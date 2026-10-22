@@ -1,3 +1,6 @@
+import { CityHousing, HOUSING_RULES } from './city_housing.js';
+import { CitySanitation } from './city_sanitation.js';
+import { CityLife } from './city_life.js';
 import { CityWorkMeals } from './city_work_meals.js';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js';
 import { CityLogistics } from './city_logistics.js';
@@ -7,10 +10,15 @@ import { CitySociety, EVENT_CATEGORIES } from './city_society.js';
 import { terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, pavePath, generateSettlement, hasSettlementAccess } from './city_terrain.js';
 
 export const BUILDING_TYPES = {
+  cleaner: { label: 'Empresa de faxina', color: 0x81c7cc, rent: 80, price: 3500, jobs: 2 },
+  waste_collector: { label: 'Coletora de lixo', color: 0x89a65e, rent: 80, price: 3500, jobs: 2 },
+  recycler: { label: 'Recicladora', color: 0x769da8, rent: 80, price: 4000, jobs: 2 },
+  public_toilet: { label: 'Banheiro público gratuito', color: 0xb2cbd0, rent: 0, price: 20000, jobs: 0 },
+  paid_toilet: { label: 'Banheiro público pago', color: 0x87c4c8, rent: 80, price: 3500, jobs: 1 },
   builder: { label: 'Construtora', color: 0xd8a957, rent: 80, price: 1800, jobs: 3 },
   quarry: { label: 'Pedreira', color: 0x929caa, rent: 70, price: 1200, jobs: 2 },
   carrier: { label: 'Transportadora', color: 0x75b4cc, rent: 75, price: 3500, jobs: 2 },
-  residential: { label: 'Residencial', color: 0xb5c4b0, rent: 65, price: 18000, jobs: 0 },
+  residential: { label: 'Residencial', color: 0xb5c4b0, rent: HOUSING_RULES.roomRent, price: HOUSING_RULES.roomPrice, jobs: 0 },
   market: { label: 'Mercado', color: 0xe2ab65, rent: 90, price: 4000, jobs: 6 },
   farm: { label: 'Fazenda', color: 0x98ad61, rent: 0, price: 2000, jobs: 1 },
   bakery: { label: 'Padaria', color: 0xdbb581, rent: 80, price: 4000, jobs: 2 },
@@ -23,7 +31,7 @@ export const BUILDING_TYPES = {
 export const NEED_LABELS = { food: 'Alimentação', water: 'Água', energy: 'Descanso', hygiene: 'Higiene', toilet: 'Banheiro', social: 'Convívio', leisure: 'Lazer', health: 'Saúde', shelter: 'Moradia', safety: 'Segurança' };
 const clamp = n => Math.max(0, Math.min(100, n));
 const key = (x, y) => `${x},${y}`;
-const names = ['Ana', 'Bruno', 'Clara', 'Davi', 'Elisa', 'Felipe', 'Gabriela', 'Hugo', 'Iara', 'João', 'Lia', 'Miguel', 'Nina', 'Otávio', 'Paula', 'Ravi', 'Sara', 'Tomás', 'Vera', 'Yuri', 'Alice', 'Caio', 'Diana', 'Enzo'];
+
 
 export class CitySimulation {
   constructor({ world, createEntity, seed = world.seed ?? 1337 }) {
@@ -39,6 +47,9 @@ export class CitySimulation {
     this.events = [];
     this.nextEventId = 1;
     this.society = new CitySociety(this);
+    this.housing = new CityHousing(this);
+    this.sanitation = new CitySanitation(this);
+    this.life = new CityLife(this);
     this.economy = new CityEconomy(this);
     this.buildingTypes = BUILDING_TYPES;
     this.development = new CityDevelopment(this);
@@ -66,7 +77,7 @@ export class CitySimulation {
     return this.events.filter(e => e.id < beforeId && (category === 'all' || e.category === category) && (citizenId === null || e.citizenIds.includes(Number(citizenId))) && (!search || e.message.toLocaleLowerCase('pt-BR').includes(search))).slice(0, limit);
   }
   accountName(id) { const account = this.accounts.get(id); return account?.entity?.properties.name || account?.name || id; }
-  payerFor(c) { return this.society.isAdult(c) ? c.accountId : this.society.guardian(c)?.accountId || c.accountId; }
+  payerFor(c) { if (this.society.isAdult(c)) return c.accountId; return [...new Set([c.guardianId, ...c.parentIds])].map(id => this.society.citizen(id)).filter(Boolean).sort((a, b) => b.balance - a.balance)[0]?.accountId || c.accountId; }
   flushPayroll() {
     for (const [accountId, amount] of this.hourlyPayroll) {
       const c = this.accounts.get(accountId);
@@ -79,8 +90,8 @@ export class CitySimulation {
     if (!a || !b || !Number.isSafeInteger(amount) || amount < 0 || a.balance < amount) return false;
     if (from === to || amount === 0) return true;
     a.balance -= amount; b.balance += amount;
-    if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Compra de espaço|Compra de terreno)/.test(reason)) b.totalRevenue += amount;
-    if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Vale-alimentação$|Atacado:|Compra de sementes$|Frete entregue|Serviço de construção)/.test(reason)) a.totalExpenses += amount;
+    if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Compra de espaço|Compra de terreno|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
+    if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Vale-alimentação$|Atacado:|Compra de sementes$|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
     this.ledger.push({ minute: this.minute, from, to, amount, reason });
     if (this.ledger.length > 1000) this.ledger.shift();
     if (reason === 'Salário') this.hourlyPayroll.set(to, (this.hourlyPayroll.get(to) || 0) + amount);
@@ -132,27 +143,24 @@ export class CitySimulation {
     this.accounts.set(b.accountId, b);
     if (!free && stone) { materialSource.inventory.pedra -= stone; this.economy.consumed.pedra += stone; this.economy.recordGoods('construction', 'pedra', stone, materialSource.id, b.id); }
     this.transfer('treasury', b.accountId, capital, 'Capital inicial');
-    for (let z = 0; z < floors; z++) for (let yy = 0; yy < depth; yy++) for (let xx = 0; xx < width; xx++) {
-      const u = { id: `${b.id}:${xx}:${yy}:${z}`, buildingId: b.id, x: xx, y: yy, z, ownerId: ownerAccountId, tenantId: null, occupantId: PUBLIC_TYPES.has(type) ? b.accountId : null, rent: spec.rent, price: spec.price, forSale: true, forRent: false, arrears: 0, missedDays: 0 };
-      b.units.push(u); this.units.set(u.id, u);
-    }
+    for (let z = 0; z < floors; z++) this.housing.addFloor(b, z, ownerAccountId);
     if (kind !== 'open-air') for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) this.occupied.add(key(xx, yy));
     this.buildings.push(b);
+    this.sanitation.setupBuilding(b);
     if (plot) { plot.buildingId = b.id; b.plotId = plot.id; } else this.development.attachBuilding(b, ownerAccountId);
     b.accessPath = [terrain.door, ...access];
     if (free) pavePath(this.world, b.accessPath);
     this.lastError = '';
-    this.log(`${entity.properties.name}: ${count} espaços de 1×1×1.`, 'city', [], { kind: 'construction', buildingId: b.id });
+    this.log(`${entity.properties.name}: ${b.units.length} espaços de 1×1×1.`, 'city', [], { kind: 'construction', buildingId: b.id });
     return b;
   }
   fail(message) { this.lastError = message; return null; }
   addCitizen(x, y, index = this.citizens.length, options = {}) {
-    const entity = this.createEntity({ x, y, properties: { name: `${names[index % names.length]} ${['Silva', 'Santos', 'Costa', 'Souza'][index % 4]}`, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: [0xffeed19d, 0xffc2dce8, 0xffe6b9af, 0xffc5daa7][index % 4] } } });
-    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0 };
+    const entity = this.createEntity({ x, y, properties: { name: this.life.name(index, options), species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: [0xffeed19d, 0xffc2dce8, 0xffe6b9af, 0xffc5daa7][index % 4] } } });
+    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, lastProgressAt: this.minute };
     this.society.initializeCitizen(c, options);
     this.economy.initializeCitizen(c, index, options);
     c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
-    if (this.citizens.some(other => other.entity.properties.name === entity.properties.name)) entity.properties.name += ` ${c.id}`;
     c.accountId = `citizen:${c.id}`;
     entity.properties.citizen = c;
     this.accounts.set(c.accountId, c);
@@ -171,16 +179,12 @@ export class CitySimulation {
     if (u.ownerId !== c.accountId && !this.transfer(payer, u.ownerId, u.rent, 'Primeiro aluguel')) return null;
     this.releaseHome(c);
     u.tenantId = c.accountId; u.rentPayerId = payer === c.accountId ? null : payer; u.arrears = 0; u.missedDays = 0;
-    c.homeUnitId = u.id;
+    c.homeUnitId = u.id; c.homeId = null;
     c.path = []; c.task = null;
     this.log(`${c.entity.properties.name} ${u.ownerId === c.accountId ? 'ocupou seu próprio' : 'alugou o'} espaço ${u.id}.`, 'housing', [c.id], { kind: u.ownerId === c.accountId ? 'owner-occupancy' : 'lease', unitId: u.id });
     return u;
   }
-  releaseHome(c) {
-    const old = this.units.get(c.homeUnitId);
-    if (old?.tenantId === c.accountId) { old.tenantId = null; old.rentPayerId = null; old.arrears = 0; old.missedDays = 0; }
-    c.homeUnitId = null;
-  }
+  releaseHome(c) { this.housing.release(c); }
   buyUnit(buyerId, unitId) {
     const c = this.citizens.find(c => c.id === buyerId && !c.entity.destroyed), u = this.units.get(unitId);
     if (!c || !u || !this.building(u.buildingId) || !u.forSale || u.ownerId === c.accountId) return this.fail('Espaço indisponível para compra.');
@@ -200,7 +204,7 @@ export class CitySimulation {
   findPath(start, goal) { return findTerrainPath(this.world, start, goal, this.occupied); }
   urgentNeed(c) {
     const n = c.needs;
-    return n.water < 18 ? 'water' : n.food < 18 ? 'food' : n.health < 20 ? 'health' : n.energy < 12 ? 'energy' : n.toilet < 10 ? 'toilet' : null;
+    return ['water', 'food', 'health', 'energy', 'toilet', 'hygiene'].filter(k => n[k] < ({ water: 18, food: 18, health: 20, energy: 12, toilet: 10, hygiene: 10 })[k]).sort((a, b) => (n[a] - (a === 'health' ? 5 : 0)) - (n[b] - (b === 'health' ? 5 : 0)))[0] || null;
   }
   chooseTask(c) {
     const n = c.needs;
@@ -210,13 +214,13 @@ export class CitySimulation {
     const child = this.citizens.find(child => child.guardianId === c.id && this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
     let task = 'leisure', type = 'leisure';
     const urgent = this.urgentNeed(c);
-    if (urgent) { task = urgent; type = ({ water: 'utility', food: 'market', health: 'clinic', energy: 'home', toilet: home ? 'home' : 'utility' })[urgent]; }
+    if (urgent) { task = urgent; type = ({ water: 'utility', food: 'market', health: 'clinic', energy: 'home', hygiene: home ? 'home' : 'utility', toilet: 'toilet' })[urgent]; }
     else if (child && this.society.isAdult(c) && Math.min(n.food, n.water, n.energy, n.hygiene) >= 25 && n.health >= 40 && n.toilet >= 15) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
     else if (n.food < 18) { task = 'food'; type = 'market'; }
     else if (n.health < 45) { task = 'health'; type = 'clinic'; }
     else if (n.water < 45) { task = 'water'; type = 'utility'; }
     else if (n.food < 45) { task = 'food'; type = 'market'; }
-    else if (n.toilet < 30) { task = 'toilet'; type = home ? 'home' : 'utility'; }
+    else if (n.toilet < 30) { task = 'toilet'; type = 'toilet'; }
     else if (n.energy < 25 || this.hour >= 22 || this.hour < 6) { task = 'energy'; type = 'home'; }
     else if (n.hygiene < 35) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
@@ -225,7 +229,8 @@ export class CitySimulation {
     else if (job && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     else if (n.energy < 65) { task = 'energy'; type = 'home'; }
-    if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
+    if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
+    if (task === 'toilet') { if (!this.sanitation.choose(c)) { c.task = null; c.action = 'Aguardando banheiro acessível'; } return; }
     if (task === 'food' && this.workMeals.routeToMeal(c)) return;
     if (task === 'food' && c.provisions > 0 && home) { task = 'provisions'; type = 'home'; }
     const childHome = child ? this.building(this.units.get(child.homeUnitId)?.buildingId) : null;
@@ -236,8 +241,8 @@ export class CitySimulation {
     }
     const hall = this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
     const candidates = type === 'company' ? [company] : task === 'food' ? this.buildings.filter(b => this.economy.mealOffer(b)) : type === 'child' ? (childHome ? [childHome] : home ? [home] : []) : type === 'home' ? (home ? [home] : []) : type === 'job' ? [job] : this.buildings.filter(b => !b.entity.destroyed && b.type === type);
-    if (!candidates.length && hall && ['home', 'utility', 'clinic', 'leisure'].includes(type)) candidates.push(hall);
-    candidates.sort((a, b) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y));
+    if (hall && ((type === 'home' && !home) || ['utility', 'clinic', 'leisure'].includes(type))) { const serviceCost = { utility: 35, clinic: 240, leisure: 25 }[type] || 0; const cash = this.accounts.get(this.payerFor(c))?.balance || 0; if (!candidates.includes(hall)) candidates.push(hall); if (cash < serviceCost) candidates.splice(0, candidates.length, hall); }
+    candidates.sort((a, b) => (Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) + (task === 'food' && a.type === 'farm' ? 20 : 0)) - (Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y) + (task === 'food' && b.type === 'farm' ? 20 : 0)));
     for (const b of candidates) {
       const path = this.findPath(c.entity, b.door);
       if (path !== null) {
@@ -250,6 +255,7 @@ export class CitySimulation {
     if (task === 'energy') n.energy = clamp(n.energy + 0.1);
   }
   performTask(c) {
+    if (c.task === 'toilet') { this.sanitation.use(c); return; }
     if (c.task === 'workmeal') { if (!this.workMeals.tryStart(c)) c.task = null; return; }
     if (c.task === 'construction') {
       const project = this.development.projects.find(p => p.id === c.workProjectId);
@@ -305,10 +311,11 @@ export class CitySimulation {
         const water = this.buildings.find(b => b.type === 'utility' && !b.entity.destroyed) || this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
         const mealPrice = market ? this.economy.mealOffer(market).price : 0;
         const usesProvisions = c.provisions > 0;
-        if (!water || (!market && !usesProvisions) || c.balance < (usesProvisions ? 35 : mealPrice + 35)) { c.action = 'Sem alimentos ou recursos para os cuidados'; c.task = null; return; }
+        const carePayer = this.payerFor(child);
+        if (!water || (!market && !usesProvisions) || (this.accounts.get(carePayer)?.balance || 0) < (usesProvisions ? 35 : mealPrice + 35)) { c.action = 'Sem alimentos ou recursos para os cuidados'; c.task = null; return; }
         if (usesProvisions) c.provisions--;
         else if (!this.economy.consumeMeal(child, market)) { c.task = null; return; }
-        this.transfer(c.accountId, water.accountId, 35, 'Água para cuidados infantis');
+        this.transfer(carePayer, water.accountId, 35, 'Água para cuidados infantis');
         c.servicePaid = `care:${child.id}`;
         this.log(`${c.entity.properties.name} está cuidando de ${child.entity.properties.name}.`, 'family', [c.id, child.id], { kind: 'childcare' });
       }
@@ -324,28 +331,22 @@ export class CitySimulation {
       if (task === 'food' ? !this.economy.consumeMeal(c, b) : !this.transfer(this.payerFor(c), b.accountId, b.type === 'townhall' ? 0 : price, `Serviço: ${NEED_LABELS[task] || task}`)) { c.action = 'Sem dinheiro para o serviço'; c.task = null; return; }
       c.servicePaid = `${b.id}:${task}`;
     }
-    const rates = { food: 5, water: 8, energy: 0.35, hygiene: 4, toilet: 8, social: 1.5, leisure: 1, health: 2 };
+    const rates = { food: 5, water: 8, energy: c.homeUnitId ? .9 : .45, hygiene: 4, social: 1.5, leisure: 1, health: 2 };
+    if (!(task in rates)) { this.life.resetTask(c, 'serviço indisponível'); return; }
     n[task] = clamp(n[task] + rates[task]);
     c.action = { food: 'Comendo no mercado', water: 'Bebendo água', energy: 'Dormindo', hygiene: 'Cuidando da higiene', toilet: 'Usando o banheiro', social: 'Procurando companhia para conversar', leisure: 'Descansando no centro de lazer', health: 'Recebendo atendimento' }[task];
-    if (task === 'social') n.social = clamp(n.social - rates.social);
+    if (task === 'social') { n.social = clamp(n.social - rates.social); c.socialWaitStarted ??= this.minute; if (this.minute - c.socialWaitStarted >= 30) { c.task = null; c.socialWaitStarted = null; n.leisure = clamp(n.leisure + 3); } }
     if (task === 'food' && n.food >= 95) c.foodVoucher = null;
     if (n[task] >= 95 || (task === 'energy' && this.hour >= 7 && this.hour < 22 && n.energy > 65)) { c.task = null; c.servicePaid = null; }
     if (task === 'energy' && Math.min(n.food, n.water, n.toilet) < 20) c.task = null;
   }
-  collectRent() {
-    for (const u of this.units.values()) {
-      if (u.ownerId === 'treasury' || !u.tenantId || u.tenantId === u.ownerId || u.rentPayerId === u.ownerId) continue;
-      const amount = u.rent + u.arrears;
-      if (this.transfer(u.rentPayerId || u.tenantId, u.ownerId, amount, 'Aluguel diário')) { u.arrears = 0; u.missedDays = 0; }
-      else {
-        u.arrears += u.rent; u.missedDays++;
-        if (u.missedDays >= 3 && u.tenantId.startsWith('citizen:')) {
-          const c = this.citizens.find(c => c.accountId === u.tenantId);
-          if (c) { this.log(`${c.entity.properties.name}: contrato encerrado por inadimplência.`, 'housing', [c.id], { kind: 'eviction', unitId: u.id }); this.releaseHome(c); }
-        }
-      }
-    }
+  payWage(c, b) {
+    const wage = b.wage + Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30);
+    if (b.balance < wage) return false;
+    const exact = wage * this.taxRate + c.taxRemainder, tax = Math.floor(exact + 1e-9); c.taxRemainder = exact - tax;
+    this.transfer(b.accountId, c.accountId, wage - tax, 'Salário'); this.transfer(b.accountId, 'treasury', tax, 'Imposto sobre salário'); c.salaryToday += wage - tax; c.lastPaidAt = this.minute; return true;
   }
+  collectRent() { this.housing.collectRent(); }
   dailyEconomy() {
     this.collectRent();
     for (const c of this.citizens) {
@@ -377,28 +378,34 @@ export class CitySimulation {
       }
       for (const shipment of this.logistics.shipments) if (shipment.seller === b || shipment.buyer === b) this.logistics.cancel(shipment);
       const hall = this.buildings.find(h => h.type === 'townhall' && !h.entity.destroyed);
-      for (const [good, qty] of Object.entries(b.inventory)) { const stored = Math.min(qty, hall ? inventoryFree(hall) : 0); if (hall) hall.inventory[good] += stored; this.economy.lost[good] += qty - stored; b.inventory[good] = 0; }
+      for (const [good, stock] of Object.entries(b.inventory)) { const qty = stock + (good === 'lixo' ? b.litter || 0 : 0); const stored = Math.min(qty, hall ? inventoryFree(hall) : 0); if (hall) hall.inventory[good] += stored; this.economy.lost[good] += qty - stored; b.inventory[good] = 0; }
+      b.litter = 0;
       this.transfer(b.accountId, this.economy.citizen(b.ownerId)?.accountId || 'treasury', b.balance, 'Encerramento de prédio');
       const owner = this.economy.citizen(b.ownerId); if (owner) owner.businessIds = owner.businessIds.filter(id => id !== b.id);
       this.log(`${b.entity.properties.name} foi demolido.`, 'city', [], { kind: 'demolition', buildingId: b.id });
       this.buildings.splice(this.buildings.indexOf(b), 1);
     }
     for (const c of [...this.citizens]) if (c.entity.destroyed) {
+      const heir = c.dead ? this.life.heir(c) : null;
+      if (heir) for (const b of this.economy.businesses.filter(b => b.ownerId === c.id)) { b.ownerId = heir.id; if (!heir.businessIds.includes(b.id)) heir.businessIds.push(b.id); }
       this.economy.removeCitizen(c);
       this.society.removeCitizen(c);
-      this.log(`${c.entity.properties.name} saiu da cidade.`, 'city', [c.id], { kind: 'departure' });
+      if (!c.dead) this.log(`${c.entity.properties.name} saiu da cidade.`, 'city', [c.id], { kind: 'departure' });
       this.releaseHome(c);
-      for (const u of this.units.values()) if (u.ownerId === c.accountId) { const resident = this.accounts.get(u.tenantId); if (resident?.homeUnitId === u.id) this.releaseHome(resident); u.ownerId = 'treasury'; u.forSale = true; u.forRent = false; }
+      for (const u of this.units.values()) if (u.ownerId === c.accountId) { const resident = this.accounts.get(u.tenantId); if (!heir && resident?.homeUnitId === u.id) this.releaseHome(resident); u.ownerId = heir?.accountId || 'treasury'; u.forSale = true; u.forRent = !!heir; }
       const b = this.building(c.jobId);
       if (b) b.workers = b.workers.filter(id => id !== c.id);
-      this.transfer(c.accountId, 'treasury', c.balance, 'Saída de cidadão');
+      this.transfer(c.accountId, heir?.accountId || 'treasury', c.balance, c.dead ? 'Herança' : 'Saída de cidadão');
+      this.sanitation.releaseCitizen(c);
       this.citizens.splice(this.citizens.indexOf(c), 1);
     }
+    for (const child of this.citizens) if (!this.society.isAdult(child)) this.society.houseChild(child);
   }
   stepMinute() {
     this.minute++;
     this.reconcile();
     this.development.reconcile();
+    this.housing.reconcile(); this.sanitation.reconcile(); this.sanitation.updateMinute();
     for (const c of this.citizens) this.workMeals.tryStart(c);
     this.logistics.updateMinute();
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
@@ -406,19 +413,21 @@ export class CitySimulation {
     for (const c of this.citizens) {
       const n = c.needs;
       c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
-      for (const [need, decay] of Object.entries({ food: 0.11, water: 0.16, energy: 0.065, hygiene: 0.07, toilet: 0.16, social: 0.065, leisure: 0.055 })) n[need] = clamp(n[need] - decay);
+      for (const [need, decay] of Object.entries({ food: .065, water: .09, energy: .055, hygiene: .045, toilet: .085, social: .035, leisure: .035 })) n[need] = clamp(n[need] - decay);
       n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2));
       n.safety = clamp(n.safety + (this.buildings.some(b => b.type === 'townhall') ? 0.08 : -0.1));
-      n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -0.22 : 0.015));
-      c.happiness = Object.values(n).reduce((a, b) => a + b, 0) / Object.keys(n).length;
+      n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025));
+      c.mood = (c.mood || 0) * .998;
+      c.happiness = clamp(Object.values(n).reduce((a, b) => a + b, 0) / Object.keys(n).length + c.mood);
+      if (this.life.minute(c)) continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
       const completingEssential = ['water', 'food', 'provisions', 'workmeal', 'health', 'energy', 'toilet'].includes(c.task) && n[c.task === 'provisions' || c.task === 'workmeal' ? 'food' : c.task] < 75;
-      if (!c.deliveryId && urgent && c.task !== urgent && !completingEssential && this.society.age(c) >= 6) { c.task = null; c.path = []; }
+      if (!c.deliveryId && !c.cleaningJobId && urgent && c.task !== urgent && !completingEssential && this.society.age(c) >= 6) { c.task = null; c.path = []; }
       const dependentNeedsCare = this.citizens.some(child => child.guardianId === c.id && this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 25);
-      if (!c.deliveryId && !urgent && dependentNeedsCare && (['work', 'manage', 'leisure', 'social'].includes(c.task) || (c.task === 'energy' && n.energy > 65)) && !c.conversation) { c.task = null; c.path = []; }
-      if (c.deliveryId) continue;
+      if (!c.deliveryId && !urgent && dependentNeedsCare && (['work', 'manage', 'leisure', 'social', 'clean'].includes(c.task) || (c.task === 'energy' && n.energy > 65)) && !c.conversation) { c.task = null; c.path = []; }
+      if (c.deliveryId || c.cleaningJobId) continue;
       if (c.conversation) continue;
       if (!c.task) { c.servicePaid = null; this.chooseTask(c); }
       if (!c.path.length && c.task) this.performTask(c);
@@ -440,7 +449,7 @@ export class CitySimulation {
     while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); }
     for (const c of this.citizens) {
       if (c.conversation || c.workMeal) continue;
-      let distance = dt * (this.society.isAdult(c) ? 2.4 : 1.6);
+      let distance = dt * (this.society.isAdult(c) ? 4 : 2.5);
       while (distance > 0 && c.path.length) {
         const p = c.path[0];
         if (!this.walkable(Math.floor(p.x), Math.floor(p.y)) || !canStep(this.world, Math.floor(c.entity.x), Math.floor(c.entity.y), Math.floor(p.x), Math.floor(p.y))) { c.path = []; c.task = null; break; }
@@ -451,9 +460,12 @@ export class CitySimulation {
       }
     }
   }
+  goodsStock(good) {
+    return [...this.buildings, ...this.development.projects, ...this.logistics.shipments].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+  }
   stats() {
     const people = this.citizens.filter(c => !c.entity.destroyed);
     const units = [...this.units.values()];
-    return { mayorId: this.economy.mayorId, wealthy: people.filter(c => c.wealthTier === 'wealthy').length, businesses: this.economy.businesses.length, population: people.length, children: people.filter(c => !this.society.isAdult(c)).length, couples: people.filter(c => c.partnerId).length / 2, friendships: [...this.society.relations.values()].filter(r => ['friend', 'close'].includes(r.status)).length, births: this.society.birthCount, employed: people.filter(c => c.jobId).length, homeless: people.filter(c => !c.homeUnitId).length, happiness: people.length ? Math.round(people.reduce((s, c) => s + c.happiness, 0) / people.length) : 0, units: units.length, occupied: units.filter(u => u.tenantId || u.occupantId).length, jobs: this.buildings.reduce((s, b) => s + b.jobs, 0), treasury: this.treasury };
+    return { mayorId: this.economy.mayorId, wealthy: people.filter(c => c.wealthTier === 'wealthy').length, businesses: this.economy.businesses.length, population: people.length, children: people.filter(c => !this.society.isAdult(c)).length, couples: people.filter(c => c.partnerId).length / 2, friendships: [...this.society.relations.values()].filter(r => ['friend', 'close'].includes(r.status)).length, births: this.society.birthCount, deaths: this.life.deathCount, employed: people.filter(c => c.jobId).length, homeless: people.filter(c => !c.homeUnitId).length, happiness: people.length ? Math.round(people.reduce((s, c) => s + c.happiness, 0) / people.length) : 0, units: units.length, occupied: units.filter(u => u.tenantId || u.occupantId).length, jobs: this.buildings.reduce((s, b) => s + b.jobs, 0), treasury: this.treasury };
   }
 }

@@ -21,6 +21,8 @@ function developFixture(city) {
       b = city.addBuilding(type, site.x, site.y, { ...site, floors, free: true }); if (b) break;
     }
     if (!b) throw Error(`Fixture site unavailable for ${type}`);
+    // Explicit affordable quotes isolate the older contract/family tests from live-market pricing.
+    if (type === 'residential') for (const u of b.units) { u.price = 12000; u.rent = 65; }
     if (type === 'residential' && city.buildings.filter(b => b.type === 'residential').length === 2) { city.economy.investInHousing(true); city.economy.assignHomes(); }
     if (['market', 'bakery', 'greengrocer', 'farm'].includes(type)) {
       const investor = wealthy[ownerIndex++ % wealthy.length];

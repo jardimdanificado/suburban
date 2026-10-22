@@ -4890,7 +4890,7 @@ export class RCT3DRenderer {
             const x = Math.max(0, Math.min(b.width - 1, Math.floor(hit.x - e.x)));
             const y = Math.max(0, Math.min(b.depth - 1, Math.floor(hit.z - e.y)));
             const z = Math.max(0, Math.min(b.floors - 1, Math.floor(hit.y - base)));
-            this.selectedCityUnitId = `${b.id}:${x}:${y}:${z}`;
+            const unitId = `${b.id}:${x}:${y}:${z}`; this.selectedCityUnitId = b.units.some(u => u.id === unitId) ? unitId : null;
           }
         }
         continue;

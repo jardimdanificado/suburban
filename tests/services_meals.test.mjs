@@ -28,7 +28,7 @@ function audit(city) {
   assert.equal(totalMoney(city), 2000000);
   const holders = [...city.buildings, ...city.development.projects, ...city.logistics.shipments];
   for (const h of holders) { assert(inventoryUsed(h) + incomingItems(h) <= h.inventoryCapacity); for (const qty of Object.values(h.inventory)) assert(Number.isSafeInteger(qty) && qty >= 0); }
-  for (const good of Object.keys(GOODS)) assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + city.economy.lost[good] + holders.reduce((n, h) => n + h.inventory[good], 0), good);
+  for (const good of Object.keys(GOODS)) assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + city.economy.lost[good] + city.goodsStock(good), good);
 }
 
 test('plots have varied dimensions and uniformly level surfaces in every landscape preset', () => {
@@ -130,6 +130,6 @@ test('autonomous public works and employee meals keep all currency and goods con
   for (let i = 0; i < 10 * 1440 * 4; i++) { city.update(1 / 16); if (i % 480 === 0) audit(city); }
   assert(city.development.projects.some(p => p.service === 'road' && p.status === 'completed'));
   assert(city.development.projects.some(p => p.service === 'expansion' && p.status === 'completed')); assert(city.buildings[0].floors > 2);
-  assert(city.buildings.some(b => b.mealsServed > 0)); assert(city.buildings.some(b => b.vouchersIssued > 0)); assert(city.logistics.shipments.some(s => s.purpose === 'work-meals'));
+  assert(city.buildings.some(b => b.mealsServed > 0)); assert(city.buildings.some(b => b.mealPurchaseCost > 0)); assert(city.logistics.shipments.some(s => s.purpose === 'work-meals'));
   assert(live(city).every(p => p.inventory.pedra + (p.incoming.pedra || 0) <= p.stone)); audit(city);
 });

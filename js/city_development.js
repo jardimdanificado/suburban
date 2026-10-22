@@ -55,10 +55,8 @@ export class CityDevelopment {
       const b = city.building(project.buildingId);
       if (!b || b.floors !== project.baseFloors) { project.status = 'blocked'; project.error = 'Edifício foi removido ou alterado durante a obra.'; return null; }
       const spec = city.buildingTypes[b.type];
-      for (let z = b.floors; z < project.targetFloors; z++) for (let y = 0; y < b.depth; y++) for (let x = 0; x < b.width; x++) {
-        const u = { id: `${b.id}:${x}:${y}:${z}`, buildingId: b.id, x, y, z, ownerId: project.accountId, tenantId: null, occupantId: b.active ? b.accountId : null, rent: spec.rent, price: spec.price, forSale: project.accountId === 'treasury', forRent: false, arrears: 0, missedDays: 0 };
-        b.units.push(u); city.units.set(u.id, u);
-      }
+      for (let z = b.floors; z < project.targetFloors; z++) city.housing.addFloor(b, z, project.accountId);
+      city.sanitation.setupBuilding(b);
       b.floors = project.targetFloors; b.inventoryCapacity += b.width * b.depth * project.floors * 16;
       b.jobs += b.type === 'townhall' ? project.floors : 0; b.geometryRevision = (b.geometryRevision || 0) + 1;
       const lot = this.plots.find(p => p.id === b.plotId); if (lot) lot.projectId = null;
@@ -79,6 +77,7 @@ export class CityDevelopment {
     const activePublic = this.projects.filter(p => p.accountId === 'treasury' && !p.cancelled && p.status !== 'completed');
     const targetFloors = Math.min(6, 2 + Math.floor((city.citizens.length + city.economy.businesses.length * 2) / 36));
     if (hall.floors < targetFloors && !activePublic.some(p => p.service === 'expansion')) this.beginExpansion('treasury', hall.id);
+    if (city.economy.businesses.length >= 5 && !city.buildings.some(b => b.type === 'public_toilet') && !this.projects.some(p => p.type === 'public_toilet' && !p.cancelled && p.status !== 'completed')) { const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId); if (lot) this.beginProject('treasury', lot.id, 'public_toilet'); }
     if (!activePublic.some(p => p.service === 'road')) {
       for (const b of city.buildings.filter(b => !b.entity.destroyed && b.id !== hall.id)) {
         if (this.beginRoad('treasury', b.door, hall.door)) break;
@@ -176,7 +175,7 @@ export class CityDevelopment {
   requestMaterials(project) {
     if (project.cancelled || project.status === 'completed') return;
     let need = project.stone - project.inventory.pedra - (project.incoming.pedra || 0);
-    for (const quarry of this.city.economy.businesses.filter(b => b.type === 'quarry')) {
+    for (const quarry of this.city.economy.businesses.filter(b => b.type === 'quarry' || b.type === 'recycler')) {
       const qty = Math.min(24, need, quarry.inventory.pedra, inventoryFree(project));
       if (qty > 0 && this.city.logistics.order(quarry, project, 'pedra', qty, this.city.economy.goods.pedra.price)) need -= qty;
     }
@@ -199,7 +198,7 @@ export class CityDevelopment {
     // Builders develop housing for sale; individual investors prefer premises for their own firms.
     const homeless = this.city.citizens.filter(c => !c.homeUnitId).length;
     const housingProjects = this.projects.filter(p => p.type === 'residential' && !p.cancelled && p.status !== 'completed');
-    const availableHomes = [...this.city.units.values()].filter(u => this.city.building(u.buildingId)?.type === 'residential' && !u.tenantId && (u.forSale || u.forRent)).length;
+    const availableHomes = [...this.city.housing.homes.values()].filter(h => this.city.housing.units(h).every(u => !u.tenantId && (u.forSale || u.forRent))).length;
     if (homeless + 3 > availableHomes && !housingProjects.length) {
       const builder = this.city.economy.businesses.find(b => b.type === 'builder');
       const p = this.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId).sort((a, b) => Math.abs(a.width * a.depth - 16) - Math.abs(b.width * b.depth - 16))[0];

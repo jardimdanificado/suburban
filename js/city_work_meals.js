@@ -4,10 +4,10 @@ export const WORK_MEAL_RULES = { units: 3, foodThreshold: 45, stockPerWorker: 6,
 export class CityWorkMeals {
   constructor(city) { this.city = city; }
   employer(c) {
-    const b = this.city.building(c.jobId), hour = this.city.hour;
-    return b?.active && b.workers.includes(c.id) && hour >= (b.type === 'carrier' ? 7 : 8) && hour < (b.type === 'carrier' ? 20 : 17) ? b : null;
+    const b = this.city.building(c.jobId) || c.businessIds.map(id => this.city.building(id)).find(b => b?.active && this.offer(b)), hour = this.city.hour;
+    return b?.active && (b.workers.includes(c.id) || b.ownerId === c.id) && hour >= (b.type === 'carrier' ? 7 : 8) && hour < (b.type === 'carrier' ? 20 : 17) ? b : null;
   }
-  foodGoods() { return Object.keys(this.city.economy.goods).filter(g => !['trigo', 'pedra', 'sementes'].includes(g)); }
+  foodGoods() { return Object.keys(this.city.economy.goods).filter(g => !['trigo', 'pedra', 'sementes', 'lixo'].includes(g)); }
   offer(holder) {
     const good = this.foodGoods().filter(g => (holder.inventory[g] || 0) >= WORK_MEAL_RULES.units).sort((a, b) => holder.inventory[b] - holder.inventory[a])[0];
     return good ? { good, quantity: WORK_MEAL_RULES.units } : null;
@@ -30,7 +30,7 @@ export class CityWorkMeals {
   tryStart(c) {
     if (c.workMeal) return true;
     const b = this.employer(c);
-    if (!b || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.needs.water < 18 || c.needs.energy < 12 || c.needs.health < 20 || c.needs.toilet < 10 || c.conversation) return false;
+    if (!b || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.conversation) return false;
     const holder = this.site(c, b);
     if (Math.hypot(c.entity.x - holder.door.x, c.entity.y - holder.door.y) > 2) return false;
     const offer = this.offer(holder); if (!offer) return false;
@@ -70,7 +70,8 @@ export class CityWorkMeals {
       const projects = city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed' && p.requiredLabor - p.labor >= 30);
       const sites = [b, ...projects];
       for (const holder of sites) {
-        const target = holder === b && projects.length ? 6 : Math.max(6, Math.ceil(b.workers.length / Math.max(1, projects.length)) * WORK_MEAL_RULES.stockPerWorker);
+        const target = holder === b && projects.length ? 6 : Math.max(9, Math.ceil(b.workers.length / Math.max(1, projects.length)) * WORK_MEAL_RULES.stockPerWorker);
+        if (this.stock(holder) > target / 2) continue;
         let needed = Math.min(24, target - this.stock(holder), inventoryFree(holder));
         if (needed < 3) continue;
         const shops = suppliers.filter(s => s !== holder && s !== b).sort((a, c) => Number(a.type === 'townhall') - Number(c.type === 'townhall') || Math.hypot(a.door.x - holder.door.x, a.door.y - holder.door.y) - Math.hypot(c.door.x - holder.door.x, c.door.y - holder.door.y));

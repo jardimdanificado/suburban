@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { floorCells } from '../js/city_housing.js';
 import { NEED_LABELS } from '../js/city_simulation.js';
 import { setup, totalMoney } from './helpers/city.mjs';
 
@@ -8,7 +9,7 @@ test('developed city fixture has accessible basic services, homes, jobs and indi
   assert.equal(city.citizens.length, 24);
   for (const type of ['market', 'townhall', 'clinic', 'utility', 'residential', 'leisure']) assert(city.buildings.some(b => b.type === type));
   for (const b of city.buildings) {
-    assert.equal(b.units.length, b.width * b.depth * b.floors);
+    assert.equal(b.units.length, floorCells(b, 0).length * b.floors);
     for (const u of b.units) { assert.equal(city.units.get(u.id), u); assert(u.z < b.floors); }
     assert(city.findPath(city.citizens[0].entity, b.door));
   }
@@ -17,7 +18,7 @@ test('developed city fixture has accessible basic services, homes, jobs and indi
 });
 
 test('private rent, occupied sales and resale transfer money and preserve the current tenant', () => {
-  const city = setup(), tenant = city.citizens.find(c => c.wealthTier === 'worker'), buyer = city.citizens.find(c => c.wealthTier === 'wealthy' && c.accountId !== city.units.get(tenant.homeUnitId).ownerId);
+  const city = setup(), tenant = city.citizens.find(c => c.wealthTier === 'worker'), buyer = city.citizens.find(c => c.wealthTier === 'wealthy' && c.balance >= city.units.get(tenant.homeUnitId).price && c.accountId !== city.units.get(tenant.homeUnitId).ownerId);
   const u = city.units.get(tenant.homeUnitId), seller = city.accounts.get(u.ownerId);
   city.listUnit(u.id, { rent: u.rent, price: u.price, forSale: true, forRent: true });
   const cash = buyer.balance, sellerCash = seller.balance;
@@ -30,7 +31,7 @@ test('private rent, occupied sales and resale transfer money and preserve the cu
   city.collectRent(); assert.equal(buyer.balance, ownerCash + rentDue);
   assert(city.listUnit(u.id, { price: 200, rent: 20, forSale: true, forRent: true }));
   assert(city.buyUnit(tenant.id, u.id));
-  const selfCash = tenant.balance; city.collectRent(); assert.equal(tenant.balance, selfCash);
+  const selfCash = tenant.balance, remainingRent = city.housing.rent(city.housing.home(tenant), tenant); city.collectRent(); assert.equal(tenant.balance, selfCash - remainingRent);
   assert.equal(totalMoney(city), 2000000);
 });
 
@@ -60,7 +61,7 @@ test('construction rejects roads, overlaps, invalid dimensions and insufficient 
   const source = { inventory: { pedra: 72 } };
   const afterLand = city.treasury;
   const b = city.addBuilding('residential', 8, 8, { width: 3, depth: 3, floors: 4, plotId: plot.id, ownerAccountId: buyer.accountId, materialSource: source });
-  assert(b); assert.equal(b.units.length, 36); assert.equal(city.treasury, afterLand); assert.equal(source.inventory.pedra, 0);
+  assert(b); assert.equal(b.units.length, 32); assert.equal(b.circulation.length, 4); assert.equal(city.treasury, afterLand); assert.equal(source.inventory.pedra, 0);
   city.transfer('treasury', 'supplier', city.treasury, 'Test drain');
   assert.equal(city.addBuilding('market', 79, 80), null);
   assert.equal(totalMoney(city), 2000000);

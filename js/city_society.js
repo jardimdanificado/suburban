@@ -1,4 +1,4 @@
-export const EVENT_CATEGORIES = { land: 'Terrenos', construction: 'Construção', transport: 'Transportes', city: 'Cidade', economy: 'Economia', housing: 'Moradia', work: 'Trabalho', social: 'Convívio', relationship: 'Relacionamentos', family: 'Famílias', government: 'Governo', business: 'Empresas', production: 'Produção' };
+export const EVENT_CATEGORIES = { death: 'Mortes', sanitation: 'Saneamento', land: 'Terrenos', construction: 'Construção', transport: 'Transportes', city: 'Cidade', economy: 'Economia', housing: 'Moradia', work: 'Trabalho', social: 'Convívio', relationship: 'Relacionamentos', family: 'Famílias', government: 'Governo', business: 'Empresas', production: 'Produção' };
 export const SOCIAL_RULES = { friendAt: 30, closeFriendAt: 65, partnerAt: 68, conversationCooldown: 30, gestationMinutes: 3 * 1440, daysPerYear: 12, maxChildren: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 const pairKey = (a, b) => [a, b].sort((x, y) => x - y).join(':');
@@ -106,7 +106,7 @@ export class CitySociety {
     const r = this.getRelation(a, b);
     const city = this.city;
     if (!r || a.partnerId !== b.id || b.partnerId !== a.id || !this.isAdult(a) || !this.isAdult(b) || this.related(a, b) || !a.personality.wantsChildren || !b.personality.wantsChildren || a.expectingId || b.expectingId || a.childIds.length >= SOCIAL_RULES.maxChildren || b.childIds.length >= SOCIAL_RULES.maxChildren || r.partnerSince === null || city.minute - r.partnerSince < 2 * 1440 || r.affection < 75 || r.trust < 65 || !a.homeUnitId || !b.homeUnitId || a.balance + b.balance < 3000 || Math.min(a.needs.health, b.needs.health) < 50 || (a.lastBirthAt !== null && city.minute - a.lastBirthAt < 5 * 1440) || (b.lastBirthAt !== null && city.minute - b.lastBirthAt < 5 * 1440)) return null;
-    if (![...city.units.values()].some(u => city.building(u.buildingId)?.type === 'residential' && u.ownerId !== 'treasury' && !u.tenantId && u.forRent)) return null;
+    if (!city.housing.home(a) || !city.housing.hasBathroom(city.housing.home(a))) return null;
     const pregnancy = { id: this.nextFamilyId++, parentIds: [a.id, b.id], startedAt: city.minute, dueAt: city.minute + SOCIAL_RULES.gestationMinutes };
     a.expectingId = b.expectingId = pregnancy.id;
     this.expecting.push(pregnancy);
@@ -131,13 +131,7 @@ export class CitySociety {
   }
   guardian(c) { return this.citizen(c.guardianId) || c.parentIds.map(id => this.citizen(id)).find(Boolean); }
   houseChild(child) {
-    const parent = this.guardian(child);
-    if (!parent) return;
-    child.guardianId = parent.id;
-    const parentHome = this.city.units.get(parent.homeUnitId);
-    const units = [...this.city.units.values()].filter(u => this.city.building(u.buildingId)?.type === 'residential' && u.ownerId !== 'treasury' && !u.tenantId && u.forRent && (u.ownerId === parent.accountId || u.rent <= parent.balance));
-    units.sort((a, b) => Number(b.buildingId === parentHome?.buildingId) - Number(a.buildingId === parentHome?.buildingId) || a.rent - b.rent);
-    if (units[0]) this.city.rentUnit(child.id, units[0].id);
+    const parent = this.guardian(child); if (parent) this.city.housing.houseChild(child, parent);
   }
   daily() {
     for (const r of this.relations.values()) {

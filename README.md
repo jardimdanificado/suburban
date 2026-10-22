@@ -18,6 +18,7 @@ Abra `http://localhost:8000`. Arraste o mapa para mover a câmera e use a roda p
 - **Empresas:** diretório dos negócios privados e acesso às respectivas fichas.
 - **Produção:** produção, consumo e estoque por alimento, cultivos, movimentações de mercadorias e oportunidades de investimento.
 - **Transportes:** cargas, origem/destino, situação, transportador, mercadoria e frete.
+- **Saneamento:** banheiros, acesso, limpeza, contratos de faxina, lixo e registros de morte.
 - **Histórico:** busca, filtros por assunto e pessoa, congelamento, carregamento de mais registros e exportação JSON dos resultados filtrados.
 
 A interface usa as janelas, botões e barras NES do próprio framework, com fonte bitmap, como no Brutopolis. Em telas largas, lista e ficha aparecem lado a lado; em telas pequenas, os botões **Lista/Ficha** alternam as vistas. **<>** amplia a janela; **X**, **C** ou **Esc** fecha o observatório. **/** foca a busca. A roda ou o arrasto no painel rola seu conteúdo; **Page Up/Down**, **Home/End** percorrem a ficha. **Localizar no mapa** centraliza a câmera e fecha a janela.
@@ -37,7 +38,11 @@ Construtoras também oferecem **serviços contratados**, com preço por célula 
 O prefeito contrata **estradas e ampliação da prefeitura** com o tesouro, separado de seu dinheiro pessoal. Estradas exigem uma pedra e duas unidades de trabalho por tile novo, preservam a altura original e respeitam terrenos cadastrados. Novos empreendimentos deixam de ganhar estradas prontas: a ligação por terra continua disponível, e o município contrata a pavimentação. A ampliação adiciona pavimentos e espaços ao mesmo edifício, preservando os contratos e estoques existentes. A carga administrativa (população e empresas) gera a demanda por ampliar a prefeitura. Caminhos da geração inicial continuam sendo infraestrutura de partida.
 
 **Ar livre** ocupa somente o nível do solo, acompanhando cada trecho do terreno, sem paredes, telhado, laje ou pavimentos. Fazendas exigem apenas o terreno para sua instalação, sem pedras ou trabalho de edificação; sementes e salários continuam sendo despesas de operação.
-Cada apartamento é uma célula de 1×1×1. Cidadãos compram os espaços e podem ocupá-los, alugá-los ou revendê-los. Proprietários privados decidem entre renda de aluguel e venda conforme reservas e preferência individual. A venda de um apartamento ocupado preserva seu inquilino; o próximo aluguel vai ao novo dono. Morar no próprio espaço dispensa aluguel. São cobradas diárias, com primeiro pagamento na contratação e encerramento do contrato após três dias sem pagamento. Trabalhadores que acumulam reservas também podem comprar moradia.
+Cada unidade negociável é uma célula de **1×1×1 na fachada**; o miolo dos pavimentos é circulação comum e não pode ser vendido nem alugado. Moradias agrupam unidades contíguas, normalmente **quarto e banheiro**, e empresas utilizam várias unidades, incluindo seu banheiro de funcionários.
+
+O preço inicial residencial é **R$ 1.200 por cômodo**, com aluguel diário de **R$ 3,50 por cômodo**: uma casa de quarto e banheiro custa R$ 2.400 ou R$ 7 por dia. Compra, aluguel e despesas de sobrevivência disputam o dinheiro real dos cidadãos. Eles preferem moradias completas quando conseguem pagá-las. Casais e filhos compartilham a casa; o contrato cobra todos os cômodos, sem multiplicar a diária por morador. Morar em unidades próprias dispensa o aluguel dessas unidades.
+
+A prefeitura vende e nunca aluga. Proprietários privados podem alugar ou revender; construtoras preferem vender, mas podem colocar casas não vendidas para alugar após um dia. A venda de uma unidade ocupada preserva o inquilino. A primeira diária é paga na contratação; três dias sem pagamento encerram o contrato e deixam a família sem moradia. Pessoas sem casa continuam procurando emprego, comida e abrigo, com descanso menos eficaz ao dormir na rua.
 
 ## População e capital inicial
 
@@ -61,7 +66,7 @@ As fazendas podem cultivar **maçã, goiaba, trigo, milho, mandioca, cebola, fei
 
 As padarias consomem **duas unidades de trigo para produzir três de pão**, após acumular trabalho de panificação. Mercados e hortifrutis compram produtos das fazendas; mercados também podem comprar pão das padarias. As lojas vendem refeições com três unidades de alimento. Compras, produção, transformação e consumo alteram estoques reais e têm registros de origem e destino. Não há reposição de comida de um fornecedor externo nem geração de alimentos pelo simples trabalho no mercado.
 
-As demandas combinam ausência de um tipo de comércio, população, capacidade estimada, estoques e pedidos de insumos. Uma padaria sem trigo aumenta a pressão por fazendas de trigo; lojas sem frutas e legumes geram oportunidades para os cultivos correspondentes. Demanda maior aumenta a prioridade de investimento, com variação individual nas escolhas. Capital disponível, mão de obra e um lote acessível também limitam novas empresas. Sementes ainda são compradas da economia externa, mediante pagamento e respeitando a capacidade do inventário. Pedras vêm exclusivamente das pedreiras locais. Comida vem da reserva inicial ou da cadeia agrícola local.
+As demandas combinam ausência de um tipo de comércio, população, capacidade estimada, estoques e pedidos de insumos. Uma padaria sem trigo aumenta a pressão por fazendas de trigo; lojas sem frutas e legumes geram oportunidades para os cultivos correspondentes. Demanda maior aumenta a prioridade de investimento, com variação individual nas escolhas. Capital disponível, mão de obra e um lote acessível também limitam novas empresas. Sementes ainda são compradas da economia externa, mediante pagamento e respeitando a capacidade do inventário. Pedras vêm das pedreiras locais ou do processamento de lixo. Comida vem da reserva inicial ou da cadeia agrícola local.
 
 ## Inventários, fretes e reserva pública
 
@@ -69,7 +74,7 @@ Todos os prédios, inclusive residenciais, têm inventário com capacidade finit
 
 As compras internas reservam espaço no destino e dinheiro em uma conta de frete. A carga sai do estoque de origem e fica identificada como mercadoria reservada, com posição física. Um cidadão percorre o caminho até a carga e depois até o destino. Só a chegada acrescenta itens ao inventário de destino e libera o pagamento ao fornecedor. Interrupções preservam a posição da carga; cancelamentos devolvem dinheiro e mercadoria, liberando a capacidade. Se não houver espaço para recuperar materiais de uma instalação demolida, a perda fica contabilizada explicitamente.
 
-Transportadoras contratam funcionários conforme habilidades e vínculos, pagam salários durante os trajetos e recebem pelo frete entregue. A habilidade de logística aumenta com a prática. Antes de haver transportadora, os próprios empreendedores podem carregar compras. São viagens a pé de até 24 itens, sem veículos. Pedras também precisam viajar da pedreira ao canteiro.
+Transportadoras contratam funcionários conforme habilidades e vínculos, pagam salários durante os trajetos e recebem pelo frete entregue. A habilidade de logística aumenta com a prática. Antes de haver transportadora, ou quando conseguem pagar os produtos mas não o frete, os próprios empreendedores podem carregar compras. São viagens a pé de até 24 itens, sem veículos. Pedras também precisam viajar da pedreira ao canteiro.
 
 A prefeitura começa com **1.728 unidades de pão** para os 24 habitantes: 576 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e não se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
 
@@ -83,7 +88,21 @@ O funcionário prefere o refeitório da empresa. Uma refeição consome três it
 
 Se não houver refeição acessível na empresa, o empregado vai a um estabelecimento e a empresa lhe paga um **vale-alimentação de no mínimo R$ 30,00 ou seis vezes o preço da refeição**, o que for maior. O valor sai do caixa do empregador e entra na conta do trabalhador; a mesma necessidade de comer não pode gerar vários vales. A diferença torna o refeitório abastecido muito mais barato que pagar vales. Sem caixa suficiente, o empregador não pode emitir dinheiro para o benefício.
 
-A ficha **Equipe** mostra refeições fornecidas, compras para alimentação e vales pagos; a ficha do cidadão mostra o benefício recebido no dia. As regras das outras necessidades permanecem as mesmas.
+A ficha **Equipe** mostra refeições fornecidas, compras para alimentação e vales pagos; a ficha do cidadão mostra o benefício recebido no dia. A arbitragem das necessidades atende à urgência de cada pessoa; refeições continuam possíveis mesmo com saúde ou outras necessidades críticas. Atividades sem progresso são canceladas para a pessoa reorganizar a rotina.
+
+## Banheiros, limpeza e reciclagem
+
+Toda empresa fornece banheiro para funcionários e proprietários. Banheiros residenciais atendem moradores e amigos muito próximos (afeto de pelo menos 65 e confiança de pelo menos 50). Banheiros públicos gratuitos são livres, mesmo imundos. Banheiros pagos cobram **R$ 1,50 por uso**, exigindo recursos do usuário.
+
+Cada visita reduz a limpeza em seis pontos e gera uma unidade de lixo físico. Um banheiro praticamente perfeito dá bônus de humor; sujeira causa infelicidade e, quando extrema, prejudica higiene e saúde. Cada visita produz resíduos e cobra somente uma vez, mesmo durando vários minutos.
+
+Empresas de faxina atendem moradores, empresas e prefeitura. Cada serviço reserva R$ 1,80 até um trabalhador chegar e executar a limpeza. Banheiros pagos podem contratar a cada três horas; privados, a cada dia; gratuitos, **somente após uma semana** desde a última limpeza. Sem prestadora, uma equipe municipal pode executar a faxina semanal gratuita. Sem dinheiro ou mão de obra disponível, a limpeza aguarda.
+
+Coletoras retiram lotes de lixo por transporte físico, cobrando pelo serviço. Moradias cobram a coleta do proprietário, empresas do próprio caixa e banheiros públicos do tesouro. Recicladoras compram o lixo coletado e transformam **duas unidades de lixo em uma pedra**, com trabalho e habilidade. Lixo além da capacidade fica espalhado no prédio e continua contabilizado até haver espaço e coleta. A demanda por esses serviços atrai novos empresários.
+
+## Sobrevivência e morte
+
+Falta prolongada de comida (12 horas a zero), água (seis horas a zero) ou saúde (duas horas a zero) provoca morte. Também há morte por velhice. O histórico registra nome, idade, momento e causa uma única vez. Mortes encerram atividades e empregos, preservam cargas em trânsito e transferem dinheiro e patrimônio a herdeiros adultos ou ao município; o prefeito é substituído quando necessário.
 
 ## Relevo e sementes
 
@@ -102,12 +121,15 @@ Pessoas próximas conversam por 4–8 minutos, com intervalo mínimo de 30 minut
 
 Casais estáveis que desejam filhos podem planejar uma família após dois dias, com saúde, reservas, moradia e espaço privado disponível. A chegada leva três dias simulados; o limite é de dois filhos por pessoa e o intervalo mínimo entre nascimentos é de cinco dias. A idade avança um ano a cada 12 dias. São tempos acelerados para a simulação.
 
-Crianças têm parentesco, necessidades, conta e moradia própria. O responsável paga suas despesas; crianças pequenas precisam de cuidados em casa, com alimentos de provisões ou das lojas locais. A partir de seis anos, visitam serviços, ainda sustentadas pelo responsável. Aos 18, deixam a dependência financeira e podem disputar vagas. Crianças não são contratadas nem formam relacionamentos amorosos.
+Crianças recebem nomes naturais, sem IDs, e herdam o sobrenome familiar. Têm parentesco, necessidades e conta, mas compartilham a moradia dos responsáveis. O responsável com mais recursos paga suas despesas; crianças pequenas precisam de cuidados em casa, com alimentos de provisões ou das lojas locais. A partir de seis anos, visitam serviços, ainda sustentadas pelo responsável. Aos 18, deixam a dependência financeira e podem disputar vagas. Crianças não são contratadas nem formam relacionamentos amorosos.
 
 ## Código e verificação
 
 - `js/city_simulation.js`: pessoas, necessidades, propriedades, contas e integração.
 - `js/city_economy.js`: prefeito, investidores, mercado imobiliário, contratação, habilidades, demandas, produção, comércio e consumo.
+- `js/city_housing.js`: moradias, unidades na fachada, contratos familiares e despejos.
+- `js/city_life.js`: nomes, recuperação de rotinas, sobrevivência e mortes.
+- `js/city_sanitation.js`: acesso a banheiros, faxina contratada, lixo e reciclagem.
 - `js/city_inventory.js`: capacidades e reservas de espaço.
 - `js/city_logistics.js`: cargas, trajetos, transportadores, pagamentos e cancelamentos.
 - `js/city_development.js`: terrenos, projetos sob medida, contratos, estradas e ampliações.
@@ -120,7 +142,7 @@ Crianças têm parentesco, necessidades, conta e moradia própria. O responsáve
 
 `npm test` verifica os controles originais, preservação do relevo, políticas públicas de venda, propriedade privada, contratação, habilidades, insumos, receitas, estoques, conversas e famílias. Simulações de vários dias verificam conservação de dinheiro e de cada mercadoria: estoque inicial e importações + produção = consumo e transformação + estoques em prédios, obras e fretes + perdas registradas. Os testes antigos de contratos e famílias usam uma cidade desenvolvida como fixture; os novos testes também verificam a evolução desde as três instalações iniciais.
 
-Ainda não há salvamento da cidade, eleições periódicas, crédito bancário, mortalidade, escola, irrigação ou veículos de transporte. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
+Ainda não há salvamento da cidade, eleições periódicas, crédito bancário, escola, irrigação ou veículos de transporte. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
 
 ---
 

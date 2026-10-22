@@ -1,3 +1,4 @@
+import { SANITATION_RULES } from './city_sanitation.js';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { clipCanvasRegion, canvasBox, canvasBar } from './canvas_widgets.js';
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js';
@@ -6,7 +7,7 @@ import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js
 import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js';
 export const money = value => ((value || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const C = { gold: '#f8b800', gray: '#bcbcbc', green: '#58d854', red: '#ff6060', cyan: '#40c8f8', pink: '#f878b8' };
-const TABS = [['city', 'CIDADE'], ['government', 'GOVERNO'], ['people', 'PESSOAS'], ['land', 'TERRENOS'], ['buildings', 'IMOVEIS'], ['economy', 'EMPRESAS'], ['production', 'PRODUCAO'], ['transport', 'TRANSPORTES'], ['log', 'HISTORICO']];
+const TABS = [['city', 'CIDADE'], ['government', 'GOVERNO'], ['people', 'PESSOAS'], ['land', 'TERRENOS'], ['buildings', 'IMOVEIS'], ['economy', 'EMPRESAS'], ['production', 'PRODUCAO'], ['transport', 'TRANSPORTES'], ['sanitation', 'SANEAMENTO'], ['log', 'HISTORICO']];
 const stamp = minute => `D${Math.floor(minute / 1440) + 1} ${String(Math.floor(minute % 1440 / 60)).padStart(2, '0')}:${String(Math.floor(minute % 60)).padStart(2, '0')}`;
 const name = entity => entity?.properties?.name || 'Ausente';
 const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -115,7 +116,7 @@ export class CityUI {
       p.heading(`CIDADÃOS / ${this.city.citizens.length}`);
       p.note('Nome / saldo / atividade. Clique para abrir a ficha.');
       const people = this.city.citizens.filter(c => this.matches(`${name(c.entity)} ${c.action} ${c.profession}`));
-      for (const c of people) p.card(name(c.entity), `${money(c.balance)} | ${c.action}`, () => this.openCitizen(c.id), this.selected?.id === c.id);
+      for (const c of people) p.card(name(c.entity), `${money(c.balance)} | ${c.homeUnitId ? '' : 'SEM MORADIA / '}${c.action}`, () => this.openCitizen(c.id), this.selected?.id === c.id);
       if (!people.length) p.note('Nenhum cidadão encontrado.');
     } else {
       const businesses = this.tab === 'economy';
@@ -145,9 +146,11 @@ export class CityUI {
     this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'HABILIDADES'], ['family', 'VÍNCULOS'], ['assets', 'FINANÇAS']]);
     if (this.detailTab === 'profile') {
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
-      p.kv('Felicidade', `${Math.round(c.happiness)}%`); p.kv('Saldo pessoal', money(c.balance)); p.kv('Provisões', `${c.provisions} refeições`);
+      p.kv('Felicidade', `${Math.round(c.happiness)}%`); p.kv('Saldo pessoal', money(c.balance)); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
       p.heading('NECESSIDADES'); for (const [id, value] of Object.entries(c.needs)) p.meter(NEED_LABELS[id], value);
-      const home = city.units.get(c.homeUnitId); p.heading('MORADIA');
+      const home = city.units.get(c.homeUnitId), dwelling = city.housing.home(c); p.heading('MORADIA');
+      if (dwelling) { p.kv('Casa', dwelling.id); p.kv('Cômodos', city.housing.units(dwelling).map(u => u.roomType === 'bathroom' ? 'Banheiro' : 'Quarto').join(' + ')); p.kv('Aluguel total/dia', money(city.housing.rent(dwelling, c))); p.kv('Valor de compra da casa', money(city.housing.price(dwelling))); }
+      p.note('Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
       if (home) { p.kv('Célula', home.id); p.kv('Regime', home.ownerId === c.accountId ? 'Proprietário' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
       else p.note('Sem moradia', C.red);
     } else if (this.detailTab === 'skills') {
@@ -189,7 +192,7 @@ export class CityUI {
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');
       p.note('Proprietário da empresa'); if (b.ownerId) p.button(name(city.economy.citizen(b.ownerId)?.entity), () => this.openCitizen(b.ownerId)); else p.note('Serviço público / sem empresa');
       p.kv('Caixa operacional', money(b.balance)); p.kv('Receita acumulada', money(b.totalRevenue)); p.kv('Despesas acumuladas', money(b.totalExpenses)); p.kv('Dividendos pagos', money(b.dividends));
-      p.kv('Equipe', `${b.workers.length}/${b.jobs}`); p.kv('Desnível do terreno', Number(b.terrain.variation).toFixed(2));
+      p.kv('Equipe', `${b.workers.length}/${b.jobs}`); p.kv('Desnível do terreno', Number(b.terrain.variation).toFixed(2)); p.kv('Circulação comum', `${b.circulation?.length || 0} células sem imóveis`);
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, b.accountId);
     } else if (this.detailTab === 'stock') {
       p.heading('INVENTÁRIO REAL'); p.kv('Capacidade', `${inventoryUsed(b)}/${b.inventoryCapacity} itens`); p.kv('Reservado para recebimento', incomingItems(b)); p.kv('Espaço livre', inventoryFree(b)); p.meter('Ocupação do armazém', inventoryUsed(b) / b.inventoryCapacity * 100, inventoryFree(b) < 12 ? C.red : C.cyan); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
@@ -212,9 +215,9 @@ export class CityUI {
       p.note('Contratos de prédios sob medida definem largura, profundidade e andares dentro do terreno. Materiais, fretes e serviço são pagos pelo contratante; o serviço só é liberado após a conclusão.');
       this.contracts(p, city.development.projects.filter(o => o.builderId === b.id).slice(-20).reverse());
     } else {
-      p.note('Cada célula tem dono, ocupação, preço e contrato independentes. A prefeitura sempre vende seus espaços; nunca os aluga.');
+      p.note('Somente células externas são imóveis. O miolo é circulação comum, sem venda ou aluguel. Casas agrupam quarto e banheiro; empresas ocupam vários espaços. Cada cômodo tem dono, preço e contrato. Cada célula tem dono, ocupação, preço e contrato independentes. A prefeitura sempre vende seus espaços; nunca os aluga.');
       let u = city.units.get(this.unitId); if (u?.buildingId !== b.id) u = b.units[0]; this.unitId = u?.id || null;
-      if (u) { p.heading(`CÉLULA ${u.x},${u.y},${u.z}`); p.kv('Proprietário', city.accountName(u.ownerId)); this.accountLink(p, u.ownerId);
+      if (u) { p.heading(`CÉLULA ${u.x},${u.y},${u.z}`); p.kv('Cômodo', { bedroom: 'Quarto', bathroom: 'Banheiro', workspace: 'Área da empresa' }[u.roomType]); if (u.homeId) p.kv('Casa', u.homeId); p.kv('Proprietário', city.accountName(u.ownerId)); this.accountLink(p, u.ownerId);
         p.kv('Ocupante', u.tenantId || u.occupantId ? city.accountName(u.tenantId || u.occupantId) : 'Livre'); this.accountLink(p, u.tenantId || u.occupantId);
         p.kv('Venda', money(u.price)); p.kv('Aluguel/dia', u.ownerId === 'treasury' ? 'Prefeitura não aluga' : money(u.rent)); p.kv('Em atraso', money(u.arrears)); p.kv('Anúncio', u.forSale ? 'À venda' : u.forRent ? 'Para alugar' : 'Uso próprio / ocupado'); }
       p.heading(`TODOS OS ESPAÇOS / ${b.units.length}`);
@@ -242,6 +245,7 @@ export class CityUI {
       p.heading('PANORAMA DA SIMULAÇÃO'); p.note('Acompanhe os habitantes e as decisões autônomas da cidade.');
       p.metrics([['HABITANTES', s.population], ['FELICIDADE', `${Math.round(s.happiness)}%`], ['EMPREGADOS', s.employed], ['SEM MORADIA', s.homeless], ['EMPRESAS', s.businesses], ['CRIANÇAS', s.children], ['CASAIS', s.couples], ['AMIZADES', s.friendships], ['CÉLULAS', s.units], ['OCUPADAS', s.occupied]]);
       p.kv('Terrenos cadastrados', city.development.plots.length); p.kv('Obras em andamento', city.development.projects.filter(p => !p.cancelled && p.status !== 'completed').length); p.kv('Fretes entregues', city.logistics.delivered);
+      p.kv('Mortes registradas', s.deaths);
       p.heading('ATENÇÃO DA CIDADE');
       const hungry = city.citizens.filter(c => c.needs.food < 30), unemployed = city.citizens.filter(c => city.society.isAdult(c) && !c.jobId && !c.businessIds.length);
       p.note(`${hungry.length} pessoas com alimentação abaixo de 30%`, hungry.length ? C.red : C.green); p.note(`${unemployed.length} adultos sem trabalho ou empresa`, unemployed.length ? C.gold : C.green);
@@ -272,11 +276,11 @@ export class CityUI {
     } else if (this.tab === 'production') {
       p.heading('CADEIA DE ABASTECIMENTO'); p.note('Pedreira > frete > obra > prédio. Fazendas > transportes > lojas > refeições. Trigo > padarias > pão. Cada refeição consome 3 unidades. Os itens só entram no estoque de destino após a chegada do transportador.');
       p.heading('PRODUÇÃO / CONSUMO / ESTOQUE'); p.note('Totais acumulados da cidade. Consumo inclui insumos de transformação.');
-      for (const [g, spec] of Object.entries(GOODS)) { const stock = city.buildings.reduce((n, b) => n + (!b.entity.destroyed ? b.inventory?.[g] || 0 : 0), 0); p.kv(spec.label, `${city.economy.produced[g]} / ${city.economy.consumed[g]} / ${stock}`); const transit = city.logistics.shipments.reduce((n, s) => n + s.inventory[g], 0), sites = city.development.projects.reduce((n, s) => n + s.inventory[g], 0); p.note(`Inicial/importado ${city.economy.initialStock[g]} | em transporte ${transit} | nas obras ${sites}`); }
+      for (const [g, spec] of Object.entries(GOODS)) { const stock = city.buildings.reduce((n, b) => n + (!b.entity.destroyed ? (b.inventory?.[g] || 0) + (g === 'lixo' ? b.litter || 0 : 0) : 0), 0); p.kv(spec.label, `${city.economy.produced[g]} / ${city.economy.consumed[g]} / ${stock}`); const transit = city.logistics.shipments.reduce((n, s) => n + s.inventory[g], 0), sites = city.development.projects.reduce((n, s) => n + s.inventory[g], 0); p.note(`Inicial/importado ${city.economy.initialStock[g]} | em transporte ${transit} | nas obras ${sites}`); }
       p.kv('Tentativas de refeição sem oferta', city.economy.failedMeals);
       this.demands(p);
       p.heading('MOVIMENTAÇÕES DE MERCADORIAS');
-      const kinds = { dispatch: 'Carga reservada', delivery: 'Entrega', mining: 'Extração', construction: 'Construção', road: 'Estrada', expansion: 'Ampliação', 'workplace-meal': 'Refeição da empresa', trade: 'Comércio', consumption: 'Consumo', sowing: 'Plantio', harvest: 'Colheita', 'recipe-input': 'Insumo de receita', baking: 'Panificação' };
+      const kinds = { dispatch: 'Carga reservada', delivery: 'Entrega', mining: 'Extração', construction: 'Construção', road: 'Estrada', expansion: 'Ampliação', 'workplace-meal': 'Refeição da empresa', waste: 'Lixo gerado', 'recycling-input': 'Processamento de lixo', 'recycling-output': 'Pedra reciclada', trade: 'Comércio', consumption: 'Consumo', sowing: 'Plantio', harvest: 'Colheita', 'recipe-input': 'Insumo de receita', baking: 'Panificação' };
       for (const l of city.economy.goodsLedger.slice(-20).reverse()) {
         p.note(`${stamp(l.minute)} | ${GOODS[l.good]?.label || l.good} x${l.quantity} | ${kinds[l.kind] || l.kind}`, C.cyan);
         const origin = city.building(l.from)?.entity, destination = city.building(l.to)?.entity || city.society.citizen(l.to)?.entity;
@@ -284,6 +288,7 @@ export class CityUI {
       }
     } else if (this.tab === 'land') this.land(p);
     else if (this.tab === 'transport') this.transport(p);
+    else if (this.tab === 'sanitation') this.sanitation(p);
     else if (this.tab === 'log') this.log(p);
   }
   land(p) {
@@ -338,6 +343,26 @@ export class CityUI {
       p.note(`${stamp(s.createdAt)} | trajeto de ${s.routeLength} células${s.completedAt ? ' | conclusão ' + stamp(s.completedAt) : ''}`);
     }
     if (!logistics.shipments.length) p.note('Nenhum frete solicitado ainda.');
+  }
+  sanitation(p) {
+    const city = this.city, system = city.sanitation;
+    p.heading('BANHEIROS, FAXINA E LIXO');
+    p.note('Banheiros privados de casas atendem moradores e amigos próximos; os das empresas atendem funcionários e proprietários. Banheiros públicos gratuitos são livres; os pagos cobram por uso.');
+    p.kv('Banheiros cadastrados', system.facilities.size); p.kv('Limpezas concluídas', system.cleaned); p.kv('Lixo físico na cidade', city.goodsStock('lixo')); p.kv('Lixo processado', city.economy.consumed.lixo);
+    p.note('Banheiros gratuitos: limpeza somente após sete dias. Pagos: limpeza mais frequente. Cada uso gera lixo e altera limpeza, humor e saúde. Duas unidades de lixo processadas geram uma pedra.');
+    const access = { home: 'Privado / moradia', employees: 'Privado / empresa', public: 'Público gratuito', paid: 'Público pago' };
+    for (const f of [...system.facilities.values()].filter(f => this.matches(`${city.building(f.buildingId)?.entity.properties.name} ${access[f.access]} ${f.homeId || ''}`))) {
+      const b = city.building(f.buildingId); if (!b) continue;
+      p.button(`${name(b.entity)} / ${f.homeId || 'BANHEIRO'}`, () => { this.select(b.entity); this.unitId = f.unitId; this.detailTab = 'units'; });
+      p.kv('Acesso', access[f.access]); p.kv('Preço por uso', money(f.price)); p.meter('Limpeza', f.cleanliness); p.kv('Utilizações', f.uses);
+      p.kv('Última limpeza', stamp(f.lastCleanedAt));
+      const interval = f.access === 'public' ? SANITATION_RULES.freeCleaningInterval : f.access === 'paid' ? SANITATION_RULES.paidCleaningInterval : SANITATION_RULES.privateCleaningInterval;
+      p.kv('Limpeza a partir de', stamp(f.lastCleanedAt + interval)); p.kv('Serviço', f.cleaningJobId ? `Faxina ${f.cleaningJobId} contratada` : 'Sem faxina pendente');
+      p.kv('Lixo no prédio', b.inventory.lixo); if (b.litter) p.kv('Lixo espalhado', b.litter);
+    }
+    p.heading('MORTES E SOBREVIVÊNCIA'); p.kv('Mortes registradas', city.life.deathCount); p.kv('Rotinas recuperadas', city.life.stallRecoveries);
+    for (const d of city.life.deaths.slice(-30).reverse()) { p.note(`${stamp(d.minute)} / ${d.name}`, C.gold); p.note(`${d.cause} / ${d.age} anos`, C.gray); }
+    if (!city.life.deaths.length) p.note('Nenhuma morte registrada.');
   }
   events(p, events) {
     for (const e of events) { p.note(`${stamp(e.minute)} / ${EVENT_CATEGORIES[e.category] || e.category}`, C.gold); p.note(e.message); for (const id of e.citizenIds || []) { const c = this.city.society.citizen(id); if (c) p.button(name(c.entity), () => this.openCitizen(id)); } p.space(8); }

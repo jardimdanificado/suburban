@@ -91,9 +91,9 @@ test('families require stability, preferences and resources and create a child o
   assert.equal(child.initialAge, 0); assert.equal(child.balance, 0);
   assert.equal(child.jobId, null); assert.equal(child.expectingId, null);
   assert.equal(a.expectingId, null); assert.equal(b.expectingId, null);
-  assert(child.homeUnitId); assert.notEqual(child.homeUnitId, a.homeUnitId);
-  assert.equal(city.units.get(child.homeUnitId).tenantId, child.accountId);
-  assert.equal(city.units.get(child.homeUnitId).rentPayerId, a.accountId);
+  assert(child.homeUnitId); assert.equal(child.homeUnitId, a.homeUnitId);
+  assert.equal(child.homeId, city.housing.home(city.society.guardian(child)).id);
+  assert.equal(city.units.get(child.homeUnitId).tenantId, a.accountId);
   assert.equal(totalMoney(city), money);
   assert.equal(city.society.giveBirth(pregnancy), null);
   assert.equal(city.society.planChild(a, b), null);
@@ -150,7 +150,7 @@ test('departures clear partners and conversations and assign the surviving paren
   const child = city.society.giveBirth(pregnancy);
   a.entity.destroyed = true; city.reconcile();
   assert.equal(b.partnerId, null); assert.equal(child.guardianId, b.id);
-  assert.equal(city.units.get(child.homeUnitId).rentPayerId, b.accountId);
+  assert.equal(child.homeUnitId, b.homeUnitId);
   assert(child.parentIds.includes(a.id));
   assert.equal(totalMoney(city), 2000000);
 });
@@ -174,10 +174,10 @@ test('a fifteen-day city develops families with coherent private contracts, need
   const children = city.citizens.filter(c => c.parentIds.length);
   assert(children.length > 0);
   assert(city.stats().couples > 0);
-  assert.equal(city.stats().births, children.length);
+  assert.equal(city.stats().births, children.length + [...city.accounts.values()].filter(c => c.dead && c.parentIds?.length).length);
   assert.equal(totalMoney(city), 2000000);
   for (const child of children) {
-    if (child.homeUnitId) assert.equal(city.units.get(child.homeUnitId).tenantId, child.accountId);
+    if (child.homeUnitId) assert.equal(child.homeId, city.housing.home(city.society.guardian(child)).id);
     assert.equal(child.jobId, null);
     assert(child.needs.health >= 0 && child.needs.health <= 100);
     assert(city.society.guardian(child));
