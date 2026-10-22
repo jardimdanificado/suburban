@@ -64,7 +64,7 @@ test('map cell selection opens ownership detail and switching dossiers resets un
 test('inspector works with the original framework UI without clip, box or bar methods', () => {
   const h = harness();
   h.ui.clip = h.ui.box = h.ui.bar = undefined;
-  for (const tab of ['city', 'government', 'production', 'log']) {
+  for (const tab of ['city', 'government', 'land', 'production', 'transport', 'log']) {
     h.inspector.navigate(tab); assert.doesNotThrow(h.draw);
   }
   h.inspector.setSelection(h.city.citizens[0].entity);

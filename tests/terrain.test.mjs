@@ -31,8 +31,8 @@ test('settlements across all landscape presets preserve every natural height and
   for (const [preset, seed] of [[0, 42], [1, 1337], [2, 23811]]) {
     const world = new World(preset, seed), natural = world.map.slice(), city = cityOn(world);
     city.initialize();
-    assert(city.buildings.length >= 7); assert.equal(city.citizens.length, 24);
-    assert.equal(city.stats().homeless, 0); assert(city.stats().employed > 0); assert.equal(city.stats().wealthy, 3);
+    assert.equal(city.buildings.length, 3); assert.equal(city.citizens.length, 24);
+    assert.equal(city.stats().homeless, 24); assert(city.stats().employed > 0); assert.equal(city.stats().wealthy, 3);
     let roads = 0;
     for (let i = 0; i < natural.length; i++) if (natural[i] !== world.map[i]) {
       roads++; assert(ROAD_TILES.has(world.map[i]));
@@ -82,7 +82,7 @@ test('construction accepts gentle slopes using raised foundations without changi
   for (let y = 10; y < 20; y++) for (let x = 12; x < 20; x++) world.setTile(x, y, 9);
   const before = world.map.slice(), site = inspectBuildingSite(city, 10, 12, 4, 3);
   assert.equal(site.error, undefined); assert(site.variation > 0);
-  const b = city.addBuilding('residential', 10, 12, { width: 4, depth: 3, floors: 2 });
+  const b = city.addBuilding('residential', 10, 12, { width: 4, depth: 3, floors: 2, free: true });
   assert(b); assert.equal(b.terrain.base, buildingGround(world, 10, 12, 4, 3).base);
   for (let y = 12; y < 15; y++) for (let x = 10; x < 14; x++) assert.equal(world.getTile(x, y), before[y * world.width + x]);
   const treasury = city.treasury;
@@ -93,9 +93,9 @@ test('construction accepts gentle slopes using raised foundations without changi
 
 test('isolated plots are rejected without construction charges, roads or terrain edits', () => {
   const world = terrainFixture(), city = cityOn(world);
-  assert(city.addBuilding('townhall', 10, 10, { width: 4, depth: 4, floors: 3 }));
+  assert(city.addBuilding('townhall', 10, 10, { width: 4, depth: 4, floors: 3, free: true }));
   for (let y = 0; y < world.height; y++) world.setTile(30, y, 2);
   const before = world.map.slice(), treasury = city.treasury;
-  assert.equal(city.addBuilding('residential', 40, 20, { width: 4, depth: 4, floors: 3 }), null);
+  assert.equal(city.addBuilding('residential', 40, 20, { width: 4, depth: 4, floors: 3, free: true }), null);
   assert.match(city.lastError, /isolado/); assert.equal(city.treasury, treasury); assert.deepEqual(world.map, before);
 });

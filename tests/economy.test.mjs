@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, totalMoney } from './helpers/city.mjs';
+import { setup, totalMoney, finishShipment } from './helpers/city.mjs';
 import { CitySimulation } from '../js/city_simulation.js';
 import { generateSettlement } from '../js/city_terrain.js';
 import { WorldClock } from '../js/world.js';
@@ -20,7 +20,7 @@ test('the municipality starts as owner of every building and its cells are only 
   for (const u of city.units.values()) { assert.equal(u.ownerId, 'treasury'); assert.equal(u.forRent, false); assert.equal(u.forSale, true); assert.equal(u.tenantId, null); }
 });
 
-test('three initial wealthy investors buy homes and businesses while most citizens are private tenants', () => {
+test('in a developed city three wealthy investors buy homes and businesses while most citizens are private tenants', () => {
   const city = setup(), wealthy = city.citizens.filter(c => c.wealthTier === 'wealthy'), workers = city.citizens.filter(c => c.wealthTier === 'worker');
   assert.equal(wealthy.length, 3); assert.equal(workers.length, 21);
   assert.equal(city.stats().homeless, 0);
@@ -90,7 +90,7 @@ test('food moves from a real harvest to shops in exchange for money, then disapp
   const city = setup(), farm = city.economy.businesses.find(b => b.type === 'farm'), shop = city.economy.businesses.find(b => b.type === 'market'), c = city.citizens[0];
   farm.crop = 'maca'; recordHarvest(city, farm);
   const money = totalMoney(city), quantity = farm.inventory.maca, farmCash = farm.balance, shopCash = shop.balance;
-  assert(city.economy.transferGoods(farm, shop, 'maca', 6, 100));
+  const shipment = city.economy.transferGoods(farm, shop, 'maca', 6, 100); assert(shipment); assert.equal(shop.inventory.maca, 0); finishShipment(city, shipment);
   assert.equal(farm.inventory.maca, quantity - 6); assert.equal(shop.inventory.maca, 6);
   assert.equal(farm.balance, farmCash + 600); assert.equal(shop.balance, shopCash - 600);
   assert.equal(city.economy.transferGoods(farm, shop, 'maca', 999, 100), false);
@@ -104,7 +104,7 @@ test('bakeries transform wheat instead of creating bread or restocking from an e
   const city = setup(), bakery = city.economy.businesses.find(b => b.type === 'bakery'), c = city.economy.citizen(bakery.workers[0]);
   assert.equal(bakery.inventory.pao, 0); assert.equal(city.economy.productionWork(bakery, c), false);
   const farm = city.economy.businesses.find(b => b.type === 'farm'); farm.crop = 'trigo'; recordHarvest(city, farm);
-  assert(city.economy.transferGoods(farm, bakery, 'trigo', 2, 90));
+  const shipment = city.economy.transferGoods(farm, bakery, 'trigo', 2, 90); assert(shipment); finishShipment(city, shipment);
   for (let i = 0; i < 8; i++) city.economy.productionWork(bakery, c);
   assert.equal(bakery.inventory.trigo, 0); assert.equal(bakery.inventory.pao, 3);
   assert.equal(city.economy.consumed.trigo, 2); assert.equal(city.economy.produced.pao, 3);
@@ -128,8 +128,8 @@ test('a multi-day autonomous city conserves money and every harvested or baked g
   assert(city.economy.businesses.length > initialBusinesses);
   assert.equal(totalMoney(city), 2000000);
   for (const good of Object.keys(GOODS)) {
-    const stock = city.buildings.reduce((sum, b) => sum + (b.inventory[good] || 0), 0);
-    assert.equal(city.economy.produced[good], city.economy.consumed[good] + stock, good);
+    const stock = [...city.buildings, ...city.development.projects, ...city.logistics.shipments].reduce((sum, b) => sum + (b.inventory[good] || 0), 0);
+    assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + stock + city.economy.lost[good], good);
     for (const b of city.buildings) assert(Number.isSafeInteger(b.inventory[good]) && b.inventory[good] >= 0);
   }
   assert(city.economy.produced.pao > 0); assert(city.economy.produced.trigo > 0);

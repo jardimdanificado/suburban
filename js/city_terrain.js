@@ -35,7 +35,8 @@ export function buildingGround(world, x, y, width, depth) {
   const door = { x: x + Math.floor(width / 2) + .5, y: y + depth + .5 };
   return { ...terrain, base: Math.max(terrain.base, surfaceElevation(world, door.x, door.y) + .06), door };
 }
-export function inspectBuildingSite(city, x, y, width, depth) {
+export function inspectBuildingSite(city, x, y, width, depth, { plotId = null } = {}) {
+  if (city.development?.overlaps(x, y, width, depth, plotId)) return { error: 'Este espaço já pertence a um terreno cadastrado.' };
   const { world, occupied } = city;
   for (let yy = y - 1; yy <= y + depth; yy++) for (let xx = x - 1; xx <= x + width; xx++) {
     if (occupied.has(tileKey(xx, yy))) return { error: 'Deixe uma célula livre entre os prédios.' };
@@ -113,7 +114,7 @@ export function generateSettlement(city) {
   const { world } = city;
   const origin = { ...world.spawnCenter };
   let hub = null;
-  const specs = [['townhall', 4 + Math.floor(city.random() * 2), 4, 3], ['market', 3, 3, 2], ['residential', 3 + Math.floor(city.random() * 3), 4, 3 + Math.floor(city.random() * 3)], ['residential', 3 + Math.floor(city.random() * 3), 4, 3 + Math.floor(city.random() * 3)], ['clinic', 4, 3 + Math.floor(city.random() * 2), 2], ['utility', 4, 3, 2], ['leisure', 4, 3 + Math.floor(city.random() * 2), 2]];
+  const specs = [['townhall', 4, 4, 2], ['builder', 3, 3, 1], ['quarry', 4, 4, 1]];
   for (const [type, w, d, h] of specs) {
     const angle = city.random() * Math.PI * 2, radius = hub ? 8 + city.random() * 13 : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };

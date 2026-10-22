@@ -1,4 +1,4 @@
-export const EVENT_CATEGORIES = { city: 'Cidade', economy: 'Economia', housing: 'Moradia', work: 'Trabalho', social: 'Convívio', relationship: 'Relacionamentos', family: 'Famílias', government: 'Governo', business: 'Empresas', production: 'Produção' };
+export const EVENT_CATEGORIES = { land: 'Terrenos', construction: 'Construção', transport: 'Transportes', city: 'Cidade', economy: 'Economia', housing: 'Moradia', work: 'Trabalho', social: 'Convívio', relationship: 'Relacionamentos', family: 'Famílias', government: 'Governo', business: 'Empresas', production: 'Produção' };
 export const SOCIAL_RULES = { friendAt: 30, closeFriendAt: 65, partnerAt: 68, conversationCooldown: 30, gestationMinutes: 3 * 1440, daysPerYear: 12, maxChildren: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 const pairKey = (a, b) => [a, b].sort((x, y) => x - y).join(':');

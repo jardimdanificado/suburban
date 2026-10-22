@@ -1,0 +1,119 @@
+import { inventoryFree, initializeInventory } from './city_inventory.js';
+
+/** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
+export class CityLogistics {
+  constructor(city) { this.city = city; this.shipments = []; this.nextId = 1; this.delivered = 0; }
+  pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
+  order(seller, buyer, good, quantity, unitPrice) {
+    const city = this.city;
+    if (!seller || !buyer || seller === buyer || !seller.active || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 24 || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
+    const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
+    const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && b.workers.length && b.balance > 0 && city.economy.connected(b, seller));
+    const carrier = carriers.sort((a, b) => this.shipments.filter(s => s.carrierId === a.id && s.status === 'in-transit').length - this.shipments.filter(s => s.carrierId === b.id && s.status === 'in-transit').length)[0];
+    const fee = carrier ? Math.max(120, (route.length + Math.abs(carrier.door.x - seller.door.x) + Math.abs(carrier.door.y - seller.door.y)) * 12 + quantity * 4) : 0;
+    const cost = quantity * unitPrice;
+    if ((city.accounts.get(buyer.accountId)?.balance || 0) < cost + fee) return false;
+    const id = this.nextId++, accountId = `shipment:${id}`;
+    const s = { id, accountId, name: `Frete ${id}`, balance: 0, seller, buyer, good, quantity, cost, fee, carrierId: carrier?.id || null, driverId: null, status: 'waiting', pickedUp: false, createdAt: city.minute, routeLength: route.length };
+    initializeInventory(s, city.economy.goods, 24); s.inventory[good] = quantity;
+    city.accounts.set(accountId, s);
+    if (!city.transfer(buyer.accountId, accountId, cost + fee, 'Reserva de compra e frete')) { city.accounts.delete(accountId); return false; }
+    seller.inventory[good] -= quantity; buyer.incoming[good] = (buyer.incoming[good] || 0) + quantity;
+    // Until pickup the reserved cargo stays at the supplier's entrance.
+    s.position = { ...seller.door }; this.shipments.push(s);
+    city.economy.recordGoods('dispatch', good, quantity, seller.id, buyer.id);
+    city.log(`Frete ${id}: ${quantity} ${city.economy.goods[good].label}, de ${seller.entity?.properties.name || seller.name} para ${buyer.entity?.properties.name || buyer.name}.`, 'transport', [], { kind: 'shipment-ordered', shipmentId: id });
+    return s;
+  }
+  releaseDriver(s) {
+    const c = this.city.society.citizen(s.driverId);
+    if (c) { c.deliveryId = null; c.task = null; c.path = []; }
+    s.driverId = null;
+  }
+  cancel(s) {
+    if (['delivered', 'cancelled'].includes(s.status)) return;
+    this.releaseDriver(s);
+    s.buyer.incoming[s.good] = Math.max(0, (s.buyer.incoming[s.good] || 0) - s.quantity);
+    const hall = this.city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
+    const destination = !s.seller.entity?.destroyed && inventoryFree(s.seller) >= s.quantity ? s.seller : hall;
+    if (destination && inventoryFree(destination) >= s.quantity) destination.inventory[s.good] += s.quantity;
+    else this.city.economy.lost[s.good] += s.quantity;
+    s.inventory[s.good] = 0;
+    const buyerAccount = this.city.accounts.get(s.buyer.accountId);
+    const refund = buyerAccount && !buyerAccount.entity?.destroyed ? s.buyer.accountId : this.city.economy.citizen(buyerAccount?.ownerId)?.accountId || 'treasury';
+    this.city.transfer(s.accountId, refund, s.balance, 'Estorno de frete cancelado');
+    s.status = 'cancelled'; s.completedAt = this.city.minute;
+    this.city.log(`Frete ${s.id} cancelado; reserva financeira devolvida.`, 'transport', [], { kind: 'shipment-cancelled', shipmentId: s.id });
+  }
+  candidates(s) {
+    const economy = this.city.economy, carrier = this.city.building(s.carrierId);
+    const ids = carrier?.active ? [...carrier.workers, carrier.ownerId] : [];
+    if (!carrier?.active) {
+      s.carrierId = null;
+      // Owners can bootstrap the supply chain by hauling their own purchases.
+      ids.push(s.buyer.ownerId, s.seller.ownerId);
+      const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
+    }
+    return [...new Set(ids)].map(id => economy.citizen(id)).filter(c => c && !c.deliveryId && !c.entity.destroyed && this.city.society.isAdult(c) && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy > 25 && (!carrier || c.id === carrier.ownerId || carrier.balance >= carrier.wage));
+  }
+  updateMinute() {
+    const city = this.city;
+    for (const s of this.shipments) {
+      if (['delivered', 'cancelled'].includes(s.status)) continue;
+      if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || !s.seller.active || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
+      let c = city.society.citizen(s.driverId);
+      if (c && (city.urgentNeed(c) || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }
+      if (!c) {
+        s.driverId = null;
+        if (city.hour < 7 || city.hour >= 20 || city.minute % 5 !== 0) continue;
+        for (const candidate of this.candidates(s)) {
+          const path = city.findPath(candidate.entity, s.position); if (path === null) continue;
+          c = candidate; c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; break;
+        }
+        if (!c) continue;
+      }
+      const carrierEmployer = city.building(s.carrierId);
+      if (carrierEmployer && c.jobId === carrierEmployer.id && carrierEmployer.balance < carrierEmployer.wage) {
+        if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y };
+        this.releaseDriver(s); s.status = 'waiting'; continue;
+      }
+      if (carrierEmployer && c.jobId === carrierEmployer.id) {
+        const wage = carrierEmployer.wage, taxExact = wage * city.taxRate + c.taxRemainder, tax = Math.floor(taxExact + 1e-9); c.taxRemainder = taxExact - tax;
+        city.transfer(carrierEmployer.accountId, c.accountId, wage - tax, 'Salário'); city.transfer(carrierEmployer.accountId, 'treasury', tax, 'Imposto sobre salário'); c.salaryToday += wage - tax; c.lastPaidAt = city.minute;
+        city.economy.practice(c, 'logistics');
+      }
+      c.task = 'transport';
+      if (!c.path.length) {
+        const goal = c.deliveryLeg === 'delivery' ? s.buyer.door : s.position;
+        if (Math.hypot(c.entity.x - goal.x, c.entity.y - goal.y) > .9) {
+          const path = city.findPath(c.entity, goal);
+          if (path === null) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); s.status = 'waiting'; continue; }
+          c.path = path;
+        }
+      }
+      if (c.path.length) { c.action = `Transportando ${city.economy.goods[s.good].label} / frete ${s.id}`; continue; }
+      if (c.deliveryLeg !== 'delivery') {
+        s.pickedUp = true;
+        const path = city.findPath(c.entity, s.buyer.door);
+        if (path === null) { s.pickedUp = false; this.releaseDriver(s); continue; }
+        c.path = path; c.deliveryLeg = 'delivery';
+      } else {
+        s.buyer.incoming[s.good] -= s.quantity;
+        if (inventoryFree(s.buyer) < s.quantity) { s.buyer.incoming[s.good] += s.quantity; s.status = 'waiting-space'; continue; }
+        s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
+        city.transfer(s.accountId, s.seller.accountId, s.cost, `Atacado: ${city.economy.goods[s.good].label}`);
+        const carrier = city.building(s.carrierId);
+        city.transfer(s.accountId, carrier?.active ? carrier.accountId : s.buyer.accountId, s.fee, carrier?.active ? 'Frete entregue' : 'Estorno de frete sem transportadora');
+        const buyerAccount = city.accounts.get(s.buyer.accountId);
+        if (buyerAccount?.entity?.properties.cityBuilding) buyerAccount.totalExpenses += s.cost + (carrier?.active ? s.fee : 0);
+        city.economy.recordGoods('delivery', s.good, s.quantity, s.seller.id, s.buyer.id);
+        city.economy.practice(c, 'logistics', 10); this.releaseDriver(s);
+        s.status = 'delivered'; s.completedAt = city.minute; this.delivered++;
+        city.log(`Frete ${s.id} entregue: ${s.quantity} ${city.economy.goods[s.good].label}.`, 'transport', [c.id], { kind: 'shipment-delivered', shipmentId: s.id });
+      }
+    }
+    // Retain every active load, plus the latest 100 completed records.
+    const completed = this.shipments.filter(s => ['delivered', 'cancelled'].includes(s.status));
+    for (const s of completed.slice(0, -100)) { this.city.accounts.delete(s.accountId); this.shipments.splice(this.shipments.indexOf(s), 1); }
+  }
+}

@@ -1,4 +1,4 @@
-import { buildingGround } from './city_terrain.js';
+import { buildingGround, surfaceElevation } from './city_terrain.js';
 // City geometry is built once per building; one instance is exactly one 1×1×1 space.
 export function syncCityBuildings(renderer, THREE, entities, world) {
   const map = world.map;
@@ -8,6 +8,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     const b = entity.properties?.cityBuilding;
     if (!b || entity.destroyed) continue;
     active.add(entity.id);
+    if (b.constructionKind === 'open-air') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     if (!group) {
       group = new THREE.Group();
@@ -83,4 +84,35 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     group.traverse(object => { object.geometry?.dispose(); object.material?.dispose(); });
     renderer.cityMeshes.delete(id);
   }
+}
+
+// Open-air premises follow every patch of the natural surface; no slab, walls or roof.
+function syncOpenAir(renderer, THREE, entity, b, world) {
+  let group = renderer.cityMeshes.get(entity.id);
+  if (!group) {
+    group = new THREE.Group();
+    const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : 0x6e7940 }), b.units.length);
+    patches.receiveShadow = true; group.add(patches); group.userData.patches = patches;
+    const rows = new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0xb0b8ba : 0x9bbd50 }), b.units.length * 3);
+    group.add(rows); group.userData.rows = rows;
+    const highlight = new THREE.Mesh(new THREE.BoxGeometry(1.02, .10, 1.02), new THREE.MeshBasicMaterial({ color: 0xf8b800, wireframe: true }));
+    highlight.visible = false; group.add(highlight); group.userData.highlight = highlight;
+    renderer.cityMeshes.set(entity.id, group); renderer.scene.add(group);
+  }
+  if (group.userData.terrainRevision !== (world.revision || 0)) {
+    b.terrain = buildingGround(world, entity.x, entity.y, b.width, b.depth);
+    const matrix = new THREE.Matrix4();
+    b.units.forEach((u, i) => {
+      const ground = surfaceElevation(world, entity.x + u.x + .5, entity.y + u.y + .5);
+      matrix.makeTranslation(u.x + .5, ground + .035, u.y + .5); group.userData.patches.setMatrixAt(i, matrix);
+      for (let r = 0; r < 3; r++) { matrix.makeTranslation(u.x + .2 + r * .3, ground + .08, u.y + .5); group.userData.rows.setMatrixAt(i * 3 + r, matrix); }
+    });
+    group.userData.patches.instanceMatrix.needsUpdate = true; group.userData.rows.instanceMatrix.needsUpdate = true;
+    group.userData.terrainRevision = world.revision || 0;
+  }
+  group.position.set(entity.x, 0, entity.y);
+  const unit = b.units.find(u => u.id === renderer.selectedCityUnitId);
+  group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
+  if (unit) group.userData.highlight.position.set(unit.x + .5, surfaceElevation(world, entity.x + unit.x + .5, entity.y + unit.y + .5) + .08, unit.y + .5);
+  group.userData.patches.material.emissive.setHex(renderer.selectedEntityId === entity.id ? 0x26351a : 0);
 }

@@ -63,6 +63,7 @@ export function update(dt, _api) { city.update(dt); }
 /** Draw additional experience-specific UI after the framework HUD. */
 export function renderUI(ui, _api) {
   if (options.open || editor.open) return;
+  drawCitySites(ui);
   for (const c of city.citizens) {
     if (!c.conversation || c.conversation.a !== c.id) continue;
     const other = city.society.citizen(c.conversation.b);
@@ -82,6 +83,32 @@ export function renderUI(ui, _api) {
     ui.ctx.restore();
   }
   cityUI.draw(ui);
+}
+
+function cityPoint(x, y, lift = .1) {
+  if (renderMode === '3d') return renderer3D.projectWorldToScreen(x, y, renderer3D.getSurfaceElevation(world.map, x, y) + lift);
+  const size = 16 * renderer2D.getCameraZoom() / (canvas2D.width / root.clientWidth);
+  return { x: root.clientWidth / 2 + (x - renderer2D.getCameraX()) * size, y: root.clientHeight / 2 + (y - renderer2D.getCameraY()) * size };
+}
+function drawCitySites(ui) {
+  const ctx = ui.ctx; ctx.save();
+  for (const p of city.development.plots) {
+    if (p.buildingId || (cityUI.tab !== 'land' && cityUI.selectedPlotId !== p.id && !p.projectId)) continue;
+    const corners = [[p.x, p.y], [p.x + p.width, p.y], [p.x + p.width, p.y + p.depth], [p.x, p.y + p.depth]].map(([x, y]) => cityPoint(x, y));
+    if (corners.some(q => !q)) continue;
+    ctx.strokeStyle = p.projectId ? '#f8b800' : p.ownerId === 'treasury' ? '#bcbcbc' : '#40c8f8'; ctx.lineWidth = cityUI.selectedPlotId === p.id ? 3 : 1;
+    ctx.setLineDash(p.projectId ? [] : [4, 4]); ctx.beginPath(); corners.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.stroke();
+    const point = cityPoint(p.x + p.width / 2, p.y + p.depth / 2);
+    if (point) ui.text(`${p.projectId ? 'OBRA' : 'LOTE'} ${p.id}`, point.x - 24, point.y, p.projectId ? '#f8b800' : '#ffffff');
+  }
+  ctx.setLineDash([]);
+  for (const s of city.logistics.shipments) {
+    if (['delivered', 'cancelled'].includes(s.status)) continue;
+    const courier = city.society.citizen(s.driverId), pos = s.pickedUp && courier ? courier.entity : s.position;
+    const point = cityPoint(pos.x, pos.y, .8); if (!point) continue;
+    ctx.fillStyle = s.good === 'pedra' ? '#bcbcbc' : '#f8b800'; ctx.fillRect(point.x - 4, point.y - 7, 8, 8); ctx.strokeStyle = '#000000'; ctx.strokeRect(point.x - 4, point.y - 7, 8, 8);
+  }
+  ctx.restore();
 }
 
 const api = {
@@ -214,6 +241,10 @@ function onPointerUp(event) {
       ? renderer3D.selectAt(event.clientX, event.clientY, entities, world)
       : renderer2D.selectAt((event.clientX - rect.left) * canvas2D.width / rect.width, (event.clientY - rect.top) * canvas2D.height / rect.height, entities);
     selectEntity(entities.find((entity) => entity.id === id) || null, renderMode === "3d" ? renderer3D.selectedCityUnitId : null);
+    if (id == null || id === -1) {
+      const tile = mapTileAt(x, y), lot = tile && city.development.plots.find(p => !p.buildingId && tile.x >= p.x && tile.x < p.x + p.width && tile.y >= p.y && tile.y < p.y + p.depth);
+      if (lot) cityUI.setPlotSelection(lot.id);
+    }
   }
   dragging = false;
   editingGesture = false;

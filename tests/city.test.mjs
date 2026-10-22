@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { NEED_LABELS } from '../js/city_simulation.js';
 import { setup, totalMoney } from './helpers/city.mjs';
 
-test('starter city has accessible basic services, homes, jobs and individual cubic spaces', () => {
+test('developed city fixture has accessible basic services, homes, jobs and individual cubic spaces', () => {
   const city = setup();
   assert.equal(city.citizens.length, 24);
   for (const type of ['market', 'townhall', 'clinic', 'utility', 'residential', 'leisure']) assert(city.buildings.some(b => b.type === type));
@@ -56,8 +56,11 @@ test('construction rejects roads, overlaps, invalid dimensions and insufficient 
   assert.equal(city.addBuilding('residential', city.buildings[0].entity.x, city.buildings[0].entity.y), null);
   assert.equal(city.addBuilding('residential', 44, 44, { width: 20 }), null);
   assert.equal(city.treasury, balance); assert.equal(city.buildings.length, count);
-  const b = city.addBuilding('residential', 8, 8, { width: 3, depth: 3, floors: 4 });
-  assert(b); assert.equal(b.units.length, 36); assert.equal(city.treasury, balance - 36 * 350);
+  const plot = city.development.createPlot(8, 8, 3, 3); assert(plot); const buyer = city.citizens[0]; assert(city.development.buyPlot(buyer.accountId, plot.id));
+  const source = { inventory: { pedra: 72 } };
+  const afterLand = city.treasury;
+  const b = city.addBuilding('residential', 8, 8, { width: 3, depth: 3, floors: 4, plotId: plot.id, ownerAccountId: buyer.accountId, materialSource: source });
+  assert(b); assert.equal(b.units.length, 36); assert.equal(city.treasury, afterLand); assert.equal(source.inventory.pedra, 0);
   city.transfer('treasury', 'supplier', city.treasury, 'Test drain');
   assert.equal(city.addBuilding('market', 79, 80), null);
   assert.equal(totalMoney(city), 2000000);

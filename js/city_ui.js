@@ -1,3 +1,4 @@
+import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { clipCanvasRegion, canvasBox, canvasBar } from './canvas_widgets.js';
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js';
@@ -5,7 +6,7 @@ import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js
 import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js';
 export const money = value => ((value || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const C = { gold: '#f8b800', gray: '#bcbcbc', green: '#58d854', red: '#ff6060', cyan: '#40c8f8', pink: '#f878b8' };
-const TABS = [['city', 'CIDADE'], ['government', 'GOVERNO'], ['people', 'PESSOAS'], ['buildings', 'IMOVEIS'], ['economy', 'EMPRESAS'], ['production', 'PRODUCAO'], ['log', 'HISTORICO']];
+const TABS = [['city', 'CIDADE'], ['government', 'GOVERNO'], ['people', 'PESSOAS'], ['land', 'TERRENOS'], ['buildings', 'IMOVEIS'], ['economy', 'EMPRESAS'], ['production', 'PRODUCAO'], ['transport', 'TRANSPORTES'], ['log', 'HISTORICO']];
 const stamp = minute => `D${Math.floor(minute / 1440) + 1} ${String(Math.floor(minute % 1440 / 60)).padStart(2, '0')}:${String(Math.floor(minute % 60)).padStart(2, '0')}`;
 const name = entity => entity?.properties?.name || 'Ausente';
 const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -35,6 +36,7 @@ export class CityUI {
     this.mobileDetail = !!entity;
   }
   toggle() { this.visible = !this.visible; this.element.hidden = !this.visible; }
+  setPlotSelection(id) { this.navigate('land'); this.selectedPlotId = id; this.visible = true; }
   openCitizen(id) { const c = this.city.society.citizen(id); if (c) this.select(c.entity); }
   openBuilding(id) { const b = this.city.building(id); if (b) this.select(b.entity); }
   personLog(id) { this.navigate('log'); this.logCitizenId = id; }
@@ -182,13 +184,16 @@ export class CityUI {
     p.button('LOCALIZAR NO MAPA', () => { this.camera(b.entity.x, b.entity.y); this.visible = false; });
     this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['units', 'CÉLULAS']]);
     if (this.detailTab === 'profile') {
+      p.kv('Tipo de ocupação', b.constructionKind === 'open-air' ? 'Ar livre / no nível do solo' : 'Edifício');
+      p.button(`TERRENO ${b.plotId}`, () => this.setPlotSelection(b.plotId));
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');
       p.note('Proprietário da empresa'); if (b.ownerId) p.button(name(city.economy.citizen(b.ownerId)?.entity), () => this.openCitizen(b.ownerId)); else p.note('Serviço público / sem empresa');
       p.kv('Caixa operacional', money(b.balance)); p.kv('Receita acumulada', money(b.totalRevenue)); p.kv('Despesas acumuladas', money(b.totalExpenses)); p.kv('Dividendos pagos', money(b.dividends));
       p.kv('Equipe', `${b.workers.length}/${b.jobs}`); p.kv('Desnível do terreno', Number(b.terrain.variation).toFixed(2));
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, b.accountId);
     } else if (this.detailTab === 'stock') {
-      p.heading('INVENTÁRIO REAL'); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
+      p.heading('INVENTÁRIO REAL'); p.kv('Capacidade', `${inventoryUsed(b)}/${b.inventoryCapacity} itens`); p.kv('Reservado para recebimento', incomingItems(b)); p.kv('Espaço livre', inventoryFree(b)); p.meter('Ocupação do armazém', inventoryUsed(b) / b.inventoryCapacity * 100, inventoryFree(b) < 12 ? C.red : C.cyan); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
+      if (b.type === 'quarry') p.kv('Reserva mineral restante', b.stoneReserve || 0);
       if (b.crop) { p.heading(`CULTIVO / ${CROPS[b.crop].label}`); p.kv('Sementes', b.seedStock); for (const [i, f] of b.fields.entries()) { p.note(`Talhão ${i + 1}: ${f.plantedAt === null ? 'aguarda plantio' : 'em crescimento'}`); p.meter('Trabalho', f.labor / 120 * 100); p.meter('Crescimento', f.plantedAt === null ? 0 : (city.minute - f.plantedAt) / CROPS[b.crop].grow * 100); } }
       if (b.type === 'bakery') p.note('Receita: trigo transformado em pão pelo trabalho da equipe.');
       p.heading('INSUMOS PROCURADOS'); const missing = Object.entries(b.inputDemand || {}).filter(([, qty]) => qty > 0);
@@ -229,6 +234,7 @@ export class CityUI {
     if (this.tab === 'city') {
       p.heading('PANORAMA DA SIMULAÇÃO'); p.note('Acompanhe os habitantes e as decisões autônomas da cidade.');
       p.metrics([['HABITANTES', s.population], ['FELICIDADE', `${Math.round(s.happiness)}%`], ['EMPREGADOS', s.employed], ['SEM MORADIA', s.homeless], ['EMPRESAS', s.businesses], ['CRIANÇAS', s.children], ['CASAIS', s.couples], ['AMIZADES', s.friendships], ['CÉLULAS', s.units], ['OCUPADAS', s.occupied]]);
+      p.kv('Terrenos cadastrados', city.development.plots.length); p.kv('Obras em andamento', city.development.projects.filter(p => !p.cancelled && p.status !== 'completed').length); p.kv('Fretes entregues', city.logistics.delivered);
       p.heading('ATENÇÃO DA CIDADE');
       const hungry = city.citizens.filter(c => c.needs.food < 30), unemployed = city.citizens.filter(c => city.society.isAdult(c) && !c.jobId && !c.businessIds.length);
       p.note(`${hungry.length} pessoas com alimentação abaixo de 30%`, hungry.length ? C.red : C.green); p.note(`${unemployed.length} adultos sem trabalho ou empresa`, unemployed.length ? C.gold : C.green);
@@ -238,7 +244,10 @@ export class CityUI {
       p.heading('GOVERNO AUTÔNOMO'); const mayor = city.economy.citizen(city.economy.mayorId);
       if (mayor) p.button(`PREFEITO: ${name(mayor.entity)}`, () => this.openCitizen(mayor.id));
       p.note('O prefeito é um cidadão. O caixa municipal é separado da conta pessoal dele.');
-      p.kv('Tesouro municipal', money(city.treasury)); p.kv('Alíquota de impostos', `${Math.round(city.taxRate * 100)}%`);
+      p.kv('Tesouro municipal', money(city.treasury));
+      const hall = city.buildings.find(b => b.type === 'townhall');
+      p.kv('Reserva pública de alimentos', `${city.economy.inventory(hall)} itens`); p.kv('Refeições disponíveis', Math.floor(city.economy.inventory(hall) / 3));
+      p.note('A prefeitura oferece alimentação de emergência gratuita e abrigo provisório. A reserva é finita e não se repõe automaticamente.'); p.kv('Alíquota de impostos', `${Math.round(city.taxRate * 100)}%`);
       const units = [...city.units.values()].filter(u => u.ownerId === 'treasury'); p.kv('Espaços públicos', units.length); p.kv('Espaços públicos à venda', units.filter(u => u.forSale).length);
       p.note('Política imobiliária: a prefeitura vende; os proprietários privados decidem se vendem ou alugam.', C.gold);
       p.heading('MOVIMENTAÇÕES DO TESOURO'); this.transactions(p, 'treasury');
@@ -252,19 +261,64 @@ export class CityUI {
       p.button('GERAR COM ESTA SEMENTE', () => { if (this.seed.reportValidity()) this.startWorld(Number(this.seed.value), this.terrain); });
       p.button('GERAR TERRENO ALEATÓRIO', () => this.startWorld(randomWorldSeed(), this.terrain));
     } else if (this.tab === 'production') {
-      p.heading('CADEIA DE ABASTECIMENTO'); p.note('Fazendas > mercados e hortifrutis > refeições. Trigo > padarias > pão. Cada refeição consome 3 unidades. Empresas negociam somente quando há conexão por terra.');
+      p.heading('CADEIA DE ABASTECIMENTO'); p.note('Pedreira > frete > obra > prédio. Fazendas > transportes > lojas > refeições. Trigo > padarias > pão. Cada refeição consome 3 unidades. Os itens só entram no estoque de destino após a chegada do transportador.');
       p.heading('PRODUÇÃO / CONSUMO / ESTOQUE'); p.note('Totais acumulados da cidade. Consumo inclui insumos de transformação.');
-      for (const [g, spec] of Object.entries(GOODS)) { const stock = city.buildings.reduce((n, b) => n + (!b.entity.destroyed ? b.inventory?.[g] || 0 : 0), 0); p.kv(spec.label, `${city.economy.produced[g]} / ${city.economy.consumed[g]} / ${stock}`); }
+      for (const [g, spec] of Object.entries(GOODS)) { const stock = city.buildings.reduce((n, b) => n + (!b.entity.destroyed ? b.inventory?.[g] || 0 : 0), 0); p.kv(spec.label, `${city.economy.produced[g]} / ${city.economy.consumed[g]} / ${stock}`); const transit = city.logistics.shipments.reduce((n, s) => n + s.inventory[g], 0), sites = city.development.projects.reduce((n, s) => n + s.inventory[g], 0); p.note(`Inicial/importado ${city.economy.initialStock[g]} | em transporte ${transit} | nas obras ${sites}`); }
       p.kv('Tentativas de refeição sem oferta', city.economy.failedMeals);
       this.demands(p);
       p.heading('MOVIMENTAÇÕES DE MERCADORIAS');
-      const kinds = { trade: 'Comércio', consumption: 'Consumo', sowing: 'Plantio', harvest: 'Colheita', 'recipe-input': 'Insumo de receita', baking: 'Panificação' };
+      const kinds = { dispatch: 'Carga reservada', delivery: 'Entrega', mining: 'Extração', construction: 'Construção', trade: 'Comércio', consumption: 'Consumo', sowing: 'Plantio', harvest: 'Colheita', 'recipe-input': 'Insumo de receita', baking: 'Panificação' };
       for (const l of city.economy.goodsLedger.slice(-20).reverse()) {
         p.note(`${stamp(l.minute)} | ${GOODS[l.good]?.label || l.good} x${l.quantity} | ${kinds[l.kind] || l.kind}`, C.cyan);
         const origin = city.building(l.from)?.entity, destination = city.building(l.to)?.entity || city.society.citizen(l.to)?.entity;
         p.note(`${origin ? name(origin) : 'Produção'} > ${destination ? name(destination) : 'Uso na produção'}`);
       }
-    } else if (this.tab === 'log') this.log(p);
+    } else if (this.tab === 'land') this.land(p);
+    else if (this.tab === 'transport') this.transport(p);
+    else if (this.tab === 'log') this.log(p);
+  }
+  land(p) {
+    const city = this.city, dev = city.development;
+    p.heading('TERRENOS E CONSTRUÇÕES');
+    p.note('A prefeitura vende terrenos. Empreendedores usam seus próprios imóveis; construtoras desenvolvem para vender. Ar livre ocupa o solo sem paredes ou pavimentos. Fazendas não precisam de pedras.');
+    const selected = dev.plots.find(l => l.id === this.selectedPlotId);
+    if (selected) {
+      p.heading(`TERRENO ${selected.id}`, C.cyan); p.kv('Dimensões', `${selected.width}x${selected.depth}`); p.kv('Proprietário', city.accountName(selected.ownerId));
+      p.kv('Venda do terreno', selected.forSale ? money(selected.price) : 'Não anunciado'); p.kv('Locação', selected.ownerId === 'treasury' ? 'Prefeitura não aluga' : selected.forRent ? money(selected.rent) + '/dia' : 'Não anunciado');
+      p.button('LOCALIZAR TERRENO', () => { this.camera(selected.x + selected.width / 2, selected.y + selected.depth / 2); this.visible = false; });
+      if (selected.buildingId) p.button('ABRIR IMÓVEL', () => this.openBuilding(selected.buildingId));
+    }
+    p.heading('OBRAS EM ANDAMENTO');
+    const projects = dev.projects.filter(o => o.status !== 'completed' && !o.cancelled);
+    if (!projects.length) p.note('Nenhuma obra em andamento.');
+    for (const o of projects) {
+      p.button(`${BUILDING_TYPES[o.type].label} / LOTE ${o.plotId}`, () => { this.selectedPlotId = o.plotId; this.resetScroll(); });
+      p.kv('Empreendedor', city.accountName(o.accountId)); p.kv('Construtora', city.building(o.builderId)?.entity.properties.name || 'Construção própria');
+      p.kv('Objetivo', o.sell ? 'Vender espaços' : 'Usar / operar'); p.kv('Contrato da obra', money(o.fee));
+      p.kv('Pedras no canteiro', `${o.inventory.pedra}/${o.stone}`); p.kv('Pedras a caminho', o.incoming.pedra || 0); p.meter('Trabalho da obra', o.requiredLabor ? o.labor / o.requiredLabor * 100 : 100);
+      p.note(o.error || (o.status === 'materials' ? 'Aguardando entrega de materiais' : 'Em construção'), o.error ? C.red : C.gray);
+    }
+    p.heading(`CADASTRO / ${dev.plots.length} TERRENOS`);
+    for (const lot of dev.plots.filter(l => this.matches(`${l.id} ${city.accountName(l.ownerId)} ${city.building(l.buildingId)?.entity.properties.name || ''}`))) {
+      p.card(`LOTE ${lot.id} / ${lot.width}x${lot.depth}`, `${city.accountName(lot.ownerId)} | ${lot.buildingId ? 'Edificado' : lot.projectId ? 'Em obras' : lot.forSale ? money(lot.price) : 'Sem edificação'}`, () => { this.selectedPlotId = lot.id; this.resetScroll(); }, lot.id === this.selectedPlotId);
+    }
+  }
+  transport(p) {
+    const city = this.city, logistics = city.logistics;
+    p.heading('LOGÍSTICA E TRANSPORTES'); p.note('Carga máxima: 24 itens por viagem. Transportadoras usam funcionários e recebem pelo frete entregue. Enquanto não houver transportadora, os proprietários podem carregar suas próprias compras.');
+    const pending = logistics.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
+    p.kv('Fretes ativos', pending.length); p.kv('Entregas concluídas', logistics.delivered);
+    p.kv('Itens em transporte / aguardando', pending.reduce((n, s) => n + s.quantity, 0));
+    const states = { waiting: 'Aguardando transportador', 'in-transit': 'Em trânsito', 'waiting-space': 'Destino sem espaço', delivered: 'Entregue', cancelled: 'Cancelado' };
+    for (const s of [...pending, ...logistics.shipments.filter(s => !pending.includes(s)).slice(-20).reverse()].filter(s => this.matches(`${s.id} ${GOODS[s.good].label} ${s.seller.entity?.properties.name} ${s.buyer.entity?.properties.name || s.buyer.name}`))) {
+      p.heading(`FRETE ${s.id} / ${GOODS[s.good].label} x${s.quantity}`, s.status === 'delivered' ? C.green : C.gold);
+      p.note(`${s.seller.entity?.properties.name || s.seller.name} > ${s.buyer.entity?.properties.name || s.buyer.name}`);
+      p.kv('Situação', states[s.status]); p.kv('Mercadoria', money(s.cost)); p.kv('Frete', money(s.fee));
+      p.kv('Operador', city.building(s.carrierId)?.entity.properties.name || 'Transporte próprio');
+      const c = city.society.citizen(s.driverId); if (c) p.button(`TRANSPORTADOR: ${name(c.entity)}`, () => this.openCitizen(c.id));
+      p.note(`${stamp(s.createdAt)} | trajeto de ${s.routeLength} células${s.completedAt ? ' | conclusão ' + stamp(s.completedAt) : ''}`);
+    }
+    if (!logistics.shipments.length) p.note('Nenhum frete solicitado ainda.');
   }
   events(p, events) {
     for (const e of events) { p.note(`${stamp(e.minute)} / ${EVENT_CATEGORIES[e.category] || e.category}`, C.gold); p.note(e.message); for (const id of e.citizenIds || []) { const c = this.city.society.citizen(id); if (c) p.button(name(c.entity), () => this.openCitizen(id)); } p.space(8); }

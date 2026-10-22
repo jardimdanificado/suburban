@@ -13,9 +13,11 @@ Abra `http://localhost:8000`. Arraste o mapa para mover a câmera e use a roda p
 - **Cidade:** indicadores de população, emprego, moradia, vínculos e alertas de necessidades.
 - **Governo:** prefeito, tesouro separado, imóveis públicos, movimentações e geração de terreno.
 - **Pessoas:** lista pesquisável e fichas com necessidades, habilidades, trabalho, parentesco, vínculos, patrimônio e movimentações financeiras.
+- **Terrenos:** cadastro de lotes, proprietários, preços, obras, pedras entregues e progresso de construção.
 - **Imóveis:** operação, finanças, estoque, equipe e ficha individual de cada célula 1x1x1, com dono, ocupante, preço, aluguel e atrasos.
 - **Empresas:** diretório dos negócios privados e acesso às respectivas fichas.
 - **Produção:** produção, consumo e estoque por alimento, cultivos, movimentações de mercadorias e oportunidades de investimento.
+- **Transportes:** cargas, origem/destino, situação, transportador, mercadoria e frete.
 - **Histórico:** busca, filtros por assunto e pessoa, congelamento, carregamento de mais registros e exportação JSON dos resultados filtrados.
 
 A interface usa as janelas, botões e barras NES do próprio framework, com fonte bitmap, como no Brutopolis. Em telas largas, lista e ficha aparecem lado a lado; em telas pequenas, os botões **Lista/Ficha** alternam as vistas. **<>** amplia a janela; **X**, **C** ou **Esc** fecha o observatório. **/** foca a busca. A roda ou o arrasto no painel rola seu conteúdo; **Page Up/Down**, **Home/End** percorrem a ficha. **Localizar no mapa** centraliza a câmera e fecha a janela.
@@ -24,8 +26,13 @@ A interface usa as janelas, botões e barras NES do próprio framework, com font
 
 O prefeito é um cidadão, escolhido inicialmente pela habilidade de administração pública entre os moradores que não são investidores. Ele tem rotina, conta pessoal, salário, necessidades e vínculos; seu dinheiro é separado do caixa municipal. A saída do prefeito provoca a escolha de outro morador. A prefeitura autoriza vendas de instalações e financia serviços públicos; suas decisões ficam no histórico.
 
-Todos os prédios iniciais e suas células começam pertencendo à prefeitura. **A prefeitura sempre oferece seus imóveis à venda e nunca para aluguel.** Isso é uma regra da simulação, inclusive ao alterar anúncios ou devolver propriedades ao patrimônio público. Serviços públicos ocupam instalações municipais sem um contrato de aluguel.
+O mapa começa com **prefeitura, construtora e pedreira**. A prefeitura conserva os espaços de seus edifícios à venda e **nunca aluga**. As duas empresas iniciais são compradas por cidadãos ricos; o restante da cidade surge de investimentos e obras. Moradores começam sem casa e podem usar os serviços de emergência da prefeitura enquanto as moradias são construídas.
 
+A prefeitura cadastra terrenos acessíveis sem alterar as alturas naturais. Vende os terrenos a cidadãos ou construtoras, e o dinheiro passa ao tesouro. Proprietários podem usar ou revender seus terrenos. As construtoras compram lotes, erguem residenciais para vender seus espaços e recebem pelo trabalho contratado. Os investidores individuais priorizam instalações para seus próprios negócios e compram moradias para morar ou alugar.
+
+Uma obra precisa de **duas pedras por célula 1x1x1**, entregues no canteiro, e três unidades de trabalho por célula. A pedreira extrai pedras de uma reserva mineral finita, com trabalho humano; não há compra externa de pedras. O contrato da construtora fica reservado até a conclusão. Construir não cria um edifício pronto nem cobra materiais inexistentes. A geração inicial e o editor do framework usam uma exceção explícita de cenário.
+
+**Ar livre** ocupa somente o nível do solo, acompanhando cada trecho do terreno, sem paredes, telhado, laje ou pavimentos. Fazendas exigem apenas o terreno para sua instalação, sem pedras ou trabalho de edificação; sementes e salários continuam sendo despesas de operação.
 Cada apartamento é uma célula de 1×1×1. Cidadãos compram os espaços e podem ocupá-los, alugá-los ou revendê-los. Proprietários privados decidem entre renda de aluguel e venda conforme reservas e preferência individual. A venda de um apartamento ocupado preserva seu inquilino; o próximo aluguel vai ao novo dono. Morar no próprio espaço dispensa aluguel. São cobradas diárias, com primeiro pagamento na contratação e encerramento do contrato após três dias sem pagamento. Trabalhadores que acumulam reservas também podem comprar moradia.
 
 ## População e capital inicial
@@ -50,9 +57,19 @@ As fazendas podem cultivar **maçã, goiaba, trigo, milho, mandioca, cebola, fei
 
 As padarias consomem **duas unidades de trigo para produzir três de pão**, após acumular trabalho de panificação. Mercados e hortifrutis compram produtos das fazendas; mercados também podem comprar pão das padarias. As lojas vendem refeições com três unidades de alimento. Compras, produção, transformação e consumo alteram estoques reais e têm registros de origem e destino. Não há reposição de comida de um fornecedor externo nem geração de alimentos pelo simples trabalho no mercado.
 
-As demandas combinam ausência de um tipo de comércio, população, capacidade estimada, estoques e pedidos de insumos. Uma padaria sem trigo aumenta a pressão por fazendas de trigo; lojas sem frutas e legumes geram oportunidades para os cultivos correspondentes. Demanda maior aumenta a prioridade de investimento, com variação individual nas escolhas. Capital disponível, mão de obra e um lote acessível também limitam novas empresas. Sementes e materiais de construção podem vir da economia externa, mediante pagamento; comida vem da cadeia local.
+As demandas combinam ausência de um tipo de comércio, população, capacidade estimada, estoques e pedidos de insumos. Uma padaria sem trigo aumenta a pressão por fazendas de trigo; lojas sem frutas e legumes geram oportunidades para os cultivos correspondentes. Demanda maior aumenta a prioridade de investimento, com variação individual nas escolhas. Capital disponível, mão de obra e um lote acessível também limitam novas empresas. Sementes ainda são compradas da economia externa, mediante pagamento e respeitando a capacidade do inventário. Pedras vêm exclusivamente das pedreiras locais. Comida vem da reserva inicial ou da cadeia agrícola local.
 
-O comércio entre empresas exige conexão por terra e é contabilizado em rodadas horárias. O transporte é uma transferência de estoque entre empresas conectadas; ainda não há veículos de entrega. Preços, tempos e receitas são regras simplificadas de jogo, não uma representação dos custos agrícolas reais.
+## Inventários, fretes e reserva pública
+
+Todos os prédios, inclusive residenciais, têm inventário com capacidade finita. Prefeitura: 6.000 itens; demais instalações: capacidade proporcional às células, com mínimo de 160 e fator maior nas pedreiras. Cada canteiro tem seu próprio estoque. Sementes também ocupam espaço. Colheitas, extração e panificação param quando não há capacidade, preservando os materiais existentes.
+
+As compras internas reservam espaço no destino e dinheiro em uma conta de frete. A carga sai do estoque de origem e fica identificada como mercadoria reservada, com posição física. Um cidadão percorre o caminho até a carga e depois até o destino. Só a chegada acrescenta itens ao inventário de destino e libera o pagamento ao fornecedor. Interrupções preservam a posição da carga; cancelamentos devolvem dinheiro e mercadoria, liberando a capacidade. Se não houver espaço para recuperar materiais de uma instalação demolida, a perda fica contabilizada explicitamente.
+
+Transportadoras contratam funcionários conforme habilidades e vínculos, pagam salários durante os trajetos e recebem pelo frete entregue. A habilidade de logística aumenta com a prática. Antes de haver transportadora, os próprios empreendedores podem carregar compras. São viagens a pé de até 24 itens, sem veículos. Pedras também precisam viajar da pedreira ao canteiro.
+
+A prefeitura começa com **1.728 unidades de pão** para os 24 habitantes: 576 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e nunca se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
+
+Preços, tempos e receitas são regras simplificadas de jogo, não uma representação dos custos agrícolas reais.
 
 ## Relevo e sementes
 
@@ -77,13 +94,16 @@ Crianças têm parentesco, necessidades, conta e moradia própria. O responsáve
 
 - `js/city_simulation.js`: pessoas, necessidades, propriedades, contas e integração.
 - `js/city_economy.js`: prefeito, investidores, mercado imobiliário, contratação, habilidades, demandas, produção, comércio e consumo.
+- `js/city_inventory.js`: capacidades e reservas de espaço.
+- `js/city_logistics.js`: cargas, trajetos, transportadores, pagamentos e cancelamentos.
+- `js/city_development.js`: terrenos, compra, projetos, materiais e construção.
 - `js/city_society.js`: vínculos, famílias, crescimento e responsáveis.
 - `js/city_terrain.js`: implantação, lotes, ruas e navegação A*.
 - `js/world_settings.js`: sementes e paisagens.
 - `js/city_ui.js`: painéis de observação.
 - `js/city_renderer_3d.js`: células volumétricas e fundações.
 
-`npm test` verifica os controles originais, preservação do relevo, políticas públicas de venda, propriedade privada, contratação, habilidades, insumos, receitas, estoques, conversas e famílias. Simulações de vários dias verificam conservação de dinheiro e de cada mercadoria: produção acumulada = consumo e transformação + estoque restante.
+`npm test` verifica os controles originais, preservação do relevo, políticas públicas de venda, propriedade privada, contratação, habilidades, insumos, receitas, estoques, conversas e famílias. Simulações de vários dias verificam conservação de dinheiro e de cada mercadoria: estoque inicial e importações + produção = consumo e transformação + estoques em prédios, obras e fretes + perdas registradas. Os testes antigos de contratos e famílias usam uma cidade desenvolvida como fixture; os novos testes também verificam a evolução desde as três instalações iniciais.
 
 Ainda não há salvamento da cidade, eleições periódicas, crédito bancário, mortalidade, escola, irrigação ou veículos de transporte. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
 
