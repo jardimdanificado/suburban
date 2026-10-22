@@ -630,6 +630,27 @@ export class LegacyCanvasUI {
     drawText8x8(value, x, y, color, scale);
   }
 
+  box(x, y, w, h) { drawNESBox(x, y, w, h); }
+
+  bar(x, y, w, h, value, max, label, color) {
+    drawNESProgressBar(x, y, w, h, value, max, label, color);
+  }
+
+  /** Clip drawing AND pointer targets so scrolled controls cannot cover other panels. */
+  clip(x, y, w, h, draw) {
+    const start = this.regions.length;
+    this.ctx.save(); this.ctx.beginPath(); this.ctx.rect(x, y, w, h); this.ctx.clip();
+    try { draw(); } finally {
+      this.ctx.restore();
+      const clipped = this.regions.splice(start).flatMap(r => {
+        const left = Math.max(x, r.x), top = Math.max(y, r.y);
+        const right = Math.min(x + w, r.x + r.w), bottom = Math.min(y + h, r.y + r.h);
+        return right > left && bottom > top ? [{ ...r, x: left, y: top, w: right - left, h: bottom - top }] : [];
+      });
+      this.regions.push(...clipped);
+    }
+  }
+
   panel(x, y, w, h, title, text) {
     this.regions.push({ x, y, w, h, onClick: null });
     drawNESBox(x, y, w, h);

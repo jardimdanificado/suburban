@@ -62,7 +62,6 @@ export function update(dt, _api) { city.update(dt); }
 
 /** Draw additional experience-specific UI after the framework HUD. */
 export function renderUI(ui, _api) {
-  cityUI.update(performance.now());
   if (options.open || editor.open) return;
   for (const c of city.citizens) {
     if (!c.conversation || c.conversation.a !== c.id) continue;
@@ -82,6 +81,7 @@ export function renderUI(ui, _api) {
     for (let i = 0; i < 3; i++) ui.ctx.fillRect(point.x - 7 + i * 6, point.y - 2, 3, 3);
     ui.ctx.restore();
   }
+  cityUI.draw(ui);
 }
 
 const api = {
@@ -177,6 +177,13 @@ function onPointerMove(event) {
     else editor.continueStroke(mapTileAt(mousePosition.x, mousePosition.y));
     return;
   }
+  if (pointerOnUI && lastPointer && !options.open && !editor.open) {
+    if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) >= 6) {
+      cityUI.scrollAt(pointerDown.x - rect.left, pointerDown.y - rect.top, lastPointer.y - event.clientY);
+    }
+    lastPointer = { x: event.clientX, y: event.clientY };
+    return;
+  }
   if (!dragging || !lastPointer) return;
   const dx = event.clientX - lastPointer.x;
   const dy = event.clientY - lastPointer.y;
@@ -203,9 +210,6 @@ function onPointerUp(event) {
   } else if (pointerOnUI && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 6) {
     if (event.button === 0) legacyUI.clickAt(x, y);
   } else if (event.button === 0 && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 4) {
-    if (cityUI.placeAt(mapTileAt(x, y))) {
-      dragging = false; pointerOnUI = false; pointerDown = lastPointer = null; return;
-    }
     const id = renderMode === "3d"
       ? renderer3D.selectAt(event.clientX, event.clientY, entities, world)
       : renderer2D.selectAt((event.clientX - rect.left) * canvas2D.width / rect.width, (event.clientY - rect.top) * canvas2D.height / rect.height, entities);
@@ -239,6 +243,7 @@ root.addEventListener("wheel", (event) => {
     event.preventDefault();
     return;
   }
+  if (!editor.open && cityUI.scrollAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY)) { event.preventDefault(); return; }
   if (legacyUI.hitTest(event.clientX - rect.left, event.clientY - rect.top)) return;
   event.preventDefault();
   const renderer = renderMode === "3d" ? renderer3D : renderer2D;
@@ -248,6 +253,7 @@ root.addEventListener("wheel", (event) => {
 
 window.addEventListener("keydown", (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
+  if (!options.open && !editor.open && cityUI.key(event)) { event.preventDefault(); return; }
   if (event.code === "Space" && !event.repeat) {
     event.preventDefault();
     togglePause();
@@ -256,8 +262,7 @@ window.addEventListener("keydown", (event) => {
   if (event.code === "KeyO" && !event.repeat) toggleOptions();
   if (event.code === "KeyS" && !event.repeat && !options.open) editor.toggle();
   if (event.code === "Escape") {
-    if (cityUI.pendingBuild) { cityUI.pendingBuild = null; cityUI.refresh(); }
-    else if (options.open) options.toggle();
+    if (options.open) options.toggle();
     else if (editor.open) editor.toggle();
   }
   if (["Minus", "NumpadSubtract"].includes(event.code)) { event.preventDefault(); time.changeSpeed(-1); }
@@ -346,10 +351,10 @@ try { city.initialize(); } catch (error) {
   city.log(error.message, 'city', [], { kind: 'generation-failed' });
   city.syncClock();
 }
-const cityUI = new CityUI({ city, root, select: selectEntity, camera(x, y) {
+export const cityUI = new CityUI({ city, root, select: selectEntity, camera(x, y) {
   renderer2D.setCamera(x, y); renderer3D.setCamera(x, y);
 } });
-if (cityGenerationError) { cityUI.notice = cityGenerationError; cityUI.refresh(); }
+if (cityGenerationError) cityUI.notice = cityGenerationError;
 for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
   editor.registerPrefab(type, { label: spec.label, create: (x, y) => city.addBuilding(type, x, y)?.entity });
 }

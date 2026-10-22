@@ -10,11 +10,15 @@ Abra `http://localhost:8000`. Arraste o mapa para mover a câmera e use a roda p
 
 ## Acompanhar a cidade
 
-- **Cidade:** população, emprego, moradia, vínculos, prefeito e configuração do terreno.
-- **Cidadãos:** dinheiro, perfil econômico, empresas, patrimônio, profissão, habilidades, necessidades, parentesco e relações.
-- **Imóveis:** proprietário de cada célula 1×1×1, ocupante, anúncio, empresa, equipe, caixa, despesas, receitas, estoques, cultivo e pedidos de insumos. Clique no mapa ou nas listas para inspecionar.
-- **Economia:** prefeito, oportunidades de investimento, gargalos, produção, consumo e empresas. Os números de capacidade são estimativas de planejamento; a produção efetiva depende de trabalho e insumos.
-- **Histórico:** acontecimentos com categoria, busca, filtro por cidadão, atualização congelável, paginação e exportação JSON. Retém os últimos 5.000 registros. Salários são agrupados por pessoa a cada hora.
+- **Cidade:** indicadores de população, emprego, moradia, vínculos e alertas de necessidades.
+- **Governo:** prefeito, tesouro separado, imóveis públicos, movimentações e geração de terreno.
+- **Pessoas:** lista pesquisável e fichas com necessidades, habilidades, trabalho, parentesco, vínculos, patrimônio e movimentações financeiras.
+- **Imóveis:** operação, finanças, estoque, equipe e ficha individual de cada célula 1x1x1, com dono, ocupante, preço, aluguel e atrasos.
+- **Empresas:** diretório dos negócios privados e acesso às respectivas fichas.
+- **Produção:** produção, consumo e estoque por alimento, cultivos, movimentações de mercadorias e oportunidades de investimento.
+- **Histórico:** busca, filtros por assunto e pessoa, congelamento, carregamento de mais registros e exportação JSON dos resultados filtrados.
+
+A interface usa as janelas, botões e barras NES do próprio framework, com fonte bitmap, como no Brutopolis. Em telas largas, lista e ficha aparecem lado a lado; em telas pequenas, os botões **Lista/Ficha** alternam as vistas. **<>** amplia a janela; **X**, **C** ou **Esc** fecha o observatório. **/** foca a busca. A roda ou o arrasto no painel rola seu conteúdo; **Page Up/Down**, **Home/End** percorrem a ficha. **Localizar no mapa** centraliza a câmera e fecha a janela.
 
 ## Governo e propriedade
 
@@ -52,7 +56,7 @@ O comércio entre empresas exige conexão por terra e é contabilizado em rodada
 
 ## Relevo e sementes
 
-Sem semente na URL, cada carregamento sorteia terreno e paisagem. **Cidade → Terreno da cidade** permite escolher arquipélago, continente ou terras altas, repetir uma semente ou gerar outra cidade. Gerar terreno reinicia a partida.
+Sem semente na URL, cada carregamento sorteia terreno e paisagem. **Governo → Geração de terreno** permite escolher arquipélago, continente ou terras altas, repetir uma semente ou gerar outra cidade. Gerar terreno reinicia a partida.
 
 ```text
 http://localhost:8000/?seed=47622&terrain=archipelago
