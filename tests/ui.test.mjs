@@ -60,3 +60,15 @@ test('map cell selection opens ownership detail and switching dossiers resets un
   assert.equal(h.inspector.detailTab, 'profile');
   assert(h.labels.includes('Saldo pessoal'));
 });
+
+test('inspector works with the original framework UI without clip, box or bar methods', () => {
+  const h = harness();
+  h.ui.clip = h.ui.box = h.ui.bar = undefined;
+  for (const tab of ['city', 'government', 'production', 'log']) {
+    h.inspector.navigate(tab); assert.doesNotThrow(h.draw);
+  }
+  h.inspector.setSelection(h.city.citizens[0].entity);
+  assert.doesNotThrow(h.draw);
+  const b = h.city.buildings[0]; h.inspector.setSelection(b.entity, b.units[0].id);
+  assert.doesNotThrow(h.draw);
+});

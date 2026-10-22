@@ -1,3 +1,5 @@
+import { clipCanvasRegion } from './canvas_widgets.js';
+
 const FONT_8X8 = [
   [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], // 0
   [0x00, 0x3c, 0x42, 0xa5, 0x81, 0x99, 0x42, 0x3c], // 1
@@ -638,17 +640,7 @@ export class LegacyCanvasUI {
 
   /** Clip drawing AND pointer targets so scrolled controls cannot cover other panels. */
   clip(x, y, w, h, draw) {
-    const start = this.regions.length;
-    this.ctx.save(); this.ctx.beginPath(); this.ctx.rect(x, y, w, h); this.ctx.clip();
-    try { draw(); } finally {
-      this.ctx.restore();
-      const clipped = this.regions.splice(start).flatMap(r => {
-        const left = Math.max(x, r.x), top = Math.max(y, r.y);
-        const right = Math.min(x + w, r.x + r.w), bottom = Math.min(y + h, r.y + r.h);
-        return right > left && bottom > top ? [{ ...r, x: left, y: top, w: right - left, h: bottom - top }] : [];
-      });
-      this.regions.push(...clipped);
-    }
+    return clipCanvasRegion(this, x, y, w, h, draw);
   }
 
   panel(x, y, w, h, title, text) {

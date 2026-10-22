@@ -1,3 +1,4 @@
+import { clipCanvasRegion, canvasBox, canvasBar } from './canvas_widgets.js';
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js';
@@ -97,7 +98,7 @@ export class CityUI {
   pane(ui, key, x, y, w, h, draw) {
     const scroll = this.scrolls[key] || 0;
     const p = new Page(ui, x, y - scroll, w - 14, y, y + h);
-    ui.clip(x, y, w, h, () => draw(p));
+    clipCanvasRegion(ui, x, y, w, h, () => draw(p));
     const height = p.y - (y - scroll), max = Math.max(0, height - h);
     this.scrolls[key] = Math.min(scroll, max); this.zones.push({ key, x, y, w, h, max });
     if (max > 0) {
@@ -322,9 +323,9 @@ class Page {
     this.y += 34;
   }
   card(title, subtitle, click, selected) { this.button(title, click, selected); this.note(subtitle, selected ? C.gold : C.gray); this.space(3); }
-  meter(label, value, color) { this.note(label); if (this.visible(20)) this.ui.bar(this.x, this.y, this.w, 20, Math.max(0, Math.min(100, value || 0)), 100, '', color || (value < 30 ? C.red : value < 65 ? C.gold : C.green)); this.y += 29; }
+  meter(label, value, color) { this.note(label); if (this.visible(20)) canvasBar(this.ui, this.x, this.y, this.w, 20, Math.max(0, Math.min(100, value || 0)), 100, '', color || (value < 30 ? C.red : value < 65 ? C.gold : C.green)); this.y += 29; }
   metrics(items) {
     const cols = this.w >= 440 ? 3 : 2, gap = 8, cw = Math.floor((this.w - gap * (cols - 1)) / cols);
-    for (let i = 0; i < items.length; i += cols) { if (this.visible(62)) for (let j = 0; j < cols && i + j < items.length; j++) { const [label, value] = items[i + j], x = this.x + j * (cw + gap); this.ui.box(x, this.y, cw, 62); this.ui.text(trim(label, cw - 16), x + 8, this.y + 10, C.gray); this.ui.text(trim(value, (cw - 16) / 2), x + 8, this.y + 31, C.gold, 2); } this.y += 70; }
+    for (let i = 0; i < items.length; i += cols) { if (this.visible(62)) for (let j = 0; j < cols && i + j < items.length; j++) { const [label, value] = items[i + j], x = this.x + j * (cw + gap); canvasBox(this.ui, x, this.y, cw, 62); this.ui.text(trim(label, cw - 16), x + 8, this.y + 10, C.gray); this.ui.text(trim(value, (cw - 16) / 2), x + 8, this.y + 31, C.gold, 2); } this.y += 70; }
   }
 }
