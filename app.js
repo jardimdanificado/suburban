@@ -101,6 +101,11 @@ function drawCitySites(ui) {
     const point = cityPoint(p.x + p.width / 2, p.y + p.depth / 2);
     if (point) ui.text(`${p.projectId ? 'OBRA' : 'LOTE'} ${p.id}`, point.x - 24, point.y, p.projectId ? '#f8b800' : '#ffffff');
   }
+  for (const project of city.development.projects) {
+    if (project.service !== 'road' || project.status === 'completed' || project.cancelled) continue;
+    ctx.strokeStyle = '#f8b800'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.beginPath();
+    project.route.forEach((p, i) => { const point = cityPoint(p.x, p.y); if (point) i ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y); }); ctx.stroke();
+  }
   ctx.setLineDash([]);
   for (const s of city.logistics.shipments) {
     if (['delivered', 'cancelled'].includes(s.status)) continue;

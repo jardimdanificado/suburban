@@ -30,6 +30,16 @@ export function surfaceElevation(world, x, y) {
   const tx = Math.floor(x), ty = Math.floor(y), u = x - tx, v = y - ty;
   return cornerHeight(world, tx, ty) * (1 - u) * (1 - v) + cornerHeight(world, tx + 1, ty) * u * (1 - v) + cornerHeight(world, tx, ty + 1) * (1 - u) * v + cornerHeight(world, tx + 1, ty + 1) * u * v;
 }
+/** A saleable plot has one elevation, including its interpolated surface and entrance. */
+export function flatSiteLevel(world, x, y, width, depth) {
+  const level = tileHeight(tileAt(world, x, y));
+  for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) {
+    if (!terrainWalkable(world, xx, yy) || tileHeight(tileAt(world, xx, yy)) !== level) return null;
+  }
+  const surface = surfaceBounds(world, x, y, width, depth);
+  const doorLevel = tileHeight(tileAt(world, x + Math.floor(width / 2), y + depth));
+  return surface.variation < .001 && Math.abs(surface.min - level) < .001 && doorLevel === level ? level : null;
+}
 export function buildingGround(world, x, y, width, depth) {
   const terrain = surfaceBounds(world, x, y, width, depth);
   const door = { x: x + Math.floor(width / 2) + .5, y: y + depth + .5 };
@@ -125,7 +135,7 @@ export function generateSettlement(city) {
       for (let y = Math.max(1, Math.floor(center.y - searchRadius)); y < Math.min(world.height - d - 1, center.y + searchRadius); y++) for (let x = Math.max(1, Math.floor(center.x - searchRadius)); x < Math.min(world.width - w - 1, center.x + searchRadius); x++) {
         const site = inspectBuildingSite(city, x, y, w, d);
         if (site.error) continue;
-        const score = Math.hypot(x - preferred.x, y - preferred.y) + site.variation * 8 + city.random() * 3;
+        const score = Math.hypot(x - preferred.x, y - preferred.y) + site.variation * 8 + city.random() * 3 + (flatSiteLevel(world, x, y, w, d) === null ? 10000 : 0);
         candidates.push({ x, y, score });
       }
       candidates.sort((a, b) => a.score - b.score);

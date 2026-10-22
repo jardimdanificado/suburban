@@ -72,3 +72,12 @@ test('inspector works with the original framework UI without clip, box or bar me
   const b = h.city.buildings[0]; h.inspector.setSelection(b.entity, b.units[0].id);
   assert.doesNotThrow(h.draw);
 });
+
+test('construction services and municipal road contracts render through the native inspector', () => {
+  const h = harness(), builder = h.city.economy.businesses.find(b => b.type === 'builder');
+  const road = h.city.development.beginRoad('treasury', { x: 5.5, y: 5.5 }, { x: 12.5, y: 5.5 }); assert(road);
+  h.inspector.navigate('land'); assert.doesNotThrow(h.draw);
+  h.inspector.setSelection(builder.entity); h.inspector.detailTab = 'services'; assert.doesNotThrow(h.draw);
+  assert(h.labels.includes('SERVIÇOS DA CONSTRUTORA'));
+  h.inspector.detailTab = 'staff'; h.draw(); assert(h.labels.includes('Refeições fornecidas'));
+});

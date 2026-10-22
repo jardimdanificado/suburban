@@ -37,7 +37,7 @@ export class CityEconomy {
     if (options.age !== 0) c.skills[Object.keys(SKILLS)[index % Object.keys(SKILLS).length]] += 15;
     c.businessIds = []; c.provisions = options.grant === false ? 0 : 3;
     c.rentalPreference = .65 + this.city.random() * .3;
-    c.lastPaidAt = this.city.minute;
+    c.lastPaidAt = this.city.minute; c.mealAllowanceToday = 0; c.foodVoucher = null; c.workMeal = null;
   }
   practice(c, skill, minutes = 1) {
     if (!c || !(skill in SKILLS) || minutes <= 0 || !Number.isFinite(minutes)) return;
@@ -48,6 +48,7 @@ export class CityEconomy {
     Object.defineProperty(b, 'seedStock', { get() { return this.inventory.sementes; }, set(value) { this.inventory.sementes = value; }, configurable: true });
     b.ownerId = null; b.active = PUBLIC_TYPES.has(b.type);
     b.crop = null; b.fields = []; b.seedStock = 0; b.bakingLabor = 0;
+    b.mealsServed = 0; b.mealPurchaseCost = 0; b.foodVoucherCost = 0; b.vouchersIssued = 0;
     b.totalRevenue = 0; b.totalExpenses = 0; b.dividends = 0;
     b.foundedAt = null; b.lastSaleAt = this.city.minute; b.stockouts = 0;
     b.jobs = ({ residential: 0, townhall: 2, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2 })[b.type] ?? 0;
@@ -367,7 +368,7 @@ export class CityEconomy {
     }
     this.appointMayor(); this.municipalPolicy(); this.assignHomes(); this.hire();
     this.city.development.updateHourly();
-    this.trade(); this.updateDemand();
+    this.trade(); this.city.workMeals.purchase(); this.updateDemand();
     if (this.city.hour % 2 === 0) { this.investInHousing(); this.invest(); }
   }
   daily() {

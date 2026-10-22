@@ -28,9 +28,13 @@ O prefeito é um cidadão, escolhido inicialmente pela habilidade de administra�
 
 O mapa começa com **prefeitura, construtora e pedreira**. A prefeitura conserva os espaços de seus edifícios à venda e **nunca aluga**. As duas empresas iniciais são compradas por cidadãos ricos; o restante da cidade surge de investimentos e obras. Moradores começam sem casa e podem usar os serviços de emergência da prefeitura enquanto as moradias são construídas.
 
-A prefeitura cadastra terrenos acessíveis sem alterar as alturas naturais. Vende os terrenos a cidadãos ou construtoras, e o dinheiro passa ao tesouro. Proprietários podem usar ou revender seus terrenos. As construtoras compram lotes, erguem residenciais para vender seus espaços e recebem pelo trabalho contratado. Os investidores individuais priorizam instalações para seus próprios negócios e compram moradias para morar ou alugar.
+A prefeitura cadastra terrenos acessíveis de tamanhos variados (como 3x3, 3x5, 4x4, 5x5 e 6x4), sempre em um único nível, sem rampas na área do lote e sem alterar as alturas naturais. Vende os terrenos a cidadãos ou construtoras, e o dinheiro passa ao tesouro. Proprietários podem usar ou revender seus terrenos. As construtoras compram lotes, erguem residenciais para vender seus espaços e recebem pelo trabalho contratado. Os investidores individuais priorizam instalações para seus próprios negócios e compram moradias para morar ou alugar.
 
 Uma obra precisa de **duas pedras por célula 1x1x1**, entregues no canteiro, e três unidades de trabalho por célula. A pedreira extrai pedras de uma reserva mineral finita, com trabalho humano; não há compra externa de pedras. O contrato da construtora fica reservado até a conclusão. Construir não cria um edifício pronto nem cobra materiais inexistentes. A geração inicial e o editor do framework usam uma exceção explícita de cenário.
+
+Construtoras também oferecem **serviços contratados**, com preço por célula e pagamento reservado até a entrega. Empreendedores podem definir a largura, profundidade e quantidade de andares do empreendimento dentro do lote e escolher uma construtora. O cliente paga os materiais e fretes; a construtora emprega seus funcionários e recebe pelo serviço concluído.
+
+O prefeito contrata **estradas e ampliação da prefeitura** com o tesouro, separado de seu dinheiro pessoal. Estradas exigem uma pedra e duas unidades de trabalho por tile novo, preservam a altura original e respeitam terrenos cadastrados. Novos empreendimentos deixam de ganhar estradas prontas: a ligação por terra continua disponível, e o município contrata a pavimentação. A ampliação adiciona pavimentos e espaços ao mesmo edifício, preservando os contratos e estoques existentes. A carga administrativa (população e empresas) gera a demanda por ampliar a prefeitura. Caminhos da geração inicial continuam sendo infraestrutura de partida.
 
 **Ar livre** ocupa somente o nível do solo, acompanhando cada trecho do terreno, sem paredes, telhado, laje ou pavimentos. Fazendas exigem apenas o terreno para sua instalação, sem pedras ou trabalho de edificação; sementes e salários continuam sendo despesas de operação.
 Cada apartamento é uma célula de 1×1×1. Cidadãos compram os espaços e podem ocupá-los, alugá-los ou revendê-los. Proprietários privados decidem entre renda de aluguel e venda conforme reservas e preferência individual. A venda de um apartamento ocupado preserva seu inquilino; o próximo aluguel vai ao novo dono. Morar no próprio espaço dispensa aluguel. São cobradas diárias, com primeiro pagamento na contratação e encerramento do contrato após três dias sem pagamento. Trabalhadores que acumulam reservas também podem comprar moradia.
@@ -67,9 +71,19 @@ As compras internas reservam espaço no destino e dinheiro em uma conta de frete
 
 Transportadoras contratam funcionários conforme habilidades e vínculos, pagam salários durante os trajetos e recebem pelo frete entregue. A habilidade de logística aumenta com a prática. Antes de haver transportadora, os próprios empreendedores podem carregar compras. São viagens a pé de até 24 itens, sem veículos. Pedras também precisam viajar da pedreira ao canteiro.
 
-A prefeitura começa com **1.728 unidades de pão** para os 24 habitantes: 576 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e nunca se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
+A prefeitura começa com **1.728 unidades de pão** para os 24 habitantes: 576 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e não se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
 
 Preços, tempos e receitas são regras simplificadas de jogo, não uma representação dos custos agrícolas reais.
+
+## Alimentação no trabalho
+
+Empresas com funcionários compram comida de mercados, hortifrutis ou padarias e recebem os itens por frete. Enquanto não há comércio privado, também podem comprar parte da reserva pública inicial. Os alimentos ficam na sede ou no canteiro, dentro da capacidade do inventário; insumos como trigo, pedras e sementes não contam como refeição pronta.
+
+O funcionário prefere o refeitório da empresa. Uma refeição consome três itens reais e recupera sua alimentação durante uma pausa de até 15 minutos, sem cobrar sua conta pessoal. Depois ele retoma o trabalho ou trajeto. Canteiros recebem refeições custeadas pela construtora, separadamente dos materiais que o cliente paga. Ao encerrar uma obra, os fretes de refeições ainda pendentes são cancelados e o empregador recebe o estorno.
+
+Se não houver refeição acessível na empresa, o empregado vai a um estabelecimento e a empresa lhe paga um **vale-alimentação de no mínimo R$ 30,00 ou seis vezes o preço da refeição**, o que for maior. O valor sai do caixa do empregador e entra na conta do trabalhador; a mesma necessidade de comer não pode gerar vários vales. A diferença torna o refeitório abastecido muito mais barato que pagar vales. Sem caixa suficiente, o empregador não pode emitir dinheiro para o benefício.
+
+A ficha **Equipe** mostra refeições fornecidas, compras para alimentação e vales pagos; a ficha do cidadão mostra o benefício recebido no dia. As regras das outras necessidades permanecem as mesmas.
 
 ## Relevo e sementes
 
@@ -96,7 +110,8 @@ Crianças têm parentesco, necessidades, conta e moradia própria. O responsáve
 - `js/city_economy.js`: prefeito, investidores, mercado imobiliário, contratação, habilidades, demandas, produção, comércio e consumo.
 - `js/city_inventory.js`: capacidades e reservas de espaço.
 - `js/city_logistics.js`: cargas, trajetos, transportadores, pagamentos e cancelamentos.
-- `js/city_development.js`: terrenos, compra, projetos, materiais e construção.
+- `js/city_development.js`: terrenos, projetos sob medida, contratos, estradas e ampliações.
+- `js/city_work_meals.js`: compras de comida, refeitórios, refeições no canteiro e vales.
 - `js/city_society.js`: vínculos, famílias, crescimento e responsáveis.
 - `js/city_terrain.js`: implantação, lotes, ruas e navegação A*.
 - `js/world_settings.js`: sementes e paisagens.

@@ -10,8 +10,11 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     active.add(entity.id);
     if (b.constructionKind === 'open-air') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
+    if (group && group.userData.floorCount !== b.floors) {
+      renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
+    }
     if (!group) {
-      group = new THREE.Group();
+      group = new THREE.Group(); group.userData.floorCount = b.floors;
       const geometry = new THREE.BoxGeometry(0.97, 0.97, 0.97);
       const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
       const cells = new THREE.InstancedMesh(geometry, material, b.units.length);
