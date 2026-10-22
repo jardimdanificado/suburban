@@ -1,70 +1,87 @@
-# Suburban — simulador de cidades
+# Suburban — simulação autônoma de cidades
 
-Primeira versão jogável sobre o Experience Framework, com visualização 3D isométrica e 2D. A cidade é gerada sobre o relevo natural e inicia às 08:00 com 24 cidadãos, prefeitura, mercado, dois residenciais, clínica, água/saneamento e centro de lazer. Lotes, prédios e ruas variam com a semente, sem planificar o terreno.
+Uma cidade procedural sobre o relevo natural, com pessoas, patrimônio, governo, empresas, trabalho, produção de alimentos e famílias. A economia evolui sem comandos do jogador; o painel permite observar as decisões dos cidadãos.
 
 ```sh
 python3 -m http.server 8000
 ```
 
-Abra `http://localhost:8000`. Use **Cidade** na barra inferior para mostrar ou ocultar o painel de gestão. Arraste o mapa para mover a câmera; a roda aproxima e afasta. Os controles de pausa, velocidade, editor e opções do framework continuam disponíveis.
+Abra `http://localhost:8000`. Arraste o mapa para mover a câmera e use a roda para aproximar. **Cidade** na barra inferior mostra ou oculta o painel. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.
 
-## Jogar
+## Acompanhar a cidade
 
-- **Cidade:** população, bem-estar, emprego, caixa municipal e acontecimentos. Em **Terreno da cidade**, escolha a paisagem, repita uma semente ou clique em **Terreno aleatório** para iniciar outra partida.
-- **Cidadãos:** selecione alguém na lista ou no mapa para acompanhar idade, família, vínculos, histórico pessoal, saldo, emprego, moradia, atividade e dez necessidades: alimentação, água, descanso, higiene, banheiro, convívio, lazer, saúde, moradia e segurança.
-- **Imóveis:** selecione um prédio e uma célula por coordenadas X/Y/Z. Cada célula **1×1×1** tem matrícula própria, proprietário, ocupante, aluguel diário, preço de venda e anúncios independentes. Clique diretamente numa célula visível em 3D para inspecioná-la; seu contorno fica destacado. Selecione um cidadão em **Negociar como** para alugar ou comprar. **Administrar anúncio** permite mudar preços e disponibilidades, inclusive revender espaços privados.
-- **Histórico:** log geral com categorias, filtro por cidadão, busca, botão para congelar a atualização, paginação e exportação JSON. São retidos os últimos 5.000 registros da partida. Entradas incluem construções, contratos, transferências, emprego, conversas, amizades, relacionamentos, separações, nascimentos e cuidados infantis. Salários são agrupados por cidadão a cada hora para evitar uma linha por minuto.
-- **Construir:** escolha o uso e as dimensões ou deixe campos vazios para geração procedural. Escolha terra firme em uma planície, praia ou colina suave. A obra custa R$ 3,50 por célula; serviços recebem R$ 700,00 de capital inicial. É necessário deixar espaço entre prédios e uma entrada conectada à cidade. O acesso é traçado automaticamente sobre o relevo existente. Escape cancela a colocação.
+- **Cidade:** população, emprego, moradia, vínculos, prefeito e configuração do terreno.
+- **Cidadãos:** dinheiro, perfil econômico, empresas, patrimônio, profissão, habilidades, necessidades, parentesco e relações.
+- **Imóveis:** proprietário de cada célula 1×1×1, ocupante, anúncio, empresa, equipe, caixa, despesas, receitas, estoques, cultivo e pedidos de insumos. Clique no mapa ou nas listas para inspecionar.
+- **Economia:** prefeito, oportunidades de investimento, gargalos, produção, consumo e empresas. Os números de capacidade são estimativas de planejamento; a produção efetiva depende de trabalho e insumos.
+- **Histórico:** acontecimentos com categoria, busca, filtro por cidadão, atualização congelável, paginação e exportação JSON. Retém os últimos 5.000 registros. Salários são agrupados por pessoa a cada hora.
 
-Os cidadãos procuram vagas e moradia automaticamente. Caminham por rotas que desviam de prédios e água, trabalham entre 08:00 e 17:00 e visitam serviços conforme suas necessidades. Recebem por minuto efetivamente trabalhado; 10% do salário volta à prefeitura. Aluguéis e orçamentos públicos são processados à meia-noite. O primeiro aluguel é cobrado na contratação. Três diárias sem pagamento encerram um contrato residencial. Moradores com reservas podem comprar seu próprio espaço automaticamente.
+## Governo e propriedade
 
-Comprar um espaço ocupado preserva seu inquilino; os próximos aluguéis vão ao novo dono. Morar no próprio espaço dispensa aluguel. Os serviços também alugam suas células e mantêm caixa próprio. Mercado, atendimento e lazer cobram dos cidadãos; mercado repõe alimentos com fornecedores externos. Todas as transferências usam centavos inteiros e contas de origem e destino, incluindo a economia externa. Não há emissão automática de dinheiro.
+O prefeito é um cidadão, escolhido inicialmente pela habilidade de administração pública entre os moradores que não são investidores. Ele tem rotina, conta pessoal, salário, necessidades e vínculos; seu dinheiro é separado do caixa municipal. A saída do prefeito provoca a escolha de outro morador. A prefeitura autoriza vendas de instalações e financia serviços públicos; suas decisões ficam no histórico.
 
-Uma segunda de simulação representa quatro minutos da cidade; a velocidade da barra multiplica esse ritmo. A prefeitura começa com R$ 20.000,00, usados também para capitalizar serviços e moradores.
+Todos os prédios iniciais e suas células começam pertencendo à prefeitura. **A prefeitura sempre oferece seus imóveis à venda e nunca para aluguel.** Isso é uma regra da simulação, inclusive ao alterar anúncios ou devolver propriedades ao patrimônio público. Serviços públicos ocupam instalações municipais sem um contrato de aluguel.
 
-## Terrenos aleatórios e implantação da cidade
+Cada apartamento é uma célula de 1×1×1. Cidadãos compram os espaços e podem ocupá-los, alugá-los ou revendê-los. Proprietários privados decidem entre renda de aluguel e venda conforme reservas e preferência individual. A venda de um apartamento ocupado preserva seu inquilino; o próximo aluguel vai ao novo dono. Morar no próprio espaço dispensa aluguel. São cobradas diárias, com primeiro pagamento na contratação e encerramento do contrato após três dias sem pagamento. Trabalhadores que acumulam reservas também podem comprar moradia.
 
-Sem uma semente na URL, cada carregamento sorteia um novo terreno e uma das três paisagens: arquipélago, continente ou terras altas. Para repetir e compartilhar uma cidade inicial, informe os dois parâmetros, por exemplo:
+## População e capital inicial
+
+A cidade começa com **três ricos e 21 trabalhadores**. Cada rico recebe R$ 4.000,00 de capital inicial; os outros recebem entre R$ 40,00 e R$ 59,99. Os valores saem do caixa municipal inicial de R$ 20.000,00: não são emitidos novos recursos. Os prédios iniciais são patrimônio de partida.
+
+Os investidores compram a própria moradia e apartamentos para alugar à maioria, preservando recursos para empresas. Preferem gerir negócios próprios a aceitar empregos. Moradores que acumularem bastante capital também podem se tornar investidores. Cada pessoa traz três refeições de provisão, registradas separadamente dos produtos das empresas, para atravessar a implantação da cadeia alimentar. Essas refeições acabam e não são repostas automaticamente.
+
+Desemprego, falta de alimentos, empresas sem recursos e inadimplência são situações possíveis. Não há garantia de emprego ou enriquecimento para cada pessoa.
+
+## Empresas, contratação e aprendizado
+
+Os negócios privados iniciais são **mercados, hortifrutis, padarias e fazendas**. Os ricos escolhem investimentos automaticamente; não é necessário clicar para fundar uma empresa. O empresário compra as instalações da prefeitura, capitaliza a conta da empresa e contrata trabalhadores. Caixa empresarial, dinheiro do dono e patrimônio são separados. Aportes e distribuição de lucros usam transferências reais.
+
+A contratação combina habilidade profissional (75% da pontuação), confiança (15%) e afeto (10%) na relação com o dono. Pessoas ganham habilidades praticando sua profissão ou outras atividades: agricultura, panificação, comércio, gestão, administração pública, saúde, manutenção, comunicação e cuidados. Conversas e cuidados com filhos também ensinam. A habilidade melhora a produtividade agrícola e da padaria e influencia a remuneração.
+
+As rotinas de trabalho acontecem entre 08:00 e 17:00, com salários pelo trabalho efetivo e imposto de 10%. Ricos que administram a própria empresa não recebem salário dela; podem receber lucros. Fazendas em crescimento e padarias sem matéria-prima não geram salários ou produção fictícios enquanto aguardam. Os serviços públicos recebem orçamento autorizado pelo prefeito.
+
+## Alimentos com origem e demanda
+
+As fazendas podem cultivar **maçã, goiaba, trigo, milho, mandioca, cebola, feijão e coentro**. Cada fazenda se especializa num cultivo e opera dois talhões. Plantar consome sementes compradas; colher exige tanto crescimento (80–200 minutos, conforme o cultivo) quanto 120 unidades de trabalho. Cada colheita produz 12 unidades, e a habilidade agrícola acelera o trabalho.
+
+As padarias consomem **duas unidades de trigo para produzir três de pão**, após acumular trabalho de panificação. Mercados e hortifrutis compram produtos das fazendas; mercados também podem comprar pão das padarias. As lojas vendem refeições com três unidades de alimento. Compras, produção, transformação e consumo alteram estoques reais e têm registros de origem e destino. Não há reposição de comida de um fornecedor externo nem geração de alimentos pelo simples trabalho no mercado.
+
+As demandas combinam ausência de um tipo de comércio, população, capacidade estimada, estoques e pedidos de insumos. Uma padaria sem trigo aumenta a pressão por fazendas de trigo; lojas sem frutas e legumes geram oportunidades para os cultivos correspondentes. Demanda maior aumenta a prioridade de investimento, com variação individual nas escolhas. Capital disponível, mão de obra e um lote acessível também limitam novas empresas. Sementes e materiais de construção podem vir da economia externa, mediante pagamento; comida vem da cadeia local.
+
+O comércio entre empresas exige conexão por terra e é contabilizado em rodadas horárias. O transporte é uma transferência de estoque entre empresas conectadas; ainda não há veículos de entrega. Preços, tempos e receitas são regras simplificadas de jogo, não uma representação dos custos agrícolas reais.
+
+## Relevo e sementes
+
+Sem semente na URL, cada carregamento sorteia terreno e paisagem. **Cidade → Terreno da cidade** permite escolher arquipélago, continente ou terras altas, repetir uma semente ou gerar outra cidade. Gerar terreno reinicia a partida.
 
 ```text
 http://localhost:8000/?seed=47622&terrain=archipelago
 http://localhost:8000/?seed=1337&terrain=highlands
 ```
 
-As opções de `terrain` são `archipelago`, `continent` e `highlands`; sementes válidas vão de 1 a 2147483647. **Cidade → Terreno da cidade** mostra a semente atual e oferece os controles para gerar outro mapa. Gerar um terreno reinicia a partida; recarregar uma URL com semente mantém o mesmo mapa inicial.
+`terrain` aceita `archipelago`, `continent` e `highlands`; sementes vão de 1 a 2147483647. Lotes e ruas respeitam água, relevo e vizinhos. Fundações com apoios e degraus acomodam inclinações suaves sem terraplanagem. Fazendas procuram terreno fértil. Lotes isolados ou íngremes são recusados. Novas instalações seguem as mesmas regras dos prédios iniciais. O editor manual continua disponível como ferramenta do framework.
 
-A implantação procura lotes adequados no relevo original. Os prédios ficam fora da água, das formações rochosas e das ruas, respeitando os vizinhos e o desnível do lote. Fundações com apoios e degraus acomodam pequenas inclinações sem cortar ou aterrar o solo. Lotes muito íngremes ou isolados são recusados. Os tamanhos e a distribuição dos prédios iniciais também variam com a semente.
+## Relações e famílias
 
-As ruas conectam as entradas dos serviços, reutilizam trechos existentes e desviam de água e encostas íngremes. Planícies, praias e colinas recebem a variante de estrada com a mesma altura do terreno original. A navegação dos cidadãos respeita essas barreiras e prefere caminhos já construídos. Apenas o editor manual pode alterar livremente o terreno; a geração e a construção da cidade não fazem terraplanagem. Não há pontes ou túneis nesta versão.
+Pessoas próximas conversam por 4–8 minutos, com intervalo mínimo de 30 minutos, desenvolvendo familiaridade, confiança e afeto. Afinidades, discordâncias e afastamento podem gerar amizades, relacionamentos ou separações. Os balões indicam conversas no mapa. Relacionamentos amorosos exigem dois adultos solteiros interessados, sem parentesco próximo.
 
-## Convívio, relacionamentos e famílias
+Casais estáveis que desejam filhos podem planejar uma família após dois dias, com saúde, reservas, moradia e espaço privado disponível. A chegada leva três dias simulados; o limite é de dois filhos por pessoa e o intervalo mínimo entre nascimentos é de cinco dias. A idade avança um ano a cada 12 dias. São tempos acelerados para a simulação.
 
-Conversas ocorrem entre duas pessoas próximas e paradas no mapa, durante 4–8 minutos, com intervalo mínimo de 30 minutos por pessoa. Os balões com reticências indicam conversas em andamento. Há temas, afinidades e personalidades individuais. Conversar atende ao convívio e desenvolve familiaridade, confiança e afeto; discordâncias e afastamento podem enfraquecer vínculos e causar separações. A ficha do cidadão mostra suas relações e permite abrir a pessoa ou o histórico correspondente.
+Crianças têm parentesco, necessidades, conta e moradia própria. O responsável paga suas despesas; crianças pequenas precisam de cuidados em casa, com alimentos de provisões ou das lojas locais. A partir de seis anos, visitam serviços, ainda sustentadas pelo responsável. Aos 18, deixam a dependência financeira e podem disputar vagas. Crianças não são contratadas nem formam relacionamentos amorosos.
 
-Amizades podem evoluir para relacionamentos quando ambos são adultos, estão solteiros, desejam um vínculo amoroso e não têm parentesco próximo. Não há sorteio de casais sem convivência: os vínculos dependem das conversas. Crianças também podem fazer amizades a partir dos três anos, mas não têm vínculos amorosos nem emprego.
+## Código e verificação
 
-Casais que desejam filhos podem planejar uma família após dois dias de relacionamento estável, com saúde, reservas financeiras, moradia e espaço residencial disponível. A chegada leva três dias simulados. Cada pessoa pode ter até dois filhos, com intervalo de cinco dias entre nascimentos. São regras aceleradas de jogo; a idade avança um ano a cada 12 dias da cidade.
+- `js/city_simulation.js`: pessoas, necessidades, propriedades, contas e integração.
+- `js/city_economy.js`: prefeito, investidores, mercado imobiliário, contratação, habilidades, demandas, produção, comércio e consumo.
+- `js/city_society.js`: vínculos, famílias, crescimento e responsáveis.
+- `js/city_terrain.js`: implantação, lotes, ruas e navegação A*.
+- `js/world_settings.js`: sementes e paisagens.
+- `js/city_ui.js`: painéis de observação.
+- `js/city_renderer_3d.js`: células volumétricas e fundações.
 
-Cada criança é um cidadão com conta, parentesco, necessidades e uma célula residencial própria, preferencialmente no prédio do responsável. Não recebe auxílio de chegada nem salário: o responsável paga aluguel, alimentação, água e atendimento. Crianças menores de seis anos ficam em casa; o responsável precisa ir até elas para oferecer cuidados. A partir de seis anos, elas visitam os serviços por conta própria, ainda com despesas pagas pelo responsável. Aos 18 anos, passam a procurar emprego e pagar suas próprias despesas. A saída de um responsável transfere os cuidados ao outro quando possível.
+`npm test` verifica os controles originais, preservação do relevo, políticas públicas de venda, propriedade privada, contratação, habilidades, insumos, receitas, estoques, conversas e famílias. Simulações de vários dias verificam conservação de dinheiro e de cada mercadoria: produção acumulada = consumo e transformação + estoque restante.
 
-## Escopo desta versão
-
-As necessidades e os serviços usam regras simplificadas. Os cidadãos ficam visíveis nas entradas enquanto usam os espaços internos; não há navegação entre andares. Segurança depende da presença da prefeitura, e moradia depende de um contrato. Ainda não há mortes, escola, redes físicas de água/energia ou salvamento da cidade; recarregar a página reinicia a partida. O renderizador 3D usa a dependência Three.js hospedada em `esm.sh`.
-
-## Código e testes
-
-- `js/city_simulation.js`: cidadãos, necessidades, contas, imóveis e contratos, sem depender do navegador.
-- `js/city_terrain.js`: implantação procedural, validação de lotes, relevo, ruas e navegação A*.
-- `js/world_settings.js`: sementes aleatórias, paisagens e parâmetros da URL.
-- `js/city_ui.js`: painel de gestão, famílias, histórico e construção.
-- `js/city_society.js`: conversas, vínculos, parentesco, nascimento, crescimento e responsáveis.
-- `js/city_renderer_3d.js`: células volumétricas, fachadas e seleção.
-- `app.js`: integração com o loop e os controles do framework.
-- `tests/city.test.mjs`: cidade inicial, negociação, inadimplência, construção, navegação, economia e demolição.
-- `tests/society.test.mjs`: encontros, vínculos, famílias, menores, cuidados, crescimento, histórico e uma partida de 15 dias.
-- `tests/terrain.test.mjs`: sementes, repetibilidade, preservação do relevo, conexão dos serviços, encostas, fundações e lotes isolados.
-
-Execute `npm test`. Os testes da simulação verificam saldos e contratos e exercitam vários dias completos; os testes originais dos controles também continuam ativos.
+Ainda não há salvamento da cidade, eleições periódicas, crédito bancário, mortalidade, escola, irrigação ou veículos de transporte. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
 
 ---
 

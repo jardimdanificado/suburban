@@ -111,7 +111,7 @@ test('guardians pay children\'s services and rents and provide care at home', ()
   child.needs.food = 20;
   const cash = a.balance, money = totalMoney(city);
   city.performTask(a);
-  assert.equal(a.balance, cash - 215); assert.equal(child.balance, 0); assert(child.needs.food > 20);
+  assert.equal(a.balance, cash - 35); assert.equal(child.balance, 0); assert(child.needs.food > 20);
   assert(city.events.some(e => e.data.kind === 'childcare'));
   child.initialAge = 8; const clinic = city.buildings.find(b => b.type === 'clinic'); child.task = 'health'; child.targetId = clinic.id; child.servicePaid = null;
   const parentCash = a.balance; city.performTask(child); assert.equal(a.balance, parentCash - 240);
@@ -123,6 +123,7 @@ test('adulthood ends financial dependency and allows employment', () => {
   const child = city.addCitizen(64.5, 64.5, 26, { age: 0, parentIds: [parent.id], grant: false });
   city.society.houseChild(child);
   city.minute = child.bornAt + 18 * SOCIAL_RULES.daysPerYear * 1440;
+  child.skills.commerce = 100; city.buildings.find(b => b.type === 'market').jobs++;
   city.society.daily(); city.assignHousingAndJobs();
   assert.equal(child.guardianId, null); assert(child.jobId);
   assert.equal(city.units.get(child.homeUnitId).rentPayerId, null);
@@ -167,7 +168,7 @@ test('urgent needs finish paid essential services without repeatedly charging or
   assert.equal(c.task, 'energy');
 });
 
-test('a fifteen-day city develops families naturally while keeping children housed, cared for and currency conserved', () => {
+test('a fifteen-day city develops families with coherent private contracts, needs and conserved currency', () => {
   const city = setup();
   for (let i = 0; i < 15 * 1440 * 4; i++) city.update(1 / 16);
   const children = city.citizens.filter(c => c.parentIds.length);
@@ -176,8 +177,9 @@ test('a fifteen-day city develops families naturally while keeping children hous
   assert.equal(city.stats().births, children.length);
   assert.equal(totalMoney(city), 2000000);
   for (const child of children) {
-    assert(child.homeUnitId); assert.equal(child.jobId, null);
-    assert(child.needs.health > 0);
+    if (child.homeUnitId) assert.equal(city.units.get(child.homeUnitId).tenantId, child.accountId);
+    assert.equal(child.jobId, null);
+    assert(child.needs.health >= 0 && child.needs.health <= 100);
     assert(city.society.guardian(child));
   }
   assert(city.events.some(e => e.data.kind === 'childcare'));

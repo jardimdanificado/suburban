@@ -92,6 +92,19 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
   return null;
 }
 
+export function hasSettlementAccess(world, door, x, y, width, depth) {
+  const start = [Math.floor(door.x), Math.floor(door.y)], queue = [start], seen = new Set([tileKey(...start)]);
+  for (let head = 0; head < queue.length && seen.size < 256; head++) {
+    const [cx, cy] = queue[head];
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+      const nx = cx + dx, ny = cy + dy, key = tileKey(nx, ny);
+      if (seen.has(key) || (nx >= x && nx < x + width && ny >= y && ny < y + depth) || !canStep(world, cx, cy, nx, ny)) continue;
+      seen.add(key); queue.push([nx, ny]);
+    }
+  }
+  return seen.size >= 256;
+}
+
 export function pavePath(world, path) {
   for (const p of path) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(world, x, y), road = roadFor(tile); if (road !== null && road !== tile) world.setTile(x, y, road); }
 }
@@ -100,7 +113,7 @@ export function generateSettlement(city) {
   const { world } = city;
   const origin = { ...world.spawnCenter };
   let hub = null;
-  const specs = [['townhall', 4 + Math.floor(city.random() * 2), 4, 3], ['market', 4 + Math.floor(city.random() * 2), 4, 2], ['residential', 3 + Math.floor(city.random() * 3), 4, 3 + Math.floor(city.random() * 3)], ['residential', 3 + Math.floor(city.random() * 3), 4, 3 + Math.floor(city.random() * 3)], ['clinic', 4, 3 + Math.floor(city.random() * 2), 2], ['utility', 4, 3, 2], ['leisure', 4, 3 + Math.floor(city.random() * 2), 2]];
+  const specs = [['townhall', 4 + Math.floor(city.random() * 2), 4, 3], ['market', 3, 3, 2], ['residential', 3 + Math.floor(city.random() * 3), 4, 3 + Math.floor(city.random() * 3)], ['residential', 3 + Math.floor(city.random() * 3), 4, 3 + Math.floor(city.random() * 3)], ['clinic', 4, 3 + Math.floor(city.random() * 2), 2], ['utility', 4, 3, 2], ['leisure', 4, 3 + Math.floor(city.random() * 2), 2]];
   for (const [type, w, d, h] of specs) {
     const angle = city.random() * Math.PI * 2, radius = hub ? 8 + city.random() * 13 : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };

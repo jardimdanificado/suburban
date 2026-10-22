@@ -12,45 +12,37 @@ test('starter city has accessible basic services, homes, jobs and individual cub
     for (const u of b.units) { assert.equal(city.units.get(u.id), u); assert(u.z < b.floors); }
     assert(city.findPath(city.citizens[0].entity, b.door));
   }
-  for (const c of city.citizens) { assert(c.homeUnitId); assert(c.jobId); assert.equal(Object.keys(c.needs).length, Object.keys(NEED_LABELS).length); }
+  for (const c of city.citizens) { assert(c.homeUnitId); if (c.wealthTier === 'wealthy') assert.equal(c.jobId, null); assert.equal(Object.keys(c.needs).length, Object.keys(NEED_LABELS).length); }
   assert.equal(totalMoney(city), 2000000);
 });
 
-test('rent, occupied sales and resale transfer money and preserve the current tenant', () => {
-  const city = setup(), [tenant, buyer] = city.citizens;
-  const u = city.units.get(tenant.homeUnitId);
-  city.transfer('treasury', buyer.accountId, u.price * 3, 'Test funding');
-  const cash = buyer.balance, treasury = city.treasury;
+test('private rent, occupied sales and resale transfer money and preserve the current tenant', () => {
+  const city = setup(), tenant = city.citizens.find(c => c.wealthTier === 'worker'), buyer = city.citizens.find(c => c.wealthTier === 'wealthy' && c.accountId !== city.units.get(tenant.homeUnitId).ownerId);
+  const u = city.units.get(tenant.homeUnitId), seller = city.accounts.get(u.ownerId);
+  city.listUnit(u.id, { rent: u.rent, price: u.price, forSale: true, forRent: true });
+  const cash = buyer.balance, sellerCash = seller.balance;
   assert(city.buyUnit(buyer.id, u.id));
-  assert.equal(buyer.balance, cash - u.price);
-  assert.equal(city.treasury, treasury + u.price);
-  assert.equal(u.tenantId, tenant.accountId);
-  assert.equal(tenant.homeUnitId, u.id);
-  assert.equal(u.forSale, false);
-  assert.equal(city.buyUnit(buyer.id, u.id), null);
+  assert.equal(buyer.balance, cash - u.price); assert.equal(seller.balance, sellerCash + u.price);
+  assert.equal(u.tenantId, tenant.accountId); assert.equal(tenant.homeUnitId, u.id);
+  assert.equal(u.forSale, false); assert.equal(city.buyUnit(buyer.id, u.id), null);
   const ownerCash = buyer.balance;
-  city.collectRent();
-  assert.equal(buyer.balance, ownerCash + u.rent - city.units.get(buyer.homeUnitId).rent);
+  const rentDue = [...city.units.values()].filter(s => s.ownerId === buyer.accountId && s.tenantId && s.tenantId !== s.ownerId).reduce((sum, s) => sum + s.rent, 0);
+  city.collectRent(); assert.equal(buyer.balance, ownerCash + rentDue);
   assert(city.listUnit(u.id, { price: 200, rent: 20, forSale: true, forRent: true }));
   assert(city.buyUnit(tenant.id, u.id));
-  const selfCash = tenant.balance;
-  city.collectRent();
-  assert.equal(tenant.balance, selfCash);
+  const selfCash = tenant.balance; city.collectRent(); assert.equal(tenant.balance, selfCash);
   assert.equal(totalMoney(city), 2000000);
 });
 
 test('unaffordable purchases and invalid listings do not mutate ownership or cash', () => {
-  const city = setup(), c = city.citizens[0], u = city.units.get(c.homeUnitId), balance = c.balance;
-  assert.equal(city.buyUnit(c.id, u.id), null);
-  assert.equal(u.ownerId, 'treasury');
-  assert.equal(c.balance, balance);
+  const city = setup(), c = city.citizens.find(c => c.wealthTier === 'worker'), u = [...city.units.values()].find(u => u.ownerId === 'treasury' && city.building(u.buildingId).type === 'residential'), balance = c.balance;
+  assert.equal(city.buyUnit(c.id, u.id), null); assert.equal(u.ownerId, 'treasury'); assert.equal(c.balance, balance);
   assert.equal(city.listUnit(u.id, { price: Infinity, rent: -1 }), null);
-  assert.equal(city.transfer(c.accountId, 'treasury', NaN), false);
-  assert.equal(city.transfer(c.accountId, 'treasury', .5), false);
+  assert.equal(city.transfer(c.accountId, 'treasury', NaN), false); assert.equal(city.transfer(c.accountId, 'treasury', .5), false);
 });
 
-test('three unpaid days evict a tenant and make the unit available', () => {
-  const city = setup(), c = city.citizens[0], u = city.units.get(c.homeUnitId);
+test('three unpaid days evict a private tenant and make the unit available', () => {
+  const city = setup(), c = city.citizens.find(c => c.wealthTier === 'worker'), u = city.units.get(c.homeUnitId);
   city.transfer(c.accountId, 'treasury', c.balance, 'Test drain');
   city.collectRent(); assert.equal(u.missedDays, 1); assert.equal(u.arrears, u.rent);
   city.collectRent(); assert.equal(c.homeUnitId, u.id);
@@ -109,7 +101,8 @@ test('demolition releases contracts, jobs and navigation cells without losing mo
 });
 
 test('fractional salary taxes accumulate to the advertised ten percent', () => {
-  const city = setup(), c = city.citizens[0], b = city.building(c.jobId);
+  const city = setup(), c = city.citizens.find(c => city.building(c.jobId)?.type === 'townhall'), b = city.building(c.jobId);
+  c.skills.governance = 0;
   b.wage = 4; c.task = 'work'; c.targetId = b.id;
   const treasury = city.treasury, cash = c.balance, company = b.balance;
   for (let i = 0; i < 10; i++) city.performTask(c);
