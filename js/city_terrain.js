@@ -48,7 +48,7 @@ export function buildingGround(world, x, y, width, depth) {
 export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, type = null } = {}) {
   if (city.development?.overlaps(x, y, width, depth, plotId)) return { error: 'Este espaço já pertence a um terreno cadastrado.' };
   const { world, occupied } = city;
-  const quarry = type === 'quarry';
+  const quarry = type === 'quarry' || type === 'iron_mine';
   for (let yy = y - 1; yy <= y + depth; yy++) for (let xx = x - 1; xx <= x + width; xx++) {
     if (occupied.has(tileKey(xx, yy))) return { error: 'Deixe uma célula livre entre os prédios.' };
     if (xx >= x && xx < x + width && yy >= y && yy < y + depth) {
@@ -57,17 +57,17 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
     }
   }
   let door = { x: x + Math.floor(width / 2) + .5, y: y + depth + .5 };
-  if (quarry) {
-    if (world.map && !quarryDeposits(world, x, y, width, depth).length) return { error: 'A área da pedreira precisa ocupar rochas.' };
+  if (quarry || type === 'farm') {
+    if (quarry && world.map && !quarryDeposits(world, x, y, width, depth).length) return { error: 'A área da pedreira precisa ocupar rochas.' };
     const doors = [];
     for (let dx = 0; dx < width; dx++) { doors.push({ x: x + dx + .5, y: y + depth + .5 }, { x: x + dx + .5, y: y - .5 }); }
     for (let dy = 0; dy < depth; dy++) { doors.push({ x: x - .5, y: y + dy + .5 }, { x: x + width + .5, y: y + dy + .5 }); }
     door = doors.find(p => terrainWalkable(world, Math.floor(p.x), Math.floor(p.y)) && !occupied.has(tileKey(Math.floor(p.x), Math.floor(p.y))));
-    if (!door) return { error: 'A pedreira precisa de uma entrada acessível junto às rochas.' };
+    if (!door) return { error: quarry ? 'A pedreira precisa de uma entrada acessível junto às rochas.' : 'A fazenda precisa de uma entrada acessível em terra firme.' };
   }
   if (!terrainWalkable(world, Math.floor(door.x), Math.floor(door.y))) return { error: 'A entrada precisa ter acesso por terra firme.' };
   const terrain = buildingGround(world, x, y, width, depth);
-  if (!quarry && (terrain.variation > 1.3 || terrain.base - tileHeight(tileAt(world, Math.floor(door.x), Math.floor(door.y))) > 1.65)) return { error: 'Encosta muito íngreme. Escolha um lote menor ou outro trecho do terreno.' };
+  if (!quarry && type !== 'farm' && (terrain.variation > 1.3 || terrain.base - tileHeight(tileAt(world, Math.floor(door.x), Math.floor(door.y))) > 1.65)) return { error: 'Encosta muito íngreme. Escolha um lote menor ou outro trecho do terreno.' };
   return { ...terrain, door };
 }
 

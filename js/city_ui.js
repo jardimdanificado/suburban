@@ -1,3 +1,4 @@
+import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
@@ -197,7 +198,7 @@ ${c.action}`,()=>this.openCitizen(c.id),this.selected?.id===c.id,critical?C.red:
       }
       if(!rows.length)p.note('Nenhuma pessoa com estes filtros.');
     } else {
-      const residences=['residential','popular_housing','luxury_housing'],food=['farm','bakery','market','greengrocer','popular_refectory'],services=['cleaner','carrier','paid_toilet','public_toilet','waste_collector'],rows=(business?city.economy.businesses:city.buildings.filter(b=>!b.entity.destroyed)).filter(b=>this.matches(`${name(b.entity)} ${BUILDING_TYPES[b.type].label} ${CROPS[b.crop]?.label||''}`)).filter(b=>filter==='all'||filter==='residential'&&residences.includes(b.type)||filter==='public'&&!b.ownerId&&!residences.includes(b.type)||filter==='private'&&!!b.ownerId||filter==='food'&&food.includes(b.type)||filter==='services'&&services.includes(b.type)||filter==='industry'&&['builder','quarry','recycler','mill'].includes(b.type));
+      const residences=['residential','popular_housing','luxury_housing'],food=['farm','bakery','market','greengrocer','popular_refectory'],services=['cleaner','carrier','paid_toilet','public_toilet','waste_collector'],rows=(business?city.economy.businesses:city.buildings.filter(b=>!b.entity.destroyed)).filter(b=>this.matches(`${name(b.entity)} ${BUILDING_TYPES[b.type].label} ${CROPS[b.crop]?.label||''}`)).filter(b=>filter==='all'||filter==='residential'&&residences.includes(b.type)||filter==='public'&&!b.ownerId&&!residences.includes(b.type)||filter==='private'&&!!b.ownerId||filter==='food'&&(food.includes(b.type)||INDUSTRIES[b.type]?.category==='food')||filter==='services'&&(services.includes(b.type)||INDUSTRIES[b.type]?.category==='services')||filter==='industry'&&(['builder','quarry','recycler','mill'].includes(b.type)||INDUSTRIES[b.type]?.category==='industry'));
       rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:name(a.entity).localeCompare(name(b.entity),'pt-BR'));p.note(`${rows.length} resultados`,C.muted);
       for(const b of rows)p.card(name(b.entity),`${CROPS[b.crop]?.label||BUILDING_TYPES[b.type].label}
 ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.length+' espaços / '+b.floors+' andares'}`,()=>this.openBuilding(b.id),this.selected?.id===b.id,b.active?C.green:residences.includes(b.type)?C.cyan:C.gold);
@@ -260,6 +261,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       const units = [...city.units.values()].filter(u => u.ownerId === c.accountId);
       p.kv('Imóveis próprios', units.length); p.kv('Valor anunciado total', money(units.reduce((s, u) => s + u.price, 0)));
       p.kv('Aluguel contratado/dia', money(units.filter(u => u.tenantId && u.tenantId !== c.accountId).reduce((s, u) => s + u.rent, 0)));
+      for(const bank of city.bank.available()) { const deposit=city.bank.deposits.get(`deposit:${bank.id}:${c.accountId}`);p.heading(name(bank.entity));p.kv('Seu depósito',money(deposit?.balance||0));p.buttons([{label:'DEPOSITAR R$ 100',click:()=>city.bank.deposit(bank,c.accountId,10000)},{label:'SACAR DEPÓSITO',click:()=>city.bank.withdraw(bank,c.accountId,deposit?.balance||0)},{label:'PEDIR R$ 100',click:()=>{if(!city.bank.lend(bank,c.accountId,10000))this.notice='Crédito indisponível: é preciso ter renda, limite e caixa no banco.';}}]);for(const loan of city.bank.loans.filter(l=>l.clientId===c.accountId)){p.kv('Principal a pagar',money(loan.remaining));p.kv('Juros pendentes',money(loan.interest));p.kv('Parcelas em atraso',loan.missed);}}
       p.heading('EMPRESAS'); for (const id of c.businessIds) { const b = city.building(id); if (b) p.button(name(b.entity), () => this.openBuilding(id)); }
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, c.accountId);
     }
@@ -273,6 +275,8 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     if (this.detailTab === 'profile') {
       const post = [...city.lighting.sites.values()].find(post => post.buildingId === b.id && !post.public && post.status !== 'cancelled');
       if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', !post.built ? post.projectId ? 'Em construção' : 'Aguarda contratação' : post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }
+      const industry=INDUSTRIES[b.type];
+      if(industry){p.heading('CADEIA PRODUTIVA');p.note(industry.impact);p.note('Insumos: '+(Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Trabalho e recursos locais'));p.note('Produtos: '+(Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Crédito e guarda de depósitos'));if(b.type==='bank'){p.kv('Depósitos protegidos',money([...city.bank.deposits.values()].filter(d=>d.bankId===b.id).reduce((n,d)=>n+d.balance,0)));p.kv('Crédito a receber',money(city.bank.loans.filter(l=>l.bankId===b.id).reduce((n,l)=>n+l.remaining+l.interest,0)));p.note('Juros: 0,2% por dia sobre principal. Prazo: 30 parcelas. Depósitos não são usados para emprestar.');}}
       p.kv('Tipo de ocupação', b.constructionKind === 'open-air' ? 'Ar livre / no nível do solo' : 'Edifício');
       p.button(`TERRENO ${b.plotId}`, () => this.setPlotSelection(b.plotId));
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');

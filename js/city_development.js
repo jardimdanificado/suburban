@@ -95,27 +95,27 @@ export class CityDevelopment {
     if (hall.floors < targetFloors && !activePublic.some(p => p.service === 'expansion')) this.beginExpansion('treasury', hall.id);
     const housing = city.buildings.filter(b => ['residential', 'popular_housing', 'luxury_housing'].includes(b.type)).length;
     if (housing < 1 && !activePublic.some(p => ['residential', 'popular_housing', 'luxury_housing'].includes(p.type))) {
-      const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3);
+      const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3 && p.width<=8 && p.depth<=8 && !['quarry','farm'].includes(p.type));
       if (lot) this.beginProject('treasury', lot.id, 'popular_housing', { floors: 3 });
     }
     if (city.citizens.some(c => c.needs.food < 35) && city.treasury > city.currency.price(500000) && !city.buildings.some(b => b.type === 'popular_refectory') && !activePublic.some(p => p.type === 'popular_refectory')) {
-      const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3);
+      const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3 && p.width<=8 && p.depth<=8 && !['quarry','farm'].includes(p.type));
       if (lot) this.beginProject('treasury', lot.id, 'popular_refectory');
     }
     if (city.stats().homeless >= 5 && !city.buildings.some(b => b.type === 'popular_housing') && !this.projects.some(p => p.type === 'popular_housing' && !p.cancelled && p.status !== 'completed') && city.treasury > city.currency.price(5000000)) {
-      const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3);
+      const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3 && p.width<=8 && p.depth<=8 && !['quarry','farm'].includes(p.type));
       if (lot) this.beginProject('treasury', lot.id, 'popular_housing', { floors: 3 });
     }
-    if (city.economy.businesses.length >= 5 && city.treasury > city.currency.price(500000) && !city.buildings.some(b => b.type === 'public_toilet') && !this.projects.some(p => p.type === 'public_toilet' && !p.cancelled && p.status !== 'completed')) { const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3); if (lot) this.beginProject('treasury', lot.id, 'public_toilet'); }
+    if (city.economy.businesses.length >= 5 && city.treasury > city.currency.price(500000) && !city.buildings.some(b => b.type === 'public_toilet') && !this.projects.some(p => p.type === 'public_toilet' && !p.cancelled && p.status !== 'completed')) { const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3 && p.width<=8 && p.depth<=8 && !['quarry','farm'].includes(p.type)); if (lot) this.beginProject('treasury', lot.id, 'public_toilet'); }
     if (city.treasury > city.currency.price(2000000) && !activePublic.some(p => p.service === 'road')) {
-      for (const b of city.buildings.filter(b => !b.entity.destroyed && b.id !== hall.id)) {
+      for (const b of city.buildings.filter(b => !b.entity.destroyed && b.id !== hall.id).sort((a,b)=>city.trafficScore(b.accessPath)-city.trafficScore(a.accessPath))) {
         if (this.beginRoad('treasury', b.door, hall.door)) break;
       }
     }
     const repairable = city.buildings.filter(b => b.repairNeeded && !this.projects.some(p => p.service === 'repair' && p.buildingId === b.id && p.status !== 'completed' && !p.cancelled));
     if (city.treasury > city.currency.price(500000)) for (const b of repairable) if (this.beginRepair('treasury', b.id)) break;
     const damagedRoad = this.cityRoadNeedsRepair();
-    if (damagedRoad.length && city.random() < .01 && city.treasury > city.currency.price(1000000) && !this.projects.some(p => p.service === 'road-repair' && p.status !== 'completed' && !p.cancelled)) this.beginRoadRepair('treasury', damagedRoad.slice(0, 12));
+    if (damagedRoad.length && city.random() < .01 && city.treasury > city.currency.price(1000000) && !this.projects.some(p => p.service === 'road-repair' && p.status !== 'completed' && !p.cancelled)) this.beginRoadRepair('treasury', damagedRoad.sort((a,b)=>city.trafficScore([b])-city.trafficScore([a])).slice(0, 12));
   }
   cityRoadNeedsRepair() {
     const out = [];
@@ -167,25 +167,43 @@ export class CityDevelopment {
   overlaps(x, y, width, depth, exceptId = null) {
     return this.plots.some(p => p.id !== exceptId && x - 1 < p.x + p.width && x + width + 1 > p.x && y - 1 < p.y + p.depth && y + depth + 1 > p.y);
   }
+  isFarmPlot(plot) {
+    if (plot.type === 'quarry' || plot.width < 8 || plot.depth < 8) return false;
+    let fertile = 0;
+    for (let y = plot.y; y < plot.y + plot.depth; y++) for (let x = plot.x; x < plot.x + plot.width; x++) {
+      if ([0, 9].includes(tileAt(this.city.world, x, y))) fertile++;
+    }
+    return fertile >= plot.width * plot.depth * .75;
+  }
   createPlot(x, y, width = 4, depth = 4, { type = null } = {}) {
-    if (![x, y, width, depth].every(Number.isInteger) || width < 2 || depth < 2 || width > 8 || depth > 8 || this.overlaps(x, y, width, depth)) return null;
+    if (![x, y, width, depth].every(Number.isInteger) || width < 2 || depth < 2 || width > 20 || depth > 20 || this.overlaps(x, y, width, depth)) return null;
     if (this.projects.some(p => p.service === 'road' && !p.cancelled && p.status !== 'completed' && p.route.some(t => t.x >= x && t.x < x + width && t.y >= y && t.y < y + depth))) return null;
     if (!type) for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) if (tileAt(this.city.world, xx, yy) === 4) type = 'quarry';
+    if (type === 'farm' && !this.isFarmPlot({ x, y, width, depth, type })) return null;
     const terrain = inspectBuildingSite(this.city, x, y, width, depth, { type });
     const level = flatSiteLevel(this.city.world, x, y, width, depth);
-    if (terrain.error || (level === null && type !== 'quarry')) return null;
+    if (terrain.error || (level === null && type !== 'quarry' && type !== 'farm')) return null;
     const hall = this.city.buildings[0];
     if (hall && findTerrainPath(this.city.world, terrain.door, hall.door, this.city.occupied, { extraBlocked: (xx, yy) => (xx >= x && xx < x + width && yy >= y && yy < y + depth) || this.plots.some(p => xx >= p.x && xx < p.x + p.width && yy >= p.y && yy < p.y + p.depth) }) === null) return null;
     const p = { id: this.nextPlotId++, x, y, width, depth, type, door: terrain.door, level, ownerId: 'treasury', price: width * depth * this.city.currency.price(DEVELOPMENT_RULES.landPerCell), forSale: true, forRent: false, rent: 0, buildingId: null, projectId: null };
     this.plots.push(p); return p;
   }
   ensurePlots(count = 18) {
-    if (this.plots.filter(p => !p.buildingId && !p.projectId && p.ownerId === 'treasury').length >= count) return;
+    const available = () => this.plots.filter(p => !p.buildingId && !p.projectId && p.ownerId === 'treasury');
+    const ruralTarget = 3;
+    const supply = () => {
+      const plots = available();
+      return { rural: plots.filter(p => this.isFarmPlot(p)).length, urban: plots.filter(p => p.type !== 'farm' && p.width <= 8 && p.depth <= 8).length };
+    };
+    let stock = supply();
+    // A full urban catalogue must never stop the search for agricultural land.
+    if (stock.urban >= count && stock.rural >= ruralTarget) return;
     if (this.nextPlotSearchAt > this.city.minute) return;
     this.nextPlotSearchAt = this.city.minute + 60;
-    const budget = this.hasSearchedPlots ? 24 : Infinity;
+    const budget = this.hasSearchedPlots ? 24 : 96;
     this.hasSearchedPlots = true;
-    const sizes = [[3, 3], [4, 4], [3, 5], [5, 3], [5, 5], [6, 4], [4, 6], [2, 3], [3, 2]];
+    const ruralSizes = [[10, 10], [8, 12], [12, 12], [16, 12], [8, 8]];
+    const urbanSizes = [[4, 5], [6, 6], [5, 7], [4, 4]];
     const center = this.city.world.spawnCenter;
     const maxRadius = Math.max(this.city.world.width, this.city.world.height) * .65;
     const radii = [];
@@ -198,12 +216,21 @@ export class CityDevelopment {
       const radius = rings[Math.floor(index / 32)], step = index % 32;
       const angle = step * Math.PI / 16 + (this.city.initialSeed % 11) * .07;
       const x = Math.floor(center.x + Math.cos(angle) * radius), y = Math.floor(center.y + Math.sin(angle) * radius);
-      const offset = this.nextPlotId % sizes.length;
-      for (let i = 0; i < sizes.length; i++) {
-        const [width, depth] = sizes[(offset + i) % sizes.length];
-        if (this.createPlot(x, y, width, depth)) break;
+      let created = null;
+      if (stock.rural < ruralTarget) for (const [width, depth] of ruralSizes) {
+        created = this.createPlot(x, y, width, depth, { type: 'farm' });
+        if (created) break;
       }
-      if (this.plots.filter(p => !p.buildingId && !p.projectId && p.ownerId === 'treasury').length >= count) return;
+      if (!created && stock.urban < count) {
+        const offset = this.nextPlotId % urbanSizes.length;
+        for (let i = 0; i < urbanSizes.length; i++) {
+          const [width, depth] = urbanSizes[(offset + i) % urbanSizes.length];
+          created = this.createPlot(x, y, width, depth);
+          if (created) break;
+        }
+      }
+      if (created) stock = supply();
+      if (stock.urban >= count && stock.rural >= ruralTarget) return;
     }
   }
 
@@ -223,9 +250,9 @@ export class CityDevelopment {
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
     if ((kind === 'open-air' && !['farm', 'quarry', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;
-    if (p.type === 'quarry' && type !== 'quarry') return null;
+    if ((p.type === 'quarry' && !['quarry','iron_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;
     const terrain = inspectBuildingSite(city, p.x, p.y, width, depth, { plotId, type }); if (terrain.error) return null;
-    if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width > p.width || depth > p.depth) return null;
+    if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width > p.width || depth > p.depth || (kind==='building' && (width>8 || depth>8))) return null;
     floors = kind === 'open-air' ? 1 : floors;
     const cells = width * depth * floors, stone = kind === 'open-air' ? 0 : cells * DEVELOPMENT_RULES.stonePerCell;
     const builder = this.selectBuilder(accountId, terrain.door, builderId);
@@ -255,7 +282,7 @@ export class CityDevelopment {
     const account = city.accounts.get(project.accountId); if (account?.entity?.properties.cityBuilding) account.totalExpenses += project.fee;
     if (['residential', 'popular_housing', 'luxury_housing'].includes(project.type) || project.sell) {
       for (const u of b.units) { u.occupantId = null; u.forSale = project.accountId === 'treasury' || project.sell; u.forRent = project.accountId !== 'treasury' && !project.sell; }
-    } else if (project.accountId === 'treasury') city.economy.activateMunicipalBusiness(b, city.currency.price(50000), project.crop);
+    } else if (project.accountId === 'treasury') city.economy.activateMunicipalBusiness(b, city.currency.price(b.type==='bank'?300000:50000), project.crop);
     else city.economy.activateBusiness(b, this.ownerCitizen(project.accountId), project.crop, false);
     city.workMeals.closeSite(project, b);
     city.log(`${b.entity.properties.name} concluído no terreno ${p.id}.`, 'construction', [project.ownerId], { kind: 'project-completed', buildingId: b.id, plotId: p.id }); return b;
@@ -291,7 +318,7 @@ export class CityDevelopment {
     const availableHomes = [...this.city.housing.homes.values()].filter(h => this.city.housing.units(h).every(u => !u.tenantId && (u.forSale || u.forRent))).length;
     if (homeless + 3 > availableHomes && !housingProjects.length) {
       const builder = this.city.economy.businesses.find(b => b.type === 'builder');
-      const p = this.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId).sort((a, b) => Math.abs(a.width * a.depth - 16) - Math.abs(b.width * b.depth - 16))[0];
+      const p = this.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId && p.width<=8 && p.depth<=8 && !['quarry','farm'].includes(p.type)).sort((a, b) => Math.abs(a.width * a.depth - 16) - Math.abs(b.width * b.depth - 16))[0];
       if (builder && p) {
         const owner = this.city.economy.citizen(builder.ownerId);
         if (owner && builder.balance < 50000 && owner.balance > 90000) this.city.transfer(owner.accountId, builder.accountId, 70000, 'Aporte para empreendimento imobiliário');

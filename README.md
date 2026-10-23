@@ -52,9 +52,9 @@ A prefeitura vende e nunca aluga. Proprietários privados podem alugar ou revend
 
 ## População, moeda e inflação
 
-Os **24 moradores começam com R$ 1.000 cada**, transferidos do tesouro. Não há classe de ricos nem promoção automática a investidor. Qualquer adulto, exceto o prefeito em exercício, pode abrir uma empresa se tiver dinheiro para terreno, materiais, construção, operação e uma reserva pessoal. As diferenças de patrimônio surgem das transações e do trabalho.
+Os **64 moradores começam com R$ 1.000 cada**, transferidos do tesouro. Não há classe de ricos nem promoção automática a investidor. Qualquer adulto, exceto o prefeito em exercício, pode abrir uma empresa se tiver dinheiro para terreno, materiais, construção, operação e uma reserva pessoal. As diferenças de patrimônio surgem das transações e do trabalho.
 
-A emissão inicial de cenário é **R$ 120.000**, registrada pela casa da moeda e dividida entre os cidadãos, o tesouro e as contas das instalações municipais. A construtora recebe R$ 20.000 e a pedreira R$ 5.000 para iniciar a cadeia de obras. Essas contas não são patrimônio pessoal de nenhum morador. Comprar uma empresa municipal em operação exige pagar pelos espaços, terreno, caixa e estoque, além de reservar o capital de operação.
+A emissão inicial de cenário é **R$ 320.000**, registrada pela casa da moeda e dividida entre os cidadãos, o tesouro e as contas das instalações municipais. A construtora recebe R$ 20.000 e a pedreira R$ 5.000 para iniciar a cadeia de obras. Essas contas não são patrimônio pessoal de nenhum morador. Comprar uma empresa municipal em operação exige pagar pelos espaços, terreno, caixa e estoque, além de reservar o capital de operação.
 
 Depois da fundação, a **casa da moeda precisa de funcionário presente e trabalhando entre 08h e 17h**. Cada minuto de trabalho emite R$ 2 para o tesouro, até R$ 800 por dia. O funcionário recebe salário da conta da casa da moeda; a emissão não entra em sua conta pessoal. Sem trabalhador ou sem casa da moeda não há emissão. Impostos, salários, vendas e orçamentos municipais apenas transferem dinheiro existente.
 
@@ -88,7 +88,7 @@ As compras internas reservam espaço no destino e dinheiro em uma conta de frete
 
 Transportadoras contratam funcionários conforme habilidades e vínculos, pagam salários durante os trajetos e recebem pelo frete entregue. A habilidade de logística aumenta com a prática. Antes de haver transportadora, ou quando conseguem pagar os produtos mas não o frete, os próprios empreendedores podem carregar compras. São viagens a pé de até 24 itens, sem veículos. Pedras também precisam viajar da pedreira ao canteiro.
 
-A prefeitura começa com **1.728 unidades de pão** para os 24 habitantes: 576 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e não se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
+A prefeitura começa com **4.608 unidades de pão** para os 64 habitantes: 1.536 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e não se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
 
 Preços, tempos e receitas são regras simplificadas de jogo, não uma representação dos custos agrícolas reais.
 
@@ -284,3 +284,51 @@ O starter ainda não contém toda a infraestrutura reutilizável do projeto orig
 ## Verificação
 
 `npm test` executa os testes de controles, relógio, persistência gráfica e interação da UI de canvas. Não exige instalação de dependências. Os testes de UI usam um contexto de canvas simulado; não substituem uma conferência visual no navegador.
+
+
+## Terrenos, tráfego e abastecimento da iluminação
+
+Novos loteamentos incluem áreas rurais de 8×8, 10×10, 8×12, 12×12 e 16×12, distribuídas também longe da prefeitura. A ocupação ao ar livre aceita até 20×20. Fazendas novas ocupam o lote rural inteiro; o número de campos e vagas cresce com a área. Lotes rurais ficam reservados para fazendas. O loteamento procura manter três áreas agrícolas disponíveis, independentemente da quantidade de lotes urbanos. Fazendas acompanham os desníveis naturais de terra firme e podem ser abertas enquanto as obras de alvenaria estão na fila. Fazendas existentes não mudam de tamanho automaticamente.
+
+A movimentação real dos cidadãos acumula passagens por célula. Essa contagem perde 20% ao dia, permitindo que o planejamento acompanhe mudanças no fluxo. Trechos de acesso com mais passagens recebem prioridade nas estradas, reparos e instalações de postes; orçamento, materiais e mão de obra continuam necessários.
+
+Cada abastecimento de lamparina é um frete de uma unidade de óleo até a calçada do poste, seguido de quatro minutos de trabalho presencial do transportador. A unidade só vira combustível ao terminar esse serviço. O responsável pelo poste paga o óleo, o deslocamento e o abastecimento. Serviços municipais custam 1,5 vez o valor comum. A falta de transportadora gera demanda; o proprietário não abastece automaticamente à distância. Transportadoras dividem os pedidos considerando toda a fila, e novas empresas podem surgir se a capacidade não atender à demanda. Construção, limpeza, coleta, reciclagem e extração também consideram capacidade e acúmulo de trabalho.
+
+## Banco e novas cadeias produtivas
+
+Há 27 novos empreendimentos produtivos e um banco. As receitas consomem estoques físicos e trabalho; compras de insumos geram fretes. A abertura depende da demanda, do terreno e do financiamento da construção. A ficha de cada empresa mostra insumos, produtos e seu papel na cidade.
+
+| Empreendimento | Insumos → produto | Efeito na sociedade |
+| --- | --- | --- |
+| Silvicultura | Trabalho, cultivo e replantio → madeira | Base renovável para várias indústrias |
+| Serraria | Madeira → tábuas | Abastece móveis e ferramentas |
+| Carvoaria | Madeira → carvão | Abastece fornos, competindo pela madeira |
+| Mina de ferro | Reservas em rochas → minério | Reservas finitas exigem novos locais |
+| Fundição | Minério + carvão → ferro | Liga mineração e manufatura |
+| Ferramentaria | Ferro + tábuas → ferramentas | Aumenta temporariamente a produtividade de quem compra |
+| Barreiro | Reserva local → argila | Abastece olaria e cerâmica |
+| Olaria | Argila + carvão → tijolos | Melhora a necessidade de moradia dos compradores |
+| Areeiro | Reserva local → areia | Abastece vidrarias |
+| Vidraria | Areia + carvão → vidro | Embalagens e conforto doméstico |
+| Marcenaria | Tábuas + tecido → móveis | Melhora o descanso |
+| Cultivo de fibras | Trabalho, cultivo e replantio → fibras | Base da indústria têxtil |
+| Tecelagem | Fibras → tecido | Abastece roupas, móveis e livros |
+| Confecção | Tecido → roupas | Melhora a higiene dos compradores |
+| Fazenda leiteira | Milho → leite | Demanda ração e diversifica refeições |
+| Queijaria | Leite → queijo | Acrescenta variedade e valor à alimentação |
+| Granja | Milho → ovos | Liga lavouras à alimentação e às massas |
+| Moinho de farinha | Trigo → farinha | Prepara cereais para manufatura |
+| Fábrica de massas | Farinha + ovos → macarrão | Nova refeição com vários fornecedores |
+| Fábrica de conservas | Milho + cebola + vidro → conserva | Liga hortaliças e embalagens à alimentação |
+| Saboaria | Óleo + ervas → sabão | Melhora higiene e compete com iluminação pelo óleo |
+| Horto medicinal | Trabalho, cultivo e replantio → ervas | Insumo renovável para higiene e saúde |
+| Farmácia | Ervas + vidro → remédio | Melhora a saúde dos compradores |
+| Fábrica de papel | Madeira → papel | Liga florestas à educação |
+| Editora e livraria | Papel + tecido → livros | Melhora lazer e habilidade de gestão |
+| Ateliê de cerâmica | Argila + carvão → cerâmica | Melhora o conforto de moradia |
+| Compostagem | Lixo → adubo | Devolve resíduos à agricultura; adubo reduz trabalho de cultivo |
+| Banco | Capital existente → empréstimos; depósitos → guarda e saques | Crédito com limite e dívida, sem emissão de moeda |
+
+Bens domésticos são comprados presencialmente quando há estoque, dinheiro e necessidade. Novos alimentos entram nas preferências individuais e nas receitas de pão com queijo e leite, macarronada e salada com ovos. Ferramentas duram um dia de simulação; fertilizante é consumido ao plantar. Silvicultura, fibras e ervas têm intervalo de replantio; minas e jazidas têm reservas finitas.
+
+O banco usa somente seu próprio caixa para emprestar, preservando separadamente todo o dinheiro depositado. O limite considera renda e reserva de salários do banco. Cada pessoa pode ter um empréstimo ativo, com principal dividido em 30 parcelas e juros diários de 0,2% sobre o principal restante. Falta de dinheiro acumula dívida e atraso; não gera moeda nem novo empréstimo. Depósitos podem ser resgatados pela ficha financeira do morador e são sacados automaticamente quando a reserva pessoal fica baixa. Na mesma ficha estão os controles de depósito, saque e pedido de crédito.

@@ -1,3 +1,5 @@
+import { INDUSTRIES } from './city_industries.js';
+import { CityBank } from './city_bank.js';
 import { quarryDeposits } from './city_terrain.js';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
@@ -12,7 +14,9 @@ import { CityEconomy, PRIVATE_TYPES, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } fr
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js';
 import { terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, pavePath, generateSettlement, hasSettlementAccess } from './city_terrain.js';
 
+export const INITIAL_POPULATION = 64;
 export const BUILDING_TYPES = {
+  ...INDUSTRIES,
   mill: { label: 'Moinho de óleo', color: 0xc3a668, rent: 90, price: 70000, jobs: 2 },
   mint: { label: 'Casa da moeda', color: 0xd5c16b, rent: 0, price: 120000, jobs: 1 },
   cleaner: { label: 'Empresa de faxina', color: 0x81c7cc, rent: 80, price: 50000, jobs: 2 },
@@ -42,7 +46,9 @@ const key = (x, y) => `${x},${y}`;
 
 
 export class CitySimulation {
-  constructor({ world, createEntity, seed = world.seed ?? 1337 }) {
+  constructor({ world, createEntity, seed = world.seed ?? 1337, population = INITIAL_POPULATION }) {
+    this.initialPopulation = population;
+    this.traffic = new Map();
     this.world = world;
     this.createEntity = createEntity;
     this.seed = seed >>> 0;
@@ -66,12 +72,18 @@ export class CitySimulation {
     this.logistics = new CityLogistics(this);
     this.workMeals = new CityWorkMeals(this);
     this.lighting = new CityLighting(this);
+    this.bank = new CityBank(this);
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
     this.taxRate = 0.1;
     this.lastError = '';
   }
+  recordTraffic(point) {
+    const id = `${Math.floor(point.x)},${Math.floor(point.y)}`;
+    this.traffic.set(id, Math.min(10000, (this.traffic.get(id) || 0) + 1));
+  }
+  trafficScore(path = []) { return path.reduce((n,p)=>n+(this.traffic.get(`${Math.floor(p.x)},${Math.floor(p.y)}`)||0),0); }
   random() { this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0; return this.seed / 4294967296; }
   get treasury() { return this.accounts.get('treasury').balance; }
   get day() { return Math.floor(this.minute / 1440) + 1; }
@@ -120,9 +132,9 @@ export class CitySimulation {
       const x = Math.floor(this.spawn.x) + dx, y = Math.floor(this.spawn.y) + dy;
       if (this.walkable(x, y) && this.findPath(this.spawn, { x, y }) !== null) arrivalTiles.push({ x: x + .5, y: y + .5 });
     }
-    for (let i = 0; i < 24; i++) { const p = arrivalTiles[i % arrivalTiles.length]; this.addCitizen(p.x, p.y, i); }
+    for (let i = 0; i < this.initialPopulation; i++) { const p = arrivalTiles[i % arrivalTiles.length]; this.addCitizen(p.x, p.y, i); }
     this.economy.initialize();
-    this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: 24 moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
+    this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: ${this.citizens.length} moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
     this.syncClock();
   }
   addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = type === 'farm' || type === 'quarry' ? 'open-air' : 'building', materialSource = null } = {}) {
@@ -130,10 +142,10 @@ export class CitySimulation {
     if (type === 'quarry' && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A pedreira precisa de um depósito rochoso junto à área de extração.');
     if (!spec) return this.fail('Tipo de prédio inválido.');
     if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry', 'leisure', 'market', 'greengrocer'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
-    width ??= 3 + Math.floor(this.random() * 3);
-    depth ??= 3 + Math.floor(this.random() * 2);
+    width ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 3);
+    depth ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 2);
     floors ??= 2 + Math.floor(this.random() * 4);
-    if (![x, y, width, depth, floors].every(Number.isInteger) || width < 1 || depth < 1 || floors < 1 || width > 8 || depth > 8 || floors > 12) return this.fail('Dimensões: 1–8 de largura/profundidade e 1–12 de altura.');
+    if (![x, y, width, depth, floors].every(Number.isInteger) || width < 1 || depth < 1 || floors < 1 || width > (kind === 'open-air' ? 20 : 8) || depth > (kind === 'open-air' ? 20 : 8) || floors > 12) return this.fail('Dimensões: até 20×20 ao ar livre, 8×8 em edifícios e 12 andares.');
     if (kind === 'open-air') floors = 1;
     const terrain = inspectBuildingSite(this, x, y, width, depth, { plotId, type });
     if (terrain.error) return this.fail(terrain.error);
@@ -256,6 +268,10 @@ export class CitySimulation {
     if (task === 'toilet') { if (!this.sanitation.choose(c)) { c.task = null; c.action = 'Aguardando banheiro acessível'; } return; }
     if (task === 'food' && this.workMeals.routeToMeal(c)) return;
     if (task === 'food' && c.provisions > 0 && home) { task = 'provisions'; type = 'home'; }
+    if(!urgent && this.society.isAdult(c) && !['work','manage','care','caregiving','food','provisions','toilet'].includes(task) && this.hour>=6 && this.hour<22 && this.minute-(c.lastShoppingAt||0)>180) {
+      const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).sort((a,b)=>Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y));
+      for(const shop of shops) {const path=this.findPath(c.entity,shop.door);if(path!==null){c.path=path;c.targetId=shop.id;c.task='shopping';return;}}
+    }
     const childHome = child ? this.building(this.units.get(child.homeUnitId)?.buildingId) : null;
     const siteProject = this.development.projectFor(c, type === 'job' ? job : type === 'company' ? company : null);
     if (!urgent && siteProject && ['work', 'manage', 'leisure'].includes(task) && this.hour >= 8 && this.hour < 17) {
@@ -296,6 +312,7 @@ export class CitySimulation {
     const b = this.building(c.targetId), n = c.needs;
     if (!b) { c.task = null; return; }
     const task = c.task;
+    if(task==='shopping'){this.economy.buyConsumerGood(c,b);c.lastShoppingAt=this.minute;c.action='Comprando produtos para a vida cotidiana';c.task=null;return;}
     if (task === 'work' || task === 'manage') {
       if (this.hour < 8 || this.hour >= 17 || !b.active) { c.task = null; return; }
       const isOwner = task === 'manage' && b.ownerId === c.id;
@@ -441,7 +458,7 @@ export class CitySimulation {
       n.safety = clamp(n.safety + (this.buildings.some(b => b.type === 'townhall') ? 0.08 : -0.1));
       n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025));
       c.mood = (c.mood || 0) * .998;
-      c.happiness = clamp(Object.values(n).reduce((a, b) => a + b, 0) / Object.keys(n).length + c.mood);
+      c.happiness = clamp(Object.values(n).reduce((a, b) => a + b, 0) / Object.keys(n).length + c.mood + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
       if (this.life.minute(c)) continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
@@ -477,7 +494,7 @@ export class CitySimulation {
         const p = c.path[0];
         if (!this.walkable(Math.floor(p.x), Math.floor(p.y)) || !canStep(this.world, Math.floor(c.entity.x), Math.floor(c.entity.y), Math.floor(p.x), Math.floor(p.y))) { c.path = []; c.task = null; break; }
         const dx = p.x - c.entity.x, dy = p.y - c.entity.y, len = Math.hypot(dx, dy);
-        if (len <= distance) { c.entity.x = p.x; c.entity.y = p.y; c.path.shift(); distance -= len; }
+        if (len <= distance) { c.entity.x = p.x; c.entity.y = p.y; this.recordTraffic(p); c.path.shift(); distance -= len; }
         else { c.entity.x += dx / len * distance; c.entity.y += dy / len * distance; distance = 0; }
         c.action = c.deliveryId ? 'Transportando mercadorias' : c.task === 'construction' ? 'Indo para a obra' : c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }

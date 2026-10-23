@@ -81,6 +81,12 @@ export class CityLighting {
     this.posts = this.posts.filter(p => p.built && p.status !== 'cancelled');
     this.city.world.cityLampPosts = this.posts;
   }
+  refillDepot(post,payer) {
+    const id=`refill:${post.id}`;
+    let depot=this.propertyStores.get(id);
+    if(!depot){depot={id,name:'Abastecimento de lamparina',type:'lamp-refill',active:true,accountId:payer,door:{...post.door},lampPost:post};initializeInventory(depot,this.city.economy.goods,1);this.propertyStores.set(id,depot);}
+    depot.active=post.built && post.status!=='cancelled';return depot;
+  }
   hourly() {
     const city = this.city, buildings = city.buildings.filter(b => !b.entity.destroyed);
     const utility = buildings.find(b => b.type === 'utility') || buildings.find(b => b.type === 'townhall');
@@ -93,9 +99,9 @@ export class CityLighting {
       if (!groups.has(key)) groups.set(key, { holder, payer, posts: [] });
       groups.get(key).posts.push(post); posts.push(post);
     };
-    for (const b of buildings) {
+    for (const b of [...buildings].sort((a,b)=>city.trafficScore(b.accessPath)-city.trafficScore(a.accessPath))) {
       // Road lamps belong to the city, independently of the neighbouring owner.
-      for (const point of b.accessPath || []) {
+      for (const point of [...(b.accessPath || [])].sort((a,b)=>city.trafficScore([b])-city.trafficScore([a]))) {
         if (!ROAD_TILES.has(tileAt(city.world, Math.floor(point.x), Math.floor(point.y)))) continue;
         if ([...this.roadPosts.values()].some(p => p.status !== 'cancelled' && Math.hypot(p.door.x - point.x, p.door.y - point.y) < LIGHTING_RULES.roadSpacing)) continue;
         const site = this.findSite(point); if (!site) continue;
@@ -126,6 +132,7 @@ export class CityLighting {
       register(utility, 'treasury', post);
     }
     for (const [id, holder] of this.propertyStores) {
+      if(holder.lampPost) {holder.active=holder.lampPost.built && holder.lampPost.status!=='cancelled';continue;}
       const b = city.building(holder.post.buildingId);
       if (b && b.units.some(u => u.ownerId === holder.post.payerId)) continue;
       for (const shipment of city.logistics.shipments) if (shipment.buyer === holder && !['cancelled', 'delivered'].includes(shipment.status)) city.logistics.cancel(shipment);
@@ -135,23 +142,19 @@ export class CityLighting {
     const mills = city.economy.businesses.filter(b => b.type === 'mill' && b.inventory.oleo > 0);
     for (const { holder, payer, posts: lamps } of groups.values()) {
       for (const post of lamps) {
-        if (night && post.fuel <= 0 && holder.inventory.oleo > 0) {
-          holder.inventory.oleo--; post.fuel = 12; city.economy.consumed.oleo++;
-          city.economy.recordGoods('lighting-fuel', 'oleo', 1, holder.id, post.id);
+        // A carrier takes a real unit from the depot and fills the lamp on site.
+        if(post.fuel<=3 && !city.logistics.shipments.some(s=>s.buyer.lampPost===post && !['delivered','cancelled'].includes(s.status))) {
+          const depot=this.refillDepot(post,payer);
+          if(holder.inventory.oleo>0) city.logistics.order(holder,depot,'oleo',1,0,{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true});
+          else for(const mill of mills) if(city.logistics.order(mill,depot,'oleo',1,Math.ceil(city.economy.goods.oleo.price*(payer==='treasury'?1.5:1)),{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true})) break;
         }
         post.lit = night && post.fuel > 0;
         if (post.lit) post.fuel--;
       }
-      let need = Math.min(12, inventoryFree(holder), Math.max(0, lamps.length - holder.inventory.oleo - (holder.incoming.oleo || 0)));
-      const unitPrice = Math.ceil(city.economy.goods.oleo.price * (payer === 'treasury' ? 1.5 : 1));
-      need = Math.min(need, Math.floor((city.accounts.get(payer)?.balance || 0) / unitPrice));
-      for (const mill of mills) {
-        const quantity = Math.min(need, mill.inventory.oleo);
-        if (quantity > 0 && city.logistics.order(mill, holder, 'oleo', quantity, unitPrice, { payerAccountId: payer, purpose: payer === 'treasury' ? 'public-lighting' : 'property-lighting' })) break;
-      }
     }
+
     // Only contracted sites reserve land; at most two installations run concurrently.
-    for (const post of this.sites.values()) this.reserve(post);
+    for (const post of [...this.sites.values()].sort((a,b)=>Number(b.public)-Number(a.public)||city.trafficScore([b.door])-city.trafficScore([a.door]))) this.reserve(post);
     this.posts = posts; city.world.cityLampPosts = posts;
     city.world.cityLampSites = [...this.sites.values()].filter(p => p.projectId && !p.built && p.status !== 'cancelled');
   }

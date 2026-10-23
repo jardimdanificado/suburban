@@ -1,3 +1,4 @@
+import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation } from './city_terrain.js';
 // City geometry is built once per building; one instance is exactly one 1×1×1 space.
 export function syncCityBuildings(renderer, THREE, entities, world) {
@@ -78,6 +79,19 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       group.add(windowMesh);
       const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), new THREE.MeshLambertMaterial({ color: 0x506054 }));
       roof.position.set(b.width / 2, b.floors + .03, b.depth / 2); roof.castShadow = true; group.add(roof);
+      const industry=INDUSTRIES[b.type];
+      if(industry) {
+        const material=new THREE.MeshLambertMaterial({color:b.type==='bank'?0xd5bc76:industry.category==='food'?0xe8ce94:industry.category==='services'?0x81bcb0:0x687a83});
+        if(b.type==='bank') {
+          for(let i=0;i<3;i++){const column=new THREE.Mesh(new THREE.CylinderGeometry(.12,.14,1.5,8),material);column.position.set(.6+i*.65,.75,b.depth+.2);group.add(column);}
+          const pediment=new THREE.Mesh(new THREE.ConeGeometry(1.3,.6,3),material);pediment.rotation.y=Math.PI/2;pediment.position.set(1.25,1.7,b.depth+.2);group.add(pediment);
+        } else {
+          const tank=new THREE.Mesh(industry.category==='industry'?new THREE.CylinderGeometry(.35,.45,1.2,8):new THREE.BoxGeometry(1,.7,.6),material);
+          tank.position.set(b.width*.65,b.floors+.6,b.depth*.5);group.add(tank);
+          if(industry.category==='industry'){const chimney=new THREE.Mesh(new THREE.CylinderGeometry(.13,.2,1.8,6),material);chimney.position.set(.6,b.floors+.9,.6);group.add(chimney);}
+          else {const sign=new THREE.Mesh(new THREE.BoxGeometry(1.3,.3,.08),material);sign.position.set(b.width/2,1.3,b.depth+.09);group.add(sign);}
+        }
+      }
       if (b.type === 'mill') {
         const blades = new THREE.Group(); blades.position.set(b.width / 2, b.floors + .3, b.depth + .08);
         for (let i = 0; i < 4; i++) { const blade = new THREE.Mesh(new THREE.BoxGeometry(.16, 1.5, .06), new THREE.MeshLambertMaterial({ color: 0xe0cd97 })); blade.rotation.z = i * Math.PI / 2; blades.add(blade); }

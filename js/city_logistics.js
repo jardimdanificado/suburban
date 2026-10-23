@@ -4,20 +4,22 @@ import { inventoryFree, initializeInventory } from './city_inventory.js';
 export class CityLogistics {
   constructor(city) { this.city = city; this.shipments = []; this.nextId = 1; this.delivered = 0; }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
-  order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null } = {}) {
+  order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false } = {}) {
     const city = this.city;
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential') || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 24 || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
     const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && b.workers.length && b.balance > 0 && city.economy.connected(b, seller));
-    let carrier = carriers.sort((a, b) => this.shipments.filter(s => s.carrierId === a.id && s.status === 'in-transit').length - this.shipments.filter(s => s.carrierId === b.id && s.status === 'in-transit').length)[0];
+    let carrier = carriers.sort((a, b) => this.shipments.filter(s => s.carrierId === a.id && !['delivered','cancelled'].includes(s.status)).length - this.shipments.filter(s => s.carrierId === b.id && !['delivered','cancelled'].includes(s.status)).length)[0];
+    if(requireCarrier && !carrier)return false;
     let fee = carrier ? city.currency.price(Math.max(120, (route.length + Math.abs(carrier.door.x - seller.door.x) + Math.abs(carrier.door.y - seller.door.y)) * 12 + quantity * 4)) : 0;
+    fee = Math.ceil(fee*(payerAccountId==='treasury'?1.5:1)) + (requireCarrier?city.currency.price(payerAccountId==='treasury'?180:120):0);
     if (!Number.isSafeInteger(serviceFee) || serviceFee < 0 || (serviceFee && !city.accounts.has(serviceAccountId))) return false;
     const cost = quantity * unitPrice;
     const funds = city.accounts.get(payerAccountId)?.balance || 0;
-    if (funds < cost + fee + serviceFee && funds >= cost + serviceFee) { carrier = null; fee = 0; }
+    if (!requireCarrier && funds < cost + fee + serviceFee && funds >= cost + serviceFee) { carrier = null; fee = 0; }
     if (funds < cost + fee + serviceFee) return false;
     const id = this.nextId++, accountId = `shipment:${id}`;
-    const s = { id, accountId, payerAccountId, purpose, serviceFee, serviceAccountId, name: `Frete ${id}`, balance: 0, seller, buyer, good, quantity, cost, fee, carrierId: carrier?.id || null, driverId: null, status: 'waiting', pickedUp: false, createdAt: city.minute, routeLength: route.length };
+    const s = { id, accountId, payerAccountId, purpose, requireCarrier, serviceFee, serviceAccountId, name: `Frete ${id}`, balance: 0, seller, buyer, good, quantity, cost, fee, carrierId: carrier?.id || null, driverId: null, status: 'waiting', pickedUp: false, createdAt: city.minute, routeLength: route.length };
     initializeInventory(s, city.economy.goods, 24); s.inventory[good] = quantity;
     city.accounts.set(accountId, s);
     if (!city.transfer(payerAccountId, accountId, cost + fee + serviceFee, 'Reserva de compra e frete')) { city.accounts.delete(accountId); return false; }
@@ -59,6 +61,7 @@ export class CityLogistics {
     const ids = carrier?.active ? [...carrier.workers, carrier.ownerId] : [];
     if (!carrier?.active) {
       s.carrierId = null;
+      if(s.requireCarrier) { const next=economy.businesses.filter(b=>b.type==='carrier' && b.workers.length && b.balance>=b.wage).sort((a,b)=>this.shipments.filter(s=>s.carrierId===a.id && !['delivered','cancelled'].includes(s.status)).length-this.shipments.filter(s=>s.carrierId===b.id && !['delivered','cancelled'].includes(s.status)).length)[0]; if(next){s.carrierId=next.id;ids.push(...next.workers,next.ownerId);}return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25); }
       // Owners can bootstrap the supply chain by hauling their own purchases.
       ids.push(s.buyer.ownerId, s.seller.ownerId);
       const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
@@ -111,9 +114,11 @@ export class CityLogistics {
         if (path === null) { s.pickedUp = false; this.releaseDriver(s); continue; }
         c.path = path; c.deliveryLeg = 'delivery';
       } else {
+        if(s.buyer.lampPost && (s.refillLabor=(s.refillLabor||0)+1)<4) {c.action='Abastecendo lamparina';continue;}
         s.buyer.incoming[s.good] -= s.quantity;
         if (inventoryFree(s.buyer) < s.quantity) { s.buyer.incoming[s.good] += s.quantity; s.status = 'waiting-space'; continue; }
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
+        if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
         city.transfer(s.accountId, s.seller.accountId, s.cost, `Atacado: ${city.economy.goods[s.good].label}`);
         const carrier = city.building(s.carrierId);
         city.transfer(s.accountId, carrier?.active ? carrier.accountId : (s.payerAccountId || s.buyer.accountId), s.fee, carrier?.active ? 'Frete entregue' : 'Estorno de frete sem transportadora');

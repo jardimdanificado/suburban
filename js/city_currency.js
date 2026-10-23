@@ -1,7 +1,7 @@
 /** A deliberately simple monetary model: issuance dilutes a fixed initial monetary base.
  * Transfers never issue currency. Existing escrows, debts and cash keep their nominal value.
  */
-export const CURRENCY_RULES = { initialSupply: 12000000, citizenGrant: 100000, mintPerWorkMinute: 200, mintDailyLimit: 80000, priceAdjustment: .35 };
+export const CURRENCY_RULES = { initialSupply: 32000000, citizenGrant: 100000, mintPerWorkMinute: 200, mintDailyLimit: 80000, priceAdjustment: .35 };
 
 export class CityCurrency {
   constructor(city) {
