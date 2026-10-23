@@ -60,7 +60,7 @@ export class CityCampaigns {
     p.initializeCitizen(a);p.initializeCitizen(b);const nomination=e.candidates.find(n=>n.endorsementPartyIds.includes(a.political.partyId));if(nomination)this.hearPromises(b,nomination,e,`Conversa com ${a.entity.properties.name}`);
   }
   daily(election) {
-    const day=Math.min(2,Math.floor((this.city.minute-election.startedAt)/1440));if(election.lastCampaignDay===day)return;election.lastCampaignDay=day;
+    const day=Math.floor((this.city.minute-election.startedAt)/1440);if(election.lastCampaignDay===day)return;election.lastCampaignDay=day;
     for(const nomination of election.candidates){const audience=this.sample(this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)),Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.buyVotes(nomination,election);}
     this.poll(election);
   }

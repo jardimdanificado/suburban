@@ -499,6 +499,14 @@ Para diagnóstico, acrescente `profile=1` à URL. Um painel temporário mostra F
 
 ## Capacidade básica e prioridades de desenvolvimento
 
+### Alteração do calendário eleitoral
+
+Em **Governo → Eleições → Câmara**, vereadores podem propor aumentar ou reduzir o mandato e a campanha em dias. Também formulam essas propostas autonomamente, considerando ambição, alternância de poder, lealdade partidária, aprovação, sociabilidade e custo de campanha. A votação segue a maioria ordinária de 17 cadeiras e fica registrada nominalmente.
+
+O padrão continua em 12 dias de mandato e três de campanha. Mudanças aprovadas valem a partir da próxima gestão: não prorrogam o governo atual nem alteram uma campanha iniciada. A campanha precisa ter ao menos um dia e ser menor que o mandato. Cada eleição e gestão guarda as regras de seu calendário; pesquisas continuam sendo realizadas uma vez a cada dia de campanha, inclusive quando a duração exceder três dias. A interface diferencia o calendário vigente das regras aprovadas para as próximas gestões.
+
+### Atendimento às necessidades básicas
+
 Os 32 vereadores exercem o mandato em tempo parcial e mantêm seus empregos profissionais. A sessão diária remunera uma hora pelo piso, apenas quando o tesouro conserva a reserva de subsistência. A troca de legislatura e a cassação de um vereador não encerram seu emprego civil. A prefeitura mantém sua equipe administrativa própria.
 
 Moradias populares são planejadas continuamente conforme adultos sem casa, vagas existentes e unidades em construção, com até duas frentes habitacionais paralelas. O modelo inicial usa blocos de 3×3 e quatro andares. Não há construção instantânea: continuam sendo necessários recursos, frete e trabalho. Alimentação, moradia e serviços essenciais têm precedência sobre ampliações administrativas e novas compras de materiais para obras secundárias durante carência social; contratos existentes não são apagados. A interface mostra os adiamentos e os indicadores de carência.
