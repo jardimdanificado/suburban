@@ -1,5 +1,5 @@
 import { inventoryFree } from './city_inventory.js';
-export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 180, usePrice: 150, wastePerUse: 1, wasteToStone: 2 };
+export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 export class CitySanitation {
   constructor(city) { this.city = city; this.facilities = new Map(); this.jobs = []; this.nextJobId = 1; this.cleaned = 0; this.collected = 0; }
@@ -11,13 +11,28 @@ export class CitySanitation {
   }
   setupBuilding(b) {
     b.litter ??= 0;
-    if (b.type === 'residential') {
+    if (['residential', 'popular_housing', 'luxury_housing'].includes(b.type)) {
       for (const u of b.units.filter(u => u.roomType === 'bathroom')) this.addFacility(b, { unitId: u.id, homeId: u.homeId, access: 'home' });
+      this.setupBusinessRooms(b);
     } else {
-      const access = ['townhall', 'public_toilet'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees';
+      const access = ['townhall', 'public_toilet', 'popular_refectory'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees';
       const u = b.units.find(u => u.roomType === 'bathroom') || b.units.at(-1);
       if (u) u.roomType = 'bathroom';
       this.addFacility(b, { unitId: u?.id || null, access });
+    }
+  }
+  setupBusinessRooms(b) {
+    if (['residential', 'popular_housing', 'luxury_housing'].includes(b.type)) return;
+    // Reuse existing rooms so repeated setup/expansion cannot duplicate facilities.
+    let bathroom = b.units.find(u => u.roomType === 'bathroom');
+    bathroom ||= b.units.find(u => u.roomType === 'workspace');
+    if (bathroom) {
+      bathroom.roomType = 'bathroom';
+      this.addFacility(b, { unitId: bathroom.id, access: ['townhall', 'public_toilet', 'popular_refectory'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees' });
+    }
+    if (!b.units.some(u => u.roomType === 'dining')) {
+      const dining = b.units.find(u => u.roomType === 'workspace');
+      if (dining) dining.roomType = 'dining';
     }
   }
   allowed(c, f) {
@@ -145,7 +160,7 @@ export class CitySanitation {
       if (b.inventory.lixo < 12 || ['waste_collector', 'recycler'].includes(b.type)) continue;
       const collector = collectors.find(c => inventoryFree(c) >= 3); if (!collector) continue;
       const quantity = Math.min(24, b.inventory.lixo, inventoryFree(collector)), fee = this.city.currency.price(200 + quantity * 50);
-      const f = [...this.facilities.values()].find(f => f.buildingId === b.id), payer = b.type === 'residential' ? b.units[0]?.ownerId : f ? this.payer(f) : b.accountId;
+      const f = [...this.facilities.values()].find(f => f.buildingId === b.id), payer = ['residential', 'popular_housing', 'luxury_housing'].includes(b.type) ? b.units[0]?.ownerId : f ? this.payer(f) : b.accountId;
       if (!payer) continue;
       const order = this.city.logistics.order(b, collector, 'lixo', quantity, 0, { payerAccountId: payer, purpose: 'waste-collection', serviceFee: fee, serviceAccountId: collector.accountId });
       if (order) this.collected += quantity;

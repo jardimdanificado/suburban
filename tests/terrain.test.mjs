@@ -41,11 +41,11 @@ test('settlements across all landscape presets preserve every natural height and
     }
     assert(roads > 0);
     for (const b of city.buildings) {
-      assert(b.terrain.variation <= 1.3);
+      if (b.type !== 'quarry') assert(b.terrain.variation <= 1.3);
       assert(b.terrain.base >= b.terrain.max);
       for (let y = b.entity.y; y < b.entity.y + b.depth; y++) for (let x = b.entity.x; x < b.entity.x + b.width; x++) {
         assert.equal(world.getTile(x, y), natural[y * world.width + x]);
-        assert(terrainWalkable(world, x, y));
+        assert(terrainWalkable(world, x, y) || b.type === 'quarry' && world.getTile(x, y) === 4);
       }
       const route = city.findPath(city.spawn, b.door); assert(route !== null);
       let last = city.spawn;

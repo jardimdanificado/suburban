@@ -14,14 +14,16 @@ export class CityHousing {
   constructor(city) { this.city = city; this.homes = new Map(); }
   addFloor(b, z, ownerId) {
     const spec = this.city.buildingTypes[b.type], units = [];
+    const housingType = ['residential', 'popular_housing', 'luxury_housing'].includes(b.type);
     for (const { x, y } of floorCells(b, z)) {
-      const u = { id: `${b.id}:${x}:${y}:${z}`, buildingId: b.id, x, y, z, width: 1, depth: 1, roomType: b.type === 'residential' ? 'bedroom' : 'workspace', homeId: null, ownerId, tenantId: null, occupantId: b.active ? b.accountId : null, rent: this.city.currency.price(b.type === 'residential' ? HOUSING_RULES.roomRent : spec.rent), price: this.city.currency.price(b.type === 'residential' ? HOUSING_RULES.roomPrice : spec.price), forSale: ownerId === 'treasury', forRent: false, arrears: 0, missedDays: 0 };
+      const u = { id: `${b.id}:${x}:${y}:${z}`, buildingId: b.id, x, y, z, width: 1, depth: 1, roomType: housingType ? 'bedroom' : 'workspace', homeId: null, ownerId, tenantId: null, occupantId: b.active ? b.accountId : null, rent: this.city.currency.price(housingType ? HOUSING_RULES.roomRent * (b.type === 'luxury_housing' ? 2 : 1) : spec.rent), price: this.city.currency.price(housingType ? HOUSING_RULES.roomPrice * (b.type === 'luxury_housing' ? 3 : 1) : spec.price), forSale: ownerId === 'treasury', forRent: false, arrears: 0, missedDays: 0 };
       b.units.push(u); this.city.units.set(u.id, u); units.push(u);
     }
     if (b.constructionKind !== 'open-air') for (let y = 1; y < b.depth - 1; y++) for (let x = 1; x < b.width - 1; x++) (b.circulation ??= []).push({ x, y, z });
-    if (b.type === 'residential') for (let i = 0; i < units.length; i += 2) {
-      const rooms = units.slice(i, i + 2), id = `home:${rooms[0].id}`;
+    if (housingType) for (let i = 0; i < units.length; i += (b.type === 'luxury_housing' ? 4 : 2)) {
+      const rooms = units.slice(i, i + (b.type === 'luxury_housing' ? 4 : 2)), id = `home:${rooms[0].id}`;
       if (rooms[1]) rooms[1].roomType = 'bathroom';
+      if (b.type === 'luxury_housing' && rooms[2]) rooms[2].roomType = 'dining';
       const home = { id, buildingId: b.id, unitIds: rooms.map(u => u.id), createdAt: this.city.minute };
       for (const u of rooms) u.homeId = id;
       this.homes.set(id, home);
@@ -30,6 +32,7 @@ export class CityHousing {
   }
   units(home) { return home.unitIds.map(id => this.city.units.get(id)).filter(Boolean); }
   home(c) { return this.homes.get(c.homeId); }
+  hasDining(home) { return this.units(home).some(u => u.roomType === 'dining'); }
   residents(home) { return this.city.citizens.filter(c => !c.entity.destroyed && c.homeId === home.id); }
   hasBathroom(home) { return this.units(home).some(u => u.roomType === 'bathroom'); }
   price(home) { return this.units(home).reduce((n, u) => n + u.price, 0); }

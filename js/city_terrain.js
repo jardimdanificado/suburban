@@ -1,4 +1,4 @@
-import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js';
+import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js';
 
 const heights = [1.1, 5.5, 0, .4, 3.8, 0, 1.1, .4, 1.1, 2.3, 7.5, .4, 2.3, 2.3];
 export const ROAD_TILES = new Set([TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE]);
@@ -45,20 +45,29 @@ export function buildingGround(world, x, y, width, depth) {
   const door = { x: x + Math.floor(width / 2) + .5, y: y + depth + .5 };
   return { ...terrain, base: Math.max(terrain.base, surfaceElevation(world, door.x, door.y) + .06), door };
 }
-export function inspectBuildingSite(city, x, y, width, depth, { plotId = null } = {}) {
+export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, type = null } = {}) {
   if (city.development?.overlaps(x, y, width, depth, plotId)) return { error: 'Este espaço já pertence a um terreno cadastrado.' };
   const { world, occupied } = city;
+  const quarry = type === 'quarry';
   for (let yy = y - 1; yy <= y + depth; yy++) for (let xx = x - 1; xx <= x + width; xx++) {
     if (occupied.has(tileKey(xx, yy))) return { error: 'Deixe uma célula livre entre os prédios.' };
     if (xx >= x && xx < x + width && yy >= y && yy < y + depth) {
-      if (!terrainWalkable(world, xx, yy)) return { error: 'O prédio precisa caber em terra firme, fora da água e das encostas rochosas.' };
+      if (!terrainWalkable(world, xx, yy) && !(quarry && tileAt(world, xx, yy) === TILE_STONE)) return { error: 'O prédio precisa caber em terra firme, fora da água e das encostas rochosas.' };
       if (ROAD_TILES.has(tileAt(world, xx, yy))) return { error: 'A construção não pode ocupar uma rua.' };
     }
   }
-  const door = { x: x + Math.floor(width / 2) + .5, y: y + depth + .5 };
+  let door = { x: x + Math.floor(width / 2) + .5, y: y + depth + .5 };
+  if (quarry) {
+    if (world.map && !quarryDeposits(world, x, y, width, depth).length) return { error: 'A área da pedreira precisa ocupar rochas.' };
+    const doors = [];
+    for (let dx = 0; dx < width; dx++) { doors.push({ x: x + dx + .5, y: y + depth + .5 }, { x: x + dx + .5, y: y - .5 }); }
+    for (let dy = 0; dy < depth; dy++) { doors.push({ x: x - .5, y: y + dy + .5 }, { x: x + width + .5, y: y + dy + .5 }); }
+    door = doors.find(p => terrainWalkable(world, Math.floor(p.x), Math.floor(p.y)) && !occupied.has(tileKey(Math.floor(p.x), Math.floor(p.y))));
+    if (!door) return { error: 'A pedreira precisa de uma entrada acessível junto às rochas.' };
+  }
   if (!terrainWalkable(world, Math.floor(door.x), Math.floor(door.y))) return { error: 'A entrada precisa ter acesso por terra firme.' };
   const terrain = buildingGround(world, x, y, width, depth);
-  if (terrain.variation > 1.3 || terrain.base - tileHeight(tileAt(world, Math.floor(door.x), Math.floor(door.y))) > 1.65) return { error: 'Encosta muito íngreme. Escolha um lote menor ou outro trecho do terreno.' };
+  if (!quarry && (terrain.variation > 1.3 || terrain.base - tileHeight(tileAt(world, Math.floor(door.x), Math.floor(door.y))) > 1.65)) return { error: 'Encosta muito íngreme. Escolha um lote menor ou outro trecho do terreno.' };
   return { ...terrain, door };
 }
 
@@ -133,8 +142,9 @@ export function generateSettlement(city) {
       const candidates = [];
       const center = hub || origin;
       for (let y = Math.max(1, Math.floor(center.y - searchRadius)); y < Math.min(world.height - d - 1, center.y + searchRadius); y++) for (let x = Math.max(1, Math.floor(center.x - searchRadius)); x < Math.min(world.width - w - 1, center.x + searchRadius); x++) {
-        const site = inspectBuildingSite(city, x, y, w, d);
+        const site = inspectBuildingSite(city, x, y, w, d, { type });
         if (site.error) continue;
+        if (type === 'quarry' && world.map && !quarryDeposits(world, x, y, w, d).length) continue;
         const score = Math.hypot(x - preferred.x, y - preferred.y) + site.variation * 8 + city.random() * 3 + (flatSiteLevel(world, x, y, w, d) === null ? 10000 : 0);
         candidates.push({ x, y, score });
       }
@@ -151,4 +161,13 @@ export function generateSettlement(city) {
   const xs = city.buildings.map(b => b.entity.x + b.width / 2), ys = city.buildings.map(b => b.entity.y + b.depth / 2);
   world.spawnCenter = { x: Math.round(xs.reduce((a, b) => a + b) / xs.length), y: Math.round(ys.reduce((a, b) => a + b) / ys.length) };
   city.bounds = { minX: Math.min(...xs) - 12, maxX: Math.max(...xs) + 12, minY: Math.min(...ys) - 12, maxY: Math.max(...ys) + 12 };
+}
+
+// Extraction is tied to rocky tiles inside the quarry footprint.
+export function quarryDeposits(world, x, y, width, depth) {
+  const deposits = [];
+  for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) {
+    if (tileAt(world, xx, yy) === TILE_STONE) deposits.push({ x: xx, y: yy });
+  }
+  return deposits;
 }

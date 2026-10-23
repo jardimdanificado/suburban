@@ -32,13 +32,13 @@ function audit(city) {
   for (const good of Object.keys(GOODS)) assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + city.economy.lost[good] + city.goodsStock(good), good);
 }
 
-test('plots have varied dimensions and uniformly level surfaces in every landscape preset', () => {
+test('ordinary plots have varied dimensions and level surfaces; extraction plots contain rock', () => {
   for (const [preset, seed] of [[0, 42], [1, 1337], [2, 23811]]) {
     const world = new World(preset, seed); let id = 0;
     const city = new CitySimulation({ world, createEntity: data => ({ id: ++id, destroyed: false, ...data }) }); city.initialize();
     const plots = city.development.plots.filter(p => !p.buildingId);
     assert(plots.length >= 8); assert(new Set(plots.map(p => `${p.width}x${p.depth}`)).size >= 3);
-    for (const p of plots) { assert.notEqual(flatSiteLevel(world, p.x, p.y, p.width, p.depth), null); assert(surfaceBounds(world, p.x, p.y, p.width, p.depth).variation < .001); }
+    for (const p of plots) { if (p.type === 'quarry') { assert(Array.from({length:p.width*p.depth}, (_, i) => world.getTile(p.x + i % p.width, p.y + Math.floor(i / p.width))).includes(4)); continue; } assert.notEqual(flatSiteLevel(world, p.x, p.y, p.width, p.depth), null); assert(surfaceBounds(world, p.x, p.y, p.width, p.depth).variation < .001); }
   }
 });
 

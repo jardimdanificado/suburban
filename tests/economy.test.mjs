@@ -72,9 +72,9 @@ test('professions and conversations increase the appropriate skills only through
   assert(worker.skills.agriculture > agriculture);
 });
 
-test('farms support all eight crops and cannot harvest without seeds, work and elapsed growth', () => {
+test('farms support all nine crops including sunflowers and cannot harvest without seeds, work and elapsed growth', () => {
   const city = setup(), farm = city.economy.businesses.find(b => b.type === 'farm');
-  assert.deepEqual(Object.keys(CROPS), ['maca', 'goiaba', 'trigo', 'milho', 'mandioca', 'cebola', 'feijao', 'coentro']);
+  assert.deepEqual(Object.keys(CROPS), ['girassol', 'maca', 'goiaba', 'trigo', 'milho', 'mandioca', 'cebola', 'feijao', 'coentro']);
   for (const crop of Object.keys(CROPS)) {
     farm.crop = crop; const field = { plantedAt: city.minute, labor: 0 };
     assert.equal(city.economy.harvest(farm, field), false);

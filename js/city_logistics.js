@@ -61,8 +61,10 @@ export class CityLogistics {
   }
   updateMinute() {
     const city = this.city;
-    for (const s of this.shipments) {
-      if (['delivered', 'cancelled'].includes(s.status)) continue;
+    const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
+    // Food and construction deliveries keep priority over lamp replenishment.
+    pending.sort((a, b) => Number(a.purpose.endsWith('lighting')) - Number(b.purpose.endsWith('lighting')));
+    for (const s of pending) {
       if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential') || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
       let c = city.society.citizen(s.driverId);
       if (c?.workMeal) continue;

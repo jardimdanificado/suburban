@@ -30,7 +30,7 @@ const VIEWS = {
 };
 const FILTERS = {
   people: [['all','TODOS'], ['homeless','SEM CASA'], ['unemployed','SEM TRABALHO'], ['critical','EM RISCO'], ['food','COM FOME'], ['children','CRIANÇAS']],
-  buildings: [['all','TODOS'], ['residential','MORADIAS'], ['public','PÚBLICOS'], ['private','PRIVADOS']],
+      buildings: [['all','TODOS'], ['residential','MORADIAS'], ['public','PÚBLICOS'], ['private','PRIVADOS']],
   economy: [['all','TODAS'], ['food','ALIMENTAÇÃO'], ['services','SERVIÇOS'], ['industry','INDÚSTRIA']],
   land: [['all','TODOS'], ['sale','À VENDA'], ['built','EDIFICADOS'], ['works','EM OBRAS']],
   sanitation: [['all','TODOS'], ['public','GRATUITOS'], ['paid','PAGOS'], ['private','PRIVADOS'], ['dirty','SUJOS']],
@@ -197,10 +197,10 @@ ${c.action}`,()=>this.openCitizen(c.id),this.selected?.id===c.id,critical?C.red:
       }
       if(!rows.length)p.note('Nenhuma pessoa com estes filtros.');
     } else {
-      const food=['farm','bakery','market','greengrocer'],services=['cleaner','carrier','paid_toilet','waste_collector'],rows=(business?city.economy.businesses:city.buildings.filter(b=>!b.entity.destroyed)).filter(b=>this.matches(`${name(b.entity)} ${BUILDING_TYPES[b.type].label} ${CROPS[b.crop]?.label||''}`)).filter(b=>filter==='all'||filter==='residential'&&b.type==='residential'||filter==='public'&&!b.ownerId&&b.type!=='residential'||filter==='private'&&!!b.ownerId||filter==='food'&&food.includes(b.type)||filter==='services'&&services.includes(b.type)||filter==='industry'&&['builder','quarry','recycler'].includes(b.type));
+      const residences=['residential','popular_housing','luxury_housing'],food=['farm','bakery','market','greengrocer','popular_refectory'],services=['cleaner','carrier','paid_toilet','public_toilet','waste_collector'],rows=(business?city.economy.businesses:city.buildings.filter(b=>!b.entity.destroyed)).filter(b=>this.matches(`${name(b.entity)} ${BUILDING_TYPES[b.type].label} ${CROPS[b.crop]?.label||''}`)).filter(b=>filter==='all'||filter==='residential'&&residences.includes(b.type)||filter==='public'&&!b.ownerId&&!residences.includes(b.type)||filter==='private'&&!!b.ownerId||filter==='food'&&food.includes(b.type)||filter==='services'&&services.includes(b.type)||filter==='industry'&&['builder','quarry','recycler','mill'].includes(b.type));
       rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:name(a.entity).localeCompare(name(b.entity),'pt-BR'));p.note(`${rows.length} resultados`,C.muted);
       for(const b of rows)p.card(name(b.entity),`${CROPS[b.crop]?.label||BUILDING_TYPES[b.type].label}
-${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.length+' espaços / '+b.floors+' andares'}`,()=>this.openBuilding(b.id),this.selected?.id===b.id,b.active?C.green:b.type==='residential'?C.cyan:C.gold);
+${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.length+' espaços / '+b.floors+' andares'}`,()=>this.openBuilding(b.id),this.selected?.id===b.id,b.active?C.green:residences.includes(b.type)?C.cyan:C.gold);
       if(!rows.length)p.note('Nenhuma instalação com estes filtros.');
     }
   }
@@ -230,10 +230,13 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
       p.heading('NECESSIDADES'); p.meters(Object.entries(c.needs).map(([id,value])=>[NEED_LABELS[id],value]));
       const home = city.units.get(c.homeUnitId), dwelling = city.housing.home(c); p.heading('MORADIA');
-      if (dwelling) { p.kv('Casa', this.homeLabel(dwelling.id)); p.kv('Cômodos', city.housing.units(dwelling).map(u => u.roomType === 'bathroom' ? 'Banheiro' : 'Quarto').join(' + ')); p.kv('Aluguel total/dia', money(city.housing.rent(dwelling, c))); p.kv('Valor de compra da casa', money(city.housing.price(dwelling))); }
+      if (dwelling) { p.kv('Casa', this.homeLabel(dwelling.id)); p.kv('Cômodos', city.housing.units(dwelling).map(u => ({ bathroom: 'Banheiro', dining: 'Refeitório', bedroom: 'Quarto' }[u.roomType] || 'Espaço')).join(' + ')); p.kv('Aluguel total/dia', money(city.housing.rent(dwelling, c))); p.kv('Valor de compra da casa', money(city.housing.price(dwelling))); }
       p.note('Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
       if (home) { p.kv('Espaço',`${home.x+1}, ${home.y+1} / ${home.z+1}º andar`); p.kv('Regime', home.ownerId === c.accountId ? 'Proprietário' : home.tenantId !== c.accountId && dwelling ? 'Moradia compartilhada' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
       else p.note('Sem moradia', C.red);
+      p.heading('PREFERÊNCIAS ALIMENTARES');
+      for (const [good, value] of Object.entries(c.foodPreferences || {}).filter(([g]) => GOODS[g] && !['girassol','trigo'].includes(g))) p.kv(GOODS[good].label, value > .2 ? `Gosta (${Math.round(value * 100)})` : value < -.2 ? `Não gosta (${Math.round(value * 100)})` : 'Neutro');
+      if (c.lastMealTaste !== undefined) p.kv('Última refeição', c.lastMealTaste >= 0 ? 'Agradou ao paladar' : 'Desagradou ao paladar');
     } else if (this.detailTab === 'skills') {
       p.heading('TRABALHO'); const job = city.building(c.jobId);
       if (job) p.button(name(job.entity), () => this.openBuilding(job.id));
@@ -268,6 +271,8 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     p.button('LOCALIZAR NO MAPA', () => { this.camera(b.entity.x, b.entity.y); if(!this.host)this.visible = false; });
     this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS']]);
     if (this.detailTab === 'profile') {
+      const post = city.lighting.posts.find(post => post.buildingId === b.id && !post.public);
+      if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }
       p.kv('Tipo de ocupação', b.constructionKind === 'open-air' ? 'Ar livre / no nível do solo' : 'Edifício');
       p.button(`TERRENO ${b.plotId}`, () => this.setPlotSelection(b.plotId));
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');
@@ -286,7 +291,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.kv('Ocorrências de falta', b.stockouts);
     } else if (this.detailTab === 'staff') {
       p.kv('Postos ocupados', `${b.workers.length}/${b.jobs}`); p.kv('Salário base/hora', money(b.wage * 60));
-      p.heading('ALIMENTAÇÃO DOS FUNCIONÁRIOS'); p.kv('Refeições fornecidas', b.mealsServed); p.kv('Compras para refeições', money(b.mealPurchaseCost)); p.kv('Vales pagos', `${b.vouchersIssued} / ${money(b.foodVoucherCost)}`);
+      p.heading('ALIMENTAÇÃO DOS FUNCIONÁRIOS'); p.kv('Refeições fornecidas', b.mealsServed); p.kv('Compras para refeições', money(b.mealPurchaseCost)); p.kv('Vales pagos', `${b.vouchersIssued} / ${money(b.foodVoucherCost)}`); p.kv('Qualidade das refeições', b.mealQuality || 1);
       p.note('A empresa compra alimentos para a sede e os canteiros. Sem refeição no local, o vale é de pelo menos R$ 30 ou seis vezes o preço da refeição, por atendimento.');
       p.note('Contratação: habilidade 75%, confiança 15%, afeto 10%. O salário também considera habilidade.');
       for (const id of b.workers) { const c = city.economy.citizen(id); if (!c) continue; p.button(name(c.entity), () => this.openCitizen(id)); p.meter(SKILLS[JOB_SKILL[b.type]] || 'Habilidade', c.skills[JOB_SKILL[b.type]] || 0, C.cyan); }
@@ -300,7 +305,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.note('Espaços na fachada; miolo de circulação comum. Cada cômodo tem seu contrato. A prefeitura vende e nunca aluga.');
       let u = city.units.get(this.unitId); if (u?.buildingId !== b.id) u = b.units[0]; this.unitId = u?.id || null;
       this.unitMap(p,b,u);
-      if (u) { p.heading(`ESPAÇO ${u.x+1}, ${u.y+1} / ${u.z+1}º ANDAR`); p.kv('Cômodo', { bedroom: 'Quarto', bathroom: 'Banheiro', workspace: 'Área da empresa' }[u.roomType]); if (u.homeId) p.kv('Casa', this.homeLabel(u.homeId)); p.kv('Proprietário', city.accountName(u.ownerId)); this.accountLink(p, u.ownerId);
+      if (u) { p.heading(`ESPAÇO ${u.x+1}, ${u.y+1} / ${u.z+1}º ANDAR`); p.kv('Cômodo', { bedroom: 'Quarto', bathroom: 'Banheiro', dining: 'Refeitório', workspace: 'Área da empresa' }[u.roomType]); if (u.homeId) p.kv('Casa', this.homeLabel(u.homeId)); p.kv('Proprietário', city.accountName(u.ownerId)); this.accountLink(p, u.ownerId);
         p.kv('Ocupante', u.tenantId || u.occupantId ? city.accountName(u.tenantId || u.occupantId) : 'Livre'); this.accountLink(p, u.tenantId || u.occupantId);
         p.kv('Venda', money(u.price)); p.kv('Aluguel/dia', u.ownerId === 'treasury' ? 'Prefeitura não aluga' : money(u.rent)); p.kv('Em atraso', money(u.arrears)); p.kv('Anúncio', u.forSale ? 'À venda' : u.forRent ? 'Para alugar' : 'Uso próprio / ocupado'); }
 
@@ -313,7 +318,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     if(p.visible(height))for(let y=0;y<b.depth;y++)for(let x=0;x<b.width;x++){
       const u=b.units.find(u=>u.x===x&&u.y===y&&u.z===(selected?.z||0)),px=p.x+x*size,py=at+y*size;
       if(u){
-        const label={bedroom:'Q',bathroom:'B',workspace:'E'}[u.roomType]||'E';
+        const label={bedroom:'Q',bathroom:'B',dining:'R',workspace:'E'}[u.roomType]||'E';
         p.ui.button(px,py,size-3,size-3,label,()=>{this.unitId=u.id;},{selected:u.id===selected?.id});
         p.ui.ctx.fillStyle=u.tenantId||u.occupantId?C.green:u.forSale?C.gold:C.cyan;p.ui.ctx.fillRect(px+4,py+size-8,size-11,2);
       }else{p.ui.ctx.fillStyle=C.surface;p.ui.ctx.fillRect(px,py,size-3,size-3);p.ui.text('::',px+Math.max(1,(size-19)/2),py+Math.max(1,(size-11)/2),C.muted);}
