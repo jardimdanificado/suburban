@@ -24,8 +24,8 @@ export class CityDevelopment {
     project.fee = accountId === 'treasury' ? Math.ceil(ordinaryFee * DEVELOPMENT_RULES.municipalMultiplier) : ordinaryFee;
     const materialCost = details.stone * city.economy.goods.pedra.price;
     project.requiredBudget = project.fee + materialCost;
-    const ordinaryMaterialCost = details.stone * city.currency.price(1000);
-    if ((city.accounts.get(accountId)?.balance || 0) < ordinaryFee + ordinaryMaterialCost) { city.accounts.delete(project.feeAccountId); return null; }
+    const ordinaryMaterialCost = materialCost;
+    if ((city.accounts.get(accountId)?.balance || 0) < project.fee + ordinaryMaterialCost) { city.accounts.delete(project.feeAccountId); return null; }
     if (!city.transfer(accountId, project.feeAccountId, project.fee, 'Reserva do serviço de construção')) { city.accounts.delete(project.feeAccountId); return null; }
     this.projects.push(project);
     city.log(`${city.accountName(accountId)} contratou ${builder.entity.properties.name}: ${project.name}.`, 'construction', [owner.id, builder.ownerId].filter(Boolean), { kind: 'service-contracted', projectId: project.id, service: project.service, fee: project.fee });
@@ -248,7 +248,7 @@ export class CityDevelopment {
     if (!p || p.ownerId !== accountId || p.projectId || !Number.isSafeInteger(price) || price < 1 || !Number.isSafeInteger(rent) || rent < 0) return false;
     Object.assign(p, { price, rent, forSale: p.ownerId === 'treasury' || !!forSale, forRent: p.ownerId !== 'treasury' && !!forRent }); return true;
   }
-  beginProject(accountId, plotId, type, { kind = type === 'farm' || type === 'quarry' ? 'open-air' : 'building', floors = ['residential', 'popular_housing', 'luxury_housing'].includes(type) ? 3 : 1, crop = null, sell = false, width = null, depth = null, builderId = null } = {}) {
+  beginProject(accountId, plotId, type, { kind = type === 'farm' || type === 'quarry' ? 'open-air' : 'building', floors = ['residential', 'popular_housing', 'luxury_housing'].includes(type) ? 3 : 1, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0 } = {}) {
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
     if ((kind === 'open-air' && !['farm', 'quarry', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;
@@ -257,12 +257,12 @@ export class CityDevelopment {
     if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width > p.width || depth > p.depth || (kind==='building' && (width>8 || depth>8))) return null;
     floors = kind === 'open-air' ? 1 : floors;
     const cells = width * depth * floors, stone = kind === 'open-air' ? 0 : cells * DEVELOPMENT_RULES.stonePerCell;
-    const builder = this.selectBuilder(accountId, terrain.door, builderId);
+    const builder = selfBuild ? null : this.selectBuilder(accountId, terrain.door, builderId);
     if (builderId && !builder) return null;
     const fee = builder && stone ? cells * this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) : 0;
     const publicFee = accountId === 'treasury' ? Math.ceil(fee * DEVELOPMENT_RULES.municipalMultiplier) : fee;
-    if ((city.accounts.get(accountId)?.balance || 0) < stone * city.currency.price(1000) + publicFee + city.currency.price(20000)) return null;
-    const project = { id: `project:${this.nextProjectId++}`, accountId, ownerId: owner.id, name: `Obra no terreno ${p.id}`, service: 'building', width, depth, plotId, type, crop, kind, floors, sell, stone, labor: 0, requiredLabor: stone ? cells * DEVELOPMENT_RULES.laborPerCell : 0, builderId: builder?.id || null, fee, active: true, door: terrain.door, status: stone ? 'materials' : 'ready', startedAt: city.minute, cancelled: false };
+    if ((city.accounts.get(accountId)?.balance || 0) < stone * city.economy.goods.pedra.price + publicFee + city.currency.price(20000)) return null;
+    const project = { id: `project:${this.nextProjectId++}`, accountId, ownerId: owner.id, name: `Obra no terreno ${p.id}`, priority, service: 'building', width, depth, plotId, type, crop, kind, floors, sell, stone, labor: 0, requiredLabor: stone ? cells * DEVELOPMENT_RULES.laborPerCell : 0, builderId: builder?.id || null, fee, active: true, door: terrain.door, status: stone ? 'materials' : 'ready', startedAt: city.minute, cancelled: false };
     initializeInventory(project, city.economy.goods, stone + 48);
     project.feeAccountId = `construction-fee:${project.id}`;
     city.accounts.set(project.feeAccountId, { name: `Caução da obra ${project.id}`, balance: 0 });
@@ -282,6 +282,7 @@ export class CityDevelopment {
     p.buildingId = b.id; p.projectId = null; project.status = 'completed'; project.error = null; project.completedAt = city.minute;
     city.transfer(project.feeAccountId, this.city.building(project.builderId)?.accountId || project.accountId, project.fee, 'Serviço de construção');
     const account = city.accounts.get(project.accountId); if (account?.entity?.properties.cityBuilding) account.totalExpenses += project.fee;
+    if(project.materialAccountId)city.transfer(project.materialAccountId,b.accountId,city.accounts.get(project.materialAccountId)?.balance||0,'Capital operacional reservado da nova empresa');
     if (['residential', 'popular_housing', 'luxury_housing'].includes(project.type) || project.sell) {
       for (const u of b.units) { u.occupantId = null; u.forSale = project.accountId === 'treasury' || project.sell; u.forRent = project.accountId !== 'treasury' && !project.sell; }
     } else if (project.accountId === 'treasury') city.economy.activateMunicipalBusiness(b, city.currency.price(b.type==='bank'?300000:50000), project.crop);
@@ -295,7 +296,7 @@ export class CityDevelopment {
     let need = project.stone - project.inventory.pedra - (project.incoming.pedra || 0);
     for (const quarry of this.city.economy.businesses.filter(b => b.type === 'quarry' || b.type === 'recycler')) {
       const qty = Math.min(24, need, quarry.inventory.pedra, inventoryFree(project));
-      if (qty > 0 && this.city.logistics.order(quarry, project, 'pedra', qty, this.city.economy.goods.pedra.price, { purpose: project.service === 'lamp' ? 'lamp-construction' : 'trade' })) need -= qty;
+      if (qty > 0 && this.city.logistics.order(quarry, project, 'pedra', qty, this.city.economy.goods.pedra.price, {payerAccountId:project.materialAccountId||project.accountId,purpose:project.priority>=100?'critical-infrastructure':project.service==='lamp'?'lamp-construction':'trade'})) need -= qty;
     }
   }
   work(project, c) {
@@ -307,14 +308,28 @@ export class CityDevelopment {
     this.city.economy.practice(c, 'construction'); this.complete(project); return true;
   }
   projectFor(c, business = null) {
-    const eligible = p => !p.cancelled && p.status !== 'completed' && p.inventory.pedra >= p.stone && (p.service !== 'lamp' || !!p.builderId) && (business?.type === 'builder' ? p.builderId === business.id || p.accountId === business.accountId : p.accountId === c.accountId && !p.builderId);
-    return this.projects.find(p => p.service !== 'lamp' && eligible(p)) || this.projects.find(eligible);
+    const eligible = p => !p.cancelled && p.status !== 'completed' && p.inventory.pedra >= p.stone && (p.service !== 'lamp' || !!p.builderId) && ((!p.builderId && (p.accountId===c.accountId || p.accountId==='treasury' && p.ownerId===c.id)) || business?.type==='builder' && (p.builderId===business.id || p.accountId===business.accountId));
+    return this.projects.filter(eligible).sort((a,b)=>(b.priority||0)-(a.priority||0)||Number(a.service==='lamp')-Number(b.service==='lamp')||a.startedAt-b.startedAt)[0]||null;
+  }
+  balanceContracts() {
+    const builders=this.city.economy.businesses.filter(b=>b.type==='builder' && (b.workers.length || this.city.economy.citizen(b.ownerId)));
+    if(builders.length<2)return;
+    const load=new Map(builders.map(b=>[b.id,0]));
+    const projects=this.projects.filter(p=>!p.cancelled && p.status!=='completed' && p.builderId);
+    for(const p of projects.filter(p=>p.labor>0))load.set(p.builderId,(load.get(p.builderId)||0)+Math.max(0,p.requiredLabor-p.labor));
+    for(const p of projects.filter(p=>p.labor===0).sort((a,b)=>(b.priority||0)-(a.priority||0)||a.startedAt-b.startedAt)) {
+      const options=builders.filter(b=>b.accountId!==p.accountId && this.city.economy.connected(b,{id:`site:${p.door.x}:${p.door.y}`,door:p.door}));
+      options.sort((a,b)=>(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);
+      const next=options[0];if(!next)continue;
+      if(p.builderId!==next.id){p.builderId=next.id;this.city.history.record('service',`Contrato ${p.id} atribuído a ${next.entity.properties.name} antes do início do trabalho.`,[p.accountId,next.accountId],{projectId:p.id});}
+      load.set(next.id,(load.get(next.id)||0)+p.requiredLabor);
+    }
   }
   updateHourly() {
     this.ensurePlots();
     this.updateWear();
     this.planPublicWorks();
-    for (const p of [...this.projects].sort((a, b) => Number(a.service === 'lamp') - Number(b.service === 'lamp'))) { this.requestMaterials(p); if (p.status === 'blocked') this.complete(p); }
+    for (const p of [...this.projects].sort((a, b) => (b.priority||0)-(a.priority||0)||Number(a.service === 'lamp') - Number(b.service === 'lamp'))) { this.requestMaterials(p); if (p.status === 'blocked') this.complete(p); }
     // Builders develop housing for sale; individual investors prefer premises for their own firms.
     const homeless = this.city.citizens.filter(c => !c.homeUnitId).length;
     const housingProjects = this.projects.filter(p => p.type === 'residential' && !p.cancelled && p.status !== 'completed');
@@ -337,6 +352,7 @@ export class CityDevelopment {
     for (const p of this.projects) if (!p.cancelled && p.status !== 'completed' && ((p.service === 'expansion' && !this.city.building(p.buildingId)) || !this.clientCitizen(p.accountId) || (p.accountId !== 'treasury' && !this.city.society.citizen(p.ownerId)))) {
       this.city.transfer(p.feeAccountId, 'treasury', this.city.accounts.get(p.feeAccountId)?.balance || 0, 'Estorno de obra cancelada');
       p.cancelled = true; p.active = false; p.status = 'cancelled';
+      if(p.materialAccountId){for(const shipment of this.city.logistics.shipments)if(shipment.buyer===p && !['delivered','cancelled'].includes(shipment.status))this.city.logistics.cancel(shipment);this.city.transfer(p.materialAccountId,this.city.accounts.has(p.accountId)?p.accountId:'treasury',this.city.accounts.get(p.materialAccountId)?.balance||0,'Estorno de capital de empreendimento cancelado');}
       const lot = this.plots.find(l => l.id === p.plotId); if (lot) { lot.projectId = null; if (p.service !== 'expansion') { lot.ownerId = 'treasury'; lot.forSale = true; } }
       const hall = this.city.buildings.find(b => b.type === 'townhall');
       for (const [good, qty] of Object.entries(p.inventory)) { const stored = Math.min(qty, hall ? inventoryFree(hall) : 0); if (hall) hall.inventory[good] += stored; this.city.economy.lost[good] += qty - stored; p.inventory[good] = 0; }

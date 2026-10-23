@@ -89,17 +89,30 @@ export class CitySanitation {
     }
     return b.accountId;
   }
+  selectCompany(site) {
+    const companies=this.city.economy.businesses.filter(b=>b.type==='cleaner' && (this.city.economy.citizen(b.ownerId) || b.workers.length && b.balance>=b.wage) && this.city.economy.connected(b,site));
+    const load=b=>this.jobs.filter(j=>j.providerId===b.id && !['completed','cancelled'].includes(j.status)).length/Math.max(1,b.workers.length+(b.ownerId?1:0));
+    return companies.sort((a,b)=>load(a)-load(b)||a.id-b.id)[0]||null;
+  }
+  rebalanceWaiting() {
+    for(const job of this.jobs.filter(j=>!j.workerId && !['completed','cancelled'].includes(j.status))) {
+      const f=this.facilities.get(job.facilityId),site=f && this.city.building(f.buildingId);if(!site)continue;
+      const company=this.selectCompany(site);if(!company)continue;
+      if(!job.fee){const fee=Math.ceil(this.city.currency.price(SANITATION_RULES.cleaningPrice)*(job.payerId==='treasury'?1.5:1));if(!this.city.transfer(job.payerId,job.accountId,fee,'Reserva de limpeza por nova prestadora'))continue;job.fee=fee;}
+      job.providerId=company.id;
+    }
+  }
   requestCleaning(facilityId, payerId = null, providerId = null) {
     const f = this.facilities.get(facilityId); if (!f || f.cleaningJobId || f.cleanliness >= 99) return null;
     const interval = f.access === 'public' ? SANITATION_RULES.freeCleaningInterval : f.access === 'paid' ? SANITATION_RULES.paidCleaningInterval : SANITATION_RULES.privateCleaningInterval;
-    if (this.city.minute - f.lastCleanedAt < interval) return null;
+    if (f.cleanliness >= 35 && this.city.minute - f.lastCleanedAt < interval) return null;
     const payer = this.payer(f); if (!payer || (payerId && payerId !== payer)) return null;
     const b = this.city.building(f.buildingId);
-    const company = this.city.economy.businesses.filter(b => b.type === 'cleaner' && (!providerId || b.id === providerId)).sort((a, d) => a.id - d.id).find(p => this.city.economy.connected(p, b));
+    const company = providerId ? this.city.economy.businesses.find(p=>p.id===providerId && p.type==='cleaner' && this.city.economy.connected(p,b)) : this.selectCompany(b);
     if (providerId && !company) return null;
     // The weekly municipal crew is a fallback only for free public toilets.
     if (!company && f.access !== 'public') return null;
-    const fee = company ? this.city.currency.price(SANITATION_RULES.cleaningPrice) : 0;
+    const fee = company ? Math.ceil(this.city.currency.price(SANITATION_RULES.cleaningPrice)*(payer==='treasury'?1.5:1)) : 0;
     if ((this.city.accounts.get(payer)?.balance || 0) < fee) return null;
     const id = this.nextJobId++, accountId = `cleaning:${id}`;
     this.city.accounts.set(accountId, { name: `Limpeza ${id}`, balance: 0 });
@@ -153,6 +166,7 @@ export class CitySanitation {
     for (const f of this.facilities.values()) if (f.occupantId && (!this.city.society.citizen(f.occupantId) || this.city.minute >= f.busyUntil)) f.occupantId = null;
   }
   hourly() {
+    this.rebalanceWaiting();
     for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : 60)) this.requestCleaning(f.id);
     const collectors = this.city.economy.businesses.filter(b => b.type === 'waste_collector');
     for (const b of this.city.buildings.filter(b => !b.entity.destroyed)) {

@@ -267,6 +267,7 @@ export class CitySimulation {
     else if (n.hygiene < 35) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
     else if (child && this.society.isAdult(c)) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
+    else if (c.startupProjectId && this.hour >= 8 && this.hour < 17 && this.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed' && p.inventory.pedra>=p.stone)) { task='work';type='startup'; }
     else if (company && this.hour >= 8 && this.hour < 17) { task = 'manage'; type = 'company'; }
     else if (job && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }

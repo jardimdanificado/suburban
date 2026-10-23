@@ -273,7 +273,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
         p.buttons([{label:'DEPOSITAR R$ 100',click:()=>{if(!city.bank.deposit(bank,c.accountId,10000))this.notice='Depósito indisponível: confira saldo e operação do banco.';}},{label:'SACAR DEPÓSITO',click:()=>city.bank.withdraw(bank,c.accountId,deposit?.balance||0)},{label:'PEDIR R$ 100',click:()=>{if(!city.bank.lend(bank,c.accountId,10000))this.notice='Crédito indisponível: é preciso ter renda, limite e caixa no banco.';}}]);
       }
       for(const loan of city.bank.loans.filter(l=>l.clientId===c.accountId)) {
-        p.heading(`EMPRÉSTIMO ${loan.id}`);p.kv('Banco',city.accountName(`business:${loan.bankId}`));
+        p.heading(`EMPRÉSTIMO ${loan.id}`);p.kv('Finalidade',loan.purpose==='business'?'Abertura de empresa / 180 parcelas':'Subsistência / 30 parcelas');if(loan.projectId)p.kv('Obra financiada',loan.projectId);p.kv('Banco',city.accountName(`business:${loan.bankId}`));
         p.kv('Principal a pagar',money(loan.remaining));p.kv('Juros pendentes',money(loan.interest));p.kv('Total pago',money(loan.paid));p.kv('Parcela de principal/dia',money(loan.dailyPayment));p.kv('Dias consecutivos em atraso',loan.missed);
         p.kv('Contrato',({active:'Ativo',paid:'Quitado',arrears:'Em atraso','written-off':'Encerrado com perda'})[loan.status]);p.kv('Taxa contratada/dia',`${(loan.rate*100).toFixed(2)}%`);
       }
@@ -291,7 +291,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       const post = [...city.lighting.sites.values()].find(post => post.buildingId === b.id && !post.public && post.status !== 'cancelled');
       if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', !post.built ? post.projectId ? 'Em construção' : 'Aguarda contratação' : post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }
       const industry=INDUSTRIES[b.type];
-      if(industry){p.heading('CADEIA PRODUTIVA');p.note(industry.impact);p.note('Insumos: '+(Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Trabalho e recursos locais'));p.note('Produtos: '+(Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Crédito e guarda de depósitos'));if(b.type==='bank'){p.kv('Depósitos protegidos',money([...city.bank.deposits.values()].filter(d=>d.bankId===b.id).reduce((n,d)=>n+d.balance,0)));p.kv('Crédito a receber',money(city.bank.loans.filter(l=>l.bankId===b.id && !['paid','written-off'].includes(l.status)).reduce((n,l)=>n+l.remaining+l.interest,0)));p.note(`Novos empréstimos: ${(city.bank.policy.loanRate*100).toFixed(2)}% ao dia; poupança: ${(city.bank.policy.savingsRate*100).toFixed(2)}% ao dia. Prazo: 30 parcelas. Depósitos são protegidos; rendimentos dependem do caixa do banco.`);}}
+      if(industry){p.heading('CADEIA PRODUTIVA');p.note(industry.impact);p.note('Insumos: '+(Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Trabalho e recursos locais'));p.note('Produtos: '+(Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Crédito e guarda de depósitos'));if(b.type==='bank'){p.kv('Depósitos protegidos',money([...city.bank.deposits.values()].filter(d=>d.bankId===b.id).reduce((n,d)=>n+d.balance,0)));p.kv('Crédito a receber',money(city.bank.loans.filter(l=>l.bankId===b.id && !['paid','written-off'].includes(l.status)).reduce((n,l)=>n+l.remaining+l.interest,0)));p.note(`Novos empréstimos: ${(city.bank.policy.loanRate*100).toFixed(2)}% ao dia; poupança: ${(city.bank.policy.savingsRate*100).toFixed(2)}% ao dia. Prazos: 30 parcelas para subsistência e 180 para abertura de empresa, com carência durante a obra. Depósitos são protegidos; rendimentos dependem do caixa do banco.`);}}
       p.kv('Tipo de ocupação', b.constructionKind === 'open-air' ? 'Ar livre / no nível do solo' : 'Edifício');
       p.button(`TERRENO ${b.plotId}`, () => this.setPlotSelection(b.plotId));
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');
@@ -384,7 +384,8 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     for (const d of this.city.economy.demands.filter(d => d.score > 0)) {
       p.heading(`${BUILDING_TYPES[d.type].label}${d.crop ? ' / ' + CROPS[d.crop].label : ''}`, C.cyan);
       p.kv('Índice de demanda', Math.round(d.score)); p.note(d.reason);
-      if (d.required !== undefined) { p.kv(d.type==='carrier'?'Trabalho pendente (min)':'Necessidade/dia', d.required); p.kv(d.type==='carrier'?'Capacidade/dia (min)':'Capacidade estimada/dia', d.supply); p.kv('Estoque', d.stock); }
+      if(d.response){p.kv('Resposta à demanda',d.response.state);if(d.response.projectId)p.note(`Projeto: ${d.response.projectId}`);p.note(`Decisão: ${stamp(d.response.minute)}`,C.muted);}
+      if (d.required !== undefined) { p.kv(['carrier','cleaner','builder'].includes(d.type)?'Trabalho pendente (min)':'Necessidade/dia', d.required); p.kv(['carrier','cleaner','builder'].includes(d.type)?'Capacidade/dia (min)':'Capacidade estimada/dia', d.supply); p.kv('Estoque', d.stock); }
     }
   }
   content(p) {
@@ -496,7 +497,8 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     }
     p.metrics([['TERRENOS',dev.plots.length,C.cyan],['À VENDA',dev.plots.filter(l=>l.forSale&&!l.buildingId).length,C.gold],['EM OBRAS',dev.projects.filter(o=>!o.cancelled&&o.status!=='completed').length,C.green]]);
     if(selected){
-      p.heading(`TERRENO ${selected.id}`,C.cyan);p.columns(q=>{q.kv('Dimensões',`${selected.width}x${selected.depth}`);q.kv('Nível',selected.level===undefined?'Instalação inicial':selected.level.toFixed(2));q.kv('Proprietário',city.accountName(selected.ownerId));},q=>{q.kv('Venda',selected.forSale?money(selected.price):'Não anunciado');q.kv('Locação',selected.ownerId==='treasury'?'Prefeitura não aluga':selected.forRent?money(selected.rent)+'/dia':'Não anunciado');});
+      const levelLabel=Number.isFinite(selected.level)?selected.level.toFixed(2):selected.level===null?'Relevo natural / nível variável':'Instalação inicial';
+      p.heading(`TERRENO ${selected.id}`,C.cyan);p.columns(q=>{q.kv('Dimensões',`${selected.width}x${selected.depth}`);q.kv('Nível',levelLabel);q.kv('Proprietário',city.accountName(selected.ownerId));},q=>{q.kv('Venda',selected.forSale?money(selected.price):'Não anunciado');q.kv('Locação',selected.ownerId==='treasury'?'Prefeitura não aluga':selected.forRent?money(selected.rent)+'/dia':'Não anunciado');});
       p.buttons([{label:'LOCALIZAR',click:()=>{this.camera(selected.x+selected.width/2,selected.y+selected.depth/2);if(!this.host)this.visible=false;}},...(selected.buildingId?[{label:'ABRIR IMÓVEL',click:()=>this.openBuilding(selected.buildingId)}]:[]),{label:'FECHAR FICHA',click:()=>{this.selectedPlotId=null;this.resetScroll();}}]);
     }
     this.filterButtons(p);const f=this.filter(),lots=dev.plots.filter(l=>this.matches(`${l.id} ${city.accountName(l.ownerId)} ${city.building(l.buildingId)?.entity.properties.name||''}`)).filter(l=>f==='all'||f==='sale'&&l.forSale&&!l.buildingId||f==='built'&&l.buildingId||f==='works'&&l.projectId);

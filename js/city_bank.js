@@ -32,6 +32,21 @@ export class CityBank {
     city.history.record('credit', `Crédito aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount, rate:loan.rate, loanId:loan.id });
     return loan;
   }
+  lendForBusiness(bank, founder, amount, proposal) {
+    const city=this.city;
+    if(!this.policy.creditEnabled || !this.available().includes(bank) || !Number.isSafeInteger(amount) || amount<=0 || proposal.score<60 || amount>proposal.budget || this.loans.some(l=>l.clientId===founder.accountId && l.purpose==='business' && !['paid','written-off'].includes(l.status)))return false;
+    const cash=Math.max(0,bank.balance-bank.workers.length*bank.wage*480);
+    if(amount>cash*.75 || !city.transfer(bank.accountId,founder.accountId,amount,'Crédito empresarial para atender demanda'))return false;
+    const loan={id:this.nextId++,bankId:bank.id,clientId:founder.accountId,purpose:'business',businessType:proposal.type,principal:amount,remaining:amount,interest:0,rate:Math.min(this.policy.loanRate,.0005),dailyPayment:Math.ceil(amount/180),dueDay:city.day+1,missed:0,status:'active',startedAt:city.minute,paid:0};
+    this.loans.push(loan);
+    city.history.record('credit',`Crédito empresarial aprovado para ${city.buildingTypes[proposal.type].label}, com aplicação em terreno, materiais e operação.`,[founder.accountId,bank.accountId],{amount,loanId:loan.id,rate:loan.rate});
+    return loan;
+  }
+  cancelBusinessLoan(loan) {
+    const bank=this.city.accounts.get(`business:${loan.bankId}`);
+    if(!bank || !this.city.transfer(loan.clientId,bank.accountId,loan.remaining,'Estorno de abertura de empresa'))return false;
+    loan.remaining=0;loan.interest=0;loan.status='paid';loan.cancelled=true;return true;
+  }
   householdFinance() {
     const city = this.city, banks = this.available();
     for (const c of city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c))) {
@@ -47,6 +62,7 @@ export class CityBank {
   daily() {
     const city = this.city;
     for (const loan of this.loans.filter(l => l.status !== 'paid' && l.status !== 'written-off' && l.dueDay <= city.day)) {
+      if(loan.purpose==='business' && loan.projectId){const project=city.development.projects.find(p=>p.id===loan.projectId);if(project && !project.cancelled && project.status!=='completed'){loan.dueDay=city.day+1;continue;}}
       const bank = city.building(loan.bankId), client = city.accounts.get(loan.clientId);
       if (!bank || !client) continue;
       const interest = Math.ceil(loan.remaining*loan.rate); loan.interest += interest;

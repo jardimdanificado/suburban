@@ -17,12 +17,26 @@ export class CityLogistics {
     const score=work?Math.min(300,(drivers?0:120)+shortage*.3+waiting.length*12+Math.min(120,oldest/15)+lampRequests*10):0;
     return {waitingSpace:shipments.filter(s=>s.status==='waiting-space').length,pending:shipments.length,waiting:waiting.length,ownHauls:shipments.filter(s=>!s.carrierId).length,oldest,lampRequests,work:Math.ceil(work),capacity,drivers,score};
   }
+  rebalanceWaiting() {
+    const city=this.city;
+    const carriers=city.economy.businesses.filter(b=>b.type==='carrier' && (city.economy.citizen(b.ownerId) || b.workers.length && b.balance>=b.wage));
+    if(!carriers.length)return;
+    const jobs=this.shipments.filter(s=>!['delivered','cancelled','waiting-space'].includes(s.status));
+    const load=new Map(carriers.map(b=>[b.id,jobs.filter(s=>s.driverId && s.carrierId===b.id).reduce((n,s)=>n+Math.max(8,s.routeLength),0)]));
+    for(const s of jobs.filter(s=>!s.driverId).sort((a,b)=>Number(b.purpose==='critical-infrastructure')-Number(a.purpose==='critical-infrastructure')||a.createdAt-b.createdAt).slice(0,64)) {
+      const options=carriers.filter(b=>city.economy.connected(b,{id:`cargo:${s.id}`,door:s.position}));
+      options.sort((a,b)=>(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);
+      const carrier=options[0];if(!carrier)continue;
+      if(!s.fee){const fee=city.currency.price(Math.max(120,s.routeLength*12+s.quantity*4));const price=Math.ceil(fee*(s.payerAccountId==='treasury'?1.5:1));if(!city.transfer(s.payerAccountId,s.accountId,price,'Reserva de transporte por nova prestadora'))continue;s.fee=price;}
+      s.carrierId=carrier.id;load.set(carrier.id,(load.get(carrier.id)||0)+Math.max(8,s.routeLength));
+    }
+  }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false } = {}) {
     const city = this.city;
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential') || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 24 || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
-    const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && b.workers.length && b.balance > 0 && city.economy.connected(b, seller));
+    const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && (city.economy.citizen(b.ownerId) || b.workers.length && b.balance >= b.wage) && city.economy.connected(b, seller));
     let carrier = carriers.sort((a, b) => this.shipments.filter(s => s.carrierId === a.id && !['delivered','cancelled'].includes(s.status)).length - this.shipments.filter(s => s.carrierId === b.id && !['delivered','cancelled'].includes(s.status)).length)[0];
     if(requireCarrier && !carrier)return false;
     let fee = carrier ? city.currency.price(Math.max(120, (route.length + Math.abs(carrier.door.x - seller.door.x) + Math.abs(carrier.door.y - seller.door.y)) * 12 + quantity * 4)) : 0;
@@ -86,7 +100,7 @@ export class CityLogistics {
     const city = this.city;
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
-    const priority = s => (s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
+    const priority = s => s.purpose==='critical-infrastructure'?-2:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
     pending.sort((a, b) => priority(a) - priority(b) || a.createdAt - b.createdAt || a.id - b.id);
     for (const s of pending) {
       if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential') || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
