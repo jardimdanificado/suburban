@@ -1,6 +1,6 @@
 import { inspectBuildingSite } from './city_terrain.js';
 
-export const ESSENTIAL_SERVICES = new Set(['builder', 'carrier', 'cleaner']);
+export const ESSENTIAL_SERVICES = new Set(['builder', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'composting']);
 
 /** Turns service backlogs into financed, physically constructed premises. */
 export class CityServiceInvestment {
@@ -9,6 +9,14 @@ export class CityServiceInvestment {
     const city = this.city;
     if (type === 'carrier') return city.logistics.demandMetrics();
     const firms = city.economy.businesses.filter(b => b.type === type);
+    if(['waste_collector','recycler','composting'].includes(type)) {
+      const waste=city.sanitation.wasteMetrics();
+      const staff=firms.reduce((n,b)=>n+(b.balance>=b.wage?b.workers.length:0)+(city.economy.citizen(b.ownerId)?1:0),0);
+      const units=type==='waste_collector'?waste.awaiting+waste.collecting:waste.total;
+      const work=units*(type==='waste_collector'?8:type==='recycler'?4:5),capacity=staff*240;
+      const shortage=Math.max(0,work-capacity*.5);
+      return {work,capacity,staff,count:units,oldest:0,score:units>=2?Math.min(300,(staff?0:120)+shortage*.5):0};
+    }
     const staff = firms.reduce((n,b) => n+(b.balance >= b.wage ? b.workers.length : 0)+(city.economy.citizen(b.ownerId) ? 1 : 0),0);
     let work = 0, oldest = 0, count = 0;
     if (type === 'cleaner') {
@@ -81,7 +89,7 @@ export class CityServiceInvestment {
       const plot = this.lots(demand.type)[0];
       if (!plot) { this.decisions.set(demand.type,{state:'Aguardando terreno urbano acessível',minute:city.minute}); continue; }
       const plan = this.plan(demand.type,plot);
-      const candidates = city.citizens.filter(c => city.society.isAdult(c) && !c.entity.destroyed && c.id !== city.economy.mayorId && !c.businessIds.length && !c.deliveryId && !c.cleaningJobId && !city.development.projects.some(p => p.accountId === c.accountId && !p.cancelled && p.status !== 'completed')).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[({builder:'construction',carrier:'logistics',cleaner:'cleaning'})[demand.type]]||0)-(a.skills[({builder:'construction',carrier:'logistics',cleaner:'cleaning'})[demand.type]]||0) || a.id-b.id);
+      const candidates = city.citizens.filter(c => city.society.isAdult(c) && !c.entity.destroyed && c.id !== city.economy.mayorId && !c.businessIds.length && !c.deliveryId && !c.cleaningJobId && !city.development.projects.some(p => p.accountId === c.accountId && !p.cancelled && p.status !== 'completed')).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[({builder:'construction',carrier:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0)-(a.skills[({builder:'construction',carrier:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0) || a.id-b.id);
       let project = null;
       for (const founder of candidates) {
         let loan = null;

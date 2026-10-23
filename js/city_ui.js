@@ -75,7 +75,7 @@ export class CityUI {
     const target=this.host?this.host.openModule(tab):this;if(!this.host)this.navigate(tab);if(filter)target.setFilter(filter);if(view)target.setView(view);return target;
   }
   view() { return this.views[this.tab] || VIEWS[this.tab]?.[0][0] || 'overview'; }
-  setView(id) { this.views[this.tab] = id; this.resetScroll(); }
+  setView(id) { this.selectedProjectId=null; this.views[this.tab] = id; this.resetScroll(); }
   filter() { return this.filters[this.tab] || 'all'; }
   setFilter(id) { this.filters[this.tab] = id; this.resetScroll(); }
   setSelection(entity, unitId = null) {
@@ -297,7 +297,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');
       if(b.type==='mint'){p.kv('Emitido hoje',money(city.currency.issuedToday));p.kv('Inflação acumulada',`${((city.currency.priceIndex-1)*100).toFixed(2)}%`);p.note('A emissão entra no tesouro e depende de um funcionário trabalhando nesta instalação.');}
       p.note('Proprietário da empresa'); if (b.ownerId) p.button(name(city.economy.citizen(b.ownerId)?.entity), () => this.openCitizen(b.ownerId)); else p.note(b.municipal?'Empresa municipal / patrimônio público':'Serviço público');
-      p.metrics([['CAIXA',money(b.balance),b.balance<1000?C.red:C.gold],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]); p.kv('Receita acumulada', money(b.totalRevenue)); p.kv('Despesas acumuladas', money(b.totalExpenses)); p.kv('Dividendos pagos', money(b.dividends));
+      p.metrics([[b.type==='townhall'?'SALDO MUNICIPAL':'CAIXA',money(b.balance),b.balance<1000?C.red:C.gold],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]); p.kv(b.type==='townhall'?'Entradas acumuladas':'Receita acumulada', money(b.totalRevenue)); p.kv(b.type==='townhall'?'Saídas acumuladas':'Despesas acumuladas', money(b.totalExpenses)); if(b.type==='townhall')p.note('Este saldo é o tesouro municipal, o mesmo exibido na barra. Recebe impostos e emissão e paga obras, benefícios e despesas da sede. Reservas de contratos já saíram do saldo disponível.');else p.kv('Dividendos pagos', money(b.dividends));
       p.kv('Equipe', `${b.workers.length}/${b.jobs}`); p.kv('Desnível do terreno', Number(b.terrain.variation).toFixed(2)); p.kv('Circulação comum', `${b.circulation?.length || 0} células sem imóveis`);
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, b.accountId);
     } else if (this.detailTab === 'stock') {
@@ -350,7 +350,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
   journal(p,account) {
     this.journalFilters??={};this.journalPages??={};
     const kind=this.journalFilters[account]||'all';
-    const options=[['all','TODOS'],['employment','EMPREGO'],['ownership','PROPRIETÁRIOS'],['sale','VENDAS'],['service','SERVIÇOS'],['credit','CRÉDITO'],['finance','FINANÇAS'],['policy','POLÍTICAS']];
+    const options=[['all','TODOS'],['employment','EMPREGO'],['ownership','PROPRIETÁRIOS'],['sale','VENDAS'],['service','SERVIÇOS'],['production','PRODUÇÃO'],['credit','CRÉDITO'],['finance','FINANÇAS'],['policy','POLÍTICAS']];
     p.heading('HISTÓRICO DETALHADO');
     p.buttons(options.map(([id,label])=>({label,selected:kind===id,click:()=>{this.journalFilters[account]=id;this.journalPages[account]=0;}})));
     const rows=this.city.history.rows(account,kind).filter(e=>this.matches(e.message)).reverse();
@@ -508,7 +508,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     const city=this.city;
     for(const o of projects){
       const label=o.service==='building'?`${BUILDING_TYPES[o.type]?.label||o.type} / lote ${o.plotId}`:o.name;
-      p.card(label,`${o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='materials'?'Aguardando materiais':'Em construção'} / serviço ${money(o.fee)}`,()=>{if(o.plotId)this.setPlotSelection(o.plotId);else{this.camera(o.door.x,o.door.y);if(!this.host)this.visible=false;}},false,o.cancelled?C.red:o.status==='completed'?C.green:C.gold);
+      p.card(label,`${o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='materials'?'Aguardando materiais':'Em construção'} / serviço ${money(o.fee)}`,()=>{this.select(null);if(o.plotId)this.setPlotSelection(o.plotId);else{this.selectedProjectId=o.id;this.camera(o.door.x,o.door.y);if(!this.host)this.visible=false;}},this.selectedProjectId===o.id,o.cancelled?C.red:o.status==='completed'?C.green:C.gold);
       p.columns(q=>{q.kv('Contratante',city.accountName(o.accountId));q.kv('Construtora',city.building(o.builderId)?.entity.properties.name||'Construção própria');},q=>{q.kv('Pedras entregues',`${o.status==='completed'?o.stone:o.inventory.pedra}/${o.stone}`);q.kv('Pedras em transporte',o.incoming.pedra||0);});
       if(o.service==='building')p.kv('Projeto',`${o.width}x${o.depth}x${o.floors} / ${o.sell?'para venda':'uso próprio'}`);if(o.service==='expansion')p.kv('Andares',`${o.baseFloors} > ${o.targetFloors}`);if(o.service==='road')p.kv('Extensão',`${o.path.length} tiles`);
       p.meter('Trabalho concluído',o.requiredLabor?o.labor/o.requiredLabor*100:100);if(o.error)p.note(o.error,C.red);p.space(8);
@@ -549,10 +549,21 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       if(!system.jobs.length)p.note('Nenhum serviço solicitado ainda.');return;
     }
     if(view==='waste'){
-      p.metrics([['LIXO NA CIDADE',city.goodsStock('lixo'),C.gold],['PROCESSADO',city.economy.consumed.lixo,C.green],['ESPALHADO',city.buildings.reduce((n,b)=>n+(b.litter||0),0),C.red]]);
-      p.heading('CICLO DOS RESÍDUOS');p.note('Banheiro > coleta > transporte > reciclagem > pedra. Duas unidades de lixo geram uma pedra com trabalho.');
+      const waste=system.wasteMetrics();
+      p.metrics([['LIXO NA CIDADE',waste.total,C.gold],['PROCESSADO',waste.processed,C.green],['COLETADO / ENTREGUE',system.collected,C.cyan]]);
+      p.heading('ETAPAS DO CICLO');p.kv('Aguardando coleta',waste.awaiting);p.kv('Em transporte de coleta',waste.collecting);p.kv('Armazenado nas coletoras',waste.atCollectors);p.kv('A caminho das processadoras',waste.transferring);p.kv('No estoque das processadoras',waste.atProcessors);p.kv('Espalhado',city.buildings.reduce((n,b)=>n+(b.litter||0),0));
+      p.note('A equipe da coletora busca o lixo e entrega às processadoras. Reciclagem: 2 lixos → 1 pedra. Compostagem: 4 lixos → 2 adubos. Ambas exigem trabalho e insumos entregues.');
       p.table([{label:'Instalação',weight:2},{label:'No estoque'},{label:'Espalhado'}],city.buildings.filter(b=>(b.inventory.lixo||b.litter)&&this.matches(name(b.entity))).sort((a,b)=>(b.inventory.lixo+b.litter)-(a.inventory.lixo+a.litter)).map(b=>({cells:[name(b.entity),b.inventory.lixo,b.litter||0],click:()=>{this.openBuilding(b.id);this.detailTab='stock';},color:b.litter?C.red:C.gray})));
-      p.heading('COLETA E PROCESSAMENTO');for(const b of city.economy.businesses.filter(b=>['waste_collector','recycler'].includes(b.type)))p.card(name(b.entity),`${BUILDING_TYPES[b.type].label} / ${b.workers.length} funcionários`,()=>this.openBuilding(b.id),false,C.green);return;
+      p.heading('COLETA E PROCESSAMENTO');
+      for(const b of city.economy.businesses.filter(b=>['waste_collector','recycler','composting'].includes(b.type))) {
+        const owner=city.economy.citizen(b.ownerId),crew=b.workers.length+(owner?1:0),minimum=b.type==='composting'?4:2;
+        const status=!crew?'Sem equipe':!owner && b.balance<b.wage?'Sem caixa para salários':b.type==='waste_collector'?inventoryFree(b)<2?'Estoque lotado':b.inventory.lixo?'Aguardando entrega à processadora':'Aguardando coleta':b.inventory.lixo<minimum?(b.incoming.lixo?'Lixo em transporte':'Sem lixo suficiente'):'Insumo disponível para processamento';
+        p.card(name(b.entity),`${BUILDING_TYPES[b.type].label} / ${crew} profissionais / ${status}`,()=>this.openBuilding(b.id),false,status==='Sem equipe'||status==='Sem caixa para salários'?C.red:C.green);
+        p.kv('Lixo no estoque / a receber',`${b.inventory.lixo} / ${b.incoming.lixo||0}`);p.kv('Lixo processado',b.wasteProcessed||0);
+        if(b.type==='recycler')p.kv('Pedras produzidas',b.recycledStone||0);
+        if(b.type==='composting')p.kv('Adubo produzido',b.compostProduced||0);
+      }
+      return;
     }
     p.metrics([['BANHEIROS',facilities.length,C.cyan],['SUJOS',dirty.length,dirty.length?C.red:C.green],['LIMPEZAS',system.cleaned,C.green]]);this.filterButtons(p);
     const access={home:'Moradia privada',employees:'Funcionários',public:'Público gratuito',paid:'Público pago'},filter=this.filter();

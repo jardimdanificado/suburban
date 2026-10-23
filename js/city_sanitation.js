@@ -165,31 +165,61 @@ export class CitySanitation {
     }
     for (const f of this.facilities.values()) if (f.occupantId && (!this.city.society.citizen(f.occupantId) || this.city.minute >= f.busyUntil)) f.occupantId = null;
   }
+  wasteMetrics() {
+    const city=this.city,buildings=city.buildings.filter(b=>!b.entity.destroyed);
+    const loads=city.logistics.shipments.filter(s=>s.good==='lixo' && !['delivered','cancelled'].includes(s.status));
+    const processors=buildings.filter(b=>['recycler','composting'].includes(b.type));
+    return {
+      awaiting:buildings.filter(b=>!['waste_collector','recycler','composting'].includes(b.type)).reduce((n,b)=>n+(b.inventory.lixo||0)+(b.litter||0),0),
+      atCollectors:buildings.filter(b=>b.type==='waste_collector').reduce((n,b)=>n+(b.inventory.lixo||0)+(b.litter||0),0),
+      atProcessors:processors.reduce((n,b)=>n+(b.inventory.lixo||0)+(b.litter||0),0),
+      collecting:loads.filter(s=>s.purpose==='waste-collection').reduce((n,s)=>n+s.quantity,0),
+      transferring:loads.filter(s=>s.purpose!=='waste-collection').reduce((n,s)=>n+s.quantity,0),
+      total:city.goodsStock('lixo'),processed:city.economy.consumed.lixo,
+    };
+  }
   hourly() {
     this.rebalanceWaiting();
     for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : 60)) this.requestCleaning(f.id);
-    const collectors = this.city.economy.businesses.filter(b => b.type === 'waste_collector');
-    for (const b of this.city.buildings.filter(b => !b.entity.destroyed)) {
-      // Spilled waste remains visible and conserved; free space lets it return to the bin.
-      if (b.litter > 0) { const n = Math.min(b.litter, inventoryFree(b)); b.inventory.lixo += n; b.litter -= n; }
-      if (b.inventory.lixo < 12 || ['waste_collector', 'recycler'].includes(b.type)) continue;
-      const collector = collectors.find(c => inventoryFree(c) >= 3); if (!collector) continue;
-      const quantity = Math.min(24, b.inventory.lixo, inventoryFree(collector)), fee = this.city.currency.price(200 + quantity * 50);
-      const f = [...this.facilities.values()].find(f => f.buildingId === b.id), payer = ['residential', 'popular_housing', 'luxury_housing'].includes(b.type) ? b.units[0]?.ownerId : f ? this.payer(f) : b.accountId;
-      if (!payer) continue;
-      const order = this.city.logistics.order(b, collector, 'lixo', quantity, 0, { payerAccountId: payer, purpose: 'waste-collection', serviceFee: fee, serviceAccountId: collector.accountId });
-      if (order) this.collected += quantity;
+    const city=this.city;
+    const collectors=city.economy.businesses.filter(b=>b.type==='waste_collector');
+    const processors=city.economy.businesses.filter(b=>['recycler','composting'].includes(b.type));
+    const activeLoads=()=>city.logistics.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
+    for (const b of city.buildings.filter(b=>!b.entity.destroyed)) {
+      // Keep spilled and stored waste conserved while deliveries clear bin space.
+      if (b.litter>0) {const n=Math.min(b.litter,inventoryFree(b));b.inventory.lixo+=n;b.litter-=n;}
+      if(b.inventory.lixo<2 || ['waste_collector','recycler','composting'].includes(b.type))continue;
+      if(activeLoads().some(s=>s.seller===b && s.purpose==='waste-collection'))continue;
+      const options=collectors.filter(c=>inventoryFree(c)>=2 && city.economy.connected(c,b)).sort((a,d)=>inventoryFree(d)-inventoryFree(a)||a.id-d.id);
+      const f=[...this.facilities.values()].find(f=>f.buildingId===b.id);
+      let payer=['residential','popular_housing','luxury_housing'].includes(b.type)?b.units[0]?.ownerId:f?this.payer(f):b.accountId;
+      if(!b.active)payer=b.units[0]?.ownerId||payer;
+      if(!payer)continue;
+      for(const collector of options) {
+        const quantity=Math.min(24,b.inventory.lixo,inventoryFree(collector));
+        const fee=Math.ceil(city.currency.price(200+quantity*50)*(payer==='treasury'?1.5:1));
+        const order=city.logistics.order(b,collector,'lixo',quantity,0,{payerAccountId:payer,purpose:'waste-collection',serviceFee:fee,serviceAccountId:collector.accountId});
+        if(order)break;
+      }
     }
-    for (const recycler of this.city.economy.businesses.filter(b => b.type === 'recycler')) for (const seller of collectors) {
-      const n = Math.min(24, seller.inventory.lixo, inventoryFree(recycler), Math.max(0, 24 - recycler.inventory.lixo - (recycler.incoming.lixo || 0)));
-      if (n > 0) this.city.logistics.order(seller, recycler, 'lixo', n, this.city.economy.goods.lixo.price);
+    // Alternate destinations so recycling and composting both receive physical inputs.
+    const offset=(this.processorCursor||0)%Math.max(1,processors.length);
+    const ordered=[...processors.slice(offset),...processors.slice(0,offset)];this.processorCursor=offset+1;
+    for(const processor of ordered) {
+      let need=Math.max(0,12-processor.inventory.lixo-(processor.incoming.lixo||0));
+      for(const seller of collectors) {
+        const quantity=Math.min(24,seller.inventory.lixo,inventoryFree(processor),need);
+        if(quantity>0 && city.logistics.order(seller,processor,'lixo',quantity,city.economy.goods.lixo.price,{purpose:'waste-processing'}))need-=quantity;
+      }
     }
   }
+
   recycle(b, c) {
     if (b.inventory.lixo < SANITATION_RULES.wasteToStone) return false;
     b.recyclingLabor = (b.recyclingLabor || 0) + 1 + (c.skills.recycling || 0) / 60;
     if (b.recyclingLabor >= 8) {
-      b.recyclingLabor -= 8; b.inventory.lixo -= SANITATION_RULES.wasteToStone; b.inventory.pedra++;
+      b.recyclingLabor -= 8; b.inventory.lixo -= SANITATION_RULES.wasteToStone; b.inventory.pedra++; b.recycledStone=(b.recycledStone||0)+1; b.wasteProcessed=(b.wasteProcessed||0)+SANITATION_RULES.wasteToStone;
+      this.city.history.record('production','Reciclagem: lixo transformado em pedra.',[b.accountId],{good:'pedra',quantity:1,waste:SANITATION_RULES.wasteToStone});
       this.city.economy.consumed.lixo += SANITATION_RULES.wasteToStone; this.city.economy.produced.pedra++;
       this.city.economy.recordGoods('recycling-input', 'lixo', SANITATION_RULES.wasteToStone, b.id, null); this.city.economy.recordGoods('recycling-output', 'pedra', 1, null, b.id);
     }

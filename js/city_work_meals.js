@@ -1,3 +1,5 @@
+import { CROPS } from './city_economy.js';
+import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 
 export const WORK_MEAL_RULES = { units: 3, foodThreshold: 45, stockPerWorker: 6, voucherMinimum: 3000, voucherPriceMultiple: 6, duration: 15 };
@@ -7,7 +9,7 @@ export class CityWorkMeals {
     const b = this.city.building(c.jobId) || c.businessIds.map(id => this.city.building(id)).find(b => b?.active && this.offer(b)), hour = this.city.hour;
     return b?.active && (b.workers.includes(c.id) || b.ownerId === c.id) && hour >= (b.type === 'carrier' ? 7 : 8) && hour < (b.type === 'carrier' ? 20 : 17) ? b : null;
   }
-  foodGoods() { return Object.keys(this.city.economy.goods).filter(g => !['trigo', 'girassol', 'oleo', 'pedra', 'sementes', 'lixo'].includes(g)); }
+  foodGoods() { return [...Object.keys(CROPS).filter(g=>!['trigo','girassol'].includes(g)),...INDUSTRIAL_FOODS,'pao']; }
   offer(holder, citizen = null) {
     if (holder.type === 'bakery' && holder.inventory.pao >= WORK_MEAL_RULES.units) return { good: 'pao', quantity: WORK_MEAL_RULES.units, inputs: { pao: WORK_MEAL_RULES.units }, quality: 1 };
     const recipes = holder.type === 'bakery' ? { pao: this.city.economy.recipes.pao } : { ...Object.fromEntries(this.foodGoods().map(g => [`single_${g}`, { inputs: { [g]: WORK_MEAL_RULES.units }, quality: 1 }])), ...this.city.economy.recipes };

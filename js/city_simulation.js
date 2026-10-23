@@ -58,7 +58,7 @@ export class CitySimulation {
     this.buildings = [];
     this.citizens = [];
     this.units = new Map();
-    this.accounts = new Map([['treasury', { name: 'Prefeitura', balance: 0 }], ['supplier', { name: 'Economia externa', balance: 0 }]]);
+    this.accounts = new Map([['treasury', { name: 'Prefeitura', balance: 0, totalRevenue: 0, totalExpenses: 0 }], ['supplier', { name: 'Economia externa', balance: 0 }]]);
     this.occupied = new Set();
     this.events = [];
     this.history = new CityHistory(this);
@@ -116,8 +116,10 @@ export class CitySimulation {
     if (!a || !b || !Number.isSafeInteger(amount) || amount < 0 || a.balance < amount) return false;
     if (from === to || amount === 0) return true;
     a.balance -= amount; b.balance += amount;
-    if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
-    if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
+    if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
+    else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
+    if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
+    else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
     this.history.transaction(from, to, amount, reason);
     this.ledger.push({ minute: this.minute, from, to, amount, reason });
     if (this.ledger.length > 1000) this.ledger.shift();
@@ -159,7 +161,7 @@ export class CitySimulation {
     const access = hub ? findTerrainPath(this.world, terrain.door, hub, this.occupied, { extraBlocked: (xx, yy) => (xx >= x && xx < x + width && yy >= y && yy < y + depth) || this.development.plots.some(p => p.id !== plotId && xx >= p.x && xx < p.x + p.width && yy >= p.y && yy < p.y + p.depth) }) : [];
     if (access === null) return this.fail('Este lote está isolado. Escolha um local conectado à cidade por terra firme.');
     if (kind !== 'open-air' && this.citizens.some(c => !c.entity.destroyed && c.entity.x >= x && c.entity.x < x + width && c.entity.y >= y && c.entity.y < y + depth)) return this.fail('Há cidadãos neste terreno. Aguarde a passagem deles.');
-    const count = width * depth * floors, stone = kind === 'open-air' ? 0 : count * DEVELOPMENT_RULES.stonePerCell, capital = PUBLIC_TYPES.has(type) && ownerAccountId === 'treasury' ? this.currency.price(50000) : 0;
+    const count = width * depth * floors, stone = kind === 'open-air' ? 0 : count * DEVELOPMENT_RULES.stonePerCell, capital = type !== 'townhall' && PUBLIC_TYPES.has(type) && ownerAccountId === 'treasury' ? this.currency.price(50000) : 0;
     const plot = this.development.plots.find(p => p.id === plotId);
     if (!free && (!plot || plot.ownerId !== ownerAccountId || plot.buildingId || plot.x !== x || plot.y !== y || width > plot.width || depth > plot.depth)) return this.fail('É necessário comprar um terreno compatível antes de construir.');
     if (!free && stone && (!materialSource || materialSource.inventory.pedra < stone)) return this.fail(`Obra precisa de ${stone} pedras entregues no terreno.`);
@@ -168,8 +170,16 @@ export class CitySimulation {
     const b = { id: entity.id, entity, type, constructionKind: kind, width, depth, floors, color: spec.color, condition: 100, units: [], balance: 0, jobs: Math.min(spec.jobs ? Math.max(spec.jobs, Math.floor(count / 6)) : 0, 32), wage: 4 + Math.floor(this.random() * 3), stock: 0, workers: [], terrain, door: terrain.door };
     this.economy.setupBuilding(b);
     entity.properties.cityBuilding = b;
-    b.accountId = `business:${b.id}`;
-    this.accounts.set(b.accountId, b);
+    b.accountId = type === 'townhall' ? 'treasury' : `business:${b.id}`;
+    if(type==='townhall') {
+      // The municipal seat uses the existing treasury account, including funds issued before its construction.
+      // Registering it again would count the same currency twice in the money supply.
+      for(const field of ['balance','totalRevenue','totalExpenses']) Object.defineProperty(b,field,{
+        get:()=>this.accounts.get('treasury')[field]||0,
+        set:value=>{this.accounts.get('treasury')[field]=value;},
+        configurable:true,enumerable:true,
+      });
+    } else this.accounts.set(b.accountId, b);
     if (!free && stone) { materialSource.inventory.pedra -= stone; this.economy.consumed.pedra += stone; this.economy.recordGoods('construction', 'pedra', stone, materialSource.id, b.id); }
     this.transfer('treasury', b.accountId, capital, 'Capital inicial');
     for (let z = 0; z < floors; z++) this.housing.addFloor(b, z, ownerAccountId);
@@ -406,7 +416,7 @@ export class CitySimulation {
       if (home && this.society.isAdult(c) && this.housing.units(home).every(u => u.forSale)) this.housing.buyHome(c, home);
     }
     const mayor = this.economy.citizen(this.economy.mayorId);
-    if (mayor) for (const b of this.buildings.filter(b => (PUBLIC_TYPES.has(b.type) || b.municipal) && !b.entity.destroyed)) {
+    if (mayor) for (const b of this.buildings.filter(b => b.accountId !== 'treasury' && (PUBLIC_TYPES.has(b.type) || b.municipal) && !b.entity.destroyed)) {
       const grant = Math.max(0, this.currency.price(20000) - b.balance);
       this.transfer('treasury', b.accountId, Math.min(grant, this.treasury), 'Orçamento autorizado pelo prefeito');
     }

@@ -102,6 +102,12 @@ function drawCitySites(ui) {
   }
   for (const project of city.development.projects) {
     if (project.service !== 'road' || project.status === 'completed' || project.cancelled) continue;
+    const entity = selected && !selected.destroyed ? selected : null;
+    const building = entity?.properties.cityBuilding, citizen = entity?.properties.citizen;
+    const selectedContract = cityUI.visible && cityUI.active?.selectedProjectId === project.id;
+    const selectedBuilder = building?.type === 'builder' && project.builderId === building.id;
+    const selectedWorker = citizen?.task === 'construction' && citizen.workProjectId === project.id;
+    if (!selectedContract && !selectedBuilder && !selectedWorker) continue;
     ctx.strokeStyle = '#f8b800'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.beginPath();
     project.route.forEach((p, i) => { const point = cityPoint(p.x, p.y); if (point) i ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y); }); ctx.stroke();
   }

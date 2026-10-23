@@ -4,7 +4,7 @@ import { inventoryFree, initializeInventory } from './city_inventory.js';
 export class CityLogistics {
   constructor(city) { this.city = city; this.shipments = []; this.nextId = 1; this.delivered = 0; }
   demandMetrics() {
-    const city=this.city, shipments=this.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
+    const city=this.city, shipments=this.shipments.filter(s=>!['delivered','cancelled'].includes(s.status) && city.building(s.carrierId)?.type!=='waste_collector');
     const carriers=city.economy.businesses.filter(b=>b.type==='carrier');
     const drivers=carriers.reduce((n,b)=>n+(b.balance>=b.wage?b.workers.filter(id=>city.society.citizen(id)).length:0)+(city.economy.citizen(b.ownerId)?1:0),0);
     const waiting=shipments.filter(s=>s.status!=='waiting-space' && (!s.driverId || !s.carrierId));
@@ -23,7 +23,7 @@ export class CityLogistics {
     if(!carriers.length)return;
     const jobs=this.shipments.filter(s=>!['delivered','cancelled','waiting-space'].includes(s.status));
     const load=new Map(carriers.map(b=>[b.id,jobs.filter(s=>s.driverId && s.carrierId===b.id).reduce((n,s)=>n+Math.max(8,s.routeLength),0)]));
-    for(const s of jobs.filter(s=>!s.driverId).sort((a,b)=>Number(b.purpose==='critical-infrastructure')-Number(a.purpose==='critical-infrastructure')||a.createdAt-b.createdAt).slice(0,64)) {
+    for(const s of jobs.filter(s=>!s.driverId && this.city.building(s.carrierId)?.type!=='waste_collector').sort((a,b)=>Number(b.purpose==='critical-infrastructure')-Number(a.purpose==='critical-infrastructure')||a.createdAt-b.createdAt).slice(0,64)) {
       const options=carriers.filter(b=>city.economy.connected(b,{id:`cargo:${s.id}`,door:s.position}));
       options.sort((a,b)=>(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);
       const carrier=options[0];if(!carrier)continue;
@@ -34,10 +34,13 @@ export class CityLogistics {
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false } = {}) {
     const city = this.city;
-    if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential') || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 24 || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
+    if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 24 || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
     const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && (city.economy.citizen(b.ownerId) || b.workers.length && b.balance >= b.wage) && city.economy.connected(b, seller));
     let carrier = carriers.sort((a, b) => this.shipments.filter(s => s.carrierId === a.id && !['delivered','cancelled'].includes(s.status)).length - this.shipments.filter(s => s.carrierId === b.id && !['delivered','cancelled'].includes(s.status)).length)[0];
+    // Collection firms send their own crews, independently of general freight capacity.
+    const wasteOperator=purpose==='waste-collection'?buyer:purpose==='waste-processing' && seller.type==='waste_collector'?seller:null;
+    if(wasteOperator?.active && (city.economy.citizen(wasteOperator.ownerId) || wasteOperator.workers.length && wasteOperator.balance>=wasteOperator.wage))carrier=wasteOperator;
     if(requireCarrier && !carrier)return false;
     let fee = carrier ? city.currency.price(Math.max(120, (route.length + Math.abs(carrier.door.x - seller.door.x) + Math.abs(carrier.door.y - seller.door.y)) * 12 + quantity * 4)) : 0;
     fee = Math.ceil(fee*(payerAccountId==='treasury'?1.5:1)) + (requireCarrier?city.currency.price(payerAccountId==='treasury'?180:120):0);
@@ -103,7 +106,7 @@ export class CityLogistics {
     const priority = s => s.purpose==='critical-infrastructure'?-2:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
     pending.sort((a, b) => priority(a) - priority(b) || a.createdAt - b.createdAt || a.id - b.id);
     for (const s of pending) {
-      if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential') || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
+      if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential' && !(s.good==='lixo' && s.purpose==='waste-collection')) || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
       let c = city.society.citizen(s.driverId);
       if (c?.workMeal) continue;
       if (c && (city.urgentNeed(c) || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }
@@ -153,6 +156,7 @@ export class CityLogistics {
         if (s.serviceFee) city.transfer(s.accountId, s.serviceAccountId, s.serviceFee, 'Serviço de coleta');
         const buyerAccount = city.accounts.get(s.payerAccountId || s.buyer.accountId);
         if (buyerAccount?.entity?.properties.cityBuilding) { buyerAccount.totalExpenses += s.cost + (carrier?.active ? s.fee : 0) + (s.serviceFee || 0); if (s.purpose === 'work-meals') buyerAccount.mealPurchaseCost += s.cost + (carrier?.active ? s.fee : 0); }
+        if(s.purpose==='waste-collection')city.sanitation.collected+=s.quantity;
         city.economy.recordGoods('delivery', s.good, s.quantity, s.seller.id, s.buyer.id);
         city.history.record('sale', `${s.quantity} ${city.economy.goods[s.good].label}: ${city.accountName(s.seller.accountId)} → ${city.accountName(s.payerAccountId)}.`,[s.seller.accountId,s.payerAccountId,s.buyer.accountId],{amount:s.cost,good:s.good,quantity:s.quantity,shipmentId:s.id});
         city.history.record('service',s.buyer.lampPost?'Abastecimento de lamparina concluído.':'Frete entregue.',[carrier?.accountId,s.payerAccountId,c.accountId,s.buyer.accountId],{amount:s.fee+s.serviceFee,shipmentId:s.id,provider:carrier?.entity.properties.name||'Transporte próprio',quantity:s.quantity});

@@ -360,3 +360,21 @@ As sedes desses prestadores não ocupam o limite de duas obras públicas comuns.
 Contratos de construção ainda sem trabalho realizado são distribuídos entre as construtoras disponíveis; serviços já iniciados mantêm a prestadora. Fretes sem motorista podem passar a novas transportadoras, preservando carga e valores em caução. Pedidos que estavam em transporte próprio só recebem transportadora se o pagador conseguir reservar o frete. A redistribuição examina até 64 fretes por hora, priorizando os materiais das sedes essenciais e as cargas mais antigas.
 
 Faxinas novas e ainda não iniciadas são distribuídas conforme a fila de cada empresa e sua equipe. Banheiros abaixo de 35% de limpeza dispensam a espera pelo intervalo normal. Serviços pagos pela prefeitura respeitam o multiplicador municipal de 1,5. O painel de demandas informa a resposta de investimento, o projeto de sede ou o impedimento encontrado, como falta de terreno ou financiamento.
+
+
+## Conta única da prefeitura
+
+O prédio da Prefeitura usa a própria conta do tesouro municipal. O saldo mostrado na ficha do prédio, na barra e no painel Governo é o mesmo: impostos, emissão, salários da sede, benefícios, obras e contratos movimentam essa conta. A sede não recebe um segundo capital operacional nem repasses do tesouro para si mesma. Entradas e saídas acumuladas e o histórico do prédio também são os do município.
+
+O dinheiro é contado uma única vez na oferta monetária. Reservas de contratos continuam nas respectivas cauções até o pagamento ou estorno; outras empresas públicas e privadas conservam suas contas próprias. A conta municipal permanece disponível se a sede for demolida, e uma sede reconstruída volta a mostrar o mesmo saldo.
+
+
+## Coleta e processamento de lixo
+
+Coletoras, recicladoras e unidades de compostagem participam do investimento em serviços essenciais: a acumulação de resíduos gera projetos com financiamento de materiais e operação, sem depender da fila comum de empreendimentos. Os funcionários e proprietários da coletora podem buscar o lixo e entregar a carga às processadoras; essas viagens não exigem que exista primeiro uma transportadora independente.
+
+A coleta pode ser pedida a partir de duas unidades no imóvel, com pagamento pelo responsável. O serviço municipal custa 1,5 vez o valor comum. O pedido reserva lixo e dinheiro; o contador de coletado só aumenta quando a carga chega à coletora. Imóveis inativos também podem ter seus resíduos coletados, com cobrança ao proprietário. Não são criados pedidos repetidos para uma coleta que já está em andamento.
+
+Lixo das coletoras segue por frete físico para reciclagem e compostagem, alternando os destinos. Dois resíduos geram uma pedra após trabalho na recicladora; quatro geram dois adubos após trabalho na compostagem. Ambos registram consumo real, produtos gerados e histórico de produção. Adubo é insumo das fazendas e não pode ser usado como comida dos funcionários.
+
+O painel Saneamento → Resíduos separa lixo aguardando coleta, em transporte de coleta, armazenado nas coletoras, em transferência e nas processadoras. As fichas das empresas mostram equipe, estoque, cargas a receber, resíduos processados, produção e impedimentos como falta de trabalhadores, dinheiro ou insumos.

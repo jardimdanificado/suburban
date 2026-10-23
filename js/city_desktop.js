@@ -45,6 +45,8 @@ export class CityDesktop {
   setView(id){this.active?.setView?.(id);}
   setFilter(id){this.active?.setFilter?.(id);}
   setSelection(entity,unitId=null){
+    for(const window of this.manager.windows)window.state.selectedProjectId=null;
+    if(!entity)this.lastSelected=null;
     if(!entity)return;const citizen=entity.properties?.citizen,building=entity.properties?.cityBuilding;if(!citizen&&!building)return;
     const state=this.create(`${citizen?'person':'building'}:${entity.id}`,citizen?'people':'buildings',{title:entity.properties.name,entity,unitId,kind:'dossier'});
     if(unitId){state.unitId=unitId;state.detailTab='units';}this.lastSelected=entity;
