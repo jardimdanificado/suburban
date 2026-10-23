@@ -57,7 +57,7 @@ export class CityPolitics {
     election.eventId=event.id;this.active=election;
   }
   voterScore(voter,candidate,platform) {
-    const city=this.city,relation=city.society.getRelation(voter,candidate),preferred=this.platform(voter);
+    const city=this.city,relation=city.relationships.view(voter,candidate),preferred=this.platform(voter);
     const civic=city.reputation.score(candidate,'civic'),honesty=candidate.traits?.honesty??.5;
     return candidate.skills.governance*.45+civic*.25+(relation?.trust??15)*.1+honesty*8+
       (preferred===platform?16:0)+(voter.id===candidate.id?8:0)+

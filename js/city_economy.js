@@ -101,8 +101,8 @@ export class CityEconomy {
   investInHousing(initial = false) { this.city.housing.invest(initial); }
   assignHomes() { this.city.housing.assign(); }
   hiringScore(c, b) {
-    const skill = c.skills[JOB_SKILL[b.type]] || 0, owner = this.citizen(b.ownerId);
-    const relation = owner ? this.city.society.getRelation(owner, c) : null;
+    const skill = c.skills[JOB_SKILL[b.type]] || 0, owner = this.city.relationships.businessPerson(b);
+    const relation = owner ? this.city.relationships.view(owner, c) : null;
     return skill * .75 + (this.city.reputation.score(c, 'reliability') - 50) * .15 + ((c.traits?.diligence ?? .5) - .5) * 8 + (relation ? relation.trust * .15 + relation.affection * .1 : 0);
   }
   hire() {
@@ -110,6 +110,7 @@ export class CityEconomy {
     for (const c of this.city.citizens) if (c.jobId && c.id !== this.mayorId) {
       const b = this.city.building(c.jobId);
       if (!b || !b.active || (b.balance < b.wage && this.city.minute - c.lastPaidAt > 1440)) this.leaveJob(c);
+      else if (!c.deliveryId && !c.cleaningJobId && !this.city.relationships.willingToWork(c,b)) this.leaveJob(c,'Conflito pessoal com o gestor');
     }
     const offers = this.city.buildings.filter(b => b.active && b.jobs > 0 && !b.entity.destroyed);
     const available = () => this.city.citizens.filter(c => this.city.society.isAdult(c) && !c.entity.destroyed && !c.jobId && !c.businessIds.length && !this.city.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed') && c.id !== this.mayorId);
@@ -124,7 +125,7 @@ export class CityEconomy {
     }
     offers.sort((a, b) => Number(a.workers.length > 0) - Number(b.workers.length > 0) || (priority.indexOf(a.type) < 0 ? 99 : priority.indexOf(a.type)) - (priority.indexOf(b.type) < 0 ? 99 : priority.indexOf(b.type)));
     const recruit = (b, count) => {
-      const candidates = available().sort((a, c) => this.hiringScore(c, b) - this.hiringScore(a, b) || a.id - c.id);
+      const candidates = available().filter(c=>this.city.relationships.willingToWork(c,b)).sort((a, c) => this.hiringScore(c, b) - this.hiringScore(a, b) || a.id - c.id);
       for (const c of candidates.slice(0, Math.min(count, b.jobs - b.workers.length))) {
         c.jobId = b.id; c.profession = JOB_SKILL[b.type]; b.workers.push(c.id); this.city.history.employment(c,b,'contratação');
         this.city.log(`${c.entity.properties.name} foi contratado em ${b.entity.properties.name}, considerando habilidade e vínculos com o proprietário.`, 'work', [c.id, b.ownerId].filter(Boolean), { kind: 'employment', buildingId: b.id, skill: c.skills[JOB_SKILL[b.type]], score: this.hiringScore(c, b) });
@@ -376,7 +377,7 @@ export class CityEconomy {
         const target = INDUSTRIES[buyer.type]?.inputs[good] ? INDUSTRIES[buyer.type].inputs[good]*6 : buyer.type === 'bakery' ? 24 : 18;
         if (buyer.inventory[good] + (buyer.incoming[good] || 0) > target / 2) continue;
         let remaining = Math.max(0, target - buyer.inventory[good] - (buyer.incoming[good] || 0));
-        const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || INDUSTRIES[b.type]?.outputs[good]) && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) + this.city.reputation.providerPenalty(a) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y) - this.city.reputation.providerPenalty(b));
+        const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || INDUSTRIES[b.type]?.outputs[good]) && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) + this.city.reputation.providerPenalty(a) + this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),a) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y) - this.city.reputation.providerPenalty(b) - this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),b));
         for (const seller of sellers) {
           const reserve = buyer.workers.length * buyer.wage * 90;
           const quantity = Math.min(24, inventoryFree(buyer), remaining, seller.inventory[good], Math.max(0, Math.floor((buyer.balance - reserve) / this.goods[good].price)));
@@ -395,7 +396,7 @@ export class CityEconomy {
   mealScore(c, b) {
     const offer = this.mealOffer(b, c);
     if (!offer || offer.price > (this.city.accounts.get(this.city.payerFor(c))?.balance || 0)) return Infinity;
-    return Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y) + offer.price / Math.max(1, this.city.currency.price(100)) * (.65 + (c.traits?.frugality ?? .5) * .7) - this.mealTaste(c, offer) * 45 + this.city.reputation.providerPenalty(b);
+    return Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y) + offer.price / Math.max(1, this.city.currency.price(100)) * (.65 + (c.traits?.frugality ?? .5) * .7) - this.mealTaste(c, offer) * 45 + this.city.reputation.providerPenalty(b) + this.city.relationships.businessPenalty(c,b);
   }
   enjoyMeal(c, offer) {
     const taste = this.mealTaste(c, offer);

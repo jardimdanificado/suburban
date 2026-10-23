@@ -1,3 +1,4 @@
+import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js';
 import { CityReputation } from './city_reputation.js';
@@ -18,7 +19,7 @@ import { CitySociety } from './city_society.js';
 import { CityServiceInvestment } from './city_service_investment.js';
 import { World, WorldClock } from './world.js';
 
-const prototypes = new Map([CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
+const prototypes = new Map([CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));
@@ -30,7 +31,7 @@ const same = (a, b) => a && a.length === b.length && a.every((v, i) => Object.is
 /** Incremental object graph transport. References (including cycles) retain their identity.
  * Only changed nodes cross the worker boundary; journals are not recopied every frame. */
 export class CityStateGraph {
-  constructor() { this.ids = new WeakMap(); this.objects = new Map(); this.previous = new Map(); this.nextId = 1; this.historyCursors = new Map(); this.mapChildren = []; }
+  constructor() { this.ids = new WeakMap(); this.objects = new Map(); this.previous = new Map(); this.nextId = 1; this.historyCursors = new Map(); this.mapChildren = []; this.relationNodes = new Map(); }
   ref(value) {
     if (value === null || typeof value !== 'object') return value;
     const id = this.ids.get(value);
@@ -50,6 +51,8 @@ export class CityStateGraph {
       this.objects.set(id, object);
       let kind, data;
       const previous = this.previous.get(id);
+      const pair=this.relationNodes.get(id);
+      if(object._socialPair && previous && pair?.revision===object.revision){for(const child of pair.children)visited.add(child);return id;}
       if (previous?.kind === 'FrozenObject' || previous?.kind === 'FrozenArray') return id;
       if (object === map && this.mapRevision === mapRevision && this.previous.has(id)) {
         for (const child of this.mapChildren) visited.add(child);
@@ -80,6 +83,7 @@ export class CityStateGraph {
           data.push(key, reference(descriptor.value));
         }
       }
+      if(object._socialPair)this.relationNodes.set(id,{revision:object.revision,children:[object.views,object.views[object.a],object.views[object.b],object.names,object.contexts].map(child=>this.ids.get(child)).filter(child=>child!=null)});
       const old = this.previous.get(id);
       if (!old || old.kind !== kind || !same(old.data, data)) {
         nodes.push({ id, kind, data }); this.previous.set(id, { kind, data });
@@ -92,7 +96,7 @@ export class CityStateGraph {
     const rootId = visit(root);
     this.mapRevision = mapRevision;
     this.mapChildren = Array.isArray(map) ? map.map(row => this.ids.get(row)) : [];
-    for (const id of this.objects.keys()) if (!visited.has(id)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); }
+    for (const id of this.objects.keys()) if (!visited.has(id)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); }
     return { rootId, nodes, removed, histories, nextId: this.nextId };
   }
   apply(packet) {
@@ -138,7 +142,7 @@ export class CityStateGraph {
       if(kind==='FrozenObject'||kind==='FrozenArray')Object.freeze(this.objects.get(id));
       this.previous.set(id,{kind,data});
     }
-    for (const id of packet.removed) {this.objects.delete(id);this.previous.delete(id);this.historyCursors.delete(id);}
+    for (const id of packet.removed) {this.objects.delete(id);this.previous.delete(id);this.historyCursors.delete(id);this.relationNodes.delete(id);}
     this.nextId = Math.max(this.nextId, packet.nextId);
     this.mapRevision = root.city.world.revision;
     this.mapChildren = Array.isArray(root.city.world.map) ? root.city.world.map.map(row=>this.ids.get(row)) : [];

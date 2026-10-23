@@ -50,11 +50,11 @@ export class CityHousing {
       }
     }
   }
-  shareHome(c, partner) {
+  shareHome(c, partner, reason = 'partner') {
     const home=this.home(partner);
-    if(!home || partner.homeShareWith===c.id)return false;
+    if(!home || partner.homeShareWith===c.id || reason==='friend' && (partner.homeShareWith || !this.city.relationships.canShareHome(partner,c) || this.residents(home).length>=4))return false;
     this.release(c);
-    c.homeShareWith=partner.homeShareWith||partner.id;c.homeId=home.id;c.homeUnitId=partner.homeUnitId;
+    c.homeShareReason=reason;c.homeShareWith=partner.homeShareWith||partner.id;c.homeId=home.id;c.homeUnitId=partner.homeUnitId;
     c.homelessSince=null;c.task=null;c.path=[];
     for(const child of this.city.citizens.filter(p=>p.guardianId===c.id && !this.city.society.isAdult(p)))this.houseChild(child,c);
     this.city.history.record('housing',`${c.entity.properties.name} passou a compartilhar moradia com ${partner.entity.properties.name}.`,[c.accountId,this.city.building(home.buildingId)?.accountId],{homeId:home.id,regime:this.isSocial(home)?'social':'shared'});
@@ -134,7 +134,8 @@ export class CityHousing {
       if (!this.city.society.isAdult(c)) { const parent = this.city.society.guardian(c); if (parent) this.houseChild(c, parent); continue; }
       const partner = this.city.society.citizen(c.partnerId), partnerHome = partner && this.home(partner);
       if (partnerHome && c.homeId !== partnerHome.id && (!this.home(c) || partner.id<c.id)) this.shareHome(c,partner);
-      if (c.homeShareWith && (!partner || c.homeShareWith !== partner.id)) { this.release(c); c.homeShareWith = null; }
+      if(c.homeShareWith){const host=this.city.society.citizen(c.homeShareWith),shared=this.home(c);const permitted=host && shared && host.homeId===c.homeId && (partner?.homeId===c.homeId || this.city.relationships.canShareHome(host,c));if(!permitted){this.release(c);c.homeShareWith=null;}}
+      if(!this.home(c))for(const relation of this.city.society.relationsFor(c.id).slice(0,6)){const friend=this.city.society.citizen(relation.a===c.id?relation.b:relation.a);if(friend && this.home(friend) && this.shareHome(c,friend,'friend'))break;}
       const current = this.home(c);
       if (current && this.hasBathroom(current)) continue;
       const candidates = [...this.homes.values()].filter(h => this.city.building(h.buildingId) && this.units(h).every(u => !u.tenantId || u.tenantId === c.accountId));

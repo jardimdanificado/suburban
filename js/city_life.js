@@ -15,6 +15,7 @@ export class CityLife {
     this.city.sanitation?.releaseCitizen(c);
     c.path = []; c.task = null; c.workMeal = null; c.entity.destroyed = true;
     this.city.log(`${event.name} morreu: ${cause}, aos ${event.age} anos.`, 'death', [c.id, c.partnerId, ...c.childIds].filter(Boolean), { kind: 'death', ...event });
+    this.city.relationships.onLoss(c,cause);
     return true;
   }
   minute(c) {

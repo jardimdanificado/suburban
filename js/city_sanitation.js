@@ -43,7 +43,7 @@ export class CitySanitation {
     const residents = this.city.housing.residents(home);
     if (residents.some(p => p.id === c.id)) return true;
     if (!residents.length && this.city.units.get(f.unitId)?.ownerId === c.accountId) return true;
-    return residents.some(p => { const r = this.city.society.getRelation(c, p); return r && r.affection >= 65 && r.trust >= 50 && ['close', 'partner'].includes(r.status); });
+    return residents.some(p => { const r = this.city.relationships.view(p,c); return r && r.affection >= 65 && r.trust >= 50 && r.resentment<30; });
   }
   choose(c) {
     const options = [...this.facilities.values()].filter(f => this.allowed(c, f) && (!f.occupantId || f.occupantId === c.id || this.city.minute >= f.busyUntil));

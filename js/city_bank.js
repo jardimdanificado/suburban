@@ -26,7 +26,8 @@ export class CityBank {
     if (!this.policy.creditEnabled || !this.available().includes(bank) || !client || client.entity?.destroyed || !city.society.isAdult(client) || !Number.isSafeInteger(amount) || amount <= 0 || this.loans.some(l => l.clientId === clientId && l.status !== 'paid')) return false;
     const income = client.jobId ? (city.building(client.jobId)?.wage || 0)*240 : client.businessIds?.length ? 20000 : 0;
     const reserve = bank.workers.length*bank.wage*480;
-    if (amount > income*12*city.reputation.creditFactor(client) || amount > Math.max(0,bank.balance-reserve)*.6 || !city.transfer(bank.accountId,clientId,amount,'Empréstimo bancário',{loanId:this.nextId})) return false;
+    const socialFactor=1+city.relationships.personalOpinion(city.relationships.businessPerson(bank),client)/100;
+    if (amount > income*12*city.reputation.creditFactor(client)*socialFactor || amount > Math.max(0,bank.balance-reserve)*.6 || !city.transfer(bank.accountId,clientId,amount,'Empréstimo bancário',{loanId:this.nextId})) return false;
     const loan = { id: this.nextId++, bankId: bank.id, clientId, principal: amount, remaining: amount, interest: 0, rate: this.policy.loanRate * (1.5 - city.reputation.score(client, 'credit') / 100), dailyPayment: Math.ceil(amount/30), dueDay: city.day+1, missed: 0, status: 'active', startedAt: city.minute, paid: 0 };
     this.loans.push(loan);
     city.history.record('credit', `Crédito aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount, rate:loan.rate, loanId:loan.id });
@@ -36,7 +37,7 @@ export class CityBank {
     const city=this.city;
     if(!this.policy.creditEnabled || !this.available().includes(bank) || !Number.isSafeInteger(amount) || amount<=0 || proposal.score<60 || amount>proposal.budget || this.loans.some(l=>l.clientId===founder.accountId && l.purpose==='business' && !['paid','written-off'].includes(l.status)))return false;
     const cash=Math.max(0,bank.balance-bank.workers.length*bank.wage*480);
-    if(amount>cash*.75*Math.min(1,city.reputation.creditFactor(founder)) || !city.transfer(bank.accountId,founder.accountId,amount,'Crédito empresarial para atender demanda',{loanId:this.nextId}))return false;
+    if(amount>cash*.75*Math.min(1,city.reputation.creditFactor(founder)*(1+city.relationships.personalOpinion(city.relationships.businessPerson(bank),founder)/100)) || !city.transfer(bank.accountId,founder.accountId,amount,'Crédito empresarial para atender demanda',{loanId:this.nextId}))return false;
     const loan={id:this.nextId++,bankId:bank.id,clientId:founder.accountId,purpose:'business',businessType:proposal.type,principal:amount,remaining:amount,interest:0,rate:Math.min(this.policy.loanRate,.0005),dailyPayment:Math.ceil(amount/180),dueDay:city.day+1,missed:0,status:'active',startedAt:city.minute,paid:0};
     this.loans.push(loan);
     city.history.record('credit',`Crédito empresarial aprovado para ${city.buildingTypes[proposal.type].label}, com aplicação em terreno, materiais e operação.`,[founder.accountId,bank.accountId],{amount,loanId:loan.id,rate:loan.rate});
@@ -50,13 +51,14 @@ export class CityBank {
   householdFinance() {
     const city = this.city, banks = this.available();
     for (const c of city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c))) {
+      const preferredBanks=banks.length>1?banks.slice().sort((a,b)=>city.relationships.businessPenalty(c,a)-city.relationships.businessPenalty(c,b)):banks;
       for (const deposit of this.deposits.values()) if (deposit.clientId === c.accountId && deposit.balance > 0 && c.balance < this.policy.cashReserve) this.withdraw({id:deposit.bankId},c.accountId,Math.min(deposit.balance,this.policy.cashReserve-c.balance));
       if (!banks.length) continue;
       if (c.balance < city.welfare.policy.cashTarget && (c.jobId || c.businessIds.length) && c.creditAllowed !== false) {
-        for (const bank of banks) if (this.lend(bank,c.accountId,city.welfare.policy.cashTarget-c.balance)) break;
+        for (const bank of preferredBanks) if (this.lend(bank,c.accountId,city.welfare.policy.cashTarget-c.balance)) break;
       }
       const amount = Math.floor(Math.max(0,c.balance-this.policy.cashReserve)*(c.savingsRate ?? .2));
-      if (amount > 0) this.deposit(banks[0],c.accountId,amount);
+      if (amount > 0) this.deposit(preferredBanks[0],c.accountId,amount);
     }
   }
   daily() {

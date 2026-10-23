@@ -1,3 +1,4 @@
+import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js';
 import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
@@ -230,7 +231,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     const city = this.city, society = city.society;
     if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos | ${c.id === city.economy.mayorId ? 'Prefeito' : c.businessIds.length ? 'Empresário' : 'Morador'}`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
-    this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'HABILIDADES'], ['family', 'VÍNCULOS'], ['assets', 'FINANÇAS'], ['history', 'HISTÓRICO']]);
+    this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'HABILIDADES'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['assets', 'FINANÇAS'], ['history', 'HISTÓRICO']]);
     if (this.detailTab === 'profile') {
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
@@ -240,7 +241,9 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.note(city.housing.isSocial(dwelling)?'Moradia popular municipal: ocupação gratuita, sem cobrança de aluguel e sem transferência de propriedade.':'Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
       if (home) { p.kv('Espaço',`${home.x+1}, ${home.y+1} / ${home.z+1}º andar`); p.kv('Regime', city.housing.isSocial(dwelling)?'Moradia social gratuita':home.ownerId === c.accountId ? 'Proprietário' : home.tenantId !== c.accountId && dwelling ? 'Moradia compartilhada' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
       else p.note('Sem moradia', C.red);
-      p.heading('IDENTIDADE E PERSONALIDADE');p.kv('Sobrenomes da família',(c.surnames||[]).join(' / '));
+      p.heading('IDENTIDADE E PERSONALIDADE');
+      p.kv('Gênero',GENDER_LABELS[c.socialProfile.gender]);p.kv('Interesse romântico',ORIENTATION_LABELS[c.socialProfile.orientation]);
+      p.kv('Luto',city.relationships.moodEffect(c)<0?'Em luto':'Sem perda recente');p.kv('Sobrenomes da família',(c.surnames||[]).join(' / '));
       p.meters(Object.entries(TRAIT_LABELS).map(([id,label])=>[label,(c.traits?.[id]??.5)*100,C.cyan]));
       p.note('Dedicação afeta aprendizado e contratação; empatia, honestidade e ceticismo afetam encontros; risco influencia investimentos; frugalidade afeta poupança e preço da refeição; ambição influencia candidaturas.');
       this.reputationPanel(p,c);
@@ -267,9 +270,9 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       if (!society.isAdult(c)) link('Responsável', c.guardianId);
       const pregnancy = society.expecting.find(e => e.id === c.expectingId); if (pregnancy) p.note(`Filho esperado: ${stamp(pregnancy.dueAt)}`, C.pink);
       p.note(`${c.personality.wantsRomance ? 'Aberto a relacionamentos' : 'Prefere ficar solteiro'} / ${c.personality.wantsChildren ? 'Deseja ter filhos' : 'Não planeja filhos'}`);
-      const relations = society.relationsFor(c.id); p.heading(`VÍNCULOS / ${relations.length}`);
-      for (const r of relations) { const other = r.a === c.id ? r.b : r.a; p.button(name(society.citizen(other)?.entity), () => this.openCitizen(other)); p.note(`${relationLabel(r)} | ${r.conversations} conversas`); p.meter('Afeto', r.affection, C.pink); p.meter('Confiança', r.trust, C.cyan); p.meter('Familiaridade', r.familiarity); }
-      if (!relations.length) p.note('Ainda está conhecendo os vizinhos.');
+      this.relationshipPanel(p,c);
+    } else if (this.detailTab === 'memories') {
+      this.socialMemories(p,c);
     } else {
       p.heading('CONTA PESSOAL'); p.kv('Dinheiro disponível', money(c.balance)); p.kv('Salário líquido hoje', money(c.salaryToday));p.kv('Complemento municipal hoje',money(c.wageSubsidyToday||0));p.kv('Complementos recebidos',money(c.wageSubsidyTotal||0));if(c.wageSubsidyUnpaidToday)p.kv('Complemento não pago por falta de caixa',money(c.wageSubsidyUnpaidToday));p.kv('Benefícios recebidos',money(c.benefitsReceived||0));p.kv('Poupança total',money(city.bank.savings(c.accountId)));
       p.buttons([{label:`POUPAR ${Math.round((c.savingsRate??.2)*100)}% DO EXCEDENTE`,click:()=>{city.setCitizenFinance(c.id,{savingsRate:(c.savingsRate??.2)>=.5?0:(c.savingsRate??.2)+.1});}},{label:c.creditAllowed===false?'CRÉDITO AUTOMÁTICO: NÃO':'CRÉDITO AUTOMÁTICO: SIM',click:()=>{city.setCitizenFinance(c.id,{creditAllowed:c.creditAllowed===false});}}]);
@@ -603,6 +606,53 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     p.table([{label:'Instalação',weight:2},{label:'Acesso',weight:1.7},{label:'Limpeza'},{label:'Uso'}],rows.map(f=>({cells:[name(city.building(f.buildingId)?.entity),access[f.access],`${Math.round(f.cleanliness)}%`,f.price?money(f.price):'Grátis'],color:f.cleanliness<25?C.red:f.cleanliness<65?C.gold:C.green,selected:this.selectedFacilityId===f.id,click:()=>{this.selectedFacilityId=f.id;this.resetScroll();}})));
     p.note('Casas: moradores e amigos próximos. Empresas: funcionários e dono. Gratuitos são livres, mesmo imundos. Pagos exigem o valor da entrada.');
   }
+  relationshipPanel(p,c) {
+    const society=this.city.society,all=society.relationsFor(c.id),filter=this.socialFilter||'all';
+    const categories=[['all','TODOS'],['friends','AMIZADES'],['conflicts','CONFLITOS'],['romance','ROMANCE'],['family','FAMÍLIA'],['work','TRABALHO'],['archived','AUSENTES']];
+    p.heading('VÍNCULOS PESSOAIS');p.buttons(categories.map(([id,label])=>({label,selected:filter===id,click:()=>{this.socialFilter=id;this.socialPage=0;this.socialRelationId=null;this.resetScroll();}})));
+    const rows=all.filter(r=>{const v=r.views[c.id],other=r.a===c.id?r.b:r.a;return this.matches(r.names[other]) && (filter==='all'||filter==='friends'&&['friend','close','confidant'].includes(v.status)||filter==='conflicts'&&['enemy','rival','estranged'].includes(v.status)||filter==='romance'&&v.romance!=='none'||filter==='family'&&v.kinship||filter==='work'&&(r.contexts.includes('coworkers')||r.mentorId)||filter==='archived'&&r.active===false);});
+    const page=Math.min(this.socialPage||0,Math.max(0,Math.ceil(rows.length/10)-1));
+    p.note(`${rows.length} vínculos / página ${page+1}. Sentimentos são individuais; amizade e romance são dimensões separadas.`);
+    const contexts={family:'Família',coworkers:'Colegas de trabalho',household:'Mesmo domicílio',neighbors:'Vizinhança'};
+    for(const r of rows.slice(page*10,page*10+10)) {
+      const other=r.a===c.id?r.b:r.a,v=r.views[c.id],back=r.views[other];
+      p.card(r.names[other],`Vê como: ${BOND_LABELS[v.status]} / É visto como: ${BOND_LABELS[back.status]}\n${r.active===false?'Ausente ou falecido / ':''}${r.contexts.map(id=>contexts[id]||id).join(' / ')}`,()=>{this.socialRelationId=r.id;this.resetScroll();},this.socialRelationId===r.id,['enemy','rival','estranged'].includes(v.status)?C.red:C.cyan);
+    }
+    p.buttons([{label:'ANTERIOR',click:()=>{this.socialPage=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.socialPage=page+1;}}]);
+    const selected=rows.find(r=>r.id===this.socialRelationId)||rows[0];
+    if(selected){
+      const other=selected.a===c.id?selected.b:selected.a;
+      p.heading(`RELAÇÃO COM ${selected.names[other]}`);p.kv('Primeiro contato',stamp(selected.since));p.kv('Último contato',stamp(selected.lastContact));p.kv('Conversas',selected.conversations);
+      if(selected.mentorId)p.kv('Mentoria',`${selected.names[selected.mentorId]} oferece orientação`);
+      const show=(observer,target)=>{const v=selected.views[observer];p.heading(`${selected.names[observer]} → ${selected.names[target]}`);p.kv('Vínculo',BOND_LABELS[v.status]);p.kv('Dimensão romântica',ROMANCE_LABELS[v.romance]);p.kv('Afeto',`${Math.round(v.affection)} / de -100 a +100`);p.meters([['Confiança',v.trust,C.cyan],['Respeito',v.respect,C.green],['Ressentimento',v.resentment,C.red],['Receio',v.fear,C.gold]]);if(v.romance!=='none')p.meter('Atração',v.attraction,C.pink);if(v.favorsOwed)p.kv('Ajuda recebida a retribuir',v.favorsOwed);};
+      show(c.id,other);show(other,c.id);
+      if(society.citizen(other))p.button('ABRIR FICHA DA OUTRA PESSOA',()=>this.openCitizen(other));
+      p.button('MEMÓRIAS DESTE VÍNCULO',()=>{this.memoryPersonId=other;this.detailTab='memories';this.memoryPage=0;this.resetScroll();});
+    }
+    if(!rows.length)p.note('Nenhum vínculo corresponde ao filtro.');
+  }
+  socialMemories(p,c) {
+    p.heading('MEMÓRIAS E CRENÇAS');
+    p.note(`Até ${RELATIONSHIP_RULES.memories} recordações e ${RELATIONSHIP_RULES.beliefs} histórias ouvidas por pessoa. Crenças podem estar erradas; o conhecimento se espalha nos encontros.`);
+    if(this.memoryPersonId)p.button(`FILTRANDO VÍNCULO: ${this.city.accountName(`citizen:${this.memoryPersonId}`)} / LIMPAR`,()=>{this.memoryPersonId=null;this.memoryPage=0;this.resetScroll();});
+    p.buttons([['memories','RECORDAÇÕES'],['beliefs','HISTÓRIAS OUVIDAS'],['grief','LUTO']].map(([id,label])=>({label,selected:(this.memoryView||'memories')===id,click:()=>{this.memoryView=id;this.memoryPage=0;this.resetScroll();}})));
+    if(this.memoryView==='grief') {
+      for(const g of c.social.grief){p.heading(g.name,C.pink);p.kv('Perda',stamp(g.startedAt));p.kv('Recuperação prevista',stamp(g.until));p.kv('Intensidade atual',Math.round(g.strength*Math.max(0,(g.until-this.city.minute)/(g.until-g.startedAt))));}
+      if(!c.social.grief.length)p.note('Sem luto recente.');
+      if(c.social.comfortUntil>this.city.minute)p.note('Apoio emocional recebido está amenizando o luto.',C.green);
+      return;
+    }
+    const belief=this.memoryView==='beliefs',rows=[...(belief?c.social.beliefs:c.social.memories)].reverse().filter(m=>(!this.memoryPersonId||[m.actorId,m.targetId,m.aboutId,m.otherId,m.sourceId].includes(this.memoryPersonId))&&this.matches(m.description));
+    const page=Math.min(this.memoryPage||0,Math.max(0,Math.ceil(rows.length/8)-1));
+    for(const m of rows.slice(page*8,page*8+8)) {
+      p.heading(`${stamp(m.heardAt??m.minute)} / ${belief?m.corrected?'CORRIGIU A OPINIÃO':m.believes?'ACREDITA':'TEM DÚVIDAS':m.firsthand?m.truth?'PARTICIPOU OU PRESENCIOU':'CONHECE A INVENÇÃO':'OUVIU UMA CORREÇÃO'}`,belief&&m.corrected?C.green:C.cyan);
+      p.note(m.description);
+      if(belief){p.kv('Fonte',this.city.accountName(`citizen:${m.sourceId}`));p.kv(m.corrected?'Confiança na correção':'Confiança na narrativa',`${m.confidence}%`);p.kv('Repasses',m.hops);}
+      if(m.eventId)p.button(`VER ORIGEM #${m.eventId}`,()=>this.openEvent(m.eventId));
+    }
+    p.note(`${rows.length} registros / página ${page+1}`);p.buttons([{label:'ANTERIOR',click:()=>{this.memoryPage=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.memoryPage=page+1;}}]);
+    if(!rows.length)p.note('Nenhuma memória corresponde ao filtro.');
+  }
   reputationPanel(p,subject) {
     p.heading('REPUTAÇÃO');p.meters(Object.entries(REPUTATION_LABELS).map(([id,label])=>[label,this.city.reputation.score(subject,id),C.cyan]));
     p.note('Entregas, faxinas e obras concluídas afetam a confiança no prestador. Parcelas pagas ou atrasadas afetam crédito. A reputação participa da escolha de fornecedores, contratação e limites bancários.');
@@ -651,6 +701,8 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     p.heading(`EVENTO #${this.selectedEventId}`,C.cyan);p.button('FECHAR DETALHES',()=>{this.selectedEventId=null;});
     if(!e){p.note('Este registro já saiu do limite de retenção.');return;}
     p.note(`${stamp(e.minute)} / ${e.kind} / ${e.data?.action||e.kind}`);p.note(e.message);
+    if(e.objectiveTruth!==undefined)p.kv('Veracidade da história na simulação',e.objectiveTruth?'Verdadeira':'Inventada');
+    if(e.believes!==undefined)p.kv('Reação de quem ouviu',e.believes?'Acreditou':'Duvidou');
     if(e.amount!==undefined)p.kv('Valor',money(e.amount));
     if(e.transactions){p.kv('Pagamentos consolidados',e.transactions);p.kv('Período',`${stamp(e.startedAt)} → ${stamp(e.endedAt)}`);}
     if(e.good)p.kv('Mercadoria',`${e.quantity??''} ${GOODS[e.good]?.label||e.good}`);

@@ -129,7 +129,15 @@ http://localhost:8000/?seed=1337&terrain=highlands
 
 ## Relações e famílias
 
-Pessoas próximas conversam por 4–8 minutos, com intervalo mínimo de 30 minutos, desenvolvendo familiaridade, confiança e afeto. Afinidades, discordâncias e afastamento podem gerar amizades, relacionamentos ou separações. Os balões indicam conversas no mapa. Relacionamentos amorosos exigem dois adultos solteiros interessados, sem parentesco próximo.
+Pessoas próximas conversam por 4–8 minutos, com intervalo mínimo de 30 minutos. Cada uma sente afeto, confiança, respeito, atração, ressentimento e receio de forma independente. Os vínculos incluem conhecidos, amizades, grandes amizades, confidentes, rivalidades, inimizades e amizades rompidas; o interesse romântico é uma dimensão separada. Família, vizinhança, convivência e trabalho dão contexto aos encontros. Os balões indicam conversas no mapa.
+
+Encontros podem produzir elogios, ofensas, humilhações, pedidos de desculpas, reconciliações, partilha de comida, ajuda financeira, mentoria e competição profissional. Pessoas procuram visitar amigos e companheiros; amigos de confiança podem acolher alguém sem moradia. Pagamento e falta de salário afetam a relação com o empregador. Opiniões pessoais também participam de contratações, escolhas de fornecedores, acesso a espaços privados, voto e crédito, junto aos critérios econômicos e à reputação pública.
+
+Cada pessoa mantém até 24 recordações, 24 histórias ouvidas e oito perdas recentes. Memórias significativas têm prioridade de retenção. Fofocas circulam nos encontros, por até seis repasses, com crença influenciada pela fonte, pelo ceticismo e pela opinião anterior. Histórias podem ser inventadas ou distorcidas; testemunhas, pessoas acusadas e quem conhece os fatos podem contestá-las. Uma correção aceita desfaz as alterações da crença e afeta a confiança na fonte. Conhecimento e sentimentos permanecem individuais.
+
+Romances exigem adultos com interesse compatível e sem parentesco próximo. Aproximações e propostas podem ser aceitas ou rejeitadas. Fidelidade e ciúme influenciam envolvimentos fora do compromisso; presenciar ou acreditar em uma traição pode gerar conflitos e separação. A morte de pessoas próximas causa luto temporário; apoio emocional ameniza seus efeitos. Vínculos importantes com falecidos permanecem consultáveis.
+
+Na ficha de uma pessoa, **Família → Vínculos pessoais** mostra as duas perspectivas, com filtros para amizades, conflitos, romance, família, trabalho e ausentes. **Memórias** apresenta recordações, histórias ouvidas, correções e luto, com acesso aos eventos de origem. O sistema usa contatos indexados, encontros locais e limites de memória, sem percorrer todas as combinações de moradores. O desempenho e o equilíbrio dessas novas interações ainda precisam de avaliação em partidas prolongadas.
 
 Casais estáveis que desejam filhos podem planejar uma família após dois dias, com saúde, reservas, moradia e espaço privado disponível. A chegada leva três dias simulados; o limite é de dois filhos por pessoa e o intervalo mínimo entre nascimentos é de cinco dias. A idade avança um ano a cada 12 dias. São tempos acelerados para a simulação.
 
@@ -147,6 +155,7 @@ Crianças recebem nomes naturais, sem IDs, e herdam o sobrenome familiar. Têm p
 - `js/city_development.js`: terrenos, projetos sob medida, contratos, estradas e ampliações.
 - `js/city_work_meals.js`: compras de comida, refeitórios, refeições no canteiro e vales.
 - `js/city_society.js`: vínculos, famílias, crescimento e responsáveis.
+- `js/city_relationships.js`: sentimentos individuais, memórias, fofocas, amizades, conflitos, apoio, mentoria e romance.
 - `js/city_terrain.js`: implantação, lotes, ruas e navegação A*.
 - `js/world_settings.js`: sementes e paisagens.
 - `js/city_ui.js`: conteúdo dos diretórios, filtros, panoramas, plantas e fichas.
