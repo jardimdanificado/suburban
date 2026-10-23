@@ -1,7 +1,7 @@
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
-import { CityPolitics } from './city_politics.js';
+import { CityGovernment as CityPolitics } from './city_government.js';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityWelfare } from './city_welfare.js';
@@ -131,7 +131,7 @@ export class CitySimulation {
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
     else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
     if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
-    else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
+    else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Imposto empresarial$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
     const shipment = a.seller && a.buyer ? a : b.seller && b.buyer ? b : null;
     const entry = this.history.transaction(from, to, amount, reason, { ...(shipment ? {shipmentId: shipment.id} : {}), ...details });
     this.ledger.push({ minute: this.minute, from, to, amount, reason, eventId: entry.id });
@@ -330,7 +330,10 @@ export class CitySimulation {
     if (task === 'social' && this.relationships.seekContact(c)) return;
     if (task === 'toilet') { if (!this.sanitation.choose(c)) { c.task = null; c.action = 'Aguardando banheiro acessível'; } return; }
     if (task === 'food' && this.workMeals.routeToMeal(c)) return;
-    if (task === 'food' && c.provisions > 0 && home) { task = 'provisions'; type = 'home'; }
+    if (task === 'food' && c.provisions > 0) {
+      if(!home || n.food<25){c.task='provisions';c.path=[];c.targetId=null;return;}
+      task = 'provisions'; type = 'home';
+    }
     if(!urgent && this.society.isAdult(c) && !['work','manage','care','caregiving','food','provisions','toilet'].includes(task) && this.hour>=6 && this.hour<22 && this.minute-(c.lastShoppingAt||0)>180) {
       const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).sort((a,b)=>Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)+this.relationships.businessPenalty(c,a)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)-this.relationships.businessPenalty(c,b));
       for(const shop of shops) {const path=this.findPath(c.entity,shop.door);if(path!==null){c.path=path;c.targetId=shop.id;c.task='shopping';return;}}
@@ -358,6 +361,7 @@ export class CitySimulation {
     if (task === 'energy') n.energy = clamp(n.energy + 0.1);
   }
   performTask(c) {
+    if(c.task==='campaign'){this.politics.campaigns.arrive(c);return;}
     if(c.task==='visit'){this.relationships.arrive(c);return;}
     if (c.task === 'toilet') { this.sanitation.use(c); return; }
     if (c.task === 'workmeal') { if (!this.workMeals.tryStart(c)) c.task = null; return; }
@@ -371,6 +375,14 @@ export class CitySimulation {
         c.action = ['road', 'road-repair'].includes(project.service) ? 'Construindo ou reparando estrada' : project.service === 'lamp' ? 'Instalando poste' : project.service === 'expansion' ? 'Ampliando edifício' : `Construindo no terreno ${project.plotId}`;
       } else { c.action = 'Aguardando materiais da obra'; c.task = null; }
       if (this.urgentNeed(c)) c.task = null;
+      return;
+    }
+    if (c.task === 'provisions') {
+      const n=c.needs;
+      if (c.provisions <= 0) { c.task = null; return; }
+      if (c.servicePaid !== 'provisions') { c.provisions--; c.servicePaid = 'provisions'; this.log(`${c.entity.properties.name} consumiu uma refeição trazida na chegada.`, 'production', [c.id], { kind: 'initial-provision-consumed' }); }
+      n.food = clamp(n.food + 5); c.action = 'Comendo suas provisões';
+      if (n.food >= 95) { c.task = null; c.servicePaid = null; }
       return;
     }
     const b = this.building(c.targetId), n = c.needs;
@@ -392,13 +404,6 @@ export class CitySimulation {
       if (Math.min(n.food, n.water, n.energy, n.toilet, n.hygiene, n.health) < 22) c.task = null;
       return;
     }
-    if (task === 'provisions') {
-      if (c.provisions <= 0) { c.task = null; return; }
-      if (c.servicePaid !== 'provisions') { c.provisions--; c.servicePaid = 'provisions'; this.log(`${c.entity.properties.name} consumiu uma refeição trazida na chegada.`, 'production', [c.id], { kind: 'initial-provision-consumed' }); }
-      n.food = clamp(n.food + 5); c.action = 'Comendo suas provisões em casa';
-      if (n.food >= 95) { c.task = null; c.servicePaid = null; }
-      return;
-    }
     if (task === 'care' || task === 'caregiving') {
       const child = task === 'care' ? c : this.society.citizen(c.careChildId);
       const guardian = child ? this.society.guardian(child) : null;
@@ -406,11 +411,11 @@ export class CitySimulation {
       if (task === 'care') { c.action = `Em casa, aos cuidados de ${guardian.entity.properties.name}`; c.needs.energy = clamp(c.needs.energy + .5); return; }
       if (Math.hypot(child.entity.x - c.entity.x, child.entity.y - c.entity.y) > 2 || child.path.length) { c.action = `Esperando ${child.entity.properties.name} em casa`; return; }
       if (c.servicePaid !== `care:${child.id}`) {
-        const market = this.buildings.find(b => { const offer = this.economy.mealOffer(b); return offer && offer.price > 0; });
-        const water = this.buildings.find(b => b.type === 'utility' && !b.entity.destroyed) || this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
-        const mealPrice = market ? this.economy.mealOffer(market).price : 0;
+        const market = this.buildings.filter(b=>Number.isFinite(this.economy.mealScore(child,b))).sort((a,b)=>this.economy.mealScore(child,a)-this.economy.mealScore(child,b))[0];
+        const water = this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed) || this.buildings.find(b => b.type === 'utility' && !b.entity.destroyed);
+        const mealPrice = market ? this.economy.mealOffer(market,child).price : 0;
         const usesProvisions = c.provisions > 0;
-        const carePayer = this.payerFor(child), waterPrice = this.currency.price(35);
+        const carePayer = this.payerFor(child), waterPrice = water?.type==='townhall'?0:this.currency.price(35);
         if (!water || (!market && !usesProvisions) || (this.accounts.get(carePayer)?.balance || 0) < (usesProvisions ? waterPrice : mealPrice + waterPrice)) { c.action = 'Sem alimentos ou recursos para os cuidados'; c.task = null; return; }
         if (usesProvisions) c.provisions--;
         else if (!this.economy.consumeMeal(child, market)) { c.task = null; return; }

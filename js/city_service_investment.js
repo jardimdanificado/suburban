@@ -89,7 +89,7 @@ export class CityServiceInvestment {
       const plot = this.lots(demand.type)[0];
       if (!plot) { this.decisions.set(demand.type,{state:'Aguardando terreno urbano acessível',minute:city.minute}); continue; }
       const plan = this.plan(demand.type,plot);
-      const candidates = city.citizens.filter(c => city.society.isAdult(c) && !c.entity.destroyed && c.id !== city.economy.mayorId && !c.businessIds.length && !c.deliveryId && !c.cleaningJobId && !city.development.projects.some(p => p.accountId === c.accountId && !p.cancelled && p.status !== 'completed')).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[({builder:'construction',carrier:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0)-(a.skills[({builder:'construction',carrier:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0) || a.id-b.id);
+      const candidates = city.citizens.filter(c => city.society.isAdult(c) && !c.entity.destroyed && !city.politics.officeHolder(c) && !c.businessIds.length && !c.deliveryId && !c.cleaningJobId && !city.development.projects.some(p => p.accountId === c.accountId && !p.cancelled && p.status !== 'completed')).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[({builder:'construction',carrier:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0)-(a.skills[({builder:'construction',carrier:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0) || a.id-b.id);
       let project = null;
       for (const founder of candidates) {
         let loan = null;

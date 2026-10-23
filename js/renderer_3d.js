@@ -6934,6 +6934,17 @@ export class RCT3DRenderer {
 
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
         if (isConsciousCreature) {
+          const campaign=e.properties?.citizen?.campaign;
+          if(campaign?.flag && e.properties.citizen.task==='campaign') {
+            const flag=campaign.flag,uiKey=`${e.id}_campaign_flag`;
+            activeUiIds.add(uiKey);
+            const tex=createTintedTexture(flag.skin,parseInt(flag.foreground.slice(1),16),parseInt(flag.background.slice(1),16),1);
+            let mat=uiMatCache.get(tex.uuid);
+            if(!mat){mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.05,depthTest:true,side:THREE.DoubleSide});uiMatCache.set(tex.uuid,mat);}
+            let mesh=this.floatingUiSprites.get(uiKey);
+            if(!mesh){mesh=new THREE.Mesh(this.flagGeo,mat);mesh.renderOrder=25;this.floatingUiGroup.add(mesh);this.floatingUiSprites.set(uiKey,mesh);}
+            mesh.material=mat;mesh.position.set(e.x+.18,surfaceH+1.2,e.y);mesh.rotation.y=billboardRotY;
+          }
           const emoteSkin = getCreatureEmoteSkin(e);
           const heldItems = [];
 

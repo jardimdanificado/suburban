@@ -17,6 +17,8 @@ export class CityDevelopment {
     const city = this.city, owner = this.clientCitizen(accountId);
     if (!owner || !builder || !Number.isSafeInteger(details.stone) || details.stone < 1) return null;
     const project = { id: `project:${this.nextProjectId++}`, accountId, ownerId: owner.id, builderId: builder.id, active: true, status: 'materials', startedAt: city.minute, cancelled: false, labor: 0, plotId: null, ...details };
+    const priority=city.politics?.policy?.infrastructurePriority;
+    if(accountId==='treasury' && (priority==='lamps' && project.service==='lamp'||priority==='roads' && ['road','road-repair'].includes(project.service))){project.politicalPriority=project.priority||0;project.priority=project.politicalPriority+50;}
     initializeInventory(project, city.economy.goods, project.stone + 48);
     project.feeAccountId = `construction-fee:${project.id}`;
     city.accounts.set(project.feeAccountId, { name: `Contrato ${project.id}`, balance: 0 });
@@ -91,10 +93,12 @@ export class CityDevelopment {
   }
   planPublicWorks() {
     const city = this.city, hall = city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
-    if (!hall || !this.clientCitizen('treasury') || city.treasury < city.currency.price(100000) || city.hour % 6 !== 0) return;
+    if (!hall || !this.clientCitizen('treasury') || city.treasury < city.currency.price(100000)) return;
+    this.planBasicHousing();
+    const needs=city.welfare.conditions();
     const activePublic = this.projects.filter(p => p.accountId === 'treasury' && !p.cancelled && p.status !== 'completed');
     const targetFloors = Math.min(6, 2 + Math.floor((city.citizens.length + city.economy.businesses.length * 2) / 36));
-    if (hall.floors < targetFloors && !activePublic.some(p => p.service === 'expansion')) this.beginExpansion('treasury', hall.id);
+    if (!needs.crisis && !needs.homeless && city.hour%6===0 && hall.floors < targetFloors && !activePublic.some(p => p.service === 'expansion')) this.beginExpansion('treasury', hall.id);
     const housing = city.buildings.filter(b => ['residential', 'popular_housing', 'luxury_housing'].includes(b.type)).length;
     if (housing < 1 && !activePublic.some(p => ['residential', 'popular_housing', 'luxury_housing'].includes(p.type))) {
       const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3 && p.width<=8 && p.depth<=8 && !['quarry','farm'].includes(p.type));
@@ -109,7 +113,7 @@ export class CityDevelopment {
       if (lot) this.beginProject('treasury', lot.id, 'popular_housing', { floors: 3 });
     }
     if (city.economy.businesses.length >= 5 && city.treasury > city.currency.price(500000) && !city.buildings.some(b => b.type === 'public_toilet') && !this.projects.some(p => p.type === 'public_toilet' && !p.cancelled && p.status !== 'completed')) { const lot = this.plots.find(p => p.ownerId === 'treasury' && !p.projectId && !p.buildingId && p.width >= 3 && p.depth >= 3 && p.width<=8 && p.depth<=8 && !['quarry','farm'].includes(p.type)); if (lot) this.beginProject('treasury', lot.id, 'public_toilet'); }
-    if (city.treasury > city.currency.price(2000000) && !activePublic.some(p => p.service === 'road')) {
+    if (!needs.crisis && city.treasury > city.currency.price(2000000) && !activePublic.some(p => p.service === 'road')) {
       for (const b of city.buildings.filter(b => !b.entity.destroyed && b.id !== hall.id).sort((a,b)=>city.trafficScore(b.accessPath)-city.trafficScore(a.accessPath))) {
         if (this.beginRoad('treasury', b.door, hall.door)) break;
       }
@@ -118,6 +122,17 @@ export class CityDevelopment {
     if (city.treasury > city.currency.price(500000)) for (const b of repairable) if (this.beginRepair('treasury', b.id)) break;
     const damagedRoad = this.cityRoadNeedsRepair();
     if (damagedRoad.length && city.random() < .01 && city.treasury > city.currency.price(1000000) && !this.projects.some(p => p.service === 'road-repair' && p.status !== 'completed' && !p.cancelled)) this.beginRoadRepair('treasury', damagedRoad.sort((a,b)=>city.trafficScore([b])-city.trafficScore([a])).slice(0, 12));
+  }
+  planBasicHousing() {
+    const city=this.city,needs=city.welfare.conditions(),pending=this.projects.filter(p=>!p.cancelled&&p.status!=='completed');
+    const vacant=[...city.housing.homes.values()].filter(h=>city.housing.isSocial(h)&&city.housing.units(h).every(u=>!u.tenantId)).length;
+    const queued=pending.filter(p=>p.type==='popular_housing'&&p.service==='building');
+    const planned=queued.reduce((n,p)=>n+Math.floor((2*p.width+2*p.depth-4)/2)*p.floors,0);
+    if(needs.homeless<=vacant+planned || queued.length>=2 || pending.filter(p=>p.service==='building'&&p.priority>=90).length>=3)return;
+    const lots=this.plots.filter(p=>p.ownerId==='treasury'&&!p.projectId&&!p.buildingId&&!['farm','quarry'].includes(p.type)&&p.width>=3&&p.depth>=3).sort((a,b)=>Math.hypot(a.x-city.spawn.x,a.y-city.spawn.y)-Math.hypot(b.x-city.spawn.x,b.y-city.spawn.y));
+    const cells=3*3*4,cost=cells*DEVELOPMENT_RULES.stonePerCell*city.economy.goods.pedra.price+Math.ceil(cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell)*1.5);
+    if(city.treasury<cost+needs.reserve)return;
+    for(const lot of lots.slice(0,8)){const project=this.beginProject('treasury',lot.id,'popular_housing',{width:3,depth:3,floors:4,priority:95});if(project)break;}
   }
   cityRoadNeedsRepair() {
     const out = [];
@@ -332,7 +347,13 @@ export class CityDevelopment {
     this.ensurePlots();
     this.updateWear();
     this.planPublicWorks();
-    for (const p of [...this.projects].sort((a, b) => (b.priority||0)-(a.priority||0)||Number(a.service === 'lamp') - Number(b.service === 'lamp'))) { this.requestMaterials(p); if (p.status === 'blocked') this.complete(p); }
+    const emergency=this.city.welfare.conditions().crisis,basic=new Set(['popular_housing','popular_refectory','farm','bakery','market','greengrocer','mill','builder','quarry','carrier','cleaner','recycler','composting','waste_collector']);
+    for (const p of [...this.projects].sort((a, b) => (b.priority||0)-(a.priority||0)||Number(a.service === 'lamp') - Number(b.service === 'lamp'))) {
+      const defer=emergency&&p.accountId==='treasury'&&p.priority<90&&!basic.has(p.type)&&p.service!=='road-repair';
+      p.waitingForBasicNeeds=defer;
+      if(!defer)this.requestMaterials(p);
+      if(p.status==='blocked')this.complete(p);
+    }
     // Builders develop housing for sale; individual investors prefer premises for their own firms.
     const homeless = this.city.citizens.filter(c => !c.homeUnitId).length;
     const housingProjects = this.projects.filter(p => p.type === 'residential' && !p.cancelled && p.status !== 'completed');

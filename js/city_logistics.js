@@ -40,6 +40,7 @@ export class CityLogistics {
     return best;
   }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
+  publicOrder(s){return s.payerAccountId==='treasury'||s.buyer.accountId==='treasury'||s.buyer.municipal;}
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false } = {}) {
     const city = this.city;
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 24 || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
@@ -102,6 +103,7 @@ export class CityLogistics {
       s.carrierId = null;
       if(s.requireCarrier) { const next=this.leastLoaded(economy.businesses.filter(b=>b.type==='carrier' && b.workers.length && b.balance>=b.wage)); if(next){s.carrierId=next.id;ids.push(...next.workers,next.ownerId);}return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25); }
       // Owners can bootstrap the supply chain by hauling their own purchases.
+      if(this.publicOrder(s))ids.push(...this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&!this.city.politics.officeHolder(c)&&!['caregiving','food','water','energy','health','toilet'].includes(c.task)).sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16).map(c=>c.id));
       ids.push(s.buyer.ownerId, s.seller.ownerId);
       const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
     }
@@ -111,7 +113,7 @@ export class CityLogistics {
     const city = this.city;
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
-    const priority = s => s.purpose==='critical-infrastructure'?-2:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
+    const priority = s => s.purpose==='public-meals'?-4:s.purpose==='work-meals'?-3:s.purpose==='critical-infrastructure'?-2:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
     pending.sort((a, b) => priority(a) - priority(b) || (a.lastDispatchAttempt || 0) - (b.lastDispatchAttempt || 0) || a.createdAt - b.createdAt || a.id - b.id);
     let dispatchBudget = 32;
     for (const s of pending) {
@@ -126,11 +128,12 @@ export class CityLogistics {
         for (const candidate of this.candidates(s)) {
           if (dispatchBudget-- <= 0) break;
           const path = city.findPath(candidate.entity, s.position); if (path === null) continue;
-          c = candidate; c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; break;
+          c = candidate;s.temporaryDriverId=!s.carrierId&&this.publicOrder(s)&&!c.jobId&&!c.businessIds.length&&!city.politics.officeHolder(c)?c.id:null; c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; break;
         }
         if (!c) continue;
       }
       const carrierEmployer = city.building(s.carrierId);
+      if(s.temporaryDriverId===c.id){const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed),wage=Math.ceil(city.currency.price(city.politics.policy.minimumWage)*1.5);if(!hall||!city.payWage(c,hall,wage)){if(s.pickedUp)s.position={x:c.entity.x,y:c.entity.y};this.releaseDriver(s);s.status='waiting';continue;}}
       if (carrierEmployer && c.jobId === carrierEmployer.id && carrierEmployer.balance < carrierEmployer.wage) {
         if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y };
         this.releaseDriver(s); s.status = 'waiting'; continue;

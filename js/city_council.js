@@ -1,0 +1,146 @@
+export const BILL_LABELS={tax:'Imposto salarial',businessTax:'Imposto empresarial',minimumWage:'Salário mínimo',partyLimit:'Limite de partidos',reelectionLimit:'Limite de reeleições',build:'Construção estatal',nationalize:'Estatização negociada',privatize:'Privatização',inflation:'Controle da inflação',welfare:'Proteção social',roads:'Acesso e iluminação',impeach:'Cassação'};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+export class CityCouncil {
+  constructor(city){this.city=city;this.members=[];this.vacancies=[];this.seats=32;this.bills=[];this.nextId=1;this.lastProposalDay=null;}
+  people(){return this.members.map(m=>this.city.society.citizen(m.citizenId)).filter(Boolean);}
+  seat(c,provisional=false) {
+    if(!c || this.members.some(m=>m.citizenId===c.id))return;
+    const city=this.city;c.role='councilor';
+    city.log(`${c.entity.properties.name} tomou posse na Câmara, mantendo sua ocupação profissional.`,'government',[c.id],{kind:'councilor-appointed',partyId:c.political.partyId});
+    this.members.push({citizenId:c.id,name:c.entity.properties.name,partyId:c.political.partyId,since:city.minute,provisional});
+  }
+  remove(id,reason='Encerramento da legislatura') {
+    const member=this.members.find(m=>m.citizenId===id),c=this.city.society.citizen(id);this.members=this.members.filter(m=>m.citizenId!==id);
+    if(member && reason!=='Encerramento da legislatura')this.vacancies.push(member.partyId);
+    if(c && member)c.role='citizen';
+  }
+  ensure() {
+    const p=this.city.politics;if(!p.parties.length)return;
+    // Release the full-time hall assignments created by the previous council model.
+    const hall=this.city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
+    if(!this.partTimeMigrated){if(hall){hall.jobs=2;for(const c of this.people())if(c.jobId===hall.id)this.city.economy.leaveJob(c,'Vereança passa a funcionar em tempo parcial');}this.partTimeMigrated=true;}
+    for(const m of [...this.members])if(!p.eligible(this.city.society.citizen(m.citizenId)))this.remove(m.citizenId,'Vacância da cadeira');
+    if(this.members.length>=this.seats)return;
+    const candidates=this.city.citizens.filter(c=>p.canRun(c,'council') && c.id!==this.city.economy.mayorId && !this.members.some(m=>m.citizenId===c.id));
+    for(const partyId of [...this.vacancies]){const substitute=candidates.filter(c=>c.political.partyId===partyId&&!this.members.some(m=>m.citizenId===c.id)).sort((a,b)=>{const votes=id=>p.lastResult?.ballots.filter(v=>v.councilCandidateId===id).length||0;return votes(b.id)-votes(a.id)||p.candidateStrength(b)-p.candidateStrength(a);})[0];if(substitute&&this.members.length<this.seats){this.seat(substitute,!p.lastResult);this.vacancies.splice(this.vacancies.indexOf(partyId),1);}}
+    const groups=p.parties.filter(a=>a.active&&!a.retiring).map(party=>candidates.filter(c=>c.political.partyId===party.id&&!this.members.some(m=>m.citizenId===c.id)).sort((a,b)=>p.candidateStrength(b)-p.candidateStrength(a)));
+    // Alternate parties for the provisional chamber; later vacancies use registered suplentes.
+    while(this.members.length<this.seats){let added=false;for(const group of groups){const c=group.shift();if(c && this.members.length<this.seats){this.seat(c,true);added=true;}}if(!added)break;}
+  }
+  elect(election) {
+    const city=this.city,p=city.politics;for(const m of [...this.members])this.remove(m.citizenId);this.vacancies=[];
+    const candidates=election.councilCandidates.filter(c=>p.canRun(city.society.citizen(c.citizenId),'council')&&c.citizenId!==election.winnerId),allocated=new Map();
+    const parties=p.parties.filter(a=>a.active).map(party=>({partyId:party.id,votes:election.ballots.filter(v=>v.councilPartyId===party.id).length,candidates:candidates.filter(c=>c.partyId===party.id).sort((a,b)=>election.ballots.filter(v=>v.councilCandidateId===b.citizenId).length-election.ballots.filter(v=>v.councilCandidateId===a.citizenId).length||a.citizenId-b.citizenId)}));
+    for(let i=0;i<this.seats;i++){const next=parties.filter(a=>a.candidates.length).sort((a,b)=>b.votes/(1+(allocated.get(b.partyId)||0))-a.votes/(1+(allocated.get(a.partyId)||0))||a.partyId-b.partyId)[0];if(!next)break;const candidate=next.candidates.shift();allocated.set(next.partyId,(allocated.get(next.partyId)||0)+1);this.seat(city.society.citizen(candidate.citizenId));}
+    election.councilResult=parties.map(a=>({partyId:a.partyId,votes:a.votes,seats:allocated.get(a.partyId)||0}));
+    city.log(`Câmara eleita: ${this.members.length} vereadores, distribuição proporcional por partido e preferência individual.`,'government',this.members.map(m=>m.citizenId),{kind:'council-elected',electionId:election.id});
+  }
+  propose(author,type,payload={},title=null) {
+    const city=this.city;if(!author || !this.members.some(m=>m.citizenId===author.id) || !BILL_LABELS[type])return null;
+    if(this.bills.some(b=>['proposed','approved','executing'].includes(b.status)&&b.type===type&&(type==='build'?b.payload.buildingType===payload.buildingType:type==='impeach'?b.payload.targetId===payload.targetId:true)))return null;
+    const bill={id:this.nextId++,authorId:author.id,authorName:author.entity.properties.name,partyId:author.political.partyId,type,payload:{...payload},title:title||BILL_LABELS[type],proposedAt:city.minute,voteAt:city.minute+360,status:'proposed',votes:[],attempts:0,result:null};
+    const e=city.log(`${author.entity.properties.name} propôs: ${bill.title}.`,'government',[author.id],{kind:'bill-proposed',billId:bill.id,partyId:bill.partyId});bill.eventId=e.id;this.bills.push(bill);
+    if(this.bills.length>160){const i=this.bills.findIndex(b=>!['proposed','approved','executing'].includes(b.status));if(i>=0)this.bills.splice(i,1);}
+    return bill;
+  }
+  preference(c,bill) {
+    const p=this.city.politics,party=p.party(c.political.partyId),e=party.ideology.economy,own=party.id===bill.partyId,loyal=c.political.loyalty;
+    let ideology=0;
+    switch(bill.type){case'tax':ideology=-e*Math.sign(bill.payload.value-this.city.taxRate)*1.4;break;case'businessTax':ideology=-e*Math.sign(bill.payload.value-p.policy.businessTax)*1.4;break;case'minimumWage':ideology=-e*Math.sign(bill.payload.value-p.policy.minimumWage);break;case'build':case'nationalize':case'welfare':ideology=-e*1.4+.25;break;case'privatize':ideology=e*1.5;break;case'inflation':ideology=.4+Math.abs(this.city.currency.dailyInflation)*40;break;case'roads':ideology=.8;break;case'partyLimit':ideology=party.ideology.liberty*Math.sign(bill.payload.value-p.policy.partyLimit);break;case'reelectionLimit':ideology=-(c.traits?.ambition??.5)*Math.sign(p.policy.reelectionLimit-bill.payload.value)+.15;break;case'impeach':{const evidence=p.scandals.find(s=>s.id===bill.payload.caseId && s.proven && s.accusedId===bill.payload.targetId);if(!evidence)return {yes:false,reason:'Não há prova válida'};ideology=.8+(c.traits?.honesty??.5)*1.2-(bill.payload.targetId===c.id?3:0)-(p.partyOfId(bill.payload.targetId)?.id===party.id?loyal*1.6*(1-(c.traits?.honesty??.5)):0);break;}}
+    const relation=this.city.relationships.view(c,this.city.society.citizen(bill.authorId));
+    const personal=c.political.ideology.economy;
+    if(['build','nationalize','welfare'].includes(bill.type))ideology=ideology*loyal-personal*(1-loyal);
+    if(bill.type==='privatize')ideology=ideology*loyal+personal*(1-loyal);
+    const pressure=(own ? .3+loyal*.7 : 0)+(relation?.trust||15)/250-(relation?.resentment||0)/180;
+    const yes=ideology+pressure+((Math.imul(c.id+17,bill.id+37)>>>0)%100)/250-.2>0;
+    return {yes,reason:bill.type==='impeach'?'Provas, ética e lealdade partidária':own&&loyal>.5?'Orientação do partido e programa':'Ideologia, interesse público e vínculo com o autor'};
+  }
+  vote(bill) {
+    const people=this.people(),eligible=people.filter(c=>c.id!==bill.payload.targetId||bill.type!=='impeach');
+    bill.votes=eligible.map(c=>({citizenId:c.id,name:c.entity.properties.name,partyId:c.political.partyId,...this.preference(c,bill)}));
+    bill.yes=bill.votes.filter(v=>v.yes).length;bill.no=bill.votes.length-bill.yes;
+    const threshold=bill.type==='impeach'?Math.ceil(this.seats*2/3):Math.floor(this.seats/2)+1;
+    bill.threshold=threshold;bill.status=bill.yes>=threshold?'approved':'rejected';bill.votedAt=this.city.minute;
+    this.city.log(`${bill.title}: ${bill.status==='approved'?'aprovado':'rejeitado'}, ${bill.yes} a ${bill.no}; exigidos ${threshold} votos.`,'government',bill.votes.map(v=>v.citizenId),{kind:'bill-voted',billId:bill.id,yes:bill.yes,no:bill.no,threshold,parentEventId:bill.eventId});
+    if(bill.status==='approved')this.execute(bill);
+  }
+  transferFirm(bill,nationalize) {
+    const city=this.city,b=city.building(bill.payload.buildingId);if(!b?.active || b.entity.destroyed || ['townhall','mint'].includes(b.type))return 'Empresa indisponível';
+    if(city.development.projects.some(p=>p.buildingId===b.id&&!p.cancelled&&p.status!=='completed'))return 'Aguardando obra contratada';
+    const old=city.society.citizen(b.ownerId);
+    if(nationalize) {
+      if(!old)return 'Já não existe proprietário privado';
+      if(!b.units.every(u=>u.ownerId===old.accountId))return 'Propriedade fracionada impede a compra integral';
+      const price=Math.max(city.currency.price(10000),b.units.reduce((n,u)=>n+u.price,0)+(city.development.plots.find(p=>p.id===b.plotId)?.price||0)+Math.max(0,b.balance));
+      if((old.traits?.frugality??.5)>.8 && bill.attempts<3)return 'Proprietário negociando a venda';
+      if(!city.transfer('treasury',old.accountId,price,'Compra negociada para estatização',{billId:bill.id,buildingId:b.id}))return 'Aguardando caixa municipal';
+      old.businessIds=old.businessIds.filter(id=>id!==b.id);b.ownerId=null;b.municipal=true;
+      for(const u of b.units){u.ownerId='treasury';u.forSale=false;u.forRent=false;}
+      const lot=city.development.plots.find(p=>p.id===b.plotId);if(lot){lot.ownerId='treasury';lot.forSale=false;}
+      city.history.ownership(b,old.accountId,'treasury',{action:'nationalization',amount:price,billId:bill.id});
+    } else {
+      if(!b.municipal)return 'Já não é uma estatal';
+      const buyer=city.citizens.filter(c=>city.politics.canOwnBusiness(c)).sort((a,b)=>b.balance-a.balance).find(c=>c.balance>=city.economy.premisesPrice(b)+city.currency.price(30000));
+      if(!buyer)return 'Aguardando comprador com recursos';
+      for(const u of b.units)u.forSale=true;
+      if(!city.economy.purchasePremises(b,buyer,b.crop,{billId:bill.id}))return 'Compra não concluída';
+    }
+    return null;
+  }
+  execute(bill) {
+    const city=this.city,p=city.politics,policy=p.policy;bill.attempts++;let wait=null;
+    const needs=city.welfare.conditions(),basic=new Set(['popular_housing','popular_refectory','farm','bakery','market','greengrocer','builder','quarry','carrier','cleaner','public_toilet','waste_collector','recycler','composting']);
+    if(needs.crisis && (bill.type==='nationalize'||bill.type==='build'&&!basic.has(bill.payload.buildingType))){bill.status='executing';bill.result='Aguardando atendimento das necessidades de alimentação e moradia';return;}
+    if(bill.type==='privatize' && needs.crisis && basic.has(city.building(bill.payload.buildingId)?.type)){bill.status='executing';bill.result='Operação essencial preservada durante a emergência social';return;}
+    switch(bill.type){
+      case'tax':city.taxRate=clamp(bill.payload.value,-.5,.5);break;
+      case'businessTax':policy.businessTax=clamp(bill.payload.value,-.2,.5);break;
+      case'minimumWage':policy.minimumWage=Math.max(1,Math.round(bill.payload.value));break;
+      case'partyLimit': {
+        const value=Math.max(1,Math.round(bill.payload.value)),active=p.parties.filter(a=>a.active).length;
+        if(value<active){
+          bill.mergePartyIds??=p.parties.filter(a=>a.active).sort((a,b)=>a.memberIds.length-b.memberIds.length).slice(0,active-value).map(a=>a.id);
+          const excess=bill.mergePartyIds.map(id=>p.party(id)).filter(a=>a?.active);
+          for(const party of excess)party.retiring=true;
+          if(excess.some(a=>this.members.some(m=>m.partyId===a.id)||p.partyOfId(city.economy.mayorId)?.id===a.id)){wait='Fusão ao fim dos mandatos; partidos em retirada não apresentarão novas candidaturas';break;}
+          for(const party of excess)p.mergeParty(party);
+        }
+        policy.partyLimit=value;p.fillParties();break;
+      }
+      case'reelectionLimit':policy.reelectionLimit=Math.max(0,Math.round(bill.payload.value));break;
+      case'welfare':city.welfare.policy.enabled=true;city.welfare.policy.dailyBudget=Math.max(0,Math.round(bill.payload.value));break;
+      case'inflation':city.currency.policy.mode='automatic';city.currency.policy.inflationTarget=.001;city.currency.policy.dailyLimit=Math.max(0,Math.round(bill.payload.value));if(!needs.crisis)city.currency.retire(Math.min(city.currency.price(50000),Math.max(0,city.treasury-Math.max(needs.reserve,city.currency.policy.treasuryReserve))));break;
+      case'roads':policy.infrastructurePriority=bill.payload.value;for(const project of city.development.projects)if(project.accountId==='treasury'&&!project.cancelled&&project.status!=='completed'&&project.priority<100){if(project.politicalPriority==null)project.politicalPriority=project.priority||0;project.priority=project.politicalPriority+(bill.payload.value==='lamps'&&project.service==='lamp'||bill.payload.value==='roads'&&['road','road-repair'].includes(project.service)?50:0);}break;
+      case'nationalize':wait=this.transferFirm(bill,true);break;
+      case'privatize':wait=this.transferFirm(bill,false);break;
+      case'build':{if(bill.projectId){const project=city.development.projects.find(pr=>pr.id===bill.projectId);if(project?.status==='completed')break;wait=project?.cancelled?'Projeto cancelado; nova deliberação necessária':'Construção em andamento';break;}
+        const type=bill.payload.buildingType;if(!city.buildingTypes[type]){wait='Tipo de obra indisponível';break;}
+        if(city.development.projects.filter(pr=>pr.accountId==='treasury'&&pr.service==='building'&&!pr.cancelled&&pr.status!=='completed').length>=3){wait='Aguardando capacidade de execução das obras públicas já contratadas';break;}
+        city.development.ensurePlots();
+        const lot=city.development.plots.find(l=>l.ownerId==='treasury'&&!l.buildingId&&!l.projectId&&l.width>=3&&l.depth>=3&&(type==='farm'?city.development.isFarmPlot(l):['quarry','iron_mine'].includes(type)?l.type==='quarry':l.width<=8&&l.depth<=8&&!['farm','quarry'].includes(l.type)));
+        if(!lot){wait='Aguardando terreno público adequado';break;}
+        const builder=city.development.selectBuilder('treasury',lot.door||{x:lot.x,y:lot.y});if(!builder){wait='Aguardando construtora disponível';break;}
+        const width=type==='popular_housing'?3:['farm','quarry'].includes(type)?lot.width:Math.min(4,lot.width),depth=type==='popular_housing'?3:['farm','quarry'].includes(type)?lot.depth:Math.min(4,lot.depth),floors=type==='popular_housing'?4:1;
+        const cost=['farm','quarry'].includes(type)?0:width*depth*floors*(2*city.economy.goods.pedra.price+city.currency.price(12000)*1.5);
+        if(city.treasury<cost+needs.reserve){wait='Aguardando caixa sem comprometer alimentação e operação dos serviços';break;}
+        const project=city.development.beginProject('treasury',lot.id,type,{floors,builderId:builder.id,priority:basic.has(type)?95:10,crop:type==='farm'?(bill.payload.crop||'milho'):null,width,depth});if(!project){wait='Aguardando orçamento e condições de implantação';break;}bill.projectId=project.id;wait=project.status==='completed'?null:'Construção em andamento';break;}
+      case'impeach':if(!p.impeach(bill.payload.targetId,bill.payload.caseId,bill.id))wait='Provas ou mandato não são mais válidos';break;
+    }
+    bill.result=wait||'Deliberação executada';bill.status=wait?'executing':'executed';
+    if(!wait){bill.executedAt=city.minute;city.log(`${bill.title}: execução concluída.`,'government',[bill.authorId],{kind:'bill-executed',billId:bill.id,projectId:bill.projectId,parentEventId:bill.eventId});}
+  }
+  draft(c) {
+    const city=this.city,p=city.politics,party=p.party(c.political.partyId),e=party.ideology.economy,metrics=p.mandates.metrics();
+    const choices=[['tax',{value:clamp(city.taxRate+(e<0?.02:-.02),-.5,.5)},`Imposto salarial de ${(city.taxRate*100).toFixed(0)}% para ${(clamp(city.taxRate+(e<0?.02:-.02),-.5,.5)*100).toFixed(0)}%`],['businessTax',{value:clamp(p.policy.businessTax+(e<0?.02:-.02),-.2,.5)},'Rever a contribuição das empresas'],['minimumWage',{value:p.policy.minimumWage+(e<.2?1:-1)},'Revisar o piso salarial por minuto trabalhado'],['inflation',{value:Math.max(0,city.currency.policy.dailyLimit-20000)},'Reduzir emissão e retirar moeda excedente'],['roads',{value:city.random()<.5?'roads':'lamps'},'Priorizar acessos e iluminação das vias movimentadas']];
+    if(e<.3){choices.push(['build',{buildingType:metrics.housed<95?'popular_housing':metrics.fed<95?'popular_refectory':['carrier','cleaner','bank'][c.id%3]},'Construir equipamento ou empresa estatal'],['welfare',{value:city.welfare.policy.dailyBudget+20000},'Ampliar orçamento de proteção social']);const firm=city.economy.businesses.find(b=>b.ownerId&&b.units.every(u=>u.ownerId===`citizen:${b.ownerId}`));if(firm)choices.push(['nationalize',{buildingId:firm.id},`Negociar estatização de ${firm.entity.properties.name}`]);}
+    if(e>.1){const firm=city.economy.businesses.find(b=>b.municipal && !['townhall','mint'].includes(b.type));if(firm)choices.push(['privatize',{buildingId:firm.id},`Privatizar ${firm.entity.properties.name}`]);}
+    if(city.random()<.2)choices.push(['partyLimit',{value:p.policy.partyLimit+(party.ideology.liberty>0?1:-1)},'Rever o limite de partidos']);
+    if(city.random()<.15)choices.push(['reelectionLimit',{value:p.policy.reelectionLimit+((c.traits?.ambition??.5)>.6?1:-1)},'Rever o limite de reeleições consecutivas']);
+    const pick=choices[Math.floor(city.random()*choices.length)];return this.propose(c,...pick);
+  }
+  hourly() {
+    this.ensure();
+    for(const bill of this.bills)if(bill.status==='proposed'&&this.city.minute>=bill.voteAt)this.vote(bill);else if(bill.status==='executing'&&this.city.hour%6===0)this.execute(bill);
+    if(this.lastProposalDay!==this.city.day){this.lastProposalDay=this.city.day;const people=this.people(),stipend=this.city.currency.price(this.city.politics.policy.minimumWage)*60,reserve=this.city.welfare.conditions().reserve;for(const c of people)if(this.city.treasury-stipend>=reserve)this.city.transfer('treasury',c.accountId,stipend,'Remuneração da sessão parlamentar');for(let i=0;i<Math.min(3,people.length);i++){const c=people[(this.city.day*3+i)%people.length];this.city.economy.practice(c,'governance',30);this.draft(c);}}
+  }
+}

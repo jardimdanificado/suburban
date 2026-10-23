@@ -74,6 +74,7 @@ export class CitySociety {
     relationship.greet(a,b,this.city.random()<chance);
     a.conversation=b.conversation=null;
     relationship.interact(a,b,conversation);
+    this.city.politics.campaigns.conversation(a,b);
     relationship.updateBond(a,b,r);
   }
   updateBond(a,b,r) {this.city.relationships.updateBond(a,b,r);}

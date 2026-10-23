@@ -1,5 +1,5 @@
 // Municipal adaptation of Brutopolis' candidate ranking, voter details and political history.
-export const POLITICS_RULES = { termMinutes: 12 * 1440, campaignMinutes: 2 * 1440, maxCandidates: 6, retainedElections: 24 };
+export const POLITICS_RULES = { termMinutes: 12 * 1440, campaignMinutes: 3 * 1440, maxCandidates: 8, retainedElections: 24 };
 export const POLITICAL_PLATFORMS = {
   social: { label: 'Proteção social', taxRate: .18, dailyBudget: 160000, dailyLimit: 80000 },
   balanced: { label: 'Serviços e equilíbrio', taxRate: .1, dailyBudget: 100000, dailyLimit: 60000 },

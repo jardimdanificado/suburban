@@ -635,6 +635,15 @@ export class Renderer {
         if(this.selectedEntityId===e.id)drawBoxOutline32(buf32,width,height,sx,sy,Math.floor(tileSize),Math.floor(tileSize),rgba32(248,220,120));
         continue;
       }
+      const campaign=e.properties?.citizen?.campaign;
+      if(campaign?.flag && e.properties.citizen.task==='campaign') {
+        const f=campaign.flag,fg=hexToRgba32(parseInt(f.foreground.slice(1),16),255),bg=hexToRgba32(parseInt(f.background.slice(1),16),255);
+        const fw=Math.max(6,Math.floor(tileSize*.8)),fh=Math.max(5,Math.floor(tileSize*.55)),fx=sx+Math.floor(tileSize*.5),fy=sy-fh;
+        drawBox32(buf32,width,height,fx-1,fy,1,fh+Math.floor(tileSize*.7),fg);
+        drawBox32(buf32,width,height,fx,fy,fw,fh,bg);
+        const emblem=findTexture(f.skin);
+        if(emblem)drawSpriteTinted32(buf32,width,height,emblem,fx,fy,fw,fh,fg,bg,globalLight);
+      }
       if (isItem) {
         // Dropped Item - Solid background color, no shadow, matching original WASM renderer
         const itemFg = r.color !== undefined ? hexToRgba32(r.color, 255) : rgba32(255, 255, 255, 255);

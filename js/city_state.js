@@ -1,4 +1,8 @@
 import { CityRelationships } from './city_relationships.js';
+import { CityGovernment } from './city_government.js';
+import { CityCouncil } from './city_council.js';
+import { CityCampaigns } from './city_campaigns.js';
+import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js';
 import { CityReputation } from './city_reputation.js';
@@ -19,13 +23,13 @@ import { CitySociety } from './city_society.js';
 import { CityServiceInvestment } from './city_service_investment.js';
 import { World, WorldClock } from './world.js';
 
-const prototypes = new Map([CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
+const prototypes = new Map([CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
 const localFields = new Set(['pathCache', 'pathCacheRevision', 'routeCache', 'routeRevision',
-  'childrenByGuardian', 'buildingsById', '_statsCache', '_statsMinute', 'cache', 'cacheVersion']);
+  'childrenByGuardian', 'buildingsById', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion']);
 const same = (a, b) => a && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
 
 /** Incremental object graph transport. References (including cycles) retain their identity.
@@ -158,7 +162,7 @@ export function bindCityState(city) {
   for (const b of city.buildings) {
     city.buildingsById.set(b.id, b);
     if (!Object.getOwnPropertyDescriptor(b, 'wage')?.get) {
-      Object.defineProperty(b, 'wage', { configurable: true, get: () => city.currency.price(b.baseWage), set: value => { b.baseWage = value / city.currency.priceIndex; } });
+      Object.defineProperty(b, 'wage', { configurable: true, get: () => city.currency.price(Math.max(b.baseWage,city.politics?.policy?.minimumWage||0)), set: value => { b.baseWage = value / city.currency.priceIndex; } });
       Object.defineProperty(b, 'seedStock', { configurable: true, get: () => b.inventory.sementes, set: value => { b.inventory.sementes = value; } });
       if (b.type === 'townhall') for (const field of ['balance', 'totalRevenue', 'totalExpenses']) Object.defineProperty(b, field, {
         configurable: true, enumerable: true, get: () => city.accounts.get('treasury')[field] || 0,

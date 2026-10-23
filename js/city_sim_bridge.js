@@ -16,7 +16,7 @@ export class CitySimulationBridge {
       this.active = true;
       for (const [target, path, method] of [[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],
         [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'],
-        [city.currency, 'currency.', 'retire'], [city.world, 'world.', 'setTile']]) {
+        [city.politics, 'politics.', 'submitBill'], [city.currency, 'currency.', 'retire'], [city.world, 'world.', 'setTile']]) {
         const original = target[method];
         target[method] = (...args) => { this.command(path + method, args); return true; };
         this.restores.push(() => { delete target[method]; if (!Object.getPrototypeOf(target)[method]) target[method] = original; });

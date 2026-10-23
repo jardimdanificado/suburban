@@ -168,7 +168,7 @@ Crianças recebem nomes naturais, sem IDs, e herdam o sobrenome familiar. Têm p
 
 `npm test` verifica os controles originais, preservação do relevo, políticas públicas de venda, propriedade privada, contratação, habilidades, insumos, receitas, estoques, conversas e famílias. Simulações de vários dias verificam que os saldos somados correspondem exatamente à moeda emitida, além da conservação de cada mercadoria: estoque inicial e importações + produção = consumo e transformação + estoques em prédios, obras e fretes + perdas registradas. Os testes antigos de contratos e famílias usam uma cidade desenvolvida como fixture; os novos testes também verificam a evolução desde as quatro instalações iniciais, incluindo emissão por trabalho, limite diário, inflação, preços reajustados e contratos preservados.
 
-Ainda não há salvamento da cidade, eleições periódicas, crédito bancário, escola, irrigação ou veículos de transporte. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
+Ainda não há salvamento da cidade, escola, irrigação ou veículos de transporte. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
 
 ---
 
@@ -445,14 +445,39 @@ A vegetação inicial inclui carvalhos, pinheiros, salgueiros, bétulas, bordos,
 
 Silviculturas compram sementes para plantios suplementares e consomem árvores maduras a até 14 tiles da entrada: cada árvore rende o lote de quatro madeiras, mediante o trabalho produtivo existente. O corte semeia o replantio no local; a empresa mantém até oito plantios suplementares, além dos replantios de corte. Sem árvore madura, a produção espera o crescimento. Madeira continua seguindo estoque e frete físicos.
 
-## Mandatos e eleições
+## Partidos, Câmara e eleições
 
-A primeira gestão é provisória, escolhida por habilidade de administração pública. Mandatos duram 12 dias e campanhas abrem dois dias antes da votação. Até seis adultos sem empresa própria nem sede empresarial em construção são candidatos; administração, ambição e reputação pública participam da seleção. O prefeito elegível pode concorrer novamente. Todo adulto vivo tem um voto. Habilidade pública, reputação, confiança entre eleitor e candidato e afinidade com o programa compõem a decisão; condições de moradia, alimentação, emprego e felicidade afetam a avaliação do prefeito atual. Empates no resultado são resolvidos por habilidade de administração e depois ID de cadastro.
+A cidade começa com **oito partidos e 32 vereadores**, além do prefeito. A primeira gestão e Câmara são provisórias. Depois, mandatos duram 12 dias, com **três dias de campanha**. Os partidos têm viés econômico, posição sobre liberdade, pauta ambiental, filiados, lealdade, liderança e sucessores. Oito famílias iniciais cobrem socialistas, trabalhistas, verdes, sociais democratas, cívicos, liberais, conservadores e autonomistas. As bandeiras adaptam o método dos clãs do Brutopolis: emblema sorteado dos sprites e cores contrastantes, exibidos na interface e nos bandeiraços em 2D e 3D.
 
-Três programas disputam a prefeitura: proteção social (18% de imposto, R$ 1.600/dia de benefícios e teto de emissão de R$ 800/dia), equilíbrio (10%, R$ 1.000 e R$ 600) e tributos menores/reserva (3%, R$ 600 e R$ 400). O vencedor aplica esses parâmetros na posse, com dinheiro, reservas e controles monetários existentes. Ajustes manuais permanecem disponíveis durante o mandato. A troca de prefeito encerra o emprego anterior, libera suas atividades e transfere a função pública sem transferir patrimônio municipal.
+Cada partido indica uma candidatura à prefeitura e até 32 para a Câmara, respeitando idade adulta, ausência de empresa ou sede empresarial em construção, impedimentos e limites de reeleição. Partidos sem candidatura própria podem apoiar uma chapa próxima. Cada adulto vota em prefeito e vereador; as cadeiras são distribuídas por quocientes sucessivos de votos partidários, preenchidas pela preferência individual. Empates usam administração pública ou cadastro. Vacâncias procuram suplentes do mesmo partido antes de completar a Câmara provisoriamente.
 
-Governo → Eleições mostra aprovação, calendário, candidaturas, programas, resultados e votos individuais. Os últimos 24 processos eleitorais são guardados separadamente dos eventos recentes. Na ausência do prefeito, assume um adulto elegível provisoriamente e a próxima votação é antecipada para no máximo um dia. Sem candidatos elegíveis, a eleição é adiada e registrada.
+O padrão permite **uma reeleição consecutiva**, para prefeitura e Câmara. A Câmara pode aumentar ou diminuir esse limite. O limite inicial de oito partidos também pode mudar por votação: vagas adicionais permitem novos registros; uma redução prevê fusões com partidos próximos, preservando mandatos atuais e retirando as candidaturas dos partidos em fusão na eleição seguinte.
 
+### Projetos e execução
+
+Vereadores propõem projetos automaticamente segundo o programa e as condições da cidade. Em **Governo → Eleições → Câmara**, também é possível encaminhar petições a um vereador. Imposto salarial e empresarial, piso salarial, orçamento social, controle da inflação, prioridade de ruas/iluminação, obras estatais, estatização negociada, privatização, número de partidos e reeleições têm propostas próprias. Projetos ordinários exigem 17 votos das 32 cadeiras, com discussão por seis horas. Votos e motivos ficam registrados; lealdade partidária, ideologia pessoal, afinidade com o autor e provas influenciam a decisão.
+
+O piso inicial é de cinco centavos por minuto de trabalho (R$ 3 por hora), reajustado pelo índice de preços. Ele é aplicado na remuneração real de empregados. O imposto empresarial incide sobre a receita contabilizada desde a cobrança anterior, uma vez por dia; valores negativos subsidiam a empresa conforme o caixa municipal.
+
+Aprovação não cria um prédio instantaneamente. Obras aguardam terreno, orçamento, construtora, materiais, frete e trabalho. Estatizações pagam o proprietário privado e preservam a operação da empresa; privatizações exigem autorização e comprador com recursos, registrando a mudança de propriedade. As propostas informam se foram rejeitadas, executadas ou estão aguardando condições. O programa do prefeito eleito é encaminhado à Câmara na posse.
+
+### Campanha, pesquisas e memória
+
+Candidaturas apresentam metas para alimentação, moradia, emprego, postes abastecidos, acesso por estrada, limpeza, moradias e refeitórios populares, estatais, salários, impostos, entregas, inflação e felicidade. Cada governo guarda indicadores na posse, medições diárias e avaliação final. A ficha **Política** dos moradores registra propostas conhecidas, filiação, voto e balanço de governos; o histórico de realizações influencia tanto a avaliação do candidato quanto a de seu partido.
+
+Campanhas divulgam propostas, fazem bandeiraços com deslocamento real pelas ruas e promovem chapas conjuntas para prefeitura e Câmara. Candidatos menos honestos podem difamar opositores; moradores podem acreditar, desconfiar, contestar e rever opiniões. Acusações eleitorais falsas não são provas de corrupção. Há compra de voto com transferência real de dinheiro pessoal do candidato ao eleitor; aceitar não garante que o eleitor cumpra o acordo na urna.
+
+Há uma pesquisa em cada um dos três períodos de 24 horas da campanha. Cada pesquisa sorteia **uma quantidade de adultos equivalente a 10% da população viva total, arredondada para cima e limitada ao eleitorado, sem reposição dentro da amostra**. Intenção, indecisão, aprovação, rejeição e motivos vêm desses entrevistados; não são calculados a partir de toda a população. A interface informa tamanho da amostra e margem máxima aproximada de 95% com correção para população finita. A pesquisa não determina a eleição: a urna consulta todos os adultos e as condições podem mudar até a votação.
+
+Ideologia, projeto, partido, afinidade, parentesco, capacidade pública, reputação, balanço do governo, campanha e venda de voto participam da decisão individual. Resultados preservam os votos e seus motivos, além da distribuição da Câmara. Até 24 eleições e 32 gestões são mantidas separadamente do histórico recente; cada morador conserva até 48 memórias políticas.
+
+### Corrupção e cassação
+
+Políticos menos honestos podem desviar recursos existentes do tesouro. Desvios e compra de voto deixam documentação financeira. Investigações podem descobrir a movimentação e confirmar o vínculo com o político, produzindo escândalos públicos, perda de reputação e memórias negativas. Suspeitas ainda não comprovadas aparecem como investigação.
+
+Com prova confirmada, vereadores podem propor cassação de prefeito ou vereador. São necessários **22 votos (dois terços das cadeiras)**; o acusado não vota no próprio processo. Cassados perdem a função e ficam impedidos nas duas eleições municipais seguintes. Há substituição provisória na prefeitura e suplência na Câmara. As telas de fiscalização permitem consultar as provas e acompanhar o projeto de cassação.
+
+Estas regras são mecânicas da simulação. A expansão política teve conferência de sintaxe; equilíbrio econômico, comportamento eleitoral e desempenho em partidas prolongadas ainda precisam de avaliação.
 
 ## Vocabulário do Brutopolis
 
@@ -470,3 +495,16 @@ Salários, impostos salariais e complementos municipais continuam movimentando d
 Encontros sociais indexam apenas pessoas aptas a conversar; a escolha do melhor vizinho dispensa ordenar todos os candidatos. O 3D adia a geometria de imóveis e postes fora da área renderizada e oculta seus grupos. A busca de cômodos para destaque só acontece no imóvel selecionado.
 
 Para diagnóstico, acrescente `profile=1` à URL. Um painel temporário mostra FPS, tempos de CPU, renderização e interface, custo do worker e número de chamadas de desenho. A instrumentação de quadros permanece desativada nas URLs comuns.
+
+
+## Capacidade básica e prioridades de desenvolvimento
+
+Os 32 vereadores exercem o mandato em tempo parcial e mantêm seus empregos profissionais. A sessão diária remunera uma hora pelo piso, apenas quando o tesouro conserva a reserva de subsistência. A troca de legislatura e a cassação de um vereador não encerram seu emprego civil. A prefeitura mantém sua equipe administrativa própria.
+
+Moradias populares são planejadas continuamente conforme adultos sem casa, vagas existentes e unidades em construção, com até duas frentes habitacionais paralelas. O modelo inicial usa blocos de 3×3 e quatro andares. Não há construção instantânea: continuam sendo necessários recursos, frete e trabalho. Alimentação, moradia e serviços essenciais têm precedência sobre ampliações administrativas e novas compras de materiais para obras secundárias durante carência social; contratos existentes não são apagados. A interface mostra os adiamentos e os indicadores de carência.
+
+Construtoras, pedreiras e transportadoras ajustam suas vagas à carga de trabalho, dentro de limites de equipe. Na ausência de transportadora, desempregados podem fazer fretes municipais temporários, com deslocamento, carga e remuneração reais, sem depender exclusivamente do prefeito. Alimentos para refeições públicas e de trabalhadores precedem materiais e iluminação na fila de entrega.
+
+A prefeitura e os refeitórios passam a comprar alimentos dos produtores locais, com pagamento e entrega, para recompor a oferta gratuita. O cálculo da demanda agrícola considera os alimentos básicos efetivamente produzíveis, sem diluir a necessidade em produtos industriais indisponíveis. Famintos reduzem a distância que aceitam percorrer por preferências de gosto. Provisões podem ser consumidas mesmo sem casa, e cuidados infantis aceitam as refeições gratuitas disponíveis. O orçamento de assistência é dividido entre os moradores ao longo do atendimento, em vez de se esgotar nos primeiros nomes da lista.
+
+Essas correções receberam conferência de sintaxe. A evolução de várias partidas não foi verificada nesta alteração.
