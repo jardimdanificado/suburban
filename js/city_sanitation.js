@@ -6,7 +6,7 @@ export class CitySanitation {
   addFacility(b, { unitId = null, homeId = null, access = 'employees' } = {}) {
     const id = `toilet:${unitId || b.id}`;
     if (this.facilities.has(id)) return this.facilities.get(id);
-    const f = { id, buildingId: b.id, unitId, homeId, access, price: access === 'paid' ? SANITATION_RULES.usePrice : 0, cleanliness: 100, uses: 0, occupantId: null, busyUntil: 0, createdAt: this.city.minute, lastCleanedAt: this.city.minute, cleaningJobId: null };
+    const f = { id, buildingId: b.id, unitId, homeId, access, price: access === 'paid' ? this.city.currency.price(SANITATION_RULES.usePrice) : 0, cleanliness: 100, uses: 0, occupantId: null, busyUntil: 0, createdAt: this.city.minute, lastCleanedAt: this.city.minute, cleaningJobId: null };
     this.facilities.set(id, f); return f;
   }
   setupBuilding(b) {
@@ -84,7 +84,7 @@ export class CitySanitation {
     if (providerId && !company) return null;
     // The weekly municipal crew is a fallback only for free public toilets.
     if (!company && f.access !== 'public') return null;
-    const fee = company ? SANITATION_RULES.cleaningPrice : 0;
+    const fee = company ? this.city.currency.price(SANITATION_RULES.cleaningPrice) : 0;
     if ((this.city.accounts.get(payer)?.balance || 0) < fee) return null;
     const id = this.nextJobId++, accountId = `cleaning:${id}`;
     this.city.accounts.set(accountId, { name: `Limpeza ${id}`, balance: 0 });
@@ -144,7 +144,7 @@ export class CitySanitation {
       if (b.litter > 0) { const n = Math.min(b.litter, inventoryFree(b)); b.inventory.lixo += n; b.litter -= n; }
       if (b.inventory.lixo < 12 || ['waste_collector', 'recycler'].includes(b.type)) continue;
       const collector = collectors.find(c => inventoryFree(c) >= 3); if (!collector) continue;
-      const quantity = Math.min(24, b.inventory.lixo, inventoryFree(collector)), fee = 200 + quantity * 50;
+      const quantity = Math.min(24, b.inventory.lixo, inventoryFree(collector)), fee = this.city.currency.price(200 + quantity * 50);
       const f = [...this.facilities.values()].find(f => f.buildingId === b.id), payer = b.type === 'residential' ? b.units[0]?.ownerId : f ? this.payer(f) : b.accountId;
       if (!payer) continue;
       const order = this.city.logistics.order(b, collector, 'lixo', quantity, 0, { payerAccountId: payer, purpose: 'waste-collection', serviceFee: fee, serviceAccountId: collector.accountId });

@@ -79,23 +79,24 @@ export class OptionsPanel {
 
   draw(ui) {
     if (!this.open) return;
-    const w = Math.min(568, ui.width - 16), h = Math.max(100, Math.min(460, ui.height - 120));
-    const x = Math.floor((ui.width - w) / 2), y = 40;
+    const floating=this.floatingBounds;
+    const w=floating?.w ?? Math.min(568,ui.width-16), h=floating?.h ?? Math.max(100,Math.min(460,ui.height-120));
+    const x=floating?.x ?? Math.floor((ui.width-w)/2), y=floating?.y ?? 40;
     this.bounds = { x, y, w, h };
-    // The modal blocks world interaction outside the window too.
-    ui.regions.push({ x: 0, y: 34, w: ui.width, h: ui.height - 34, onClick: null });
-    ui.ctx.save(); ui.ctx.fillStyle = "rgba(0,0,0,0.75)"; ui.ctx.fillRect(0, 34, ui.width, ui.height - 34); ui.ctx.restore();
-    ui.panel(x, y, w, h, "OPCOES", "");
-    ui.button(x + w - 126, y + 4, 88, 20, "PADROES", () => {
+    if(!floating){
+      ui.regions.push({x:0,y:34,w:ui.width,h:ui.height-34,onClick:null});
+      ui.ctx.save();ui.ctx.fillStyle='rgba(0,0,0,.75)';ui.ctx.fillRect(0,34,ui.width,ui.height-34);ui.ctx.restore();ui.panel(x,y,w,h,'OPCOES','');
+    }
+    ui.button(floating ? x+8 : x+w-126, floating ? y+h-32 : y+4, 88, 20, "PADROES", () => {
       for (const item of [...GRAPHICS, ...EFFECTS]) this.apply(item.key, item.default);
     });
-    ui.button(x + w - 32, y + 4, 26, 20, "X", () => this.toggle());
+    if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
     [["GRAPHICS", "GRAFICOS"], ["EFFECTS", "EFEITOS"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
       const bw = Math.floor((w - 24) / 3);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
     const rows = this.tab === "GRAPHICS" ? GRAPHICS : EFFECTS;
-    const contentY = y + 62, bottom = y + h - 6;
+    const contentY = y + 62, bottom = y + h - (floating?40:6);
     const first = ui.regions.length;
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();
     if (this.tab === "TIME") {
@@ -111,17 +112,17 @@ export class OptionsPanel {
       ui.button(x + 138, after, 90, 24, "PASSO", () => this.step());
       ui.text("ESPACO: PAUSA\n-/+: VELOCIDADE\n.: UM PASSO QUANDO PAUSADO", x + 12, after + 42);
     } else {
-      this.maxScroll = Math.max(0, rows.length * 38 + 26 - (bottom - contentY));
+      this.maxScroll = Math.max(0, rows.length * 30 + 22 - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
       ui.text(this.tab === "GRAPHICS" ? "AJUSTES DO RENDERIZADOR 3D" : "CAMERAS EM PERSPECTIVA", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
       rows.forEach((row, i) => {
-        const ry = contentY + 24 + i * 38 - this.scroll;
+        const ry = contentY + 22 + i * 30 - this.scroll;
         if (ry + 30 < contentY || ry > bottom) return;
-        ui.text(row.label, x + 12, ry + 9);
+        ui.text(row.label, x + 12, ry + 6);
         const index = row.values.findIndex(([v]) => v === this.values[row.key]);
         const valueWidth = Math.min(150, Math.floor(w * 0.42));
         const bx = x + w - valueWidth - 12;
-        ui.button(bx, ry, valueWidth, 28, row.values[index][1], () => this.apply(row.key, row.values[(index + 1) % row.values.length][0]));
+        ui.button(bx, ry, valueWidth, 24, row.values[index][1], () => this.apply(row.key, row.values[(index + 1) % row.values.length][0]));
       });
     }
     ui.ctx.restore();

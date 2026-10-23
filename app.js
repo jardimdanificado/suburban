@@ -1,11 +1,11 @@
 import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js";
-import { CityUI } from "./js/city_ui.js";
+import { CityDesktop } from "./js/city_desktop.js";
 import { World } from "./js/world.js";
 import { Renderer } from "./js/renderer.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js";
 import { setActiveEntities } from "./js/engine.js";
-import { LegacyCanvasUI } from "./js/legacy_ui.js";
+import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
 import { SimulationTime } from "./js/simulation_time.js";
 import { OptionsPanel } from "./js/options.js";
@@ -20,7 +20,7 @@ const worldSettings = resolveWorldSettings(new URLSearchParams(window.location.s
 const world = new World(worldSettings.presetId, worldSettings.seed);
 world.preset = worldSettings.preset;
 const entities = [];
-const legacyUI = new LegacyCanvasUI(canvasUI);
+const legacyUI = new ManagementCanvasUI(canvasUI);
 export const time = new SimulationTime();
 let optionStorage = null;
 try { optionStorage = window.localStorage; } catch {}
@@ -62,7 +62,6 @@ export function update(dt, _api) { city.update(dt); }
 
 /** Draw additional experience-specific UI after the framework HUD. */
 export function renderUI(ui, _api) {
-  if (options.open || editor.open) return;
   drawCitySites(ui);
   for (const c of city.citizens) {
     if (!c.conversation || c.conversation.a !== c.id) continue;
@@ -143,7 +142,7 @@ function stepSimulation() {
 }
 
 function toggleOptions() {
-  options.toggle();
+  cityUI.toggleTool('options',options);
   editor.endStroke();
   editingGesture = dragging = false;
   pointerDown = lastPointer = null;
@@ -188,10 +187,11 @@ function onPointerDown(event) {
   const rect = root.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
-  pointerOnUI = options.open || !!legacyUI.hitTest(x, y);
+  pointerOnUI = !!legacyUI.hitTest(x, y);
   root.setPointerCapture?.(event.pointerId);
   pointerDown = { x: event.clientX, y: event.clientY };
   lastPointer = pointerDown;
+  if (cityUI.pointerDown(x,y)) { pointerOnUI=true; return; }
   if (pointerOnUI) return;
   if (event.button === 0 && editor.open) {
     editingGesture = true;
@@ -204,12 +204,13 @@ function onPointerDown(event) {
 function onPointerMove(event) {
   const rect = root.getBoundingClientRect();
   mousePosition = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  if (cityUI.pointerMove(mousePosition.x,mousePosition.y)) return;
   if (editingGesture) {
     if (legacyUI.hitTest(mousePosition.x, mousePosition.y)) editor.lastTile = null;
     else editor.continueStroke(mapTileAt(mousePosition.x, mousePosition.y));
     return;
   }
-  if (pointerOnUI && lastPointer && !options.open && !editor.open) {
+  if (pointerOnUI && lastPointer) {
     if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) >= 6) {
       cityUI.scrollAt(pointerDown.x - rect.left, pointerDown.y - rect.top, lastPointer.y - event.clientY);
     }
@@ -237,6 +238,9 @@ function onPointerUp(event) {
   const rect = root.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
+  if (cityUI.pointerUp()) {
+    dragging=editingGesture=pointerOnUI=false;pointerDown=lastPointer=null;return;
+  }
   if (editingGesture) {
     editor.endStroke();
   } else if (pointerOnUI && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 6) {
@@ -261,7 +265,9 @@ function onPointerUp(event) {
 root.addEventListener("pointerdown", onPointerDown);
 root.addEventListener("pointermove", onPointerMove);
 root.addEventListener("pointerup", onPointerUp);
+root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if(cityUI.doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
 root.addEventListener("pointercancel", () => {
+  cityUI.pointerUp();
   editor.endStroke();
   editingGesture = dragging = pointerOnUI = false;
   pointerDown = lastPointer = null;
@@ -270,16 +276,7 @@ root.addEventListener("contextmenu", (event) => event.preventDefault());
 root.addEventListener("wheel", (event) => {
   if (event.target.closest(".ui-panel")) return;
   const rect = root.getBoundingClientRect();
-  if (options.open) {
-    options.scrollAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY);
-    event.preventDefault();
-    return;
-  }
-  if (editor.scrollAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY)) {
-    event.preventDefault();
-    return;
-  }
-  if (!editor.open && cityUI.scrollAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY)) { event.preventDefault(); return; }
+  if(cityUI.scrollAt(event.clientX-rect.left,event.clientY-rect.top,event.deltaY)){event.preventDefault();return;}
   if (legacyUI.hitTest(event.clientX - rect.left, event.clientY - rect.top)) return;
   event.preventDefault();
   const renderer = renderMode === "3d" ? renderer3D : renderer2D;
@@ -289,14 +286,14 @@ root.addEventListener("wheel", (event) => {
 
 window.addEventListener("keydown", (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
-  if (!options.open && !editor.open && cityUI.key(event)) { event.preventDefault(); return; }
+  if (cityUI.key(event)) { event.preventDefault(); return; }
   if (event.code === "Space" && !event.repeat) {
     event.preventDefault();
     togglePause();
   }
   if (event.code === "F3") { event.preventDefault(); setRenderMode(renderMode === "3d" ? "2d" : "3d"); }
   if (event.code === "KeyO" && !event.repeat) toggleOptions();
-  if (event.code === "KeyS" && !event.repeat && !options.open) editor.toggle();
+  if(event.code==="KeyS"&&!event.repeat)cityUI.toggleTool("editor",editor);
   if (event.code === "Escape") {
     if (options.open) options.toggle();
     else if (editor.open) editor.toggle();
@@ -324,28 +321,9 @@ function frame(now) {
   const pointerY = mousePosition.y;
   legacyUI.beginFrame(pointerX, pointerY);
   const clockText = `D${String(world.clock.day).padStart(2, "0")} ${String(world.clock.hour).padStart(2, "0")}:${String(world.clock.minute).padStart(2, "0")}`;
-  legacyUI.drawHud({
-    title: "SUBURBAN",
-    status: `${renderMode.toUpperCase()} ${clockText}`,
-    buttons: [
-      { label: "3D", selected: renderMode === "3d", onClick: () => setRenderMode("3d") },
-      { label: "2D", selected: renderMode === "2d", onClick: () => setRenderMode("2d") },
-    ],
-  });
-  legacyUI.drawActionBar([
-    { label: "EDITOR", selected: editor.open, onClick: () => editor.toggle() },
-    { label: "CIDADE", selected: cityUI.visible, onClick: () => cityUI.toggle() },
-    { label: "CENTRO", onClick: () => { renderer3D.setCamera(world.spawnCenter.x, world.spawnCenter.y); renderer2D.setCamera(world.spawnCenter.x, world.spawnCenter.y); } },
-    { label: "OPCOES", selected: options.open, onClick: toggleOptions },
-  ], { timeControls: [
-    { label: paused ? "IR" : "PAUSA", selected: paused, onClick: togglePause },
-    { label: "-", onClick: () => time.changeSpeed(-1) },
-    { label: `${time.speed}X`, onClick: () => { const next = time.speed === 32 ? 0.5 : time.speed * 2; time.setSpeed(next); } },
-    { label: "+", onClick: () => time.changeSpeed(1) },
-    { label: "PASSO", selected: paused, onClick: stepSimulation },
-  ] });
+  cityUI.drawChrome(legacyUI,{clockText,paused,speed:time.speed,renderMode});
   const hoverTile = editor.open && mousePosition.x >= 0 ? mapTileAt(mousePosition.x, mousePosition.y) : null;
-  editor.draw(legacyUI, hoverTile);
+
   if (!legacyUI.hitTest(mousePosition.x, mousePosition.y)) {
     editor.drawPreview(legacyUI, hoverTile, (x, y) => {
       if (renderMode === "3d") {
@@ -358,8 +336,8 @@ function frame(now) {
     });
   }
   renderUI(legacyUI, api);
-  options.draw(legacyUI);
-  cityUI.element.hidden = !cityUI.visible || options.open || editor.open;
+
+  cityUI.element.hidden = !cityUI.visible;
   requestAnimationFrame(frame);
 }
 
@@ -387,7 +365,10 @@ try { city.initialize(); } catch (error) {
   city.log(error.message, 'city', [], { kind: 'generation-failed' });
   city.syncClock();
 }
-export const cityUI = new CityUI({ city, root, select: selectEntity, camera(x, y) {
+export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
+  pause:togglePause, speed:()=>time.setSpeed(time.speed===32?0.5:time.speed*2), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor), render:setRenderMode,
+  center:()=>{renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);renderer2D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
+}, camera(x, y) {
   renderer2D.setCamera(x, y); renderer3D.setCamera(x, y);
 } });
 if (cityGenerationError) cityUI.notice = cityGenerationError;

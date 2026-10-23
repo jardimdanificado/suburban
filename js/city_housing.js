@@ -15,7 +15,7 @@ export class CityHousing {
   addFloor(b, z, ownerId) {
     const spec = this.city.buildingTypes[b.type], units = [];
     for (const { x, y } of floorCells(b, z)) {
-      const u = { id: `${b.id}:${x}:${y}:${z}`, buildingId: b.id, x, y, z, width: 1, depth: 1, roomType: b.type === 'residential' ? 'bedroom' : 'workspace', homeId: null, ownerId, tenantId: null, occupantId: b.active ? b.accountId : null, rent: b.type === 'residential' ? HOUSING_RULES.roomRent : spec.rent, price: b.type === 'residential' ? HOUSING_RULES.roomPrice : spec.price, forSale: ownerId === 'treasury', forRent: false, arrears: 0, missedDays: 0 };
+      const u = { id: `${b.id}:${x}:${y}:${z}`, buildingId: b.id, x, y, z, width: 1, depth: 1, roomType: b.type === 'residential' ? 'bedroom' : 'workspace', homeId: null, ownerId, tenantId: null, occupantId: b.active ? b.accountId : null, rent: this.city.currency.price(b.type === 'residential' ? HOUSING_RULES.roomRent : spec.rent), price: this.city.currency.price(b.type === 'residential' ? HOUSING_RULES.roomPrice : spec.price), forSale: ownerId === 'treasury', forRent: false, arrears: 0, missedDays: 0 };
       b.units.push(u); this.city.units.set(u.id, u); units.push(u);
     }
     if (b.constructionKind !== 'open-air') for (let y = 1; y < b.depth - 1; y++) for (let x = 1; x < b.width - 1; x++) (b.circulation ??= []).push({ x, y, z });
@@ -56,7 +56,7 @@ export class CityHousing {
   }
   buyHome(c, home) {
     const units = this.units(home), total = this.price(home);
-    if (!units.length || units.some(u => !u.forSale || u.ownerId === c.accountId) || c.balance < total + HOUSING_RULES.livingReserve) return false;
+    if (!units.length || units.some(u => !u.forSale || u.ownerId === c.accountId) || c.balance < total + this.city.currency.price(HOUSING_RULES.livingReserve)) return false;
     for (const u of units) if (!this.city.buyUnit(c.id, u.id)) throw Error('Compra de moradia mudou durante transação síncrona.');
     return true;
   }
@@ -88,14 +88,14 @@ export class CityHousing {
         if (current && !this.hasBathroom(h)) continue;
         const units = this.units(h), owned = units.every(u => u.ownerId === c.accountId);
         if (owned && this.rentHome(c, h)) break;
-        if (c.wealthTier === 'wealthy' && this.price(h) + HOUSING_RULES.livingReserve <= c.balance && this.buyHome(c, h) && this.rentHome(c, h)) break;
+        if (this.price(h) + this.city.currency.price(HOUSING_RULES.livingReserve) <= c.balance && this.buyHome(c, h) && this.rentHome(c, h)) break;
         // Keep money for the next meals; a lease must be sustainable beyond its first payment.
         if (this.rent(h, c) + Math.min(1500, c.balance * .25) <= c.balance && this.rentHome(c, h)) break;
       }
     }
   }
   invest(initial = false) {
-    const investors = this.city.citizens.filter(c => c.wealthTier === 'wealthy' && this.city.society.isAdult(c));
+    const investors = this.city.citizens.filter(c => this.city.society.isAdult(c));
     for (const c of investors) {
       if (!c.homeUnitId) {
         const home = [...this.homes.values()].find(h => this.units(h).every(u => u.forSale && !u.tenantId && u.ownerId !== c.accountId) && this.price(h) + 60000 < c.balance);

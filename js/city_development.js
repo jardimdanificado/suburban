@@ -1,7 +1,7 @@
 import { inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, pavePath } from './city_terrain.js';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
-export const DEVELOPMENT_RULES = { landPerCell: 180, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 120, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 80 };
+export const DEVELOPMENT_RULES = { landPerCell: 2500, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 10000, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 5000 };
 export class CityDevelopment {
   constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; }
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
@@ -11,7 +11,7 @@ export class CityDevelopment {
   serviceOffers(builderId) {
     const b = this.city.building(builderId);
     if (!b?.active || b.type !== 'builder') return [];
-    return [{ service: 'building', label: 'Empreendimento sob medida', feePerCell: DEVELOPMENT_RULES.constructionFeePerCell }, { service: 'road', label: 'Construção de estrada', feePerCell: DEVELOPMENT_RULES.roadFeePerTile }, { service: 'expansion', label: 'Ampliação de edifício', feePerCell: DEVELOPMENT_RULES.constructionFeePerCell }];
+    return [{ service: 'building', label: 'Empreendimento sob medida', feePerCell: this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) }, { service: 'road', label: 'Construção de estrada', feePerCell: this.city.currency.price(DEVELOPMENT_RULES.roadFeePerTile) }, { service: 'expansion', label: 'Ampliação de edifício', feePerCell: this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) }];
   }
   registerService(accountId, builder, details) {
     const city = this.city, owner = this.clientCitizen(accountId);
@@ -34,13 +34,13 @@ export class CityDevelopment {
     const tiles = route.filter(p => !ROAD_TILES.has(tileAt(city.world, Math.floor(p.x), Math.floor(p.y))));
     if (!tiles.length || tiles.some(p => this.plots.some(l => p.x >= l.x && p.x < l.x + l.width && p.y >= l.y && p.y < l.y + l.depth)) || this.projects.some(p => p.service === 'road' && !p.cancelled && p.status !== 'completed' && p.path.some(t => tiles.some(n => n.x === t.x && n.y === t.y)))) return null;
     const builder = this.selectBuilder(accountId, tiles[0], builderId);
-    return this.registerService(accountId, builder, { service: 'road', type: 'road', name: `Estrada de ${tiles.length} células`, path: tiles, route, door: { ...tiles[0] }, stone: tiles.length * DEVELOPMENT_RULES.roadStonePerTile, requiredLabor: tiles.length * DEVELOPMENT_RULES.roadLaborPerTile, fee: tiles.length * DEVELOPMENT_RULES.roadFeePerTile });
+    return this.registerService(accountId, builder, { service: 'road', type: 'road', name: `Estrada de ${tiles.length} células`, path: tiles, route, door: { ...tiles[0] }, stone: tiles.length * DEVELOPMENT_RULES.roadStonePerTile, requiredLabor: tiles.length * DEVELOPMENT_RULES.roadLaborPerTile, fee: tiles.length * city.currency.price(DEVELOPMENT_RULES.roadFeePerTile) });
   }
   beginExpansion(accountId, buildingId, { floors = 1, builderId = null } = {}) {
     const b = this.city.building(buildingId);
     if (!b || b.constructionKind !== 'building' || !Number.isInteger(floors) || floors < 1 || b.floors + floors > 12 || !b.units.every(u => u.ownerId === accountId) || this.projects.some(p => p.buildingId === buildingId && p.service === 'expansion' && !p.cancelled && p.status !== 'completed')) return null;
     const builder = this.selectBuilder(accountId, b.door, builderId), cells = b.width * b.depth * floors;
-    const project = this.registerService(accountId, builder, { service: 'expansion', type: b.type, name: `Ampliação de ${b.entity.properties.name}`, buildingId, plotId: b.plotId, baseFloors: b.floors, floors, targetFloors: b.floors + floors, door: { ...b.door }, stone: cells * DEVELOPMENT_RULES.stonePerCell, requiredLabor: cells * DEVELOPMENT_RULES.laborPerCell, fee: cells * DEVELOPMENT_RULES.constructionFeePerCell });
+    const project = this.registerService(accountId, builder, { service: 'expansion', type: b.type, name: `Ampliação de ${b.entity.properties.name}`, buildingId, plotId: b.plotId, baseFloors: b.floors, floors, targetFloors: b.floors + floors, door: { ...b.door }, stone: cells * DEVELOPMENT_RULES.stonePerCell, requiredLabor: cells * DEVELOPMENT_RULES.laborPerCell, fee: cells * this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) });
     const lot = this.plots.find(p => p.id === b.plotId); if (project && lot) lot.projectId = project.id;
     return project;
   }
@@ -87,10 +87,11 @@ export class CityDevelopment {
   ownerCitizen(accountId) {
     const account = this.city.accounts.get(accountId);
     if (account?.entity?.destroyed) return null;
+    if (account?.municipal) return this.city.economy.citizen(this.city.economy.mayorId);
     return account?.entity?.properties.citizen ? this.city.society.citizen(account.id) : this.city.economy.citizen(account?.ownerId);
   }
   attachBuilding(b, ownerId = 'treasury') {
-    const lot = { id: this.nextPlotId++, x: b.entity.x, y: b.entity.y, width: b.width, depth: b.depth, door: { ...b.door }, ownerId, price: b.width * b.depth * DEVELOPMENT_RULES.landPerCell, forSale: false, forRent: false, rent: 0, buildingId: b.id, projectId: null };
+    const lot = { id: this.nextPlotId++, x: b.entity.x, y: b.entity.y, width: b.width, depth: b.depth, door: { ...b.door }, ownerId, price: b.width * b.depth * this.city.currency.price(DEVELOPMENT_RULES.landPerCell), forSale: false, forRent: false, rent: 0, buildingId: b.id, projectId: null };
     this.plots.push(lot); b.plotId = lot.id; return lot;
   }
   overlaps(x, y, width, depth, exceptId = null) {
@@ -104,7 +105,7 @@ export class CityDevelopment {
     if (terrain.error || level === null) return null;
     const hall = this.city.buildings[0];
     if (hall && findTerrainPath(this.city.world, terrain.door, hall.door, this.city.occupied, { extraBlocked: (xx, yy) => (xx >= x && xx < x + width && yy >= y && yy < y + depth) || this.plots.some(p => xx >= p.x && xx < p.x + p.width && yy >= p.y && yy < p.y + p.depth) }) === null) return null;
-    const p = { id: this.nextPlotId++, x, y, width, depth, door: terrain.door, level, ownerId: 'treasury', price: width * depth * DEVELOPMENT_RULES.landPerCell, forSale: true, forRent: false, rent: 0, buildingId: null, projectId: null };
+    const p = { id: this.nextPlotId++, x, y, width, depth, door: terrain.door, level, ownerId: 'treasury', price: width * depth * this.city.currency.price(DEVELOPMENT_RULES.landPerCell), forSale: true, forRent: false, rent: 0, buildingId: null, projectId: null };
     this.plots.push(p); return p;
   }
   ensurePlots(count = 18) {
@@ -145,8 +146,8 @@ export class CityDevelopment {
     const cells = width * depth * floors, stone = kind === 'open-air' ? 0 : cells * DEVELOPMENT_RULES.stonePerCell;
     const builder = this.selectBuilder(accountId, terrain.door, builderId);
     if (builderId && !builder) return null;
-    const fee = builder && stone ? cells * DEVELOPMENT_RULES.constructionFeePerCell : 0;
-    if ((city.accounts.get(accountId)?.balance || 0) < stone * city.economy.goods.pedra.price + fee + 20000) return null;
+    const fee = builder && stone ? cells * this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) : 0;
+    if ((city.accounts.get(accountId)?.balance || 0) < stone * city.economy.goods.pedra.price + fee + city.currency.price(20000)) return null;
     const project = { id: `project:${this.nextProjectId++}`, accountId, ownerId: owner.id, name: `Obra no terreno ${p.id}`, service: 'building', width, depth, plotId, type, crop, kind, floors, sell, stone, labor: 0, requiredLabor: stone ? cells * DEVELOPMENT_RULES.laborPerCell : 0, builderId: builder?.id || null, fee, active: true, door: terrain.door, status: stone ? 'materials' : 'ready', startedAt: city.minute, cancelled: false };
     initializeInventory(project, city.economy.goods, stone + 48);
     project.feeAccountId = `construction-fee:${project.id}`;
@@ -168,7 +169,8 @@ export class CityDevelopment {
     const account = city.accounts.get(project.accountId); if (account?.entity?.properties.cityBuilding) account.totalExpenses += project.fee;
     if (project.type === 'residential' || project.sell) {
       for (const u of b.units) { u.occupantId = null; u.forSale = project.accountId === 'treasury' || project.sell; u.forRent = project.accountId !== 'treasury' && !project.sell; }
-    } else city.economy.activateBusiness(b, this.ownerCitizen(project.accountId), project.crop, false);
+    } else if (project.accountId === 'treasury') city.economy.activateMunicipalBusiness(b, city.currency.price(50000), project.crop);
+    else city.economy.activateBusiness(b, this.ownerCitizen(project.accountId), project.crop, false);
     city.workMeals.closeSite(project, b);
     city.log(`${b.entity.properties.name} concluído no terreno ${p.id}.`, 'construction', [project.ownerId], { kind: 'project-completed', buildingId: b.id, plotId: p.id }); return b;
   }
@@ -213,7 +215,7 @@ export class CityDevelopment {
     this.city.economy.appointMayor();
     for (const p of this.plots) if (p.buildingId && !this.city.building(p.buildingId)) { p.buildingId = null; p.forSale = true; }
     for (const project of this.projects) if (project.builderId && !this.city.building(project.builderId) && project.status !== 'completed' && !project.cancelled) { project.builderId = null; this.city.transfer(project.feeAccountId, project.accountId, this.city.accounts.get(project.feeAccountId)?.balance || 0, 'Estorno de contrato de construtora encerrada'); project.fee = 0; }
-    for (const project of this.projects) if (project.accountId === 'treasury' && this.clientCitizen('treasury')) project.ownerId = this.clientCitizen('treasury').id;
+    for (const project of this.projects) if ((project.accountId === 'treasury' || this.city.accounts.get(project.accountId)?.municipal) && this.clientCitizen(project.accountId)) project.ownerId = this.clientCitizen(project.accountId).id;
     for (const p of this.projects) if (!p.cancelled && p.status !== 'completed' && ((p.service === 'expansion' && !this.city.building(p.buildingId)) || !this.clientCitizen(p.accountId) || (p.accountId !== 'treasury' && !this.city.society.citizen(p.ownerId)))) {
       this.city.transfer(p.feeAccountId, 'treasury', this.city.accounts.get(p.feeAccountId)?.balance || 0, 'Estorno de obra cancelada');
       p.cancelled = true; p.active = false; p.status = 'cancelled';

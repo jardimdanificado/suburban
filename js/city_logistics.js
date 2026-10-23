@@ -10,7 +10,7 @@ export class CityLogistics {
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
     const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && b.workers.length && b.balance > 0 && city.economy.connected(b, seller));
     let carrier = carriers.sort((a, b) => this.shipments.filter(s => s.carrierId === a.id && s.status === 'in-transit').length - this.shipments.filter(s => s.carrierId === b.id && s.status === 'in-transit').length)[0];
-    let fee = carrier ? Math.max(120, (route.length + Math.abs(carrier.door.x - seller.door.x) + Math.abs(carrier.door.y - seller.door.y)) * 12 + quantity * 4) : 0;
+    let fee = carrier ? city.currency.price(Math.max(120, (route.length + Math.abs(carrier.door.x - seller.door.x) + Math.abs(carrier.door.y - seller.door.y)) * 12 + quantity * 4)) : 0;
     if (!Number.isSafeInteger(serviceFee) || serviceFee < 0 || (serviceFee && !city.accounts.has(serviceAccountId))) return false;
     const cost = quantity * unitPrice;
     const funds = city.accounts.get(payerAccountId)?.balance || 0;

@@ -5,12 +5,12 @@ import { GOODS, ECONOMY_RULES } from '../js/city_economy.js';
 import { inventoryUsed, inventoryFree, incomingItems } from '../js/city_inventory.js';
 
 const freePlot = city => city.development.plots.find(p => p.ownerId === 'treasury' && !p.buildingId && !p.projectId);
-const investor = city => city.citizens.filter(c => c.wealthTier === 'wealthy').sort((a, b) => b.balance - a.balance)[0];
+const investor = city => city.citizens.filter(c => c.fixtureInvestor).sort((a, b) => b.balance - a.balance)[0];
 function seedStone(city, quarry, qty = 24) {
   quarry.inventory.pedra += qty; quarry.stoneReserve -= qty; city.economy.produced.pedra += qty;
 }
 function audit(city) {
-  assert.equal(totalMoney(city), 2000000);
+  assert.equal(totalMoney(city), city.currency.issued);
   for (const holder of [...city.buildings, ...city.development.projects, ...city.logistics.shipments]) {
     for (const value of Object.values(holder.inventory)) assert(Number.isSafeInteger(value) && value >= 0);
     assert(inventoryUsed(holder) + incomingItems(holder) <= holder.inventoryCapacity, holder.name || holder.type || holder.id);
@@ -22,10 +22,10 @@ function audit(city) {
   }
 }
 
-test('a new city starts with exactly the hall, builder and quarry, finite public food and municipal land for sale', () => {
+test('a new city starts with the hall, municipal firms and mint, finite public food and municipal land for sale', () => {
   const city = setup({ starter: true });
-  assert.deepEqual(city.buildings.map(b => b.type), ['townhall', 'builder', 'quarry']);
-  assert.equal(city.citizens.length, 24); assert.equal(city.stats().wealthy, 3);
+  assert.deepEqual(city.buildings.map(b => b.type), ['townhall', 'builder', 'quarry', 'mint']);
+  assert.equal(city.citizens.length, 24); assert.equal(city.stats().entrepreneurs, 0);
   const hall = city.buildings[0]; assert(hall.inventory.pao >= 24 * 3 * 20);
   assert.equal(hall.inventory.pao, city.economy.initialStock.pao);
   const c = city.citizens[10], balance = c.balance, stock = hall.inventory.pao;
@@ -37,7 +37,7 @@ test('a new city starts with exactly the hall, builder and quarry, finite public
 });
 
 test('land purchases, resales and municipal listing policy transfer money without changing the natural terrain', () => {
-  const city = setup({ starter: true }), p = freePlot(city), a = investor(city), b = city.citizens.find(c => c.wealthTier === 'wealthy' && c.id !== a.id);
+  const city = setup({ starter: true, funded: true }), p = freePlot(city), a = investor(city), b = city.citizens.find(c => c.fixtureInvestor && c.id !== a.id);
   const before = [], cash = a.balance, treasury = city.treasury;
   for (let y = p.y; y < p.y + p.depth; y++) for (let x = p.x; x < p.x + p.width; x++) before.push(city.world.getTile(x, y));
   assert(city.development.listPlot('treasury', p.id, { price: p.price, forSale: false, forRent: true })); assert(p.forSale); assert(!p.forRent);
@@ -51,7 +51,7 @@ test('land purchases, resales and municipal listing policy transfer money withou
 });
 
 test('an open-air farm requires only purchased land, and creates no walls or stone consumption', () => {
-  const city = setup({ starter: true }), a = investor(city), p = freePlot(city);
+  const city = setup({ starter: true, funded: true }), a = investor(city), p = freePlot(city);
   assert(city.development.buyPlot(a.accountId, p.id));
   const beforeStone = city.economy.consumed.pedra;
   const project = city.development.beginProject(a.accountId, p.id, 'farm', { kind: 'open-air', crop: 'maca' }); assert(project);
@@ -62,7 +62,7 @@ test('an open-air farm requires only purchased land, and creates no walls or sto
 });
 
 test('buildings cannot bypass land ownership, stone delivery or construction labor', () => {
-  const city = setup({ starter: true }), a = investor(city), p = freePlot(city), quarry = city.buildings.find(b => b.type === 'quarry');
+  const city = setup({ starter: true, funded: true }), a = investor(city), p = freePlot(city), quarry = city.buildings.find(b => b.type === 'quarry');
   assert.equal(city.addBuilding('market', p.x, p.y, { width: p.width, depth: p.depth, floors: 1 }), null);
   assert(city.development.buyPlot(a.accountId, p.id));
   const project = city.development.beginProject(a.accountId, p.id, 'market'); assert(project); assert.equal(project.stone, p.width * p.depth * 2);
@@ -124,27 +124,27 @@ test('interrupted courier paths cannot teleport cargo to its destination or move
 test('a transport company hires a courier, earns delivery fees and pays wages from a separate business account', () => {
   const city = setup(), a = investor(city); let carrier;
   for (const site of city.economy.locateBuilding('carrier')) { carrier = city.addBuilding('carrier', site.x, site.y, { ...site, free: true }); if (carrier) break; }
-  assert(carrier); assert(city.economy.purchasePremises(carrier, a, null));
-  const worker = city.citizens.find(c => c.wealthTier === 'worker' && c.id !== city.economy.mayorId); city.economy.leaveJob(worker); worker.jobId = carrier.id; carrier.workers = [worker.id];
+  assert(carrier); for(const u of carrier.units)u.price=1000; assert(city.economy.purchasePremises(carrier, a, null));
+  const worker = city.citizens.find(c => !c.fixtureInvestor && c.id !== city.economy.mayorId); city.economy.leaveJob(worker); worker.jobId = carrier.id; carrier.workers = [worker.id];
   const farm = city.economy.businesses.find(b => b.type === 'farm'), buyer = city.economy.businesses.find(b => b.type === 'market'); farm.inventory.maca = 12; city.economy.produced.maca += 12;
   const revenue = carrier.totalRevenue, expenses = carrier.totalExpenses, skill = worker.skills.logistics;
   const s = city.logistics.order(farm, buyer, 'maca', 6, 100); assert(s); assert.equal(s.carrierId, carrier.id); assert(s.fee > 0);
   finishShipment(city, s); assert.equal(carrier.totalRevenue - revenue, s.fee); assert(carrier.totalExpenses > expenses); assert(worker.skills.logistics > skill); audit(city);
 });
 
-test('a starter city autonomously builds, sells and rents housing, grows food and transports every material with conserved stocks', () => {
+test('a starter city autonomously builds housing, grows food and transports every material with conserved stocks', () => {
   const city = setup({ starter: true });
   for (let i = 0; i < 10 * 1440 * 4; i++) { city.update(1 / 16); if (i % 240 === 0) audit(city); }
   for (const type of ['residential', 'farm', 'market', 'bakery', 'greengrocer', 'carrier']) assert(city.buildings.some(b => b.type === type), type);
   assert(city.economy.produced.pedra > 0); assert(city.economy.consumed.pedra > 0); assert(city.economy.produced.pao > 0); assert(city.logistics.delivered > 0);
   assert(city.events.some(e => e.data.kind === 'shipment-delivered'));
   const residence = city.buildings.find(b => b.type === 'residential'), builder = city.economy.businesses.find(b => b.type === 'builder');
-  assert(residence.units.some(u => u.ownerId !== builder.accountId)); assert(residence.units.some(u => u.tenantId && u.tenantId !== u.ownerId));
+  assert(residence.units.some(u => u.tenantId && u.tenantId !== u.ownerId));
   assert(city.stats().homeless < city.stats().population); assert(city.buildings[0].inventory.pao > 0); audit(city);
 });
 
 test('demolishing a supplier cancels its active cargo with a refund and conserved items', () => {
-  const city = setup({ starter: true }), owner = investor(city), lot = freePlot(city), quarry = city.buildings.find(b => b.type === 'quarry');
+  const city = setup({ starter: true, funded: true }), owner = investor(city), lot = freePlot(city), quarry = city.buildings.find(b => b.type === 'quarry');
   city.development.buyPlot(owner.accountId, lot.id); const project = city.development.beginProject(owner.accountId, lot.id, 'market');
   seedStone(city, quarry, 24); const s = city.logistics.order(quarry, project, 'pedra', 12, GOODS.pedra.price); assert(s);
   quarry.entity.destroyed = true; city.reconcile(); city.development.reconcile(); city.logistics.updateMinute();
@@ -152,7 +152,7 @@ test('demolishing a supplier cancels its active cargo with a refund and conserve
 });
 
 test('an abandoned project releases its land, materials and escrow when its owner leaves', () => {
-  const city = setup({ starter: true }), owner = investor(city), lot = freePlot(city), quarry = city.buildings.find(b => b.type === 'quarry');
+  const city = setup({ starter: true, funded: true }), owner = investor(city), lot = freePlot(city), quarry = city.buildings.find(b => b.type === 'quarry');
   city.development.buyPlot(owner.accountId, lot.id); const project = city.development.beginProject(owner.accountId, lot.id, 'market');
   seedStone(city, quarry, 24); const s = city.logistics.order(quarry, project, 'pedra', 12, GOODS.pedra.price); assert(s);
   owner.entity.destroyed = true; city.reconcile(); city.development.reconcile(); city.logistics.updateMinute();

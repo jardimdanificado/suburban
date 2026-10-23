@@ -6,28 +6,34 @@ Uma cidade procedural sobre o relevo natural, com pessoas, patrimônio, governo,
 python3 -m http.server 8000
 ```
 
-Abra `http://localhost:8000`. Arraste o mapa para mover a câmera e use a roda para aproximar. **Cidade** na barra inferior mostra ou oculta o painel. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.
+Abra `http://localhost:8000`. Arraste o mapa para mover a câmera e use a roda para aproximar. A barra superior abre janelas e controla pausa, velocidade e visualização. O minimapa e o botão de centralizar ajudam a navegar pelo terreno. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.
 
 ## Acompanhar a cidade
 
 - **Cidade:** indicadores de população, emprego, moradia, vínculos e alertas de necessidades.
-- **Governo:** prefeito, tesouro separado, imóveis públicos, movimentações e geração de terreno.
+- **Governo:** prefeito, tesouro separado, imóveis públicos, emissão monetária, inflação, movimentações e geração de terreno.
 - **Pessoas:** lista pesquisável e fichas com necessidades, habilidades, trabalho, parentesco, vínculos, patrimônio e movimentações financeiras.
 - **Terrenos:** cadastro de lotes, proprietários, preços, obras, pedras entregues e progresso de construção.
 - **Imóveis:** operação, finanças, estoque, equipe e ficha individual de cada célula 1x1x1, com dono, ocupante, preço, aluguel e atrasos.
-- **Empresas:** diretório dos negócios privados e acesso às respectivas fichas.
+- **Empresas:** diretório das empresas privadas e municipais e acesso às respectivas fichas.
 - **Produção:** produção, consumo e estoque por alimento, cultivos, movimentações de mercadorias e oportunidades de investimento.
 - **Transportes:** cargas, origem/destino, situação, transportador, mercadoria e frete.
 - **Saneamento:** banheiros, acesso, limpeza, contratos de faxina, lixo e registros de morte.
 - **Histórico:** busca, filtros por assunto e pessoa, congelamento, carregamento de mais registros e exportação JSON dos resultados filtrados.
 
-A interface usa as janelas, botões e barras NES do próprio framework, com fonte bitmap, como no Brutopolis. Em telas largas, lista e ficha aparecem lado a lado; em telas pequenas, os botões **Lista/Ficha** alternam as vistas. **<>** amplia a janela; **X**, **C** ou **Esc** fecha o observatório. **/** foca a busca. A roda ou o arrasto no painel rola seu conteúdo; **Page Up/Down**, **Home/End** percorrem a ficha. **Localizar no mapa** centraliza a câmera e fecha a janela.
+A interface usa uma **área de trabalho com janelas independentes**, seguindo o funcionamento do OpenTTD. A barra de ícones no topo abre os diretórios e ferramentas; passe o cursor para ver o nome. Em telas estreitas, o último botão abre a lista completa de ferramentas. A barra inferior mostra data, população e tesouro.
+
+Arraste a **barra de título** para mover uma janela e o **canto inferior direito** para redimensionar. As bordas encaixam nas outras janelas e nos limites da tela. A janela clicada vem para frente. Cada janela mantém busca, filtros, abas e rolagem próprios. Abrir um cidadão ou prédio cria uma ficha separada e mantém o diretório aberto; reabrir o mesmo registro traz sua janela existente para frente.
+
+Os controles da barra permitem **fechar**, **fixar**, **recolher** e **maximizar/restaurar**. Um duplo clique no título recolhe ou restaura. **Delete** fecha as janelas não fixadas; **Shift+Delete**, todas; **Esc**, a janela não fixada mais recente; **Tab/Shift+Tab** alterna o foco. O menu de janelas também organiza em cascata. Posições e tamanhos são lembrados ao reabrir durante a sessão.
+
+Opções e editor usam o mesmo sistema de janelas móveis. O **minimapa** exibe terreno, prédios e pessoas; clicar nele centraliza a câmera. **C** abre o panorama da cidade; **/** foca a busca da janela ativa. A roda, o arrasto do conteúdo e a barra de rolagem percorrem apenas a janela sob o cursor. **Page Up/Down**, **Home/End** percorrem a janela ativa. A planta de cada prédio permite selecionar andares e cômodos: **Q** quarto, **B** banheiro, **E** espaço empresarial e **::** circulação comum. O histórico mantém filtros, congelamento e exportação JSON.
 
 ## Governo e propriedade
 
 O prefeito é um cidadão, escolhido inicialmente pela habilidade de administração pública entre os moradores que não são investidores. Ele tem rotina, conta pessoal, salário, necessidades e vínculos; seu dinheiro é separado do caixa municipal. A saída do prefeito provoca a escolha de outro morador. A prefeitura autoriza vendas de instalações e financia serviços públicos; suas decisões ficam no histórico.
 
-O mapa começa com **prefeitura, construtora e pedreira**. A prefeitura conserva os espaços de seus edifícios à venda e **nunca aluga**. As duas empresas iniciais são compradas por cidadãos ricos; o restante da cidade surge de investimentos e obras. Moradores começam sem casa e podem usar os serviços de emergência da prefeitura enquanto as moradias são construídas.
+O mapa começa com **prefeitura, construtora municipal, pedreira municipal e casa da moeda**. A prefeitura conserva os espaços de seus edifícios à venda e **nunca aluga**. Construtora e pedreira operam com contas próprias, funcionários e capital público, sem proprietários privilegiados. Moradores começam sem casa e usam os serviços de emergência enquanto a construtora ergue moradias para venda ou aluguel em sua própria conta. O município também pode contratar instalações essenciais quando os moradores ainda não conseguem financiá-las; essas empresas continuam públicas e não pertencem ao prefeito.
 
 A prefeitura cadastra terrenos acessíveis de tamanhos variados (como 3x3, 3x5, 4x4, 5x5 e 6x4), sempre em um único nível, sem rampas na área do lote e sem alterar as alturas naturais. Vende os terrenos a cidadãos ou construtoras, e o dinheiro passa ao tesouro. Proprietários podem usar ou revender seus terrenos. As construtoras compram lotes, erguem residenciais para vender seus espaços e recebem pelo trabalho contratado. Os investidores individuais priorizam instalações para seus próprios negócios e compram moradias para morar ou alugar.
 
@@ -44,21 +50,27 @@ O preço inicial residencial é **R$ 1.200 por cômodo**, com aluguel diário de
 
 A prefeitura vende e nunca aluga. Proprietários privados podem alugar ou revender; construtoras preferem vender, mas podem colocar casas não vendidas para alugar após um dia. A venda de uma unidade ocupada preserva o inquilino. A primeira diária é paga na contratação; três dias sem pagamento encerram o contrato e deixam a família sem moradia. Pessoas sem casa continuam procurando emprego, comida e abrigo, com descanso menos eficaz ao dormir na rua.
 
-## População e capital inicial
+## População, moeda e inflação
 
-A cidade começa com **três ricos e 21 trabalhadores**. Cada rico recebe R$ 4.000,00 de capital inicial; os outros recebem entre R$ 40,00 e R$ 59,99. Os valores saem do caixa municipal inicial de R$ 20.000,00: não são emitidos novos recursos. Os prédios iniciais são patrimônio de partida.
+Os **24 moradores começam com R$ 1.000 cada**, transferidos do tesouro. Não há classe de ricos nem promoção automática a investidor. Qualquer adulto, exceto o prefeito em exercício, pode abrir uma empresa se tiver dinheiro para terreno, materiais, construção, operação e uma reserva pessoal. As diferenças de patrimônio surgem das transações e do trabalho.
 
-Os investidores compram a própria moradia e apartamentos para alugar à maioria, preservando recursos para empresas. Preferem gerir negócios próprios a aceitar empregos. Moradores que acumularem bastante capital também podem se tornar investidores. Cada pessoa traz três refeições de provisão, registradas separadamente dos produtos das empresas, para atravessar a implantação da cadeia alimentar. Essas refeições acabam e não são repostas automaticamente.
+A emissão inicial de cenário é **R$ 120.000**, registrada pela casa da moeda e dividida entre os cidadãos, o tesouro e as contas das instalações municipais. A construtora recebe R$ 20.000 e a pedreira R$ 5.000 para iniciar a cadeia de obras. Essas contas não são patrimônio pessoal de nenhum morador. Comprar uma empresa municipal em operação exige pagar pelos espaços, terreno, caixa e estoque, além de reservar o capital de operação.
 
-Desemprego, falta de alimentos, empresas sem recursos e inadimplência são situações possíveis. Não há garantia de emprego ou enriquecimento para cada pessoa.
+Depois da fundação, a **casa da moeda precisa de funcionário presente e trabalhando entre 08h e 17h**. Cada minuto de trabalho emite R$ 2 para o tesouro, até R$ 800 por dia. O funcionário recebe salário da conta da casa da moeda; a emissão não entra em sua conta pessoal. Sem trabalhador ou sem casa da moeda não há emissão. Impostos, salários, vendas e orçamentos municipais apenas transferem dinheiro existente.
+
+A inflação usa um modelo monetário simplificado: a razão entre o total emitido e a emissão inicial define o índice de preços de referência; a cada dia os preços percorrem 35% da diferença até esse índice. Esse modelo representa a diluição monetária, sem tentar reproduzir toda a formação de preços de uma economia real. Alimentos, sementes, pedras, serviços, fretes, novos contratos, terrenos, imóveis e aluguéis acompanham o índice. Salários são reajustados com arredondamento em centavos. Saldos bancários, pagamentos em caução, contratos de frete/construção já reservados e atrasos de aluguel mantêm seu valor nominal. O painel **Governo**, inclusive a aba **Tesouro**, mostra emissão diária, total e inflação diária/acumulada.
+
+Os preços iniciais dos espaços comerciais ficam entre **R$ 500 e R$ 600 por célula**, além do terreno a R$ 25 por tile. Uma moradia completa continua custando R$ 2.400, acima do saldo inicial de um cidadão. Pedra custa R$ 150 por unidade, o serviço de construção R$ 100 por célula e a pavimentação R$ 50 por tile, com materiais e frete pagos à parte. Abrir uma fazenda ao ar livre requer o terreno e o capital de operação; dispensa a construção do edifício.
+
+Cada pessoa traz três refeições de provisão, separadas dos estoques das empresas. A prefeitura mantém uma reserva alimentar finita para a implantação da cadeia local. Desemprego, falta de alimentos, empresas sem recursos e inadimplência continuam possíveis. Emissão monetária não cria alimentos, pedras, moradias ou mão de obra.
 
 ## Empresas, contratação e aprendizado
 
-Os negócios privados iniciais são **mercados, hortifrutis, padarias e fazendas**. Os ricos escolhem investimentos automaticamente; não é necessário clicar para fundar uma empresa. O empresário compra as instalações da prefeitura, capitaliza a conta da empresa e contrata trabalhadores. Caixa empresarial, dinheiro do dono e patrimônio são separados. Aportes e distribuição de lucros usam transferências reais.
+Mercados, hortifrutis, padarias, fazendas e serviços surgem conforme a demanda e o capital disponível. Moradores escolhem investimentos automaticamente; não é necessário clicar para fundar uma empresa. O empresário compra instalações ou contrata uma obra, capitaliza a conta da empresa e contrata trabalhadores. Quando uma fazenda já tem o próprio dono trabalhando, sua mão de obra contratada pode atender serviços ainda sem funcionários. Caixa empresarial, dinheiro do dono e patrimônio são separados. Aportes e distribuição de lucros usam transferências reais.
 
 A contratação combina habilidade profissional (75% da pontuação), confiança (15%) e afeto (10%) na relação com o dono. Pessoas ganham habilidades praticando sua profissão ou outras atividades: agricultura, panificação, comércio, gestão, administração pública, saúde, manutenção, comunicação e cuidados. Conversas e cuidados com filhos também ensinam. A habilidade melhora a produtividade agrícola e da padaria e influencia a remuneração.
 
-As rotinas de trabalho acontecem entre 08:00 e 17:00, com salários pelo trabalho efetivo e imposto de 10%. Ricos que administram a própria empresa não recebem salário dela; podem receber lucros. Fazendas em crescimento e padarias sem matéria-prima não geram salários ou produção fictícios enquanto aguardam. Os serviços públicos recebem orçamento autorizado pelo prefeito.
+As rotinas de trabalho acontecem entre 08:00 e 17:00, com salários pelo trabalho efetivo e imposto de 10%. Proprietários que administram a própria empresa não recebem salário dela; podem receber lucros. Fazendas em crescimento e padarias sem matéria-prima não geram salários ou produção fictícios enquanto aguardam. Os serviços públicos recebem orçamento autorizado pelo prefeito.
 
 ## Alimentos com origem e demanda
 
@@ -137,10 +149,15 @@ Crianças recebem nomes naturais, sem IDs, e herdam o sobrenome familiar. Têm p
 - `js/city_society.js`: vínculos, famílias, crescimento e responsáveis.
 - `js/city_terrain.js`: implantação, lotes, ruas e navegação A*.
 - `js/world_settings.js`: sementes e paisagens.
-- `js/city_ui.js`: painéis de observação.
+- `js/city_ui.js`: conteúdo dos diretórios, filtros, panoramas, plantas e fichas.
+- `js/city_desktop.js`: área de trabalho, barra de ferramentas, janelas, minimapa e integração.
+- `js/window_manager.js`: foco, movimento, encaixe, redimensionamento e estados das janelas.
+- `js/tycoon_icons.js`: ícones em pixels desenhados localmente para a barra de ferramentas.
+- `js/city_ui_widgets.js`: tabelas, métricas, linhas de dados e barras de necessidades.
+- `js/management_ui.js`: janelas em relevo, paleta clara, tipografia proporcional e controles da interface.
 - `js/city_renderer_3d.js`: células volumétricas e fundações.
 
-`npm test` verifica os controles originais, preservação do relevo, políticas públicas de venda, propriedade privada, contratação, habilidades, insumos, receitas, estoques, conversas e famílias. Simulações de vários dias verificam conservação de dinheiro e de cada mercadoria: estoque inicial e importações + produção = consumo e transformação + estoques em prédios, obras e fretes + perdas registradas. Os testes antigos de contratos e famílias usam uma cidade desenvolvida como fixture; os novos testes também verificam a evolução desde as três instalações iniciais.
+`npm test` verifica os controles originais, preservação do relevo, políticas públicas de venda, propriedade privada, contratação, habilidades, insumos, receitas, estoques, conversas e famílias. Simulações de vários dias verificam que os saldos somados correspondem exatamente à moeda emitida, além da conservação de cada mercadoria: estoque inicial e importações + produção = consumo e transformação + estoques em prédios, obras e fretes + perdas registradas. Os testes antigos de contratos e famílias usam uma cidade desenvolvida como fixture; os novos testes também verificam a evolução desde as quatro instalações iniciais, incluindo emissão por trabalho, limite diário, inflação, preços reajustados e contratos preservados.
 
 Ainda não há salvamento da cidade, eleições periódicas, crédito bancário, escola, irrigação ou veículos de transporte. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
 
@@ -226,7 +243,7 @@ Esses objetos aparecem na aba **OBJETOS** e podem ser colocados com um clique. O
 
 ## UI
 
-`js/legacy_ui.js` reutiliza diretamente a fonte bitmap 8×8 e os desenhos de caixa, botão, barra e HUD do `app.js` antigo. O starter usa esse estilo para a barra superior, ações e inspetor; `renderUI(ui, api)` permite acrescentar botões e painéis próprios. As telas antigas de Brutopolis, como dossiês, clãs, guerras e eleições, não foram trazidas porque dependem dos sistemas próprios do jogo.
+`js/legacy_ui.js` reutiliza diretamente a fonte bitmap 8×8 e os desenhos de caixa, botão, barra e HUD do `app.js` antigo. O framework conserva esse estilo como opção; o simulador usa `ManagementCanvasUI`, com janelas claras e texto proporcional, para a barra superior, ações, opções, editor e inspetor; `renderUI(ui, api)` permite acrescentar botões e painéis próprios. As telas antigas de Brutopolis, como dossiês, clãs, guerras e eleições, não foram trazidas porque dependem dos sistemas próprios do jogo.
 
 O renderizador 3D usa Three.js via `esm.sh`, portanto precisa de conexão com a internet para carregar essa dependência. O renderizador 2D continua disponível pelo botão 2D caso você queira uma experiência sem WebGL.
 

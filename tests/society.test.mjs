@@ -152,7 +152,7 @@ test('departures clear partners and conversations and assign the surviving paren
   assert.equal(b.partnerId, null); assert.equal(child.guardianId, b.id);
   assert.equal(child.homeUnitId, b.homeUnitId);
   assert(child.parentIds.includes(a.id));
-  assert.equal(totalMoney(city), 2000000);
+  assert.equal(totalMoney(city), city.currency.issued);
 });
 
 test('urgent needs finish paid essential services without repeatedly charging or resetting them', () => {
@@ -175,7 +175,7 @@ test('a fifteen-day city develops families with coherent private contracts, need
   assert(children.length > 0);
   assert(city.stats().couples > 0);
   assert.equal(city.stats().births, children.length + [...city.accounts.values()].filter(c => c.dead && c.parentIds?.length).length);
-  assert.equal(totalMoney(city), 2000000);
+  assert.equal(totalMoney(city), city.currency.issued);
   for (const child of children) {
     if (child.homeUnitId) assert.equal(child.homeId, city.housing.home(city.society.guardian(child)).id);
     assert.equal(child.jobId, null);

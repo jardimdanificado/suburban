@@ -55,7 +55,7 @@ export class CityWorkMeals {
   issueVoucher(c, shop) {
     const b = this.employer(c), offer = this.city.economy.mealOffer(shop);
     if (!b || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.foodVoucher || !offer) return false;
-    const amount = Math.max(WORK_MEAL_RULES.voucherMinimum, offer.price * WORK_MEAL_RULES.voucherPriceMultiple);
+    const amount = Math.max(this.city.currency.price(WORK_MEAL_RULES.voucherMinimum), offer.price * WORK_MEAL_RULES.voucherPriceMultiple);
     if (!this.city.transfer(b.accountId, c.accountId, amount, 'Vale-alimentação')) return false;
     c.foodVoucher = { employerId: b.id, amount, issuedAt: this.city.minute };
     c.mealAllowanceToday += amount; b.foodVoucherCost += amount; b.vouchersIssued++;
@@ -77,7 +77,7 @@ export class CityWorkMeals {
         const shops = suppliers.filter(s => s !== holder && s !== b).sort((a, c) => Number(a.type === 'townhall') - Number(c.type === 'townhall') || Math.hypot(a.door.x - holder.door.x, a.door.y - holder.door.y) - Math.hypot(c.door.x - holder.door.x, c.door.y - holder.door.y));
         for (const shop of shops) {
           const offer = this.offer(shop); if (!offer) continue;
-          const unitPrice = shop.type === 'townhall' ? city.economy.goods[offer.good].price : offer.good === 'pao' ? 160 : city.economy.goods[offer.good].price + 65;
+          const unitPrice = shop.type === 'townhall' ? city.economy.goods[offer.good].price : offer.good === 'pao' ? city.currency.price(160) : city.economy.goods[offer.good].price + city.currency.price(65);
           const reserve = b.workers.length * b.wage * 60;
           let quantity = Math.floor(Math.min(needed, shop.inventory[offer.good], Math.max(0, b.balance - reserve) / unitPrice) / 3) * 3;
           let order = null;

@@ -20,14 +20,14 @@ test('the municipality starts as owner of every building and its cells are only 
   for (const u of city.units.values()) { assert.equal(u.ownerId, 'treasury'); assert.equal(u.forRent, false); assert.equal(u.forSale, true); assert.equal(u.tenantId, null); }
 });
 
-test('in a developed city three wealthy investors buy homes and businesses while most citizens are private tenants', () => {
-  const city = setup(), wealthy = city.citizens.filter(c => c.wealthTier === 'wealthy'), workers = city.citizens.filter(c => c.wealthTier === 'worker');
+test('an explicitly funded developed fixture supports owners, firms and private tenants', () => {
+  const city = setup(), wealthy = city.citizens.filter(c => c.fixtureInvestor), workers = city.citizens.filter(c => !c.fixtureInvestor);
   assert.equal(wealthy.length, 3); assert.equal(workers.length, 21);
   assert.equal(city.stats().homeless, 0);
   assert(wealthy.every(c => c.businessIds.length && !c.jobId));
   for (const c of workers) { const u = city.units.get(c.homeUnitId); assert(u); assert.notEqual(u.ownerId, 'treasury'); assert.notEqual(u.ownerId, c.accountId); }
   assert(city.economy.businesses.every(b => wealthy.some(c => c.id === b.ownerId)));
-  assert.equal(totalMoney(city), 2000000);
+  assert.equal(totalMoney(city), city.currency.issued);
 });
 
 test('the mayor is a citizen with a separate bank account and is replaced after departure', () => {
@@ -40,7 +40,7 @@ test('the mayor is a citizen with a separate bank account and is replaced after 
 });
 
 test('public rentals and public removal from sale remain forbidden after policy and listing changes', () => {
-  const city = setup(), c = city.citizens.find(c => c.wealthTier === 'worker');
+  const city = setup(), c = city.citizens.find(c => !c.fixtureInvestor);
   const u = [...city.units.values()].find(u => u.ownerId === 'treasury' && city.building(u.buildingId).type === 'residential');
   assert(city.listUnit(u.id, { rent: 1, price: 18000, forRent: true, forSale: false }));
   assert.equal(u.forRent, false); assert.equal(u.forSale, true);
@@ -50,8 +50,8 @@ test('public rentals and public removal from sale remain forbidden after policy 
   for (const p of city.units.values()) if (p.ownerId === 'treasury') { assert.equal(p.tenantId, null); assert.equal(p.forRent, false); }
 });
 
-test('skills and social ties both influence the hiring decision; wealthy owners prefer their firms', () => {
-  const city = setup(), b = city.economy.businesses.find(b => b.type === 'market'), owner = city.economy.citizen(b.ownerId), workers = city.citizens.filter(c => c.wealthTier === 'worker' && c.id !== city.economy.mayorId);
+test('skills and social ties both influence the hiring decision; business owners prefer their firms', () => {
+  const city = setup(), b = city.economy.businesses.find(b => b.type === 'market'), owner = city.economy.citizen(b.ownerId), workers = city.citizens.filter(c => !c.fixtureInvestor && c.id !== city.economy.mayorId);
   const [skilled, friend] = workers;
   skilled.skills.commerce = friend.skills.commerce = 20;
   const r = city.society.getRelation(owner, friend, true); r.affection = r.trust = 100;
@@ -127,7 +127,7 @@ test('a multi-day autonomous city conserves money and every harvested or baked g
   const city = setup(), initialBusinesses = city.economy.businesses.length;
   for (let i = 0; i < 8 * 1440 * 4; i++) city.update(1 / 16);
   assert(city.development.projects.length > 0); // Turnover can include closures when employers cannot cover costs.
-  assert.equal(totalMoney(city), 2000000);
+  assert.equal(totalMoney(city), city.currency.issued);
   for (const good of Object.keys(GOODS)) {
     const stock = city.goodsStock(good);
     assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + stock + city.economy.lost[good], good);
@@ -150,5 +150,5 @@ test('operating accounts include seeds, wages, tax and service revenue exactly o
   const clinic = city.buildings.find(b => b.type === 'clinic'), revenue = clinic.totalRevenue;
   const c = city.citizens[0]; c.task = 'health'; c.targetId = clinic.id; c.servicePaid = null;
   city.performTask(c); assert.equal(clinic.totalRevenue - revenue, 240);
-  assert.equal(totalMoney(city), 2000000);
+  assert.equal(totalMoney(city), city.currency.issued);
 });

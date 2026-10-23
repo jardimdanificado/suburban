@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, totalMoney, finishShipment } from './helpers/city.mjs';
+import { DEVELOPMENT_RULES } from '../js/city_development.js';
 import { GOODS } from '../js/city_economy.js';
 import { WORK_MEAL_RULES } from '../js/city_work_meals.js';
 import { flatSiteLevel, surfaceBounds, tileHeight, ROAD_TILES } from '../js/city_terrain.js';
@@ -25,7 +26,7 @@ function finish(city, project) {
   assert.equal(project.status, 'completed');
 }
 function audit(city) {
-  assert.equal(totalMoney(city), 2000000);
+  assert.equal(totalMoney(city), city.currency.issued);
   const holders = [...city.buildings, ...city.development.projects, ...city.logistics.shipments];
   for (const h of holders) { assert(inventoryUsed(h) + incomingItems(h) <= h.inventoryCapacity); for (const qty of Object.values(h.inventory)) assert(Number.isSafeInteger(qty) && qty >= 0); }
   for (const good of Object.keys(GOODS)) assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + city.economy.lost[good] + city.goodsStock(good), good);
@@ -42,24 +43,24 @@ test('plots have varied dimensions and uniformly level surfaces in every landsca
 });
 
 test('mixed elevation and ramps are rejected for plots without altering any tile', () => {
-  const city = setup({ starter: true }); city.world.setTile(12, 12, 9);
+  const city = setup({ starter: true, funded: true }); city.world.setTile(12, 12, 9);
   const before = Array.from({ length: 36 }, (_, i) => city.world.getTile(9 + i % 6, 9 + Math.floor(i / 6)));
   assert.equal(city.development.createPlot(10, 10, 4, 4), null);
   assert.deepEqual(Array.from({ length: 36 }, (_, i) => city.world.getTile(9 + i % 6, 9 + Math.floor(i / 6))), before);
 });
 
 test('an entrepreneur contracts exact dimensions and floors from a chosen construction company', () => {
-  const city = setup({ starter: true }), builder = builderOf(city), client = city.citizens.find(c => c.wealthTier === 'wealthy' && c.id !== builder.ownerId), plot = city.development.plots.find(p => !p.buildingId && p.width >= 3 && p.depth >= 3);
+  const city = setup({ starter: true, funded: true }), builder = builderOf(city), client = city.citizens.find(c => c.fixtureInvestor && c.id !== builder.ownerId), plot = city.development.plots.find(p => !p.buildingId && p.width >= 3 && p.depth >= 3);
   assert.equal(city.development.serviceOffers(builder.id).length, 3); city.development.buyPlot(client.accountId, plot.id);
   const p = city.development.beginProject(client.accountId, plot.id, 'market', { width: 3, depth: 2, floors: 2, builderId: builder.id }); assert(p);
-  assert.equal(p.stone, 24); assert.equal(p.fee, 12 * 120); assert.equal(p.builderId, builder.id); assert.equal(city.accounts.get(p.feeAccountId).balance, p.fee);
+  assert.equal(p.stone, 24); assert.equal(p.fee, 12 * DEVELOPMENT_RULES.constructionFeePerCell); assert.equal(p.builderId, builder.id); assert.equal(city.accounts.get(p.feeAccountId).balance, p.fee);
   assert.equal(city.development.beginProject(client.accountId, plot.id, 'bakery'), null);
   prepare(city, p); const revenue = builder.totalRevenue; finish(city, p);
   const b = city.building(plot.buildingId); assert.deepEqual([b.width, b.depth, b.floors], [3, 2, 2]); assert.equal(b.units.length, 12); assert.equal(builder.totalRevenue - revenue, p.fee); audit(city);
 });
 
 test('municipal roads need a paid construction contract, delivered stone and work, and preserve all terrain heights', () => {
-  const city = setup({ starter: true }), builder = builderOf(city);
+  const city = setup({ starter: true, funded: true }), builder = builderOf(city);
   const p = city.development.beginRoad('treasury', { x: 5.5, y: 5.5 }, { x: 12.5, y: 5.5 }, { builderId: builder.id }); assert(p);
   const before = p.route.map(t => city.world.getTile(Math.floor(t.x), Math.floor(t.y)));
   assert.equal(city.development.complete(p), null); assert(p.path.every(t => !ROAD_TILES.has(city.world.getTile(Math.floor(t.x), Math.floor(t.y)))));
@@ -70,7 +71,7 @@ test('municipal roads need a paid construction contract, delivered stone and wor
 });
 
 test('hall expansion retains existing cells and accounts, adds floors and releases the service payment exactly once', () => {
-  const city = setup({ starter: true }), hall = city.buildings[0], oldUnits = [...hall.units], oldCapacity = hall.inventoryCapacity, builder = builderOf(city);
+  const city = setup({ starter: true, funded: true }), hall = city.buildings[0], oldUnits = [...hall.units], oldCapacity = hall.inventoryCapacity, builder = builderOf(city);
   assert.equal(city.development.beginExpansion(city.citizens[0].accountId, hall.id), null);
   const p = city.development.beginExpansion('treasury', hall.id, { floors: 2 }); assert(p); assert.equal(city.development.beginExpansion('treasury', hall.id), null);
   prepare(city, p); const revenue = builder.totalRevenue; finish(city, p);
@@ -81,7 +82,7 @@ test('hall expansion retains existing cells and accounts, adds floors and releas
 });
 
 test('public service contracts survive a change of mayor', () => {
-  const city = setup({ starter: true }), hall = city.buildings[0], p = city.development.beginExpansion('treasury', hall.id); assert(p);
+  const city = setup({ starter: true, funded: true }), hall = city.buildings[0], p = city.development.beginExpansion('treasury', hall.id); assert(p);
   city.society.citizen(city.economy.mayorId).entity.destroyed = true; city.reconcile(); city.development.reconcile();
   assert(!p.cancelled); assert.equal(p.ownerId, city.economy.mayorId); audit(city);
 });
@@ -108,7 +109,7 @@ test('a meal voucher is generous, comes from the employer and cannot be repeated
   shop.inventory.maca = 9; c.needs.food = 30; const offer = city.economy.mealOffer(shop), workerCash = c.balance, businessCash = b.balance, expense = b.totalExpenses;
   assert(city.workMeals.issueVoucher(c, shop)); const amount = c.foodVoucher.amount;
   assert(amount >= 3000 && amount >= offer.price * 6); assert.equal(c.balance, workerCash + amount); assert.equal(b.balance, businessCash - amount); assert.equal(b.totalExpenses - expense, amount);
-  assert.equal(city.workMeals.issueVoucher(c, shop), false); assert.equal(b.vouchersIssued, 1); assert.equal(c.mealAllowanceToday, amount); assert.equal(totalMoney(city), 2000000);
+  assert.equal(city.workMeals.issueVoucher(c, shop), false); assert.equal(b.vouchersIssued, 1); assert.equal(c.mealAllowanceToday, amount); assert.equal(totalMoney(city), city.currency.issued);
 });
 
 test('food for a construction site is bought by its employer, shipped physically and eaten at that site', () => {
@@ -126,7 +127,7 @@ test('completing a site cancels incoming catering and refunds the employer inste
 });
 
 test('autonomous public works and employee meals keep all currency and goods conserved over multiple days', () => {
-  const city = setup({ starter: true });
+  const city = setup({ starter: true, funded: true });
   for (let i = 0; i < 10 * 1440 * 4; i++) { city.update(1 / 16); if (i % 480 === 0) audit(city); }
   assert(city.development.projects.some(p => p.service === 'road' && p.status === 'completed'));
   assert(city.development.projects.some(p => p.service === 'expansion' && p.status === 'completed')); assert(city.buildings[0].floors > 2);

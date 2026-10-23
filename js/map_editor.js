@@ -124,14 +124,14 @@ export class MapEditor {
 
   draw(ui, hoverTile) {
     if (!this.open) return;
-    const x = 12, top = 46, w = Math.min(336, ui.width - 24);
-    const h = Math.max(80, Math.min(358, ui.height - 100));
+    const floating=this.floatingBounds;
+    const x=floating?.x ?? 12,top=floating?.y ?? 46,w=floating?.w ?? Math.min(336,ui.width-24);
+    const h=floating?.h ?? Math.max(80,Math.min(358,ui.height-100));
     this.bounds = { x, y: top, w, h };
     this.maxScroll = Math.max(0, 324 - h);
     this.scroll = Math.min(this.scroll, this.maxScroll);
     const y = top - this.scroll;
-    ui.panel(x, top, w, h, "EDITOR DE MAPA", "");
-    ui.button(x + w - 30, top + 4, 24, 20, "X", () => this.toggle());
+    if(!floating){ui.panel(x,top,w,h,"EDITOR DE MAPA","");ui.button(x+w-30,top+4,24,20,"X",()=>this.toggle());}
     const firstBodyRegion = ui.regions.length;
     ui.ctx.save();
     ui.ctx.beginPath();
