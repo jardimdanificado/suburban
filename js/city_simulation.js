@@ -1,3 +1,5 @@
+import { CityHistory } from './city_history.js';
+import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
 import { quarryDeposits } from './city_terrain.js';
@@ -59,6 +61,7 @@ export class CitySimulation {
     this.accounts = new Map([['treasury', { name: 'Prefeitura', balance: 0 }], ['supplier', { name: 'Economia externa', balance: 0 }]]);
     this.occupied = new Set();
     this.events = [];
+    this.history = new CityHistory(this);
     this.nextEventId = 1;
     this.minute = 8 * 60;
     this.currency = new CityCurrency(this);
@@ -73,6 +76,7 @@ export class CitySimulation {
     this.workMeals = new CityWorkMeals(this);
     this.lighting = new CityLighting(this);
     this.bank = new CityBank(this);
+    this.welfare = new CityWelfare(this);
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -114,6 +118,7 @@ export class CitySimulation {
     a.balance -= amount; b.balance += amount;
     if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
     if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
+    this.history.transaction(from, to, amount, reason);
     this.ledger.push({ minute: this.minute, from, to, amount, reason });
     if (this.ledger.length > 1000) this.ledger.shift();
     if (reason === 'Salário') this.hourlyPayroll.set(to, (this.hourlyPayroll.get(to) || 0) + amount);
@@ -175,6 +180,7 @@ export class CitySimulation {
     if (plot) { plot.buildingId = b.id; b.plotId = plot.id; } else this.development.attachBuilding(b, ownerAccountId);
     b.accessPath = [terrain.door, ...access];
     if (free) pavePath(this.world, b.accessPath);
+    this.history.ownership(b, null, ownerAccountId, {action:'construction'});
     this.lastError = '';
     this.log(`${entity.properties.name}: ${b.units.length} espaços de 1×1×1.`, 'city', [], { kind: 'construction', buildingId: b.id });
     return b;
@@ -214,6 +220,7 @@ export class CitySimulation {
     const c = this.citizens.find(c => c.id === buyerId && !c.entity.destroyed), u = this.units.get(unitId);
     if (!c || !u || !this.building(u.buildingId) || !u.forSale || u.ownerId === c.accountId) return this.fail('Espaço indisponível para compra.');
     if (!this.transfer(c.accountId, u.ownerId, u.price, 'Compra de espaço')) return this.fail('Saldo insuficiente para a compra.');
+    this.history.ownership(this.building(u.buildingId), u.ownerId, c.accountId, {unitId:u.id,amount:u.price});
     u.ownerId = c.accountId; u.forSale = false; u.forRent = !u.tenantId && ['residential', 'popular_housing', 'luxury_housing'].includes(this.building(u.buildingId).type); u.arrears = 0; u.missedDays = 0;
     this.log(`${c.entity.properties.name} comprou o espaço ${u.id}.`, 'housing', [c.id], { kind: 'purchase', unitId: u.id });
     return u;
@@ -393,7 +400,7 @@ export class CitySimulation {
     this.collectRent();
     for (const c of this.citizens) {
       if (c.entity.destroyed) continue;
-      c.salaryToday = 0; c.mealAllowanceToday = 0;
+      c.salaryYesterday = c.salaryToday; c.salaryToday = 0; c.mealAllowanceToday = 0;
       const home = this.housing.home(c);
       if (home && this.society.isAdult(c) && this.housing.units(home).every(u => u.forSale)) this.housing.buyHome(c, home);
     }
@@ -411,7 +418,7 @@ export class CitySimulation {
       for (const u of b.units) { this.units.delete(u.id); }
       for (let y = b.entity.y; y < b.entity.y + b.depth; y++) for (let x = b.entity.x; x < b.entity.x + b.width; x++) this.occupied.delete(key(x, y));
       for (const c of this.citizens) {
-        if (c.jobId === b.id) c.jobId = null;
+        if (c.jobId === b.id) {this.history.employment(c,b,'desligamento','Edifício demolido');c.jobId=null;}
         if (!this.units.has(c.homeUnitId)) c.homeUnitId = null;
         if (c.targetId === b.id) { c.task = null; c.path = []; }
       }
@@ -426,14 +433,14 @@ export class CitySimulation {
     }
     for (const c of [...this.citizens]) if (c.entity.destroyed) {
       const heir = c.dead ? this.life.heir(c) : null;
-      if (heir) for (const b of this.economy.businesses.filter(b => b.ownerId === c.id)) { b.ownerId = heir.id; if (!heir.businessIds.includes(b.id)) heir.businessIds.push(b.id); }
+      if (heir) for (const b of this.economy.businesses.filter(b => b.ownerId === c.id)) { this.history.ownership(b,c.accountId,heir.accountId,{action:'inheritance'}); b.ownerId = heir.id; if (!heir.businessIds.includes(b.id)) heir.businessIds.push(b.id); }
       this.economy.removeCitizen(c);
       this.society.removeCitizen(c);
       if (!c.dead) this.log(`${c.entity.properties.name} saiu da cidade.`, 'city', [c.id], { kind: 'departure' });
       this.releaseHome(c);
-      for (const u of this.units.values()) if (u.ownerId === c.accountId) { const resident = this.accounts.get(u.tenantId); if (!heir && resident?.homeUnitId === u.id) this.releaseHome(resident); u.ownerId = heir?.accountId || 'treasury'; u.forSale = true; u.forRent = !!heir; }
-      const b = this.building(c.jobId);
-      if (b) b.workers = b.workers.filter(id => id !== c.id);
+      for (const u of this.units.values()) if (u.ownerId === c.accountId) { const resident = this.accounts.get(u.tenantId); if (!heir && resident?.homeUnitId === u.id) this.releaseHome(resident); this.history.ownership(this.building(u.buildingId),c.accountId,heir?.accountId||'treasury',{unitId:u.id,action:'inheritance'}); u.ownerId = heir?.accountId || 'treasury'; u.forSale = true; u.forRent = !!heir; }
+      this.economy.leaveJob(c, c.dead ? 'Falecimento' : 'Saída da cidade');
+      this.bank.closeClient(c, heir);
       this.transfer(c.accountId, heir?.accountId || 'treasury', c.balance, c.dead ? 'Herança' : 'Saída de cidadão');
       this.sanitation.releaseCitizen(c);
       this.citizens.splice(this.citizens.indexOf(c), 1);

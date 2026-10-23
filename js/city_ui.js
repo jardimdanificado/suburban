@@ -225,7 +225,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     const city = this.city, society = city.society;
     if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos | ${c.id === city.economy.mayorId ? 'Prefeito' : c.businessIds.length ? 'Empresário' : 'Morador'}`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
-    this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'HABILIDADES'], ['family', 'VÍNCULOS'], ['assets', 'FINANÇAS']]);
+    this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'HABILIDADES'], ['family', 'VÍNCULOS'], ['assets', 'FINANÇAS'], ['history', 'HISTÓRICO']]);
     if (this.detailTab === 'profile') {
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
@@ -239,11 +239,15 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       for (const [good, value] of Object.entries(c.foodPreferences || {}).filter(([g]) => GOODS[g] && !['girassol','trigo'].includes(g))) p.kv(GOODS[good].label, value > .2 ? `Gosta (${Math.round(value * 100)})` : value < -.2 ? `Não gosta (${Math.round(value * 100)})` : 'Neutro');
       if (c.lastMealTaste !== undefined) p.kv('Última refeição', c.lastMealTaste >= 0 ? 'Agradou ao paladar' : 'Desagradou ao paladar');
     } else if (this.detailTab === 'skills') {
+      p.heading('HISTÓRICO DE EMPREGO');
+      for(const entry of city.history.rows(c.accountId,'employment').slice(-8).reverse()){p.note(`${stamp(entry.minute)} | ${entry.message}`);p.kv('Salário base/hora na ocasião',money(entry.wage*60));}
       p.heading('TRABALHO'); const job = city.building(c.jobId);
       if (job) p.button(name(job.entity), () => this.openBuilding(job.id));
       else p.note(c.businessIds.length ? 'Empresário' : society.isAdult(c) ? 'Sem emprego' : 'Criança');
       p.kv('Salário recebido hoje', money(c.salaryToday)); p.kv('Vale-alimentação hoje', money(c.mealAllowanceToday)); p.note('As habilidades aumentam com a prática e influenciam contratação e remuneração.');
       p.meters(Object.entries(c.skills).map(([id,v])=>[SKILLS[id],v,C.cyan]));
+    } else if (this.detailTab === 'history') {
+      this.journal(p,c.accountId);
     } else if (this.detailTab === 'family') {
       p.heading('FAMÍLIA', C.pink);
       const link = (label, id) => { const person = society.citizen(id); p.note(label); if (person) p.button(name(person.entity), () => this.openCitizen(id)); else p.note(city.accountName(`citizen:${id}`)); };
@@ -257,11 +261,22 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       for (const r of relations) { const other = r.a === c.id ? r.b : r.a; p.button(name(society.citizen(other)?.entity), () => this.openCitizen(other)); p.note(`${relationLabel(r)} | ${r.conversations} conversas`); p.meter('Afeto', r.affection, C.pink); p.meter('Confiança', r.trust, C.cyan); p.meter('Familiaridade', r.familiarity); }
       if (!relations.length) p.note('Ainda está conhecendo os vizinhos.');
     } else {
-      p.heading('CONTA PESSOAL'); p.kv('Dinheiro disponível', money(c.balance)); p.kv('Salário hoje', money(c.salaryToday));
+      p.heading('CONTA PESSOAL'); p.kv('Dinheiro disponível', money(c.balance)); p.kv('Salário hoje', money(c.salaryToday));p.kv('Benefícios recebidos',money(c.benefitsReceived||0));p.kv('Poupança total',money(city.bank.savings(c.accountId)));
+      p.buttons([{label:`POUPAR ${Math.round((c.savingsRate??.2)*100)}% DO EXCEDENTE`,click:()=>{c.savingsRate=(c.savingsRate??.2)>=.5?0:(c.savingsRate??.2)+.1;}},{label:c.creditAllowed===false?'CRÉDITO AUTOMÁTICO: NÃO':'CRÉDITO AUTOMÁTICO: SIM',click:()=>{c.creditAllowed=c.creditAllowed===false;}}]);
       const units = [...city.units.values()].filter(u => u.ownerId === c.accountId);
       p.kv('Imóveis próprios', units.length); p.kv('Valor anunciado total', money(units.reduce((s, u) => s + u.price, 0)));
       p.kv('Aluguel contratado/dia', money(units.filter(u => u.tenantId && u.tenantId !== c.accountId).reduce((s, u) => s + u.rent, 0)));
-      for(const bank of city.bank.available()) { const deposit=city.bank.deposits.get(`deposit:${bank.id}:${c.accountId}`);p.heading(name(bank.entity));p.kv('Seu depósito',money(deposit?.balance||0));p.buttons([{label:'DEPOSITAR R$ 100',click:()=>city.bank.deposit(bank,c.accountId,10000)},{label:'SACAR DEPÓSITO',click:()=>city.bank.withdraw(bank,c.accountId,deposit?.balance||0)},{label:'PEDIR R$ 100',click:()=>{if(!city.bank.lend(bank,c.accountId,10000))this.notice='Crédito indisponível: é preciso ter renda, limite e caixa no banco.';}}]);for(const loan of city.bank.loans.filter(l=>l.clientId===c.accountId)){p.kv('Principal a pagar',money(loan.remaining));p.kv('Juros pendentes',money(loan.interest));p.kv('Parcelas em atraso',loan.missed);}}
+      const banks=city.buildings.filter(b=>b.type==='bank' && !b.entity.destroyed);
+      for(const bank of banks) {
+        const deposit=city.bank.deposits.get(`deposit:${bank.id}:${c.accountId}`);
+        p.heading(name(bank.entity));p.kv('Seu depósito',money(deposit?.balance||0));p.kv('Rendimentos recebidos',money(deposit?.interestEarned||0));
+        p.buttons([{label:'DEPOSITAR R$ 100',click:()=>{if(!city.bank.deposit(bank,c.accountId,10000))this.notice='Depósito indisponível: confira saldo e operação do banco.';}},{label:'SACAR DEPÓSITO',click:()=>city.bank.withdraw(bank,c.accountId,deposit?.balance||0)},{label:'PEDIR R$ 100',click:()=>{if(!city.bank.lend(bank,c.accountId,10000))this.notice='Crédito indisponível: é preciso ter renda, limite e caixa no banco.';}}]);
+      }
+      for(const loan of city.bank.loans.filter(l=>l.clientId===c.accountId)) {
+        p.heading(`EMPRÉSTIMO ${loan.id}`);p.kv('Banco',city.accountName(`business:${loan.bankId}`));
+        p.kv('Principal a pagar',money(loan.remaining));p.kv('Juros pendentes',money(loan.interest));p.kv('Total pago',money(loan.paid));p.kv('Parcela de principal/dia',money(loan.dailyPayment));p.kv('Dias consecutivos em atraso',loan.missed);
+        p.kv('Contrato',({active:'Ativo',paid:'Quitado',arrears:'Em atraso','written-off':'Encerrado com perda'})[loan.status]);p.kv('Taxa contratada/dia',`${(loan.rate*100).toFixed(2)}%`);
+      }
       p.heading('EMPRESAS'); for (const id of c.businessIds) { const b = city.building(id); if (b) p.button(name(b.entity), () => this.openBuilding(id)); }
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, c.accountId);
     }
@@ -271,12 +286,12 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     const city = this.city;
     if(!this.floatingDossier)p.heading(name(b.entity)); p.note(`${BUILDING_TYPES[b.type].label} | ${b.width}x${b.depth}x${b.floors} | ${b.units.length} células`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(b.entity.x, b.entity.y); if(!this.host)this.visible = false; });
-    this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS']]);
+    this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
     if (this.detailTab === 'profile') {
       const post = [...city.lighting.sites.values()].find(post => post.buildingId === b.id && !post.public && post.status !== 'cancelled');
       if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', !post.built ? post.projectId ? 'Em construção' : 'Aguarda contratação' : post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }
       const industry=INDUSTRIES[b.type];
-      if(industry){p.heading('CADEIA PRODUTIVA');p.note(industry.impact);p.note('Insumos: '+(Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Trabalho e recursos locais'));p.note('Produtos: '+(Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Crédito e guarda de depósitos'));if(b.type==='bank'){p.kv('Depósitos protegidos',money([...city.bank.deposits.values()].filter(d=>d.bankId===b.id).reduce((n,d)=>n+d.balance,0)));p.kv('Crédito a receber',money(city.bank.loans.filter(l=>l.bankId===b.id).reduce((n,l)=>n+l.remaining+l.interest,0)));p.note('Juros: 0,2% por dia sobre principal. Prazo: 30 parcelas. Depósitos não são usados para emprestar.');}}
+      if(industry){p.heading('CADEIA PRODUTIVA');p.note(industry.impact);p.note('Insumos: '+(Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Trabalho e recursos locais'));p.note('Produtos: '+(Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Crédito e guarda de depósitos'));if(b.type==='bank'){p.kv('Depósitos protegidos',money([...city.bank.deposits.values()].filter(d=>d.bankId===b.id).reduce((n,d)=>n+d.balance,0)));p.kv('Crédito a receber',money(city.bank.loans.filter(l=>l.bankId===b.id && !['paid','written-off'].includes(l.status)).reduce((n,l)=>n+l.remaining+l.interest,0)));p.note(`Novos empréstimos: ${(city.bank.policy.loanRate*100).toFixed(2)}% ao dia; poupança: ${(city.bank.policy.savingsRate*100).toFixed(2)}% ao dia. Prazo: 30 parcelas. Depósitos são protegidos; rendimentos dependem do caixa do banco.`);}}
       p.kv('Tipo de ocupação', b.constructionKind === 'open-air' ? 'Ar livre / no nível do solo' : 'Edifício');
       p.button(`TERRENO ${b.plotId}`, () => this.setPlotSelection(b.plotId));
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');
@@ -288,11 +303,14 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     } else if (this.detailTab === 'stock') {
       p.heading('INVENTÁRIO REAL'); p.kv('Capacidade', `${inventoryUsed(b)}/${b.inventoryCapacity} itens`); p.kv('Reservado para recebimento', incomingItems(b)); p.kv('Espaço livre', inventoryFree(b)); p.meter('Ocupação do armazém', inventoryUsed(b) / b.inventoryCapacity * 100, inventoryFree(b) < 12 ? C.red : C.cyan); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
       if (b.type === 'quarry') p.kv('Reserva mineral restante', b.stoneReserve || 0);
-      if (b.crop) { p.heading(`CULTIVO / ${CROPS[b.crop].label}`); p.kv('Sementes', b.seedStock); for (const [i, f] of b.fields.entries()) { p.note(`Talhão ${i + 1}: ${f.plantedAt === null ? 'aguarda plantio' : 'em crescimento'}`); p.meter('Trabalho', f.labor / 120 * 100); p.meter('Crescimento', f.plantedAt === null ? 0 : (city.minute - f.plantedAt) / CROPS[b.crop].grow * 100); } }
+      if(b.type==='farm'){const farm=city.economy.farmCapacity(b);p.heading('ÁREA E CAPACIDADE AGRÍCOLA');p.kv('Área total / cultivada',`${b.width*b.depth} / ${farm.area} tiles`);p.kv('Talhões',farm.fields);p.kv('Funcionários / vagas',`${b.workers.length} / ${farm.jobs}`);p.kv('Colheita com todos os talhões',`${farm.harvest} unidades`);p.kv('Potencial estimado/dia',`${farm.daily} unidades`);p.note('Estimativa para 480 minutos de trabalho. Sementes, crescimento, equipe, refeições, transporte e capacidade do armazém limitam a produção real.');}
+      if (b.crop) { p.heading(`CULTIVO / ${CROPS[b.crop].label}`); p.kv('Sementes', b.seedStock); for (const [i, f] of b.fields.entries()) { p.note(`Talhão ${i + 1}: ${f.plantedAt === null ? 'aguarda plantio' : 'em crescimento'}`); p.meter('Trabalho', f.labor / (f.requiredLabor||120) * 100); p.meter('Crescimento', f.plantedAt === null ? 0 : (city.minute - f.plantedAt) / CROPS[b.crop].grow * 100); } }
       if (b.type === 'bakery') p.note('Receita: trigo transformado em pão pelo trabalho da equipe.');
       p.heading('INSUMOS PROCURADOS'); const missing = Object.entries(b.inputDemand || {}).filter(([, qty]) => qty > 0);
       for (const [id, qty] of missing) p.kv(GOODS[id].label, qty); if (!missing.length) p.note('Nenhum insumo pendente.');
       p.kv('Ocorrências de falta', b.stockouts);
+    } else if (this.detailTab === 'history') {
+      this.journal(p,b.accountId);
     } else if (this.detailTab === 'staff') {
       p.kv('Postos ocupados', `${b.workers.length}/${b.jobs}`); p.kv('Salário base/hora', money(b.wage * 60));
       p.heading('ALIMENTAÇÃO DOS FUNCIONÁRIOS'); p.kv('Refeições fornecidas', b.mealsServed); p.kv('Compras para refeições', money(b.mealPurchaseCost)); p.kv('Vales pagos', `${b.vouchersIssued} / ${money(b.foodVoucherCost)}`); p.kv('Qualidade das refeições', b.mealQuality || 1);
@@ -329,6 +347,32 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     }
     p.space(height+12);p.note('Q quarto / B banheiro / E empresa / :: circulação',C.muted);p.note('Verde: ocupado / amarelo: à venda / azul: privado',C.muted);
   }
+  journal(p,account) {
+    this.journalFilters??={};this.journalPages??={};
+    const kind=this.journalFilters[account]||'all';
+    const options=[['all','TODOS'],['employment','EMPREGO'],['ownership','PROPRIETÁRIOS'],['sale','VENDAS'],['service','SERVIÇOS'],['credit','CRÉDITO'],['finance','FINANÇAS'],['policy','POLÍTICAS']];
+    p.heading('HISTÓRICO DETALHADO');
+    p.buttons(options.map(([id,label])=>({label,selected:kind===id,click:()=>{this.journalFilters[account]=id;this.journalPages[account]=0;}})));
+    const rows=this.city.history.rows(account,kind).filter(e=>this.matches(e.message)).reverse();
+    const pages=Math.max(1,Math.ceil(rows.length/20)),page=Math.min(this.journalPages[account]||0,pages-1);
+    p.note(`${rows.length} registros disponíveis / página ${page+1} de ${pages}`);
+    p.kv('Ocorrências desde a fundação',this.city.history.journals.get(account)?.total||0);
+    p.note('Até 2.000 registros por categoria e pessoa/empresa; nomes e valores são os da ocasião.');
+    for(const entry of rows.slice(page*20,page*20+20)) {
+      p.note(`${stamp(entry.minute)} / ${options.find(([id])=>id===entry.kind)?.[1]||entry.kind}`,C.cyan);
+      p.note(entry.message);
+      if(entry.amount!==undefined)p.kv('Valor',money(entry.amount));
+      if(entry.wage!==undefined)p.kv('Salário base/hora',money(entry.wage*60));
+      if(entry.ingredients)p.note('Ingredientes: '+Object.entries(entry.ingredients).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(', '));
+      if(entry.quality!==undefined)p.kv('Qualidade da refeição',entry.quality);
+      if(entry.rate!==undefined)p.kv('Juros/dia',`${(entry.rate*100).toFixed(2)}%`);
+      if(entry.buildingId && this.city.building(entry.buildingId))p.button('ABRIR EMPRESA',()=>this.openBuilding(entry.buildingId));
+      p.space(6);
+    }
+    p.buttons([{label:'ANTERIOR',click:()=>{this.journalPages[account]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.journalPages[account]=Math.min(pages-1,page+1);}}]);
+    if(!rows.length)p.note('Nenhum registro nesta categoria.');
+  }
+  policyAction(message,action) { action();this.city.history.record('policy',message,['treasury']); }
   accountLink(p, id) { if (String(id).startsWith('citizen:')) p.button('ABRIR FICHA DO MORADOR', () => this.openCitizen(Number(id.split(':')[1]))); }
   transactions(p, account) {
     const rows = this.city.ledger.filter(l => l.from === account || l.to === account).slice(-18).reverse();
@@ -340,7 +384,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     for (const d of this.city.economy.demands.filter(d => d.score > 0)) {
       p.heading(`${BUILDING_TYPES[d.type].label}${d.crop ? ' / ' + CROPS[d.crop].label : ''}`, C.cyan);
       p.kv('Índice de demanda', Math.round(d.score)); p.note(d.reason);
-      if (d.required !== undefined) { p.kv('Necessidade/dia', d.required); p.kv('Capacidade estimada/dia', d.supply); p.kv('Estoque', d.stock); }
+      if (d.required !== undefined) { p.kv(d.type==='carrier'?'Trabalho pendente (min)':'Necessidade/dia', d.required); p.kv(d.type==='carrier'?'Capacidade/dia (min)':'Capacidade estimada/dia', d.supply); p.kv('Estoque', d.stock); }
     }
   }
   content(p) {
@@ -386,7 +430,23 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     p.heading('MOEDA E INFLAÇÃO');
     p.kv('Dinheiro emitido',money(currency.issued));p.kv('Emitido hoje',money(currency.issuedToday));
     p.kv('Inflação diária',`${(currency.dailyInflation*100).toFixed(2)}%`);p.kv('Inflação acumulada',`${((currency.priceIndex-1)*100).toFixed(2)}%`);
+    p.kv('Emissão líquida',money(currency.netIssued()));p.kv('Moeda retirada',money(currency.burned));
+    p.kv('Modo de emissão',({automatic:'Automático',capped:'Cota fixa',paused:'Pausado'})[currency.policy.mode]);
+    p.buttons([['automatic','AUTOMÁTICO'],['capped','COTA FIXA'],['paused','PAUSAR EMISSÃO']].map(([mode,label])=>({label,selected:currency.policy.mode===mode,click:()=>this.policyAction(`Política monetária: ${label}.`,()=>{currency.policy.mode=mode;})})));
+    p.kv('Teto de emissão/dia',money(currency.policy.dailyLimit));
+    p.buttons([{label:'REDUZIR COTA',click:()=>this.policyAction('Cota de emissão reduzida.',()=>{currency.policy.dailyLimit=Math.max(0,currency.policy.dailyLimit-10000);})},{label:'AUMENTAR COTA',click:()=>this.policyAction('Cota de emissão aumentada.',()=>{currency.policy.dailyLimit=Math.min(500000,currency.policy.dailyLimit+10000);})},{label:'RETIRAR R$ 1.000',click:()=>{if(!currency.retire(100000))this.notice='É preciso preservar a reserva do tesouro e a base monetária mínima.';}}]);
+    p.note(`Automático: suspende emissão com inflação diária acima de ${(currency.policy.inflationTarget*100).toFixed(2)}% ou tesouro acima da reserva de ${money(currency.policy.treasuryReserve)}.`);
+    const bank=this.city.bank,welfare=this.city.welfare;
+    p.heading('CRÉDITO E POUPANÇA');p.kv('Poupança protegida',money([...bank.deposits.values()].reduce((n,d)=>n+d.balance,0)));p.kv('Juros de novos empréstimos/dia',`${(bank.policy.loanRate*100).toFixed(2)}%`);p.kv('Rendimento da poupança/dia',`${(bank.policy.savingsRate*100).toFixed(2)}%`);
+    p.buttons([{label:bank.policy.creditEnabled?'SUSPENDER NOVO CRÉDITO':'LIBERAR CRÉDITO',click:()=>this.policyAction('Política de crédito alterada.',()=>{bank.policy.creditEnabled=!bank.policy.creditEnabled;})},{label:'JUROS +0,05%',click:()=>this.policyAction('Juros de novos empréstimos elevados.',()=>{bank.policy.loanRate=Math.min(.01,bank.policy.loanRate+.0005);})},{label:'JUROS -0,05%',click:()=>this.policyAction('Juros de novos empréstimos reduzidos.',()=>{bank.policy.loanRate=Math.max(0,bank.policy.loanRate-.0005);})}]);
+    p.buttons([{label:'POUPANÇA +0,01%',click:()=>this.policyAction('Rendimento da poupança elevado.',()=>{bank.policy.savingsRate=Math.min(.005,bank.policy.savingsRate+.0001);})},{label:'POUPANÇA -0,01%',click:()=>this.policyAction('Rendimento da poupança reduzido.',()=>{bank.policy.savingsRate=Math.max(0,bank.policy.savingsRate-.0001);})}]);
+    p.heading('POLÍTICA FISCAL');p.kv('Imposto sobre salários',`${Math.round(this.city.taxRate*100)}%`);
+    p.buttons([{label:'IMPOSTO +1%',click:()=>this.policyAction('Imposto salarial aumentado.',()=>{this.city.taxRate=Math.min(.5,this.city.taxRate+.01);})},{label:'IMPOSTO -1%',click:()=>this.policyAction('Imposto salarial reduzido.',()=>{this.city.taxRate=Math.max(0,this.city.taxRate-.01);})}]);
+    p.heading('BENEFÍCIOS MUNICIPAIS');p.kv('Orçamento diário',money(welfare.policy.dailyBudget));p.kv('Pago hoje',money(welfare.spentToday));p.kv('Pago desde a fundação',money(welfare.totalPaid));p.kv('Piso por adulto',money(welfare.policy.householdFloor));
+    p.buttons([{label:welfare.policy.enabled?'PAUSAR BENEFÍCIOS':'ATIVAR BENEFÍCIOS',click:()=>this.policyAction('Programa de benefícios alterado.',()=>{welfare.policy.enabled=!welfare.policy.enabled;})},{label:'ORÇAMENTO +R$ 100',click:()=>this.policyAction('Orçamento de benefícios ampliado.',()=>{welfare.policy.dailyBudget+=10000;})},{label:'ORÇAMENTO -R$ 100',click:()=>this.policyAction('Orçamento de benefícios reduzido.',()=>{welfare.policy.dailyBudget=Math.max(0,welfare.policy.dailyBudget-10000);})}]);
+    p.note('Benefícios consideram saldo, poupança e dependentes; têm teto diário e preservam a reserva do tesouro. Cidadãos com renda podem buscar crédito antes de recorrer ao benefício.');
     p.note('A casa da moeda deposita a emissão no tesouro. A expansão monetária eleva gradualmente os preços. Dinheiro guardado e contratos já reservados mantêm seu valor nominal.');
+    p.heading('EVOLUÇÃO ECONÔMICA');p.table([{label:'Dia'},{label:'Inflação'},{label:'Poupança'},{label:'Crédito'}],currency.history.slice(-10).reverse().map(h=>({cells:[h.day,`${(h.inflation*100).toFixed(2)}%`,money(h.savings||0),money(h.credit||0)]})));
     if(mint)p.button('ABRIR CASA DA MOEDA',()=>this.openBuilding(mint.id));
   }
   government(p) {
@@ -401,7 +461,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.heading('RESERVA DE EMERGÊNCIA');p.kv('Alimentos disponíveis',`${city.economy.inventory(hall)} itens`);p.note('Reserva finita para os habitantes até a cadeia alimentar se estabelecer.');
       if(hall)p.button('ABRIR PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,city.development.projects.filter(o=>o.accountId==='treasury').slice(-30).reverse());}
-    else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.transactions(p,'treasury');}
+    else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
     else {
       p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
       p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');const iy=p.y;p.space(30);if(iy>=p.top&&iy+24<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);
@@ -456,6 +516,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
   transport(p) {
     const city=this.city,system=city.logistics,pending=system.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
     p.metrics([['EM ANDAMENTO',pending.length,C.gold],['ENTREGUES',system.delivered,C.green],['ITENS EM FRETE',pending.reduce((n,s)=>n+s.quantity,0),C.cyan]]);
+    const demand=system.demandMetrics();p.heading('DEMANDA POR TRANSPORTE');p.kv('Cargas aguardando / transporte próprio',`${demand.waiting} / ${demand.ownHauls}`);p.kv('Transportadores disponíveis',demand.drivers);p.kv('Cargas bloqueadas por armazém cheio',demand.waitingSpace);p.kv('Espera mais antiga',`${Math.round(demand.oldest)} min`);p.kv('Trabalho pendente / capacidade diária',`${demand.work} / ${demand.capacity} min`);p.kv('Lamparinas sem atendimento',demand.lampRequests);p.kv('Índice de demanda',Math.round(demand.score));
     const states={waiting:'Aguardando coleta','in-transit':'Em trânsito','waiting-space':'Sem espaço',delivered:'Entregue',cancelled:'Cancelado'};
     const rows=(this.view()==='active'?pending:system.shipments.filter(s=>['delivered','cancelled'].includes(s.status)).slice(-40).reverse()).filter(s=>this.matches(`${s.id} ${GOODS[s.good].label} ${s.seller.entity?.properties.name} ${s.buyer.entity?.properties.name||s.buyer.name}`));
     p.heading(this.view()==='active'?'CARGAS EM ANDAMENTO':'ENTREGAS E CANCELAMENTOS');

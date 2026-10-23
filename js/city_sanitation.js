@@ -145,6 +145,7 @@ export class CitySanitation {
         f.cleanliness = 100; f.lastCleanedAt = this.city.minute; f.cleaningJobId = null; this.cleaned++;
         this.city.transfer(job.accountId, employer?.accountId || 'treasury', job.fee, 'Serviço de limpeza');
         if (this.city.accounts.get(job.payerId)?.entity?.properties.cityBuilding) this.city.accounts.get(job.payerId).totalExpenses += job.fee;
+        this.city.history.record('service',`Limpeza de banheiro em ${site.entity.properties.name}.`,[job.payerId,employer?.accountId,site.accountId,c.accountId],{amount:job.fee,jobId:job.id});
         job.status = 'completed'; job.completedAt = this.city.minute; c.cleaningJobId = null; c.task = null; c.path = [];
         this.city.log(`Banheiro em ${site.entity.properties.name} foi limpo por ${employer?.entity.properties.name || 'equipe municipal'}.`, 'sanitation', [c.id], { kind: 'cleaning-completed', facilityId: f.id, jobId: job.id });
       }

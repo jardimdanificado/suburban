@@ -3,6 +3,20 @@ import { inventoryFree, initializeInventory } from './city_inventory.js';
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
 export class CityLogistics {
   constructor(city) { this.city = city; this.shipments = []; this.nextId = 1; this.delivered = 0; }
+  demandMetrics() {
+    const city=this.city, shipments=this.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
+    const carriers=city.economy.businesses.filter(b=>b.type==='carrier');
+    const drivers=carriers.reduce((n,b)=>n+(b.balance>=b.wage?b.workers.filter(id=>city.society.citizen(id)).length:0)+(city.economy.citizen(b.ownerId)?1:0),0);
+    const waiting=shipments.filter(s=>s.status!=='waiting-space' && (!s.driverId || !s.carrierId));
+    const oldest=waiting.reduce((n,s)=>Math.max(n,city.minute-s.createdAt),0);
+    const lampRequests=city.lighting.posts.filter(p=>p.fuel<=3 && !shipments.some(s=>s.buyer.lampPost===p)).length;
+    const work=shipments.reduce((n,s)=>{if(s.status==='waiting-space')return n;const driver=city.society.citizen(s.driverId);const remaining=driver?.deliveryLeg==='delivery'?driver.path.length+4:s.routeLength+(s.pickedUp?0:s.routeLength*.5)+4;return n+Math.max(4,remaining);},0)+lampRequests*30;
+    // Only part of a shift is available after pickup, food, rest and personal needs.
+    const capacity=drivers*240;
+    const shortage=Math.max(0,work-capacity*.5);
+    const score=work?Math.min(300,(drivers?0:120)+shortage*.3+waiting.length*12+Math.min(120,oldest/15)+lampRequests*10):0;
+    return {waitingSpace:shipments.filter(s=>s.status==='waiting-space').length,pending:shipments.length,waiting:waiting.length,ownHauls:shipments.filter(s=>!s.carrierId).length,oldest,lampRequests,work:Math.ceil(work),capacity,drivers,score};
+  }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false } = {}) {
     const city = this.city;
@@ -126,6 +140,8 @@ export class CityLogistics {
         const buyerAccount = city.accounts.get(s.payerAccountId || s.buyer.accountId);
         if (buyerAccount?.entity?.properties.cityBuilding) { buyerAccount.totalExpenses += s.cost + (carrier?.active ? s.fee : 0) + (s.serviceFee || 0); if (s.purpose === 'work-meals') buyerAccount.mealPurchaseCost += s.cost + (carrier?.active ? s.fee : 0); }
         city.economy.recordGoods('delivery', s.good, s.quantity, s.seller.id, s.buyer.id);
+        city.history.record('sale', `${s.quantity} ${city.economy.goods[s.good].label}: ${city.accountName(s.seller.accountId)} → ${city.accountName(s.payerAccountId)}.`,[s.seller.accountId,s.payerAccountId,s.buyer.accountId],{amount:s.cost,good:s.good,quantity:s.quantity,shipmentId:s.id});
+        city.history.record('service',s.buyer.lampPost?'Abastecimento de lamparina concluído.':'Frete entregue.',[carrier?.accountId,s.payerAccountId,c.accountId,s.buyer.accountId],{amount:s.fee+s.serviceFee,shipmentId:s.id,provider:carrier?.entity.properties.name||'Transporte próprio',quantity:s.quantity});
         city.economy.practice(c, 'logistics', 10); this.releaseDriver(s);
         s.status = 'delivered'; s.completedAt = city.minute; this.delivered++;
         city.log(`Frete ${s.id} entregue: ${s.quantity} ${city.economy.goods[s.good].label}.`, 'transport', [c.id], { kind: 'shipment-delivered', shipmentId: s.id });

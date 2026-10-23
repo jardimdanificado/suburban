@@ -1,42 +1,85 @@
-/** Full reserve deposits and loans funded exclusively by existing bank equity. */
+/** Deposits have full reserves; loans and savings interest use existing bank equity. */
 export class CityBank {
-  constructor(city) { this.city=city; this.deposits=new Map(); this.loans=[]; this.nextId=1; }
-  available() { return this.city.economy.businesses.filter(b=>b.type==='bank' && b.workers.length); }
-  deposit(bank, clientId, amount) {
-    const city=this.city, client=city.accounts.get(clientId);
-    if (!this.available().includes(bank) || !client || !Number.isSafeInteger(amount) || amount<=0) return false;
-    const key=`deposit:${bank.id}:${clientId}`;
-    let account=this.deposits.get(key);
-    if (!account) { account={name:`Depósito de ${city.accountName(clientId)}`,balance:0,bankId:bank.id,clientId}; this.deposits.set(key,account);city.accounts.set(key,account); }
-    return city.transfer(clientId,key,amount,'Depósito bancário');
+  constructor(city) {
+    this.city = city; this.deposits = new Map(); this.loans = []; this.nextId = 1;
+    this.policy = { creditEnabled: true, loanRate: .002, savingsRate: .0005, cashReserve: 10000 };
   }
-  withdraw(bank,clientId,amount) {
-    if (!Number.isSafeInteger(amount) || amount<=0) return false;
-    return this.city.transfer(`deposit:${bank.id}:${clientId}`,clientId,amount,'Saque bancário');
+  available() { return this.city.economy.businesses.filter(b => b.type === 'bank' && b.workers.length && b.balance >= b.wage); }
+  savings(clientId) { return [...this.deposits.values()].filter(d => d.clientId === clientId).reduce((n,d) => n+d.balance,0); }
+  deposit(bank, clientId, amount) {
+    const city = this.city, client = city.accounts.get(clientId);
+    if (!this.available().includes(bank) || !client || !Number.isSafeInteger(amount) || amount <= 0) return false;
+    const key = `deposit:${bank.id}:${clientId}`;
+    let account = this.deposits.get(key);
+    if (!account) {
+      account = { name: `Poupança de ${city.accountName(clientId)}`, balance: 0, bankId: bank.id, clientId, interestEarned: 0 };
+      this.deposits.set(key,account); city.accounts.set(key,account);
+    }
+    return city.transfer(clientId,key,amount,'Depósito em poupança');
+  }
+  withdraw(bank, clientId, amount) {
+    if (!Number.isSafeInteger(amount) || amount <= 0) return false;
+    return this.city.transfer(`deposit:${bank.id}:${clientId}`,clientId,amount,'Resgate de poupança');
   }
   lend(bank, clientId, amount) {
-    const city=this.city,client=city.accounts.get(clientId);
-    if (!this.available().includes(bank) || !client || !city.society.isAdult(client) || !Number.isSafeInteger(amount) || amount<=0 || this.loans.some(l=>l.clientId===clientId && l.remaining>0)) return false;
-    const income=client.jobId ? (city.building(client.jobId)?.wage||0)*240 : client.businessIds?.length ? 20000 : 0;
-    const reserve=bank.workers.length*bank.wage*480;
-    if (amount>income*12 || amount>Math.max(0,bank.balance-reserve)*.6 || !city.transfer(bank.accountId,clientId,amount,'Empréstimo bancário')) return false;
-    const loan={id:this.nextId++,bankId:bank.id,clientId,principal:amount,remaining:amount,interest:0,dailyPayment:Math.ceil(amount/30),dueDay:city.day+1,missed:0};
-    this.loans.push(loan);city.log(`Banco concedeu crédito de ${(amount/100).toFixed(2)} a ${city.accountName(clientId)}.`, 'economy', [client.id],{kind:'bank-loan',loanId:loan.id});return loan;
+    const city = this.city, client = city.accounts.get(clientId);
+    if (!this.policy.creditEnabled || !this.available().includes(bank) || !client || client.entity?.destroyed || !city.society.isAdult(client) || !Number.isSafeInteger(amount) || amount <= 0 || this.loans.some(l => l.clientId === clientId && l.status !== 'paid')) return false;
+    const income = client.jobId ? (city.building(client.jobId)?.wage || 0)*240 : client.businessIds?.length ? 20000 : 0;
+    const reserve = bank.workers.length*bank.wage*480;
+    if (amount > income*12 || amount > Math.max(0,bank.balance-reserve)*.6 || !city.transfer(bank.accountId,clientId,amount,'Empréstimo bancário')) return false;
+    const loan = { id: this.nextId++, bankId: bank.id, clientId, principal: amount, remaining: amount, interest: 0, rate: this.policy.loanRate, dailyPayment: Math.ceil(amount/30), dueDay: city.day+1, missed: 0, status: 'active', startedAt: city.minute, paid: 0 };
+    this.loans.push(loan);
+    city.history.record('credit', `Crédito aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount, rate:loan.rate, loanId:loan.id });
+    return loan;
+  }
+  householdFinance() {
+    const city = this.city, banks = this.available();
+    for (const c of city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c))) {
+      for (const deposit of this.deposits.values()) if (deposit.clientId === c.accountId && deposit.balance > 0 && c.balance < this.policy.cashReserve) this.withdraw({id:deposit.bankId},c.accountId,Math.min(deposit.balance,this.policy.cashReserve-c.balance));
+      if (!banks.length) continue;
+      if (c.balance < city.welfare.policy.cashTarget && (c.jobId || c.businessIds.length) && c.creditAllowed !== false) {
+        for (const bank of banks) if (this.lend(bank,c.accountId,city.welfare.policy.cashTarget-c.balance)) break;
+      }
+      const amount = Math.floor(Math.max(0,c.balance-this.policy.cashReserve)*(c.savingsRate ?? .2));
+      if (amount > 0) this.deposit(banks[0],c.accountId,amount);
+    }
   }
   daily() {
-    for(const loan of this.loans.filter(l=>l.remaining>0 && l.dueDay<=this.city.day)) {
-      const bank=this.city.building(loan.bankId),client=this.city.accounts.get(loan.clientId); if(!bank || !client) continue;
-      // Interest is a debt, never new currency; no compounding arrears.
-      const interest=Math.ceil(loan.remaining*.002);loan.interest+=interest;
-      const payment=Math.min(client.balance,loan.dailyPayment+loan.interest,loan.remaining+loan.interest);
-      if(payment && this.city.transfer(loan.clientId,bank.accountId,payment,'Parcela de empréstimo')) { const paidInterest=Math.min(payment,loan.interest);loan.interest-=paidInterest;loan.remaining-=payment-paidInterest;bank.totalRevenue+=paidInterest; }
-      loan.missed=payment<loan.dailyPayment?loan.missed+1:0;loan.dueDay=this.city.day+1;
+    const city = this.city;
+    for (const loan of this.loans.filter(l => l.status !== 'paid' && l.status !== 'written-off' && l.dueDay <= city.day)) {
+      const bank = city.building(loan.bankId), client = city.accounts.get(loan.clientId);
+      if (!bank || !client) continue;
+      const interest = Math.ceil(loan.remaining*loan.rate); loan.interest += interest;
+      // Preserve a basic subsistence reserve; arrears do not create currency.
+      const due = Math.min(loan.dailyPayment+loan.interest,loan.remaining+loan.interest);
+      const payment = Math.min(Math.max(0,client.balance-city.currency.price(1500)),due);
+      if (payment && city.transfer(loan.clientId,bank.accountId,payment,'Parcela de empréstimo')) {
+        const paidInterest = Math.min(payment,loan.interest);
+        loan.interest -= paidInterest; loan.remaining -= payment-paidInterest; loan.paid += payment; bank.totalRevenue += paidInterest;
+      }
+      loan.missed = payment < due ? loan.missed+1 : 0;
+      loan.status = loan.remaining+loan.interest === 0 ? 'paid' : loan.missed >= 3 ? 'arrears' : 'active';
+      if (loan.status === 'paid') city.history.record('credit','Empréstimo quitado.',[loan.clientId,bank.accountId],{loanId:loan.id,amount:loan.paid});
+      loan.dueDay = city.day+1;
     }
-    this.loans=this.loans.filter(l=>l.remaining>0 || l.interest>0);
-    for(const [key,deposit] of this.deposits) { const client=this.city.accounts.get(deposit.clientId);if(client && client.balance<20000 && deposit.balance>0) this.withdraw({id:deposit.bankId},deposit.clientId,Math.min(deposit.balance,20000-client.balance)); }
-    for(const bank of this.available()) {
-      const client=this.city.citizens.filter(c=>this.city.society.isAdult(c) && !c.entity.destroyed && c.balance>80000 && !this.deposits.get(`deposit:${bank.id}:${c.accountId}`)?.balance).sort((a,b)=>b.balance-a.balance)[0];
-      if(client) this.deposit(bank,client.accountId,Math.floor(client.balance*.1));
+    for (const [key,deposit] of this.deposits) {
+      const bank = city.building(deposit.bankId);
+      if (!bank?.active || !deposit.balance) continue;
+      const interest = Math.min(Math.floor(deposit.balance*this.policy.savingsRate),Math.max(0,bank.balance-bank.workers.length*bank.wage*480));
+      if (interest > 0 && city.transfer(bank.accountId,key,interest,'Rendimento de poupança')) { deposit.interestEarned += interest; bank.totalExpenses += interest; }
+    }
+  }
+  closeClient(c, heir) {
+    for (const [key,deposit] of this.deposits) if (deposit.clientId === c.accountId && deposit.balance) this.city.transfer(key,c.accountId,deposit.balance,'Resgate de poupança do espólio');
+    for (const loan of this.loans.filter(l => l.clientId === c.accountId && !['paid','written-off'].includes(l.status))) {
+      const bank = this.city.building(loan.bankId);
+      const due = loan.remaining+loan.interest, amount = Math.min(c.balance,due);
+      if (bank && amount && this.city.transfer(c.accountId,bank.accountId,amount,'Liquidação de dívida do espólio')) {
+        const interest = Math.min(amount,loan.interest); loan.interest -= interest; loan.remaining -= amount-interest; bank.totalRevenue += interest;
+      }
+      loan.status = loan.remaining+loan.interest ? 'written-off' : 'paid';
+      if (bank && loan.status === 'written-off') bank.totalExpenses += loan.remaining+loan.interest;
+      this.city.history.record('credit','Encerramento do contrato por saída ou falecimento.',[c.accountId,bank?.accountId],{loanId:loan.id,unpaid:loan.remaining+loan.interest});
     }
   }
 }
