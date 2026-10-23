@@ -1,8 +1,11 @@
+import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation } from './city_terrain.js';
 // City geometry is built once per building; one instance is exactly one 1×1×1 space.
 export function syncCityBuildings(renderer, THREE, entities, world) {
   const map = world.map;
+  const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
+    x+width>=renderer.renderedMinTx-8 && x<=renderer.renderedMaxTx+8 && y+depth>=renderer.renderedMinTy-8 && y<=renderer.renderedMaxTy+8;
   renderer.lampMeshes ??= new Map();
   // A fixed light pool prevents shader recompilation and unbounded GPU work per post.
   if (!renderer.cityLampLights) {
@@ -17,6 +20,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   for (const post of world.cityLampPosts || []) {
     if (!post.built) continue;
     liveLamps.add(post.id);
+    if(!inView(post.x,post.y)){const existing=renderer.lampMeshes.get(post.id);if(existing)existing.visible=false;continue;}
     let lamp = renderer.lampMeshes.get(post.id);
     if (!lamp) {
       lamp = new THREE.Group();
@@ -36,11 +40,13 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   for (const site of world.cityLampSites || []) {
     if (site.built || site.status === 'cancelled') continue;
     sites.add(site.id);
+    if(!inView(site.x,site.y)){const existing=renderer.lampSiteMeshes.get(site.id);if(existing)existing.visible=false;continue;}
     let marker = renderer.lampSiteMeshes.get(site.id);
     if (!marker) {
       marker = new THREE.Mesh(new THREE.BoxGeometry(.9, .12, .9), new THREE.MeshLambertMaterial({ color: 0xc69543 }));
       renderer.scene.add(marker); renderer.lampSiteMeshes.set(site.id, marker);
     }
+    marker.visible=true;
     marker.position.set(site.x, surfaceElevation(world, site.x, site.y) + .08, site.y);
   }
   for (const [id, marker] of renderer.lampSiteMeshes) if (!sites.has(id)) { renderer.scene.remove(marker); marker.geometry.dispose(); marker.material.dispose(); renderer.lampSiteMeshes.delete(id); }
@@ -50,6 +56,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     const b = entity.properties?.cityBuilding;
     if (!b || entity.destroyed) continue;
     active.add(entity.id);
+    if(!inView(entity.x,entity.y,b.width,b.depth)){const existing=renderer.cityMeshes.get(entity.id);if(existing)existing.visible=false;continue;}
     if (b.constructionKind === 'open-air') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     if (group && group.userData.floorCount !== b.floors) {
@@ -60,7 +67,9 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const geometry = new THREE.BoxGeometry(0.97, 0.97, 0.97);
       const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
       const cells = new THREE.InstancedMesh(geometry, material, b.units.length);
-      const matrix = new THREE.Matrix4(), color = new THREE.Color(b.color);
+      const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
+      const residential = ['residential','popular_housing','luxury_housing'].includes(b.type);
+      const matrix = new THREE.Matrix4(), color = new THREE.Color(residential ? style.wall : b.color);
       const windows = [];
       for (let i = 0; i < b.units.length; i++) {
         const u = b.units[i];
@@ -77,8 +86,27 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const windowMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0x36545a, emissive: 0x1d2c20 }), windows.length);
       windows.forEach(([x, y, z, w, h, d], i) => { matrix.makeScale(w, h, d); matrix.setPosition(x, y, z); windowMesh.setMatrixAt(i, matrix); });
       group.add(windowMesh);
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), new THREE.MeshLambertMaterial({ color: 0x506054 }));
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), new THREE.MeshLambertMaterial({ color: style.roof }));
       roof.position.set(b.width / 2, b.floors + .03, b.depth / 2); roof.castShadow = true; group.add(roof);
+      if (residential) {
+        const roofMaterial = new THREE.MeshLambertMaterial({color:style.roof});
+        if (style.roofKind === 'gable') {
+          const triangle = new THREE.Shape(); triangle.moveTo(-b.width/2-.1,0); triangle.lineTo(b.width/2+.1,0); triangle.lineTo(0,.75); triangle.closePath();
+          const pitched = new THREE.Mesh(new THREE.ExtrudeGeometry(triangle,{depth:b.depth+.2,bevelEnabled:false}),roofMaterial);
+          pitched.position.set(b.width/2,b.floors+.1,-.1); pitched.castShadow=true; group.add(pitched);
+        } else if (style.roofKind === 'hip') {
+          const pitched = new THREE.Mesh(new THREE.ConeGeometry(1,.75,4),roofMaterial); pitched.rotation.y=Math.PI/4;
+          pitched.scale.set((b.width+.2)/Math.SQRT2,1,(b.depth+.2)/Math.SQRT2); pitched.position.set(b.width/2,b.floors+.475,b.depth/2); pitched.castShadow=true; group.add(pitched);
+        } else roofMaterial.dispose();
+        if (b.architecture === 'timber') for (let z=0;z<=b.floors;z++) {
+          const beam=new THREE.Mesh(new THREE.BoxGeometry(b.width+.04,.07,.08),new THREE.MeshLambertMaterial({color:0x594736}));
+          beam.position.set(b.width/2,z+.04,b.depth+.025);group.add(beam);
+        }
+        if (b.architecture === 'hacienda') {
+          for (const x of [.25,b.width-.25]) {const column=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,.95,6),new THREE.MeshLambertMaterial({color:0xe7d9bf}));column.position.set(x,.48,b.depth+.12);group.add(column);}
+          const porch=new THREE.Mesh(new THREE.BoxGeometry(b.width,.1,.6),new THREE.MeshLambertMaterial({color:style.roof}));porch.position.set(b.width/2,1,b.depth+.1);group.add(porch);
+        }
+      }
       const industry=INDUSTRIES[b.type];
       if(industry) {
         const material=new THREE.MeshLambertMaterial({color:b.type==='bank'?0xd5bc76:industry.category==='food'?0xe8ce94:industry.category==='services'?0x81bcb0:0x687a83});
@@ -132,6 +160,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       renderer.scene.add(group);
       renderer.cityMeshes.set(entity.id, group);
     }
+    group.visible=true;
     if (group.userData.terrainRevision !== (world.revision || 0)) {
       b.terrain = buildingGround(world, entity.x, entity.y, b.width, b.depth);
       const base = b.terrain.base, matrix = new THREE.Matrix4();
@@ -158,7 +187,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z += .005;
     group.position.set(entity.x, b.terrain.base, entity.y);
     if (group.userData.roomProps) group.userData.roomProps.visible = renderer.selectedEntityId === entity.id;
-    const unit = b.units.find(u => u.id === renderer.selectedCityUnitId);
+    const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
     group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z + .5, unit.y + .5);
     group.userData.cells.material.emissive.setHex(renderer.selectedEntityId === entity.id ? 0x26351a : 0x000000);
@@ -203,6 +232,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     highlight.visible = false; group.add(highlight); group.userData.highlight = highlight;
     renderer.cityMeshes.set(entity.id, group); renderer.scene.add(group);
   }
+  group.visible=true;
   if (group.userData.terrainRevision !== (world.revision || 0)) {
     b.terrain = buildingGround(world, entity.x, entity.y, b.width, b.depth);
     const matrix = new THREE.Matrix4();
@@ -216,7 +246,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     group.userData.terrainRevision = world.revision || 0;
   }
   group.position.set(entity.x, 0, entity.y);
-  const unit = b.units.find(u => u.id === renderer.selectedCityUnitId);
+  const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
   group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
   if (unit) group.userData.highlight.position.set(unit.x + .5, surfaceElevation(world, entity.x + unit.x + .5, entity.y + unit.y + .5) + .08, unit.y + .5);
   group.userData.patches.material.emissive.setHex(renderer.selectedEntityId === entity.id ? 0x26351a : 0);

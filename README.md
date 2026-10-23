@@ -346,7 +346,7 @@ Pessoas guardam inicialmente 20% do excedente acima de R$ 100, com percentual aj
 
 O painel Governo permite ajustar emissão (automática, cota fixa ou pausa), retirar moeda do tesouro, suspender novo crédito, alterar juros de novos empréstimos, rendimento da poupança, imposto salarial e orçamento dos benefícios. Retirada de moeda preserva a reserva monetária e pelo menos metade da base inicial; poupança, juros, empréstimos e benefícios são transferências, não emissão. Os controles mantêm o modelo monetário simplificado descrito acima: juros e poupança alteram crédito e distribuição, enquanto emissão e retirada alteram diretamente a referência de preços.
 
-As fichas de pessoas e prédios têm aba Histórico, com categorias de emprego, proprietários, vendas, serviços, crédito e finanças. Contratações e desligamentos guardam empregador, data, motivo e salário da ocasião. Propriedades registram compras, construção e heranças por cômodo ou instalação. Vendas físicas incluem produto, quantidade e valor; refeições também guardam ingredientes e qualidade. Fretes, abastecimento, faxina e construção registram a conclusão do serviço e seu valor. A aba Tesouro inclui o histórico público e as decisões de política. Cada categoria conserva até 2.000 eventos por pessoa/empresa e um contador de ocorrências desde a fundação; há filtros, busca e paginação. Esses registros pertencem à cidade em execução e são reiniciados ao gerar outra cidade.
+As fichas de pessoas e prédios têm aba Histórico, com categorias de emprego, proprietários, vendas, serviços, crédito e finanças. Contratações e desligamentos guardam empregador, data, motivo e salário da ocasião. Propriedades registram compras, construção e heranças por cômodo ou instalação. Vendas físicas incluem produto, quantidade e valor; refeições também guardam ingredientes e qualidade. Fretes, abastecimento, faxina e construção registram a conclusão do serviço e seu valor. A aba Tesouro inclui o histórico público e as decisões de política. Cada categoria conserva até 2.000 eventos por pessoa/empresa dentro da retenção global dos 16.000 eventos recentes (com descarte em lotes de até 513 excedentes), além de um contador de ocorrências desde a fundação; há filtros, busca e paginação. Esses registros pertencem à cidade em execução e são reiniciados ao gerar outra cidade.
 
 
 ## Resposta às filas de serviços essenciais
@@ -406,3 +406,58 @@ Operações bancárias, políticas fiscais/monetárias, preferências financeira
 As consultas de habitantes usam contas indexadas; prédios e dependentes possuem índices próprios. Consultas visuais usam regiões de 16×16 tiles. O cálculo de caminhos reutiliza buffers numéricos e os caches de caminhos/conectividade possuem limite com remoção gradual, sem apagar todo o cache ao atingir a capacidade.
 
 As rotinas horárias são distribuídas entre os primeiros 13 minutos de cada hora, em vez de executadas juntas. A revisão de estruturas acompanha mudanças e faz uma conferência periódica a cada cinco minutos. Tentativas de encontrar motoristas são distribuídas por cinco fases e têm um limite de 32 consultas de caminho por minuto; cargas em andamento continuam sendo processadas normalmente. O relógio limita a recuperação de atrasos e cede execução entre lotes de trabalho. Sob sobrecarga, o avanço da simulação pode ficar abaixo da velocidade selecionada, mantendo a interface responsiva.
+
+
+## Logging estruturado e rastreabilidade
+
+O Histórico e os históricos individuais compartilham IDs de evento. Os registros guardam horário, tipo, ação, contas, participantes, prédios, nomes da ocasião, valores e mercadorias. Existem índices por morador, prédio, categoria, tipo e operação. Os detalhes permitem abrir participantes e prédios, seguir eventos anteriores e consultar toda a operação vinculada: frete, obra, faxina, empréstimo, eleição ou planta.
+
+Movimentações de mercadorias também entram no journal: plantio, produção, consumo de insumos, despacho e entrega. A produção aponta para movimentos anteriores dos insumos; recebimentos, reservas e pagamentos apontam para sua operação. Estoques continuam misturados: esses vínculos descrevem movimentos e causas registradas, sem identificar cada unidade como um lote individual. Eventos já descartados aparecem como fora da retenção. A exportação JSON versão 2 inclui os resultados filtrados, filtros, total registrado e total descartado. O congelamento mantém um retrato dos registros disponíveis; não pausa a cidade. Os registros pertencem à sessão atual, sem persistência automática em disco.
+
+## Identidade, personalidade e convívio
+
+Os moradores recebem nomes variados e dois sobrenomes. Filhos herdam um sobrenome de cada genitor; nomes completos não se repetem na mesma cidade. Sobrenomes e parentesco continuam disponíveis quando um familiar morre ou sai da cidade.
+
+Sete traços individuais, visíveis na ficha, têm efeitos: dedicação altera aprendizado e contratação; empatia influencia ajuda e reconciliação; honestidade e ceticismo influenciam mentiras e sua descoberta; tolerância a risco participa da escolha de investidores; frugalidade define a poupança inicial e o peso do preço das refeições; ambição participa da seleção de candidaturas. Os efeitos adaptam as ideias do Brutopolis às rotinas econômicas do Suburban.
+
+Conversas podem terminar em elogios, ofensas, reconciliação, mentira descoberta ou compartilhamento de uma provisão real. Essas ações mudam confiança, afeto, humor e, quando cabível, reputação pública. São encontros entre pessoas próximas, usando o sistema existente de conversas e seus intervalos. O histórico liga a interação à conversa que a originou.
+
+## Reputação econômica
+
+Pessoas e empresas começam com 50 pontos em confiabilidade profissional, reputação comercial, histórico de crédito e reputação pública. Trabalho remunerado melhora a confiabilidade uma vez por dia. Entregas, obras e faxinas concluídas melhoram a reputação do prestador e de seu proprietário; falta de caixa para salário pode reduzi-la. Parcelas completas e atrasos alteram o histórico de crédito. Cada observação guarda motivo, mudança e operação de origem.
+
+Contratação combina habilidade, relações, dedicação e confiabilidade. Compras no atacado e refeições combinam distância e reputação, preservando preço, disponibilidade e preferências individuais. Transportadoras usam fila e reputação; construtoras usam reputação para desempatar filas iguais. Crédito pessoal combina renda, caixa do banco e reputação para determinar limite e taxa. Crédito empresarial mantém suas reservas e taxa reduzida, com limite ajustado para histórico ruim. Reputação não cria dinheiro nem garante aprovação.
+
+## Arquitetura e vegetação
+
+Residenciais variam entre barro, pedra, madeira, casarão com varanda e fachada contemporânea, conforme a categoria. Cores, telhados, vigas e varandas aparecem no 3D; o 2D usa a mesma paleta. As variações preservam células, cômodos, propriedade e capacidade. A ficha do edifício identifica seu estilo.
+
+A vegetação inicial inclui carvalhos, pinheiros, salgueiros, bétulas, bordos, cerejeiras e amoreiras. O painel Cidade → Vegetação mostra espécies, estágio, posição, cultivador e datas, com localização no mapa. Sementes germinam depois de seis horas; amoreiras amadurecem em um dia e árvores em três ou quatro dias. Mudas crescem visualmente em três estágios. Árvores naturais maduras dispersam sementes; terreno adequado e espaço livre são necessários. Lotes cadastrados, construções, estradas e postes impedem ocupações incompatíveis. Há limites de 640 plantas e 160 sementes por cidade.
+
+Silviculturas compram sementes para plantios suplementares e consomem árvores maduras a até 14 tiles da entrada: cada árvore rende o lote de quatro madeiras, mediante o trabalho produtivo existente. O corte semeia o replantio no local; a empresa mantém até oito plantios suplementares, além dos replantios de corte. Sem árvore madura, a produção espera o crescimento. Madeira continua seguindo estoque e frete físicos.
+
+## Mandatos e eleições
+
+A primeira gestão é provisória, escolhida por habilidade de administração pública. Mandatos duram 12 dias e campanhas abrem dois dias antes da votação. Até seis adultos sem empresa própria nem sede empresarial em construção são candidatos; administração, ambição e reputação pública participam da seleção. O prefeito elegível pode concorrer novamente. Todo adulto vivo tem um voto. Habilidade pública, reputação, confiança entre eleitor e candidato e afinidade com o programa compõem a decisão; condições de moradia, alimentação, emprego e felicidade afetam a avaliação do prefeito atual. Empates no resultado são resolvidos por habilidade de administração e depois ID de cadastro.
+
+Três programas disputam a prefeitura: proteção social (18% de imposto, R$ 1.600/dia de benefícios e teto de emissão de R$ 800/dia), equilíbrio (10%, R$ 1.000 e R$ 600) e tributos menores/reserva (3%, R$ 600 e R$ 400). O vencedor aplica esses parâmetros na posse, com dinheiro, reservas e controles monetários existentes. Ajustes manuais permanecem disponíveis durante o mandato. A troca de prefeito encerra o emprego anterior, libera suas atividades e transfere a função pública sem transferir patrimônio municipal.
+
+Governo → Eleições mostra aprovação, calendário, candidaturas, programas, resultados e votos individuais. Os últimos 24 processos eleitorais são guardados separadamente dos eventos recentes. Na ausência do prefeito, assume um adulto elegível provisoriamente e a próxima votação é antecipada para no máximo um dia. Sem candidatos elegíveis, a eleição é adiada e registrada.
+
+
+## Vocabulário do Brutopolis
+
+`js/vocabulario.js` conserva o catálogo original de palavras, nomes, prefixos, sufixos e funções de combinação, classificação e singularização. `js/city_names.js` usa esse catálogo para nomes próprios, sobrenomes dos fundadores e nomes dos imóveis/empreendimentos. Filhos preservam a herança dos sobrenomes. Colisões usam combinação por eufonia e, por último, uma identificação numérica para garantir progresso. Nomes próprios não passam pela singularização; essa regra fica reservada às palavras comuns.
+
+A escolha usa a semente da cidade e um número limitado de tentativas, sem filtrar o catálogo inteiro a cada nome. O catálogo permanece nos módulos JavaScript, fora do estado sincronizado com o worker. É carregado uma vez em cada contexto JavaScript e só é consultado ao criar identidades e instalações. Os nomes existentes são preservados durante a sessão.
+
+
+## Redução do custo de sincronização
+
+Históricos atravessam o worker como eventos novos e contadores alterados; os índices são mantidos localmente. O feed transmite IDs. Sobrenomes, personalidade, traços e preferências alimentares são dados fixos da identidade e deixam de ser percorridos em cada envio. O mapa usa o buffer de bytes, evitando convertê-lo numa lista de um milhão de números.
+
+Salários, impostos salariais e complementos municipais continuam movimentando dinheiro imediatamente a cada minuto. O journal consolida esses pagamentos por hora, com total em centavos, quantidade de pagamentos e início/fim do intervalo. A folha ainda em consolidação é sincronizada, indicada nas fichas e incluída na exportação JSON ao vivo quando corresponde aos filtros. Demais transações continuam individuais.
+
+Encontros sociais indexam apenas pessoas aptas a conversar; a escolha do melhor vizinho dispensa ordenar todos os candidatos. O 3D adia a geometria de imóveis e postes fora da área renderizada e oculta seus grupos. A busca de cômodos para destaque só acontece no imóvel selecionado.
+
+Para diagnóstico, acrescente `profile=1` à URL. Um painel temporário mostra FPS, tempos de CPU, renderização e interface, custo do worker e número de chamadas de desenho. A instrumentação de quadros permanece desativada nas URLs comuns.

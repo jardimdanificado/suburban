@@ -45,14 +45,14 @@ export class CityEconomy {
   initializeCitizen(c, index, options) {
     c.skills = Object.fromEntries(Object.keys(SKILLS).map(skill => [skill, options.age === 0 ? 0 : 2 + this.city.random() * 16]));
     if (options.age !== 0) c.skills[Object.keys(SKILLS)[index % Object.keys(SKILLS).length]] += 15;
-    c.foodPreferences = Object.fromEntries([...edible, ...Object.keys(CROPS), 'pao', 'oleo', ...Object.keys(MEAL_RECIPES)].map(g => [g, (((Math.imul(c.id + 17, 2654435761) ^ Math.imul(g.split('').reduce((n, ch) => n * 31 + ch.charCodeAt(0), 0), 1597334677)) >>> 0) % 201 - 100) / 100]));
+    c.foodPreferences = Object.freeze(Object.fromEntries([...edible, ...Object.keys(CROPS), 'pao', 'oleo', ...Object.keys(MEAL_RECIPES)].map(g => [g, (((Math.imul(c.id + 17, 2654435761) ^ Math.imul(g.split('').reduce((n, ch) => n * 31 + ch.charCodeAt(0), 0), 1597334677)) >>> 0) % 201 - 100) / 100])));
     c.businessIds = []; c.provisions = options.grant === false ? 0 : 3;
     c.rentalPreference = .65 + this.city.random() * .3;
     c.lastPaidAt = this.city.minute; c.mealAllowanceToday = 0; c.foodVoucher = null; c.workMeal = null;
   }
   practice(c, skill, minutes = 1) {
     if (!c || !(skill in SKILLS) || minutes <= 0 || !Number.isFinite(minutes)) return;
-    c.skills[skill] = Math.min(100, c.skills[skill] + minutes * .025 / (1 + c.skills[skill] / 25));
+    c.skills[skill] = Math.min(100, c.skills[skill] + minutes * .025 * (.8 + (c.traits?.diligence ?? .5) * .4) / (1 + c.skills[skill] / 25));
   }
   setupBuilding(b) {
     const startingFood = Math.max(this.city.initialPopulation, this.city.citizens.length) * ECONOMY_RULES.mealUnits * ECONOMY_RULES.initialMealsPerCitizen;
@@ -84,16 +84,7 @@ export class CityEconomy {
     this.hire();
     this.updateDemand();
   }
-  appointMayor() {
-    if (this.citizen(this.mayorId)) return;
-    const candidates = this.city.citizens.filter(c => this.city.society.isAdult(c) && !c.businessIds.length);
-    candidates.sort((a, b) => b.skills.governance - a.skills.governance || a.id - b.id);
-    const mayor = candidates[0]; if (!mayor) return;
-    this.leaveJob(mayor); this.mayorId = mayor.id; mayor.role = 'mayor';
-    const hall = this.city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
-    if (hall) { mayor.jobId = hall.id; hall.workers.push(mayor.id); this.city.history.employment(mayor,hall,'posse na prefeitura'); }
-    this.city.log(`${mayor.entity.properties.name} assumiu a prefeitura e administra o patrimônio e o orçamento públicos.`, 'government', [mayor.id], { kind: 'mayor-appointed' });
-  }
+  appointMayor() { return this.city.politics.ensureMayor(); }
   leaveJob(c, reason = 'Troca de ocupação') {
     const employer = this.city.building(c.jobId);
     if (employer) this.city.history.employment(c,employer,'desligamento',reason);
@@ -112,7 +103,7 @@ export class CityEconomy {
   hiringScore(c, b) {
     const skill = c.skills[JOB_SKILL[b.type]] || 0, owner = this.citizen(b.ownerId);
     const relation = owner ? this.city.society.getRelation(owner, c) : null;
-    return skill * .75 + (relation ? relation.trust * .15 + relation.affection * .1 : 0);
+    return skill * .75 + (this.city.reputation.score(c, 'reliability') - 50) * .15 + ((c.traits?.diligence ?? .5) - .5) * 8 + (relation ? relation.trust * .15 + relation.affection * .1 : 0);
   }
   hire() {
     this.appointMayor();
@@ -317,7 +308,7 @@ export class CityEconomy {
     this.updateDemand();
     const essentialStarted=this.serviceInvestment.invest();
     this.updateDemand();
-    const investors = this.city.citizens.filter(c => this.city.society.isAdult(c) && c.id !== this.mayorId && c.businessIds.length < 10).sort((a, b) => b.balance - a.balance || a.id - b.id);
+    const investors = this.city.citizens.filter(c => this.city.society.isAdult(c) && c.id !== this.mayorId && c.businessIds.length < 10).sort((a, b) => b.balance * (.8 + (b.traits?.riskTolerance ?? .5) * .4) - a.balance * (.8 + (a.traits?.riskTolerance ?? .5) * .4) || a.id - b.id);
     const opportunities = this.demands.filter(d => d.score >= 30).map(d => ({ ...d, priority: d.score * (.9 + this.city.random() * .2) })).sort((a, b) => b.priority - a.priority);
     for (const opportunity of opportunities) {
       if(ESSENTIAL_SERVICES.has(opportunity.type))continue;
@@ -352,14 +343,24 @@ export class CityEconomy {
     return essentialStarted;
   }
   buySeeds(b) {
-    if (b.type !== 'farm' || !b.active || b.seedStock >= 8) return;
+    if (!['farm','forestry'].includes(b.type) || !b.active || b.seedStock >= 8) return;
     const qty = Math.min(24 - b.seedStock, Math.floor(b.balance / this.goods.sementes.price), inventoryFree(b), Math.max(0, 12 - b.seedStock));
     const cost = qty * this.goods.sementes.price;
     if (qty > 0 && this.city.transfer(b.accountId, 'supplier', cost, 'Compra de sementes')) { b.seedStock += qty; this.initialStock.sementes += qty; b.totalExpenses += cost; }
   }
-  recordGoods(kind, good, quantity, from, to) {
+  recordGoods(kind, good, quantity, from, to, details = {}) {
     this.goodsLedger.push({ minute: this.city.minute, kind, good, quantity, from, to });
     if (this.goodsLedger.length > 2000) this.goodsLedger.shift();
+    const city=this.city,source=city.building(from),destination=city.building(to);
+    const project=typeof to==='string' && to.startsWith('project:')?city.development.projects.find(p=>p.id===to):null;
+    const previous=city.history.lastGoodsEvent.get(`${from}:${good}`);
+    const inputEvents=kind==='production' && destination ? destination.lastInputEventIds||[] : [];
+    const entry=city.history.record('production',`${GOODS[good]?.label||good}: ${quantity} unidades / ${kind}${source?' / '+source.entity.properties.name:''}${destination?' → '+destination.entity.properties.name:''}.`,[source?.accountId,destination?.accountId,project?.accountId],
+      {action:kind,good,quantity,fromBuildingId:source?.id,toBuildingId:destination?.id,buildingIds:[source?.id,destination?.id].filter(id=>id!=null),projectId:project?.id,relatedEventIds:[previous,...inputEvents].filter(id=>id!=null),...details});
+    if(from!=null)city.history.lastGoodsEvent.set(`${from}:${good}`,entry.id);
+    if(to!=null)city.history.lastGoodsEvent.set(`${to}:${good}`,entry.id);
+    if(kind==='recipe-input' && source){source.lastInputEventIds??=[];source.lastInputEventIds.push(entry.id);if(source.lastInputEventIds.length>8)source.lastInputEventIds.shift();}
+    return entry;
   }
   transferGoods(seller, buyer, good, quantity, unitPrice) {
     if (!GOODS[good]) return false;
@@ -375,7 +376,7 @@ export class CityEconomy {
         const target = INDUSTRIES[buyer.type]?.inputs[good] ? INDUSTRIES[buyer.type].inputs[good]*6 : buyer.type === 'bakery' ? 24 : 18;
         if (buyer.inventory[good] + (buyer.incoming[good] || 0) > target / 2) continue;
         let remaining = Math.max(0, target - buyer.inventory[good] - (buyer.incoming[good] || 0));
-        const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || INDUSTRIES[b.type]?.outputs[good]) && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y));
+        const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || INDUSTRIES[b.type]?.outputs[good]) && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) + this.city.reputation.providerPenalty(a) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y) - this.city.reputation.providerPenalty(b));
         for (const seller of sellers) {
           const reserve = buyer.workers.length * buyer.wage * 90;
           const quantity = Math.min(24, inventoryFree(buyer), remaining, seller.inventory[good], Math.max(0, Math.floor((buyer.balance - reserve) / this.goods[good].price)));
@@ -394,7 +395,7 @@ export class CityEconomy {
   mealScore(c, b) {
     const offer = this.mealOffer(b, c);
     if (!offer || offer.price > (this.city.accounts.get(this.city.payerFor(c))?.balance || 0)) return Infinity;
-    return Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y) + offer.price / Math.max(1, this.city.currency.price(100)) - this.mealTaste(c, offer) * 45;
+    return Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y) + offer.price / Math.max(1, this.city.currency.price(100)) * (.65 + (c.traits?.frugality ?? .5) * .7) - this.mealTaste(c, offer) * 45 + this.city.reputation.providerPenalty(b);
   }
   enjoyMeal(c, offer) {
     const taste = this.mealTaste(c, offer);
@@ -456,6 +457,7 @@ export class CityEconomy {
   }
   industrialWork(b,c,spec) {
     if(['forestry','fiber_farm','herb_farm'].includes(b.type) && this.city.minute<(b.replantingAt||0)+180) return false;
+    if (b.type === 'forestry') { this.buySeeds(b); this.city.nature.replant(b); if (!this.city.nature.forestryTree(b)) return false; }
     if(b.type==='bank') return this.city.bank.loans.some(l=>l.bankId===b.id && l.remaining>0) || [...this.city.bank.deposits.values()].some(a=>a.bankId===b.id);
     if (!Object.entries(spec.inputs).every(([g,n])=>b.inventory[g]>=n)) return false;
     const net=Object.values(spec.outputs).reduce((n,v)=>n+v,0)-Object.values(spec.inputs).reduce((n,v)=>n+v,0);
@@ -470,6 +472,7 @@ export class CityEconomy {
     if(['clay_pit','sand_pit'].includes(b.type) && (b.extractionReserve??=b.width*b.depth*120)<Object.values(spec.outputs)[0])return false;
     b.productionLabor=(b.productionLabor||0)+1+(c.skills[spec.skill]||0)/80+(c.toolUntil>this.city.minute ? .3 : 0);
     if(b.productionLabor<spec.labor)return true;
+    if (b.type === 'forestry' && !this.city.nature.harvest(b, this.city.nature.forestryTree(b))) return false;
     b.productionLabor-=spec.labor;
     for(const [g,n] of Object.entries(spec.inputs)){b.inventory[g]-=n;this.consumed[g]+=n;if(g==='lixo')b.wasteProcessed=(b.wasteProcessed||0)+n;this.recordGoods('recipe-input',g,n,b.id,null);}
     for(const [g,n] of Object.entries(spec.outputs)){b.inventory[g]+=n;this.produced[g]+=n;if(b.type==='composting')b.compostProduced=(b.compostProduced||0)+n;this.recordGoods('production',g,n,null,b.id);}
@@ -544,11 +547,11 @@ export class CityEconomy {
     switch (phase) {
       case 0: this.city.currency.hourly(); this.city.welfare.hourly(); break;
       case 1: this.city.lighting.hourly(); break;
-      case 2: this.appointMayor(); this.municipalPolicy(); break;
+      case 2: this.city.politics.hourly(); this.municipalPolicy(); break;
       case 3: this.assignHomes(); break;
       case 4: this.hire(); break;
       case 5: this.city.development.updateHourly(); break;
-      case 6: this.city.development.balanceContracts(); break;
+      case 6: this.city.development.balanceContracts(); this.city.nature.hourly(); break;
       case 7: this.city.logistics.rebalanceWaiting(); break;
       case 8: this.trade(); break;
       case 9: this.householdPurchases(); break;

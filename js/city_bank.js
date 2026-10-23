@@ -26,8 +26,8 @@ export class CityBank {
     if (!this.policy.creditEnabled || !this.available().includes(bank) || !client || client.entity?.destroyed || !city.society.isAdult(client) || !Number.isSafeInteger(amount) || amount <= 0 || this.loans.some(l => l.clientId === clientId && l.status !== 'paid')) return false;
     const income = client.jobId ? (city.building(client.jobId)?.wage || 0)*240 : client.businessIds?.length ? 20000 : 0;
     const reserve = bank.workers.length*bank.wage*480;
-    if (amount > income*12 || amount > Math.max(0,bank.balance-reserve)*.6 || !city.transfer(bank.accountId,clientId,amount,'Empréstimo bancário')) return false;
-    const loan = { id: this.nextId++, bankId: bank.id, clientId, principal: amount, remaining: amount, interest: 0, rate: this.policy.loanRate, dailyPayment: Math.ceil(amount/30), dueDay: city.day+1, missed: 0, status: 'active', startedAt: city.minute, paid: 0 };
+    if (amount > income*12*city.reputation.creditFactor(client) || amount > Math.max(0,bank.balance-reserve)*.6 || !city.transfer(bank.accountId,clientId,amount,'Empréstimo bancário',{loanId:this.nextId})) return false;
+    const loan = { id: this.nextId++, bankId: bank.id, clientId, principal: amount, remaining: amount, interest: 0, rate: this.policy.loanRate * (1.5 - city.reputation.score(client, 'credit') / 100), dailyPayment: Math.ceil(amount/30), dueDay: city.day+1, missed: 0, status: 'active', startedAt: city.minute, paid: 0 };
     this.loans.push(loan);
     city.history.record('credit', `Crédito aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount, rate:loan.rate, loanId:loan.id });
     return loan;
@@ -36,7 +36,7 @@ export class CityBank {
     const city=this.city;
     if(!this.policy.creditEnabled || !this.available().includes(bank) || !Number.isSafeInteger(amount) || amount<=0 || proposal.score<60 || amount>proposal.budget || this.loans.some(l=>l.clientId===founder.accountId && l.purpose==='business' && !['paid','written-off'].includes(l.status)))return false;
     const cash=Math.max(0,bank.balance-bank.workers.length*bank.wage*480);
-    if(amount>cash*.75 || !city.transfer(bank.accountId,founder.accountId,amount,'Crédito empresarial para atender demanda'))return false;
+    if(amount>cash*.75*Math.min(1,city.reputation.creditFactor(founder)) || !city.transfer(bank.accountId,founder.accountId,amount,'Crédito empresarial para atender demanda',{loanId:this.nextId}))return false;
     const loan={id:this.nextId++,bankId:bank.id,clientId:founder.accountId,purpose:'business',businessType:proposal.type,principal:amount,remaining:amount,interest:0,rate:Math.min(this.policy.loanRate,.0005),dailyPayment:Math.ceil(amount/180),dueDay:city.day+1,missed:0,status:'active',startedAt:city.minute,paid:0};
     this.loans.push(loan);
     city.history.record('credit',`Crédito empresarial aprovado para ${city.buildingTypes[proposal.type].label}, com aplicação em terreno, materiais e operação.`,[founder.accountId,bank.accountId],{amount,loanId:loan.id,rate:loan.rate});
@@ -69,10 +69,12 @@ export class CityBank {
       // Preserve a basic subsistence reserve; arrears do not create currency.
       const due = Math.min(loan.dailyPayment+loan.interest,loan.remaining+loan.interest);
       const payment = Math.min(Math.max(0,client.balance-city.currency.price(1500)),due);
-      if (payment && city.transfer(loan.clientId,bank.accountId,payment,'Parcela de empréstimo')) {
+      if (payment && city.transfer(loan.clientId,bank.accountId,payment,'Parcela de empréstimo',{loanId:loan.id})) {
         const paidInterest = Math.min(payment,loan.interest);
         loan.interest -= paidInterest; loan.remaining -= payment-paidInterest; loan.paid += payment; bank.totalRevenue += paidInterest;
       }
+      if (payment >= due) city.reputation.observe(loan.clientId,'credit',1,'parcela paga no prazo',{loanId:loan.id,amount:payment});
+      else city.reputation.observe(loan.clientId,'credit',-.75,'parcela incompleta ou em atraso',{loanId:loan.id,due,amount:payment});
       loan.missed = payment < due ? loan.missed+1 : 0;
       loan.status = loan.remaining+loan.interest === 0 ? 'paid' : loan.missed >= 3 ? 'arrears' : 'active';
       if (loan.status === 'paid') city.history.record('credit','Empréstimo quitado.',[loan.clientId,bank.accountId],{loanId:loan.id,amount:loan.paid});
@@ -90,7 +92,7 @@ export class CityBank {
     for (const loan of this.loans.filter(l => l.clientId === c.accountId && !['paid','written-off'].includes(l.status))) {
       const bank = this.city.building(loan.bankId);
       const due = loan.remaining+loan.interest, amount = Math.min(c.balance,due);
-      if (bank && amount && this.city.transfer(c.accountId,bank.accountId,amount,'Liquidação de dívida do espólio')) {
+      if (bank && amount && this.city.transfer(c.accountId,bank.accountId,amount,'Liquidação de dívida do espólio',{loanId:loan.id})) {
         const interest = Math.min(amount,loan.interest); loan.interest -= interest; loan.remaining -= amount-interest; bank.totalRevenue += interest;
       }
       loan.status = loan.remaining+loan.interest ? 'written-off' : 'paid';

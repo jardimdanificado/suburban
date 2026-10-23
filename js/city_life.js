@@ -1,19 +1,10 @@
+import { makeIdentity, makeBuildingName } from './city_names.js';
 export const LIFE_RULES = { starvationMinutes: 720, dehydrationMinutes: 360, terminalHealthMinutes: 120, stalledMinutes: 120 };
-const firstNames = ['Ana', 'Bruno', 'Clara', 'Davi', 'Elisa', 'Felipe', 'Gabriela', 'Hugo', 'Iara', 'João', 'Lia', 'Miguel', 'Nina', 'Otávio', 'Paula', 'Ravi', 'Sara', 'Tomás', 'Vera', 'Yuri', 'Alice', 'Caio', 'Diana', 'Enzo', 'Helena', 'Luís', 'Marina', 'Pedro', 'Rosa', 'Vicente', 'Beatriz', 'André'];
-const surnames = ['Silva', 'Santos', 'Costa', 'Souza', 'Oliveira', 'Lima', 'Almeida', 'Pereira', 'Rocha', 'Nascimento', 'Ribeiro', 'Carvalho'];
 export class CityLife {
-  constructor(city) { this.city = city; this.deaths = []; this.deathCount = 0; this.usedNames = new Set(); this.stallRecoveries = 0; }
-  name(index, options = {}) {
-    const parent = this.city.accounts.get(`citizen:${options.parentIds?.[0]}`);
-    const surname = parent?.entity.properties.name.split(' ').at(-1) || surnames[index % surnames.length];
-    for (let attempt = 0; ; attempt++) {
-      const given = firstNames[(index + attempt) % firstNames.length];
-      let code = attempt + Math.floor(index / firstNames.length), middle = '';
-      if (code || this.usedNames.has(`${given} ${surname}`)) { do { middle += ` ${firstNames[(code + 7) % firstNames.length]}`; code = Math.floor(code / firstNames.length) - 1; } while (code >= 0); }
-      const candidate = `${given}${middle} ${surname}`;
-      if (!this.usedNames.has(candidate)) { this.usedNames.add(candidate); return candidate; }
-    }
-  }
+  constructor(city) { this.city = city; this.deaths = []; this.deathCount = 0; this.usedNames = new Set(); this.usedBuildingNames = new Set(); this.stallRecoveries = 0; }
+  identity(index, options = {}) { return makeIdentity(this.city, this.usedNames, index, options); }
+  name(index, options = {}) { return this.identity(index, options).name; }
+  buildingName(label) { return makeBuildingName(this.city, this.usedBuildingNames, label); }
   heir(c) { return [c.partnerId, ...c.childIds, ...c.parentIds].map(id => this.city.society.citizen(id)).find(p => p && p.id !== c.id && this.city.society.isAdult(p)); }
   die(c, cause) {
     if (c.entity.destroyed || c.dead) return false;

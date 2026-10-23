@@ -36,7 +36,7 @@ export class CityLogistics {
     const loads = new Map();
     for (const shipment of this.shipments) if (!['delivered', 'cancelled'].includes(shipment.status)) loads.set(shipment.carrierId, (loads.get(shipment.carrierId) || 0) + 1);
     let best, load = Infinity;
-    for (const carrier of carriers) { const count = loads.get(carrier.id) || 0; if (count < load) { best = carrier; load = count; } }
+    for (const carrier of carriers) { const count = (loads.get(carrier.id) || 0) + this.city.reputation.providerPenalty(carrier); if (count < load) { best = carrier; load = count; } }
     return best;
   }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
@@ -65,8 +65,8 @@ export class CityLogistics {
     seller.inventory[good] -= quantity; buyer.incoming[good] = (buyer.incoming[good] || 0) + quantity;
     // Until pickup the reserved cargo stays at the supplier's entrance.
     s.position = { ...seller.door }; this.shipments.push(s);
-    city.economy.recordGoods('dispatch', good, quantity, seller.id, buyer.id);
-    city.log(`Frete ${id}: ${quantity} ${city.economy.goods[good].label}, de ${seller.entity?.properties.name || seller.name} para ${buyer.entity?.properties.name || buyer.name}.`, 'transport', [], { kind: 'shipment-ordered', shipmentId: id });
+    city.economy.recordGoods('dispatch', good, quantity, seller.id, buyer.id, {shipmentId:id});
+    city.log(`Frete ${id}: ${quantity} ${city.economy.goods[good].label}, de ${seller.entity?.properties.name || seller.name} para ${buyer.entity?.properties.name || buyer.name}.`, 'transport', [], { kind: 'shipment-ordered', shipmentId: id, projectId:typeof buyer.id==='string' && buyer.id.startsWith('project:')?buyer.id:undefined, buildingIds:[seller.entity?.id,buyer.entity?.id,carrier?.id].filter(id=>id!=null), accounts:[seller.accountId,buyer.accountId,payerAccountId].filter(Boolean), good, quantity, amount:cost, fee });
     return s;
   }
   releaseDriver(s) {
@@ -87,7 +87,7 @@ export class CityLogistics {
     const refund = buyerAccount && !buyerAccount.entity?.destroyed ? (s.payerAccountId || s.buyer.accountId) : this.city.economy.citizen(buyerAccount?.ownerId)?.accountId || 'treasury';
     this.city.transfer(s.accountId, refund, s.balance, 'Estorno de frete cancelado');
     s.status = 'cancelled'; s.completedAt = this.city.minute;
-    this.city.log(`Frete ${s.id} cancelado; reserva financeira devolvida.`, 'transport', [], { kind: 'shipment-cancelled', shipmentId: s.id });
+    this.city.log(`Frete ${s.id} cancelado; reserva financeira devolvida.`, 'transport', [], { kind: 'shipment-cancelled', shipmentId: s.id, buildingIds:[s.seller.entity?.id,s.buyer.entity?.id].filter(id=>id!=null), accounts:[s.seller.accountId,s.buyer.accountId,s.payerAccountId].filter(Boolean) });
   }
   candidates(s) {
     const economy = this.city.economy;
@@ -167,12 +167,13 @@ export class CityLogistics {
         const buyerAccount = city.accounts.get(s.payerAccountId || s.buyer.accountId);
         if (buyerAccount?.entity?.properties.cityBuilding) { buyerAccount.totalExpenses += s.cost + (carrier?.active ? s.fee : 0) + (s.serviceFee || 0); if (s.purpose === 'work-meals') buyerAccount.mealPurchaseCost += s.cost + (carrier?.active ? s.fee : 0); }
         if(s.purpose==='waste-collection')city.sanitation.collected+=s.quantity;
-        city.economy.recordGoods('delivery', s.good, s.quantity, s.seller.id, s.buyer.id);
+        city.economy.recordGoods('delivery', s.good, s.quantity, s.seller.id, s.buyer.id, {shipmentId:s.id});
         city.history.record('sale', `${s.quantity} ${city.economy.goods[s.good].label}: ${city.accountName(s.seller.accountId)} → ${city.accountName(s.payerAccountId)}.`,[s.seller.accountId,s.payerAccountId,s.buyer.accountId],{amount:s.cost,good:s.good,quantity:s.quantity,shipmentId:s.id});
         city.history.record('service',s.buyer.lampPost?'Abastecimento de lamparina concluído.':'Frete entregue.',[carrier?.accountId,s.payerAccountId,c.accountId,s.buyer.accountId],{amount:s.fee+s.serviceFee,shipmentId:s.id,provider:carrier?.entity.properties.name||'Transporte próprio',quantity:s.quantity});
+        city.reputation.completed(carrier, c, 'entrega concluída', {shipmentId:s.id});
         city.economy.practice(c, 'logistics', 10); this.releaseDriver(s);
         s.status = 'delivered'; s.completedAt = city.minute; this.delivered++;
-        city.log(`Frete ${s.id} entregue: ${s.quantity} ${city.economy.goods[s.good].label}.`, 'transport', [c.id], { kind: 'shipment-delivered', shipmentId: s.id });
+        city.log(`Frete ${s.id} entregue: ${s.quantity} ${city.economy.goods[s.good].label}.`, 'transport', [c.id], { kind: 'shipment-delivered', shipmentId: s.id, buildingIds:[s.seller.entity?.id,s.buyer.entity?.id,carrier?.id].filter(id=>id!=null), accounts:[s.seller.accountId,s.buyer.accountId,s.payerAccountId].filter(Boolean), good:s.good, quantity:s.quantity });
       }
     }
     // Retain every active load, plus the latest 100 completed records.

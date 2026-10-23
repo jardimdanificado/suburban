@@ -6,7 +6,7 @@ export class CityDevelopment {
   constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; }
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
   selectBuilder(clientId, door, builderId = null) {
-    return this.city.economy.businesses.filter(b => b.type === 'builder' && (!builderId || b.id === builderId) && b.accountId !== clientId && this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door })).sort((a, b) => this.projects.filter(p => p.builderId === a.id && !p.cancelled && p.status !== 'completed').length - this.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed').length || a.id - b.id)[0] || null;
+    return this.city.economy.businesses.filter(b => b.type === 'builder' && (!builderId || b.id === builderId) && b.accountId !== clientId && this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door })).sort((a, b) => this.projects.filter(p => p.builderId === a.id && !p.cancelled && p.status !== 'completed').length - this.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed').length || this.city.reputation.providerPenalty(a) - this.city.reputation.providerPenalty(b) || a.id - b.id)[0] || null;
   }
   serviceOffers(builderId) {
     const b = this.city.building(builderId);
@@ -26,9 +26,9 @@ export class CityDevelopment {
     project.requiredBudget = project.fee + materialCost;
     const ordinaryMaterialCost = materialCost;
     if ((city.accounts.get(accountId)?.balance || 0) < project.fee + ordinaryMaterialCost) { city.accounts.delete(project.feeAccountId); return null; }
-    if (!city.transfer(accountId, project.feeAccountId, project.fee, 'Reserva do serviço de construção')) { city.accounts.delete(project.feeAccountId); return null; }
+    if (!city.transfer(accountId, project.feeAccountId, project.fee, 'Reserva do serviço de construção', {projectId:project.id})) { city.accounts.delete(project.feeAccountId); return null; }
     this.projects.push(project);
-    city.log(`${city.accountName(accountId)} contratou ${builder.entity.properties.name}: ${project.name}.`, 'construction', [owner.id, builder.ownerId].filter(Boolean), { kind: 'service-contracted', projectId: project.id, service: project.service, fee: project.fee });
+    city.log(`${city.accountName(accountId)} contratou ${builder.entity.properties.name}: ${project.name}.`, 'construction', [owner.id, builder.ownerId].filter(Boolean), { kind: 'service-contracted', projectId: project.id, service: project.service, fee: project.fee, buildingIds:[builder.id], accounts:[accountId,builder.accountId] });
     return project;
   }
   beginRoad(accountId, start, end, { builderId = null } = {}) {
@@ -81,11 +81,12 @@ export class CityDevelopment {
     project.inventory.pedra -= project.stone; city.economy.consumed.pedra += project.stone;
     city.economy.recordGoods(project.service, 'pedra', project.stone, project.id, project.buildingId || null);
     project.status = 'completed'; project.error = null; project.completedAt = city.minute;
-    city.transfer(project.feeAccountId, city.building(project.builderId)?.accountId || project.accountId, project.fee, 'Serviço de construção');
+    city.reputation.completed(city.building(project.builderId), null, 'obra concluída', {projectId:project.id});
+    city.transfer(project.feeAccountId, city.building(project.builderId)?.accountId || project.accountId, project.fee, 'Serviço de construção', {projectId:project.id});
     const account = city.accounts.get(project.accountId); if (account?.entity?.properties.cityBuilding) account.totalExpenses += project.fee;
     city.history.record('service',`${project.name}: serviço concluído.`,[project.accountId,city.building(project.builderId)?.accountId,city.building(project.buildingId)?.accountId],{amount:project.fee,projectId:project.id,service:project.service,stone:project.stone});
     city.workMeals.closeSite(project, project.service === 'expansion' ? result : null);
-    city.log(`${project.name} concluída por ${city.building(project.builderId)?.entity.properties.name || 'construtora'}.`, 'construction', [project.ownerId], { kind: 'service-completed', projectId: project.id, service: project.service });
+    city.log(`${project.name} concluída por ${city.building(project.builderId)?.entity.properties.name || 'construtora'}.`, 'construction', [project.ownerId], { kind: 'service-completed', projectId: project.id, service: project.service, buildingIds:[project.builderId,project.buildingId].filter(id=>id!=null), accounts:[project.accountId] });
     return result;
   }
   planPublicWorks() {
@@ -267,7 +268,7 @@ export class CityDevelopment {
     project.feeAccountId = `construction-fee:${project.id}`;
     city.accounts.set(project.feeAccountId, { name: `Caução da obra ${project.id}`, balance: 0 });
     if (accountId === 'treasury' && fee) project.fee = publicFee;
-    if (!city.transfer(accountId, project.feeAccountId, project.fee, 'Reserva do serviço de construção')) { city.accounts.delete(project.feeAccountId); return null; }
+    if (!city.transfer(accountId, project.feeAccountId, project.fee, 'Reserva do serviço de construção', {projectId:project.id})) { city.accounts.delete(project.feeAccountId); return null; }
     this.projects.push(project); p.projectId = project.id;
     city.log(`${owner.entity.properties.name} iniciou ${city.buildingTypes[type].label} no terreno ${p.id}: ${stone} pedras.`, 'construction', [owner.id], { kind: 'project-started', projectId: project.id, plotId });
     if (!stone) this.complete(project);
@@ -279,8 +280,9 @@ export class CityDevelopment {
     const p = this.plots.find(p => p.id === project.plotId), city = this.city;
     const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, materialSource: project });
     if (!b) { project.status = 'blocked'; project.error = city.lastError; return null; }
+    city.reputation.completed(city.building(project.builderId), null, 'edifício concluído', {projectId:project.id});
     p.buildingId = b.id; p.projectId = null; project.status = 'completed'; project.error = null; project.completedAt = city.minute;
-    city.transfer(project.feeAccountId, this.city.building(project.builderId)?.accountId || project.accountId, project.fee, 'Serviço de construção');
+    city.transfer(project.feeAccountId, this.city.building(project.builderId)?.accountId || project.accountId, project.fee, 'Serviço de construção', {projectId:project.id});
     const account = city.accounts.get(project.accountId); if (account?.entity?.properties.cityBuilding) account.totalExpenses += project.fee;
     if(project.materialAccountId)city.transfer(project.materialAccountId,b.accountId,city.accounts.get(project.materialAccountId)?.balance||0,'Capital operacional reservado da nova empresa');
     if (['residential', 'popular_housing', 'luxury_housing'].includes(project.type) || project.sell) {
@@ -290,7 +292,7 @@ export class CityDevelopment {
     city.history.record('service',`Construção de ${b.entity.properties.name} concluída.`,[project.accountId,city.building(project.builderId)?.accountId,b.accountId],{amount:project.fee,projectId:project.id,stone:project.stone});
     city.workMeals.closeSite(project, b);
     if(b.type==='popular_housing' && project.accountId==='treasury')city.housing.assign();
-    city.log(`${b.entity.properties.name} concluído no terreno ${p.id}.`, 'construction', [project.ownerId], { kind: 'project-completed', buildingId: b.id, plotId: p.id }); return b;
+    city.log(`${b.entity.properties.name} concluído no terreno ${p.id}.`, 'construction', [project.ownerId], { kind: 'project-completed', buildingId: b.id, plotId: p.id, projectId:project.id }); return b;
   }
   requestMaterials(project) {
     if (project.cancelled || project.status === 'completed') return;

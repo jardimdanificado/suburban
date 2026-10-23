@@ -1,3 +1,7 @@
+import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
+import { CityNature } from './city_nature.js';
+import { CityPolitics } from './city_politics.js';
+import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -80,6 +84,9 @@ export class CitySimulation {
     this.lighting = new CityLighting(this);
     this.bank = new CityBank(this);
     this.welfare = new CityWelfare(this);
+    this.reputation = new CityReputation(this);
+    this.nature = new CityNature(this);
+    this.politics = new CityPolitics(this);
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -97,25 +104,24 @@ export class CitySimulation {
   get day() { return Math.floor(this.minute / 1440) + 1; }
   get hour() { return Math.floor(this.minute % 1440 / 60); }
   log(message, category = 'city', citizenIds = [], data = {}) {
-    const event = { id: this.nextEventId++, minute: this.minute, category: EVENT_CATEGORIES[category] ? category : 'city', message, citizenIds: [...new Set(citizenIds)], data: { ...data } };
+    const event = this.history.record(category, message, data.accounts || [], { ...data, category: EVENT_CATEGORIES[category] ? category : 'city', citizenIds: [...new Set(citizenIds.filter(id => id != null))] });
+    this.nextEventId = this.history.nextId;
     this.events.unshift(event);
     if (this.events.length > 5000) this.events.length = 5000;
     return event;
   }
-  getEvents({ category = 'all', citizenId = null, query = '', beforeId = Infinity, limit = 100 } = {}) {
-    const search = query.trim().toLocaleLowerCase('pt-BR');
-    return this.events.filter(e => e.id < beforeId && (category === 'all' || e.category === category) && (citizenId === null || e.citizenIds.includes(Number(citizenId))) && (!search || e.message.toLocaleLowerCase('pt-BR').includes(search))).slice(0, limit);
-  }
+  getEvents(options = {}) { return this.history.query(options); }
   accountName(id) { const account = this.accounts.get(id); return account?.entity?.properties.name || account?.name || id; }
   payerFor(c) { if (this.society.isAdult(c)) return c.accountId; return [...new Set([c.guardianId, ...c.parentIds])].map(id => this.society.citizen(id)).filter(Boolean).sort((a, b) => b.balance - a.balance)[0]?.accountId || c.accountId; }
   flushPayroll() {
+    this.history.flushFinance();
     for (const [accountId, amount] of this.hourlyPayroll) {
       const c = this.accounts.get(accountId);
       this.log(`${this.accountName(accountId)} recebeu ${(amount / 100).toFixed(2)} em salários e complementos na última hora.`, 'work', c ? [c.id] : [], { kind: 'wages', amount });
     }
     this.hourlyPayroll.clear();
   }
-  transfer(from, to, amount, reason) {
+  transfer(from, to, amount, reason, details = {}) {
     const a = this.accounts.get(from), b = this.accounts.get(to);
     if (!a || !b || !Number.isSafeInteger(amount) || amount < 0 || a.balance < amount) return false;
     if (from === to || amount === 0) return true;
@@ -124,14 +130,13 @@ export class CitySimulation {
     else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
     if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
     else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
-    this.history.transaction(from, to, amount, reason);
-    this.ledger.push({ minute: this.minute, from, to, amount, reason });
+    const shipment = a.seller && a.buyer ? a : b.seller && b.buyer ? b : null;
+    const entry = this.history.transaction(from, to, amount, reason, { ...(shipment ? {shipmentId: shipment.id} : {}), ...details });
+    this.ledger.push({ minute: this.minute, from, to, amount, reason, eventId: entry.id });
     if (this.ledger.length > 1000) this.ledger.shift();
     if (reason === 'Salário' || reason === 'Subsídio salarial municipal') this.hourlyPayroll.set(to, (this.hourlyPayroll.get(to) || 0) + amount);
     else if (reason !== 'Imposto sobre salário') {
-      const ids = [a, b].filter(account => account.entity?.properties.citizen).map(c => c.id);
-      const category = /aluguel/i.test(reason) ? 'housing' : 'economy';
-      this.log(`${reason}: ${this.accountName(from)} → ${this.accountName(to)} (${(amount / 100).toFixed(2)}).`, category, ids, { kind: 'transfer', from, to, amount, reason });
+      this.events.unshift(entry); if (this.events.length > 5000) this.events.length = 5000;
     }
     return true;
   }
@@ -145,6 +150,7 @@ export class CitySimulation {
     }
     for (let i = 0; i < this.initialPopulation; i++) { const p = arrivalTiles[i % arrivalTiles.length]; this.addCitizen(p.x, p.y, i); }
     this.economy.initialize();
+    this.nature.initialize();
     this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: ${this.citizens.length} moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
     this.syncClock();
   }
@@ -170,8 +176,11 @@ export class CitySimulation {
     if (!free && (!plot || plot.ownerId !== ownerAccountId || plot.buildingId || plot.x !== x || plot.y !== y || width > plot.width || depth > plot.depth)) return this.fail('É necessário comprar um terreno compatível antes de construir.');
     if (!free && stone && (!materialSource || materialSource.inventory.pedra < stone)) return this.fail(`Obra precisa de ${stone} pedras entregues no terreno.`);
     if (!free && this.treasury < capital) return this.fail('Caixa municipal insuficiente para obra e capital de operação.');
-    const entity = this.createEntity({ x, y, properties: { name: `${spec.label} ${this.buildings.filter(b => b.type === type).length + 1}`, species: 'city-building', render: { color: spec.color, style: type === 'popular_housing' ? 'popular' : type === 'luxury_housing' ? 'luxury' : type === 'popular_refectory' ? 'refectory' : type } } });
+    const entity = this.createEntity({ x, y, properties: { name: this.life.buildingName(spec.label), species: 'city-building', render: { color: spec.color, style: type === 'popular_housing' ? 'popular' : type === 'luxury_housing' ? 'luxury' : type === 'popular_refectory' ? 'refectory' : type } } });
     const b = { id: entity.id, entity, type, constructionKind: kind, width, depth, floors, color: spec.color, condition: 100, units: [], balance: 0, jobs: Math.min(spec.jobs ? Math.max(spec.jobs, Math.floor(count / 6)) : 0, 32), wage: 4 + Math.floor(this.random() * 3), stock: 0, workers: [], terrain, door: terrain.door };
+    b.architecture = architectureFor(type, entity.id);
+    if (['residential','popular_housing','luxury_housing'].includes(type)) b.architectureColor = HOUSE_STYLES[b.architecture].wall;
+    this.reputation.setup(b);
     this.economy.setupBuilding(b);
     entity.properties.cityBuilding = b;
     b.accountId = type === 'townhall' ? 'treasury' : `business:${b.id}`;
@@ -203,8 +212,11 @@ export class CitySimulation {
   }
   fail(message) { this.lastError = message; return null; }
   addCitizen(x, y, index = this.citizens.length, options = {}) {
-    const entity = this.createEntity({ x, y, properties: { name: this.life.name(index, options), species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: [0xffeed19d, 0xffc2dce8, 0xffe6b9af, 0xffc5daa7][index % 4] } } });
+    const identity = this.life.identity(index, options);
+    const entity = this.createEntity({ x, y, properties: { name: identity.name, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: [0xffeed19d, 0xffc2dce8, 0xffe6b9af, 0xffc5daa7][index % 4] } } });
     const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, lastProgressAt: this.minute };
+    c.givenNames = identity.givenNames; c.surnames = Object.freeze(identity.surnames);
+    initializeCharacter(this, c); this.reputation.setup(c);
     this.society.initializeCitizen(c, options);
     this.economy.initializeCitizen(c, index, options);
     c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
@@ -423,7 +435,11 @@ export class CitySimulation {
     if (task === 'energy' && Math.min(n.food, n.water, n.toilet) < 20) c.task = null;
   }
   payWage(c, b, wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30))) {
-    if (!Number.isSafeInteger(wage) || wage < 0 || b.balance < wage) return false;
+    if (!Number.isSafeInteger(wage) || wage < 0) return false;
+    if (b.balance < wage) {
+      if(c.unpaidWageDay!==this.day){c.unpaidWageDay=this.day;this.reputation.observe(b.accountId,'commerce',-1,'falta de caixa para o salário',{citizenIds:[c.id]});}
+      return false;
+    }
     const rate=Math.max(-.5,Math.min(.5,Number(this.taxRate)||0));
     // Separate fractional cents preserve accuracy when the policy changes direction.
     const remainderKey=rate<0?'subsidyRemainder':'taxRemainder';
@@ -433,6 +449,7 @@ export class CitySimulation {
     c[remainderKey]=Math.max(0,exact-amount);
     if(tax){this.transfer(b.accountId,'treasury',tax,'Imposto sobre salário');c.taxPaidToday=(c.taxPaidToday||0)+tax;}
     c.salaryToday+=wage-tax;c.lastPaidAt=this.minute;
+    if(c.reputationWorkDay!==this.day){c.reputationWorkDay=this.day;this.reputation.observe(c.accountId,'reliability',.5,'trabalho remunerado realizado',{buildingId:b.id});}
     if(rate<0 && amount>0) {
       const subsidy=Math.min(amount,this.treasury);
       if(subsidy>0 && this.transfer('treasury',c.accountId,subsidy,'Subsídio salarial municipal')) {

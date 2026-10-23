@@ -618,7 +618,7 @@ export class Renderer {
 
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;
-        const color = hexToRgba32(b.color, 255);
+        const color = hexToRgba32(b.architectureColor || b.color, 255);
         for (let y = 0; y < b.depth; y++) for (let x = 0; x < b.width; x++) {
           const px = Math.floor(sx + x * tileSize), py = Math.floor(sy + y * tileSize);
           drawBox32(buf32, width, height, px + 1, py + 1, Math.floor(tileSize) - 2, Math.floor(tileSize) - 2, colorScale(color, globalLight));
@@ -628,6 +628,13 @@ export class Renderer {
         continue;
       }
 
+      if (e.properties.cityPlant) {
+        const plant=e.properties.cityPlant,size=r.size||1,w=Math.max(3,Math.floor(tileSize*size)),cx=Math.floor(sx+tileSize/2),cy=Math.floor(sy+tileSize/2);
+        drawBox32(buf32,width,height,cx-1,cy,2,Math.max(2,w/2|0),rgba32(100,72,45));
+        drawBox32(buf32,width,height,cx-(w/2|0),cy-(w/2|0),w,Math.max(3,w*.7|0),hexToRgba32(r.color,255));
+        if(this.selectedEntityId===e.id)drawBoxOutline32(buf32,width,height,sx,sy,Math.floor(tileSize),Math.floor(tileSize),rgba32(248,220,120));
+        continue;
+      }
       if (isItem) {
         // Dropped Item - Solid background color, no shadow, matching original WASM renderer
         const itemFg = r.color !== undefined ? hexToRgba32(r.color, 255) : rgba32(255, 255, 255, 255);

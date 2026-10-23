@@ -116,7 +116,7 @@ export class CitySanitation {
     if ((this.city.accounts.get(payer)?.balance || 0) < fee) return null;
     const id = this.nextJobId++, accountId = `cleaning:${id}`;
     this.city.accounts.set(accountId, { name: `Limpeza ${id}`, balance: 0 });
-    if (!this.city.transfer(payer, accountId, fee, 'Reserva de limpeza')) { this.city.accounts.delete(accountId); return null; }
+    if (!this.city.transfer(payer, accountId, fee, 'Reserva de limpeza', {jobId:id})) { this.city.accounts.delete(accountId); return null; }
     const job = { id, facilityId, providerId: company?.id || null, payerId: payer, accountId, fee, status: 'waiting', workerId: null, labor: 0, createdAt: this.city.minute };
     this.jobs.push(job); f.cleaningJobId = id; return job;
   }
@@ -156,9 +156,10 @@ export class CitySanitation {
       job.labor += 1 + (c.skills.cleaning || 0) / 50; c.action = 'Limpando banheiro'; this.city.economy.practice(c, 'cleaning');
       if (job.labor >= 20) {
         f.cleanliness = 100; f.lastCleanedAt = this.city.minute; f.cleaningJobId = null; this.cleaned++;
-        this.city.transfer(job.accountId, employer?.accountId || 'treasury', job.fee, 'Serviço de limpeza');
+        this.city.transfer(job.accountId, employer?.accountId || 'treasury', job.fee, 'Serviço de limpeza', {jobId:job.id});
         if (this.city.accounts.get(job.payerId)?.entity?.properties.cityBuilding) this.city.accounts.get(job.payerId).totalExpenses += job.fee;
         this.city.history.record('service',`Limpeza de banheiro em ${site.entity.properties.name}.`,[job.payerId,employer?.accountId,site.accountId,c.accountId],{amount:job.fee,jobId:job.id});
+        this.city.reputation.completed(employer,c,'faxina concluída',{jobId:job.id});
         job.status = 'completed'; job.completedAt = this.city.minute; c.cleaningJobId = null; c.task = null; c.path = [];
         this.city.log(`Banheiro em ${site.entity.properties.name} foi limpo por ${employer?.entity.properties.name || 'equipe municipal'}.`, 'sanitation', [c.id], { kind: 'cleaning-completed', facilityId: f.id, jobId: job.id });
       }

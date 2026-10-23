@@ -34,6 +34,13 @@ world.onTileChange = () => {
 let nextId = 1;
 let simulationBridge = null;
 let previousFrame = performance.now();
+// Opt-in diagnostics, readable without exposing mutable simulation objects to the browser.
+const profiling = new URLSearchParams(window.location.search).has('profile');
+const frameMetrics = { started: performance.now(), count: 0, simulation: 0, index: 0, scene: 0, ui: 0, cpu: 0, max: 0 };
+const performanceOutput=profiling?document.createElement('output'):null;
+if(performanceOutput){performanceOutput.id='performance-stats';Object.assign(performanceOutput.style,{position:'absolute',bottom:'30px',right:'8px',maxWidth:'560px',padding:'8px',font:'12px monospace',color:'#fff',background:'#17221de6',zIndex:'9999',pointerEvents:'none',whiteSpace:'pre-wrap'});root.append(performanceOutput);}
+
+
 let selected = null;
 let renderMode = "3d";
 let dragging = false;
@@ -315,6 +322,7 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("resize", resize);
 
 function frame(now) {
+  const frameStarted = profiling ? performance.now() : 0;
   resize();
   const dt = Math.min((now - previousFrame) / 1000, 0.25);
   previousFrame = now;
@@ -324,10 +332,13 @@ function frame(now) {
   renderer3D.setPaused(paused);
   renderer2D.setPaused(paused);
   renderer3D.simTick = time.tick;
+  const simulationEnded = profiling ? performance.now() : 0;
   setActiveEntities(entities);
+  const indexEnded = profiling ? performance.now() : 0;
   renderer3D.selectedCityUnitId = selected?.properties.cityBuilding ? cityUI.unitId : null;
   if (renderMode === "3d") renderer3D.render(world, entities, time.elapsed, dt, paused ? 0 : time.speed);
   else renderer2D.render(world, entities, time.elapsed, dt, paused ? 0 : time.speed);
+  const sceneEnded = profiling ? performance.now() : 0;
   const pointerX = mousePosition.x;
   const pointerY = mousePosition.y;
   legacyUI.beginFrame(pointerX, pointerY);
@@ -349,6 +360,17 @@ function frame(now) {
   renderUI(legacyUI, api);
 
   cityUI.element.hidden = !cityUI.visible;
+  if (profiling) {
+    const ended=performance.now(),cpu=ended-frameStarted;
+    frameMetrics.count++;frameMetrics.simulation+=simulationEnded-frameStarted;frameMetrics.index+=indexEnded-simulationEnded;
+    frameMetrics.scene+=sceneEnded-indexEnded;frameMetrics.ui+=ended-sceneEnded;frameMetrics.cpu+=cpu;frameMetrics.max=Math.max(frameMetrics.max,cpu);
+    if(ended-frameMetrics.started>=1000){
+      const count=frameMetrics.count;
+      root.dataset.performance=JSON.stringify({fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,worker:simulationBridge?.metrics,drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute});
+      performanceOutput.textContent=root.dataset.performance;
+      Object.assign(frameMetrics,{started:ended,count:0,simulation:0,index:0,scene:0,ui:0,cpu:0,max:0});
+    }
+  }
   requestAnimationFrame(frame);
 }
 

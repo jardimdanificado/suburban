@@ -46,6 +46,7 @@ export class CitySimulationBridge {
       return;
     }
     if (data.type !== 'state') return;
+    const receiveStarted=performance.now();
     const revision = this.city.world.revision, count = this.entities.length, structure = this.city.structureRevision;
     const positions = new Map(this.city.citizens.map(c => [c.id, { x: c.entity.x, y: c.entity.y }]));
     // Unchanged graph nodes still hold authoritative positions, not an interpolation sample.
@@ -64,6 +65,7 @@ export class CitySimulationBridge {
       }
     }
     this.changed({ terrain: revision !== this.city.world.revision, entities: count !== this.entities.length || structure !== this.city.structureRevision });
+    this.metrics={encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
     this.worker.postMessage({ type: 'ack' });
   }
   interpolate(now) {

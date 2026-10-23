@@ -6354,6 +6354,7 @@ export class RCT3DRenderer {
       else if (isCherry && cherryCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 62917), 982451653) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
+        if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instCherryTrunks.setMatrixAt(cherryCount, mMatrix);
         this.instCherryLeaves.setMatrixAt(cherryCount, mMatrix);
@@ -6363,6 +6364,7 @@ export class RCT3DRenderer {
       else if (isBirch && birchCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 31849), 428931173) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
+        if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instBirchTrunks.setMatrixAt(birchCount, mMatrix);
         this.instBirchLeaves.setMatrixAt(birchCount, mMatrix);
@@ -6372,6 +6374,7 @@ export class RCT3DRenderer {
       else if (isMaple && mapleCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 82349), 619284711) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
+        if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instMapleTrunks.setMatrixAt(mapleCount, mMatrix);
         this.instMapleLeaves.setMatrixAt(mapleCount, mMatrix);
@@ -6381,6 +6384,7 @@ export class RCT3DRenderer {
       else if (isBerryBush && berryBushCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 19849), 2654435761) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
+        if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instBerryBushes.setMatrixAt(berryBushCount, mMatrix);
         this.instBerryOrnaments.setMatrixAt(berryBushCount, mMatrix);
@@ -6390,6 +6394,7 @@ export class RCT3DRenderer {
       else if (isRoseBush && roseBushCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 44558), 198491317) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
+        if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instRoseBushes.setMatrixAt(roseBushCount, mMatrix);
         this.instRoseFlowers.setMatrixAt(roseBushCount, mMatrix);
@@ -6399,6 +6404,7 @@ export class RCT3DRenderer {
       else if (isTree && !isPine && oakCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 45211), 982451653) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
+        if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instOakTrunks.setMatrixAt(oakCount, mMatrix);
         this.instOakLeaves.setMatrixAt(oakCount, mMatrix);
@@ -6408,6 +6414,7 @@ export class RCT3DRenderer {
       else if (isPine && pineCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 73819), 428931173) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
+        if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instPineTrunks.setMatrixAt(pineCount, mMatrix);
         this.instPineLeaves.setMatrixAt(pineCount, mMatrix);
