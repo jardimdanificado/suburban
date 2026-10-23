@@ -284,11 +284,12 @@ export class CityDevelopment {
     const account = city.accounts.get(project.accountId); if (account?.entity?.properties.cityBuilding) account.totalExpenses += project.fee;
     if(project.materialAccountId)city.transfer(project.materialAccountId,b.accountId,city.accounts.get(project.materialAccountId)?.balance||0,'Capital operacional reservado da nova empresa');
     if (['residential', 'popular_housing', 'luxury_housing'].includes(project.type) || project.sell) {
-      for (const u of b.units) { u.occupantId = null; u.forSale = project.accountId === 'treasury' || project.sell; u.forRent = project.accountId !== 'treasury' && !project.sell; }
+      for (const u of b.units) { u.occupantId = null; u.forSale = project.type==='popular_housing' && project.accountId==='treasury'?false:project.accountId === 'treasury' || project.sell; u.forRent = project.accountId !== 'treasury' && !project.sell; }
     } else if (project.accountId === 'treasury') city.economy.activateMunicipalBusiness(b, city.currency.price(b.type==='bank'?300000:50000), project.crop);
     else city.economy.activateBusiness(b, this.ownerCitizen(project.accountId), project.crop, false);
     city.history.record('service',`Construção de ${b.entity.properties.name} concluída.`,[project.accountId,city.building(project.builderId)?.accountId,b.accountId],{amount:project.fee,projectId:project.id,stone:project.stone});
     city.workMeals.closeSite(project, b);
+    if(b.type==='popular_housing' && project.accountId==='treasury')city.housing.assign();
     city.log(`${b.entity.properties.name} concluído no terreno ${p.id}.`, 'construction', [project.ownerId], { kind: 'project-completed', buildingId: b.id, plotId: p.id }); return b;
   }
   requestMaterials(project) {

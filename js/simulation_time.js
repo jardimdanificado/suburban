@@ -43,12 +43,15 @@ export class SimulationTime {
     // A suspended browser tab does not generate minutes of catch-up work.
     this.accumulator += Math.min(realDt, 0.25) * this.speed;
     let count = 0;
-    while (this.accumulator + 1e-10 >= this.stepSeconds) {
+    const deadline = performance.now() + 6;
+    while (this.accumulator + 1e-10 >= this.stepSeconds && count < 120 && performance.now() < deadline) {
       this.accumulator = Math.max(0, this.accumulator - this.stepSeconds);
       this.runStep(update);
       count++;
       if (this.paused) break;
     }
+    // The local fallback also yields to rendering instead of compounding a slow frame.
+    this.accumulator = Math.min(this.accumulator, this.stepSeconds * 2);
     return count;
   }
 }

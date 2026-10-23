@@ -12,7 +12,11 @@ export class CitySociety {
     this.nextFamilyId = 1;
     this.birthCount = 0;
   }
-  citizen(id) { return this.city.citizens.find(c => c.id === id && !c.entity.destroyed); }
+  citizen(id) {
+    if (id == null) return undefined;
+    const c = this.city.accounts.get(`citizen:${id}`);
+    return c && c.id === id && c.entity && !c.entity.destroyed ? c : undefined;
+  }
   age(c) { return c.initialAge + Math.floor((this.city.minute - c.bornAt) / (1440 * SOCIAL_RULES.daysPerYear)); }
   isAdult(c) { return this.age(c) >= 18; }
   initializeCitizen(c, { age = 20 + Math.floor(this.city.random() * 24), parentIds = [] } = {}) {

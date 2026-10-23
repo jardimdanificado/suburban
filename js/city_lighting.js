@@ -72,10 +72,11 @@ export class CityLighting {
     post.status = 'cancelled'; post.built = false; post.lit = false;
   }
   reconcile() {
+    const projects = new Map(this.city.development.projects.map(p => [p.id, p]));
     for (const post of this.sites.values()) {
       if (post.status === 'cancelled') continue;
       const b = this.city.building(post.buildingId);
-      const project = this.city.development.projects.find(p => p.id === post.projectId);
+      const project = projects.get(post.projectId);
       if ((!post.projectId && this.city.occupied.has(`${Math.floor(post.x)},${Math.floor(post.y)}`)) || (!post.public && (!b || !b.units.some(u => u.ownerId === post.payerId))) || (project && !post.built && (project.cancelled || !project.builderId)) || !terrainWalkable(this.city.world, Math.floor(post.x), Math.floor(post.y)) || ROAD_TILES.has(tileAt(this.city.world, Math.floor(post.x), Math.floor(post.y)))) this.cancelPost(post);
     }
     this.posts = this.posts.filter(p => p.built && p.status !== 'cancelled');

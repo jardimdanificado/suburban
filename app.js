@@ -1,3 +1,4 @@
+import { CitySimulationBridge } from './js/city_sim_bridge.js';
 import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js";
 import { CityDesktop } from "./js/city_desktop.js";
@@ -31,6 +32,7 @@ world.onTileChange = () => {
   renderer3D.forceStaticInstanceUpdate();
 };
 let nextId = 1;
+let simulationBridge = null;
 let previousFrame = performance.now();
 let selected = null;
 let renderMode = "3d";
@@ -50,6 +52,7 @@ export function createEntity({ x = 0, y = 0, properties = {}, ...data }) {
 }
 
 export function destroyEntity(entity) {
+  if (simulationBridge?.active && entity) { simulationBridge.command('destroy', [entity]); return; }
   if (entity) {
     entity.destroyed = true;
     if (selected === entity) selected = null;
@@ -144,6 +147,7 @@ function advanceSimulation(dt) {
 }
 
 function stepSimulation() {
+  if (simulationBridge?.active) return simulationBridge.step();
   return time.step(advanceSimulation);
 }
 
@@ -314,7 +318,8 @@ function frame(now) {
   resize();
   const dt = Math.min((now - previousFrame) / 1000, 0.25);
   previousFrame = now;
-  time.advance(dt, advanceSimulation);
+  if (simulationBridge?.active) { simulationBridge.control(); simulationBridge.interpolate(now); }
+  else time.advance(dt, advanceSimulation);
   const paused = time.paused;
   renderer3D.setPaused(paused);
   renderer2D.setPaused(paused);
@@ -381,3 +386,14 @@ if (cityGenerationError) cityUI.notice = cityGenerationError;
 for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
   editor.registerPrefab(type, { label: spec.label, create: (x, y) => city.addBuilding(type, x, y)?.entity });
 }
+
+// Background simulation starts after UI/editor bindings exist. Commands are serialized by the worker.
+simulationBridge = new CitySimulationBridge({ city, entities, nextId, time,
+  notice: message => { cityUI.notice = message; },
+  changed: ({ terrain, entities: changedEntities }) => {
+    nextId = simulationBridge.state.nextId;
+    if (terrain) world.onTileChange?.();
+    if (changedEntities) renderer3D.forceStaticInstanceUpdate();
+    if (selected?.destroyed) selectEntity(null);
+  },
+});

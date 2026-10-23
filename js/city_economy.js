@@ -18,7 +18,7 @@ export const PUBLIC_TYPES = new Set(['townhall', 'clinic', 'utility', 'leisure',
 const retailTypes = new Set(['bakery', 'greengrocer', 'market']);
 const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)), ...INDUSTRIAL_FOODS];
 export const JOB_SKILL = { ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
-export const ECONOMY_RULES = { workingCapital: 20000, mealUnits: 3, farmBatch: 12, farmLabor: 120 };
+export const ECONOMY_RULES = { workingCapital: 20000, mealUnits: 3, initialMealsPerCitizen: 24, farmBatch: 12, farmLabor: 120 };
 export const MEAL_RECIPES = {
   pao: { label: 'Pão simples', inputs: { pao: 3 }, quality: 1 },
   refogado: { label: 'Refeição de feijão e cebola', inputs: { feijao: 2, cebola: 1 }, quality: 2 },
@@ -55,7 +55,8 @@ export class CityEconomy {
     c.skills[skill] = Math.min(100, c.skills[skill] + minutes * .025 / (1 + c.skills[skill] / 25));
   }
   setupBuilding(b) {
-    initializeInventory(b, GOODS, b.type === 'townhall' ? 6000 : Math.max(160, b.width * b.depth * b.floors * (b.type === 'quarry' ? 40 : 16)));
+    const startingFood = Math.max(this.city.initialPopulation, this.city.citizens.length) * ECONOMY_RULES.mealUnits * ECONOMY_RULES.initialMealsPerCitizen;
+    initializeInventory(b, GOODS, b.type === 'townhall' ? Math.max(6000, startingFood + 256) : Math.max(160, b.width * b.depth * b.floors * (b.type === 'quarry' ? 40 : 16)));
     Object.defineProperty(b, 'seedStock', { get() { return this.inventory.sementes; }, set(value) { this.inventory.sementes = value; }, configurable: true });
     b.ownerId = null; b.active = PUBLIC_TYPES.has(b.type);
     b.crop = null; b.fields = []; b.seedStock = 0; b.bakingLabor = 0;
@@ -72,7 +73,7 @@ export class CityEconomy {
   initialize() {
     this.appointMayor();
     const hall = this.city.buildings.find(b => b.type === 'townhall');
-    hall.inventory.pao = this.city.citizens.length * ECONOMY_RULES.mealUnits * 24;
+    hall.inventory.pao = this.city.citizens.length * ECONOMY_RULES.mealUnits * ECONOMY_RULES.initialMealsPerCitizen;
     this.initialStock.pao += hall.inventory.pao;
     // Public starter firms keep construction and extraction available without privileged founders.
     for (const [type, budget] of [['builder', 2000000], ['quarry', 500000], ['bank', 2000000]]) {
@@ -152,9 +153,10 @@ export class CityEconomy {
   }
 
   connected(a, b) {
-    const key = [a.id, b.id].sort((x, y) => x - y).join(':') + `:${this.city.world.revision ?? 0}:${this.city.buildings.length}`;
+    const endpoints = [`${a.id}@${Math.floor(a.door.x)},${Math.floor(a.door.y)}`, `${b.id}@${Math.floor(b.door.x)},${Math.floor(b.door.y)}`].sort();
+    const key = endpoints.join(':') + `:${this.city.world.revision ?? 0}:${this.city.occupied.size}:${this.city.structureRevision}`;
     if (!this.routeCache.has(key)) {
-      if (this.routeCache.size > 1000) this.routeCache.clear();
+      if (this.routeCache.size >= 2048) this.routeCache.delete(this.routeCache.keys().next().value);
       this.routeCache.set(key, this.city.findPath(a.door, b.door) !== null);
     }
     return this.routeCache.get(key);
@@ -536,16 +538,24 @@ export class CityEconomy {
     }
     return true;
   }
-  hourly() {
-    this.city.currency.hourly();
-    this.city.welfare.hourly();
-    this.city.lighting.hourly();
-    this.appointMayor(); this.municipalPolicy(); this.assignHomes(); this.hire();
-    this.city.development.updateHourly();
-    this.city.development.balanceContracts();
-    this.city.logistics.rebalanceWaiting();
-    this.trade(); this.householdPurchases(); this.city.sanitation.hourly(); this.city.workMeals.purchase(); this.updateDemand();
-    if (this.city.hour % 2 === 0) { this.investInHousing(); this.invest(); }
+  hourly(phase = null) {
+    // A direct call still performs a complete hour (tools and initialization).
+    if (phase === null) { for (let i = 0; i < 13; i++) this.hourly(i); return; }
+    switch (phase) {
+      case 0: this.city.currency.hourly(); this.city.welfare.hourly(); break;
+      case 1: this.city.lighting.hourly(); break;
+      case 2: this.appointMayor(); this.municipalPolicy(); break;
+      case 3: this.assignHomes(); break;
+      case 4: this.hire(); break;
+      case 5: this.city.development.updateHourly(); break;
+      case 6: this.city.development.balanceContracts(); break;
+      case 7: this.city.logistics.rebalanceWaiting(); break;
+      case 8: this.trade(); break;
+      case 9: this.householdPurchases(); break;
+      case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
+      case 11: this.updateDemand(); break;
+      case 12: if (this.city.hour % 2 === 0) { this.investInHousing(); this.invest(); } break;
+    }
   }
   daily() {
     this.city.bank.daily();

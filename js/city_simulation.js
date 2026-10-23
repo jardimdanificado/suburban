@@ -16,7 +16,7 @@ import { CityEconomy, PRIVATE_TYPES, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } fr
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js';
 import { terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, pavePath, generateSettlement, hasSettlementAccess } from './city_terrain.js';
 
-export const INITIAL_POPULATION = 64;
+export const INITIAL_POPULATION = 256;
 export const BUILDING_TYPES = {
   ...INDUSTRIES,
   mill: { label: 'Moinho de óleo', color: 0xc3a668, rent: 90, price: 70000, jobs: 2 },
@@ -57,6 +57,9 @@ export class CitySimulation {
     this.initialSeed = this.seed;
     this.buildings = [];
     this.citizens = [];
+    this.buildingsById = new Map();
+    this.childrenByGuardian = new Map();
+    this.structureRevision = 0;
     this.units = new Map();
     this.accounts = new Map([['treasury', { name: 'Prefeitura', balance: 0, totalRevenue: 0, totalExpenses: 0 }], ['supplier', { name: 'Economia externa', balance: 0 }]]);
     this.occupied = new Set();
@@ -81,6 +84,7 @@ export class CitySimulation {
     this.ledger = [];
     this.accumulator = 0;
     this.taxRate = 0.1;
+    this.wageSubsidies = {paidToday:0,totalPaid:0,unpaidToday:0};
     this.lastError = '';
   }
   recordTraffic(point) {
@@ -107,7 +111,7 @@ export class CitySimulation {
   flushPayroll() {
     for (const [accountId, amount] of this.hourlyPayroll) {
       const c = this.accounts.get(accountId);
-      this.log(`${this.accountName(accountId)} recebeu ${(amount / 100).toFixed(2)} em salários na última hora.`, 'work', c ? [c.id] : [], { kind: 'wages', amount });
+      this.log(`${this.accountName(accountId)} recebeu ${(amount / 100).toFixed(2)} em salários e complementos na última hora.`, 'work', c ? [c.id] : [], { kind: 'wages', amount });
     }
     this.hourlyPayroll.clear();
   }
@@ -123,7 +127,7 @@ export class CitySimulation {
     this.history.transaction(from, to, amount, reason);
     this.ledger.push({ minute: this.minute, from, to, amount, reason });
     if (this.ledger.length > 1000) this.ledger.shift();
-    if (reason === 'Salário') this.hourlyPayroll.set(to, (this.hourlyPayroll.get(to) || 0) + amount);
+    if (reason === 'Salário' || reason === 'Subsídio salarial municipal') this.hourlyPayroll.set(to, (this.hourlyPayroll.get(to) || 0) + amount);
     else if (reason !== 'Imposto sobre salário') {
       const ids = [a, b].filter(account => account.entity?.properties.citizen).map(c => c.id);
       const category = /aluguel/i.test(reason) ? 'housing' : 'economy';
@@ -185,6 +189,8 @@ export class CitySimulation {
     for (let z = 0; z < floors; z++) this.housing.addFloor(b, z, ownerAccountId);
     if (kind !== 'open-air') for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) this.occupied.add(key(xx, yy));
     this.buildings.push(b);
+    this.buildingsById.set(b.id, b);
+    this.structureRevision++;
     this.sanitation.setupBuilding(b);
     this.sanitation.setupBusinessRooms(b);
     if (plot) { plot.buildingId = b.id; b.plotId = plot.id; } else this.development.attachBuilding(b, ownerAccountId);
@@ -207,12 +213,33 @@ export class CitySimulation {
     this.accounts.set(c.accountId, c);
     if (options.grant !== false) this.transfer('treasury', c.accountId, CURRENCY_RULES.citizenGrant, 'Capital inicial do cidadão');
     this.citizens.push(c);
+    this.structureRevision++;
     if (options.grant !== false) this.log(`${entity.properties.name} chegou à cidade.`, 'city', [c.id], { kind: 'arrival' });
     return c;
   }
-  building(id) { return this.buildings.find(b => b.id === id && !b.entity.destroyed); }
+  building(id) { const b = this.buildingsById.get(id); return b && !b.entity.destroyed ? b : undefined; }
+  childrenOf(id) { return this.childrenByGuardian.get(id) || []; }
+  indexFamilies() {
+    this.childrenByGuardian.clear();
+    for (const c of this.citizens) if (c.guardianId != null && !c.entity.destroyed) {
+      let children = this.childrenByGuardian.get(c.guardianId);
+      if (!children) this.childrenByGuardian.set(c.guardianId, children = []);
+      children.push(c);
+    }
+  }
+  setCitizenFinance(id, settings) {
+    const c = this.society.citizen(id); if (!c) return false;
+    if (Number.isFinite(settings.savingsRate)) c.savingsRate = Math.max(0, Math.min(.5, settings.savingsRate));
+    if (typeof settings.creditAllowed === 'boolean') c.creditAllowed = settings.creditAllowed;
+    return true;
+  }
+  setPolicies(policies, message) {
+    for (const scope of ['currency', 'bank', 'welfare']) if (policies[scope]) Object.assign(this[scope].policy, policies[scope]);
+    if (Number.isFinite(policies.taxRate)) this.taxRate = Math.max(-.5, Math.min(.5, policies.taxRate));
+    this.history.record('policy', message, ['treasury']);
+  }
   rentUnit(citizenId, unitId) {
-    const c = this.citizens.find(c => c.id === citizenId && !c.entity.destroyed), u = this.units.get(unitId);
+    const c = this.society.citizen(citizenId), u = this.units.get(unitId);
     if (!c || !u || !this.building(u.buildingId) || !['residential', 'popular_housing', 'luxury_housing'].includes(this.building(u.buildingId).type) || (u.ownerId !== c.accountId && (!u.forRent || u.ownerId === 'treasury')) || (u.tenantId && u.tenantId !== c.accountId)) return this.fail('Espaço indisponível para moradia.');
     const payer = this.payerFor(c);
     if (u.ownerId !== c.accountId && u.ownerId !== payer && this.accounts.get(payer).balance < u.rent) return this.fail('Saldo insuficiente para o primeiro aluguel.');
@@ -227,8 +254,8 @@ export class CitySimulation {
   }
   releaseHome(c) { this.housing.release(c); }
   buyUnit(buyerId, unitId) {
-    const c = this.citizens.find(c => c.id === buyerId && !c.entity.destroyed), u = this.units.get(unitId);
-    if (!c || !u || !this.building(u.buildingId) || !u.forSale || u.ownerId === c.accountId) return this.fail('Espaço indisponível para compra.');
+    const c = this.society.citizen(buyerId), u = this.units.get(unitId);
+    if (!c || !u || !this.building(u.buildingId) || this.housing.isSocial(this.housing.homes.get(u.homeId)) || !u.forSale || u.ownerId === c.accountId) return this.fail('Espaço indisponível para compra.');
     if (!this.transfer(c.accountId, u.ownerId, u.price, 'Compra de espaço')) return this.fail('Saldo insuficiente para a compra.');
     this.history.ownership(this.building(u.buildingId), u.ownerId, c.accountId, {unitId:u.id,amount:u.price});
     u.ownerId = c.accountId; u.forSale = false; u.forRent = !u.tenantId && ['residential', 'popular_housing', 'luxury_housing'].includes(this.building(u.buildingId).type); u.arrears = 0; u.missedDays = 0;
@@ -238,6 +265,7 @@ export class CitySimulation {
   listUnit(unitId, { rent, price, forSale, forRent }) {
     const u = this.units.get(unitId);
     if (!u || !Number.isSafeInteger(rent) || rent < 0 || !Number.isSafeInteger(price) || price < 1) return this.fail('Informe preços válidos.');
+    if(this.housing.isSocial(this.housing.homes.get(u.homeId)))return this.fail('Moradia popular municipal é destinada à ocupação social gratuita.');
     u.rent = rent; u.price = price; u.forSale = u.ownerId === 'treasury' ? true : !!forSale; u.forRent = u.ownerId === 'treasury' ? false : !!forRent;
     return u;
   }
@@ -248,11 +276,12 @@ export class CitySimulation {
     if (this.pathCacheRevision !== revision) { this.pathCache = new Map(); this.pathCacheRevision = revision; }
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
     if (!this.pathCache.has(key)) {
-      if (this.pathCache.size >= 512) this.pathCache.clear();
+      if (this.pathCache.size >= 2048) this.pathCache.delete(this.pathCache.keys().next().value);
       this.pathCache.set(key, findTerrainPath(this.world, start, goal, this.occupied));
     }
     const path = this.pathCache.get(key);
-    return path === null ? null : path.map(p => ({ ...p }));
+    // Consumers shift their own array but never mutate waypoint coordinates.
+    return path === null ? null : path.slice();
   }
   urgentNeed(c) {
     const n = c.needs;
@@ -263,7 +292,7 @@ export class CitySimulation {
     const home = this.building(this.units.get(c.homeUnitId)?.buildingId);
     const job = this.building(c.jobId);
     const company = c.businessIds.map(id => this.building(id)).filter(b => b?.active).sort((a, b) => Number(b.type === 'farm') - Number(a.type === 'farm'))[Math.floor(this.minute / 120) % Math.max(1, c.businessIds.length)] || c.businessIds.map(id => this.building(id)).find(b => b?.active);
-    const child = this.citizens.find(child => child.guardianId === c.id && this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
+    const child = this.childrenOf(c.id).find(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
     let task = 'leisure', type = 'leisure';
     const urgent = this.urgentNeed(c);
     if (urgent) { task = urgent; type = ({ water: 'utility', food: 'market', health: 'clinic', energy: 'home', hygiene: home ? 'home' : 'utility', toilet: 'toilet' })[urgent]; }
@@ -321,7 +350,7 @@ export class CitySimulation {
       if (!project || project.status === 'completed' || project.cancelled || this.hour < 8 || this.hour >= 17) { c.task = null; return; }
       if (builder && builder.ownerId !== c.id && (c.jobId !== builder.id || builder.balance < builder.wage)) { c.task = null; return; }
       if (this.development.work(project, c)) {
-        if (builder && builder.ownerId !== c.id) { const wage = builder.wage, taxExact = wage * this.taxRate + c.taxRemainder, tax = Math.floor(taxExact + 1e-9); c.taxRemainder = taxExact - tax; this.transfer(builder.accountId, c.accountId, wage - tax, 'Salário'); this.transfer(builder.accountId, 'treasury', tax, 'Imposto sobre salário'); c.salaryToday += wage - tax; c.lastPaidAt = this.minute; }
+        if (builder && builder.ownerId !== c.id) this.payWage(c,builder,builder.wage);
         c.action = ['road', 'road-repair'].includes(project.service) ? 'Construindo ou reparando estrada' : project.service === 'lamp' ? 'Instalando poste' : project.service === 'expansion' ? 'Ampliando edifício' : `Construindo no terreno ${project.plotId}`;
       } else { c.action = 'Aguardando materiais da obra'; c.task = null; }
       if (this.urgentNeed(c)) c.task = null;
@@ -338,13 +367,7 @@ export class CitySimulation {
       if (!isOwner && b.balance < wage) { c.action = 'Empregador sem caixa'; c.task = null; return; }
       const productive = this.economy.productionWork(b, c);
       if (productive || !PRIVATE_TYPES.has(b.type)) {
-        if (!isOwner) {
-          const taxExact = wage * this.taxRate + c.taxRemainder;
-          const tax = Math.floor(taxExact + 1e-9); c.taxRemainder = taxExact - tax;
-          this.transfer(b.accountId, c.accountId, wage - tax, 'Salário');
-          this.transfer(b.accountId, 'treasury', tax, 'Imposto sobre salário');
-          c.salaryToday += wage - tax; c.lastPaidAt = this.minute;
-        }
+        if (!isOwner) this.payWage(c,b,wage);
         this.economy.practice(c, JOB_SKILL[b.type]);
       }
       if (isOwner) this.economy.practice(c, 'management');
@@ -399,19 +422,38 @@ export class CitySimulation {
     if (n[task] >= 95 || (task === 'energy' && this.hour >= 7 && this.hour < 22 && n.energy > 65)) { c.task = null; c.servicePaid = null; }
     if (task === 'energy' && Math.min(n.food, n.water, n.toilet) < 20) c.task = null;
   }
-  payWage(c, b) {
-    const wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30));
-    if (b.balance < wage) return false;
-    const exact = wage * this.taxRate + c.taxRemainder, tax = Math.floor(exact + 1e-9); c.taxRemainder = exact - tax;
-    this.transfer(b.accountId, c.accountId, wage - tax, 'Salário'); this.transfer(b.accountId, 'treasury', tax, 'Imposto sobre salário'); c.salaryToday += wage - tax; c.lastPaidAt = this.minute; return true;
+  payWage(c, b, wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30))) {
+    if (!Number.isSafeInteger(wage) || wage < 0 || b.balance < wage) return false;
+    const rate=Math.max(-.5,Math.min(.5,Number(this.taxRate)||0));
+    // Separate fractional cents preserve accuracy when the policy changes direction.
+    const remainderKey=rate<0?'subsidyRemainder':'taxRemainder';
+    const exact=wage*Math.abs(rate)+(c[remainderKey]||0);
+    const amount=Math.floor(exact+1e-9),tax=rate>=0?amount:0;
+    if(!this.transfer(b.accountId,c.accountId,wage-tax,'Salário'))return false;
+    c[remainderKey]=Math.max(0,exact-amount);
+    if(tax){this.transfer(b.accountId,'treasury',tax,'Imposto sobre salário');c.taxPaidToday=(c.taxPaidToday||0)+tax;}
+    c.salaryToday+=wage-tax;c.lastPaidAt=this.minute;
+    if(rate<0 && amount>0) {
+      const subsidy=Math.min(amount,this.treasury);
+      if(subsidy>0 && this.transfer('treasury',c.accountId,subsidy,'Subsídio salarial municipal')) {
+        c.wageSubsidyToday=(c.wageSubsidyToday||0)+subsidy;
+        c.wageSubsidyTotal=(c.wageSubsidyTotal||0)+subsidy;
+        this.wageSubsidies.paidToday+=subsidy;this.wageSubsidies.totalPaid+=subsidy;
+      }
+      const unpaid=amount-subsidy;
+      c.wageSubsidyUnpaidToday=(c.wageSubsidyUnpaidToday||0)+unpaid;
+      this.wageSubsidies.unpaidToday+=unpaid;
+    }
+    return true;
   }
   collectRent() { this.housing.collectRent(); }
   dailyEconomy() {
     this.currency.daily();
+    this.wageSubsidies.paidToday=0;this.wageSubsidies.unpaidToday=0;
     this.collectRent();
     for (const c of this.citizens) {
       if (c.entity.destroyed) continue;
-      c.salaryYesterday = c.salaryToday; c.salaryToday = 0; c.mealAllowanceToday = 0;
+      c.salaryYesterday = c.salaryToday; c.salaryToday = 0; c.wageSubsidyToday=0;c.wageSubsidyUnpaidToday=0;c.taxPaidToday=0; c.mealAllowanceToday = 0;
       const home = this.housing.home(c);
       if (home && this.society.isAdult(c) && this.housing.units(home).every(u => u.forSale)) this.housing.buyHome(c, home);
     }
@@ -441,6 +483,8 @@ export class CitySimulation {
       const owner = this.economy.citizen(b.ownerId); if (owner) owner.businessIds = owner.businessIds.filter(id => id !== b.id);
       this.log(`${b.entity.properties.name} foi demolido.`, 'city', [], { kind: 'demolition', buildingId: b.id });
       this.buildings.splice(this.buildings.indexOf(b), 1);
+      this.buildingsById.delete(b.id);
+      this.structureRevision++;
     }
     for (const c of [...this.citizens]) if (c.entity.destroyed) {
       const heir = c.dead ? this.life.heir(c) : null;
@@ -455,25 +499,32 @@ export class CitySimulation {
       this.transfer(c.accountId, heir?.accountId || 'treasury', c.balance, c.dead ? 'Herança' : 'Saída de cidadão');
       this.sanitation.releaseCitizen(c);
       this.citizens.splice(this.citizens.indexOf(c), 1);
+      this.structureRevision++;
     }
     for (const child of this.citizens) if (!this.society.isAdult(child)) this.society.houseChild(child);
   }
   stepMinute() {
     this.minute++;
+    this.indexFamilies();
     this.reconcile();
-    this.development.reconcile();
-    this.lighting.reconcile();
-    this.housing.reconcile(); this.sanitation.reconcile(); this.sanitation.updateMinute();
+    const reconcileRevision = `${this.structureRevision}:${this.world.revision}:${this.development.projects.length}`;
+    if (this.reconciledRevision !== reconcileRevision || this.minute % 5 === 0) {
+      this.development.reconcile(); this.lighting.reconcile();
+      this.housing.reconcile(); this.sanitation.reconcile();
+      this.reconciledRevision = reconcileRevision;
+    }
+    this.sanitation.updateMinute();
     for (const c of this.citizens) this.workMeals.tryStart(c);
     this.logistics.updateMinute();
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
-    if (this.minute % 60 === 0) { this.flushPayroll(); this.assignHousingAndJobs(); }
+    if (this.minute % 60 === 0) this.flushPayroll();
+    const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
     for (const c of this.citizens) {
       const n = c.needs;
       c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
       for (const [need, decay] of Object.entries({ food: .065, water: .09, energy: .055, hygiene: .045, toilet: .085, social: .035, leisure: .035 })) n[need] = clamp(n[need] - decay);
       n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2));
-      n.safety = clamp(n.safety + (this.buildings.some(b => b.type === 'townhall') ? 0.08 : -0.1));
+      n.safety = clamp(n.safety + (hasTownhall ? 0.08 : -0.1));
       n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025));
       c.mood = (c.mood || 0) * .998;
       c.happiness = clamp(Object.values(n).reduce((a, b) => a + b, 0) / Object.keys(n).length + c.mood + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
@@ -483,7 +534,7 @@ export class CitySimulation {
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
       const completingEssential = ['water', 'food', 'provisions', 'workmeal', 'health', 'energy', 'toilet'].includes(c.task) && n[c.task === 'provisions' || c.task === 'workmeal' ? 'food' : c.task] < 75;
       if (!c.deliveryId && !c.cleaningJobId && urgent && c.task !== urgent && !completingEssential && this.society.age(c) >= 6) { c.task = null; c.path = []; }
-      const dependentNeedsCare = this.citizens.some(child => child.guardianId === c.id && this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 25);
+      const dependentNeedsCare = this.childrenOf(c.id).some(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 25);
       if (!c.deliveryId && !urgent && dependentNeedsCare && (['work', 'manage', 'leisure', 'social', 'clean'].includes(c.task) || (c.task === 'energy' && n.energy > 65)) && !c.conversation) { c.task = null; c.path = []; }
       if (c.deliveryId || c.cleaningJobId) continue;
       if (c.conversation) continue;
@@ -491,7 +542,9 @@ export class CitySimulation {
       if (!c.path.length && c.task) this.performTask(c);
     }
     this.society.updateMinute();
-    if (this.minute % 60 === 0) this.economy.hourly();
+    // Spread hourly work across minutes; keep the same order and one run per hour.
+    if (this.minute % 60 === 0) this.hourlyPhase = 0;
+    if (this.hourlyPhase != null && this.hourlyPhase < 13) this.economy.hourly(this.hourlyPhase++);
     this.syncClock();
   }
   syncClock() {
@@ -522,8 +575,10 @@ export class CitySimulation {
     return [...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
+    if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;
+    this._statsMinute = this.minute; this._statsStructure = this.structureRevision;
     const people = this.citizens.filter(c => !c.entity.destroyed);
     const units = [...this.units.values()];
-    return { mayorId: this.economy.mayorId, entrepreneurs: people.filter(c => c.businessIds.length).length, moneySupply: this.currency.supply(), moneyIssued: this.currency.issued, priceIndex: this.currency.priceIndex, inflation: this.currency.dailyInflation, businesses: this.economy.businesses.length, population: people.length, children: people.filter(c => !this.society.isAdult(c)).length, couples: people.filter(c => c.partnerId).length / 2, friendships: [...this.society.relations.values()].filter(r => ['friend', 'close'].includes(r.status)).length, births: this.society.birthCount, deaths: this.life.deathCount, employed: people.filter(c => c.jobId).length, homeless: people.filter(c => !c.homeUnitId).length, happiness: people.length ? Math.round(people.reduce((s, c) => s + c.happiness, 0) / people.length) : 0, units: units.length, occupied: units.filter(u => u.tenantId || u.occupantId).length, jobs: this.buildings.reduce((s, b) => s + b.jobs, 0), treasury: this.treasury };
+    return this._statsCache = { mayorId: this.economy.mayorId, entrepreneurs: people.filter(c => c.businessIds.length).length, moneySupply: this.currency.supply(), moneyIssued: this.currency.issued, priceIndex: this.currency.priceIndex, inflation: this.currency.dailyInflation, businesses: this.economy.businesses.length, population: people.length, children: people.filter(c => !this.society.isAdult(c)).length, couples: people.filter(c => c.partnerId).length / 2, friendships: [...this.society.relations.values()].filter(r => ['friend', 'close'].includes(r.status)).length, births: this.society.birthCount, deaths: this.life.deathCount, employed: people.filter(c => c.jobId).length, homeless: people.filter(c => !c.homeUnitId).length, happiness: people.length ? Math.round(people.reduce((s, c) => s + c.happiness, 0) / people.length) : 0, units: units.length, occupied: units.filter(u => u.tenantId || u.occupantId).length, jobs: this.buildings.reduce((s, b) => s + b.jobs, 0), treasury: this.treasury };
   }
 }

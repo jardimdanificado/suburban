@@ -84,28 +84,40 @@ class MinHeap {
   }
 }
 
+const pathWorkspaces = new WeakMap();
+const pathDirections = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+
 export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null } = {}) {
   const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
   if (!terrainWalkable(world, sx, sy) || !terrainWalkable(world, gx, gy) || blocked.has(tileKey(gx, gy))) return null;
-  const startKey = tileKey(sx, sy), goalKey = tileKey(gx, gy);
-  const open = new MinHeap(), costs = new Map([[startKey, 0]]), parents = new Map();
+  const width = world.width, size = width * world.height;
+  let workspace = pathWorkspaces.get(world);
+  if (!workspace || workspace.costs.length !== size) {
+    workspace = { costs: new Float64Array(size), parents: new Int32Array(size), marks: new Uint32Array(size), generation: 0 };
+    pathWorkspaces.set(world, workspace);
+  }
+  workspace.generation = (workspace.generation + 1) >>> 0;
+  if (!workspace.generation) { workspace.marks.fill(0); workspace.generation = 1; }
+  const { costs, parents, marks, generation } = workspace;
+  const startKey = sy * width + sx, goalKey = gy * width + gx;
+  const open = new MinHeap(); costs[startKey] = 0; marks[startKey] = generation;
   open.push({ x: sx, y: sy, cost: 0, score: 0 });
   let visited = 0;
   while (open.items.length && visited++ < limit) {
-    const current = open.pop(), k = tileKey(current.x, current.y);
-    if (current.cost !== costs.get(k)) continue;
+    const current = open.pop(), k = current.y * width + current.x;
+    if (marks[k] !== generation || current.cost !== costs[k]) continue;
     if (k === goalKey) {
-      const path = []; let step = [gx, gy];
-      while (tileKey(...step) !== startKey) { path.push({ x: step[0] + .5, y: step[1] + .5 }); step = parents.get(tileKey(...step)); }
+      const path = []; let step = goalKey;
+      while (step !== startKey) { path.push({ x: step % width + .5, y: Math.floor(step / width) + .5 }); step = parents[step]; }
       return path.reverse();
     }
-    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-      const x = current.x + dx, y = current.y + dy, nextKey = tileKey(x, y);
-      if (blocked.has(nextKey) || extraBlocked?.(x, y) || !canStep(world, current.x, current.y, x, y)) continue;
+    for (const [dx, dy] of pathDirections) {
+      const x = current.x + dx, y = current.y + dy, nextKey = y * width + x;
+      if (blocked.has(tileKey(x, y)) || extraBlocked?.(x, y) || !canStep(world, current.x, current.y, x, y)) continue;
       const tile = tileAt(world, x, y);
       const cost = current.cost + (ROAD_TILES.has(tile) ? .55 : tile === TILE_HILL ? 1.6 : tile === TILE_SAND ? 1.2 : 1) + Math.abs(tileHeight(tile) - tileHeight(tileAt(world, current.x, current.y))) * .7;
-      if (cost >= (costs.get(nextKey) ?? Infinity)) continue;
-      costs.set(nextKey, cost); parents.set(nextKey, [current.x, current.y]);
+      if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
+      marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
       open.push({ x, y, cost, score: cost + (Math.abs(gx - x) + Math.abs(gy - y)) * .55 });
     }
   }

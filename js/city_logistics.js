@@ -31,13 +31,21 @@ export class CityLogistics {
       s.carrierId=carrier.id;load.set(carrier.id,(load.get(carrier.id)||0)+Math.max(8,s.routeLength));
     }
   }
+  leastLoaded(carriers) {
+    if (carriers.length < 2) return carriers[0];
+    const loads = new Map();
+    for (const shipment of this.shipments) if (!['delivered', 'cancelled'].includes(shipment.status)) loads.set(shipment.carrierId, (loads.get(shipment.carrierId) || 0) + 1);
+    let best, load = Infinity;
+    for (const carrier of carriers) { const count = loads.get(carrier.id) || 0; if (count < load) { best = carrier; load = count; } }
+    return best;
+  }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false } = {}) {
     const city = this.city;
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 24 || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
     const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && (city.economy.citizen(b.ownerId) || b.workers.length && b.balance >= b.wage) && city.economy.connected(b, seller));
-    let carrier = carriers.sort((a, b) => this.shipments.filter(s => s.carrierId === a.id && !['delivered','cancelled'].includes(s.status)).length - this.shipments.filter(s => s.carrierId === b.id && !['delivered','cancelled'].includes(s.status)).length)[0];
+    let carrier = this.leastLoaded(carriers);
     // Collection firms send their own crews, independently of general freight capacity.
     const wasteOperator=purpose==='waste-collection'?buyer:purpose==='waste-processing' && seller.type==='waste_collector'?seller:null;
     if(wasteOperator?.active && (city.economy.citizen(wasteOperator.ownerId) || wasteOperator.workers.length && wasteOperator.balance>=wasteOperator.wage))carrier=wasteOperator;
@@ -92,7 +100,7 @@ export class CityLogistics {
     const ids = carrier?.active ? [...carrier.workers, carrier.ownerId] : [];
     if (!carrier?.active) {
       s.carrierId = null;
-      if(s.requireCarrier) { const next=economy.businesses.filter(b=>b.type==='carrier' && b.workers.length && b.balance>=b.wage).sort((a,b)=>this.shipments.filter(s=>s.carrierId===a.id && !['delivered','cancelled'].includes(s.status)).length-this.shipments.filter(s=>s.carrierId===b.id && !['delivered','cancelled'].includes(s.status)).length)[0]; if(next){s.carrierId=next.id;ids.push(...next.workers,next.ownerId);}return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25); }
+      if(s.requireCarrier) { const next=this.leastLoaded(economy.businesses.filter(b=>b.type==='carrier' && b.workers.length && b.balance>=b.wage)); if(next){s.carrierId=next.id;ids.push(...next.workers,next.ownerId);}return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25); }
       // Owners can bootstrap the supply chain by hauling their own purchases.
       ids.push(s.buyer.ownerId, s.seller.ownerId);
       const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
@@ -104,7 +112,8 @@ export class CityLogistics {
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
     const priority = s => s.purpose==='critical-infrastructure'?-2:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
-    pending.sort((a, b) => priority(a) - priority(b) || a.createdAt - b.createdAt || a.id - b.id);
+    pending.sort((a, b) => priority(a) - priority(b) || (a.lastDispatchAttempt || 0) - (b.lastDispatchAttempt || 0) || a.createdAt - b.createdAt || a.id - b.id);
+    let dispatchBudget = 32;
     for (const s of pending) {
       if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential' && !(s.good==='lixo' && s.purpose==='waste-collection')) || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
       let c = city.society.citizen(s.driverId);
@@ -112,8 +121,10 @@ export class CityLogistics {
       if (c && (city.urgentNeed(c) || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }
       if (!c) {
         s.driverId = null;
-        if (city.hour < 7 || city.hour >= 20 || city.minute % 5 !== 0) continue;
+        if (city.hour < 7 || city.hour >= 20 || city.minute % 5 !== s.id % 5 || dispatchBudget <= 0) continue;
+        s.lastDispatchAttempt = city.minute;
         for (const candidate of this.candidates(s)) {
+          if (dispatchBudget-- <= 0) break;
           const path = city.findPath(candidate.entity, s.position); if (path === null) continue;
           c = candidate; c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; break;
         }
@@ -125,8 +136,7 @@ export class CityLogistics {
         this.releaseDriver(s); s.status = 'waiting'; continue;
       }
       if (carrierEmployer && c.jobId === carrierEmployer.id) {
-        const wage = carrierEmployer.wage, taxExact = wage * city.taxRate + c.taxRemainder, tax = Math.floor(taxExact + 1e-9); c.taxRemainder = taxExact - tax;
-        city.transfer(carrierEmployer.accountId, c.accountId, wage - tax, 'Salário'); city.transfer(carrierEmployer.accountId, 'treasury', tax, 'Imposto sobre salário'); c.salaryToday += wage - tax; c.lastPaidAt = city.minute;
+        city.payWage(c,carrierEmployer,carrierEmployer.wage);
         city.economy.practice(c, 'logistics');
       }
       c.task = 'transport';

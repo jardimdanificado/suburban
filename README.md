@@ -33,7 +33,7 @@ Opções e editor usam o mesmo sistema de janelas móveis. O **minimapa** exibe 
 
 O prefeito é um cidadão, escolhido inicialmente pela habilidade de administração pública entre os moradores que não são investidores. Ele tem rotina, conta pessoal, salário, necessidades e vínculos; seu dinheiro é separado do caixa municipal. A saída do prefeito provoca a escolha de outro morador. A prefeitura autoriza vendas de instalações e financia serviços públicos; suas decisões ficam no histórico.
 
-O mapa começa com **prefeitura, construtora municipal, pedreira municipal e casa da moeda**. A prefeitura conserva os espaços de seus edifícios à venda e **nunca aluga**. Construtora e pedreira operam com contas próprias, funcionários e capital público, sem proprietários privilegiados. Moradores começam sem casa e usam os serviços de emergência enquanto a construtora ergue moradias para venda ou aluguel em sua própria conta. O município também pode contratar instalações essenciais quando os moradores ainda não conseguem financiá-las; essas empresas continuam públicas e não pertencem ao prefeito.
+O mapa começa com **prefeitura, construtora municipal, pedreira municipal e casa da moeda**. A prefeitura conserva seus imóveis comuns à venda e não cobra aluguel; as moradias populares municipais são destinadas à ocupação social gratuita. Construtora e pedreira operam com contas próprias, funcionários e capital público, sem proprietários privilegiados. Moradores começam sem casa e usam os serviços de emergência enquanto a construtora ergue moradias para venda ou aluguel em sua própria conta. O município também pode contratar instalações essenciais quando os moradores ainda não conseguem financiá-las; essas empresas continuam públicas e não pertencem ao prefeito.
 
 A prefeitura cadastra terrenos acessíveis de tamanhos variados (como 3x3, 3x5, 4x4, 5x5 e 6x4), sempre em um único nível, sem rampas na área do lote e sem alterar as alturas naturais. Vende os terrenos a cidadãos ou construtoras, e o dinheiro passa ao tesouro. Proprietários podem usar ou revender seus terrenos. As construtoras compram lotes, erguem residenciais para vender seus espaços e recebem pelo trabalho contratado. Os investidores individuais priorizam instalações para seus próprios negócios e compram moradias para morar ou alugar.
 
@@ -48,11 +48,11 @@ Cada unidade negociável é uma célula de **1×1×1 na fachada**; o miolo dos p
 
 O preço inicial residencial é **R$ 1.200 por cômodo**, com aluguel diário de **R$ 3,50 por cômodo**: uma casa de quarto e banheiro custa R$ 2.400 ou R$ 7 por dia. Compra, aluguel e despesas de sobrevivência disputam o dinheiro real dos cidadãos. Eles preferem moradias completas quando conseguem pagá-las. Casais e filhos compartilham a casa; o contrato cobra todos os cômodos, sem multiplicar a diária por morador. Morar em unidades próprias dispensa o aluguel dessas unidades.
 
-A prefeitura vende e nunca aluga. Proprietários privados podem alugar ou revender; construtoras preferem vender, mas podem colocar casas não vendidas para alugar após um dia. A venda de uma unidade ocupada preserva o inquilino. A primeira diária é paga na contratação; três dias sem pagamento encerram o contrato e deixam a família sem moradia. Pessoas sem casa continuam procurando emprego, comida e abrigo, com descanso menos eficaz ao dormir na rua.
+Moradias populares municipais são ocupadas gratuitamente por famílias sem teto, com propriedade pública preservada. Os demais imóveis municipais podem ser vendidos; a prefeitura não cobra aluguel. Proprietários privados podem alugar ou revender; construtoras preferem vender, mas podem colocar casas não vendidas para alugar após um dia. A venda de uma unidade ocupada preserva o inquilino. A primeira diária é paga na contratação; três dias sem pagamento encerram o contrato e deixam a família sem moradia. Pessoas sem casa continuam procurando emprego, comida e abrigo, com descanso menos eficaz ao dormir na rua.
 
 ## População, moeda e inflação
 
-Os **64 moradores começam com saldo zero**. O banco municipal já existe na fundação: pessoas com renda podem pedir crédito; famílias sem recursos recebem benefícios sujeitos ao orçamento público. Não há classe de ricos nem promoção automática a investidor. Qualquer adulto, exceto o prefeito em exercício, pode abrir uma empresa se tiver dinheiro para terreno, materiais, construção, operação e uma reserva pessoal. As diferenças de patrimônio surgem das transações e do trabalho.
+Os **256 moradores começam com saldo zero**. O banco municipal já existe na fundação: pessoas com renda podem pedir crédito; famílias sem recursos recebem benefícios sujeitos ao orçamento público. Não há classe de ricos nem promoção automática a investidor. Qualquer adulto, exceto o prefeito em exercício, pode abrir uma empresa se tiver dinheiro para terreno, materiais, construção, operação e uma reserva pessoal. As diferenças de patrimônio surgem das transações e do trabalho.
 
 A emissão inicial de cenário é **R$ 320.000**, registrada pela casa da moeda e distribuída entre o tesouro e as contas das instalações municipais, sem doação inicial aos cidadãos. A construtora recebe R$ 20.000, a pedreira R$ 5.000 e o banco R$ 20.000 para iniciar a cadeia de obras. Essas contas não são patrimônio pessoal de nenhum morador. Comprar uma empresa municipal em operação exige pagar pelos espaços, terreno, caixa e estoque, além de reservar o capital de operação.
 
@@ -82,13 +82,13 @@ As demandas combinam ausência de um tipo de comércio, população, capacidade 
 
 ## Inventários, fretes e reserva pública
 
-Todos os prédios, inclusive residenciais, têm inventário com capacidade finita. Prefeitura: 6.000 itens; demais instalações: capacidade proporcional às células, com mínimo de 160 e fator maior nas pedreiras. Cada canteiro tem seu próprio estoque. Sementes também ocupam espaço. Colheitas, extração e panificação param quando não há capacidade, preservando os materiais existentes.
+Todos os prédios, inclusive residenciais, têm inventário com capacidade finita. Prefeitura: pelo menos 6.000 itens, ampliados para comportar a reserva alimentar inicial mais 256 itens (18.688 itens com 256 habitantes); demais instalações: capacidade proporcional às células, com mínimo de 160 e fator maior nas pedreiras. Cada canteiro tem seu próprio estoque. Sementes também ocupam espaço. Colheitas, extração e panificação param quando não há capacidade, preservando os materiais existentes.
 
 As compras internas reservam espaço no destino e dinheiro em uma conta de frete. A carga sai do estoque de origem e fica identificada como mercadoria reservada, com posição física. Um cidadão percorre o caminho até a carga e depois até o destino. Só a chegada acrescenta itens ao inventário de destino e libera o pagamento ao fornecedor. Interrupções preservam a posição da carga; cancelamentos devolvem dinheiro e mercadoria, liberando a capacidade. Se não houver espaço para recuperar materiais de uma instalação demolida, a perda fica contabilizada explicitamente.
 
 Transportadoras contratam funcionários conforme habilidades e vínculos, pagam salários durante os trajetos e recebem pelo frete entregue. A habilidade de logística aumenta com a prática. Antes de haver transportadora, ou quando conseguem pagar os produtos mas não o frete, os próprios empreendedores podem carregar compras. São viagens a pé de até 24 itens, sem veículos. Pedras também precisam viajar da pedreira ao canteiro.
 
-A prefeitura começa com **4.608 unidades de pão** para os 64 habitantes: 1.536 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e não se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
+A prefeitura começa com **18.432 unidades de pão** para os 256 habitantes: 6.144 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e não se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
 
 Preços, tempos e receitas são regras simplificadas de jogo, não uma representação dos custos agrícolas reais.
 
@@ -378,3 +378,31 @@ A coleta pode ser pedida a partir de duas unidades no imóvel, com pagamento pel
 Lixo das coletoras segue por frete físico para reciclagem e compostagem, alternando os destinos. Dois resíduos geram uma pedra após trabalho na recicladora; quatro geram dois adubos após trabalho na compostagem. Ambos registram consumo real, produtos gerados e histórico de produção. Adubo é insumo das fazendas e não pode ser usado como comida dos funcionários.
 
 O painel Saneamento → Resíduos separa lixo aguardando coleta, em transporte de coleta, armazenado nas coletoras, em transferência e nas processadoras. As fichas das empresas mostram equipe, estoque, cargas a receber, resíduos processados, produção e impedimentos como falta de trabalhadores, dinheiro ou insumos.
+
+
+## Ocupação das moradias populares
+
+Moradias populares cujos cômodos pertencem integralmente ao município são destinadas à ocupação gratuita, sem entrada, compra ou aluguel. Não ficam à venda nem podem ser adquiridas por investidores. O cadastro considera uma casa completa, com quarto e banheiro, e ocupa todos os seus cômodos para a mesma família.
+
+A atribuição ocorre ao concluir o prédio e nas revisões de moradia, inclusive para prédios populares públicos que já estavam vazios. Adultos sem teto com dependentes têm prioridade, seguidos por menor saldo/poupança, maior tempo de espera e ordem de cadastro. A casa precisa ter acesso por caminho transitável. Companheiros e filhos compartilham o domicílio; o imóvel continua pertencendo à prefeitura. Saída ou mudança libera a casa para outra família. Não há aluguel, atrasos ou despejo por falta de renda na ocupação social.
+
+A ficha do prédio mostra famílias abrigadas, moradores e pessoas sem teto; a ficha pessoal identifica o regime gratuito. A planta marca os cômodos como ocupados e distingue vagas sociais de imóveis anunciados. Entradas e compartilhamentos constam no histórico de moradia. Moradias populares que já são privadas mantêm suas regras de compra e aluguel.
+
+
+## Imposto salarial negativo
+
+Em Governo → Política fiscal, a alíquota pode variar entre -50% e +50%, em passos de um ponto percentual. Uma taxa positiva retém parte do salário para a prefeitura. Uma taxa negativa faz o empregador pagar o salário bruto normal e a prefeitura transferir um complemento ao trabalhador: a -20%, um salário bruto de R$ 100 resulta em R$ 100 pagos pela empresa e R$ 20 pelo município.
+
+O cálculo é o mesmo para trabalho nas empresas, construção, transporte e faxina, com arredondamento de centavos acumulado separadamente para impostos e subsídios. O complemento usa o saldo municipal disponível após o pagamento do salário; se faltar caixa, paga apenas o possível e informa a parcela não paga. Essa parcela é informativa e não vira dívida automática. O salário da empresa permanece devido integralmente, sem emissão de moeda para financiar o complemento.
+
+A ficha financeira distingue salário líquido, complemento municipal e benefícios de subsistência. O painel fiscal mostra os subsídios pagos no dia, o total e valores não pagos por falta de caixa; pagamentos aparecem nos históricos do trabalhador e da prefeitura.
+
+## Execução e desempenho da simulação
+
+A simulação roda em `js/city_sim_worker.js`, separada da interface e dos renderizadores. A interface recebe alterações de estado em intervalos de aproximadamente 100 ms, preservando as referências de pessoas, prédios, contas e contratos. Somente objetos alterados são enviados; o mapa é reenviado quando sua revisão muda. O movimento visível é interpolado entre atualizações. Há no máximo uma atualização aguardando confirmação da interface, evitando acúmulo de mensagens.
+
+Operações bancárias, políticas fiscais/monetárias, preferências financeiras individuais e ações do editor são comandos executados pelo worker. Salários, estoques, escrows e ocupações continuam sendo calculados por uma única simulação. Pausa, velocidades e avanço de um passo são encaminhados ao mesmo relógio. Se o worker não puder executar, a cidade volta à execução local com aviso.
+
+As consultas de habitantes usam contas indexadas; prédios e dependentes possuem índices próprios. Consultas visuais usam regiões de 16×16 tiles. O cálculo de caminhos reutiliza buffers numéricos e os caches de caminhos/conectividade possuem limite com remoção gradual, sem apagar todo o cache ao atingir a capacidade.
+
+As rotinas horárias são distribuídas entre os primeiros 13 minutos de cada hora, em vez de executadas juntas. A revisão de estruturas acompanha mudanças e faz uma conferência periódica a cada cinco minutos. Tentativas de encontrar motoristas são distribuídas por cinco fases e têm um limite de 32 consultas de caminho por minuto; cargas em andamento continuam sendo processadas normalmente. O relógio limita a recuperação de atrasos e cede execução entre lotes de trabalho. Sob sobrecarga, o avanço da simulação pode ficar abaixo da velocidade selecionada, mantendo a interface responsiva.

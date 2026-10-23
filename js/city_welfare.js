@@ -12,7 +12,7 @@ export class CityWelfare {
     if (!this.policy.enabled) return;
     const adults = city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c)).sort((a,b) => a.balance-b.balance || a.id-b.id);
     for (const c of adults) {
-      const dependents = city.citizens.filter(child => child.guardianId === c.id && !city.society.isAdult(child)).length;
+      const dependents = city.childrenOf(c.id).filter(child => !city.society.isAdult(child)).length;
       const target = city.currency.price(this.policy.householdFloor * (1 + dependents * .5));
       const savings = city.bank.savings(c.accountId);
       const already = this.paid.get(c.id) || 0;

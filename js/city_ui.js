@@ -231,9 +231,9 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
       p.heading('NECESSIDADES'); p.meters(Object.entries(c.needs).map(([id,value])=>[NEED_LABELS[id],value]));
       const home = city.units.get(c.homeUnitId), dwelling = city.housing.home(c); p.heading('MORADIA');
-      if (dwelling) { p.kv('Casa', this.homeLabel(dwelling.id)); p.kv('Cômodos', city.housing.units(dwelling).map(u => ({ bathroom: 'Banheiro', dining: 'Refeitório', bedroom: 'Quarto' }[u.roomType] || 'Espaço')).join(' + ')); p.kv('Aluguel total/dia', money(city.housing.rent(dwelling, c))); p.kv('Valor de compra da casa', money(city.housing.price(dwelling))); }
-      p.note('Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
-      if (home) { p.kv('Espaço',`${home.x+1}, ${home.y+1} / ${home.z+1}º andar`); p.kv('Regime', home.ownerId === c.accountId ? 'Proprietário' : home.tenantId !== c.accountId && dwelling ? 'Moradia compartilhada' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
+      if (dwelling) { p.kv('Casa', this.homeLabel(dwelling.id)); p.kv('Cômodos', city.housing.units(dwelling).map(u => ({ bathroom: 'Banheiro', dining: 'Refeitório', bedroom: 'Quarto' }[u.roomType] || 'Espaço')).join(' + ')); p.kv('Aluguel total/dia', money(city.housing.rent(dwelling, c))); p.kv(city.housing.isSocial(dwelling)?'Regime':'Valor de compra da casa',city.housing.isSocial(dwelling)?'Ocupação social gratuita':money(city.housing.price(dwelling))); }
+      p.note(city.housing.isSocial(dwelling)?'Moradia popular municipal: ocupação gratuita, sem cobrança de aluguel e sem transferência de propriedade.':'Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
+      if (home) { p.kv('Espaço',`${home.x+1}, ${home.y+1} / ${home.z+1}º andar`); p.kv('Regime', city.housing.isSocial(dwelling)?'Moradia social gratuita':home.ownerId === c.accountId ? 'Proprietário' : home.tenantId !== c.accountId && dwelling ? 'Moradia compartilhada' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
       else p.note('Sem moradia', C.red);
       p.heading('PREFERÊNCIAS ALIMENTARES');
       for (const [good, value] of Object.entries(c.foodPreferences || {}).filter(([g]) => GOODS[g] && !['girassol','trigo'].includes(g))) p.kv(GOODS[good].label, value > .2 ? `Gosta (${Math.round(value * 100)})` : value < -.2 ? `Não gosta (${Math.round(value * 100)})` : 'Neutro');
@@ -244,7 +244,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.heading('TRABALHO'); const job = city.building(c.jobId);
       if (job) p.button(name(job.entity), () => this.openBuilding(job.id));
       else p.note(c.businessIds.length ? 'Empresário' : society.isAdult(c) ? 'Sem emprego' : 'Criança');
-      p.kv('Salário recebido hoje', money(c.salaryToday)); p.kv('Vale-alimentação hoje', money(c.mealAllowanceToday)); p.note('As habilidades aumentam com a prática e influenciam contratação e remuneração.');
+      p.kv('Salário líquido hoje', money(c.salaryToday));p.kv('Imposto retido hoje',money(c.taxPaidToday||0));p.kv('Complemento municipal hoje',money(c.wageSubsidyToday||0)); p.kv('Vale-alimentação hoje', money(c.mealAllowanceToday)); p.note('As habilidades aumentam com a prática e influenciam contratação e remuneração.');
       p.meters(Object.entries(c.skills).map(([id,v])=>[SKILLS[id],v,C.cyan]));
     } else if (this.detailTab === 'history') {
       this.journal(p,c.accountId);
@@ -261,8 +261,8 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       for (const r of relations) { const other = r.a === c.id ? r.b : r.a; p.button(name(society.citizen(other)?.entity), () => this.openCitizen(other)); p.note(`${relationLabel(r)} | ${r.conversations} conversas`); p.meter('Afeto', r.affection, C.pink); p.meter('Confiança', r.trust, C.cyan); p.meter('Familiaridade', r.familiarity); }
       if (!relations.length) p.note('Ainda está conhecendo os vizinhos.');
     } else {
-      p.heading('CONTA PESSOAL'); p.kv('Dinheiro disponível', money(c.balance)); p.kv('Salário hoje', money(c.salaryToday));p.kv('Benefícios recebidos',money(c.benefitsReceived||0));p.kv('Poupança total',money(city.bank.savings(c.accountId)));
-      p.buttons([{label:`POUPAR ${Math.round((c.savingsRate??.2)*100)}% DO EXCEDENTE`,click:()=>{c.savingsRate=(c.savingsRate??.2)>=.5?0:(c.savingsRate??.2)+.1;}},{label:c.creditAllowed===false?'CRÉDITO AUTOMÁTICO: NÃO':'CRÉDITO AUTOMÁTICO: SIM',click:()=>{c.creditAllowed=c.creditAllowed===false;}}]);
+      p.heading('CONTA PESSOAL'); p.kv('Dinheiro disponível', money(c.balance)); p.kv('Salário líquido hoje', money(c.salaryToday));p.kv('Complemento municipal hoje',money(c.wageSubsidyToday||0));p.kv('Complementos recebidos',money(c.wageSubsidyTotal||0));if(c.wageSubsidyUnpaidToday)p.kv('Complemento não pago por falta de caixa',money(c.wageSubsidyUnpaidToday));p.kv('Benefícios recebidos',money(c.benefitsReceived||0));p.kv('Poupança total',money(city.bank.savings(c.accountId)));
+      p.buttons([{label:`POUPAR ${Math.round((c.savingsRate??.2)*100)}% DO EXCEDENTE`,click:()=>{city.setCitizenFinance(c.id,{savingsRate:(c.savingsRate??.2)>=.5?0:(c.savingsRate??.2)+.1});}},{label:c.creditAllowed===false?'CRÉDITO AUTOMÁTICO: NÃO':'CRÉDITO AUTOMÁTICO: SIM',click:()=>{city.setCitizenFinance(c.id,{creditAllowed:c.creditAllowed===false});}}]);
       const units = [...city.units.values()].filter(u => u.ownerId === c.accountId);
       p.kv('Imóveis próprios', units.length); p.kv('Valor anunciado total', money(units.reduce((s, u) => s + u.price, 0)));
       p.kv('Aluguel contratado/dia', money(units.filter(u => u.tenantId && u.tenantId !== c.accountId).reduce((s, u) => s + u.rent, 0)));
@@ -298,6 +298,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       if(b.type==='mint'){p.kv('Emitido hoje',money(city.currency.issuedToday));p.kv('Inflação acumulada',`${((city.currency.priceIndex-1)*100).toFixed(2)}%`);p.note('A emissão entra no tesouro e depende de um funcionário trabalhando nesta instalação.');}
       p.note('Proprietário da empresa'); if (b.ownerId) p.button(name(city.economy.citizen(b.ownerId)?.entity), () => this.openCitizen(b.ownerId)); else p.note(b.municipal?'Empresa municipal / patrimônio público':'Serviço público');
       p.metrics([[b.type==='townhall'?'SALDO MUNICIPAL':'CAIXA',money(b.balance),b.balance<1000?C.red:C.gold],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]); p.kv(b.type==='townhall'?'Entradas acumuladas':'Receita acumulada', money(b.totalRevenue)); p.kv(b.type==='townhall'?'Saídas acumuladas':'Despesas acumuladas', money(b.totalExpenses)); if(b.type==='townhall')p.note('Este saldo é o tesouro municipal, o mesmo exibido na barra. Recebe impostos e emissão e paga obras, benefícios e despesas da sede. Reservas de contratos já saíram do saldo disponível.');else p.kv('Dividendos pagos', money(b.dividends));
+      if(b.type==='popular_housing'){const social=[...city.housing.homes.values()].filter(h=>h.buildingId===b.id && city.housing.isSocial(h));if(social.length){p.heading('OCUPAÇÃO SOCIAL');p.kv('Famílias abrigadas / moradias',`${social.filter(h=>city.housing.residents(h).length>0).length} / ${social.length}`);p.kv('Moradores',city.citizens.filter(c=>!c.entity.destroyed && social.some(h=>h.id===c.homeId)).length);p.kv('Adultos sem teto na cidade',city.citizens.filter(c=>!c.entity.destroyed && city.society.isAdult(c) && !c.homeUnitId).length);p.note('Ocupação gratuita com propriedade municipal. Famílias sem teto com dependentes e menos recursos têm prioridade.');}}
       p.kv('Equipe', `${b.workers.length}/${b.jobs}`); p.kv('Desnível do terreno', Number(b.terrain.variation).toFixed(2)); p.kv('Circulação comum', `${b.circulation?.length || 0} células sem imóveis`);
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, b.accountId);
     } else if (this.detailTab === 'stock') {
@@ -324,12 +325,12 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.note('Contratos de prédios sob medida definem largura, profundidade e andares dentro do terreno. Materiais, fretes e serviço são pagos pelo contratante; o serviço só é liberado após a conclusão.');
       this.contracts(p, city.development.projects.filter(o => o.builderId === b.id).slice(-20).reverse());
     } else {
-      p.note('Espaços na fachada; miolo de circulação comum. Cada cômodo tem seu contrato. A prefeitura vende e nunca aluga.');
+      p.note('Espaços na fachada; miolo de circulação comum. Moradias populares municipais oferecem ocupação social gratuita; os demais imóveis mantêm seus contratos de compra ou aluguel.');
       let u = city.units.get(this.unitId); if (u?.buildingId !== b.id) u = b.units[0]; this.unitId = u?.id || null;
       this.unitMap(p,b,u);
       if (u) { p.heading(`ESPAÇO ${u.x+1}, ${u.y+1} / ${u.z+1}º ANDAR`); p.kv('Cômodo', { bedroom: 'Quarto', bathroom: 'Banheiro', dining: 'Refeitório', workspace: 'Área da empresa' }[u.roomType]); if (u.homeId) p.kv('Casa', this.homeLabel(u.homeId)); p.kv('Proprietário', city.accountName(u.ownerId)); this.accountLink(p, u.ownerId);
         p.kv('Ocupante', u.tenantId || u.occupantId ? city.accountName(u.tenantId || u.occupantId) : 'Livre'); this.accountLink(p, u.tenantId || u.occupantId);
-        p.kv('Venda', money(u.price)); p.kv('Aluguel/dia', u.ownerId === 'treasury' ? 'Prefeitura não aluga' : money(u.rent)); p.kv('Em atraso', money(u.arrears)); p.kv('Anúncio', u.forSale ? 'À venda' : u.forRent ? 'Para alugar' : 'Uso próprio / ocupado'); }
+        const social=city.housing.isSocial(city.housing.homes.get(u.homeId));p.kv('Venda',social?'Patrimônio público / sem venda':money(u.price)); p.kv('Aluguel/dia',social?'Gratuito':u.ownerId === 'treasury' ? 'Prefeitura não aluga' : money(u.rent)); p.kv('Em atraso', money(u.arrears)); p.kv('Anúncio',social?(u.tenantId?'Ocupação social':'Vaga social'):u.forSale ? 'À venda' : u.forRent ? 'Para alugar' : 'Uso próprio / ocupado'); }
 
     }
   }
@@ -350,7 +351,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
   journal(p,account) {
     this.journalFilters??={};this.journalPages??={};
     const kind=this.journalFilters[account]||'all';
-    const options=[['all','TODOS'],['employment','EMPREGO'],['ownership','PROPRIETÁRIOS'],['sale','VENDAS'],['service','SERVIÇOS'],['production','PRODUÇÃO'],['credit','CRÉDITO'],['finance','FINANÇAS'],['policy','POLÍTICAS']];
+    const options=[['all','TODOS'],['employment','EMPREGO'],['ownership','PROPRIETÁRIOS'],['housing','MORADIA'],['sale','VENDAS'],['service','SERVIÇOS'],['production','PRODUÇÃO'],['credit','CRÉDITO'],['finance','FINANÇAS'],['policy','POLÍTICAS']];
     p.heading('HISTÓRICO DETALHADO');
     p.buttons(options.map(([id,label])=>({label,selected:kind===id,click:()=>{this.journalFilters[account]=id;this.journalPages[account]=0;}})));
     const rows=this.city.history.rows(account,kind).filter(e=>this.matches(e.message)).reverse();
@@ -372,7 +373,11 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     p.buttons([{label:'ANTERIOR',click:()=>{this.journalPages[account]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.journalPages[account]=Math.min(pages-1,page+1);}}]);
     if(!rows.length)p.note('Nenhum registro nesta categoria.');
   }
-  policyAction(message,action) { action();this.city.history.record('policy',message,['treasury']); }
+  policyAction(message, action) {
+    action();
+    this.city.setPolicies({ taxRate: this.city.taxRate, currency: { ...this.city.currency.policy },
+      bank: { ...this.city.bank.policy }, welfare: { ...this.city.welfare.policy } }, message);
+  }
   accountLink(p, id) { if (String(id).startsWith('citizen:')) p.button('ABRIR FICHA DO MORADOR', () => this.openCitizen(Number(id.split(':')[1]))); }
   transactions(p, account) {
     const rows = this.city.ledger.filter(l => l.from === account || l.to === account).slice(-18).reverse();
@@ -441,8 +446,8 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     p.heading('CRÉDITO E POUPANÇA');p.kv('Poupança protegida',money([...bank.deposits.values()].reduce((n,d)=>n+d.balance,0)));p.kv('Juros de novos empréstimos/dia',`${(bank.policy.loanRate*100).toFixed(2)}%`);p.kv('Rendimento da poupança/dia',`${(bank.policy.savingsRate*100).toFixed(2)}%`);
     p.buttons([{label:bank.policy.creditEnabled?'SUSPENDER NOVO CRÉDITO':'LIBERAR CRÉDITO',click:()=>this.policyAction('Política de crédito alterada.',()=>{bank.policy.creditEnabled=!bank.policy.creditEnabled;})},{label:'JUROS +0,05%',click:()=>this.policyAction('Juros de novos empréstimos elevados.',()=>{bank.policy.loanRate=Math.min(.01,bank.policy.loanRate+.0005);})},{label:'JUROS -0,05%',click:()=>this.policyAction('Juros de novos empréstimos reduzidos.',()=>{bank.policy.loanRate=Math.max(0,bank.policy.loanRate-.0005);})}]);
     p.buttons([{label:'POUPANÇA +0,01%',click:()=>this.policyAction('Rendimento da poupança elevado.',()=>{bank.policy.savingsRate=Math.min(.005,bank.policy.savingsRate+.0001);})},{label:'POUPANÇA -0,01%',click:()=>this.policyAction('Rendimento da poupança reduzido.',()=>{bank.policy.savingsRate=Math.max(0,bank.policy.savingsRate-.0001);})}]);
-    p.heading('POLÍTICA FISCAL');p.kv('Imposto sobre salários',`${Math.round(this.city.taxRate*100)}%`);
-    p.buttons([{label:'IMPOSTO +1%',click:()=>this.policyAction('Imposto salarial aumentado.',()=>{this.city.taxRate=Math.min(.5,this.city.taxRate+.01);})},{label:'IMPOSTO -1%',click:()=>this.policyAction('Imposto salarial reduzido.',()=>{this.city.taxRate=Math.max(0,this.city.taxRate-.01);})}]);
+    p.heading('POLÍTICA FISCAL');p.kv(this.city.taxRate<0?'Subsídio sobre salários':'Imposto sobre salários',`${Math.round(this.city.taxRate*100)}%`);p.note('Alíquota de -50% a +50%. Negativa: a empresa paga o salário bruto e a prefeitura acrescenta o percentual ao trabalhador.');p.kv('Subsídios salariais pagos hoje',money(this.city.wageSubsidies.paidToday));p.kv('Total de subsídios salariais',money(this.city.wageSubsidies.totalPaid));if(this.city.wageSubsidies.unpaidToday)p.kv('Não pago hoje por falta de caixa',money(this.city.wageSubsidies.unpaidToday));
+    p.buttons([{label:'IMPOSTO +1%',click:()=>this.policyAction('Imposto salarial aumentado.',()=>{this.city.taxRate=Math.min(.5,Math.round((this.city.taxRate+.01)*100)/100);})},{label:'IMPOSTO -1%',click:()=>this.policyAction('Imposto salarial reduzido.',()=>{this.city.taxRate=Math.max(-.5,Math.round((this.city.taxRate-.01)*100)/100);})}]);
     p.heading('BENEFÍCIOS MUNICIPAIS');p.kv('Orçamento diário',money(welfare.policy.dailyBudget));p.kv('Pago hoje',money(welfare.spentToday));p.kv('Pago desde a fundação',money(welfare.totalPaid));p.kv('Piso por adulto',money(welfare.policy.householdFloor));
     p.buttons([{label:welfare.policy.enabled?'PAUSAR BENEFÍCIOS':'ATIVAR BENEFÍCIOS',click:()=>this.policyAction('Programa de benefícios alterado.',()=>{welfare.policy.enabled=!welfare.policy.enabled;})},{label:'ORÇAMENTO +R$ 100',click:()=>this.policyAction('Orçamento de benefícios ampliado.',()=>{welfare.policy.dailyBudget+=10000;})},{label:'ORÇAMENTO -R$ 100',click:()=>this.policyAction('Orçamento de benefícios reduzido.',()=>{welfare.policy.dailyBudget=Math.max(0,welfare.policy.dailyBudget-10000);})}]);
     p.note('Benefícios consideram saldo, poupança e dependentes; têm teto diário e preservam a reserva do tesouro. Cidadãos com renda podem buscar crédito antes de recorrer ao benefício.');
@@ -455,7 +460,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     if(view==='overview'){
       p.heading('GOVERNO AUTÔNOMO');
       if(mayor)p.card(name(mayor.entity),'Prefeito / cidadão da cidade',()=>this.openCitizen(mayor.id),false,C.gold);
-      p.metrics([['TESOURO',money(city.treasury),C.gold],['REFEIÇÕES',Math.floor(city.economy.inventory(hall)/3),C.green],['IMPOSTOS',`${Math.round(city.taxRate*100)}%`,C.cyan]]);
+      p.metrics([['TESOURO',money(city.treasury),C.gold],['REFEIÇÕES',Math.floor(city.economy.inventory(hall)/3),C.green],[city.taxRate<0?'SUBSÍDIO SALARIAL':'IMPOSTOS',`${Math.round(city.taxRate*100)}%`,C.cyan]]);
       this.monetaryPolicy(p);
       p.heading('PATRIMÔNIO PÚBLICO');const units=[...city.units.values()].filter(u=>u.ownerId==='treasury');p.kv('Espaços públicos',units.length);p.kv('Espaços à venda',units.filter(u=>u.forSale).length);
       p.note('O município vende imóveis e terrenos; nunca aluga. O prefeito tem rotina e conta pessoal, separadas do tesouro.');
