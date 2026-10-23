@@ -288,7 +288,7 @@ export class CitySimulation {
       if (builder && builder.ownerId !== c.id && (c.jobId !== builder.id || builder.balance < builder.wage)) { c.task = null; return; }
       if (this.development.work(project, c)) {
         if (builder && builder.ownerId !== c.id) { const wage = builder.wage, taxExact = wage * this.taxRate + c.taxRemainder, tax = Math.floor(taxExact + 1e-9); c.taxRemainder = taxExact - tax; this.transfer(builder.accountId, c.accountId, wage - tax, 'Salário'); this.transfer(builder.accountId, 'treasury', tax, 'Imposto sobre salário'); c.salaryToday += wage - tax; c.lastPaidAt = this.minute; }
-        c.action = ['road', 'road-repair'].includes(project.service) ? 'Construindo ou reparando estrada' : project.service === 'expansion' ? 'Ampliando edifício' : `Construindo no terreno ${project.plotId}`;
+        c.action = ['road', 'road-repair'].includes(project.service) ? 'Construindo ou reparando estrada' : project.service === 'lamp' ? 'Instalando poste' : project.service === 'expansion' ? 'Ampliando edifício' : `Construindo no terreno ${project.plotId}`;
       } else { c.action = 'Aguardando materiais da obra'; c.task = null; }
       if (this.urgentNeed(c)) c.task = null;
       return;
@@ -427,6 +427,7 @@ export class CitySimulation {
     this.minute++;
     this.reconcile();
     this.development.reconcile();
+    this.lighting.reconcile();
     this.housing.reconcile(); this.sanitation.reconcile(); this.sanitation.updateMinute();
     for (const c of this.citizens) this.workMeals.tryStart(c);
     this.logistics.updateMinute();

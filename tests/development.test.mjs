@@ -134,7 +134,9 @@ test('a transport company hires a courier, earns delivery fees and pays wages fr
 
 test('a starter city autonomously builds housing, grows food and transports every material with conserved stocks', () => {
   const city = setup({ starter: true });
-  for (let i = 0; i < 10 * 1440 * 4; i++) { city.update(1 / 16); if (i % 240 === 0) audit(city); }
+  // Real lamp installation shares builders and freight; wait for the production chain, with a bounded deadline.
+  const developed = () => city.economy.produced.pao > 0 && ['residential', 'farm', 'market', 'bakery', 'greengrocer', 'carrier'].every(type => city.buildings.some(b => b.type === type));
+  for (let i = 0; i < 20 * 1440 * 4; i++) { city.update(1 / 16); if (i % 240 === 0) audit(city); if (i >= 10 * 1440 * 4 && developed()) break; }
   for (const type of ['residential', 'farm', 'market', 'bakery', 'greengrocer', 'carrier']) assert(city.buildings.some(b => b.type === type), type);
   assert(city.economy.produced.pedra > 0); assert(city.economy.consumed.pedra > 0); assert(city.economy.produced.pao > 0); assert(city.logistics.delivered > 0);
   assert(city.events.some(e => e.data.kind === 'shipment-delivered'));

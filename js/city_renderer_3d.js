@@ -14,6 +14,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   const distanceToView = p => (p.x - (renderer.camX || 0)) ** 2 + (p.y - (renderer.camY || 0)) ** 2;
   const litNearby = new Set((world.cityLampPosts || []).filter(p => p.lit && (!p.buildingId || liveBuildings.has(p.buildingId))).sort((a, b) => distanceToView(a) - distanceToView(b)).slice(0, 8).map(p => p.id));
   for (const post of world.cityLampPosts || []) {
+    if (!post.built) continue;
     liveLamps.add(post.id);
     let lamp = renderer.lampMeshes.get(post.id);
     if (!lamp) {
@@ -22,13 +23,26 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const lantern = new THREE.Mesh(new THREE.BoxGeometry(.25, .35, .25), new THREE.MeshLambertMaterial({ color: 0xe3b65f })); lantern.position.y = 2.08; lamp.add(lantern); lamp.userData.lantern = lantern;
       renderer.scene.add(lamp); renderer.lampMeshes.set(post.id, lamp);
     }
-    lamp.position.set(post.x + .35, surfaceElevation(world, post.x, post.y) + (post.height || 0), post.y);
+    lamp.position.set(post.x, surfaceElevation(world, post.x, post.y) + (post.height || 0), post.y);
     lamp.userData.lantern.material.emissive.setHex(post.lit ? 0xffa52f : 0);
     lamp.visible = !post.buildingId || liveBuildings.has(post.buildingId);
     if (litNearby.has(post.id) && lamp.visible && lightIndex < renderer.cityLampLights.length) { const light = renderer.cityLampLights[lightIndex++]; light.position.copy(lamp.position); light.position.y += 2.1; light.intensity = 2; }
   }
   for (; lightIndex < renderer.cityLampLights.length; lightIndex++) renderer.cityLampLights[lightIndex].intensity = 0;
   for (const [id, mesh] of renderer.lampMeshes) if (!liveLamps.has(id)) { renderer.scene.remove(mesh); mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); }); renderer.lampMeshes.delete(id); }
+  renderer.lampSiteMeshes ??= new Map();
+  const sites = new Set();
+  for (const site of world.cityLampSites || []) {
+    if (site.built || site.status === 'cancelled') continue;
+    sites.add(site.id);
+    let marker = renderer.lampSiteMeshes.get(site.id);
+    if (!marker) {
+      marker = new THREE.Mesh(new THREE.BoxGeometry(.9, .12, .9), new THREE.MeshLambertMaterial({ color: 0xc69543 }));
+      renderer.scene.add(marker); renderer.lampSiteMeshes.set(site.id, marker);
+    }
+    marker.position.set(site.x, surfaceElevation(world, site.x, site.y) + .08, site.y);
+  }
+  for (const [id, marker] of renderer.lampSiteMeshes) if (!sites.has(id)) { renderer.scene.remove(marker); marker.geometry.dispose(); marker.material.dispose(); renderer.lampSiteMeshes.delete(id); }
   renderer.cityMeshes ??= new Map();
   const active = new Set();
   for (const entity of entities) {

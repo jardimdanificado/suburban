@@ -16,7 +16,7 @@ export class WindowManager {
   closeAll(includePinned=false){return [...this.windows].filter(w=>includePinned||!w.pinned).map(w=>this.close(w.id));}
   rect(w){return{x:w.x,y:w.y,w:w.w,h:w.shaded?26:w.h};}
   at(x,y){return [...this.windows].reverse().find(w=>{const r=this.rect(w);return x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;});}
-  caption(w,x,y){return y>=w.y&&y<w.y+26&&x>=w.x+26&&x<w.x+w.w-78;}
+  caption(w,x,y){return y>=w.y&&y<w.y+26&&x>=w.x+4&&x<w.x+w.w-104;}
   constrain(w){
     const maxW=Math.max(180,this.width-8),maxH=Math.max(110,this.height-this.top-this.bottom-6);
     w.w=Math.min(maxW,Math.max(Math.min(w.minWidth,maxW),w.w));w.h=Math.min(maxH,Math.max(Math.min(w.minHeight,maxH),w.h));

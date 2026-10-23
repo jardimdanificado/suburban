@@ -39,6 +39,7 @@ export class CityDesktop {
     const state={tab:id,element,zones:[],drawFloating:(ui,w)=>{tool.floatingBounds={x:w.x,y:w.y,w:w.w,h:w.h-18};clipCanvasRegion(ui,w.x+3,w.y+26,w.w-6,w.h-44,()=>tool.draw(ui));},scrollAt:(x,y,d)=>tool.scrollAt(x,y,d),key:()=>false,onClose:()=>{tool.open=false;tool.floatingBounds=null;tool.bounds=null;tool.endStroke?.();}};
     const w=this.manager.open({id:`tool:${id}`,title,width:id==='options'?460:330,height:id==='options'?390:380,minWidth:300,minHeight:210,state});w.kind='tool';tool.open=true;this.hidden=false;return state;
   }
+  toggleModule(tab){const current=this.manager.find(`module:${tab}`);if(current)return this.close(current.id);return this.openModule(tab);}
   openModule(tab){const state=this.create(`module:${tab}`,tab);state.visible=true;return state;}
   navigate(tab){return this.openModule(tab);}
   setView(id){this.active?.setView?.(id);}
@@ -69,7 +70,7 @@ export class CityDesktop {
   }
   drawChrome(ui,{clockText='',paused=false,speed=1,renderMode='3d'}={}){
     this.manager.viewport(ui.width,ui.height);this.tooltip=null;bevel(ui.ctx,0,0,ui.width,34,{fill:'#b4b4a4'});
-    const buttons=[['pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speed}×`,this.controls.speed],['settings','Opções',this.controls.options],...CITY_WINDOWS.map(([id,label])=>[id,label,()=>this.openModule(id),this.manager.windows.some(w=>w.id===`module:${id}`)]),['center','Centralizar mapa',this.controls.center],['editor','Editor de mapa',this.controls.editor],['windows','Organizar janelas',()=>{this.menuOpen=!this.menuOpen;},this.menuOpen],['3d','Vista 3D',()=>this.controls.render?.('3d'),renderMode==='3d'],['2d','Vista 2D',()=>this.controls.render?.('2d'),renderMode==='2d']];
+    const buttons=[['pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speed}×`,this.controls.speed],['settings','Opções',this.controls.options],...CITY_WINDOWS.map(([id,label])=>[id,label,()=>this.toggleModule(id),this.manager.windows.some(w=>w.id===`module:${id}`)]),['center','Centralizar mapa',this.controls.center],['editor','Editor de mapa',this.controls.editor],['windows','Organizar janelas',()=>{this.menuOpen=!this.menuOpen;},this.menuOpen],['3d','Vista 3D',()=>this.controls.render?.('3d'),renderMode==='3d'],['2d','Vista 2D',()=>this.controls.render?.('2d'),renderMode==='2d']];
     const size=30,max=Math.max(1,Math.floor((ui.width-8)/size));
     this.toolbarButtons=buttons;const shown=max>=buttons.length?buttons:buttons.slice(0,Math.max(1,max-1)).concat([['windows','Todas as ferramentas',()=>{this.menuOpen=!this.menuOpen;},this.menuOpen]]);
     let x=Math.max(4,Math.floor((ui.width-shown.length*size)/2));
@@ -82,12 +83,12 @@ export class CityDesktop {
     const r=this.manager.rect(w),active=this.manager.activeId===w.id,ctx=ui.ctx;ctx.save();ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(r.x+3,r.y+3,r.w,r.h);ctx.restore();bevel(ctx,r.x,r.y,r.w,r.h,{fill:'#c6c6b1'});
     ui.regions.push({...r,onClick:()=>this.manager.raise(w.id)});
     bevel(ctx,w.x+1,w.y+1,w.w-2,24,{fill:active?'#537a9e':'#9b9e8c'});
-    ui.button(w.x+2,w.y+2,22,22,'×',()=>this.close(w.id));ui.regions.at(-1).label=`Fechar: ${w.title}`;
-    const title=w.title;ctx.save();ctx.beginPath();ctx.rect(w.x+29,w.y+3,w.w-111,20);ctx.clip();ctx.font=ui.font(1,true);ctx.textBaseline='middle';ctx.textAlign='center';ctx.fillStyle=active?'#ffffff':'#222a24';ctx.fillText(title,w.x+26+(w.w-104)/2,w.y+13);ctx.restore();
-    ui.regions.push({x:w.x+26,y:w.y+2,w:w.w-104,h:22,onClick:()=>this.manager.raise(w.id),label:`Mover: ${title}`});
-    ui.button(w.x+w.w-76,w.y+2,24,22,w.pinned?'●':'○',()=>this.manager.pin(w.id),{selected:w.pinned});ui.regions.at(-1).label=`Fixar: ${title}`;
-    ui.button(w.x+w.w-51,w.y+2,24,22,w.shaded?'▣':'−',()=>this.manager.shade(w.id));ui.regions.at(-1).label=`Recolher: ${title}`;
-    ui.button(w.x+w.w-26,w.y+2,24,22,w.maximized?'↙':'↗',()=>this.manager.maximize(w.id));ui.regions.at(-1).label=`Ampliar: ${title}`;
+    const title=w.title;ctx.save();ctx.beginPath();ctx.rect(w.x+8,w.y+3,w.w-114,20);ctx.clip();ctx.font=ui.font(1,true);ctx.textBaseline='middle';ctx.textAlign='left';ctx.fillStyle=active?'#ffffff':'#222a24';ctx.fillText(title,w.x+8,w.y+13);ctx.restore();
+    ui.regions.push({x:w.x+4,y:w.y+2,w:w.w-108,h:22,onClick:()=>this.manager.raise(w.id),label:`Mover: ${title}`});
+    ui.button(w.x+w.w-101,w.y+2,24,22,w.pinned?'●':'○',()=>this.manager.pin(w.id),{selected:w.pinned});ui.regions.at(-1).label=`Fixar: ${title}`;
+    ui.button(w.x+w.w-76,w.y+2,24,22,w.shaded?'▣':'−',()=>this.manager.shade(w.id));ui.regions.at(-1).label=`Recolher: ${title}`;
+    ui.button(w.x+w.w-51,w.y+2,24,22,w.maximized?'↙':'↗',()=>this.manager.maximize(w.id));ui.regions.at(-1).label=`Ampliar: ${title}`;
+    ui.button(w.x+w.w-26,w.y+2,24,22,'×',()=>this.close(w.id));ui.regions.at(-1).label=`Fechar: ${title}`;
     if(!w.shaded){if(w.state.tab==='map')this.drawMap(ui,w);else w.state.drawFloating(ui,w);ctx.fillStyle=T.muted;for(let i=0;i<3;i++)ctx.fillRect(w.x+w.w-5-i*4,w.y+w.h-5,2,2+i*4);ui.regions.push({x:w.x+w.w-18,y:w.y+w.h-18,w:18,h:18,label:`Redimensionar: ${title}`,onClick:null});ui.text(w.pinned?'Fixada':'',w.x+6,w.y+w.h-17,T.muted);}
     else {w.state.element.hidden=true;w.state.zones=[];}
   }

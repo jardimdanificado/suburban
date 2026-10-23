@@ -49,7 +49,13 @@ export class CityLogistics {
     this.city.log(`Frete ${s.id} cancelado; reserva financeira devolvida.`, 'transport', [], { kind: 'shipment-cancelled', shipmentId: s.id });
   }
   candidates(s) {
-    const economy = this.city.economy, carrier = this.city.building(s.carrierId);
+    const economy = this.city.economy;
+    let carrier = this.city.building(s.carrierId);
+    // A closed, unstaffed or insolvent carrier must not trap the cargo and escrow forever.
+    const ownerCanHaul = !!economy.citizen(carrier?.ownerId);
+    if (carrier && (!carrier.active || (!ownerCanHaul && (!carrier.workers.some(id => economy.citizen(id)) || carrier.balance < carrier.wage)))) {
+      s.carrierId = null; carrier = null;
+    }
     const ids = carrier?.active ? [...carrier.workers, carrier.ownerId] : [];
     if (!carrier?.active) {
       s.carrierId = null;
@@ -62,8 +68,9 @@ export class CityLogistics {
   updateMinute() {
     const city = this.city;
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
-    // Food and construction deliveries keep priority over lamp replenishment.
-    pending.sort((a, b) => Number(a.purpose.endsWith('lighting')) - Number(b.purpose.endsWith('lighting')));
+    // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
+    const priority = s => (s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
+    pending.sort((a, b) => priority(a) - priority(b) || a.createdAt - b.createdAt || a.id - b.id);
     for (const s of pending) {
       if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential') || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
       let c = city.society.citizen(s.driverId);

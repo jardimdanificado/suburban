@@ -54,7 +54,10 @@ export class CityDevelopment {
     const city = this.city;
     if (project.status === 'completed' || project.cancelled || project.inventory.pedra < project.stone || project.labor < project.requiredLabor) return null;
     let result;
-    if (project.service === 'road' || project.service === 'road-repair') {
+    if (project.service === 'lamp') {
+      result = city.lighting.completePost(project);
+      if (!result) { project.status = 'blocked'; project.error = 'Local do poste indisponível.'; return null; }
+    } else if (project.service === 'road' || project.service === 'road-repair') {
       if (project.route.some(t => this.plots.some(p => t.x >= p.x && t.x < p.x + p.width && t.y >= p.y && t.y < p.y + p.depth)) || project.route.some(p => !city.walkable(Math.floor(p.x), Math.floor(p.y))) || project.route.some((p, i, route) => i && !canStep(city.world, Math.floor(route[i - 1].x), Math.floor(route[i - 1].y), Math.floor(p.x), Math.floor(p.y)))) { project.status = 'blocked'; project.error = 'Trajeto deixou de ser acessível.'; return null; }
       pavePath(city.world, project.route); result = project;
       if (project.service === 'road-repair') for (const p of project.route) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(city.world, x, y); if (ROAD_TILES.has(tile)) { city.world.setTile(x, y, roadFor(tile)); city.world.roadCondition?.set(`${x},${y}`, 100); } }
@@ -243,7 +246,7 @@ export class CityDevelopment {
   }
   complete(project) {
     if (project.status === 'completed' || project.cancelled || project.inventory.pedra < project.stone || project.labor < project.requiredLabor) return null;
-    if (project.service === 'road' || project.service === 'road-repair' || project.service === 'repair' || project.service === 'expansion') return this.completeService(project);
+    if (['lamp', 'road', 'road-repair', 'repair', 'expansion'].includes(project.service)) return this.completeService(project);
     const p = this.plots.find(p => p.id === project.plotId), city = this.city;
     const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, materialSource: project });
     if (!b) { project.status = 'blocked'; project.error = city.lastError; return null; }
@@ -262,7 +265,7 @@ export class CityDevelopment {
     let need = project.stone - project.inventory.pedra - (project.incoming.pedra || 0);
     for (const quarry of this.city.economy.businesses.filter(b => b.type === 'quarry' || b.type === 'recycler')) {
       const qty = Math.min(24, need, quarry.inventory.pedra, inventoryFree(project));
-      if (qty > 0 && this.city.logistics.order(quarry, project, 'pedra', qty, this.city.economy.goods.pedra.price)) need -= qty;
+      if (qty > 0 && this.city.logistics.order(quarry, project, 'pedra', qty, this.city.economy.goods.pedra.price, { purpose: project.service === 'lamp' ? 'lamp-construction' : 'trade' })) need -= qty;
     }
   }
   work(project, c) {
@@ -274,13 +277,14 @@ export class CityDevelopment {
     this.city.economy.practice(c, 'construction'); this.complete(project); return true;
   }
   projectFor(c, business = null) {
-    return this.projects.find(p => !p.cancelled && p.status !== 'completed' && p.inventory.pedra >= p.stone && (business?.type === 'builder' ? p.builderId === business.id || p.accountId === business.accountId : p.accountId === c.accountId && !p.builderId));
+    const eligible = p => !p.cancelled && p.status !== 'completed' && p.inventory.pedra >= p.stone && (p.service !== 'lamp' || !!p.builderId) && (business?.type === 'builder' ? p.builderId === business.id || p.accountId === business.accountId : p.accountId === c.accountId && !p.builderId);
+    return this.projects.find(p => p.service !== 'lamp' && eligible(p)) || this.projects.find(eligible);
   }
   updateHourly() {
     this.ensurePlots();
     this.updateWear();
     this.planPublicWorks();
-    for (const p of this.projects) { this.requestMaterials(p); if (p.status === 'blocked') this.complete(p); }
+    for (const p of [...this.projects].sort((a, b) => Number(a.service === 'lamp') - Number(b.service === 'lamp'))) { this.requestMaterials(p); if (p.status === 'blocked') this.complete(p); }
     // Builders develop housing for sale; individual investors prefer premises for their own firms.
     const homeless = this.city.citizens.filter(c => !c.homeUnitId).length;
     const housingProjects = this.projects.filter(p => p.type === 'residential' && !p.cancelled && p.status !== 'completed');

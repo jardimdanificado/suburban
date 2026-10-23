@@ -102,3 +102,28 @@ test('tooltips use a separate overlay and disappear when the pointer leaves the 
   assert.equal(h.desktop.tooltipElement.hidden,false);assert(h.desktop.tooltipElement.textContent);assert(h.desktop.tooltipElement.style.left);
   h.ui.beginFrame(-1,-1);h.desktop.drawChrome(h.ui);h.desktop.draw(h.ui);assert.equal(h.desktop.tooltipElement.hidden,true);
 });
+
+test('caption controls sit together on the right and never initiate a window drag',()=>{
+  for(const width of [390,1440]){
+    const h=harness(width,800),w=h.desktop.manager.active;h.draw();
+    const controls=['Fixar','Recolher','Ampliar','Fechar'].map(label=>h.ui.regions.find(r=>r.label===`${label}: ${w.title}`));
+    assert(controls.every(Boolean));
+    for(let i=0;i<controls.length;i++){
+      const r=controls[i];assert(r.x>=w.x+w.w-101);assert(r.x+r.w<=w.x+w.w);
+      if(i)assert(controls[i-1].x+controls[i-1].w<r.x);
+      assert.equal(h.desktop.manager.caption(w,r.x+r.w/2,r.y+r.h/2),false);
+    }
+    assert(h.desktop.manager.caption(w,w.x+8,w.y+12));
+    controls.at(-1).onClick();assert.equal(h.desktop.manager.find(w.id),undefined);
+  }
+});
+
+test('toolbar buttons toggle their dialogs while internal navigation keeps existing dialogs open',()=>{
+  const h=harness();
+  const click=()=>{h.draw();const button=h.ui.regions.find(r=>r.label==='Cidadãos');assert(button);button.onClick();};
+  click();assert(h.desktop.manager.find('module:people'));
+  h.desktop.manager.pin('module:people');click();assert.equal(h.desktop.manager.find('module:people'),undefined);
+  click();const state=h.desktop.manager.find('module:people').state;
+  h.desktop.openModule('people');assert.equal(h.desktop.manager.find('module:people').state,state);
+  click();assert.equal(h.desktop.manager.find('module:people'),undefined);
+});
