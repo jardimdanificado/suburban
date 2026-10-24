@@ -11,7 +11,7 @@ export class CityPolitics {
     this.approval=50;this.lastResult=null;this.baseline=null;
   }
   platform(c) { return (c.traits?.empathy??.5)-(c.traits?.frugality??.5)>.15?'social':(c.traits?.frugality??.5)-(c.traits?.empathy??.5)>.15?'thrift':'balanced'; }
-  eligible(c) { return c && !c.entity.destroyed && this.city.society.isAdult(c) && !c.businessIds.length && !this.city.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed'); }
+  eligible(c) { return c && !c.entity.destroyed && this.city.society.isAdult(c) && !c.businessIds.length && !this.city.development.projects.some(p=>(p.id===c.startupProjectId||p.accountId===c.accountId) && !p.cancelled && p.status!=='completed'); }
   ensureMayor() {
     const city=this.city, current=city.society.citizen(city.economy.mayorId);
     if(current) {

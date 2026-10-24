@@ -1,12 +1,14 @@
 // Every batch reserves real inputs and requires paid, on-site work. Prices are cents.
 export const INDUSTRIAL_GOODS = Object.fromEntries([
-  ['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
+  ['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
   ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['livros','Livros',2300],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],
 ].map(([id,label,price])=>[id,{label,price}]));
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
+  kitchen: industry('Cozinha e marmitaria',{feijao:2,arroz:2,alface:1,tomate:1},{marmita:3},18,'baking','Prepara marmitas com ingredientes reais e preserva suas preferências.','food'),
+  artisan: industry('Loja do artesão',{madeira:3,fibras:2},{cesta:2,carrinho:1},24,'construction','Artesanato em madeira: cestas e carrinhos ampliam a capacidade individual de transporte.','services',{need:'energy',boost:0}),
   forestry: industry('Silvicultura',{}, {madeira:4},45,'agriculture','Replantio obrigatório; sustenta móveis, papel e combustível.'),
   sawmill: industry('Serraria',{madeira:3},{tabuas:5},18,'maintenance','Madeira beneficiada para mobiliário e ferramentas.'),
   charcoal: industry('Carvoaria',{madeira:3},{carvao:4},24,'maintenance','Combustível para fornos; consome a madeira das florestas cultivadas.'),
@@ -36,4 +38,15 @@ export const INDUSTRIES = {
   composting: industry('Compostagem',{lixo:4},{adubo:2},20,'recycling','Resíduos urbanos retornam como fertilizante às lavouras.'),
   bank: industry('Banco',{}, {},1,'commerce','Depósitos mantêm reserva integral; crédito usa somente capital próprio disponível.','services'),
 };
-export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva'];
+export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva','marmita','marmita_simples','marmita_rustica'];
+
+export const MEAL_COMPONENTS={
+  marmita:{quality:4,ingredients:{feijao:2,arroz:2,alface:1,tomate:1}},
+  marmita_simples:{quality:2,ingredients:{arroz:2,feijao:2}},
+  marmita_rustica:{quality:3,ingredients:{mandioca:2,milho:2,tomate:1}},
+};
+export const KITCHEN_RECIPES=[
+  {good:'marmita',quantity:3,labor:18,inputs:MEAL_COMPONENTS.marmita.ingredients},
+  {good:'marmita_simples',quantity:2,labor:12,inputs:MEAL_COMPONENTS.marmita_simples.ingredients},
+  {good:'marmita_rustica',quantity:2,labor:15,inputs:MEAL_COMPONENTS.marmita_rustica.ingredients},
+];

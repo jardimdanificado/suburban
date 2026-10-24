@@ -1,3 +1,4 @@
+import { preparedOffer } from './city_markets.js';
 import { CROPS } from './city_economy.js';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
@@ -11,6 +12,7 @@ export class CityWorkMeals {
   }
   foodGoods() { return [...Object.keys(CROPS).filter(g=>!['trigo','girassol'].includes(g)),...INDUSTRIAL_FOODS,'pao']; }
   offer(holder, citizen = null) {
+    const packed=preparedOffer(this.city.economy,holder,citizen);if(packed)return {...packed,price:0};
     if (holder.type === 'bakery' && holder.inventory.pao >= WORK_MEAL_RULES.units) return { good: 'pao', quantity: WORK_MEAL_RULES.units, inputs: { pao: WORK_MEAL_RULES.units }, quality: 1 };
     const recipes = holder.type === 'bakery' ? { pao: this.city.economy.recipes.pao } : { ...Object.fromEntries(this.foodGoods().map(g => [`single_${g}`, { inputs: { [g]: WORK_MEAL_RULES.units }, quality: 1 }])), ...this.city.economy.recipes };
     const ready = Object.entries(recipes).filter(([, r]) => Object.entries(r.inputs).every(([g, n]) => (holder.inventory[g] || 0) >= n)).sort((a, b) => (b[1].quality + (citizen ? this.city.economy.mealTaste(citizen, { good: b[0], inputs: b[1].inputs }) * 10 : 0)) - (a[1].quality + (citizen ? this.city.economy.mealTaste(citizen, { good: a[0], inputs: a[1].inputs }) * 10 : 0)))[0];

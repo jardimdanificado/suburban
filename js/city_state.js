@@ -171,7 +171,7 @@ export function bindCityState(city) {
     }
   }
   for (const [id, good] of Object.entries(city.economy.goods)) if (!Object.getOwnPropertyDescriptor(good, 'price')?.get) Object.defineProperty(good, 'price', {
-    enumerable: true, configurable: true, get: () => city.currency.price(GOODS[id].price),
+    enumerable: true, configurable: true, get: () => city.currency.price(GOODS[id].price*(city.economy.market?.[id]?.multiplier||1)),
   });
   city.indexFamilies();
 }

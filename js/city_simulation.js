@@ -321,7 +321,7 @@ export class CitySimulation {
     else if (n.hygiene < 35) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
     else if (child && this.society.isAdult(c)) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
-    else if (c.startupProjectId && this.hour >= 8 && this.hour < 17 && this.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed' && p.inventory.pedra>=p.stone)) { task='work';type='startup'; }
+    else if (c.startupProjectId && this.hour >= 8 && this.hour < 17 && this.development.projects.some(p=>p.id===c.startupProjectId && !p.builderId && !p.cancelled && p.status!=='completed' && p.inventory.pedra>=p.stone)) { task='work';type='startup'; }
     else if (company && this.hour >= 8 && this.hour < 17) { task = 'manage'; type = 'company'; }
     else if (job && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
@@ -381,7 +381,7 @@ export class CitySimulation {
       const n=c.needs;
       if (c.provisions <= 0) { c.task = null; return; }
       if (c.servicePaid !== 'provisions') { c.provisions--; c.servicePaid = 'provisions'; this.log(`${c.entity.properties.name} consumiu uma refeição trazida na chegada.`, 'production', [c.id], { kind: 'initial-provision-consumed' }); }
-      n.food = clamp(n.food + 5); c.action = 'Comendo suas provisões';
+      n.food = clamp(n.food + 30); c.action = 'Comendo suas provisões';
       if (n.food >= 95) { c.task = null; c.servicePaid = null; }
       return;
     }
@@ -446,6 +446,7 @@ export class CitySimulation {
     if (task === 'energy' && Math.min(n.food, n.water, n.toilet) < 20) c.task = null;
   }
   payWage(c, b, wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30))) {
+    if(c.id===this.economy.mayorId)return true; // Mayor receives only the voted daily salary.
     if (!Number.isSafeInteger(wage) || wage < 0) return false;
     if (b.balance < wage) {
       if(c.unpaidWageDay!==this.day){c.unpaidWageDay=this.day;this.reputation.observe(b.accountId,'commerce',-1,'falta de caixa para o salário',{citizenIds:[c.id]});this.relationships.workEvent(b,c,false);}

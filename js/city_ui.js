@@ -1,3 +1,4 @@
+import { carryCapacity } from './city_markets.js';
 import { renderPolitics, renderCitizenPolitics } from './city_politics_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js';
@@ -229,7 +230,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
   }
   citizen(p, c) {
     const city = this.city, society = city.society;
-    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos | ${c.id === city.economy.mayorId ? 'Prefeito' : c.businessIds.length ? 'Empresário' : 'Morador'}`);
+    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.kv('Capacidade de carga',`${carryCapacity(c)} itens${c.equipment?.carrinho?' / carrinho':c.equipment?.cesta?' / cesta':''}`); p.note(`${society.age(c)} anos | ${c.id === city.economy.mayorId ? 'Prefeito' : c.businessIds.length ? 'Empresário' : 'Morador'}`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'HABILIDADES'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'FINANÇAS'], ['history', 'HISTÓRICO']]);
     if (this.detailTab === 'profile') {
@@ -317,6 +318,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.metrics([[b.type==='townhall'?'SALDO MUNICIPAL':'CAIXA',money(b.balance),b.balance<1000?C.red:C.gold],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]); p.kv(b.type==='townhall'?'Entradas acumuladas':'Receita acumulada', money(b.totalRevenue)); p.kv(b.type==='townhall'?'Saídas acumuladas':'Despesas acumuladas', money(b.totalExpenses)); if(b.type==='townhall')p.note('Este saldo é o tesouro municipal, o mesmo exibido na barra. Recebe impostos e emissão e paga obras, benefícios e despesas da sede. Reservas de contratos já saíram do saldo disponível.');else p.kv('Dividendos pagos', money(b.dividends));
       if(b.type==='popular_housing'){const social=[...city.housing.homes.values()].filter(h=>h.buildingId===b.id && city.housing.isSocial(h));if(social.length){p.heading('OCUPAÇÃO SOCIAL');p.kv('Famílias abrigadas / moradias',`${social.filter(h=>city.housing.residents(h).length>0).length} / ${social.length}`);p.kv('Moradores',city.citizens.filter(c=>!c.entity.destroyed && social.some(h=>h.id===c.homeId)).length);p.kv('Adultos sem teto na cidade',city.citizens.filter(c=>!c.entity.destroyed && city.society.isAdult(c) && !c.homeUnitId).length);p.note('Ocupação gratuita com propriedade municipal. Famílias sem teto com dependentes e menos recursos têm prioridade.');}}
       p.kv('Equipe', `${b.workers.length}/${b.jobs}`); p.kv('Desnível do terreno', Number(b.terrain.variation).toFixed(2)); p.kv('Circulação comum', `${b.circulation?.length || 0} células sem imóveis`);
+      const agreements=(city.economy.supplyAgreements||[]).filter(a=>a.buyerId===b.id||a.sellerId===b.id);if(agreements.length){p.heading('ACORDOS DE FORNECIMENTO');for(const a of agreements)p.note(`${GOODS[a.good].label}: ${city.accountName(city.building(a.sellerId)?.accountId)} → ${city.accountName(city.building(a.buyerId)?.accountId)}, ${money(a.unitPrice)}/unidade`);}if(b.equityPartners?.length){p.heading('SÓCIOS E CAPITAL');for(const share of b.equityPartners)p.note(`${city.accountName(`citizen:${share.citizenId}`)}: ${money(share.amount)}`);}
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, b.accountId);
     } else if (this.detailTab === 'stock') {
       p.heading('INVENTÁRIO REAL'); p.kv('Capacidade', `${inventoryUsed(b)}/${b.inventoryCapacity} itens`); p.kv('Reservado para recebimento', incomingItems(b)); p.kv('Espaço livre', inventoryFree(b)); p.meter('Ocupação do armazém', inventoryUsed(b) / b.inventoryCapacity * 100, inventoryFree(b) < 12 ? C.red : C.cyan); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
@@ -407,6 +409,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     if (!rows.length) p.note('Nenhuma movimentação registrada.');
   }
   demands(p) {
+    p.heading('PREÇOS E MERCADO');for(const [good,row] of Object.entries(this.city.economy.market||{}).filter(([g,r])=>r.demand>0||r.stock>0))p.note(`${GOODS[good].label}: ${money(this.city.economy.goods[good].price)} / oferta ${Math.round(row.stock)} / procura ${Math.round(row.demand)} / preferências ${Math.round(row.likes)}`);
     p.heading('DEMANDAS E OPORTUNIDADES'); p.note('Os investidores respondem à demanda e aos insumos que faltam na cadeia produtiva.');
     for (const d of this.city.economy.demands.filter(d => d.score > 0)) {
       p.heading(`${BUILDING_TYPES[d.type].label}${d.crop ? ' / ' + CROPS[d.crop].label : ''}`, C.cyan);
