@@ -1,3 +1,4 @@
+import {renderElectionMonitor} from './city_election_ui.js';
 import {sectionTitle} from './city_ui_sections.js';
 import {ROTATION_LABELS} from './city_building_geometry.js';
 import { renderPublications } from './city_publications_ui.js';
@@ -423,6 +424,7 @@ export class CityUI {
     p.rows(rows,d=>{const key=d.type+':'+(d.crop||''),selected=this.selectedDemandKey===key;p.record(`${BUILDING_TYPES[d.type].label}${d.crop?' / '+CROPS[d.crop].label:''}`,d.response?.state||d.reason,()=>{this.selectedDemandKey=key;this.resetScroll();},selected,{value:Math.round(d.score)+' pts',color:d.score>=100?C.red:C.cyan});});
   }
   content(p) {
+    if(this.tab==='election'){renderElectionMonitor(this,p);return;}
     if (this.notice) p.note(this.notice, C.red);
     const render = { city: 'overview', government: 'government', production: 'production', land: 'land', transport: 'transport', sanitation: 'sanitation', log: 'log',event:'eventInspector',publications:'publications',corruption:'corruptionDirectory','corruption-case':'corruptionInspector' }[this.tab];
     if (render) this[render](p);

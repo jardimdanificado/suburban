@@ -368,6 +368,7 @@ export class CitySimulation {
     if (task === 'energy') n.energy = clamp(n.energy + 0.1);
   }
   performTask(c) {
+    if(c.task==='vote'){this.politics.voting.arrive(c);return;}
     if(c.task==='campaign'){this.politics.campaigns.arrive(c);return;}
     if(c.task==='visit'){this.relationships.arrive(c);return;}
     if (c.task === 'toilet') { this.sanitation.use(c); return; }
@@ -556,6 +557,7 @@ export class CitySimulation {
     this.sanitation.updateMinute();
     for (const c of this.citizens) this.workMeals.tryStart(c);
     this.logistics.updateMinute();
+    this.politics.voting.updateMinute();
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
     if (this.minute % 60 === 0) this.flushPayroll();
     const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
@@ -611,7 +613,7 @@ export class CitySimulation {
         const dx = p.x - c.entity.x, dy = p.y - c.entity.y, len = Math.hypot(dx, dy);
         if (len <= distance) { c.entity.x = p.x; c.entity.y = p.y; this.recordTraffic(p); c.path.shift(); distance -= len; }
         else { c.entity.x += dx / len * distance; c.entity.y += dy / len * distance; distance = 0; }
-        c.action = c.deliveryId ? 'Transportando mercadorias' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.deliveryId ? 'Transportando mercadorias' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
     }
   }

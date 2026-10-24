@@ -5,13 +5,13 @@ import {tycoonIcon} from './tycoon_icons.js';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
 export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['production','Produção'],['transport','Transportes'],['sanitation','Saneamento'],['publications','Livros e panfletos'],['corruption','Corrupção'],['log','Histórico'],['map','Mapa da cidade']];
-const sizes={publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
+const sizes={election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop: directories, records and tools have independent windows. */
 export class CityDesktop {
   constructor({city,root,select,camera,controls={}}){
-    Object.assign(this,{city,select,camera,controls});this.manager=new WindowManager();this.hidden=false;this.tooltip=null;this.menuOpen=false;this.lastSelected=null;
+    Object.assign(this,{city,select,camera,controls});this.manager=new WindowManager();this.hidden=false;this.tooltip=null;this.menuOpen=false;this.lastSelected=null;this.electionNotices=new Set();this.lastElectionResultId=city.politics.lastResult?.id??null;
     this.element=document.createElement('div');this.element.className='city-desktop-inputs';root.append(this.element);this.openModule('city');
     this.tooltipElement=document.createElement('div');this.tooltipElement.className='city-tooltip';this.tooltipElement.setAttribute('role','tooltip');this.tooltipElement.hidden=true;root.append(this.tooltipElement);
   }
@@ -42,6 +42,18 @@ export class CityDesktop {
     state.tab=tab;state.selected=dossier?source.selected:null;Object.assign(state,overrides);state.sectionWindow=true;state.search.value=state.query||'';if(tab==='government'&&state.politicsTab==='promises')state.termId??=this.city.politics.mandates.current?.id??this.city.politics.mandates.terms.at(-1)?.id;
     if(source.eventSnapshot)state.eventSnapshot=source.eventSnapshot;
     const window=this.manager.find(id);window.title=state.sectionTitle();return state;
+  }
+  openElection(id,view='count'){
+    const gov=this.city.politics,e=[gov.active,gov.lastResult,...gov.elections].find(e=>e?.id===id);if(!e)return;
+    const label={polls:'Pesquisas eleitorais',count:'Votação e apuração',results:'Resultado eleitoral'}[view];
+    const state=this.create(`election:${id}:${view}`,'election',{title:`${label} · eleição ${id}`});state.electionId=id;state.electionView=view;state.electionSnapshot=e;return state;
+  }
+  syncElectionNotices(){
+    const gov=this.city.politics;
+    if(this.lastElectionNoticeMinute!=null&&this.city.minute<this.lastElectionNoticeMinute){this.electionNotices.clear();this.lastElectionResultId=gov.lastResult?.id??null;}this.lastElectionNoticeMinute=this.city.minute;
+    const active=gov.active;
+    if(active){const view=active.status==='campaign'?'polls':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);}}
+    if(gov.lastResult&&gov.lastResult.id!==this.lastElectionResultId){this.lastElectionResultId=gov.lastResult.id;this.openElection(gov.lastResult.id,'results');}
   }
   openEvent(id,snapshot=null){const state=this.create(`event:${id}`,'event',{title:`Inspetor do evento #${id}`,kind:'inspector'});state.selectedEventId=id;state.eventSnapshot??=snapshot||this.city.history.get(id);return state;}
   openCorruption(id){if(id==null)return this.openModule('corruption');const state=this.create(`corruption:${id}`,'corruption-case',{title:`Corrupção · caso #${id}`,kind:'inspector'});state.corruptionCaseId=id;state.corruptionSnapshot??=this.city.politics.corruption.find(r=>r.id===id)||this.city.politics.scandals.find(r=>r.id===id);return state;}
@@ -110,6 +122,7 @@ export class CityDesktop {
     else {w.state.element.hidden=true;w.state.zones=[];}
   }
   draw(ui){
+    this.syncElectionNotices();
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
     if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean))input.hidden=true;this.drawMenu(ui);}

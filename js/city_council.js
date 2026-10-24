@@ -42,9 +42,9 @@ export class CityCouncil {
   }
   elect(election) {
     const city=this.city,p=city.politics;this.leaderId=null;this.leaderElectionTerm=null;for(const m of [...this.members])this.remove(m.citizenId);this.vacancies=[];
-    const candidates=election.councilCandidates.filter(c=>p.canRun(city.society.citizen(c.citizenId),'council')&&c.citizenId!==election.winnerId&&c.citizenId!==p.viceMayorId),allocated=new Map();
+    const candidates=election.councilCandidates.filter(c=>p.canRun(city.society.citizen(c.citizenId),'council')&&city.society.citizen(c.citizenId).political.partyId===c.partyId&&c.citizenId!==election.winnerId&&c.citizenId!==p.viceMayorId),allocated=new Map();
     const parties=p.parties.filter(a=>a.active).map(party=>({partyId:party.id,votes:election.ballots.filter(v=>v.councilPartyId===party.id).length,candidates:candidates.filter(c=>c.partyId===party.id).sort((a,b)=>election.ballots.filter(v=>v.councilCandidateId===b.citizenId).length-election.ballots.filter(v=>v.councilCandidateId===a.citizenId).length||a.citizenId-b.citizenId)}));
-    for(let i=0;i<this.seats;i++){const next=parties.filter(a=>a.candidates.length).sort((a,b)=>b.votes/(1+(allocated.get(b.partyId)||0))-a.votes/(1+(allocated.get(a.partyId)||0))||a.partyId-b.partyId)[0];if(!next)break;const candidate=next.candidates.shift();allocated.set(next.partyId,(allocated.get(next.partyId)||0)+1);this.seat(city.society.citizen(candidate.citizenId));}
+    for(let i=0;i<this.seats;i++){const next=parties.filter(a=>a.candidates.length&&a.votes>0).sort((a,b)=>b.votes/(1+(allocated.get(b.partyId)||0))-a.votes/(1+(allocated.get(a.partyId)||0))||a.partyId-b.partyId)[0];if(!next)break;const candidate=next.candidates.shift();allocated.set(next.partyId,(allocated.get(next.partyId)||0)+1);this.seat(city.society.citizen(candidate.citizenId));}
     election.councilResult=parties.map(a=>({partyId:a.partyId,votes:a.votes,seats:allocated.get(a.partyId)||0}));
     city.log(`Câmara eleita: ${this.members.length} vereadores, distribuição proporcional por partido e preferência individual.`,'government',this.members.map(m=>m.citizenId),{kind:'council-elected',electionId:election.id});
   }

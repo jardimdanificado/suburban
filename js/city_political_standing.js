@@ -69,7 +69,7 @@ export class CityPoliticalStanding {
     return {candidate:incumbent||preferred||possible[0],reason:incumbent?'Preferência do prefeito em exercício':preferred?'Sucessão pelo vice-prefeito':'Maior popularidade no partido'};
   }
   replaceUnavailable(){
-    const city=this.city,p=city.politics,e=p.active;if(!e)return;
+    const city=this.city,p=city.politics,e=p.active;if(!e||e.status!=='campaign')return;
     for(const n of e.candidates){const old=city.society.citizen(n.citizenId);if(old&&p.canRun(old,'mayor',true)&&old.political.partyId===n.partyId)continue;
       const party=p.party(n.partyId);if(!party?.active)continue;
       const vice=city.society.citizen(n.viceId),replacement=vice&&vice.political.partyId===party.id&&p.canRun(vice,'mayor',true)?vice:this.nomination(party).candidate;if(!replacement)continue;

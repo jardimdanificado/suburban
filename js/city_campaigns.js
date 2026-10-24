@@ -64,14 +64,14 @@ export class CityCampaigns {
   }
   arrive(c) {
     if(c.campaign?.type==='membership')return this.city.politics.organization.arrive(c);
-    const city=this.city,p=city.politics,campaign=c.campaign,e=p.active;if(!campaign||!e||e.id!==campaign.electionId||city.minute>=campaign.until||city.urgentNeed(c)){c.campaign=null;c.task=null;return;}
+    const city=this.city,p=city.politics,campaign=c.campaign,e=p.active;if(!campaign||!e||e.status!=='campaign'||e.id!==campaign.electionId||city.minute>=campaign.until||city.urgentNeed(c)){c.campaign=null;c.task=null;return;}
     c.action=`Bandeiraço ${p.party(campaign.partyId).short}: apresentando propostas`;
     if(city.minute-(campaign.lastOutreachAt??-Infinity)<30)return;campaign.lastOutreachAt=city.minute;
     const nomination=e.candidates.find(n=>n.citizenId===campaign.candidateId);if(!nomination)return;
     for(const voter of city.citizens.filter(v=>!v.entity.destroyed&&city.society.isAdult(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<5).slice(0,16)){this.hearPromises(voter,nomination,e,'Bandeiraço de rua');p.remember(voter,{kind:'campaign-rally',electionId:e.id,partyId:nomination.partyId,candidateId:nomination.citizenId,promiseKey:`rally:${e.id}:${nomination.citizenId}`,effect:3,description:'Conheceu a chapa conjunta para prefeitura e Câmara num bandeiraço.'});}
   }
   conversation(a,b) {
-    const p=this.city.politics,e=p.active;const scandal=p.scandals.find(s=>s.awareIds?.includes(a.id)&&!s.awareIds.includes(b.id));if(scandal&&this.city.random()<.2){scandal.awareIds.push(b.id);p.remember(b,{kind:scandal.proven?'proven-scandal':'corruption-rumor',candidateId:scandal.accusedId,partyId:scandal.partyId,caseId:scandal.id,effect:scandal.proven?-10:-2,description:'Debateu uma denúncia de corrupção numa conversa.'});}if(!e||this.city.random()>.2||!this.city.society.isAdult(a)||!this.city.society.isAdult(b))return;
+    const p=this.city.politics,e=p.active;const scandal=p.scandals.find(s=>s.awareIds?.includes(a.id)&&!s.awareIds.includes(b.id));if(scandal&&this.city.random()<.2){scandal.awareIds.push(b.id);p.remember(b,{kind:scandal.proven?'proven-scandal':'corruption-rumor',candidateId:scandal.accusedId,partyId:scandal.partyId,caseId:scandal.id,effect:scandal.proven?-10:-2,description:'Debateu uma denúncia de corrupção numa conversa.'});}if(!e||e.status!=='campaign'||this.city.random()>.2||!this.city.society.isAdult(a)||!this.city.society.isAdult(b))return;
     p.initializeCitizen(a);p.initializeCitizen(b);const nomination=e.candidates.find(n=>n.endorsementPartyIds.includes(a.political.partyId??a.political.sympathyPartyId));if(nomination)this.hearPromises(b,nomination,e,`Conversa com ${a.entity.properties.name}`);
   }
   daily(election) {
