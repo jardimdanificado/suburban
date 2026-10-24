@@ -1,4 +1,5 @@
-import { inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, pavePath, roadFor } from './city_terrain.js';
+import {MIN_PLOT_CELLS} from './city_building_geometry.js';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, pavePath, roadFor } from './city_terrain.js';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 export const DEVELOPMENT_RULES = { landPerCell: 4000, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 12000, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 8000, municipalMultiplier: 1.5, wearInterval: 30 * 1440, repairThreshold: 60 };
@@ -193,7 +194,7 @@ export class CityDevelopment {
     return fertile >= plot.width * plot.depth * .75;
   }
   createPlot(x, y, width = 4, depth = 4, { type = null } = {}) {
-    if (![x, y, width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width > 20 || depth > 20 || this.overlaps(x, y, width, depth)) return null;
+    if (![x, y, width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width*depth < MIN_PLOT_CELLS || width > 20 || depth > 20 || this.overlaps(x, y, width, depth)) return null;
     if (this.projects.some(p => p.service === 'road' && !p.cancelled && p.status !== 'completed' && p.route.some(t => t.x >= x && t.x < x + width && t.y >= y && t.y < y + depth))) return null;
     if (!type) for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) if (tileAt(this.city.world, xx, yy) === 4) type = 'quarry';
     if (type === 'farm' && !this.isFarmPlot({ x, y, width, depth, type })) return null;
@@ -264,13 +265,14 @@ export class CityDevelopment {
     if (!p || p.ownerId !== accountId || p.projectId || !Number.isSafeInteger(price) || price < 1 || !Number.isSafeInteger(rent) || rent < 0) return false;
     Object.assign(p, { price, rent, forSale: p.ownerId === 'treasury' || !!forSale, forRent: p.ownerId !== 'treasury' && !!forRent }); return true;
   }
-  beginProject(accountId, plotId, type, { kind = type === 'farm' || type === 'quarry' ? 'open-air' : 'building', floors = ['residential', 'popular_housing', 'luxury_housing'].includes(type) ? 3 : 1, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false } = {}) {
+  beginProject(accountId, plotId, type, { kind = type === 'farm' || type === 'quarry' ? 'open-air' : 'building', floors = ['residential', 'popular_housing', 'luxury_housing'].includes(type) ? 3 : 1, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
     if ((kind === 'open-air' && !['farm', 'quarry', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;
+    if(width*depth<MIN_PLOT_CELLS||p.width*p.depth<MIN_PLOT_CELLS)return city.fail('Terrenos e prédios precisam de pelo menos 4 células de área.');
     if ((p.type === 'quarry' && !['quarry','iron_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;
-    const terrain = inspectBuildingSite(city, p.x, p.y, width, depth, { plotId, type }); if (terrain.error) return null;
-    if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width > p.width || depth > p.depth || (kind==='building' && (width>8 || depth>8))) return null;
+    if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || p.width*p.depth<MIN_PLOT_CELLS || width > p.width || depth > p.depth || (kind==='building' && (width>8 || depth>8))) return null;
+    const terrain=chooseBuildingSite(city,p.x,p.y,width,depth,{plotId,type,rotation});if(terrain.error)return null;
     floors = kind === 'open-air' ? 1 : floors;
     const cells = width * depth * floors, stone = kind === 'open-air' ? 0 : cells * DEVELOPMENT_RULES.stonePerCell;
     const builder = selfBuild ? null : this.selectBuilder(accountId, terrain.door, builderId);
@@ -278,13 +280,13 @@ export class CityDevelopment {
     const fee = builder && stone ? cells * this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) : 0;
     const publicFee = accountId === 'treasury' ? Math.ceil(fee * DEVELOPMENT_RULES.municipalMultiplier) : fee;
     if ((city.accounts.get(accountId)?.balance || 0) < stone * city.economy.goods.pedra.price + publicFee + city.currency.price(micro?2000:20000)) return null;
-    const project = { id: `project:${this.nextProjectId++}`, micro, accountId, ownerId: owner.id, name: `Obra no terreno ${p.id}`, priority, service: 'building', width, depth, plotId, type, crop, kind, floors, sell, stone, labor: 0, requiredLabor: stone ? cells * DEVELOPMENT_RULES.laborPerCell : 0, builderId: builder?.id || null, fee, active: true, door: terrain.door, status: stone ? 'materials' : 'ready', startedAt: city.minute, cancelled: false };
+    const project = { id: `project:${this.nextProjectId++}`, micro, accountId, ownerId: owner.id, name: `Obra no terreno ${p.id}`, priority, service: 'building', rotation:terrain.rotation, width, depth, plotId, type, crop, kind, floors, sell, stone, labor: 0, requiredLabor: stone ? cells * DEVELOPMENT_RULES.laborPerCell : 0, builderId: builder?.id || null, fee, active: true, door: terrain.door, status: stone ? 'materials' : 'ready', startedAt: city.minute, cancelled: false };
     initializeInventory(project, city.economy.goods, stone + 48);
     project.feeAccountId = `construction-fee:${project.id}`;
     city.accounts.set(project.feeAccountId, { name: `Caução da obra ${project.id}`, balance: 0 });
     if (accountId === 'treasury' && fee) project.fee = publicFee;
     if (!city.transfer(accountId, project.feeAccountId, project.fee, 'Reserva do serviço de construção', {projectId:project.id})) { city.accounts.delete(project.feeAccountId); return null; }
-    this.projects.push(project); p.projectId = project.id;
+    this.projects.push(project); p.projectId = project.id;p.door={...terrain.door};
     city.log(`${owner.entity.properties.name} iniciou ${city.buildingTypes[type].label} no terreno ${p.id}: ${stone} pedras.`, 'construction', [owner.id], { kind: 'project-started', projectId: project.id, plotId });
     if (!stone) this.complete(project);
     return project;
@@ -293,7 +295,7 @@ export class CityDevelopment {
     if (project.status === 'completed' || project.cancelled || project.inventory.pedra < project.stone || project.labor < project.requiredLabor) return null;
     if (['lamp', 'road', 'road-repair', 'repair', 'expansion'].includes(project.service)) return this.completeService(project);
     const p = this.plots.find(p => p.id === project.plotId), city = this.city;
-    const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, materialSource: project });
+    const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, materialSource: project,rotation:project.rotation??0 });
     if(b&&project.micro)b.micro=true;
     if(b&&project.equityPartners)b.equityPartners=project.equityPartners;
     if (!b) { project.status = 'blocked'; project.error = city.lastError; return null; }

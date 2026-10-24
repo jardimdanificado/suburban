@@ -7,14 +7,19 @@ export function membershipProfile(p,c){
   s.independence??=clamp(.45+(s.criticalSense??.5)*.35+((c.id*19)%101)/500);
   s.support??={};s.membershipSince??=p.city.minute;s.membershipCooldownUntil??=0;
   if(!s.partyId)s.loyalty=0;
+  syncPartyColor(p,c);
   return s;
+}
+export function syncPartyColor(p,c){
+  const flag=p.party(c.political?.partyId)?.flag;
+  c.entity.properties.render.color=flag?parseInt(flag.background.slice(1),16):0xe8e8e8;
 }
 function updateSympathy(s){const best=Object.entries(s.support).sort((a,b)=>b[1].score-a[1].score)[0];s.sympathyPartyId=best&&best[1].score>4?Number(best[0]):null;}
 const adults=p=>p.city.citizens.filter(c=>!c.entity.destroyed&&p.city.society.isAdult(c));
 export function canJoin(p,c){const people=adults(p);return !!c.political.partyId||people.filter(v=>v.political?.partyId&&p.party(v.political.partyId)?.active).length<Math.floor(people.length*MEMBERSHIP_RULES.maxShare);}
 export function leaveParty(p,c,reason){
   const s=membershipProfile(p,c),old=p.party(s.partyId);if(!old)return false;
-  old.memberIds=old.memberIds.filter(id=>id!==c.id);s.partyId=null;s.loyalty=0;s.membershipCooldownUntil=p.city.minute+1440*MEMBERSHIP_RULES.cooldownDays;
+  old.memberIds=old.memberIds.filter(id=>id!==c.id);s.partyId=null;syncPartyColor(p,c);s.loyalty=0;s.membershipCooldownUntil=p.city.minute+1440*MEMBERSHIP_RULES.cooldownDays;
   p.remember(c,{kind:'party-departure',partyId:old.id,description:`Desfiliou-se de ${old.short}: ${reason}.`});
   return true;
 }

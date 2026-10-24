@@ -8,10 +8,36 @@ python3 -m http.server 8000
 
 Abra `http://localhost:8000`. Arraste o mapa para mover a câmera e use a roda para aproximar. A barra superior abre janelas e controla pausa, velocidade e visualização. O minimapa e o botão de centralizar ajudam a navegar pelo terreno. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.
 
+## Madeira, artesanato e publicações
+
+Moradores filiados usam a cor de fundo da bandeira do partido; independentes ficam em cinza claro, inclusive no minimapa. A cor acompanha filiações e desfiliações.
+
+Na silvicultura, trabalhadores vão até árvores maduras, cortam, replantam com sementes transportadas e levam a madeira ao depósito. Madeira e fibras abastecem cestas e carrinhos; serrarias beneficiam tábuas e prensas transformam 3 madeiras em 12 folhas de papel. A papelaria consome uma folha por página: panfletos têm uma página e livros podem ser configurados entre 2 e 32 páginas (padrão: 5).
+
+Cada página guarda dois registros. A janela **Livros e panfletos** permite consultar o acervo, escrever informações, relatos, propaganda, anúncios e mentiras. O inspetor de eventos oferece transcrição para um exemplar pertencente a um morador. Escritos ocupam espaço sem apagar registros anteriores e continuam consultáveis após o descarte do evento no histórico geral. Os exemplares passam aos herdeiros ou ao arquivo municipal.
+
+A leitura considera a proximidade física do exemplar. Propaganda pode apresentar propostas eleitorais, mentiras podem enganar conforme o senso crítico e anúncios dão uma pequena preferência ao estabelecimento. Escrita e circulação automáticas têm limites por hora; o acervo usa índices por proprietário e evento.
+
+## Avaliação do governo e abastecimento da iluminação
+
+Em **Governo → Eleições → Avaliação**, a nota é decomposta em felicidade, moradia, alimentação, ocupação, mudança desde a posse, promessas, corrupção comprovada e vetos. O relatório mostra pontos, condições usadas, horário do cálculo e os maiores descontos, incluindo o ajuste final ao intervalo de 0 a 100.
+
+Partidos combinam organizações, causas e termos políticos compatíveis com sua ideologia, acrescidos de uma palavra sorteada do `vocabulario.js`. Nomes e siglas evitam duplicatas; o sorteio usa a semente da cidade.
+
+A iluminação demanda uma unidade de óleo por poste a cada noite de doze horas. O planejamento inclui reserva, carga inicial e obras próximas da conclusão. Essa necessidade alimenta a demanda por girassol, moinhos e o preço do óleo. A prefeitura pode contratar a etapa ausente com prioridade de obra e transporte, respeitando a reserva de subsistência e sem duplicar projetos pendentes. **Produção → Iluminação** mostra as metas e o gargalo da cadeia.
+
+## Terrenos e orientação dos prédios
+
+Terrenos e novas construções exigem pelo menos **4 células de área no chão**, inclusive pequenos empreendimentos: 2×2, 4×1 e 1×4 são válidos; andares não substituem essa área mínima. Materiais e orçamento acompanham as dimensões reais.
+
+A orientação é sorteada entre 0°, 90°, 180° e 270° na criação da obra e preservada até a conclusão. Entradas sem acesso são descartadas em favor de outra orientação viável. Portas, fachadas, telhados e escadas acompanham a orientação, mantendo os cômodos no terreno e os caminhos alinhados à entrada. O inspetor mostra a direção da fachada.
+
 ## Acompanhar a cidade
 
 - **Cidade:** indicadores de população, emprego, moradia, vínculos e alertas de necessidades.
 - **Governo:** prefeito, tesouro separado, imóveis públicos, emissão monetária, inflação, movimentações e geração de terreno.
+- **Corrupção:** central com casos descobertos e visão de todos os crimes da simulação. Cada caso abre uma janela com participantes, método, contrato, pagamentos, destino líquido por conta, comprovantes e andamento da investigação. Consultar crimes secretos não informa a população. O valor inicial não é contado novamente nos repasses.
+- A prefeitura exibe no telhado a bandeira do partido do prefeito em exercício, atualizada nas posses e substituições, nas vistas 2D e 3D.
 - **Pessoas:** lista pesquisável e fichas com necessidades, habilidades, trabalho, parentesco, vínculos, patrimônio e movimentações financeiras.
 - **Terrenos:** cadastro de lotes, proprietários, preços, obras, pedras entregues e progresso de construção.
 - **Imóveis:** operação, finanças, estoque, equipe e ficha individual de cada célula 1x1x1, com dono, ocupante, preço, aluguel e atrasos.

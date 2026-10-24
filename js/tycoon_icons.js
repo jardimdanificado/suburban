@@ -20,6 +20,10 @@ export function tycoonIcon(ctx,key,x,y,scale=2){
     rect(1,6,9,6,blue);rect(10,8,4,4,brick);rect(11,6,2,3,light);rect(2,12,3,3,ink);rect(10,12,3,3,ink);rect(3,13,1,1,'#c8c9bc');rect(11,13,1,1,'#c8c9bc');
   }else if(key==='sanitation'){
     rect(4,6,9,8,'#6496ac');rect(3,5,11,2,light);rect(6,2,5,3,light);rect(6,8,2,4,'#a0c9d6');rect(11,8,1,4,ink);line([[1,13],[3,8],[3,4]],green);
+  }else if(key==='publications'){
+    rect(1,3,6,11,blue);rect(8,3,6,11,dark);rect(2,2,5,10,light);rect(8,2,5,10,light);rect(7,3,1,11,ink);for(const y of[4,7,10]){rect(3,y,3,1,dark);rect(9,y,3,1,dark);}
+  }else if(key==='corruption'){
+    rect(2,2,9,11,dark);rect(3,3,7,9,light);for(const y of[5,8])rect(4,y,5,1,ink);rect(9,7,5,5,blue);rect(10,8,3,3,light);line([[12,11],[15,15]],ink);
   }else if(key==='log'||key==='windows'){
     rect(2,2,12,12,dark);rect(3,3,10,10,light);for(const i of[5,8,11])rect(5,i,6,1,ink);if(key==='windows'){rect(0,0,11,9,blue);rect(1,2,9,6,light);}
   }else if(key==='settings'){

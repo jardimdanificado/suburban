@@ -1,3 +1,4 @@
+import {approvalReport} from './city_political_institutions.js';
 import { formatMoney } from './city_ui_format.js';
 import { drawPartyFlag } from './city_party_flags.js';
 import { PROMISE_METRICS } from './city_mandates.js';
@@ -14,8 +15,20 @@ function promise(p,pr,campaign=false){
 }
 export function renderPolitics(ui,p) {
   const city=ui.city,gov=city.politics,active=gov.active,tab=ui.politicsTab||'overview',partyName=id=>gov.party(id)?.short||'Sem partido';
-  p.heading('GOVERNO, CÂMARA E ELEIÇÕES');p.buttons([['overview','GOVERNO'],['parties','PARTIDOS'],['council','CÂMARA'],['campaign','CAMPANHA'],['polls','PESQUISAS'],['promises','PROMESSAS'],['scandals','FISCALIZAÇÃO'],['results','RESULTADOS']].map(([id,label])=>({label,selected:tab===id,click:()=>{ui.politicsTab=id;ui.resetScroll();}})));
+  p.heading('GOVERNO, CÂMARA E ELEIÇÕES');p.buttons([['overview','GOVERNO'],['approval','AVALIAÇÃO'],['parties','PARTIDOS'],['council','CÂMARA'],['campaign','CAMPANHA'],['polls','PESQUISAS'],['promises','PROMESSAS'],['scandals','FISCALIZAÇÃO'],['results','RESULTADOS']].map(([id,label])=>({label,selected:tab===id,click:()=>{ui.politicsTab=id;ui.resetScroll();}})));
+  if(tab==='approval'){
+    const report=gov.approvalReport||approvalReport(gov),signed=n=>`${n>0?'+':''}${n.toFixed(2)} p.p.`;
+    p.meter('Aprovação do governo',report.score);p.kv('Avaliação',report.score>=50?'Saldo positivo (50 pontos ou mais)':'Saldo negativo (menos de 50 pontos)');p.kv('Atualização',stamp(report.minute));
+    p.note('O cálculo parte de 100 pontos. Condições ruins e decisões impopulares descontam pontos; melhorar a felicidade desde a posse acrescenta pontos. A nota final fica entre 0 e 100.');
+    p.note(`Sustentam a avaliação: ${(report.housed*100).toFixed(1)}% com moradia, ${(report.fed*100).toFixed(1)}% acima do limiar de fome e ${(report.employment*100).toFixed(1)}% com emprego ou negócio.`);
+    const worst=report.rows.filter(r=>r.points<-.01).slice().sort((a,b)=>a.points-b.points).slice(0,3);if(worst.length)p.note('Maiores perdas: '+worst.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
+    p.kv('Ponto de partida',100);
+    for(const row of report.rows){p.heading(`${row.label}: ${signed(row.points)}`);p.note(row.detail);}
+    p.kv('Soma antes do limite',report.raw.toFixed(2));if(Math.abs(report.adjustment)>.001)p.kv('Ajuste ao intervalo 0–100',signed(report.adjustment));p.kv('Nota final',report.score.toFixed(2));
+    p.note('Este é o índice geral usado pelo governo. Pesquisas eleitorais medem uma amostra de moradores e podem produzir outro resultado.');
+  }
   if(tab==='overview'){
+    p.button('POR QUE O GOVERNO TEM ESTA AVALIAÇÃO?',()=>{ui.politicsTab='approval';ui.resetScroll();});
     p.meter('Aprovação do governo',gov.approval);p.kv('Prefeito',city.accountName(`citizen:${city.economy.mayorId}`));if(gov.suspendedExecutive)p.note(`Prefeito afastado até ${stamp(gov.suspendedExecutive.until)}; substituição temporária preserva o mandato e as promessas.`);p.kv('Vice-prefeito',gov.viceMayorId?city.accountName(`citizen:${gov.viceMayorId}`):'Vago');p.kv('Presidente da Câmara',gov.council.leaderId?city.accountName(`citizen:${gov.council.leaderId}`):'Eleição na metade do mandato');p.kv('Partido do governo',partyName(gov.partyOfId(city.economy.mayorId)?.id));p.kv('Vereadores',`${gov.council.members.length}/${gov.council.seats}`);p.kv('Partidos ativos / limite',`${gov.parties.filter(a=>a.active).length}/${gov.policy.partyLimit}`);p.kv('Próxima eleição',gov.nextElectionAt==null?'Aguardando população adulta':stamp(gov.nextElectionAt));p.kv('Mandato / campanha',`${gov.termRules.termMinutes/1440} dias / ${gov.termRules.campaignMinutes/1440} dias`);p.kv('Regras aprovadas para próximas gestões',`${gov.policy.termDays} dias de mandato / ${gov.policy.campaignDays} dias de campanha`);p.kv('Reeleições consecutivas permitidas',gov.policy.reelectionLimit);p.kv('Salário mínimo por hora',money(city.currency.price(gov.policy.minimumWage)*60));p.kv('Imposto salarial',`${(city.taxRate*100).toFixed(0)}%`);p.kv('Imposto sobre receita empresarial',`${(gov.policy.businessTax*100).toFixed(0)}%`);
     p.note('Os vereadores mantêm seus empregos. O orçamento salarial diário é dividido entre todos, conforme o caixa acima da reserva de subsistência.');
     const needs=city.welfare.conditions();p.kv('Moradores com fome',needs.hungry);p.kv('Adultos sem moradia',needs.homeless);p.kv('Alimento disponível / consumo estimado',`${needs.foodDays.toFixed(1)} dias`);p.kv('Reserva operacional de referência',money(needs.reserve));if(needs.crisis)p.note('Prioridade de execução: alimentação, moradia e serviços essenciais.');
@@ -91,7 +104,8 @@ export function renderPolitics(ui,p) {
   }
   if(tab==='scandals'){
     p.note('Suspeitas podem ficar sem prova ou ser arquivadas por proteção política. Cassação por corrupção exige provas, gravidade e repercussão em pelo menos 65% do eleitorado, além de dois terços dos votos ponderados. Aprovação abaixo de 20% por três dias permite impeachment por perda de confiança. Cassados ficam impedidos nas duas eleições municipais seguintes. Mentiras eleitorais não constituem prova de corrupção.');
-    for(const s of paginate(ui,p,[...gov.scandals].reverse(),'scandalPage')){p.heading(`#${s.id} ${city.accountName(`citizen:${s.accusedId}`)}`);p.kv('Esquema',({'vote-buying':'Compra de votos','contract-overbilling':'Superfaturamento contratual',favoritism:'Favorecimento indevido',embezzlement:'Desvio de recursos'}[s.type]||s.type));p.kv('Valor',money(s.amount));p.kv('Situação',s.impeached?'Cassado':s.proven?'Prova documental confirmada':'Investigação em andamento');p.kv('Partido',partyName(s.partyId));p.kv('Gravidade / repercussão',`${Math.round(s.severity||0)} / ${Math.round(s.publicAttention||0)}% do eleitorado`);if(s.coverUps)p.kv('Obstruções registradas',s.coverUps);if(s.outcome)p.note(s.outcome);for(const person of s.roles||[])p.note(`${city.accountName(`citizen:${person.citizenId}`)}: ${person.role}`);for(const step of s.steps||[])p.note(`${step.description}: ${money(step.amount)}`);if(s.proven&&s.accusedId===city.economy.mayorId&&!gov.suspendedExecutive)p.button('PEDIR AFASTAMENTO POR 2 DIAS',()=>gov.submitBill('suspend',{targetId:s.accusedId,caseId:s.id,value:2}));if(s.evidenceEventId)p.button('DOCUMENTAÇÃO FINANCEIRA',()=>ui.openEvent(s.evidenceEventId));}
+    p.button('ABRIR CENTRAL DE CORRUPÇÃO',()=>ui.go('corruption'));
+    for(const s of paginate(ui,p,[...gov.scandals].reverse(),'scandalPage'))p.record(`#${s.id} ${city.accountName(`citizen:${s.accusedId}`)}`,s.outcome||(s.proven?'Provas confirmadas':'Investigação em andamento'),()=>ui.openCorruption(s.id),false,{value:money(s.amount)});
     if(!gov.scandals.length)p.note('Nenhuma investigação pública até o momento.');
   }
   if(tab==='results'){

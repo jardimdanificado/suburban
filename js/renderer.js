@@ -624,6 +624,22 @@ export class Renderer {
           drawBox32(buf32, width, height, px + 1, py + 1, Math.floor(tileSize) - 2, Math.floor(tileSize) - 2, colorScale(color, globalLight));
           drawBox32(buf32, width, height, px + Math.floor(tileSize * .25), py + Math.floor(tileSize * .25), Math.floor(tileSize * .45), Math.floor(tileSize * .35), rgba32(60, 83, 77));
         }
+        if(b.constructionKind!=='open-air'){
+          const turn=b.rotation||0,dx=[0,1,0,-1][turn],dy=[1,0,-1,0][turn];
+          const px=Math.floor(sx+(b.door.x-e.x-dx*.6)*tileSize),py=Math.floor(sy+(b.door.y-e.y-dy*.6)*tileSize);
+          drawBox32(buf32,width,height,px-(turn%2?1:Math.floor(tileSize*.2)),py-(turn%2?Math.floor(tileSize*.2):1),turn%2?2:Math.max(2,Math.floor(tileSize*.4)),turn%2?Math.max(2,Math.floor(tileSize*.4)):2,rgba32(38,51,47));
+        }
+        if(b.type==='townhall'&&b.governingFlag){
+          const f=b.governingFlag,fw=Math.max(10,Math.floor(tileSize*1.65)),fh=Math.max(6,Math.floor(fw*.63));
+          const fx=Math.floor(sx+b.width*tileSize*.5),fy=Math.floor(sy+b.depth*tileSize*.5-tileSize*2.5);
+          const fg=hexToRgba32(parseInt(f.foreground.slice(1),16),255),bg=hexToRgba32(parseInt(f.background.slice(1),16),255);
+          drawBox32(buf32,width,height,fx-1,fy,2,Math.floor(tileSize*2.5),rgba32(200,198,180));
+          drawBox32(buf32,width,height,fx+1,fy,fw,fh,bg);
+          if(f.pattern===1)drawBox32(buf32,width,height,fx+1,fy+Math.floor(fh*.42),fw,Math.max(1,Math.floor(fh*.16)),fg);
+          if(f.pattern===2)for(let row=0;row<fh;row++)drawBox32(buf32,width,height,fx+1,fy+row,Math.max(1,Math.floor(fw*.5*(1-Math.abs(row*2/fh-1)))),1,fg);
+          const emblem=findTexture(f.skin);
+          if(emblem)drawSpriteTinted32(buf32,width,height,emblem,fx+1+Math.floor(fw*.3),fy+Math.floor(fh*.12),Math.floor(fw*.4),Math.floor(fh*.76),fg,bg,globalLight);
+        }
         if (this.selectedEntityId === e.id) drawBoxOutline32(buf32, width, height, sx, sy, Math.floor(b.width * tileSize), Math.floor(b.depth * tileSize), rgba32(248, 220, 120));
         continue;
       }

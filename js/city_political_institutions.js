@@ -2,14 +2,28 @@ const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 export function seatBounds(city){const population=city.citizens.filter(c=>!c.entity.destroyed).length;const min=Math.max(1,Math.ceil(population*.05));return {population,min,max:Math.max(min,Math.floor(population*.125))};}
 export function publicPressure(p,record){const living=p.city.citizens.filter(c=>!c.entity.destroyed&&p.city.society.isAdult(c));const aware=new Set(record.awareIds||[]);return living.length?living.filter(c=>aware.has(c.id)).length/living.length*100:0;}
 export function scandalEligible(p,record){return !!record?.proven&&(record.severity||0)>=60&&publicPressure(p,record)>=65&&!record.archived;}
-export function criticalApproval(p){
+export function approvalReport(p){
   const city=p.city,now=p.conditions(),base=p.baseline||now,t=p.mandates.current;
-  const delivery=t?.promises.length?t.promises.filter(pr=>pr.fulfilled).length/t.promises.length:0;
+  const fulfilled=t?.promises.filter(pr=>pr.fulfilled).length||0,total=t?.promises.length||0,delivery=total?fulfilled/total:0;
   const elapsed=t?clamp((city.minute-t.startedAt)/p.termRules.termMinutes,0,1):0;
   const scandals=p.scandals.filter(s=>s.proven&&s.accusedId===city.economy.mayorId).reduce((n,s)=>n+publicPressure(p,s)/100*(s.severity||20)*.2,0);
   const vetoPenalty=(p.vetoes||[]).reduce((n,v)=>n+Math.max(0,28-(city.minute-v.minute)/1440*2),0);
-  p.approval=clamp(now.happiness*.25+(1-now.homeless)*20+(1-now.hunger)*25+now.employment*15+15+(now.happiness-base.happiness)*.35-(1-delivery)*elapsed*28-scandals-vetoPenalty);
-  p.lowApprovalSince=p.approval<20?(p.lowApprovalSince??city.minute):null;
+  const rows=[
+    {label:'Felicidade',points:-(100-now.happiness)*.25,detail:`${now.happiness.toFixed(1)}/100; peso máximo de 25 pontos`},
+    {label:'Moradia',points:-now.homeless*20,detail:`${(now.homeless*100).toFixed(1)}% sem moradia; peso de 20 pontos`},
+    {label:'Alimentação',points:-now.hunger*25,detail:`${(now.hunger*100).toFixed(1)}% com alimentação abaixo de 30/100; peso de 25 pontos`},
+    {label:'Ocupação',points:-(1-now.employment)*15,detail:`${(now.employment*100).toFixed(1)}% com emprego ou negócio; peso de 15 pontos`},
+    {label:'Mudança na felicidade',points:(now.happiness-base.happiness)*.35,detail:`Início: ${base.happiness.toFixed(1)}; agora: ${now.happiness.toFixed(1)}`},
+    {label:'Promessas pendentes',points:-(1-delivery)*elapsed*28,detail:`${fulfilled}/${total} cumpridas; ${(elapsed*100).toFixed(1)}% do mandato transcorrido`},
+    {label:'Corrupção comprovada',points:-scandals,detail:'Penalidade ponderada pela gravidade e pela parcela da população informada'},
+    {label:'Vetos do prefeito',points:-vetoPenalty,detail:'Cada veto começa com perda de 28 pontos, reduzida em 2 pontos por dia'}
+  ].map(row=>Object.freeze(row));
+  const raw=100+rows.reduce((n,r)=>n+r.points,0),score=clamp(raw);
+  return {minute:city.minute,startingScore:100,score,raw,adjustment:score-raw,rows,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment};
+}
+export function criticalApproval(p){
+  p.approvalReport=approvalReport(p);p.approval=p.approvalReport.score;
+  p.lowApprovalSince=p.approval<20?(p.lowApprovalSince??p.city.minute):null;
 }
 export function organizeScheme(p,official){
   const city=p.city,projects=city.development.projects.filter(pr=>pr.accountId==='treasury'&&!pr.cancelled&&pr.fee>0&&city.building(pr.builderId)?.ownerId);
@@ -21,8 +35,8 @@ export function organizeScheme(p,official){
   const amount=Math.min(Math.floor(city.treasury*.002),city.currency.price(project?Math.max(500,Math.floor(project.fee*.08)):500+Math.floor(city.random()*2500)));
   if(amount<100||city.treasury-amount<city.welfare.conditions().reserve)return null;
   const record=p.crime(official,type,'treasury',entrepreneur?.accountId||official.accountId,amount,{projectId:project?.id,buildingId:firm?.id,participantIds:[official.id,entrepreneur?.id,accomplice?.id].filter(id=>id!=null),roles:[{citizenId:official.id,role:'articulador'},{citizenId:entrepreneur?.id,role:'beneficiário de contrato'},{citizenId:accomplice?.id,role:'intermediário e proteção parlamentar'}].filter(r=>r.citizenId!=null)});
-  if(!record)return null;record.steps=[{minute:city.minute,from:'treasury',to:record.to,amount,description:project?'Aditivo indevido em contrato público':entrepreneur?'Subvenção direcionada a aliado':'Desvio de caixa'}];
-  if(entrepreneur){for(const [recipient,share] of [[official,.3],[accomplice,.15]]){if(!recipient)continue;const kickback=Math.floor(amount*share);if(city.transfer(entrepreneur.accountId,recipient.accountId,kickback,'Repasse clandestino de contrato',{corruptionCaseId:record.id})){record.steps.push({minute:city.minute,from:entrepreneur.accountId,to:recipient.accountId,amount:kickback,description:'Retorno ao integrante do esquema'});}}firm.favoredBy=official.id;firm.favorUntil=city.minute+3*1440;}
+  if(!record)return null;record.steps[0].description=project?'Aditivo indevido em contrato público':entrepreneur?'Subvenção direcionada a aliado':'Desvio de caixa';
+  if(entrepreneur){for(const [recipient,share] of [[official,.3],[accomplice,.15]]){if(!recipient||recipient.accountId===entrepreneur.accountId)continue;const kickback=Math.floor(amount*share);if(city.transfer(entrepreneur.accountId,recipient.accountId,kickback,'Repasse clandestino de contrato',{corruptionCaseId:record.id})){record.steps.push(p.corruptionStep(entrepreneur.accountId,recipient.accountId,kickback,'Retorno ao integrante do esquema'));}}firm.favoredBy=official.id;firm.favorUntil=city.minute+3*1440;}
   record.severity=clamp((project?45:20)+record.participantIds.length*8+Math.min(25,amount/Math.max(1,city.treasury)*5000));
   record.concealment=clamp(.25+(official.skills.governance||0)/200+(accomplice ? .25 : 0),0,.9);
   return record;

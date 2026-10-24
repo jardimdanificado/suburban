@@ -1,3 +1,4 @@
+import {buildingEntrance} from './city_building_geometry.js';
 import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js';
 
 const heights = [1.1, 5.5, 0, .4, 3.8, 0, 1.1, .4, 1.1, 2.3, 7.5, .4, 2.3, 2.3];
@@ -52,12 +53,25 @@ export function flatSiteLevel(world, x, y, width, depth) {
   const doorLevel = tileHeight(tileAt(world, x + Math.floor(width / 2), y + depth));
   return surface.variation < .001 && Math.abs(surface.min - level) < .001 && doorLevel === level ? level : null;
 }
-export function buildingGround(world, x, y, width, depth) {
+export function buildingGround(world, x, y, width, depth, entrance = null) {
   const terrain = surfaceBounds(world, x, y, width, depth);
-  const door = { x: x + Math.floor(width / 2) + .5, y: y + depth + .5 };
+  const door = entrance||buildingEntrance(x,y,width,depth);
   return { ...terrain, base: Math.max(terrain.base, surfaceElevation(world, door.x, door.y) + .06), door };
 }
-export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, type = null } = {}) {
+export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,rotation=null}={}){
+  if(rotation!==null&&(!Number.isInteger(rotation)||rotation<0||rotation>3))return {error:'Rotação inválida.'};
+  const first=rotation??Math.floor(city.random()*4),hub=city.buildings.find(b=>!b.entity.destroyed)?.door;
+  let error='Nenhuma orientação permite acesso ao terreno.';
+  for(let attempt=0;attempt<(rotation===null?4:1);attempt++){
+    const turn=(first+attempt)%4,site=inspectBuildingSite(city,x,y,width,depth,{plotId,type,rotation:turn});
+    if(site.error){error=site.error;continue;}
+    const access=hub?findTerrainPath(city.world,site.door,hub,city.occupied,{extraBlocked:(xx,yy)=>(xx>=x&&xx<x+width&&yy>=y&&yy<y+depth)||city.development.plots.some(p=>p.id!==plotId&&xx>=p.x&&xx<p.x+p.width&&yy>=p.y&&yy<p.y+p.depth)}):[];
+    if(access!==null)return {...site,access};
+  }
+  return {error};
+}
+
+export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, type = null, rotation = 0 } = {}) {
   if (city.development?.overlaps(x, y, width, depth, plotId)) return { error: 'Este espaço já pertence a um terreno cadastrado.' };
   const { world, occupied } = city;
   const quarry = type === 'quarry' || type === 'iron_mine';
@@ -68,19 +82,19 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
       if (ROAD_TILES.has(tileAt(world, xx, yy))) return { error: 'A construção não pode ocupar uma rua.' };
     }
   }
-  let door = { x: x + Math.floor(width / 2) + .5, y: y + depth + .5 };
+  let door = buildingEntrance(x,y,width,depth,rotation);
   if (quarry || type === 'farm') {
     if (quarry && world.map && !quarryDeposits(world, x, y, width, depth).length) return { error: 'A área da pedreira precisa ocupar rochas.' };
-    const doors = [];
+    const doors = [door];
     for (let dx = 0; dx < width; dx++) { doors.push({ x: x + dx + .5, y: y + depth + .5 }, { x: x + dx + .5, y: y - .5 }); }
     for (let dy = 0; dy < depth; dy++) { doors.push({ x: x - .5, y: y + dy + .5 }, { x: x + width + .5, y: y + dy + .5 }); }
     door = doors.find(p => terrainWalkable(world, Math.floor(p.x), Math.floor(p.y)) && !occupied.has(tileKey(Math.floor(p.x), Math.floor(p.y))));
     if (!door) return { error: quarry ? 'A pedreira precisa de uma entrada acessível junto às rochas.' : 'A fazenda precisa de uma entrada acessível em terra firme.' };
   }
   if (!terrainWalkable(world, Math.floor(door.x), Math.floor(door.y))) return { error: 'A entrada precisa ter acesso por terra firme.' };
-  const terrain = buildingGround(world, x, y, width, depth);
+  const terrain = buildingGround(world, x, y, width, depth,door);
   if (!quarry && type !== 'farm' && (terrain.variation > 1.3 || terrain.base - tileHeight(tileAt(world, Math.floor(door.x), Math.floor(door.y))) > 1.65)) return { error: 'Encosta muito íngreme. Escolha um lote menor ou outro trecho do terreno.' };
-  return { ...terrain, door };
+  return { ...terrain, door, rotation };
 }
 
 class MinHeap {

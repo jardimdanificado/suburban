@@ -4,8 +4,8 @@ import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
-export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['production','Produção'],['transport','Transportes'],['sanitation','Saneamento'],['log','Histórico'],['map','Mapa da cidade']];
-const sizes={map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
+export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['production','Produção'],['transport','Transportes'],['sanitation','Saneamento'],['publications','Livros e panfletos'],['corruption','Corrupção'],['log','Histórico'],['map','Mapa da cidade']];
+const sizes={publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop: directories, records and tools have independent windows. */
@@ -29,10 +29,11 @@ export class CityDesktop {
     const[w,h]=kind==='inspector'?[540,500]:kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
     const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'?near:null});window.kind=kind;state.windowId=id;
     if(entity)state.setSelection(entity,unitId);this.hidden=false;
-    for(const input of[state.search,state.seed,state.filterInput,state.sortInput])input.addEventListener('pointerdown',()=>this.manager.raise(id));
+    for(const input of[state.search,state.seed,state.filterInput,state.sortInput,state.publicationDraft])input.addEventListener('pointerdown',()=>this.manager.raise(id));
     return state;
   }
   openEvent(id,snapshot=null){const state=this.create(`event:${id}`,'event',{title:`Inspetor do evento #${id}`,kind:'inspector'});state.selectedEventId=id;state.eventSnapshot??=snapshot||this.city.history.get(id);return state;}
+  openCorruption(id){if(id==null)return this.openModule('corruption');const state=this.create(`corruption:${id}`,'corruption-case',{title:`Corrupção · caso #${id}`,kind:'inspector'});state.corruptionCaseId=id;state.corruptionSnapshot??=this.city.politics.corruption.find(r=>r.id===id)||this.city.politics.scandals.find(r=>r.id===id);return state;}
   toggleTool(id,tool){const current=this.manager.find(`tool:${id}`);if(current){this.close(current.id);return;}return this.openTool(id,tool);}
   openTool(id,tool){
     const existing=this.manager.find(`tool:${id}`);if(existing){this.manager.raise(existing.id);return existing.state;}
@@ -99,12 +100,12 @@ export class CityDesktop {
   draw(ui){
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
-    if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
+    if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
     this.tooltipElement.hidden=!this.tooltip||this.menuOpen||!!this.manager.gesture;
     if(!this.tooltipElement.hidden){const {text,x,y}=this.tooltip,w=Math.min(440,ui.width-8,Math.ceil(ui.textWidth(text))+18);this.tooltipElement.textContent=text;Object.assign(this.tooltipElement.style,{left:`${Math.max(4,Math.min(x,ui.width-w-4))}px`,top:`${Math.max(0,Math.min(y,ui.height-190))}px`,width:`${w}px`});}
   }
   drawMap(ui,w){
-    const state=w.state,world=this.city.world;state.zones=[];for(const input of[state.search,state.seed,state.filterInput,state.sortInput])input.hidden=true;
+    const state=w.state,world=this.city.world;state.zones=[];for(const input of[state.search,state.seed,state.filterInput,state.sortInput,state.publicationDraft])input.hidden=true;
     this.mapCanvas??=document.createElement('canvas');
     if(this.mapRevision!==world.revision||this.mapCanvas.width!==world.width){
       this.mapCanvas.width=world.width;this.mapCanvas.height=world.height;const ctx=this.mapCanvas.getContext('2d'),colors=['#7b9748','#4776a3','#66786a','#baad76','#adaba1','#263f49','#797965','#92905d','#797b65','#8caa61','#ae9c73','#5d705c','#a6a88a','#67805d'];
@@ -112,13 +113,13 @@ export class CityDesktop {
     }
     const size=Math.min(w.w-20,w.h-85),x=w.x+(w.w-size)/2,y=w.y+34;bevel(ui.ctx,x-2,y-2,size+4,size+4,{inset:true});ui.ctx.save();ui.ctx.imageSmoothingEnabled=false;ui.ctx.drawImage(this.mapCanvas,x,y,size,size);ui.ctx.restore();
     for(const b of this.city.buildings){ui.ctx.fillStyle=b.type==='residential'?'#f6e8aa':'#e47f56';ui.ctx.fillRect(x+b.entity.x/world.width*size,y+b.entity.y/world.height*size,Math.max(2,b.width/world.width*size),Math.max(2,b.depth/world.height*size));}
-    for(const c of this.city.citizens){ui.ctx.fillStyle='#ffffff';ui.ctx.fillRect(x+c.entity.x/world.width*size,y+c.entity.y/world.height*size,2,2);}
+    for(const c of this.city.citizens){ui.ctx.fillStyle='#'+(c.entity.properties.render.color&0xffffff).toString(16).padStart(6,'0');ui.ctx.fillRect(x+c.entity.x/world.width*size,y+c.entity.y/world.height*size,2,2);}
     ui.regions.push({x,y,w:size,h:size,label:'Navegar no mapa',onClick:point=>{if(point)this.camera(Math.max(0,Math.min(world.width,(point.x-x)/size*world.width)),Math.max(0,Math.min(world.height,(point.y-y)/size*world.height)));}});
     ui.text('Clique para centralizar a câmera.',w.x+9,y+size+10,T.ink);
   }
   occludeInputs(){
     const windows=this.manager.windows;
-    windows.forEach((w,i)=>{for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput].filter(Boolean)){
+    windows.forEach((w,i)=>{for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean)){
       if(input.hidden)continue;const rect={x:parseFloat(input.style.left),y:parseFloat(input.style.top),w:parseFloat(input.style.width),h:20};let visible=[rect];
       for(const above of windows.slice(i+1)){
         const cover=this.manager.rect(above);visible=visible.flatMap(part=>{

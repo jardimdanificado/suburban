@@ -8,9 +8,9 @@ export function updateMarket(economy){
   for(const good of Object.keys(economy.goods)){
     const previous=economy.market[good]||{multiplier:1},food=city.workMeals.foodGoods().includes(good),likes=people.reduce((n,c)=>n+Math.max(0,c.foodPreferences?.[good]||0),0);
     const consumer=Object.values(INDUSTRIES).find(spec=>spec.use&&spec.outputs[good]);
-    const wants=consumer?people.filter(c=>good==='cesta'||good==='carrinho'?carryCapacity(c)<(good==='carrinho'?72:36):c.needs[consumer.use.need]<80).length:0;
+    const wants=consumer?people.filter(c=>['livros','panfletos'].includes(good)?!city.publications.owned(c.accountId).some(d=>d.good===good&&d.entries.length<city.publications.capacity(d)):good==='cesta'||good==='carrinho'?carryCapacity(c)<(good==='carrinho'?72:36):c.needs[consumer.use.need]<80).length:0;
     const retail=food?people.length*.3+likes*.8:wants*.35;
-    const demand=retail+firms.reduce((n,b)=>n+(b.inputDemand?.[good]||0),0)+city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').reduce((n,p)=>n+(good==='pedra'?Math.max(0,p.stone-(p.inventory.pedra||0)-(p.incoming.pedra||0)):0),0);
+    const demand=retail+(good==='oleo'?(economy.lightingSupplyReport?.oilRequired||0):0)+firms.reduce((n,b)=>n+(b.inputDemand?.[good]||0),0)+city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').reduce((n,p)=>n+(good==='pedra'?Math.max(0,p.stone-(p.inventory.pedra||0)-(p.incoming.pedra||0)):0),0);
     const stock=city.buildings.filter(b=>b.active&&!b.entity.destroyed).reduce((n,b)=>n+(b.inventory[good]||0),0);
     const target=demand>0?clamp((demand+12)/(stock+12),.55,2.5):stock>24?.65:1;
     const multiplier=Math.round(clamp(previous.multiplier+clamp(target-previous.multiplier,-.035,.035),.55,2.5)*1000)/1000;
@@ -49,15 +49,15 @@ export function bootstrapEnterprise(economy){
   if(!people.length)return false;
   const options=economy.demands.filter(d=>d.score>=30&&['market','artisan','kitchen','carrier','cleaner','waste_collector'].includes(d.type)).sort((a,b)=>b.score-a.score);
   for(const option of options){
-    const founder=people[0],partners=people.slice(0,6),open=option.type==='market',capital=city.currency.price(2000),cost=capital+city.currency.price(4000)+(open?0:2*economy.goods.pedra.price+city.currency.price(12000));
+    const founder=people[0],partners=people.slice(0,6),open=option.type==='market',capital=city.currency.price(2000),cost=capital+city.currency.price(4*4000)+(open?0:8*economy.goods.pedra.price+city.currency.price(4*12000));
     const pooled=partners.reduce((n,c)=>n+Math.max(0,c.balance-city.currency.price(500)),0);let loan=null;if(pooled<cost){const bank=city.bank.available()[0];if(bank)loan=city.bank.lendForBusiness(bank,founder,cost-pooled,{type:option.type,score:option.score,budget:cost});if(!loan)continue;}
-    let lot=city.development.plots.find(p=>p.ownerId===founder.accountId&&!p.projectId&&!p.buildingId&&p.width===1&&p.depth===1);
-    if(!lot){for(let radius=6;radius<=26&&!lot;radius+=4)for(let i=0;i<12&&!lot;i++){const angle=i*Math.PI/6,x=Math.floor(city.spawn.x+Math.cos(angle)*radius),y=Math.floor(city.spawn.y+Math.sin(angle)*radius);const candidate=city.development.createPlot(x,y,1,1);if(candidate)lot=candidate;}}
+    let lot=city.development.plots.find(p=>p.ownerId===founder.accountId&&!p.projectId&&!p.buildingId&&p.width*p.depth===4);
+    if(!lot){for(let radius=6;radius<=26&&!lot;radius+=4)for(let i=0;i<12&&!lot;i++){const angle=i*Math.PI/6,x=Math.floor(city.spawn.x+Math.cos(angle)*radius),y=Math.floor(city.spawn.y+Math.sin(angle)*radius);const shapes=[[2,2],[4,1],[1,4]],first=Math.floor(city.random()*shapes.length);for(let shape=0;shape<shapes.length&&!lot;shape++){const [width,depth]=shapes[(first+shape)%shapes.length];const candidate=city.development.createPlot(x,y,width,depth);if(candidate)lot=candidate;}}}
     if(!lot){if(loan)city.bank.cancelBusinessLoan(loan);continue;}
     const contributions=[];let missing=Math.max(0,cost-founder.balance);
     for(const donor of partners.slice(1)){const amount=Math.min(missing,Math.max(0,donor.balance-city.currency.price(500)));if(amount&&city.transfer(donor.accountId,founder.accountId,amount,'Quota de capital de empreendimento conjunto')){contributions.push({citizenId:donor.id,amount});missing-=amount;}}
     if(lot.ownerId==='treasury')lot=city.development.buyPlot(founder.accountId,lot.id);
-    const project=lot&&city.development.beginProject(founder.accountId,lot.id,option.type,{width:1,depth:1,floors:1,kind:open?'open-air':'building',micro:true});
+    const project=lot&&city.development.beginProject(founder.accountId,lot.id,option.type,{width:lot.width,depth:lot.depth,floors:1,kind:open?'open-air':'building',micro:true});
     if(!project){for(const item of contributions)city.transfer(founder.accountId,`citizen:${item.citizenId}`,item.amount,'Devolução de capital: empreendimento não iniciado');if(loan)city.bank.cancelBusinessLoan(loan);continue;}
     const shares=[{citizenId:founder.id,amount:Math.max(1,cost-contributions.reduce((n,a)=>n+a.amount,0))},...contributions];project.equityPartners=shares;const building=city.building(project.buildingId)||city.buildings.find(b=>b.plotId===project.plotId);if(building)building.equityPartners=shares;else founder.startupProjectId=project.id;
     city.log('Moradores sem ocupação reuniram poupança para iniciar um pequeno empreendimento.','business',partners.map(c=>c.id),{kind:'cooperative-startup',projectId:project.id,type:option.type});return true;

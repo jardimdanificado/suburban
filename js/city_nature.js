@@ -1,3 +1,4 @@
+import { inventoryFree } from './city_inventory.js';
 import { tileAt, ROAD_TILES } from './city_terrain.js';
 export const PLANT_SPECIES = {
   oak: { label: 'Carvalho', color: 0x6c994b, grow: 3 * 1440, wood: 4, terrain: [0,9] },
@@ -49,6 +50,7 @@ export class CityNature {
   }
   hourly() {
     const city=this.city;
+    for(const c of city.citizens){const job=c.forestryJob;if(!job)continue;const b=city.building(job.buildingId);if(c.entity.destroyed||!b||city.politics.officeHolder(c)||c.jobId!==b.id&&b.ownerId!==c.id){if(job.load){city.economy.lost.madeira+=job.load;city.log('Madeira em transporte perdida após interrupção da atividade florestal.','nature',[c.id],{kind:'forestry-cargo-lost',quantity:job.load,buildingId:job.buildingId});}c.forestryJob=null;}}
     for(const plant of [...this.plants.values()]) {
       if(plant.buildingId && !city.building(plant.buildingId))plant.buildingId=null;
       if(plant.entity.destroyed || !this.validExisting(plant)) {this.remove(plant,'vegetação removida por ocupação ou alteração do terreno');this.lost++;continue;}
@@ -85,17 +87,59 @@ export class CityNature {
     return [...this.plants.values()].filter(p=>PLANT_SPECIES[p.species].wood && p.stage==='mature' && (!p.buildingId || p.buildingId===b.id) && Math.hypot(p.x-b.door.x,p.y-b.door.y)<=14 && this.validExisting(p))
       .sort((a,c)=>Math.hypot(a.x-b.door.x,a.y-b.door.y)-Math.hypot(c.x-b.door.x,c.y-b.door.y))[0];
   }
-  replant(b) {
-    const planted=[...this.plants.values()].filter(p=>p.buildingId===b.id).length+this.seeds.filter(s=>s.buildingId===b.id).length;
-    if(planted>=8 || b.lastSownAt===this.city.minute || b.inventory.sementes<1)return;
-    for(let attempt=0;attempt<12;attempt++) {
-      const x=Math.floor(b.door.x+this.city.random()*22-11),y=Math.floor(b.door.y+this.city.random()*22-11);
-      if(this.sow(x,y,tileAt(this.city.world,x,y)===9?'pine':'oak',b.id)){b.lastSownAt=this.city.minute;b.inventory.sementes--;this.city.economy.consumed.sementes++;this.city.economy.recordGoods('replanting','sementes',1,b.id,null);return;}
+  // Workers reserve one tree or planting site and physically visit it.
+  forestryWork(b,c){
+    const city=this.city;city.economy.buySeeds(b);
+    let job=c.forestryJob;
+    if(job&&job.buildingId!==b.id)return false;
+    if(!job){
+      if(inventoryFree(b)<4||b.inventory.madeira>=48||city.minute<(b.forestryBlockedUntil||0))return false;
+      const claimed=new Set(city.citizens.filter(v=>v.forestryJob).map(v=>v.forestryJob.treeId));
+      const tree=[...this.plants.values()].filter(p=>p.stage==='mature'&&PLANT_SPECIES[p.species].wood&&(!p.buildingId||p.buildingId===b.id)&&!claimed.has(p.id)&&Math.hypot(p.x-b.door.x,p.y-b.door.y)<=14&&this.validExisting(p)).sort((a,d)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(d.x-c.entity.x,d.y-c.entity.y))[0];
+      if(b.seedStock<1&&!(c.forestrySeeds>0))return false;
+      if(tree)job={buildingId:b.id,treeId:tree.id,x:tree.x+.5,y:tree.y+.5,species:tree.species,stage:'cut',labor:0,load:0};
+      else{
+        const planted=[...this.plants.values()].filter(p=>p.buildingId===b.id).length+this.seeds.filter(p=>p.buildingId===b.id).length;
+        if(planted>=16)return false;
+        for(let i=0;i<24&&!job;i++){
+          const x=Math.floor(b.door.x+city.random()*24-12),y=Math.floor(b.door.y+city.random()*24-12),species=tileAt(city.world,x,y)===9?'pine':'oak';
+          if(this.available(x,y,species,b.id)&&!this.seeds.some(s=>s.x===x&&s.y===y)&&!city.citizens.some(v=>v.forestryJob?.x===x+.5&&v.forestryJob?.y===y+.5))job={buildingId:b.id,x:x+.5,y:y+.5,species,stage:'plant',labor:0,load:0};
+        }
+      }
+      if(!job)return false;if(!(c.forestrySeeds>0)){b.seedStock--;c.forestrySeeds=1;}c.forestryJob=job;
     }
+    const destination=job.stage==='return'?b.door:job;
+    if(Math.hypot(c.entity.x-destination.x,c.entity.y-destination.y)>1.2){
+      const path=city.findPath(c.entity,destination);
+      if(path===null){c.action='Sem caminho para a atividade florestal';if(!job.load){c.forestryJob=null;b.forestryBlockedUntil=city.minute+60;}return false;}
+      c.path=path;c.action=job.stage==='return'?'Levando madeira à silvicultura':job.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore';return true;
+    }
+    if(job.stage==='return'){
+      if(inventoryFree(b)<job.load){c.action='Aguardando espaço para descarregar madeira';return false;}
+      b.inventory.madeira+=job.load;
+      if(job.load>0)city.economy.recordGoods('forestry-delivery','madeira',job.load,null,b.id,{citizenIds:[c.id],plantId:job.treeId,parentEventId:job.harvestEventId});
+      c.forestryJob=null;c.action='Descarregando a madeira cortada';return true;
+    }
+    if(job.stage==='cut'){
+      const tree=this.plants.get(job.treeId);if(!tree||tree.stage!=='mature'){c.forestryJob=null;return false;}
+      job.labor+=1+(c.skills.agriculture||0)/80+(c.toolUntil>city.minute?.3:0);c.action=`Cortando ${PLANT_SPECIES[tree.species].label.toLowerCase()}`;
+      if(job.labor<45)return true;
+      const event=this.harvest(b,tree,c);if(!event)return false;
+      job.load=PLANT_SPECIES[tree.species].wood;job.harvestEventId=event.id;job.stage='plant';job.labor=0;return true;
+    }
+    c.action='Plantando árvore para renovar a floresta';
+    if(!(c.forestrySeeds>0))return false;
+    job.labor+=1+(c.skills.agriculture||0)/100;if(job.labor<12)return true;
+    const x=Math.floor(job.x),y=Math.floor(job.y);
+    if(this.sow(x,y,job.species,b.id,job.harvestEventId)){
+      c.forestrySeeds--;city.economy.consumed.sementes++;city.economy.recordGoods('replanting','sementes',1,b.id,null,{citizenIds:[c.id]});
+      city.log(`${c.entity.properties.name} plantou uma árvore.`, 'nature',[c.id],{kind:'tree-planted',buildingId:b.id,species:job.species,x,y,parentEventId:job.harvestEventId});
+    }else if(this.available(x,y,job.species,b.id)&&!this.seeds.some(s=>s.x===x&&s.y===y))return false;
+    job.stage='return';return true;
   }
-  harvest(b,tree) {
-    if(!tree || !this.plants.has(tree.id) || tree.stage!=='mature' || this.seeds.length>=NATURE_RULES.maxSeeds || !this.available(tree.x,tree.y,tree.species,b.id,tree.id))return false;
-    const event=this.remove(tree,`cortada por ${b.entity.properties.name}`,{buildingId:b.id,quantity:PLANT_SPECIES[tree.species].wood});
-    this.harvested++;this.sow(tree.x,tree.y,tree.species,b.id,event.id);return true;
+  harvest(b,tree,worker){
+    if(!worker||!tree||!this.plants.has(tree.id)||tree.stage!=='mature'||Math.hypot(worker.entity.x-tree.x-.5,worker.entity.y-tree.y-.5)>1.6)return false;
+    const event=this.remove(tree,`cortada por ${worker.entity.properties.name}`,{citizenIds:[worker.id],buildingId:b.id,quantity:PLANT_SPECIES[tree.species].wood});
+    this.harvested++;this.city.economy.produced.madeira+=PLANT_SPECIES[tree.species].wood;return event;
   }
 }

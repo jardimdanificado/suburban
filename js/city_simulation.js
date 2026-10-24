@@ -1,3 +1,5 @@
+import {MIN_PLOT_CELLS} from './city_building_geometry.js';
+import { CityPublications } from './city_publications.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
@@ -19,7 +21,7 @@ import { CityLogistics } from './city_logistics.js';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PRIVATE_TYPES, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js';
-import { terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, pavePath, generateSettlement, hasSettlementAccess } from './city_terrain.js';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, pavePath, generateSettlement, hasSettlementAccess } from './city_terrain.js';
 
 export const INITIAL_POPULATION = 256;
 export const BUILDING_TYPES = {
@@ -91,6 +93,7 @@ export class CitySimulation {
     this.relationships = new CityRelationships(this);
     this.nature = new CityNature(this);
     this.politics = new CityPolitics(this);
+    this.publications = new CityPublications(this);
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -158,7 +161,7 @@ export class CitySimulation {
     this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: ${this.citizens.length} moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
     this.syncClock();
   }
-  addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = type === 'farm' || type === 'quarry' ? 'open-air' : 'building', materialSource = null } = {}) {
+  addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = type === 'farm' || type === 'quarry' ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
     const spec = BUILDING_TYPES[type];
     if (type === 'quarry' && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A pedreira precisa de um depósito rochoso junto à área de extração.');
     if (!spec) return this.fail('Tipo de prédio inválido.');
@@ -166,13 +169,13 @@ export class CitySimulation {
     width ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 3);
     depth ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 2);
     floors ??= 2 + Math.floor(this.random() * 4);
-    if (![x, y, width, depth, floors].every(Number.isInteger) || width < 1 || depth < 1 || floors < 1 || width > (kind === 'open-air' ? 20 : 8) || depth > (kind === 'open-air' ? 20 : 8) || floors > 12) return this.fail('Dimensões: até 20×20 ao ar livre, 8×8 em edifícios e 12 andares.');
+    if (![x, y, width, depth, floors].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || floors < 1 || width > (kind === 'open-air' ? 20 : 8) || depth > (kind === 'open-air' ? 20 : 8) || floors > 12) return this.fail('Área mínima de 4 células (2×2, 4×1 ou 1×4). Limites: 20×20 ao ar livre, 8×8 em edifícios e 12 andares.');
     if (kind === 'open-air') floors = 1;
-    const terrain = inspectBuildingSite(this, x, y, width, depth, { plotId, type });
+    const {access,...terrain}=chooseBuildingSite(this,x,y,width,depth,{plotId,type,rotation});
     if (terrain.error) return this.fail(terrain.error);
     const hub = this.buildings.find(b => !b.entity.destroyed)?.door;
     if (!hub && !hasSettlementAccess(this.world, terrain.door, x, y, width, depth)) return this.fail('A entrada está isolada ou não há espaço acessível para o restante da cidade.');
-    const access = hub ? findTerrainPath(this.world, terrain.door, hub, this.occupied, { extraBlocked: (xx, yy) => (xx >= x && xx < x + width && yy >= y && yy < y + depth) || this.development.plots.some(p => p.id !== plotId && xx >= p.x && xx < p.x + p.width && yy >= p.y && yy < p.y + p.depth) }) : [];
+
     if (access === null) return this.fail('Este lote está isolado. Escolha um local conectado à cidade por terra firme.');
     if (kind !== 'open-air' && this.citizens.some(c => !c.entity.destroyed && c.entity.x >= x && c.entity.x < x + width && c.entity.y >= y && c.entity.y < y + depth)) return this.fail('Há cidadãos neste terreno. Aguarde a passagem deles.');
     const count = width * depth * floors, stone = kind === 'open-air' ? 0 : count * DEVELOPMENT_RULES.stonePerCell, capital = type !== 'townhall' && PUBLIC_TYPES.has(type) && ownerAccountId === 'treasury' ? this.currency.price(50000) : 0;
@@ -181,7 +184,7 @@ export class CitySimulation {
     if (!free && stone && (!materialSource || materialSource.inventory.pedra < stone)) return this.fail(`Obra precisa de ${stone} pedras entregues no terreno.`);
     if (!free && this.treasury < capital) return this.fail('Caixa municipal insuficiente para obra e capital de operação.');
     const entity = this.createEntity({ x, y, properties: { name: this.life.buildingName(spec.label), species: 'city-building', render: { color: spec.color, style: type === 'popular_housing' ? 'popular' : type === 'luxury_housing' ? 'luxury' : type === 'popular_refectory' ? 'refectory' : type } } });
-    const b = { id: entity.id, entity, type, constructionKind: kind, width, depth, floors, color: spec.color, condition: 100, units: [], balance: 0, jobs: Math.min(spec.jobs ? Math.max(spec.jobs, Math.floor(count / 6)) : 0, 32), wage: 4 + Math.floor(this.random() * 3), stock: 0, workers: [], terrain, door: terrain.door };
+    const b = { id: entity.id, entity, type, constructionKind: kind, rotation:terrain.rotation, width, depth, floors, color: spec.color, condition: 100, units: [], balance: 0, jobs: Math.min(spec.jobs ? Math.max(spec.jobs, Math.floor(count / 6)) : 0, 32), wage: 4 + Math.floor(this.random() * 3), stock: 0, workers: [], terrain, door: terrain.door };
     b.architecture = architectureFor(type, entity.id);
     if (['residential','popular_housing','luxury_housing'].includes(type)) b.architectureColor = HOUSE_STYLES[b.architecture].wall;
     this.reputation.setup(b);
@@ -206,7 +209,7 @@ export class CitySimulation {
     this.structureRevision++;
     this.sanitation.setupBuilding(b);
     this.sanitation.setupBusinessRooms(b);
-    if (plot) { plot.buildingId = b.id; b.plotId = plot.id; } else this.development.attachBuilding(b, ownerAccountId);
+    if (plot) { plot.buildingId = b.id;plot.door={...b.door}; b.plotId = plot.id; } else this.development.attachBuilding(b, ownerAccountId);
     b.accessPath = [terrain.door, ...access];
     if (free) pavePath(this.world, b.accessPath);
     this.history.ownership(b, null, ownerAccountId, {action:'construction'});
@@ -217,7 +220,7 @@ export class CitySimulation {
   fail(message) { this.lastError = message; return null; }
   addCitizen(x, y, index = this.citizens.length, options = {}) {
     const identity = this.life.identity(index, options);
-    const entity = this.createEntity({ x, y, properties: { name: identity.name, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: [0xffeed19d, 0xffc2dce8, 0xffe6b9af, 0xffc5daa7][index % 4] } } });
+    const entity = this.createEntity({ x, y, properties: { name: identity.name, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: 0xe8e8e8 } } });
     const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, lastProgressAt: this.minute };
     c.givenNames = identity.givenNames; c.surnames = Object.freeze(identity.surnames);
     initializeCharacter(this, c); this.reputation.setup(c);
@@ -339,7 +342,7 @@ export class CitySimulation {
       task = 'provisions'; type = 'home';
     }
     if(!urgent && this.society.isAdult(c) && !['work','manage','care','caregiving','food','provisions','toilet'].includes(task) && this.hour>=6 && this.hour<22 && this.minute-(c.lastShoppingAt||0)>180) {
-      const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).sort((a,b)=>Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)+this.relationships.businessPenalty(c,a)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)-this.relationships.businessPenalty(c,b));
+      const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).sort((a,b)=>Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)+this.relationships.businessPenalty(c,a)-((c.knownAdvertisements?.[a.id]||0)>this.minute?2:0)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)-this.relationships.businessPenalty(c,b)+((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0));
       for(const shop of shops) {const path=this.findPath(c.entity,shop.door);if(path!==null){c.path=path;c.targetId=shop.id;c.task='shopping';return;}}
     }
     const childHome = child ? this.building(this.units.get(child.homeUnitId)?.buildingId) : null;
@@ -404,6 +407,7 @@ export class CitySimulation {
         this.economy.practice(c, JOB_SKILL[b.type]);
       }
       if (isOwner) this.economy.practice(c, 'management');
+      if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
       c.action = c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Gerindo ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
       if (Math.min(n.food, n.water, n.energy, n.toilet, n.hygiene, n.health) < 22) c.task = null;
       return;
@@ -512,6 +516,7 @@ export class CitySimulation {
       const hall = this.buildings.find(h => h.type === 'townhall' && !h.entity.destroyed);
       for (const [good, stock] of Object.entries(b.inventory)) { const qty = stock + (good === 'lixo' ? b.litter || 0 : 0); const stored = Math.min(qty, hall ? inventoryFree(hall) : 0); if (hall) hall.inventory[good] += stored; this.economy.lost[good] += qty - stored; b.inventory[good] = 0; }
       b.litter = 0;
+      this.publications.inherit(b.accountId,'treasury');
       this.transfer(b.accountId, this.economy.citizen(b.ownerId)?.accountId || 'treasury', b.balance, 'Encerramento de prédio');
       const owner = this.economy.citizen(b.ownerId); if (owner) owner.businessIds = owner.businessIds.filter(id => id !== b.id);
       this.log(`${b.entity.properties.name} foi demolido.`, 'city', [], { kind: 'demolition', buildingId: b.id });
@@ -529,6 +534,8 @@ export class CitySimulation {
       for (const u of this.units.values()) if (u.ownerId === c.accountId) { const resident = this.accounts.get(u.tenantId); if (!heir && resident?.homeUnitId === u.id) this.releaseHome(resident); this.history.ownership(this.building(u.buildingId),c.accountId,heir?.accountId||'treasury',{unitId:u.id,action:'inheritance'}); u.ownerId = heir?.accountId || 'treasury'; u.forSale = true; u.forRent = !!heir; }
       this.economy.leaveJob(c, c.dead ? 'Falecimento' : 'Saída da cidade');
       this.bank.closeClient(c, heir);
+      this.publications.inherit(c.accountId,heir?.accountId||'treasury');
+      if(c.forestryJob?.load){this.economy.lost.madeira+=c.forestryJob.load;this.log('Madeira perdida com a interrupção do transporte florestal.','nature',[c.id],{quantity:c.forestryJob.load,buildingId:c.forestryJob.buildingId});}
       this.transfer(c.accountId, heir?.accountId || 'treasury', c.balance, c.dead ? 'Herança' : 'Saída de cidadão');
       this.sanitation.releaseCitizen(c);
       this.citizens.splice(this.citizens.indexOf(c), 1);
@@ -604,12 +611,13 @@ export class CitySimulation {
         const dx = p.x - c.entity.x, dy = p.y - c.entity.y, len = Math.hypot(dx, dy);
         if (len <= distance) { c.entity.x = p.x; c.entity.y = p.y; this.recordTraffic(p); c.path.shift(); distance -= len; }
         else { c.entity.x += dx / len * distance; c.entity.y += dy / len * distance; distance = 0; }
-        c.action = c.deliveryId ? 'Transportando mercadorias' : c.task === 'construction' ? 'Indo para a obra' : c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.deliveryId ? 'Transportando mercadorias' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
     }
   }
   goodsStock(good) {
-    return [...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
+    return carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

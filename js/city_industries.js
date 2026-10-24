@@ -3,7 +3,7 @@ export const INDUSTRIAL_GOODS = Object.fromEntries([
   ['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
-  ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['livros','Livros',2300],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],
+  ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],
 ].map(([id,label,price])=>[id,{label,price}]));
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
@@ -32,8 +32,8 @@ export const INDUSTRIES = {
   soapworks: industry('Saboaria',{oleo:2,ervas:1},{sabao:3},18,'cleaning','Higiene doméstica compete pelo óleo usado na iluminação.','services',{need:'hygiene',boost:22}),
   herb_farm: industry('Horto medicinal',{}, {ervas:4},40,'agriculture','Cultivo renovável de insumos para remédios e sabão.'),
   pharmacy: industry('Farmácia',{ervas:3,vidro:1},{remedio:2},24,'medicine','Medicamentos reduzem necessidades de saúde.','services',{need:'health',boost:20}),
-  paper_mill: industry('Fábrica de papel',{madeira:3},{papel:4},22,'maintenance','Papel liga a silvicultura à educação.'),
-  publisher: industry('Editora e livraria',{papel:3,tecido:1},{livros:2},24,'social','Leitura melhora lazer e habilidades dos leitores.','services',{need:'leisure',boost:18}),
+  paper_mill: industry('Prensa de papel',{madeira:3},{papel:12},22,'maintenance','Papel liga a silvicultura à educação.'),
+  publisher: industry('Papelaria e encadernação',{papel:5},{livros:1,panfletos:1},24,'social','Encaderna livros e panfletos; cada página preserva dois relatos, inclusive propaganda e anúncios.','services',{need:'leisure',boost:18}),
   pottery: industry('Ateliê de cerâmica',{argila:3,carvao:1},{ceramica:3},18,'maintenance','Utensílios para conforto doméstico.','services',{need:'shelter',boost:8}),
   composting: industry('Compostagem',{lixo:4},{adubo:2},20,'recycling','Resíduos urbanos retornam como fertilizante às lavouras.'),
   bank: industry('Banco',{}, {},1,'commerce','Depósitos mantêm reserva integral; crédito usa somente capital próprio disponível.','services'),

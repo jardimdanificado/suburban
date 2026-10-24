@@ -4,7 +4,7 @@ export class CityCampaigns {
   constructor(city){this.city=city;this.lastRallyHour=null;}
   sample(rows,size){const pool=rows.slice();for(let i=0;i<Math.min(size,pool.length);i++){const j=i+Math.floor(this.city.random()*(pool.length-i));[pool[i],pool[j]]=[pool[j],pool[i]];}return pool.slice(0,size);}
   audience(size){const rows=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)),independent=rows.filter(c=>!c.political?.partyId),first=this.sample(independent,Math.ceil(size*.85)),selected=new Set(first.map(c=>c.id));return first.concat(this.sample(rows.filter(c=>!selected.has(c.id)),Math.max(0,size-first.length)));}
-  event(election,message,kind,ids=[],details={}){const event=this.city.log(message,'government',ids,{kind,electionId:election.id,...details});election.events.push({eventId:event.id,minute:this.city.minute,message,kind,...details});if(election.events.length>120)election.events.shift();return event;}
+  event(election,message,kind,ids=[],details={}){const event=this.city.log(message,'government',ids,{kind,electionId:election.id,...details});election.events.push({eventId:event.id,minute:this.city.minute,message,kind,...details});if(election.events.length>120)election.events.shift();const author=this.city.society.citizen(ids[0]);if(author&&['campaign-program','campaign-defamation','campaign-accountability','campaign-rally'].includes(kind))this.city.publications.preserveEvent(author,event,'propaganda');return event;}
   hearPromises(voter,nomination,election,source='Programa divulgado') {
     const p=this.city.politics,party=p.party(nomination.partyId);p.campaignContact(voter,nomination,election,source);
     nomination.memoryPromises??=Object.freeze(nomination.promises.map(pr=>Object.freeze({title:pr.title,metric:pr.metric,baseline:pr.campaignBaseline,target:pr.target})));
@@ -58,7 +58,7 @@ export class CityCampaigns {
     // Reach real street tiles; don't teleport workers away from their jobs.
     const routes=[...city.traffic.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([key])=>{const [x,y]=key.split(',').map(Number);return {x:x+.5,y:y+.5};}).filter(pos=>ROAD_TILES.has(tileAt(city.world,Math.floor(pos.x),Math.floor(pos.y))));
     if(!routes.length)return;const destination=routes[Math.floor(city.random()*Math.min(4,routes.length))];
-    const event=this.event(election,`Bandeiraço ${party.short}: campanha conjunta para prefeitura e Câmara.`,'campaign-rally',participants.map(c=>c.id),{partyId:party.id,x:destination.x,y:destination.y});let paths=0;
+    const event=this.event(election,`Bandeiraço ${party.short}: campanha conjunta para prefeitura e Câmara.`,'campaign-rally',participants.map(c=>c.id),{partyId:party.id,candidateId:nomination.citizenId,x:destination.x,y:destination.y});let paths=0;
     for(const c of participants){if(paths++>=3)break;const path=city.findPath(c.entity,destination);if(path===null)continue;c.path=path;c.task='campaign';c.campaign={electionId:election.id,candidateId:nomination.citizenId,partyId:party.id,flag:party.flag,until:city.minute+120,destination,eventId:event.id};c.action=`Bandeiraço ${party.short}`;}
   }
   arrive(c) {
@@ -74,7 +74,7 @@ export class CityCampaigns {
   }
   daily(election) {
     const day=Math.floor((this.city.minute-election.startedAt)/1440);if(election.lastCampaignDay===day)return;election.lastCampaignDay=day;
-    for(const nomination of election.candidates){const audience=this.audience(Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.criticize(nomination,election);this.buyVotes(nomination,election);}
+    for(const nomination of election.candidates){const candidate=this.city.society.citizen(nomination.citizenId);if(candidate&&this.city.publications.writable(candidate))this.event(election,`${nomination.name} apresentou o programa: ${nomination.promises.map(pr=>pr.title).join('; ')}.`,'campaign-program',[nomination.citizenId],{candidateId:nomination.citizenId,partyId:nomination.partyId,truth:true});const audience=this.audience(Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.criticize(nomination,election);this.buyVotes(nomination,election);}
     this.poll(election);
   }
   hourly(election){for(const c of this.city.citizens)if(c.campaign&&(this.city.minute>=c.campaign.until||this.city.urgentNeed(c))){c.campaign=null;if(c.task==='campaign'){c.task=null;c.path=[];}}if(this.city.minute>=election.voteAt)return;this.daily(election);this.factCheck(election);const hour=Math.floor(this.city.minute/60);if(this.lastRallyHour!==hour&&this.city.hour>=7&&this.city.hour<20&&this.city.hour%3===0){this.lastRallyHour=hour;for(const nomination of this.sample(election.candidates,2))this.rally(nomination,election);}}

@@ -1,4 +1,5 @@
-import {membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js';
+import {makePartyName} from './city_party_names.js';
+import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js';
 import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investigateCases } from './city_political_institutions.js';
 import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js';
 import { makePartyFlag } from './city_party_flags.js';
@@ -7,17 +8,17 @@ import { CityCampaigns } from './city_campaigns.js';
 import { CityMandates } from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js';
 
-export const PARTY_FAMILIES=[
-  ['Partido Socialista Popular','PSP',-1,.2,.35],['Trabalho e Solidariedade','PTS',-.65,.3,.2],
-  ['Aliança Verde Comunitária','AVC',-.4,.65,1],['União Social Democrática','USD',-.2,.3,.45],
-  ['Movimento Cívico Municipal','MCM',.05,.05,.25],['Partido Liberal de Iniciativa','PLI',.7,.7,.15],
-  ['União Conservadora Municipal','UCM',.6,-.75,.1],['Liberdade e Autonomia','PLA',1,1,.25],
-];
+// Ideological starting points; names are generated separately from word pools.
+export const PARTY_FAMILIES=[[-1,.2,.35],[-.65,.3,.2],[-.4,.65,1],[-.2,.3,.45],[.05,.05,.25],[.7,.7,.15],[.6,-.75,.1],[1,1,.25]];
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 export class CityGovernment extends CityPolitics {
   constructor(city){super(city);this.termNumber=0;this.parties=[];this.nextPartyId=1;this.policy={termDays:12,campaignDays:3,partyLimit:8,reelectionLimit:1,minimumWage:5,businessTax:0,infrastructurePriority:'traffic',councilBudget:9600,mayorBudget:3000,councilRate:5};this.termRules=Object.freeze({termMinutes:POLITICS_RULES.termMinutes,campaignMinutes:POLITICS_RULES.campaignMinutes});this.council=new CityCouncil(city);this.mandates=new CityMandates(city);this.campaigns=new CityCampaigns(city);this.corruption=[];this.scandals=[];this.nextCaseId=1;this.lastDaily=null;this.viceMayorId=null;this.vetoes=[];this.lowApprovalSince=null;this.suspendedExecutive=null;}
   party(id){return this.parties.find(p=>p.id===id);}
   partyOfId(id){return this.party(this.city.society.citizen(id)?.political?.partyId);}
+  syncGoverningFlag(){
+    const party=this.partyOfId(this.city.economy.mayorId);
+    for(const b of this.city.buildings)if(b.type==='townhall'&&!b.entity.destroyed){b.governingPartyId=party?.id??null;b.governingPartyName=party?.name??null;b.governingFlag=party?.flag??null;}
+  }
   platform(c){const e=this.party(c?.political?.partyId)?.ideology.economy??c?.political?.ideology.economy??0;return e<-.3?'social':e>.3?'thrift':'balanced';}
   officeHolder(c){return !!c&&(c.id===this.city.economy.mayorId||c.id===this.viceMayorId||c.id===this.suspendedExecutive?.citizenId||this.council.members.some(m=>m.citizenId===c.id));}
   submitBill(type,payload={},authorId=null){const author=this.city.society.citizen(authorId)||this.council.people()[0];if(!author||!this.council.members.some(m=>m.citizenId===author.id))return this.city.fail('Selecione um vereador em exercício.');if(['tax','businessTax','minimumWage','partyLimit','reelectionLimit','termDays','campaignDays','inflation','welfare','councilSeats','councilRate','councilBudget','mayorBudget'].includes(type)&&!Number.isFinite(payload.value))return this.city.fail('Valor de proposta inválido.');if(['nationalize','privatize'].includes(type)&&!this.city.building(payload.buildingId))return this.city.fail('Empresa indisponível.');if(type==='impeach'&&!this.scandals.some(s=>s.id===payload.caseId&&(s.accusedId===payload.targetId||s.participantIds?.includes(payload.targetId))&&scandalEligible(this,s)))return this.city.fail('Cassação exige provas, gravidade e grande repercussão popular.');this.city.lastError='';const proposal=this.council.propose(author,type,payload);return proposal===false?false:proposal||(this.city.lastError?null:this.city.fail('Já existe proposta semelhante em tramitação ou o tipo é inválido.'));}
@@ -27,13 +28,21 @@ export class CityGovernment extends CityPolitics {
   canRun(c,office='mayor',nextTerm=false){if(!super.eligible(c))return false;this.initializeCitizen(c);if(!this.party(c.political.partyId)?.active||this.party(c.political.partyId).retiring)return false;const record=c.political.tenure[office],term=this.termNumber+(nextTerm?1:0);if(c.political.blockedUntilTerm>term)return false;return !record||record.lastTerm<term-1||record.count<1+this.policy.reelectionLimit;}
   distance(a,b){return Math.abs(a.economy-b.economy)+Math.abs(a.liberty-b.liberty)*.35+Math.abs(a.green-b.green)*.3;}
   remember(c,record){this.initializeCitizen(c);const memory={minute:this.city.minute,...record};if(memory.promises)memory.promises=Object.freeze(memory.promises);const key=record.termId?`term:${record.termId}`:record.promiseKey||null;if(key){const i=c.political.memories.findIndex(m=>m.key===key);if(i>=0)c.political.memories.splice(i,1);memory.key=key;}c.political.memories.push(Object.freeze(memory));if(c.political.memories.length>48){const i=c.political.memories.findIndex(m=>!['campaign-promise','government-record','proven-scandal'].includes(m.kind));c.political.memories.splice(i>=0?i:0,1);}}
-  createParty(){if(this.parties.filter(p=>p.active).length>=this.policy.partyLimit)return null;const id=this.nextPartyId++,[name,short,economy,liberty,green]=PARTY_FAMILIES[(id-1)%8],generation=Math.floor((id-1)/8),party={id,name:name+(generation?` — Renovação ${generation}`:''),short:short+(generation||''),ideology:Object.freeze({economy:clamp(economy+(generation?(this.city.random()-.5)*.25:0),-1,1),liberty,green}),flag:makePartyFlag(this.city,id-1),active:true,memberIds:[],leaderId:null,successorIds:[],history:[],foundedAt:this.city.minute};this.parties.push(party);this.city.log(`${party.name} foi registrado.`,'government',[],{kind:'party-founded',partyId:id});return party;}
+  createParty(){
+    if(this.parties.filter(p=>p.active).length>=this.policy.partyLimit)return null;
+    const id=this.nextPartyId++,[economy,liberty,green]=PARTY_FAMILIES[(id-1)%PARTY_FAMILIES.length],generation=Math.floor((id-1)/PARTY_FAMILIES.length);
+    const ideology=Object.freeze({economy:clamp(economy+(generation?(this.city.random()-.5)*.25:0),-1,1),liberty,green});
+    const party={id,...makePartyName(this.city,ideology,this.parties,id),ideology,flag:makePartyFlag(this.city,id-1),active:true,memberIds:[],leaderId:null,successorIds:[],history:[],foundedAt:this.city.minute};
+    this.parties.push(party);this.city.log(`${party.name} foi registrado.`,'government',[],{kind:'party-founded',partyId:id});return party;
+  }
   fillParties(){while(this.parties.filter(p=>p.active).length<this.policy.partyLimit)this.createParty();}
-  join(c,party,reason='Afinidade ideológica'){this.initializeCitizen(c);if(!party?.active||!canJoin(this,c))return false;const old=this.party(c.political.partyId);if(old?.id===party.id)return true;if(old)old.memberIds=old.memberIds.filter(id=>id!==c.id);c.political.partyId=party.id;c.political.membershipSince=this.city.minute;c.political.loyalty=Math.max(.3,c.political.engagement*.7);if(!party.memberIds.includes(c.id))party.memberIds.push(c.id);for(const m of this.council.members)if(m.citizenId===c.id)m.partyId=party.id;this.remember(c,{kind:'party-membership',partyId:party.id,description:`Filiação a ${party.short}: ${reason}.`});return true;}
+  join(c,party,reason='Afinidade ideológica'){this.initializeCitizen(c);if(!party?.active||!canJoin(this,c))return false;const old=this.party(c.political.partyId);if(old?.id===party.id)return true;if(old)old.memberIds=old.memberIds.filter(id=>id!==c.id);c.political.partyId=party.id;syncPartyColor(this,c);c.political.membershipSince=this.city.minute;c.political.loyalty=Math.max(.3,c.political.engagement*.7);if(!party.memberIds.includes(c.id))party.memberIds.push(c.id);for(const m of this.council.members)if(m.citizenId===c.id)m.partyId=party.id;this.remember(c,{kind:'party-membership',partyId:party.id,description:`Filiação a ${party.short}: ${reason}.`});if(c.id===this.city.economy.mayorId)this.syncGoverningFlag();return true;}
   campaignContact(voter,nomination,election,source){campaignContact(this,voter,nomination,election,source);}
 
   mergeParty(party){const destination=this.parties.filter(p=>p.active&&p.id!==party.id).sort((a,b)=>this.distance(party.ideology,a.ideology)-this.distance(party.ideology,b.ideology))[0];if(!destination)return;for(const id of [...party.memberIds]){const c=this.city.society.citizen(id);if(c){if(this.officeHolder(c)||this.distance(c.political.ideology,destination.ideology)<.8)this.join(c,destination,'Fusão aprovada pela Câmara');else leaveParty(this,c,'Não concordou com a fusão aprovada pela Câmara');}}party.active=false;party.mergedInto=destination.id;party.history.push(Object.freeze({minute:this.city.minute,description:`Fusão com ${destination.short}`}));}
-  organize(){this.fillParties();const adults=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c));for(const c of adults)this.initializeCitizen(c);
+  organize(){
+    for(const party of this.parties)if(!party.nameFlavor){const previousName=party.name;Object.assign(party,makePartyName(this.city,party.ideology,this.parties,party.id));party.history.push(Object.freeze({minute:this.city.minute,previousName,description:`Nome registrado: ${party.name}`}));}
+    this.fillParties();const adults=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c));for(const c of adults)this.initializeCitizen(c);
     organizeMembership(this,adults);
     for(const party of this.parties.filter(p=>p.active)){party.memberIds=party.memberIds.filter(id=>this.city.society.citizen(id));const leaders=party.memberIds.map(id=>this.city.society.citizen(id)).filter(c=>this.eligible(c)).sort((a,b)=>this.candidateStrength(b)-this.candidateStrength(a)),old=party.leaderId;party.leaderId=leaders[0]?.id??null;party.successorIds=leaders.slice(1,5).map(c=>c.id);if(old!==party.leaderId){party.history.push(Object.freeze({minute:this.city.minute,leaderId:party.leaderId,description:`Liderança: ${leaders[0]?.entity.properties.name||'vaga'}`}));if(party.history.length>24)party.history.shift();}}
   }
@@ -41,17 +50,17 @@ export class CityGovernment extends CityPolitics {
   releaseDuties(c,reason){if(c.deliveryId){const s=this.city.logistics.shipments.find(s=>s.id===c.deliveryId);if(s){if(s.pickedUp)s.position={x:c.entity.x,y:c.entity.y};this.city.logistics.releaseDriver(s);s.status='waiting';}}this.city.sanitation.releaseCitizen(c);this.city.economy.leaveJob(c,reason);c.workMeal=null;c.campaign=null;c.task=null;c.path=[];}
   ensureMayor(){
     const city=this.city,current=city.society.citizen(city.economy.mayorId);
-    if(current)return super.ensureMayor();
+    if(current){const mayor=super.ensureMayor();this.syncGoverningFlag();return mayor;}
     this.organize();
     const successor=[this.viceMayorId,this.council.leaderId].map(id=>city.society.citizen(id)).find(c=>c&&super.eligible(c)&&(!c.political||c.political.blockedUntilTerm<=this.termNumber));
     if(successor){if(this.suspendedExecutive)this.takeActingOffice(successor,'Substituição durante afastamento');else{if(successor.id===this.viceMayorId)this.viceMayorId=null;this.takeOffice(successor,'Sucessão constitucional');}return successor;}
     const governing=this.mandates.current?.partyId??this.vacancyPartyId,candidates=city.citizens.filter(c=>this.canRun(c));
     candidates.sort((a,b)=>Number(b.political.partyId===governing)-Number(a.political.partyId===governing)||this.candidateStrength(b)-this.candidateStrength(a));
-    const c=candidates[0];if(!c)return null;if(this.suspendedExecutive)this.takeActingOffice(c,'Substituição provisória durante afastamento');else this.takeOffice(c,'Posse provisória');this.vacancyPartyId=null;
+    const c=candidates[0];if(!c){this.syncGoverningFlag();return null;}if(this.suspendedExecutive)this.takeActingOffice(c,'Substituição provisória durante afastamento');else this.takeOffice(c,'Posse provisória');this.vacancyPartyId=null;
     if(this.nextElectionAt===null){this.termStartedAt=city.minute;this.nextElectionAt=city.minute+this.termRules.termMinutes;this.baseline=this.conditions();}else this.nextElectionAt=Math.min(this.nextElectionAt,city.minute+this.termRules.campaignMinutes);
     if(!this.lastResult&&!this.viceMayorId){const vice=this.city.citizens.filter(v=>v.id!==c.id&&this.canRun(v)&&v.political.partyId===c.political.partyId).sort((a,b)=>this.candidateStrength(b)-this.candidateStrength(a))[0];if(vice){this.viceMayorId=vice.id;vice.role='vice-mayor';this.council.remove(vice.id,'Vice-prefeitura provisória');}}this.council.ensure();return c;
   }
-  takeOffice(c,reason,election=null){this.lowApprovalSince=null;this.initializeCitizen(c);if(!c.political.partyId)this.organize();this.mandates.finish(reason);this.council.remove(c.id,'Posse na prefeitura');this.releaseDuties(c,reason);super.takeOffice(c,reason,election);const old=c.political.tenure.mayor;c.political.tenure.mayor={count:old&&old.lastTerm===this.termNumber?old.count:old&&old.lastTerm===this.termNumber-1?old.count+1:1,lastTerm:this.termNumber};const party=this.party(c.political.partyId),nomination=election?.candidates.find(p=>p.citizenId===c.id);this.mandates.start(c,party,nomination?.promises||this.mandates.program(c,party),election?.id??null);}
+  takeOffice(c,reason,election=null){this.lowApprovalSince=null;this.initializeCitizen(c);if(!c.political.partyId)this.organize();this.mandates.finish(reason);this.council.remove(c.id,'Posse na prefeitura');this.releaseDuties(c,reason);super.takeOffice(c,reason,election);const old=c.political.tenure.mayor;c.political.tenure.mayor={count:old&&old.lastTerm===this.termNumber?old.count:old&&old.lastTerm===this.termNumber-1?old.count+1:1,lastTerm:this.termNumber};const party=this.party(c.political.partyId),nomination=election?.candidates.find(p=>p.citizenId===c.id);this.mandates.start(c,party,nomination?.promises||this.mandates.program(c,party),election?.id??null);this.syncGoverningFlag();}
   roadConnected(b){return !!b.accessPath?.length && b.accessPath.every(p=>p&&ROAD_TILES.has(tileAt(this.city.world,Math.floor(p.x),Math.floor(p.y))));}
   beginElection(){this.organize();const city=this.city,candidates=[],councilCandidates=[];
     for(const party of this.parties.filter(p=>p.active&&!p.retiring)){const possible=party.memberIds.map(id=>city.society.citizen(id)).filter(c=>this.canRun(c,'mayor',true)).sort((a,b)=>this.candidateStrength(b)-this.candidateStrength(a)),leader=possible.find(c=>c.id===city.economy.mayorId)||possible[0];if(leader)candidates.push({citizenId:leader.id,name:leader.entity.properties.name,partyId:party.id,platform:this.platform(leader),promises:this.mandates.program(leader,party),endorsementPartyIds:[party.id]});for(const c of party.memberIds.map(id=>city.society.citizen(id)).filter(c=>this.canRun(c,'council',true)&&c.id!==leader?.id).sort((a,b)=>this.candidateStrength(b)-this.candidateStrength(a)).slice(0,this.council.seats))councilCandidates.push({citizenId:c.id,name:c.entity.properties.name,partyId:party.id});}
@@ -81,10 +90,20 @@ export class CityGovernment extends CityPolitics {
     for(const c of city.citizens)if(c.campaign){c.campaign=null;if(c.task==='campaign'){c.task=null;c.path=[];}}this.applyPlatform(winner.platform,e);city.log(`${winner.name} (${this.party(winner.partyId).short}) venceu com ${winner.votes}/${e.turnout} votos.`,'government',[winner.citizenId],{kind:'election-completed',electionId:e.id,winnerId:winner.citizenId});this.lastResult=e;this.retain(e);this.active=null;this.termStartedAt=city.minute;this.nextElectionAt=city.minute+this.termRules.termMinutes;this.baseline=this.conditions();
   }
   applyPlatform(id,election){const program=POLITICAL_PLATFORMS[id],author=this.council.people().find(c=>c.political.partyId===this.partyOfId(election.winnerId)?.id)||this.council.people()[0];if(!author)return;this.council.propose(author,'tax',{value:program.taxRate},`Programa eleito: imposto de ${Math.round(program.taxRate*100)}%`);this.council.propose(author,'welfare',{value:program.dailyBudget},'Programa eleito: orçamento social');this.council.propose(author,'inflation',{value:program.dailyLimit},'Programa eleito: teto de emissão');for(const pr of election.candidates.find(n=>n.citizenId===election.winnerId)?.promises||[]){const type={kitchens:'kitchen',artisans:'artisan',publicMeals:'popular_refectory',publicHomes:'popular_housing',recycling:'composting',literacy:'publisher'}[pr.metric];if(type)this.council.propose(author,'build',{buildingType:type},pr.title);}election.proposedPolicy={...program};}
-  crime(accused,type,from,to,amount,details={}){const id=this.nextCaseId;if(!this.city.transfer(from,to,amount,type==='vote-buying'?'Compra ilegal de voto':'Desvio de recursos',{politicianId:accused.id,corruptionCaseId:id,...details}))return null;const record={id:this.nextCaseId++,participantIds:[accused.id,details.voterId].filter(id=>id!=null),severity:type==='vote-buying'?25:40,awareIds:[],concealment:.4,accusedId:accused.id,partyId:accused.political.partyId,type,from,to,amount,occurredAt:this.city.minute,discoveredAt:null,proven:false,...details};record.evidenceEventId=this.city.history.record('government','Movimentação financeira vinculada a investigação.',[from,to],{kind:'corruption-evidence',corruptionCaseId:id,amount,...details}).id;this.corruption.push(record);if(this.corruption.length>128)this.corruption.shift();return record;}
+  crime(accused,type,from,to,amount,details={}){
+    if(from===to||!Number.isFinite(amount)||amount<=0)return null;
+    const id=this.nextCaseId,reason=type==='vote-buying'?'Compra ilegal de voto':'Desvio de recursos';
+    if(!this.city.transfer(from,to,amount,reason,{...details,politicianId:accused.id,corruptionCaseId:id}))return null;
+    const record={...details,id:this.nextCaseId++,participantIds:details.participantIds||[accused.id,details.voterId].filter(id=>id!=null),severity:type==='vote-buying'?25:40,awareIds:[],concealment:.4,accusedId:accused.id,partyId:accused.political.partyId,type,from,to,amount,occurredAt:this.city.minute,discoveredAt:null,proven:false};
+    record.steps=[this.corruptionStep(from,to,amount,reason)];
+    record.evidenceEventId=this.city.history.record('government','Movimentação financeira vinculada a investigação.',[from,to],{...details,kind:'corruption-evidence',corruptionCaseId:id,amount}).id;
+    this.corruption.push(record);if(this.corruption.length>128)this.corruption.shift();return record;
+  }
+  corruptionStep(from,to,amount,description){return {minute:this.city.minute,from,to,fromName:this.city.accountName(from),toName:this.city.accountName(to),amount,description,eventId:this.city.ledger.at(-1)?.eventId};}
+
   investigate(){investigateCases(this);}
   updateApproval(){criticalApproval(this);}
-  takeActingOffice(c,reason){this.council.remove(c.id,'Exercício temporário da prefeitura');this.releaseDuties(c,reason);super.takeOffice(c,reason);c.actingMayor=true;this.lowApprovalSince=null;}
+  takeActingOffice(c,reason){this.council.remove(c.id,'Exercício temporário da prefeitura');this.releaseDuties(c,reason);super.takeOffice(c,reason);this.syncGoverningFlag();c.actingMayor=true;this.lowApprovalSince=null;}
   suspendMayor(days,caseId,billId){
     const city=this.city,mayor=city.society.citizen(city.economy.mayorId),proof=this.scandals.find(s=>s.id===caseId&&s.proven&&(s.accusedId===mayor?.id||s.participantIds?.includes(mayor?.id)));
     if(!mayor||!proof||this.suspendedExecutive||!Number.isInteger(days)||days<1||days>5)return false;
@@ -95,7 +114,7 @@ export class CityGovernment extends CityPolitics {
     const s=this.suspendedExecutive;if(!s)return;const city=this.city,original=city.society.citizen(s.citizenId),acting=city.society.citizen(city.economy.mayorId);
     if(!original||original.political.blockedUntilTerm>this.termNumber){this.suspendedExecutive=null;if(acting){acting.actingMayor=false;if(this.viceMayorId===acting.id)this.viceMayorId=null;this.takeOffice(acting,'Conversão do afastamento em sucessão definitiva');}return;}
     if(city.minute<s.until||this.termNumber!==s.termNumber||city.minute>=this.nextElectionAt)return;
-    this.suspendedExecutive=null;if(acting)acting.actingMayor=false;super.takeOffice(original,'Retorno após afastamento temporário');this.viceMayorId=this.eligible(city.society.citizen(s.viceId))?s.viceId:null;const vice=city.society.citizen(this.viceMayorId);if(vice)vice.role='vice-mayor';this.lowApprovalSince=null;
+    this.suspendedExecutive=null;if(acting)acting.actingMayor=false;super.takeOffice(original,'Retorno após afastamento temporário');this.syncGoverningFlag();this.viceMayorId=this.eligible(city.society.citizen(s.viceId))?s.viceId:null;const vice=city.society.citizen(this.viceMayorId);if(vice)vice.role='vice-mayor';this.lowApprovalSince=null;
   }
   vetoBill(billId){
     const bill=this.council.bills.find(b=>b.id===billId),mayor=this.city.society.citizen(this.city.economy.mayorId);

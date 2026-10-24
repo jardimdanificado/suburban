@@ -1,3 +1,6 @@
+import {ROTATION_LABELS} from './city_building_geometry.js';
+import { renderPublications } from './city_publications_ui.js';
+import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases } from './city_corruption_ui.js';
 import {renderEventInspector} from './city_event_inspector.js';
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
@@ -63,7 +66,8 @@ export class CityUI {
     this.seed = document.createElement('input'); this.seed.type = 'number'; this.seed.min = '1'; this.seed.max = '2147483647'; this.seed.value = city.world.seed ?? city.initialSeed; this.seed.setAttribute('aria-label', 'Semente do próximo terreno');
     this.filterInput=document.createElement('select');this.filterInput.setAttribute('aria-label','Filtrar registros');this.filterInput.addEventListener('change',()=>this.setFilter(this.filterInput.value));
     this.sortInput=document.createElement('select');this.sortInput.setAttribute('aria-label','Ordenar registros');this.sortInput.addEventListener('change',()=>{this.sorts[this.tab]=this.sortInput.value;this.resetScroll();});
-    this.element.append(this.search,this.seed,this.filterInput,this.sortInput);
+    this.publicationDraft=document.createElement('input');this.publicationDraft.type='text';this.publicationDraft.maxLength=1200;this.publicationDraft.placeholder='Escreva um relato, informação, anúncio ou invenção…';this.publicationDraft.setAttribute('aria-label','Conteúdo a escrever no livro ou panfleto');
+    this.element.append(this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft);
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
   }
   resetScroll() { this.scrolls = {}; }
@@ -127,11 +131,11 @@ export class CityUI {
   inputAt(input,x,y,w){const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.style.clipPath)input.style.clipPath='';if(input.hidden)input.hidden=false;}
   drawFloating(ui,window) {
     this.floating=true;this.floatingDossier=window.kind==='dossier';this.element.hidden=false;this.visible=true;this.zones=[];
-    for(const input of [this.search,this.seed,this.filterInput,this.sortInput])input.hidden=true;
+    for(const input of [this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft])input.hidden=true;
     this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded)return;
     const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+29;
     if(!this.floatingDossier){
-      const search=this.tab!=='event'&&(this.tab!=='city'||this.view()!=='overview');
+      const search=!['event','corruption-case'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.setView(id)})));y=p.y;}
     }
@@ -140,7 +144,7 @@ export class CityUI {
     });
   }
   draw(ui) {
-    this.element.hidden=!this.visible;for(const input of [this.search,this.seed,this.filterInput,this.sortInput])input.hidden=true;this.zones=[];
+    this.element.hidden=!this.visible;for(const input of [this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft])input.hidden=true;this.zones=[];
     if(!this.visible)return;
     const w=Math.min(ui.width-12,this.expanded?ui.width-24:1088),x=ui.width-w-6,y=42,h=Math.max(140,ui.height-y-(ui.width<700?78:48)),desktop=w>=940;
     this.bounds={x,y,w,h};this.layout={desktop,compact:w<700};const info=TABS.find(t=>t[0]===this.tab)||TABS[0];
@@ -160,7 +164,7 @@ export class CityUI {
     const s=this.city.stats(),footer=bw>600?`${stamp(this.city.minute)}  •  ${s.population} habitantes  •  Tesouro: ${money(s.treasury)}`:`${stamp(this.city.minute)}  •  ${s.population} habitantes`;
     ui.text(trim(footer,w-28),x+14,y+h-22,T.muted);
     if(this.menuOpen&&!desktop){
-      for(const input of[this.search,this.seed,this.filterInput,this.sortInput])input.hidden=true;this.zones=[];const my=y+74,mh=h-102;
+      for(const input of[this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft])input.hidden=true;this.zones=[];const my=y+74,mh=h-102;
       ui.panel(bx-3,my,bw+6,mh,'Janelas da cidade','');this.pane(ui,'navigation',bx+6,my+34,bw-12,mh-42,p=>{p.y=this.navigation(ui,p.x,p.y,p.w,p.top,p.bottom);});
     }
   }
@@ -301,6 +305,7 @@ export class CityUI {
       p.heading('EMPRESAS'); for (const id of c.businessIds) { const b = city.building(id); if (b) p.button(name(b.entity), () => this.openBuilding(id)); }
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, c.accountId);
     }
+    p.button('LIVROS E PANFLETOS DESTA PESSOA',()=>{const state=this.go('publications');state.publicationOwner=c.accountId;state.selectedPublicationId=null;state.resetScroll();});
     p.button('VER HISTÓRICO DESTA PESSOA', () => this.personLog(c.id));
   }
   building(p, b) {
@@ -312,6 +317,9 @@ export class CityUI {
       const post = [...city.lighting.sites.values()].find(post => post.buildingId === b.id && !post.public && post.status !== 'cancelled');
       if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', !post.built ? post.projectId ? 'Em construção' : 'Aguarda contratação' : post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }
       const industry=INDUSTRIES[b.type];
+      p.kv('Orientação da fachada',`${ROTATION_LABELS[b.rotation||0]} · ${(b.rotation||0)*90}°`);
+      if(b.type==='forestry'){const trees=[...city.nature.plants.values()].filter(t=>t.buildingId===b.id);p.kv('Árvores cultivadas / maduras',`${trees.length} / ${trees.filter(t=>t.stage==='mature').length}`);p.kv('Sementes disponíveis',b.seedStock);p.note('Os trabalhadores cortam árvores no local, replantam com sementes e carregam a madeira até o depósito.');for(const c of city.citizens.filter(c=>c.forestryJob?.buildingId===b.id))p.card(name(c.entity),`${c.action} · ${c.forestryJob.load||0} madeiras em transporte`,()=>this.openCitizen(c.id));}
+      if(b.type==='publisher'){p.kv('Páginas por novo livro',b.bookPages||5);p.note('Cada livro consome uma folha por página; panfletos consomem uma folha. Dois registros por página.');p.buttons([2,5,10,20,32].map(pages=>({label:`${pages} PÁGINAS`,selected:(b.bookPages||5)===pages,click:()=>city.publications.configure(b.id,pages)})));}
       if(industry){p.heading('CADEIA PRODUTIVA');p.note(industry.impact);p.note('Insumos: '+(Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Trabalho e recursos locais'));p.note('Produtos: '+(Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Crédito e guarda de depósitos'));if(b.type==='bank'){p.kv('Depósitos protegidos',money([...city.bank.deposits.values()].filter(d=>d.bankId===b.id).reduce((n,d)=>n+d.balance,0)));p.kv('Crédito a receber',money(city.bank.loans.filter(l=>l.bankId===b.id && !['paid','written-off'].includes(l.status)).reduce((n,l)=>n+l.remaining+l.interest,0)));p.note(`Novos empréstimos: ${(city.bank.policy.loanRate*100).toFixed(2)}% ao dia; poupança: ${(city.bank.policy.savingsRate*100).toFixed(2)}% ao dia. Prazos: 30 parcelas para subsistência e 180 para abertura de empresa, com carência durante a obra. Depósitos são protegidos; rendimentos dependem do caixa do banco.`);}}
       p.kv('Arquitetura',HOUSE_STYLES[b.architecture]?.label||'Padrão');this.reputationPanel(p,b);
       if(b.type==='forestry'){const plants=[...city.nature.plants.values()].filter(t=>t.buildingId===b.id);p.kv('Árvores cultivadas',plants.length);p.kv('Maduras',plants.filter(t=>t.stage==='mature').length);p.kv('Sementes em germinação',city.nature.seeds.filter(t=>t.buildingId===b.id).length);p.note('Cada lote de madeira consome uma árvore madura a até 14 tiles. O corte replanta uma semente; árvores novas levam de 3 a 4 dias para crescer.');}
@@ -411,7 +419,7 @@ export class CityUI {
   }
   content(p) {
     if (this.notice) p.note(this.notice, C.red);
-    const render = { city: 'overview', government: 'government', production: 'production', land: 'land', transport: 'transport', sanitation: 'sanitation', log: 'log',event:'eventInspector' }[this.tab];
+    const render = { city: 'overview', government: 'government', production: 'production', land: 'land', transport: 'transport', sanitation: 'sanitation', log: 'log',event:'eventInspector',publications:'publications',corruption:'corruptionDirectory','corruption-case':'corruptionInspector' }[this.tab];
     if (render) this[render](p);
   }
   overview(p) {
@@ -498,6 +506,7 @@ export class CityUI {
   production(p) {
     if(this.view()==='lighting'){
       const city=this.city,posts=[...city.lighting.sites.values()].filter(l=>l.status!=='cancelled');p.heading('ILUMINAÇÃO E ABASTECIMENTO');p.metrics([['CONSTRUÍDOS',posts.filter(l=>l.built).length],['ACESOS',posts.filter(l=>l.lit).length],['SEM ÓLEO',posts.filter(l=>l.built&&!l.fuel).length],['EM PLANEJAMENTO',posts.filter(l=>!l.built).length]]);
+      const supply=city.economy.lightingSupplyReport;if(supply){p.kv('Óleo para a iluminação',`${supply.daily} unidades/dia · reserva atual ${supply.oilStock}`);p.kv('Girassol necessário / capacidade com equipe',`${Math.ceil(supply.sunflowerRequired)} / ${supply.farmDaily} por dia`);p.kv('Moagem com equipe / meta com reserva',`${supply.millDaily} / ${supply.oilRequired} por dia`);p.note(`Gargalo: ${supply.bottleneck}.`);}
       p.note('A prefeitura paga postes públicos; proprietários pagam os particulares. Pedras, construção, óleo e abastecimento têm trabalho e transporte reais.');
       p.table([{label:'Local'},{label:'Responsável',weight:1.4},{label:'Óleo (h)'},{label:'Situação',weight:2}],posts.filter(l=>this.matches(`${l.id} ${l.supplyStatus||''}`)).map(l=>({cells:[`${Math.floor(l.x)}, ${Math.floor(l.y)}`,l.public?'Prefeitura':city.accountName(l.payerId),l.fuel,l.built?l.supplyStatus||'Aguardando abastecimento':l.projectId?'Em construção':'Aguardando contratação'],click:()=>this.camera(l.x,l.y)})));return;
     }
@@ -525,6 +534,7 @@ export class CityUI {
       p.heading('OBRAS EM ANDAMENTO');const active=dev.projects.filter(o=>o.status!=='completed'&&!o.cancelled);this.contracts(p,active);
       p.heading('OBRAS ENCERRADAS');this.contracts(p,dev.projects.filter(o=>o.status==='completed'||o.cancelled).slice(-15).reverse());return;
     }
+    p.note('Área mínima de terrenos e novas obras: 4 células no chão (2×2, 4×1 ou 1×4). Fachadas recebem orientações aleatórias com acesso por terra firme.');
     p.metrics([['TERRENOS',dev.plots.length,C.cyan],['À VENDA',dev.plots.filter(l=>l.forSale&&!l.buildingId).length,C.gold],['EM OBRAS',dev.projects.filter(o=>!o.cancelled&&o.status!=='completed').length,C.green]]);
     if(selected){
       const levelLabel=Number.isFinite(selected.level)?selected.level.toFixed(2):selected.level===null?'Relevo natural / nível variável':'Instalação inicial';
@@ -540,6 +550,7 @@ export class CityUI {
       const label=o.service==='building'?`${BUILDING_TYPES[o.type]?.label||o.type} / lote ${o.plotId}`:o.name;
       p.card(label,`${o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='materials'?'Aguardando materiais':'Em construção'} / serviço ${money(o.fee)}`,()=>{this.select(null);if(o.plotId)this.setPlotSelection(o.plotId);else{this.selectedProjectId=o.id;this.camera(o.door.x,o.door.y);if(!this.host)this.visible=false;}},this.selectedProjectId===o.id,o.cancelled?C.red:o.status==='completed'?C.green:C.gold);
       p.columns(q=>{q.kv('Contratante',city.accountName(o.accountId));q.kv('Construtora',city.building(o.builderId)?.entity.properties.name||'Construção própria');},q=>{q.kv('Pedras entregues',`${o.status==='completed'?o.stone:o.inventory.pedra}/${o.stone}`);q.kv('Pedras em transporte',o.incoming.pedra||0);});
+      if(o.service==='building')p.kv('Orientação',`${ROTATION_LABELS[o.rotation||0]} · ${(o.rotation||0)*90}°`);
       if(o.service==='building')p.kv('Projeto',`${o.width}x${o.depth}x${o.floors} / ${o.sell?'para venda':'uso próprio'}`);if(o.service==='expansion')p.kv('Andares',`${o.baseFloors} > ${o.targetFloors}`);if(o.service==='road')p.kv('Extensão',`${o.path.length} tiles`);
       p.meter('Trabalho concluído',o.requiredLabor?o.labor/o.requiredLabor*100:100);if(o.waitingForBasicNeeds)p.note('Novas compras de materiais aguardam as prioridades de alimentação e moradia.',C.gold);if(o.error)p.note(o.error,C.red);p.space(8);
     }
@@ -647,7 +658,7 @@ export class CityUI {
     const belief=this.memoryView==='beliefs',rows=[...(belief?c.social.beliefs:c.social.memories)].reverse().filter(m=>(!this.memoryPersonId||[m.actorId,m.targetId,m.aboutId,m.otherId,m.sourceId].includes(this.memoryPersonId))&&this.matches(m.description));
     const page=Math.min(this.memoryPage||0,Math.max(0,Math.ceil(rows.length/8)-1));
     for(const m of rows.slice(page*8,page*8+8)) {
-      p.heading(`${stamp(m.heardAt??m.minute)} / ${belief?m.corrected?'CORRIGIU A OPINIÃO':m.believes?'ACREDITA':'TEM DÚVIDAS':m.firsthand?m.truth?'PARTICIPOU OU PRESENCIOU':'CONHECE A INVENÇÃO':'OUVIU UMA CORREÇÃO'}`,belief&&m.corrected?C.green:C.cyan);
+      p.heading(`${stamp(m.heardAt??m.minute)} / ${m.kind==='publication'?'LEITURA':belief?m.corrected?'CORRIGIU A OPINIÃO':m.believes?'ACREDITA':'TEM DÚVIDAS':m.firsthand?m.truth?'PARTICIPOU OU PRESENCIOU':'CONHECE A INVENÇÃO':'OUVIU UMA CORREÇÃO'}`,belief&&m.corrected?C.green:C.cyan);
       p.note(m.description);
       if(belief){p.kv('Fonte',this.city.accountName(`citizen:${m.sourceId}`));p.kv(m.corrected?'Confiança na correção':'Confiança na narrativa',`${m.confidence}%`);p.kv('Repasses',m.hops);}
       if(m.eventId)p.button(`VER ORIGEM #${m.eventId}`,()=>this.openEvent(m.eventId));
@@ -675,7 +686,11 @@ export class CityUI {
     p.button('HISTÓRICO DA VEGETAÇÃO',()=>{this.go('log').logCategory='nature';});
   }
   electionsPanel(p) { renderPolitics(this,p); }
-  openEvent(id){if(this.host)return this.host.openEvent(id,this.city.history.get(id)||this.frozenEvents?.find(e=>e.id===id));this.remember();this.tab='event';this.selectedEventId=id;this.eventSnapshot=this.city.history.get(id)||this.frozenEvents?.find(e=>e.id===id);this.resetScroll();}
+  openEvent(id){const snapshot=this.city.history.get(id)||this.frozenEvents?.find(e=>e.id===id)||this.city.publications.eventSnapshot(id);if(this.host)return this.host.openEvent(id,snapshot);this.remember();this.tab='event';this.selectedEventId=id;this.eventSnapshot=snapshot;this.resetScroll();}
+  openCorruption(id){if(this.host)return this.host.openCorruption(id);this.remember();this.tab='corruption-case';this.corruptionCaseId=id;this.corruptionSnapshot=corruptionCases(this.city.politics).find(r=>r.id===id);this.resetScroll();}
+  publications(p){renderPublications(this,p);}
+  corruptionDirectory(p){renderCorruptionDirectory(this,p);}
+  corruptionInspector(p){renderCorruptionInspector(this,p);}
   eventInspector(p){renderEventInspector(this,p);}
   events(p, events) {
     p.rows(events,e=>{
