@@ -59,7 +59,7 @@ export class CityCampaigns {
     // Reach real street tiles; don't teleport workers away from their jobs.
     const routes=[...city.traffic.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([key])=>{const [x,y]=key.split(',').map(Number);return {x:x+.5,y:y+.5};}).filter(pos=>ROAD_TILES.has(tileAt(city.world,Math.floor(pos.x),Math.floor(pos.y))));
     if(!routes.length)return;const destination=routes[Math.floor(city.random()*Math.min(4,routes.length))];
-    const event=this.event(election,`Bandeiraço ${party.short}: campanha conjunta para prefeitura e Câmara.`,'campaign-rally',participants.map(c=>c.id),{partyId:party.id,candidateId:nomination.citizenId,x:destination.x,y:destination.y});let paths=0;
+    const event=this.event(election,`Bandeiraço ${party.short}: ${election.round===2?'campanha de segundo turno para prefeitura':'campanha conjunta para prefeitura e Câmara'}.`,'campaign-rally',participants.map(c=>c.id),{partyId:party.id,candidateId:nomination.citizenId,x:destination.x,y:destination.y});let paths=0;
     for(const c of participants){if(paths++>=3)break;const path=city.findPath(c.entity,destination);if(path===null)continue;c.path=path;c.task='campaign';c.campaign={electionId:election.id,candidateId:nomination.citizenId,partyId:party.id,flag:party.flag,until:city.minute+120,destination,eventId:event.id};c.action=`Bandeiraço ${party.short}`;}
   }
   arrive(c) {
@@ -68,7 +68,7 @@ export class CityCampaigns {
     c.action=`Bandeiraço ${p.party(campaign.partyId).short}: apresentando propostas`;
     if(city.minute-(campaign.lastOutreachAt??-Infinity)<30)return;campaign.lastOutreachAt=city.minute;
     const nomination=e.candidates.find(n=>n.citizenId===campaign.candidateId);if(!nomination)return;
-    for(const voter of city.citizens.filter(v=>!v.entity.destroyed&&city.society.isAdult(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<5).slice(0,16)){this.hearPromises(voter,nomination,e,'Bandeiraço de rua');p.remember(voter,{kind:'campaign-rally',electionId:e.id,partyId:nomination.partyId,candidateId:nomination.citizenId,promiseKey:`rally:${e.id}:${nomination.citizenId}`,effect:3,description:'Conheceu a chapa conjunta para prefeitura e Câmara num bandeiraço.'});}
+    for(const voter of city.citizens.filter(v=>!v.entity.destroyed&&city.society.isAdult(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<5).slice(0,16)){this.hearPromises(voter,nomination,e,'Bandeiraço de rua');p.remember(voter,{kind:'campaign-rally',electionId:e.id,partyId:nomination.partyId,candidateId:nomination.citizenId,promiseKey:`rally:${e.id}:${nomination.citizenId}`,effect:3,description:e.round===2?'Conheceu a chapa do segundo turno num bandeiraço.':'Conheceu a chapa conjunta para prefeitura e Câmara num bandeiraço.'});}
   }
   conversation(a,b) {
     const p=this.city.politics,e=p.active;const scandal=p.scandals.find(s=>s.awareIds?.includes(a.id)&&!s.awareIds.includes(b.id));if(scandal&&this.city.random()<.2){scandal.awareIds.push(b.id);p.remember(b,{kind:scandal.proven?'proven-scandal':'corruption-rumor',candidateId:scandal.accusedId,partyId:scandal.partyId,caseId:scandal.id,effect:scandal.proven?-10:-2,description:'Debateu uma denúncia de corrupção numa conversa.'});}if(!e||e.status!=='campaign'||this.city.random()>.2||!this.city.society.isAdult(a)||!this.city.society.isAdult(b))return;

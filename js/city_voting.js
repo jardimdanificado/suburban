@@ -44,11 +44,11 @@ export class CityVoting {
     const chosen=p.intentions(voter,this.available(e))[0];
     const council=e.councilCandidates.map(n=>{const c=city.society.citizen(n.citizenId);return p.party(n.partyId)?.active&&p.canRun(c,'council',true)&&c.political.partyId===n.partyId?{id:n.citizenId,name:n.name,partyId:n.partyId,...p.voterAssessment(voter,c,p.platform(c))}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score||a.id-b.id)[0];
     const nomination=e.candidates.find(n=>n.citizenId===chosen?.candidateId);
-    const ballot=Object.freeze({citizenId:voter.id,name:row.name,candidateId:chosen?.candidateId??null,candidateName:nomination?.name??'Branco',partyId:chosen?.partyId??null,score:chosen?.score??0,reason:chosen?.reason||'Sem candidatura elegível',reasons:chosen?.reasons||[],councilCandidateId:council?.id??null,councilCandidateName:council?.name??'Branco',councilPartyId:council?.partyId??null,councilReason:council?.reason||'Sem candidatura elegível',castAt:city.minute,arrivedAt:row.arrivedAt,pollingBuildingId:hall.id});
+    const ballot=Object.freeze({citizenId:voter.id,name:row.name,candidateId:chosen?.candidateId??null,candidateName:nomination?.name??'Branco',partyId:chosen?.partyId??null,score:chosen?.score??0,reason:chosen?.reason||'Sem candidatura elegível',reasons:chosen?.reasons||[],councilCandidateId:council?.id??null,councilCandidateName:council?.name??(e.round===2?'Não se aplica ao segundo turno':'Branco'),councilPartyId:council?.partyId??null,councilReason:council?.reason||'Sem candidatura elegível',castAt:city.minute,arrivedAt:row.arrivedAt,pollingBuildingId:hall.id});
     e.ballots.push(ballot);if(ballot.candidateId!=null)e.mayorCounts[ballot.candidateId]=(e.mayorCounts[ballot.candidateId]||0)+1;if(ballot.councilCandidateId!=null)e.councilCounts[ballot.councilCandidateId]=(e.councilCounts[ballot.councilCandidateId]||0)+1;e.turnout=e.ballots.length;e.countRevision++;
     row.status='voted';row.castAt=city.minute;row.reason=`Votou por ${ballot.reason}`;this.clear(voter);voter.action='Concluiu seu voto presencial';
     const event=city.history.record('government',`${row.name} votou presencialmente na prefeitura.` ,[voter.accountId],{kind:'in-person-vote',action:'vote',electionId:e.id,buildingId:hall.id,candidateId:ballot.candidateId,councilCandidateId:ballot.councilCandidateId,reason:ballot.reason,castAt:ballot.castAt,parentEventId:e.votingEventId});
-    p.remember(voter,{kind:'vote',electionId:e.id,partyId:ballot.partyId,candidateId:ballot.candidateId,eventId:event.id,description:`Votou presencialmente em ${ballot.candidateName} e ${ballot.councilCandidateName}, por ${ballot.reason}.`});
+    p.remember(voter,{kind:'vote',electionId:e.id,partyId:ballot.partyId,candidateId:ballot.candidateId,eventId:event.id,description:`Votou presencialmente em ${ballot.candidateName}${e.round===2?'':` e ${ballot.councilCandidateName}`}, por ${ballot.reason}.`});
   }
   close(e){
     const city=this.city;for(const row of e.electorate||[])if(!['voted','unavailable','abstained'].includes(row.status)){row.status='abstained';row.reason=e.cancellationReason||row.reason||'Não compareceu antes do fechamento';this.clear(city.society.citizen(row.citizenId));}
@@ -56,6 +56,7 @@ export class CityVoting {
   }
   updateMinute(){
     const city=this.city,p=city.politics,e=p.active;if(!e||this.lastMinute===city.minute)return;this.lastMinute=city.minute;
+    if(e.status==='scheduled'&&city.minute>=e.startedAt)e.status='campaign';
     if(e.status==='campaign'&&city.minute>=e.voteAt)this.open(e);
     if(p.active!==e||!['voting','counting'].includes(e.status))return;
     if(!this.hall(e)){e.cancellationReason='Prefeitura ficou indisponível durante a votação.';this.close(e);return;}

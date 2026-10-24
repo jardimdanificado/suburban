@@ -53,13 +53,13 @@ export class CityDesktop {
   openElection(id,view='count'){
     const gov=this.city.politics,e=[gov.active,gov.lastResult,...gov.elections].find(e=>e?.id===id);if(!e)return;
     const label={polls:'Pesquisas eleitorais',count:'Votação e apuração',results:'Resultado eleitoral'}[view];
-    const state=this.create(`election:${id}:${view}`,'election',{title:`${label} · eleição ${id}`});state.electionId=id;state.electionView=view;state.electionSnapshot=e;return state;
+    const state=this.create(`election:${id}:${view}`,'election',{title:`${label} · eleição ${id} · ${e.round||1}º turno`});state.electionId=id;state.electionView=view;state.electionSnapshot=e;return state;
   }
   syncElectionNotices(){
     const gov=this.city.politics;
     if(this.lastElectionNoticeMinute!=null&&this.city.minute<this.lastElectionNoticeMinute){this.electionNotices.clear();this.lastElectionResultId=gov.lastResult?.id??null;}this.lastElectionNoticeMinute=this.city.minute;
     const active=gov.active;
-    if(active){const view=active.status==='campaign'?'polls':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);}}
+    if(active){const view=['campaign','scheduled'].includes(active.status)?'polls':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);}}
     if(gov.lastResult&&gov.lastResult.id!==this.lastElectionResultId){this.lastElectionResultId=gov.lastResult.id;this.openElection(gov.lastResult.id,'results');}
   }
   openEvent(id,snapshot=null){const state=this.create(`event:${id}`,'event',{title:`Inspetor do evento #${id}`,kind:'inspector'});state.selectedEventId=id;state.eventSnapshot??=snapshot||this.city.history.get(id);return state;}
