@@ -17,7 +17,7 @@ export class CitySanitation {
     } else {
       const access = ['townhall', 'public_toilet', 'popular_refectory'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees';
       const u = b.units.find(u => u.roomType === 'bathroom') || b.units.at(-1);
-      if (u) u.roomType = 'bathroom';
+      if(u&&u.roomType!=='bathroom'){u.roomType='bathroom';b.layoutRevision=(b.layoutRevision||0)+1;}
       this.addFacility(b, { unitId: u?.id || null, access });
     }
   }
@@ -27,12 +27,12 @@ export class CitySanitation {
     let bathroom = b.units.find(u => u.roomType === 'bathroom');
     bathroom ||= b.units.find(u => u.roomType === 'workspace');
     if (bathroom) {
-      bathroom.roomType = 'bathroom';
+      if(bathroom.roomType!=='bathroom'){bathroom.roomType='bathroom';b.layoutRevision=(b.layoutRevision||0)+1;}
       this.addFacility(b, { unitId: bathroom.id, access: ['townhall', 'public_toilet', 'popular_refectory'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees' });
     }
     if (!b.units.some(u => u.roomType === 'dining')) {
       const dining = b.units.find(u => u.roomType === 'workspace');
-      if (dining) dining.roomType = 'dining';
+      if(dining){dining.roomType='dining';b.layoutRevision=(b.layoutRevision||0)+1;}
     }
   }
   allowed(c, f) {

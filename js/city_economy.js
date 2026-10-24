@@ -118,6 +118,24 @@ export class CityEconomy {
       if(b.type==='carrier')b.jobs=Math.min(16,Math.max(2,Math.ceil(freight.work/180/Math.max(1,firms.filter(f=>f.type==='carrier').length))));
     }
   }
+  reconcileStaff() {
+    const city=this.city,assigned=new Map();
+    for(const c of city.citizens)if(!c.entity.destroyed&&c.jobId){let staff=assigned.get(c.jobId);if(!staff)assigned.set(c.jobId,staff=[]);staff.push(c.id);}
+    for(const b of city.buildings){
+      const seen=new Set();
+      b.workers=b.workers.filter(id=>{const c=this.citizen(id);if(!c||c.jobId!==b.id||seen.has(id))return false;seen.add(id);return true;});
+      for(const id of assigned.get(b.id)||[])if(!seen.has(id)){b.workers.push(id);seen.add(id);}
+      b.jobs=Math.max(b.type==='townhall'&&seen.has(this.mayorId)?1:0,Number.isFinite(b.jobs)?Math.max(0,Math.floor(b.jobs)):0);
+      const excess=b.workers.length-b.jobs;if(excess<=0)continue;
+      const candidates=b.workers.map(id=>this.citizen(id)).filter(c=>c&&c.id!==this.mayorId).sort((a,c)=>Number(!!(a.deliveryId||a.cleaningJobId))-Number(!!(c.deliveryId||c.cleaningJobId))||this.hiringScore(a,b)-this.hiringScore(c,b)||a.id-c.id);
+      for(const c of candidates.slice(0,excess)){
+        if(c.deliveryId){const shipment=city.logistics.shipments.find(s=>s.id===c.deliveryId);if(shipment){if(shipment.pickedUp)shipment.position={x:c.entity.x,y:c.entity.y};city.logistics.releaseDriver(shipment);shipment.status='waiting';}else c.deliveryId=null;}
+        if(c.cleaningJobId)city.sanitation.releaseCitizen(c);
+        this.leaveJob(c,'Adequação da equipe ao número de postos de trabalho');c.action='Procurando trabalho';
+      }
+    }
+    city._statsCache=null;
+  }
   hire() {
     this.appointMayor();
     this.staffEssentials();
@@ -126,6 +144,7 @@ export class CityEconomy {
       if (!b || !b.active || (b.balance < b.wage && this.city.minute - c.lastPaidAt > 1440)) this.leaveJob(c);
       else if (!c.deliveryId && !c.cleaningJobId && !this.city.relationships.willingToWork(c,b)) this.leaveJob(c,'Conflito pessoal com o gestor');
     }
+    this.reconcileStaff();
     const offers = this.city.buildings.filter(b => b.active && b.jobs > 0 && !b.entity.destroyed);
     const available = () => this.city.citizens.filter(c => this.city.society.isAdult(c) && !c.entity.destroyed && !c.jobId && !c.businessIds.length && !this.city.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed') && c.id !== this.mayorId);
     const priority = ['mint', 'bakery', 'market', 'greengrocer', 'farm', 'quarry', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'builder', 'mint', 'townhall'];
@@ -139,8 +158,10 @@ export class CityEconomy {
     }
     offers.sort((a, b) => Number(a.workers.length > 0) - Number(b.workers.length > 0) || (priority.indexOf(a.type) < 0 ? 99 : priority.indexOf(a.type)) - (priority.indexOf(b.type) < 0 ? 99 : priority.indexOf(b.type)));
     const recruit = (b, count) => {
+      const slots=Math.max(0,Math.min(Math.floor(count),b.jobs-b.workers.length));
+      if(!Number.isFinite(slots)||slots<=0)return;
       const candidates = available().filter(c=>this.city.relationships.willingToWork(c,b)).sort((a, c) => this.hiringScore(c, b) - this.hiringScore(a, b) || a.id - c.id);
-      for (const c of candidates.slice(0, Math.min(count, b.jobs - b.workers.length))) {
+      for (const c of candidates.slice(0, slots)) {
         c.jobId = b.id; c.profession = JOB_SKILL[b.type]; b.workers.push(c.id); this.city.history.employment(c,b,'contratação');
         this.city.log(`${c.entity.properties.name} foi contratado em ${b.entity.properties.name}, considerando habilidade e vínculos com o proprietário.`, 'work', [c.id, b.ownerId].filter(Boolean), { kind: 'employment', buildingId: b.id, skill: c.skills[JOB_SKILL[b.type]], score: this.hiringScore(c, b) });
       }

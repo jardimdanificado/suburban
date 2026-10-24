@@ -28,7 +28,10 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const lantern = new THREE.Mesh(new THREE.BoxGeometry(.25, .35, .25), new THREE.MeshLambertMaterial({ color: 0xe3b65f })); lantern.position.y = 2.08; lamp.add(lantern); lamp.userData.lantern = lantern;
       renderer.scene.add(lamp); renderer.lampMeshes.set(post.id, lamp);
     }
-    lamp.position.set(post.x, surfaceElevation(world, post.x, post.y) + (post.height || 0), post.y);
+    if(lamp.userData.terrainRevision!==world.revision||lamp.userData.x!==post.x||lamp.userData.y!==post.y||lamp.userData.height!==post.height){
+      lamp.position.set(post.x,surfaceElevation(world,post.x,post.y)+(post.height||0),post.y);
+      Object.assign(lamp.userData,{terrainRevision:world.revision,x:post.x,y:post.y,height:post.height});
+    }
     lamp.userData.lantern.material.emissive.setHex(post.lit ? 0xffa52f : 0);
     lamp.visible = !post.buildingId || liveBuildings.has(post.buildingId);
     if (litNearby.has(post.id) && lamp.visible && lightIndex < renderer.cityLampLights.length) { const light = renderer.cityLampLights[lightIndex++]; light.position.copy(lamp.position); light.position.y += 2.1; light.intensity = 2; }
@@ -59,11 +62,11 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     if(!inView(entity.x,entity.y,b.width,b.depth)){const existing=renderer.cityMeshes.get(entity.id);if(existing)existing.visible=false;continue;}
     if (b.constructionKind === 'open-air') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
-    if (group && group.userData.floorCount !== b.floors) {
+    if (group && (group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0))) {
       renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
-      group = new THREE.Group(); group.userData.floorCount = b.floors;
+      group = new THREE.Group(); group.userData.floorCount = b.floors;group.userData.layoutRevision=b.layoutRevision||0;
       const geometry = new THREE.BoxGeometry(0.97, 0.97, 0.97);
       const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
       const cells = new THREE.InstancedMesh(geometry, material, b.units.length);
@@ -202,7 +205,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
 // Open-air premises follow every patch of the natural surface; no slab, walls or roof.
 function syncOpenAir(renderer, THREE, entity, b, world) {
   let group = renderer.cityMeshes.get(entity.id);
-  const signature = `${b.crop}:${b.units.filter(u => ['bathroom', 'dining'].includes(u.roomType)).map(u => u.id + u.roomType).join(',')}`;
+  const signature=`${b.crop}:${b.layoutRevision||0}:${b.units.length}`;
   if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;

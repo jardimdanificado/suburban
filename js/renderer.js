@@ -564,7 +564,7 @@ export class Renderer {
     }
 
     // 3.5. Render Planned Clan House Blueprints
-    const visibleEntities = getEntitiesInViewport(minTx - 1, maxTx + 1, minTy - 1, maxTy + 1);
+    const visibleEntities = getEntitiesInViewport(minTx - 1, maxTx + 1, minTy - 1, maxTy + 1,0,this._visibleEntitiesArray??=([]));
     const clanGroups = new Map();
     const occupiedHouseTiles = new Set();
     for (let i = 0; i < visibleEntities.length; i++) {

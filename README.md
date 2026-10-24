@@ -563,3 +563,31 @@ Medições locais contra a versão anterior desta revisão, excluindo inicializa
 Os hashes dos resultados observados na simulação (necessidades, atividades, posições, saldos, eventos e relações) coincidiram; as consultas espaciais também produziram o mesmo hash após movimento, redimensionamento, substituição e remoção. Essas medições de CPU e tráfego não representam FPS garantido nem equilíbrio de uma partida prolongada. A conferência visual desta revisão usou renderizações do Canvas fora do navegador.
 
 Para repetir as cargas, use `npm run benchmark`, `npm run benchmark -- scene` e `npm run benchmark -- snapshots`. Um caminho de checkout pode ser passado após o nome da carga para comparação, por exemplo `node scripts/benchmark.mjs simulation /caminho/da/versao/anterior`. O cenário usa terreno plano de 128×128, semente 1337 e 256 moradores; os números variam conforme a máquina e processos em execução.
+
+### Segunda rodada de otimização — 24/10/2026
+
+O transporte do worker agora envia somente os campos alterados quando a estrutura de um objeto permanece igual. Os campos são identificados pela posição no estado inicial, evitando repetir nomes de propriedades; adição ou remoção de campos continua enviando o objeto completo. As referências cíclicas e a identidade dos objetos são preservadas. A marcação de objetos visitados usa referências fracas reutilizáveis, sem reservar memória proporcional a todos os IDs já emitidos.
+
+A interpolação reutiliza amostras por morador, acompanha apenas deslocamentos ativos e remove amostras de pessoas que saíram da cidade. Consultas espaciais permitem reutilizar o vetor de saída nos renderizadores 2D e 3D. A rotina de necessidades evita listas e ordenações temporárias; encontros sociais aproveitam a elegibilidade já verificada durante a montagem dos grupos de vizinhos, mantendo a ordem e os sorteios.
+
+As alturas dos cantos do terreno têm cache por revisão do mapa, limitado às dimensões de cada mundo e descartável com ele. Fazendas e pedreiras detectam mudanças dos cômodos por uma revisão de layout, atualizada na criação de andares e na instalação de banheiros e refeitórios. A preparação do 3D não precisa mais varrer todos os espaços a cada quadro; posições de postes também reaproveitam a altura enquanto o terreno e o próprio poste não mudam.
+
+Comparação com a versão imediatamente anterior a esta rodada, mediana de três execuções alternadas na mesma máquina:
+
+| Carga | Antes | Depois |
+| --- | ---: | ---: |
+| Simulação de 256 moradores, 360 atualizações | 1.659 ms | 1.303 ms |
+| Percentil 95 dos passos | 12,45 ms | 9,33 ms |
+| Aplicação do pacote e interpolação no lado da interface, média de 30 envios | 13,41 ms | 7,78 ms |
+| Tamanho médio do pacote diferencial | 469 kB | 247 kB |
+| Preparação de 500 fazendas de 100 espaços, 300 quadros com malhas existentes | 412 ms | 59 ms |
+
+A codificação do pacote no worker ficou em aproximadamente 31 ms nesta carga (antes, 27 ms); o ganho líquido vem principalmente da aplicação mais curta e do menor volume transferido. O cenário de fazendas mede a sincronização de malhas já existentes com objetos gráficos simulados, sem criação de geometria, shaders ou GPU; portanto, não mede FPS. Os hashes dos dados observados coincidiram entre versões, entre origem e espelho do worker e após a interpolação. O cenário curto não cobre o equilíbrio de partidas prolongadas.
+
+Além das cargas anteriores, `npm run benchmark -- bridge` mede a aplicação através da ponte real da simulação, e `npm run benchmark -- city-render` mede a preparação dos imóveis. `snapshots` agora informa também o custo de aplicação e os hashes da origem e do espelho após clonagem estruturada dos pacotes. Esses comandos aceitam o caminho de outro checkout como último argumento.
+
+### Limite de contratações
+
+A contratação ignora capacidades nulas ou negativas antes de selecionar candidatos. Isso corrige o uso de `slice` com índice negativo quando a equipe ultrapassava a capacidade após uma redução de postos, situação que podia contratar quase todos os desempregados de uma vez.
+
+A cada rodada de contratação, as equipes também são reconciliadas com os vínculos dos cidadãos e com a capacidade atual. Desligamentos por excesso ficam no histórico; entregas já carregadas preservam sua posição e aguardam outro transportador, e faxinas voltam à fila. O panorama distingue **empregados / postos totais** de **vagas abertas**, contando somente postos em estabelecimentos ativos.

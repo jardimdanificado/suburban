@@ -96,7 +96,14 @@ export class CitySociety {
       for (let dx = -1; dx <= 1 && !c.conversation; dx++) for (let dy = -1; dy <= 1 && !c.conversation; dy++) {
         const nearby = buckets.get(`${x + dx},${y + dy}`) || [];
         let candidate=null,best=-Infinity;
-        for(const other of nearby)if(this.canConverse(c,other)){const v=this.city.relationships.view(c,other);if(v && (v.fear>50 || v.status==='enemy') && !(v.resentment>55 && c.socialProfile.assertiveness>.6))continue;const score=(v?.affection||0)+(v?0:(this.city.minute+c.id)%6===0?55:0)+(other.partnerId===c.id?20:0)-(v?.fear||0)*.5+(v?.resentment>55 && c.socialProfile.assertiveness>.6?40:0);if(score>best){candidate=other;best=score;}}
+        // Buckets contain people already checked for eligibility this minute. Only
+        // a new conversation can make an inserted person unavailable during this pass.
+        for(const other of nearby){
+          const dx=c.entity.x-other.entity.x,dy=c.entity.y-other.entity.y;
+          if(other.conversation || !(dx*dx+dy*dy<=4))continue;
+          const relation=this.relations.get(pairKey(c.id,other.id));
+          if(!relation && ((this.contactIndex.get(c.id)?.size||0)>=64 || (this.contactIndex.get(other.id)?.size||0)>=64))continue;
+          const v=relation?.views?.[c.id];if(v && (v.fear>50 || v.status==='enemy') && !(v.resentment>55 && c.socialProfile.assertiveness>.6))continue;const score=(v?.affection||0)+(v?0:(this.city.minute+c.id)%6===0?55:0)+(other.partnerId===c.id?20:0)-(v?.fear||0)*.5+(v?.resentment>55 && c.socialProfile.assertiveness>.6?40:0);if(score>best){candidate=other;best=score;}}
         if (candidate && this.city.random() < c.personality.sociability * 0.14) this.startConversation(c, candidate, nearby.filter(other=>other!==c && other!==candidate && Math.hypot(other.entity.x-c.entity.x,other.entity.y-c.entity.y)<=2).slice(0,4).map(other=>other.id));
       }
       const key = `${x},${y}`;

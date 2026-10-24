@@ -48,8 +48,8 @@ export const BUILDING_TYPES = {
   utility: { label: 'Água e saneamento', color: 0x83b9ce, rent: 70, price: 30000, jobs: 3 },
 };
 export const NEED_LABELS = { food: 'Alimentação', water: 'Água', energy: 'Descanso', hygiene: 'Higiene', toilet: 'Banheiro', social: 'Convívio', leisure: 'Lazer', health: 'Saúde', shelter: 'Moradia', safety: 'Segurança' };
-const NEED_DECAY=Object.entries({food:.065,water:.09,energy:.055,hygiene:.045,toilet:.085,social:.035,leisure:.035});
-const NEED_KEYS=Object.keys(NEED_LABELS);
+const NO_CHILDREN=Object.freeze([]);
+const URGENT_NEEDS=[['water',18,0],['food',18,0],['health',20,5],['energy',12,0],['toilet',10,0],['hygiene',10,0]];
 const clamp = n => Math.max(0, Math.min(100, n));
 const key = (x, y) => `${x},${y}`;
 
@@ -235,7 +235,7 @@ export class CitySimulation {
     return c;
   }
   building(id) { const b = this.buildingsById.get(id); return b && !b.entity.destroyed ? b : undefined; }
-  childrenOf(id) { return this.childrenByGuardian.get(id) || []; }
+  childrenOf(id) { return this.childrenByGuardian.get(id) || NO_CHILDREN; }
   indexFamilies() {
     this.childrenByGuardian.clear();
     for (const c of this.citizens) if (c.guardianId != null && !c.entity.destroyed) {
@@ -301,9 +301,11 @@ export class CitySimulation {
     return path === null ? null : path.slice();
   }
   urgentNeed(c) {
-    const n = c.needs;
-    return ['water', 'food', 'health', 'energy', 'toilet', 'hygiene'].filter(k => n[k] < ({ water: 18, food: 18, health: 20, energy: 12, toilet: 10, hygiene: 10 })[k]).sort((a, b) => (n[a] - (a === 'health' ? 5 : 0)) - (n[b] - (b === 'health' ? 5 : 0)))[0] || null;
+    let need,score=Infinity;
+    for(const [key,threshold,penalty] of URGENT_NEEDS){const value=c.needs[key];if(value<threshold && (need===undefined || value-penalty<score)){need=key;score=value-penalty;}}
+    return need;
   }
+
   chooseTask(c) {
     const n = c.needs;
     const home = this.building(this.units.get(c.homeUnitId)?.buildingId);
@@ -553,13 +555,16 @@ export class CitySimulation {
     for (const c of this.citizens) {
       const n = c.needs;
       c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
-      for (const [need, decay] of NEED_DECAY) n[need] = clamp(n[need] - decay);
+      // These fixed fields are the hottest loop; direct access avoids temporary
+      // iterators and dynamic property lookups for every resident and city minute.
+      n.food=clamp(n.food-.065);n.water=clamp(n.water-.09);n.energy=clamp(n.energy-.055);
+      n.hygiene=clamp(n.hygiene-.045);n.toilet=clamp(n.toilet-.085);n.social=clamp(n.social-.035);n.leisure=clamp(n.leisure-.035);
       n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2));
       n.safety = clamp(n.safety + (hasTownhall ? 0.08 : -0.1));
       n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025));
       c.mood = (c.mood || 0) * .998;
-      let totalNeeds=0;for(const need of NEED_KEYS)totalNeeds+=n[need];
-      c.happiness = clamp(totalNeeds / NEED_KEYS.length + c.mood + this.relationships.moodEffect(c) + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
+      const totalNeeds=n.food+n.water+n.energy+n.hygiene+n.toilet+n.social+n.leisure+n.health+n.shelter+n.safety;
+      c.happiness = clamp(totalNeeds / 10 + c.mood + this.relationships.moodEffect(c) + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
       if (this.life.minute(c)) continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
@@ -591,7 +596,7 @@ export class CitySimulation {
     this.accumulator += dt * 4;
     while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); }
     for (const c of this.citizens) {
-      if (c.conversation || c.workMeal) continue;
+      if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5);
       while (distance > 0 && c.path.length) {
         const p = c.path[0];
@@ -611,6 +616,8 @@ export class CitySimulation {
     this._statsMinute = this.minute; this._statsStructure = this.structureRevision;
     const people = this.citizens.filter(c => !c.entity.destroyed);
     const units = [...this.units.values()];
-    return this._statsCache = { mayorId: this.economy.mayorId, entrepreneurs: people.filter(c => c.businessIds.length).length, moneySupply: this.currency.supply(), moneyIssued: this.currency.issued, priceIndex: this.currency.priceIndex, inflation: this.currency.dailyInflation, businesses: this.economy.businesses.length, population: people.length, children: people.filter(c => !this.society.isAdult(c)).length, couples: people.filter(c => c.partnerId).length / 2, friendships: [...this.society.relations.values()].filter(r => r.active!==false && ['friend', 'close'].includes(r.status)).length, births: this.society.birthCount, deaths: this.life.deathCount, employed: people.filter(c => c.jobId).length, homeless: people.filter(c => !c.homeUnitId).length, happiness: people.length ? Math.round(people.reduce((s, c) => s + c.happiness, 0) / people.length) : 0, units: units.length, occupied: units.filter(u => u.tenantId || u.occupantId).length, jobs: this.buildings.reduce((s, b) => s + b.jobs, 0), treasury: this.treasury };
+    const employers=this.buildings.filter(b=>b.active&&!b.entity.destroyed);
+    const jobs=employers.reduce((n,b)=>n+b.jobs,0),vacancies=employers.reduce((n,b)=>n+Math.max(0,b.jobs-b.workers.length),0);
+    return this._statsCache = { mayorId: this.economy.mayorId, entrepreneurs: people.filter(c => c.businessIds.length).length, moneySupply: this.currency.supply(), moneyIssued: this.currency.issued, priceIndex: this.currency.priceIndex, inflation: this.currency.dailyInflation, businesses: this.economy.businesses.length, population: people.length, children: people.filter(c => !this.society.isAdult(c)).length, couples: people.filter(c => c.partnerId).length / 2, friendships: [...this.society.relations.values()].filter(r => r.active!==false && ['friend', 'close'].includes(r.status)).length, births: this.society.birthCount, deaths: this.life.deathCount, employed: people.filter(c => c.jobId).length, homeless: people.filter(c => !c.homeUnitId).length, happiness: people.length ? Math.round(people.reduce((s, c) => s + c.happiness, 0) / people.length) : 0, units: units.length, occupied: units.filter(u => u.tenantId || u.occupantId).length, jobs, vacancies, treasury: this.treasury };
   }
 }

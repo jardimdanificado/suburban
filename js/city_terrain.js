@@ -15,10 +15,22 @@ export function roadFor(tile) {
   return null;
 }
 // Match the renderer's interpolated corners, without changing any terrain tile.
-export function cornerHeight(world, x, y) {
-  const tiles = [tileAt(world, x - 1, y - 1), tileAt(world, x, y - 1), tileAt(world, x - 1, y), tileAt(world, x, y)].filter(t => t !== TILE_WATER && t !== TILE_VOID);
-  return tiles.length ? tiles.reduce((sum, t) => sum + tileHeight(t), 0) / tiles.length : 0;
+const cornerCaches=new WeakMap();
+function computeCornerHeight(world,x,y){
+  let sum=0,count=0;
+  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tile=tileAt(world,x+dx,y+dy);if(tile!==TILE_WATER&&tile!==TILE_VOID){sum+=tileHeight(tile);count++;}}
+  return count?sum/count:0;
 }
+export function cornerHeight(world,x,y){
+  if(!Number.isFinite(world.revision)||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>world.width||y>world.height)return computeCornerHeight(world,x,y);
+  let cache=cornerCaches.get(world);
+  if(!cache||cache.width!==world.width||cache.height!==world.height){const size=(world.width+1)*(world.height+1);cache={width:world.width,height:world.height,values:new Float64Array(size),marks:new Uint32Array(size),generation:0};cornerCaches.set(world,cache);}
+  if(cache.revision!==world.revision){cache.revision=world.revision;cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
+  const index=y*(cache.width+1)+x;
+  if(cache.marks[index]!==cache.generation){cache.values[index]=computeCornerHeight(world,x,y);cache.marks[index]=cache.generation;}
+  return cache.values[index];
+}
+
 export function surfaceBounds(world, x, y, width, depth) {
   let min = Infinity, max = -Infinity;
   for (let yy = y; yy <= y + depth; yy++) for (let xx = x; xx <= x + width; xx++) {

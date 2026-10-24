@@ -43,19 +43,19 @@ function removeMembership(id) {
 }
 export function getEntityById(id) { return entitiesById.get(Number(id)) || null; }
 export function getTileKey(x, y) { return ((Math.floor(x) & 0xffff) << 16) | (Math.floor(y) & 0xffff); }
-export function getEntitiesInViewport(minX, maxX, minY, maxY) {
-  const candidates = new Set();
-  const x0 = Math.floor(minX / REGION), x1 = Math.floor(maxX / REGION);
-  const y0 = Math.floor(minY / REGION), y1 = Math.floor(maxY / REGION);
-  // Whole-map views are cheaper as one pass than thousands of empty buckets.
-  const source = (x1 - x0 + 1) * (y1 - y0 + 1) > regions.size * 2 ? activeEntities : candidates;
-  if (source === candidates) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    for (const entity of regions.get(regionKey(x, y)) || []) candidates.add(entity);
+export function getEntitiesInViewport(minX,maxX,minY,maxY,_padding=0,out=[]) {
+  out.length=0;
+  const x0=Math.floor(minX/REGION),x1=Math.floor(maxX/REGION),y0=Math.floor(minY/REGION),y1=Math.floor(maxY/REGION);
+  // Whole-map queries need neither a candidate set nor intermediate arrays.
+  let source=activeEntities;
+  if((x1-x0+1)*(y1-y0+1)<=regions.size*2){
+    source=new Set();
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)for(const entity of regions.get(regionKey(x,y))||[])source.add(entity);
   }
-  return [...source].filter(entity => entity && !entity.destroyed &&
-    entity.x + (entity.properties?.cityBuilding?.width || 0) >= minX && entity.x <= maxX &&
-    entity.y + (entity.properties?.cityBuilding?.depth || 0) >= minY && entity.y <= maxY);
+  for(const entity of source)if(entity&&!entity.destroyed&&entity.x+(entity.properties?.cityBuilding?.width||0)>=minX&&entity.x<=maxX&&entity.y+(entity.properties?.cityBuilding?.depth||0)>=minY&&entity.y<=maxY)out.push(entity);
+  return out;
 }
+
 export function resolveWallSkin(x, y) {
   return getEntitiesInViewport(x, x, y, y).find(item => item.properties?.wall)?.properties?.render?.skin || 'Feature_Wood.png';
 }

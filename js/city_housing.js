@@ -28,6 +28,7 @@ export class CityHousing {
       for (const u of rooms) u.homeId = id;
       this.homes.set(id, home);
     }
+    b.layoutRevision=(b.layoutRevision||0)+1;
     return units;
   }
   units(home) { return home.unitIds.map(id => this.city.units.get(id)).filter(Boolean); }

@@ -327,7 +327,7 @@ export class CityUI {
     } else if (this.detailTab === 'stock') {
       p.heading('INVENTÁRIO REAL'); p.kv('Capacidade', `${inventoryUsed(b)}/${b.inventoryCapacity} itens`); p.kv('Reservado para recebimento', incomingItems(b)); p.kv('Espaço livre', inventoryFree(b)); p.meter('Ocupação do armazém', inventoryUsed(b) / b.inventoryCapacity * 100, inventoryFree(b) < 12 ? C.red : C.cyan); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
       if (b.type === 'quarry') p.kv('Reserva mineral restante', b.stoneReserve || 0);
-      if(b.type==='farm'){const farm=city.economy.farmCapacity(b);p.heading('ÁREA E CAPACIDADE AGRÍCOLA');p.kv('Área total / cultivada',`${b.width*b.depth} / ${farm.area} tiles`);p.kv('Talhões',farm.fields);p.kv('Funcionários / vagas',`${b.workers.length} / ${farm.jobs}`);p.kv('Colheita com todos os talhões',`${farm.harvest} unidades`);p.kv('Potencial estimado/dia',`${farm.daily} unidades`);p.note('Estimativa para 480 minutos de trabalho. Sementes, crescimento, equipe, refeições, transporte e capacidade do armazém limitam a produção real.');}
+      if(b.type==='farm'){const farm=city.economy.farmCapacity(b);p.heading('ÁREA E CAPACIDADE AGRÍCOLA');p.kv('Área total / cultivada',`${b.width*b.depth} / ${farm.area} tiles`);p.kv('Talhões',farm.fields);p.kv('Funcionários / postos totais',`${b.workers.length} / ${farm.jobs}`);p.kv('Colheita com todos os talhões',`${farm.harvest} unidades`);p.kv('Potencial estimado/dia',`${farm.daily} unidades`);p.note('Estimativa para 480 minutos de trabalho. Sementes, crescimento, equipe, refeições, transporte e capacidade do armazém limitam a produção real.');}
       if (b.crop) { p.heading(`CULTIVO / ${CROPS[b.crop].label}`); p.kv('Sementes', b.seedStock); for (const [i, f] of b.fields.entries()) { p.note(`Talhão ${i + 1}: ${f.plantedAt === null ? 'aguarda plantio' : 'em crescimento'}`); p.meter('Trabalho', f.labor / (f.requiredLabor||120) * 100); p.meter('Crescimento', f.plantedAt === null ? 0 : (city.minute - f.plantedAt) / CROPS[b.crop].grow * 100); } }
       if (b.type === 'bakery') p.note('Receita: trigo transformado em pão pelo trabalho da equipe.');
       p.heading('INSUMOS PROCURADOS'); const missing = Object.entries(b.inputDemand || {}).filter(([, qty]) => qty > 0);
@@ -431,7 +431,7 @@ export class CityUI {
         q.card(`${dirty.length} BANHEIROS SUJOS`,'Limpeza abaixo de 25%',()=>this.go('sanitation',{filter:'dirty'}),false,dirty.length?C.gold:C.green);
       },q=>{
         q.heading('A CIDADE EM MOVIMENTO');
-        q.kv('Empregados / vagas',`${s.employed} / ${s.jobs}`);q.kv('Empresas ativas',s.businesses);
+        q.kv('Empregados / postos totais',`${s.employed} / ${s.jobs}`);q.kv('Vagas abertas',s.vacancies);q.kv('Empresas ativas',s.businesses);
         q.kv('Obras em andamento',city.development.projects.filter(o=>!o.cancelled&&o.status!=='completed').length);
         q.kv('Cargas em andamento',city.logistics.shipments.filter(o=>!['delivered','cancelled'].includes(o.status)).length);
         q.kv('Entregas concluídas',city.logistics.delivered);q.kv('Casais / amizades',`${s.couples} / ${s.friendships}`);q.kv('Nascimentos / mortes',`${s.births} / ${s.deaths}`);

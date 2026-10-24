@@ -6,7 +6,7 @@ export class CitySimulationBridge {
     this.city = city; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice;
     this.graph = new CityStateGraph(); this.state = { city, entities, nextId };
     this.active = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
-    this.motion = new Map(); this.lastSnapshot = performance.now();
+    this.motion = new Map();this.motionSamples=new Map(); this.lastSnapshot = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
       this.worker = new Worker(new URL('./city_sim_worker.js', import.meta.url), { type: 'module' });
@@ -48,7 +48,11 @@ export class CitySimulationBridge {
     if (data.type !== 'state') return;
     const receiveStarted=performance.now();
     const revision = this.city.world.revision, count = this.entities.length, structure = this.city.structureRevision;
-    const positions = new Map(this.city.citizens.map(c => [c.id, { x: c.entity.x, y: c.entity.y }]));
+    for(const c of this.city.citizens){
+      let sample=this.motionSamples.get(c.id);
+      if(!sample){sample={id:c.id,from:{},to:{},entity:c.entity};this.motionSamples.set(c.id,sample);}
+      sample.from.x=c.entity.x;sample.from.y=c.entity.y;
+    }
     // Unchanged graph nodes still hold authoritative positions, not an interpolation sample.
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     this.graph.apply(data.packet); bindCityState(this.city);
@@ -57,13 +61,17 @@ export class CitySimulationBridge {
     const now = performance.now(), duration = Math.max(16, Math.min(150, now - this.lastSnapshot));
     this.lastSnapshot = now;
     this.motion.clear();
-    for (const c of this.city.citizens) {
-      const from = positions.get(c.id), to = { x: c.entity.x, y: c.entity.y };
-      if (from && !this.time.paused && Math.hypot(to.x - from.x, to.y - from.y) < 8) {
-        this.motion.set(c.id, { entity: c.entity, from, to, started: now, duration });
-        c.entity.x = from.x; c.entity.y = from.y;
+    for(const c of this.city.citizens){
+      let sample=this.motionSamples.get(c.id);const existing=!!sample;
+      if(!sample){sample={id:c.id,from:{x:c.entity.x,y:c.entity.y},to:{}};this.motionSamples.set(c.id,sample);}
+      sample.entity=c.entity;sample.seen=this.city._uiRevision;sample.to.x=c.entity.x;sample.to.y=c.entity.y;
+      const dx=sample.to.x-sample.from.x,dy=sample.to.y-sample.from.y;
+      if(existing&&!this.time.paused&&(dx!==0||dy!==0)&&Math.hypot(dx,dy)<8){
+        sample.started=now;sample.duration=duration;this.motion.set(c.id,sample);
+        c.entity.x=sample.from.x;c.entity.y=sample.from.y;
       }
     }
+    for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
     this.changed({ terrain: revision !== this.city.world.revision, entities: count !== this.entities.length || structure !== this.city.structureRevision });
     this.metrics={encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
     this.worker.postMessage({ type: 'ack' });
@@ -73,6 +81,7 @@ export class CitySimulationBridge {
       const t = this.time.paused ? 1 : Math.min(1, (now - motion.started) / motion.duration);
       motion.entity.x = motion.from.x + (motion.to.x - motion.from.x) * t;
       motion.entity.y = motion.from.y + (motion.to.y - motion.from.y) * t;
+      if(t>=1)this.motion.delete(motion.id);
     }
   }
   fail(message) {
@@ -80,7 +89,7 @@ export class CitySimulationBridge {
     for (const restore of this.restores) restore(); this.restores = [];
     bindCityState(this.city);
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
-    this.pending.clear(); this.motion.clear();
+    this.pending.clear(); this.motion.clear();this.motionSamples.clear();
     console.error('Simulação em segundo plano indisponível:', message);
     this.notice('Simulação em segundo plano indisponível; execução local ativada.');
   }
