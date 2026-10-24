@@ -1,3 +1,4 @@
+import {POLITICS_SECTIONS} from './city_ui_sections.js';
 import {renderPartyOrganization} from './city_party_organization_ui.js';
 import {approvalReport} from './city_political_institutions.js';
 import { formatMoney } from './city_ui_format.js';
@@ -6,26 +7,34 @@ import { PROMISE_METRICS } from './city_mandates.js';
 const money=formatMoney;
 const stamp=n=>`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const states={dismissed:'Arquivado','awaiting-sanction':'Aguardando sanção ou veto',vetoed:'Vetado: aguardando Câmara','veto-maintained':'Veto mantido',proposed:'Em discussão',approved:'Aprovado',executing:'Em execução / aguardando condições',executed:'Executado',rejected:'Rejeitado'};
-const format=(metric,value)=>{const spec=PROMISE_METRICS[metric];return `${Number(value||0).toFixed(spec?.unit==='%'?1:0)}${spec?.unit==='%'?'%':spec?.unit==='centavos'?' centavos/hora':''}`;};
+const format=(metric,value)=>{const spec=PROMISE_METRICS[metric];return `${Number(value||0).toFixed(['%','dias'].includes(spec?.unit)?1:0)}${spec?.unit==='%'?'%':spec?.unit==='centavos'?' centavos/hora':spec?.unit==='dias'?' dias':''}`;};
 function paginate(ui,p,rows,key,size=8){if(!rows.length){p.note('Nenhum registro disponível.');return [];}if(rows.length<=size)return rows;const page=Math.min(ui[key]||0,Math.max(0,Math.ceil(rows.length/size)-1));p.note(`${rows.length} registros / página ${page+1}`);p.buttons([{label:'ANTERIOR',click:()=>{ui[key]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{ui[key]=page+1;}}]);return rows.slice(page*size,page*size+size);}
 function flag(p,party){if(p.visible(42))drawPartyFlag(p.ui.ctx,party.flag,p.x,p.y,60,36);p.y+=42;}
 function fold(ui,p,key,label,draw){ui.helpOpen??={};const open=!!ui.helpOpen[key];p.disclosure(label,open,()=>{ui.helpOpen[key]=!open;});if(open)draw();}
-function promise(p,pr,campaign=false){
+function promise(p,pr,campaign=false,ui=null){
   p.record(pr.title,`${campaign?'Na campanha':'Na posse'}: ${format(pr.metric,pr.baseline??pr.campaignBaseline)} · Meta: ${format(pr.metric,pr.target)}`,null,false,{value:campaign?'':pr.fulfilled?'Atingida':pr.progress>0?'Melhorou':pr.progress<0?'Piorou':'Sem avanço'});
-  if(!campaign)p.kv('Última medição',format(pr.metric,pr.current));
+  if(pr.ambitionLabel)p.kv('Ambição da meta',`${pr.ambitionLabel} · atenção ${(100*(pr.attention??0)).toFixed(0)}/100`);
+  if(campaign){p.kv('Avanço prometido',`${pr.higher?'Aumentar':'Reduzir'} ${format(pr.metric,Math.abs(pr.target-pr.campaignBaseline))}`);p.note('Metas maiores atraem atenção e aumentam a cobrança ao fim do governo.');}
+  if(!campaign){p.kv('Última medição',format(pr.metric,pr.current));p.kv('Avanço desde a posse',`${pr.higher?'Ganho':'Redução'} de ${format(pr.metric,(pr.current-pr.baseline)*(pr.higher?1:-1))}`);
+    if(pr.fulfilledAt!=null)p.kv('Primeiro cumprimento',stamp(pr.fulfilledAt));
+    const a=pr.assessment;if(a){p.kv('Superação do avanço prometido',`${(a.overdelivery*100).toFixed(1)}%`);p.kv('Efeito da promessa na avaliação',`${a.points>=0?'+':''}${a.points.toFixed(2)} pontos`);p.note(`Avanço +${a.partial.toFixed(1)} · conclusão +${a.completion.toFixed(1)} · rapidez +${a.early.toFixed(1)} · superação +${a.excess.toFixed(1)} · pendência ${a.pending.toFixed(1)} · recuos ${a.regression.toFixed(1)}`);}
+    if(ui&&pr.lastEventId)p.button('INSPECIONAR ÚLTIMO MARCO',()=>ui.openEvent(pr.lastEventId));
+  }
 }
 export function renderPolitics(ui,p) {
   const city=ui.city,gov=city.politics,active=gov.active,tab=ui.politicsTab||'overview',partyName=id=>gov.party(id)?.short||'Sem partido';
-  p.heading('GOVERNO, CÂMARA E ELEIÇÕES');p.buttons([['overview','GOVERNO'],['approval','AVALIAÇÃO'],['parties','PARTIDOS'],['council','CÂMARA'],['campaign','CAMPANHA'],['polls','PESQUISAS'],['promises','PROMESSAS'],['scandals','FISCALIZAÇÃO'],['results','RESULTADOS']].map(([id,label])=>({label,selected:tab===id,click:()=>{ui.politicsTab=id;ui.resetScroll();}})));
+  p.heading(ui.sectionWindow?POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'Governo':'GOVERNO, CÂMARA E ELEIÇÕES');if(!ui.sectionWindow)p.buttons(POLITICS_SECTIONS.map(([id,label])=>({label,selected:tab===id,click:()=>{ui.politicsTab=id;ui.resetScroll();}})));
   if(tab==='approval'){
-    const report=gov.approvalReport?.startingScore===50?gov.approvalReport:approvalReport(gov),signed=n=>`${n>0?'+':''}${n.toFixed(2)} p.p.`;
+    const report=gov.approvalReport?.version===2?gov.approvalReport:approvalReport(gov),signed=n=>`${n>0?'+':''}${n.toFixed(2)} p.p.`;
     p.meter('Aprovação do governo',report.score);p.kv('Avaliação',report.score>50?'Saldo positivo (acima de 50 pontos)':report.score<50?'Saldo negativo (abaixo de 50 pontos)':'Avaliação neutra (50 pontos)');p.kv('Atualização',stamp(report.minute));
-    p.note('O cálculo parte de 50 pontos, a nota neutra. Condições acima da referência somam pontos; condições ruins e decisões impopulares descontam. A nota final fica entre 0 e 100.');
+    p.note('O cálculo parte de 50 pontos, a nota neutra. A evolução desde a posse tem mais peso que as condições herdadas. Cumprimento, rapidez e superação da promessa somam pontos; retrocessos, pendências e decisões impopulares descontam. A nota final fica entre 0 e 100.');
     p.note(`Sustentam a avaliação: ${(report.housed*100).toFixed(1)}% com moradia, ${(report.fed*100).toFixed(1)}% acima do limiar de fome e ${(report.employment*100).toFixed(1)}% com emprego ou negócio.`);
     const worst=report.rows.filter(r=>r.points<-.01).slice().sort((a,b)=>a.points-b.points).slice(0,3);if(worst.length)p.note('Maiores perdas: '+worst.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
     const best=report.rows.filter(r=>r.points>.01).slice().sort((a,b)=>b.points-a.points).slice(0,3);if(best.length)p.note('Maiores ganhos: '+best.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
     p.kv('Ponto de partida',report.startingScore);
-    for(const row of report.rows){p.heading(`${row.label}: ${signed(row.points)}`);p.note(row.detail);}
+    const view=ui.approvalView||'summary';p.buttons([['summary','RESUMO'],['changes','DESDE A POSSE'],['promise','PROMESSA'],['conditions','CONDIÇÕES E PENALIDADES']].map(([id,label])=>({label,selected:view===id,click:()=>{ui.approvalView=id;ui.resetScroll();}})));
+    const rows=report.rows.filter(row=>view==='summary'?Math.abs(row.points)>.01:view==='changes'?row.label.startsWith('Mudança')||row.label==='Limite do efeito das mudanças':view==='promise'?['Avanço da promessa','Meta alcançada','Rapidez do cumprimento','Superação da meta','Cobrança da promessa pendente','Recuos na promessa'].includes(row.label):row.label.startsWith('Condições')||['Corrupção comprovada','Vetos do prefeito'].includes(row.label));
+    for(const row of rows){p.heading(`${row.label}: ${signed(row.points)}`);if(view!=='summary')p.note(row.detail);}
     p.kv('Soma antes do limite',report.raw.toFixed(2));if(Math.abs(report.adjustment)>.001)p.kv('Ajuste ao intervalo 0–100',signed(report.adjustment));p.kv('Nota final',report.score.toFixed(2));
     p.note('Este é o índice geral usado pelo governo. Pesquisas eleitorais medem uma amostra de moradores e podem produzir outro resultado.');
   }
@@ -89,7 +98,7 @@ export function renderPolitics(ui,p) {
     if(!active){p.note(`As campanhas começam ${gov.termRules.campaignMinutes/1440} dias antes da eleição.`);return;}p.heading(`CAMPANHA ${active.id}`);p.kv('Duração prevista',`${(active.voteAt-active.startedAt)/1440} dias`);p.kv('Votação',stamp(active.voteAt));
     p.buttons(active.candidates.map(c=>({label:`${partyName(c.partyId)} · ${c.name}`,selected:ui.campaignCandidateId===c.citizenId,click:()=>{ui.campaignCandidateId=c.citizenId;}})));
     const candidate=active.candidates.find(c=>c.citizenId===ui.campaignCandidateId)||active.candidates[0];
-    if(candidate){const c=candidate,party=gov.party(c.partyId);flag(p,party);p.card(c.name,`${party.short} / apoios: ${c.endorsementPartyIds.map(partyName).join(', ')}`,()=>ui.openCitizen(c.citizenId));if(c.viceId)p.kv('Vice na chapa',c.viceName||city.accountName(`citizen:${c.viceId}`));p.heading('PROGRAMA DE GOVERNO');for(const pr of c.promises)promise(p,pr,true);}
+    if(candidate){const c=candidate,party=gov.party(c.partyId);flag(p,party);p.card(c.name,`${party.short} / apoios: ${c.endorsementPartyIds.map(partyName).join(', ')}`,()=>ui.openCitizen(c.citizenId));if(c.viceId)p.kv('Vice na chapa',c.viceName||city.accountName(`citizen:${c.viceId}`));p.heading('PROGRAMA DE GOVERNO');for(const pr of c.promises)promise(p,pr,true,ui);}
 
     p.heading('ACONTECIMENTOS DA CAMPANHA');for(const event of paginate(ui,p,[...active.events].reverse(),'campaignPage')){p.note(`${stamp(event.minute)} / ${event.message}`);p.button('VER ACONTECIMENTO',()=>ui.openEvent(event.eventId));}
   }
@@ -101,11 +110,15 @@ export function renderPolitics(ui,p) {
     p.heading('RESPOSTAS INDIVIDUAIS');for(const r of paginate(ui,p,poll.responses,'pollResponsePage')){p.card(r.name,r.decided?`Decidiu: ${city.accountName(`citizen:${r.candidateId}`)}`:'Indeciso',()=>ui.openCitizen(r.citizenId));p.note(`Motivo: ${r.reason}`);p.kv('Aprovação do governo',`${r.approval}%`);p.note(`Rejeita: ${r.rejectedIds.map(id=>city.accountName(`citizen:${id}`)).join(', ')||'Ninguém declarado'}`);for(const reason of r.reasons)p.note(`${reason.reason}: ${reason.value.toFixed(1)} pontos`);}
   }
   if(tab==='promises'){
-    p.note('Uma promessa principal por candidato, registrada na campanha e medida a partir da posse. O histórico guarda o início, as medições diárias e o fim de cada governo, inclusive gestões encerradas por cassação.');
-    p.buttons([...gov.mandates.terms].reverse().slice(0,12).map(t=>({label:`GESTÃO ${t.id} / ${partyName(t.partyId)}`,selected:ui.termId===t.id,click:()=>{ui.termId=t.id;ui.milestonePage=0;}})));const term=gov.mandates.terms.find(t=>t.id===ui.termId)||gov.mandates.current||gov.mandates.terms.at(-1);if(!term)return;
-    p.heading(`${term.mayorName} — ${partyName(term.partyId)}`);p.kv('Início',stamp(term.startedAt));p.kv('Fim',term.endedAt==null?'Em andamento':stamp(term.endedAt));p.kv('Promessas atingidas',`${term.promises.filter(pr=>pr.fulfilled).length}/${term.promises.length}`);for(const pr of term.promises)promise(p,pr);
-    p.heading('MARCADORES DO GOVERNO');p.table([{label:'Indicador',weight:2},{label:'Na posse'},{label:'Último / fim'}],Object.entries(PROMISE_METRICS).map(([key,spec])=>({cells:[spec.label,format(key,term.baseline[key]),format(key,term.latest[key])]})));
-    p.heading('MEDIÇÕES DIÁRIAS');for(const row of paginate(ui,p,[...term.checkpoints].reverse(),'milestonePage')){p.heading(stamp(row.minute));for(const pr of term.promises)p.kv(PROMISE_METRICS[pr.metric].label,format(pr.metric,row[pr.metric]));}
+    p.buttons([...gov.mandates.terms].reverse().slice(0,12).map(t=>({label:`GESTÃO ${t.id} / ${partyName(t.partyId)}`,selected:ui.termId===t.id,click:()=>{ui.termId=t.id;ui.milestonePage=0;ui.resetScroll();}})));
+    const term=gov.mandates.terms.find(t=>t.id===ui.termId)||gov.mandates.current||gov.mandates.terms.at(-1);if(!term)return;
+    p.heading(`${term.mayorName} — ${partyName(term.partyId)}`);p.kv('Início',stamp(term.startedAt));p.kv('Fim',term.endedAt==null?'Em andamento':stamp(term.endedAt));
+    p.button('ABRIR ESTA GESTÃO PARA COMPARAR',()=>ui.openSection({termId:term.id}));
+    const mode=ui.mandateView||'promise';p.buttons([['promise','META E RESULTADO'],['indicators','INDICADORES'],['measurements','MEDIÇÕES'],['events','ACONTECIMENTOS']].map(([id,label])=>({label,selected:id===mode,click:()=>{ui.mandateView=id;ui.resetScroll();}})));
+    if(mode==='promise'){for(const pr of term.promises)promise(p,pr,false,ui);p.kv('Efeito das mudanças na cidade',`${(term.outcomes?.points||0).toFixed(2)} pontos`);p.note('Indicadores e promessa são medidos a cada hora. O histórico mantém a última medição de cada dia e os eventos de cumprimento, superação e recuo.');}
+    if(mode==='indicators')p.table([{label:'Indicador',weight:2},{label:'Na posse'},{label:'Último / fim'},{label:'Variação'}],Object.entries(PROMISE_METRICS).map(([key,spec])=>({cells:[spec.label,format(key,term.baseline[key]),format(key,term.latest[key]),`${term.latest[key]-term.baseline[key]>0?'+':''}${format(key,term.latest[key]-term.baseline[key])}`]})));
+    if(mode==='measurements')for(const row of paginate(ui,p,[...term.checkpoints].reverse(),'milestonePage')){p.heading(stamp(row.minute));for(const pr of term.promises)p.kv(PROMISE_METRICS[pr.metric].label,format(pr.metric,row[pr.metric]));if(row.promisePoints!=null)p.kv('Promessa / evolução da cidade',`${row.promisePoints.toFixed(1)} / ${row.outcomePoints.toFixed(1)} pontos`);}
+    if(mode==='events'){for(const event of paginate(ui,p,[...(city.history.byReference.get(`termId:${term.id}`)||[])].reverse(),'termEventsPage'))p.record(stamp(event.minute),event.message,()=>ui.openEvent(event.id));p.button('ABRIR HISTÓRICO DESTA GESTÃO',()=>ui.openHistory(`termId:${term.id}`));}
   }
   if(tab==='scandals'){
     p.note('Suspeitas podem ficar sem prova ou ser arquivadas por proteção política. Cassação por corrupção exige provas, gravidade e repercussão em pelo menos 65% do eleitorado, além de dois terços dos votos ponderados. Aprovação abaixo de 20% por três dias permite impeachment por perda de confiança. Cassados ficam impedidos nas duas eleições municipais seguintes. Mentiras eleitorais não constituem prova de corrupção.');

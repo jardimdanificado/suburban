@@ -1,3 +1,4 @@
+import {describePromise} from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js';
 
 export class CityCampaigns {
@@ -7,8 +8,8 @@ export class CityCampaigns {
   event(election,message,kind,ids=[],details={}){const event=this.city.log(message,'government',ids,{kind,electionId:election.id,...details});election.events.push({eventId:event.id,minute:this.city.minute,message,kind,...details});if(election.events.length>120)election.events.shift();const author=this.city.society.citizen(ids[0]);if(author&&['campaign-program','campaign-defamation','campaign-accountability','campaign-rally'].includes(kind))this.city.publications.preserveEvent(author,event,'propaganda');return event;}
   hearPromises(voter,nomination,election,source='Programa divulgado') {
     const p=this.city.politics,party=p.party(nomination.partyId);if(!party?.active||!this.city.society.citizen(nomination.citizenId))return;p.campaignContact(voter,nomination,election,source);
-    nomination.memoryPromises??=Object.freeze(nomination.promises.map(pr=>Object.freeze({title:pr.title,metric:pr.metric,baseline:pr.campaignBaseline,target:pr.target})));
-    p.remember(voter,{kind:'campaign-promise',electionId:election.id,partyId:party.id,candidateId:nomination.citizenId,promiseKey:`promises:${election.id}:${nomination.citizenId}`,description:`${source}: ${nomination.name} (${party.short}) prometeu ${nomination.promises.map(pr=>pr.title.toLowerCase()).join('; ')}.`,effect:1,promises:nomination.memoryPromises});
+    nomination.memoryPromises??=Object.freeze(nomination.promises.map(pr=>Object.freeze({title:pr.title,metric:pr.metric,baseline:pr.campaignBaseline,target:pr.target,attention:pr.attention,ambitionLabel:pr.ambitionLabel})));
+    p.remember(voter,{kind:'campaign-promise',electionId:election.id,partyId:party.id,candidateId:nomination.citizenId,promiseKey:`promises:${election.id}:${nomination.citizenId}`,description:`${source}: ${nomination.name} (${party.short}) prometeu ${nomination.promises.map(describePromise).join('; ')}.`,effect:1,promises:nomination.memoryPromises});
   }
   poll(election) {
     const city=this.city,p=city.politics,electorate=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),cityPopulation=city.citizens.filter(c=>!c.entity.destroyed).length,size=Math.max(1,Math.ceil(cityPopulation*.1)),sample=this.sample(electorate,Math.min(size,electorate.length)),responses=[];
@@ -34,12 +35,12 @@ export class CityCampaigns {
   criticize(nomination,election){
     const city=this.city,p=city.politics,targets=election.candidates.filter(n=>n.citizenId!==nomination.citizenId);if(!targets.length)return;
     const target=targets[Math.floor(city.random()*targets.length)],scandal=p.scandals.filter(s=>s.proven&&(s.accusedId===target.citizenId||s.participantIds?.includes(target.citizenId))).sort((a,b)=>(b.severity||0)-(a.severity||0))[0];
-    const term=p.mandates.terms.filter(t=>t.mayorId===target.citizenId).at(-1),broken=term?.promises.filter(pr=>!pr.fulfilled).sort((a,b)=>a.progress-b.progress)[0];
+    const term=p.mandates.terms.filter(t=>t.mayorId===target.citizenId||t.partyId===target.partyId).at(-1),broken=term?.promises.filter(pr=>!pr.fulfilled).sort((a,b)=>a.progress-b.progress)[0];
     if(!scandal&&!broken)return;
-    const message=scandal?`${nomination.name} divulgou documentos de ${scandal.type}, envolvendo ${target.name} e ${(scandal.participantIds||[]).length} participantes.`:`${nomination.name} cobrou de ${target.name}: “${broken.title}”: início ${broken.baseline}, situação ${broken.current}, meta ${broken.target}.`;
+    const message=scandal?`${nomination.name} divulgou documentos de ${scandal.type}, envolvendo ${target.name} e ${(scandal.participantIds||[]).length} participantes.`:`${nomination.name} cobrou de ${target.name} o governo de ${term.mayorName}${term.mayorId!==target.citizenId?' de seu partido':''}: “${broken.title}”: início ${broken.baseline}, situação ${broken.current}, meta ${broken.target}.`;
     const event=this.event(election,message,'campaign-accountability',[nomination.citizenId,target.citizenId],{truth:true,targetId:target.citizenId,caseId:scandal?.id,termId:term?.id,metric:broken?.metric});
     for(const voter of this.sample(city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),Math.ceil(city.citizens.length*.2))){p.initializeCitizen(voter);const loyalty=voter.political.partyId===target.partyId?voter.political.loyalty:0,critical=.5+(voter.political.criticalSense??.5)*.7-loyalty*.35;
-      p.remember(voter,{kind:'campaign-accountability',electionId:election.id,candidateId:target.citizenId,partyId:target.partyId,caseId:scandal?.id,eventId:event.id,truth:true,effect:-(scandal?15:10)*critical,description:message});
+      p.remember(voter,{kind:'campaign-accountability',electionId:election.id,candidateId:target.citizenId,partyId:target.partyId,caseId:scandal?.id,eventId:event.id,truth:true,effect:-(scandal?15:10+(broken?.attention??.4)*8)*critical,description:message});
       if(scandal){scandal.awareIds??=[];if(!scandal.awareIds.includes(voter.id))scandal.awareIds.push(voter.id);}
     }
   }
@@ -75,7 +76,7 @@ export class CityCampaigns {
   }
   daily(election) {
     const day=Math.floor((this.city.minute-election.startedAt)/1440);if(election.lastCampaignDay===day)return;election.lastCampaignDay=day;
-    for(const nomination of election.candidates.filter(n=>this.city.politics.party(n.partyId)?.active&&this.city.society.citizen(n.citizenId))){const candidate=this.city.society.citizen(nomination.citizenId);if(candidate&&this.city.publications.writable(candidate))this.event(election,`${nomination.name} apresentou o programa: ${nomination.promises.map(pr=>pr.title).join('; ')}.`,'campaign-program',[nomination.citizenId],{candidateId:nomination.citizenId,partyId:nomination.partyId,truth:true});const audience=this.audience(Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.criticize(nomination,election);this.buyVotes(nomination,election);}
+    for(const nomination of election.candidates.filter(n=>this.city.politics.party(n.partyId)?.active&&this.city.society.citizen(n.citizenId))){const candidate=this.city.society.citizen(nomination.citizenId);if(candidate)this.event(election,`${nomination.name} apresentou o programa: ${nomination.promises.map(describePromise).join('; ')}.`,'campaign-program',[nomination.citizenId],{candidateId:nomination.citizenId,partyId:nomination.partyId,truth:true,promises:nomination.promises.map(pr=>({...pr}))});const audience=this.audience(Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.criticize(nomination,election);this.buyVotes(nomination,election);}
     this.poll(election);
   }
   hourly(election){for(const c of this.city.citizens)if(c.campaign&&(this.city.minute>=c.campaign.until||this.city.urgentNeed(c))){c.campaign=null;if(c.task==='campaign'){c.task=null;c.path=[];}}if(this.city.minute>=election.voteAt)return;this.daily(election);this.factCheck(election);const hour=Math.floor(this.city.minute/60);if(this.lastRallyHour!==hour&&this.city.hour>=7&&this.city.hour<20&&this.city.hour%3===0){this.lastRallyHour=hour;for(const nomination of this.sample(election.candidates,2))this.rally(nomination,election);}}

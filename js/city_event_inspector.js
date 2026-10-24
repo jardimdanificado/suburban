@@ -1,3 +1,5 @@
+import {PROMISE_METRICS,describePromise} from './city_mandates.js';
+import {renderEventTimeline,renderEventSummary,eventTypeLabel} from './city_event_timeline_ui.js';
 import {formatMoney} from './city_ui_format.js';
 import {EVENT_CATEGORIES} from './city_society.js';
 const stamp=n=>`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
@@ -6,19 +8,25 @@ export function renderEventInspector(ui,p){
   const city=ui.city,event=city.history.get(ui.selectedEventId)||ui.eventSnapshot;
   p.heading(`INSPETOR DO EVENTO #${ui.selectedEventId}`);
   if(!event){p.note('Registro indisponível.');return;}
+  const tab=ui.eventTab||'summary';p.buttons([['summary','RESUMO'],['details','DETALHES'],['timeline','LINHA DO TEMPO']].map(([id,label])=>({label,selected:tab===id,click:()=>{ui.eventTab=id;ui.resetScroll();}})));
+  if(tab==='summary'){renderEventSummary(ui,p,event);return;}if(tab==='timeline'){renderEventTimeline(ui,p,event);return;}
   p.note(event.message);
-  p.columns(q=>{q.kv('Quando',stamp(event.minute));q.kv('Assunto',EVENT_CATEGORIES[event.category]||event.category||event.kind);},q=>{q.kv('Tipo',event.data?.action||event.kind);if(event.amount!=null)q.kv('Valor registrado',formatMoney(event.amount));});
+  p.columns(q=>{q.kv('Quando',stamp(event.minute));q.kv('Assunto',EVENT_CATEGORIES[event.category]||event.category||event.kind);},q=>{q.kv('Tipo',eventTypeLabel(event));if(event.amount!=null)q.kv('Valor registrado',formatMoney(event.amount));});
   if(!city.history.get(event.id))p.note('Este registro saiu da retenção do histórico; o inspetor preserva a ocorrência aberta.');
   if(event.objectiveTruth!==undefined||event.truth!==undefined){const truth=event.objectiveTruth??event.truth;p.kv('Veracidade na simulação',truth===true?'Verdadeiro':truth===false?'Inventado':'Não verificado');}
   if(event.believes!==undefined)p.kv('Reação ao relato',event.believes?'Acreditou':'Duvidou');
-  const fields=[['transactions','Pagamentos consolidados'],['quantity','Quantidade'],['quality','Qualidade'],['service','Serviço'],['provider','Prestador'],['reason','Motivo'],['topic','Assunto da conversa'],['dimension','Dimensão da reputação'],['previous','Valor anterior'],['value','Novo valor']];
+  const fields=[['transactions','Pagamentos consolidados'],['quantity','Quantidade'],['quality','Qualidade'],['service','Serviço'],['provider','Prestador'],['reason','Motivo'],['topic','Assunto da conversa'],['dimension','Dimensão da reputação'],['baseline','Na posse'],['target','Meta prometida'],['current','Medição registrada'],['earlyBonus','Bônus por rapidez'],['overdeliveryBonus','Bônus por superação'],['popularityPoints','Efeito da promessa na avaliação'],['previous','Valor anterior'],['value','Novo valor']];
   for(const [key,label] of fields)if(event[key]!=null&&typeof event[key]!=='object')p.kv(label,event[key]);
-  if(event.kind==='party-membership-outreach'){
+  if((event.data?.action||event.kind)==='party-membership-outreach'){
     for(const [key,label] of [['communication','Comunicação do militante'],['ideologicalAffinity','Afinidade ideológica'],['closeness','Proximidade social'],['chance','Chance de filiação']])if(event[key]!=null)p.kv(label,`${(event[key]*100).toFixed(2)}%`);
     p.kv('Distância física',`${Number(event.physicalDistance||0).toFixed(1)} células`);p.kv('Resultado',event.joined?'Filiou-se':'Não se filiou');
   }
   const foundation=city.politics.organization?.proposals.find(r=>r.id===event.partyProposalId);
   if(foundation){p.heading('FUNDAÇÃO PARTIDÁRIA');p.kv('Nome',foundation.name);p.kv('Consulta popular',stamp(foundation.voteAt));if(foundation.result)p.note(foundation.result);if(foundation.electorate!=null)p.kv('Sim / não / abstenções',`${foundation.yes} / ${foundation.no} / ${foundation.abstentions}`);p.button('ABRIR VEREDITO E VOTOS',()=>{const state=ui.go('government');state.setView('elections');state.politicsTab='parties';state.partyProposalId=foundation.id;state.helpOpen??={};state.helpOpen.partyFoundations=true;state.resetScroll();});}
+  for(const promise of event.promises||[])p.note(describePromise(promise));
+  if(event.metric)p.kv('Indicador da promessa',PROMISE_METRICS[event.metric]?.label||event.metric);
+  if(event.fulfilledAt!=null)p.kv('Primeiro cumprimento da meta',stamp(event.fulfilledAt));
+  if(event.termId!=null)p.button('ABRIR GESTÃO EM JANELA SEPARADA',()=>ui.openSection({tab:'government',views:{government:'elections'},politicsTab:'promises',termId:event.termId}));
   if(event.good)p.kv('Mercadoria',city.economy.goods[event.good]?.label||event.good);
   if(event.wage!=null)p.kv('Salário base/hora',formatMoney(event.wage*60));
   if(event.rate!=null)p.kv('Juros/dia',`${(event.rate*100).toFixed(2)}%`);
@@ -43,6 +51,6 @@ export function renderEventInspector(ui,p){
   const related=[...new Set([...(event.relatedEventIds||[]),event.parentEventId,event.evidenceEventId].filter(id=>id!=null&&id!==event.id))];
   for(const id of related){const cause=city.history.get(id);p.button(`#${id}: ${cause?.message||'Registro fora da retenção'}`,()=>ui.openEvent(id));}
   if(!related.length)p.note('Nenhum evento anterior vinculado.');
-  p.buttons([{label:'VER NO HISTÓRICO',click:()=>{const target=ui.go('log');target.logCategory='all';target.query='';target.search.value='';target.logReference=null;target.logCitizenId=null;target.logBuildingId=null;target.logAccountId=null;target.logLimit=80;target.logLive=true;target.scrolls={};}}]);
-  for(const reference of city.history.references(event))p.button(`HISTÓRICO DA OPERAÇÃO: ${reference}`,()=>{const target=ui.go('log');target.logReference=reference;target.logCategory='all';target.logCitizenId=null;target.logBuildingId=null;target.logAccountId=null;target.query='';target.search.value='';target.resetScroll();});
+  p.button('ABRIR HISTÓRICO EM OUTRA JANELA',()=>ui.openHistory());
+  for(const reference of city.history.references(event))p.button(`HISTÓRICO DA OPERAÇÃO: ${reference}`,()=>ui.openHistory(reference));
 }

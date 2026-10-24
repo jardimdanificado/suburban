@@ -49,7 +49,8 @@ export function campaignContact(p,voter,nomination,election,source){
   const proximity=1-p.distance(s.ideology,party.ideology)/2.8,relation=p.city.relationships.view(voter,candidate),record=p.mandates.recordScore(candidate.id,party.id);
   const relevant=nomination.promises.filter(pr=>promiseRelevant(p.city,voter,pr.metric)).length;
   const knownScandals=p.scandals.filter(r=>r.partyId===party.id&&r.proven&&r.awareIds?.includes(voter.id)).reduce((n,r)=>n+(r.severity||40)/100,0);
-  const effect=(proximity-.4)*7+Math.min(3,relevant)*1.2+record*.08+((relation?.trust??50)-50)*.035-knownScandals*8;
+  const ambitionAttention=nomination.promises.reduce((n,pr)=>n+(pr.attention??.4),0);
+  const effect=ambitionAttention*2*(1-s.criticalSense*.5)+(proximity-.4)*7+Math.min(3,relevant)*1.2+record*.08+((relation?.trust??50)-50)*.035-knownScandals*8;
   opinion.score=clamp(opinion.score+effect*(1-s.criticalSense*.4),-35,40);opinion.contacts++;opinion.lastContact=p.city.minute;opinion.electionId=election.id;opinion.source=source;
   updateSympathy(s);
   // Persuasion usually changes the vote. Joining requires sustained interest,

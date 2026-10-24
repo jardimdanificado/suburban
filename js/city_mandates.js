@@ -1,3 +1,4 @@
+import {outcomeAssessment,promiseAssessment,promiseDifficulty} from './city_promise_evaluation.js';
 export const PROMISE_METRICS={
   health:{label:'Moradores com saúde acima de 60',unit:'%',higher:true},water:{label:'Moradores com água acima de 45',unit:'%',higher:true},rest:{label:'Moradores descansados',unit:'%',higher:true},hygiene:{label:'Moradores com higiene acima de 50',unit:'%',higher:true},
   clinics:{label:'Clínicas ativas',unit:'',higher:true},waterWorks:{label:'Serviços de água ativos',unit:'',higher:true},parks:{label:'Centros de lazer ativos',unit:'',higher:true},carriers:{label:'Transportadoras ativas',unit:'',higher:true},cleaners:{label:'Empresas de limpeza ativas',unit:'',higher:true},builders:{label:'Construtoras ativas',unit:'',higher:true},
@@ -10,6 +11,10 @@ export const PROMISE_METRICS={
   inflation:{label:'Inflação diária absoluta',unit:'%',higher:false},tax:{label:'Imposto salarial',unit:'%',higher:false},wage:{label:'Piso/hora em preços iniciais',unit:'centavos',higher:true},
   deliveries:{label:'Entregas pendentes',unit:'',higher:false},happiness:{label:'Felicidade média',unit:'%',higher:true},
 };
+export function describePromise(pr){
+  const spec=PROMISE_METRICS[pr.metric],unit=spec.unit||'',format=n=>`${Number(n).toFixed(['%','dias'].includes(unit)?1:0)}${unit==='%'?'%':unit?' '+unit:''}`;
+  return `${pr.title}: ${spec.label.toLowerCase()} de ${format(pr.campaignBaseline??pr.baseline)} para ${format(pr.target)}`;
+}
 // The same needs make a promise relevant in conversations and at the ballot.
 export function promiseRelevant(city,c,metric){
   const n=c.needs;
@@ -33,7 +38,7 @@ export function promiseRelevant(city,c,metric){
 const cityLampCount=city=>city.lighting.posts.filter(p=>p.built).length;
 const slogans={fed:'Ninguém vai passar fome',housed:'Casa para todas as pessoas',employed:'Uma ocupação para cada adulto',lamps:'Nenhum poste público sem óleo',connected:'Todo prédio ligado à estrada',clean:'Banheiro limpo é dignidade',publicHomes:'Construir moradia popular',publicMeals:'Abrir um refeitório popular',stateFirms:'Ampliar a produção municipal',inflation:'Conter a inflação',tax:'Aliviar o imposto do trabalhador',wage:'Valorizar o salário mínimo',deliveries:'Destravar as entregas',happiness:'Melhorar a vida no bairro'};
 export class CityMandates {
-  constructor(city){this.city=city;this.terms=[];this.current=null;this.nextId=1;this.lastDay=null;}
+  constructor(city){this.city=city;this.terms=[];this.current=null;this.nextId=1;this.lastDay=null;this.lastHour=null;}
   metrics() {
     const city=this.city,people=city.citizens.filter(c=>!c.entity.destroyed),adults=people.filter(c=>city.society.isAdult(c)),buildings=city.buildings.filter(b=>!b.entity.destroyed),posts=city.lighting.posts.filter(p=>p.public && p.built),facilities=[...city.sanitation.facilities.values()];
     const pct=(a,b)=>b?Math.round(a/b*1000)/10:100;
@@ -80,31 +85,52 @@ export class CityMandates {
     // Distinct main commitments within the same election, with bounded seeded variation.
     const unused=viable.filter(([key])=>!usedMetrics.includes(key)),pool=unused.length?unused:viable;
     const ranked=pool.map(row=>({row,rank:this.city.random()*1.6+(preferred.includes(row[0])?.7:0)+(green>.6&&environmental.includes(row[0])?.7:0)})).sort((a,b)=>b.rank-a.rank);
-    return ranked.slice(0,1).map(({row:[metric,title,target]})=>({metric,title,target,campaignBaseline:base[metric],current:base[metric],higher:PROMISE_METRICS[metric].higher}));
+    const ambition=Math.max(0,Math.min(1,.1+(candidate.traits?.ambition??.5)*.55+(1-(candidate.traits?.honesty??.5))*.2+this.city.random()*.35));
+    return ranked.slice(0,1).map(({row:[metric,title,target]})=>{
+      const spec=PROMISE_METRICS[metric],factor=.4+ambition*1.9;
+      let adjusted=base[metric]+(target-base[metric])*factor;
+      if(spec.unit==='%')adjusted=metric==='tax'?Math.max(-50,Math.min(50,adjusted)):metric==='inflation'?Math.max(0,adjusted):Math.max(0,Math.min(100,adjusted));
+      else if(!spec.unit)adjusted=spec.higher?Math.ceil(adjusted):Math.max(0,Math.floor(adjusted));
+      adjusted=Math.round(adjusted*10)/10;
+      return {metric,title,target:adjusted,...promiseDifficulty(metric,base[metric],adjusted,spec),candidateAmbition:ambition,campaignBaseline:base[metric],current:base[metric],higher:spec.higher};
+    });
   }
 
   start(mayor,party,promises=[],electionId=null) {
     this.finish();const base=this.metrics();
     const term={id:this.nextId++,mayorId:mayor.id,mayorName:mayor.entity.properties.name,partyId:party.id,calendarRules:this.city.politics.termRules,startedAt:this.city.minute,endedAt:null,electionId,baseline:Object.freeze({...base}),latest:Object.freeze({...base}),checkpoints:[],promises:promises.slice(0,1).map(p=>({...p,baseline:base[p.metric],current:base[p.metric],progress:0,fulfilled:false})),score:0};
-    this.current=term;this.terms.push(term);if(this.terms.length>32)this.terms.shift();this.lastDay=null;this.update();return term;
+    this.current=term;this.terms.push(term);if(this.terms.length>32)this.terms.shift();this.lastDay=null;this.lastHour=null;this.update();return term;
   }
   update(force=false) {
-    const t=this.current;if(!t || !force && this.lastDay===this.city.day)return;this.lastDay=this.city.day;
-    const now=this.metrics();t.latest=Object.freeze({...now});
-    for(const p of t.promises){p.current=now[p.metric];const direction=p.higher?1:-1,goal=(p.target-p.baseline)*direction,change=(p.current-p.baseline)*direction;p.fulfilled=(p.current-p.target)*direction>=-.001;p.progress=goal>0?Math.max(-1,Math.min(1,change/goal)):p.fulfilled?1:-Math.min(1,Math.abs(change)/Math.max(1,Math.abs(p.baseline)));}
-    t.score=t.promises.length?t.promises.reduce((s,p)=>s+p.progress*.6+(p.fulfilled?.4:0)-.5,0)/t.promises.length:0;
-    const snapshot=Object.freeze({minute:this.city.minute,day:this.city.day,...now,score:t.score});
+    const t=this.current,hour=Math.floor(this.city.minute/60);if(!t||!force&&this.lastHour===hour)return;this.lastHour=hour;this.lastDay=this.city.day;
+    const now=this.metrics();t.latest=Object.freeze({...now});t.outcomes=outcomeAssessment(t.baseline,now);
+    for(const p of t.promises){
+      const wasFulfilled=p.fulfilled,previousTier=p.overdeliveryTier||0;p.current=now[p.metric];
+      const assessment=promiseAssessment(p,t,this.city.minute);p.progress=assessment.progress;p.fulfilled=assessment.fulfilled;
+      if(assessment.completionAt!=null&&p.fulfilledAt==null)p.fulfilledAt=assessment.completionAt;
+      p.assessment=Object.freeze(assessment);const tier=Math.floor(assessment.overdelivery*4+1e-6);
+      let kind=null,message=null;
+      if(p.fulfilled&&!wasFulfilled&&assessment.earned){kind=p.achievementEventId?'promise-recovered':'promise-fulfilled';message=`${t.mayorName} ${p.achievementEventId?'recuperou':'cumpriu'} a meta: ${p.title}.`;}
+      else if(!p.fulfilled&&wasFulfilled&&p.achievementEventId){kind='promise-setback';message=`A meta de ${t.mayorName} deixou de ser atendida: ${p.title}.`;}
+      else if(p.fulfilled&&tier>previousTier){kind='promise-surpassed';message=`${t.mayorName} superou a meta em ${(assessment.overdelivery*100).toFixed(0)}% do avanço prometido: ${p.title}.`;}
+      if(kind){const event=this.city.log(message,'government',[t.mayorId],{kind,termId:t.id,partyId:t.partyId,metric:p.metric,baseline:p.baseline,target:p.target,current:p.current,fulfilledAt:p.fulfilledAt,earlyBonus:assessment.early,overdeliveryBonus:assessment.excess,popularityPoints:assessment.points,relatedEventIds:[p.lastEventId].filter(id=>id!=null)});if(kind==='promise-fulfilled')p.achievementEventId=event.id;p.lastEventId=event.id;}
+      p.overdeliveryTier=Math.max(previousTier,tier);
+    }
+    const promisePoints=t.promises.reduce((n,p)=>n+p.assessment.points,0)/Math.max(1,t.promises.length);
+    t.score=Math.max(-1.5,Math.min(1.5,promisePoints/40*.7+t.outcomes.points/40*.3));
+    const snapshot=Object.freeze({minute:this.city.minute,day:this.city.day,...now,score:t.score,promisePoints,outcomePoints:t.outcomes.points});
     if(t.checkpoints.at(-1)?.day===this.city.day)t.checkpoints[t.checkpoints.length-1]=snapshot;else t.checkpoints.push(snapshot);
+    if(t.checkpoints.length>180)t.checkpoints.shift();
   }
   finish(reason='Encerramento do mandato') {
     const t=this.current;if(!t)return;this.update(true);t.endedAt=this.city.minute;t.endReason=reason;
     this.city.log(`${t.mayorName} encerrou a gestão; ${t.promises.filter(p=>p.fulfilled).length}/${t.promises.length} promessas cumpridas.`,'government',[t.mayorId],{kind:'term-assessed',termId:t.id,partyId:t.partyId,score:t.score});
-    const memories=Object.freeze(t.promises.map(p=>Object.freeze({title:p.title,metric:p.metric,baseline:p.baseline,current:p.current,target:p.target,fulfilled:p.fulfilled})));
-    for(const c of this.city.citizens.filter(c=>!c.entity.destroyed))this.city.politics.remember(c,{kind:'government-record',partyId:t.partyId,candidateId:t.mayorId,termId:t.id,effect:t.score*16,description:`Balanço de ${t.mayorName}: ${t.promises.filter(p=>p.fulfilled).length}/${t.promises.length} promessas cumpridas.`,promises:memories});
+    const memories=Object.freeze(t.promises.map(p=>Object.freeze({title:p.title,metric:p.metric,baseline:p.baseline,current:p.current,target:p.target,fulfilled:p.fulfilled,fulfilledAt:p.fulfilledAt,overdelivery:p.assessment?.overdelivery,attention:p.attention})));
+    for(const c of this.city.citizens.filter(c=>!c.entity.destroyed))this.city.politics.remember(c,{kind:'government-record',partyId:t.partyId,candidateId:t.mayorId,termId:t.id,effect:t.score*24,description:`Balanço de ${t.mayorName}: ${t.promises.filter(p=>p.fulfilled).length}/${t.promises.length} promessas cumpridas.`,promises:memories});
     this.current=null;
   }
   recordScore(candidateId,partyId) {
     const relevant=this.terms.filter(t=>t.promises.length && (t.mayorId===candidateId||t.partyId===partyId)).slice(-3);
-    return relevant.length?relevant.reduce((n,t)=>n+t.score*(t.mayorId===candidateId?1:.75),0)/relevant.length*18:0;
+    return relevant.length?relevant.reduce((n,t)=>n+t.score*(t.mayorId===candidateId?1:.75),0)/relevant.length*30:0;
   }
 }

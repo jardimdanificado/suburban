@@ -27,10 +27,21 @@ export class CityDesktop {
     const existing=this.manager.find(id);if(existing){this.manager.raise(id);if(existing.shaded)this.manager.shade(id);this.hidden=false;return existing.state;}
     const state=new CityUI({city:this.city,root:this.element,select:this.select,camera:this.camera,host:this});state.tab=tab;
     const[w,h]=kind==='inspector'?[540,500]:kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
-    const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'?near:null});window.kind=kind;state.windowId=id;
+    const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'||kind==='section'?near:null});window.kind=kind;state.windowId=id;
     if(entity)state.setSelection(entity,unitId);this.hidden=false;
     for(const input of[state.search,state.seed,state.filterInput,state.sortInput,state.publicationDraft])input.addEventListener('pointerdown',()=>this.manager.raise(id));
     return state;
+  }
+  openSection(source,overrides={}){
+    const tab=overrides.tab||source.tab,id=`section:${this.sectionSerial=(this.sectionSerial||0)+1}`;
+    const dossier=!!source.selected&&tab===source.tab;
+    const state=this.create(id,tab,{kind:dossier?'dossier':'section',entity:dossier?source.selected:null,unitId:dossier?source.unitId:null});
+    // Copy the observer's choices, never the DOM, simulation objects or caches.
+    for(const [key,value] of Object.entries(source))if(key!=='windowId'&&(/(?:Id|Tab|View|Page)$/.test(key)||['query','logCategory','logReference','logLive','logLimit','logKind','publicationContentType','publicCrop'].includes(key)))if(value===null||['string','number','boolean'].includes(typeof value))state[key]=value;
+    for(const key of ['views','filters','sorts','scrolls','helpOpen','journalFilters','journalPages'])if(source[key])state[key]={...source[key]};
+    state.tab=tab;state.selected=dossier?source.selected:null;Object.assign(state,overrides);state.sectionWindow=true;state.search.value=state.query||'';if(tab==='government'&&state.politicsTab==='promises')state.termId??=this.city.politics.mandates.current?.id??this.city.politics.mandates.terms.at(-1)?.id;
+    if(source.eventSnapshot)state.eventSnapshot=source.eventSnapshot;
+    const window=this.manager.find(id);window.title=state.sectionTitle();return state;
   }
   openEvent(id,snapshot=null){const state=this.create(`event:${id}`,'event',{title:`Inspetor do evento #${id}`,kind:'inspector'});state.selectedEventId=id;state.eventSnapshot??=snapshot||this.city.history.get(id);return state;}
   openCorruption(id){if(id==null)return this.openModule('corruption');const state=this.create(`corruption:${id}`,'corruption-case',{title:`Corrupção · caso #${id}`,kind:'inspector'});state.corruptionCaseId=id;state.corruptionSnapshot??=this.city.politics.corruption.find(r=>r.id===id)||this.city.politics.scandals.find(r=>r.id===id);return state;}
@@ -88,6 +99,7 @@ export class CityDesktop {
     const r=this.manager.rect(w),active=this.manager.activeId===w.id,ctx=ui.ctx;ctx.save();ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(r.x+3,r.y+3,r.w,r.h);ctx.restore();bevel(ctx,r.x,r.y,r.w,r.h,{fill:'#c6c6b1'});
     ui.regions.push({...r,onClick:()=>this.manager.raise(w.id)});
     bevel(ctx,w.x+1,w.y+1,w.w-2,24,{fill:active?'#537a9e':'#9b9e8c'});
+    if(w.state.sectionWindow)w.title=w.state.sectionTitle();
     const title=w.title;ctx.save();ctx.beginPath();ctx.rect(w.x+8,w.y+3,w.w-114,20);ctx.clip();ctx.font=ui.font(1,true);ctx.textBaseline='middle';ctx.textAlign='left';ctx.fillStyle=active?'#ffffff':'#222a24';ctx.fillText(title,w.x+8,w.y+13);ctx.restore();
     ui.regions.push({x:w.x+4,y:w.y+2,w:w.w-108,h:22,onClick:()=>this.manager.raise(w.id),label:`Mover: ${title}`});
     ui.button(w.x+w.w-101,w.y+2,24,22,w.pinned?'●':'○',()=>this.manager.pin(w.id),{selected:w.pinned});ui.regions.at(-1).label=`Fixar: ${title}`;

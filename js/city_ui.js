@@ -1,3 +1,4 @@
+import {sectionTitle} from './city_ui_sections.js';
 import {ROTATION_LABELS} from './city_building_geometry.js';
 import { renderPublications } from './city_publications_ui.js';
 import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases } from './city_corruption_ui.js';
@@ -93,6 +94,9 @@ export class CityUI {
   go(tab,{filter=null,view=null}={}) {
     const target=this.host?this.host.openModule(tab):this;if(!this.host)this.navigate(tab);if(filter)target.setFilter(filter);if(view)target.setView(view);return target;
   }
+  sectionTitle(){return sectionTitle(this);}
+  openSection(overrides={}){return this.host?this.host.openSection(this,overrides):Object.assign(this,overrides);}
+  openHistory(reference=null,overrides={}){return this.openSection({tab:'log',query:'',selected:null,logCategory:'all',logReference:reference,logCitizenId:null,logBuildingId:null,logAccountId:null,logLimit:80,logLive:true,scrolls:{},...overrides});}
   view() { return this.views[this.tab] || VIEWS[this.tab]?.[0][0] || 'overview'; }
   setView(id) { this.selectedProjectId=null; this.views[this.tab] = id; this.resetScroll(); }
   filter() { return this.filters[this.tab] || 'all'; }
@@ -137,8 +141,9 @@ export class CityUI {
     if(!this.floatingDossier){
       const search=!['event','corruption-case'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
-      const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.setView(id)})));y=p.y;}
+      const views=VIEWS[this.tab];if(views&&!this.sectionWindow){const p=new Page(ui,x+4,y,w-8,y,bottom);p.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.setView(id)})));y=p.y;}
     }
+    if(this.host&&this.tab!=='map'){const toolbar=new Page(ui,x+4,y,w-8,y,bottom);toolbar.button(this.sectionWindow?'DUPLICAR ESTA SEÇÃO':'ABRIR ABA ATUAL EM OUTRA JANELA',()=>this.openSection());y=toolbar.y;}
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings','economy'].includes(this.tab)?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings','economy'].includes(this.tab))this.directory(p);else this.content(p);
     });
