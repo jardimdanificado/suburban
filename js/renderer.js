@@ -624,6 +624,11 @@ export class Renderer {
           drawBox32(buf32, width, height, px + 1, py + 1, Math.floor(tileSize) - 2, Math.floor(tileSize) - 2, colorScale(color, globalLight));
           drawBox32(buf32, width, height, px + Math.floor(tileSize * .25), py + Math.floor(tileSize * .25), Math.floor(tileSize * .45), Math.floor(tileSize * .35), rgba32(60, 83, 77));
         }
+        if(['market','greengrocer'].includes(b.type))for(let y=0;y<b.depth;y++)for(let x=0;x<b.width;x++){
+          const px=Math.floor(sx+x*tileSize),py=Math.floor(sy+y*tileSize),band=Math.max(1,Math.floor(tileSize/4));
+          for(let stripe=0;stripe<4;stripe++)drawBox32(buf32,width,height,px+stripe*band,py+1,band,Math.max(2,Math.floor(tileSize*.42)),stripe%2?rgba32(238,222,182):b.type==='market'?rgba32(194,79,56):rgba32(69,127,74));
+          drawBox32(buf32,width,height,px+2,py+Math.floor(tileSize*.65),Math.max(2,Math.floor(tileSize)-4),Math.max(1,Math.floor(tileSize*.18)),rgba32(154,111,57));
+        }
         if(b.constructionKind!=='open-air'){
           const turn=b.rotation||0,dx=[0,1,0,-1][turn],dy=[1,0,-1,0][turn];
           const px=Math.floor(sx+(b.door.x-e.x-dx*.6)*tileSize),py=Math.floor(sy+(b.door.y-e.y-dy*.6)*tileSize);

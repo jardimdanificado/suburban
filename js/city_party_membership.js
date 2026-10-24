@@ -6,7 +6,7 @@ export function membershipProfile(p,c){
   const s=c.political,t=c.traits||{};
   s.engagement??=clamp((t.ambition??.5)*.4+(t.openness??.5)*.25+c.personality.sociability*.15+((c.id*37)%101)/500);
   s.independence??=clamp(.45+(s.criticalSense??.5)*.35+((c.id*19)%101)/500);
-  s.support??={};s.membershipSince??=p.city.minute;s.membershipCooldownUntil??=0;
+  s.popularity??=50;s.support??={};s.membershipSince??=p.city.minute;s.membershipCooldownUntil??=0;
   if(!s.partyId)s.loyalty=0;
   syncPartyColor(p,c);
   return s;
@@ -66,7 +66,7 @@ export function reviewMembership(p){
     const distance=p.distance(s.ideology,party.ideology),memories=s.memories.filter(m=>m.partyId===party.id&&p.city.minute-m.minute<5*1440);
     const criticism=memories.reduce((n,m)=>n+(m.effect||0),0),scandals=p.scandals.filter(r=>r.partyId===party.id&&r.proven&&r.awareIds?.includes(c.id)).reduce((n,r)=>n+(r.severity||40)/100,0);
     const record=p.mandates.recordScore(null,party.id),governing=p.partyOfId(p.city.economy.mayorId)?.id===party.id;
-    const target=clamp(.5+(1-distance/2.8)*.25+record/100+clamp(criticism/80,-.4,.15)-scandals*.25+(governing?(p.approval-50)/150:0),.02,.95);
+    const target=clamp(((party.publicReputation??50)-50)/300+.5+(1-distance/2.8)*.25+record/100+clamp(criticism/80,-.4,.15)-scandals*.25+(governing?(p.approval-50)/150:0),.02,.95);
     s.loyalty=clamp(s.loyalty+(target-s.loyalty)*.18);
     if(!p.officeHolder(c)&&s.loyalty<.25&&p.city.minute-s.membershipSince>2*1440)leaveParty(p,c,scandals?'Decepção com corrupção conhecida':'Divergências, promessas e balanço do partido');
   }

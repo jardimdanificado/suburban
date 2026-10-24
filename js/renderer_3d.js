@@ -4880,7 +4880,7 @@ export class RCT3DRenderer {
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;
         const base = b.constructionKind === 'open-air' ? b.terrain.min : b.terrain?.base ?? (map ? this.getTileSurfaceHeight(map, e.x, e.y) : 1);
-        const box = new THREE.Box3(new THREE.Vector3(e.x, base, e.y), new THREE.Vector3(e.x + b.width, b.constructionKind === 'open-air' ? b.terrain.max + .14 : base + b.floors, e.y + b.depth));
+        const box = new THREE.Box3(new THREE.Vector3(e.x, base, e.y), new THREE.Vector3(e.x + b.width, b.constructionKind === 'open-air' ? b.terrain.max + (['market','greengrocer'].includes(b.type)?1.3:.14) : base + b.floors, e.y + b.depth));
         const hit = ray.intersectBox(box, new THREE.Vector3());
         if (hit) {
           const distance = ray.origin.distanceTo(hit);

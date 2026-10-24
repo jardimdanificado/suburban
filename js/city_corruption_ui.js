@@ -36,6 +36,8 @@ export function renderCorruptionInspector(ui,p){
     p.kv(r.type==='vote-buying'?'Pagamento ilegal inicial':'Valor retirado do tesouro',money(r.amount));
     p.kv('Quando ocorreu',stamp(r.occurredAt));p.kv('Partido do articulador à época',party?.name||'Sem partido');
     if(party?.flag){if(p.visible(40))drawPartyFlag(p.ui.ctx,party.flag,p.x,p.y,58,36);p.y+=41;}
+    p.heading('REPUTAÇÃO DOS PARTIDOS');for(const affected of gov.parties){const incidents=(affected.reputationIncidents||[]).filter(i=>i.caseId===r.id);for(const incident of incidents)p.kv(`${affected.short} · ${incident.role==='origin'?'à época do crime':'acolhimento posterior'}`,`−${incident.penalty.toFixed(2)} pontos`);}
+    if(!discovered(r))p.note('Sem efeito público na reputação enquanto o esquema permanecer secreto.');
     p.heading('QUEM PARTICIPOU');
     const roles=new Map((r.roles||[]).map(role=>[role.citizenId,role.role]));
     for(const id of new Set([r.accusedId,...(r.participantIds||[]),...roles.keys()])){

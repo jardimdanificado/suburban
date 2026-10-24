@@ -1,3 +1,4 @@
+import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
 import {modelSize,buildingPoint} from './city_building_geometry.js';
 import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
@@ -213,14 +214,15 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
 // Open-air premises follow every patch of the natural surface; no slab, walls or roof.
 function syncOpenAir(renderer, THREE, entity, b, world) {
   let group = renderer.cityMeshes.get(entity.id);
-  const signature=`${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}`;
+  const signature=`retail-v2:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}`;
   if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;
-    const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : 0x6e7940 }), b.units.length);
+    const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : ['market','greengrocer'].includes(b.type)?0xb5a68d:0x6e7940 }), b.units.length);
     patches.receiveShadow = true; group.add(patches); group.userData.patches = patches;
-    const rows = new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0xb0b8ba : b.crop === 'girassol' ? 0xffce30 : 0x9bbd50 }), b.units.length * 3);
-    group.add(rows); group.userData.rows = rows;
+    const rows = ['farm','quarry'].includes(b.type)?new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0xb0b8ba : b.crop === 'girassol' ? 0xffce30 : 0x9bbd50 }), b.units.length * 3):null;
+    if(rows)group.add(rows);group.userData.rows=rows;
+    if(['market','greengrocer'].includes(b.type)){const fixtures=marketFixtures(THREE,b);group.add(fixtures);group.userData.retailFixtures=fixtures;}
     group.userData.sheds = [];
     if (['quarry', 'farm'].includes(b.type)) {
       const addShed = (unit, kind) => {
@@ -250,10 +252,11 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     b.units.forEach((u, i) => {
       const ground = surfaceElevation(world, entity.x + u.x + .5, entity.y + u.y + .5);
       matrix.makeTranslation(u.x + .5, ground + .035, u.y + .5); group.userData.patches.setMatrixAt(i, matrix);
-      for (let r = 0; r < 3; r++) { matrix.makeTranslation(u.x + .2 + r * .3, ground + .08, u.y + .5); group.userData.rows.setMatrixAt(i * 3 + r, matrix); }
+      if(group.userData.rows)for (let r = 0; r < 3; r++) { matrix.makeTranslation(u.x + .2 + r * .3, ground + .08, u.y + .5); group.userData.rows.setMatrixAt(i * 3 + r, matrix); }
     });
     for (const { unit, mesh } of group.userData.sheds || []) mesh.position.set(unit.x + .5, surfaceElevation(world, entity.x + unit.x + .5, entity.y + unit.y + .5) + .06, unit.y + .5);
-    group.userData.patches.instanceMatrix.needsUpdate = true; group.userData.rows.instanceMatrix.needsUpdate = true;
+    group.userData.patches.instanceMatrix.needsUpdate = true;if(group.userData.rows)group.userData.rows.instanceMatrix.needsUpdate=true;
+    if(group.userData.retailFixtures)positionMarketFixtures(THREE,group.userData.retailFixtures,b,u=>surfaceElevation(world,entity.x+u.x+.5,entity.y+u.y+.5)+.06);
     group.userData.terrainRevision = world.revision || 0;
   }
   group.position.set(entity.x, 0, entity.y);

@@ -1,3 +1,4 @@
+import {CityPoliticalStanding} from './city_political_standing.js';
 import {CityPartyOrganization} from './city_party_organization.js';
 import { CityPublications } from './city_publications.js';
 import { CityRelationships } from './city_relationships.js';
@@ -25,7 +26,7 @@ import { CitySociety } from './city_society.js';
 import { CityServiceInvestment } from './city_service_investment.js';
 import { World, WorldClock } from './world.js';
 
-const prototypes = new Map([CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
+const prototypes = new Map([CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));
