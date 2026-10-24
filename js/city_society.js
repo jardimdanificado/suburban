@@ -42,6 +42,8 @@ export class CitySociety {
     return seen;
   }
   related(a, b) {
+    if(a.id===b.id)return true;
+    if(!a.parentIds.length&&!b.parentIds.length)return false;
     const aa = this.ancestors(a), bb = this.ancestors(b);
     return a.id === b.id || aa.has(b.id) || bb.has(a.id) || [...aa].some(id => bb.has(id));
   }
@@ -52,8 +54,9 @@ export class CitySociety {
   }
   canConverse(a, b) {
     const dx=a.entity.x-b.entity.x,dy=a.entity.y-b.entity.y;
+    if(a===b||!(dx*dx+dy*dy<=4)||!this.canSocialize(a)||!this.canSocialize(b))return false;
     const known=this.relations.has(pairKey(a.id,b.id));
-    return a!==b && (known || (this.contactIndex.get(a.id)?.size||0)<64 && (this.contactIndex.get(b.id)?.size||0)<64) && this.canSocialize(a) && this.canSocialize(b) && dx*dx+dy*dy<=4;
+    return known || (this.contactIndex.get(a.id)?.size||0)<64 && (this.contactIndex.get(b.id)?.size||0)<64;
   }
   startConversation(a, b, witnessIds = []) {
     if (!this.canConverse(a, b)) return false;

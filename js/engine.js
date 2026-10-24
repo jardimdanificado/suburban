@@ -2,32 +2,37 @@
 export const globalWallCoords = new Set();
 const entitiesById = new Map(), regions = new Map(), memberships = new Map();
 const REGION = 16;
-let activeEntities = [];
+let activeEntities = [], indexGeneration = 0;
 const regionKey = (x, y) => `${x},${y}`;
 
 export function setActiveEntities(entities) {
   activeEntities = entities || [];
-  const live = new Set();
+  const generation = ++indexGeneration;
   for (const entity of activeEntities) {
     if (entity?.id == null || entity.destroyed) continue;
-    live.add(entity.id); entitiesById.set(entity.id, entity);
-    const building = entity.properties?.cityBuilding;
+    const building = entity.properties?.cityBuilding, width = building?.width || 0, depth = building?.depth || 0;
+    const previous = memberships.get(entity.id);
+    if (previous?.entity === entity) {
+      previous.generation = generation;
+      if (previous.x === entity.x && previous.y === entity.y && previous.width === width && previous.depth === depth) continue;
+    }
     const minX = Math.floor(entity.x / REGION), minY = Math.floor(entity.y / REGION);
-    const maxX = Math.floor((entity.x + (building?.width || 0)) / REGION);
-    const maxY = Math.floor((entity.y + (building?.depth || 0)) / REGION);
-    const bounds = `${minX}:${minY}:${maxX}:${maxY}`, previous = memberships.get(entity.id);
-    if (previous?.bounds === bounds && previous.entity === entity) continue;
-    removeMembership(entity.id);
+    const maxX = Math.floor((entity.x + width) / REGION), maxY = Math.floor((entity.y + depth) / REGION);
+    if (previous?.entity === entity && previous.minX === minX && previous.minY === minY && previous.maxX === maxX && previous.maxY === maxY) {
+      previous.x=entity.x;previous.y=entity.y;previous.width=width;previous.depth=depth;continue;
+    }
+    removeMembership(entity.id);entitiesById.set(entity.id, entity);
     const keys = [];
     for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
       const key = regionKey(x, y); let bucket = regions.get(key);
       if (!bucket) regions.set(key, bucket = new Set());
       bucket.add(entity); keys.push(key);
     }
-    memberships.set(entity.id, { bounds, keys, entity });
+    memberships.set(entity.id, { minX,minY,maxX,maxY,x:entity.x,y:entity.y,width,depth,generation,keys,entity });
   }
-  for (const id of entitiesById.keys()) if (!live.has(id)) { removeMembership(id); entitiesById.delete(id); }
+  for (const [id, membership] of memberships) if (membership.generation !== generation) { removeMembership(id);entitiesById.delete(id); }
 }
+
 function removeMembership(id) {
   const previous = memberships.get(id); if (!previous) return;
   for (const key of previous.keys) {

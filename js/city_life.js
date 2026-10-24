@@ -27,13 +27,13 @@ export class CityLife {
     if (c.deprivation.health >= LIFE_RULES.terminalHealthMinutes) return this.die(c, 'falência da saúde');
     if (this.city.society.age(c) >= 90 + c.initialAge % 15) return this.die(c, 'velhice');
     // Invalid service names must never turn a need into NaN and freeze the entire scheduler.
-    for (const k of Object.keys(n)) if (!Number.isFinite(n[k])) { n[k] = 20; this.resetTask(c, 'valor de necessidade inválido'); }
+    for (const k in n) if (!Number.isFinite(n[k])) { n[k] = 20; this.resetTask(c, 'valor de necessidade inválido'); }
     const watched = c.activity;
     const need = ['provisions', 'workmeal'].includes(c.task) ? 'food' : c.task;
     const progress = !watched || Math.hypot(c.entity.x - watched.x, c.entity.y - watched.y) > .05 || (n[need] !== undefined && n[need] > (watched.needs[need] ?? 0) + .05) || c.conversation || c.workMeal || ['work', 'manage', 'construction', 'clean'].includes(c.task);
     if (progress) c.lastProgressAt = this.city.minute;
     if (c.task && !c.deliveryId && !c.cleaningJobId && this.city.minute - (c.lastProgressAt ?? this.city.minute) >= LIFE_RULES.stalledMinutes) this.resetTask(c, 'atividade sem progresso');
-    c.activity = { x: c.entity.x, y: c.entity.y, needs: { ...n } };
+    const activity=c.activity??=( {x:0,y:0,needs:{}} );activity.x=c.entity.x;activity.y=c.entity.y;for(const key in n)activity.needs[key]=n[key];
     return false;
   }
   resetTask(c, reason) {

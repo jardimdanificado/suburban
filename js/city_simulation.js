@@ -48,6 +48,8 @@ export const BUILDING_TYPES = {
   utility: { label: 'Água e saneamento', color: 0x83b9ce, rent: 70, price: 30000, jobs: 3 },
 };
 export const NEED_LABELS = { food: 'Alimentação', water: 'Água', energy: 'Descanso', hygiene: 'Higiene', toilet: 'Banheiro', social: 'Convívio', leisure: 'Lazer', health: 'Saúde', shelter: 'Moradia', safety: 'Segurança' };
+const NEED_DECAY=Object.entries({food:.065,water:.09,energy:.055,hygiene:.045,toilet:.085,social:.035,leisure:.035});
+const NEED_KEYS=Object.keys(NEED_LABELS);
 const clamp = n => Math.max(0, Math.min(100, n));
 const key = (x, y) => `${x},${y}`;
 
@@ -551,12 +553,13 @@ export class CitySimulation {
     for (const c of this.citizens) {
       const n = c.needs;
       c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
-      for (const [need, decay] of Object.entries({ food: .065, water: .09, energy: .055, hygiene: .045, toilet: .085, social: .035, leisure: .035 })) n[need] = clamp(n[need] - decay);
+      for (const [need, decay] of NEED_DECAY) n[need] = clamp(n[need] - decay);
       n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2));
       n.safety = clamp(n.safety + (hasTownhall ? 0.08 : -0.1));
       n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025));
       c.mood = (c.mood || 0) * .998;
-      c.happiness = clamp(Object.values(n).reduce((a, b) => a + b, 0) / Object.keys(n).length + c.mood + this.relationships.moodEffect(c) + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
+      let totalNeeds=0;for(const need of NEED_KEYS)totalNeeds+=n[need];
+      c.happiness = clamp(totalNeeds / NEED_KEYS.length + c.mood + this.relationships.moodEffect(c) + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
       if (this.life.minute(c)) continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);

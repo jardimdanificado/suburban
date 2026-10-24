@@ -28,7 +28,7 @@ const prototypes = new Map([CityGovernment, CityCouncil, CityCampaigns, CityMand
   CityLogistics, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
-const localFields = new Set(['pathCache', 'pathCacheRevision', 'routeCache', 'routeRevision',
+const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision', 'routeCache', 'routeRevision',
   'childrenByGuardian', 'buildingsById', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion']);
 const same = (a, b) => a && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
 

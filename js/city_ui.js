@@ -1,3 +1,4 @@
+import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
 import { renderPolitics, renderCitizenPolitics } from './city_politics_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js';
@@ -15,7 +16,7 @@ import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js';
 import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js';
-export const money = value => ((value || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
   ['government', 'GOVERNO', 'CIDADE', 'Prefeito, patrimônio público e orçamento municipal.'],
@@ -65,6 +66,12 @@ export class CityUI {
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
   }
   resetScroll() { this.scrolls = {}; }
+  cachedList(key,build){
+    this.listCache??=new Map();const signature=`${this.city.minute}:${this.city.structureRevision}:${this.city._uiRevision||0}:${this.query}:${this.filter()}:${this.sorts[this.tab]}:${Math.floor(performance.now()/250)}`;
+    const old=this.listCache.get(key);if(old?.signature===signature)return old.rows;const rows=build();if(this.listCache.size>=32&&!this.listCache.has(key))this.listCache.delete(this.listCache.keys().next().value);this.listCache.set(key,{signature,rows});return rows;
+  }
+  section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
+
   remember() {
     this.history.push({ tab: this.tab, selected: this.selected, selectedPlotId: this.selectedPlotId, unitId: this.unitId, detailTab: this.detailTab, mobileDetail: this.mobileDetail, query: this.query, views: { ...this.views }, filters: { ...this.filters }, scrolls: { ...this.scrolls } });
     if (this.history.length > 40) this.history.shift();
@@ -97,7 +104,7 @@ export class CityUI {
   openCitizen(id) { const c = this.city.society.citizen(id); if (c) this.select(c.entity); }
   openBuilding(id) { const b = this.city.building(id); if (b) this.select(b.entity); }
   personLog(id) { this.go('log').logCitizenId = id; }
-  matches(value) { return normalize(value).includes(normalize(this.query)); }
+  matches(value) { if(!this.query)return true;if(this.normalizedQuerySource!==this.query){this.normalizedQuerySource=this.query;this.normalizedQuery=normalize(this.query);}return normalize(value).includes(this.normalizedQuery); }
   scrollAt(x, y, delta) {
     if (this.element.hidden || !this.visible) return false;
     const z = this.zones.find(z => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h);
@@ -116,7 +123,7 @@ export class CityUI {
     }
     return false;
   }
-  inputAt(input, x, y, w) { Object.assign(input.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, clipPath:'' }); input.hidden = false; }
+  inputAt(input,x,y,w){const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.style.clipPath)input.style.clipPath='';if(input.hidden)input.hidden=false;}
   drawFloating(ui,window) {
     this.floating=true;this.floatingDossier=window.kind==='dossier';this.element.hidden=false;this.visible=true;this.zones=[];
     for(const input of [this.search,this.seed,this.filterInput,this.sortInput])input.hidden=true;
@@ -166,7 +173,7 @@ export class CityUI {
   }
   nativeSelect(input,p,options,value,x=p.x,y=p.y,w=p.w) {
     const signature=JSON.stringify(options);if(input.optionSignature!==signature){input.innerHTML=options.map(([id,label])=>`<option value="${id}">${readableLabel(label)}</option>`).join('');input.optionSignature=signature;}
-    input.value=value;if(y>=p.top&&y+24<=p.bottom)this.inputAt(input,x,y,w);
+    if(input.value!==value)input.value=value;if(y>=p.top&&y+24<=p.bottom)this.inputAt(input,x,y,w);
   }
   filterButtons(p) {
     const options=FILTERS[this.tab];if(!options)return;p.note('Mostrar',T.muted);this.nativeSelect(this.filterInput,p,options,this.filter(),p.x,p.y,Math.min(p.w,320));p.space(30);
@@ -195,20 +202,17 @@ export class CityUI {
     this.nativeSelect(this.filterInput,p,FILTERS[this.tab],this.filter(),p.x,iy,cw);this.nativeSelect(this.sortInput,p,sorts,sort,p.x+cw+8,iy,cw);p.space(47);
     const filter=this.filter();
     if(people){
-      const rows=city.citizens.filter(c=>this.matches(`${name(c.entity)} ${c.action} ${c.profession}`)).filter(c=>filter==='all'||filter==='homeless'&&!c.homeUnitId||filter==='unemployed'&&city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length||filter==='critical'&&Math.min(...Object.values(c.needs))<20||filter==='food'&&c.needs.food<30||filter==='children'&&!city.society.isAdult(c));
-      rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:sort==='needs'?Math.min(...Object.values(a.needs))-Math.min(...Object.values(b.needs)):name(a.entity).localeCompare(name(b.entity),'pt-BR'));
+      const rows=this.cachedList('people',()=>{const rows=city.citizens.filter(c=>this.matches(`${name(c.entity)} ${c.action} ${c.profession}`)).filter(c=>filter==='all'||filter==='homeless'&&!c.homeUnitId||filter==='unemployed'&&city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length||filter==='critical'&&Math.min(...Object.values(c.needs))<20||filter==='food'&&c.needs.food<30||filter==='children'&&!city.society.isAdult(c));
+      rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:sort==='needs'?Math.min(...Object.values(a.needs))-Math.min(...Object.values(b.needs)):name(a.entity).localeCompare(name(b.entity),'pt-BR'));return rows;});
       p.note(`${rows.length} resultados`,C.muted);
-      for(const c of rows){const critical=Math.min(...Object.values(c.needs))<20,role=c.id===city.economy.mayorId?'Prefeito':!city.society.isAdult(c)?'Criança':c.businessIds.length?'Empresário':city.building(c.jobId)?.entity.properties.name||'Sem trabalho';
-        p.card(name(c.entity),`${city.society.age(c)} anos / ${money(c.balance)}
-${c.homeUnitId?role:'SEM MORADIA'}
-${c.action}`,()=>this.openCitizen(c.id),this.selected?.id===c.id,critical?C.red:!c.homeUnitId?C.gold:C.green);
-      }
+      p.rows(rows,c=>{const critical=Math.min(...Object.values(c.needs))<20,role=c.id===city.economy.mayorId?'Prefeito':c.id===city.politics.viceMayorId?'Vice-prefeito':!city.society.isAdult(c)?'Criança':c.businessIds.length?'Empresário':city.building(c.jobId)?.entity.properties.name||'Sem trabalho';
+        p.record(name(c.entity),`${city.society.age(c)} anos · ${c.homeUnitId?role:'Sem casa · '+role}`,()=>this.openCitizen(c.id),this.selected?.id===c.id,{value:money(c.balance),color:critical?C.red:!c.homeUnitId?C.gold:C.green});
+      });
       if(!rows.length)p.note('Nenhuma pessoa com estes filtros.');
     } else {
-      const residences=['residential','popular_housing','luxury_housing'],food=['farm','bakery','market','greengrocer','popular_refectory'],services=['cleaner','carrier','paid_toilet','public_toilet','waste_collector'],rows=(business?city.economy.businesses:city.buildings.filter(b=>!b.entity.destroyed)).filter(b=>this.matches(`${name(b.entity)} ${BUILDING_TYPES[b.type].label} ${CROPS[b.crop]?.label||''}`)).filter(b=>filter==='all'||filter==='residential'&&residences.includes(b.type)||filter==='public'&&!b.ownerId&&!residences.includes(b.type)||filter==='private'&&!!b.ownerId||filter==='food'&&(food.includes(b.type)||INDUSTRIES[b.type]?.category==='food')||filter==='services'&&(services.includes(b.type)||INDUSTRIES[b.type]?.category==='services')||filter==='industry'&&(['builder','quarry','recycler','mill'].includes(b.type)||INDUSTRIES[b.type]?.category==='industry'));
-      rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:name(a.entity).localeCompare(name(b.entity),'pt-BR'));p.note(`${rows.length} resultados`,C.muted);
-      for(const b of rows)p.card(name(b.entity),`${CROPS[b.crop]?.label||BUILDING_TYPES[b.type].label}
-${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.length+' espaços / '+b.floors+' andares'}`,()=>this.openBuilding(b.id),this.selected?.id===b.id,b.active?C.green:residences.includes(b.type)?C.cyan:C.gold);
+      const residences=['residential','popular_housing','luxury_housing'],food=['farm','bakery','market','greengrocer','popular_refectory'],services=['cleaner','carrier','paid_toilet','public_toilet','waste_collector'],rows=this.cachedList(`buildings:${business}`,()=>{const rows=(business?city.economy.businesses:city.buildings.filter(b=>!b.entity.destroyed)).filter(b=>this.matches(`${name(b.entity)} ${BUILDING_TYPES[b.type].label} ${CROPS[b.crop]?.label||''}`)).filter(b=>filter==='all'||filter==='residential'&&residences.includes(b.type)||filter==='public'&&!b.ownerId&&!residences.includes(b.type)||filter==='private'&&!!b.ownerId||filter==='food'&&(food.includes(b.type)||INDUSTRIES[b.type]?.category==='food')||filter==='services'&&(services.includes(b.type)||INDUSTRIES[b.type]?.category==='services')||filter==='industry'&&(['builder','quarry','recycler','mill'].includes(b.type)||INDUSTRIES[b.type]?.category==='industry'));
+      rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:name(a.entity).localeCompare(name(b.entity),'pt-BR'));return rows;});p.note(`${rows.length} resultados`,C.muted);
+      p.rows(rows,b=>p.record(name(b.entity),`${CROPS[b.crop]?.label||BUILDING_TYPES[b.type].label} · ${business?b.workers.length+'/'+b.jobs+' na equipe':b.units.length+' espaços'}`,()=>this.openBuilding(b.id),this.selected?.id===b.id,{value:business?money(b.balance):b.floors+' andares',color:b.active?C.green:residences.includes(b.type)?C.cyan:C.gold}));
       if(!rows.length)p.note('Nenhuma instalação com estes filtros.');
     }
   }
@@ -230,7 +234,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
   }
   citizen(p, c) {
     const city = this.city, society = city.society;
-    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.kv('Capacidade de carga',`${carryCapacity(c)} itens${c.equipment?.carrinho?' / carrinho':c.equipment?.cesta?' / cesta':''}`); p.note(`${society.age(c)} anos | ${c.id === city.economy.mayorId ? 'Prefeito' : c.businessIds.length ? 'Empresário' : 'Morador'}`);
+    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?'Prefeito':c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'HABILIDADES'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'FINANÇAS'], ['history', 'HISTÓRICO']]);
     if (this.detailTab === 'profile') {
@@ -242,16 +246,16 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
       p.note(city.housing.isSocial(dwelling)?'Moradia popular municipal: ocupação gratuita, sem cobrança de aluguel e sem transferência de propriedade.':'Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
       if (home) { p.kv('Espaço',`${home.x+1}, ${home.y+1} / ${home.z+1}º andar`); p.kv('Regime', city.housing.isSocial(dwelling)?'Moradia social gratuita':home.ownerId === c.accountId ? 'Proprietário' : home.tenantId !== c.accountId && dwelling ? 'Moradia compartilhada' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
       else p.note('Sem moradia', C.red);
-      p.heading('IDENTIDADE E PERSONALIDADE');
+      this.section(p,'personality','Identidade, personalidade e reputação',()=>{p.heading('IDENTIDADE E PERSONALIDADE');
       p.kv('Gênero',GENDER_LABELS[c.socialProfile.gender]);p.kv('Interesse romântico',ORIENTATION_LABELS[c.socialProfile.orientation]);
       p.kv('Luto',city.relationships.moodEffect(c)<0?'Em luto':'Sem perda recente');p.kv('Sobrenomes da família',(c.surnames||[]).join(' / '));
       p.meters(Object.entries(TRAIT_LABELS).map(([id,label])=>[label,(c.traits?.[id]??.5)*100,C.cyan]));
       p.note('Dedicação afeta aprendizado e contratação; empatia, honestidade e ceticismo afetam encontros; risco influencia investimentos; frugalidade afeta poupança e preço da refeição; ambição influencia candidaturas.');
       this.reputationPanel(p,c);
       if(c.lastSocialEventId)p.button('ÚLTIMA INTERAÇÃO SOCIAL',()=>this.openEvent(c.lastSocialEventId));
-      p.heading('PREFERÊNCIAS ALIMENTARES');
+      });this.section(p,'foodPreferences','Preferências alimentares',()=>{p.heading('PREFERÊNCIAS ALIMENTARES');
       for (const [good, value] of Object.entries(c.foodPreferences || {}).filter(([g]) => GOODS[g] && !['girassol','trigo'].includes(g))) p.kv(GOODS[good].label, value > .2 ? `Gosta (${Math.round(value * 100)})` : value < -.2 ? `Não gosta (${Math.round(value * 100)})` : 'Neutro');
-      if (c.lastMealTaste !== undefined) p.kv('Última refeição', c.lastMealTaste >= 0 ? 'Agradou ao paladar' : 'Desagradou ao paladar');
+      if (c.lastMealTaste !== undefined) p.kv('Última refeição', c.lastMealTaste >= 0 ? 'Agradou ao paladar' : 'Desagradou ao paladar');});
     } else if (this.detailTab === 'skills') {
       p.heading('HISTÓRICO DE EMPREGO');
       for(const entry of city.history.rows(c.accountId,'employment').slice(-8).reverse()){p.note(`${stamp(entry.minute)} | ${entry.message}`);p.kv('Salário base/hora na ocasião',money(entry.wage*60));}
@@ -374,26 +378,14 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     p.heading('HISTÓRICO DETALHADO');
     const pending=[...this.city.history.pendingFinance.values()].filter(row=>row.from===account || row.to===account);
     if(pending.length)p.note(`Folha da hora atual: ${pending.reduce((n,row)=>n+row.transactions,0)} pagamentos em consolidação. Valores já movimentaram as contas.`,C.muted);
-    p.buttons(options.map(([id,label])=>({label,selected:kind===id,click:()=>{this.journalFilters[account]=id;this.journalPages[account]=0;}})));
-    const rows=this.city.history.rows(account,kind).filter(e=>this.matches(e.message)).reverse();
+    this.section(p,`journalFilters:${account}`,`Filtrar histórico: ${options.find(([id])=>id===kind)?.[1]||kind}`,()=>p.buttons(options.map(([id,label])=>({label,selected:kind===id,click:()=>{this.journalFilters[account]=id;this.journalPages[account]=0;this.helpOpen[`journalFilters:${account}`]=false;this.resetScroll();}}))));
+    const rows=this.cachedList(`journal:${account}:${kind}`,()=>this.city.history.rows(account,kind).filter(e=>this.matches(e.message)).reverse());
     const pages=Math.max(1,Math.ceil(rows.length/20)),page=Math.min(this.journalPages[account]||0,pages-1);
     p.note(`${rows.length} registros disponíveis / página ${page+1} de ${pages}`);
     p.kv('Ocorrências desde a fundação',this.city.history.journals.get(account)?.total||0);
-    p.note(`Até 2.000 por categoria e pessoa/empresa dentro dos ${HISTORY_LIMIT.toLocaleString('pt-BR')} eventos recentes da cidade. Contadores totais são preservados.`);
+    this.section(p,'historyRetention','Sobre a retenção dos registros',()=>p.note(`Até 2.000 por categoria e pessoa/empresa dentro dos ${HISTORY_LIMIT.toLocaleString('pt-BR')} eventos recentes da cidade. Contadores totais são preservados.`));
     p.button('ABRIR REGISTROS VINCULADOS',()=>{const target=this.go('log');target.logCitizenId=null;target.logBuildingId=null;target.logAccountId=account;target.logReference=null;target.selectedEventId=null;});
-    for(const entry of rows.slice(page*20,page*20+20)) {
-      p.note(`${stamp(entry.minute)} / ${options.find(([id])=>id===entry.kind)?.[1]||entry.kind}`,C.cyan);
-      p.note(entry.message);
-      if(entry.amount!==undefined)p.kv('Valor',money(entry.amount));
-      if(entry.transactions){p.kv('Pagamentos consolidados',entry.transactions);p.kv('Período',`${stamp(entry.startedAt)} → ${stamp(entry.endedAt)}`);}
-      if(entry.wage!==undefined)p.kv('Salário base/hora',money(entry.wage*60));
-      if(entry.ingredients)p.note('Ingredientes: '+Object.entries(entry.ingredients).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(', '));
-      if(entry.quality!==undefined)p.kv('Qualidade da refeição',entry.quality);
-      if(entry.rate!==undefined)p.kv('Juros/dia',`${(entry.rate*100).toFixed(2)}%`);
-      if(entry.buildingId && this.city.building(entry.buildingId))p.button('ABRIR EMPRESA',()=>this.openBuilding(entry.buildingId));
-      p.button(`DETALHES DO EVENTO #${entry.id}`,()=>this.openEvent(entry.id));
-      p.space(6);
-    }
+    p.rows(rows.slice(page*20,page*20+20),entry=>p.record(entry.message,`${stamp(entry.minute)} · ${options.find(([id])=>id===entry.kind)?.[1]||entry.kind}`,()=>this.openEvent(entry.id),false,{value:entry.amount!==undefined?money(entry.amount):'',color:C.cyan}));
     p.buttons([{label:'ANTERIOR',click:()=>{this.journalPages[account]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.journalPages[account]=Math.min(pages-1,page+1);}}]);
     if(!rows.length)p.note('Nenhum registro nesta categoria.');
   }
@@ -405,18 +397,16 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
   accountLink(p, id) { if (String(id).startsWith('citizen:')) p.button('ABRIR FICHA DO MORADOR', () => this.openCitizen(Number(id.split(':')[1]))); }
   transactions(p, account) {
     const rows = this.city.ledger.filter(l => l.from === account || l.to === account).slice(-18).reverse();
-    for (const l of rows) { p.note(`${stamp(l.minute)} | ${l.reason}`); p.note(`${l.to === account ? '+' : '-'}${money(l.amount)} | ${this.city.accountName(l.to === account ? l.from : l.to)}`, l.to === account ? C.green : C.red); }
-    if (!rows.length) p.note('Nenhuma movimentação registrada.');
+    p.table([{label:'Quando',weight:.7},{label:'Movimentação',weight:2},{label:'Valor',weight:1}],rows.map(l=>({cells:[stamp(l.minute),l.reason,`${l.to===account?'+':'−'}${money(l.amount)}`],color:l.to===account?C.green:C.red})),{empty:'Nenhuma movimentação registrada.'});
   }
   demands(p) {
-    p.heading('PREÇOS E MERCADO');for(const [good,row] of Object.entries(this.city.economy.market||{}).filter(([g,r])=>r.demand>0||r.stock>0))p.note(`${GOODS[good].label}: ${money(this.city.economy.goods[good].price)} / oferta ${Math.round(row.stock)} / procura ${Math.round(row.demand)} / preferências ${Math.round(row.likes)}`);
-    p.heading('DEMANDAS E OPORTUNIDADES'); p.note('Os investidores respondem à demanda e aos insumos que faltam na cadeia produtiva.');
-    for (const d of this.city.economy.demands.filter(d => d.score > 0)) {
-      p.heading(`${BUILDING_TYPES[d.type].label}${d.crop ? ' / ' + CROPS[d.crop].label : ''}`, C.cyan);
-      p.kv('Índice de demanda', Math.round(d.score)); p.note(d.reason);
-      if(d.response){p.kv('Resposta à demanda',d.response.state);if(d.response.projectId)p.note(`Projeto: ${d.response.projectId}`);p.note(`Decisão: ${stamp(d.response.minute)}`,C.muted);}
-      if (d.required !== undefined) { p.kv(['carrier','cleaner','builder'].includes(d.type)?'Trabalho pendente (min)':'Necessidade/dia', d.required); p.kv(['carrier','cleaner','builder'].includes(d.type)?'Capacidade/dia (min)':'Capacidade estimada/dia', d.supply); p.kv('Estoque', d.stock); }
-    }
+    const mode=this.demandTab||'opportunities';p.buttons([['opportunities','Oportunidades'],['prices','Preços'],['agreements','Acordos']].map(([id,label])=>({label,selected:id===mode,click:()=>{this.demandTab=id;this.resetScroll();}})));
+    if(mode==='prices'){p.heading('PREÇOS E MERCADO');const rows=Object.entries(this.city.economy.market||{}).filter(([,r])=>r.demand>0||r.stock>0).filter(([g])=>this.matches(GOODS[g].label));p.table([{label:'Produto',weight:1.7},{label:'Preço'},{label:'Oferta'},{label:'Procura'}],rows.map(([g,r])=>({cells:[GOODS[g].label,money(this.city.economy.goods[g].price),Math.round(r.stock),Math.round(r.demand)]})));return;}
+    if(mode==='agreements'){p.heading('ACORDOS ENTRE EMPRESAS');const city=this.city;p.table([{label:'Produto'},{label:'Fornecedor',weight:1.5},{label:'Comprador',weight:1.5},{label:'Preço'}],(city.economy.supplyAgreements||[]).map(a=>({cells:[GOODS[a.good].label,name(city.building(a.sellerId)?.entity),name(city.building(a.buyerId)?.entity),money(a.unitPrice)],click:()=>this.openBuilding(a.buyerId)})));return;}
+    p.heading('DEMANDAS E OPORTUNIDADES');const rows=this.city.economy.demands.filter(d=>d.score>0&&this.matches(`${BUILDING_TYPES[d.type].label} ${CROPS[d.crop]?.label||''}`));
+
+    const d=rows.find(row=>row.type+':'+(row.crop||'')===this.selectedDemandKey);if(d){p.heading('DETALHES DA OPORTUNIDADE');p.note(d.reason);if(d.response){p.kv('Resposta',d.response.state);if(d.response.projectId)p.kv('Projeto',d.response.projectId);}if(d.required!==undefined){p.kv('Necessidade',d.required);p.kv('Capacidade estimada',d.supply);p.kv('Estoque',d.stock);}}else p.note('Selecione uma oportunidade para ver capacidade, estoque e resposta.');
+    p.rows(rows,d=>{const key=d.type+':'+(d.crop||''),selected=this.selectedDemandKey===key;p.record(`${BUILDING_TYPES[d.type].label}${d.crop?' / '+CROPS[d.crop].label:''}`,d.response?.state||d.reason,()=>{this.selectedDemandKey=key;this.resetScroll();},selected,{value:Math.round(d.score)+' pts',color:d.score>=100?C.red:C.cyan});});
   }
   content(p) {
     if (this.notice) p.note(this.notice, C.red);
@@ -447,7 +437,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
         q.kv('Entregas concluídas',city.logistics.delivered);q.kv('Casais / amizades',`${s.couples} / ${s.friendships}`);q.kv('Nascimentos / mortes',`${s.births} / ${s.deaths}`);
         q.button('ACOMPANHAR AS OBRAS',()=>this.go('land',{view:'projects'}));q.button('VER ABASTECIMENTO',()=>this.go('production'));
       });
-      p.heading('ÚLTIMOS ACONTECIMENTOS');this.events(p,city.events.filter(e=>this.matches(e.message)).slice(0,2),false);p.button('ABRIR HISTÓRICO COMPLETO',()=>this.go('log'));
+      p.heading('ÚLTIMOS ACONTECIMENTOS');this.events(p,city.events.filter(e=>this.matches(e.message)).slice(0,2));p.button('ABRIR HISTÓRICO COMPLETO',()=>this.go('log'));
     } else if(view==='needs'){
       p.heading('CONDIÇÕES DE VIDA');
       p.meters(Object.entries(NEED_LABELS).map(([key,label])=>[label,city.citizens.reduce((n,c)=>n+c.needs[key],0)/Math.max(1,s.population)]));
@@ -690,6 +680,7 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     if(e.amount!==undefined)p.kv('Valor',money(e.amount));
     if(e.transactions){p.kv('Pagamentos consolidados',e.transactions);p.kv('Período',`${stamp(e.startedAt)} → ${stamp(e.endedAt)}`);}
     if(e.good)p.kv('Mercadoria',`${e.quantity??''} ${GOODS[e.good]?.label||e.good}`);
+    if(e.wage!==undefined)p.kv('Salário base/hora',money(e.wage*60));if(e.rate!==undefined)p.kv('Juros/dia',`${(e.rate*100).toFixed(2)}%`);if(e.quality!==undefined)p.kv('Qualidade da refeição',e.quality);if(e.ingredients)p.note('Ingredientes: '+Object.entries(e.ingredients).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(', '));if(e.buildingId&&this.city.building(e.buildingId))p.button('ABRIR EMPRESA',()=>this.openBuilding(e.buildingId));
     if(e.dimension)p.kv(REPUTATION_LABELS[e.dimension]||e.dimension,`${e.previous.toFixed(1)} → ${e.value.toFixed(1)}`);
     for(const subject of e.subjects||[]) {
       const citizen=this.city.accounts.get(subject.accountId),building=this.city.buildings.find(b=>b.accountId===subject.accountId);
@@ -705,19 +696,14 @@ ${business?money(b.balance)+' / '+b.workers.length+' funcionários':b.units.leng
     for(const reference of refs)p.button(reference,()=>{this.logReference=reference;this.logCategory='all';this.logCitizenId=null;this.logBuildingId=null;this.logAccountId=null;this.query='';this.search.value='';this.resetScroll();});
     p.space(10);
   }
-  events(p, events, links=true) {
-    for(const e of events){
+  events(p, events) {
+    p.rows(events,e=>{
       const color=e.category==='death'?C.red:e.category==='family'||e.category==='relationship'?C.pink:e.category==='production'||e.category==='transport'?C.cyan:C.gold;
-      p.heading(`${stamp(e.minute)} / ${EVENT_CATEGORIES[e.category]||e.category}`,color);p.note(e.message,T.ink);
-      if(e.amount!==undefined)p.kv('Valor',money(e.amount));
-      if(links){
-        const people=(e.citizenIds||[]).map(id=>this.city.society.citizen(id)).filter(Boolean);
-        p.buttons(people.map(c=>({label:name(c.entity),click:()=>this.openCitizen(c.id)})));
-        p.button(`DETALHES #${e.id}${e.relatedEventIds?.length?' / REGISTROS VINCULADOS':''}`,()=>this.openEvent(e.id));
-      }
-    }
+      p.record(e.message,`${stamp(e.minute)} · ${EVENT_CATEGORIES[e.category]||e.category}${e.relatedEventIds?.length?' · Registros vinculados':''}`,()=>this.openEvent(e.id),this.selectedEventId===e.id,{value:e.amount!==undefined?money(e.amount):'',color});
+    });
     if(!events.length)p.note('Nenhum acontecimento encontrado.');
   }
+
   eventRows(limit=Infinity) {
     const signature=[this.logLive?this.city.history.nextId:this.frozenEvents?.[0]?.id,limit,this.logCategory,this.logCitizenId,this.logBuildingId,this.logAccountId,this.logReference,this.query,this.logLive].join('|');
     if(this.eventQueryKey===signature)return this.eventQueryRows;

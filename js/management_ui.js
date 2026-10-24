@@ -1,14 +1,14 @@
 import { LegacyCanvasUI } from './legacy_ui.js';
 
 export const MANAGEMENT_THEME = {
-  ink: '#29342f', muted: '#63685f', paper: '#f5f3e9', face: '#d6d2c2', light: '#fffcf2', shadow: '#8b8b7c', border: '#697468',
+  ink: '#29342f', muted: '#53615b', paper: '#f5f3e9', face: '#d6d2c2', light: '#fffcf2', shadow: '#8b8b7c', border: '#697468',
   header: '#355b70', headerLight: '#557c8d', selected: '#dbe5e6', row: '#ebece2', gold: '#805914', green: '#356b39', red: '#a8342b', blue: '#295d79', track: '#d5d8c9', line: '#c5c8ba',
 };
 const T=MANAGEMENT_THEME;
 const legacyColors={'#ffffff':T.ink,'#bcbcbc':T.muted,'#f8b800':T.gold,'#3cbcfc':T.blue,'#40c8f8':T.blue,'#58d854':T.green,'#ff6060':T.red};
 export function readableLabel(value) {
   const text=String(value??'');
-  return /^[A-ZÀ-Ü0-9º\s/<>:+%.-]+$/.test(text)&&text.length>3 ? text.charAt(0)+text.slice(1).toLocaleLowerCase('pt-BR') : text;
+  return /^[A-ZÀ-Ü0-9º\s/<>:+%.,…-]+$/.test(text)&&text.length>3 ? text.charAt(0)+text.slice(1).toLocaleLowerCase('pt-BR') : text;
 }
 export function bevel(ctx,x,y,w,h,{inset=false,fill=T.face}={}) {
   ctx.save();ctx.fillStyle=fill;ctx.fillRect(x,y,w,h);
@@ -20,8 +20,14 @@ export function bevel(ctx,x,y,w,h,{inset=false,fill=T.face}={}) {
 /** Classic management-game chrome, with readable system fonts at native device resolution. */
 export class ManagementCanvasUI extends LegacyCanvasUI {
   beginFrame(x=-1,y=-1){this.pointer={x,y};super.beginFrame(x,y);}
-  font(scale=1,bold=false){return `${bold||scale>1?'600':'400'} ${Math.round(scale>1?20:12)}px Arial, Helvetica, sans-serif`;}
-  textWidth(value,scale=1){this.ctx.save();this.ctx.font=this.font(scale);const width=this.ctx.measureText(String(value))?.width;this.ctx.restore();return Number.isFinite(width)?width:String(value).length*8*scale;}
+  font(scale=1,bold=false){return `${bold||scale>1?'600':'400'} ${Math.round(scale>1?20:13)}px Arial, Helvetica, sans-serif`;}
+  textWidth(value,scale=1){
+    const text=readableLabel(value),font=this.font(scale),key=`${font}:${text}`;this.widthCache??=new Map();
+    if(this.widthCache.has(key))return this.widthCache.get(key);
+    this.ctx.save();this.ctx.font=font;const width=this.ctx.measureText(text)?.width;this.ctx.restore();const result=Number.isFinite(width)?width:text.length*7*scale;
+    if(this.widthCache.size>=4096)this.widthCache.delete(this.widthCache.keys().next().value);this.widthCache.set(key,result);return result;
+  }
+  fitText(value,width,scale=1){const text=String(value??'');if(width<=0)return '';if(this.textWidth(text,scale)<=width)return text;const suffix='…';let low=0,high=text.length;while(low<high){const middle=Math.ceil((low+high)/2);if(this.textWidth(text.slice(0,middle)+suffix,scale)<=width)low=middle;else high=middle-1;}return low?text.slice(0,low)+suffix:width>=this.textWidth(suffix,scale)?suffix:'';}
   text(value,x,y,color=T.ink,scale=1){
     const ctx=this.ctx;ctx.save();ctx.font=this.font(scale);ctx.textBaseline='top';ctx.fillStyle=legacyColors[color]||color;
     readableLabel(value).split('\n').forEach((line,i)=>ctx.fillText(line,x,y+i*(scale>1?24:16)));ctx.restore();

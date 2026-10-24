@@ -53,7 +53,7 @@ export class CitySimulationBridge {
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     this.graph.apply(data.packet); bindCityState(this.city);
     this.time.tick = data.tick; this.time.elapsed = data.elapsed;
-    this.city._statsCache = null;
+    this.city._statsCache = null;this.city._uiRevision=(this.city._uiRevision||0)+1;
     const now = performance.now(), duration = Math.max(16, Math.min(150, now - this.lastSnapshot));
     this.lastSnapshot = now;
     this.motion.clear();

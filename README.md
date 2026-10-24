@@ -541,3 +541,25 @@ Acordos entre fornecedores e processadores definem preço por unidade por dois d
 Os preços das mercadorias passam a acompanhar procura, estoques e preferências, além da inflação monetária. O multiplicador de mercado muda gradualmente entre 0,55 e 2,5; preços de contratos já assinados ficam preservados. O painel de demandas mostra oferta, procura e preço corrente; fichas empresariais mostram acordos e sócios.
 
 A revisão possui testes específicos de regras legislativas, sucessão, corrupção, veto, receitas, preferências, equipamentos, crédito coletivo e sincronização com o worker. Partidas prolongadas ainda exigem acompanhamento de equilíbrio.
+
+
+### Interface compacta e custos de processamento
+
+As listas de cidadãos, imóveis e históricos usam linhas compactas, com desenho apenas das linhas visíveis. Valores financeiros compartilham formatação e ficam alinhados; textos cortados têm dicas ao manter o ponteiro sobre a linha. A fonte base é de 13 px e os indicadores de necessidades ocupam duas colunas quando há espaço. Personalidade, preferências, filtros de histórico e explicações podem ser expandidos na ficha.
+
+Em **Governo → Eleições → Câmara**, projetos, vereadores e encaminhamento de pedidos têm áreas próprias. Pedidos são agrupados por assunto. Campanhas permitem selecionar uma chapa e consultar seu programa. **Produção → Demandas** separa oportunidades, preços e acordos.
+
+As otimizações reaproveitam os dados de acompanhamento das atividades, calculam prioridades habitacionais uma vez por atendimento, eliminam buscas sociais desnecessárias e atualizam o índice espacial somente quando posição, tamanho ou identidade mudam. O acompanhamento interno das atividades fica no worker; não precisa trafegar para a interface. Caches de texto e moeda têm limites de memória.
+
+Medições locais contra a versão anterior desta revisão, excluindo inicialização:
+
+| Cenário | Antes | Depois |
+| --- | ---: | ---: |
+| 256 moradores, 360 atualizações de 1/6 s: mediana de três execuções | 1.481 ms | 1.202 ms |
+| Percentil 95 dos passos nesse cenário: mediana das execuções | 13,58 ms | 9,84 ms |
+| Índice de 10 mil entidades paradas, mil atualizações | 6.438 ms | 1.361 ms |
+| Pacotes diferenciais do worker, média de 30 envios | 573 kB | 469 kB |
+
+Os hashes dos resultados observados na simulação (necessidades, atividades, posições, saldos, eventos e relações) coincidiram; as consultas espaciais também produziram o mesmo hash após movimento, redimensionamento, substituição e remoção. Essas medições de CPU e tráfego não representam FPS garantido nem equilíbrio de uma partida prolongada. A conferência visual desta revisão usou renderizações do Canvas fora do navegador.
+
+Para repetir as cargas, use `npm run benchmark`, `npm run benchmark -- scene` e `npm run benchmark -- snapshots`. Um caminho de checkout pode ser passado após o nome da carga para comparação, por exemplo `node scripts/benchmark.mjs simulation /caminho/da/versao/anterior`. O cenário usa terreno plano de 128×128, semente 1337 e 256 moradores; os números variam conforme a máquina e processos em execução.

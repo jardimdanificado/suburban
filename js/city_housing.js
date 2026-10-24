@@ -75,9 +75,12 @@ export class CityHousing {
   assignSocialHomes() {
     const city=this.city;
     const waiting=city.citizens.filter(c=>!c.entity.destroyed && city.society.isAdult(c) && !c.homeUnitId);
+    if(!waiting.length)return;
     for(const c of waiting)c.homelessSince??=city.minute;
-    const dependents=c=>city.citizens.filter(p=>!p.entity.destroyed && !city.society.isAdult(p) && (p.guardianId===c.id || p.guardianId===c.partnerId)).length;
-    const means=c=>c.balance+city.bank.savings(c.accountId);
+    const counts=new Map();for(const person of city.citizens)if(!person.entity.destroyed&&!city.society.isAdult(person))counts.set(person.guardianId,(counts.get(person.guardianId)||0)+1);
+    const priorities=new Map(waiting.map(c=>[c.id,{dependents:(counts.get(c.id)||0)+(c.partnerId!==c.id?(counts.get(c.partnerId)||0):0),means:c.balance+city.bank.savings(c.accountId)}]));
+    const dependents=c=>priorities.get(c.id).dependents;
+    const means=c=>priorities.get(c.id).means;
     waiting.sort((a,b)=>dependents(b)-dependents(a)||means(a)-means(b)||a.homelessSince-b.homelessSince||a.id-b.id);
     const vacant=[...this.homes.values()].filter(h=>this.isSocial(h) && this.hasBathroom(h) && this.units(h).every(u=>!u.tenantId) && !this.residents(h).length);
     for(const c of waiting) {

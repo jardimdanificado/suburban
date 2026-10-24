@@ -5,7 +5,7 @@ import {tycoonIcon} from './tycoon_icons.js';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
 export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['production','Produção'],['transport','Transportes'],['sanitation','Saneamento'],['log','Histórico'],['map','Mapa da cidade']];
-const sizes={map:[320,330],city:[680,470],government:[490,450],people:[330,450],land:[550,440],buildings:[350,440],economy:[350,440],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
+const sizes={map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop: directories, records and tools have independent windows. */
@@ -97,10 +97,10 @@ export class CityDesktop {
   }
   draw(ui){
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&!hover.shaded&&point.x>=hover.x+hover.w-18&&point.y>=hover.y+hover.h-18;if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
-    this.element.hidden=!this.visible;if(this.visible){for(const w of this.manager.windows){w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label&&/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(hit.label))this.tooltip={text:hit.label,x:point.x,y:point.y+24};}
+    this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
     if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
     this.tooltipElement.hidden=!this.tooltip||this.menuOpen||!!this.manager.gesture;
-    if(!this.tooltipElement.hidden){const {text,x,y}=this.tooltip,w=Math.min(ui.width-8,Math.ceil(ui.textWidth(text))+18);this.tooltipElement.textContent=text;Object.assign(this.tooltipElement.style,{left:`${Math.max(4,Math.min(x,ui.width-w-4))}px`,top:`${Math.max(0,Math.min(y,ui.height-56))}px`,width:`${w}px`});}
+    if(!this.tooltipElement.hidden){const {text,x,y}=this.tooltip,w=Math.min(440,ui.width-8,Math.ceil(ui.textWidth(text))+18);this.tooltipElement.textContent=text;Object.assign(this.tooltipElement.style,{left:`${Math.max(4,Math.min(x,ui.width-w-4))}px`,top:`${Math.max(0,Math.min(y,ui.height-190))}px`,width:`${w}px`});}
   }
   drawMap(ui,w){
     const state=w.state,world=this.city.world;state.zones=[];for(const input of[state.search,state.seed,state.filterInput,state.sortInput])input.hidden=true;
