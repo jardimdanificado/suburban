@@ -1,3 +1,4 @@
+import {renderEventInspector} from './city_event_inspector.js';
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
 import { renderPolitics, renderCitizenPolitics } from './city_politics_ui.js';
@@ -33,7 +34,7 @@ const VIEWS = {
   city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['nature','VEGETAÇÃO']],
   government: [['overview', 'GOVERNO'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO'], ['elections','ELEIÇÕES']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
-  production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES']],
+  production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
   transport: [['active', 'EM ANDAMENTO'], ['finished', 'ENCERRADOS']],
   sanitation: [['facilities', 'BANHEIROS'], ['cleaning', 'FAXINA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
@@ -128,10 +129,10 @@ export class CityUI {
     this.floating=true;this.floatingDossier=window.kind==='dossier';this.element.hidden=false;this.visible=true;this.zones=[];
     for(const input of [this.search,this.seed,this.filterInput,this.sortInput])input.hidden=true;
     this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded)return;
-    const x=window.x+5,w=window.w-10,bottom=window.y+window.h-19;let y=window.y+31;
+    const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+29;
     if(!this.floatingDossier){
-      const search=this.tab!=='city'||this.view()!=='overview';
-      if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=28;}
+      const search=this.tab!=='event'&&(this.tab!=='city'||this.view()!=='overview');
+      if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.setView(id)})));y=p.y;}
     }
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings','economy'].includes(this.tab)?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
@@ -173,15 +174,15 @@ export class CityUI {
   }
   nativeSelect(input,p,options,value,x=p.x,y=p.y,w=p.w) {
     const signature=JSON.stringify(options);if(input.optionSignature!==signature){input.innerHTML=options.map(([id,label])=>`<option value="${id}">${readableLabel(label)}</option>`).join('');input.optionSignature=signature;}
-    if(input.value!==value)input.value=value;if(y>=p.top&&y+24<=p.bottom)this.inputAt(input,x,y,w);
+    if(input.value!==value)input.value=value;if(y>=p.top&&y+20<=p.bottom)this.inputAt(input,x,y,w);
   }
   filterButtons(p) {
-    const options=FILTERS[this.tab];if(!options)return;p.note('Mostrar',T.muted);this.nativeSelect(this.filterInput,p,options,this.filter(),p.x,p.y,Math.min(p.w,320));p.space(30);
+    const options=FILTERS[this.tab];if(!options)return;p.note('Mostrar',T.muted);this.nativeSelect(this.filterInput,p,options,this.filter(),p.x,p.y,Math.min(p.w,320));p.space(24);
   }
   pane(ui, key, x, y, w, h, draw) {
     const scroll = this.scrolls[key] || 0;
     bevel(ui.ctx,x,y,w,h,{inset:true,fill:key==='navigation'?T.face:T.paper});
-    const p = new Page(ui, x+8, y+4 - scroll, w - 30, y+4, y + h-4);
+    const p = new Page(ui, x+8, y+4 - scroll, w - 22, y+4, y + h-4);
     clipCanvasRegion(ui, x+3, y+3, w-6, h-6, () => draw(p));
     const height = p.y - (y+4 - scroll), max = Math.max(0, height - h+8);
     this.scrolls[key] = Math.min(scroll, max); this.zones.push({ key, x, y, w, h, max });
@@ -197,9 +198,9 @@ export class CityUI {
     p.heading(people ? `CIDADÃOS / ${city.citizens.length}` : `${business?'EMPRESAS':'PRÉDIOS'} / ${business?city.economy.businesses.length:city.buildings.length}`);
     const sorts=people?[['name','NOME'],['cash','SALDO'],['needs','NECESSIDADE']]:[['name','NOME'],['cash','CAIXA']];
     const sort=this.sorts[this.tab]||'name';
-    const cw=Math.floor((p.w-8)/2),iy=p.y+17;
-    if(p.visible(18)){p.ui.text('Mostrar',p.x,p.y,T.muted);p.ui.text('Ordenar',p.x+cw+8,p.y,T.muted);}
-    this.nativeSelect(this.filterInput,p,FILTERS[this.tab],this.filter(),p.x,iy,cw);this.nativeSelect(this.sortInput,p,sorts,sort,p.x+cw+8,iy,cw);p.space(47);
+    const cw=Math.floor((p.w-6)/2),iy=p.y+13;
+    if(p.visible(18)){p.ui.text('Mostrar',p.x,p.y,T.muted);p.ui.text('Ordenar',p.x+cw+6,p.y,T.muted);}
+    this.nativeSelect(this.filterInput,p,FILTERS[this.tab],this.filter(),p.x,iy,cw);this.nativeSelect(this.sortInput,p,sorts,sort,p.x+cw+6,iy,cw);p.space(36);
     const filter=this.filter();
     if(people){
       const rows=this.cachedList('people',()=>{const rows=city.citizens.filter(c=>this.matches(`${name(c.entity)} ${c.action} ${c.profession}`)).filter(c=>filter==='all'||filter==='homeless'&&!c.homeUnitId||filter==='unemployed'&&city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length||filter==='critical'&&Math.min(...Object.values(c.needs))<20||filter==='food'&&c.needs.food<30||filter==='children'&&!city.society.isAdult(c));
@@ -225,7 +226,7 @@ export class CityUI {
   }
   dossierTabs(p, tabs) {
     p.buttons(tabs.map(([id, label]) => ({ label, selected: this.detailTab === id, click: () => { this.detailTab = id; for(const key of Object.keys(this.scrolls)) if(key.startsWith('detail:'))delete this.scrolls[key]; } })));
-    p.space(8);
+    p.space(3);
   }
   homeLabel(id) {
     const home=this.city.housing.homes.get(id);if(!home)return 'Sem moradia';
@@ -236,7 +237,7 @@ export class CityUI {
     const city = this.city, society = city.society;
     if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?'Prefeito':c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
-    this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'HABILIDADES'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'FINANÇAS'], ['history', 'HISTÓRICO']]);
+    this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'TRABALHO'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'CONTA'], ['history', 'HISTÓRICO']]);
     if (this.detailTab === 'profile') {
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
@@ -410,7 +411,7 @@ export class CityUI {
   }
   content(p) {
     if (this.notice) p.note(this.notice, C.red);
-    const render = { city: 'overview', government: 'government', production: 'production', land: 'land', transport: 'transport', sanitation: 'sanitation', log: 'log' }[this.tab];
+    const render = { city: 'overview', government: 'government', production: 'production', land: 'land', transport: 'transport', sanitation: 'sanitation', log: 'log',event:'eventInspector' }[this.tab];
     if (render) this[render](p);
   }
   overview(p) {
@@ -488,13 +489,19 @@ export class CityUI {
     else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
     else {
       p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
-      p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');const iy=p.y;p.space(30);if(iy>=p.top&&iy+24<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);
+      p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');const iy=p.y;p.space(30);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);
       p.button(`PAISAGEM: ${WORLD_PRESETS[this.terrain].label}`,()=>{const keys=Object.keys(WORLD_PRESETS);this.terrain=keys[(keys.indexOf(this.terrain)+1)%keys.length];});
       p.note('Gerar terreno reinicia a simulação e descarta a cidade atual.',C.red);
       p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity())this.startWorld(Number(this.seed.value),this.terrain);});p.button('GERAR TERRENO ALEATÓRIO',()=>this.startWorld(randomWorldSeed(),this.terrain));
     }
   }
   production(p) {
+    if(this.view()==='lighting'){
+      const city=this.city,posts=[...city.lighting.sites.values()].filter(l=>l.status!=='cancelled');p.heading('ILUMINAÇÃO E ABASTECIMENTO');p.metrics([['CONSTRUÍDOS',posts.filter(l=>l.built).length],['ACESOS',posts.filter(l=>l.lit).length],['SEM ÓLEO',posts.filter(l=>l.built&&!l.fuel).length],['EM PLANEJAMENTO',posts.filter(l=>!l.built).length]]);
+      p.note('A prefeitura paga postes públicos; proprietários pagam os particulares. Pedras, construção, óleo e abastecimento têm trabalho e transporte reais.');
+      p.table([{label:'Local'},{label:'Responsável',weight:1.4},{label:'Óleo (h)'},{label:'Situação',weight:2}],posts.filter(l=>this.matches(`${l.id} ${l.supplyStatus||''}`)).map(l=>({cells:[`${Math.floor(l.x)}, ${Math.floor(l.y)}`,l.public?'Prefeitura':city.accountName(l.payerId),l.fuel,l.built?l.supplyStatus||'Aguardando abastecimento':l.projectId?'Em construção':'Aguardando contratação'],click:()=>this.camera(l.x,l.y)})));return;
+    }
+
     const city=this.city,view=this.view();
     if(view==='demand'){this.demands(p);return;}
     if(view==='stocks'){
@@ -668,34 +675,8 @@ export class CityUI {
     p.button('HISTÓRICO DA VEGETAÇÃO',()=>{this.go('log').logCategory='nature';});
   }
   electionsPanel(p) { renderPolitics(this,p); }
-  openEvent(id) {const target=this.go('log');target.selectedEventId=id;target.resetScroll();}
-  eventDetails(p) {
-    if(!this.selectedEventId)return;
-    const e=this.city.history.get(this.selectedEventId)||this.frozenEvents?.find(row=>row.id===this.selectedEventId);
-    p.heading(`EVENTO #${this.selectedEventId}`,C.cyan);p.button('FECHAR DETALHES',()=>{this.selectedEventId=null;});
-    if(!e){p.note('Este registro já saiu do limite de retenção.');return;}
-    p.note(`${stamp(e.minute)} / ${e.kind} / ${e.data?.action||e.kind}`);p.note(e.message);
-    if(e.objectiveTruth!==undefined)p.kv('Veracidade da história na simulação',e.objectiveTruth?'Verdadeira':'Inventada');
-    if(e.believes!==undefined)p.kv('Reação de quem ouviu',e.believes?'Acreditou':'Duvidou');
-    if(e.amount!==undefined)p.kv('Valor',money(e.amount));
-    if(e.transactions){p.kv('Pagamentos consolidados',e.transactions);p.kv('Período',`${stamp(e.startedAt)} → ${stamp(e.endedAt)}`);}
-    if(e.good)p.kv('Mercadoria',`${e.quantity??''} ${GOODS[e.good]?.label||e.good}`);
-    if(e.wage!==undefined)p.kv('Salário base/hora',money(e.wage*60));if(e.rate!==undefined)p.kv('Juros/dia',`${(e.rate*100).toFixed(2)}%`);if(e.quality!==undefined)p.kv('Qualidade da refeição',e.quality);if(e.ingredients)p.note('Ingredientes: '+Object.entries(e.ingredients).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(', '));if(e.buildingId&&this.city.building(e.buildingId))p.button('ABRIR EMPRESA',()=>this.openBuilding(e.buildingId));
-    if(e.dimension)p.kv(REPUTATION_LABELS[e.dimension]||e.dimension,`${e.previous.toFixed(1)} → ${e.value.toFixed(1)}`);
-    for(const subject of e.subjects||[]) {
-      const citizen=this.city.accounts.get(subject.accountId),building=this.city.buildings.find(b=>b.accountId===subject.accountId);
-      if(citizen?.entity?.properties.citizen && !citizen.entity.destroyed)p.button(subject.name,()=>this.openCitizen(citizen.id));
-      else if(building)p.button(subject.name,()=>this.openBuilding(building.id));
-      else p.note(subject.name);
-    }
-    p.heading('CAUSAS E ACONTECIMENTOS ANTERIORES');
-    for(const id of e.relatedEventIds||[]){const cause=this.city.history.get(id);p.button(`#${id}: ${cause?.message||'Fora da retenção'}`,()=>{this.selectedEventId=id;this.resetScroll();});}
-    if(!e.relatedEventIds?.length)p.note('Sem evento anterior vinculado.');
-    const refs=this.city.history.references(e);
-    if(refs.length)p.heading('ACOMPANHAR OPERAÇÃO');
-    for(const reference of refs)p.button(reference,()=>{this.logReference=reference;this.logCategory='all';this.logCitizenId=null;this.logBuildingId=null;this.logAccountId=null;this.query='';this.search.value='';this.resetScroll();});
-    p.space(10);
-  }
+  openEvent(id){if(this.host)return this.host.openEvent(id,this.city.history.get(id)||this.frozenEvents?.find(e=>e.id===id));this.remember();this.tab='event';this.selectedEventId=id;this.eventSnapshot=this.city.history.get(id)||this.frozenEvents?.find(e=>e.id===id);this.resetScroll();}
+  eventInspector(p){renderEventInspector(this,p);}
   events(p, events) {
     p.rows(events,e=>{
       const color=e.category==='death'?C.red:e.category==='family'||e.category==='relationship'?C.pink:e.category==='production'||e.category==='transport'?C.cyan:C.gold;
@@ -716,7 +697,6 @@ export class CityUI {
     p.buttons([{label:this.logLive?'CONGELAR HISTÓRICO':'RETOMAR AO VIVO',selected:!this.logLive,click:()=>{this.logLive=!this.logLive;this.frozenEvents=this.logLive?null:this.city.history.query({limit:Infinity});}},{label:'EXPORTAR JSON',click:()=>this.exportLog()}]);
     p.heading('FILTRAR POR ASSUNTO');p.buttons([['all','TODOS'],...Object.entries(EVENT_CATEGORIES)].map(([id,label])=>({label:String(label).toUpperCase(),selected:this.logCategory===id,click:()=>{this.logCategory=id;this.resetScroll();}})));
     for(const [key,label] of [['logCitizenId','PESSOA'],['logBuildingId','PRÉDIO'],['logAccountId','CONTA'],['logReference','OPERAÇÃO']])if(this[key]!=null)p.button(`${label}: ${this[key]} / LIMPAR`,()=>{this[key]=null;this.resetScroll();});
-    this.eventDetails(p);
     const rows=this.eventRows(this.logLimit+1);
     p.heading(`${Math.min(rows.length,this.logLimit)} REGISTROS / ${this.logLive?'AO VIVO':'CONGELADO'}`);
     p.note(`Eventos recentes primeiro; retenção global de ${HISTORY_LIMIT.toLocaleString('pt-BR')}, além de até 512 aguardando descarte. ${this.city.history.total.toLocaleString('pt-BR')} registrados desde a fundação; ${this.city.history.dropped.toLocaleString('pt-BR')} descartados.`,C.muted);

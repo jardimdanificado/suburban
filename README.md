@@ -545,7 +545,7 @@ A revisão possui testes específicos de regras legislativas, sucessão, corrup�
 
 ### Interface compacta e custos de processamento
 
-As listas de cidadãos, imóveis e históricos usam linhas compactas, com desenho apenas das linhas visíveis. Valores financeiros compartilham formatação e ficam alinhados; textos cortados têm dicas ao manter o ponteiro sobre a linha. A fonte base é de 13 px e os indicadores de necessidades ocupam duas colunas quando há espaço. Personalidade, preferências, filtros de histórico e explicações podem ser expandidos na ficha.
+As listas de cidadãos, imóveis e históricos usam linhas compactas, com desenho apenas das linhas visíveis. Valores financeiros compartilham formatação e ficam alinhados; textos cortados têm dicas ao manter o ponteiro sobre a linha. A fonte base é de 11 px e os indicadores de necessidades ocupam duas ou três colunas quando há espaço. Personalidade, preferências, filtros de histórico e explicações podem ser expandidos na ficha.
 
 Em **Governo → Eleições → Câmara**, projetos, vereadores e encaminhamento de pedidos têm áreas próprias. Pedidos são agrupados por assunto. Campanhas permitem selecionar uma chapa e consultar seu programa. **Produção → Demandas** separa oportunidades, preços e acordos.
 
@@ -591,3 +591,33 @@ Além das cargas anteriores, `npm run benchmark -- bridge` mede a aplicação at
 A contratação ignora capacidades nulas ou negativas antes de selecionar candidatos. Isso corrige o uso de `slice` com índice negativo quando a equipe ultrapassava a capacidade após uma redução de postos, situação que podia contratar quase todos os desempregados de uma vez.
 
 A cada rodada de contratação, as equipes também são reconciliadas com os vínculos dos cidadãos e com a capacidade atual. Desligamentos por excesso ficam no histórico; entregas já carregadas preservam sua posição e aguardam outro transportador, e faxinas voltam à fila. O panorama distingue **empregados / postos totais** de **vagas abertas**, contando somente postos em estabelecimentos ativos.
+
+
+### Densidade dos painéis
+
+Textos comuns usam 11 px e destaques numéricos, 16 px. Listas de pessoas, imóveis e históricos passaram de 43 para 32 px por registro; tabelas usam linhas de 19 px, botões e campos têm 20 px de altura e pares de rótulo/valor ocupam 18 px quando cabem na mesma linha. Margens e intervalos também foram reduzidos. A virtualização usa as mesmas alturas do desenho, preservando a rolagem e as áreas de clique. Colunas e indicadores aproveitam janelas menores; dicas mantêm os textos completos acessíveis quando houver corte.
+
+
+### Independentes, campanhas e filiação
+
+A maioria dos adultos começa sem partido. Na inicialização de referência com 256 moradores, há 29 filiados nos núcleos e nas candidaturas locais e 227 independentes. Convites de organização selecionam pessoas com interesse político e proximidade ideológica; a filiação não acompanha automaticamente todo novo adulto. Novas adesões respeitam um teto de 40% dos adultos, preservando um eleitorado majoritariamente independente.
+
+Cada pessoa distingue filiação, simpatia e convencimento de campanha. As campanhas direcionam cerca de 85% do público sorteado aos independentes. Propostas relevantes para suas necessidades, afinidade, confiança no candidato, senso crítico, resultados anteriores e corrupção conhecida alteram o apoio. Repetir contatos em menos de três horas não acumula convencimento. Apoio eleitoral não exige filiação; adesão voluntária requer contatos continuados, interesse, afinidade e uma decisão rara. Independentes simpáticos a uma chapa também podem apresentar suas propostas em conversas.
+
+A lealdade é revista diariamente pelo desempenho do partido, denúncias conhecidas e memórias políticas. Filiados decepcionados podem sair, com três dias de intervalo antes de uma nova adesão; ocupantes de cargos mantêm o vínculo durante o exercício. Fusões permitem que membros discordantes permaneçam independentes. Versões antigas que filiavam todos recebem uma migração única, preservando os ocupantes e pequenos núcleos. A interface de partidos mostra independentes e filiados; a ficha política apresenta simpatia, interesse, autonomia e contatos de campanha.
+
+### Câmara proporcional à população
+
+O percentual inicial é 5% da população viva: 256 moradores correspondem a 13 cadeiras, com arredondamento para cima. A população altera a quantidade de cadeiras automaticamente. Projetos legislativos permitem aumentar ou reduzir o percentual em 0,5 ponto, dentro dos limites já existentes de 5% a 12,5%; a execução passa pela votação e sanção/veto. O orçamento salarial continua global, dividido pelos membros. A interface informa o percentual e o número resultante de cadeiras.
+
+### Instalação e manutenção da iluminação
+
+Postes públicos seguem ruas com tráfego, além dos acessos dos edifícios, com espaçamento de sete tiles e busca de um tile próprio ao lado da rua. Até quatro instalações podem estar contratadas: três públicas e uma particular. O número de outras obras da construtora deixa de impedir a contratação de postes; a espera aumenta gradualmente sua prioridade de execução. Instalações públicas recebem prioridade suficiente para comprar materiais durante crises, mantendo custos, materiais entregues e trabalho real.
+
+O reabastecimento é solicitado com seis horas de combustível restantes. Pode comprar óleo de qualquer empresa com estoque disponível e dá prioridade aos postes secos durante a noite. A iluminação começa quando o transportador termina o serviço, inclusive entre atualizações horárias. A demanda por moinhos considera instalações planejadas, produção e estoque. Proprietários pagam sua iluminação; a prefeitura paga a via pública. **Produção → Iluminação** mostra obra, combustível e pendências de estoque, transportadora, caixa ou rota.
+
+### Inspetor de eventos e redimensionamento
+
+Selecionar um evento abre uma janela própria, sem misturar seus detalhes à listagem do histórico. O inspetor mostra dados da ocorrência, envolvidos, causas e links; obras, fretes, votações e pesquisas apresentam também informações vinculadas. A ocorrência aberta permanece disponível se sair da retenção global. Eventos relacionados podem ser abertos em outras janelas; consultar o histórico de uma operação é uma ação explícita.
+
+O marcador de redimensionamento é desenhado dentro da borda, usa a mesma área para o cursor e o arraste e tem precedência sobre a barra de rolagem. Janelas maximizadas não exibem esse marcador. Foram conferidas sintaxe e prévias do Canvas; o equilíbrio em partidas prolongadas ainda não foi acompanhado nesta alteração.

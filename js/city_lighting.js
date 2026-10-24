@@ -1,6 +1,6 @@
 import { ROAD_TILES, tileAt, terrainWalkable, canStep } from './city_terrain.js';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
-export const LIGHTING_RULES = { roadSpacing: 10, privateSpacing: 3, stone: 2, labor: 20, installationFee: 8000, maxActiveSites: 2 };
+export const LIGHTING_RULES = { roadSpacing: 7, privateSpacing: 3, stone: 2, labor: 20, installationFee: 8000, maxActiveSites: 4 };
 export class CityLighting {
   constructor(city) { this.city = city; this.posts = []; this.propertyStores = new Map(); this.roadPosts = new Map(); this.sites = new Map(); }
   freeSite(x, y, building = null) {
@@ -15,7 +15,7 @@ export class CityLighting {
   }
   findSite(point, building = null) {
     const x = Math.floor(point.x), y = Math.floor(point.y);
-    const radius = building ? 4 : 1;
+    const radius = building ? 4 : 2;
     for (let r = 1; r <= radius; r++) for (const [dx, dy] of [[r,0],[-r,0],[0,r],[0,-r]]) {
       const xx = x + dx, yy = y + dy;
       if (!this.freeSite(xx, yy, building)) continue;
@@ -35,13 +35,12 @@ export class CityLighting {
     const city = this.city;
     if (post.projectId || post.built || post.status === 'cancelled') return;
     const pending = city.development.projects.filter(p => p.service === 'lamp' && !p.cancelled && p.status !== 'completed');
-    if (pending.length >= LIGHTING_RULES.maxActiveSites || pending.some(p => this.sites.get(p.lampId)?.public === post.public) || !this.freeSite(Math.floor(post.x), Math.floor(post.y), city.building(post.buildingId))) return;
+    if (pending.length >= LIGHTING_RULES.maxActiveSites || pending.filter(p=>this.sites.get(p.lampId)?.public===post.public).length>=(post.public?3:1) || !this.freeSite(Math.floor(post.x), Math.floor(post.y), city.building(post.buildingId))) return;
     const builder = city.development.selectBuilder(post.payerId, post.door);
     const fee = city.currency.price(LIGHTING_RULES.installationFee);
     const budget = Math.ceil(fee * (post.payerId === 'treasury' ? 1.5 : 1)) + LIGHTING_RULES.stone * city.economy.goods.pedra.price;
     if (!builder || (city.accounts.get(post.payerId)?.balance || 0) < budget) return;
-    if (city.development.projects.filter(p => p.builderId === builder.id && p.service !== 'lamp' && !p.cancelled && p.status !== 'completed').length >= 2) return;
-    const project = city.development.registerService(post.payerId, builder, { service: 'lamp', type: 'lamp', name: post.public ? 'Instalação de poste público' : 'Instalação de iluminação do imóvel', lampId: post.id, door: { ...post.door }, stone: LIGHTING_RULES.stone, requiredLabor: LIGHTING_RULES.labor, fee });
+    const project = city.development.registerService(post.payerId, builder, { service: 'lamp', type: 'lamp', name: post.public ? 'Instalação de poste público' : 'Instalação de iluminação do imóvel', lampId: post.id,priority:post.public?90:50, door: { ...post.door }, stone: LIGHTING_RULES.stone, requiredLabor: LIGHTING_RULES.labor, fee });
     if (!project) return;
     post.projectId = project.id; post.status = 'materials';
     city.occupied.add(`${Math.floor(post.x)},${Math.floor(post.y)}`);
@@ -100,16 +99,17 @@ export class CityLighting {
       if (!groups.has(key)) groups.set(key, { holder, payer, posts: [] });
       groups.get(key).posts.push(post); posts.push(post);
     };
+    const planRoad=point=>{
+      if(!ROAD_TILES.has(tileAt(city.world,Math.floor(point.x),Math.floor(point.y))))return;
+      if([...this.roadPosts.values()].some(p=>p.status!=='cancelled'&&Math.hypot(p.door.x-point.x,p.door.y-point.y)<LIGHTING_RULES.roadSpacing))return;
+      const site=this.findSite(point);if(!site)return;
+      const id=`road:${Math.floor(site.x)}:${Math.floor(site.y)}`,post=this.plan({id,...site,fuel:0,lit:false,public:true,payerId:'treasury'});
+      if(post)this.roadPosts.set(id,post);
+    };
+    for(const [key] of [...city.traffic].sort((a,b)=>b[1]-a[1]).slice(0,128)){const [x,y]=key.split(',').map(Number);planRoad({x:x+.5,y:y+.5});}
     for (const b of [...buildings].sort((a,b)=>city.trafficScore(b.accessPath)-city.trafficScore(a.accessPath))) {
       // Road lamps belong to the city, independently of the neighbouring owner.
-      for (const point of [...(b.accessPath || [])].sort((a,b)=>city.trafficScore([b])-city.trafficScore([a]))) {
-        if (!ROAD_TILES.has(tileAt(city.world, Math.floor(point.x), Math.floor(point.y)))) continue;
-        if ([...this.roadPosts.values()].some(p => p.status !== 'cancelled' && Math.hypot(p.door.x - point.x, p.door.y - point.y) < LIGHTING_RULES.roadSpacing)) continue;
-        const site = this.findSite(point); if (!site) continue;
-        const id = `road:${Math.floor(site.x)}:${Math.floor(site.y)}`;
-        const post = this.plan({ id, ...site, fuel: 0, lit: false, public: true, payerId: 'treasury' });
-        if (post) this.roadPosts.set(id, post);
-      }
+      for(const point of [...(b.accessPath||[])].sort((a,b)=>city.trafficScore([b])-city.trafficScore([a])))planRoad(point);
       const owners = new Map();
       for (const unit of b.units) if (unit.ownerId && !owners.has(unit.ownerId)) owners.set(unit.ownerId, unit);
       for (const owner of owners.keys()) {
@@ -140,21 +140,24 @@ export class CityLighting {
       // Retired property fuel remains in its depot for exact stock accounting.
       holder.active = false; this.cancelPost(holder.post);
     }
-    const mills = city.economy.businesses.filter(b => b.type === 'mill' && b.inventory.oleo > 0);
+    const mills=city.economy.businesses.filter(b=>b.inventory.oleo>0);
     for (const { holder, payer, posts: lamps } of groups.values()) {
       for (const post of lamps) {
         // A carrier takes a real unit from the depot and fills the lamp on site.
-        if(post.fuel<=3 && !city.logistics.shipments.some(s=>s.buyer.lampPost===post && !['delivered','cancelled'].includes(s.status))) {
-          const depot=this.refillDepot(post,payer);
-          if(holder.inventory.oleo>0) city.logistics.order(holder,depot,'oleo',1,0,{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true});
-          else for(const mill of mills) if(city.logistics.order(mill,depot,'oleo',1,Math.ceil(city.economy.goods.oleo.price*(payer==='treasury'?1.5:1)),{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true})) break;
-        }
+        const pending=city.logistics.shipments.find(s=>s.buyer.lampPost===post&&!['delivered','cancelled'].includes(s.status));
+        if(post.fuel<=6&&!pending){
+          const depot=this.refillDepot(post,payer);let ordered=false;
+          if(holder.inventory.oleo>0)ordered=city.logistics.order(holder,depot,'oleo',1,0,{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true});
+          if(!ordered)for(const mill of mills.filter(m=>m!==holder).sort((a,b)=>Math.hypot(a.door.x-post.x,a.door.y-post.y)-Math.hypot(b.door.x-post.x,b.door.y-post.y)))if(city.logistics.order(mill,depot,'oleo',1,Math.ceil(city.economy.goods.oleo.price*(payer==='treasury'?1.5:1)),{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true})){ordered=true;break;}
+          const carriers=city.economy.businesses.some(b=>b.type==='carrier'&&(b.workers.length||b.ownerId));
+          post.supplyStatus=ordered?'Abastecimento contratado':!mills.length&&!holder.inventory.oleo?'Sem óleo disponível':!carriers?'Aguardando transportadora':'Aguardando caixa ou rota de entrega';
+        }else post.supplyStatus=pending?'Óleo em transporte':post.fuel>0?'Abastecido':'Aguardando pedido';
         post.lit = night && post.fuel > 0;
         if (post.lit) post.fuel--;
       }
     }
 
-    // Only contracted sites reserve land; at most two installations run concurrently.
+    // Only contracted sites reserve land; at most four installations run concurrently.
     for (const post of [...this.sites.values()].sort((a,b)=>Number(b.public)-Number(a.public)||city.trafficScore([b.door])-city.trafficScore([a.door]))) this.reserve(post);
     this.posts = posts; city.world.cityLampPosts = posts;
     city.world.cityLampSites = [...this.sites.values()].filter(p => p.projectId && !p.built && p.status !== 'cancelled');

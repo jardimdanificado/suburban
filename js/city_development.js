@@ -329,7 +329,8 @@ export class CityDevelopment {
   }
   projectFor(c, business = null) {
     const eligible = p => !p.cancelled && p.status !== 'completed' && p.inventory.pedra >= p.stone && (p.service !== 'lamp' || !!p.builderId) && ((!p.builderId && (p.accountId===c.accountId || p.accountId==='treasury' && p.ownerId===c.id)) || business?.type==='builder' && (p.builderId===business.id || p.accountId===business.accountId));
-    return this.projects.filter(eligible).sort((a,b)=>(b.priority||0)-(a.priority||0)||Number(a.service==='lamp')-Number(b.service==='lamp')||a.startedAt-b.startedAt)[0]||null;
+    const priority=p=>(p.priority||0)+(p.service==='lamp'?Math.min(80,Math.max(0,this.city.minute-p.startedAt)/60*2):0);
+    return this.projects.filter(eligible).sort((a,b)=>priority(b)-priority(a)||Number(a.service==='lamp')-Number(b.service==='lamp')||a.startedAt-b.startedAt)[0]||null;
   }
   balanceContracts() {
     const builders=this.city.economy.businesses.filter(b=>b.type==='builder' && (b.workers.length || this.city.economy.citizen(b.ownerId)));

@@ -3,9 +3,10 @@ import { ROAD_TILES, tileAt } from './city_terrain.js';
 export class CityCampaigns {
   constructor(city){this.city=city;this.lastRallyHour=null;}
   sample(rows,size){const pool=rows.slice();for(let i=0;i<Math.min(size,pool.length);i++){const j=i+Math.floor(this.city.random()*(pool.length-i));[pool[i],pool[j]]=[pool[j],pool[i]];}return pool.slice(0,size);}
+  audience(size){const rows=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)),independent=rows.filter(c=>!c.political?.partyId),first=this.sample(independent,Math.ceil(size*.85)),selected=new Set(first.map(c=>c.id));return first.concat(this.sample(rows.filter(c=>!selected.has(c.id)),Math.max(0,size-first.length)));}
   event(election,message,kind,ids=[],details={}){const event=this.city.log(message,'government',ids,{kind,electionId:election.id,...details});election.events.push({eventId:event.id,minute:this.city.minute,message,kind,...details});if(election.events.length>120)election.events.shift();return event;}
   hearPromises(voter,nomination,election,source='Programa divulgado') {
-    const p=this.city.politics,party=p.party(nomination.partyId);
+    const p=this.city.politics,party=p.party(nomination.partyId);p.campaignContact(voter,nomination,election,source);
     nomination.memoryPromises??=Object.freeze(nomination.promises.map(pr=>Object.freeze({title:pr.title,metric:pr.metric,baseline:pr.campaignBaseline,target:pr.target})));
     p.remember(voter,{kind:'campaign-promise',electionId:election.id,partyId:party.id,candidateId:nomination.citizenId,promiseKey:`promises:${election.id}:${nomination.citizenId}`,description:`${source}: ${nomination.name} (${party.short}) prometeu ${nomination.promises.map(pr=>pr.title.toLowerCase()).join('; ')}.`,effect:1,promises:nomination.memoryPromises});
   }
@@ -14,7 +15,7 @@ export class CityCampaigns {
     for(const voter of sample){const scores=p.intentions(voter),top=scores[0];if(!top)continue;const margin=top.score-(scores[1]?.score??0),knows=margin>=8||voter.political.memories.some(m=>m.electionId===election.id&&m.candidateId===top.candidateId),decided=knows&&city.random()<Math.min(.97,.55+margin/80);
       const approval=Math.max(0,Math.min(100,p.approval*.65+(voter.happiness-50)*.25+(voter.homeUnitId?8:-12)+(voter.needs.food>=30?8:-20)+(voter.jobId||voter.businessIds.length?5:-8)));
       const rejected=scores.filter(s=>s.score<40||voter.political.memories.some(m=>m.candidateId===s.candidateId&&(m.kind==='proven-scandal'||m.kind==='defamation'&&m.believes&&!m.corrected))).map(s=>s.candidateId);
-      responses.push(Object.freeze({citizenId:voter.id,name:voter.entity.properties.name,candidateId:decided?top.candidateId:null,leaningId:top.candidateId,decided,reason:decided?top.reason:'ainda avaliando propostas e alternativas',approval:Math.round(approval),rejectedIds:Object.freeze(rejected),reasons:Object.freeze(top.reasons.map(r=>Object.freeze({...r})))}));
+      responses.push(Object.freeze({citizenId:voter.id,name:voter.entity.properties.name,candidateId:decided?top.candidateId:null,leaningId:top.candidateId,decided,partyId:voter.political.partyId??null,sympathyPartyId:voter.political.sympathyPartyId??null,reason:decided?top.reason:'ainda avaliando propostas e alternativas',approval:Math.round(approval),rejectedIds:Object.freeze(rejected),reasons:Object.freeze(top.reasons.map(r=>Object.freeze({...r})))}));
     }
     const n=responses.length,results=election.candidates.map(c=>({candidateId:c.citizenId,name:c.name,partyId:c.partyId,intentions:responses.filter(r=>r.candidateId===c.citizenId).length,rejections:responses.filter(r=>r.rejectedIds.includes(c.citizenId)).length}));
     const finite=electorate.length>1?Math.sqrt((electorate.length-n)/(electorate.length-1)):0;
@@ -69,11 +70,11 @@ export class CityCampaigns {
   }
   conversation(a,b) {
     const p=this.city.politics,e=p.active;const scandal=p.scandals.find(s=>s.awareIds?.includes(a.id)&&!s.awareIds.includes(b.id));if(scandal&&this.city.random()<.2){scandal.awareIds.push(b.id);p.remember(b,{kind:scandal.proven?'proven-scandal':'corruption-rumor',candidateId:scandal.accusedId,partyId:scandal.partyId,caseId:scandal.id,effect:scandal.proven?-10:-2,description:'Debateu uma denúncia de corrupção numa conversa.'});}if(!e||this.city.random()>.2||!this.city.society.isAdult(a)||!this.city.society.isAdult(b))return;
-    p.initializeCitizen(a);p.initializeCitizen(b);const nomination=e.candidates.find(n=>n.endorsementPartyIds.includes(a.political.partyId));if(nomination)this.hearPromises(b,nomination,e,`Conversa com ${a.entity.properties.name}`);
+    p.initializeCitizen(a);p.initializeCitizen(b);const nomination=e.candidates.find(n=>n.endorsementPartyIds.includes(a.political.partyId??a.political.sympathyPartyId));if(nomination)this.hearPromises(b,nomination,e,`Conversa com ${a.entity.properties.name}`);
   }
   daily(election) {
     const day=Math.floor((this.city.minute-election.startedAt)/1440);if(election.lastCampaignDay===day)return;election.lastCampaignDay=day;
-    for(const nomination of election.candidates){const audience=this.sample(this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)),Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.criticize(nomination,election);this.buyVotes(nomination,election);}
+    for(const nomination of election.candidates){const audience=this.audience(Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.criticize(nomination,election);this.buyVotes(nomination,election);}
     this.poll(election);
   }
   hourly(election){for(const c of this.city.citizens)if(c.campaign&&(this.city.minute>=c.campaign.until||this.city.urgentNeed(c))){c.campaign=null;if(c.task==='campaign'){c.task=null;c.path=[];}}if(this.city.minute>=election.voteAt)return;this.daily(election);this.factCheck(election);const hour=Math.floor(this.city.minute/60);if(this.lastRallyHour!==hour&&this.city.hour>=7&&this.city.hour<20&&this.city.hour%3===0){this.lastRallyHour=hour;for(const nomination of this.sample(election.candidates,2))this.rally(nomination,election);}}

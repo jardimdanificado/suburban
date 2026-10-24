@@ -129,7 +129,7 @@ export class CityLogistics {
     const maxCarry=Math.max(24,...city.citizens.filter(c=>!c.entity.destroyed).map(carryCapacity));for(const s of this.shipments.filter(s=>!s.driverId&&!['delivered','cancelled'].includes(s.status)&&s.quantity>maxCarry))this.splitLoad(s);
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
-    const priority = s => s.purpose==='public-meals'?-4:s.purpose==='work-meals'?-3:s.purpose==='critical-infrastructure'?-2:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
+    const priority = s => s.purpose==='public-meals'?-4:s.purpose==='work-meals'?-3:s.purpose==='lamp-refill'?(s.buyer.lampPost?.fuel<=0&& (city.hour<6||city.hour>=18)?-3:-2):s.purpose==='critical-infrastructure'?-2:s.purpose==='lamp-construction'?-1:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
     pending.sort((a, b) => priority(a) - priority(b) || (a.lastDispatchAttempt || 0) - (b.lastDispatchAttempt || 0) || a.createdAt - b.createdAt || a.id - b.id);
     let dispatchBudget = 32;
     for (const s of pending) {
@@ -178,7 +178,7 @@ export class CityLogistics {
         s.buyer.incoming[s.good] -= s.quantity;
         if (inventoryFree(s.buyer) < s.quantity) { s.buyer.incoming[s.good] += s.quantity; s.status = 'waiting-space'; continue; }
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
-        if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
+        if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
         city.transfer(s.accountId, s.seller.accountId, s.cost, `Atacado: ${city.economy.goods[s.good].label}`);
         const carrier = city.building(s.carrierId);
         city.transfer(s.accountId, carrier?.active ? carrier.accountId : (s.payerAccountId || s.buyer.accountId), s.fee, carrier?.active ? 'Frete entregue' : 'Estorno de frete sem transportadora');

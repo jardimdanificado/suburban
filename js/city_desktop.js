@@ -26,12 +26,13 @@ export class CityDesktop {
   create(id,tab,{title=null,entity=null,unitId=null,kind='module'}={}){
     const existing=this.manager.find(id);if(existing){this.manager.raise(id);if(existing.shaded)this.manager.shade(id);this.hidden=false;return existing.state;}
     const state=new CityUI({city:this.city,root:this.element,select:this.select,camera:this.camera,host:this});state.tab=tab;
-    const[w,h]=kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
-    const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'?near:null});window.kind=kind;state.windowId=id;
+    const[w,h]=kind==='inspector'?[540,500]:kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
+    const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'?near:null});window.kind=kind;state.windowId=id;
     if(entity)state.setSelection(entity,unitId);this.hidden=false;
     for(const input of[state.search,state.seed,state.filterInput,state.sortInput])input.addEventListener('pointerdown',()=>this.manager.raise(id));
     return state;
   }
+  openEvent(id,snapshot=null){const state=this.create(`event:${id}`,'event',{title:`Inspetor do evento #${id}`,kind:'inspector'});state.selectedEventId=id;state.eventSnapshot??=snapshot||this.city.history.get(id);return state;}
   toggleTool(id,tool){const current=this.manager.find(`tool:${id}`);if(current){this.close(current.id);return;}return this.openTool(id,tool);}
   openTool(id,tool){
     const existing=this.manager.find(`tool:${id}`);if(existing){this.manager.raise(existing.id);return existing.state;}
@@ -56,7 +57,7 @@ export class CityDesktop {
   toggle(){if(!this.manager.windows.length){this.openModule('city');return;}this.hidden=!this.hidden;this.element.hidden=this.hidden;}
   close(id){const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
   closeAll(all=false){for(const w of [...this.manager.windows])if(all||!w.pinned)this.close(w.id);}
-  pointerDown(x,y){if(this.menuOpen){const b=this.menuBounds;if(b&&x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)return false;this.menuOpen=false;}if(!this.visible)return false;const w=this.manager.at(x,y);const z=w&&!w.shaded&&w.state.zones?.find(z=>z.max>0&&x>=z.x+z.w-12&&x<=z.x+z.w&&y>=z.y&&y<=z.y+z.h);if(z){this.manager.raise(w.id);const thumb=Math.max(16,z.h*z.h/(z.h+z.max));this.scrollGesture={id:w.id,key:z.key,y,start:w.state.scrolls[z.key]||0,max:z.max,track:Math.max(1,z.h-thumb)};return true;}if(w?.state.selected&&w.state.selected!==this.lastSelected){this.lastSelected=w.state.selected;this.select(w.state.selected,w.state.unitId);}return this.manager.pointerDown(x,y);}
+  pointerDown(x,y){if(this.menuOpen){const b=this.menuBounds;if(b&&x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)return false;this.menuOpen=false;}if(!this.visible)return false;const w=this.manager.at(x,y);const z=w&&!this.manager.resizeAt(w,x,y)&&!w.shaded&&w.state.zones?.find(z=>z.max>0&&x>=z.x+z.w-12&&x<=z.x+z.w&&y>=z.y&&y<=z.y+z.h);if(z){this.manager.raise(w.id);const thumb=Math.max(16,z.h*z.h/(z.h+z.max));this.scrollGesture={id:w.id,key:z.key,y,start:w.state.scrolls[z.key]||0,max:z.max,track:Math.max(1,z.h-thumb)};return true;}if(w?.state.selected&&w.state.selected!==this.lastSelected){this.lastSelected=w.state.selected;this.select(w.state.selected,w.state.unitId);}return this.manager.pointerDown(x,y);}
   pointerMove(x,y){if(this.scrollGesture){const g=this.scrollGesture,w=this.manager.find(g.id);if(w)w.state.scrolls[g.key]=Math.max(0,Math.min(g.max,g.start+(y-g.y)/g.track*g.max));return true;}return this.manager.pointerMove(x,y);}
   pointerUp(){const scroll=!!this.scrollGesture;this.scrollGesture=null;return this.manager.pointerUp()||scroll;}
   doubleClick(x,y){const w=this.manager.at(x,y);if(w&&this.manager.caption(w,x,y)){this.manager.shade(w.id);return true;}return false;}
@@ -92,11 +93,11 @@ export class CityDesktop {
     ui.button(w.x+w.w-76,w.y+2,24,22,w.shaded?'▣':'−',()=>this.manager.shade(w.id));ui.regions.at(-1).label=`Recolher: ${title}`;
     ui.button(w.x+w.w-51,w.y+2,24,22,w.maximized?'↙':'↗',()=>this.manager.maximize(w.id));ui.regions.at(-1).label=`Ampliar: ${title}`;
     ui.button(w.x+w.w-26,w.y+2,24,22,'×',()=>this.close(w.id));ui.regions.at(-1).label=`Fechar: ${title}`;
-    if(!w.shaded){if(w.state.tab==='map')this.drawMap(ui,w);else w.state.drawFloating(ui,w);ctx.fillStyle=T.muted;for(let i=0;i<3;i++)ctx.fillRect(w.x+w.w-5-i*4,w.y+w.h-5,2,2+i*4);ui.regions.push({x:w.x+w.w-18,y:w.y+w.h-18,w:18,h:18,label:`Redimensionar: ${title}`,onClick:null});ui.text(w.pinned?'Fixada':'',w.x+6,w.y+w.h-17,T.muted);}
+    if(!w.shaded){if(w.state.tab==='map')this.drawMap(ui,w);else w.state.drawFloating(ui,w);if(!w.maximized){const handle=this.manager.resizeHandle(w);ctx.fillStyle=T.muted;for(let i=0;i<3;i++)ctx.fillRect(handle.x+handle.w-3-i*4,handle.y+handle.h-3-i*4,2,2+i*4);ui.regions.push({...handle,label:`Redimensionar: ${title}`,onClick:null});}ui.text(w.pinned?'Fixada':'',w.x+6,w.y+w.h-17,T.muted);}
     else {w.state.element.hidden=true;w.state.zones=[];}
   }
   draw(ui){
-    const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&!hover.shaded&&point.x>=hover.x+hover.w-18&&point.y>=hover.y+hover.h-18;if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
+    const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
     if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
     this.tooltipElement.hidden=!this.tooltip||this.menuOpen||!!this.manager.gesture;
@@ -118,7 +119,7 @@ export class CityDesktop {
   occludeInputs(){
     const windows=this.manager.windows;
     windows.forEach((w,i)=>{for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput].filter(Boolean)){
-      if(input.hidden)continue;const rect={x:parseFloat(input.style.left),y:parseFloat(input.style.top),w:parseFloat(input.style.width),h:24};let visible=[rect];
+      if(input.hidden)continue;const rect={x:parseFloat(input.style.left),y:parseFloat(input.style.top),w:parseFloat(input.style.width),h:20};let visible=[rect];
       for(const above of windows.slice(i+1)){
         const cover=this.manager.rect(above);visible=visible.flatMap(part=>{
           if(!intersects(part,cover))return[part];const x=Math.max(part.x,cover.x),y=Math.max(part.y,cover.y),right=Math.min(part.x+part.w,cover.x+cover.w),bottom=Math.min(part.y+part.h,cover.y+cover.h);

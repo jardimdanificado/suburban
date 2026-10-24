@@ -17,6 +17,8 @@ export class WindowManager {
   rect(w){return{x:w.x,y:w.y,w:w.w,h:w.shaded?26:w.h};}
   at(x,y){return [...this.windows].reverse().find(w=>{const r=this.rect(w);return x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;});}
   caption(w,x,y){return y>=w.y&&y<w.y+26&&x>=w.x+4&&x<w.x+w.w-104;}
+  resizeHandle(w){return {x:w.x+w.w-18,y:w.y+w.h-18,w:14,h:14};}
+  resizeAt(w,x,y){const r=this.resizeHandle(w);return !w.shaded&&!w.maximized&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;}
   constrain(w){
     const maxW=Math.max(180,this.width-8),maxH=Math.max(110,this.height-this.top-this.bottom-6);
     w.w=Math.min(maxW,Math.max(Math.min(w.minWidth,maxW),w.w));w.h=Math.min(maxH,Math.max(Math.min(w.minHeight,maxH),w.h));
@@ -24,7 +26,7 @@ export class WindowManager {
   }
   pointerDown(x,y){
     const w=this.at(x,y);if(!w)return false;this.raise(w.id);
-    const resize=!w.shaded&&x>=w.x+w.w-18&&y>=w.y+w.h-18;
+    const resize=this.resizeAt(w,x,y);
     if(!resize&&!this.caption(w,x,y))return false;
     if(w.maximized)return false;
     this.gesture={id:w.id,kind:resize?'resize':'move',x,y,start:{x:w.x,y:w.y,w:w.w,h:w.h}};return true;

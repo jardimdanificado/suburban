@@ -20,7 +20,7 @@ export function bevel(ctx,x,y,w,h,{inset=false,fill=T.face}={}) {
 /** Classic management-game chrome, with readable system fonts at native device resolution. */
 export class ManagementCanvasUI extends LegacyCanvasUI {
   beginFrame(x=-1,y=-1){this.pointer={x,y};super.beginFrame(x,y);}
-  font(scale=1,bold=false){return `${bold||scale>1?'600':'400'} ${Math.round(scale>1?20:13)}px Arial, Helvetica, sans-serif`;}
+  font(scale=1,bold=false){return `${bold||scale>1?'600':'400'} ${Math.round(scale>1?16:11)}px Arial, Helvetica, sans-serif`;}
   textWidth(value,scale=1){
     const text=readableLabel(value),font=this.font(scale),key=`${font}:${text}`;this.widthCache??=new Map();
     if(this.widthCache.has(key))return this.widthCache.get(key);
@@ -30,7 +30,7 @@ export class ManagementCanvasUI extends LegacyCanvasUI {
   fitText(value,width,scale=1){const text=String(value??'');if(width<=0)return '';if(this.textWidth(text,scale)<=width)return text;const suffix='…';let low=0,high=text.length;while(low<high){const middle=Math.ceil((low+high)/2);if(this.textWidth(text.slice(0,middle)+suffix,scale)<=width)low=middle;else high=middle-1;}return low?text.slice(0,low)+suffix:width>=this.textWidth(suffix,scale)?suffix:'';}
   text(value,x,y,color=T.ink,scale=1){
     const ctx=this.ctx;ctx.save();ctx.font=this.font(scale);ctx.textBaseline='top';ctx.fillStyle=legacyColors[color]||color;
-    readableLabel(value).split('\n').forEach((line,i)=>ctx.fillText(line,x,y+i*(scale>1?24:16)));ctx.restore();
+    readableLabel(value).split('\n').forEach((line,i)=>ctx.fillText(line,x,y+i*(scale>1?19:14)));ctx.restore();
   }
   button(x,y,w,h,label,onClick,{selected=false,danger=false}={}){
     const ctx=this.ctx,hover=this.pointer&&this.pointer.x>=x&&this.pointer.x<=x+w&&this.pointer.y>=y&&this.pointer.y<=y+h;
