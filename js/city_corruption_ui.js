@@ -28,7 +28,7 @@ export function renderCorruptionInspector(ui,p){
   if(!r){p.note('Caso indisponível.');return;}
   const tab=ui.corruptionTab||'summary',party=gov.party(r.partyId),steps=flows(r);
   p.heading(`CASO #${r.id} · ${labels[r.type]||r.type}`);
-  p.buttons([['summary','ESQUEMA'],['money','DINHEIRO'],['evidence','INVESTIGAÇÃO']].map(([id,label])=>({label,selected:tab===id,click:()=>{ui.corruptionTab=id;ui.resetScroll();}})));
+  p.buttons([['summary','ESQUEMA'],['money','DINHEIRO'],['evidence','INVESTIGAÇÃO']].map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({corruptionTab:id})})));
   p.kv('Situação',status(r));
   if(!discovered(r))p.note('Informação secreta da simulação: a população ainda não descobriu este esquema.');
   if(tab==='summary'){
@@ -70,7 +70,7 @@ export function renderCorruptionInspector(ui,p){
     p.note('Conhecer os envolvidos nesta janela não equivale a prova pública. A investigação precisa reunir evidências e o escândalo precisa ganhar repercussão para permitir uma cassação.');
     if(r.proven&&r.accusedId===city.economy.mayorId&&!gov.suspendedExecutive)p.button('PEDIR AFASTAMENTO POR 2 DIAS',()=>gov.submitBill('suspend',{targetId:r.accusedId,caseId:r.id,value:2}));
     if(r.evidenceEventId)p.button('DOCUMENTAÇÃO FINANCEIRA',()=>ui.openEvent(r.evidenceEventId));
-    p.button('HISTÓRICO DESTE CASO',()=>{const target=ui.go('log');target.logReference=`corruptionCaseId:${r.id}`;target.logCategory='all';target.query='';target.search.value='';target.logCitizenId=null;target.logBuildingId=null;target.logAccountId=null;target.resetScroll();});
+    p.button('HISTÓRICO DESTE CASO',()=>ui.openHistory(`corruptionCaseId:${r.id}`));
   }
   p.button('CENTRAL DE CORRUPÇÃO',()=>ui.go('corruption'));
 }

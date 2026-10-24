@@ -5,7 +5,7 @@ import {tycoonIcon} from './tycoon_icons.js';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
 export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['production','Produção'],['transport','Transportes'],['sanitation','Saneamento'],['publications','Livros e panfletos'],['corruption','Corrupção'],['log','Histórico'],['map','Mapa da cidade']];
-const sizes={election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
+const sizes={party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop: directories, records and tools have independent windows. */
@@ -32,17 +32,24 @@ export class CityDesktop {
     for(const input of[state.search,state.seed,state.filterInput,state.sortInput,state.publicationDraft])input.addEventListener('pointerdown',()=>this.manager.raise(id));
     return state;
   }
-  openSection(source,overrides={}){
-    const tab=overrides.tab||source.tab,id=`section:${this.sectionSerial=(this.sectionSerial||0)+1}`;
-    const dossier=!!source.selected&&tab===source.tab;
-    const state=this.create(id,tab,{kind:dossier?'dossier':'section',entity:dossier?source.selected:null,unitId:dossier?source.unitId:null});
-    // Copy the observer's choices, never the DOM, simulation objects or caches.
-    for(const [key,value] of Object.entries(source))if(key!=='windowId'&&(/(?:Id|Tab|View|Page)$/.test(key)||['query','logCategory','logReference','logLive','logLimit','logKind','publicationContentType','publicCrop'].includes(key)))if(value===null||['string','number','boolean'].includes(typeof value))state[key]=value;
-    for(const key of ['views','filters','sorts','scrolls','helpOpen','journalFilters','journalPages'])if(source[key])state[key]={...source[key]};
-    state.tab=tab;state.selected=dossier?source.selected:null;Object.assign(state,overrides);state.sectionWindow=true;state.search.value=state.query||'';if(tab==='government'&&state.politicsTab==='promises')state.termId??=this.city.politics.mandates.current?.id??this.city.politics.mandates.terms.at(-1)?.id;
-    if(source.eventSnapshot)state.eventSnapshot=source.eventSnapshot;
+  openPanel(source,overrides={}){
+    const tab=overrides.tab||source.tab,properties={};
+    for(const [key,value] of Object.entries(source))if(key!=='windowId'&&(/(?:Id|Tab|View)$/.test(key)||['logCategory','logReference','logLive','logKind','publicCrop','recordWindow'].includes(key)))if(value===null||['string','number','boolean'].includes(typeof value))properties[key]=value;
+    properties.filters={...source.filters,...overrides.filters};properties.sorts={...source.sorts};properties.views={...source.views,...overrides.views};Object.assign(properties,overrides);properties.tab=tab;
+    const dossier=!!source.selected&&tab===source.tab,entity=dossier?source.selected:null;
+    const view=properties.views[tab]||'overview',politics=properties.politicsTab||'overview';
+    const keys=entity?['detailTab','memoryView']:tab==='government'&&view==='elections'?['politicsTab',...(politics==='approval'?['approvalView']:politics==='council'?['councilView','billId']:politics==='promises'?['termId','mandateView']:politics==='polls'?['electionId','pollId']:[])]:tab==='election'?['electionId','electionView','electionDetailView']:tab==='event'?['selectedEventId','eventTab']:tab==='corruption-case'?['corruptionCaseId','corruptionTab']:tab==='poll-response'?['electionId','pollId','pollResponseCitizenId']:tab==='log'?['logReference','logCitizenId','logBuildingId','logAccountId','logCategory']:tab==='production'?['demandTab']:tab==='party-organization'?['partyOrganizationView','partyProposalId']:tab==='publications'?['selectedPublicationId','publicationTab','publicationSourceEventId']:tab==='land'?['selectedPlotId']:['partyId','projectId','contractPlotId'];
+    const defaults={approvalView:'summary',councilView:'bills',mandateView:'promise',eventTab:'summary',corruptionTab:'summary',detailTab:'profile',demandTab:'opportunities'};for(const key of keys)if(properties[key]==null&&defaults[key])properties[key]=defaults[key];
+    const id=`panel:${JSON.stringify([tab,view,entity?.id??null,properties.filters?.[tab]||'all',...keys.map(key=>properties[key]??null)])}`;
+    if(entity){const primary=this.manager.find(`${entity.properties.citizen?'person':'building'}:${entity.id}`);if(primary&&primary.state.detailTab===properties.detailTab&&(primary.state.unitId??null)===(properties.unitId??null)){this.manager.raise(primary.id);this.hidden=false;return primary.state;}}
+    const existing=this.manager.find(id);if(existing){this.manager.raise(id);if(existing.shaded)this.manager.shade(id);this.hidden=false;return existing.state;}
+    const state=this.create(id,tab,{kind:dossier?'dossier':'section',entity,unitId:dossier?source.unitId:null});
+    Object.assign(state,properties);state.selected=entity;state.sectionWindow=true;state.scrolls={};state.query='';state.search.value='';
+    if(source.eventSnapshot)state.eventSnapshot=source.eventSnapshot;if(source.electionSnapshot)state.electionSnapshot=source.electionSnapshot;
     const window=this.manager.find(id);window.title=state.sectionTitle();return state;
   }
+  openParty(id){const party=this.city.politics.party(id);if(!party)return;const state=this.create(`party:${id}`,'party',{title:`${party.short} · ${party.name}`,kind:'section'});state.partyId=id;return state;}
+  openContract(id){const project=this.city.development.projects.find(p=>p.id===id);if(!project)return;const state=this.create(`contract:${id}`,'contract',{title:`Contrato · ${project.name}`,kind:'section'});state.projectId=id;return state;}
   openElection(id,view='count'){
     const gov=this.city.politics,e=[gov.active,gov.lastResult,...gov.elections].find(e=>e?.id===id);if(!e)return;
     const label={polls:'Pesquisas eleitorais',count:'Votação e apuração',results:'Resultado eleitoral'}[view];
@@ -77,7 +84,7 @@ export class CityDesktop {
     const state=this.create(`${citizen?'person':'building'}:${entity.id}`,citizen?'people':'buildings',{title:entity.properties.name,entity,unitId,kind:'dossier'});
     if(unitId){state.unitId=unitId;state.detailTab='units';}this.lastSelected=entity;
   }
-  setPlotSelection(id){const state=this.openModule('land');state.selectedPlotId=id;state.setView('plots');return state;}
+  setPlotSelection(id){const state=this.create(`plot:${id}`,'land',{title:`Terreno ${id}`,kind:'section'});state.selectedPlotId=id;state.recordWindow=true;state.setView('plots');return state;}
   toggle(){if(!this.manager.windows.length){this.openModule('city');return;}this.hidden=!this.hidden;this.element.hidden=this.hidden;}
   close(id){const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
   closeAll(all=false){for(const w of [...this.manager.windows])if(all||!w.pinned)this.close(w.id);}

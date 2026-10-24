@@ -1,8 +1,8 @@
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
 export const GOVERNMENT_OUTCOMES=Object.freeze({happiness:['Felicidade',.28],fed:['Alimentação',.28],housed:['Moradia',.24],employed:['Ocupação',.18],health:['Saúde',.08],water:['Água',.08],hygiene:['Higiene',.06],rest:['Descanso',.04]});
 export function outcomeAssessment(baseline,latest){
-  const rows=Object.entries(GOVERNMENT_OUTCOMES).map(([metric,[label,weight]])=>{const before=Number(baseline[metric]||0),now=Number(latest[metric]||0);return {metric,label,baseline:before,current:now,change:now-before,points:(now-before)*weight};});
-  const raw=rows.reduce((n,r)=>n+r.points,0);return {rows,raw,points:clamp(raw,-40,40)};
+  const rows=Object.entries(GOVERNMENT_OUTCOMES).map(([metric,[label,weight]])=>{const before=Number(baseline[metric]||0),now=Number(latest[metric]||0);return {metric,label,baseline:before,current:now,change:now-before,points:(now-before)*weight*(now<before?.45:1)};});
+  const raw=rows.reduce((n,r)=>n+r.points,0);return {rows,raw,points:clamp(raw,-25,40)};
 }
 export function promiseAssessment(p,term,minute){
   const direction=p.higher?1:-1,goal=(p.target-p.baseline)*direction,change=(p.current-p.baseline)*direction;
@@ -14,10 +14,11 @@ export function promiseAssessment(p,term,minute){
   const speed=completionAt==null?0:clamp(1-(completionAt-term.startedAt)/duration);
   const completion=fulfilled&&earned?16:0,early=completion?speed*14:0;
   const overdelivery=fulfilled&&earned?clamp((change-goal)/scale,0,2):0;
-  const partial=clamp(progress)*8,excess=overdelivery*10;
-  const attention=p.attention??.4,pending=fulfilled?0:-(1-clamp(progress))*elapsed*(16+attention*18);
-  const regression=Math.min(0,progress)*18-(completionAt!=null&&!fulfilled?6:0);
-  return {goal,change,progress,fulfilled,earned,completionAt,speed,overdelivery,partial,completion,early,excess,pending,regression,points:partial+completion+early+excess+pending+regression};
+  const partial=clamp(progress)*12,excess=overdelivery*10;
+  const attention=p.attention??.4,deadlinePressure=clamp((elapsed-.25)/.75),pending=fulfilled?0:-(1-clamp(progress))*Math.pow(deadlinePressure,1.5)*(18+attention*10);
+  const regression=Math.min(0,progress)*12-(completionAt!=null&&!fulfilled?6:0);
+  const initiative=fulfilled?0:Math.min(6,(p.execution?.committed||0)*2);
+  return {goal,change,progress,fulfilled,earned,completionAt,speed,overdelivery,partial,completion,early,excess,pending,regression,initiative,deadlinePressure,points:partial+completion+early+excess+pending+regression+initiative};
 }
 export function promiseDifficulty(metric,baseline,target,spec){
   const goal=Math.abs(target-baseline),step=spec.unit==='%'?(metric==='inflation'?Math.max(.1,baseline*.35):metric==='tax'?5:20):spec.unit==='centavos'?Math.max(30,baseline*.2):Math.max(1,Math.abs(baseline)*.35);

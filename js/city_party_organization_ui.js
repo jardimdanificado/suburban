@@ -6,9 +6,9 @@ export function renderPartyOrganization(ui,p,{fold,paginate}){
   p.kv('Partidos ativos / limite',`${gov.parties.filter(a=>a.active).length} / ${gov.policy.partyLimit}`);
   fold(ui,p,'partyFoundations','Fundações e vereditos populares',()=>{
     p.note('A cidade começa com quatro partidos. Novos registros exigem dois amigos adultos, ideias próximas e falta de representação. A consulta ocorre um dia após o pedido: maioria dos votos válidos e participação mínima de 25% dos adultos.');
-    const rows=paginate(ui,p,[...organization.proposals].reverse(),'partyFoundationPage',6);
-    for(const row of rows)p.record(row.name,`${states[row.status]} · ${stamp(row.proposedAt)}`,()=>{ui.partyProposalId=row.id;ui.partyFoundationBallotPage=0;},ui.partyProposalId===row.id);
-    const selected=organization.proposals.find(r=>r.id===ui.partyProposalId)||rows[0];if(!selected)return;
+    const rows=ui.partyProposalId?[]:paginate(ui,p,[...organization.proposals].reverse(),'partyFoundationPage',6);
+    if(!ui.partyProposalId)for(const row of rows)p.record(row.name,`${states[row.status]} · ${stamp(row.proposedAt)}`,()=>ui.openPanel({tab:'party-organization',partyOrganizationView:'foundations',partyProposalId:row.id,recordWindow:true}),ui.partyProposalId===row.id);
+    const selected=organization.proposals.find(r=>r.id===ui.partyProposalId);if(!selected)return;
     p.heading(selected.name);p.kv('Situação',states[selected.status]);p.kv('Consulta',stamp(selected.voteAt));
     if(selected.parentPartyId)p.kv('Dissidência de',gov.party(selected.parentPartyId)?.name||selected.parentPartyId);
     for(let i=0;i<selected.founderIds.length;i++)p.button(`FUNDADOR: ${selected.founderNames[i]}`,()=>ui.openCitizen(selected.founderIds[i]));
@@ -25,4 +25,10 @@ export function renderPartyOrganization(ui,p,{fold,paginate}){
     p.note('A chance de adesão é pequena e depende das ideias, confiança e amizade com o militante, distância física, empatia, comunicação e qualidade da conversa. A maioria pode continuar independente.');
     for(const row of paginate(ui,p,[...organization.contacts].reverse(),'membershipOutreachPage',6))p.record(`${city.accountName(`citizen:${row.citizenId}`)} · ${gov.party(row.partyId)?.short||'Partido encerrado'}`,`${stamp(row.minute)} · ${row.joined?'Filiou-se':'Não se filiou'} · chance ${(row.chance*100).toFixed(2)}%`,()=>ui.openEvent(row.eventId));
   });
+}
+
+export function renderPartyOrganizationWindow(ui,p){
+  const paginate=(ui,p,rows,key,size)=>{const page=Math.max(0,Math.min(ui[key]||0,Math.ceil(rows.length/size)-1));if(rows.length>size)p.buttons([{label:'ANTERIOR',click:()=>{ui[key]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{ui[key]=page+1;}}]);return rows.slice(page*size,page*size+size);};
+  const fold=(ui,p,key,title,draw)=>{if(key===(ui.partyOrganizationView==='membership'?'partyMembershipCampaign':'partyFoundations')||key==='partyFoundationBallots'){p.heading(title);draw();}};
+  renderPartyOrganization(ui,p,{fold,paginate});
 }

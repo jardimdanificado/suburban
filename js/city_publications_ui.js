@@ -9,12 +9,12 @@ export function renderPublications(ui,p){
     if(ui.publicationOwner){p.kv('Acervo',city.accountName(ui.publicationOwner));p.button('MOSTRAR TODOS OS ACERVOS',()=>{ui.publicationOwner=null;ui.resetScroll();});}
     const docs=ui.cachedList('publications',()=>[...library.documents.values()].filter(d=>(!ui.publicationOwner||d.ownerAccountId===ui.publicationOwner)&&ui.matches(`${d.title} ${city.accountName(d.ownerAccountId)}`)).reverse());
     p.kv('Exemplares neste filtro',docs.length);
-    p.rows(docs,d=>p.record(`#${d.id} ${d.title}`,`${city.accountName(d.ownerAccountId)} · ${d.pages} página${d.pages>1?'s':''}`,()=>{ui.selectedPublicationId=d.id;ui.resetScroll();},false,{value:`${d.entries.length}/${library.capacity(d)}`}));
+    p.rows(docs,d=>p.record(`#${d.id} ${d.title}`,`${city.accountName(d.ownerAccountId)} · ${d.pages} página${d.pages>1?'s':''}`,()=>ui.openPanel({selectedPublicationId:d.id,publicationTab:'read'}),false,{value:`${d.entries.length}/${library.capacity(d)}`}));
     if(!docs.length)p.note('Ainda não há exemplares. A prensa transforma madeira em papel; a papelaria encaderna livros e prepara panfletos para venda.');return;
   }
-  p.button('VOLTAR AO ACERVO',()=>{ui.selectedPublicationId=null;ui.resetScroll();});
+  p.button('VOLTAR AO ACERVO',()=>ui.go('publications'));
   p.heading(`#${doc.id} ${doc.title}`);p.kv('Dono',city.accountName(doc.ownerAccountId));p.kv('Formato',doc.pages===1?'Panfleto (uma página)':`Livro de ${doc.pages} páginas`);p.kv('Registros / capacidade',`${doc.entries.length}/${library.capacity(doc)}`);
-  p.buttons([{label:'CONTEÚDO',selected:ui.publicationTab!=='write',click:()=>{ui.publicationTab='read';ui.resetScroll();}},{label:'ESCREVER',selected:ui.publicationTab==='write',click:()=>{ui.publicationTab='write';ui.resetScroll();}}]);
+  p.buttons([{label:'CONTEÚDO',selected:ui.publicationTab!=='write',click:()=>ui.openPanel({publicationTab:'read'})},{label:'ESCREVER',selected:ui.publicationTab==='write',click:()=>ui.openPanel({publicationTab:'write'})}]);
   const owner=city.citizens.find(c=>c.accountId===doc.ownerAccountId&&!c.entity.destroyed);
   if(ui.publicationTab==='write'){
     if(!owner||!city.society.isAdult(owner)){p.note('O exemplar precisa ser comprado por um morador adulto para ser escrito.');return;}

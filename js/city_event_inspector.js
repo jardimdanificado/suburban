@@ -8,7 +8,7 @@ export function renderEventInspector(ui,p){
   const city=ui.city,event=city.history.get(ui.selectedEventId)||ui.eventSnapshot;
   p.heading(`INSPETOR DO EVENTO #${ui.selectedEventId}`);
   if(!event){p.note('Registro indisponível.');return;}
-  const tab=ui.eventTab||'summary';p.buttons([['summary','RESUMO'],['details','DETALHES'],['timeline','LINHA DO TEMPO']].map(([id,label])=>({label,selected:tab===id,click:()=>{ui.eventTab=id;ui.resetScroll();}})));
+  const tab=ui.eventTab||'summary';p.buttons([['summary','RESUMO'],['details','DETALHES'],['timeline','LINHA DO TEMPO']].map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({eventTab:id})})));
   if(tab==='summary'){renderEventSummary(ui,p,event);return;}if(tab==='timeline'){renderEventTimeline(ui,p,event);return;}
   p.note(event.message);
   p.columns(q=>{q.kv('Quando',stamp(event.minute));q.kv('Assunto',EVENT_CATEGORIES[event.category]||event.category||event.kind);},q=>{q.kv('Tipo',eventTypeLabel(event));if(event.amount!=null)q.kv('Valor registrado',formatMoney(event.amount));});
@@ -22,11 +22,11 @@ export function renderEventInspector(ui,p){
     p.kv('Distância física',`${Number(event.physicalDistance||0).toFixed(1)} células`);p.kv('Resultado',event.joined?'Filiou-se':'Não se filiou');
   }
   const foundation=city.politics.organization?.proposals.find(r=>r.id===event.partyProposalId);
-  if(foundation){p.heading('FUNDAÇÃO PARTIDÁRIA');p.kv('Nome',foundation.name);p.kv('Consulta popular',stamp(foundation.voteAt));if(foundation.result)p.note(foundation.result);if(foundation.electorate!=null)p.kv('Sim / não / abstenções',`${foundation.yes} / ${foundation.no} / ${foundation.abstentions}`);p.button('ABRIR VEREDITO E VOTOS',()=>{const state=ui.go('government');state.setView('elections');state.politicsTab='parties';state.partyProposalId=foundation.id;state.helpOpen??={};state.helpOpen.partyFoundations=true;state.resetScroll();});}
+  if(foundation){p.heading('FUNDAÇÃO PARTIDÁRIA');p.kv('Nome',foundation.name);p.kv('Consulta popular',stamp(foundation.voteAt));if(foundation.result)p.note(foundation.result);if(foundation.electorate!=null)p.kv('Sim / não / abstenções',`${foundation.yes} / ${foundation.no} / ${foundation.abstentions}`);p.button('ABRIR VEREDITO E VOTOS',()=>ui.openPanel({tab:'party-organization',partyOrganizationView:'foundations',partyProposalId:foundation.id,recordWindow:true}));}
   for(const promise of event.promises||[])p.note(describePromise(promise));
   if(event.metric)p.kv('Indicador da promessa',PROMISE_METRICS[event.metric]?.label||event.metric);
   if(event.fulfilledAt!=null)p.kv('Primeiro cumprimento da meta',stamp(event.fulfilledAt));
-  if(event.termId!=null)p.button('ABRIR GESTÃO EM JANELA SEPARADA',()=>ui.openSection({tab:'government',views:{government:'elections'},politicsTab:'promises',termId:event.termId}));
+  if(event.termId!=null)p.button('ABRIR GESTÃO EM JANELA SEPARADA',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'promises',termId:event.termId}));
   if(event.good)p.kv('Mercadoria',city.economy.goods[event.good]?.label||event.good);
   if(event.wage!=null)p.kv('Salário base/hora',formatMoney(event.wage*60));
   if(event.rate!=null)p.kv('Juros/dia',`${(event.rate*100).toFixed(2)}%`);

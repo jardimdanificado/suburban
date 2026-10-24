@@ -30,6 +30,14 @@ export class UIPage {
   heading(value,color=T.ink){this.space(3);if(this.visible(16)){this.ui.text(fit(this.ui,value,this.w),this.x,this.y,color===T.gold?T.ink:color);this.ui.ctx.fillStyle=T.line;this.ui.ctx.fillRect(this.x,this.y+14,this.w,1);}this.y+=19;}
   line(value,color=T.muted){if(this.visible(14))this.ui.text(value,this.x,this.y,color);this.y+=14;}
   note(value,color=T.muted){const lines=wrapped(this.ui,value,this.w),start=this.y;const first=Math.max(0,Math.floor((this.top-start)/14)),last=Math.min(lines.length,Math.ceil((this.bottom-start)/14));for(let i=first;i<last;i++)this.ui.text(lines[i],this.x,start+i*14,color);this.y=start+lines.length*14+2;}
+  block(title,subtitle,draw){
+    const start=this.y,ctx=this.ui.ctx;
+    if(this.visible(25)){ctx.fillStyle=T.face;ctx.fillRect(this.x,start,this.w,24);this.ui.text(fit(this.ui,title,this.w-20),this.x+10,start+5,T.ink);}
+    const body=new UIPage(this.ui,this.x+10,start+30,this.w-20,this.top,this.bottom);
+    if(subtitle)body.note(subtitle);draw(body);const end=body.y+8;
+    if(end>this.top&&start<this.bottom){ctx.strokeStyle=T.line;ctx.strokeRect(this.x+.5,start+.5,this.w-1,end-start-1);}
+    this.y=end+12;
+  }
   kv(label,value){
     const text=String(value??''),wide=widthOf(this.ui,text)>this.w*.64,h=wide?29:18;
     if(this.visible(h)){

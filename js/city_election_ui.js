@@ -11,19 +11,20 @@ function polls(ui,p,e){
   p.note('Pesquisas por amostragem: entrevistam aproximadamente 10% da população. Intenções não são votos depositados nas urnas.');
   const poll=e.polls.find(r=>r.id===ui.monitorPollId)||e.polls.at(-1);
   if(!poll){p.note('Aguardando a primeira pesquisa.');return;}
-  p.buttons([{label:'ACOMPANHAR A MAIS RECENTE',selected:ui.monitorPollId==null,click:()=>{ui.monitorPollId=null;}},...e.polls.map(r=>({label:`${stamp(r.minute)}`,selected:ui.monitorPollId===r.id,click:()=>{ui.monitorPollId=r.id;}}))]);
+  p.buttons([{label:'ACOMPANHAR A MAIS RECENTE',selected:ui.monitorPollId==null,click:()=>{ui.monitorPollId=null;}},...e.polls.map(r=>({label:`${stamp(r.minute)}`,selected:ui.monitorPollId===r.id,click:()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:r.id})}))]);
   p.kv('Última atualização',stamp(poll.minute));p.metrics([['ENTREVISTADOS',poll.sampleSize],['INDECISOS',poll.undecided],['MARGEM',`±${poll.marginOfError.toFixed(1)} p.p.`]]);
   p.table([{label:'Candidato',weight:2},{label:'Intenção'},{label:'Rejeição'}],poll.results.map(r=>({cells:[r.name,`${(r.intentions/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`,`${(r.rejections/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`],click:()=>ui.openCitizen(r.candidateId)})));
   p.kv('Aprovação entre entrevistados',`${poll.approval.toFixed(1)}%`);
-  p.button('ABRIR RESPOSTAS E MOTIVOS EM OUTRA JANELA',()=>ui.openSection({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:poll.id}));
+  p.button('RESPOSTAS E MOTIVOS',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:poll.id}));
 }
 function ballots(ui,p,e){
   p.note('Visão do observador: os votos e motivos abaixo são os efetivamente registrados na urna, com horário e escolhas individuais.');
   const rows=e.ballots.filter(b=>ui.matches(`${b.name} ${b.candidateName||''} ${b.councilCandidateName||''} ${b.reason}`));
   for(const b of pages(ui,p,[...rows].reverse(),'monitorBallotPage',8)){
-    p.record(b.name,`${stamp(b.castAt)} · ${b.reason}`,()=>ui.openCitizen(b.citizenId));
-    p.kv('Prefeito',b.candidateName||e.candidates.find(n=>n.citizenId===b.candidateId)?.name||'Branco');p.kv('Vereador',b.councilCandidateName||e.councilCandidates.find(n=>n.citizenId===b.councilCandidateId)?.name||'Branco');
-    if(b.councilReason)p.note(`Escolha do vereador: ${b.councilReason}`);
+    p.block(b.name,`${stamp(b.castAt)} · voto presencial`,q=>{
+      q.kv('Prefeito',b.candidateName||e.candidates.find(n=>n.citizenId===b.candidateId)?.name||'Branco');q.kv('Vereador',b.councilCandidateName||e.councilCandidates.find(n=>n.citizenId===b.councilCandidateId)?.name||'Branco');
+      q.heading('MOTIVOS');q.note(`Prefeito: ${b.reason}`);if(b.councilReason)q.note(`Vereador: ${b.councilReason}`);q.button('FICHA DO ELEITOR',()=>ui.openCitizen(b.citizenId));
+    });
   }
   if(!rows.length)p.note('Nenhum voto registrado neste filtro.');
 }
@@ -47,7 +48,7 @@ function council(ui,p,e){
 export function renderElectionMonitor(ui,p){
   const city=ui.city,e=electionFor(ui);if(!e){p.note('Registro desta eleição indisponível.');return;}
   const mode=ui.electionView||'polls';p.heading(`ELEIÇÃO ${e.id} · ${phases[e.status]||e.status}`);
-  p.buttons([['polls','PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>{ui.electionView=id;ui.resetScroll();}})));
+  p.buttons([['polls','PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.host?.openElection(e.id,id)})));
   if(mode==='polls'){p.kv('Dia da votação presencial',stamp(e.voteAt));polls(ui,p,e);return;}
   if(e.status==='campaign'){p.note(`Votação presencial na prefeitura a partir de ${stamp(e.voteAt)}. A contagem começa com os votos efetivamente depositados.`);return;}
   p.metrics([['VOTOS REGISTRADOS',e.ballots.length],['ELEITORADO',e.electorateSize??e.ballots.length],['NÃO VOTARAM',Math.max(0,(e.electorateSize??e.ballots.length)-e.ballots.length)]]);
@@ -55,7 +56,7 @@ export function renderElectionMonitor(ui,p){
   if(['voting','counting'].includes(e.status)){const travelling=(e.electorate||[]).filter(r=>r.status==='travelling').length,waiting=(e.queue?.length||0)+(e.stations?.filter(s=>s.citizenId!=null).length||0);p.kv('A caminho / em atendimento',`${travelling} / ${waiting}`);p.note(e.status==='counting'?'Fila fechada: os eleitores que chegaram no horário ainda estão sendo atendidos.':'Contagem em tempo real. Cada voto aparece depois do atendimento presencial na urna.');}
   if(e.status==='cancelled'){p.note(`Eleição adiada: ${e.cancellationReason||'Sem resultado válido'}. O governo atual continua até nova votação.`);}
   if(e.status==='completed'){p.heading(`PREFEITO ELEITO: ${e.winnerName||e.ranking.find(n=>n.citizenId===e.winnerId)?.name}`);p.kv('Vice-prefeito eleito',e.viceWinnerName||'Sem vice elegível');p.kv('Apuração concluída',stamp(e.completedAt));}
-  const view=ui.electionDetailView||(mode==='results'?'elected':'count');p.buttons([['count','CONTAGEM'],['elected','VEREADORES'],['ballots','VOTOS INDIVIDUAIS'],['turnout','COMPARECIMENTO']].map(([id,label])=>({label,selected:view===id,click:()=>{ui.electionDetailView=id;ui.resetScroll();}})));
+  const view=ui.electionDetailView||(mode==='results'?'elected':'count');p.buttons([['count','CONTAGEM'],['elected','VEREADORES'],['ballots','VOTOS INDIVIDUAIS'],['turnout','COMPARECIMENTO']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({electionDetailView:id})})));
   if(view==='count')candidates(ui,p,e);if(view==='elected'){if(e.status==='completed')candidates(ui,p,e);council(ui,p,e);}if(view==='ballots')ballots(ui,p,e);if(view==='turnout')turnout(ui,p,e);
   if(e.pollingBuildingId)p.button('LOCALIZAR PREFEITURA',()=>{const hall=city.building(e.pollingBuildingId);if(hall)ui.camera(hall.door.x,hall.door.y);});
   p.button('ABRIR HISTÓRICO DESTA ELEIÇÃO',()=>ui.openHistory(`electionId:${e.id}`));

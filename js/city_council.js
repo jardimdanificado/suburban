@@ -63,7 +63,7 @@ export class CityCouncil {
       if(campaign>=term)return city.fail('A campanha deve durar menos que o mandato.');
       title??=`${BILL_LABELS[type]}: ${payload.value} dias, a partir da próxima gestão`;
     }
-    if(this.bills.some(b=>['proposed','approved','executing','awaiting-sanction','vetoed'].includes(b.status)&&b.type===type&&(type==='build'?b.payload.buildingType===payload.buildingType:type==='impeach'?b.payload.targetId===payload.targetId:true)))return null;
+    if(this.bills.some(b=>['proposed','approved','executing','awaiting-sanction','vetoed'].includes(b.status)&&b.type===type&&(type==='build'?b.payload.buildingType===payload.buildingType&&(payload.buildingType!=='farm'||(b.payload.crop||'milho')===(payload.crop||'milho')):type==='impeach'?b.payload.targetId===payload.targetId:true)))return null;
     const bill={id:this.nextId++,authorId:author.id,authorName:author.entity.properties.name,partyId:author.political.partyId,type,payload:{...payload},title:title||BILL_LABELS[type],proposedAt:city.minute,voteAt:city.minute+360,status:'proposed',votes:[],attempts:0,result:null};
     const e=city.log(`${author.entity.properties.name} propôs: ${bill.title}.`,'government',[author.id],{kind:'bill-proposed',billId:bill.id,partyId:bill.partyId});bill.eventId=e.id;this.bills.push(bill);
     if(this.bills.length>160){const i=this.bills.findIndex(b=>!['proposed','approved','executing','awaiting-sanction','vetoed'].includes(b.status));if(i>=0)this.bills.splice(i,1);}
@@ -124,7 +124,7 @@ export class CityCouncil {
   }
   execute(bill) {
     const city=this.city,p=city.politics,policy=p.policy;bill.attempts++;let wait=null;
-    const needs=city.welfare.conditions(),basic=new Set(['popular_housing','popular_refectory','kitchen','farm','bakery','market','greengrocer','builder','quarry','carrier','cleaner','public_toilet','waste_collector','recycler','composting']);
+    const needs=city.welfare.conditions(),basic=new Set(['popular_housing','popular_refectory','kitchen','farm','bakery','market','greengrocer','builder','quarry','carrier','cleaner','public_toilet','waste_collector','recycler','composting','utility','clinic','mill']);
     if(needs.crisis && (bill.type==='nationalize'||bill.type==='build'&&!basic.has(bill.payload.buildingType))){bill.status='executing';bill.result='Aguardando atendimento das necessidades de alimentação e moradia';return;}
     if(bill.type==='privatize' && needs.crisis && basic.has(city.building(bill.payload.buildingId)?.type)){bill.status='executing';bill.result='Operação essencial preservada durante a emergência social';return;}
     switch(bill.type){
@@ -154,21 +154,21 @@ export class CityCouncil {
         policy[bill.type]=bill.payload.value;bill.effectiveFromTerm=p.termNumber+1;break;
       }
       case'welfare':city.welfare.policy.enabled=true;city.welfare.policy.dailyBudget=Math.max(0,Math.round(bill.payload.value));break;
-      case'inflation':city.currency.policy.mode='automatic';city.currency.policy.inflationTarget=.001;city.currency.policy.dailyLimit=Math.max(0,Math.round(bill.payload.value));if(!needs.crisis)city.currency.retire(Math.min(city.currency.price(50000),Math.max(0,city.treasury-Math.max(needs.reserve,city.currency.policy.treasuryReserve))));break;
+      case'inflation':city.currency.policy.mode='automatic';city.currency.policy.inflationTarget=Math.max(0,bill.payload.target??.001);city.currency.policy.dailyLimit=Math.max(0,Math.round(bill.payload.value));if(!needs.crisis)city.currency.retire(Math.min(city.currency.price(50000),Math.max(0,city.treasury-Math.max(needs.reserve,city.currency.policy.treasuryReserve))));break;
       case'roads':policy.infrastructurePriority=bill.payload.value;for(const project of city.development.projects)if(project.accountId==='treasury'&&!project.cancelled&&project.status!=='completed'&&project.priority<100){if(project.politicalPriority==null)project.politicalPriority=project.priority||0;project.priority=project.politicalPriority+(bill.payload.value==='lamps'&&project.service==='lamp'||bill.payload.value==='roads'&&['road','road-repair'].includes(project.service)?50:0);}break;
       case'nationalize':wait=this.transferFirm(bill,true);break;
       case'privatize':wait=this.transferFirm(bill,false);break;
       case'build':{if(bill.projectId){const project=city.development.projects.find(pr=>pr.id===bill.projectId);if(project?.status==='completed')break;wait=project?.cancelled?'Projeto cancelado; nova deliberação necessária':'Construção em andamento';break;}
         const type=bill.payload.buildingType;if(!city.buildingTypes[type]){wait='Tipo de obra indisponível';break;}
-        if(city.development.projects.filter(pr=>pr.accountId==='treasury'&&pr.service==='building'&&!pr.cancelled&&pr.status!=='completed').length>=3){wait='Aguardando capacidade de execução das obras públicas já contratadas';break;}
+        if(type!=='farm'&&city.development.projects.filter(pr=>pr.accountId==='treasury'&&pr.service==='building'&&pr.type!=='farm'&&!pr.cancelled&&pr.status!=='completed').length>=3){wait='Aguardando capacidade de execução das obras públicas já contratadas';break;}
         city.development.ensurePlots();
         const lot=city.development.plots.find(l=>l.ownerId==='treasury'&&!l.buildingId&&!l.projectId&&l.width>=3&&l.depth>=3&&(type==='farm'?city.development.isFarmPlot(l):['quarry','iron_mine'].includes(type)?l.type==='quarry':l.width<=8&&l.depth<=8&&!['farm','quarry'].includes(l.type)));
         if(!lot){wait='Aguardando terreno público adequado';break;}
-        const builder=city.development.selectBuilder('treasury',lot.door||{x:lot.x,y:lot.y});if(!builder){wait='Aguardando construtora disponível';break;}
+        const builder=city.development.selectBuilder('treasury',lot.door||{x:lot.x,y:lot.y});if(!builder&&type!=='farm'){wait='Aguardando construtora disponível';break;}
         const width=type==='popular_housing'?3:['farm','quarry'].includes(type)?lot.width:Math.min(4,lot.width),depth=type==='popular_housing'?3:['farm','quarry'].includes(type)?lot.depth:Math.min(4,lot.depth),floors=type==='popular_housing'?4:1;
         const cost=['farm','quarry'].includes(type)?0:width*depth*floors*(2*city.economy.goods.pedra.price+city.currency.price(12000)*1.5);
         if(city.treasury<cost+needs.reserve){wait='Aguardando caixa sem comprometer alimentação e operação dos serviços';break;}
-        const project=city.development.beginProject('treasury',lot.id,type,{floors,builderId:builder.id,priority:basic.has(type)?95:10,crop:type==='farm'?(bill.payload.crop||'milho'):null,width,depth});if(!project){wait='Aguardando orçamento e condições de implantação';break;}bill.projectId=project.id;wait=project.status==='completed'?null:'Construção em andamento';break;}
+        const project=city.development.beginProject('treasury',lot.id,type,{floors,builderId:builder?.id??null,priority:basic.has(type)?95:10,crop:type==='farm'?(bill.payload.crop||'milho'):null,width,depth});if(!project){wait='Aguardando orçamento e condições de implantação';break;}bill.projectId=project.id;if(bill.agendaTermId){project.agendaTermId=bill.agendaTermId;project.promiseMetric=bill.promiseMetric;project.priority=Math.max(project.priority||0,95);}wait=project.status==='completed'?null:'Construção em andamento';break;}
       case'impeach':if(!p.impeach(bill.payload.targetId,bill.payload.caseId,bill.id)){bill.status='dismissed';bill.result='Provas, repercussão ou mandato não são mais válidos';return;}break;
     }
     bill.result=wait||'Deliberação executada';bill.status=wait?'executing':'executed';
@@ -192,7 +192,7 @@ export class CityCouncil {
     for(const bill of this.bills){
       if(bill.status==='proposed'&&city.minute>=bill.voteAt)this.vote(bill);
       else if(bill.status==='awaiting-sanction'&&city.minute>=bill.sanctionAt){const mayor=city.society.citizen(city.economy.mayorId),opposed=mayor&&!this.preference(mayor,bill).yes;
-        if(opposed&&(mayor.traits?.ambition??.5)>.65&&city.random()<.12)p.vetoBill(bill.id);else this.execute(bill);}
+        if(bill.agendaTermId!==p.mandates.current?.id&&opposed&&(mayor.traits?.ambition??.5)>.65&&city.random()<.12)p.vetoBill(bill.id);else this.execute(bill);}
       else if(bill.status==='vetoed'&&city.minute>=bill.overrideAt)this.vote(bill,true);
       else if(bill.status==='executing'&&city.hour%6===0)this.execute(bill);
     }

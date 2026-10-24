@@ -144,9 +144,9 @@ export class CityDevelopment {
     }
     return out;
   }
-  beginRepair(accountId, buildingId) {
+  beginRepair(accountId, buildingId, {preventive=false}={}) {
     const b = this.city.building(buildingId);
-    if (!b?.repairNeeded) return null;
+    if (!b || !b.repairNeeded&&(!preventive||(b.condition??100)>=95)) return null;
     const cells = b.width * b.depth, builder = this.selectBuilder(accountId, b.door);
     return this.registerService(accountId, builder, { service: 'repair', type: b.type, name: `Reparo de ${b.entity.properties.name}`, buildingId, plotId: b.plotId, door: { ...b.door }, stone: Math.max(2, Math.ceil(cells * .25)), requiredLabor: Math.max(4, Math.ceil(cells * .75)), fee: cells * this.city.currency.price(2500) });
   }

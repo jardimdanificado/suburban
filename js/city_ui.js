@@ -1,3 +1,5 @@
+import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
+import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js';
 import {renderElectionMonitor} from './city_election_ui.js';
 import {sectionTitle} from './city_ui_sections.js';
 import {ROTATION_LABELS} from './city_building_geometry.js';
@@ -93,11 +95,15 @@ export class CityUI {
     this.tab = tab; this.query = ''; this.search.value = ''; this.mobileDetail = false; this.menuOpen = false; this.resetScroll();
   }
   go(tab,{filter=null,view=null}={}) {
-    const target=this.host?this.host.openModule(tab):this;if(!this.host)this.navigate(tab);if(filter)target.setFilter(filter);if(view)target.setView(view);return target;
+    if(this.host&&(filter||view))return this.openPanel({tab,views:{[tab]:view||VIEWS[tab]?.[0][0]||'overview'},filters:{[tab]:filter||'all'}});
+    const target=this.host?this.host.openModule(tab):this;if(!this.host)this.navigate(tab);return target;
   }
   sectionTitle(){return sectionTitle(this);}
-  openSection(overrides={}){return this.host?this.host.openSection(this,overrides):Object.assign(this,overrides);}
-  openHistory(reference=null,overrides={}){return this.openSection({tab:'log',query:'',selected:null,logCategory:'all',logReference:reference,logCitizenId:null,logBuildingId:null,logAccountId:null,logLimit:80,logLive:true,scrolls:{},...overrides});}
+  openPanel(overrides={}){return this.host?this.host.openPanel(this,overrides):Object.assign(this,overrides);}
+  showView(id){return this.openPanel({views:{...this.views,[this.tab]:id},...(this.tab==='government'&&id==='elections'?{politicsTab:'directory',billId:null,termId:null}:{} )});}
+  openParty(id){return this.host?.openParty(id);}
+  openContract(id){return this.host?.openContract(id);}
+  openHistory(reference=null,overrides={}){return this.openPanel({tab:'log',query:'',selected:null,logCategory:'all',logReference:reference,logCitizenId:null,logBuildingId:null,logAccountId:null,logLimit:80,logLive:true,scrolls:{},...overrides});}
   view() { return this.views[this.tab] || VIEWS[this.tab]?.[0][0] || 'overview'; }
   setView(id) { this.selectedProjectId=null; this.views[this.tab] = id; this.resetScroll(); }
   filter() { return this.filters[this.tab] || 'all'; }
@@ -113,7 +119,7 @@ export class CityUI {
   setPlotSelection(id) { if(this.host)return this.host.setPlotSelection(id); if(this.tab==='land')this.remember(); this.navigate('land'); this.selectedPlotId = id; this.setView('plots'); this.visible = true; }
   openCitizen(id) { const c = this.city.society.citizen(id); if (c) this.select(c.entity); }
   openBuilding(id) { const b = this.city.building(id); if (b) this.select(b.entity); }
-  personLog(id) { this.go('log').logCitizenId = id; }
+  personLog(id) { this.openHistory(null,{logCitizenId:id}); }
   matches(value) { if(!this.query)return true;if(this.normalizedQuerySource!==this.query){this.normalizedQuerySource=this.query;this.normalizedQuery=normalize(this.query);}return normalize(value).includes(this.normalizedQuery); }
   scrollAt(x, y, delta) {
     if (this.element.hidden || !this.visible) return false;
@@ -140,11 +146,10 @@ export class CityUI {
     this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded)return;
     const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+29;
     if(!this.floatingDossier){
-      const search=!['event','corruption-case'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview');
+      const search=!['event','corruption-case'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
-      const views=VIEWS[this.tab];if(views&&!this.sectionWindow){const p=new Page(ui,x+4,y,w-8,y,bottom);p.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.setView(id)})));y=p.y;}
+      const views=VIEWS[this.tab];if(views&&!this.sectionWindow&&this.tab!=='government'){const p=new Page(ui,x+4,y,w-8,y,bottom);p.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
     }
-    if(this.host&&this.tab!=='map'){const toolbar=new Page(ui,x+4,y,w-8,y,bottom);toolbar.button(this.sectionWindow?'DUPLICAR ESTA SEÇÃO':'ABRIR ABA ATUAL EM OUTRA JANELA',()=>this.openSection());y=toolbar.y;}
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings','economy'].includes(this.tab)?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings','economy'].includes(this.tab))this.directory(p);else this.content(p);
     });
@@ -162,7 +167,7 @@ export class CityUI {
     else{ui.button(bx,by,78,28,'MENU',()=>{this.menuOpen=!this.menuOpen;},{selected:this.menuOpen});ui.text(trim(info[1],bw-122),bx+90,by+6,T.ink);if(this.history.length)ui.button(bx+bw-28,by,28,28,'<',()=>this.back());by+=38;}
     const listMode=['people','buildings','economy'].includes(this.tab),split=listMode&&bw>=680;
     this.search.placeholder=this.tab==='people'?'Buscar nome ou atividade…':this.tab==='log'?'Buscar acontecimento…':'Pesquisar nesta janela…';this.inputAt(this.search,bx,by,split?254:bw);by+=38;
-    const views=VIEWS[this.tab];if(views){const row=new Page(ui,bx,by,bw,by,y+h-24);row.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.setView(id)})));by=row.y;}
+    const views=VIEWS[this.tab];if(views&&this.tab!=='government'){const row=new Page(ui,bx,by,bw,by,y+h-24);row.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));by=row.y;}
     if(listMode&&!split){const tw=Math.floor((bw-6)/2);ui.button(bx,by,tw,28,'LISTA',()=>{this.mobileDetail=false;},{selected:!this.mobileDetail});ui.button(bx+tw+6,by,tw,28,'FICHA',()=>{this.mobileDetail=true;},{selected:this.mobileDetail});by+=38;}
     const bh=Math.max(16,y+h-by-29);
     if(split){this.pane(ui,'list',bx,by,254,bh,p=>this.directory(p));this.pane(ui,`detail:${this.selected?.id}:${this.detailTab}`,bx+268,by,bw-268,bh,p=>this.detail(p));}
@@ -235,7 +240,7 @@ export class CityUI {
     if (this.tab === 'economy') this.demands(p);
   }
   dossierTabs(p, tabs) {
-    p.buttons(tabs.map(([id, label]) => ({ label, selected: this.detailTab === id, click: () => { this.detailTab = id; for(const key of Object.keys(this.scrolls)) if(key.startsWith('detail:'))delete this.scrolls[key]; } })));
+    p.buttons(tabs.map(([id, label]) => ({ label, selected: this.detailTab === id, click:()=>this.openPanel({detailTab:id}) })));
     p.space(3);
   }
   homeLabel(id) {
@@ -415,7 +420,7 @@ export class CityUI {
     p.table([{label:'Quando',weight:.7},{label:'Movimentação',weight:2},{label:'Valor',weight:1}],rows.map(l=>({cells:[stamp(l.minute),l.reason,`${l.to===account?'+':'−'}${money(l.amount)}`],color:l.to===account?C.green:C.red})),{empty:'Nenhuma movimentação registrada.'});
   }
   demands(p) {
-    const mode=this.demandTab||'opportunities';p.buttons([['opportunities','Oportunidades'],['prices','Preços'],['agreements','Acordos']].map(([id,label])=>({label,selected:id===mode,click:()=>{this.demandTab=id;this.resetScroll();}})));
+    const mode=this.demandTab||'opportunities';p.buttons([['opportunities','Oportunidades'],['prices','Preços'],['agreements','Acordos']].map(([id,label])=>({label,selected:id===mode,click:()=>this.openPanel({demandTab:id})})));
     if(mode==='prices'){p.heading('PREÇOS E MERCADO');const rows=Object.entries(this.city.economy.market||{}).filter(([,r])=>r.demand>0||r.stock>0).filter(([g])=>this.matches(GOODS[g].label));p.table([{label:'Produto',weight:1.7},{label:'Preço'},{label:'Oferta'},{label:'Procura'}],rows.map(([g,r])=>({cells:[GOODS[g].label,money(this.city.economy.goods[g].price),Math.round(r.stock),Math.round(r.demand)]})));return;}
     if(mode==='agreements'){p.heading('ACORDOS ENTRE EMPRESAS');const city=this.city;p.table([{label:'Produto'},{label:'Fornecedor',weight:1.5},{label:'Comprador',weight:1.5},{label:'Preço'}],(city.economy.supplyAgreements||[]).map(a=>({cells:[GOODS[a.good].label,name(city.building(a.sellerId)?.entity),name(city.building(a.buyerId)?.entity),money(a.unitPrice)],click:()=>this.openBuilding(a.buyerId)})));return;}
     p.heading('DEMANDAS E OPORTUNIDADES');const rows=this.city.economy.demands.filter(d=>d.score>0&&this.matches(`${BUILDING_TYPES[d.type].label} ${CROPS[d.crop]?.label||''}`));
@@ -424,6 +429,8 @@ export class CityUI {
     p.rows(rows,d=>{const key=d.type+':'+(d.crop||''),selected=this.selectedDemandKey===key;p.record(`${BUILDING_TYPES[d.type].label}${d.crop?' / '+CROPS[d.crop].label:''}`,d.response?.state||d.reason,()=>{this.selectedDemandKey=key;this.resetScroll();},selected,{value:Math.round(d.score)+' pts',color:d.score>=100?C.red:C.cyan});});
   }
   content(p) {
+    if(this.tab==='party-organization'){renderPartyOrganizationWindow(this,p);return;}
+    if(this.tab==='party'){renderPartyDossier(this,p);return;}if(this.tab==='contract'){renderContractDossier(this,p);return;}if(this.tab==='poll-response'){renderPollResponseDossier(this,p);return;}
     if(this.tab==='election'){renderElectionMonitor(this,p);return;}
     if (this.notice) p.note(this.notice, C.red);
     const render = { city: 'overview', government: 'government', production: 'production', land: 'land', transport: 'transport', sanitation: 'sanitation', log: 'log',event:'eventInspector',publications:'publications',corruption:'corruptionDirectory','corruption-case':'corruptionInspector' }[this.tab];
@@ -491,16 +498,12 @@ export class CityUI {
     const city=this.city,view=this.view(),mayor=city.economy.citizen(city.economy.mayorId),hall=city.buildings.find(b=>b.type==='townhall');
     if(view==='elections'){this.electionsPanel(p);return;}
     if(view==='overview'){
-      p.heading('GOVERNO AUTÔNOMO');
-      p.button('MANDATO, CANDIDATURAS E ELEIÇÕES',()=>this.setView('elections'));
-      if(mayor)p.card(name(mayor.entity),'Prefeito / cidadão da cidade',()=>this.openCitizen(mayor.id),false,C.gold);
-      p.metrics([['TESOURO',money(city.treasury),C.gold],['REFEIÇÕES',Math.floor(city.economy.inventory(hall)/3),C.green],[city.taxRate<0?'SUBSÍDIO SALARIAL':'IMPOSTOS',`${Math.round(city.taxRate*100)}%`,C.cyan]]);
-      this.monetaryPolicy(p);
-      p.heading('PATRIMÔNIO PÚBLICO');const units=[...city.units.values()].filter(u=>u.ownerId==='treasury');p.kv('Espaços públicos',units.length);p.kv('Espaços à venda',units.filter(u=>u.forSale).length);
-      p.note('O município vende imóveis e terrenos; nunca aluga. O prefeito tem rotina e conta pessoal, separadas do tesouro.');
-      p.heading('RESERVA DE EMERGÊNCIA');p.kv('Alimentos disponíveis',`${city.economy.inventory(hall)} itens`);p.note('Reserva finita para os habitantes até a cadeia alimentar se estabelecer.');
-      if(hall)p.button('ABRIR PREFEITURA',()=>this.openBuilding(hall.id));
-    } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,city.development.projects.filter(o=>o.accountId==='treasury').slice(-30).reverse());}
+      p.heading('PREFEITURA');if(mayor)p.record(name(mayor.entity),'Prefeito em exercício',()=>this.openCitizen(mayor.id));
+      p.metrics([['TESOURO',money(city.treasury)],['APROVAÇÃO',`${city.politics.approval.toFixed(1)}%`]]);
+      for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.buttons(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
+      p.heading('ADMINISTRAÇÃO');p.buttons([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));
+      if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
+    } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice(-30).reverse());}
     else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
     else {
       p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
@@ -546,22 +549,14 @@ export class CityUI {
     if(selected){
       const levelLabel=Number.isFinite(selected.level)?selected.level.toFixed(2):selected.level===null?'Relevo natural / nível variável':'Instalação inicial';
       p.heading(`TERRENO ${selected.id}`,C.cyan);p.columns(q=>{q.kv('Dimensões',`${selected.width}x${selected.depth}`);q.kv('Nível',levelLabel);q.kv('Proprietário',city.accountName(selected.ownerId));},q=>{q.kv('Venda',selected.forSale?money(selected.price):'Não anunciado');q.kv('Locação',selected.ownerId==='treasury'?'Prefeitura não aluga':selected.forRent?money(selected.rent)+'/dia':'Não anunciado');});
-      p.buttons([{label:'LOCALIZAR',click:()=>{this.camera(selected.x+selected.width/2,selected.y+selected.depth/2);if(!this.host)this.visible=false;}},...(selected.buildingId?[{label:'ABRIR IMÓVEL',click:()=>this.openBuilding(selected.buildingId)}]:[]),{label:'FECHAR FICHA',click:()=>{this.selectedPlotId=null;this.resetScroll();}}]);
+      p.buttons([{label:'LOCALIZAR',click:()=>{this.camera(selected.x+selected.width/2,selected.y+selected.depth/2);if(!this.host)this.visible=false;}},...(selected.buildingId?[{label:'ABRIR IMÓVEL',click:()=>this.openBuilding(selected.buildingId)}]:[]),{label:'CONTRATOS DO TERRENO',click:()=>this.openPanel({tab:'government',views:{government:'contracts'},contractPlotId:selected.id})}]);
     }
+    if(this.recordWindow)return;
     this.filterButtons(p);const f=this.filter(),lots=dev.plots.filter(l=>this.matches(`${l.id} ${city.accountName(l.ownerId)} ${city.building(l.buildingId)?.entity.properties.name||''}`)).filter(l=>f==='all'||f==='sale'&&l.forSale&&!l.buildingId||f==='built'&&l.buildingId||f==='works'&&l.projectId);
-    p.heading('CADASTRO DE TERRENOS');p.table([{label:'Terreno'},{label:'Proprietário',weight:2},{label:'Área'},{label:'Situação',weight:1.5}],lots.map(l=>({cells:[`Lote ${l.id}`,city.accountName(l.ownerId),`${l.width}x${l.depth}`,l.buildingId?'Edificado':l.projectId?'Em obras':l.forSale?money(l.price):'Disponível'],selected:l.id===this.selectedPlotId,click:()=>{this.selectedPlotId=l.id;this.resetScroll();}})));
+    p.heading('CADASTRO DE TERRENOS');p.table([{label:'Terreno'},{label:'Proprietário',weight:2},{label:'Área'},{label:'Situação',weight:1.5}],lots.map(l=>({cells:[`Lote ${l.id}`,city.accountName(l.ownerId),`${l.width}x${l.depth}`,l.buildingId?'Edificado':l.projectId?'Em obras':l.forSale?money(l.price):'Disponível'],selected:l.id===this.selectedPlotId,click:()=>this.setPlotSelection(l.id)})));
   }
   contracts(p, projects) {
-    const city=this.city;
-    for(const o of projects){
-      const label=o.service==='building'?`${BUILDING_TYPES[o.type]?.label||o.type} / lote ${o.plotId}`:o.name;
-      p.card(label,`${o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='materials'?'Aguardando materiais':'Em construção'} / serviço ${money(o.fee)}`,()=>{this.select(null);if(o.plotId)this.setPlotSelection(o.plotId);else{this.selectedProjectId=o.id;this.camera(o.door.x,o.door.y);if(!this.host)this.visible=false;}},this.selectedProjectId===o.id,o.cancelled?C.red:o.status==='completed'?C.green:C.gold);
-      p.columns(q=>{q.kv('Contratante',city.accountName(o.accountId));q.kv('Construtora',city.building(o.builderId)?.entity.properties.name||'Construção própria');},q=>{q.kv('Pedras entregues',`${o.status==='completed'?o.stone:o.inventory.pedra}/${o.stone}`);q.kv('Pedras em transporte',o.incoming.pedra||0);});
-      if(o.service==='building')p.kv('Orientação',`${ROTATION_LABELS[o.rotation||0]} · ${(o.rotation||0)*90}°`);
-      if(o.service==='building')p.kv('Projeto',`${o.width}x${o.depth}x${o.floors} / ${o.sell?'para venda':'uso próprio'}`);if(o.service==='expansion')p.kv('Andares',`${o.baseFloors} > ${o.targetFloors}`);if(o.service==='road')p.kv('Extensão',`${o.path.length} tiles`);
-      p.meter('Trabalho concluído',o.requiredLabor?o.labor/o.requiredLabor*100:100);if(o.waitingForBasicNeeds)p.note('Novas compras de materiais aguardam as prioridades de alimentação e moradia.',C.gold);if(o.error)p.note(o.error,C.red);p.space(8);
-    }
-    if(!projects.length)p.note('Nenhum contrato nesta situação.');
+    p.table([{label:'Contrato',weight:2},{label:'Situação'},{label:'Serviço'}],projects.filter(o=>this.matches(`${o.name} ${BUILDING_TYPES[o.type]?.label||o.type}`)).map(o=>({cells:[o.name,o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='materials'?'Materiais':'Em andamento',money(o.fee)],click:()=>this.openContract(o.id)})));
   }
   transport(p) {
     const city=this.city,system=city.logistics,pending=system.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
@@ -655,7 +650,7 @@ export class CityUI {
     p.heading('MEMÓRIAS E CRENÇAS');
     p.note(`Até ${RELATIONSHIP_RULES.memories} recordações e ${RELATIONSHIP_RULES.beliefs} histórias ouvidas por pessoa. Crenças podem estar erradas; o conhecimento se espalha nos encontros.`);
     if(this.memoryPersonId)p.button(`FILTRANDO VÍNCULO: ${this.city.accountName(`citizen:${this.memoryPersonId}`)} / LIMPAR`,()=>{this.memoryPersonId=null;this.memoryPage=0;this.resetScroll();});
-    p.buttons([['memories','RECORDAÇÕES'],['beliefs','HISTÓRIAS OUVIDAS'],['grief','LUTO']].map(([id,label])=>({label,selected:(this.memoryView||'memories')===id,click:()=>{this.memoryView=id;this.memoryPage=0;this.resetScroll();}})));
+    p.buttons([['memories','RECORDAÇÕES'],['beliefs','HISTÓRIAS OUVIDAS'],['grief','LUTO']].map(([id,label])=>({label,selected:(this.memoryView||'memories')===id,click:()=>this.openPanel({memoryView:id})})));
     if(this.memoryView==='grief') {
       for(const g of c.social.grief){p.heading(g.name,C.pink);p.kv('Perda',stamp(g.startedAt));p.kv('Recuperação prevista',stamp(g.until));p.kv('Intensidade atual',Math.round(g.strength*Math.max(0,(g.until-this.city.minute)/(g.until-g.startedAt))));}
       if(!c.social.grief.length)p.note('Sem luto recente.');

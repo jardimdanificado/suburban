@@ -1,0 +1,33 @@
+import {drawPartyFlag} from './city_party_flags.js';
+import {formatMoney as money} from './city_ui_format.js';
+const stamp=n=>`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
+const fold=(ui,p,key,title,render)=>ui.section(p,key,title,render);
+function paginate(ui,p,rows,key,size=8){const page=Math.min(ui[key]||0,Math.max(0,Math.ceil(rows.length/size)-1));if(rows.length>size)p.buttons([{label:'ANTERIOR',click:()=>{ui[key]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{ui[key]=page+1;}}]);return rows.slice(page*size,page*size+size);}
+function flag(p,party){if(p.visible(42))drawPartyFlag(p.ui.ctx,party.flag,p.x,p.y,60,36);p.y+=42;}
+export function renderPartyDossier(ui,p){
+  const city=ui.city,gov=city.politics,selected=gov.party(ui.partyId);if(!selected){p.note('Partido indisponível.');return;}
+p.heading(`DIREÇÃO ${selected.short}`);p.meter('Reputação do partido',selected.publicReputation??50);const reputation=selected.reputationReport;if(reputation)p.note(`Base 50 · governos ${reputation.performance>=0?'+':''}${reputation.performance.toFixed(2)} · crimes na época da filiação −${reputation.originalPenalty.toFixed(2)} · acolhimentos −${reputation.hostingPenalty.toFixed(2)}.`);if(selected.preferredCandidateId){const c=city.society.citizen(selected.preferredCandidateId);if(c){p.card(`PREFERIDO: ${c.entity.properties.name}`,`${selected.nominationReason} · popularidade ${(c.political.popularity??50).toFixed(1)}`,()=>ui.openCitizen(c.id));}}fold(ui,p,'partyReputationIncidents','Escândalos e marcas na reputação',()=>{p.note('Trocar de partido não transfere nem apaga a marca do partido de origem. Acolher um envolvido gera uma penalidade muito menor. Casos secretos não afetam estes índices.');for(const incident of paginate(ui,p,[...(selected.reputationIncidents||[])].reverse(),'partyReputationPage',6))p.record(`Caso #${incident.caseId} · ${incident.role==='origin'?'Partido da época':'Acolhimento posterior'}`,`${incident.proven?'Comprovado':'Investigação / arquivamento'} · −${incident.penalty.toFixed(2)} pontos`,()=>ui.openCorruption(incident.caseId));});if(selected.parentPartyId)p.kv('Dissidência de',gov.party(selected.parentPartyId)?.name||selected.parentPartyId);flag(p,selected);p.kv('Economia / liberdade / ambiente',`${Math.round(selected.ideology.economy*100)} / ${Math.round(selected.ideology.liberty*100)} / ${Math.round(selected.ideology.green*100)}`);if(selected.leaderId)p.button(`LÍDER: ${city.accountName(`citizen:${selected.leaderId}`)}`,()=>ui.openCitizen(selected.leaderId));for(const id of selected.successorIds)p.button(`SUCESSOR: ${city.accountName(`citizen:${id}`)}`,()=>ui.openCitizen(id));for(const row of selected.history.slice(-5).reverse())p.note(`${stamp(row.minute)} / ${row.description}`);
+  p.heading('FILIADOS');p.table([{label:'Morador',weight:2},{label:'Popularidade'},{label:'Lealdade'}],selected.memberIds.map(id=>city.society.citizen(id)).filter(Boolean).filter(c=>ui.matches(c.entity.properties.name)).map(c=>({cells:[c.entity.properties.name,(c.political.popularity??50).toFixed(1),`${(c.political.loyalty*100).toFixed(0)}%`],click:()=>ui.openCitizen(c.id)})));
+  p.button('HISTÓRICO DO PARTIDO',()=>ui.openHistory(`partyId:${selected.id}`));
+}
+export function renderContractDossier(ui,p){
+  const city=ui.city,o=city.development.projects.find(o=>o.id===ui.projectId);if(!o){p.note('Contrato indisponível.');return;}
+  p.heading(o.name);p.block('CONTRATO',o.cancelled?'Cancelado':o.status==='completed'?'Concluído':'Em execução',q=>{q.kv('Contratante',city.accountName(o.accountId));q.kv('Construtora',city.building(o.builderId)?.entity.properties.name||'Aguardando contratação');q.kv('Valor do serviço',money(o.fee));q.kv('Início',stamp(o.startedAt));});
+  p.block('EXECUÇÃO E MATERIAIS','',q=>{q.meter('Trabalho concluído',o.requiredLabor?o.labor/o.requiredLabor*100:100);q.kv('Pedras entregues',`${o.status==='completed'?o.stone:o.inventory.pedra}/${o.stone}`);q.kv('Em transporte',o.incoming.pedra||0);if(o.width)q.kv('Dimensões',`${o.width} × ${o.depth} × ${o.floors}`);if(o.error)q.note(o.error);if(o.waitingForBasicNeeds)q.note('Compras aguardam alimentação e moradia.');});
+  p.button('LOCALIZAR OBRA',()=>ui.camera(o.door.x,o.door.y));p.button('HISTÓRICO DESTE CONTRATO',()=>ui.openHistory(`projectId:${o.id}`));
+}
+export function renderPollResponse(ui,p,r,poll){
+  const city=ui.city,politics=city.politics,name=id=>id==null?'Nenhum':city.accountName(`citizen:${id}`);
+  p.block(r.name,`${stamp(poll.minute)} · resposta individual`,q=>{
+    q.kv('Situação',r.decided?'Voto decidido':'Ainda está indeciso');q.kv('Intenção declarada',r.decided?name(r.candidateId):'Não declarou candidato');
+    if(!r.decided&&r.leaningId!=null)q.kv('Inclinação atual',name(r.leaningId));
+    q.kv('Aprovação do governo',`${r.approval}%`);q.kv('Filiação',politics.party(r.partyId)?.name||'Sem partido');
+    q.heading('MOTIVO DA RESPOSTA');q.note(r.reason);
+    q.heading('CANDIDATOS REJEITADOS');for(const id of r.rejectedIds)q.note(name(id));if(!r.rejectedIds.length)q.note('Nenhuma rejeição declarada.');
+    ui.section(q,`pollReasons:${poll.id}:${r.citizenId}`,'Fatores que influenciaram a resposta',()=>q.table([{label:'Fator',weight:3},{label:'Pontos'}],r.reasons.map(a=>({cells:[a.reason,`${a.value>=0?'+':''}${a.value.toFixed(1)}`]}))));
+  });
+}
+export function renderPollResponseDossier(ui,p){
+  const gov=ui.city.politics,e=[gov.active,gov.lastResult,...gov.elections].find(e=>e?.id===ui.electionId),poll=e?.polls.find(a=>a.id===ui.pollId),response=poll?.responses.find(r=>r.citizenId===ui.pollResponseCitizenId);
+  if(!response){p.note('Resposta indisponível.');return;}renderPollResponse(ui,p,response,poll);p.button('ABRIR FICHA DO MORADOR',()=>ui.openCitizen(response.citizenId));
+}
