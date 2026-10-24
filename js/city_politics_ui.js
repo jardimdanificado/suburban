@@ -1,3 +1,4 @@
+import {renderPartyOrganization} from './city_party_organization_ui.js';
 import {approvalReport} from './city_political_institutions.js';
 import { formatMoney } from './city_ui_format.js';
 import { drawPartyFlag } from './city_party_flags.js';
@@ -17,12 +18,13 @@ export function renderPolitics(ui,p) {
   const city=ui.city,gov=city.politics,active=gov.active,tab=ui.politicsTab||'overview',partyName=id=>gov.party(id)?.short||'Sem partido';
   p.heading('GOVERNO, CÂMARA E ELEIÇÕES');p.buttons([['overview','GOVERNO'],['approval','AVALIAÇÃO'],['parties','PARTIDOS'],['council','CÂMARA'],['campaign','CAMPANHA'],['polls','PESQUISAS'],['promises','PROMESSAS'],['scandals','FISCALIZAÇÃO'],['results','RESULTADOS']].map(([id,label])=>({label,selected:tab===id,click:()=>{ui.politicsTab=id;ui.resetScroll();}})));
   if(tab==='approval'){
-    const report=gov.approvalReport||approvalReport(gov),signed=n=>`${n>0?'+':''}${n.toFixed(2)} p.p.`;
-    p.meter('Aprovação do governo',report.score);p.kv('Avaliação',report.score>=50?'Saldo positivo (50 pontos ou mais)':'Saldo negativo (menos de 50 pontos)');p.kv('Atualização',stamp(report.minute));
-    p.note('O cálculo parte de 100 pontos. Condições ruins e decisões impopulares descontam pontos; melhorar a felicidade desde a posse acrescenta pontos. A nota final fica entre 0 e 100.');
+    const report=gov.approvalReport?.startingScore===50?gov.approvalReport:approvalReport(gov),signed=n=>`${n>0?'+':''}${n.toFixed(2)} p.p.`;
+    p.meter('Aprovação do governo',report.score);p.kv('Avaliação',report.score>50?'Saldo positivo (acima de 50 pontos)':report.score<50?'Saldo negativo (abaixo de 50 pontos)':'Avaliação neutra (50 pontos)');p.kv('Atualização',stamp(report.minute));
+    p.note('O cálculo parte de 50 pontos, a nota neutra. Condições acima da referência somam pontos; condições ruins e decisões impopulares descontam. A nota final fica entre 0 e 100.');
     p.note(`Sustentam a avaliação: ${(report.housed*100).toFixed(1)}% com moradia, ${(report.fed*100).toFixed(1)}% acima do limiar de fome e ${(report.employment*100).toFixed(1)}% com emprego ou negócio.`);
     const worst=report.rows.filter(r=>r.points<-.01).slice().sort((a,b)=>a.points-b.points).slice(0,3);if(worst.length)p.note('Maiores perdas: '+worst.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
-    p.kv('Ponto de partida',100);
+    const best=report.rows.filter(r=>r.points>.01).slice().sort((a,b)=>b.points-a.points).slice(0,3);if(best.length)p.note('Maiores ganhos: '+best.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
+    p.kv('Ponto de partida',report.startingScore);
     for(const row of report.rows){p.heading(`${row.label}: ${signed(row.points)}`);p.note(row.detail);}
     p.kv('Soma antes do limite',report.raw.toFixed(2));if(Math.abs(report.adjustment)>.001)p.kv('Ajuste ao intervalo 0–100',signed(report.adjustment));p.kv('Nota final',report.score.toFixed(2));
     p.note('Este é o índice geral usado pelo governo. Pesquisas eleitorais medem uma amostra de moradores e podem produzir outro resultado.');
@@ -39,11 +41,14 @@ export function renderPolitics(ui,p) {
     });
   }
   if(tab==='parties'){
+    renderPartyOrganization(ui,p,{fold,paginate});
+    p.note('Partidos sem filiados vivos são liquidados. O limite é um teto de registros ativos, não uma obrigação de preencher todas as vagas.');
+    fold(ui,p,'dissolvedParties','Partidos liquidados',()=>{for(const party of gov.parties.filter(a=>a.liquidatedAt!=null))p.note(`${party.name} (${party.short}) — ${stamp(party.liquidatedAt)}: sem filiados vivos.`);});
     const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),independent=adults.filter(c=>!gov.party(c.political?.partyId)?.active);p.metrics([['SEM PARTIDO',independent.length],['FILIADOS',adults.length-independent.length]]);p.note('Simpatia e voto não exigem filiação. Campanhas priorizam independentes; lealdade muda com experiências, promessas e corrupção conhecida.');
     p.note('Economia: -100 favorece propriedade pública e proteção social; +100 favorece iniciativa privada e tributos menores. Liberdade e pauta ambiental completam o viés. A lealdade partidária orienta os votos dos membros.');
     const parties=gov.parties.filter(a=>a.active&&ui.matches(a.name));
     p.rows(parties,party=>p.record(`${party.short} — ${party.name}`,`${party.memberIds.length} filiados · ${gov.council.members.filter(m=>m.partyId===party.id).length} cadeiras`,()=>{ui.selectedPartyId=party.id;},ui.selectedPartyId===party.id));
-    const selected=gov.party(ui.selectedPartyId)||parties[0];if(selected){p.heading(`DIREÇÃO ${selected.short}`);flag(p,selected);p.kv('Economia / liberdade / ambiente',`${Math.round(selected.ideology.economy*100)} / ${Math.round(selected.ideology.liberty*100)} / ${Math.round(selected.ideology.green*100)}`);if(selected.leaderId)p.button(`LÍDER: ${city.accountName(`citizen:${selected.leaderId}`)}`,()=>ui.openCitizen(selected.leaderId));for(const id of selected.successorIds)p.button(`SUCESSOR: ${city.accountName(`citizen:${id}`)}`,()=>ui.openCitizen(id));for(const row of selected.history.slice(-5).reverse())p.note(`${stamp(row.minute)} / ${row.description}`);}
+    const selected=parties.find(party=>party.id===ui.selectedPartyId)||parties[0];if(selected){p.heading(`DIREÇÃO ${selected.short}`);if(selected.parentPartyId)p.kv('Dissidência de',gov.party(selected.parentPartyId)?.name||selected.parentPartyId);flag(p,selected);p.kv('Economia / liberdade / ambiente',`${Math.round(selected.ideology.economy*100)} / ${Math.round(selected.ideology.liberty*100)} / ${Math.round(selected.ideology.green*100)}`);if(selected.leaderId)p.button(`LÍDER: ${city.accountName(`citizen:${selected.leaderId}`)}`,()=>ui.openCitizen(selected.leaderId));for(const id of selected.successorIds)p.button(`SUCESSOR: ${city.accountName(`citizen:${id}`)}`,()=>ui.openCitizen(id));for(const row of selected.history.slice(-5).reverse())p.note(`${stamp(row.minute)} / ${row.description}`);}
   }
   if(tab==='council'){
     const bounds=gov.council.bounds();p.kv('Representação aprovada',`${(gov.policy.councilRate??5).toFixed(1)}% da população / ${gov.council.seats} cadeiras`);p.kv('Faixa legal de vereadores',`${bounds.min} a ${bounds.max} / população ${bounds.population}`);p.kv('Presidência da Câmara',gov.council.leaderId?`${city.accountName(`citizen:${gov.council.leaderId}`)} / voto com peso ${gov.council.weight(gov.council.leaderId)}`:'Eleição pelos pares na metade do mandato');
@@ -96,7 +101,7 @@ export function renderPolitics(ui,p) {
     p.heading('RESPOSTAS INDIVIDUAIS');for(const r of paginate(ui,p,poll.responses,'pollResponsePage')){p.card(r.name,r.decided?`Decidiu: ${city.accountName(`citizen:${r.candidateId}`)}`:'Indeciso',()=>ui.openCitizen(r.citizenId));p.note(`Motivo: ${r.reason}`);p.kv('Aprovação do governo',`${r.approval}%`);p.note(`Rejeita: ${r.rejectedIds.map(id=>city.accountName(`citizen:${id}`)).join(', ')||'Ninguém declarado'}`);for(const reason of r.reasons)p.note(`${reason.reason}: ${reason.value.toFixed(1)} pontos`);}
   }
   if(tab==='promises'){
-    p.note('Metas registradas na campanha e medidas a partir da posse. O histórico guarda o início, as medições diárias e o fim de cada governo, inclusive gestões encerradas por cassação.');
+    p.note('Uma promessa principal por candidato, registrada na campanha e medida a partir da posse. O histórico guarda o início, as medições diárias e o fim de cada governo, inclusive gestões encerradas por cassação.');
     p.buttons([...gov.mandates.terms].reverse().slice(0,12).map(t=>({label:`GESTÃO ${t.id} / ${partyName(t.partyId)}`,selected:ui.termId===t.id,click:()=>{ui.termId=t.id;ui.milestonePage=0;}})));const term=gov.mandates.terms.find(t=>t.id===ui.termId)||gov.mandates.current||gov.mandates.terms.at(-1);if(!term)return;
     p.heading(`${term.mayorName} — ${partyName(term.partyId)}`);p.kv('Início',stamp(term.startedAt));p.kv('Fim',term.endedAt==null?'Em andamento':stamp(term.endedAt));p.kv('Promessas atingidas',`${term.promises.filter(pr=>pr.fulfilled).length}/${term.promises.length}`);for(const pr of term.promises)promise(p,pr);
     p.heading('MARCADORES DO GOVERNO');p.table([{label:'Indicador',weight:2},{label:'Na posse'},{label:'Último / fim'}],Object.entries(PROMISE_METRICS).map(([key,spec])=>({cells:[spec.label,format(key,term.baseline[key]),format(key,term.latest[key])]})));

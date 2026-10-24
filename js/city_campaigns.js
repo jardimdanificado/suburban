@@ -6,7 +6,7 @@ export class CityCampaigns {
   audience(size){const rows=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)),independent=rows.filter(c=>!c.political?.partyId),first=this.sample(independent,Math.ceil(size*.85)),selected=new Set(first.map(c=>c.id));return first.concat(this.sample(rows.filter(c=>!selected.has(c.id)),Math.max(0,size-first.length)));}
   event(election,message,kind,ids=[],details={}){const event=this.city.log(message,'government',ids,{kind,electionId:election.id,...details});election.events.push({eventId:event.id,minute:this.city.minute,message,kind,...details});if(election.events.length>120)election.events.shift();const author=this.city.society.citizen(ids[0]);if(author&&['campaign-program','campaign-defamation','campaign-accountability','campaign-rally'].includes(kind))this.city.publications.preserveEvent(author,event,'propaganda');return event;}
   hearPromises(voter,nomination,election,source='Programa divulgado') {
-    const p=this.city.politics,party=p.party(nomination.partyId);p.campaignContact(voter,nomination,election,source);
+    const p=this.city.politics,party=p.party(nomination.partyId);if(!party?.active||!this.city.society.citizen(nomination.citizenId))return;p.campaignContact(voter,nomination,election,source);
     nomination.memoryPromises??=Object.freeze(nomination.promises.map(pr=>Object.freeze({title:pr.title,metric:pr.metric,baseline:pr.campaignBaseline,target:pr.target})));
     p.remember(voter,{kind:'campaign-promise',electionId:election.id,partyId:party.id,candidateId:nomination.citizenId,promiseKey:`promises:${election.id}:${nomination.citizenId}`,description:`${source}: ${nomination.name} (${party.short}) prometeu ${nomination.promises.map(pr=>pr.title.toLowerCase()).join('; ')}.`,effect:1,promises:nomination.memoryPromises});
   }
@@ -62,6 +62,7 @@ export class CityCampaigns {
     for(const c of participants){if(paths++>=3)break;const path=city.findPath(c.entity,destination);if(path===null)continue;c.path=path;c.task='campaign';c.campaign={electionId:election.id,candidateId:nomination.citizenId,partyId:party.id,flag:party.flag,until:city.minute+120,destination,eventId:event.id};c.action=`Bandeiraço ${party.short}`;}
   }
   arrive(c) {
+    if(c.campaign?.type==='membership')return this.city.politics.organization.arrive(c);
     const city=this.city,p=city.politics,campaign=c.campaign,e=p.active;if(!campaign||!e||e.id!==campaign.electionId||city.minute>=campaign.until||city.urgentNeed(c)){c.campaign=null;c.task=null;return;}
     c.action=`Bandeiraço ${p.party(campaign.partyId).short}: apresentando propostas`;
     if(city.minute-(campaign.lastOutreachAt??-Infinity)<30)return;campaign.lastOutreachAt=city.minute;
@@ -74,7 +75,7 @@ export class CityCampaigns {
   }
   daily(election) {
     const day=Math.floor((this.city.minute-election.startedAt)/1440);if(election.lastCampaignDay===day)return;election.lastCampaignDay=day;
-    for(const nomination of election.candidates){const candidate=this.city.society.citizen(nomination.citizenId);if(candidate&&this.city.publications.writable(candidate))this.event(election,`${nomination.name} apresentou o programa: ${nomination.promises.map(pr=>pr.title).join('; ')}.`,'campaign-program',[nomination.citizenId],{candidateId:nomination.citizenId,partyId:nomination.partyId,truth:true});const audience=this.audience(Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.criticize(nomination,election);this.buyVotes(nomination,election);}
+    for(const nomination of election.candidates.filter(n=>this.city.politics.party(n.partyId)?.active&&this.city.society.citizen(n.citizenId))){const candidate=this.city.society.citizen(nomination.citizenId);if(candidate&&this.city.publications.writable(candidate))this.event(election,`${nomination.name} apresentou o programa: ${nomination.promises.map(pr=>pr.title).join('; ')}.`,'campaign-program',[nomination.citizenId],{candidateId:nomination.citizenId,partyId:nomination.partyId,truth:true});const audience=this.audience(Math.max(1,Math.ceil(this.city.citizens.length*.2)));for(const c of audience)this.hearPromises(c,nomination,election);this.defame(nomination,election);this.criticize(nomination,election);this.buyVotes(nomination,election);}
     this.poll(election);
   }
   hourly(election){for(const c of this.city.citizens)if(c.campaign&&(this.city.minute>=c.campaign.until||this.city.urgentNeed(c))){c.campaign=null;if(c.task==='campaign'){c.task=null;c.path=[];}}if(this.city.minute>=election.voteAt)return;this.daily(election);this.factCheck(election);const hour=Math.floor(this.city.minute/60);if(this.lastRallyHour!==hour&&this.city.hour>=7&&this.city.hour<20&&this.city.hour%3===0){this.lastRallyHour=hour;for(const nomination of this.sample(election.candidates,2))this.rally(nomination,election);}}

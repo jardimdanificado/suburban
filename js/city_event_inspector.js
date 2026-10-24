@@ -13,6 +13,12 @@ export function renderEventInspector(ui,p){
   if(event.believes!==undefined)p.kv('Reação ao relato',event.believes?'Acreditou':'Duvidou');
   const fields=[['transactions','Pagamentos consolidados'],['quantity','Quantidade'],['quality','Qualidade'],['service','Serviço'],['provider','Prestador'],['reason','Motivo'],['topic','Assunto da conversa'],['dimension','Dimensão da reputação'],['previous','Valor anterior'],['value','Novo valor']];
   for(const [key,label] of fields)if(event[key]!=null&&typeof event[key]!=='object')p.kv(label,event[key]);
+  if(event.kind==='party-membership-outreach'){
+    for(const [key,label] of [['communication','Comunicação do militante'],['ideologicalAffinity','Afinidade ideológica'],['closeness','Proximidade social'],['chance','Chance de filiação']])if(event[key]!=null)p.kv(label,`${(event[key]*100).toFixed(2)}%`);
+    p.kv('Distância física',`${Number(event.physicalDistance||0).toFixed(1)} células`);p.kv('Resultado',event.joined?'Filiou-se':'Não se filiou');
+  }
+  const foundation=city.politics.organization?.proposals.find(r=>r.id===event.partyProposalId);
+  if(foundation){p.heading('FUNDAÇÃO PARTIDÁRIA');p.kv('Nome',foundation.name);p.kv('Consulta popular',stamp(foundation.voteAt));if(foundation.result)p.note(foundation.result);if(foundation.electorate!=null)p.kv('Sim / não / abstenções',`${foundation.yes} / ${foundation.no} / ${foundation.abstentions}`);p.button('ABRIR VEREDITO E VOTOS',()=>{const state=ui.go('government');state.setView('elections');state.politicsTab='parties';state.partyProposalId=foundation.id;state.helpOpen??={};state.helpOpen.partyFoundations=true;state.resetScroll();});}
   if(event.good)p.kv('Mercadoria',city.economy.goods[event.good]?.label||event.good);
   if(event.wage!=null)p.kv('Salário base/hora',formatMoney(event.wage*60));
   if(event.rate!=null)p.kv('Juros/dia',`${(event.rate*100).toFixed(2)}%`);

@@ -12,18 +12,23 @@ export const POLITICAL_WORDS=Object.freeze({
 const pick=(city,items)=>items[Math.floor(city.random()*items.length)];
 const capitalize=s=>s[0].toLocaleUpperCase('pt-BR')+s.slice(1).toLocaleLowerCase('pt-BR');
 function flavor(city){for(let i=0;i<48;i++){const word=pick(city,vocabulario.palavras);if(typeof word==='string'&&/^[\p{L}]{4,14}$/u.test(word))return capitalize(word);}return 'Horizonte';}
-export function makePartyName(city,ideology,parties,id){
+export function makePartyName(city,ideology,parties,id,{parentParty=null}={}){
   const pool=[...POLITICAL_WORDS.common,...(ideology.economy<-.3?POLITICAL_WORDS.left:ideology.economy>.3?POLITICAL_WORDS.right:[])];
   if(ideology.green>.65)pool.push(...POLITICAL_WORDS.green,...POLITICAL_WORDS.green);
   if(ideology.liberty<-.3)pool.push(...POLITICAL_WORDS.authority);
   if(ideology.liberty>.6)pool.push(...POLITICAL_WORDS.liberty.filter(w=>w!=='Anarquista'||ideology.economy<0));
-  for(let attempt=0;attempt<24;attempt++){
+  for(let attempt=0;attempt<64;attempt++){
     const [organization,gender]=pick(city,organizations);let adjective=pick(city,pool);if(gender==='f'&&adjective.endsWith('o'))adjective=adjective.slice(0,-1)+'a';
-    const unique=flavor(city),core=`${organization} ${adjective} ${pick(city,POLITICAL_WORDS.causes)}`,name=`${core} — ${unique}`;
-    if(parties.some(p=>p.name===name))continue;
-    let short=core.split(' ').filter(w=>!['da','de','do','das','dos','e'].includes(w)).map(w=>w[0]).join('').slice(0,5)+unique[0];
-    if(parties.some(p=>p.short===short))short+=id;
-    return {name,short,nameFlavor:unique};
+    const core=parentParty?(parentParty.nameCore||parentParty.name.split(/\s+/).slice(0,2).join(' ')):`${organization} ${adjective}`;
+    const unique=parentParty||city.random()<.025?flavor(city):null;
+    let parts;
+    if(parentParty){const [first,last]=core.split(' ');parts=city.random()<.5?[first,unique,last]:[first,last,unique];}
+    else if(unique)parts=[organization,adjective,unique];
+    else{const extra=pool.map(w=>gender==='f'&&w.endsWith('o')?w.slice(0,-1)+'a':w).filter(w=>w!==adjective);const third=pick(city,extra);parts=city.random()<.45?[organization,adjective,third]:[organization,adjective];}
+    const name=parts.join(' ');if(parties.some(p=>p.name===name))continue;
+    let short=parts.map(w=>w[0]).join('');if(parties.some(p=>p.short===short))short+=id;
+    return {name,short,nameFlavor:unique,nameCore:core,nameVersion:2};
   }
-  return {name:`Movimento da Renovação — ${flavor(city)} ${id}`,short:`MR${id}`,nameFlavor:'Renovação'};
+  // A unique vocabulary term still keeps the rare collision fallback within three words.
+  const unique=flavor(city);return {name:`Partido Popular ${unique}`,short:`PP${id}`,nameFlavor:unique,nameCore:'Partido Popular',nameVersion:2};
 }

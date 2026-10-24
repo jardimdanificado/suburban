@@ -4,22 +4,22 @@ export function publicPressure(p,record){const living=p.city.citizens.filter(c=>
 export function scandalEligible(p,record){return !!record?.proven&&(record.severity||0)>=60&&publicPressure(p,record)>=65&&!record.archived;}
 export function approvalReport(p){
   const city=p.city,now=p.conditions(),base=p.baseline||now,t=p.mandates.current;
-  const fulfilled=t?.promises.filter(pr=>pr.fulfilled).length||0,total=t?.promises.length||0,delivery=total?fulfilled/total:0;
+  const fulfilled=t?.promises.filter(pr=>pr.fulfilled).length||0,total=t?.promises.length||0,delivery=total?fulfilled/total:1;
   const elapsed=t?clamp((city.minute-t.startedAt)/p.termRules.termMinutes,0,1):0;
   const scandals=p.scandals.filter(s=>s.proven&&s.accusedId===city.economy.mayorId).reduce((n,s)=>n+publicPressure(p,s)/100*(s.severity||20)*.2,0);
   const vetoPenalty=(p.vetoes||[]).reduce((n,v)=>n+Math.max(0,28-(city.minute-v.minute)/1440*2),0);
   const rows=[
-    {label:'Felicidade',points:-(100-now.happiness)*.25,detail:`${now.happiness.toFixed(1)}/100; peso máximo de 25 pontos`},
-    {label:'Moradia',points:-now.homeless*20,detail:`${(now.homeless*100).toFixed(1)}% sem moradia; peso de 20 pontos`},
-    {label:'Alimentação',points:-now.hunger*25,detail:`${(now.hunger*100).toFixed(1)}% com alimentação abaixo de 30/100; peso de 25 pontos`},
-    {label:'Ocupação',points:-(1-now.employment)*15,detail:`${(now.employment*100).toFixed(1)}% com emprego ou negócio; peso de 15 pontos`},
+    {label:'Felicidade',points:(now.happiness-50)*.25,detail:`${now.happiness.toFixed(1)}/100; 50 é neutro, variação de −12,5 a +12,5 pontos`},
+    {label:'Moradia',points:(.5-now.homeless)*20,detail:`${(now.homeless*100).toFixed(1)}% sem moradia; metade abrigada é neutro, variação de −10 a +10 pontos`},
+    {label:'Alimentação',points:(.5-now.hunger)*25,detail:`${(now.hunger*100).toFixed(1)}% com fome; metade sem fome é neutro, variação de −12,5 a +12,5 pontos`},
+    {label:'Ocupação',points:(now.employment-.5)*15,detail:`${(now.employment*100).toFixed(1)}% com emprego ou negócio; 50% é neutro, variação de −7,5 a +7,5 pontos`},
     {label:'Mudança na felicidade',points:(now.happiness-base.happiness)*.35,detail:`Início: ${base.happiness.toFixed(1)}; agora: ${now.happiness.toFixed(1)}`},
     {label:'Promessas pendentes',points:-(1-delivery)*elapsed*28,detail:`${fulfilled}/${total} cumpridas; ${(elapsed*100).toFixed(1)}% do mandato transcorrido`},
     {label:'Corrupção comprovada',points:-scandals,detail:'Penalidade ponderada pela gravidade e pela parcela da população informada'},
     {label:'Vetos do prefeito',points:-vetoPenalty,detail:'Cada veto começa com perda de 28 pontos, reduzida em 2 pontos por dia'}
   ].map(row=>Object.freeze(row));
-  const raw=100+rows.reduce((n,r)=>n+r.points,0),score=clamp(raw);
-  return {minute:city.minute,startingScore:100,score,raw,adjustment:score-raw,rows,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment};
+  const raw=50+rows.reduce((n,r)=>n+r.points,0),score=clamp(raw);
+  return {minute:city.minute,startingScore:50,score,raw,adjustment:score-raw,rows,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment};
 }
 export function criticalApproval(p){
   p.approvalReport=approvalReport(p);p.approval=p.approvalReport.score;

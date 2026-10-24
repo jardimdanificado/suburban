@@ -1,3 +1,4 @@
+import {promiseRelevant} from './city_mandates.js';
 // Party membership is a minority commitment; electoral support is personal and reversible.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
 export const MEMBERSHIP_RULES=Object.freeze({maxShare:.4,contactInterval:180,cooldownDays:3});
@@ -19,13 +20,13 @@ const adults=p=>p.city.citizens.filter(c=>!c.entity.destroyed&&p.city.society.is
 export function canJoin(p,c){const people=adults(p);return !!c.political.partyId||people.filter(v=>v.political?.partyId&&p.party(v.political.partyId)?.active).length<Math.floor(people.length*MEMBERSHIP_RULES.maxShare);}
 export function leaveParty(p,c,reason){
   const s=membershipProfile(p,c),old=p.party(s.partyId);if(!old)return false;
-  old.memberIds=old.memberIds.filter(id=>id!==c.id);s.partyId=null;syncPartyColor(p,c);s.loyalty=0;s.membershipCooldownUntil=p.city.minute+1440*MEMBERSHIP_RULES.cooldownDays;
+  old.memberIds=old.memberIds.filter(id=>id!==c.id);s.lastPartyId=old.id;s.lastPartyDepartureAt=p.city.minute;s.partyId=null;syncPartyColor(p,c);s.loyalty=0;s.membershipCooldownUntil=p.city.minute+1440*MEMBERSHIP_RULES.cooldownDays;
   p.remember(c,{kind:'party-departure',partyId:old.id,description:`Desfiliou-se de ${old.short}: ${reason}.`});
   return true;
 }
 export function inviteMembers(p,count,reason,onlyParty=null){
   const parties=p.parties.filter(a=>a.active&&!a.retiring&&(!onlyParty||a.id===onlyParty.id));if(!parties.length)return;
-  const pool=adults(p).filter(c=>!c.political.partyId&&c.political.membershipCooldownUntil<=p.city.minute);
+  const pool=adults(p).filter(c=>!c.political.partyId&&!c.political.foundingProposalId&&c.political.membershipCooldownUntil<=p.city.minute);
   const options=pool.map(c=>{const party=parties.slice().sort((a,b)=>p.distance(c.political.ideology,a.ideology)-p.distance(c.political.ideology,b.ideology))[0];return {c,party,score:c.political.engagement*30+p.candidateStrength(c)*.3-p.distance(c.political.ideology,party.ideology)*15};}).sort((a,b)=>b.score-a.score||a.c.id-b.c.id);
   for(const row of options){if(count<=0||!canJoin(p,row.c))break;if(p.join(row.c,row.party,reason))count--;}
 }
@@ -46,14 +47,14 @@ export function campaignContact(p,voter,nomination,election,source){
   if(!opinion){const keys=Object.keys(s.support);if(keys.length>=16){const oldest=keys.sort((a,b)=>s.support[a].lastContact-s.support[b].lastContact)[0];delete s.support[oldest];}opinion=s.support[party.id]={score:0,contacts:0,lastContact:-Infinity};}
   if(p.city.minute-opinion.lastContact<MEMBERSHIP_RULES.contactInterval)return;
   const proximity=1-p.distance(s.ideology,party.ideology)/2.8,relation=p.city.relationships.view(voter,candidate),record=p.mandates.recordScore(candidate.id,party.id);
-  const relevant=nomination.promises.filter(pr=>pr.metric==='fed'?voter.needs.food<50:pr.metric==='housed'?!voter.homeUnitId:pr.metric==='employed'?!voter.jobId&&!voter.businessIds.length:pr.metric==='lamps'?p.city.lighting.posts.some(l=>l.public&&!l.fuel):false).length;
+  const relevant=nomination.promises.filter(pr=>promiseRelevant(p.city,voter,pr.metric)).length;
   const knownScandals=p.scandals.filter(r=>r.partyId===party.id&&r.proven&&r.awareIds?.includes(voter.id)).reduce((n,r)=>n+(r.severity||40)/100,0);
   const effect=(proximity-.4)*7+Math.min(3,relevant)*1.2+record*.08+((relation?.trust??50)-50)*.035-knownScandals*8;
   opinion.score=clamp(opinion.score+effect*(1-s.criticalSense*.4),-35,40);opinion.contacts++;opinion.lastContact=p.city.minute;opinion.electionId=election.id;opinion.source=source;
   updateSympathy(s);
   // Persuasion usually changes the vote. Joining requires sustained interest,
   // ideological affinity and a separate, deliberately uncommon commitment.
-  if(!s.partyId&&s.membershipCooldownUntil<=p.city.minute&&s.engagement>.6&&opinion.contacts>=3&&opinion.score>22&&proximity>.65&&p.city.random()<.04*(1-s.independence)&&canJoin(p,voter))p.join(voter,party,'Aproximação voluntária após conversas e propostas de campanha');
+  if(!s.partyId&&!s.foundingProposalId&&s.membershipCooldownUntil<=p.city.minute&&s.engagement>.6&&opinion.contacts>=3&&opinion.score>22&&proximity>.65&&p.city.random()<.04*(1-s.independence)&&canJoin(p,voter))p.join(voter,party,'Aproximação voluntária após conversas e propostas de campanha');
 }
 export function reviewMembership(p){
   if(p.membershipReviewDay===p.city.day)return;p.membershipReviewDay=p.city.day;
@@ -64,7 +65,7 @@ export function reviewMembership(p){
     const distance=p.distance(s.ideology,party.ideology),memories=s.memories.filter(m=>m.partyId===party.id&&p.city.minute-m.minute<5*1440);
     const criticism=memories.reduce((n,m)=>n+(m.effect||0),0),scandals=p.scandals.filter(r=>r.partyId===party.id&&r.proven&&r.awareIds?.includes(c.id)).reduce((n,r)=>n+(r.severity||40)/100,0);
     const record=p.mandates.recordScore(null,party.id),governing=p.partyOfId(p.city.economy.mayorId)?.id===party.id;
-    const target=clamp(.5+(1-distance/2.8)*.25+record/100+clamp(criticism/80,-.4,.15)-scandals*.25+(governing?(p.approval-55)/150:0),.02,.95);
+    const target=clamp(.5+(1-distance/2.8)*.25+record/100+clamp(criticism/80,-.4,.15)-scandals*.25+(governing?(p.approval-50)/150:0),.02,.95);
     s.loyalty=clamp(s.loyalty+(target-s.loyalty)*.18);
     if(!p.officeHolder(c)&&s.loyalty<.25&&p.city.minute-s.membershipSince>2*1440)leaveParty(p,c,scandals?'Decepção com corrupção conhecida':'Divergências, promessas e balanço do partido');
   }
