@@ -209,11 +209,22 @@ export class CityEconomy {
     return this.routeCache.get(key);
   }
   updateDemand() {
-    const population = this.city.citizens.filter(c => !c.entity.destroyed).length;
+    const activeCitizens = this.city.citizens.filter(c => !c.entity.destroyed);
+    const population = activeCitizens.length;
     const businesses = this.businesses;
     const farms = businesses.filter(b => b.type === 'farm');
     const buyers = businesses.filter(b => retailTypes.has(b.type));
+    const industrialBusinesses = businesses.filter(b => INDUSTRIES[b.type]);
     for (const b of businesses) b.inputDemand = b.type==='kitchen'?Object.fromEntries([...new Set(KITCHEN_RECIPES.flatMap(r=>Object.keys(r.inputs)))].map(g=>[g,Math.max(0,18-(b.inventory[g]||0)-(b.incoming[g]||0))])):b.type==='mill'?{girassol:Math.max(0,36-b.inventory.girassol-(b.incoming.girassol||0))}:INDUSTRIES[b.type] ? Object.fromEntries(Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs).map(([g,n])=>[g,Math.max(0,(b.type==='automaker'?n*Math.max(6,b.vehicleBatchSize||3):b.type==='publisher'&&g==='papel'?Math.max(12,(b.bookPages||5)*3):n*6)-b.inventory[g]-(b.incoming[g]||0))])) : b.type === 'bakery' ? { trigo: Math.max(0, 24 - b.inventory.trigo) } : !retailTypes.has(b.type) ? {} : Object.fromEntries(edible.filter(g => this.accepts(b, g)).map(g => [g, Math.max(0, 12 - b.inventory[g])]));
+    const stockByGood = new Map(), inputDemandByGood = new Map(), totalInputDemandByGood = new Map(), foodPreferenceByGood = new Map();
+    for (const b of businesses) {
+      for (const [good, amount] of Object.entries(b.inventory)) stockByGood.set(good, (stockByGood.get(good) || 0) + amount);
+      for (const [good, amount] of Object.entries(b.inputDemand || {})) {
+        totalInputDemandByGood.set(good, (totalInputDemandByGood.get(good) || 0) + amount);
+        if (INDUSTRIES[b.type]) inputDemandByGood.set(good, (inputDemandByGood.get(good) || 0) + amount);
+      }
+    }
+    for (const c of activeCitizens) for (const [good, preference] of Object.entries(c.foodPreferences || {})) if (preference > 0) foodPreferenceByGood.set(good, (foodPreferenceByGood.get(good) || 0) + preference);
     const oil=this.lightingSupplyReport=oilSupply(this),oilGap=Math.max(0,oil.oilRequired-oil.millPotential-oil.millPlanned);
     const items=[{type:'mill',crop:null,score:oilGap?Math.min(300,200+oilGap*2):0,required:oil.oilRequired,supply:oil.millDaily,stock:oil.oilStock,reason:`Postes precisam de ${oil.daily} óleos/dia; ${oil.empty} vazios. ${oil.bottleneck}`}];
     const facilities = [...this.city.sanitation.facilities.values()], waste = this.city.buildings.reduce((n, b) => n + (b.inventory.lixo || 0) + (b.litter || 0), 0);
@@ -232,13 +243,13 @@ export class CityEconomy {
       items.push({ type, crop: null, score: shortage ? ({ market: 90, greengrocer: 85, bakery: 80 })[type] + shortage * 10 : 0, reason: count ? 'População e capacidade de atendimento' : 'Este tipo de comércio ainda não existe' });
     }
     const stapleCrops=Object.keys(CROPS).filter(g=>!['trigo','girassol'].includes(g));
-    const foodWeights=Object.fromEntries(stapleCrops.map(g=>[g,this.city.citizens.filter(c=>!c.entity.destroyed).reduce((n,c)=>n+.35+Math.max(0,c.foodPreferences?.[g]||0),0)]));
+    const foodWeights=Object.fromEntries(stapleCrops.map(g=>[g,population*.35+(foodPreferenceByGood.get(g)||0)]));
     const totalFoodWeight=Object.values(foodWeights).reduce((n,v)=>n+v,0)||1;
     for (const [crop, spec] of Object.entries(CROPS)) {
       const producers = farms.filter(b => b.crop === crop);
-      const stock = businesses.reduce((sum, b) => sum + b.inventory[crop], 0);
+      const stock = stockByGood.get(crop) || 0;
       const bakeries = crop === 'trigo' ? businesses.filter(b => b.type === 'bakery').length : 0;
-      const processingNeed=businesses.filter(b=>INDUSTRIES[b.type]).reduce((n,b)=>n+(b.inputDemand?.[crop]||0),0);
+      const processingNeed=inputDemandByGood.get(crop)||0;
       const grainConsumers=businesses.filter(b=>b.type==='bakery'||INDUSTRIES[b.type]?.inputs.trigo).length;
       const downstream = crop === 'trigo' ? grainConsumers : buyers.filter(b => this.accepts(b, crop)).length;
       const dailyNeed = crop === 'trigo' ? Math.ceil(Math.max(population*(bakeries?2:.5),processingNeed)) : crop==='girassol'?Math.max(oil.sunflowerRequired,processingNeed):Math.ceil(population*6*(foodWeights[crop]||0)/totalFoodWeight)+processingNeed;
@@ -266,10 +277,10 @@ export class CityEconomy {
       if(['dealership','fuel_station','garage','bus_operator'].includes(type)){const count=businesses.filter(b=>b.type===type).length,target=type==='bus_operator'?Math.max(1,Math.ceil(population/400)):Math.max(1,Math.ceil(population/300));items.push({type,crop:null,score:count<target?110:0,required:target,supply:count,stock:0,reason:'Mobilidade aérea: veículos, combustível, manutenção e transporte coletivo.'});continue;}
       if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
       const firms=businesses.filter(b=>b.type===type);
-      const needed=(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+businesses.reduce((sum,b)=>sum+(b.inputDemand?.[g]||0),0)+(spec.use?(type==='publisher'?this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+this.city.citizens.filter(c=>!c.entity.destroyed).reduce((n,c)=>n+Math.max(0,c.foodPreferences?.[g]||0),0)*.8:0),0);
-      const stock=Object.keys(spec.outputs).reduce((n,g)=>n+businesses.reduce((v,b)=>v+(b.inventory[g]||0),0),0);
+      const needed=(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?activeCitizens.filter(c=>this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
+      const stock=Object.keys(spec.outputs).reduce((n,g)=>n+(stockByGood.get(g)||0),0);
       const supply=firms.reduce((n,b)=>n+Math.max(1,b.workers.length)*240/spec.labor*Object.values(spec.outputs).reduce((a,v)=>a+v,0),0);
-      const inputAvailability=Object.entries(spec.inputs).length?Object.entries(spec.inputs).reduce((n,[g,q])=>n+Math.min(2,businesses.reduce((v,b)=>v+(b.inventory[g]||0),0)/Math.max(1,q*6)),0)/Object.keys(spec.inputs).length:1;
+      const inputAvailability=Object.entries(spec.inputs).length?Object.entries(spec.inputs).reduce((n,[g,q])=>n+Math.min(2,(stockByGood.get(g)||0)/Math.max(1,q*6)),0)/Object.keys(spec.inputs).length:1;
       const chainBonus=!firms.length&&(needed>0||Object.keys(spec.inputs).length&&inputAvailability>.8)?Math.min(70,needed*.3+inputAvailability*25):0;
       const score=type==='clothing_store'?(firms.length>=Math.max(1,Math.ceil(population/300))?0:55):type==='bank' ? firms.length?0:65 : Math.min(160,Math.max(0,needed-stock-supply*.5)+(firms.length?0:25)+chainBonus);
       items.push({type,crop:null,score,required:Math.ceil(needed),supply:Math.floor(supply),stock,reason:spec.impact});

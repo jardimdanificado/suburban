@@ -97,8 +97,8 @@ export class CityGovernment extends CityPolitics {
     const election={id:this.nextId++,round:1,startedAt:city.minute,voteAt:this.nextElectionAt,candidates,councilCandidates,status:'campaign',ballots:[],ranking:[],polls:[],events:[],lastCampaignDay:null,calendarRules:this.termRules};election.eventId=city.log(`Eleição ${election.id}: ${candidates.length} chapas, ${councilCandidates.length} candidaturas à Câmara e ${this.termRules.campaignMinutes/1440} dias de campanha.`,'government',candidates.map(c=>c.citizenId),{kind:'election-opened',electionId:election.id}).id;this.active=election;allocatePartyFunds(this,election);this.campaigns.daily(election);
   }
   beginRunoff(first,finalists){
-    const city=this.city,duration=Math.max(1,first.voteAt-first.startedAt);
-    // Keep the first campaign duration exactly, including elections loaded mid-campaign.
+    const city=this.city,duration=Math.max(1,Math.floor((first.voteAt-first.startedAt)/2));
+    // A runoff campaign lasts half the first round, including loaded elections.
     let voteAt=this.voting.schedule(city.minute+duration);if(voteAt-duration<=city.minute)voteAt+=1440;const startedAt=voteAt-duration;
     const candidates=finalists.map(n=>({...n,promises:n.promises.map(pr=>({...pr})),endorsementPartyIds:[n.partyId]}));
     for(const party of this.parties.filter(p=>p.active&&!candidates.some(n=>n.partyId===p.id))){const ally=candidates.slice().sort((a,b)=>this.distance(party.ideology,this.party(a.partyId).ideology)-this.distance(party.ideology,this.party(b.partyId).ideology))[0];if(ally)ally.endorsementPartyIds.push(party.id);}

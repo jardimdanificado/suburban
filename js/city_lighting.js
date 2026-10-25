@@ -2,7 +2,26 @@ import { ROAD_TILES, tileAt, terrainWalkable, canStep } from './city_terrain.js'
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 export const LIGHTING_RULES = { roadSpacing: 7, privateSpacing: 3, stone: 2, labor: 20, installationFee: 8000, maxActiveSites: 4 };
 export class CityLighting {
-  constructor(city) { this.city = city; this.posts = []; this.propertyStores = new Map(); this.roadPosts = new Map(); this.sites = new Map(); }
+  constructor(city) { this.city = city; this.posts = []; this.propertyStores = new Map(); this.roadPosts = new Map(); this.sites = new Map(); this.siteBuckets = new Map(); }
+  siteBucketKey(x, y) { return `${Math.floor(x / LIGHTING_RULES.roadSpacing)},${Math.floor(y / LIGHTING_RULES.roadSpacing)}`; }
+  indexSite(post) {
+    const key = this.siteBucketKey(post.x, post.y);
+    let bucket = this.siteBuckets.get(key);
+    if (!bucket) this.siteBuckets.set(key, bucket = new Set());
+    bucket.add(post);
+  }
+  nearbySites(x, y) {
+    if (!this.siteBuckets) {
+      this.siteBuckets = new Map();
+      for (const post of this.sites.values()) this.indexSite(post);
+    }
+    const bx = Math.floor(x / LIGHTING_RULES.roadSpacing), by = Math.floor(y / LIGHTING_RULES.roadSpacing), nearby = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const bucket = this.siteBuckets.get(`${bx + dx},${by + dy}`);
+      if (bucket) for (const post of bucket) nearby.push(post);
+    }
+    return nearby;
+  }
   siteOccupancy(){
     const city=this.city,blocked=new Set(),plots=new Map(),mark=p=>blocked.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     for(const p of city.development.plots){mark(p.door);for(let y=p.y;y<p.y+p.depth;y++)for(let x=p.x;x<p.x+p.width;x++)plots.set(`${x},${y}`,p.id);}
@@ -36,9 +55,9 @@ export class CityLighting {
   plan(post) {
     if (this.sites.has(post.id) && this.sites.get(post.id).status !== 'cancelled') return this.sites.get(post.id);
     const spacing = post.public ? LIGHTING_RULES.roadSpacing : LIGHTING_RULES.privateSpacing;
-    if ([...this.sites.values()].some(p => p.status !== 'cancelled' && Math.hypot(p.x - post.x, p.y - post.y) < (post.public && p.public ? spacing : LIGHTING_RULES.privateSpacing))) return null;
+    if (this.nearbySites(post.x, post.y).some(p => p.status !== 'cancelled' && Math.hypot(p.x - post.x, p.y - post.y) < (post.public && p.public ? spacing : LIGHTING_RULES.privateSpacing))) return null;
     post.status = 'planned'; post.built = false;
-    this.sites.set(post.id, post); return post;
+    this.sites.set(post.id, post); this.indexSite(post); return post;
   }
   reserve(post) {
     const city = this.city;
@@ -109,19 +128,31 @@ export class CityLighting {
       if (!groups.has(key)) groups.set(key, { holder, payer, posts: [] });
       groups.get(key).posts.push(post); posts.push(post);
     };
-    const seenRoadTiles=new Set();
+    const seenRoadTiles=new Set(), roadBuckets=new Map();
+    const addRoadBucket=post=>{
+      const key=this.siteBucketKey(post.door.x,post.door.y);let bucket=roadBuckets.get(key);
+      if(!bucket)roadBuckets.set(key,bucket=[]);bucket.push(post);
+    };
+    for(const post of this.roadPosts.values())if(post.status!=='cancelled')addRoadBucket(post);
+    const hasNearbyRoadPost=(x,y)=>{
+      const bx=Math.floor(x/LIGHTING_RULES.roadSpacing),by=Math.floor(y/LIGHTING_RULES.roadSpacing);
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)for(const p of roadBuckets.get(`${bx+dx},${by+dy}`)||[])if(Math.hypot(p.door.x-x,p.door.y-y)<LIGHTING_RULES.roadSpacing)return true;
+      return false;
+    };
     const planRoad=point=>{
       const key=`${Math.floor(point.x)},${Math.floor(point.y)}`;if(seenRoadTiles.has(key))return;seenRoadTiles.add(key);
       if(!ROAD_TILES.has(tileAt(city.world,Math.floor(point.x),Math.floor(point.y))))return;
-      if([...this.roadPosts.values()].some(p=>p.status!=='cancelled'&&Math.hypot(p.door.x-point.x,p.door.y-point.y)<LIGHTING_RULES.roadSpacing))return;
+      if(hasNearbyRoadPost(point.x,point.y))return;
       const site=this.findSite(point,null,occupancy);if(!site)return;
       const id=`road:${Math.floor(site.x)}:${Math.floor(site.y)}`,post=this.plan({id,...site,fuel:0,lit:false,public:true,payerId:'treasury'});
-      if(post)this.roadPosts.set(id,post);
+      if(post){this.roadPosts.set(id,post);addRoadBucket(post);}
     };
     for(const [key] of [...city.traffic].sort((a,b)=>b[1]-a[1]).slice(0,128)){const [x,y]=key.split(',').map(Number);planRoad({x:x+.5,y:y+.5});}
-    for (const b of [...buildings].sort((a,b)=>city.trafficScore(b.accessPath)-city.trafficScore(a.accessPath))) {
+    const trafficRankedBuildings=buildings.map((b,index)=>({b,index,score:city.trafficScore(b.accessPath)})).sort((a,b)=>b.score-a.score||a.index-b.index);
+    for (const {b} of trafficRankedBuildings) {
       // Road lamps belong to the city, independently of the neighbouring owner.
-      for(const point of [...(b.accessPath||[])].sort((a,b)=>city.trafficScore([b])-city.trafficScore([a])))planRoad(point);
+      const trafficRankedPath=(b.accessPath||[]).map((point,index)=>({point,index,score:city.traffic.get(`${Math.floor(point.x)},${Math.floor(point.y)}`)||0})).sort((a,b)=>b.score-a.score||a.index-b.index);
+      for(const {point} of trafficRankedPath)planRoad(point);
       const owners = new Map();
       for (const unit of b.units) if (unit.ownerId && !owners.has(unit.ownerId)) owners.set(unit.ownerId, unit);
       for (const owner of owners.keys()) {

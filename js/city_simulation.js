@@ -317,8 +317,8 @@ export class CitySimulation {
       this.pathCache.set(key, findTerrainPath(this.world, start, goal, this.occupied));
     }
     const path = this.pathCache.get(key);
-    // Refresh frequently used destinations so one-off journeys do not evict them.
-    this.pathCache.delete(key);this.pathCache.set(key,path);
+    // Keep insertion-order eviction: touching every cache hit costs two Map
+    // mutations across the hot path, while FIFO gives the same route answers.
     // Consumers shift their own array but never mutate waypoint coordinates.
     return path === null ? null : copy?path.slice():path;
   }
@@ -365,8 +365,8 @@ export class CitySimulation {
     }
     if(!urgent && this.society.isAdult(c) && !['work','manage','care','caregiving','food','provisions','toilet'].includes(task) && this.hour>=6 && this.hour<22 && this.minute-(c.lastShoppingAt||0)>180 && this.minute-(c.lastShoppingSearchAt??-Infinity)>=30) {
       c.lastShoppingSearchAt=this.minute;
-      const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).sort((a,b)=>Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)+this.relationships.businessPenalty(c,a)-((c.knownAdvertisements?.[a.id]||0)>this.minute?2:0)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)-this.relationships.businessPenalty(c,b)+((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0));
-      for(const shop of shops) {const path=this.findPath(c.entity,shop.door);if(path!==null){c.path=path;c.targetId=shop.id;c.task='shopping';return;}}
+      const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).map((b,index)=>({b,index,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)})).sort((a,b)=>a.score-b.score||a.index-b.index);
+      for(const {b:shop} of shops) {const path=this.findPath(c.entity,shop.door);if(path!==null){c.path=path;c.targetId=shop.id;c.task='shopping';return;}}
     }
     const childHome = child ? this.building(this.units.get(child.homeUnitId)?.buildingId) : null;
     const siteProject = this.development.projectFor(c, type === 'job' ? job : type === 'company' ? company : null);
@@ -654,7 +654,10 @@ export class CitySimulation {
     for (const c of this.citizens) {
       syncCitizenInterior(this,c);
       if(c.ridingVehicleId)continue;
-      this.vehicles.tryTrip(c);
+      // Vehicle eligibility is minute based (including its 20-minute search
+      // cooldown); polling it on every animation frame repeats the same scans
+      // up to 60 times before any relevant state can change.
+      if(this.vehicles.activeCount&&c._vehicleSearchMinute!==this.minute){c._vehicleSearchMinute=this.minute;this.vehicles.tryTrip(c);}
       const load=c.deliveryId?this.logistics.shipments.find(s=>s.id===c.deliveryId):null;
       if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>(c.equipment?.carrinho?72:c.equipment?.cesta?36:24)){c.action='Aguardando veículo para transportar a carga';continue;}
       if (c.conversation || c.workMeal || !c.path.length) continue;

@@ -7,14 +7,21 @@ export function syncCitizenInterior(city, c) {
   let b, room;
   if(c.mobilityTrip||c.ridingVehicleId){c.indoorLocation=null;return;}
   const task = c.workMeal ? 'workmeal' : c.task;
+  const previous=c.indoorLocation, targetId=c.workMeal?.siteId ?? c.targetId;
+  // Most residents who entered a room stay there across many render frames.
+  // Keep that stable case O(1): avoid resolving the destination and searching
+  // the building's rooms until their task, target, layout, or position changes.
+  if(previous && !c.entity.destroyed && !c.path.length && !c.deliveryId && previous.task===task && previous.buildingId===targetId && previous.toiletTargetId===c.toiletTargetId) {
+    const current=city.building(previous.buildingId);
+    if(current && !current.entity.destroyed && previous.layoutRevision===(current.layoutRevision||0) && Math.hypot(c.entity.x-current.door.x,c.entity.y-current.door.y)<=1.5)return;
+  }
   if (!c.entity.destroyed && !c.path.length && !c.deliveryId && INDOOR_TASKS.has(task)) {
-    b = city.building(c.workMeal?.siteId ?? c.targetId);
+    b = city.building(targetId);
     if (b && Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5) {
       if (['work','manage'].includes(task) && (OUTDOOR_WORK.has(b.type) || b.constructionKind==='open-air')) b = null;
     } else b = null;
   }
   if (!b) { c.indoorLocation = null; return; }
-  const previous=c.indoorLocation;
   const layoutRevision=b.layoutRevision||0;
   if(previous?.buildingId===b.id && previous.task===task && previous.layoutRevision===layoutRevision && previous.toiletTargetId===c.toiletTargetId)return;
   const roomType = task==='toilet'||task==='hygiene' ? 'bathroom'
