@@ -534,7 +534,10 @@ export class CityUI {
   }
   monetaryPolicy(p) {
     const currency=this.city.currency,mint=this.city.buildings.find(b=>b.type==='mint'&&!b.entity.destroyed);
-    p.heading('MOEDA E INFLAÇÃO');
+    const bank=this.city.bank,welfare=this.city.welfare;
+    p.metrics([['TESOURO',money(this.city.treasury),C.gold],['INFLAÇÃO DIÁRIA',`${(currency.dailyInflation*100).toFixed(2)}%`,currency.dailyInflation>.001?C.red:C.green],['POUPANÇA',money([...bank.deposits.values()].reduce((n,d)=>n+d.balance,0)),C.cyan],['BENEFÍCIOS HOJE',money(welfare.spentToday),C.blue]]);
+    this.section(p,'financeCurrency','Moeda e inflação',()=>{
+    p.heading('INDICADORES MONETÁRIOS');
     p.kv('Dinheiro emitido',money(currency.issued));p.kv('Emitido hoje',money(currency.issuedToday));
     p.kv('Inflação diária',`${(currency.dailyInflation*100).toFixed(2)}%`);p.kv('Inflação acumulada',`${((currency.priceIndex-1)*100).toFixed(2)}%`);
     p.kv('Emissão líquida',money(currency.netIssued()));p.kv('Moeda retirada',money(currency.burned));
@@ -543,17 +546,23 @@ export class CityUI {
     p.kv('Teto de emissão/dia',money(currency.policy.dailyLimit));
     p.buttons([{label:'REDUZIR COTA',click:()=>this.policyAction('Cota de emissão reduzida.',()=>{currency.policy.dailyLimit=Math.max(0,currency.policy.dailyLimit-10000);})},{label:'AUMENTAR COTA',click:()=>this.policyAction('Cota de emissão aumentada.',()=>{currency.policy.dailyLimit=Math.min(500000,currency.policy.dailyLimit+10000);})},{label:'RETIRAR R$ 1.000',click:()=>{if(!currency.retire(100000))this.notice='É preciso preservar a reserva do tesouro e a base monetária mínima.';}}]);
     p.note(`Automático: suspende emissão com inflação diária acima de ${(currency.policy.inflationTarget*100).toFixed(2)}% ou tesouro acima da reserva de ${money(currency.policy.treasuryReserve)}.`);
-    const bank=this.city.bank,welfare=this.city.welfare;
-    p.heading('CRÉDITO E POUPANÇA');p.kv('Poupança protegida',money([...bank.deposits.values()].reduce((n,d)=>n+d.balance,0)));p.kv('Juros de novos empréstimos/dia',`${(bank.policy.loanRate*100).toFixed(2)}%`);p.kv('Rendimento da poupança/dia',`${(bank.policy.savingsRate*100).toFixed(2)}%`);
+    },true);
+    this.section(p,'financeBank','Crédito e poupança',()=>{
+    p.kv('Poupança protegida',money([...bank.deposits.values()].reduce((n,d)=>n+d.balance,0)));p.kv('Juros de novos empréstimos/dia',`${(bank.policy.loanRate*100).toFixed(2)}%`);p.kv('Rendimento da poupança/dia',`${(bank.policy.savingsRate*100).toFixed(2)}%`);
     p.buttons([{label:bank.policy.creditEnabled?'SUSPENDER NOVO CRÉDITO':'LIBERAR CRÉDITO',click:()=>this.policyAction('Política de crédito alterada.',()=>{bank.policy.creditEnabled=!bank.policy.creditEnabled;})},{label:'JUROS +0,05%',click:()=>this.policyAction('Juros de novos empréstimos elevados.',()=>{bank.policy.loanRate=Math.min(.01,bank.policy.loanRate+.0005);})},{label:'JUROS -0,05%',click:()=>this.policyAction('Juros de novos empréstimos reduzidos.',()=>{bank.policy.loanRate=Math.max(0,bank.policy.loanRate-.0005);})}]);
     p.buttons([{label:'POUPANÇA +0,01%',click:()=>this.policyAction('Rendimento da poupança elevado.',()=>{bank.policy.savingsRate=Math.min(.005,bank.policy.savingsRate+.0001);})},{label:'POUPANÇA -0,01%',click:()=>this.policyAction('Rendimento da poupança reduzido.',()=>{bank.policy.savingsRate=Math.max(0,bank.policy.savingsRate-.0001);})}]);
-    p.heading('POLÍTICA FISCAL');p.kv(this.city.taxRate<0?'Subsídio sobre salários':'Imposto sobre salários',`${Math.round(this.city.taxRate*100)}%`);p.note('Alíquota de -50% a +50%. Negativa: a empresa paga o salário bruto e a prefeitura acrescenta o percentual ao trabalhador.');p.kv('Subsídios salariais pagos hoje',money(this.city.wageSubsidies.paidToday));p.kv('Total de subsídios salariais',money(this.city.wageSubsidies.totalPaid));if(this.city.wageSubsidies.unpaidToday)p.kv('Não pago hoje por falta de caixa',money(this.city.wageSubsidies.unpaidToday));
+    },false);
+    this.section(p,'financeTax','Impostos e subsídios salariais',()=>{
+    p.kv(this.city.taxRate<0?'Subsídio sobre salários':'Imposto sobre salários',`${Math.round(this.city.taxRate*100)}%`);p.note('Alíquota de -50% a +50%. Negativa: a empresa paga o salário bruto e a prefeitura acrescenta o percentual ao trabalhador.');p.kv('Subsídios salariais pagos hoje',money(this.city.wageSubsidies.paidToday));p.kv('Total de subsídios salariais',money(this.city.wageSubsidies.totalPaid));if(this.city.wageSubsidies.unpaidToday)p.kv('Não pago hoje por falta de caixa',money(this.city.wageSubsidies.unpaidToday));
     p.buttons([{label:'IMPOSTO +1%',click:()=>this.policyAction('Imposto salarial aumentado.',()=>{this.city.taxRate=Math.min(.5,Math.round((this.city.taxRate+.01)*100)/100);})},{label:'IMPOSTO -1%',click:()=>this.policyAction('Imposto salarial reduzido.',()=>{this.city.taxRate=Math.max(-.5,Math.round((this.city.taxRate-.01)*100)/100);})}]);
-    p.heading('BENEFÍCIOS MUNICIPAIS');p.kv('Orçamento diário',money(welfare.policy.dailyBudget));p.kv('Pago hoje',money(welfare.spentToday));p.kv('Pago desde a fundação',money(welfare.totalPaid));p.kv('Piso por adulto',money(welfare.policy.householdFloor));
+    },false);
+    this.section(p,'financeBenefits','Benefícios municipais',()=>{
+    p.kv('Orçamento diário',money(welfare.policy.dailyBudget));p.kv('Pago hoje',money(welfare.spentToday));p.kv('Pago desde a fundação',money(welfare.totalPaid));p.kv('Piso por adulto',money(welfare.policy.householdFloor));
     p.buttons([{label:welfare.policy.enabled?'PAUSAR BENEFÍCIOS':'ATIVAR BENEFÍCIOS',click:()=>this.policyAction('Programa de benefícios alterado.',()=>{welfare.policy.enabled=!welfare.policy.enabled;})},{label:'ORÇAMENTO +R$ 100',click:()=>this.policyAction('Orçamento de benefícios ampliado.',()=>{welfare.policy.dailyBudget+=10000;})},{label:'ORÇAMENTO -R$ 100',click:()=>this.policyAction('Orçamento de benefícios reduzido.',()=>{welfare.policy.dailyBudget=Math.max(0,welfare.policy.dailyBudget-10000);})}]);
     p.note('Benefícios consideram saldo, poupança e dependentes; têm teto diário e preservam a reserva do tesouro. Cidadãos com renda podem buscar crédito antes de recorrer ao benefício.');
     p.note('A casa da moeda deposita a emissão no tesouro. A expansão monetária eleva gradualmente os preços. Dinheiro guardado e contratos já reservados mantêm seu valor nominal.');
-    p.heading('EVOLUÇÃO ECONÔMICA');p.table([{label:'Dia'},{label:'Inflação'},{label:'Poupança'},{label:'Crédito'}],currency.history.slice(-10).reverse().map(h=>({cells:[h.day,`${(h.inflation*100).toFixed(2)}%`,money(h.savings||0),money(h.credit||0)]})));
+    },false);
+    this.section(p,'financeHistory','Histórico monetário',()=>{p.table([{label:'Dia'},{label:'Inflação'},{label:'Poupança'},{label:'Crédito'}],currency.history.slice(-10).reverse().map(h=>({cells:[h.day,`${(h.inflation*100).toFixed(2)}%`,money(h.savings||0),money(h.credit||0)]})));},false);
     if(mint)p.button('ABRIR CASA DA MOEDA',()=>this.openBuilding(mint.id));
   }
   government(p) {
@@ -601,7 +610,9 @@ export class CityUI {
     } else {
       p.heading('MOVIMENTAÇÕES DE MERCADORIAS');
       const kinds={dispatch:'Carga reservada',delivery:'Entrega',mining:'Extração',construction:'Construção',road:'Estrada',expansion:'Ampliação','workplace-meal':'Refeição da empresa',waste:'Lixo gerado','recycling-input':'Processamento','recycling-output':'Pedra reciclada',consumption:'Consumo',sowing:'Plantio',harvest:'Colheita','recipe-input':'Insumo',baking:'Panificação'};
-      for(const l of city.economy.goodsLedger.slice(-60).reverse().filter(l=>this.matches(`${GOODS[l.good]?.label} ${kinds[l.kind]||l.kind}`))){p.heading(`${GOODS[l.good]?.label||l.good} x${l.quantity}`,C.cyan);p.note(`${stamp(l.minute)} / ${kinds[l.kind]||l.kind}`);const origin=city.building(l.from),target=city.building(l.to)||city.society.citizen(l.to);p.note(`${origin?name(origin.entity):'Produção'} > ${target?name(target.entity):'Consumo ou transformação'}`);}
+      const rows=city.economy.goodsLedger.slice(-100).reverse().filter(l=>this.matches(`${GOODS[l.good]?.label} ${kinds[l.kind]||l.kind} ${name(city.building(l.from)?.entity)} ${name(city.building(l.to)?.entity)}`));
+      p.metrics([['MOVIMENTAÇÕES',rows.length],['JANELA',`${Math.min(100,city.economy.goodsLedger.length)} mais recentes`]]);
+      p.table([{label:'Quando'},{label:'Mercadoria',weight:1.6},{label:'Etapa',weight:1.3},{label:'Origem → destino',weight:2}],rows.map(l=>{const origin=city.building(l.from),target=city.building(l.to)||city.society.citizen(l.to);return{cells:[stamp(l.minute),`${GOODS[l.good]?.label||l.good} × ${l.quantity}`,kinds[l.kind]||l.kind,`${origin?name(origin.entity):'Produção'} → ${target?name(target.entity):'Consumo / transformação'}`],click:()=>{const building=city.building(l.to)||origin;if(building)this.openBuilding(building.id);}};}),{empty:'Nenhuma movimentação de mercadoria encontrada.'});
     }
   }
   land(p) {

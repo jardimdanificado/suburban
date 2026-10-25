@@ -25,9 +25,10 @@ const numeric=v=>typeof v==='number'||/^-?R\$|^-?\d+[%,]/.test(String(v));
 /** Compact layouts with bounded text caches and viewport-only row rendering. */
 export class UIPage {
   constructor(ui,x,y,w,top,bottom){Object.assign(this,{ui,x,y,w,top,bottom});}
+  touch(){return (this.ui.width||0)<700;}
   space(h=4){this.y+=h;}
   visible(h){return this.y+h>this.top&&this.y<this.bottom;}
-  heading(value,color=T.ink){this.space(3);if(this.visible(16)){this.ui.text(fit(this.ui,value,this.w),this.x,this.y,color===T.gold?T.ink:color);this.ui.ctx.fillStyle=T.line;this.ui.ctx.fillRect(this.x,this.y+14,this.w,1);}this.y+=19;}
+  heading(value,color=T.ink){this.space(5);if(this.visible(18)){this.ui.ctx.fillStyle=color===T.gold?T.gold:color;this.ui.ctx.fillRect(this.x,this.y+1,3,15);this.ui.text(fit(this.ui,value,this.w-10),this.x+8,this.y,color===T.gold?T.ink:color);this.ui.ctx.fillStyle=T.line;this.ui.ctx.fillRect(this.x,this.y+17,this.w,1);}this.y+=22;}
   line(value,color=T.muted){if(this.visible(14))this.ui.text(value,this.x,this.y,color);this.y+=14;}
   note(value,color=T.muted){const lines=wrapped(this.ui,value,this.w),start=this.y;const first=Math.max(0,Math.floor((this.top-start)/14)),last=Math.min(lines.length,Math.ceil((this.bottom-start)/14));for(let i=first;i<last;i++)this.ui.text(lines[i],this.x,start+i*14,color);this.y=start+lines.length*14+2;}
   block(title,subtitle,draw){
@@ -39,24 +40,24 @@ export class UIPage {
     this.y=end+12;
   }
   kv(label,value){
-    const text=String(value??''),wide=widthOf(this.ui,text)>this.w*.64,lines=wide?wrapped(this.ui,text,this.w-4):null,h=wide?18+lines.length*14:18;
+    const text=String(value??''),wide=widthOf(this.ui,text)>this.w*.64,lines=wide?wrapped(this.ui,text,this.w-4):null,h=wide?20+lines.length*14:20;
     if(this.visible(h)){
       const valueWidth=Math.min(this.w*.64,widthOf(this.ui,text)),labelWidth=wide?this.w:this.w-valueWidth-10;
       this.ui.text(fit(this.ui,label,labelWidth),this.x+2,this.y+2,T.muted);
-      if(wide){for(let i=0;i<lines.length;i++)if(this.y+16+i*14>=this.top-14&&this.y+16+i*14<this.bottom)this.ui.text(lines[i],this.x+2,this.y+16+i*14,T.ink);}
-      else this.ui.text(text,this.x+this.w-valueWidth-2,this.y+2,T.ink);
+      if(wide){for(let i=0;i<lines.length;i++)if(this.y+17+i*14>=this.top-14&&this.y+17+i*14<this.bottom)this.ui.text(lines[i],this.x+2,this.y+17+i*14,T.ink);}
+      else this.ui.text(text,this.x+this.w-valueWidth-2,this.y+3,T.ink);
       this.ui.ctx.fillStyle=T.line;this.ui.ctx.fillRect(this.x,this.y+h-1,this.w,1);
       this.ui.regions.push({x:this.x,y:this.y,w:this.w,h,label:`${label}: ${text}`,onClick:null});
     }this.y+=h;
   }
-  button(label,click,selected=false){if(this.visible(20))this.ui.button(this.x,this.y,this.w,20,fit(this.ui,label,this.w-12),click,{selected});this.y+=23;}
-  buttons(items){let dx=0;for(const item of items){const w=Math.min(this.w,Math.ceil(widthOf(this.ui,item.label))+14);if(dx&&dx+w>this.w){dx=0;this.y+=23;}if(this.visible(20))this.ui.button(this.x+dx,this.y,w,20,fit(this.ui,item.label,w-10),item.click,{selected:item.selected});dx+=w+3;}this.y+=23;}
+  button(label,click,selected=false){const h=this.touch()?27:20,gap=this.touch()?5:3;if(this.visible(h))this.ui.button(this.x,this.y,this.w,h,fit(this.ui,label,this.w-12),click,{selected});this.y+=h+gap;}
+  buttons(items){const h=this.touch()?27:20,gap=this.touch()?5:3,row=h+gap;let dx=0;for(const item of items){const w=Math.min(this.w,Math.ceil(widthOf(this.ui,item.label))+14);if(dx&&dx+w>this.w){dx=0;this.y+=row;}if(this.visible(h))this.ui.button(this.x+dx,this.y,w,h,fit(this.ui,item.label,w-10),item.click,{selected:item.selected});dx+=w+3;}this.y+=row;}
   // Related views stay visible as compact tabs inside their current window.
   links(items){
     if(!items.length)return;
     const state=this.ui.windowState;if(state?.host){state.windowLinks??=[];state.windowLinks.push(...items);}
     if(!items.some(item=>'selected' in item||'current' in item)){this.buttons(items);return;}
-    const rows=[[]],gap=2,rowHeight=24,tabHeight=22;let used=0;
+    const rows=[[]],gap=2,rowHeight=this.touch()?31:24,tabHeight=this.touch()?28:22;let used=0;
     for(const item of items){
       // Reserve bold text width for every state so selecting a tab never changes
       // its width or pushes the following labels into a different row.
@@ -108,20 +109,21 @@ export class UIPage {
     if(!rows.length){this.note(empty);return;}
     const total=columns.reduce((n,c)=>n+(c.weight||1),0),widths=columns.map(c=>Math.floor(this.w*(c.weight||1)/total));
     if(this.w<300||Math.min(...widths)<48){
-      const height=24+(columns.length-1)*14;
+      const height=(this.touch()?31:27)+(columns.length-1)*(this.touch()?17:15);
       this.rows(rows,row=>{
         if(!this.visible(height))return;
         const ctx=this.ui.ctx;ctx.fillStyle=row.selected?T.selected:T.row;ctx.fillRect(this.x,this.y,this.w,height-3);
-        this.ui.text(fit(this.ui,row.cells[0],this.w-12),this.x+6,this.y+3,row.color||T.ink);
+        this.ui.text(fit(this.ui,row.cells[0],this.w-12),this.x+6,this.y+4,row.color||T.ink);
         for(let j=1;j<columns.length;j++){
           const label=fit(this.ui,columns[j].label,this.w*.42-8),value=fit(this.ui,row.cells[j],this.w*.58-12);
-          this.ui.text(label,this.x+6,this.y+20+(j-1)*14,T.muted);this.ui.text(value,this.x+this.w-widthOf(this.ui,value)-6,this.y+20+(j-1)*14,T.ink);
+          this.ui.text(label,this.x+6,this.y+(this.touch()?25:21)+(j-1)*(this.touch()?17:15),T.muted);this.ui.text(value,this.x+this.w-widthOf(this.ui,value)-6,this.y+(this.touch()?25:21)+(j-1)*(this.touch()?17:15),T.ink);
         }
         this.ui.regions.push({x:this.x,y:this.y,w:this.w,h:height-3,label:row.cells.map((v,j)=>`${columns[j]?.label}: ${v}`).join(' · '),onClick:row.click});
       },height);this.space(3);return;
     }
-    if(this.visible(19)){this.ui.ctx.fillStyle=T.face;this.ui.ctx.fillRect(this.x,this.y,this.w,19);let x=this.x;columns.forEach((c,i)=>{this.ui.text(fit(this.ui,c.label,widths[i]-12),x+6,this.y+3,T.ink);x+=widths[i];});}this.y+=20;
-    this.rows(rows,(row,i)=>{if(this.visible(19)){const ctx=this.ui.ctx;ctx.fillStyle=row.selected?T.selected:i%2?T.row:T.paper;ctx.fillRect(this.x,this.y,this.w,19);let x=this.x;row.cells.forEach((value,j)=>{const text=fit(this.ui,value,widths[j]-12),px=numeric(value)?x+widths[j]-widthOf(this.ui,text)-6:x+6;this.ui.text(text,px,this.y+3,row.color||T.ink);x+=widths[j];});this.ui.regions.push({x:this.x,y:this.y,w:this.w,h:19,label:row.cells.map((v,j)=>`${columns[j]?.label}: ${v}`).join(' · '),onClick:row.click});}},19);this.space(3);
+    const rowHeight=this.touch()?27:21,headerHeight=this.touch()?25:22;
+    if(this.visible(headerHeight)){this.ui.ctx.fillStyle=T.face;this.ui.ctx.fillRect(this.x,this.y,this.w,headerHeight);let x=this.x;columns.forEach((c,i)=>{this.ui.text(fit(this.ui,c.label,widths[i]-12),x+6,this.y+(this.touch()?6:4),T.ink);x+=widths[i];});}this.y+=headerHeight;
+    this.rows(rows,(row,i)=>{if(this.visible(rowHeight)){const ctx=this.ui.ctx;ctx.fillStyle=row.selected?T.selected:i%2?T.row:T.paper;ctx.fillRect(this.x,this.y,this.w,rowHeight);let x=this.x;row.cells.forEach((value,j)=>{const text=fit(this.ui,value,widths[j]-12),px=numeric(value)?x+widths[j]-widthOf(this.ui,text)-6:x+6;this.ui.text(text,px,this.y+(this.touch()?7:4),row.color||T.ink);x+=widths[j];});this.ui.regions.push({x:this.x,y:this.y,w:this.w,h:rowHeight,label:row.cells.map((v,j)=>`${columns[j]?.label}: ${v}`).join(' · '),onClick:row.click});}},rowHeight);this.space(4);
   }
   disclosure(label,open,click){this.button(`${open?'−':'+'} ${label}`,click,open);}
 }
