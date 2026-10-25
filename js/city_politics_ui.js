@@ -1,3 +1,4 @@
+import {renderInterventions} from './city_interventions_ui.js';
 import {renderResearchDirectory,renderResearchProgress,renderPollMethod} from './city_research_ui.js';
 import {POLITICS_SECTIONS,POLITICS_GROUPS} from './city_ui_sections.js';
 import {renderPartyOrganization} from './city_party_organization_ui.js';
@@ -36,8 +37,9 @@ export function renderPolitics(ui,p) {
   if(!ui.billId)p.heading(POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'GOVERNO, CÂMARA E ELEIÇÕES');
   if(tab==='directory'&&ui.host){p.meter('Aprovação do governo',gov.approval);p.kv(gov.isProvisionalMayor()?'Prefeito provisório':'Prefeito',city.accountName(`citizen:${city.economy.mayorId}`));p.kv('Vereadores',`${gov.council.members.length}/${gov.council.seats}`);p.kv('Partidos ativos',gov.parties.filter(p=>p.active).length);return;}
   if(tab==='directory'){
-    for(const [label,ids] of [['GESTÃO',['overview','approval','promises']],['INSTITUIÇÕES',['parties','council']],['ELEIÇÕES',['campaign','polls','institutes','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.windowLink(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
+    for(const [label,ids] of [['GESTÃO',['overview','approval','promises','interventions']],['INSTITUIÇÕES',['parties','council']],['ELEIÇÕES',['campaign','polls','institutes','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.windowLink(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
   }
+  if(tab==='interventions'){renderInterventions(ui,p);return;}
   if(tab==='institutes'){renderResearchDirectory(ui,p);return;}
   if(tab==='approval'){
     const view=ui.approvalView||'summary';p.links([['summary','RESUMO'],['changes','DESDE A POSSE'],['promise','PROMESSA'],['conditions','CONDIÇÕES E PENALIDADES']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({approvalView:id})})));

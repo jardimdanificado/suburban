@@ -315,6 +315,7 @@ export class CityUI {
       this.socialMemories(p,c);
     } else if (this.detailTab === 'politics') {
       renderCitizenPolitics(this,p,c);
+      p.windowLink('INTERVIR NA IMAGEM E NA CAMPANHA',()=>this.openPanel({tab:'government',views:{government:'elections'},politicsTab:'interventions',interventionTargetId:c.id,interventionView:'opinion'}));
       if(city.politics.canRun(c,'mayor',true)){p.buttons([{label:'PESQUISAR PRIORIDADES PARA PROMESSAS',click:()=>city.politics.getResearch().commissionService(c.accountId,'public-priorities',c.id)},{label:'PESQUISAR MINHA APROVAÇÃO',click:()=>city.politics.getResearch().commissionService(c.accountId,'candidate-potential',c.id)}]);}
     } else {
       p.heading('CONTA PESSOAL'); p.kv('Dinheiro disponível', money(c.balance)); p.kv('Salário líquido hoje', money(c.salaryToday));p.kv('Complemento municipal hoje',money(c.wageSubsidyToday||0));p.kv('Complementos recebidos',money(c.wageSubsidyTotal||0));if(c.wageSubsidyUnpaidToday)p.kv('Complemento não pago por falta de caixa',money(c.wageSubsidyUnpaidToday));p.kv('Benefícios recebidos',money(c.benefitsReceived||0));p.kv('Poupança total',money(city.bank.savings(c.accountId)));
@@ -574,7 +575,7 @@ export class CityUI {
     if(view==='elections'){this.electionsPanel(p);return;}
     if(view==='overview'){
       renderGovernmentDashboard(this,p);
-      if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas','polls'],['Institutos de pesquisa','institutes'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
+      if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview'],['Intervenções','interventions']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas','polls'],['Institutos de pesquisa','institutes'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
       if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,this.cachedList(`municipal-contracts:${this.contractPlotId||'all'}`,()=>city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice().sort((a,b)=>Number(a.cancelled||a.status==='completed')-Number(b.cancelled||b.status==='completed')||Number(b.status==='blocked')-Number(a.status==='blocked')||b.startedAt-a.startedAt)));}

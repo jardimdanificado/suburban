@@ -1,3 +1,4 @@
+import {syncCityActivityBadges} from './city_activity_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
@@ -36,6 +37,7 @@ function syncFastBuildings(renderer,THREE,buildings){
 // City geometry is built once per building; one instance is exactly one 1×1×1 space.
 export function syncCityBuildings(renderer, THREE, entities, world) {
   syncCampaignDecorations(renderer,THREE,entities,world);
+  syncCityActivityBadges(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
   const map = world.map;
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||

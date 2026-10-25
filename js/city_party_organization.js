@@ -115,7 +115,7 @@ export class CityPartyOrganization {
       const candidates=party.memberIds.map(id=>city.society.citizen(id)).filter(c=>c&&city.society.isAdult(c)&&!p.officeHolder(c)&&!c.campaign&&!c.conversation&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.workMeal&&!city.urgentNeed(c)&&[null,'social','leisure'].includes(c.task)&&c.political.loyalty>.4).sort((a,b)=>(b.skills.social||0)-(a.skills.social||0));
       const c=candidates[0];if(!c)continue;const destination=roads.find(point=>Math.hypot(point.x-c.entity.x,point.y-c.entity.y)<=18);if(!destination)continue;
       if(routes++>=2)break;const path=city.findPath(c.entity,destination);if(path===null)continue;
-      c.path=path;c.task='campaign';c.campaign={type:'membership',partyId:party.id,flag:(c.campaignInventory?.bandeiras||0)>0?party.flag:null,until:Math.min(window.until,city.minute+120),destination};c.action=`Indo divulgar ${party.short} na rua`;
+      c.path=path;c.task='campaign';c.campaign={type:'membership',partyId:party.id,partyNumber:party.number,partyFlag:party.flag,flag:(c.campaignInventory?.bandeiras||0)>0?party.flag:null,until:Math.min(window.until,city.minute+120),destination};c.action=`Indo divulgar ${party.short} na rua`;
     }
   }
   hourly(){

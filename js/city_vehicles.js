@@ -21,6 +21,10 @@ const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),1
 /** Vehicles, component provenance, actual trips, fuel deliveries and services. */
 export class CityVehicles {
   constructor(city){this.city=city;this.air=new CityAirTraffic(city);this.units=new Map();this.models=new Map();this.batches=[];this.lines=[];this.nextId=1;this.nextModelId=1;this.nextBatchId=1;this.lastHour=null;this.activeCount=0;this.stats={distance:0,passengers:0,fares:0,fuel:0,repairs:0};}
+  productionStatus(){
+    const city=this.city,types=['iron_mine','coal_mine','steel_mill','aluminum_smelter','sawmill','glassworks','weaving','engine_factory','chassis_factory','bodyworks','tire_factory','transmission_factory','automotive_glass','upholstery','automaker','carriage_builder','dealership','fuel_station'];
+    return types.filter(type=>city.buildingTypes[type]).map(type=>{const firms=city.economy.businesses.filter(b=>b.type===type&&b.active&&!b.entity.destroyed),projects=city.development.projects.filter(p=>p.type===type&&!p.cancelled&&p.status!=='completed'),spec=city.buildingTypes[type];return{type,label:spec.label,active:firms.length,planned:projects.length,workers:firms.reduce((n,b)=>n+b.workers.length,0),missing:firms.flatMap(b=>{const plan=this.recipeFor(b),inputs=plan?.inputs||spec.inputs||{};return Object.entries(inputs).filter(([good,q])=>(b.inventory[good]||0)<q*(plan?.size||1)).map(([good])=>city.economy.goods[good]?.label||good);}).filter((s,i,a)=>a.indexOf(s)===i),buildingId:firms[0]?.id};});
+  }
   recipeFor(b){
     if(b.type==='carriage_builder')return {inputs:VEHICLE_RECIPES.carruagem,good:'carruagem',size:1};
     if(b.type!=='automaker')return null;

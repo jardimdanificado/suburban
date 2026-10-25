@@ -1,3 +1,4 @@
+import {activityBadge,activityBadgeCanvas,activityBadgeKey} from './city_activity_badges.js';
 // =============================================================================
 // Brutopolis - Ultra Fast Direct Buffer Canvas 2D Visual Renderer
 // =============================================================================
@@ -604,7 +605,7 @@ export class Renderer {
     }
 
     // 4. Render Dropped Items & Entities (Fast Viewport Culling)
-    const emoteTextures = getEmoteTextures(),campaignPosters=[];
+    const emoteTextures = getEmoteTextures(),campaignPosters=[],activityMarkers=[];
 
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
@@ -658,6 +659,7 @@ export class Renderer {
         if(this.selectedEntityId===e.id)drawBoxOutline32(buf32,width,height,sx,sy,Math.floor(tileSize),Math.floor(tileSize),rgba32(248,220,120));
         continue;
       }
+      const badge=activityBadge(e.properties?.citizen);if(badge)activityMarkers.push({badge,x:sx+tileSize*.5,y:sy-4});
       const campaign=e.properties?.citizen?.campaign;
       if(campaign?.type==='canvass'&&!campaign.flag&&e.properties.citizen.task==='campaign'&&!e.properties.citizen.path.length){const size=Math.max(5,Math.floor(tileSize*.65)),color=hexToRgba32(parseInt((campaign.speechColor||'#eeeeee').slice(1),16),255);drawBox32(buf32,width,height,Math.floor(sx),Math.floor(sy-size),size,size,color);drawBox32(buf32,width,height,Math.floor(sx+size*.2),Math.floor(sy),2,2,color);}
       if(campaign?.flag && e.properties.citizen.task==='campaign') {
@@ -931,6 +933,7 @@ export class Renderer {
 
     // 6. Blit final 32-bit buffer straight to Canvas in 1 call (60 FPS even on Zoomout)
     this.ctx.putImageData(this.imageData, 0, 0);
+    this.cityActivityCanvases??=new Map();for(const marker of activityMarkers){const key=activityBadgeKey(marker.badge);let canvas=this.cityActivityCanvases.get(key);if(!canvas){canvas=activityBadgeCanvas(marker.badge);this.cityActivityCanvases.set(key,canvas);}const size=Math.max(13,Math.min(26,tileSize*1.1));this.ctx.drawImage(canvas,marker.x-size/2,marker.y-size,size,size);}if(this.cityActivityCanvases.size>64){const used=new Set(activityMarkers.map(m=>activityBadgeKey(m.badge)));for(const key of this.cityActivityCanvases.keys())if(!used.has(key))this.cityActivityCanvases.delete(key);}
     if(campaignPosters.length){const ctx=this.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='top';for(const poster of campaignPosters){const {d,x,y,w,h}=poster;ctx.fillStyle=d.flag.foreground;ctx.font=`bold ${Math.max(7,Math.min(14,h*.55))}px sans-serif`;ctx.fillText(String(d.partyNumber),x+w/2,y+1,w-2);if(d.kind==='banner'&&h>=12){ctx.font=`${Math.max(6,Math.min(10,h*.35))}px sans-serif`;ctx.fillText(d.candidateName,x+w/2,y+h*.6,w-2);}}ctx.restore();}
   }
 
