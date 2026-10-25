@@ -88,8 +88,13 @@ export class CityAirTraffic {
     city.log(`Acidente aéreo: veículos ${a.id} e ${b.id}, ${record.injured} feridos. Pouso de emergência solicitado.`,'city',people,{kind:'air-accident',airAccidentId:record.id,vehicleIds:record.vehicleIds,x:point.x,y:point.y,altitude:point.z});
   }
   update(dt){
-    const system=this.city.vehicles,units=[...system.units.values()].filter(v=>v.active&&!v.scrapped),flying=units.filter(v=>v.journey),bins=new Map(),accepted=new Map();
+    const system=this.city.vehicles,units=[],flying=[];
+    for(const v of system.units.values())if(v.active&&!v.scrapped){units.push(v);if(v.journey)flying.push(v);}
     this.stats.airborne=0;this.stats.holding=0;
+    // Parked fleets are common. Avoid rebuilding spatial bins and collision
+    // proposals on every render frame when there is no aircraft to move.
+    if(!flying.length)return;
+    const bins=new Map(),accepted=new Map();
     const add=v=>{const k=id(v.x,v.y);if(!bins.has(k))bins.set(k,[]);bins.get(k).push(v);};
     for(const v of units){v.altitude??=ground(this.city,v);add(v);}
     const neighbors=v=>{const result=[],x=Math.floor(v.x/16),y=Math.floor(v.y/16);for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)result.push(...(bins.get(`${x+dx},${y+dy}`)||[]));return result;};

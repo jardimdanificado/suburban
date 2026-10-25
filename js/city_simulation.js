@@ -607,7 +607,8 @@ export class CitySimulation {
     const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
     for (const c of this.citizens) {
       const n = c.needs;
-      c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
+      const age=this.society.age(c);
+      if(c._renderAge!==age){c._renderAge=age;c.entity.properties.render.size=age<6?.55:age>=18?1:.8;}
       // These fixed fields are the hottest loop; direct access avoids temporary
       // iterators and dynamic property lookups for every resident and city minute.
       n.food=clamp(n.food-.065);n.water=clamp(n.water-.09);n.energy=clamp(n.energy-.055);
@@ -671,7 +672,6 @@ export class CitySimulation {
         }
         c.action = c.deliveryId ? 'Transportando mercadorias' : c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
-      syncCitizenInterior(this,c);
     }
     this.vehicles.update(dt);
   }

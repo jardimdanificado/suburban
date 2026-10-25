@@ -17,7 +17,13 @@ export class CitySociety {
     const c = this.city.accounts.get(`citizen:${id}`);
     return c && c.id === id && c.entity && !c.entity.destroyed ? c : undefined;
   }
-  age(c) { return c.initialAge + Math.floor((this.city.minute - c.bornAt) / (1440 * SOCIAL_RULES.daysPerYear)); }
+  age(c) {
+    if(c._ageValue==null||this.city.minute>=c._nextBirthdayAt||this.city.minute<c.bornAt){
+      c._ageValue=c.initialAge+Math.floor((this.city.minute-c.bornAt)/(1440*SOCIAL_RULES.daysPerYear));
+      c._nextBirthdayAt=c.bornAt+(c._ageValue-c.initialAge+1)*1440*SOCIAL_RULES.daysPerYear;
+    }
+    return c._ageValue;
+  }
   isAdult(c) { return this.age(c) >= 18; }
   initializeCitizen(c, options = {}) {
     const { age = 20 + Math.floor(this.city.random() * 24), parentIds = [] } = options;

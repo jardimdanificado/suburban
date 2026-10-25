@@ -152,14 +152,17 @@ export class CityVehicles {
   }
   hourly(){
     const city=this.city,hour=Math.floor(city.minute/60);if(this.lastHour===hour)return;this.lastHour=hour;
-    const firms=city.economy.businesses;
+    const firms=city.economy.businesses,allUnits=[...this.units.values()],activeByOwner=new Map(),activeOwners=new Set(),dealerAccounts=new Set();
+    for(const b of city.buildings)if(b.type==='dealership')dealerAccounts.add(b.accountId);
+    for(const v of allUnits)if(v.active&&!v.scrapped){activeOwners.add(v.ownerAccountId);activeByOwner.set(v.ownerAccountId,(activeByOwner.get(v.ownerAccountId)||0)+1);}
+    const unsoldVehicles=allUnits.filter(v=>!v.active&&!v.scrapped);
     for(const b of firms.filter(b=>['carrier','bus_operator'].includes(b.type))){
-      const kind=b.type==='bus_operator'?'onibus':'caminhao',owned=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&v.ownerAccountId===b.accountId);
-      if(owned.length<Math.max(1,Math.ceil(b.workers.length/3))){const v=[...this.units.values()].find(v=>!v.active&&!v.scrapped&&v.good===kind&&city.buildings.some(d=>d.type==='dealership'&&d.accountId===v.holderAccountId));if(v&&this.financeVehicle(b,v))this.buyVehicle(b.accountId,v.id);}
+      const kind=b.type==='bus_operator'?'onibus':'caminhao';
+      if((activeByOwner.get(b.accountId)||0)<Math.max(1,Math.ceil(b.workers.length/3))){const v=unsoldVehicles.find(v=>v.good===kind&&dealerAccounts.has(v.holderAccountId));if(v&&this.financeVehicle(b,v)&&this.buyVehicle(b.accountId,v.id)){activeOwners.add(b.accountId);activeByOwner.set(b.accountId,(activeByOwner.get(b.accountId)||0)+1);}}
     }
-    const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.balance>city.economy.goods.carro.price+city.currency.price(60000)&&![...this.units.values()].some(v=>v.active&&v.ownerAccountId===c.accountId));
-    for(const c of buyers.slice(0,3)){const units=[...this.units.values()].filter(v=>!v.active&&!v.scrapped&&['carro','carruagem'].includes(v.good));units.sort((a,b)=>Math.abs((hash(`${c.id}:${a.manufacturerId}`)%100)-70)-Math.abs((hash(`${c.id}:${b.manufacturerId}`)%100)-70));for(const v of units)if(this.buyVehicle(c.accountId,v.id))break;}
-    for(const v of this.units.values())if(v.active&&!v.scrapped){
+    const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.balance>city.economy.goods.carro.price+city.currency.price(60000)&&!activeOwners.has(c.accountId));
+    for(const c of buyers.slice(0,3)){const candidates=unsoldVehicles.filter(v=>['carro','carruagem'].includes(v.good));candidates.sort((a,b)=>Math.abs((hash(`${c.id}:${a.manufacturerId}`)%100)-70)-Math.abs((hash(`${c.id}:${b.manufacturerId}`)%100)-70));for(const v of candidates)if(this.buyVehicle(c.accountId,v.id)){activeOwners.add(c.accountId);break;}}
+    for(const v of allUnits)if(v.active&&!v.scrapped){
       if(!v.journey){v.fuelStore.door=v.parking||this.groundAccess(v);if(v.fuelStore.inventory[v.fuelGood]+(v.fuelStore.incoming[v.fuelGood]||0)<2&&v.fuel<VEHICLE_SPECS[v.good].range){
         const suppliers=firms.filter(b=>b.type==='fuel_station'&&b.inventory.oleo>0).sort((a,b)=>Math.hypot(a.door.x-v.x,a.door.y-v.y)-Math.hypot(b.door.x-v.x,b.door.y-v.y));
         for(const shop of suppliers){if(city.logistics.order(shop,v.fuelStore,v.fuelGood,Math.min(2,shop.inventory[v.fuelGood],inventoryFree(v.fuelStore)),Math.ceil(city.economy.goods[v.fuelGood].price*1.35),{purpose:'vehicle-fuel'}))break;}
