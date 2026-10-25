@@ -27,7 +27,10 @@ export class CityVehicles {
     let good=b.vehicleKind;
     if(!good){const units=[...this.units.values()].filter(v=>!v.scrapped),targets={carro:Math.max(2,this.city.citizens.length/60),caminhao:Math.max(1,this.city.economy.businesses.filter(b=>b.type==='carrier').length*1.5),onibus:Math.max(1,this.city.citizens.length/180)};
       good=Object.keys(targets).sort((a,b)=>units.filter(v=>v.good===a).length/targets[a]-units.filter(v=>v.good===b).length/targets[b])[0];}
-    return {inputs:VEHICLE_RECIPES[good],good,size:b.vehicleBatchSize||3};
+    // A new factory should be able to complete its first vehicle from one
+    // component set; requiring the default three-unit lot hid production for
+    // a long time while every upstream supplier was still ramping up.
+    return {inputs:VEHICLE_RECIPES[good],good,size:b.vehicleBatchSize||1};
   }
   configureAssembly(id,kind,size){
     const b=this.city.building(id);if(b?.type==='automaker'&&kind==='auto'&&!b.vehicleAssembly){b.vehicleKind=null;b.vehicleBatchSize=null;this.city.economy.updateDemand();return true;}if(!b||b.type!=='automaker'||!['carro','caminhao','onibus'].includes(kind)||!Number.isInteger(size)||size<1||size>12||b.vehicleAssembly)return this.city.fail('Escolha um lote de 1 a 12 veículos; conclua o lote atual antes de mudar.');
@@ -38,14 +41,14 @@ export class CityVehicles {
   coherentLots(b,good){const groups=new Map();for(const lot of b.componentLots?.[good]||[]){const id=JSON.stringify([lot.producerId,lot.design]),old=groups.get(id);if(old)old.quantity+=lot.quantity;else groups.set(id,{producerId:lot.producerId,design:lot.design,quantity:lot.quantity});}if(!groups.size&&b.inventory[good]>0)groups.set('legacy',{producerId:'origem não identificada',design:1,quantity:b.inventory[good]});return [...groups.values()].sort((a,b)=>b.quantity-a.quantity);}
   revisePart(id){const b=this.city.building(id);if(!b||!Object.keys(this.city.buildingTypes[b.type]?.outputs||{}).some(g=>parts.has(g)))return false;b.partDesign=(b.partDesign||1)+1;return true;}
   produced(b,outputs){for(const [good,quantity]of Object.entries(outputs)){if(parts.has(good)){b.componentLots??={};(b.componentLots[good]??=[]).push({producerId:b.id,design:b.partDesign||1,quantity});}if(VEHICLE_SPECS[good])this.registerUnits(b,good,quantity);}}
-  loseStock(holder,good,quantity){if(VEHICLE_SPECS[good])for(const v of [...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.good===good&&v.holderAccountId===holder.accountId).slice(0,quantity)){v.scrapped=true;v.holderAccountId=null;}if(parts.has(good))this.discardComponents(holder,good,quantity);}
+  loseStock(holder,good,quantity){if(VEHICLE_SPECS[good])for(const v of [...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.good===good&&v.holderAccountId===holder.accountId).slice(0,quantity)){v.scrapped=true;v.holderAccountId=null;if(v.entity)v.entity.destroyed=true;}if(parts.has(good))this.discardComponents(holder,good,quantity);}
   moveStock(from,to,good,quantity){
     if(parts.has(good)){
       from.componentLots??={};to.componentLots??={};const source=from.componentLots[good]??=[],target=to.componentLots[good]??=[];let remaining=quantity;
       while(remaining>0&&source.length){const lot=source[0],take=Math.min(remaining,lot.quantity);target.push({...lot,quantity:take});lot.quantity-=take;remaining-=take;if(!lot.quantity)source.shift();}
       if(remaining)target.push({producerId:from.entity?.id??from.id,design:from.partDesign||1,quantity:remaining});
     }
-    if(VEHICLE_SPECS[good])for(const v of [...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.good===good&&v.holderAccountId===from.accountId).slice(0,quantity)){v.holderAccountId=to.accountId;v.ownerAccountId=to.accountId;}
+    if(VEHICLE_SPECS[good])for(const v of [...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.good===good&&v.holderAccountId===from.accountId).slice(0,quantity)){v.holderAccountId=to.accountId;v.ownerAccountId=to.accountId;this.placeDisplay(v,to);}
   }
   takeComponents(b,recipe,quantity){
     const bill=[];b.componentLots??={};
@@ -78,7 +81,16 @@ export class CityVehicles {
   registerUnits(b,good,quantity,modelId=null,batchId=null){
     if(!VEHICLE_SPECS[good])return;
     if(modelId==null){const signature=`${b.id}:${good}:${b.partDesign||1}`,existing=this.models.get(signature);let model=existing;if(!model){model={id:this.nextModelId++,signature,kind:good,manufacturerId:b.id,brand:b.entity.properties.name,name:`${VEHICLE_SPECS[good].label} ${b.partDesign||1}`,components:Object.entries(VEHICLE_RECIPES[good]).map(([good,quantity])=>({good,quantity,producerId:b.id,design:1})),createdAt:this.city.minute};this.models.set(signature,model);}modelId=model.id;}
-    for(let i=0;i<quantity;i++){const id=this.nextId++;this.units.set(id,{id,good,modelId,batchId,manufacturerId:b.id,holderAccountId:b.accountId,ownerAccountId:b.accountId,active:false,scrapped:false,condition:100,fuel:0,distance:0,passengerIds:[],driverId:null,journey:null});}
+    for(let i=0;i<quantity;i++){const id=this.nextId++,v={id,good,modelId,batchId,manufacturerId:b.id,holderAccountId:b.accountId,ownerAccountId:b.accountId,active:false,scrapped:false,condition:100,fuel:0,distance:0,passengerIds:[],driverId:null,journey:null};this.units.set(id,v);this.placeDisplay(v,b);}
+  }
+  placeDisplay(v,building){
+    if(!building?.door)return;
+    // Finished vehicles are visible while waiting for sale, so a working
+    // factory or dealership has an unmistakable in-world result.
+    if(v.entity)v.entity.destroyed=true;
+    const siblings=[...this.units.values()].filter(other=>other!==v&&!other.active&&!other.scrapped&&other.holderAccountId===building.accountId).length;
+    const x=building.door.x+(siblings%3-1)*1.1,y=building.door.y+Math.floor(siblings/3)*1.1;
+    v.entity=this.city.createEntity({x,y,properties:{name:`${this.model(v)?.brand} · ${this.model(v)?.name}`,cityVehicle:v,render:{color:0x52879a}}});
   }
   spec(v){return VEHICLE_SPECS[v.good];}
   landingAnchor(point,maxDistance=10){
@@ -109,6 +121,7 @@ export class CityVehicles {
   activate(v,account,building){
     const lane=this.landingAnchor(building.door,10,true);if(!lane)return false;const parking=this.parkingAt(lane,v.id,true);if(!parking)return false;
     v.active=true;this.activeCount++;v.ownerAccountId=account;v.holderAccountId=null;v.x=parking.x;v.y=parking.y;v.altitude=surfaceElevation(this.city.world,parking.x,parking.y);v.flightPhase='parked';
+    if(v.entity)v.entity.destroyed=true;
     v.parking=parking;v.entity=this.city.createEntity({x:parking.x,y:parking.y,properties:{name:`${this.model(v)?.brand} · ${this.model(v)?.name}`,cityVehicle:v,render:{color:0x52879a}}});
     const fuelGood='oleo';v.fuelGood=fuelGood;
     v.fuelStore={id:`vehicle-tank:${v.id}`,name:`Tanque do veículo ${v.id}`,type:'vehicle_tank',active:true,balance:0,totalRevenue:0,totalExpenses:0,ownerId:this.city.accounts.get(account)?.entity?.properties.citizen?.id??building.ownerId,accountId:account,door:this.groundAccess(lane)};
@@ -126,9 +139,11 @@ export class CityVehicles {
     city.log(`${city.accountName(buyerAccountId)} adquiriu ${model.brand} ${model.name}.`,'economy',[],{kind:'vehicle-purchased',vehicleId:v.id,modelId:v.modelId,accounts:[buyerAccountId,dealer.accountId],amount:price});return true;
   }
   financeVehicle(company,v){
-    const city=this.city,price=this.vehiclePrice(v),amount=Math.max(0,price+city.currency.price(40000)-company.balance);
+    const city=this.city,price=this.vehiclePrice(v),amount=Math.max(0,price-company.balance);
     if(!amount)return true;
-    if(!city.bank.policy.creditEnabled||amount>Math.floor(price*.9)||city.bank.loans.some(l=>l.clientId===company.accountId&&l.purpose==='vehicle'&&!['paid','written-off'].includes(l.status)))return false;
+    // The vehicle itself is collateral. Requiring an extra operating reserve
+    // on top of a 10% down payment made every new carrier ineligible.
+    if(!city.bank.policy.creditEnabled||amount>Math.floor(price*.98)||city.bank.loans.some(l=>l.clientId===company.accountId&&l.purpose==='vehicle'&&!['paid','written-off'].includes(l.status)))return false;
     for(const bank of city.bank.available()){
       const reserve=Math.max(city.currency.price(city.bank.policy.cashReserve),bank.workers.length*bank.wage*480);
       if(bank.balance<reserve+amount)continue;

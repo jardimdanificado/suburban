@@ -4,6 +4,11 @@ import {chooseBuildingSite} from './city_terrain.js';
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
 const inputs=(type)=>type==='bakery'?{trigo:2}:type==='mill'?{girassol:3}:INDUSTRIES[type]?.inputs||{};
+const vehicleFactories=new Set(['engine_factory','chassis_factory','bodyworks','tire_factory','transmission_factory','automotive_glass','upholstery','automaker']);
+const startupCapital=(city,economy,type)=>type==='dealership'
+  ? Math.ceil(['carro','caminhao','onibus','carruagem'].reduce((n,g)=>n+economy.goods[g].price,0)*3)+city.currency.price(100000)
+  : type==='bus_operator'?Math.ceil(economy.goods.onibus.price*3)+city.currency.price(100000)
+  : city.currency.price(type==='bank'?2000000:type==='research_institute'?100000:type==='automaker'?600000:vehicleFactories.has(type)?180000:60000);
 // Get the vehicle supply chain off the ground in dependency order. The long tail
 // of optional industries can still open later as the production queue clears.
 const rolloutPriority={
@@ -74,7 +79,7 @@ export function investProductionPlan(economy){
   // Existing unfunded sites must progress before commissioning replacement factories.
   for(const row of plan.filter(r=>r.planned)){
     const project=active.find(p=>p.id===row.projectId);if(!project||project.materialAccountId||!['building'].includes(project.service))continue;
-    const capital=city.currency.price(project.type==='bank'?2000000:project.type==='research_institute'?100000:60000),freight=city.currency.price(24000),amount=Math.max(0,project.stone-(project.inventory.pedra||0)-(project.incoming.pedra||0))*economy.goods.pedra.price+capital+freight,payer=city.accounts.get(project.accountId),reserve=project.accountId==='treasury'?needs.reserve:city.currency.price(15000);
+    const capital=startupCapital(city,economy,project.type),freight=city.currency.price(24000),amount=Math.max(0,project.stone-(project.inventory.pedra||0)-(project.incoming.pedra||0))*economy.goods.pedra.price+capital+freight,payer=city.accounts.get(project.accountId),reserve=project.accountId==='treasury'?needs.reserve:city.currency.price(15000);
     if(!payer)continue;
     let loan=null;if(payer.balance<amount+reserve&&payer.entity?.properties.citizen&&payer.creditAllowed!==false)for(const bank of city.bank.available()){loan=city.bank.lendForBusiness(bank,payer,amount+reserve-payer.balance,{type:project.type,crop:project.crop,initialChain:true,projectId:project.id,score:Math.max(60,row.score),budget:amount+reserve});if(loan)break;}
     if(payer.balance>=amount+reserve&&fundProject(economy,project,capital,freight)){project.priority=Math.max(project.priority||0,110);if(loan){loan.projectId=project.id;project.loanId=loan.id;}recordResponse(economy,row,'Obra pendente recuperada: materiais e operação financiados.',{projectId:project.id});return true;}
@@ -103,7 +108,7 @@ export function investProductionPlan(economy){
       selected={lot,width,depth,site,builder};break;
     }
     if(!selected){recordResponse(economy,row,accessPending?'Planejando acesso ao terreno.':'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
-    const {lot,width,depth,site,builder}=selected,stone=row.type==='farm'?0:width*depth*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=row.type==='dealership'?Math.ceil(['carro','caminhao','onibus','carruagem'].reduce((n,g)=>n+economy.goods[g].price,0)*3)+city.currency.price(100000):row.type==='bus_operator'?Math.ceil(economy.goods.onibus.price*3)+city.currency.price(100000):city.currency.price(row.type==='bank'?2000000:row.type==='research_institute'?100000:60000),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
+    const {lot,width,depth,site,builder}=selected,stone=row.type==='farm'?0:width*depth*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=startupCapital(city,economy,row.type),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
     const managementSkill=({farm:'agriculture',...Object.fromEntries(Object.entries(INDUSTRIES).map(([type,spec])=>[type,spec.skill]))})[row.type]||'management';
     const founders=founderPool.filter(c=>!assignedManagers.has(c.id)&&managerLoad(c)<3&&!city.development.projects.some(p=>pending(p)&&p.ownerId===c.id)).sort((a,b)=>managerLoad(a)-managerLoad(b)||((b.skills.management||0)*.45+(b.skills[managementSkill]||0)*.55+(b.skills.governance||0)*.15)-((a.skills.management||0)*.45+(a.skills[managementSkill]||0)*.55+(a.skills.governance||0)*.15)||Number(!!a.jobId)-Number(!!b.jobId)||b.balance-a.balance||a.id-b.id).slice(0,16);
     let project=null;
