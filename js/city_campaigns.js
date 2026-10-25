@@ -4,6 +4,15 @@ import { ROAD_TILES, tileAt } from './city_terrain.js';
 
 export class CityCampaigns {
   constructor(city){this.city=city;this.lastRallyHour=null;}
+  streetPoints(limit=48,origin=null){
+    const city=this.city,hour=Math.floor(city.minute/60);
+    if(this.trafficPointHour!==hour){this.trafficPointCache=[...city.traffic].sort((a,b)=>b[1]-a[1]).map(([key])=>{const [x,y]=key.split(',').map(Number);return {x:x+.5,y:y+.5};}).filter(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y))));this.trafficPointHour=hour;}
+    const traffic=this.trafficPointCache||[];
+    if(traffic.length){if(origin){const local=traffic.filter(p=>Math.hypot(p.x-origin.x,p.y-origin.y)<=60);if(local.length)return local.slice(0,limit);return traffic.slice().sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y)).slice(0,limit);}return traffic.slice(0,limit);}
+    const revision=city.world.revision??0;
+    if(this.roadPointRevision!==revision){const points=[];for(let y=0;y<city.world.height;y++)for(let x=0;x<city.world.width;x++)if(ROAD_TILES.has(tileAt(city.world,x,y)))points.push({x:x+.5,y:y+.5});this.roadPointCache=points;this.roadPointRevision=revision;}
+    const points=this.roadPointCache||[];return origin?points.slice().sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y)).slice(0,limit):points.slice(0,limit);
+  }
   getMaterials(){return this.materials??=new CityCampaignMaterials(this.city);}
   sample(rows,size){const pool=rows.slice();for(let i=0;i<Math.min(size,pool.length);i++){const j=i+Math.floor(this.city.random()*(pool.length-i));[pool[i],pool[j]]=[pool[j],pool[i]];}return pool.slice(0,size);}
   audience(size){const rows=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)),independent=rows.filter(c=>!c.political?.partyId),first=this.sample(independent,Math.ceil(size*.85)),selected=new Set(first.map(c=>c.id));return first.concat(this.sample(rows.filter(c=>!selected.has(c.id)),Math.max(0,size-first.length)));}
@@ -54,16 +63,18 @@ export class CityCampaigns {
     const essentialWork=new Set(['farm','bakery','kitchen','popular_refectory','builder','quarry','carrier','utility','clinic','mill','cleaner','waste_collector']);
     const candidates=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!p.officeHolder(c)&&!c.campaign&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!essential.has(c.task)&&!city.urgentNeed(c)&&Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)>35&&(!['work','manage'].includes(c.task)||!essentialWork.has(city.building(c.jobId)?.type)&&!c.businessIds.some(id=>essentialWork.has(city.building(id)?.type)))&&p.distance(c.political?.ideology||party.ideology,party.ideology)<1.7);
     candidates.sort((a,b)=>Number(b.political?.partyId===party.id)-Number(a.political?.partyId===party.id)+(b.skills.social-a.skills.social)/300);
-    const points=[...city.traffic].sort((a,b)=>b[1]-a[1]).map(([k])=>{const [x,y]=k.split(',').map(Number);return {x:x+.5,y:y+.5};}).filter(t=>ROAD_TILES.has(tileAt(city.world,Math.floor(t.x),Math.floor(t.y)))).slice(0,48);
+    const points=this.streetPoints(1);
     if(!points.length)return;
     for(const c of candidates.slice(0,8)){
-      const dest=points[(party.id*7+active*11+Math.floor(city.minute/120))%points.length],path=city.findPath(c.entity,dest);if(path===null)continue;
+      const localPoints=this.streetPoints(12,c.entity);let dest,path;
+      for(let i=0;i<Math.min(6,localPoints.length);i++){const option=localPoints[(party.id*7+active*11+Math.floor(city.minute/120)+i)%localPoints.length],route=city.findPath(c.entity,option);if(route!==null&&route.length<=60){dest=option;path=route;break;}}
+      if(!dest)continue;
       const volunteer=c.political?.partyId===party.id&&(c.political.loyalty||0)>.6,fee=volunteer?0:city.currency.price(900);
       if(fee&&!city.transfer(p.partyAccount(party).accountId,c.accountId,fee,'Serviço: turno de campanha de rua',{electionId:e.id,partyId:party.id,workerId:c.id}))continue;
       n.campaignFinance??={received:0,spent:0,donors:[]};n.campaignFinance.spent+=fee;
       c.campaignInventory??={};
       if(!c.campaignInventory.bandeiras){const shop=city.economy.businesses.find(b=>b.active&&b.inventory.bandeiras>0);if(shop&&p.partyAccount(party).balance>=city.economy.goods.bandeiras.price&&city.transfer(p.partyAccount(party).accountId,shop.accountId,city.economy.goods.bandeiras.price,'Compra de bandeira para militante',{electionId:e.id,partyId:party.id})){shop.inventory.bandeiras--;n.campaignFinance.spent+=city.economy.goods.bandeiras.price;c.campaignInventory.bandeiras=1;city.economy.recordGoods('campaign-pickup','bandeiras',1,shop.id,c.id);}}
-      c.path=path;c.task='campaign';c.targetId=null;c.campaign={type:'canvass',electionId:e.id,candidateId:n.citizenId,partyId:party.id,partyNumber:party.number,speechColor:party.flag.background,flag:c.campaignInventory.bandeiras?party.flag:null,until:Math.min(e.voteAt,city.minute+150),destination:dest,fee};
+      c.path=path;c.task='campaign';c.targetId=null;c.campaign={type:'canvass',electionId:e.id,candidateId:n.citizenId,partyId:party.id,partyNumber:party.number,speechColor:party.flag.background,flag:c.campaignInventory.bandeiras?party.flag:null,until:Math.min(e.voteAt,city.minute+240),destination:dest,fee};
       e.streetCampaign??={turns:0,paid:0};e.streetCampaign.turns++;e.streetCampaign.paid+=fee;
       c.action=`Campanha de rua: ${n.name}, ${party.number}`;break;
     }
@@ -72,10 +83,10 @@ export class CityCampaigns {
     const city=this.city,p=city.politics,party=p.party(nomination.partyId),eligible=city.citizens.filter(c=>c.political?.partyId===party.id&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.entity.destroyed&&!c.path.length&&!c.conversation&&!c.deliveryId&&!c.cleaningJobId&&!c.workMeal&&!['work','construction','manage','caregiving','food','provisions','water','energy','health','toilet','hygiene','care','workmeal'].includes(c.task)&&!city.urgentNeed(c));
     const participants=this.sample(eligible.filter(c=>(c.campaignInventory?.bandeiras||0)>0),6);if(!participants.length)return;
     // Reach real street tiles; don't teleport workers away from their jobs.
-    const routes=[...city.traffic.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(([key])=>{const [x,y]=key.split(',').map(Number);return {x:x+.5,y:y+.5};}).filter(pos=>ROAD_TILES.has(tileAt(city.world,Math.floor(pos.x),Math.floor(pos.y))));
+    const routes=this.streetPoints(12,participants[0].entity);
     if(!routes.length)return;const destination=routes[Math.floor(city.random()*Math.min(4,routes.length))];
     const event=this.event(election,`Bandeiraço ${party.short}: ${election.round===2?'campanha de segundo turno para prefeitura':'campanha conjunta para prefeitura e Câmara'}.`,'campaign-rally',participants.map(c=>c.id),{partyId:party.id,candidateId:nomination.citizenId,x:destination.x,y:destination.y});let paths=0;
-    for(const c of participants){if(paths++>=3)break;const path=city.findPath(c.entity,destination);if(path===null)continue;c.path=path;c.task='campaign';c.campaign={electionId:election.id,candidateId:nomination.citizenId,partyId:party.id,flag:party.flag,until:city.minute+120,destination,eventId:event.id};c.action=`Bandeiraço ${party.short}`;}
+    for(const c of participants){if(paths++>=3)break;const path=city.findPath(c.entity,destination);if(path===null||path.length>60)continue;c.path=path;c.task='campaign';c.campaign={electionId:election.id,candidateId:nomination.citizenId,partyId:party.id,flag:party.flag,until:city.minute+240,destination,eventId:event.id};c.action=`Bandeiraço ${party.short}`;}
   }
   arrive(c) {
     if(c.campaign?.type==='paid')return this.getMaterials().work(c);

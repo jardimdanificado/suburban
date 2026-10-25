@@ -132,6 +132,35 @@ test('research agents interview nearby unique voters and publish an approximate 
   assert(poll.responses.every(r=>r.agentId===agent.id&&typeof r.reason==='string'));assert.equal(city.currency.supply(),city.currency.netIssued());
 });
 
+test('campaigns can select real street stages before traffic statistics accumulate',()=>{
+  const city=setup({starter:true,population:64}),p=city.politics,campaigns=p.campaigns;
+  city.minute=8*60;p.nextElectionAt=city.minute+3*1440;p.beginElection();const election=p.active,nomination=election.candidates[0],party=p.party(nomination.partyId);
+  city.transfer('treasury',p.partyAccount(party).accountId,1000000,'Verba de teste para campanha');
+  for(const c of city.citizens)for(const need of Object.keys(c.needs))c.needs[need]=95;
+  city.traffic.clear();
+  assert(campaigns.streetPoints(8).length>0);
+  campaigns.recruit(nomination,election);
+  assert(election.streetCampaign?.turns>0);
+  assert(city.citizens.some(c=>c.campaign?.electionId===election.id&&c.task==='campaign'&&c.path.length<=60));
+  const research=city.politics.getResearch();
+  assert(research.sites(3).length<=1);
+  assert(research.sites(30).length<=4);
+});
+
+test('both required campaign polls have an organizer even when the council has no formal leader',()=>{
+  const city=setup({starter:true,population:64}),p=city.politics;
+  city.minute=8*60;p.nextElectionAt=city.minute+3*1440;p.beginElection();
+  const institute=firm(city,'research_institute'),research=p.getResearch();p.council.leaderId=null;
+  research.request(p.active);
+  assert.equal(p.active.requiredPolls.length,2);
+  assert(p.active.requiredPolls.every(row=>row.studyId!=null));
+  assert.equal(p.active.requiredPolls[1].organizerId,p.council.people()[0]?.id??city.economy.mayorId);
+  assert.equal(research.studies.filter(s=>s.electionId===p.active.id).length,2);
+  research.studies.forEach(s=>s.status='published');city.minute=p.active.voteAt-60;research.request(p.active);
+  assert.equal(research.studies.filter(s=>s.electionId===p.active.id).length,2);
+  assert(institute.active);
+});
+
 test('settlement connectivity agrees with routes and invalidates blocked components',()=>{
   const city=setup({starter:true}),a=city.buildings[0],b=city.buildings[1];
   assert.equal(settlementConnected(city,a.door,b.door),true);

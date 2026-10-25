@@ -1,7 +1,7 @@
 import {ROAD_TILES,tileAt} from './city_terrain.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const live=c=>c&&!c.entity.destroyed;
-const essential=new Set(['council-session','vote','care','caregiving','food','provisions','workmeal','water','health','energy','toilet','construction','research','interview']);
+const essential=new Set(['council-session','vote','care','caregiving','food','provisions','workmeal','water','health','energy','toilet','construction','campaign','research','interview']);
 export class CityResearch {
   constructor(city){this.city=city;this.studies=[];this.nextId=1;this.lastMinute=null;this.lastSupplyDay=null;}
   institutes(){return this.city.economy.businesses.filter(b=>b.type==='research_institute'&&b.active&&!b.entity.destroyed);}
@@ -10,18 +10,21 @@ export class CityResearch {
     const city=this.city;if(this.lastSupplyDay===city.day)return;this.lastSupplyDay=city.day;
     // Public commissioning uses the same voted construction, materials and builders as other firms.
     const gov=city.politics,preparing=gov.active||gov.nextElectionAt!=null&&city.minute>=gov.nextElectionAt-gov.termRules.campaignMinutes-3*1440;
-    if(!this.demand().supply&&preparing){const author=city.politics.council.people()[0];if(author)city.politics.council.propose(author,'build',{buildingType:'research_institute'},'Instalar instituto para garantir pesquisas presenciais');}
+    const supply=this.demand();if(supply.supply<supply.required&&preparing){const author=city.politics.council.people()[0];if(author)city.politics.council.propose(author,'build',{buildingType:'research_institute'},'Instalar instituto para garantir pesquisas presenciais');}
   }
-  sites(){
+  sites(target=Infinity,origin=null){
     const city=this.city,points=[];
-    for(const [key,flow] of [...city.traffic].sort((a,b)=>b[1]-a[1])){if(points.length>=8)break;const [x,y]=key.split(',').map(Number);if(!ROAD_TILES.has(tileAt(city.world,x,y))||points.some(p=>Math.hypot(p.x-x-.5,p.y-y-.5)<4))continue;points.push({x:x+.5,y:y+.5,flow:Math.max(1,flow),label:`Via ${x}, ${y}`});}
-    if(!points.length)for(const b of city.buildings.filter(b=>b.active&&!b.entity.destroyed).slice(0,8))points.push({x:b.door.x,y:b.door.y,flow:1,label:b.entity.properties.name});
+    const siteLimit=Math.min(4,Math.max(1,Math.ceil(target/5)));
+    let traffic=[...city.traffic].sort((a,b)=>b[1]-a[1]);
+    if(origin){const local=traffic.filter(([key])=>{const [x,y]=key.split(',').map(Number);return Math.hypot(x+.5-origin.x,y+.5-origin.y)<=30;});if(local.length)traffic=local;else{const ox=Math.floor(origin.x),oy=Math.floor(origin.y),nearby=[];for(let y=Math.max(0,oy-30);y<=Math.min(city.world.height-1,oy+30);y++)for(let x=Math.max(0,ox-30);x<=Math.min(city.world.width-1,ox+30);x++)if(ROAD_TILES.has(tileAt(city.world,x,y)))nearby.push({x:x+.5,y:y+.5,flow:1,label:`Via ${x}, ${y}`});nearby.sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y));for(const site of nearby){if(points.length>=siteLimit)break;if(points.every(p=>Math.hypot(p.x-site.x,p.y-site.y)>=4))points.push(site);}if(points.length)return points;traffic.sort((a,b)=>{const [ax,ay]=a[0].split(',').map(Number),[bx,by]=b[0].split(',').map(Number);return Math.hypot(ax+.5-origin.x,ay+.5-origin.y)-Math.hypot(bx+.5-origin.x,by+.5-origin.y);});}}
+    for(const [key,flow] of traffic){if(points.length>=siteLimit)break;const [x,y]=key.split(',').map(Number);if(!ROAD_TILES.has(tileAt(city.world,x,y))||points.some(p=>Math.hypot(p.x-x-.5,p.y-y-.5)<4))continue;points.push({x:x+.5,y:y+.5,flow:Math.max(1,flow),label:`Via ${x}, ${y}`});}
+    if(!points.length)for(const b of city.buildings.filter(b=>b.active&&!b.entity.destroyed).slice(0,siteLimit))points.push({x:b.door.x,y:b.door.y,flow:1,label:b.entity.properties.name});
     return points;
   }
   createStudy(e,b,commission=null){const city=this.city;
       const population=city.citizens.filter(c=>live(c)&&city.society.isAdult(c)).length,minRate=clamp(city.politics.policy.pollMinRate??5,5,10),maxRate=clamp(city.politics.policy.pollMaxRate??20,15,20),minimum=Math.ceil(population*minRate/100),maximum=Math.floor(population*maxRate/100);
       const target=maximum>=minimum&&minimum>0?(commission?minimum:minimum+Math.floor(city.random()*(maximum-minimum+1))):0;
-      const s={id:this.nextId++,electionId:e.id,commission:commission?{...commission}:null,instituteId:b.id,instituteName:b.entity.properties.name,requestDay:city.day,requestedAt:city.minute,deadline:e.voteAt,population,cityPopulation:city.citizens.filter(live).length,minRate,maxRate,minimum,maximum,target,status:target?'funding':'insufficient',reason:target?'Aguardando financiamento':'Eleitorado insuficiente para uma amostra inteira dentro dos limites legais',responses:[],respondentIds:new Set(),reservedIds:new Set(),sessions:[],funders:[],funded:0,spent:0,wages:0,sites:this.sites()};
+      const s={id:this.nextId++,electionId:e.id,commission:commission?{...commission}:null,instituteId:b.id,instituteName:b.entity.properties.name,requestDay:city.day,requestedAt:city.minute,deadline:e.voteAt,population,cityPopulation:city.citizens.filter(live).length,minRate,maxRate,minimum,maximum,target,status:target?'funding':'insufficient',reason:target?'Aguardando financiamento':'Eleitorado insuficiente para uma amostra inteira dentro dos limites legais',responses:[],respondentIds:new Set(),reservedIds:new Set(),sessions:[],funders:[],funded:0,spent:0,wages:0,sites:this.sites(target,b.door)};
       s.budget=city.currency.price(15000)+Math.max(1,target)*Math.max(city.currency.price(500),b.wage*40);
       const total=s.sites.reduce((n,p)=>n+p.flow,0)||1;
       for(const site of s.sites){site.share=site.flow/total;site.quota=Math.floor(site.share*target);site.interviews=0;}
@@ -34,11 +37,12 @@ export class CityResearch {
     e.requiredPolls??=[{key:'mayor',label:'Prefeitura',organizerId:city.economy.mayorId,status:'requested',studyId:null},{key:'council',label:'Câmara municipal',organizerId:city.politics.council.leaderId,status:'requested',studyId:null}];
     for(const [index,commission]of e.requiredPolls.entries()){
       if(commission.studyId!=null)continue;
-      commission.organizerId??=commission.key==='mayor'?city.economy.mayorId:city.politics.council.leaderId;
-      if(!commission.organizerId||!institutes.length){commission.reason=!commission.organizerId?'Aguardando dirigente em exercício':'Aguardando instituto construído e com equipe';continue;}
+      commission.organizerId??=commission.key==='mayor'?city.economy.mayorId:city.politics.council.leaderId||city.politics.council.people()[0]?.id||city.economy.mayorId;
+      if(!institutes.length){commission.reason='Aguardando instituto construído e com equipe';continue;}
       const institute=institutes[index%institutes.length],study=this.createStudy(e,institute,commission);commission.studyId=study.id;commission.status=study.status;
     }
     for(const b of institutes){
+      if(city.minute+1440>=e.voteAt)continue;
       if(this.studies.some(s=>s.electionId===e.id&&s.instituteId===b.id&&(s.requestDay===city.day||['funding','collecting'].includes(s.status))))continue;
       this.createStudy(e,b);
     }
@@ -80,13 +84,13 @@ export class CityResearch {
     if(!s.sites.length||!staff.length){s.reason=!staff.length?'Instituto sem agentes contratados':'Nenhum local acessível para coleta';return;}
     let dispatched=0;
     for(let i=0;i<staff.length&&dispatched<2;i++){
-      const c=staff[i],start=today+(8+i%5*2)*60,end=Math.min(s.deadline,start+120);
+      const c=staff[i],start=today+(8+i%5*2)*60,end=Math.min(s.deadline,start+240);
       if(city.minute<start||city.minute>=end||s.sessions.some(r=>r.agentId===c.id&&r.day===city.day)||c.researchAssignment||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||essential.has(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<40)continue;
       if(s.spent+b.wage>=s.funded||b.balance<b.wage){s.reason='Coleta aguardando recursos para salários';continue;}
       const sites=s.sites.slice().sort((a,b)=>(b.quota-b.interviews)/Math.max(1,b.quota)-(a.quota-a.interviews)/Math.max(1,a.quota));
       for(const site of sites){
         if(site.interviews>=site.quota||s.sessions.some(r=>r.day===city.day&&r.status==='active'&&r.siteIndex===s.sites.indexOf(site)))continue;
-        const path=city.findPath(c.entity,site);if(path===null)continue;
+        const path=city.findPath(c.entity,site);if(path===null||path.length>60)continue;
         const session={id:s.sessions.length+1,agentId:c.id,agentName:c.entity.properties.name,siteIndex:s.sites.indexOf(site),day:city.day,scheduledAt:start,startedAt:city.minute,until:end,status:'active',interviews:0,nextInterviewAt:city.minute,voterId:null};
         s.sessions.push(session);c.researchAssignment={studyId:s.id,sessionId:session.id};c.path=path;c.task='research';c.targetId=b.id;c.action=`Indo entrevistar em ${site.label}`;dispatched++;break;
       }
@@ -111,16 +115,20 @@ export class CityResearch {
     if(Math.hypot(c.entity.x-site.x,c.entity.y-site.y)>1.5){this.releaseAgent(s,session,'Rota interrompida');return false;}
     c.action=`Entrevistando eleitores: ${s.instituteName}`;
     if(session.voterId!=null){const voter=city.society.citizen(session.voterId);
-      if(!live(voter)||voter.task!=='interview'||voter.pollInterview?.studyId!==s.id||voter.pollInterview.sessionId!==session.id||Math.hypot(voter.entity.x-c.entity.x,voter.entity.y-c.entity.y)>4||city.urgentNeed(voter)){this.releaseInterview(s,session);return true;}
+      if(!live(voter)||voter.task!=='interview'||voter.pollInterview?.studyId!==s.id||voter.pollInterview.sessionId!==session.id||city.urgentNeed(voter)){this.releaseInterview(s,session);return true;}
+      if(voter.path.length||Math.hypot(voter.entity.x-c.entity.x,voter.entity.y-c.entity.y)>4)return true;
+      session.finishAt??=city.minute+4;
       if(city.minute<session.finishAt)return true;
       if(!s.respondentIds.has(voter.id)&&s.responses.length<s.target){const response=this.interview(voter,e,c,site);if(response){s.respondentIds.add(voter.id);s.responses.push(response);site.interviews++;session.interviews++;city.history.record('government',`${c.entity.properties.name} entrevistou ${response.name} presencialmente.`,[c.accountId,voter.accountId,b.accountId],{kind:'research-interview',studyId:s.id,electionId:e.id,agentId:c.id,citizenId:voter.id,buildingId:b.id,x:site.x,y:site.y,parentEventId:s.eventId});}}
       this.releaseInterview(s,session);session.nextInterviewAt=city.minute+2;return true;
     }
     if(city.minute<session.nextInterviewAt||s.responses.length+s.reservedIds.size>=s.target)return true;session.nextInterviewAt=city.minute+5;
-    const nearby=city.citizens.filter(v=>live(v)&&!v.indoorLocation&&v.id!==c.id&&city.society.isAdult(v)&&!s.respondentIds.has(v.id)&&!s.reservedIds.has(v.id)&&!v.pollInterview&&!v.deliveryId&&!v.cleaningJobId&&!v.workMeal&&!v.conversation&&!essential.has(v.task)&&!city.urgentNeed(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<=3.5);
-    if(!nearby.length)return true;const voter=nearby[Math.floor(city.random()*nearby.length)];
-    s.reservedIds.add(voter.id);session.voterId=voter.id;session.finishAt=city.minute+4;
-    voter.pollInterview={studyId:s.id,sessionId:session.id,previous:{task:voter.task,path:voter.path,targetId:voter.targetId}};voter.path=[];voter.task='interview';voter.action=`Respondendo pesquisa de ${s.instituteName}`;return true;
+    const candidates=city.citizens.filter(v=>live(v)&&v.id!==c.id&&city.society.isAdult(v)&&!s.respondentIds.has(v.id)&&!s.reservedIds.has(v.id)&&!v.pollInterview&&!v.deliveryId&&!v.cleaningJobId&&!v.workMeal&&!v.conversation&&!essential.has(v.task)&&!city.urgentNeed(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<=60).sort((a,b)=>Math.hypot(a.entity.x-c.entity.x,a.entity.y-c.entity.y)-Math.hypot(b.entity.x-c.entity.x,b.entity.y-c.entity.y));
+    let voter=null,voterPath=null;
+    for(const option of candidates.slice(0,8)){const path=Math.hypot(option.entity.x-c.entity.x,option.entity.y-c.entity.y)<=4?[]:city.findPath(option.entity,c.entity);if(path!==null&&path.length<=60){voter=option;voterPath=path;break;}}
+    if(!voter)return true;
+    s.reservedIds.add(voter.id);session.voterId=voter.id;session.finishAt=voterPath.length?null:city.minute+4;
+    voter.pollInterview={studyId:s.id,sessionId:session.id,previous:{task:voter.task,path:voter.path,targetId:voter.targetId}};voter.path=voterPath;voter.targetId=c.id;voter.task='interview';voter.action=`Indo responder à pesquisa de ${s.instituteName}`;return true;
   }
   respondentWait(c){if(!c.pollInterview){c.task=null;return;}c.action='Respondendo entrevista presencial';}
   manipulate(s,poll,e){
@@ -168,7 +176,7 @@ export class CityResearch {
       const b=city.building(s.instituteId);
       if(!b?.active||b.entity.destroyed||e?.id!==s.electionId||e.status!=='campaign'||city.minute>=s.deadline){
         for(const session of s.sessions.filter(r=>r.status==='active'))this.releaseAgent(s,session,'Fim da coleta');
-        if(b?.active&&!b.entity.destroyed&&e?.id===s.electionId&&s.responses.length>=s.minimum)this.publish(s,e);else{s.status='insufficient';s.reason='Coleta encerrada sem atingir a amostra mínima; resultados não publicados';}continue;
+        if(b?.active&&!b.entity.destroyed&&e?.id===s.electionId&&s.responses.length>=s.minimum)this.publish(s,e);else{s.status='insufficient';const completed=s.sessions.filter(r=>r.status==='finished').length;s.reason=`Coleta encerrou com ${s.responses.length}/${s.minimum} entrevistas únicas; ${completed} turnos de campo concluídos sem completar a amostra.`;}continue;
       }
       if(s.responses.length>=s.target||city.hour>=19&&s.responses.length>=s.minimum){this.publish(s,e);continue;}
       for(const session of s.sessions.filter(r=>r.status==='active')){const c=city.society.citizen(session.agentId);if(!live(c)||c.task!=='research'||c.researchAssignment?.studyId!==s.id||city.minute>=session.until)this.releaseAgent(s,session,'Agente indisponível ou turno encerrado');}
