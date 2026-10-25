@@ -47,6 +47,8 @@ let dragging = false;
 let pointerDown = null;
 let rightClickConsumed = false;
 let lastPointer = null;
+const touchPointers = new Map();
+let pinchGesture = null;
 let mousePosition = { x: -1, y: -1 };
 let pointerOnUI = false;
 let editingGesture = false;
@@ -200,6 +202,19 @@ function mapTileAt(x, y) {
   };
 }
 
+function midpoint(a,b){return {x:(a.x+b.x)/2,y:(a.y+b.y)/2};}
+function pointerDistance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function moveCameraByPointer(dx,dy,zoom){
+  const camera=renderMode==='3d'?renderer3D:renderer2D;
+  if(renderMode==='3d'){
+    const factor=56/(zoom*Math.max(100,root.clientHeight));
+    camera.setCamera(camera.getCameraX()-(dx*.70710678+dy*1.22474487)*factor,camera.getCameraY()-(-dx*.70710678+dy*1.22474487)*factor,zoom);
+  }else{
+    const factor=(canvas2D.width/root.clientWidth)/(16*zoom);
+    camera.setCamera(camera.getCameraX()-dx*factor,camera.getCameraY()-dy*factor,zoom);
+  }
+}
+
 function onPointerDown(event) {
   if(event.button===2){
     rightClickConsumed=false;const rect=root.getBoundingClientRect();
@@ -211,6 +226,15 @@ function onPointerDown(event) {
   const y = event.clientY - rect.top;
   pointerOnUI = !!legacyUI.hitTest(x, y);
   root.setPointerCapture?.(event.pointerId);
+  if(event.pointerType==='touch'&&!pointerOnUI){
+    touchPointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    if(touchPointers.size>=2){
+      const [a,b]=[...touchPointers.values()],renderer=renderMode==='3d'?renderer3D:renderer2D;
+      pinchGesture={distance:Math.max(1,pointerDistance(a,b)),center:midpoint(a,b),zoom:renderer.getCameraZoom()};
+      dragging=false;editingGesture=false;pointerOnUI=false;pointerDown=lastPointer=null;
+      event.preventDefault();return;
+    }
+  }
   pointerDown = { x: event.clientX, y: event.clientY };
   lastPointer = pointerDown;
   if (cityUI.pointerDown(x,y)) { pointerOnUI=true; return; }
@@ -226,6 +250,19 @@ function onPointerDown(event) {
 function onPointerMove(event) {
   const rect = root.getBoundingClientRect();
   mousePosition = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  if(event.pointerType==='touch'&&touchPointers.has(event.pointerId)){
+    touchPointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    if(pinchGesture&&touchPointers.size>=2){
+      const [a,b]=[...touchPointers.values()],center=midpoint(a,b),distance=pointerDistance(a,b),renderer=renderMode==='3d'?renderer3D:renderer2D;
+      const previousZoom=renderer.getCameraZoom(),zoom=previousZoom*distance/Math.max(1,pinchGesture.distance);
+      if(renderMode==='2d'){
+        const scale=canvas2D.width/root.clientWidth/16,anchorX=renderer.getCameraX()+(pinchGesture.center.x-rect.left-root.clientWidth/2)*scale/previousZoom,anchorY=renderer.getCameraY()+(pinchGesture.center.y-rect.top-root.clientHeight/2)*scale/previousZoom;
+        renderer.setCamera(anchorX-(center.x-rect.left-root.clientWidth/2)*scale/zoom,anchorY-(center.y-rect.top-root.clientHeight/2)*scale/zoom,zoom);
+      }else moveCameraByPointer(center.x-pinchGesture.center.x,center.y-pinchGesture.center.y,zoom);
+      pinchGesture={distance:Math.max(1,distance),center,zoom:renderer.getCameraZoom()};
+      event.preventDefault();return;
+    }
+  }
   if (cityUI.pointerMove(mousePosition.x,mousePosition.y)) return;
   if (editingGesture) {
     if (legacyUI.hitTest(mousePosition.x, mousePosition.y)) editor.lastTile = null;
@@ -256,6 +293,15 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if(event.pointerType==='touch'&&touchPointers.has(event.pointerId)){
+    touchPointers.delete(event.pointerId);
+    if(pinchGesture){
+      pinchGesture=null;pointerDown=null;pointerOnUI=false;editingGesture=false;
+      if(touchPointers.size){dragging=true;lastPointer={...touchPointers.values().next().value};}
+      else{dragging=false;lastPointer=null;}
+      cityUI.pointerUp();event.preventDefault();return;
+    }
+  }
   if(event.button===2&&rightClickConsumed){rightClickConsumed=false;event.preventDefault();return;}
   if (event.target.closest(".ui-panel")) return;
   const rect = root.getBoundingClientRect();
@@ -294,6 +340,7 @@ root.addEventListener("pointercancel", () => {
   cityUI.pointerUp();
   editor.endStroke();
   editingGesture = dragging = pointerOnUI = false;
+  touchPointers.clear();pinchGesture=null;
   pointerDown = lastPointer = null;
 });
 root.addEventListener("contextmenu", (event) => event.preventDefault());
