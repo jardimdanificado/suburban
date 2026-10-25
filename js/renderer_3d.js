@@ -4,6 +4,7 @@
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { syncCityBuildings } from "./city_renderer_3d.js";
+import { CityCitizenBatches } from './city_citizen_batches.js';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -3978,6 +3979,7 @@ export class RCT3DRenderer {
     this.entityGroup = new THREE.Group();
     this.scene.add(this.entityGroup);
     this.entitySprites = new Map();
+    this.cityCitizenBatches=new CityCitizenBatches(THREE,this.entityGroup,this.billboardGeo);
 
     // Floating UI Group (Emotes, Held Items & Clan House Flags)
     this.uiIconGeo = new THREE.PlaneGeometry(0.40, 0.40);
@@ -4582,6 +4584,7 @@ export class RCT3DRenderer {
   isSimPaused() { return this.isPaused; }
 
   clear() {
+    this.cityCitizenBatches?.clear();
     this.lastBuiltCamTileX = -9999;
     this.lastBuiltCamTileY = -9999;
     this.lastInstCamTileX = -9999;
@@ -6188,6 +6191,7 @@ export class RCT3DRenderer {
     this._activeUiIds.clear();
     const activeIds = this._activeIds;
     const activeUiIds = this._activeUiIds;
+    this.cityCitizenBatches.begin();
     let selectedPos = null;
 
     const curCamTileX = Math.floor(this.camX);
@@ -6932,6 +6936,8 @@ export class RCT3DRenderer {
           sprite.material.color.setHex(0xffffff); // Full bright
         }
 
+        if(e.properties?.citizen)this.cityCitizenBatches.add(sprite);
+
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
         if (isConsciousCreature) {
           const campaign=e.properties?.citizen?.campaign;
@@ -7478,6 +7484,7 @@ export class RCT3DRenderer {
     this._forceInstUpdate = false;
   }
 
+    this.cityCitizenBatches.end();
     // Clean inactive dynamic billboards
     for (const [id, spr] of this.entitySprites.entries()) {
       if (!activeIds.has(id)) {

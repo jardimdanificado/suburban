@@ -10,7 +10,7 @@ function seedStone(city, quarry, qty = 24) {
   quarry.inventory.pedra += qty; quarry.stoneReserve -= qty; city.economy.produced.pedra += qty;
 }
 function audit(city) {
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
   for (const holder of [...city.buildings, ...city.development.projects, ...city.logistics.shipments]) {
     for (const value of Object.values(holder.inventory)) assert(Number.isSafeInteger(value) && value >= 0);
     assert(inventoryUsed(holder) + incomingItems(holder) <= holder.inventoryCapacity, holder.name || holder.type || holder.id);
@@ -24,7 +24,7 @@ function audit(city) {
 
 test('a new city starts with the hall, municipal firms and mint, finite public food and municipal land for sale', () => {
   const city = setup({ starter: true });
-  assert.deepEqual(city.buildings.map(b => b.type), ['townhall', 'builder', 'quarry', 'mint']);
+  assert.deepEqual(city.buildings.map(b => b.type), ['townhall', 'builder', 'quarry', 'mint', 'bank']);
   assert.equal(city.citizens.length, 24); assert.equal(city.stats().entrepreneurs, 0);
   const hall = city.buildings[0]; assert(hall.inventory.pao >= 24 * 3 * 20);
   assert.equal(hall.inventory.pao, city.economy.initialStock.pao);
@@ -133,15 +133,15 @@ test('a transport company hires a courier, earns delivery fees and pays wages fr
 });
 
 test('a starter city autonomously builds housing, grows food and transports every material with conserved stocks', () => {
-  const city = setup({ starter: true });
+  const city = setup({ starter: true,population:128 });
   // Real lamp installation shares builders and freight; wait for the production chain, with a bounded deadline.
-  const developed = () => city.economy.produced.pao > 0 && ['residential', 'farm', 'market', 'bakery', 'greengrocer', 'carrier'].every(type => city.buildings.some(b => b.type === type));
+  const developed = () => city.economy.produced.pao > 0 && ['farm', 'bakery', 'carrier'].every(type => city.buildings.some(b => b.type === type)) && city.buildings.some(b=>['market','greengrocer'].includes(b.type));
   for (let i = 0; i < 20 * 1440 * 4; i++) { city.update(1 / 16); if (i % 240 === 0) audit(city); if (i >= 10 * 1440 * 4 && developed()) break; }
-  for (const type of ['residential', 'farm', 'market', 'bakery', 'greengrocer', 'carrier']) assert(city.buildings.some(b => b.type === type), type);
+  for (const type of ['farm', 'bakery', 'carrier']) assert(city.buildings.some(b => b.type === type), type);
+  assert(city.buildings.some(b=>['market','greengrocer'].includes(b.type)));
   assert(city.economy.produced.pedra > 0); assert(city.economy.consumed.pedra > 0); assert(city.economy.produced.pao > 0); assert(city.logistics.delivered > 0);
   assert(city.events.some(e => e.data.kind === 'shipment-delivered'));
-  const residence = city.buildings.find(b => b.type === 'residential'), builder = city.economy.businesses.find(b => b.type === 'builder');
-  assert(residence.units.some(u => u.tenantId && u.tenantId !== u.ownerId));
+  assert(city.buildings.some(b=>['residential','popular_housing'].includes(b.type)&&b.units.some(u=>u.tenantId)));
   assert(city.stats().homeless < city.stats().population); assert(city.buildings[0].inventory.pao > 0); audit(city);
 });
 

@@ -1,0 +1,2316 @@
+{
+  "date": "2026-10-25",
+  "runtime": "v24.21.0",
+  "runs": [
+    {
+      "name": "continente_512",
+      "stage": "Cenário continuado: estado do dia 8 avançado por seis dias; anterior aos últimos ajustes de varejo e desempenho.",
+      "completed": true,
+      "settings": {
+        "population": 512,
+        "days": 6,
+        "seed": 1337,
+        "preset": 1
+      },
+      "final": {
+        "violations": [],
+        "services": {
+          "lighting": {
+            "planned": 29,
+            "built": 19,
+            "publicBuilt": 14,
+            "publicLit": 0,
+            "peakPublicLights": 12,
+            "firstPublicLight": 11220,
+            "refills": 11
+          },
+          "roads": {
+            "completed": 21,
+            "pending": 0
+          },
+          "sanitation": {
+            "cleaned": 520,
+            "wasteProcessed": 664
+          },
+          "banking": {
+            "loans": 438,
+            "active": 438,
+            "deposits": 2373943
+          },
+          "politics": {
+            "approval": 54.7568772610897,
+            "parties": 5,
+            "council": 26,
+            "bills": 37,
+            "votes": 0,
+            "studies": [
+              {
+                "id": 1,
+                "status": "published",
+                "minimum": 26,
+                "target": 26,
+                "responses": 26,
+                "unique": 26
+              },
+              {
+                "id": 2,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 26,
+                "responses": 21,
+                "unique": 21
+              },
+              {
+                "id": 3,
+                "status": "published",
+                "minimum": 26,
+                "target": 81,
+                "responses": 30,
+                "unique": 30
+              },
+              {
+                "id": 4,
+                "status": "published",
+                "minimum": 26,
+                "target": 48,
+                "responses": 26,
+                "unique": 26
+              },
+              {
+                "id": 5,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 76,
+                "responses": 2,
+                "unique": 2
+              },
+              {
+                "id": 6,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 31,
+                "responses": 0,
+                "unique": 0
+              }
+            ],
+            "polls": 3,
+            "corruptionCases": 14,
+            "scandals": 5
+          },
+          "publications": {
+            "documents": 34,
+            "newspapers": 23,
+            "books": 4,
+            "pamphlets": 7
+          },
+          "birthCount": 0
+        },
+        "day": 14,
+        "minute": 19800,
+        "population": 512,
+        "employed": 347,
+        "homeless": 114,
+        "deaths": 0,
+        "hungry": 13,
+        "happiness": 72,
+        "treasury": 603550,
+        "buildings": 155,
+        "businesses": 129,
+        "sectors": [
+          "kitchen",
+          "artisan",
+          "forestry",
+          "sawmill",
+          "charcoal",
+          "iron_mine",
+          "foundry",
+          "toolmaker",
+          "clay_pit",
+          "brickworks",
+          "sand_pit",
+          "glassworks",
+          "furniture",
+          "fiber_farm",
+          "flagmaker",
+          "paintworks",
+          "weaving",
+          "newsroom",
+          "clothing_store",
+          "tailor",
+          "dairy_farm",
+          "cheesemaker",
+          "poultry",
+          "flour_mill",
+          "pasta_factory",
+          "cannery",
+          "soapworks",
+          "herb_farm",
+          "pharmacy",
+          "paper_mill",
+          "publisher",
+          "pottery",
+          "composting",
+          "research_institute",
+          "bank"
+        ],
+        "crops": [
+          "trigo",
+          "girassol",
+          "milho",
+          "alface",
+          "arroz",
+          "cebola",
+          "feijao",
+          "tomate",
+          "mandioca",
+          "maca",
+          "goiaba",
+          "coentro",
+          "maca",
+          "mandioca",
+          "cebola",
+          "goiaba",
+          "feijao",
+          "goiaba",
+          "coentro",
+          "trigo",
+          "trigo",
+          "trigo",
+          "trigo",
+          "maca",
+          "trigo",
+          "alface",
+          "arroz",
+          "milho"
+        ],
+        "produced": {
+          "bandeiras": 4,
+          "faixas": 7,
+          "tinta": 72,
+          "cesta": 14,
+          "marmita": 27,
+          "marmita_simples": 26,
+          "marmita_rustica": 54,
+          "madeira": 180,
+          "tabuas": 80,
+          "carvao": 72,
+          "minerio": 120,
+          "ferro": 40,
+          "ferramentas": 16,
+          "argila": 175,
+          "tijolos": 27,
+          "areia": 84,
+          "vidro": 16,
+          "moveis": 6,
+          "fibras": 160,
+          "tecido": 102,
+          "roupas": 44,
+          "leite": 325,
+          "queijo": 88,
+          "ovos": 228,
+          "farinha": 124,
+          "massa": 75,
+          "conserva": 6,
+          "sabao": 105,
+          "ervas": 136,
+          "remedio": 20,
+          "papel": 120,
+          "jornais": 23,
+          "livros": 4,
+          "panfletos": 7,
+          "ceramica": 15,
+          "adubo": 166,
+          "arroz": 2192,
+          "alface": 3936,
+          "tomate": 624,
+          "girassol": 738,
+          "maca": 828,
+          "goiaba": 1056,
+          "trigo": 1704,
+          "milho": 1908,
+          "mandioca": 660,
+          "cebola": 912,
+          "feijao": 696,
+          "coentro": 744,
+          "oleo": 180,
+          "pao": 738,
+          "pedra": 4542,
+          "lixo": 9472
+        },
+        "projects": {
+          "active": 10,
+          "completed": 193
+        },
+        "deliveries": 1975,
+        "elections": 1,
+        "relationships": 15672,
+        "events": 283759,
+        "heapMB": 465,
+        "elapsedMs": 413813
+      },
+      "violations": [],
+      "deaths": [],
+      "industryTypes": 35,
+      "elapsedMs": 414911,
+      "minuteMs": {
+        "p50": 23.938773999994737,
+        "p95": 142.59703900001477,
+        "p99": 397.0061599999899,
+        "max": 3161.2759809999843
+      },
+      "profile": [
+        {
+          "key": "economy.hourly",
+          "calls": 1872,
+          "ms": 127970.08032499973,
+          "maxMs": 3012.831835000019
+        },
+        {
+          "key": "city.chooseTask",
+          "calls": 607178,
+          "ms": 127543.55677599831,
+          "maxMs": 281.81935199996224
+        },
+        {
+          "key": "city.findPath",
+          "calls": 606808,
+          "ms": 118063.51264000696,
+          "maxMs": 363.9066640000092
+        },
+        {
+          "key": "lighting.hourly",
+          "calls": 144,
+          "ms": 60522.992294999865,
+          "maxMs": 3012.818006000016
+        },
+        {
+          "key": "logistics.updateMinute",
+          "calls": 8640,
+          "ms": 28501.909229002547,
+          "maxMs": 183.52301299996907
+        },
+        {
+          "key": "economy.invest",
+          "calls": 72,
+          "ms": 9632.874821000216,
+          "maxMs": 880.8145419999928
+        },
+        {
+          "key": "housing.invest",
+          "calls": 78,
+          "ms": 8071.843243000012,
+          "maxMs": 240.86788700000034
+        },
+        {
+          "key": "economy.hire",
+          "calls": 150,
+          "ms": 7289.717543000162,
+          "maxMs": 220.10095199997886
+        },
+        {
+          "key": "society.updateMinute",
+          "calls": 8640,
+          "ms": 7215.037697998644,
+          "maxMs": 24.285675999999512
+        },
+        {
+          "key": "sanitation.updateMinute",
+          "calls": 8640,
+          "ms": 6073.394429000142,
+          "maxMs": 395.9881550000282
+        },
+        {
+          "key": "economy.updateDemand",
+          "calls": 288,
+          "ms": 4478.215022000117,
+          "maxMs": 83.65035799999896
+        },
+        {
+          "key": "sanitation.hourly",
+          "calls": 144,
+          "ms": 4426.265880000074,
+          "maxMs": 428.5143260000041
+        },
+        {
+          "key": "politics.hourly",
+          "calls": 144,
+          "ms": 2579.775668000322,
+          "maxMs": 210.26898500000243
+        },
+        {
+          "key": "city.reconcile",
+          "calls": 8640,
+          "ms": 1889.378610000771,
+          "maxMs": 23.898546000011265
+        },
+        {
+          "key": "economy.daily",
+          "calls": 6,
+          "ms": 1881.0067159999817,
+          "maxMs": 523.4330740000005
+        },
+        {
+          "key": "development.reconcile",
+          "calls": 1946,
+          "ms": 882.2845830000842,
+          "maxMs": 7.830386999994516
+        },
+        {
+          "key": "society.daily",
+          "calls": 6,
+          "ms": 677.8381669999944,
+          "maxMs": 206.0364680000057
+        },
+        {
+          "key": "relationships.daily",
+          "calls": 6,
+          "ms": 610.3462039999795,
+          "maxMs": 185.9900839999973
+        },
+        {
+          "key": "sanitation.reconcile",
+          "calls": 1946,
+          "ms": 395.35038599978907,
+          "maxMs": 3.4743209999869578
+        },
+        {
+          "key": "publications.hourly",
+          "calls": 144,
+          "ms": 350.7696659999583,
+          "maxMs": 17.200843000000532
+        },
+        {
+          "key": "nature.hourly",
+          "calls": 144,
+          "ms": 343.3070019996685,
+          "maxMs": 13.932205000019167
+        },
+        {
+          "key": "lighting.reconcile",
+          "calls": 2090,
+          "ms": 304.8159200005239,
+          "maxMs": 27.65286000003107
+        },
+        {
+          "key": "research.updateMinute",
+          "calls": 8640,
+          "ms": 248.94825399782349,
+          "maxMs": 24.013365000020713
+        },
+        {
+          "key": "bank.daily",
+          "calls": 6,
+          "ms": 141.7585270000418,
+          "maxMs": 49.30272900000273
+        },
+        {
+          "key": "politics.daily",
+          "calls": 6,
+          "ms": 124.47436199997173,
+          "maxMs": 42.96079699999973
+        },
+        {
+          "key": "housing.reconcile",
+          "calls": 1946,
+          "ms": 89.0570399996459,
+          "maxMs": 3.527750000008382
+        }
+      ]
+    },
+    {
+      "name": "arquipelago_512",
+      "stage": "Oito dias autônomos desde a fundação; anterior aos últimos ajustes de varejo e desempenho.",
+      "completed": true,
+      "settings": {
+        "population": 512,
+        "days": 8,
+        "seed": 42,
+        "preset": 0
+      },
+      "final": {
+        "services": {
+          "lighting": {
+            "planned": 27,
+            "built": 19,
+            "publicBuilt": 18,
+            "publicLit": 0,
+            "peakPublicLights": 17,
+            "firstPublicLight": 5460,
+            "refills": 1
+          },
+          "roads": {
+            "completed": 20,
+            "pending": 2
+          },
+          "sanitation": {
+            "cleaned": 108,
+            "wasteProcessed": 464
+          },
+          "banking": {
+            "loans": 298,
+            "active": 298,
+            "deposits": 5993547
+          },
+          "politics": {
+            "approval": 51.737999885836444,
+            "parties": 4,
+            "council": 29,
+            "bills": 18,
+            "votes": 0,
+            "studies": [],
+            "polls": 0,
+            "corruptionCases": 8,
+            "scandals": 1
+          },
+          "publications": {
+            "documents": 10,
+            "newspapers": 10,
+            "books": 0,
+            "pamphlets": 0
+          },
+          "birthCount": 0
+        },
+        "day": 9,
+        "minute": 12000,
+        "population": 512,
+        "employed": 241,
+        "homeless": 391,
+        "deaths": 0,
+        "hungry": 5,
+        "happiness": 75,
+        "treasury": 12171382,
+        "buildings": 87,
+        "businesses": 76,
+        "sectors": [
+          "kitchen",
+          "artisan",
+          "forestry",
+          "sawmill",
+          "charcoal",
+          "iron_mine",
+          "foundry",
+          "clay_pit",
+          "brickworks",
+          "sand_pit",
+          "glassworks",
+          "furniture",
+          "fiber_farm",
+          "flagmaker",
+          "paintworks",
+          "weaving",
+          "newsroom",
+          "clothing_store",
+          "tailor",
+          "dairy_farm",
+          "cheesemaker",
+          "poultry",
+          "flour_mill",
+          "pasta_factory",
+          "cannery",
+          "herb_farm",
+          "paper_mill",
+          "composting",
+          "research_institute",
+          "bank"
+        ],
+        "crops": [
+          "trigo",
+          "girassol",
+          "milho",
+          "alface",
+          "arroz",
+          "cebola",
+          "feijao",
+          "tomate",
+          "coentro",
+          "goiaba",
+          "maca",
+          "mandioca",
+          "feijao",
+          "alface",
+          "coentro",
+          "feijao",
+          "trigo",
+          "trigo",
+          "trigo",
+          "trigo",
+          "trigo",
+          "trigo",
+          "trigo",
+          "milho",
+          "mandioca"
+        ],
+        "produced": {
+          "tinta": 48,
+          "cesta": 10,
+          "marmita": 18,
+          "marmita_simples": 18,
+          "marmita_rustica": 36,
+          "madeira": 72,
+          "tabuas": 25,
+          "carvao": 4,
+          "minerio": 66,
+          "ferro": 2,
+          "argila": 105,
+          "areia": 68,
+          "vidro": 2,
+          "fibras": 88,
+          "tecido": 36,
+          "leite": 260,
+          "queijo": 58,
+          "ovos": 100,
+          "farinha": 104,
+          "massa": 45,
+          "ervas": 36,
+          "papel": 72,
+          "jornais": 10,
+          "adubo": 96,
+          "arroz": 684,
+          "alface": 1608,
+          "tomate": 252,
+          "girassol": 518,
+          "maca": 300,
+          "goiaba": 228,
+          "trigo": 1120,
+          "milho": 1224,
+          "mandioca": 348,
+          "cebola": 312,
+          "feijao": 792,
+          "coentro": 432,
+          "oleo": 101,
+          "pao": 375,
+          "pedra": 2910,
+          "lixo": 4861
+        },
+        "projects": {
+          "active": 5,
+          "completed": 124
+        },
+        "deliveries": 942,
+        "elections": 0,
+        "relationships": 12206,
+        "events": 147704,
+        "heapMB": 164,
+        "elapsedMs": 937610
+      },
+      "violations": [],
+      "deaths": [],
+      "industryTypes": 30,
+      "elapsedMs": 937620,
+      "minuteMs": {
+        "p50": 56.11965000000782,
+        "p95": 201.7788779999828,
+        "p99": 441.3941620000405,
+        "max": 2684.3798530000204
+      },
+      "profile": [
+        {
+          "key": "city.chooseTask",
+          "calls": 2018832,
+          "ms": 406035.3348959401,
+          "maxMs": 188.66409400000703
+        },
+        {
+          "key": "city.findPath",
+          "calls": 1053357,
+          "ms": 187495.4884119751,
+          "maxMs": 188.60368100000778
+        },
+        {
+          "key": "economy.hourly",
+          "calls": 2484,
+          "ms": 177715.60136099986,
+          "maxMs": 2612.533778000012
+        },
+        {
+          "key": "logistics.updateMinute",
+          "calls": 11520,
+          "ms": 39660.116223992976,
+          "maxMs": 209.90294699999504
+        },
+        {
+          "key": "lighting.hourly",
+          "calls": 191,
+          "ms": 32316.768167999522,
+          "maxMs": 952.5539699999972
+        },
+        {
+          "key": "society.updateMinute",
+          "calls": 11520,
+          "ms": 26528.025308001863,
+          "maxMs": 342.8526810000003
+        },
+        {
+          "key": "economy.invest",
+          "calls": 95,
+          "ms": 24888.545861999693,
+          "maxMs": 1293.820835999999
+        },
+        {
+          "key": "economy.hire",
+          "calls": 201,
+          "ms": 13680.313639000498,
+          "maxMs": 690.5271979999961
+        },
+        {
+          "key": "city.reconcile",
+          "calls": 11520,
+          "ms": 9327.882269001115,
+          "maxMs": 47.172500999993645
+        },
+        {
+          "key": "economy.updateDemand",
+          "calls": 376,
+          "ms": 7589.421212000532,
+          "maxMs": 68.61270599999989
+        },
+        {
+          "key": "politics.hourly",
+          "calls": 191,
+          "ms": 5135.128418000069,
+          "maxMs": 375.42948599999727
+        },
+        {
+          "key": "housing.invest",
+          "calls": 103,
+          "ms": 4840.188271999541,
+          "maxMs": 136.32802300003823
+        },
+        {
+          "key": "sanitation.updateMinute",
+          "calls": 11520,
+          "ms": 2753.6055880035474,
+          "maxMs": 57.590645000105724
+        },
+        {
+          "key": "economy.daily",
+          "calls": 8,
+          "ms": 1887.181726000039,
+          "maxMs": 354.3025890000863
+        },
+        {
+          "key": "sanitation.hourly",
+          "calls": 191,
+          "ms": 1742.606917000663,
+          "maxMs": 425.6494390000007
+        },
+        {
+          "key": "development.reconcile",
+          "calls": 2551,
+          "ms": 1540.6276240008501,
+          "maxMs": 27.17570500005968
+        },
+        {
+          "key": "society.daily",
+          "calls": 8,
+          "ms": 912.7604719999799,
+          "maxMs": 183.84260600002017
+        },
+        {
+          "key": "relationships.daily",
+          "calls": 8,
+          "ms": 814.09236900002,
+          "maxMs": 158.42655099998228
+        },
+        {
+          "key": "lighting.reconcile",
+          "calls": 2742,
+          "ms": 535.2768269998815,
+          "maxMs": 15.92631100001745
+        },
+        {
+          "key": "nature.hourly",
+          "calls": 191,
+          "ms": 442.7815629988909,
+          "maxMs": 21.528484000009485
+        },
+        {
+          "key": "sanitation.reconcile",
+          "calls": 2551,
+          "ms": 407.83141400002387,
+          "maxMs": 48.84072900004685
+        },
+        {
+          "key": "politics.daily",
+          "calls": 9,
+          "ms": 311.0674540000073,
+          "maxMs": 51.14569799999663
+        },
+        {
+          "key": "publications.hourly",
+          "calls": 191,
+          "ms": 291.3211850003572,
+          "maxMs": 8.842317000031471
+        },
+        {
+          "key": "bank.daily",
+          "calls": 8,
+          "ms": 138.98967099998845,
+          "maxMs": 24.949097999953665
+        },
+        {
+          "key": "research.updateMinute",
+          "calls": 11520,
+          "ms": 95.77156400156491,
+          "maxMs": 6.220965999998953
+        },
+        {
+          "key": "housing.reconcile",
+          "calls": 2551,
+          "ms": 71.13633600119465,
+          "maxMs": 2.4739849999314174
+        }
+      ]
+    },
+    {
+      "name": "montanhas_128",
+      "stage": "Dois dias autônomos, etapa intermediária da auditoria.",
+      "completed": true,
+      "settings": {
+        "population": 128,
+        "days": 2,
+        "seed": 23811,
+        "preset": 2
+      },
+      "final": {
+        "services": {
+          "lighting": {
+            "planned": 9,
+            "built": 2,
+            "publicBuilt": 2,
+            "publicLit": 0,
+            "peakPublicLights": 0,
+            "firstPublicLight": null,
+            "refills": 0
+          },
+          "roads": {
+            "completed": 0,
+            "pending": 0
+          },
+          "sanitation": {
+            "cleaned": 5,
+            "wasteProcessed": 0
+          },
+          "banking": {
+            "loans": 140,
+            "active": 140,
+            "deposits": 1453787
+          },
+          "politics": {
+            "approval": 88.29339098472045,
+            "parties": 4,
+            "council": 7,
+            "bills": 8,
+            "votes": 0,
+            "studies": [],
+            "polls": 0,
+            "corruptionCases": 1,
+            "scandals": 0
+          },
+          "publications": {
+            "documents": 0,
+            "newspapers": 0,
+            "books": 0,
+            "pamphlets": 0
+          },
+          "birthCount": 0
+        },
+        "day": 3,
+        "minute": 3360,
+        "population": 128,
+        "employed": 98,
+        "homeless": 64,
+        "deaths": 0,
+        "hungry": 0,
+        "happiness": 84,
+        "treasury": 1777998,
+        "buildings": 43,
+        "businesses": 36,
+        "sectors": [
+          "forestry",
+          "charcoal",
+          "iron_mine",
+          "sand_pit",
+          "glassworks",
+          "fiber_farm",
+          "newsroom",
+          "dairy_farm",
+          "cheesemaker",
+          "poultry",
+          "flour_mill",
+          "paper_mill",
+          "composting",
+          "research_institute",
+          "bank"
+        ],
+        "crops": [
+          "trigo",
+          "girassol",
+          "milho",
+          "alface",
+          "arroz",
+          "cebola",
+          "feijao",
+          "tomate",
+          "coentro",
+          "goiaba",
+          "mandioca",
+          "maca"
+        ],
+        "produced": {
+          "minerio": 48,
+          "areia": 68,
+          "fibras": 8,
+          "leite": 50,
+          "ovos": 4,
+          "arroz": 240,
+          "alface": 192,
+          "tomate": 144,
+          "girassol": 192,
+          "maca": 60,
+          "goiaba": 84,
+          "trigo": 204,
+          "milho": 240,
+          "mandioca": 60,
+          "cebola": 204,
+          "feijao": 96,
+          "coentro": 168,
+          "oleo": 6,
+          "pao": 39,
+          "pedra": 1381,
+          "lixo": 395
+        },
+        "projects": {
+          "active": 25,
+          "completed": 40
+        },
+        "deliveries": 139,
+        "elections": 0,
+        "relationships": 1290,
+        "events": 16356,
+        "heapMB": 92,
+        "elapsedMs": 27809
+      },
+      "violations": [],
+      "deaths": [],
+      "industryTypes": 15,
+      "elapsedMs": 27811,
+      "minuteMs": {
+        "p50": 5.491125999999895,
+        "p95": 22.578058000000055,
+        "p99": 84.66040199999952,
+        "max": 420.34758299999885
+      },
+      "profile": [
+        {
+          "key": "economy.hourly",
+          "calls": 612,
+          "ms": 7795.3063269999475,
+          "maxMs": 414.7882219999992
+        },
+        {
+          "key": "city.chooseTask",
+          "calls": 81640,
+          "ms": 4377.006485999758,
+          "maxMs": 46.4759750000012
+        },
+        {
+          "key": "city.findPath",
+          "calls": 81847,
+          "ms": 4255.716525999929,
+          "maxMs": 46.420242000000144
+        },
+        {
+          "key": "economy.invest",
+          "calls": 23,
+          "ms": 2187.5606089999974,
+          "maxMs": 410.74741899999935
+        },
+        {
+          "key": "logistics.updateMinute",
+          "calls": 2880,
+          "ms": 1617.240076000065,
+          "maxMs": 25.16951599999811
+        },
+        {
+          "key": "lighting.hourly",
+          "calls": 47,
+          "ms": 1111.6982780000026,
+          "maxMs": 115.2245920000023
+        },
+        {
+          "key": "society.updateMinute",
+          "calls": 2880,
+          "ms": 982.4224210000903,
+          "maxMs": 8.012392999999975
+        },
+        {
+          "key": "economy.updateDemand",
+          "calls": 85,
+          "ms": 463.44575499999746,
+          "maxMs": 9.806894000001193
+        },
+        {
+          "key": "politics.hourly",
+          "calls": 47,
+          "ms": 289.71420099998795,
+          "maxMs": 90.44995900000004
+        },
+        {
+          "key": "city.reconcile",
+          "calls": 2880,
+          "ms": 179.36252500001365,
+          "maxMs": 2.3023160000011558
+        },
+        {
+          "key": "economy.hire",
+          "calls": 50,
+          "ms": 163.51957999999377,
+          "maxMs": 16.58191100000022
+        },
+        {
+          "key": "housing.invest",
+          "calls": 25,
+          "ms": 134.97268499999973,
+          "maxMs": 13.65675100000226
+        },
+        {
+          "key": "development.reconcile",
+          "calls": 639,
+          "ms": 133.06139799999164,
+          "maxMs": 0.6357649999999921
+        },
+        {
+          "key": "sanitation.hourly",
+          "calls": 47,
+          "ms": 118.52766199999405,
+          "maxMs": 99.36875099999997
+        },
+        {
+          "key": "economy.daily",
+          "calls": 2,
+          "ms": 74.81970400000137,
+          "maxMs": 37.52715000000171
+        },
+        {
+          "key": "nature.hourly",
+          "calls": 47,
+          "ms": 53.528961000004074,
+          "maxMs": 3.4822129999993194
+        },
+        {
+          "key": "lighting.reconcile",
+          "calls": 686,
+          "ms": 50.46356899999728,
+          "maxMs": 0.2953589999997348
+        },
+        {
+          "key": "sanitation.updateMinute",
+          "calls": 2880,
+          "ms": 50.08259000000089,
+          "maxMs": 0.45976500000006126
+        },
+        {
+          "key": "sanitation.reconcile",
+          "calls": 639,
+          "ms": 26.384842999991633,
+          "maxMs": 0.18500900000071852
+        },
+        {
+          "key": "politics.daily",
+          "calls": 3,
+          "ms": 26.036944000001313,
+          "maxMs": 9.711770000001707
+        },
+        {
+          "key": "society.daily",
+          "calls": 2,
+          "ms": 17.50604899999962,
+          "maxMs": 9.804519000001164
+        },
+        {
+          "key": "relationships.daily",
+          "calls": 2,
+          "ms": 15.464170999995986,
+          "maxMs": 8.701795999997557
+        },
+        {
+          "key": "research.updateMinute",
+          "calls": 2880,
+          "ms": 13.416130999922188,
+          "maxMs": 0.36952999999994063
+        },
+        {
+          "key": "bank.daily",
+          "calls": 2,
+          "ms": 11.151126999999178,
+          "maxMs": 7.205168000000413
+        },
+        {
+          "key": "housing.reconcile",
+          "calls": 639,
+          "ms": 7.9297059999494195,
+          "maxMs": 0.1172630000000936
+        },
+        {
+          "key": "publications.hourly",
+          "calls": 47,
+          "ms": 2.3775330000021313,
+          "maxMs": 0.6319229999999152
+        }
+      ]
+    },
+    {
+      "name": "inicializacao_atual_128",
+      "stage": "Três dias desde a fundação, incluindo planejamento de distribuição alimentar e correções das publicações.",
+      "completed": true,
+      "settings": {
+        "population": 128,
+        "days": 3,
+        "seed": 1337,
+        "preset": 1
+      },
+      "final": {
+        "violations": [],
+        "services": {
+          "lighting": {
+            "planned": 12,
+            "built": 3,
+            "publicBuilt": 3,
+            "publicLit": 0,
+            "peakPublicLights": 0,
+            "firstPublicLight": null,
+            "refills": 0
+          },
+          "roads": {
+            "completed": 2,
+            "pending": 2
+          },
+          "sanitation": {
+            "cleaned": 8,
+            "wasteProcessed": 0
+          },
+          "banking": {
+            "loans": 145,
+            "active": 145,
+            "deposits": 457226
+          },
+          "politics": {
+            "approval": 78.47581697620929,
+            "parties": 4,
+            "council": 8,
+            "bills": 16,
+            "votes": 0,
+            "studies": [],
+            "polls": 0,
+            "corruptionCases": 1,
+            "scandals": 0
+          },
+          "publications": {
+            "documents": 0,
+            "newspapers": 0,
+            "books": 0,
+            "pamphlets": 0
+          },
+          "birthCount": 0
+        },
+        "day": 4,
+        "minute": 4800,
+        "population": 128,
+        "employed": 98,
+        "homeless": 12,
+        "deaths": 0,
+        "hungry": 0,
+        "happiness": 89,
+        "treasury": 4979523,
+        "buildings": 50,
+        "businesses": 40,
+        "sectors": [
+          "forestry",
+          "charcoal",
+          "iron_mine",
+          "foundry",
+          "sand_pit",
+          "glassworks",
+          "fiber_farm",
+          "weaving",
+          "newsroom",
+          "dairy_farm",
+          "cheesemaker",
+          "poultry",
+          "flour_mill",
+          "cannery",
+          "paper_mill",
+          "research_institute",
+          "bank"
+        ],
+        "crops": [
+          "trigo",
+          "girassol",
+          "milho",
+          "alface",
+          "arroz",
+          "cebola",
+          "feijao",
+          "tomate",
+          "coentro",
+          "maca",
+          "goiaba",
+          "mandioca",
+          "trigo",
+          "goiaba",
+          "mandioca"
+        ],
+        "produced": {
+          "madeira": 16,
+          "carvao": 8,
+          "minerio": 24,
+          "areia": 68,
+          "fibras": 20,
+          "leite": 30,
+          "ovos": 16,
+          "farinha": 4,
+          "papel": 12,
+          "arroz": 324,
+          "alface": 240,
+          "tomate": 228,
+          "girassol": 240,
+          "maca": 168,
+          "goiaba": 144,
+          "trigo": 336,
+          "milho": 264,
+          "mandioca": 120,
+          "cebola": 252,
+          "feijao": 168,
+          "coentro": 216,
+          "pao": 72,
+          "pedra": 1902,
+          "lixo": 625
+        },
+        "projects": {
+          "active": 28,
+          "completed": 51
+        },
+        "deliveries": 175,
+        "elections": 0,
+        "relationships": 1729,
+        "events": 23832,
+        "heapMB": 172,
+        "elapsedMs": 35458
+      },
+      "violations": [],
+      "deaths": [],
+      "industryTypes": 17,
+      "elapsedMs": 35459,
+      "minuteMs": {
+        "p50": 4.688161999998556,
+        "p95": 17.867966000005254,
+        "p99": 60.10932899999898,
+        "max": 600.0995189999994
+      },
+      "profile": [
+        {
+          "key": "economy.hourly",
+          "calls": 924,
+          "ms": 10009.403237999923,
+          "maxMs": 595.7220119999984
+        },
+        {
+          "key": "economy.invest",
+          "calls": 35,
+          "ms": 4435.433369999987,
+          "maxMs": 591.3387070000026
+        },
+        {
+          "key": "city.chooseTask",
+          "calls": 109443,
+          "ms": 4263.034447998061,
+          "maxMs": 36.36150100000032
+        },
+        {
+          "key": "city.findPath",
+          "calls": 109762,
+          "ms": 3617.1771379996317,
+          "maxMs": 28.205652999999984
+        },
+        {
+          "key": "logistics.updateMinute",
+          "calls": 4320,
+          "ms": 1995.026629999696,
+          "maxMs": 15.748634999999922
+        },
+        {
+          "key": "society.updateMinute",
+          "calls": 4320,
+          "ms": 1669.3747819999749,
+          "maxMs": 17.03748399999995
+        },
+        {
+          "key": "lighting.hourly",
+          "calls": 71,
+          "ms": 1338.6339660000122,
+          "maxMs": 74.39548900000227
+        },
+        {
+          "key": "economy.updateDemand",
+          "calls": 133,
+          "ms": 597.3001519999848,
+          "maxMs": 20.439868999999817
+        },
+        {
+          "key": "politics.hourly",
+          "calls": 71,
+          "ms": 352.93544900002644,
+          "maxMs": 85.31313699999964
+        },
+        {
+          "key": "city.reconcile",
+          "calls": 4320,
+          "ms": 308.45169499990243,
+          "maxMs": 4.136764999999741
+        },
+        {
+          "key": "development.reconcile",
+          "calls": 969,
+          "ms": 229.70158299998957,
+          "maxMs": 8.471529999999802
+        },
+        {
+          "key": "economy.hire",
+          "calls": 74,
+          "ms": 227.16092300000946,
+          "maxMs": 27.668853999999556
+        },
+        {
+          "key": "housing.invest",
+          "calls": 38,
+          "ms": 187.3591140000235,
+          "maxMs": 13.780300000000352
+        },
+        {
+          "key": "sanitation.updateMinute",
+          "calls": 4320,
+          "ms": 97.90013000002273,
+          "maxMs": 5.443144999999731
+        },
+        {
+          "key": "economy.daily",
+          "calls": 3,
+          "ms": 84.55144900000596,
+          "maxMs": 38.37662900000214
+        },
+        {
+          "key": "lighting.reconcile",
+          "calls": 1040,
+          "ms": 72.99612799987472,
+          "maxMs": 1.8590340000000651
+        },
+        {
+          "key": "nature.hourly",
+          "calls": 71,
+          "ms": 59.46979600000077,
+          "maxMs": 8.337854000000334
+        },
+        {
+          "key": "sanitation.reconcile",
+          "calls": 969,
+          "ms": 53.969658000020445,
+          "maxMs": 0.33300299999973504
+        },
+        {
+          "key": "research.updateMinute",
+          "calls": 4320,
+          "ms": 31.152054000152475,
+          "maxMs": 11.34130499999992
+        },
+        {
+          "key": "sanitation.hourly",
+          "calls": 71,
+          "ms": 29.07580299998108,
+          "maxMs": 0.8889389999985724
+        },
+        {
+          "key": "politics.daily",
+          "calls": 4,
+          "ms": 27.368814999992537,
+          "maxMs": 9.660855000000083
+        },
+        {
+          "key": "society.daily",
+          "calls": 3,
+          "ms": 24.204799999999523,
+          "maxMs": 8.45672399999603
+        },
+        {
+          "key": "relationships.daily",
+          "calls": 3,
+          "ms": 21.699106000007305,
+          "maxMs": 7.773187000006146
+        },
+        {
+          "key": "housing.reconcile",
+          "calls": 969,
+          "ms": 13.42088699996657,
+          "maxMs": 0.11593600000014703
+        },
+        {
+          "key": "bank.daily",
+          "calls": 3,
+          "ms": 12.537614999999278,
+          "maxMs": 5.280415000001085
+        },
+        {
+          "key": "publications.hourly",
+          "calls": 71,
+          "ms": 3.0623290000071393,
+          "maxMs": 0.5293960000003608
+        }
+      ]
+    },
+    {
+      "name": "cidade_madura_atual_512",
+      "stage": "Estado do dia 14 avançado por 360 minutos com as últimas otimizações.",
+      "completed": true,
+      "settings": {
+        "population": 512,
+        "days": 0.25,
+        "seed": 1337,
+        "preset": 1
+      },
+      "final": {
+        "violations": [],
+        "services": {
+          "lighting": {
+            "planned": 29,
+            "built": 19,
+            "publicBuilt": 14,
+            "publicLit": 10,
+            "peakPublicLights": 11,
+            "firstPublicLight": 19860,
+            "refills": 10
+          },
+          "roads": {
+            "completed": 21,
+            "pending": 0
+          },
+          "sanitation": {
+            "cleaned": 529,
+            "wasteProcessed": 664
+          },
+          "banking": {
+            "loans": 438,
+            "active": 438,
+            "deposits": 2409964
+          },
+          "politics": {
+            "approval": 57.756265347661035,
+            "parties": 5,
+            "council": 26,
+            "bills": 37,
+            "votes": 0,
+            "studies": [
+              {
+                "id": 1,
+                "status": "published",
+                "minimum": 26,
+                "target": 26,
+                "responses": 26,
+                "unique": 26
+              },
+              {
+                "id": 2,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 26,
+                "responses": 21,
+                "unique": 21
+              },
+              {
+                "id": 3,
+                "status": "published",
+                "minimum": 26,
+                "target": 81,
+                "responses": 30,
+                "unique": 30
+              },
+              {
+                "id": 4,
+                "status": "published",
+                "minimum": 26,
+                "target": 48,
+                "responses": 26,
+                "unique": 26
+              },
+              {
+                "id": 5,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 76,
+                "responses": 2,
+                "unique": 2
+              },
+              {
+                "id": 6,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 31,
+                "responses": 0,
+                "unique": 0
+              }
+            ],
+            "polls": 3,
+            "corruptionCases": 14,
+            "scandals": 5
+          },
+          "publications": {
+            "documents": 34,
+            "newspapers": 23,
+            "books": 4,
+            "pamphlets": 7
+          },
+          "birthCount": 0
+        },
+        "day": 15,
+        "minute": 20160,
+        "population": 512,
+        "employed": 347,
+        "homeless": 114,
+        "deaths": 0,
+        "hungry": 4,
+        "happiness": 76,
+        "treasury": 2846470,
+        "buildings": 155,
+        "businesses": 129,
+        "sectors": [
+          "kitchen",
+          "artisan",
+          "forestry",
+          "sawmill",
+          "charcoal",
+          "iron_mine",
+          "foundry",
+          "toolmaker",
+          "clay_pit",
+          "brickworks",
+          "sand_pit",
+          "glassworks",
+          "furniture",
+          "fiber_farm",
+          "flagmaker",
+          "paintworks",
+          "weaving",
+          "newsroom",
+          "clothing_store",
+          "tailor",
+          "dairy_farm",
+          "cheesemaker",
+          "poultry",
+          "flour_mill",
+          "pasta_factory",
+          "cannery",
+          "soapworks",
+          "herb_farm",
+          "pharmacy",
+          "paper_mill",
+          "publisher",
+          "pottery",
+          "composting",
+          "research_institute",
+          "bank"
+        ],
+        "crops": [
+          "trigo",
+          "girassol",
+          "milho",
+          "alface",
+          "arroz",
+          "cebola",
+          "feijao",
+          "tomate",
+          "mandioca",
+          "maca",
+          "goiaba",
+          "coentro",
+          "maca",
+          "mandioca",
+          "cebola",
+          "goiaba",
+          "feijao",
+          "goiaba",
+          "coentro",
+          "trigo",
+          "trigo",
+          "trigo",
+          "trigo",
+          "maca",
+          "trigo",
+          "alface",
+          "arroz",
+          "milho"
+        ],
+        "produced": {
+          "bandeiras": 4,
+          "faixas": 7,
+          "tinta": 72,
+          "cesta": 14,
+          "marmita": 27,
+          "marmita_simples": 26,
+          "marmita_rustica": 54,
+          "madeira": 180,
+          "tabuas": 80,
+          "carvao": 72,
+          "minerio": 120,
+          "ferro": 40,
+          "ferramentas": 16,
+          "argila": 175,
+          "tijolos": 27,
+          "areia": 84,
+          "vidro": 16,
+          "moveis": 6,
+          "fibras": 160,
+          "tecido": 102,
+          "roupas": 44,
+          "leite": 325,
+          "queijo": 88,
+          "ovos": 228,
+          "farinha": 124,
+          "massa": 75,
+          "conserva": 6,
+          "sabao": 105,
+          "ervas": 136,
+          "remedio": 20,
+          "papel": 120,
+          "jornais": 23,
+          "livros": 4,
+          "panfletos": 7,
+          "ceramica": 15,
+          "adubo": 166,
+          "arroz": 2192,
+          "alface": 3936,
+          "tomate": 624,
+          "girassol": 738,
+          "maca": 828,
+          "goiaba": 1056,
+          "trigo": 1704,
+          "milho": 1908,
+          "mandioca": 660,
+          "cebola": 912,
+          "feijao": 696,
+          "coentro": 744,
+          "oleo": 180,
+          "pao": 738,
+          "pedra": 4542,
+          "lixo": 9713
+        },
+        "projects": {
+          "active": 10,
+          "completed": 193
+        },
+        "deliveries": 1991,
+        "elections": 1,
+        "relationships": 15742,
+        "events": 288859,
+        "heapMB": 401,
+        "elapsedMs": 8838
+      },
+      "violations": [],
+      "deaths": [],
+      "industryTypes": 35,
+      "elapsedMs": 8838,
+      "minuteMs": {
+        "p50": 11.712510999999722,
+        "p95": 60.190066000000115,
+        "p99": 142.22820800000045,
+        "max": 288.828755999999
+      },
+      "profile": [
+        {
+          "key": "city.chooseTask",
+          "calls": 8280,
+          "ms": 3009.9045539999706,
+          "maxMs": 27.712643999999955
+        },
+        {
+          "key": "city.findPath",
+          "calls": 8321,
+          "ms": 2660.1464400000254,
+          "maxMs": 27.084352999999965
+        },
+        {
+          "key": "economy.hourly",
+          "calls": 78,
+          "ms": 1690.583391999997,
+          "maxMs": 192.81748100000004
+        },
+        {
+          "key": "logistics.updateMinute",
+          "calls": 360,
+          "ms": 425.1605629999967,
+          "maxMs": 16.219714000000295
+        },
+        {
+          "key": "lighting.hourly",
+          "calls": 6,
+          "ms": 357.40102299999944,
+          "maxMs": 74.95854899999995
+        },
+        {
+          "key": "economy.invest",
+          "calls": 3,
+          "ms": 271.16947600000003,
+          "maxMs": 117.30132099999992
+        },
+        {
+          "key": "housing.invest",
+          "calls": 4,
+          "ms": 232.2516459999988,
+          "maxMs": 75.36697999999978
+        },
+        {
+          "key": "economy.hire",
+          "calls": 7,
+          "ms": 174.3882709999989,
+          "maxMs": 54.43298400000003
+        },
+        {
+          "key": "economy.daily",
+          "calls": 1,
+          "ms": 137.5132279999998,
+          "maxMs": 137.5132279999998
+        },
+        {
+          "key": "society.updateMinute",
+          "calls": 360,
+          "ms": 137.50611599999525,
+          "maxMs": 4.452656999999817
+        },
+        {
+          "key": "economy.updateDemand",
+          "calls": 13,
+          "ms": 126.13057600000229,
+          "maxMs": 24.15192900000011
+        },
+        {
+          "key": "society.daily",
+          "calls": 1,
+          "ms": 75.21360900000036,
+          "maxMs": 75.21360900000036
+        },
+        {
+          "key": "relationships.daily",
+          "calls": 1,
+          "ms": 67.00377399999888,
+          "maxMs": 67.00377399999888
+        },
+        {
+          "key": "sanitation.hourly",
+          "calls": 6,
+          "ms": 64.75942799999984,
+          "maxMs": 14.221487000000252
+        },
+        {
+          "key": "politics.hourly",
+          "calls": 6,
+          "ms": 61.237613999998075,
+          "maxMs": 27.78311400000007
+        },
+        {
+          "key": "city.reconcile",
+          "calls": 360,
+          "ms": 39.660375999997314,
+          "maxMs": 1.7589509999997972
+        },
+        {
+          "key": "sanitation.updateMinute",
+          "calls": 360,
+          "ms": 32.209213999988606,
+          "maxMs": 3.361247999999705
+        },
+        {
+          "key": "development.reconcile",
+          "calls": 76,
+          "ms": 28.51379499999939,
+          "maxMs": 1.0388189999998758
+        },
+        {
+          "key": "bank.daily",
+          "calls": 1,
+          "ms": 13.566306999999142,
+          "maxMs": 13.566306999999142
+        },
+        {
+          "key": "nature.hourly",
+          "calls": 6,
+          "ms": 10.432600999999522,
+          "maxMs": 3.5611330000001544
+        },
+        {
+          "key": "publications.hourly",
+          "calls": 6,
+          "ms": 10.17390999999725,
+          "maxMs": 3.5649749999997766
+        },
+        {
+          "key": "sanitation.reconcile",
+          "calls": 76,
+          "ms": 9.668041999998877,
+          "maxMs": 0.36568899999974747
+        },
+        {
+          "key": "lighting.reconcile",
+          "calls": 82,
+          "ms": 7.452758000004451,
+          "maxMs": 0.40773300000000745
+        },
+        {
+          "key": "research.updateMinute",
+          "calls": 360,
+          "ms": 3.4846569999997428,
+          "maxMs": 0.24416500000006636
+        },
+        {
+          "key": "housing.reconcile",
+          "calls": 76,
+          "ms": 2.0541669999943224,
+          "maxMs": 0.23829799999975876
+        },
+        {
+          "key": "politics.daily",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        }
+      ]
+    },
+    {
+      "name": "votacao_e_reservas",
+      "stage": "Conferência adicional de votos únicos e reservas bancárias no estado maduro.",
+      "completed": true,
+      "settings": {
+        "population": 512,
+        "days": 0.001,
+        "seed": 1337,
+        "preset": 1
+      },
+      "final": {
+        "violations": [],
+        "services": {
+          "lighting": {
+            "planned": 29,
+            "built": 19,
+            "publicBuilt": 14,
+            "publicLit": 11,
+            "peakPublicLights": 11,
+            "firstPublicLight": 19802,
+            "refills": 11
+          },
+          "roads": {
+            "completed": 21,
+            "pending": 0
+          },
+          "sanitation": {
+            "cleaned": 520,
+            "wasteProcessed": 664
+          },
+          "banking": {
+            "loans": 438,
+            "active": 438,
+            "deposits": 2373943
+          },
+          "politics": {
+            "elections": [
+              {
+                "id": 1,
+                "round": 1,
+                "status": "completed",
+                "votes": 426,
+                "uniqueVoters": 426
+              }
+            ],
+            "approval": 55.29745881265948,
+            "parties": 5,
+            "council": 26,
+            "bills": 37,
+            "votes": 0,
+            "studies": [
+              {
+                "id": 1,
+                "status": "published",
+                "minimum": 26,
+                "target": 26,
+                "responses": 26,
+                "unique": 26
+              },
+              {
+                "id": 2,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 26,
+                "responses": 21,
+                "unique": 21
+              },
+              {
+                "id": 3,
+                "status": "published",
+                "minimum": 26,
+                "target": 81,
+                "responses": 30,
+                "unique": 30
+              },
+              {
+                "id": 4,
+                "status": "published",
+                "minimum": 26,
+                "target": 48,
+                "responses": 26,
+                "unique": 26
+              },
+              {
+                "id": 5,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 76,
+                "responses": 2,
+                "unique": 2
+              },
+              {
+                "id": 6,
+                "status": "insufficient",
+                "minimum": 26,
+                "target": 31,
+                "responses": 0,
+                "unique": 0
+              }
+            ],
+            "polls": 3,
+            "corruptionCases": 14,
+            "scandals": 5
+          },
+          "publications": {
+            "documents": 34,
+            "newspapers": 23,
+            "books": 4,
+            "pamphlets": 7
+          },
+          "birthCount": 0
+        },
+        "day": 14,
+        "minute": 19802,
+        "population": 512,
+        "employed": 347,
+        "homeless": 114,
+        "deaths": 0,
+        "hungry": 13,
+        "happiness": 71,
+        "treasury": 603600,
+        "buildings": 155,
+        "businesses": 129,
+        "sectors": [
+          "kitchen",
+          "artisan",
+          "forestry",
+          "sawmill",
+          "charcoal",
+          "iron_mine",
+          "foundry",
+          "toolmaker",
+          "clay_pit",
+          "brickworks",
+          "sand_pit",
+          "glassworks",
+          "furniture",
+          "fiber_farm",
+          "flagmaker",
+          "paintworks",
+          "weaving",
+          "newsroom",
+          "clothing_store",
+          "tailor",
+          "dairy_farm",
+          "cheesemaker",
+          "poultry",
+          "flour_mill",
+          "pasta_factory",
+          "cannery",
+          "soapworks",
+          "herb_farm",
+          "pharmacy",
+          "paper_mill",
+          "publisher",
+          "pottery",
+          "composting",
+          "research_institute",
+          "bank"
+        ],
+        "crops": [
+          "trigo",
+          "girassol",
+          "milho",
+          "alface",
+          "arroz",
+          "cebola",
+          "feijao",
+          "tomate",
+          "mandioca",
+          "maca",
+          "goiaba",
+          "coentro",
+          "maca",
+          "mandioca",
+          "cebola",
+          "goiaba",
+          "feijao",
+          "goiaba",
+          "coentro",
+          "trigo",
+          "trigo",
+          "trigo",
+          "trigo",
+          "maca",
+          "trigo",
+          "alface",
+          "arroz",
+          "milho"
+        ],
+        "produced": {
+          "bandeiras": 4,
+          "faixas": 7,
+          "tinta": 72,
+          "cesta": 14,
+          "marmita": 27,
+          "marmita_simples": 26,
+          "marmita_rustica": 54,
+          "madeira": 180,
+          "tabuas": 80,
+          "carvao": 72,
+          "minerio": 120,
+          "ferro": 40,
+          "ferramentas": 16,
+          "argila": 175,
+          "tijolos": 27,
+          "areia": 84,
+          "vidro": 16,
+          "moveis": 6,
+          "fibras": 160,
+          "tecido": 102,
+          "roupas": 44,
+          "leite": 325,
+          "queijo": 88,
+          "ovos": 228,
+          "farinha": 124,
+          "massa": 75,
+          "conserva": 6,
+          "sabao": 105,
+          "ervas": 136,
+          "remedio": 20,
+          "papel": 120,
+          "jornais": 23,
+          "livros": 4,
+          "panfletos": 7,
+          "ceramica": 15,
+          "adubo": 166,
+          "arroz": 2192,
+          "alface": 3936,
+          "tomate": 624,
+          "girassol": 738,
+          "maca": 828,
+          "goiaba": 1056,
+          "trigo": 1704,
+          "milho": 1908,
+          "mandioca": 660,
+          "cebola": 912,
+          "feijao": 696,
+          "coentro": 744,
+          "oleo": 180,
+          "pao": 738,
+          "pedra": 4542,
+          "lixo": 9472
+        },
+        "projects": {
+          "active": 10,
+          "completed": 193
+        },
+        "deliveries": 1975,
+        "elections": 1,
+        "relationships": 15672,
+        "events": 283766,
+        "heapMB": 325,
+        "elapsedMs": 2116
+      },
+      "violations": [],
+      "deaths": [],
+      "industryTypes": 35,
+      "elapsedMs": 2117,
+      "minuteMs": {
+        "p50": 193.39136700000017,
+        "p95": 193.39136700000017,
+        "p99": 193.39136700000017,
+        "max": 193.39136700000017
+      },
+      "profile": [
+        {
+          "key": "economy.hourly",
+          "calls": 2,
+          "ms": 139.84711200000038,
+          "maxMs": 97.60854300000028
+        },
+        {
+          "key": "city.chooseTask",
+          "calls": 14,
+          "ms": 112.34043100000008,
+          "maxMs": 32.16111000000001
+        },
+        {
+          "key": "city.findPath",
+          "calls": 14,
+          "ms": 104.53148300000112,
+          "maxMs": 31.454107999999906
+        },
+        {
+          "key": "lighting.hourly",
+          "calls": 1,
+          "ms": 97.45566100000042,
+          "maxMs": 97.45566100000042
+        },
+        {
+          "key": "politics.hourly",
+          "calls": 1,
+          "ms": 40.2052120000003,
+          "maxMs": 40.2052120000003
+        },
+        {
+          "key": "logistics.updateMinute",
+          "calls": 2,
+          "ms": 7.298896000000241,
+          "maxMs": 5.169366999999966
+        },
+        {
+          "key": "city.reconcile",
+          "calls": 2,
+          "ms": 1.4633129999997436,
+          "maxMs": 0.8522729999999683
+        },
+        {
+          "key": "society.updateMinute",
+          "calls": 2,
+          "ms": 1.2483420000003207,
+          "maxMs": 0.8052689999999529
+        },
+        {
+          "key": "sanitation.updateMinute",
+          "calls": 2,
+          "ms": 0.5608250000000226,
+          "maxMs": 0.4393009999998867
+        },
+        {
+          "key": "lighting.reconcile",
+          "calls": 1,
+          "ms": 0.46632999999974345,
+          "maxMs": 0.46632999999974345
+        },
+        {
+          "key": "research.updateMinute",
+          "calls": 2,
+          "ms": 0.16971400000011272,
+          "maxMs": 0.1394030000001294
+        },
+        {
+          "key": "economy.daily",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "economy.invest",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "economy.hire",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "economy.updateDemand",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "development.reconcile",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "housing.reconcile",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "housing.invest",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "sanitation.reconcile",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "sanitation.hourly",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "politics.daily",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "society.daily",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "relationships.daily",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "bank.daily",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "nature.hourly",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        },
+        {
+          "key": "publications.hourly",
+          "calls": 0,
+          "ms": 0,
+          "maxMs": 0
+        }
+      ]
+    }
+  ],
+  "performance": {
+    "connectivity": {
+      "before": {
+        "p50": 35.93344399999842,
+        "p95": 221.1815349999997,
+        "p99": 793.8256350000006,
+        "max": 4079.007470999999
+      },
+      "after": {
+        "p50": 29.36194400000022,
+        "p95": 86.25026600000092,
+        "p99": 337.498513,
+        "max": 681.102267000002
+      },
+      "beforeMs": 36179,
+      "afterMs": 16643
+    },
+    "lampPlacement": {
+      "beforeMs": 27710,
+      "afterMs": 8838,
+      "before": {
+        "p50": 25.769102999998722,
+        "p95": 141.2568570000003,
+        "p99": 1211.6727619999983,
+        "max": 2211.0445799999998
+      },
+      "after": {
+        "p50": 11.712510999999722,
+        "p95": 60.190066000000115,
+        "p99": 142.22820800000045,
+        "max": 288.828755999999
+      },
+      "identicalObservedOutcomes": true
+    },
+    "browser": {
+      "population": 512,
+      "citizenBatches": 5,
+      "batchedCitizens": 512,
+      "drawCallsBefore": 1095,
+      "drawCallsAfter": 81,
+      "observedFpsBefore": 6.4,
+      "observedFpsAfter": 41.6,
+      "consoleErrors": 0,
+      "limitation": "Leituras da inspeção local; mapa e carga concorrente variaram. Não é uma garantia de FPS."
+    }
+  },
+  "benchmarks": [
+    {
+      "mode": "simulation",
+      "root": "/home/jardel/repos/suburban/",
+      "population": 256,
+      "updates": 360,
+      "ms": 3252.1896850000003,
+      "p50": 7.231359000000339,
+      "p95": 26.135489999999663,
+      "max": 225.15445200000022,
+      "checksum": "f6bafee0a8716ea7de29be8766e8b6474f2f8d9cb384b7d57bed82677b9e6c0d"
+    },
+    {
+      "mode": "snapshots",
+      "root": "/home/jardel/repos/suburban/",
+      "samples": 30,
+      "encodeMs": 74.98487653333329,
+      "changedNodes": 1027.6666666666667,
+      "bytes": 222410.66666666666,
+      "applyMs": 14.141793299999911,
+      "checksum": "1403dbc29da16fea7edbd501c003d81705fd375100818d8db270ae1db7cd924e",
+      "mirrorChecksum": "1403dbc29da16fea7edbd501c003d81705fd375100818d8db270ae1db7cd924e"
+    },
+    {
+      "mode": "bridge",
+      "root": "/home/jardel/repos/suburban/",
+      "samples": 30,
+      "encodeMs": 72.8217916333333,
+      "changedNodes": 1027.6666666666667,
+      "bytes": 222410.66666666666,
+      "applyMs": 15.594260233333276,
+      "checksum": "1403dbc29da16fea7edbd501c003d81705fd375100818d8db270ae1db7cd924e",
+      "mirrorChecksum": "1403dbc29da16fea7edbd501c003d81705fd375100818d8db270ae1db7cd924e"
+    },
+    {
+      "mode": "scene",
+      "root": "/home/jardel/repos/suburban/",
+      "entities": 9999,
+      "staticMs": 1308.686398,
+      "movingMs": 491.648547,
+      "checksum": "f26aedc3a82c9508a5066ad82b93dca616d7beebf9727db834ce4ac169ed0311"
+    },
+    {
+      "mode": "city-render",
+      "root": "/home/jardel/repos/suburban/",
+      "buildings": 500,
+      "spaces": 50000,
+      "frames": 300,
+      "ms": 197.27970600000003,
+      "checksum": "853199b38ceb441371614b8050be3b582eb49485076b5ebeecbe5d57b4dd82f7"
+    }
+  ],
+  "tests": {
+    "command": "npm test",
+    "tests": 191,
+    "passed": 191,
+    "failed": 0,
+    "newRegressionTests": 27,
+    "elapsedMs": 118649.49342
+  }
+}

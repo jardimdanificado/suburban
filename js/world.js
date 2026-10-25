@@ -1,4 +1,5 @@
 import { randomWorldSeed } from './world_settings.js';
+import { roadFor } from './city_terrain.js';
 // =============================================================================
 // Brutopolis - World & Environment System (Pure JS Engine)
 // =============================================================================
@@ -104,6 +105,7 @@ export class World {
     this.seed = seed;
     this.presetId = presetId;
     this.revision = (this.revision || 0) + 1;
+    this.topologyRevision = (this.topologyRevision || 0) + 1;
     let cfg = MAP_PRESET_ARCHIPELAGO;
     if (presetId === 1) cfg = MAP_PRESET_CONTINENT;
     else if (presetId === 2) cfg = MAP_PRESET_HIGHLANDS;
@@ -146,7 +148,10 @@ export class World {
 
   setTile(x, y, tile) {
     if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) return;
-    if (this.map[y * MAP_WIDTH + x] === tile) return;
+    const previous=this.map[y * MAP_WIDTH + x];
+    if (previous === tile) return;
+    // Paving changes travel cost, but not reachability or terrain elevation.
+    if(roadFor(previous)===null||roadFor(previous)!==roadFor(tile))this.topologyRevision=(this.topologyRevision||0)+1;
     this.map[y * MAP_WIDTH + x] = tile;
     this.revision++;
     if (typeof this.onTileChange === "function") {

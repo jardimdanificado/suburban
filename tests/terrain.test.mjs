@@ -17,7 +17,7 @@ function terrainFixture() {
 test('seeds are random by default, validated in URLs and repeatable when specified', () => {
   const seeds = new Set(Array.from({ length: 16 }, randomWorldSeed)); assert(seeds.size > 1);
   const settings = resolveWorldSettings(new URLSearchParams('seed=12345&terrain=highlands'));
-  assert.deepEqual(settings, { seed: 12345, preset: 'highlands', presetId: 2 });
+  assert.deepEqual(settings, { seed: 12345, preset: 'highlands', presetId: 2, population: 512 });
   assert.deepEqual(settings, resolveWorldSettings(new URLSearchParams('seed=12345&terrain=highlands')));
   for (const bad of ['0', '-1', 'NaN', '123x', '4294967296']) {
     const s = resolveWorldSettings(new URLSearchParams(`seed=${bad}&terrain=bad`));
@@ -31,8 +31,8 @@ test('settlements across all landscape presets preserve every natural height and
   for (const [preset, seed] of [[0, 42], [1, 1337], [2, 23811]]) {
     const world = new World(preset, seed), natural = world.map.slice(), city = cityOn(world);
     city.initialize();
-    assert.equal(city.buildings.length, 4); assert.equal(city.citizens.length, 24);
-    assert.equal(city.stats().homeless, 24); assert(city.stats().employed > 0); assert.equal(city.stats().entrepreneurs, 0);
+    assert.equal(city.buildings.length, 5); assert.equal(city.citizens.length, 512);
+    assert.equal(city.stats().homeless, 512); assert(city.stats().employed > 0); assert.equal(city.stats().entrepreneurs, 0);
     let roads = 0;
     for (let i = 0; i < natural.length; i++) if (natural[i] !== world.map[i]) {
       roads++; assert(ROAD_TILES.has(world.map[i]));
@@ -97,5 +97,5 @@ test('isolated plots are rejected without construction charges, roads or terrain
   for (let y = 0; y < world.height; y++) world.setTile(30, y, 2);
   const before = world.map.slice(), treasury = city.treasury;
   assert.equal(city.addBuilding('residential', 40, 20, { width: 4, depth: 4, floors: 3, free: true }), null);
-  assert.match(city.lastError, /isolado/); assert.equal(city.treasury, treasury); assert.deepEqual(world.map, before);
+  assert.match(city.lastError, /isolado|acesso/); assert.equal(city.treasury, treasury); assert.deepEqual(world.map, before);
 });

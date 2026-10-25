@@ -3,9 +3,18 @@ import { initializeInventory, inventoryFree } from './city_inventory.js';
 export const LIGHTING_RULES = { roadSpacing: 7, privateSpacing: 3, stone: 2, labor: 20, installationFee: 8000, maxActiveSites: 4 };
 export class CityLighting {
   constructor(city) { this.city = city; this.posts = []; this.propertyStores = new Map(); this.roadPosts = new Map(); this.sites = new Map(); }
-  freeSite(x, y, building = null) {
+  siteOccupancy(){
+    const city=this.city,blocked=new Set(),plots=new Map(),mark=p=>blocked.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
+    for(const p of city.development.plots){mark(p.door);for(let y=p.y;y<p.y+p.depth;y++)for(let x=p.x;x<p.x+p.width;x++)plots.set(`${x},${y}`,p.id);}
+    for(const p of city.development.projects)if(!p.cancelled&&p.status!=='completed'){mark(p.door);for(const t of p.route||[])mark(t);}
+    for(const b of city.buildings)if(!b.entity.destroyed){for(let y=b.entity.y;y<b.entity.y+b.depth;y++)for(let x=b.entity.x;x<b.entity.x+b.width;x++)blocked.add(`${x},${y}`);for(const p of b.accessPath||[])mark(p);}
+    for(const c of city.citizens)if(!c.entity.destroyed)mark(c.entity);
+    return {blocked,plots};
+  }
+  freeSite(x, y, building = null,occupancy=null) {
     const city = this.city;
     if (!terrainWalkable(city.world, x, y) || ROAD_TILES.has(tileAt(city.world, x, y)) || city.occupied.has(`${x},${y}`)) return false;
+    if(occupancy){const key=`${x},${y}`;return !occupancy.blocked.has(key)&&(!occupancy.plots.has(key)||occupancy.plots.get(key)===building?.plotId);}
     if (city.development.plots.some(p => Math.floor(p.door.x) === x && Math.floor(p.door.y) === y)) return false;
     if (city.development.projects.some(p => !p.cancelled && p.status !== 'completed' && Math.floor(p.door.x) === x && Math.floor(p.door.y) === y)) return false;
     if (city.development.plots.some(p => p.id !== building?.plotId && x >= p.x && x < p.x + p.width && y >= p.y && y < p.y + p.depth)) return false;
@@ -13,12 +22,12 @@ export class CityLighting {
     if (city.development.projects.some(p => !p.cancelled && p.status !== 'completed' && p.route?.some(t => Math.floor(t.x) === x && Math.floor(t.y) === y))) return false;
     return !city.citizens.some(c => !c.entity.destroyed && Math.floor(c.entity.x) === x && Math.floor(c.entity.y) === y);
   }
-  findSite(point, building = null) {
+  findSite(point, building = null,occupancy=null) {
     const x = Math.floor(point.x), y = Math.floor(point.y);
     const radius = building ? 4 : 2;
     for (let r = 1; r <= radius; r++) for (const [dx, dy] of [[r,0],[-r,0],[0,r],[0,-r]]) {
       const xx = x + dx, yy = y + dy;
-      if (!this.freeSite(xx, yy, building)) continue;
+      if (!this.freeSite(xx, yy, building,occupancy)) continue;
       const street = [[xx + 1, yy], [xx - 1, yy], [xx, yy + 1], [xx, yy - 1]].find(([sx, sy]) => ROAD_TILES.has(tileAt(this.city.world, sx, sy)) && canStep(this.city.world, sx, sy, xx, yy));
       if (street) return { x: xx + .5, y: yy + .5, door: { x: street[0] + .5, y: street[1] + .5 } };
     }
@@ -44,6 +53,7 @@ export class CityLighting {
     if (!project) return;
     post.projectId = project.id; post.status = 'materials';
     city.occupied.add(`${Math.floor(post.x)},${Math.floor(post.y)}`);
+    city.obstacleRevision=(city.obstacleRevision||0)+1;
   }
   completePost(project) {
     const post = this.sites.get(project.lampId);
@@ -67,7 +77,7 @@ export class CityLighting {
         city.economy.lost[good] += quantity - stored; project.inventory[good] = 0;
       }
     }
-    if (post.projectId) city.occupied.delete(`${Math.floor(post.x)},${Math.floor(post.y)}`);
+    if (post.projectId&&city.occupied.delete(`${Math.floor(post.x)},${Math.floor(post.y)}`))city.obstacleRevision=(city.obstacleRevision||0)+1;
     post.status = 'cancelled'; post.built = false; post.lit = false;
   }
   reconcile() {
@@ -92,17 +102,19 @@ export class CityLighting {
     const utility = buildings.find(b => b.type === 'utility') || buildings.find(b => b.type === 'townhall');
     if (!utility) return;
     this.reconcile();
-    const night = city.hour < 6 || city.hour >= 18, groups = new Map(), posts = [];
+    const night = city.hour < 6 || city.hour >= 18, groups = new Map(), posts = [],occupancy=this.siteOccupancy();
     const register = (holder, payer, post) => {
       if (!post.built) return;
       const key = `${holder.id}:${payer}`;
       if (!groups.has(key)) groups.set(key, { holder, payer, posts: [] });
       groups.get(key).posts.push(post); posts.push(post);
     };
+    const seenRoadTiles=new Set();
     const planRoad=point=>{
+      const key=`${Math.floor(point.x)},${Math.floor(point.y)}`;if(seenRoadTiles.has(key))return;seenRoadTiles.add(key);
       if(!ROAD_TILES.has(tileAt(city.world,Math.floor(point.x),Math.floor(point.y))))return;
       if([...this.roadPosts.values()].some(p=>p.status!=='cancelled'&&Math.hypot(p.door.x-point.x,p.door.y-point.y)<LIGHTING_RULES.roadSpacing))return;
-      const site=this.findSite(point);if(!site)return;
+      const site=this.findSite(point,null,occupancy);if(!site)return;
       const id=`road:${Math.floor(site.x)}:${Math.floor(site.y)}`,post=this.plan({id,...site,fuel:0,lit:false,public:true,payerId:'treasury'});
       if(post)this.roadPosts.set(id,post);
     };
@@ -116,7 +128,7 @@ export class CityLighting {
         const id = `property:${b.id}:${owner}`;
         let holder = this.propertyStores.get(id);
         if (!holder || holder.post.status === 'cancelled') {
-          const site = this.findSite(b.door, b); if (!site) continue;
+          const site = this.findSite(b.door, b,occupancy); if (!site) continue;
           const post = this.plan({ id, buildingId: b.id, ...site, fuel: 0, lit: false, public: false, payerId: owner });
           if (!post) continue;
           holder = { id, type: 'property-lighting', active: true, entity: b.entity, accountId: owner, ownerId: city.development.ownerCitizen(owner)?.id, door: b.door, post };

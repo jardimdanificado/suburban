@@ -39,9 +39,11 @@ export class CityDevelopment {
   roadAccessTiles(){
     const allowed=new Set();
     for(const b of this.city.buildings)if(!b.entity.destroyed)for(const p of b.accessPath||[]){const x=Math.floor(p.x),y=Math.floor(p.y);if(!this.city.occupied.has(`${x},${y}`))allowed.add(`${x},${y}`);}
+    const blocked=allowed.blockedPlots=new Set();
+    for(const p of this.plots)for(let y=p.y;y<p.y+p.depth;y++)for(let x=p.x;x<p.x+p.width;x++){const k=`${x},${y}`;if(!allowed.has(k))blocked.add(k);}
     return allowed;
   }
-  roadPlotBlocked(x,y,access){return this.plots.some(p=>x>=p.x&&y>=p.y&&x<p.x+p.width&&y<p.y+p.depth)&&!access.has(`${x},${y}`);}
+  roadPlotBlocked(x,y,access){return access.blockedPlots?access.blockedPlots.has(`${x},${y}`):this.plots.some(p=>x>=p.x&&y>=p.y&&x<p.x+p.width&&y<p.y+p.depth)&&!access.has(`${x},${y}`);}
   beginRoad(accountId, start, end, { builderId = null,maxTiles=Infinity,priority=0 } = {}) {
     const city=this.city;
     if(!start||!end||![start.x,start.y,end.x,end.y].every(Number.isFinite)||!(maxTiles>0))return null;
@@ -140,23 +142,18 @@ export class CityDevelopment {
     const perTile=DEVELOPMENT_RULES.roadStonePerTile*city.economy.goods.pedra.price+Math.ceil(city.currency.price(DEVELOPMENT_RULES.roadFeePerTile)*DEVELOPMENT_RULES.municipalMultiplier),margin=city.currency.price(12000);
     const tiles=Math.min(8,Math.floor((city.treasury-needs.reserve-margin)/perTile));
     if(tiles<1){this.roadPlanning={reason:'Caixa aguardando orçamento para trecho de rua, após reserva social.',required:perTile+margin};return;}
-    const network=new Map(),roadProjects=this.projects.filter(p=>p.service==='road'&&p.status==='completed'&&!p.cancelled),projectsByTile=new Map(),routeTiles=new Map(),queue=[];
-    const addRoad=(x,y)=>{x=Math.floor(x);y=Math.floor(y);const k=`${x},${y}`;if(!ROAD_TILES.has(tileAt(city.world,x,y))||network.has(k))return;network.set(k,{x:x+.5,y:y+.5});queue.push(k);};
-    for(const p of hall.accessPath||[])addRoad(p.x,p.y);
-    if(!network.size)for(const b of city.buildings)for(const p of b.accessPath||[])addRoad(p.x,p.y);
-    for(const project of roadProjects){
-      const roadTiles=[];routeTiles.set(project,roadTiles);
-      for(const point of project.route||[]){const x=Math.floor(point.x),y=Math.floor(point.y),k=`${x},${y}`;if(!ROAD_TILES.has(tileAt(city.world,x,y)))continue;roadTiles.push(k);let list=projectsByTile.get(k);if(!list)projectsByTile.set(k,list=[]);list.push(project);}
-      if(project.connectedRoadNetwork)for(const k of roadTiles){const [x,y]=k.split(',').map(Number);addRoad(x,y);}
-    }
-    for(let head=0;head<queue.length;head++)for(const project of projectsByTile.get(queue[head])||[]){project.connectedRoadNetwork=true;for(const k of routeTiles.get(project)||[]){const [x,y]=k.split(',').map(Number);addRoad(x,y);}}
+    const network=new Map(),queue=[];
+    const addRoad=(x,y)=>{x=Math.floor(x);y=Math.floor(y);const k=`${x},${y}`;if(!ROAD_TILES.has(tileAt(city.world,x,y))||network.has(k)||!city.walkable(x,y))return;network.set(k,{x:x+.5,y:y+.5});queue.push({x,y});};
+    addRoad(hall.door.x,hall.door.y);
+    if(!network.size){const first=(hall.accessPath||[]).find(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y))));if(first)addRoad(first.x,first.y);}
+    for(let head=0;head<queue.length;head++){const {x,y}=queue[head];for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(canStep(city.world,x,y,x+dx,y+dy))addRoad(x+dx,y+dy);}
     const targets=[...network.values()];
-    const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!b.accessPath?.some(p=>network.has(`${Math.floor(p.x)},${Math.floor(p.y)}`))).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])})).sort((a,b)=>b.traffic-a.traffic||a.b.id-b.b.id);
+    const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!network.has(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`)).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])})).sort((a,b)=>b.traffic-a.traffic||a.b.id-b.b.id);
     if(!targets.length){this.roadPlanning={reason:'Aguardando definição do primeiro trecho conectado à rua da prefeitura.'};return;}
     const offset=(this.roadCursor||0)%Math.max(1,buildings.length),options=buildings.slice(offset).concat(buildings.slice(0,offset)).slice(0,8);
     for(const {b} of options){
       let target=targets[0],bestDistance=Infinity;for(const point of targets){const d=(point.x-b.door.x)**2+(point.y-b.door.y)**2;if(d<bestDistance){bestDistance=d;target=point;}}
-      const project=this.beginRoad('treasury',b.door,target,{maxTiles:tiles,priority:110});
+      const project=this.beginRoad('treasury',target,b.door,{maxTiles:tiles,priority:110});
       if(!project)continue;
       const id=`materials:${project.id}`,budget=project.stone*city.economy.goods.pedra.price+margin;
       city.accounts.set(id,{name:`Materiais de ${project.name}`,balance:0});
@@ -170,11 +167,11 @@ export class CityDevelopment {
     const vacant=[...city.housing.homes.values()].filter(h=>city.housing.isSocial(h)&&city.housing.units(h).every(u=>!u.tenantId)).length;
     const queued=pending.filter(p=>p.type==='popular_housing'&&p.service==='building');
     const planned=queued.reduce((n,p)=>n+Math.floor((2*p.width+2*p.depth-4)/2)*p.floors,0);
-    if(needs.homeless<=vacant+planned || queued.length>=2 || pending.filter(p=>p.service==='building'&&p.priority>=90).length>=3)return;
+    if(needs.homeless<=vacant+planned || queued.length>=2)return;
     const lots=this.plots.filter(p=>p.ownerId==='treasury'&&!p.projectId&&!p.buildingId&&!['farm','quarry'].includes(p.type)&&p.width>=3&&p.depth>=3).sort((a,b)=>Math.hypot(a.x-city.spawn.x,a.y-city.spawn.y)-Math.hypot(b.x-city.spawn.x,b.y-city.spawn.y));
     const cells=3*3*4,cost=cells*DEVELOPMENT_RULES.stonePerCell*city.economy.goods.pedra.price+Math.ceil(cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell)*1.5);
     if(city.treasury<cost+needs.reserve)return;
-    for(const lot of lots.slice(0,8)){const project=this.beginProject('treasury',lot.id,'popular_housing',{width:3,depth:3,floors:4,priority:95});if(project)break;}
+    for(const lot of lots.slice(0,8)){const project=this.beginProject('treasury',lot.id,'popular_housing',{width:3,depth:3,floors:4,priority:needs.homeless>needs.population*.3?150:95});if(project)break;}
   }
   cityRoadNeedsRepair() {
     const out = [];
@@ -258,7 +255,7 @@ export class CityDevelopment {
     const ruralTarget = 3;
     const supply = () => {
       const plots = available();
-      return { rural: plots.filter(p => this.isFarmPlot(p)).length, urban: plots.filter(p => p.type !== 'farm' && p.width <= 8 && p.depth <= 8).length };
+      return { rural: plots.filter(p => this.isFarmPlot(p)).length, urban: plots.filter(p => !['farm','quarry'].includes(p.type) && p.width <= 8 && p.depth <= 8).length };
     };
     let stock = supply();
     // A full urban catalogue must never stop the search for agricultural land.
@@ -446,7 +443,7 @@ export class CityDevelopment {
     this.ensurePlots();
     this.updateWear();
     this.planPublicWorks();
-    const emergency=this.city.welfare.conditions().crisis,basic=new Set(['popular_housing','popular_refectory','kitchen','farm','bakery','market','greengrocer','mill','builder','quarry','carrier','cleaner','recycler','composting','waste_collector']);
+    const emergency=this.city.welfare.conditions().crisis,basic=new Set(['popular_housing','popular_refectory','public_toilet','kitchen','farm','bakery','market','greengrocer','mill','builder','quarry','carrier','cleaner','recycler','composting','waste_collector']);
     for (const p of [...this.projects].sort((a, b) => (b.priority||0)-(a.priority||0)||Number(a.service === 'lamp') - Number(b.service === 'lamp'))) {
       const defer=emergency&&p.accountId==='treasury'&&p.priority<90&&!basic.has(p.type)&&p.service!=='road-repair';
       p.waitingForBasicNeeds=defer;

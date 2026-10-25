@@ -7,7 +7,7 @@ import { WorldClock } from "../js/world.js";
 
 test("all speed tiers advance the world clock and experience with fixed steps", () => {
   for (const speed of SPEED_TIERS) {
-    const time = new SimulationTime();
+    const time = new SimulationTime({now:()=>0});
     const clock = new WorldClock();
     time.setSpeed(speed);
     let calls = 0;
@@ -25,7 +25,7 @@ test("all speed tiers advance the world clock and experience with fixed steps", 
 
 test("simulation produces the same steps at different rendering frame rates", () => {
   const run = fps => {
-    const time = new SimulationTime();
+    const time = new SimulationTime({now:()=>0});
     time.setSpeed(16);
     for (let i = 0; i < fps; i++) time.advance(1 / fps, () => {});
     return time.tick;
@@ -34,8 +34,14 @@ test("simulation produces the same steps at different rendering frame rates", ()
   assert.equal(run(144), 960);
 });
 
+test('local fallback yields after its CPU budget and bounds catch-up work',()=>{
+  let now=0,calls=0;const time=new SimulationTime({now:()=>now});time.setSpeed(32);
+  const steps=time.advance(.25,()=>{now+=4;calls++;});
+  assert.equal(steps,2);assert.equal(calls,2);assert(time.accumulator<=time.stepSeconds*2);
+});
+
 test("pause discards partial steps and suspended-tab time is bounded", () => {
-  const time = new SimulationTime();
+  const time = new SimulationTime({now:()=>0});
   time.advance(1 / 120, () => assert.fail("partial step must wait"));
   time.setPaused(true);
   assert.equal(time.advance(200, () => assert.fail("paused update")), 0);
@@ -45,7 +51,7 @@ test("pause discards partial steps and suspended-tab time is bounded", () => {
 });
 
 test("single-step requires pause and is independent of the selected speed", () => {
-  const time = new SimulationTime();
+  const time = new SimulationTime({now:()=>0});
   time.setSpeed(32);
   assert.equal(time.step(() => assert.fail("running step")), false);
   time.setPaused(true);
@@ -78,7 +84,7 @@ test("graphics options apply renderer hooks and persist validated preferences", 
   let saved = '{"resolution":0.75,"shadows":false,"distance":"bad"}';
   const storage = { getItem() { return saved; }, setItem(_key, value) { saved = value; } };
   const renderer = rendererMock();
-  const panel = new OptionsPanel({ renderer, time: new SimulationTime(), step() {}, storage });
+  const panel = new OptionsPanel({ renderer, time: new SimulationTime({now:()=>0}), step() {}, storage });
   assert.equal(renderer.scaleFactor, 0.75);
   assert.equal(renderer.shadowsEnabled, false);
   assert.equal(renderer.max3DRenderDistance, 64);
@@ -95,7 +101,7 @@ test("graphics options apply renderer hooks and persist validated preferences", 
 
 test("unavailable browser storage does not break settings", () => {
   const storage = { getItem() { throw Error("blocked"); }, setItem() { throw Error("blocked"); } };
-  const panel = new OptionsPanel({ renderer: rendererMock(), time: new SimulationTime(), step() {}, storage });
+  const panel = new OptionsPanel({ renderer: rendererMock(), time: new SimulationTime({now:()=>0}), step() {}, storage });
   assert.doesNotThrow(() => panel.apply("shadows", false));
 });
 
@@ -108,7 +114,7 @@ function canvasUI(width = 320, height = 400) {
 
 test("options canvas buttons change settings and time, with clipped scrolling", () => {
   const ui = canvasUI();
-  const time = new SimulationTime();
+  const time = new SimulationTime({now:()=>0});
   const renderer = rendererMock();
   const panel = new OptionsPanel({ renderer, time, step: () => time.step(() => {}) });
   panel.open = true;

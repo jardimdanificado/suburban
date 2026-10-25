@@ -373,7 +373,7 @@ function frame(now) {
     frameMetrics.scene+=sceneEnded-indexEnded;frameMetrics.ui+=ended-sceneEnded;frameMetrics.cpu+=cpu;frameMetrics.max=Math.max(frameMetrics.max,cpu);
     if(ended-frameMetrics.started>=1000){
       const count=frameMetrics.count;
-      root.dataset.performance=JSON.stringify({fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,worker:simulationBridge?.metrics,drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute});
+      root.dataset.performance=JSON.stringify({fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,worker:simulationBridge?.metrics,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute});
       performanceOutput.textContent=root.dataset.performance;
       Object.assign(frameMetrics,{started:ended,count:0,simulation:0,index:0,scene:0,ui:0,cpu:0,max:0});
     }

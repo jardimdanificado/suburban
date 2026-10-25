@@ -2,7 +2,8 @@ export const SPEED_TIERS = [0.5, 1, 2, 4, 8, 16, 32];
 
 /** Fixed simulation steps keep experience rules independent of rendering FPS. */
 export class SimulationTime {
-  constructor() {
+  constructor({now=()=>performance.now()}={}) {
+    this.now=now;
     this.speed = 1;
     this.paused = false;
     this.tick = 0;
@@ -43,8 +44,8 @@ export class SimulationTime {
     // A suspended browser tab does not generate minutes of catch-up work.
     this.accumulator += Math.min(realDt, 0.25) * this.speed;
     let count = 0;
-    const deadline = performance.now() + 6;
-    while (this.accumulator + 1e-10 >= this.stepSeconds && count < 120 && performance.now() < deadline) {
+    const deadline = this.now() + 6;
+    while (this.accumulator + 1e-10 >= this.stepSeconds && count < 120 && this.now() < deadline) {
       this.accumulator = Math.max(0, this.accumulator - this.stepSeconds);
       this.runStep(update);
       count++;

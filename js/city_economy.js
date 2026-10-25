@@ -7,7 +7,7 @@ import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_invest
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { quarryDeposits } from './city_terrain.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { inspectBuildingSite, tileAt } from './city_terrain.js';
+import { inspectBuildingSite, tileAt, settlementConnected } from './city_terrain.js';
 
 export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados', construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
 export const CROPS = {
@@ -33,6 +33,12 @@ export const MEAL_RECIPES = {
   prato_completo: { label: 'Prato completo', inputs: { feijao: 1, milho: 1, mandioca: 1 }, quality: 3 },
   refeicao_especial: { label: 'Refeição especial', inputs: { pao: 1, feijao: 1, maca: 1, coentro: 1 }, quality: 4 },
 };
+const mealRecipeCache=new WeakMap();
+function mealOptions(recipes){
+  let options=mealRecipeCache.get(recipes);if(options)return options;
+  const definitions={...Object.fromEntries([...edible,'pao'].map(g=>[`single_${g}`,{inputs:{[g]:MEAL_COMPONENTS[g]?1:ECONOMY_RULES.mealUnits},quality:1}])),...recipes,refeicao_laticinios:{inputs:{pao:1,queijo:1,leite:1},quality:3},macarronada:{inputs:{massa:2,cebola:1,oleo:1},quality:4},salada_conserva:{inputs:{conserva:1,ovos:1,coentro:1},quality:3}};
+  options=Object.entries(definitions).map(([good,details])=>({good,...details,entries:Object.entries(details.inputs)}));mealRecipeCache.set(recipes,options);return options;
+}
 
 export class CityEconomy {
   constructor(city) {
@@ -191,11 +197,14 @@ export class CityEconomy {
   }
 
   connected(a, b) {
+    const revision=`${this.city.world.topologyRevision??this.city.world.revision??0}:${this.city.obstacleRevision||0}:${this.city.occupied.size}`;
+    if(this.routeRevision!==revision){this.routeCache.clear();this.routeRevision=revision;}
     const endpoints = [`${a.id}@${Math.floor(a.door.x)},${Math.floor(a.door.y)}`, `${b.id}@${Math.floor(b.door.x)},${Math.floor(b.door.y)}`].sort();
-    const key = endpoints.join(':') + `:${this.city.world.revision ?? 0}:${this.city.occupied.size}:${this.city.structureRevision}`;
+    const key = endpoints.join(':');
     if (!this.routeCache.has(key)) {
-      if (this.routeCache.size >= 2048) this.routeCache.delete(this.routeCache.keys().next().value);
-      this.routeCache.set(key, this.city.findPath(a.door, b.door) !== null);
+      if (this.routeCache.size >= 8192) this.routeCache.delete(this.routeCache.keys().next().value);
+      const connected=settlementConnected(this.city,a.door,b.door);
+      this.routeCache.set(key,connected??(this.city.findPath(a.door,b.door,{copy:false})!==null));
     }
     return this.routeCache.get(key);
   }
@@ -468,10 +477,19 @@ export class CityEconomy {
   trade() {
     const businesses = this.businesses;
     for(const farm of businesses.filter(b=>b.type==='farm' && b.inventory.adubo+(b.incoming.adubo||0)<4)) {const seller=businesses.find(b=>b.type==='composting' && b.inventory.adubo>0);if(seller)this.transferGoods(seller,farm,'adubo',Math.min(4,seller.inventory.adubo),this.goods.adubo.price);}
-    for (const buyer of businesses.filter(b => retailTypes.has(b.type) || b.type === 'mill' || INDUSTRIES[b.type])) {
+    const buyers=businesses.filter(b=>retailTypes.has(b.type)||b.type==='mill'||INDUSTRIES[b.type]);
+    const available={},batchDemand={};
+    for(const b of businesses){const outputs=b.type==='farm'?[b.crop]:b.type==='mill'?['oleo']:b.type==='bakery'?['pao']:Object.keys(INDUSTRIES[b.type]?.outputs||{});for(const good of outputs)available[good]=(available[good]||0)+(b.inventory[good]||0);}
+    for(const b of buyers)for(const [good,n]of Object.entries(INDUSTRIES[b.type]?.inputs||{}))batchDemand[good]=(batchDemand[good]||0)+Math.max(0,n*6-b.inventory[good]-(b.incoming[good]||0));
+    // Rotate equal bids. A scarce upstream stock serves one batch per factory
+    // before any factory can reserve six batches and starve the other chains.
+    const offset=(this.tradeCursor||0)%Math.max(1,buyers.length);this.tradeCursor=offset+1;
+    for (const buyer of [...buyers.slice(offset),...buyers.slice(0,offset)]) {
       for (const good of Object.keys(GOODS).filter(g => this.accepts(buyer, g))) {
         if(good==='lixo' && buyer.type==='composting')continue;
-        const target = buyer.type==='publisher'&&good==='papel'?Math.max(12,(buyer.bookPages||5)*3):buyer.type==='kitchen'?18:INDUSTRIES[buyer.type]?.inputs[good] ? INDUSTRIES[buyer.type].inputs[good]*6 : buyer.type === 'bakery' ? 24 : 18;
+        const batch=INDUSTRIES[buyer.type]?.inputs[good];
+        const scarce=batch&&(available[good]||0)<(batchDemand[good]||0);
+        const target = scarce?batch:buyer.type==='publisher'&&good==='papel'?Math.max(12,(buyer.bookPages||5)*3):buyer.type==='kitchen'?18:batch ? batch*6 : buyer.type === 'bakery' ? 24 : 18;
         if (buyer.inventory[good] + (buyer.incoming[good] || 0) > target / 2) continue;
         let remaining = Math.max(0, target - buyer.inventory[good] - (buyer.incoming[good] || 0));
         const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || b.type==='kitchen'&&MEAL_COMPONENTS[good] || INDUSTRIES[b.type]?.outputs[good]) && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) + this.city.reputation.providerPenalty(a) + this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),a) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y) - this.city.reputation.providerPenalty(b) - this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),b));
@@ -505,15 +523,18 @@ export class CityEconomy {
   mealOffer(b, citizen = null) {
     if (!b?.active || b.entity.destroyed || (!retailTypes.has(b.type) && b.type !== 'townhall' && b.type !== 'farm' && b.type !== 'popular_refectory' && INDUSTRIES[b.type]?.category !== 'food')) return null;
     const packed=preparedOffer(this,b,citizen,true);if(packed&&(!citizen||packed.price<=(this.city.accounts.get(this.city.payerFor(citizen))?.balance||0)))return packed;if(b.type==='kitchen')return null;
-    const recipeSet = { ...Object.fromEntries([...edible, 'pao'].map(g => [`single_${g}`, { label: this.goods[g].label, inputs: { [g]: MEAL_COMPONENTS[g]?1:ECONOMY_RULES.mealUnits }, quality: 1 }])), ...this.recipes, refeicao_laticinios:{label:'Pão e queijo',inputs:{pao:1,queijo:1,leite:1},quality:3}, macarronada:{label:'Macarronada',inputs:{massa:2,cebola:1,oleo:1},quality:4}, salada_conserva:{label:'Salada com ovos',inputs:{conserva:1,ovos:1,coentro:1},quality:3} };
-    const candidates = Object.entries(recipeSet).filter(([, r]) => Object.entries(r.inputs).every(([g, n]) => (b.inventory[g] || 0) >= n) && (!citizen || ['townhall', 'popular_refectory'].includes(b.type) || Object.entries(r.inputs).reduce((sum, [g,n])=>sum+this.goods[g].price*n,0) <= (this.city.accounts.get(this.city.payerFor(citizen))?.balance || 0)));
-    const fallback = this.foodOffer(b);
-    if (!candidates.length && fallback) return { good: fallback.good, quantity: fallback.quantity, inputs: { [fallback.good]: fallback.quantity }, quality: 1, price: fallback.price };
-    const [recipe, details] = candidates.sort((a, c) => (c[1].quality + (citizen ? this.mealTaste(citizen, { good: c[0], inputs: c[1].inputs }) * 10 : 0)) - (a[1].quality + (citizen ? this.mealTaste(citizen, { good: a[0], inputs: a[1].inputs }) * 10 : 0)))[0] || [];
-    if (!recipe) return null;
-    const inputValue = Object.entries(details.inputs).reduce((n, [g, q]) => n + (this.goods[g]?.price || 0) * q, 0);
+    const free=b.type==='townhall'||b.type==='popular_refectory',cash=citizen?(this.city.accounts.get(this.city.payerFor(citizen))?.balance||0):Infinity;
+    let details=null,bestScore=-Infinity;
+    for(const option of mealOptions(this.recipes)){
+      if(!option.entries.every(([g,n])=>(b.inventory[g]||0)>=n))continue;
+      if(citizen&&!free&&option.entries.reduce((sum,[g,n])=>sum+this.goods[g].price*n,0)>cash)continue;
+      const score=option.quality+(citizen?this.mealTaste(citizen,option)*10:0);
+      if(score>bestScore){bestScore=score;details=option;}
+    }
+    if(!details){const fallback=this.foodOffer(b);return fallback?{...fallback,inputs:{[fallback.good]:fallback.quantity},quality:1}:null;}
+    const inputValue=details.entries.reduce((n,[g,q])=>n+(this.goods[g]?.price||0)*q,0);
     const quality = details.quality + (b.mealQuality || 0) - 1;
-    return { good: recipe, quantity: 1, inputs: details.inputs, quality, price: b.type === 'townhall' || b.type === 'popular_refectory' ? 0 : Math.round(inputValue) };
+    return { good: details.good, quantity: 1, inputs: details.inputs, quality, price: free ? 0 : Math.round(inputValue) };
   }
   foodOffer(b) {
     const goods = b.type === 'bakery' ? ['pao'] : [...edible, 'pao'];

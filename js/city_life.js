@@ -9,7 +9,7 @@ export class CityLife {
   die(c, cause) {
     if (c.entity.destroyed || c.dead) return false;
     c.dead = true; c.diedAt = this.city.minute; c.deathCause = cause;
-    const event = { citizenId: c.id, name: c.entity.properties.name, minute: this.city.minute, age: this.city.society.age(c), cause };
+    const event = { citizenId: c.id, name: c.entity.properties.name, minute: this.city.minute, age: this.city.society.age(c), cause,needs:{...c.needs},task:c.task,targetId:c.targetId,position:{x:c.entity.x,y:c.entity.y} };
     this.deathCount++; this.deaths.push(event); if (this.deaths.length > 1000) this.deaths.shift();
     for (const s of this.city.logistics.shipments) if (s.driverId === c.id) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.city.logistics.releaseDriver(s); s.status = 'waiting'; }
     this.city.sanitation?.releaseCitizen(c);
@@ -20,15 +20,16 @@ export class CityLife {
   }
   minute(c) {
     const n = c.needs;
+    // Repair invalid inputs before deprivation counters or other needs can use them.
+    for(const k in n)if(!Number.isFinite(n[k])){n[k]=20;this.resetTask(c,'valor de necessidade inválido');}
     c.deprivation ??= { food: 0, water: 0, health: 0 };
     for (const k of ['food', 'water', 'health']) c.deprivation[k] = n[k] <= 0 ? c.deprivation[k] + 1 : 0;
     if (c.deprivation.water >= LIFE_RULES.dehydrationMinutes) return this.die(c, 'desidratação');
     if (c.deprivation.food >= LIFE_RULES.starvationMinutes) return this.die(c, 'inanição');
     if (c.deprivation.health >= LIFE_RULES.terminalHealthMinutes) return this.die(c, 'falência da saúde');
     if (this.city.society.age(c) >= 90 + c.initialAge % 15) return this.die(c, 'velhice');
-    if(this.city.minute%5===0){
-      // Invalid service names must never turn a need into NaN and freeze the scheduler.
-      for (const k in n) if (!Number.isFinite(n[k])) { n[k] = 20; this.resetTask(c, 'valor de necessidade inválido'); }
+    if(c.lastActivityCheckAt==null||this.city.minute-c.lastActivityCheckAt>=5){
+      c.lastActivityCheckAt=this.city.minute;
       const watched = c.activity;
       const need = ['provisions', 'workmeal'].includes(c.task) ? 'food' : c.task;
       const progress = !watched || Math.hypot(c.entity.x - watched.x, c.entity.y - watched.y) > .05 || (n[need] !== undefined && n[need] > (watched.needs[need] ?? 0) + .05) || c.conversation || c.workMeal || ['work', 'manage', 'construction', 'clean'].includes(c.task);

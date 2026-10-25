@@ -12,9 +12,9 @@ if(mode==='city-render'){
   // CPU synchronization only: existing farm meshes, no GPU driver or shader work.
   const {syncCityBuildings}=await moduleAt('city_renderer_3d.js');
   const renderer={scene:{add(){},remove(){}},cityLampLights:Array.from({length:8},()=>({intensity:0})),cityMeshes:new Map()};
-  const oldSignature=readFileSync(resolve(root,'js/city_renderer_3d.js'),'utf8').includes('b.units.filter');
-  const entities=Array.from({length:500},(_,id)=>{const units=Array.from({length:100},(_,n)=>({id:`${id}:${n}`,roomType:n===0?'bathroom':n===1?'dining':'workspace',x:n%10,y:Math.floor(n/10),z:0}));const b={crop:'milho',constructionKind:'open-air',width:10,depth:10,units,layoutRevision:1};
-    const signature=oldSignature?`${b.crop}:${units.filter(u=>['bathroom','dining'].includes(u.roomType)).map(u=>u.id+u.roomType).join(',')}`:`${b.crop}:1:100`;
+  const rendererSource=readFileSync(resolve(root,'js/city_renderer_3d.js'),'utf8'),oldSignature=rendererSource.includes('b.units.filter');
+  const entities=Array.from({length:500},(_,id)=>{const units=Array.from({length:100},(_,n)=>({id:`${id}:${n}`,roomType:n===0?'bathroom':n===1?'dining':'workspace',x:n%10,y:Math.floor(n/10),z:0}));const b={type:'farm',crop:'milho',constructionKind:'open-air',width:10,depth:10,units,layoutRevision:1,rotation:0};
+    const signature=rendererSource.includes('retail-v2:')?`retail-v2:farm:10:10:milho:1:100:0`:oldSignature?`${b.crop}:${units.filter(u=>['bathroom','dining'].includes(u.roomType)).map(u=>u.id+u.roomType).join(',')}`:`${b.crop}:1:100`;
     renderer.cityMeshes.set(id,{visible:true,position:{set(){}},userData:{signature,terrainRevision:0,highlight:{visible:false},patches:{material:{emissive:{setHex(){}}}}}});
     return {id,x:id%20*12,y:Math.floor(id/20)*12,properties:{cityBuilding:b}};
   });

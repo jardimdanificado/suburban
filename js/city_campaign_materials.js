@@ -1,6 +1,6 @@
 import {ROAD_TILES,tileAt} from './city_terrain.js';
 const blocked=new Set(['vote','research','interview','council-session','care','caregiving','food','provisions','water','health','energy','toilet','workmeal','construction','work','manage']);
-const live=c=>c&&!c.entity.destroyed;
+const live=c=>!!c?.entity&&!c.entity.destroyed;
 export class CityCampaignMaterials {
   constructor(city){this.city=city;this.missions=[];this.decorations=[];this.nextId=1;this.lastDay=null;}
   demand(good){const e=this.city.politics.active;if(!e||e.status!=='campaign')return 0;return ({panfletos:12,bandeiras:3,faixas:2,tinta:6})[good]*e.candidates.length||0;}
@@ -90,13 +90,19 @@ export class CityCampaignMaterials {
     const building=city.building(m.destination.buildingId);
     if(building&&(!building.active||building.entity.destroyed||!building.units.every(u=>u.ownerId===m.destination.ownerAccountId))){this.release(c,'A autorização do imóvel deixou de ser válida');return;}
     if(m.destination.permissionFee){if(!city.transfer(city.politics.partyAccount(party).accountId,m.destination.ownerAccountId,m.destination.permissionFee,'Serviço: Autorização de publicidade em fachada',{electionId:e.id,missionId:m.id,buildingId:building.id})){this.release(c,'Sem recursos para a autorização');return;}m.paid+=m.destination.permissionFee;n.campaignFinance.spent+=m.destination.permissionFee;}
-    if((c.campaignInventory[m.good]||0)<m.quantity){this.release(c,'Material não está com o instalador');return;}c.campaignInventory[m.good]-=m.quantity;
+    if((c.campaignInventory[m.good]||0)<m.quantity){this.release(c,'Material não está com o instalador');return;}c.campaignInventory[m.good]-=m.quantity;this.consumeMaterial(m);
     const d={id:m.id,kind:m.kind,rotation:building?.rotation??0,buildingId:building?.id??null,partyId:party.id,partyNumber:party.number,candidateId:n.citizenId,candidateName:n.name,partyName:party.name,flag:party.flag,color:party.flag.background,until:e.voteAt+1440,installedAt:city.minute,missionId:m.id};
     d.entity=city.createEntity({x:m.destination.x,y:m.destination.y,properties:{name:`${n.name} · ${party.number}`,campaignDecoration:d,render:{size:1,color:parseInt(d.color.slice(1),16)}}});this.decorations.push(d);if(m.kind==='paint'){building.campaignPaint=d;building.geometryRevision=(building.geometryRevision||0)+1;}
     city.politics.campaigns.event(e,`${c.entity.properties.name} concluiu propaganda de ${n.name}, número ${party.number}.`,'campaign-installation',[n.citizenId,c.id],{missionId:m.id,buildingId:building?.id,x:d.entity.x,y:d.entity.y,good:m.good,quantity:m.quantity});m.status='completed';c.campaign=null;c.task=null;c.action='Serviço de campanha concluído';
   }
+  consumeMaterial(m){
+    if(m.materialConsumed||m.kind==='pamphlet')return;
+    const city=this.city;city.economy.consumed[m.good]+=m.quantity;m.materialConsumed=true;
+    city.economy.recordGoods('campaign-installation',m.good,m.quantity,null,m.destination.buildingId,{missionId:m.id,electionId:m.electionId});
+  }
   minute(){
     const city=this.city;
+    for(const m of this.missions)if(m.status==='completed')this.consumeMaterial(m);
     for(const d of this.decorations)if(!d.entity.destroyed&&city.minute>=d.until){d.entity.destroyed=true;const b=city.building(d.buildingId);if(b?.campaignPaint===d){b.campaignPaint=null;b.geometryRevision=(b.geometryRevision||0)+1;}}
     this.decorations=this.decorations.filter(d=>!d.entity.destroyed);
     for(const c of city.citizens)if(c.campaign?.type==='paid'&&(!city.politics.active||city.minute>=c.campaign.until||c.task!=='campaign'))this.release(c,'Contrato interrompido ou encerrado');

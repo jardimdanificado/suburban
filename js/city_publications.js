@@ -1,6 +1,8 @@
 import {appearance,brandPreference} from './city_clothing.js';
+import {inventoryFree} from './city_inventory.js';
 /** Physical paper media. Written entries are independent of journal retention. */
 export const PUBLICATION_RULES=Object.freeze({bookPages:5,maxPages:32,entriesPerPage:2,writersPerHour:4});
+const printedGoods=new Set(['livros','panfletos','jornais']);
 export class CityPublications {
   constructor(city){this.city=city;this.documents=new Map();this.nextId=1;this.nextEntryId=1;this.ownerIndex=new Map();this.eventIndex=new Map();this.readerCursor=1;}
   stock(building,good,pages=PUBLICATION_RULES.bookPages){
@@ -8,9 +10,28 @@ export class CityPublications {
     this.documents.set(doc.id,doc);const ids=this.ownerIndex.get(doc.ownerAccountId)||[];ids.push(doc.id);this.ownerIndex.set(doc.ownerAccountId,ids);return doc;
   }
   capacity(doc){return doc.pages*PUBLICATION_RULES.entriesPerPage;}
-  owned(account){return (this.ownerIndex.get(account)||[]).map(id=>this.documents.get(id)).filter(Boolean);}
+  owned(account){return (this.ownerIndex.get(account)||[]).map(id=>this.documents.get(id)).filter(d=>d&&!d.lost);}
+  inventoryHolder(account){return this.city.accounts.get(account)?.inventory?this.city.accounts.get(account):this.city.buildings.find(b=>b.accountId===account&&!b.entity.destroyed);}
   move(doc,account){const old=this.ownerIndex.get(doc.ownerAccountId)||[];this.ownerIndex.set(doc.ownerAccountId,old.filter(id=>id!==doc.id));doc.ownerAccountId=account;const ids=this.ownerIndex.get(account)||[];ids.push(doc.id);this.ownerIndex.set(account,ids);}
-  inherit(from,to){for(const doc of this.owned(from))this.move(doc,to);}
+  inherit(from,to){
+    const source=this.inventoryHolder(from),target=this.inventoryHolder(to);
+    for(const doc of this.owned(from)){
+      if(!source?.inventory&&target?.inventory){
+        if(target.entity?.destroyed||inventoryFree(target)<1){this.move(doc,null);doc.lost=true;doc.lostAt=this.city.minute;this.city.economy.lost[doc.good]++;continue;}
+        target.inventory[doc.good]++;
+      }
+      this.move(doc,to);
+    }
+  }
+  moveStock(from,to,good,quantity){
+    if(!printedGoods.has(good)||quantity<=0)return;
+    const docs=this.owned(from.accountId).filter(d=>d.good===good);
+    for(let i=0;i<quantity;i++)this.move(docs[i]||this.stock(from,good,from.bookPages||PUBLICATION_RULES.bookPages),to.accountId);
+  }
+  loseStock(holder,good,quantity){
+    if(!printedGoods.has(good)||quantity<=0)return;
+    for(const doc of this.owned(holder.accountId).filter(d=>d.good===good).slice(0,quantity)){this.move(doc,null);doc.lost=true;doc.lostAt=this.city.minute;}
+  }
   takeStock(b,c,good){
     const doc=this.owned(b.accountId).find(d=>d.good===good&&(good==='jornais'||!d.entries.length))||this.stock(b,good,good==='panfletos'?1:b.bookPages||PUBLICATION_RULES.bookPages);
     this.move(doc,c.accountId);return doc;
@@ -33,15 +54,17 @@ export class CityPublications {
     // A faithful transcription preserves the source's truth classification; copying a lie does not make it true.
     const faithful=!!source&&text===source.message;
     const objectiveTruth=type==='lie'?false:faithful?(source.objectiveTruth??source.truth??null):truth===false?false:null;
-    const item={id:this.nextEntryId++,authorId:author.id,authorName:author.entity.properties.name,writtenAt:city.minute,type,text,truth:objectiveTruth,sourceEventId:source?.id??null,sourceMinute:source?.minute??null,targetId:targetId??source?.targetId??null,buildingId:buildingId??source?.buildingId??null,electionId:source?.electionId??null,candidateId:source?.candidateId??source?.accuserId??source?.citizenIds?.[0]??null};
+    const item={id:this.nextEntryId++,authorId:author.id,authorName:author.entity.properties.name,writtenAt:city.minute,type,text,truth:objectiveTruth,sourceEventId:source?.id??null,sourceMinute:source?.minute??null,sourceSnapshot:source?Object.freeze({...source}):null,targetId:targetId??source?.targetId??null,buildingId:buildingId??source?.buildingId??null,electionId:source?.electionId??null,candidateId:source?.candidateId??source?.accuserId??source?.citizenIds?.[0]??null};
     const event=city.history.record('publication',`${author.entity.properties.name} escreveu: ${text}`,[author.accountId],{kind:'publication-written',publicationId:doc.id,originalEventId:item.sourceEventId,truth:objectiveTruth,contentType:type});
     item.eventId=event.id;doc.entries.push(Object.freeze(item));this.eventIndex.set(event.id,{documentId:doc.id,entry:item});
+    if(source)this.eventIndex.set(source.id,{documentId:doc.id,entry:item});
     if(doc.entries.length===1)doc.title=(doc.pages===1?'Panfleto: ':'Livro: ')+text.slice(0,72);
     author.lastAuthoredDay=city.day;return true;
   }
   eventSnapshot(eventId){
     const saved=this.eventIndex.get(Number(eventId));if(!saved)return null;
-    const e=saved.entry;return {id:e.eventId,minute:e.writtenAt,message:e.text,kind:'publication',category:'publication',truth:e.truth,publicationId:saved.documentId,citizenIds:[e.authorId],data:{action:'publication-written'},subjects:[{accountId:`citizen:${e.authorId}`,name:e.authorName}]};
+    const e=saved.entry;if(e.sourceSnapshot&&e.sourceEventId===Number(eventId))return e.sourceSnapshot;
+    return {id:e.eventId,minute:e.writtenAt,message:e.text,kind:'publication',category:'publication',truth:e.truth,publicationId:saved.documentId,citizenIds:[e.authorId],data:{action:'publication-written'},subjects:[{accountId:`citizen:${e.authorId}`,name:e.authorName}]};
   }
   preserveEvent(c,event,type='event'){
     const doc=this.writable(c,type==='propaganda');if(!doc||!event)return false;
@@ -50,7 +73,7 @@ export class CityPublications {
   }
   read(documentId,citizenId){
     const city=this.city,doc=this.documents.get(documentId),c=city.society.citizen(citizenId);
-    if(!doc||!c||!doc.entries.length)return false;
+    if(!doc||doc.lost||!c||!doc.entries.length)return false;
     const owner=city.accounts.get(doc.ownerAccountId),position=doc.ownerAccountId==='treasury'?city.buildings.find(b=>b.type==='townhall')?.door:owner?.door||owner?.entity;
     if(doc.ownerAccountId!==c.accountId&&(!position||Math.hypot(position.x-c.entity.x,position.y-c.entity.y)>3))return city.fail('O texto está longe demais para ser lido.');
     c.publicationReading??={};const start=c.publicationReading[doc.id]||0;if(start>=doc.entries.length)return false;

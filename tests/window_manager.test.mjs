@@ -27,7 +27,7 @@ test('caption dragging moves only its window and respects the usable screen',()=
   assert(m.pointerDown(b.x+70,b.y+12));m.pointerMove(2000,2000);m.pointerUp();assert.deepEqual({x:a.x,y:a.y},before);assert(b.x+b.w<=1100);assert(b.y+b.h<=770);assert(!m.pointerMove(20,30));
 });
 test('resize handles enforce minimum dimensions and keep controls out of the toolbar',()=>{
-  const m=manager(),w=m.open({id:'a',minWidth:300,minHeight:220});assert(m.pointerDown(w.x+w.w-4,w.y+w.h-4));m.pointerMove(-2000,-2000);m.pointerUp();assert.equal(w.w,300);assert.equal(w.h,220);assert(w.y>=m.top);
+  const m=manager(),w=m.open({id:'a',minWidth:300,minHeight:220});assert(m.pointerDown(w.x+w.w-8,w.y+w.h-8));m.pointerMove(-2000,-2000);m.pointerUp();assert.equal(w.w,300);assert.equal(w.h,220);assert(w.y>=m.top);
 });
 test('nearby windows snap their edges when dragged',()=>{
   const m=manager(),a=m.open({id:'a',width:300}),b=m.open({id:'b',width:300});a.x=10;a.y=80;b.x=320;b.y=80;m.snapWindow(b);assert.equal(b.x,a.x+a.w+2);
@@ -36,7 +36,7 @@ test('pinned windows survive close-all while explicit close and shift-close rema
   const m=manager();m.open({id:'a'});m.open({id:'b'});m.pin('a');m.closeAll();assert.deepEqual(m.windows.map(w=>w.id),['a']);m.closeAll(true);assert.equal(m.windows.length,0);
 });
 test('shaded windows expose only their caption and restore their complete body',()=>{
-  const m=manager(),w=m.open({id:'a'});m.shade('a');assert.equal(m.rect(w).h,26);assert.equal(m.at(w.x+20,w.y+50),undefined);m.shade('a');assert.equal(m.rect(w).h,w.h);
+  const m=manager(),w=m.open({id:'a'});m.shade('a');assert.equal(m.rect(w).h,22);assert.equal(m.at(w.x+20,w.y+50),undefined);m.shade('a');assert.equal(m.rect(w).h,w.h);
 });
 test('maximize follows viewport changes and restores the original geometry',()=>{
   const m=manager(),w=m.open({id:'a'}),original={x:w.x,y:w.y,w:w.w,h:w.h};m.maximize('a');assert.equal(w.w,1092);m.viewport(1400,900);assert.equal(w.w,1392);m.maximize('a');assert.deepEqual({x:w.x,y:w.y,w:w.w,h:w.h},original);
@@ -51,7 +51,7 @@ test('cascade leaves pinned windows where they are and small viewports keep capt
 test('directories and multiple citizen dossiers remain open with independent filters and scroll',()=>{
   const h=harness(),directory=h.desktop.openModule('people');for(const c of h.city.citizens.slice(0,8))h.city.releaseHome(c);directory.setFilter('homeless');directory.scrolls.list=80;
   for(const c of h.city.citizens.slice(0,2))h.desktop.setSelection(c.entity);h.draw();
-  assert(h.desktop.manager.find('module:people'));assert.equal(h.desktop.manager.windows.filter(w=>w.id.startsWith('person:')).length,2);assert.equal(directory.filter(),'homeless');assert.equal(directory.scrolls.list,80);
+  assert(h.desktop.manager.find('module:people'));assert.equal(h.desktop.manager.windows.filter(w=>w.id.startsWith('person:')).length,2);assert.equal(directory.filter(),'homeless');assert.equal(directory.scrolls.list,Math.min(80,directory.zones.find(z=>z.key==='list').max));
   h.desktop.setSelection(h.city.citizens[0].entity);assert.equal(h.desktop.manager.windows.filter(w=>w.id.startsWith('person:')).length,2);
 });
 test('links from a panorama open and filter the destination without replacing the panorama',()=>{
@@ -106,7 +106,7 @@ test('tooltips use a separate overlay and disappear when the pointer leaves the 
 test('caption controls sit together on the right and never initiate a window drag',()=>{
   for(const width of [390,1440]){
     const h=harness(width,800),w=h.desktop.manager.active;h.draw();
-    const controls=['Fixar','Recolher','Ampliar','Fechar'].map(label=>h.ui.regions.find(r=>r.label===`${label}: ${w.title}`));
+    const controls=['Fixar','Recolher','Ampliar','Fechar'].map(label=>h.ui.regions.find(r=>r.label?.startsWith(`${label}: ${w.title}`)));
     assert(controls.every(Boolean));
     for(let i=0;i<controls.length;i++){
       const r=controls[i];assert(r.x>=w.x+w.w-101);assert(r.x+r.w<=w.x+w.w);

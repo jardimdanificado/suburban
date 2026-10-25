@@ -6,6 +6,7 @@ import { GOODS } from '../js/city_economy.js';
 import { DEVELOPMENT_RULES } from '../js/city_development.js';
 
 function printer(city) {
+  city.currency.policy.mode='capped';
   const b=city.buildings.find(b=>b.type==='mint'),c=city.society.citizen(b.workers[0]);
   c.entity.x=b.door.x;c.entity.y=b.door.y;c.path=[];c.task='work';c.targetId=b.id;
   for(const key of Object.keys(c.needs))c.needs[key]=95;
@@ -71,7 +72,7 @@ test('issuance raises actual goods, services, property and wage quotes without i
   assert.equal(order.balance,escrow);assert.equal(order.cost,cost);
   city.currency.daily();assert.equal(city.currency.priceIndex,index);assert.equal(c.balance,cash);
   assert.equal(other.economy.goods.pedra.price,GOODS.pedra.price);assert.equal(other.currency.priceIndex,1);
-  assert.equal(totalMoney(city),city.currency.issued);
+  assert.equal(totalMoney(city),city.currency.netIssued());
 });
 
 test('without a mint, autonomous budgets and investment preserve the initial money supply',()=>{
@@ -82,11 +83,13 @@ test('without a mint, autonomous budgets and investment preserve the initial mon
 });
 
 test('buying a municipal firm includes its cash and stock, preventing a subsidized takeover',()=>{
-  const city=setup({starter:true}),b=city.buildings.find(b=>b.type==='quarry'),c=city.citizens.find(c=>c.id!==city.economy.mayorId);
+  const city=setup({starter:true}),b=city.buildings.find(b=>b.type==='quarry'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
   const property=b.units.reduce((n,u)=>n+u.price,0)+city.development.plots.find(p=>p.id===b.plotId).price;
   b.inventory.pedra=3;const price=city.economy.premisesPrice(b);
   assert.equal(price,property+b.balance+3*city.economy.goods.pedra.price);
   city.transfer('treasury',c.accountId,price+20000-c.balance,'Test acquisition capital');
-  const cash=c.balance,supply=totalMoney(city);assert(city.economy.purchasePremises(b,c));
+  const cash=c.balance,supply=totalMoney(city);assert.equal(city.economy.purchasePremises(b,c),null);
+  for(const u of b.units)u.forSale=true;
+  assert(city.economy.purchasePremises(b,c,null,{billId:1}));
   assert.equal(c.balance,cash-price-20000);assert.equal(b.ownerId,c.id);assert.equal(b.municipal,false);assert.equal(totalMoney(city),supply);
 });

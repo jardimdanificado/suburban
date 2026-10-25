@@ -100,7 +100,7 @@ export class CityUI {
   }
   go(tab,{filter=null,view=null}={}) {
     if(this.host&&(filter||view))return this.openPanel({tab,views:{[tab]:view||VIEWS[tab]?.[0][0]||'overview'},filters:{[tab]:filter||'all'}});
-    const target=this.host?this.host.openModule(tab):this;if(!this.host)this.navigate(tab);return target;
+    const target=this.host?this.host.openModule(tab):this;if(!this.host)this.navigate(tab);if(filter!==null)target.setFilter(filter);if(view!==null)target.setView(view);return target;
   }
   sectionTitle(){return sectionTitle(this);}
   openPanel(overrides={}){return this.host?this.host.openPanel(this,overrides):Object.assign(this,overrides);}

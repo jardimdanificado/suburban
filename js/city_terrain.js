@@ -113,6 +113,42 @@ class MinHeap {
 const pathWorkspaces = new WeakMap();
 const pathDirections = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
+// Reachability does not need a shortest path for every pair of businesses.
+// Label the settlement's walkable components once per obstacle/terrain change.
+// A component touching the edge may connect outside the window: fall back to A*.
+const settlementComponents = new WeakMap();
+export function settlementConnected(city, a, b) {
+  const world=city.world,revision=`${world.topologyRevision??world.revision}:${city.obstacleRevision||0}:${city.occupied.size}`;
+  let cache=settlementComponents.get(city);
+  if(!cache||cache.revision!==revision){
+    let x0=world.width-1,y0=world.height-1,x1=0,y1=0;
+    for(const building of city.buildings){if(building.entity.destroyed)continue;const {x,y}=building.door;x0=Math.min(x0,Math.floor(x));y0=Math.min(y0,Math.floor(y));x1=Math.max(x1,Math.floor(x));y1=Math.max(y1,Math.floor(y));}
+    x0=Math.max(0,x0-24);y0=Math.max(0,y0-24);x1=Math.min(world.width-1,x1+24);y1=Math.min(world.height-1,y1+24);
+    const width=x1-x0+1,height=y1-y0+1;
+    cache={revision,x0,y0,x1,y1,width,height,labels:width*height<=262144?new Uint32Array(width*height):null,sealed:[false],next:1};
+    settlementComponents.set(city,cache);
+  }
+  const {x0,y0,x1,y1,width,labels}=cache;
+  if(!labels)return null;
+  const point=p=>{const x=Math.floor(p.x),y=Math.floor(p.y);return x<x0||y<y0||x>x1||y>y1||!city.walkable(x,y)?null:{x,y,index:(y-y0)*width+x-x0};};
+  const start=point(a),goal=point(b);if(!start||!goal)return null;
+  function component(p){
+    if(labels[p.index])return labels[p.index];
+    const label=cache.next++,queue=[p.index];labels[p.index]=label;let sealed=true;
+    for(let head=0;head<queue.length;head++){
+      const index=queue[head],x=index%width+x0,y=Math.floor(index/width)+y0;
+      if(x===x0&&x0>0||y===y0&&y0>0||x===x1&&x1<world.width-1||y===y1&&y1<world.height-1)sealed=false;
+      for(const [dx,dy]of pathDirections){const nx=x+dx,ny=y+dy,ni=(ny-y0)*width+nx-x0;
+        if(nx<x0||ny<y0||nx>x1||ny>y1||labels[ni]||!city.walkable(nx,ny)||!canStep(world,x,y,nx,ny))continue;
+        labels[ni]=label;queue.push(ni);
+      }
+    }
+    cache.sealed[label]=sealed;return label;
+  }
+  const ac=component(start),bc=component(goal);
+  return ac===bc?true:cache.sealed[ac]||cache.sealed[bc]?false:null;
+}
+
 export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null } = {}) {
   const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
   if (!terrainWalkable(world, sx, sy) || !terrainWalkable(world, gx, gy) || blocked.has(tileKey(gx, gy))) return null;

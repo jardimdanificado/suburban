@@ -21,7 +21,7 @@ function harness(width = 1100, height = 800, Renderer = ManagementCanvasUI) {
 
 test('native inspector opens citizen dossiers and mobile selection goes straight to the detail', () => {
   const h = harness(390, 844); h.inspector.navigate('people'); h.draw();
-  const c = h.city.citizens[0]; h.ui.regions.find(r => r.label === c.entity.properties.name).onClick(); h.draw();
+  const row=h.ui.regions.find(r=>h.city.citizens.some(c=>r.label?.startsWith(c.entity.properties.name+' —')));assert(row);row.onClick();h.draw();
   assert.equal(h.inspector.mobileDetail, true);
   assert(h.labels.includes('NECESSIDADES'));
   assert(!h.labels.some(l => l.startsWith('CIDADÃOS /')));
@@ -87,8 +87,8 @@ test('panorama alerts open the relevant directory with an applied filter', () =>
   const h=harness(1440,900),c=h.city.citizens[3]; h.city.releaseHome(c); h.draw();
   const metric=h.ui.regions.find(r=>r.label==='SEM MORADIA'); assert(metric); metric.onClick(); h.draw();
   assert.equal(h.inspector.tab,'people'); assert.equal(h.inspector.filter(),'homeless');
-  const cards=h.ui.regions.filter(r=>r.label&&h.city.citizens.some(c=>c.entity.properties.name===r.label));
-  assert(cards.length); for(const r of cards) assert(!h.city.citizens.find(c=>c.entity.properties.name===r.label).homeUnitId);
+  const cards=h.ui.regions.filter(r=>r.label&&h.city.citizens.some(c=>r.label.startsWith(c.entity.properties.name+' —')));
+  assert(cards.length); for(const r of cards) assert(!h.city.citizens.find(c=>r.label.startsWith(c.entity.properties.name+' —')).homeUnitId);
 });
 
 test('dossiers retain directory search and scroll; back restores context and selection', () => {
@@ -98,7 +98,7 @@ test('dossiers retain directory search and scroll; back restores context and sel
   h.inspector.setSelection(b.entity);h.inspector.navigate('production');h.inspector.setView('demand');
   h.inspector.back(); assert.equal(h.inspector.tab,'people');assert.equal(h.inspector.selected,b.entity);assert.equal(h.inspector.query,'Ana');
   h.inspector.back(); assert.equal(h.inspector.selected,a.entity);assert.equal(h.inspector.scrolls.list,95);
-  h.draw();h.buttons.find(b=>b.label==='HABILIDADES').click();assert.equal(h.inspector.scrolls.list,Math.min(95,h.inspector.zones.find(z=>z.key==='list').max));
+  h.inspector.scrolls[`detail:${a.entity.id}:${h.inspector.detailTab}`]=0;h.draw();h.buttons.find(b=>b.label==='TRABALHO').click();assert.equal(h.inspector.scrolls.list,Math.min(95,h.inspector.zones.find(z=>z.key==='list').max));
 });
 
 test('compact navigation hides text inputs, scrolls on short screens and closes with Escape', () => {
@@ -156,5 +156,5 @@ test('classic controls preserve hit testing and clipping with proportional text 
   const h=harness();let clicks=0;h.ui.beginFrame();h.ui.panel(10,10,300,180,'Administração da cidade');
   h.ui.clip(20,50,180,70,()=>h.ui.button(20,90,180,40,'Próximo cidadão',()=>clicks++));
   assert(h.ui.clickAt(40,100));assert.equal(clicks,1);h.ui.clickAt(40,125);assert.equal(clicks,1);assert.equal(h.ui.hitTest(40,125).onClick,null);
-  assert.match(h.ui.font(),/12px Arial/);assert.doesNotThrow(()=>h.ui.text('João, maçã, feijão e R$ 1.234,56',20,40));
+  assert.match(h.ui.font(),/11px Tahoma/);assert.doesNotThrow(()=>h.ui.text('João, maçã, feijão e R$ 1.234,56',20,40));
 });

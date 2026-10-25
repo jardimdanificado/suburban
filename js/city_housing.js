@@ -1,4 +1,5 @@
 export const HOUSING_RULES = { roomPrice: 120000, roomRent: 350, livingReserve: 3000, defaultDays: 3, unsoldRentalAfter: 1440 };
+const NO_RESIDENTS=Object.freeze([]);
 
 /** Only facade cells can be owned. Interior cells are common circulation. */
 export function floorCells(b, z) {
@@ -34,7 +35,15 @@ export class CityHousing {
   units(home) { return home.unitIds.map(id => this.city.units.get(id)).filter(Boolean); }
   home(c) { return this.homes.get(c.homeId); }
   hasDining(home) { return this.units(home).some(u => u.roomType === 'dining'); }
-  residents(home) { return this.city.citizens.filter(c => !c.entity.destroyed && c.homeId === home.id); }
+  invalidateResidents(){this.residentsByHome=null;}
+  residents(home) {
+    const city=this.city;
+    if(!this.residentsByHome||this.residentsMinute!==city.minute||this.residentsPopulation!==city.citizens.length){
+      const index=new Map();for(const c of city.citizens)if(!c.entity.destroyed&&c.homeId){let people=index.get(c.homeId);if(!people)index.set(c.homeId,people=[]);people.push(c);}
+      this.residentsByHome=index;this.residentsMinute=city.minute;this.residentsPopulation=city.citizens.length;
+    }
+    return this.residentsByHome.get(home.id)?.slice()||NO_RESIDENTS;
+  }
   hasBathroom(home) { return this.units(home).some(u => u.roomType === 'bathroom'); }
   price(home) { return this.units(home).reduce((n, u) => n + u.price, 0); }
   rent(home, citizen = null) { if(this.isSocial(home))return 0;return this.units(home).reduce((n, u) => n + (citizen && u.ownerId === citizen.accountId ? 0 : u.rent), 0); }
@@ -56,6 +65,7 @@ export class CityHousing {
     if(!home || partner.homeShareWith===c.id || reason==='friend' && (partner.homeShareWith || !this.city.relationships.canShareHome(partner,c) || this.residents(home).length>=4))return false;
     this.release(c);
     c.homeShareReason=reason;c.homeShareWith=partner.homeShareWith||partner.id;c.homeId=home.id;c.homeUnitId=partner.homeUnitId;
+    this.invalidateResidents();
     c.homelessSince=null;c.task=null;c.path=[];
     for(const child of this.city.citizens.filter(p=>p.guardianId===c.id && !this.city.society.isAdult(p)))this.houseChild(child,c);
     this.city.history.record('housing',`${c.entity.properties.name} passou a compartilhar moradia com ${partner.entity.properties.name}.`,[c.accountId,this.city.building(home.buildingId)?.accountId],{homeId:home.id,regime:this.isSocial(home)?'social':'shared'});
@@ -67,6 +77,7 @@ export class CityHousing {
     this.release(c);
     for(const unit of units){unit.tenantId=c.accountId;unit.occupantId=null;unit.rentPayerId=null;unit.arrears=0;unit.missedDays=0;}
     c.homeId=home.id;c.homeUnitId=units.find(u=>u.roomType==='bedroom').id;c.homelessSince=null;c.task=null;c.path=[];
+    this.invalidateResidents();
     for(const child of city.citizens.filter(p=>p.guardianId===c.id && !city.society.isAdult(p)))this.houseChild(child,c);
     const partner=city.society.citizen(c.partnerId);if(partner && !partner.homeUnitId)this.shareHome(partner,c);
     const message=`${c.entity.properties.name} recebeu ocupação gratuita em ${building.entity.properties.name}; o imóvel continua público.`;
@@ -96,6 +107,7 @@ export class CityHousing {
     for (const u of units) if (u.tenantId === c.accountId) { u.tenantId = null; u.rentPayerId = null; u.arrears = 0; u.missedDays = 0; }
     c.homeUnitId = null; c.homeId = null; c.homeShareWith = null;c.homelessSince??=this.city.minute;
     if (home) for (const resident of this.city.citizens.filter(p => p.homeId === home.id && (p.guardianId === c.id || p.homeShareWith === c.id))) { resident.homeId = null; resident.homeUnitId = null; resident.homeShareWith = null; }
+    this.invalidateResidents();
   }
   rentHome(c, home) {
     const units = this.units(home), payer = this.city.payerFor(c), rent = this.rent(home, c);
@@ -107,6 +119,7 @@ export class CityHousing {
       u.tenantId = c.accountId; u.rentPayerId = payer === c.accountId ? null : payer; u.arrears = 0; u.missedDays = 0;
     }
     c.homeId = home.id; c.homeUnitId = units.find(u => u.roomType === 'bedroom').id; c.task = null; c.path = [];
+    this.invalidateResidents();
     this.city.log(`${c.entity.properties.name} passou a morar em ${home.id}, com ${units.length} cômodos.`, 'housing', [c.id], { kind: 'home-lease', homeId: home.id, rent });
     for (const child of this.city.citizens.filter(p => p.guardianId === c.id && !this.city.society.isAdult(p))) this.houseChild(child, c);
     return true;
@@ -120,6 +133,7 @@ export class CityHousing {
   houseChild(child, parent) {
     const home = this.home(parent); if (!home) return false;
     if (child.homeUnitId && child.homeUnitId !== parent.homeUnitId) this.release(child);
+    if(child.homeId!==home.id)this.invalidateResidents();
     child.guardianId = parent.id; child.homeId = home.id; child.homeUnitId = parent.homeUnitId; return true;
   }
   market() {

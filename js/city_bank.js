@@ -31,7 +31,7 @@ export class CityBank {
     return city.transfer(clientId,key,amount,'Depósito em poupança');
   }
   withdraw(bank, clientId, amount) {
-    if (!Number.isSafeInteger(amount) || amount <= 0) return false;
+    if (!bank || !this.city.accounts.has(clientId) || !Number.isSafeInteger(amount) || amount <= 0) return false;
     return this.city.transfer(`deposit:${bank.id}:${clientId}`,clientId,amount,'Resgate de poupança');
   }
   lend(bank, clientId, amount) {

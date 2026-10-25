@@ -14,7 +14,7 @@ test('developed city fixture has accessible basic services, homes, jobs and indi
     assert(city.findPath(city.citizens[0].entity, b.door));
   }
   for (const c of city.citizens) { assert(c.homeUnitId); if (c.fixtureInvestor) assert.equal(c.jobId, null); assert.equal(Object.keys(c.needs).length, Object.keys(NEED_LABELS).length); }
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
 });
 
 test('private rent, occupied sales and resale transfer money and preserve the current tenant', () => {
@@ -32,7 +32,7 @@ test('private rent, occupied sales and resale transfer money and preserve the cu
   assert(city.listUnit(u.id, { price: 200, rent: 20, forSale: true, forRent: true }));
   assert(city.buyUnit(tenant.id, u.id));
   const selfCash = tenant.balance, remainingRent = city.housing.rent(city.housing.home(tenant), tenant); city.collectRent(); assert.equal(tenant.balance, selfCash - remainingRent);
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
 });
 
 test('unaffordable purchases and invalid listings do not mutate ownership or cash', () => {
@@ -64,7 +64,7 @@ test('construction rejects roads, overlaps, invalid dimensions and insufficient 
   assert(b); assert.equal(b.units.length, 32); assert.equal(b.circulation.length, 4); assert.equal(city.treasury, afterLand); assert.equal(source.inventory.pedra, 0);
   city.transfer('treasury', 'supplier', city.treasury, 'Test drain');
   assert.equal(city.addBuilding('market', 79, 80), null);
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
 });
 
 test('navigation routes around buildings and rejects inaccessible entrances', () => {
@@ -78,13 +78,14 @@ test('navigation routes around buildings and rejects inaccessible entrances', ()
 
 test('several days of movement, needs, wages, services and rent conserve currency', () => {
   const city = setup();
-  for (let i = 0; i < 3 * 1440 * 4; i++) city.update(1 / 16);
+  const reasons=new Set();
+  for (let i = 0; i < 3 * 1440 * 4; i++) {city.update(1 / 16);if(i%240===0)for(const e of city.ledger)reasons.add(e.reason);}
   assert.equal(city.day, 4);
   assert.equal(city.world.clock.day, city.day);
-  assert.equal(totalMoney(city), city.currency.issued);
-  assert(city.ledger.some(t => t.reason === 'Salário'));
-  assert(city.ledger.some(t => t.reason === 'Aluguel diário'));
-  assert(city.ledger.some(t => t.reason.startsWith('Serviço:')));
+  assert.equal(totalMoney(city), city.currency.netIssued());
+  assert(reasons.has('Salário'));
+  assert(reasons.has('Aluguel diário'));
+  assert([...reasons].some(reason=>reason.startsWith('Serviço:')));
   for (const a of city.accounts.values()) assert(Number.isSafeInteger(a.balance) && a.balance >= 0);
   for (const c of city.citizens) {
     assert(city.walkable(Math.floor(c.entity.x), Math.floor(c.entity.y)));
@@ -101,17 +102,17 @@ test('demolition releases contracts, jobs and navigation cells without losing mo
   assert.equal(resident.homeUnitId, null); assert.equal(worker.jobId, null);
   assert.equal(city.building(residence.id), undefined);
   assert(city.walkable(residence.entity.x, residence.entity.y));
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
 });
 
 test('fractional salary taxes accumulate to the advertised ten percent', () => {
-  const city = setup(), c = city.citizens.find(c => city.building(c.jobId)?.type === 'townhall'), b = city.building(c.jobId);
+  const city = setup(), c = city.citizens.find(c => city.building(c.jobId)?.ownerId), b = city.building(c.jobId);
   c.skills.governance = 0;
   b.wage = 4; c.task = 'work'; c.targetId = b.id;
   const treasury = city.treasury, cash = c.balance, company = b.balance;
-  for (let i = 0; i < 10; i++) city.performTask(c);
+  for (let i = 0; i < 10; i++) assert(city.payWage(c,b,4));
   assert.equal(city.treasury - treasury, 4);
   assert.equal(c.balance - cash, 36);
   assert.equal(company - b.balance, 40);
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
 });

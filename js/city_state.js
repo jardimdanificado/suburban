@@ -37,7 +37,7 @@ const prototypes = new Map([CityCampaignMaterials,CityCouncilChamber,CityResearc
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
 const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision', 'routeCache', 'routeRevision','familyIndexDirty',
-  'childrenByGuardian', 'buildingsById', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion']);
+  'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion']);
 const same = (a,b) => {if(!a||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(!Object.is(a[i],b[i]))return false;return true;};
 
 /** Incremental object graph transport. References (including cycles) retain their identity.
@@ -180,6 +180,7 @@ export class CityStateGraph {
 
 /** Restore computed fields, never serialized as stale monetary values. */
 export function bindCityState(city) {
+  city.housing.invalidateResidents();
   city.buildingsById ??= new Map(); city.buildingsById.clear();
   city.childrenByGuardian ??= new Map();
   city.economy.routeCache ??= new Map();

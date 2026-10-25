@@ -28,6 +28,7 @@ export function productionPlan(economy){
   for(const crop of Object.keys(economy.crops))visit('farm',crop,crop==='trigo'?240:140,'Diversidade inicial das matérias-primas e da alimentação.');
   // Bread is a basic consumption need even before the first bakery has opened.
   if(city.citizens.some(c=>!c.entity.destroyed))visit('bakery',null,200,'Alimentação: pão e farinha precisam de lavouras de trigo.');
+  for(const type of ['market','greengrocer'])visit(type,null,210,'Distribuição inicial: levar a produção agrícola ao comércio de alimentos.');
   for(const b of [...firms,...projects])for(const good of Object.keys(inputs(b.type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,150,`Abastecer ${city.buildingTypes[b.type]?.label||b.type}`);}
   const result=[];
   for(const [id,row]of rows){

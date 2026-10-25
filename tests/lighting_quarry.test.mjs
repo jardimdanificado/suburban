@@ -6,6 +6,12 @@ import { World } from '../js/world.js';
 import { CitySimulation } from '../js/city_simulation.js';
 import { quarryDeposits, terrainWalkable, ROAD_TILES, tileAt } from '../js/city_terrain.js';
 
+function supplyCarrier(city){
+  let carrier=city.economy.businesses.find(b=>b.type==='carrier');
+  if(!carrier)for(const site of city.economy.locateBuilding('carrier')){carrier=city.addBuilding('carrier',site.x,site.y,{...site,free:true});if(carrier)break;}
+  assert(carrier);city.economy.activateMunicipalBusiness(carrier,200000);city.economy.hire();assert(carrier.workers.length);return carrier;
+}
+
 function finishLamp(city, post) {
   const quarry = city.economy.businesses.find(b => b.type === 'quarry');
   const finish = project => {
@@ -24,26 +30,28 @@ function finishLamp(city, post) {
 
 test('private lighting orders debit property owners and road lighting debits treasury', () => {
   const city = setup(), mill = city.economy.businesses.find(b => b.type === 'farm');
+  supplyCarrier(city);
   mill.type = 'mill'; mill.inventory.oleo = 24; city.economy.produced.oleo += 24;
   city.lighting.hourly();
   finishLamp(city, [...city.lighting.roadPosts.values()][0]);
   finishLamp(city, [...city.lighting.propertyStores.values()].find(h => h.post.payerId.startsWith('citizen:')).post);
   const supply = totalMoney(city); city.lighting.hourly();
-  const orders = city.logistics.shipments.filter(s => /lighting/.test(s.purpose));
-  assert(orders.some(s => s.purpose === 'public-lighting' && s.payerAccountId === 'treasury'));
-  assert(orders.some(s => s.purpose === 'property-lighting' && s.payerAccountId.startsWith('citizen:')));
+  const orders = city.logistics.shipments.filter(s => s.purpose==='lamp-refill');
+  assert(orders.some(s => s.buyer.lampPost.public && s.payerAccountId === 'treasury'));
+  assert(orders.some(s => !s.buyer.lampPost.public && s.payerAccountId.startsWith('citizen:')));
   for (const s of orders) assert.equal(s.cost, s.quantity * Math.ceil(city.economy.goods.oleo.price * (s.payerAccountId === 'treasury' ? 1.5 : 1)));
   assert.equal(totalMoney(city), supply);
 });
 
 test('a private lamp cannot burn municipal oil and a retired depot conserves its inventory', () => {
-  const city = setup(); city.lighting.hourly();
+  const city = setup(); supplyCarrier(city);city.lighting.hourly();
   const store = [...city.lighting.propertyStores.values()].find(h => h.post.payerId.startsWith('citizen:'));
   finishLamp(city, store.post);
   const hall = city.buildings.find(b => b.type === 'utility'); hall.inventory.oleo = 5; city.economy.produced.oleo += 5;
   city.minute = 18 * 60; city.lighting.hourly(); assert.equal(store.post.lit, false);
   store.inventory.oleo = 2; city.economy.produced.oleo += 2;
-  city.lighting.hourly(); assert.equal(store.post.lit, true); assert.equal(store.inventory.oleo, 1);
+  city.lighting.hourly();const refill=city.logistics.shipments.find(s=>s.buyer.lampPost===store.post);assert(refill);finishShipment(city,refill);
+  city.minute=Math.ceil(city.minute/1440)*1440+18*60;city.lighting.hourly(); assert.equal(store.post.lit, true); assert.equal(store.inventory.oleo, 1);
   const b = city.building(store.post.buildingId);
   for (const u of b.units.filter(u => u.ownerId === store.post.payerId)) u.ownerId = 'treasury';
   city.lighting.hourly(); assert.equal(store.active, false); assert.equal(store.post.lit, false);
@@ -161,14 +169,16 @@ test('an insolvent carrier releases an order to owner collection instead of hold
 });
 
 test('a burning lamp orders replacement oil before running out', () => {
-  const city = setup(); city.lighting.hourly();
+  const city = setup(); supplyCarrier(city);city.lighting.hourly();
   const post = [...city.lighting.roadPosts.values()][0]; finishLamp(city, post);
   const utility = city.buildings.find(b => b.type === 'utility') || city.buildings[0];
   const mill = city.economy.businesses.find(b => b.type === 'farm'); mill.type = 'mill'; mill.inventory.oleo = 12; city.economy.produced.oleo += 12;
   utility.inventory.oleo = 1; city.economy.produced.oleo++;
   city.minute = 18 * 60; city.lighting.hourly();
+  assert(!post.lit);const refill=city.logistics.shipments.find(s=>s.buyer.lampPost===post);assert(refill);finishShipment(city,refill);city.lighting.hourly();
   assert(post.lit); assert(post.fuel > 0);
-  assert(city.logistics.shipments.some(s => s.good === 'oleo' && s.buyer === utility && s.purpose === 'public-lighting'));
+  for(let hour=0;hour<7;hour++){city.minute+=60;city.lighting.hourly();}
+  assert(city.logistics.shipments.some(s => s.good === 'oleo' && s.buyer.lampPost===post && s.purpose === 'lamp-refill' && s.status!=='delivered'));
 });
 
 
@@ -186,9 +196,9 @@ test('a generated city builds, supplies and lights a public lamp without injecte
   assert(firstNight, 'public illumination must receive oil through real deliveries within the first eight days');
   assert(firstNight.hour >= 18 || firstNight.hour < 6);
   assert(city.economy.produced.girassol > 0); assert(city.economy.produced.oleo > 0);
-  assert(city.logistics.shipments.some(s => s.good === 'oleo' && s.purpose === 'public-lighting' && s.status === 'delivered'));
+  assert(city.logistics.shipments.some(s => s.good === 'oleo' && s.purpose === 'lamp-refill' && s.buyer.lampPost?.public && s.status === 'delivered'));
   assert(city.development.projects.some(p => p.service === 'lamp' && p.status === 'completed'));
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
   for (const good of ['girassol', 'oleo', 'pedra']) assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + city.economy.lost[good] + city.goodsStock(good));
   city.minute = Math.floor(city.minute / 1440) * 1440 + 6 * 60;
   city.lighting.hourly(); assert(city.lighting.posts.every(p => !p.lit));

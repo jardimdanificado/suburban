@@ -17,13 +17,20 @@ function addFirm(city,type){
   throw Error(`Missing site: ${type}`);
 }
 function money(city){return [...city.accounts.values()].reduce((n,a)=>n+a.balance,0);}
+function plenary(city,minute=city.minute){
+  const chamber=city.politics.council.getChamber(),hall=chamber.hall()||addFirm(city,'council_chamber');
+  if(hall.floors<2){city.housing.addFloor(hall,1,'treasury');hall.floors=2;}
+  city.minute=Math.floor(minute/1440)*1440+600;
+  for(const c of city.politics.council.people()){c.task='council-session';c.path=[];c.councilSession={buildingId:hall.id};c.entity.x=hall.door.x;c.entity.y=hall.door.y;for(const k of Object.keys(c.needs))c.needs[k]=95;}
+  chamber.minute();return hall;
+}
 
 test('chamber follows population bounds, elects president halfway and divides a fixed salary budget',()=>{
-  const city=cityOf(),p=city.politics,c=p.council;c.ensure();assert.equal(c.seats,10);assert.equal(c.members.length,10);assert.deepEqual(c.bounds(),{population:80,min:4,max:10});
+  const city=cityOf(),p=city.politics,c=p.council;c.ensure();assert.equal(c.seats,4);assert.equal(c.members.length,4);assert.deepEqual(c.bounds(),{population:80,min:4,max:10});plenary(city);
   assert.equal(p.submitBill('councilSeats',{value:11}),null);assert.match(city.lastError,/entre 4 e 10/);
   p.policy.councilBudget=1001;p.policy.mayorBudget=333;city.welfare.policy.reserve=0;
   const treasury=city.treasury;c.hourly();assert.equal(treasury-city.treasury,1334);
-  city.minute=p.termStartedAt+p.termRules.termMinutes/2;c.hourly();assert(c.leaderId);assert.equal(c.weight(c.leaderId),2);assert.equal(c.totalWeight(),11);assert.equal(c.leaderElections.at(-1).ballots.length,10);
+  plenary(city,p.termStartedAt+p.termRules.termMinutes/2);c.hourly();assert(c.leaderId);assert.equal(c.weight(c.leaderId),2);assert.equal(c.totalWeight(),5);assert.equal(c.leaderElections.at(-1).ballots.length,4);
 });
 
 test('proven small cases do not auto-impeach; serious cases need widespread awareness and may stay undiscovered',()=>{
@@ -36,12 +43,12 @@ test('proven small cases do not auto-impeach; serious cases need widespread awar
 });
 
 test('mayor veto hurts approval and the chamber can override it with weighted supermajority',()=>{
-  const city=cityOf(),p=city.politics,c=p.council;const bill=c.propose(c.people()[0],'tax',{value:.12});c.preference=()=>({yes:true,reason:'test electorate'});c.vote(bill);assert.equal(bill.status,'awaiting-sanction');
+  const city=cityOf(),p=city.politics,c=p.council;const bill=c.propose(c.people()[0],'tax',{value:.12});plenary(city);c.preference=()=>({yes:true,reason:'test electorate'});c.vote(bill);assert.equal(bill.status,'awaiting-sanction');
   p.updateApproval();const before=p.approval;assert(p.vetoBill(bill.id));assert.equal(bill.status,'vetoed');assert(p.approval<before);c.vote(bill,true);assert.equal(bill.status,'executed');assert.equal(city.taxRate,.12);assert(bill.vetoOverridden);
 });
 
 test('vice mayor succeeds first, and chamber president succeeds when both executive offices are vacant',()=>{
-  const city=cityOf(),p=city.politics,vice=p.viceMayorId;assert(vice);p.council.electLeader();const president=p.council.leaderId,deadline=p.nextElectionAt;
+  const city=cityOf(),p=city.politics,vice=p.viceMayorId;assert(vice);plenary(city);p.council.electLeader();const president=p.council.leaderId,deadline=p.nextElectionAt;
   city.society.citizen(city.economy.mayorId).entity.destroyed=true;p.ensureMayor();assert.equal(city.economy.mayorId,vice);assert.equal(p.nextElectionAt,deadline);
   city.society.citizen(vice).entity.destroyed=true;p.ensureMayor();assert.equal(city.economy.mayorId,president);assert.equal(p.nextElectionAt,deadline);
 });
@@ -72,7 +79,7 @@ test('unemployed founders can pool money for a small real business, and supply a
 });
 
 test('campaigns expose unfulfilled promises and candidate programs differ',()=>{
-  const city=cityOf(),p=city.politics;p.beginElection();assert(p.active.candidates.every(n=>n.viceId&&n.promises.length>=4));const programs=p.active.candidates.map(n=>n.promises.map(pr=>pr.title).join('|'));assert(new Set(programs).size>2);
+  const city=cityOf(),p=city.politics;p.beginElection();assert(p.active.candidates.every(n=>n.viceId&&n.promises.length===1));const programs=p.active.candidates.map(n=>n.promises.map(pr=>pr.title).join('|'));assert(new Set(programs).size>2);
   const incumbent=p.active.candidates.find(n=>n.citizenId===city.economy.mayorId),challenger=p.active.candidates.find(n=>n.citizenId!==incumbent.citizenId);assert(challenger);p.campaigns.criticize(challenger,p.active);assert(p.active.events.some(e=>e.kind==='campaign-accountability'));
 });
 
@@ -100,7 +107,12 @@ test('two election cycles retain lawful chamber sizes, tickets and money conserv
   const city=cityOf(64),p=city.politics;
   for(let election=0;election<2;election++){
     city.minute=p.nextElectionAt-p.termRules.campaignMinutes;p.hourly();assert(p.active);const total=money(city);
-    city.minute=p.nextElectionAt;p.hourly();assert(p.lastResult);assert.equal(p.active,null);assert.equal(p.council.seats,8);assert(!p.council.members.some(m=>m.citizenId===p.viceMayorId||m.citizenId===city.economy.mayorId));assert.equal(money(city),total);
+    for(let round=0;round<2&&p.active;round++){
+      const e=p.active;city.minute=e.voteAt;e.status='campaign';p.voting.open(e);assert.equal(e.status,'voting');
+      for(const row of e.electorate){const c=city.society.citizen(row.citizenId);c.entity.x=city.buildings[0].door.x;c.entity.y=city.buildings[0].door.y;c.path=[];c.task='vote';c.voting={electionId:e.id};row.status='casting';p.voting.cast(e,row);}
+      assert.equal(e.ballots.length,64);assert.equal(new Set(e.ballots.map(b=>b.citizenId)).size,64);p.voting.close(e);
+    }
+    assert(p.lastResult);assert.equal(p.active,null);assert.equal(p.council.seats,4);assert(!p.council.members.some(m=>m.citizenId===p.viceMayorId||m.citizenId===city.economy.mayorId));assert.equal(money(city),total);
   }
 });
 

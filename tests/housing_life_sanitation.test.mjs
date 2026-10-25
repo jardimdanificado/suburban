@@ -91,7 +91,7 @@ test('bathroom access distinguishes public, paid, employees, residents and close
   const city = setup({ starter: true, funded: true }), { tenant, home } = lease(city), outsider = city.citizens[5];
   const f = [...city.sanitation.facilities.values()].find(f => f.homeId === home.id);
   assert(city.sanitation.allowed(tenant, f)); assert(!city.sanitation.allowed(outsider, f));
-  Object.assign(city.society.getRelation(tenant, outsider, true), { affection: 80, trust: 80, status: 'close' }); assert(city.sanitation.allowed(outsider, f));
+  const relation=city.society.getRelation(tenant,outsider,true);Object.assign(relation.views[tenant.id],{affection:80,trust:80,status:'close'});city.relationships.sync(relation);assert(city.sanitation.allowed(outsider,f));
   const company = city.economy.businesses.find(b => b.workers.length), privateToilet = [...city.sanitation.facilities.values()].find(f => f.buildingId === company.id);
   outsider.jobId = null; assert(!city.sanitation.allowed(outsider, privateToilet)); outsider.jobId = company.id; assert(city.sanitation.allowed(outsider, privateToilet));
   const paid = build(city, 'paid_toilet'), fee = [...city.sanitation.facilities.values()].find(f => f.buildingId === paid.id);
@@ -109,16 +109,16 @@ test('each toilet visit produces waste once, charges once and applies cleanlines
 test('cleaning contracts obey weekly public and frequent paid intervals and require physical work', () => {
   const city = setup({ starter: true, funded: true }), cleaner = business(city, 'cleaner'), paid = build(city, 'paid_toilet');
   const free = [...city.sanitation.facilities.values()].find(f => f.access === 'public'), f = [...city.sanitation.facilities.values()].find(f => f.buildingId === paid.id);
-  for (const facility of [free, f]) facility.cleanliness = 10;
+  free.cleanliness=40;f.cleanliness=10;
   city.transfer('treasury', paid.accountId, 1000, 'Test cleaning budget'); city.minute = f.lastCleanedAt + SANITATION_RULES.paidCleaningInterval; assert.equal(city.sanitation.requestCleaning(free.id), null);
   const job = city.sanitation.requestCleaning(f.id, paid.accountId, cleaner.id); assert(job); assert.equal(f.cleanliness, 10);
   const worker = city.society.citizen(cleaner.ownerId); freshNeeds(worker); worker.conversation = null; worker.workMeal = null; worker.deliveryId = null;
   worker.cleaningJobId = job.id; worker.entity.x = paid.door.x; worker.entity.y = paid.door.y; worker.path = []; job.workerId = worker.id; job.status = 'working';
   const before = cleaner.balance; for (let i = 0; i < 25; i++) { city.minute++; city.sanitation.updateMinute(); }
   assert.equal(job.status, 'completed'); assert.equal(f.cleanliness, 100); assert.equal(cleaner.balance - before, job.fee);
-  f.cleanliness = 0; assert.equal(city.sanitation.requestCleaning(f.id), null);
+  f.cleanliness = 40; assert.equal(city.sanitation.requestCleaning(f.id), null);
   city.minute = free.lastCleanedAt + SANITATION_RULES.freeCleaningInterval; assert(city.sanitation.requestCleaning(free.id, 'treasury', cleaner.id));
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
 });
 
 test('private home cleaning is paid by its resident through a cleaning company', () => {
@@ -131,10 +131,10 @@ test('garbage collection carries physical stock and pays a service, recycling co
   const city = setup({ starter: true, funded: true }), collector = business(city, 'waste_collector'), recycler = business(city, 'recycler'), hall = city.buildings.find(b => b.type === 'townhall');
   city.sanitation.addWaste(hall, 24); city.sanitation.hourly();
   const collection = city.logistics.shipments.find(s => s.purpose === 'waste-collection'); assert(collection); assert.equal(hall.inventory.lixo, 0); assert.equal(collector.inventory.lixo, 0);
-  const before = collector.balance; finishShipment(city, collection); assert.equal(collector.inventory.lixo, 24); assert.equal(collector.balance - before, collection.serviceFee);
+  const before = collector.balance,expenses=collector.totalExpenses; finishShipment(city, collection); assert.equal(collector.inventory.lixo, 24); assert.equal(collector.balance - before+(collector.totalExpenses-expenses), collection.serviceFee+collection.fee);
   city.sanitation.hourly(); const transfer = city.logistics.shipments.find(s => s.buyer === recycler && s.good === 'lixo'); assert(transfer); finishShipment(city, transfer);
   const c = city.society.citizen(recycler.ownerId), stone = recycler.inventory.pedra; for (let i = 0; i < 8; i++) city.sanitation.recycle(recycler, c);
-  assert(recycler.inventory.pedra > stone); assert(city.economy.consumed.lixo > 0); assert.equal(totalMoney(city), city.currency.issued);
+  assert(recycler.inventory.pedra > stone); assert(city.economy.consumed.lixo > 0); assert.equal(totalMoney(city), city.currency.netIssued());
   for (const good of ['lixo','pedra']) assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + city.economy.lost[good] + city.goodsStock(good));
 });
 
@@ -144,9 +144,9 @@ test('overflowing bathroom waste remains accounted for outside a full inventory'
 });
 
 test('twenty days sustain routines, food supply, sanitation and exact money/material accounting', () => {
-  const city = setup({ starter: true }); for (let i = 0; i < 20 * 1440 * 4; i++) city.update(1 / 16);
+  const city = setup({ starter: true,population:128 }); for (let i = 0; i < 20 * 1440 * 4; i++) city.update(1 / 16);
   assert(city.citizens.length >= 20); assert(city.economy.produced.pao > 0); assert(city.sanitation.cleaned > 0); assert(city.economy.consumed.lixo > 0);
   for (const c of city.citizens) for (const value of Object.values(c.needs)) assert(Number.isFinite(value) && value >= 0 && value <= 100);
-  assert.equal(totalMoney(city), city.currency.issued);
+  assert.equal(totalMoney(city), city.currency.netIssued());
   for (const good of Object.keys(GOODS)) assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + city.economy.lost[good] + city.goodsStock(good), good);
 });
