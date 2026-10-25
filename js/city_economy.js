@@ -610,7 +610,7 @@ export class CityEconomy {
     if(b.type==='artisan')spec=b.inventory.carrinho<b.inventory.cesta/2?{...spec,inputs:{madeira:5,fibras:1},outputs:{carrinho:1}}:{...spec,inputs:{madeira:3,fibras:2},outputs:{cesta:2}};
     if(b.type==='forestry')return this.city.nature.forestryWork(b,c);
     if(['fiber_farm','herb_farm'].includes(b.type) && this.city.minute<(b.replantingAt||0)+180) return false;
-    if(b.type==='research_institute')return this.city.politics.getResearch().studies.some(s=>s.instituteId===b.id&&['funding','collecting'].includes(s.status));
+    if(b.type==='research_institute')return false;
     if(b.type==='bank') return this.city.bank.loans.some(l=>l.bankId===b.id && l.remaining>0) || [...this.city.bank.deposits.values()].some(a=>a.bankId===b.id);
     if (!Object.entries(spec.inputs).every(([g,n])=>b.inventory[g]>=n)) return false;
     const net=Object.values(spec.outputs).reduce((n,v)=>n+v,0)-Object.values(spec.inputs).reduce((n,v)=>n+v,0);

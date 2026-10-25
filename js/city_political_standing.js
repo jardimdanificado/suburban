@@ -66,9 +66,9 @@ export class CityPoliticalStanding {
   }
   compare(a,b){return (b.political?.popularity??50)-(a.political?.popularity??50)||this.city.politics.candidateStrength(b)-this.city.politics.candidateStrength(a)||a.id-b.id;}
   nomination(party){
-    const p=this.city.politics,possible=party.memberIds.map(id=>this.city.society.citizen(id)).filter(c=>p.canRun(c,'mayor',true)).sort((a,b)=>this.compare(a,b));
+    const p=this.city.politics,research=p.getResearch?.(),survey=research?.studies.filter(s=>s.mode==='service'&&s.status==='published'&&s.serviceType==='party-candidates'&&s.subjectId===party.id).sort((a,b)=>b.completedAt-a.completedAt)[0],surveyScore=c=>survey?.report?.rows.find(r=>r.citizenId===c.id)?.score,score=c=>surveyScore(c)==null?(c.political?.popularity??50):((c.political?.popularity??50)*.4+surveyScore(c)*.6),possible=party.memberIds.map(id=>this.city.society.citizen(id)).filter(c=>p.canRun(c,'mayor',true)).sort((a,b)=>score(b)-score(a)||this.compare(a,b));
     const incumbent=possible.find(c=>c.id===this.city.economy.mayorId),preferred=possible.find(c=>c.id===party.executiveSuccessorId&&party.executiveSuccessionTerm===p.termNumber);
-    return {candidate:incumbent||preferred||possible[0],reason:incumbent?'Preferência do prefeito em exercício':preferred?'Sucessão pelo vice-prefeito':'Maior popularidade no partido'};
+    return {candidate:incumbent||preferred||possible[0],reason:incumbent?'Preferência do prefeito em exercício':preferred?'Sucessão pelo vice-prefeito':survey?'Melhor combinação entre popularidade e pesquisa contratada':'Maior popularidade no partido'};
   }
   replaceUnavailable(){
     const city=this.city,p=city.politics,e=p.active;if(!e||e.status!=='campaign')return;

@@ -80,11 +80,12 @@ export class CityMandates {
 
     ];
     const preferred=e<-.3?['housed','publicHomes','publicMeals','wage','stateFirms','clinics','water','publicJobs','health']:e>.3?['tax','smallFirms','savers','deliveries','artisans','carriers','paidLoans','banks']:['kitchens','fed','clean','foodVariety','connected','preservation','hygiene','readers'];
+    const priorityMetric={'Alimentação':'fed','Moradia':'housed','Emprego e renda':'employed','Saúde':'health','Higiene e saneamento':'clean','Transporte e acesso':'connected'},research=this.city.politics.getResearch?.(),survey=research?.studies.filter(s=>s.mode==='service'&&s.status==='published'&&s.serviceType==='public-priorities'&&(s.subjectId===candidate.id||s.requesterAccountId===candidate.accountId||s.subjectId===party.id)).sort((a,b)=>b.completedAt-a.completedAt)[0],surveyPriority=new Set((survey?.report?.rows||[]).slice(0,3).map(r=>priorityMetric[r.label]).filter(Boolean));
     const environmental=['recycling','foodVariety','clean','cultivatedTrees','waste'];
     const viable=catalog.filter(([key,,target])=>(target-base[key])*(PROMISE_METRICS[key].higher?1:-1)>.01);
     // Distinct main commitments within the same election, with bounded seeded variation.
     const unused=viable.filter(([key])=>!usedMetrics.includes(key)),pool=unused.length?unused:viable;
-    const ranked=pool.map(row=>({row,rank:this.city.random()*1.6+(preferred.includes(row[0])?.7:0)+(green>.6&&environmental.includes(row[0])?.7:0)})).sort((a,b)=>b.rank-a.rank);
+    const ranked=pool.map(row=>({row,rank:this.city.random()*1.6+(preferred.includes(row[0])?.7:0)+(green>.6&&environmental.includes(row[0])?.7:0)+(surveyPriority.has(row[0])?1.6:0)})).sort((a,b)=>b.rank-a.rank);
     const ambition=Math.max(0,Math.min(1,.1+(candidate.traits?.ambition??.5)*.55+(1-(candidate.traits?.honesty??.5))*.2+this.city.random()*.35));
     return ranked.slice(0,1).map(({row:[metric,title,target]})=>{
       const spec=PROMISE_METRICS[metric],factor=.4+ambition*1.9;
