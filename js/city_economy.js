@@ -244,6 +244,7 @@ export class CityEconomy {
     }
     for (const [type,spec] of Object.entries(INDUSTRIES)) {
       if(type==='composting')continue;
+      if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
       const firms=businesses.filter(b=>b.type===type);
       const needed=Object.keys(spec.outputs).reduce((n,g)=>n+businesses.reduce((sum,b)=>sum+(b.inputDemand?.[g]||0),0)+(spec.use?(type==='publisher'?this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+this.city.citizens.filter(c=>!c.entity.destroyed).reduce((n,c)=>n+Math.max(0,c.foodPreferences?.[g]||0),0)*.8:0),0);
       const stock=Object.keys(spec.outputs).reduce((n,g)=>n+businesses.reduce((v,b)=>v+(b.inventory[g]||0),0),0);
@@ -550,6 +551,7 @@ export class CityEconomy {
     if(b.type==='artisan')spec=b.inventory.carrinho<b.inventory.cesta/2?{...spec,inputs:{madeira:5,fibras:1},outputs:{carrinho:1}}:{...spec,inputs:{madeira:3,fibras:2},outputs:{cesta:2}};
     if(b.type==='forestry')return this.city.nature.forestryWork(b,c);
     if(['fiber_farm','herb_farm'].includes(b.type) && this.city.minute<(b.replantingAt||0)+180) return false;
+    if(b.type==='research_institute')return this.city.politics.getResearch().studies.some(s=>s.instituteId===b.id&&['funding','collecting'].includes(s.status));
     if(b.type==='bank') return this.city.bank.loans.some(l=>l.bankId===b.id && l.remaining>0) || [...this.city.bank.deposits.values()].some(a=>a.bankId===b.id);
     if (!Object.entries(spec.inputs).every(([g,n])=>b.inventory[g]>=n)) return false;
     const net=Object.values(spec.outputs).reduce((n,v)=>n+v,0)-Object.values(spec.inputs).reduce((n,v)=>n+v,0);

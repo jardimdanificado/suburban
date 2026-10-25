@@ -15,7 +15,7 @@ export class CityHistory {
     let rows = map.get(key); if (!rows) map.set(key, rows = []); rows.push(entry);
   }
   references(details) {
-    return ['partyProposalId','publicationId','shipmentId','projectId','jobId','loanId','electionId','plantId','socialFactId','partyId','billId','termId','corruptionCaseId'].filter(key => details[key] != null).map(key => `${key}:${details[key]}`);
+    return ['studyId','partyProposalId','publicationId','shipmentId','projectId','jobId','loanId','electionId','plantId','socialFactId','partyId','billId','termId','corruptionCaseId'].filter(key => details[key] != null).map(key => `${key}:${details[key]}`);
   }
   record(kind, message, accounts = [], details = {}) {
     accounts = unique([...accounts, ...(details.accounts || [])]);

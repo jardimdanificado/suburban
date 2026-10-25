@@ -1,3 +1,4 @@
+import {renderResearchProgress,renderPollMethod} from './city_research_ui.js';
 const stamp=n=>n==null?'—':`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const phases={scheduled:'Aguardando início da campanha', 'runoff-required':'Segundo turno confirmado',campaign:'Campanha e pesquisas',voting:'Votação presencial',counting:'Atendimento da fila final',completed:'Resultado definitivo',cancelled:'Eleição adiada'};
 function pages(ui,p,rows,key,size=10){const count=Math.max(1,Math.ceil(rows.length/size)),page=Math.max(0,Math.min(count-1,ui[key]||0));if(count>1){p.note(`${rows.length} registros · página ${page+1}/${count}`);p.buttons([{label:'ANTERIOR',click:()=>{ui[key]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{ui[key]=Math.min(count-1,page+1);}}]);}return rows.slice(page*size,page*size+size);}
@@ -8,13 +9,13 @@ function candidates(ui,p,e){const gov=ui.city.politics,total=e.validMayoralVotes
   const blanks=e.ballots.filter(b=>b.candidateId==null).length;if(blanks)p.kv('Votos em branco para prefeito',blanks);if(e.invalidMayoralVotes)p.kv('Votos para candidaturas indisponíveis ao encerrar',e.invalidMayoralVotes);
 }
 function polls(ui,p,e){
-  p.note('Pesquisas por amostragem: entrevistam aproximadamente 10% da população. Intenções não são votos depositados nas urnas.');
+  renderResearchProgress(ui,p,e);p.note('Pesquisas presenciais por instituto, dentro dos limites de amostragem votados pela Câmara. Intenções declaradas não são votos nas urnas.');
   const poll=e.polls.find(r=>r.id===ui.monitorPollId)||e.polls.at(-1);
   if(!poll){p.note('Aguardando a primeira pesquisa.');return;}
   p.button('ACOMPANHAR A MAIS RECENTE',()=>{ui.monitorPollId=null;},ui.monitorPollId==null);p.links(e.polls.map(r=>({label:`${stamp(r.minute)}`,click:()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:r.id})})));
-  p.kv('Última atualização',stamp(poll.minute));p.metrics([['ENTREVISTADOS',poll.sampleSize],['INDECISOS',poll.undecided],['MARGEM',`±${poll.marginOfError.toFixed(1)} p.p.`]]);
+  if(poll.instituteName)p.kv('Instituto',poll.instituteName);p.kv('Última atualização',stamp(poll.minute));p.metrics([['ENTREVISTADOS',poll.sampleSize],['INDECISOS',poll.undecided],['MARGEM',`±${poll.marginOfError.toFixed(1)} p.p.`]]);
   p.table([{label:'Candidato',weight:2},{label:'Intenção'},{label:'Rejeição'}],poll.results.map(r=>({cells:[r.name,`${(r.intentions/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`,`${(r.rejections/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`],click:()=>ui.openCitizen(r.candidateId)})));
-  p.kv('Aprovação entre entrevistados',`${poll.approval.toFixed(1)}%`);
+  p.kv('Aprovação entre entrevistados',`${poll.approval.toFixed(1)}%`);ui.section(p,`monitorMethod:${poll.id}`,'Método e financiamento',()=>renderPollMethod(ui,p,poll));
   p.button('RESPOSTAS E MOTIVOS',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:poll.id}));
 }
 function ballots(ui,p,e){

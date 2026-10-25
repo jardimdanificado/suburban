@@ -27,10 +27,11 @@ export function renderContractDossier(ui,p){
 }
 export function renderPollResponse(ui,p,r,poll){
   const city=ui.city,politics=city.politics,name=id=>id==null?'Nenhum':city.accountName(`citizen:${id}`);
-  p.block(r.name,`${stamp(poll.minute)} · resposta individual`,q=>{
+  p.block(r.name,`${stamp(r.interviewedAt??poll.minute)} · resposta individual`,q=>{
     q.kv('Situação',r.decided?'Voto decidido':'Ainda está indeciso');q.kv('Intenção declarada',r.decided?name(r.candidateId):'Não declarou candidato');
     if(!r.decided&&r.leaningId!=null)q.kv('Inclinação atual',name(r.leaningId));
     q.kv('Aprovação do governo',`${r.approval}%`);q.kv('Filiação',politics.party(r.partyId)?.name||'Sem partido');
+    if(r.agentName){q.kv('Entrevistador',r.agentName);q.kv('Local da abordagem',r.siteLabel||`${r.x}, ${r.y}`);}
     q.heading('MOTIVO DA RESPOSTA');q.note(r.reason);
     q.heading('CANDIDATOS REJEITADOS');for(const id of r.rejectedIds)q.note(name(id));if(!r.rejectedIds.length)q.note('Nenhuma rejeição declarada.');
     ui.section(q,`pollReasons:${poll.id}:${r.citizenId}`,'Fatores que influenciaram a resposta',()=>q.table([{label:'Fator',weight:3},{label:'Pontos'}],r.reasons.map(a=>({cells:[a.reason,`${a.value>=0?'+':''}${a.value.toFixed(1)}`]}))));

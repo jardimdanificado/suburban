@@ -1,7 +1,8 @@
 import {formatMoney as money} from './city_ui_format.js';
 import {drawPartyFlag} from './city_party_flags.js';
-const labels={'vote-buying':'Compra de votos','contract-overbilling':'Superfaturamento contratual',favoritism:'Favorecimento indevido',embezzlement:'Desvio de recursos'};
+const labels={'poll-rigging':'Manipulação de pesquisa eleitoral','vote-buying':'Compra de votos','contract-overbilling':'Superfaturamento contratual',favoritism:'Favorecimento indevido',embezzlement:'Desvio de recursos'};
 const mechanisms={
+  'poll-rigging':'Um candidato ou sua empresa pagou uma quantia elevada ao instituto para inflar suas intenções de voto no relatório divulgado. As entrevistas originais foram preservadas; uma investigação pode comprovar a divergência e provocar uma correção pública.',
   'vote-buying':'O candidato pagou diretamente a um eleitor em troca de uma promessa de voto. O recebimento não garante que o eleitor cumpra o acordo na urna.',
   'contract-overbilling':'Um aditivo indevido ligado a um contrato público retirou dinheiro do tesouro para o empresário contratado. Os repasses abaixo mostram os retornos efetivamente pagos aos integrantes do esquema.',
   favoritism:'Uma subvenção pública foi direcionada a uma empresa aliada. O favorecimento também dá preferência temporária à empresa; os retornos financeiros realizados aparecem no fluxo.',
@@ -33,7 +34,8 @@ export function renderCorruptionInspector(ui,p){
   if(!discovered(r))p.note('Informação secreta da simulação: a população ainda não descobriu este esquema.');
   if(tab==='summary'){
     p.note(mechanisms[r.type]||'As movimentações registradas mostram a execução financeira deste esquema.');
-    p.kv(r.type==='vote-buying'?'Pagamento ilegal inicial':'Valor retirado do tesouro',money(r.amount));
+    p.kv(['vote-buying','poll-rigging'].includes(r.type)?'Pagamento ilegal inicial':'Valor retirado do tesouro',money(r.amount));
+    if(r.type==='poll-rigging'){p.kv('Pesquisa / coleta',`#${r.pollId} / #${r.studyId}`);p.kv('Candidato favorecido',city.accountName(`citizen:${r.targetCandidateId}`));p.windowLink('PESQUISA VINCULADA',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:r.electionId,pollId:r.pollId}));}
     p.kv('Quando ocorreu',stamp(r.occurredAt));p.kv('Partido do articulador à época',party?.name||'Sem partido');
     if(party?.flag){if(p.visible(40))drawPartyFlag(p.ui.ctx,party.flag,p.x,p.y,58,36);p.y+=41;}
     p.heading('REPUTAÇÃO DOS PARTIDOS');for(const affected of gov.parties){const incidents=(affected.reputationIncidents||[]).filter(i=>i.caseId===r.id);for(const incident of incidents)p.kv(`${affected.short} · ${incident.role==='origin'?'à época do crime':'acolhimento posterior'}`,`−${incident.penalty.toFixed(2)} pontos`);}

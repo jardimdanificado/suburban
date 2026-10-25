@@ -11,6 +11,7 @@ function opinion(city,c,bill){
     case'build':return -.5*e+((bill.payload.buildingType==='popular_housing'&&!c.homeUnitId) ? .8 : .25);
     case'nationalize':return -e;case'privatize':return e;
     case'roads':return .65;case'inflation':return Math.sign(city.currency.policy.dailyLimit-v)*(.2+Math.min(.8,Math.max(0,city.currency.dailyInflation)*40));
+    case'pollMinRate':case'pollMaxRate':return Math.sign(v-(p.policy[bill.type]??(bill.type==='pollMinRate'?5:20)))*((c.political.criticalSense??.5)*.7-(c.traits?.frugality??.5)*.3);
     case'partyLimit':return change('partyLimit')*(i.liberty*.7+.1);
     case'reelectionLimit':return -change('reelectionLimit')*(.3+(c.political.criticalSense??.5)*.6);
     case'termDays':return -change('termDays')*(.3+i.liberty*.3);

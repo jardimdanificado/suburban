@@ -36,6 +36,7 @@ export const INDUSTRIES = {
   publisher: industry('Papelaria e encadernação',{papel:5},{livros:1,panfletos:1},24,'social','Encaderna livros e panfletos; cada página preserva dois relatos, inclusive propaganda e anúncios.','services',{need:'leisure',boost:18}),
   pottery: industry('Ateliê de cerâmica',{argila:3,carvao:1},{ceramica:3},18,'maintenance','Utensílios para conforto doméstico.','services',{need:'shelter',boost:8}),
   composting: industry('Compostagem',{lixo:4},{adubo:2},20,'recycling','Resíduos urbanos retornam como fertilizante às lavouras.'),
+  research_institute: {...industry('Instituto de pesquisa',{}, {},1,'social','Pesquisas eleitorais presenciais financiadas por investidores e empresas; prefeitura contrata somente na falta de investimento privado.','services'),jobs:3,color:0x648caf},
   bank: industry('Banco',{}, {},1,'commerce','Depósitos mantêm reserva integral; crédito usa somente capital próprio disponível.','services'),
 };
 export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva','marmita','marmita_simples','marmita_rustica'];
