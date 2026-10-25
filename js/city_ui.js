@@ -4,13 +4,14 @@ import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
 import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js';
 import {renderElectionMonitor} from './city_election_ui.js';
 import {sectionTitle} from './city_ui_sections.js';
+import {renderGovernmentDashboard} from './city_ui_dashboard.js';
 import {ROTATION_LABELS} from './city_building_geometry.js';
 import { renderPublications } from './city_publications_ui.js';
 import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases } from './city_corruption_ui.js';
 import {renderEventInspector} from './city_event_inspector.js';
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
-import { renderPolitics, renderCitizenPolitics } from './city_politics_ui.js';
+import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js';
 import { REPUTATION_LABELS } from './city_reputation.js';
@@ -85,7 +86,7 @@ export class CityUI {
   section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
 
   remember() {
-    const route={};for(const key of ['politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow'])route[key]=this[key];
+    const route={};for(const key of ['politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow'])route[key]=this[key];
     this.history.push({ ...route, tab: this.tab, selected: this.selected, selectedPlotId: this.selectedPlotId, unitId: this.unitId, detailTab: this.detailTab, mobileDetail: this.mobileDetail, query: this.query, views: { ...this.views }, filters: { ...this.filters }, scrolls: { ...this.scrolls } });
     if (this.history.length > 40) this.history.shift();
   }
@@ -148,19 +149,21 @@ export class CityUI {
   finishInputs(){for(const input of[this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
   inputAt(input,x,y,w){this.frameInputs?.add(input);const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.hidden)input.hidden=false;}
   drawFloating(ui,window) {
-    this.floating=true;this.floatingDossier=window.kind==='dossier';if(this.element.hidden)this.element.hidden=false;this.visible=true;this.zones=[];this.beginInputs();
+    this.floating=true;this.politicsNavigationPinned=false;this.floatingDossier=window.kind==='dossier';if(this.element.hidden)this.element.hidden=false;this.visible=true;this.zones=[];this.beginInputs();
     this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded){this.finishInputs();return;}
     const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+25;
     if(!this.floatingDossier){
       const search=!['event','corruption-case'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
+      if(this.tab==='government'&&this.view()==='elections'){const nav=new Page(ui,x+4,y,w-8,y,bottom);renderPoliticsNavigation(this,nav);y=nav.y;this.politicsNavigationPinned=true;}
     }
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings','economy'].includes(this.tab)?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings','economy'].includes(this.tab))this.directory(p);else this.content(p);
     });this.finishInputs();
   }
   draw(ui) {
+    this.politicsNavigationPinned=false;
     this.element.hidden=!this.visible;this.beginInputs();this.zones=[];
     if(!this.visible){this.finishInputs();return;}
     const w=Math.min(ui.width-12,this.expanded?ui.width-24:1088),x=ui.width-w-6,y=42,h=Math.max(140,ui.height-y-(ui.width<700?78:48)),desktop=w>=940;
@@ -260,7 +263,7 @@ export class CityUI {
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'TRABALHO'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'CONTA'], ['history', 'HISTÓRICO']]);
     if (this.detailTab === 'profile') {
-      this.section(p,'wardrobe','Roupas, aparência e marcas',()=>{p.meter('Apresentação',appearance(c));p.note('Roupa bem conservada e de um estilo preferido melhora o bem-estar e a credibilidade; a experiência e a reputação continuam importantes.');p.kv('Preferências por peças',GARMENT_TYPES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));p.kv('Preferências por estilos',CLOTHING_STYLES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));for(const [i,g]of (c.wardrobe||[]).entries())p.record(`${i===(c.wearingIndex||0)?'Vestindo: ':''}${g.piece} · ${g.style}`,`${g.brandName} · conservação ${g.condition.toFixed(0)}% · qualidade ${g.quality.toFixed(0)}%`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});for(const b of city.economy.businesses.filter(b=>['tailor','clothing_store'].includes(b.type)).slice(0,12))p.kv(`Afinidade: ${b.entity.properties.name}`,`${brandPreference(c,b.id)>0?'Gosta':'Não gosta'} (${Math.round(brandPreference(c,b.id)*100)})`);});
+
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
       const inside=city.building(c.indoorLocation?.buildingId);
       if(inside){p.kv('Localização',`Dentro de ${name(inside.entity)} · ${c.indoorLocation.floor+1}º andar`);p.kv('Cômodo',{bedroom:'Quarto',bathroom:'Banheiro',dining:'Refeitório',plenary:'Plenário',office:'Gabinete',workspace:'Área da empresa'}[c.indoorLocation.roomType]||'Interior');p.button('VER PRÉDIO ATUAL',()=>this.openBuilding(inside.id));}
@@ -271,6 +274,7 @@ export class CityUI {
       p.note(city.housing.isSocial(dwelling)?'Moradia popular municipal: ocupação gratuita, sem cobrança de aluguel e sem transferência de propriedade.':'Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
       if (home) { p.kv('Espaço',`${home.x+1}, ${home.y+1} / ${home.z+1}º andar`); p.kv('Regime', city.housing.isSocial(dwelling)?'Moradia social gratuita':home.ownerId === c.accountId ? 'Proprietário' : home.tenantId !== c.accountId && dwelling ? 'Moradia compartilhada' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
       else p.note('Sem moradia', C.red);
+      this.section(p,'wardrobe','Roupas, aparência e marcas',()=>{p.meter('Apresentação',appearance(c));p.note('Roupa bem conservada e de um estilo preferido melhora o bem-estar e a credibilidade; a experiência e a reputação continuam importantes.');p.kv('Preferências por peças',GARMENT_TYPES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));p.kv('Preferências por estilos',CLOTHING_STYLES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));for(const [i,g]of (c.wardrobe||[]).entries())p.record(`${i===(c.wearingIndex||0)?'Vestindo: ':''}${g.piece} · ${g.style}`,`${g.brandName} · conservação ${g.condition.toFixed(0)}% · qualidade ${g.quality.toFixed(0)}%`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});for(const b of city.economy.businesses.filter(b=>['tailor','clothing_store'].includes(b.type)).slice(0,12))p.kv(`Afinidade: ${b.entity.properties.name}`,`${brandPreference(c,b.id)>0?'Gosta':'Não gosta'} (${Math.round(brandPreference(c,b.id)*100)})`);});
       this.section(p,'personality','Identidade, personalidade e reputação',()=>{p.heading('IDENTIDADE E PERSONALIDADE');
       p.kv('Gênero',GENDER_LABELS[c.socialProfile.gender]);p.kv('Interesse romântico',ORIENTATION_LABELS[c.socialProfile.orientation]);
       p.kv('Luto',city.relationships.moodEffect(c)<0?'Em luto':'Sem perda recente');p.kv('Sobrenomes da família',(c.surnames||[]).join(' / '));
@@ -333,17 +337,19 @@ export class CityUI {
     const city = this.city;
     if(!this.floatingDossier)p.heading(name(b.entity)); p.note(`${BUILDING_TYPES[b.type].label} | ${b.width}x${b.depth}x${b.floors} | ${b.units.length} células`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(b.entity.x, b.entity.y); if(!this.host)this.visible = false; });
-    this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
+    this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['finance','FINANÇAS'], ['infrastructure','ESTRUTURA'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
     if (this.detailTab === 'profile') {
+      p.metrics([['CAIXA',money(b.balance),b.balance<1000?C.red:C.cyan],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]);
+      p.status(b.active?'EM ATIVIDADE':['residential','popular_housing','luxury_housing'].includes(b.type)?'MORADIA':'INSTALAÇÃO DISPONÍVEL',b.entity.properties.name,b.active?C.green:C.cyan);
+      const missing=b.active&&INDUSTRIES[b.type]?Object.entries(INDUSTRIES[b.type].inputs).filter(([g,n])=>(b.inventory[g]||0)<n):[];
+      if(missing.length)p.status('AGUARDANDO INSUMOS',missing.map(([g,n])=>`${GOODS[g].label}: ${b.inventory[g]||0}/${n}${b.incoming[g]?' · '+b.incoming[g]+' a receber':''}`).join(' · '),C.gold,()=>this.openPanel({detailTab:'stock'}));
+      if(b.active&&b.jobs>0&&!b.workers.length&&!b.ownerId)p.status('SEM EQUIPE','Nenhum funcionário contratado para operar esta instalação.',C.red,()=>this.openPanel({detailTab:'staff'}));
       if(b.type==='council_chamber')p.kv('Bandeira da sede',b.governingFlagDescription||'Presidência ainda não eleita');
       const occupants=city.citizens.filter(c=>c.indoorLocation?.buildingId===b.id);
-      this.section(p,'inside','Pessoas no interior',()=>{p.kv('Presentes',occupants.length);for(const c of occupants)p.record(name(c.entity),`${c.action} · ${c.indoorLocation.floor+1}º andar`,()=>this.openCitizen(c.id));});
+      this.section(p,'inside',`Pessoas no interior (${occupants.length})`,()=>{p.kv('Presentes',occupants.length);for(const c of occupants)p.record(name(c.entity),`${c.action} · ${c.indoorLocation.floor+1}º andar`,()=>this.openCitizen(c.id));});
       if(b.type==='newsroom'){p.kv('Linha editorial',newsroomGenre(b));p.kv('Última edição',b.newsEditionDay??'Ainda não impressa');p.kv('Exemplares produzidos hoje',b.newsPrintedDay===city.day?b.newsCopies:0);p.note(b.officialJournal?'Jornal obrigatório, custeado pela prefeitura. Cada edição usa quatro folhas e preserva até oito atos públicos; inclui votos individuais.':'Papel chega por transporte. Cada cópia consome 3–5 folhas; anúncios pagos são identificados no acervo.');p.button('ACERVO DO JORNAL',()=>this.openPanel({tab:'publications',publicationOwner:b.accountId,selectedPublicationId:null}));}
 
-      const post = [...city.lighting.sites.values()].find(post => post.buildingId === b.id && !post.public && post.status !== 'cancelled');
-      if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', !post.built ? post.projectId ? 'Em construção' : 'Aguarda contratação' : post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }
       const industry=INDUSTRIES[b.type];
-      p.kv('Orientação da fachada',`${ROTATION_LABELS[b.rotation||0]} · ${(b.rotation||0)*90}°`);
       if(b.type==='quarry')p.kv('Pedra restante nos depósitos',city.economy.quarryStatus(b).remaining);
       if(b.type==='forestry'){const trees=[...city.nature.plants.values()].filter(t=>t.buildingId===b.id);p.kv('Árvores cultivadas / maduras',`${trees.length} / ${trees.filter(t=>t.stage==='mature').length}`);p.kv('Sementes disponíveis',b.seedStock);p.note('Os trabalhadores cortam árvores no local, replantam com sementes e carregam a madeira até o depósito.');for(const c of city.citizens.filter(c=>c.forestryJob?.buildingId===b.id))p.card(name(c.entity),`${c.action} · ${c.forestryJob.load||0} madeiras em transporte`,()=>this.openCitizen(c.id));}
       if(b.type==='council_chamber'){const chamber=city.politics.council.getChamber();p.kv('Plenário',`${b.width*b.depth} células no térreo`);p.kv('Gabinetes / vereadores',`${chamber.officeCount||0} / ${city.politics.council.members.length}`);for(const member of city.politics.council.members.filter(m=>city.units.get(m.officeUnitId)?.buildingId===b.id))p.record(member.name,`Gabinete ${member.officeUnitId}`,()=>this.select(b.entity,member.officeUnitId));}
@@ -361,11 +367,30 @@ export class CityUI {
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');
       if(b.type==='mint'){p.kv('Emitido hoje',money(city.currency.issuedToday));p.kv('Inflação acumulada',`${((city.currency.priceIndex-1)*100).toFixed(2)}%`);p.note('A emissão entra no tesouro e depende de um funcionário trabalhando nesta instalação.');}
       p.note('Proprietário da empresa'); if (b.ownerId) p.button(name(city.economy.citizen(b.ownerId)?.entity), () => this.openCitizen(b.ownerId)); else p.note(b.municipal?'Empresa municipal / patrimônio público':'Serviço público');
-      p.metrics([[b.type==='townhall'?'SALDO MUNICIPAL':'CAIXA',money(b.balance),b.balance<1000?C.red:C.gold],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]); p.kv(b.type==='townhall'?'Entradas acumuladas':'Receita acumulada', money(b.totalRevenue)); p.kv(b.type==='townhall'?'Saídas acumuladas':'Despesas acumuladas', money(b.totalExpenses)); if(b.type==='townhall')p.note('Este saldo é o tesouro municipal, o mesmo exibido na barra. Recebe impostos e emissão e paga obras, benefícios e despesas da sede. Reservas de contratos já saíram do saldo disponível.');else p.kv('Dividendos pagos', money(b.dividends));
+
       if(b.type==='popular_housing'){const social=[...city.housing.homes.values()].filter(h=>h.buildingId===b.id && city.housing.isSocial(h));if(social.length){p.heading('OCUPAÇÃO SOCIAL');p.kv('Famílias abrigadas / moradias',`${social.filter(h=>city.housing.residents(h).length>0).length} / ${social.length}`);p.kv('Moradores',city.citizens.filter(c=>!c.entity.destroyed && social.some(h=>h.id===c.homeId)).length);p.kv('Adultos sem teto na cidade',city.citizens.filter(c=>!c.entity.destroyed && city.society.isAdult(c) && !c.homeUnitId).length);p.note('Ocupação gratuita com propriedade municipal. Famílias sem teto com dependentes e menos recursos têm prioridade.');}}
-      p.kv('Equipe', `${b.workers.length}/${b.jobs}`); p.kv('Desnível do terreno', Number(b.terrain.variation).toFixed(2)); p.kv('Circulação comum', `${b.circulation?.length || 0} células sem imóveis`);
+    } else if(this.detailTab==='finance'){
+      p.heading('FINANÇAS E PROPRIEDADE');
+      p.metrics([[b.type==='townhall'?'SALDO MUNICIPAL':'CAIXA',money(b.balance),b.balance<1000?C.red:C.gold],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]); p.kv(b.type==='townhall'?'Entradas acumuladas':'Receita acumulada', money(b.totalRevenue)); p.kv(b.type==='townhall'?'Saídas acumuladas':'Despesas acumuladas', money(b.totalExpenses)); if(b.type==='townhall')p.note('Este saldo é o tesouro municipal, o mesmo exibido na barra. Recebe impostos e emissão e paga obras, benefícios e despesas da sede. Reservas de contratos já saíram do saldo disponível.');else p.kv('Dividendos pagos', money(b.dividends));
       const agreements=(city.economy.supplyAgreements||[]).filter(a=>a.buyerId===b.id||a.sellerId===b.id);if(agreements.length){p.heading('ACORDOS DE FORNECIMENTO');for(const a of agreements)p.note(`${GOODS[a.good].label}: ${city.accountName(city.building(a.sellerId)?.accountId)} → ${city.accountName(city.building(a.buyerId)?.accountId)}, ${money(a.unitPrice)}/unidade`);}if(b.equityPartners?.length){p.heading('SÓCIOS E CAPITAL');for(const share of b.equityPartners)p.note(`${city.accountName(`citizen:${share.citizenId}`)}: ${money(share.amount)}`);}
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, b.accountId);
+    } else if(this.detailTab==='infrastructure'){
+      p.heading('ESTRUTURA E SERVIÇOS DO IMÓVEL');
+      p.kv('Andares / limite de ampliação',`${b.floors} / 12`);
+      p.meter('Conservação',b.condition??100);
+      const post = [...city.lighting.sites.values()].find(post => post.buildingId === b.id && !post.public && post.status !== 'cancelled');
+      if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', !post.built ? post.projectId ? 'Em construção' : 'Aguarda contratação' : post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }
+      p.kv('Orientação da fachada',`${ROTATION_LABELS[b.rotation||0]} · ${(b.rotation||0)*90}°`);
+      p.kv('Desnível do terreno',Number(b.terrain?.variation||0).toFixed(2));
+      p.kv('Circulação comum',`${b.circulation?.length||0} células`);
+      const facilities=[...city.sanitation.facilities.values()].filter(f=>f.buildingId===b.id);
+      p.heading('BANHEIROS');
+      if(!facilities.length)p.note('Nenhum banheiro cadastrado.');
+      for(const f of facilities)p.meter(`Banheiro ${f.id} · limpeza`,f.cleanliness);
+      p.heading('OBRAS NO IMÓVEL');
+      const works=city.development.projects.filter(o=>o.buildingId===b.id&&!o.cancelled&&o.status!=='completed');
+      if(!works.length)p.note('Nenhuma ampliação ou reparo em andamento.');
+      for(const o of works)p.record(o.name,o.error||o.status,()=>this.openContract(o.id));
     } else if (this.detailTab === 'stock') {
       p.heading('INVENTÁRIO REAL'); p.kv('Capacidade', `${inventoryUsed(b)}/${b.inventoryCapacity} itens`); p.kv('Reservado para recebimento', incomingItems(b)); p.kv('Espaço livre', inventoryFree(b)); p.meter('Ocupação do armazém', inventoryUsed(b) / b.inventoryCapacity * 100, inventoryFree(b) < 12 ? C.red : C.cyan); for (const [id, spec] of Object.entries(GOODS)) p.kv(spec.label, b.inventory?.[id] || 0);
       if (b.type === 'quarry') p.kv('Reserva mineral restante', b.stoneReserve || 0);
@@ -527,12 +552,11 @@ export class CityUI {
     const city=this.city,view=this.view(),mayor=city.economy.citizen(city.economy.mayorId),hall=city.buildings.find(b=>b.type==='townhall');
     if(view==='elections'){this.electionsPanel(p);return;}
     if(view==='overview'){
-      p.heading('PREFEITURA');if(mayor)p.record(name(mayor.entity),'Prefeito em exercício',()=>this.openCitizen(mayor.id));
-      p.metrics([['TESOURO',money(city.treasury)],['APROVAÇÃO',`${city.politics.approval.toFixed(1)}%`]]);
+      renderGovernmentDashboard(this,p);
       if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas','polls'],['Institutos de pesquisa','institutes'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
       if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
-    } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice(-30).reverse());}
+    } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,this.cachedList(`municipal-contracts:${this.contractPlotId||'all'}`,()=>city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice().sort((a,b)=>Number(a.cancelled||a.status==='completed')-Number(b.cancelled||b.status==='completed')||Number(b.status==='blocked')-Number(a.status==='blocked')||b.startedAt-a.startedAt)));}
     else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
     else {
       p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
@@ -554,14 +578,18 @@ export class CityUI {
     const city=this.city,view=this.view();
     if(view==='demand'){this.demands(p);return;}
     if(view==='stocks'){
-      p.heading('ESTOQUES E TRANSFORMAÇÕES');
-      p.note('Produção e consumo acumulados. Estoque inclui prédios, obras, cargas e resíduos espalhados.');
-      const rows=Object.entries(GOODS).filter(([g,spec])=>this.matches(spec.label)).map(([g,spec])=>({cells:[spec.label,city.economy.produced[g],city.economy.consumed[g],city.goodsStock(g)],color:city.goodsStock(g)?C.gray:C.red}));
-      p.table([{label:'Produto',weight:2},{label:'Produzido'},{label:'Consumido'},{label:'Estoque'}],rows);
-      p.kv('Refeições sem oferta',city.economy.failedMeals);
-      p.heading('ORIGEM E DESTINO');
-      p.table([{label:'Produto',weight:2},{label:'Inicial'},{label:'Em frete'},{label:'Nas obras'}],Object.entries(GOODS).filter(([,spec])=>this.matches(spec.label)).map(([g,spec])=>({cells:[spec.label,city.economy.initialStock[g],city.logistics.shipments.reduce((n,s)=>n+s.inventory[g],0),city.development.projects.reduce((n,s)=>n+s.inventory[g],0)]})));
-      p.note('Fazendas > lojas > refeições. Trigo > padarias > pão. Pedreira ou reciclagem > obra > prédio. As entregas precisam chegar para liberar o estoque.');
+      p.heading('ESTOQUES E CADEIAS PRODUTIVAS');
+      const stocks=this.cachedList('stock-summary',()=>Object.entries(GOODS).map(([id,spec])=>({id,label:spec.label,stock:city.goodsStock(id),produced:city.economy.produced[id]||0,consumed:city.economy.consumed[id]||0,price:city.economy.goods[id]?.price??spec.price,initial:city.economy.initialStock[id]||0,freight:city.logistics.shipments.reduce((n,s)=>n+(s.inventory[id]||0),0),works:city.development.projects.reduce((n,s)=>n+(s.inventory[id]||0),0)})));
+      p.metrics([['PRODUTOS',stocks.length],['SEM ESTOQUE',stocks.filter(g=>!g.stock).length,C.gold],['REFEIÇÕES SEM OFERTA',city.economy.failedMeals,C.red]]);
+      const mode=this.stockView||'all';
+      p.links([['all','TODOS'],['available','COM ESTOQUE'],['empty','SEM ESTOQUE']].map(([id,label])=>({label,selected:id===mode,click:()=>this.openPanel({stockView:id})})));
+      const rows=stocks.filter(g=>this.matches(g.label)&&(mode==='all'||mode==='available'&&g.stock>0||mode==='empty'&&!g.stock));
+      p.table([{label:'Produto',weight:2},{label:'Estoque'},{label:'Produzido'},{label:'Consumido'},{label:'Preço'}],rows.map(g=>({cells:[g.label,g.stock,g.produced,g.consumed,money(g.price)],color:g.stock?C.gray:C.red})));
+      this.section(p,'stockOrigins','Origem, transporte e materiais nas obras',()=>{
+        p.table([{label:'Produto',weight:2},{label:'Inicial'},{label:'Em frete'},{label:'Nas obras'}],rows.map(g=>({cells:[g.label,g.initial,g.freight,g.works]})));
+        p.note('O estoque total inclui prédios, obras, cargas e resíduos. Mercadorias reservadas só ficam disponíveis no destino após a entrega.');
+      });
+
     } else {
       p.heading('MOVIMENTAÇÕES DE MERCADORIAS');
       const kinds={dispatch:'Carga reservada',delivery:'Entrega',mining:'Extração',construction:'Construção',road:'Estrada',expansion:'Ampliação','workplace-meal':'Refeição da empresa',waste:'Lixo gerado','recycling-input':'Processamento','recycling-output':'Pedra reciclada',consumption:'Consumo',sowing:'Plantio',harvest:'Colheita','recipe-input':'Insumo',baking:'Panificação'};
@@ -571,8 +599,10 @@ export class CityUI {
   land(p) {
     const city=this.city,dev=city.development,selected=dev.plots.find(l=>l.id===this.selectedPlotId);
     if(this.view()==='projects'){
-      p.heading('OBRAS EM ANDAMENTO');const active=dev.projects.filter(o=>o.status!=='completed'&&!o.cancelled);this.contracts(p,active);
-      p.heading('OBRAS ENCERRADAS');this.contracts(p,dev.projects.filter(o=>o.status==='completed'||o.cancelled).slice(-15).reverse());return;
+      const active=dev.projects.filter(o=>o.status!=='completed'&&!o.cancelled),finished=dev.projects.filter(o=>o.status==='completed'||o.cancelled),mode=this.projectView||'active';
+      p.metrics([['EM ANDAMENTO',active.length],['BLOQUEADAS',active.filter(o=>o.status==='blocked').length,C.red],['CONCLUÍDAS',finished.filter(o=>!o.cancelled).length,C.green]]);
+      p.links([['active','EM ANDAMENTO'],['blocked','BLOQUEADAS'],['finished','ENCERRADAS']].map(([id,label])=>({label,selected:id===mode,click:()=>this.openPanel({projectView:id})})));
+      this.contracts(p,mode==='finished'?finished.slice().reverse():mode==='blocked'?active.filter(o=>o.status==='blocked'):active);return;
     }
     p.note('Área mínima de terrenos e novas obras: 4 células no chão (2×2, 4×1 ou 1×4). Fachadas recebem orientações aleatórias com acesso por terra firme.');
     p.metrics([['TERRENOS',dev.plots.length,C.cyan],['À VENDA',dev.plots.filter(l=>l.forSale&&!l.buildingId).length,C.gold],['EM OBRAS',dev.projects.filter(o=>!o.cancelled&&o.status!=='completed').length,C.green]]);
@@ -586,22 +616,29 @@ export class CityUI {
     p.heading('CADASTRO DE TERRENOS');p.table([{label:'Terreno'},{label:'Proprietário',weight:2},{label:'Área'},{label:'Situação',weight:1.5}],lots.map(l=>({cells:[`Lote ${l.id}`,city.accountName(l.ownerId),`${l.width}x${l.depth}`,l.buildingId?'Edificado':l.projectId?'Em obras':l.forSale?money(l.price):'Disponível'],selected:l.id===this.selectedPlotId,click:()=>this.setPlotSelection(l.id)})));
   }
   contracts(p, projects) {
-    p.table([{label:'Contrato',weight:2},{label:'Situação'},{label:'Serviço'}],projects.filter(o=>this.matches(`${o.name} ${BUILDING_TYPES[o.type]?.label||o.type}`)).map(o=>({cells:[o.name,o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='materials'?'Materiais':'Em andamento',money(o.fee)],click:()=>this.openContract(o.id)})));
+    p.table([{label:'Contrato',weight:2},{label:'Situação',weight:1.5},{label:'Valor'}],projects.filter(o=>this.matches(`${o.name} ${BUILDING_TYPES[o.type]?.label||o.type}`)).map(o=>({cells:[o.name,o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='blocked'?'Bloqueado':o.status==='materials'?'Aguardando materiais':'Em andamento',money(o.fee)],color:o.status==='blocked'?C.red:C.gray,click:()=>this.openContract(o.id)})));
   }
   transport(p) {
     const city=this.city,system=city.logistics,pending=system.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
     p.metrics([['EM ANDAMENTO',pending.length,C.gold],['ENTREGUES',system.delivered,C.green],['ITENS EM FRETE',pending.reduce((n,s)=>n+s.quantity,0),C.cyan]]);
+    this.section(p,'transportDemand','Demanda, capacidade e causas dos atrasos',()=>{
     const demand=system.demandMetrics();p.heading('DEMANDA POR TRANSPORTE');p.kv('Cargas aguardando / transporte próprio',`${demand.waiting} / ${demand.ownHauls}`);p.kv('Transportadores disponíveis',demand.drivers);p.kv('Cargas bloqueadas por armazém cheio',demand.waitingSpace);p.kv('Espera mais antiga',`${Math.round(demand.oldest)} min`);p.kv('Trabalho pendente / capacidade diária',`${demand.work} / ${demand.capacity} min`);p.kv('Lamparinas sem atendimento',demand.lampRequests);p.kv('Índice de demanda',Math.round(demand.score));
+    });
     const states={waiting:'Aguardando coleta','in-transit':'Em trânsito','waiting-space':'Sem espaço',delivered:'Entregue',cancelled:'Cancelado'};
     const rows=(this.view()==='active'?pending:system.shipments.filter(s=>['delivered','cancelled'].includes(s.status)).slice(-40).reverse()).filter(s=>this.matches(`${s.id} ${GOODS[s.good].label} ${s.seller.entity?.properties.name} ${s.buyer.entity?.properties.name||s.buyer.name}`));
     p.heading(this.view()==='active'?'CARGAS EM ANDAMENTO':'ENTREGAS E CANCELAMENTOS');
-    for(const s of rows){
+    const selected=system.shipments.find(s=>s.id===this.selectedShipmentId);
+    if(selected){
+      p.button('VOLTAR À LISTA DE CARGAS',()=>this.openPanel({selectedShipmentId:null}));
+      const s=selected;
       p.heading(`FRETE ${s.id} / ${GOODS[s.good].label} x${s.quantity}`,s.status==='delivered'?C.green:s.status==='cancelled'?C.red:C.gold);
       p.note(states[s.status],C.cyan);p.note(`${s.seller.entity?.properties.name||s.seller.name} > ${s.buyer.entity?.properties.name||s.buyer.name}`);
       p.columns(q=>{q.kv('Mercadoria',money(s.cost));q.kv('Frete',money(s.fee));if(s.serviceFee)q.kv('Serviço de coleta',money(s.serviceFee));},q=>{q.kv('Operador',city.building(s.carrierId)?.entity.properties.name||'Transporte próprio');q.kv('Trajeto',`${s.routeLength} tiles`);});
       const driver=city.society.citizen(s.driverId);p.buttons([...(city.building(s.seller.id)?[{label:'ORIGEM',click:()=>this.openBuilding(s.seller.id)}]:[]),...(city.building(s.buyer.id)?[{label:'DESTINO',click:()=>this.openBuilding(s.buyer.id)}]:[]),...(driver?[{label:'TRANSPORTADOR',click:()=>this.openCitizen(driver.id)}]:[])]);
       p.note(`${stamp(s.createdAt)}${s.completedAt?' / conclusão '+stamp(s.completedAt):''}`,C.muted);
+      return;
     }
+    p.rows(rows,s=>p.record(`#${s.id} · ${GOODS[s.good].label} × ${s.quantity}`,`${s.seller.entity?.properties.name||s.seller.name} → ${s.buyer.entity?.properties.name||s.buyer.name}`,()=>this.openPanel({selectedShipmentId:s.id}),false,{value:states[s.status]||s.status,color:s.status==='waiting-space'?C.red:s.status==='delivered'?C.green:C.cyan}));
     if(!rows.length)p.note(this.view()==='active'?'Nenhuma carga em andamento.':'Ainda não há entregas ou cancelamentos.');
   }
   sanitation(p) {

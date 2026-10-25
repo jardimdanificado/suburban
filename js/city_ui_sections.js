@@ -1,9 +1,12 @@
 export const POLITICS_SECTIONS=[['overview','Governo'],['approval','Avaliação'],['parties','Partidos'],['council','Câmara'],['campaign','Campanha'],['polls','Pesquisas'],['institutes','Institutos de pesquisa'],['promises','Promessas'],['scandals','Fiscalização'],['results','Resultados']];
-const details={profile:'Perfil',skills:'Habilidades',history:'Histórico',family:'Família',memories:'Memórias',politics:'Política',finance:'Finanças',stock:'Estoque',staff:'Equipe',services:'Serviços',units:'Unidades'};
+export const POLITICS_GROUPS=[['management','Gestão',['overview','approval','promises']],['institutions','Instituições',['parties','council']],['elections','Eleições',['campaign','polls','institutes','results']],['oversight','Fiscalização',['scandals']]];
+const details={profile:'Perfil',skills:'Habilidades',history:'Histórico',family:'Família',memories:'Memórias',politics:'Política',finance:'Finanças',infrastructure:'Infraestrutura',assets:'Conta',stock:'Estoque',staff:'Equipe',services:'Serviços',units:'Unidades'};
 export function sectionTitle(state){
   if(state.tab==='party-organization')return state.partyProposalId?`Fundação partidária #${state.partyProposalId}`:state.partyOrganizationView==='membership'?'Campanhas de filiação':'Registro de partidos';
   if(state.tab==='land'&&state.recordWindow)return `Terreno ${state.selectedPlotId}`;
   if(state.tab==='publications'&&state.selectedPublicationId)return `${state.city.publications.documents.get(state.selectedPublicationId)?.title||'Publicação'} · ${state.publicationTab==='write'?'Escrita':'Conteúdo'}`;
+  if(state.tab==='publications'&&state.publicationTab==='official')return 'Publicações · Jornal oficial';
+  if(state.tab==='transport'&&state.selectedShipmentId!=null)return `Transportes · Frete ${state.selectedShipmentId}`;
   if(state.tab==='party')return `Partido · ${state.city.politics.party(state.partyId)?.name||state.partyId}`;
   if(state.tab==='contract')return `Contrato · ${state.city.development.projects.find(p=>p.id===state.projectId)?.name||state.projectId}`;
   if(state.tab==='poll-response')return `Pesquisa ${state.pollId} · ${state.city.accountName(`citizen:${state.pollResponseCitizenId}`)}`;

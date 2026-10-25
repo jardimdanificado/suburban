@@ -1,6 +1,6 @@
 import {renderResearchDirectory,renderResearchProgress,renderPollMethod} from './city_research_ui.js';
 import {renderPollResponse} from './city_government_records_ui.js';
-import {POLITICS_SECTIONS} from './city_ui_sections.js';
+import {POLITICS_SECTIONS,POLITICS_GROUPS} from './city_ui_sections.js';
 import {renderPartyOrganization} from './city_party_organization_ui.js';
 import {approvalReport} from './city_political_institutions.js';
 import { formatMoney } from './city_ui_format.js';
@@ -24,9 +24,16 @@ function promise(p,pr,campaign=false,ui=null){
     if(ui&&pr.lastEventId)p.button('INSPECIONAR ÚLTIMO MARCO',()=>ui.openEvent(pr.lastEventId));
   }
 }
+export function renderPoliticsNavigation(ui,p){
+  const tab=ui.politicsTab||'overview';
+  const group=POLITICS_GROUPS.find(([, , ids])=>ids.includes(tab))||POLITICS_GROUPS[0];
+  const change=id=>ui.openPanel({politicsTab:id,billId:null,termId:null,recordWindow:false,approvalView:'summary',councilView:'bills'});
+  p.links(POLITICS_GROUPS.map(([id,label,ids])=>({label,selected:group[0]===id,click:()=>change(ids[0])})));
+  p.links(POLITICS_SECTIONS.filter(([id])=>group[2].includes(id)).map(([id,label])=>({label,selected:tab===id,click:()=>change(id)})));
+}
 export function renderPolitics(ui,p) {
   const city=ui.city,gov=city.politics,active=gov.active,tab=ui.politicsTab||'overview',partyName=id=>gov.party(id)?.ballotLabel||'Sem partido';
-  p.links(POLITICS_SECTIONS.map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({politicsTab:id,billId:null,termId:null,recordWindow:false,approvalView:'summary',councilView:'bills'})})));
+  if(!ui.politicsNavigationPinned)renderPoliticsNavigation(ui,p);
   if(!ui.billId)p.heading(POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'GOVERNO, CÂMARA E ELEIÇÕES');
   if(tab==='directory'&&ui.host){p.meter('Aprovação do governo',gov.approval);p.kv(gov.isProvisionalMayor()?'Prefeito provisório':'Prefeito',city.accountName(`citizen:${city.economy.mayorId}`));p.kv('Vereadores',`${gov.council.members.length}/${gov.council.seats}`);p.kv('Partidos ativos',gov.parties.filter(p=>p.active).length);return;}
   if(tab==='directory'){
@@ -48,11 +55,36 @@ export function renderPolitics(ui,p) {
     p.note('Este é o índice geral usado pelo governo. Pesquisas eleitorais medem uma amostra de moradores e podem produzir outro resultado.');
   }
   if(tab==='overview'){
-    p.button('POR QUE O GOVERNO TEM ESTA AVALIAÇÃO?',()=>ui.openPanel({politicsTab:'approval',approvalView:'summary'}));
-    p.meter('Aprovação do governo',gov.approval);p.kv(gov.isProvisionalMayor()?'Prefeito provisório':'Prefeito',city.accountName(`citizen:${city.economy.mayorId}`));if(gov.suspendedExecutive)p.note(`Prefeito afastado até ${stamp(gov.suspendedExecutive.until)}; substituição temporária preserva o mandato e as promessas.`);p.kv('Vice-prefeito',gov.viceMayorId?city.accountName(`citizen:${gov.viceMayorId}`):'Vago');p.kv('Presidente da Câmara',gov.council.leaderId?city.accountName(`citizen:${gov.council.leaderId}`):'Eleição na metade do mandato');p.kv('Partido do governo',partyName(gov.partyOfId(city.economy.mayorId)?.id));p.kv('Vereadores',`${gov.council.members.length}/${gov.council.seats}`);p.kv('Partidos ativos / limite',`${gov.parties.filter(a=>a.active).length}/${gov.policy.partyLimit}`);p.kv('Próxima eleição',gov.nextElectionAt==null?'Aguardando população adulta':stamp(gov.nextElectionAt));p.kv('Mandato / campanha',`${gov.termRules.termMinutes/1440} dias / ${gov.termRules.campaignMinutes/1440} dias`);p.kv('Regras aprovadas para próximas gestões',`${gov.policy.termDays} dias de mandato / ${gov.policy.campaignDays} dias de campanha`);p.kv('Reeleições consecutivas permitidas',gov.policy.reelectionLimit);if(gov.isProvisionalMayor())p.note('O prefeito fundador exerce cargo provisório: não pode disputar a próxima eleição para prefeito. Sua gestão conta para a imagem do partido.');p.button('JORNAL OFICIAL DO GOVERNO',()=>ui.openPanel({tab:'publications',selectedPublicationId:null,publicationTab:'official'}));p.kv('Salário mínimo por hora',money(city.currency.price(gov.policy.minimumWage)*60));p.kv('Imposto salarial',`${(city.taxRate*100).toFixed(0)}%`);p.kv('Imposto sobre receita empresarial',`${(gov.policy.businessTax*100).toFixed(0)}%`);
-    p.note('Os vereadores mantêm seus empregos. O orçamento salarial diário é dividido entre todos, conforme o caixa acima da reserva de subsistência.');
-    const needs=city.welfare.conditions();p.kv('Moradores com fome',needs.hungry);p.kv('Adultos sem moradia',needs.homeless);p.kv('Alimento disponível / consumo estimado',`${needs.foodDays.toFixed(1)} dias`);p.kv('Reserva operacional de referência',money(needs.reserve));if(needs.crisis)p.note('Prioridade de execução: alimentação, moradia e serviços essenciais.');
-    p.kv('Orçamento diário da Câmara',money(gov.policy.councilBudget));p.kv('Salário diário por vereador',money(Math.floor(gov.policy.councilBudget/Math.max(1,gov.council.members.length))));p.kv('Salário diário do prefeito',money(gov.policy.mayorBudget));
+    p.metrics([['APROVAÇÃO',`${gov.approval.toFixed(1)}%`,gov.approval<40?'#963226':'#305c28'],['VEREADORES',`${gov.council.members.length}/${gov.council.seats}`]]);
+    p.button('ENTENDER A AVALIAÇÃO DO GOVERNO',()=>ui.openPanel({politicsTab:'approval',approvalView:'summary'}));
+    p.columns(q=>{
+      q.heading('QUEM GOVERNA');
+      q.kv(gov.isProvisionalMayor()?'Prefeito provisório':'Prefeito',city.accountName(`citizen:${city.economy.mayorId}`));
+      q.kv('Vice-prefeito',gov.viceMayorId?city.accountName(`citizen:${gov.viceMayorId}`):'Vago');
+      q.kv('Partido do governo',partyName(gov.partyOfId(city.economy.mayorId)?.id));
+      q.kv('Presidência da Câmara',gov.council.leaderId?city.accountName(`citizen:${gov.council.leaderId}`):'Eleição na metade do mandato');
+    },q=>{
+      q.heading('CALENDÁRIO E REPRESENTAÇÃO');
+      q.kv('Próxima eleição',gov.nextElectionAt==null?'Aguardando população adulta':stamp(gov.nextElectionAt));
+      q.kv('Mandato / campanha em vigor',`${gov.termRules.termMinutes/1440} / ${gov.termRules.campaignMinutes/1440} dias`);
+      q.kv('Partidos ativos / limite',`${gov.parties.filter(a=>a.active).length}/${gov.policy.partyLimit}`);
+      q.kv('Reeleições consecutivas',gov.policy.reelectionLimit);
+    });
+    if(gov.isProvisionalMayor())p.status('GESTÃO PROVISÓRIA','O prefeito fundador não disputa a reeleição seguinte. O resultado desta gestão afeta a imagem do partido.');
+    if(gov.suspendedExecutive)p.status('AFASTAMENTO TEMPORÁRIO',`Substituição até ${stamp(gov.suspendedExecutive.until)}; mandato e promessa preservados.`);
+    const needs=city.welfare.conditions();
+    p.heading('PROTEÇÃO SOCIAL');
+    p.metrics([['COM FOME',needs.hungry],['SEM CASA',needs.homeless],['ALIMENTO',`${needs.foodDays.toFixed(1)} dias`],['RESERVA',money(needs.reserve)]]);
+    if(needs.crisis)p.status('PRIORIDADE ESSENCIAL','Alimentação, moradia e serviços essenciais têm prioridade na execução.','#963226');
+    fold(ui,p,'governmentTaxes','Tributos e salário mínimo',()=>{
+      p.kv('Salário mínimo por hora',money(city.currency.price(gov.policy.minimumWage)*60));p.kv('Imposto salarial',`${(city.taxRate*100).toFixed(0)}%`);p.kv('Imposto empresarial',`${(gov.policy.businessTax*100).toFixed(0)}%`);
+    });
+    fold(ui,p,'governmentPayroll','Orçamentos e regras das próximas gestões',()=>{
+      p.kv('Mandato / campanha aprovados',`${gov.policy.termDays} / ${gov.policy.campaignDays} dias`);
+      p.kv('Orçamento diário da Câmara',money(gov.policy.councilBudget));p.kv('Salário diário por vereador',money(Math.floor(gov.policy.councilBudget/Math.max(1,gov.council.members.length))));p.kv('Salário diário do prefeito',money(gov.policy.mayorBudget));
+      p.note('O orçamento da Câmara é dividido entre os vereadores. Pagamentos respeitam o caixa e a reserva de subsistência; vereadores mantêm seus empregos.');
+    });
+    p.button('JORNAL OFICIAL E VOTAÇÕES PRESERVADAS',()=>ui.openPanel({tab:'publications',selectedPublicationId:null,publicationTab:'official',publicationSourceEventId:null}));
     fold(ui,p,'governmentRules','Como funcionam os projetos e as votações',()=>{
     p.note('A primeira Câmara é provisória. Nas eleições, cada adulto escolhe prefeito e vereador. As cadeiras são distribuídas proporcionalmente por partido. Projetos exigem maioria absoluta dos votos ponderados; cassação e derrubada de veto exigem dois terços. O presidente tem peso de 5% das cadeiras, com mínimo de dois.');
     p.note('O programa vencedor passa pela Câmara. Obras aprovadas precisam de terreno, orçamento, construtora, materiais e transporte. Estatização paga o proprietário; privatização exige comprador com recursos.');
@@ -67,8 +99,12 @@ export function renderPolitics(ui,p) {
     fold(ui,p,'partyDirectoryRules','Como funcionam filiação e ideologia',()=>{p.note('Partidos sem filiados vivos são liquidados. O limite é um teto de registros ativos. Simpatia e voto não exigem filiação; lealdade muda com experiências, promessas e corrupção conhecida.');p.note('Economia: −100 favorece propriedade pública e proteção social; +100 favorece iniciativa privada e tributos menores. Liberdade e pauta ambiental completam o viés.');});
   }
   if(tab==='council'){
-    const chamber=gov.council.getChamber(),hall=chamber.hall();p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento / construção');if(chamber.planning){p.note(chamber.planning.reason);if(chamber.planning.requiredBudget!=null)p.kv('Orçamento necessário / disponível após reserva social',`${money(chamber.planning.requiredBudget)} / ${money(chamber.planning.availableBudget??Math.max(0,city.treasury-city.welfare.conditions().reserve))}`);}
+    const chamber=gov.council.getChamber(),hall=chamber.hall();
+    p.metrics([['NO PLENÁRIO',`${chamber.present().length}/${gov.council.members.length}`],['GABINETES',`${chamber.officeCount||0}/${gov.council.members.length}`]]);
+    fold(ui,p,'councilPremises','Sede, sessões e obras da Câmara',()=>{
+p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento / construção');if(chamber.planning){p.note(chamber.planning.reason);if(chamber.planning.requiredBudget!=null)p.kv('Orçamento necessário / disponível após reserva social',`${money(chamber.planning.requiredBudget)} / ${money(chamber.planning.availableBudget??Math.max(0,city.treasury-city.welfare.conditions().reserve))}`);}
     p.kv('Gabinetes disponíveis / necessários',`${chamber.officeCount||0}/${gov.council.members.length}`);p.kv('Presentes no plenário',`${chamber.present().length}/${gov.council.members.length}`);p.note('Sessões presenciais das 10h às 12h e das 15h às 17h. Apresentações e votações exigem presença na Câmara.');if(hall)p.button('LOCALIZAR PLENÁRIO',()=>ui.camera(hall.door.x,hall.door.y));for(const id of chamber.contracts.slice(-2))p.record('Obra da Câmara',id,()=>ui.openContract(id));
+    });
     const view=ui.councilView||'bills';if(!ui.billId){
     const bounds=gov.council.bounds();p.kv('Representação aprovada',`${(gov.policy.councilRate??5).toFixed(1)}% da população / ${gov.council.seats} cadeiras`);p.kv('Faixa legal de vereadores',`${bounds.min} a ${bounds.max} / população ${bounds.population}`);p.kv('Presidência da Câmara',gov.council.leaderId?`${city.accountName(`citizen:${gov.council.leaderId}`)} / voto com peso ${gov.council.weight(gov.council.leaderId)}`:'Eleição pelos pares na metade do mandato');
     p.links([['bills','PROJETOS'],['members','VEREADORES'],['propose','ENCAMINHAR PEDIDO']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({councilView:id,billId:null})})));
