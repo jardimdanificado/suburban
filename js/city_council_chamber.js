@@ -98,6 +98,6 @@ export class CityCouncilChamber {
     if(!this.open())return;
     const present=this.present(),presentIds=new Set(present.map(c=>c.id));
     for(const bill of council.bills.filter(b=>b.status==='awaiting-session'&&presentIds.has(b.authorId))){bill.status='proposed';bill.proposedAt=city.minute;bill.voteAt=city.minute+60;bill.plenaryBuildingId=hall.id;bill.proposalEventId=city.log(`${bill.authorName} apresentou no plenário: ${bill.title}.`,'government',[bill.authorId],{kind:'bill-proposed',billId:bill.id,buildingId:hall.id,parentEventId:bill.eventId}).id;}
-    if(this.quorum())for(const bill of council.bills.filter(b=>b.status==='proposed'&&city.minute>=b.voteAt))council.vote(bill);
+    for(const bill of council.bills.filter(b=>b.status==='proposed'&&city.minute>=b.voteAt))council.vote(bill);
   }
 }

@@ -297,6 +297,19 @@ export const POLITICAL_WORDS=Object.freeze({
 const pick=(city,items)=>items[Math.floor(city.random()*items.length)];
 const feminine=word=>({Cidadão:'Cidadã',Camponês:'Camponesa',Guardião:'Guardiã'}[word]||(/or$/.test(word)?word+'a':word.endsWith('o')?word.slice(0,-1)+'a':word));
 const capitalize=s=>s[0].toLocaleUpperCase('pt-BR')+s.slice(1).toLocaleLowerCase('pt-BR');
+const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR');
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const wordMatch=(text,word)=>new RegExp(`(?:^|[^\\p{L}])${normalize(word).replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}(?:$|[^\\p{L}])`,'u').test(text);
+/** Political meaning carried by a party name. Negative economy favors redistribution; positive favors markets. */
+export function partyNameAgenda(name=''){
+  const text=normalize(name);let left=0,right=0,state=0,liberty=0,green=0,social=0;
+  const count=words=>words.reduce((n,w)=>n+(wordMatch(text,w)?1:0),0);
+  left=count(POLITICAL_WORDS.left);right=count(POLITICAL_WORDS.right);
+  state=count(POLITICAL_WORDS.authority);liberty=count(POLITICAL_WORDS.liberty);green=count(POLITICAL_WORDS.green);
+  social=count(['Popular','Solidário','Inclusivo','Universalista','Comunitário','Social','dos Trabalhadores','da União Popular','da Solidariedade','da Justiça Social','da Igualdade','do Trabalho','da Cooperação','do Bem Comum','das Comunidades','da Moradia','da Alimentação','da Saúde','da Educação','da Inclusão','da Dignidade']);
+  // Mild, bounded effects keep names meaningful without overpowering the party's founding platform.
+  return Object.freeze({economy:clamp((right-left)*.2,-.55,.55),state:clamp((state-liberty)*.2,-.6,.6),liberty:clamp((liberty-state)*.18,-.5,.5),green:clamp(green*.12,0,.5),social:clamp(social*.1,0,.45)});
+}
 function flavor(city){for(let i=0;i<48;i++){const word=pick(city,vocabulario.palavras);if(typeof word==='string'&&/^[\p{L}]{4,14}$/u.test(word))return capitalize(word);}return 'Horizonte';}
 export function makePartyName(city,ideology,parties,id,{parentParty=null}={}){
   const pool=[...POLITICAL_WORDS.common,...(ideology.economy<-.3?POLITICAL_WORDS.left:ideology.economy>.3?POLITICAL_WORDS.right:[])];
@@ -313,9 +326,20 @@ export function makePartyName(city,ideology,parties,id,{parentParty=null}={}){
     else if(city.random()<.35)parts=[organization,adjective,pick(city,POLITICAL_WORDS.causes)];
     else{const extra=pool.map(w=>gender==='f'?feminine(w):w).filter(w=>w!==adjective);const third=pick(city,extra);parts=city.random()<.45?[organization,adjective,third]:[organization,adjective];}
     const name=parts.join(' ');if(parties.some(p=>p.name===name))continue;
-    let short=parts.flatMap(part=>part.split(/\s+/)).filter(word=>!['da','das','de','do','dos','e'].includes(word)).map(word=>word[0]).join('');if(parties.some(p=>p.short===short))short+=id;
-    return {name,short,nameFlavor:unique,nameCore:core,nameVersion:3};
+    let short=parts.flatMap(part=>part.split(/\s+/)).filter(word=>!['da','das','de','do','dos','e'].includes(word)).map(word=>word[0]).join('');
+    if(parties.some(p=>p.short===short)){
+      // Acronym collisions must be visible in the registered name, not hidden by an ID suffix.
+      const existingNames=new Set(parties.map(p=>p.name));let distinguishing;
+      for(let n=0;n<64;n++){const candidate=flavor(city);if(!parts.some(part=>normalize(part)===normalize(candidate))){const expanded=[...parts];expanded.splice(Math.min(1,expanded.length),0,candidate);const candidateName=expanded.join(' ');if(!existingNames.has(candidateName)){parts.splice(0,parts.length,...expanded);distinguishing=candidate;break;}}}
+      if(!distinguishing){distinguishing=`${flavor(city)} ${id}`;parts.push(distinguishing);}
+      const revised=parts.flatMap(part=>part.split(/\s+/)).filter(word=>!['da','das','de','do','dos','e'].includes(word)).map(word=>word[0]).join('');
+      short=parties.some(p=>p.short===revised)?`${revised}${id}`:revised;
+      return {name:parts.join(' '),short,nameFlavor:distinguishing,nameCore:core,nameVersion:3,nameAgenda:partyNameAgenda(parts.join(' '))};
+    }
+    return {name,short,nameFlavor:unique,nameCore:core,nameVersion:3,nameAgenda:partyNameAgenda(name)};
   }
   // A unique vocabulary term still keeps the rare collision fallback within three words.
-  const unique=flavor(city);return {name:`Partido Popular ${unique}`,short:`PP${id}`,nameFlavor:unique,nameCore:'Partido Popular',nameVersion:3};
+  const unique=flavor(city);let parts=['Partido','Popular',unique],name=parts.join(' '),short='PP'+unique[0];
+  if(parties.some(p=>p.short===short)){const extra=flavor(city);parts.splice(2,0,extra);name=parts.join(' ');short=parts.map(x=>x[0]).join('');}
+  return {name,short,nameFlavor:unique,nameCore:'Partido Popular',nameVersion:3,nameAgenda:partyNameAgenda(name)};
 }

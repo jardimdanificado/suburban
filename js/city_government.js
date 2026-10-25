@@ -5,7 +5,7 @@ import {CityGovernmentAgenda} from './city_government_agenda.js';
 import {CityVoting} from './city_voting.js';
 import {CityPoliticalStanding} from './city_political_standing.js';
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
-import {makePartyName} from './city_party_names.js';
+import {makePartyName,partyNameAgenda} from './city_party_names.js';
 import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js';
 import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investigateCases } from './city_political_institutions.js';
 import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js';
@@ -29,7 +29,7 @@ export class CityGovernment extends CityPolitics {
   syncGoverningFlag(){
     for(const b of this.city.buildings)if(['townhall','council_chamber'].includes(b.type)&&!b.entity.destroyed){const party=this.partyOfId(b.type==='townhall'?this.city.economy.mayorId:this.council.leaderId);b.governingPartyId=party?.id??null;b.governingPartyName=party?.name??null;b.governingFlag=party?.flag??(b.type==='council_chamber'?COUNCIL_INSTITUTIONAL_FLAG:null);b.governingFlagDescription=party?`Bandeira de ${party.name}`:b.type==='council_chamber'?'Bandeira institucional: presidência ainda não eleita':null;}
   }
-  platform(c){const e=this.party(c?.political?.partyId)?.ideology.economy??c?.political?.ideology.economy??0;return e<-.3?'social':e>.3?'thrift':'balanced';}
+  platform(c){const party=this.party(c?.political?.partyId),agenda=party?(party.nameAgenda||partyNameAgenda(party.name)):null,e=clamp((party?.ideology.economy??c?.political?.ideology.economy??0)+(agenda?.economy||0)*.7,-1,1);return e<-.3||(agenda?.social||0)>.25||(agenda?.state||0)>.4?'social':e>.3||(agenda?.state||0)<-.3?'thrift':'balanced';}
   officeHolder(c){return !!c&&(c.id===this.city.economy.mayorId||c.id===this.viceMayorId||c.id===this.suspendedExecutive?.citizenId||this.council.members.some(m=>m.citizenId===c.id));}
   submitBill(type,payload={},authorId=null){const author=this.city.society.citizen(authorId)||this.council.people()[0];if(!author||!this.council.members.some(m=>m.citizenId===author.id))return this.city.fail('Selecione um vereador em exercício.');if(['tax','businessTax','minimumWage','partyLimit','reelectionLimit','termDays','campaignDays','pollMinRate','pollMaxRate','inflation','welfare','councilSeats','councilRate','councilBudget','mayorBudget','partyFund'].includes(type)&&!Number.isFinite(payload.value))return this.city.fail('Valor de proposta inválido.');if(['nationalize','privatize'].includes(type)&&!this.city.building(payload.buildingId))return this.city.fail('Empresa indisponível.');if(type==='impeach'&&!this.scandals.some(s=>s.id===payload.caseId&&(s.accusedId===payload.targetId||s.participantIds?.includes(payload.targetId))&&scandalEligible(this,s)))return this.city.fail('Cassação exige provas, gravidade e grande repercussão popular.');this.city.lastError='';const proposal=this.council.propose(author,type,payload);return proposal===false?false:proposal||(this.city.lastError?null:this.city.fail('Já existe proposta semelhante em tramitação ou o tipo é inválido.'));}
   canOwnBusiness(c){return c&&!c.entity.destroyed&&this.city.society.isAdult(c)&&!this.officeHolder(c);}
@@ -46,7 +46,7 @@ export class CityGovernment extends CityPolitics {
     const id=this.nextPartyId++,[economy,liberty,green]=PARTY_FAMILIES[[0,2,5,6][(id-1)%4]];
     const ideology=proposal?.ideology||Object.freeze({economy,liberty,green});
     const naming=proposal?Object.fromEntries(['name','short','nameFlavor','nameCore','nameVersion'].map(key=>[key,proposal[key]])):makePartyName(this.city,ideology,this.parties,id);
-    const party={id,...naming,ideology,parentPartyId:proposal?.parentPartyId??null,approvalId:proposalId,flag:makePartyFlag(this.city,id-1),active:true,memberIds:[],leaderId:null,successorIds:[],history:[],foundedAt:this.city.minute};
+    const party={id,...naming,ideology,nameAgenda:naming.nameAgenda||partyNameAgenda(naming.name),parentPartyId:proposal?.parentPartyId??null,approvalId:proposalId,flag:makePartyFlag(this.city,id-1),active:true,memberIds:[],leaderId:null,successorIds:[],history:[],foundedAt:this.city.minute};
     this.parties.push(party);this.partyAccount(party);this.assignPartyNumbers();this.city.log(`${party.name} foi registrado.`,'government',proposal?.founderIds||[],{kind:'party-founded',partyId:id,partyProposalId:proposalId});return party;
   }
   fillParties(){
