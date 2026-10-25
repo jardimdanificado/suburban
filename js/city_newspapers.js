@@ -7,6 +7,7 @@ export function newspaperOffer(city,c,b){
   return doc?{good:'jornais',documentId:doc.id,price:city.economy.goods.jornais.price,spec:{use:{need:'leisure',boost:8}}}:null;
 }
 export function printNewspaper(city,b,pages,editor){
+  if(b.officialJournal)return city.officialJournal.print(b,pages,editor);
   const library=city.publications,genre=newsroomGenre(b);b.newsGenre=genre;
   // A single editorial selection per day; copies still require paper and paid labor.
   if(b.newsEditionDay!==city.day){

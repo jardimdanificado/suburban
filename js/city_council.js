@@ -107,7 +107,7 @@ export class CityCouncil {
     if(bill.status==='approved'){if(override||['impeach','confidence'].includes(bill.type)){bill.vetoOverridden=override;this.execute(bill);}else{bill.status='awaiting-sanction';bill.sanctionAt=this.city.minute+360;}}
   }
   transferFirm(bill,nationalize) {
-    const city=this.city,b=city.building(bill.payload.buildingId);if(!b?.active || b.entity.destroyed || ['townhall','mint'].includes(b.type))return 'Empresa indisponível';
+    const city=this.city,b=city.building(bill.payload.buildingId);if(!b?.active || b.entity.destroyed || (['townhall','mint'].includes(b.type)||b.officialJournal))return 'Empresa indisponível';
     if(city.development.projects.some(p=>p.buildingId===b.id&&!p.cancelled&&p.status!=='completed'))return 'Aguardando obra contratada';
     const old=city.society.citizen(b.ownerId);
     if(nationalize) {
@@ -189,7 +189,7 @@ export class CityCouncil {
     if(city.random()<.2)choices.push(['partyFund',{value:Math.max(0,Math.round((p.policy.partyFund??80000)*(city.random()<.5?.9:1.1)))},'Rever o fundo público eleitoral de todos os partidos']);
     if(city.random()<.25){const type=city.random()<.5?'pollMinRate':'pollMaxRate',min=type==='pollMinRate'?5:15,max=type==='pollMinRate'?10:20,value=clamp((p.policy[type]??(type==='pollMinRate'?5:20))+(city.random()<.5?-1:1),min,max);choices.push([type,{value},`Rever ${BILL_LABELS[type].toLowerCase()}: ${value}%`]);}
     if(e<.3){choices.push(['build',{buildingType:metrics.housed<95?'popular_housing':metrics.fed<95?'popular_refectory':['carrier','cleaner','bank'][c.id%3]},'Construir equipamento ou empresa estatal'],['welfare',{value:city.welfare.policy.dailyBudget+20000},'Ampliar orçamento de proteção social']);const firm=city.economy.businesses.find(b=>b.ownerId&&b.units.every(u=>u.ownerId===`citizen:${b.ownerId}`));if(firm)choices.push(['nationalize',{buildingId:firm.id},`Negociar estatização de ${firm.entity.properties.name}`]);}
-    if(e>.1){const firm=city.economy.businesses.find(b=>b.municipal && !['townhall','mint'].includes(b.type));if(firm)choices.push(['privatize',{buildingId:firm.id},`Privatizar ${firm.entity.properties.name}`]);}
+    if(e>.1){const firm=city.economy.businesses.find(b=>b.municipal && !(['townhall','mint'].includes(b.type)||b.officialJournal));if(firm)choices.push(['privatize',{buildingId:firm.id},`Privatizar ${firm.entity.properties.name}`]);}
     if(city.random()<.2)choices.push(['partyLimit',{value:p.policy.partyLimit+(party.ideology.liberty>0?1:-1)},'Rever o limite de partidos']);
     if(city.random()<.15)choices.push(['reelectionLimit',{value:p.policy.reelectionLimit+((c.traits?.ambition??.5)>.6?1:-1)},'Rever o limite de reeleições consecutivas']);
     if(city.random()<.2)choices.push(['termDays',{value:Math.max(p.policy.campaignDays+1,p.policy.termDays+((c.traits?.ambition??.5)>.5?2:-2))},null]);

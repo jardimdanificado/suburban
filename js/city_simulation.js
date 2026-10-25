@@ -1,12 +1,14 @@
 import {clothingMood,moveGarments} from './city_clothing.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
 import { CityPublications } from './city_publications.js';
+import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
 import { CityGovernment as CityPolitics } from './city_government.js';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
+import { syncCitizenInterior } from './city_interiors.js';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
@@ -99,6 +101,7 @@ export class CitySimulation {
     this.nature = new CityNature(this);
     this.politics = new CityPolitics(this);
     this.publications = new CityPublications(this);
+    this.officialJournal = new CityOfficialJournal(this);
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -236,6 +239,7 @@ export class CitySimulation {
     this.economy.initializeCitizen(c, index, options);
     c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
     c.accountId = `citizen:${c.id}`;
+    c.indoorLocation = null;
     entity.properties.citizen = c;
     this.accounts.set(c.accountId, c);
     if (options.grant !== false) this.transfer('treasury', c.accountId, CURRENCY_RULES.citizenGrant, 'Capital inicial do cidadão');
@@ -377,8 +381,7 @@ export class CitySimulation {
       if (foodScores && !Number.isFinite(foodScores.get(b))) continue;
       const path = this.findPath(c.entity, b.door);
       if (path !== null) {
-        const spot = { x: Math.floor(b.door.x) + .2 + (c.id % 3) * .3, y: Math.floor(b.door.y) + .2 + (Math.floor(c.id / 3) % 3) * .3 };
-        path.push(spot); c.path = path; c.targetId = b.id; c.task = task; if (task === 'food') this.workMeals.issueVoucher(c, b); return;
+        c.path = path; c.targetId = b.id; c.task = task; if (task === 'food') this.workMeals.issueVoucher(c, b); return;
       }
     }
     c.task = null; c.targetId = null; c.action = task === 'food' ? 'Alimentos indisponíveis nas lojas locais' : home ? 'Sem acesso ao serviço' : 'Sem moradia';
@@ -386,6 +389,7 @@ export class CitySimulation {
     if (task === 'energy') n.energy = clamp(n.energy + 0.1);
   }
   performTask(c) {
+    syncCitizenInterior(this,c);
     if(c.task==='council-session'){this.politics.council.getChamber().arrive(c);return;}
     if(c.task==='research'){this.politics.getResearch().fieldWork(c);return;}
     if(c.task==='interview'){this.politics.getResearch().respondentWait(c);return;}
@@ -622,6 +626,7 @@ export class CitySimulation {
       if (!c.task) { c.servicePaid = null; this.chooseTask(c); }
       if (!c.path.length && c.task) this.performTask(c);
     }
+    for(const c of this.citizens)syncCitizenInterior(this,c);
     this.society.updateMinute();
     // Spread hourly work across minutes; keep the same order and one run per hour.
     if (this.minute % 60 === 0) this.hourlyPhase = 0;
@@ -640,6 +645,7 @@ export class CitySimulation {
     this.accumulator += dt * 4;
     while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); }
     for (const c of this.citizens) {
+      syncCitizenInterior(this,c);
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5);
       while (distance > 0 && c.path.length) {
@@ -655,6 +661,7 @@ export class CitySimulation {
         }
         c.action = c.deliveryId ? 'Transportando mercadorias' : c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
+      syncCitizenInterior(this,c);
     }
   }
   goodsStock(good) {

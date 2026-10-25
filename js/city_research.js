@@ -117,7 +117,7 @@ export class CityResearch {
       this.releaseInterview(s,session);session.nextInterviewAt=city.minute+2;return true;
     }
     if(city.minute<session.nextInterviewAt||s.responses.length+s.reservedIds.size>=s.target)return true;session.nextInterviewAt=city.minute+5;
-    const nearby=city.citizens.filter(v=>live(v)&&v.id!==c.id&&city.society.isAdult(v)&&!s.respondentIds.has(v.id)&&!s.reservedIds.has(v.id)&&!v.pollInterview&&!v.deliveryId&&!v.cleaningJobId&&!v.workMeal&&!v.conversation&&!essential.has(v.task)&&!city.urgentNeed(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<=3.5);
+    const nearby=city.citizens.filter(v=>live(v)&&!v.indoorLocation&&v.id!==c.id&&city.society.isAdult(v)&&!s.respondentIds.has(v.id)&&!s.reservedIds.has(v.id)&&!v.pollInterview&&!v.deliveryId&&!v.cleaningJobId&&!v.workMeal&&!v.conversation&&!essential.has(v.task)&&!city.urgentNeed(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<=3.5);
     if(!nearby.length)return true;const voter=nearby[Math.floor(city.random()*nearby.length)];
     s.reservedIds.add(voter.id);session.voterId=voter.id;session.finishAt=city.minute+4;
     voter.pollInterview={studyId:s.id,sessionId:session.id,previous:{task:voter.task,path:voter.path,targetId:voter.targetId}};voter.path=[];voter.task='interview';voter.action=`Respondendo pesquisa de ${s.instituteName}`;return true;

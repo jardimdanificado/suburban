@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState } from './city_state.js';
+import { CityStateGraph, bindCityState } from './city_state.js?v=civic-institutions-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;

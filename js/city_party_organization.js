@@ -83,7 +83,7 @@ export class CityPartyOrganization {
   }
   contact(militant,target){
     const city=this.city,p=city.politics,party=p.party(militant.political?.partyId);
-    const distance=Math.hypot(target.entity.x-militant.entity.x,target.entity.y-militant.entity.y);if(distance>3||!ROAD_TILES.has(tileAt(city.world,Math.floor(target.entity.x),Math.floor(target.entity.y))))return false;
+    const distance=Math.hypot(target.entity.x-militant.entity.x,target.entity.y-militant.entity.y);if(target.indoorLocation||militant.indoorLocation||distance>3||!ROAD_TILES.has(tileAt(city.world,Math.floor(target.entity.x),Math.floor(target.entity.y))))return false;
     p.initializeCitizen(target);const s=target.political;
     if(!party?.active||party.retiring||target===militant||!city.society.isAdult(target)||s.partyId||s.foundingProposalId||s.membershipCooldownUntil>city.minute||city.minute-(s.lastMembershipOutreachAt??-Infinity)<PARTY_ORGANIZATION_RULES.contactInterval)return false;
     const ideological=clamp(1-p.distance(s.ideology,party.ideology)/2.8),view=city.relationships.view(target,militant),closeness=clamp(((view?.trust||0)+(view?.affection||0))/200),communication=clamp((militant.skills.social||0)/100),physical=clamp(1-distance/4);

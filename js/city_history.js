@@ -39,6 +39,7 @@ export class CityHistory {
       subjects: accounts.map(id => ({ accountId: id, name: this.city.accountName(id) })),
       data: { ...details, action: details.action || details.kind || kind } };
     this.appendEntry(entry);
+    this.city.officialJournal?.capture(entry);
     if (this.entries.length > HISTORY_LIMIT + 512) this.prune();
     return entry;
   }

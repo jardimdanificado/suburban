@@ -411,7 +411,7 @@ export class Renderer {
 
     // Pass 1: exact tile hit (including multi-tile structures like houses, warehouses, leader palaces)
     for (const e of entities) {
-      if (e.destroyed || !e.properties?.render) continue;
+      if (e.destroyed || !e.properties?.render || e.properties.citizen?.indoorLocation) continue;
       const [fpW, fpH] = getFootprint(e);
       if (fx >= e.x && fx < e.x + fpW && fy >= e.y && fy < e.y + fpH) {
         this.selectedEntityId = e.id;
@@ -423,7 +423,7 @@ export class Renderer {
     let closestDist = 1.5;
     let foundId = -1;
     for (const e of entities) {
-      if (e.destroyed || !e.properties?.render) continue;
+      if (e.destroyed || !e.properties?.render || e.properties.citizen?.indoorLocation) continue;
       const [fpW, fpH] = getFootprint(e);
       const dx = (e.x + fpW * 0.5) - fx;
       const dy = (e.y + fpH * 0.5) - fy;
@@ -608,7 +608,7 @@ export class Renderer {
 
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
-      if (!e || e.destroyed || !e.properties || !e.properties.render) continue;
+      if (!e || e.destroyed || !e.properties || !e.properties.render || e.properties.citizen?.indoorLocation) continue;
 
       const r = e.properties.render;
       const isItem = !e.properties.life && (!!e.properties.edible || !!e.properties.resourceType || !!e.properties.germination || e.properties.species === "item");

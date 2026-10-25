@@ -4,6 +4,27 @@ export function renderPublications(ui,p){
   const city=ui.city,library=city.publications,doc=library.documents.get(ui.selectedPublicationId);
   p.heading('JORNAIS, LIVROS E PANFLETOS');
   if(!doc){
+    p.links([{label:'ACERVO',selected:ui.publicationTab!=='official',click:()=>ui.openPanel({publicationTab:'read',publicationSourceEventId:null})},{label:'JORNAL OFICIAL',selected:ui.publicationTab==='official',click:()=>ui.openPanel({publicationTab:'official',publicationSourceEventId:null})}]);
+    if(ui.publicationTab==='official'){
+      const journal=city.officialJournal,record=journal.byEventId.get(ui.publicationSourceEventId),press=city.buildings.find(b=>b.officialJournal&&!b.entity.destroyed);
+      p.heading('JORNAL OFICIAL DO MUNICÍPIO');
+      p.note('Arquivo permanente dos atos públicos. A impressão usa papel transportado à redação, trabalho e custeio municipal. Registros aguardam na fila até serem impressos.');
+      p.kv('Redação',press?press.entity.properties.name:'Construção obrigatória aguardando recursos e terreno');p.kv('Atos arquivados / aguardando impressão',`${journal.records.length} / ${journal.pending}`);
+      if(press)p.button('VER REDAÇÃO',()=>ui.openBuilding(press.id));
+      if(record){
+        p.button('VOLTAR AOS ATOS',()=>ui.openPanel({publicationSourceEventId:null}));
+        p.heading(stamp(record.minute));p.note(record.message);
+        if(record.billId!=null)p.button('VER PROJETO DE LEI',()=>ui.openPanel({tab:'government',views:{...ui.views,government:'elections'},politicsTab:'council',billId:record.billId}));
+        if(record.votes.length){p.kv('Votos ponderados',`${record.yes??'—'} a favor / ${record.no??'—'} contra · necessários ${record.threshold??'—'}`);p.table([{label:'Vereador',weight:2},{label:'Voto'},{label:'Peso'},{label:'Motivo',weight:3}],record.votes.map(v=>({cells:[v.name,v.yes?'Sim':'Não',v.weight,v.reason]})));}
+        if(record.leadershipBallots.length)p.table([{label:'Vereador'},{label:'Votou para presidente'}],record.leadershipBallots.map(v=>({cells:[v.voterName,v.candidateName]})));
+        for(const absent of record.absences)p.record(`${absent.name} · ausente`,absent.reason||'Ausência registrada');
+      }else{
+        const rows=ui.cachedList('official-journal',()=>journal.records.filter(r=>ui.matches(r.message)).slice().reverse());
+        p.rows(rows,r=>p.record(stamp(r.minute),r.message,()=>ui.openPanel({publicationSourceEventId:r.id})));
+        if(!rows.length)p.note('Os atos públicos serão registrados desde a posse do primeiro prefeito.');
+      }
+      return;
+    }
     p.note('Jornais temáticos consomem de três a cinco folhas por exemplar (média de quatro) e podem publicar propaganda paga em qualquer gênero. Uma página comporta dois registros. Um panfleto tem uma página; livros guardam relatos permanentemente, inclusive após o descarte do histórico geral.');
     if(ui.publicationSourceEventId){const source=(city.history.get(ui.publicationSourceEventId)||library.eventSnapshot(ui.publicationSourceEventId));p.note(`Para registrar: ${source?.message||'Evento fora da retenção'}. Escolha um exemplar pertencente a um morador.`);p.button('CANCELAR TRANSCRIÇÃO',()=>{ui.publicationSourceEventId=null;});}
     if(ui.publicationOwner){p.kv('Acervo',city.accountName(ui.publicationOwner));p.button('MOSTRAR TODOS OS ACERVOS',()=>{ui.publicationOwner=null;ui.resetScroll();});}

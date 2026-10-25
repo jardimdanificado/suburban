@@ -5012,7 +5012,7 @@ export class RCT3DRenderer {
       let closestId = -1;
       let minD = 1.3;
       for (const e of entities) {
-        if (e.destroyed || !e.properties) continue;
+        if (e.destroyed || !e.properties || e.properties.citizen?.indoorLocation) continue;
         // Multi-tile footprint check
         let eFpW = 1, eFpH = 1;
         if (e.properties.house) {
@@ -6886,7 +6886,7 @@ export class RCT3DRenderer {
         const billboardRotY = this.isPerspectiveActive() ? (this.fpYaw + Math.PI) : this.fixedRotationY;
         const isPossessed = this.isFirstPersonActive() && Number(e.id) === Number(this.fpEntityId);
 
-        if (isPossessed) {
+        if (isPossessed || e.properties?.citizen?.indoorLocation) {
           sprite.visible = false;
         } else {
           sprite.visible = true;
@@ -6939,7 +6939,7 @@ export class RCT3DRenderer {
         if(e.properties?.citizen)this.cityCitizenBatches.add(sprite);
 
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
-        if (isConsciousCreature) {
+        if (isConsciousCreature && !e.properties?.citizen?.indoorLocation) {
           const campaign=e.properties?.citizen?.campaign;
           if(campaign?.flag && e.properties.citizen.task==='campaign') {
             const flag=campaign.flag,uiKey=`${e.id}_campaign_flag`;

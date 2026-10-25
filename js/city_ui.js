@@ -227,7 +227,7 @@ export class CityUI {
       const rows=this.cachedList('people',()=>{const rows=city.citizens.filter(c=>this.matches(`${name(c.entity)} ${c.action} ${c.profession}`)).filter(c=>filter==='all'||filter==='homeless'&&!c.homeUnitId||filter==='unemployed'&&city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length||filter==='critical'&&Math.min(...Object.values(c.needs))<20||filter==='food'&&c.needs.food<30||filter==='children'&&!city.society.isAdult(c));
       rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:sort==='needs'?Math.min(...Object.values(a.needs))-Math.min(...Object.values(b.needs)):name(a.entity).localeCompare(name(b.entity),'pt-BR'));return rows;});
       p.note(`${rows.length} resultados`,C.muted);
-      p.rows(rows,c=>{const critical=Math.min(...Object.values(c.needs))<20,role=c.id===city.economy.mayorId?'Prefeito':c.id===city.politics.viceMayorId?'Vice-prefeito':!city.society.isAdult(c)?'Criança':c.businessIds.length?'Empresário':city.building(c.jobId)?.entity.properties.name||'Sem trabalho';
+      p.rows(rows,c=>{const critical=Math.min(...Object.values(c.needs))<20,role=c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.id===city.politics.viceMayorId?'Vice-prefeito':!city.society.isAdult(c)?'Criança':c.businessIds.length?'Empresário':city.building(c.jobId)?.entity.properties.name||'Sem trabalho';
         p.record(name(c.entity),`${city.society.age(c)} anos · ${c.homeUnitId?role:'Sem casa · '+role}`,()=>this.openCitizen(c.id),this.selected?.id===c.id,{value:money(c.balance),color:critical?C.red:!c.homeUnitId?C.gold:C.green});
       });
       if(!rows.length)p.note('Nenhuma pessoa com estes filtros.');
@@ -256,12 +256,14 @@ export class CityUI {
   }
   citizen(p, c) {
     const city = this.city, society = city.society;
-    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?'Prefeito':c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
+    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     this.dossierTabs(p, [['profile', 'PERFIL'], ['skills', 'TRABALHO'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'CONTA'], ['history', 'HISTÓRICO']]);
     if (this.detailTab === 'profile') {
       this.section(p,'wardrobe','Roupas, aparência e marcas',()=>{p.meter('Apresentação',appearance(c));p.note('Roupa bem conservada e de um estilo preferido melhora o bem-estar e a credibilidade; a experiência e a reputação continuam importantes.');p.kv('Preferências por peças',GARMENT_TYPES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));p.kv('Preferências por estilos',CLOTHING_STYLES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));for(const [i,g]of (c.wardrobe||[]).entries())p.record(`${i===(c.wearingIndex||0)?'Vestindo: ':''}${g.piece} · ${g.style}`,`${g.brandName} · conservação ${g.condition.toFixed(0)}% · qualidade ${g.quality.toFixed(0)}%`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});for(const b of city.economy.businesses.filter(b=>['tailor','clothing_store'].includes(b.type)).slice(0,12))p.kv(`Afinidade: ${b.entity.properties.name}`,`${brandPreference(c,b.id)>0?'Gosta':'Não gosta'} (${Math.round(brandPreference(c,b.id)*100)})`);});
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
+      const inside=city.building(c.indoorLocation?.buildingId);
+      if(inside){p.kv('Localização',`Dentro de ${name(inside.entity)} · ${c.indoorLocation.floor+1}º andar`);p.kv('Cômodo',{bedroom:'Quarto',bathroom:'Banheiro',dining:'Refeitório',plenary:'Plenário',office:'Gabinete',workspace:'Área da empresa'}[c.indoorLocation.roomType]||'Interior');p.button('VER PRÉDIO ATUAL',()=>this.openBuilding(inside.id));}
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
       p.heading('NECESSIDADES'); p.meters(Object.entries(c.needs).map(([id,value])=>[NEED_LABELS[id],value]));
       const home = city.units.get(c.homeUnitId), dwelling = city.housing.home(c); p.heading('MORADIA');
@@ -334,7 +336,9 @@ export class CityUI {
     this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
     if (this.detailTab === 'profile') {
       if(b.type==='council_chamber')p.kv('Bandeira da sede',b.governingFlagDescription||'Presidência ainda não eleita');
-      if(b.type==='newsroom'){p.kv('Linha editorial',newsroomGenre(b));p.kv('Última edição',b.newsEditionDay??'Ainda não impressa');p.kv('Exemplares produzidos hoje',b.newsPrintedDay===city.day?b.newsCopies:0);p.note('Papel chega por transporte. Cada cópia consome 3–5 folhas; anúncios pagos são identificados no acervo.');p.button('ACERVO DO JORNAL',()=>this.openPanel({tab:'publications',publicationOwner:b.accountId,selectedPublicationId:null}));}
+      const occupants=city.citizens.filter(c=>c.indoorLocation?.buildingId===b.id);
+      this.section(p,'inside','Pessoas no interior',()=>{p.kv('Presentes',occupants.length);for(const c of occupants)p.record(name(c.entity),`${c.action} · ${c.indoorLocation.floor+1}º andar`,()=>this.openCitizen(c.id));});
+      if(b.type==='newsroom'){p.kv('Linha editorial',newsroomGenre(b));p.kv('Última edição',b.newsEditionDay??'Ainda não impressa');p.kv('Exemplares produzidos hoje',b.newsPrintedDay===city.day?b.newsCopies:0);p.note(b.officialJournal?'Jornal obrigatório, custeado pela prefeitura. Cada edição usa quatro folhas e preserva até oito atos públicos; inclui votos individuais.':'Papel chega por transporte. Cada cópia consome 3–5 folhas; anúncios pagos são identificados no acervo.');p.button('ACERVO DO JORNAL',()=>this.openPanel({tab:'publications',publicationOwner:b.accountId,selectedPublicationId:null}));}
 
       const post = [...city.lighting.sites.values()].find(post => post.buildingId === b.id && !post.public && post.status !== 'cancelled');
       if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', !post.built ? post.projectId ? 'Em construção' : 'Aguarda contratação' : post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }

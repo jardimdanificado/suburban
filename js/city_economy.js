@@ -583,7 +583,7 @@ export class CityEconomy {
   }
   industrialWork(b,c,spec) {
     if(b.type==='clothing_store')return b.inventory.roupas>0;
-    if(b.type==='newsroom'){const pages=3+(b.id+this.city.day)%3;spec={...spec,inputs:{papel:pages},outputs:{jornais:1}};if((b.newsPrintedDay===this.city.day?b.newsCopies||0:0)>=Math.max(2,Math.ceil(this.city.citizens.length*.08)))return false;}
+    if(b.type==='newsroom'){if(b.officialJournal&&!this.city.officialJournal.pending)return false;const pages=b.officialJournal?4:3+(b.id+this.city.day)%3;spec={...spec,inputs:{papel:pages},outputs:{jornais:1}};if((b.newsPrintedDay===this.city.day?b.newsCopies||0:0)>=Math.max(2,Math.ceil(this.city.citizens.length*.08)))return false;}
     if(b.type==='publisher'){
       const pamphlet=b.inventory.panfletos<Math.max(2,b.inventory.livros,this.city.politics.campaigns.getMaterials().demand('panfletos')),pages=pamphlet?1:b.bookPages||5;
       spec={...spec,inputs:{papel:pages},outputs:{[pamphlet?'panfletos':'livros']:1},labor:pamphlet?6:18+pages*2};

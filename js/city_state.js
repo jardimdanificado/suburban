@@ -6,6 +6,7 @@ import {CityVoting} from './city_voting.js';
 import {CityPoliticalStanding} from './city_political_standing.js';
 import {CityPartyOrganization} from './city_party_organization.js';
 import { CityPublications } from './city_publications.js';
+import { CityOfficialJournal } from './city_official_journal.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityGovernment } from './city_government.js';
 import { CityCouncil } from './city_council.js';
@@ -31,7 +32,7 @@ import { CitySociety } from './city_society.js';
 import { CityServiceInvestment } from './city_service_investment.js';
 import { World, WorldClock } from './world.js';
 
-const prototypes = new Map([CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
+const prototypes = new Map([CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));

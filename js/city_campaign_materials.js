@@ -36,7 +36,7 @@ export class CityCampaignMaterials {
   plan(e){
     const city=this.city;if(city.hour<8||city.hour>=20)return;
     for(const n of e.candidates){const candidate=city.society.citizen(n.citizenId),party=city.politics.party(n.partyId);if(!live(candidate)||!party?.active)continue;if(n.campaignFinanceDay!==city.day){this.fund(n,e);n.campaignFinanceDay=city.day;}
-      const pool=city.citizens.filter(c=>live(c)&&city.society.isAdult(c)&&c.id!==candidate.id&&!c.campaign&&!c.researchAssignment&&!c.deliveryId&&!c.cleaningJobId&&!c.workMeal&&!c.conversation&&!blocked.has(c.task)&&!city.urgentNeed(c));
+      const pool=city.citizens.filter(c=>live(c)&&!c.indoorLocation&&city.society.isAdult(c)&&c.id!==candidate.id&&!c.campaign&&!c.researchAssignment&&!c.deliveryId&&!c.cleaningJobId&&!c.workMeal&&!c.conversation&&!blocked.has(c.task)&&!city.urgentNeed(c));
       for(const kind of ['pamphlet','flag','banner','paint']){
         if(this.missions.some(m=>m.electionId===e.id&&m.candidateId===n.citizenId&&m.kind===kind&&m.requestDay===city.day))continue;
         const neededGood={pamphlet:'panfletos',flag:'bandeiras',banner:'faixas',paint:'tinta'}[kind];if(!city.economy.businesses.some(b=>(b.inventory[neededGood]||0)>0))continue;
@@ -76,7 +76,7 @@ export class CityCampaignMaterials {
     if(Math.hypot(c.entity.x-m.destination.x,c.entity.y-m.destination.y)>1.5){this.release(c,'Deslocamento interrompido');return;}
     if(m.kind==='pamphlet'){
       c.action=`Panfletaço pago por ${n.name} · ${party.number}`;if(city.minute-(m.lastContactAt??-Infinity)<10)return;m.lastContactAt=city.minute;
-      const listeners=city.citizens.filter(v=>live(v)&&v.id!==c.id&&city.society.isAdult(v)&&!m.recipientIds?.includes(v.id)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<=3);
+      const listeners=city.citizens.filter(v=>live(v)&&!v.indoorLocation&&v.id!==c.id&&city.society.isAdult(v)&&!m.recipientIds?.includes(v.id)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<=3);
       const voter=listeners[Math.floor(city.random()*listeners.length)];if(voter){
         city.politics.initializeCitizen(voter);m.recipientIds??=[];m.recipientIds.push(voter.id);
         const doc=city.publications.documents.get(m.docIds.find(id=>city.publications.documents.get(id)?.ownerAccountId===c.accountId));
@@ -107,7 +107,7 @@ export class CityCampaignMaterials {
     this.decorations=this.decorations.filter(d=>!d.entity.destroyed);
     for(const c of city.citizens)if(c.campaign?.type==='paid'&&(!city.politics.active||city.minute>=c.campaign.until||c.task!=='campaign'))this.release(c,'Contrato interrompido ou encerrado');
     // Visibility of a real installation affects only nearby passers-by, once per day.
-    if(city.minute%30===0){const e=city.politics.active;if(e?.status!=='campaign')return;for(const d of this.decorations){const n=e.candidates.find(n=>n.citizenId===d.candidateId);if(!n)continue;for(const c of city.citizens.filter(c=>live(c)&&city.society.isAdult(c)&&Math.hypot(c.entity.x-d.entity.x,c.entity.y-d.entity.y)<5).slice(0,12)){
+    if(city.minute%30===0){const e=city.politics.active;if(e?.status!=='campaign')return;for(const d of this.decorations){const n=e.candidates.find(n=>n.citizenId===d.candidateId);if(!n)continue;for(const c of city.citizens.filter(c=>live(c)&&!c.indoorLocation&&city.society.isAdult(c)&&Math.hypot(c.entity.x-d.entity.x,c.entity.y-d.entity.y)<5).slice(0,12)){
       city.politics.initializeCitizen(c);if(c.political.memories.some(m=>m.promiseKey===`sign:${e.id}:${d.id}:${city.day}`))continue;city.politics.campaigns.hearPromises(c,n,e,'Publicidade vista na rua');city.politics.remember(c,{kind:'campaign-sign',electionId:e.id,candidateId:n.citizenId,partyId:n.partyId,effect:.5,promiseKey:`sign:${e.id}:${d.id}:${city.day}`,description:`Viu propaganda de ${n.name}, número ${d.partyNumber}.`});
     }}}
   }

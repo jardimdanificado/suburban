@@ -92,6 +92,7 @@ export class CityDevelopment {
       if (project.service === 'expansion') {
       b.floors = project.targetFloors; b.inventoryCapacity += b.width * b.depth * project.floors * 16;
       b.jobs += b.type === 'townhall' ? project.floors : 0; b.geometryRevision = (b.geometryRevision || 0) + 1;
+      if(b.type==='popular_housing'&&project.accountId==='treasury')city.housing.assign();
       }
       }
       const lot = this.plots.find(p => p.id === b.plotId); if (lot) lot.projectId = null;
@@ -111,6 +112,7 @@ export class CityDevelopment {
   }
   planPublicWorks() {
     const city = this.city, hall = city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
+    if(hall&&this.clientCitizen('treasury'))city.officialJournal?.ensure();
     if (!hall || !this.clientCitizen('treasury') || city.treasury < city.currency.price(100000)) return;
     this.planBasicHousing();
     const needs=city.welfare.conditions();
@@ -170,8 +172,17 @@ export class CityDevelopment {
     const city=this.city,needs=city.welfare.conditions(),pending=this.projects.filter(p=>!p.cancelled&&p.status!=='completed');
     const vacant=[...city.housing.homes.values()].filter(h=>city.housing.isSocial(h)&&city.housing.units(h).every(u=>!u.tenantId)).length;
     const queued=pending.filter(p=>p.type==='popular_housing'&&p.service==='building');
-    const planned=queued.reduce((n,p)=>n+Math.floor((2*p.width+2*p.depth-4)/2)*p.floors,0);
-    if(needs.homeless<=vacant+planned || queued.length>=2)return;
+    const expansions=pending.filter(p=>p.type==='popular_housing'&&p.service==='expansion');
+    const planned=[...queued,...expansions].reduce((n,p)=>{const b=city.building(p.buildingId);return n+Math.floor((2*(p.width??b?.width??0)+2*(p.depth??b?.depth??0)-4)/2)*p.floors;},0);
+    if(needs.homeless<=vacant+planned || queued.length+expansions.length>=2)return;
+    const expandable=city.buildings.filter(b=>b.type==='popular_housing'&&!b.entity.destroyed&&b.floors<12&&b.units.every(u=>u.ownerId==='treasury')&&!pending.some(p=>p.buildingId===b.id));
+    expandable.sort((a,b)=>a.floors-b.floors||a.id-b.id);
+    for(const b of expandable){
+      const perFloor=Math.max(1,Math.floor((2*b.width+2*b.depth-4)/2)),floors=Math.min(2,12-b.floors,Math.ceil((needs.homeless-vacant-planned)/perFloor));
+      const cells=b.width*b.depth*floors,cost=cells*DEVELOPMENT_RULES.stonePerCell*city.economy.goods.pedra.price+Math.ceil(cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell)*DEVELOPMENT_RULES.municipalMultiplier);
+      if(city.treasury<cost+needs.reserve)continue;
+      const project=this.beginExpansion('treasury',b.id,{floors});if(project){project.priority=needs.homeless>needs.population*.3?150:100;return;}
+    }
     const lots=this.plots.filter(p=>p.ownerId==='treasury'&&!p.projectId&&!p.buildingId&&!['farm','quarry'].includes(p.type)&&p.width>=3&&p.depth>=3).sort((a,b)=>Math.hypot(a.x-city.spawn.x,a.y-city.spawn.y)-Math.hypot(b.x-city.spawn.x,b.y-city.spawn.y));
     const cells=3*3*4,cost=cells*DEVELOPMENT_RULES.stonePerCell*city.economy.goods.pedra.price+Math.ceil(cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell)*1.5);
     if(city.treasury<cost+needs.reserve)return;
@@ -341,6 +352,7 @@ export class CityDevelopment {
     const p = this.plots.find(p => p.id === project.plotId), city = this.city;
     const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, materialSource: project,rotation:project.rotation??0 });
     if(b&&project.micro)b.micro=true;
+    if(b&&project.officialJournal){b.officialJournal=true;b.newsGenre='política';b.entity.properties.name='Jornal Oficial do Município';}
     if(b&&project.equityPartners)b.equityPartners=project.equityPartners;
     if (!b) { project.status = 'blocked'; project.error = city.lastError; return null; }
     city.reputation.completed(city.building(project.builderId), null, 'edifício concluído', {projectId:project.id});

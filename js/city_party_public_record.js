@@ -45,7 +45,7 @@ export function recordLegislativeOpinion(standing,bill,override=false){
 export function publicPerformance(p,party){
   party.governmentRecords??=[];
   for(const term of p.mandates.terms.filter(t=>t.partyId===party.id)){
-    let row=party.governmentRecords.find(r=>r.termId===term.id);if(!row){row={termId:term.id,mayorId:term.mayorId,title:`Gestão de ${term.mayorName}`,startedAt:term.startedAt};party.governmentRecords.push(row);}
+    let row=party.governmentRecords.find(r=>r.termId===term.id);if(!row){row={termId:term.id,mayorId:term.mayorId,title:`Gestão ${term.provisional?'provisória ':''}de ${term.mayorName}`,startedAt:term.startedAt};party.governmentRecords.push(row);}row.provisional=!!term.provisional;
     row.minute=term.endedAt??p.city.minute;row.ended=term.endedAt!=null;
     row.management=clamp((term.outcomes?.points||0)*.35,-12,14);
     row.promises=clamp(term.promises.reduce((n,pr)=>n+(pr.assessment?.points||0),0)/Math.max(1,term.promises.length)*.25,-12,14);

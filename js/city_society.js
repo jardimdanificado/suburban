@@ -54,7 +54,7 @@ export class CitySociety {
   }
   canConverse(a, b) {
     const dx=a.entity.x-b.entity.x,dy=a.entity.y-b.entity.y;
-    if(a===b||!(dx*dx+dy*dy<=4)||!this.canSocialize(a)||!this.canSocialize(b))return false;
+    if(a===b||a.indoorLocation?.buildingId!==b.indoorLocation?.buildingId||!(dx*dx+dy*dy<=4)||!this.canSocialize(a)||!this.canSocialize(b))return false;
     const known=this.relations.has(pairKey(a.id,b.id));
     return known || (this.contactIndex.get(a.id)?.size||0)<64 && (this.contactIndex.get(b.id)?.size||0)<64;
   }
