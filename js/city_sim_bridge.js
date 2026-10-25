@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState } from './city_state.js?v=state-motion-7';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-motion-9';
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
 export class CitySimulationBridge {
@@ -9,7 +9,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=state-motion-7', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=state-motion-9', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });
@@ -66,7 +66,7 @@ export class CitySimulationBridge {
       const c=this.city.citizens[i], at=i*3;
       let sample=this.motionSamples.get(c.id);const existing=!!sample;
       if(!sample){sample={id:c.id,from:{x:c.entity.x,y:c.entity.y},to:{}};this.motionSamples.set(c.id,sample);}
-      sample.entity=c.entity;sample.seen=this.city._uiRevision;
+      sample.entity=c.entity;sample.citizen=c;sample.seen=this.city._uiRevision;
       sample.to.x=data.positions?.[at]===c.id?data.positions[at+1]:c.entity.x;
       sample.to.y=data.positions?.[at]===c.id?data.positions[at+2]:c.entity.y;
       c.entity.x=sample.to.x;c.entity.y=sample.to.y;
@@ -85,12 +85,13 @@ export class CitySimulationBridge {
   receiveMotion(data) {
     const now=performance.now();
     this.interpolate(now);
-    const duration=Math.max(16,Math.min(250,now-this.lastPositionUpdate)),positions=data.positions;
+    const duration=Math.max(16,Math.min(250,now-this.lastPositionUpdate)),positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
     this.lastPositionUpdate=now;
     this.time.tick=data.tick;this.time.elapsed=data.elapsed;
     for(let i=0;i<positions.length;i+=3){
       const sample=this.motionSamples.get(positions[i]);
       if(!sample||sample.entity.destroyed)continue;
+      if(needs){const c=sample.citizen,at=i/3*needsStride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)c.needs[CITY_NEED_FIELDS[j]]=needs[at+j];c.happiness=needs[at+CITY_NEED_FIELDS.length];c.mood=needs[at+CITY_NEED_FIELDS.length+1];}
       const x=positions[i+1],y=positions[i+2],fromX=sample.entity.x,fromY=sample.entity.y;
       sample.from.x=fromX;sample.from.y=fromY;sample.to.x=x;sample.to.y=y;
       const dx=x-fromX,dy=y-fromY;

@@ -7,7 +7,10 @@ export const WORK_MEAL_RULES = { units: 3, foodThreshold: 45, stockPerWorker: 6,
 export class CityWorkMeals {
   constructor(city) { this.city = city; }
   employer(c) {
-    const b = this.city.building(c.jobId) || c.businessIds.map(id => this.city.building(id)).find(b => b?.active && this.offer(b)), hour = this.city.hour;
+    const hour = this.city.hour;
+    if(hour<7||hour>=20||c.role==='councilor'||!c.jobId&&!c.businessIds.length)return null;
+    let b=this.city.building(c.jobId);
+    if(!b)for(const id of c.businessIds){const candidate=this.city.building(id);if(candidate?.active&&this.offer(candidate)){b=candidate;break;}}
     return b?.active && (b.workers.includes(c.id) || b.ownerId === c.id) && hour >= (b.type === 'carrier' ? 7 : 8) && hour < (b.type === 'carrier' ? 20 : 17) ? b : null;
   }
   foodGoods() { return [...Object.keys(CROPS).filter(g=>!['trigo','girassol'].includes(g)),...INDUSTRIAL_FOODS,'pao']; }
@@ -38,8 +41,9 @@ export class CityWorkMeals {
   tryStart(c) {
     if(c.mobilityTrip||c.ridingVehicleId)return false;
     if (c.workMeal) return true;
+    if(c.needs.food>=WORK_MEAL_RULES.foodThreshold||c.conversation)return false;
     const b = this.employer(c);
-    if (!b || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.conversation) return false;
+    if (!b) return false;
     const holder = this.site(c, b);
     if (Math.hypot(c.entity.x - holder.door.x, c.entity.y - holder.door.y) > 2) return false;
     const offer = this.offer(holder, c); if (!offer) return false;

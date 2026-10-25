@@ -5582,7 +5582,12 @@ export class RCT3DRenderer {
     const distCamY = Math.abs(curTileY - this.lastBuiltCamTileY);
     const inBufferMargin = distCamX < 6 && distCamY < 6;
 
-    if (inBufferMargin &&
+    if (this.terrainDirty && this.rapidCityMode && inBufferMargin &&
+        curZoom === this.lastBuiltZoom &&
+        performance.now() - (this.lastTerrainBuildAt || 0) < 250 &&
+        this.terrainGroup.children.length > 0) return;
+
+    if (!this.terrainDirty && inBufferMargin &&
         curZoom === this.lastBuiltZoom && curVisionZx === this.lastVisionZoneX &&
         curVisionZy === this.lastVisionZoneY && knownCount === this.lastVisionKnownCount &&
         this.lastBuiltFullWorld === this.renderFullWorld &&
@@ -5592,6 +5597,8 @@ export class RCT3DRenderer {
 
     this.lastBuiltCamTileX = curTileX;
     this.lastBuiltCamTileY = curTileY;
+    this.terrainDirty = false;
+    this.lastTerrainBuildAt = performance.now();
     this.lastBuiltZoom = curZoom;
     this.lastVisionZoneX = curVisionZx;
     this.lastVisionZoneY = curVisionZy;

@@ -6,6 +6,33 @@ import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation } from './city_terrain.js';
+const fastBuildingColors={residential:0xb8aa85,popular_housing:0xa87962,luxury_housing:0xd3b77a,market:0xdba653,greengrocer:0x83a65d,bakery:0xc8895a,builder:0xb87c3f,clinic:0xd8ddd1,bank:0x8da8a1,cleaner:0x7da6aa,carrier:0x668e9f,mill:0xbdaf82,press:0xa28e72,quarry:0x8a9191};
+function fastBuildingColor(type){
+  if(fastBuildingColors[type])return fastBuildingColors[type];
+  let hash=0;for(let i=0;i<type.length;i++)hash=Math.imul(hash,31)+type.charCodeAt(i)|0;
+  const colors=[0x9aa997,0xb0a887,0xa7968a,0x8fa3a4,0xb4a079,0x9d9eae,0x9da873];
+  return colors[(hash>>>0)%colors.length];
+}
+function syncFastBuildings(renderer,THREE,buildings){
+  let fast=renderer.fastBuildingMeshes;
+  if(!fast||fast.capacity<buildings.length){
+    if(fast){renderer.scene.remove(fast.walls,fast.roofs);fast.walls.dispose();fast.roofs.dispose();fast.walls.geometry.dispose();fast.walls.material.dispose();}
+    const capacity=Math.max(32,2**Math.ceil(Math.log2(Math.max(1,buildings.length))));
+    const geometry=new THREE.BoxGeometry(1,1,1),material=new THREE.MeshLambertMaterial({color:0xffffff});
+    const walls=new THREE.InstancedMesh(geometry,material,capacity),roofs=new THREE.InstancedMesh(geometry,material,capacity);
+    walls.frustumCulled=roofs.frustumCulled=false;walls.castShadow=roofs.castShadow=false;
+    renderer.scene.add(walls,roofs);fast={walls,roofs,capacity};renderer.fastBuildingMeshes=fast;
+  }
+  const matrix=renderer.fastBuildingMatrix??=new THREE.Matrix4(),color=renderer.fastBuildingColor??=new THREE.Color();
+  for(let i=0;i<buildings.length;i++){
+    const {entity,b}=buildings[i],height=Math.max(.25,b.floors||1),base=b.terrain?.base??0,width=Math.max(.5,b.width),depth=Math.max(.5,b.depth);
+    matrix.makeScale(width,height,depth);matrix.setPosition(entity.x+width/2,base+height/2,entity.y+depth/2);fast.walls.setMatrixAt(i,matrix);
+    matrix.makeScale(width+.1,.14,depth+.1);matrix.setPosition(entity.x+width/2,base+height+.07,entity.y+depth/2);fast.roofs.setMatrixAt(i,matrix);
+    color.setHex(fastBuildingColor(b.type));fast.walls.setColorAt(i,color);fast.roofs.setColorAt(i,color.multiplyScalar(.65));
+  }
+  fast.walls.count=fast.roofs.count=buildings.length;
+  if(buildings.length){fast.walls.instanceMatrix.needsUpdate=fast.roofs.instanceMatrix.needsUpdate=true;fast.walls.instanceColor.needsUpdate=fast.roofs.instanceColor.needsUpdate=true;}
+}
 // City geometry is built once per building; one instance is exactly one 1×1×1 space.
 export function syncCityBuildings(renderer, THREE, entities, world) {
   syncCampaignDecorations(renderer,THREE,entities,world);
@@ -23,7 +50,8 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   const liveBuildings = new Set(entities.filter(e => e.properties?.cityBuilding && !e.destroyed).map(e => e.id));
   const liveLamps = new Set(); let lightIndex = 0;
   const distanceToView = p => (p.x - (renderer.camX || 0)) ** 2 + (p.y - (renderer.camY || 0)) ** 2;
-  const litNearby = new Set((world.cityLampPosts || []).filter(p => p.lit && (!p.buildingId || liveBuildings.has(p.buildingId))).sort((a, b) => distanceToView(a) - distanceToView(b)).slice(0, 8).map(p => p.id));
+  const lightBudget=renderer.rapidCityMode?2:renderer.cityLampLights.length;
+  const litNearby = new Set((world.cityLampPosts || []).filter(p => p.lit && (!p.buildingId || liveBuildings.has(p.buildingId))).sort((a, b) => distanceToView(a) - distanceToView(b)).slice(0, lightBudget).map(p => p.id));
   for (const post of world.cityLampPosts || []) {
     if (!post.built) continue;
     liveLamps.add(post.id);
@@ -41,9 +69,9 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     }
     lamp.userData.lantern.material.emissive.setHex(post.lit ? 0xffa52f : 0);
     lamp.visible = !post.buildingId || liveBuildings.has(post.buildingId);
-    if (litNearby.has(post.id) && lamp.visible && lightIndex < renderer.cityLampLights.length) { const light = renderer.cityLampLights[lightIndex++]; light.position.copy(lamp.position); light.position.y += 2.1; light.intensity = 2; }
+    if (litNearby.has(post.id) && lamp.visible && lightIndex < lightBudget) { const light = renderer.cityLampLights[lightIndex++]; light.position.copy(lamp.position); light.position.y += 2.1; light.intensity = 2;light.visible=true; }
   }
-  for (; lightIndex < renderer.cityLampLights.length; lightIndex++) renderer.cityLampLights[lightIndex].intensity = 0;
+  for (; lightIndex < renderer.cityLampLights.length; lightIndex++){renderer.cityLampLights[lightIndex].intensity = 0;renderer.cityLampLights[lightIndex].visible=false;}
   for (const [id, mesh] of renderer.lampMeshes) if (!liveLamps.has(id)) { renderer.scene.remove(mesh); mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.lampMeshes.delete(id); }
   renderer.lampSiteMeshes ??= new Map();
   const sites = new Set();
@@ -62,6 +90,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   for (const [id, marker] of renderer.lampSiteMeshes) if (!sites.has(id)) { renderer.scene.remove(marker); marker.geometry.dispose(); marker.material.dispose(); renderer.lampSiteMeshes.delete(id); }
   renderer.cityMeshes ??= new Map();
   const active = new Set();
+  const fastBuildings=[];
   for (const entity of entities) {
     const b = entity.properties?.cityBuilding;
     if (!b || entity.destroyed) continue;
@@ -218,7 +247,9 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z + .5, unit.y + .5);
     group.userData.cells.material.emissive.setHex(renderer.selectedEntityId === entity.id ? 0x26351a : 0x000000);
+    if(renderer.rapidCityMode&&b.active&&b.type!=='townhall'&&b.type!=='council_chamber'&&renderer.selectedEntityId!==entity.id){group.visible=false;fastBuildings.push({entity,b});}
   }
+  if(renderer.rapidCityMode||renderer.fastBuildingMeshes)syncFastBuildings(renderer,THREE,fastBuildings);
   for (const [id, group] of renderer.cityMeshes) if (!active.has(id)) {
     renderer.scene.remove(group);
     group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); });

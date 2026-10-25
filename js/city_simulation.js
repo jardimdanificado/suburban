@@ -57,6 +57,11 @@ export const BUILDING_TYPES = {
 export const NEED_LABELS = { food: 'Alimentação', water: 'Água', energy: 'Descanso', hygiene: 'Higiene', toilet: 'Banheiro', social: 'Convívio', leisure: 'Lazer', health: 'Saúde', shelter: 'Moradia', safety: 'Segurança' };
 const NO_CHILDREN=Object.freeze([]);
 const URGENT_NEEDS=[['water',18,0],['food',18,0],['health',20,5],['energy',12,0],['toilet',10,0],['hygiene',10,0]];
+const SERVICE_PRICES={food:180,water:35,health:240,leisure:25,social:0,energy:0,hygiene:0,toilet:0};
+const SERVICE_RATES={food:5,water:8,hygiene:4,social:1.5,leisure:1,health:2};
+const SERVICE_ACTIONS={food:'Comendo no mercado',water:'Bebendo água',energy:'Dormindo',hygiene:'Cuidando da higiene',toilet:'Usando o banheiro',social:'Procurando companhia para conversar',leisure:'Descansando no centro de lazer',health:'Recebendo atendimento'};
+const ESSENTIAL_TASKS=new Set(['water','food','provisions','workmeal','health','toilet']);
+const INTERRUPTIBLE_TASKS=new Set(['work','manage','leisure','social','clean']);
 const CITY_FEED_LIMIT=128,CITY_FEED_TRIM=64;
 const clamp = n => Math.max(0, Math.min(100, n));
 const key = (x, y) => `${x},${y}`;
@@ -335,7 +340,8 @@ export class CitySimulation {
     const n = c.needs;
     const home = this.building(this.units.get(c.homeUnitId)?.buildingId);
     const job = this.building(c.jobId);
-    const company = c.role==='councilor' ? null : c.businessIds.map(id => this.building(id)).filter(b => b?.active).sort((a, b) => Number(b.type === 'farm') - Number(a.type === 'farm'))[Math.floor(this.minute / 120) % Math.max(1, c.businessIds.length)] || c.businessIds.map(id => this.building(id)).find(b => b?.active);
+    const companies=c.role==='councilor'||!c.businessIds.length?NO_CHILDREN:c.businessIds.map(id=>this.building(id)).filter(b=>b?.active).sort((a,b)=>Number(b.type==='farm')-Number(a.type==='farm'));
+    const company=companies[Math.floor(this.minute/120)%Math.max(1,c.businessIds.length)]||companies[0]||null;
     const child = this.childrenOf(c.id).find(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
     let task = 'leisure', type = 'leisure';
     const urgent = this.urgentNeed(c);
@@ -468,16 +474,16 @@ export class CitySimulation {
       if (Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) >= 90) { c.task = null; c.servicePaid = null; }
       return;
     }
-    const price = this.currency.price({ food: 180, water: 35, health: 240, leisure: 25, social: 0, energy: 0, hygiene: 0, toilet: 0 }[task]);
+    const price = this.currency.price(SERVICE_PRICES[task]);
     if (c.servicePaid !== `${b.id}:${task}`) {
       if (task === 'food' ? !this.economy.consumeMeal(c, b) : !this.transfer(this.payerFor(c), b.accountId, b.type === 'townhall' ? 0 : price, `Serviço: ${NEED_LABELS[task] || task}`)) { c.action = 'Sem dinheiro para o serviço'; c.task = null; return; }
       c.servicePaid = `${b.id}:${task}`;
     }
-    const rates = { food: 5, water: 8, energy: c.homeUnitId ? .9 : .45, hygiene: 4, social: 1.5, leisure: 1, health: 2 };
-    if (!(task in rates)) { this.life.resetTask(c, 'serviço indisponível'); return; }
-    n[task] = clamp(n[task] + rates[task]);
-    c.action = { food: 'Comendo no mercado', water: 'Bebendo água', energy: 'Dormindo', hygiene: 'Cuidando da higiene', toilet: 'Usando o banheiro', social: 'Procurando companhia para conversar', leisure: 'Descansando no centro de lazer', health: 'Recebendo atendimento' }[task];
-    if (task === 'social') { n.social = clamp(n.social - rates.social); c.socialWaitStarted ??= this.minute; if (this.minute - c.socialWaitStarted >= 30) { c.task = null; c.socialWaitStarted = null; n.leisure = clamp(n.leisure + 3); } }
+    const rate=task==='energy'?(c.homeUnitId?.9:.45):SERVICE_RATES[task];
+    if (rate===undefined) { this.life.resetTask(c, 'serviço indisponível'); return; }
+    n[task] = clamp(n[task] + rate);
+    c.action = SERVICE_ACTIONS[task];
+    if (task === 'social') { n.social = clamp(n.social - rate); c.socialWaitStarted ??= this.minute; if (this.minute - c.socialWaitStarted >= 30) { c.task = null; c.socialWaitStarted = null; n.leisure = clamp(n.leisure + 3); } }
     if (task === 'food' && n.food >= 95) c.foodVoucher = null;
     if (n[task] >= 95 || (task === 'energy' && this.hour >= 7 && this.hour < 22 && n.energy > 65)) { c.task = null; c.servicePaid = null; }
     if (task === 'energy' && Math.min(n.food, n.water, n.toilet) < 20) c.task = null;
@@ -533,7 +539,7 @@ export class CitySimulation {
     this.log(`Dia ${this.day}: aluguéis e orçamento processados.`, 'economy', [], { kind: 'daily-budget' });
   }
   reconcile() {
-    for (const b of [...this.buildings]) if (b.entity.destroyed) {
+    if(this.buildings.some(b=>b.entity.destroyed))for (const b of [...this.buildings]) if (b.entity.destroyed) {
       for (const u of b.units) { this.units.delete(u.id); }
       for (let y = b.entity.y; y < b.entity.y + b.depth; y++) for (let x = b.entity.x; x < b.entity.x + b.width; x++) this.occupied.delete(key(x, y));
       this.obstacleRevision=(this.obstacleRevision||0)+1;
@@ -559,7 +565,7 @@ export class CitySimulation {
       this.buildingsById.delete(b.id);
       this.structureRevision++;
     }
-    for (const c of [...this.citizens]) if (c.entity.destroyed) {
+    if(this.citizens.some(c=>c.entity.destroyed))for (const c of [...this.citizens]) if (c.entity.destroyed) {
       const heir = c.dead ? this.life.heir(c) : null;
       this.vehicles.removeCitizen(c,heir);
       if (heir) for (const b of this.economy.businesses.filter(b => b.ownerId === c.id)) { this.history.ownership(b,c.accountId,heir.accountId,{action:'inheritance'}); b.ownerId = heir.id; if (!heir.businessIds.includes(b.id)) heir.businessIds.push(b.id); }
@@ -596,7 +602,7 @@ export class CitySimulation {
       this.reconciledRevision = reconcileRevision;
     }
     this.sanitation.updateMinute();
-    for (const c of this.citizens) this.workMeals.tryStart(c);
+    for (const c of this.citizens)if(c.workMeal||(c.jobId||c.businessIds.length)&&c.needs.food<45)this.workMeals.tryStart(c);
     this.logistics.updateMinute();
     this.politics.voting.updateMinute();
     this.politics.getResearch().updateMinute();
@@ -608,34 +614,51 @@ export class CitySimulation {
     const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
     for (const c of this.citizens) {
       const n = c.needs;
+      // Idle adults cannot choose another activity until their short retry
+      // window expires. Accumulate their passive need changes in one pass;
+      // active workers, travelers, conversations and children still run each
+      // minute. The window is at most five city minutes.
+      if(!c.entity.destroyed&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==0)continue;
+      const elapsed=Math.max(1,this.minute-(c._lastNeedsAt??this.minute-1));c._lastNeedsAt=this.minute;c._idleHomeId=c.homeUnitId;
       const age=this.society.age(c);
       if(c._renderAge!==age){c._renderAge=age;c.entity.properties.render.size=age<6?.55:age>=18?1:.8;}
       // These fixed fields are the hottest loop; direct access avoids temporary
       // iterators and dynamic property lookups for every resident and city minute.
-      n.food=clamp(n.food-.065);n.water=clamp(n.water-.09);n.energy=clamp(n.energy-.055);
-      n.hygiene=clamp(n.hygiene-.045);n.toilet=clamp(n.toilet-.085);n.social=clamp(n.social-.035);n.leisure=clamp(n.leisure-.035);
-      n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2));
-      n.safety = clamp(n.safety + (hasTownhall ? 0.08 : -0.1));
-      n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025));
-      c.mood = (c.mood || 0) * .998;
+      n.food=clamp(n.food-.065*elapsed);n.water=clamp(n.water-.09*elapsed);n.energy=clamp(n.energy-.055*elapsed);
+      n.hygiene=clamp(n.hygiene-.045*elapsed);n.toilet=clamp(n.toilet-.085*elapsed);n.social=clamp(n.social-.035*elapsed);n.leisure=clamp(n.leisure-.035*elapsed);
+      n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2)*elapsed);
+      n.safety = clamp(n.safety + (hasTownhall ? 0.08 : -0.1)*elapsed);
+      n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025)*elapsed);
+      c.mood = (c.mood || 0) * (elapsed===1?.998:Math.pow(.998,elapsed));
       const totalNeeds=n.food+n.water+n.energy+n.hygiene+n.toilet+n.social+n.leisure+n.health+n.shelter+n.safety;
-      c.happiness = clamp(totalNeeds / 10 + c.mood + clothingMood(c) + this.relationships.moodEffect(c) + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
-      if (this.life.minute(c)) continue;
+      let comfort=0;if(c.homeUnitId&&c.homeComfort)for(const key in c.homeComfort)if(c.homeComfort[key]>this.minute)comfort++;
+      c.happiness = clamp(totalNeeds / 10 + c.mood + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
+      if (this.life.minute(c,elapsed)) continue;
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
-      const completingEssential = !c.path.length && ['water', 'food', 'provisions', 'workmeal', 'health', 'toilet'].includes(c.task) && n[c.task === 'provisions' || c.task === 'workmeal' ? 'food' : c.task] < 75;
-      if (!c.deliveryId && !c.cleaningJobId && urgent && c.task !== urgent && !completingEssential && this.society.age(c) >= 6) { c.task = null; c.path = []; }
-      const dependentNeedsCare = this.childrenOf(c.id).some(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 25);
-      if (!c.deliveryId && !urgent && dependentNeedsCare && (['work', 'manage', 'leisure', 'social', 'clean'].includes(c.task) || (c.task === 'energy' && n.energy > 65)) && !c.conversation) { c.task = null; c.path = []; }
+      const completingEssential = !c.path.length && ESSENTIAL_TASKS.has(c.task) && n[c.task === 'provisions' || c.task === 'workmeal' ? 'food' : c.task] < 75;
+      if (!c.deliveryId && !c.cleaningJobId && urgent && c.task !== urgent && !completingEssential && age >= 6) { c.task = null; c.path = []; }
+      let dependentNeedsCare=false;for(const child of this.childrenOf(c.id))if(this.society.age(child)<6&&Math.min(child.needs.food,child.needs.water,child.needs.hygiene,child.needs.social)<25){dependentNeedsCare=true;break;}
+      if (!c.deliveryId && !urgent && dependentNeedsCare && (INTERRUPTIBLE_TASKS.has(c.task) || (c.task === 'energy' && n.energy > 65)) && !c.conversation) { c.task = null; c.path = []; }
       if (c.deliveryId || c.cleaningJobId) continue;
       if (c.conversation) continue;
-      if (!c.task) { c.servicePaid = null; this.chooseTask(c); }
+      if (!c.task) {
+        // An idle citizen used to repeat the same path/offer search every city
+        // minute, even after finishing leisure at 95% or finding no service.
+        // Retry on a changed urgent need, at shift boundaries, or after a short
+        // delay. At 32× this is only a fraction of a real second.
+        if(this.minute<(c._nextTaskAt||0)&&c._retryUrgent===urgent&&this.minute%60!==0)continue;
+        c.servicePaid = null; this.chooseTask(c);
+      }
       if (!c.path.length && c.task) this.performTask(c);
+      if(!c.task){c._nextTaskAt=this.minute+5;c._retryUrgent=urgent;}
     }
-    for(const c of this.citizens)syncCitizenInterior(this,c);
+    for(const c of this.citizens)if(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation)syncCitizenInterior(this,c);
     this.society.updateMinute();
+    const movers=this._movingCitizens??=[];movers.length=0;
+    for(const c of this.citizens)if(c.path.length||c.deliveryId||c.ridingVehicleId)movers.push(c);
     // Spread hourly work across minutes; keep the same order and one run per hour.
     if (this.minute % 60 === 0) this.hourlyPhase = 0;
     if (this.hourlyPhase != null && this.hourlyPhase < 13) this.economy.hourly(this.hourlyPhase++);
@@ -652,13 +675,16 @@ export class CitySimulation {
     // One simulation second = four city minutes; all systems share this clock.
     this.accumulator += dt * 4;
     while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); }
-    for (const c of this.citizens) {
-      syncCitizenInterior(this,c);
+    const movers=this._movingCitizens||[];
+    if(this.vehicles.activeCount&&this._lastVehicleScanMinute!==this.minute){
+      this._lastVehicleScanMinute=this.minute;
+      for(const c of movers)if(!c.ridingVehicleId)this.vehicles.tryTrip(c);
+    }
+    for (const c of movers) {
       if(c.ridingVehicleId)continue;
       // Vehicle eligibility is minute based (including its 20-minute search
       // cooldown); polling it on every animation frame repeats the same scans
       // up to 60 times before any relevant state can change.
-      if(this.vehicles.activeCount&&c._vehicleSearchMinute!==this.minute){c._vehicleSearchMinute=this.minute;this.vehicles.tryTrip(c);}
       const load=c.deliveryId?this.logistics.shipments.find(s=>s.id===c.deliveryId):null;
       if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>(c.equipment?.carrinho?72:c.equipment?.cesta?36:24)){c.action='Aguardando veículo para transportar a carga';continue;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
@@ -676,6 +702,7 @@ export class CitySimulation {
         }
         c.action = c.deliveryId ? 'Transportando mercadorias' : c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
+      if(!c.path.length)syncCitizenInterior(this,c);
     }
     this.vehicles.update(dt);
   }

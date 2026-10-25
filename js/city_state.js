@@ -40,7 +40,13 @@ const prototypes = new Map([CityAirTraffic,CityVehicles,CityOfficialJournal,City
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
 const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision', 'routeCache', 'routeRevision','familyIndexDirty',
-  'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute']);
+  'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId']);
+// Only these enumerable fields are installed as accessors by the simulation.
+// Inspecting every property descriptor in the full state graph is expensive at
+// large populations; normal fields can be read directly.
+const accessorFields = new Set(['wage','seedStock','price','balance','totalRevenue','totalExpenses']);
+export const CITY_NEED_FIELDS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
+const needFields=CITY_NEED_FIELDS;
 const same = (a,b) => {if(!a||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(!Object.is(a[i],b[i]))return false;return true;};
 
 /** Incremental object graph transport. References (including cycles) retain their identity.
@@ -54,8 +60,14 @@ export class CityStateGraph {
     return { ref: id };
   }
   value(value) { return value && typeof value === 'object' && 'ref' in value ? this.objects.get(value.ref) : value; }
-  encode(root) {
+  encode(root,{packNeeds=false,packPositions=false}={}) {
     const nodes=[],removed=[],histories=[];
+    let packedNeeds=null,needsSet=null,citizenSet=null,entitySet=null;
+    if(packPositions){entitySet=new WeakSet();for(const citizen of root.city.citizens)entitySet.add(citizen.entity);}
+    if(packNeeds){
+      const people=root.city.citizens,stride=needFields.length+2;packedNeeds=new Float64Array(people.length*stride);needsSet=new WeakSet();citizenSet=new WeakSet();
+      for(let i=0;i<people.length;i++){const citizen=people[i],needs=citizen.needs;citizenSet.add(citizen);needsSet.add(needs);for(let j=0;j<needFields.length;j++)packedNeeds[i*stride+j]=needs[needFields[j]];packedNeeds[i*stride+needFields.length]=citizen.happiness;packedNeeds[i*stride+needFields.length+1]=citizen.mood;}
+    }
     // Weak visitation marks are reused between sends and do not retain removed
     // objects or reserve an array indexed by the ever-growing wire IDs.
     const visited=this.visitMarks??=new WeakMap(),generation=this.visitGeneration=(this.visitGeneration||0)+1;
@@ -69,6 +81,9 @@ export class CityStateGraph {
       this.objects.set(id, object);
       let kind, data, fields=false;
       const previous = this.previous.get(id);
+      // The initial graph establishes the needs objects. Subsequent worker
+      // snapshots carry their numeric values in one compact typed array.
+      if(needsSet?.has(object)&&previous)return id;
       const pair=this.relationNodes.get(id);
       if(object._socialPair && previous && pair?.revision===object.revision){for(const child of pair.children){const value=this.objects.get(child);if(value)visited.set(value,generation);}return id;}
       if (previous?.kind === 'FrozenObject' || previous?.kind === 'FrozenArray') return id;
@@ -93,14 +108,32 @@ export class CityStateGraph {
       else if (object instanceof Set) { kind = 'Set'; data = []; object.forEach(value => data.push(reference(value))); }
       else if (Array.isArray(object)) { kind = 'Array'; data = object.map(reference); }
       else {
-        kind = object.constructor?.name || 'Object'; data = [];fields=true;
+        kind = object.constructor?.name || 'Object';fields=true;
+        const oldFields=previous?.kind===kind?previous.data:null;
+        let index=0,delta=null,full=oldFields?null:[];
         for (const key of Object.keys(object)) {
           if (localFields.has(key)) continue;
-          const descriptor = Object.getOwnPropertyDescriptor(object,key);
-          if (descriptor.get || typeof descriptor.value === 'function') continue;
-          data.push(key, reference(descriptor.value));
+          if(accessorFields.has(key)&&Object.getOwnPropertyDescriptor(object,key)?.get)continue;
+          const value=object[key];
+          if(typeof value === 'function')continue;
+          const encoded=oldFields?.[index]===key&&((citizenSet?.has(object)&&(key==='happiness'||key==='mood'))||(entitySet?.has(object)&&(key==='x'||key==='y')))?oldFields[index+1]:reference(value);
+          if(full)full.push(key,encoded);
+          else if(oldFields[index]===key){if(!Object.is(oldFields[index+1],encoded))(delta??=[]).push(index,encoded);}
+          else{
+            full=oldFields.slice(0,index);
+            if(delta)for(let i=0;i<delta.length;i+=2)full[delta[i]+1]=delta[i+1];
+            full.push(key,encoded);
+          }
+          index+=2;
+        }
+        if(!full && index!==oldFields.length){full=oldFields.slice(0,index);if(delta)for(let i=0;i<delta.length;i+=2)full[delta[i]+1]=delta[i+1];}
+        if(full){nodes.push({id,kind,data:full});this.previous.set(id,{kind,data:full});}
+        else if(delta){
+          if(delta.length+4<oldFields.length){nodes.push({id,kind,data:delta,patch:true});for(let i=0;i<delta.length;i+=2)oldFields[delta[i]+1]=delta[i+1];}
+          else{data=oldFields.slice();for(let i=0;i<delta.length;i+=2)data[delta[i]+1]=delta[i+1];nodes.push({id,kind,data});this.previous.set(id,{kind,data});}
         }
       }
+      if(fields){if(object._socialPair)this.relationNodes.set(id,{revision:object.revision,children:[object.views,object.views[object.a],object.views[object.b],object.names,object.contexts].map(child=>this.ids.get(child)).filter(child=>child!=null)});return id;}
       if(object._socialPair)this.relationNodes.set(id,{revision:object.revision,children:[object.views,object.views[object.a],object.views[object.b],object.names,object.contexts].map(child=>this.ids.get(child)).filter(child=>child!=null)});
       const old = this.previous.get(id);
       if (!old || old.kind !== kind || !same(old.data, data)) {
@@ -123,7 +156,7 @@ export class CityStateGraph {
     this.mapRevision = mapRevision;
     this.mapChildren = Array.isArray(map) ? map.map(row => this.ids.get(row)) : [];
     for(const [id,object] of this.objects)if(visited.get(object)!==generation) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); }
-    return { rootId, nodes, removed, histories, nextId: this.nextId };
+    return { rootId, nodes, removed, histories, nextId: this.nextId, ...(packedNeeds?{packedNeeds}:{}) };
   }
   apply(packet) {
     for (const { id, kind, data } of packet.nodes) if (!this.objects.has(id)) {
@@ -142,10 +175,13 @@ export class CityStateGraph {
       else if (kind === 'Array' || kind === 'FrozenArray') { object.length = data.length; for (let i = 0; i < data.length; i++) object[i] = resolve(data[i]); }
       else if (kind === 'Uint8Array') object.set(data);
       else {
-        const keys=patch?null:new Set(),baseline=patch?this.previous.get(id)?.data:null;
+        const baseline=this.previous.get(id)?.data;
         if(patch&&!baseline)throw new Error(`Atualização parcial sem estado inicial: ${id}`);
+        let sameShape=!patch&&!!baseline&&baseline.length===data.length;
+        if(sameShape)for(let i=0;i<data.length;i+=2)if(baseline[i]!==data[i]){sameShape=false;break;}
+        const keys=patch||sameShape?null:new Set();
         for(let i=0;i<data.length;i+=2){const key=patch?baseline[data[i]]:data[i];keys?.add(key);object[key]=resolve(data[i+1]);}
-        if(!patch)for (const key of Object.keys(object)) if (!keys.has(key) && !localFields.has(key)) {
+        if(keys)for (const key of Object.keys(object)) if (!keys.has(key) && !localFields.has(key)) {
           const descriptor=Object.getOwnPropertyDescriptor(object,key);
           if (!descriptor.get && typeof descriptor.value !== 'function') delete object[key];
         }
@@ -174,6 +210,7 @@ export class CityStateGraph {
       }else this.previous.set(id,{kind,data});
     }
     for (const id of packet.removed) {this.objects.delete(id);this.previous.delete(id);this.historyCursors.delete(id);this.relationNodes.delete(id);}
+    if(packet.packedNeeds){const people=root.city.citizens,data=packet.packedNeeds,stride=needFields.length+2;for(let i=0;i<people.length;i++){const citizen=people[i],needs=citizen.needs;if(!needs)continue;for(let j=0;j<needFields.length;j++)needs[needFields[j]]=data[i*stride+j];citizen.happiness=data[i*stride+needFields.length];citizen.mood=data[i*stride+needFields.length+1];}}
     this.nextId = Math.max(this.nextId, packet.nextId);
     this.mapRevision = root.city.world.revision;
     this.mapChildren = Array.isArray(root.city.world.map) ? root.city.world.map.map(row=>this.ids.get(row)) : [];

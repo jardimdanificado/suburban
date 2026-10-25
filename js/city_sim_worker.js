@@ -1,10 +1,15 @@
-import { CityStateGraph, bindCityState } from './city_state.js?v=state-motion-7';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-motion-9';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
 let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0, dirty = false, forceSnapshotPending = false;
-const STEP = 1 / 60;
-const STATE_INTERVAL = 400, MOTION_INTERVAL = 100;
+const MIN_STEP = 1 / 60;
+// One city minute is 0.25 simulation seconds. At high speed, advancing it
+// in one call avoids rescanning every citizen several times for subminute
+// movement that is already interpolated on the main thread.
+const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
+const stateInterval = () => speed>=32?900:speed>=16?600:400;
+const MOTION_INTERVAL = 100;
 const allowed = new Set(['vehicles.configureAssembly','vehicles.buyVehicle','vehicles.revisePart','publications.write', 'publications.read', 'publications.configure', 'politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
 function positions() {
@@ -25,20 +30,25 @@ function vehiclePositions() {
   }
   return result;
 }
+function vitals(){
+  const people=state.city.citizens,stride=CITY_NEED_FIELDS.length+2,result=new Float64Array(people.length*stride);
+  for(let i=0;i<people.length;i++){const c=people[i],at=i*stride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)result[at+j]=c.needs[CITY_NEED_FIELDS[j]];result[at+CITY_NEED_FIELDS.length]=c.happiness;result[at+CITY_NEED_FIELDS.length+1]=c.mood;}
+  return result;
+}
 function snapshot(force = false) {
   if (!state) return false;
   if (awaitingAck) { if (force) forceSnapshotPending = true; return false; }
-  if (!force && performance.now() - lastSnapshot < STATE_INTERVAL) return false;
+  if (!force && performance.now() - lastSnapshot < stateInterval()) return false;
   const started = performance.now();
-  const packet = graph.encode(state), motion = positions(), vehicles = vehiclePositions();
-  postMessage({ type: 'state', packet, positions: motion, vehicles, tick, elapsed, workMs: performance.now() - started }, [motion.buffer, vehicles.buffer]);
+  const packet = graph.encode(state,{packNeeds:true,packPositions:true}), motion = positions(), vehicles = vehiclePositions();
+  postMessage({ type: 'state', packet, positions: motion, vehicles, tick, elapsed, workMs: performance.now() - started }, [motion.buffer, vehicles.buffer, packet.packedNeeds.buffer]);
   awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
   return true;
 }
 function sendMotion() {
   if (!state || !dirty || paused || performance.now() - lastMotion < MOTION_INTERVAL) return;
-  const motion = positions(), vehicles = vehiclePositions();
-  postMessage({ type: 'motion', positions: motion, vehicles, tick, elapsed }, [motion.buffer, vehicles.buffer]);
+  const motion = positions(), vehicles = vehiclePositions(),needs=vitals();
+  postMessage({ type: 'motion', positions: motion, vehicles, needs, tick, elapsed }, [motion.buffer, vehicles.buffer, needs.buffer]);
   lastMotion = performance.now();
 }
 function fail(error) {
@@ -61,7 +71,7 @@ self.onmessage = ({ data }) => {
       awaitingAck = false;
       if (dirty) snapshot(forceSnapshotPending);
     } else if (data.type === 'step' && state && paused) {
-      state.city.update(STEP); tick++; elapsed += STEP; dirty = true; snapshot(true);
+      state.city.update(MIN_STEP); tick++; elapsed += MIN_STEP; dirty = true; snapshot(true);
     } else if (data.type === 'command' && state) {
       let result;
       if (data.path === 'world.setTile') result = state.city.world.setTile(...data.args);
@@ -98,10 +108,10 @@ setInterval(() => {
     if (!paused) {
       // A bounded backlog prevents a slow hour from causing endless catch-up work.
       accumulator = Math.min(accumulator + dt * speed, Math.max(.25, speed * .25));
-      const deadline = performance.now() + 8;
+      const deadline = performance.now() + (speed>=16?14:8), step=stepSize();
       let steps = 0;
-      while (accumulator >= STEP && steps < 240 && performance.now() < deadline) {
-        state.city.update(STEP); accumulator -= STEP; tick++; elapsed += STEP; steps++;
+      while (accumulator >= step && steps < 240 && performance.now() < deadline) {
+        state.city.update(step); accumulator -= step; tick++; elapsed += step; steps++;
       }
       if (steps) dirty = true;
     }

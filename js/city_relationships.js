@@ -345,6 +345,7 @@ export class CityRelationships {
     c.action=`Esperando um momento livre de ${other.entity.properties.name}`;
   }
   moodEffect(c) {
+    if(!c.social.grief.length)return 0;
     const now=this.city.minute;
     return -Math.min(18,c.social.grief.reduce((sum,g)=>sum+g.strength*Math.max(0,(g.until-now)/(g.until-g.startedAt)),0))*(c.social.comfortUntil>now?.55:1);
   }

@@ -8,6 +8,7 @@ export function syncCitizenInterior(city, c) {
   if(c.mobilityTrip||c.ridingVehicleId){c.indoorLocation=null;return;}
   const task = c.workMeal ? 'workmeal' : c.task;
   const previous=c.indoorLocation, targetId=c.workMeal?.siteId ?? c.targetId;
+  if(!previous&&(c.entity.destroyed||c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)))return;
   // Most residents who entered a room stay there across many render frames.
   // Keep that stable case O(1): avoid resolving the destination and searching
   // the building's rooms until their task, target, layout, or position changes.

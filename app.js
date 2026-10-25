@@ -1,10 +1,10 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=state-motion-7';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=state-motion-9';
 import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js";
 import { CityDesktop } from "./js/city_desktop.js";
 import { World } from "./js/world.js";
 import { Renderer } from "./js/renderer.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=state-motion-6";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=state-motion-9";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
@@ -28,12 +28,16 @@ try { optionStorage = window.localStorage; } catch {}
 export const options = new OptionsPanel({ renderer: renderer3D, time, step: stepSimulation, storage: optionStorage });
 export const editor = new MapEditor({ world, entities, destroyEntity });
 world.onTileChange = () => {
-  renderer3D.lastBuiltCamTileX = -9999;
+  renderer3D.terrainDirty = true;
   renderer3D.forceStaticInstanceUpdate();
 };
 let nextId = 1;
 let simulationBridge = null;
 let previousFrame = performance.now();
+let lastRenderedAt = previousFrame;
+let lastUiDrawnAt = previousFrame;
+let lastUiPointerX = -1, lastUiPointerY = -1;
+let rapidResolution = null;
 // Opt-in diagnostics, readable without exposing mutable simulation objects to the browser.
 const profiling = new URLSearchParams(window.location.search).has('profile');
 const frameMetrics = { started: performance.now(), count: 0, simulation: 0, index: 0, scene: 0, ui: 0, cpu: 0, max: 0, terrain:0, city:0, renderEntities:0, entityLoop:0, entityRest:0, citizenClass:0, citizenSurface:0, citizenBody:0, webgl:0 };
@@ -382,6 +386,18 @@ function frame(now) {
   previousFrame = now;
   if (simulationBridge?.active) { simulationBridge.control(); simulationBridge.interpolate(now); }
   else time.advance(dt, advanceSimulation);
+  const rapidMode=simulationBridge?.active&&time.speed>=16&&city.citizens.length>=512;
+  renderer3D.rapidCityMode=rapidMode;
+  if(rapidMode&&now-lastRenderedAt<40){requestAnimationFrame(frame);return;}
+  if(renderMode==='3d'){
+    if(rapidMode&&rapidResolution===null){rapidResolution=renderer3D.resolutionScale;if(rapidResolution>.25)renderer3D.setResolutionScale(.25);}
+    else if(!rapidMode&&rapidResolution!==null){renderer3D.setResolutionScale(rapidResolution);rapidResolution=null;}
+  }
+  if(renderer3D.renderer.shadowMap.enabled===rapidMode&&renderer3D.shadowsEnabled){
+    renderer3D.renderer.shadowMap.enabled=!rapidMode;
+    renderer3D.renderer.shadowMap.needsUpdate=true;
+  }
+  const renderDt=Math.min((now-lastRenderedAt)/1000,.25);lastRenderedAt=now;
   const paused = time.paused;
   renderer3D.setPaused(paused);
   renderer2D.setPaused(paused);
@@ -390,11 +406,14 @@ function frame(now) {
   setActiveEntities(entities);
   const indexEnded = profiling ? performance.now() : 0;
   renderer3D.selectedCityUnitId = selected?.properties.cityBuilding ? cityUI.unitId : null;
-  if (renderMode === "3d") {renderer3D.profileFrame=profiling;renderer3D.render(world, entities, time.elapsed, dt, paused ? 0 : time.speed);}
-  else renderer2D.render(world, entities, time.elapsed, dt, paused ? 0 : time.speed);
+  if (renderMode === "3d") {renderer3D.profileFrame=profiling;renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);}
+  else renderer2D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
   const sceneEnded = profiling ? performance.now() : 0;
   const pointerX = mousePosition.x;
   const pointerY = mousePosition.y;
+  const drawInterface=!rapidMode||now-lastUiDrawnAt>=125||pointerX!==lastUiPointerX||pointerY!==lastUiPointerY||cityUI.manager.gesture||cityUI.scrollGesture;
+  if(drawInterface){
+  lastUiDrawnAt=now;lastUiPointerX=pointerX;lastUiPointerY=pointerY;
   legacyUI.beginFrame(pointerX, pointerY);
   const clockText = `D${String(world.clock.day).padStart(2, "0")} ${String(world.clock.hour).padStart(2, "0")}:${String(world.clock.minute).padStart(2, "0")}`;
   cityUI.drawChrome(legacyUI,{clockText,paused,speed:time.speed,renderMode});
@@ -414,6 +433,7 @@ function frame(now) {
   renderUI(legacyUI, api);
 
   cityUI.element.hidden = !cityUI.visible;
+  }
   if (profiling) {
     const ended=performance.now(),cpu=ended-frameStarted;
     frameMetrics.count++;frameMetrics.simulation+=simulationEnded-frameStarted;frameMetrics.index+=indexEnded-simulationEnded;
@@ -435,6 +455,7 @@ renderer2D.initPromise.then(() => {
   renderer3D.setCamera(x, y, 1.2);
   resize();
   previousFrame = performance.now();
+  lastRenderedAt = previousFrame;
   requestAnimationFrame(frame);
 });
 

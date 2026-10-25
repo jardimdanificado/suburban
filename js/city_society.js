@@ -2,6 +2,7 @@ export const EVENT_CATEGORIES = { publication: 'Livros e panfletos', policy: 'Po
 export const SOCIAL_RULES = { friendAt: 30, closeFriendAt: 65, partnerAt: 68, conversationCooldown: 30, gestationMinutes: 3 * 1440, daysPerYear: 12, maxChildren: 2 };
 const pairKey = (a, b) => a < b ? `${a}:${b}` : `${b}:${a}`;
 const topics = ['o bairro', 'o trabalho', 'os planos para o futuro', 'a família', 'a cidade', 'música', 'comida', 'o dia a dia'];
+const NO_NEIGHBORS=Object.freeze([]);
 
 export class CitySociety {
   constructor(city) {
@@ -88,8 +89,7 @@ export class CitySociety {
   }
   updateBond(a,b,r) {this.city.relationships.updateBond(a,b,r);}
   updateMinute() {
-    const people = this.city.citizens.filter(c => !c.entity.destroyed);
-    for (const c of people) if (c.conversation && c.conversation.a === c.id) {
+    for (const c of this.city.citizens) if (!c.entity.destroyed && c.conversation && c.conversation.a === c.id) {
       const other = this.citizen(c.conversation.b), conversation = c.conversation;
       if (!other || Math.hypot(c.entity.x - other.entity.x, c.entity.y - other.entity.y) > 2) { c.conversation = null; if (other) other.conversation = null; }
       else if (this.city.minute >= conversation.until) this.finishConversation(c, other, conversation);
@@ -97,30 +97,38 @@ export class CitySociety {
     // Conversations already underway resolve every minute. Searching for new
     // encounters uses a fresh spatial grid every ten minutes; the chance per
     // scan represents the missed minute-by-minute opportunities.
-    if(this.city.minute%10!==0){for(const pregnancy of [...this.expecting])if(this.city.minute>=pregnancy.dueAt)this.giveBirth(pregnancy);return;}
+    if(this.city.minute%10!==0){for(let i=this.expecting.length-1;i>=0;i--)if(this.city.minute>=this.expecting[i].dueAt)this.giveBirth(this.expecting[i]);return;}
     // A spatial grid limits encounters to nearby people, with one conversation per person.
-    const buckets = new Map();
-    for (const c of people) {
+    const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4;
+    const residents=this.city.citizens,contactBudget=Math.max(24,Math.ceil(residents.length*.08));
+    const offset=(Math.floor(this.city.minute/10)*37)%Math.max(1,residents.length);
+    let contacts=0;
+    for(let residentIndex=0;residentIndex<residents.length&&contacts<contactBudget;residentIndex++){
+      const c=residents[(offset+residentIndex)%residents.length];
       if (!this.canSocialize(c)) continue;
       const x = Math.floor(c.entity.x / 2), y = Math.floor(c.entity.y / 2);
       for (let dx = -1; dx <= 1 && !c.conversation; dx++) for (let dy = -1; dy <= 1 && !c.conversation; dy++) {
-        const nearby = buckets.get(`${x + dx},${y + dy}`) || [];
+        const nearby = buckets.get(x+dx+(y+dy)*stride) || NO_NEIGHBORS;
         let candidate=null,best=-Infinity;
-        // Buckets contain people already checked for eligibility this minute. Only
-        // a new conversation can make an inserted person unavailable during this pass.
-        for(const other of nearby){
+        // In a crowded square, examine a rotating cross section instead of
+        // comparing every resident with every other resident. The offset varies
+        // by citizen and scan, so the same first arrivals do not monopolize
+        // social contact.
+        const sampleSize=Math.min(16,nearby.length),start=nearby.length?(Math.floor(this.city.minute/10)*13+c.id*7)%nearby.length:0;
+        for(let i=0;i<sampleSize;i++){
+          const other=nearby[(start+i)%nearby.length];
           const dx=c.entity.x-other.entity.x,dy=c.entity.y-other.entity.y;
           if(other.conversation || !(dx*dx+dy*dy<=4))continue;
           const relation=this.relations.get(pairKey(c.id,other.id));
           if(!relation && ((this.contactIndex.get(c.id)?.size||0)>=64 || (this.contactIndex.get(other.id)?.size||0)>=64))continue;
           const v=relation?.views?.[c.id];if(v && (v.fear>50 || v.status==='enemy') && !(v.resentment>55 && c.socialProfile.assertiveness>.6))continue;const score=(v?.affection||0)+(v?0:(this.city.minute+c.id)%6===0?55:0)+(other.partnerId===c.id?20:0)-(v?.fear||0)*.5+(v?.resentment>55 && c.socialProfile.assertiveness>.6?40:0);if(score>best){candidate=other;best=score;}}
-        if (candidate && this.city.random() < 1-Math.pow(1-c.personality.sociability*0.14,10)) this.startConversation(c, candidate, nearby.filter(other=>other!==c && other!==candidate && Math.hypot(other.entity.x-c.entity.x,other.entity.y-c.entity.y)<=2).slice(0,4).map(other=>other.id));
+        if (candidate && this.city.random() < 1-Math.pow(1-c.personality.sociability*0.14,10) && this.startConversation(c, candidate, nearby.filter(other=>other!==c && other!==candidate && Math.hypot(other.entity.x-c.entity.x,other.entity.y-c.entity.y)<=2).slice(0,4).map(other=>other.id)))contacts++;
       }
-      const key = `${x},${y}`;
+      const key = x+y*stride;
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(c);
     }
-    for (const pregnancy of [...this.expecting]) if (this.city.minute >= pregnancy.dueAt) this.giveBirth(pregnancy);
+    for(let i=this.expecting.length-1;i>=0;i--)if(this.city.minute>=this.expecting[i].dueAt)this.giveBirth(this.expecting[i]);
   }
   planChild(a, b) {
     const r = this.getRelation(a, b);

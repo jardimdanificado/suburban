@@ -1,5 +1,6 @@
 import { makeIdentity, makeBuildingName } from './city_names.js';
 export const LIFE_RULES = { starvationMinutes: 720, dehydrationMinutes: 360, terminalHealthMinutes: 120, stalledMinutes: 120 };
+const NEED_KEYS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
 export class CityLife {
   constructor(city) { this.city = city; this.deaths = []; this.deathCount = 0; this.usedNames = new Set(); this.usedBuildingNames = new Set(); this.stallRecoveries = 0; }
   identity(index, options = {}) { return makeIdentity(this.city, this.usedNames, index, options); }
@@ -18,12 +19,14 @@ export class CityLife {
     this.city.relationships.onLoss(c,cause);
     return true;
   }
-  minute(c) {
+  minute(c,elapsed=1) {
     const n = c.needs;
     // Repair invalid inputs before deprivation counters or other needs can use them.
-    for(const k in n)if(!Number.isFinite(n[k])){n[k]=20;this.resetTask(c,'valor de necessidade inválido');}
+    for(const k of NEED_KEYS)if(!Number.isFinite(n[k])){n[k]=20;this.resetTask(c,'valor de necessidade inválido');}
     c.deprivation ??= { food: 0, water: 0, health: 0 };
-    for (const k of ['food', 'water', 'health']) c.deprivation[k] = n[k] <= 0 ? c.deprivation[k] + 1 : 0;
+    c.deprivation.food=n.food<=0?c.deprivation.food+elapsed:0;
+    c.deprivation.water=n.water<=0?c.deprivation.water+elapsed:0;
+    c.deprivation.health=n.health<=0?c.deprivation.health+elapsed:0;
     if (c.deprivation.water >= LIFE_RULES.dehydrationMinutes) return this.die(c, 'desidratação');
     if (c.deprivation.food >= LIFE_RULES.starvationMinutes) return this.die(c, 'inanição');
     if (c.deprivation.health >= LIFE_RULES.terminalHealthMinutes) return this.die(c, 'falência da saúde');
@@ -31,11 +34,11 @@ export class CityLife {
     if(c.lastActivityCheckAt==null||this.city.minute-c.lastActivityCheckAt>=5){
       c.lastActivityCheckAt=this.city.minute;
       const watched = c.activity;
-      const need = ['provisions', 'workmeal'].includes(c.task) ? 'food' : c.task;
+      const need = c.task==='provisions'||c.task==='workmeal' ? 'food' : c.task;
       const progress = !watched || Math.hypot(c.entity.x - watched.x, c.entity.y - watched.y) > .05 || (n[need] !== undefined && n[need] > (watched.needs[need] ?? 0) + .05) || c.conversation || c.workMeal || ['work', 'manage', 'construction', 'clean'].includes(c.task);
       if (progress) c.lastProgressAt = this.city.minute;
       if (c.task && !c.deliveryId && !c.cleaningJobId && this.city.minute - (c.lastProgressAt ?? this.city.minute) >= LIFE_RULES.stalledMinutes) this.resetTask(c, 'atividade sem progresso');
-      const activity=c.activity??=( {x:0,y:0,needs:{}} );activity.x=c.entity.x;activity.y=c.entity.y;for(const key in n)activity.needs[key]=n[key];
+      const activity=c.activity??=( {x:0,y:0,needs:{}} );activity.x=c.entity.x;activity.y=c.entity.y;for(const key of NEED_KEYS)activity.needs[key]=n[key];
     }
     return false;
   }
