@@ -54,6 +54,7 @@ export class UIPage {
   // Window destinations use flat links with an external-window icon, never pressed tabs.
   links(items){
     if(!items.length)return;
+    const state=this.ui.windowState;if(state?.host){state.windowLinks??=[];state.windowLinks.push(...items);return;}
     const cols=this.w>=520?2:1,gap=12,cw=Math.floor((this.w-gap*(cols-1))/cols),height=24;
     for(let i=0;i<items.length;i+=cols){
       if(this.visible(height))for(let j=0;j<cols&&i+j<items.length;j++){

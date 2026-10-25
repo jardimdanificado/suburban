@@ -139,12 +139,13 @@ export class CityUI {
     }
     return false;
   }
-  inputAt(input,x,y,w){const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.style.clipPath)input.style.clipPath='';if(input.hidden)input.hidden=false;}
+  beginInputs(){this.frameInputs??=new Set();this.frameInputs.clear();}
+  finishInputs(){for(const input of[this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
+  inputAt(input,x,y,w){this.frameInputs?.add(input);const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.hidden)input.hidden=false;}
   drawFloating(ui,window) {
-    this.floating=true;this.floatingDossier=window.kind==='dossier';this.element.hidden=false;this.visible=true;this.zones=[];
-    for(const input of [this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft])input.hidden=true;
-    this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded)return;
-    const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+29;
+    this.floating=true;this.floatingDossier=window.kind==='dossier';if(this.element.hidden)this.element.hidden=false;this.visible=true;this.zones=[];this.beginInputs();
+    this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded){this.finishInputs();return;}
+    const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+25;
     if(!this.floatingDossier){
       const search=!['event','corruption-case'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
@@ -152,11 +153,11 @@ export class CityUI {
     }
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings','economy'].includes(this.tab)?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings','economy'].includes(this.tab))this.directory(p);else this.content(p);
-    });
+    });this.finishInputs();
   }
   draw(ui) {
-    this.element.hidden=!this.visible;for(const input of [this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft])input.hidden=true;this.zones=[];
-    if(!this.visible)return;
+    this.element.hidden=!this.visible;this.beginInputs();this.zones=[];
+    if(!this.visible){this.finishInputs();return;}
     const w=Math.min(ui.width-12,this.expanded?ui.width-24:1088),x=ui.width-w-6,y=42,h=Math.max(140,ui.height-y-(ui.width<700?78:48)),desktop=w>=940;
     this.bounds={x,y,w,h};this.layout={desktop,compact:w<700};const info=TABS.find(t=>t[0]===this.tab)||TABS[0];
     ui.panel(x,y,w,h,'Suburban — Administração da cidade','');ui.button(x+w-92,y+4,50,22,this.expanded?'><':'<>',()=>{this.expanded=!this.expanded;});ui.button(x+w-36,y+4,28,22,'X',()=>this.toggle(),{danger:true});
@@ -175,9 +176,9 @@ export class CityUI {
     const s=this.city.stats(),footer=bw>600?`${stamp(this.city.minute)}  •  ${s.population} habitantes  •  Tesouro: ${money(s.treasury)}`:`${stamp(this.city.minute)}  •  ${s.population} habitantes`;
     ui.text(trim(footer,w-28),x+14,y+h-22,T.muted);
     if(this.menuOpen&&!desktop){
-      for(const input of[this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft])input.hidden=true;this.zones=[];const my=y+74,mh=h-102;
+      this.frameInputs.clear();this.zones=[];const my=y+74,mh=h-102;
       ui.panel(bx-3,my,bw+6,mh,'Janelas da cidade','');this.pane(ui,'navigation',bx+6,my+34,bw-12,mh-42,p=>{p.y=this.navigation(ui,p.x,p.y,p.w,p.top,p.bottom);});
-    }
+    }this.finishInputs();
   }
   navigation(ui, x, y, w, top, bottom) {
     const p = new Page(ui,x,y,w,top,bottom); let group='';
@@ -189,7 +190,7 @@ export class CityUI {
   }
   nativeSelect(input,p,options,value,x=p.x,y=p.y,w=p.w) {
     const signature=JSON.stringify(options);if(input.optionSignature!==signature){input.innerHTML=options.map(([id,label])=>`<option value="${id}">${readableLabel(label)}</option>`).join('');input.optionSignature=signature;}
-    if(input.value!==value)input.value=value;if(y>=p.top&&y+20<=p.bottom)this.inputAt(input,x,y,w);
+    if(document.activeElement!==input&&input.value!==value)input.value=value;if(y>=p.top&&y+20<=p.bottom)this.inputAt(input,x,y,w);
   }
   filterButtons(p) {
     const options=FILTERS[this.tab];if(!options)return;p.note('Mostrar',T.muted);this.nativeSelect(this.filterInput,p,options,this.filter(),p.x,p.y,Math.min(p.w,320));p.space(24);
@@ -505,8 +506,8 @@ export class CityUI {
     if(view==='overview'){
       p.heading('PREFEITURA');if(mayor)p.record(name(mayor.entity),'Prefeito em exercício',()=>this.openCitizen(mayor.id));
       p.metrics([['TESOURO',money(city.treasury)],['APROVAÇÃO',`${city.politics.approval.toFixed(1)}%`]]);
-      for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas','polls'],['Institutos de pesquisa','institutes'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
-      p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));
+      if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas','polls'],['Institutos de pesquisa','institutes'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
+      if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice(-30).reverse());}
     else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}

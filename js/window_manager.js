@@ -14,15 +14,15 @@ export class WindowManager {
   raise(id){const i=this.windows.findIndex(w=>w.id===id);if(i<0)return;const[w]=this.windows.splice(i,1);this.windows.push(w);this.activeId=id;return w;}
   close(id){const w=this.find(id);if(!w)return null;this.saved.set(id,{x:w.x,y:w.y,w:w.w,h:w.h,pinned:w.pinned});this.windows.splice(this.windows.indexOf(w),1);if(this.activeId===id)this.activeId=this.windows.at(-1)?.id||null;if(this.gesture?.id===id)this.gesture=null;return w;}
   closeAll(includePinned=false){return [...this.windows].filter(w=>includePinned||!w.pinned).map(w=>this.close(w.id));}
-  rect(w){return{x:w.x,y:w.y,w:w.w,h:w.shaded?26:w.h};}
+  rect(w){return{x:w.x,y:w.y,w:w.w,h:w.shaded?22:w.h};}
   at(x,y){return [...this.windows].reverse().find(w=>{const r=this.rect(w);return x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;});}
-  caption(w,x,y){return y>=w.y&&y<w.y+26&&x>=w.x+4&&x<w.x+w.w-104;}
+  caption(w,x,y){return y>=w.y&&y<w.y+22&&x>=w.x+4&&x<w.x+w.w-88;}
   resizeHandle(w){return {x:w.x+w.w-18,y:w.y+w.h-18,w:14,h:14};}
   resizeAt(w,x,y){const r=this.resizeHandle(w);return !w.shaded&&!w.maximized&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h;}
   constrain(w){
     const maxW=Math.max(180,this.width-8),maxH=Math.max(110,this.height-this.top-this.bottom-6);
     w.w=Math.min(maxW,Math.max(Math.min(w.minWidth,maxW),w.w));w.h=Math.min(maxH,Math.max(Math.min(w.minHeight,maxH),w.h));
-    w.x=Math.max(4,Math.min(this.width-w.w-4,w.x));w.y=Math.max(this.top,Math.min(this.height-this.bottom-(w.shaded?26:w.h),w.y));return w;
+    w.x=Math.max(4,Math.min(this.width-w.w-4,w.x));w.y=Math.max(this.top,Math.min(this.height-this.bottom-(w.shaded?22:w.h),w.y));return w;
   }
   pointerDown(x,y){
     const w=this.at(x,y);if(!w)return false;this.raise(w.id);

@@ -45,6 +45,7 @@ let selected = null;
 let renderMode = "3d";
 let dragging = false;
 let pointerDown = null;
+let rightClickConsumed = false;
 let lastPointer = null;
 let mousePosition = { x: -1, y: -1 };
 let pointerOnUI = false;
@@ -200,6 +201,10 @@ function mapTileAt(x, y) {
 }
 
 function onPointerDown(event) {
+  if(event.button===2){
+    rightClickConsumed=false;const rect=root.getBoundingClientRect();
+    if(cityUI.rightClick(event.clientX-rect.left,event.clientY-rect.top)){event.preventDefault();rightClickConsumed=true;cityUI.pointerUp();dragging=editingGesture=pointerOnUI=false;pointerDown=lastPointer=null;return;}
+  }
   if (event.target.closest(".ui-toolbar, .ui-panel")) return;
   const rect = root.getBoundingClientRect();
   const x = event.clientX - rect.left;
@@ -251,6 +256,7 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if(event.button===2&&rightClickConsumed){rightClickConsumed=false;event.preventDefault();return;}
   if (event.target.closest(".ui-panel")) return;
   const rect = root.getBoundingClientRect();
   const x = event.clientX - rect.left;
@@ -284,6 +290,7 @@ root.addEventListener("pointermove", onPointerMove);
 root.addEventListener("pointerup", onPointerUp);
 root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if(cityUI.doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
 root.addEventListener("pointercancel", () => {
+  rightClickConsumed=false;
   cityUI.pointerUp();
   editor.endStroke();
   editingGesture = dragging = pointerOnUI = false;

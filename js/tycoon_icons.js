@@ -3,7 +3,10 @@ export function tycoonIcon(ctx,key,x,y,scale=2){
   ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
   const rect=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);},line=(points,c)=>{ctx.strokeStyle=c;ctx.lineWidth=1;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x+.5,y+.5):ctx.moveTo(x+.5,y+.5));ctx.stroke();};
   const ink='#293438',light='#f4ebc5',blue='#527cb3',dark='#714f30',brick='#b57448',green='#659453';
-  if(['city','buildings','government'].includes(key)){
+  if(key==='elections'){rect(2,7,12,7,blue);rect(5,8,6,1,ink);rect(5,1,7,5,light);line([[6,2],[9,5],[11,2]],dark);rect(7,5,2,3,light);}
+  else if(key==='politics'){rect(2,8,12,6,dark);rect(3,9,10,4,light);for(let i=0;i<3;i++)rect(3+i*4,4,2,3,blue);rect(7,0,2,3,'#d6b169');}
+  else if(key==='current'){rect(1,1,14,13,blue);rect(2,4,12,9,light);rect(3,2,7,1,'#e7bd59');rect(4,6,7,1,dark);rect(4,9,5,1,dark);}
+  else if(['city','buildings','government'].includes(key)){
     rect(2,6,12,8,dark);rect(3,7,10,6,key==='government'?'#d6c797':brick);rect(5,2,6,12,key==='city'?blue:light);rect(6,3,4,2,dark);rect(7,11,2,3,ink);
     for(const i of[0,1])for(const j of[0,1])rect(3+i*8,8+j*3,2,1,light);if(key==='government'){line([[1,5],[8,1],[15,5]],dark);rect(7,0,1,3,ink);rect(8,0,4,2,'#c64b3c');}
   }else if(key==='people'){

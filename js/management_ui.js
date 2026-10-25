@@ -1,8 +1,8 @@
 import { LegacyCanvasUI } from './legacy_ui.js';
 
 export const MANAGEMENT_THEME = {
-  ink: '#29342f', muted: '#53615b', paper: '#f5f3e9', face: '#d6d2c2', light: '#fffcf2', shadow: '#8b8b7c', border: '#697468',
-  header: '#355b70', headerLight: '#557c8d', selected: '#dbe5e6', row: '#ebece2', gold: '#805914', green: '#356b39', red: '#a8342b', blue: '#295d79', track: '#d5d8c9', line: '#c5c8ba',
+  ink:'#242014',muted:'#534d3c',paper:'#d6ceb6',face:'#b1a58b',light:'#eee4c8',shadow:'#7b705a',border:'#4c4435',
+  header:'#e7bd59',headerLight:'#ffe598',captionInk:'#201a0e',inactiveHeader:'#b4a17a',selected:'#ead18a',row:'#cbc1a7',gold:'#805307',green:'#305c28',red:'#963226',blue:'#284f69',track:'#a2987f',line:'#b0a48a',
 };
 const T=MANAGEMENT_THEME;
 const legacyColors={'#ffffff':T.ink,'#bcbcbc':T.muted,'#f8b800':T.gold,'#3cbcfc':T.blue,'#40c8f8':T.blue,'#58d854':T.green,'#ff6060':T.red};
@@ -20,7 +20,7 @@ export function bevel(ctx,x,y,w,h,{inset=false,fill=T.face}={}) {
 /** Classic management-game chrome, with readable system fonts at native device resolution. */
 export class ManagementCanvasUI extends LegacyCanvasUI {
   beginFrame(x=-1,y=-1){this.pointer={x,y};super.beginFrame(x,y);}
-  font(scale=1,bold=false){return `${bold||scale>1?'600':'400'} ${Math.round(scale>1?16:11)}px Arial, Helvetica, sans-serif`;}
+  font(scale=1,bold=false){return `${bold||scale>1?'600':'400'} ${Math.round(scale>1?16:11)}px Tahoma, Verdana, sans-serif`;}
   textWidth(value,scale=1){
     const text=readableLabel(value),font=this.font(scale),key=`${font}:${text}`;this.widthCache??=new Map();
     if(this.widthCache.has(key))return this.widthCache.get(key);
@@ -34,7 +34,7 @@ export class ManagementCanvasUI extends LegacyCanvasUI {
   }
   button(x,y,w,h,label,onClick,{selected=false,danger=false}={}){
     const ctx=this.ctx,hover=this.pointer&&this.pointer.x>=x&&this.pointer.x<=x+w&&this.pointer.y>=y&&this.pointer.y<=y+h;
-    bevel(ctx,x,y,w,h,{inset:selected,fill:selected?T.selected:hover?'#e6e3d7':T.face});
+    bevel(ctx,x,y,w,h,{inset:selected,fill:selected?T.selected:hover?T.paper:T.face});
     const title=readableLabel(label);ctx.save();ctx.beginPath();ctx.rect(x+3,y+2,w-6,h-4);ctx.clip();ctx.font=this.font(1,selected);ctx.textBaseline='middle';ctx.textAlign='center';ctx.fillStyle=danger?T.red:T.ink;ctx.fillText(title,x+w/2+(selected?1:0),y+h/2+(selected?1:0));ctx.restore();
     this.regions.push({x,y,w,h,label,onClick});
   }
@@ -46,7 +46,7 @@ export class ManagementCanvasUI extends LegacyCanvasUI {
   }
   panel(x,y,w,h,title,text=''){
     const ctx=this.ctx;bevel(ctx,x,y,w,h);ctx.fillStyle=T.header;ctx.fillRect(x+3,y+3,w-6,25);ctx.fillStyle=T.headerLight;ctx.fillRect(x+3,y+3,w-6,1);
-    ctx.save();ctx.font=this.font(1,true);ctx.textBaseline='middle';ctx.fillStyle='#ffffff';ctx.fillText(readableLabel(title),x+10,y+15);ctx.restore();
+    ctx.save();ctx.font=this.font(1,true);ctx.textBaseline='middle';ctx.fillStyle=T.captionInk;ctx.fillText(readableLabel(title),x+10,y+15);ctx.restore();
     this.regions.push({x,y,w,h,onClick:null});if(text)this.text(text,x+10,y+38);
   }
   drawHud({title='SUBURBAN',status='',buttons=[]}={}){
