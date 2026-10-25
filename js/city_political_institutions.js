@@ -14,6 +14,7 @@ export function approvalReport(p){
   const vetoPenalty=(p.vetoes||[]).filter(v=>v.mayorId===city.economy.mayorId).reduce((n,v)=>n+Math.max(0,28-(city.minute-v.minute)/1440*2),0);
   const expectations=governmentExpectations(p);
   const rows=[
+    {label:'Fundo partidário',points:(p.partyFundChanges||[]).filter(r=>r.mayorId===city.economy.mayorId).reduce((n,r)=>n+r.points*Math.exp(-(city.minute-r.minute)/(12*1440)),0),detail:'Aumentar o fundo eleitoral gera desaprovação; reduzir gera aprovação. Efeito decai ao longo de 12 dias.'},
     {label:'Condições atuais: felicidade',points:(now.happiness-50)*.06,detail:`${now.happiness.toFixed(1)}/100; peso menor que o avanço desde a posse`},
     {label:'Condições atuais: moradia',points:(.5-now.homeless)*6,detail:`${((1-now.homeless)*100).toFixed(1)}% abrigados`},
     {label:'Condições atuais: alimentação',points:(.5-now.hunger)*8,detail:`${((1-now.hunger)*100).toFixed(1)}% sem fome`},

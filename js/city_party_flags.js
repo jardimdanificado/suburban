@@ -1,3 +1,4 @@
+export const COUNCIL_INSTITUTIONAL_FLAG=Object.freeze({foreground:'#f5e9bf',background:'#4c655c',skin:'Feature_Flower.png',pattern:1});
 import { ASSET_DATA } from './assets_data.js';
 
 // Brutopolis clans choose a sprite emblem and a contrasting foreground/background pair.

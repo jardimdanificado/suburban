@@ -1,3 +1,4 @@
+import {moveGarments} from './city_clothing.js';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
 
@@ -29,7 +30,7 @@ export class CityLogistics {
     while(s.quantity>limit){const quantity=limit,unitCost=s.cost/s.quantity,cost=Math.round(unitCost*quantity),fee=Math.floor(s.fee*quantity/s.quantity),serviceFee=Math.floor((s.serviceFee||0)*quantity/s.quantity),id=this.nextId++,accountId=`shipment:${id}`;
       const part={...s,id,accountId,name:`Frete ${id}`,balance:0,quantity,cost,fee,serviceFee,driverId:null,status:'waiting',position:{...s.position},incoming:{},inventory:{...s.inventory},inventoryCapacity:limit};part.inventory[s.good]=quantity;
       this.city.accounts.set(accountId,part);if(!this.city.transfer(s.accountId,accountId,cost+fee+serviceFee,'Divisão de carga: equipamento indisponível')){this.city.accounts.delete(accountId);break;}
-      s.quantity-=quantity;s.cost-=cost;s.fee-=fee;s.serviceFee-=serviceFee;s.inventory[s.good]=s.quantity;this.shipments.push(part);
+      s.quantity-=quantity;s.cost-=cost;s.fee-=fee;s.serviceFee-=serviceFee;s.inventory[s.good]=s.quantity;if(s.good==='roupas'){part.garments=[];moveGarments(s,part,quantity);}this.shipments.push(part);
     }
   }
   rebalanceWaiting() {
@@ -78,6 +79,7 @@ export class CityLogistics {
     initializeInventory(s, city.economy.goods, Math.max(24,quantity)); s.inventory[good] = quantity;
     city.accounts.set(accountId, s);
     if (!city.transfer(payerAccountId, accountId, cost + fee + serviceFee, 'Reserva de compra e frete')) { city.accounts.delete(accountId); return false; }
+    if(good==='roupas')moveGarments(seller,s,quantity);
     seller.inventory[good] -= quantity; buyer.incoming[good] = (buyer.incoming[good] || 0) + quantity;
     // Until pickup the reserved cargo stays at the supplier's entrance.
     s.position = { ...seller.door }; this.shipments.push(s);
@@ -96,7 +98,7 @@ export class CityLogistics {
     s.buyer.incoming[s.good] = Math.max(0, (s.buyer.incoming[s.good] || 0) - s.quantity);
     const hall = this.city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
     const destination = !s.seller.entity?.destroyed && inventoryFree(s.seller) >= s.quantity ? s.seller : hall;
-    if (destination && inventoryFree(destination) >= s.quantity) destination.inventory[s.good] += s.quantity;
+    if (destination && inventoryFree(destination) >= s.quantity) {destination.inventory[s.good] += s.quantity;if(s.good==='roupas')moveGarments(s,destination,s.quantity);}
     else this.city.economy.lost[s.good] += s.quantity;
     s.inventory[s.good] = 0;
     const buyerAccount = this.city.accounts.get(s.payerAccountId || s.buyer.accountId);
@@ -177,6 +179,7 @@ export class CityLogistics {
         if(s.buyer.lampPost && (s.refillLabor=(s.refillLabor||0)+1)<4) {c.action='Abastecendo lamparina';continue;}
         s.buyer.incoming[s.good] -= s.quantity;
         if (inventoryFree(s.buyer) < s.quantity) { s.buyer.incoming[s.good] += s.quantity; s.status = 'waiting-space'; continue; }
+        if(s.good==='roupas')moveGarments(s,s.buyer,s.quantity);
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
         if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
         city.transfer(s.accountId, s.seller.accountId, s.cost, `Atacado: ${city.economy.goods[s.good].label}`);

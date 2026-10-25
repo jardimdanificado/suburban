@@ -1,0 +1,114 @@
+import {INDUSTRIES} from './city_industries.js';
+import {DEVELOPMENT_RULES} from './city_development.js';
+import {chooseBuildingSite} from './city_terrain.js';
+const key=(type,crop)=>`${type}:${crop||''}`;
+const pending=p=>!p.cancelled&&p.status!=='completed';
+const inputs=(type)=>type==='bakery'?{trigo:2}:type==='mill'?{girassol:3}:INDUSTRIES[type]?.inputs||{};
+/** Demand follows recipes before factories exist, preventing empty chains from remaining invisible. */
+export function productionPlan(economy){
+  const city=economy.city,firms=economy.businesses,projects=city.development.projects.filter(pending),rows=new Map(),since=economy.productionWaitSince??={},responses=economy.productionResponses??={};
+  const producers=new Map();
+  for(const [type,spec]of Object.entries(INDUSTRIES))for(const good of Object.keys(spec.outputs))if(!producers.has(good))producers.set(good,{type,crop:null});
+  for(const good of Object.keys(economy.crops))producers.set(good,{type:'farm',crop:good});
+  producers.set('pao',{type:'bakery',crop:null});producers.set('oleo',{type:'mill',crop:null});producers.set('pedra',{type:'quarry',crop:null});
+  const exists=(type,crop)=>firms.filter(b=>b.type===type&&(type!=='farm'||b.crop===crop)).length;
+  const planned=(type,crop)=>projects.filter(b=>b.type===type&&(type!=='farm'||b.crop===crop));
+  function visit(type,crop,score,origin,trail=new Set()){
+    const id=key(type,crop);if(trail.has(id))return;const path=new Set(trail);path.add(id);
+    const current=exists(type,crop),building=planned(type,crop),target=type==='research_institute'?city.politics.getResearch().demand().required:1;
+    const absent=current+building.length<target;
+    const row=rows.get(id)||{type,crop,origins:[],missing:absent,current,planned:building.length,projectId:building[0]?.id,score:0};
+    if(!row.origins.includes(origin))row.origins.push(origin);row.score=Math.max(row.score,score);rows.set(id,row);
+    // Both established and planned consumers create demand for the earlier stages.
+    for(const good of Object.keys(inputs(type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,score+12,`${city.buildingTypes[type]?.label||type} precisa de ${economy.goods[good]?.label||good}`,path);}
+  }
+  for(const d of economy.demands)if(d.score>=30&&(INDUSTRIES[d.type]||['bakery','mill'].includes(d.type)||d.type==='farm'&&d.crop==='trigo'))visit(d.type,d.crop,d.type==='farm'&&d.crop==='trigo'?240:Math.min(190,d.score),d.reason);
+  // The first installation of each sector is an explicit development objective, independent of empty shelves.
+  for(const type of Object.keys(INDUSTRIES))visit(type,null,type==='bank'?320:type==='research_institute'?220:type==='newsroom'?210:145,'Iniciar a primeira produção desta cadeia.');
+  for(const crop of Object.keys(economy.crops))visit('farm',crop,crop==='trigo'?240:140,'Diversidade inicial das matérias-primas e da alimentação.');
+  // Bread is a basic consumption need even before the first bakery has opened.
+  if(city.citizens.some(c=>!c.entity.destroyed))visit('bakery',null,200,'Alimentação: pão e farinha precisam de lavouras de trigo.');
+  for(const b of [...firms,...projects])for(const good of Object.keys(inputs(b.type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,150,`Abastecer ${city.buildingTypes[b.type]?.label||b.type}`);}
+  const result=[];
+  for(const [id,row]of rows){
+    if(row.missing){since[id]??=city.minute;row.waitMinutes=city.minute-since[id];row.priority=row.score+Math.min(180,row.waitMinutes/60*3);}
+    else{delete since[id];row.waitMinutes=0;row.priority=0;}
+    row.blockedInputs=Object.keys(inputs(row.type)).filter(g=>{const p=producers.get(g);return p&&!exists(p.type,p.crop);});
+    row.reason=row.origins.join(' · ');row.state=row.planned?'Materiais e construção em andamento':!row.missing?'Etapa já instalada':responses[id]?.state||'Aguardando investimento';
+    if(row.planned){const project=projects.find(p=>p.id===row.projectId);row.response={state:responses[id]?.projectId===row.projectId?responses[id].state:row.state,projectId:row.projectId};if(project?.materialAccountId)row.response.state=project.inventory.pedra>=project.stone?'Materiais entregues; aguardando trabalho na obra.':'Materiais financiados; aguardando compra e transporte.';}
+    else if(!row.missing){
+      const sites=firms.filter(b=>b.type===row.type&&(row.type!=='farm'||b.crop===row.crop));
+      const hasCrew=sites.some(b=>b.workers.length||city.society.citizen(b.ownerId));
+      const hasCapital=sites.some(b=>b.balance>=b.wage*60);
+      const shortages=Object.keys(inputs(row.type)).filter(g=>!sites.some(b=>(b.inventory[g]||0)>=(inputs(row.type)[g]||1)));
+      row.state=!hasCrew?'Etapa instalada; aguardando trabalhadores.':!hasCapital?'Etapa instalada; caixa insuficiente para salários e insumos.':shortages.length?`Etapa instalada; aguardando ${shortages.map(g=>economy.goods[g]?.label||g).join(', ')}.`:'Etapa instalada e com recursos para operar.';row.response={state:row.state};
+    }else row.response=responses[id]||{state:row.state};result.push(row);
+    const d=economy.demands.find(d=>key(d.type,d.crop)===id);
+    if(d){d.chainReason=row.reason;d.response=row.response;if(row.missing){d.score=Math.max(d.score,Math.min(260,row.priority));d.reason=row.reason;}}
+  }
+  economy.productionPlan=result.sort((a,b)=>b.priority-a.priority||key(a.type,a.crop).localeCompare(key(b.type,b.crop)));
+  economy.demands.sort((a,b)=>b.score-a.score);return economy.productionPlan;
+}
+function recordResponse(economy,row,state,extra={}){economy.productionResponses[key(row.type,row.crop)]={state,minute:economy.city.minute,...extra};row.response=economy.productionResponses[key(row.type,row.crop)];row.state=state;}
+function fundProject(economy,project,capital,freight){
+  const city=economy.city,id=`startup:${project.id}`,amount=Math.max(0,project.stone-(project.inventory.pedra||0)-(project.incoming.pedra||0))*economy.goods.pedra.price+capital+freight;
+  city.accounts.set(id,{name:`Materiais e operação: ${city.buildingTypes[project.type].label}`,balance:0});
+  if(!city.transfer(project.accountId,id,amount,'Reserva da cadeia produtiva',{projectId:project.id})){city.accounts.delete(id);return false;}
+  project.materialAccountId=id;project.startupCapital=capital;project.productionChain=true;return true;
+}
+export function investProductionPlan(economy){
+  const city=economy.city,plan=productionPlan(economy),needs=city.welfare.conditions(),active=city.development.projects.filter(pending);
+  const pipelineLimit=Math.max(6,Math.min(12,Math.ceil(city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)).length/24)));
+  city.bank.developmentBanks();
+  if(active.filter(p=>p.productionChain).length>=pipelineLimit){for(const row of plan.filter(r=>r.missing&&!r.planned))recordResponse(economy,row,`Aguardando execução das ${pipelineLimit} obras de cadeias já financiadas.`);return false;}
+  // Existing unfunded sites must progress before commissioning replacement factories.
+  for(const row of plan.filter(r=>r.planned)){
+    const project=active.find(p=>p.id===row.projectId);if(!project||project.materialAccountId||!['building'].includes(project.service))continue;
+    const capital=city.currency.price(project.type==='bank'?2000000:project.type==='research_institute'?100000:60000),freight=city.currency.price(24000),amount=Math.max(0,project.stone-(project.inventory.pedra||0)-(project.incoming.pedra||0))*economy.goods.pedra.price+capital+freight,payer=city.accounts.get(project.accountId),reserve=project.accountId==='treasury'?needs.reserve:city.currency.price(15000);
+    if(!payer)continue;
+    let loan=null;if(payer.balance<amount+reserve&&payer.entity?.properties.citizen&&payer.creditAllowed!==false)for(const bank of city.bank.available()){loan=city.bank.lendForBusiness(bank,payer,amount+reserve-payer.balance,{type:project.type,crop:project.crop,initialChain:true,projectId:project.id,score:Math.max(60,row.score),budget:amount+reserve});if(loan)break;}
+    if(payer.balance>=amount+reserve&&fundProject(economy,project,capital,freight)){project.priority=Math.max(project.priority||0,110);if(loan){loan.projectId=project.id;project.loanId=loan.id;}recordResponse(economy,row,'Obra pendente recuperada: materiais e operação financiados.',{projectId:project.id});return true;}
+    if(loan)city.bank.cancelBusinessLoan(loan);recordResponse(economy,row,'Obra pendente aguardando crédito ou capital para materiais.',{projectId:project.id});
+  }
+
+  const rows=plan.filter(r=>r.missing&&!r.planned&&r.type!=='quarry');
+  city.development.ensurePlots();
+  const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),founders=adults.filter(c=>!city.politics.officeHolder(c)&&!c.businessIds.length&&c.creditAllowed!==false&&!city.bank.loans.some(l=>l.clientId===c.accountId&&l.purpose==='business'&&!['paid','written-off'].includes(l.status))&&!active.some(p=>p.ownerId===c.id)).sort((a,b)=>Number(!!a.jobId)-Number(!!b.jobId)||b.balance-a.balance||a.id-b.id).slice(0,16);
+  // A bounded search and one opening per investment tick keep expansion and pathfinding controlled.
+  for(const row of rows){
+    const upstreamMissing=row.blockedInputs.filter(g=>plan.some(p=>p.missing&&p.planned===0&&(p.type==='farm'?p.crop===g:INDUSTRIES[p.type]?.outputs[g]||p.type==='bakery'&&g==='pao'||p.type==='mill'&&g==='oleo')));
+    if(upstreamMissing.length){recordResponse(economy,row,`Primeiro instalar fornecedores: ${upstreamMissing.map(g=>economy.goods[g].label).join(', ')}.`);continue;}
+    const lots=city.development.plots.filter(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&(row.type==='farm'?city.development.isFarmPlot(p):p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&(row.type==='iron_mine'?p.type==='quarry':!['farm','quarry'].includes(p.type)))).sort((a,b)=>a.price-b.price||a.id-b.id).slice(0,4);
+    if(!lots.length){recordResponse(economy,row,row.type==='farm'?'Aguardando terreno fértil.':'Aguardando terreno urbano.');continue;}
+    let selected;
+    for(const lot of lots){
+      const width=row.type==='farm'?lot.width:Math.min(3,lot.width),depth=row.type==='farm'?lot.depth:Math.min(3,lot.depth),site=chooseBuildingSite(city,lot.x,lot.y,width,depth,{plotId:lot.id,type:row.type});if(site.error)continue;
+      const builder=row.type==='farm'?null:city.development.selectBuilder('treasury',site.door);if(row.type!=='farm'&&!builder)continue;
+      selected={lot,width,depth,site,builder};break;
+    }
+    if(!selected){recordResponse(economy,row,'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
+    const {lot,width,depth,site,builder}=selected,stone=row.type==='farm'?0:width*depth*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=city.currency.price(row.type==='bank'?2000000:row.type==='research_institute'?100000:60000),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
+    let project=null;
+    for(const founder of founders){
+      let loan=null;const deficit=Math.max(0,privateBudget-founder.balance);
+      if(deficit&&founder.creditAllowed!==false)for(const bank of city.bank.available()){loan=city.bank.lendForBusiness(bank,founder,deficit,{type:row.type,crop:row.crop,initialChain:true,score:Math.max(60,row.priority),budget:privateBudget});if(loan)break;}
+      if(founder.balance<privateBudget){if(loan)city.bank.cancelBusinessLoan(loan);continue;}
+      if(city.development.buyPlot(founder.accountId,lot.id))project=city.development.beginProject(founder.accountId,lot.id,row.type,{width,depth,crop:row.crop,floors:1,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(170,row.priority))});
+      if(project){if(project.status==='completed'){const b=city.buildings.find(b=>b.plotId===lot.id);if(b)city.transfer(founder.accountId,b.accountId,capital,'Capital da lavoura prioritária',{buildingId:b.id,projectId:project.id});}else{fundProject(economy,project,capital,freight);founder.startupProjectId=project.id;}if(loan){loan.projectId=project.id;project.loanId=loan.id;}break;}
+      if(lot.ownerId===founder.accountId&&!lot.projectId&&city.transfer('treasury',founder.accountId,lot.price,'Estorno de terreno: cadeia não iniciada')){lot.ownerId='treasury';lot.forSale=true;}
+      if(loan)city.bank.cancelBusinessLoan(loan);
+    }
+    if(!project){
+      const cost=stone*economy.goods.pedra.price+Math.ceil(fee*DEVELOPMENT_RULES.municipalMultiplier)+capital+freight+city.currency.price(70000);
+      const foodSafe=row.type==='farm'||row.type==='bakery'||needs.foodDays>=2||needs.hungry<Math.max(3,needs.population*.15);
+      if(!foodSafe){recordResponse(economy,row,city.bank.lastBusinessRefusal?.reason||'Sem crédito privado; município preservando alimentação emergencial.');continue;}
+      if(city.treasury<needs.reserve+cost){recordResponse(economy,row,city.bank.lastBusinessRefusal?.reason||'Aguardando banco com atendimento ou caixa municipal após reserva social.',{requiredBudget:cost});continue;}
+      if(active.filter(p=>p.accountId==='treasury'&&p.productionChain).length>=2){recordResponse(economy,row,'Aguardando conclusão das etapas públicas já financiadas.');continue;}
+      project=city.development.beginProject('treasury',lot.id,row.type,{width,depth,crop:row.crop,floors:1,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(170,row.priority))});
+      if(project&&project.status!=='completed')fundProject(economy,project,capital,freight);
+    }
+    if(project){project.productionChain=true;project.chainReason=row.reason;project.priority=Math.max(105,Math.min(170,row.priority));recordResponse(economy,row,'Demanda financiada: materiais, construção e capital de operação.',{projectId:project.id});city.log(`Demanda iniciou ${city.buildingTypes[row.type].label}${row.crop?' de '+economy.crops[row.crop].label:''}: ${row.reason}`,'business',[],{kind:'production-chain-funded',projectId:project.id,type:row.type,crop:row.crop,accounts:[project.accountId]});return true;}
+    recordResponse(economy,row,'A contratação ainda não encontrou condições de execução.');
+  }
+  return false;
+}

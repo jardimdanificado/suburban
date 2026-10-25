@@ -635,7 +635,7 @@ export class Renderer {
           const px=Math.floor(sx+(b.door.x-e.x-dx*.6)*tileSize),py=Math.floor(sy+(b.door.y-e.y-dy*.6)*tileSize);
           drawBox32(buf32,width,height,px-(turn%2?1:Math.floor(tileSize*.2)),py-(turn%2?Math.floor(tileSize*.2):1),turn%2?2:Math.max(2,Math.floor(tileSize*.4)),turn%2?Math.max(2,Math.floor(tileSize*.4)):2,rgba32(38,51,47));
         }
-        if(b.type==='townhall'&&b.governingFlag){
+        if(['townhall','council_chamber'].includes(b.type)&&b.governingFlag){
           const f=b.governingFlag,fw=Math.max(10,Math.floor(tileSize*1.65)),fh=Math.max(6,Math.floor(fw*.63));
           const fx=Math.floor(sx+b.width*tileSize*.5),fy=Math.floor(sy+b.depth*tileSize*.5-tileSize*2.5);
           const fg=hexToRgba32(parseInt(f.foreground.slice(1),16),255),bg=hexToRgba32(parseInt(f.background.slice(1),16),255);

@@ -182,7 +182,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       renderer.cityMeshes.set(entity.id, group);
     }
     group.visible=true;
-    if(b.type==='townhall')syncTownhallFlag(group,THREE,b);
+    if(['townhall','council_chamber'].includes(b.type))syncTownhallFlag(group,THREE,b);
     if (group.userData.terrainRevision !== (world.revision || 0)) {
       b.terrain = buildingGround(world, entity.x, entity.y, b.width, b.depth,b.door);
       const base = b.terrain.base, matrix = new THREE.Matrix4();
@@ -210,7 +210,8 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z += .005;
     group.position.set(entity.x, b.terrain.base, entity.y);
     if (group.userData.roomProps) group.userData.roomProps.visible = renderer.selectedEntityId === entity.id;
-    if(b.type==='council_chamber'){const selected=renderer.selectedEntityId===entity.id;group.userData.cells.material.transparent=selected;group.userData.cells.material.opacity=selected?.22:1;}
+    // Selection highlights the chamber without making every floor transparent.
+    if(b.type==='council_chamber'){group.userData.cells.material.transparent=false;group.userData.cells.material.opacity=1;group.userData.cells.material.depthWrite=true;}
     const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
     group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z + .5, unit.y + .5);
@@ -279,7 +280,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
 }
 
 function syncTownhallFlag(group,THREE,b){
-  const flag=b.governingFlag,key=flag?JSON.stringify(flag)+':'+(b.rotation||0):null;
+  const flag=b.governingFlag,key=flag?JSON.stringify(flag)+':'+(b.rotation||0)+':'+b.floors:null;
   if(group.userData.governingFlagKey===key)return;
   const old=group.userData.governingFlagMesh;
   if(old){group.remove(old);old.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.userData.partyFlagTexture?.dispose();});}

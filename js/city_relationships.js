@@ -1,3 +1,4 @@
+import {appearance,companyPreference} from './city_clothing.js';
 // Personal relationships react to encounters and known facts, not to a scan of all pairs.
 export const RELATIONSHIP_RULES = { memories: 24, beliefs: 24, grief: 8, facts: 768, gossipHops: 6, proposalCooldown: 1440, visitCooldown: 60, visitDistance: 32, visitPathBudget: 3 };
 export const FEELING_LABELS = { affection: 'Afeto', trust: 'Confiança', respect: 'Respeito', attraction: 'Atração', resentment: 'Ressentimento', fear: 'Receio' };
@@ -129,7 +130,7 @@ export class CityRelationships {
     return bounded((v.trust-15)*.08+v.affection*.04-v.resentment*.14-v.fear*.08,-22,12);
   }
   businessPerson(b) {return this.city.society.citizen(b?.ownerId) || (b?.municipal?this.city.society.citizen(this.city.economy.mayorId):null) || (!b?.ownerId?this.city.society.citizen(b?.workers?.[0]):null);}
-  businessPenalty(c,b) {return -this.personalOpinion(c,this.businessPerson(b));}
+  businessPenalty(c,b) {return -this.personalOpinion(c,this.businessPerson(b))-companyPreference(c,b);}
   willingToWork(c,b) {
     const v=this.view(c,this.businessPerson(b));
     return !v || v.fear<75 && v.resentment<80 || c.balance<this.city.currency.price(3000);
@@ -226,7 +227,7 @@ export class CityRelationships {
     if(witness){if(witness.truth===false)return this.refute(listener,speaker,fact,parentEventId,true);return false;}
     const aboutId=fact.kind==='betrayal' && listener.partnerId===fact.targetId?fact.targetId:fact.aboutId;
     const about=this.city.society.citizen(aboutId);if(!about)return false;
-    const sourceTrust=this.view(listener,speaker,true).trust,bias=this.view(listener,about)?.affection||0;
+    const sourceTrust=this.view(listener,speaker,true).trust+(appearance(speaker)-50)*.12,bias=this.view(listener,about)?.affection||0;
     const chance=bounded(.42+sourceTrust/220-trait(listener,'skepticism')*.4+(bias<0 && !positive.has(fact.kind) ? .12 : 0),.05,.95);
     const believes=witness?witness.truth:this.city.random()<chance;
     const impact=believes ? positive.has(fact.kind)?{affection:5,trust:4,respect:3,resentment:-2}:{affection:-8,trust:-6,respect:-3,resentment:6}:{};

@@ -306,15 +306,16 @@ export class CityDevelopment {
     if(project.materialAccountId)city.transfer(project.materialAccountId,b.accountId,city.accounts.get(project.materialAccountId)?.balance||0,'Capital operacional reservado da nova empresa');
     if (['residential', 'popular_housing', 'luxury_housing'].includes(project.type) || project.sell) {
       for (const u of b.units) { u.occupantId = null; u.forSale = project.type==='popular_housing' && project.accountId==='treasury'?false:project.accountId === 'treasury' || project.sell; u.forRent = project.accountId !== 'treasury' && !project.sell; }
-    } else if (project.accountId === 'treasury') city.economy.activateMunicipalBusiness(b, city.currency.price(b.type==='bank'?300000:50000), project.crop);
+    } else if (project.accountId === 'treasury') city.economy.activateMunicipalBusiness(b, b.type==='council_chamber'||project.materialAccountId?0:city.currency.price(b.type==='bank'?300000:50000), project.crop);
     else city.economy.activateBusiness(b, this.ownerCitizen(project.accountId), project.crop, false);
     city.history.record('service',`Construção de ${b.entity.properties.name} concluída.`,[project.accountId,city.building(project.builderId)?.accountId,b.accountId],{amount:project.fee,projectId:project.id,stone:project.stone});
     city.workMeals.closeSite(project, b);
+    if(b.type==='council_chamber')city.politics.syncGoverningFlag();
     if(b.type==='popular_housing' && project.accountId==='treasury')city.housing.assign();
     city.log(`${b.entity.properties.name} concluído no terreno ${p.id}.`, 'construction', [project.ownerId], { kind: 'project-completed', buildingId: b.id, plotId: p.id, projectId:project.id }); return b;
   }
   requestMaterials(project) {
-    if (project.cancelled || project.status === 'completed') return;
+    if (project.cancelled || project.status === 'completed' || project.waitingForCouncilContract) return;
     let need = project.stone - project.inventory.pedra - (project.incoming.pedra || 0);
     for (const quarry of this.city.economy.businesses.filter(b => b.type === 'quarry' || b.type === 'recycler')) {
       const qty = Math.min(this.city.logistics.transportLimit(quarry,project), need, quarry.inventory.pedra, inventoryFree(project));
@@ -330,7 +331,7 @@ export class CityDevelopment {
     this.city.economy.practice(c, 'construction'); this.complete(project); return true;
   }
   projectFor(c, business = null) {
-    const eligible = p => !p.cancelled && p.status !== 'completed' && p.inventory.pedra >= p.stone && (p.service !== 'lamp' || !!p.builderId) && ((!p.builderId && (p.accountId===c.accountId || p.accountId==='treasury' && p.ownerId===c.id)) || business?.type==='builder' && (p.builderId===business.id || p.accountId===business.accountId));
+    const eligible = p => !p.waitingForCouncilContract && !p.cancelled && p.status !== 'completed' && p.inventory.pedra >= p.stone && (p.service !== 'lamp' || !!p.builderId) && ((!p.builderId && (p.accountId===c.accountId || p.accountId==='treasury' && p.ownerId===c.id)) || business?.type==='builder' && (p.builderId===business.id || p.accountId===business.accountId));
     const priority=p=>(p.priority||0)+(p.service==='lamp'?Math.min(80,Math.max(0,this.city.minute-p.startedAt)/60*2):0);
     return this.projects.filter(eligible).sort((a,b)=>priority(b)-priority(a)||Number(a.service==='lamp')-Number(b.service==='lamp')||a.startedAt-b.startedAt)[0]||null;
   }

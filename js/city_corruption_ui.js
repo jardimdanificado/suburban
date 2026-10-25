@@ -1,7 +1,8 @@
 import {formatMoney as money} from './city_ui_format.js';
 import {drawPartyFlag} from './city_party_flags.js';
-const labels={'poll-rigging':'Manipulação de pesquisa eleitoral','vote-buying':'Compra de votos','contract-overbilling':'Superfaturamento contratual',favoritism:'Favorecimento indevido',embezzlement:'Desvio de recursos'};
+const labels={'party-fund-diversion':'Caixa partidário clandestino','poll-rigging':'Manipulação de pesquisa eleitoral','vote-buying':'Compra de votos','contract-overbilling':'Superfaturamento contratual',favoritism:'Favorecimento indevido',embezzlement:'Desvio de recursos'};
 const mechanisms={
+  'party-fund-diversion':'Um dirigente desviou recursos municipais ou recebeu uma doação empresarial oculta para o caixa do partido. O dinheiro financia campanhas e publicidade; a origem, os envolvidos e os repasses reais ficam registrados, mesmo enquanto o esquema permanece secreto.',
   'poll-rigging':'Um candidato, empresa ou dirigente responsável pela contratação pagou clandestinamente ao instituto para inflar suas intenções de voto no relatório divulgado. As entrevistas originais foram preservadas; uma investigação pode comprovar a divergência e provocar uma correção pública.',
   'vote-buying':'O candidato pagou diretamente a um eleitor em troca de uma promessa de voto. O recebimento não garante que o eleitor cumpra o acordo na urna.',
   'contract-overbilling':'Um aditivo indevido ligado a um contrato público retirou dinheiro do tesouro para o empresário contratado. Os repasses abaixo mostram os retornos efetivamente pagos aos integrantes do esquema.',

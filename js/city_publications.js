@@ -1,3 +1,4 @@
+import {appearance,brandPreference} from './city_clothing.js';
 /** Physical paper media. Written entries are independent of journal retention. */
 export const PUBLICATION_RULES=Object.freeze({bookPages:5,maxPages:32,entriesPerPage:2,writersPerHour:4});
 export class CityPublications {
@@ -11,7 +12,7 @@ export class CityPublications {
   move(doc,account){const old=this.ownerIndex.get(doc.ownerAccountId)||[];this.ownerIndex.set(doc.ownerAccountId,old.filter(id=>id!==doc.id));doc.ownerAccountId=account;const ids=this.ownerIndex.get(account)||[];ids.push(doc.id);this.ownerIndex.set(account,ids);}
   inherit(from,to){for(const doc of this.owned(from))this.move(doc,to);}
   takeStock(b,c,good){
-    const doc=this.owned(b.accountId).find(d=>d.good===good&&!d.entries.length)||this.stock(b,good,good==='panfletos'?1:b.bookPages||PUBLICATION_RULES.bookPages);
+    const doc=this.owned(b.accountId).find(d=>d.good===good&&(good==='jornais'||!d.entries.length))||this.stock(b,good,good==='panfletos'?1:b.bookPages||PUBLICATION_RULES.bookPages);
     this.move(doc,c.accountId);return doc;
   }
   configure(buildingId,pages){
@@ -19,10 +20,11 @@ export class CityPublications {
     if(!b||b.type!=='publisher'||!Number.isInteger(pages)||pages<2||pages>PUBLICATION_RULES.maxPages)return this.city.fail('Livros devem ter entre 2 e 32 páginas.');
     b.bookPages=pages;return true;
   }
-  writable(c,pamphlet=false){const docs=this.owned(c.accountId).filter(d=>d.entries.length<this.capacity(d));return (pamphlet?docs.find(d=>d.pages===1):docs.find(d=>d.pages>1))||docs[0];}
+  writable(c,pamphlet=false){const docs=this.owned(c.accountId).filter(d=>!d.sealed&&d.entries.length<this.capacity(d));return (pamphlet?docs.find(d=>d.pages===1):docs.find(d=>d.pages>1))||docs[0];}
   write(documentId,authorId,{eventId=null,text='',type='information',truth=null,targetId=null,buildingId=null}={}){
     const city=this.city,doc=this.documents.get(documentId),author=city.society.citizen(authorId);
     if(!doc||!author||doc.ownerAccountId!==author.accountId||!city.society.isAdult(author))return city.fail('É preciso ser dono do livro ou panfleto para escrever.');
+    if(doc.sealed)return city.fail('Edição de jornal encerrada pela redação.');
     if(doc.entries.length>=this.capacity(doc))return city.fail('Todas as páginas estão preenchidas.');
     if(!['event','information','propaganda','advertisement','lie'].includes(type))return city.fail('Tipo de publicação inválido.');
     const source=eventId!=null?(city.history.get(eventId)||this.eventSnapshot(eventId)):null;
@@ -53,9 +55,10 @@ export class CityPublications {
     if(doc.ownerAccountId!==c.accountId&&(!position||Math.hypot(position.x-c.entity.x,position.y-c.entity.y)>3))return city.fail('O texto está longe demais para ser lido.');
     c.publicationReading??={};const start=c.publicationReading[doc.id]||0;if(start>=doc.entries.length)return false;
     const entry=doc.entries[start],author=city.society.citizen(entry.authorId),trust=author?(city.relationships.view(c,author)?.trust??50):40,critical=c.political?.criticalSense??.5;
-    const believes=c.id===entry.authorId?entry.truth!==false:city.random()<Math.max(.1,Math.min(.95,.8-critical*.35+(trust-50)*.004));
+    const believes=c.id===entry.authorId?entry.truth!==false:city.random()<Math.max(.1,Math.min(.95,.8-critical*.35+(trust-50)*.004+(author?(appearance(author)-50)*.001:0)+(doc.good==='jornais'?brandPreference(c,doc.producerId)*.04:0)));
     c.publicationReading[doc.id]=start+1;c.needs.leisure=Math.min(100,c.needs.leisure+6);city.economy.practice(c,'management',8);
     city.relationships.remember(c,{id:`publication:${doc.id}:${entry.id}`,eventId:entry.eventId,kind:'publication',actorId:entry.authorId,targetId:entry.targetId,minute:city.minute,description:`Leu ${entry.truth===false?(believes?'e acreditou':'e desconfiou'):''}: ${entry.text}`,truth:entry.truth},{otherId:entry.authorId,firsthand:false,truth:believes?entry.truth:null});
+    if(entry.corruptionCaseId!=null){const scandal=city.politics.scandals.find(s=>s.id===entry.corruptionCaseId&&s.discoveredAt!=null);if(scandal&&believes){scandal.awareIds??=[];if(!scandal.awareIds.includes(c.id))scandal.awareIds.push(c.id);}}
     if(entry.targetId!=null){city.politics.remember(c,{kind:entry.truth===false?'defamation':'published-account',candidateId:entry.targetId,eventId:entry.eventId,publicationId:doc.id,electionId:entry.electionId,believes,truth:entry.truth,effect:entry.truth===false&&believes?-5:0,description:`Leu em ${doc.title}: ${entry.text}`});}
     if(believes&&entry.type==='propaganda'&&city.politics.active?.id===entry.electionId){const nomination=city.politics.active.candidates.find(n=>n.citizenId===entry.candidateId);if(nomination)city.politics.campaigns.hearPromises(c,nomination,city.politics.active,'Leitura de propaganda impressa');}
     if(believes&&entry.type==='advertisement'&&entry.buildingId){c.knownAdvertisements??={};c.knownAdvertisements[entry.buildingId]=city.minute+3*1440;}

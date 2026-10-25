@@ -69,7 +69,7 @@ export class CityServiceInvestment {
     const reserve=project.accountId==='treasury'?city.welfare.policy.reserve:city.currency.price(15000);
     let loan=null;
     if(payer.balance<need+reserve && project.accountId!=='treasury' && payer.entity?.properties.citizen){
-      for(const bank of city.bank.available()){loan=city.bank.lendForBusiness(bank,payer,need+reserve-payer.balance,{type:project.type,score,budget:need+reserve});if(loan)break;}
+      for(const bank of city.bank.available()){loan=city.bank.lendForBusiness(bank,payer,need+reserve-payer.balance,{type:project.type,initialChain:true,projectId:project.id,score,budget:need+reserve});if(loan)break;}
     }
     if(payer.balance<need+reserve)return false;
     const id=`startup:${project.id}`;city.accounts.set(id,{name:'Materiais e operação de prestadora',balance:0});
@@ -77,10 +77,10 @@ export class CityServiceInvestment {
     if(loan){loan.projectId=project.id;project.loanId=loan.id;}
     return true;
   }
-  invest() {
+  invest({initialOnly=false}={}) {
     const city = this.city;
     city.development.ensurePlots();
-    const demands = [...ESSENTIAL_SERVICES].map(type => ({type,...this.demand(type)})).filter(d => d.score >= 60).sort((a,b) => (a.type === 'builder' ? -1 : b.type === 'builder' ? 1 : b.score-a.score));
+    const demands = [...ESSENTIAL_SERVICES].map(type => ({type,...this.demand(type)})).filter(d => d.score >= 60&&(!initialOnly||!city.economy.businesses.some(b=>b.type===d.type))).sort((a,b) => (a.type === 'builder' ? -1 : b.type === 'builder' ? 1 : b.score-a.score));
     let started = false;
     for (const demand of demands) {
       const pending = this.pending(demand.type);
@@ -94,7 +94,7 @@ export class CityServiceInvestment {
       for (const founder of candidates) {
         let loan = null;
         const need = Math.max(0,plan.total-founder.balance);
-        if (need && founder.creditAllowed!==false) for (const bank of city.bank.available()) { loan = city.bank.lendForBusiness(bank,founder,need,{type:demand.type,score:demand.score,budget:plan.total}); if (loan) break; }
+        if (need && founder.creditAllowed!==false) for (const bank of city.bank.available()) { loan = city.bank.lendForBusiness(bank,founder,need,{type:demand.type,initialChain:!city.economy.businesses.some(b=>b.type===demand.type),score:demand.score,budget:plan.total}); if (loan) break; }
         if (founder.balance < plan.total) continue;
         if (city.development.buyPlot(founder.accountId,plot.id)) project = this.start(founder.accountId,plan,loan);
         if (project) break;

@@ -3,7 +3,7 @@ export const INDUSTRIAL_GOODS = Object.fromEntries([
   ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
-  ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],
+  ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['jornais','Jornais',3200],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],
 ].map(([id,label,price])=>[id,{label,price}]));
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
@@ -24,7 +24,9 @@ export const INDUSTRIES = {
   flagmaker:industry('Oficina de bandeiras e faixas',{tecido:3,madeira:1},{bandeiras:2,faixas:1},18,'maintenance','Costura tecido em bandeiras e faixas; a madeira sustenta os mastros de campanha.','industry'),
   paintworks:industry('Fábrica de tintas',{oleo:1,argila:2,ervas:1},{tinta:4},20,'maintenance','Tintas de óleo e pigmentos para fachadas e publicidade.','industry'),
   weaving: industry('Tecelagem',{fibras:4},{tecido:3},20,'maintenance','Fornece tecido para confecções e marcenarias.'),
-  tailor: industry('Confecção',{tecido:3},{roupas:2},22,'commerce','Roupas melhoram higiene e proteção individual.','services',{need:'hygiene',boost:15}),
+  newsroom: industry('Redação e gráfica de jornal',{papel:4},{jornais:1},20,'social','Jornais temáticos com média de quatro folhas, notícias preservadas e publicidade política paga.','services',{need:'leisure',boost:8}),
+  clothing_store: industry('Loja de roupas',{roupas:1},{},1,'commerce','Revende peças de diferentes confecções, preservando marca, estilo, qualidade e durabilidade.','services',{need:'leisure',boost:0}),
+  tailor: industry('Confecção',{tecido:3},{roupas:2},22,'commerce','Produz peças duráveis com marca, estilo e qualidade; vestir-se afeta bem-estar e credibilidade.','services',{need:'hygiene',boost:15}),
   dairy_farm: industry('Fazenda leiteira',{milho:3},{leite:5},30,'agriculture','Leite depende de ração; integra pecuária e lavoura.','food'),
   cheesemaker: industry('Queijaria',{leite:4},{queijo:2},16,'baking','Conserva e agrega valor ao leite.','food'),
   poultry: industry('Granja',{milho:2},{ovos:4},22,'agriculture','Ovos diversificam a alimentação e demandam milho.','food'),

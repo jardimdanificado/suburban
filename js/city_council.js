@@ -1,7 +1,7 @@
 import {CityCouncilChamber} from './city_council_chamber.js';
 import {inviteMembers} from './city_party_membership.js';
 import { seatBounds, scandalEligible, publicPressure } from './city_political_institutions.js';
-export const BILL_LABELS={pollMinRate:'Amostra mínima das pesquisas',pollMaxRate:'Amostra máxima das pesquisas',tax:'Imposto salarial',businessTax:'Imposto empresarial',minimumWage:'Salário mínimo',partyLimit:'Limite de partidos',reelectionLimit:'Limite de reeleições',termDays:'Duração do mandato',campaignDays:'Duração da campanha',build:'Construção estatal',nationalize:'Estatização negociada',privatize:'Privatização',inflation:'Controle da inflação',welfare:'Proteção social',roads:'Acesso e iluminação',suspend:'Afastamento temporário do prefeito',impeach:'Cassação',confidence:'Impeachment por perda de confiança',councilRate:'Percentual de vereadores na população',councilSeats:'Quantidade de vereadores',councilBudget:'Orçamento salarial da Câmara',mayorBudget:'Salário diário do prefeito'};
+export const BILL_LABELS={partyFund:'Fundo partidário por eleição',pollMinRate:'Amostra mínima das pesquisas',pollMaxRate:'Amostra máxima das pesquisas',tax:'Imposto salarial',businessTax:'Imposto empresarial',minimumWage:'Salário mínimo',partyLimit:'Limite de partidos',reelectionLimit:'Limite de reeleições',termDays:'Duração do mandato',campaignDays:'Duração da campanha',build:'Construção estatal',nationalize:'Estatização negociada',privatize:'Privatização',inflation:'Controle da inflação',welfare:'Proteção social',roads:'Acesso e iluminação',suspend:'Afastamento temporário do prefeito',impeach:'Cassação',confidence:'Impeachment por perda de confiança',councilRate:'Percentual de vereadores na população',councilSeats:'Quantidade de vereadores',councilBudget:'Orçamento salarial da Câmara',mayorBudget:'Salário diário do prefeito'};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export class CityCouncil {
   constructor(city){this.city=city;this.members=[];this.vacancies=[];this.seats=1;this.bills=[];this.nextId=1;this.lastProposalDay=null;this.leaderId=null;this.leaderElections=[];this.leaderElectionTerm=null;}
@@ -12,7 +12,7 @@ export class CityCouncil {
   electLeader(){
     const chamber=this.getChamber();if(!chamber.open()||!chamber.quorum())return;const people=chamber.present();if(!people.length)return;
     const ballots=people.map(v=>{const choices=people.map(c=>({id:c.id,score:c.skills.governance*.3+(v.political.partyId===c.political.partyId?12*v.political.loyalty:0)+(this.city.relationships.view(v,c)?.trust||0)*.2+(c.traits?.honesty??.5)*6})).sort((a,b)=>b.score-a.score||a.id-b.id);return {voterId:v.id,candidateId:choices[0].id};});
-    const ranked=people.map(c=>({id:c.id,votes:ballots.filter(v=>v.candidateId===c.id).length})).sort((a,b)=>b.votes-a.votes||a.id-b.id);this.leaderId=ranked[0].id;this.leaderElectionTerm=this.city.politics.termNumber;
+    const ranked=people.map(c=>({id:c.id,votes:ballots.filter(v=>v.candidateId===c.id).length})).sort((a,b)=>b.votes-a.votes||a.id-b.id);this.leaderId=ranked[0].id;this.city.politics.syncGoverningFlag();this.leaderElectionTerm=this.city.politics.termNumber;
     this.leaderElections.push({minute:this.city.minute,term:this.leaderElectionTerm,winnerId:this.leaderId,ballots});if(this.leaderElections.length>32)this.leaderElections.shift();this.city.log('A Câmara elegeu sua presidência para a segunda metade do mandato.','government',[this.leaderId],{kind:'council-president-elected',weight:this.weight(this.leaderId)});
   }
   people(){return this.members.map(m=>this.city.society.citizen(m.citizenId)).filter(Boolean);}
@@ -24,7 +24,7 @@ export class CityCouncil {
   }
   remove(id,reason='Encerramento da legislatura') {
     const member=this.members.find(m=>m.citizenId===id),c=this.city.society.citizen(id);this.members=this.members.filter(m=>m.citizenId!==id);
-    if(id===this.leaderId)this.leaderId=null;
+    if(id===this.leaderId){this.leaderId=null;this.city.politics.syncGoverningFlag();}
     if(member && !['Encerramento da legislatura','Redimensionamento da Câmara'].includes(reason))this.vacancies.push(member.partyId);
     if(c && member)c.role='citizen';
   }
@@ -55,7 +55,7 @@ export class CityCouncil {
     if(['pollMinRate','pollMaxRate'].includes(type)){const min=type==='pollMinRate'?5:15,max=type==='pollMinRate'?10:20;if(!Number.isFinite(payload.value)||payload.value<min||payload.value>max)return city.fail(`Limite deve ficar entre ${min}% e ${max}%.`);if(payload.value===(city.politics.policy[type]??(type==='pollMinRate'?5:20)))return city.fail('Esse limite já está em vigor.');title??=`${BILL_LABELS[type]}: ${payload.value}% do eleitorado`; }
     if(type==='councilRate'){if(!Number.isFinite(payload.value)||payload.value<5||payload.value>12.5)return city.fail('Representação deve ficar entre 5% e 12,5% da população.');title??=`Câmara: ${payload.value.toFixed(1)}% da população`;if(Math.abs(payload.value-(city.politics.policy.councilRate??5))<.001)return city.fail('Esse percentual já está em vigor.');}
     if(type==='councilSeats'){const bounds=this.bounds();if(!Number.isSafeInteger(payload.value)||payload.value<bounds.min||payload.value>bounds.max)return city.fail(`Câmara deve ter entre ${bounds.min} e ${bounds.max} vereadores (5% a 12,5% da população).`);}
-    if(['councilBudget','mayorBudget'].includes(type)&&(!Number.isSafeInteger(payload.value)||payload.value<0))return city.fail('Orçamento salarial deve ser um valor inteiro não negativo.');
+    if(['councilBudget','mayorBudget','partyFund'].includes(type)&&(!Number.isSafeInteger(payload.value)||payload.value<0))return city.fail('Orçamento salarial deve ser um valor inteiro não negativo.');
     if(type==='suspend'&&(!Number.isInteger(payload.value)||payload.value<1||payload.value>5||payload.targetId!==city.economy.mayorId||!city.politics.scandals.some(r=>r.id===payload.caseId&&r.proven&&(r.accusedId===payload.targetId||r.participantIds?.includes(payload.targetId)))))return city.fail('Afastamento exige prefeito em exercício, prova e prazo de um a cinco dias.');
     if(type==='impeach'&&!city.politics.scandals.some(r=>r.id===payload.caseId&&scandalEligible(city.politics,r)&&(r.accusedId===payload.targetId||r.participantIds?.includes(payload.targetId))))return city.fail('Faltam prova, gravidade ou repercussão popular.');
     if(type==='confidence'&&(city.politics.approval>=20||city.politics.lowApprovalSince==null||city.minute-city.politics.lowApprovalSince<3*1440||payload.targetId!==city.economy.mayorId))return city.fail('Perda de confiança exige aprovação abaixo de 20% por três dias.');
@@ -67,7 +67,7 @@ export class CityCouncil {
       title??=`${BILL_LABELS[type]}: ${payload.value} dias, a partir da próxima gestão`;
     }
     if(this.bills.some(b=>['awaiting-session','proposed','approved','executing','awaiting-sanction','vetoed'].includes(b.status)&&b.type===type&&(type==='build'?b.payload.buildingType===payload.buildingType&&(payload.buildingType!=='farm'||(b.payload.crop||'milho')===(payload.crop||'milho')):type==='impeach'?b.payload.targetId===payload.targetId:true)))return null;
-    const bill={id:this.nextId++,authorId:author.id,authorName:author.entity.properties.name,partyId:author.political.partyId,type,payload:{...payload},title:title||BILL_LABELS[type],proposedAt:city.minute,voteAt:city.minute+360,status:'awaiting-session',requestedAt:city.minute,votes:[],attempts:0,result:null};
+    const bill={previousValue:type==='partyFund'?(city.politics.policy.partyFund??80000):undefined,id:this.nextId++,authorId:author.id,authorName:author.entity.properties.name,partyId:author.political.partyId,type,payload:{...payload},title:title||BILL_LABELS[type],proposedAt:city.minute,voteAt:city.minute+360,status:'awaiting-session',requestedAt:city.minute,votes:[],attempts:0,result:null};
     const e=city.log(`${author.entity.properties.name} encaminhou para apresentação no plenário: ${bill.title}.`,'government',[author.id],{kind:'bill-requested',billId:bill.id,partyId:bill.partyId});bill.eventId=e.id;this.bills.push(bill);
     if(this.bills.length>160){const i=this.bills.findIndex(b=>!['awaiting-session','proposed','approved','executing','awaiting-sanction','vetoed'].includes(b.status));if(i>=0)this.bills.splice(i,1);}
     return bill;
@@ -76,6 +76,7 @@ export class CityCouncil {
     const p=this.city.politics,party=p.party(c.political.partyId),e=party.ideology.economy,own=party.id===bill.partyId,loyal=c.political.loyalty;
     let ideology=0;
     switch(bill.type){case'tax':ideology=-e*Math.sign(bill.payload.value-this.city.taxRate)*1.4;break;case'businessTax':ideology=-e*Math.sign(bill.payload.value-p.policy.businessTax)*1.4;break;case'minimumWage':ideology=-e*Math.sign(bill.payload.value-p.policy.minimumWage);break;case'build':case'nationalize':case'welfare':ideology=-e*1.4+.25;break;case'privatize':ideology=e*1.5;break;case'inflation':ideology=.4+Math.abs(this.city.currency.dailyInflation)*40;break;case'roads':ideology=.8;break;case'partyLimit':ideology=party.ideology.liberty*Math.sign(bill.payload.value-p.policy.partyLimit);break;case'reelectionLimit':ideology=Math.sign(bill.payload.value-p.policy.reelectionLimit)*((c.traits?.ambition??.5)*.7-(c.traits?.honesty??.5)*.8+(p.partyOfId(this.city.economy.mayorId)?.id===party.id?.15:-.35)-p.policy.reelectionLimit*.12);break;case'councilRate':ideology=Math.sign(bill.payload.value-(p.policy.councilRate??5))*((c.traits?.ambition??.5)-.45);break;case'councilSeats':ideology=Math.sign(bill.payload.value-this.seats)*((c.traits?.ambition??.5)-.45);break;
+    case'partyFund':ideology=Math.sign(bill.payload.value-(p.policy.partyFund??80000))*((c.traits?.ambition??.5)-(c.traits?.honesty??.5)*.7-.15);break;
     case'councilBudget':case'mayorBudget':ideology=Math.sign(bill.payload.value-p.policy[bill.type])*((c.traits?.ambition??.5)*1.1-(c.traits?.honesty??.5)*.6-.15);break;
     case'suspend':ideology=(c.traits?.honesty??.5)*1.5-(p.partyOfId(bill.payload.targetId)?.id===party.id?loyal:0);break;
     case'confidence':ideology=p.approval<20?1.2-(p.partyOfId(bill.payload.targetId)?.id===party.id?loyal*2:0):-5;break;
@@ -134,6 +135,7 @@ export class CityCouncil {
     if(needs.crisis && (bill.type==='nationalize'||bill.type==='build'&&!basic.has(bill.payload.buildingType))){bill.status='executing';bill.result='Aguardando atendimento das necessidades de alimentação e moradia';return;}
     if(bill.type==='privatize' && needs.crisis && basic.has(city.building(bill.payload.buildingId)?.type)){bill.status='executing';bill.result='Operação essencial preservada durante a emergência social';return;}
     switch(bill.type){
+      case'partyFund':p.changePartyFund(bill.payload.value,bill);break;
       case'councilRate':policy.councilRate=clamp(Math.round(bill.payload.value*100)/100,5,12.5);this.ensure();break;
       case'councilSeats':{const bounds=this.bounds();policy.councilRate=clamp(bill.payload.value/Math.max(1,bounds.population)*100,5,12.5);this.seats=Math.max(bounds.min,Math.min(bounds.max,Math.round(bill.payload.value)));while(this.members.length>this.seats)this.remove(this.members.at(-1).citizenId,'Redimensionamento da Câmara');this.ensure();break;}
       case'councilBudget':case'mayorBudget':policy[bill.type]=Math.max(0,Math.round(bill.payload.value));break;
@@ -184,6 +186,7 @@ export class CityCouncil {
   draft(c) {
     const city=this.city,p=city.politics,party=p.party(c.political.partyId),e=party.ideology.economy,metrics=p.mandates.metrics();
     const choices=[['tax',{value:clamp(city.taxRate+(e<0?.02:-.02),-.5,.5)},`Imposto salarial de ${(city.taxRate*100).toFixed(0)}% para ${(clamp(city.taxRate+(e<0?.02:-.02),-.5,.5)*100).toFixed(0)}%`],['businessTax',{value:clamp(p.policy.businessTax+(e<0?.02:-.02),-.2,.5)},'Rever a contribuição das empresas'],['minimumWage',{value:p.policy.minimumWage+(e<.2?1:-1)},'Revisar o piso salarial por minuto trabalhado'],['inflation',{value:Math.max(0,city.currency.policy.dailyLimit-20000)},'Reduzir emissão e retirar moeda excedente'],['roads',{value:city.random()<.5?'roads':'lamps'},'Priorizar acessos e iluminação das vias movimentadas']];
+    if(city.random()<.2)choices.push(['partyFund',{value:Math.max(0,Math.round((p.policy.partyFund??80000)*(city.random()<.5?.9:1.1)))},'Rever o fundo público eleitoral de todos os partidos']);
     if(city.random()<.25){const type=city.random()<.5?'pollMinRate':'pollMaxRate',min=type==='pollMinRate'?5:15,max=type==='pollMinRate'?10:20,value=clamp((p.policy[type]??(type==='pollMinRate'?5:20))+(city.random()<.5?-1:1),min,max);choices.push([type,{value},`Rever ${BILL_LABELS[type].toLowerCase()}: ${value}%`]);}
     if(e<.3){choices.push(['build',{buildingType:metrics.housed<95?'popular_housing':metrics.fed<95?'popular_refectory':['carrier','cleaner','bank'][c.id%3]},'Construir equipamento ou empresa estatal'],['welfare',{value:city.welfare.policy.dailyBudget+20000},'Ampliar orçamento de proteção social']);const firm=city.economy.businesses.find(b=>b.ownerId&&b.units.every(u=>u.ownerId===`citizen:${b.ownerId}`));if(firm)choices.push(['nationalize',{buildingId:firm.id},`Negociar estatização de ${firm.entity.properties.name}`]);}
     if(e>.1){const firm=city.economy.businesses.find(b=>b.municipal && !['townhall','mint'].includes(b.type));if(firm)choices.push(['privatize',{buildingId:firm.id},`Privatizar ${firm.entity.properties.name}`]);}

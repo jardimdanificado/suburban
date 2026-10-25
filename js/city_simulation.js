@@ -1,3 +1,4 @@
+import {clothingMood} from './city_clothing.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
 import { CityPublications } from './city_publications.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
@@ -580,7 +581,7 @@ export class CitySimulation {
       n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025));
       c.mood = (c.mood || 0) * .998;
       const totalNeeds=n.food+n.water+n.energy+n.hygiene+n.toilet+n.social+n.leisure+n.health+n.shelter+n.safety;
-      c.happiness = clamp(totalNeeds / 10 + c.mood + this.relationships.moodEffect(c) + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
+      c.happiness = clamp(totalNeeds / 10 + c.mood + clothingMood(c) + this.relationships.moodEffect(c) + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
       if (this.life.minute(c)) continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
@@ -627,7 +628,9 @@ export class CitySimulation {
   goodsStock(good) {
     const campaignCarried=this.citizens.reduce((n,c)=>n+(c.campaignInventory?.[good]||0),0);
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
-    return campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
+    const printed=['livros','panfletos','jornais'].includes(good)?[...this.publications.documents.values()].filter(d=>d.good===good&&!this.accounts.get(d.ownerAccountId)?.inventory).length:0;
+    return printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;
