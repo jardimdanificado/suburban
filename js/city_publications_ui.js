@@ -14,7 +14,7 @@ export function renderPublications(ui,p){
   }
   p.button('VOLTAR AO ACERVO',()=>ui.go('publications'));
   p.heading(`#${doc.id} ${doc.title}`);p.kv('Dono',city.accountName(doc.ownerAccountId));p.kv('Formato',doc.pages===1?'Panfleto (uma página)':`Livro de ${doc.pages} páginas`);p.kv('Registros / capacidade',`${doc.entries.length}/${library.capacity(doc)}`);
-  p.buttons([{label:'CONTEÚDO',selected:ui.publicationTab!=='write',click:()=>ui.openPanel({publicationTab:'read'})},{label:'ESCREVER',selected:ui.publicationTab==='write',click:()=>ui.openPanel({publicationTab:'write'})}]);
+  p.links([{label:'CONTEÚDO',selected:ui.publicationTab!=='write',click:()=>ui.openPanel({publicationTab:'read'})},{label:'ESCREVER',selected:ui.publicationTab==='write',click:()=>ui.openPanel({publicationTab:'write'})}]);
   const owner=city.citizens.find(c=>c.accountId===doc.ownerAccountId&&!c.entity.destroyed);
   if(ui.publicationTab==='write'){
     if(!owner||!city.society.isAdult(owner)){p.note('O exemplar precisa ser comprado por um morador adulto para ser escrito.');return;}

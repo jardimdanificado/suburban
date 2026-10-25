@@ -38,5 +38,5 @@ export function renderEventSummary(ui,p,event){
   p.heading('POR QUE / DE ONDE VEIO');
   for(const id of explicit){const cause=history.get(id);p.record(`#${id} · ${cause?stamp(cause.minute):'Fora da retenção'}`,cause?.message||'Vínculo registrado; detalhes não estão mais no histórico.',()=>ui.openEvent(id));}
   if(!explicit.length)p.note('O registro não informa uma causa explícita. Os detalhes e a linha do tempo podem mostrar o contexto e os parâmetros usados.');
-  p.buttons([{label:'VER DADOS E SITUAÇÃO ATUAL',click:()=>ui.openPanel({eventTab:'details'})},{label:'SEGUIR LINHA DO TEMPO',click:()=>ui.openPanel({eventTab:'timeline'})}]);
+  p.links([{label:'VER DADOS E SITUAÇÃO ATUAL',click:()=>ui.openPanel({eventTab:'details'})},{label:'SEGUIR LINHA DO TEMPO',click:()=>ui.openPanel({eventTab:'timeline'})}]);
 }

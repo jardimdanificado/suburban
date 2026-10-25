@@ -28,7 +28,7 @@ export function renderCorruptionInspector(ui,p){
   if(!r){p.note('Caso indisponível.');return;}
   const tab=ui.corruptionTab||'summary',party=gov.party(r.partyId),steps=flows(r);
   p.heading(`CASO #${r.id} · ${labels[r.type]||r.type}`);
-  p.buttons([['summary','ESQUEMA'],['money','DINHEIRO'],['evidence','INVESTIGAÇÃO']].map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({corruptionTab:id})})));
+  p.links([['summary','ESQUEMA'],['money','DINHEIRO'],['evidence','INVESTIGAÇÃO']].map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({corruptionTab:id})})));
   p.kv('Situação',status(r));
   if(!discovered(r))p.note('Informação secreta da simulação: a população ainda não descobriu este esquema.');
   if(tab==='summary'){

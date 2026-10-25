@@ -25,9 +25,9 @@ function promise(p,pr,campaign=false,ui=null){
 }
 export function renderPolitics(ui,p) {
   const city=ui.city,gov=city.politics,active=gov.active,tab=ui.politicsTab||'overview',partyName=id=>gov.party(id)?.short||'Sem partido';
-  if(!ui.billId)p.heading(ui.sectionWindow?POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'Governo':'GOVERNO, CÂMARA E ELEIÇÕES');if(!ui.sectionWindow)p.buttons(POLITICS_SECTIONS.map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({politicsTab:id,billId:null,termId:null,approvalView:'summary',councilView:'bills'})})));
+  if(!ui.billId)p.heading(ui.sectionWindow?POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'Governo':'GOVERNO, CÂMARA E ELEIÇÕES');if(!ui.sectionWindow)p.links(POLITICS_SECTIONS.map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({politicsTab:id,billId:null,termId:null,approvalView:'summary',councilView:'bills'})})));
   if(tab==='directory'){
-    for(const [label,ids] of [['GESTÃO',['overview','approval','promises']],['INSTITUIÇÕES',['parties','council']],['ELEIÇÕES',['campaign','polls','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.button(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
+    for(const [label,ids] of [['GESTÃO',['overview','approval','promises']],['INSTITUIÇÕES',['parties','council']],['ELEIÇÕES',['campaign','polls','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.windowLink(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
   }
   if(tab==='approval'){
     const report=gov.approvalReport?.version===4?gov.approvalReport:approvalReport(gov),signed=n=>`${n>0?'+':''}${n.toFixed(2)} p.p.`;
@@ -37,7 +37,7 @@ export function renderPolitics(ui,p) {
     const worst=report.rows.filter(r=>r.points<-.01).slice().sort((a,b)=>a.points-b.points).slice(0,3);if(worst.length)p.note('Maiores perdas: '+worst.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
     const best=report.rows.filter(r=>r.points>.01&&!r.label.startsWith('Limite do efeito')).slice().sort((a,b)=>b.points-a.points).slice(0,3);if(best.length)p.note('Maiores ganhos: '+best.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
     p.kv('Ponto de partida',report.startingScore);if(report.expectations.previousTermId){p.note(report.expectations.detail);p.button('GESTÃO ANTERIOR USADA NA COMPARAÇÃO',()=>ui.openPanel({politicsTab:'promises',termId:report.expectations.previousTermId,mandateView:'indicators'}));}
-    const view=ui.approvalView||'summary';p.buttons([['summary','RESUMO'],['changes','DESDE A POSSE'],['promise','PROMESSA'],['conditions','CONDIÇÕES E PENALIDADES']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({approvalView:id})})));
+    const view=ui.approvalView||'summary';p.links([['summary','RESUMO'],['changes','DESDE A POSSE'],['promise','PROMESSA'],['conditions','CONDIÇÕES E PENALIDADES']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({approvalView:id})})));
     const rows=report.rows.filter(row=>view==='summary'?Math.abs(row.points)>.01:view==='changes'?row.label.startsWith('Mudança')||['Limite do efeito das mudanças','Expectativa em relação à gestão anterior'].includes(row.label):view==='promise'?['Avanço da promessa','Execução comprovada do plano','Meta alcançada','Rapidez do cumprimento','Superação da meta','Cobrança da promessa pendente','Recuos na promessa','Limite do efeito da promessa','Expectativa em relação à gestão anterior'].includes(row.label):row.label.startsWith('Condições')||['Corrupção comprovada','Vetos do prefeito'].includes(row.label));
     for(const row of rows){p.heading(`${row.label}: ${signed(row.points)}`);if(view!=='summary')p.note(row.detail);}
     p.kv('Soma antes do retorno decrescente',report.raw.toFixed(2));if(Math.abs(report.adjustment)>.001)p.kv('Retorno decrescente dos ganhos e perdas',signed(report.adjustment));p.kv('Nota final',report.score.toFixed(2));
@@ -58,14 +58,14 @@ export function renderPolitics(ui,p) {
     const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),independent=adults.filter(c=>!gov.party(c.political?.partyId)?.active),parties=gov.parties.filter(a=>a.active&&ui.matches(`${a.name} ${a.short}`));
     p.metrics([['PARTIDOS',gov.parties.filter(a=>a.active).length],['LIMITE',gov.policy.partyLimit],['SEM PARTIDO',independent.length],['FILIADOS',adults.length-independent.length]]);
     p.table([{label:'Partido',weight:3},{label:'Filiados'},{label:'Cadeiras'},{label:'Reputação'}],parties.map(party=>({cells:[`${party.short} · ${party.name}`,party.memberIds.length,gov.council.members.filter(m=>m.partyId===party.id).length,(party.publicReputation??50).toFixed(1)],click:()=>ui.openParty(party.id)})));
-    p.heading('ORGANIZAÇÃO PARTIDÁRIA');p.buttons([{label:'REGISTROS E FUNDAÇÕES',click:()=>ui.openPanel({tab:'party-organization',partyOrganizationView:'foundations'})},{label:'CAMPANHAS DE FILIAÇÃO',click:()=>ui.openPanel({tab:'party-organization',partyOrganizationView:'membership'})}]);
+    p.heading('ORGANIZAÇÃO PARTIDÁRIA');p.links([{label:'REGISTROS E FUNDAÇÕES',click:()=>ui.openPanel({tab:'party-organization',partyOrganizationView:'foundations'})},{label:'CAMPANHAS DE FILIAÇÃO',click:()=>ui.openPanel({tab:'party-organization',partyOrganizationView:'membership'})}]);
     fold(ui,p,'dissolvedParties','Partidos liquidados',()=>{for(const party of gov.parties.filter(a=>a.liquidatedAt!=null))p.record(party.name,`${stamp(party.liquidatedAt)} · sem filiados vivos`,()=>ui.openParty(party.id));});
     fold(ui,p,'partyDirectoryRules','Como funcionam filiação e ideologia',()=>{p.note('Partidos sem filiados vivos são liquidados. O limite é um teto de registros ativos. Simpatia e voto não exigem filiação; lealdade muda com experiências, promessas e corrupção conhecida.');p.note('Economia: −100 favorece propriedade pública e proteção social; +100 favorece iniciativa privada e tributos menores. Liberdade e pauta ambiental completam o viés.');});
   }
   if(tab==='council'){
     const view=ui.councilView||'bills';if(!ui.billId){
     const bounds=gov.council.bounds();p.kv('Representação aprovada',`${(gov.policy.councilRate??5).toFixed(1)}% da população / ${gov.council.seats} cadeiras`);p.kv('Faixa legal de vereadores',`${bounds.min} a ${bounds.max} / população ${bounds.population}`);p.kv('Presidência da Câmara',gov.council.leaderId?`${city.accountName(`citizen:${gov.council.leaderId}`)} / voto com peso ${gov.council.weight(gov.council.leaderId)}`:'Eleição pelos pares na metade do mandato');
-    p.buttons([['bills','PROJETOS'],['members','VEREADORES'],['propose','ENCAMINHAR PEDIDO']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({councilView:id,billId:null})})));
+    p.links([['bills','PROJETOS'],['members','VEREADORES'],['propose','ENCAMINHAR PEDIDO']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({councilView:id,billId:null})})));
     }
     if(view==='members'){p.heading('LEGISLATURA');p.table([{label:'Vereador',weight:2},{label:'Partido'},{label:'Mandato'}],gov.council.members.filter(m=>ui.matches(`${m.name} ${partyName(m.partyId)}`)).map(m=>({cells:[m.name,partyName(m.partyId),m.provisional?'Provisório':'Eleito'],click:()=>ui.openCitizen(m.citizenId)})));}
     const author=gov.council.members.find(m=>m.citizenId===ui.selectedCouncilorId)||gov.council.members[0];
@@ -110,7 +110,7 @@ export function renderPolitics(ui,p) {
   }
   if(tab==='polls'){
     const e=gov.elections.find(e=>e.id===ui.electionId)||active||gov.lastResult;if(!e?.polls?.length){p.note('Nenhuma pesquisa de campanha disponível.');return;}
-    p.buttons(e.polls.map(poll=>({label:`PESQUISA ${poll.id}`,selected:ui.pollId===poll.id,click:()=>ui.openPanel({electionId:e.id,pollId:poll.id})})));
+    p.links(e.polls.map(poll=>({label:`PESQUISA ${poll.id}`,selected:ui.pollId===poll.id,click:()=>ui.openPanel({electionId:e.id,pollId:poll.id})})));
     const poll=e.polls.find(s=>s.id===ui.pollId)||e.polls.at(-1);
     p.block(`PESQUISA ${poll.id}`,stamp(poll.minute),q=>{q.metrics([['AMOSTRA',poll.sampleSize],['INDECISOS',poll.undecided],['APROVAÇÃO',`${poll.approval.toFixed(1)}%`],['MARGEM',`±${poll.marginOfError.toFixed(1)} p.p.`]]);q.kv('Eleitorado / população total',`${poll.population} / ${poll.cityPopulation??poll.population}`);});
     p.heading('INTENÇÕES E REJEIÇÃO');p.table([{label:'Candidato',weight:2},{label:'Intenção'},{label:'Rejeição'}],poll.results.map(r=>({cells:[r.name,`${(r.intentions/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`,`${(r.rejections/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`],click:()=>ui.openCitizen(r.candidateId)})));
@@ -120,10 +120,10 @@ export function renderPolitics(ui,p) {
     }
   }
   if(tab==='promises'){
-    p.buttons([...gov.mandates.terms].reverse().slice(0,12).map(t=>({label:`GESTÃO ${t.id} / ${partyName(t.partyId)}`,selected:ui.termId===t.id,click:()=>ui.openPanel({termId:t.id,mandateView:'promise'})})));
+    p.links([...gov.mandates.terms].reverse().slice(0,12).map(t=>({label:`GESTÃO ${t.id} / ${partyName(t.partyId)}`,selected:ui.termId===t.id,click:()=>ui.openPanel({termId:t.id,mandateView:'promise'})})));
     const term=gov.mandates.terms.find(t=>t.id===ui.termId)||gov.mandates.current||gov.mandates.terms.at(-1);if(!term)return;
     p.heading(`${term.mayorName} — ${partyName(term.partyId)}`);p.kv('Início',stamp(term.startedAt));p.kv('Fim',term.endedAt==null?'Em andamento':stamp(term.endedAt));
-    const mode=ui.mandateView||'promise';p.buttons([['promise','META E RESULTADO'],['indicators','INDICADORES'],['measurements','MEDIÇÕES'],['events','ACONTECIMENTOS']].map(([id,label])=>({label,selected:id===mode,click:()=>ui.openPanel({termId:term.id,mandateView:id})})));
+    const mode=ui.mandateView||'promise';p.links([['promise','META E RESULTADO'],['indicators','INDICADORES'],['measurements','MEDIÇÕES'],['events','ACONTECIMENTOS']].map(([id,label])=>({label,selected:id===mode,click:()=>ui.openPanel({termId:term.id,mandateView:id})})));
     if(mode==='promise'){for(const pr of term.promises)promise(p,pr,false,ui);p.kv('Efeito das mudanças na cidade',`${(term.outcomes?.points||0).toFixed(2)} pontos`);p.note('Indicadores e promessa são medidos a cada hora. O histórico mantém a última medição de cada dia e os eventos de cumprimento, superação e recuo.');}
     if(mode==='indicators')p.table([{label:'Indicador',weight:2},{label:'Na posse'},{label:'Último / fim'},{label:'Variação'}],Object.entries(PROMISE_METRICS).map(([key,spec])=>({cells:[spec.label,format(key,term.baseline[key]),format(key,term.latest[key]),`${term.latest[key]-term.baseline[key]>0?'+':''}${format(key,term.latest[key]-term.baseline[key])}`]})));
     if(mode==='measurements')for(const row of paginate(ui,p,[...term.checkpoints].reverse(),'milestonePage')){p.heading(stamp(row.minute));for(const pr of term.promises)p.kv(PROMISE_METRICS[pr.metric].label,format(pr.metric,row[pr.metric]));if(row.promisePoints!=null)p.kv('Promessa / evolução da cidade',`${row.promisePoints.toFixed(1)} / ${row.outcomePoints.toFixed(1)} pontos`);}

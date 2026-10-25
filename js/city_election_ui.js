@@ -11,7 +11,7 @@ function polls(ui,p,e){
   p.note('Pesquisas por amostragem: entrevistam aproximadamente 10% da população. Intenções não são votos depositados nas urnas.');
   const poll=e.polls.find(r=>r.id===ui.monitorPollId)||e.polls.at(-1);
   if(!poll){p.note('Aguardando a primeira pesquisa.');return;}
-  p.buttons([{label:'ACOMPANHAR A MAIS RECENTE',selected:ui.monitorPollId==null,click:()=>{ui.monitorPollId=null;}},...e.polls.map(r=>({label:`${stamp(r.minute)}`,selected:ui.monitorPollId===r.id,click:()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:r.id})}))]);
+  p.button('ACOMPANHAR A MAIS RECENTE',()=>{ui.monitorPollId=null;},ui.monitorPollId==null);p.links(e.polls.map(r=>({label:`${stamp(r.minute)}`,click:()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:r.id})})));
   p.kv('Última atualização',stamp(poll.minute));p.metrics([['ENTREVISTADOS',poll.sampleSize],['INDECISOS',poll.undecided],['MARGEM',`±${poll.marginOfError.toFixed(1)} p.p.`]]);
   p.table([{label:'Candidato',weight:2},{label:'Intenção'},{label:'Rejeição'}],poll.results.map(r=>({cells:[r.name,`${(r.intentions/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`,`${(r.rejections/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`],click:()=>ui.openCitizen(r.candidateId)})));
   p.kv('Aprovação entre entrevistados',`${poll.approval.toFixed(1)}%`);
@@ -52,7 +52,7 @@ export function renderElectionMonitor(ui,p){
   if(e.runoffId)p.button('ACOMPANHAR SEGUNDO TURNO',()=>ui.host?.openElection(e.runoffId,'polls'));
   if(e.status==='runoff-required')p.note('Nenhuma chapa obteve mais de 50% dos votos válidos. As duas primeiras disputarão o segundo turno. A Câmara será empossada com o resultado final, usando somente os votos do primeiro turno.');
   if(e.status==='scheduled')p.note(`A campanha começa em ${stamp(e.startedAt)} e dura ${(e.voteAt-e.startedAt)/1440} dias, como no primeiro turno.`);
-  p.buttons([['polls','PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.host?.openElection(e.id,id)})));
+  p.links([['polls','PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.host?.openElection(e.id,id)})));
   if(mode==='polls'){p.kv('Dia da votação presencial',stamp(e.voteAt));polls(ui,p,e);return;}
   if(['campaign','scheduled'].includes(e.status)){p.note(`Votação presencial na prefeitura a partir de ${stamp(e.voteAt)}. A contagem começa com os votos efetivamente depositados.`);return;}
   p.metrics([['VOTOS REGISTRADOS',e.ballots.length],['ELEITORADO',e.electorateSize??e.ballots.length],['NÃO VOTARAM',Math.max(0,(e.electorateSize??e.ballots.length)-e.ballots.length)]]);
@@ -61,7 +61,7 @@ export function renderElectionMonitor(ui,p){
   if(e.status==='cancelled'){p.note(`Eleição adiada: ${e.cancellationReason||'Sem resultado válido'}. O governo atual continua até nova votação.`);}
   if(e.tieBroken)p.note('Empate no segundo turno: desempate por capacidade administrativa e, persistindo, ordem de cadastro.');
   if(e.status==='completed'){p.heading(`PREFEITO ELEITO: ${e.winnerName||e.ranking.find(n=>n.citizenId===e.winnerId)?.name}`);p.kv('Vice-prefeito eleito',e.viceWinnerName||'Sem vice elegível');p.kv('Apuração concluída',stamp(e.completedAt));}
-  const view=ui.electionDetailView||(mode==='results'?'elected':'count');p.buttons([['count','CONTAGEM'],['elected','VEREADORES'],['ballots','VOTOS INDIVIDUAIS'],['turnout','COMPARECIMENTO']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({electionDetailView:id})})));
+  const view=ui.electionDetailView||(mode==='results'?'elected':'count');p.links([['count','CONTAGEM'],['elected','VEREADORES'],['ballots','VOTOS INDIVIDUAIS'],['turnout','COMPARECIMENTO']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({electionDetailView:id})})));
   if(view==='count')candidates(ui,p,e);if(view==='elected'){if(e.status==='completed')candidates(ui,p,e);council(ui,p,e);}if(view==='ballots')ballots(ui,p,e);if(view==='turnout')turnout(ui,p,e);
   if(e.pollingBuildingId)p.button('LOCALIZAR PREFEITURA',()=>{const hall=city.building(e.pollingBuildingId);if(hall)ui.camera(hall.door.x,hall.door.y);});
   p.button('ABRIR HISTÓRICO DESTA ELEIÇÃO',()=>ui.openHistory(`electionId:${e.id}`));

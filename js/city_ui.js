@@ -148,7 +148,7 @@ export class CityUI {
     if(!this.floatingDossier){
       const search=!['event','corruption-case'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
-      const views=VIEWS[this.tab];if(views&&!this.sectionWindow&&this.tab!=='government'){const p=new Page(ui,x+4,y,w-8,y,bottom);p.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
+      const views=VIEWS[this.tab];if(views&&!this.sectionWindow&&this.tab!=='government'){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
     }
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings','economy'].includes(this.tab)?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings','economy'].includes(this.tab))this.directory(p);else this.content(p);
@@ -167,7 +167,7 @@ export class CityUI {
     else{ui.button(bx,by,78,28,'MENU',()=>{this.menuOpen=!this.menuOpen;},{selected:this.menuOpen});ui.text(trim(info[1],bw-122),bx+90,by+6,T.ink);if(this.history.length)ui.button(bx+bw-28,by,28,28,'<',()=>this.back());by+=38;}
     const listMode=['people','buildings','economy'].includes(this.tab),split=listMode&&bw>=680;
     this.search.placeholder=this.tab==='people'?'Buscar nome ou atividade…':this.tab==='log'?'Buscar acontecimento…':'Pesquisar nesta janela…';this.inputAt(this.search,bx,by,split?254:bw);by+=38;
-    const views=VIEWS[this.tab];if(views&&this.tab!=='government'){const row=new Page(ui,bx,by,bw,by,y+h-24);row.buttons(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));by=row.y;}
+    const views=VIEWS[this.tab];if(views&&this.tab!=='government'){const row=new Page(ui,bx,by,bw,by,y+h-24);row.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));by=row.y;}
     if(listMode&&!split){const tw=Math.floor((bw-6)/2);ui.button(bx,by,tw,28,'LISTA',()=>{this.mobileDetail=false;},{selected:!this.mobileDetail});ui.button(bx+tw+6,by,tw,28,'FICHA',()=>{this.mobileDetail=true;},{selected:this.mobileDetail});by+=38;}
     const bh=Math.max(16,y+h-by-29);
     if(split){this.pane(ui,'list',bx,by,254,bh,p=>this.directory(p));this.pane(ui,`detail:${this.selected?.id}:${this.detailTab}`,bx+268,by,bw-268,bh,p=>this.detail(p));}
@@ -240,7 +240,7 @@ export class CityUI {
     if (this.tab === 'economy') this.demands(p);
   }
   dossierTabs(p, tabs) {
-    p.buttons(tabs.map(([id, label]) => ({ label, selected: this.detailTab === id, click:()=>this.openPanel({detailTab:id}) })));
+    p.links(tabs.map(([id, label]) => ({ label, selected: this.detailTab === id, click:()=>this.openPanel({detailTab:id}) })));
     p.space(3);
   }
   homeLabel(id) {
@@ -420,7 +420,7 @@ export class CityUI {
     p.table([{label:'Quando',weight:.7},{label:'Movimentação',weight:2},{label:'Valor',weight:1}],rows.map(l=>({cells:[stamp(l.minute),l.reason,`${l.to===account?'+':'−'}${money(l.amount)}`],color:l.to===account?C.green:C.red})),{empty:'Nenhuma movimentação registrada.'});
   }
   demands(p) {
-    const mode=this.demandTab||'opportunities';p.buttons([['opportunities','Oportunidades'],['prices','Preços'],['agreements','Acordos']].map(([id,label])=>({label,selected:id===mode,click:()=>this.openPanel({demandTab:id})})));
+    const mode=this.demandTab||'opportunities';p.links([['opportunities','Oportunidades'],['prices','Preços'],['agreements','Acordos']].map(([id,label])=>({label,selected:id===mode,click:()=>this.openPanel({demandTab:id})})));
     if(mode==='prices'){p.heading('PREÇOS E MERCADO');const rows=Object.entries(this.city.economy.market||{}).filter(([,r])=>r.demand>0||r.stock>0).filter(([g])=>this.matches(GOODS[g].label));p.table([{label:'Produto',weight:1.7},{label:'Preço'},{label:'Oferta'},{label:'Procura'}],rows.map(([g,r])=>({cells:[GOODS[g].label,money(this.city.economy.goods[g].price),Math.round(r.stock),Math.round(r.demand)]})));return;}
     if(mode==='agreements'){p.heading('ACORDOS ENTRE EMPRESAS');const city=this.city;p.table([{label:'Produto'},{label:'Fornecedor',weight:1.5},{label:'Comprador',weight:1.5},{label:'Preço'}],(city.economy.supplyAgreements||[]).map(a=>({cells:[GOODS[a.good].label,name(city.building(a.sellerId)?.entity),name(city.building(a.buyerId)?.entity),money(a.unitPrice)],click:()=>this.openBuilding(a.buyerId)})));return;}
     p.heading('DEMANDAS E OPORTUNIDADES');const rows=this.city.economy.demands.filter(d=>d.score>0&&this.matches(`${BUILDING_TYPES[d.type].label} ${CROPS[d.crop]?.label||''}`));
@@ -500,8 +500,8 @@ export class CityUI {
     if(view==='overview'){
       p.heading('PREFEITURA');if(mayor)p.record(name(mayor.entity),'Prefeito em exercício',()=>this.openCitizen(mayor.id));
       p.metrics([['TESOURO',money(city.treasury)],['APROVAÇÃO',`${city.politics.approval.toFixed(1)}%`]]);
-      for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.buttons(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
-      p.heading('ADMINISTRAÇÃO');p.buttons([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));
+      for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
+      p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice(-30).reverse());}
     else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
@@ -650,7 +650,7 @@ export class CityUI {
     p.heading('MEMÓRIAS E CRENÇAS');
     p.note(`Até ${RELATIONSHIP_RULES.memories} recordações e ${RELATIONSHIP_RULES.beliefs} histórias ouvidas por pessoa. Crenças podem estar erradas; o conhecimento se espalha nos encontros.`);
     if(this.memoryPersonId)p.button(`FILTRANDO VÍNCULO: ${this.city.accountName(`citizen:${this.memoryPersonId}`)} / LIMPAR`,()=>{this.memoryPersonId=null;this.memoryPage=0;this.resetScroll();});
-    p.buttons([['memories','RECORDAÇÕES'],['beliefs','HISTÓRIAS OUVIDAS'],['grief','LUTO']].map(([id,label])=>({label,selected:(this.memoryView||'memories')===id,click:()=>this.openPanel({memoryView:id})})));
+    p.links([['memories','RECORDAÇÕES'],['beliefs','HISTÓRIAS OUVIDAS'],['grief','LUTO']].map(([id,label])=>({label,selected:(this.memoryView||'memories')===id,click:()=>this.openPanel({memoryView:id})})));
     if(this.memoryView==='grief') {
       for(const g of c.social.grief){p.heading(g.name,C.pink);p.kv('Perda',stamp(g.startedAt));p.kv('Recuperação prevista',stamp(g.until));p.kv('Intensidade atual',Math.round(g.strength*Math.max(0,(g.until-this.city.minute)/(g.until-g.startedAt))));}
       if(!c.social.grief.length)p.note('Sem luto recente.');

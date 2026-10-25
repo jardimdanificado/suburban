@@ -8,7 +8,7 @@ export function renderEventInspector(ui,p){
   const city=ui.city,event=city.history.get(ui.selectedEventId)||ui.eventSnapshot;
   p.heading(`INSPETOR DO EVENTO #${ui.selectedEventId}`);
   if(!event){p.note('Registro indisponível.');return;}
-  const tab=ui.eventTab||'summary';p.buttons([['summary','RESUMO'],['details','DETALHES'],['timeline','LINHA DO TEMPO']].map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({eventTab:id})})));
+  const tab=ui.eventTab||'summary';p.links([['summary','RESUMO'],['details','DETALHES'],['timeline','LINHA DO TEMPO']].map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({eventTab:id})})));
   if(tab==='summary'){renderEventSummary(ui,p,event);return;}if(tab==='timeline'){renderEventTimeline(ui,p,event);return;}
   p.note(event.message);
   p.columns(q=>{q.kv('Quando',stamp(event.minute));q.kv('Assunto',EVENT_CATEGORIES[event.category]||event.category||event.kind);},q=>{q.kv('Tipo',eventTypeLabel(event));if(event.amount!=null)q.kv('Valor registrado',formatMoney(event.amount));});
