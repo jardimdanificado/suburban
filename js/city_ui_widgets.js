@@ -56,18 +56,30 @@ export class UIPage {
     if(!items.length)return;
     const state=this.ui.windowState;if(state?.host){state.windowLinks??=[];state.windowLinks.push(...items);}
     if(!items.some(item=>'selected' in item||'current' in item)){this.buttons(items);return;}
-    let dx=0;const ctx=this.ui.ctx;
+    const rows=[[]],gap=2,rowHeight=24,tabHeight=22;let used=0;
     for(const item of items){
-      const w=Math.min(this.w,Math.ceil(widthOf(this.ui,item.label))+18),selected=!!(item.current??item.selected);
-      if(dx&&dx+w>this.w){dx=0;this.y+=21;}
-      if(this.visible(19)){
-        ctx.fillStyle=selected?T.selected:T.face;ctx.fillRect(this.x+dx,this.y,w-2,19);
-        ctx.fillStyle=selected?T.blue:T.line;ctx.fillRect(this.x+dx,this.y+17,w-2,selected?2:1);
-        this.ui.text(fit(this.ui,item.label,w-14),this.x+dx+7,this.y+3,selected?T.blue:T.ink);
-        this.ui.regions.push({x:this.x+dx,y:this.y,w:w-2,h:19,label:item.label,onClick:item.click});
-      }dx+=w;
-    }this.y+=23;
+      // Reserve bold text width for every state so selecting a tab never changes
+      // its width or pushes the following labels into a different row.
+      const measured=this.ui.textWidth?this.ui.textWidth(item.label,1,true):widthOf(this.ui,item.label);
+      const w=Math.min(this.w,Math.max(52,Math.ceil(measured)+20));
+      if(used&&used+gap+w>this.w){rows.push([]);used=0;}
+      const x=this.x+used+(used?gap:0);rows.at(-1).push({item,x,w});used=x-this.x+w;
+    }
+    const ctx=this.ui.ctx;
+    for(const row of rows){
+      if(this.visible(tabHeight)){
+        ctx.fillStyle=T.shadow;ctx.fillRect(this.x,this.y+tabHeight-1,this.w,1);
+        for(const {item,x,w}of row){
+          const selected=!!(item.current??item.selected);
+          if(this.ui.tab)this.ui.tab(x,this.y,w,tabHeight,item.label,item.click,{selected});
+          else this.ui.button(x,this.y,w,tabHeight,fit(this.ui,item.label,w-16),item.click,{selected});
+        }
+      }
+      this.y+=rowHeight;
+    }
+    this.y+=2;
   }
+
   status(title,description='',color=T.blue,click=null){
     const start=this.y,lines=description?wrapped(this.ui,description,this.w-18):[],height=22+lines.length*14;
     if(this.visible(height)){

@@ -21,8 +21,8 @@ export function bevel(ctx,x,y,w,h,{inset=false,fill=T.face}={}) {
 export class ManagementCanvasUI extends LegacyCanvasUI {
   beginFrame(x=-1,y=-1){this.pointer={x,y};super.beginFrame(x,y);}
   font(scale=1,bold=false){return `${bold||scale>1?'600':'400'} ${Math.round(scale>1?16:11)}px Tahoma, Verdana, sans-serif`;}
-  textWidth(value,scale=1){
-    const text=readableLabel(value),font=this.font(scale),key=`${font}:${text}`;this.widthCache??=new Map();
+  textWidth(value,scale=1,bold=false){
+    const text=readableLabel(value),font=this.font(scale,bold),key=`${font}:${text}`;this.widthCache??=new Map();
     if(this.widthCache.has(key))return this.widthCache.get(key);
     this.ctx.save();this.ctx.font=font;const width=this.ctx.measureText(text)?.width;this.ctx.restore();const result=Number.isFinite(width)?width:text.length*7*scale;
     if(this.widthCache.size>=4096)this.widthCache.delete(this.widthCache.keys().next().value);this.widthCache.set(key,result);return result;
@@ -37,6 +37,19 @@ export class ManagementCanvasUI extends LegacyCanvasUI {
     bevel(ctx,x,y,w,h,{inset:selected,fill:selected?T.selected:hover?T.paper:T.face});
     const title=readableLabel(label);ctx.save();ctx.beginPath();ctx.rect(x+3,y+2,w-6,h-4);ctx.clip();ctx.font=this.font(1,selected);ctx.textBaseline='middle';ctx.textAlign='center';ctx.fillStyle=danger?T.red:T.ink;ctx.fillText(title,x+w/2+(selected?1:0),y+h/2+(selected?1:0));ctx.restore();
     this.regions.push({x,y,w,h,label,onClick});
+  }
+  tab(x,y,w,h,label,onClick,{selected=false}={}){
+    const ctx=this.ctx,hover=this.pointer&&this.pointer.x>=x&&this.pointer.x<x+w&&this.pointer.y>=y&&this.pointer.y<y+h;
+    // Selected tabs sit in front of the strip, instead of looking pressed in.
+    const top=selected?y:y+2,height=h-(selected?0:2);
+    bevel(ctx,x,top,w,height,{fill:selected?T.paper:hover?T.row:T.face});
+    if(selected){ctx.fillStyle=T.paper;ctx.fillRect(x+1,y+h-2,w-2,2);ctx.fillStyle=T.header;ctx.fillRect(x+2,y+2,w-4,2);}
+    ctx.save();ctx.beginPath();ctx.rect(x+5,top+3,Math.max(0,w-10),Math.max(0,height-5));ctx.clip();
+    ctx.font=this.font(1,selected);ctx.textBaseline='middle';ctx.textAlign='center';ctx.fillStyle=T.ink;
+    let title=readableLabel(label);
+    if(ctx.measureText(title).width>w-16){let low=0,high=title.length;while(low<high){const middle=Math.ceil((low+high)/2);if(ctx.measureText(title.slice(0,middle)+'…').width<=w-16)low=middle;else high=middle-1;}title=low?title.slice(0,low)+'…':'';}
+    ctx.fillText(title,x+w/2,top+height/2+.5);ctx.restore();
+    this.regions.push({x,y:top,w,h:height,label,onClick});
   }
   clickAt(x,y){const region=this.hitTest(x,y);if(region)region.onClick?.({x,y});return !!region;}
   box(x,y,w,h){bevel(this.ctx,x,y,w,h);}
