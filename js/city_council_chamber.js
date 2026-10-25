@@ -6,8 +6,9 @@ export class CityCouncilChamber {
   constructor(city){this.city=city;this.buildingIds=[];this.contracts=[];this.lastPlanHour=null;this.lastMinute=null;this.sessions=[];}
   buildings(){return this.city.buildings.filter(b=>b.type==='council_chamber'&&b.active&&!b.entity.destroyed);}
   hall(){return this.buildings()[0]||null;}
+  workHours(){return this.city.hour>=8&&this.city.hour<17;}
   open(){return this.city.hour>=10&&this.city.hour<12||this.city.hour>=15&&this.city.hour<17;}
-  present(){const hall=this.hall();return hall?this.city.politics.council.people().filter(c=>c.task==='council-session'&&c.councilSession?.buildingId===hall.id&&!c.path.length&&Math.hypot(c.entity.x-hall.door.x,c.entity.y-hall.door.y)<1.5&&!this.city.urgentNeed(c)):[];}
+  present(){const hall=this.hall();return hall&&this.open()?this.city.politics.council.people().filter(c=>c.task==='council-session'&&c.councilSession?.buildingId===hall.id&&!c.path.length&&Math.hypot(c.entity.x-hall.door.x,c.entity.y-hall.door.y)<1.5&&!this.city.urgentNeed(c)):[];}
   quorum(){const council=this.city.politics.council;return this.present().reduce((n,c)=>n+council.weight(c.id),0)>council.totalWeight()/2;}
   report(reason,details={}){this.planning={minute:this.city.minute,reason,...details};}
   constructionCost(cells){const city=this.city;return cells*DEVELOPMENT_RULES.stonePerCell*city.economy.goods.pedra.price+Math.ceil(cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell)*DEVELOPMENT_RULES.municipalMultiplier);}
@@ -81,19 +82,20 @@ export class CityCouncilChamber {
     if(project){project.costCenter='council';project.priority=buildings.length?90:92;project.waitingForCouncilContract=false;this.contracts.push(project.id);this.report('Obra contratada: aguardando entrega dos materiais.',{projectId:project.id});city.log(`Câmara contratou ${project.service==='expansion'?'ampliação para novos gabinetes':'plenário térreo; gabinetes serão construídos em ampliações'}; ${offices.length}/${council.members.length} gabinetes disponíveis.`,'government',[],{kind:'council-premises-contracted',projectId:project.id,buildingId:project.buildingId,costCenter:'council',fee:project.fee});}
     else this.report('Aguardando condições para contratar a ampliação.');
   }
-  arrive(c){const hall=this.hall();if(!hall||!this.open()||Math.hypot(c.entity.x-hall.door.x,c.entity.y-hall.door.y)>1.5){this.release(c);return;}c.action='No plenário da Câmara: sessão legislativa';}
+  arrive(c){const hall=this.hall();if(!hall||!this.workHours()||Math.hypot(c.entity.x-hall.door.x,c.entity.y-hall.door.y)>1.5){this.release(c);return;}c.action=this.open()?'No plenário da Câmara: sessão legislativa':'No gabinete da Câmara: analisando projetos e atendendo eleitores';}
   release(c){if(c.task==='council-session'){c.task=null;c.path=[];}c.councilSession=null;}
   minute(){
     const city=this.city,council=city.politics.council;if(this.lastMinute===city.minute)return;this.lastMinute=city.minute;const members=new Set(council.members.map(m=>m.citizenId));for(const bill of council.bills)if(bill.status==='awaiting-session'&&!members.has(bill.authorId)){bill.status='dismissed';bill.result='Autor deixou a Câmara antes de apresentar o projeto';city.log(`Projeto arquivado antes da apresentação: ${bill.title}.`,'government',[bill.authorId],{kind:'bill-dismissed',billId:bill.id});}const hall=this.hall();
-    if(!hall||!this.open()){for(const c of council.people())if(c.councilSession)this.release(c);return;}
+    if(!hall||!this.workHours()){for(const c of council.people())if(c.councilSession)this.release(c);return;}
     let routed=0;
     for(const c of council.people()){
       if(c.councilSession&&c.task!=='council-session')c.councilSession=null;
       if(c.task==='council-session'){if(city.urgentNeed(c))this.release(c);continue;}
-      if(routed>=2||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||['vote','research','interview','campaign','care','caregiving','food','provisions','water','health','energy','toilet','workmeal'].includes(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<35||city.minute-(c.lastCouncilRouteAt??-Infinity)<30)continue;
+      if(routed>=2||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||['vote','interview','care','caregiving','food','provisions','water','health','energy','toilet','workmeal'].includes(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<35||city.minute-(c.lastCouncilRouteAt??-Infinity)<30)continue;
       c.lastCouncilRouteAt=city.minute;const path=city.findPath(c.entity,hall.door);if(path===null)continue;
-      c.path=path;c.task='council-session';c.targetId=hall.id;c.councilSession={buildingId:hall.id,startedAt:city.minute};c.action='Indo à sessão da Câmara';routed++;
+      c.path=path;c.task='council-session';c.targetId=hall.id;c.councilSession={buildingId:hall.id,startedAt:city.minute};c.action='Indo trabalhar na Câmara';routed++;
     }
+    if(!this.open())return;
     const present=this.present(),presentIds=new Set(present.map(c=>c.id));
     for(const bill of council.bills.filter(b=>b.status==='awaiting-session'&&presentIds.has(b.authorId))){bill.status='proposed';bill.proposedAt=city.minute;bill.voteAt=city.minute+60;bill.plenaryBuildingId=hall.id;bill.proposalEventId=city.log(`${bill.authorName} apresentou no plenário: ${bill.title}.`,'government',[bill.authorId],{kind:'bill-proposed',billId:bill.id,buildingId:hall.id,parentEventId:bill.eventId}).id;}
     if(this.quorum())for(const bill of council.bills.filter(b=>b.status==='proposed'&&city.minute>=b.voteAt))council.vote(bill);

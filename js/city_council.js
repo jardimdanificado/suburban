@@ -18,21 +18,20 @@ export class CityCouncil {
   people(){return this.members.map(m=>this.city.society.citizen(m.citizenId)).filter(Boolean);}
   seat(c,provisional=false) {
     if(!c || this.members.some(m=>m.citizenId===c.id))return;
-    const city=this.city;c.role='councilor';
-    city.log(`${c.entity.properties.name} tomou posse na Câmara, mantendo sua ocupação profissional.`,'government',[c.id],{kind:'councilor-appointed',partyId:c.political.partyId});
+    const city=this.city;city.politics.releaseDuties(c,'Posse como vereador em dedicação exclusiva');c.role='councilor';
+    city.log(`${c.entity.properties.name} tomou posse na Câmara em dedicação exclusiva.`,'government',[c.id],{kind:'councilor-appointed',partyId:c.political.partyId});
     this.members.push({citizenId:c.id,name:c.entity.properties.name,partyId:c.political.partyId,since:city.minute,provisional});
   }
   remove(id,reason='Encerramento da legislatura') {
     const member=this.members.find(m=>m.citizenId===id),c=this.city.society.citizen(id);this.members=this.members.filter(m=>m.citizenId!==id);
     if(id===this.leaderId){this.leaderId=null;this.city.politics.syncGoverningFlag();}
     if(member && !['Encerramento da legislatura','Redimensionamento da Câmara'].includes(reason))this.vacancies.push(member.partyId);
-    if(c && member)c.role='citizen';
+    if(c && member){this.getChamber().release(c);c.role='citizen';c.action='Mandato encerrado; disponível para trabalhar';}
   }
   ensure() {
     const p=this.city.politics;if(!p.parties.length)return;const bounds=this.bounds();p.policy.councilRate??=5;this.seats=Math.max(bounds.min,Math.min(bounds.max,Math.ceil(bounds.population*p.policy.councilRate/100)));while(this.members.length>this.seats)this.remove(this.members.at(-1).citizenId,'Redimensionamento da Câmara');
-    // Release the full-time hall assignments created by the previous council model.
-    const hall=this.city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
-    if(!this.partTimeMigrated){if(hall){hall.jobs=2;for(const c of this.people())if(c.jobId===hall.id)this.city.economy.leaveJob(c,'Vereança passa a funcionar em tempo parcial');}this.partTimeMigrated=true;}
+    // Also migrate sitting councilors from saves made under the former part-time rule.
+    for(const c of this.people())if(c.jobId||c.deliveryId||c.cleaningJobId||['work','manage','construction','research','transport'].includes(c.task))p.releaseDuties(c,'Vereança em dedicação exclusiva');
     for(const m of [...this.members])if(!p.eligible(this.city.society.citizen(m.citizenId)))this.remove(m.citizenId,'Vacância da cadeira');
     if(this.members.length>=this.seats)return;
     let candidates=this.city.citizens.filter(c=>p.canRun(c,'council') && c.id!==this.city.economy.mayorId && c.id!==p.viceMayorId && !this.members.some(m=>m.citizenId===c.id));

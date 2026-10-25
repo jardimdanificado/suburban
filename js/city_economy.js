@@ -124,9 +124,10 @@ export class CityEconomy {
   quarryStatus(b){
     if(this.city.world.map){const revision=this.city.world.revision||0;if(b.depositRevision!==revision||!b.deposits){b.deposits=quarryDeposits(this.city.world,b.entity.x,b.entity.y,b.width,b.depth);b.depositRevision=revision;}}
     const rock=this.city.world.map?(b.deposits||[]).reduce((n,p)=>n+(this.city.world.quarryReserves?.get(`${p.x},${p.y}`)??250),0):(b.stoneReserve??12000);
-    const remaining=Math.max(0,Math.min(b.stoneReserve??12000,rock)),staff=b.workers.length+(this.citizen(b.ownerId)?1:0);
+    const remaining=Math.max(0,Math.min(b.stoneReserve??12000,rock)),staff=b.workers.length+(this.workingOwner(b)?1:0);
     return {remaining,staff,daily:Math.min(remaining,staff*80),potential:Math.min(remaining,Math.max(staff,b.jobs||0)*80)};
   }
+  workingOwner(b){const c=this.citizen(b?.ownerId);return c&&c.role!=='councilor'?c:null;}
   staffEssentials() {
     const city=this.city,needs=city.welfare.conditions(),projects=city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed'),stone=projects.reduce((n,p)=>n+Math.max(0,p.stone-p.inventory.pedra-(p.incoming.pedra||0)),0),freight=city.logistics.demandMetrics(),firms=this.businesses;
     for(const b of firms){
@@ -163,7 +164,7 @@ export class CityEconomy {
     }
     this.reconcileStaff();
     const offers = this.city.buildings.filter(b => b.active && b.jobs > 0 && !b.entity.destroyed);
-    const available = () => this.city.citizens.filter(c => this.city.society.isAdult(c) && !c.entity.destroyed && !c.jobId && !c.businessIds.length && !this.city.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed') && c.id !== this.mayorId);
+    const available = () => this.city.citizens.filter(c => this.city.society.isAdult(c) && !c.entity.destroyed && !c.jobId && !c.businessIds.length && c.role!=='councilor' && c.id!==this.mayorId && !this.city.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed'));
     const priority = ['mint', 'bakery', 'market', 'greengrocer', 'farm', 'mill', 'quarry', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'builder', 'mint', 'townhall'];
     const underserved = offers.filter(b => !b.workers.length).length;
     // Give each operating firm its first employee before filling additional posts elsewhere.
@@ -342,7 +343,7 @@ export class CityEconomy {
   }
   farmCapacity(b,planned=false) {
     const area=b.fields.reduce((n,f)=>n+(f.area||12),0);
-    const staff=(planned?Math.max(b.jobs,b.workers.length):b.workers.length)+(this.citizen(b.ownerId)?1:0);
+    const staff=(planned?Math.max(b.jobs,b.workers.length):b.workers.length)+(this.workingOwner(b)?1:0);
     const labor=b.fields.reduce((n,f)=>n+(f.requiredLabor||ECONOMY_RULES.farmLabor),0);
     const cycle=Math.max(CROPS[b.crop]?.grow||120,labor/Math.max(1,staff));
     const harvest=b.fields.reduce((n,f)=>n+(f.yield||12),0);

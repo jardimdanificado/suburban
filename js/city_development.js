@@ -443,7 +443,7 @@ export class CityDevelopment {
   }
   reserveConstruction(project){const dispatch=constructionDispatch.get(this);if(dispatch?.minute===this.city.minute)dispatch.assigned.set(project.id,(dispatch.assigned.get(project.id)||0)+1);}
   balanceContracts() {
-    const builders=this.city.economy.businesses.filter(b=>b.type==='builder' && (b.workers.length || this.city.economy.citizen(b.ownerId)));
+    const builders=this.city.economy.businesses.filter(b=>b.type==='builder' && (b.workers.length || this.city.economy.workingOwner(b)));
     if(builders.length<2)return;
     const load=new Map(builders.map(b=>[b.id,0])),dispatched=new Set(this.city.citizens.filter(c=>!c.entity.destroyed&&c.task==='construction').map(c=>c.workProjectId));
     const projects=this.projects.filter(p=>!p.cancelled && p.status!=='completed' && p.builderId);

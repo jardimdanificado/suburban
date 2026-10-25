@@ -4766,12 +4766,21 @@ export class RCT3DRenderer {
   }
 
   getCornerHeight(map, vx, vy) {
+    const cacheable=Number.isInteger(vx)&&Number.isInteger(vy)&&vx>=0&&vy>=0&&vx<=MAP_WIDTH&&vy<=MAP_HEIGHT;
+    let cache=this._cornerHeightCache,index;
+    if(cacheable){
+      if(!cache||cache.map!==map){const size=(MAP_WIDTH+1)*(MAP_HEIGHT+1);cache=this._cornerHeightCache={map,revision:this.currentWorldRevision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size)};}
+      if(cache.revision!==this.currentWorldRevision){cache.revision=this.currentWorldRevision;cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
+      index=vy*(MAP_WIDTH+1)+vx;
+      if(cache.marks[index]===cache.generation)return cache.values[index];
+    }
     const t00 = this.getTileTypeAt(map, vx - 1, vy - 1);
     const t10 = this.getTileTypeAt(map, vx, vy - 1);
     const t01 = this.getTileTypeAt(map, vx - 1, vy);
     const t11 = this.getTileTypeAt(map, vx, vy);
 
     if (t00 === TILE_WATER && t10 === TILE_WATER && t01 === TILE_WATER && t11 === TILE_WATER) {
+      if(cacheable){cache.values[index]=0;cache.marks[index]=cache.generation;}
       return 0.0;
     }
 
@@ -4782,7 +4791,9 @@ export class RCT3DRenderer {
     if (t01 !== TILE_WATER && t01 !== TILE_VOID) { sum += this.getTileBaseHeight(t01); count++; }
     if (t11 !== TILE_WATER && t11 !== TILE_VOID) { sum += this.getTileBaseHeight(t11); count++; }
 
-    return count > 0 ? (sum / count) : 0.0;
+    const height=count > 0 ? (sum / count) : 0.0;
+    if(cacheable){cache.values[index]=height;cache.marks[index]=cache.generation;}
+    return height;
   }
 
   // ---------------------------------------------------------------------------
@@ -6089,7 +6100,9 @@ export class RCT3DRenderer {
 
   render(world, entities, time, dt, simSpeed = 1.0, visionCreature = null, visualizedGroupId = null) {
     if (!this.width || !this.height || !world) return;
+    const profileStart = this.profileFrame ? performance.now() : 0;
     this.currentMap = world.map;
+    this.currentWorldRevision = world.revision;
 
     const isPersp = this.isPerspectiveActive();
     if (this._lastPerspState !== isPersp) {
@@ -6161,6 +6174,7 @@ export class RCT3DRenderer {
     }
 
     this.rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionCreature);
+    const profileTerrain = this.profileFrame ? performance.now() : 0;
 
     // Current Vision Zone
     const zoneSz = 8;
@@ -6189,6 +6203,7 @@ export class RCT3DRenderer {
     }
 
     syncCityBuildings(this, THREE, entities, world);
+    const profileCity = this.profileFrame ? performance.now() : 0;
 
     // Render 3D Volumetric Instanced Entities
     const map = world.map;
@@ -6274,9 +6289,11 @@ export class RCT3DRenderer {
       }
     }
 
+    let profileCitizenClass = 0, profileCitizenSurface = 0, profileCitizenBody = 0;
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
       if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.cityVehicle||e.properties.campaignDecoration) continue;
+      const profileCitizenStart = this.profileFrame && e.properties.citizen ? performance.now() : 0;
 
       if (e.x < this.renderedMinTx || e.x > this.renderedMaxTx + 0.99 ||
           e.y < this.renderedMinTy || e.y > this.renderedMaxTy + 0.99) {
@@ -6288,6 +6305,13 @@ export class RCT3DRenderer {
         if (!knownZones.has(zk)) {
           continue; // Entity is in an unknown zone -> completely hidden
         }
+      }
+
+      const cityCitizen=e.properties.citizen;
+      if(cityCitizen&&(cityCitizen.indoorLocation||cityCitizen.ridingVehicleId)&&this.selectedEntityId!==e.id){
+        const sprite=this.entitySprites.get(e.id);
+        if(sprite){sprite.visible=false;activeIds.add(e.id);}
+        continue;
       }
 
       const r = e.properties.render;
@@ -6308,7 +6332,7 @@ export class RCT3DRenderer {
       const isMaple = isPlantOrFlora && (e.properties.species === "maple" || e.properties.name?.toLowerCase().includes("bordo") || e.properties.name?.toLowerCase().includes("maple"));
       const isBerryBush = isPlantOrFlora && (e.properties.species === "berry" || e.properties.name?.toLowerCase().includes("amora") || (e.properties.species === "bush" && !e.properties.name?.toLowerCase().includes("florido")));
       const isRoseBush = isPlantOrFlora && (e.properties.species === "rose_bush" || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
-      const isTree = !isCactus && !isBerryBush && !isRoseBush && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
+      const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
       const isPine = isTree && (e.properties.species === "pine" || (r.skin && r.skin.toLowerCase().includes("pine")));
 
       const isWoodLog = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "wood" || e.properties.name?.includes("Wood Log") || e.properties.name?.includes("Madeira") || r.skin === "Item_Wood.png");
@@ -6320,6 +6344,7 @@ export class RCT3DRenderer {
       const isBuilding = isHouse || isWall || isDoor || isWarehouse || isSlaughterhouse || isKitchen || isWell || isArtisanHut;
       const isPlantOrItem = isTree || isCactus || isBerryBush || isRoseBush || isWoodLog || isStoneItem || isTorch || isCampfire || isRoad;
       const isItem = !e.properties.brain && !isBuilding && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isWoodLog && !isStoneItem && !isTorch && !isCampfire && !isRoad;
+      const profileAfterClass = profileCitizenStart ? performance.now() : 0;
 
       const isStaticEntity = isBuilding || isPlantOrItem;
       if (isStaticEntity && !isDoor && !shouldUpdateStaticInstances) {
@@ -6343,8 +6368,13 @@ export class RCT3DRenderer {
       } else if (isBuilding) {
         surfaceH = this.getTileSurfaceHeight(map, Math.floor(e.x), Math.floor(e.y), 1, 1);
       } else {
-        surfaceH = this.getSurfaceElevation(map, isPlantOrItem ? e.x + 0.5 : e.x, isPlantOrItem ? e.y + 0.5 : e.y);
+        if(cityCitizen){
+          const cache=this._entitySurfaceCache??=new WeakMap(),cached=cache.get(e);
+          if(cached&&cached.x===e.x&&cached.y===e.y&&cached.revision===world.revision)surfaceH=cached.height;
+          else{surfaceH=this.getSurfaceElevation(map,e.x,e.y);cache.set(e,{x:e.x,y:e.y,revision:world.revision,height:surfaceH});}
+        }else surfaceH = this.getSurfaceElevation(map, isPlantOrItem ? e.x + 0.5 : e.x, isPlantOrItem ? e.y + 0.5 : e.y);
       }
+      const profileAfterSurface = profileCitizenStart ? performance.now() : 0;
 
       // --- 3D WOOD LOGS (Volumetric Stacked Timber Logs) ---
       if (isWoodLog && woodLogCount < this.maxInstances) {
@@ -6970,7 +7000,7 @@ export class RCT3DRenderer {
           }
 
           const ep = e.properties || {};
-          for (const k in ep) {
+          if(!cityCitizen)for (const k in ep) {
             const p = ep[k];
             if ((k.includes("arm") || k.includes("hand") || k.includes("Arm") || k.includes("Hand")) && p && p.heldItem) {
               heldItems.push(p.heldItem);
@@ -7119,9 +7149,11 @@ export class RCT3DRenderer {
           fpH: selFpH
         };
       }
+      if(profileCitizenStart){profileCitizenClass+=profileAfterClass-profileCitizenStart;profileCitizenSurface+=profileAfterSurface-profileAfterClass;profileCitizenBody+=performance.now()-profileAfterSurface;}
     }
 
     // --- RENDER UNSTARTED CLAN HOUSE PLOTS (STAGE 0: PEGS & BOUNDARY STRINGS) ---
+    const profileEntityLoop = this.profileFrame ? performance.now() : 0;
     if (clanGroups.size > 0 && pegsCount < 400) {
       for (const group of clanGroups.values()) {
         if (!group || !group.claimedZones) continue;
@@ -7539,6 +7571,7 @@ export class RCT3DRenderer {
 
 
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
+    const profilePrepared = this.profileFrame ? performance.now() : 0;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     if (this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget) {
       this.renderer.setRenderTarget(this.renderTarget);
@@ -7589,6 +7622,7 @@ export class RCT3DRenderer {
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.scene, activeCam);
     }
+    if (this.profileFrame) this.frameProfile = {terrain:profileTerrain-profileStart,city:profileCity-profileTerrain,entities:profilePrepared-profileCity,entityLoop:profileEntityLoop-profileCity,entityRest:profilePrepared-profileEntityLoop,citizenClass:profileCitizenClass,citizenSurface:profileCitizenSurface,citizenBody:profileCitizenBody,webgl:performance.now()-profilePrepared};
   }
 
   projectWorldToScreen(worldX, worldY, elevation = 0) {

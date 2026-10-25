@@ -68,7 +68,7 @@ export class CityResearch {
     if(!s.funded){const amount=Math.ceil(s.budget*1.5);if(city.transfer('treasury',b.accountId,amount,'Serviço: Pesquisa eleitoral sem investimento privado',{studyId:s.id,electionId:s.electionId,buildingId:b.id,multiplier:1.5})){s.funded=amount;s.funders.push({accountId:'treasury',name:'Prefeitura',kind:'contrato público de último recurso',amount,minute:city.minute,eventId:city.ledger.at(-1)?.eventId});}}
     s.status=s.funded?'collecting':'funding';s.reason=s.funded?'Equipe preparando coleta presencial':'Sem investimento privado e prefeitura sem caixa';
   }
-  staff(b){return [...new Set([b.ownerId,...b.workers])].map(id=>this.city.society.citizen(id)).filter(c=>live(c)&&this.city.society.isAdult(c)&&(c.id===b.ownerId||c.jobId===b.id));}
+  staff(b){return [...new Set([b.ownerId,...b.workers])].map(id=>this.city.society.citizen(id)).filter(c=>live(c)&&c.role!=='councilor'&&this.city.society.isAdult(c)&&(c.id===b.ownerId||c.jobId===b.id));}
   releaseInterview(s,session){
     const city=this.city,c=city.society.citizen(session.voterId);s.reservedIds.delete(session.voterId);
     if(c?.pollInterview?.studyId===s.id&&c.pollInterview.sessionId===session.id){const previous=c.pollInterview.previous;c.pollInterview=null;if(c.task==='interview'){if(!city.urgentNeed(c)){c.task=previous.task;c.path=previous.path;c.targetId=previous.targetId;}else{c.task=null;c.path=[];}}}

@@ -335,7 +335,7 @@ export class CitySimulation {
     const n = c.needs;
     const home = this.building(this.units.get(c.homeUnitId)?.buildingId);
     const job = this.building(c.jobId);
-    const company = c.businessIds.map(id => this.building(id)).filter(b => b?.active).sort((a, b) => Number(b.type === 'farm') - Number(a.type === 'farm'))[Math.floor(this.minute / 120) % Math.max(1, c.businessIds.length)] || c.businessIds.map(id => this.building(id)).find(b => b?.active);
+    const company = c.role==='councilor' ? null : c.businessIds.map(id => this.building(id)).filter(b => b?.active).sort((a, b) => Number(b.type === 'farm') - Number(a.type === 'farm'))[Math.floor(this.minute / 120) % Math.max(1, c.businessIds.length)] || c.businessIds.map(id => this.building(id)).find(b => b?.active);
     const child = this.childrenOf(c.id).find(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
     let task = 'leisure', type = 'leisure';
     const urgent = this.urgentNeed(c);
@@ -350,9 +350,9 @@ export class CitySimulation {
     else if (n.hygiene < 35) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
     else if (child && this.society.isAdult(c)) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
-    else if (c.startupProjectId && this.hour >= 8 && this.hour < 17 && this.development.projects.some(p=>p.id===c.startupProjectId && !p.builderId && !p.cancelled && p.status!=='completed' && p.inventory.pedra>=p.stone)) { task='work';type='startup'; }
+    else if (c.role!=='councilor' && c.startupProjectId && this.hour >= 8 && this.hour < 17 && this.development.projects.some(p=>p.id===c.startupProjectId && !p.builderId && !p.cancelled && p.status!=='completed' && p.inventory.pedra>=p.stone)) { task='work';type='startup'; }
     else if (company && this.hour >= 8 && this.hour < 17) { task = 'manage'; type = 'company'; }
-    else if (job && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
+    else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     else if (n.energy < 65) { task = 'energy'; type = 'home'; }
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
@@ -425,6 +425,7 @@ export class CitySimulation {
     const task = c.task;
     if(task==='shopping'){this.economy.buyConsumerGood(c,b);c.lastShoppingAt=this.minute;c.action='Comprando produtos para a vida cotidiana';c.task=null;return;}
     if (task === 'work' || task === 'manage') {
+      if(c.role==='councilor'){c.task=null;return;}
       if (this.hour < 8 || this.hour >= 17 || !b.active) { c.task = null; return; }
       const isOwner = task === 'manage' && b.ownerId === c.id;
       const wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30));

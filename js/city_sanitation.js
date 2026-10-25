@@ -90,7 +90,7 @@ export class CitySanitation {
     return b.accountId;
   }
   selectCompany(site) {
-    const companies=this.city.economy.businesses.filter(b=>b.type==='cleaner' && (this.city.economy.citizen(b.ownerId) || b.workers.length && b.balance>=b.wage) && this.city.economy.connected(b,site));
+    const companies=this.city.economy.businesses.filter(b=>b.type==='cleaner' && (this.city.economy.workingOwner(b) || b.workers.length && b.balance>=b.wage) && this.city.economy.connected(b,site));
     const load=b=>this.jobs.filter(j=>j.providerId===b.id && !['completed','cancelled'].includes(j.status)).length/Math.max(1,b.workers.length+(b.ownerId?1:0));
     return companies.sort((a,b)=>load(a)-load(b)||a.id-b.id)[0]||null;
   }
@@ -123,7 +123,7 @@ export class CitySanitation {
   worker(job) {
     const b = this.city.building(job.providerId), hall = this.city.buildings.find(b => b.type === 'townhall');
     const ids = b ? [...b.workers, b.ownerId] : hall?.workers || [];
-    return ids.map(id => this.city.society.citizen(id)).find(c => c && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c));
+    return ids.map(id => this.city.society.citizen(id)).find(c => c && c.role!=='councilor' && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c));
   }
   releaseCitizen(c) {
     for (const f of this.facilities.values()) if (f.occupantId === c.id) f.occupantId = null;

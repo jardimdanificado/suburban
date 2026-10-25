@@ -81,7 +81,7 @@ export function renderPolitics(ui,p) {
     fold(ui,p,'governmentPayroll','Orçamentos e regras das próximas gestões',()=>{
       p.kv('Mandato / campanha aprovados',`${gov.policy.termDays} / ${gov.policy.campaignDays} dias`);
       p.kv('Orçamento diário da Câmara',money(gov.policy.councilBudget));p.kv('Salário diário por vereador',money(Math.floor(gov.policy.councilBudget/Math.max(1,gov.council.members.length))));p.kv('Salário diário do prefeito',money(gov.policy.mayorBudget));
-      p.note('O orçamento da Câmara é dividido entre os vereadores. Pagamentos respeitam o caixa e a reserva de subsistência; vereadores mantêm seus empregos.');
+      p.note('O orçamento da Câmara é dividido entre os vereadores. Pagamentos respeitam o caixa e a reserva de subsistência; vereadores trabalham exclusivamente no mandato.');
     });
     p.button('JORNAL OFICIAL E VOTAÇÕES PRESERVADAS',()=>ui.openPanel({tab:'publications',selectedPublicationId:null,publicationTab:'official',publicationSourceEventId:null}));
     fold(ui,p,'governmentRules','Como funcionam os projetos e as votações',()=>{

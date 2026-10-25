@@ -1,17 +1,45 @@
-import { CityStateGraph, bindCityState } from './city_state.js?v=air-mobility-1';
+import { CityStateGraph, bindCityState } from './city_state.js?v=state-motion-7';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
-let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, dirty = false;
+let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0, dirty = false, forceSnapshotPending = false;
 const STEP = 1 / 60;
+const STATE_INTERVAL = 400, MOTION_INTERVAL = 100;
 const allowed = new Set(['vehicles.configureAssembly','vehicles.buyVehicle','vehicles.revisePart','publications.write', 'publications.read', 'publications.configure', 'politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
+function positions() {
+  const people = state.city.citizens, result = new Float64Array(people.length * 3);
+  for (let i = 0; i < people.length; i++) {
+    const c = people[i], at = i * 3;
+    result[at] = c.id; result[at + 1] = c.entity.x; result[at + 2] = c.entity.y;
+  }
+  return result;
+}
+function vehiclePositions() {
+  const vehicles = [...state.city.vehicles.units.values()].filter(v => v.active && !v.scrapped && v.entity);
+  const result = new Float64Array(vehicles.length * 5);
+  let at = 0;
+  for (const v of vehicles) {
+    result[at++] = v.id; result[at++] = v.x || 0; result[at++] = v.y || 0;
+    result[at++] = v.altitude || 0; result[at++] = v.angle || 0;
+  }
+  return result;
+}
 function snapshot(force = false) {
-  if (!state || awaitingAck || (!force && performance.now() - lastSnapshot < 100)) return;
+  if (!state) return false;
+  if (awaitingAck) { if (force) forceSnapshotPending = true; return false; }
+  if (!force && performance.now() - lastSnapshot < STATE_INTERVAL) return false;
   const started = performance.now();
-  const packet = graph.encode(state);
-  postMessage({ type: 'state', packet, tick, elapsed, workMs: performance.now() - started });
-  awaitingAck = true; lastSnapshot = performance.now(); dirty = false;
+  const packet = graph.encode(state), motion = positions(), vehicles = vehiclePositions();
+  postMessage({ type: 'state', packet, positions: motion, vehicles, tick, elapsed, workMs: performance.now() - started }, [motion.buffer, vehicles.buffer]);
+  awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
+  return true;
+}
+function sendMotion() {
+  if (!state || !dirty || paused || performance.now() - lastMotion < MOTION_INTERVAL) return;
+  const motion = positions(), vehicles = vehiclePositions();
+  postMessage({ type: 'motion', positions: motion, vehicles, tick, elapsed }, [motion.buffer, vehicles.buffer]);
+  lastMotion = performance.now();
 }
 function fail(error) {
   paused = true;
@@ -31,7 +59,7 @@ self.onmessage = ({ data }) => {
       accumulator = 0; lastTime = performance.now();
     } else if (data.type === 'ack') {
       awaitingAck = false;
-      if (dirty) snapshot();
+      if (dirty) snapshot(forceSnapshotPending);
     } else if (data.type === 'step' && state && paused) {
       state.city.update(STEP); tick++; elapsed += STEP; dirty = true; snapshot(true);
     } else if (data.type === 'command' && state) {
@@ -77,6 +105,6 @@ setInterval(() => {
       }
       if (steps) dirty = true;
     }
-    if (dirty) snapshot();
+    if (dirty && !snapshot()) sendMotion();
   } catch (error) { fail(error); }
 }, 16);
