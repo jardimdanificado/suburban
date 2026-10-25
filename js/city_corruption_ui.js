@@ -2,7 +2,7 @@ import {formatMoney as money} from './city_ui_format.js';
 import {drawPartyFlag} from './city_party_flags.js';
 const labels={'poll-rigging':'Manipulação de pesquisa eleitoral','vote-buying':'Compra de votos','contract-overbilling':'Superfaturamento contratual',favoritism:'Favorecimento indevido',embezzlement:'Desvio de recursos'};
 const mechanisms={
-  'poll-rigging':'Um candidato ou sua empresa pagou uma quantia elevada ao instituto para inflar suas intenções de voto no relatório divulgado. As entrevistas originais foram preservadas; uma investigação pode comprovar a divergência e provocar uma correção pública.',
+  'poll-rigging':'Um candidato, empresa ou dirigente responsável pela contratação pagou clandestinamente ao instituto para inflar suas intenções de voto no relatório divulgado. As entrevistas originais foram preservadas; uma investigação pode comprovar a divergência e provocar uma correção pública.',
   'vote-buying':'O candidato pagou diretamente a um eleitor em troca de uma promessa de voto. O recebimento não garante que o eleitor cumpra o acordo na urna.',
   'contract-overbilling':'Um aditivo indevido ligado a um contrato público retirou dinheiro do tesouro para o empresário contratado. Os repasses abaixo mostram os retornos efetivamente pagos aos integrantes do esquema.',
   favoritism:'Uma subvenção pública foi direcionada a uma empresa aliada. O favorecimento também dá preferência temporária à empresa; os retornos financeiros realizados aparecem no fluxo.',

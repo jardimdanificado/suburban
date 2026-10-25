@@ -4,12 +4,14 @@ const statuses={funding:'Buscando financiamento',collecting:'Coleta presencial',
 const openStudy=(ui,id)=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'institutes',studyId:id});
 export function renderResearchProgress(ui,p,e){
   const research=ui.city.politics.getResearch(),studies=research.studies.filter(s=>s.electionId===e.id&&s.status!=='published');
+  if(e.requiredPolls?.length){p.heading('PESQUISAS OBRIGATÓRIAS');for(const row of e.requiredPolls)p.record(row.label,`${row.organizerId?ui.city.accountName(`citizen:${row.organizerId}`):'Aguardando dirigente'} · ${statuses[row.status]||'Solicitada'}${row.reason?' · '+row.reason:''}`,()=>row.studyId?openStudy(ui,row.studyId):null);}
   p.windowLink('INSTITUTOS E COLETAS PRESENCIAIS',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'institutes',studyId:null}));
   if(!research.institutes().length)p.note('Aguardando um instituto construído e em funcionamento. A demanda pode gerar empresas privadas; a Câmara pode aprovar uma instalação pública.');
   for(const s of studies.slice(-3))p.record(s.instituteName,`${statuses[s.status]} · ${s.responses.length}/${s.target} entrevistas · mínimo ${s.minimum}`,()=>openStudy(ui,s.id));
 }
 export function renderPollMethod(ui,p,poll){
   p.note(poll.method||'Pesquisa antiga: amostra aleatória sem reposição anterior à criação dos institutos.');
+  if(poll.commission){p.kv('Pesquisa obrigatória',poll.commission.label);p.kv('Organizador responsável',ui.city.accountName(`citizen:${poll.commission.organizerId}`));}
   if(poll.instituteName)p.kv('Instituto responsável',poll.instituteName);
   if(poll.minRate!=null)p.kv('Limites na abertura da coleta',`${poll.minRate}%–${poll.maxRate}% do eleitorado adulto`);
   if(poll.studyId)p.windowLink('FINANCIAMENTO, AGENTES E LOCAIS',()=>openStudy(ui,poll.studyId));
@@ -36,10 +38,11 @@ export function renderResearchDirectory(ui,p){
     p.heading('COLETAS E FINANCIAMENTO');if(pages>1)p.buttons([{label:'ANTERIORES',click:()=>{ui.researchPage=Math.max(0,page-1);}},{label:'PRÓXIMAS',click:()=>{ui.researchPage=Math.min(pages-1,page+1);}}]);
     for(const row of rows.slice(page*10,page*10+10))p.record(`#${row.id} · ${row.instituteName}`,`${statuses[row.status]} · ${row.responses.length} entrevistas · ${money(row.funded)} recebidos`,()=>openStudy(ui,row.id));return;
   }
+  if(s.commission){p.kv('Pesquisa obrigatória da',s.commission.label);p.kv('Organizador',city.accountName(`citizen:${s.commission.organizerId}`));}
   p.block('SITUAÇÃO',statuses[s.status],q=>{
     q.metrics([['ENTREVISTAS',`${s.responses.length}/${s.target}`],['INTERVALO LEGAL',`${s.minimum}–${s.maximum}`],['RECEBIDO',money(s.funded)],['SALÁRIOS DE CAMPO',money(s.wages)]]);
     q.kv('Amostra / eleitorado',`${(s.responses.length/Math.max(1,s.population)*100).toFixed(1)}% / ${s.population}`);q.kv('Limites registrados',`${s.minRate}%–${s.maxRate}%`);q.kv('Orçamento operacional',money(s.budget));q.kv('Abertura / prazo',`${stamp(s.requestedAt)} / ${stamp(s.deadline)}`);q.note(s.reason);
-    q.note('Financiamento privado é buscado primeiro. Sem nenhum investimento, a prefeitura pode contratar por 1,5× o orçamento; falta de caixa pode interromper a coleta. Uma amostra abaixo do mínimo não é publicada.');
+    q.note(s.commission?'Pesquisa obrigatória contratada pelo poder público; todas as entrevistas e os custos continuam sendo reais.':'Financiamento privado é buscado primeiro. Sem nenhum investimento, a prefeitura pode contratar por 1,5× o orçamento; falta de caixa pode interromper a coleta. Uma amostra abaixo do mínimo não é publicada.');
   });
   p.heading('QUEM FINANCIOU');for(const source of s.funders)p.record(source.name,`${source.kind} · ${stamp(source.minute)}`,()=>source.eventId?ui.openEvent(source.eventId):ui.openHistory(null,{logAccountId:source.accountId}),false,{value:money(source.amount)});
   if(!s.funders.length)p.note('Nenhum pagamento recebido.');

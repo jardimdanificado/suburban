@@ -1,7 +1,7 @@
 import {ROAD_TILES,tileAt} from './city_terrain.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const live=c=>c&&!c.entity.destroyed;
-const essential=new Set(['vote','care','caregiving','food','provisions','workmeal','water','health','energy','toilet','construction','research','interview']);
+const essential=new Set(['council-session','vote','care','caregiving','food','provisions','workmeal','water','health','energy','toilet','construction','research','interview']);
 export class CityResearch {
   constructor(city){this.city=city;this.studies=[];this.nextId=1;this.lastMinute=null;this.lastSupplyDay=null;}
   institutes(){return this.city.economy.businesses.filter(b=>b.type==='research_institute'&&b.active&&!b.entity.destroyed);}
@@ -18,25 +18,40 @@ export class CityResearch {
     if(!points.length)for(const b of city.buildings.filter(b=>b.active&&!b.entity.destroyed).slice(0,8))points.push({x:b.door.x,y:b.door.y,flow:1,label:b.entity.properties.name});
     return points;
   }
-  request(e){
-    const city=this.city;this.ensureSupply();
-    for(const b of this.institutes()){
-      if(this.studies.some(s=>s.electionId===e.id&&s.instituteId===b.id&&(s.requestDay===city.day||['funding','collecting'].includes(s.status))))continue;
+  createStudy(e,b,commission=null){const city=this.city;
       const population=city.citizens.filter(c=>live(c)&&city.society.isAdult(c)).length,minRate=clamp(city.politics.policy.pollMinRate??5,5,10),maxRate=clamp(city.politics.policy.pollMaxRate??20,15,20),minimum=Math.ceil(population*minRate/100),maximum=Math.floor(population*maxRate/100);
-      const target=maximum>=minimum&&minimum>0?minimum+Math.floor(city.random()*(maximum-minimum+1)):0;
-      const s={id:this.nextId++,electionId:e.id,instituteId:b.id,instituteName:b.entity.properties.name,requestDay:city.day,requestedAt:city.minute,deadline:e.voteAt,population,cityPopulation:city.citizens.filter(live).length,minRate,maxRate,minimum,maximum,target,status:target?'funding':'insufficient',reason:target?'Aguardando financiamento':'Eleitorado insuficiente para uma amostra inteira dentro dos limites legais',responses:[],respondentIds:new Set(),reservedIds:new Set(),sessions:[],funders:[],funded:0,spent:0,wages:0,sites:this.sites()};
+      const target=maximum>=minimum&&minimum>0?(commission?minimum:minimum+Math.floor(city.random()*(maximum-minimum+1))):0;
+      const s={id:this.nextId++,electionId:e.id,commission:commission?{...commission}:null,instituteId:b.id,instituteName:b.entity.properties.name,requestDay:city.day,requestedAt:city.minute,deadline:e.voteAt,population,cityPopulation:city.citizens.filter(live).length,minRate,maxRate,minimum,maximum,target,status:target?'funding':'insufficient',reason:target?'Aguardando financiamento':'Eleitorado insuficiente para uma amostra inteira dentro dos limites legais',responses:[],respondentIds:new Set(),reservedIds:new Set(),sessions:[],funders:[],funded:0,spent:0,wages:0,sites:this.sites()};
       s.budget=city.currency.price(15000)+Math.max(1,target)*Math.max(city.currency.price(500),b.wage*40);
       const total=s.sites.reduce((n,p)=>n+p.flow,0)||1;
       for(const site of s.sites){site.share=site.flow/total;site.quota=Math.floor(site.share*target);site.interviews=0;}
       let remaining=target-s.sites.reduce((n,p)=>n+p.quota,0);for(const site of s.sites.slice().sort((a,b)=>(b.share*target-b.quota)-(a.share*target-a.quota)))if(remaining-->0)site.quota++;
       s.eventId=city.politics.campaigns.event(e,`${s.instituteName} registrou pesquisa presencial: ${minimum} a ${maximum} entrevistas únicas (${minRate}%–${maxRate}% do eleitorado).`,'research-registered',[],{studyId:s.id,buildingId:b.id}).id;
-      this.studies.push(s);if(target)this.fund(s);
+      this.studies.push(s);if(target)this.fund(s);return s;
+  }
+  request(e){
+    const city=this.city;this.ensureSupply();const institutes=this.institutes();
+    e.requiredPolls??=[{key:'mayor',label:'Prefeitura',organizerId:city.economy.mayorId,status:'requested',studyId:null},{key:'council',label:'Câmara municipal',organizerId:city.politics.council.leaderId,status:'requested',studyId:null}];
+    for(const [index,commission]of e.requiredPolls.entries()){
+      if(commission.studyId!=null)continue;
+      commission.organizerId??=commission.key==='mayor'?city.economy.mayorId:city.politics.council.leaderId;
+      if(!commission.organizerId||!institutes.length){commission.reason=!commission.organizerId?'Aguardando dirigente em exercício':'Aguardando instituto construído e com equipe';continue;}
+      const institute=institutes[index%institutes.length],study=this.createStudy(e,institute,commission);commission.studyId=study.id;commission.status=study.status;
     }
+    for(const b of institutes){
+      if(this.studies.some(s=>s.electionId===e.id&&s.instituteId===b.id&&(s.requestDay===city.day||['funding','collecting'].includes(s.status))))continue;
+      this.createStudy(e,b);
+    }
+    for(const commission of e.requiredPolls){const study=this.studies.find(s=>s.id===commission.studyId);if(study){commission.status=study.status;commission.pollId=study.pollId??null;commission.reason=study.reason;}}
     while(this.studies.length>96){const removable=this.studies.findIndex(s=>!['funding','collecting'].includes(s.status));if(removable<0)break;this.studies.splice(removable,1);}
   }
   fund(s){
     const city=this.city,b=city.building(s.instituteId);if(!b?.active)return;
     s.lastFundingAt=city.minute;
+    if(s.commission){
+      if(!s.funded){const amount=Math.ceil(s.budget*1.5);if(city.transfer('treasury',b.accountId,amount,`Serviço: Pesquisa obrigatória da ${s.commission.label}`,{studyId:s.id,electionId:s.electionId,buildingId:b.id,organizerId:s.commission.organizerId,costCenter:s.commission.key,multiplier:1.5})){s.funded=amount;s.funders.push({accountId:'treasury',name:s.commission.label,kind:'contratação obrigatória',organizerId:s.commission.organizerId,amount,minute:city.minute,eventId:city.ledger.at(-1)?.eventId});}}
+      s.status=s.funded?'collecting':'funding';s.reason=s.funded?'Pesquisa obrigatória financiada; coleta presencial em preparação':'Obrigação registrada; aguardando caixa público';return;
+    }
     const investors=city.citizens.filter(c=>live(c)&&city.society.isAdult(c)&&c.balance>city.currency.price(50000)).sort((a,b)=>b.balance-a.balance).slice(0,12).map(c=>({accountId:c.accountId,reserve:city.currency.price(50000),kind:'investidor privado'}));
     const firms=city.economy.businesses.filter(f=>f.id!==b.id&&!f.municipal&&f.ownerId&&f.active).sort((a,b)=>b.balance-a.balance).slice(0,12).map(f=>({accountId:f.accountId,reserve:city.currency.price(30000)+f.wage*Math.max(1,f.workers.length)*480,kind:'empresa'}));
     for(const source of [...investors,...firms]){
@@ -110,12 +125,13 @@ export class CityResearch {
   respondentWait(c){if(!c.pollInterview){c.task=null;return;}c.action='Respondendo entrevista presencial';}
   manipulate(s,poll,e){
     const city=this.city,p=city.politics,b=city.building(s.instituteId),director=this.staff(b).find(c=>c.id===b.ownerId)||this.staff(b)[0];if(!director||(director.traits?.honesty??.5)>.55)return;
-    const nominees=e.candidates.map(n=>({nomination:n,c:city.society.citizen(n.citizenId)})).filter(a=>live(a.c)&&a.c.id!==director.id&&(a.c.traits?.honesty??.5)<.5);
+    const organizer=s.commission?city.society.citizen(s.commission.organizerId):null;if(s.commission&&(s.commission.key==='mayor'?p.city.economy.mayorId:p.council.leaderId)!==organizer?.id)return;const preferred=organizer?e.candidates.find(n=>n.partyId===organizer.political?.partyId):null;
+    const nominees=(s.commission?(preferred?[{nomination:preferred,c:organizer}]:[]):e.candidates.map(n=>({nomination:n,c:city.society.citizen(n.citizenId)}))).filter(a=>live(a.c)&&a.c.id!==director.id&&(a.c.traits?.honesty??.5)<.5);
     for(const {nomination,c} of nominees){
-      if(city.random()>.12)continue;
-      const amount=city.currency.price(300000+s.target*10000),firms=city.economy.businesses.filter(f=>{const owner=city.society.citizen(f.ownerId);return f.id!==b.id&&!f.municipal&&f.active&&live(owner)&&(owner.traits?.honesty??.5)<.5&&(owner.id===c.id||owner.political?.partyId===nomination.partyId||(city.relationships.view(owner,c)?.trust||0)>55);}).sort((a,b)=>b.balance-a.balance),payer=[c,...firms].find(a=>a.balance>=amount+city.currency.price(50000));if(!payer)continue;
+      if(city.random()>(s.commission?.035:.12))continue;
+      const amount=city.currency.price(300000+s.target*10000),firms=city.economy.businesses.filter(f=>{const owner=city.society.citizen(f.ownerId);return f.id!==b.id&&!f.municipal&&f.active&&live(owner)&&(owner.traits?.honesty??.5)<.5&&(owner.id===c.id||owner.political?.partyId===nomination.partyId||(city.relationships.view(owner,c)?.trust||0)>55);}).sort((a,b)=>b.balance-a.balance),payer=s.commission&&city.treasury>=amount+city.welfare.conditions().reserve?{accountId:'treasury',balance:city.treasury}:[c,...firms].find(a=>a.balance>=amount+city.currency.price(50000));if(!payer)continue;
       const financier=payer.ownerId?city.society.citizen(payer.ownerId):c;
-      const record=p.crime(c,'poll-rigging',payer.accountId,b.accountId,amount,{studyId:s.id,pollId:poll.id,electionId:e.id,buildingId:b.id,targetCandidateId:c.id,participantIds:[...new Set([c.id,director.id,financier.id])],roles:[{citizenId:c.id,role:'Contratante da manipulação'},{citizenId:director.id,role:'Direção cúmplice do instituto'},...(financier.id!==c.id?[{citizenId:financier.id,role:'Empresário financiador do pagamento clandestino'}]:[])]});if(!record)continue;
+      const record=p.crime(c,'poll-rigging',payer.accountId,b.accountId,amount,{studyId:s.id,pollId:poll.id,electionId:e.id,buildingId:b.id,targetCandidateId:nomination.citizenId,organizerId:s.commission?.organizerId,commissioner:s.commission?.key,participantIds:[...new Set([c.id,director.id,financier.id])],roles:[{citizenId:c.id,role:'Contratante da manipulação'},{citizenId:director.id,role:'Direção cúmplice do instituto'},...(financier.id!==c.id?[{citizenId:financier.id,role:'Empresário financiador do pagamento clandestino'}]:[])]});if(!record)continue;
       record.severity=clamp(65+amount/Math.max(1,city.treasury)*500,65,95);record.concealment=.65+(director.skills.social||0)/500;
       record.steps[0].description='Pagamento clandestino por alteração do relatório eleitoral';
       if(director.accountId!==payer.accountId){const share=Math.floor(amount*.4);if(city.transfer(b.accountId,director.accountId,share,'Repasse clandestino pela adulteração',{corruptionCaseId:record.id,studyId:s.id})){record.steps.push(p.corruptionStep(b.accountId,director.accountId,share,'Comissão à direção cúmplice'));}}
@@ -127,10 +143,10 @@ export class CityResearch {
   }
   publish(s,e){
     const city=this.city,n=s.responses.length;if(n<s.minimum||n>s.maximum)return false;
-    const results=e.candidates.map(c=>Object.freeze({candidateId:c.citizenId,name:c.name,partyId:c.partyId,intentions:s.responses.filter(r=>r.candidateId===c.citizenId).length,rejections:s.responses.filter(r=>r.rejectedIds.includes(c.citizenId)).length})),undecided=s.responses.filter(r=>!r.decided).length;
+    const results=e.candidates.map(c=>Object.freeze({candidateId:c.citizenId,name:c.name,partyId:c.partyId,partyNumber:c.partyNumber??city.politics.party(c.partyId)?.number,intentions:s.responses.filter(r=>r.candidateId===c.citizenId).length,rejections:s.responses.filter(r=>r.rejectedIds.includes(c.citizenId)).length})),undecided=s.responses.filter(r=>!r.decided).length;
     const finite=s.population>1?Math.sqrt(Math.max(0,s.population-n)/(s.population-1)):0;
-    const poll={id:e.polls.length+1,studyId:s.id,instituteId:s.instituteId,instituteName:s.instituteName,minute:city.minute,startedAt:s.requestedAt,population:s.population,cityPopulation:s.cityPopulation,sampleSize:n,sampleFraction:n/Math.max(1,s.population),minRate:s.minRate,maxRate:s.maxRate,minimum:s.minimum,maximum:s.maximum,responses:s.responses,results,rawResults:results,undecided,rawUndecided:undecided,approval:s.responses.reduce((sum,r)=>sum+r.approval,0)/n,marginOfError:Math.min(100,1.96*Math.sqrt(.25/n)*finite*Math.sqrt(1.5)*100),designEffect:1.5,funders:s.funders,sites:s.sites,sessions:s.sessions,budget:s.budget,funded:s.funded,spent:s.spent,method:'Entrevistas presenciais por pontos de fluxo, em horários distintos, sem repetição de eleitores. Distribuição proporcional ao fluxo observado; a amostra pode ter viés de local e horário. Margem aproximada com efeito de agrupamento de 1,5.'};
-    this.manipulate(s,poll,e);s.status='published';s.reason='Coleta concluída e relatório publicado dentro dos limites de amostragem';s.completedAt=city.minute;s.pollId=poll.id;
+    const poll={id:e.polls.length+1,studyId:s.id,commission:s.commission,instituteId:s.instituteId,instituteName:s.instituteName,minute:city.minute,startedAt:s.requestedAt,population:s.population,cityPopulation:s.cityPopulation,sampleSize:n,sampleFraction:n/Math.max(1,s.population),minRate:s.minRate,maxRate:s.maxRate,minimum:s.minimum,maximum:s.maximum,responses:s.responses,results,rawResults:results,undecided,rawUndecided:undecided,approval:s.responses.reduce((sum,r)=>sum+r.approval,0)/n,marginOfError:Math.min(100,1.96*Math.sqrt(.25/n)*finite*Math.sqrt(1.5)*100),designEffect:1.5,funders:s.funders,sites:s.sites,sessions:s.sessions,budget:s.budget,funded:s.funded,spent:s.spent,method:'Entrevistas presenciais por pontos de fluxo, em horários distintos, sem repetição de eleitores. Distribuição proporcional ao fluxo observado; a amostra pode ter viés de local e horário. Margem aproximada com efeito de agrupamento de 1,5.'};
+    this.manipulate(s,poll,e);s.status='published';s.reason='Coleta concluída e relatório publicado dentro dos limites de amostragem';s.completedAt=city.minute;s.pollId=poll.id;const obligation=e.requiredPolls?.find(r=>r.studyId===s.id);if(obligation){obligation.status='published';obligation.pollId=poll.id;}
     for(const session of s.sessions.filter(r=>r.status==='active'))this.releaseAgent(s,session,'Pesquisa encerrada');
     const institute=city.building(s.instituteId);city.history.record('service',`${s.instituteName} concluiu pesquisa eleitoral com ${n} entrevistas presenciais.`,[institute.accountId],{kind:'research-service',studyId:s.id,electionId:e.id,pollId:poll.id,buildingId:institute.id,interviews:n,funded:s.funded,wages:s.wages});
     e.polls.push(poll);poll.eventId=city.politics.campaigns.event(e,`${s.instituteName}: pesquisa ${poll.id} publicada com ${n} entrevistas presenciais únicas (${(poll.sampleFraction*100).toFixed(1)}% do eleitorado).`,'election-poll',[],{pollId:poll.id,studyId:s.id,buildingId:s.instituteId,sampleSize:n}).id;
@@ -148,7 +164,7 @@ export class CityResearch {
   }
   updateMinute(){
     const city=this.city;if(this.lastMinute===city.minute)return;this.lastMinute=city.minute;const e=city.politics.active;
-    for(const s of this.studies.filter(s=>['funding','collecting'].includes(s.status))){
+    for(const s of this.studies.filter(s=>['funding','collecting'].includes(s.status)).sort((a,b)=>Number(!!b.commission)-Number(!!a.commission))){
       const b=city.building(s.instituteId);
       if(!b?.active||b.entity.destroyed||e?.id!==s.electionId||e.status!=='campaign'||city.minute>=s.deadline){
         for(const session of s.sessions.filter(r=>r.status==='active'))this.releaseAgent(s,session,'Fim da coleta');

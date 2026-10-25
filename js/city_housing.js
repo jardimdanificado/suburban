@@ -3,7 +3,7 @@ export const HOUSING_RULES = { roomPrice: 120000, roomRent: 350, livingReserve: 
 /** Only facade cells can be owned. Interior cells are common circulation. */
 export function floorCells(b, z) {
   const cells = [];
-  if (b.constructionKind === 'open-air') { for (let y = 0; y < b.depth; y++) for (let x = 0; x < b.width; x++) cells.push({ x, y, z }); return cells; }
+  if (b.constructionKind === 'open-air'||b.type==='council_chamber'&&z===0) { for (let y = 0; y < b.depth; y++) for (let x = 0; x < b.width; x++) cells.push({ x, y, z }); return cells; }
   for (let x = 0; x < b.width; x++) cells.push({ x, y: 0, z });
   for (let y = 1; y < b.depth; y++) cells.push({ x: b.width - 1, y, z });
   if (b.depth > 1) for (let x = b.width - 2; x >= 0; x--) cells.push({ x, y: b.depth - 1, z });
@@ -16,10 +16,10 @@ export class CityHousing {
     const spec = this.city.buildingTypes[b.type], units = [];
     const housingType = ['residential', 'popular_housing', 'luxury_housing'].includes(b.type);
     for (const { x, y } of floorCells(b, z)) {
-      const u = { id: `${b.id}:${x}:${y}:${z}`, buildingId: b.id, x, y, z, width: 1, depth: 1, roomType: housingType ? 'bedroom' : 'workspace', homeId: null, ownerId, tenantId: null, occupantId: b.active ? b.accountId : null, rent: this.city.currency.price(housingType ? HOUSING_RULES.roomRent * (b.type === 'luxury_housing' ? 2 : 1) : spec.rent), price: this.city.currency.price(housingType ? HOUSING_RULES.roomPrice * (b.type === 'luxury_housing' ? 3 : 1) : spec.price), forSale: ownerId === 'treasury', forRent: false, arrears: 0, missedDays: 0 };
+      const u = { id: `${b.id}:${x}:${y}:${z}`, buildingId: b.id, x, y, z, width: 1, depth: 1, roomType:b.type==='council_chamber'?(z===0?'plenary':'office'):housingType?'bedroom':'workspace', homeId: null, ownerId, tenantId: null, occupantId: b.active ? b.accountId : null, rent: this.city.currency.price(housingType ? HOUSING_RULES.roomRent * (b.type === 'luxury_housing' ? 2 : 1) : spec.rent), price: this.city.currency.price(housingType ? HOUSING_RULES.roomPrice * (b.type === 'luxury_housing' ? 3 : 1) : spec.price), forSale:ownerId==='treasury'&&b.type!=='council_chamber', forRent: false, arrears: 0, missedDays: 0 };
       b.units.push(u); this.city.units.set(u.id, u); units.push(u);
     }
-    if (b.constructionKind !== 'open-air') for (let y = 1; y < b.depth - 1; y++) for (let x = 1; x < b.width - 1; x++) (b.circulation ??= []).push({ x, y, z });
+    if (b.constructionKind !== 'open-air'&&!(b.type==='council_chamber'&&z===0)) for (let y = 1; y < b.depth - 1; y++) for (let x = 1; x < b.width - 1; x++) (b.circulation ??= []).push({ x, y, z });
     if (housingType) for (let i = 0; i < units.length; i += (b.type === 'luxury_housing' ? 4 : 2)) {
       const rooms = units.slice(i, i + (b.type === 'luxury_housing' ? 4 : 2)), id = `home:${rooms[0].id}`;
       if (rooms[1]) rooms[1].roomType = 'bathroom';

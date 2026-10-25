@@ -1,6 +1,6 @@
 // Every batch reserves real inputs and requires paid, on-site work. Prices are cents.
 export const INDUSTRIAL_GOODS = Object.fromEntries([
-  ['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
+  ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
   ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],
@@ -21,6 +21,8 @@ export const INDUSTRIES = {
   glassworks: industry('Vidraria',{areia:3,carvao:2},{vidro:2},24,'maintenance','Vidros para proteção e conforto dos imóveis.','industry',{need:'shelter',boost:10}),
   furniture: industry('Marcenaria',{tabuas:4,tecido:1},{moveis:1},28,'construction','Mobiliário melhora o descanso nas casas.','industry',{need:'energy',boost:18}),
   fiber_farm: industry('Cultivo de fibras',{}, {fibras:4},45,'agriculture','Fibras renováveis para roupas e estofados.'),
+  flagmaker:industry('Oficina de bandeiras e faixas',{tecido:3,madeira:1},{bandeiras:2,faixas:1},18,'maintenance','Costura tecido em bandeiras e faixas; a madeira sustenta os mastros de campanha.','industry'),
+  paintworks:industry('Fábrica de tintas',{oleo:1,argila:2,ervas:1},{tinta:4},20,'maintenance','Tintas de óleo e pigmentos para fachadas e publicidade.','industry'),
   weaving: industry('Tecelagem',{fibras:4},{tecido:3},20,'maintenance','Fornece tecido para confecções e marcenarias.'),
   tailor: industry('Confecção',{tecido:3},{roupas:2},22,'commerce','Roupas melhoram higiene e proteção individual.','services',{need:'hygiene',boost:15}),
   dairy_farm: industry('Fazenda leiteira',{milho:3},{leite:5},30,'agriculture','Leite depende de ração; integra pecuária e lavoura.','food'),

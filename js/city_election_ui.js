@@ -5,7 +5,7 @@ function pages(ui,p,rows,key,size=10){const count=Math.max(1,Math.ceil(rows.leng
 export function electionFor(ui){const p=ui.city.politics;return [p.active,p.lastResult,...p.elections].find(e=>e?.id===ui.electionId)||ui.electionSnapshot;}
 function mayorRanking(e){return e.ranking?.length?e.ranking:e.candidates.map(n=>({...n,votes:e.mayorCounts?.[n.citizenId]||0})).sort((a,b)=>b.votes-a.votes||a.citizenId-b.citizenId);}
 function candidates(ui,p,e){const gov=ui.city.politics,total=e.validMayoralVotes??e.ballots.filter(b=>b.candidateId!=null).length;
-  p.heading('PREFEITURA');p.table([{label:'Chapa',weight:2},{label:'Partido'},{label:'Votos'},{label:'% recebidos'}],mayorRanking(e).map(n=>({cells:[n.eligible===false?`${n.name} (indisponível)`:n.name,gov.party(n.partyId)?.short||'Partido encerrado',n.votes,total?`${(n.votes/total*100).toFixed(1)}%`:'0,0%'],click:()=>ui.openCitizen(n.citizenId),selected:n.citizenId===e.winnerId})));
+  p.heading('PREFEITURA');p.table([{label:'Chapa',weight:2},{label:'Partido'},{label:'Votos'},{label:'% recebidos'}],mayorRanking(e).map(n=>({cells:[n.eligible===false?`${n.name} (indisponível)`:n.name,n.partyNumber!=null?`${n.partyNumber} · ${gov.party(n.partyId)?.short||'Partido encerrado'}`:gov.party(n.partyId)?.ballotLabel||'Partido encerrado',n.votes,total?`${(n.votes/total*100).toFixed(1)}%`:'0,0%'],click:()=>ui.openCitizen(n.citizenId),selected:n.citizenId===e.winnerId})));
   const blanks=e.ballots.filter(b=>b.candidateId==null).length;if(blanks)p.kv('Votos em branco para prefeito',blanks);if(e.invalidMayoralVotes)p.kv('Votos para candidaturas indisponíveis ao encerrar',e.invalidMayoralVotes);
 }
 function polls(ui,p,e){

@@ -6266,7 +6266,7 @@ export class RCT3DRenderer {
 
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
-      if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding) continue;
+      if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.campaignDecoration) continue;
 
       if (e.x < this.renderedMinTx || e.x > this.renderedMaxTx + 0.99 ||
           e.y < this.renderedMinTy || e.y > this.renderedMaxTy + 0.99) {

@@ -604,7 +604,7 @@ export class Renderer {
     }
 
     // 4. Render Dropped Items & Entities (Fast Viewport Culling)
-    const emoteTextures = getEmoteTextures();
+    const emoteTextures = getEmoteTextures(),campaignPosters=[];
 
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
@@ -616,9 +616,10 @@ export class Renderer {
       const sx = centerScreenX + Math.floor((e.x - this.camX) * tileSize);
       const sy = centerScreenY + Math.floor((e.y - this.camY) * tileSize);
 
+      if(e.properties.campaignDecoration){const d=e.properties.campaignDecoration;if(d.kind==='paint')continue;const bg=hexToRgba32(parseInt(d.flag.background.slice(1),16),255),fg=hexToRgba32(parseInt(d.flag.foreground.slice(1),16),255),fw=Math.max(8,Math.floor(tileSize*(d.kind==='flag'?1.2:2))),fh=Math.max(5,Math.floor(fw*.5));drawBox32(buf32,width,height,sx,sy-fh,fw,fh,bg);drawBox32(buf32,width,height,sx,sy-fh,fw,1,fg);drawBox32(buf32,width,height,sx,sy-fh,1,fh+Math.floor(tileSize),rgba32(115,92,60));if(tileSize>=10)campaignPosters.push({d,x:sx,y:sy-fh,w:fw,h:fh});continue;}
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;
-        const color = hexToRgba32(b.architectureColor || b.color, 255);
+        const color = hexToRgba32(b.campaignPaint?parseInt(b.campaignPaint.color.slice(1),16):b.architectureColor || b.color, 255);
         for (let y = 0; y < b.depth; y++) for (let x = 0; x < b.width; x++) {
           const px = Math.floor(sx + x * tileSize), py = Math.floor(sy + y * tileSize);
           drawBox32(buf32, width, height, px + 1, py + 1, Math.floor(tileSize) - 2, Math.floor(tileSize) - 2, colorScale(color, globalLight));
@@ -928,6 +929,7 @@ export class Renderer {
 
     // 6. Blit final 32-bit buffer straight to Canvas in 1 call (60 FPS even on Zoomout)
     this.ctx.putImageData(this.imageData, 0, 0);
+    if(campaignPosters.length){const ctx=this.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='top';for(const poster of campaignPosters){const {d,x,y,w,h}=poster;ctx.fillStyle=d.flag.foreground;ctx.font=`bold ${Math.max(7,Math.min(14,h*.55))}px sans-serif`;ctx.fillText(String(d.partyNumber),x+w/2,y+1,w-2);if(d.kind==='banner'&&h>=12){ctx.font=`${Math.max(6,Math.min(10,h*.35))}px sans-serif`;ctx.fillText(d.candidateName,x+w/2,y+h*.6,w-2);}}ctx.restore();}
   }
 
   projectWorldToScreen(worldX, worldY, elevation = 0) {
