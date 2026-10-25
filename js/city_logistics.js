@@ -40,7 +40,8 @@ export class CityLogistics {
     if(!carriers.length)return;
     const jobs=this.shipments.filter(s=>!['delivered','cancelled','waiting-space'].includes(s.status));
     const load=new Map(carriers.map(b=>[b.id,jobs.filter(s=>s.driverId && s.carrierId===b.id).reduce((n,s)=>n+Math.max(8,s.routeLength),0)]));
-    for(const s of jobs.filter(s=>!s.driverId && this.city.building(s.carrierId)?.type!=='waste_collector').sort((a,b)=>Number(['critical-infrastructure','lighting-input','lamp-refill','public-meals','work-meals'].includes(b.purpose))-Number(['critical-infrastructure','lighting-input','lamp-refill','public-meals','work-meals'].includes(a.purpose))||a.createdAt-b.createdAt).slice(0,64)) {
+    const dispatchPriority=s=>s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:s.purpose==='sanitation'?-3:Number(['critical-infrastructure','lighting-input','lamp-refill'].includes(s.purpose))?-2:0;
+    for(const s of jobs.filter(s=>!s.driverId && this.city.building(s.carrierId)?.type!=='waste_collector').sort((a,b)=>dispatchPriority(a)-dispatchPriority(b)||a.createdAt-b.createdAt).slice(0,64)) {
       const options=carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=s.quantity)&&city.economy.connected(b,{id:`cargo:${s.id}`,door:s.position}));
       options.sort((a,b)=>(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);
       const carrier=options[0];if(!carrier)continue;
@@ -133,7 +134,7 @@ export class CityLogistics {
     const maxCarry=Math.max(24,...city.citizens.filter(c=>!c.entity.destroyed).map(c=>this.capacity(c)));for(const s of this.shipments.filter(s=>!s.driverId&&!['delivered','cancelled'].includes(s.status)&&s.quantity>maxCarry))this.splitLoad(s);
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
-    const priority = s => s.purpose==='public-meals'?-4:s.purpose==='work-meals'?-3:s.purpose==='lamp-refill'?(s.buyer.lampPost?.fuel<=0&& (city.hour<6||city.hour>=18)?-3:-2):s.purpose==='critical-infrastructure'||s.purpose==='lighting-input'?-2:s.purpose==='lamp-construction'?-1:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
+    const priority = s => s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:s.purpose==='sanitation'?-3:s.purpose==='lamp-refill'?(s.buyer.lampPost?.fuel<=0&& (city.hour<6||city.hour>=18)?-3:-2):s.purpose==='critical-infrastructure'||s.purpose==='lighting-input'?-2:s.purpose==='lamp-construction'?-1:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
     pending.sort((a, b) => priority(a) - priority(b) || (a.lastDispatchAttempt || 0) - (b.lastDispatchAttempt || 0) || a.createdAt - b.createdAt || a.id - b.id);
     let dispatchBudget = 32;
     for (const s of pending) {

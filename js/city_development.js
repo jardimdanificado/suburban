@@ -409,7 +409,8 @@ export class CityDevelopment {
       while(need>0&&orders<4){
         const account=city.accounts.get(project.materialAccountId||project.accountId),spendable=Math.max(0,(account?.balance||0)-(project.startupCapital||0)),affordable=Math.floor(Math.max(0,spendable-city.currency.price(1200))/city.economy.goods.pedra.price);
         const qty=Math.min(city.logistics.transportLimit(quarry,project),need,quarry.inventory.pedra,inventoryFree(project),affordable);if(qty<=0)break;
-        const shipment=city.logistics.order(quarry,project,'pedra',qty,city.economy.goods.pedra.price,{payerAccountId:project.materialAccountId||project.accountId,purpose:project.priority>=100?'critical-infrastructure':project.service==='lamp'?'lamp-construction':'trade'});
+        const sanitation=['waste_collector','recycler','composting'].includes(project.type);
+        const shipment=city.logistics.order(quarry,project,'pedra',qty,city.economy.goods.pedra.price,{payerAccountId:project.materialAccountId||project.accountId,purpose:sanitation?'sanitation':project.priority>=100?'critical-infrastructure':project.service==='lamp'?'lamp-construction':'trade'});
         if(!shipment)break;need-=qty;orders++;
       }
     }

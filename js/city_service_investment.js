@@ -69,7 +69,9 @@ export class CityServiceInvestment {
     return project;
   }
   preparePending(project, score) {
-    const city=this.city;project.priority=100;
+    const city=this.city;
+    const priority=['waste_collector','recycler','composting'].includes(project.type)?260:project.type==='quarry'?230:project.type==='builder'?220:Math.max(100,score);
+    project.priority=Math.max(project.priority||0,priority);
     if(project.materialAccountId)return true;
     const stone=Math.max(0,project.stone-project.inventory.pedra-(project.incoming.pedra||0));
     const need=stone*city.economy.goods.pedra.price+city.currency.price(174000);
