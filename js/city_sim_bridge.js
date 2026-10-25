@@ -9,13 +9,13 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map(); this.lastSnapshot = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=civic-institutions-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=air-mobility-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });
       this.active = true;
       for (const [target, path, method] of [[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],
-        [city.publications, 'publications.', 'write'], [city.publications, 'publications.', 'read'], [city.publications, 'publications.', 'configure'], [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'],
+        [city.vehicles,'vehicles.','configureAssembly'],[city.vehicles,'vehicles.','buyVehicle'],[city.vehicles,'vehicles.','revisePart'],[city.publications, 'publications.', 'write'], [city.publications, 'publications.', 'read'], [city.publications, 'publications.', 'configure'], [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'],
         [city.politics, 'politics.', 'submitBill'], [city.politics, 'politics.', 'vetoBill'], [city.currency, 'currency.', 'retire'], [city.world, 'world.', 'setTile']]) {
         const original = target[method];
         target[method] = (...args) => { this.command(path + method, args); return true; };
@@ -85,12 +85,14 @@ export class CitySimulationBridge {
     }
   }
   fail(message) {
+    const wasRunning=this.active;
     this.worker?.terminate(); this.active = false;
+    if(wasRunning)this.time.paused=true;
     for (const restore of this.restores) restore(); this.restores = [];
     bindCityState(this.city);
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     this.pending.clear(); this.motion.clear();this.motionSamples.clear();
     console.error('Simulação em segundo plano indisponível:', message);
-    this.notice('Simulação em segundo plano indisponível; execução local ativada.');
+    this.notice(wasRunning?`Simulação pausada após erro: ${String(message).split('\n')[0]}`:'Simulação em segundo plano indisponível; execução local ativada.');
   }
 }

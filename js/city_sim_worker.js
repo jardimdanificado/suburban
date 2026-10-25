@@ -1,10 +1,10 @@
-import { CityStateGraph, bindCityState } from './city_state.js?v=civic-institutions-1';
+import { CityStateGraph, bindCityState } from './city_state.js?v=air-mobility-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
 let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, dirty = false;
 const STEP = 1 / 60;
-const allowed = new Set(['publications.write', 'publications.read', 'publications.configure', 'politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
+const allowed = new Set(['vehicles.configureAssembly','vehicles.buyVehicle','vehicles.revisePart','publications.write', 'publications.read', 'publications.configure', 'politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
 function snapshot(force = false) {
   if (!state || awaitingAck || (!force && performance.now() - lastSnapshot < 100)) return;

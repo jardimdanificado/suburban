@@ -36,6 +36,7 @@ export class CityWorkMeals {
     return false;
   }
   tryStart(c) {
+    if(c.mobilityTrip||c.ridingVehicleId)return false;
     if (c.workMeal) return true;
     const b = this.employer(c);
     if (!b || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.conversation) return false;

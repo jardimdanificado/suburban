@@ -251,7 +251,11 @@ export class CityDevelopment {
     const level = flatSiteLevel(this.city.world, x, y, width, depth);
     if (terrain.error || (level === null && type !== 'quarry' && type !== 'farm')) return null;
     const hall = this.city.buildings[0];
-    if (hall && findTerrainPath(this.city.world, terrain.door, hall.door, this.city.occupied, { extraBlocked: (xx, yy) => (xx >= x && xx < x + width && yy >= y && yy < y + depth) || this.plots.some(p => xx >= p.x && xx < p.x + p.width && yy >= p.y && yy < p.y + p.depth) }) === null) return null;
+    if(hall){
+      const blocked=new Set(this.city.occupied);
+      for(const p of [...this.plots,{x,y,width,depth}])for(let yy=p.y;yy<p.y+p.depth;yy++)for(let xx=p.x;xx<p.x+p.width;xx++)blocked.add(`${xx},${yy}`);
+      if(findTerrainPath(this.city.world,terrain.door,hall.door,blocked,{limit:4096})===null)return null;
+    }
     const p = { id: this.nextPlotId++, x, y, width, depth, type, door: terrain.door, level, ownerId: 'treasury', price: width * depth * this.city.currency.price(DEVELOPMENT_RULES.landPerCell), forSale: true, forRent: false, rent: 0, buildingId: null, projectId: null };
     this.plots.push(p); return p;
   }
@@ -262,7 +266,7 @@ export class CityDevelopment {
     for(let i=0;i<48;i++){const index=(this.quarryPlotCursor||0)%total;this.quarryPlotCursor=index+1;const radius=8+Math.floor(index/32)*6,angle=index%32*Math.PI/16,x=Math.floor(center.x+Math.cos(angle)*radius),y=Math.floor(center.y+Math.sin(angle)*radius);if(tileAt(city.world,x,y)!==4)continue;if(this.createPlot(x-1,y-1,3,3,{type:'quarry'}))return;}
   }
   ensurePlots(count = 18) {
-    const available = () => this.plots.filter(p => !p.buildingId && !p.projectId && p.ownerId === 'treasury');
+    const available = () => this.plots.filter(p => !p.landingReserved && !p.buildingId && !p.projectId && p.ownerId === 'treasury');
     const ruralTarget = 3;
     const supply = () => {
       const plots = available();

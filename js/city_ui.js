@@ -1,3 +1,4 @@
+import {renderMobility,renderVehicle,renderAssembly} from './city_vehicles_ui.js';
 import {appearance,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
@@ -45,7 +46,7 @@ const VIEWS = {
   government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
-  transport: [['active', 'EM ANDAMENTO'], ['finished', 'ENCERRADOS']],
+  transport: [['active', 'FRETES'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['lines','ÔNIBUS'], ['models','MODELOS'], ['airspace','TRÁFEGO AÉREO']],
   sanitation: [['facilities', 'BANHEIROS'], ['cleaning', 'FAXINA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
 const FILTERS = {
@@ -86,7 +87,7 @@ export class CityUI {
   section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
 
   remember() {
-    const route={};for(const key of ['politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow'])route[key]=this[key];
+    const route={};for(const key of ['politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','selectedVehicleId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow'])route[key]=this[key];
     this.history.push({ ...route, tab: this.tab, selected: this.selected, selectedPlotId: this.selectedPlotId, unitId: this.unitId, detailTab: this.detailTab, mobileDetail: this.mobileDetail, query: this.query, views: { ...this.views }, filters: { ...this.filters }, scrolls: { ...this.scrolls } });
     if (this.history.length > 40) this.history.shift();
   }
@@ -116,7 +117,7 @@ export class CityUI {
   setFilter(id) { this.filters[this.tab] = id; this.resetScroll(); }
   setSelection(entity, unitId = null) {
     if (entity !== this.selected || unitId !== this.unitId) this.remember();
-    const target = entity?.properties.citizen ? 'people' : entity?.properties.cityBuilding ? (this.tab === 'economy' && this.city.economy.businesses.some(b=>b.id===entity.id) ? 'economy' : 'buildings') : this.tab;
+    const target = entity?.properties.cityVehicle?'transport':entity?.properties.citizen ? 'people' : entity?.properties.cityBuilding ? (this.tab === 'economy' && this.city.economy.businesses.some(b=>b.id===entity.id) ? 'economy' : 'buildings') : this.tab;
     const sameDirectory = this.tab === target, listScroll = this.scrolls.list || 0;
     this.tab = target; this.selected = entity; this.unitId = unitId; this.detailTab = unitId ? 'units' : 'profile'; this.visible = true;
     this.mobileDetail = !!entity; if (!sameDirectory) { this.query = ''; this.search.value = ''; } this.menuOpen = false; this.resetScroll(); if (sameDirectory) this.scrolls.list=listScroll;
@@ -242,6 +243,7 @@ export class CityUI {
     }
   }
   detail(p) {
+    if(this.selected?.properties.cityVehicle)return renderVehicle(this,p,this.selected.properties.cityVehicle);
     const c = this.selected?.properties.citizen, b = this.selected?.properties.cityBuilding;
     if (this.tab === 'people' && c && this.city.society.citizen(c.id)) return this.citizen(p, c);
     if (this.tab !== 'people' && b && !b.entity.destroyed) return this.building(p, b);
@@ -265,6 +267,8 @@ export class CityUI {
     if (this.detailTab === 'profile') {
 
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
+      if(c.ridingVehicleId)p.button('VER VEÍCULO EM USO',()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:c.ridingVehicleId,selected:null}));
+      this.section(p,'personalVehicles','Veículos próprios',()=>{for(const v of city.vehicles.units.values())if(v.active&&v.ownerAccountId===c.accountId)p.record(city.vehicles.model(v)?.name||v.good,`${v.condition.toFixed(0)}% de conservação · ${v.fuel.toFixed(0)} células de autonomia`,()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));});
       const inside=city.building(c.indoorLocation?.buildingId);
       if(inside){p.kv('Localização',`Dentro de ${name(inside.entity)} · ${c.indoorLocation.floor+1}º andar`);p.kv('Cômodo',{bedroom:'Quarto',bathroom:'Banheiro',dining:'Refeitório',plenary:'Plenário',office:'Gabinete',workspace:'Área da empresa'}[c.indoorLocation.roomType]||'Interior');p.button('VER PRÉDIO ATUAL',()=>this.openBuilding(inside.id));}
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
@@ -350,6 +354,9 @@ export class CityUI {
       if(b.type==='newsroom'){p.kv('Linha editorial',newsroomGenre(b));p.kv('Última edição',b.newsEditionDay??'Ainda não impressa');p.kv('Exemplares produzidos hoje',b.newsPrintedDay===city.day?b.newsCopies:0);p.note(b.officialJournal?'Jornal obrigatório, custeado pela prefeitura. Cada edição usa quatro folhas e preserva até oito atos públicos; inclui votos individuais.':'Papel chega por transporte. Cada cópia consome 3–5 folhas; anúncios pagos são identificados no acervo.');p.button('ACERVO DO JORNAL',()=>this.openPanel({tab:'publications',publicationOwner:b.accountId,selectedPublicationId:null}));}
 
       const industry=INDUSTRIES[b.type];
+      if(b.type==='automaker')renderAssembly(this,p,b);
+      if(['engine_factory','chassis_factory','bodyworks','tire_factory','transmission_factory','automotive_glass','upholstery'].includes(b.type)){p.kv('Revisão da peça produzida',b.partDesign||1);p.button('INICIAR NOVA REVISÃO DA PEÇA',()=>city.vehicles.revisePart(b.id));}
+      if(b.type==='dealership')for(const v of [...city.vehicles.units.values()].filter(v=>!v.active&&!v.scrapped&&v.holderAccountId===b.accountId))p.record(`${city.vehicles.model(v)?.brand} · ${city.vehicles.model(v)?.name}`,money(city.vehicles.vehiclePrice(v)),()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));
       if(b.type==='quarry')p.kv('Pedra restante nos depósitos',city.economy.quarryStatus(b).remaining);
       if(b.type==='forestry'){const trees=[...city.nature.plants.values()].filter(t=>t.buildingId===b.id);p.kv('Árvores cultivadas / maduras',`${trees.length} / ${trees.filter(t=>t.stage==='mature').length}`);p.kv('Sementes disponíveis',b.seedStock);p.note('Os trabalhadores cortam árvores no local, replantam com sementes e carregam a madeira até o depósito.');for(const c of city.citizens.filter(c=>c.forestryJob?.buildingId===b.id))p.card(name(c.entity),`${c.action} · ${c.forestryJob.load||0} madeiras em transporte`,()=>this.openCitizen(c.id));}
       if(b.type==='council_chamber'){const chamber=city.politics.council.getChamber();p.kv('Plenário',`${b.width*b.depth} células no térreo`);p.kv('Gabinetes / vereadores',`${chamber.officeCount||0} / ${city.politics.council.members.length}`);for(const member of city.politics.council.members.filter(m=>city.units.get(m.officeUnitId)?.buildingId===b.id))p.record(member.name,`Gabinete ${member.officeUnitId}`,()=>this.select(b.entity,member.officeUnitId));}
@@ -371,6 +378,7 @@ export class CityUI {
       if(b.type==='popular_housing'){const social=[...city.housing.homes.values()].filter(h=>h.buildingId===b.id && city.housing.isSocial(h));if(social.length){p.heading('OCUPAÇÃO SOCIAL');p.kv('Famílias abrigadas / moradias',`${social.filter(h=>city.housing.residents(h).length>0).length} / ${social.length}`);p.kv('Moradores',city.citizens.filter(c=>!c.entity.destroyed && social.some(h=>h.id===c.homeId)).length);p.kv('Adultos sem teto na cidade',city.citizens.filter(c=>!c.entity.destroyed && city.society.isAdult(c) && !c.homeUnitId).length);p.note('Ocupação gratuita com propriedade municipal. Famílias sem teto com dependentes e menos recursos têm prioridade.');}}
     } else if(this.detailTab==='finance'){
       p.heading('FINANÇAS E PROPRIEDADE');
+      for(const loan of city.bank.loans.filter(l=>l.clientId===b.accountId&&l.purpose==='vehicle')){p.kv(`Crédito do veículo ${loan.vehicleId}`,money(loan.remaining+loan.interest));p.kv('Parcela diária',money(loan.dailyPayment));}
       p.metrics([[b.type==='townhall'?'SALDO MUNICIPAL':'CAIXA',money(b.balance),b.balance<1000?C.red:C.gold],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]); p.kv(b.type==='townhall'?'Entradas acumuladas':'Receita acumulada', money(b.totalRevenue)); p.kv(b.type==='townhall'?'Saídas acumuladas':'Despesas acumuladas', money(b.totalExpenses)); if(b.type==='townhall')p.note('Este saldo é o tesouro municipal, o mesmo exibido na barra. Recebe impostos e emissão e paga obras, benefícios e despesas da sede. Reservas de contratos já saíram do saldo disponível.');else p.kv('Dividendos pagos', money(b.dividends));
       const agreements=(city.economy.supplyAgreements||[]).filter(a=>a.buyerId===b.id||a.sellerId===b.id);if(agreements.length){p.heading('ACORDOS DE FORNECIMENTO');for(const a of agreements)p.note(`${GOODS[a.good].label}: ${city.accountName(city.building(a.sellerId)?.accountId)} → ${city.accountName(city.building(a.buyerId)?.accountId)}, ${money(a.unitPrice)}/unidade`);}if(b.equityPartners?.length){p.heading('SÓCIOS E CAPITAL');for(const share of b.equityPartners)p.note(`${city.accountName(`citizen:${share.citizenId}`)}: ${money(share.amount)}`);}
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, b.accountId);
@@ -619,6 +627,7 @@ export class CityUI {
     p.table([{label:'Contrato',weight:2},{label:'Situação',weight:1.5},{label:'Valor'}],projects.filter(o=>this.matches(`${o.name} ${BUILDING_TYPES[o.type]?.label||o.type}`)).map(o=>({cells:[o.name,o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='blocked'?'Bloqueado':o.status==='materials'?'Aguardando materiais':'Em andamento',money(o.fee)],color:o.status==='blocked'?C.red:C.gray,click:()=>this.openContract(o.id)})));
   }
   transport(p) {
+    if(['vehicles','lines','models','airspace'].includes(this.view())){renderMobility(this,p);return;}
     const city=this.city,system=city.logistics,pending=system.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
     p.metrics([['EM ANDAMENTO',pending.length,C.gold],['ENTREGUES',system.delivered,C.green],['ITENS EM FRETE',pending.reduce((n,s)=>n+s.quantity,0),C.cyan]]);
     this.section(p,'transportDemand','Demanda, capacidade e causas dos atrasos',()=>{

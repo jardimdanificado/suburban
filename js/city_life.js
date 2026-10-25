@@ -40,6 +40,7 @@ export class CityLife {
     return false;
   }
   resetTask(c, reason) {
+    if(c.mobilityTrip)this.city.vehicles.releaseTrip(c);
     c.task = null; c.path = []; c.servicePaid = null; c.lastProgressAt = this.city.minute; this.stallRecoveries++;
     if (!c.lastRecoveryLog || this.city.minute - c.lastRecoveryLog > 1440) { c.lastRecoveryLog = this.city.minute; this.city.log(`${c.entity.properties.name} reorganizou a rotina: ${reason}.`, 'city', [c.id], { kind: 'routine-recovery', reason }); }
   }

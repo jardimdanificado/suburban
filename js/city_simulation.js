@@ -1,3 +1,4 @@
+import {CityVehicles} from './city_vehicles.js';
 import {clothingMood,moveGarments} from './city_clothing.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
 import { CityPublications } from './city_publications.js';
@@ -102,6 +103,7 @@ export class CitySimulation {
     this.politics = new CityPolitics(this);
     this.publications = new CityPublications(this);
     this.officialJournal = new CityOfficialJournal(this);
+    this.vehicles = new CityVehicles(this);
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -222,7 +224,7 @@ export class CitySimulation {
     this.sanitation.setupBusinessRooms(b);
     if (plot) { plot.buildingId = b.id;plot.door={...b.door}; b.plotId = plot.id; } else this.development.attachBuilding(b, ownerAccountId);
     b.accessPath = [terrain.door, ...access];
-    layDirtPath(this.world, b.accessPath);
+    layDirtPath(this.world,b.accessPath);
     this.history.ownership(b, null, ownerAccountId, {action:'construction'});
     this.lastError = '';
     this.log(`${entity.properties.name}: ${b.units.length} espaços de 1×1×1.`, 'city', [], { kind: 'construction', buildingId: b.id });
@@ -434,7 +436,7 @@ export class CitySimulation {
       }
       if (isOwner) this.economy.practice(c, 'management');
       if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
-      c.action = c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Gerindo ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
+      c.action = b.type==='garage'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Gerindo ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
       if (Math.min(n.food, n.water, n.energy, n.toilet, n.hygiene, n.health) < 22) c.task = null;
       return;
     }
@@ -543,10 +545,11 @@ export class CitySimulation {
       const hall = this.buildings.find(h => h.type === 'townhall' && !h.entity.destroyed);
       for (const [good, stock] of Object.entries(b.inventory)) {
         const qty = stock + (good === 'lixo' ? b.litter || 0 : 0),stored = Math.min(qty, hall ? inventoryFree(hall) : 0);
-        if (hall) {hall.inventory[good] += stored;this.publications.moveStock(b,hall,good,stored);if(good==='roupas')moveGarments(b,hall,stored);}
-        this.economy.lost[good] += qty - stored;this.publications.loseStock(b,good,qty-stored);b.inventory[good] = 0;
+        if (hall) {hall.inventory[good] += stored;this.publications.moveStock(b,hall,good,stored);this.vehicles.moveStock(b,hall,good,stored);if(good==='roupas')moveGarments(b,hall,stored);}
+        this.economy.lost[good] += qty - stored;this.publications.loseStock(b,good,qty-stored);this.vehicles.loseStock(b,good,qty-stored);b.inventory[good] = 0;
       }
       b.litter = 0;
+      for(const v of this.vehicles.units.values())if(v.active&&v.ownerAccountId===b.accountId){v.ownerAccountId=this.economy.citizen(b.ownerId)?.accountId||'treasury';v.fuelStore.accountId=v.ownerAccountId;}
       this.publications.inherit(b.accountId,'treasury');
       this.transfer(b.accountId, this.economy.citizen(b.ownerId)?.accountId || 'treasury', b.balance, 'Encerramento de prédio');
       const owner = this.economy.citizen(b.ownerId); if (owner) owner.businessIds = owner.businessIds.filter(id => id !== b.id);
@@ -557,6 +560,7 @@ export class CitySimulation {
     }
     for (const c of [...this.citizens]) if (c.entity.destroyed) {
       const heir = c.dead ? this.life.heir(c) : null;
+      this.vehicles.removeCitizen(c,heir);
       if (heir) for (const b of this.economy.businesses.filter(b => b.ownerId === c.id)) { this.history.ownership(b,c.accountId,heir.accountId,{action:'inheritance'}); b.ownerId = heir.id; if (!heir.businessIds.includes(b.id)) heir.businessIds.push(b.id); }
       this.economy.removeCitizen(c);
       this.society.removeCitizen(c);
@@ -597,6 +601,7 @@ export class CitySimulation {
     this.politics.getResearch().updateMinute();
     this.politics.council.getChamber().minute();
     this.politics.campaigns.getMaterials().minute();
+    this.vehicles.minute();
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
     if (this.minute % 60 === 0) this.flushPayroll();
     const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
@@ -614,6 +619,7 @@ export class CitySimulation {
       const totalNeeds=n.food+n.water+n.energy+n.hygiene+n.toilet+n.social+n.leisure+n.health+n.shelter+n.safety;
       c.happiness = clamp(totalNeeds / 10 + c.mood + clothingMood(c) + this.relationships.moodEffect(c) + (c.homeUnitId ? Math.min(6,Object.values(c.homeComfort||{}).filter(until=>until>this.minute).length*2) : 0));
       if (this.life.minute(c)) continue;
+      if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
@@ -646,6 +652,10 @@ export class CitySimulation {
     while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); }
     for (const c of this.citizens) {
       syncCitizenInterior(this,c);
+      if(c.ridingVehicleId)continue;
+      this.vehicles.tryTrip(c);
+      const load=c.deliveryId?this.logistics.shipments.find(s=>s.id===c.deliveryId):null;
+      if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>(c.equipment?.carrinho?72:c.equipment?.cesta?36:24)){c.action='Aguardando veículo para transportar a carga';continue;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5);
       while (distance > 0 && c.path.length) {
@@ -663,13 +673,14 @@ export class CitySimulation {
       }
       syncCitizenInterior(this,c);
     }
+    this.vehicles.update(dt);
   }
   goodsStock(good) {
     const campaignCarried=this.citizens.reduce((n,c)=>n+(c.campaignInventory?.[good]||0),0);
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     const printed=['livros','panfletos','jornais'].includes(good)?[...this.publications.documents.values()].filter(d=>!d.lost&&d.good===good&&!this.publications.inventoryHolder(d.ownerAccountId)).length:0;
-    return printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

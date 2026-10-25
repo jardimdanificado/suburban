@@ -5,11 +5,12 @@ import { inventoryFree, initializeInventory } from './city_inventory.js';
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
 export class CityLogistics {
   constructor(city) { this.city = city; this.shipments = []; this.nextId = 1; this.delivered = 0; }
+  capacity(c){if(!c)return 0;return this.city.vehicles?this.city.vehicles.cargoCapacity(c):carryCapacity(c);}
   transportLimit(seller,buyer){
     const city=this.city,ids=new Set([seller?.ownerId,buyer?.ownerId]);
     for(const b of city.economy.businesses.filter(b=>b.type==='carrier'))for(const id of [...b.workers,b.ownerId])ids.add(id);
     if(buyer?.accountId==='treasury'||buyer?.municipal)for(const c of city.citizens)if(!c.jobId&&!c.businessIds.length)ids.add(c.id);
-    return Math.max(24,...[...ids].map(id=>city.society.citizen(id)).filter(Boolean).map(carryCapacity));
+    return Math.max(24,...[...ids].map(id=>city.society.citizen(id)).filter(Boolean).map(c=>this.capacity(c)));
   }
   demandMetrics() {
     const city=this.city, shipments=this.shipments.filter(s=>!['delivered','cancelled'].includes(s.status) && city.building(s.carrierId)?.type!=='waste_collector');
@@ -40,7 +41,7 @@ export class CityLogistics {
     const jobs=this.shipments.filter(s=>!['delivered','cancelled','waiting-space'].includes(s.status));
     const load=new Map(carriers.map(b=>[b.id,jobs.filter(s=>s.driverId && s.carrierId===b.id).reduce((n,s)=>n+Math.max(8,s.routeLength),0)]));
     for(const s of jobs.filter(s=>!s.driverId && this.city.building(s.carrierId)?.type!=='waste_collector').sort((a,b)=>Number(['critical-infrastructure','lighting-input','lamp-refill','public-meals','work-meals'].includes(b.purpose))-Number(['critical-infrastructure','lighting-input','lamp-refill','public-meals','work-meals'].includes(a.purpose))||a.createdAt-b.createdAt).slice(0,64)) {
-      const options=carriers.filter(b=>[...b.workers,b.ownerId].some(id=>carryCapacity(city.society.citizen(id))>=s.quantity)&&city.economy.connected(b,{id:`cargo:${s.id}`,door:s.position}));
+      const options=carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=s.quantity)&&city.economy.connected(b,{id:`cargo:${s.id}`,door:s.position}));
       options.sort((a,b)=>(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);
       const carrier=options[0];if(!carrier)continue;
       if(!s.fee){const fee=city.currency.price(Math.max(120,s.routeLength*12+s.quantity*4));const price=Math.ceil(fee*(s.payerAccountId==='treasury'?1.5:1));if(!city.transfer(s.payerAccountId,s.accountId,price,'Reserva de transporte por nova prestadora'))continue;s.fee=price;}
@@ -62,7 +63,7 @@ export class CityLogistics {
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
     const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && (city.economy.citizen(b.ownerId) || b.workers.length && b.balance >= b.wage) && city.economy.connected(b, seller));
-    let carrier = this.leastLoaded(carriers.filter(b=>[...b.workers,b.ownerId].some(id=>carryCapacity(city.society.citizen(id))>=quantity)));
+    let carrier = this.leastLoaded(carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=quantity)));
     // Collection firms send their own crews, independently of general freight capacity.
     const wasteOperator=purpose==='waste-collection'?buyer:purpose==='waste-processing' && seller.type==='waste_collector'?seller:null;
     if(wasteOperator?.active && (city.economy.citizen(wasteOperator.ownerId) || wasteOperator.workers.length && wasteOperator.balance>=wasteOperator.wage))carrier=wasteOperator;
@@ -80,7 +81,7 @@ export class CityLogistics {
     city.accounts.set(accountId, s);
     if (!city.transfer(payerAccountId, accountId, cost + fee + serviceFee, 'Reserva de compra e frete')) { city.accounts.delete(accountId); return false; }
     if(good==='roupas')moveGarments(seller,s,quantity);
-    city.publications.moveStock(seller,s,good,quantity);
+    city.publications.moveStock(seller,s,good,quantity);city.vehicles.moveStock(seller,s,good,quantity);
     seller.inventory[good] -= quantity; buyer.incoming[good] = (buyer.incoming[good] || 0) + quantity;
     // Until pickup the reserved cargo stays at the supplier's entrance.
     s.position = { ...seller.door }; this.shipments.push(s);
@@ -90,7 +91,7 @@ export class CityLogistics {
   }
   releaseDriver(s) {
     const c = this.city.society.citizen(s.driverId);
-    if (c) { c.deliveryId = null; c.task = null; c.path = []; }
+    if (c) { if(c.mobilityTrip)this.city.vehicles.releaseTrip(c);c.deliveryId = null; c.task = null; c.path = []; }
     s.driverId = null;
   }
   cancel(s) {
@@ -99,8 +100,8 @@ export class CityLogistics {
     s.buyer.incoming[s.good] = Math.max(0, (s.buyer.incoming[s.good] || 0) - s.quantity);
     const hall = this.city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
     const destination = !s.seller.entity?.destroyed && inventoryFree(s.seller) >= s.quantity ? s.seller : hall;
-    if (destination && inventoryFree(destination) >= s.quantity) {destination.inventory[s.good] += s.quantity;if(s.good==='roupas')moveGarments(s,destination,s.quantity);this.city.publications.moveStock(s,destination,s.good,s.quantity);}
-    else {this.city.economy.lost[s.good] += s.quantity;this.city.publications.loseStock(s,s.good,s.quantity);}
+    if (destination && inventoryFree(destination) >= s.quantity) {destination.inventory[s.good] += s.quantity;if(s.good==='roupas')moveGarments(s,destination,s.quantity);this.city.publications.moveStock(s,destination,s.good,s.quantity);this.city.vehicles.moveStock(s,destination,s.good,s.quantity);}
+    else {this.city.economy.lost[s.good] += s.quantity;this.city.publications.loseStock(s,s.good,s.quantity);this.city.vehicles.loseStock(s,s.good,s.quantity);}
     s.inventory[s.good] = 0;
     const buyerAccount = this.city.accounts.get(s.payerAccountId || s.buyer.accountId);
     const refund = buyerAccount && !buyerAccount.entity?.destroyed ? (s.payerAccountId || s.buyer.accountId) : this.city.economy.citizen(buyerAccount?.ownerId)?.accountId || 'treasury';
@@ -119,17 +120,17 @@ export class CityLogistics {
     const ids = carrier?.active ? [...carrier.workers, carrier.ownerId] : [];
     if (!carrier?.active) {
       s.carrierId = null;
-      if(s.requireCarrier) { const next=this.leastLoaded(economy.businesses.filter(b=>b.type==='carrier' && b.workers.length && b.balance>=b.wage)); if(next){s.carrierId=next.id;ids.push(...next.workers,next.ownerId);}return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && carryCapacity(c)>=s.quantity && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25); }
+      if(s.requireCarrier) { const next=this.leastLoaded(economy.businesses.filter(b=>b.type==='carrier' && b.workers.length && b.balance>=b.wage)); if(next){s.carrierId=next.id;ids.push(...next.workers,next.ownerId);}return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25); }
       // Owners can bootstrap the supply chain by hauling their own purchases.
       if(this.publicOrder(s))ids.push(...this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&!this.city.politics.officeHolder(c)&&!['caregiving','food','water','energy','health','toilet'].includes(c.task)).sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16).map(c=>c.id));
       ids.push(s.buyer.ownerId, s.seller.ownerId);
       const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
     }
-    return [...new Set(ids)].map(id => economy.citizen(id)).filter(c => c && carryCapacity(c)>=s.quantity && !c.deliveryId && !c.entity.destroyed && this.city.society.isAdult(c) && !c.conversation && !c.workMeal && !c.cleaningJobId && !this.city.urgentNeed(c) && c.needs.energy > 25 && (!carrier || c.id === carrier.ownerId || carrier.balance >= carrier.wage));
+    return [...new Set(ids)].map(id => economy.citizen(id)).filter(c => c && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.entity.destroyed && this.city.society.isAdult(c) && !c.conversation && !c.workMeal && !c.cleaningJobId && !this.city.urgentNeed(c) && c.needs.energy > 25 && (!carrier || c.id === carrier.ownerId || carrier.balance >= carrier.wage));
   }
   updateMinute() {
     const city = this.city;
-    const maxCarry=Math.max(24,...city.citizens.filter(c=>!c.entity.destroyed).map(carryCapacity));for(const s of this.shipments.filter(s=>!s.driverId&&!['delivered','cancelled'].includes(s.status)&&s.quantity>maxCarry))this.splitLoad(s);
+    const maxCarry=Math.max(24,...city.citizens.filter(c=>!c.entity.destroyed).map(c=>this.capacity(c)));for(const s of this.shipments.filter(s=>!s.driverId&&!['delivered','cancelled'].includes(s.status)&&s.quantity>maxCarry))this.splitLoad(s);
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
     const priority = s => s.purpose==='public-meals'?-4:s.purpose==='work-meals'?-3:s.purpose==='lamp-refill'?(s.buyer.lampPost?.fuel<=0&& (city.hour<6||city.hour>=18)?-3:-2):s.purpose==='critical-infrastructure'||s.purpose==='lighting-input'?-2:s.purpose==='lamp-construction'?-1:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
@@ -162,6 +163,7 @@ export class CityLogistics {
         city.economy.practice(c, 'logistics');
       }
       c.task = 'transport';
+      if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (!c.path.length) {
         const goal = c.deliveryLeg === 'delivery' ? s.buyer.door : s.position;
         if (Math.hypot(c.entity.x - goal.x, c.entity.y - goal.y) > .9) {
@@ -181,7 +183,7 @@ export class CityLogistics {
         s.buyer.incoming[s.good] -= s.quantity;
         if (inventoryFree(s.buyer) < s.quantity) { s.buyer.incoming[s.good] += s.quantity; s.status = 'waiting-space'; continue; }
         if(s.good==='roupas')moveGarments(s,s.buyer,s.quantity);
-        city.publications.moveStock(s,s.buyer,s.good,s.quantity);
+        city.publications.moveStock(s,s.buyer,s.good,s.quantity);city.vehicles.moveStock(s,s.buyer,s.good,s.quantity);
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
         if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
         city.transfer(s.accountId, s.seller.accountId, s.cost, `Atacado: ${city.economy.goods[s.good].label}`);

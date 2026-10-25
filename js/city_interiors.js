@@ -5,6 +5,7 @@ const OUTDOOR_WORK = new Set(['farm','quarry','forestry']);
 
 export function syncCitizenInterior(city, c) {
   let b, room;
+  if(c.mobilityTrip||c.ridingVehicleId){c.indoorLocation=null;return;}
   const task = c.workMeal ? 'workmeal' : c.task;
   if (!c.entity.destroyed && !c.path.length && !c.deliveryId && INDOOR_TASKS.has(task)) {
     b = city.building(c.workMeal?.siteId ?? c.targetId);

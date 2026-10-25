@@ -109,7 +109,8 @@ export class CityDesktop {
     for(const window of this.manager.windows)window.state.selectedProjectId=null;
     if(!entity)this.lastSelected=null;
     if(entity?.properties?.cityPlant){const state=this.openModule('city');state.setView('nature');state.selectedPlantId=entity.id;this.lastSelected=entity;return;}
-    if(!entity)return;const citizen=entity.properties?.citizen,building=entity.properties?.cityBuilding;if(!citizen&&!building)return;
+    if(!entity)return;const citizen=entity.properties?.citizen,building=entity.properties?.cityBuilding;if(!citizen&&!building&&!entity.properties?.cityVehicle)return;
+    if(entity.properties.cityVehicle){const state=this.create(`vehicle:${entity.id}`,'transport',{title:entity.properties.name,entity,kind:'dossier'});this.lastSelected=entity;return;}
     const state=this.create(`${citizen?'person':'building'}:${entity.id}`,citizen?'people':'buildings',{title:entity.properties.name,entity,unitId,kind:'dossier'});
     if(unitId){state.unitId=unitId;state.detailTab='units';}this.lastSelected=entity;
   }

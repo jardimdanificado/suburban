@@ -4603,6 +4603,7 @@ export class RCT3DRenderer {
       if (m.geometry) m.geometry.dispose();
     }
 
+    if(this.mobilityBatches){for(const b of this.mobilityBatches.values()){this.scene.remove(b.mesh);b.mesh.dispose();b.geometry.dispose();b.material.dispose();}this.mobilityBatches.clear();this.mobilityStreetStamp=null;}
     if (this.entitySprites) {
       for (const spr of this.entitySprites.values()) {
         this.entityGroup.remove(spr);
@@ -4880,6 +4881,11 @@ export class RCT3DRenderer {
       const e = entities[i];
       if (!e || e.destroyed || !e.properties || !e.properties.render || e.properties.species === "effect") continue;
 
+      if(e.properties.cityVehicle){
+        const v=e.properties.cityVehicle,h=v.altitude??1,extent=['caminhao','onibus'].includes(v.good)?1.2:1;
+        const box=new THREE.Box3(new THREE.Vector3(e.x-extent,h,e.y-extent),new THREE.Vector3(e.x+extent,h+1.1,e.y+extent)),hit=ray.intersectBox(box,new THREE.Vector3());
+        if(hit){const d=ray.origin.distanceTo(hit);if(d<closestDist){closestDist=d;bestEntId=e.id;this.selectedCityUnitId=null;}}continue;
+      }
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;
         const base = b.constructionKind === 'open-air' ? b.terrain.min : b.terrain?.base ?? (map ? this.getTileSurfaceHeight(map, e.x, e.y) : 1);
@@ -5012,7 +5018,7 @@ export class RCT3DRenderer {
       let closestId = -1;
       let minD = 1.3;
       for (const e of entities) {
-        if (e.destroyed || !e.properties || e.properties.citizen?.indoorLocation) continue;
+        if (e.destroyed || !e.properties || (e.properties.citizen?.indoorLocation||e.properties.citizen?.ridingVehicleId)) continue;
         // Multi-tile footprint check
         let eFpW = 1, eFpH = 1;
         if (e.properties.house) {
@@ -6270,7 +6276,7 @@ export class RCT3DRenderer {
 
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
-      if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.campaignDecoration) continue;
+      if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.cityVehicle||e.properties.campaignDecoration) continue;
 
       if (e.x < this.renderedMinTx || e.x > this.renderedMaxTx + 0.99 ||
           e.y < this.renderedMinTy || e.y > this.renderedMaxTy + 0.99) {
@@ -6886,7 +6892,7 @@ export class RCT3DRenderer {
         const billboardRotY = this.isPerspectiveActive() ? (this.fpYaw + Math.PI) : this.fixedRotationY;
         const isPossessed = this.isFirstPersonActive() && Number(e.id) === Number(this.fpEntityId);
 
-        if (isPossessed || e.properties?.citizen?.indoorLocation) {
+        if (isPossessed || (e.properties?.citizen?.indoorLocation||e.properties?.citizen?.ridingVehicleId)) {
           sprite.visible = false;
         } else {
           sprite.visible = true;
@@ -6939,7 +6945,7 @@ export class RCT3DRenderer {
         if(e.properties?.citizen)this.cityCitizenBatches.add(sprite);
 
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
-        if (isConsciousCreature && !e.properties?.citizen?.indoorLocation) {
+        if (isConsciousCreature && !(e.properties?.citizen?.indoorLocation||e.properties?.citizen?.ridingVehicleId)) {
           const campaign=e.properties?.citizen?.campaign;
           if(campaign?.flag && e.properties.citizen.task==='campaign') {
             const flag=campaign.flag,uiKey=`${e.id}_campaign_flag`;

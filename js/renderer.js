@@ -411,7 +411,7 @@ export class Renderer {
 
     // Pass 1: exact tile hit (including multi-tile structures like houses, warehouses, leader palaces)
     for (const e of entities) {
-      if (e.destroyed || !e.properties?.render || e.properties.citizen?.indoorLocation) continue;
+      if (e.destroyed || !e.properties?.render || (e.properties.citizen?.indoorLocation||e.properties.citizen?.ridingVehicleId)) continue;
       const [fpW, fpH] = getFootprint(e);
       if (fx >= e.x && fx < e.x + fpW && fy >= e.y && fy < e.y + fpH) {
         this.selectedEntityId = e.id;
@@ -423,7 +423,7 @@ export class Renderer {
     let closestDist = 1.5;
     let foundId = -1;
     for (const e of entities) {
-      if (e.destroyed || !e.properties?.render || e.properties.citizen?.indoorLocation) continue;
+      if (e.destroyed || !e.properties?.render || (e.properties.citizen?.indoorLocation||e.properties.citizen?.ridingVehicleId)) continue;
       const [fpW, fpH] = getFootprint(e);
       const dx = (e.x + fpW * 0.5) - fx;
       const dy = (e.y + fpH * 0.5) - fy;
@@ -608,7 +608,7 @@ export class Renderer {
 
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
-      if (!e || e.destroyed || !e.properties || !e.properties.render || e.properties.citizen?.indoorLocation) continue;
+      if (!e || e.destroyed || !e.properties || !e.properties.render || (e.properties.citizen?.indoorLocation||e.properties.citizen?.ridingVehicleId)) continue;
 
       const r = e.properties.render;
       const isItem = !e.properties.life && (!!e.properties.edible || !!e.properties.resourceType || !!e.properties.germination || e.properties.species === "item");
@@ -616,6 +616,7 @@ export class Renderer {
       const sx = centerScreenX + Math.floor((e.x - this.camX) * tileSize);
       const sy = centerScreenY + Math.floor((e.y - this.camY) * tileSize);
 
+      if(e.properties.cityVehicle){const v=e.properties.cityVehicle,large=['caminhao','onibus'].includes(v.good),horizontal=Math.abs(Math.sin(v.angle||0))>.5,tw=Math.max(4,Math.floor(tileSize*(horizontal?(large?1.5:1.1):.7))),th=Math.max(4,Math.floor(tileSize*(horizontal?.7:large?1.5:1.1))),color=hexToRgba32(({carro:0x397e99,caminhao:0xbd793c,onibus:0xd5b345,carruagem:0x765038})[v.good],255);const lift=Math.min(tileSize*3,Math.max(0,(v.altitude||0)-1.1)*tileSize*.12);drawBox32(buf32,width,height,sx-Math.floor(tw/2),sy-Math.floor(th/2),tw,th,rgba32(35,43,46));drawBox32(buf32,width,height,sx-Math.floor(tw/2),sy-Math.floor(th/2)-Math.floor(lift),tw,th,color);drawBox32(buf32,width,height,sx-Math.floor(tw/4),sy-Math.floor(th/4)-Math.floor(lift),Math.max(2,Math.floor(tw/2)),Math.max(2,Math.floor(th/2)),rgba32(45,73,86));continue;}
       if(e.properties.campaignDecoration){const d=e.properties.campaignDecoration;if(d.kind==='paint')continue;const bg=hexToRgba32(parseInt(d.flag.background.slice(1),16),255),fg=hexToRgba32(parseInt(d.flag.foreground.slice(1),16),255),fw=Math.max(8,Math.floor(tileSize*(d.kind==='flag'?1.2:2))),fh=Math.max(5,Math.floor(fw*.5));drawBox32(buf32,width,height,sx,sy-fh,fw,fh,bg);drawBox32(buf32,width,height,sx,sy-fh,fw,1,fg);drawBox32(buf32,width,height,sx,sy-fh,1,fh+Math.floor(tileSize),rgba32(115,92,60));if(tileSize>=10)campaignPosters.push({d,x:sx,y:sy-fh,w:fw,h:fh});continue;}
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;
@@ -658,6 +659,7 @@ export class Renderer {
         continue;
       }
       const campaign=e.properties?.citizen?.campaign;
+      if(campaign?.type==='canvass'&&!campaign.flag&&e.properties.citizen.task==='campaign'&&!e.properties.citizen.path.length){const size=Math.max(5,Math.floor(tileSize*.65)),color=hexToRgba32(parseInt((campaign.speechColor||'#eeeeee').slice(1),16),255);drawBox32(buf32,width,height,Math.floor(sx),Math.floor(sy-size),size,size,color);drawBox32(buf32,width,height,Math.floor(sx+size*.2),Math.floor(sy),2,2,color);}
       if(campaign?.flag && e.properties.citizen.task==='campaign') {
         const f=campaign.flag,fg=hexToRgba32(parseInt(f.foreground.slice(1),16),255),bg=hexToRgba32(parseInt(f.background.slice(1),16),255);
         const fw=Math.max(6,Math.floor(tileSize*.8)),fh=Math.max(5,Math.floor(tileSize*.55)),fx=sx+Math.floor(tileSize*.5),fy=sy-fh;

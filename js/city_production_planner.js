@@ -84,16 +84,17 @@ export function investProductionPlan(economy){
     if(opened>=batchLimit||city.development.projects.filter(p=>pending(p)&&p.productionChain).length>=pipelineLimit)break;
     const upstreamMissing=row.blockedInputs.filter(g=>plan.some(p=>p.missing&&p.planned===0&&(p.type==='farm'?p.crop===g:INDUSTRIES[p.type]?.outputs[g]||p.type==='bakery'&&g==='pao'||p.type==='mill'&&g==='oleo')));
     if(upstreamMissing.length){recordResponse(economy,row,`Primeiro instalar fornecedores: ${upstreamMissing.map(g=>economy.goods[g].label).join(', ')}.`);continue;}
-    const lots=city.development.plots.filter(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&(row.type==='farm'?city.development.isFarmPlot(p):p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&(row.type==='iron_mine'?p.type==='quarry':!['farm','quarry'].includes(p.type)))).sort((a,b)=>a.price-b.price||a.id-b.id).slice(0,4);
+    if(['iron_mine','bauxite_mine'].includes(row.type))city.development.ensureQuarryPlot();
+    const lots=city.development.plots.filter(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&(row.type==='farm'?city.development.isFarmPlot(p):p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&(['iron_mine','bauxite_mine'].includes(row.type)?p.type==='quarry':!['farm','quarry'].includes(p.type)))).sort((a,b)=>a.price-b.price||a.id-b.id).slice(0,4);
     if(!lots.length){recordResponse(economy,row,row.type==='farm'?'Aguardando terreno fértil.':'Aguardando terreno urbano.');continue;}
-    let selected;
+    let selected,accessPending=false;
     for(const lot of lots){
-      const width=row.type==='farm'?lot.width:Math.min(3,lot.width),depth=row.type==='farm'?lot.depth:Math.min(3,lot.depth),site=chooseBuildingSite(city,lot.x,lot.y,width,depth,{plotId:lot.id,type:row.type});if(site.error)continue;
+      const width=row.type==='farm'?lot.width:Math.min(3,lot.width),depth=row.type==='farm'?lot.depth:Math.min(3,lot.depth),site=chooseBuildingSite(city,lot.x,lot.y,width,depth,{plotId:lot.id,type:row.type});if(site.error){accessPending ||= !!site.pending;continue;}
       const builder=row.type==='farm'?null:city.development.selectBuilder('treasury',site.door);if(row.type!=='farm'&&!builder)continue;
       selected={lot,width,depth,site,builder};break;
     }
-    if(!selected){recordResponse(economy,row,'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
-    const {lot,width,depth,site,builder}=selected,stone=row.type==='farm'?0:width*depth*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=city.currency.price(row.type==='bank'?2000000:row.type==='research_institute'?100000:60000),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
+    if(!selected){recordResponse(economy,row,accessPending?'Planejando acesso ao terreno.':'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
+    const {lot,width,depth,site,builder}=selected,stone=row.type==='farm'?0:width*depth*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=row.type==='dealership'?Math.ceil(['carro','caminhao','onibus','carruagem'].reduce((n,g)=>n+economy.goods[g].price,0)*3)+city.currency.price(100000):row.type==='bus_operator'?Math.ceil(economy.goods.onibus.price*3)+city.currency.price(100000):city.currency.price(row.type==='bank'?2000000:row.type==='research_institute'?100000:60000),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
     const managementSkill=({farm:'agriculture',...Object.fromEntries(Object.entries(INDUSTRIES).map(([type,spec])=>[type,spec.skill]))})[row.type]||'management';
     const founders=founderPool.filter(c=>!assignedManagers.has(c.id)&&managerLoad(c)<3&&!city.development.projects.some(p=>pending(p)&&p.ownerId===c.id)).sort((a,b)=>managerLoad(a)-managerLoad(b)||((b.skills.management||0)*.45+(b.skills[managementSkill]||0)*.55+(b.skills.governance||0)*.15)-((a.skills.management||0)*.45+(a.skills[managementSkill]||0)*.55+(a.skills.governance||0)*.15)||Number(!!a.jobId)-Number(!!b.jobId)||b.balance-a.balance||a.id-b.id).slice(0,16);
     let project=null;

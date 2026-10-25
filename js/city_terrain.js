@@ -94,12 +94,12 @@ export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,r
 export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, type = null, rotation = 0 } = {}) {
   if (city.development?.overlaps(x, y, width, depth, plotId)) return { error: 'Este espaço já pertence a um terreno cadastrado.' };
   const { world, occupied } = city;
-  const quarry = type === 'quarry' || type === 'iron_mine';
+  const quarry = type === 'quarry' || type === 'iron_mine' || type === 'bauxite_mine';
   for (let yy = y - 1; yy <= y + depth; yy++) for (let xx = x - 1; xx <= x + width; xx++) {
     if (occupied.has(tileKey(xx, yy))) return { error: 'Deixe uma célula livre entre os prédios.' };
     if (xx >= x && xx < x + width && yy >= y && yy < y + depth) {
       if (!terrainWalkable(world, xx, yy) && !(quarry && tileAt(world, xx, yy) === TILE_STONE)) return { error: 'O prédio precisa caber em terra firme, fora da água e das encostas rochosas.' };
-      if (ROAD_TILES.has(tileAt(world, xx, yy))) return { error: 'A construção não pode ocupar uma rua.' };
+      if (ROAD_TILES.has(tileAt(world, xx, yy))||world.parkingTiles?.has(tileKey(xx,yy))) return { error: 'A construção não pode ocupar uma rua.' };
     }
   }
   let door = buildingEntrance(x,y,width,depth,rotation);
@@ -203,7 +203,7 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
     }
     for (const [dx, dy] of pathDirections) {
       const x = current.x + dx, y = current.y + dy, nextKey = y * width + x;
-      if (blocked.has(tileKey(x, y)) || extraBlocked?.(x, y) || !canStep(world, current.x, current.y, x, y)) continue;
+      if (!canStep(world, current.x, current.y, x, y) || blocked.has(tileKey(x, y)) || extraBlocked?.(x, y)) continue;
       const tile = tileAt(world, x, y);
       if(roadOnly&&!ROAD_TILES.has(tile))continue;
       const cost = current.cost + roadTravelCost(tile) + Math.abs(tileHeight(tile) - tileHeight(tileAt(world, current.x, current.y))) * .7;
