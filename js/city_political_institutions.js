@@ -1,3 +1,4 @@
+import {governmentExpectations} from './city_government_expectations.js';
 import {outcomeAssessment,promiseAssessment} from './city_promise_evaluation.js';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 export function seatBounds(city){const population=city.citizens.filter(c=>!c.entity.destroyed).length;const min=Math.max(1,Math.ceil(population*.05));return {population,min,max:Math.max(min,Math.floor(population*.125))};}
@@ -11,25 +12,35 @@ export function approvalReport(p){
   const mean=key=>assessments.reduce((n,a)=>n+(a[key]||0),0)/Math.max(1,assessments.length);
   const scandals=p.scandals.filter(s=>s.proven&&s.accusedId===city.economy.mayorId).reduce((n,s)=>n+publicPressure(p,s)/100*(s.severity||20)*.2,0);
   const vetoPenalty=(p.vetoes||[]).filter(v=>v.mayorId===city.economy.mayorId).reduce((n,v)=>n+Math.max(0,28-(city.minute-v.minute)/1440*2),0);
+  const expectations=governmentExpectations(p);
   const rows=[
-    {label:'Condições atuais: felicidade',points:(now.happiness-50)*.08,detail:`${now.happiness.toFixed(1)}/100; peso menor que o avanço desde a posse`},
-    {label:'Condições atuais: moradia',points:(.5-now.homeless)*8,detail:`${((1-now.homeless)*100).toFixed(1)}% abrigados`},
-    {label:'Condições atuais: alimentação',points:(.5-now.hunger)*10,detail:`${((1-now.hunger)*100).toFixed(1)}% sem fome`},
-    {label:'Condições atuais: ocupação',points:(now.employment-.5)*6,detail:`${(now.employment*100).toFixed(1)}% com ocupação`},
-    ...(outcomes?.rows||[]).map(row=>({label:`Mudança desde a posse: ${row.label.toLowerCase()}`,points:row.points,detail:`Início ${row.baseline.toFixed(1)}% → agora ${row.current.toFixed(1)}%; variação ${row.change>0?'+':''}${row.change.toFixed(1)} pontos percentuais${row.change<0?'; quedas usam 45% do peso normal':''}`})),
-    ...(outcomes&&Math.abs(outcomes.points-outcomes.raw)>.001?[{label:'Limite do efeito das mudanças',points:outcomes.points-outcomes.raw,detail:'A evolução dos indicadores contribui entre −25 e +40 pontos no total'}]:[]),
-    {label:'Avanço da promessa',points:mean('partial'),detail:'O avanço medido desde a posse rende até 12 pontos antes do bônus de conclusão'},
-    {label:'Execução comprovada do plano',points:mean('initiative'),detail:'Até 6 pontos por contratos, custeio, entregas ou medidas executadas; apresentar propostas por si só não dá bônus'},
-    {label:'Meta alcançada',points:mean('completion'),detail:`${fulfilled}/${total} metas atendidas; 16 pontos quando houve avanço real da gestão`},
-    {label:'Rapidez do cumprimento',points:mean('early'),detail:'Até 14 pontos adicionais: quanto menor a parcela do mandato usada para cumprir, maior o bônus'},
-    {label:'Superação da meta',points:mean('excess'),detail:'10 pontos por avanço adicional igual ao prometido, até 20 pontos; só vale enquanto a meta continua atendida'},
-    {label:'Cobrança da promessa pendente',points:mean('pending'),detail:'A cobrança começa após 25% do mandato e cresce até o prazo final, conforme a ambição e a parcela não realizada'},
+    {label:'Condições atuais: felicidade',points:(now.happiness-50)*.06,detail:`${now.happiness.toFixed(1)}/100; peso menor que o avanço desde a posse`},
+    {label:'Condições atuais: moradia',points:(.5-now.homeless)*6,detail:`${((1-now.homeless)*100).toFixed(1)}% abrigados`},
+    {label:'Condições atuais: alimentação',points:(.5-now.hunger)*8,detail:`${((1-now.hunger)*100).toFixed(1)}% sem fome`},
+    {label:'Condições atuais: ocupação',points:(now.employment-.5)*4,detail:`${(now.employment*100).toFixed(1)}% com ocupação`},
+    ...(outcomes?.rows||[]).map(row=>({label:`Mudança desde a posse: ${row.label.toLowerCase()}`,points:row.points*(row.points<0?1.8:.6),detail:`Início ${row.baseline.toFixed(1)}% → agora ${row.current.toFixed(1)}%; variação ${row.change>0?'+':''}${row.change.toFixed(1)} pontos percentuais. Ganhos têm peso moderado; retrocessos descontam com mais força.`})),
+    {label:'Avanço da promessa',points:mean('partial')*.4,detail:'Até 4,8 pontos pelo avanço real, antes do ajuste às expectativas'},
+    {label:'Execução comprovada do plano',points:mean('initiative')*.5,detail:'Até 3 pontos por execução comprovada enquanto a promessa está pendente'},
+    {label:'Meta alcançada',points:mean('completion')*.45,detail:`${fulfilled}/${total} metas atendidas; até 7,2 pontos por conclusão com avanço real`},
+    {label:'Rapidez do cumprimento',points:mean('early')*.45,detail:'Até 6,3 pontos pelo cumprimento antecipado; a velocidade continua relevante'},
+    {label:'Superação da meta',points:mean('excess')*.35,detail:'Até 7 pontos pela superação; o bônus depende de a meta continuar atendida'},
+    {label:'Cobrança da promessa pendente',points:mean('pending'),detail:'Após 25% do mandato, a cobrança cresce com o atraso, a ambição e a parte não realizada'},
     {label:'Recuos na promessa',points:mean('regression'),detail:'Pioras desde a posse e perda de uma meta anteriormente alcançada descontam pontos'},
     {label:'Corrupção comprovada',points:-scandals,detail:'Penalidade ponderada pela gravidade e pela parcela da população informada'},
     {label:'Vetos do prefeito',points:-vetoPenalty,detail:'Cada veto começa com perda de 28 pontos, reduzida em 2 pontos por dia'}
-  ].map(row=>Object.freeze(row));
-  const raw=50+rows.reduce((n,r)=>n+r.points,0),score=clamp(raw);
-  return {version:3,minute:city.minute,startingScore:50,score,raw,adjustment:score-raw,rows,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment,outcomePoints:outcomes?.points||0,promisePoints:assessments.reduce((n,a)=>n+a.points,0)/Math.max(1,assessments.length)};
+  ];
+  const changeRows=rows.filter(r=>r.label.startsWith('Mudança')),changeRaw=changeRows.reduce((n,r)=>n+r.points,0),changePoints=clamp(changeRaw,-30,22);
+  rows.push({label:'Limite do efeito das mudanças',points:changePoints-changeRaw,detail:'A evolução dos indicadores contribui entre −30 e +22 pontos; evita somar muitas vezes a mesma recuperação.'});
+  const positiveChanges=changeRows.reduce((n,r)=>n+Math.max(0,r.points),0),boundedPositiveChanges=Math.min(22,positiveChanges);
+  const promiseRows=rows.filter(r=>['Avanço da promessa','Execução comprovada do plano','Meta alcançada','Rapidez do cumprimento','Superação da meta','Cobrança da promessa pendente','Recuos na promessa'].includes(r.label)),promiseRaw=promiseRows.reduce((n,r)=>n+r.points,0),promisePoints=clamp(promiseRaw,-30,26);
+  rows.push({label:'Limite do efeito da promessa',points:promisePoints-promiseRaw,detail:'O conjunto de efeitos da promessa contribui entre −30 e +26 pontos.'});
+  const positivePromises=Math.min(26,promiseRows.reduce((n,r)=>n+Math.max(0,r.points),0));
+  rows.push({label:'Expectativa em relação à gestão anterior',points:(expectations.factor-1)*(boundedPositiveChanges+positivePromises),detail:expectations.detail});
+  const raw=50+rows.reduce((n,r)=>n+r.points,0),delta=raw-50;
+  // Diminishing returns preserve room for disagreement instead of clamping at unanimity.
+  const score=50+49.5*Math.tanh(delta/50);
+  rows.forEach(Object.freeze);
+  return {version:4,expectations,minute:city.minute,startingScore:50,score,raw,adjustment:score-raw,rows,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment,outcomePoints:outcomes?.points||0,promisePoints};
 }
 export function criticalApproval(p){
   p.approvalReport=approvalReport(p);p.approval=p.approvalReport.score;
