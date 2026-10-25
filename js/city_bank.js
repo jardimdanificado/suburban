@@ -50,7 +50,13 @@ export class CityBank {
   initialChainCredit(proposal){
     if(!proposal?.initialChain||!this.city.buildingTypes[proposal.type])return false;
     const target=proposal.type==='research_institute'?this.city.politics.getResearch().demand().required:1;
-    return this.city.economy.businesses.filter(b=>b.type===proposal.type&&(proposal.type!=='farm'||b.crop===proposal.crop)).length<target;
+    return this.city.economy.businesses.filter(b=>b.type===proposal.type&&(proposal.type!=='farm'||b.crop===proposal.crop)&&(proposal.type!=='quarry'||this.city.economy.quarryStatus(b).remaining>0)).length<target;
+  }
+  completionFundingNeed(proposal){
+    if(!proposal?.completionDraw||!proposal.projectId)return 0;
+    const p=this.city.development.projects.find(p=>p.id===proposal.projectId&&!p.cancelled&&p.status!=='completed');
+    if(!p||p.type!==proposal.type||!(p.productionChain||this.loans.some(l=>l.projectId===p.id&&l.initialChain)||this.initialChainCredit(proposal)))return 0;
+    return Math.max(0,this.city.development.materialBudget(p).target-(this.city.accounts.get(p.materialAccountId)?.balance||0));
   }
   refinanceDevelopment(bank,amount,proposal){
     if(amount<=0)return 0;
@@ -72,10 +78,12 @@ export class CityBank {
     if(!this.available().includes(bank))return reject('Banco sem atendimento ou sem caixa operacional.');
     if(!founder||founder.entity?.destroyed||!city.society.isAdult(founder)||founder.creditAllowed===false)return reject('Empreendedor indisponível ou sem autorização para crédito.');
     if(!Number.isSafeInteger(amount)||amount<=0||!Number.isSafeInteger(proposal?.budget)||amount>proposal.budget)return reject('Orçamento empresarial inválido.');
-    const initial=this.initialChainCredit(proposal);
+    if(!city.buildingTypes[proposal.type])return reject('Tipo de empreendimento não disponível para crédito empresarial.');
+    const completionNeed=this.completionFundingNeed(proposal),completion=completionNeed>0&&amount<=completionNeed;
+    const initial=this.initialChainCredit(proposal)||completion;
     if(!initial&&proposal.score<60)return reject('Demanda insuficiente para crédito empresarial comum.');
     const existing=this.loans.find(l=>l.clientId===founder.accountId&&l.purpose==='business'&&!['paid','written-off'].includes(l.status));
-    const topUp=initial&&existing&&proposal.projectId===existing.projectId&&!existing.startupTopUpUsed&&city.development.projects.some(p=>p.id===proposal.projectId&&!p.cancelled&&p.status!=='completed'&&!p.materialAccountId);
+    const topUp=initial&&existing&&proposal.projectId===existing.projectId&&(completion||!existing.startupTopUpUsed)&&city.development.projects.some(p=>p.id===proposal.projectId&&!p.cancelled&&p.status!=='completed'&&(completion||!p.materialAccountId));
     if(topUp&&existing.bankId!==bank.id)return reject('Complemento precisa ser contratado no banco do empréstimo original.');
     if(existing&&!topUp)return reject('Empreendedor já possui financiamento empresarial em andamento.');
     const reserve=Math.max(city.currency.price(20000),bank.workers.length*bank.wage*480),cash=Math.max(0,bank.balance-reserve);
@@ -83,7 +91,7 @@ export class CityBank {
     if(initial&&amount>cash){refinance=this.refinanceDevelopment(bank,amount-cash,proposal);if(refinance===false)return false;}
     if(!initial&&amount>cash*.75*Math.min(1,city.reputation.creditFactor(founder)*(1+city.relationships.personalOpinion(city.relationships.businessPerson(bank),founder)/100)))return reject('Caixa ou limite de risco insuficiente no crédito comum.');
     if(!city.transfer(bank.accountId,founder.accountId,amount,'Crédito empresarial para atender demanda',{loanId:topUp?existing.id:this.nextId,businessType:proposal.type,initialChain:initial}))return reject('Transferência de crédito indisponível.');
-    if(topUp){existing.principal+=amount;existing.remaining+=amount;existing.initialChain=true;existing.startupTopUpUsed=true;existing.graceDays=14;existing.operatingStartedAt=null;existing.installments=240;existing.dailyPayment=Math.ceil(existing.remaining/240);existing.publicRefinance=(existing.publicRefinance||0)+refinance;existing.publicRefinanceRemaining=(existing.publicRefinanceRemaining||0)+refinance;existing.rate=Math.min(existing.rate,.00025);existing.status='active';existing.missed=0;existing.dueDay=city.day+1;this.lastBusinessRefusal=null;city.history.record('credit','Complemento único do financiamento para concluir a cadeia inicial.',[founder.accountId,bank.accountId],{loanId:existing.id,projectId:proposal.projectId,amount,publicRefinance:refinance});return existing;}
+    if(topUp){existing.principal+=amount;existing.remaining+=amount;existing.initialChain=true;existing.startupTopUpUsed=true;existing.completionDraws=(existing.completionDraws||0)+(completion?1:0);existing.graceDays=14;existing.operatingStartedAt=null;existing.installments=240;existing.dailyPayment=Math.ceil(existing.remaining/240);existing.publicRefinance=(existing.publicRefinance||0)+refinance;existing.publicRefinanceRemaining=(existing.publicRefinanceRemaining||0)+refinance;existing.rate=Math.min(existing.rate,.00025);existing.status='active';existing.missed=0;existing.dueDay=city.day+1;this.lastBusinessRefusal=null;city.history.record('credit',completion?'Complemento auditado pelo custo atual dos materiais da obra.':'Complemento único do financiamento para concluir a cadeia inicial.',[founder.accountId,bank.accountId],{loanId:existing.id,projectId:proposal.projectId,amount,publicRefinance:refinance});return existing;}
     const installments=initial?240:180;
     const loan={id:this.nextId++,bankId:bank.id,clientId:founder.accountId,purpose:'business',businessType:proposal.type,crop:proposal.crop??null,initialChain:initial,graceDays:initial?14:0,operatingStartedAt:null,publicRefinance:refinance,publicRefinanceRemaining:refinance,principal:amount,remaining:amount,interest:0,rate:Math.min(this.policy.loanRate,initial?.00025:.0005),installments,dailyPayment:Math.ceil(amount/installments),dueDay:city.day+1,missed:0,status:'active',startedAt:city.minute,paid:0};
     this.loans.push(loan);this.lastBusinessRefusal=null;

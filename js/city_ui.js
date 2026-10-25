@@ -337,6 +337,7 @@ export class CityUI {
       if (post) { p.kv('Responsável pela iluminação', city.accountName(post.payerId)); p.kv('Iluminação do imóvel', !post.built ? post.projectId ? 'Em construção' : 'Aguarda contratação' : post.lit ? 'Aceso' : post.fuel > 0 ? 'Apagado / dia' : 'Sem óleo'); p.kv('Óleo no poste', `${post.fuel} horas de iluminação`); }
       const industry=INDUSTRIES[b.type];
       p.kv('Orientação da fachada',`${ROTATION_LABELS[b.rotation||0]} · ${(b.rotation||0)*90}°`);
+      if(b.type==='quarry')p.kv('Pedra restante nos depósitos',city.economy.quarryStatus(b).remaining);
       if(b.type==='forestry'){const trees=[...city.nature.plants.values()].filter(t=>t.buildingId===b.id);p.kv('Árvores cultivadas / maduras',`${trees.length} / ${trees.filter(t=>t.stage==='mature').length}`);p.kv('Sementes disponíveis',b.seedStock);p.note('Os trabalhadores cortam árvores no local, replantam com sementes e carregam a madeira até o depósito.');for(const c of city.citizens.filter(c=>c.forestryJob?.buildingId===b.id))p.card(name(c.entity),`${c.action} · ${c.forestryJob.load||0} madeiras em transporte`,()=>this.openCitizen(c.id));}
       if(b.type==='council_chamber'){const chamber=city.politics.council.getChamber();p.kv('Plenário',`${b.width*b.depth} células no térreo`);p.kv('Gabinetes / vereadores',`${chamber.officeCount||0} / ${city.politics.council.members.length}`);for(const member of city.politics.council.members.filter(m=>city.units.get(m.officeUnitId)?.buildingId===b.id))p.record(member.name,`Gabinete ${member.officeUnitId}`,()=>this.select(b.entity,member.officeUnitId));}
       if(b.type==='research_institute'){
@@ -436,6 +437,7 @@ export class CityUI {
   demands(p) {
     const mode=this.demandTab||'opportunities';p.links([['opportunities','Oportunidades'],['prices','Preços'],['agreements','Acordos'],['chains','Cadeias produtivas']].map(([id,label])=>({label,selected:id===mode,click:()=>this.openPanel({demandTab:id})})));
     if(mode==='chains'){
+      const execution=this.city.development.executionReport();p.metrics([['SEM OCUPAÇÃO',execution.unemployed],['OBRAS PRONTAS P/ TRABALHO',execution.ready],['AGUARDANDO PEDRA',execution.waiting]]);p.kv('Construtores no canteiro / em deslocamento',`${execution.working} / ${execution.travelling}`);p.kv('Obras com orçamento insuficiente',execution.unfunded);if(this.city.development.roadPlanning)p.note('Ruas: '+this.city.development.roadPlanning.reason);
       p.heading('ETAPAS DA PRODUÇÃO');p.note('A procura por produtos finais planeja também os fornecedores. Etapas ausentes ganham prioridade com o tempo de espera.');
       const rows=(this.city.economy.productionPlan||[]).filter(r=>this.matches(`${BUILDING_TYPES[r.type]?.label} ${CROPS[r.crop]?.label||''} ${r.reason}`)),selected=rows.find(r=>`${r.type}:${r.crop||''}`===this.selectedDemandKey);
       if(selected){p.heading(BUILDING_TYPES[selected.type].label);p.note(selected.reason);p.note(selected.response?.state||selected.state);p.kv('Instaladas / em construção',`${selected.current} / ${selected.planned}`);if(selected.response?.projectId)p.button('ABRIR OBRA',()=>this.openContract(selected.response.projectId));}

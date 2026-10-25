@@ -115,12 +115,18 @@ export class CityEconomy {
     const relation = owner ? this.city.relationships.view(owner, c) : null;
     return skill * .75 + (this.city.reputation.score(c, 'reliability') - 50) * .15 + ((c.traits?.diligence ?? .5) - .5) * 8 + (relation ? relation.trust * .15 + relation.affection * .1 : 0);
   }
+  quarryStatus(b){
+    if(this.city.world.map){const revision=this.city.world.revision||0;if(b.depositRevision!==revision||!b.deposits){b.deposits=quarryDeposits(this.city.world,b.entity.x,b.entity.y,b.width,b.depth);b.depositRevision=revision;}}
+    const rock=this.city.world.map?(b.deposits||[]).reduce((n,p)=>n+(this.city.world.quarryReserves?.get(`${p.x},${p.y}`)??250),0):(b.stoneReserve??12000);
+    const remaining=Math.max(0,Math.min(b.stoneReserve??12000,rock)),staff=b.workers.length+(this.citizen(b.ownerId)?1:0);
+    return {remaining,staff,daily:Math.min(remaining,staff*80),potential:Math.min(remaining,Math.max(staff,b.jobs||0)*80)};
+  }
   staffEssentials() {
     const city=this.city,needs=city.welfare.conditions(),projects=city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed'),stone=projects.reduce((n,p)=>n+Math.max(0,p.stone-p.inventory.pedra-(p.incoming.pedra||0)),0),freight=city.logistics.demandMetrics(),firms=this.businesses;
     for(const b of firms){
-      if(b.type==='builder')b.jobs=Math.min(16,Math.max(3,Math.ceil((projects.reduce((n,p)=>n+Math.max(0,p.requiredLabor-p.labor),0)/240+needs.homeless/32)/Math.max(1,firms.filter(f=>f.type==='builder').length))));
-      if(b.type==='quarry')b.jobs=Math.min(12,Math.max(2,Math.ceil(stone/48/Math.max(1,firms.filter(f=>f.type==='quarry').length))));
-      if(b.type==='carrier')b.jobs=Math.min(16,Math.max(2,Math.ceil(freight.work/180/Math.max(1,firms.filter(f=>f.type==='carrier').length))));
+      if(b.type==='builder'){const sites=projects.filter(p=>p.builderId===b.id),labor=sites.reduce((n,p)=>n+Math.max(0,p.requiredLabor-p.labor),0);b.jobs=Math.min(48,Math.max(3,sites.length*2+Math.ceil(labor/180)));}
+      if(b.type==='quarry'){const usable=firms.filter(f=>f.type==='quarry'&&this.quarryStatus(f).remaining>0).length;b.jobs=this.quarryStatus(b).remaining>0?Math.min(32,Math.max(2,Math.ceil(stone/60/Math.max(1,usable)))):0;}
+      if(b.type==='carrier')b.jobs=Math.min(32,Math.max(2,Math.ceil(freight.work/120/Math.max(1,firms.filter(f=>f.type==='carrier').length))));
     }
   }
   reconcileStaff() {
@@ -205,7 +211,7 @@ export class CityEconomy {
     for (const [type, needed, reason] of [ ['paid_toilet', facilities.length >= 3, 'Demanda por banheiros limpos e acessíveis']]) items.push({ type, crop: null, score: !needed ? 0 : !businesses.some(b=>b.type===type)?95:Math.max(0,(type==='cleaner'?facilities.filter(f=>f.cleanliness<65).length:type==='paid_toilet'?facilities.length:waste/4)*18-businesses.filter(b=>b.type===type).reduce((n,b)=>n+Math.max(1,b.workers.length)*40,0)), reason });
     const transport = this.city.logistics.demandMetrics();
     items.push({ type:'carrier',crop:null,score:transport.score,required:transport.work,supply:transport.capacity,stock:0,reason:`${transport.waiting} cargas aguardando; ${transport.ownHauls} transportes próprios; ${transport.drivers} transportadores; espera máxima ${Math.round(transport.oldest)} min; ${transport.lampRequests} lamparinas pendentes` });
-    items.push({ type: 'quarry', crop: null, score: !businesses.some(b=>b.type==='quarry')?140:Math.max(0,this.city.development.projects.filter(p=>!p.cancelled && p.status!=='completed').reduce((n,p)=>n+Math.max(0,p.stone-p.inventory.pedra-(p.incoming.pedra||0)),0)-businesses.filter(b=>b.type==='quarry').reduce((n,b)=>n+b.inventory.pedra+Math.max(1,b.workers.length)*120,0)), reason: 'Obras precisam de pedras' });
+    const extraction=this.serviceInvestment.demand('quarry');items.push({type:'quarry',crop:null,...extraction,required:extraction.work,supply:extraction.capacity,reason:`Obras: ${extraction.work} pedras pendentes; ${extraction.remaining} em depósitos ainda disponíveis; ${extraction.staff} trabalhadores na extração.`});
     for (const type of ['cleaner','builder','waste_collector','recycler','composting']) {
       const service = this.serviceInvestment.demand(type);
       items.push({type,crop:null,score:service.score,required:service.work,supply:service.capacity,stock:0,reason:`${service.count} ${type==='cleaner'?'banheiros sujos':type==='builder'?'obras pendentes':'unidades de lixo para atender'}; ${service.staff} profissionais; ${service.work} minutos de trabalho pendente`});
@@ -383,7 +389,8 @@ export class CityEconomy {
     this.updateDemand();
     // Construction and transport must be staffed before the first factories can receive their materials.
     this.city.bank.developmentBanks();
-    const firstServices=this.serviceInvestment.invest({initialOnly:true});
+    const extractionStarted=this.serviceInvestment.invest({types:['quarry']});
+    const firstServices=this.serviceInvestment.invest({initialOnly:true})||extractionStarted;
     // Initial chains have their own funded rollout before expanding established sectors.
     if(investProductionPlan(this)||firstServices)return true;
     if(investOilChain(this))return true;
