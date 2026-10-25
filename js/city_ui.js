@@ -72,11 +72,13 @@ export class CityUI {
     this.search.addEventListener('input', () => { this.query = this.search.value; this.logLimit = 80; this.resetScroll(); });
     this.search.addEventListener('keydown', e => { if (e.key === 'Escape') { this.search.blur(); e.stopPropagation(); } });
     this.seed = document.createElement('input'); this.seed.type = 'number'; this.seed.min = '1'; this.seed.max = '2147483647'; this.seed.value = city.world.seed ?? city.initialSeed; this.seed.setAttribute('aria-label', 'Semente do próximo terreno');
+    this.worksBudgetInput=document.createElement('input');this.worksBudgetInput.type='number';this.worksBudgetInput.min='0';this.worksBudgetInput.step='1';this.worksBudgetInput.value='5000000';this.worksBudgetInput.setAttribute('aria-label','Novo orçamento de obras solicitado');
+    this.worksTransferInput=document.createElement('input');this.worksTransferInput.type='number';this.worksTransferInput.min='1';this.worksTransferInput.step='1';this.worksTransferInput.value='250000';this.worksTransferInput.setAttribute('aria-label','Valor da transferência solicitada para obras');
     this.populationInput = document.createElement('input'); this.populationInput.type = 'number'; this.populationInput.min = '1'; this.populationInput.max = '2000'; this.populationInput.step = '1'; this.populationInput.value = String(city.initialPopulation ?? 512); this.populationInput.setAttribute('aria-label', 'Número de cidadãos da próxima cidade');
     this.filterInput=document.createElement('select');this.filterInput.setAttribute('aria-label','Filtrar registros');this.filterInput.addEventListener('change',()=>this.setFilter(this.filterInput.value));
     this.sortInput=document.createElement('select');this.sortInput.setAttribute('aria-label','Ordenar registros');this.sortInput.addEventListener('change',()=>{this.sorts[this.tab]=this.sortInput.value;this.resetScroll();});
     this.publicationDraft=document.createElement('input');this.publicationDraft.type='text';this.publicationDraft.maxLength=1200;this.publicationDraft.placeholder='Escreva um relato, informação, anúncio ou invenção…';this.publicationDraft.setAttribute('aria-label','Conteúdo a escrever no livro ou panfleto');
-    this.element.append(this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft);
+    this.element.append(this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput);
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
   }
   resetScroll() { this.scrolls = {}; }
@@ -147,7 +149,7 @@ export class CityUI {
     return false;
   }
   beginInputs(){this.frameInputs??=new Set();this.frameInputs.clear();}
-  finishInputs(){for(const input of[this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
+  finishInputs(){for(const input of[this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
   inputAt(input,x,y,w){this.frameInputs?.add(input);const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.hidden)input.hidden=false;}
   drawFloating(ui,window) {
     this.floating=true;this.politicsNavigationPinned=false;this.floatingDossier=window.kind==='dossier';if(this.element.hidden)this.element.hidden=false;this.visible=true;this.zones=[];this.beginInputs();

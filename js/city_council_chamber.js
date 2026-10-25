@@ -85,7 +85,7 @@ export class CityCouncilChamber {
   arrive(c){const hall=this.hall();if(!hall||!this.workHours()||Math.hypot(c.entity.x-hall.door.x,c.entity.y-hall.door.y)>1.5){this.release(c);return;}c.action=this.open()?'No plenário da Câmara: sessão legislativa':'No gabinete da Câmara: analisando projetos e atendendo eleitores';}
   release(c){if(c.task==='council-session'){c.task=null;c.path=[];}c.councilSession=null;}
   minute(){
-    const city=this.city,council=city.politics.council;if(this.lastMinute===city.minute)return;this.lastMinute=city.minute;const members=new Set(council.members.map(m=>m.citizenId));for(const bill of council.bills)if(bill.status==='awaiting-session'&&!members.has(bill.authorId)){bill.status='dismissed';bill.result='Autor deixou a Câmara antes de apresentar o projeto';city.log(`Projeto arquivado antes da apresentação: ${bill.title}.`,'government',[bill.authorId],{kind:'bill-dismissed',billId:bill.id});}const hall=this.hall();
+    const city=this.city,council=city.politics.council;if(this.lastMinute===city.minute)return;this.lastMinute=city.minute;const members=new Set(council.members.map(m=>m.citizenId));for(const bill of council.bills)if(bill.status==='awaiting-session'&&!members.has(bill.authorId)&&!bill.executiveRequest){bill.status='dismissed';bill.result='Autor deixou a Câmara antes de apresentar o projeto';city.log(`Projeto arquivado antes da apresentação: ${bill.title}.`,'government',[bill.authorId],{kind:'bill-dismissed',billId:bill.id});}const hall=this.hall();
     if(!hall||!this.workHours()){for(const c of council.people())if(c.councilSession)this.release(c);return;}
     let routed=0;
     for(const c of council.people()){
@@ -97,7 +97,7 @@ export class CityCouncilChamber {
     }
     if(!this.open())return;
     const present=this.present(),presentIds=new Set(present.map(c=>c.id));
-    for(const bill of council.bills.filter(b=>b.status==='awaiting-session'&&presentIds.has(b.authorId))){bill.status='proposed';bill.proposedAt=city.minute;bill.voteAt=city.minute+60;bill.plenaryBuildingId=hall.id;bill.proposalEventId=city.log(`${bill.authorName} apresentou no plenário: ${bill.title}.`,'government',[bill.authorId],{kind:'bill-proposed',billId:bill.id,buildingId:hall.id,parentEventId:bill.eventId}).id;}
+    for(const bill of council.bills.filter(b=>b.status==='awaiting-session'&&(b.executiveRequest?present.length>0:presentIds.has(b.authorId)))){bill.status='proposed';bill.proposedAt=city.minute;bill.voteAt=city.minute+60;bill.plenaryBuildingId=hall.id;bill.plenaryPresenterId=bill.executiveRequest?present[0].id:bill.authorId;bill.proposalEventId=city.log(`${bill.executiveRequest?`${bill.authorName} solicitou; ${present[0].entity.properties.name} apresentou no plenário`:`${bill.authorName} apresentou no plenário`}: ${bill.title}.`,'government',[bill.authorId,bill.plenaryPresenterId],{kind:'bill-proposed',billId:bill.id,buildingId:hall.id,executiveRequest:!!bill.executiveRequest,parentEventId:bill.eventId}).id;}
     for(const bill of council.bills.filter(b=>b.status==='proposed'&&city.minute>=b.voteAt))council.vote(bill);
   }
 }

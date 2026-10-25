@@ -83,6 +83,24 @@ export function renderPolitics(ui,p) {
       p.kv('Orçamento diário da Câmara',money(gov.policy.councilBudget));p.kv('Salário diário por vereador',money(Math.floor(gov.policy.councilBudget/Math.max(1,gov.council.members.length))));p.kv('Salário diário do prefeito',money(gov.policy.mayorBudget));
       p.note('O orçamento da Câmara é dividido entre os vereadores. Pagamentos respeitam o caixa e a reserva de subsistência; vereadores trabalham exclusivamente no mandato.');
     });
+    fold(ui,p,'executiveWorks','Orçamento executivo e contratação de obras',()=>{
+      const worksBudget=gov.ensureWorksBudget(),step=city.currency.price(250000);
+      p.kv('Verba autorizada para novas obras',money(worksBudget));
+      p.kv('Caixa municipal',money(city.treasury));
+      p.note('A verba é dinheiro separado do caixa geral. O prefeito pode contratar obras diretamente dentro desse saldo; o valor liberado para cada contrato é descontado do orçamento. A dotação inicial respeita a reserva social do município.');
+      p.buttons([{label:`PEDIR +${money(step)} DE ORÇAMENTO`,click:()=>gov.requestWorksBudget(worksBudget+step)},{label:`PEDIR −${money(step)} DE ORÇAMENTO`,click:()=>gov.requestWorksBudget(Math.max(0,worksBudget-step))}]);
+      p.note('Solicitar outro limite (valor em centavos):');let inputY=p.y;p.space(24);if(inputY>=p.top&&inputY+20<=p.bottom)ui.inputAt(ui.worksBudgetInput,p.x,inputY,p.w);p.space(3);p.button('SOLICITAR ESTE ORÇAMENTO',()=>gov.requestWorksBudget(Number(ui.worksBudgetInput.value)));
+      const transferAmounts=[city.currency.price(50000),city.currency.price(250000),city.currency.price(1000000),city.currency.price(5000000),city.currency.price(25000000)];
+      p.note('Transferência solicitada do orçamento geral para a verba de obras. Pedidos maiores recebem menor apoio provável na Câmara.');
+      p.buttons(transferAmounts.map(amount=>({label:`PEDIR TRANSFERÊNCIA ${money(amount)}`,click:()=>gov.requestWorksTransfer(amount)})));
+      p.note('Ou solicite um valor exato (centavos):');inputY=p.y;p.space(24);if(inputY>=p.top&&inputY+20<=p.bottom)ui.inputAt(ui.worksTransferInput,p.x,inputY,p.w);p.space(3);p.button('SOLICITAR TRANSFERÊNCIA DESTE VALOR',()=>gov.requestWorksTransfer(Number(ui.worksTransferInput.value)));
+      const publicTypes=Object.entries(city.buildingTypes).filter(([type])=>!['townhall','mint','council_chamber'].includes(type)&&ui.matches(city.buildingTypes[type].label));
+      p.heading('CONTRATAÇÃO DIRETA PELO PREFEITO');
+      if(publicTypes.some(([type])=>type==='farm'))p.buttons(Object.entries(city.economy.crops).map(([id,crop])=>({label:`CULTURA ${crop.label.toUpperCase()}`,selected:(ui.publicCrop||'milho')===id,click:()=>{ui.publicCrop=id;}})));
+      for(const [type,spec] of paginate(ui,p,publicTypes,'executiveWorkPage',12))p.button(`CONSTRUIR ${spec.label.toUpperCase()}`,()=>gov.startPublicWork(type,ui.publicCrop||'milho'));
+      const projects=city.development.projects.filter(project=>project.executiveInitiative&&!project.cancelled).slice(-8).reverse();
+      if(projects.length){p.heading('OBRAS CONTRATADAS NESTA GESTÃO');for(const project of projects)p.record(project.name,`${project.status} · verba autorizada ${money(project.worksBudgetCharge||0)}`,()=>ui.openContract(project.id));}
+    });
     p.button('JORNAL OFICIAL E VOTAÇÕES PRESERVADAS',()=>ui.openPanel({tab:'publications',selectedPublicationId:null,publicationTab:'official',publicationSourceEventId:null}));
     fold(ui,p,'governmentRules','Como funcionam os projetos e as votações',()=>{
     p.note('A primeira Câmara é provisória. Nas eleições, cada adulto escolhe prefeito e vereador. As cadeiras são distribuídas proporcionalmente por partido. Projetos exigem maioria absoluta dos votos ponderados; cassação e derrubada de veto exigem dois terços. O presidente tem peso de 5% das cadeiras, com mínimo de dois.');
