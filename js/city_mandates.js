@@ -1,3 +1,4 @@
+import {ideologicalProfile,ideologicalPromiseWeight} from './city_ideology.js';
 import {outcomeAssessment,promiseAssessment,promiseDifficulty} from './city_promise_evaluation.js';
 export const PROMISE_METRICS={
   health:{label:'Moradores com saúde acima de 60',unit:'%',higher:true},water:{label:'Moradores com água acima de 45',unit:'%',higher:true},rest:{label:'Moradores descansados',unit:'%',higher:true},hygiene:{label:'Moradores com higiene acima de 50',unit:'%',higher:true},
@@ -53,7 +54,7 @@ export class CityMandates {
       inflation:Math.abs(city.currency.dailyInflation*100),tax:city.taxRate*100,wage:city.politics.policy.minimumWage*60,deliveries:city.logistics.shipments.filter(s=>!['delivered','cancelled'].includes(s.status)).length,happiness:people.reduce((n,c)=>n+c.happiness,0)/Math.max(1,people.length)};
   }
   program(candidate,party,usedMetrics=[],base=this.metrics()) {
-    const e=party.ideology.economy,green=party.ideology.green,seed=candidate.id*31+this.city.politics.termNumber*17;
+    const profile=ideologicalProfile(party),e=profile.economy,green=profile.green,seed=candidate.id*31+this.city.politics.termNumber*17;
     const catalog=[
       ['fed','Mutirão de comida: reduzir filas e atender quem passa fome',100],['housed','Aluguel social e casas para famílias sem teto',100],
       ['employed','Recolocar adultos sem renda em cadeias locais',95],['lamps','Rota do óleo: abastecer as ruas esquecidas',100],
@@ -85,7 +86,7 @@ export class CityMandates {
     const viable=catalog.filter(([key,,target])=>(target-base[key])*(PROMISE_METRICS[key].higher?1:-1)>.01);
     // Distinct main commitments within the same election, with bounded seeded variation.
     const unused=viable.filter(([key])=>!usedMetrics.includes(key)),pool=unused.length?unused:viable;
-    const ranked=pool.map(row=>({row,rank:this.city.random()*1.6+(preferred.includes(row[0])?.7:0)+(green>.6&&environmental.includes(row[0])?.7:0)+(surveyPriority.has(row[0])?1.6:0)})).sort((a,b)=>b.rank-a.rank);
+    const ranked=pool.map(row=>({row,rank:this.city.random()*1.6+ideologicalPromiseWeight(profile,row[0])+(preferred.includes(row[0])?.7:0)+(green>.6&&environmental.includes(row[0])?.7:0)+(surveyPriority.has(row[0])?1.6:0)})).sort((a,b)=>b.rank-a.rank);
     const ambition=Math.max(0,Math.min(1,.1+(candidate.traits?.ambition??.5)*.55+(1-(candidate.traits?.honesty??.5))*.2+this.city.random()*.35));
     return ranked.slice(0,1).map(({row:[metric,title,target]})=>{
       const spec=PROMISE_METRICS[metric],factor=.4+ambition*1.9;

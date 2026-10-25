@@ -50,12 +50,13 @@ export function renderResearchDirectory(ui,p){
   p.block('RESUMO DA COLETA',statuses[s.status],q=>{
     q.metrics([['ENTREVISTAS',`${s.responses.length}/${s.target}`],['INTERVALO LEGAL',`${s.minimum}–${s.maximum}`],['RECEBIDO',money(s.funded)],['SALÁRIOS DE CAMPO',money(s.wages)]]);
     q.kv('Amostra / eleitorado',`${(s.responses.length/Math.max(1,s.population)*100).toFixed(1)}% / ${s.population}`);q.kv('Limites registrados',`${s.minRate}%–${s.maxRate}%`);q.kv('Orçamento operacional',money(s.budget));q.kv('Abertura / prazo',`${stamp(s.requestedAt)} / ${stamp(s.deadline)}`);q.note(s.reason);
+    q.kv('Prioridade da equipe',research.electionPriority(s.instituteId)?.id===s.id?'Esta pesquisa está no início da fila eleitoral':'Aguardando conclusão da pesquisa prioritária');q.note('Pesquisas eleitorais pausam contratos comuns. A equipe pode retomar turnos após pausas; o relatório é liberado ao atingir o mínimo legal, sem esperar o fim da campanha.');
     q.note(s.commission?'Pesquisa obrigatória contratada pelo poder público; todas as entrevistas e os custos continuam sendo reais.':'Financiamento privado é buscado primeiro. Sem nenhum investimento, a prefeitura pode contratar por 1,5× o orçamento; falta de caixa pode interromper a coleta. Uma amostra abaixo do mínimo não é publicada.');
   });
   p.heading('FINANCIAMENTO');for(const source of s.funders)p.record(source.name,`${source.kind} · ${stamp(source.minute)}`,()=>source.eventId?ui.openEvent(source.eventId):ui.openHistory(null,{logAccountId:source.accountId}),false,{value:money(source.amount)});
   if(!s.funders.length)p.note('Nenhum pagamento recebido.');
   p.heading('LOCAIS E DISTRIBUIÇÃO PELO FLUXO');p.table([{label:'Local',weight:2},{label:'Fluxo %'},{label:'Cota'},{label:'Feitas'}],s.sites.map(site=>({cells:[site.label,`${(site.share*100).toFixed(1)}%`,site.quota,site.interviews],click:()=>ui.camera(site.x,site.y)})));
-  p.heading('AGENTES E TURNOS');for(const row of s.sessions.slice(-16).reverse())p.record(row.agentName,`${stamp(row.startedAt)}–${stamp(row.until)} · ${s.sites[row.siteIndex]?.label} · ${row.interviews} entrevistas · ${row.status==='active'?'em campo':row.reason}`,()=>ui.openCitizen(row.agentId));
+  p.heading('AGENTES E TURNOS');for(const row of s.sessions.slice(-16).reverse())p.record(row.agentName,`${stamp(row.startedAt)}–${stamp(row.until)} · ${row.siteLabel||s.sites[row.siteIndex]?.label} · ${row.interviews} entrevistas · ${row.status==='active'?'em campo':row.reason}`,()=>ui.openCitizen(row.agentId));
   if(!s.sessions.length)p.note('Nenhum agente despachado. É necessário ter equipe, recursos e caminho até um ponto de coleta.');
   if(s.pollId)p.windowLink('RELATÓRIO PUBLICADO',()=>ui.openPanel({politicsTab:'polls',electionId:s.electionId,pollId:s.pollId}));
   p.windowLink('INSTITUTO RESPONSÁVEL',()=>ui.openBuilding(s.instituteId));p.windowLink('HISTÓRICO DESTA COLETA',()=>ui.openHistory(`studyId:${s.id}`));

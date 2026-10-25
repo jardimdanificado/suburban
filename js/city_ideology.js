@@ -1,0 +1,52 @@
+import {partyNameAgenda} from './city_party_names.js';
+const clamp=(n,a=-1,b=1)=>Math.max(a,Math.min(b,n));
+const profiles=new WeakMap();
+const normalize=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+/** Distinct policy preferences. Economic side does not determine civil liberties. */
+export function ideologicalProfile(subject){
+  const citizen=!!subject?.political,i=citizen?subject.political.ideology:subject?.ideology,name=citizen?'':subject?.name||'',frugality=citizen?subject.traits?.frugality:null,cached=subject&&profiles.get(subject);
+  if(cached&&cached.ideology===i&&cached.name===name&&cached.agenda===subject.nameAgenda&&cached.frugality===frugality)return cached.profile;
+  const source=i||{},agenda=citizen?{}:subject?.nameAgenda||partyNameAgenda(name),text=normalize(name);
+  const has=re=>re.test(text)?1:0,economy=clamp((source.economy||0)+(agenda.economy||0)*.7),liberty=clamp((source.liberty||0)+(agenda.liberty||0)*.6),green=clamp((source.green??.4)+(agenda.green||0),0,1);
+  const redistribution=clamp(-economy*.8+(agenda.social||0)*.9),ownership=clamp(-economy*.65+(agenda.state||0)*1.1+has(/comunist|estatist|estadist|coletivist/)*.35-has(/anarqu|libertari/)*.4),regulation=clamp(-economy*.5-liberty*.25+green*.15+has(/sindicat|trabalh/)*.2),fiscal=clamp(economy*.45+(citizen?(subject.traits?.frugality??.5)-.5:0)+has(/fiscal|auster|conserv/)*.4-has(/desenvolv|expans/)*.25),cooperation=clamp(-economy*.5+liberty*.25+has(/cooper|solidari|mutual/)*.4);
+  const side=economy<-.65?'esquerda':economy<-.2?'centro-esquerda':economy>.65?'direita':economy>.2?'centro-direita':'centro',current=ownership>.5?'estatal':ownership<-.4?'privada':cooperation>.4?'cooperativa':'mista';
+  const profile=Object.freeze({economy,liberty,green,redistribution,ownership,regulation,fiscal,cooperation,label:`${side} · economia ${current} · ${liberty>.25?'libertária':liberty<-.25?'centralizadora':'pluralista'}`});
+  if(subject)profiles.set(subject,{ideology:i,name,agenda:subject.nameAgenda,frugality,profile});return profile;
+}
+export function policyAffinity(profile,city,type,payload={}){
+  const p=city.politics,v=payload.value,dir=current=>Math.sign(v-current),socialBuildings=['popular_housing','popular_refectory','clinic','utility','kitchen'],environmental=['recycler','composting','cleaner','forestry','leisure'];
+  switch(type){
+    case'tax':return dir(city.taxRate)*(profile.redistribution*.9+profile.ownership*.25-profile.fiscal*.3);
+    case'businessTax':return dir(p.policy.businessTax)*(profile.redistribution*.8+profile.regulation*.55);
+    case'minimumWage':return dir(p.policy.minimumWage)*(profile.redistribution*.75+profile.regulation*.65);
+    case'welfare':return dir(city.welfare.policy.dailyBudget)*(profile.redistribution*1.2-profile.fiscal*.35+.15);
+    case'nationalize':return profile.ownership*1.6+profile.regulation*.2;
+    case'privatize':return -profile.ownership*1.6-profile.regulation*.2;
+    case'build':return profile.ownership*.9+(socialBuildings.includes(payload.buildingType)?profile.redistribution*.65+.2:0)+(environmental.includes(payload.buildingType)?profile.green*.7:0)-profile.fiscal*.25;
+    case'inflation':return Math.sign(city.currency.policy.dailyLimit-v)*(.35+profile.fiscal*.65+Math.min(1,Math.max(0,city.currency.dailyInflation)*40));
+    case'partyLimit':return dir(p.policy.partyLimit)*profile.liberty;
+    default:return null;
+  }
+}
+export function citizenPolicyInterest(city,c,type,payload={}){
+  const p=city.politics,owner=!!c.businessIds?.length,poor=c.balance<city.currency.price(10000),direction=current=>Math.sign(payload.value-current);
+  switch(type){
+    case'tax':return -direction(city.taxRate)*(poor?.25:.1);
+    case'businessTax':return direction(p.policy.businessTax)*(owner?-.45:.1);
+    case'minimumWage':return direction(p.policy.minimumWage)*(owner?-.4:c.jobId?.3:.15);
+    case'welfare':return direction(city.welfare.policy.dailyBudget)*((c.needs.food<45||!c.homeUnitId)?.5:poor?.2:0);
+    case'build':return payload.buildingType==='popular_housing'&&!c.homeUnitId?.5:payload.buildingType==='popular_refectory'&&c.needs.food<45?.5:0;
+    case'nationalize':return city.building(payload.buildingId)?.ownerId===c.id?-.65:0;
+    case'privatize':return city.building(payload.buildingId)?.workers.includes(c.id)?-.2:0;
+    default:return 0;
+  }
+}
+export function ideologicalPromiseWeight(profile,metric){
+  if(['publicHomes','publicMeals','stateFirms','publicJobs'].includes(metric))return profile.ownership*.65+profile.redistribution*.5;
+  if(['fed','housed','wage','health','water','clinics','literacy','readers'].includes(metric))return profile.redistribution*.7;
+  if(['tax','savers','banks','paidLoans'].includes(metric))return profile.economy*.5+profile.fiscal*.4;
+  if(['smallFirms','artisans','builders','carriers'].includes(metric))return profile.economy*.55+profile.cooperation*.25;
+  if(['recycling','cultivatedTrees','waste','parks','clean'].includes(metric))return profile.green*.8;
+  if(metric==='inflation')return profile.fiscal*.7;
+  return 0;
+}

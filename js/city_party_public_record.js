@@ -1,7 +1,9 @@
+import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 /** Civilian interests are independent of party discipline and the author's friendships. */
 function opinion(city,c,bill){
   const p=city.politics,i=c.political.ideology,e=i.economy,v=bill.payload.value;
+  const affinity=policyAffinity(ideologicalProfile(c),city,bill.type,bill.payload);if(affinity!==null)return affinity+citizenPolicyInterest(city,c,bill.type,bill.payload);
   const change=key=>Math.sign(v-(p.policy[key]??0));
   switch(bill.type){
     case'partyFund':return -Math.sign(v-(bill.previousValue??p.policy.partyFund??80000))*.9;
