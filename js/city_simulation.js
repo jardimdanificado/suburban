@@ -22,7 +22,7 @@ import { CityLogistics } from './city_logistics.js';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PRIVATE_TYPES, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, pavePath, generateSettlement, hasSettlementAccess } from './city_terrain.js';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -219,7 +219,7 @@ export class CitySimulation {
     this.sanitation.setupBusinessRooms(b);
     if (plot) { plot.buildingId = b.id;plot.door={...b.door}; b.plotId = plot.id; } else this.development.attachBuilding(b, ownerAccountId);
     b.accessPath = [terrain.door, ...access];
-    if (free) pavePath(this.world, b.accessPath);
+    layDirtPath(this.world, b.accessPath);
     this.history.ownership(b, null, ownerAccountId, {action:'construction'});
     this.lastError = '';
     this.log(`${entity.properties.name}: ${b.units.length} espaços de 1×1×1.`, 'city', [], { kind: 'construction', buildingId: b.id });
@@ -646,8 +646,13 @@ export class CitySimulation {
         const p = c.path[0];
         if (!this.walkable(Math.floor(p.x), Math.floor(p.y)) || !canStep(this.world, Math.floor(c.entity.x), Math.floor(c.entity.y), Math.floor(p.x), Math.floor(p.y))) { c.path = []; c.task = null; break; }
         const dx = p.x - c.entity.x, dy = p.y - c.entity.y, len = Math.hypot(dx, dy);
-        if (len <= distance) { c.entity.x = p.x; c.entity.y = p.y; this.recordTraffic(p); c.path.shift(); distance -= len; }
-        else { c.entity.x += dx / len * distance; c.entity.y += dy / len * distance; distance = 0; }
+        const tx=Math.floor(p.x),ty=Math.floor(p.y),tile=tileAt(this.world,tx,ty),cost=roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
+        if (len <= available) { c.entity.x = p.x; c.entity.y = p.y; this.recordTraffic(p); c.path.shift(); distance = Math.max(0,distance-len*cost); }
+        else { c.entity.x += dx / len * available; c.entity.y += dy / len * available; distance = 0; }
+        if(travelled>0){
+          wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
+          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}
+        }
         c.action = c.deliveryId ? 'Transportando mercadorias' : c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
     }

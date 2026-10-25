@@ -3,6 +3,9 @@ import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TI
 
 const heights = [1.1, 5.5, 0, .4, 3.8, 0, 1.1, .4, 1.1, 2.3, 7.5, .4, 2.3, 2.3];
 export const ROAD_TILES = new Set([TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE]);
+export const DIRT_ROAD_TILES = new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL]);
+export const PAVED_ROAD_TILES = new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
+export const ROAD_RULES = Object.freeze({dirtCost:.8,pavedCost:.55,degradeAt:30,wearPerCell:.01,hygienePerDirtCell:.025,moodPerDirtCell:.006});
 const land = new Set([TILE_FLOOR, TILE_SAND, TILE_HILL, ...ROAD_TILES]);
 export const tileKey = (x, y) => `${x},${y}`;
 export const tileHeight = tile => heights[tile] ?? 0;
@@ -14,6 +17,23 @@ export function roadFor(tile) {
   if ([TILE_SAND, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE].includes(tile)) return TILE_ROAD_SAND_STONE;
   if ([TILE_HILL, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE].includes(tile)) return TILE_ROAD_HILL_STONE;
   return null;
+}
+export function dirtRoadFor(tile){
+  if([TILE_FLOOR,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE].includes(tile))return TILE_ROAD_GRASS;
+  if([TILE_SAND,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE].includes(tile))return TILE_ROAD_SAND;
+  if([TILE_HILL,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE].includes(tile))return TILE_ROAD_HILL;
+  return null;
+}
+export function roadTravelCost(tile){return PAVED_ROAD_TILES.has(tile)?ROAD_RULES.pavedCost:DIRT_ROAD_TILES.has(tile)?ROAD_RULES.dirtCost:tile===TILE_HILL?1.6:tile===TILE_SAND?1.2:1;}
+export function wearRoad(world,x,y,amount){
+  const tile=tileAt(world,x,y);if(!PAVED_ROAD_TILES.has(tile)||!(amount>0))return;
+  const key=tileKey(x,y),condition=Math.max(0,(world.roadCondition?.get(key)??100)-amount);
+  const conditions=world.roadCondition??=new Map();
+  if(condition<=ROAD_RULES.degradeAt){world.setTile(x,y,dirtRoadFor(tile));conditions.delete(key);}
+  else conditions.set(key,condition);
+}
+export function layDirtPath(world,path){
+  for(const p of path){const x=Math.floor(p.x),y=Math.floor(p.y),tile=tileAt(world,x,y);if(ROAD_TILES.has(tile))continue;const road=dirtRoadFor(tile);if(road!==null)world.setTile(x,y,road);}
 }
 // Match the renderer's interpolated corners, without changing any terrain tile.
 const cornerCaches=new WeakMap();
@@ -149,9 +169,17 @@ export function settlementConnected(city, a, b) {
   return ac===bc?true:cache.sealed[ac]||cache.sealed[bc]?false:null;
 }
 
-export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null } = {}) {
+export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false } = {}) {
   const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
   if (!terrainWalkable(world, sx, sy) || !terrainWalkable(world, gx, gy) || blocked.has(tileKey(gx, gy))) return null;
+  // Search the much smaller street network first. Keep off-road shortcuts when
+  // following the streets would cost more than a near-direct walk on flat land.
+  if(preferRoads&&!extraBlocked&&ROAD_TILES.has(tileAt(world,sx,sy))&&ROAD_TILES.has(tileAt(world,gx,gy))){
+    const direct=Math.abs(gx-sx)+Math.abs(gy-sy),roadPath=findTerrainPath(world,start,goal,blocked,{limit:Math.min(limit,Math.max(128,direct*24)),preferRoads:false,roadOnly:true});
+    if(roadPath){let cost=0,x=sx,y=sy;for(const p of roadPath){const nx=Math.floor(p.x),ny=Math.floor(p.y),tile=tileAt(world,nx,ny);cost+=roadTravelCost(tile)+Math.abs(tileHeight(tile)-tileHeight(tileAt(world,x,y)))*.7;x=nx;y=ny;}
+      if(cost<=direct*1.05)return roadPath;
+    }
+  }
   const width = world.width, size = width * world.height;
   let workspace = pathWorkspaces.get(world);
   if (!workspace || workspace.costs.length !== size) {
@@ -177,7 +205,8 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
       const x = current.x + dx, y = current.y + dy, nextKey = y * width + x;
       if (blocked.has(tileKey(x, y)) || extraBlocked?.(x, y) || !canStep(world, current.x, current.y, x, y)) continue;
       const tile = tileAt(world, x, y);
-      const cost = current.cost + (ROAD_TILES.has(tile) ? .55 : tile === TILE_HILL ? 1.6 : tile === TILE_SAND ? 1.2 : 1) + Math.abs(tileHeight(tile) - tileHeight(tileAt(world, current.x, current.y))) * .7;
+      if(roadOnly&&!ROAD_TILES.has(tile))continue;
+      const cost = current.cost + roadTravelCost(tile) + Math.abs(tileHeight(tile) - tileHeight(tileAt(world, current.x, current.y))) * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
       marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
       open.push({ x, y, cost, score: cost + (Math.abs(gx - x) + Math.abs(gy - y)) * .55 });
@@ -200,7 +229,7 @@ export function hasSettlementAccess(world, door, x, y, width, depth) {
 }
 
 export function pavePath(world, path) {
-  for (const p of path) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(world, x, y), road = roadFor(tile); if (road !== null && road !== tile) world.setTile(x, y, road); }
+  for (const p of path) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(world, x, y), road = roadFor(tile); if (road !== null && road !== tile) {world.setTile(x, y, road);(world.roadCondition??=new Map()).set(tileKey(x,y),100);} }
 }
 
 export function generateSettlement(city) {

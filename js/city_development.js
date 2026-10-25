@@ -1,6 +1,6 @@
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, pavePath, roadFor } from './city_terrain.js';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad } from './city_terrain.js';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
@@ -50,9 +50,10 @@ export class CityDevelopment {
     const access=this.roadAccessTiles();
     const path=findTerrainPath(city.world,start,end,city.occupied,{extraBlocked:(x,y)=>this.roadPlotBlocked(x,y,access)});if(path===null)return null;
     const full=[{x:Math.floor(start.x)+.5,y:Math.floor(start.y)+.5},...path];
-    const indexes=full.map((p,i)=>!ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))?i:-1).filter(i=>i>=0).slice(0,maxTiles);
+    const indexes=full.map((p,i)=>!PAVED_ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))?i:-1).filter(i=>i>=0).slice(0,maxTiles);
     if(!indexes.length)return null;
-    const route=full.slice(Math.max(0,indexes[0]-1),Math.min(full.length,indexes.at(-1)+2)),tiles=route.filter(p=>!ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y))));
+    const last=indexes.at(-1),next=full[last+1],includeNext=next&&PAVED_ROAD_TILES.has(tileAt(city.world,Math.floor(next.x),Math.floor(next.y)));
+    const route=full.slice(Math.max(0,indexes[0]-1),last+1+(includeNext?1:0)),tiles=route.filter(p=>!PAVED_ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y))));
     if(tiles.some(p=>this.roadPlotBlocked(Math.floor(p.x),Math.floor(p.y),access))||this.projects.some(p=>p.service==='road'&&!p.cancelled&&p.status!=='completed'&&p.status!=='blocked'&&p.path.some(t=>tiles.some(n=>n.x===t.x&&n.y===t.y))))return null;
     const builder=this.selectBuilder(accountId,tiles[0],builderId,{allowTerrainAccess:true});
     const project=this.registerService(accountId,builder,{service:'road',type:'road',name:`Estrada de ${tiles.length} células`,path:tiles,route,plotAccessTiles:route.filter(p=>access.has(`${Math.floor(p.x)},${Math.floor(p.y)}`)).map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`),door:{...tiles[0]},priority,stone:tiles.length*DEVELOPMENT_RULES.roadStonePerTile,requiredLabor:tiles.length*DEVELOPMENT_RULES.roadLaborPerTile,fee:tiles.length*city.currency.price(DEVELOPMENT_RULES.roadFeePerTile)});
@@ -143,12 +144,15 @@ export class CityDevelopment {
     const tiles=Math.min(8,Math.floor((city.treasury-needs.reserve-margin)/perTile));
     if(tiles<1){this.roadPlanning={reason:'Caixa aguardando orçamento para trecho de rua, após reserva social.',required:perTile+margin};return;}
     const network=new Map(),queue=[];
-    const addRoad=(x,y)=>{x=Math.floor(x);y=Math.floor(y);const k=`${x},${y}`;if(!ROAD_TILES.has(tileAt(city.world,x,y))||network.has(k)||!city.walkable(x,y))return;network.set(k,{x:x+.5,y:y+.5});queue.push({x,y});};
-    addRoad(hall.door.x,hall.door.y);
-    if(!network.size){const first=(hall.accessPath||[]).find(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y))));if(first)addRoad(first.x,first.y);}
+    const addRoad=(x,y,origin=false)=>{x=Math.floor(x);y=Math.floor(y);const k=`${x},${y}`;if((!PAVED_ROAD_TILES.has(tileAt(city.world,x,y))&&!origin)||network.has(k)||!city.walkable(x,y))return;network.set(k,{x:x+.5,y:y+.5});queue.push({x,y});};
+    addRoad(hall.door.x,hall.door.y,true);
     for(let head=0;head<queue.length;head++){const {x,y}=queue[head];for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(canStep(city.world,x,y,x+dx,y+dy))addRoad(x+dx,y+dy);}
     const targets=[...network.values()];
-    const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!network.has(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`)).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])})).sort((a,b)=>b.traffic-a.traffic||a.b.id-b.b.id);
+    const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!network.has(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`)).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])}));
+    // Busy dirt shortcuts also qualify for paving, even after every door has a paved connection.
+    const doors=new Set(buildings.map(({b})=>`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`));
+    for(const [key,traffic]of city.traffic)if(traffic>=8&&!doors.has(key)){const [x,y]=key.split(',').map(Number);if(DIRT_ROAD_TILES.has(tileAt(city.world,x,y)))buildings.push({b:{id:`traffic:${key}`,door:{x:x+.5,y:y+.5}},traffic});}
+    buildings.sort((a,b)=>b.traffic-a.traffic||String(a.b.id).localeCompare(String(b.b.id),undefined,{numeric:true}));
     if(!targets.length){this.roadPlanning={reason:'Aguardando definição do primeiro trecho conectado à rua da prefeitura.'};return;}
     const offset=(this.roadCursor||0)%Math.max(1,buildings.length),options=buildings.slice(offset).concat(buildings.slice(0,offset)).slice(0,8);
     for(const {b} of options){
@@ -178,7 +182,7 @@ export class CityDevelopment {
     for (const [key, condition] of this.city.world.roadCondition || []) {
       if (condition > DEVELOPMENT_RULES.repairThreshold) continue;
       const [x, y] = key.split(',').map(Number);
-      if (ROAD_TILES.has(tileAt(this.city.world, x, y))) out.push({ x: x + .5, y: y + .5 });
+      if (PAVED_ROAD_TILES.has(tileAt(this.city.world, x, y))) out.push({ x: x + .5, y: y + .5 });
     }
     return out;
   }
@@ -203,11 +207,7 @@ export class CityDevelopment {
     }
     if (city.world.map) for (let y = 0; y < city.world.height; y++) for (let x = 0; x < city.world.width; x++) {
       const tile = tileAt(city.world, x, y);
-      if (ROAD_TILES.has(tile) && city.random() < .015) {
-        const k = `${x},${y}`, condition = Math.max(0, (city.world.roadCondition?.get(k) ?? 100) - 10);
-        (city.world.roadCondition ??= new Map()).set(k, condition);
-        if (condition <= DEVELOPMENT_RULES.repairThreshold) city.world.setTile(x, y, Math.floor(tile / 2) * 2);
-      }
+      if (PAVED_ROAD_TILES.has(tile) && city.random() < .015) wearRoad(city.world,x,y,10);
     }
   }
   ownerCitizen(accountId) {
