@@ -53,7 +53,7 @@ export function renderElectionMonitor(ui,p){
   if(e.runoffId)p.button('ACOMPANHAR SEGUNDO TURNO',()=>ui.host?.openElection(e.runoffId,'polls'));
   if(e.status==='runoff-required')p.note('Nenhuma chapa obteve mais de 50% dos votos válidos. As duas primeiras disputarão o segundo turno. A Câmara será empossada com o resultado final, usando somente os votos do primeiro turno.');
   if(e.status==='scheduled')p.note(`A campanha começa em ${stamp(e.startedAt)} e dura ${(e.voteAt-e.startedAt)/1440} dias, como no primeiro turno.`);
-  p.links([['polls','PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.host?.openElection(e.id,id)})));
+  p.links([['polls','PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.openPanel({electionView:id})})));
   if(mode==='polls'){p.kv('Dia da votação presencial',stamp(e.voteAt));polls(ui,p,e);return;}
   if(['campaign','scheduled'].includes(e.status)){p.note(`Votação presencial na prefeitura a partir de ${stamp(e.voteAt)}. A contagem começa com os votos efetivamente depositados.`);return;}
   p.metrics([['VOTOS REGISTRADOS',e.ballots.length],['ELEITORADO',e.electorateSize??e.ballots.length],['NÃO VOTARAM',Math.max(0,(e.electorateSize??e.ballots.length)-e.ballots.length)]]);

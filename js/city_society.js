@@ -88,6 +88,10 @@ export class CitySociety {
       if (!other || Math.hypot(c.entity.x - other.entity.x, c.entity.y - other.entity.y) > 2) { c.conversation = null; if (other) other.conversation = null; }
       else if (this.city.minute >= conversation.until) this.finishConversation(c, other, conversation);
     }
+    // Conversations already underway resolve every minute. Searching for new
+    // encounters uses a fresh spatial grid every ten minutes; the chance per
+    // scan represents the missed minute-by-minute opportunities.
+    if(this.city.minute%10!==0){for(const pregnancy of [...this.expecting])if(this.city.minute>=pregnancy.dueAt)this.giveBirth(pregnancy);return;}
     // A spatial grid limits encounters to nearby people, with one conversation per person.
     const buckets = new Map();
     for (const c of people) {
@@ -104,7 +108,7 @@ export class CitySociety {
           const relation=this.relations.get(pairKey(c.id,other.id));
           if(!relation && ((this.contactIndex.get(c.id)?.size||0)>=64 || (this.contactIndex.get(other.id)?.size||0)>=64))continue;
           const v=relation?.views?.[c.id];if(v && (v.fear>50 || v.status==='enemy') && !(v.resentment>55 && c.socialProfile.assertiveness>.6))continue;const score=(v?.affection||0)+(v?0:(this.city.minute+c.id)%6===0?55:0)+(other.partnerId===c.id?20:0)-(v?.fear||0)*.5+(v?.resentment>55 && c.socialProfile.assertiveness>.6?40:0);if(score>best){candidate=other;best=score;}}
-        if (candidate && this.city.random() < c.personality.sociability * 0.14) this.startConversation(c, candidate, nearby.filter(other=>other!==c && other!==candidate && Math.hypot(other.entity.x-c.entity.x,other.entity.y-c.entity.y)<=2).slice(0,4).map(other=>other.id));
+        if (candidate && this.city.random() < 1-Math.pow(1-c.personality.sociability*0.14,10)) this.startConversation(c, candidate, nearby.filter(other=>other!==c && other!==candidate && Math.hypot(other.entity.x-c.entity.x,other.entity.y-c.entity.y)<=2).slice(0,4).map(other=>other.id));
       }
       const key = `${x},${y}`;
       if (!buckets.has(key)) buckets.set(key, []);
@@ -132,6 +136,7 @@ export class CitySociety {
     const position = home?.door || guardian.entity;
     const baby = this.city.addCitizen(position.x, position.y, this.city.citizens.length, { age: 0, parentIds: pregnancy.parentIds, grant: false });
     baby.guardianId = guardian.id;
+    this.city.familyIndexDirty = true;
     this.birthCount++;
     for (const parent of parents) { parent.childIds.push(baby.id); parent.expectingId = null; parent.lastBirthAt = this.city.minute; }
     this.expecting.splice(this.expecting.indexOf(pregnancy), 1);
@@ -153,12 +158,14 @@ export class CitySociety {
     for (const c of this.city.citizens) {
       if (this.isAdult(c) && c.guardianId !== null) {
         c.guardianId = null;
+        this.city.familyIndexDirty = true;
         const home = this.city.units.get(c.homeUnitId); if (home) home.rentPayerId = null;
         this.city.log(`${c.entity.properties.name} chegou à idade adulta e passa a procurar trabalho.`, 'family', [c.id], { kind: 'adulthood' });
       }
     }
   }
   removeCitizen(c) {
+    this.city.familyIndexDirty = true;
     for (const other of this.city.citizens) {
       if (other.partnerId === c.id) other.partnerId = null;
       if (other.conversation?.a === c.id || other.conversation?.b === c.id) other.conversation = null;

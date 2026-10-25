@@ -3,12 +3,13 @@ import {MIN_PLOT_CELLS} from './city_building_geometry.js';
 import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, pavePath, roadFor } from './city_terrain.js';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
+const constructionDispatch = new WeakMap();
 export const DEVELOPMENT_RULES = { landPerCell: 4000, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 12000, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 8000, municipalMultiplier: 1.5, wearInterval: 30 * 1440, repairThreshold: 60 };
 export class CityDevelopment {
   constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; }
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
-  selectBuilder(clientId, door, builderId = null) {
-    return this.city.economy.businesses.filter(b => b.type === 'builder' && (!builderId || b.id === builderId) && b.accountId !== clientId && this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door })).sort((a, b) => (clientId==='treasury'?Number(b.favorUntil>this.city.minute&&b.favoredBy===this.city.economy.mayorId)-Number(a.favorUntil>this.city.minute&&a.favoredBy===this.city.economy.mayorId):0)||this.projects.filter(p => p.builderId === a.id && !p.cancelled && p.status !== 'completed').length - this.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed').length || this.city.reputation.providerPenalty(a) - this.city.reputation.providerPenalty(b) || a.id - b.id)[0] || null;
+  selectBuilder(clientId, door, builderId = null, {allowTerrainAccess=false}={}) {
+    return this.city.economy.businesses.filter(b => b.type === 'builder' && (!builderId || b.id === builderId) && b.accountId !== clientId && (this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door }) || allowTerrainAccess&&findTerrainPath(this.city.world,b.door,door,this.city.occupied)!==null)).sort((a, b) => (clientId==='treasury'?Number(b.favorUntil>this.city.minute&&b.favoredBy===this.city.economy.mayorId)-Number(a.favorUntil>this.city.minute&&a.favoredBy===this.city.economy.mayorId):0)||this.projects.filter(p => p.builderId === a.id && !p.cancelled && p.status !== 'completed').length - this.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed').length || this.city.reputation.providerPenalty(a) - this.city.reputation.providerPenalty(b) || a.id - b.id)[0] || null;
   }
   serviceOffers(builderId) {
     const b = this.city.building(builderId);
@@ -49,9 +50,9 @@ export class CityDevelopment {
     const full=[{x:Math.floor(start.x)+.5,y:Math.floor(start.y)+.5},...path];
     const indexes=full.map((p,i)=>!ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))?i:-1).filter(i=>i>=0).slice(0,maxTiles);
     if(!indexes.length)return null;
-    const route=full.slice(indexes[0],indexes.at(-1)+1),tiles=route.filter(p=>!ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y))));
+    const route=full.slice(Math.max(0,indexes[0]-1),Math.min(full.length,indexes.at(-1)+2)),tiles=route.filter(p=>!ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y))));
     if(tiles.some(p=>this.roadPlotBlocked(Math.floor(p.x),Math.floor(p.y),access))||this.projects.some(p=>p.service==='road'&&!p.cancelled&&p.status!=='completed'&&p.status!=='blocked'&&p.path.some(t=>tiles.some(n=>n.x===t.x&&n.y===t.y))))return null;
-    const builder=this.selectBuilder(accountId,tiles[0],builderId);
+    const builder=this.selectBuilder(accountId,tiles[0],builderId,{allowTerrainAccess:true});
     const project=this.registerService(accountId,builder,{service:'road',type:'road',name:`Estrada de ${tiles.length} células`,path:tiles,route,plotAccessTiles:route.filter(p=>access.has(`${Math.floor(p.x)},${Math.floor(p.y)}`)).map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`),door:{...tiles[0]},priority,stone:tiles.length*DEVELOPMENT_RULES.roadStonePerTile,requiredLabor:tiles.length*DEVELOPMENT_RULES.roadLaborPerTile,fee:tiles.length*city.currency.price(DEVELOPMENT_RULES.roadFeePerTile)});
     if(project){project.requiredBudget=project.fee+project.stone*city.economy.goods.pedra.price;project.targetDoor={...end};}
     return project;
@@ -139,10 +140,23 @@ export class CityDevelopment {
     const perTile=DEVELOPMENT_RULES.roadStonePerTile*city.economy.goods.pedra.price+Math.ceil(city.currency.price(DEVELOPMENT_RULES.roadFeePerTile)*DEVELOPMENT_RULES.municipalMultiplier),margin=city.currency.price(12000);
     const tiles=Math.min(8,Math.floor((city.treasury-needs.reserve-margin)/perTile));
     if(tiles<1){this.roadPlanning={reason:'Caixa aguardando orçamento para trecho de rua, após reserva social.',required:perTile+margin};return;}
-    const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id).sort((a,b)=>city.trafficScore(b.accessPath||[])-city.trafficScore(a.accessPath||[])||a.id-b.id);
+    const network=new Map(),roadProjects=this.projects.filter(p=>p.service==='road'&&p.status==='completed'&&!p.cancelled),projectsByTile=new Map(),routeTiles=new Map(),queue=[];
+    const addRoad=(x,y)=>{x=Math.floor(x);y=Math.floor(y);const k=`${x},${y}`;if(!ROAD_TILES.has(tileAt(city.world,x,y))||network.has(k))return;network.set(k,{x:x+.5,y:y+.5});queue.push(k);};
+    for(const p of hall.accessPath||[])addRoad(p.x,p.y);
+    if(!network.size)for(const b of city.buildings)for(const p of b.accessPath||[])addRoad(p.x,p.y);
+    for(const project of roadProjects){
+      const roadTiles=[];routeTiles.set(project,roadTiles);
+      for(const point of project.route||[]){const x=Math.floor(point.x),y=Math.floor(point.y),k=`${x},${y}`;if(!ROAD_TILES.has(tileAt(city.world,x,y)))continue;roadTiles.push(k);let list=projectsByTile.get(k);if(!list)projectsByTile.set(k,list=[]);list.push(project);}
+      if(project.connectedRoadNetwork)for(const k of roadTiles){const [x,y]=k.split(',').map(Number);addRoad(x,y);}
+    }
+    for(let head=0;head<queue.length;head++)for(const project of projectsByTile.get(queue[head])||[]){project.connectedRoadNetwork=true;for(const k of routeTiles.get(project)||[]){const [x,y]=k.split(',').map(Number);addRoad(x,y);}}
+    const targets=[...network.values()];
+    const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!b.accessPath?.some(p=>network.has(`${Math.floor(p.x)},${Math.floor(p.y)}`))).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])})).sort((a,b)=>b.traffic-a.traffic||a.b.id-b.b.id);
+    if(!targets.length){this.roadPlanning={reason:'Aguardando definição do primeiro trecho conectado à rua da prefeitura.'};return;}
     const offset=(this.roadCursor||0)%Math.max(1,buildings.length),options=buildings.slice(offset).concat(buildings.slice(0,offset)).slice(0,8);
-    for(const b of options){
-      const project=this.beginRoad('treasury',b.door,hall.door,{maxTiles:tiles,priority:110});
+    for(const {b} of options){
+      let target=targets[0],bestDistance=Infinity;for(const point of targets){const d=(point.x-b.door.x)**2+(point.y-b.door.y)**2;if(d<bestDistance){bestDistance=d;target=point;}}
+      const project=this.beginRoad('treasury',b.door,target,{maxTiles:tiles,priority:110});
       if(!project)continue;
       const id=`materials:${project.id}`,budget=project.stone*city.economy.goods.pedra.price+margin;
       city.accounts.set(id,{name:`Materiais de ${project.name}`,balance:0});
@@ -397,12 +411,23 @@ export class CityDevelopment {
     this.city.economy.practice(c, 'construction'); this.complete(project); return true;
   }
   projectFor(c, business = null) {
-    const eligible = p => p.status!=='blocked' && p.labor<p.requiredLabor && !p.waitingForCouncilContract && !p.cancelled && p.status !== 'completed' && p.inventory.pedra >= p.stone && (p.service !== 'lamp' || !!p.builderId) && ((!p.builderId && (p.accountId===c.accountId || p.accountId==='treasury' && p.ownerId===c.id)) || business?.type==='builder' && (p.builderId===business.id || p.accountId===business.accountId));
-    const priority=p=>(p.priority||0)+(p.service==='lamp'?Math.min(80,Math.max(0,this.city.minute-p.startedAt)/60*2):0);
-    const assigned=new Map();for(const worker of this.city.citizens)if(!worker.entity.destroyed&&worker.task==='construction'&&worker.id!==c.id)assigned.set(worker.workProjectId,(assigned.get(worker.workProjectId)||0)+1);
-    const crewLimit=p=>Math.max(1,Math.min(6,Math.ceil(Math.max(0,p.requiredLabor-p.labor)/30)));
-    return this.projects.filter(p=>eligible(p)&&(assigned.get(p.id)||0)<crewLimit(p)).sort((a,b)=>(priority(b)+Math.min(160,(this.city.minute-b.startedAt)/60))-(priority(a)+Math.min(160,(this.city.minute-a.startedAt)/60))||(assigned.get(a.id)||0)-(assigned.get(b.id)||0)||a.startedAt-b.startedAt)[0]||null;
+    let dispatch=constructionDispatch.get(this);
+    if(!dispatch||dispatch.minute!==this.city.minute){
+      const assigned=new Map();for(const worker of this.city.citizens)if(!worker.entity.destroyed&&worker.task==='construction')assigned.set(worker.workProjectId,(assigned.get(worker.workProjectId)||0)+1);
+      dispatch={minute:this.city.minute,assigned,projects:this.projects.filter(p=>p.status!=='blocked'&&p.labor<p.requiredLabor&&!p.waitingForCouncilContract&&!p.cancelled&&p.status!=='completed'&&p.inventory.pedra>=p.stone&&(p.service!=='lamp'||!!p.builderId))};
+      constructionDispatch.set(this,dispatch);
+    }
+    let selected=null,selectedPriority=-Infinity,selectedCrew=Infinity;
+    for(const p of dispatch.projects){
+      const owned=!p.builderId&&(p.accountId===c.accountId||p.accountId==='treasury'&&p.ownerId===c.id),builderJob=business?.type==='builder'&&(p.builderId===business.id||p.accountId===business.accountId);
+      if(!owned&&!builderJob||p.status==='blocked'||p.labor>=p.requiredLabor||p.waitingForCouncilContract||p.cancelled||p.status==='completed'||p.inventory.pedra<p.stone)continue;
+      const crew=dispatch.assigned.get(p.id)||0,limit=Math.max(1,Math.min(6,Math.ceil(Math.max(0,p.requiredLabor-p.labor)/30)));if(crew>=limit)continue;
+      const score=(p.priority||0)+(p.service==='lamp'?Math.min(80,Math.max(0,this.city.minute-p.startedAt)/60*2):0)+Math.min(160,(this.city.minute-p.startedAt)/60);
+      if(score>selectedPriority||score===selectedPriority&&(crew<selectedCrew||crew===selectedCrew&&p.startedAt<selected?.startedAt)){selected=p;selectedPriority=score;selectedCrew=crew;}
+    }
+    return selected;
   }
+  reserveConstruction(project){const dispatch=constructionDispatch.get(this);if(dispatch?.minute===this.city.minute)dispatch.assigned.set(project.id,(dispatch.assigned.get(project.id)||0)+1);}
   balanceContracts() {
     const builders=this.city.economy.businesses.filter(b=>b.type==='builder' && (b.workers.length || this.city.economy.citizen(b.ownerId)));
     if(builders.length<2)return;

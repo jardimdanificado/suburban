@@ -51,31 +51,13 @@ export class UIPage {
   }
   button(label,click,selected=false){if(this.visible(20))this.ui.button(this.x,this.y,this.w,20,fit(this.ui,label,this.w-12),click,{selected});this.y+=23;}
   buttons(items){let dx=0;for(const item of items){const w=Math.min(this.w,Math.ceil(widthOf(this.ui,item.label))+14);if(dx&&dx+w>this.w){dx=0;this.y+=23;}if(this.visible(20))this.ui.button(this.x+dx,this.y,w,20,fit(this.ui,item.label,w-10),item.click,{selected:item.selected});dx+=w+3;}this.y+=23;}
-  // Window destinations use flat links with an external-window icon, never pressed tabs.
+  // Related views stay visible as compact tabs inside their current window.
   links(items){
     if(!items.length)return;
-    const state=this.ui.windowState;if(state?.host){state.windowLinks??=[];state.windowLinks.push(...items);return;}
-    const cols=this.w>=520?2:1,gap=12,cw=Math.floor((this.w-gap*(cols-1))/cols),height=24;
-    for(let i=0;i<items.length;i+=cols){
-      if(this.visible(height))for(let j=0;j<cols&&i+j<items.length;j++){
-        const item=items[i+j],current=!!(item.current??item.selected),x=this.x+j*(cw+gap),y=this.y,ctx=this.ui.ctx;
-        const hover=!current&&this.ui.pointer&&this.ui.pointer.x>=x&&this.ui.pointer.x<x+cw&&this.ui.pointer.y>=y&&this.ui.pointer.y<y+height;
-        ctx.fillStyle=hover?T.row:T.paper;ctx.fillRect(x,y,cw,height-2);
-        const text=fit(this.ui,item.label,cw-(current?48:24)),color=current?T.muted:T.blue;
-        this.ui.text(text,x+4,y+5,color);
-        if(current)this.ui.text('Atual',x+cw-34,y+5,T.muted);
-        else{
-          if(hover){ctx.fillStyle=color;ctx.fillRect(x+4,y+18,Math.min(cw-24,widthOf(this.ui,text)),1);}
-          const ix=x+cw-16,iy=y+7;ctx.save();ctx.strokeStyle=color;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ix+5,iy+2);ctx.lineTo(ix,iy+2);ctx.lineTo(ix,iy+10);ctx.lineTo(ix+8,iy+10);ctx.lineTo(ix+8,iy+6);ctx.moveTo(ix+4,iy+6);ctx.lineTo(ix+10,iy);ctx.lineTo(ix+5,iy);ctx.moveTo(ix+10,iy);ctx.lineTo(ix+10,iy+5);ctx.stroke();ctx.restore();
-        }
-        ctx.fillStyle=T.line;ctx.fillRect(x,y+height-2,cw,1);
-        this.ui.regions.push({x,y,w:cw,h:height-1,label:current?`${item.label} — nesta janela`:`${item.label} — abrir em outra janela`,onClick:current?null:item.click});
-      }
-      this.y+=height;
-    }
-    this.space(3);
+    const state=this.ui.windowState;if(state?.host){state.windowLinks??=[];state.windowLinks.push(...items);}
+    this.buttons(items.map(item=>({...item,selected:!!(item.current??item.selected)})));
   }
-  windowLink(label,click){this.links([{label,click}]);}
+  windowLink(label,click){this.button(label,click);}
   card(title,subtitle,click,selected,color=T.blue){const lines=String(subtitle??'').split('\n'),h=19+lines.length*14;if(this.visible(h)){const ctx=this.ui.ctx;ctx.fillStyle=selected?T.selected:T.paper;ctx.fillRect(this.x,this.y,this.w,h);ctx.fillStyle=T.line;ctx.fillRect(this.x,this.y+h-1,this.w,1);this.ui.text(fit(this.ui,title,this.w-25),this.x+6,this.y+4,T.ink);ctx.fillStyle=color;ctx.fillRect(this.x+this.w-10,this.y+8,4,4);for(const[i,line]of lines.entries())this.ui.text(fit(this.ui,line,this.w-16),this.x+6,this.y+17+i*14,T.muted);this.ui.regions.push({x:this.x,y:this.y,w:this.w,h,label:`${title} — ${lines.join(' / ')}`,onClick:click});}this.y+=h+1;}
   record(title,subtitle,click,selected=false,{value='',color=T.blue}={}){
     const h=32;if(this.visible(h)){const ctx=this.ui.ctx;ctx.fillStyle=selected?T.selected:T.paper;ctx.fillRect(this.x,this.y,this.w,h-1);ctx.fillStyle=color;ctx.fillRect(this.x,this.y+5,3,h-12);ctx.fillStyle=T.line;ctx.fillRect(this.x,this.y+h-2,this.w,1);

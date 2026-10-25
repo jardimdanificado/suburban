@@ -41,7 +41,7 @@ const TABS = [
 ];
 const VIEWS = {
   city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['nature','VEGETAÇÃO']],
-  government: [['overview', 'GOVERNO'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO'], ['elections','ELEIÇÕES']],
+  government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
   transport: [['active', 'EM ANDAMENTO'], ['finished', 'ENCERRADOS']],
@@ -70,10 +70,11 @@ export class CityUI {
     this.search.addEventListener('input', () => { this.query = this.search.value; this.logLimit = 80; this.resetScroll(); });
     this.search.addEventListener('keydown', e => { if (e.key === 'Escape') { this.search.blur(); e.stopPropagation(); } });
     this.seed = document.createElement('input'); this.seed.type = 'number'; this.seed.min = '1'; this.seed.max = '2147483647'; this.seed.value = city.world.seed ?? city.initialSeed; this.seed.setAttribute('aria-label', 'Semente do próximo terreno');
+    this.populationInput = document.createElement('input'); this.populationInput.type = 'number'; this.populationInput.min = '1'; this.populationInput.max = '2000'; this.populationInput.step = '1'; this.populationInput.value = String(city.initialPopulation ?? 512); this.populationInput.setAttribute('aria-label', 'Número de cidadãos da próxima cidade');
     this.filterInput=document.createElement('select');this.filterInput.setAttribute('aria-label','Filtrar registros');this.filterInput.addEventListener('change',()=>this.setFilter(this.filterInput.value));
     this.sortInput=document.createElement('select');this.sortInput.setAttribute('aria-label','Ordenar registros');this.sortInput.addEventListener('change',()=>{this.sorts[this.tab]=this.sortInput.value;this.resetScroll();});
     this.publicationDraft=document.createElement('input');this.publicationDraft.type='text';this.publicationDraft.maxLength=1200;this.publicationDraft.placeholder='Escreva um relato, informação, anúncio ou invenção…';this.publicationDraft.setAttribute('aria-label','Conteúdo a escrever no livro ou panfleto');
-    this.element.append(this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft);
+    this.element.append(this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft);
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
   }
   resetScroll() { this.scrolls = {}; }
@@ -84,7 +85,8 @@ export class CityUI {
   section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
 
   remember() {
-    this.history.push({ tab: this.tab, selected: this.selected, selectedPlotId: this.selectedPlotId, unitId: this.unitId, detailTab: this.detailTab, mobileDetail: this.mobileDetail, query: this.query, views: { ...this.views }, filters: { ...this.filters }, scrolls: { ...this.scrolls } });
+    const route={};for(const key of ['politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow'])route[key]=this[key];
+    this.history.push({ ...route, tab: this.tab, selected: this.selected, selectedPlotId: this.selectedPlotId, unitId: this.unitId, detailTab: this.detailTab, mobileDetail: this.mobileDetail, query: this.query, views: { ...this.views }, filters: { ...this.filters }, scrolls: { ...this.scrolls } });
     if (this.history.length > 40) this.history.shift();
   }
   back() {
@@ -102,7 +104,8 @@ export class CityUI {
   }
   sectionTitle(){return sectionTitle(this);}
   openPanel(overrides={}){return this.host?this.host.openPanel(this,overrides):Object.assign(this,overrides);}
-  showView(id){return this.openPanel({views:{...this.views,[this.tab]:id},...(this.tab==='government'&&id==='elections'?{politicsTab:'directory',billId:null,termId:null}:{} )});}
+  showView(id){return this.openPanel({views:{...this.views,[this.tab]:id},...(this.tab==='government'&&id==='elections'?{politicsTab:this.politicsTab||'overview'}:{} )});}
+  openCurrentInWindow(){if(!this.host)return;return this.host.openPanel(this,{tab:this.tab,views:{...this.views},filters:{...this.filters},sorts:{...this.sorts}},{separate:true});}
   openParty(id){return this.host?.openParty(id);}
   openContract(id){return this.host?.openContract(id);}
   openHistory(reference=null,overrides={}){return this.openPanel({tab:'log',query:'',selected:null,logCategory:'all',logReference:reference,logCitizenId:null,logBuildingId:null,logAccountId:null,logLimit:80,logLive:true,scrolls:{},...overrides});}
@@ -142,7 +145,7 @@ export class CityUI {
     return false;
   }
   beginInputs(){this.frameInputs??=new Set();this.frameInputs.clear();}
-  finishInputs(){for(const input of[this.search,this.seed,this.filterInput,this.sortInput,this.publicationDraft]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
+  finishInputs(){for(const input of[this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
   inputAt(input,x,y,w){this.frameInputs?.add(input);const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.hidden)input.hidden=false;}
   drawFloating(ui,window) {
     this.floating=true;this.floatingDossier=window.kind==='dossier';if(this.element.hidden)this.element.hidden=false;this.visible=true;this.zones=[];this.beginInputs();
@@ -151,7 +154,7 @@ export class CityUI {
     if(!this.floatingDossier){
       const search=!['event','corruption-case'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
-      const views=VIEWS[this.tab];if(views&&!this.sectionWindow&&this.tab!=='government'){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
+      const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
     }
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings','economy'].includes(this.tab)?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings','economy'].includes(this.tab))this.directory(p);else this.content(p);
@@ -166,11 +169,11 @@ export class CityUI {
     const navWidth=desktop?158:0;
     if(desktop)this.pane(ui,'navigation',x+8,y+36,navWidth-12,h-68,p=>{p.y=this.navigation(ui,p.x,p.y,p.w,p.top,p.bottom);});
     const bx=x+navWidth+16,bw=w-navWidth-32;let by=y+39;
-    if(desktop){ui.text(info[1],bx,by,T.ink,2);if(this.history.length)ui.button(bx+bw-92,by,92,26,'< VOLTAR',()=>this.back());by+=38;}
-    else{ui.button(bx,by,78,28,'MENU',()=>{this.menuOpen=!this.menuOpen;},{selected:this.menuOpen});ui.text(trim(info[1],bw-122),bx+90,by+6,T.ink);if(this.history.length)ui.button(bx+bw-28,by,28,28,'<',()=>this.back());by+=38;}
+    if(desktop){ui.text(info[1],bx,by,T.ink,2);if(this.host&&!this.sectionWindow)ui.button(bx+bw-112,by,108,26,'↗ OUTRA JANELA',()=>this.openCurrentInWindow());if(this.history.length)ui.button(bx+bw-218,by,92,26,'< VOLTAR',()=>this.back());by+=38;}
+    else{ui.button(bx,by,78,28,'MENU',()=>{this.menuOpen=!this.menuOpen;},{selected:this.menuOpen});ui.text(trim(info[1],bw-160),bx+90,by+6,T.ink);if(this.host&&!this.sectionWindow)ui.button(bx+bw-(this.history.length?94:62),by,62,28,'↗',()=>this.openCurrentInWindow());if(this.history.length)ui.button(bx+bw-28,by,28,28,'<',()=>this.back());by+=38;}
     const listMode=['people','buildings','economy'].includes(this.tab),split=listMode&&bw>=680;
     this.search.placeholder=this.tab==='people'?'Buscar nome ou atividade…':this.tab==='log'?'Buscar acontecimento…':'Pesquisar nesta janela…';this.inputAt(this.search,bx,by,split?254:bw);by+=38;
-    const views=VIEWS[this.tab];if(views&&this.tab!=='government'){const row=new Page(ui,bx,by,bw,by,y+h-24);row.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));by=row.y;}
+    const views=VIEWS[this.tab];if(views){const row=new Page(ui,bx,by,bw,by,y+h-24);row.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));by=row.y;}
     if(listMode&&!split){const tw=Math.floor((bw-6)/2);ui.button(bx,by,tw,28,'LISTA',()=>{this.mobileDetail=false;},{selected:!this.mobileDetail});ui.button(bx+tw+6,by,tw,28,'FICHA',()=>{this.mobileDetail=true;},{selected:this.mobileDetail});by+=38;}
     const bh=Math.max(16,y+h-by-29);
     if(split){this.pane(ui,'list',bx,by,254,bh,p=>this.directory(p));this.pane(ui,`detail:${this.selected?.id}:${this.detailTab}`,bx+268,by,bw-268,bh,p=>this.detail(p));}
@@ -482,7 +485,7 @@ export class CityUI {
         q.kv('Entregas concluídas',city.logistics.delivered);q.kv('Casais / amizades',`${s.couples} / ${s.friendships}`);q.kv('Nascimentos / mortes',`${s.births} / ${s.deaths}`);
         q.button('ACOMPANHAR AS OBRAS',()=>this.go('land',{view:'projects'}));q.button('VER ABASTECIMENTO',()=>this.go('production'));
       });
-      p.heading('ÚLTIMOS ACONTECIMENTOS');this.events(p,city.events.filter(e=>this.matches(e.message)).slice(0,2));p.button('ABRIR HISTÓRICO COMPLETO',()=>this.go('log'));
+      p.heading('ÚLTIMOS ACONTECIMENTOS');this.events(p,this.recentCityEvents(2));p.button('ABRIR HISTÓRICO COMPLETO',()=>this.go('log'));
     } else if(view==='needs'){
       p.heading('CONDIÇÕES DE VIDA');
       p.meters(Object.entries(NEED_LABELS).map(([key,label])=>[label,city.citizens.reduce((n,c)=>n+c.needs[key],0)/Math.max(1,s.population)]));
@@ -490,7 +493,7 @@ export class CityUI {
       const rows=city.citizens.filter(c=>Math.min(...Object.values(c.needs))<30).sort((a,b)=>Math.min(...Object.values(a.needs))-Math.min(...Object.values(b.needs)));
       for(const c of rows){const need=Object.entries(c.needs).sort((a,b)=>a[1]-b[1])[0];p.card(name(c.entity),`${NEED_LABELS[need[0]]}: ${Math.round(need[1])}% / ${c.action}`,()=>this.openCitizen(c.id),false,C.red);}
       if(!rows.length)p.note('Todos os habitantes estão com necessidades acima de 30%.',C.green);
-    } else {p.heading('ATIVIDADE DA CIDADE');this.events(p,city.events.filter(e=>this.matches(e.message)).slice(0,30));}
+    } else {p.heading('ATIVIDADE DA CIDADE');this.events(p,this.recentCityEvents(30));}
   }
   monetaryPolicy(p) {
     const currency=this.city.currency,mint=this.city.buildings.find(b=>b.type==='mint'&&!b.entity.destroyed);
@@ -529,10 +532,11 @@ export class CityUI {
     else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
     else {
       p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
-      p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');const iy=p.y;p.space(30);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);
+      p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');let iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);
+      p.note('Cidadãos iniciais (1 a 2.000)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.populationInput,p.x,iy,p.w);
       p.button(`PAISAGEM: ${WORLD_PRESETS[this.terrain].label}`,()=>{const keys=Object.keys(WORLD_PRESETS);this.terrain=keys[(keys.indexOf(this.terrain)+1)%keys.length];});
       p.note('Gerar terreno reinicia a simulação e descarta a cidade atual.',C.red);
-      p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity())this.startWorld(Number(this.seed.value),this.terrain);});p.button('GERAR TERRENO ALEATÓRIO',()=>this.startWorld(randomWorldSeed(),this.terrain));
+      p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity()&&this.populationInput.reportValidity())this.startWorld(Number(this.seed.value),this.terrain,Number(this.populationInput.value));});p.button('GERAR TERRENO ALEATÓRIO',()=>{if(this.populationInput.reportValidity())this.startWorld(randomWorldSeed(),this.terrain,Number(this.populationInput.value));});
     }
   }
   production(p) {
@@ -724,6 +728,12 @@ export class CityUI {
     if(!events.length)p.note('Nenhum acontecimento encontrado.');
   }
 
+  recentCityEvents(limit=30) {
+    const rows=[];
+    for(let i=this.city.events.length-1;i>=0&&rows.length<limit;i--){const event=this.city.events[i];if(this.matches(event.message))rows.push(event);}
+    return rows;
+  }
+
   eventRows(limit=Infinity) {
     const signature=[this.logLive?this.city.history.nextId:this.frozenEvents?.[0]?.id,limit,this.logCategory,this.logCitizenId,this.logBuildingId,this.logAccountId,this.logReference,this.query,this.logLive].join('|');
     if(this.eventQueryKey===signature)return this.eventQueryRows;
@@ -751,5 +761,5 @@ export class CityUI {
     const blob=new Blob([JSON.stringify({version:2,cityMinute:this.city.minute,total:this.city.history.total,dropped:this.city.history.dropped,retention:HISTORY_LIMIT,filters:{category:this.logCategory,citizenId:this.logCitizenId,buildingId:this.logBuildingId,accountId:this.logAccountId,reference:this.logReference,query:this.query},events,pendingFinance},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`suburban-historico-dia-${this.city.day}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  startWorld(seed, terrain) { const url = new URL(window.location.href); url.searchParams.set('seed', seed); url.searchParams.set('terrain', terrain); window.location.assign(url.href); }
+  startWorld(seed, terrain, population = this.city.initialPopulation ?? 512) { const url = new URL(window.location.href); url.searchParams.set('seed', seed); url.searchParams.set('terrain', terrain); url.searchParams.set('population', population); window.location.assign(url.href); }
 }

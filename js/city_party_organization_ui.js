@@ -28,6 +28,7 @@ export function renderPartyOrganization(ui,p,{fold,paginate}){
 }
 
 export function renderPartyOrganizationWindow(ui,p){
+  p.links([['foundations','FUNDAÇÕES E REGISTROS'],['membership','CAMPANHAS DE FILIAÇÃO']].map(([id,label])=>({label,selected:(ui.partyOrganizationView||'foundations')===id,click:()=>ui.openPanel({partyOrganizationView:id,partyProposalId:null,recordWindow:false})})));
   const paginate=(ui,p,rows,key,size)=>{const page=Math.max(0,Math.min(ui[key]||0,Math.ceil(rows.length/size)-1));if(rows.length>size)p.buttons([{label:'ANTERIOR',click:()=>{ui[key]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{ui[key]=page+1;}}]);return rows.slice(page*size,page*size+size);};
   const fold=(ui,p,key,title,draw)=>{if(key===(ui.partyOrganizationView==='membership'?'partyMembershipCampaign':'partyFoundations')||key==='partyFoundationBallots'){p.heading(title);draw();}};
   renderPartyOrganization(ui,p,{fold,paginate});

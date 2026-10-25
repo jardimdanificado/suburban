@@ -1,7 +1,8 @@
 /** Durable garments keep their manufacturer through wholesale transport. */
 export const GARMENT_TYPES=['camisa','calça','vestido','casaco','saia','macacão'];
 export const CLOTHING_STYLES=['simples','social','esportivo','colorido','clássico'];
-export const clothingPreference=(id,key)=>((Math.imul(id+71,[...String(key)].reduce((n,c)=>(Math.imul(n,31)+c.charCodeAt(0))|0,17))>>>0)%201-100)/100;
+const preferenceSeeds=new Map(),appearanceCache=new WeakMap();
+export const clothingPreference=(id,key)=>{let seed=preferenceSeeds.get(key);if(seed===undefined){seed=[...String(key)].reduce((n,c)=>(Math.imul(n,31)+c.charCodeAt(0))|0,17);preferenceSeeds.set(key,seed);}return ((Math.imul(id+71,seed)>>>0)%201-100)/100;};
 export function brandPreference(c,id){if(!c||id==null)return 0;c.brandPreferences??={};return c.brandPreferences[id]??=clothingPreference(c.id,`marca:${id}`);}
 export function companyPreference(c,b){return b?brandPreference(c,b.id)*2:0;}
 export function garmentScore(c,g){return g.condition*.65+g.quality*.2+clothingPreference(c.id,g.piece)*10+clothingPreference(c.id,g.style)*8+brandPreference(c,g.brandId)*7;}
@@ -10,7 +11,7 @@ export function initializeClothes(city,c){
   c.wardrobe=[{piece:'camisa',style:CLOTHING_STYLES[c.id%5],brandId:null,brandName:'Roupa de chegada',quality:45,condition:65,acquiredAt:city.minute}];
   c.clothingUpdatedAt=city.minute;
 }
-export function appearance(c){const g=c.wardrobe?.[c.wearingIndex||0];return g?Math.max(0,Math.min(100,garmentScore(c,g))):40;}
+export function appearance(c){const g=c.wardrobe?.[c.wearingIndex||0];if(!g)return 40;const old=appearanceCache.get(c);if(old&&old.g===g&&old.condition===g.condition&&old.quality===g.quality&&old.brandId===g.brandId&&old.piece===g.piece&&old.style===g.style)return old.score;const score=Math.max(0,Math.min(100,garmentScore(c,g)));appearanceCache.set(c,{g,condition:g.condition,quality:g.quality,brandId:g.brandId,piece:g.piece,style:g.style,score});return score;}
 export function clothingMood(c){return (appearance(c)-50)/12;}
 export function manufactureClothes(city,b,n){b.garments??=[];for(let i=0;i<n;i++){const serial=b.garmentSerial=(b.garmentSerial||0)+1;b.garments.push({piece:GARMENT_TYPES[(b.id+serial)%6],style:CLOTHING_STYLES[(b.id*3+serial)%5],brandId:b.id,brandName:b.entity.properties.name,quality:Math.min(100,40+(b.productionQuality||0)+Math.min(40,(b.workers||[]).length*5)),condition:100,manufacturedAt:city.minute});}}
 export function clothingOffer(city,c,b){

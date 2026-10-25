@@ -26,13 +26,15 @@ function promise(p,pr,campaign=false,ui=null){
 }
 export function renderPolitics(ui,p) {
   const city=ui.city,gov=city.politics,active=gov.active,tab=ui.politicsTab||'overview',partyName=id=>gov.party(id)?.ballotLabel||'Sem partido';
-  if(!ui.billId)p.heading(ui.sectionWindow?POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'Governo':'GOVERNO, CÂMARA E ELEIÇÕES');if(!ui.sectionWindow)p.links(POLITICS_SECTIONS.map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({politicsTab:id,billId:null,termId:null,approvalView:'summary',councilView:'bills'})})));
+  p.links(POLITICS_SECTIONS.map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({politicsTab:id,billId:null,termId:null,recordWindow:false,approvalView:'summary',councilView:'bills'})})));
+  if(!ui.billId)p.heading(POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'GOVERNO, CÂMARA E ELEIÇÕES');
   if(tab==='directory'&&ui.host){p.meter('Aprovação do governo',gov.approval);p.kv('Prefeito',city.accountName(`citizen:${city.economy.mayorId}`));p.kv('Vereadores',`${gov.council.members.length}/${gov.council.seats}`);p.kv('Partidos ativos',gov.parties.filter(p=>p.active).length);return;}
   if(tab==='directory'){
     for(const [label,ids] of [['GESTÃO',['overview','approval','promises']],['INSTITUIÇÕES',['parties','council']],['ELEIÇÕES',['campaign','polls','institutes','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.windowLink(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
   }
   if(tab==='institutes'){renderResearchDirectory(ui,p);return;}
   if(tab==='approval'){
+    const view=ui.approvalView||'summary';p.links([['summary','RESUMO'],['changes','DESDE A POSSE'],['promise','PROMESSA'],['conditions','CONDIÇÕES E PENALIDADES']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({approvalView:id})})));
     const report=gov.approvalReport?.version===4?gov.approvalReport:approvalReport(gov),signed=n=>`${n>0?'+':''}${n.toFixed(2)} p.p.`;
     p.meter('Aprovação do governo',report.score);p.kv('Avaliação',report.score>50?'Saldo positivo (acima de 50 pontos)':report.score<50?'Saldo negativo (abaixo de 50 pontos)':'Avaliação neutra (50 pontos)');p.kv('Atualização',stamp(report.minute));
     p.note('O cálculo parte de 50 pontos, a nota neutra. A evolução desde a posse tem mais peso que as condições herdadas. Cumprimento, rapidez e superação da promessa somam pontos; retrocessos, pendências e decisões impopulares descontam. O ritmo da gestão anterior ajusta os bônus positivos. Ganhos sucessivos têm retorno decrescente, preservando espaço para discordância e evitando unanimidade automática.');
@@ -40,7 +42,6 @@ export function renderPolitics(ui,p) {
     const worst=report.rows.filter(r=>r.points<-.01).slice().sort((a,b)=>a.points-b.points).slice(0,3);if(worst.length)p.note('Maiores perdas: '+worst.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
     const best=report.rows.filter(r=>r.points>.01&&!r.label.startsWith('Limite do efeito')).slice().sort((a,b)=>b.points-a.points).slice(0,3);if(best.length)p.note('Maiores ganhos: '+best.map(r=>`${r.label.toLowerCase()} (${signed(r.points)})`).join('; ')+'.');
     p.kv('Ponto de partida',report.startingScore);if(report.expectations.previousTermId){p.note(report.expectations.detail);p.button('GESTÃO ANTERIOR USADA NA COMPARAÇÃO',()=>ui.openPanel({politicsTab:'promises',termId:report.expectations.previousTermId,mandateView:'indicators'}));}
-    const view=ui.approvalView||'summary';p.links([['summary','RESUMO'],['changes','DESDE A POSSE'],['promise','PROMESSA'],['conditions','CONDIÇÕES E PENALIDADES']].map(([id,label])=>({label,selected:view===id,click:()=>ui.openPanel({approvalView:id})})));
     const rows=report.rows.filter(row=>view==='summary'?Math.abs(row.points)>.01:view==='changes'?row.label.startsWith('Mudança')||['Limite do efeito das mudanças','Expectativa em relação à gestão anterior'].includes(row.label):view==='promise'?['Avanço da promessa','Execução comprovada do plano','Meta alcançada','Rapidez do cumprimento','Superação da meta','Cobrança da promessa pendente','Recuos na promessa','Limite do efeito da promessa','Expectativa em relação à gestão anterior'].includes(row.label):row.label.startsWith('Condições')||['Corrupção comprovada','Vetos do prefeito','Fundo partidário'].includes(row.label));
     for(const row of rows){p.heading(`${row.label}: ${signed(row.points)}`);if(view!=='summary')p.note(row.detail);}
     p.kv('Soma antes do retorno decrescente',report.raw.toFixed(2));if(Math.abs(report.adjustment)>.001)p.kv('Retorno decrescente dos ganhos e perdas',signed(report.adjustment));p.kv('Nota final',report.score.toFixed(2));

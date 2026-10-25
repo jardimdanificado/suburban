@@ -58,7 +58,7 @@ function fundProject(economy,project,capital,freight){
 }
 export function investProductionPlan(economy){
   const city=economy.city,plan=productionPlan(economy),needs=city.welfare.conditions(),active=city.development.projects.filter(pending);
-  const pipelineLimit=Math.max(6,Math.min(12,Math.ceil(city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)).length/24)));
+  const pipelineLimit=Math.max(12,Math.min(24,Math.ceil(city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)).length/20)));
   city.bank.developmentBanks();
   if(active.filter(p=>p.productionChain).length>=pipelineLimit){for(const row of plan.filter(r=>r.missing&&!r.planned))recordResponse(economy,row,`Aguardando execução das ${pipelineLimit} obras de cadeias já financiadas.`);return false;}
   // Existing unfunded sites must progress before commissioning replacement factories.
@@ -73,9 +73,14 @@ export function investProductionPlan(economy){
 
   const rows=plan.filter(r=>r.missing&&!r.planned&&r.type!=='quarry');
   city.development.ensurePlots();
-  const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),founders=adults.filter(c=>!city.politics.officeHolder(c)&&!c.businessIds.length&&c.creditAllowed!==false&&!city.bank.loans.some(l=>l.clientId===c.accountId&&l.purpose==='business'&&!['paid','written-off'].includes(l.status))&&!active.some(p=>p.ownerId===c.id)).sort((a,b)=>Number(!!a.jobId)-Number(!!b.jobId)||b.balance-a.balance||a.id-b.id).slice(0,16);
-  // A bounded search and one opening per investment tick keep expansion and pathfinding controlled.
+  const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));
+  // The government assigns initial ventures to capable residents, spreading ownership and keeping managers within a small portfolio.
+  const managerLoad=c=>c.businessIds.length+active.filter(p=>p.ownerId===c.id).length;
+  const founderPool=adults.filter(c=>!city.politics.officeHolder(c)&&managerLoad(c)<3&&c.creditAllowed!==false&&!city.bank.loans.some(l=>l.clientId===c.accountId&&l.purpose==='business'&&!['paid','written-off'].includes(l.status)));
+  const batchLimit=6,assignedManagers=new Set();let opened=0;
+  // Commission several distinct initial firms each investment cycle; later expansion remains demand driven.
   for(const row of rows){
+    if(opened>=batchLimit||city.development.projects.filter(p=>pending(p)&&p.productionChain).length>=pipelineLimit)break;
     const upstreamMissing=row.blockedInputs.filter(g=>plan.some(p=>p.missing&&p.planned===0&&(p.type==='farm'?p.crop===g:INDUSTRIES[p.type]?.outputs[g]||p.type==='bakery'&&g==='pao'||p.type==='mill'&&g==='oleo')));
     if(upstreamMissing.length){recordResponse(economy,row,`Primeiro instalar fornecedores: ${upstreamMissing.map(g=>economy.goods[g].label).join(', ')}.`);continue;}
     const lots=city.development.plots.filter(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&(row.type==='farm'?city.development.isFarmPlot(p):p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&(row.type==='iron_mine'?p.type==='quarry':!['farm','quarry'].includes(p.type)))).sort((a,b)=>a.price-b.price||a.id-b.id).slice(0,4);
@@ -88,6 +93,8 @@ export function investProductionPlan(economy){
     }
     if(!selected){recordResponse(economy,row,'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
     const {lot,width,depth,site,builder}=selected,stone=row.type==='farm'?0:width*depth*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=city.currency.price(row.type==='bank'?2000000:row.type==='research_institute'?100000:60000),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
+    const managementSkill=({farm:'agriculture',...Object.fromEntries(Object.entries(INDUSTRIES).map(([type,spec])=>[type,spec.skill]))})[row.type]||'management';
+    const founders=founderPool.filter(c=>!assignedManagers.has(c.id)&&managerLoad(c)<3&&!city.development.projects.some(p=>pending(p)&&p.ownerId===c.id)).sort((a,b)=>managerLoad(a)-managerLoad(b)||((b.skills.management||0)*.45+(b.skills[managementSkill]||0)*.55+(b.skills.governance||0)*.15)-((a.skills.management||0)*.45+(a.skills[managementSkill]||0)*.55+(a.skills.governance||0)*.15)||Number(!!a.jobId)-Number(!!b.jobId)||b.balance-a.balance||a.id-b.id).slice(0,16);
     let project=null;
     for(const founder of founders){
       let loan=null;const deficit=Math.max(0,privateBudget-founder.balance);
@@ -107,8 +114,8 @@ export function investProductionPlan(economy){
       project=city.development.beginProject('treasury',lot.id,row.type,{width,depth,crop:row.crop,floors:1,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(170,row.priority))});
       if(project&&project.status!=='completed')fundProject(economy,project,capital,freight);
     }
-    if(project){project.productionChain=true;project.chainReason=row.reason;project.priority=Math.max(105,Math.min(170,row.priority));recordResponse(economy,row,'Demanda financiada: materiais, construção e capital de operação.',{projectId:project.id});city.log(`Demanda iniciou ${city.buildingTypes[row.type].label}${row.crop?' de '+economy.crops[row.crop].label:''}: ${row.reason}`,'business',[],{kind:'production-chain-funded',projectId:project.id,type:row.type,crop:row.crop,accounts:[project.accountId]});return true;}
+    if(project){project.productionChain=true;project.chainReason=row.reason;project.priority=Math.max(105,Math.min(170,row.priority));if(project.accountId!=='treasury')assignedManagers.add(project.ownerId);recordResponse(economy,row,'Governo destinou a abertura a um gestor com afinidade e capacidade: materiais, construção e capital financiados.',{projectId:project.id});city.log(`Demanda iniciou ${city.buildingTypes[row.type].label}${row.crop?' de '+economy.crops[row.crop].label:''}: ${row.reason}`,'business',[],{kind:'production-chain-funded',projectId:project.id,type:row.type,crop:row.crop,accounts:[project.accountId]});opened++;continue;}
     recordResponse(economy,row,'A contratação ainda não encontrou condições de execução.');
   }
-  return false;
+  return opened>0;
 }

@@ -9,7 +9,7 @@ export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people',
 const sizes={party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],sanitation:[570,450],log:[530,450]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
-/** OpenTTD-style desktop: directories, records and tools have independent windows. */
+/** OpenTTD-style desktop with tabbed modules and optional detached views. */
 export class CityDesktop {
   constructor({city,root,select,camera,controls={}}){
     Object.assign(this,{city,select,camera,controls});this.manager=new WindowManager();this.hidden=false;this.tooltip=null;this.menuOpen=false;this.lastSelected=null;this.electionNotices=new Set();this.lastElectionResultId=city.politics.lastResult?.id??null;
@@ -30,22 +30,33 @@ export class CityDesktop {
     const[w,h]=kind==='inspector'?[540,500]:kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
     const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'||kind==='section'?near:null});window.kind=kind;state.windowId=id;
     if(entity)state.setSelection(entity,unitId);this.hidden=false;
-    for(const input of[state.search,state.seed,state.filterInput,state.sortInput,state.publicationDraft])input.addEventListener('pointerdown',()=>this.manager.raise(id));
+    for(const input of[state.search,state.seed,state.populationInput,state.filterInput,state.sortInput,state.publicationDraft])input.addEventListener('pointerdown',()=>this.manager.raise(id));
     return state;
   }
-  openPanel(source,overrides={}){
+  openPanel(source,overrides={},{separate=false}={}){
     const tab=overrides.tab||source.tab,properties={};
     for(const [key,value] of Object.entries(source))if(key!=='windowId'&&(/(?:Id|Tab|View)$/.test(key)||['logCategory','logReference','logLive','logKind','publicCrop','recordWindow'].includes(key)))if(value===null||['string','number','boolean'].includes(typeof value))properties[key]=value;
     properties.filters={...source.filters,...overrides.filters};properties.sorts={...source.sorts};properties.views={...source.views,...overrides.views};Object.assign(properties,overrides);properties.tab=tab;
+    if(!separate){
+      const sameWindow=source.windowId&&tab===source.tab;
+      const state=sameWindow?source:this.openModule(tab);
+      if(sameWindow)state.remember();
+      Object.assign(state,properties);state.resetScroll();state.search.value=state.query;
+      const window=this.manager.find(state.windowId);if(window&&window.kind!=='module')window.title=state.sectionTitle();
+      return state;
+    }
     const dossier=!!source.selected&&tab===source.tab,entity=dossier?source.selected:null;
     const view=properties.views[tab]||'overview',politics=properties.politicsTab||'overview';
     const keys=entity?['detailTab','memoryView']:tab==='government'&&view==='elections'?['politicsTab',...(politics==='approval'?['approvalView']:politics==='council'?['councilView','billId']:politics==='promises'?['termId','mandateView']:politics==='polls'?['electionId','pollId']:politics==='institutes'?['studyId']:[])]:tab==='election'?['electionId','electionView','electionDetailView']:tab==='event'?['selectedEventId','eventTab']:tab==='corruption-case'?['corruptionCaseId','corruptionTab']:tab==='poll-response'?['electionId','pollId','pollResponseCitizenId']:tab==='log'?['logReference','logCitizenId','logBuildingId','logAccountId','logCategory']:tab==='production'?['demandTab']:tab==='party-organization'?['partyOrganizationView','partyProposalId']:tab==='publications'?['selectedPublicationId','publicationTab','publicationSourceEventId']:tab==='land'?['selectedPlotId']:['partyId','projectId','contractPlotId'];
     const defaults={approvalView:'summary',councilView:'bills',mandateView:'promise',eventTab:'summary',corruptionTab:'summary',detailTab:'profile',demandTab:'opportunities'};for(const key of keys)if(properties[key]==null&&defaults[key])properties[key]=defaults[key];
-    const id=`panel:${JSON.stringify([tab,view,entity?.id??null,properties.filters?.[tab]||'all',...keys.map(key=>properties[key]??null)])}`;
-    if(entity){const primary=this.manager.find(`${entity.properties.citizen?'person':'building'}:${entity.id}`);if(primary&&primary.state.detailTab===properties.detailTab&&(primary.state.unitId??null)===(properties.unitId??null)){this.manager.raise(primary.id);this.hidden=false;return primary.state;}}
+    this.detachedSerial=(this.detachedSerial||0)+1;
+    const id=`panel:${this.detachedSerial}:${JSON.stringify([tab,view,entity?.id??null,properties.filters?.[tab]||'all',...keys.map(key=>properties[key]??null)])}`;
     const existing=this.manager.find(id);if(existing){this.manager.raise(id);if(existing.shaded)this.manager.shade(id);this.hidden=false;return existing.state;}
     const state=this.create(id,tab,{kind:dossier?'dossier':'section',entity,unitId:dossier?source.unitId:null});
-    Object.assign(state,properties);state.selected=entity;state.sectionWindow=true;state.scrolls={};state.query='';state.search.value='';
+    Object.assign(state,properties);state.selected=entity;state.sectionWindow=true;state.scrolls={...source.scrolls};state.query=source.query||'';state.search.value=state.query;
+    state.seed.value=source.seed?.value??state.seed.value;state.populationInput.value=source.populationInput?.value??state.populationInput.value;
+    state.publicationDraft.value=source.publicationDraft?.value??state.publicationDraft.value;
+    if(source.frozenEvents)state.frozenEvents=[...source.frozenEvents];
     if(source.eventSnapshot)state.eventSnapshot=source.eventSnapshot;if(source.electionSnapshot)state.electionSnapshot=source.electionSnapshot;
     const window=this.manager.find(id);window.title=state.sectionTitle();return state;
   }
@@ -71,8 +82,7 @@ export class CityDesktop {
   openContract(id){const project=this.city.development.projects.find(p=>p.id===id);if(!project)return;const state=this.create(`contract:${id}`,'contract',{title:`Contrato · ${project.name}`,kind:'section'});state.projectId=id;return state;}
   openElection(id,view='count'){
     const gov=this.city.politics,e=[gov.active,gov.lastResult,...gov.elections].find(e=>e?.id===id);if(!e)return;
-    const label={polls:'Pesquisas eleitorais',count:'Votação e apuração',results:'Resultado eleitoral'}[view];
-    const state=this.create(`election:${id}:${view}`,'election',{title:`${label} · eleição ${id} · ${e.round||1}º turno`});state.electionId=id;state.electionView=view;state.electionSnapshot=e;return state;
+    const state=this.create(`election:${id}`,'election',{title:`Eleição ${id} · ${e.round||1}º turno`});state.electionId=id;state.electionView=view;state.electionSnapshot=e;return state;
   }
   syncElectionNotices(){
     const gov=this.city.politics;
@@ -108,7 +118,7 @@ export class CityDesktop {
   close(id){const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
   closeAll(all=false){for(const w of [...this.manager.windows])if(all||!w.pinned)this.close(w.id);}
   pointerDown(x,y){
-    if(this.menuOpen){const b=this.menuBounds,anchor=this.menuAnchors?.find(r=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);if(anchor||b&&x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)return false;this.closeMenu();this.menuDismissGesture=true;return true;}
+    if(this.menuOpen){const b=this.menuBounds,toolbarButton=this.menuBarRegions?.some(r=>r.onClick&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);if(toolbarButton||b&&x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)return false;this.closeMenu();this.menuDismissGesture=true;return true;}
     if(!this.visible)return false;const w=this.manager.at(x,y),z=w&&!this.manager.resizeAt(w,x,y)&&!w.shaded&&w.state.zones?.find(z=>z.max>0&&x>=z.x+z.w-12&&x<=z.x+z.w&&y>=z.y&&y<=z.y+z.h);
     if(z){this.manager.raise(w.id);const thumb=Math.max(16,z.h*z.h/(z.h+z.max));this.scrollGesture={id:w.id,key:z.key,y,start:w.state.scrolls[z.key]||0,max:z.max,track:Math.max(1,z.h-thumb)};return true;}
     if(w?.state.selected&&w.state.selected!==this.lastSelected){this.lastSelected=w.state.selected;this.select(w.state.selected,w.state.unitId);}return this.manager.pointerDown(x,y);
@@ -142,7 +152,11 @@ export class CityDesktop {
   drawChrome(ui,{clockText='',paused=false,speed=1,renderMode='3d'}={}){
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
     let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speed}×`,this.controls.speed,false]];
-    const entries=[...controls.map(([icon,label,click,selected])=>({icon,label,click,selected,w:29})),...this.menuGroups.map(g=>({id:g.id,label:g.label,icon:({city:'city',government:'government',politics:'politics',elections:'elections',economy:'economy',infrastructure:'land',society:'people',tools:'settings',current:'current',windows:'windows'})[g.id],w:36,click:()=>this.toggleMenu(g.id),selected:this.menuOpen&&this.menuId===g.id}))];
+    const entries=[
+      ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),
+      ...CITY_WINDOWS.map(([tab,label])=>({label,icon:tab,w:29,click:()=>{this.closeMenu();this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
+      ...this.menuGroups.map(g=>({id:g.id,label:g.label,icon:g.id==='tools'?'settings':'windows',w:36,click:()=>this.toggleMenu(g.id),selected:this.menuOpen&&this.menuId===g.id}))
+    ];
     const placed=[];for(const entry of entries){if(x>4&&x+entry.w>ui.width-4){x=4;barY+=30;}placed.push({...entry,x,y:barY});x+=entry.w+2;}
     for(const rowY of new Set(placed.map(entry=>entry.y))){const row=placed.filter(entry=>entry.y===rowY),end=Math.max(...row.map(entry=>entry.x+entry.w)),offset=Math.max(0,Math.floor((ui.width-end-4)/2));for(const entry of row)entry.x+=offset;}
     const barHeight=barY+32;this.manager.top=barHeight;this.manager.viewport(ui.width,ui.height);bevel(ui.ctx,0,0,ui.width,barHeight,{fill:T.face});
@@ -171,7 +185,7 @@ export class CityDesktop {
     ui.button(w.x+w.w-62,w.y+2,20,18,w.shaded?'▣':'−',()=>this.manager.shade(w.id));ui.regions.at(-1).label=`Recolher: ${title}`;
     ui.button(w.x+w.w-41,w.y+2,20,18,w.maximized?'↙':'↗',()=>this.manager.maximize(w.id));ui.regions.at(-1).label=`Ampliar: ${title}`;
     ui.button(w.x+w.w-20,w.y+2,18,18,'×',()=>this.close(w.id));ui.regions.at(-1).label=`Fechar: ${title} (também com botão direito)`;
-    if(!w.shaded){const previousState=ui.windowState;ui.windowState=w.state;w.state.windowLinks=[];try{if(w.state.tab==='map')this.drawMap(ui,w);else w.state.drawFloating(ui,w);}finally{ui.windowState=previousState;}if(!w.maximized){const handle=this.manager.resizeHandle(w);ctx.fillStyle=T.muted;for(let i=0;i<3;i++)ctx.fillRect(handle.x+handle.w-3-i*4,handle.y+handle.h-3-i*4,2,2+i*4);ui.regions.push({...handle,label:`Redimensionar: ${title}`,onClick:null});}ui.text(w.pinned?'Fixada':'',w.x+6,w.y+w.h-17,T.muted);}
+    if(!w.shaded){const previousState=ui.windowState;ui.windowState=w.state;w.state.windowLinks=[];try{if(w.state.tab==='map')this.drawMap(ui,w);else w.state.drawFloating(ui,w);}finally{ui.windowState=previousState;}if(w.state.openCurrentInWindow&&w.state.tab!=='map'){ui.button(w.x+w.w-177,w.y+w.h-20,154,18,'DESTACAR ABA ↗',()=>w.state.openCurrentInWindow());ui.regions.at(-1).label='Abrir aba atual em outra janela';}if(!w.maximized){const handle=this.manager.resizeHandle(w);ctx.fillStyle=T.muted;for(let i=0;i<3;i++)ctx.fillRect(handle.x+handle.w-3-i*4,handle.y+handle.h-3-i*4,2,2+i*4);ui.regions.push({...handle,label:`Redimensionar: ${title}`,onClick:null});}ui.text(w.pinned?'Fixada':'',w.x+6,w.y+w.h-17,T.muted);}
     else {w.state.element.hidden=true;w.state.zones=[];}
   }
   draw(ui){
@@ -179,12 +193,12 @@ export class CityDesktop {
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     if(this.element.hidden===this.visible)this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}if(w.state.element.hidden)w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
     ui.regions.push(...(this.menuBarRegions||[]));
-    if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
+    if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.populationInput,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
     this.tooltipElement.hidden=!this.tooltip||this.menuOpen||!!this.manager.gesture;
     if(!this.tooltipElement.hidden){const {text,x,y}=this.tooltip,w=Math.min(440,ui.width-8,Math.ceil(ui.textWidth(text))+18);this.tooltipElement.textContent=text;Object.assign(this.tooltipElement.style,{left:`${Math.max(4,Math.min(x,ui.width-w-4))}px`,top:`${Math.max(0,Math.min(y,ui.height-190))}px`,width:`${w}px`});}
   }
   drawMap(ui,w){
-    const state=w.state,world=this.city.world;state.zones=[];for(const input of[state.search,state.seed,state.filterInput,state.sortInput,state.publicationDraft])input.hidden=true;
+    const state=w.state,world=this.city.world;state.zones=[];for(const input of[state.search,state.seed,state.populationInput,state.filterInput,state.sortInput,state.publicationDraft])input.hidden=true;
     this.mapCanvas??=document.createElement('canvas');
     if(this.mapRevision!==world.revision||this.mapCanvas.width!==world.width){
       this.mapCanvas.width=world.width;this.mapCanvas.height=world.height;const ctx=this.mapCanvas.getContext('2d'),colors=['#7b9748','#4776a3','#66786a','#baad76','#adaba1','#263f49','#797965','#92905d','#797b65','#8caa61','#ae9c73','#5d705c','#a6a88a','#67805d'];
@@ -198,7 +212,7 @@ export class CityDesktop {
   }
   occludeInputs(){
     const windows=this.manager.windows;
-    windows.forEach((w,i)=>{for(const input of[w.state.search,w.state.seed,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean)){
+    windows.forEach((w,i)=>{for(const input of[w.state.search,w.state.seed,w.state.populationInput,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean)){
       if(input.hidden)continue;const rect={x:parseFloat(input.style.left),y:parseFloat(input.style.top),w:parseFloat(input.style.width),h:20};let visible=[rect];
       for(const above of windows.slice(i+1)){
         const cover=this.manager.rect(above);visible=visible.flatMap(part=>{

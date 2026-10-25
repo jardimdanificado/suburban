@@ -398,7 +398,7 @@ function selectEntity(entity, unitId = null) {
   window.dispatchEvent(new CustomEvent("experience:select", { detail: selected }));
 }
 
-export const city = new CitySimulation({ world, createEntity });
+export const city = new CitySimulation({ world, createEntity, population: worldSettings.population });
 let cityGenerationError = null;
 try { city.initialize(); } catch (error) {
   cityGenerationError = error.message;
