@@ -200,7 +200,7 @@ export class CityResearch {
     const city=this.city,p=city.politics;p.initializeCitizen(voter);const scores=p.intentions(voter,e.candidates),top=scores[0];if(!top)return null;
     const margin=top.score-(scores[1]?.score??0),knows=margin>=8||voter.political.memories.some(m=>m.electionId===e.id&&m.candidateId===top.candidateId),decided=knows&&city.random()<Math.min(.97,.55+margin/80);
     const approval=clamp(50+(p.approval-50)*.7+(voter.happiness-50)*.12+(voter.homeUnitId?3:-4)+(voter.needs.food>=30?3:-6)+(voter.jobId||voter.businessIds.length?2:-2),0,100);
-    const rejected=scores.filter(a=>a.score<40||voter.political.memories.some(m=>m.candidateId===a.candidateId&&(m.kind==='proven-scandal'||m.kind==='defamation'&&m.believes&&!m.corrected))).map(a=>a.candidateId);
+    const rejected=scores.filter(a=>a.score<0||voter.political.memories.some(m=>m.candidateId===a.candidateId&&(m.kind==='proven-scandal'||m.kind==='defamation'&&m.believes&&!m.corrected))).map(a=>a.candidateId);
     return Object.freeze({citizenId:voter.id,name:voter.entity.properties.name,candidateId:decided?top.candidateId:null,leaningId:top.candidateId,decided,partyId:voter.political.partyId??null,sympathyPartyId:voter.political.sympathyPartyId??null,reason:decided?top.reason:'ainda avaliando propostas e alternativas',approval:Math.round(approval),rejectedIds:Object.freeze(rejected),reasons:Object.freeze(top.reasons.map(r=>Object.freeze({...r}))),interviewedAt:city.minute,agentId:agent.id,agentName:agent.entity.properties.name,x:site.x,y:site.y,siteLabel:site.label});
   }
   fieldWork(c){

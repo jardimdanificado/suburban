@@ -125,7 +125,8 @@ export class CityBank {
       const interest = Math.ceil(loan.remaining*loan.rate); loan.interest += interest;
       // Preserve a basic subsistence reserve; arrears do not create currency.
       const due = Math.min(loan.dailyPayment+loan.interest,loan.remaining+loan.interest);
-      const payment = Math.min(Math.max(0,client.balance-city.currency.price(1500)),due);
+      const protectedCash=client.entity?.properties.citizen?city.welfare.subsistenceFloor(client):city.currency.price(1500);
+      const payment = Math.min(Math.max(0,client.balance-protectedCash),due);
       if (payment && city.transfer(loan.clientId,bank.accountId,payment,'Parcela de empréstimo',{loanId:loan.id})) {
         const paidInterest = Math.min(payment,loan.interest);
         loan.interest -= paidInterest; loan.remaining -= payment-paidInterest; loan.paid += payment; bank.totalRevenue += paidInterest;this.repayDevelopment(bank,payment-paidInterest,loan);

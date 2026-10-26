@@ -1,3 +1,4 @@
+import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js';
 import {clothingMood,moveGarments} from './city_clothing.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
@@ -102,6 +103,7 @@ export class CitySimulation {
     this.lighting = new CityLighting(this);
     this.bank = new CityBank(this);
     this.welfare = new CityWelfare(this);
+    this.fiscal = new CityFiscal(this);
     this.reputation = new CityReputation(this);
     this.relationships = new CityRelationships(this);
     this.nature = new CityNature(this);
@@ -150,7 +152,9 @@ export class CitySimulation {
     const a = this.accounts.get(from), b = this.accounts.get(to);
     if (!a || !b || !Number.isSafeInteger(amount) || amount < 0 || a.balance < amount) return false;
     if (from === to || amount === 0) return true;
+    if(from==='treasury'&&this.fiscal&&!this.fiscal.allows(amount,reason,details))return false;
     a.balance -= amount; b.balance += amount;
+    this.fiscal?.record(from,to,amount,reason,details);
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
     else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
     if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
@@ -506,7 +510,7 @@ export class CitySimulation {
     c.salaryToday+=wage-tax;c.lastPaidAt=this.minute;
     if(c.reputationWorkDay!==this.day){c.reputationWorkDay=this.day;this.reputation.observe(c.accountId,'reliability',.5,'trabalho remunerado realizado',{buildingId:b.id});this.relationships.workEvent(b,c,true);}
     if(rate<0 && amount>0) {
-      const subsidy=Math.min(amount,this.treasury);
+      const freeCash=c.balance<this.welfare.subsistenceFloor(c)?this.treasury:Math.max(0,this.treasury-this.welfare.conditions().reserve),subsidy=Math.min(amount,freeCash);
       if(subsidy>0 && this.transfer('treasury',c.accountId,subsidy,'Subsídio salarial municipal')) {
         c.wageSubsidyToday=(c.wageSubsidyToday||0)+subsidy;
         c.wageSubsidyTotal=(c.wageSubsidyTotal||0)+subsidy;
@@ -529,11 +533,7 @@ export class CitySimulation {
       const home = this.housing.home(c);
       if (home && this.society.isAdult(c) && this.housing.units(home).every(u => u.forSale)) this.housing.buyHome(c, home);
     }
-    const mayor = this.economy.citizen(this.economy.mayorId);
-    if (mayor) for (const b of this.buildings.filter(b => b.accountId !== 'treasury' && (PUBLIC_TYPES.has(b.type) || b.municipal) && !b.entity.destroyed)) {
-      const grant = Math.max(0, this.currency.price(20000) - b.balance);
-      this.transfer('treasury', b.accountId, Math.min(grant, this.treasury), 'Orçamento autorizado pelo prefeito');
-    }
+    this.fiscal?.daily();this.fiscal?.fundServices();
     this.economy.daily();
     this.assignHousingAndJobs();
     this.log(`Dia ${this.day}: aluguéis e orçamento processados.`, 'economy', [], { kind: 'daily-budget' });

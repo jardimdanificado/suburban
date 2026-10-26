@@ -11,14 +11,15 @@ export class CityCurrency {
   }
   netIssued() { return this.issued-this.burned; }
   retire(amount) {
-    if(!Number.isSafeInteger(amount) || amount<=0 || this.city.treasury-amount<this.policy.treasuryReserve || this.netIssued()-amount<CURRENCY_RULES.initialSupply*.5)return false;
+    if(!Number.isSafeInteger(amount) || amount<=0 || this.city.treasury-amount<Math.max(this.policy.treasuryReserve,this.city.fiscal?.reserve()||0) || this.netIssued()-amount<CURRENCY_RULES.initialSupply*.5)return false;
     const treasury=this.city.accounts.get('treasury');
     treasury.balance-=amount;treasury.totalExpenses=(treasury.totalExpenses||0)+amount;this.burned+=amount;
+    this.city.fiscal?.record('treasury','burned',amount,'Moeda retirada de circulação');
     this.city.history.record('policy','Moeda retirada do tesouro e de circulação.',['treasury'],{amount});return true;
   }
   emissionLimit() {
     if(this.policy.mode==='paused')return 0;
-    if(this.policy.mode==='automatic' && (this.dailyInflation>this.policy.inflationTarget || this.city.treasury>=this.policy.treasuryReserve))return 0;
+    if(this.policy.mode==='automatic' && (this.dailyInflation>this.policy.inflationTarget || this.city.treasury>=Math.max(this.policy.treasuryReserve,this.city.fiscal?.reserve()||0)))return 0;
     return Math.max(0,this.policy.dailyLimit);
   }
   price(base) { return Math.max(0, Math.round(base * this.priceIndex)); }
@@ -31,6 +32,7 @@ export class CityCurrency {
   issue(amount, initial = false) {
     if (!Number.isSafeInteger(amount) || amount <= 0 || !Number.isSafeInteger(this.issued + amount) || !Number.isSafeInteger(this.city.treasury + amount)) return false;
     const treasury=this.city.accounts.get('treasury');
+    this.city.fiscal?.record('mint','treasury',amount,initial?'Emissão monetária inicial':'Emissão da casa da moeda');
     treasury.balance += amount;treasury.totalRevenue=(treasury.totalRevenue||0)+amount;this.issued += amount;
     if (!initial) { this.issuedToday += amount; this.hourlyIssued += amount; }
     this.city.ledger.push({ minute: this.city.minute, from: 'mint', to: 'treasury', amount, reason: initial ? 'Emissão monetária inicial' : 'Emissão da casa da moeda' });

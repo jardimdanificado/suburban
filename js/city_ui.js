@@ -1,3 +1,4 @@
+import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly} from './city_vehicles_ui.js';
 import {appearance,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js';
 import {newsroomGenre} from './city_newspapers.js';
@@ -579,7 +580,7 @@ export class CityUI {
       if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,this.cachedList(`municipal-contracts:${this.contractPlotId||'all'}`,()=>city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice().sort((a,b)=>Number(a.cancelled||a.status==='completed')-Number(b.cancelled||b.status==='completed')||Number(b.status==='blocked')-Number(a.status==='blocked')||b.startedAt-a.startedAt)));}
-    else if(view==='finance'){this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
+    else if(view==='finance'){renderFiscalReport(this,p);this.monetaryPolicy(p);p.heading('MOVIMENTAÇÕES DO TESOURO');p.metrics([['DISPONÍVEL',money(city.treasury),C.gold]]);this.journal(p,'treasury');}
     else {
       p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
       p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');let iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);

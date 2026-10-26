@@ -1,3 +1,4 @@
+import {canJoin} from './city_party_membership.js';
 import {recordLegislativeOpinion,publicPerformance} from './city_party_public_record.js';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 /** Public standing uses bounded opinion panels; secret crimes never enter these scores. */
@@ -65,6 +66,12 @@ export class CityPoliticalStanding {
     for(const party of p.parties.filter(a=>a.active)){const {candidate,reason}=this.nomination(party);party.preferredCandidateId=candidate?.id??null;party.nominationReason=reason;}
   }
   compare(a,b){return (b.political?.popularity??50)-(a.political?.popularity??50)||this.city.politics.candidateStrength(b)-this.city.politics.candidateStrength(a)||a.id-b.id;}
+  recruitConventionNominee(party){
+    const city=this.city,p=city.politics;if(this.nomination(party).candidate)return null;
+    const willing=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&p.eligible(c)&&!c.political.partyId&&!c.political.foundingProposalId&&c.political.membershipCooldownUntil<=city.minute&&c.political.engagement>.45&&p.distance(c.political.ideology,party.ideology)<.95).sort((a,b)=>p.distance(a.political.ideology,party.ideology)-p.distance(b.political.ideology,party.ideology)||this.compare(a,b));
+    const c=willing[0];if(!c||!canJoin(p,c)||!p.join(c,party,'Convite aceito na convenção para disputar a eleição'))return null;
+    city.log(`${party.short} convidou ${c.entity.properties.name}, que aceitou se filiar para apresentar uma candidatura.`,'government',[c.id],{kind:'convention-candidate-recruited',partyId:party.id});return c;
+  }
   nomination(party){
     const p=this.city.politics,research=p.getResearch?.(),survey=research?.studies.filter(s=>s.mode==='service'&&s.status==='published'&&s.serviceType==='party-candidates'&&s.subjectId===party.id).sort((a,b)=>b.completedAt-a.completedAt)[0],surveyScore=c=>survey?.report?.rows.find(r=>r.citizenId===c.id)?.score,score=c=>surveyScore(c)==null?(c.political?.popularity??50):((c.political?.popularity??50)*.4+surveyScore(c)*.6),possible=party.memberIds.map(id=>this.city.society.citizen(id)).filter(c=>p.canRun(c,'mayor',true)).sort((a,b)=>score(b)-score(a)||this.compare(a,b));
     const incumbent=possible.find(c=>c.id===this.city.economy.mayorId),preferred=possible.find(c=>c.id===party.executiveSuccessorId&&party.executiveSuccessionTerm===p.termNumber);

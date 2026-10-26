@@ -80,7 +80,7 @@ export class CityLogistics {
     const s = { id, accountId, payerAccountId, purpose, requireCarrier, serviceFee, serviceAccountId, name: `Frete ${id}`, balance: 0, seller, buyer, good, quantity, cost, fee, carrierId: carrier?.id || null, driverId: null, status: 'waiting', pickedUp: false, createdAt: city.minute, routeLength: route.length };
     initializeInventory(s, city.economy.goods, Math.max(24,quantity)); s.inventory[good] = quantity;
     city.accounts.set(accountId, s);
-    if (!city.transfer(payerAccountId, accountId, cost + fee + serviceFee, 'Reserva de compra e frete')) { city.accounts.delete(accountId); return false; }
+    if (!city.transfer(payerAccountId, accountId, cost + fee + serviceFee, 'Reserva de compra e frete',{shipmentId:id,purpose,good,essential:purpose==='public-meals'})) { city.accounts.delete(accountId); return false; }
     if(good==='roupas')moveGarments(seller,s,quantity);
     city.publications.moveStock(seller,s,good,quantity);city.vehicles.moveStock(seller,s,good,quantity);
     seller.inventory[good] -= quantity; buyer.incoming[good] = (buyer.incoming[good] || 0) + quantity;

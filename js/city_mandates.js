@@ -1,3 +1,4 @@
+import {captureGovernmentExperience} from './city_electoral_behavior.js';
 import {ideologicalProfile,ideologicalPromiseWeight} from './city_ideology.js';
 import {outcomeAssessment,promiseAssessment,promiseDifficulty} from './city_promise_evaluation.js';
 export const PROMISE_METRICS={
@@ -101,7 +102,7 @@ export class CityMandates {
   start(mayor,party,promises=[],electionId=null) {
     this.finish();const base=this.metrics();
     const term={id:this.nextId++,mayorId:mayor.id,mayorName:mayor.entity.properties.name,partyId:party.id,calendarRules:this.city.politics.termRules,startedAt:this.city.minute,endedAt:null,electionId,baseline:Object.freeze({...base}),latest:Object.freeze({...base}),checkpoints:[],promises:promises.slice(0,1).map(p=>({...p,baseline:base[p.metric],current:base[p.metric],progress:0,fulfilled:false})),score:0};
-    this.current=term;this.terms.push(term);if(this.terms.length>32)this.terms.shift();this.lastDay=null;this.lastHour=null;this.update();return term;
+    this.current=term;for(const c of this.city.citizens)if(!c.entity.destroyed){this.city.politics.initializeCitizen(c);captureGovernmentExperience(this.city,c,term.id);}this.terms.push(term);if(this.terms.length>32)this.terms.shift();this.lastDay=null;this.lastHour=null;this.update();return term;
   }
   update(force=false) {
     const t=this.current,hour=Math.floor(this.city.minute/60);if(!t||!force&&this.lastHour===hour)return;this.lastHour=hour;this.lastDay=this.city.day;

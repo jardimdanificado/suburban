@@ -1,3 +1,4 @@
+import {electoralPriorities} from './city_electoral_behavior.js';
 import {renderInterventions} from './city_interventions_ui.js';
 import {renderResearchDirectory,renderResearchProgress,renderPollMethod} from './city_research_ui.js';
 import {POLITICS_SECTIONS,POLITICS_GROUPS} from './city_ui_sections.js';
@@ -217,6 +218,10 @@ p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento /
 export function renderCitizenPolitics(ui,p,c) {
   const seat=ui.city.politics.council.members.find(m=>m.citizenId===c.id);if(seat){const office=ui.city.units.get(seat.officeUnitId);p.kv('Gabinete na Câmara',office?`${seat.officeUnitId} · andar ${office.z+1}`:'Aguardando construção / ampliação');if(office)p.button('ABRIR GABINETE',()=>ui.select(ui.city.building(office.buildingId).entity,office.id));}
   const gov=ui.city.politics,political=c.political;if(!political){p.note('Sem participação política registrada.');return;}const party=gov.party(political.partyId);
+  ui.section(p,'electoralPriorities','Como esta pessoa decide seu voto',()=>{
+    const preferences=electoralPriorities(c);p.kv('Afinidade ideológica',preferences.ideology>22?'Peso alto':'Peso moderado');p.kv('Condições pessoais e serviços',preferences.material>1?'Peso alto':'Peso moderado');p.kv('Abertura à renovação',preferences.renewal>.8?'Alta':'Moderada');p.note('Histórico, popularidade e aprovação têm efeito conjunto limitado. Experiências pessoais, propostas, afinidades e informações conhecidas podem mudar a escolha. Apoio antigo não se transfere integralmente à eleição seguinte.');
+    if(gov.active){const choices=gov.intentions(c);p.table([{label:'Candidatura',weight:2},{label:'Avaliação'},{label:'Principal motivo',weight:2}],choices.map(choice=>({cells:[ui.city.accountName(`citizen:${choice.candidateId}`),choice.score.toFixed(1),choice.reason],click:()=>ui.openCitizen(choice.candidateId)})));p.note('Avaliação relativa desta pessoa; não é uma porcentagem de votos.');}
+  });
   ui.section(p,'candidateKnowledge','Candidaturas conhecidas e origem dos contatos',()=>{
     const rows=Object.values(political.candidateContacts||{}).filter(r=>!gov.active||r.electionId===gov.active.id||r.electionId===gov.active.firstRoundId).sort((a,b)=>b.minute-a.minute);
     p.table([{label:'Candidatura',weight:2},{label:'Partido'},{label:'Contatos'},{label:'Como conheceu',weight:2}],rows.map(r=>({cells:[ui.city.accountName(`citizen:${r.candidateId}`),gov.party(r.partyId)?.short||'Partido encerrado',r.count,r.source],click:()=>ui.openCitizen(r.candidateId)})));

@@ -363,6 +363,7 @@ export class CityEconomy {
   }
   activateBusiness(b, founder, crop = null, capitalize = true) {
     if (!founder) return null;
+    b.politicalTaxRevenue=b.totalRevenue;b.politicalTaxExpenses=Math.max(0,b.totalExpenses-(b.businessTaxPaid||0));
     founder.startupProjectId=null;
     b.ownerId = founder.id; b.crop = crop; b.active = true; b.foundedAt = this.city.minute;
     if(b.type==='farm') this.setupFarm(b); else b.fields=[];
@@ -535,7 +536,7 @@ export class CityEconomy {
   }
   mealOffer(b, citizen = null) {
     if (!b?.active || b.entity.destroyed || (!retailTypes.has(b.type) && b.type !== 'townhall' && b.type !== 'farm' && b.type !== 'popular_refectory' && INDUSTRIES[b.type]?.category !== 'food')) return null;
-    const packed=preparedOffer(this,b,citizen,true);if(packed&&(!citizen||packed.price<=(this.city.accounts.get(this.city.payerFor(citizen))?.balance||0)))return packed;if(b.type==='kitchen')return null;
+    const packed=preparedOffer(this,b,citizen,true);if(packed&&(!citizen||packed.price<=(this.city.accounts.get(this.city.payerFor(citizen))?.balance||0)))return this.city.welfare.mealContribution(b,citizen,packed);if(b.type==='kitchen')return null;
     const free=b.type==='townhall'||b.type==='popular_refectory',cash=citizen?(this.city.accounts.get(this.city.payerFor(citizen))?.balance||0):Infinity;
     let details=null,bestScore=-Infinity;
     for(const option of mealOptions(this.recipes)){
@@ -544,10 +545,10 @@ export class CityEconomy {
       const score=option.quality+(citizen?this.mealTaste(citizen,option)*10:0);
       if(score>bestScore){bestScore=score;details=option;}
     }
-    if(!details){const fallback=this.foodOffer(b);return fallback?{...fallback,inputs:{[fallback.good]:fallback.quantity},quality:1}:null;}
+    if(!details){const fallback=this.foodOffer(b);return fallback?this.city.welfare.mealContribution(b,citizen,{...fallback,inputs:{[fallback.good]:fallback.quantity},quality:1}):null;}
     const inputValue=details.entries.reduce((n,[g,q])=>n+(this.goods[g]?.price||0)*q,0);
     const quality = details.quality + (b.mealQuality || 0) - 1;
-    return { good: details.good, quantity: 1, inputs: details.inputs, quality, price: free ? 0 : Math.round(inputValue) };
+    return this.city.welfare.mealContribution(b,citizen,{ good: details.good, quantity: 1, inputs: details.inputs, quality, price: free ? 0 : Math.round(inputValue) });
   }
   foodOffer(b) {
     const goods = b.type === 'bakery' ? ['pao'] : [...edible, 'pao'];
@@ -728,10 +729,10 @@ export class CityEconomy {
     this.city.bank.daily();
     for(const [key,value] of this.city.traffic) {if(value<2)this.city.traffic.delete(key);else this.city.traffic.set(key,value*.8);}
     this.municipalPolicy();
+    for(const b of this.city.buildings)if(this.city.fiscal?.municipal(b))this.city.fiscal.distribute(b);
     for (const b of this.businesses) {
       const owner = this.citizen(b.ownerId);
       if (!owner) {
-        if (b.municipal && b.balance > this.city.currency.price(['builder','bank'].includes(b.type) ? 2000000 : 500000)) this.city.transfer(b.accountId, 'treasury', Math.floor((b.balance - this.city.currency.price(['builder','bank'].includes(b.type) ? 2000000 : 500000)) * .5), 'Lucro de empresa municipal');
         continue;
       }
       if (b.balance < 5000 && owner.balance > 15000) this.city.transfer(owner.accountId, b.accountId, Math.min(10000, owner.balance - 10000), 'Aporte do proprietário');

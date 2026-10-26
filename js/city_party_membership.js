@@ -45,13 +45,14 @@ export function campaignContact(p,voter,nomination,election,source){
   p.initializeCitizen(voter);const s=membershipProfile(p,voter),party=p.party(nomination.partyId),candidate=p.city.society.citizen(nomination.citizenId);if(!party||!candidate)return;
   let opinion=s.support[party.id];
   if(!opinion){const keys=Object.keys(s.support);if(keys.length>=16){const oldest=keys.sort((a,b)=>s.support[a].lastContact-s.support[b].lastContact)[0];delete s.support[oldest];}opinion=s.support[party.id]={score:0,contacts:0,lastContact:-Infinity};}
+  const cycleId=election.firstRoundId??election.id;if(opinion.cycleId!==cycleId){opinion.score*=.25;opinion.contacts=0;opinion.lastContact=-Infinity;opinion.cycleId=cycleId;}
   if(p.city.minute-opinion.lastContact<MEMBERSHIP_RULES.contactInterval)return;
   const proximity=1-p.distance(s.ideology,party.ideology)/2.8,relation=p.city.relationships.view(voter,candidate),record=p.mandates.recordScore(candidate.id,party.id);
   const relevant=nomination.promises.filter(pr=>promiseRelevant(p.city,voter,pr.metric)).length;
   const knownScandals=p.scandals.filter(r=>r.partyId===party.id&&r.proven&&r.awareIds?.includes(voter.id)).reduce((n,r)=>n+(r.severity||40)/100,0);
   const ambitionAttention=nomination.promises.reduce((n,pr)=>n+(pr.attention??.4),0);
-  const effect=ambitionAttention*2*(1-s.criticalSense*.5)+(proximity-.4)*7+Math.min(3,relevant)*1.2+record*.08+((relation?.trust??50)-50)*.035-knownScandals*8;
-  opinion.score=clamp(opinion.score+effect*(1-s.criticalSense*.4),-35,40);opinion.contacts++;opinion.lastContact=p.city.minute;opinion.electionId=election.id;opinion.source=source;
+  const effect=ambitionAttention*2*(1-s.criticalSense*.5)+(proximity-.6)*10+Math.min(3,relevant)*1.2+Math.tanh(record/30)*2+((relation?.trust??50)-50)*.035-knownScandals*8;
+  opinion.score=clamp(opinion.score+effect*(1-s.criticalSense*.4),-25,30);opinion.contacts++;opinion.lastContact=p.city.minute;opinion.electionId=election.id;opinion.source=source;
   updateSympathy(s);
   // Persuasion usually changes the vote. Joining requires sustained interest,
   // ideological affinity and a separate, deliberately uncommon commitment.

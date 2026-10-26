@@ -40,6 +40,7 @@ export function renderGovernmentDashboard(ui,p){
     ];
     for(const [title,hint,count,click]of alerts)q.record(title,hint,click,false,{color:count?C.gold:C.green});
     q.kv('Reserva social de referência',money(needs.reserve));
+    q.button('SAÚDE DO CAIXA E RESERVA SOCIAL',()=>ui.showView('finance'));
     q.heading('TRANSPARÊNCIA');q.kv('Atos no jornal oficial',city.officialJournal?.records.length||0);q.kv('Aguardando impressão',city.officialJournal?.pending||0);
     q.button('JORNAL OFICIAL',()=>ui.openPanel({tab:'publications',selectedPublicationId:null,publicationTab:'official',publicationSourceEventId:null}));
     q.button('FISCALIZAÇÃO E CORRUPÇÃO',()=>policy('scandals'));
