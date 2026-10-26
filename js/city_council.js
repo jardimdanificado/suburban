@@ -183,14 +183,17 @@ export class CityCouncil {
       case'build':{if(bill.projectId){const project=city.development.projects.find(pr=>pr.id===bill.projectId);if(project?.status==='completed')break;wait=project?.cancelled?'Projeto cancelado; nova deliberação necessária':'Construção em andamento';break;}
         const type=bill.payload.buildingType;if(!city.buildingTypes[type]){wait='Tipo de obra indisponível';break;}
         if(type!=='farm'&&city.development.projects.filter(pr=>pr.accountId==='treasury'&&pr.service==='building'&&pr.type!=='farm'&&!pr.cancelled&&pr.status!=='completed').length>=3){wait='Aguardando capacidade de execução das obras públicas já contratadas';break;}
-        city.development.ensurePlots();
-        const lot=city.development.plots.find(l=>l.ownerId==='treasury'&&!l.buildingId&&!l.projectId&&l.width>=3&&l.depth>=3&&(type==='farm'?city.development.isFarmPlot(l):['quarry','iron_mine'].includes(type)?l.type==='quarry':l.width<=8&&l.depth<=8&&!['farm','quarry'].includes(l.type)));
-        if(!lot){wait='Aguardando terreno público adequado';break;}
-        const builder=city.development.selectBuilder('treasury',lot.door||{x:lot.x,y:lot.y});if(!builder&&type!=='farm'){wait='Aguardando construtora disponível';break;}
-        const width=type==='popular_housing'?3:['farm','quarry'].includes(type)?lot.width:Math.min(4,lot.width),depth=type==='popular_housing'?3:['farm','quarry'].includes(type)?lot.depth:Math.min(4,lot.depth),floors=type==='popular_housing'?4:1;
+        const site=city.development.publicBuildingSite(type);bill.landSearch={...city.development.publicLandReport};
+        if(!site){
+          if(type==='popular_housing')for(const building of city.buildings.filter(b=>b.type===type&&!b.entity.destroyed&&b.floors<12&&b.units.every(u=>u.ownerId==='treasury')&&!city.development.projects.some(pr=>pr.buildingId===b.id&&!pr.cancelled&&pr.status!=='completed'))){const floors=Math.min(2,12-building.floors),cost=building.width*building.depth*floors*(2*city.economy.goods.pedra.price+Math.ceil(city.currency.price(12000)*1.5));if(city.treasury<cost+needs.reserve)continue;const project=city.development.beginExpansion('treasury',building.id,{floors});if(project){bill.projectId=project.id;project.priority=95;if(bill.agendaTermId){project.agendaTermId=bill.agendaTermId;project.promiseMetric=bill.promiseMetric;}wait='Ampliação vertical das moradias populares em andamento';break;}}
+          wait??=city.development.publicLandReport?.reason||'Procurando terreno público acessível';break;
+        }const lot=site.lot;
+        const builder=city.development.selectBuilder('treasury',site.door);if(!builder&&type!=='farm'){wait='Aguardando construtora disponível';break;}
+        const {width,depth}=site,floors=type==='popular_housing'?4:1;
         const cost=['farm','quarry'].includes(type)?0:width*depth*floors*(2*city.economy.goods.pedra.price+city.currency.price(12000)*1.5);
-        if(city.treasury<cost+needs.reserve){wait='Aguardando caixa sem comprometer alimentação e operação dos serviços';break;}
-        const project=city.development.beginProject('treasury',lot.id,type,{floors,builderId:builder?.id??null,priority:basic.has(type)?95:10,crop:type==='farm'?(bill.payload.crop||'milho'):null,width,depth});if(!project){wait='Aguardando orçamento e condições de implantação';break;}bill.projectId=project.id;if(bill.agendaTermId){project.agendaTermId=bill.agendaTermId;project.promiseMetric=bill.promiseMetric;project.priority=Math.max(project.priority||0,95);}wait=project.status==='completed'?null:'Construção em andamento';break;}
+        if(city.treasury<cost+site.purchasePrice+city.currency.price(20000)+needs.reserve){wait='Aguardando caixa para terreno e obra sem comprometer alimentação e operação dos serviços';break;}
+        if(!city.development.acquirePublicSite(site)){wait='Aguardando compra negociada do terreno anunciado';break;}
+        const project=city.development.beginProject('treasury',lot.id,type,{floors,builderId:builder?.id??null,priority:basic.has(type)?95:10,crop:type==='farm'?(bill.payload.crop||'milho'):null,width,depth,rotation:site.rotation});if(!project){wait='Aguardando orçamento e condições de implantação';break;}bill.projectId=project.id;if(bill.agendaTermId){project.agendaTermId=bill.agendaTermId;project.promiseMetric=bill.promiseMetric;project.priority=Math.max(project.priority||0,95);}wait=project.status==='completed'?null:'Construção em andamento';break;}
       case'impeach':if(!p.impeach(bill.payload.targetId,bill.payload.caseId,bill.id)){bill.status='dismissed';bill.result='Provas, repercussão ou mandato não são mais válidos';return;}break;
     }
     bill.result=wait||'Deliberação executada';bill.status=wait?'executing':'executed';

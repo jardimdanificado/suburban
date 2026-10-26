@@ -1,3 +1,4 @@
+import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
 import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad } from './city_terrain.js';
@@ -7,6 +8,8 @@ const constructionDispatch = new WeakMap();
 export const DEVELOPMENT_RULES = { landPerCell: 4000, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 12000, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 8000, municipalMultiplier: 1.5, wearInterval: 30 * 1440, repairThreshold: 60 };
 export class CityDevelopment {
   constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; }
+  publicBuildingSite(type,options={}){return findPublicBuildingSite(this,type,options);}
+  acquirePublicSite(site){return acquirePublicBuildingSite(this,site);}
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
   selectBuilder(clientId, door, builderId = null, {allowTerrainAccess=false}={}) {
     return this.city.economy.businesses.filter(b => b.type === 'builder' && (!builderId || b.id === builderId) && b.accountId !== clientId && (this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door }) || allowTerrainAccess&&findTerrainPath(this.city.world,b.door,door,this.city.occupied)!==null)).sort((a, b) => (clientId==='treasury'?Number(b.favorUntil>this.city.minute&&b.favoredBy===this.city.economy.mayorId)-Number(a.favorUntil>this.city.minute&&a.favoredBy===this.city.economy.mayorId):0)||this.projects.filter(p => p.builderId === a.id && !p.cancelled && p.status !== 'completed').length - this.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed').length || this.city.reputation.providerPenalty(a) - this.city.reputation.providerPenalty(b) || a.id - b.id)[0] || null;
@@ -249,7 +252,7 @@ export class CityDevelopment {
     if (type === 'farm' && !this.isFarmPlot({ x, y, width, depth, type })) return null;
     const terrain = inspectBuildingSite(this.city, x, y, width, depth, { type });
     const level = flatSiteLevel(this.city.world, x, y, width, depth);
-    if (terrain.error || (level === null && type !== 'quarry' && type !== 'farm')) return null;
+    if (terrain.error) return null;
     const hall = this.city.buildings[0];
     if(hall){
       const blocked=new Set(this.city.occupied);
@@ -329,7 +332,7 @@ export class CityDevelopment {
     if ((kind === 'open-air' && !['farm', 'quarry', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;
     if(width*depth<MIN_PLOT_CELLS||p.width*p.depth<MIN_PLOT_CELLS)return city.fail('Terrenos e prédios precisam de pelo menos 4 células de área.');
-    if ((p.type === 'quarry' && !['quarry','iron_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;
+    if ((p.type === 'quarry' && !['quarry','iron_mine','bauxite_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;
     if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || p.width*p.depth<MIN_PLOT_CELLS || width > p.width || depth > p.depth || (kind==='building' && (width>8 || depth>8))) return null;
     const terrain=chooseBuildingSite(city,p.x,p.y,width,depth,{plotId,type,rotation});if(terrain.error)return null;
     floors = kind === 'open-air' ? 1 : floors;
