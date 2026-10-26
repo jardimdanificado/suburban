@@ -50,3 +50,17 @@ export function ideologicalPromiseWeight(profile,metric){
   if(metric==='inflation')return profile.fiscal*.7;
   return 0;
 }
+
+/** Human descriptions summarize existing policy axes; they do not change anyone's beliefs. */
+export function describePoliticalOrientation(subject){
+  if(!subject?.political?.ideology&&!subject?.ideology)return {label:'Orientação ainda não definida',position:'Ainda não definida',ideology:'Sem corrente definida',economic:'Sem preferência definida',civil:'Sem preferência definida',environment:'Sem preferência definida'};
+  const p=ideologicalProfile(subject),position=p.economy<-.65?'Esquerda':p.economy<-.2?'Centro-esquerda':p.economy>.65?'Direita':p.economy>.2?'Centro-direita':'Centro';
+  let ideology;
+  if(p.economy<-.65)ideology=p.liberty>.45&&p.ownership<.55?'Socialismo libertário':p.liberty>.25?'Socialismo democrático':p.liberty<-.25?'Socialismo estatista':'Socialismo';
+  else if(p.economy<-.2)ideology=p.liberty<-.35?'Desenvolvimentismo estatista':'Social-democracia';
+  else if(p.economy>.65)ideology=p.liberty>.6?'Liberalismo libertário':p.liberty<-.25?'Capitalismo autoritário':'Liberalismo econômico';
+  else if(p.economy>.2)ideology=p.ownership>.35?'Desenvolvimentismo estatal':p.fiscal>.45?'Conservadorismo fiscal':p.liberty<-.35?'Direita centralizadora':'Liberalismo moderado';
+  else ideology=p.liberty>.35?'Liberalismo social':p.ownership>.35||p.liberty<-.35?'Estatismo moderado':'Centrismo pragmático';
+  const tendencies=[];if(p.cooperation>.45)tendencies.push('Cooperativismo');if(p.green>=.65)tendencies.push('Ambientalismo');
+  return {position,ideology,tendencies,label:[position,ideology,...tendencies].join(' · '),economic:p.ownership>.45?'Predomínio estatal e serviços públicos':p.ownership<-.4?'Iniciativa privada e livre mercado':p.cooperation>.45?'Economia mista com cooperativas':'Economia mista',civil:p.liberty>.35?'Libertária: autonomia e pluralismo':p.liberty<-.35?'Autoritária: centralização e autoridade':'Moderada: equilíbrio entre autonomia e regulação',environment:p.green>=.65?'Ambientalista: preservação como prioridade':p.green>=.35?'Equilíbrio entre preservação e produção':'Prioridade produtiva, com menor ênfase ambiental'};
+}

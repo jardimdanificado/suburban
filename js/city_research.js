@@ -1,3 +1,4 @@
+import {formatMoney} from './city_ui_format.js';
 import {ROAD_TILES,tileAt} from './city_terrain.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const live=c=>c&&!c.entity.destroyed;
@@ -125,8 +126,10 @@ export class CityResearch {
     const city=this.city,b=city.building(s.instituteId);if(!b?.active)return;
     s.lastFundingAt=city.minute;
     if(s.commission){
-      if(!s.funded){const amount=Math.ceil(s.budget*1.5);if(city.transfer('treasury',b.accountId,amount,`Serviço: Pesquisa obrigatória da ${s.commission.label}`,{studyId:s.id,electionId:s.electionId,buildingId:b.id,organizerId:s.commission.organizerId,costCenter:s.commission.key,multiplier:1.5})){s.funded=amount;s.funders.push({accountId:'treasury',name:s.commission.label,kind:'contratação obrigatória',organizerId:s.commission.organizerId,amount,minute:city.minute,eventId:city.ledger.at(-1)?.eventId});}}
-      s.status=s.funded?'collecting':'funding';s.reason=s.funded?'Pesquisa obrigatória financiada; coleta presencial em preparação':'Obrigação registrada; aguardando caixa público';return;
+      const required=Math.ceil(s.budget*1.5),amount=Math.max(0,required-(s.funded||0));
+      if(amount&&city.transfer('treasury',b.accountId,amount,`Serviço: Pesquisa obrigatória da ${s.commission.label}`,{studyId:s.id,electionId:s.electionId,buildingId:b.id,organizerId:s.commission.organizerId,costCenter:s.commission.key,mandatoryResearch:true,multiplier:1.5})){s.funded+=amount;s.funders.push({accountId:'treasury',name:s.commission.label,kind:'contratação obrigatória',organizerId:s.commission.organizerId,amount,minute:city.minute,eventId:city.ledger.at(-1)?.eventId});}
+      const ready=s.funded>=required;s.status=ready?'collecting':'funding';s.reason=ready?'Pesquisa obrigatória paga; coleta presencial em preparação. A contratação pode usar a reserva municipal.':`Pesquisa obrigatória ainda não paga: custo restante ${formatMoney(Math.max(0,required-s.funded))}; caixa municipal ${formatMoney(city.treasury)}; faltam ${formatMoney(Math.max(0,required-s.funded-city.treasury))}.`;
+      const obligation=city.politics.active?.requiredPolls?.find(r=>r.key===s.commission.key&&(r.studyId==null||r.studyId===s.id));if(obligation){obligation.status=s.status;obligation.reason=s.reason;}return;
     }
     const investors=city.citizens.filter(c=>live(c)&&city.society.isAdult(c)&&c.balance>city.currency.price(50000)).sort((a,b)=>b.balance-a.balance).slice(0,12).map(c=>({accountId:c.accountId,reserve:city.currency.price(50000),kind:'investidor privado'}));
     const firms=city.economy.businesses.filter(f=>f.id!==b.id&&!f.municipal&&f.ownerId&&f.active).sort((a,b)=>b.balance-a.balance).slice(0,12).map(f=>({accountId:f.accountId,reserve:city.currency.price(30000)+f.wage*Math.max(1,f.workers.length)*480,kind:'empresa'}));

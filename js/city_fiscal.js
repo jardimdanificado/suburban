@@ -22,6 +22,10 @@ export class CityFiscal {
   allows(amount,reason,details={}){
     if(details.essential||details.fiscalRecovery||/^(Estorno|Devolução)/.test(reason))return true;
     const category=this.category(reason,details);if(!['investment','research','operations'].includes(category))return true;
+    if(category==='research'&&details.mandatoryResearch){
+      const election=this.city.politics.active,study=this.city.politics.getResearch().studies.find(s=>s.id===details.studyId),due=study?Math.max(0,Math.ceil(study.budget*1.5)-(study.funded||0)):0;
+      if(study?.commission&&['mayor','council'].includes(study.commission.key)&&study.electionId===election?.id&&['campaign','scheduled'].includes(election?.status)&&study.instituteId===details.buildingId&&amount<=due)return true;
+    }
     if(this.city.treasury-amount>=this.reserve())return true;
     const project=details.projectId&&this.city.development.projects.find(p=>p.id===details.projectId),type=details.businessType||project?.type;if(['farm','bakery','kitchen','popular_refectory'].includes(type)&&this.city.welfare.conditions().foodDays<3&&this.city.treasury-amount>=this.foodCost()*this.city.citizens.length)return true;
     this.lastDeferred={minute:this.city.minute,reason,amount,category};return false;

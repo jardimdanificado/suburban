@@ -1,3 +1,4 @@
+import {describePoliticalOrientation} from './city_ideology.js';
 const stamp=n=>`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const states={proposed:'Aguardando consulta popular',approved:'Aprovado; aguardando registro',registered:'Registrado',rejected:'Rejeitado',withdrawn:'Retirado'};
 export function renderPartyOrganization(ui,p,{fold,paginate}){
@@ -9,7 +10,7 @@ export function renderPartyOrganization(ui,p,{fold,paginate}){
     const rows=ui.partyProposalId?[]:paginate(ui,p,[...organization.proposals].reverse(),'partyFoundationPage',6);
     if(!ui.partyProposalId)for(const row of rows)p.record(row.name,`${states[row.status]} · ${stamp(row.proposedAt)}`,()=>ui.openPanel({tab:'party-organization',partyOrganizationView:'foundations',partyProposalId:row.id,recordWindow:true}),ui.partyProposalId===row.id);
     const selected=organization.proposals.find(r=>r.id===ui.partyProposalId);if(!selected)return;
-    p.heading(selected.name);p.kv('Situação',states[selected.status]);p.kv('Consulta',stamp(selected.voteAt));
+    p.heading(selected.name);p.kv('Orientação política proposta',describePoliticalOrientation(selected).label);p.kv('Situação',states[selected.status]);p.kv('Consulta',stamp(selected.voteAt));
     if(selected.parentPartyId)p.kv('Dissidência de',gov.party(selected.parentPartyId)?.name||selected.parentPartyId);
     for(let i=0;i<selected.founderIds.length;i++)p.button(`FUNDADOR: ${selected.founderNames[i]}`,()=>ui.openCitizen(selected.founderIds[i]));
     if(selected.result)p.note(selected.result);
