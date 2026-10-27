@@ -17,6 +17,8 @@ export function tycoonIcon(ctx,key,x,y,scale=2){
     rect(7,1,2,14,blue);rect(1,7,14,2,blue);rect(4,4,8,8,ink);rect(5,5,6,6,light);rect(7,7,2,2,'#c4553d');
   }else if(key==='map'){
     rect(1,2,14,12,green);rect(2,3,12,10,'#a5bd70');line([[3,5],[7,8],[11,4],[14,8]],blue);line([[4,3],[4,13]],dark);line([[10,3],[10,13]],dark);line([[2,9],[14,9]],dark);
+  }else if(key==='market'){
+    rect(1,11,3,4,blue);rect(6,7,3,8,green);rect(11,3,3,12,brick);line([[1,8],[6,4],[10,6],[14,1]],ink);rect(1,1,4,4,'#e5c64b');
   }else if(key==='economy'||key==='production'){
     rect(1,7,14,7,brick);rect(3,2,2,8,dark);rect(10,1,2,9,dark);rect(4,1,3,1,'#c3c6ba');rect(11,0,3,1,'#c3c6ba');for(const p of[2,6,10])rect(p,9,3,3,light);if(key==='production'){rect(6,4,1,9,'#e5c64b');line([[4,5],[6,7],[9,4]],'#f4d56a');}
   }else if(key==='transport'){

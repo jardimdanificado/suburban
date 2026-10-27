@@ -1,3 +1,4 @@
+import {renderMarket} from './city_wealth_ui.js';
 import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './city_paint_ui.js';
 import {colorName} from './city_colors.js';
 import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.js';
@@ -42,12 +43,14 @@ const TABS = [
   ['land', 'TERRENOS', 'TERRITÓRIO', 'Terrenos, contratos e a expansão sobre o relevo.'],
   ['buildings', 'IMÓVEIS', 'TERRITÓRIO', 'Edifícios, moradias e seus espaços negociáveis.'],
   ['economy', 'EMPRESAS', 'ECONOMIA', 'Negócios, equipes e as finanças de quem produz.'],
+  ['market', 'MERCADO E RIQUEZAS', 'ECONOMIA', 'Patrimônio, distribuição de riqueza, preços e vendas.'],
   ['production', 'PRODUÇÃO', 'ECONOMIA', 'Estoques, consumo e oportunidades na cadeia produtiva.'],
   ['transport', 'TRANSPORTES', 'ECONOMIA', 'Cargas reais: da reserva à entrega.'],
   ['sanitation', 'SANEAMENTO', 'VIDA URBANA', 'Banheiros, serviços de limpeza e ciclo dos resíduos.'],
   ['log', 'HISTÓRICO', 'VIDA URBANA', 'Os acontecimentos e as decisões de cada pessoa.'],
 ];
 const VIEWS = {
+  market: [['overview','PANORAMA'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS']],
   economy: [['overview','EMPRESAS'],['vacancies','VAGAS'],['applications','SELEÇÕES'],['workers','FUNCIONÁRIOS']],
   city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['nature','VEGETAÇÃO']],
   government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
@@ -96,7 +99,7 @@ export class CityUI {
   section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
 
   remember() {
-    const route={};for(const key of ['politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','selectedVehicleId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow','employmentCompanyId','employmentCitizenId','employmentApplicationAt','employmentStatus','employmentPage','employmentCandidatesPage'])route[key]=this[key];
+    const route={};for(const key of ['wealthAccountId','wealthLocationId','wealthGoodId','marketSaleId','marketKindId','politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','selectedVehicleId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow','employmentCompanyId','employmentCitizenId','employmentApplicationAt','employmentStatus','employmentPage','employmentCandidatesPage'])route[key]=this[key];
     this.history.push({ ...route, tab: this.tab, selected: this.selected, selectedPlotId: this.selectedPlotId, unitId: this.unitId, detailTab: this.detailTab, mobileDetail: this.mobileDetail, query: this.query, views: { ...this.views }, filters: { ...this.filters }, scrolls: { ...this.scrolls } });
     if (this.history.length > 40) this.history.shift();
   }
@@ -115,7 +118,7 @@ export class CityUI {
   }
   sectionTitle(){return sectionTitle(this);}
   openPanel(overrides={}){return this.host?this.host.openPanel(this,overrides):Object.assign(this,overrides);}
-  showView(id){return this.openPanel({...(this.tab==='economy'?{employmentStatus:'all',employmentPage:0,employmentCompanyId:null,employmentCitizenId:null,employmentApplicationAt:null}:{}),views:{...this.views,[this.tab]:id},...(this.tab==='government'&&id==='elections'?{politicsTab:this.politicsTab||'overview'}:{} )});}
+  showView(id){return this.openPanel({...(this.tab==='market'?{wealthAccountId:null,wealthLocationId:null,wealthGoodId:null,marketSaleId:null}:{}),...(this.tab==='economy'?{employmentStatus:'all',employmentPage:0,employmentCompanyId:null,employmentCitizenId:null,employmentApplicationAt:null}:{}),views:{...this.views,[this.tab]:id},...(this.tab==='government'&&id==='elections'?{politicsTab:this.politicsTab||'overview'}:{} )});}
   openCurrentInWindow(){if(!this.host)return;return this.host.openPanel(this,{tab:this.tab,views:{...this.views},filters:{...this.filters},sorts:{...this.sorts}},{separate:true});}
   openParty(id){return this.host?.openParty(id);}
   openContract(id){return this.host?.openContract(id);}
@@ -515,6 +518,7 @@ export class CityUI {
     p.rows(rows,d=>{const key=d.type+':'+(d.crop||''),selected=this.selectedDemandKey===key;p.record(`${BUILDING_TYPES[d.type].label}${d.crop?' / '+CROPS[d.crop].label:''}`,d.response?.state||d.reason,()=>{this.selectedDemandKey=key;this.resetScroll();},selected,{value:Math.round(d.score)+' pts',color:d.score>=100?C.red:C.cyan});});
   }
   content(p) {
+    if(this.tab==='market')return renderMarket(this,p);
     if(this.tab==='economy')return renderEmployment(this,p);
     if(this.tab==='city'&&this.view()==='services')return renderCivicServices(this,p);
     if(this.tab==='party-organization'){renderPartyOrganizationWindow(this,p);return;}

@@ -490,7 +490,7 @@ export class CityEconomy {
     if (!['farm','forestry'].includes(b.type) || !b.active || b.seedStock >= 8) return;
     const qty = Math.min(24 - b.seedStock, Math.floor(b.balance / this.goods.sementes.price), inventoryFree(b), Math.max(0, 12 - b.seedStock));
     const cost = qty * this.goods.sementes.price;
-    if (qty > 0 && this.city.transfer(b.accountId, 'supplier', cost, 'Compra de sementes')) { b.seedStock += qty; this.initialStock.sementes += qty; b.totalExpenses += cost; }
+    if (qty > 0 && this.city.transfer(b.accountId, 'supplier', cost, 'Compra de sementes',{good:'sementes',quantity:qty})) { b.seedStock += qty; this.initialStock.sementes += qty; b.totalExpenses += cost; }
   }
   recordGoods(kind, good, quantity, from, to, details = {}) {
     this.goodsLedger.push({ minute: this.city.minute, kind, good, quantity, from, to });
@@ -580,7 +580,7 @@ export class CityEconomy {
   }
   consumeMeal(c, b) {
     const offer = this.mealOffer(b, c); if (!offer) { this.failedMeals++; if (b) b.stockouts++; return false; }
-    if (!this.city.transfer(this.city.payerFor(c), b.accountId, offer.price, `Serviço: Alimentação (${GOODS[Object.keys(offer.inputs)[0]]?.label || offer.good})`)) return false;
+    if (!this.city.transfer(this.city.payerFor(c), b.accountId, offer.price, `Serviço: Alimentação (${GOODS[Object.keys(offer.inputs)[0]]?.label || offer.good})`,{good:offer.good,quantity:offer.quantity||1})) return false;
     for (const [good, amount] of Object.entries(offer.inputs)) { b.inventory[good] -= amount; this.consumed[good] += amount; this.recordGoods('consumption', good, amount, b.id, c.id); }
     this.city.history.record('sale',`Refeição: ${c.entity.properties.name} em ${b.entity.properties.name}.`,[c.accountId,b.accountId],{amount:offer.price,ingredients:{...(offer.ingredients||offer.inputs)},consumedProducts:{...offer.inputs},quality:offer.quality});
     this.enjoyMeal(c, offer);
@@ -683,7 +683,7 @@ export class CityEconomy {
     const offer=this.consumerOffer(c,b);
     if(!offer || Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)>2) return false;
     const {good,spec,price}=offer;
-    if(!this.city.transfer(c.accountId,b.accountId,price,`Serviço: Venda de ${this.goods[good].label}`))return false;
+    if(!this.city.transfer(c.accountId,b.accountId,price,`Serviço: Venda de ${this.goods[good].label}`,{good,quantity:1}))return false;
     b.inventory[good]--;const publication=['livros','panfletos','jornais'].includes(good);if(!publication&&good!=='roupas')this.consumed[good]++;this.recordGoods(publication||good==='roupas'?'durable-purchase':'household-consumption',good,1,b.id,c.id);
     if(good==='roupas'){buyClothes(this.city,c,b,offer.garmentIndex);return true;}
     if(good==='jornais'){const doc=this.city.publications.documents.get(offer.documentId);this.city.publications.move(doc,c.accountId);c.newspaperEditions??=[];c.newspaperEditions.push(doc.editionKey);c.newspaperEditions=c.newspaperEditions.slice(-32);this.city.publications.read(doc.id,c.id);return true;}

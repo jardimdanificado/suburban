@@ -1,3 +1,4 @@
+import {recordMarketTransaction} from './city_wealth.js';
 import {CityPaint} from './city_paint.js';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork} from './city_employment.js';
@@ -168,6 +169,7 @@ export class CitySimulation {
     const shipment = a.seller && a.buyer ? a : b.seller && b.buyer ? b : null;
     const entry = this.history.transaction(from, to, amount, reason, { ...(shipment ? {shipmentId: shipment.id} : {}), ...details });
     this.ledger.push({ minute: this.minute, from, to, amount, reason, eventId: entry.id });
+    recordMarketTransaction(this,from,to,amount,reason,details,entry.id);
     if (this.ledger.length > 1000) this.ledger.shift();
     if (reason === 'Salário' || reason === 'Subsídio salarial municipal') this.hourlyPayroll.set(to, (this.hourlyPayroll.get(to) || 0) + amount);
     else if (reason !== 'Imposto sobre salário') {
@@ -309,7 +311,7 @@ export class CitySimulation {
   buyUnit(buyerId, unitId) {
     const c = this.society.citizen(buyerId), u = this.units.get(unitId);
     if (!c || !u || !this.building(u.buildingId) || this.housing.isSocial(this.housing.homes.get(u.homeId)) || !u.forSale || u.ownerId === c.accountId) return this.fail('Espaço indisponível para compra.');
-    if (!this.transfer(c.accountId, u.ownerId, u.price, 'Compra de espaço')) return this.fail('Saldo insuficiente para a compra.');
+    if (!this.transfer(c.accountId, u.ownerId, u.price, 'Compra de espaço',{buildingId:u.buildingId,unitId:u.id})) return this.fail('Saldo insuficiente para a compra.');
     this.history.ownership(this.building(u.buildingId), u.ownerId, c.accountId, {unitId:u.id,amount:u.price});
     u.ownerId = c.accountId; u.forSale = false; u.forRent = !u.tenantId && ['residential', 'popular_housing', 'luxury_housing'].includes(this.building(u.buildingId).type); u.arrears = 0; u.missedDays = 0;
     this.log(`${c.entity.properties.name} comprou o espaço ${u.id}.`, 'housing', [c.id], { kind: 'purchase', unitId: u.id });
