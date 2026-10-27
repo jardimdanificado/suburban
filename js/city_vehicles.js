@@ -10,6 +10,7 @@ export const VEHICLE_SPECS=Object.freeze({
   patins:{label:'Patins',speed:6,seats:1,cargo:24},
   skate:{label:'Skate',speed:6.5,seats:1,cargo:24},
 });
+const PERSONAL_MOBILITY=new Set(Object.keys(VEHICLE_SPECS));
 export const VEHICLE_RECIPES=Object.freeze({
   bicicleta:{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},
   bicicleta_carga:{quadro:2,rodas:3,corrente:1,selim:1,plataforma:1,rolamentos:3},
@@ -48,16 +49,16 @@ export class CityVehicles {
     });
   }
   parkingReport(){
-    const sites=this.parkingSites(),vehicles=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&['bicicleta','bicicleta_carga','patinete'].includes(v.good)),required=Math.max(2,Math.ceil(vehicles.length/12));
+    const sites=this.parkingSites(),vehicles=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&PERSONAL_MOBILITY.has(v.good)),required=Math.max(2,Math.ceil(vehicles.length/12));
     return {sites,required,missing:Math.max(0,required-sites.length),capacity:sites.reduce((n,b)=>n+b.bikeSlots.length,0),occupied:sites.reduce((n,b)=>n+b.bikeSlots.filter(s=>s.vehicleId!=null).length,0),reserved:sites.reduce((n,b)=>n+b.bikeSlots.filter(s=>s.reservedBy!=null).length,0),outside:vehicles.filter(v=>!v.driverId&&(!v.parking||v.parking.kind==='roadside')).length};
   }
   reserveParking(v,goal,maxDistance=12){
-    if(!['bicicleta','bicicleta_carga','patinete'].includes(v.good))return null;
+    if(!PERSONAL_MOBILITY.has(v.good))return null;
     const choices=this.parkingSites().filter(b=>Math.hypot(b.door.x-goal.x,b.door.y-goal.y)<=maxDistance).sort((a,b)=>Math.hypot(a.door.x-goal.x,a.door.y-goal.y)-Math.hypot(b.door.x-goal.x,b.door.y-goal.y));
     for(const b of choices)for(const slot of b.bikeSlots){if(slot.vehicleId!=null||slot.reservedBy!=null)continue;if(!this.city.walkable(Math.floor(slot.x),Math.floor(slot.y))||this.city.findPath(slot,goal)===null)continue;slot.reservedBy=v.id;return {rackId:b.id,index:slot.index,x:slot.x,y:slot.y};}return null;
   }
   roadsideParking(v,goal,maxDistance=8){
-    if(!['bicicleta','bicicleta_carga','patinete'].includes(v.good))return null;
+    if(!PERSONAL_MOBILITY.has(v.good))return null;
     const city=this.city,candidates=[],occupied=new Set();
     for(const other of this.units.values())if(other.id!==v.id&&!other.scrapped)for(const p of [other.parking,other.reservedParking])if(p)occupied.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     for(let dy=-maxDistance;dy<=maxDistance;dy++)for(let dx=-maxDistance;dx<=maxDistance;dx++){
@@ -97,7 +98,7 @@ export class CityVehicles {
     if(b.type==='skate_workshop')return {inputs:VEHICLE_RECIPES.skate,good:'skate',size:1};
     if(b.type!=='cycle_assembler')return null;
     let good=b.vehicleKind;
-    if(!good){const units=[...this.units.values()].filter(v=>!v.scrapped),targets={bicicleta:Math.max(2,this.city.citizens.length/30),bicicleta_carga:Math.max(1,this.city.economy.businesses.filter(b=>b.type==='carrier').length*1.5),patinete:Math.max(1,this.city.citizens.length/80),patins:Math.max(1,this.city.citizens.length/60)};
+    if(!good){const units=[...this.units.values()].filter(v=>!v.scrapped),companies=this.city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed),cargoBikeTarget=companies.reduce((n,b)=>n+Math.max(1,Math.ceil(b.workers.length/4)),0),targets={bicicleta:Math.max(2,this.city.citizens.length/30),bicicleta_carga:Math.max(1,cargoBikeTarget),patinete:Math.max(1,this.city.citizens.length/80),patins:Math.max(1,this.city.citizens.length/60)};
       good=Object.keys(targets).sort((a,b)=>units.filter(v=>v.good===a).length/targets[a]-units.filter(v=>v.good===b).length/targets[b])[0];}
     // A new factory should be able to complete its first vehicle from one
     // component set; requiring the default three-unit lot hid production for
@@ -218,14 +219,23 @@ export class CityVehicles {
   hourly(){
     const city=this.city,hour=Math.floor(city.minute/60);if(this.lastHour===hour)return;this.lastHour=hour;
     const parking=this.parkingReport();if(parking.missing>0&&this.lastParkingPlanDay!==city.day&&!city.development.projects.some(p=>p.type==='bike_rack'&&!p.cancelled&&p.status!=='completed')){this.lastParkingPlanDay=city.day;if(city.welfare.conditions().foodDays>=1){city.politics.fundInitialWorksBudget();city.politics.startPublicWork('bike_rack');}}
-    const units=[...this.units.values()],unsold=units.filter(v=>!v.active&&!v.scrapped&&city.buildings.some(b=>b.type==='cycle_shop'&&b.active&&b.accountId===v.holderAccountId)),owners=new Set(units.filter(v=>v.active&&!v.scrapped).map(v=>v.ownerAccountId));
-    for(const company of city.economy.businesses.filter(b=>['carrier','bicycle_rental'].includes(b.type)&&!owners.has(b.accountId))){
-      const v=unsold.find(v=>!v.active&&v.good===(company.type==='carrier'?'bicicleta_carga':'bicicleta'));
-      if(v&&this.financeVehicle(company,v)&&this.buyVehicle(company.accountId,v.id))owners.add(company.accountId);
+    const units=[...this.units.values()],unsold=units.filter(v=>!v.active&&!v.scrapped&&city.buildings.some(b=>b.type==='cycle_shop'&&b.active&&b.accountId===v.holderAccountId)),ownedBy=account=>units.filter(v=>v.active&&!v.scrapped&&v.ownerAccountId===account),owners=new Set(units.filter(v=>v.active&&!v.scrapped).map(v=>v.ownerAccountId));
+    for(const company of city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed).sort((a,b)=>b.workers.length-a.workers.length||a.id-b.id)){
+      const target=Math.max(1,Math.ceil(Math.max(1,company.workers.length)/4));let fleet=ownedBy(company.accountId).filter(v=>v.good==='bicicleta_carga').length;
+      while(fleet<target){const v=unsold.find(v=>!v.active&&v.good==='bicicleta_carga');if(!v)break;const dealer=city.building(v.holderAccountId);let acquired=false;
+        if(dealer?.accountId===company.accountId&&dealer.type==='cycle_shop'&&dealer.inventory[v.good]>0){dealer.inventory[v.good]--;this.activate(v,company.accountId,dealer);city.history.record('ownership',`${dealer.entity.properties.name} destinou uma bicicleta de carga à equipe.`,[company.accountId],{vehicleId:v.id,good:v.good,companyFleet:true});acquired=true;}
+        else acquired=this.financeVehicle(company,v)&&this.buyVehicle(company.accountId,v.id);
+        if(!acquired)break;fleet++;owners.add(company.accountId);
+      }
+      if(company.type==='bicycle_rental'){
+        const targetRental=Math.max(1,Math.ceil(city.citizens.length/400));let rentals=ownedBy(company.accountId).filter(v=>v.good==='bicicleta').length;
+        while(rentals<targetRental){const v=unsold.find(v=>!v.active&&v.good==='bicicleta');if(!v||!this.financeVehicle(company,v)||!this.buyVehicle(company.accountId,v.id))break;rentals++;}
+      }
     }
-    for(const c of city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!owners.has(c.accountId)).slice().sort((a,b)=>b.balance-a.balance).slice(0,6)){
-      const offered=unsold.filter(v=>!v.active&&this.vehiclePrice(v)+city.currency.price(15000)<c.balance).sort((a,b)=>Number(b.good===['bicicleta','patins','skate'][c.id%3])-Number(a.good===['bicicleta','patins','skate'][c.id%3])||this.vehiclePrice(a)*(1-.18*colorAffinity(c,a.color))-this.vehiclePrice(b)*(1-.18*colorAffinity(c,b.color)));
-      if(offered[0]&&this.buyVehicle(c.accountId,offered[0].id))owners.add(c.accountId);
+    const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!owners.has(c.accountId)&&c.mobilityNeed>=12).sort((a,b)=>(b.mobilityNeed*(b.mobilityPriority||1)-a.mobilityNeed*(a.mobilityPriority||1))||b.balance-a.balance||a.id-b.id).slice(0,6);
+    for(const c of buyers){
+      const offered=unsold.filter(v=>!v.active&&v.good!=='bicicleta_carga'&&this.vehiclePrice(v)+city.currency.price(2500)<c.balance).sort((a,b)=>Number(b.good===['bicicleta','patins','skate','patinete'][c.id%4])-Number(a.good===['bicicleta','patins','skate','patinete'][c.id%4])||this.vehiclePrice(a)*(1-.18*colorAffinity(c,a.color))-this.vehiclePrice(b)*(1-.18*colorAffinity(c,b.color)));
+      if(offered[0]&&this.buyVehicle(c.accountId,offered[0].id)){owners.add(c.accountId);c.mobilityNeed*=.22;}
     }
   }
   tryTrip(c){

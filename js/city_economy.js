@@ -803,7 +803,7 @@ export class CityEconomy {
       case 9: this.city.paint.hourly();updateClothes(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
       case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
       case 11: this.updateDemand(); updateMarket(this);planSupplyChains(this);tradeSharesHourly(this.city);break;
-      case 12: if (this.city.hour % 2 === 0) { this.investInHousing(); this.invest(); } break;
+      case 12: this.city.vehicles.hourly(); if (this.city.hour % 2 === 0) { this.investInHousing(); this.invest(); } break;
     }
   }
   daily() {

@@ -280,7 +280,8 @@ export class CitySimulation {
   addCitizen(x, y, index = this.citizens.length, options = {}) {
     const identity = this.life.identity(index, options);
     const entity = this.createEntity({ x, y, properties: { name: identity.name, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: 0xe8e8e8 } } });
-    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, lastProgressAt: this.minute };
+    const mobilityPriority=.75+((((Math.imul(index+1,2654435761)^this.initialSeed)>>>0)/4294967295)*.5);
+    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, mobilityPriority, mobilityNeed: 8, mobilityTimeLostToday: 0, lastProgressAt: this.minute };
     c.givenNames = identity.givenNames; c.surnames = Object.freeze(identity.surnames);
     initializeCharacter(this, c); this.reputation.setup(c);
     this.society.initializeCitizen(c, options);
@@ -600,6 +601,7 @@ export class CitySimulation {
     collectOfficeRents(this);
     for (const c of this.citizens) {
       if (c.entity.destroyed) continue;
+      const walkingTime=c.mobilityTimeLostToday||0;c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)*.72+Math.min(52,walkingTime*1.2)*(c.mobilityPriority||1));c.mobilityTimeLostToday=0;
       c.salaryYesterday = c.salaryToday; c.salaryToday = 0; c.wageSubsidyToday=0;c.wageSubsidyUnpaidToday=0;c.taxPaidToday=0; c.mealAllowanceToday = 0;
       const home = this.housing.home(c);
       if (home && this.society.isAdult(c) && this.housing.units(home).every(u => u.forSale)) this.housing.buyHome(c, home);
@@ -774,6 +776,8 @@ export class CitySimulation {
         if (len <= available) { c.entity.x = p.x; c.entity.y = p.y; this.recordTraffic(p); c.path.shift(); distance = Math.max(0,distance-len*cost); }
         else { c.entity.x += dx / len * available; c.entity.y += dy / len * available; distance = 0; }
         if(travelled>0){
+          c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;
+          c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
           wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}
         }

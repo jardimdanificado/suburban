@@ -279,6 +279,46 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   }
 }
 
+const CROP_VISUALS={
+  girassol:{height:1.05,grow:180,foliage:0x4b8736,head:0xffd34f,leaf:'broad',produce:'flower'},
+  trigo:{height:.82,grow:120,foliage:0x71963d,head:0xd7bb70,leaf:'blade',produce:'grain'},
+  arroz:{height:.7,grow:150,foliage:0x6f9d45,head:0xc9b977,leaf:'blade',produce:'grain'},
+  milho:{height:1,grow:100,foliage:0x528c3a,head:0xe5c742,leaf:'corn',produce:'ear'},
+  feijao:{height:.48,grow:150,foliage:0x529447,head:0x78ac52,leaf:'bush',produce:'pod'},
+  alface:{height:.34,grow:75,foliage:0x6fae4b,head:0x95c866,leaf:'rosette',produce:'head'},
+  tomate:{height:.52,grow:100,foliage:0x4b813d,head:0xc94335,leaf:'bush',produce:'fruit'},
+  mandioca:{height:.68,grow:200,foliage:0x4d8241,head:0xb18d58,leaf:'broad',produce:'root'},
+  cebola:{height:.42,grow:140,foliage:0x649346,head:0xd3c27a,leaf:'blade',produce:'bulb'},
+  coentro:{height:.38,grow:80,foliage:0x63a74f,head:0x8cba62,leaf:'fine',produce:'none'},
+  maca:{height:.72,grow:180,foliage:0x437e39,head:0xc9573f,leaf:'bush',produce:'fruit'},
+  goiaba:{height:.72,grow:160,foliage:0x49813d,head:0xc8764d,leaf:'bush',produce:'fruit'},
+  default:{height:.5,grow:120,foliage:0x669b48,head:0x8bb75e,leaf:'bush',produce:'fruit'},
+};
+function createFarmPlants(THREE,b){
+  const visual=CROP_VISUALS[b.crop]||CROP_VISUALS.default,capacity=b.units.length*(visual.height>.7?2:3),group=new THREE.Group();
+  const stem=new THREE.InstancedMesh(new THREE.CylinderGeometry(.018,.032,1,5),new THREE.MeshLambertMaterial({color:0x63883b}),capacity);
+  const leafGeometry=visual.leaf==='blade'?new THREE.ConeGeometry(.07,.34,4):visual.leaf==='corn'?new THREE.ConeGeometry(.1,.55,4):visual.leaf==='fine'?new THREE.ConeGeometry(.045,.24,5):new THREE.SphereGeometry(1,6,4);
+  const foliage=new THREE.InstancedMesh(leafGeometry,new THREE.MeshLambertMaterial({color:visual.foliage}),capacity);
+  const productGeometry=visual.produce==='grain'?new THREE.ConeGeometry(.5,1,5):visual.produce==='ear'?new THREE.CylinderGeometry(.42,.5,1,6):visual.produce==='flower'?new THREE.CylinderGeometry(.5,.5,.14,10):new THREE.SphereGeometry(1,6,4);
+  const product=new THREE.InstancedMesh(productGeometry,new THREE.MeshLambertMaterial({color:visual.head}),capacity);for(const mesh of [stem,foliage,product]){mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;mesh.count=0;group.add(mesh);}
+  return {group,stem,foliage,product,capacity,visual};
+}
+function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
+  const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),growthByCell=new Float32Array(cells.length);let offset=0;
+  for(const field of b.fields||[]){const count=Math.min(field.area||12,cells.length-offset),age=field.plantedAt==null?0:Math.max(0,minute-field.plantedAt),growth=field.plantedAt==null?0:Math.min(1,age/Math.max(1,plantSet.visual.grow));for(let i=0;i<count;i++)growthByCell[offset+i]=growth;offset+=count;if(offset>=cells.length)break;}
+  const m=renderer._farmPlantMatrix??=new THREE.Matrix4(),pos=renderer._farmPlantPosition??=new THREE.Vector3(),quat=renderer._farmPlantQuaternion??=new THREE.Quaternion(),scale=renderer._farmPlantScale??=new THREE.Vector3(),axis=renderer._farmPlantAxis??=new THREE.Vector3(0,1,0),plantsPerCell=plantSet.visual.height>.7?2:3;
+  let n=0,produceCount=0;
+  for(let i=0;i<cells.length;i++){const growth=growthByCell[i];if(!growth)continue;const u=cells[i],height=plantSet.visual.height*(.12+.88*growth),ground=surfaceElevation(world,b.entity.x+u.x+.5,b.entity.y+u.y+.5);
+    for(let j=0;j<plantsPerCell;j++){const x=u.x+.5+(j-(plantsPerCell-1)/2)*.22,z=u.y+.5+((j%2)?-.13:.13),lean=(j-1)*.08,stemH=height*(.78+(j%2)*.18);pos.set(x,ground+.05+stemH/2,z);quat.setFromAxisAngle(axis,lean);scale.set(1,stemH,1);m.compose(pos,quat,scale);plantSet.stem.setMatrixAt(n,m);
+      const leafH=ground+.05+height*(plantSet.visual.leaf==='bush'||plantSet.visual.leaf==='rosette'?.58:.62);pos.set(x,leafH,z);quat.setFromAxisAngle(axis,lean*.6);scale.set(.09*growth,height*(plantSet.visual.leaf==='bush'||plantSet.visual.leaf==='rosette'?.48:.52),.09*growth);m.compose(pos,quat,scale);plantSet.foliage.setMatrixAt(n,m);
+      if(plantSet.visual.produce!=='none'&&growth>.48){const productH=ground+.05+height*.88;pos.set(x,productH,z);quat.setFromAxisAngle(axis,0);const kind=plantSet.visual.produce,size=kind==='flower'?.14:kind==='grain'?.065:kind==='ear'?.07:.07;scale.set(size,kind==='flower'?.8:kind==='grain'?.22:kind==='ear'?.2:size*1.15,size);m.compose(pos,quat,scale);plantSet.product.setMatrixAt(produceCount++,m);}
+      n++;
+    }
+  }
+  plantSet.stem.count=plantSet.foliage.count=n;plantSet.product.count=produceCount;
+  for(const mesh of [plantSet.stem,plantSet.foliage,plantSet.product])mesh.instanceMatrix.needsUpdate=true;
+}
+
 // Open-air premises follow every patch of the natural surface; no slab, walls or roof.
 function syncOpenAir(renderer, THREE, entity, b, world) {
   let group = renderer.cityMeshes.get(entity.id);
@@ -287,10 +327,11 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;
     addBuildingDetails(THREE,group,b,{outdoor:true,ground:surfaceElevation(world,entity.x+b.width/2,entity.y+b.depth/2)});
-    const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : ['market','greengrocer'].includes(b.type)?0xb5a68d:0x6e7940 }), b.units.length);
+    const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : b.type==='farm'?0x795c3d:['market','greengrocer'].includes(b.type)?0xb5a68d:0x6e7940 }), b.units.length);
     patches.receiveShadow = true; group.add(patches); group.userData.patches = patches;
-    const rows = ['farm','quarry'].includes(b.type)?new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0xb0b8ba : b.crop === 'girassol' ? 0xffce30 : 0x9bbd50 }), b.units.length * 3):null;
+    const rows = b.type==='quarry'?new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color:0xb0b8ba }), b.units.length * 3):null;
     if(rows)group.add(rows);group.userData.rows=rows;
+    if(b.type==='farm'){const cropPlants=createFarmPlants(THREE,b);group.add(cropPlants.group);group.userData.cropPlants=cropPlants;}
     if(['market','greengrocer'].includes(b.type)){const fixtures=marketFixtures(THREE,b);group.add(fixtures);group.userData.retailFixtures=fixtures;}
     if(b.type==='bike_rack'){
       const metal=new THREE.MeshLambertMaterial({color:0x89999e});
@@ -346,6 +387,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     group.userData.terrainRevision = world.revision || 0;
   }
   group.position.set(entity.x, 0, entity.y);
+  if(b.type==='farm'&&group.userData.cropPlants){const minute=world.clock?Math.max(0,world.clock.day-1)*1440+world.clock.hour*60+world.clock.minute:0;if(group.userData.farmVisualMinute!==minute){syncFarmPlants(renderer,THREE,b,world,group.userData.cropPlants,minute);group.userData.farmVisualMinute=minute;}}
   const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
   group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
   if (unit) group.userData.highlight.position.set(unit.x + .5, surfaceElevation(world, entity.x + unit.x + .5, entity.y + unit.y + .5) + .08, unit.y + .5);
