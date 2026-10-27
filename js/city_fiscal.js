@@ -11,8 +11,9 @@ export class CityFiscal {
     if(/Benefício|subsistência/.test(reason))return 'benefits';
     if(details.purpose==='public-meals'||details.costCenter==='food'||/Alimentação/.test(reason))return 'food';
     if(/Imposto/.test(reason))return 'tax';
-    if(/Lucro de empresa municipal|Resultado de empresa municipal/.test(reason))return 'dividends';
+    if(/Lucro de empresa municipal|Resultado de empresa municipal|Distribuição de lucros por participação/.test(reason))return 'dividends';
     if(/Emissão|retirada.*circulação|monetária/.test(reason))return 'monetary';
+    if(/participação empresarial/i.test(reason))return 'investment';
     if(/obra|construção|terreno|empreendimento|cadeia|Refinanciamento|refinanciamento|Capital inicial|Capital de empresa municipal|Capital operacional do banco|estatização|fundo partidário|Fundo partidário/i.test(reason))return 'investment';
     if(/Pesquisa|pesquisa/.test(reason))return 'research';
     if(/Salário|salarial/.test(reason))return 'payroll';
@@ -35,7 +36,7 @@ export class CityFiscal {
     let day=this.days.at(-1);if(day?.day!==this.city.day){day={day:this.city.day,income:0,expenses:0,receipts:{},payments:{}};this.days.push(day);if(this.days.length>60)this.days.shift();}
     const incoming=to==='treasury',category=details.fiscalRecovery?'liquidity':this.category(reason,details),table=incoming?day.receipts:day.payments;table[category]=(table[category]||0)+amount;day[incoming?'income':'expenses']+=amount;
   }
-  municipal(b){return b.accountId!=='treasury'&&!b.entity.destroyed&&b.active&&!b.ownerId&&(b.municipal||b.units?.length&&b.units.every(u=>u.ownerId==='treasury'));}
+  municipal(b){return (!b.equityShares?.length||b.equityShares.length===1&&b.equityShares[0].accountId==='treasury')&&b.accountId!=='treasury'&&!b.entity.destroyed&&b.active&&!b.ownerId&&(b.municipal||b.units?.length&&b.units.every(u=>u.ownerId==='treasury'));}
   businessReserve(b){
     const city=this.city,plan=city.vehicles?.recipeFor(b),inputs=plan?.inputs||city.buildingTypes[b.type]?.inputs||{},materials=Object.entries(inputs).reduce((n,[g,q])=>n+q*(city.economy.goods[g]?.price||0),0)*(plan?.size||1)*3;
     return Math.ceil(Math.max(city.currency.price(['bank','builder'].includes(b.type)?200000:40000),b.workers.length*b.wage*480*7,materials,(b.fiscalDailyExpenses||0)*3));

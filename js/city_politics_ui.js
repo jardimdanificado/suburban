@@ -1,3 +1,4 @@
+import {equityShares} from './city_equity.js';
 import {contextActions} from './city_context_actions.js';
 import {describePoliticalOrientation} from './city_ideology.js';
 import {electoralPriorities} from './city_electoral_behavior.js';
@@ -161,7 +162,7 @@ p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento /
       });
       fold(ui,p,'petitionOwnership','Estatizar ou privatizar empresas',()=>{
       p.heading('PROPRIEDADE DAS EMPRESAS');
-      for(const b of paginate(ui,p,city.economy.businesses.filter(b=>(b.ownerId||b.municipal)&&!['townhall','mint'].includes(b.type)&&ui.matches(b.entity.properties.name)),'publicOwnershipPage',8))p.button(`${b.municipal?'PRIVATIZAR':'NEGOCIAR ESTATIZAÇÃO'}: ${b.entity.properties.name}`,()=>submit(b.municipal?'privatize':'nationalize',{buildingId:b.id}));
+      for(const b of paginate(ui,p,city.economy.businesses.filter(b=>(b.ownerId||b.municipal)&&!['townhall','mint'].includes(b.type)&&ui.matches(b.entity.properties.name)),'publicOwnershipPage',8)){const publicShare=equityShares(city,b).find(s=>s.accountId==='treasury')?.points||0;p.button(`PARTICIPAÇÕES: ${b.entity.properties.name} · ${(publicShare/100).toFixed(0)}% pública`,()=>ui.openBuilding(b.id));if(publicShare<10000)p.button(`NEGOCIAR ESTATIZAÇÃO: ${b.entity.properties.name}`,()=>submit('nationalize',{buildingId:b.id}));}
       });
 
     }

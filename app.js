@@ -1,4 +1,4 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=civic-sites-2';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=equity-1';
 import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js";
 import { CityDesktop } from "./js/city_desktop.js";

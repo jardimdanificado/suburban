@@ -1,3 +1,4 @@
+import {offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js';
 import {externalTradeHourly} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js';
@@ -62,6 +63,9 @@ export class CityEconomy {
     this.routeCache = new Map();
     this.serviceInvestment = new CityServiceInvestment(city);
   }
+  offerShares(buildingId,sellerId,points){return offerShares(this.city,this.city.building(buildingId),sellerId,points);}
+  buyShares(buildingId,offerId,buyerId,points){return buyShares(this.city,this.city.building(buildingId),offerId,buyerId,points);}
+  cancelShareOffer(buildingId,offerId,sellerId){return cancelShareOffer(this.city,this.city.building(buildingId),offerId,sellerId);}
   configureEmployment(buildingId,changes){
     const b=this.city.building(buildingId);if(!b||b.entity.destroyed)return false;
     const policy=requirements(this.city,b);
@@ -775,7 +779,7 @@ export class CityEconomy {
       case 8: this.trade(); externalTradeHourly(this.city); break;
       case 9: this.city.paint.hourly();updateClothes(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
       case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
-      case 11: this.updateDemand(); updateMarket(this);planSupplyChains(this);break;
+      case 11: this.updateDemand(); updateMarket(this);planSupplyChains(this);tradeSharesHourly(this.city);break;
       case 12: if (this.city.hour % 2 === 0) { this.investInHousing(); this.invest(); } break;
     }
   }
@@ -785,6 +789,7 @@ export class CityEconomy {
     this.municipalPolicy();
     for(const b of this.city.buildings)if(this.city.fiscal?.municipal(b))this.city.fiscal.distribute(b);
     for (const b of this.businesses) {
+      if(b.equityShares?.length){distributeShareDividends(this.city,b);continue;}
       const owner = this.citizen(b.ownerId);
       if (!owner) {
         continue;

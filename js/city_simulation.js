@@ -1,3 +1,4 @@
+import {inheritShares,liquidateShareCash} from './city_equity.js';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
 import {CityPaint} from './city_paint.js';
@@ -578,7 +579,8 @@ export class CitySimulation {
       b.litter = 0;
       for(const v of this.vehicles.units.values())if(v.active&&v.ownerAccountId===b.accountId){v.ownerAccountId=this.economy.citizen(b.ownerId)?.accountId||'treasury';if(v.fuelStore)v.fuelStore.accountId=v.ownerAccountId;}
       this.publications.inherit(b.accountId,'treasury');
-      this.transfer(b.accountId, this.economy.citizen(b.ownerId)?.accountId || 'treasury', b.balance, 'Encerramento de prédio');
+      if(!liquidateShareCash(this,b))this.transfer(b.accountId, this.economy.citizen(b.ownerId)?.accountId || 'treasury', b.balance, 'Encerramento de prédio');
+      const lot=this.development.plots.find(p=>p.id===b.plotId);if(lot?.ownerId===b.accountId){lot.ownerId=this.economy.citizen(b.ownerId)?.accountId||'treasury';lot.buildingId=null;lot.forSale=true;}
       const owner = this.economy.citizen(b.ownerId); if (owner) owner.businessIds = owner.businessIds.filter(id => id !== b.id);
       this.log(`${b.entity.properties.name} foi demolido.`, 'city', [], { kind: 'demolition', buildingId: b.id });
       this.buildings.splice(this.buildings.indexOf(b), 1);
@@ -588,7 +590,8 @@ export class CitySimulation {
     if(this.citizens.some(c=>c.entity.destroyed))for (const c of [...this.citizens]) if (c.entity.destroyed) {
       const heir = c.dead ? this.life.heir(c) : null;
       this.vehicles.removeCitizen(c,heir);
-      if (heir) for (const b of this.economy.businesses.filter(b => b.ownerId === c.id)) { this.history.ownership(b,c.accountId,heir.accountId,{action:'inheritance'}); b.ownerId = heir.id; if (!heir.businessIds.includes(b.id)) heir.businessIds.push(b.id); }
+      inheritShares(this,c,heir);
+      if (heir) for (const b of this.economy.businesses.filter(b => b.ownerId === c.id&&!b.equityShares?.length)) { this.history.ownership(b,c.accountId,heir.accountId,{action:'inheritance'}); b.ownerId = heir.id; if (!heir.businessIds.includes(b.id)) heir.businessIds.push(b.id); }
       this.economy.removeCitizen(c);
       this.society.removeCitizen(c);
       if (!c.dead) this.log(`${c.entity.properties.name} saiu da cidade.`, 'city', [c.id], { kind: 'departure' });

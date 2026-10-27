@@ -1,3 +1,4 @@
+import {equityShares} from './city_equity.js';
 /** Read-only valuation of existing assets; commercial records exclude cash transfers and escrow reservations. */
 export const MARKET_HISTORY_LIMIT=600;
 const positive=n=>Number.isFinite(n)?Math.max(0,n):0;
@@ -77,7 +78,7 @@ export function buildWealthReport(city){
  const owner=id=>{if(!owners.has(id)){const r=ensure(id);owners.set(id,{...r,assets:[],companyEquity:0,companies:[],cash:0,savings:0,reserved:0,inventory:0,property:0,land:0,vehicles:0,durables:0,receivables:0,debt:0,gross:0,net:0});}return owners.get(id);};
  for(const row of [...direct.values()]){
   const b=row.type==='company'?buildings.get(row.id):null;let shares;
-  if(b){shares=(b.equityPartners||[]).filter(s=>s.amount>0&&city.accounts.has(`citizen:${s.citizenId}`)).map(s=>({id:`citizen:${s.citizenId}`,amount:s.amount}));if(!shares.length)shares=[{id:b.municipal||!b.ownerId?'treasury':`citizen:${b.ownerId}`,amount:1}];}
+  if(b){shares=equityShares(city,b).map(s=>({id:s.accountId,amount:s.points}));}
   else shares=[{id:row.id,amount:1}];
   const total=shares.reduce((n,s)=>n+s.amount,0);control.set(row.id,shares.map(s=>({id:s.id,share:s.amount/total})));
   for(const s of shares){const target=owner(s.id),share=s.amount/total;for(const key of [...categories,'receivables','debt','gross','net'])target[key]+=row[key]*share;if(b){target.companyEquity+=row.net*share;target.companies.push({accountId:row.id,buildingId:b.id,name:row.name,share,value:row.net*share});}else target.assets.push(...row.assets);}

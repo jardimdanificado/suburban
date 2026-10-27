@@ -1,3 +1,4 @@
+import {equityShares,offerShares,initializeEquity,nationalizeShares} from './city_equity.js';
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
 import {CityCouncilChamber} from './city_council_chamber.js';
@@ -62,6 +63,7 @@ export class CityCouncil {
     if(['councilBudget','mayorBudget','partyFund'].includes(type)&&(!Number.isSafeInteger(payload.value)||payload.value<0))return city.fail('Orçamento salarial deve ser um valor inteiro não negativo.');
     if(type==='suspend'&&(!Number.isInteger(payload.value)||payload.value<1||payload.value>5||payload.targetId!==city.economy.mayorId||!city.politics.scandals.some(r=>r.id===payload.caseId&&r.proven&&(r.accusedId===payload.targetId||r.participantIds?.includes(payload.targetId)))))return city.fail('Afastamento exige prefeito em exercício, prova e prazo de um a cinco dias.');
     if(type==='convict'&&!city.politics.scandals.some(r=>r.id===payload.caseId&&r.proven&&!r.archived&&(r.accusedId===payload.targetId||r.participantIds?.includes(payload.targetId))))return city.fail('A condenação exige provas e ligação com o caso.');
+    if(type==='privatize'&&payload.percent!=null&&(!Number.isFinite(payload.percent)||payload.percent<=0||payload.percent>100))return city.fail('Percentual de privatização deve ficar entre 0,01% e 100%.');
     if(type==='impeach'&&!city.politics.scandals.some(r=>r.id===payload.caseId&&scandalEligible(city.politics,r)&&(r.accusedId===payload.targetId||r.participantIds?.includes(payload.targetId))))return city.fail('Faltam prova, gravidade ou repercussão popular.');
     if(type==='confidence'&&(city.politics.approval>=20||city.politics.lowApprovalSince==null||city.minute-city.politics.lowApprovalSince<3*1440||payload.targetId!==city.economy.mayorId))return city.fail('Perda de confiança exige aprovação abaixo de 20% por três dias.');
     if(['termDays','campaignDays'].includes(type)){
@@ -71,7 +73,7 @@ export class CityCouncil {
       if(campaign>=term)return city.fail('A campanha deve durar menos que o mandato.');
       title??=`${BILL_LABELS[type]}: ${payload.value} dias, a partir da próxima gestão`;
     }
-    if(this.bills.some(b=>['awaiting-session','proposed','approved','executing','awaiting-sanction','vetoed'].includes(b.status)&&b.type===type&&(type==='build'?b.payload.buildingType===payload.buildingType&&(payload.buildingType!=='farm'||(b.payload.crop||'milho')===(payload.crop||'milho')):['impeach','convict'].includes(type)?b.payload.targetId===payload.targetId&&b.payload.caseId===payload.caseId:true)))return null;
+    if(this.bills.some(b=>['awaiting-session','proposed','approved','executing','awaiting-sanction','vetoed'].includes(b.status)&&b.type===type&&(type==='build'?b.payload.buildingType===payload.buildingType&&(payload.buildingType!=='farm'||(b.payload.crop||'milho')===(payload.crop||'milho')):['impeach','convict'].includes(type)?b.payload.targetId===payload.targetId&&b.payload.caseId===payload.caseId:['nationalize','privatize'].includes(type)?b.payload.buildingId===payload.buildingId:true)))return null;
     const bill={previousValue:type==='partyFund'?(city.politics.policy.partyFund??80000):type==='worksBudget'?(city.politics.policy.worksBudget??city.currency.price(5000000)):undefined,id:this.nextId++,authorId:author.id,authorName:author.entity.properties.name,partyId:author.political.partyId,type,payload:{...payload},title:title||BILL_LABELS[type],executiveRequest,proposedAt:city.minute,voteAt:city.minute+360,status:'awaiting-session',requestedAt:city.minute,votes:[],attempts:0,result:null};
     const e=city.log(`${author.entity.properties.name} encaminhou para apresentação no plenário: ${bill.title}.`,'government',[author.id],{kind:'bill-requested',billId:bill.id,partyId:bill.partyId});bill.eventId=e.id;this.bills.push(bill);
     if(this.bills.length>160){const i=this.bills.findIndex(b=>!['awaiting-session','proposed','approved','executing','awaiting-sanction','vetoed'].includes(b.status));if(i>=0)this.bills.splice(i,1);}
@@ -123,25 +125,15 @@ export class CityCouncil {
   transferFirm(bill,nationalize) {
     const city=this.city,b=city.building(bill.payload.buildingId);if(!b?.active || b.entity.destroyed || (['townhall','mint'].includes(b.type)||b.officialJournal))return 'Empresa indisponível';
     if(city.development.projects.some(p=>p.buildingId===b.id&&!p.cancelled&&p.status!=='completed'))return 'Aguardando obra contratada';
-    const old=city.society.citizen(b.ownerId);
-    if(nationalize) {
-      if(!old)return 'Já não existe proprietário privado';
-      if(!b.units.every(u=>u.ownerId===old.accountId))return 'Propriedade fracionada impede a compra integral';
-      const price=Math.max(city.currency.price(10000),b.units.reduce((n,u)=>n+u.price,0)+(city.development.plots.find(p=>p.id===b.plotId)?.price||0)+Math.max(0,b.balance));
-      if((old.traits?.frugality??.5)>.8 && bill.attempts<3)return 'Proprietário negociando a venda';
-      if(!city.transfer('treasury',old.accountId,price,'Compra negociada para estatização',{billId:bill.id,buildingId:b.id}))return 'Aguardando caixa municipal';
-      old.businessIds=old.businessIds.filter(id=>id!==b.id);b.ownerId=null;b.municipal=true;
-      for(const u of b.units){u.ownerId='treasury';u.forSale=false;u.forRent=false;}
-      const lot=city.development.plots.find(p=>p.id===b.plotId);if(lot){lot.ownerId='treasury';lot.forSale=false;}
-      city.history.ownership(b,old.accountId,'treasury',{action:'nationalization',amount:price,billId:bill.id});
-    } else {
-      if(!b.municipal)return 'Já não é uma estatal';
-      const buyer=city.citizens.filter(c=>city.politics.canOwnBusiness(c)).sort((a,b)=>b.balance-a.balance).find(c=>c.balance>=city.economy.premisesPrice(b)+city.currency.price(30000));
-      if(!buyer)return 'Aguardando comprador com recursos';
-      for(const u of b.units)u.forSale=true;
-      if(!city.economy.purchasePremises(b,buyer,b.crop,{billId:bill.id}))return 'Compra não concluída';
+    if(nationalize){
+      if(!initializeEquity(city,b))return city.lastError||'Imóvel incompatível com estatização';
+      return nationalizeShares(city,b,bill)||null;
     }
-    return null;
+    const available=equityShares(city,b).find(s=>s.accountId==='treasury')?.points||0,points=Math.round((bill.payload.percent??100)*100);
+    if(!Number.isSafeInteger(points)||points<1||points>available)return 'Percentual público indisponível';
+    const existing=b.shareOffers?.find(o=>o.billId===bill.id&&o.status==='open');if(existing)return null;
+    const offer=offerShares(city,b,'treasury',points,{billId:bill.id});if(!offer)return city.lastError||'Oferta de privatização indisponível';
+    bill.shareOfferId=offer.id;return null;
   }
   execute(bill) {
     const city=this.city,p=city.politics,policy=p.policy;bill.attempts++;let wait=null;
