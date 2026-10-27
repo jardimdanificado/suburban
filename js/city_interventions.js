@@ -19,6 +19,16 @@ export const INTERVENTIONS={
   divineInspiration:{label:'Faísca de talento',group:'god',description:'Dá experiência imediata à habilidade mais baixa da pessoa escolhida.'},
   divineRepair:{label:'Reparo instantâneo',group:'god',description:'Restaura imediatamente a condição do prédio escolhido.'},
   divineHarvest:{label:'Acelerar lavoura',group:'god',description:'Leva as plantações ativas da fazenda diretamente à maturidade.'},
+  divineNeed:{label:'Alterar uma necessidade',group:'god',description:'Eleva ou reduz imediatamente uma necessidade específica da pessoa.'},
+  divineBond:{label:'Mudar uma relação',group:'god',description:'Aproxima ou afasta imediatamente duas pessoas e registra o acontecimento na memória delas.'},
+  divineCampaign:{label:'Soprar a favor da candidatura',group:'god',description:'Leva uma mensagem de apoio à candidatura para eleitores, com reação individual à ideologia e à confiança.'},
+  divineSmear:{label:'Plant ar uma suspeita eleitoral',group:'god',description:'Espalha uma acusação sem prova durante a campanha; eleitores críticos podem rejeitá-la.'},
+  divineTurnout:{label:'Convocar eleitores às urnas',group:'god',description:'Libera imediatamente os eleitores aptos e inicia os trajetos presenciais até a prefeitura.'},
+  divineTreasury:{label:'Emitir dinheiro para a prefeitura',group:'god',description:'Emite dinheiro no tesouro; a expansão da base monetária pode pressionar a inflação.'},
+  divineDecree:{label:'Decreto econômico imediato',group:'god',description:'Muda imediatamente uma alíquota, sem tramitação na Câmara.'},
+  divineBankLiquidity:{label:'Injetar liquidez no banco',group:'god',description:'Transfere recursos do tesouro para o banco financiar depósitos e empréstimos.'},
+  divineDebtRelief:{label:'Perdoar uma dívida',group:'god',description:'Encerra imediatamente o empréstimo escolhido e remove juros e saldo devedor.'},
+  divineConvocation:{label:'Convocar a Câmara ao plenário',group:'god',description:'Restaura as condições dos vereadores e inicia imediatamente o deslocamento até a sessão.'},
 };
 export class CityInterventions {
   constructor(city){this.city=city;this.records=[];this.nextId=1;this.cooldowns=new Map();}
@@ -82,6 +92,44 @@ export class CityInterventions {
       const maturity=({arroz:150,alface:75,tomate:100,girassol:180,maca:180,goiaba:160,trigo:120,milho:100,mandioca:200,cebola:140,feijao:150,coentro:80})[b.crop]||120;
       for(const field of fields)field.plantedAt=Math.min(field.plantedAt,city.minute-maturity);
       record.affected=fields.length;record.buildingId=b.id;record.description=`${fields.length} canteiros de ${b.entity.properties.name} amadureceram agora; os funcionários já podem colher.`;
+    }else if(kind==='divineNeed'){
+      const key=options.need;if(!Object.hasOwn(c.needs,key))return city.fail('Necessidade inválida para esta pessoa.');
+      const before=c.needs[key],delta=Math.max(-100,Math.min(100,Number(options.delta)||0));c.needs[key]=clamp(before+delta,0,100);record.affected=1;record.need=key;
+      record.description=`A necessidade ${key} de ${c.entity.properties.name} mudou imediatamente: ${Math.round(before)}% → ${Math.round(c.needs[key])}%.`;
+    }else if(kind==='divineBond'){
+      const other=city.society.citizen(options.otherId);if(!other||other.id===c.id||other.entity.destroyed)return city.fail('Escolha outra pessoa viva para alterar esta relação.');
+      const friendship=options.tone!=='rivalry';city.relationships.shift(c,other,friendship?{affection:65,trust:55,respect:35,resentment:-30}:{affection:-70,trust:-55,respect:-30,resentment:65});
+      city.relationships.shift(other,c,friendship?{affection:50,trust:40,respect:25,resentment:-20}:{affection:-55,trust:-40,respect:-20,resentment:50});
+      const relation=city.society.getRelation(c,other);city.relationships.updateBond(c,other,relation);city.relationships.fact(friendship?'friendship':'competition',c,other,friendship?`Uma amizade inesperada aproximou ${c.entity.properties.name} e ${other.entity.properties.name}.`:`Uma rivalidade repentina surgiu entre ${c.entity.properties.name} e ${other.entity.properties.name}.`,{witnessIds:[]});
+      record.affected=2;record.otherId=other.id;record.description=friendship?`${c.entity.properties.name} e ${other.entity.properties.name} tornaram-se amigos.`:`${c.entity.properties.name} e ${other.entity.properties.name} agora são rivais.`;
+    }else if(kind==='divineCampaign'||kind==='divineSmear'){
+      if(!p.active||p.active.status!=='campaign')return city.fail('Esta intervenção exige uma campanha eleitoral em andamento.');
+      const candidate=p.active.candidates.find(row=>row.citizenId===targetId);if(!candidate)return city.fail('Escolha um candidato desta eleição.');
+      const message=kind==='divineCampaign'?`Recebeu uma recomendação sobrenatural para votar em ${candidate.name}.`:`Ouviu uma acusação eleitoral sem provas contra ${candidate.name}.`;
+      const voters=p.campaigns.audience(Math.max(1,Math.ceil(city.citizens.length*.4)));
+      for(const voter of voters){p.initializeCitizen(voter);const believes=kind==='divineCampaign'||city.random()<clamp(.75-(voter.political?.criticalSense??.5)*.65,.08,.72),fit=1-p.distance(voter.political.ideology,p.party(candidate.partyId).ideology)/2.8,effect=kind==='divineCampaign'?(believes?clamp(3+fit*4,-1,7):0):(believes?-clamp(4+fit*4,2,8):0);p.remember(voter,{kind:'observer-opinion',interventionId:record.id,electionId:p.active.id,candidateId:targetId,partyId:candidate.partyId,truth:kind==='divineCampaign',believes,effect,promiseKey:`observer:${record.id}:${voter.id}`,description:message});if(effect)record.affected++;}
+      record.description=`${kind==='divineCampaign'?'Apoio':'Suspeita'} sobre ${candidate.name} chegou a ${voters.length} eleitores; ${record.affected} registraram reação.`;
+    }else if(kind==='divineTurnout'){
+      const election=p.active;if(!election||!['voting','counting'].includes(election.status))return city.fail('A convocação às urnas só funciona durante a votação presencial.');
+      let routed=0;for(const row of election.electorate||[]){if(row.status!=='pending')continue;row.plannedAt=city.minute;row.nextAttemptAt=city.minute;if(election.status==='voting'&&p.voting.route(election,row))routed++;}
+      record.affected=routed;record.description=`Convocação concluída: ${routed} eleitores aptos começaram o trajeto para votar na prefeitura.`;
+    }else if(kind==='divineTreasury'){
+      const amount=city.currency.price(Math.max(1000,Math.min(10000000,Number(options.amount)||100000)));if(!city.currency.issue(amount))return city.fail('A emissão não pôde ser registrada no tesouro.');
+      record.cost=amount;record.affected=1;record.description=`A prefeitura recebeu ${city.currency.format?city.currency.format(amount):`R$ ${(amount/100).toFixed(2)}`} por emissão extraordinária; o dinheiro entrou no tesouro.`;
+    }else if(kind==='divineDecree'){
+      const value=Number(options.value),category=options.category;if(!Number.isFinite(value)||value<0||value>.5)return city.fail('A alíquota deve ficar entre 0% e 50%.');
+      const before=category?city.politics.policy.salesTaxes?.[category]:city.taxRate;if(category){if(!Object.hasOwn(city.politics.policy.salesTaxes||{},category))return city.fail('Categoria de imposto desconhecida.');city.politics.policy.salesTaxes[category]=value;}else city.taxRate=value;
+      record.affected=1;record.description=`Decreto econômico: ${category?`imposto de ${category}`:'imposto salarial'} alterado imediatamente de ${Math.round(before*100)}% para ${Math.round(value*100)}%.`;
+    }else if(kind==='divineBankLiquidity'){
+      const b=city.building(targetId);if(!b||b.type!=='bank'||b.entity.destroyed)return city.fail('Selecione um banco ativo.');const amount=city.currency.price(Math.max(1000,Math.min(1000000,Number(options.amount)||25000))),reserve=city.welfare.conditions().reserve;
+      if(city.treasury-amount<reserve||!city.transfer('treasury',b.accountId,amount,'Intervenção do observador: liquidez extraordinária para o banco',{buildingId:b.id}))return city.fail('O tesouro não tem saldo livre suficiente para essa injeção.');record.cost=amount;record.affected=1;record.buildingId=b.id;record.description=`${b.entity.properties.name} recebeu ${`R$ ${(amount/100).toFixed(2)}`} de liquidez imediatamente.`;
+    }else if(kind==='divineDebtRelief'){
+      const loan=city.bank.loans.find(l=>l.id===options.loanId&&l.bankId===targetId&&!['paid','written-off'].includes(l.status));if(!loan)return city.fail('Escolha uma dívida ativa deste banco.');
+      const amount=loan.remaining+loan.interest;loan.remaining=0;loan.interest=0;loan.status='paid';loan.divineReliefAt=city.minute;record.cost=amount;record.affected=1;record.loanId=loan.id;record.description=`Dívida #${loan.id} de ${city.accountName(loan.clientId)} perdoada; ${`R$ ${(amount/100).toFixed(2)}`} deixaram de ser cobrados.`;
+    }else if(kind==='divineConvocation'){
+      const hall=city.politics.council.getChamber().hall();if(!hall)return city.fail('A Câmara ainda não tem plenário construído.');let routed=0;
+      for(const person of city.politics.council.people()){if(!person||person.deliveryId||person.cleaningJobId)continue;for(const key of Object.keys(person.needs))person.needs[key]=Math.max(person.needs[key],55);const path=city.findPath(person.entity,hall.door);if(path===null)continue;person.task='council-session';person.targetId=hall.id;person.councilSession={buildingId:hall.id,startedAt:city.minute,observerConvocation:true};person.path=path;person.action='Convocado pelo observador para o plenário';routed++;}
+      record.affected=routed;record.buildingId=hall.id;record.description=`${routed} vereadores iniciaram imediatamente o deslocamento para o plenário.`;
     }else if(kind==='ride'){
       const system=city.vehicles,v=system.units.get(targetId);if(!v?.active||v.scrapped||v.driverId||v.condition<=15)return city.fail('Escolha um equipamento conservado e sem usuário ocupado.');
       const owner=city.accounts.get(v.ownerAccountId)?.entity?.properties.citizen,company=city.buildings.find(b=>b.accountId===v.ownerAccountId),people=owner?[owner]:(company?.workers||[]).map(id=>city.society.citizen(id)),rider=people.find(c=>c&&!c.entity.destroyed&&city.society.isAdult(c)&&!c.mobilityTrip&&!c.deliveryId&&!c.cleaningJobId&&!c.researchAssignment&&!c.campaign&&!c.conversation&&!city.urgentNeed(c));

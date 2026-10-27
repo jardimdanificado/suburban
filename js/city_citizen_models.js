@@ -91,7 +91,10 @@ export class CityCitizenModels {
     const moved=dx*dx+dy*dy>1e-7;
     if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId){motion.walkDistance+=Math.hypot(dx,dy);motion.hasWalked=true;}motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&c.mobilityTrip){const next=c.path?.[0];if(next)motion.angle=Math.atan2(next.x-entity.x,next.y-entity.y);}
-    const clip=citizenAnimation(c,moved||!!c.path?.length&&motion.hasWalked),pose=clip==='run'?{clip:'run',frame:Math.floor(motion.walkDistance*3+(entity.id*13)%17)%CITIZEN_MODEL_FRAMES.run.length}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    // Animate walking from presentation time rather than traveled distance.
+    // Distance-based frame changes tied the pose to simulation updates and
+    // made each step visibly click at ordinary speed.
+    const clip=citizenAnimation(c,moved||!!c.path?.length&&motion.hasWalked),pose=citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
     const garment=c.wardrobe?.[c.wearingIndex||0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
     if(batch.count===batch.capacity){

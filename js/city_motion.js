@@ -1,6 +1,8 @@
 // Two future worker samples keep velocity continuous across packet boundaries.
 // The render buffer never predicts beyond known positions, including stops.
-export const MOTION_BUFFER_MS=260;
+// Keep enough delayed samples to absorb worker scheduling and rendering jitter.
+// This is a visual-only buffer: simulation time and gameplay remain unchanged.
+export const MOTION_BUFFER_MS=360;
 export function queueMotion(sample,x,y,now,{reset=false}={}){
   const points=sample.points??=[];
   if(reset||!points.length){sample.previous=null;points.length=0;points.push({x,y,at:now-MOTION_BUFFER_MS});}

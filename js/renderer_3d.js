@@ -3139,7 +3139,7 @@ export class RCT3DRenderer {
     this.scene.add(this.sunLight.target);
 
     // Dynamic Night Point Light Pool (Optimized pool for realistic 1P/3P light propagation)
-    this.maxNightLights = 64;
+    this.maxNightLights = 128;
     this.maxShadowPointLights = 0; // Point lights do direct local shading; sun/moon provides directional shadows
     this.nightLightPool = [];
     for (let i = 0; i < this.maxNightLights; i++) {
@@ -3158,7 +3158,7 @@ export class RCT3DRenderer {
 
     // Reusable Light Candidate Structs (Zero GC during nighttime)
     this.lightCandidatesPool = [];
-    for (let i = 0; i < 512; i++) {
+    for (let i = 0; i < 2048; i++) {
       this.lightCandidatesPool.push({
         x: 0,
         y: 0,
@@ -7222,7 +7222,21 @@ export class RCT3DRenderer {
       let candidateCount = 0;
       const focusX = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.x : this.camX;
       const focusY = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.z : this.camY;
-      const maxPool = this.lightCandidatesPool.length;
+      let maxPool = this.lightCandidatesPool.length;
+
+      // City lamps and oil-lit building interiors share the night-light pool
+      // so they are considered together and aren't limited by a small side pool.
+      const cityLights=this.cityNightLights||[];
+      if(cityLights.length>this.maxNightLights){
+        while(this.nightLightPool.length<cityLights.length){const light=new THREE.PointLight(0xffaa44,0,24,1.2);light.castShadow=false;this.scene.add(light);this.nightLightPool.push(light);}
+        while(this.lightCandidatesPool.length<cityLights.length)this.lightCandidatesPool.push({x:0,y:0,z:0,color:0,distance:0,decay:0,intensity:0,priority:0,distSq:0});
+        this.maxNightLights=cityLights.length;
+        maxPool=this.lightCandidatesPool.length;
+      }
+      for(let i=0;i<cityLights.length&&candidateCount<maxPool;i++){
+        const source=cityLights[i],c=this.lightCandidatesPool[candidateCount++];
+        c.x=source.x;c.y=source.y;c.z=source.z;c.color=source.color;c.distance=source.distance;c.decay=source.decay;c.intensity=source.intensity;c.priority=source.priority;c.distSq=source.distSq;
+      }
 
       for (let i = 0; i < visibleEntities.length && candidateCount < maxPool; i++) {
         const e = visibleEntities[i];

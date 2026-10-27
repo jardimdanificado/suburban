@@ -22,9 +22,12 @@ function renderSegmentWalkable(world,ax,ay,bx,by){
   return true;
 }
 function sampleCitizenMotion(world,sample,now){
-  const done=sampleMotion(sample,now);
-  if(!renderSegmentWalkable(world,sample.from.x,sample.from.y,sample.entity.x,sample.entity.y)){
-    sample.entity.x=sample.to.x;sample.entity.y=sample.to.y;return true;
+  const x=sample.entity.x,y=sample.entity.y,done=sampleMotion(sample,now);
+  if(!renderSegmentWalkable(world,x,y,sample.entity.x,sample.entity.y)){
+    // Keep the last valid rendered point and let later samples carry the
+    // citizen around the corner. Snapping to the worker's endpoint made
+    // turns and narrow passages look like visible simulation ticks.
+    sample.entity.x=x;sample.entity.y=y;return false;
   }
   return done;
 }
@@ -101,7 +104,7 @@ export class CitySimulationBridge {
       sample.to.y=data.positions?.[at]===c.id?data.positions[at+2]:c.entity.y;
       c.entity.x=sample.to.x;c.entity.y=sample.to.y;
       const dx=sample.to.x-sample.from.x,dy=sample.to.y-sample.from.y;
-      const reset=!existing||this.time.paused||Math.hypot(dx,dy)>=8||!renderSegmentWalkable(this.city.world,sample.from.x,sample.from.y,sample.to.x,sample.to.y);
+      const reset=!existing||this.time.paused||Math.hypot(dx,dy)>=8;
       queueMotion(sample,sample.to.x,sample.to.y,now,{reset});
       if(!reset){this.motion.set(c.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
     }
@@ -124,7 +127,7 @@ export class CitySimulationBridge {
       const x=positions[i+1],y=positions[i+2],fromX=sample.to.x,fromY=sample.to.y;
       sample.from.x=fromX;sample.from.y=fromY;sample.to.x=x;sample.to.y=y;
       const dx=x-fromX,dy=y-fromY;
-      const reset=this.time.paused||Math.hypot(dx,dy)>=8||!renderSegmentWalkable(this.city.world,fromX,fromY,x,y);
+      const reset=this.time.paused||Math.hypot(dx,dy)>=8;
       queueMotion(sample,x,y,now,{reset});
       if(!reset){this.motion.set(sample.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
       else {sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}

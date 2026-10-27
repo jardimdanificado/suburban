@@ -12,19 +12,29 @@ import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrai
 function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
 }
-function windowedCellGeometry(THREE,mask){
-  const g=new THREE.BufferGeometry(),v=[],w=.97,h=CITY_FLOOR_HEIGHT-.03,half=.485,wy=.23,wh=.25,ww=.25;
-  const quad=(a,b,c,d)=>v.push(...a,...b,...c,...a,...c,...d);
-  const wall=(axis,sign,hasWindow)=>{
-    const at=sign*half,lo=wy-wh,hi=wy+wh;
-    const rect=(a0,a1,y0,y1)=>{if(a1<=a0||y1<=y0)return;if(axis==='z')quad([a0,y0,at],[a1,y0,at],[a1,y1,at],[a0,y1,at]);else quad([at,y0,a0],[at,y0,a1],[at,y1,a1],[at,y1,a0]);};
-    if(!hasWindow){rect(-half,half,0,h);return;}
-    rect(-half,half,0,lo);rect(-half,half,hi,h);
-    rect(-half,-ww,lo,hi);rect(ww,half,lo,hi);
+function roomCellGeometry(THREE,facadeMask,openingMask){
+  const g=new THREE.BufferGeometry(),v=[],colors=[],h=CITY_FLOOR_HEIGHT-.03,half=.485,wy=.95-(CITY_FLOOR_HEIGHT-h)/2,wh=.215,ww=.215;
+  const exterior=[1,1,1],interior=[.72,.65,.53];
+  const quad=(a,b,c,d,color)=>{for(const point of [a,b,c,a,c,d]){v.push(...point);colors.push(...color);}};
+  const wall=(axis,sign,bit)=>{
+    const hasWindow=!!(openingMask&bit),wallColor=facadeMask&bit?exterior:interior;
+    const at=sign*half,innerAt=sign*(half-.03),lo=wy-wh,hi=wy+wh;
+    const face=(plane,color)=>{
+      const rect=(a0,a1,y0,y1)=>{if(a1<=a0||y1<=y0)return;if(axis==='z')quad([a0,y0,plane],[a1,y0,plane],[a1,y1,plane],[a0,y1,plane],color);else quad([plane,y0,a0],[plane,y0,a1],[plane,y1,a1],[plane,y1,a0],color);};
+      if(!hasWindow){rect(-half,half,0,h);return;}
+      rect(-half,half,0,lo);rect(-half,half,hi,h);
+      rect(-half,-ww,lo,hi);rect(ww,half,lo,hi);
+    };
+    face(at,wallColor);
+    face(innerAt,interior);
   };
-  for(const [bit,axis,sign] of [[1,'z',-1],[2,'z',1],[4,'x',-1],[8,'x',1]])wall(axis,sign,!!(mask&bit));
-  quad([-half,h,-half],[half,h,-half],[half,h,half],[-half,h,half]);quad([-half,0,half],[half,0,half],[half,0,-half],[-half,0,-half]);
-  g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.computeVertexNormals();return g;
+  for(const [bit,axis,sign] of [[1,'z',-1],[2,'z',1],[4,'x',-1],[8,'x',1]])wall(axis,sign,bit);
+  quad([-half,h,-half],[half,h,-half],[half,h,half],[-half,h,half],interior);quad([-half,0,half],[half,0,half],[half,0,-half],[-half,0,-half],interior);
+  g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  // The wall vertices are described from floor level (0..h), while each
+  // instance is placed at the floor center. Center the geometry before
+  // instancing so every floor occupies exactly one CITY_FLOOR_HEIGHT.
+  g.translate(0,-h/2,0);g.computeVertexNormals();return g;
 }
 // Room coordinates count floors; render their physical height consistently with picking.
 
@@ -41,21 +51,13 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
     x>=renderer.renderedMinTx && x+width<=renderer.renderedMaxTx+1 && y>=renderer.renderedMinTy && y+depth<=renderer.renderedMaxTy+1;
   renderer.lampMeshes ??= new Map();
-  // A fixed light pool prevents shader recompilation and unbounded GPU work per post.
-  if (!renderer.cityLampLights) {
-    renderer.cityLampLights = Array.from({ length: 8 }, () => {
-      const light = new THREE.PointLight(0xffbc63, 0, 5, 2); renderer.scene.add(light); return light;
-    });
-  }
+  const cityNightLights=renderer.cityNightLights??=[];cityNightLights.length=0;
   const liveBuildings = new Set(entities.filter(e => e.properties?.cityBuilding && !e.destroyed).map(e => e.id));
-  const liveLamps = new Set(); let lightIndex = 0;
-  const distanceToView = p => (p.x - (renderer.camX || 0)) ** 2 + (p.y - (renderer.camY || 0)) ** 2;
-  const lightBudget=renderer.rapidCityMode?2:renderer.cityLampLights.length;
-  const litNearby = new Set((world.cityLampPosts || []).filter(p => p.lit && (!p.buildingId || liveBuildings.has(p.buildingId))).sort((a, b) => distanceToView(a) - distanceToView(b)).slice(0, lightBudget).map(p => p.id));
+  const liveLamps = new Set();
   for (const post of world.cityLampPosts || []) {
     if (!post.built) continue;
     liveLamps.add(post.id);
-    if(!inView(post.x,post.y)){const existing=renderer.lampMeshes.get(post.id);if(existing)existing.visible=false;continue;}
+    if(!inView(post.x,post.y)){const existing=renderer.lampMeshes.get(post.id);if(existing)existing.visible=false;}
     let lamp = renderer.lampMeshes.get(post.id);
     if (!lamp) {
       lamp = new THREE.Group();
@@ -68,10 +70,9 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       Object.assign(lamp.userData,{terrainRevision:world.revision,x:post.x,y:post.y,height:post.height});
     }
     lamp.userData.lantern.material.emissive.setHex(post.lit ? 0xffa52f : 0);
-    lamp.visible = !post.buildingId || liveBuildings.has(post.buildingId);
-    if (litNearby.has(post.id) && lamp.visible && lightIndex < lightBudget) { const light = renderer.cityLampLights[lightIndex++]; light.position.copy(lamp.position); light.position.y += 2.1; light.intensity = 2;light.visible=true; }
+    lamp.visible = inView(post.x,post.y) && (!post.buildingId || liveBuildings.has(post.buildingId));
+    if(post.lit&&lamp.visible)cityNightLights.push({x:lamp.position.x,y:lamp.position.y+2.1,z:lamp.position.z,color:0xffbc63,distance:6,decay:2,intensity:2.6,priority:-2,distSq:(post.x-(renderer.camX||0))**2+(post.y-(renderer.camY||0))**2});
   }
-  for (; lightIndex < renderer.cityLampLights.length; lightIndex++){renderer.cityLampLights[lightIndex].intensity = 0;renderer.cityLampLights[lightIndex].visible=false;}
   for (const [id, mesh] of renderer.lampMeshes) if (!liveLamps.has(id)) { renderer.scene.remove(mesh); mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.lampMeshes.delete(id); }
   renderer.lampSiteMeshes ??= new Map();
   const sites = new Set();
@@ -102,27 +103,24 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     }
     if (!group) {
       group = new THREE.Group(); group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
-      const material = buildingMaterial(renderer,THREE,b.architecture==='timber'?'wood':'wall',0xffffff);material.side=THREE.DoubleSide;material.needsUpdate=true;
+      const material = buildingMaterial(renderer,THREE,b.architecture==='timber'?'wood':'wall',0xffffff);material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
       const mineWall={iron_mine:0x77736b,bauxite_mine:0x806b62,clay_pit:0x886b58,sand_pit:0x94866a};
       const matrix = new THREE.Matrix4(), color = new THREE.Color(b.campaignPaint?.color||b.wallColor||(mine?mineWall[b.type]:residential ? style.wall : b.color));
-      const windows = [],cellMasks=new Map();
-      for (let i = 0; i < b.units.length; i++) {
-        const u = b.units[i];
-        const sides=[];if(u.hasWindow){if(u.y===0)sides.push(1);if(u.y===b.depth-1)sides.push(2);if(u.x===0)sides.push(4);if(u.x===b.width-1)sides.push(8);}
-        const mask=sides.reduce((a,n)=>a|n,0),bucket=cellMasks.get(mask)||[];bucket.push(u);cellMasks.set(mask,bucket);
-        if(!sides.length)continue;
-        const size={sash:[.43,.43],tall:[.3,.67],picture:[.69,.31],round:[.43,.43],shuttered:[.48,.5]}[u.windowStyle]||[.43,.43],push=(x,y,z,axis)=>windows.push({x,y,z,w:axis==='z'?size[0]:.03,h:size[1],d:axis==='z'?.03:size[0],axis,style:u.windowStyle});
-        if (u.y === 0) push(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.95,-.005,'z');
-        if (u.y === b.depth-1) push(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.95,b.depth+.005,'z');
-        if (u.x === 0) push(-.005,u.z*CITY_FLOOR_HEIGHT+.95,u.y+.5,'x');
-        if (u.x === b.width-1) push(b.width+.005,u.z*CITY_FLOOR_HEIGHT+.95,u.y+.5,'x');
+      const cellMasks=new Map();
+      for (const u of b.units) {
+        let facadeMask=0;if(u.y===0)facadeMask|=1;if(u.y===b.depth-1)facadeMask|=2;if(u.x===0)facadeMask|=4;if(u.x===b.width-1)facadeMask|=8;
+        const openingMask=u.hasWindow?facadeMask:0,key=`${facadeMask}:${openingMask}`,bucket=cellMasks.get(key)||[];bucket.push(u);cellMasks.set(key,bucket);
       }
-      const cellMeshes=[];for(const [mask,units] of cellMasks){const cells=new THREE.InstancedMesh(windowedCellGeometry(THREE,mask),material,units.length);cells.castShadow=true;cells.receiveShadow=true;for(let i=0;i<units.length;i++){const u=units[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2,u.y+.5);cells.setMatrixAt(i,matrix);cells.setColorAt(i,b.wallColors?.[u.id]&&!b.campaignPaint?new THREE.Color(b.wallColors[u.id]):color);}group.add(cells);cellMeshes.push(cells);}const cells=cellMeshes[0];group.userData.cellMeshes=cellMeshes;
-      const glass=new THREE.MeshPhongMaterial({color:0x9fcbd1,transparent:true,opacity:.22,depthWrite:false,shininess:90,side:THREE.DoubleSide});
-      for(const styleName of ['sash','tall','picture','round','shuttered']){const selected=windows.filter(w=>w.style===styleName);if(!selected.length)continue;const round=styleName==='round',mesh=new THREE.InstancedMesh(round?new THREE.CylinderGeometry(.5,.5,1,12):new THREE.BoxGeometry(1,1,1),glass,selected.length);selected.forEach((w,i)=>{const pos=new THREE.Vector3(w.x,w.y,w.z),quat=new THREE.Quaternion(),size=round?(w.axis==='x'?new THREE.Vector3(w.h,.012,w.w):new THREE.Vector3(w.w,.012,w.h)):new THREE.Vector3(w.w,w.h,w.d);if(round)quat.setFromAxisAngle(new THREE.Vector3(w.axis==='x'?0:1,0,w.axis==='x'?1:0),Math.PI/2);matrix.compose(pos,quat,size);mesh.setMatrixAt(i,matrix);});if(mine)mesh.visible=false;group.add(mesh);}
-      const shutters=windows.filter(w=>w.style==='shuttered');if(shutters.length){const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0x73523b}),shutters.length*2);shutters.forEach((w,i)=>{for(const side of [-1,1]){const pos=new THREE.Vector3(w.x,w.y,w.z),size=w.axis==='x'?new THREE.Vector3(.035,w.h*.9,.075):new THREE.Vector3(.075,w.h*.9,.035);if(w.axis==='x')pos.z+=side*.28;else pos.x+=side*.28;matrix.compose(pos,new THREE.Quaternion(),size);mesh.setMatrixAt(i*2+(side>0?1:0),matrix);}});if(mine)mesh.visible=false;group.add(mesh);}
+      const cellMeshes=[];
+      for(const units of cellMasks.values()){
+        const first=units[0],facadeMask=(first.y===0?1:0)|(first.y===b.depth-1?2:0)|(first.x===0?4:0)|(first.x===b.width-1?8:0),openingMask=first.hasWindow?facadeMask:0;
+        const cells=new THREE.InstancedMesh(roomCellGeometry(THREE,facadeMask,openingMask),material,units.length);cells.castShadow=true;cells.receiveShadow=true;
+        for(let i=0;i<units.length;i++){const u=units[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2,u.y+.5);cells.setMatrixAt(i,matrix);cells.setColorAt(i,b.wallColors?.[u.id]&&!b.campaignPaint?new THREE.Color(b.wallColors[u.id]):color);}
+        group.add(cells);cellMeshes.push(cells);
+      }
+      const cells=cellMeshes[0];group.userData.cellMeshes=cellMeshes;
       const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',mine?0x454b49:style.roof));
       roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);group.userData.roof=roof;
       const facade=new THREE.Group(),origin=buildingPoint(b,0,0);facade.rotation.y=(b.rotation||0)*Math.PI/2;facade.position.set(origin.x,0,origin.y);group.add(facade);group.userData.facade=facade;
@@ -263,6 +261,8 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     }
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = Math.floor((renderer.foliageAnimationTick || 0)/20)*.1;
     group.position.set(entity.x, b.terrain.base, entity.y);
+    const hour=world.clock?.hour??12,night=hour<6||hour>=18,hasStoredOil=(b.inventory?.oleo||0)>0;
+    if(night&&hasStoredOil)cityNightLights.push({x:entity.x+b.width/2,y:b.terrain.base+b.floors*CITY_FLOOR_HEIGHT/2,z:entity.y+b.depth/2,color:0xffbd72,distance:Math.max(6,b.floors*CITY_FLOOR_HEIGHT+2,Math.max(b.width,b.depth)+2),decay:1.6,intensity:1.8,priority:-2,distSq:(entity.x+b.width/2-(renderer.camX||0))**2+(entity.y+b.depth/2-(renderer.camY||0))**2});
     const cutaway=renderer.selectedEntityId===entity.id||selectedInteriorId===b.id||selectedOfficeHost===b.id;
     if(group.userData.roomProps)group.userData.roomProps.visible=cutaway;
     if(group.userData.roof)group.userData.roof.visible=!cutaway;
