@@ -1,26 +1,22 @@
-import {COLOR_PALETTE,colorAffinity} from './city_colors.js';
 export const COUNCIL_INSTITUTIONAL_FLAG=Object.freeze({foreground:'#f5e9bf',background:'#4c655c',skin:'Feature_Flower.png',pattern:1});
 import { ASSET_DATA } from './assets_data.js';
 
 // Brutopolis clans choose a sprite emblem and a contrasting foreground/background pair.
 // Keep only the tiny description in simulation state; textures belong to the renderer.
 const skins=ASSET_DATA.map(a=>a.filename).filter(s=>/^Feature_|^Item_/.test(s));
-const palettes=[['#ffe3a0','#822a31'],['#e8f5ff','#224a89'],['#fff5b7','#276347'],['#e9ddff','#633980'],['#ffeacf','#a14f20'],['#f2f2ed','#303b47'],['#ffdfef','#823d68'],['#d6ffff','#205e66']];
 export function flagContrast(a,b){
  const luminance=hex=>{const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;},x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);
 }
-export function founderColoredFlag(flag,founders=[]){
- const people=[...new Map(founders.filter(Boolean).map(c=>[c.id,c])).values()];if(!people.length)return Object.freeze({...flag});
- // Equal influence for each founder; a small compromise term avoids choosing
- // a color one founder adores but every other founder strongly dislikes.
- const score=color=>{const values=people.map(c=>colorAffinity(c,color));return values.reduce((n,v)=>n+v,0)/values.length*.8+Math.min(...values)*.2;};
- const background=[...COLOR_PALETTE].sort((a,b)=>score(b.hex)-score(a.hex))[0].hex;
- const foreground=[...COLOR_PALETTE.map(c=>c.hex),'#ffffff','#000000'].filter(c=>flagContrast(c,background)>=4.5).sort((a,b)=>score(b)-score(a)||flagContrast(b,background)-flagContrast(a,background))[0];
- return Object.freeze({...flag,background,foreground,colorSource:'founders',colorFounderIds:Object.freeze(people.map(c=>c.id))});
+function randomColor(hue,lightness,saturation){
+ const l=lightness;
+ const a=saturation*Math.min(l,1-l),f=n=>{const k=(n+hue/30)%12;return l-a*Math.max(-1,Math.min(k-3,9-k,1));};
+ return `#${[f(0),f(8),f(4)].map(value=>Math.round(value*255).toString(16).padStart(2,'0')).join('')}`;
 }
 export function makePartyFlag(city,index,founders=[]) {
- const [foreground,background]=palettes[index%palettes.length];
- return founderColoredFlag({foreground,background,skin:skins[Math.floor(city.random()*skins.length)]||'Feature_Flower.png',pattern:Math.floor(city.random()*3)},founders);
+ const hue=city.random()*360,background=randomColor(hue,.19,.78);
+ let foreground=randomColor((hue+180)%360,.88,.58);
+ if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';
+ return Object.freeze({foreground,background,skin:skins[Math.floor(city.random()*skins.length)]||'Feature_Flower.png',pattern:Math.floor(city.random()*3),colorSource:'random'});
 }
 
 const textures=new Map(),pending=new Map();
