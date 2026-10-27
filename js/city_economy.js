@@ -1,3 +1,4 @@
+import {taxCategory,taxRate} from './city_sales_tax.js';
 import {offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js';
 import {externalTradeHourly} from './city_external_trade.js';
@@ -26,11 +27,11 @@ export const CROPS = {
   feijao: { label: 'Feijão', grow: 150, price: 100 }, coentro: { label: 'Coentro', grow: 80, price: 90 },
 };
 export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 450 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
-export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill']);
+export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill']);
 export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'popular_housing', 'luxury_housing', 'popular_refectory']);
 const retailTypes = new Set(['bakery', 'greengrocer', 'market']);
 const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)), ...INDUSTRIAL_FOODS];
-export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
+export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', lamp_service: 'logistics', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
 // Keep a multi-week public food reserve so farms can be founded, staffed,
 // planted and harvested before the town hall's opening stock runs out.
 export const ECONOMY_RULES = { workingCapital: 20000, mealUnits: 3, initialMealsPerCitizen: 96, farmBatch: 12, farmLabor: 120 };
@@ -49,7 +50,7 @@ function mealOptions(recipes){
 
 export class CityEconomy {
   constructor(city) {
-    this.city = city; this.goods = Object.fromEntries(Object.entries(GOODS).map(([id, spec]) => [id, { label: spec.label, get price() { return city.currency.price(spec.price*(city.economy?.market?.[id]?.multiplier||1)); } }])); this.crops = CROPS; this.recipes = MEAL_RECIPES;
+    this.city = city; this.goods = Object.fromEntries(Object.entries(GOODS).map(([id, spec]) => [id, { label: spec.label, get price() { return city.currency.price(spec.price*(city.economy?.market?.[id]?.multiplier||1)*(1+taxRate(city,taxCategory(id)))); } }])); this.crops = CROPS; this.recipes = MEAL_RECIPES;
     this.market={};this.supplyAgreements=[];this.lastBootstrapDay=null;
     this.mayorId = null;
     this.demands = [];
@@ -100,7 +101,7 @@ export class CityEconomy {
     b.mealQuality = b.type === 'popular_refectory' ? 2 : 1;
     b.totalRevenue = 0; b.totalExpenses = 0; b.dividends = 0;
     b.foundedAt = null; b.lastSaleAt = this.city.minute; b.stockouts = 0;
-    b.jobs = ({ mill: 2, mint: 1, residential: 0, popular_housing: 0, luxury_housing: 0, popular_refectory: 4, townhall: 2, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2, cleaner: 2, waste_collector: 2, recycler: 2, paid_toilet: 1, public_toilet: 0 })[b.type] ?? CIVIC_SERVICES[b.type]?.jobs ?? INDUSTRIES[b.type]?.jobs ?? 0;
+    b.jobs = ({ mill: 2, mint: 1, residential: 0, popular_housing: 0, luxury_housing: 0, popular_refectory: 4, townhall: 2, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2, lamp_service: 2, cleaner: 2, waste_collector: 2, recycler: 2, paid_toilet: 1, public_toilet: 0 })[b.type] ?? CIVIC_SERVICES[b.type]?.jobs ?? INDUSTRIES[b.type]?.jobs ?? 0;
     b.baseWage = b.type === 'farm' || b.type === 'quarry' ? 8 : b.type === 'bakery' || b.type === 'builder' || b.type === 'carrier' ? 6 : 5;
     if (b.type === 'townhall') b.baseWage = 7;
     b.baseWage *= 0.85 + ((Math.imul(b.id+71,2654435761)>>>0)%31)/100;
@@ -190,7 +191,7 @@ export class CityEconomy {
     for(const c of this.city.citizens)for(const a of c.career?.applications||[])if(a.status==='análise'&&a.decideAt<=this.city.minute){const b=this.city.building(a.buildingId),q=b&&qualification(this.city,c,b);if(!b?.active||b.entity.destroyed||b.workers.length>=b.jobs||!q.eligible){a.status='reprovado';a.reason=!b?.active||b.entity.destroyed?'Empresa indisponível':!q.eligible?q.reason:'Vaga preenchida';a.decidedAt=this.city.minute;}}
     const offers = this.city.buildings.filter(b => b.active && b.jobs > 0 && !b.entity.destroyed);
     const available = () => this.city.citizens.filter(c => this.city.society.isAdult(c) && !c.entity.destroyed && !c.jobId && !c.businessIds.length && c.role!=='councilor' && c.id!==this.mayorId && !this.city.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed'));
-    const priority = ['mint', 'bakery', 'market', 'greengrocer', 'farm', 'mill', 'quarry', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'builder', 'mint', 'townhall'];
+    const priority = ['mint', 'bakery', 'market', 'greengrocer', 'farm', 'mill', 'quarry', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'builder', 'mint', 'townhall'];
     for(const b of offers)reviewWages(this.city,b);
     reviewMarket(this.city,offers);
     const applicants=new Map();
@@ -259,6 +260,7 @@ export class CityEconomy {
     const items=[{type:'mill',crop:null,score:oilGap?Math.min(300,200+oilGap*2):0,required:oil.oilRequired,supply:oil.millDaily,stock:oil.oilStock,reason:`Postes precisam de ${oil.daily} óleos/dia; ${oil.empty} vazios. ${oil.bottleneck}`}];
     const facilities = [...this.city.sanitation.facilities.values()], waste = this.city.buildings.reduce((n, b) => n + (b.inventory.lixo || 0) + (b.litter || 0), 0);
     for (const [type, needed, reason] of [ ['paid_toilet', facilities.length >= 3, 'Demanda por banheiros limpos e acessíveis']]) items.push({ type, crop: null, score: !needed ? 0 : !businesses.some(b=>b.type===type)?95:Math.max(0,(type==='cleaner'?facilities.filter(f=>f.cleanliness<65).length:type==='paid_toilet'?facilities.length:waste/4)*18-businesses.filter(b=>b.type===type).reduce((n,b)=>n+Math.max(1,b.workers.length)*40,0)), reason });
+    const lampDemand=this.serviceInvestment.demand('lamp_service');items.push({type:'lamp_service',crop:null,score:lampDemand.score,required:lampDemand.work,supply:lampDemand.capacity,stock:0,reason:`${lampDemand.count} postes aguardam óleo; ${lampDemand.staff} abastecedores`});
     const transport = this.city.logistics.demandMetrics();
     items.push({ type:'carrier',crop:null,score:transport.score,required:transport.work,supply:transport.capacity,stock:0,reason:`${transport.waiting} cargas aguardando; ${transport.ownHauls} transportes próprios; ${transport.drivers} transportadores; espera máxima ${Math.round(transport.oldest)} min; ${transport.lampRequests} lamparinas pendentes` });
     const extraction=this.serviceInvestment.demand('quarry');items.push({type:'quarry',crop:null,...extraction,required:extraction.work,supply:extraction.capacity,reason:`Obras: ${extraction.work} pedras pendentes; ${extraction.remaining} em depósitos ainda disponíveis; ${extraction.staff} trabalhadores na extração.`});
@@ -751,7 +753,7 @@ export class CityEconomy {
     }
     if (b.type === 'paid_toilet') return this.city.minute - (b.lastToiletUseAt ?? -Infinity) < 3;
     if (b.type === 'recycler') return this.city.sanitation.recycle(b, c);
-    if (b.type === 'carrier' || b.type === 'cleaner' || b.type === 'waste_collector') return false;
+    if (b.type === 'carrier' || b.type === 'lamp_service' || b.type === 'cleaner' || b.type === 'waste_collector') return false;
     if (b.type === 'bakery') {
       if (b.inventory.trigo < 2 || b.inventory.pao >= 36 || inventoryFree(b) < 1) return false;
       b.bakingLabor += (1 + c.skills.baking / 60)*workEfficiency(c,b);

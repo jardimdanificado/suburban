@@ -1,7 +1,9 @@
+import {TAX_CATEGORIES,taxRate} from './city_sales_tax.js';
 import {captureGovernmentExperience} from './city_electoral_behavior.js';
 import {ideologicalProfile,ideologicalPromiseWeight} from './city_ideology.js';
 import {outcomeAssessment,promiseAssessment,promiseDifficulty} from './city_promise_evaluation.js';
 export const PROMISE_METRICS={
+  ...Object.fromEntries(Object.entries(TAX_CATEGORIES).map(([key,spec])=>[`salesTax_${key}`,{label:`Imposto: ${spec.label}`,unit:'%',higher:false}])),
   health:{label:'Moradores com saúde acima de 60',unit:'%',higher:true},water:{label:'Moradores com água acima de 45',unit:'%',higher:true},rest:{label:'Moradores descansados',unit:'%',higher:true},hygiene:{label:'Moradores com higiene acima de 50',unit:'%',higher:true},
   clinics:{label:'Clínicas ativas',unit:'',higher:true},waterWorks:{label:'Serviços de água ativos',unit:'',higher:true},parks:{label:'Centros de lazer ativos',unit:'',higher:true},carriers:{label:'Transportadoras ativas',unit:'',higher:true},cleaners:{label:'Empresas de limpeza ativas',unit:'',higher:true},builders:{label:'Construtoras ativas',unit:'',higher:true},
   preservation:{label:'Conservação média dos imóveis',unit:'%',higher:true},waste:{label:'Lixo aguardando coleta',unit:'',higher:false},cultivatedTrees:{label:'Árvores cultivadas e sementes plantadas',unit:'',higher:true},oilReserve:{label:'Óleo disponível na cidade',unit:'',higher:true},oilMills:{label:'Moinhos de óleo ativos',unit:'',higher:true},sunflowerFarms:{label:'Lavouras de girassol ativas',unit:'',higher:true},
@@ -33,6 +35,7 @@ export function promiseRelevant(city,c,metric){
   if(['recycling','waste','cultivatedTrees'].includes(metric))return (c.political?.ideology.green||0)>.5||n.hygiene<65;
   if(['literacy','readers','publishedTexts','paperStock'].includes(metric))return n.leisure<80||(c.traits?.openness??.5)>.5;
   if(['savers','banks','paidLoans','inflation'].includes(metric))return c.balance<city.currency.price(30000)||(c.traits?.frugality??.5)>.5;
+  if(metric.startsWith('salesTax_'))return metric==='salesTax_food'?n.food<75:c.businessIds.length>0||c.balance<city.currency.price(30000);
   if(metric==='wage')return !!c.jobId;if(metric==='tax')return c.balance>city.currency.price(10000);
   if(metric==='happiness')return c.happiness<75;
   return (c.political?.engagement||0)>.6;
@@ -46,7 +49,7 @@ export class CityMandates {
     const pct=(a,b)=>b?Math.round(a/b*1000)/10:100;
     const active=type=>buildings.filter(b=>b.type===type&&b.active).length;
     const readings=people.reduce((n,c)=>n+Object.values(c.publicationReading||{}).reduce((n,v)=>n+v,0),0);
-    return {health:pct(people.filter(c=>c.needs.health>=60).length,people.length),water:pct(people.filter(c=>c.needs.water>=45).length,people.length),rest:pct(people.filter(c=>c.needs.energy>=50).length,people.length),hygiene:pct(people.filter(c=>c.needs.hygiene>=50).length,people.length),
+    return {...Object.fromEntries(Object.keys(TAX_CATEGORIES).map(key=>[`salesTax_${key}`,taxRate(city,key)*100])),health:pct(people.filter(c=>c.needs.health>=60).length,people.length),water:pct(people.filter(c=>c.needs.water>=45).length,people.length),rest:pct(people.filter(c=>c.needs.energy>=50).length,people.length),hygiene:pct(people.filter(c=>c.needs.hygiene>=50).length,people.length),
       clinics:active('clinic')+active('hospital'),waterWorks:active('utility'),parks:active('leisure')+active('park')+active('sports_center')+active('library')+active('theater'),carriers:active('carrier'),cleaners:active('cleaner'),builders:active('builder'),preservation:buildings.length?buildings.reduce((n,b)=>n+(b.condition??100),0)/buildings.length:100,
       waste:city.sanitation.wasteMetrics().awaiting,cultivatedTrees:[...city.nature.plants.values()].filter(p=>p.buildingId).length+city.nature.seeds.filter(p=>p.buildingId).length,oilReserve:city.goodsStock('oleo'),oilMills:active('mill'),sunflowerFarms:buildings.filter(b=>b.type==='farm'&&b.crop==='girassol'&&b.active).length,
       woodStock:city.goodsStock('madeira'),paperStock:city.goodsStock('papel'),publishedTexts:city.publications.nextEntryId-1,readers:pct(people.filter(c=>Object.values(c.publicationReading||{}).some(n=>n>0)).length,people.length),banks:active('bank'),paidLoans:city.bank.loans.filter(l=>l.status==='paid').length,publicJobs:buildings.filter(b=>b.municipal&&b.active).reduce((n,b)=>n+b.workers.length,0),foodVariety:new Set(buildings.filter(b=>b.type==='farm'&&b.active&&!['trigo','girassol'].includes(b.crop)).map(b=>b.crop)).size,kitchens:buildings.filter(b=>b.type==='kitchen'&&b.active).length,artisans:buildings.filter(b=>b.type==='artisan'&&b.active).length,equipped:pct(people.filter(c=>c.equipment?.cesta||c.equipment?.carrinho).length,people.length),savers:pct(people.filter(c=>city.bank.savings(c.accountId)>0).length,people.length),smallFirms:buildings.filter(b=>b.micro||b.equityPartners?.length>1).length,foodReserve:city.welfare.conditions().foodDays,literacy:readings,recycling:buildings.reduce((n,b)=>n+(b.wasteProcessed||0),0),fed:pct(people.filter(c=>c.needs.food>=30).length,people.length),housed:pct(people.filter(c=>c.homeUnitId).length,people.length),employed:pct(adults.filter(c=>c.jobId||c.businessIds.length||c.role==='councilor').length,adults.length),lamps:posts.length?pct(posts.filter(p=>p.fuel>0).length,posts.length):0,
@@ -57,6 +60,7 @@ export class CityMandates {
   program(candidate,party,usedMetrics=[],base=this.metrics()) {
     const profile=ideologicalProfile(party),e=profile.economy,green=profile.green,seed=candidate.id*31+this.city.politics.termNumber*17;
     const catalog=[
+      ...Object.entries(TAX_CATEGORIES).map(([key,spec])=>[`salesTax_${key}`,`Reduzir imposto sobre ${spec.label.toLowerCase()}`,Math.max(0,base[`salesTax_${key}`]-2-seed%3)]),
       ['fed','Mutirão de comida: reduzir filas e atender quem passa fome',100],['housed','Aluguel social e casas para famílias sem teto',100],
       ['employed','Recolocar adultos sem renda em cadeias locais',95],['lamps','Rota do óleo: abastecer as ruas esquecidas',100],
       ['connected','Ligar as oficinas e bairros afastados à estrada',95],['clean','Mutirão permanente de limpeza dos banheiros',95],

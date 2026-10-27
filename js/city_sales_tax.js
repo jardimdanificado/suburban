@@ -1,0 +1,10 @@
+export const TAX_CATEGORIES={food:{label:'Alimentos e refeições',rate:.08},materials:{label:'Materiais e construção',rate:.10},clothing:{label:'Roupas e tecidos',rate:.12},mobility:{label:'Mobilidade e equipamentos',rate:.12},publications:{label:'Papel e publicações',rate:.08},energy:{label:'Óleo e iluminação',rate:.10},services:{label:'Serviços',rate:.10}};
+const groups={food:'arroz alface tomate maca goiaba trigo milho mandioca cebola feijao coentro pao leite queijo ovos farinha massa conserva marmita marmita_simples marmita_rustica',materials:'pedra madeira tabuas carvao minerio ferro ferramentas argila tijolos areia vidro moveis fibras ceramica adubo bauxita aluminio aco resina borracha',clothing:'tecido roupas bandeiras faixas',mobility:'rolamentos quadro plataforma rodas corrente capacete selim pecas botas bicicleta bicicleta_carga patinete patins skate cesta carrinho',publications:'papel jornais livros panfletos',energy:'oleo girassol'};
+const byGood=new Map(Object.entries(groups).flatMap(([category,goods])=>goods.split(' ').map(g=>[g,category])));
+export function taxCategory(good,reason=''){if(/^Serviço: Alimentação/.test(reason))return 'food';return byGood.get(good)||'services';}
+export function taxRate(city,category){const value=city.politics?.policy?.salesTaxes?.[category];return Number.isFinite(value)?value:TAX_CATEGORIES[category]?.rate??.1;}
+export function applySalesTax(city,from,to,amount,reason,details){
+ if(to==='treasury'||from===to||amount<=0||!city.accounts.get(to)?.entity?.properties?.cityBuilding||!(/^(Serviço:|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)))return 0;
+ const category=taxCategory(details.good,reason),rate=Math.max(0,Math.min(.5,taxRate(city,category))),tax=Math.floor(amount*rate/(1+rate));
+ if(tax&&city.transfer(to,'treasury',tax,`Imposto sobre vendas: ${TAX_CATEGORIES[category].label}`,{taxCategory:category,taxableAmount:amount,good:details.good,shipmentId:details.shipmentId,projectId:details.projectId})){const b=city.accounts.get(to);b.salesTaxPaid=(b.salesTaxPaid||0)+tax;return tax;}return 0;
+}

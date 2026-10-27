@@ -8,6 +8,7 @@ function opinion(city,c,bill){
   switch(bill.type){
     case'partyFund':return -Math.sign(v-(bill.previousValue??p.policy.partyFund??80000))*.9;
     case'tax':return Math.sign(v-city.taxRate)*(-e*.6-(c.balance<city.currency.price(10000) ? .45 : .15));
+    case'salesTax':return Math.sign(v-(p.policy.salesTaxes?.[bill.payload.category]??.1))*(-.35-e*.4-(bill.payload.category==='food'?.4:0));
     case'businessTax':return change('businessTax')*(-e*.7-(c.businessIds?.length ? .5 : 0));
     case'minimumWage':return change('minimumWage')*(-e*.4+(c.businessIds?.length ? -.65 : .55));
     case'welfare':return Math.sign(v-city.welfare.policy.dailyBudget)*(-e*.55+((c.needs.food<45||!c.homeUnitId) ? .7 : .1));

@@ -1,3 +1,4 @@
+import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
@@ -48,6 +49,7 @@ export const BUILDING_TYPES = {
   paid_toilet: { label: 'Banheiro público pago', color: 0x87c4c8, rent: 80, price: 50000, jobs: 1 },
   builder: { label: 'Construtora', color: 0xd8a957, rent: 80, price: 50000, jobs: 3 },
   quarry: { label: 'Pedreira', color: 0x929caa, rent: 70, price: 50000, jobs: 2 },
+  lamp_service: { label: 'Abastecedora de postes', color: 0xe4b34c, rent: 75, price: 50000, jobs: 2 },
   carrier: { label: 'Transportadora', color: 0x75b4cc, rent: 75, price: 50000, jobs: 2 },
   residential: { label: 'Residencial', color: 0xb5c4b0, rent: HOUSING_RULES.roomRent, price: HOUSING_RULES.roomPrice, jobs: 0 },
   popular_housing: { label: 'Moradia popular', color: 0xc7a779, rent: HOUSING_RULES.roomRent, price: HOUSING_RULES.roomPrice, jobs: 0 },
@@ -167,12 +169,13 @@ export class CitySimulation {
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
     else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
     if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
-    else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Imposto empresarial$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
+    else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Imposto sobre vendas:|Imposto empresarial$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
     const shipment = a.seller && a.buyer ? a : b.seller && b.buyer ? b : null;
     const entry = this.history.transaction(from, to, amount, reason, { ...(shipment ? {shipmentId: shipment.id} : {}), ...details });
     this.ledger.push({ minute: this.minute, from, to, amount, reason, eventId: entry.id });
     recordMarketTransaction(this,from,to,amount,reason,details,entry.id);
     if (this.ledger.length > 1000) this.ledger.shift();
+    applySalesTax(this,from,to,amount,reason,details);
     if (reason === 'Salário' || reason === 'Subsídio salarial municipal') this.hourlyPayroll.set(to, (this.hourlyPayroll.get(to) || 0) + amount);
     else if (reason !== 'Imposto sobre salário') {
       this.appendCityEvent(entry);

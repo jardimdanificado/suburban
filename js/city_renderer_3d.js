@@ -1,4 +1,4 @@
-import {addBuildingDetails} from './city_building_details.js?v=building-models-1';
+import {addBuildingDetails} from './city_building_details.js?v=lamp-taxes-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';

@@ -1,6 +1,6 @@
 import { inspectBuildingSite } from './city_terrain.js';
 
-export const ESSENTIAL_SERVICES = new Set(['quarry','builder', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'composting']);
+export const ESSENTIAL_SERVICES = new Set(['quarry','builder', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'composting']);
 
 /** Turns service backlogs into financed, physically constructed premises. */
 export class CityServiceInvestment {
@@ -13,6 +13,8 @@ export class CityServiceInvestment {
       return {work,capacity,remaining,staff,stock,count:firms.length,oldest:0,score:work>stock&&(exhausted||shortage>0)?Math.min(300,180+shortage):0};
     }
     if (type === 'carrier') return city.logistics.demandMetrics();
+    if (type === 'lamp_service') {const posts=city.lighting.posts.filter(p=>p.built&&p.fuel<=3),firms=city.economy.businesses.filter(b=>b.type===type),staff=firms.reduce((n,b)=>n+(b.balance>=b.wage?b.workers.length:0)+(city.economy.workingOwner(b)?1:0),0),pending=city.logistics.shipments.filter(s=>s.purpose==='lamp-refill'&&!['delivered','cancelled'].includes(s.status)).length,work=posts.length*35+pending*25,capacity=staff*240;return {work,capacity,staff,count:posts.length,oldest:0,score:posts.length?Math.min(300,(staff?0:120)+Math.max(0,work-capacity*.5)*.5):0};}
+
     const firms = city.economy.businesses.filter(b => b.type === type);
     if(['waste_collector','recycler','composting'].includes(type)) {
       const waste=city.sanitation.wasteMetrics();
@@ -99,7 +101,7 @@ export class CityServiceInvestment {
       const plot = this.lots(demand.type)[0];
       if (!plot) { this.decisions.set(demand.type,{state:'Aguardando terreno urbano acessível',minute:city.minute}); continue; }
       const plan = this.plan(demand.type,plot);
-      const candidates = city.citizens.filter(c => city.society.isAdult(c) && !c.entity.destroyed && !city.politics.officeHolder(c) && !c.businessIds.length && !c.deliveryId && !c.cleaningJobId && !city.development.projects.some(p => p.accountId === c.accountId && !p.cancelled && p.status !== 'completed')).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[({quarry:'mining',builder:'construction',carrier:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0)-(a.skills[({quarry:'mining',builder:'construction',carrier:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0) || a.id-b.id);
+      const candidates = city.citizens.filter(c => city.society.isAdult(c) && !c.entity.destroyed && !city.politics.officeHolder(c) && !c.businessIds.length && !c.deliveryId && !c.cleaningJobId && !city.development.projects.some(p => p.accountId === c.accountId && !p.cancelled && p.status !== 'completed')).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[({quarry:'mining',builder:'construction',carrier:'logistics',lamp_service:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0)-(a.skills[({quarry:'mining',builder:'construction',carrier:'logistics',lamp_service:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0) || a.id-b.id);
       let project = null;
       for (const founder of candidates) {
         let loan = null;

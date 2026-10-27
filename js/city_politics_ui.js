@@ -1,3 +1,4 @@
+import {TAX_CATEGORIES,taxRate} from './city_sales_tax.js';
 import {equityShares} from './city_equity.js';
 import {contextActions} from './city_context_actions.js';
 import {describePoliticalOrientation} from './city_ideology.js';
@@ -143,6 +144,8 @@ p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento /
         p.buttons(['pollMinRate','pollMaxRate'].flatMap(type=>[-1,1].map(direction=>({label:`${type==='pollMinRate'?'AMOSTRA MÍNIMA':'AMOSTRA MÁXIMA'} ${direction>0?'+':'−'}1 P.P.`,click:()=>submit(type,{value:Math.max(type==='pollMinRate'?5:15,Math.min(type==='pollMinRate'?10:20,(gov.policy[type]??(type==='pollMinRate'?5:20))+direction))})}))));
       });
       fold(ui,p,'petitionSeats','Cadeiras e remuneração',()=>{
+      p.heading('IMPOSTOS POR RAMO');p.note('Alíquotas incluídas no preço, recolhidas pelo vendedor em cada venda. A Câmara pode alterar cada ramo separadamente.');
+      for(const [category,spec] of Object.entries(TAX_CATEGORIES)){const rate=taxRate(city,category);p.kv(spec.label,`${(rate*100).toFixed(1)}%`);p.buttons([-1,1].map(direction=>({label:`${spec.label.toUpperCase()} ${direction>0?'+':'−'}2 P.P.`,click:()=>submit('salesTax',{category,value:Math.max(0,Math.min(.5,Math.round((rate+direction*.02)*100)/100))})})));}
       p.heading('FUNDO ELEITORAL');p.kv('Orçamento total por eleição',money(gov.policy.partyFund??80000));p.note('Distribuído igualmente entre todos os partidos. Aumentar prejudica a imagem pública; reduzir melhora.');p.buttons([-1,1].map(direction=>({label:`FUNDO PARTIDÁRIO ${direction>0?'+':'−'}10%`,click:()=>submit('partyFund',{value:Math.max(0,Math.round((gov.policy.partyFund??80000)*(1+direction*.1)))})})));
       p.heading('CADEIRAS E REMUNERAÇÃO');p.note(`Orçamento global: ${money(gov.policy.councilBudget)}/dia, dividido por ${gov.council.members.length} vereadores. Prefeito: ${money(gov.policy.mayorBudget)}/dia.`);p.buttons([{label:'REPRESENTAÇÃO +0,5 P.P.',click:()=>submit('councilRate',{value:Math.min(12.5,(gov.policy.councilRate??5)+.5)})},{label:'REPRESENTAÇÃO -0,5 P.P.',click:()=>submit('councilRate',{value:Math.max(5,(gov.policy.councilRate??5)-.5)})},...['councilBudget','mayorBudget'].flatMap(type=>[-1,1].map(direction=>({label:`${type==='councilBudget'?'ORÇAMENTO CÂMARA':'SALÁRIO PREFEITO'} ${direction>0?'+':'-'}10%`,click:()=>submit(type,{value:Math.max(0,Math.round(gov.policy[type]*(1+direction*.1)))})}))) ]);
 

@@ -3,7 +3,7 @@ import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 // Small architectural details are part of the model, not floating labels.
 const THEMES={
  bakery:'bread',kitchen:'pot',popular_refectory:'pot',flour_mill:'silo',pasta_factory:'pasta',cannery:'jars',cheesemaker:'cheese',dairy_farm:'milk',poultry:'eggs',
- builder:'crane',carrier:'cargo',waste_collector:'bins',cleaner:'brush',recycler:'recycling',composting:'compost',
+ builder:'crane',lamp_service:'oil_lamp',carrier:'cargo',waste_collector:'bins',cleaner:'brush',recycler:'recycling',composting:'compost',
  sawmill:'logs',forestry:'logs',charcoal:'kiln',iron_mine:'ore',bauxite_mine:'ore',foundry:'furnace',steel_mill:'furnace',aluminum_smelter:'furnace',clay_pit:'clay',sand_pit:'sand',brickworks:'bricks',glassworks:'glass',
  toolmaker:'tools',artisan:'basket',furniture:'chair',pottery:'pottery',paper_mill:'paper',publisher:'books',newsroom:'newspaper',
  weaving:'fabric',fiber_farm:'fabric',flagmaker:'fabric',tailor:'fabric',clothing_store:'fabric',paintworks:'paint',soapworks:'soap',pharmacy:'medicine',herb_farm:'plant',
@@ -62,6 +62,7 @@ export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  case'saddle':ball(.34,0,.42,0,0x50413a).scale.set(1,.35,.65);box(.08,.36,.08,0,.2,0,metal);break;
  case'boot':box(.3,.5,.25,0,.3,0,0x555d67);box(.45,.18,.3,.08,.1,.05,0x555d67);break;
  case'ball':ball(.34,0,.35,0,0xe1bd72);break;
+ case'oil_lamp':cyl(.2,.28,.3,0,.18,0,metal);box(.28,.4,.28,0,.52,0,0xe6c177);cyl(.25,.25,.07,0,.75,0,metal);break;
  case'water':cyl(.34,.34,.65,0,.38,0,0x6094ac);cyl(.37,.37,.08,0,.73,0,metal);break;
  case'coins':for(let i=0;i<4;i++)cyl(.3,.3,.08,0,.06+i*.09,0,0xd1b459);break;
  case'bank':case'civic':{const m=new THREE.Mesh(new THREE.ConeGeometry(.65,.4,4),mat(0xb5a57e));m.rotation.y=Math.PI/4;m.position.y=.25;root.add(m);break;}

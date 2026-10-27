@@ -1,3 +1,4 @@
+import {taxCategory,taxRate} from './city_sales_tax.js';
 import {CityPaint} from './city_paint.js';
 import {CityFiscal} from './city_fiscal.js';
 import {CityInterventions} from './city_interventions.js';
@@ -240,7 +241,7 @@ export function bindCityState(city) {
     }
   }
   for (const [id, good] of Object.entries(city.economy.goods)) if (!Object.getOwnPropertyDescriptor(good, 'price')?.get) Object.defineProperty(good, 'price', {
-    enumerable: true, configurable: true, get: () => city.currency.price(GOODS[id].price*(city.economy.market?.[id]?.multiplier||1)),
+    enumerable: true, configurable: true, get: () => city.currency.price(GOODS[id].price*(city.economy.market?.[id]?.multiplier||1)*(1+taxRate(city,taxCategory(id)))),
   });
   city.indexFamilies();
 }

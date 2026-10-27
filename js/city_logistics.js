@@ -42,14 +42,14 @@ export class CityLogistics {
   }
   rebalanceWaiting() {
     const city=this.city;
-    const carriers=city.economy.businesses.filter(b=>b.type==='carrier' && (city.economy.workingOwner(b) || b.workers.length && b.balance>=b.wage));
+    const carriers=city.economy.businesses.filter(b=>['carrier','lamp_service'].includes(b.type) && (city.economy.workingOwner(b) || b.workers.length && b.balance>=b.wage));
     if(!carriers.length)return;
     const jobs=this.shipments.filter(s=>!['delivered','cancelled','waiting-space'].includes(s.status));
     const load=new Map(carriers.map(b=>[b.id,jobs.filter(s=>s.driverId && s.carrierId===b.id).reduce((n,s)=>n+Math.max(8,s.routeLength),0)]));
     const dispatchPriority=s=>s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:s.purpose==='sanitation'?-3:Number(['critical-infrastructure','lighting-input','lamp-refill'].includes(s.purpose))?-2:0;
     for(const s of jobs.filter(s=>!s.driverId && this.city.building(s.carrierId)?.type!=='waste_collector').sort((a,b)=>dispatchPriority(a)-dispatchPriority(b)||a.createdAt-b.createdAt).slice(0,64)) {
-      const options=carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=s.quantity)&&city.economy.connected(b,{id:`cargo:${s.id}`,door:s.position}));
-      options.sort((a,b)=>(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);
+      const options=carriers.filter(b=>(s.purpose==='lamp-refill'||b.type==='carrier')&&[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=s.quantity)&&city.economy.connected(b,{id:`cargo:${s.id}`,door:s.position}));
+      options.sort((a,b)=>(s.purpose==='lamp-refill'?Number(b.type==='lamp_service')-Number(a.type==='lamp_service'):0)||(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);
       const carrier=options[0];if(!carrier)continue;
       if(!s.fee){const fee=city.currency.price(Math.max(120,s.routeLength*12+s.quantity*4));const price=Math.ceil(fee*(s.payerAccountId==='treasury'?1.5:1));if(!city.transfer(s.payerAccountId,s.accountId,price,'Reserva de transporte por nova prestadora'))continue;s.fee=price;}
       s.carrierId=carrier.id;load.set(carrier.id,(load.get(carrier.id)||0)+Math.max(8,s.routeLength));
@@ -69,8 +69,9 @@ export class CityLogistics {
     const city = this.city;
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
-    const carriers = city.economy.businesses.filter(b => b.type === 'carrier' && (city.economy.workingOwner(b) || b.workers.length && b.balance >= b.wage) && city.economy.connected(b, seller));
-    let carrier = this.leastLoaded(carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=quantity)));
+    const carriers = city.economy.businesses.filter(b => (b.type === 'carrier'||purpose==='lamp-refill'&&b.type==='lamp_service') && (city.economy.workingOwner(b) || b.workers.length && b.balance >= b.wage) && city.economy.connected(b, seller));
+    const eligibleCarriers=carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=quantity));
+    let carrier = this.leastLoaded(purpose==='lamp-refill'&&eligibleCarriers.some(b=>b.type==='lamp_service')?eligibleCarriers.filter(b=>b.type==='lamp_service'):eligibleCarriers);
     // Collection firms send their own crews, independently of general freight capacity.
     const wasteOperator=purpose==='waste-collection'?buyer:purpose==='waste-processing' && seller.type==='waste_collector'?seller:null;
     if(wasteOperator?.active && (city.economy.workingOwner(wasteOperator) || wasteOperator.workers.length && wasteOperator.balance>=wasteOperator.wage))carrier=wasteOperator;
@@ -129,7 +130,7 @@ export class CityLogistics {
       s.carrierId = null;
       // A cargo bike can be temporarily occupied. Reconsider carriers later instead
       // of permanently turning a large order into an impossible owner-only haul.
-      const next=s.requireCarrier||s.fee>0?this.leastLoaded(economy.businesses.filter(b=>b.type==='carrier' && b.active && b.balance>=b.wage && [...b.workers,b.ownerId].some(id=>this.capacity(economy.citizen(id))>=s.quantity))):null;
+      const next=s.requireCarrier||s.fee>0?this.leastLoaded(economy.businesses.filter(b=>(b.type==='carrier'||s.purpose==='lamp-refill'&&b.type==='lamp_service') && b.active && b.balance>=b.wage && [...b.workers,b.ownerId].some(id=>this.capacity(economy.citizen(id))>=s.quantity))):null;
       if(next){s.carrierId=next.id;carrier=next;ids.push(...next.workers,next.ownerId);}
       if(s.requireCarrier)return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25);
       if(!carrier){
@@ -199,9 +200,9 @@ export class CityLogistics {
         city.publications.moveStock(s,s.buyer,s.good,s.quantity);city.vehicles.moveStock(s,s.buyer,s.good,s.quantity);city.paint.move(s,s.buyer,s.good,s.quantity);
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
         if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
-        city.transfer(s.accountId, s.seller.accountId, s.cost, `Atacado: ${city.economy.goods[s.good].label}`);
+        city.transfer(s.accountId, s.seller.accountId, s.cost, `Atacado: ${city.economy.goods[s.good].label}`,{good:s.good,quantity:s.quantity,shipmentId:s.id});
         const carrier = city.building(s.carrierId);
-        city.transfer(s.accountId, carrier?.active ? carrier.accountId : (s.payerAccountId || s.buyer.accountId), s.fee, carrier?.active ? 'Frete entregue' : 'Estorno de frete sem transportadora');
+        city.transfer(s.accountId, carrier?.active ? carrier.accountId : (s.payerAccountId || s.buyer.accountId), s.fee, carrier?.active ? 'Frete entregue' : 'Estorno de frete sem transportadora',{shipmentId:s.id});
         if (s.serviceFee) city.transfer(s.accountId, s.serviceAccountId, s.serviceFee, 'Serviço de coleta');
         const buyerAccount = city.accounts.get(s.payerAccountId || s.buyer.accountId);
         if (buyerAccount?.entity?.properties.cityBuilding) { buyerAccount.totalExpenses += s.cost + (carrier?.active ? s.fee : 0) + (s.serviceFee || 0); if (s.purpose === 'work-meals') buyerAccount.mealPurchaseCost += s.cost + (carrier?.active ? s.fee : 0); }

@@ -192,8 +192,8 @@ export class CityLighting {
           const depot=this.refillDepot(post,payer);let ordered=false;
           if(holder.inventory.oleo>0)ordered=city.logistics.order(holder,depot,'oleo',1,0,{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true});
           if(!ordered)for(const mill of mills.filter(m=>m!==holder).sort((a,b)=>Math.hypot(a.door.x-post.x,a.door.y-post.y)-Math.hypot(b.door.x-post.x,b.door.y-post.y)))if(city.logistics.order(mill,depot,'oleo',1,Math.ceil(city.economy.goods.oleo.price*(payer==='treasury'?1.5:1)),{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true})){ordered=true;break;}
-          const carriers=city.economy.businesses.some(b=>b.type==='carrier'&&(b.workers.length||b.ownerId));
-          post.supplyStatus=ordered?'Abastecimento contratado':!mills.length&&!holder.inventory.oleo?'Sem óleo disponível':!carriers?'Aguardando transportadora':'Aguardando caixa ou rota de entrega';
+          const carriers=city.economy.businesses.some(b=>['carrier','lamp_service'].includes(b.type)&&(b.workers.length||b.ownerId));
+          post.supplyStatus=ordered?'Abastecimento contratado':!mills.length&&!holder.inventory.oleo?'Sem óleo disponível':!carriers?'Aguardando empresa de abastecimento ou transportadora':'Aguardando caixa ou rota de entrega';
         }else post.supplyStatus=pending?'Óleo em transporte':post.fuel>0?'Abastecido':'Aguardando pedido';
         post.lit = night && post.fuel > 0;
         if (post.lit) post.fuel--;
