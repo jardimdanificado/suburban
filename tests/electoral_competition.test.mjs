@@ -35,7 +35,7 @@ test('repeated campaign messages saturate and rejected allegations do not damage
 });
 
 test('a party without eligible members can invite a willing independent without exceeding affiliation limits',()=>{
-  const city=setup({starter:true,population:128}),p=city.politics,party=p.parties.find(party=>party.id!==p.partyOfId(city.economy.mayorId).id);for(const id of party.memberIds)city.society.citizen(id).businessIds=[999999];for(const c of city.citizens)if(!c.political.partyId)c.political.engagement=.1;
+  const city=setup({starter:true,population:128}),p=city.politics,party=p.parties.find(party=>party.id!==p.partyOfId(city.economy.mayorId).id);p.policy.entrepreneurCandidates=false;for(const id of party.memberIds)city.society.citizen(id).businessIds=[999999];for(const c of city.citizens)if(!c.political.partyId)c.political.engagement=.1;
   const willing=city.citizens.find(c=>!c.political.partyId&&p.eligible(c));assert(willing);Object.assign(willing.political,{ideology:{...party.ideology},engagement:.95,membershipCooldownUntil:0});assert(!p.standing.nomination(party).candidate);const recruit=p.standing.recruitConventionNominee(party);assert.equal(recruit.id,willing.id);assert(p.canRun(willing,'mayor',true));assert(city.citizens.filter(c=>c.political.partyId).length<=Math.floor(city.citizens.length*.4));
 });
 

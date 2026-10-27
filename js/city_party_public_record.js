@@ -1,7 +1,7 @@
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 /** Civilian interests are independent of party discipline and the author's friendships. */
-function opinion(city,c,bill){
+export function legislativeOpinion(city,c,bill){
   const p=city.politics,i=c.political.ideology,e=i.economy,v=bill.payload.value;
   const affinity=policyAffinity(ideologicalProfile(c),city,bill.type,bill.payload);if(affinity!==null)return affinity+citizenPolicyInterest(city,c,bill.type,bill.payload);
   const change=key=>Math.sign(v-(p.policy[key]??0));
@@ -32,13 +32,19 @@ export function recordLegislativeOpinion(standing,bill,override=false){
   const voters=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));
   const size=Math.min(64,voters.length),offset=(Math.imul(bill.id+1,31)>>>0)%Math.max(1,voters.length);
   const panel=Array.from({length:size},(_,i)=>voters[(offset+Math.floor(i*voters.length/Math.max(1,size)))%voters.length]);
-  const opinions=panel.map(c=>{p.initializeCitizen(c);return opinion(city,c,bill);});
+  const allOpinions=voters.map(c=>{p.initializeCitizen(c);return legislativeOpinion(city,c,bill);});
+  const byId=new Map(voters.map((c,i)=>[c.id,allOpinions[i]]));
+  const opinions=panel.map(c=>byId.get(c.id));
   const support=opinions.reduce((n,v)=>n+v,0)/Math.max(1,size);
   for(const partyId of new Set(bill.votes.map(v=>v.partyId))){const party=p.party(partyId);if(!party)continue;
     party.publicRecords??=[];if(party.publicRecords.some(r=>r.key===key))continue;
     const votes=bill.votes.filter(v=>v.partyId===partyId),yes=votes.filter(v=>v.yes).length,stance=(yes-(votes.length-yes))/votes.length;
     const points=['impeach','convict'].includes(bill.type)?0:clamp(support*stance*1.8,-1.8,1.8);
-    const record={key,kind:'legislative',billId:bill.id,title:bill.title,minute:city.minute,points,sampleSize:size,support:opinions.filter(v=>v>.05).length,rejection:opinions.filter(v=>v<-.05).length,yes,no:votes.length-yes,votes:votes.map(v=>({...v})),override};
+    const reactions=Object.fromEntries(voters.map(c=>[c.id,clamp(byId.get(c.id)*stance*3,-4,4)]));
+    const groups=[['Esquerda',c=>ideologicalProfile(c).economy<-.2],['Centro',c=>Math.abs(ideologicalProfile(c).economy)<=.2],['Direita',c=>ideologicalProfile(c).economy>.2],['Estatistas',c=>ideologicalProfile(c).ownership>.45],['Empresários',c=>c.businessIds?.length>0]];
+    const segments=groups.map(([label,match])=>{const people=voters.filter(match),sum=people.reduce((n,c)=>n+reactions[c.id],0);return {label,count:people.length,points:sum/Math.max(1,people.length)};});
+    const individualOpinions=Object.fromEntries(voters.map(c=>[c.id,clamp(byId.get(c.id)*3,-4,4)]));
+    const record={reactions,individualOpinions,segments,key,kind:'legislative',billId:bill.id,title:bill.title,minute:city.minute,points,sampleSize:size,support:opinions.filter(v=>v>.05).length,rejection:opinions.filter(v=>v<-.05).length,yes,no:votes.length-yes,votes:votes.map(v=>({...v})),override};
     record.eventId=city.log(`${party.short}: reação pública ${points>=0?'favorável':'desfavorável'} aos votos em “${bill.title}” (${points>=0?'+':''}${points.toFixed(2)} pontos).`,'government',votes.map(v=>v.citizenId),{kind:'party-legislative-reputation',partyId,billId:bill.id,points,sampleSize:size}).id;
     party.publicRecords.push(record);
     if(party.publicRecords.length>96){const removed=party.publicRecords.shift();party.archivedLegislativePoints=clamp((party.archivedLegislativePoints||0)+removed.points,-20,20);}

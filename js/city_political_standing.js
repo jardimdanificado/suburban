@@ -54,13 +54,15 @@ export class CityPoliticalStanding {
     const candidates=voters.filter(c=>c.political.partyId||p.officeHolder(c)||c.political.tenure.mayor||p.active?.candidates.some(n=>n.citizenId===c.id));
     const size=Math.min(64,voters.length),offset=city.day*13%Math.max(1,voters.length),panel=Array.from({length:size},(_,i)=>voters[(offset+Math.floor(i*voters.length/Math.max(1,size)))%voters.length]);
     for(const c of candidates){const s=c.political,components=[{label:'Reputação pública pessoal',points:(city.reputation.score(c,'civic')-50)*.25},{label:'Comunicação e capacidade',points:((c.skills.social||0)-50)*.04+((c.skills.governance||0)-50)*.05},{label:'Balanço dos seus governos',points:p.mandates.recordScore(c.id,null)*.5},{label:'Avaliação como prefeito',points:c.id===city.economy.mayorId?(p.approval-50)*.35:0}];
-      let relations=0,ideology=0,memories=0,scandals=0;
+      let relations=0,ideology=0,memories=0,scandals=0,votes=0;
+      const ownVotes=p.parties.flatMap(party=>(party.publicRecords||[]).slice(-24).filter(r=>r.votes?.some(v=>v.citizenId===c.id)));
       for(const voter of panel){const view=city.relationships.view(voter,c);if(view)relations+=(view.trust-50)*.16+(view.affection-20)*.1-(view.resentment||0)*.2;if(voter.id===c.id)relations+=15;else if(city.society.related(voter,c))relations+=5;
         ideology+=(.5-p.distance(voter.political.ideology,s.ideology)/2.8)*8;
         memories+=clamp(voter.political.memories.filter(m=>m.candidateId===c.id&&['campaign-rally','defamation','campaign-accountability','campaign-correction'].includes(m.kind)).reduce((n,m)=>n+(m.effect||0),0),-20,15);
+        for(const r of ownVotes){const vote=r.votes.find(v=>v.citizenId===c.id);votes+=(r.individualOpinions?.[voter.id]||0)*(vote.yes?1:-1)*.5;}
         for(const {record:r,aware} of casesByCitizen.get(c.id)||[])if(aware.has(voter.id))scandals-=(r.severity||40)*(r.proven?.3:.04);
       }
-      for(const [label,value] of [['Relações e família',relations],['Afinidade das ideias',ideology],['Memória das campanhas',memories],['Escândalos conhecidos',scandals]])components.push({label,points:value/Math.max(1,panel.length)});
+      for(const [label,value] of [['Relações e família',relations],['Afinidade das ideias',ideology],['Memória das campanhas',memories],['Votos na Câmara',votes],['Escândalos conhecidos',scandals]])components.push({label,points:value/Math.max(1,panel.length)});
       const raw=50+components.reduce((n,a)=>n+a.points,0);s.popularity=clamp(raw);s.popularityReport={minute:city.minute,score:s.popularity,raw,sampleSize:panel.length,electorate:voters.length,components};
     }
     for(const party of p.parties.filter(a=>a.active)){const {candidate,reason}=this.nomination(party);party.preferredCandidateId=candidate?.id??null;party.nominationReason=reason;}
@@ -68,7 +70,7 @@ export class CityPoliticalStanding {
   compare(a,b){return (b.political?.popularity??50)-(a.political?.popularity??50)||this.city.politics.candidateStrength(b)-this.city.politics.candidateStrength(a)||a.id-b.id;}
   recruitConventionNominee(party){
     const city=this.city,p=city.politics;if(this.nomination(party).candidate)return null;
-    const willing=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&p.eligible(c)&&!c.political.partyId&&!c.political.foundingProposalId&&c.political.membershipCooldownUntil<=city.minute&&c.political.engagement>.45&&p.distance(c.political.ideology,party.ideology)<.95).sort((a,b)=>p.distance(a.political.ideology,party.ideology)-p.distance(b.political.ideology,party.ideology)||this.compare(a,b));
+    const willing=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&p.eligible(c)&&(p.policy.entrepreneurCandidates!==false||(!c.businessIds?.length&&!city.development.projects.some(project=>(project.id===c.startupProjectId||project.accountId===c.accountId)&&!project.cancelled&&project.status!=='completed')))&&!c.political.partyId&&!c.political.foundingProposalId&&c.political.membershipCooldownUntil<=city.minute&&c.political.engagement>.45&&p.distance(c.political.ideology,party.ideology)<.95).sort((a,b)=>p.distance(a.political.ideology,party.ideology)-p.distance(b.political.ideology,party.ideology)||this.compare(a,b));
     const c=willing[0];if(!c||!canJoin(p,c)||!p.join(c,party,'Convite aceito na convenção para disputar a eleição'))return null;
     city.log(`${party.short} convidou ${c.entity.properties.name}, que aceitou se filiar para apresentar uma candidatura.`,'government',[c.id],{kind:'convention-candidate-recruited',partyId:party.id});return c;
   }

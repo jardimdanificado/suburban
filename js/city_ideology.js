@@ -16,8 +16,10 @@ export function ideologicalProfile(subject){
 export function policyAffinity(profile,city,type,payload={}){
   const p=city.politics,v=payload.value,dir=current=>Math.sign(v-current),socialBuildings=['popular_housing','popular_refectory','clinic','utility','kitchen'],environmental=['recycler','composting','cleaner','forestry','leisure'];
   switch(type){
-    case'tax':return dir(city.taxRate)*(profile.redistribution*.9+profile.ownership*.25-profile.fiscal*.3);
-    case'businessTax':return dir(p.policy.businessTax)*(profile.redistribution*.8+profile.regulation*.55);
+    case'entrepreneurCandidates':return (v?1:-1)*(profile.economy*1.1-profile.ownership*.3);
+    case'tax':return dir(city.taxRate)*(profile.redistribution*.5+profile.ownership*.2-profile.fiscal*.4-.6);
+    case'businessTax':return dir(p.policy.businessTax)*(profile.redistribution*.55+profile.regulation*.4-.3);
+    case'salesTax':return dir(p.policy.salesTaxes?.[payload.category]??.1)*(profile.redistribution*.4-profile.economy*.35-.4-(payload.category==='food'?.2:0));
     case'minimumWage':return dir(p.policy.minimumWage)*(profile.redistribution*.75+profile.regulation*.65);
     case'welfare':return dir(city.welfare.policy.dailyBudget)*(profile.redistribution*1.2-profile.fiscal*.35+.15);
     case'nationalize':return profile.ownership*1.6+profile.regulation*.2;
@@ -31,6 +33,7 @@ export function policyAffinity(profile,city,type,payload={}){
 export function citizenPolicyInterest(city,c,type,payload={}){
   const p=city.politics,owner=!!c.businessIds?.length,poor=c.balance<city.currency.price(10000),direction=current=>Math.sign(payload.value-current);
   switch(type){
+    case'entrepreneurCandidates':return (payload.value?1:-1)*(owner?.35:0);
     case'tax':return -direction(city.taxRate)*(poor?.25:.1);
     case'businessTax':return direction(p.policy.businessTax)*(owner?-.45:.1);
     case'minimumWage':return direction(p.policy.minimumWage)*(owner?-.4:c.jobId?.3:.15);
