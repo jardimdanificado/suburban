@@ -39,6 +39,8 @@ function roomCellGeometry(THREE,facadeMask,openingMask){
 // Room coordinates count floors; render their physical height consistently with picking.
 
 export function syncCityBuildings(renderer, THREE, entities, world) {
+  const oilCarriers=renderer.cityOilCarriers??=new Set();oilCarriers.clear();
+  for(const shipment of renderer.cityLogistics?.shipments||[])if(shipment.good==='oleo'&&shipment.pickedUp&&shipment.driverId!=null)oilCarriers.add(shipment.driverId);
   const selectedEntity=entities.find(e=>e.id===renderer.selectedEntityId);
   const selectedPerson=selectedEntity?.properties?.citizen;
   const selectedOfficeHost=selectedEntity?.properties?.cityBuilding?.officeTenantOf;
@@ -121,6 +123,20 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         group.add(cells);cellMeshes.push(cells);
       }
       const cells=cellMeshes[0];group.userData.cellMeshes=cellMeshes;
+      const windowGlow=[];
+      for(const u of b.units){
+        if(!u.hasWindow)continue;
+        const y=u.z*CITY_FLOOR_HEIGHT+.95,add=(x,z,axis)=>windowGlow.push({x,y,z,axis});
+        if(u.y===0)add(u.x+.5,.015,'z');
+        if(u.y===b.depth-1)add(u.x+.5,b.depth-.015,'z');
+        if(u.x===0)add(.015,u.y+.5,'x');
+        if(u.x===b.width-1)add(b.width-.015,u.y+.5,'x');
+      }
+      if(windowGlow.length){
+        const glow=new THREE.InstancedMesh(new THREE.BoxGeometry(.34,.34,.018),new THREE.MeshBasicMaterial({color:0xffb65e,toneMapped:false}),windowGlow.length);
+        for(let i=0;i<windowGlow.length;i++){const w=windowGlow[i],angle=w.axis==='x'?Math.PI/2:0;matrix.makeRotationY(angle);matrix.setPosition(w.x,w.y,w.z);glow.setMatrixAt(i,matrix);}
+        glow.visible=false;glow.userData.oilWindowGlow=true;group.add(glow);group.userData.oilWindowGlow=glow;group.userData.oilWindowPositions=windowGlow;
+      }
       const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',mine?0x454b49:style.roof));
       roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);group.userData.roof=roof;
       const facade=new THREE.Group(),origin=buildingPoint(b,0,0);facade.rotation.y=(b.rotation||0)*Math.PI/2;facade.position.set(origin.x,0,origin.y);group.add(facade);group.userData.facade=facade;
@@ -261,9 +277,24 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     }
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = Math.floor((renderer.foliageAnimationTick || 0)/20)*.1;
     group.position.set(entity.x, b.terrain.base, entity.y);
-    const hour=world.clock?.hour??12,night=hour<6||hour>=18,hasStoredOil=(b.inventory?.oleo||0)>0;
-    if(night&&hasStoredOil)cityNightLights.push({x:entity.x+b.width/2,y:b.terrain.base+b.floors*CITY_FLOOR_HEIGHT/2,z:entity.y+b.depth/2,color:0xffbd72,distance:Math.max(6,b.floors*CITY_FLOOR_HEIGHT+2,Math.max(b.width,b.depth)+2),decay:1.6,intensity:1.8,priority:-2,distSq:(entity.x+b.width/2-(renderer.camX||0))**2+(entity.y+b.depth/2-(renderer.camY||0))**2});
     const cutaway=renderer.selectedEntityId===entity.id||selectedInteriorId===b.id||selectedOfficeHost===b.id;
+    const hour=world.clock?.hour??12,night=hour<6||hour>=18,hasStoredOil=(b.inventory?.oleo||0)>0;
+    if(group.userData.oilWindowGlow)group.userData.oilWindowGlow.visible=night&&hasStoredOil&&!cutaway;
+    if(night&&hasStoredOil&&!cutaway&&group.userData.oilWindowPositions?.length){
+      const cx=renderer.camX||0,cz=renderer.camY||0;
+      for(const window of group.userData.oilWindowPositions){
+        const offset=.12,x=entity.x+window.x+(window.axis==='x'?(window.x<b.width/2?-offset:offset):0),z=entity.y+window.z+(window.axis==='z'?(window.z<b.depth/2?-offset:offset):0),dx=x-cx,dz=z-cz;
+        cityNightLights.push({x,y:b.terrain.base+window.y,z,color:0xffbd72,distance:3.5,decay:2,intensity:.9,priority:-2,distSq:dx*dx+dz*dz});
+      }
+    }
+    let interiorLight=group.userData.oilInteriorLight;
+    if(night&&hasStoredOil&&cutaway){
+      if(!interiorLight){interiorLight=new THREE.PointLight(0xffbd72,.75,2.8,2);interiorLight.castShadow=true;interiorLight.shadow.mapSize.set(256,256);interiorLight.shadow.camera.near=.1;interiorLight.shadow.camera.far=2.8;group.add(interiorLight);group.userData.oilInteriorLight=interiorLight;}
+      const indoor=selectedPerson?.indoorLocation,unitId=renderer.selectedEntityId===entity.id?renderer.selectedCityUnitId:null;
+      const room=b.units.find(u=>u.id===unitId)||b.units.find(u=>u.id===(indoor?.buildingId===b.id?(indoor.targetUnitId||indoor.unitId):null))||b.units[0];
+      if(room)interiorLight.position.set(room.x+.5,room.z*CITY_FLOOR_HEIGHT+.8,room.y+.5);
+      interiorLight.intensity=.75;interiorLight.distance=2.8;interiorLight.visible=!!room;
+    }else if(interiorLight){interiorLight.intensity=0;interiorLight.visible=false;}
     if(group.userData.roomProps)group.userData.roomProps.visible=cutaway;
     if(group.userData.roof)group.userData.roof.visible=!cutaway;
     if(group.userData.facade)group.userData.facade.visible=!cutaway;

@@ -7227,15 +7227,23 @@ export class RCT3DRenderer {
       // City lamps and oil-lit building interiors share the night-light pool
       // so they are considered together and aren't limited by a small side pool.
       const cityLights=this.cityNightLights||[];
-      if(cityLights.length>this.maxNightLights){
-        while(this.nightLightPool.length<cityLights.length){const light=new THREE.PointLight(0xffaa44,0,24,1.2);light.castShadow=false;this.scene.add(light);this.nightLightPool.push(light);}
-        while(this.lightCandidatesPool.length<cityLights.length)this.lightCandidatesPool.push({x:0,y:0,z:0,color:0,distance:0,decay:0,intensity:0,priority:0,distSq:0});
-        this.maxNightLights=cityLights.length;
-        maxPool=this.lightCandidatesPool.length;
+      const requiredNightLights=cityLights.length+entities.length+128,requiredCandidates=cityLights.length+entities.length+1024;
+      if(requiredNightLights>this.nightLightPool.length){
+        while(this.nightLightPool.length<requiredNightLights){const light=new THREE.PointLight(0xffaa44,0,24,1.2);light.castShadow=false;this.scene.add(light);this.nightLightPool.push(light);}
+        this.maxNightLights=this.nightLightPool.length;
       }
+      if(requiredCandidates>maxPool){while(this.lightCandidatesPool.length<requiredCandidates)this.lightCandidatesPool.push({x:0,y:0,z:0,color:0,distance:0,decay:0,intensity:0,priority:0,distSq:0});maxPool=this.lightCandidatesPool.length;}
       for(let i=0;i<cityLights.length&&candidateCount<maxPool;i++){
         const source=cityLights[i],c=this.lightCandidatesPool[candidateCount++];
         c.x=source.x;c.y=source.y;c.z=source.z;c.color=source.color;c.distance=source.distance;c.decay=source.decay;c.intensity=source.intensity;c.priority=source.priority;c.distSq=source.distSq;
+      }
+
+      const oilCarriers=this.cityOilCarriers||new Set();
+      for(let i=0;i<visibleEntities.length&&candidateCount<maxPool;i++){
+        const e=visibleEntities[i],citizen=e?.properties?.citizen;
+        if(!citizen||!oilCarriers.has(citizen.id)||citizen.entity?.destroyed)continue;
+        const c=this.lightCandidatesPool[candidateCount++],surface=this.getSurfaceElevation(map,e.x,e.y),dx=e.x-focusX,dz=e.y-focusY;
+        c.x=e.x;c.y=surface+.95;c.z=e.y;c.color=0xffbd72;c.distance=8;c.decay=1.8;c.intensity=nightGlow*1.65;c.priority=-1;c.distSq=dx*dx+dz*dz;
       }
 
       for (let i = 0; i < visibleEntities.length && candidateCount < maxPool; i++) {

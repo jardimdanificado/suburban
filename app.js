@@ -305,6 +305,7 @@ function frame(now) {
   const indexEnded = profiling ? performance.now() : 0;
   renderer3D.selectedCityUnitId = selected?.properties.cityBuilding ? cityUI.unitId : null;
   renderer3D.cityDevelopment=city.development;
+  renderer3D.cityLogistics=city.logistics;
   renderer3D.profileFrame=profiling;renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
   const sceneEnded = profiling ? performance.now() : 0;
   const pointerX = mousePosition.x;
