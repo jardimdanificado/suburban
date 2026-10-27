@@ -35,7 +35,7 @@ export class CitySanitation {
     // whole population. Give it enough real rooms instead of queuing hundreds
     // of people at a single four-person table or single toilet.
     const population=Math.max(this.city.initialPopulation||0,this.city.citizens.length),publicHall=b.type==='townhall';
-    const targets={dining:publicHall?Math.min(16,Math.max(1,Math.ceil(population/64))):1,bathroom:publicHall?Math.min(12,Math.max(1,Math.ceil(population/128))):1};
+    const targets={dining:publicHall?Math.min(16,Math.max(1,Math.ceil(population/64))):1,bathroom:publicHall?Math.min(16,Math.max(1,Math.ceil(population/32))):1};
     for(const [kind,target]of Object.entries(targets)){
       let count=b.units.filter(u=>u.roomType===kind).length;
       while(count<target){

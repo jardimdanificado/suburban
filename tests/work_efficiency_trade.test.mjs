@@ -68,7 +68,7 @@ test('splitting a large cargo preserves the origin and quantity of vehicle compo
 });
 
 test('the starting town hall has real public dining rooms and bathrooms sized for the population',()=>{
- const city=setup({starter:true,population:512}),hall=city.buildings.find(b=>b.type==='townhall'),dining=hall.units.filter(u=>u.roomType==='dining'),bathrooms=hall.units.filter(u=>u.roomType==='bathroom');assert(hall.floors>=4);assert.equal(dining.length,8);assert.equal(bathrooms.length,4);assert(bathrooms.every(u=>city.sanitation.facilities.get(`toilet:${u.id}`)?.access==='public'));assert(hall.units.filter(u=>u.roomType==='workspace').length>=hall.jobs);city.sanitation.setupBusinessRooms(hall);assert.equal(hall.units.filter(u=>u.roomType==='dining').length,8);
+ const city=setup({starter:true,population:512}),hall=city.buildings.find(b=>b.type==='townhall'),dining=hall.units.filter(u=>u.roomType==='dining'),bathrooms=hall.units.filter(u=>u.roomType==='bathroom');assert(hall.floors>=4);assert.equal(dining.length,8);assert.equal(bathrooms.length,16);assert(bathrooms.every(u=>city.sanitation.facilities.get(`toilet:${u.id}`)?.access==='public'));assert(hall.units.filter(u=>u.roomType==='workspace').length>=hall.jobs);city.sanitation.setupBusinessRooms(hall);assert.equal(hall.units.filter(u=>u.roomType==='dining').length,8);
 });
 
 test('a large waiting order splits when its carrier has no available cargo-bike driver',()=>{

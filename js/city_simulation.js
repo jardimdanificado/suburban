@@ -74,7 +74,7 @@ const SERVICE_PRICES={food:180,water:35,health:240,leisure:25,social:0,energy:0,
 const SERVICE_RATES={food:5,water:8,hygiene:4,social:1.5,leisure:1,health:2};
 const SERVICE_ACTIONS={food:'Comendo no mercado',water:'Bebendo água',energy:'Dormindo',hygiene:'Cuidando da higiene',toilet:'Usando o banheiro',social:'Procurando companhia para conversar',leisure:'Descansando no centro de lazer',health:'Recebendo atendimento'};
 const ESSENTIAL_TASKS=new Set(['water','food','provisions','workmeal','health','toilet']);
-const INTERRUPTIBLE_TASKS=new Set(['work','manage','leisure','social','clean']);
+const INTERRUPTIBLE_TASKS=new Set(['work','manage','leisure','social','clean','walk']);
 const CITY_FEED_LIMIT=128,CITY_FEED_TRIM=64;
 const clamp = n => Math.max(0, Math.min(100, n));
 const key = (x, y) => `${x},${y}`;
@@ -386,7 +386,20 @@ export class CitySimulation {
     if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&this.paint.route(c))return;
     if (task === 'social' && this.relationships.seekContact(c)) return;
     if(task==='hygiene'&&this.sanitation.choose(c,'hygiene'))return;
-    if (task === 'toilet') { if (!this.sanitation.choose(c)) { c.task = null; c.action = 'Aguardando banheiro acessível'; } return; }
+    if (task === 'toilet') {
+      if (this.sanitation.choose(c)) { c.toiletWaitingSince=null; return; }
+      c.toiletWaitingSince??=this.minute;
+      // A full or inaccessible bathroom must not trap a person indefinitely.
+      // Emergency relief has real hygiene and mood costs; it is not a service.
+      if(n.toilet<10 && this.minute-c.toiletWaitingSince>=30){
+        n.toilet=clamp(n.toilet+65);n.hygiene=clamp(n.hygiene-12);c.mood=Math.max(-25,(c.mood||0)-8);
+        c.toiletWaitingSince=null;c.task=null;c.action='Aliviou-se por falta de banheiro';
+        this.sanitation.outdoorIncidents=(this.sanitation.outdoorIncidents||0)+1;
+        this.log(`${c.entity.properties.name} não encontrou banheiro e precisou se aliviar ao ar livre.`, 'sanitation', [c.id], {kind:'toilet-emergency',x:c.entity.x,y:c.entity.y});
+      }else { c.task = null; c.action = 'Aguardando banheiro acessível'; }
+      return;
+    }
+    c.toiletWaitingSince=null;
     if (task === 'food' && this.workMeals.routeToMeal(c)) return;
     if (task === 'food' && c.provisions > 0) {
       if(!home || n.food<25){c.task='provisions';c.path=[];c.targetId=null;return;}
@@ -396,6 +409,17 @@ export class CitySimulation {
       c.lastShoppingSearchAt=this.minute;
       const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).map((b,index)=>({b,index,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)})).sort((a,b)=>a.score-b.score||a.index-b.index);
       for(const {b:shop} of shops) {const path=this.findPath(c.entity,shop.door);if(path!==null){c.path=path;c.targetId=shop.id;c.task='shopping';return;}}
+    }
+    // Citizens with no pressing need or appointment should not flood the town
+    // hall for leisure they have already satisfied. Take a short walk instead.
+    if(task==='leisure' && !urgent && n.leisure>=75 && this.hour>=6 && this.hour<22 && this.society.isAdult(c)) {
+      const origin=c.entity, offsets=[[3,0],[0,3],[-3,0],[0,-3],[3,3],[-3,3],[-3,-3],[3,-3]];
+      const first=(c.id+Math.floor(this.minute/30))%offsets.length;
+      for(let i=0;i<offsets.length;i++){
+        const [dx,dy]=offsets[(first+i)%offsets.length],destination={x:Math.floor(origin.x)+dx+.5,y:Math.floor(origin.y)+dy+.5};
+        if(!this.walkable(Math.floor(destination.x),Math.floor(destination.y)))continue;
+        const path=this.findPath(origin,destination);if(path?.length){c.task='walk';c.targetId=null;c.path=path;c.action='Passeando pela cidade';return;}
+      }
     }
     const childHome = child ? this.building(this.units.get(child.homeUnitId)?.buildingId) : null;
     const siteProject = this.development.projectFor(c, type === 'job' ? job : type === 'company' ? company : null);
@@ -733,7 +757,7 @@ export class CitySimulation {
           wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}
         }
-        c.action = c.deliveryId ? 'Transportando mercadorias' : c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }

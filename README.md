@@ -3,10 +3,10 @@
 Uma cidade procedural sobre o relevo natural, com pessoas, patrimônio, governo, empresas, trabalho, produção de alimentos e famílias. A economia evolui sem comandos do jogador; o painel permite observar as decisões dos cidadãos.
 
 ```sh
-python3 -m http.server 8000
+python3 scripts/serve.py
 ```
 
-Abra `http://localhost:8000`. Arraste o mapa para mover a câmera e use a roda para aproximar. A barra superior abre janelas e controla pausa, velocidade e visualização. O minimapa e o botão de centralizar ajudam a navegar pelo terreno. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.
+Abra `http://127.0.0.1:8000`. O servidor impede o cache de código da página e do worker. Arraste o mapa para mover a câmera e use a roda para aproximar. A barra superior abre janelas e controla pausa, velocidade e visualização. O minimapa e o botão de centralizar ajudam a navegar pelo terreno. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.
 
 ## Madeira, artesanato e publicações
 
@@ -210,7 +210,7 @@ Sirva esta pasta por HTTP (o navegador não carrega módulos ES diretamente de `
 
 ```sh
 cd experience-framework
-python3 -m http.server 8000
+python3 scripts/serve.py
 ```
 
 Abra `http://localhost:8000`.

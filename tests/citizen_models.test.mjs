@@ -64,3 +64,22 @@ test('bicycle riders hold use frame 1 while moving, stopped and paused',async()=
  e.x+=.7;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:1');
  e.properties.citizen.ridingVehicleKind='patinete';assert.equal(citizenAnimation(e.properties.citizen,true),'glide');
 });
+
+test('each garment replaces a distinct part of every animated body and follows its pose',async()=>{
+ const {model}=await models();
+ for(const [key,geometry] of model.frames)for(const piece of ['camisa','calça','vestido','casaco','saia','macacão','trapos']){
+  const outfit=model.outfits.get(`${key}:${piece}`),whole=geometry.attributes.position.array;
+  assert(outfit);assert(outfit.body.attributes.position.array.length>0);assert(outfit.clothes.attributes.position.array.length>0);
+  assert.equal(outfit.body.attributes.position.array.length+outfit.clothes.attributes.position.array.length,whole.length);
+ }
+ const personWithClothes=person(12);personWithClothes.properties.citizen.wardrobe=[{piece:'vestido',color:'#329ac1'}];
+ model.begin(.1,1);model.add(personWithClothes,0);model.end();let batch=model.batches.get('idle:0:vestido');assert(batch);assert.equal(batch.mesh.colors[0],0xc42b24);assert.equal(batch.clothingMesh.colors[0],0x329ac1);assert.deepEqual(batch.mesh.matrices[0],batch.clothingMesh.matrices[0]);
+ personWithClothes.x=1;model.begin(.1,1);model.add(personWithClothes,0);model.end();batch=[...model.batches.entries()].find(([key,b])=>key.startsWith('run:')&&b.count)?.[1];assert(batch);assert.deepEqual(batch.mesh.matrices[0],batch.clothingMesh.matrices[0]);assert.equal(batch.clothingMesh.colors[0],0x329ac1);
+ personWithClothes.properties.citizen.wardrobe[0]={piece:'calça',color:'#ddbb11'};model.begin(.1,1);model.add(personWithClothes,0);model.end();batch=[...model.batches.entries()].find(([key,b])=>key.endsWith(':calça')&&b.count)?.[1];assert.equal(batch.clothingMesh.colors[0],0xddbb11);
+});
+
+test('citizens wearing different colored clothes share an instance batch without losing colors',async()=>{
+ const {model}=await models();model.begin(.01,1);
+ for(let i=0;i<100;i++){const e=person(i);e.properties.citizen.wardrobe=[{piece:'camisa',color:i%2?'#ff0000':'#0000ff'}];model.add(e,0);}
+ model.end();const batch=model.batches.get('idle:0:camisa');assert.equal(batch.count,100);assert.equal(batch.clothingMesh.colors[0],0x0000ff);assert.equal(batch.clothingMesh.colors[99],0xff0000);assert.deepEqual(batch.mesh.matrices[99],batch.clothingMesh.matrices[99]);
+});
