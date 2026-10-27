@@ -10,6 +10,7 @@ export const VEHICLE_SPECS=Object.freeze({
   patins:{label:'Patins',speed:6,seats:1,cargo:24},
   skate:{label:'Skate',speed:6.5,seats:1,cargo:24},
 });
+export const MAX_CARGO_CAPACITY=Math.max(72,...Object.values(VEHICLE_SPECS).map(spec=>spec.cargo));
 const PERSONAL_MOBILITY=new Set(Object.keys(VEHICLE_SPECS));
 export const VEHICLE_RECIPES=Object.freeze({
   bicicleta:{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},
@@ -216,7 +217,7 @@ export class CityVehicles {
     const owners=new Set([c.accountId,this.city.building(c.jobId)?.accountId]);
     for(const id of c.businessIds||[])owners.add(this.city.building(id)?.accountId);
     let capacity=base;
-    for(const v of this.units.values())if(v.active&&!v.scrapped&&v.condition>15&&!v.mechanicId&&owners.has(v.ownerAccountId)&&(!v.driverId||v.driverId===c.id))capacity=Math.max(capacity,VEHICLE_SPECS[v.good].cargo);
+    for(const v of this.units.values())if(v.active&&!v.scrapped&&v.condition>15&&!v.mechanicId&&owners.has(v.ownerAccountId)&&(!v.driverId||v.driverId===c.id)){capacity=Math.max(capacity,VEHICLE_SPECS[v.good].cargo);if(capacity>=MAX_CARGO_CAPACITY)break;}
     return capacity;
   }
   hourly(){

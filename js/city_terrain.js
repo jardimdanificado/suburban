@@ -171,13 +171,13 @@ export function settlementConnected(city, a, b) {
   return ac===bc?true:cache.sealed[ac]||cache.sealed[bc]?false:null;
 }
 
-export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false } = {}) {
+export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false,blockedGrid=null } = {}) {
   const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
   if (!terrainWalkable(world, sx, sy) || !terrainWalkable(world, gx, gy) || blocked.has(tileKey(gx, gy))) return null;
   // Search the much smaller street network first. Keep off-road shortcuts when
   // following the streets would cost more than a near-direct walk on flat land.
   if(preferRoads&&!extraBlocked&&ROAD_TILES.has(tileAt(world,sx,sy))&&ROAD_TILES.has(tileAt(world,gx,gy))){
-    const direct=Math.abs(gx-sx)+Math.abs(gy-sy),roadPath=findTerrainPath(world,start,goal,blocked,{limit:Math.min(limit,Math.max(128,direct*24)),preferRoads:false,roadOnly:true});
+    const direct=Math.abs(gx-sx)+Math.abs(gy-sy),roadPath=findTerrainPath(world,start,goal,blocked,{limit:Math.min(limit,Math.max(128,direct*24)),preferRoads:false,roadOnly:true,blockedGrid});
     if(roadPath){let cost=0,x=sx,y=sy;for(const p of roadPath){const nx=Math.floor(p.x),ny=Math.floor(p.y),tile=tileAt(world,nx,ny);cost+=roadTravelCost(tile)+Math.abs(tileHeight(tile)-tileHeight(tileAt(world,x,y)))*.7;x=nx;y=ny;}
       if(cost<=direct*1.05)return roadPath;
     }
@@ -207,7 +207,7 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
     for (const [dx, dy] of pathDirections) {
       const x = current.x + dx, y = current.y + dy, nextKey = y * width + x;
       const tile = tileAt(world, x, y);
-      if (!land.has(tile) || Math.abs(currentHeight-tileHeight(tile))>1.25 || blocked.has(tileKey(x, y)) || extraBlocked?.(x, y)) continue;
+      if (!land.has(tile) || Math.abs(currentHeight-tileHeight(tile))>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
       if(roadOnly&&!ROAD_TILES.has(tile))continue;
       const cost = current.cost + roadTravelCost(tile) + Math.abs(tileHeight(tile) - currentHeight) * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;

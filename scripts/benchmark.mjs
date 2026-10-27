@@ -15,7 +15,7 @@ if(mode==='city-render'){
   const renderer={scene:{add(){},remove(){}},cityLampLights:Array.from({length:8},()=>({intensity:0})),cityMeshes:new Map()};
   const rendererSource=readFileSync(resolve(root,'js/city_renderer_3d.js'),'utf8'),oldSignature=rendererSource.includes('b.units.filter');
   const entities=Array.from({length:500},(_,id)=>{const units=Array.from({length:100},(_,n)=>({id:`${id}:${n}`,roomType:n===0?'bathroom':n===1?'dining':'workspace',x:n%10,y:Math.floor(n/10),z:0}));const b={type:'farm',crop:'milho',constructionKind:'open-air',width:10,depth:10,units,layoutRevision:1,rotation:0};
-    const signature=rendererSource.includes('retail-v2:')?`retail-v2:farm:10:10:milho:1:100:0`:oldSignature?`${b.crop}:${units.filter(u=>['bathroom','dining'].includes(u.roomType)).map(u=>u.id+u.roomType).join(',')}`:`${b.crop}:1:100`;
+    const signature=rendererSource.includes('retail-v2:')?`retail-v2:farm:10:10:milho:1:100:0:0`:oldSignature?`${b.crop}:${units.filter(u=>['bathroom','dining'].includes(u.roomType)).map(u=>u.id+u.roomType).join(',')}`:`${b.crop}:1:100`;
     renderer.cityMeshes.set(id,{visible:true,position:{set(){}},userData:{signature,terrainRevision:0,highlight:{visible:false},patches:{material:{emissive:{setHex(){}}}}}});
     return {id,x:id%20*12,y:Math.floor(id/20)*12,properties:{cityBuilding:b}};
   });
@@ -36,6 +36,16 @@ if(mode==='city-render'){
   entities[300]={id:300,x:300,y:300,properties:{cityBuilding:{width:40,depth:30}}};entities[301].destroyed=true;entities.splice(302,1);setActiveEntities(entities);
   views.push(getEntitiesInViewport(320,340,320,340).map(e=>e.id),[getEntityById(301),getEntityById(302)]);
   console.log(JSON.stringify({mode,root,entities:entities.length,staticMs,movingMs,checksum:hash(views)}));
+}else if(mode==='freight'){
+  // Movement updates with a large shipment history and active drivers. No time
+  // advances, so this isolates lookup cost without changing delivery behavior.
+  const {CitySimulation}=await moduleAt('city_simulation.js');
+  const city=Object.create(CitySimulation.prototype),shipments=Array.from({length:4000},(_,i)=>({id:i+1,pickedUp:false,quantity:1}));
+  const movers=Array.from({length:500},(_,i)=>({id:i+1,deliveryId:3501+i,entity:{x:0,y:0},path:[{x:1,y:0}],equipment:{},action:'Transportando'}));
+  Object.assign(city,{accumulator:0,minute:480,_movingCitizens:movers,logistics:{shipments},vehicles:{activeCount:0,update(){}},society:{isAdult(){return true;}}});
+  for(let i=0;i<10;i++)city.update(0);
+  const started=performance.now();for(let i=0;i<100;i++)city.update(0);
+  console.log(JSON.stringify({mode,root,drivers:movers.length,shipments:shipments.length,updates:100,ms:performance.now()-started,checksum:hash(movers.map(c=>[c.deliveryId,c.action,c.entity.x,c.entity.y,c.path]))}));
 }else if(mode==='simulation'||mode==='snapshots'||mode==='bridge'||mode==='throughput'){
   const {CitySimulation}=await moduleAt('city_simulation.js'),{World}=await moduleAt('world.js');
   const entities=[];let id=0;
@@ -64,9 +74,9 @@ if(mode==='city-render'){
   }else{
     const dt=Math.max(1/60,Math.min(.25,Number(process.env.SUBURBAN_BENCH_DT)||1/6)),updates=Math.round(60/dt);
     const times=[],start=performance.now();for(let i=0;i<updates;i++){const at=performance.now();city.update(dt);times.push(performance.now()-at);}const ms=performance.now()-start;times.sort((a,b)=>a-b);
-    const state={minute:city.minute,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,activity:c.activity,task:c.task,happiness:c.happiness,x:c.entity.x,y:c.entity.y,balance:c.balance,home:c.homeUnitId,job:c.jobId})),accounts:[...city.accounts].map(([k,a])=>[k,a.balance]),history:city.history.nextId,events:city.events,relations:[...city.society.relations]};
+    const state={minute:city.minute,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,activity:c.activity,task:c.task,path:c.path,happiness:c.happiness,x:c.entity.x,y:c.entity.y,balance:c.balance,home:c.homeUnitId,job:c.jobId,interior:c.indoorLocation,career:c.career})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),buildings:city.buildings.map(b=>({id:b.id,inventory:b.inventory,workers:b.workers})),shipments:city.logistics.shipments.map(s=>({id:s.id,status:s.status,driverId:s.driverId,quantity:s.quantity,position:s.position})),terrain:Array.from(city.world.map),accounts:[...city.accounts].map(([k,a])=>[k,a.balance]),history:city.history.nextId,events:city.events,relations:[...city.society.relations]};
     console.log(JSON.stringify({mode,root,population:city.citizens.length,dt,updates:times.length,ms,p50:times[Math.floor(times.length*.5)],p95:times[Math.floor(times.length*.95)],max:times.at(-1),checksum:hash(state)}));
   }
-}else throw Error('Use simulation, snapshots, bridge, throughput, scene or city-render.');
+}else throw Error('Use simulation, snapshots, bridge, throughput, freight, scene or city-render.');
 
-function observed(city){return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:c.entity.x,y:c.entity.y,home:c.homeUnitId,job:c.jobId,career:c.career})),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),ledger:city.ledger,events:city.events.map(e=>e.id),relations:[...city.society.relations]};}
+function observed(city){return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:c.entity.x,y:c.entity.y,home:c.homeUnitId,job:c.jobId,career:c.career,interior:c.indoorLocation})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),ledger:city.ledger,events:city.events.map(e=>e.id),relations:[...city.society.relations]};}

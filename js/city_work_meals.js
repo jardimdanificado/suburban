@@ -19,7 +19,12 @@ export class CityWorkMeals {
     const packed=preparedOffer(this.city.economy,holder,citizen);if(packed)return {...packed,price:0};
     if (holder.type === 'bakery' && holder.inventory.pao >= WORK_MEAL_RULES.units) return { good: 'pao', quantity: WORK_MEAL_RULES.units, inputs: { pao: WORK_MEAL_RULES.units }, quality: 1 };
     const recipes = holder.type === 'bakery' ? { pao: this.city.economy.recipes.pao } : { ...Object.fromEntries(this.foodGoods().map(g => [`single_${g}`, { inputs: { [g]: WORK_MEAL_RULES.units }, quality: 1 }])), ...this.city.economy.recipes };
-    const ready = Object.entries(recipes).filter(([, r]) => Object.entries(r.inputs).every(([g, n]) => (holder.inventory[g] || 0) >= n)).sort((a, b) => (b[1].quality + (citizen ? this.city.economy.mealTaste(citizen, { good: b[0], inputs: b[1].inputs }) * 10 : 0)) - (a[1].quality + (citizen ? this.city.economy.mealTaste(citizen, { good: a[0], inputs: a[1].inputs }) * 10 : 0)))[0];
+    let ready=null,bestScore=-Infinity;
+    for(const [good,recipe] of Object.entries(recipes)){
+      if(!Object.entries(recipe.inputs).every(([g,n])=>(holder.inventory[g]||0)>=n))continue;
+      const score=recipe.quality+(citizen?this.city.economy.mealTaste(citizen,{good,inputs:recipe.inputs})*10:0);
+      if(!ready||score>bestScore){ready=[good,recipe];bestScore=score;}
+    }
     if (ready) return { good: ready[0], quantity: 1, inputs: ready[1].inputs, quality: ready[1].quality + (holder.mealQuality || 0) - 1 };
     const good = this.foodGoods().filter(g => (holder.inventory[g] || 0) >= WORK_MEAL_RULES.units).sort((a, b) => holder.inventory[b] - holder.inventory[a])[0];
     return good ? { good, quantity: WORK_MEAL_RULES.units, inputs: { [good]: WORK_MEAL_RULES.units }, quality: 1 } : null;

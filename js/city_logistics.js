@@ -1,6 +1,7 @@
 import {moveGarments} from './city_clothing.js';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
+import { MAX_CARGO_CAPACITY } from './city_vehicles.js';
 
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
 // Urgent food and housing start ahead, while waiting freight gains priority over time.
@@ -16,7 +17,7 @@ export class CityLogistics {
     const city=this.city,ids=new Set([seller?.ownerId,buyer?.ownerId]);
     for(const b of city.economy.businesses.filter(b=>b.type==='carrier'))for(const id of [...b.workers,b.ownerId])ids.add(id);
     if(buyer?.accountId==='treasury'||buyer?.municipal)for(const c of city.citizens)if(!c.jobId&&!c.businessIds.length)ids.add(c.id);
-    return Math.max(24,...[...ids].map(id=>city.society.citizen(id)).filter(Boolean).map(c=>this.capacity(c)));
+    let capacity=24;for(const id of ids){const c=city.society.citizen(id);if(c)capacity=Math.max(capacity,this.capacity(c));if(capacity>=MAX_CARGO_CAPACITY)break;}return capacity;
   }
   demandMetrics() {
     const city=this.city, shipments=this.shipments.filter(s=>!['delivered','cancelled'].includes(s.status) && city.building(s.carrierId)?.type!=='waste_collector');
@@ -145,7 +146,7 @@ export class CityLogistics {
   updateMinute() {
     const city = this.city;
     const oversized=this.shipments.filter(s=>!s.driverId&&s.status!=='delivered'&&s.status!=='cancelled'&&s.quantity>24);
-    if(oversized.length){let maxCarry=24;for(const c of city.citizens)if(!c.entity.destroyed)maxCarry=Math.max(maxCarry,this.capacity(c));for(const s of oversized)if(s.quantity>maxCarry)this.splitLoad(s);}
+    if(oversized.length){let maxCarry=24;for(const c of city.citizens)if(!c.entity.destroyed){maxCarry=Math.max(maxCarry,this.capacity(c));if(maxCarry>=MAX_CARGO_CAPACITY)break;}for(const s of oversized)if(s.quantity>maxCarry)this.splitLoad(s);}
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
     const priority = s => shipmentPriority(s,city.minute,city.hour);

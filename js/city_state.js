@@ -42,7 +42,7 @@ const prototypes = new Map([CityPaint,CityFiscal,CityInterventions,CityVehicles,
   CityLogistics, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
-const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision', 'routeCache', 'routeRevision','familyIndexDirty',
+const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision', 'routeCache', 'routeRevision','familyIndexDirty',
   'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at
@@ -71,16 +71,24 @@ export class CityStateGraph {
       const people=root.city.citizens,stride=needFields.length+2;packedNeeds=new Float64Array(people.length*stride);needsSet=new WeakSet();citizenSet=new WeakSet();
       for(let i=0;i<people.length;i++){const citizen=people[i],needs=citizen.needs;citizenSet.add(citizen);needsSet.add(needs);for(let j=0;j<needFields.length;j++)packedNeeds[i*stride+j]=needs[needFields[j]];packedNeeds[i*stride+needFields.length]=citizen.happiness;packedNeeds[i*stride+needFields.length+1]=citizen.mood;}
     }
-    // Weak visitation marks are reused between sends and do not retain removed
-    // objects or reserve an array indexed by the ever-growing wire IDs.
-    const visited=this.visitMarks??=new WeakMap(),generation=this.visitGeneration=(this.visitGeneration||0)+1;
+    // Most visits use integer wire IDs, avoiding repeated weak-map lookups on
+    // every reference. Cap the dense table so long sessions cannot grow it
+    // without bound; IDs beyond that cap use weak marks instead.
+    let marks=this.visitIds??=new Uint32Array(1024),visited=this.visitMarks??=new WeakMap();
+    let generation=(this.visitGeneration||0)+1;
+    if(generation>0xffffffff){marks.fill(0);visited=this.visitMarks=new WeakMap();generation=1;}
+    this.visitGeneration=generation;
+    const denseLimit=1048576;
+    const mark=(id,object)=>{if(id<marks.length)marks[id]=generation;else visited.set(object,generation);};
+    const wasVisited=(id,object)=>id<marks.length?marks[id]===generation:visited.get(object)===generation;
     const map = root.city.world.map, mapRevision = root.city.world.revision;
     const visit = object => {
       if (object === null || typeof object !== 'object') return object;
       let id = this.ids.get(object);
       if (!id) { id = this.nextId++; this.ids.set(object, id); }
-      if(visited.get(object)===generation)return id;
-      visited.set(object,generation);
+      if(id>=marks.length&&id<denseLimit){let size=marks.length;while(size<=id)size*=2;const grown=new Uint32Array(Math.min(size,denseLimit));grown.set(marks);marks=this.visitIds=grown;}
+      if(wasVisited(id,object))return id;
+      mark(id,object);
       const previous = this.previous.get(id);
       // Existing nodes already occupy this ID in objects. Reinsert only new or
       // reappearing nodes, avoiding a Map write for every edge on every snapshot.
@@ -93,9 +101,9 @@ export class CityStateGraph {
       // The initial graph establishes the needs objects. Subsequent worker
       // snapshots carry their numeric values in one compact typed array.
       if(needsSet?.has(object)&&previous)return id;
-      if(object._socialPair && previous){const pair=this.relationNodes.get(id);if(pair?.revision===object.revision){for(const child of pair.children){const value=this.objects.get(child);if(value)visited.set(value,generation);}return id;}}
+      if(object._socialPair && previous){const pair=this.relationNodes.get(id);if(pair?.revision===object.revision){for(const child of pair.children){const value=this.objects.get(child);if(value)mark(child,value);}return id;}}
       if (object === map && this.mapRevision === mapRevision && this.previous.has(id)) {
-        for(const child of this.mapChildren){const value=this.objects.get(child);if(value)visited.set(value,generation);}
+        for(const child of this.mapChildren){const value=this.objects.get(child);if(value)mark(child,value);}
         return id;
       }
       if (object instanceof CityHistory) {
@@ -164,7 +172,7 @@ export class CityStateGraph {
     const rootId = visit(root);
     this.mapRevision = mapRevision;
     this.mapChildren = Array.isArray(map) ? map.map(row => this.ids.get(row)) : [];
-    for(const [id,object] of this.objects)if(visited.get(object)!==generation) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); }
+    for(const [id,object] of this.objects)if(!wasVisited(id,object)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); }
     return { rootId, nodes, removed, histories, nextId: this.nextId, ...(packedNeeds?{packedNeeds}:{}) };
   }
   apply(packet) {

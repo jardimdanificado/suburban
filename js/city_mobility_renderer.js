@@ -10,9 +10,14 @@ function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
   }return b;
 }
 export function syncCityMobility(renderer,THREE,entities,world){
+  const vehicles=entities.filter(e=>!e.destroyed&&e.properties?.cityVehicle&&inView(renderer,e.x,e.y,1));
+  if(!vehicles.length){
+    for(const b of renderer.mobilityBatches?.values()||[])b.mesh.count=0;
+    for(const [id,g] of renderer.cycleFlags||[]){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();if(o.material&&!o.material.map)o.material.dispose();});renderer.cycleFlags.delete(id);}
+    return;
+  }
   const matrix=renderer._mobilityMatrix??=new THREE.Matrix4(),position=renderer._mobilityPosition??=new THREE.Vector3(),quaternion=renderer._mobilityQuaternion??=new THREE.Quaternion(),scale=renderer._mobilityScale??=new THREE.Vector3(),color=renderer._mobilityColor??=new THREE.Color(),axis=renderer._mobilityAxis??=new THREE.Vector3(0,1,0);
   const place=(mesh,index,x,y,z,sx,sy,sz,angle=0,tint=null)=>{position.set(x,y,z);quaternion.setFromAxisAngle(axis,angle);scale.set(sx,sy,sz);matrix.compose(position,quaternion,scale);mesh.setMatrixAt(index,matrix);if(tint!=null)mesh.setColorAt(index,color.setHex(tint));};
-  const vehicles=entities.filter(e=>!e.destroyed&&e.properties?.cityVehicle&&inView(renderer,e.x,e.y,1));
   const body=batch(renderer,THREE,'cycle-frames',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0xffffff}),vehicles.length*7),wheel=batch(renderer,THREE,'cycle-wheels',()=>new THREE.TorusGeometry(.22,.035,5,12),()=>new THREE.MeshLambertMaterial({color:0x252725}),vehicles.length*8);let n=0,w=0;
   for(const e of vehicles){const v=e.properties.cityVehicle,h=surfaceElevation(world,e.x,e.y),angle=v.angle||0,tint=v.color?parseInt(v.color.slice(1),16):colors[v.good]||0x52879a;
     const part=(dx,dy,dz,sx,sy,sz,color=tint)=>place(body.mesh,n++,e.x+dx*Math.cos(angle)+dz*Math.sin(angle),h+dy,e.y-dx*Math.sin(angle)+dz*Math.cos(angle),sx,sy,sz,angle,color);

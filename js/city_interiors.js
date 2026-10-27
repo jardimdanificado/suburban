@@ -3,14 +3,19 @@ import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 // position, circulation and floor changes are separate physical coordinates.
 const INDOOR_TASKS=new Set(['work','manage','shopping','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','leisure','social']);
 const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
-const citizen=(city,id)=>city.accounts.get(`citizen:${id}`)||city.society.citizen(id);
+const citizenKeys=[];
+const citizen=(city,id)=>city.accounts.get(Number.isInteger(id)&&id>=0&&id<65536?(citizenKeys[id]??=`citizen:${id}`):`citizen:${id}`)||city.society.citizen(id);
+const indoorCitizenCaches=new WeakMap();
+function indoorCitizenCache(city){let cache=indoorCitizenCaches.get(city);if(!cache||cache.revision!==city.structureRevision||cache.accounts!==city.accounts){cache={revision:city.structureRevision,accounts:city.accounts,people:[]};indoorCitizenCaches.set(city,cache);}return cache.people;}
 const point=(b,u)=>({x:b.entity.x+u.x+.5,y:b.entity.y+u.y+.5,z:u.z*CITY_FLOOR_HEIGHT});
 function release(city,c){const id=c.indoorLocation?.targetUnitId||c.indoorLocation?.unitId,u=city.units.get(id);if(u?.activityReservedIds)u.activityReservedIds=u.activityReservedIds.filter(id=>id!==c.id);if(c.workCell?.unitId===id)c.workCell=null;}
 export function activityCellAvailable(city,u,c,kind){
- u.activityReservedIds??=[];u.activityReservedIds=u.activityReservedIds.filter(id=>{const other=citizen(city,id),location=other?.indoorLocation;return other&&!other.entity.destroyed&&!location?.exiting&&(location?.targetUnitId===u.id||location?.unitId===u.id);});
- const visitor=['service','treatment'].includes(kind),workers=['workspace','office'].includes(kind),occupants=u.activityReservedIds.filter(id=>{const other=citizen(city,id),type=other?.indoorLocation?.targetRoomType;return visitor?!['workspace','office'].includes(type):workers?!['service','treatment'].includes(type):true;});
+ if(!u.activityReservedIds?.length){u.activityReservedIds??=[];return true;}
+ const visitor=kind==='service'||kind==='treatment',workers=kind==='workspace'||kind==='office',ids=u.activityReservedIds,people=indoorCitizenCache(city);let reserved=null,occupants=0,alreadyReserved=false;
+ for(let i=0;i<ids.length;i++){const id=ids[i],cacheable=Number.isInteger(id)&&id>=0&&id<65536;let other=cacheable?people[id]:undefined;if(!other){other=citizen(city,id);if(other&&cacheable)people[id]=other;}const location=other?.indoorLocation;if(!other||other.entity.destroyed||location?.exiting||(location?.targetUnitId!==u.id&&location?.unitId!==u.id)){reserved??=ids.slice(0,i);continue;}if(reserved)reserved.push(id);if(id===c.id)alreadyReserved=true;const type=location?.targetRoomType;if(visitor?type!=='workspace'&&type!=='office':workers?type!=='service'&&type!=='treatment':true)occupants++;}
+ if(reserved)u.activityReservedIds=reserved;
  const capacity=visitor?4:kind==='bathroom'||kind==='office'?1:kind==='dining'||kind==='plenary'?4:kind==='bedroom'?4:1;
- return u.activityReservedIds.includes(c.id)||occupants.length<capacity;
+ return alreadyReserved||occupants<capacity;
 }
 function route(from,to){const path=[],p={...from};for(const axis of ['x','y','z'])while(Math.abs(p[axis]-to[axis])>.001){p[axis]+=Math.sign(to[axis]-p[axis])*Math.min(1,Math.abs(to[axis]-p[axis]));path.push({...p});}return path;}
 function interiorRoute(b,from,to){
@@ -92,8 +97,7 @@ export function syncCitizenInterior(city,c){
  if(task==='clean'){const job=city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId);room=city.units.get(city.sanitation.facilities.get(job?.facilityId)?.unitId);}
  if(!room&&['energy','care','provisions','hygiene'].includes(task)){const home=city.housing.home(c);if(home?.buildingId===b.id)room=city.housing.units(home).find(u=>u.roomType===kind);if(!room&&kind==='bedroom')room=city.units.get(c.homeUnitId);}
  if(!room&&previous?.buildingId===b.id&&previous.targetRoomType===kind){const assigned=city.units.get(previous.targetUnitId);if(assigned&&activityCellAvailable(city,assigned,c,kind))room=assigned;}
- const choices=b.units.filter(u=>u.roomType===kind);if(!choices.length&&['service','treatment'].includes(kind))choices.push(...b.units.filter(u=>u.roomType==='workspace'||u.roomType==='office'));if(!choices.length&&kind==='bedroom'&&!c.homeUnitId)choices.push(...b.units.filter(u=>u.roomType==='workspace'));if(!choices.length&&kind==='workspace')choices.push(...b.units.filter(u=>u.roomType==='office'));
- room??=choices.find(u=>activityCellAvailable(city,u,c,kind));
+ if(!room){const choices=b.units.filter(u=>u.roomType===kind);if(!choices.length&&['service','treatment'].includes(kind))choices.push(...b.units.filter(u=>u.roomType==='workspace'||u.roomType==='office'));if(!choices.length&&kind==='bedroom'&&!c.homeUnitId)choices.push(...b.units.filter(u=>u.roomType==='workspace'));if(!choices.length&&kind==='workspace')choices.push(...b.units.filter(u=>u.roomType==='office'));room=choices.find(u=>activityCellAvailable(city,u,c,kind));}
  if(!room){c.action=`Aguardando célula de ${kind} disponível`;return false;}
  return activityRoomReady(city,c,b,room,kind);
 }

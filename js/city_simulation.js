@@ -361,7 +361,13 @@ export class CitySimulation {
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
     if (!this.pathCache.has(key)) {
       if (this.pathCache.size >= Math.max(2048,Math.min(16384,this.citizens.length*16))) this.pathCache.delete(this.pathCache.keys().next().value);
-      this.pathCache.set(key, findTerrainPath(this.world, start, goal, this.occupied));
+      const width=this.world.width,height=this.world.height,blockedRevision=`${width}:${height}:${this.obstacleRevision||0}:${this.occupied.size}`;
+      if(this._pathBlockedRevision!==blockedRevision){
+        const grid=new Uint8Array(width*height);
+        for(const cell of this.occupied){const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));if(x>=0&&y>=0&&x<width&&y<height)grid[y*width+x]=1;}
+        this._pathBlockedGrid=grid;this._pathBlockedRevision=blockedRevision;
+      }
+      this.pathCache.set(key, findTerrainPath(this.world, start, goal, this.occupied,{blockedGrid:this._pathBlockedGrid}));
     }
     const path = this.pathCache.get(key);
     // Keep insertion-order eviction: touching every cache hit costs two Map
@@ -759,12 +765,21 @@ export class CitySimulation {
       this._lastVehicleScanMinute=this.minute;
       for(const c of movers)if(!c.ridingVehicleId)this.vehicles.tryTrip(c);
     }
+    // Many active drivers used to scan the entire shipment list independently
+    // on every movement update. Build a temporary index only when it pays off.
+    let driverCount=0;for(const c of movers)if(c.deliveryId&&++driverCount>4)break;
+    let shipmentIndex=null;
+    if(driverCount>4){
+      const wanted=new Set();for(const c of movers)if(c.deliveryId)wanted.add(c.deliveryId);
+      shipmentIndex=new Map();
+      for(const s of this.logistics.shipments)if(wanted.delete(s.id)){shipmentIndex.set(s.id,s);if(!wanted.size)break;}
+    }
     for (const c of movers) {
       if(c.ridingVehicleId||c.indoorLocation?.exiting)continue;
       // Vehicle eligibility is minute based (including its 20-minute search
       // cooldown); polling it on every animation frame repeats the same scans
       // up to 60 times before any relevant state can change.
-      const load=c.deliveryId?this.logistics.shipments.find(s=>s.id===c.deliveryId):null;
+      const load=c.deliveryId?(shipmentIndex?shipmentIndex.get(c.deliveryId):this.logistics.shipments.find(s=>s.id===c.deliveryId)):null;
       if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>(c.equipment?.carrinho?72:c.equipment?.cesta?36:24)){c.action='Aguardando veículo para transportar a carga';continue;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5);

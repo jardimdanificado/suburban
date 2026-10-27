@@ -38,7 +38,8 @@ export function requirements(city,b){
 }
 export function qualification(city,c,b){
   const policy=requirements(city,b),skill=city.economy.jobSkill(b),cv=career(c),experience=cv.worked[skill]||0;
-  const previous=cv.jobs.filter(r=>r.skill===skill&&r.workedMinutes>0),rating=previous.length?previous.reduce((n,r)=>n+r.rating*r.workedMinutes,0)/previous.reduce((n,r)=>n+r.workedMinutes,0):50;
+  let weighted=0,minutes=0;for(const row of cv.jobs)if(row.skill===skill&&row.workedMinutes>0){weighted+=row.rating*row.workedMinutes;minutes+=row.workedMinutes;}
+  const rating=minutes?weighted/minutes:50;
   const gaps=[];
   if((c.skills[skill]||0)<policy.minSkill)gaps.push(`habilidade mínima ${policy.minSkill}`);
   if(experience<policy.minExperienceMinutes)gaps.push(`experiência comprovada de ${policy.minExperienceMinutes} minutos`);

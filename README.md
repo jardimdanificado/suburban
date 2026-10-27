@@ -612,6 +612,8 @@ A codificação do pacote no worker ficou em aproximadamente 31 ms nesta carga (
 
 Além das cargas anteriores, `npm run benchmark -- bridge` mede a aplicação através da ponte real da simulação, e `npm run benchmark -- city-render` mede a preparação dos imóveis. `snapshots` agora informa também o custo de aplicação e os hashes da origem e do espelho após clonagem estruturada dos pacotes. Esses comandos aceitam o caminho de outro checkout como último argumento.
 
+`npm run benchmark -- freight` mede o custo de localizar fretes durante atualizações de movimento com muitos motoristas e registros de entregas.
+
 Em cidades maiores, o worker ajusta o intervalo dos estados completos conforme o custo de montá-los, até dois segundos. Posições e necessidades continuam sendo enviadas a cada 100 ms; comandos solicitam uma atualização completa imediata assim que a anterior é confirmada.
 
 ### Limite de contratações
