@@ -1,4 +1,4 @@
-import {addBuildingSign} from './city_building_details.js';
+import {addBuildingDetails} from './city_building_details.js?v=building-models-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityActivityBadges} from './city_activity_renderer.js?v=activity-toggle-1';
 import {syncCityMobility} from './city_mobility_renderer.js';
@@ -191,11 +191,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         } else if(b.type==='bank') {
           for(let i=0;i<3;i++){const column=new THREE.Mesh(new THREE.CylinderGeometry(.12,.14,1.5,8),material);column.position.set(.6+i*.65,.75,b.depth+.2);facade.add(column);}
           const pediment=new THREE.Mesh(new THREE.ConeGeometry(1.3,.6,3),material);pediment.rotation.y=Math.PI/2;pediment.position.set(1.25,1.7,b.depth+.2);facade.add(pediment);
-        } else {
-          const tank=new THREE.Mesh(industry.category==='industry'?new THREE.CylinderGeometry(.35,.45,1.2,8):new THREE.BoxGeometry(1,.7,.6),material);
-          tank.position.set(b.width*.65,b.floors*CITY_FLOOR_HEIGHT+.6,b.depth*.5);facade.add(tank);
-          if(industry.category==='industry'){const chimney=new THREE.Mesh(new THREE.CylinderGeometry(.13,.2,1.8,6),material);chimney.position.set(.6,b.floors*CITY_FLOOR_HEIGHT+.9,.6);facade.add(chimney);}
-          else {const sign=new THREE.Mesh(new THREE.BoxGeometry(1.3,.3,.08),material);sign.position.set(b.width/2,1.3,b.depth+.09);facade.add(sign);}
+
         }
       }
       if (b.type === 'mill') {
@@ -203,7 +199,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         for (let i = 0; i < 4; i++) { const blade = new THREE.Mesh(new THREE.BoxGeometry(.16, 1.5, .06), new THREE.MeshLambertMaterial({ color: 0xe0cd97 })); blade.rotation.z = i * Math.PI / 2; blades.add(blade); }
         facade.add(blades); group.userData.millBlades = blades;
       }
-      addBuildingSign(THREE,facade,b);
+      addBuildingDetails(THREE,facade,b);
       const door = new THREE.Mesh(new THREE.BoxGeometry(.55, 1.4, .04), new THREE.MeshLambertMaterial({ color: 0x293e35 }));
       door.position.set(Math.floor(b.width / 2) + .5, .70, b.depth + .025); facade.add(door);
       const awning = new THREE.Mesh(new THREE.BoxGeometry(1.1, .12, .7), new THREE.MeshLambertMaterial({ color: b.type === 'market' ? 0xdca14b : 0xc9d9a1 }));
@@ -296,7 +292,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
   if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;
-    addBuildingSign(THREE,group,b,surfaceElevation(world,entity.x+b.width/2,entity.y+b.depth));
+    addBuildingDetails(THREE,group,b,{outdoor:true,ground:surfaceElevation(world,entity.x+b.width/2,entity.y+b.depth/2)});
     const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : ['market','greengrocer'].includes(b.type)?0xb5a68d:0x6e7940 }), b.units.length);
     patches.receiveShadow = true; group.add(patches); group.userData.patches = patches;
     const rows = ['farm','quarry'].includes(b.type)?new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0xb0b8ba : b.crop === 'girassol' ? 0xffce30 : 0x9bbd50 }), b.units.length * 3):null;
