@@ -23,7 +23,7 @@ export class CityDesktop {
   set unitId(id){if(this.active)this.active.unitId=id;}
   get selectedPlotId(){return this.active?.selectedPlotId||null;}
   get selected(){return this.active?.selected||null;}
-  set notice(value){const state=this.manager.find('module:city')?.state;if(state)state.notice=value;}
+  set notice(value){const state=this.active||this.manager.find('module:city')?.state;if(state)state.notice=value;}
   create(id,tab,{title=null,entity=null,unitId=null,kind='module'}={}){
     const existing=this.manager.find(id);if(existing){this.manager.raise(id);if(existing.shaded)this.manager.shade(id);this.hidden=false;return existing.state;}
     const state=new CityUI({city:this.city,root:this.element,select:this.select,camera:this.camera,host:this});state.tab=tab;

@@ -8,9 +8,6 @@ export function desktopMenus(d){
       item('Terreno, semente e geração',()=>d.openDestination('government','world')),
       item('Centralizar câmera',()=>d.controls.center?.()),
       separator,
-      item('Visualização 3D',()=>d.controls.render?.('3d'),{checked:()=>d.chromeState?.renderMode==='3d'}),
-      item('Visualização 2D',()=>d.controls.render?.('2d'),{checked:()=>d.chromeState?.renderMode==='2d'}),
-      separator,
       item('Pausar / continuar',()=>d.controls.pause?.(),{checked:()=>!!d.chromeState?.paused}),
       item('Alterar velocidade',()=>d.controls.speed?.())
     ]},

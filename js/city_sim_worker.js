@@ -92,7 +92,7 @@ self.onmessage = ({ data }) => {
         'currency.retire': 'É preciso preservar a reserva do tesouro e a base monetária mínima.',
       };
       const ok = result !== false && result !== null;
-      postMessage({ type: 'result', id: data.id, ok, message: ok ? '' : errors[data.path] || state.city.lastError });
+      postMessage({ type: 'result', id: data.id, ok, message: ok ? (data.path==='politics.intervene'?(result?.description||'Intervenção concluída.'):'') : errors[data.path] || state.city.lastError });
       dirty = true; snapshot(true);
     }
   } catch (error) {

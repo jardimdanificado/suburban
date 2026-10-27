@@ -1,3 +1,4 @@
+import {contextActions} from './city_context_actions.js';
 import {colorName} from './city_colors.js';
 import {renderVehiclePaint} from './city_paint_ui.js';
 import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js';
@@ -8,6 +9,7 @@ const stamp=n=>`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStar
 function ownerLink(ui,account){const actor=ui.city.accounts.get(account);if(actor?.entity?.properties.citizen)ui.openCitizen(actor.id);else if(actor?.entity?.properties.cityBuilding)ui.openBuilding(actor.id);else if(account==='treasury')ui.openPanel({tab:'government',views:{government:'finance'}});}
 export function renderVehicle(ui,p,v){
   const city=ui.city,system=city.vehicles,model=system.model(v),spec=VEHICLE_SPECS[v.good];
+  contextActions(ui,p,{vehicle:v});
   p.heading(`${title(v)} #${v.id}`);p.status(model?.brand||'Fabricante desconhecido',model?.name||'Modelo sem identificação');
   p.metrics([['CONSERVAÇÃO',`${v.condition.toFixed(0)}%`,v.condition<30?C.red:C.green],['VELOCIDADE NA RUA',`${spec.speed} células/s`]]);
   p.heading('IDENTIDADE E PROPRIEDADE');p.kv('Registro individual',v.id);p.kv('Marca',model?.brand||'Sem registro');p.kv('Modelo / revisão',model?.name||'Sem registro');p.kv('Origem',v.initial?'Equipamento da fundação':v.imported?'Importado':'Produção local');
@@ -69,5 +71,5 @@ export function renderMobility(ui,p){
   p.metrics([['EM USO',units.filter(v=>v.active).length],['À VENDA',units.filter(v=>!v.active).length],['EM VIAGEM',units.filter(v=>v.active&&v.driverId).length,C.cyan],['AVARIADOS',units.filter(v=>v.active&&v.condition<=15).length,C.red]]);
   const rows=units.filter(v=>ui.matches(`${title(v)} ${system.model(v)?.brand} ${system.model(v)?.name} ${city.accountName(v.ownerAccountId)}`));
   p.table([{label:'Marca / modelo',weight:3},{label:'Dono',weight:2},{label:'Conservação'},{label:'Situação',weight:2}],rows.map(v=>({cells:[`${system.model(v)?.brand} · ${system.model(v)?.name}`,city.accountName(v.ownerAccountId),`${v.condition.toFixed(0)}%`,!v.active?'Estoque / loja':v.journey?'Em viagem':v.condition<=15?'Avariado':'Estacionado'],click:()=>ui.openPanel({selectedVehicleId:v.id}),color:v.active&&v.condition<=15?C.gold:C.gray})));
-  if(!rows.length){p.note('Ainda não há veículos fabricados. A cadeia começa com metais, madeira, látex e tecido.');p.heading('ONDE A CADEIA ESTÁ PARADA');p.table([{label:'Etapa',weight:2},{label:'Ativas / obras'},{label:'Funcionários'},{label:'Falta',weight:3}],system.productionStatus().map(row=>({cells:[row.label,`${row.active} / ${row.planned}`,row.workers,!row.active?'Instalar empresa':!row.workers?'Contratar funcionários':row.missing.join(', ')||'Produção disponível'],...(row.buildingId?{click:()=>ui.openBuilding(row.buildingId)}:{})})));}p.windowLink('INTERVIR: FINANCIAR OU IMPORTAR VEÍCULOS',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'interventions',interventionView:'economy'}));
+  if(!rows.length){p.note('Ainda não há veículos fabricados. A cadeia começa com metais, madeira, látex e tecido.');p.heading('ONDE A CADEIA ESTÁ PARADA');p.table([{label:'Etapa',weight:2},{label:'Ativas / obras'},{label:'Funcionários'},{label:'Falta',weight:3}],system.productionStatus().map(row=>({cells:[row.label,`${row.active} / ${row.planned}`,row.workers,!row.active?'Instalar empresa':!row.workers?'Contratar funcionários':row.missing.join(', ')||'Produção disponível'],...(row.buildingId?{click:()=>ui.openBuilding(row.buildingId)}:{})})));}
 }

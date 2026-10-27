@@ -3,14 +3,14 @@ import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
 export class CitySimulationBridge {
-  constructor({ city, entities, nextId, time, changed, notice }) {
-    this.city = city; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice;
+  constructor({ city, entities, nextId, time, changed, notice, noticeTarget }) {
+    this.city = city; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice; this.noticeTarget = noticeTarget;
     this.graph = new CityStateGraph(); this.state = { city, entities, nextId };
     this.active = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
     this.motion = new Map();this.motionSamples=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=jobs-trade-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=civic-sites-2', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });
@@ -28,7 +28,7 @@ export class CitySimulationBridge {
     const id = ++this.commandId;
     // Policies/options are plain data. Bank/building references use graph IDs.
     const encoded = args.map(arg => arg && typeof arg === 'object' && this.graph.ids.has(arg) ? this.graph.ref(arg) : arg);
-    this.pending.set(id, path); this.worker.postMessage({ type: 'command', id, path, args: encoded });
+    this.pending.set(id, {path,target:this.noticeTarget?.()}); this.worker.postMessage({ type: 'command', id, path, args: encoded });
   }
   control() {
     if (!this.active) return;
@@ -42,8 +42,8 @@ export class CitySimulationBridge {
     if (!this.active) return;
     if (data.type === 'failure') { this.fail(data.message); return; }
     if (data.type === 'result') {
-      const path = this.pending.get(data.id); this.pending.delete(data.id);
-      if (!data.ok) this.notice(data.message || `Não foi possível concluir a operação: ${path}.`);
+      const pending = this.pending.get(data.id),path=pending?.path; this.pending.delete(data.id);
+      if (!data.ok || path==='politics.intervene') this.notice(data.message || `Não foi possível concluir a operação: ${path}.`,pending?.target);
       return;
     }
     if (data.type === 'motion') { this.receiveMotion(data); return; }

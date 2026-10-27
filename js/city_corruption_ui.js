@@ -1,3 +1,4 @@
+import {contextActions} from './city_context_actions.js';
 import {formatMoney as money} from './city_ui_format.js';
 import {drawPartyFlag} from './city_party_flags.js';
 const labels={'party-fund-diversion':'Caixa partidário clandestino','poll-rigging':'Manipulação de pesquisa eleitoral','vote-buying':'Compra de votos','contract-overbilling':'Superfaturamento contratual',favoritism:'Favorecimento indevido',embezzlement:'Desvio de recursos'};
@@ -32,6 +33,9 @@ export function renderCorruptionInspector(ui,p){
   p.heading(`CASO #${r.id} · ${labels[r.type]||r.type}`);
   p.links([['summary','ESQUEMA'],['money','DINHEIRO'],['evidence','INVESTIGAÇÃO']].map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({corruptionTab:id})})));
   p.kv('Situação',status(r));
+  contextActions(ui,p,{caseRecord:r});
+  if(r.convictedIds?.length)p.kv('Condenados',r.convictedIds.map(id=>city.accountName(`citizen:${id}`)).join(', '));
+  for(const bill of gov.council.bills.filter(b=>b.type==='convict'&&b.payload.caseId===r.id))p.record('Votação de condenação',`${city.accountName(`citizen:${bill.payload.targetId}`)} · ${bill.status} · ${bill.yes??0} a ${bill.no??0}`,()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'council',billId:bill.id}));
   if(!discovered(r))p.note('Informação secreta da simulação: a população ainda não descobriu este esquema.');
   if(tab==='summary'){
     p.note(mechanisms[r.type]||'As movimentações registradas mostram a execução financeira deste esquema.');

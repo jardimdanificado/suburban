@@ -1,3 +1,5 @@
+import {addBuildingSign} from './city_building_details.js';
+import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityActivityBadges} from './city_activity_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
@@ -40,6 +42,9 @@ function buildingMaterial(renderer,THREE,kind,color){
 // Room coordinates count floors; render their physical height consistently with picking.
 
 export function syncCityBuildings(renderer, THREE, entities, world) {
+  const selectedPerson=entities.find(e=>e.id===renderer.selectedEntityId)?.properties?.citizen;
+  const selectedInteriorId=selectedPerson?.indoorLocation?.buildingId;
+  syncConstructionSites(renderer,THREE,world,renderer.cityDevelopment);
   syncCampaignDecorations(renderer,THREE,entities,world);
   syncCityActivityBadges(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
@@ -132,8 +137,8 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       windows.forEach(([x, y, z, w, h, d], i) => { matrix.makeScale(w, h, d); matrix.setPosition(x, y, z); windowMesh.setMatrixAt(i, matrix); });
       group.add(windowMesh);
       const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',style.roof));
-      roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);
-      const facade=new THREE.Group(),origin=buildingPoint(b,0,0);facade.rotation.y=(b.rotation||0)*Math.PI/2;facade.position.set(origin.x,0,origin.y);group.add(facade);
+      roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);group.userData.roof=roof;
+      const facade=new THREE.Group(),origin=buildingPoint(b,0,0);facade.rotation.y=(b.rotation||0)*Math.PI/2;facade.position.set(origin.x,0,origin.y);group.add(facade);group.userData.facade=facade;
       {
       const b={...entity.properties.cityBuilding,...modelSize(entity.properties.cityBuilding)};
       if (residential) {
@@ -198,6 +203,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         for (let i = 0; i < 4; i++) { const blade = new THREE.Mesh(new THREE.BoxGeometry(.16, 1.5, .06), new THREE.MeshLambertMaterial({ color: 0xe0cd97 })); blade.rotation.z = i * Math.PI / 2; blades.add(blade); }
         facade.add(blades); group.userData.millBlades = blades;
       }
+      addBuildingSign(THREE,facade,b);
       const door = new THREE.Mesh(new THREE.BoxGeometry(.55, 1.4, .04), new THREE.MeshLambertMaterial({ color: 0x293e35 }));
       door.position.set(Math.floor(b.width / 2) + .5, .70, b.depth + .025); facade.add(door);
       const awning = new THREE.Mesh(new THREE.BoxGeometry(1.1, .12, .7), new THREE.MeshLambertMaterial({ color: b.type === 'market' ? 0xdca14b : 0xc9d9a1 }));
@@ -264,9 +270,11 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     }
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = renderer.cityAnimationTime*.3;
     group.position.set(entity.x, b.terrain.base, entity.y);
-    if (group.userData.roomProps) group.userData.roomProps.visible = renderer.selectedEntityId === entity.id;
-    // Selection highlights the chamber without making every floor transparent.
-    if(b.type==='council_chamber'){group.userData.cells.material.transparent=false;group.userData.cells.material.opacity=1;group.userData.cells.material.depthWrite=true;}
+    const cutaway=renderer.selectedEntityId===entity.id||selectedInteriorId===b.id;
+    if(group.userData.roomProps)group.userData.roomProps.visible=cutaway;
+    if(group.userData.roof)group.userData.roof.visible=!cutaway;
+    if(group.userData.facade)group.userData.facade.visible=!cutaway;
+    const material=group.userData.cells.material;if(material.transparent!==cutaway){material.transparent=cutaway;material.needsUpdate=true;}material.opacity=cutaway?.18:1;material.depthWrite=!cutaway;
     const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
     group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z*CITY_FLOOR_HEIGHT + CITY_FLOOR_HEIGHT/2, unit.y + .5);
@@ -288,6 +296,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
   if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;
+    addBuildingSign(THREE,group,b,surfaceElevation(world,entity.x+b.width/2,entity.y+b.depth));
     const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : ['market','greengrocer'].includes(b.type)?0xb5a68d:0x6e7940 }), b.units.length);
     patches.receiveShadow = true; group.add(patches); group.userData.patches = patches;
     const rows = ['farm','quarry'].includes(b.type)?new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0xb0b8ba : b.crop === 'girassol' ? 0xffce30 : 0x9bbd50 }), b.units.length * 3):null;

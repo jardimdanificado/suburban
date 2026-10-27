@@ -1,3 +1,4 @@
+import {contextActions} from './city_context_actions.js';
 import {renderResearchProgress,renderPollMethod} from './city_research_ui.js';
 const stamp=n=>n==null?'—':`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const phases={scheduled:'Aguardando início da campanha', 'runoff-required':'Segundo turno confirmado',campaign:'Campanha e pesquisas',voting:'Votação presencial',counting:'Atendimento da fila final',completed:'Resultado definitivo',cancelled:'Eleição adiada'};
@@ -16,6 +17,7 @@ function polls(ui,p,e){
   renderResearchProgress(ui,p,e);p.note('Pesquisas presenciais por instituto, dentro dos limites de amostragem votados pela Câmara. Intenções declaradas não são votos nas urnas.');
   const poll=e.polls.find(r=>r.id===ui.monitorPollId)||e.polls.at(-1);
   if(!poll){p.note('Aguardando a primeira pesquisa.');return;}
+  contextActions(ui,p,{poll});
   p.button('ACOMPANHAR A MAIS RECENTE',()=>{ui.monitorPollId=null;},ui.monitorPollId==null);p.links(e.polls.map(r=>({label:`${stamp(r.minute)}`,click:()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:r.id})})));
   if(poll.instituteName)p.kv('Instituto',poll.instituteName);p.kv('Última atualização',stamp(poll.minute));p.metrics([['ENTREVISTADOS',poll.sampleSize],['INDECISOS',poll.undecided],['MARGEM',`±${poll.marginOfError.toFixed(1)} p.p.`]]);
   p.table([{label:'Candidato',weight:2},{label:'Intenção'},{label:'Rejeição'}],poll.results.map(r=>({cells:[r.name,`${(r.intentions/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`,`${(r.rejections/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`],click:()=>ui.openCitizen(r.candidateId)})));
@@ -52,6 +54,7 @@ function council(ui,p,e){
 }
 export function renderElectionMonitor(ui,p){
   const city=ui.city,e=electionFor(ui);if(!e){p.note('Registro desta eleição indisponível.');return;}
+  contextActions(ui,p,{election:e});
   const mode=ui.electionView||'polls';p.heading(`ELEIÇÃO ${e.id} · ${e.round||1}º TURNO · ${phases[e.status]||e.status}`);
   if(e.firstRoundId)p.button('RESULTADO DO PRIMEIRO TURNO',()=>ui.host?.openElection(e.firstRoundId,'results'));
   if(e.runoffId)p.button('ACOMPANHAR SEGUNDO TURNO',()=>ui.host?.openElection(e.runoffId,'polls'));

@@ -1,3 +1,4 @@
+import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js';
 import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './city_paint_ui.js';
 import {colorName} from './city_colors.js';
@@ -171,6 +172,7 @@ export class CityUI {
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
       if(this.tab==='government'&&this.view()==='elections'){const nav=new Page(ui,x+4,y,w-8,y,bottom);renderPoliticsNavigation(this,nav);y=nav.y;this.politicsNavigationPinned=true;}
     }
+    if(this.notice){const alert=new Page(ui,x+4,y,w-8,y,bottom);alert.status('INTERVENÇÃO',this.notice);y=alert.y;}
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings'].includes(this.tab)||this.tab==='economy'&&this.view()==='overview'?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings'].includes(this.tab)||this.tab==='economy'&&this.view()==='overview')this.directory(p);else this.content(p);
     });this.finishInputs();
@@ -278,7 +280,7 @@ export class CityUI {
     this.dossierTabs(p, [['profile', 'PERFIL'], ['colors','CORES'], ['skills', 'TRABALHO'], ['resume','CURRÍCULO'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'CONTA'], ['history', 'HISTÓRICO']]);
     if(this.detailTab==='colors'){renderColorPreferences(this,p,c);return;}
     if (this.detailTab === 'profile') {
-
+      contextActions(this,p,{person:c});
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
       if(c.workCell)p.kv('Célula de atividade',`${c.workCell.x+1}, ${c.workCell.y+1} · ${c.workCell.z+1}º andar`);
       if(c.indoorLocation?.path?.length)p.kv('Percurso interno',`${c.indoorLocation.path.length} etapas até ${c.indoorLocation.exiting?'a saída':c.indoorLocation.targetRoomType}`);
@@ -330,7 +332,7 @@ export class CityUI {
       this.socialMemories(p,c);
     } else if (this.detailTab === 'politics') {
       renderCitizenPolitics(this,p,c);
-      p.windowLink('INTERVIR NA IMAGEM E NA CAMPANHA',()=>this.openPanel({tab:'government',views:{government:'elections'},politicsTab:'interventions',interventionTargetId:c.id,interventionView:'opinion'}));
+      contextActions(this,p,{person:c});
       if(city.politics.canRun(c,'mayor',true)){p.buttons([{label:'PESQUISAR PRIORIDADES PARA PROMESSAS',click:()=>city.politics.getResearch().commissionService(c.accountId,'public-priorities',c.id)},{label:'PESQUISAR MINHA APROVAÇÃO',click:()=>city.politics.getResearch().commissionService(c.accountId,'candidate-potential',c.id)}]);}
     } else {
       p.heading('CONTA PESSOAL'); p.kv('Dinheiro disponível', money(c.balance)); p.kv('Salário líquido hoje', money(c.salaryToday));p.kv('Complemento municipal hoje',money(c.wageSubsidyToday||0));p.kv('Complementos recebidos',money(c.wageSubsidyTotal||0));if(c.wageSubsidyUnpaidToday)p.kv('Complemento não pago por falta de caixa',money(c.wageSubsidyUnpaidToday));p.kv('Benefícios recebidos',money(c.benefitsReceived||0));p.kv('Poupança total',money(city.bank.savings(c.accountId)));
@@ -363,6 +365,7 @@ export class CityUI {
     this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['finance','FINANÇAS'], ['infrastructure','ESTRUTURA'], ['paint','PINTURA'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
     if(this.detailTab==='paint'){renderBuildingPaint(this,p,b);return;}
     if (this.detailTab === 'profile') {
+      contextActions(this,p,{business:b});
       if(b.type==='bike_rack'){renderParking(this,p);return;}
       p.metrics([['CAIXA',money(b.balance),b.balance<1000?C.red:C.cyan],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]);
       if(civicSpec(b)){const service=civicStatus(city,b);p.heading('ATENDIMENTO');p.kv('Equipe presente / capacidade',`${service.team} / ${service.capacity}`);p.kv('Usuários atendidos agora',service.visitors);p.kv('Visitas concluídas',b.completedVisits||0);p.note(service.reason);}
@@ -524,7 +527,7 @@ export class CityUI {
     if(this.tab==='party-organization'){renderPartyOrganizationWindow(this,p);return;}
     if(this.tab==='party'){renderPartyDossier(this,p);return;}if(this.tab==='contract'){renderContractDossier(this,p);return;}if(this.tab==='poll-response'){renderPollResponseDossier(this,p);return;}
     if(this.tab==='election'){renderElectionMonitor(this,p);return;}
-    if (this.notice) p.note(this.notice, C.red);
+    if (this.notice&&!this.floating) p.note(this.notice, C.red);
     const render = { city: 'overview', government: 'government', production: 'production', land: 'land', transport: 'transport', sanitation: 'sanitation', log: 'log',event:'eventInspector',publications:'publications',corruption:'corruptionDirectory','corruption-case':'corruptionInspector' }[this.tab];
     if (render) this[render](p);
   }
@@ -600,7 +603,7 @@ export class CityUI {
     if(view==='elections'){this.electionsPanel(p);return;}
     if(view==='overview'){
       renderGovernmentDashboard(this,p);
-      if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview'],['Intervenções','interventions']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council'],['Institutos de pesquisa','institutes'],['Pesquisas não eleitorais','research-services']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas eleitorais','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
+      if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council'],['Institutos de pesquisa','institutes'],['Pesquisas não eleitorais','research-services']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas eleitorais','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
       if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,this.cachedList(`municipal-contracts:${this.contractPlotId||'all'}`,()=>city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice().sort((a,b)=>Number(a.cancelled||a.status==='completed')-Number(b.cancelled||b.status==='completed')||Number(b.status==='blocked')-Number(a.status==='blocked')||b.startedAt-a.startedAt)));}

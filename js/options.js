@@ -2,10 +2,10 @@ import { SPEED_TIERS } from "./simulation_time.js";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
 const GRAPHICS = [
-  { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1, 1.5, 2].map(v => [v, `${v * 100}%`]), default: 0.5 },
+  { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1, 1.5, 2].map(v => [v, `${v * 100}%`]), default: 0.25 },
   { key: "distance", label: "DISTANCIA", values: [...[24, 36, 48, 64, 96].map(v => [v, `${v} T`]), [0, "TOTAL"]], default: 64 },
   { key: "shadows", label: "SOMBRAS", values: BOOL, default: true },
-  { key: "shadowQuality", label: "MAPA SOMBRAS", values: [512, 1024, 2048, 4096].map(v => [v, `${v}`]), default: 2048 },
+  { key: "shadowQuality", label: "MAPA SOMBRAS", values: [512, 1024, 2048, 4096].map(v => [v, `${v}`]), default: 512 },
   { key: "wireframe", label: "WIREFRAME", values: [[0, "OFF"], [1, "GRADE"], [2, "TOTAL"]], default: 0 },
 ];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
@@ -91,8 +91,8 @@ export class OptionsPanel {
       for (const item of [...GRAPHICS, ...EFFECTS]) this.apply(item.key, item.default);
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
-    [["GRAPHICS", "GRAFICOS"], ["EFFECTS", "EFEITOS"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
-      const bw = Math.floor((w - 24) / 3);
+    [["GRAPHICS", "GRAFICOS"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
+      const bw = Math.floor((w - 24) / 2);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
     const rows = this.tab === "GRAPHICS" ? GRAPHICS : EFFECTS;

@@ -56,12 +56,13 @@ export class CityCitizenModels {
   add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
-    if(hidden||c.indoorLocation)return true;
+    if(hidden)return true;
+    const inside=c.indoorLocation?.position,x=inside?.x??entity.x,y=inside?.y??entity.y;
     let motion=this.motion.get(entity);
-    if(!motion){motion={x:entity.x,y:entity.y,angle:0,walkDistance:0,hasWalked:false};this.motion.set(entity,motion);}
-    const dx=entity.x-motion.x,dy=entity.y-motion.y;
+    if(!motion){motion={x,y,angle:0,walkDistance:0,hasWalked:false};this.motion.set(entity,motion);}
+    const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
-    if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId){motion.walkDistance+=Math.hypot(dx,dy);motion.hasWalked=true;}motion.x=entity.x;motion.y=entity.y;}
+    if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId){motion.walkDistance+=Math.hypot(dx,dy);motion.hasWalked=true;}motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&c.mobilityTrip){const next=c.path?.[0];if(next)motion.angle=Math.atan2(next.x-entity.x,next.y-entity.y);}
     const clip=citizenAnimation(c,moved||!!c.path?.length&&motion.hasWalked),pose=clip==='run'?{clip:'run',frame:Math.floor(motion.walkDistance*3+(entity.id*13)%17)%CITIZEN_MODEL_FRAMES.run.length}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
     let batch=this.batches.get(key);if(!batch){batch={count:0,capacity:0,mesh:null};this.batches.set(key,batch);}
@@ -71,7 +72,7 @@ export class CityCitizenModels {
       this.group.add(mesh);batch.mesh=mesh;batch.capacity=capacity;
     }
     const size=(entity.properties.render.size||1)*(perspective?1.05:1);
-    this.position.set(entity.x,surfaceH+(c.ridingVehicleId? .18:0),entity.y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
+    this.position.set(x,surfaceH+(inside?.z||0)+(c.ridingVehicleId? .18:0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count++,this.color);return true;
   }
   end(){for(const batch of this.batches.values()){batch.mesh.count=batch.count;if(batch.count){batch.mesh.instanceMatrix.needsUpdate=true;if(batch.mesh.instanceColor)batch.mesh.instanceColor.needsUpdate=true;}}}

@@ -1,3 +1,4 @@
+import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {governmentExpectations} from './city_government_expectations.js';
 import {outcomeAssessment,promiseAssessment} from './city_promise_evaluation.js';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
@@ -85,6 +86,12 @@ export function investigateCases(p){
     const reach=Math.max(1,Math.ceil(voters.length*(record.proven?.035:.01)*(1+record.severity/100)));
     const listeners=p.campaigns.sample(voters.filter(c=>!record.awareIds.includes(c.id)),reach);
     for(const voter of listeners){record.awareIds.push(voter.id);p.remember(voter,{kind:record.proven?'proven-scandal':'corruption-rumor',caseId:record.id,partyId:record.partyId,candidateId:record.accusedId,effect:record.proven?-record.severity/4:-2,description:record.proven?'Conheceu provas de corrupção e seus participantes.':'Ouviu denúncia ainda sob investigação.'});}
+    syncCorruptionVotes(p,record);
+    if(record.proven)for(const targetId of [...new Set([record.accusedId,...(record.participantIds||[])])]){
+      if(p.council.bills.some(b=>b.type==='convict'&&b.payload.caseId===record.id&&b.payload.targetId===targetId))continue;
+      const author=p.council.people().find(c=>c.id!==targetId&&!record.participantIds?.includes(c.id));
+      if(author)p.council.propose(author,'convict',{targetId,caseId:record.id},'Condenação por corrupção comprovada');
+    }
     record.publicAttention=publicPressure(p,record);
     if(scandalEligible(p,record))for(const targetId of [...new Set([record.accusedId,...(record.participantIds||[])])]){
       if(record.impeachedIds?.includes(targetId)||p.council.bills.some(b=>b.type==='impeach'&&b.payload.caseId===record.id&&b.payload.targetId===targetId))continue;

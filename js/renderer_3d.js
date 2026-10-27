@@ -3122,8 +3122,8 @@ export class RCT3DRenderer {
     this.sunLight = new THREE.DirectionalLight(0xfffaea, 1.4);
     this.sunLight.position.set(40, 80, 50);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.width = 2048;
-    this.sunLight.shadow.mapSize.height = 2048;
+    this.sunLight.shadow.mapSize.width = 512;
+    this.sunLight.shadow.mapSize.height = 512;
     this.sunLight.shadow.camera.near = 1;
     this.sunLight.shadow.camera.far = 350;
     const sd = 60;

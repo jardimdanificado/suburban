@@ -97,7 +97,11 @@ export function syncCitizenInterior(city,c){
 
 export function workCellReady(city,c,b){
  const assigned=city.units.get(c.workCell?.unitId),valid=u=>u?.buildingId===b.id&&['workspace','office','plenary'].includes(u.roomType);
- const room=valid(assigned)?assigned:b.units.find(u=>valid(u)&&activityCellAvailable(city,u,c,u.roomType));
+ let room=valid(assigned)?assigned:b.units.find(u=>valid(u)&&activityCellAvailable(city,u,c,u.roomType));
+ if(b.constructionKind!=='open-air'&&room&&c.indoorLocation?.unitId===room.id&&!c.indoorLocation.path?.length){
+  c.nextWorkRotationAt??=city.minute+30+c.id%31;
+  if(city.minute>=c.nextWorkRotationAt){const alternatives=b.units.filter(u=>valid(u)&&u.id!==room.id&&activityCellAvailable(city,u,c,u.roomType));if(alternatives.length)room=alternatives[(c.id+Math.floor(city.minute/60))%alternatives.length];c.nextWorkRotationAt=city.minute+45+c.id%30;}
+ }
  if(!room){c.action='Aguardando célula de trabalho livre';return false;}
  if(b.constructionKind==='open-air')return outdoorCellReady(city,c,b,room);
  return activityRoomReady(city,c,b,room,room.roomType);

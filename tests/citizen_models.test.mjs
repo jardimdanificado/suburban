@@ -35,11 +35,11 @@ test('1024 people share at most nine frame batches and preserve political colors
  model.begin(.05,1);for(let i=0;i<people.length;i++){const e=people[i];if(i%3===0)e.x+=1;else if(i%3===1)e.properties.citizen.task='work';model.add(e,3);}model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),1024);assert(group.meshes.size<=9);assert(group.meshes.size>=7);
  model.begin(.016,1);model.end();assert.equal(b.mesh.count,0);
 });
-test('heading follows movement, indoor and first-person bodies stay hidden, pause freezes animation',async()=>{
+test('heading follows movement, indoor bodies are shown, first-person bodies stay hidden, pause freezes animation',async()=>{
  const {model}=await models(),e=person(1);model.begin(.1,1);model.add(e,2);e.x=1;model.begin(.1,1);model.add(e,2);model.end();const run=[...model.batches.entries()].find(([key,b])=>key.startsWith('run')&&b.count);assert(run);assert.equal(run[1].mesh.matrices[0].angle,Math.PI/2);
  const clock=model.clock;model.begin(1,0);assert.equal(model.clock,clock);model.add(e,2);model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),1);
  model.begin(.1,1);model.add(e,2,{hidden:true});model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),0);
- e.properties.citizen.indoorLocation={buildingId:1};model.begin(.1,1);model.add(e,2);model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),0);
+ e.properties.citizen.indoorLocation={buildingId:1,position:{x:4,y:5,z:1.8}};model.begin(.1,1);model.add(e,2);model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),1);
 });
 test('clearing a city keeps loaded geometry and resets character motion without fetching again',async()=>{
  const {model,group,requests}=await models();model.add(person(2),0);model.end();model.clear();assert.equal(group.meshes.size,0);assert(model.ready);assert.equal(model.frames.size,9);model.add(person(3),0);model.end();assert.equal(requests.length,9);assert.equal(group.meshes.size,1);

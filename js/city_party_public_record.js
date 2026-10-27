@@ -36,7 +36,7 @@ export function recordLegislativeOpinion(standing,bill,override=false){
   for(const partyId of new Set(bill.votes.map(v=>v.partyId))){const party=p.party(partyId);if(!party)continue;
     party.publicRecords??=[];if(party.publicRecords.some(r=>r.key===key))continue;
     const votes=bill.votes.filter(v=>v.partyId===partyId),yes=votes.filter(v=>v.yes).length,stance=(yes-(votes.length-yes))/votes.length;
-    const points=clamp(support*stance*1.8,-1.8,1.8);
+    const points=['impeach','convict'].includes(bill.type)?0:clamp(support*stance*1.8,-1.8,1.8);
     const record={key,kind:'legislative',billId:bill.id,title:bill.title,minute:city.minute,points,sampleSize:size,support:opinions.filter(v=>v>.05).length,rejection:opinions.filter(v=>v<-.05).length,yes,no:votes.length-yes,votes:votes.map(v=>({...v})),override};
     record.eventId=city.log(`${party.short}: reação pública ${points>=0?'favorável':'desfavorável'} aos votos em “${bill.title}” (${points>=0?'+':''}${points.toFixed(2)} pontos).`,'government',votes.map(v=>v.citizenId),{kind:'party-legislative-reputation',partyId,billId:bill.id,points,sampleSize:size}).id;
     party.publicRecords.push(record);
