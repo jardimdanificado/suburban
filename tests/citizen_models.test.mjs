@@ -25,7 +25,8 @@ test('OBJ parser triangulates quads, resolves negative indices and rejects inval
 });
 test('animation distinguishes actual movement, on-site work, idle and bicycle poses',()=>{
  assert.equal(citizenAnimation({task:null,path:[]}), 'idle');assert.equal(citizenAnimation({task:'work',path:[]}), 'use');assert.equal(citizenAnimation({task:'work',path:[{}]},true),'run');
- assert.equal(citizenAnimation({task:'work',path:[{}]},false),'idle');assert.equal(citizenAnimation({ridingVehicleId:1},true),'ride');assert.deepEqual(citizenFrame('ride',.3),{clip:'use',frame:1});
+ assert.equal(citizenAnimation({task:'work',path:[{}]},false),'idle');assert.equal(citizenAnimation({ridingVehicleId:1,ridingVehicleKind:'bicicleta',mobilityTrip:{stage:'riding'}},true),'pedal');assert.deepEqual(citizenFrame('mount',.3),{clip:'use',frame:0});assert.deepEqual(citizenFrame('passenger',.3),{clip:'use',frame:0});
+ assert.deepEqual([0,.125,.25].map(time=>citizenFrame('pedal',time).frame),[0,2,4]);
  assert.notEqual(citizenFrame('run',0).frame,citizenFrame('run',.15).frame);assert.equal(citizenFrame('use',.5).frame,2);assert.equal(citizenFrame('use',.75).frame,1);
 });
 test('1024 people share at most nine frame batches and preserve political colors through growth',async()=>{
@@ -48,20 +49,23 @@ test('a failed asset leaves the renderer able to use its existing sprite fallbac
  const model=new CityCitizenModels(THREE,{add(){},remove(){}},{fetchAsset:async()=>({ok:false,status:404})});await model.loading;assert(!model.ready);assert.match(model.error,/404/);assert.equal(model.add(person(1),0),false);
 });
 
-test('walking frames advance only with distance, never with elapsed time while blocked',async()=>{
+test('walking frames advance with presentation time and freeze while paused',async()=>{
  const {model}=await models(),e=person(71);e.properties.citizen.path=[{x:10,y:0}];model.begin(.01,1);model.add(e,0);e.x=1;model.begin(.01,1);model.add(e,0);model.end();
  const pose=()=>[...model.batches].find(([key,b])=>key.startsWith('run')&&b.count)?.[0],first=pose();assert(first);
- for(let i=0;i<30;i++){model.begin(.1,2);model.add(e,0);model.end();assert.equal(pose(),first);}
- e.x+=.4;model.begin(.01,1);model.add(e,0);model.end();assert.notEqual(pose(),first);
+ for(let i=0;i<30;i++){model.begin(.1,2);model.add(e,0);model.end();}
+ const moving=pose();assert.notEqual(moving,first);model.begin(.1,0);model.add(e,0);model.end();assert.equal(pose(),moving);
 });
 
-test('bicycle riders hold use frame 1 while moving, stopped and paused',async()=>{
- const {model}=await models(),e=person(11);e.properties.citizen.ridingVehicleId=1;e.properties.citizen.ridingVehicleKind='bicicleta';
+test('bicycle riders pedal through run frames and use frame 0 while boarding or riding as passenger',async()=>{
+ const {model}=await models(),e=person(0);e.properties.citizen.ridingVehicleId=1;e.properties.citizen.ridingVehicleKind='bicicleta';
  const pose=()=>[...model.batches].find(([,b])=>b.count)?.[0];
- model.begin(0,1);model.add(e,0);model.end();assert.equal(pose(),'use:1');
- e.x+=.7;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:1');
- for(let i=0;i<20;i++){model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:1');}
- e.x+=.7;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:1');
+ e.properties.citizen.mobilityTrip={stage:'riding'};
+ model.begin(0,1);model.add(e,0);model.end();assert.equal(pose(),'run:0');
+ model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:0');
+ model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:2');
+ model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:4');
+ e.properties.citizen.mobilityTrip.stage='boarding';model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:0');
+ e.properties.citizen.mobilityTrip=null;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:0');
  e.properties.citizen.ridingVehicleKind='patinete';assert.equal(citizenAnimation(e.properties.citizen,true),'glide');
 });
 
