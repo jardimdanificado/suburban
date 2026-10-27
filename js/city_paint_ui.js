@@ -1,4 +1,4 @@
-import {COLOR_PALETTE,colorName,colorAffinity,favoriteColors,factoryColors,normalizeColor,buildingColor} from './city_colors.js';
+import {COLOR_PALETTE,colorName,colorAffinity,dislikesColor,favoriteColors,factoryColors,normalizeColor,buildingColor} from './city_colors.js';
 import {formatMoney as money} from './city_ui_format.js';
 function chooser(ui,p,initial){
  const color=ui.paintColor||initial||COLOR_PALETTE[0].hex;p.kv('Cor selecionada',colorName(color));
@@ -7,8 +7,8 @@ function chooser(ui,p,initial){
 }
 function jobs(ui,p,list){for(const j of list.slice(-12).reverse())p.record(`Pintura #${j.id} · ${colorName(j.color)}`,`${({delivery:'Levar veículo à oficina',ready:'Aguarda tinta / pagamento / equipe',painting:'Em pintura',completed:'Concluída',cancelled:'Cancelada'})[j.status]} · ${j.labor.toFixed(0)}/${j.requiredLabor} · ${j.quantity} latas${j.price?' · '+money(j.price):''}`,()=>{});}
 export function renderColorPreferences(ui,p,c){
- p.heading('CORES E GOSTOS PESSOAIS');p.note('A cor influencia roupas, a escolha de imóveis e veículos. Alimentos, abrigo, preço e utilidade continuam tendo prioridade.');
- p.table([{label:'Cor'},{label:'Afinidade'}],favoriteColors(c).map(color=>({cells:[color.name,`${Math.round(colorAffinity(c,color.hex)*100)}%`]})));
+  p.heading('CORES E GOSTOS PESSOAIS');p.note('A cor influencia roupas, a escolha de imóveis e veículos. Afinidades negativas indicam aversão; cores muito rejeitadas não são escolhidas para roupas. Alimentos, abrigo, preço e utilidade continuam tendo prioridade.');
+  p.table([{label:'Cor'},{label:'Afinidade'}],favoriteColors(c).map(color=>({cells:[color.name,`${dislikesColor(c,color.hex)?'Rejeita · ':''}${Math.round(colorAffinity(c,color.hex)*100)}%`]})));
  const color=chooser(ui,p,favoriteColors(c)[0].hex);p.heading('TINTA PRÓPRIA');
  for(const l of c.paintBag?.paintLots||[])p.kv(`${colorName(l.color)} · ${l.producerName}`,`${l.quantity} lata(s)`);
  if(c.paintPurchase)p.note(`Compra pendente: ${colorName(c.paintPurchase.color)}. Aguarda estoque e deslocamento à fábrica.`);

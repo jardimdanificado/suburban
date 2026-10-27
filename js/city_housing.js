@@ -178,7 +178,7 @@ export class CityHousing {
       const current = this.home(c);
       if (current && this.hasBathroom(current)) continue;
       const candidates = [...this.homes.values()].filter(h => this.city.building(h.buildingId) && this.units(h).every(u => !u.tenantId || u.tenantId === c.accountId));
-      candidates.sort((a, b) => Number(this.hasBathroom(b)) - Number(this.hasBathroom(a)) || this.rent(a,c)*(1-.1*colorAffinity(c,this.homeColor(a)))-this.rent(b,c)*(1-.1*colorAffinity(c,this.homeColor(b))));
+      candidates.sort((a, b) => Number(this.hasBathroom(b)) - Number(this.hasBathroom(a)) || this.rent(a,c)*(1-.25*colorAffinity(c,this.homeColor(a)))-this.rent(b,c)*(1-.25*colorAffinity(c,this.homeColor(b))));
       for (const h of candidates) {
         if (current && !this.hasBathroom(h)) continue;
         const units = this.units(h), owned = units.every(u => u.ownerId === c.accountId);
@@ -193,7 +193,7 @@ export class CityHousing {
     const investors = this.city.citizens.filter(c => this.city.society.isAdult(c));
     for (const c of investors) {
       if (!c.homeUnitId) {
-        const home = [...this.homes.values()].sort((a,b)=>this.price(a)*(1-.12*colorAffinity(c,this.homeColor(a)))-this.price(b)*(1-.12*colorAffinity(c,this.homeColor(b)))).find(h => !this.isSocial(h) && this.units(h).every(u => u.forSale && !u.tenantId && u.ownerId !== c.accountId) && this.price(h) + 60000 < c.balance);
+        const home = [...this.homes.values()].sort((a,b)=>this.price(a)*(1-.25*colorAffinity(c,this.homeColor(a)))-this.price(b)*(1-.25*colorAffinity(c,this.homeColor(b)))).find(h => !this.isSocial(h) && this.units(h).every(u => u.forSale && !u.tenantId && u.ownerId !== c.accountId) && this.price(h) + 60000 < c.balance);
         if (home && this.buyHome(c, home)) this.rentHome(c, home);
       }
       const demand = this.city.citizens.some(p => !p.homeUnitId && this.city.society.isAdult(p)); if (!demand) continue;

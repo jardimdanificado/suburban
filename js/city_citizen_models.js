@@ -90,16 +90,16 @@ export class CityCitizenModels {
     if(hidden)return true;
     const inside=c.indoorLocation?.position,x=inside?.x??entity.x,y=inside?.y??entity.y;
     let motion=this.motion.get(entity);
-    if(!motion){motion={x,y,angle:0,walkDistance:0,hasWalked:false};this.motion.set(entity,motion);}
+     if(!motion){motion={x,y,angle:0,walkDistance:0};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
-    if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId){motion.walkDistance+=Math.hypot(dx,dy);motion.hasWalked=true;}motion.x=x;motion.y=y;}
+     if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&c.mobilityTrip){const next=c.path?.[0];if(next)motion.angle=Math.atan2(next.x-entity.x,next.y-entity.y);}
     // Animate walking from presentation time rather than traveled distance.
     // Distance-based frame changes tied the pose to simulation updates and
     // made each step visibly click at ordinary speed.
-    const clip=citizenAnimation(c,moved||!!c.path?.length&&motion.hasWalked),pose=citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
-    const garment=c.wardrobe?.[c.wearingIndex||0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
+     const clip=citizenAnimation(c,moved),pose=citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
     if(batch.count===batch.capacity){
       const capacity=Math.max(32,batch.capacity*2),mesh=new this.THREE.InstancedMesh(outfit?.body||this.frames.get(key),this.material,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;

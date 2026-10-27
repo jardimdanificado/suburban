@@ -55,6 +55,14 @@ test('walking frames advance with presentation time and freeze while paused',asy
  for(let i=0;i<30;i++){model.begin(.1,2);model.add(e,0);model.end();}
  const moving=pose();assert.notEqual(moving,first);model.begin(.1,0);model.add(e,0);model.end();assert.equal(pose(),moving);
 });
+test('stationary citizens never cycle through run frames just because their path is still set',async()=>{
+ const {model}=await models(),e=person(71);e.properties.citizen.path=[{x:10,y:0}];
+ model.begin(.01,1);model.add(e,0);model.end();e.x=1;
+ model.begin(.01,1);model.add(e,0);model.end();assert([...model.batches].some(([key,b])=>key.startsWith('run:')&&b.count));
+ const pose=()=>[...model.batches].find(([key,b])=>b.count)?.[0];
+ model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'idle:0');
+ for(let i=0;i<20;i++){model.begin(.1,2);model.add(e,0);model.end();assert.equal(pose(),'idle:0');}
+});
 
 test('bicycle riders pedal through run frames and use frame 0 while boarding or riding as passenger',async()=>{
  const {model}=await models(),e=person(0);e.properties.citizen.ridingVehicleId=1;e.properties.citizen.ridingVehicleKind='bicicleta';

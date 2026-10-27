@@ -19,14 +19,13 @@ function assign(p,party,b,unit,floor,kind,rent=0){
  else {unit.partyHeadquartersIds??=[];if(!unit.partyHeadquartersIds.includes(party.id))unit.partyHeadquartersIds.push(party.id);}
  const h={kind,buildingId:b.id,unitId:unit.id,floor,rent,startedAt:city.minute,lastRentDay:city.day,arrears:0,missedDays:0};
  account.door={...b.door};account.buildingId=b.id;account.headquartersUnitId=unit.id;account.name=`Sede e fundo: ${party.name}`;
- const decoration={kind:'flag',partyId:party.id,partyNumber:party.number,flag:party.flag,candidateName:party.short,rotation:b.rotation||0,headquarters:true};
- h.flagEntity=city.createEntity({x:b.door.x,y:b.door.y,properties:{name:`Sede de ${party.short}`,campaignDecoration:decoration,render:{color:0xffffff}}});party.headquarters=h;
+  h.flagEntity=null;party.headquarters=h;
  party.history.push(Object.freeze({minute:city.minute,description:`Sede ${kind==='office'?'alugada':'provisória'} em ${b.entity.properties.name}, ${floor+1}º andar.`}));
- city.log(`${party.short} instalou sua sede em ${b.entity.properties.name}.`,'government',party.leaderId?[party.leaderId]:[],{kind:'party-headquarters',partyId:party.id,buildingId:b.id,floor,unitId:unit.id,rent});return h;
+  city.log(`${party.short} instalou sua sede em ${b.entity.properties.name}.`,'government',party.leaderId?[party.leaderId]:[],{kind:'party-headquarters',partyId:party.id,buildingId:b.id,floor,unitId:unit.id,rent});return h;
 }
 export function ensureHeadquarters(p,party){
  if(!party?.active)return null;const city=p.city,account=headquartersAccount(p,party),current=party.headquarters,host=current&&city.building(current.buildingId);
- if(host&&!host.entity.destroyed&&city.units.has(current.unitId))return current;
+ if(host&&!host.entity.destroyed&&city.units.has(current.unitId)){if(current.flagEntity){current.flagEntity.destroyed=true;current.flagEntity=null;}return current;}
  if(account.incoming&&Object.values(account.incoming).some(n=>n>0))for(const shipment of city.logistics.shipments)if(shipment.buyer===account&&!['delivered','cancelled'].includes(shipment.status))city.logistics.cancel(shipment);
  const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(!hall)return null;
  const choices=hall.units.filter(u=>u.roomType==='workspace'||u.roomType==='office');const unit=choices.sort((a,b)=>(a.partyHeadquartersIds?.length||0)-(b.partyHeadquartersIds?.length||0))[0]||hall.units[0];if(!unit)return null;

@@ -98,7 +98,7 @@ test('mobility units survive worker snapshots and repair consumes parts rather t
  city.economy.leaveJob(c);c.jobId=workshop.id;workshop.workers.push(c.id);c.entity.x=v.x;c.entity.y=v.y;c.path=[];
  for(let i=0;i<40&&v.condition<100;i++)city.vehicles.garageWork(workshop,c);
  assert.equal(v.condition,100);assert.equal(workshop.inventory.pecas,0);assert.equal(city.economy.consumed.pecas,1);
- const mirror=new CityStateGraph().apply(new CityStateGraph().encode({city})).city;bindCityState(mirror);assert.equal(mirror.vehicles.units.get(v.id).good,'bicicleta');assert.equal(mirror.vehicles.air,undefined);assert.equal(mirror.vehicles.spec(mirror.vehicles.units.get(v.id)).seats,1);
+  const mirror=new CityStateGraph().apply(new CityStateGraph().encode({city})).city;bindCityState(mirror);assert.equal(mirror.vehicles.units.get(v.id).good,'bicicleta');assert.equal(mirror.vehicles.air,undefined);assert.equal(mirror.vehicles.spec(mirror.vehicles.units.get(v.id)).seats,2);
 });
 
 test('private treatment charges once, covers supplies and records genuine provider revenue',()=>{

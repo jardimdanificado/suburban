@@ -1,11 +1,11 @@
-import {COLOR_PALETTE,colorAffinity} from './city_colors.js';
+import {COLOR_PALETTE,colorAffinity,dislikesColor} from './city_colors.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {inventoryFree} from './city_inventory.js';
 import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js';
 
 export const VEHICLE_SPECS=Object.freeze({
-  bicicleta:{label:'Bicicleta',speed:8,seats:1,cargo:36},
-  bicicleta_carga:{label:'Bicicleta de carga',speed:6.5,seats:1,cargo:96},
+  bicicleta:{label:'Bicicleta',speed:8,seats:2,cargo:36},
+  bicicleta_carga:{label:'Bicicleta de carga',speed:6.5,seats:2,cargo:96},
   patinete:{label:'Patinete',speed:7,seats:1,cargo:24},
   patins:{label:'Patins',speed:6,seats:1,cargo:24},
   skate:{label:'Skate',speed:6.5,seats:1,cargo:24},
@@ -234,7 +234,7 @@ export class CityVehicles {
     }
     const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!owners.has(c.accountId)&&c.mobilityNeed>=12).sort((a,b)=>(b.mobilityNeed*(b.mobilityPriority||1)-a.mobilityNeed*(a.mobilityPriority||1))||b.balance-a.balance||a.id-b.id).slice(0,6);
     for(const c of buyers){
-      const offered=unsold.filter(v=>!v.active&&v.good!=='bicicleta_carga'&&this.vehiclePrice(v)+city.currency.price(2500)<c.balance).sort((a,b)=>Number(b.good===['bicicleta','patins','skate','patinete'][c.id%4])-Number(a.good===['bicicleta','patins','skate','patinete'][c.id%4])||this.vehiclePrice(a)*(1-.18*colorAffinity(c,a.color))-this.vehiclePrice(b)*(1-.18*colorAffinity(c,b.color)));
+      const offered=unsold.filter(v=>!v.active&&v.good!=='bicicleta_carga'&&!dislikesColor(c,v.color)&&this.vehiclePrice(v)+city.currency.price(2500)<c.balance).sort((a,b)=>Number(b.good===['bicicleta','patins','skate','patinete'][c.id%4])-Number(a.good===['bicicleta','patins','skate','patinete'][c.id%4])||this.vehiclePrice(a)*(1-.3*colorAffinity(c,a.color))-this.vehiclePrice(b)*(1-.3*colorAffinity(c,b.color)));
       if(offered[0]&&this.buyVehicle(c.accountId,offered[0].id)){owners.add(c.accountId);c.mobilityNeed*=.22;}
     }
   }
@@ -254,9 +254,40 @@ export class CityVehicles {
       v.reservedParking=parking;v.driverId=c.id;c.mobilityTrip={kind:'cycle',vehicleId:v.id,goal,stage:'boarding'};c.path=path;c.indoorLocation=null;v.status='Usuário a caminho';return true;
     }
   }
+  tryCarpool(v,driver){
+    v.passengerIds??=[];
+    if(!['bicicleta','bicicleta_carga'].includes(v.good)||v.passengerIds.length>=VEHICLE_SPECS[v.good].seats-1||driver.mobilityTrip?.stage!=='riding')return false;
+    const goal=driver.mobilityTrip.goal;if(!goal)return false;const city=this.city;
+    for(const passenger of city.citizens){
+      if(passenger===driver||passenger.entity.destroyed||passenger.indoorLocation||passenger.mobilityTrip||passenger.ridingVehicleId||passenger.conversation||passenger.workMeal||passenger.deliveryId||passenger.path.length===0||city.minute-(passenger.lastCarpoolAt??-Infinity)<240||['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving'].includes(passenger.task))continue;
+      const passengerGoal=passenger.path.at(-1);if(!passengerGoal||Math.hypot(passengerGoal.x-goal.x,passengerGoal.y-goal.y)>3)continue;
+      if(Math.hypot(passenger.entity.x-v.x,passenger.entity.y-v.y)>2)continue;
+      const relation=city.relationships.view(driver,passenger),reverse=city.relationships.view(passenger,driver);
+      if(relation&&(relation.affection<0||relation.resentment>=30)||reverse&&(reverse.affection<0||reverse.resentment>=30))continue;
+      const trip={kind:'cycle',vehicleId:v.id,goal:{...passengerGoal},stage:'passenger'};
+      passenger.carpoolResume={task:passenger.task,targetId:passenger.targetId,mobilityWalkGoal:passenger.mobilityWalkGoal?{...passenger.mobilityWalkGoal}:null};
+      passenger.mobilityTrip=trip;passenger.ridingVehicleId=v.id;passenger.ridingVehicleKind=v.good;passenger.ridingAsPassenger=true;passenger.path=[];v.passengerIds.push(passenger.id);
+      passenger.lastCarpoolAt=city.minute;
+      city.relationships.view(driver,passenger,true);
+      city.relationships.shift(driver,passenger,{affection:30,trust:18,respect:2});city.relationships.shift(passenger,driver,{affection:30,trust:18,respect:2});city.relationships.updateBond(driver,passenger,city.society.getRelation(driver,passenger));
+      city.relationships.fact('ride-share',driver,passenger,`${driver.entity.properties.name} ofereceu carona de bicicleta a ${passenger.entity.properties.name}.`,{witnessIds:[]});
+      passenger.mood=Math.min(25,(passenger.mood||0)+2);driver.mood=Math.min(25,(driver.mood||0)+1);
+      return true;
+    }
+    return false;
+  }
+  detachPassenger(c,v,continueOnFoot=true){
+    if(v)v.passengerIds=(v.passengerIds||[]).filter(id=>id!==c.id);
+    const goal=c.mobilityTrip?.goal,resume=c.carpoolResume||{};
+    c.ridingVehicleId=null;c.ridingVehicleKind=null;c.ridingAsPassenger=false;c.mobilityTrip=null;c.carpoolResume=null;
+    c.task=resume.task??c.task;c.targetId=resume.targetId??c.targetId;
+    if(continueOnFoot&&goal){c.path=this.city.findPath(c.entity,goal)||[];c.mobilityWalkGoal=c.path.length?{...goal}:null;}
+  }
   releaseTrip(c,arrived=false){
+    if(c.ridingAsPassenger){this.detachPassenger(c,this.units.get(c.ridingVehicleId),true);return;}
     const trip=c.mobilityTrip,v=this.units.get(c.ridingVehicleId||trip?.vehicleId);
     if(v){
+      for(const id of [...(v.passengerIds||[])]){const passenger=this.city.society.citizen(id);if(passenger)this.detachPassenger(passenger,v,true);}
       const parked=arrived&&v.reservedParking&&Math.hypot(v.x-v.reservedParking.x,v.y-v.reservedParking.y)<1&&this.occupyParking(v,v.reservedParking);
       this.freeParking(v,true);v.driverId=null;v.journey=null;v.passengerIds=[];
       if(!parked)v.status=v.parking?.kind==='roadside'?'Estacionado ao lado da rua':v.parking?'Estacionado no bicicletário':'Estacionado fora do bicicletário';
@@ -278,7 +309,8 @@ export class CityVehicles {
     if(!this.activeCount)return;const city=this.city;
     for(const v of this.units.values()){
       if(!v.active||v.scrapped||!v.driverId)continue;
-      const c=city.society.citizen(v.driverId);if(!c||c.entity.destroyed){v.driverId=null;continue;}
+      v.passengerIds??=[];
+      const c=city.society.citizen(v.driverId);if(!c||c.entity.destroyed){for(const id of [...(v.passengerIds||[])]){const passenger=city.society.citizen(id);if(passenger)this.detachPassenger(passenger,v,false);}v.driverId=null;continue;}
       if(c.mobilityTrip?.stage==='boarding'){
         if(c.path.length)continue;
         if(Math.hypot(c.entity.x-v.x,c.entity.y-v.y)>2){this.releaseTrip(c);continue;}
@@ -297,6 +329,9 @@ export class CityVehicles {
         wearRoad(city.world,tx,ty,travel*ROAD_RULES.wearPerCell);
         if(len<=travel+.0001){c.entity.x=p.x;c.entity.y=p.y;c.path.shift();city.recordTraffic(p);}
         v.x=c.entity.x;v.y=c.entity.y;v.altitude=surfaceElevation(city.world,v.x,v.y);v.entity.x=v.x;v.entity.y=v.y;
+        v.carpoolScanDistance=(v.carpoolScanDistance||0)+travel;
+        if(v.carpoolScanDistance>=.75){v.carpoolScanDistance%=.75;this.tryCarpool(v,c);}
+         for(let i=v.passengerIds.length-1;i>=0;i--){const passenger=city.society.citizen(v.passengerIds[i]);if(!passenger||passenger.entity.destroyed){v.passengerIds.splice(i,1);continue;}const side=(i+1)*.34;passenger.entity.x=v.x+Math.cos(v.angle||0)*side;passenger.entity.y=v.y-Math.sin(v.angle||0)*side;const goal=passenger.mobilityTrip?.goal;if(goal&&Math.hypot(goal.x-v.x,goal.y-v.y)<=.8)this.detachPassenger(passenger,v,true);}
         v.status=road?`Usando ${VEHICLE_SPECS[v.good].label.toLowerCase()}`:'Levando equipamento fora da rua';c.action=v.status;
         if(v.condition<=15){this.releaseTrip(c);break;}
       }

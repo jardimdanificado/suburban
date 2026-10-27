@@ -406,7 +406,7 @@ function syncTownhallFlag(renderer,group,THREE,b,shade=1){
   pole.position.set(b.width*.5,roof+1.25,b.depth*.5);mast.add(pole);
   let texture;
   const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});
-  texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.colorSpace=THREE.SRGBColorSpace;
+  texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
   const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);
   const banner=new THREE.Mesh(clothFlagGeometry(THREE,1.65,1.04),material);group.userData.governingFlagCloth=banner;group.userData.governingFlagPhase=(b.id||0)*.73;animateClothFlag(banner,flagWindTime(renderer),group.userData.governingFlagPhase);
   banner.userData.partyFlagTexture=texture;banner.rotation.y=(b.rotation||0)*Math.PI/2;banner.position.set(b.width*.5+.85*Math.cos(banner.rotation.y),roof+1.9,b.depth*.5-.85*Math.sin(banner.rotation.y));mast.add(banner);group.userData.governingFlagMaterial=material;

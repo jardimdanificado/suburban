@@ -8,9 +8,9 @@ export const ORIENTATION_LABELS = { hetero:'Interesse por outro gênero', homo:'
 export const GENDER_LABELS = { man:'Homem', woman:'Mulher', nonbinary:'Não binário' };
 const bounded = (n,min=0,max=100) => Math.max(min,Math.min(max,n));
 const trait = (c,key) => c.traits?.[key] ?? .5;
-const positive = new Set(['praise','gift','food-shared','support','mentoring','care','good-work','friendship','reconciliation']);
+const positive = new Set(['praise','gift','food-shared','support','mentoring','care','good-work','friendship','ride-share','reconciliation']);
 const serious = new Set(['betrayal','humiliation','unpaid-work','breakup']);
-const labels = { praise:'um elogio',gift:'ajuda financeira','food-shared':'partilha de comida',support:'apoio emocional',mentoring:'uma orientação profissional',care:'cuidado familiar',insult:'uma ofensa',humiliation:'uma humilhação',betrayal:'uma quebra de fidelidade','unpaid-work':'um salário não pago','good-work':'trabalho remunerado',competition:'uma disputa',reconciliation:'uma reconciliação',rejection:'uma proposta rejeitada',flirt:'uma aproximação romântica',proposal:'uma proposta de relacionamento',partnership:'o início de um relacionamento',breakup:'uma separação',loss:'uma perda',apology:'um pedido de desculpas' };
+const labels = { praise:'um elogio',gift:'ajuda financeira','food-shared':'partilha de comida',support:'apoio emocional',mentoring:'uma orientação profissional',care:'cuidado familiar',insult:'uma ofensa',humiliation:'uma humilhação',betrayal:'uma quebra de fidelidade','unpaid-work':'um salário não pago','good-work':'trabalho remunerado',competition:'uma disputa',reconciliation:'uma reconciliação','ride-share':'uma carona de bicicleta',rejection:'uma proposta rejeitada',flirt:'uma aproximação romântica',proposal:'uma proposta de relacionamento',partnership:'o início de um relacionamento',breakup:'uma separação',loss:'uma perda',apology:'um pedido de desculpas' };
 
 export class CityRelationships {
   constructor(city) { this.city=city;this.facts=new Map();this.nextFactId=1;this.rumorsShared=0;this.corrections=0; }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup,totalMoney,finishShipment,putAtWorkCell,finishActivityRoute} from './helpers/city.mjs';
 import {COLOR_PALETTE,initializeColors,colorAffinity,favoriteColors,factoryColors} from '../js/city_colors.js';
-import {garmentScore} from '../js/city_clothing.js';
+import {garmentScore,selectClothes} from '../js/city_clothing.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint,renderVehiclePaint} from '../js/city_paint_ui.js';
 const fixture=()=>setup({starter:true,funded:true,population:128});
@@ -13,8 +13,10 @@ function panel(){const text=[],actions=[];return{text,actions,heading:s=>text.pu
 test('individual color tastes are stable, different and change garment desirability',()=>{
  const seeded=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
  const a={id:1},b={id:2},same={id:1};initializeColors(a,seeded(1));initializeColors(b,seeded(2));initializeColors(same,seeded(1));assert.deepEqual(a.colorPreferences,same.colorPreferences);assert.notDeepEqual(a.colorPreferences,b.colorPreferences);assert.equal(a.colorPreferenceAnchors.length,1+Math.floor((Math.imul(1,1664525)+1013904223>>>0)/4294967296*3));
+ assert(a.dislikedColors.length>=2&&a.dislikedColors.some(hex=>colorAffinity(a,hex)<=-.65));assert(COLOR_PALETTE.some(color=>colorAffinity(a,color.hex)<0));
  const ranked=favoriteColors(a),favorite=ranked[0].hex,rgb=parseInt(favorite.slice(1),16),near=`#${((rgb+1)&0xffffff).toString(16).padStart(6,'0')}`,far=COLOR_PALETTE.reduce((best,color)=>colorAffinity(a,color.hex)<colorAffinity(a,best.hex)?color:best,COLOR_PALETTE[0]),g={condition:100,quality:70,piece:'camisa',style:'simples',brandId:4};
  assert(colorAffinity(a,near)>colorAffinity(a,far.hex));assert(garmentScore(a,{...g,color:favorite})>garmentScore(a,{...g,color:far.hex}));assert(Number.isFinite(colorAffinity(a,'#123456')));
+ const disliked=a.dislikedColors[0];selectClothes(Object.assign(a,{wardrobe:[{...g,color:disliked},{...g,color:favorite}]}));assert.equal(a.wearingIndex,1);
 });
 test('factories consume actual inputs to produce normal and custom paint, sold with a premium',()=>{
  const city=fixture(),factory=city.buildings.find(b=>b.type==='paintworks'),worker=city.society.citizen(factory.workers[0]),c=city.citizens.find(c=>c.fixtureInvestor),color='#123456',money=totalMoney(city);
@@ -71,8 +73,8 @@ test('a requested repaint autonomously travels to the workshop and completes dur
  assert.equal(job.status,'completed',JSON.stringify({status:job.status,minute:city.minute,ownerAction:owner.action,ownerTask:owner.task,ownerPath:owner.path.length,vehicle:{x:v.x,y:v.y,driver:v.driverId,trip:owner.mobilityTrip},workers:garage.workers.map(id=>{const c=city.society.citizen(id);return{id,task:c?.task,path:c?.path.length,action:c?.action};})}));assert.equal(v.color,color);assert(job.deliveredAt);assert.equal(v.paintHistory.length,1);
 });
 test('buyers choose a preferred vehicle color when type, price and availability are equal',()=>{
- const city=fixture(),system=city.vehicles,shop=city.buildings.find(b=>b.type==='cycle_shop'),owners=new Set([...system.units.values()].filter(v=>v.active).map(v=>v.ownerAccountId)),c=city.citizens.find(c=>city.society.isAdult(c)&&!owners.has(c.accountId)&&!city.politics.officeHolder(c));
- city.transfer('treasury',c.accountId,2200000,'Fixture purchasing power');shop.inventory.bicicleta=2;system.registerUnits(shop,'bicicleta',2);const units=[...system.units.values()].filter(v=>!v.active&&v.holderAccountId===shop.accountId),colors=favoriteColors(c);units[0].color=colors.at(-1).hex;units[1].color=colors[0].hex;
+  const city=fixture(),system=city.vehicles,shop=city.buildings.find(b=>b.type==='cycle_shop'),owners=new Set([...system.units.values()].filter(v=>v.active).map(v=>v.ownerAccountId)),c=city.citizens.find(c=>city.society.isAdult(c)&&!owners.has(c.accountId)&&!city.politics.officeHolder(c));
+  const colors=favoriteColors(c),preferred=colors.find(color=>!c.dislikedColors.includes(color.hex)),rejected=colors.find(color=>c.dislikedColors.includes(color.hex));city.transfer('treasury',c.accountId,2200000,'Fixture purchasing power');for(const person of city.citizens)person.mobilityNeed=person===c?100:0;shop.inventory.bicicleta=2;system.registerUnits(shop,'bicicleta',2);const units=[...system.units.values()].filter(v=>!v.active&&v.holderAccountId===shop.accountId);units[0].color=rejected.hex;units[1].color=preferred.hex;
  system.lastHour=null;system.hourly();assert.equal(units[1].ownerAccountId,c.accountId);assert.notEqual(units[0].ownerAccountId,c.accountId);
 });
 test('a home buyer prefers their favored wall color among equally priced properties',()=>{

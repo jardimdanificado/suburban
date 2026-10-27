@@ -25,6 +25,18 @@ test('a trip frees the original rack, parks at its reserved destination and cont
  for(let i=0;i<1000&&c.ridingVehicleId;i++)system.update(.05);
  assert.equal(v.parking.rackId,dest.id);assert.equal(dest.bikeSlots[spot.index].vehicleId,v.id);assert.equal(c.ridingVehicleId,null);assert.equal(v.reservedParking,null);assert(v.parkingHistory.length>0);
 });
+test('bicycles offer a nearby passenger a ride toward a shared destination and can turn the ride into friendship',()=>{
+ const city=setup({starter:true,population:64}),system=city.vehicles,v=firstBike(city),[driver,passenger]=city.citizens.filter(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)).slice(0,2),goal={x:91,y:91};
+ driver.entity.x=v.x;driver.entity.y=v.y;driver.mobilityTrip={vehicleId:v.id,goal,stage:'riding'};v.driverId=driver.id;v.passengerIds=[];
+ passenger.entity.x=v.x+.8;passenger.entity.y=v.y;passenger.path=[{x:goal.x+.5,y:goal.y}];passenger.task='walk';
+ const hostile=city.society.getRelation(driver,passenger,true);hostile.views[driver.id].affection=-10;hostile.views[passenger.id].affection=10;
+ assert.equal(system.tryCarpool(v,driver),false,'the rider refuses someone they dislike');
+ hostile.views[driver.id].affection=10;hostile.views[passenger.id].affection=-10;
+ assert.equal(system.tryCarpool(v,driver),false,'the pedestrian can also refuse the rider');
+ hostile.views[passenger.id].affection=10;passenger.path=[{x:goal.x+2,y:goal.y}];
+ assert.equal(system.tryCarpool(v,driver),true);assert.deepEqual(v.passengerIds,[passenger.id]);assert.equal(passenger.ridingVehicleId,v.id);assert(passenger.ridingAsPassenger);assert.equal(hostile.views[driver.id].status,'friend');assert.equal(hostile.views[passenger.id].status,'friend');
+ system.detachPassenger(passenger,v,false);assert.equal(passenger.ridingVehicleId,null);assert.equal(v.passengerIds.length,0);
+});
 test('full racks refuse additional reservations and cancellation frees a reserved slot',()=>{
  const city=setup({starter:true,population:64}),system=city.vehicles,v=firstBike(city),rack=system.parkingSites()[0];
  for(const b of system.parkingSites())for(const slot of b.bikeSlots)if(slot.vehicleId==null)slot.reservedBy=99999;
