@@ -8,7 +8,7 @@ import {fundInitialCycleChain} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,apply,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js';
 import {productionPlan,investProductionPlan} from './city_production_planner.js';
-import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes} from './city_clothing.js';
+import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
@@ -29,7 +29,7 @@ export const CROPS = {
 };
 export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 450 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
 export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'lamp_service', 'office_tower', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill']);
-export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'popular_housing', 'luxury_housing', 'popular_refectory']);
+export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing', 'popular_refectory']);
 const retailTypes = new Set(['bakery', 'greengrocer', 'market']);
 const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)), ...INDUSTRIAL_FOODS];
 export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', lamp_service: 'logistics', office_tower:'management', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
@@ -103,7 +103,7 @@ export class CityEconomy {
     b.mealQuality = b.type === 'popular_refectory' ? 2 : 1;
     b.totalRevenue = 0; b.totalExpenses = 0; b.dividends = 0;
     b.foundedAt = null; b.lastSaleAt = this.city.minute; b.stockouts = 0;
-    b.jobs = ({ mill: 2, mint: 1, residential: 0, popular_housing: 0, luxury_housing: 0, popular_refectory: 4, townhall: 2, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2, lamp_service: 2, cleaner: 2, waste_collector: 2, recycler: 2, paid_toilet: 1, public_toilet: 0 })[b.type] ?? CIVIC_SERVICES[b.type]?.jobs ?? INDUSTRIES[b.type]?.jobs ?? 0;
+    b.jobs = ({ mill: 2, mint: 1, residential: 0, super_popular_housing: 0, popular_housing: 0, popular_luxury_housing: 0, luxury_housing: 0, popular_refectory: 4, townhall: 2, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2, lamp_service: 2, cleaner: 2, waste_collector: 2, recycler: 2, paid_toilet: 1, public_toilet: 0 })[b.type] ?? CIVIC_SERVICES[b.type]?.jobs ?? INDUSTRIES[b.type]?.jobs ?? 0;
     b.baseWage = b.type === 'farm' || b.type === 'quarry' ? 8 : b.type === 'bakery' || b.type === 'builder' || b.type === 'carrier' ? 6 : 5;
     if (b.type === 'townhall') b.baseWage = 7;
     b.baseWage *= 0.85 + ((Math.imul(b.id+71,2654435761)>>>0)%31)/100;
@@ -134,7 +134,7 @@ export class CityEconomy {
     c.jobId = null; c.task = null; c.path = [];
   }
   municipalPolicy() {
-    for (const u of this.city.units.values()) if (u.ownerId === 'treasury' && !['residential', 'popular_housing', 'luxury_housing','office_tower'].includes(this.city.building(u.buildingId)?.type)) {
+    for (const u of this.city.units.values()) if (u.ownerId === 'treasury' && !['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing','office_tower'].includes(this.city.building(u.buildingId)?.type)) {
       const occupant = this.city.accounts.get(u.tenantId);
       if (occupant?.homeUnitId === u.id) this.city.releaseHome(occupant);
       u.tenantId = null; u.forSale = !this.city.building(u.buildingId)?.municipal; u.forRent = false; u.arrears = 0; u.missedDays = 0;
@@ -318,7 +318,7 @@ export class CityEconomy {
       const supply=firms.reduce((n,b)=>n+Math.max(1,b.workers.length)*240/spec.labor*Object.values(spec.outputs).reduce((a,v)=>a+v,0),0);
       const inputAvailability=Object.entries(spec.inputs).length?Object.entries(spec.inputs).reduce((n,[g,q])=>n+Math.min(2,(stockByGood.get(g)||0)/Math.max(1,q*6)),0)/Object.keys(spec.inputs).length:1;
       const chainBonus=!firms.length&&(needed>0||Object.keys(spec.inputs).length&&inputAvailability>.8)?Math.min(70,needed*.3+inputAvailability*25):0;
-      const score=type==='clothing_store'?(firms.length>=Math.max(1,Math.ceil(population/300))?0:55):type==='bank' ? firms.length?0:65 : Math.min(160,Math.max(0,needed-stock-supply*.5)+(firms.length?0:25)+chainBonus);
+      const score=type==='clothing_store'?(firms.length>=Math.max(1,Math.ceil(population/300))?0:55):type==='laundromat'?Math.max(0,110-firms.length*90):type==='thrift_store'?Math.max(0,95-firms.length*75):type==='bank' ? firms.length?0:65 : Math.min(160,Math.max(0,needed-stock-supply*.5)+(firms.length?0:25)+chainBonus);
       items.push({type,crop:null,score,required:Math.ceil(needed),supply:Math.floor(supply),stock,reason:spec.impact});
     }
     for(const item of items) if(ESSENTIAL_SERVICES.has(item.type)) item.response=this.serviceInvestment.decisions.get(item.type);
@@ -660,6 +660,13 @@ export class CityEconomy {
     if(b.type==='sports_shop')return b.inventory.capacete>0;
     if(b.type==='bicycle_rental')return [...this.city.vehicles.units.values()].some(v=>v.active&&v.ownerAccountId===b.accountId);
     if(b.type==='clothing_store')return b.inventory.roupas>0;
+    if(b.type==='laundromat')return b.inventory.sabao>0;
+    if(b.type==='thrift_store'){
+      const garment=b.garments?.find(g=>(g.dirt||0)>=8);if(!garment||b.inventory.sabao<1)return false;
+      b.laundryLabor=(b.laundryLabor||0)+(1+(c.skills.commerce||0)/80)*workEfficiency(c,b);
+      if(b.laundryLabor>=spec.labor){b.laundryLabor-=spec.labor;b.inventory.sabao--;this.consumed.sabao++;this.recordGoods('laundry-soap','sabao',1,b.id,null);washGarment(garment,this.city.minute,b.entity.properties.name);this.city.log(`${b.entity.properties.name} lavou uma peça usada para revenda.`, 'economy',[b.ownerId],{kind:'thrift-garment-cleaned',buildingId:b.id,garmentId:garment.garmentId});}
+      return true;
+    }
     if(b.type==='newsroom'){if(b.officialJournal&&!this.city.officialJournal.pending)return false;const pages=b.officialJournal?4:3+(b.id+this.city.day)%3;spec={...spec,inputs:{papel:pages},outputs:{jornais:1}};if((b.newsPrintedDay===this.city.day?b.newsCopies||0:0)>=Math.max(2,Math.ceil(this.city.citizens.length*.08)))return false;}
     if(b.type==='publisher'){
       const pamphlet=b.inventory.panfletos<Math.max(2,b.inventory.livros,this.city.politics.campaigns.getMaterials().demand('panfletos')),pages=pamphlet?1:b.bookPages||5;
@@ -699,6 +706,7 @@ export class CityEconomy {
     return true;
   }
   consumerOffer(c, b) {
+    if(b?.type==='laundromat'&&b.active&&!b.entity.destroyed&&(b.workers.length>0||b.ownerId)&&b.inventory.sabao>0&&(c.wardrobe||[]).some(g=>(g.dirt||0)>=12)&&c.balance>=this.city.currency.price(700))return {service:'laundry',good:'sabao',price:this.city.currency.price(700)};
     if(b?.active&&!b.entity.destroyed&&['tailor','clothing_store'].includes(b.type))return clothingOffer(this.city,c,b);
     if(b?.active&&!b.entity.destroyed&&b.type==='newsroom')return newspaperOffer(this.city,c,b);
     if(b?.type==='sports_shop'&&b.active&&!b.entity.destroyed&&b.inventory.capacete>0&&c.needs.safety<80&&c.balance>=this.goods.capacete.price)return {good:'capacete',spec:INDUSTRIES.sports_shop,price:this.goods.capacete.price};
@@ -715,6 +723,12 @@ export class CityEconomy {
     const offer=this.consumerOffer(c,b);
     if(!offer || Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)>2) return false;
     const {good,spec,price}=offer;
+    if(offer.service==='laundry'){
+      if(!this.city.transfer(c.accountId,b.accountId,price,'Lavagem de roupas',{good:'sabao',quantity:1}))return false;
+      b.inventory.sabao--;this.consumed.sabao++;this.recordGoods('laundry-soap','sabao',1,b.id,null);const washed=washWardrobe(c,this.city.minute,b.entity.properties.name);
+      if(washed){c.lastLaundryAt=this.city.minute;c.lastShoppingAt=this.city.minute;this.city.log(`${c.entity.properties.name} levou ${washed} peça(s) para lavar em ${b.entity.properties.name}.`,'economy',[c.id],{kind:'clothes-laundered',buildingId:b.id,quantity:washed});}
+      return washed>0;
+    }
     if(!this.city.transfer(c.accountId,b.accountId,price,`Serviço: Venda de ${this.goods[good].label}`,{good,quantity:1}))return false;
     b.inventory[good]--;const publication=['livros','panfletos','jornais'].includes(good);if(!publication&&good!=='roupas')this.consumed[good]++;this.recordGoods(publication||good==='roupas'?'durable-purchase':'household-consumption',good,1,b.id,c.id);
     if(good==='roupas'){buyClothes(this.city,c,b,offer.garmentIndex);return true;}
@@ -809,7 +823,7 @@ export class CityEconomy {
       if(dividend>0){const shares=(b.equityPartners||[{citizenId:owner.id,amount:1}]).filter(a=>this.citizen(a.citizenId)),total=shares.reduce((n,a)=>n+a.amount,0);for(const share of shares){const amount=Math.floor(dividend*share.amount/Math.max(1,total));if(amount&&this.city.transfer(b.accountId,`citizen:${share.citizenId}`,amount,'Distribuição de lucros por quota de capital'))b.dividends+=amount;}}
     }
     for (const owner of this.city.citizens) if (!owner.entity.destroyed && this.city.society.isAdult(owner)) {
-      for (const u of this.city.units.values()) if (u.ownerId === owner.accountId && ['residential', 'popular_housing', 'luxury_housing'].includes(this.city.building(u.buildingId)?.type) && u.id !== owner.homeUnitId) {
+      for (const u of this.city.units.values()) if (u.ownerId === owner.accountId && ['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing'].includes(this.city.building(u.buildingId)?.type) && u.id !== owner.homeUnitId) {
         if (u.tenantId) continue;
         // Owners choose liquidity or rental income according to reserves and preference.
         u.forSale = owner.balance < 2500 || owner.rentalPreference < .75;

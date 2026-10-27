@@ -19,6 +19,6 @@ export function initializeCharacter(city, citizen) {
   citizen.savingsRate = Math.round((.05 + citizen.traits.frugality * .4) * 100) / 100;
 }
 export function architectureFor(type, id) {
-  const pool = type === 'popular_housing' ? ['adobe','cottage','modern'] : type === 'luxury_housing' ? ['hacienda','modern','cottage'] : ['adobe','cottage','timber','hacienda','modern'];
+  const pool = ['super_popular_housing','popular_housing'].includes(type) ? ['adobe','cottage','modern'] : ['popular_luxury_housing','luxury_housing'].includes(type) ? ['hacienda','modern','cottage'] : ['adobe','cottage','timber','hacienda','modern'];
   return pool[((Math.imul(id + 19, 2654435761) >>> 0) % pool.length)];
 }

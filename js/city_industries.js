@@ -49,6 +49,8 @@ export const INDUSTRIES = {
   weaving: industry('Tecelagem',{fibras:4},{tecido:3},20,'maintenance','Fornece tecido para confecções e marcenarias.'),
   newsroom: industry('Redação e gráfica de jornal',{papel:4},{jornais:1},20,'social','Jornais temáticos com média de quatro folhas, notícias preservadas e publicidade política paga.','services',{need:'leisure',boost:8}),
   clothing_store: industry('Loja de roupas',{roupas:1},{},1,'commerce','Revende peças de diferentes confecções, preservando marca, estilo, qualidade e durabilidade.','services',{need:'leisure',boost:0}),
+  laundromat: industry('Lavanderia',{sabao:1},{},6,'cleaning','Lava roupas dos moradores e mantém a higiene pessoal em dia.','services',{need:'hygiene',boost:0}),
+  thrift_store: industry('Brechó',{sabao:1},{},5,'commerce','Compra roupas excedentes, limpa e revende peças usadas com histórico de proprietários.','services',{need:'leisure',boost:0}),
   tailor: industry('Confecção',{tecido:3},{roupas:2},22,'commerce','Produz peças duráveis com marca, estilo e qualidade; vestir-se afeta bem-estar e credibilidade.','services',{need:'hygiene',boost:15}),
   dairy_farm: industry('Fazenda leiteira',{milho:3},{leite:5},30,'agriculture','Leite depende de ração; integra pecuária e lavoura.','food'),
   cheesemaker: industry('Queijaria',{leite:4},{queijo:2},16,'baking','Conserva e agrega valor ao leite.','food'),

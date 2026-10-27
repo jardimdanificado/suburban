@@ -5,7 +5,7 @@ import { inventoryFree, initializeInventory } from './city_inventory.js';
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
 // Urgent food and housing start ahead, while waiting freight gains priority over time.
 export function shipmentPriority(s,minute,hour){
- const base=s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:s.buyer?.type==='popular_housing'?-4:s.purpose==='sanitation'?-3:s.purpose==='lamp-refill'?(s.buyer.lampPost?.fuel<=0&&(hour<6||hour>=18)?-3:-2):s.purpose==='critical-infrastructure'||s.purpose==='lighting-input'?-2:s.purpose==='lamp-construction'?-1:(s.purpose?.endsWith('lighting')&&minute-s.createdAt<12*60?1:0);
+ const base=s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:['super_popular_housing','popular_housing','popular_luxury_housing'].includes(s.buyer?.type)?-4:s.purpose==='sanitation'?-3:s.purpose==='lamp-refill'?(s.buyer.lampPost?.fuel<=0&&(hour<6||hour>=18)?-3:-2):s.purpose==='critical-infrastructure'||s.purpose==='lighting-input'?-2:s.purpose==='lamp-construction'?-1:(s.purpose?.endsWith('lighting')&&minute-s.createdAt<12*60?1:0);
  return base-Math.min(12,Math.floor(Math.max(0,minute-(s.createdAt??minute))/360));
 }
 

@@ -141,7 +141,7 @@ export class CityCouncil {
   }
   execute(bill) {
     const city=this.city,p=city.politics,policy=p.policy;bill.attempts++;let wait=null;
-    const needs=city.welfare.conditions(),basic=new Set(['popular_housing','popular_refectory','kitchen','farm','bakery','market','greengrocer','builder','quarry','carrier','cleaner','public_toilet','waste_collector','recycler','composting','utility','clinic','mill']);
+    const needs=city.welfare.conditions(),basic=new Set(['super_popular_housing','popular_housing','popular_luxury_housing','popular_refectory','kitchen','farm','bakery','market','greengrocer','builder','quarry','carrier','cleaner','public_toilet','waste_collector','recycler','composting','utility','clinic','mill']);
     if(needs.crisis && (bill.type==='nationalize'||bill.type==='build'&&!basic.has(bill.payload.buildingType))){bill.status='executing';bill.result='Aguardando atendimento das necessidades de alimentação e moradia';return;}
     if(bill.type==='privatize' && needs.crisis && basic.has(city.building(bill.payload.buildingId)?.type)){bill.status='executing';bill.result='Operação essencial preservada durante a emergência social';return;}
     switch(bill.type){
@@ -186,11 +186,11 @@ export class CityCouncil {
         if(type!=='farm'&&city.development.projects.filter(pr=>pr.accountId==='treasury'&&pr.service==='building'&&pr.type!=='farm'&&!pr.cancelled&&pr.status!=='completed').length>=3){wait='Aguardando capacidade de execução das obras públicas já contratadas';break;}
         const site=city.development.publicBuildingSite(type);bill.landSearch={...city.development.publicLandReport};
         if(!site){
-          if(type==='popular_housing')for(const building of city.buildings.filter(b=>b.type===type&&!b.entity.destroyed&&b.floors<12&&b.units.every(u=>u.ownerId==='treasury')&&!city.development.projects.some(pr=>pr.buildingId===b.id&&!pr.cancelled&&pr.status!=='completed'))){const floors=Math.min(2,12-building.floors),cost=building.width*building.depth*floors*(2*city.economy.goods.pedra.price+Math.ceil(city.currency.price(12000)*1.5));if(city.treasury<cost+needs.reserve)continue;const project=city.development.beginExpansion('treasury',building.id,{floors});if(project){bill.projectId=project.id;project.priority=95;if(bill.agendaTermId){project.agendaTermId=bill.agendaTermId;project.promiseMetric=bill.promiseMetric;}wait='Ampliação vertical das moradias populares em andamento';break;}}
+          if(['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type))for(const building of city.buildings.filter(b=>b.type===type&&!b.entity.destroyed&&b.floors<12&&b.units.every(u=>u.ownerId==='treasury')&&!city.development.projects.some(pr=>pr.buildingId===b.id&&!pr.cancelled&&pr.status!=='completed'))){const floors=Math.min(2,12-building.floors),cost=building.width*building.depth*floors*(2*city.economy.goods.pedra.price+Math.ceil(city.currency.price(12000)*1.5));if(city.treasury<cost+needs.reserve)continue;const project=city.development.beginExpansion('treasury',building.id,{floors});if(project){bill.projectId=project.id;project.priority=95;if(bill.agendaTermId){project.agendaTermId=bill.agendaTermId;project.promiseMetric=bill.promiseMetric;}wait='Ampliação vertical das moradias populares em andamento';break;}}
           wait??=city.development.publicLandReport?.reason||'Procurando terreno público acessível';break;
         }const lot=site.lot;
         const builder=city.development.selectBuilder('treasury',site.door);if(!builder&&type!=='farm'){wait='Aguardando construtora disponível';break;}
-        const {width,depth}=site,floors=type==='popular_housing'?4:1;
+        const {width,depth}=site,floors=['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?4:1;
         const cost=['farm','quarry'].includes(type)?0:width*depth*floors*(2*city.economy.goods.pedra.price+city.currency.price(12000)*1.5);
         if(city.treasury<cost+site.purchasePrice+city.currency.price(20000)+needs.reserve){wait='Aguardando caixa para terreno e obra sem comprometer alimentação e operação dos serviços';break;}
         if(!city.development.acquirePublicSite(site)){wait='Aguardando compra negociada do terreno anunciado';break;}

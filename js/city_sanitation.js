@@ -1,19 +1,20 @@
 import {activityRoomReady,activityCellAvailable} from './city_interiors.js';
 import { inventoryFree } from './city_inventory.js';
+import { HOUSING_TYPES } from './city_housing.js';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 export class CitySanitation {
   constructor(city) { this.city = city; this.facilities = new Map(); this.jobs = []; this.nextJobId = 1; this.cleaned = 0; this.collected = 0; }
-  addFacility(b, { unitId = null, homeId = null, access = 'employees' } = {}) {
+  addFacility(b, { unitId = null, homeId = null, homeIds = null, access = 'employees' } = {}) {
     const id = `toilet:${unitId || b.id}`;
     if (this.facilities.has(id)) return this.facilities.get(id);
-    const f = { id, buildingId: b.id, unitId, homeId, access, price: access === 'paid' ? this.city.currency.price(SANITATION_RULES.usePrice) : 0, cleanliness: 100, uses: 0, occupantId: null, busyUntil: 0, createdAt: this.city.minute, lastCleanedAt: this.city.minute, cleaningJobId: null };
+    const f = { id, buildingId: b.id, unitId, homeId, homeIds:homeIds||null, access, price: access === 'paid' ? this.city.currency.price(SANITATION_RULES.usePrice) : 0, cleanliness: 100, uses: 0, occupantId: null, busyUntil: 0, createdAt: this.city.minute, lastCleanedAt: this.city.minute, cleaningJobId: null };
     this.facilities.set(id, f); return f;
   }
   setupBuilding(b) {
     b.litter ??= 0;
-    if (['residential', 'popular_housing', 'luxury_housing'].includes(b.type)) {
-      for (const u of b.units.filter(u => u.roomType === 'bathroom')) this.addFacility(b, { unitId: u.id, homeId: u.homeId, access: 'home' });
+    if (HOUSING_TYPES.includes(b.type)) {
+      for (const u of b.units.filter(u => u.roomType === 'bathroom')) {const homes=[...this.city.housing.homes.values()].filter(h=>h.buildingId===b.id&&h.bathroomUnitId===u.id).map(h=>h.id);this.addFacility(b, { unitId: u.id, homeId: u.homeId, homeIds:homes, access: 'home' });}
       this.setupBusinessRooms(b);
     } else {
       const access = ['townhall', 'public_toilet', 'popular_refectory'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees';
@@ -23,7 +24,7 @@ export class CitySanitation {
     }
   }
   setupBusinessRooms(b) {
-    if (['residential', 'popular_housing', 'luxury_housing'].includes(b.type)) return;
+    if (HOUSING_TYPES.includes(b.type)) return;
     // Reuse existing rooms so repeated setup/expansion cannot duplicate facilities.
     let bathroom = b.units.find(u => u.roomType === 'bathroom');
     bathroom ||= b.units.find(u => u.roomType === 'workspace');
@@ -49,8 +50,8 @@ export class CitySanitation {
     const b = this.city.building(f.buildingId); if (!b) return false;
     if (f.access === 'public' || f.access === 'paid') return f.price <= (this.city.accounts.get(this.city.payerFor(c))?.balance || 0);
     if (f.access === 'employees') return b.active && (c.jobId === b.id || c.id === b.ownerId);
-    const home = this.city.housing.homes.get(f.homeId); if (!home) return false;
-    const residents = this.city.housing.residents(home);
+    const homes=(f.homeIds||[f.homeId]).map(id=>this.city.housing.homes.get(id)).filter(Boolean);if(!homes.length)return false;
+    const residents=homes.flatMap(home=>this.city.housing.residents(home));
     if (residents.some(p => p.id === c.id)) return true;
     if (!residents.length && this.city.units.get(f.unitId)?.ownerId === c.accountId) return true;
     return residents.some(p => { const r = this.city.relationships.view(p,c); return r && r.affection >= 65 && r.trust >= 50 && r.resentment<30; });
@@ -66,7 +67,7 @@ export class CitySanitation {
   }
   score(c, f) {
     const b = this.city.building(f.buildingId);
-    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 - (f.homeId === c.homeId ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
+    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
   }
   addWaste(b, amount = 1) {
     const stored = Math.min(amount, inventoryFree(b)); b.inventory.lixo += stored; b.litter += amount - stored;
@@ -94,10 +95,12 @@ export class CitySanitation {
   payer(f) {
     const b = this.city.building(f.buildingId); if (!b) return null;
     if (f.access === 'public') return 'treasury';
+    const unit=this.city.units.get(f.unitId);if(unit?.ownerId==='treasury')return 'treasury';
     if (f.homeId) {
       const home = this.city.housing.homes.get(f.homeId), resident = home && this.city.housing.residents(home).find(c => this.city.society.isAdult(c));
       return resident?.accountId || this.city.units.get(f.unitId)?.ownerId;
     }
+    if(f.homeIds?.length){for(const id of f.homeIds){const home=this.city.housing.homes.get(id),resident=home&&this.city.housing.residents(home).find(c=>this.city.society.isAdult(c));if(resident)return resident.accountId;}}
     return b.accountId;
   }
   selectCompany(site) {
@@ -206,7 +209,7 @@ export class CitySanitation {
       if(activeLoads().some(s=>s.seller===b && s.purpose==='waste-collection'))continue;
       const options=collectors.filter(c=>inventoryFree(c)>=2 && city.economy.connected(c,b)).sort((a,d)=>inventoryFree(d)-inventoryFree(a)||a.id-d.id);
       const f=[...this.facilities.values()].find(f=>f.buildingId===b.id);
-      let payer=['residential','popular_housing','luxury_housing'].includes(b.type)?b.units[0]?.ownerId:f?this.payer(f):b.accountId;
+      let payer=['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type)?b.units[0]?.ownerId:f?this.payer(f):b.accountId;
       if(!b.active)payer=b.units[0]?.ownerId||payer;
       if(!payer)continue;
       for(const collector of options) {

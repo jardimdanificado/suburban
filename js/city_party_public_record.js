@@ -12,7 +12,7 @@ export function legislativeOpinion(city,c,bill){
     case'businessTax':return change('businessTax')*(-e*.7-(c.businessIds?.length ? .5 : 0));
     case'minimumWage':return change('minimumWage')*(-e*.4+(c.businessIds?.length ? -.65 : .55));
     case'welfare':return Math.sign(v-city.welfare.policy.dailyBudget)*(-e*.55+((c.needs.food<45||!c.homeUnitId) ? .7 : .1));
-    case'build':return -.5*e+((bill.payload.buildingType==='popular_housing'&&!c.homeUnitId) ? .8 : .25);
+    case'build':return -.5*e+((['super_popular_housing','popular_housing','popular_luxury_housing'].includes(bill.payload.buildingType)&&!c.homeUnitId) ? .8 : .25);
     case'nationalize':return -e;case'privatize':return e;
     case'roads':return .65;case'inflation':return Math.sign(city.currency.policy.dailyLimit-v)*(.2+Math.min(.8,Math.max(0,city.currency.dailyInflation)*40));
     case'pollMinRate':case'pollMaxRate':return Math.sign(v-(p.policy[bill.type]??(bill.type==='pollMinRate'?5:20)))*((c.political.criticalSense??.5)*.7-(c.traits?.frugality??.5)*.3);

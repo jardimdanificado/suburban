@@ -54,7 +54,9 @@ export const BUILDING_TYPES = {
   office_tower: { label: 'Empresarial', color: 0x9aaeb2, rent: 100, price: 100000, jobs: 1 },
   carrier: { label: 'Transportadora', color: 0x75b4cc, rent: 75, price: 50000, jobs: 2 },
   residential: { label: 'Residencial', color: 0xb5c4b0, rent: HOUSING_RULES.roomRent, price: HOUSING_RULES.roomPrice, jobs: 0 },
+  super_popular_housing: { label: 'Moradia super popular', color: 0xb59b7e, rent: HOUSING_RULES.roomRent * .7, price: HOUSING_RULES.roomPrice * .7, jobs: 0 },
   popular_housing: { label: 'Moradia popular', color: 0xc7a779, rent: HOUSING_RULES.roomRent, price: HOUSING_RULES.roomPrice, jobs: 0 },
+  popular_luxury_housing: { label: 'Moradia popular de luxo', color: 0xd0b98f, rent: HOUSING_RULES.roomRent * 1.25, price: HOUSING_RULES.roomPrice * 1.5, jobs: 0 },
   luxury_housing: { label: 'Moradia de luxo', color: 0xd6c99c, rent: HOUSING_RULES.roomRent * 2, price: HOUSING_RULES.roomPrice * 3, jobs: 0 },
   popular_refectory: { label: 'Refeitório popular', color: 0xd89d62, rent: 0, price: 90000, jobs: 4 },
   market: { label: 'Mercado', color: 0xe2ab65, rent: 90, price: 60000, jobs: 6 },
@@ -240,10 +242,10 @@ export class CitySimulation {
     if (!free && (!plot || plot.ownerId !== ownerAccountId || plot.buildingId || plot.x !== x || plot.y !== y || width > plot.width || depth > plot.depth)) return this.fail('É necessário comprar um terreno compatível antes de construir.');
     if (!free && stone && (!materialSource || materialSource.inventory.pedra < stone)) return this.fail(`Obra precisa de ${stone} pedras entregues no terreno.`);
     if (!free && this.treasury < capital) return this.fail('Caixa municipal insuficiente para obra e capital de operação.');
-    const entity = this.createEntity({ x, y, properties: { name: this.life.buildingName(spec.label), species: 'city-building', render: { color: spec.color, style: type === 'popular_housing' ? 'popular' : type === 'luxury_housing' ? 'luxury' : type === 'popular_refectory' ? 'refectory' : type } } });
+    const entity = this.createEntity({ x, y, properties: { name: this.life.buildingName(spec.label), species: 'city-building', render: { color: spec.color, style: type === 'super_popular_housing' ? 'popular' : type === 'popular_luxury_housing' ? 'luxury' : type === 'popular_housing' ? 'popular' : type === 'luxury_housing' ? 'luxury' : type === 'popular_refectory' ? 'refectory' : type } } });
     const b = { id: entity.id, entity, type, constructionKind: kind, rotation:terrain.rotation, width, depth, floors, color: spec.color, condition: 100, units: [], balance: 0, jobs: Math.min(spec.jobs ? Math.max(spec.jobs, Math.floor(count / 6)) : 0, 32), wage: 4 + Math.floor(this.random() * 3), stock: 0, workers: [], terrain, door: terrain.door };
     b.architecture = architectureFor(type, entity.id);
-    if (['residential','popular_housing','luxury_housing'].includes(type)) b.architectureColor = HOUSE_STYLES[b.architecture].wall;
+    if (['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(type)) b.architectureColor = HOUSE_STYLES[b.architecture].wall;
     this.reputation.setup(b);
     this.economy.setupBuilding(b);
     entity.properties.cityBuilding = b;
@@ -321,7 +323,7 @@ export class CitySimulation {
   }
   rentUnit(citizenId, unitId) {
     const c = this.society.citizen(citizenId), u = this.units.get(unitId);
-    if (!c || !u || !this.building(u.buildingId) || !['residential', 'popular_housing', 'luxury_housing'].includes(this.building(u.buildingId).type) || (u.ownerId !== c.accountId && (!u.forRent || u.ownerId === 'treasury')) || (u.tenantId && u.tenantId !== c.accountId)) return this.fail('Espaço indisponível para moradia.');
+    if (!c || !u || !this.building(u.buildingId) || !['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing'].includes(this.building(u.buildingId).type) || (u.ownerId !== c.accountId && (!u.forRent || u.ownerId === 'treasury')) || (u.tenantId && u.tenantId !== c.accountId)) return this.fail('Espaço indisponível para moradia.');
     const payer = this.payerFor(c);
     if (u.ownerId !== c.accountId && u.ownerId !== payer && this.accounts.get(payer).balance < u.rent) return this.fail('Saldo insuficiente para o primeiro aluguel.');
     if (c.homeUnitId === u.id) return u;
@@ -339,7 +341,7 @@ export class CitySimulation {
     if (!c || !u || !this.building(u.buildingId) || this.housing.isSocial(this.housing.homes.get(u.homeId)) || !u.forSale || u.ownerId === c.accountId) return this.fail('Espaço indisponível para compra.');
     if (!this.transfer(c.accountId, u.ownerId, u.price, 'Compra de espaço',{buildingId:u.buildingId,unitId:u.id})) return this.fail('Saldo insuficiente para a compra.');
     this.history.ownership(this.building(u.buildingId), u.ownerId, c.accountId, {unitId:u.id,amount:u.price});
-    u.ownerId = c.accountId; u.forSale = false; u.forRent = !u.tenantId && ['residential', 'popular_housing', 'luxury_housing'].includes(this.building(u.buildingId).type); u.arrears = 0; u.missedDays = 0;
+    u.ownerId = c.accountId; u.forSale = false; u.forRent = !u.tenantId && ['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing'].includes(this.building(u.buildingId).type); u.arrears = 0; u.missedDays = 0;
     this.log(`${c.entity.properties.name} comprou o espaço ${u.id}.`, 'housing', [c.id], { kind: 'purchase', unitId: u.id });
     return u;
   }

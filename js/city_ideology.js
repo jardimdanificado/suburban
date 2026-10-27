@@ -14,7 +14,7 @@ export function ideologicalProfile(subject){
   if(subject)profiles.set(subject,{ideology:i,name,agenda:subject.nameAgenda,frugality,profile});return profile;
 }
 export function policyAffinity(profile,city,type,payload={}){
-  const p=city.politics,v=payload.value,dir=current=>Math.sign(v-current),socialBuildings=['popular_housing','popular_refectory','clinic','utility','kitchen'],environmental=['recycler','composting','cleaner','forestry','leisure'];
+  const p=city.politics,v=payload.value,dir=current=>Math.sign(v-current),socialBuildings=['super_popular_housing','popular_housing','popular_luxury_housing','popular_refectory','clinic','utility','kitchen'],environmental=['recycler','composting','cleaner','forestry','leisure'];
   switch(type){
     case'entrepreneurCandidates':return (v?1:-1)*(profile.economy*1.1-profile.ownership*.3);
     case'tax':return dir(city.taxRate)*(profile.redistribution*.5+profile.ownership*.2-profile.fiscal*.4-.6);
@@ -38,7 +38,7 @@ export function citizenPolicyInterest(city,c,type,payload={}){
     case'businessTax':return direction(p.policy.businessTax)*(owner?-.45:.1);
     case'minimumWage':return direction(p.policy.minimumWage)*(owner?-.4:c.jobId?.3:.15);
     case'welfare':return direction(city.welfare.policy.dailyBudget)*((c.needs.food<45||!c.homeUnitId)?.5:poor?.2:0);
-    case'build':return payload.buildingType==='popular_housing'&&!c.homeUnitId?.5:payload.buildingType==='popular_refectory'&&c.needs.food<45?.5:0;
+    case'build':return ['super_popular_housing','popular_housing','popular_luxury_housing'].includes(payload.buildingType)&&!c.homeUnitId?.5:payload.buildingType==='popular_refectory'&&c.needs.food<45?.5:0;
     case'nationalize':return city.building(payload.buildingId)?.ownerId===c.id?-.65:0;
     case'privatize':return city.building(payload.buildingId)?.workers.includes(c.id)?-.2:0;
     default:return 0;

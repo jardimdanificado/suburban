@@ -6,10 +6,10 @@ const THEMES={
  builder:'crane',lamp_service:'oil_lamp',carrier:'cargo',waste_collector:'bins',cleaner:'brush',recycler:'recycling',composting:'compost',
  sawmill:'logs',forestry:'logs',charcoal:'kiln',iron_mine:'mine',bauxite_mine:'mine',foundry:'furnace',steel_mill:'furnace',aluminum_smelter:'furnace',clay_pit:'mine',sand_pit:'mine',brickworks:'bricks',glassworks:'glass',
  toolmaker:'tools',artisan:'basket',furniture:'chair',pottery:'pottery',paper_mill:'paper',publisher:'books',newsroom:'newspaper',
- weaving:'fabric',fiber_farm:'fabric',flagmaker:'fabric',tailor:'fabric',clothing_store:'fabric',paintworks:'paint',soapworks:'soap',pharmacy:'medicine',herb_farm:'plant',
+ weaving:'fabric',fiber_farm:'fabric',flagmaker:'fabric',tailor:'fabric',clothing_store:'fabric',thrift_store:'fabric',laundromat:'fabric',paintworks:'paint',soapworks:'soap',pharmacy:'medicine',herb_farm:'plant',
  rubber_grove:'rubber',rubberworks:'rubber',bearing_factory:'bearing',frame_factory:'frame',deck_factory:'deck',tire_factory:'wheel',chain_factory:'chain',safety_equipment:'helmet',saddle_factory:'saddle',cycle_parts:'tools',sports_shoes:'boot',skate_workshop:'deck',cycle_assembler:'frame',cycle_shop:'wheel',cycle_workshop:'wheel',bicycle_rental:'wheel',sports_shop:'ball',
  utility:'water',mint:'coins',bank:'bank',townhall:'civic',council_chamber:'civic',research_institute:'research',clinic:'medical',hospital:'medical',library:'books',theater:'theater',sports_center:'ball',leisure:'ball',public_toilet:'water',paid_toilet:'water',
- office_tower:'office',residential:'home',popular_housing:'housing',luxury_housing:'luxury',market:'market',greengrocer:'plant',mill:'mill',farm:'farm',quarry:'quarry',park:'plant'
+ office_tower:'office',residential:'home',super_popular_housing:'housing',popular_housing:'housing',popular_luxury_housing:'luxury',luxury_housing:'luxury',market:'market',greengrocer:'plant',mill:'mill',farm:'farm',quarry:'quarry',park:'plant'
 };
 export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  const kind=THEMES[b.type];if(!kind)return;
@@ -49,7 +49,7 @@ export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  case'pottery':cyl(.25,.34,.46,0,.25,0,0xb97852);cyl(.27,.27,.06,0,.5,0,0x8f5944);break;
  case'paper':for(const x of [-.26,0,.26]){const m=cyl(.14,.14,.7,x,.16,0,cream);m.rotation.x=Math.PI/2;}break;
  case'books':case'newspaper':for(let i=0;i<4;i++)box(.16,.5,.35,(i-1.5)*.19,.28,0,kind==='newspaper'?cream:[0x9a5849,0x4d7381,0xa38753,0x668864][i]);break;
- case'fabric':for(const x of [-.25,0,.25]){const m=cyl(.13,.13,.65,x,.18,0,x===0?0xb65b69:0x7d9bb0);m.rotation.x=Math.PI/2;}if(b.type==='flagmaker'){box(.05,.9,.05,.45,.5,0,wood);box(.45,.3,.04,.68,.75,0,0xc75650);}else if(b.type==='tailor'||b.type==='clothing_store')box(.52,.43,.06,0,.68,0,b.type==='tailor'?0x9b6f82:0x6c8eac);break;
+ case'fabric':if(b.type==='laundromat'){box(.7,.75,.65,0,.38,0,0xd5d8d2);cyl(.2,.2,.06,0,.4,.34,0x526c73,12);}else if(b.type==='thrift_store'){box(.08,.85,.08,-.28,.43,0,metal);box(.08,.85,.08,.28,.43,0,metal);box(.68,.06,.08,0,.82,0,wood);for(const x of [-.22,0,.22])box(.12,.42,.035,x,.58,.04,[0x986474,0x668898,0xc1a36b][Math.round((x+.22)*5)]);}else{for(const x of [-.25,0,.25]){const m=cyl(.13,.13,.65,x,.18,0,x===0?0xb65b69:0x7d9bb0);m.rotation.x=Math.PI/2;}if(b.type==='flagmaker'){box(.05,.9,.05,.45,.5,0,wood);box(.45,.3,.04,.68,.75,0,0xc75650);}else if(b.type==='tailor'||b.type==='clothing_store')box(.52,.43,.06,0,.68,0,b.type==='tailor'?0x9b6f82:0x6c8eac);}break;
  case'paint':for(const x of [-.25,.25]){cyl(.2,.2,.36,x,.2,0,x<0?0xc35e51:0x537ea4);cyl(.21,.21,.04,x,.4,0,cream);}break;
  case'soap':for(const x of [-.22,.22])box(.36,.2,.26,x,.14,0,0xc7d6b6);break;
  case'medicine':box(.18,.65,.15,0,.38,0,0xc84848);box(.6,.18,.15,0,.38,0,0xc84848);break;

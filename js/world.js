@@ -107,7 +107,6 @@ export class World {
     this.presetId = presetId;
     this.revision = (this.revision || 0) + 1;
     this.topologyRevision = (this.topologyRevision || 0) + 1;
-    this.transitCrossings = new Map();
     let cfg = MAP_PRESET_ARCHIPELAGO;
     if (presetId === 1) cfg = MAP_PRESET_CONTINENT;
     else if (presetId === 2) cfg = MAP_PRESET_HIGHLANDS;
