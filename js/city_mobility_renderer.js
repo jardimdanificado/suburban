@@ -1,5 +1,5 @@
 import {surfaceElevation} from './city_terrain.js';
-const colors={bicicleta:0x397e99,bicicleta_carga:0xbd793c,patins:0xd5b345,skate:0x765038};
+const colors={bicicleta:0x397e99,bicicleta_carga:0xbd793c,patinete:0x62a69a,patins:0xd5b345,skate:0x765038};
 const inView=(r,x,y,margin=4)=>!Number.isFinite(r.renderedMinTx)||x>=r.renderedMinTx-margin&&x<=r.renderedMaxTx+margin&&y>=r.renderedMinTy-margin&&y<=r.renderedMaxTy+margin;
 function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
   renderer.mobilityBatches??=new Map();let b=renderer.mobilityBatches.get(key);
@@ -18,6 +18,8 @@ export function syncCityMobility(renderer,THREE,entities,world){
     if(['bicicleta','bicicleta_carga'].includes(v.good)){
       part(0,.42,0,.10,.28,.72);part(0,.64,-.12,.24,.08,.26,0x343437);part(0,.8,.35,.5,.05,.06,0x777777);tire(0,-.42);tire(0,.42);
       if(v.good==='bicicleta_carga'){part(0,.46,-.6,.55,.25,.44);tire(.24,-.5);}
+    }else if(v.good==='patinete'){
+      part(0,.18,0,.24,.08,.72);part(0,.52,.3,.05,.65,.05,0x777777);part(0,.85,.3,.5,.05,.05);tire(0,-.3,.55);tire(0,.3,.55);
     }else if(v.good==='skate'){
       part(0,.18,0,.32,.07,.85);for(const x of [-.18,.18])for(const z of [-.3,.3])tire(x,z,.4);
     }else{

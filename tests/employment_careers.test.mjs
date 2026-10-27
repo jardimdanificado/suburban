@@ -37,7 +37,7 @@ test('strict recruitment rejects unproven experience and entry-level jobs allow 
 });
 test('employed candidates wait for selection and switch only after a better offer is approved',()=>{
  const {city,b,c}=fixture(),old=city.buildings.find(x=>x.type==='builder');city.minute=600;
- for(const person of city.citizens)if(person!==c&&!city.politics.officeHolder(person)){city.economy.leaveJob(person);person.businessIds=[-1];}
+ for(const person of city.citizens)if(person!==c){city.economy.leaveJob(person);if(!city.politics.officeHolder(person))person.businessIds=[-1];}
  for(const f of city.buildings){f.workers=f.workers.filter(id=>id===city.economy.mayorId);f.jobs=f.workers.length;}
  c.jobId=old.id;old.workers.push(c.id);old.jobs=old.workers.length;b.jobs=1;
  city.economy.configureEmployment(old.id,{baseWage:5});city.economy.configureEmployment(b.id,{baseWage:20});
@@ -54,7 +54,7 @@ test('resume renders career and selection records without relying on old events'
 test('career records and company requirements survive worker serialization',()=>{
  const {city,b,c}=fixture();c.jobId=b.id;recordWork(city,c,b,b.wage,true);city.economy.configureEmployment(b.id,{minExperienceMinutes:100});
  const writer=new CityStateGraph(),reader=new CityStateGraph(),root=reader.apply(writer.encode({city}));bindCityState(root.city);
- assert.equal(root.city.society.citizen(c.id).career.jobs[0].workedMinutes,1);assert.equal(root.city.building(b.id).hiringPolicy.minExperienceMinutes,100);
+ assert.equal(root.city.society.citizen(c.id).career.jobs.at(-1).workedMinutes,1);assert.equal(root.city.building(b.id).hiringPolicy.minExperienceMinutes,100);
 });
 
 test('persistent vacancies raise company offers only with sustainable payroll cash',()=>{

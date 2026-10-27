@@ -2,7 +2,7 @@ import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
 import {renderResume,requirements} from './city_employment.js';
 import {renderFiscalReport} from './city_fiscal_ui.js';
-import {renderMobility,renderVehicle,renderAssembly} from './city_vehicles_ui.js';
+import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
 import {appearance,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
@@ -51,7 +51,7 @@ const VIEWS = {
   government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
-  transport: [['active', 'FRETES'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['rentals','ALUGUEL'], ['models','MODELOS']],
+  transport: [['active', 'FRETES'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
   sanitation: [['facilities', 'BANHEIROS'], ['cleaning', 'FAXINA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
 const FILTERS = {
@@ -354,6 +354,7 @@ export class CityUI {
     p.button('LOCALIZAR NO MAPA', () => { this.camera(b.entity.x, b.entity.y); if(!this.host)this.visible = false; });
     this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['finance','FINANÇAS'], ['infrastructure','ESTRUTURA'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
     if (this.detailTab === 'profile') {
+      if(b.type==='bike_rack'){renderParking(this,p);return;}
       p.metrics([['CAIXA',money(b.balance),b.balance<1000?C.red:C.cyan],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]);
       if(civicSpec(b)){const service=civicStatus(city,b);p.heading('ATENDIMENTO');p.kv('Equipe presente / capacidade',`${service.team} / ${service.capacity}`);p.kv('Usuários atendidos agora',service.visitors);p.kv('Visitas concluídas',b.completedVisits||0);p.note(service.reason);}
       p.status(b.active?'EM ATIVIDADE':['residential','popular_housing','luxury_housing'].includes(b.type)?'MORADIA':'INSTALAÇÃO DISPONÍVEL',b.entity.properties.name,b.active?C.green:C.cyan);
@@ -655,7 +656,7 @@ export class CityUI {
     p.table([{label:'Contrato',weight:2},{label:'Situação',weight:1.5},{label:'Valor'}],projects.filter(o=>this.matches(`${o.name} ${BUILDING_TYPES[o.type]?.label||o.type}`)).map(o=>({cells:[o.name,o.cancelled?'Cancelado':o.status==='completed'?'Concluído':o.status==='blocked'?'Bloqueado':o.status==='materials'?'Aguardando materiais':'Em andamento',money(o.fee)],color:o.status==='blocked'?C.red:C.gray,click:()=>this.openContract(o.id)})));
   }
   transport(p) {
-    if(['vehicles','rentals','models'].includes(this.view())){renderMobility(this,p);return;}
+    if(['vehicles','parking','rentals','models'].includes(this.view())){renderMobility(this,p);return;}
     const city=this.city,system=city.logistics,pending=system.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
     p.metrics([['EM ANDAMENTO',pending.length,C.gold],['ENTREGUES',system.delivered,C.green],['ITENS EM FRETE',pending.reduce((n,s)=>n+s.quantity,0),C.cyan]]);
     this.section(p,'transportDemand','Demanda, capacidade e causas dos atrasos',()=>{

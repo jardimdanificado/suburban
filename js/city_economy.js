@@ -1,3 +1,4 @@
+import {fundInitialCycleChain} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,apply,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js';
 import {productionPlan,investProductionPlan} from './city_production_planner.js';
@@ -22,7 +23,7 @@ export const CROPS = {
 };
 export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 450 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
 export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill']);
-export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'townhall','council_chamber', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'popular_housing', 'luxury_housing', 'popular_refectory']);
+export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'popular_housing', 'luxury_housing', 'popular_refectory']);
 const retailTypes = new Set(['bakery', 'greengrocer', 'market']);
 const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)), ...INDUSTRIAL_FOODS];
 export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
@@ -106,10 +107,11 @@ export class CityEconomy {
     hall.inventory.pao = this.city.citizens.length * ECONOMY_RULES.mealUnits * ECONOMY_RULES.initialMealsPerCitizen;
     this.initialStock.pao += hall.inventory.pao;
     // Public starter firms keep construction and extraction available without privileged founders.
-    for (const [type, budget] of [['builder', 2000000], ['quarry', 500000], ['bank', 2000000]]) {
+    for (const [type, budget] of [['builder', 2000000], ['quarry', 500000], ['bank', 2000000], ['carrier', 300000]]) {
       const b = this.city.buildings.find(b => b.type === type);
       if (b) this.activateMunicipalBusiness(b, budget);
     }
+    fundInitialCycleChain(this.city);
     this.city.development.ensurePlots();
     this.hire();
     this.updateDemand();
@@ -304,6 +306,7 @@ export class CityEconomy {
       items.push({type,crop:null,score,required:Math.ceil(needed),supply:Math.floor(supply),stock,reason:spec.impact});
     }
     for(const item of items) if(ESSENTIAL_SERVICES.has(item.type)) item.response=this.serviceInvestment.decisions.get(item.type);
+    const parking=this.city.vehicles.parkingReport();items.push({type:'bike_rack',crop:null,score:parking.missing*130,required:parking.required,supply:parking.sites.length,stock:0,reason:'Vagas para bicicletas e patinetes junto às ruas e destinos.'});
     this.demands = items.sort((a, b) => b.score - a.score);
     productionPlan(this);
     return this.demands;

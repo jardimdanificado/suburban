@@ -288,6 +288,15 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     const rows = ['farm','quarry'].includes(b.type)?new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0xb0b8ba : b.crop === 'girassol' ? 0xffce30 : 0x9bbd50 }), b.units.length * 3):null;
     if(rows)group.add(rows);group.userData.rows=rows;
     if(['market','greengrocer'].includes(b.type)){const fixtures=marketFixtures(THREE,b);group.add(fixtures);group.userData.retailFixtures=fixtures;}
+    if(b.type==='bike_rack'){
+      const metal=new THREE.MeshLambertMaterial({color:0x89999e});
+      for(let z=.5;z<b.depth;z++)for(let x=.5;x<b.width;x++){
+        const h=surfaceElevation(world,entity.x+x,entity.y+z);
+        for(const dx of [-.18,.18]){const rail=new THREE.Mesh(new THREE.BoxGeometry(.04,.65,.04),metal);rail.position.set(x+dx,h+.325,z);group.add(rail);}
+        const top=new THREE.Mesh(new THREE.BoxGeometry(.4,.04,.04),metal);top.position.set(x,h+.65,z);group.add(top);
+      }
+      const sign=new THREE.Mesh(new THREE.BoxGeometry(.6,.35,.06),new THREE.MeshLambertMaterial({color:0x326c94}));sign.position.set(.25,surfaceElevation(world,entity.x,entity.y)+1,.1);group.add(sign);
+    }
     if(b.type==='park'){
       for(const [x,z]of [[.7,.7],[b.width-.7,b.depth-.7]]){
         const ground=surfaceElevation(world,entity.x+x,entity.y+z),wood=new THREE.MeshLambertMaterial({color:0x79553d});

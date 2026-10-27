@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, WorldClock } from '../js/world.js';
 import { CitySimulation } from '../js/city_simulation.js';
-import { ROAD_TILES, tileHeight, terrainWalkable, canStep, findTerrainPath, inspectBuildingSite, roadFor, buildingGround } from '../js/city_terrain.js';
+import { ROAD_TILES, tileHeight, terrainWalkable, canStep, findTerrainPath, inspectBuildingSite, roadFor, dirtRoadFor, buildingGround } from '../js/city_terrain.js';
 import { resolveWorldSettings, randomWorldSeed } from '../js/world_settings.js';
 
 function cityOn(world, seed = world.seed ?? 42) {
@@ -31,21 +31,21 @@ test('settlements across all landscape presets preserve every natural height and
   for (const [preset, seed] of [[0, 42], [1, 1337], [2, 23811]]) {
     const world = new World(preset, seed), natural = world.map.slice(), city = cityOn(world);
     city.initialize();
-    assert.equal(city.buildings.length, 5); assert.equal(city.citizens.length, 512);
+    assert(city.buildings.length>=8);for(const type of ['townhall','builder','quarry','mint','bank','carrier','bike_rack','cycle_assembler','cycle_shop'])assert(city.buildings.some(b=>b.type===type),`Missing ${type}`); assert.equal(city.citizens.length, 512);
     assert.equal(city.stats().homeless, 512); assert(city.stats().employed > 0); assert.equal(city.stats().entrepreneurs, 0);
     let roads = 0;
     for (let i = 0; i < natural.length; i++) if (natural[i] !== world.map[i]) {
       roads++; assert(ROAD_TILES.has(world.map[i]));
-      assert.equal(world.map[i], roadFor(natural[i]));
+      assert([roadFor(natural[i]),dirtRoadFor(natural[i])].includes(world.map[i]));
       assert.equal(tileHeight(natural[i]), tileHeight(world.map[i]));
     }
     assert(roads > 0);
     for (const b of city.buildings) {
-      if (b.type !== 'quarry') assert(b.terrain.variation <= 1.3);
+      if(b.constructionKind!=='open-air'&&!['quarry','iron_mine','bauxite_mine'].includes(b.type))assert(b.terrain.variation<=1.3);
       assert(b.terrain.base >= b.terrain.max);
       for (let y = b.entity.y; y < b.entity.y + b.depth; y++) for (let x = b.entity.x; x < b.entity.x + b.width; x++) {
-        assert.equal(world.getTile(x, y), natural[y * world.width + x]);
-        assert(terrainWalkable(world, x, y) || b.type === 'quarry' && world.getTile(x, y) === 4);
+        if(b.constructionKind==='open-air'&&ROAD_TILES.has(world.getTile(x,y)))assert.equal(tileHeight(world.getTile(x,y)),tileHeight(natural[y*world.width+x]));else assert.equal(world.getTile(x,y),natural[y*world.width+x]);
+        assert(terrainWalkable(world, x, y) || ['quarry','iron_mine','bauxite_mine'].includes(b.type) && world.getTile(x,y)===4);
       }
       const route = city.findPath(city.spawn, b.door); assert(route !== null);
       let last = city.spawn;

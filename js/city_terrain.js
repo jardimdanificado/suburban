@@ -1,3 +1,4 @@
+import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {buildingEntrance} from './city_building_geometry.js';
 import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js';
 
@@ -236,9 +237,9 @@ export function generateSettlement(city) {
   const { world } = city;
   const origin = { ...world.spawnCenter };
   let hub = null;
-  const specs = [['townhall', 4, 4, 2], ['builder', 3, 3, 1], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bank', 3, 3, 1]];
+  const specs = [['townhall', 4, 4, 2], ['builder', 3, 3, 1], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bank', 3, 3, 1], ['carrier', 3, 3, 1], ['bike_rack',4,2,1], ...INITIAL_CYCLE_STAGES.map(type=>[type,type==='farm'?8:3,type==='farm'?8:3,1]), ['bike_rack',4,2,1]];
   for (const [type, w, d, h] of specs) {
-    const angle = city.random() * Math.PI * 2, radius = hub ? 8 + city.random() * 13 : 0;
+    const angle = city.random() * Math.PI * 2, radius = hub ? (type==='bike_rack'?4+city.random()*3:8+city.random()*13) : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };
     let placed = null;
     for (const searchRadius of [24, 48, 96]) {
@@ -258,6 +259,8 @@ export function generateSettlement(city) {
       }
       if (placed) break;
     }
+    if(!placed&&INITIAL_CYCLE_STAGES.includes(type)){(city.initialCycleSitesMissing??=[]).push(type);continue;}
+    if(placed&&INITIAL_CYCLE_STAGES.includes(type))placed.initialCycleChain=true;
     if (!placed) throw new Error(`Não há terreno acessível para ${type}. Experimente outra semente.`);
     if (!hub) { hub = { ...placed.door }; city.spawn = { ...hub }; }
   }

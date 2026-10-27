@@ -47,7 +47,7 @@ export function apply(city,c,b){
   if(last&&last.status==='análise')return last;
   if(last&&city.minute>480&&city.minute-last.appliedAt<360)return null;
   const q=qualification(city,c,b),row={buildingId:b.id,company:b.entity.properties.name,appliedAt:city.minute,decideAt:city.minute<=480?city.minute:city.minute+60,status:q.eligible?'análise':'reprovado',reason:q.reason,trainee:q.trainee,score:city.economy.hiringScore(c,b),offeredWage:wageFor(city,c,b)};
-  cv.applications.push(row);if(cv.applications.length>24)cv.applications.splice(0,cv.applications.length-24);return row;
+  cv.applications.push(row);if(cv.applications.length>48)cv.applications=cv.applications.filter((a,index)=>a.status==='análise'||index>=cv.applications.length-24);return row;
 }
 export function reviewMarket(city,offers){
   // One staggered search per citizen per day; examine only the twelve best offers.

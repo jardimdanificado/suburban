@@ -20,14 +20,14 @@ function hospital(){
  b.inventory.remedio=10;b.inventory.sabao=10;return {city,b,c,people};
 }
 test('only human-powered mobility is offered and recipes need actual industrial inputs',()=>{
- const city=setup({starter:true});assert.deepEqual(Object.keys(VEHICLE_SPECS),['bicicleta','bicicleta_carga','patins','skate']);
+ const city=setup({starter:true});assert.deepEqual(Object.keys(VEHICLE_SPECS),['bicicleta','bicicleta_carga','patinete','patins','skate']);
  for(const old of ['carro','caminhao','onibus','carruagem'])assert.equal(city.economy.goods[old],undefined);
  for(const old of ['automaker','dealership','fuel_station','bus_operator'])assert.equal(city.buildingTypes[old],undefined);
  for(const recipe of Object.values(VEHICLE_RECIPES))for(const g of Object.keys(recipe))assert(city.economy.goods[g]);
  assert.equal(city.vehicles.air,undefined);
 });
 test('every bicycle, skate and skating model assembles from consumed parts without oil',()=>{
- const city=setup({starter:true,population:64}),b=building(city,'cycle_assembler'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
+ const city=setup({starter:true,population:64}),b=building(city,'cycle_assembler'),c=city.citizens.find(c=>!city.politics.officeHolder(c)),initialUnits=city.vehicles.units.size;
  for(const kind of ['bicicleta','bicicleta_carga','patins']){
   assert(city.vehicles.configureAssembly(b.id,kind,1));const recipe=VEHICLE_RECIPES[kind];for(const [g,n]of Object.entries(recipe))b.inventory[g]=n;
   for(let i=0;i<100;i++)city.vehicles.assemblyWork(b,c);
@@ -35,11 +35,11 @@ test('every bicycle, skate and skating model assembles from consumed parts witho
  }
  const skate=building(city,'skate_workshop');for(const [g,n]of Object.entries(VEHICLE_RECIPES.skate))skate.inventory[g]=n;
  for(let i=0;i<100;i++)city.vehicles.assemblyWork(skate,c);assert.equal(skate.inventory.skate,1);
- assert.equal(city.vehicles.units.size,4);
+ assert.equal(city.vehicles.units.size,initialUnits+4);
 });
 test('a citizen rides on road paths, stays on the ground and equipment wears down',()=>{
  const city=setup({starter:true,population:48}),b=building(city,'cycle_assembler'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
- city.vehicles.registerUnits(b,'bicicleta',1);const v=[...city.vehicles.units.values()][0];city.vehicles.activate(v,c.accountId,b);
+ city.vehicles.registerUnits(b,'bicicleta',1);const v=[...city.vehicles.units.values()].at(-1);city.vehicles.activate(v,c.accountId,b);
  for(let x=10;x<=30;x++)city.world.setTile(x,10,TILE_ROAD_GRASS_STONE);
  c.entity.x=v.x=v.entity.x=10.5;c.entity.y=v.y=v.entity.y=10.5;c.path=Array.from({length:20},(_,i)=>({x:11.5+i,y:10.5}));c.task='leisure';
  assert(city.vehicles.tryTrip(c));city.vehicles.update(.1);assert.equal(c.ridingVehicleId,v.id);assert(v.distance>0);
@@ -48,7 +48,7 @@ test('a citizen rides on road paths, stays on the ground and equipment wears dow
 });
 test('road equipment never crosses water even if its path becomes invalid',()=>{
  const city=setup({starter:true,population:48}),b=building(city,'cycle_assembler'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
- city.vehicles.registerUnits(b,'patins',1);const v=[...city.vehicles.units.values()][0];city.vehicles.activate(v,c.accountId,b);
+ city.vehicles.registerUnits(b,'patins',1);const v=[...city.vehicles.units.values()].at(-1);city.vehicles.activate(v,c.accountId,b);
  c.entity.x=v.x=v.entity.x=10.5;c.entity.y=v.y=v.entity.y=10.5;city.world.setTile(11,10,2);
  v.driverId=c.id;c.ridingVehicleId=v.id;c.mobilityTrip={vehicleId:v.id,stage:'riding'};c.path=[{x:11.5,y:10.5}];city.vehicles.update(.5);assert.equal(c.entity.x,10.5);assert.equal(c.ridingVehicleId,null);
 });
@@ -90,7 +90,7 @@ test('medical supplies actually travel from a producer into hospital inventory',
 });
 test('mobility units survive worker snapshots and repair consumes parts rather than fuel',()=>{
  const city=setup({starter:true,population:64}),assembler=building(city,'cycle_assembler'),workshop=building(city,'cycle_workshop'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
- city.vehicles.registerUnits(assembler,'bicicleta',1);const v=[...city.vehicles.units.values()][0];city.vehicles.activate(v,workshop.accountId,assembler);v.condition=40;workshop.inventory.pecas=1;
+ city.vehicles.registerUnits(assembler,'bicicleta',1);const v=[...city.vehicles.units.values()].at(-1);city.vehicles.activate(v,workshop.accountId,assembler);v.condition=40;workshop.inventory.pecas=1;
  city.economy.leaveJob(c);c.jobId=workshop.id;workshop.workers.push(c.id);c.entity.x=v.x;c.entity.y=v.y;c.path=[];
  for(let i=0;i<40&&v.condition<100;i++)city.vehicles.garageWork(workshop,c);
  assert.equal(v.condition,100);assert.equal(workshop.inventory.pecas,0);assert.equal(city.economy.consumed.pecas,1);

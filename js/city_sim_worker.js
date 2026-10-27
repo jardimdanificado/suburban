@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ground-mobility-services-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=cycle-parking-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -10,7 +10,7 @@ const MIN_STEP = 1 / 60;
 const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
 const stateInterval = () => speed>=32?900:speed>=16?600:400;
 const MOTION_INTERVAL = 100;
-const allowed = new Set(['economy.configureEmployment','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
+const allowed = new Set(['economy.configureEmployment','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
 function positions() {
   const people = state.city.citizens, result = new Float64Array(people.length * 3);

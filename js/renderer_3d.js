@@ -5,6 +5,7 @@
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { syncCityBuildings } from "./city_renderer_3d.js";
 import { CityCitizenBatches } from './city_citizen_batches.js';
+import { CityCitizenModels } from './city_citizen_models.js';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -3980,6 +3981,7 @@ export class RCT3DRenderer {
     this.scene.add(this.entityGroup);
     this.entitySprites = new Map();
     this.cityCitizenBatches=new CityCitizenBatches(THREE,this.entityGroup,this.billboardGeo);
+    this.cityCitizenModels=new CityCitizenModels(THREE,this.entityGroup);
 
     // Floating UI Group (Emotes, Held Items & Clan House Flags)
     this.uiIconGeo = new THREE.PlaneGeometry(0.40, 0.40);
@@ -4585,6 +4587,7 @@ export class RCT3DRenderer {
 
   clear() {
     this.cityCitizenBatches?.clear();
+    this.cityCitizenModels?.clear();
     this.lastBuiltCamTileX = -9999;
     this.lastBuiltCamTileY = -9999;
     this.lastInstCamTileX = -9999;
@@ -4893,8 +4896,8 @@ export class RCT3DRenderer {
       if (!e || e.destroyed || !e.properties || !e.properties.render || e.properties.species === "effect") continue;
 
       if(e.properties.cityVehicle){
-        const v=e.properties.cityVehicle,h=v.altitude??1,extent=['bicicleta_carga','patins'].includes(v.good)?1.2:1;
-        const box=new THREE.Box3(new THREE.Vector3(e.x-extent,h,e.y-extent),new THREE.Vector3(e.x+extent,h+1.1,e.y+extent)),hit=ray.intersectBox(box,new THREE.Vector3());
+        const v=e.properties.cityVehicle,h=v.altitude??1,length=v.good==='bicicleta_carga'?.85:v.good==='patins'?.3:.55,halfWidth=v.good==='bicicleta_carga'?.3:.22,sin=Math.abs(Math.sin(v.angle||0)),cos=Math.abs(Math.cos(v.angle||0)),ex=sin*length+cos*halfWidth,ez=cos*length+sin*halfWidth;
+        const box=new THREE.Box3(new THREE.Vector3(e.x-ex,h,e.y-ez),new THREE.Vector3(e.x+ex,h+.95,e.y+ez)),hit=ray.intersectBox(box,new THREE.Vector3());
         if(hit){const d=ray.origin.distanceTo(hit);if(d<closestDist){closestDist=d;bestEntId=e.id;this.selectedCityUnitId=null;}}continue;
       }
       if (e.properties.cityBuilding) {
@@ -6220,6 +6223,7 @@ export class RCT3DRenderer {
     const activeIds = this._activeIds;
     const activeUiIds = this._activeUiIds;
     this.cityCitizenBatches.begin();
+    this.cityCitizenModels.begin(dt,effectiveSpeed);
     let selectedPos = null;
 
     const curCamTileX = Math.floor(this.camX);
@@ -6849,6 +6853,14 @@ export class RCT3DRenderer {
       }
       // --- DYNAMIC BILLBOARDS (Creatures, Humanoids, Items, Doors) ---
       else {
+        const billboardRotY = this.isPerspectiveActive() ? (this.fpYaw + Math.PI) : this.fixedRotationY;
+        const isPossessed = this.isFirstPersonActive() && Number(e.id) === Number(this.fpEntityId);
+        const isConsciousCreature = !isItem && !isDoor && !!e.properties?.brain;
+        const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
+        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,{hidden:isPossessed,dimmed:!inCurZone,perspective:this.isPerspectiveActive()});
+        if(modelRendered){
+          activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
+        }else{
         activeIds.add(e.id);
         let skinName = r.skin;
         if (!skinName) {
@@ -6926,8 +6938,6 @@ export class RCT3DRenderer {
 
         const isSleeping = !!e.properties?.life?.isSleeping && !!e.properties?.brain;
         const isStandingTorch = !!e.properties?.torch;
-        const billboardRotY = this.isPerspectiveActive() ? (this.fpYaw + Math.PI) : this.fixedRotationY;
-        const isPossessed = this.isFirstPersonActive() && Number(e.id) === Number(this.fpEntityId);
 
         if (isPossessed || e.properties?.citizen?.indoorLocation) {
           sprite.visible = false;
@@ -6966,8 +6976,6 @@ export class RCT3DRenderer {
         }
 
         // Dimming in Vision Mode outside current zone
-        const isConsciousCreature = !isItem && !isDoor && !!e.properties?.brain;
-        const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
 
         if (e.combatFlash > 0) {
           sprite.material.color.setHex(0xff3333);
@@ -6980,6 +6988,8 @@ export class RCT3DRenderer {
         }
 
         if(e.properties?.citizen)this.cityCitizenBatches.add(sprite);
+
+        }
 
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
         if (isConsciousCreature && !e.properties?.citizen?.indoorLocation) {
@@ -7019,7 +7029,7 @@ export class RCT3DRenderer {
 
           const totalIcons = (emoteSkin ? 1 : 0) + heldItems.length;
           if (totalIcons > 0) {
-            const headY = surfaceH + 0.90 + floatBob;
+            const headY = surfaceH + (modelRendered?1.25:.90) + floatBob;
             const iconSpacing = 0.32;
             const startOffset = -((totalIcons - 1) * iconSpacing) / 2;
 
@@ -7530,6 +7540,7 @@ export class RCT3DRenderer {
   }
 
     this.cityCitizenBatches.end();
+    this.cityCitizenModels.end();
     // Clean inactive dynamic billboards
     for (const [id, spr] of this.entitySprites.entries()) {
       if (!activeIds.has(id)) {

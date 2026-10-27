@@ -33,6 +33,7 @@ import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, find
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
   ...CIVIC_SERVICES,
+  bike_rack:{label:'Bicicletário',color:0x638e9b,rent:0,price:18000,jobs:0},
   ...INDUSTRIES,
   mill: { label: 'Moinho de óleo', color: 0xc3a668, rent: 90, price: 70000, jobs: 2 },
   mint: { label: 'Casa da moeda', color: 0xd5c16b, rent: 0, price: 120000, jobs: 1 },
@@ -182,15 +183,16 @@ export class CitySimulation {
     }
     for (let i = 0; i < this.initialPopulation; i++) { const p = arrivalTiles[i % arrivalTiles.length]; this.addCitizen(p.x, p.y, i); }
     this.economy.initialize();
+    this.vehicles.equipInitialWorkers();
     this.nature.initialize();
     this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: ${this.citizens.length} moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
     this.syncClock();
   }
-  addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = ['farm','quarry','park'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
+  addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
     const spec = BUILDING_TYPES[type];
     if (type === 'quarry' && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A pedreira precisa de um depósito rochoso junto à área de extração.');
     if (!spec) return this.fail('Tipo de prédio inválido.');
-    if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry', 'park', 'leisure', 'market', 'greengrocer'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
+    if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
     width ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 3);
     depth ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 2);
     floors ??= 2 + Math.floor(this.random() * 4);
@@ -203,7 +205,7 @@ export class CitySimulation {
 
     if (access === null) return this.fail('Este lote está isolado. Escolha um local conectado à cidade por terra firme.');
     if (kind !== 'open-air' && this.citizens.some(c => !c.entity.destroyed && c.entity.x >= x && c.entity.x < x + width && c.entity.y >= y && c.entity.y < y + depth)) return this.fail('Há cidadãos neste terreno. Aguarde a passagem deles.');
-    const count = width * depth * floors, stone = kind === 'open-air' ? (type==='park'?Math.ceil(count/4):0) : count * DEVELOPMENT_RULES.stonePerCell, capital = type !== 'townhall' && PUBLIC_TYPES.has(type) && ownerAccountId === 'treasury' ? this.currency.price(50000) : 0;
+    const count = width * depth * floors, stone = kind === 'open-air' ? (['park','bike_rack'].includes(type)?Math.ceil(count/4):0) : count * DEVELOPMENT_RULES.stonePerCell, capital = type !== 'townhall' && PUBLIC_TYPES.has(type) && ownerAccountId === 'treasury' ? this.currency.price(50000) : 0;
     const plot = this.development.plots.find(p => p.id === plotId);
     if (!free && (!plot || plot.ownerId !== ownerAccountId || plot.buildingId || plot.x !== x || plot.y !== y || width > plot.width || depth > plot.depth)) return this.fail('É necessário comprar um terreno compatível antes de construir.');
     if (!free && stone && (!materialSource || materialSource.inventory.pedra < stone)) return this.fail(`Obra precisa de ${stone} pedras entregues no terreno.`);

@@ -6,7 +6,7 @@ export const INDUSTRIAL_GOODS = Object.fromEntries([
   ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['jornais','Jornais',3200],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],
   ['bauxita','Bauxita',700],['aluminio','Alumínio',1900],['aco','Aço',2400],['resina','Látex vegetal',280],['borracha','Borracha',950],
   ['rolamentos','Rolamentos',450],['quadro','Quadro de bicicleta',3500],['plataforma','Plataforma de madeira e metal',1200],['rodas','Rodas de mobilidade',500],['corrente','Corrente de bicicleta',900],['capacete','Capacete de proteção',1200],['selim','Selim',650],['pecas','Peças de reposição',700],['botas','Botas para patins',1700],
-  ['bicicleta','Bicicleta',14000],['bicicleta_carga','Bicicleta de carga',28000],['patins','Patins',10500],['skate','Skate',6500],
+  ['bicicleta','Bicicleta',14000],['bicicleta_carga','Bicicleta de carga',28000],['patinete','Patinete',9500],['patins','Patins',10500],['skate','Skate',6500],
 ].map(([id,label,price])=>[id,{label,price}]));
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
@@ -25,8 +25,8 @@ export const INDUSTRIES = {
   cycle_parts:industry('Fábrica de peças de mobilidade',{aco:1,borracha:1},{pecas:4},20,'maintenance','Peças para oficinas conservarem bicicletas, patins e skates.'),
   sports_shoes:industry('Fábrica de botas esportivas',{tecido:3,borracha:2},{botas:2},32,'construction','Botas reforçadas usadas na montagem de patins.'),
   skate_workshop:industry('Oficina de skates',{plataforma:1,rodas:4,rolamentos:2},{skate:1},45,'construction','Monta skates com fornecedores e modelos identificados.'),
-  cycle_assembler:industry('Montadora de bicicletas e patins',{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},{bicicleta:1,bicicleta_carga:1,patins:1},65,'maintenance','Monta lotes com peças reais; cada alteração de fornecedor ou revisão define outro modelo.'),
-  cycle_shop:industry('Loja de bicicletas e patins',{bicicleta:1,bicicleta_carga:1,patins:1,skate:1},{},1,'commerce','Vende equipamentos reais, com proprietário, fabricante, modelo e histórico.','services'),
+  cycle_assembler:industry('Montadora de bicicletas e patinetes',{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},{bicicleta:1,bicicleta_carga:1,patinete:1,patins:1},65,'maintenance','Monta lotes com peças reais; cada alteração de fornecedor ou revisão define outro modelo.'),
+  cycle_shop:industry('Loja de mobilidade',{bicicleta:1,bicicleta_carga:1,patinete:1,patins:1,skate:1},{},1,'commerce','Vende equipamentos reais, com proprietário, fabricante, modelo e histórico.','services'),
   sports_shop:industry('Loja de artigos esportivos',{capacete:1},{},1,'commerce','Fornece proteção para praticantes de esportes.','services',{need:'safety',boost:12}),
   cycle_workshop:industry('Oficina de mobilidade',{pecas:1},{},24,'maintenance','Mecânicos levam peças até equipamentos avariados e cobram pelo reparo.','services'),
   bicycle_rental:industry('Locadora de bicicletas',{},{},1,'commerce','Compra bicicletas e aluga o uso por viagem a moradores próximos.','services'),

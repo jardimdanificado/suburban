@@ -2,27 +2,45 @@ import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const title=v=>VEHICLE_SPECS[v.good]?.label||v.good;
+const stamp=n=>`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
+function ownerLink(ui,account){const actor=ui.city.accounts.get(account);if(actor?.entity?.properties.citizen)ui.openCitizen(actor.id);else if(actor?.entity?.properties.cityBuilding)ui.openBuilding(actor.id);else if(account==='treasury')ui.openPanel({tab:'government',views:{government:'finance'}});}
 export function renderVehicle(ui,p,v){
   const city=ui.city,system=city.vehicles,model=system.model(v),spec=VEHICLE_SPECS[v.good];
-  p.heading(`${title(v)} #${v.id}`);p.status(model?.brand||'Fabricante',model?.name||'Modelo sem identificação');
+  p.heading(`${title(v)} #${v.id}`);p.status(model?.brand||'Fabricante desconhecido',model?.name||'Modelo sem identificação');
   p.metrics([['CONSERVAÇÃO',`${v.condition.toFixed(0)}%`,v.condition<30?C.red:C.green],['VELOCIDADE NA RUA',`${spec.speed} células/s`]]);
-  p.kv('Proprietário',city.accountName(v.ownerAccountId));if(!v.active)p.kv('Preço de venda',money(system.vehiclePrice(v)));p.kv('Situação',!v.active?'No estoque':v.status||(v.journey?'Em viagem':'Estacionado'));
-  p.note('Usa força humana. Circula mais rápido nas ruas; fora delas o cidadão leva o equipamento a pé. O uso provoca desgaste e requer reparos com peças reais.');
-  p.kv('Distância percorrida',`${v.distance.toFixed(1)} células`);p.kv('Lugares / carga',`${spec.seats} pessoas / ${spec.cargo} itens`);p.kv('Lote de fabricação',v.batchId??'Produção artesanal');
-  if(v.entity)p.button('LOCALIZAR VEÍCULO',()=>ui.camera(v.entity.x,v.entity.y));
-  if(v.driverId)p.button(`USUÁRIO: ${city.accountName(`citizen:${v.driverId}`)}`,()=>ui.openCitizen(v.driverId));
-  for(const id of v.passengerIds)p.record(city.accountName(`citizen:${id}`),'Passageiro',()=>ui.openCitizen(id));
-  p.heading('PEÇAS E FORNECEDORES');
-  p.table([{label:'Peça',weight:2},{label:'Quantidade'},{label:'Fabricante',weight:2},{label:'Revisão'}],(model?.components||[]).map(part=>({cells:[city.economy.goods[part.good]?.label||part.good,part.quantity,city.building(part.producerId)?.entity.properties.name||String(part.producerId),part.design],click:()=>ui.openBuilding(part.producerId)})));
-  ui.section(p,'vehicleOwnership','Histórico de proprietários',()=>{for(const row of v.ownershipHistory||[])p.record(`Dia ${Math.floor(row.minute/1440)+1} · ${city.accountName(row.to)}`,`${city.accountName(row.from)} → ${city.accountName(row.to)} · ${row.reason||money(row.price)}`);});
-  p.button('HISTÓRICO DO VEÍCULO',()=>ui.openHistory(`vehicleId:${v.id}`));
+  p.heading('IDENTIDADE E PROPRIEDADE');p.kv('Registro individual',v.id);p.kv('Marca',model?.brand||'Sem registro');p.kv('Modelo / revisão',model?.name||'Sem registro');p.kv('Origem',v.initial?'Equipamento da fundação':v.imported?'Importado':'Produção local');
+  p.button(`DONO: ${city.accountName(v.ownerAccountId)}`,()=>ownerLink(ui,v.ownerAccountId));
+  if(model?.manufacturerId!=null)p.button(`FABRICANTE: ${city.building(model.manufacturerId)?.entity.properties.name||model.brand}`,()=>ui.openBuilding(model.manufacturerId));
+  p.kv('Fabricação / registro',stamp(v.createdAt??model?.createdAt??0));p.kv('Lote',v.batchId??(v.initial?'Patrimônio inicial':'Sem lote registrado'));
+  if(!v.active)p.kv('Preço de venda',money(system.vehiclePrice(v)));p.kv('Situação',v.status||(!v.active?'No estoque':v.driverId?'Em viagem':'Estacionado'));
+  p.kv('Distância percorrida',`${v.distance.toFixed(1)} células`);p.kv('Capacidade de carga',`${spec.cargo} itens`);
+  if(v.entity)p.button('LOCALIZAR NO MAPA',()=>ui.camera(v.entity.x,v.entity.y));
+  if(v.driverId)p.button(`USUÁRIO ATUAL: ${city.accountName(`citizen:${v.driverId}`)}`,()=>ui.openCitizen(v.driverId));
+  const rack=v.parking&&city.building(v.parking.rackId);p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));
+  if(v.reservedParking)p.kv('Vaga reservada no destino',`${city.building(v.reservedParking.rackId)?.entity.properties.name||v.reservedParking.rackId} · ${v.reservedParking.index+1}`);
+  p.heading('PEÇAS ORIGINAIS E FORNECEDORES');
+  const components=model?.components?.length?model.components:Object.entries(VEHICLE_RECIPES[v.good]||{}).map(([good,quantity])=>({good,quantity,producerName:'Não registrado',design:'—'}));
+  p.table([{label:'Peça',weight:2},{label:'Quantidade'},{label:'Fabricante',weight:2},{label:'Revisão'}],components.map(part=>({cells:[city.economy.goods[part.good]?.label||part.good,part.quantity,part.producerName||city.building(part.producerId)?.entity.properties.name||String(part.producerId),part.design],click:()=>ui.openBuilding(part.producerId)})));
+  if(!model?.components?.length)p.note('A tabela mostra a composição padrão deste equipamento inicial/importado. Os fornecedores das peças não foram registrados; não são atribuídos a uma fábrica local.');
+  p.heading('TODOS OS PROPRIETÁRIOS');p.table([{label:'Quando'},{label:'Origem',weight:2},{label:'Novo proprietário',weight:2},{label:'Valor'},{label:'Motivo',weight:2}],(v.ownershipHistory||[]).map(row=>({cells:[stamp(row.minute),row.fromName||(row.from?city.accountName(row.from):'Fabricação'),row.toName||city.accountName(row.to),money(row.price||0),row.reason||'Transferência'],click:()=>ownerLink(ui,row.to)})));
+  p.heading('MANUTENÇÃO E PEÇAS APLICADAS');
+  for(const row of v.maintenanceHistory||[]){p.record(`${stamp(row.minute)} · ${row.workshopName||'Oficina'}`,`Reparo: ${money(row.price||0)}`,()=>ui.openBuilding(row.workshopId));p.table([{label:'Material'},{label:'Quantidade'},{label:'Origem',weight:2},{label:'Revisão'}],(row.components||[]).map(part=>({cells:[city.economy.goods[part.good]?.label||part.good,part.quantity,part.producerName||city.building(part.producerId)?.entity.properties.name||String(part.producerId),part.design]})));}
+  if(!v.maintenanceHistory?.length)p.note('Nenhum reparo registrado.');
+  if(v.parkingHistory?.length){p.heading('ESTACIONAMENTOS RECENTES');p.table([{label:'Quando'},{label:'Local',weight:2},{label:'Usuário',weight:2}],v.parkingHistory.slice().reverse().map(row=>({cells:[stamp(row.minute),row.rackName||'Fora de bicicletário',city.accountName(`citizen:${row.citizenId}`)],click:()=>ui.camera(row.x,row.y)})));}
+  p.button('EVENTOS DESTE EQUIPAMENTO',()=>ui.openHistory(`vehicleId:${v.id}`));
+}
+export function renderParking(ui,p){
+ const city=ui.city,system=city.vehicles,report=system.parkingReport();p.heading('BICICLETÁRIOS · BIKES E PATINETES');p.metrics([['VAGAS',report.capacity],['OCUPADAS',report.occupied],['RESERVADAS',report.reserved],['FORA DOS BICICLETÁRIOS',report.outside]]);
+ p.note('A vaga é reservada antes da viagem. Ao chegar, o cidadão estaciona e termina o percurso a pé. Na ausência de vaga próxima, o equipamento fica junto ao destino.');
+ p.button('SOLICITAR NOVO BICICLETÁRIO',()=>city.politics.startPublicWork('bike_rack'));
+ for(const b of report.sites){p.heading(b.entity.properties.name);p.button('LOCALIZAR BICICLETÁRIO',()=>ui.camera(b.entity.x,b.entity.y));p.table([{label:'Vaga'},{label:'Equipamento',weight:2},{label:'Proprietário',weight:2},{label:'Estado'}],b.bikeSlots.map(slot=>{const v=system.units.get(slot.vehicleId??slot.reservedBy);return {cells:[slot.index+1,v?`${title(v)} #${v.id}`:'Livre',v?city.accountName(v.ownerAccountId):'—',slot.vehicleId!=null?'Estacionado':slot.reservedBy!=null?'Reservado':'Disponível'],...(v?{click:()=>ui.openPanel({selectedVehicleId:v.id})}:{})};}));}
 }
 export function renderAssembly(ui,p,b){
   const system=ui.city.vehicles,plan=system.recipeFor(b);if(!plan)return;
   p.heading('LOTES E MODELOS');p.kv('Marca',b.entity.properties.name);p.kv('Próximo tipo',VEHICLE_SPECS[plan.good].label);p.kv('Pacote por lote',`${b.vehicleBatchSize?'':'Até '}${plan.size} veículos${b.vehicleBatchSize?'':' (automático)'}`);
   p.note('Cada lote usa um fabricante e uma revisão por peça. Trocar uma peça, fornecedor ou revisão registra outro modelo. Os componentes chegam por transporte.');
   p.button('PLANEJAMENTO AUTOMÁTICO DA PRODUÇÃO',()=>system.configureAssembly(b.id,'auto',3),!b.vehicleKind);
-  p.buttons(['bicicleta','bicicleta_carga','patins'].map(kind=>({label:VEHICLE_SPECS[kind].label,selected:plan.good===kind,click:()=>system.configureAssembly(b.id,kind,b.vehicleBatchSize||3)})));
+  p.buttons(['bicicleta','bicicleta_carga','patinete','patins'].map(kind=>({label:VEHICLE_SPECS[kind].label,selected:plan.good===kind,click:()=>system.configureAssembly(b.id,kind,b.vehicleBatchSize||3)})));
   p.buttons([1,3,6,12].map(size=>({label:`LOTE ${size}`,selected:plan.size===size,click:()=>system.configureAssembly(b.id,plan.good,size)})));
   if(b.vehicleAssembly){const batch=b.vehicleAssembly;p.meter(`Montagem do lote ${batch.id}`,100*batch.labor/batch.requiredLabor);p.kv('Unidades no lote',batch.quantity);}
   p.table([{label:'Componente',weight:2},{label:'Por lote'},{label:'No estoque'},{label:'Em frete'}],Object.entries(VEHICLE_RECIPES[plan.good]).map(([g,n])=>({cells:[ui.city.economy.goods[g].label,n*plan.size,b.inventory[g],b.incoming[g]]})));
@@ -30,6 +48,7 @@ export function renderAssembly(ui,p,b){
 export function renderMobility(ui,p){
   const city=ui.city,system=city.vehicles,view=ui.view(),units=[...system.units.values()].filter(v=>!v.scrapped);
   if(ui.selectedVehicleId!=null){const v=system.units.get(ui.selectedVehicleId);if(v){p.button('VOLTAR À FROTA',()=>ui.openPanel({selectedVehicleId:null}));renderVehicle(ui,p,v);return;}}
+  if(view==='parking'){renderParking(ui,p);return;}
   if(view==='rentals'){
     p.heading('ALUGUEL DE BICICLETAS');p.metrics([['VIAGENS',system.stats.passengers],['RECEITA DE ALUGUÉIS',money(system.stats.fares)]]);
     p.note('Locadoras com funcionários compram bicicletas e alugam cada viagem por R$ 0,50, ajustado pelo índice monetário. O morador precisa chegar ao equipamento disponível.');
