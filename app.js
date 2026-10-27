@@ -3,12 +3,12 @@ import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js";
 import { CityDesktop } from "./js/city_desktop.js";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=civic-sites-2";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=civic-sites-4";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
 import { SimulationTime } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js";
+import { OptionsPanel } from "./js/options.js?v=activity-toggle-1";
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
@@ -76,21 +76,6 @@ export function update(dt, _api) { city.update(dt); }
 
 /** Draw additional experience-specific UI after the framework HUD. */
 export function renderUI(ui, _api) {
-  ui.ctx.save();ui.ctx.beginPath();ui.ctx.rect(0,cityUI.manager.top,ui.width,Math.max(0,ui.height-cityUI.manager.top-27));ui.ctx.clip();
-  for (const c of city.citizens) {
-    if (!c.conversation || c.conversation.a !== c.id) continue;
-    const other = city.society.citizen(c.conversation.b);
-    if (!other) continue;
-    const x = (c.entity.x + other.entity.x) / 2, y = (c.entity.y + other.entity.y) / 2;
-    const point = renderer3D.projectWorldToScreen(x, y, renderer3D.getSurfaceElevation(world.map, x, y) + 1.1);
-    if (!point || point.x < 0 || point.x > ui.width || point.y < 38 || point.y > ui.height - 60) continue;
-    ui.ctx.save(); ui.ctx.fillStyle = '#192b24'; ui.ctx.strokeStyle = '#d4b6cd'; ui.ctx.lineWidth = 1;
-    ui.ctx.fillRect(point.x - 12, point.y - 9, 25, 16); ui.ctx.strokeRect(point.x - 12, point.y - 9, 25, 16);
-    ui.ctx.fillStyle = '#e6d8c2';
-    for (let i = 0; i < 3; i++) ui.ctx.fillRect(point.x - 7 + i * 6, point.y - 2, 3, 3);
-    ui.ctx.restore();
-  }
-  ui.ctx.restore();
   cityUI.draw(ui);
 }
 

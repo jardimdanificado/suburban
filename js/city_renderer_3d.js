@@ -1,6 +1,6 @@
 import {addBuildingSign} from './city_building_details.js';
 import {syncConstructionSites} from './city_construction_renderer.js';
-import {syncCityActivityBadges} from './city_activity_renderer.js';
+import {syncCityActivityBadges} from './city_activity_renderer.js?v=activity-toggle-1';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
@@ -268,7 +268,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       group.userData.stairs.instanceMatrix.needsUpdate = true;
       group.userData.terrainRevision = world.revision || 0;
     }
-    if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = renderer.cityAnimationTime*.3;
+    if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = Math.floor((renderer.foliageAnimationTick || 0)/20)*.1;
     group.position.set(entity.x, b.terrain.base, entity.y);
     const cutaway=renderer.selectedEntityId===entity.id||selectedInteriorId===b.id;
     if(group.userData.roomProps)group.userData.roomProps.visible=cutaway;

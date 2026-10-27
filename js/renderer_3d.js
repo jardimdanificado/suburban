@@ -6149,6 +6149,7 @@ export class RCT3DRenderer {
 
       // Update GPU Wind Vertex Sway on all tree species, cacti, bushes, roses and grass
       const currentTickVal = this.simTick || 0;
+      this.foliageAnimationTick = currentTickVal;
       for (const dict of [this.materials, this.materialsIso, this.materialsPerspective]) {
         if (!dict) continue;
         for (const k of STATIC_FOLIAGE_KEYS) {

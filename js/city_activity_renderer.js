@@ -2,6 +2,7 @@ import {activityBadge,activityBadgeCanvas,activityBadgeKey} from './city_activit
 import {surfaceElevation} from './city_terrain.js';
 export function syncCityActivityBadges(renderer,THREE,entities,world){
   const sprites=renderer.cityActivitySprites??=new Map(),materials=renderer.cityActivityMaterials??=new Map(),active=new Set();
+  if(renderer.showActivityBadges===false){for(const sprite of sprites.values())renderer.scene.remove(sprite);sprites.clear();return;}
   for(const e of entities){const c=e.properties?.citizen;if(!c||e.destroyed)continue;
     if(Number.isFinite(renderer.renderedMinTx)&&(e.x<renderer.renderedMinTx-3||e.x>renderer.renderedMaxTx+3||e.y<renderer.renderedMinTy-3||e.y>renderer.renderedMaxTy+3))continue;
     const badge=activityBadge(c);if(!badge)continue;active.add(e.id);const key=activityBadgeKey(badge);let material=materials.get(key);

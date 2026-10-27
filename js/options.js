@@ -5,6 +5,7 @@ const GRAPHICS = [
   { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1, 1.5, 2].map(v => [v, `${v * 100}%`]), default: 0.25 },
   { key: "distance", label: "DISTANCIA", values: [...[24, 36, 48, 64, 96].map(v => [v, `${v} T`]), [0, "TOTAL"]], default: 64 },
   { key: "shadows", label: "SOMBRAS", values: BOOL, default: true },
+  { key: "activityBadges", label: "BALOES DE ACAO", values: BOOL, default: true },
   { key: "shadowQuality", label: "MAPA SOMBRAS", values: [512, 1024, 2048, 4096].map(v => [v, `${v}`]), default: 512 },
   { key: "wireframe", label: "WIREFRAME", values: [[0, "OFF"], [1, "GRADE"], [2, "TOTAL"]], default: 0 },
 ];
@@ -60,6 +61,7 @@ export class OptionsPanel {
       r.forceStaticInstanceUpdate();
     } else if (key === "shadows" && r.shadowsEnabled !== value) r.toggleShadows();
     else if (key === "shadowQuality") r.setShadowQuality(value);
+    else if (key === "activityBadges") r.showActivityBadges = value;
     else if (key === "wireframe") {
       for (let i = 0; i < 3 && r.wireframeMode !== value; i++) r.toggleWireframe();
     } else if (key === "postEffects") r.postEffectsEnabled = value;
