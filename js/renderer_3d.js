@@ -3139,7 +3139,8 @@ export class RCT3DRenderer {
     this.scene.add(this.sunLight.target);
 
     // Dynamic Night Point Light Pool (Optimized pool for realistic 1P/3P light propagation)
-    this.maxNightLights = 128;
+    // Keep the shader's point-light uniform budget safely below WebGL limits.
+    this.maxNightLights = 32;
     this.maxShadowPointLights = 0; // Point lights do direct local shading; sun/moon provides directional shadows
     this.nightLightPool = [];
     for (let i = 0; i < this.maxNightLights; i++) {
@@ -7224,22 +7225,17 @@ export class RCT3DRenderer {
       const focusY = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.z : this.camY;
       let maxPool = this.lightCandidatesPool.length;
 
-      // City lamps and oil-lit building interiors share the night-light pool
-      // so they are considered together and aren't limited by a small side pool.
+      // City lamps and oil-carrying people share the bounded night-light pool.
       const cityLights=this.cityNightLights||[];
-      const requiredNightLights=cityLights.length+entities.length+128,requiredCandidates=cityLights.length+entities.length+1024;
-      if(requiredNightLights>this.nightLightPool.length){
-        while(this.nightLightPool.length<requiredNightLights){const light=new THREE.PointLight(0xffaa44,0,24,1.2);light.castShadow=false;this.scene.add(light);this.nightLightPool.push(light);}
-        this.maxNightLights=this.nightLightPool.length;
-      }
-      if(requiredCandidates>maxPool){while(this.lightCandidatesPool.length<requiredCandidates)this.lightCandidatesPool.push({x:0,y:0,z:0,color:0,distance:0,decay:0,intensity:0,priority:0,distSq:0});maxPool=this.lightCandidatesPool.length;}
-      for(let i=0;i<cityLights.length&&candidateCount<maxPool;i++){
-        const source=cityLights[i],c=this.lightCandidatesPool[candidateCount++];
+      const cityLightCount=Math.min(cityLights.length,Math.max(0,this.maxNightLights-8));
+      const selectedCityLights=cityLightCount===cityLights.length?cityLights:cityLights.slice().sort((a,b)=>a.distSq-b.distSq||a.priority-b.priority).slice(0,cityLightCount);
+      for(let i=0;i<selectedCityLights.length&&candidateCount<maxPool;i++){
+        const source=selectedCityLights[i],c=this.lightCandidatesPool[candidateCount++];
         c.x=source.x;c.y=source.y;c.z=source.z;c.color=source.color;c.distance=source.distance;c.decay=source.decay;c.intensity=source.intensity;c.priority=source.priority;c.distSq=source.distSq;
       }
 
       const oilCarriers=this.cityOilCarriers||new Set();
-      for(let i=0;i<visibleEntities.length&&candidateCount<maxPool;i++){
+      for(let i=0;i<visibleEntities.length&&candidateCount<maxPool&&candidateCount<this.maxNightLights-4;i++){
         const e=visibleEntities[i],citizen=e?.properties?.citizen;
         if(!citizen||!oilCarriers.has(citizen.id)||citizen.entity?.destroyed)continue;
         const c=this.lightCandidatesPool[candidateCount++],surface=this.getSurfaceElevation(map,e.x,e.y),dx=e.x-focusX,dz=e.y-focusY;
@@ -7342,36 +7338,6 @@ export class RCT3DRenderer {
           continue;
         }
 
-        // 5. Indoor Glow for Buildings
-        const r = e.properties.render || {}; const isHouse = !e.properties.brain && (!!e.properties.house || !!e.properties.leaderHouse || r.skin === "Overworld_House.png" || e.properties.name?.includes("Casa") || e.properties.name?.includes("Manor") || e.properties.name?.includes("Villa") || e.properties.name?.includes("Chalet") || e.properties.name?.includes("Cottage") || e.properties.name?.includes("Cabin") || e.properties.name?.includes("Hut") || e.properties.name?.includes("Lodge") || e.properties.name?.includes("Ranch") || e.properties.name?.includes("Palácio") || e.properties.name?.includes("Castelo") || e.properties.name?.includes("Hall") || e.properties.name?.includes("Grange") || e.properties.name?.includes("Citadel"));// || !!e.properties?.leaderHouse || (e.properties?.species === "structure" && (e.properties?.name?.includes("Casa") || e.properties?.name?.includes("Manor") || e.properties?.name?.includes("Villa") || e.properties?.name?.includes("Chalet") || e.properties?.name?.includes("Cottage") || e.properties?.name?.includes("Cabin") || e.properties?.name?.includes("Hut") || e.properties?.name?.includes("Lodge") || e.properties?.name?.includes("Ranch") || e.properties?.name?.includes("Palácio") || e.properties?.name?.includes("Castelo") || e.properties?.name?.includes("Hall") || e.properties?.name?.includes("Grange")));
-        const isIndustrial = !!e.properties?.kitchen || e.properties?.name?.includes("Cozinha") || !!e.properties?.slaughterhouse || e.properties?.name?.includes("Abatedouro") || !!e.properties?.artisan_hut || e.properties?.name?.includes("Artesão") || !!e.properties?.forge || e.properties?.name?.includes("Forja");
-        // City buildings receive light from constructed, fuelled lamps only.
-        if (!e.properties.cityBuilding && (isHouse || isIndustrial)) {
-          let fpW = 1, fpH = 1;
-          if (e.properties?.house) {
-            fpW = e.properties.house.footprintW || (e.properties.house.footprint ? Number(e.properties.house.footprint.split("x")[0]) : 1) || 1;
-            fpH = e.properties.house.footprintH || (e.properties.house.footprint ? Number(e.properties.house.footprint.split("x")[1]) : 1) || 1;
-          } else if (e.properties?.leaderHouse || e.properties?.name?.includes("Manor") || e.properties?.name?.includes("Palácio") || e.properties?.name?.includes("Castelo")) {
-            fpW = 3; fpH = 3;
-          } else if (isIndustrial) {
-            fpW = 2; fpH = 2; // general size for these
-          }
-          const sH = this.getTileSurfaceHeight(map, Math.floor(e.x), Math.floor(e.y), 1, 1);
-          const dx = (e.x + fpW * 0.5) - focusX;
-          const dy = (e.y + fpH * 0.5) - focusY;
-          if (candidateCount < maxPool) {
-            const c = this.lightCandidatesPool[candidateCount++];
-            c.x = e.x + fpW * 0.5;
-            c.y = sH + 1.2;
-            c.z = e.y + fpH * 0.5;
-            c.color = isIndustrial ? 0xff6600 : 0xffa020; // Industrial = intense orange, House = warm amber
-            c.distance = isPersp ? 24.0 : 12.0;
-            c.decay = 1.2;
-            c.intensity = isPersp ? nightGlow * 3.0 : nightGlow * 2.2;
-            c.priority = 4;
-            c.distSq = dx * dx + dy * dy;
-          }
-        }
       }
 
       // 5. Mouse Cursor Light in Isometric Mode
