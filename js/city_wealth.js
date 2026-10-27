@@ -6,7 +6,7 @@ export function marketKind(reason=''){
  if(/reserva|estorno|devolução|voto|propina/i.test(reason))return null;
  if(/^(Compra de espaço|Compra de instalações|Compra de terreno|Compra negociada para estatização|Compra negociada de terreno)/.test(reason))return 'property';
  if(/^(Primeiro aluguel|Aluguel)/.test(reason))return 'rent';
- if(/^Atacado:/.test(reason))return 'wholesale';
+ if(/^(Atacado:|Exportação:)/.test(reason))return 'wholesale';
  if(/^(Compra|Serviço: Venda)/.test(reason))return 'retail';
  if(/^(Serviço|Frete entregue|Água para cuidados)/.test(reason))return 'service';return null;
 }

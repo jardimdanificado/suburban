@@ -237,7 +237,8 @@ export function generateSettlement(city) {
   const { world } = city;
   const origin = { ...world.spawnCenter };
   let hub = null;
-  const specs = [['townhall', 4, 4, 2], ['builder', 3, 3, 1], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bank', 3, 3, 1], ['carrier', 3, 3, 1], ['bike_rack',4,2,1], ...INITIAL_CYCLE_STAGES.map(type=>[type,type==='farm'?8:3,type==='farm'?8:3,1]), ['bike_rack',4,2,1]];
+  const hallFloors=Math.min(8,Math.max(2,Math.ceil((city.initialPopulation||0)/80)));
+  const specs = [['townhall', 4, 4, hallFloors], ['builder', 3, 3, 1], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bank', 3, 3, 1], ['carrier', 3, 3, 1], ['bike_rack',4,2,1], ...INITIAL_CYCLE_STAGES.map(type=>[type,type==='farm'?8:3,type==='farm'?8:3,1]), ['bike_rack',4,2,1]];
   for (const [type, w, d, h] of specs) {
     const angle = city.random() * Math.PI * 2, radius = hub ? (type==='bike_rack'?4+city.random()*3:8+city.random()*13) : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };

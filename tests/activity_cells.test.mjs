@@ -16,7 +16,7 @@ test('a farmer visits separate crop cells and labor does not advance while trave
  const city=setup({starter:true,population:128}),b=city.buildings.find(b=>b.type==='farm'),c=city.society.citizen(b.workers[0]);fresh(c);c.task='work';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;const visited=new Set();
  assert(city.economy.farmWork(b,c));assert(c.path.length);assert.equal(b.fields[0].labor,0);
  for(let i=0;i<100&&visited.size<3;i++){walk(c);const before=b.fields.reduce((n,f)=>n+f.labor,0);city.economy.farmWork(b,c);if(c.path.length)assert.equal(b.fields.reduce((n,f)=>n+f.labor,0),before);else visited.add(c.workCell.unitId);}
- assert(visited.size>=3);assert(b.fields[0].cellLabor.filter(n=>n>0).length>=3);
+ assert(visited.size>=3);assert(b.fields.reduce((n,f)=>n+(f.cellLabor||[]).filter(v=>v>0).length,0)>=3);
 });
 test('a toilet visit has no effects at the entrance and only starts inside the assigned bathroom',()=>{
  const city=setup({starter:true,population:128}),b=city.buildings.find(b=>b.type==='farm'),c=city.society.citizen(b.workers[0]),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===b.id);fresh(c);c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='toilet';c.targetId=b.id;c.toiletTargetId=f.id;c.needs.toilet=0;const uses=f.uses,waste=city.goodsStock('lixo');

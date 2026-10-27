@@ -1,3 +1,4 @@
+import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
 import {CityPaint} from './city_paint.js';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
@@ -28,7 +29,7 @@ import { CityWorkMeals } from './city_work_meals.js';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js';
 import { CityLogistics } from './city_logistics.js';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PRIVATE_TYPES, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js';
 
@@ -163,7 +164,7 @@ export class CitySimulation {
     a.balance -= amount; b.balance += amount;
     this.fiscal?.record(from,to,amount,reason,details);
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
-    else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
+    else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
     if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
     else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Imposto empresarial$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
     const shipment = a.seller && a.buyer ? a : b.seller && b.buyer ? b : null;
@@ -178,7 +179,8 @@ export class CitySimulation {
     return true;
   }
   initialize() {
-    this.currency.initialize();
+    // The rest of the world starts with a share of the existing monetary base.
+    if(this.currency.initialize())this.transfer('treasury','supplier',Math.floor(this.currency.issued*EXTERNAL_TRADE_RULES.initialReserveFraction),'Reserva inicial do comércio exterior');
     generateSettlement(this);
     const arrivalTiles = [];
     for (let radius = 0; radius <= 5; radius++) for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
@@ -455,10 +457,10 @@ export class CitySimulation {
       if (!isOwner && b.balance < wage) { this.payWage(c,b,wage); c.action = 'Empregador sem caixa'; c.task = null; return; }
       if(b.constructionKind==='open-air'&&!['farm','quarry','forestry'].includes(b.type)){const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cell=cells[c.id%Math.max(1,cells.length)];if(cell&&!outdoorCellReady(this,c,b,cell))return;}
       const productive = this.economy.productionWork(b, c);
-      if (productive || !PRIVATE_TYPES.has(b.type)) {
-        if (!isOwner) this.payWage(c,b,wage);
-        this.economy.practice(c, JOB_SKILL[b.type]);
-      }
+      const present=!!(c.indoorLocation?.buildingId===b.id&&c.indoorLocation.unitId&&!c.indoorLocation.path?.length)||
+        !!(c.workCell?.buildingId===b.id&&c.workCell.target&&!c.path.length&&Math.hypot(c.entity.x-c.workCell.target.x,c.entity.y-c.workCell.target.y)<.2);
+      // Waiting for ingredients or a customer is still paid time at the assigned workplace.
+      if(productive||present){if(!isOwner)this.payWage(c,b,wage);if(productive)this.economy.practice(c,JOB_SKILL[b.type]);}
       if (isOwner) this.economy.practice(c, 'management');
       if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
       c.action = b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Gerindo ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';

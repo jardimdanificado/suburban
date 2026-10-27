@@ -31,9 +31,18 @@ export class CitySanitation {
       if(bathroom.roomType!=='bathroom'){bathroom.roomType='bathroom';b.layoutRevision=(b.layoutRevision||0)+1;}
       this.addFacility(b, { unitId: bathroom.id, access: ['townhall', 'public_toilet', 'popular_refectory'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees' });
     }
-    if (!b.units.some(u => u.roomType === 'dining')) {
-      const dining = b.units.find(u => u.roomType === 'workspace');
-      if(dining){dining.roomType='dining';b.layoutRevision=(b.layoutRevision||0)+1;}
+    // The town hall is the first public food and hygiene service for the
+    // whole population. Give it enough real rooms instead of queuing hundreds
+    // of people at a single four-person table or single toilet.
+    const population=Math.max(this.city.initialPopulation||0,this.city.citizens.length),publicHall=b.type==='townhall';
+    const targets={dining:publicHall?Math.min(16,Math.max(1,Math.ceil(population/64))):1,bathroom:publicHall?Math.min(12,Math.max(1,Math.ceil(population/128))):1};
+    for(const [kind,target]of Object.entries(targets)){
+      let count=b.units.filter(u=>u.roomType===kind).length;
+      while(count<target){
+        const workspaces=b.units.filter(u=>u.roomType==='workspace');if(workspaces.length<=Math.max(3,b.jobs||0))break;
+        const room=workspaces[0];room.roomType=kind;b.layoutRevision=(b.layoutRevision||0)+1;count++;
+        if(kind==='bathroom')this.addFacility(b,{unitId:room.id,access:'public'});
+      }
     }
   }
   allowed(c, f) {
@@ -186,7 +195,7 @@ export class CitySanitation {
   hourly() {
     this.rebalanceWaiting();
     for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : 60)) this.requestCleaning(f.id);
-    const city=this.city;
+    const city=this.city,hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(hall)this.setupBusinessRooms(hall);
     const collectors=city.economy.businesses.filter(b=>b.type==='waste_collector');
     const processors=city.economy.businesses.filter(b=>['recycler','composting'].includes(b.type));
     const activeLoads=()=>city.logistics.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));

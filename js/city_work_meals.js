@@ -1,4 +1,4 @@
-import {activityRoomReady,outdoorCellReady} from './city_interiors.js';
+import {activityCellAvailable,activityRoomReady,outdoorCellReady} from './city_interiors.js';
 import { preparedOffer } from './city_markets.js';
 import { CROPS } from './city_economy.js';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
@@ -31,6 +31,7 @@ export class CityWorkMeals {
     return c.task === 'construction' && project ? project : employer;
   }
   routeToMeal(c) {
+    if(this.city.minute<(c.mealRetryAt||0))return false;
     const b = this.employer(c); if (!b) return false;
     const sites = [b, ...this.city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed')].filter(s => { const offer = this.offer(s, c); return offer && (c.needs.food < 18 || !this.city.buildings.some(shop => this.city.economy.mealScore(c, shop) < Math.hypot(s.door.x - c.entity.x, s.door.y - c.entity.y) - this.city.economy.mealTaste(c, offer) * 45)); }).sort((a, d) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(d.door.x - c.entity.x, d.door.y - c.entity.y));
     for (const site of sites) {
@@ -42,6 +43,10 @@ export class CityWorkMeals {
   tryStart(c) {
     if(c.mobilityTrip||c.ridingVehicleId)return false;
     if (c.workMeal) return true;
+    // An optional meal must not interrupt drinking, treatment or other urgent travel.
+    if(!['work','manage','construction','workmeal'].includes(c.task))return false;
+    const urgent=this.city.urgentNeed(c);if(urgent&&urgent!=='food')return false;
+    if(this.city.minute<(c.mealRetryAt||0))return false;
     if(c.needs.food>=WORK_MEAL_RULES.foodThreshold||c.conversation)return false;
     const b = this.employer(c);
     if (!b) return false;
@@ -50,7 +55,14 @@ export class CityWorkMeals {
     if(!atFarm&&Math.hypot(c.entity.x-holder.door.x,c.entity.y-holder.door.y)>2&&!c.indoorLocation)return false;
     const offer = this.offer(holder, c); if (!offer) return false;
     if(c.task!=='workmeal'){c.mealResume={task:c.task,targetId:c.targetId,workProjectId:c.workProjectId};c.task='workmeal';c.path=[];c.targetId=b.id;c.mealTargetId=holder.id;}
-    const room=holder.units?.find(u=>u.roomType==='dining');
+    const rooms=holder.units?.filter(u=>u.roomType==='dining')||[];
+    const room=rooms.find(u=>activityCellAvailable(this.city,u,c,'dining'));
+    if(rooms.length&&!room){
+      c.mealWaitSince??=this.city.minute;c.action='Aguardando vaga no refeitório';
+      if(this.city.minute-c.mealWaitSince>=30){c.mealWaitSince=null;c.mealRetryAt=this.city.minute+90;c.task=null;c.path=[];c.mealResume=null;return false;}
+      return true;
+    }
+    c.mealWaitSince=null;
     if(room){if(!activityRoomReady(this.city,c,holder,room,'dining'))return true;}
     else if(holder.type){c.action='Aguardando refeitório';return false;}
     else if(!outdoorCellReady(this.city,c,{id:holder.id,entity:holder.door},{x:0,y:0,z:0,id:`site-dining:${holder.id}`}))return true;

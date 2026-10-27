@@ -44,7 +44,7 @@ export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'
  if(previous?.buildingId===b.id&&previous.targetUnitId===room.id&&!previous.exiting&&previous.layoutRevision===(b.layoutRevision||0))return !previous.path.length;
  if(previous?.buildingId!==b.id&&previous&&!exit(city,c))return false;
  if(!activityCellAvailable(city,room,c,kind)){if(['toilet','hygiene'].includes(c.task)){c.task=null;c.toiletTargetId=null;c.hygieneTargetId=null;}c.action=`Aguardando célula de ${kind==='bathroom'?'banheiro':kind==='dining'?'refeitório':'trabalho'} livre`;return false;}
- if(b.constructionKind==='open-air'){
+ if(b.constructionKind==='open-air'&&b.type!=='quarry'){
   const target=point(b,room);
   if(!outdoorCellReady(city,c,b,room)){return false;}
   release(city,c);c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:room.id,targetRoomType:kind,roomType:kind,floor:room.z,position:target,path:[],task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute,arrivedAt:city.minute,toiletTargetId:c.toiletTargetId};

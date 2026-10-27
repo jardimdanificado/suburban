@@ -69,8 +69,8 @@ test('critical health does not trap a hungry worker in an endless refused meal',
   const city = setup({ starter: true, funded: true }), employer = city.economy.businesses.find(b => b.workers.length), c = city.society.citizen(employer.workers[0]);
   city.minute = 9 * 60; freshNeeds(c); c.needs.food = 0; c.needs.health = 1; c.needs.water = 1; c.needs.toilet = 1;
   c.entity.x = employer.door.x; c.entity.y = employer.door.y; c.conversation = null; c.task = 'workmeal'; employer.inventory.pao += 3;
-  assert(city.workMeals.tryStart(c));finishActivityRoute(city,c);city.workMeals.tryStart(c); for (let i = 0; i < 15; i++) city.workMeals.advance(c);
-  assert(c.needs.food >= 75); assert.equal(c.workMeal, null); assert.equal(c.task, null);
+  assert.equal(city.workMeals.tryStart(c),false);assert.equal(c.workMeal,null);
+  for(let i=0;i<10&&c.task!=='health';i++)city.stepMinute();assert.equal(c.task,'health');assert.equal(c.workMeal,null);
 });
 
 test('stalled routines recover and invalid needs are repaired instead of propagating NaN', () => {

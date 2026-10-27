@@ -95,7 +95,7 @@ test('onsite meals consume real food, preserve the work position and resume work
   c.entity.x = b.door.x; c.entity.y = b.door.y; c.task = 'work'; c.path = []; const balance = c.balance, consumed = city.economy.consumed.pao;
   assert(city.workMeals.tryStart(c));finishActivityRoute(city,c);city.workMeals.tryStart(c); assert.equal(b.inventory.pao, 3);
   for (let i = 0; i < WORK_MEAL_RULES.duration; i++) city.workMeals.advance(c);
-  assert(c.needs.food >= 95); assert.equal(c.balance, balance); assert.equal(c.entity.x, b.entity.x+b.units.find(u=>u.roomType==='dining').x+.5); assert.equal(c.task, 'work'); assert.equal(c.workMeal, null); assert.equal(b.mealsServed, 1); assert.equal(city.economy.consumed.pao, consumed + 3); audit(city);
+  assert(c.needs.food >= 95); assert.equal(c.balance, balance); assert.equal(c.indoorLocation.position.x, b.entity.x+b.units.find(u=>u.roomType==='dining').x+.5); assert.equal(c.task, 'work'); assert.equal(c.workMeal, null); assert.equal(b.mealsServed, 1); assert.equal(city.economy.consumed.pao, consumed + 3); audit(city);
 });
 
 test('employees choose the stocked company refectory before an external establishment or a voucher', () => {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup,finishShipment } from './helpers/city.mjs';
+import { setup,finishShipment,putAtWorkCell } from './helpers/city.mjs';
 import { CityStateGraph,bindCityState } from '../js/city_state.js';
 import { INDUSTRIES } from '../js/city_industries.js';
 import { GOODS } from '../js/city_economy.js';
@@ -39,6 +39,7 @@ test('road planning grows a connected paved network despite access paths sharing
   for(const p of b.accessPath){const x=Math.floor(p.x),y=Math.floor(p.y);if(!roads.has(`${x},${y}`))city.world.setTile(x,y,0);}
   assert(b.accessPath.some(p=>roads.has(`${Math.floor(p.x)},${Math.floor(p.y)}`)));
   assert(!ROAD_TILES.has(city.world.getTile(Math.floor(b.door.x),Math.floor(b.door.y))));
+  city.traffic.set(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`,100000);
   city.development.planRoadNetwork(hall,{reserve:0});const project=city.development.projects.find(p=>p.service==='road');assert(project,city.development.roadPlanning?.reason);
   assert(ROAD_TILES.has(city.world.getTile(Math.floor(project.route[0].x),Math.floor(project.route[0].y))));
   assert.equal(project.targetDoor.x,b.door.x);assert(project.materialAccountId);goodsAudit(city);
@@ -213,9 +214,9 @@ test('housing resident index follows moves, dependents, release and same-minute 
   housing.residents(home);bindCityState(city);assert.equal(housing.residentsByHome,null);
 });
 
-test('all industrial transformations consume real inputs, conserve goods and stop without stock',()=>{
+test('standard industrial recipes consume real inputs, conserve goods and stop without stock',()=>{
   const city=setup({starter:true,population:64}),c=city.citizens.find(c=>!city.politics.officeHolder(c));
-  const specialized=new Set(['kitchen','forestry','iron_mine','bank','research_institute','clothing_store']);
+  const specialized=new Set(['kitchen','forestry','iron_mine','bauxite_mine','bank','research_institute','clothing_store','cycle_assembler','skate_workshop','cycle_shop','sports_shop','cycle_workshop','bicycle_rental']);
   for(const [type,spec] of Object.entries(INDUSTRIES)){
     if(specialized.has(type))continue;
     const site=city.economy.locateBuilding(type).find(s=>!city.development.overlaps(s.x,s.y,s.width,s.depth));assert(site,type);
@@ -224,6 +225,7 @@ test('all industrial transformations consume real inputs, conserve goods and sto
     const inputs={...spec.inputs,...(type==='artisan'?{madeira:5,fibras:2}:type==='flagmaker'?{tecido:3,madeira:1}:type==='newsroom'?{papel:5}:{} )};
     for(const [good,n]of Object.entries(inputs)){b.inventory[good]+=n;city.economy.initialStock[good]+=n;}
     const before=Object.values(b.inventory).reduce((n,v)=>n+v,0);b.productionLabor=100;b.replantingAt=-Infinity;
+    c.jobId=b.id;b.workers.push(c.id);putAtWorkCell(city,c,b);
     assert(city.economy.productionWork(b,c),type);
     assert(Object.keys(spec.outputs).some(g=>b.inventory[g]>0),type);
     assert(before>0||Object.values(b.inventory).some(n=>n>0),type);

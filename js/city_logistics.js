@@ -3,6 +3,12 @@ import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
 
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
+// Urgent food and housing start ahead, while waiting freight gains priority over time.
+export function shipmentPriority(s,minute,hour){
+ const base=s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:s.buyer?.type==='popular_housing'?-4:s.purpose==='sanitation'?-3:s.purpose==='lamp-refill'?(s.buyer.lampPost?.fuel<=0&&(hour<6||hour>=18)?-3:-2):s.purpose==='critical-infrastructure'||s.purpose==='lighting-input'?-2:s.purpose==='lamp-construction'?-1:(s.purpose?.endsWith('lighting')&&minute-s.createdAt<12*60?1:0);
+ return base-Math.min(12,Math.floor(Math.max(0,minute-(s.createdAt??minute))/360));
+}
+
 export class CityLogistics {
   constructor(city) { this.city = city; this.shipments = []; this.nextId = 1; this.delivered = 0; }
   capacity(c){if(!c)return 0;return this.city.vehicles?this.city.vehicles.cargoCapacity(c):carryCapacity(c);}
@@ -29,9 +35,9 @@ export class CityLogistics {
   splitLoad(s,limit=24){
     if(s.driverId||s.quantity<=limit)return;
     while(s.quantity>limit){const quantity=limit,unitCost=s.cost/s.quantity,cost=Math.round(unitCost*quantity),fee=Math.floor(s.fee*quantity/s.quantity),serviceFee=Math.floor((s.serviceFee||0)*quantity/s.quantity),id=this.nextId++,accountId=`shipment:${id}`;
-      const part={...s,id,accountId,name:`Frete ${id}`,balance:0,quantity,cost,fee,serviceFee,driverId:null,status:'waiting',position:{...s.position},incoming:{},inventory:{...s.inventory},inventoryCapacity:limit};part.inventory[s.good]=quantity;
+      const part={...s,id,accountId,name:`Frete ${id}`,balance:0,quantity,cost,fee,serviceFee,driverId:null,status:'waiting',position:{...s.position},incoming:{},inventory:{...s.inventory},componentLots:{},inventoryCapacity:limit};part.inventory[s.good]=quantity;
       this.city.accounts.set(accountId,part);if(!this.city.transfer(s.accountId,accountId,cost+fee+serviceFee,'Divisão de carga: equipamento indisponível')){this.city.accounts.delete(accountId);break;}
-      if(s.good==='tinta')part.paintLots=[];this.city.paint.move(s,part,s.good,quantity);s.quantity-=quantity;s.cost-=cost;s.fee-=fee;s.serviceFee-=serviceFee;s.inventory[s.good]=s.quantity;if(s.good==='roupas'){part.garments=[];moveGarments(s,part,quantity);}this.city.publications.moveStock(s,part,s.good,quantity);this.shipments.push(part);
+      if(s.good==='tinta')part.paintLots=[];this.city.paint.move(s,part,s.good,quantity);s.quantity-=quantity;s.cost-=cost;s.fee-=fee;s.serviceFee-=serviceFee;s.inventory[s.good]=s.quantity;if(s.good==='roupas'){part.garments=[];moveGarments(s,part,quantity);}this.city.publications.moveStock(s,part,s.good,quantity);this.city.vehicles.moveStock(s,part,s.good,quantity);this.shipments.push(part);
     }
   }
   rebalanceWaiting() {
@@ -114,18 +120,24 @@ export class CityLogistics {
     const economy = this.city.economy;
     let carrier = this.city.building(s.carrierId);
     // A closed, unstaffed or insolvent carrier must not trap the cargo and escrow forever.
-    const ownerCanHaul = !!economy.workingOwner(carrier)&&carryCapacity(economy.workingOwner(carrier))>=s.quantity;
-    if (carrier && (!carrier.active || (!ownerCanHaul && (!carrier.workers.some(id => economy.citizen(id)&&carryCapacity(economy.citizen(id))>=s.quantity) || carrier.balance < carrier.wage)))) {
+    const ownerCanHaul = !!economy.workingOwner(carrier)&&this.capacity(economy.workingOwner(carrier))>=s.quantity;
+    if (carrier && (!carrier.active || (!ownerCanHaul && (!carrier.workers.some(id => economy.citizen(id)&&this.capacity(economy.citizen(id))>=s.quantity) || carrier.balance < carrier.wage)))) {
       s.carrierId = null; carrier = null;
     }
     const ids = carrier?.active ? [...carrier.workers, carrier.ownerId] : [];
     if (!carrier?.active) {
       s.carrierId = null;
-      if(s.requireCarrier) { const next=this.leastLoaded(economy.businesses.filter(b=>b.type==='carrier' && b.workers.length && b.balance>=b.wage)); if(next){s.carrierId=next.id;ids.push(...next.workers,next.ownerId);}return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25); }
-      // Owners can bootstrap the supply chain by hauling their own purchases.
-      if(this.publicOrder(s))ids.push(...this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&!this.city.politics.officeHolder(c)&&!['caregiving','food','water','energy','health','toilet'].includes(c.task)).sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16).map(c=>c.id));
-      ids.push(s.buyer.ownerId, s.seller.ownerId);
-      const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
+      // A cargo bike can be temporarily occupied. Reconsider carriers later instead
+      // of permanently turning a large order into an impossible owner-only haul.
+      const next=s.requireCarrier||s.fee>0?this.leastLoaded(economy.businesses.filter(b=>b.type==='carrier' && b.active && b.balance>=b.wage && [...b.workers,b.ownerId].some(id=>this.capacity(economy.citizen(id))>=s.quantity))):null;
+      if(next){s.carrierId=next.id;carrier=next;ids.push(...next.workers,next.ownerId);}
+      if(s.requireCarrier)return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25);
+      if(!carrier){
+        // Owners and temporary public workers can bootstrap an unserved route.
+        if(this.publicOrder(s))ids.push(...this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&!this.city.politics.officeHolder(c)&&!['caregiving','food','water','energy','health','toilet'].includes(c.task)).sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16).map(c=>c.id));
+        ids.push(s.buyer.ownerId, s.seller.ownerId);
+        const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
+      }
     }
     return [...new Set(ids)].map(id => economy.citizen(id)).filter(c => c && c.role!=='councilor' && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.entity.destroyed && this.city.society.isAdult(c) && !c.conversation && !c.workMeal && !c.cleaningJobId && !this.city.urgentNeed(c) && c.needs.energy > 25 && (!carrier || c.id === carrier.ownerId || carrier.balance >= carrier.wage));
   }
@@ -134,7 +146,7 @@ export class CityLogistics {
     const maxCarry=Math.max(24,...city.citizens.filter(c=>!c.entity.destroyed).map(c=>this.capacity(c)));for(const s of this.shipments.filter(s=>!s.driverId&&!['delivered','cancelled'].includes(s.status)&&s.quantity>maxCarry))this.splitLoad(s);
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
-    const priority = s => s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:s.purpose==='sanitation'?-3:s.purpose==='lamp-refill'?(s.buyer.lampPost?.fuel<=0&& (city.hour<6||city.hour>=18)?-3:-2):s.purpose==='critical-infrastructure'||s.purpose==='lighting-input'?-2:s.purpose==='lamp-construction'?-1:(s.purpose.endsWith('lighting') || s.purpose === 'lamp-construction') && city.minute - s.createdAt < 12 * 60 ? 1 : 0;
+    const priority = s => shipmentPriority(s,city.minute,city.hour);
     pending.sort((a, b) => priority(a) - priority(b) || (a.lastDispatchAttempt || 0) - (b.lastDispatchAttempt || 0) || a.createdAt - b.createdAt || a.id - b.id);
     let dispatchBudget = 32;
     for (const s of pending) {
@@ -151,7 +163,7 @@ export class CityLogistics {
           const path = city.findPath(candidate.entity, s.position); if (path === null) continue;
           c = candidate;s.temporaryDriverId=!s.carrierId&&this.publicOrder(s)&&!c.jobId&&!c.businessIds.length&&!city.politics.officeHolder(c)?c.id:null; c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; break;
         }
-        if (!c) continue;
+        if (!c) {if(s.quantity>24&&city.minute-s.createdAt>=60)this.splitLoad(s,24);continue;}
       }
       const carrierEmployer = city.building(s.carrierId);
       if(s.temporaryDriverId===c.id){const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed),wage=Math.ceil(city.currency.price(city.politics.policy.minimumWage)*1.5);if(!hall||!city.payWage(c,hall,wage)){if(s.pickedUp)s.position={x:c.entity.x,y:c.entity.y};this.releaseDriver(s);s.status='waiting';continue;}}
