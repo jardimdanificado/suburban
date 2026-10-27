@@ -15,14 +15,18 @@ export const INTERVENTIONS={
   businessFunding:{label:'Financiar empresa',group:'economy',description:'Transfere capital municipal para custeio, salários e compras da empresa escolhida.',cost:100000},
   importVehicle:{label:'Importar veículo',group:'economy',description:'Compra externa explícita: entrega um veículo ao cidadão escolhido, sem depender da produção local.'},
   ride:{label:'Solicitar passeio de bicicleta ou patins',group:'economy',description:'O proprietário ou funcionário busca o equipamento e segue por um caminho real na cidade.'},
+  divineBlessing:{label:'Benção: restaurar necessidades',group:'god',description:'Restaura imediatamente as necessidades e o ânimo da pessoa escolhida.'},
+  divineInspiration:{label:'Faísca de talento',group:'god',description:'Dá experiência imediata à habilidade mais baixa da pessoa escolhida.'},
+  divineRepair:{label:'Reparo instantâneo',group:'god',description:'Restaura imediatamente a condição do prédio escolhido.'},
+  divineHarvest:{label:'Acelerar lavoura',group:'god',description:'Leva as plantações ativas da fazenda diretamente à maturidade.'},
 };
 export class CityInterventions {
   constructor(city){this.city=city;this.records=[];this.nextId=1;this.cooldowns=new Map();}
   perform(kind,targetId=null,options={}){
     const city=this.city,p=city.politics,spec=INTERVENTIONS[kind];if(!spec)return city.fail('Intervenção desconhecida.');
-    const key=`${kind}:${targetId??'city'}`;if(city.minute-(this.cooldowns.get(key)??-Infinity)<30)return city.fail('Aguarde 30 minutos da cidade para repetir esta intervenção no mesmo alvo.');
+    const key=`${kind}:${targetId??'city'}`;if(spec.group!=='god'&&city.minute-(this.cooldowns.get(key)??-Infinity)<30)return city.fail('Aguarde 30 minutos da cidade para repetir esta intervenção no mesmo alvo.');
     const c=city.society.citizen(targetId),e=p.active,n=e?.candidates.find(n=>n.citizenId===targetId),record={id:this.nextId,kind,title:spec.label,targetId,minute:city.minute,affected:0,cost:0,description:'',truth:kind!=='rumor'};
-    const live=c&&!c.entity.destroyed;if(['opinion','campaign'].includes(spec.group)&&kind!=='debate'&&!live)return city.fail('Selecione uma pessoa viva.');
+    const live=c&&!c.entity.destroyed;if(['opinion','campaign','god'].includes(spec.group)&&!['debate','divineRepair','divineHarvest'].includes(kind)&&!live)return city.fail('Selecione uma pessoa viva.');
     if(spec.group==='campaign'&&(!e||e.status!=='campaign'))return city.fail('Esta intervenção precisa de uma campanha eleitoral em andamento.');
     if(['endorsement','rally','rigPoll'].includes(kind)&&!n)return city.fail('Selecione um candidato a prefeito desta eleição.');
     const audience=()=>p.campaigns.audience(Math.max(1,Math.ceil(city.citizens.length*.25)));
@@ -60,6 +64,24 @@ export class CityInterventions {
       if(!live)return city.fail('Selecione quem receberá o veículo.');const good=options.good||'bicicleta',system=city.vehicles,building=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(!VEHICLE_SPECS[good]||!building)return city.fail('Veículo ou ponto de entrega indisponível.');
       if(!city.accounts.has('external-trade'))city.accounts.set('external-trade',{name:'Comércio exterior',balance:0,totalRevenue:0,totalExpenses:0});if(!pay('external-trade',Math.ceil(city.economy.goods[good].price*1.5),'Intervenção: importação de veículo'))return false;
       const signature=`imported:${good}`;let model=system.models.get(signature);if(!model){model={id:system.nextModelId++,signature,kind:good,manufacturerId:null,brand:'Importação',name:VEHICLE_SPECS[good].label,components:[],createdAt:city.minute,imported:true};system.models.set(signature,model);}const id=system.nextId;system.registerUnits(building,good,1,model.id);const v=system.units.get(id);system.activate(v,c.accountId,building);v.imported=true;v.ownershipHistory=[{minute:city.minute,from:'external-trade',to:c.accountId,price:record.cost,reason:'Importação pelo observador'}];city.economy.initialStock[good]=(city.economy.initialStock[good]||0)+1;record.vehicleId=id;record.description=`${VEHICLE_SPECS[good].label} #${id} importado para ${c.entity.properties.name}. Usa força humana para circular nas ruas.`;
+    }else if(kind==='divineBlessing'){
+      for(const need of Object.keys(c.needs))c.needs[need]=Math.min(100,(c.needs[need]||0)+45);
+      c.happiness=clamp((c.happiness||0)+18,0,100);c.mood=clamp((c.mood||0)+24,0,100);record.affected=1;
+      record.description=`${c.entity.properties.name} recebeu uma benção: necessidades restauradas e ânimo renovado.`;
+    }else if(kind==='divineInspiration'){
+      const entries=Object.entries(c.skills||{});if(!entries.length)return city.fail('Esta pessoa ainda não tem habilidades para inspirar.');
+      const [skill,value]=entries.sort((a,b)=>a[1]-b[1])[0];c.skills[skill]=clamp(value+20,0,100);record.affected=1;record.skill=skill;
+      record.description=`${c.entity.properties.name} recebeu uma faísca de talento em ${skill}: ${value} → ${c.skills[skill]}.`;
+    }else if(kind==='divineRepair'){
+      const b=city.building(targetId);if(!b||b.entity.destroyed)return city.fail('Selecione um prédio existente.');
+      const previous=b.condition??100;b.condition=100;b.repairNeeded=false;b.maintenanceNeeded=false;record.affected=1;record.buildingId=b.id;
+      record.description=`${b.entity.properties.name} foi reparado instantaneamente (${Math.round(previous)}% → 100%).`;
+    }else if(kind==='divineHarvest'){
+      const b=city.building(targetId);if(!b||b.entity.destroyed||b.type!=='farm')return city.fail('Selecione uma fazenda.');
+      const fields=b.fields?.filter(f=>f.plantedAt!==null&&f.plantedAt!==undefined)||[];if(!fields.length)return city.fail('Esta fazenda não tem plantações ativas para acelerar.');
+      const maturity=({arroz:150,alface:75,tomate:100,girassol:180,maca:180,goiaba:160,trigo:120,milho:100,mandioca:200,cebola:140,feijao:150,coentro:80})[b.crop]||120;
+      for(const field of fields)field.plantedAt=Math.min(field.plantedAt,city.minute-maturity);
+      record.affected=fields.length;record.buildingId=b.id;record.description=`${fields.length} canteiros de ${b.entity.properties.name} amadureceram agora; os funcionários já podem colher.`;
     }else if(kind==='ride'){
       const system=city.vehicles,v=system.units.get(targetId);if(!v?.active||v.scrapped||v.driverId||v.condition<=15)return city.fail('Escolha um equipamento conservado e sem usuário ocupado.');
       const owner=city.accounts.get(v.ownerAccountId)?.entity?.properties.citizen,company=city.buildings.find(b=>b.accountId===v.ownerAccountId),people=owner?[owner]:(company?.workers||[]).map(id=>city.society.citizen(id)),rider=people.find(c=>c&&!c.entity.destroyed&&city.society.isAdult(c)&&!c.mobilityTrip&&!c.deliveryId&&!c.cleaningJobId&&!c.researchAssignment&&!c.campaign&&!c.conversation&&!city.urgentNeed(c));
