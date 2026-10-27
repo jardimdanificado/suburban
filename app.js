@@ -8,7 +8,7 @@ import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
 import { SimulationTime } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js?v=activity-toggle-1";
+import { OptionsPanel } from "./js/options.js?v=no-action-badges-1";
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");

@@ -1,6 +1,5 @@
 import {addBuildingDetails} from './city_building_details.js?v=building-models-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
-import {syncCityActivityBadges} from './city_activity_renderer.js?v=activity-toggle-1';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
@@ -9,33 +8,6 @@ import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation } from './city_terrain.js';
-const fastBuildingColors={residential:0xb8aa85,popular_housing:0xa87962,luxury_housing:0xd3b77a,market:0xdba653,greengrocer:0x83a65d,bakery:0xc8895a,builder:0xb87c3f,clinic:0xd8ddd1,bank:0x8da8a1,cleaner:0x7da6aa,carrier:0x668e9f,mill:0xbdaf82,press:0xa28e72,quarry:0x8a9191};
-function fastBuildingColor(type){
-  if(fastBuildingColors[type])return fastBuildingColors[type];
-  let hash=0;for(let i=0;i<type.length;i++)hash=Math.imul(hash,31)+type.charCodeAt(i)|0;
-  const colors=[0x9aa997,0xb0a887,0xa7968a,0x8fa3a4,0xb4a079,0x9d9eae,0x9da873];
-  return colors[(hash>>>0)%colors.length];
-}
-function syncFastBuildings(renderer,THREE,buildings){
-  let fast=renderer.fastBuildingMeshes;
-  if(!fast||fast.capacity<buildings.length){
-    if(fast){renderer.scene.remove(fast.walls,fast.roofs);fast.walls.dispose();fast.roofs.dispose();fast.walls.geometry.dispose();fast.walls.material.dispose();}
-    const capacity=Math.max(32,2**Math.ceil(Math.log2(Math.max(1,buildings.length))));
-    const geometry=new THREE.BoxGeometry(1,1,1),material=buildingMaterial(renderer,THREE,'wall',0xffffff);
-    const walls=new THREE.InstancedMesh(geometry,material,capacity),roofs=new THREE.InstancedMesh(geometry,material,capacity);
-    walls.frustumCulled=roofs.frustumCulled=false;walls.castShadow=roofs.castShadow=false;
-    renderer.scene.add(walls,roofs);fast={walls,roofs,capacity};renderer.fastBuildingMeshes=fast;
-  }
-  const matrix=renderer.fastBuildingMatrix??=new THREE.Matrix4(),color=renderer.fastBuildingColor??=new THREE.Color();
-  for(let i=0;i<buildings.length;i++){
-    const {entity,b}=buildings[i],height=Math.max(.25,(b.floors||1)*CITY_FLOOR_HEIGHT),base=b.terrain?.base??0,width=Math.max(.5,b.width),depth=Math.max(.5,b.depth);
-    matrix.makeScale(width,height,depth);matrix.setPosition(entity.x+width/2,base+height/2,entity.y+depth/2);fast.walls.setMatrixAt(i,matrix);
-    matrix.makeScale(width+.1,.14,depth+.1);matrix.setPosition(entity.x+width/2,base+height+.07,entity.y+depth/2);fast.roofs.setMatrixAt(i,matrix);
-    color.setHex(b.wallColor?parseInt(b.wallColor.slice(1),16):fastBuildingColor(b.type));fast.walls.setColorAt(i,color);fast.roofs.setColorAt(i,color.multiplyScalar(.65));
-  }
-  fast.walls.count=fast.roofs.count=buildings.length;
-  if(buildings.length){fast.walls.instanceMatrix.needsUpdate=fast.roofs.instanceMatrix.needsUpdate=true;fast.walls.instanceColor.needsUpdate=fast.roofs.instanceColor.needsUpdate=true;}
-}
 function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
 }
@@ -46,7 +18,6 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   const selectedInteriorId=selectedPerson?.indoorLocation?.buildingId;
   syncConstructionSites(renderer,THREE,world,renderer.cityDevelopment);
   syncCampaignDecorations(renderer,THREE,entities,world);
-  syncCityActivityBadges(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
   const map = world.map;
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
@@ -101,7 +72,6 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   for (const [id, marker] of renderer.lampSiteMeshes) if (!sites.has(id)) { renderer.scene.remove(marker); marker.geometry.dispose(); marker.material.dispose(); renderer.lampSiteMeshes.delete(id); }
   renderer.cityMeshes ??= new Map();
   const active = new Set();
-  const fastBuildings=[];
   for (const entity of entities) {
     const b = entity.properties?.cityBuilding;
     if (!b || entity.destroyed) continue;
@@ -275,9 +245,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z*CITY_FLOOR_HEIGHT + CITY_FLOOR_HEIGHT/2, unit.y + .5);
     group.userData.cells.material.emissive.setHex(renderer.selectedEntityId === entity.id ? 0x26351a : 0x000000);
-    if(renderer.rapidCityMode&&b.active&&b.type!=='townhall'&&b.type!=='council_chamber'&&renderer.selectedEntityId!==entity.id){group.visible=false;fastBuildings.push({entity,b});}
   }
-  if(renderer.rapidCityMode||renderer.fastBuildingMeshes)syncFastBuildings(renderer,THREE,fastBuildings);
   for (const [id, group] of renderer.cityMeshes) if (!active.has(id)) {
     renderer.scene.remove(group);
     group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); });
