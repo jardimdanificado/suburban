@@ -7,6 +7,7 @@ import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels } from './city_citizen_models.js';
+import { flagNightFactor } from './city_terrain.js';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -6847,6 +6848,7 @@ export class RCT3DRenderer {
             }
             flagMesh.material = flagMat;
           }
+          flagMesh.material.color.setScalar(flagNightFactor(world));
 
           const numFloors = h?.maxFloors || h?.floors?.length || (isLeaderHouse ? 7 : 2);
           const peakY = surfaceH + (1.20 + numFloors * 1.85) + 0.40;
@@ -7014,6 +7016,7 @@ export class RCT3DRenderer {
             const tex=createTintedTexture(flag.skin,parseInt(flag.foreground.slice(1),16),parseInt(flag.background.slice(1),16),1);
             let mat=uiMatCache.get(tex.uuid);
             if(!mat){mat=new THREE.MeshLambertMaterial({map:tex,transparent:true,alphaTest:.05,depthTest:true,side:THREE.DoubleSide});uiMatCache.set(tex.uuid,mat);}
+            mat.color.setScalar(flagNightFactor(world));
             let mesh=this.floatingUiSprites.get(uiKey);
             if(!mesh){mesh=new THREE.Mesh(this.flagGeo,mat);mesh.renderOrder=25;this.floatingUiGroup.add(mesh);this.floatingUiSprites.set(uiKey,mesh);}
             mesh.material=mat;mesh.position.set(e.x+.18,surfaceH+1.2,e.y);mesh.rotation.y=billboardRotY;

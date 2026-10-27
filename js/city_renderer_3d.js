@@ -7,7 +7,7 @@ import {modelSize,buildingPoint,CITY_FLOOR_HEIGHT} from './city_building_geometr
 import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation } from './city_terrain.js';
+import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js';
 function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
 }
@@ -22,6 +22,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   syncConstructionSites(renderer,THREE,world,renderer.cityDevelopment);
   syncCampaignDecorations(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
+  syncTransitCrossings(renderer,THREE,world);
   const map = world.map;
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
     x>=renderer.renderedMinTx && x+width<=renderer.renderedMaxTx+1 && y>=renderer.renderedMinTy && y+depth<=renderer.renderedMaxTy+1;
@@ -222,7 +223,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       renderer.cityMeshes.set(entity.id, group);
     }
     group.visible=true;
-    if(['townhall','council_chamber'].includes(b.type))syncTownhallFlag(group,THREE,b);
+    if(['townhall','council_chamber'].includes(b.type))syncTownhallFlag(group,THREE,b,flagNightFactor(world));
     if (group.userData.terrainRevision !== (world.revision || 0)) {
       b.terrain = buildingGround(world, entity.x, entity.y, b.width, b.depth,b.door);
       const base = b.terrain.base, matrix = new THREE.Matrix4();
@@ -339,12 +340,12 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
   group.userData.patches.material.emissive.setHex(renderer.selectedEntityId === entity.id ? 0x26351a : 0);
 }
 
-function syncTownhallFlag(group,THREE,b){
+function syncTownhallFlag(group,THREE,b,shade=1){
   const flag=b.governingFlag,key=flag?JSON.stringify(flag)+':'+(b.rotation||0)+':'+b.floors:null;
-  if(group.userData.governingFlagKey===key)return;
+  if(group.userData.governingFlagKey===key){group.userData.governingFlagMaterial?.color.setScalar(shade);return;}
   const old=group.userData.governingFlagMesh;
   if(old){group.remove(old);old.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.userData.partyFlagTexture?.dispose();});}
-  group.userData.governingFlagKey=key;group.userData.governingFlagMesh=null;
+  group.userData.governingFlagKey=key;group.userData.governingFlagMesh=null;group.userData.governingFlagMaterial=null;
   if(!flag)return;
   const mast=new THREE.Group(),roof=b.floors*CITY_FLOOR_HEIGHT+.18;
   const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,2.5,6),new THREE.MeshLambertMaterial({color:0xc8c6b4}));
@@ -352,7 +353,35 @@ function syncTownhallFlag(group,THREE,b){
   let texture;
   const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});
   texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.colorSpace=THREE.SRGBColorSpace;
-  const banner=new THREE.Mesh(new THREE.PlaneGeometry(1.65,1.04),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));
-  banner.userData.partyFlagTexture=texture;banner.rotation.y=(b.rotation||0)*Math.PI/2;banner.position.set(b.width*.5+.85*Math.cos(banner.rotation.y),roof+1.9,b.depth*.5-.85*Math.sin(banner.rotation.y));mast.add(banner);
+  const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);
+  const banner=new THREE.Mesh(new THREE.PlaneGeometry(1.65,1.04),material);
+  banner.userData.partyFlagTexture=texture;banner.rotation.y=(b.rotation||0)*Math.PI/2;banner.position.set(b.width*.5+.85*Math.cos(banner.rotation.y),roof+1.9,b.depth*.5-.85*Math.sin(banner.rotation.y));mast.add(banner);group.userData.governingFlagMaterial=material;
   group.add(mast);group.userData.governingFlagMesh=mast;
+}
+
+function syncTransitCrossings(renderer,THREE,world){
+  renderer.transitCrossingMeshes??=new Map();const live=new Set();
+  for(const crossing of world.transitCrossings?.values?.()||[]){
+    live.add(crossing.id);let group=renderer.transitCrossingMeshes.get(crossing.id);
+    if(!group){group=new THREE.Group();const stone=new THREE.MeshLambertMaterial({color:crossing.type==='bridge'?0x625d50:0x69675d}),metal=new THREE.MeshLambertMaterial({color:0x555c59}),water=new THREE.MeshLambertMaterial({color:0x426b79,transparent:true,opacity:.68,side:THREE.DoubleSide});
+      if(crossing.type==='bridge'){
+        crossing.tiles.forEach((tile,index)=>{
+          if(tile.underlay===2){const surface=new THREE.Mesh(new THREE.PlaneGeometry(.98,.98),water);surface.rotation.x=-Math.PI/2;surface.position.set(tile.x+.5,.025,tile.y+.5);group.add(surface);}
+          const axisX=crossing.axis==='x',h=crossing.deckHeight;
+          for(const side of [.08,.92]){const rail=new THREE.Mesh(new THREE.BoxGeometry(axisX?1:.09,.28,axisX?.09:1),metal);rail.position.set(tile.x+.5,h+.22,axisX?tile.y+side:tile.y+.5);if(!axisX)rail.position.x=tile.x+side;group.add(rail);}
+          if(index%4===1){const pier=new THREE.Mesh(new THREE.CylinderGeometry(.12,.17,Math.max(.12,h),6),stone);pier.position.set(tile.x+.5,Math.max(.06,h/2),tile.y+.5);group.add(pier);}
+        });
+      }else{
+        const axisX=crossing.axis==='x',steps=crossing.tiles.filter((_,i)=>i===0||i===crossing.tiles.length-1||i%2===0);
+        for(const tile of crossing.tiles){const roof=new THREE.Mesh(new THREE.BoxGeometry(axisX?1:.82,.2,axisX?.82:1),stone);roof.position.set(tile.x+.5,crossing.deckHeight+1.82,tile.y+.5);group.add(roof);}
+        for(const tile of steps){const h=crossing.deckHeight,centerX=tile.x+.5,centerZ=tile.y+.5;
+          for(const side of [-.43,.43]){const post=new THREE.Mesh(new THREE.BoxGeometry(axisX?.11:.11,1.7,axisX?.11:.11),stone);post.position.set(axisX?centerX:centerX+side,h+.85,axisX?centerZ+side:centerZ);group.add(post);}
+          const lintel=new THREE.Mesh(new THREE.BoxGeometry(axisX?.13:1,.13,axisX?1:.13),stone);lintel.position.set(centerX,h+1.7,centerZ);group.add(lintel);
+        }
+      }
+      renderer.scene.add(group);renderer.transitCrossingMeshes.set(crossing.id,group);
+    }
+    group.visible=true;
+  }
+  for(const [id,group]of renderer.transitCrossingMeshes)if(!live.has(id)){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.transitCrossingMeshes.delete(id);}
 }

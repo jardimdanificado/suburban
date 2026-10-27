@@ -107,11 +107,12 @@ export class World {
     this.presetId = presetId;
     this.revision = (this.revision || 0) + 1;
     this.topologyRevision = (this.topologyRevision || 0) + 1;
+    this.transitCrossings = new Map();
     let cfg = MAP_PRESET_ARCHIPELAGO;
     if (presetId === 1) cfg = MAP_PRESET_CONTINENT;
     else if (presetId === 2) cfg = MAP_PRESET_HIGHLANDS;
 
-    const outCenter = { x: 256, y: 256 };
+    const outCenter = { x: this.width / 2, y: this.height / 2 };
     world_gen_generate(this.map, { ...cfg, seed, width:this.width, height:this.height }, outCenter);
     this.spawnCenter = outCenter;
     this.groups = []; // Clear groups

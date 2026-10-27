@@ -1,5 +1,5 @@
 import {partyFlagCanvas} from './city_party_flags.js';
-import {surfaceElevation} from './city_terrain.js';
+import {surfaceElevation,flagNightFactor} from './city_terrain.js';
 const colors={bicicleta:0x397e99,bicicleta_carga:0xbd793c,patinete:0x62a69a,patins:0xd5b345,skate:0x765038};
 const inView=(r,x,y,margin=4)=>!Number.isFinite(r.renderedMinTx)||x-margin>=r.renderedMinTx&&x+margin<=r.renderedMaxTx+1&&y-margin>=r.renderedMinTy&&y+margin<=r.renderedMaxTy+1;
 function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
@@ -35,7 +35,7 @@ function syncCycleFlags(renderer,THREE,vehicles,world,entities){
  renderer.cycleFlags??=new Map();renderer.cycleFlagMaterials??=new Map();const live=new Set(),riders=new Map(entities.filter(e=>e.properties?.citizen?.ridingVehicleId).map(e=>[e.properties.citizen.id,e.properties.citizen]));
  for(const e of vehicles){const v=e.properties.cityVehicle,rider=v.driverId&&riders.get(v.driverId);const campaign=rider?.task==='campaign'&&rider.campaignInventory?.bandeiras>0?rider.campaign:null;
   const flag=v.mountedFlag?.flag||campaign?.flag;if(!flag)continue;live.add(v.id);const key=JSON.stringify(flag);let material=renderer.cycleFlagMaterials.get(key);
-  if(!material){let texture;const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide});renderer.cycleFlagMaterials.set(key,material);}
+  if(!material){let texture;const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});renderer.cycleFlagMaterials.set(key,material);}material.color.setScalar(flagNightFactor(world));
   let g=renderer.cycleFlags.get(v.id);if(!g){g=new THREE.Group();const pole=new THREE.Mesh(new THREE.CylinderGeometry(.015,.02,1.25,4),new THREE.MeshLambertMaterial({color:0xa5a59a}));pole.position.y=.625;g.add(pole);const cloth=new THREE.Mesh(new THREE.PlaneGeometry(.7,.44),material);cloth.position.set(.35,1.05,0);g.add(cloth);g.userData.cloth=cloth;renderer.scene.add(g);renderer.cycleFlags.set(v.id,g);}
   g.userData.cloth.material=material;g.position.set(e.x,surfaceElevation(world,e.x,e.y)+.25,e.y);g.rotation.y=v.angle||0;
  }

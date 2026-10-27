@@ -2,8 +2,8 @@
 // Brutopolis - Procedural World Generator (Pure JavaScript Port)
 // =============================================================================
 
-export const MAP_WIDTH = 256;
-export const MAP_HEIGHT = 256;
+export const MAP_WIDTH = 128;
+export const MAP_HEIGHT = 128;
 
 export const TILE_FLOOR = 0;              // Fertile Grassland / Lowland Plains (h = 1.10)
 export const TILE_MOUNTAIN = 1;           // Mountain Massif (h = 5.50 - NO ROADS)
@@ -182,7 +182,7 @@ export function world_gen_is_walkable(map, x, y, move_type = 1, MAP_WIDTH = Math
   return false;
 }
 
-export function world_gen_generate(map, config, outCenter = { x: 256, y: 256 }) {
+export function world_gen_generate(map, config, outCenter = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 }) {
   const MAP_WIDTH = config?.width ?? Math.sqrt(map.length), MAP_HEIGHT = config?.height ?? MAP_WIDTH;
   if(!Number.isInteger(MAP_WIDTH)||!Number.isInteger(MAP_HEIGHT)||MAP_WIDTH*MAP_HEIGHT!==map.length)throw new RangeError("Dimensões do mapa inválidas");
   if(s_hmap.length!==map.length){s_hmap=new Float32Array(map.length);tmp_ca=new Uint8Array(map.length);}

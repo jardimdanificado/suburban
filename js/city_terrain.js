@@ -1,6 +1,6 @@
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {buildingEntrance} from './city_building_geometry.js';
-import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js';
+import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_MOUNTAIN, TILE_PEAK, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js';
 
 const heights = [1.1, 5.5, 0, .4, 3.8, 0, 1.1, .4, 1.1, 2.3, 7.5, .4, 2.3, 2.3];
 export const ROAD_TILES = new Set([TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE]);
@@ -8,9 +8,12 @@ export const DIRT_ROAD_TILES = new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD
 export const PAVED_ROAD_TILES = new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
 export const ROAD_RULES = Object.freeze({dirtCost:.8,pavedCost:.55,degradeAt:30,wearPerCell:.01,hygienePerDirtCell:.025,moodPerDirtCell:.006});
 const land = new Set([TILE_FLOOR, TILE_SAND, TILE_HILL, ...ROAD_TILES]);
+const TUNNEL_TILES=new Set([TILE_STONE,TILE_MOUNTAIN,TILE_PEAK]);
+const CROSSING_SPANS=Object.freeze({bridge:12,tunnel:8});
 export const tileKey = (x, y) => `${x},${y}`;
 export const tileHeight = tile => heights[tile] ?? 0;
 export function tileAt(world, x, y) { return x < 0 || y < 0 || x >= world.width || y >= world.height ? TILE_VOID : world.getTile(x, y); }
+export function flagNightFactor(world){const hour=(world?.clock?.hour??12)+(world?.clock?.minute??0)/60;let glow=0;if(hour<5.5||hour>=19)glow=1;else if(hour<7)glow=1-(hour-5.5)/1.5;else if(hour>17.5)glow=(hour-17.5)/1.5;return 1-.82*Math.max(0,Math.min(1,glow));}
 export function terrainWalkable(world, x, y) { return land.has(tileAt(world, x, y)); }
 export function canStep(world, x, y, nx, ny) { return terrainWalkable(world, nx, ny) && Math.abs(tileHeight(tileAt(world, x, y)) - tileHeight(tileAt(world, nx, ny))) <= 1.25; }
 export function roadFor(tile) {
@@ -134,6 +137,35 @@ class MinHeap {
 const pathWorkspaces = new WeakMap();
 const pathDirections = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
+function straightCrossing(world,x,y,dx,dy,blocked,extraBlocked){
+  const first=tileAt(world,x+dx,y+dy),type=first===TILE_WATER?'bridge':TUNNEL_TILES.has(first)?'tunnel':null;
+  if(!type)return null;let span=0;
+  for(let distance=1;distance<=CROSSING_SPANS[type]+1;distance++){
+    const nx=x+dx*distance,ny=y+dy*distance,tile=tileAt(world,nx,ny);
+    if(type==='bridge'?tile===TILE_WATER:TUNNEL_TILES.has(tile)){
+      if(blocked.has(tileKey(nx,ny))||extraBlocked?.(nx,ny))return null;
+      span++;continue;
+    }
+    if(!span||!terrainWalkable(world,nx,ny)||blocked.has(tileKey(nx,ny))||extraBlocked?.(nx,ny))return null;
+    if(Math.abs(tileHeight(tileAt(world,x,y))-tileHeight(tile))>1.25)return null;
+    return {type,x:nx,y:ny,span};
+  }
+  return null;
+}
+
+function materializeCrossing(world,type,from,to){
+  const width=world.width,fromIndex=from.y*width+from.x,toIndex=to.y*width+to.x;
+  const reverse=fromIndex>toIndex,start=reverse?to:from,end=reverse?from:to;
+  const id=`${type}:${start.x},${start.y}:${end.x},${end.y}`;
+  world.transitCrossings??=new Map();if(world.transitCrossings.has(id))return world.transitCrossings.get(id);
+  const dx=Math.sign(end.x-start.x),dy=Math.sign(end.y-start.y),startHeight=tileHeight(tileAt(world,start.x,start.y)),endHeight=tileHeight(tileAt(world,end.x,end.y)),average=(startHeight+endHeight)/2;
+  const road=average<.75?TILE_ROAD_SAND:average<1.7?TILE_ROAD_GRASS:TILE_ROAD_HILL,tiles=[];
+  for(let x=start.x+dx,y=start.y+dy;x!==end.x||y!==end.y;x+=dx,y+=dy){const underlay=tileAt(world,x,y);tiles.push({x,y,underlay});world.setTile(x,y,road);}
+  const crossing={id,type,from:{...start},to:{...end},tiles,axis:dx?'x':'y',deckHeight:tileHeight(road),roadTile:road};
+  world.transitCrossings.set(id,crossing);world.topologyRevision=(world.topologyRevision||0)+1;
+  return crossing;
+}
+
 // Reachability does not need a shortest path for every pair of businesses.
 // Label the settlement's walkable components once per obstacle/terrain change.
 // A component touching the edge may connect outside the window: fall back to A*.
@@ -184,12 +216,12 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
   const width = world.width, size = width * world.height;
   let workspace = pathWorkspaces.get(world);
   if (!workspace || workspace.costs.length !== size) {
-    workspace = { costs: new Float64Array(size), parents: new Int32Array(size), marks: new Uint32Array(size), generation: 0 };
+    workspace = { costs: new Float64Array(size), parents: new Int32Array(size), edgeTypes:new Uint8Array(size), marks: new Uint32Array(size), generation: 0 };
     pathWorkspaces.set(world, workspace);
   }
   workspace.generation = (workspace.generation + 1) >>> 0;
   if (!workspace.generation) { workspace.marks.fill(0); workspace.generation = 1; }
-  const { costs, parents, marks, generation } = workspace;
+  const { costs, parents, edgeTypes, marks, generation } = workspace;
   const startKey = sy * width + sx, goalKey = gy * width + gx;
   const open = new MinHeap(); costs[startKey] = 0; marks[startKey] = generation;
   open.push({ x: sx, y: sy, cost: 0, score: 0 });
@@ -198,19 +230,28 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
     const current = open.pop(), k = current.y * width + current.x;
     if (marks[k] !== generation || current.cost !== costs[k]) continue;
     if (k === goalKey) {
-      const path = []; let step = goalKey;
-      while (step !== startKey) { path.push({ x: step % width + .5, y: Math.floor(step / width) + .5 }); step = parents[step]; }
-      return path.reverse();
+      const path = [],crossings=[]; let step = goalKey;
+      while (step !== startKey) {
+        const x=step%width,y=Math.floor(step/width),parent=parents[step],px=parent%width,py=Math.floor(parent/width),edge=edgeTypes[step];
+        path.push({x:x+.5,y:y+.5});
+        if(edge){const dx=Math.sign(x-px),dy=Math.sign(y-py);for(let ix=x-dx,iy=y-dy;ix!==px||iy!==py;ix-=dx,iy-=dy)path.push({x:ix+.5,y:iy+.5});crossings.push({type:edge===1?'bridge':'tunnel',from:{x:px,y:py},to:{x,y}});}
+        step=parent;
+      }
+      path.reverse();for(const crossing of crossings)materializeCrossing(world,crossing.type,crossing.from,crossing.to);return path;
     }
+    const relax=(x,y,edge=0,extraCost=0)=>{
+      if(x<0||y<0||x>=world.width||y>=world.height||blocked.has(tileKey(x,y))||extraBlocked?.(x,y))return;
+      if(edge===0&&(!canStep(world,current.x,current.y,x,y)||roadOnly&&!ROAD_TILES.has(tileAt(world,x,y))))return;
+      if(edge&&roadOnly)return;
+      const tile=tileAt(world,x,y),cost=current.cost+roadTravelCost(tile)+Math.abs(tileHeight(tile)-tileHeight(tileAt(world,current.x,current.y)))*.7+extraCost,nextKey=y*width+x;
+      if(marks[nextKey]===generation&&cost>=costs[nextKey])return;
+      marks[nextKey]=generation;costs[nextKey]=cost;parents[nextKey]=k;edgeTypes[nextKey]=edge;
+      open.push({x,y,cost,score:cost+(Math.abs(gx-x)+Math.abs(gy-y))*.55});
+    };
     for (const [dx, dy] of pathDirections) {
-      const x = current.x + dx, y = current.y + dy, nextKey = y * width + x;
-      if (!canStep(world, current.x, current.y, x, y) || blocked.has(tileKey(x, y)) || extraBlocked?.(x, y)) continue;
-      const tile = tileAt(world, x, y);
-      if(roadOnly&&!ROAD_TILES.has(tile))continue;
-      const cost = current.cost + roadTravelCost(tile) + Math.abs(tileHeight(tile) - tileHeight(tileAt(world, current.x, current.y))) * .7;
-      if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
-      marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
-      open.push({ x, y, cost, score: cost + (Math.abs(gx - x) + Math.abs(gy - y)) * .55 });
+      const x=current.x+dx,y=current.y+dy;
+      if(canStep(world,current.x,current.y,x,y))relax(x,y);
+      else if(!roadOnly){const crossing=straightCrossing(world,current.x,current.y,dx,dy,blocked,extraBlocked);if(crossing)relax(crossing.x,crossing.y,crossing.type==='bridge'?1:2,crossing.span*(crossing.type==='bridge'?1.55:1.3)+5);}
     }
   }
   return null;
