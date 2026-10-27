@@ -1,3 +1,4 @@
+import {ensureHeadquarters,headquartersAccount} from './city_party_headquarters.js';
 /** Party accounts contain transferred currency, never newly created money. */
 export function partyAccount(p,party){
   if(!party)return null;
@@ -32,9 +33,9 @@ export function illegalPartyFunding(p){
   if(city.random()>.12)return;
   const officials=[city.society.citizen(city.economy.mayorId),...p.council.people()].filter(c=>c&&!c.entity.destroyed&&(c.traits?.honesty??.5)<.35&&p.partyOfId(c.id)?.active);
   const official=officials[Math.floor(city.random()*officials.length)];if(!official)return;
-  const party=p.partyOfId(official.id),account=partyAccount(p,party),firm=city.economy.businesses.find(b=>b.ownerId&&b.balance>city.currency.price(20000)&&city.society.citizen(b.ownerId)?.political?.partyId===party.id),owner=city.society.citizen(firm?.ownerId);
+  const party=p.partyOfId(official.id);ensureHeadquarters(p,party);headquartersAccount(p,party);const account=city.accounts.get(party.secretAccountId),firm=city.economy.businesses.find(b=>b.ownerId&&b.balance>city.currency.price(20000)&&city.society.citizen(b.ownerId)?.political?.partyId===party.id),owner=city.society.citizen(firm?.ownerId);
   const from=firm?.accountId||'treasury',balance=city.accounts.get(from)?.balance||0,reserve=from==='treasury'?city.welfare.conditions().reserve:city.currency.price(15000),amount=Math.min(city.currency.price(1500+Math.floor(city.random()*6000)),Math.floor((balance-reserve)*.03));
   if(amount<=0)return;
-  const record=p.crime(official,'party-fund-diversion',from,account.accountId,amount,{beneficiaryPartyId:party.id,buildingId:firm?.id,participantIds:[official.id,owner?.id].filter(id=>id!=null),roles:[{citizenId:official.id,role:'Articulador do caixa clandestino'},...(owner?[{citizenId:owner.id,role:'Financiador empresarial favorecido'}]:[])]});
-  if(record){record.concealment=.7;record.severity=55;record.steps[0].description=firm?'Doação empresarial oculta em troca de favorecimento':'Verba pública desviada para o caixa de campanha do partido';}
+  const record=p.crime(official,'party-fund-diversion',from,account.accountId,amount,{beneficiaryPartyId:party.id,buildingId:firm?.id,headquartersBuildingId:party.headquarters?.buildingId,participantIds:[official.id,owner?.id].filter(id=>id!=null),roles:[{citizenId:official.id,role:'Articulador do caixa clandestino'},...(owner?[{citizenId:owner.id,role:'Financiador empresarial favorecido'}]:[])]});
+  if(record){record.concealment=.7;record.severity=55;record.steps[0].description=firm?'Doação empresarial oculta para o caixa clandestino da sede':'Verba pública desviada para o caixa clandestino da sede';}
 }

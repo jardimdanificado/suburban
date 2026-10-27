@@ -1,3 +1,4 @@
+import {officeFloors,OFFICE_BUSINESSES} from './city_offices.js';
 import {equityShares,equityValue} from './city_equity.js';
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js';
@@ -86,11 +87,12 @@ export class CityUI {
     this.seed = document.createElement('input'); this.seed.type = 'number'; this.seed.min = '1'; this.seed.max = '2147483647'; this.seed.value = city.world.seed ?? city.initialSeed; this.seed.setAttribute('aria-label', 'Semente do próximo terreno');
     this.worksBudgetInput=document.createElement('input');this.worksBudgetInput.type='number';this.worksBudgetInput.min='0';this.worksBudgetInput.step='1';this.worksBudgetInput.value='5000000';this.worksBudgetInput.setAttribute('aria-label','Novo orçamento de obras solicitado');
     this.worksTransferInput=document.createElement('input');this.worksTransferInput.type='number';this.worksTransferInput.min='1';this.worksTransferInput.step='1';this.worksTransferInput.value='250000';this.worksTransferInput.setAttribute('aria-label','Valor da transferência solicitada para obras');
+    this.mapSizeInput=document.createElement('input');this.mapSizeInput.type='number';this.mapSizeInput.min='128';this.mapSizeInput.max='1024';this.mapSizeInput.step='1';this.mapSizeInput.value=String(city.world.width||512);this.mapSizeInput.setAttribute('aria-label','Tamanho do próximo mapa');
     this.populationInput = document.createElement('input'); this.populationInput.type = 'number'; this.populationInput.min = '1'; this.populationInput.max = '2000'; this.populationInput.step = '1'; this.populationInput.value = String(city.initialPopulation ?? 512); this.populationInput.setAttribute('aria-label', 'Número de cidadãos da próxima cidade');
     this.filterInput=document.createElement('select');this.filterInput.setAttribute('aria-label','Filtrar registros');this.filterInput.addEventListener('change',()=>this.setFilter(this.filterInput.value));
     this.sortInput=document.createElement('select');this.sortInput.setAttribute('aria-label','Ordenar registros');this.sortInput.addEventListener('change',()=>{this.sorts[this.tab]=this.sortInput.value;this.resetScroll();});
     this.publicationDraft=document.createElement('input');this.publicationDraft.type='text';this.publicationDraft.maxLength=1200;this.publicationDraft.placeholder='Escreva um relato, informação, anúncio ou invenção…';this.publicationDraft.setAttribute('aria-label','Conteúdo a escrever no livro ou panfleto');
-    this.element.append(this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput);
+    this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput);
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
   }
   resetScroll() { this.scrolls = {}; }
@@ -161,7 +163,7 @@ export class CityUI {
     return false;
   }
   beginInputs(){this.frameInputs??=new Set();this.frameInputs.clear();}
-  finishInputs(){for(const input of[this.search,this.seed,this.populationInput,this.filterInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
+  finishInputs(){for(const input of[this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
   inputAt(input,x,y,w){this.frameInputs?.add(input);const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.hidden)input.hidden=false;}
   drawFloating(ui,window) {
     this.floating=true;this.politicsNavigationPinned=false;this.floatingDossier=window.kind==='dossier';if(this.element.hidden)this.element.hidden=false;this.visible=true;this.zones=[];this.beginInputs();
@@ -368,6 +370,13 @@ export class CityUI {
     if (this.detailTab === 'profile') {
       contextActions(this,p,{business:b});
       if(b.type==='bike_rack'){renderParking(this,p);return;}
+      const sediados=city.politics.parties.filter(party=>party.active&&party.headquarters?.buildingId===b.id);if(sediados.length){p.heading('SEDES PARTIDÁRIAS');for(const party of sediados)p.record(party.name,`${party.headquarters.floor+1}º andar · ${party.headquarters.kind==='office'?'Alugado':'Provisório'}`,()=>this.openParty(party.id));}
+      if(b.type==='office_tower'){
+        p.heading('ANDARES EMPRESARIAIS');p.note('Cada empresa aluga um andar inteiro e mantém equipe, caixa e atividades próprias.');
+        for(const row of officeFloors(city,b)){p.heading(`${row.floor+1}º ANDAR`);p.kv('Aluguel diário',money(row.rent));if(row.tenant){const tenantName=row.tenant.entity?.properties?.name||city.accountName(row.tenant.accountId);p.record(tenantName,row.tenant.partyId?'Sede partidária':'Empresa locatária',()=>row.tenant.partyId?this.openParty(row.tenant.partyId):this.openBuilding(row.tenant.id));const lease=b.officeLeases?.find(l=>l.buildingId===row.tenant.id&&l.status==='active');if(lease?.arrears)p.kv('Aluguel atrasado',money(lease.arrears));}else{p.note('Disponível para aluguel');this.section(p,`rent-office:${b.id}:${row.floor}`,'Fundar empresa neste andar',()=>{const type=this.officeBusinessType||'newsroom';p.buttons([...OFFICE_BUSINESSES].map(t=>({label:city.buildingTypes[t].label,selected:t===type,click:()=>{this.officeBusinessType=t;}})));const founders=city.citizens.filter(c=>!c.entity.destroyed&&city.politics.canOwnBusiness(c)&&c.balance>=row.rent+city.currency.price(20000)).sort((a,d)=>d.balance-a.balance).slice(0,8);if(!founders.length)p.note('Nenhum fundador tem saldo para o primeiro aluguel e capital.');for(const founder of founders)p.button(`${name(founder.entity)} · ${money(founder.balance)}`,()=>{const result=city.economy.rentOffice(b.id,row.floor,type,founder.id);this.notice=result===true?'Locação enviada à simulação.':result?'Andar alugado.':city.lastError||'Não foi possível alugar o andar.';});});}}
+      }
+      if(b.officeTenantOf){p.kv('Sede',`${city.building(b.officeTenantOf)?.entity.properties.name||'Empresarial'} · ${b.officeFloor+1}º andar`);p.button('VER EMPRESARIAL',()=>this.openBuilding(b.officeTenantOf));}
+
       p.metrics([['CAIXA',money(b.balance),b.balance<1000?C.red:C.cyan],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]);
       if(civicSpec(b)){const service=civicStatus(city,b);p.heading('ATENDIMENTO');p.kv('Equipe presente / capacidade',`${service.team} / ${service.capacity}`);p.kv('Usuários atendidos agora',service.visitors);p.kv('Visitas concluídas',b.completedVisits||0);p.note(service.reason);}
       p.status(b.active?'EM ATIVIDADE':['residential','popular_housing','luxury_housing'].includes(b.type)?'MORADIA':'INSTALAÇÃO DISPONÍVEL',b.entity.properties.name,b.active?C.green:C.cyan);
@@ -619,9 +628,10 @@ export class CityUI {
       p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
       p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');let iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);
       p.note('Cidadãos iniciais (1 a 2.000)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.populationInput,p.x,iy,p.w);
+      p.note('Tamanho do mapa (128 a 1024 células por lado)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.mapSizeInput,p.x,iy,p.w);
       p.button(`PAISAGEM: ${WORLD_PRESETS[this.terrain].label}`,()=>{const keys=Object.keys(WORLD_PRESETS);this.terrain=keys[(keys.indexOf(this.terrain)+1)%keys.length];});
       p.note('Gerar terreno reinicia a simulação e descarta a cidade atual.',C.red);
-      p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity()&&this.populationInput.reportValidity())this.startWorld(Number(this.seed.value),this.terrain,Number(this.populationInput.value));});p.button('GERAR TERRENO ALEATÓRIO',()=>{if(this.populationInput.reportValidity())this.startWorld(randomWorldSeed(),this.terrain,Number(this.populationInput.value));});
+      p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity()&&this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(Number(this.seed.value),this.terrain,Number(this.populationInput.value),Number(this.mapSizeInput.value));});p.button('GERAR TERRENO ALEATÓRIO',()=>{if(this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(randomWorldSeed(),this.terrain,Number(this.populationInput.value),Number(this.mapSizeInput.value));});
     }
   }
   production(p) {
@@ -862,5 +872,5 @@ export class CityUI {
     const blob=new Blob([JSON.stringify({version:2,cityMinute:this.city.minute,total:this.city.history.total,dropped:this.city.history.dropped,retention:HISTORY_LIMIT,filters:{category:this.logCategory,citizenId:this.logCitizenId,buildingId:this.logBuildingId,accountId:this.logAccountId,reference:this.logReference,query:this.query},events,pendingFinance},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`suburban-historico-dia-${this.city.day}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  startWorld(seed, terrain, population = this.city.initialPopulation ?? 512) { const url = new URL(window.location.href); url.searchParams.set('seed', seed); url.searchParams.set('terrain', terrain); url.searchParams.set('population', population); window.location.assign(url.href); }
+  startWorld(seed, terrain, population = this.city.initialPopulation ?? 512, size = this.city.world.width ?? 512) { const url = new URL(window.location.href); url.searchParams.set('seed', seed); url.searchParams.set('terrain', terrain); url.searchParams.set('population', population); url.searchParams.set('size',size); window.location.assign(url.href); }
 }

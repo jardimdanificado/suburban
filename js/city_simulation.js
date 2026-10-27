@@ -1,3 +1,4 @@
+import {collectOfficeRents,endOfficeLease} from './city_offices.js';
 import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
@@ -50,6 +51,7 @@ export const BUILDING_TYPES = {
   builder: { label: 'Construtora', color: 0xd8a957, rent: 80, price: 50000, jobs: 3 },
   quarry: { label: 'Pedreira', color: 0x929caa, rent: 70, price: 50000, jobs: 2 },
   lamp_service: { label: 'Abastecedora de postes', color: 0xe4b34c, rent: 75, price: 50000, jobs: 2 },
+  office_tower: { label: 'Empresarial', color: 0x9aaeb2, rent: 100, price: 100000, jobs: 1 },
   carrier: { label: 'Transportadora', color: 0x75b4cc, rent: 75, price: 50000, jobs: 2 },
   residential: { label: 'Residencial', color: 0xb5c4b0, rent: HOUSING_RULES.roomRent, price: HOUSING_RULES.roomPrice, jobs: 0 },
   popular_housing: { label: 'Moradia popular', color: 0xc7a779, rent: HOUSING_RULES.roomRent, price: HOUSING_RULES.roomPrice, jobs: 0 },
@@ -551,6 +553,7 @@ export class CitySimulation {
     this.currency.daily();
     this.wageSubsidies.paidToday=0;this.wageSubsidies.unpaidToday=0;
     this.collectRent();
+    collectOfficeRents(this);
     for (const c of this.citizens) {
       if (c.entity.destroyed) continue;
       c.salaryYesterday = c.salaryToday; c.salaryToday = 0; c.wageSubsidyToday=0;c.wageSubsidyUnpaidToday=0;c.taxPaidToday=0; c.mealAllowanceToday = 0;
@@ -564,6 +567,8 @@ export class CitySimulation {
   }
   reconcile() {
     if(this.buildings.some(b=>b.entity.destroyed))for (const b of [...this.buildings]) if (b.entity.destroyed) {
+      if(b.officeTenantOf){const tower=this.building(b.officeTenantOf),lease=tower?.officeLeases?.find(l=>l.buildingId===b.id&&l.status==='active');if(lease)endOfficeLease(this,tower,lease,'Empresa encerrada');for(const u of b.units)this.units.delete(u.id);this.buildings.splice(this.buildings.indexOf(b),1);this.buildingsById.delete(b.id);this.structureRevision++;continue;}
+      if(b.type==='office_tower')for(const lease of b.officeLeases||[])endOfficeLease(this,b,lease,'Empresarial demolido');
       for (const u of b.units) { this.units.delete(u.id); }
       for (let y = b.entity.y; y < b.entity.y + b.depth; y++) for (let x = b.entity.x; x < b.entity.x + b.width; x++) this.occupied.delete(key(x, y));
       this.obstacleRevision=(this.obstacleRevision||0)+1;
@@ -739,7 +744,7 @@ export class CitySimulation {
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     const printed=['livros','panfletos','jornais'].includes(good)?[...this.publications.documents.values()].filter(d=>!d.lost&&d.good===good&&!this.publications.inventoryHolder(d.ownerAccountId)).length:0;
-    return this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

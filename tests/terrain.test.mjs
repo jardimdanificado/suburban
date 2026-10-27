@@ -17,7 +17,7 @@ function terrainFixture() {
 test('seeds are random by default, validated in URLs and repeatable when specified', () => {
   const seeds = new Set(Array.from({ length: 16 }, randomWorldSeed)); assert(seeds.size > 1);
   const settings = resolveWorldSettings(new URLSearchParams('seed=12345&terrain=highlands'));
-  assert.deepEqual(settings, { seed: 12345, preset: 'highlands', presetId: 2, population: 512 });
+  assert.deepEqual(settings, { seed: 12345, preset: 'highlands', presetId: 2, population: 512, size: 512 });
   assert.deepEqual(settings, resolveWorldSettings(new URLSearchParams('seed=12345&terrain=highlands')));
   for (const bad of ['0', '-1', 'NaN', '123x', '4294967296']) {
     const s = resolveWorldSettings(new URLSearchParams(`seed=${bad}&terrain=bad`));
@@ -98,4 +98,20 @@ test('isolated plots are rejected without construction charges, roads or terrain
   const before = world.map.slice(), treasury = city.treasury;
   assert.equal(city.addBuilding('residential', 40, 20, { width: 4, depth: 4, floors: 3, free: true }), null);
   assert.match(city.lastError, /isolado|acesso/); assert.equal(city.treasury, treasury); assert.deepEqual(world.map, before);
+});
+
+test('landscapes use most of the map for land while retaining varied shores and rock',()=>{
+ for(const preset of [0,1,2])for(const seed of [42,1337]){
+  const world=new World(preset,seed),counts=new Uint32Array(14);for(const tile of world.map)counts[tile]++;
+  const water=counts[2]/world.map.length,usable=(counts[0]+counts[3]+counts[9])/world.map.length;
+  assert(water<(preset===0?.45:.25),`preset ${preset} seed ${seed}: ${(water*100).toFixed(1)}% water`);
+  assert(usable>.5,`preset ${preset} seed ${seed}: ${(usable*100).toFixed(1)}% usable land`);
+  assert(counts[2]>100&&counts[4]>100,'coasts and rock deposits remain available');
+ }
+});
+
+
+test('square maps from 128 to 1024 use their actual dimensions throughout generation',()=>{
+ for(const size of [128,256,512,1024]){const world=new World(1,42,size);assert.equal(world.width,size);assert.equal(world.height,size);assert.equal(world.map.length,size*size);assert(world.spawnCenter.x>=0&&world.spawnCenter.x<size);assert(world.spawnCenter.y>=0&&world.spawnCenter.y<size);assert.equal(world.getTile(size,0),5);const tile=world.getTile(size-1,size-1);world.setTile(size-1,size-1,tile===0?3:0);assert.equal(world.getTile(size-1,size-1),tile===0?3:0);}
+ assert.equal(resolveWorldSettings(new URLSearchParams()).size,512);assert.equal(resolveWorldSettings(new URLSearchParams('size=128')).size,128);assert.equal(resolveWorldSettings(new URLSearchParams('size=1025')).size,512);
 });

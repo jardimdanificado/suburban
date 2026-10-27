@@ -1,4 +1,4 @@
-import {addBuildingDetails} from './city_building_details.js?v=lamp-taxes-1';
+import {addBuildingDetails} from './city_building_details.js?v=offices-map-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
@@ -14,14 +14,17 @@ function buildingMaterial(renderer,THREE,kind,color){
 // Room coordinates count floors; render their physical height consistently with picking.
 
 export function syncCityBuildings(renderer, THREE, entities, world) {
-  const selectedPerson=entities.find(e=>e.id===renderer.selectedEntityId)?.properties?.citizen;
-  const selectedInteriorId=selectedPerson?.indoorLocation?.buildingId;
+  const selectedEntity=entities.find(e=>e.id===renderer.selectedEntityId);
+  const selectedPerson=selectedEntity?.properties?.citizen;
+  const selectedOfficeHost=selectedEntity?.properties?.cityBuilding?.officeTenantOf;
+  const selectedInteriorBuilding=selectedPerson?.indoorLocation?.buildingId;
+  const selectedInteriorId=entities.find(e=>e.id===selectedInteriorBuilding)?.properties?.cityBuilding?.officeTenantOf??selectedInteriorBuilding;
   syncConstructionSites(renderer,THREE,world,renderer.cityDevelopment);
   syncCampaignDecorations(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
   const map = world.map;
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
-    x+width>=renderer.renderedMinTx-8 && x<=renderer.renderedMaxTx+8 && y+depth>=renderer.renderedMinTy-8 && y<=renderer.renderedMaxTy+8;
+    x>=renderer.renderedMinTx && x+width<=renderer.renderedMaxTx+1 && y>=renderer.renderedMinTy && y+depth<=renderer.renderedMaxTy+1;
   renderer.lampMeshes ??= new Map();
   // A fixed light pool prevents shader recompilation and unbounded GPU work per post.
   if (!renderer.cityLampLights) {
@@ -74,7 +77,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   const active = new Set();
   for (const entity of entities) {
     const b = entity.properties?.cityBuilding;
-    if (!b || entity.destroyed) continue;
+    if (!b || entity.destroyed || b.officeTenantOf) continue;
     active.add(entity.id);
     if(!inView(entity.x,entity.y,b.width,b.depth)){const existing=renderer.cityMeshes.get(entity.id);if(existing)existing.visible=false;continue;}
     if (b.constructionKind === 'open-air') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
@@ -236,7 +239,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     }
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = Math.floor((renderer.foliageAnimationTick || 0)/20)*.1;
     group.position.set(entity.x, b.terrain.base, entity.y);
-    const cutaway=renderer.selectedEntityId===entity.id||selectedInteriorId===b.id;
+    const cutaway=renderer.selectedEntityId===entity.id||selectedInteriorId===b.id||selectedOfficeHost===b.id;
     if(group.userData.roomProps)group.userData.roomProps.visible=cutaway;
     if(group.userData.roof)group.userData.roof.visible=!cutaway;
     if(group.userData.facade)group.userData.facade.visible=!cutaway;

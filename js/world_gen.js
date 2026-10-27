@@ -2,8 +2,8 @@
 // Brutopolis - Procedural World Generator (Pure JavaScript Port)
 // =============================================================================
 
-export const MAP_WIDTH = 1024;
-export const MAP_HEIGHT = 1024;
+export const MAP_WIDTH = 512;
+export const MAP_HEIGHT = 512;
 
 export const TILE_FLOOR = 0;              // Fertile Grassland / Lowland Plains (h = 1.10)
 export const TILE_MOUNTAIN = 1;           // Mountain Massif (h = 5.50 - NO ROADS)
@@ -24,6 +24,7 @@ export const MAP_PRESET_ARCHIPELAGO = {
   seed: 0,
   noise_scale: 0.05,
   octaves: 4,
+  land_base: 0.78,
   num_islands: 6,
   min_island_radius: 90.0,
   max_island_radius: 170.0,
@@ -36,6 +37,7 @@ export const MAP_PRESET_CONTINENT = {
   seed: 0,
   noise_scale: 0.035,
   octaves: 5,
+  land_base: 0.94,
   num_islands: 3,
   min_island_radius: 140.0,
   max_island_radius: 240.0,
@@ -48,6 +50,7 @@ export const MAP_PRESET_HIGHLANDS = {
   seed: 0,
   noise_scale: 0.06,
   octaves: 4,
+  land_base: 0.90,
   num_islands: 4,
   min_island_radius: 100.0,
   max_island_radius: 180.0,
@@ -136,10 +139,10 @@ function island_falloff(dx, dy, radius) {
   return t * t * (3.0 - 2.0 * t);
 }
 
-const s_hmap = new Float32Array(MAP_WIDTH * MAP_HEIGHT);
-const tmp_ca = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+let s_hmap = new Float32Array(0);
+let tmp_ca = new Uint8Array(0);
 
-function ca_smooth(map, iterations) {
+function ca_smooth(map, iterations, MAP_WIDTH, MAP_HEIGHT) {
   for (let iter = 0; iter < iterations; iter++) {
     for (let y = 0; y < MAP_HEIGHT; y++) {
       const yOffset = y * MAP_WIDTH;
@@ -169,7 +172,7 @@ function ca_smooth(map, iterations) {
   }
 }
 
-export function world_gen_is_walkable(map, x, y, move_type = 1) {
+export function world_gen_is_walkable(map, x, y, move_type = 1, MAP_WIDTH = Math.sqrt(map.length), MAP_HEIGHT = MAP_WIDTH) {
   if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) return false;
   const t = map[y * MAP_WIDTH + x];
   if (t === TILE_VOID) return false;
@@ -180,8 +183,13 @@ export function world_gen_is_walkable(map, x, y, move_type = 1) {
 }
 
 export function world_gen_generate(map, config, outCenter = { x: 256, y: 256 }) {
+  const MAP_WIDTH = config?.width ?? Math.sqrt(map.length), MAP_HEIGHT = config?.height ?? MAP_WIDTH;
+  if(!Number.isInteger(MAP_WIDTH)||!Number.isInteger(MAP_HEIGHT)||MAP_WIDTH*MAP_HEIGHT!==map.length)throw new RangeError("Dimensões do mapa inválidas");
+  if(s_hmap.length!==map.length){s_hmap=new Float32Array(map.length);tmp_ca=new Uint8Array(map.length);}
   const cfg = Object.assign({}, MAP_PRESET_ARCHIPELAGO, config || {});
 
+  const scale = Math.min(MAP_WIDTH, MAP_HEIGHT) / 1024;
+  cfg.min_island_radius *= scale; cfg.max_island_radius *= scale;
   random_seed(cfg.seed > 0 ? cfg.seed : 1337);
   s_noise_seed = wasm_rand();
 
@@ -197,7 +205,7 @@ export function world_gen_generate(map, config, outCenter = { x: 256, y: 256 }) 
   });
 
   for (let i = 1; i < n_islands; i++) {
-    const margin = 40.0;
+    const margin = Math.min(40, Math.floor(Math.min(MAP_WIDTH, MAP_HEIGHT)*.08));
     islands.push({
       cx: margin + random_int(0, Math.floor(MAP_WIDTH - 2 * margin)),
       cy: margin + random_int(0, Math.floor(MAP_HEIGHT - 2 * margin)),
@@ -220,7 +228,9 @@ export function world_gen_generate(map, config, outCenter = { x: 256, y: 256 }) 
         if (f > falloff) falloff = f;
       }
 
-      s_hmap[yOffset + x] = n * falloff;
+      // Keep terrain across the map while islands add broad coastal variation.
+      const base = Math.max(0, Math.min(1, cfg.land_base ?? 0.78));
+      s_hmap[yOffset + x] = n * (base + (1 - base) * falloff);
     }
   }
 
@@ -249,7 +259,7 @@ export function world_gen_generate(map, config, outCenter = { x: 256, y: 256 }) 
   }
 
   if (cfg.ca_smooth_iterations > 0) {
-    ca_smooth(map, cfg.ca_smooth_iterations);
+    ca_smooth(map, cfg.ca_smooth_iterations, MAP_WIDTH, MAP_HEIGHT);
   }
 
   // 2. Post-process Biome Borders: water edges receive natural beach sand
@@ -285,7 +295,7 @@ export function world_gen_generate(map, config, outCenter = { x: 256, y: 256 }) 
     let found = false;
     for (let dy = -r; dy <= r && !found; dy++) {
       for (let dx = -r; dx <= r && !found; dx++) {
-        if (world_gen_is_walkable(map, center_x + dx, center_y + dy, 1)) {
+        if (world_gen_is_walkable(map, center_x + dx, center_y + dy, 1, MAP_WIDTH, MAP_HEIGHT)) {
           center_x += dx;
           center_y += dy;
           found = true;

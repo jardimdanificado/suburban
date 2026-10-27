@@ -93,11 +93,12 @@ export class WorldClock {
 }
 
 export class World {
-  constructor(presetId = 0, seed = randomWorldSeed()) {
-    this.width = MAP_WIDTH;
-    this.height = MAP_HEIGHT;
+  constructor(presetId = 0, seed = randomWorldSeed(), size = MAP_WIDTH) {
+    if(!Number.isInteger(size)||size<128||size>1024)throw new RangeError("Tamanho do mapa deve ficar entre 128 e 1024.");
+    this.width = size;
+    this.height = size;
     this.clock = new WorldClock();
-    this.map = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+    this.map = new Uint8Array(this.width * this.height);
     this.generate(presetId, seed);
   }
 
@@ -111,7 +112,7 @@ export class World {
     else if (presetId === 2) cfg = MAP_PRESET_HIGHLANDS;
 
     const outCenter = { x: 256, y: 256 };
-    world_gen_generate(this.map, { ...cfg, seed }, outCenter);
+    world_gen_generate(this.map, { ...cfg, seed, width:this.width, height:this.height }, outCenter);
     this.spawnCenter = outCenter;
     this.groups = []; // Clear groups
     this.clock.reset();
@@ -123,8 +124,8 @@ export class World {
   }
 
   getTile(x, y) {
-    if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) return TILE_VOID;
-    return this.map[y * MAP_WIDTH + x];
+    if (x < 0 || x >= this.width || y < 0 || y >= this.height) return TILE_VOID;
+    return this.map[y * this.width + x];
   }
 
   getTileName(t) {
@@ -147,12 +148,12 @@ export class World {
   }
 
   setTile(x, y, tile) {
-    if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) return;
-    const previous=this.map[y * MAP_WIDTH + x];
+    if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
+    const previous=this.map[y * this.width + x];
     if (previous === tile) return;
     // Paving changes travel cost, but not reachability or terrain elevation.
     if(roadFor(previous)===null||roadFor(previous)!==roadFor(tile))this.topologyRevision=(this.topologyRevision||0)+1;
-    this.map[y * MAP_WIDTH + x] = tile;
+    this.map[y * this.width + x] = tile;
     this.revision++;
     if (typeof this.onTileChange === "function") {
       this.onTileChange(x, y, tile);
@@ -160,6 +161,6 @@ export class World {
   }
 
   isWalkable(x, y, moveType = 1) {
-    return world_gen_is_walkable(this.map, x, y, moveType);
+    return world_gen_is_walkable(this.map, x, y, moveType, this.width, this.height);
   }
 }

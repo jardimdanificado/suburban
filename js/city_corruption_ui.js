@@ -41,6 +41,7 @@ export function renderCorruptionInspector(ui,p){
     p.note(mechanisms[r.type]||'As movimentações registradas mostram a execução financeira deste esquema.');
     p.kv(['vote-buying','poll-rigging'].includes(r.type)?'Pagamento ilegal inicial':'Valor retirado do tesouro',money(r.amount));
     if(r.type==='poll-rigging'){p.kv('Pesquisa / coleta',`#${r.pollId} / #${r.studyId}`);p.kv('Candidato favorecido',city.accountName(`citizen:${r.targetCandidateId}`));p.windowLink('PESQUISA VINCULADA',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:r.electionId,pollId:r.pollId}));}
+    if(r.headquartersBuildingId!=null){const headquarters=city.building(r.headquartersBuildingId);p.kv('Sede vinculada ao caixa clandestino',headquarters?.entity.properties.name||'Imóvel indisponível');if(headquarters)p.button('VER SEDE VINCULADA',()=>ui.openBuilding(headquarters.id));}
     p.kv('Quando ocorreu',stamp(r.occurredAt));p.kv('Partido do articulador à época',party?.name||'Sem partido');
     if(party?.flag){if(p.visible(40))drawPartyFlag(p.ui.ctx,party.flag,p.x,p.y,58,36);p.y+=41;}
     p.heading('REPUTAÇÃO DOS PARTIDOS');for(const affected of gov.parties){const incidents=(affected.reputationIncidents||[]).filter(i=>i.caseId===r.id);for(const incident of incidents)p.kv(`${affected.short} · ${incident.role==='origin'?'à época do crime':'acolhimento posterior'}`,`−${incident.penalty.toFixed(2)} pontos`);}

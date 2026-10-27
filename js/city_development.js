@@ -1,3 +1,4 @@
+import {setupOfficeTower} from './city_offices.js';
 import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js';
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
@@ -94,7 +95,7 @@ export class CityDevelopment {
       city.sanitation.setupBuilding(b);
       city.sanitation.setupBusinessRooms(b);
       if (project.service === 'expansion') {
-      b.floors = project.targetFloors; b.inventoryCapacity += b.width * b.depth * project.floors * 16;
+      b.floors = project.targetFloors;if(b.type==='office_tower')setupOfficeTower(city,b); b.inventoryCapacity += b.width * b.depth * project.floors * 16;
       b.jobs += b.type === 'townhall' ? project.floors : 0; b.geometryRevision = (b.geometryRevision || 0) + 1;
       if(b.type==='popular_housing'&&project.accountId==='treasury')city.housing.assign();
       }
@@ -328,7 +329,7 @@ export class CityDevelopment {
     if (!p || p.ownerId !== accountId || p.projectId || !Number.isSafeInteger(price) || price < 1 || !Number.isSafeInteger(rent) || rent < 0) return false;
     Object.assign(p, { price, rent, forSale: p.ownerId === 'treasury' || !!forSale, forRent: p.ownerId !== 'treasury' && !!forRent }); return true;
   }
-  beginProject(accountId, plotId, type, { kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = ['residential', 'popular_housing', 'luxury_housing'].includes(type) ? 3 : 1, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
+  beginProject(accountId, plotId, type, { kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = ['residential', 'popular_housing', 'luxury_housing','office_tower'].includes(type) ? 3 : 1, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
     if ((kind === 'open-air' && !['farm', 'quarry', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;

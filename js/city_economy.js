@@ -1,3 +1,4 @@
+import {rentOffice,rentAvailableOffice,setupOfficeTower,officeFloors,OFFICE_BUSINESSES} from './city_offices.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js';
@@ -27,11 +28,11 @@ export const CROPS = {
   feijao: { label: 'Feijão', grow: 150, price: 100 }, coentro: { label: 'Coentro', grow: 80, price: 90 },
 };
 export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 450 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
-export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill']);
+export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'lamp_service', 'office_tower', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill']);
 export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'popular_housing', 'luxury_housing', 'popular_refectory']);
 const retailTypes = new Set(['bakery', 'greengrocer', 'market']);
 const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)), ...INDUSTRIAL_FOODS];
-export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', lamp_service: 'logistics', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
+export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', lamp_service: 'logistics', office_tower:'management', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
 // Keep a multi-week public food reserve so farms can be founded, staffed,
 // planted and harvested before the town hall's opening stock runs out.
 export const ECONOMY_RULES = { workingCapital: 20000, mealUnits: 3, initialMealsPerCitizen: 96, farmBatch: 12, farmLabor: 120 };
@@ -67,6 +68,7 @@ export class CityEconomy {
   offerShares(buildingId,sellerId,points){return offerShares(this.city,this.city.building(buildingId),sellerId,points);}
   buyShares(buildingId,offerId,buyerId,points){return buyShares(this.city,this.city.building(buildingId),offerId,buyerId,points);}
   cancelShareOffer(buildingId,offerId,sellerId){return cancelShareOffer(this.city,this.city.building(buildingId),offerId,sellerId);}
+  rentOffice(towerId,floor,type,founderId){return rentOffice(this.city,towerId,floor,type,founderId);}
   configureEmployment(buildingId,changes){
     const b=this.city.building(buildingId);if(!b||b.entity.destroyed)return false;
     const policy=requirements(this.city,b);
@@ -132,7 +134,7 @@ export class CityEconomy {
     c.jobId = null; c.task = null; c.path = [];
   }
   municipalPolicy() {
-    for (const u of this.city.units.values()) if (u.ownerId === 'treasury' && !['residential', 'popular_housing', 'luxury_housing'].includes(this.city.building(u.buildingId)?.type)) {
+    for (const u of this.city.units.values()) if (u.ownerId === 'treasury' && !['residential', 'popular_housing', 'luxury_housing','office_tower'].includes(this.city.building(u.buildingId)?.type)) {
       const occupant = this.city.accounts.get(u.tenantId);
       if (occupant?.homeUnitId === u.id) this.city.releaseHome(occupant);
       u.tenantId = null; u.forSale = !this.city.building(u.buildingId)?.municipal; u.forRent = false; u.arrears = 0; u.missedDays = 0;
@@ -261,6 +263,7 @@ export class CityEconomy {
     const facilities = [...this.city.sanitation.facilities.values()], waste = this.city.buildings.reduce((n, b) => n + (b.inventory.lixo || 0) + (b.litter || 0), 0);
     for (const [type, needed, reason] of [ ['paid_toilet', facilities.length >= 3, 'Demanda por banheiros limpos e acessíveis']]) items.push({ type, crop: null, score: !needed ? 0 : !businesses.some(b=>b.type===type)?95:Math.max(0,(type==='cleaner'?facilities.filter(f=>f.cleanliness<65).length:type==='paid_toilet'?facilities.length:waste/4)*18-businesses.filter(b=>b.type===type).reduce((n,b)=>n+Math.max(1,b.workers.length)*40,0)), reason });
     const lampDemand=this.serviceInvestment.demand('lamp_service');items.push({type:'lamp_service',crop:null,score:lampDemand.score,required:lampDemand.work,supply:lampDemand.capacity,stock:0,reason:`${lampDemand.count} postes aguardam óleo; ${lampDemand.staff} abastecedores`});
+    const offices=this.businesses.filter(b=>b.type==='office_tower'),vacant=offices.reduce((n,b)=>n+officeFloors(this.city,b).filter(f=>!f.tenantId).length,0),officeDemand=this.city.citizens.length>=64&&vacant===0&&!this.city.development.projects.some(p=>p.type==='office_tower'&&!p.cancelled&&p.status!=='completed');items.push({type:'office_tower',crop:null,score:officeDemand?75:0,required:1,supply:vacant,stock:0,reason:`${vacant} andares empresariais disponíveis para escritórios`});
     const transport = this.city.logistics.demandMetrics();
     items.push({ type:'carrier',crop:null,score:transport.score,required:transport.work,supply:transport.capacity,stock:0,reason:`${transport.waiting} cargas aguardando; ${transport.ownHauls} transportes próprios; ${transport.drivers} transportadores; espera máxima ${Math.round(transport.oldest)} min; ${transport.lampRequests} lamparinas pendentes` });
     const extraction=this.serviceInvestment.demand('quarry');items.push({type:'quarry',crop:null,...extraction,required:extraction.work,supply:extraction.capacity,reason:`Obras: ${extraction.work} pedras pendentes; ${extraction.remaining} em depósitos ainda disponíveis; ${extraction.staff} trabalhadores na extração.`});
@@ -393,6 +396,7 @@ export class CityEconomy {
     if (b.type === 'quarry') b.stoneReserve ??= 12000;
     for (const u of b.units) { u.forSale = false; u.forRent = false; u.occupantId = b.accountId; }
     this.city.transfer('treasury', b.accountId, Math.min(budget, this.city.treasury), 'Capital de empresa municipal');
+    if(b.type==='office_tower')setupOfficeTower(this.city,b);
     this.buySeeds(b);return b;
   }
   activateBusiness(b, founder, crop = null, capitalize = true) {
@@ -409,6 +413,7 @@ export class CityEconomy {
     if (!capitalize && b.balance === 0) this.city.transfer(founder.accountId, b.accountId, Math.min(this.city.currency.price(b.type==='bank'?200000:ECONOMY_RULES.workingCapital), founder.balance), 'Capital de empresa');
     if (founder.jobId) this.leaveJob(founder);
     this.city.log(`${founder.entity.properties.name} fundou ${b.entity.properties.name}${crop ? ` para cultivar ${CROPS[crop].label.toLowerCase()}` : ''}.`, 'business', [founder.id], { kind: 'business-founded', buildingId: b.id, type: b.type, crop });
+    if(b.type==='office_tower')setupOfficeTower(this.city,b);
     this.buySeeds(b); return b;
   }
   purchasePremises(b, founder, crop, authorization = null) {
@@ -425,6 +430,7 @@ export class CityEconomy {
     const city = this.city, founder = this.citizen(founderId);
     if (!founder || !city.society.isAdult(founder) || !PRIVATE_TYPES.has(type) || this.city.politics.officeHolder(founder) || (type === 'farm' && !CROPS[crop])) return null;
     if (city.development.projects.some(p => p.ownerId === founder.id && p.type === type && p.crop === crop && !p.cancelled && p.status !== 'completed')) return null;
+    const rented=rentAvailableOffice(city,type,founder);if(rented){this.hire();this.updateDemand();return rented;}
     const existing = city.buildings.find(b => b.type === type && (!b.active || b.municipal) && !b.entity.destroyed && b.units.every(u => u.ownerId === 'treasury' && u.forSale));
     if (existing) return this.purchasePremises(existing, founder, crop);
     city.development.ensurePlots();
@@ -444,6 +450,7 @@ export class CityEconomy {
   }
   invest() {
     this.updateDemand();
+    if(this.businesses.some(b=>b.type==='office_tower'))for(const demand of this.demands.filter(d=>OFFICE_BUSINESSES.has(d.type)&&d.score>=30).sort((a,b)=>b.score-a.score)){for(const founder of this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.politics.canOwnBusiness(c)&&!c.businessIds.length&&!c.startupProjectId).sort((a,b)=>b.balance-a.balance).slice(0,12)){if(rentAvailableOffice(this.city,demand.type,founder)){this.hire();return true;}}}
     // Construction and transport must be staffed before the first factories can receive their materials.
     this.city.bank.developmentBanks();
     const extractionStarted=this.serviceInvestment.invest({types:['quarry']});

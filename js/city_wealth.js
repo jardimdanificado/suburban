@@ -36,6 +36,7 @@ export function buildWealthReport(city){
  for(const job of city.sanitation.jobs)custody.set(job.accountId,{owner:job.payerId,label:`Reserva de faxina #${job.id}`});
  for(const s of city.logistics.shipments)custody.set(s.accountId,{owner:s.payerAccountId||s.buyer.accountId,label:`Reserva do frete #${s.id}`});
  custody.set('works-budget',{owner:'treasury',label:'Orçamento municipal de obras'});
+ for(const party of city.politics.parties)if(party.secretAccountId)custody.set(party.secretAccountId,{owner:party.accountId,label:`Caixa clandestino na sede de ${party.short}`});
  const deposits=new Map([...city.bank.deposits.entries()]);let money=0,externalMoney=0;
  for(const [id,account]of city.accounts){const value=positive(account.balance),deposit=deposits.get(id),escrow=custody.get(id);money+=value;if(['supplier','external-trade'].includes(id))externalMoney+=value;
   add(deposit?.clientId||escrow?.owner||id,deposit?'savings':escrow?'reserved':'cash',value,{label:deposit?'Poupança':escrow?.label||'Dinheiro disponível',location:deposit?city.building(deposit.bankId)?.entity.properties.name||'Banco ausente':escrow?.label||city.accountName(id),accountId:id,buildingId:deposit?.bankId??buildings.get(id)?.id??null});
@@ -54,6 +55,7 @@ export function buildWealthReport(city){
   for(const [owner,r]of owners)add(owner,'property',r.value,{label:`${r.count} cômodos em ${b.entity.properties.name}`,quantity:r.count,location:b.entity.properties.name,buildingId:b.id,x:b.entity.x,y:b.entity.y});
  }
  for(const plot of city.development.plots)add(plot.ownerId,'land',plot.price,{label:`Terreno #${plot.id} · ${plot.width}×${plot.depth}`,plotId:plot.id,location:`Terreno #${plot.id}`,x:plot.x,y:plot.y});
+ for(const party of city.politics.parties){const holder=city.accounts.get(party.accountId),host=city.building(party.headquarters?.buildingId);if(holder?.inventory)inventory(holder,holder.accountId,`Sede de ${party.short}`,{buildingId:host?.id,x:host?.door?.x,y:host?.door?.y,placeKind:'party-headquarters'});}
  for(const project of city.development.projects)inventory(project,project.accountId,project.name||project.id,{projectId:project.id,placeKind:'project',x:project.door.x,y:project.door.y});
  for(const s of city.logistics.shipments)inventory(s,s.seller.accountId,`Frete #${s.id} · ${s.status}`,{shipmentId:s.id,placeKind:'shipment',x:s.position?.x,y:s.position?.y});
  for(const [id,holder]of city.lighting.propertyStores)inventory(holder,holder.accountId,`Abastecimento ${id}`,{placeKind:'lamp',x:holder.door.x,y:holder.door.y});

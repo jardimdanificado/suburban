@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=lamp-taxes-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=party-hq-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -10,7 +10,7 @@ const MIN_STEP = 1 / 60;
 const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
 const stateInterval = () => speed>=32?900:speed>=16?600:400;
 const MOTION_INTERVAL = 100;
-const allowed = new Set(['paint.setPalette','paint.requestPurchase','paint.requestVehicle','paint.requestBuilding','vehicles.mountFlag','vehicles.removeFlag','economy.configureEmployment','economy.offerShares','economy.buyShares','economy.cancelShareOffer','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
+const allowed = new Set(['paint.setPalette','paint.requestPurchase','paint.requestVehicle','paint.requestBuilding','vehicles.mountFlag','vehicles.removeFlag','politics.leaseHeadquarters','economy.rentOffice','economy.configureEmployment','economy.offerShares','economy.buyShares','economy.cancelShareOffer','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
 function positions() {
   const people = state.city.citizens, result = new Float64Array(people.length * 3);
@@ -92,7 +92,7 @@ self.onmessage = ({ data }) => {
         'currency.retire': 'É preciso preservar a reserva do tesouro e a base monetária mínima.',
       };
       const ok = result !== false && result !== null;
-      postMessage({ type: 'result', id: data.id, ok, message: ok ? (['politics.intervene','economy.offerShares','economy.buyShares','economy.cancelShareOffer','politics.submitBill'].includes(data.path)?(result?.description||'Operação concluída.'):'') : errors[data.path] || state.city.lastError });
+      postMessage({ type: 'result', id: data.id, ok, message: ok ? (['politics.leaseHeadquarters','economy.rentOffice','politics.intervene','economy.offerShares','economy.buyShares','economy.cancelShareOffer','politics.submitBill'].includes(data.path)?(result?.description||'Operação concluída.'):'') : errors[data.path] || state.city.lastError });
       dirty = true; snapshot(true);
     }
   } catch (error) {

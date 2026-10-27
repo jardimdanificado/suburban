@@ -2845,6 +2845,7 @@ export function createRealisticFlameMaterial() {
 
 export class RCT3DRenderer {
   constructor(container) {
+    this.mapWidth=MAP_WIDTH;this.mapHeight=MAP_HEIGHT;
     this.container = container;
     this.width = container.clientWidth || window.innerWidth;
     this.height = container.clientHeight || window.innerHeight;
@@ -4633,10 +4634,10 @@ export class RCT3DRenderer {
 
   setCamera(x, y, zoom) {
     if (typeof x === "number" && !isNaN(x)) {
-      this.camX = Math.max(0, Math.min(MAP_WIDTH, x));
+      this.camX = Math.max(0, Math.min(this.mapWidth, x));
     }
     if (typeof y === "number" && !isNaN(y)) {
-      this.camY = Math.max(0, Math.min(MAP_HEIGHT, y));
+      this.camY = Math.max(0, Math.min(this.mapHeight, y));
     }
     if (typeof zoom === "number" && !isNaN(zoom)) {
       this.zoom = Math.max(0.08, Math.min(5.0, zoom));
@@ -4778,12 +4779,12 @@ export class RCT3DRenderer {
   }
 
   getCornerHeight(map, vx, vy) {
-    const cacheable=Number.isInteger(vx)&&Number.isInteger(vy)&&vx>=0&&vy>=0&&vx<=MAP_WIDTH&&vy<=MAP_HEIGHT;
+    const cacheable=Number.isInteger(vx)&&Number.isInteger(vy)&&vx>=0&&vy>=0&&vx<=this.mapWidth&&vy<=this.mapHeight;
     let cache=this._cornerHeightCache,index;
     if(cacheable){
-      if(!cache||cache.map!==map){const size=(MAP_WIDTH+1)*(MAP_HEIGHT+1);cache=this._cornerHeightCache={map,revision:this.currentWorldRevision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size)};}
+      if(!cache||cache.map!==map){const size=(this.mapWidth+1)*(this.mapHeight+1);cache=this._cornerHeightCache={map,revision:this.currentWorldRevision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size)};}
       if(cache.revision!==this.currentWorldRevision){cache.revision=this.currentWorldRevision;cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
-      index=vy*(MAP_WIDTH+1)+vx;
+      index=vy*(this.mapWidth+1)+vx;
       if(cache.marks[index]===cache.generation)return cache.values[index];
     }
     const t00 = this.getTileTypeAt(map, vx - 1, vy - 1);
@@ -4832,8 +4833,8 @@ export class RCT3DRenderer {
   }
 
   getTileTypeAt(map, x, y) {
-    if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) return TILE_WATER;
-    return map[y * MAP_WIDTH + x];
+    if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return TILE_WATER;
+    return map[y * this.mapWidth + x];
   }
 
   getTileSurfaceHeight(map, tx, ty, fpW = 1, fpH = 1) {
@@ -4904,6 +4905,7 @@ export class RCT3DRenderer {
       const e = entities[i];
       if (!e || e.destroyed || !e.properties || !e.properties.render || e.properties.species === "effect") continue;
 
+      if(e.properties.cityBuilding?.officeTenantOf)continue;
       if(e.properties.cityVehicle){
         const v=e.properties.cityVehicle,h=v.altitude??1,length=v.good==='bicicleta_carga'?.85:v.good==='patins'?.3:.55,halfWidth=v.good==='bicicleta_carga'?.3:.22,sin=Math.abs(Math.sin(v.angle||0)),cos=Math.abs(Math.cos(v.angle||0)),ex=sin*length+cos*halfWidth,ez=cos*length+sin*halfWidth;
         const box=new THREE.Box3(new THREE.Vector3(e.x-ex,h,e.y-ez),new THREE.Vector3(e.x+ex,h+.95,e.y+ez)),hit=ray.intersectBox(box,new THREE.Vector3());
@@ -5118,8 +5120,8 @@ export class RCT3DRenderer {
           const hitX = Math.floor(exactX);
           const hitY = Math.floor(exactZ);
           return {
-            x: Math.max(0, Math.min(MAP_WIDTH - 1, hitX)),
-            y: Math.max(0, Math.min(MAP_HEIGHT - 1, hitY)),
+            x: Math.max(0, Math.min(this.mapWidth - 1, hitX)),
+            y: Math.max(0, Math.min(this.mapHeight - 1, hitY)),
             exactX,
             exactY,
             exactZ
@@ -5136,8 +5138,8 @@ export class RCT3DRenderer {
       const tx = Math.floor(intersectPoint.x);
       const ty = Math.floor(intersectPoint.z);
       return {
-        x: Math.max(0, Math.min(MAP_WIDTH - 1, tx)),
-        y: Math.max(0, Math.min(MAP_HEIGHT - 1, ty)),
+        x: Math.max(0, Math.min(this.mapWidth - 1, tx)),
+        y: Math.max(0, Math.min(this.mapHeight - 1, ty)),
         exactX: intersectPoint.x,
         exactY: 0.0,
         exactZ: intersectPoint.z
@@ -5154,9 +5156,9 @@ export class RCT3DRenderer {
     const map = world.map;
     const half = Math.floor(brushSize / 2);
     const minTx = Math.max(0, tileX - half);
-    const maxTx = Math.min(MAP_WIDTH - 1, tileX + half);
+    const maxTx = Math.min(this.mapWidth - 1, tileX + half);
     const minTy = Math.max(0, tileY - half);
-    const maxTy = Math.min(MAP_HEIGHT - 1, tileY + half);
+    const maxTy = Math.min(this.mapHeight - 1, tileY + half);
 
     const posArray = [];
     const lineArray = [];
@@ -5656,10 +5658,10 @@ export class RCT3DRenderer {
     let foliageCount = 0;
     const isPersp = this.isPerspectiveActive();
 
-    const clampedMinTx = Math.max(0, Math.min(MAP_WIDTH - 1, minTx));
-    const clampedMaxTx = Math.max(0, Math.min(MAP_WIDTH - 1, maxTx));
-    const clampedMinTy = Math.max(0, Math.min(MAP_HEIGHT - 1, minTy));
-    const clampedMaxTy = Math.max(0, Math.min(MAP_HEIGHT - 1, maxTy));
+    const clampedMinTx = Math.max(0, Math.min(this.mapWidth - 1, minTx));
+    const clampedMaxTx = Math.max(0, Math.min(this.mapWidth - 1, maxTx));
+    const clampedMinTy = Math.max(0, Math.min(this.mapHeight - 1, minTy));
+    const clampedMaxTy = Math.max(0, Math.min(this.mapHeight - 1, maxTy));
 
     this.renderedMinTx = clampedMinTx;
     this.renderedMaxTx = clampedMaxTx;
@@ -5669,12 +5671,12 @@ export class RCT3DRenderer {
     const lineElevOffset = 0.006;
 
     const isWaterAt = (tx, ty) => {
-      if (tx < 0 || tx >= MAP_WIDTH || ty < 0 || ty >= MAP_HEIGHT) return true;
-      return map[ty * MAP_WIDTH + tx] === TILE_WATER;
+      if (tx < 0 || tx >= this.mapWidth || ty < 0 || ty >= this.mapHeight) return true;
+      return map[ty * this.mapWidth + tx] === TILE_WATER;
     };
 
     for (let ty = clampedMinTy; ty <= clampedMaxTy; ty++) {
-      const yOffset = ty * MAP_WIDTH;
+      const yOffset = ty * this.mapWidth;
       const zY = Math.floor(ty / zoneSz);
 
       for (let tx = clampedMinTx; tx <= clampedMaxTx; tx++) {
@@ -6016,7 +6018,7 @@ export class RCT3DRenderer {
       // Fill quads on each tile
       for (let ty = minY; ty < maxY; ty++) {
         for (let tx = minX; tx < maxX; tx++) {
-          if (tx < 0 || tx >= MAP_WIDTH || ty < 0 || ty >= MAP_HEIGHT) continue;
+          if (tx < 0 || tx >= this.mapWidth || ty < 0 || ty >= this.mapHeight) continue;
           const h00 = this.getCornerHeight(map, tx, ty) + fillElevOffset;
           const h10 = this.getCornerHeight(map, tx + 1, ty) + fillElevOffset;
           const h11 = this.getCornerHeight(map, tx + 1, ty + 1) + fillElevOffset;
@@ -6120,6 +6122,7 @@ export class RCT3DRenderer {
   render(world, entities, time, dt, simSpeed = 1.0, visionCreature = null, visualizedGroupId = null) {
     if (!this.width || !this.height || !world) return;
     const profileStart = this.profileFrame ? performance.now() : 0;
+    this.mapWidth=world.width;this.mapHeight=world.height;
     this.currentMap = world.map;
     this.currentWorldRevision = world.revision;
 
@@ -6177,9 +6180,9 @@ export class RCT3DRenderer {
     const maxDist = (this.max3DRenderDistance !== undefined) ? this.max3DRenderDistance : 64;
     if (this.renderFullWorld || maxDist === 0) {
       minTx = 0;
-      maxTx = MAP_WIDTH - 1;
+      maxTx = this.mapWidth - 1;
       minTy = 0;
-      maxTy = MAP_HEIGHT - 1;
+      maxTy = this.mapHeight - 1;
     } else {
       const aspect = this.width / this.height;
       const isPerspActive = this.isPerspectiveActive();
@@ -6188,9 +6191,9 @@ export class RCT3DRenderer {
       const radius = isPerspActive ? 128 : Math.min(maxDist || 64, Math.ceil(diagonal * 1.25) + 3);
 
       minTx = Math.max(0, Math.floor(this.camX - radius));
-      maxTx = Math.min(MAP_WIDTH - 1, Math.ceil(this.camX + radius));
+      maxTx = Math.min(this.mapWidth - 1, Math.ceil(this.camX + radius));
       minTy = Math.max(0, Math.floor(this.camY - radius));
-      maxTy = Math.min(MAP_HEIGHT - 1, Math.ceil(this.camY + radius));
+      maxTy = Math.min(this.mapHeight - 1, Math.ceil(this.camY + radius));
     }
 
     this.rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionCreature);
@@ -7585,7 +7588,7 @@ export class RCT3DRenderer {
     // Update 3D Atmosphere Clouds (Visible in 1P & 3P modes during daytime, and at high altitude zoom in isometric)
     if (this.cloudMesh && this.cloudMat) {
       const isNightTime = (world?.clock) ? (world.clock.hour < 5 || world.clock.hour >= 20) : false;
-      if (!isNightTime && (this.isPerspectiveActive() || this.zoom <= 0.38)) {
+      if (!isNightTime && this.isPerspectiveActive()) {
         this.cloudMesh.visible = true;
         this.cloudMesh.position.set(this.camX, 42.0, this.camY);
         this.cloudMat.uniforms.uTime.value = performance.now() * 0.001;

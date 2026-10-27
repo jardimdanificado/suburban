@@ -9,7 +9,7 @@ const THEMES={
  weaving:'fabric',fiber_farm:'fabric',flagmaker:'fabric',tailor:'fabric',clothing_store:'fabric',paintworks:'paint',soapworks:'soap',pharmacy:'medicine',herb_farm:'plant',
  rubber_grove:'rubber',rubberworks:'rubber',bearing_factory:'bearing',frame_factory:'frame',deck_factory:'deck',tire_factory:'wheel',chain_factory:'chain',safety_equipment:'helmet',saddle_factory:'saddle',cycle_parts:'tools',sports_shoes:'boot',skate_workshop:'deck',cycle_assembler:'frame',cycle_shop:'wheel',cycle_workshop:'wheel',bicycle_rental:'wheel',sports_shop:'ball',
  utility:'water',mint:'coins',bank:'bank',townhall:'civic',council_chamber:'civic',research_institute:'research',clinic:'medical',hospital:'medical',library:'books',theater:'theater',sports_center:'ball',leisure:'ball',public_toilet:'water',paid_toilet:'water',
- residential:'home',popular_housing:'housing',luxury_housing:'luxury',market:'market',greengrocer:'plant',mill:'mill',farm:'farm',quarry:'quarry',bike_rack:'wheel',park:'plant'
+ office_tower:'office',residential:'home',popular_housing:'housing',luxury_housing:'luxury',market:'market',greengrocer:'plant',mill:'mill',farm:'farm',quarry:'quarry',bike_rack:'wheel',park:'plant'
 };
 export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  const kind=THEMES[b.type];if(!kind)return;
@@ -69,6 +69,7 @@ export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  case'research':wheel(0,.5,0,.28,metal);box(.08,.45,.08,.32,.2,0,metal).rotation.z=.8;break;
  case'medical':box(.18,.65,.15,0,.4,0,0xc84242);box(.65,.18,.15,0,.4,0,0xc84242);break;
  case'theater':for(const x of [-.3,.3])box(.3,.7,.18,x,.4,0,0x963d4e);break;
+ case'office':for(const x of [-.5,0,.5])box(.18,.35,.18,x,.2,0,0x7798a5);break;
  case'home':box(.24,.5,.24,-.35,.25,0,0x8c7967);break;
  case'housing':for(const x of [-.35,.35])box(.35,.16,.25,x,.18,0,0x868f80);break;
  case'luxury':cyl(.38,.38,.1,0,.08,0,0xe1c67b);ball(.25,0,.36,0,0x6a9e85);break;

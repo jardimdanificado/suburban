@@ -16,6 +16,8 @@ export function syncConstructionSites(renderer,THREE,world,development){
   if(!cells.length)continue;
   const signature=`${world.revision}:${cells.length}:${cells[0].x}:${cells[0].y}:${cells.at(-1).x}:${cells.at(-1).y}`;
   live.add(project.id);let site=renderer.constructionMeshes.get(project.id);
+  const visible=!Number.isFinite(renderer.renderedMinTx)||cells.every(c=>c.x>=renderer.renderedMinTx&&c.x<=renderer.renderedMaxTx+1&&c.y>=renderer.renderedMinTy&&c.y<=renderer.renderedMaxTy+1);
+  if(!visible){if(site)site.visible=false;continue;}if(site)site.visible=true;
   if(site&&site.userData.signature!==signature){renderer.scene.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(project.id);site=null;}
   if(site)continue;
   site=new THREE.Group();site.userData.signature=signature;

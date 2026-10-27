@@ -1,3 +1,4 @@
+import {headquartersAccount} from './city_party_headquarters.js';
 import {ROAD_TILES,tileAt} from './city_terrain.js';
 const blocked=new Set(['vote','research','interview','council-session','care','caregiving','food','provisions','water','health','energy','toilet','workmeal','construction','work','manage']);
 const live=c=>!!c?.entity&&!c.entity.destroyed;
@@ -40,12 +41,12 @@ export class CityCampaignMaterials {
       const pool=city.citizens.filter(c=>live(c)&&!c.indoorLocation&&city.society.isAdult(c)&&c.id!==candidate.id&&!c.campaign&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.researchAssignment&&!c.deliveryId&&!c.cleaningJobId&&!c.workMeal&&!c.conversation&&!blocked.has(c.task)&&!city.urgentNeed(c));
       for(const kind of ['pamphlet','flag','banner','paint']){
         if(this.missions.some(m=>m.electionId===e.id&&m.candidateId===n.citizenId&&m.kind===kind&&m.requestDay===city.day))continue;
-        const neededGood={pamphlet:'panfletos',flag:'bandeiras',banner:'faixas',paint:'tinta'}[kind];if(!city.economy.businesses.some(b=>(b.inventory[neededGood]||0)>0))continue;
+        const neededGood={pamphlet:'panfletos',flag:'bandeiras',banner:'faixas',paint:'tinta'}[kind],hq=headquartersAccount(city.politics,party);if(!(hq.inventory[neededGood]>0)&&!city.economy.businesses.some(b=>(b.inventory[neededGood]||0)>0))continue;
         const worker=city.politics.campaigns.sample(pool.filter(c=>!c.campaign),8).sort((a,b)=>(b.skills.social||0)-(a.skills.social||0))[0];if(!worker)break;
         let destination=kind==='flag'?this.roadside():['paint','banner'].includes(kind)?this.property(n):city.politics.getResearch().sites()[0];if(!destination)continue;
         const good={pamphlet:'panfletos',flag:'bandeiras',banner:'faixas',paint:'tinta'}[kind],quantity=kind==='pamphlet'?3:kind==='paint'?Math.max(1,Math.ceil(city.building(destination.buildingId).width*city.building(destination.buildingId).depth/6)):1;
-        const shop=city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&(b.inventory[good]||0)>=quantity&&(good!=='tinta'||city.paint.available(b,party.flag.background)>=quantity)).sort((a,b)=>Math.hypot(a.door.x-worker.entity.x,a.door.y-worker.entity.y)-Math.hypot(b.door.x-worker.entity.x,b.door.y-worker.entity.y))[0];if(!shop)continue;
-        const unitPrice=good==='tinta'?city.paint.quote(shop,party.flag.background):city.economy.goods[good].price,fee=city.currency.price(600),cost=unitPrice*quantity+fee+(destination.permissionFee||0);if(city.politics.partyAccount(party).balance<cost)continue;
+        const shop=(hq.door&&hq.inventory[good]>=quantity&&(good!=='tinta'||city.paint.available(hq,party.flag.background)>=quantity)?hq:null)||city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&(b.inventory[good]||0)>=quantity&&(good!=='tinta'||city.paint.available(b,party.flag.background)>=quantity)).sort((a,b)=>Math.hypot(a.door.x-worker.entity.x,a.door.y-worker.entity.y)-Math.hypot(b.door.x-worker.entity.x,b.door.y-worker.entity.y))[0];if(!shop)continue;
+        const unitPrice=shop===hq?0:good==='tinta'?city.paint.quote(shop,party.flag.background):city.economy.goods[good].price,fee=city.currency.price(600),cost=unitPrice*quantity+fee+(destination.permissionFee||0);if(city.politics.partyAccount(party).balance<cost)continue;
         const path=city.findPath(worker.entity,shop.door);if(path===null)continue;
         const mission={id:this.nextId++,electionId:e.id,requestDay:city.day,candidateId:n.citizenId,candidateName:n.name,partyId:n.partyId,partyNumber:party.number,workerId:worker.id,shopId:shop.id,kind,good,quantity,unitPrice,fee,destination,status:'assigned',stage:'pickup',startedAt:city.minute,until:Math.min(e.voteAt,city.minute+240),paid:0,docIds:[]};
         this.missions.push(mission);worker.campaign={type:'paid',missionId:mission.id,electionId:e.id,candidateId:n.citizenId,partyId:n.partyId,partyNumber:party.number,partyFlag:party.flag,speechColor:party.flag.background,flag:null,until:mission.until,destination};worker.path=path;worker.task='campaign';worker.targetId=shop.id;worker.action='Indo retirar material de campanha';
@@ -61,8 +62,8 @@ export class CityCampaignMaterials {
     const party=city.politics.party(m.partyId);if(!party?.active){this.release(c,'Partido indisponível');return;}
     c.campaignInventory??={};
     if(m.stage==='pickup'){
-      const shop=city.building(m.shopId),cost=m.quantity*m.unitPrice;
-      if(!shop?.active||shop.entity.destroyed||Math.hypot(c.entity.x-shop.door.x,c.entity.y-shop.door.y)>1.5||shop.inventory[m.good]<m.quantity||(m.good==='tinta'&&city.paint.available(shop,party.flag.background)<m.quantity)||city.politics.partyAccount(party).balance<cost+m.fee+(m.destination.permissionFee||0)){this.release(c,'Fornecedor, material ou pagamento indisponível');return;}
+      const shop=city.building(m.shopId)||city.accounts.get(m.shopId),cost=m.quantity*m.unitPrice;
+      if(!shop?.active||shop.entity?.destroyed||Math.hypot(c.entity.x-shop.door.x,c.entity.y-shop.door.y)>1.5||shop.inventory[m.good]<m.quantity||(m.good==='tinta'&&city.paint.available(shop,party.flag.background)<m.quantity)||city.politics.partyAccount(party).balance<cost+m.fee+(m.destination.permissionFee||0)){this.release(c,'Fornecedor, material ou pagamento indisponível');return;}
       const route=city.findPath(c.entity,m.destination);if(route===null){this.release(c,'Sem rota para instalação ou propaganda');return;}
       if(!city.transfer(city.politics.partyAccount(party).accountId,shop.accountId,cost,'Serviço: Material de campanha',{electionId:e.id,missionId:m.id,good:m.good,quantity:m.quantity,buildingId:shop.id}))return;
       city.paint.discard(shop,m.good,m.quantity,m.good==='tinta'?party.flag.background:null);shop.inventory[m.good]-=m.quantity;city.economy.recordGoods('campaign-pickup',m.good,m.quantity,shop.id,null);m.paid+=cost;n.campaignFinance.spent+=cost;

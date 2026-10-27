@@ -30,7 +30,7 @@ export class CityDesktop {
     const[w,h]=kind==='inspector'?[540,500]:kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
     const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'||kind==='section'?near:null});window.kind=kind;state.windowId=id;
     if(entity)state.setSelection(entity,unitId);this.hidden=false;
-    for(const input of[state.search,state.seed,state.populationInput,state.filterInput,state.sortInput,state.publicationDraft])input.addEventListener('pointerdown',()=>this.manager.raise(id));
+    for(const input of[state.search,state.seed,state.populationInput,state.mapSizeInput,state.filterInput,state.sortInput,state.publicationDraft])input.addEventListener('pointerdown',()=>this.manager.raise(id));
     return state;
   }
   openPanel(source,overrides={},{separate=false}={}){
@@ -54,7 +54,7 @@ export class CityDesktop {
     const existing=this.manager.find(id);if(existing){this.manager.raise(id);if(existing.shaded)this.manager.shade(id);this.hidden=false;return existing.state;}
     const state=this.create(id,tab,{kind:dossier?'dossier':'section',entity,unitId:dossier?source.unitId:null});
     Object.assign(state,properties);state.selected=entity;state.sectionWindow=true;state.scrolls={...source.scrolls};state.query=source.query||'';state.search.value=state.query;
-    state.seed.value=source.seed?.value??state.seed.value;state.populationInput.value=source.populationInput?.value??state.populationInput.value;
+    state.seed.value=source.seed?.value??state.seed.value;state.populationInput.value=source.populationInput?.value??state.populationInput.value;state.mapSizeInput.value=source.mapSizeInput?.value??state.mapSizeInput.value;
     state.publicationDraft.value=source.publicationDraft?.value??state.publicationDraft.value;
     if(source.frozenEvents)state.frozenEvents=[...source.frozenEvents];
     if(source.eventSnapshot)state.eventSnapshot=source.eventSnapshot;if(source.electionSnapshot)state.electionSnapshot=source.electionSnapshot;
@@ -194,12 +194,12 @@ export class CityDesktop {
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     if(this.element.hidden===this.visible)this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}if(w.state.element.hidden)w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
     ui.regions.push(...(this.menuBarRegions||[]));
-    if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.populationInput,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
+    if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.populationInput,w.state.mapSizeInput,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
     this.tooltipElement.hidden=!this.tooltip||this.menuOpen||!!this.manager.gesture;
     if(!this.tooltipElement.hidden){const {text,x,y}=this.tooltip,w=Math.min(440,ui.width-8,Math.ceil(ui.textWidth(text))+18);this.tooltipElement.textContent=text;Object.assign(this.tooltipElement.style,{left:`${Math.max(4,Math.min(x,ui.width-w-4))}px`,top:`${Math.max(0,Math.min(y,ui.height-190))}px`,width:`${w}px`});}
   }
   drawMap(ui,w){
-    const state=w.state,world=this.city.world;state.zones=[];for(const input of[state.search,state.seed,state.populationInput,state.filterInput,state.sortInput,state.publicationDraft])input.hidden=true;
+    const state=w.state,world=this.city.world;state.zones=[];for(const input of[state.search,state.seed,state.populationInput,state.mapSizeInput,state.filterInput,state.sortInput,state.publicationDraft])input.hidden=true;
     this.mapCanvas??=document.createElement('canvas');
     if(this.mapRevision!==world.revision||this.mapCanvas.width!==world.width){
       this.mapCanvas.width=world.width;this.mapCanvas.height=world.height;const ctx=this.mapCanvas.getContext('2d'),colors=['#7b9748','#4776a3','#66786a','#baad76','#adaba1','#263f49','#797965','#92905d','#797b65','#8caa61','#ae9c73','#5d705c','#a6a88a','#67805d'];
@@ -213,7 +213,7 @@ export class CityDesktop {
   }
   occludeInputs(){
     const windows=this.manager.windows;
-    windows.forEach((w,i)=>{for(const input of[w.state.search,w.state.seed,w.state.populationInput,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean)){
+    windows.forEach((w,i)=>{for(const input of[w.state.search,w.state.seed,w.state.populationInput,w.state.mapSizeInput,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean)){
       if(input.hidden)continue;const rect={x:parseFloat(input.style.left),y:parseFloat(input.style.top),w:parseFloat(input.style.width),h:20};let visible=[rect];
       for(const above of windows.slice(i+1)){
         const cover=this.manager.rect(above);visible=visible.flatMap(part=>{
