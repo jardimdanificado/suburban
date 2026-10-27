@@ -82,7 +82,7 @@ test('initial production planning includes financed food distribution before opt
 });
 
 test('idle citizens retry unavailable shopping offers periodically instead of scanning all firms every minute',()=>{
-  const city=setup({starter:true}),c=city.citizens.find(c=>!city.politics.officeHolder(c)&&!c.jobId);for(const k of Object.keys(c.needs))c.needs[k]=95;
+  const city=setup({starter:true}),c=city.citizens.find(c=>!city.politics.officeHolder(c));city.economy.leaveJob(c);for(const k of Object.keys(c.needs))c.needs[k]=95;
   let calls=0;city.economy.consumerOffer=()=>{calls++;return null;};
   city.chooseTask(c);const first=calls;assert(first>0);
   for(let i=0;i<29;i++){city.minute++;city.chooseTask(c);}assert.equal(calls,first);
@@ -100,7 +100,8 @@ test('indexed lamp placement preserves terrain, property, entrance and pedestria
 test('clothes retain their brand, improve appearance and enter consumption only when worn out',()=>{
   const city=setup({starter:true,population:64}),tailor=firm(city,'tailor'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
   const n=INDUSTRIES.tailor.inputs.tecido;tailor.inventory.tecido=n;city.economy.initialStock.tecido+=n;tailor.productionLabor=100;
-  city.economy.productionWork(tailor,c);assert(tailor.garments.length>0);
+  city.economy.leaveJob(c);c.jobId=tailor.id;tailor.workers.push(c.id);putAtWorkCell(city,c,tailor);
+  assert(city.economy.productionWork(tailor,c));assert(tailor.garments.length>0);
   city.transfer('treasury',c.accountId,100000,'Fixture wardrobe budget');c.wardrobe[0].condition=1;
   const before=appearance(c);c.entity.x=tailor.door.x;c.entity.y=tailor.door.y;
   assert(city.economy.buyConsumerGood(c,tailor));assert(appearance(c)>before);
@@ -113,6 +114,7 @@ test('newspapers consume physical paper and retain editorial facts within their 
   const city=setup({starter:true,population:64}),b=firm(city,'newsroom'),editor=city.citizens[3];b.newsGenre='política';
   const original=city.log('A prefeitura inaugurou uma obra pública.','government',[editor.id]);
   b.inventory.papel=5;city.economy.initialStock.papel+=5;b.productionLabor=100;
+  city.economy.leaveJob(editor);editor.jobId=b.id;b.workers.push(editor.id);putAtWorkCell(city,editor,b);
   assert(city.economy.productionWork(b,editor));const doc=city.publications.owned(b.accountId).find(d=>d.good==='jornais');
   assert(doc);assert(doc.pages>=3&&doc.pages<=5);assert(doc.entries.length<=doc.pages*2);
   assert(doc.entries.some(e=>e.sourceEventId===original.id));assert.equal(city.economy.consumed.papel,doc.pages);goodsAudit(city);
