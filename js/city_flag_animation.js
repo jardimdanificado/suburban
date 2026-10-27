@@ -14,3 +14,7 @@ export function animateClothFlag(mesh,time,phase=0){
   }
   positions.needsUpdate=true;geometry.computeVertexNormals();
 }
+
+export function flagWindTime(renderer){
+  return Math.floor((renderer?.foliageAnimationTick||0)/20)*.1;
+}

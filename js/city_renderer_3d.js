@@ -2,7 +2,7 @@ import {addBuildingDetails} from './city_building_details.js?v=housing-flag-wind
 import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
-import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=housing-flag-windows-1';
+import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
 import {modelSize,buildingPoint,CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import { partyFlagCanvas } from './city_party_flags.js';
@@ -236,7 +236,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       renderer.cityMeshes.set(entity.id, group);
     }
     group.visible=true;
-    if(['townhall','council_chamber'].includes(b.type))syncTownhallFlag(group,THREE,b,flagNightFactor(world));
+    if(['townhall','council_chamber'].includes(b.type))syncTownhallFlag(renderer,group,THREE,b,flagNightFactor(world));
     if (group.userData.terrainRevision !== (world.revision || 0)) {
       b.terrain = buildingGround(world, entity.x, entity.y, b.width, b.depth,b.door);
       const base = b.terrain.base, matrix = new THREE.Matrix4();
@@ -394,9 +394,9 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
   group.userData.patches.material.emissive.setHex(renderer.selectedEntityId === entity.id ? 0x26351a : 0);
 }
 
-function syncTownhallFlag(group,THREE,b,shade=1){
+function syncTownhallFlag(renderer,group,THREE,b,shade=1){
   const flag=b.governingFlag,key=flag?JSON.stringify(flag)+':'+(b.rotation||0)+':'+b.floors:null;
-  if(group.userData.governingFlagKey===key){group.userData.governingFlagMaterial?.color.setScalar(shade);animateClothFlag(group.userData.governingFlagCloth,(performance.now?.()||Date.now())*.001,group.userData.governingFlagPhase||0);return;}
+  if(group.userData.governingFlagKey===key){group.userData.governingFlagMaterial?.color.setScalar(shade);animateClothFlag(group.userData.governingFlagCloth,flagWindTime(renderer),group.userData.governingFlagPhase||0);return;}
   const old=group.userData.governingFlagMesh;
   if(old){group.remove(old);old.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.userData.partyFlagTexture?.dispose();});}
   group.userData.governingFlagKey=key;group.userData.governingFlagMesh=null;group.userData.governingFlagMaterial=null;group.userData.governingFlagCloth=null;
@@ -408,7 +408,7 @@ function syncTownhallFlag(group,THREE,b,shade=1){
   const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});
   texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.colorSpace=THREE.SRGBColorSpace;
   const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);
-  const banner=new THREE.Mesh(clothFlagGeometry(THREE,1.65,1.04),material);group.userData.governingFlagCloth=banner;group.userData.governingFlagPhase=(b.id||0)*.73;animateClothFlag(banner,(performance.now?.()||Date.now())*.001,group.userData.governingFlagPhase);
+  const banner=new THREE.Mesh(clothFlagGeometry(THREE,1.65,1.04),material);group.userData.governingFlagCloth=banner;group.userData.governingFlagPhase=(b.id||0)*.73;animateClothFlag(banner,flagWindTime(renderer),group.userData.governingFlagPhase);
   banner.userData.partyFlagTexture=texture;banner.rotation.y=(b.rotation||0)*Math.PI/2;banner.position.set(b.width*.5+.85*Math.cos(banner.rotation.y),roof+1.9,b.depth*.5-.85*Math.sin(banner.rotation.y));mast.add(banner);group.userData.governingFlagMaterial=material;
   group.add(mast);group.userData.governingFlagMesh=mast;
 }
