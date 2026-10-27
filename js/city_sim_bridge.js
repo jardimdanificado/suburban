@@ -7,17 +7,18 @@ import {canStep,terrainWalkable} from './city_terrain.js';
 // or rock even though the simulated route itself never crossed it.
 function renderSegmentWalkable(world,ax,ay,bx,by){
   if(!Number.isFinite(ax)||!Number.isFinite(ay)||!Number.isFinite(bx)||!Number.isFinite(by))return false;
-  const distance=Math.hypot(bx-ax,by-ay),steps=Math.max(1,Math.ceil(distance/.2));let previous=null;
+  const distance=Math.hypot(bx-ax,by-ay),steps=Math.max(1,Math.ceil(distance/.2));let px,py;
   for(let i=0;i<=steps;i++){
     const t=i/steps,x=ax+(bx-ax)*t,y=ay+(by-ay)*t,tx=Math.floor(x),ty=Math.floor(y);
+    if(tx===px&&ty===py)continue;
     if(!terrainWalkable(world,tx,ty))return false;
-    if(previous&&(tx!==previous.x||ty!==previous.y)){
-      if(tx!==previous.x&&ty!==previous.y){
-        if(!terrainWalkable(world,tx,previous.y)||!terrainWalkable(world,previous.x,ty))return false;
+    if(px!==undefined){
+      if(tx!==px&&ty!==py){
+        if(!terrainWalkable(world,tx,py)||!terrainWalkable(world,px,ty))return false;
       }
-      if(!canStep(world,previous.x,previous.y,tx,ty))return false;
+      if(!canStep(world,px,py,tx,ty))return false;
     }
-    previous={x:tx,y:ty};
+    px=tx;py=ty;
   }
   return true;
 }

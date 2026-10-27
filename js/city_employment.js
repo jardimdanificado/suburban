@@ -1,6 +1,11 @@
 /** Career records are independent of the bounded event journal and survive snapshots. */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function career(c){return c.career??={jobs:[],applications:[],worked:{},motivation:50};}
+export function finishApplication(application,status,reason,decidedAt){
+  application.status=status;application.reason=reason;
+  if(decidedAt!==undefined)application.decidedAt=decidedAt;
+  return Object.freeze(application);
+}
 export function contract(city,c,b){
   const cv=career(c);let row=cv.jobs.at(-1);
   if(row?.buildingId===b.id&&row.endedAt==null)return row;
@@ -47,6 +52,7 @@ export function apply(city,c,b){
   if(last&&last.status==='análise')return last;
   if(last&&city.minute>480&&city.minute-last.appliedAt<360)return null;
   const q=qualification(city,c,b),row={buildingId:b.id,company:b.entity.properties.name,appliedAt:city.minute,decideAt:city.minute<=480?city.minute:city.minute+60,status:q.eligible?'análise':'reprovado',reason:q.reason,trainee:q.trainee,score:city.economy.hiringScore(c,b),offeredWage:wageFor(city,c,b)};
+  if(row.status!=='análise')Object.freeze(row);
   cv.applications.push(row);if(cv.applications.length>48)cv.applications=cv.applications.filter((a,index)=>a.status==='análise'||index>=cv.applications.length-24);return row;
 }
 export function reviewMarket(city,offers){

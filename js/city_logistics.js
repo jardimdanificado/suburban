@@ -144,7 +144,8 @@ export class CityLogistics {
   }
   updateMinute() {
     const city = this.city;
-    const maxCarry=Math.max(24,...city.citizens.filter(c=>!c.entity.destroyed).map(c=>this.capacity(c)));for(const s of this.shipments.filter(s=>!s.driverId&&!['delivered','cancelled'].includes(s.status)&&s.quantity>maxCarry))this.splitLoad(s);
+    const oversized=this.shipments.filter(s=>!s.driverId&&s.status!=='delivered'&&s.status!=='cancelled'&&s.quantity>24);
+    if(oversized.length){let maxCarry=24;for(const c of city.citizens)if(!c.entity.destroyed)maxCarry=Math.max(maxCarry,this.capacity(c));for(const s of oversized)if(s.quantity>maxCarry)this.splitLoad(s);}
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
     const priority = s => shipmentPriority(s,city.minute,city.hour);

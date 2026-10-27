@@ -203,12 +203,13 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
       while (step !== startKey) { path.push({ x: step % width + .5, y: Math.floor(step / width) + .5 }); step = parents[step]; }
       return path.reverse();
     }
+    const currentHeight=tileHeight(tileAt(world,current.x,current.y));
     for (const [dx, dy] of pathDirections) {
       const x = current.x + dx, y = current.y + dy, nextKey = y * width + x;
-      if (!canStep(world, current.x, current.y, x, y) || blocked.has(tileKey(x, y)) || extraBlocked?.(x, y)) continue;
       const tile = tileAt(world, x, y);
+      if (!land.has(tile) || Math.abs(currentHeight-tileHeight(tile))>1.25 || blocked.has(tileKey(x, y)) || extraBlocked?.(x, y)) continue;
       if(roadOnly&&!ROAD_TILES.has(tile))continue;
-      const cost = current.cost + roadTravelCost(tile) + Math.abs(tileHeight(tile) - tileHeight(tileAt(world, current.x, current.y))) * .7;
+      const cost = current.cost + roadTravelCost(tile) + Math.abs(tileHeight(tile) - currentHeight) * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
       marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
       open.push({ x, y, cost, score: cost + (Math.abs(gx - x) + Math.abs(gy - y)) * .55 });

@@ -588,7 +588,7 @@ Medições locais contra a versão anterior desta revisão, excluindo inicializa
 
 Os hashes dos resultados observados na simulação (necessidades, atividades, posições, saldos, eventos e relações) coincidiram; as consultas espaciais também produziram o mesmo hash após movimento, redimensionamento, substituição e remoção. Essas medições de CPU e tráfego não representam FPS garantido nem equilíbrio de uma partida prolongada. A conferência visual desta revisão usou renderizações do Canvas fora do navegador.
 
-Para repetir as cargas, use `npm run benchmark`, `npm run benchmark -- scene` e `npm run benchmark -- snapshots`. Um caminho de checkout pode ser passado após o nome da carga para comparação, por exemplo `node scripts/benchmark.mjs simulation /caminho/da/versao/anterior`. O cenário usa terreno plano de 128×128, semente 1337 e 256 moradores; os números variam conforme a máquina e processos em execução.
+Para repetir as cargas, use `npm run benchmark`, `npm run benchmark -- scene` e `npm run benchmark -- snapshots`. Um caminho de checkout pode ser passado após o nome da carga para comparação, por exemplo `node scripts/benchmark.mjs simulation /caminho/da/versao/anterior`. O cenário usa um mapa continental de 128×128, semente 1337 e 256 moradores; `SUBURBAN_BENCH_POPULATION` altera a população. Os números variam conforme a máquina e processos em execução.
 
 ### Segunda rodada de otimização — 24/10/2026
 
@@ -611,6 +611,8 @@ Comparação com a versão imediatamente anterior a esta rodada, mediana de trê
 A codificação do pacote no worker ficou em aproximadamente 31 ms nesta carga (antes, 27 ms); o ganho líquido vem principalmente da aplicação mais curta e do menor volume transferido. O cenário de fazendas mede a sincronização de malhas já existentes com objetos gráficos simulados, sem criação de geometria, shaders ou GPU; portanto, não mede FPS. Os hashes dos dados observados coincidiram entre versões, entre origem e espelho do worker e após a interpolação. O cenário curto não cobre o equilíbrio de partidas prolongadas.
 
 Além das cargas anteriores, `npm run benchmark -- bridge` mede a aplicação através da ponte real da simulação, e `npm run benchmark -- city-render` mede a preparação dos imóveis. `snapshots` agora informa também o custo de aplicação e os hashes da origem e do espelho após clonagem estruturada dos pacotes. Esses comandos aceitam o caminho de outro checkout como último argumento.
+
+Em cidades maiores, o worker ajusta o intervalo dos estados completos conforme o custo de montá-los, até dois segundos. Posições e necessidades continuam sendo enviadas a cada 100 ms; comandos solicitam uma atualização completa imediata assim que a anterior é confirmada.
 
 ### Limite de contratações
 

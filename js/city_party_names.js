@@ -383,16 +383,18 @@ const feminine=word=>({Cidadão:'Cidadã',Camponês:'Camponesa',Guardião:'Guard
 const capitalize=s=>s[0].toLocaleUpperCase('pt-BR')+s.slice(1).toLocaleLowerCase('pt-BR');
 const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const wordMatch=(text,word)=>new RegExp(`(?:^|[^\\p{L}])${normalize(word).replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}(?:$|[^\\p{L}])`,'u').test(text);
+const wordPatterns=new Map(),agendaCache=new Map();
+const wordMatch=(text,word)=>{let pattern=wordPatterns.get(word);if(!pattern){pattern=new RegExp(`(?:^|[^\\p{L}])${normalize(word).replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}(?:$|[^\\p{L}])`,'u');wordPatterns.set(word,pattern);}return pattern.test(text);};
 /** Political meaning carried by a party name. Negative economy favors redistribution; positive favors markets. */
 export function partyNameAgenda(name=''){
-  const text=normalize(name);let left=0,right=0,state=0,liberty=0,green=0,social=0;
+  const text=normalize(name);const cached=agendaCache.get(text);if(cached)return cached;let left=0,right=0,state=0,liberty=0,green=0,social=0;
   const count=words=>words.reduce((n,w)=>n+(wordMatch(text,w)?1:0),0);
   left=count(POLITICAL_WORDS.left);right=count(POLITICAL_WORDS.right);
   state=count(POLITICAL_WORDS.authority);liberty=count(POLITICAL_WORDS.liberty);green=count(POLITICAL_WORDS.green);
   social=count(['Popular','Solidário','Inclusivo','Universalista','Comunitário','Social','dos Trabalhadores','da União Popular','da Solidariedade','da Justiça Social','da Igualdade','do Trabalho','da Cooperação','do Bem Comum','das Comunidades','da Moradia','da Alimentação','da Saúde','da Educação','da Inclusão','da Dignidade']);
   // Mild, bounded effects keep names meaningful without overpowering the party's founding platform.
-  return Object.freeze({economy:clamp((right-left)*.2,-.55,.55),state:clamp((state-liberty)*.2,-.6,.6),liberty:clamp((liberty-state)*.18,-.5,.5),green:clamp(green*.12,0,.5),social:clamp(social*.1,0,.45)});
+  const result=Object.freeze({economy:clamp((right-left)*.2,-.55,.55),state:clamp((state-liberty)*.2,-.6,.6),liberty:clamp((liberty-state)*.18,-.5,.5),green:clamp(green*.12,0,.5),social:clamp(social*.1,0,.45)});
+  if(agendaCache.size>=2048)agendaCache.delete(agendaCache.keys().next().value);agendaCache.set(text,result);return result;
 }
 function flavor(city){for(let i=0;i<48;i++){const word=pick(city,vocabulario.palavras);if(typeof word==='string'&&/^[\p{L}]{4,14}$/u.test(word))return capitalize(word);}return 'Horizonte';}
 export function makePartyName(city,ideology,parties,id,{parentParty=null}={}){

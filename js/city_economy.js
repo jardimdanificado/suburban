@@ -6,7 +6,7 @@ import {externalTradeHourly} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js';
 import {fundInitialCycleChain} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,apply,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js';
+import {career,requirements,qualification,apply,finishApplication,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js';
 import {productionPlan,investProductionPlan} from './city_production_planner.js';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
@@ -157,10 +157,13 @@ export class CityEconomy {
   workingOwner(b){const c=this.citizen(b?.ownerId);return c&&c.role!=='councilor'?c:null;}
   staffEssentials() {
     const city=this.city,needs=city.welfare.conditions(),projects=city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed'),stone=projects.reduce((n,p)=>n+Math.max(0,p.stone-p.inventory.pedra-(p.incoming.pedra||0)),0),freight=city.logistics.demandMetrics(),firms=this.businesses;
+    const builderLoad=new Map(),quarryRemaining=new Map();let usableQuarries=0,carriers=0;
+    for(const p of projects){let load=builderLoad.get(p.builderId);if(!load)builderLoad.set(p.builderId,load={sites:0,labor:0});load.sites++;load.labor+=Math.max(0,p.requiredLabor-p.labor);}
+    for(const b of firms){if(b.type==='carrier')carriers++;else if(b.type==='quarry'){const remaining=this.quarryStatus(b).remaining;quarryRemaining.set(b,remaining);if(remaining>0)usableQuarries++;}}
     for(const b of firms){
-      if(b.type==='builder'){const sites=projects.filter(p=>p.builderId===b.id),labor=sites.reduce((n,p)=>n+Math.max(0,p.requiredLabor-p.labor),0);b.jobs=Math.min(48,Math.max(3,sites.length*2+Math.ceil(labor/180)));}
-      if(b.type==='quarry'){const usable=firms.filter(f=>f.type==='quarry'&&this.quarryStatus(f).remaining>0).length;b.jobs=this.quarryStatus(b).remaining>0?Math.min(32,Math.max(2,Math.ceil(stone/60/Math.max(1,usable)))):0;}
-      if(b.type==='carrier')b.jobs=Math.min(32,Math.max(2,Math.ceil(freight.work/120/Math.max(1,firms.filter(f=>f.type==='carrier').length))));
+      if(b.type==='builder'){const load=builderLoad.get(b.id);b.jobs=Math.min(48,Math.max(3,(load?.sites||0)*2+Math.ceil((load?.labor||0)/180)));}
+      if(b.type==='quarry')b.jobs=quarryRemaining.get(b)>0?Math.min(32,Math.max(2,Math.ceil(stone/60/Math.max(1,usableQuarries)))):0;
+      if(b.type==='carrier')b.jobs=Math.min(32,Math.max(2,Math.ceil(freight.work/120/Math.max(1,carriers))));
     }
   }
   reconcileStaff() {
@@ -190,7 +193,7 @@ export class CityEconomy {
       else if (!c.deliveryId && !c.cleaningJobId && !this.city.relationships.willingToWork(c,b)) this.leaveJob(c,'Conflito pessoal com o gestor');
     }
     this.reconcileStaff();
-    for(const c of this.city.citizens)for(const a of c.career?.applications||[])if(a.status==='análise'&&a.decideAt<=this.city.minute){const b=this.city.building(a.buildingId),q=b&&qualification(this.city,c,b);if(!b?.active||b.entity.destroyed||b.workers.length>=b.jobs||!q.eligible){a.status='reprovado';a.reason=!b?.active||b.entity.destroyed?'Empresa indisponível':!q.eligible?q.reason:'Vaga preenchida';a.decidedAt=this.city.minute;}}
+    for(const c of this.city.citizens)for(const a of c.career?.applications||[])if(a.status==='análise'&&a.decideAt<=this.city.minute){const b=this.city.building(a.buildingId),q=b&&qualification(this.city,c,b);if(!b?.active||b.entity.destroyed||b.workers.length>=b.jobs||!q.eligible)finishApplication(a,'reprovado',!b?.active||b.entity.destroyed?'Empresa indisponível':!q.eligible?q.reason:'Vaga preenchida',this.city.minute);}
     const offers = this.city.buildings.filter(b => b.active && b.jobs > 0 && !b.entity.destroyed);
     const available = () => this.city.citizens.filter(c => this.city.society.isAdult(c) && !c.entity.destroyed && !c.jobId && !c.businessIds.length && c.role!=='councilor' && c.id!==this.mayorId && !this.city.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed'));
     const priority = ['mint', 'bakery', 'market', 'greengrocer', 'farm', 'mill', 'quarry', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'builder', 'mint', 'townhall'];
@@ -212,12 +215,13 @@ export class CityEconomy {
       if(!Number.isFinite(slots)||slots<=0)return;
       const candidates = (applicants.get(b.id)||[]).filter(c=>c.jobId!==b.id);
       const eligible=candidates.filter(c=>{const a=career(c).applications.findLast(a=>a.buildingId===b.id);return a?.status==='análise'&&a.decideAt<=this.city.minute&&qualification(this.city,c,b).eligible&&(!c.jobId||wageFor(this.city,c,b)>(this.city.building(c.jobId)?wageFor(this.city,c,this.city.building(c.jobId)):Infinity)*1.15);});
-      eligible.sort((a,c)=>this.hiringScore(c,b)-this.hiringScore(a,b)||a.id-c.id);
-      for(const c of (slots===b.jobs-b.workers.length?eligible.slice(slots):[])){const a=career(c).applications.findLast(a=>a.buildingId===b.id);a.status='reprovado';a.reason='Outro candidato teve melhor pontuação para as vagas disponíveis';}
+      const scores=new Map(eligible.map(c=>[c.id,this.hiringScore(c,b)]));
+      eligible.sort((a,c)=>scores.get(c.id)-scores.get(a.id)||a.id-c.id);
+      for(const c of (slots===b.jobs-b.workers.length?eligible.slice(slots):[])){const a=career(c).applications.findLast(a=>a.buildingId===b.id);finishApplication(a,'reprovado','Outro candidato teve melhor pontuação para as vagas disponíveis');}
 
       for (const c of eligible.slice(0, slots)) {
-        const a=career(c).applications.findLast(a=>a.buildingId===b.id);a.status='aprovado';a.reason=a.trainee?'Selecionado para formação no trabalho':'Selecionado por habilidade, experiência e referências';a.decidedAt=this.city.minute;
-        for(const other of career(c).applications)if(other!==a&&other.status==='análise'){other.status='retirado';other.reason='Aceitou outra proposta';}
+        const a=career(c).applications.findLast(a=>a.buildingId===b.id);finishApplication(a,'aprovado',a.trainee?'Selecionado para formação no trabalho':'Selecionado por habilidade, experiência e referências',this.city.minute);
+        for(const other of career(c).applications)if(other!==a&&other.status==='análise')finishApplication(other,'retirado','Aceitou outra proposta');
         if(c.jobId)this.leaveJob(c,'Aceitou proposta salarial melhor');
         c.jobId = b.id; c.profession = JOB_SKILL[b.type]; b.workers.push(c.id); this.city.history.employment(c,b,'contratação');
         this.city.log(`${c.entity.properties.name} foi contratado em ${b.entity.properties.name}, considerando habilidade e vínculos com o proprietário.`, 'work', [c.id, b.ownerId].filter(Boolean), { kind: 'employment', buildingId: b.id, skill: c.skills[JOB_SKILL[b.type]], score: this.hiringScore(c, b) });

@@ -71,6 +71,9 @@ export function outdoorCellReady(city,c,b,u,adjacent=false){
  c.action='Deslocando-se até a célula de atividade';return false;
 }
 export function syncCitizenInterior(city,c){
+ // An outdoor citizen with no indoor activity has nothing to release or route.
+ // Avoid resolving buildings and construction projects on every movement tick.
+ if(!c.indoorLocation&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length||c.deliveryId||!INDOOR_TASKS.has(c.workMeal?'workmeal':c.task)))return true;
  normalizeInterior(city,c);
  const task=c.workMeal?'workmeal':c.task,fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation;
  if(c.paintWorkId&&previous&&!c.path.length){const job=city.paint.jobs.find(j=>j.id===c.paintWorkId);if(job?.kind==='building'&&job.buildingId===previous.buildingId&&job.status==='painting'&&!previous.exiting)return !previous.path.length;}

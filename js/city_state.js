@@ -81,15 +81,19 @@ export class CityStateGraph {
       if (!id) { id = this.nextId++; this.ids.set(object, id); }
       if(visited.get(object)===generation)return id;
       visited.set(object,generation);
-      this.objects.set(id, object);
-      let kind, data, fields=false;
       const previous = this.previous.get(id);
+      // Existing nodes already occupy this ID in objects. Reinsert only new or
+      // reappearing nodes, avoiding a Map write for every edge on every snapshot.
+      if(!previous)this.objects.set(id, object);
+      let kind, data, fields=false;
+      if (previous?.kind === 'FrozenObject' || previous?.kind === 'FrozenArray') return id;
+      // Empty collections have no children to visit and cannot have changed
+      // while both their previous and current lengths remain zero.
+      if(previous?.data.length===0 && ((previous.kind==='Array'&&object.length===0)||(previous.kind==='Map'&&object.size===0)||(previous.kind==='Set'&&object.size===0)))return id;
       // The initial graph establishes the needs objects. Subsequent worker
       // snapshots carry their numeric values in one compact typed array.
       if(needsSet?.has(object)&&previous)return id;
-      const pair=this.relationNodes.get(id);
-      if(object._socialPair && previous && pair?.revision===object.revision){for(const child of pair.children){const value=this.objects.get(child);if(value)visited.set(value,generation);}return id;}
-      if (previous?.kind === 'FrozenObject' || previous?.kind === 'FrozenArray') return id;
+      if(object._socialPair && previous){const pair=this.relationNodes.get(id);if(pair?.revision===object.revision){for(const child of pair.children){const value=this.objects.get(child);if(value)visited.set(value,generation);}return id;}}
       if (object === map && this.mapRevision === mapRevision && this.previous.has(id)) {
         for(const child of this.mapChildren){const value=this.objects.get(child);if(value)visited.set(value,generation);}
         return id;
@@ -102,7 +106,9 @@ export class CityStateGraph {
           histories.push({id,...snapshot.payload}); this.historyCursors.set(id,snapshot.cursor);
         }
       }
-      else if (Object.isFrozen(object) && (Array.isArray(object) || Object.getPrototypeOf(object)===Object.prototype) && Object.values(object).every(value=>value===null || typeof value!=='object' && typeof value!=='function')) {
+      // A previously encoded mutable node can stay on the normal path even if
+      // it is frozen later. Avoid probing every object in the graph on each send.
+      else if ((!previous || object.appliedAt!=null && object.status!=='análise') && (Array.isArray(object) || Object.getPrototypeOf(object)===Object.prototype) && Object.isFrozen(object) && Object.values(object).every(value=>value===null || typeof value!=='object' && typeof value!=='function')) {
         kind=Array.isArray(object)?'FrozenArray':'FrozenObject';data=Array.isArray(object)?object.map(reference):Object.entries(object).flatMap(([key,value])=>[key,reference(value)]);
       }
       else if (object === root.city.events) { kind = 'CityFeed'; data = object.map(entry => entry.id); }
@@ -119,7 +125,7 @@ export class CityStateGraph {
           if(accessorFields.has(key)&&Object.getOwnPropertyDescriptor(object,key)?.get)continue;
           const value=object[key];
           if(typeof value === 'function')continue;
-          const encoded=oldFields?.[index]===key&&((citizenSet?.has(object)&&(key==='happiness'||key==='mood'))||(entitySet?.has(object)&&(key==='x'||key==='y')))?oldFields[index+1]:reference(value);
+          const encoded=oldFields?.[index]===key&&(((key==='happiness'||key==='mood')&&citizenSet?.has(object))||((key==='x'||key==='y')&&entitySet?.has(object)))?oldFields[index+1]:reference(value);
           if(full)full.push(key,encoded);
           else if(oldFields[index]===key){if(!Object.is(oldFields[index+1],encoded))(delta??=[]).push(index,encoded);}
           else{

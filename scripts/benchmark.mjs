@@ -37,17 +37,18 @@ if(mode==='city-render'){
   views.push(getEntitiesInViewport(320,340,320,340).map(e=>e.id),[getEntityById(301),getEntityById(302)]);
   console.log(JSON.stringify({mode,root,entities:entities.length,staticMs,movingMs,checksum:hash(views)}));
 }else if(mode==='simulation'||mode==='snapshots'||mode==='bridge'||mode==='throughput'){
-  const {CitySimulation}=await moduleAt('city_simulation.js'),{WorldClock}=await moduleAt('world.js');
-  const tiles=new Uint8Array(128*128),entities=[];let id=0;
-  const world={width:128,height:128,revision:0,spawnCenter:{x:64,y:64},clock:new WorldClock(),getTile(x,y){return tiles[y*128+x];},setTile(x,y,t){tiles[y*128+x]=t;this.revision++;}};
+  const {CitySimulation}=await moduleAt('city_simulation.js'),{World}=await moduleAt('world.js');
+  const entities=[];let id=0;
+  // Real terrain and prototype exercise the same navigation and worker mirror as the game.
+  const world=new World(1,1337,128);
   const city=new CitySimulation({world,population,seed:1337,createEntity:data=>{const entity={id:++id,destroyed:false,...data};entities.push(entity);return entity;}});city.initialize();
   if(mode==='throughput'){
     const {CityStateGraph}=await moduleAt('city_state.js'),graph=new CityStateGraph(),state={city,entities,nextId:id+1};graph.encode(state);
     const stateInterval=Math.max(100,Number(process.env.SUBURBAN_BENCH_STATE_INTERVAL)||400);
-    let snapshots=0,encodeMs=0,lastSnapshot=performance.now(),started=lastSnapshot;const snapshotCosts=[];
+    let snapshots=0,encodeMs=0,lastSnapshot=performance.now(),started=lastSnapshot,lastSnapshotCost=0;const snapshotCosts=[];
     for(let i=0;i<240;i++){
       city.update(.25);
-      if(performance.now()-lastSnapshot>=stateInterval){const at=performance.now(),packet=graph.encode(state,{packNeeds:true,packPositions:true}),encodedAt=performance.now();structuredClone(packet);const cost=performance.now()-at;encodeMs+=cost;snapshots++;const kinds={};for(const node of packet.nodes)kinds[node.kind]=(kinds[node.kind]||0)+1;snapshotCosts.push({minute:city.minute,ms:cost,encodeMs:encodedAt-at,cloneMs:cost-(encodedAt-at),nodes:packet.nodes.length,objects:graph.objects.size,kinds});lastSnapshot=performance.now();}
+      if(performance.now()-lastSnapshot>=Math.max(stateInterval,Math.min(2000,lastSnapshotCost*5))){const at=performance.now(),packet=graph.encode(state,{packNeeds:true,packPositions:true}),encodedAt=performance.now();lastSnapshotCost=encodedAt-at;structuredClone(packet);const cost=performance.now()-at;encodeMs+=cost;snapshots++;const kinds={};for(const node of packet.nodes)kinds[node.kind]=(kinds[node.kind]||0)+1;snapshotCosts.push({minute:city.minute,ms:cost,encodeMs:encodedAt-at,cloneMs:cost-(encodedAt-at),nodes:packet.nodes.length,objects:graph.objects.size,kinds});lastSnapshot=performance.now();}
     }
     const ms=performance.now()-started;
     console.log(JSON.stringify({mode,root,population:city.citizens.length,cityMinutes:240,ms,stateInterval,snapshots,encodeMs,snapshotCosts,speed:60/(ms/1000),targetMs:1875}));
@@ -68,4 +69,4 @@ if(mode==='city-render'){
   }
 }else throw Error('Use simulation, snapshots, bridge, throughput, scene or city-render.');
 
-function observed(city){return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:c.entity.x,y:c.entity.y,home:c.homeUnitId,job:c.jobId})),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),events:city.events.map(e=>e.id),relations:[...city.society.relations]};}
+function observed(city){return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:c.entity.x,y:c.entity.y,home:c.homeUnitId,job:c.jobId,career:c.career})),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),ledger:city.ledger,events:city.events.map(e=>e.id),relations:[...city.society.relations]};}

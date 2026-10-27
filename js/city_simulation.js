@@ -176,7 +176,7 @@ export class CitySimulation {
     else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Imposto sobre vendas:|Imposto empresarial$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
     const shipment = a.seller && a.buyer ? a : b.seller && b.buyer ? b : null;
     const entry = this.history.transaction(from, to, amount, reason, { ...(shipment ? {shipmentId: shipment.id} : {}), ...details });
-    this.ledger.push({ minute: this.minute, from, to, amount, reason, eventId: entry.id });
+    this.ledger.push(Object.freeze({ minute: this.minute, from, to, amount, reason, eventId: entry.id }));
     recordMarketTransaction(this,from,to,amount,reason,details,entry.id);
     if (this.ledger.length > 1000) this.ledger.shift();
     applySalesTax(this,from,to,amount,reason,details);

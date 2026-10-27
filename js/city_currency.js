@@ -35,7 +35,7 @@ export class CityCurrency {
     this.city.fiscal?.record('mint','treasury',amount,initial?'Emissão monetária inicial':'Emissão da casa da moeda');
     treasury.balance += amount;treasury.totalRevenue=(treasury.totalRevenue||0)+amount;this.issued += amount;
     if (!initial) { this.issuedToday += amount; this.hourlyIssued += amount; }
-    this.city.ledger.push({ minute: this.city.minute, from: 'mint', to: 'treasury', amount, reason: initial ? 'Emissão monetária inicial' : 'Emissão da casa da moeda' });
+    this.city.ledger.push(Object.freeze({ minute: this.city.minute, from: 'mint', to: 'treasury', amount, reason: initial ? 'Emissão monetária inicial' : 'Emissão da casa da moeda' }));
     if (this.city.ledger.length > 1000) this.city.ledger.shift();
     return true;
   }

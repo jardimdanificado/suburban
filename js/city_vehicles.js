@@ -213,8 +213,11 @@ export class CityVehicles {
   removeFlag(id){const v=this.units.get(id);if(!v?.mountedFlag)return false;const owner=this.city.accounts.get(v.ownerAccountId);if(owner?.entity?.properties.citizen){owner.campaignInventory??={};owner.campaignInventory.bandeiras=(owner.campaignInventory.bandeiras||0)+1;}else if(owner?.inventory)owner.inventory.bandeiras=(owner.inventory.bandeiras||0)+1;else this.city.economy.lost.bandeiras++;v.mountedFlag=null;return true;}
   cargoCapacity(c){
     const base=c.equipment?.carrinho?72:c.equipment?.cesta?36:24;if(!this.activeCount)return base;
-    const owners=new Set([c.accountId,this.city.building(c.jobId)?.accountId,...(c.businessIds||[]).map(id=>this.city.building(id)?.accountId)]);
-    return Math.max(base,...[...this.units.values()].filter(v=>v.active&&!v.scrapped&&v.condition>15&&!v.mechanicId&&owners.has(v.ownerAccountId)&&(!v.driverId||v.driverId===c.id)).map(v=>VEHICLE_SPECS[v.good].cargo));
+    const owners=new Set([c.accountId,this.city.building(c.jobId)?.accountId]);
+    for(const id of c.businessIds||[])owners.add(this.city.building(id)?.accountId);
+    let capacity=base;
+    for(const v of this.units.values())if(v.active&&!v.scrapped&&v.condition>15&&!v.mechanicId&&owners.has(v.ownerAccountId)&&(!v.driverId||v.driverId===c.id))capacity=Math.max(capacity,VEHICLE_SPECS[v.good].cargo);
+    return capacity;
   }
   hourly(){
     const city=this.city,hour=Math.floor(city.minute/60);if(this.lastHour===hour)return;this.lastHour=hour;
