@@ -7,13 +7,13 @@ export const CIVIC_SERVICES={
  theater:{label:'Teatro',color:0xad6975,rent:0,price:105000,jobs:5,skill:'social',need:'leisure',rate:3,slots:8,minStaff:2,inputs:{},population:320},
 };
 export function civicSpec(b){return CIVIC_SERVICES[b?.type]|| (b?.type==='clinic'?{label:'Clínica',need:'health',rate:2,slots:2,minStaff:1,inputs:{remedio:1}}:b?.type==='leisure'?{label:'Centro de lazer',need:'leisure',rate:1,slots:6,minStaff:1,inputs:{}}:null);}
-export function civicStaff(city,b){return b.workers.map(id=>city.society.citizen(id)).filter(c=>c&&!c.entity.destroyed&&c.jobId===b.id&&c.task==='work'&&(b.constructionKind==='open-air'?c.workCell?.buildingId===b.id:c.indoorLocation?.buildingId===b.id&&!!c.indoorLocation.unitId&&!c.indoorLocation.path?.length&&!c.indoorLocation.exiting)&&!c.path.length&&(b.constructionKind==='open-air'?Math.hypot(c.entity.x-c.workCell.target.x,c.entity.y-c.workCell.target.y)<=.15:Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=2));}
+export function civicStaff(city,b){return b.workers.map(id=>city.society.citizen(id)).filter(c=>c&&!c.entity.destroyed&&c.jobId===b.id&&c.task==='work'&&(b.constructionKind==='open-air'?c.workCell?.buildingId===b.id:c.indoorLocation?.buildingId===b.id&&!!c.indoorLocation.unitId&&!c.indoorLocation.path?.length&&!c.indoorLocation.exiting)&&!c.path.length&&(b.constructionKind==='open-air'?c.workCell?.target&&Math.hypot(c.entity.x-c.workCell.target.x,c.entity.y-c.workCell.target.y)<=.15:Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=2));}
 const occupancy=new WeakMap();
 export function civicStatus(city,b,c=null){
  const spec=civicSpec(b);if(!spec)return null;
  const team=civicStaff(city,b),capacity=team.length>=spec.minStaff?team.length*spec.slots:0;
  let cache=occupancy.get(city);if(cache?.minute!==city.minute){cache={minute:city.minute,counts:new Map()};for(const person of city.citizens)if(!person.entity.destroyed&&person.civicVisit&&['health','leisure','social'].includes(person.task)){const site=city.building(person.civicVisit.buildingId);if(site&&Math.hypot(person.entity.x-site.door.x,person.entity.y-site.door.y)<=2)cache.counts.set(site.id,(cache.counts.get(site.id)||0)+1);}occupancy.set(city,cache);}
- const count=cache.counts.get(b.id)||0,already=c?.civicVisit?.buildingId===b.id&&(b.constructionKind==='open-air'?Math.hypot(c.entity.x-c.workCell.target.x,c.entity.y-c.workCell.target.y)<=.15:Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=2);
+  const count=cache.counts.get(b.id)||0,already=c?.civicVisit?.buildingId===b.id&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=2;
  const inputs=Object.entries(spec.inputs).filter(([g,n])=>(b.inventory[g]||0)<n).map(([g])=>city.economy.goods[g].label),hasTicket=c?.civicVisit?.buildingId===b.id;
  const stocked=(!inputs.length||hasTicket)&&(b.type!=='library'||b.inventory.livros>=1);
  const ready=b.active&&!b.entity.destroyed&&capacity>0&&(count<capacity||already)&&stocked;

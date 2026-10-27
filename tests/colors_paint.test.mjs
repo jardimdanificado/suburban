@@ -11,8 +11,10 @@ function paintStock(holder,color,n=1,premium=false){holder.inventory.tinta=n;hol
 const paintTotal=city=>city.goodsStock('tinta')+city.economy.consumed.tinta+city.economy.lost.tinta;
 function panel(){const text=[],actions=[];return{text,actions,heading:s=>text.push(s),note:s=>text.push(s),kv:(...s)=>text.push(s.join(' ')),table:(cols,rows)=>text.push(...rows.map(r=>r.cells.join(' '))),buttons:items=>actions.push(...items),button:(label,click)=>actions.push({label,click}),record:(...s)=>text.push(s.slice(0,2).join(' '))};}
 test('individual color tastes are stable, different and change garment desirability',()=>{
- const a={id:1},b={id:2},same={id:1};initializeColors(a);initializeColors(b);initializeColors(same);assert.deepEqual(a.colorPreferences,same.colorPreferences);assert.notDeepEqual(a.colorPreferences,b.colorPreferences);
- const ranked=favoriteColors(a),g={condition:100,quality:70,piece:'camisa',style:'simples',brandId:4};assert(garmentScore(a,{...g,color:ranked[0].hex})>garmentScore(a,{...g,color:ranked.at(-1).hex}));assert(Number.isFinite(colorAffinity(a,'#123456')));
+ const seeded=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+ const a={id:1},b={id:2},same={id:1};initializeColors(a,seeded(1));initializeColors(b,seeded(2));initializeColors(same,seeded(1));assert.deepEqual(a.colorPreferences,same.colorPreferences);assert.notDeepEqual(a.colorPreferences,b.colorPreferences);assert.equal(a.colorPreferenceAnchors.length,1+Math.floor((Math.imul(1,1664525)+1013904223>>>0)/4294967296*3));
+ const ranked=favoriteColors(a),favorite=ranked[0].hex,rgb=parseInt(favorite.slice(1),16),near=`#${((rgb+1)&0xffffff).toString(16).padStart(6,'0')}`,far=COLOR_PALETTE.reduce((best,color)=>colorAffinity(a,color.hex)<colorAffinity(a,best.hex)?color:best,COLOR_PALETTE[0]),g={condition:100,quality:70,piece:'camisa',style:'simples',brandId:4};
+ assert(colorAffinity(a,near)>colorAffinity(a,far.hex));assert(garmentScore(a,{...g,color:favorite})>garmentScore(a,{...g,color:far.hex}));assert(Number.isFinite(colorAffinity(a,'#123456')));
 });
 test('factories consume actual inputs to produce normal and custom paint, sold with a premium',()=>{
  const city=fixture(),factory=city.buildings.find(b=>b.type==='paintworks'),worker=city.society.citizen(factory.workers[0]),c=city.citizens.find(c=>c.fixtureInvestor),color='#123456',money=totalMoney(city);

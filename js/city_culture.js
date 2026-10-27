@@ -10,7 +10,11 @@ export const HOUSE_STYLES = {
   modern: { label: 'Fachada contemporânea', wall: 0xd7dfdb, roof: 0x506054, roofKind: 'flat' },
 };
 export function initializeCharacter(city, citizen) {
-  initializeColors(citizen);
+  let colorSeed = (Math.imul(citizen.id + 37, 2654435761) ^ city.initialSeed) >>> 0 || 1;
+  initializeColors(citizen, () => {
+    colorSeed = (Math.imul(colorSeed, 1664525) + 1013904223) >>> 0;
+    return colorSeed / 4294967296;
+  });
   citizen.traits = Object.freeze(Object.fromEntries(Object.keys(TRAIT_LABELS).map(id => [id, .1 + city.random() * .8])));
   citizen.savingsRate = Math.round((.05 + citizen.traits.frugality * .4) * 100) / 100;
 }
