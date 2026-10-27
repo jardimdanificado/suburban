@@ -1,3 +1,5 @@
+import {colorName} from './city_colors.js';
+import {renderVehiclePaint} from './city_paint_ui.js';
 import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
@@ -18,6 +20,8 @@ export function renderVehicle(ui,p,v){
   if(v.driverId)p.button(`USUÁRIO ATUAL: ${city.accountName(`citizen:${v.driverId}`)}`,()=>ui.openCitizen(v.driverId));
   const rack=v.parking&&city.building(v.parking.rackId);p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':v.parking?.kind==='roadside'?'Ao lado da rua':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));
   if(v.reservedParking)p.kv('Vaga reservada no destino',v.reservedParking.kind==='roadside'?'Ao lado da rua':`${city.building(v.reservedParking.rackId)?.entity.properties.name||v.reservedParking.rackId} · ${v.reservedParking.index+1}`);
+  p.kv('Cor',colorName(v.color));
+  if(ui.section)ui.section(p,'vehicleCustomization','Pintura e bandeiras',()=>renderVehiclePaint(ui,p,v));else renderVehiclePaint(ui,p,v);
   p.heading('PEÇAS ORIGINAIS E FORNECEDORES');
   const components=model?.components?.length?model.components:Object.entries(VEHICLE_RECIPES[v.good]||{}).map(([good,quantity])=>({good,quantity,producerName:'Não registrado',design:'—'}));
   p.table([{label:'Peça',weight:2},{label:'Quantidade'},{label:'Fabricante',weight:2},{label:'Revisão'}],components.map(part=>({cells:[city.economy.goods[part.good]?.label||part.good,part.quantity,part.producerName||city.building(part.producerId)?.entity.properties.name||String(part.producerId),part.design],click:()=>ui.openBuilding(part.producerId)})));

@@ -711,3 +711,11 @@ A fundação inclui dois bicicletários e uma cadeia municipal de mobilidade: ex
 Em **Transportes → Bicicletários**, cada vaga mostra o equipamento, proprietário e estado de reserva. A viagem reserva uma vaga próxima quando disponível, libera a origem ao montar, estaciona e conclui o trecho final a pé. Sem vaga próxima, o equipamento fica junto ao destino e aparece como estacionado fora de bicicletário. Cancelamentos liberam reservas. Novas instalações dependem de orçamento, materiais e construção.
 
 Clicar numa bike ou patinete abre sua ficha: proprietário e antigos donos, marca, modelo, lote, fabricantes e revisões dos componentes, reparos e peças aplicadas, localização e estacionamento. Equipamentos de fundação/importados indicam explicitamente quando não há procedência registrada das peças. A animação de corrida agora avança por distância efetivamente percorrida, permanecendo congelada quando o cidadão está bloqueado ou parado.
+
+### Cores, pintura e personalização
+
+Cada cidadão tem afinidades individuais por cores, usadas ao escolher roupas, imóveis e veículos. A ficha pessoal tem uma aba **Cores**, com preferências e compras de tinta. Fábricas de tintas alternam uma paleta própria e atendem encomendas de cores hexadecimais com adicional de 75%; óleo, argila, ervas, trabalho e transporte continuam necessários.
+
+A aba **Pintura** de um prédio contrata uma construtora para pintar os cômodos do proprietário escolhido. A ficha de uma bicicleta ou patinete tem **Pintura e bandeiras**: o proprietário leva o veículo à oficina, que usa tinta de seu estoque ou tinta entregue pelo cliente, cobra o serviço e emprega um mecânico. A procedência da tinta e o histórico de pintura ficam registrados. Bandeiras montadas são itens físicos e retornam ao proprietário ao serem retiradas; militantes também carregam na bicicleta suas bandeiras de campanha.
+
+As paredes usam cores lisas, preservando o dither da iluminação. A pedalada alterna os OBJ `use/1` e `use/2` pela distância percorrida; o deslocamento usa interpolação cúbica monotônica entre amostras da simulação para manter continuidade de velocidade sem prever posições além das recebidas.

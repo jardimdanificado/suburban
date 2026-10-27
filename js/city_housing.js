@@ -1,3 +1,4 @@
+import {colorAffinity,buildingColor} from './city_colors.js';
 export const HOUSING_RULES = { roomPrice: 120000, roomRent: 350, livingReserve: 3000, defaultDays: 3, unsoldRentalAfter: 1440 };
 const NO_RESIDENTS=Object.freeze([]);
 
@@ -33,6 +34,7 @@ export class CityHousing {
     return units;
   }
   units(home) { return home.unitIds.map(id => this.city.units.get(id)).filter(Boolean); }
+  homeColor(home){const b=this.city.building(home.buildingId),room=this.units(home).find(u=>u.roomType==='bedroom');return b?.wallColors?.[room?.id]||buildingColor(b);}
   home(c) { return this.homes.get(c.homeId); }
   hasDining(home) { return this.units(home).some(u => u.roomType === 'dining'); }
   invalidateResidents(){this.residentsByHome=null;}
@@ -157,7 +159,7 @@ export class CityHousing {
       const current = this.home(c);
       if (current && this.hasBathroom(current)) continue;
       const candidates = [...this.homes.values()].filter(h => this.city.building(h.buildingId) && this.units(h).every(u => !u.tenantId || u.tenantId === c.accountId));
-      candidates.sort((a, b) => Number(this.hasBathroom(b)) - Number(this.hasBathroom(a)) || this.rent(a, c) - this.rent(b, c));
+      candidates.sort((a, b) => Number(this.hasBathroom(b)) - Number(this.hasBathroom(a)) || this.rent(a,c)*(1-.1*colorAffinity(c,this.homeColor(a)))-this.rent(b,c)*(1-.1*colorAffinity(c,this.homeColor(b))));
       for (const h of candidates) {
         if (current && !this.hasBathroom(h)) continue;
         const units = this.units(h), owned = units.every(u => u.ownerId === c.accountId);
@@ -172,7 +174,7 @@ export class CityHousing {
     const investors = this.city.citizens.filter(c => this.city.society.isAdult(c));
     for (const c of investors) {
       if (!c.homeUnitId) {
-        const home = [...this.homes.values()].find(h => !this.isSocial(h) && this.units(h).every(u => u.forSale && !u.tenantId && u.ownerId !== c.accountId) && this.price(h) + 60000 < c.balance);
+        const home = [...this.homes.values()].sort((a,b)=>this.price(a)*(1-.12*colorAffinity(c,this.homeColor(a)))-this.price(b)*(1-.12*colorAffinity(c,this.homeColor(b)))).find(h => !this.isSocial(h) && this.units(h).every(u => u.forSale && !u.tenantId && u.ownerId !== c.accountId) && this.price(h) + 60000 < c.balance);
         if (home && this.buyHome(c, home)) this.rentHome(c, home);
       }
       const demand = this.city.citizens.some(p => !p.homeUnitId && this.city.society.isAdult(p)); if (!demand) continue;

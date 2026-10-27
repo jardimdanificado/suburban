@@ -28,7 +28,7 @@ export const INDUSTRIES = {
   cycle_assembler:industry('Montadora de bicicletas e patinetes',{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},{bicicleta:1,bicicleta_carga:1,patinete:1,patins:1},65,'maintenance','Monta lotes com peças reais; cada alteração de fornecedor ou revisão define outro modelo.'),
   cycle_shop:industry('Loja de mobilidade',{bicicleta:1,bicicleta_carga:1,patinete:1,patins:1,skate:1},{},1,'commerce','Vende equipamentos reais, com proprietário, fabricante, modelo e histórico.','services'),
   sports_shop:industry('Loja de artigos esportivos',{capacete:1},{},1,'commerce','Fornece proteção para praticantes de esportes.','services',{need:'safety',boost:12}),
-  cycle_workshop:industry('Oficina de mobilidade',{pecas:1},{},24,'maintenance','Mecânicos levam peças até equipamentos avariados e cobram pelo reparo.','services'),
+  cycle_workshop:industry('Oficina de mobilidade',{pecas:1,tinta:1},{},24,'maintenance','Mecânicos levam peças até equipamentos avariados e cobram pelo reparo.','services'),
   bicycle_rental:industry('Locadora de bicicletas',{},{},1,'commerce','Compra bicicletas e aluga o uso por viagem a moradores próximos.','services'),
   kitchen: industry('Cozinha e marmitaria',{feijao:2,arroz:2,alface:1,tomate:1},{marmita:3},18,'baking','Prepara marmitas com ingredientes reais e preserva suas preferências.','food'),
   artisan: industry('Loja do artesão',{madeira:3,fibras:2},{cesta:2,carrinho:1},24,'construction','Artesanato em madeira: cestas e carrinhos ampliam a capacidade individual de transporte.','services',{need:'energy',boost:0}),

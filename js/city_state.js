@@ -1,3 +1,4 @@
+import {CityPaint} from './city_paint.js';
 import {CityFiscal} from './city_fiscal.js';
 import {CityInterventions} from './city_interventions.js';
 import {CityVehicles} from './city_vehicles.js';
@@ -35,7 +36,7 @@ import { CitySociety } from './city_society.js';
 import { CityServiceInvestment } from './city_service_investment.js';
 import { World, WorldClock } from './world.js';
 
-const prototypes = new Map([CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
+const prototypes = new Map([CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));
@@ -221,6 +222,7 @@ export class CityStateGraph {
 
 /** Restore computed fields, never serialized as stale monetary values. */
 export function bindCityState(city) {
+  city.paint??=new CityPaint(city);
   city.fiscal??=new CityFiscal(city);
   city.housing.invalidateResidents();
   city.buildingsById ??= new Map(); city.buildingsById.clear();

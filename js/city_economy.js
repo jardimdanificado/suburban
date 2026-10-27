@@ -637,7 +637,7 @@ export class CityEconomy {
     if(b.type==='bank') return this.city.bank.loans.some(l=>l.bankId===b.id && l.remaining>0) || [...this.city.bank.deposits.values()].some(a=>a.bankId===b.id);
     if (!Object.entries(spec.inputs).every(([g,n])=>b.inventory[g]>=n)) return false;
     const net=Object.values(spec.outputs).reduce((n,v)=>n+v,0)-Object.values(spec.inputs).reduce((n,v)=>n+v,0);
-    if(inventoryFree(b)<Math.max(0,net) || Object.entries(spec.outputs).some(([g])=>b.inventory[g]>=48)) return false;
+    if(inventoryFree(b)<Math.max(0,net) || Object.entries(spec.outputs).some(([g])=>b.inventory[g]>=(b.type==='paintworks'&&b.paintColorOrders?.length?180:48))) return false;
     // Mines must own actual rock deposits; other primary sites have finite extraction reserves.
     if(['iron_mine','bauxite_mine'].includes(b.type)) {
       b.deposits ??= quarryDeposits(this.city.world,b.entity.x,b.entity.y,b.width,b.depth);
@@ -649,9 +649,10 @@ export class CityEconomy {
     b.productionLabor=(b.productionLabor||0)+(1+(c.skills[spec.skill]||0)/80+(c.toolUntil>this.city.minute ? .3 : 0))*workEfficiency(c,b);
     if(b.productionLabor<spec.labor)return true;
     b.productionLabor-=spec.labor;
-    for(const [g,n] of Object.entries(spec.inputs)){b.inventory[g]-=n;this.city.vehicles.discardComponents(b,g,n);this.consumed[g]+=n;if(g==='lixo')b.wasteProcessed=(b.wasteProcessed||0)+n;this.recordGoods('recipe-input',g,n,b.id,null);}
+    for(const [g,n] of Object.entries(spec.inputs)){this.city.paint.discard(b,g,n);b.inventory[g]-=n;this.city.vehicles.discardComponents(b,g,n);this.consumed[g]+=n;if(g==='lixo')b.wasteProcessed=(b.wasteProcessed||0)+n;this.recordGoods('recipe-input',g,n,b.id,null);}
     for(const [g,n] of Object.entries(spec.outputs)){b.inventory[g]+=n;this.produced[g]+=n;if(b.type==='composting')b.compostProduced=(b.compostProduced||0)+n;this.recordGoods('production',g,n,null,b.id);}
     this.city.vehicles.produced(b,spec.outputs);
+    if(b.type==='paintworks')this.city.paint.produced(b,spec.outputs.tinta);
     if(b.type==='tailor')manufactureClothes(this.city,b,spec.outputs.roupas);
     if(b.type==='newsroom'){printNewspaper(this.city,b,spec.inputs.papel,c);if(b.newsPrintedDay!==this.city.day){b.newsPrintedDay=this.city.day;b.newsCopies=0;}b.newsCopies++;}
     if(b.type==='publisher')for(const [good,n] of Object.entries(spec.outputs))for(let i=0;i<n;i++)this.city.publications.stock(b,good,spec.inputs.papel);
@@ -696,6 +697,7 @@ export class CityEconomy {
     }
   }
   productionWork(b, c) {
+    if(['builder','cycle_workshop'].includes(b.type)&&this.city.paint.work(b,c))return true;
     if(b.type==='kitchen')return kitchenWork(this,b,c);
     if (INDUSTRIES[b.type]) return this.industrialWork(b,c,INDUSTRIES[b.type]);
     if (b.type === 'mill') {
@@ -742,7 +744,7 @@ export class CityEconomy {
       case 6: this.city.development.balanceContracts(); this.city.nature.hourly(); break;
       case 7: this.city.logistics.rebalanceWaiting(); break;
       case 8: this.trade(); break;
-      case 9: updateClothes(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
+      case 9: this.city.paint.hourly();updateClothes(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
       case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
       case 11: this.updateDemand(); updateMarket(this);planSupplyChains(this);break;
       case 12: if (this.city.hour % 2 === 0) { this.investInHousing(); this.invest(); } break;

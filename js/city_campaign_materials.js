@@ -44,8 +44,8 @@ export class CityCampaignMaterials {
         const worker=city.politics.campaigns.sample(pool.filter(c=>!c.campaign),8).sort((a,b)=>(b.skills.social||0)-(a.skills.social||0))[0];if(!worker)break;
         let destination=kind==='flag'?this.roadside():['paint','banner'].includes(kind)?this.property(n):city.politics.getResearch().sites()[0];if(!destination)continue;
         const good={pamphlet:'panfletos',flag:'bandeiras',banner:'faixas',paint:'tinta'}[kind],quantity=kind==='pamphlet'?3:kind==='paint'?Math.max(1,Math.ceil(city.building(destination.buildingId).width*city.building(destination.buildingId).depth/6)):1;
-        const shop=city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&(b.inventory[good]||0)>=quantity).sort((a,b)=>Math.hypot(a.door.x-worker.entity.x,a.door.y-worker.entity.y)-Math.hypot(b.door.x-worker.entity.x,b.door.y-worker.entity.y))[0];if(!shop)continue;
-        const unitPrice=city.economy.goods[good].price,fee=city.currency.price(600),cost=unitPrice*quantity+fee+(destination.permissionFee||0);if(city.politics.partyAccount(party).balance<cost)continue;
+        const shop=city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&(b.inventory[good]||0)>=quantity&&(good!=='tinta'||city.paint.available(b,party.flag.background)>=quantity)).sort((a,b)=>Math.hypot(a.door.x-worker.entity.x,a.door.y-worker.entity.y)-Math.hypot(b.door.x-worker.entity.x,b.door.y-worker.entity.y))[0];if(!shop)continue;
+        const unitPrice=good==='tinta'?city.paint.quote(shop,party.flag.background):city.economy.goods[good].price,fee=city.currency.price(600),cost=unitPrice*quantity+fee+(destination.permissionFee||0);if(city.politics.partyAccount(party).balance<cost)continue;
         const path=city.findPath(worker.entity,shop.door);if(path===null)continue;
         const mission={id:this.nextId++,electionId:e.id,requestDay:city.day,candidateId:n.citizenId,candidateName:n.name,partyId:n.partyId,partyNumber:party.number,workerId:worker.id,shopId:shop.id,kind,good,quantity,unitPrice,fee,destination,status:'assigned',stage:'pickup',startedAt:city.minute,until:Math.min(e.voteAt,city.minute+240),paid:0,docIds:[]};
         this.missions.push(mission);worker.campaign={type:'paid',missionId:mission.id,electionId:e.id,candidateId:n.citizenId,partyId:n.partyId,partyNumber:party.number,partyFlag:party.flag,speechColor:party.flag.background,flag:null,until:mission.until,destination};worker.path=path;worker.task='campaign';worker.targetId=shop.id;worker.action='Indo retirar material de campanha';
@@ -62,10 +62,10 @@ export class CityCampaignMaterials {
     c.campaignInventory??={};
     if(m.stage==='pickup'){
       const shop=city.building(m.shopId),cost=m.quantity*m.unitPrice;
-      if(!shop?.active||shop.entity.destroyed||Math.hypot(c.entity.x-shop.door.x,c.entity.y-shop.door.y)>1.5||shop.inventory[m.good]<m.quantity||city.politics.partyAccount(party).balance<cost+m.fee+(m.destination.permissionFee||0)){this.release(c,'Fornecedor, material ou pagamento indisponível');return;}
+      if(!shop?.active||shop.entity.destroyed||Math.hypot(c.entity.x-shop.door.x,c.entity.y-shop.door.y)>1.5||shop.inventory[m.good]<m.quantity||(m.good==='tinta'&&city.paint.available(shop,party.flag.background)<m.quantity)||city.politics.partyAccount(party).balance<cost+m.fee+(m.destination.permissionFee||0)){this.release(c,'Fornecedor, material ou pagamento indisponível');return;}
       const route=city.findPath(c.entity,m.destination);if(route===null){this.release(c,'Sem rota para instalação ou propaganda');return;}
       if(!city.transfer(city.politics.partyAccount(party).accountId,shop.accountId,cost,'Serviço: Material de campanha',{electionId:e.id,missionId:m.id,good:m.good,quantity:m.quantity,buildingId:shop.id}))return;
-      shop.inventory[m.good]-=m.quantity;city.economy.recordGoods('campaign-pickup',m.good,m.quantity,shop.id,null);m.paid+=cost;n.campaignFinance.spent+=cost;
+      city.paint.discard(shop,m.good,m.quantity,m.good==='tinta'?party.flag.background:null);shop.inventory[m.good]-=m.quantity;city.economy.recordGoods('campaign-pickup',m.good,m.quantity,shop.id,null);m.paid+=cost;n.campaignFinance.spent+=cost;
       if(m.kind==='pamphlet')for(let i=0;i<m.quantity;i++){
         const doc=city.publications.takeStock(shop,c,'panfletos'),event=city.history.record('government',`${n.name}, número ${party.number}, ${party.name}: ${n.promises.map(pr=>pr.title).join('; ')}.`,[candidate.accountId],{kind:'campaign-leaflet',electionId:e.id,candidateId:n.citizenId,partyId:party.id,partyNumber:party.number,missionId:m.id});
         city.publications.write(doc.id,c.id,{eventId:event.id,type:'propaganda'});m.docIds.push(doc.id);

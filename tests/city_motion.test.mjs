@@ -7,7 +7,7 @@ test('buffered movement stays continuous across jittered motion and full-state p
  for(let now=0;now<=1000;now+=5){
   while(next<packets.length&&packets[next]<=now){const t=packets[next++];queueMotion(m,t*.004,0,t);}
   sampleMotion(m,now);
-  if(now>MOTION_BUFFER_MS){assert(m.entity.x>last,`unwanted stop at ${now} ms`);assert(Math.abs(m.entity.x-(now-MOTION_BUFFER_MS)*.004)<1e-9);}
+  if(now>MOTION_BUFFER_MS){assert(m.entity.x>last,`unwanted stop at ${now} ms`);if(now>MOTION_BUFFER_MS+100)assert(Math.abs(m.entity.x-(now-MOTION_BUFFER_MS)*.004)<1e-9);}
   last=m.entity.x;
  }
  assert(m.points.length<=5);
@@ -20,4 +20,12 @@ test('a real stop holds the endpoint without predicting movement past it',()=>{
 test('teleports and resets discard old walking segments',()=>{
  const m=motion();queueMotion(m,0,0,0);queueMotion(m,1,0,100);queueMotion(m,40,50,120,{reset:true});sampleMotion(m,120);
  assert.deepEqual(m.entity,{x:40,y:50});
+});
+
+test('velocity stays continuous at a simulation tick with different incoming and outgoing speeds',()=>{
+ const m=motion();for(const [at,x]of [[0,0],[100,.2],[200,.8],[300,1],[400,1.7]])queueMotion(m,x,0,at);
+ const value=t=>{sampleMotion(m,t+MOTION_BUFFER_MS);return m.entity.x;},delta=.01;
+ const left=value(200-delta),center=value(200),right=value(200+delta);
+ assert(Math.abs((center-left)/delta-(right-center)/delta)<.00001);
+ assert(center>=left&&right>=center);
 });

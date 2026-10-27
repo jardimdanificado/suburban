@@ -7,7 +7,7 @@ import {VEHICLE_RECIPES} from '../js/city_vehicles.js';
 import {renderVehicle,renderParking} from '../js/city_vehicles_ui.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 function firstBike(city){return [...city.vehicles.units.values()].find(v=>v.good==='bicicleta_carga');}
-function panel(){const text=[],buttons=[];return {text,buttons,heading:s=>text.push(s),status:(...s)=>text.push(s.join(' ')),note:s=>text.push(s),metrics(){},kv:(...s)=>text.push(s.join(': ')),button:(label,click)=>buttons.push({label,click}),record:(...s)=>text.push(s.slice(0,2).join(' ')),table:(cols,rows)=>text.push(...rows.map(r=>r.cells.join(' ')))};}
+function panel(){const text=[],buttons=[];return {text,actions:buttons,buttons:items=>buttons.push(...items),heading:s=>text.push(s),status:(...s)=>text.push(s.join(' ')),note:s=>text.push(s),metrics(){},kv:(...s)=>text.push(s.join(': ')),button:(label,click)=>buttons.push({label,click}),record:(...s)=>text.push(s.slice(0,2).join(' ')),table:(cols,rows)=>text.push(...rows.map(r=>r.cells.join(' ')))};}
 test('foundation starts the public cycle chain with funded premises and real raw-material reserves',()=>{
  const city=setup({starter:true,population:128});for(const type of INITIAL_CYCLE_STAGES){const b=city.buildings.find(b=>b.type===type&&b.initialCycleChain);assert(b,`Missing ${type}`);assert(b.active&&b.municipal);assert(b.balance>0);assert(b.workers.length>0,`No workers in ${type}`);assert(b.units.every(u=>u.ownerId==='treasury'));}
  const assembler=city.buildings.find(b=>b.type==='cycle_assembler');assert.equal(assembler.inventory.bicicleta,0);assert.equal(assembler.inventory.quadro,0);assert(city.economy.initialStock.aco>0);assert.equal(totalMoney(city),city.currency.netIssued());

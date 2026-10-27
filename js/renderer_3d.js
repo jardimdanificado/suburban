@@ -4587,7 +4587,7 @@ export class RCT3DRenderer {
   getTps() { return this.targetTps; }
   createCityBuildingMaterial(kind,color){
     const feature=kind==='wood'?'Feature_Wood.png':kind==='roof'?'Feature_Brick_C.png':'Feature_Brick_B.png';
-    const material=new THREE.MeshLambertMaterial({color,map:createTintedTexture(feature,0xffffff,0x999999,1),side:THREE.DoubleSide});
+    const material=new THREE.MeshLambertMaterial({color,...(kind==='roof'?{map:createTintedTexture(feature,0xffffff,0x999999,1)}:{}),side:THREE.DoubleSide});
     applyRetroDitherToMaterial(material);return material;
   }
   decorateCityMaterials(group){group.traverse(object=>{for(const material of [object.material].flat())if(material?.isMeshLambertMaterial)applyRetroDitherToMaterial(material);});}
@@ -7004,7 +7004,7 @@ export class RCT3DRenderer {
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
         if (isConsciousCreature && !e.properties?.citizen?.indoorLocation) {
           const campaign=e.properties?.citizen?.campaign;
-          if(campaign?.flag && e.properties.citizen.task==='campaign') {
+          if(campaign?.flag && e.properties.citizen.task==='campaign'&&!e.properties.citizen.ridingVehicleId) {
             const flag=campaign.flag,uiKey=`${e.id}_campaign_flag`;
             activeUiIds.add(uiKey);
             const tex=createTintedTexture(flag.skin,parseInt(flag.foreground.slice(1),16),parseInt(flag.background.slice(1),16),1);

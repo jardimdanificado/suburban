@@ -2,12 +2,13 @@
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2]});
 const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','health','vote','council-session']);
 export function citizenAnimation(c,moving=false){
-  if(c.ridingVehicleId)return 'ride';
+  if(c.ridingVehicleId)return ['patinete','patins','skate'].includes(c.ridingVehicleKind)?'glide':'ride';
   if(moving)return 'run';
   return WORK_TASKS.has(c.task)&&!c.path?.length?'use':'idle';
 }
 export function citizenFrame(clip,time,phase=0){
-  if(clip==='ride')return {clip:'use',frame:1};
+  if(clip==='ride')return {clip:'use',frame:1+Math.floor(Math.max(0,time)*4+phase)%2};
+  if(clip==='glide')return {clip:'use',frame:1};
   const sequence=clip==='use'?[0,1,2,1]:CITIZEN_MODEL_FRAMES[clip]||[0],fps=clip==='run'?8:4;
   return {clip:clip in CITIZEN_MODEL_FRAMES?clip:'idle',frame:sequence[Math.floor(Math.max(0,time)*fps+phase)%sequence.length]};
 }
@@ -57,12 +58,12 @@ export class CityCitizenModels {
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden||c.indoorLocation)return true;
     let motion=this.motion.get(entity);
-    if(!motion){motion={x:entity.x,y:entity.y,angle:0,walkDistance:0,hasWalked:false};this.motion.set(entity,motion);}
+    if(!motion){motion={x:entity.x,y:entity.y,angle:0,walkDistance:0,rideDistance:0,hasWalked:false};this.motion.set(entity,motion);}
     const dx=entity.x-motion.x,dy=entity.y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
-    if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId){motion.walkDistance+=Math.hypot(dx,dy);motion.hasWalked=true;}motion.x=entity.x;motion.y=entity.y;}
+    if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId){motion.walkDistance+=Math.hypot(dx,dy);motion.hasWalked=true;}else motion.rideDistance+=Math.hypot(dx,dy);motion.x=entity.x;motion.y=entity.y;}
     if(c.ridingVehicleId&&c.mobilityTrip){const next=c.path?.[0];if(next)motion.angle=Math.atan2(next.x-entity.x,next.y-entity.y);}
-    const clip=citizenAnimation(c,moved||!!c.path?.length&&motion.hasWalked),pose=clip==='run'?{clip:'run',frame:Math.floor(motion.walkDistance*3+(entity.id*13)%17)%CITIZEN_MODEL_FRAMES.run.length}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    const clip=citizenAnimation(c,moved||!!c.path?.length&&motion.hasWalked),pose=clip==='run'?{clip:'run',frame:Math.floor(motion.walkDistance*3+(entity.id*13)%17)%CITIZEN_MODEL_FRAMES.run.length}:clip==='ride'?{clip:'use',frame:1+Math.floor(motion.rideDistance*1.5)%2}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
     let batch=this.batches.get(key);if(!batch){batch={count:0,capacity:0,mesh:null};this.batches.set(key,batch);}
     if(batch.count===batch.capacity){
       const capacity=Math.max(32,batch.capacity*2),mesh=new this.THREE.InstancedMesh(this.frames.get(key),this.material,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;

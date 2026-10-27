@@ -1,3 +1,4 @@
+import {CityPaint} from './city_paint.js';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork} from './city_employment.js';
 import {CityFiscal} from './city_fiscal.js';
@@ -115,6 +116,7 @@ export class CitySimulation {
     this.publications = new CityPublications(this);
     this.officialJournal = new CityOfficialJournal(this);
     this.vehicles = new CityVehicles(this);
+    this.paint = new CityPaint(this);
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -371,6 +373,7 @@ export class CitySimulation {
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     else if (n.energy < 65) { task = 'energy'; type = 'home'; }
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
+    if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&this.paint.route(c))return;
     if (task === 'social' && this.relationships.seekContact(c)) return;
     if (task === 'toilet') { if (!this.sanitation.choose(c)) { c.task = null; c.action = 'Aguardando banheiro acessível'; } return; }
     if (task === 'food' && this.workMeals.routeToMeal(c)) return;
@@ -409,6 +412,7 @@ export class CitySimulation {
   performTask(c) {
     syncCitizenInterior(this,c);
     if(c.task==='council-session'){this.politics.council.getChamber().arrive(c);return;}
+    if(['paint-purchase','paint-delivery'].includes(c.task)){this.paint.arrive(c);return;}
     if(c.task==='research'){this.politics.getResearch().fieldWork(c);return;}
     if(c.task==='interview'){this.politics.getResearch().respondentWait(c);return;}
     if(c.task==='vote'){this.politics.voting.arrive(c);return;}
@@ -562,7 +566,7 @@ export class CitySimulation {
       const hall = this.buildings.find(h => h.type === 'townhall' && !h.entity.destroyed);
       for (const [good, stock] of Object.entries(b.inventory)) {
         const qty = stock + (good === 'lixo' ? b.litter || 0 : 0),stored = Math.min(qty, hall ? inventoryFree(hall) : 0);
-        if (hall) {hall.inventory[good] += stored;this.publications.moveStock(b,hall,good,stored);this.vehicles.moveStock(b,hall,good,stored);if(good==='roupas')moveGarments(b,hall,stored);}
+        if (hall) {hall.inventory[good] += stored;this.publications.moveStock(b,hall,good,stored);this.vehicles.moveStock(b,hall,good,stored);this.paint.move(b,hall,good,stored);if(good==='roupas')moveGarments(b,hall,stored);}
         this.economy.lost[good] += qty - stored;this.publications.loseStock(b,good,qty-stored);this.vehicles.loseStock(b,good,qty-stored);b.inventory[good] = 0;
       }
       b.litter = 0;
@@ -590,6 +594,7 @@ export class CitySimulation {
       if(c.forestryJob?.load){this.economy.lost.madeira+=c.forestryJob.load;this.log('Madeira perdida com a interrupção do transporte florestal.','nature',[c.id],{quantity:c.forestryJob.load,buildingId:c.forestryJob.buildingId});}
       if(c.forestrySeeds)this.economy.lost.sementes+=c.forestrySeeds;
       for(const [good,n]of Object.entries(c.campaignInventory||{}))this.economy.lost[good]+=n;
+      this.economy.lost.tinta+=c.paintBag?.inventory.tinta||0;
       this.economy.lost.roupas+=(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length;
       this.transfer(c.accountId, heir?.accountId || 'treasury', c.balance, c.dead ? 'Herança' : 'Saída de cidadão');
       this.sanitation.releaseCitizen(c);
@@ -721,7 +726,7 @@ export class CitySimulation {
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     const printed=['livros','panfletos','jornais'].includes(good)?[...this.publications.documents.values()].filter(d=>!d.lost&&d.good===good&&!this.publications.inventoryHolder(d.ownerAccountId)).length:0;
-    return this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values()].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;
