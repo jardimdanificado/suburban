@@ -40,6 +40,7 @@ export class CityCurrency {
     return true;
   }
   work(b, c) {
+    if(!c.indoorLocation?.unitId||c.indoorLocation.buildingId!==b.id||c.indoorLocation.path?.length||c.indoorLocation.exiting)return false;
     if (b.type !== 'mint' || !b.active || b.entity.destroyed || !b.workers.includes(c.id) || c.jobId !== b.id || this.city.hour < 8 || this.city.hour >= 17 || Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>2) return false;
     this.rollDay();
     const amount = Math.min(CURRENCY_RULES.mintPerWorkMinute, this.emissionLimit() - this.issuedToday);

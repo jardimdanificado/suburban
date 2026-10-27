@@ -1,3 +1,4 @@
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js';
 import { inventoryFree } from './city_inventory.js';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
@@ -45,12 +46,12 @@ export class CitySanitation {
     if (!residents.length && this.city.units.get(f.unitId)?.ownerId === c.accountId) return true;
     return residents.some(p => { const r = this.city.relationships.view(p,c); return r && r.affection >= 65 && r.trust >= 50 && r.resentment<30; });
   }
-  choose(c) {
-    const options = [...this.facilities.values()].filter(f => this.allowed(c, f) && (!f.occupantId || f.occupantId === c.id || this.city.minute >= f.busyUntil));
+  choose(c,task='toilet') {
+    const options = [...this.facilities.values()].filter(f => this.allowed(c, f) && this.city.units.get(f.unitId)?.roomType==='bathroom' && activityCellAvailable(this.city,this.city.units.get(f.unitId),c,'bathroom') && (!f.occupantId || f.occupantId === c.id || this.city.minute >= f.busyUntil));
     options.sort((a, b) => this.score(c, a) - this.score(c, b));
     for (const f of options) {
       const b = this.city.building(f.buildingId), path = this.city.findPath(c.entity, b.door); if (path === null) continue;
-      c.toiletTargetId = f.id; c.task = 'toilet'; c.targetId = b.id; c.path = path; return true;
+      if(task==='toilet')c.toiletTargetId=f.id;else c.hygieneTargetId=f.id;c.task=task; c.targetId = b.id; c.path = path; return true;
     }
     return false;
   }
@@ -66,6 +67,7 @@ export class CitySanitation {
   use(c) {
     const f = this.facilities.get(c.toiletTargetId), b = f && this.city.building(f.buildingId);
     if (!f || !b || !this.allowed(c, f) || (f.occupantId && f.occupantId !== c.id && this.city.minute < f.busyUntil)) { c.task = null; c.toiletTargetId = null; return false; }
+    const room=this.city.units.get(f.unitId);if(!room||!activityRoomReady(this.city,c,b,room,'bathroom'))return false;
     if (c.servicePaid !== f.id) {
       if (!this.city.transfer(this.city.payerFor(c), b.accountId, f.price, 'Serviço: Banheiro')) { c.task = null; return false; }
       b.lastToiletUseAt = this.city.minute; f.occupantId = c.id; f.busyUntil = this.city.minute + 20; f.uses++;
@@ -146,8 +148,10 @@ export class CitySanitation {
         if (!c || path === null) continue;
         c.cleaningJobId = job.id; c.task = 'clean'; c.servicePaid = null; c.targetId = site.id; c.path = path; job.workerId = c.id; job.status = 'working';
       }
-      if (!c || c.workMeal || c.conversation || c.path.length) continue;
+      if (!c || c.workMeal || c.task==='workmeal' || c.conversation || c.path.length) continue;
+      if(c.task!=='clean'){c.task='clean';c.targetId=site.id;}
       if (Math.hypot(c.entity.x - site.door.x, c.entity.y - site.door.y) > 2) { const path = this.city.findPath(c.entity, site.door); if (path) c.path = path; else this.releaseCitizen(c); continue; }
+      const room=this.city.units.get(this.facilities.get(job.facilityId)?.unitId);if(room&&!activityRoomReady(this.city,c,site,room,'bathroom'))continue;
       const employer = this.city.building(job.providerId);
       if (employer && c.id !== employer.ownerId) {
         if (employer.balance < employer.wage) { this.releaseCitizen(c); continue; }

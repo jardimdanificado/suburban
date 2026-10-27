@@ -68,7 +68,7 @@ export class CityGovernment extends CityPolitics {
     const id=this.nextPartyId++,[economy,liberty,green]=PARTY_FAMILIES[[0,2,5,6][(id-1)%4]];
     const ideology=proposal?.ideology||Object.freeze({economy,liberty,green});
     const naming=proposal?Object.fromEntries(['name','short','nameFlavor','nameCore','nameVersion'].map(key=>[key,proposal[key]])):makePartyName(this.city,ideology,this.parties,id);
-    const party={id,...naming,ideology,nameAgenda:naming.nameAgenda||partyNameAgenda(naming.name),parentPartyId:proposal?.parentPartyId??null,approvalId:proposalId,flag:makePartyFlag(this.city,id-1),active:true,memberIds:[],leaderId:null,successorIds:[],history:[],foundedAt:this.city.minute};
+    const party={id,...naming,ideology,nameAgenda:naming.nameAgenda||partyNameAgenda(naming.name),parentPartyId:proposal?.parentPartyId??null,approvalId:proposalId,flag:makePartyFlag(this.city,id-1,(proposal?.founderIds||[]).map(id=>this.city.society.citizen(id))),initialParty:initial,founderIds:proposal?.founderIds?.slice()||[],active:true,memberIds:[],leaderId:null,successorIds:[],history:[],foundedAt:this.city.minute};
     this.parties.push(party);this.partyAccount(party);this.assignPartyNumbers();this.city.log(`${party.name} foi registrado.`,'government',proposal?.founderIds||[],{kind:'party-founded',partyId:id,partyProposalId:proposalId});return party;
   }
   fillParties(){

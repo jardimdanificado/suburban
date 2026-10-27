@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,totalMoney,finishShipment} from './helpers/city.mjs';
+import {setup,totalMoney,finishShipment,putAtWorkCell,finishActivityRoute} from './helpers/city.mjs';
 import {COLOR_PALETTE,initializeColors,colorAffinity,favoriteColors,factoryColors} from '../js/city_colors.js';
 import {garmentScore} from '../js/city_clothing.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
@@ -18,7 +18,7 @@ test('factories consume actual inputs to produce normal and custom paint, sold w
  const city=fixture(),factory=city.buildings.find(b=>b.type==='paintworks'),worker=city.society.citizen(factory.workers[0]),c=city.citizens.find(c=>c.fixtureInvestor),color='#123456',money=totalMoney(city);
  factory.inventory.tinta=0;factory.paintLots=[];for(const [g,n]of Object.entries(city.buildingTypes.paintworks.inputs))factory.inventory[g]=n*4;
  assert(city.paint.requestPurchase(c.id,factory.id,color,true));assert(factory.paintColorOrders.length);assert.equal(factory.inventory.tinta,0);
- for(let i=0;i<25;i++)city.economy.productionWork(factory,worker);
+ putAtWorkCell(city,worker,factory);for(let i=0;i<25;i++)city.economy.productionWork(factory,worker);
  assert(city.paint.available(factory,color)>0);assert(factory.paintLots.some(l=>l.color===color&&l.premium));const normal=city.economy.goods.tinta.price;assert(city.paint.quote(factory,color)>normal);
  const before=paintTotal(city);c.entity.x=factory.door.x;c.entity.y=factory.door.y;c.task='paint-purchase';city.paint.arrive(c);
  assert.equal(c.paintBag.inventory.tinta,1);assert.equal(c.paintBag.paintLots[0].color,color);assert.equal(c.paintPurchase,null);assert.equal(paintTotal(city),before);assert.equal(totalMoney(city),money);assert.equal(factoryColors(factory).length,4);
@@ -39,13 +39,13 @@ test('painting a delivered bicycle uses workshop paint, real worker labor and ex
 test('the owner can bring paint to a garage and pays only labor',()=>{
  const city=fixture(),{v,owner,garage,worker}=equipment(city),color='#aabbcc';paintStock(city.paint.bag(owner),color);garage.inventory.tinta=0;garage.paintLots=[];
  assert(city.paint.requestVehicle(v.id,garage.id,color,true));const job=city.paint.jobs.at(-1);v.x=v.entity.x=worker.entity.x=owner.entity.x=garage.door.x;v.y=v.entity.y=worker.entity.y=owner.entity.y=garage.door.y;owner.task='paint-delivery';city.paint.arrive(owner);assert.equal(owner.paintBag.inventory.tinta,0);assert.equal(job.materials.length,1);assert.equal(job.price,undefined);
- const before=paintTotal(city);for(let i=0;i<30&&job.status!=='completed';i++)city.economy.productionWork(garage,worker);
+ worker.task='work';worker.targetId=garage.id;const before=paintTotal(city);for(let i=0;i<30&&job.status!=='completed';i++)city.economy.productionWork(garage,worker);
  assert.equal(job.status,'completed');assert.equal(v.color,color);assert.equal(owner.paintBag.inventory.tinta,0);assert.equal(job.price,Math.ceil(city.currency.price(job.requiredLabor*city.politics.policy.minimumWage)));assert.equal(paintTotal(city),before);
 });
 test('a property owner can paint only their own rooms with a real construction service',()=>{
  const city=fixture(),b=city.buildings.find(b=>b.type==='bank'),builder=city.buildings.find(b=>b.type==='builder'),worker=city.society.citizen(builder.workers[0]),c=city.citizens.find(c=>c.fixtureInvestor),color='#ddaaff';
  b.units[0].ownerId=c.accountId;b.units[1].ownerId=c.accountId;paintStock(builder,color);assert(city.paint.requestBuilding(b.id,c.accountId,color));const job=city.paint.jobs.at(-1);assert.equal(job.quantity,1);assert.equal(job.unitIds.length,2);const before=paintTotal(city);
- worker.entity.x=b.door.x;worker.entity.y=b.door.y;for(let i=0;i<30&&job.status!=='completed';i++)city.economy.productionWork(builder,worker);
+ worker.task='work';worker.targetId=builder.id;worker.entity.x=b.door.x;worker.entity.y=b.door.y;for(let i=0;i<30&&job.status!=='completed';i++){city.economy.productionWork(builder,worker);finishActivityRoute(city,worker);}
  assert.equal(job.status,'completed');assert.equal(b.wallColors[b.units[0].id],color);assert.equal(b.wallColors[b.units[2].id],undefined);assert.equal(b.paintRevision,1);assert.equal(paintTotal(city),before);
 });
 test('vehicle flags are durable physical items and detach without duplication',()=>{

@@ -718,4 +718,10 @@ Cada cidadão tem afinidades individuais por cores, usadas ao escolher roupas, i
 
 A aba **Pintura** de um prédio contrata uma construtora para pintar os cômodos do proprietário escolhido. A ficha de uma bicicleta ou patinete tem **Pintura e bandeiras**: o proprietário leva o veículo à oficina, que usa tinta de seu estoque ou tinta entregue pelo cliente, cobra o serviço e emprega um mecânico. A procedência da tinta e o histórico de pintura ficam registrados. Bandeiras montadas são itens físicos e retornam ao proprietário ao serem retiradas; militantes também carregam na bicicleta suas bandeiras de campanha.
 
-As paredes usam cores lisas, preservando o dither da iluminação. A pedalada alterna os OBJ `use/1` e `use/2` pela distância percorrida; o deslocamento usa interpolação cúbica monotônica entre amostras da simulação para manter continuidade de velocidade sem prever posições além das recebidas.
+As paredes usam cores lisas, preservando o dither da iluminação. A pose na bicicleta permanece fixa em `use/1`; o deslocamento usa interpolação cúbica monotônica entre amostras da simulação para manter continuidade de velocidade sem prever posições além das recebidas.
+
+### Células de atividade e cores dos fundadores
+
+Novos partidos escolhem a cor principal pela afinidade conjunta dos fundadores, com peso igual e preferência por um consenso. A cor dos símbolos considera os mesmos gostos e precisa contrastar com o fundo. Os partidos iniciais usam seu primeiro núcleo de filiados como fundadores; a ficha do partido registra a origem das cores.
+
+Trabalho, banheiro e alimentação exigem chegar à célula correspondente. `indoorLocation.position` e seu percurso registram a circulação interna e as mudanças de andar; o ponto externo permanece na entrada para a navegação da cidade. Postos de trabalho e cômodos reservam suas vagas. Fazendeiros cultivam e colhem célula por célula, construtores percorrem a área da obra e vereadores precisam alcançar o plenário para contar no quórum. A ficha pessoal mostra a célula da atividade e o percurso interno.

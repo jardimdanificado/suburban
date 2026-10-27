@@ -1,3 +1,4 @@
+import {syncCitizenInterior,advanceCitizenInterior,outdoorCellReady} from '../../js/city_interiors.js';
 import { CitySimulation } from '../../js/city_simulation.js';
 import { WorldClock } from '../../js/world.js';
 
@@ -60,3 +61,18 @@ export function finishShipment(city, shipment) {
   if (shipment.status !== 'delivered') throw Error(`Shipment ${shipment.id} did not arrive: ${shipment.status}, carrier ${shipment.carrierId}, driver ${shipment.driverId}, candidates ${city.logistics.candidates(shipment).map(c=>c.id).join(',')}, minute ${city.minute}`);
 }
 export const totalMoney = city => [...city.accounts.values()].reduce((sum, a) => sum + a.balance, 0);
+
+/** Complete an explicitly requested indoor/outdoor route without running unrelated systems. */
+export function finishActivityRoute(city,c){
+  for(let i=0;i<40;i++){
+    if(c.path.length){const last=c.path.at(-1);c.entity.x=last.x;c.entity.y=last.y;c.path=[];}
+    advanceCitizenInterior(city,c,100);
+    if(syncCitizenInterior(city,c)&&!c.path.length&&!c.indoorLocation?.path?.length)return;
+  }
+  throw Error(`Activity route did not finish: ${c.task} ${c.action}`);
+}
+export function putAtWorkCell(city,c,b){
+  c.path=[];c.indoorLocation=null;c.task='work';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;
+  if(b.constructionKind==='open-air'){const unit=b.units.find(u=>!['bathroom','dining'].includes(u.roomType));outdoorCellReady(city,c,b,unit);if(c.path.length){const last=c.path.at(-1);c.entity.x=last.x;c.entity.y=last.y;c.path=[];}outdoorCellReady(city,c,b,unit);}
+  else finishActivityRoute(city,c);
+}

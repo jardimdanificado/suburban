@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, totalMoney } from './helpers/city.mjs';
+import { setup, totalMoney, putAtWorkCell } from './helpers/city.mjs';
 import { CURRENCY_RULES } from '../js/city_currency.js';
 import { GOODS } from '../js/city_economy.js';
 import { DEVELOPMENT_RULES } from '../js/city_development.js';
@@ -9,7 +9,7 @@ function printer(city) {
   city.currency.policy.mode='capped';
   const b=city.buildings.find(b=>b.type==='mint'),c=city.society.citizen(b.workers[0]);
   c.entity.x=b.door.x;c.entity.y=b.door.y;c.path=[];c.task='work';c.targetId=b.id;
-  for(const key of Object.keys(c.needs))c.needs[key]=95;
+  for(const key of Object.keys(c.needs))c.needs[key]=95;putAtWorkCell(city,c,b);
   return {b,c};
 }
 

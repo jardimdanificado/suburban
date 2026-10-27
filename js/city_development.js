@@ -1,3 +1,4 @@
+import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js';
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
@@ -372,7 +373,7 @@ export class CityDevelopment {
     } else if (project.accountId === 'treasury') city.economy.activateMunicipalBusiness(b, b.type==='council_chamber'||project.materialAccountId?0:city.currency.price(b.type==='bank'?300000:50000), project.crop);
     else city.economy.activateBusiness(b, this.ownerCitizen(project.accountId), project.crop, false);
     city.history.record('service',`Construção de ${b.entity.properties.name} concluída.`,[project.accountId,city.building(project.builderId)?.accountId,b.accountId],{amount:project.fee,projectId:project.id,stone:project.stone});
-    city.workMeals.closeSite(project, b);
+    city.workMeals.closeSite(project, b);finishBuildingOccupants(city,b);
     if(b.type==='council_chamber')city.politics.syncGoverningFlag();
     if(b.type==='popular_housing' && project.accountId==='treasury')city.housing.assign();
     city.log(`${b.entity.properties.name} concluído no terreno ${p.id}.`, 'construction', [project.ownerId], { kind: 'project-completed', buildingId: b.id, plotId: p.id, projectId:project.id }); return b;
@@ -422,7 +423,15 @@ export class CityDevelopment {
   work(project, c) {
     if (!project || project.cancelled || project.status === 'completed') return false;
     if (project.inventory.pedra < project.stone) return false;
-    if (Math.hypot(c.entity.x - project.door.x, c.entity.y - project.door.y) > 2) return false;
+    if(['work','manage'].includes(c.task)){c.task='construction';c.workProjectId=project.id;c.targetId=project.builderId||c.targetId;}
+    const index=Math.max(0,Math.floor(project.labor/Math.max(1,DEVELOPMENT_RULES.laborPerCell))),plot=this.plots.find(p=>p.id===project.plotId);
+    if(project.service==='expansion'){
+      const building=this.city.building(project.buildingId),cells=building?.units.filter(u=>u.z===building.floors-1&&!['bathroom','dining'].includes(u.roomType));
+      if(cells?.length&&!activityRoomReady(this.city,c,building,cells[index%cells.length],'workspace'))return true;
+    }else{
+      const tile=['road','road-repair'].includes(project.service)?project.path[Math.min(project.path.length-1,Math.floor(project.labor/DEVELOPMENT_RULES.roadLaborPerTile))]:plot?{x:plot.x+(index%(project.width||plot.width))+.5,y:plot.y+Math.floor(index/(project.width||plot.width))%(project.depth||plot.depth)+.5}:project.door;
+      if(!outdoorCellReady(this.city,c,{id:project.id,entity:{x:0,y:0}},{id:`${project.id}:${index}`,x:tile.x-.5,y:tile.y-.5,z:plot?Math.floor(index/((project.width||plot.width)*(project.depth||plot.depth))):0},true))return true;
+    }
     project.status = 'building'; project.labor = Math.min(project.requiredLabor, project.labor + 1 + c.skills.construction / 50);
     if (project.service === 'road' || project.service === 'road-repair') { const tile = project.path[Math.min(project.path.length - 1, Math.floor(project.labor / DEVELOPMENT_RULES.roadLaborPerTile))]; project.door = { ...tile }; }
     this.city.economy.practice(c, 'construction'); this.complete(project); return true;

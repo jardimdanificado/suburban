@@ -1,3 +1,4 @@
+import {activityRoomReady,outdoorCellReady} from './city_interiors.js';
 import {normalizeColor,colorName,factoryColors,favoriteColors,colorAffinity} from './city_colors.js';
 const paintable=new Set(['bicicleta','bicicleta_carga','patinete']);
 const live=b=>b?.active&&!b.entity.destroyed;
@@ -80,19 +81,21 @@ export class CityPaint {
    if(job.price==null){
    const price=Math.ceil(((job.useOwn?0:this.quote(b,job.color,job.quantity))+city.currency.price(job.requiredLabor*city.politics.policy.minimumWage))*(job.payer==='treasury'?1.5:1));
    if(!city.transfer(job.payer,b.accountId,price,'Serviço: pintura',{vehicleId:job.vehicleId,buildingId:job.buildingId,paintJobId:job.id,color:job.color}))return false;
-   if(!job.materials?.length)job.materials=this.take(source,job.quantity,job.color);job.price=price;}job.workerId=c.id;job.status='painting';if(job.kind==='vehicle')target.mechanicId=c.id;
+   if(!job.materials?.length)job.materials=this.take(source,job.quantity,job.color);job.price=price;}job.workerId=c.id;c.paintWorkId=job.id;job.status='painting';if(job.kind==='vehicle')target.mechanicId=c.id;
   }
-  if(Math.hypot(c.entity.x-point.x,c.entity.y-point.y)>1.5){const path=city.findPath(c.entity,point);if(path===null)return false;c.path=path;c.indoorLocation=null;return true;}
-  job.labor+=1+(c.skills.maintenance||c.skills.construction||0)/100;c.action=`Pintando de ${colorName(job.color)}`;if(job.labor<job.requiredLabor)return true;
+  c.task='work';c.targetId=b.id;
+  if(job.kind==='building'){const index=Math.min(job.unitIds.length-1,Math.floor(job.labor/3)),unit=city.units.get(job.unitIds[index]);if(!unit){this.cancel(job);return false;}if(!activityRoomReady(city,c,target,unit,'workspace'))return true;}
+  else if(!outdoorCellReady(city,c,{id:b.id,entity:{x:0,y:0}},{id:`vehicle:${target.id}`,x:point.x-.5,y:point.y-.5,z:0}))return true;
+  job.labor+=Math.min(1+(c.skills.maintenance||c.skills.construction||0)/100,job.kind==='building'?(Math.floor(job.labor/3)+1)*3-job.labor:Infinity);c.action=`Pintando de ${colorName(job.color)}`;if(job.labor<job.requiredLabor)return true;
   city.economy.consumed.tinta+=job.quantity;city.economy.recordGoods('painting','tinta',job.quantity,b.id,target.id);
   if(job.kind==='vehicle'){target.color=job.color;target.mechanicId=null;target.paintJobId=null;target.status='Pintura concluída';(target.paintHistory??=[]).push({minute:city.minute,color:job.color,workshopId:b.id,workerId:c.id,price:job.price,materials:job.materials});}
   else {target.wallColors??={};for(const id of job.unitIds)target.wallColors[id]=job.color;if(job.unitIds.length===target.units.length)target.wallColor=job.color;target.paintRevision=(target.paintRevision||0)+1;}
-  job.status='completed';job.completedAt=city.minute;job.materials=[];city.history.record('production',`Pintura ${colorName(job.color)} concluída por ${b.entity.properties.name}.`,[job.payer],{kind:'paint-completed',vehicleId:job.vehicleId,buildingId:job.buildingId,paintJobId:job.id,color:job.color,amount:job.price});return true;
+  c.paintWorkId=null;job.status='completed';job.completedAt=city.minute;job.materials=[];city.history.record('production',`Pintura ${colorName(job.color)} concluída por ${b.entity.properties.name}.`,[job.payer],{kind:'paint-completed',vehicleId:job.vehicleId,buildingId:job.buildingId,paintJobId:job.id,color:job.color,amount:job.price});return true;
  }
- cancel(job){for(const l of job.materials||[])this.city.economy.lost.tinta+=l.quantity;job.materials=[];job.status='cancelled';const v=this.city.vehicles.units.get(job.vehicleId);if(v){v.paintJobId=null;v.mechanicId=null;}}
+ cancel(job){const worker=this.city.society.citizen(job.workerId);if(worker?.paintWorkId===job.id)worker.paintWorkId=null;for(const l of job.materials||[])this.city.economy.lost.tinta+=l.quantity;job.materials=[];job.status='cancelled';const v=this.city.vehicles.units.get(job.vehicleId);if(v){v.paintJobId=null;v.mechanicId=null;}}
  hourly(){
   const city=this.city,hour=Math.floor(city.minute/60);if(this.lastHour===hour)return;this.lastHour=hour;
-  for(const job of this.jobs.filter(j=>!['completed','cancelled'].includes(j.status))){const b=city.building(job.providerId);const client=city.society.citizen(job.clientId);if(job.clientId&&(!client||client.entity.destroyed)){this.cancel(job);continue;}const worker=city.society.citizen(job.workerId);if(job.workerId&&(!worker||worker.entity.destroyed||worker.jobId!==b?.id&&worker.id!==b?.ownerId)){job.workerId=null;job.status='ready';const v=city.vehicles.units.get(job.vehicleId);if(v)v.mechanicId=null;}if(!live(b)){this.cancel(job);continue;}if(job.useOwn||job.status==='painting'||this.available(b,job.color)+(b.incoming.tinta||0)>=job.quantity)continue;
+  for(const job of this.jobs.filter(j=>!['completed','cancelled'].includes(j.status))){const b=city.building(job.providerId);const client=city.society.citizen(job.clientId);if(job.clientId&&(!client||client.entity.destroyed)){this.cancel(job);continue;}const worker=city.society.citizen(job.workerId);if(job.workerId&&(!worker||worker.entity.destroyed||worker.jobId!==b?.id&&worker.id!==b?.ownerId)){if(worker?.paintWorkId===job.id)worker.paintWorkId=null;job.workerId=null;job.status='ready';const v=city.vehicles.units.get(job.vehicleId);if(v)v.mechanicId=null;}if(!live(b)){this.cancel(job);continue;}if(job.useOwn||job.status==='painting'||this.available(b,job.color)+(b.incoming.tinta||0)>=job.quantity)continue;
    const suppliers=city.economy.businesses.filter(p=>live(p)&&p.type==='paintworks'),seller=suppliers.find(s=>this.available(s,job.color)>=job.quantity);
    if(seller){seller.paintLots.sort((a,b)=>Number(b.color===job.color)-Number(a.color===job.color));city.logistics.order(seller,b,'tinta',job.quantity,this.quote(seller,job.color));}
    else if(suppliers[0]){const factory=suppliers[0];factory.paintColorOrders??=[];if(!factory.paintColorOrders.some(o=>o.color===job.color))factory.paintColorOrders.push({color:job.color,paintJobId:job.id});}

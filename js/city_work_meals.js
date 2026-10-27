@@ -1,3 +1,4 @@
+import {activityRoomReady,outdoorCellReady} from './city_interiors.js';
 import { preparedOffer } from './city_markets.js';
 import { CROPS } from './city_economy.js';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
@@ -45,11 +46,17 @@ export class CityWorkMeals {
     const b = this.employer(c);
     if (!b) return false;
     const holder = this.site(c, b);
-    if (Math.hypot(c.entity.x - holder.door.x, c.entity.y - holder.door.y) > 2) return false;
+    const atFarm=holder.type==='farm'&&c.entity.x>=holder.entity.x-1&&c.entity.x<=holder.entity.x+holder.width+1&&c.entity.y>=holder.entity.y-1&&c.entity.y<=holder.entity.y+holder.depth+1;
+    if(!atFarm&&Math.hypot(c.entity.x-holder.door.x,c.entity.y-holder.door.y)>2&&!c.indoorLocation)return false;
     const offer = this.offer(holder, c); if (!offer) return false;
+    if(c.task!=='workmeal'){c.mealResume={task:c.task,targetId:c.targetId,workProjectId:c.workProjectId};c.task='workmeal';c.path=[];c.targetId=b.id;c.mealTargetId=holder.id;}
+    const room=holder.units?.find(u=>u.roomType==='dining');
+    if(room){if(!activityRoomReady(this.city,c,holder,room,'dining'))return true;}
+    else if(holder.type){c.action='Aguardando refeitório';return false;}
+    else if(!outdoorCellReady(this.city,c,{id:holder.id,entity:holder.door},{x:0,y:0,z:0,id:`site-dining:${holder.id}`}))return true;
     this.city.economy.enjoyMeal(c, offer);
     for (const [good, amount] of Object.entries(offer.inputs)) { holder.inventory[good] -= amount; this.city.economy.consumed[good] += amount; this.city.economy.recordGoods('workplace-meal', good, amount, holder.id, c.id); }
-    c.workMeal = { employerId: b.id, siteId: holder.id, startedAt: this.city.minute, elapsed: 0, good: offer.good, quality: offer.quality, resume: ['work', 'manage', 'construction', 'transport'].includes(c.task) };
+    c.workMeal = { employerId: b.id, siteId: holder.id, startedAt: this.city.minute, elapsed: 0, good: offer.good, quality: offer.quality, resume:c.mealResume?['work','manage','construction','transport'].includes(c.mealResume.task):false,resumeState:c.mealResume };
     b.mealsServed++;
     this.city.log(`${c.entity.properties.name} recebeu uma refeição de ${b.entity.properties.name}, no local de trabalho.`, 'work', [c.id, b.ownerId].filter(Boolean), { kind: 'workplace-meal', employerId: b.id, siteId: holder.id, good: offer.good, quantity: offer.quantity });
     return true;
@@ -59,7 +66,8 @@ export class CityWorkMeals {
     c.workMeal.elapsed++; c.needs.food = Math.min(100, c.needs.food + 5 * c.workMeal.quality);
     c.action = 'Comendo refeição fornecida pela empresa';
     if (c.needs.food >= 95 || c.workMeal.elapsed >= WORK_MEAL_RULES.duration) {
-      const resume = c.workMeal.resume; c.workMeal = null; c.foodVoucher = null;
+      const resume = c.workMeal.resume,state=c.workMeal.resumeState; c.workMeal = null; c.foodVoucher = null;c.mealResume=null;
+      if(resume&&state){c.task=state.task;c.targetId=state.targetId;c.workProjectId=state.workProjectId;}
       if (!resume) { c.task = null; c.path = []; c.servicePaid = null; }
     }
     return true;

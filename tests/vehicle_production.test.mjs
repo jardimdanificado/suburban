@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,finishShipment} from './helpers/city.mjs';
+import {setup,finishShipment,putAtWorkCell} from './helpers/city.mjs';
 import {INDUSTRIES} from '../js/city_industries.js';
 import {VEHICLE_RECIPES} from '../js/city_vehicles.js';
 
@@ -24,7 +24,7 @@ test('vehicle parts are produced, delivered, assembled as a batch and sold as a 
   for(const [good,type]of Object.entries(partFactories)){
     const factory=business(city,type),spec=INDUSTRIES[type],worker=city.society.citizen(factory.ownerId);
     for(const [input,quantity]of Object.entries(spec.inputs)){factory.inventory[input]=quantity;city.economy.initialStock[input]+=quantity;}
-    factory.productionLabor=spec.labor;
+    putAtWorkCell(city,worker,factory);factory.productionLabor=spec.labor;
     assert(city.economy.productionWork(factory,worker),`${type} should complete production`);
     assert(factory.inventory[good]>0,`${type} should produce ${good}`);
     const shipment=city.logistics.order(factory,cycle_assembler,good,recipe[good],0,{purpose:'vehicle-parts'});
@@ -34,6 +34,7 @@ test('vehicle parts are produced, delivered, assembled as a batch and sold as a 
   }
   for(const good of Object.keys(recipe))assert(cycle_assembler.componentLots[good]?.length,`${good} should retain its producer and design`);
   const worker=city.society.citizen(cycle_assembler.ownerId);
+  putAtWorkCell(city,worker,cycle_assembler);
   for(let i=0;i<100&&cycle_assembler.inventory.bicicleta===0;i++)city.economy.productionWork(cycle_assembler,worker);
   const vehicle=[...city.vehicles.units.values()].find(v=>v.batchId&&v.good==='bicicleta');
   assert(vehicle,'assembly should register a vehicle unit');

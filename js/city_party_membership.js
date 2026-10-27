@@ -1,3 +1,4 @@
+import {founderColoredFlag} from './city_party_flags.js';
 import {promiseRelevant} from './city_mandates.js';
 // Party membership is a minority commitment; electoral support is personal and reversible.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
@@ -38,7 +39,7 @@ export function organizeMembership(p,people){
     p.membershipModelVersion=1;
   }
   for(const c of people)if(c.political.partyId&&!p.party(c.political.partyId)?.active)leaveParty(p,c,'Partido encerrado');
-  for(const party of p.parties.filter(a=>a.active&&!a.retiring&&!a.membershipSeeded)){inviteMembers(p,Math.max(0,2-party.memberIds.length),'Convite aceito para organizar o núcleo partidário',party);party.membershipSeeded=true;}
+  for(const party of p.parties.filter(a=>a.active&&!a.retiring&&!a.membershipSeeded)){inviteMembers(p,Math.max(0,2-party.memberIds.length),'Convite aceito para organizar o núcleo partidário',party);party.membershipSeeded=true;if(party.initialParty&&!party.founderIds?.length){party.founderIds=party.memberIds.slice(0,2);party.flag=founderColoredFlag(party.flag,party.founderIds.map(id=>p.city.society.citizen(id)));for(const id of party.memberIds){const c=p.city.society.citizen(id);if(c)syncPartyColor(p,c);}p.syncGoverningFlag();}}
   if(!p.membershipSeeded){const seats=Math.ceil(p.city.citizens.length*(p.policy.councilRate??5)/100),target=Math.min(Math.floor(people.length*.3),p.parties.filter(a=>a.active).length*2+seats);inviteMembers(p,Math.max(0,target-people.filter(c=>c.political.partyId).length),'Interesse em participar da organização política local');p.membershipSeeded=true;}
 }
 export function campaignContact(p,voter,nomination,election,source){

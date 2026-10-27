@@ -1,3 +1,5 @@
+import {advanceCitizenInterior} from '../js/city_interiors.js';
+import {finishActivityRoute} from './helpers/city.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, totalMoney, finishShipment } from './helpers/city.mjs';
@@ -21,7 +23,7 @@ function prepare(city, project) {
 function finish(city, project) {
   const builder = city.building(project.builderId), worker = city.society.citizen(builder.workers[0]);
   for (let i = 0; i < 10000 && project.status !== 'completed'; i++) {
-    worker.entity.x = project.door.x; worker.entity.y = project.door.y; assert(city.development.work(project, worker));
+    if(worker.path.length){const last=worker.path.at(-1);worker.entity.x=last.x;worker.entity.y=last.y;worker.path=[];}if(worker.indoorLocation)advanceCitizenInterior(city,worker,100);assert(city.development.work(project,worker));
   }
   assert.equal(project.status, 'completed');
 }
@@ -91,9 +93,9 @@ test('onsite meals consume real food, preserve the work position and resume work
   const city = setup(), b = city.economy.businesses.find(b => b.type === 'quarry'), c = city.society.citizen(b.workers[0]);
   b.inventory.pao = 6; city.economy.produced.pao += 6; c.needs.food = 30; c.needs.water = c.needs.energy = c.needs.toilet = c.needs.health = 90;
   c.entity.x = b.door.x; c.entity.y = b.door.y; c.task = 'work'; c.path = []; const balance = c.balance, consumed = city.economy.consumed.pao;
-  assert(city.workMeals.tryStart(c)); assert.equal(b.inventory.pao, 3);
+  assert(city.workMeals.tryStart(c));finishActivityRoute(city,c);city.workMeals.tryStart(c); assert.equal(b.inventory.pao, 3);
   for (let i = 0; i < WORK_MEAL_RULES.duration; i++) city.workMeals.advance(c);
-  assert(c.needs.food >= 95); assert.equal(c.balance, balance); assert.equal(c.entity.x, b.door.x); assert.equal(c.task, 'work'); assert.equal(c.workMeal, null); assert.equal(b.mealsServed, 1); assert.equal(city.economy.consumed.pao, consumed + 3); audit(city);
+  assert(c.needs.food >= 95); assert.equal(c.balance, balance); assert.equal(c.entity.x, b.entity.x+b.units.find(u=>u.roomType==='dining').x+.5); assert.equal(c.task, 'work'); assert.equal(c.workMeal, null); assert.equal(b.mealsServed, 1); assert.equal(city.economy.consumed.pao, consumed + 3); audit(city);
 });
 
 test('employees choose the stocked company refectory before an external establishment or a voucher', () => {

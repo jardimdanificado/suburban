@@ -1,3 +1,4 @@
+import {outdoorCellReady,workCellReady} from './city_interiors.js';
 import {fundInitialCycleChain} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,apply,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js';
@@ -590,33 +591,36 @@ export class CityEconomy {
     b.lastSaleAt = this.city.minute;
     return true;
   }
-  farmWork(b, c) {
-    this.buySeeds(b);
-    // Harvest needs both elapsed growth time and accumulated human labor.
-    for (const field of b.fields) {
-      if (field.plantedAt === null) {
-        const seeds=Math.ceil((field.area||12)/3);
-        if (b.seedStock < seeds || b.inventory[b.crop] >= Math.max(36,b.fields.length*18)) continue;
-        b.seedStock -= seeds; field.plantedAt = this.city.minute; field.labor = 0;
-        if(b.inventory.adubo>0) {b.inventory.adubo--;this.consumed.adubo++;field.labor=Math.min(field.requiredLabor||ECONOMY_RULES.farmLabor,30);}
-        this.consumed.sementes += seeds; this.recordGoods('sowing', 'sementes', seeds, b.id, null);
+  farmWork(b,c){
+    this.buySeeds(b);const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType));let offset=0;
+    for(const field of b.fields){
+      const area=field.area||12,units=cells.slice(offset,offset+area);offset+=area;if(!units.length)continue;
+      const required=field.requiredLabor||ECONOMY_RULES.farmLabor,quota=required/units.length;
+      if(field.plantedAt===null&&(b.seedStock<Math.ceil(area/3)||b.inventory[b.crop]>=Math.max(36,b.fields.length*18)))continue;
+      field.cellLabor??=units.map(()=>Math.min(quota,(field.labor||0)/units.length));field.harvestedCells??=units.map(()=>false);
+      const mature=field.plantedAt!==null&&this.city.minute-field.plantedAt>=CROPS[b.crop].grow&&field.labor>=required;
+      const needs=index=>field.cellLabor[index]<quota-.00001||mature&&!field.harvestedCells[index];
+      const free=u=>{const worker=this.city.accounts.get(`citizen:${u.farmWorkerId}`);return !worker||worker.entity.destroyed||worker.id===c.id||!['work','manage'].includes(worker.task)||worker.workCell?.unitId!==u.id;};
+      let index=units.findIndex(u=>u.id===c.workCell?.unitId&&free(u)&&needs(units.indexOf(u)));if(index<0)index=units.findIndex((u,i)=>free(u)&&needs(i));if(index<0)continue;
+      const unit=units[index],old=this.city.units.get(c.workCell?.unitId);if(old?.farmWorkerId===c.id&&old!==unit)old.farmWorkerId=null;unit.farmWorkerId=c.id;
+      if(!outdoorCellReady(this.city,c,b,unit))return true;
+      if(field.plantedAt===null){const seeds=Math.ceil(area/3);b.seedStock-=seeds;field.plantedAt=this.city.minute;field.labor=0;field.cellLabor=units.map(()=>0);field.harvestedCells=units.map(()=>false);field.harvestedQuantity=0;
+        if(b.inventory.adubo>0){b.inventory.adubo--;this.consumed.adubo++;field.labor=Math.min(required,30);field.cellLabor=units.map(()=>field.labor/units.length);}
+        this.consumed.sementes+=seeds;this.recordGoods('sowing','sementes',seeds,b.id,null);
       }
-      if (field.labor < (field.requiredLabor||ECONOMY_RULES.farmLabor)) {
-        field.labor = Math.min(field.requiredLabor||ECONOMY_RULES.farmLabor, field.labor + (1 + c.skills.agriculture / 60 + (c.toolUntil>this.city.minute ? .3 : 0))*workEfficiency(c,b));
-        this.harvest(b, field); return true;
-      }
-      if (this.harvest(b, field)) return true;
-    }
-    return false;
+      if(field.cellLabor[index]<quota-.00001){const labor=Math.min(quota-field.cellLabor[index],(1+c.skills.agriculture/60+(c.toolUntil>this.city.minute?.3:0))*workEfficiency(c,b));field.cellLabor[index]+=labor;field.labor=Math.min(required,field.labor+labor);if(required-field.labor<.00001)field.labor=required;c.action=`Cultivando célula ${unit.x+1}, ${unit.y+1}`;return true;}
+      if(this.harvest(b,field,index))return true;
+    }return false;
   }
-  harvest(b, field) {
-    if (inventoryFree(b) < (field.yield||ECONOMY_RULES.farmBatch) || field.plantedAt === null || field.labor < (field.requiredLabor||ECONOMY_RULES.farmLabor) || this.city.minute - field.plantedAt < CROPS[b.crop].grow) return false;
-    const quantity=field.yield||ECONOMY_RULES.farmBatch;
-    b.inventory[b.crop] += quantity; this.produced[b.crop] += quantity;
-    this.recordGoods('harvest', b.crop, quantity, null, b.id);
-    this.city.log(`${b.entity.properties.name} colheu ${quantity} unidades de ${CROPS[b.crop].label.toLowerCase()}.`, 'production', [b.ownerId], { kind: 'harvest', buildingId: b.id, crop: b.crop, quantity });
-    field.plantedAt = null; field.labor = 0; return true;
+  harvest(b,field,cellIndex=null){
+    const total=field.yield||ECONOMY_RULES.farmBatch,perCell=cellIndex==null?total:Math.floor(total*(cellIndex+1)/field.cellLabor.length)-Math.floor(total*cellIndex/field.cellLabor.length);
+    if(inventoryFree(b)<perCell||field.plantedAt===null||field.labor<(field.requiredLabor||ECONOMY_RULES.farmLabor)||this.city.minute-field.plantedAt<CROPS[b.crop].grow||cellIndex!=null&&field.harvestedCells[cellIndex])return false;
+    b.inventory[b.crop]+=perCell;this.produced[b.crop]+=perCell;this.recordGoods('harvest',b.crop,perCell,null,b.id);
+    if(cellIndex!=null){field.harvestedCells[cellIndex]=true;field.harvestedQuantity=(field.harvestedQuantity||0)+perCell;if(!field.harvestedCells.every(Boolean))return true;}
+    this.city.log(`${b.entity.properties.name} colheu ${total} unidades de ${CROPS[b.crop].label.toLowerCase()}.`,'production',[b.ownerId],{kind:'harvest',buildingId:b.id,crop:b.crop,quantity:total});
+    field.plantedAt=null;field.labor=0;field.cellLabor=null;field.harvestedCells=null;field.harvestedQuantity=0;return true;
   }
+
   industrialWork(b,c,spec) {
     if(['cycle_assembler','skate_workshop'].includes(b.type))return this.city.vehicles.assemblyWork(b,c);
     if(b.type==='cycle_workshop')return this.city.vehicles.garageWork(b,c);
@@ -697,7 +701,9 @@ export class CityEconomy {
     }
   }
   productionWork(b, c) {
+    if(!c||!['work','manage'].includes(c.task)||c.jobId!==b.id&&c.id!==b.ownerId&&!c.businessIds?.includes(b.id))return false;
     if(['builder','cycle_workshop'].includes(b.type)&&this.city.paint.work(b,c))return true;
+    if(!['farm','quarry','forestry'].includes(b.type)&&!c.mechanicJob&&!workCellReady(this.city,c,b))return false;
     if(b.type==='kitchen')return kitchenWork(this,b,c);
     if (INDUSTRIES[b.type]) return this.industrialWork(b,c,INDUSTRIES[b.type]);
     if (b.type === 'mill') {
@@ -712,6 +718,7 @@ export class CityEconomy {
     if (b.type === 'quarry') {
       if (this.city.world.map) { const revision = this.city.world.revision || 0; if (b.depositRevision !== revision) { b.deposits = quarryDeposits(this.city.world, b.entity.x, b.entity.y, b.width, b.depth); b.depositRevision = revision; } const deposits = b.deposits; if (!deposits.length) return false; const reserves = this.city.world.quarryReserves ??= new Map(); const deposit = deposits.find(p => (reserves.get(`${p.x},${p.y}`) ?? 250) > 0); if (!deposit) return false; b.activeDeposit = deposit; }
       if (b.stoneReserve <= 0 || inventoryFree(b) < 1) return false;
+      const deposit=b.activeDeposit,cell=deposit?{id:`${b.id}:deposit:${deposit.x}:${deposit.y}`,x:deposit.x-b.entity.x,y:deposit.y-b.entity.y,z:0}:b.units.find(u=>!['bathroom','dining'].includes(u.roomType));if(cell&&!outdoorCellReady(this.city,c,b,cell,true))return true;
       b.miningLabor = (b.miningLabor || 0) + (1 + c.skills.mining / 60)*workEfficiency(c,b);
       if (b.miningLabor >= 3) { b.miningLabor -= 3; b.inventory.pedra++; b.stoneReserve--; if (b.activeDeposit) { const key = `${b.activeDeposit.x},${b.activeDeposit.y}`; const reserves = this.city.world.quarryReserves; reserves.set(key, (reserves.get(key) ?? 250) - 1); } this.produced.pedra++; this.recordGoods('mining', 'pedra', 1, null, b.id); }
       return true;

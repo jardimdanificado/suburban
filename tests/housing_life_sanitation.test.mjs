@@ -1,3 +1,4 @@
+import {finishActivityRoute} from './helpers/city.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, totalMoney, finishShipment } from './helpers/city.mjs';
@@ -68,7 +69,7 @@ test('critical health does not trap a hungry worker in an endless refused meal',
   const city = setup({ starter: true, funded: true }), employer = city.economy.businesses.find(b => b.workers.length), c = city.society.citizen(employer.workers[0]);
   city.minute = 9 * 60; freshNeeds(c); c.needs.food = 0; c.needs.health = 1; c.needs.water = 1; c.needs.toilet = 1;
   c.entity.x = employer.door.x; c.entity.y = employer.door.y; c.conversation = null; c.task = 'workmeal'; employer.inventory.pao += 3;
-  assert(city.workMeals.tryStart(c)); for (let i = 0; i < 15; i++) city.workMeals.advance(c);
+  assert(city.workMeals.tryStart(c));finishActivityRoute(city,c);city.workMeals.tryStart(c); for (let i = 0; i < 15; i++) city.workMeals.advance(c);
   assert(c.needs.food >= 75); assert.equal(c.workMeal, null); assert.equal(c.task, null);
 });
 
@@ -102,7 +103,7 @@ test('bathroom access distinguishes public, paid, employees, residents and close
 test('each toilet visit produces waste once, charges once and applies cleanliness happiness', () => {
   const city = setup({ starter: true, funded: true }), c = city.citizens[3], b = build(city, 'paid_toilet'), f = [...city.sanitation.facilities.values()].find(f => f.buildingId === b.id);
   const cash = c.balance, stock = city.goodsStock('lixo'); c.toiletTargetId = f.id; c.needs.toilet = 0; c.servicePaid = null; c.mood = 0;
-  assert(city.sanitation.use(c)); city.sanitation.use(c); assert.equal(c.balance, cash - f.price); assert.equal(city.goodsStock('lixo'), stock + 1); assert.equal(c.mood, 6); assert.equal(f.uses, 1);
+  c.task='toilet';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;city.sanitation.use(c);finishActivityRoute(city,c);assert(city.sanitation.use(c)); city.sanitation.use(c); assert.equal(c.balance, cash - f.price); assert.equal(city.goodsStock('lixo'), stock + 1); assert.equal(c.mood, 6); assert.equal(f.uses, 1);
   c.needs.toilet = 95; city.sanitation.use(c); c.toiletTargetId = f.id; c.needs.toilet = 0; f.cleanliness = 0; c.mood = 0; city.sanitation.use(c); assert(c.mood < 0);
 });
 
@@ -114,7 +115,7 @@ test('cleaning contracts obey weekly public and frequent paid intervals and requ
   const job = city.sanitation.requestCleaning(f.id, paid.accountId, cleaner.id); assert(job); assert.equal(f.cleanliness, 10);
   const worker = city.society.citizen(cleaner.ownerId); freshNeeds(worker); worker.conversation = null; worker.workMeal = null; worker.deliveryId = null;
   worker.cleaningJobId = job.id; worker.entity.x = paid.door.x; worker.entity.y = paid.door.y; worker.path = []; job.workerId = worker.id; job.status = 'working';
-  const before = cleaner.balance; for (let i = 0; i < 25; i++) { city.minute++; city.sanitation.updateMinute(); }
+  const before = cleaner.balance; for (let i = 0; i < 25; i++) { city.minute++;city.sanitation.updateMinute();finishActivityRoute(city,worker);city.sanitation.updateMinute(); }
   assert.equal(job.status, 'completed'); assert.equal(f.cleanliness, 100); assert.equal(cleaner.balance - before, job.fee);
   f.cleanliness = 40; assert.equal(city.sanitation.requestCleaning(f.id), null);
   city.minute = free.lastCleanedAt + SANITATION_RULES.freeCleaningInterval; assert(city.sanitation.requestCleaning(free.id, 'treasury', cleaner.id));

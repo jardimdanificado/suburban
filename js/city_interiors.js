@@ -1,40 +1,117 @@
-// Entity coordinates remain the outdoor navigation anchor. Indoor location is
-// explicit so blocked building tiles never become pathfinding starting points.
-const INDOOR_TASKS = new Set(['work','manage','shopping','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','vote','clean','leisure','social']);
-const OUTDOOR_WORK = new Set(['farm','quarry','forestry']);
+import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
+// Outdoor coordinates remain the navigation anchor at the entrance. Interior
+// position, circulation and floor changes are separate physical coordinates.
+const INDOOR_TASKS=new Set(['work','manage','shopping','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','leisure','social']);
+const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
+const citizen=(city,id)=>city.accounts.get(`citizen:${id}`)||city.society.citizen(id);
+const point=(b,u)=>({x:b.entity.x+u.x+.5,y:b.entity.y+u.y+.5,z:u.z*CITY_FLOOR_HEIGHT});
+function release(city,c){const id=c.indoorLocation?.targetUnitId||c.indoorLocation?.unitId,u=city.units.get(id);if(u?.activityReservedIds)u.activityReservedIds=u.activityReservedIds.filter(id=>id!==c.id);if(c.workCell?.unitId===id)c.workCell=null;}
+export function activityCellAvailable(city,u,c,kind){
+ u.activityReservedIds??=[];u.activityReservedIds=u.activityReservedIds.filter(id=>{const other=citizen(city,id),location=other?.indoorLocation;return other&&!other.entity.destroyed&&!location?.exiting&&(location?.targetUnitId===u.id||location?.unitId===u.id);});
+ const visitor=['service','treatment'].includes(kind),workers=['workspace','office'].includes(kind),occupants=u.activityReservedIds.filter(id=>{const other=citizen(city,id),type=other?.indoorLocation?.targetRoomType;return visitor?!['workspace','office'].includes(type):workers?!['service','treatment'].includes(type):true;});
+ const capacity=visitor?4:kind==='bathroom'||kind==='office'?1:kind==='dining'||kind==='plenary'?4:kind==='bedroom'?4:1;
+ return u.activityReservedIds.includes(c.id)||occupants.length<capacity;
+}
+function route(from,to){const path=[],p={...from};for(const axis of ['x','y','z'])while(Math.abs(p[axis]-to[axis])>.001){p[axis]+=Math.sign(to[axis]-p[axis])*Math.min(1,Math.abs(to[axis]-p[axis]));path.push({...p});}return path;}
+function interiorRoute(b,from,to){
+ if(Math.abs(from.z-to.z)<.001)return route(from,to);
+ const stair={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:from.z},landing={...stair,z:to.z};
+ return [...route(from,stair),...route(stair,landing),...route(landing,to)];
+}
 
-export function syncCitizenInterior(city, c) {
-  let b, room;
-  if(c.mobilityTrip||c.ridingVehicleId){c.indoorLocation=null;return;}
-  const task = c.workMeal ? 'workmeal' : c.task;
-  const previous=c.indoorLocation, targetId=c.workMeal?.siteId ?? c.targetId;
-  if(!previous&&(c.entity.destroyed||c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)))return;
-  // Most residents who entered a room stay there across many render frames.
-  // Keep that stable case O(1): avoid resolving the destination and searching
-  // the building's rooms until their task, target, layout, or position changes.
-  if(previous && !c.entity.destroyed && !c.path.length && !c.deliveryId && previous.task===task && previous.buildingId===targetId && previous.toiletTargetId===c.toiletTargetId) {
-    const current=city.building(previous.buildingId);
-    if(current && !current.entity.destroyed && previous.layoutRevision===(current.layoutRevision||0) && Math.hypot(c.entity.x-current.door.x,c.entity.y-current.door.y)<=1.5)return;
-  }
-  if (!c.entity.destroyed && !c.path.length && !c.deliveryId && INDOOR_TASKS.has(task)) {
-    b = city.building(targetId);
-    if (b && Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5) {
-      if ((['work','manage'].includes(task) && OUTDOOR_WORK.has(b.type)) || (b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal'].includes(task))) b = null;
-    } else b = null;
-  }
-  if (!b) { c.indoorLocation = null; return; }
-  const layoutRevision=b.layoutRevision||0;
-  if(previous?.buildingId===b.id && previous.task===task && previous.layoutRevision===layoutRevision && previous.toiletTargetId===c.toiletTargetId)return;
-  const roomType = task==='toilet'||task==='hygiene' ? 'bathroom'
-    : ['food','workmeal','provisions'].includes(task) ? 'dining'
-    : task==='council-session' ? 'plenary'
-    : ['energy','care','caregiving'].includes(task) ? 'bedroom' : 'workspace';
-  if(task==='toilet') room=city.units.get(city.sanitation.facilities.get(c.toiletTargetId)?.unitId);
-  if(!room && ['energy','care','provisions','hygiene'].includes(task)) {
-    const home=city.housing.home(c);
-    if(home?.buildingId===b.id)room=home.unitIds.map(id=>city.units.get(id)).find(u=>u?.roomType===roomType);
-    if(!room) { const unit=city.units.get(c.homeUnitId); if(unit?.buildingId===b.id)room=unit; }
-  }
-  room ||= b.units.find(u=>u.roomType===roomType) || b.units.find(u=>!['bathroom','dining'].includes(u.roomType)) || b.units[0];
-  c.indoorLocation={buildingId:b.id,unitId:room?.id??null,floor:room?.z??0,roomType:room?.roomType??roomType,task,layoutRevision,toiletTargetId:c.toiletTargetId,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute};
+function exit(city,c){
+ const s=c.indoorLocation;if(!s)return true;
+ const b=city.building(s.buildingId);if(!b||b.entity.destroyed){release(city,c);c.indoorLocation=null;return true;}
+ if(b.constructionKind==='open-air'){release(city,c);c.indoorLocation=null;return true;}
+ if(!s.exiting){release(city,c);s.exiting=true;s.roomType='circulation';c.action='Saindo do prédio';s.unitId=null;s.targetUnitId=null;s.path=interiorRoute(b,s.position||{x:b.door.x,y:b.door.y,z:0},{x:b.door.x,y:b.door.y,z:0});}
+ if(!s.path.length){c.indoorLocation=null;return true;}return false;
+}
+function normalizeInterior(city,c){
+ const old=c.indoorLocation;if(old&&!old.path){const building=city.building(old.buildingId),unit=city.units.get(old.unitId);old.path=[];old.targetUnitId=old.unitId;old.targetRoomType=old.roomType;old.position=building&&unit?point(building,unit):{x:c.entity.x,y:c.entity.y,z:0};}
+}
+
+export function advanceCitizenInterior(city,c,minutes=1){
+ const s=c.indoorLocation;if(!s?.path?.length)return;
+ let distance=Math.max(0,minutes);
+ while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001)s.path.shift();}
+ s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));
+ if(!s.path.length){if(s.exiting)c.indoorLocation=null;else{s.unitId=s.targetUnitId;s.roomType=s.targetRoomType;s.arrivedAt=city.minute;}}
+}
+export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'){
+ normalizeInterior(city,c);
+ if(!b||!room||c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId)return false;
+ const previous=c.indoorLocation;
+ if(previous?.buildingId===b.id&&previous.targetUnitId===room.id&&!previous.exiting&&previous.layoutRevision===(b.layoutRevision||0))return !previous.path.length;
+ if(previous?.buildingId!==b.id&&previous&&!exit(city,c))return false;
+ if(!activityCellAvailable(city,room,c,kind)){if(['toilet','hygiene'].includes(c.task)){c.task=null;c.toiletTargetId=null;c.hygieneTargetId=null;}c.action=`Aguardando célula de ${kind==='bathroom'?'banheiro':kind==='dining'?'refeitório':'trabalho'} livre`;return false;}
+ if(b.constructionKind==='open-air'){
+  const target=point(b,room);
+  if(!outdoorCellReady(city,c,b,room)){return false;}
+  release(city,c);c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:room.id,targetRoomType:kind,roomType:kind,floor:room.z,position:target,path:[],task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute,arrivedAt:city.minute,toiletTargetId:c.toiletTargetId};
+ }else{
+  if(c.path.length)return false;
+  if(!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>1.5){const path=city.findPath(c.entity,b.door);if(path!==null)c.path=path;return false;}
+  const from=previous?.buildingId===b.id?previous.position:{x:b.door.x,y:b.door.y,z:0};release(city,c);
+  const target=point(b,room),path=interiorRoute(b,from,target);
+  c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
+ }
+ c.workCell={buildingId:b.id,unitId:room.id,x:room.x,y:room.y,z:room.z,target:point(b,room)};
+ if(!room.activityReservedIds.includes(c.id))room.activityReservedIds.push(c.id);
+ if(c.indoorLocation.path.length)c.action=`Indo à célula de ${kind}`;
+ return !c.indoorLocation.path.length;
+}
+export function outdoorCellReady(city,c,b,u,adjacent=false){
+ if(c.indoorLocation&&!exit(city,c))return false;
+ const target={x:b.entity.x+u.x+.5,y:b.entity.y+u.y+.5};
+ let dest=target;
+ if(adjacent&&!city.walkable(Math.floor(dest.x),Math.floor(dest.y))){const points=[[1,0],[-1,0],[0,1],[0,-1]].map(([x,y])=>({x:target.x+x,y:target.y+y})).filter(p=>city.walkable(Math.floor(p.x),Math.floor(p.y))).sort((a,b)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(b.x-c.entity.x,b.y-c.entity.y));dest=points.find(p=>city.findPath(c.entity,p)!==null);if(!dest)return false;}
+ c.workCell={buildingId:b.id,unitId:u.id??null,x:u.x,y:u.y,z:u.z||0,target:{...dest}};
+ if(Math.hypot(c.entity.x-dest.x,c.entity.y-dest.y)<=.15&&!c.path.length)return true;
+ if(!c.path.length){const path=city.findPath(c.entity,dest);if(path!==null){c.path=path;if(!path.length||Math.hypot(path.at(-1).x-dest.x,path.at(-1).y-dest.y)>.001)c.path.push({...dest});}}
+ c.action='Deslocando-se até a célula de atividade';return false;
+}
+export function syncCitizenInterior(city,c){
+ normalizeInterior(city,c);
+ const task=c.workMeal?'workmeal':c.task,fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation;
+ if(c.paintWorkId&&previous&&!c.path.length){const job=city.paint.jobs.find(j=>j.id===c.paintWorkId);if(job?.kind==='building'&&job.buildingId===previous.buildingId&&job.status==='painting'&&!previous.exiting)return !previous.path.length;}
+ if(c.entity.destroyed){release(city,c);c.indoorLocation=null;return true;}
+ if(c.mobilityTrip||c.ridingVehicleId){return exit(city,c);}
+ if(task==='construction'&&project?.service!=='expansion')return exit(city,c);
+ if(c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)||fieldWork||!b||(['work','manage'].includes(task)&&OUTDOOR_WORK.has(b.type))||(b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal','clean'].includes(task)))return exit(city,c);
+ if(previous?.exiting)return false;
+ let kind=['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()?'plenary':'office'):['energy','care','caregiving'].includes(task)?'bedroom':task==='health'?'treatment':!['work','manage'].includes(task)?'service':['work','manage'].includes(task)&&c.role==='councilor'?'office':'workspace';
+ if(previous&&!previous.exiting&&previous.buildingId===b.id&&previous.task===task&&previous.targetRoomType===kind&&previous.toiletTargetId===c.toiletTargetId&&previous.layoutRevision===(b.layoutRevision||0)&&city.units.has(previous.targetUnitId))return !previous.path.length;
+ if(task==='provisions'&&!b.units.some(u=>u.roomType==='dining'))kind='bedroom';
+ let room;
+ if(kind==='office'&&c.councilSession){const member=city.politics.council.members.find(m=>m.citizenId===c.id),office=city.units.get(member?.officeUnitId);if(office?.buildingId===b.id)room=office;}
+ if(task==='hygiene')room=city.units.get(city.sanitation.facilities.get(c.hygieneTargetId)?.unitId);
+ if(task==='toilet')room=city.units.get(city.sanitation.facilities.get(c.toiletTargetId)?.unitId);
+ if(task==='clean'){const job=city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId);room=city.units.get(city.sanitation.facilities.get(job?.facilityId)?.unitId);}
+ if(!room&&['energy','care','provisions','hygiene'].includes(task)){const home=city.housing.home(c);if(home?.buildingId===b.id)room=city.housing.units(home).find(u=>u.roomType===kind);if(!room&&kind==='bedroom')room=city.units.get(c.homeUnitId);}
+ if(!room&&previous?.buildingId===b.id&&previous.targetRoomType===kind){const assigned=city.units.get(previous.targetUnitId);if(assigned&&activityCellAvailable(city,assigned,c,kind))room=assigned;}
+ const choices=b.units.filter(u=>u.roomType===kind);if(!choices.length&&['service','treatment'].includes(kind))choices.push(...b.units.filter(u=>u.roomType==='workspace'||u.roomType==='office'));if(!choices.length&&kind==='bedroom'&&!c.homeUnitId)choices.push(...b.units.filter(u=>u.roomType==='workspace'));if(!choices.length&&kind==='workspace')choices.push(...b.units.filter(u=>u.roomType==='office'));
+ room??=choices.find(u=>activityCellAvailable(city,u,c,kind));
+ if(!room){c.action=`Aguardando célula de ${kind} disponível`;return false;}
+ return activityRoomReady(city,c,b,room,kind);
+}
+
+export function workCellReady(city,c,b){
+ const assigned=city.units.get(c.workCell?.unitId),valid=u=>u?.buildingId===b.id&&['workspace','office','plenary'].includes(u.roomType);
+ const room=valid(assigned)?assigned:b.units.find(u=>valid(u)&&activityCellAvailable(city,u,c,u.roomType));
+ if(!room){c.action='Aguardando célula de trabalho livre';return false;}
+ if(b.constructionKind==='open-air')return outdoorCellReady(city,c,b,room);
+ return activityRoomReady(city,c,b,room,room.roomType);
+}
+
+// A finished shell must not strand its construction crew on newly blocked
+// outdoor tiles. Keep the real indoor position and route everyone to the door.
+export function finishBuildingOccupants(city,b){
+ if(b.constructionKind==='open-air')return;
+ for(const c of city.citizens){if(c.entity.destroyed||c.entity.x<b.entity.x||c.entity.x>=b.entity.x+b.width||c.entity.y<b.entity.y||c.entity.y>=b.entity.y+b.depth)continue;
+  const goal=c.path.at(-1),position={x:c.entity.x,y:c.entity.y,z:Math.min(b.floors-1,c.workCell?.z||0)*CITY_FLOOR_HEIGHT};
+  if(c.mobilityTrip||c.ridingVehicleId)city.vehicles.releaseTrip(c);
+  c.entity.x=b.door.x;c.entity.y=b.door.y;c.path=goal?city.findPath(c.entity,goal)||[]:[];
+  c.indoorLocation={buildingId:b.id,unitId:null,targetUnitId:null,roomType:'circulation',position,path:interiorRoute(b,position,{x:b.door.x,y:b.door.y,z:0}),floor:Math.floor(position.z/CITY_FLOOR_HEIGHT),exiting:true,task:c.task,layoutRevision:b.layoutRevision||0};c.workCell=null;
+ }
+ for(const v of city.vehicles.units.values())if(v.active&&!v.scrapped&&v.x>=b.entity.x&&v.x<b.entity.x+b.width&&v.y>=b.entity.y&&v.y<b.entity.y+b.depth){city.vehicles.freeParking(v);v.x=v.entity.x=b.door.x;v.y=v.entity.y=b.door.y;city.vehicles.parkNearby(v,b.door);}
 }

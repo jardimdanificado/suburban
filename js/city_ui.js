@@ -277,10 +277,12 @@ export class CityUI {
     if (this.detailTab === 'profile') {
 
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
+      if(c.workCell)p.kv('Célula de atividade',`${c.workCell.x+1}, ${c.workCell.y+1} · ${c.workCell.z+1}º andar`);
+      if(c.indoorLocation?.path?.length)p.kv('Percurso interno',`${c.indoorLocation.path.length} etapas até ${c.indoorLocation.exiting?'a saída':c.indoorLocation.targetRoomType}`);
       if(c.ridingVehicleId)p.button('VER VEÍCULO EM USO',()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:c.ridingVehicleId,selected:null}));
       this.section(p,'personalVehicles','Veículos próprios',()=>{for(const v of city.vehicles.units.values())if(v.active&&v.ownerAccountId===c.accountId)p.record(city.vehicles.model(v)?.name||v.good,`${v.condition.toFixed(0)}% de conservação · força humana`,()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));});
       const inside=city.building(c.indoorLocation?.buildingId);
-      if(inside){p.kv('Localização',`Dentro de ${name(inside.entity)} · ${c.indoorLocation.floor+1}º andar`);p.kv('Cômodo',{bedroom:'Quarto',bathroom:'Banheiro',dining:'Refeitório',plenary:'Plenário',office:'Gabinete',workspace:'Área da empresa'}[c.indoorLocation.roomType]||'Interior');p.button('VER PRÉDIO ATUAL',()=>this.openBuilding(inside.id));}
+      if(inside){p.kv('Localização',`Dentro de ${name(inside.entity)} · ${c.indoorLocation.floor+1}º andar`);p.kv('Cômodo',{bedroom:'Quarto',bathroom:'Banheiro',dining:'Refeitório',plenary:'Plenário',office:'Gabinete',workspace:'Área da empresa',circulation:'Circulação entre cômodos',service:'Área de atendimento',treatment:'Consultório'}[c.indoorLocation.roomType]||'Interior');p.button('VER PRÉDIO ATUAL',()=>this.openBuilding(inside.id));}
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
       p.heading('NECESSIDADES'); p.meters(Object.entries(c.needs).map(([id,value])=>[NEED_LABELS[id],value]));
       const home = city.units.get(c.homeUnitId), dwelling = city.housing.home(c); p.heading('MORADIA');

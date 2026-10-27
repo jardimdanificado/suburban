@@ -309,7 +309,7 @@ export class CityVehicles {
       const origin=b.componentLots?.pecas?.[0];this.discardComponents(b,'pecas',1);b.inventory.pecas--;c.mechanicJob={vehicleId:v.id,garageId:b.id,parts:{pecas:1},components:[{good:'pecas',quantity:1,producerId:origin?.producerId??'origem não identificada',producerName:origin?.producerName,design:origin?.design??1}],price,startedAt:city.minute,labor:0};v.mechanicId=c.id;c.path=path;c.indoorLocation=null;return true;
     }
     const job=c.mechanicJob,v=this.units.get(job.vehicleId);if(!v||v.scrapped){for(const [g,n]of Object.entries(job.parts))city.economy.lost[g]+=n;c.mechanicJob=null;return false;}
-    if(Math.hypot(c.entity.x-v.x,c.entity.y-v.y)>2){c.path=city.findPath(c.entity,v)||[];return true;}
+    if(Math.hypot(c.entity.x-v.x,c.entity.y-v.y)>.25){c.path=city.findPath(c.entity,v)||[];if(!c.path.length)c.path=[{x:v.x,y:v.y}];return true;}
     job.labor+=1+(c.skills.maintenance||0)/80;if(job.labor<24)return true;
     for(const [g,n]of Object.entries(job.parts)){city.economy.consumed[g]+=n;city.economy.recordGoods('cycle-repair',g,n,b.id,v.id);}v.condition=100;v.mechanicId=null;(v.maintenanceHistory??=[]).push({minute:city.minute,workshopId:b.id,workshopName:b.entity.properties.name,workerId:c.id,price:job.price,components:job.components||[]});c.mechanicJob=null;this.stats.repairs++;return true;
   }

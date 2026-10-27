@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,totalMoney,finishShipment} from './helpers/city.mjs';
+import {setup,totalMoney,finishShipment,putAtWorkCell} from './helpers/city.mjs';
 import {VEHICLE_SPECS,VEHICLE_RECIPES} from '../js/city_vehicles.js';
 import {CIVIC_SERVICES,civicStatus,civicVisit,renderCivicServices,planCivicServices} from '../js/city_public_services.js';
 import {TILE_ROAD_GRASS_STONE} from '../js/world_gen.js';
@@ -15,7 +15,7 @@ function building(city,type){
 }
 function hospital(){
  const city=setup({starter:true,population:64}),b=building(city,'hospital'),people=city.citizens.filter(c=>!city.politics.officeHolder(c)&&!c.businessIds.length);
- for(const c of people.slice(0,2)){city.economy.leaveJob(c);c.jobId=b.id;b.workers.push(c.id);c.task='work';c.path=[];c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;}
+ for(const c of people.slice(0,2)){city.economy.leaveJob(c);c.jobId=b.id;b.workers.push(c.id);c.task='work';c.path=[];c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;putAtWorkCell(city,c,b);}
  const c=people[2];city.economy.leaveJob(c);c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='health';c.targetId=b.id;c.needs.health=20;
  b.inventory.remedio=10;b.inventory.sabao=10;return {city,b,c,people};
 }
@@ -68,7 +68,7 @@ test('library uses durable books and real staff; sports and parks improve leisur
  const {city,c,people}=hospital();
  for(const type of ['library','park','sports_center','theater']){
   const b=building(city,type),spec=CIVIC_SERVICES[type];
-  for(const worker of people.slice(0,spec.minStaff)){city.economy.leaveJob(worker);worker.jobId=b.id;b.workers.push(worker.id);worker.task='work';worker.path=[];worker.entity.x=b.door.x;worker.entity.y=b.door.y;}
+  for(const worker of people.slice(0,spec.minStaff)){city.economy.leaveJob(worker);worker.jobId=b.id;b.workers.push(worker.id);worker.task='work';worker.path=[];worker.entity.x=b.door.x;worker.entity.y=b.door.y;putAtWorkCell(city,worker,b);}
   c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='leisure';c.targetId=b.id;c.needs.leisure=20;c.civicVisit=null;city.minute++;
   if(type==='library'){assert(!civicStatus(city,b,c).ready);b.inventory.livros=1;}
   assert(civicStatus(city,b,c).ready);civicVisit(city,c,b);assert(c.needs.leisure>20);if(type==='library')assert.equal(b.inventory.livros,1);
