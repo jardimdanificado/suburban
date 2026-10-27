@@ -10,7 +10,7 @@ export function syncCampaignDecorations(renderer,THREE,entities,world){
   syncCampaignSpeakers(renderer,THREE,entities,world);
   for(const e of entities){const d=e.properties?.campaignDecoration;if(!d||e.destroyed||d.kind==='paint')continue;if(Number.isFinite(renderer.renderedMinTx)&&(e.x<renderer.renderedMinTx+2||e.x>renderer.renderedMaxTx-1||e.y<renderer.renderedMinTy+2||e.y>renderer.renderedMaxTy-1)){const old=renderer.campaignMeshes.get(e.id);if(old)old.visible=false;active.add(e.id);continue;}active.add(e.id);let group=renderer.campaignMeshes.get(e.id);
     if(!group){group=new THREE.Group();const isFlag=d.kind==='flag',w=isFlag?1.4:2.4,h=isFlag?.8:1.2;let texture;const canvas=poster(d,()=>{if(texture){texture.image=poster(d);texture.needsUpdate=true;}});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.colorSpace=THREE.SRGBColorSpace;
-      const sign=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));sign.userData.partyFlagTexture=texture;sign.position.set(isFlag?w*.5:0,isFlag?1.6:1.35,0);group.add(sign);
+      const sign=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));sign.userData.partyFlagTexture=texture;sign.position.set(isFlag?w*.5:0,isFlag?1.6:1.35,0);group.add(sign);
       if(isFlag){const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.04,2,5),new THREE.MeshLambertMaterial({color:0xa58a60}));pole.position.y=1;group.add(pole);}renderer.scene.add(group);renderer.campaignMeshes.set(e.id,group);
     }
     group.visible=true;group.rotation.y=(d.rotation||0)*Math.PI/2;group.position.set(e.x,surfaceElevation(world,e.x,e.y),e.y);

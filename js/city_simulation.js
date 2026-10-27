@@ -33,7 +33,7 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js';
 import { CityLogistics } from './city_logistics.js';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=mine-rack-social-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js';
 
 export const INITIAL_POPULATION = 512;
@@ -188,11 +188,29 @@ export class CitySimulation {
     // The rest of the world starts with a share of the existing monetary base.
     if(this.currency.initialize())this.transfer('treasury','supplier',Math.floor(this.currency.issued*EXTERNAL_TRADE_RULES.initialReserveFraction),'Reserva inicial do comércio exterior');
     generateSettlement(this);
-    const arrivalTiles = [];
-    for (let radius = 0; radius <= 5; radius++) for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
-      const x = Math.floor(this.spawn.x) + dx, y = Math.floor(this.spawn.y) + dy;
-      if (this.walkable(x, y) && this.findPath(this.spawn, { x, y }) !== null) arrivalTiles.push({ x: x + .5, y: y + .5 });
+    const arrivalTiles = [],{width,height}=this.world,limit=Math.min(width*height,Math.max(256,this.initialPopulation*2));
+    // Place initial residents across reachable land instead of cycling through
+    // a tiny 11×11 patch around the town hall. On crowded or coastal seeds the
+    // old search found only a few cells, stacking many citizens at one point.
+    let start=null;
+    for(let radius=0;radius<=32&&!start;radius++)for(let dy=-radius;dy<=radius&&!start;dy++)for(let dx=-radius;dx<=radius&&!start;dx++){
+      if(radius&&Math.abs(dx)!==radius&&Math.abs(dy)!==radius)continue;
+      const x=Math.floor(this.spawn.x)+dx,y=Math.floor(this.spawn.y)+dy;
+      if(this.walkable(x,y)&&this.findPath(this.spawn,{x,y})!==null)start={x,y};
     }
+    if(!start)for(let index=0;index<width*height;index++){const x=index%width,y=Math.floor(index/width);if(this.walkable(x,y)&&this.findPath(this.spawn,{x,y})!==null){start={x,y};break;}}
+    if(start){
+      const seen=new Uint8Array(width*height),queue=[start.y*width+start.x];seen[queue[0]]=1;
+      for(let head=0;head<queue.length&&arrivalTiles.length<limit;head++){
+        const index=queue[head],x=index%width,y=Math.floor(index/width);arrivalTiles.push({x:x+.5,y:y+.5});
+        for(const [dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]]){
+          const nx=x+dx,ny=y+dy,next=ny*width+nx;
+          if(nx<0||ny<0||nx>=width||ny>=height||seen[next]||!this.walkable(nx,ny)||!canStep(this.world,x,y,nx,ny))continue;
+          seen[next]=1;queue.push(next);
+        }
+      }
+    }
+    if(!arrivalTiles.length)throw new Error('Não há células de terra acessíveis para distribuir a população neste mapa.');
     for (let i = 0; i < this.initialPopulation; i++) { const p = arrivalTiles[i % arrivalTiles.length]; this.addCitizen(p.x, p.y, i); }
     this.economy.initialize();
     this.vehicles.equipInitialWorkers();

@@ -20,7 +20,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js';
+import { CitySimulation } from './city_simulation.js?v=land-motion-2';
 import { CityHistory } from './city_history.js';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js';
@@ -33,7 +33,7 @@ import { CityWorkMeals } from './city_work_meals.js';
 import { CityDevelopment } from './city_development.js';
 import { CityLogistics } from './city_logistics.js';
 import { CityEconomy, GOODS } from './city_economy.js';
-import { CitySociety } from './city_society.js';
+import { CitySociety } from './city_society.js?v=mine-rack-social-1';
 import { CityServiceInvestment } from './city_service_investment.js';
 import { World, WorldClock } from './world.js';
 

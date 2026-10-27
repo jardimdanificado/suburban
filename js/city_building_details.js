@@ -4,12 +4,12 @@ import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 const THEMES={
  bakery:'bread',kitchen:'pot',popular_refectory:'pot',flour_mill:'silo',pasta_factory:'pasta',cannery:'jars',cheesemaker:'cheese',dairy_farm:'milk',poultry:'eggs',
  builder:'crane',lamp_service:'oil_lamp',carrier:'cargo',waste_collector:'bins',cleaner:'brush',recycler:'recycling',composting:'compost',
- sawmill:'logs',forestry:'logs',charcoal:'kiln',iron_mine:'ore',bauxite_mine:'ore',foundry:'furnace',steel_mill:'furnace',aluminum_smelter:'furnace',clay_pit:'clay',sand_pit:'sand',brickworks:'bricks',glassworks:'glass',
+ sawmill:'logs',forestry:'logs',charcoal:'kiln',iron_mine:'mine',bauxite_mine:'mine',foundry:'furnace',steel_mill:'furnace',aluminum_smelter:'furnace',clay_pit:'mine',sand_pit:'mine',brickworks:'bricks',glassworks:'glass',
  toolmaker:'tools',artisan:'basket',furniture:'chair',pottery:'pottery',paper_mill:'paper',publisher:'books',newsroom:'newspaper',
  weaving:'fabric',fiber_farm:'fabric',flagmaker:'fabric',tailor:'fabric',clothing_store:'fabric',paintworks:'paint',soapworks:'soap',pharmacy:'medicine',herb_farm:'plant',
  rubber_grove:'rubber',rubberworks:'rubber',bearing_factory:'bearing',frame_factory:'frame',deck_factory:'deck',tire_factory:'wheel',chain_factory:'chain',safety_equipment:'helmet',saddle_factory:'saddle',cycle_parts:'tools',sports_shoes:'boot',skate_workshop:'deck',cycle_assembler:'frame',cycle_shop:'wheel',cycle_workshop:'wheel',bicycle_rental:'wheel',sports_shop:'ball',
  utility:'water',mint:'coins',bank:'bank',townhall:'civic',council_chamber:'civic',research_institute:'research',clinic:'medical',hospital:'medical',library:'books',theater:'theater',sports_center:'ball',leisure:'ball',public_toilet:'water',paid_toilet:'water',
- office_tower:'office',residential:'home',popular_housing:'housing',luxury_housing:'luxury',market:'market',greengrocer:'plant',mill:'mill',farm:'farm',quarry:'quarry',bike_rack:'wheel',park:'plant'
+ office_tower:'office',residential:'home',popular_housing:'housing',luxury_housing:'luxury',market:'market',greengrocer:'plant',mill:'mill',farm:'farm',quarry:'quarry',park:'plant'
 };
 export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  const kind=THEMES[b.type];if(!kind)return;
@@ -39,6 +39,7 @@ export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  case'logs':for(const [x,y] of [[-.24,.17],[.24,.17],[0,.48]]){const m=cyl(.17,.17,.9,x,y,0,wood,7);m.rotation.x=Math.PI/2;}break;
  case'kiln':cyl(.45,.5,.6,0,.3,0,0x5c5650);cyl(.09,.09,.35,0,.77,0,metal);break;
  case'ore':case'clay':case'sand':for(const [x,r] of [[-.25,.28],[.18,.36],[.4,.2]])ball(r,x,r*.65,0,kind==='ore'?(b.type==='bauxite_mine'?0xb87652:0x7f8585):kind==='clay'?0xa7684c:0xd2bb83).scale.y=.7;break;
+ case'mine':{const pit=['clay_pit','sand_pit'].includes(b.type),timber=b.type==='iron_mine'?0x72563d:b.type==='bauxite_mine'?0x8b6348:0x74634c,ore=b.type==='clay_pit'?0xa7684c:b.type==='sand_pit'?0xd2bb83:b.type==='bauxite_mine'?0xb87652:0x7f8585;if(pit){for(const x of [-.32,0,.32])ball(.3,x,.2,0,ore).scale.y=.65;const belt=box(.8,.07,.12,0,.58,-.12,metal);belt.rotation.z=-.38;for(const x of [-.25,.25])box(.06,.42,.08,x,.32,-.12,metal);}else{for(const x of [-.42,.42]){box(.09,1.35,.09,x,.68,0,timber);const brace=box(.065,.95,.08,x*.55,.45,0,metal);brace.rotation.z=x<0?-.48:.48;}box(1,.09,.09,0,1.32,0,timber);cyl(.24,.24,.12,0,1.28,0,metal,10);box(.05,.95,.05,0,.68,0,metal);}break;}
  case'furnace':box(.75,.8,.7,0,.4,0,b.type==='steel_mill'?0x6e5045:b.type==='aluminum_smelter'?0x8b9696:0x67625e);cyl(.13,.18,.9,.2,1.2,0,0x505657);if(b.type==='steel_mill')cyl(.11,.15,.65,-.25,1.1,0,0x505657);box(.27,.25,.03,0,.33,.36,0xe68a3d);break;
  case'bricks':for(const [x,y] of [[-.22,.1],[.22,.1],[0,.32]])box(.4,.2,.25,x,y,0,0xb25e45);break;
  case'glass':for(const x of [-.24,0,.24])box(.12,.7,.45,x,.4,0,0x83b9be);break;

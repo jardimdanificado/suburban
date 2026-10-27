@@ -1,5 +1,33 @@
 import {queueMotion,sampleMotion} from './city_motion.js';
 import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=party-hq-1';
+import {canStep,terrainWalkable} from './city_terrain.js';
+
+// Worker snapshots can skip several corners of a valid route. Interpolating
+// directly between those snapshots would draw a straight chord through water
+// or rock even though the simulated route itself never crossed it.
+function renderSegmentWalkable(world,ax,ay,bx,by){
+  if(!Number.isFinite(ax)||!Number.isFinite(ay)||!Number.isFinite(bx)||!Number.isFinite(by))return false;
+  const distance=Math.hypot(bx-ax,by-ay),steps=Math.max(1,Math.ceil(distance/.2));let previous=null;
+  for(let i=0;i<=steps;i++){
+    const t=i/steps,x=ax+(bx-ax)*t,y=ay+(by-ay)*t,tx=Math.floor(x),ty=Math.floor(y);
+    if(!terrainWalkable(world,tx,ty))return false;
+    if(previous&&(tx!==previous.x||ty!==previous.y)){
+      if(tx!==previous.x&&ty!==previous.y){
+        if(!terrainWalkable(world,tx,previous.y)||!terrainWalkable(world,previous.x,ty))return false;
+      }
+      if(!canStep(world,previous.x,previous.y,tx,ty))return false;
+    }
+    previous={x:tx,y:ty};
+  }
+  return true;
+}
+function sampleCitizenMotion(world,sample,now){
+  const done=sampleMotion(sample,now);
+  if(!renderSegmentWalkable(world,sample.from.x,sample.from.y,sample.entity.x,sample.entity.y)){
+    sample.entity.x=sample.to.x;sample.entity.y=sample.to.y;return true;
+  }
+  return done;
+}
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
 export class CitySimulationBridge {
@@ -10,7 +38,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=party-hq-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=mine-rack-social-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });
@@ -73,9 +101,9 @@ export class CitySimulationBridge {
       sample.to.y=data.positions?.[at]===c.id?data.positions[at+2]:c.entity.y;
       c.entity.x=sample.to.x;c.entity.y=sample.to.y;
       const dx=sample.to.x-sample.from.x,dy=sample.to.y-sample.from.y;
-      const reset=!existing||this.time.paused||Math.hypot(dx,dy)>=8;
+      const reset=!existing||this.time.paused||Math.hypot(dx,dy)>=8||!renderSegmentWalkable(this.city.world,sample.from.x,sample.from.y,sample.to.x,sample.to.y);
       queueMotion(sample,sample.to.x,sample.to.y,now,{reset});
-      if(!reset){this.motion.set(c.id,sample);sampleMotion(sample,now);}
+      if(!reset){this.motion.set(c.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
     }
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
     this.applyVehiclePositions(data.vehicles);
@@ -93,12 +121,12 @@ export class CitySimulationBridge {
       const sample=this.motionSamples.get(positions[i]);
       if(!sample||sample.entity.destroyed)continue;
       if(needs){const c=sample.citizen,at=i/3*needsStride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)c.needs[CITY_NEED_FIELDS[j]]=needs[at+j];c.happiness=needs[at+CITY_NEED_FIELDS.length];c.mood=needs[at+CITY_NEED_FIELDS.length+1];}
-      const x=positions[i+1],y=positions[i+2],fromX=sample.entity.x,fromY=sample.entity.y;
+      const x=positions[i+1],y=positions[i+2],fromX=sample.to.x,fromY=sample.to.y;
       sample.from.x=fromX;sample.from.y=fromY;sample.to.x=x;sample.to.y=y;
       const dx=x-fromX,dy=y-fromY;
-      const reset=this.time.paused||Math.hypot(dx,dy)>=8;
+      const reset=this.time.paused||Math.hypot(dx,dy)>=8||!renderSegmentWalkable(this.city.world,fromX,fromY,x,y);
       queueMotion(sample,x,y,now,{reset});
-      if(!reset){this.motion.set(sample.id,sample);sampleMotion(sample,now);}
+      if(!reset){this.motion.set(sample.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
       else {sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}
     }
     this.applyVehiclePositions(data.vehicles);
@@ -123,7 +151,7 @@ export class CitySimulationBridge {
     if(!this.time.paused)for(const motion of this.vehicleMotion.values())sampleMotion(motion,now);
     for (const motion of this.motion.values()) {
       if(this.time.paused)continue;
-      if(sampleMotion(motion,now))this.motion.delete(motion.id);
+      if(sampleCitizenMotion(this.city.world,motion,now))this.motion.delete(motion.id);
     }
   }
   fail(message) {

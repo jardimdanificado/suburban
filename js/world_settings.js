@@ -14,6 +14,6 @@ export function resolveWorldSettings(params = new URLSearchParams()) {
   const parsedPopulation = rawPopulation !== null && /^\d+$/.test(rawPopulation) ? Number(rawPopulation) : NaN;
   const population = Number.isSafeInteger(parsedPopulation) && parsedPopulation >= 1 && parsedPopulation <= 2000 ? parsedPopulation : 512;
   const rawSize=params.get('size'),parsedSize=rawSize!==null&&/^\d+$/.test(rawSize)?Number(rawSize):NaN;
-  const size=Number.isSafeInteger(parsedSize)&&parsedSize>=128&&parsedSize<=1024?parsedSize:512;
+  const size=Number.isSafeInteger(parsedSize)&&parsedSize>=128&&parsedSize<=1024?parsedSize:256;
   return { seed, preset, presetId: WORLD_PRESETS[preset].id, population, size };
 }

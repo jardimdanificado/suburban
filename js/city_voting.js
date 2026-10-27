@@ -21,7 +21,11 @@ export class CityVoting {
     if(!c){row.status='unavailable';row.reason='Faleceu ou saiu da cidade antes de votar';return false;}
     if(!hall)return false;
     if(c.voting?.electionId===e.id&&c.task==='vote')return false;
-    if(city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.health)<35||c.needs.toilet<25||c.workMeal||c.deliveryId||c.cleaningJobId||['care','caregiving','food','provisions','water','health','toilet','workmeal'].includes(c.task)){row.reason='Atendendo necessidade ou serviço essencial';return false;}
+    // Do not require unusually high need meters for turnout. That used to make
+    // ordinary hunger, fatigue, or a routine trip to get food count as a reason
+    // to miss the entire polling window. Only urgent needs and committed jobs
+    // that cannot safely be interrupted keep a voter from routing to the hall.
+    if(city.urgentNeed(c)||c.workMeal||c.deliveryId||c.cleaningJobId){row.reason=city.urgentNeed(c)?`Necessidade urgente: ${city.urgentNeed(c)}`:'Serviço ou entrega em andamento';return false;}
     row.nextAttemptAt=city.minute+VOTING_RULES.retryMinutes;const path=city.findPath(c.entity,hall.door);
     if(path===null){row.reason='Sem caminho acessível até a prefeitura';return true;}
     if(c.conversation){const other=city.society.citizen(c.conversation.a===c.id?c.conversation.b:c.conversation.a);if(other)other.conversation=null;c.conversation=null;}
@@ -51,7 +55,7 @@ export class CityVoting {
     p.remember(voter,{kind:'vote',electionId:e.id,partyId:ballot.partyId,candidateId:ballot.candidateId,eventId:event.id,description:`Votou presencialmente em ${ballot.candidateName}${e.round===2?'':` e ${ballot.councilCandidateName}`}, por ${ballot.reason}.`});
   }
   close(e){
-    const city=this.city;for(const row of e.electorate||[])if(!['voted','unavailable','abstained'].includes(row.status)){row.status='abstained';row.reason=e.cancellationReason||row.reason||'Não compareceu antes do fechamento';this.clear(city.society.citizen(row.citizenId));}
+    const city=this.city;for(const row of e.electorate||[])if(!['voted','unavailable','abstained'].includes(row.status)){const previous=row.status;row.status='abstained';row.reason=e.cancellationReason||(row.reason==='Ainda não compareceu'?(previous==='travelling'?'Não chegou à prefeitura antes do fechamento':'Não iniciou o trajeto antes do fechamento'):row.reason)||'Não compareceu antes do fechamento';this.clear(city.society.citizen(row.citizenId));}
     e.abstentions=(e.electorate||[]).filter(r=>r.status!=='voted').map(r=>Object.freeze({citizenId:r.citizenId,name:r.name,status:r.status,reason:r.reason}));e.queue=[];for(const station of e.stations||[]){station.citizenId=null;station.finishAt=null;}e.readyToFinish=true;this.city.politics.vote();
   }
   updateMinute(){

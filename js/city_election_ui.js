@@ -38,6 +38,7 @@ function ballots(ui,p,e){
 function turnout(ui,p,e){
   const statuses={pending:'Ainda não saiu',travelling:'A caminho',waiting:'Na fila',casting:'Na urna',voted:'Já votou',unavailable:'Indisponível',abstained:'Abstenção'};
   const rows=(e.electorate||e.abstentions||[]).filter(r=>ui.matches(`${r.name} ${r.reason} ${statuses[r.status]}`));
+  if(e.abstentions?.length){const reasons=new Map();for(const row of e.abstentions){const reason=row.reason||'Motivo não registrado';reasons.set(reason,(reasons.get(reason)||0)+1);}p.heading('MOTIVOS DAS ABSTENÇÕES');p.table([{label:'Motivo',weight:3},{label:'Eleitores'}],[...reasons].sort((a,b)=>b[1]-a[1]).slice(0,8).map(([reason,count])=>({cells:[reason,count]})));}
   for(const row of pages(ui,p,rows,'monitorTurnoutPage',10))p.record(row.name,`${statuses[row.status]||row.status} · ${row.reason}`,()=>ui.openCitizen(row.citizenId));
 }
 function council(ui,p,e){

@@ -6820,7 +6820,7 @@ export class RCT3DRenderer {
           if (!flagMesh) {
             let flagMat = uiMatCache.get(flagMatKey);
             if (!flagMat) {
-              flagMat = new THREE.MeshBasicMaterial({
+              flagMat = new THREE.MeshLambertMaterial({
                 map: flagTex,
                 transparent: true,
                 alphaTest: 0.05,
@@ -6836,7 +6836,7 @@ export class RCT3DRenderer {
           } else if (flagMesh.material !== uiMatCache.get(flagMatKey) || flagMesh.material.map !== flagTex) {
             let flagMat = uiMatCache.get(flagMatKey);
             if (!flagMat) {
-              flagMat = new THREE.MeshBasicMaterial({
+              flagMat = new THREE.MeshLambertMaterial({
                 map: flagTex,
                 transparent: true,
                 alphaTest: 0.05,
@@ -7013,7 +7013,7 @@ export class RCT3DRenderer {
             activeUiIds.add(uiKey);
             const tex=createTintedTexture(flag.skin,parseInt(flag.foreground.slice(1),16),parseInt(flag.background.slice(1),16),1);
             let mat=uiMatCache.get(tex.uuid);
-            if(!mat){mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.05,depthTest:true,side:THREE.DoubleSide});uiMatCache.set(tex.uuid,mat);}
+            if(!mat){mat=new THREE.MeshLambertMaterial({map:tex,transparent:true,alphaTest:.05,depthTest:true,side:THREE.DoubleSide});uiMatCache.set(tex.uuid,mat);}
             let mesh=this.floatingUiSprites.get(uiKey);
             if(!mesh){mesh=new THREE.Mesh(this.flagGeo,mat);mesh.renderOrder=25;this.floatingUiGroup.add(mesh);this.floatingUiSprites.set(uiKey,mesh);}
             mesh.material=mat;mesh.position.set(e.x+.18,surfaceH+1.2,e.y);mesh.rotation.y=billboardRotY;

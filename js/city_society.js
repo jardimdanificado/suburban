@@ -56,7 +56,7 @@ export class CitySociety {
   }
   canPartner(a, b) { return !a.partnerId && !b.partnerId && this.city.relationships.compatible(a,b); }
   canSocialize(c) {
-    return !c.entity.destroyed && !c.mobilityTrip && !c.ridingVehicleId && !c.path.length && !c.conversation && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving'].includes(c.task) && this.age(c)>=3 && c.task!=='energy' &&
+    return !c.entity.destroyed && !c.mobilityTrip && !c.ridingVehicleId && (!c.path.length||['walk','leisure','social'].includes(c.task)) && !c.conversation && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving'].includes(c.task) && this.age(c)>=3 && c.task!=='energy' &&
       this.city.minute-c.lastConversationAt>=SOCIAL_RULES.conversationCooldown && Math.min(c.needs.food,c.needs.water,c.needs.energy)>20;
   }
   canConverse(a, b) {
@@ -70,6 +70,7 @@ export class CitySociety {
     const topic = topics[(a.personality.interest + Math.floor(this.city.random() * 3)) % topics.length];
     const duration = 4 + Math.floor(this.city.random() * 5);
     const conversation = { a: a.id, b: b.id, topic, startedAt: this.city.minute, until: this.city.minute + duration, witnessIds };
+    for(const c of [a,b])if(c.path.length){c.path=[];c.targetId=null;if(['walk','leisure','social'].includes(c.task))c.task=null;}
     a.conversation = b.conversation = conversation;
     a.lastConversationAt = b.lastConversationAt = this.city.minute;
     a.action = `Conversando com ${b.entity.properties.name} sobre ${topic}`;
@@ -94,14 +95,13 @@ export class CitySociety {
       if (!other || Math.hypot(c.entity.x - other.entity.x, c.entity.y - other.entity.y) > 2) { c.conversation = null; if (other) other.conversation = null; }
       else if (this.city.minute >= conversation.until) this.finishConversation(c, other, conversation);
     }
-    // Conversations already underway resolve every minute. Searching for new
-    // encounters uses a fresh spatial grid every ten minutes; the chance per
-    // scan represents the missed minute-by-minute opportunities.
-    if(this.city.minute%10!==0){for(let i=this.expecting.length-1;i>=0;i--)if(this.city.minute>=this.expecting[i].dueAt)this.giveBirth(this.expecting[i]);return;}
+    // Walkers can pass one another between ten-minute scans. Scan a rotating
+    // slice each minute so ordinary foot traffic has a chance to meet without
+    // comparing every resident with every other resident.
     // A spatial grid limits encounters to nearby people, with one conversation per person.
     const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4;
-    const residents=this.city.citizens,contactBudget=Math.max(24,Math.ceil(residents.length*.08));
-    const offset=(Math.floor(this.city.minute/10)*37)%Math.max(1,residents.length);
+    const residents=this.city.citizens,contactBudget=Math.max(12,Math.ceil(residents.length*.02));
+    const offset=(this.city.minute*37)%Math.max(1,residents.length);
     let contacts=0;
     for(let residentIndex=0;residentIndex<residents.length&&contacts<contactBudget;residentIndex++){
       const c=residents[(offset+residentIndex)%residents.length];

@@ -1,4 +1,4 @@
-import {addBuildingDetails} from './city_building_details.js?v=offices-map-1';
+import {addBuildingDetails} from './city_building_details.js?v=mine-rack-social-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
@@ -91,8 +91,9 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const material = buildingMaterial(renderer,THREE,b.architecture==='timber'?'wood':'wall',0xffffff);
       const cells = new THREE.InstancedMesh(geometry, material, b.units.length);
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
-      const residential = ['residential','popular_housing','luxury_housing'].includes(b.type);
-      const matrix = new THREE.Matrix4(), color = new THREE.Color(b.campaignPaint?.color||b.wallColor||(residential ? style.wall : b.color));
+      const residential = ['residential','popular_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
+      const mineWall={iron_mine:0x77736b,bauxite_mine:0x806b62,clay_pit:0x886b58,sand_pit:0x94866a};
+      const matrix = new THREE.Matrix4(), color = new THREE.Color(b.campaignPaint?.color||b.wallColor||(mine?mineWall[b.type]:residential ? style.wall : b.color));
       const windows = [];
       for (let i = 0; i < b.units.length; i++) {
         const u = b.units[i];
@@ -108,8 +109,9 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       group.add(cells);
       const windowMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0x36545a, emissive: 0x1d2c20 }), windows.length);
       windows.forEach(([x, y, z, w, h, d], i) => { matrix.makeScale(w, h, d); matrix.setPosition(x, y, z); windowMesh.setMatrixAt(i, matrix); });
+      if(mine)windowMesh.visible=false;
       group.add(windowMesh);
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',style.roof));
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',mine?0x454b49:style.roof));
       roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);group.userData.roof=roof;
       const facade=new THREE.Group(),origin=buildingPoint(b,0,0);facade.rotation.y=(b.rotation||0)*Math.PI/2;facade.position.set(origin.x,0,origin.y);group.add(facade);group.userData.facade=facade;
       {
@@ -136,6 +138,14 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       if(b.type==='council_chamber'){
         const material=new THREE.MeshLambertMaterial({color:0xe1d5b3});for(let i=0;i<4;i++){const column=new THREE.Mesh(new THREE.CylinderGeometry(.08,.11,1.5,6),material);column.position.set(.4+i*(b.width-.8)/3,.75,b.depth+.15);facade.add(column);}
         const sign=new THREE.Mesh(new THREE.BoxGeometry(b.width*.85,.22,.08),new THREE.MeshLambertMaterial({color:0x4c655c}));sign.position.set(b.width/2,1.6,b.depth+.12);facade.add(sign);
+      }
+      if(mine){
+        const timber=new THREE.MeshLambertMaterial({color:b.type==='iron_mine'?0x72563d:0x8b6348}),shadow=new THREE.MeshLambertMaterial({color:0x171d1c}),rail=new THREE.MeshLambertMaterial({color:0x555e60});
+        const portal=new THREE.Mesh(new THREE.BoxGeometry(1.35,1.35,.12),shadow);portal.position.set(b.width/2,.68,b.depth+.12);facade.add(portal);
+        for(const x of [b.width/2-.72,b.width/2+.72]){const post=new THREE.Mesh(new THREE.BoxGeometry(.12,1.55,.14),timber);post.position.set(x,.78,b.depth+.18);facade.add(post);}
+        const lintel=new THREE.Mesh(new THREE.BoxGeometry(1.56,.14,.15),timber);lintel.position.set(b.width/2,1.55,b.depth+.18);facade.add(lintel);
+        for(const x of [b.width/2-.5,b.width/2+.5]){const bar=new THREE.Mesh(new THREE.BoxGeometry(.055,.08,.85),rail);bar.position.set(x,.08,b.depth+.62);facade.add(bar);}
+        const crossbar=new THREE.Mesh(new THREE.BoxGeometry(1.05,.07,.08),rail);crossbar.position.set(b.width/2,.08,b.depth+.62);facade.add(crossbar);
       }
       if(['hospital','clinic'].includes(b.type)){
         const red=new THREE.MeshLambertMaterial({color:0xc43e42});for(const [w,h]of [[.75,.22],[.22,.75]]){const cross=new THREE.Mesh(new THREE.BoxGeometry(w,h,.12),red);cross.position.set(b.width/2,1.5,b.depth+.16);facade.add(cross);}
@@ -178,7 +188,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const awning = new THREE.Mesh(new THREE.BoxGeometry(1.1, .12, .7), new THREE.MeshLambertMaterial({ color: b.type === 'market' ? 0xdca14b : 0xc9d9a1 }));
       const awningColors = { popular_refectory: 0xd88a45, market: 0xdca14b, bakery: 0xc78b52, greengrocer: 0x75a956, clinic: 0xf0eee4, townhall: 0x7693ae, builder: 0xb87c3f, quarry: 0x777f83, luxury_housing: 0xc7a956, popular_housing: 0xa8734d };
       awning.material.color.setHex(awningColors[b.type] ?? 0xc9d9a1);
-      awning.position.set(door.position.x, 1.55, b.depth + .25); awning.castShadow = true; facade.add(awning);
+      if(!mine){awning.position.set(door.position.x, 1.55, b.depth + .25); awning.castShadow = true; facade.add(awning);}
       }
       const highlight = new THREE.Mesh(new THREE.BoxGeometry(1.02, CITY_FLOOR_HEIGHT+.02, 1.02), new THREE.MeshBasicMaterial({ color: 0xf0e6a1, wireframe: true }));
       highlight.visible = false; group.add(highlight); group.userData.highlight = highlight;
@@ -276,7 +286,6 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
         for(const dx of [-.18,.18]){const rail=new THREE.Mesh(new THREE.BoxGeometry(.04,.65,.04),metal);rail.position.set(x+dx,h+.325,z);group.add(rail);}
         const top=new THREE.Mesh(new THREE.BoxGeometry(.4,.04,.04),metal);top.position.set(x,h+.65,z);group.add(top);
       }
-      const sign=new THREE.Mesh(new THREE.BoxGeometry(.6,.35,.06),new THREE.MeshLambertMaterial({color:0x326c94}));sign.position.set(.25,surfaceElevation(world,entity.x,entity.y)+1,.1);group.add(sign);
     }
     if(b.type==='park'){
       for(const [x,z]of [[.7,.7],[b.width-.7,b.depth-.7]]){
