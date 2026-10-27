@@ -3,6 +3,7 @@
 // =============================================================================
 
 import * as THREE from "https://esm.sh/three@0.160.0";
+import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels } from './city_citizen_models.js';
@@ -289,8 +290,10 @@ export function createTintedTexture(skinName, fgHex = 0xffffff, bgHex = 0x000000
 // Retro Bayer Ordered Dithering on Color & 3D Lighting Edges
 // ---------------------------------------------------------------------------
 
+const retroDitherMaterials=new WeakSet();
 export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) {
-  if (!mat) return;
+  if (!mat || retroDitherMaterials.has(mat)) return;
+  retroDitherMaterials.add(mat);
   mat.dithering = true;
   const prevCompile = mat.onBeforeCompile;
   mat.onBeforeCompile = (shader) => {
@@ -4582,6 +4585,12 @@ export class RCT3DRenderer {
 
   setTps(tps) { this.targetTps = tps; }
   getTps() { return this.targetTps; }
+  createCityBuildingMaterial(kind,color){
+    const feature=kind==='wood'?'Feature_Wood.png':kind==='roof'?'Feature_Brick_C.png':'Feature_Brick_B.png';
+    const material=new THREE.MeshLambertMaterial({color,map:createTintedTexture(feature,0xffffff,0x999999,1),side:THREE.DoubleSide});
+    applyRetroDitherToMaterial(material);return material;
+  }
+  decorateCityMaterials(group){group.traverse(object=>{for(const material of [object.material].flat())if(material?.isMeshLambertMaterial)applyRetroDitherToMaterial(material);});}
   setPaused(p) { this.isPaused = !!p; }
   isSimPaused() { return this.isPaused; }
 
@@ -4903,7 +4912,7 @@ export class RCT3DRenderer {
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;
         const base = b.constructionKind === 'open-air' ? b.terrain.min : b.terrain?.base ?? (map ? this.getTileSurfaceHeight(map, e.x, e.y) : 1);
-        const box = new THREE.Box3(new THREE.Vector3(e.x, base, e.y), new THREE.Vector3(e.x + b.width, b.constructionKind === 'open-air' ? b.terrain.max + (['market','greengrocer'].includes(b.type)?1.3:.14) : base + b.floors, e.y + b.depth));
+        const box = new THREE.Box3(new THREE.Vector3(e.x, base, e.y), new THREE.Vector3(e.x + b.width, b.constructionKind === 'open-air' ? b.terrain.max + (['market','greengrocer'].includes(b.type)?CITY_FLOOR_HEIGHT+.1:.14) : base + b.floors*CITY_FLOOR_HEIGHT, e.y + b.depth));
         const hit = ray.intersectBox(box, new THREE.Vector3());
         if (hit) {
           const distance = ray.origin.distanceTo(hit);
@@ -4912,7 +4921,7 @@ export class RCT3DRenderer {
             hit.addScaledVector(ray.direction, .001);
             const x = Math.max(0, Math.min(b.width - 1, Math.floor(hit.x - e.x)));
             const y = Math.max(0, Math.min(b.depth - 1, Math.floor(hit.z - e.y)));
-            const z = Math.max(0, Math.min(b.floors - 1, Math.floor(hit.y - base)));
+            const z = Math.max(0, Math.min(b.floors - 1, Math.floor((hit.y - base)/CITY_FLOOR_HEIGHT)));
             const unitId = `${b.id}:${x}:${y}:${z}`; this.selectedCityUnitId = b.units.some(u => u.id === unitId) ? unitId : null;
           }
         }
@@ -6212,6 +6221,7 @@ export class RCT3DRenderer {
       }
     }
 
+    this.cityAnimationTime=(this.cityAnimationTime||0)+dt*effectiveSpeed;
     syncCityBuildings(this, THREE, entities, world);
     const profileCity = this.profileFrame ? performance.now() : 0;
 

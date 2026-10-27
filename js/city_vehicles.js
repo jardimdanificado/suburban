@@ -48,22 +48,43 @@ export class CityVehicles {
   }
   parkingReport(){
     const sites=this.parkingSites(),vehicles=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&['bicicleta','bicicleta_carga','patinete'].includes(v.good)),required=Math.max(2,Math.ceil(vehicles.length/12));
-    return {sites,required,missing:Math.max(0,required-sites.length),capacity:sites.reduce((n,b)=>n+b.bikeSlots.length,0),occupied:sites.reduce((n,b)=>n+b.bikeSlots.filter(s=>s.vehicleId!=null).length,0),reserved:sites.reduce((n,b)=>n+b.bikeSlots.filter(s=>s.reservedBy!=null).length,0),outside:vehicles.filter(v=>!v.driverId&&!v.parking).length};
+    return {sites,required,missing:Math.max(0,required-sites.length),capacity:sites.reduce((n,b)=>n+b.bikeSlots.length,0),occupied:sites.reduce((n,b)=>n+b.bikeSlots.filter(s=>s.vehicleId!=null).length,0),reserved:sites.reduce((n,b)=>n+b.bikeSlots.filter(s=>s.reservedBy!=null).length,0),outside:vehicles.filter(v=>!v.driverId&&(!v.parking||v.parking.kind==='roadside')).length};
   }
   reserveParking(v,goal,maxDistance=12){
     if(!['bicicleta','bicicleta_carga','patinete'].includes(v.good))return null;
     const choices=this.parkingSites().filter(b=>Math.hypot(b.door.x-goal.x,b.door.y-goal.y)<=maxDistance).sort((a,b)=>Math.hypot(a.door.x-goal.x,a.door.y-goal.y)-Math.hypot(b.door.x-goal.x,b.door.y-goal.y));
     for(const b of choices)for(const slot of b.bikeSlots){if(slot.vehicleId!=null||slot.reservedBy!=null)continue;if(!this.city.walkable(Math.floor(slot.x),Math.floor(slot.y))||this.city.findPath(slot,goal)===null)continue;slot.reservedBy=v.id;return {rackId:b.id,index:slot.index,x:slot.x,y:slot.y};}return null;
   }
+  roadsideParking(v,goal,maxDistance=8){
+    if(!['bicicleta','bicicleta_carga','patinete'].includes(v.good))return null;
+    const city=this.city,candidates=[],occupied=new Set();
+    for(const other of this.units.values())if(other.id!==v.id&&!other.scrapped)for(const p of [other.parking,other.reservedParking])if(p)occupied.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
+    for(let dy=-maxDistance;dy<=maxDistance;dy++)for(let dx=-maxDistance;dx<=maxDistance;dx++){
+      const x=Math.floor(goal.x)+dx,y=Math.floor(goal.y)+dy;
+      if(!city.walkable(x,y)||ROAD_TILES.has(tileAt(city.world,x,y)))continue;
+      const neighbor=[[1,0],[-1,0],[0,1],[0,-1]].find(([sx,sy])=>ROAD_TILES.has(tileAt(city.world,x+sx,y+sy))&&canStep(city.world,x,y,x+sx,y+sy));
+      if(!neighbor||occupied.has(`${x},${y}`))continue;
+      if(city.buildings.some(b=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth))continue;
+      const spot={kind:'roadside',x:x+.5,y:y+.5,angle:neighbor[0]?0:Math.PI/2};
+      candidates.push(spot);
+    }
+    candidates.sort((a,b)=>Math.hypot(a.x-goal.x,a.y-goal.y)-Math.hypot(b.x-goal.x,b.y-goal.y));
+    return candidates.find(spot=>city.findPath(spot,goal)!==null)||null;
+  }
+  destinationParking(v,goal){return this.reserveParking(v,goal)||this.roadsideParking(v,goal);}
   freeParking(v,reservation=false){
     const point=reservation?v.reservedParking:v.parking,b=point&&this.city.building(point.rackId),slot=b?.bikeSlots?.[point.index];
     if(slot){if(reservation&&slot.reservedBy===v.id)slot.reservedBy=null;if(!reservation&&slot.vehicleId===v.id)slot.vehicleId=null;}
     if(reservation)v.reservedParking=null;else v.parking=null;
   }
   parkNearby(v,goal){
-    const spot=this.reserveParking(v,goal);if(!spot)return false;v.reservedParking=spot;return this.occupyParking(v,spot);
+    const spot=this.destinationParking(v,goal);if(!spot)return false;v.reservedParking=spot;return this.occupyParking(v,spot);
   }
   occupyParking(v,spot){
+    if(spot.kind==='roadside'){
+      this.freeParking(v);v.parking={...spot};v.reservedParking=null;
+      v.x=v.entity.x=spot.x;v.y=v.entity.y=spot.y;v.angle=spot.angle;v.altitude=surfaceElevation(this.city.world,v.x,v.y);v.status='Estacionado ao lado da rua';return true;
+    }
     const b=this.city.building(spot.rackId),slot=b?.bikeSlots?.[spot.index];if(!slot||slot.reservedBy!==v.id||slot.vehicleId!=null)return false;
     this.freeParking(v);slot.vehicleId=v.id;slot.reservedBy=null;v.parking=spot;v.reservedParking=null;v.x=v.entity.x=spot.x;v.y=v.entity.y=spot.y;v.angle=0;v.altitude=surfaceElevation(this.city.world,v.x,v.y);v.status='Estacionado no bicicletário';return true;
   }
@@ -207,7 +228,7 @@ export class CityVehicles {
     candidates.sort((a,b)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(b.x-c.entity.x,b.y-c.entity.y));
     for(const v of candidates){
       const path=city.findPath(c.entity,v);if(path===null||path.length>Math.max(4,c.path.length/2))continue;
-      const parking=this.reserveParking(v,goal);
+      const parking=this.destinationParking(v,goal);
       const rental=!owners.has(v.ownerAccountId);if(rental&&!city.transfer(c.accountId,v.ownerAccountId,city.currency.price(50),'Serviço: aluguel de bicicleta',{vehicleId:v.id})){v.reservedParking=parking;this.freeParking(v,true);continue;}
       if(rental)this.stats.fares+=city.currency.price(50);
       v.reservedParking=parking;v.driverId=c.id;c.mobilityTrip={kind:'cycle',vehicleId:v.id,goal,stage:'boarding'};c.path=path;c.indoorLocation=null;v.status='Usuário a caminho';return true;
@@ -218,15 +239,15 @@ export class CityVehicles {
     if(v){
       const parked=arrived&&v.reservedParking&&Math.hypot(v.x-v.reservedParking.x,v.y-v.reservedParking.y)<1&&this.occupyParking(v,v.reservedParking);
       this.freeParking(v,true);v.driverId=null;v.journey=null;v.passengerIds=[];
-      if(!parked)v.status=v.parking?'Estacionado no bicicletário':'Estacionado fora do bicicletário';
-      if(arrived){v.parkingHistory??=[];v.parkingHistory.push({minute:this.city.minute,rackId:v.parking?.rackId??null,rackName:v.parking?this.city.building(v.parking.rackId)?.entity.properties.name:null,x:v.x,y:v.y,citizenId:c.id});if(v.parkingHistory.length>40)v.parkingHistory.shift();}
+      if(!parked)v.status=v.parking?.kind==='roadside'?'Estacionado ao lado da rua':v.parking?'Estacionado no bicicletário':'Estacionado fora do bicicletário';
+      if(arrived){v.parkingHistory??=[];v.parkingHistory.push({minute:this.city.minute,rackId:v.parking?.rackId??null,rackName:v.parking?.kind==='roadside'?'Ao lado da rua':v.parking?this.city.building(v.parking.rackId)?.entity.properties.name:null,x:v.x,y:v.y,citizenId:c.id});if(v.parkingHistory.length>40)v.parkingHistory.shift();}
     }
     c.ridingVehicleId=null;c.mobilityTrip=null;
     if(arrived&&trip?.goal){c.path=this.city.findPath(c.entity,trip.goal)||[];c.mobilityWalkGoal=c.path.length?{...trip.goal}:null;}
   }
   minute(){
     this.hourly();
-    for(const v of this.units.values()){if(v.parking&&!this.city.building(v.parking.rackId)){v.parking=null;v.status='Bicicletário removido';}if(v.reservedParking&&!v.driverId)this.freeParking(v,true);}
+    for(const v of this.units.values()){if(v.parking&&v.parking.kind!=='roadside'&&!this.city.building(v.parking.rackId)){v.parking=null;v.status='Bicicletário removido';}if(v.reservedParking&&!v.driverId)this.freeParking(v,true);}
     for(const c of this.city.citizens){
       if(c.mobilityWalkGoal&&!c.path.length)c.mobilityWalkGoal=null;
       if(c.mobilityTrip&&(c.entity.destroyed||!this.units.has(c.mobilityTrip.vehicleId))){this.releaseTrip(c);continue;}
@@ -241,7 +262,7 @@ export class CityVehicles {
       if(c.mobilityTrip?.stage==='boarding'){
         if(c.path.length)continue;
         if(Math.hypot(c.entity.x-v.x,c.entity.y-v.y)>2){this.releaseTrip(c);continue;}
-        if(!v.reservedParking)v.reservedParking=this.reserveParking(v,c.mobilityTrip.goal);
+        if(!v.reservedParking)v.reservedParking=this.destinationParking(v,c.mobilityTrip.goal);
         const path=city.findPath(v,v.reservedParking||c.mobilityTrip.goal);if(path===null){this.releaseTrip(c);c.task=null;continue;}
         this.freeParking(v);c.entity.x=v.x;c.entity.y=v.y;c.path=path;c.ridingVehicleId=v.id;c.mobilityTrip.stage='riding';v.journey={};this.stats.passengers++;
       }

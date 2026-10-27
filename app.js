@@ -1,10 +1,10 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=cycle-parking-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=visual-flow-1';
 import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js";
 import { CityDesktop } from "./js/city_desktop.js";
 import { World } from "./js/world.js";
 import { Renderer } from "./js/renderer.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=cycle-parking-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=visual-flow-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
@@ -79,6 +79,7 @@ export function update(dt, _api) { city.update(dt); }
 
 /** Draw additional experience-specific UI after the framework HUD. */
 export function renderUI(ui, _api) {
+  ui.ctx.save();ui.ctx.beginPath();ui.ctx.rect(0,cityUI.manager.top,ui.width,Math.max(0,ui.height-cityUI.manager.top-27));ui.ctx.clip();
   drawCitySites(ui);
   for (const c of city.citizens) {
     if (!c.conversation || c.conversation.a !== c.id) continue;
@@ -98,6 +99,7 @@ export function renderUI(ui, _api) {
     for (let i = 0; i < 3; i++) ui.ctx.fillRect(point.x - 7 + i * 6, point.y - 2, 3, 3);
     ui.ctx.restore();
   }
+  ui.ctx.restore();
   cityUI.draw(ui);
 }
 
@@ -420,6 +422,7 @@ function frame(now) {
   const hoverTile = editor.open && mousePosition.x >= 0 ? mapTileAt(mousePosition.x, mousePosition.y) : null;
 
   if (!legacyUI.hitTest(mousePosition.x, mousePosition.y)) {
+    legacyUI.ctx.save();legacyUI.ctx.beginPath();legacyUI.ctx.rect(0,cityUI.manager.top,legacyUI.width,Math.max(0,legacyUI.height-cityUI.manager.top-27));legacyUI.ctx.clip();
     editor.drawPreview(legacyUI, hoverTile, (x, y) => {
       if (renderMode === "3d") {
         const elevation = renderer3D.getSurfaceElevation(world.map, x, y);
@@ -429,6 +432,7 @@ function frame(now) {
       return { x: root.clientWidth / 2 + (x - renderer2D.getCameraX()) * size,
         y: root.clientHeight / 2 + (y - renderer2D.getCameraY()) * size };
     });
+    legacyUI.ctx.restore();
   }
   renderUI(legacyUI, api);
 

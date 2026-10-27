@@ -16,8 +16,8 @@ export function renderVehicle(ui,p,v){
   p.kv('Distância percorrida',`${v.distance.toFixed(1)} células`);p.kv('Capacidade de carga',`${spec.cargo} itens`);
   if(v.entity)p.button('LOCALIZAR NO MAPA',()=>ui.camera(v.entity.x,v.entity.y));
   if(v.driverId)p.button(`USUÁRIO ATUAL: ${city.accountName(`citizen:${v.driverId}`)}`,()=>ui.openCitizen(v.driverId));
-  const rack=v.parking&&city.building(v.parking.rackId);p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));
-  if(v.reservedParking)p.kv('Vaga reservada no destino',`${city.building(v.reservedParking.rackId)?.entity.properties.name||v.reservedParking.rackId} · ${v.reservedParking.index+1}`);
+  const rack=v.parking&&city.building(v.parking.rackId);p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':v.parking?.kind==='roadside'?'Ao lado da rua':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));
+  if(v.reservedParking)p.kv('Vaga reservada no destino',v.reservedParking.kind==='roadside'?'Ao lado da rua':`${city.building(v.reservedParking.rackId)?.entity.properties.name||v.reservedParking.rackId} · ${v.reservedParking.index+1}`);
   p.heading('PEÇAS ORIGINAIS E FORNECEDORES');
   const components=model?.components?.length?model.components:Object.entries(VEHICLE_RECIPES[v.good]||{}).map(([good,quantity])=>({good,quantity,producerName:'Não registrado',design:'—'}));
   p.table([{label:'Peça',weight:2},{label:'Quantidade'},{label:'Fabricante',weight:2},{label:'Revisão'}],components.map(part=>({cells:[city.economy.goods[part.good]?.label||part.good,part.quantity,part.producerName||city.building(part.producerId)?.entity.properties.name||String(part.producerId),part.design],click:()=>ui.openBuilding(part.producerId)})));
@@ -31,7 +31,7 @@ export function renderVehicle(ui,p,v){
 }
 export function renderParking(ui,p){
  const city=ui.city,system=city.vehicles,report=system.parkingReport();p.heading('BICICLETÁRIOS · BIKES E PATINETES');p.metrics([['VAGAS',report.capacity],['OCUPADAS',report.occupied],['RESERVADAS',report.reserved],['FORA DOS BICICLETÁRIOS',report.outside]]);
- p.note('A vaga é reservada antes da viagem. Ao chegar, o cidadão estaciona e termina o percurso a pé. Na ausência de vaga próxima, o equipamento fica junto ao destino.');
+ p.note('A vaga é reservada antes da viagem. Ao chegar, o cidadão estaciona e termina o percurso a pé. Sem vaga próxima, procura espaço ao lado da rua e termina o trajeto a pé.');
  p.button('SOLICITAR NOVO BICICLETÁRIO',()=>city.politics.startPublicWork('bike_rack'));
  for(const b of report.sites){p.heading(b.entity.properties.name);p.button('LOCALIZAR BICICLETÁRIO',()=>ui.camera(b.entity.x,b.entity.y));p.table([{label:'Vaga'},{label:'Equipamento',weight:2},{label:'Proprietário',weight:2},{label:'Estado'}],b.bikeSlots.map(slot=>{const v=system.units.get(slot.vehicleId??slot.reservedBy);return {cells:[slot.index+1,v?`${title(v)} #${v.id}`:'Livre',v?city.accountName(v.ownerAccountId):'—',slot.vehicleId!=null?'Estacionado':slot.reservedBy!=null?'Reservado':'Disponível'],...(v?{click:()=>ui.openPanel({selectedVehicleId:v.id})}:{})};}));}
 }

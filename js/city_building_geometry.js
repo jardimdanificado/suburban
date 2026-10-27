@@ -1,3 +1,4 @@
+export const CITY_FLOOR_HEIGHT=1.8;
 export const MIN_PLOT_CELLS=4;
 export const ROTATION_LABELS=['Sul','Leste','Norte','Oeste'];
 export function modelSize(b){return (b.rotation||0)%2?{width:b.depth,depth:b.width}:{width:b.width,depth:b.depth};}

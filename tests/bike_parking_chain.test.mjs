@@ -1,3 +1,4 @@
+import {ROAD_TILES,tileAt} from '../js/city_terrain.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup,totalMoney,finishShipment} from './helpers/city.mjs';
@@ -52,4 +53,19 @@ test('the public chain autonomously assembles a new bike or scooter from deliver
  const city=setup({starter:true,population:128});city.currency.policy.mode='paused';let product;
  for(let i=0;i<2880&&!product;i++){city.update(.25);product=[...city.vehicles.units.values()].find(v=>v.batchId&&['bicicleta','bicicleta_carga','patinete'].includes(v.good));}
  assert(product,'The initial chain must complete a genuine equipment batch');const model=city.vehicles.model(product);assert(model.components.length>0);assert(model.components.every(p=>city.building(p.producerId)?.municipal&&p.producerName));assert(city.logistics.shipments.some(s=>s.buyer.id===model.manufacturerId&&s.status==='delivered'));assert.equal(totalMoney(city),city.currency.netIssued());
+});
+test('missing or full racks fall back to reserved spaces beside roads, never on the road',()=>{
+ const city=setup({starter:true,population:64}),system=city.vehicles,v=firstBike(city),goal=system.parkingSites()[0].door;
+ for(const b of system.parkingSites())for(const slot of b.bikeSlots)if(slot.vehicleId==null)slot.reservedBy=99999;
+ const spot=system.destinationParking(v,goal);assert(spot);assert.equal(spot.kind,'roadside');
+ assert(!ROAD_TILES.has(tileAt(city.world,Math.floor(spot.x),Math.floor(spot.y))));
+ assert([[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>ROAD_TILES.has(tileAt(city.world,Math.floor(spot.x)+dx,Math.floor(spot.y)+dy))));
+ v.reservedParking=spot;const other=[...system.units.values()].find(o=>o.id!==v.id);const second=system.roadsideParking(other,goal);assert(second);assert.notDeepEqual(second,spot);
+ assert(system.occupyParking(v,spot));assert.equal(v.status,'Estacionado ao lado da rua');
+ for(const b of system.parkingSites())b.active=false;
+ assert.equal(system.destinationParking(v,goal).kind,'roadside');
+ const mirror=new CityStateGraph().apply(new CityStateGraph().encode({city})).city;bindCityState(mirror);assert.equal(mirror.vehicles.units.get(v.id).parking.kind,'roadside');
+ system.freeParking(v);assert.equal(v.parking,null);
+ const c=city.accounts.get(v.ownerAccountId);c.entity.x=v.x;c.entity.y=v.y;v.driverId=c.id;v.reservedParking=spot;c.ridingVehicleId=v.id;c.mobilityTrip={vehicleId:v.id,goal,stage:'riding'};
+ system.releaseTrip(c,true);assert.equal(v.parking.kind,'roadside');assert.equal(c.ridingVehicleId,null);assert.equal(v.reservedParking,null);assert.equal(v.parkingHistory.at(-1).rackName,'Ao lado da rua');
 });

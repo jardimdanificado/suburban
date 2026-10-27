@@ -1,14 +1,15 @@
+import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 /** Retail stalls share one instanced mesh per premises, including striped canopies. */
 export function marketFixtures(THREE,b){
   const units=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),count=Math.min(12,units.length),parts=[];
   const color=b.type==='greengrocer'?0x49854b:0xc75840;
   for(let i=0;i<count;i++){
     const unit=units[Math.floor(i*units.length/count)],add=(x,y,z,w,h,d,tint)=>parts.push({unit,x,y,z,w,h,d,tint});
-    for(let stripe=0;stripe<4;stripe++)add(-.36+stripe*.24,1.12,0,.24,.10,.96,stripe%2?0xf3e4bd:color);
-    for(const x of [-.4,.4])add(x,.57,-.32,.055,1.08,.055,0x765536);
+    for(let stripe=0;stripe<4;stripe++)add(-.36+stripe*.24,CITY_FLOOR_HEIGHT,0,.24,.10,.96,stripe%2?0xf3e4bd:color);
+    for(const x of [-.4,.4])add(x,CITY_FLOOR_HEIGHT/2,-.32,.055,CITY_FLOOR_HEIGHT,.055,0x765536);
     add(0,.48,.16,.86,.12,.46,0x946638);
     for(let crate=0;crate<3;crate++){const x=-.27+crate*.27;add(x,.60,.16,.23,.15,.32,0xb58a4f);add(x,.70,.16,.17,.10,.22,[0xd85a32,0x72a43e,0xe9c45c][crate]);}
-    add(0,.88,-.34,.55,.18,.055,color);
+    add(0,1.45,-.34,.55,.18,.055,color);
   }
   const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0xffffff}),parts.length);
   mesh.userData.parts=parts;mesh.castShadow=true;mesh.receiveShadow=true;return mesh;

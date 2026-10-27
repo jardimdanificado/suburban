@@ -1,3 +1,4 @@
+import {queueMotion,sampleMotion} from './city_motion.js';
 import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=cycle-parking-1';
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
@@ -6,10 +7,10 @@ export class CitySimulationBridge {
     this.city = city; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice;
     this.graph = new CityStateGraph(); this.state = { city, entities, nextId };
     this.active = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
-    this.motion = new Map();this.motionSamples=new Map(); this.lastPositionUpdate = performance.now();
+    this.motion = new Map();this.motionSamples=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=cycle-parking-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=visual-flow-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });
@@ -56,10 +57,11 @@ export class CitySimulationBridge {
     }
     // Unchanged graph nodes still hold authoritative positions, not an interpolation sample.
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
+    for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
     this.graph.apply(data.packet); bindCityState(this.city);
     this.time.tick = data.tick; this.time.elapsed = data.elapsed;
     this.city._statsCache = null;this.city._uiRevision=(this.city._uiRevision||0)+1;
-    const now = performance.now(), duration = Math.max(16, Math.min(250, now - this.lastPositionUpdate));
+    const now = performance.now();
     this.lastPositionUpdate = now;
     this.motion.clear();
     for(let i=0;i<this.city.citizens.length;i++){
@@ -71,10 +73,9 @@ export class CitySimulationBridge {
       sample.to.y=data.positions?.[at]===c.id?data.positions[at+2]:c.entity.y;
       c.entity.x=sample.to.x;c.entity.y=sample.to.y;
       const dx=sample.to.x-sample.from.x,dy=sample.to.y-sample.from.y;
-      if(existing&&!this.time.paused&&(dx!==0||dy!==0)&&Math.hypot(dx,dy)<8){
-        sample.started=now;sample.duration=duration;this.motion.set(c.id,sample);
-        c.entity.x=sample.from.x;c.entity.y=sample.from.y;
-      }
+      const reset=!existing||this.time.paused||Math.hypot(dx,dy)>=8;
+      queueMotion(sample,sample.to.x,sample.to.y,now,{reset});
+      if(!reset){this.motion.set(c.id,sample);sampleMotion(sample,now);}
     }
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
     this.applyVehiclePositions(data.vehicles);
@@ -85,7 +86,7 @@ export class CitySimulationBridge {
   receiveMotion(data) {
     const now=performance.now();
     this.interpolate(now);
-    const duration=Math.max(16,Math.min(250,now-this.lastPositionUpdate)),positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
+    const positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
     this.lastPositionUpdate=now;
     this.time.tick=data.tick;this.time.elapsed=data.elapsed;
     for(let i=0;i<positions.length;i+=3){
@@ -95,26 +96,34 @@ export class CitySimulationBridge {
       const x=positions[i+1],y=positions[i+2],fromX=sample.entity.x,fromY=sample.entity.y;
       sample.from.x=fromX;sample.from.y=fromY;sample.to.x=x;sample.to.y=y;
       const dx=x-fromX,dy=y-fromY;
-      if(!this.time.paused&&(dx!==0||dy!==0)&&Math.hypot(dx,dy)<8){sample.started=now;sample.duration=duration;this.motion.set(sample.id,sample);}
+      const reset=this.time.paused||Math.hypot(dx,dy)>=8;
+      queueMotion(sample,x,y,now,{reset});
+      if(!reset){this.motion.set(sample.id,sample);sampleMotion(sample,now);}
       else {sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}
     }
     this.applyVehiclePositions(data.vehicles);
   }
   applyVehiclePositions(positions) {
     if(!positions)return;
+    const now=performance.now(),live=new Set();
     for(let i=0;i<positions.length;i+=5){
       const v=this.city.vehicles.units.get(positions[i]);
       if(!v?.entity)continue;
-      v.x=v.entity.x=positions[i+1];v.y=v.entity.y=positions[i+2];
+      live.add(v.id);let motion=this.vehicleMotion.get(v.id);
+      if(!motion){motion={entity:v.entity,to:{}};this.vehicleMotion.set(v.id,motion);}
+      motion.entity=v.entity;
+      const x=positions[i+1],y=positions[i+2],reset=this.time.paused||!motion.points?.length||Math.hypot(x-v.entity.x,y-v.entity.y)>=8;
+      v.x=x;v.y=y;queueMotion(motion,x,y,now,{reset});
+      if(reset){v.entity.x=x;v.entity.y=y;}else sampleMotion(motion,now);
       v.altitude=positions[i+3];v.angle=positions[i+4];
     }
+    for(const id of this.vehicleMotion.keys())if(!live.has(id))this.vehicleMotion.delete(id);
   }
   interpolate(now) {
+    if(!this.time.paused)for(const motion of this.vehicleMotion.values())sampleMotion(motion,now);
     for (const motion of this.motion.values()) {
-      const t = this.time.paused ? 1 : Math.min(1, (now - motion.started) / motion.duration);
-      motion.entity.x = motion.from.x + (motion.to.x - motion.from.x) * t;
-      motion.entity.y = motion.from.y + (motion.to.y - motion.from.y) * t;
-      if(t>=1)this.motion.delete(motion.id);
+      if(this.time.paused)continue;
+      if(sampleMotion(motion,now))this.motion.delete(motion.id);
     }
   }
   fail(message) {
@@ -125,7 +134,8 @@ export class CitySimulationBridge {
     bindCityState(this.city);
     this.city.lighting.siteBuckets=null;
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
-    this.pending.clear(); this.motion.clear();this.motionSamples.clear();
+    for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
+    this.pending.clear(); this.motion.clear();this.motionSamples.clear();this.vehicleMotion.clear();
     console.error('Simulação em segundo plano indisponível:', message);
     this.notice(wasRunning?`Simulação pausada após erro: ${String(message).split('\n')[0]}`:'Simulação em segundo plano indisponível; execução local ativada.');
   }
