@@ -19,7 +19,7 @@ export function syncCitizenInterior(city, c) {
   if (!c.entity.destroyed && !c.path.length && !c.deliveryId && INDOOR_TASKS.has(task)) {
     b = city.building(targetId);
     if (b && Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5) {
-      if (['work','manage'].includes(task) && (OUTDOOR_WORK.has(b.type) || b.constructionKind==='open-air')) b = null;
+      if ((['work','manage'].includes(task) && OUTDOOR_WORK.has(b.type)) || (b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal'].includes(task))) b = null;
     } else b = null;
   }
   if (!b) { c.indoorLocation = null; return; }

@@ -4,19 +4,19 @@ import {chooseBuildingSite} from './city_terrain.js';
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
 const inputs=(type)=>type==='bakery'?{trigo:2}:type==='mill'?{girassol:3}:INDUSTRIES[type]?.inputs||{};
-const vehicleFactories=new Set(['engine_factory','chassis_factory','bodyworks','tire_factory','transmission_factory','automotive_glass','upholstery','automaker']);
-const startupCapital=(city,economy,type)=>type==='dealership'
-  ? Math.ceil(['carro','caminhao','onibus','carruagem'].reduce((n,g)=>n+economy.goods[g].price,0)*3)+city.currency.price(100000)
-  : type==='bus_operator'?Math.ceil(economy.goods.onibus.price*3)+city.currency.price(100000)
-  : city.currency.price(type==='bank'?2000000:type==='research_institute'?100000:type==='automaker'?600000:vehicleFactories.has(type)?180000:60000);
+const vehicleFactories=new Set(['bearing_factory','frame_factory','deck_factory','tire_factory','chain_factory','safety_equipment','saddle_factory','cycle_assembler']);
+const startupCapital=(city,economy,type)=>type==='cycle_shop'
+  ? Math.ceil(['bicicleta','bicicleta_carga','patins','skate'].reduce((n,g)=>n+economy.goods[g].price,0)*3)+city.currency.price(100000)
+  : type==='bicycle_rental'?Math.ceil(economy.goods.bicicleta.price*3)+city.currency.price(100000)
+  : city.currency.price(type==='bank'?2000000:type==='research_institute'?100000:type==='cycle_assembler'?600000:vehicleFactories.has(type)?180000:60000);
 // Get the vehicle supply chain off the ground in dependency order. The long tail
 // of optional industries can still open later as the production queue clears.
 const rolloutPriority={
   iron_mine:220,foundry:205,steel_mill:205,bauxite_mine:200,aluminum_smelter:190,
   rubber_grove:195,rubberworks:185,glassworks:185,forestry:185,sawmill:175,
-  engine_factory:170,chassis_factory:170,bodyworks:170,tire_factory:170,
-  transmission_factory:170,automotive_glass:170,upholstery:170,automaker:155,
-  dealership:145,
+  bearing_factory:170,frame_factory:170,deck_factory:170,tire_factory:170,
+  chain_factory:170,safety_equipment:170,saddle_factory:170,cycle_assembler:155,
+  cycle_shop:145,
 };
 /** Demand follows recipes before factories exist, preventing empty chains from remaining invisible. */
 export function productionPlan(economy){

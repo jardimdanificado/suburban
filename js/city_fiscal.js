@@ -1,4 +1,4 @@
-const essentialTypes=new Set(['farm','bakery','kitchen','market','greengrocer','popular_refectory','clinic','utility','cleaner','waste_collector','recycler','carrier','mint']);
+const essentialTypes=new Set(['farm','bakery','kitchen','market','greengrocer','popular_refectory','clinic','hospital','utility','cleaner','waste_collector','recycler','carrier','mint']);
 export class CityFiscal {
   constructor(city){this.city=city;this.days=[];this.worksAdvance=0;this.recovered=0;this.lastRecoveryHour=null;}
   foodCost(){const city=this.city;if(this.foodMinute===city.minute)return this.foodValue;const goods=city.workMeals?.foodGoods()||['pao'];this.foodMinute=city.minute;return this.foodValue=Math.ceil(Math.min(...goods.map(g=>city.economy.goods[g]?.price||Infinity).filter(Number.isFinite))*9.6);}

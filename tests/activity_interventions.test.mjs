@@ -29,13 +29,13 @@ test('opinion interventions change voter assessment, can be corrected, and prese
   assert.equal(JSON.stringify(e.ballots),ballots);assert.equal(p.intervene('praise',target.id),null);assert.match(city.lastError,/30 minutos/);
 });
 
-test('vehicle imports conserve money and produce a visible aircraft that can take a real flight',()=>{
-  const city=setup({starter:true,funded:true,population:48}),p=city.politics;available(city);const citizen=city.citizens.find(c=>!p.officeHolder(c)&&!c.businessIds.length),money=totalMoney(city),stock=city.economy.initialStock.carro;
-  const result=p.intervene('importVehicle',citizen.id,{good:'carro'});assert(result,city.lastError);const v=city.vehicles.units.get(result.vehicleId);assert(v.entity&&!v.entity.destroyed);assert(v.active);assert.equal(v.ownerAccountId,citizen.accountId);assert.equal(v.entity.properties.cityVehicle,v);assert.equal(city.economy.initialStock.carro,stock+1);assert.equal(totalMoney(city),money);
-  assert(p.intervene('importFuel',v.id));city.vehicles.minute();assert(v.fuel>0);
-  const flight=p.intervene('flight',v.id);assert(flight,city.lastError);assert.equal(citizen.mobilityTrip.vehicleId,v.id);
+test('vehicle imports conserve money and produce a visible bicycle that can make a real trip',()=>{
+  const city=setup({starter:true,funded:true,population:48}),p=city.politics;available(city);const citizen=city.citizens.find(c=>!p.officeHolder(c)&&!c.businessIds.length),money=totalMoney(city),stock=city.economy.initialStock.bicicleta;
+  const result=p.intervene('importVehicle',citizen.id,{good:'bicicleta'});assert(result,city.lastError);const v=city.vehicles.units.get(result.vehicleId);assert(v.entity&&!v.entity.destroyed);assert(v.active);assert.equal(v.ownerAccountId,citizen.accountId);assert.equal(v.entity.properties.cityVehicle,v);assert.equal(city.economy.initialStock.bicicleta,stock+1);assert.equal(totalMoney(city),money);
+  assert.equal(v.fuelStore,undefined);
+  const ride=p.intervene('ride',v.id);assert(ride,city.lastError);assert.equal(citizen.mobilityTrip.vehicleId,v.id);
   for(let frame=0;frame<2400&&v.distance===0;frame++)city.update(1/16);
-  assert(v.distance>0,'the vehicle must move through the flight system');assert.equal(totalMoney(city),money);
+  assert(v.distance>0,'the vehicle must move along a real ground path');assert.equal(totalMoney(city),money);
 });
 
 test('intervention records retain their prototype across worker state transfer',()=>{

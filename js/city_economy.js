@@ -1,3 +1,5 @@
+import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
+import {career,requirements,qualification,apply,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js';
 import {productionPlan,investProductionPlan} from './city_production_planner.js';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes} from './city_clothing.js';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
@@ -20,10 +22,10 @@ export const CROPS = {
 };
 export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 450 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
 export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill']);
-export const PUBLIC_TYPES = new Set(['townhall','council_chamber', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'popular_housing', 'luxury_housing', 'popular_refectory']);
+export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'townhall','council_chamber', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'popular_housing', 'luxury_housing', 'popular_refectory']);
 const retailTypes = new Set(['bakery', 'greengrocer', 'market']);
 const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)), ...INDUSTRIAL_FOODS];
-export const JOB_SKILL = { ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
+export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
 // Keep a multi-week public food reserve so farms can be founded, staffed,
 // planted and harvested before the town hall's opening stock runs out.
 export const ECONOMY_RULES = { workingCapital: 20000, mealUnits: 3, initialMealsPerCitizen: 96, farmBatch: 12, farmLabor: 120 };
@@ -56,6 +58,16 @@ export class CityEconomy {
     this.routeCache = new Map();
     this.serviceInvestment = new CityServiceInvestment(city);
   }
+  configureEmployment(buildingId,changes){
+    const b=this.city.building(buildingId);if(!b||b.entity.destroyed)return false;
+    const policy=requirements(this.city,b);
+    if(Number.isFinite(changes.baseWage))b.baseWage=Math.max(1,Math.min(1000,changes.baseWage));
+    for(const key of ['minSkill','minRating'])if(Number.isFinite(changes[key]))policy[key]=Math.max(0,Math.min(100,changes[key]));
+    if(Number.isFinite(changes.minExperienceMinutes))policy.minExperienceMinutes=Math.max(0,Math.min(144000,Math.round(changes.minExperienceMinutes)));
+    if(typeof changes.allowTraining==='boolean')policy.allowTraining=changes.allowTraining;
+    return true;
+  }
+  jobSkill(b) { return JOB_SKILL[b.type] || 'management'; }
   citizen(id) { return this.city.society.citizen(id); }
   initializeCitizen(c, index, options) {
     c.skills = Object.fromEntries(Object.keys(SKILLS).map(skill => [skill, options.age === 0 ? 0 : 2 + this.city.random() * 16]));
@@ -68,7 +80,7 @@ export class CityEconomy {
   }
   practice(c, skill, minutes = 1) {
     if (!c || !(skill in SKILLS) || minutes <= 0 || !Number.isFinite(minutes)) return;
-    c.skills[skill] = Math.min(100, c.skills[skill] + minutes * .025 * (.8 + (c.traits?.diligence ?? .5) * .4) / (1 + c.skills[skill] / 25));
+    c.skills[skill] = Math.min(100, c.skills[skill] + minutes * (c.jobId?(.8+career(c).motivation/250):1) * .025 * (.8 + (c.traits?.diligence ?? .5) * .4) / (1 + c.skills[skill] / 25));
   }
   setupBuilding(b) {
     const startingFood = Math.max(this.city.initialPopulation, this.city.citizens.length) * ECONOMY_RULES.mealUnits * ECONOMY_RULES.initialMealsPerCitizen;
@@ -80,9 +92,11 @@ export class CityEconomy {
     b.mealQuality = b.type === 'popular_refectory' ? 2 : 1;
     b.totalRevenue = 0; b.totalExpenses = 0; b.dividends = 0;
     b.foundedAt = null; b.lastSaleAt = this.city.minute; b.stockouts = 0;
-    b.jobs = ({ mill: 2, mint: 1, residential: 0, popular_housing: 0, luxury_housing: 0, popular_refectory: 4, townhall: 2, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2, cleaner: 2, waste_collector: 2, recycler: 2, paid_toilet: 1, public_toilet: 0 })[b.type] ?? INDUSTRIES[b.type]?.jobs ?? 0;
+    b.jobs = ({ mill: 2, mint: 1, residential: 0, popular_housing: 0, luxury_housing: 0, popular_refectory: 4, townhall: 2, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2, cleaner: 2, waste_collector: 2, recycler: 2, paid_toilet: 1, public_toilet: 0 })[b.type] ?? CIVIC_SERVICES[b.type]?.jobs ?? INDUSTRIES[b.type]?.jobs ?? 0;
     b.baseWage = b.type === 'farm' || b.type === 'quarry' ? 8 : b.type === 'bakery' || b.type === 'builder' || b.type === 'carrier' ? 6 : 5;
     if (b.type === 'townhall') b.baseWage = 7;
+    b.baseWage *= 0.85 + ((Math.imul(b.id+71,2654435761)>>>0)%31)/100;
+    requirements(this.city,b);
     Object.defineProperty(b, 'wage', { get: () => this.city.currency.price(Math.max(b.baseWage,this.city.politics?.policy?.minimumWage||0)), set: value => { b.baseWage = value / this.city.currency.priceIndex; }, configurable: true });
   }
   get businesses() { return this.city.buildings.filter(b => PRIVATE_TYPES.has(b.type) && b.active && !b.entity.destroyed); }
@@ -119,7 +133,8 @@ export class CityEconomy {
   hiringScore(c, b) {
     const skill = c.skills[JOB_SKILL[b.type]] || 0, owner = this.city.relationships.businessPerson(b);
     const relation = owner ? this.city.relationships.view(owner, c) : null;
-    return skill * .75 + (this.city.reputation.score(c, 'reliability') - 50) * .15 + ((c.traits?.diligence ?? .5) - .5) * 8 + (relation ? relation.trust * .15 + relation.affection * .1 : 0);
+    const q=qualification(this.city,c,b);
+    return Math.min(12,q.experience/480)*.8+(q.rating-50)*.2+skill * .75 + (this.city.reputation.score(c, 'reliability') - 50) * .15 + ((c.traits?.diligence ?? .5) - .5) * 8 + (relation ? relation.trust * .15 + relation.affection * .1 : 0);
   }
   quarryStatus(b){
     if(this.city.world.map){const revision=this.city.world.revision||0;if(b.depositRevision!==revision||!b.deposits){b.deposits=quarryDeposits(this.city.world,b.entity.x,b.entity.y,b.width,b.depth);b.depositRevision=revision;}}
@@ -163,36 +178,35 @@ export class CityEconomy {
       else if (!c.deliveryId && !c.cleaningJobId && !this.city.relationships.willingToWork(c,b)) this.leaveJob(c,'Conflito pessoal com o gestor');
     }
     this.reconcileStaff();
+    for(const c of this.city.citizens)for(const a of c.career?.applications||[])if(a.status==='análise'&&a.decideAt<=this.city.minute){const b=this.city.building(a.buildingId),q=b&&qualification(this.city,c,b);if(!b?.active||b.entity.destroyed||b.workers.length>=b.jobs||!q.eligible){a.status='reprovado';a.reason=!b?.active||b.entity.destroyed?'Empresa indisponível':!q.eligible?q.reason:'Vaga preenchida';a.decidedAt=this.city.minute;}}
     const offers = this.city.buildings.filter(b => b.active && b.jobs > 0 && !b.entity.destroyed);
     const available = () => this.city.citizens.filter(c => this.city.society.isAdult(c) && !c.entity.destroyed && !c.jobId && !c.businessIds.length && c.role!=='councilor' && c.id!==this.mayorId && !this.city.development.projects.some(p=>p.id===c.startupProjectId && !p.cancelled && p.status!=='completed'));
     const priority = ['mint', 'bakery', 'market', 'greengrocer', 'farm', 'mill', 'quarry', 'carrier', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'builder', 'mint', 'townhall'];
-    const underserved = offers.filter(b => !b.workers.length).length;
-    // Give each operating firm its first employee before filling additional posts elsewhere.
-    for (let shortage = underserved - available().length; shortage > 0; shortage--) {
-      const donor = offers.filter(b => b.workers.length > 1 && b.workers.some(id => { const c = this.citizen(id); return c && c.id!==this.mayorId && !c.deliveryId && !c.cleaningJobId; })).sort((a, b) => b.workers.length - a.workers.length)[0];
-      if (!donor) break;
-      const worker = donor.workers.map(id => this.citizen(id)).filter(c => c && c.id!==this.mayorId && !c.deliveryId && !c.cleaningJobId).sort((a, b) => this.hiringScore(a, donor) - this.hiringScore(b, donor))[0];
-      this.leaveJob(worker);
+    for(const b of offers)reviewWages(this.city,b);
+    reviewMarket(this.city,offers);
+    const applicants=new Map();
+    for(const c of this.city.citizens)if(c.jobId&&!c.businessIds.length&&!c.deliveryId&&!c.cleaningJobId&&!c.researchAssignment&&!c.mobilityTrip&&!c.workMeal&&!this.city.politics.officeHolder(c))for(const a of c.career?.applications||[])if(a.status==='análise'&&a.buildingId!==c.jobId){let list=applicants.get(a.buildingId);if(!list)applicants.set(a.buildingId,list=[]);list.push(c);}
+    for(const c of available()){
+      const choices=offers.filter(b=>b.workers.length<b.jobs&&this.city.relationships.willingToWork(c,b)&&qualification(this.city,c,b).eligible).sort((a,b)=>b.wage-a.wage||a.id-b.id).slice(0,this.city.minute<=480?offers.length:3);
+      for(const b of choices){const a=apply(this.city,c,b);if(a?.status==='análise'){let list=applicants.get(b.id);if(!list)applicants.set(b.id,list=[]);list.push(c);}}
     }
     offers.sort((a, b) => Number(a.workers.length > 0) - Number(b.workers.length > 0) || (priority.indexOf(a.type) < 0 ? 99 : priority.indexOf(a.type)) - (priority.indexOf(b.type) < 0 ? 99 : priority.indexOf(b.type)));
     const recruit = (b, count) => {
       const slots=Math.max(0,Math.min(Math.floor(count),b.jobs-b.workers.length));
       if(!Number.isFinite(slots)||slots<=0)return;
-      const candidates = available().filter(c=>this.city.relationships.willingToWork(c,b)).sort((a, c) => this.hiringScore(c, b) - this.hiringScore(a, b) || a.id - c.id);
-      for (const c of candidates.slice(0, slots)) {
+      const candidates = (applicants.get(b.id)||[]).filter(c=>c.jobId!==b.id);
+      const eligible=candidates.filter(c=>{const a=career(c).applications.findLast(a=>a.buildingId===b.id);return a?.status==='análise'&&a.decideAt<=this.city.minute&&qualification(this.city,c,b).eligible&&(!c.jobId||wageFor(this.city,c,b)>(this.city.building(c.jobId)?wageFor(this.city,c,this.city.building(c.jobId)):Infinity)*1.15);});
+      eligible.sort((a,c)=>this.hiringScore(c,b)-this.hiringScore(a,b)||a.id-c.id);
+      for(const c of (slots===b.jobs-b.workers.length?eligible.slice(slots):[])){const a=career(c).applications.findLast(a=>a.buildingId===b.id);a.status='reprovado';a.reason='Outro candidato teve melhor pontuação para as vagas disponíveis';}
+
+      for (const c of eligible.slice(0, slots)) {
+        const a=career(c).applications.findLast(a=>a.buildingId===b.id);a.status='aprovado';a.reason=a.trainee?'Selecionado para formação no trabalho':'Selecionado por habilidade, experiência e referências';a.decidedAt=this.city.minute;
+        for(const other of career(c).applications)if(other!==a&&other.status==='análise'){other.status='retirado';other.reason='Aceitou outra proposta';}
+        if(c.jobId)this.leaveJob(c,'Aceitou proposta salarial melhor');
         c.jobId = b.id; c.profession = JOB_SKILL[b.type]; b.workers.push(c.id); this.city.history.employment(c,b,'contratação');
         this.city.log(`${c.entity.properties.name} foi contratado em ${b.entity.properties.name}, considerando habilidade e vínculos com o proprietário.`, 'work', [c.id, b.ownerId].filter(Boolean), { kind: 'employment', buildingId: b.id, skill: c.skills[JOB_SKILL[b.type]], score: this.hiringScore(c, b) });
       }
     };
-    // Owner-operated farms can keep producing without an employee. Move their employees
-    // to vacant services before leaving the mint or food processors permanently unstaffed.
-    for (const b of offers.filter(b => !b.workers.length && b.type !== 'farm')) {
-      if (available().length) break;
-      const donor = offers.find(f => f.type === 'farm' && this.citizen(f.ownerId) && f.workers.some(id => { const c=this.citizen(id);return c && !c.deliveryId && !c.cleaningJobId; }));
-      const worker = donor?.workers.map(id=>this.citizen(id)).find(c=>c && !c.deliveryId && !c.cleaningJobId);
-      if (!worker) break;
-      this.leaveJob(worker); recruit(b, 1);
-    }
     for (const b of offers) if (!b.workers.length) recruit(b, 1);
     for (const b of offers) recruit(b, b.jobs - b.workers.length);
   }
@@ -216,7 +230,8 @@ export class CityEconomy {
     const farms = businesses.filter(b => b.type === 'farm');
     const buyers = businesses.filter(b => retailTypes.has(b.type));
     const industrialBusinesses = businesses.filter(b => INDUSTRIES[b.type]);
-    for (const b of businesses) b.inputDemand = b.type==='kitchen'?Object.fromEntries([...new Set(KITCHEN_RECIPES.flatMap(r=>Object.keys(r.inputs)))].map(g=>[g,Math.max(0,18-(b.inventory[g]||0)-(b.incoming[g]||0))])):b.type==='mill'?{girassol:Math.max(0,36-b.inventory.girassol-(b.incoming.girassol||0))}:INDUSTRIES[b.type] ? Object.fromEntries(Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs).map(([g,n])=>[g,Math.max(0,(b.type==='automaker'?n*Math.max(6,b.vehicleBatchSize||3):b.type==='publisher'&&g==='papel'?Math.max(12,(b.bookPages||5)*3):n*6)-b.inventory[g]-(b.incoming[g]||0))])) : b.type === 'bakery' ? { trigo: Math.max(0, 24 - b.inventory.trigo) } : !retailTypes.has(b.type) ? {} : Object.fromEntries(edible.filter(g => this.accepts(b, g)).map(g => [g, Math.max(0, 12 - b.inventory[g])]));
+    for (const b of businesses) b.inputDemand = b.type==='kitchen'?Object.fromEntries([...new Set(KITCHEN_RECIPES.flatMap(r=>Object.keys(r.inputs)))].map(g=>[g,Math.max(0,18-(b.inventory[g]||0)-(b.incoming[g]||0))])):b.type==='mill'?{girassol:Math.max(0,36-b.inventory.girassol-(b.incoming.girassol||0))}:INDUSTRIES[b.type] ? Object.fromEntries(Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs).map(([g,n])=>[g,Math.max(0,(b.type==='cycle_assembler'?n*Math.max(6,b.vehicleBatchSize||3):b.type==='publisher'&&g==='papel'?Math.max(12,(b.bookPages||5)*3):n*6)-b.inventory[g]-(b.incoming[g]||0))])) : b.type === 'bakery' ? { trigo: Math.max(0, 24 - b.inventory.trigo) } : !retailTypes.has(b.type) ? {} : Object.fromEntries(edible.filter(g => this.accepts(b, g)).map(g => [g, Math.max(0, 12 - b.inventory[g])]));
+    for(const b of this.city.buildings)if(b.active&&civicSpec(b))b.inputDemand=Object.fromEntries(Object.entries(b.type==='library'?{livros:1}:civicSpec(b).inputs).map(([g,n])=>[g,Math.max(0,n*6-(b.inventory[g]||0)-(b.incoming[g]||0))]));
     const stockByGood = new Map(), inputDemandByGood = new Map(), totalInputDemandByGood = new Map(), foodPreferenceByGood = new Map();
     for (const b of businesses) {
       for (const [good, amount] of Object.entries(b.inventory)) stockByGood.set(good, (stockByGood.get(good) || 0) + amount);
@@ -225,6 +240,7 @@ export class CityEconomy {
         if (INDUSTRIES[b.type]) inputDemandByGood.set(good, (inputDemandByGood.get(good) || 0) + amount);
       }
     }
+    for(const b of this.city.buildings)if(b.active&&civicSpec(b))for(const [g,n]of Object.entries(b.inputDemand||{})){totalInputDemandByGood.set(g,(totalInputDemandByGood.get(g)||0)+n);inputDemandByGood.set(g,(inputDemandByGood.get(g)||0)+n);}
     for (const c of activeCitizens) for (const [good, preference] of Object.entries(c.foodPreferences || {})) if (preference > 0) foodPreferenceByGood.set(good, (foodPreferenceByGood.get(good) || 0) + preference);
     const oil=this.lightingSupplyReport=oilSupply(this),oilGap=Math.max(0,oil.oilRequired-oil.millPotential-oil.millPlanned);
     const items=[{type:'mill',crop:null,score:oilGap?Math.min(300,200+oilGap*2):0,required:oil.oilRequired,supply:oil.millDaily,stock:oil.oilStock,reason:`Postes precisam de ${oil.daily} óleos/dia; ${oil.empty} vazios. ${oil.bottleneck}`}];
@@ -273,9 +289,10 @@ export class CityEconomy {
         : coverage<.9 ? Math.min(125,100+Math.max(0,1-coverage)*20) : 0;
       items.push({ type: 'farm', crop, score, required: dailyNeed, supply: capacity, stock, reason: crop === 'trigo' && downstream ? 'Padarias precisam de trigo' : downstream ? `Lojas precisam de ${spec.label.toLowerCase()}` : 'Diversidade da alimentação local' });
     }
+    for(const [type,spec]of Object.entries(CIVIC_SERVICES)){const count=this.city.buildings.filter(b=>b.type===type&&b.active&&!b.entity.destroyed).length,target=Math.max(1,Math.ceil(population/spec.population));items.push({type,crop:null,score:Math.max(0,target-count)*120,required:target,supply:count,stock:0,reason:spec.need==='health'?'Capacidade hospitalar e cuidados com recursos reais':'Acesso a lazer, esporte e cultura'});}
     for (const [type,spec] of Object.entries(INDUSTRIES)) {
       if(type==='composting')continue;
-      if(['dealership','fuel_station','garage','bus_operator'].includes(type)){const count=businesses.filter(b=>b.type===type).length,target=type==='bus_operator'?Math.max(1,Math.ceil(population/400)):Math.max(1,Math.ceil(population/300));items.push({type,crop:null,score:count<target?110:0,required:target,supply:count,stock:0,reason:'Mobilidade aérea: veículos, combustível, manutenção e transporte coletivo.'});continue;}
+      if(['cycle_shop','sports_shop','cycle_workshop','bicycle_rental'].includes(type)){const count=businesses.filter(b=>b.type===type).length,target=type==='bicycle_rental'?Math.max(1,Math.ceil(population/400)):Math.max(1,Math.ceil(population/300));items.push({type,crop:null,score:count<target?110:0,required:target,supply:count,stock:0,reason:'Mobilidade individual: bicicletas, patins, lojas, aluguel e reparos.'});continue;}
       if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
       const firms=businesses.filter(b=>b.type===type);
       const needed=(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?activeCitizens.filter(c=>this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
@@ -292,6 +309,7 @@ export class CityEconomy {
     return this.demands;
   }
   accepts(b, good) {
+    if(civicSpec(b))return good in (b.type==='library'?{livros:1}:civicSpec(b).inputs);
     if(b.type==='kitchen')return KITCHEN_RECIPES.some(r=>good in r.inputs);
     if (INDUSTRIES[b.type]) return good in (this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs);
     if (b.type === 'mill') return good === 'girassol';
@@ -415,6 +433,7 @@ export class CityEconomy {
     const extractionStarted=this.serviceInvestment.invest({types:['quarry']});
     const firstServices=this.serviceInvestment.invest({initialOnly:true})||extractionStarted;
     // Initial chains have their own funded rollout before expanding established sectors.
+    if(planCivicServices(this.city))return true;
     if(investProductionPlan(this)||firstServices)return true;
     if(investOilChain(this))return true;
     if(bootstrapEnterprise(this))return true;
@@ -491,17 +510,17 @@ export class CityEconomy {
   trade() {
     const businesses = this.businesses;
     for(const farm of businesses.filter(b=>b.type==='farm' && b.inventory.adubo+(b.incoming.adubo||0)<4)) {const seller=businesses.find(b=>b.type==='composting' && b.inventory.adubo>0);if(seller)this.transferGoods(seller,farm,'adubo',Math.min(4,seller.inventory.adubo),this.goods.adubo.price);}
-    const buyers=businesses.filter(b=>retailTypes.has(b.type)||b.type==='mill'||INDUSTRIES[b.type]);
+    const buyers=[...businesses.filter(b=>retailTypes.has(b.type)||b.type==='mill'||INDUSTRIES[b.type]),...this.city.buildings.filter(b=>b.active&&!b.entity.destroyed&&civicSpec(b)&&!businesses.includes(b))];
     const available={},batchDemand={};
     for(const b of businesses){const outputs=b.type==='farm'?[b.crop]:b.type==='mill'?['oleo']:b.type==='bakery'?['pao']:Object.keys(INDUSTRIES[b.type]?.outputs||{});for(const good of outputs)available[good]=(available[good]||0)+(b.inventory[good]||0);}
-    for(const b of buyers)for(const [good,n]of Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type]?.inputs||{}))batchDemand[good]=(batchDemand[good]||0)+Math.max(0,n*6-b.inventory[good]-(b.incoming[good]||0));
+    for(const b of buyers)for(const [good,n]of Object.entries(this.city.vehicles.recipeFor(b)?.inputs||(b.type==='library'?{livros:1}:civicSpec(b)?.inputs)||INDUSTRIES[b.type]?.inputs||{}))batchDemand[good]=(batchDemand[good]||0)+Math.max(0,n*6-b.inventory[good]-(b.incoming[good]||0));
     // Rotate equal bids. A scarce upstream stock serves one batch per factory
     // before any factory can reserve six batches and starve the other chains.
     const offset=(this.tradeCursor||0)%Math.max(1,buyers.length);this.tradeCursor=offset+1;
     for (const buyer of [...buyers.slice(offset),...buyers.slice(0,offset)]) {
       for (const good of Object.keys(GOODS).filter(g => this.accepts(buyer, g))) {
         if(good==='lixo' && buyer.type==='composting')continue;
-        const batch=(this.city.vehicles.recipeFor(buyer)?.inputs||INDUSTRIES[buyer.type]?.inputs)?.[good];
+        const batch=(this.city.vehicles.recipeFor(buyer)?.inputs||(buyer.type==='library'?{livros:1}:civicSpec(buyer)?.inputs)||INDUSTRIES[buyer.type]?.inputs)?.[good];
         const scarce=batch&&(available[good]||0)<(batchDemand[good]||0);
         const target = scarce?batch:buyer.type==='publisher'&&good==='papel'?Math.max(12,(buyer.bookPages||5)*3):buyer.type==='kitchen'?18:batch ? batch*6 : buyer.type === 'bakery' ? 24 : 18;
         if (buyer.inventory[good] + (buyer.incoming[good] || 0) > target / 2) continue;
@@ -580,7 +599,7 @@ export class CityEconomy {
         this.consumed.sementes += seeds; this.recordGoods('sowing', 'sementes', seeds, b.id, null);
       }
       if (field.labor < (field.requiredLabor||ECONOMY_RULES.farmLabor)) {
-        field.labor = Math.min(field.requiredLabor||ECONOMY_RULES.farmLabor, field.labor + 1 + c.skills.agriculture / 60 + (c.toolUntil>this.city.minute ? .3 : 0));
+        field.labor = Math.min(field.requiredLabor||ECONOMY_RULES.farmLabor, field.labor + (1 + c.skills.agriculture / 60 + (c.toolUntil>this.city.minute ? .3 : 0))*workEfficiency(c,b));
         this.harvest(b, field); return true;
       }
       if (this.harvest(b, field)) return true;
@@ -596,11 +615,11 @@ export class CityEconomy {
     field.plantedAt = null; field.labor = 0; return true;
   }
   industrialWork(b,c,spec) {
-    if(['automaker','carriage_builder'].includes(b.type))return this.city.vehicles.assemblyWork(b,c);
-    if(b.type==='garage')return this.city.vehicles.garageWork(b,c);
-    if(b.type==='dealership')return ['carro','caminhao','onibus','carruagem'].some(g=>b.inventory[g]>0);
-    if(b.type==='fuel_station')return b.inventory.oleo>0;
-    if(b.type==='bus_operator')return this.city.vehicles.lines.some(l=>l.companyId===b.id&&l.status==='operating');
+    if(['cycle_assembler','skate_workshop'].includes(b.type))return this.city.vehicles.assemblyWork(b,c);
+    if(b.type==='cycle_workshop')return this.city.vehicles.garageWork(b,c);
+    if(b.type==='cycle_shop')return ['bicicleta','bicicleta_carga','patins','skate'].some(g=>b.inventory[g]>0);
+    if(b.type==='sports_shop')return b.inventory.capacete>0;
+    if(b.type==='bicycle_rental')return [...this.city.vehicles.units.values()].some(v=>v.active&&v.ownerAccountId===b.accountId);
     if(b.type==='clothing_store')return b.inventory.roupas>0;
     if(b.type==='newsroom'){if(b.officialJournal&&!this.city.officialJournal.pending)return false;const pages=b.officialJournal?4:3+(b.id+this.city.day)%3;spec={...spec,inputs:{papel:pages},outputs:{jornais:1}};if((b.newsPrintedDay===this.city.day?b.newsCopies||0:0)>=Math.max(2,Math.ceil(this.city.citizens.length*.08)))return false;}
     if(b.type==='publisher'){
@@ -624,7 +643,7 @@ export class CityEconomy {
       b.activeOre=b.deposits.find(p=>(reserves.get(`${p.x},${p.y}`)??120)>0);if(!b.activeOre)return false;
     }
     if(['clay_pit','sand_pit'].includes(b.type) && (b.extractionReserve??=b.width*b.depth*120)<Object.values(spec.outputs)[0])return false;
-    b.productionLabor=(b.productionLabor||0)+1+(c.skills[spec.skill]||0)/80+(c.toolUntil>this.city.minute ? .3 : 0);
+    b.productionLabor=(b.productionLabor||0)+(1+(c.skills[spec.skill]||0)/80+(c.toolUntil>this.city.minute ? .3 : 0))*workEfficiency(c,b);
     if(b.productionLabor<spec.labor)return true;
     b.productionLabor-=spec.labor;
     for(const [g,n] of Object.entries(spec.inputs)){b.inventory[g]-=n;this.city.vehicles.discardComponents(b,g,n);this.consumed[g]+=n;if(g==='lixo')b.wasteProcessed=(b.wasteProcessed||0)+n;this.recordGoods('recipe-input',g,n,b.id,null);}
@@ -642,6 +661,7 @@ export class CityEconomy {
   consumerOffer(c, b) {
     if(b?.active&&!b.entity.destroyed&&['tailor','clothing_store'].includes(b.type))return clothingOffer(this.city,c,b);
     if(b?.active&&!b.entity.destroyed&&b.type==='newsroom')return newspaperOffer(this.city,c,b);
+    if(b?.type==='sports_shop'&&b.active&&!b.entity.destroyed&&b.inventory.capacete>0&&c.needs.safety<80&&c.balance>=this.goods.capacete.price)return {good:'capacete',spec:INDUSTRIES.sports_shop,price:this.goods.capacete.price};
     if(b?.type==='artisan'&&b.active&&!b.entity.destroyed){const good=['carrinho','cesta'].find(g=>b.inventory[g]>0&&c.balance>=this.goods[g].price&&carryCapacity(c)<(g==='carrinho'?72:36));return good?{good,spec:INDUSTRIES.artisan,price:this.goods[good].price}:null;}
     const spec=INDUSTRIES[b?.type];
     if(!b?.active || b.entity.destroyed || !spec?.use) return null;
@@ -677,7 +697,7 @@ export class CityEconomy {
     if (INDUSTRIES[b.type]) return this.industrialWork(b,c,INDUSTRIES[b.type]);
     if (b.type === 'mill') {
       if (b.inventory.girassol < 3 || inventoryFree(b) < 1) return false;
-      b.millingLabor = (b.millingLabor || 0) + 1;
+      b.millingLabor = (b.millingLabor || 0) + workEfficiency(c,b);
       if (b.millingLabor >= 8) { b.millingLabor -= 8; b.inventory.girassol -= 3; b.inventory.oleo++; this.consumed.girassol += 3; this.produced.oleo++; this.recordGoods('milling', 'oleo', 1, null, b.id); }
       return true;
     }
@@ -687,7 +707,7 @@ export class CityEconomy {
     if (b.type === 'quarry') {
       if (this.city.world.map) { const revision = this.city.world.revision || 0; if (b.depositRevision !== revision) { b.deposits = quarryDeposits(this.city.world, b.entity.x, b.entity.y, b.width, b.depth); b.depositRevision = revision; } const deposits = b.deposits; if (!deposits.length) return false; const reserves = this.city.world.quarryReserves ??= new Map(); const deposit = deposits.find(p => (reserves.get(`${p.x},${p.y}`) ?? 250) > 0); if (!deposit) return false; b.activeDeposit = deposit; }
       if (b.stoneReserve <= 0 || inventoryFree(b) < 1) return false;
-      b.miningLabor = (b.miningLabor || 0) + 1 + c.skills.mining / 60;
+      b.miningLabor = (b.miningLabor || 0) + (1 + c.skills.mining / 60)*workEfficiency(c,b);
       if (b.miningLabor >= 3) { b.miningLabor -= 3; b.inventory.pedra++; b.stoneReserve--; if (b.activeDeposit) { const key = `${b.activeDeposit.x},${b.activeDeposit.y}`; const reserves = this.city.world.quarryReserves; reserves.set(key, (reserves.get(key) ?? 250) - 1); } this.produced.pedra++; this.recordGoods('mining', 'pedra', 1, null, b.id); }
       return true;
     }
@@ -696,7 +716,7 @@ export class CityEconomy {
     if (b.type === 'carrier' || b.type === 'cleaner' || b.type === 'waste_collector') return false;
     if (b.type === 'bakery') {
       if (b.inventory.trigo < 2 || b.inventory.pao >= 36 || inventoryFree(b) < 1) return false;
-      b.bakingLabor += 1 + c.skills.baking / 60;
+      b.bakingLabor += (1 + c.skills.baking / 60)*workEfficiency(c,b);
       if (b.bakingLabor >= 8) {
         b.bakingLabor -= 8; b.inventory.trigo -= 2; b.inventory.pao += 3;
         this.produced.pao += 3; this.consumed.trigo += 2;

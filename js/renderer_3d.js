@@ -4893,7 +4893,7 @@ export class RCT3DRenderer {
       if (!e || e.destroyed || !e.properties || !e.properties.render || e.properties.species === "effect") continue;
 
       if(e.properties.cityVehicle){
-        const v=e.properties.cityVehicle,h=v.altitude??1,extent=['caminhao','onibus'].includes(v.good)?1.2:1;
+        const v=e.properties.cityVehicle,h=v.altitude??1,extent=['bicicleta_carga','patins'].includes(v.good)?1.2:1;
         const box=new THREE.Box3(new THREE.Vector3(e.x-extent,h,e.y-extent),new THREE.Vector3(e.x+extent,h+1.1,e.y+extent)),hit=ray.intersectBox(box,new THREE.Vector3());
         if(hit){const d=ray.origin.distanceTo(hit);if(d<closestDist){closestDist=d;bestEntId=e.id;this.selectedCityUnitId=null;}}continue;
       }
@@ -5029,7 +5029,7 @@ export class RCT3DRenderer {
       let closestId = -1;
       let minD = 1.3;
       for (const e of entities) {
-        if (e.destroyed || !e.properties || (e.properties.citizen?.indoorLocation||e.properties.citizen?.ridingVehicleId)) continue;
+        if (e.destroyed || !e.properties || e.properties.citizen?.indoorLocation) continue;
         // Multi-tile footprint check
         let eFpW = 1, eFpH = 1;
         if (e.properties.house) {
@@ -6315,7 +6315,7 @@ export class RCT3DRenderer {
       }
 
       const cityCitizen=e.properties.citizen;
-      if(cityCitizen&&(cityCitizen.indoorLocation||cityCitizen.ridingVehicleId)&&this.selectedEntityId!==e.id){
+      if(cityCitizen&&cityCitizen.indoorLocation&&this.selectedEntityId!==e.id){
         const sprite=this.entitySprites.get(e.id);
         if(sprite){sprite.visible=false;activeIds.add(e.id);}
         continue;
@@ -6929,7 +6929,7 @@ export class RCT3DRenderer {
         const billboardRotY = this.isPerspectiveActive() ? (this.fpYaw + Math.PI) : this.fixedRotationY;
         const isPossessed = this.isFirstPersonActive() && Number(e.id) === Number(this.fpEntityId);
 
-        if (isPossessed || (e.properties?.citizen?.indoorLocation||e.properties?.citizen?.ridingVehicleId)) {
+        if (isPossessed || e.properties?.citizen?.indoorLocation) {
           sprite.visible = false;
         } else {
           sprite.visible = true;
@@ -6982,7 +6982,7 @@ export class RCT3DRenderer {
         if(e.properties?.citizen)this.cityCitizenBatches.add(sprite);
 
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
-        if (isConsciousCreature && !(e.properties?.citizen?.indoorLocation||e.properties?.citizen?.ridingVehicleId)) {
+        if (isConsciousCreature && !e.properties?.citizen?.indoorLocation) {
           const campaign=e.properties?.citizen?.campaign;
           if(campaign?.flag && e.properties.citizen.task==='campaign') {
             const flag=campaign.flag,uiKey=`${e.id}_campaign_flag`;

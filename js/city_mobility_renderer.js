@@ -1,5 +1,5 @@
 import {surfaceElevation} from './city_terrain.js';
-const colors={carro:0x397e99,caminhao:0xbd793c,onibus:0xd5b345,carruagem:0x765038};
+const colors={bicicleta:0x397e99,bicicleta_carga:0xbd793c,patins:0xd5b345,skate:0x765038};
 const inView=(r,x,y,margin=4)=>!Number.isFinite(r.renderedMinTx)||x>=r.renderedMinTx-margin&&x<=r.renderedMaxTx+margin&&y>=r.renderedMinTy-margin&&y<=r.renderedMaxTy+margin;
 function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
   renderer.mobilityBatches??=new Map();let b=renderer.mobilityBatches.get(key);
@@ -11,13 +11,18 @@ export function syncCityMobility(renderer,THREE,entities,world){
   const matrix=renderer._mobilityMatrix??=new THREE.Matrix4(),position=renderer._mobilityPosition??=new THREE.Vector3(),quaternion=renderer._mobilityQuaternion??=new THREE.Quaternion(),scale=renderer._mobilityScale??=new THREE.Vector3(),color=renderer._mobilityColor??=new THREE.Color(),axis=renderer._mobilityAxis??=new THREE.Vector3(0,1,0);
   const place=(mesh,index,x,y,z,sx,sy,sz,angle=0,tint=null)=>{position.set(x,y,z);quaternion.setFromAxisAngle(axis,angle);scale.set(sx,sy,sz);matrix.compose(position,quaternion,scale);mesh.setMatrixAt(index,matrix);if(tint!=null)mesh.setColorAt(index,color.setHex(tint));};
   const vehicles=entities.filter(e=>!e.destroyed&&e.properties?.cityVehicle&&inView(renderer,e.x,e.y,Math.max(4,e.properties.cityVehicle.altitude||0)));
-  const body=batch(renderer,THREE,'bodies',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0xffffff}),vehicles.length),cab=batch(renderer,THREE,'cabins',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0x375362}),vehicles.length),wheel=batch(renderer,THREE,'wheels',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0x242723}),vehicles.length*6),horse=batch(renderer,THREE,'horses',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0x704635}),vehicles.length),rotor=batch(renderer,THREE,'rotors',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0xaecddd}),vehicles.length*4),shadow=batch(renderer,THREE,'air-shadows',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshBasicMaterial({color:0x17252b,transparent:true,opacity:.22,depthWrite:false}),vehicles.length);let n=0,w=0,horses=0,rotors=0;
-  for(const e of vehicles){const v=e.properties.cityVehicle,large=v.good==='onibus'||v.good==='caminhao',length=large?1.6:1.15,h=v.altitude??surfaceElevation(world,e.x,e.y),angle=v.angle||0,tint=colors[v.good]+((v.manufacturerId*31)%20)*0x010100;
-    place(body.mesh,n,e.x,h+.3,e.y,.72,.42,length,angle,tint);place(cab.mesh,n++,e.x,h+.58,e.y,.62,.3,large?length*.7:length*.5,angle);
-    place(shadow.mesh,n-1,e.x,surfaceElevation(world,e.x,e.y)+.015,e.y,.9,.01,length*1.1,angle);
-    for(const dx of [-.62,.62])for(const dz of [-length*.33,length*.33]){const px=e.x+dx*Math.cos(angle)+dz*Math.sin(angle),py=e.y-dx*Math.sin(angle)+dz*Math.cos(angle);place(rotor.mesh,rotors++,px,h+.65,py,.58,.035,.1,angle+(v.journey?performance.now()*.025:0));}
-    for(const z of [-length*.32,length*.32])for(const x of [-.38,.38]){const px=e.x+x*Math.cos(angle)+z*Math.sin(angle),py=e.y-x*Math.sin(angle)+z*Math.cos(angle);place(wheel.mesh,w++,px,h+.17,py,.16,.25,.24,angle);}
-    if(v.good==='carruagem')place(horse.mesh,horses++,e.x+Math.sin(angle)*.95,h+.45,e.y+Math.cos(angle)*.95,.4,.55,.75,angle);
+  const body=batch(renderer,THREE,'cycle-frames',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0xffffff}),vehicles.length*4),wheel=batch(renderer,THREE,'cycle-wheels',()=>new THREE.TorusGeometry(.22,.035,5,12),()=>new THREE.MeshLambertMaterial({color:0x252725}),vehicles.length*8);let n=0,w=0;
+  for(const e of vehicles){const v=e.properties.cityVehicle,h=surfaceElevation(world,e.x,e.y),angle=v.angle||0,tint=colors[v.good]||0x52879a;
+    const part=(dx,dy,dz,sx,sy,sz,color=tint)=>place(body.mesh,n++,e.x+dx*Math.cos(angle)+dz*Math.sin(angle),h+dy,e.y-dx*Math.sin(angle)+dz*Math.cos(angle),sx,sy,sz,angle,color);
+    const tire=(dx,dz,size=1)=>place(wheel.mesh,w++,e.x+dx*Math.cos(angle)+dz*Math.sin(angle),h+.23*size,e.y-dx*Math.sin(angle)+dz*Math.cos(angle),size,size,size,angle+Math.PI/2);
+    if(['bicicleta','bicicleta_carga'].includes(v.good)){
+      part(0,.42,0,.10,.28,.72);part(0,.64,-.12,.24,.08,.26,0x343437);part(0,.8,.35,.5,.05,.06,0x777777);tire(0,-.42);tire(0,.42);
+      if(v.good==='bicicleta_carga'){part(0,.46,-.6,.55,.25,.44);tire(.24,-.5);}
+    }else if(v.good==='skate'){
+      part(0,.18,0,.32,.07,.85);for(const x of [-.18,.18])for(const z of [-.3,.3])tire(x,z,.4);
+    }else{
+      for(const x of [-.18,.18]){part(x,.21,0,.18,.22,.38);for(const z of [-.18,-.06,.06,.18])tire(x,z,.3);}
+    }
   }
-  for(const b of [body,cab,wheel,horse,rotor,shadow])b.mesh.instanceMatrix.needsUpdate=true;body.mesh.count=n;cab.mesh.count=n;wheel.mesh.count=w;horse.mesh.count=horses;rotor.mesh.count=rotors;shadow.mesh.count=n;if(body.mesh.instanceColor)body.mesh.instanceColor.needsUpdate=true;
+  body.mesh.count=n;wheel.mesh.count=w;body.mesh.instanceMatrix.needsUpdate=true;wheel.mesh.instanceMatrix.needsUpdate=true;if(body.mesh.instanceColor)body.mesh.instanceColor.needsUpdate=true;
 }

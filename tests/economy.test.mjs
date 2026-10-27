@@ -149,6 +149,8 @@ test('operating accounts include seeds, wages, tax and service revenue exactly o
   city.performTask(worker); assert.equal(farm.totalExpenses - payrollBefore, cash - farm.balance);
   const clinic = city.buildings.find(b => b.type === 'clinic'), revenue = clinic.totalRevenue;
   const c = city.citizens[0]; c.task = 'health'; c.targetId = clinic.id; c.servicePaid = null;
-  city.performTask(c); assert.equal(clinic.totalRevenue - revenue, 240);
+  // Public care is now free and requires medicine plus a present professional.
+  const doctor=city.citizens.find(person=>person.id!==c.id&&!city.politics.officeHolder(person));city.economy.leaveJob(doctor);doctor.jobId=clinic.id;clinic.workers.push(doctor.id);doctor.task='work';doctor.path=[];doctor.entity.x=clinic.door.x;doctor.entity.y=clinic.door.y;clinic.inventory.remedio=1;c.path=[];c.entity.x=clinic.door.x;c.entity.y=clinic.door.y;c.needs.health=20;
+  city.performTask(c);assert.equal(clinic.totalRevenue-revenue,0);assert.equal(clinic.inventory.remedio,0);
   assert.equal(totalMoney(city), city.currency.netIssued());
 });

@@ -114,7 +114,7 @@ Todos os prédios, inclusive residenciais, têm inventário com capacidade finit
 
 As compras internas reservam espaço no destino e dinheiro em uma conta de frete. A carga sai do estoque de origem e fica identificada como mercadoria reservada, com posição física. Um cidadão percorre o caminho até a carga e depois até o destino. Só a chegada acrescenta itens ao inventário de destino e libera o pagamento ao fornecedor. Interrupções preservam a posição da carga; cancelamentos devolvem dinheiro e mercadoria, liberando a capacidade. Se não houver espaço para recuperar materiais de uma instalação demolida, a perda fica contabilizada explicitamente.
 
-Transportadoras contratam funcionários conforme habilidades e vínculos, pagam salários durante os trajetos e recebem pelo frete entregue. A habilidade de logística aumenta com a prática. Antes de haver transportadora, ou quando conseguem pagar os produtos mas não o frete, os próprios empreendedores podem carregar compras. São viagens a pé de até 24 itens, sem veículos. Pedras também precisam viajar da pedreira ao canteiro.
+Transportadoras contratam funcionários conforme habilidades e vínculos, pagam salários durante os trajetos e recebem pelo frete entregue. A habilidade de logística aumenta com a prática. Antes de haver transportadora, ou quando conseguem pagar os produtos mas não o frete, os próprios empreendedores podem carregar compras. São viagens a pé de até 24 itens; cestas, carrinhos e bicicletas de carga ampliam a capacidade. Pedras também precisam viajar da pedreira ao canteiro.
 
 A prefeitura começa com **18.432 unidades de pão** para os 256 habitantes: 6.144 refeições gratuitas, equivalentes a 24 refeições por pessoa. O estoque diminui a cada atendimento e não se repõe automaticamente. Ela também oferece água, higiene, descanso e atendimento básico provisórios até surgirem instalações especializadas. A comida das empresas não é gerada por reposição automática.
 
@@ -196,7 +196,7 @@ Crianças recebem nomes naturais, sem IDs, e herdam o sobrenome familiar. Têm p
 
 `npm test` verifica os controles originais, preservação do relevo, políticas públicas de venda, propriedade privada, contratação, habilidades, insumos, receitas, estoques, conversas e famílias. Simulações de vários dias verificam que os saldos somados correspondem exatamente à moeda emitida, além da conservação de cada mercadoria: estoque inicial e importações + produção = consumo e transformação + estoques em prédios, obras e fretes + perdas registradas. Os testes antigos de contratos e famílias usam uma cidade desenvolvida como fixture; os novos testes também verificam a evolução desde as quatro instalações iniciais, incluindo emissão por trabalho, limite diário, inflação, preços reajustados e contratos preservados.
 
-Ainda não há salvamento da cidade, escola, irrigação ou veículos de transporte. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
+Ainda não há salvamento da cidade, escola ou irrigação. A mobilidade individual usa bicicletas, bicicletas de carga, patins e skates, com produção física, proprietários, desgaste e oficinas. Recarregar reinicia a partida. O renderizador 3D carrega Three.js por `esm.sh`.
 
 ---
 
@@ -693,3 +693,9 @@ A prefeitura revisa o plano da promessa a cada seis horas. O plano articula proj
 Promessas e a avaliação mostram as medidas efetivas, seus contratos, projetos de lei e pendências. Apresentar uma proposta por si só não melhora a aprovação. Contratos/custeio/entregas reais podem render até seis pontos de iniciativa, enquanto a meta está pendente. O avanço parcial rende até doze pontos. A cobrança de atraso começa depois do primeiro quarto do mandato e aumenta gradualmente até o prazo final. Pioras continuam descontando, com amortecimento de quedas correlacionadas ao arranque da cidade e limite conjunto de −25 pontos para mudanças; melhoras podem somar até 40. Conclusão, rapidez e superação continuam com seus bônus, e corrupção e vetos mantêm suas penalidades.
 
 A aprovação individual nas pesquisas também parte da referência neutra de 50: o índice geral entra como desvio em relação a 50, combinado com a situação pessoal de alimentação, moradia, trabalho e felicidade. Isso elimina o desconto artificial que antes multiplicava a nota neutra por 65% antes de considerar as necessidades do entrevistado.
+
+### Mobilidade individual, saúde e lazer
+
+A antiga cadeia automotiva foi convertida em quadros, rolamentos, rodas, correntes, selins, plataformas e botas esportivas. Montadoras e oficinas produzem bicicletas, bicicletas de carga, patins e skates preservando fabricante, modelo, lote e fornecedores. Lojas vendem unidades reais; locadoras alugam bicicletas por viagem. Equipamentos aceleram o cidadão nas ruas, acompanham caminhos terrestres e são levados a pé fora delas. Não há voo, tanque ou abastecimento. Reparos usam peças entregues fisicamente.
+
+Em **Transportes → Frota / Modelos / Aluguel** é possível acompanhar a cadeia. **Cidade → Saúde e lazer** mostra equipe presente, capacidade, ocupação e impedimentos de atendimento. Hospital, parque público, centro esportivo, biblioteca e teatro têm demanda e planejamento municipal de obras, respeitando alimentos, caixa e o orçamento executivo. Hospitais e clínicas consomem medicamentos reais; hospitais também usam sabão. Bibliotecas precisam de livros e preservam seu acervo. Atendimento depende de funcionários presentes, com limite de usuários simultâneos.

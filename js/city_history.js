@@ -1,3 +1,4 @@
+import {employmentEvent} from './city_employment.js';
 /** Structured event journal, inspired by Brutopolis/event_log.js.
  * Stable IDs, subject/type indices and bounded retention; no entity references in exports. */
 export const HISTORY_LIMIT = 16000;
@@ -140,6 +141,7 @@ export class CityHistory {
     return journal.cache;
   }
   employment(c, b, action, reason = '') {
+    employmentEvent(this.city,c,b,action,reason);
     return this.record('employment', `${this.city.accountName(c.accountId)}: ${action} em ${b.entity.properties.name}${reason ? ` (${reason})` : ''}.`, [c.accountId,b.accountId], { action, buildingId: b.id, wage: b.wage, reason });
   }
   ownership(b, from, to, details = {}) {
