@@ -9,10 +9,11 @@ export class CityCampaigns {
     const city=this.city,hour=Math.floor(city.minute/60);
     if(this.trafficPointHour!==hour){this.trafficPointCache=[...city.traffic].sort((a,b)=>b[1]-a[1]).map(([key])=>{const [x,y]=key.split(',').map(Number);return {x:x+.5,y:y+.5};}).filter(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y))));this.trafficPointHour=hour;}
     const traffic=this.trafficPointCache||[];
-    if(traffic.length){if(origin){const local=traffic.filter(p=>Math.hypot(p.x-origin.x,p.y-origin.y)<=60);if(local.length)return local.slice(0,limit);return traffic.slice().sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y)).slice(0,limit);}return traffic.slice(0,limit);}
     const revision=city.world.revision??0;
     if(this.roadPointRevision!==revision){const points=[];for(let y=0;y<city.world.height;y++)for(let x=0;x<city.world.width;x++)if(ROAD_TILES.has(tileAt(city.world,x,y)))points.push({x:x+.5,y:y+.5});this.roadPointCache=points;this.roadPointRevision=revision;}
-    const points=this.roadPointCache||[];return origin?points.slice().sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y)).slice(0,limit):points.slice(0,limit);
+    const roads=this.roadPointCache||[],points=[...traffic,...roads.filter((_,i)=>i%4===0)];
+    if(origin)points.sort((a,b)=>Math.hypot(a.x-origin.x,a.y-origin.y)-Math.hypot(b.x-origin.x,b.y-origin.y));
+    const spread=[];for(const point of points)if(spread.every(p=>Math.hypot(p.x-point.x,p.y-point.y)>=3)){spread.push(point);if(spread.length>=limit)break;}return spread;
   }
   getMaterials(){return this.materials??=new CityCampaignMaterials(this.city);}
   sample(rows,size){const pool=rows.slice();for(let i=0;i<Math.min(size,pool.length);i++){const j=i+Math.floor(this.city.random()*(pool.length-i));[pool[i],pool[j]]=[pool[j],pool[i]];}return pool.slice(0,size);}
@@ -68,7 +69,9 @@ export class CityCampaigns {
     if(!points.length)return;
     for(const c of candidates.slice(0,8)){
       const localPoints=this.streetPoints(12,c.entity);let dest,path;
-      for(let i=0;i<Math.min(6,localPoints.length);i++){const option=localPoints[(party.id*7+active*11+Math.floor(city.minute/120)+i)%localPoints.length],route=city.findPath(c.entity,option);if(route!==null&&route.length<=60){dest=option;path=route;break;}}
+      const occupied=city.citizens.filter(other=>other.campaign?.destination&&other.campaign.electionId===e.id).map(other=>other.campaign.destination);
+      const spread=localPoints.slice().sort((a,b)=>Math.min(30,...occupied.map(p=>Math.hypot(p.x-b.x,p.y-b.y)))-Math.min(30,...occupied.map(p=>Math.hypot(p.x-a.x,p.y-a.y))));
+      for(let i=0;i<Math.min(12,spread.length);i++){const option=spread[i],route=city.findPath(c.entity,option);if(route!==null&&route.length<=60){dest=option;path=route;break;}}
       if(!dest)continue;
       const volunteer=c.political?.partyId===party.id&&(c.political.loyalty||0)>.6,fee=volunteer?0:city.currency.price(900);
       if(fee&&!city.transfer(p.partyAccount(party).accountId,c.accountId,fee,'Serviço: turno de campanha de rua',{electionId:e.id,partyId:party.id,workerId:c.id}))continue;

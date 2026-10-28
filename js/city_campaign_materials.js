@@ -1,5 +1,6 @@
 import {headquartersAccount} from './city_party_headquarters.js?v=party-caps-skin-1';
 import {ROAD_TILES,tileAt} from './city_terrain.js';
+import {planPropertyFlags,maintainPropertyFlags} from './city_campaign_property.js';
 const blocked=new Set(['vote','research','interview','council-session','care','caregiving','food','provisions','water','health','energy','toilet','workmeal','construction','work','manage']);
 const live=c=>!!c?.entity&&!c.entity.destroyed;
 export class CityCampaignMaterials {
@@ -37,6 +38,7 @@ export class CityCampaignMaterials {
   }
   plan(e){
     const city=this.city;if(city.hour<7||city.hour>=22)return;
+    const hour=Math.floor(city.minute/60);if(this.propertyFlagsHour!==hour){this.propertyFlagsHour=hour;planPropertyFlags(city,this,e);}
     for(const n of e.candidates){const candidate=city.society.citizen(n.citizenId),party=city.politics.party(n.partyId);if(!live(candidate)||!party?.active)continue;if(n.campaignFinanceDay!==city.day){this.fund(n,e);n.campaignFinanceDay=city.day;}
       const pool=city.citizens.filter(c=>live(c)&&!c.indoorLocation&&city.society.isAdult(c)&&c.id!==candidate.id&&!c.campaign&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.researchAssignment&&!c.deliveryId&&!c.cleaningJobId&&!c.workMeal&&!c.conversation&&!blocked.has(c.task)&&!city.urgentNeed(c));
       for(const kind of ['pamphlet','flag','banner','paint']){
@@ -104,6 +106,7 @@ export class CityCampaignMaterials {
   }
   minute(){
     const city=this.city;
+    if(city.minute%30===0)maintainPropertyFlags(city,this);
     for(const m of this.missions)if(m.status==='completed')this.consumeMaterial(m);
     for(const d of this.decorations)if(!d.entity.destroyed&&city.minute>=d.until){d.entity.destroyed=true;const b=city.building(d.buildingId);if(b?.campaignPaint===d){b.campaignPaint=null;b.geometryRevision=(b.geometryRevision||0)+1;}}
     this.decorations=this.decorations.filter(d=>!d.entity.destroyed);
