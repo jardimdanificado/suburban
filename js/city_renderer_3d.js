@@ -43,11 +43,6 @@ function roomCellGeometry(THREE,facadeMask,openingMask){
 export function syncCityBuildings(renderer, THREE, entities, world) {
   const oilCarriers=renderer.cityOilCarriers??=new Set();oilCarriers.clear();
   for(const shipment of renderer.cityLogistics?.shipments||[])if(shipment.good==='oleo'&&shipment.pickedUp&&shipment.driverId!=null)oilCarriers.add(shipment.driverId);
-  const selectedEntity=entities.find(e=>e.id===renderer.selectedEntityId);
-  const selectedPerson=selectedEntity?.properties?.citizen;
-  const selectedOfficeHost=selectedEntity?.properties?.cityBuilding?.officeTenantOf;
-  const selectedInteriorBuilding=selectedPerson?.indoorLocation?.buildingId;
-  const selectedInteriorId=entities.find(e=>e.id===selectedInteriorBuilding)?.properties?.cityBuilding?.officeTenantOf??selectedInteriorBuilding;
   syncConstructionSites(renderer,THREE,world,renderer.cityDevelopment);
   syncCampaignDecorations(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
@@ -265,11 +260,10 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     }
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = Math.floor((renderer.foliageAnimationTick || 0)/20)*.1;
     group.position.set(entity.x, b.terrain.base, entity.y);
-    const cutaway=renderer.selectedEntityId===entity.id||selectedInteriorId===b.id||selectedOfficeHost===b.id;
-    if(group.userData.roomProps)group.userData.roomProps.visible=cutaway;
-    if(group.userData.roof)group.userData.roof.visible=!cutaway;
-    if(group.userData.facade)group.userData.facade.visible=!cutaway;
-    for(const cells of group.userData.cellMeshes||[group.userData.cells]){const material=cells.material;if(material.transparent!==cutaway){material.transparent=cutaway;material.needsUpdate=true;}material.opacity=cutaway?.18:1;material.depthWrite=!cutaway;material.emissive.setHex(renderer.selectedEntityId===entity.id?0x26351a:0x000000);}
+    if(group.userData.roomProps)group.userData.roomProps.visible=false;
+    if(group.userData.roof)group.userData.roof.visible=true;
+    if(group.userData.facade)group.userData.facade.visible=true;
+    for(const cells of group.userData.cellMeshes||[group.userData.cells]){const material=cells.material;material.emissive.setHex(renderer.selectedEntityId===entity.id?0x26351a:0x000000);}
     const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
     group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z*CITY_FLOOR_HEIGHT + CITY_FLOOR_HEIGHT/2, unit.y + .5);
