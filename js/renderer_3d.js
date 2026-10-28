@@ -4662,25 +4662,6 @@ export class RCT3DRenderer {
 
   selectEntity(id) { this.selectedEntityId = id; }
 
-  setFirstPersonMode(enabled, entityId = null) {
-    this.isFirstPersonMode = !!enabled;
-    if (enabled) this.isThirdPersonMode = false;
-    this.fpEntityId = enabled && entityId !== null && entityId !== undefined ? Number(entityId) : null;
-    if (enabled) {
-      if (entityId !== null && entityId !== undefined) {
-        this.selectedEntityId = Number(entityId);
-      } else {
-        this.freeCamX = this.camX;
-        this.freeCamY = 10.0;
-        this.freeCamZ = this.camY;
-      }
-      this.fpYaw = 0;
-      this.fpPitch = 0;
-      this.lastBuiltCamTileX = -9999;
-      this.lastBuiltCamTileY = -9999;
-    }
-  }
-
   setThirdPersonMode(enabled, entityId = null) {
     this.isThirdPersonMode = !!enabled;
     if (enabled) this.isFirstPersonMode = false;

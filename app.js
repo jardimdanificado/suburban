@@ -265,7 +265,7 @@ root.addEventListener("wheel", (event) => {
 
 window.addEventListener("keydown", (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
-  if(event.code==='Escape'&&renderer3D.isPerspectiveActive()){renderer3D.setFirstPersonMode(false);renderer3D.setThirdPersonMode(false);event.preventDefault();return;}
+  if(event.code==='Escape'&&renderer3D.isPerspectiveActive()){renderer3D.setThirdPersonMode(false);event.preventDefault();return;}
   if (cityUI.key(event)) { event.preventDefault(); return; }
   if (event.code === "Space" && !event.repeat) {
     event.preventDefault();
@@ -375,11 +375,11 @@ try { city.initialize(); } catch (error) {
 }
 export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
   pause:togglePause, speed:()=>time.setSpeed(time.speed===32?0.5:time.speed*2), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
-  center:()=>{renderer3D.setFirstPersonMode(false);renderer3D.setThirdPersonMode(false);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
-  observe:(mode,id)=>{if(mode==='first')renderer3D.setFirstPersonMode(true,id);else if(mode==='third')renderer3D.setThirdPersonMode(true,id);else{renderer3D.setFirstPersonMode(false);renderer3D.setThirdPersonMode(false);}},
+  center:()=>{renderer3D.setThirdPersonMode(false);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
+  observe:(mode,id)=>{renderer3D.setThirdPersonMode(mode==='third',id);},
   observation:()=>renderer3D.isPerspectiveActive(),
 }, camera(x, y) {
-  renderer3D.setFirstPersonMode(false);renderer3D.setThirdPersonMode(false);
+  renderer3D.setThirdPersonMode(false);
   renderer3D.setCamera(x, y);
 } });
 if (cityGenerationError) cityUI.notice = cityGenerationError;
