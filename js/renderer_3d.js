@@ -6,7 +6,7 @@ import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels } from './city_citizen_models.js?v=street-sleep-1';
+import { CityCitizenModels } from './city_citizen_models.js?v=vehicle-heading-1';
 import { flagNightFactor } from './city_terrain.js';
 import { ASSET_DATA } from "./assets_data.js";
 import {
@@ -6861,7 +6861,8 @@ export class RCT3DRenderer {
         const isPossessed = this.isFirstPersonActive() && Number(e.id) === Number(this.fpEntityId);
         const isConsciousCreature = !isItem && !isDoor && !!e.properties?.brain;
         const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
-        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,{hidden:isPossessed,dimmed:!inCurZone,perspective:this.isPerspectiveActive()});
+        const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
+        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,{hidden:isPossessed,dimmed:!inCurZone,perspective:this.isPerspectiveActive(),vehicleAngle});
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
         }else{

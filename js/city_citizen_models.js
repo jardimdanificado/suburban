@@ -99,7 +99,7 @@ export class CityCitizenModels {
     this.ready=true;return true;
   }
   begin(dt=0,speed=1){this.clock+=Math.max(0,Math.min(.1,dt))*Math.max(0,Math.min(2,speed));for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
-  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false}={}){
+  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,vehicleAngle=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
@@ -109,7 +109,7 @@ export class CityCitizenModels {
     const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
-    if(c.ridingVehicleId&&c.mobilityTrip){const next=c.path?.[0];if(next)motion.angle=Math.atan2(next.x-entity.x,next.y-entity.y);}
+    if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle;
     // Animate walking from presentation time rather than traveled distance.
     // Distance-based frame changes tied the pose to simulation updates and
     // made each step visibly click at ordinary speed.

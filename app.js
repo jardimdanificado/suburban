@@ -3,12 +3,12 @@ import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=party-caps-skin-1";
 import { CityDesktop } from "./js/city_desktop.js";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=street-sleep-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=vehicle-heading-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
 import { SimulationTime } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js?v=no-action-badges-1";
+import { OptionsPanel } from "./js/options.js?v=resolution-options-1";
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");

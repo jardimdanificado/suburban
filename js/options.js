@@ -2,7 +2,7 @@ import { SPEED_TIERS } from "./simulation_time.js";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
 const GRAPHICS = [
-  { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1, 1.5, 2].map(v => [v, `${v * 100}%`]), default: 0.25 },
+  { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 1].map(v => [v, `${v * 100}%`]), default: 0.25 },
   { key: "distance", label: "DISTANCIA", values: [...[24, 36, 48, 64, 96].map(v => [v, `${v} T`]), [0, "TOTAL"]], default: 64 },
   { key: "shadows", label: "SOMBRAS", values: BOOL, default: true },
   { key: "shadowQuality", label: "MAPA SOMBRAS", values: [512, 1024, 2048, 4096].map(v => [v, `${v}`]), default: 512 },
@@ -41,7 +41,8 @@ export class OptionsPanel {
     let saved = {};
     try { saved = JSON.parse(storage?.getItem("experience-framework.options") || "{}") || {}; } catch {}
     for (const item of [...GRAPHICS, ...EFFECTS]) {
-      const value = item.values.some(([v]) => v === saved[item.key]) ? saved[item.key] : item.default;
+      const previous=saved[item.key];
+      const value = item.values.some(([v]) => v === previous) ? previous : item.key==='resolution'&&Number.isFinite(previous) ? item.values.reduce((best,[v])=>Math.abs(v-previous)<=Math.abs(best-previous)?v:best,item.default) : item.default;
       this.apply(item.key, value, false);
     }
   }
