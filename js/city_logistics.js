@@ -1,4 +1,4 @@
-import {moveGarments} from './city_clothing.js';
+import {moveGarments} from './city_clothing.js?v=party-caps-skin-1';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
 import { MAX_CARGO_CAPACITY } from './city_vehicles.js';
@@ -66,9 +66,10 @@ export class CityLogistics {
   }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
   publicOrder(s){return s.payerAccountId==='treasury'||s.buyer.accountId==='treasury'||s.buyer.municipal;}
-  order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false } = {}) {
+  order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false,garmentIds=null } = {}) {
     const city = this.city;
-    if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0) return false;
+    if(good==='roupas'&&!garmentIds&&seller?.type==='tailor'&&seller.garments?.some(g=>g.reservedPartyId!=null)){garmentIds=seller.garments.filter(g=>g.reservedPartyId==null).slice(0,quantity).map(g=>g.garmentId);if(garmentIds.length<quantity)return false;}
+    if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0 || garmentIds&&(good!=='roupas'||garmentIds.length!==quantity||new Set(garmentIds).size!==quantity||garmentIds.some(id=>!seller.garments?.some(g=>g.garmentId===id)))) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
     const carriers = city.economy.businesses.filter(b => (b.type === 'carrier'||purpose==='lamp-refill'&&b.type==='lamp_service') && (city.economy.workingOwner(b) || b.workers.length && b.balance >= b.wage) && city.economy.connected(b, seller));
     const eligibleCarriers=carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=quantity));
@@ -89,7 +90,7 @@ export class CityLogistics {
     initializeInventory(s, city.economy.goods, Math.max(24,quantity)); s.inventory[good] = quantity;
     city.accounts.set(accountId, s);
     if (!city.transfer(payerAccountId, accountId, cost + fee + serviceFee, 'Reserva de compra e frete',{shipmentId:id,purpose,good,essential:purpose==='public-meals'})) { city.accounts.delete(accountId); return false; }
-    if(good==='roupas')moveGarments(seller,s,quantity);
+    if(good==='roupas')moveGarments(seller,s,quantity,garmentIds);
     city.publications.moveStock(seller,s,good,quantity);city.vehicles.moveStock(seller,s,good,quantity);city.paint.move(seller,s,good,quantity);
     seller.inventory[good] -= quantity; buyer.incoming[good] = (buyer.incoming[good] || 0) + quantity;
     // Until pickup the reserved cargo stays at the supplier's entrance.

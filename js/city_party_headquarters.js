@@ -1,5 +1,7 @@
 import {initializeInventory,inventoryFree} from './city_inventory.js';
 import {officeFloors} from './city_offices.js';
+import {partyCapsHourly,seedPartyCaps} from './city_party_caps.js?v=party-caps-skin-1';
+import {moveGarments} from './city_clothing.js?v=party-caps-skin-1';
 
 export function headquartersAccount(p,party){
  const city=p.city,account=p.partyAccount(party);if(!account.inventory)initializeInventory(account,city.economy.goods,160);
@@ -34,13 +36,15 @@ export function ensureHeadquarters(p,party){
 export function leaseHeadquarters(p,partyId,towerId,floor){
  const city=p.city,party=p.party(partyId),tower=city.building(towerId);if(!party?.active||!tower?.active||tower.entity.destroyed||tower.type!=='office_tower')return city.fail('Partido ou empresarial indisponível.');
  const account=headquartersAccount(p,party),row=officeFloors(city,tower).find(r=>r.floor===floor);if(!row||row.tenantId||!row.units.length||!row.units.every(u=>u.forRent))return city.fail('Andar indisponível.');
- if(Object.values(account.inventory).some(n=>n>0)||Object.values(account.incoming).some(n=>n>0))return city.fail('A mudança exige que o estoque e as entregas pendentes sejam retirados da sede atual.');
+ if(Object.values(account.incoming).some(n=>n>0))return city.fail('A mudança exige a conclusão ou o cancelamento das entregas pendentes.');
  const rent=Math.max(city.currency.price(100),row.rent);if(account.balance<rent||!city.transfer(account.accountId,tower.accountId,rent,'Primeiro aluguel de sede partidária',{partyId,buildingId:tower.id,floor}))return city.fail('O fundo partidário não cobre o primeiro aluguel.');tower.totalRevenue+=rent;
  return assign(p,party,tower,row.units[0],floor,'office',rent);
 }
 export function headquartersHourly(p){
  const city=p.city;for(const party of p.parties.filter(p=>p.active)){
   const h=ensureHeadquarters(p,party);if(!h)continue;const account=headquartersAccount(p,party);
+  seedPartyCaps(p,party);
+  partyCapsHourly(p,party);
   if(h.kind==='office'&&h.lastRentDay!==city.day){h.lastRentDay=city.day;const landlord=city.building(h.buildingId),amount=h.rent+h.arrears;if(landlord?.active&&city.transfer(account.accountId,landlord.accountId,amount,'Aluguel de sede partidária',{partyId:party.id,buildingId:landlord.id,floor:h.floor})){landlord.totalRevenue+=amount;h.arrears=0;h.missedDays=0;}else{h.arrears+=h.rent;h.missedDays++;if(h.missedDays>=3){releaseLocation(city,party);party.headquarters=null;ensureHeadquarters(p,party);}}}
   if(h.kind==='provisional'&&!Object.values(account.inventory).some(n=>n>0)&&!Object.values(account.incoming).some(n=>n>0)){
    const tower=city.economy.businesses.find(b=>b.type==='office_tower'&&officeFloors(city,b).some(f=>!f.tenantId&&f.units.every(u=>u.forRent)&&account.balance>=f.rent*3));const row=tower&&officeFloors(city,tower).find(f=>!f.tenantId&&f.units.every(u=>u.forRent)&&account.balance>=f.rent*3);if(row)leaseHeadquarters(p,party.id,tower.id,row.floor);
@@ -61,6 +65,7 @@ export function stockHeadquarters(p,election){
 }
 export function closeHeadquarters(p,party){
  const city=p.city,account=headquartersAccount(p,party);for(const s of city.logistics.shipments)if(s.buyer===account&&!['delivered','cancelled'].includes(s.status))city.logistics.cancel(s);
- const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);for(const [good,q] of Object.entries(account.inventory)){if(!q)continue;const keep=hall?Math.min(q,inventoryFree(hall)):0;if(keep){hall.inventory[good]+=keep;city.publications.moveStock(account,hall,good,keep);city.paint.move(account,hall,good,keep);}if(q>keep){city.publications.loseStock(account,good,q-keep);city.economy.lost[good]+=q-keep;}account.inventory[good]=0;}
+ for(const tailor of city.economy.businesses)if(tailor.type==='tailor'){for(const order of tailor.partyCapOrders||[])if(order.partyId===party.id)order.remaining=0;for(const g of tailor.garments||[])if(g.reservedPartyId===party.id)delete g.reservedPartyId;}
+ const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);for(const [good,q] of Object.entries(account.inventory)){if(!q)continue;const keep=hall?Math.min(q,inventoryFree(hall)):0;if(keep){hall.inventory[good]+=keep;if(good==='roupas')moveGarments(account,hall,keep);city.publications.moveStock(account,hall,good,keep);city.paint.move(account,hall,good,keep);}if(q>keep){if(good==='roupas')account.garments?.splice(0,q-keep);city.publications.loseStock(account,good,q-keep);city.economy.lost[good]+=q-keep;}account.inventory[good]=0;}
  const secret=city.accounts.get(party.secretAccountId);if(secret?.balance)city.transfer(secret.accountId,'treasury',secret.balance,'Liquidação de caixa clandestino',{partyId:party.id});releaseLocation(city,party);party.headquarters=null;account.active=false;
 }

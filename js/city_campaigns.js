@@ -1,6 +1,7 @@
 import {CityCampaignMaterials} from './city_campaign_materials.js';
 import {describePromise} from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js';
+import {issuePartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 
 export class CityCampaigns {
   constructor(city){this.city=city;this.lastRallyHour=null;}
@@ -74,7 +75,8 @@ export class CityCampaigns {
       n.campaignFinance??={received:0,spent:0,donors:[]};n.campaignFinance.spent+=fee;
       c.campaignInventory??={};
       if(!c.campaignInventory.bandeiras){const shop=city.economy.businesses.find(b=>b.active&&b.inventory.bandeiras>0);if(shop&&p.partyAccount(party).balance>=city.economy.goods.bandeiras.price&&city.transfer(p.partyAccount(party).accountId,shop.accountId,city.economy.goods.bandeiras.price,'Compra de bandeira para militante',{electionId:e.id,partyId:party.id})){shop.inventory.bandeiras--;n.campaignFinance.spent+=city.economy.goods.bandeiras.price;c.campaignInventory.bandeiras=1;city.economy.recordGoods('campaign-pickup','bandeiras',1,shop.id,c.id);}}
-      c.path=path;c.task='campaign';c.targetId=null;c.campaign={type:'canvass',electionId:e.id,candidateId:n.citizenId,partyId:party.id,partyNumber:party.number,speechColor:party.flag.background,partyFlag:party.flag,flag:c.campaignInventory.bandeiras?party.flag:null,until:Math.min(e.voteAt,city.minute+240),destination:dest,fee};
+      const capGarmentId=issuePartyCap(p,party,c)?.garmentId||null;
+      c.path=path;c.task='campaign';c.targetId=null;c.campaign={type:'canvass',electionId:e.id,candidateId:n.citizenId,partyId:party.id,partyNumber:party.number,speechColor:party.flag.background,partyFlag:party.flag,flag:c.campaignInventory.bandeiras?party.flag:null,capGarmentId,until:Math.min(e.voteAt,city.minute+240),destination:dest,fee};
       e.streetCampaign??={turns:0,paid:0};e.streetCampaign.turns++;e.streetCampaign.paid+=fee;
       c.action=`Campanha de rua: ${n.name}, ${party.number}`;break;
     }
@@ -87,7 +89,7 @@ export class CityCampaigns {
     const destination=routes[Math.floor(city.random()*Math.min(4,routes.length))],gathering=this.streetPoints(24,destination).filter(point=>Math.hypot(point.x-destination.x,point.y-destination.y)<=5),planned=[];
     for(const c of participants){const point=gathering[planned.length%Math.max(1,gathering.length)]||destination,path=city.findPath(c.entity,point);if(path!==null&&path.length<=60)planned.push({c,path,point});}if(!planned.length)return 0;
     const event=this.event(election,`Bandeiraço ${party.short}: ${election.round===2?'campanha de segundo turno para prefeitura':'campanha conjunta para prefeitura e Câmara'}; ${planned.length} participantes a caminho.`,'campaign-rally',planned.map(r=>r.c.id),{partyId:party.id,candidateId:nomination.citizenId,x:destination.x,y:destination.y});
-    for(const {c,path,point}of planned){c.path=path;c.task='campaign';c.campaign={type:'rally',electionId:election.id,candidateId:nomination.citizenId,partyId:party.id,partyNumber:party.number,partyFlag:party.flag,flag:c.campaignInventory?.bandeiras?party.flag:null,until:Math.min(election.voteAt,city.minute+240),destination:point,eventId:event.id};c.action=`Bandeiraço ${party.short}`;}return planned.length;
+    for(const {c,path,point}of planned){const capGarmentId=issuePartyCap(p,party,c)?.garmentId||null;c.path=path;c.task='campaign';c.campaign={type:'rally',electionId:election.id,candidateId:nomination.citizenId,partyId:party.id,partyNumber:party.number,partyFlag:party.flag,flag:c.campaignInventory?.bandeiras?party.flag:null,capGarmentId,until:Math.min(election.voteAt,city.minute+240),destination:point,eventId:event.id};c.action=`Bandeiraço ${party.short}`;}return planned.length;
   }
   arrive(c) {
     if(c.campaign?.type==='paid')return this.getMaterials().work(c);

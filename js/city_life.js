@@ -22,7 +22,9 @@ export class CityLife {
   minute(c,elapsed=1) {
     const n = c.needs;
     // Repair invalid inputs before deprivation counters or other needs can use them.
-    for(const k of NEED_KEYS)if(!Number.isFinite(n[k])){n[k]=20;this.resetTask(c,'valor de necessidade inválido');}
+    if(!Number.isFinite(n.food)||!Number.isFinite(n.water)||!Number.isFinite(n.energy)||!Number.isFinite(n.hygiene)||!Number.isFinite(n.toilet)||!Number.isFinite(n.social)||!Number.isFinite(n.leisure)||!Number.isFinite(n.health)||!Number.isFinite(n.shelter)||!Number.isFinite(n.safety)){
+      for(const k of NEED_KEYS)if(!Number.isFinite(n[k])){n[k]=20;this.resetTask(c,'valor de necessidade inválido');}
+    }
     c.deprivation ??= { food: 0, water: 0, health: 0 };
     c.deprivation.food=n.food<=0?c.deprivation.food+elapsed:0;
     c.deprivation.water=n.water<=0?c.deprivation.water+elapsed:0;

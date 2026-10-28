@@ -37,15 +37,28 @@ export function parseCitizenOBJ(text){
   return {positions,normals:normalData,bounds:{min,max},triangles:triangles.length};
 }
 // Partition the animated surface itself: covered body faces are replaced, never layered.
-export const RENDERED_GARMENTS=Object.freeze(['camisa','calça','vestido','casaco','saia','macacão','trapos']);
+export const RENDERED_GARMENTS=Object.freeze(['camisa','calça','vestido','casaco','saia','macacão','shorts','sapatos','botas','trapos']);
 export function garmentSurface(reference,piece){
   const mask=new Uint8Array(reference.positions.length/9);
   for(let t=0;t<mask.length;t++){
     const i=t*9,p=reference.positions,y=(p[i+1]+p[i+4]+p[i+7])/3;
     const upper=y>=1.03&&y<1.78,lower=y>=.12&&y<1.10;
-    mask[t]=Number(piece==='camisa'||piece==='trapos'?upper:piece==='casaco'?y>=.85&&y<1.79:piece==='calça'?lower:piece==='saia'?y>=.53&&y<1.13:piece==='vestido'?y>=.45&&y<1.78:piece==='macacão'?y>=.12&&y<1.78:false);
+    mask[t]=Number(piece==='camisa'||piece==='trapos'?upper:piece==='casaco'?y>=.85&&y<1.79:piece==='calça'?lower:piece==='shorts'?y>=.55&&y<1.10:piece==='sapatos'?y<.20:piece==='botas'?y<.42:piece==='saia'?y>=.53&&y<1.13:piece==='vestido'?y>=.45&&y<1.78:piece==='macacão'?y>=.12&&y<1.78:false);
   }
   return mask;
+}
+// Headwear uses a separate mesh so a hat and the main garment can be worn together.
+// Its anchor is computed independently for each animated OBJ frame.
+export function headwearSurface(data,piece){
+  const p=data.positions;let top=-Infinity;for(let i=1;i<p.length;i+=3)top=Math.max(top,p[i]);
+  let x=0,z=0,n=0;for(let i=0;i<p.length;i+=3)if(p[i+1]>=top-.07){x+=p[i];z+=p[i+2];n++;}x/=n||1;z/=n||1;
+  const positions=[],normals=[],tri=(a,b,c)=>{const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2],nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,len=Math.hypot(nx,ny,nz)||1;for(const q of [a,b,c]){positions.push(...q);normals.push(nx/len,ny/len,nz/len);}};
+  const ring=(radius,y,i)=>{const angle=i*Math.PI*2/12;return [x+Math.cos(angle)*radius,y,z+Math.sin(angle)*radius];};
+  const base=top-.025,height=piece==='chapéu'?.14:.085,radius=piece==='chapéu'?.105:.12;
+  for(let i=0;i<12;i++){const a=ring(radius,base,i),b=ring(radius,base,i+1),c=ring(radius*.72,base+height,i+1),d=ring(radius*.72,base+height,i);tri(a,b,c);tri(a,c,d);tri(d,c,[x,base+height,z]);
+    if(piece==='chapéu'){const outer=ring(.17,base,i),next=ring(.17,base,i+1);tri(a,outer,next);tri(a,next,b);}}
+  if(piece==='boné'){const y=base+.005,a=[x-.095,y,z+.035],b=[x+.095,y,z+.035],c=[x+.11,y,z+.205],d=[x-.11,y,z+.205];tri(a,b,c);tri(a,c,d);}
+  return {positions:new Float32Array(positions),normals:new Float32Array(normals)};
 }
 export function splitGarmentSurface(data,mask){
   const body=[],bodyNormals=[],clothes=[],clothesNormals=[];
@@ -57,7 +70,7 @@ export function splitGarmentSurface(data,mask){
 }
 export class CityCitizenModels {
   constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/model/',import.meta.url)}={}){
-    this.THREE=THREE;this.group=group;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.batches=new Map();this.motion=new WeakMap();this.clock=0;this.ready=false;this.error=null;
+    this.THREE=THREE;this.group=group;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearBatches=new Map();this.batches=new Map();this.motion=new WeakMap();this.clock=0;this.ready=false;this.error=null;
     this.matrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.color=new THREE.Color();
     this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});
     this.loading=this.load().catch(error=>{this.error=error.message;console.warn('Modelos dos cidadãos indisponíveis; usando sprites.',error.message);return false;});
@@ -79,11 +92,13 @@ export class CityCitizenModels {
         const parts=splitGarmentSurface(data,masks[source][piece]);
         const make=(positions,normals)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));g.computeBoundingSphere();return g;};
         this.outfits.set(`${key}:${piece}`,{body:make(parts.body,parts.bodyNormals),clothes:make(parts.clothes,parts.clothesNormals)});
+        if(piece==='sapatos'||piece==='botas'){const surface=parts.clothes.slice();for(let i=0;i<surface.length;i++)surface[i]+=parts.clothesNormals[i]*.003;this.headwear.set(`${key}:${piece}`,make(surface,parts.clothesNormals));}
       }
+      for(const piece of ['boné','chapéu']){const part=headwearSurface(data,piece),g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(part.positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(part.normals,3));g.computeBoundingSphere();this.headwear.set(`${key}:${piece}`,g);}
     }
     this.ready=true;return true;
   }
-  begin(dt=0,speed=1){this.clock+=Math.max(0,Math.min(.1,dt))*Math.max(0,Math.min(2,speed));for(const batch of this.batches.values())batch.count=0;}
+  begin(dt=0,speed=1){this.clock+=Math.max(0,Math.min(.1,dt))*Math.max(0,Math.min(2,speed));for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
   add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
@@ -113,8 +128,12 @@ export class CityCitizenModels {
     const size=(entity.properties.render.size||1)*(perspective?1.05:1);
     this.position.set(x,surfaceH+(inside?.z||0)+(c.ridingVehicleId? .18:0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count,this.color);
-    if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,(garment?.dirt||0)/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;return true;
+    if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
+    const capId=c.political?.partyCapId||c.campaign?.capGarmentId,partyCap=capId&&c.wardrobe?.find(g=>g.garmentId===capId),hat=partyCap||(Number.isInteger(c.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null);
+    const footwear=Number.isInteger(c.footwearIndex)&&c.footwearIndex>=0?c.wardrobe?.[c.footwearIndex]:null;
+    for(const item of [hat,footwear])if(item&&['boné','chapéu','sapatos','botas'].includes(item.piece)){const itemKey=`${key}:${item.piece}`;let head=this.headwearBatches.get(itemKey);if(!head){head={count:0,capacity:0,mesh:null};this.headwearBatches.set(itemKey,head);}if(head.count===head.capacity){const capacity=Math.max(32,head.capacity*2),mesh=new this.THREE.InstancedMesh(this.headwear.get(itemKey),this.material,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.receiveShadow=true;if(head.mesh){for(let i=0;i<head.count;i++){head.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);head.mesh.getColorAt(i,this.color);mesh.setColorAt(i,this.color);}this.group.remove(head.mesh);head.mesh.dispose();}this.group.add(mesh);head.mesh=mesh;head.capacity=capacity;this.matrix.compose(this.position,this.quaternion,this.scale);}head.mesh.setMatrixAt(head.count,this.matrix);const raw=item.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(item.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,item.dirt/140));head.mesh.setColorAt(head.count++,this.color);}
+    return true;
   }
-  end(){for(const batch of this.batches.values()){batch.mesh.count=batch.count;if(batch.count){batch.mesh.instanceMatrix.needsUpdate=true;if(batch.mesh.instanceColor)batch.mesh.instanceColor.needsUpdate=true;}if(batch.clothingMesh){batch.clothingMesh.count=batch.count;if(batch.count){batch.clothingMesh.instanceMatrix.needsUpdate=true;if(batch.clothingMesh.instanceColor)batch.clothingMesh.instanceColor.needsUpdate=true;}}}}
-  clear(){for(const b of this.batches.values()){this.group.remove(b.mesh);b.mesh.dispose();if(b.clothingMesh){this.group.remove(b.clothingMesh);b.clothingMesh.dispose();}}this.batches.clear();this.motion=new WeakMap();this.clock=0;}
+  end(){for(const batch of this.batches.values()){batch.mesh.count=batch.count;if(batch.count){batch.mesh.instanceMatrix.needsUpdate=true;if(batch.mesh.instanceColor)batch.mesh.instanceColor.needsUpdate=true;}if(batch.clothingMesh){batch.clothingMesh.count=batch.count;if(batch.count){batch.clothingMesh.instanceMatrix.needsUpdate=true;if(batch.clothingMesh.instanceColor)batch.clothingMesh.instanceColor.needsUpdate=true;}}}for(const batch of this.headwearBatches.values()){batch.mesh.count=batch.count;if(batch.count){batch.mesh.instanceMatrix.needsUpdate=true;if(batch.mesh.instanceColor)batch.mesh.instanceColor.needsUpdate=true;}}}
+  clear(){for(const b of this.batches.values()){this.group.remove(b.mesh);b.mesh.dispose();if(b.clothingMesh){this.group.remove(b.clothingMesh);b.clothingMesh.dispose();}}for(const b of this.headwearBatches.values()){this.group.remove(b.mesh);b.mesh.dispose();}this.batches.clear();this.headwearBatches.clear();this.motion=new WeakMap();this.clock=0;}
 }

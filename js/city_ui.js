@@ -9,10 +9,10 @@ import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js
 import {renderResume,requirements} from './city_employment.js';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
-import {appearance,clothingOdor,wornGarment,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js';
+import {appearance,clothingOdor,wornGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-caps-skin-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
-import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js';
+import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-caps-skin-1';
 import {renderElectionMonitor} from './city_election_ui.js';
 import {sectionTitle} from './city_ui_sections.js';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
@@ -34,10 +34,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=party-caps-skin-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=party-caps-skin-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -299,7 +299,7 @@ export class CityUI {
       p.note(city.housing.isSocial(dwelling)?'Moradia popular municipal: ocupação gratuita, sem cobrança de aluguel e sem transferência de propriedade.':'Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
       if (home) { p.kv('Espaço',`${home.x+1}, ${home.y+1} / ${home.z+1}º andar`); p.kv('Regime', city.housing.isSocial(dwelling)?'Moradia social gratuita':home.ownerId === c.accountId ? 'Proprietário' : home.tenantId !== c.accountId && dwelling ? 'Moradia compartilhada' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
       else p.note('Sem moradia', C.red);
-      this.section(p,'wardrobe','Roupas, aparência e marcas',()=>{p.meter('Apresentação',appearance(c));p.meter('Sujeira e odor',clothingOdor(c),C.red);p.note('Moradores alternam para uma peça limpa quando têm outra. Lavanderias domésticas e comerciais lavam as roupas; roupas sujas prejudicam apresentação e convivência.');p.kv('Preferências por peças',GARMENT_TYPES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));p.kv('Preferências por estilos',CLOTHING_STYLES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));for(const [i,g]of (c.wardrobe||[]).entries()){const owners=(g.ownerHistory||[]).map(h=>`${h.ownerName} · ${stamp(h.minute)}`).join(' → ')||g.brandName,washes=(g.washingHistory||[]).slice(-2).map(w=>`${stamp(w.minute)} ${w.method}`).join(' / ')||'nenhuma';p.record(`${g===wornGarment(c)?'Vestindo: ':''}${g.piece} · ${g.style}`,`${g.brandName} · ${colorName(g.color)} · conservação ${g.condition.toFixed(0)}% · sujeira ${(g.dirt||0).toFixed(0)}% · donos: ${owners} · lavagens: ${washes}`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});}for(const b of city.economy.businesses.filter(b=>['tailor','clothing_store','thrift_store','laundromat'].includes(b.type)).slice(0,12))p.kv(`Afinidade: ${b.entity.properties.name}`,`${brandPreference(c,b.id)>0?'Gosta':'Não gosta'} (${Math.round(brandPreference(c,b.id)*100)})`);});
+      this.section(p,'wardrobe','Roupas, aparência e marcas',()=>{p.meter('Apresentação',appearance(c));p.meter('Sujeira e odor',clothingOdor(c),C.red);p.note('Moradores alternam para uma peça limpa quando têm outra. Lavanderias domésticas e comerciais lavam as roupas; roupas sujas prejudicam apresentação e convivência.');p.kv('Preferências por peças',GARMENT_TYPES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));p.kv('Preferências por estilos',CLOTHING_STYLES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));for(const [i,g]of (c.wardrobe||[]).entries()){const owners=(g.ownerHistory||[]).map(h=>`${h.ownerName} · ${stamp(h.minute)}`).join(' → ')||g.brandName,washes=(g.washingHistory||[]).slice(-2).map(w=>`${stamp(w.minute)} ${w.method}`).join(' / ')||'nenhuma';p.record(`${g===wornGarment(c)||g===wornHeadwear(c)||g===wornFootwear(c)||c.political?.partyCapId===g.garmentId||c.campaign?.capGarmentId===g.garmentId?'Vestindo: ':''}${g.piece} · ${g.style}`,`${g.brandName} · ${colorName(g.color)} · conservação ${g.condition.toFixed(0)}% · sujeira ${(g.dirt||0).toFixed(0)}% · donos: ${owners} · lavagens: ${washes}`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});}for(const b of city.economy.businesses.filter(b=>['tailor','clothing_store','thrift_store','laundromat'].includes(b.type)).slice(0,12))p.kv(`Afinidade: ${b.entity.properties.name}`,`${brandPreference(c,b.id)>0?'Gosta':'Não gosta'} (${Math.round(brandPreference(c,b.id)*100)})`);});
       this.section(p,'personality','Identidade, personalidade e reputação',()=>{p.heading('IDENTIDADE E PERSONALIDADE');
       p.kv('Gênero',GENDER_LABELS[c.socialProfile.gender]);p.kv('Interesse romântico',ORIENTATION_LABELS[c.socialProfile.orientation]);
       p.kv('Luto',city.relationships.moodEffect(c)<0?'Em luto':'Sem perda recente');p.kv('Sobrenomes da família',(c.surnames||[]).join(' / '));

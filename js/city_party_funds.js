@@ -1,4 +1,4 @@
-import {ensureHeadquarters,headquartersAccount} from './city_party_headquarters.js';
+import {ensureHeadquarters,headquartersAccount} from './city_party_headquarters.js?v=party-caps-skin-1';
 /** Party accounts contain transferred currency, never newly created money. */
 export function partyAccount(p,party){
   if(!party)return null;

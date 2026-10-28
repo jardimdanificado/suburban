@@ -6,9 +6,9 @@ import {externalTradeHourly} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js';
 import {fundInitialCycleChain} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,apply,finishApplication,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js';
+import {career,requirements,qualification,apply,finishApplication,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=employment-finish-1';
 import {productionPlan,investProductionPlan} from './city_production_planner.js';
-import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js';
+import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=party-caps-skin-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
@@ -711,7 +711,7 @@ export class CityEconomy {
   }
   consumerOffer(c, b) {
     if(b?.type==='laundromat'&&b.active&&!b.entity.destroyed&&(b.workers.length>0||b.ownerId)&&b.inventory.sabao>0&&(c.wardrobe||[]).some(g=>(g.dirt||0)>=12)&&c.balance>=this.city.currency.price(700))return {service:'laundry',good:'sabao',price:this.city.currency.price(700)};
-    if(b?.active&&!b.entity.destroyed&&['tailor','clothing_store'].includes(b.type))return clothingOffer(this.city,c,b);
+    if(b?.active&&!b.entity.destroyed&&['tailor','clothing_store','thrift_store'].includes(b.type))return clothingOffer(this.city,c,b);
     if(b?.active&&!b.entity.destroyed&&b.type==='newsroom')return newspaperOffer(this.city,c,b);
     if(b?.type==='sports_shop'&&b.active&&!b.entity.destroyed&&b.inventory.capacete>0&&c.needs.safety<80&&c.balance>=this.goods.capacete.price)return {good:'capacete',spec:INDUSTRIES.sports_shop,price:this.goods.capacete.price};
     if(b?.type==='artisan'&&b.active&&!b.entity.destroyed){const good=['carrinho','cesta'].find(g=>b.inventory[g]>0&&c.balance>=this.goods[g].price&&carryCapacity(c)<(g==='carrinho'?72:36));return good?{good,spec:INDUSTRIES.artisan,price:this.goods[good].price}:null;}

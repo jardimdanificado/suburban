@@ -1,4 +1,6 @@
 import {promiseRelevant} from './city_mandates.js';
+import {ensureSkinColor} from './city_skin.js';
+import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 // Party membership is a minority commitment; electoral support is personal and reversible.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
 export const MEMBERSHIP_RULES=Object.freeze({maxShare:.4,contactInterval:180,cooldownDays:3});
@@ -12,15 +14,14 @@ export function membershipProfile(p,c){
   return s;
 }
 export function syncPartyColor(p,c){
-  const flag=p.party(c.political?.partyId)?.flag;
-  c.entity.properties.render.color=flag?parseInt(flag.background.slice(1),16):0xe8e8e8;
+  ensureSkinColor(p.city,c);
 }
 function updateSympathy(s){const best=Object.entries(s.support).sort((a,b)=>b[1].score-a[1].score)[0];s.sympathyPartyId=best&&best[1].score>4?Number(best[0]):null;}
 const adults=p=>p.city.citizens.filter(c=>!c.entity.destroyed&&p.city.society.isAdult(c));
 export function canJoin(p,c){const people=adults(p);return !!c.political.partyId||people.filter(v=>v.political?.partyId&&p.party(v.political.partyId)?.active).length<Math.floor(people.length*MEMBERSHIP_RULES.maxShare);}
 export function leaveParty(p,c,reason){
   const s=membershipProfile(p,c),old=p.party(s.partyId);if(!old)return false;
-  old.memberIds=old.memberIds.filter(id=>id!==c.id);s.lastPartyId=old.id;s.lastPartyDepartureAt=p.city.minute;s.partyId=null;syncPartyColor(p,c);s.loyalty=0;s.membershipCooldownUntil=p.city.minute+1440*MEMBERSHIP_RULES.cooldownDays;
+  returnPartyCap(p,old,c);old.memberIds=old.memberIds.filter(id=>id!==c.id);s.lastPartyId=old.id;s.lastPartyDepartureAt=p.city.minute;s.partyId=null;syncPartyColor(p,c);s.loyalty=0;s.membershipCooldownUntil=p.city.minute+1440*MEMBERSHIP_RULES.cooldownDays;
   p.remember(c,{kind:'party-departure',partyId:old.id,description:`Desfiliou-se de ${old.short}: ${reason}.`});
   return true;
 }

@@ -8,14 +8,16 @@ import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_ser
 import {recordWork} from './city_employment.js';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js';
-import {clothingMood,moveGarments} from './city_clothing.js';
+import {clothingMood,moveGarments} from './city_clothing.js?v=party-caps-skin-1';
+import {ensureSkinColor} from './city_skin.js';
+import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
-import { CityGovernment as CityPolitics } from './city_government.js';
+import { CityGovernment as CityPolitics } from './city_government.js?v=party-caps-skin-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady } from './city_interiors.js';
@@ -27,12 +29,12 @@ import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
 import { CitySanitation } from './city_sanitation.js';
-import { CityLife } from './city_life.js';
+import { CityLife } from './city_life.js?v=needs-performance-1';
 import { CityWorkMeals } from './city_work_meals.js';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js';
-import { CityLogistics } from './city_logistics.js';
+import { CityLogistics } from './city_logistics.js?v=party-caps-skin-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=party-caps-skin-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=mine-rack-social-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js';
 
@@ -282,6 +284,7 @@ export class CitySimulation {
     const entity = this.createEntity({ x, y, properties: { name: identity.name, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: 0xe8e8e8 } } });
     const mobilityPriority=.75+((((Math.imul(index+1,2654435761)^this.initialSeed)>>>0)/4294967295)*.5);
     const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, mobilityPriority, mobilityNeed: 8, mobilityTimeLostToday: 0, lastProgressAt: this.minute };
+    c.parentIds=options.parentIds||[];ensureSkinColor(this,c);
     c.givenNames = identity.givenNames; c.surnames = Object.freeze(identity.surnames);
     initializeCharacter(this, c); this.reputation.setup(c);
     this.society.initializeCitizen(c, options);
@@ -648,6 +651,7 @@ export class CitySimulation {
       this.structureRevision++;
     }
     if(this.citizens.some(c=>c.entity.destroyed))for (const c of [...this.citizens]) if (c.entity.destroyed) {
+      const party=this.politics.party(c.political?.partyId);if(party&&c.political?.partyCapId)returnPartyCap(this.politics,party,c);
       const heir = c.dead ? this.life.heir(c) : null;
       this.vehicles.removeCitizen(c,heir);
       inheritShares(this,c,heir);
@@ -725,8 +729,9 @@ export class CitySimulation {
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
       const completingEssential = !c.path.length && (!['toilet','food','health'].includes(c.task)||!!c.indoorLocation?.unitId&&!c.indoorLocation?.path?.length) && ESSENTIAL_TASKS.has(c.task) && n[c.task === 'provisions' || c.task === 'workmeal' ? 'food' : c.task] < 75;
       if (!c.deliveryId && !c.cleaningJobId && urgent && (['workmeal','provisions'].includes(c.task)?'food':c.task) !== urgent && !completingEssential && age >= 6) { c.task = null; c.path = []; }
-      let dependentNeedsCare=false;for(const child of this.childrenOf(c.id))if(this.society.age(child)<6&&Math.min(child.needs.food,child.needs.water,child.needs.hygiene,child.needs.social)<25){dependentNeedsCare=true;break;}
-      if (!c.deliveryId && !urgent && dependentNeedsCare && (INTERRUPTIBLE_TASKS.has(c.task) || (c.task === 'energy' && n.energy > 65)) && !c.conversation) { c.task = null; c.path = []; }
+      if(!c.deliveryId&&!urgent&&!c.conversation&&(INTERRUPTIBLE_TASKS.has(c.task)||(c.task==='energy'&&n.energy>65))){
+        for(const child of this.childrenOf(c.id))if(this.society.age(child)<6&&Math.min(child.needs.food,child.needs.water,child.needs.hygiene,child.needs.social)<25){c.task=null;c.path=[];break;}
+      }
       if (c.deliveryId || c.cleaningJobId) continue;
       if (c.conversation) continue;
       if (!c.task) {
