@@ -199,7 +199,7 @@ export class CityLogistics {
         if(s.buyer.lampPost && (s.refillLabor=(s.refillLabor||0)+1)<4) {c.action='Abastecendo lamparina';continue;}
         s.buyer.incoming[s.good] -= s.quantity;
         if (inventoryFree(s.buyer) < s.quantity) { s.buyer.incoming[s.good] += s.quantity; s.status = 'waiting-space'; continue; }
-        if(s.good==='roupas')moveGarments(s,s.buyer,s.quantity);
+        if(s.good==='roupas'){if(s.purpose==='liquidated-party-caps')for(const g of s.garments||[]){g.ownerHistory??=[];g.ownerHistory.push({ownerId:s.buyer.accountId,ownerName:s.buyer.entity.properties.name,minute:city.minute,event:'compra de boné de partido liquidado'});g.formerPartyId=g.liquidatedPartyId;delete g.liquidatedPartyId;}moveGarments(s,s.buyer,s.quantity);}
         city.publications.moveStock(s,s.buyer,s.good,s.quantity);city.vehicles.moveStock(s,s.buyer,s.good,s.quantity);city.paint.move(s,s.buyer,s.good,s.quantity);
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
         if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}

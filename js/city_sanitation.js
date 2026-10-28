@@ -7,7 +7,7 @@ export class CitySanitation {
   constructor(city) { this.city = city; this.facilities = new Map(); this.jobs = []; this.nextJobId = 1; this.cleaned = 0; this.collected = 0; }
   addFacility(b, { unitId = null, homeId = null, homeIds = null, access = 'employees' } = {}) {
     const id = `toilet:${unitId || b.id}`;
-    if (this.facilities.has(id)) return this.facilities.get(id);
+    if (this.facilities.has(id)) {const existing=this.facilities.get(id);if(homeIds)existing.homeIds=homeIds;return existing;}
     const f = { id, buildingId: b.id, unitId, homeId, homeIds:homeIds||null, access, price: access === 'paid' ? this.city.currency.price(SANITATION_RULES.usePrice) : 0, cleanliness: 100, uses: 0, occupantId: null, busyUntil: 0, createdAt: this.city.minute, lastCleanedAt: this.city.minute, cleaningJobId: null };
     this.facilities.set(id, f); return f;
   }

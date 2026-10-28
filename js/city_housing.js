@@ -29,7 +29,7 @@ export class CityHousing {
     if (housingType) {
       const shared = b.type==='popular_housing'||b.type==='super_popular_housing';
       const floorGroups=new Map();for(const u of units){let a=floorGroups.get(u.z);if(!a)floorGroups.set(u.z,a=[]);a.push(u);}
-      if(b.type==='super_popular_housing'&&units.length){const bathroom=units[0];bathroom.roomType='bathroom';b.sharedBathroomUnitId??=bathroom.id;}
+      if(b.type==='super_popular_housing'&&units.length&&!b.sharedBathroomUnitId){const bathroom=units[0];bathroom.roomType='bathroom';b.sharedBathroomUnitId=bathroom.id;}
       for(const [floor,floorUnits] of floorGroups){
         let bathroom=null,bedrooms=floorUnits;
         if(b.type==='popular_housing'){bathroom=floorUnits[0];bathroom.roomType='bathroom';bedrooms=floorUnits.slice(1);}
@@ -225,5 +225,14 @@ export class CityHousing {
     if (this.city.transfer(payer, u.ownerId, u.rent + u.arrears, 'Aluguel diário')) { u.arrears = 0; u.missedDays = 0; }
     else { u.arrears += u.rent; u.missedDays++; if (u.missedDays >= HOUSING_RULES.defaultDays) { const c = this.city.accounts.get(u.tenantId); if (c) this.release(c); } }
   }
-  reconcile() { for (const [id, h] of this.homes) if (!this.city.building(h.buildingId)) this.homes.delete(id); }
+  reconcile() {
+    for (const [id, h] of this.homes) if (!this.city.building(h.buildingId)) this.homes.delete(id);
+    for(const b of this.city.buildings)if(b.type==='super_popular_housing'&&b.units.length){
+      const bathroom=b.units.find(u=>u.id===b.sharedBathroomUnitId&&u.roomType==='bathroom')||b.units.filter(u=>u.roomType==='bathroom').sort((a,b)=>a.z-b.z)[0];
+      if(!bathroom)continue;b.sharedBathroomUnitId=bathroom.id;
+      for(const u of b.units)if(u.roomType==='bathroom'&&u!==bathroom){u.roomType='bedroom';configureRoomWindow(b,u);b.layoutRevision=(b.layoutRevision||0)+1;this.city.sanitation.facilities.delete(`toilet:${u.id}`);}
+      const homes=[...this.homes.values()].filter(h=>h.buildingId===b.id);for(const h of homes)h.bathroomUnitId=bathroom.id;
+      const facility=this.city.sanitation.facilities.get(`toilet:${bathroom.id}`);if(facility)facility.homeIds=homes.map(h=>h.id);
+    }
+  }
 }

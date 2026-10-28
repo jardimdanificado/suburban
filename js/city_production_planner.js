@@ -43,6 +43,7 @@ export function productionPlan(economy){
   // Bread is a basic consumption need even before the first bakery has opened.
   if(city.citizens.some(c=>!c.entity.destroyed))visit('bakery',null,200,'Alimentação: pão e farinha precisam de lavouras de trigo.');
   for(const type of ['market','greengrocer'])visit(type,null,210,'Distribuição inicial: levar a produção agrícola ao comércio de alimentos.');
+  if(city.citizens.length>=64)visit('office_tower',null,185,'Espaço para sedes partidárias e empresas de serviços.');
   for(const b of [...firms,...projects])for(const good of Object.keys(inputs(b.type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,150,`Abastecer ${city.buildingTypes[b.type]?.label||b.type}`);}
   const result=[];
   for(const [id,row]of rows){
@@ -108,7 +109,7 @@ export function investProductionPlan(economy){
       selected={lot,width,depth,site,builder};break;
     }
     if(!selected){recordResponse(economy,row,accessPending?'Planejando acesso ao terreno.':'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
-    const {lot,width,depth,site,builder}=selected,stone=row.type==='farm'?0:width*depth*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=startupCapital(city,economy,row.type),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
+    const {lot,width,depth,site,builder}=selected,floors=row.type==='office_tower'?3:1,stone=row.type==='farm'?0:width*depth*floors*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*floors*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=startupCapital(city,economy,row.type),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
     const managementSkill=({farm:'agriculture',...Object.fromEntries(Object.entries(INDUSTRIES).map(([type,spec])=>[type,spec.skill]))})[row.type]||'management';
     const founders=founderPool.filter(c=>!assignedManagers.has(c.id)&&managerLoad(c)<3&&!city.development.projects.some(p=>pending(p)&&p.ownerId===c.id)).sort((a,b)=>managerLoad(a)-managerLoad(b)||((b.skills.management||0)*.45+(b.skills[managementSkill]||0)*.55+(b.skills.governance||0)*.15)-((a.skills.management||0)*.45+(a.skills[managementSkill]||0)*.55+(a.skills.governance||0)*.15)||Number(!!a.jobId)-Number(!!b.jobId)||b.balance-a.balance||a.id-b.id).slice(0,16);
     let project=null;
@@ -116,7 +117,7 @@ export function investProductionPlan(economy){
       let loan=null;const deficit=Math.max(0,privateBudget-founder.balance);
       if(deficit&&founder.creditAllowed!==false)for(const bank of city.bank.available()){loan=city.bank.lendForBusiness(bank,founder,deficit,{type:row.type,crop:row.crop,initialChain:true,score:Math.max(60,row.priority),budget:privateBudget});if(loan)break;}
       if(founder.balance<privateBudget){if(loan)city.bank.cancelBusinessLoan(loan);continue;}
-      if(city.development.buyPlot(founder.accountId,lot.id))project=city.development.beginProject(founder.accountId,lot.id,row.type,{width,depth,crop:row.crop,floors:1,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(250,row.priority))});
+      if(city.development.buyPlot(founder.accountId,lot.id))project=city.development.beginProject(founder.accountId,lot.id,row.type,{width,depth,crop:row.crop,floors,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(250,row.priority))});
       if(project){if(project.status==='completed'){const b=city.buildings.find(b=>b.plotId===lot.id);if(b)city.transfer(founder.accountId,b.accountId,capital,'Capital da lavoura prioritária',{buildingId:b.id,projectId:project.id});}else{fundProject(economy,project,capital,freight);founder.startupProjectId=project.id;}if(loan){loan.projectId=project.id;project.loanId=loan.id;}break;}
       if(lot.ownerId===founder.accountId&&!lot.projectId&&city.transfer('treasury',founder.accountId,lot.price,'Estorno de terreno: cadeia não iniciada')){lot.ownerId='treasury';lot.forSale=true;}
       if(loan)city.bank.cancelBusinessLoan(loan);
@@ -127,7 +128,7 @@ export function investProductionPlan(economy){
       if(!foodSafe){recordResponse(economy,row,city.bank.lastBusinessRefusal?.reason||'Sem crédito privado; município preservando alimentação emergencial.');continue;}
       if(city.treasury<needs.reserve+cost){recordResponse(economy,row,city.bank.lastBusinessRefusal?.reason||'Aguardando banco com atendimento ou caixa municipal após reserva social.',{requiredBudget:cost});continue;}
       if(active.filter(p=>p.accountId==='treasury'&&p.productionChain).length>=2){recordResponse(economy,row,'Aguardando conclusão das etapas públicas já financiadas.');continue;}
-      project=city.development.beginProject('treasury',lot.id,row.type,{width,depth,crop:row.crop,floors:1,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(250,row.priority))});
+      project=city.development.beginProject('treasury',lot.id,row.type,{width,depth,crop:row.crop,floors,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(250,row.priority))});
       if(project&&project.status!=='completed')fundProject(economy,project,capital,freight);
     }
     if(project){project.productionChain=true;project.chainReason=row.reason;project.priority=Math.max(105,Math.min(250,row.priority));if(project.accountId!=='treasury')assignedManagers.add(project.ownerId);recordResponse(economy,row,'Governo destinou a abertura a um gestor com afinidade e capacidade: materiais, construção e capital financiados.',{projectId:project.id});city.log(`Demanda iniciou ${city.buildingTypes[row.type].label}${row.crop?' de '+economy.crops[row.crop].label:''}: ${row.reason}`,'business',[],{kind:'production-chain-funded',projectId:project.id,type:row.type,crop:row.crop,accounts:[project.accountId]});opened++;continue;}
