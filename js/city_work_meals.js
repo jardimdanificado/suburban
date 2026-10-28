@@ -1,6 +1,6 @@
 import {activityCellAvailable,activityRoomReady,outdoorCellReady} from './city_interiors.js';
 import { preparedOffer } from './city_markets.js';
-import { CROPS } from './city_economy.js?v=party-caps-skin-1';
+import { CROPS } from './city_economy.js?v=initial-offices-1';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 

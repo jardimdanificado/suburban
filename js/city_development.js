@@ -1,4 +1,4 @@
-import {setupOfficeTower} from './city_offices.js';
+import {setupOfficeTower} from './city_offices.js?v=initial-offices-1';
 import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js';
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';

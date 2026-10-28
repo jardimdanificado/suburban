@@ -1,5 +1,6 @@
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {buildingEntrance} from './city_building_geometry.js';
+import {OFFICE_BUSINESSES} from './city_offices.js?v=initial-offices-1';
 import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js';
 
 const heights = [1.1, 5.5, 0, .4, 3.8, 0, 1.1, .4, 1.1, 2.3, 7.5, .4, 2.3, 2.3];
@@ -241,7 +242,8 @@ export function generateSettlement(city) {
   const origin = { ...world.spawnCenter };
   let hub = null;
   const hallFloors=Math.min(8,Math.max(2,Math.ceil((city.initialPopulation||0)/80)));
-  const specs = [['townhall', 4, 4, hallFloors], ['builder', 3, 3, 1], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bank', 3, 3, 1], ['carrier', 3, 3, 1], ['bike_rack',4,2,1], ...INITIAL_CYCLE_STAGES.map(type=>[type,type==='farm'?8:3,type==='farm'?8:3,1]), ['bike_rack',4,2,1]];
+  const officeTypes=['builder','bank','carrier',...INITIAL_CYCLE_STAGES].filter(type=>OFFICE_BUSINESSES.has(type));
+  const specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, Math.max(3,officeTypes.length)], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bike_rack',4,2,1], ...INITIAL_CYCLE_STAGES.filter(type=>!OFFICE_BUSINESSES.has(type)).map(type=>[type,type==='farm'?8:3,type==='farm'?8:3,1]), ['bike_rack',4,2,1]];
   for (const [type, w, d, h] of specs) {
     const angle = city.random() * Math.PI * 2, radius = hub ? (type==='bike_rack'?4+city.random()*3:8+city.random()*13) : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };
@@ -265,6 +267,7 @@ export function generateSettlement(city) {
     }
     if(!placed&&INITIAL_CYCLE_STAGES.includes(type)){(city.initialCycleSitesMissing??=[]).push(type);continue;}
     if(placed&&INITIAL_CYCLE_STAGES.includes(type))placed.initialCycleChain=true;
+    if(placed&&type==='office_tower')placed.initialOfficeTypes=officeTypes;
     if (!placed) throw new Error(`Não há terreno acessível para ${type}. Experimente outra semente.`);
     if (!hub) { hub = { ...placed.door }; city.spawn = { ...hub }; }
   }

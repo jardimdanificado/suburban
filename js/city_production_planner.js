@@ -76,7 +76,11 @@ export function investProductionPlan(economy){
   const city=economy.city,plan=productionPlan(economy),needs=city.welfare.conditions(),active=city.development.projects.filter(pending);
   const pipelineLimit=Math.max(6,Math.min(12,Math.ceil(city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)).length/40)));
   city.bank.developmentBanks();
-  if(active.filter(p=>p.productionChain).length>=pipelineLimit){for(const row of plan.filter(r=>r.missing&&!r.planned))recordResponse(economy,row,`Aguardando execução das ${pipelineLimit} obras de cadeias já financiadas.`);return false;}
+  const pipelineFull=active.filter(p=>p.productionChain).length>=pipelineLimit;
+  // Reserve one extra slot for the first shared office building when a backed-up
+  // production queue would otherwise prevent the service from ever starting.
+  const officeException=pipelineFull&&plan.some(r=>r.type==='office_tower'&&r.missing&&!r.planned&&r.waitMinutes>=720);
+  if(pipelineFull&&!officeException){for(const row of plan.filter(r=>r.missing&&!r.planned))recordResponse(economy,row,`Aguardando execução das ${pipelineLimit} obras de cadeias já financiadas.`);return false;}
   // Existing unfunded sites must progress before commissioning replacement factories.
   for(const row of plan.filter(r=>r.planned)){
     const project=active.find(p=>p.id===row.projectId);if(!project||project.materialAccountId||!['building'].includes(project.service))continue;
@@ -87,7 +91,7 @@ export function investProductionPlan(economy){
     if(loan)city.bank.cancelBusinessLoan(loan);recordResponse(economy,row,'Obra pendente aguardando crédito ou capital para materiais.',{projectId:project.id});
   }
 
-  const rows=plan.filter(r=>r.missing&&!r.planned&&r.type!=='quarry');
+  const rows=plan.filter(r=>r.missing&&!r.planned&&r.type!=='quarry'&&(!officeException||r.type==='office_tower'));
   city.development.ensurePlots();
   const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));
   // The government assigns initial ventures to capable residents, spreading ownership and keeping managers within a small portfolio.
@@ -96,7 +100,7 @@ export function investProductionPlan(economy){
   const batchLimit=3,assignedManagers=new Set();let opened=0;
   // Commission several distinct initial firms each investment cycle; later expansion remains demand driven.
   for(const row of rows){
-    if(opened>=batchLimit||city.development.projects.filter(p=>pending(p)&&p.productionChain).length>=pipelineLimit)break;
+    if(opened>=batchLimit||city.development.projects.filter(p=>pending(p)&&p.productionChain).length>=pipelineLimit+(officeException?1:0))break;
     const upstreamMissing=row.blockedInputs.filter(g=>plan.some(p=>p.missing&&p.planned===0&&(p.type==='farm'?p.crop===g:INDUSTRIES[p.type]?.outputs[g]||p.type==='bakery'&&g==='pao'||p.type==='mill'&&g==='oleo')));
     if(upstreamMissing.length){recordResponse(economy,row,`Primeiro instalar fornecedores: ${upstreamMissing.map(g=>economy.goods[g].label).join(', ')}.`);continue;}
     if(['iron_mine','bauxite_mine'].includes(row.type))city.development.ensureQuarryPlot();
@@ -104,7 +108,7 @@ export function investProductionPlan(economy){
     if(!lots.length){recordResponse(economy,row,row.type==='farm'?'Aguardando terreno fértil.':'Aguardando terreno urbano.');continue;}
     let selected,accessPending=false;
     for(const lot of lots){
-      const width=row.type==='farm'?lot.width:Math.min(3,lot.width),depth=row.type==='farm'?lot.depth:Math.min(3,lot.depth),site=chooseBuildingSite(city,lot.x,lot.y,width,depth,{plotId:lot.id,type:row.type});if(site.error){accessPending ||= !!site.pending;continue;}
+      const width=row.type==='farm'?lot.width:Math.min(row.type==='office_tower'?2:3,lot.width),depth=row.type==='farm'?lot.depth:Math.min(row.type==='office_tower'?2:3,lot.depth),site=chooseBuildingSite(city,lot.x,lot.y,width,depth,{plotId:lot.id,type:row.type});if(site.error){accessPending ||= !!site.pending;continue;}
       const builder=row.type==='farm'?null:city.development.selectBuilder('treasury',site.door);if(row.type!=='farm'&&!builder)continue;
       selected={lot,width,depth,site,builder};break;
     }

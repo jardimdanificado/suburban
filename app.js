@@ -34,7 +34,6 @@ let previousFrame = performance.now();
 let lastRenderedAt = previousFrame;
 let lastUiDrawnAt = previousFrame;
 let lastUiPointerX = -1, lastUiPointerY = -1;
-let rapidResolution = null;
 // Opt-in diagnostics, readable without exposing mutable simulation objects to the browser.
 const profiling = new URLSearchParams(window.location.search).has('profile');
 const frameMetrics = { started: performance.now(), count: 0, simulation: 0, index: 0, scene: 0, ui: 0, cpu: 0, max: 0, terrain:0, city:0, renderEntities:0, entityLoop:0, entityRest:0, citizenClass:0, citizenSurface:0, citizenBody:0, webgl:0 };
@@ -293,10 +292,6 @@ function frame(now) {
   const rapidMode=simulationBridge?.active&&time.speed>=16&&city.citizens.length>=512;
   renderer3D.rapidCityMode=rapidMode;
   if(rapidMode&&now-lastRenderedAt<40){requestAnimationFrame(frame);return;}
-  if(renderMode==='3d'){
-    if(rapidMode&&rapidResolution===null){rapidResolution=renderer3D.resolutionScale;if(rapidResolution>.25)renderer3D.setResolutionScale(.25);}
-    else if(!rapidMode&&rapidResolution!==null){renderer3D.setResolutionScale(rapidResolution);rapidResolution=null;}
-  }
   if(renderer3D.renderer.shadowMap.enabled===rapidMode&&renderer3D.shadowsEnabled){
     renderer3D.renderer.shadowMap.enabled=!rapidMode;
     renderer3D.renderer.shadowMap.needsUpdate=true;

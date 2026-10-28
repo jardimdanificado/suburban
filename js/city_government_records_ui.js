@@ -1,4 +1,4 @@
-import {officeFloors} from './city_offices.js';
+import {officeFloors} from './city_offices.js?v=initial-offices-1';
 import {colorName} from './city_colors.js';
 import {ideologicalProfile,describePoliticalOrientation} from './city_ideology.js';
 import {drawPartyFlag} from './city_party_flags.js';

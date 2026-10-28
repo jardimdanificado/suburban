@@ -1,4 +1,4 @@
-import {collectOfficeRents,endOfficeLease} from './city_offices.js';
+import {collectOfficeRents,endOfficeLease} from './city_offices.js?v=initial-offices-1';
 import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
@@ -32,9 +32,9 @@ import { CitySanitation } from './city_sanitation.js';
 import { CityLife } from './city_life.js?v=needs-performance-1';
 import { CityWorkMeals } from './city_work_meals.js';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js';
-import { CityLogistics } from './city_logistics.js?v=party-caps-skin-1';
+import { CityLogistics } from './city_logistics.js?v=office-rollout-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=party-caps-skin-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=initial-offices-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=mine-rack-social-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js';
 

@@ -1,4 +1,4 @@
-import {rentOffice,rentAvailableOffice,setupOfficeTower,officeFloors,OFFICE_BUSINESSES} from './city_offices.js';
+import {rentOffice,rentAvailableOffice,officeStartupCost,setupOfficeTower,officeFloors,OFFICE_BUSINESSES,createMunicipalOffice} from './city_offices.js?v=initial-offices-1';
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js';
@@ -7,7 +7,7 @@ import {outdoorCellReady,workCellReady} from './city_interiors.js';
 import {fundInitialCycleChain} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,apply,finishApplication,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=employment-finish-1';
-import {productionPlan,investProductionPlan} from './city_production_planner.js';
+import {productionPlan,investProductionPlan} from './city_production_planner.js?v=office-rollout-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=party-caps-skin-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
@@ -28,7 +28,7 @@ export const CROPS = {
   feijao: { label: 'Feijão', grow: 150, price: 100 }, coentro: { label: 'Coentro', grow: 80, price: 90 },
 };
 export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 450 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
-export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'lamp_service', 'office_tower', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill']);
+export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'builder', 'quarry', 'carrier', 'lamp_service', 'office_tower', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill','clinic','library']);
 export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing', 'popular_refectory']);
 const retailTypes = new Set(['bakery', 'greengrocer', 'market']);
 const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)), ...INDUSTRIAL_FOODS];
@@ -116,10 +116,12 @@ export class CityEconomy {
     const hall = this.city.buildings.find(b => b.type === 'townhall');
     hall.inventory.pao = this.city.citizens.length * ECONOMY_RULES.mealUnits * ECONOMY_RULES.initialMealsPerCitizen;
     this.initialStock.pao += hall.inventory.pao;
+    // Initial compatible public services share a municipal office tower.
+    const tower=this.city.buildings.find(b=>b.type==='office_tower'&&b.initialOfficeTypes);if(tower){this.activateMunicipalBusiness(tower,0);for(const [floor,type] of tower.initialOfficeTypes.entries()){const budget=({builder:2000000,bank:2000000,carrier:300000})[type]??100000;const b=createMunicipalOffice(this.city,tower,floor,type,budget);if(!b)throw Error(`Não foi possível instalar ${this.city.buildingTypes[type].label} no empresarial inicial.`);if(type!=='builder'&&type!=='bank'&&type!=='carrier')b.initialCycleChain=true;}}
     // Public starter firms keep construction and extraction available without privileged founders.
     for (const [type, budget] of [['builder', 2000000], ['quarry', 500000], ['bank', 2000000], ['carrier', 300000]]) {
       const b = this.city.buildings.find(b => b.type === type);
-      if (b) this.activateMunicipalBusiness(b, budget);
+      if (b&&!b.active) this.activateMunicipalBusiness(b, budget);
     }
     fundInitialCycleChain(this.city);
     this.city.development.ensurePlots();
@@ -430,10 +432,19 @@ export class CityEconomy {
     this.city.history.ownership(b,'treasury',founder.accountId,{action:'purchase',amount:price});
     b.municipal = false; this.activateBusiness(b, founder, crop); return b;
   }
+  useOwnedPremises(founder,type,crop=null){
+    if(!OFFICE_BUSINESSES.has(type))return null;const city=this.city;
+    const b=city.buildings.find(b=>!['office_tower','residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing','townhall','council_chamber','mint'].includes(b.type)&&!b.municipal&&!b.active&&!b.entity.destroyed&&!b.officeTenantOf&&b.constructionKind==='building'&&b.units.length&&b.units.every(u=>u.ownerId===founder.accountId&&!u.tenantId&&!u.occupantId)&&!b.workers.length&&!Object.values(b.inventory||{}).some(n=>n>0)&&!Object.values(b.incoming||{}).some(n=>n>0));
+    if(!b)return null;
+    if(b.type!==type){const oldType=b.type,totals={totalRevenue:b.totalRevenue,totalExpenses:b.totalExpenses,dividends:b.dividends};b.type=type;b.entity.properties.name=city.life.buildingName(city.buildingTypes[type].label);b.entity.properties.render.style=type;b.entity.properties.render.color=city.buildingTypes[type].color;b.color=city.buildingTypes[type].color;this.setupBuilding(b);Object.assign(b,totals);b.layoutRevision=(b.layoutRevision||0)+1;city.history.record('business',`Imóvel próprio adaptado de ${city.buildingTypes[oldType].label} para ${city.buildingTypes[type].label}.`,[founder.accountId,b.accountId],{buildingId:b.id,oldType,type});}
+    this.activateBusiness(b,founder,crop);city.sanitation.setupBuilding(b);return b;
+  }
   foundBusiness(founderId, type, crop = null) {
     const city = this.city, founder = this.citizen(founderId);
     if (!founder || !city.society.isAdult(founder) || !PRIVATE_TYPES.has(type) || this.city.politics.officeHolder(founder) || (type === 'farm' && !CROPS[crop])) return null;
     if (city.development.projects.some(p => p.ownerId === founder.id && p.type === type && p.crop === crop && !p.cancelled && p.status !== 'completed')) return null;
+    const ownOffice=rentAvailableOffice(city,type,founder,{ownOnly:true});if(ownOffice){this.hire();this.updateDemand();return ownOffice;}
+    const owned=this.useOwnedPremises(founder,type,crop);if(owned){this.hire();this.updateDemand();return owned;}
     const rented=rentAvailableOffice(city,type,founder);if(rented){this.hire();this.updateDemand();return rented;}
     const existing = city.buildings.find(b => b.type === type && (!b.active || b.municipal) && !b.entity.destroyed && b.units.every(u => u.ownerId === 'treasury' && u.forSale));
     if (existing) return this.purchasePremises(existing, founder, crop);
@@ -454,7 +465,13 @@ export class CityEconomy {
   }
   invest() {
     this.updateDemand();
-    if(this.businesses.some(b=>b.type==='office_tower'))for(const demand of this.demands.filter(d=>OFFICE_BUSINESSES.has(d.type)&&d.score>=30).sort((a,b)=>b.score-a.score)){for(const founder of this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.politics.canOwnBusiness(c)&&!c.businessIds.length&&!c.startupProjectId).sort((a,b)=>b.balance-a.balance).slice(0,12)){if(rentAvailableOffice(this.city,demand.type,founder)){this.hire();return true;}}}
+    if(this.businesses.some(b=>b.type==='office_tower'))for(const demand of this.demands.filter(d=>OFFICE_BUSINESSES.has(d.type)&&d.score>=30).sort((a,b)=>b.score-a.score)){for(const founder of this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.politics.canOwnBusiness(c)&&c.businessIds.length<3&&!c.startupProjectId).sort((a,b)=>Number(b.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))-Number(a.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))||b.balance-a.balance).slice(0,24)){
+      if(rentAvailableOffice(this.city,demand.type,founder,{ownOnly:true})){this.hire();return true;}
+      if(this.useOwnedPremises(founder,demand.type)){this.hire();return true;}
+      let loan=null;const budget=officeStartupCost(this.city,founder),deficit=budget-founder.balance;
+      if(Number.isFinite(budget)&&deficit>0&&demand.score>=60&&founder.creditAllowed!==false)for(const bank of this.city.bank.available()){loan=this.city.bank.lendForBusiness(bank,founder,deficit,{type:demand.type,score:demand.score,budget});if(loan)break;}
+      const office=rentAvailableOffice(this.city,demand.type,founder);if(office){if(loan)loan.buildingId=office.id;this.hire();return true;}if(loan)this.city.bank.cancelBusinessLoan(loan);
+    }}
     // Construction and transport must be staffed before the first factories can receive their materials.
     this.city.bank.developmentBanks();
     const extractionStarted=this.serviceInvestment.invest({types:['quarry']});
