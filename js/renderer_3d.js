@@ -6322,7 +6322,8 @@ export class RCT3DRenderer {
 
       const cityCitizen=e.properties.citizen;
       const interiorBuilding=cityCitizen?.indoorLocation&&this.cityDevelopment?.city?.building(cityCitizen.indoorLocation.buildingId);
-      const renderInside=cityCitizen?cityCitizen._renderInside??!!(cityCitizen.indoorLocation&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air')):false;
+      const exposed=cityCitizen?.indoorLocation&&['balcony','roof_terrace'].includes(cityCitizen.indoorLocation.roomType)&&!cityCitizen.indoorLocation.path?.length;
+      const renderInside=cityCitizen?cityCitizen._renderInside??!!(cityCitizen.indoorLocation&&!exposed&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air')):false;
       if(renderInside){
         const sprite=this.entitySprites.get(e.id);
         if(sprite){sprite.visible=false;activeIds.add(e.id);}
@@ -6383,7 +6384,8 @@ export class RCT3DRenderer {
       } else if (isBuilding) {
         surfaceH = this.getTileSurfaceHeight(map, Math.floor(e.x), Math.floor(e.y), 1, 1);
       } else {
-        if(cityCitizen){
+        if(cityCitizen&&exposed&&interiorBuilding)surfaceH=interiorBuilding.terrain?.base??this.getSurfaceElevation(map,e.x,e.y);
+        else if(cityCitizen){
           const cache=this._entitySurfaceCache??=new WeakMap(),cached=cache.get(e);
           if(cached&&cached.x===e.x&&cached.y===e.y&&cached.revision===world.revision)surfaceH=cached.height;
           else{surfaceH=this.getSurfaceElevation(map,e.x,e.y);cache.set(e,{x:e.x,y:e.y,revision:world.revision,height:surfaceH});}

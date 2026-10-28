@@ -1,4 +1,4 @@
-import {collectOfficeRents,endOfficeLease} from './city_offices.js?v=initial-offices-1';
+import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=service-queues-1';
 import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
@@ -20,7 +20,8 @@ import { CityNature } from './city_nature.js';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-caps-skin-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady } from './city_interiors.js?v=indoor-motion-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=service-queues-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-living-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
@@ -28,14 +29,14 @@ import { quarryDeposits } from './city_terrain.js';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
-import { CitySanitation } from './city_sanitation.js';
+import { CitySanitation } from './city_sanitation.js?v=service-queues-1';
 import { CityLife } from './city_life.js?v=needs-performance-1';
 import { CityWorkMeals } from './city_work_meals.js';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=service-queues-1';
 import { CityLogistics } from './city_logistics.js?v=office-rollout-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=initial-offices-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=mine-rack-social-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=service-queues-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=service-queues-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js';
 
 export const INITIAL_POPULATION = 512;
@@ -223,6 +224,7 @@ export class CitySimulation {
     this.syncClock();
   }
   addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
+    if(OFFICE_ONLY_TYPES.has(type)&&!free)return this.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const spec = BUILDING_TYPES[type];
     if (type === 'quarry' && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A pedreira precisa de um depósito rochoso junto à área de extração.');
     if (!spec) return this.fail('Tipo de prédio inválido.');
@@ -413,6 +415,14 @@ export class CitySimulation {
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     else if (n.energy < 65) { task = 'energy'; type = 'home'; }
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
+    if(!urgent&&task==='leisure'&&n.leisure<90&&this.hour>=6&&this.hour<22){
+      const employer=job||company,workplace=employer?.officeTenantOf?this.building(employer.officeTenantOf):employer,dwelling=this.housing.home(c),sites=[...(home?[{site:home,access:'home'}]:[]),...(workplace&&workplace!==home?[{site:workplace,access:'work'}]:[])];
+      for(const {site,access} of sites){const spaces=buildingLeisureSpaces(site).filter(s=>s.kind==='roof_terrace'||(access==='home'?dwelling?.unitIds.includes(s.unitId):!employer?.officeTenantOf||s.floor===employer.officeFloor));
+       for(const space of spaces){const occupied=this.citizens.filter(other=>other!==c&&other.task==='outdoor_leisure'&&other.outdoorLeisure?.buildingId===site.id&&other.outdoorLeisure.spaceId===space.id).map(other=>other.outdoorLeisure.slot),slot=Array.from({length:space.capacity},(_,i)=>i).find(i=>!occupied.includes(i));if(slot==null)continue;const path=this.findPath(c.entity,site.door);if(path===null)continue;
+        const offsets=space.kind==='roof_terrace'?[[0,0],[.35,0],[-.35,0],[0,.35]]:[[0,0]],offset=offsets[slot]||offsets[0];c.outdoorLeisure={buildingId:site.id,jobId:access==='work'?employer.id:null,access,unitId:space.unitId,spaceId:space.id,kind:space.kind,slot,position:{...space.position,x:space.position.x+offset[0],y:space.position.y+offset[1]},until:null};c.task='outdoor_leisure';c.targetId=site.id;c.path=path;c.action=space.kind==='balcony'?'Indo descansar na varanda':'Indo descansar na cobertura';return;
+       }
+      }
+    }
     if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&this.paint.route(c))return;
     if (task === 'social' && this.relationships.seekContact(c)) return;
     if(task==='hygiene'&&this.sanitation.choose(c,'hygiene'))return;
@@ -485,6 +495,7 @@ export class CitySimulation {
     if(c.task==='visit'){this.relationships.arrive(c);return;}
     if (c.task === 'toilet') { this.sanitation.use(c); return; }
     if (c.task === 'workmeal') { if (!this.workMeals.tryStart(c)) {c.task = null;c.mealResume=null;} return; }
+    if(c.task==='outdoor_leisure'){c.outdoorLeisure.until??=this.minute+45;c.needs.leisure=clamp(c.needs.leisure+1.2);c.mood=Math.min(25,(c.mood||0)+.02);c.action=c.outdoorLeisure.kind==='balcony'?'Descansando na varanda':'Descansando na cobertura';if(c.needs.leisure>=95||this.minute>=c.outdoorLeisure.until){c.task=null;c.outdoorLeisure=null;}return;}
     if (c.task === 'construction') {
       const project = this.development.projects.find(p => p.id === c.workProjectId);
       const builder = this.building(project?.builderId);
@@ -747,7 +758,7 @@ export class CitySimulation {
       if(!c.task){c._nextTaskAt=this.minute+5;c._retryUrgent=urgent;}
     }
     for(const c of this.citizens)if(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation)syncCitizenInterior(this,c);
-    this.society.updateMinute();
+    disperseCrowds(this);this.society.updateMinute();
     const movers=this._movingCitizens??=[];movers.length=0;
     for(const c of this.citizens)if(c.path.length||c.deliveryId||c.ridingVehicleId)movers.push(c);
     // Spread hourly work across minutes; keep the same order and one run per hour.

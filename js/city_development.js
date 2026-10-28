@@ -1,5 +1,6 @@
-import {setupOfficeTower} from './city_offices.js?v=initial-offices-1';
-import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js';
+import {setupOfficeTower} from './city_offices.js?v=service-queues-1';
+import {OFFICE_ONLY_TYPES} from './city_offices.js?v=service-queues-1';
+import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js?v=service-queues-1';
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
@@ -330,6 +331,7 @@ export class CityDevelopment {
     Object.assign(p, { price, rent, forSale: p.ownerId === 'treasury' || !!forSale, forRent: p.ownerId !== 'treasury' && !!forRent }); return true;
   }
   beginProject(accountId, plotId, type, { kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = ['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing','office_tower'].includes(type) ? 3 : 1, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
+    if(OFFICE_ONLY_TYPES.has(type))return this.city.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
     if ((kind === 'open-air' && !['farm', 'quarry', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;

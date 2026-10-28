@@ -9,22 +9,24 @@ import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js';
-import {addArchitectureVariations} from './city_architecture_variations.js';
+import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-living-2';
 import {syncSkybridges} from './city_skybridges.js';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-living-2';
 function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
 }
-function roomCellGeometry(THREE,facadeMask,openingMask){
+function roomCellGeometry(THREE,facadeMask,openingMask,doorMask=0){
   const g=new THREE.BufferGeometry(),v=[],colors=[],h=CITY_FLOOR_HEIGHT,half=.5,wy=.95,wh=.215,ww=.215;
   const exterior=[1,1,1],interior=[.72,.65,.53];
   const quad=(a,b,c,d,color)=>{for(const point of [a,b,c,a,c,d]){v.push(...point);colors.push(...color);}};
   const wall=(axis,sign,bit)=>{
-    const hasWindow=!!(openingMask&bit),wallColor=facadeMask&bit?exterior:interior;
+    const hasWindow=!!(openingMask&bit),hasDoor=!!(doorMask&bit),wallColor=facadeMask&bit?exterior:interior;
     // Exterior faces reach the edge of their tile. Interior partitions stay
     // slightly inset so neighboring rooms do not draw coplanar wall faces.
     const at=sign*(facadeMask&bit?half:half-.015),innerAt=at-sign*.03,lo=wy-wh,hi=wy+wh;
     const face=(plane,color)=>{
       const rect=(a0,a1,y0,y1)=>{if(a1<=a0||y1<=y0)return;if(axis==='z')quad([a0,y0,plane],[a1,y0,plane],[a1,y1,plane],[a0,y1,plane],color);else quad([plane,y0,a0],[plane,y0,a1],[plane,y1,a1],[plane,y1,a0],color);};
+      if(hasDoor){rect(-half,-.22,0,1.45);rect(.22,half,0,1.45);rect(-half,half,1.45,h);return;}
       if(!hasWindow){rect(-half,half,0,h);return;}
       rect(-half,half,0,lo);rect(-half,half,hi,h);
       rect(-half,-ww,lo,hi);rect(ww,half,lo,hi);
@@ -109,15 +111,15 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
       const mineWall={iron_mine:0x77736b,bauxite_mine:0x806b62,clay_pit:0x886b58,sand_pit:0x94866a};
       const matrix = new THREE.Matrix4(), color = new THREE.Color(b.campaignPaint?.color||b.wallColor||(mine?mineWall[b.type]:residential ? style.wall : b.color));
-      const cellMasks=new Map();
+      const cellMasks=new Map(),doorByUnit=new Map();for(const s of buildingLeisureSpaces(b))if(s.kind==='balcony')doorByUnit.set(s.unitId,(doorByUnit.get(s.unitId)||0)|s.doorBit);
       for (const u of b.units) {
         let facadeMask=0;if(u.y===0)facadeMask|=1;if(u.y===b.depth-1)facadeMask|=2;if(u.x===0)facadeMask|=4;if(u.x===b.width-1)facadeMask|=8;
-        const openingMask=u.hasWindow?facadeMask:0,key=`${facadeMask}:${openingMask}`,bucket=cellMasks.get(key)||[];bucket.push(u);cellMasks.set(key,bucket);
+        const doorMask=doorByUnit.get(u.id)||0,openingMask=u.hasWindow?facadeMask&~doorMask:0,key=`${facadeMask}:${openingMask}:${doorMask}`,bucket=cellMasks.get(key)||[];bucket.push(u);cellMasks.set(key,bucket);
       }
       const cellMeshes=[];
       for(const units of cellMasks.values()){
-        const first=units[0],facadeMask=(first.y===0?1:0)|(first.y===b.depth-1?2:0)|(first.x===0?4:0)|(first.x===b.width-1?8:0),openingMask=first.hasWindow?facadeMask:0;
-        const cells=new THREE.InstancedMesh(roomCellGeometry(THREE,facadeMask,openingMask),material,units.length);cells.castShadow=true;cells.receiveShadow=true;
+        const first=units[0],facadeMask=(first.y===0?1:0)|(first.y===b.depth-1?2:0)|(first.x===0?4:0)|(first.x===b.width-1?8:0),doorMask=doorByUnit.get(first.id)||0,openingMask=first.hasWindow?facadeMask&~doorMask:0;
+        const cells=new THREE.InstancedMesh(roomCellGeometry(THREE,facadeMask,openingMask,doorMask),material,units.length);cells.castShadow=true;cells.receiveShadow=true;
         for(let i=0;i<units.length;i++){const u=units[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2,u.y+.5);cells.setMatrixAt(i,matrix);cells.setColorAt(i,b.wallColors?.[u.id]&&!b.campaignPaint?new THREE.Color(b.wallColors[u.id]):color);}
         group.add(cells);cellMeshes.push(cells);
       }
@@ -194,7 +196,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         facade.add(blades); group.userData.millBlades = blades;
       }
       addBuildingDetails(THREE,facade,b);
-      addArchitectureVariations(THREE,facade,b);
+      addArchitectureVariations(THREE,facade,b,buildingLeisureSpaces(entity.properties.cityBuilding));
       const door = new THREE.Mesh(new THREE.BoxGeometry(.55, 1.4, .04), new THREE.MeshLambertMaterial({ color: 0x293e35 }));
       door.position.set(Math.floor(b.width / 2) + .5, .70, b.depth + .025); facade.add(door);
       const awning = new THREE.Mesh(new THREE.BoxGeometry(1.1, .12, .7), new THREE.MeshLambertMaterial({ color: b.type === 'market' ? 0xdca14b : 0xc9d9a1 }));

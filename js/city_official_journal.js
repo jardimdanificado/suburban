@@ -1,4 +1,4 @@
-import { DEVELOPMENT_RULES } from './city_development.js';
+import { DEVELOPMENT_RULES } from './city_development.js?v=service-queues-1';
 /** Permanent institutional archive; physical copies still need paper and labor. */
 export class CityOfficialJournal {
   constructor(city){this.city=city;this.records=[];this.byEventId=new Map();this.printedThrough=0;this.nextEdition=1;}

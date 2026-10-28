@@ -56,12 +56,13 @@ export class CitySociety {
   }
   canPartner(a, b) { return !a.partnerId && !b.partnerId && this.city.relationships.compatible(a,b); }
   canSocialize(c) {
-    return !c.entity.destroyed && !c.mobilityTrip && !c.ridingVehicleId && (!c.path.length||['walk','leisure','social'].includes(c.task)) && !c.conversation && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving'].includes(c.task) && this.age(c)>=3 && c.task!=='energy' &&
+    return !c.entity.destroyed && !c.mobilityTrip && !c.ridingVehicleId && !(c.serviceQueue&&c.serviceQueue.kind===c.task&&c.serviceQueue.buildingId===c.targetId) && (!c.path.length||['walk','leisure','social'].includes(c.task)) && !c.conversation && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving','food','provisions','toilet','hygiene'].includes(c.task) && this.age(c)>=3 && c.task!=='energy' &&
       this.city.minute-c.lastConversationAt>=SOCIAL_RULES.conversationCooldown && Math.min(c.needs.food,c.needs.water,c.needs.energy)>20;
   }
   canConverse(a, b) {
-    const dx=a.entity.x-b.entity.x,dy=a.entity.y-b.entity.y;
-    if(a===b||a.indoorLocation?.buildingId!==b.indoorLocation?.buildingId||!(dx*dx+dy*dy<=4)||!this.canSocialize(a)||!this.canSocialize(b))return false;
+    const ap=a.indoorLocation?.position||a.entity,bp=b.indoorLocation?.position||b.entity,dx=ap.x-bp.x,dy=ap.y-bp.y,dz=(ap.z||0)-(bp.z||0);
+    if(a===b||a.indoorLocation?.buildingId!==b.indoorLocation?.buildingId||!(dx*dx+dy*dy+dz*dz<=4)||!this.canSocialize(a)||!this.canSocialize(b))return false;
+    if(!a.indoorLocation&&!b.indoorLocation&&Math.floor(ap.x)===Math.floor(bp.x)&&Math.floor(ap.y)===Math.floor(bp.y))return false;
     const known=this.relations.has(pairKey(a.id,b.id));
     return known || (this.contactIndex.get(a.id)?.size||0)<64 && (this.contactIndex.get(b.id)?.size||0)<64;
   }
@@ -99,13 +100,15 @@ export class CitySociety {
     // slice each minute so ordinary foot traffic has a chance to meet without
     // comparing every resident with every other resident.
     // A spatial grid limits encounters to nearby people, with one conversation per person.
-    const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4;
+    const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4,tileCounts=new Map();
     const residents=this.city.citizens,contactBudget=Math.max(12,Math.ceil(residents.length*.02));
+    for(const c of residents)if(!c.entity.destroyed&&!c.indoorLocation){const key=`${Math.floor(c.entity.x)},${Math.floor(c.entity.y)}`;tileCounts.set(key,(tileCounts.get(key)||0)+1);}
     const offset=(this.city.minute*37)%Math.max(1,residents.length);
     let contacts=0;
     for(let residentIndex=0;residentIndex<residents.length&&contacts<contactBudget;residentIndex++){
       const c=residents[(offset+residentIndex)%residents.length];
       if (!this.canSocialize(c)) continue;
+      if(!c.indoorLocation&&(tileCounts.get(`${Math.floor(c.entity.x)},${Math.floor(c.entity.y)}`)||0)>1)continue;
       const x = Math.floor(c.entity.x / 2), y = Math.floor(c.entity.y / 2);
       for (let dx = -1; dx <= 1 && !c.conversation; dx++) for (let dy = -1; dy <= 1 && !c.conversation; dy++) {
         const nearby = buckets.get(x+dx+(y+dy)*stride) || NO_NEIGHBORS;

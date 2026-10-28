@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=indoor-motion-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=service-queues-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -24,7 +24,7 @@ function positions() {
 }
 function indoorFlags(){
  const city=state.city,people=city.citizens,result=new Uint8Array(people.length);
- for(let i=0;i<people.length;i++){const location=people[i].indoorLocation;if(!location)continue;const building=city.building(location.buildingId);result[i]=!building||building.constructionKind!=='open-air'?1:0;}
+ for(let i=0;i<people.length;i++){const location=people[i].indoorLocation;if(!location||(['balcony','roof_terrace'].includes(location.roomType)&&!location.path?.length))continue;const building=city.building(location.buildingId);result[i]=!building||building.constructionKind!=='open-air'?1:0;}
  return result;
 }
 function vehiclePositions() {

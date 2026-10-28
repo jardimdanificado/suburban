@@ -1,4 +1,5 @@
-import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=initial-offices-1';
+import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=service-queues-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-living-2';
 import {equityShares,equityValue} from './city_equity.js';
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js';
@@ -29,15 +30,15 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js';
+import { SANITATION_RULES } from './city_sanitation.js?v=service-queues-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=initial-offices-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=service-queues-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js';
-import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=indoor-motion-1';
+import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=service-queues-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=service-queues-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -293,7 +294,7 @@ export class CityUI {
       p.heading('MOBILIDADE');p.kv('Prioridade por transporte',`${Math.round(c.mobilityNeed||0)}%`);p.kv('Valoriza economizar tempo',`${Math.round((c.mobilityPriority||1)*100)}%`);if(c.mobilityTimeLostToday>0)p.kv('Tempo caminhando hoje',`${Math.round(c.mobilityTimeLostToday)} min`);
       this.section(p,'personalVehicles','Veículos próprios',()=>{for(const v of city.vehicles.units.values())if(v.active&&v.ownerAccountId===c.accountId)p.record(city.vehicles.model(v)?.name||v.good,`${v.condition.toFixed(0)}% de conservação · força humana`,()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));});
       const inside=city.building(c.indoorLocation?.buildingId);
-      if(inside){p.kv('Localização',`Dentro de ${name(inside.entity)} · ${c.indoorLocation.floor+1}º andar`);p.kv('Cômodo',{bedroom:'Quarto',bathroom:'Banheiro',dining:'Refeitório',plenary:'Plenário',office:'Gabinete',workspace:'Área da empresa',circulation:'Circulação entre cômodos',service:'Área de atendimento',treatment:'Consultório'}[c.indoorLocation.roomType]||'Interior');p.button('VER PRÉDIO ATUAL',()=>this.openBuilding(inside.id));}
+      if(inside){p.kv('Localização',`${['balcony','roof_terrace'].includes(c.indoorLocation.roomType)?'Em':'Dentro de'} ${name(inside.entity)} · ${c.indoorLocation.floor+1}º andar`);p.kv('Cômodo',{bedroom:'Quarto',bathroom:'Banheiro',dining:'Refeitório',plenary:'Plenário',office:'Gabinete',workspace:'Área da empresa',circulation:'Circulação entre cômodos',service:'Área de atendimento',treatment:'Consultório',balcony:'Varanda',roof_terrace:'Cobertura'}[c.indoorLocation.roomType]||'Interior');p.button('VER PRÉDIO ATUAL',()=>this.openBuilding(inside.id));}
       p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
       p.heading('NECESSIDADES'); p.meters(Object.entries(c.needs).map(([id,value])=>[NEED_LABELS[id],value]));
       const home = city.units.get(c.homeUnitId), dwelling = city.housing.home(c); p.heading('MORADIA');
@@ -387,6 +388,7 @@ export class CityUI {
       if(missing.length)p.status('AGUARDANDO INSUMOS',missing.map(([g,n])=>`${GOODS[g].label}: ${b.inventory[g]||0}/${n}${b.incoming[g]?' · '+b.incoming[g]+' a receber':''}`).join(' · '),C.gold,()=>this.openPanel({detailTab:'stock'}));
       if(b.active&&b.jobs>0&&!b.workers.length&&!b.ownerId)p.status('SEM EQUIPE','Nenhum funcionário contratado para operar esta instalação.',C.red,()=>this.openPanel({detailTab:'staff'}));
       if(b.type==='council_chamber')p.kv('Bandeira da sede',b.governingFlagDescription||'Presidência ainda não eleita');
+      const leisureSpaces=buildingLeisureSpaces(b);if(leisureSpaces.length)this.section(p,`leisure-spaces:${b.id}`,`Varandas e cobertura (${leisureSpaces.length})`,()=>{for(const s of leisureSpaces){const occupants=city.citizens.filter(c=>c.task==='outdoor_leisure'&&c.outdoorLeisure?.buildingId===b.id&&c.outdoorLeisure.spaceId===s.id);p.kv(s.kind==='balcony'?`Varanda · ${s.floor+1}º andar`:'Cobertura compartilhada',`${occupants.length}/${s.capacity} ocupados`);for(const c of occupants)p.button(name(c.entity),()=>this.openCitizen(c.id));}});
       const flags=(city.politics.campaigns.materials?.decorations||[]).filter(d=>d.buildingId===b.id&&!d.entity.destroyed&&['window_flag','roof_flag'].includes(d.kind));if(flags.length)this.section(p,`campaign-flags:${b.id}`,`Bandeiras eleitorais (${flags.length})`,()=>{for(const d of flags){const resident=city.society.citizen(d.controllerId);p.record(`${d.partyName} · ${String(d.partyNumber).padStart(2,'0')}`,`${d.kind==='roof_flag'?'Telhado':`Janela · ${city.units.get(d.unitId)?.z+1||1}º andar`} · ${name(resident?.entity)} · ${d.voluntary?'voluntária':money(d.fee)}`,()=>this.openParty(d.partyId));}});
       const occupants=city.citizens.filter(c=>c.indoorLocation?.buildingId===b.id);
       this.section(p,'inside',`Pessoas no interior (${occupants.length})`,()=>{p.kv('Presentes',occupants.length);for(const c of occupants)p.record(name(c.entity),`${c.action} · ${c.indoorLocation.floor+1}º andar`,()=>this.openCitizen(c.id));});
@@ -409,6 +411,9 @@ export class CityUI {
       if(b.ownerId&&b.type!=='research_institute'&&INDUSTRIES[b.type]){p.button('CONTRATAR PESQUISA DE DEMANDA',()=>city.politics.getResearch().commissionService(b.accountId,'market-demand',b.id));const reports=city.politics.getResearch().studies.filter(s=>s.serviceType==='market-demand'&&s.subjectId===b.id&&s.status==='published').slice(-1);for(const report of reports)p.record(`Pesquisa de mercado #${report.id}`,`${report.report?.rows?.[0]?.label||'Relatório disponível'} · amostra ${report.report?.sampleSize||report.target}`,()=>this.openPanel({tab:'government',views:{government:'elections'},politicsTab:'research-services',studyId:report.id}));}
       if(b.type==='publisher'){p.kv('Páginas por novo livro',b.bookPages||5);p.note('Cada livro consome uma folha por página; panfletos consomem uma folha. Dois registros por página.');p.buttons([2,5,10,20,32].map(pages=>({label:`${pages} PÁGINAS`,selected:(b.bookPages||5)===pages,click:()=>city.publications.configure(b.id,pages)})));}
       if(industry){p.heading('CADEIA PRODUTIVA');p.note(industry.impact);p.note('Insumos: '+(Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Trabalho e recursos locais'));p.note('Produtos: '+(Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Crédito e guarda de depósitos'));if(b.type==='bank'){const line=city.bank.developmentLines?.find(l=>l.bankId===b.id);if(line){p.kv('Refinanciamento municipal recebido',money(line.principal));p.kv('Dívida do banco com o município',money(line.remaining));p.kv('Devolvido ao município',money(line.repaid));}p.kv('Depósitos protegidos',money([...city.bank.deposits.values()].filter(d=>d.bankId===b.id).reduce((n,d)=>n+d.balance,0)));p.kv('Crédito a receber',money(city.bank.loans.filter(l=>l.bankId===b.id && !['paid','written-off'].includes(l.status)).reduce((n,l)=>n+l.remaining+l.interest,0)));p.note(`Novos empréstimos: ${(city.bank.policy.loanRate*100).toFixed(2)}% ao dia; poupança: ${(city.bank.policy.savingsRate*100).toFixed(2)}% ao dia. Prazos: 30 parcelas para subsistência; 180 para empresas; 240 para iniciar cadeias, com carência durante a obra e 14 dias após a abertura. Depósitos são protegidos; rendimentos dependem do caixa do banco.`);}}
+      const queueEntrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;
+      const waiting=(queueEntrance.serviceQueue||[]).filter(q=>q.buildingId===b.id&&city.society.citizen(q.citizenId)?.task===q.kind).sort((a,z)=>a.sequence-z.sequence);
+      if(waiting.length)this.section(p,`service-queue:${b.id}`,`Filas de atendimento (${waiting.length})`,()=>{for(const [i,q] of waiting.entries()){const person=city.society.citizen(q.citizenId);if(person)p.record(`${i+1}. ${name(person.entity)}`,q.kind==='toilet'?'Banheiro':'Alimentação',()=>this.openCitizen(person.id));}p.note('A ordem é respeitada para cada banheiro ou serviço de alimentação.');});
       p.kv('Arquitetura',HOUSE_STYLES[b.architecture]?.label||'Padrão');this.reputationPanel(p,b);
       if(b.type==='forestry'){const plants=[...city.nature.plants.values()].filter(t=>t.buildingId===b.id);p.kv('Árvores cultivadas',plants.length);p.kv('Maduras',plants.filter(t=>t.stage==='mature').length);p.kv('Sementes em germinação',city.nature.seeds.filter(t=>t.buildingId===b.id).length);p.note('Cada lote de madeira consome uma árvore madura a até 14 tiles. O corte replanta uma semente; árvores novas levam de 3 a 4 dias para crescer.');}
       p.kv('Tipo de ocupação', b.constructionKind === 'open-air' ? 'Ar livre / no nível do solo' : 'Edifício');

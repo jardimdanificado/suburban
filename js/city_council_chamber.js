@@ -1,4 +1,4 @@
-import {DEVELOPMENT_RULES} from './city_development.js';
+import {DEVELOPMENT_RULES} from './city_development.js?v=service-queues-1';
 import {chooseBuildingSite} from './city_terrain.js';
 
 /** The legislature needs real premises, offices and in-person plenary sessions. */

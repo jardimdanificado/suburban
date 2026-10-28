@@ -1,6 +1,7 @@
 import {INDUSTRIES} from './city_industries.js';
-import {DEVELOPMENT_RULES} from './city_development.js';
+import {DEVELOPMENT_RULES} from './city_development.js?v=service-queues-1';
 import {chooseBuildingSite} from './city_terrain.js';
+import {OFFICE_ONLY_TYPES,officeSpaceDemand} from './city_offices.js?v=service-queues-1';
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
 const inputs=(type)=>type==='bakery'?{trigo:2}:type==='mill'?{girassol:3}:INDUSTRIES[type]?.inputs||{};
@@ -30,7 +31,7 @@ export function productionPlan(economy){
   function visit(type,crop,score,origin,trail=new Set()){
     const id=key(type,crop);if(trail.has(id))return;const path=new Set(trail);path.add(id);
     const current=exists(type,crop),building=planned(type,crop),target=type==='research_institute'?city.politics.getResearch().demand().required:1;
-    const absent=current+building.length<target;
+    const absent=type==='office_tower'?officeSpaceDemand(city).missing>0:current+building.length<target;
     const row=rows.get(id)||{type,crop,origins:[],missing:absent,current,planned:building.length,projectId:building[0]?.id,score:0};
     if(!row.origins.includes(origin))row.origins.push(origin);row.score=Math.max(row.score,score);rows.set(id,row);
     // Both established and planned consumers create demand for the earlier stages.
@@ -43,7 +44,7 @@ export function productionPlan(economy){
   // Bread is a basic consumption need even before the first bakery has opened.
   if(city.citizens.some(c=>!c.entity.destroyed))visit('bakery',null,200,'Alimentação: pão e farinha precisam de lavouras de trigo.');
   for(const type of ['market','greengrocer'])visit(type,null,210,'Distribuição inicial: levar a produção agrícola ao comércio de alimentos.');
-  if(city.citizens.length>=64)visit('office_tower',null,185,'Espaço para sedes partidárias e empresas de serviços.');
+  if(city.citizens.length>=64)visit('office_tower',null,Math.max(185,economy.demands.find(d=>d.type==='office_tower')?.score||0),'Andares para sedes partidárias e atividades que precisam de empresarial.');
   for(const b of [...firms,...projects])for(const good of Object.keys(inputs(b.type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,150,`Abastecer ${city.buildingTypes[b.type]?.label||b.type}`);}
   const result=[];
   for(const [id,row]of rows){
@@ -101,6 +102,7 @@ export function investProductionPlan(economy){
   // Commission several distinct initial firms each investment cycle; later expansion remains demand driven.
   for(const row of rows){
     if(opened>=batchLimit||city.development.projects.filter(p=>pending(p)&&p.productionChain).length>=pipelineLimit+(officeException?1:0))break;
+    if(OFFICE_ONLY_TYPES.has(row.type)){recordResponse(economy,row,'Aguardando locação de andar empresarial e financiamento operacional.');continue;}
     const upstreamMissing=row.blockedInputs.filter(g=>plan.some(p=>p.missing&&p.planned===0&&(p.type==='farm'?p.crop===g:INDUSTRIES[p.type]?.outputs[g]||p.type==='bakery'&&g==='pao'||p.type==='mill'&&g==='oleo')));
     if(upstreamMissing.length){recordResponse(economy,row,`Primeiro instalar fornecedores: ${upstreamMissing.map(g=>economy.goods[g].label).join(', ')}.`);continue;}
     if(['iron_mine','bauxite_mine'].includes(row.type))city.development.ensureQuarryPlot();

@@ -1,4 +1,4 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=service-queues-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
@@ -50,14 +50,14 @@ export class CitySanitation {
     const b = this.city.building(f.buildingId); if (!b) return false;
     if (f.access === 'public' || f.access === 'paid') return f.price <= (this.city.accounts.get(this.city.payerFor(c))?.balance || 0);
     if (f.access === 'employees') return b.active && (c.jobId === b.id || c.id === b.ownerId);
-    const homes=(f.homeIds||[f.homeId]).map(id=>this.city.housing.homes.get(id)).filter(Boolean);if(!homes.length)return false;
+    const homes=[...new Set([...(f.homeIds||[]),f.homeId].filter(Boolean))].map(id=>this.city.housing.homes.get(id)).filter(Boolean);if(!homes.length)return false;
     const residents=homes.flatMap(home=>this.city.housing.residents(home));
     if (residents.some(p => p.id === c.id)) return true;
     if (!residents.length && this.city.units.get(f.unitId)?.ownerId === c.accountId) return true;
     return residents.some(p => { const r = this.city.relationships.view(p,c); return r && r.affection >= 65 && r.trust >= 50 && r.resentment<30; });
   }
   choose(c,task='toilet') {
-    const options = [...this.facilities.values()].filter(f => this.allowed(c, f) && this.city.units.get(f.unitId)?.roomType==='bathroom' && activityCellAvailable(this.city,this.city.units.get(f.unitId),c,'bathroom') && (!f.occupantId || f.occupantId === c.id || this.city.minute >= f.busyUntil));
+    const options = [...this.facilities.values()].filter(f => this.allowed(c, f) && this.city.units.get(f.unitId)?.roomType==='bathroom');
     options.sort((a, b) => this.score(c, a) - this.score(c, b));
     for (const f of options) {
       const b = this.city.building(f.buildingId), path = this.city.findPath(c.entity, b.door); if (path === null) continue;
@@ -67,7 +67,9 @@ export class CitySanitation {
   }
   score(c, f) {
     const b = this.city.building(f.buildingId);
-    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
+    const entrance=b.officeTenantOf?this.city.building(b.officeTenantOf)||b:b;
+    const queued=(entrance.serviceQueue||[]).filter(q=>q.buildingId===b.id&&q.kind==='toilet'&&q.resource===f.id).length,busy=f.occupantId&&f.occupantId!==c.id&&this.city.minute<f.busyUntil;
+    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + queued*5+(busy?4:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
   }
   addWaste(b, amount = 1) {
     const stored = Math.min(amount, inventoryFree(b)); b.inventory.lixo += stored; b.litter += amount - stored;
