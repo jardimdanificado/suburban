@@ -4,7 +4,7 @@
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=rooftop-bridges-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels } from './city_citizen_models.js?v=vehicle-heading-1';
 import { flagNightFactor } from './city_terrain.js?v=business-heights-1';
@@ -6322,7 +6322,7 @@ export class RCT3DRenderer {
 
       const cityCitizen=e.properties.citizen;
       const interiorBuilding=cityCitizen?.indoorLocation&&this.cityDevelopment?.city?.building(cityCitizen.indoorLocation.buildingId);
-      const exposed=cityCitizen?.indoorLocation&&['balcony','roof_terrace'].includes(cityCitizen.indoorLocation.roomType)&&!cityCitizen.indoorLocation.path?.length;
+      const exposed=cityCitizen?.indoorLocation&&(cityCitizen.indoorLocation.roomType==='roof_terrace'||cityCitizen.indoorLocation.roomType==='balcony'&&!cityCitizen.indoorLocation.path?.length);
       const renderInside=cityCitizen?cityCitizen._renderInside??!!(cityCitizen.indoorLocation&&!exposed&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air')):false;
       if(renderInside){
         const sprite=this.entitySprites.get(e.id);

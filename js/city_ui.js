@@ -1,5 +1,5 @@
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=service-queues-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-living-2';
+import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
 import {equityShares,equityValue} from './city_equity.js';
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js';
@@ -38,7 +38,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=business-heights-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=service-queues-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=business-heights-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=rooftop-bridges-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

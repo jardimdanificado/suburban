@@ -14,10 +14,9 @@ export function buildingLeisureSpaces(b){
  };
  for(let floor=1;floor<b.floors;floor++){
   if(!homes.has(b.type)){if((floor+variant)%2===0)add(floor,width/2,Math.max(.9,width-.4),.62,variant%2===0);continue;}
-  if(variant===0||variant===3)add(floor,width/2,Math.max(.9,width-.35),.65,variant===3);
-  else if(variant===1){const w=Math.max(.85,Math.min(1.25,width*.38));add(floor,w*.55,w,.68,true);if(width>2.2)add(floor,width-w*.55,w,.68,false);}
-  else if(variant===2)add(floor,width/2,Math.max(.9,width*.72),.85,false);
-  else add(floor,floor%2?width*.32:width*.68,Math.max(.8,width*.42),.7,true);
+  // Give each eligible front-facing home its own usable balcony. Previously
+  // one shared facade projection was tied to only a single apartment.
+  for(let col=0;col<width;col++)add(floor,col+.5,.82,variant===2?.85:.68,(col+floor+variant)%3===0);
  }
  if((homes.has(b.type)&&(HOUSE_STYLES[b.architecture]||HOUSE_STYLES.modern).roofKind==='flat')||b.type==='office_tower'){
   const unit=b.units.find(u=>u.z===b.floors-1&&['bedroom','workspace','office'].includes(u.roomType));if(unit){const pos=buildingPoint(b,width*.5,depth*.5);spaces.push({id:`roof:${b.id}`,kind:'roof_terrace',floor:b.floors-1,unitId:unit.id,position:{x:b.entity.x+pos.x,y:b.entity.y+pos.y,z:b.floors*CITY_FLOOR_HEIGHT+.23},capacity:4});}

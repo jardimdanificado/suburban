@@ -20,7 +20,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js?v=business-heights-1';
+import { CitySimulation } from './city_simulation.js?v=rooftop-bridges-1';
 import { CityHistory } from './city_history.js';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js';

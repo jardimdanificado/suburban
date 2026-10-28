@@ -21,7 +21,7 @@ import { CityGovernment as CityPolitics } from './city_government.js?v=party-cap
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=service-queues-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-living-2';
+import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
@@ -415,7 +415,7 @@ export class CitySimulation {
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     else if (n.energy < 65) { task = 'energy'; type = 'home'; }
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
-    if(!urgent&&task==='leisure'&&n.leisure<90&&this.hour>=6&&this.hour<22){
+    if(!urgent&&(task==='leisure'||task==='social'&&n.social>=35)&&n.leisure<95&&this.hour>=6&&this.hour<22){
       const employer=job||company,workplace=employer?.officeTenantOf?this.building(employer.officeTenantOf):employer,dwelling=this.housing.home(c),sites=[...(home?[{site:home,access:'home'}]:[]),...(workplace&&workplace!==home?[{site:workplace,access:'work'}]:[])];
       for(const {site,access} of sites){const spaces=buildingLeisureSpaces(site).filter(s=>s.kind==='roof_terrace'||(access==='home'?dwelling?.unitIds.includes(s.unitId):!employer?.officeTenantOf||s.floor===employer.officeFloor));
        for(const space of spaces){const occupied=this.citizens.filter(other=>other!==c&&other.task==='outdoor_leisure'&&other.outdoorLeisure?.buildingId===site.id&&other.outdoorLeisure.spaceId===space.id).map(other=>other.outdoorLeisure.slot),slot=Array.from({length:space.capacity},(_,i)=>i).find(i=>!occupied.includes(i));if(slot==null)continue;const path=this.findPath(c.entity,site.door);if(path===null)continue;
@@ -495,7 +495,16 @@ export class CitySimulation {
     if(c.task==='visit'){this.relationships.arrive(c);return;}
     if (c.task === 'toilet') { this.sanitation.use(c); return; }
     if (c.task === 'workmeal') { if (!this.workMeals.tryStart(c)) {c.task = null;c.mealResume=null;} return; }
-    if(c.task==='outdoor_leisure'){c.outdoorLeisure.until??=this.minute+45;c.needs.leisure=clamp(c.needs.leisure+1.2);c.mood=Math.min(25,(c.mood||0)+.02);c.action=c.outdoorLeisure.kind==='balcony'?'Descansando na varanda':'Descansando na cobertura';if(c.needs.leisure>=95||this.minute>=c.outdoorLeisure.until){c.task=null;c.outdoorLeisure=null;}return;}
+    if(c.task==='outdoor_leisure'){
+      const visit=c.outdoorLeisure,location=c.indoorLocation;visit.until??=this.minute+45;
+      c.needs.leisure=clamp(c.needs.leisure+1.2);c.mood=Math.min(25,(c.mood||0)+.02);
+      c.action=visit.kind==='balcony'?'Descansando na varanda':'Descansando na cobertura';
+      if(visit.kind==='roof_terrace'&&location?.roomType==='roof_terrace'&&!location.path.length&&this.minute>=(visit.nextStroll??this.minute+2)){
+        const b=this.building(visit.buildingId);if(b){const margin=.5,spanX=Math.max(0,b.width-2*margin),spanY=Math.max(0,b.depth-2*margin),turn=visit.strollCount||0,slot=visit.slot||0;visit.strollCount=turn+1;
+          const points=[[.2,.2],[.8,.2],[.8,.8],[.2,.8]],q=points[(turn+slot)%points.length];location.path=[{x:b.entity.x+margin+spanX*q[0],y:b.entity.y+margin+spanY*q[1],z:location.position.z}];visit.nextStroll=this.minute+4;c.action='Passeando na cobertura';}
+      }else if(visit.kind==='roof_terrace'&&visit.nextStroll==null)visit.nextStroll=this.minute+2;
+      if(c.needs.leisure>=95||this.minute>=visit.until){c.task=null;c.outdoorLeisure=null;}return;
+    }
     if (c.task === 'construction') {
       const project = this.development.projects.find(p => p.id === c.workProjectId);
       const builder = this.building(project?.builderId);
