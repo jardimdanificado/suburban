@@ -3,7 +3,7 @@ import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=party-caps-skin-1";
 import { CityDesktop } from "./js/city_desktop.js";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=party-caps-skin-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=citizen-camera-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
@@ -157,7 +157,7 @@ function onPointerDown(event) {
   lastPointer = pointerDown;
   if (cityUI.pointerDown(x,y)) { pointerOnUI=true; return; }
   if (pointerOnUI) return;
-  if (event.button === 0 && editor.open) {
+  if (event.button === 0 && editor.open && !renderer3D.isPerspectiveActive()) {
     editingGesture = true;
     editor.beginStroke(mapTileAt(x, y));
     return;
@@ -173,7 +173,8 @@ function onPointerMove(event) {
     if(pinchGesture&&touchPointers.size>=2){
       const [a,b]=[...touchPointers.values()],center=midpoint(a,b),distance=pointerDistance(a,b),renderer=renderer3D;
       const previousZoom=renderer.getCameraZoom(),zoom=previousZoom*distance/Math.max(1,pinchGesture.distance);
-      moveCameraByPointer(center.x-pinchGesture.center.x,center.y-pinchGesture.center.y,zoom);
+      if(renderer.isThirdPersonActive())renderer.adjustThirdPersonDistance((pinchGesture.distance-distance)*.02);
+      else if(!renderer.isPerspectiveActive())moveCameraByPointer(center.x-pinchGesture.center.x,center.y-pinchGesture.center.y,zoom);
       pinchGesture={distance:Math.max(1,distance),center,zoom:renderer.getCameraZoom()};
       event.preventDefault();return;
     }
@@ -194,7 +195,8 @@ function onPointerMove(event) {
   if (!dragging || !lastPointer) return;
   const dx = event.clientX - lastPointer.x;
   const dy = event.clientY - lastPointer.y;
-  moveCameraByPointer(dx,dy,renderer3D.getCameraZoom());
+  if(renderer3D.isPerspectiveActive())renderer3D.rotatePerspectiveCamera(dx*.006,-dy*.006);
+  else moveCameraByPointer(dx,dy,renderer3D.getCameraZoom());
   lastPointer = { x: event.clientX, y: event.clientY };
 }
 
@@ -220,7 +222,7 @@ function onPointerUp(event) {
     editor.endStroke();
   } else if (pointerOnUI && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 6) {
     if (event.button === 0) legacyUI.clickAt(x, y);
-  } else if (event.button === 0 && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 4) {
+  } else if (!renderer3D.isPerspectiveActive() && event.button === 0 && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 4) {
     const id = renderer3D.selectAt(event.clientX, event.clientY, entities, world);
     selectEntity(entities.find((entity) => entity.id === id) || null, renderer3D.selectedCityUnitId);
     if (id == null || id === -1) {
@@ -255,12 +257,15 @@ root.addEventListener("wheel", (event) => {
   if (legacyUI.hitTest(event.clientX - rect.left, event.clientY - rect.top)) return;
   event.preventDefault();
   const renderer = renderer3D;
+  if(renderer.isThirdPersonActive()){renderer.adjustThirdPersonDistance(event.deltaY*.005);return;}
+  if(renderer.isPerspectiveActive())return;
   const zoom = renderer.getCameraZoom() * (event.deltaY < 0 ? 1.12 : 0.89);
   renderer.setCamera(renderer.getCameraX(), renderer.getCameraY(), zoom);
 }, { passive: false });
 
 window.addEventListener("keydown", (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
+  if(event.code==='Escape'&&renderer3D.isPerspectiveActive()){renderer3D.setFirstPersonMode(false);renderer3D.setThirdPersonMode(false);event.preventDefault();return;}
   if (cityUI.key(event)) { event.preventDefault(); return; }
   if (event.code === "Space" && !event.repeat) {
     event.preventDefault();
@@ -370,8 +375,11 @@ try { city.initialize(); } catch (error) {
 }
 export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
   pause:togglePause, speed:()=>time.setSpeed(time.speed===32?0.5:time.speed*2), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
-  center:()=>{renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
+  center:()=>{renderer3D.setFirstPersonMode(false);renderer3D.setThirdPersonMode(false);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
+  observe:(mode,id)=>{if(mode==='first')renderer3D.setFirstPersonMode(true,id);else if(mode==='third')renderer3D.setThirdPersonMode(true,id);else{renderer3D.setFirstPersonMode(false);renderer3D.setThirdPersonMode(false);}},
+  observation:()=>renderer3D.isPerspectiveActive(),
 }, camera(x, y) {
+  renderer3D.setFirstPersonMode(false);renderer3D.setThirdPersonMode(false);
   renderer3D.setCamera(x, y);
 } });
 if (cityGenerationError) cityUI.notice = cityGenerationError;

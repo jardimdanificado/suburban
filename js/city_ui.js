@@ -280,6 +280,8 @@ export class CityUI {
     const city = this.city, society = city.society;
     if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
+    if(this.host?.controls.observe){const active=this.host.controls.observation?.();p.buttons([{label:'1ª PESSOA',click:()=>this.host.controls.observe('first',c.id)},{label:'3ª PESSOA',click:()=>this.host.controls.observe('third',c.id)},...(active? [{label:'SAIR DA CÂMERA',click:()=>this.host.controls.observe('off')}]:[])]);}
+    if(this.host?.controls.observation?.())p.note('Arraste para olhar ao redor. Na 3ª pessoa, use a roda ou pinça para aproximar. Esc sai da câmera.');
     this.dossierTabs(p, [['profile', 'PERFIL'], ['colors','CORES'], ['skills', 'TRABALHO'], ['resume','CURRÍCULO'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'CONTA'], ['history', 'HISTÓRICO']]);
     if(this.detailTab==='colors'){renderColorPreferences(this,p,c);return;}
     if (this.detailTab === 'profile') {

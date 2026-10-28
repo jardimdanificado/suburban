@@ -4989,9 +4989,13 @@ export class RCT3DRenderer {
         const boxMaxX = isFlora ? posX + bounds.radius : e.x + fpW;
         const boxMinZ = isFlora ? posY - bounds.radius : e.y;
         const boxMaxZ = isFlora ? posY + bounds.radius : e.y + fpH;
+        const floraScale=isFlora&&e.properties.cityPlant?Math.max(.05,r.size??1):1;
+        const floraMesh=isCherry?this.instCherryLeaves:isBirch?this.instBirchLeaves:isMaple?this.instMapleLeaves:isBerryBush?this.instBerryBushes:isRoseBush?this.instRoseBushes:isTree?(e.properties.species==='pine'?this.instPineLeaves:this.instOakLeaves):isCactus?this.instCacti:null;
+        const geometry=floraMesh?.geometry;if(geometry&&!geometry.boundingBox)geometry.computeBoundingBox();
+        const floraHeight=geometry?.boundingBox?.max.y??bounds.h;
         const box = new THREE.Box3(
-          new THREE.Vector3(boxMinX, surfaceH - 0.2, boxMinZ),
-          new THREE.Vector3(boxMaxX, surfaceH + Math.max(1.0, bounds.h), boxMaxZ)
+          new THREE.Vector3(isFlora?posX-bounds.radius*floraScale:boxMinX, surfaceH - 0.1, isFlora?posY-bounds.radius*floraScale:boxMinZ),
+          new THREE.Vector3(isFlora?posX+bounds.radius*floraScale:boxMaxX, surfaceH + (isFlora?floraHeight*floraScale:Math.max(1.0,bounds.h)), isFlora?posY+bounds.radius*floraScale:boxMaxZ)
         );
         const intersect = new THREE.Vector3();
         if (ray.intersectBox(box, intersect)) {
@@ -5223,10 +5227,11 @@ export class RCT3DRenderer {
       }
 
       if (targetEnt && !targetEnt.destroyed && (!targetEnt.properties?.life || !targetEnt.properties.life.isDead)) {
-        const eyeX = targetEnt.x;
-        const eyeZ = targetEnt.y;
+        const inside=targetEnt.properties?.citizen?.indoorLocation?.position;
+        const eyeX = inside?.x??targetEnt.x;
+        const eyeZ = inside?.y??targetEnt.y;
         const surfaceH = this.currentMap ? this.getSurfaceElevation(this.currentMap, eyeX, eyeZ) : 1.0;
-        const eyeY = surfaceH + 0.65; // Creature center height
+        const eyeY = surfaceH + (inside?.z??0) + 0.65;
 
         this.camX = eyeX;
         this.camY = eyeZ;
