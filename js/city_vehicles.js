@@ -1,7 +1,7 @@
 import {COLOR_PALETTE,colorAffinity,dislikesColor} from './city_colors.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {inventoryFree} from './city_inventory.js';
-import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js';
+import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=business-heights-1';
 
 export const VEHICLE_SPECS=Object.freeze({
   bicicleta:{label:'Bicicleta',speed:8,seats:2,cargo:36},

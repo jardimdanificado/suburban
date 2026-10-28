@@ -25,19 +25,19 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-living-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
-import { quarryDeposits } from './city_terrain.js';
+import { quarryDeposits } from './city_terrain.js?v=business-heights-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
 import { CitySanitation } from './city_sanitation.js?v=service-queues-1';
 import { CityLife } from './city_life.js?v=needs-performance-1';
 import { CityWorkMeals } from './city_work_meals.js';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=service-queues-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=business-heights-1';
 import { CityLogistics } from './city_logistics.js?v=office-rollout-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=service-queues-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=business-heights-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=service-queues-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=business-heights-1';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {

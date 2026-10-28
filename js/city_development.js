@@ -1,10 +1,11 @@
+import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {setupOfficeTower} from './city_offices.js?v=service-queues-1';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=service-queues-1';
 import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js?v=service-queues-1';
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad } from './city_terrain.js';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad } from './city_terrain.js?v=business-heights-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
@@ -97,7 +98,7 @@ export class CityDevelopment {
       city.sanitation.setupBusinessRooms(b);
       if (project.service === 'expansion') {
       b.floors = project.targetFloors;if(b.type==='office_tower')setupOfficeTower(city,b); b.inventoryCapacity += b.width * b.depth * project.floors * 16;
-      b.jobs += b.type === 'townhall' ? project.floors : 0; b.geometryRevision = (b.geometryRevision || 0) + 1;
+      if(b.type==='townhall')b.jobs+=project.floors;else b.jobs=Math.min(32,b.jobs+businessJobCapacity(b.type,2,project.targetFloors)-businessJobCapacity(b.type,2,project.baseFloors)); b.geometryRevision = (b.geometryRevision || 0) + 1;
       if(['super_popular_housing','popular_housing','popular_luxury_housing'].includes(b.type)&&project.accountId==='treasury')city.housing.assign();
       }
       }
@@ -330,9 +331,11 @@ export class CityDevelopment {
     if (!p || p.ownerId !== accountId || p.projectId || !Number.isSafeInteger(price) || price < 1 || !Number.isSafeInteger(rent) || rent < 0) return false;
     Object.assign(p, { price, rent, forSale: p.ownerId === 'treasury' || !!forSale, forRent: p.ownerId !== 'treasury' && !!forRent }); return true;
   }
-  beginProject(accountId, plotId, type, { kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = ['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing','office_tower'].includes(type) ? 3 : 1, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
+  beginProject(accountId, plotId, type, { kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = null, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
     if(OFFICE_ONLY_TYPES.has(type))return this.city.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
+    const autoFloors=floors===null;
+    floors ??= ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing','office_tower'].includes(type)?3:businessFloors(type,plotId);
     if ((kind === 'open-air' && !['farm', 'quarry', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;
     if(width*depth<MIN_PLOT_CELLS||p.width*p.depth<MIN_PLOT_CELLS)return city.fail('Terrenos e prédios precisam de pelo menos 4 células de área.');
@@ -340,9 +343,10 @@ export class CityDevelopment {
     if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || p.width*p.depth<MIN_PLOT_CELLS || width > p.width || depth > p.depth || (kind==='building' && (width>8 || depth>8))) return null;
     const terrain=chooseBuildingSite(city,p.x,p.y,width,depth,{plotId,type,rotation});if(terrain.error)return null;
     floors = kind === 'open-air' ? 1 : floors;
-    const cells = width * depth * floors, stone = kind === 'open-air' ? (['park','bike_rack'].includes(type)?Math.ceil(cells/4):0) : cells * DEVELOPMENT_RULES.stonePerCell;
     const builder = selfBuild ? null : this.selectBuilder(accountId, terrain.door, builderId);
     if (builderId && !builder) return null;
+    if(autoFloors&&kind==='building')while(floors>1){const cells=width*depth*floors,stone=cells*DEVELOPMENT_RULES.stonePerCell,fee=builder?cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,cost=stone*city.economy.goods.pedra.price+(accountId==='treasury'?Math.ceil(fee*DEVELOPMENT_RULES.municipalMultiplier):fee)+city.currency.price(micro?2000:20000);if((city.accounts.get(accountId)?.balance||0)>=cost)break;floors--;}
+    const cells = width * depth * floors, stone = kind === 'open-air' ? (['park','bike_rack'].includes(type)?Math.ceil(cells/4):0) : cells * DEVELOPMENT_RULES.stonePerCell;
     const fee = builder && stone ? cells * this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) : 0;
     const publicFee = accountId === 'treasury' ? Math.ceil(fee * DEVELOPMENT_RULES.municipalMultiplier) : fee;
     if ((city.accounts.get(accountId)?.balance || 0) < stone * city.economy.goods.pedra.price + publicFee + city.currency.price(micro?2000:20000)) return null;

@@ -1,3 +1,4 @@
+import {businessFloors} from './city_business_heights.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {buildingEntrance} from './city_building_geometry.js';
 import {OFFICE_BUSINESSES} from './city_offices.js?v=service-queues-1';
@@ -243,7 +244,7 @@ export function generateSettlement(city) {
   let hub = null;
   const hallFloors=Math.min(8,Math.max(2,Math.ceil((city.initialPopulation||0)/80)));
   const officeTypes=['builder','bank','carrier',...INITIAL_CYCLE_STAGES].filter(type=>OFFICE_BUSINESSES.has(type));
-  const specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, Math.max(3,officeTypes.length+3)], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bike_rack',4,2,1], ...INITIAL_CYCLE_STAGES.filter(type=>!OFFICE_BUSINESSES.has(type)).map(type=>[type,type==='farm'?8:3,type==='farm'?8:3,1]), ['bike_rack',4,2,1]];
+  const specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, Math.max(3,officeTypes.length+3)], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bike_rack',4,2,1], ...INITIAL_CYCLE_STAGES.filter(type=>!OFFICE_BUSINESSES.has(type)).map(type=>[type,type==='farm'?8:3,type==='farm'?8:3,businessFloors(type,'startup')]), ['bike_rack',4,2,1]];
   for (const [type, w, d, h] of specs) {
     const angle = city.random() * Math.PI * 2, radius = hub ? (type==='bike_rack'?4+city.random()*3:8+city.random()*13) : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };

@@ -1,4 +1,5 @@
-import { inspectBuildingSite } from './city_terrain.js';
+import {businessFloors} from './city_business_heights.js';
+import { inspectBuildingSite } from './city_terrain.js?v=business-heights-1';
 
 export const ESSENTIAL_SERVICES = new Set(['quarry','builder', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'composting']);
 
@@ -48,14 +49,14 @@ export class CityServiceInvestment {
     return city.development.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId && !['quarry','farm'].includes(p.type) && p.width >= 3 && p.depth >= 3 && p.width <= 8 && p.depth <= 8 && !inspectBuildingSite(city,p.x,p.y,3,3,{plotId:p.id,type}).error).sort((a,b) => a.price-b.price || a.id-b.id);
   }
   plan(type, plot, municipal = false) {
-    const city = this.city, stone = type==='quarry'?0:18, fee = type==='quarry'?0:type === 'builder' && !municipal ? 0 : city.currency.price(9*12000);
+    const city = this.city, floors=businessFloors(type,plot.id), stone = type==='quarry'?0:18*floors, fee = type==='quarry'?0:type === 'builder' && !municipal ? 0 : city.currency.price(9*12000*floors);
     const capital = city.currency.price(150000), freight = city.currency.price(24000);
     const construction = stone*city.economy.goods.pedra.price+Math.ceil(fee*(municipal?1.5:1));
-    return {type,plot,width:type==='quarry'?plot.width:3,depth:type==='quarry'?plot.depth:3,stone,capital,freight,fee,selfBuild:type==='builder'&&!municipal,total:(municipal?0:plot.price)+construction+capital+freight+city.currency.price(15000)};
+    return {type,plot,floors,width:type==='quarry'?plot.width:3,depth:type==='quarry'?plot.depth:3,stone,capital,freight,fee,selfBuild:type==='builder'&&!municipal,total:(municipal?0:plot.price)+construction+capital+freight+city.currency.price(15000)};
   }
   start(ownerId, plan, loan = null) {
     const city = this.city;
-    const project = city.development.beginProject(ownerId,plan.plot.id,plan.type,{width:plan.width||3,depth:plan.depth||3,floors:1,selfBuild:plan.selfBuild,priority:150});
+    const project = city.development.beginProject(ownerId,plan.plot.id,plan.type,{width:plan.width||3,depth:plan.depth||3,floors:plan.floors,selfBuild:plan.selfBuild,priority:150});
     if (!project) return null;
     if(project.status==='completed'){
       const b=city.buildings.find(b=>b.plotId===plan.plot.id);if(b)city.transfer(ownerId,b.accountId,Math.max(0,plan.capital+plan.freight-b.balance),'Capital operacional da nova extração',{projectId:project.id,buildingId:b.id});

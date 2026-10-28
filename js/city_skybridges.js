@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {ROAD_TILES,tileAt} from './city_terrain.js';
+import {ROAD_TILES,tileAt} from './city_terrain.js?v=business-heights-1';
 
 // Elevated architectural links do not occupy or block their street tiles.
 export function syncSkybridges(renderer,THREE,entities,world){

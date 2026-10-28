@@ -1,6 +1,7 @@
+import {businessFloors} from './city_business_heights.js';
 import {INDUSTRIES} from './city_industries.js';
-import {DEVELOPMENT_RULES} from './city_development.js?v=service-queues-1';
-import {chooseBuildingSite} from './city_terrain.js';
+import {DEVELOPMENT_RULES} from './city_development.js?v=business-heights-1';
+import {chooseBuildingSite} from './city_terrain.js?v=business-heights-1';
 import {OFFICE_ONLY_TYPES,officeSpaceDemand} from './city_offices.js?v=service-queues-1';
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
@@ -115,7 +116,7 @@ export function investProductionPlan(economy){
       selected={lot,width,depth,site,builder};break;
     }
     if(!selected){recordResponse(economy,row,accessPending?'Planejando acesso ao terreno.':'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
-    const {lot,width,depth,site,builder}=selected,floors=row.type==='office_tower'?3:1,stone=row.type==='farm'?0:width*depth*floors*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*floors*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=startupCapital(city,economy,row.type),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
+    const {lot,width,depth,site,builder}=selected,floors=row.type==='office_tower'?3:businessFloors(row.type,lot.id),stone=row.type==='farm'?0:width*depth*floors*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*floors*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=startupCapital(city,economy,row.type),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
     const managementSkill=({farm:'agriculture',...Object.fromEntries(Object.entries(INDUSTRIES).map(([type,spec])=>[type,spec.skill]))})[row.type]||'management';
     const founders=founderPool.filter(c=>!assignedManagers.has(c.id)&&managerLoad(c)<3&&!city.development.projects.some(p=>pending(p)&&p.ownerId===c.id)).sort((a,b)=>managerLoad(a)-managerLoad(b)||((b.skills.management||0)*.45+(b.skills[managementSkill]||0)*.55+(b.skills.governance||0)*.15)-((a.skills.management||0)*.45+(a.skills[managementSkill]||0)*.55+(a.skills.governance||0)*.15)||Number(!!a.jobId)-Number(!!b.jobId)||b.balance-a.balance||a.id-b.id).slice(0,16);
     let project=null;

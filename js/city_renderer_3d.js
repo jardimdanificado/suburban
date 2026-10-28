@@ -8,7 +8,7 @@ import {modelSize,buildingPoint,CITY_FLOOR_HEIGHT} from './city_building_geometr
 import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js';
+import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=business-heights-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-living-2';
 import {syncSkybridges} from './city_skybridges.js';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-living-2';
