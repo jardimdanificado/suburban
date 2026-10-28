@@ -6,7 +6,7 @@ import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels } from './city_citizen_models.js?v=party-caps-skin-1';
+import { CityCitizenModels } from './city_citizen_models.js?v=street-sleep-1';
 import { flagNightFactor } from './city_terrain.js';
 import { ASSET_DATA } from "./assets_data.js";
 import {
@@ -6321,7 +6321,8 @@ export class RCT3DRenderer {
       }
 
       const cityCitizen=e.properties.citizen;
-      if(cityCitizen&&cityCitizen.indoorLocation&&this.selectedEntityId!==e.id){
+      const interiorBuilding=cityCitizen?.indoorLocation&&this.cityDevelopment?.city?.building(cityCitizen.indoorLocation.buildingId);
+      if(cityCitizen?.indoorLocation&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air')){
         const sprite=this.entitySprites.get(e.id);
         if(sprite){sprite.visible=false;activeIds.add(e.id);}
         continue;
@@ -6939,10 +6940,10 @@ export class RCT3DRenderer {
           sprite.customDepthMaterial = depthMat;
         }
 
-        const isSleeping = !!e.properties?.life?.isSleeping && !!e.properties?.brain;
+        const isSleeping = !!e.properties?.life?.isSleeping && !!e.properties?.brain || !!cityCitizen&&cityCitizen.task==='energy'&&cityCitizen.targetId==null&&!cityCitizen.path.length&&!cityCitizen.indoorLocation;
         const isStandingTorch = !!e.properties?.torch;
 
-        if (isPossessed || e.properties?.citizen?.indoorLocation) {
+        if (isPossessed || (cityCitizen?.indoorLocation&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air'))) {
           sprite.visible = false;
         } else {
           sprite.visible = true;

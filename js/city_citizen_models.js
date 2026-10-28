@@ -71,7 +71,7 @@ export function splitGarmentSurface(data,mask){
 export class CityCitizenModels {
   constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/model/',import.meta.url)}={}){
     this.THREE=THREE;this.group=group;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearBatches=new Map();this.batches=new Map();this.motion=new WeakMap();this.clock=0;this.ready=false;this.error=null;
-    this.matrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.color=new THREE.Color();
+    this.matrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.lyingRotation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/2);this.color=new THREE.Color();
     this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});
     this.loading=this.load().catch(error=>{this.error=error.message;console.warn('Modelos dos cidadãos indisponíveis; usando sprites.',error.message);return false;});
   }
@@ -113,7 +113,7 @@ export class CityCitizenModels {
     // Animate walking from presentation time rather than traveled distance.
     // Distance-based frame changes tied the pose to simulation updates and
     // made each step visibly click at ordinary speed.
-     const clip=citizenAnimation(c,moved),pose=citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+     const sleeping=c.task==='energy'&&c.targetId==null&&!c.path?.length&&!c.indoorLocation,clip=citizenAnimation(c,moved),pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
     const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
     if(batch.count===batch.capacity){
@@ -126,7 +126,7 @@ export class CityCitizenModels {
       }batch.capacity=capacity;
     }
     const size=(entity.properties.render.size||1)*(perspective?1.05:1);
-    this.position.set(x,surfaceH+(inside?.z||0)+(c.ridingVehicleId? .18:0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
+    this.position.set(x,surfaceH+(inside?.z||0)+(c.ridingVehicleId? .18:0)+(sleeping?size*.27:0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);if(sleeping)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count,this.color);
     if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
     const capId=c.political?.partyCapId||c.campaign?.capGarmentId,partyCap=capId&&c.wardrobe?.find(g=>g.garmentId===capId),hat=partyCap||(Number.isInteger(c.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null);

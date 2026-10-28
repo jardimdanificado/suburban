@@ -470,9 +470,9 @@ export class CitySimulation {
         c.path = path; c.targetId = b.id; c.task = task; if (task === 'food') this.workMeals.issueVoucher(c, b); return;
       }
     }
-    c.task = null; c.targetId = null; c.action = task === 'food' ? 'Alimentos indisponíveis nas lojas locais' : home ? 'Sem acesso ao serviço' : 'Sem moradia';
+    c.task = task==='energy'&&!home?'energy':null; c.targetId = null; c.action = task==='energy'&&!home?'Dormindo na rua':task === 'food' ? 'Alimentos indisponíveis nas lojas locais' : home ? 'Sem acesso ao serviço' : 'Sem moradia';
     if (task === 'food' && (!c.foodShortageAt || this.minute - c.foodShortageAt >= 60)) { c.foodShortageAt = this.minute; this.economy.failedMeals++; this.log(`${c.entity.properties.name} não encontrou alimentos à venda.`, 'production', [c.id], { kind: 'food-shortage' }); }
-    if (task === 'energy') n.energy = clamp(n.energy + 0.1);
+    if (task === 'energy'&&home) n.energy = clamp(n.energy + 0.1);
   }
   performTask(c) {
     if(!syncCitizenInterior(this,c))return;
@@ -505,6 +505,7 @@ export class CitySimulation {
       if (n.food >= 95) { c.task = null; c.servicePaid = null; }
       return;
     }
+    if(c.task==='energy'&&c.targetId==null&&!c.homeUnitId){c.action='Dormindo na rua';c.needs.energy=clamp(c.needs.energy+.22);if(c.needs.energy>=95||(this.hour>=7&&this.hour<22&&c.needs.energy>65)||Math.min(c.needs.food,c.needs.water,c.needs.toilet)<20)c.task=null;return;}
     const b = this.building(c.targetId), n = c.needs;
     if (!b) { c.task = null; return; }
     const task = c.task;
