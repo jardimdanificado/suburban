@@ -6322,7 +6322,8 @@ export class RCT3DRenderer {
 
       const cityCitizen=e.properties.citizen;
       const interiorBuilding=cityCitizen?.indoorLocation&&this.cityDevelopment?.city?.building(cityCitizen.indoorLocation.buildingId);
-      if(cityCitizen?.indoorLocation&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air')){
+      const renderInside=cityCitizen?cityCitizen._renderInside??!!(cityCitizen.indoorLocation&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air')):false;
+      if(renderInside){
         const sprite=this.entitySprites.get(e.id);
         if(sprite){sprite.visible=false;activeIds.add(e.id);}
         continue;
@@ -6944,7 +6945,7 @@ export class RCT3DRenderer {
         const isSleeping = !!e.properties?.life?.isSleeping && !!e.properties?.brain || !!cityCitizen&&cityCitizen.task==='energy'&&cityCitizen.targetId==null&&!cityCitizen.path.length&&!cityCitizen.indoorLocation;
         const isStandingTorch = !!e.properties?.torch;
 
-        if (isPossessed || (cityCitizen?.indoorLocation&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air'))) {
+        if (isPossessed || renderInside) {
           sprite.visible = false;
         } else {
           sprite.visible = true;

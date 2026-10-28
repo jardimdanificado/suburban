@@ -23,13 +23,18 @@ function interiorRoute(b,from,to){
  const stair={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:from.z},landing={...stair,z:to.z};
  return [...route(from,stair),...route(stair,landing),...route(landing,to)];
 }
+function leaveEntrance(city,c){
+ if(c.task||c.path.length||c.conversation||c.deliveryId||c.mobilityTrip)return;
+ const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y),offsets=[[2,0],[0,2],[-2,0],[0,-2],[2,2],[-2,2],[-2,-2],[2,-2]],first=c.id%offsets.length;
+ for(let i=0;i<offsets.length;i++){const [dx,dy]=offsets[(first+i)%offsets.length],destination={x:x+dx+.5,y:y+dy+.5};if(!city.walkable(Math.floor(destination.x),Math.floor(destination.y)))continue;const path=city.findPath(c.entity,destination);if(path?.length){c.path=path;c.task='walk';c.targetId=null;c.action='Saindo da entrada do prédio';return;}}
+}
 
 function exit(city,c){
  const s=c.indoorLocation;if(!s)return true;
  const b=city.building(s.buildingId);if(!b||b.entity.destroyed){release(city,c);c.indoorLocation=null;return true;}
  if(b.constructionKind==='open-air'){release(city,c);c.indoorLocation=null;return true;}
  if(!s.exiting){release(city,c);s.exiting=true;s.roomType='circulation';c.action='Saindo do prédio';s.unitId=null;s.targetUnitId=null;s.path=interiorRoute(b,s.position||{x:b.door.x,y:b.door.y,z:0},{x:b.door.x,y:b.door.y,z:0});}
- if(!s.path.length){c.indoorLocation=null;return true;}return false;
+ if(!s.path.length){c.indoorLocation=null;leaveEntrance(city,c);return true;}return false;
 }
 function normalizeInterior(city,c){
  const old=c.indoorLocation;if(old&&!old.path){const building=city.building(old.buildingId),unit=city.units.get(old.unitId);old.path=[];old.targetUnitId=old.unitId;old.targetRoomType=old.roomType;old.position=building&&unit?point(building,unit):{x:c.entity.x,y:c.entity.y,z:0};}
@@ -40,7 +45,7 @@ export function advanceCitizenInterior(city,c,minutes=1){
  let distance=Math.max(0,minutes);
  while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001)s.path.shift();}
  s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));
- if(!s.path.length){if(s.exiting)c.indoorLocation=null;else{s.unitId=s.targetUnitId;s.roomType=s.targetRoomType;s.arrivedAt=city.minute;}}
+ if(!s.path.length){if(s.exiting){c.indoorLocation=null;leaveEntrance(city,c);}else{s.unitId=s.targetUnitId;s.roomType=s.targetRoomType;s.arrivedAt=city.minute;}}
 }
 export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'){
  normalizeInterior(city,c);
@@ -98,7 +103,10 @@ export function syncCitizenInterior(city,c){
  if(!room&&['energy','care','provisions','hygiene'].includes(task)){const home=city.housing.home(c);if(home?.buildingId===b.id)room=city.housing.units(home).find(u=>u.roomType===kind);if(!room&&kind==='bedroom')room=city.units.get(c.homeUnitId);}
  if(!room&&previous?.buildingId===b.id&&previous.targetRoomType===kind){const assigned=city.units.get(previous.targetUnitId);if(assigned&&activityCellAvailable(city,assigned,c,kind))room=assigned;}
  if(!room){const choices=b.units.filter(u=>u.roomType===kind);if(!choices.length&&['service','treatment'].includes(kind))choices.push(...b.units.filter(u=>u.roomType==='workspace'||u.roomType==='office'));if(!choices.length&&kind==='bedroom'&&!c.homeUnitId)choices.push(...b.units.filter(u=>u.roomType==='workspace'));if(!choices.length&&kind==='workspace')choices.push(...b.units.filter(u=>u.roomType==='office'));room=choices.find(u=>activityCellAvailable(city,u,c,kind));}
- if(!room){c.action=`Aguardando célula de ${kind} disponível`;return false;}
+ if(!room){
+  if(b.constructionKind!=='open-air'&&!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5){const from={x:b.door.x,y:b.door.y,z:0},lobby={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:0};c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:from,path:interiorRoute(b,from,lobby),task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}
+  c.action=`Aguardando célula de ${kind} disponível`;return false;
+ }
  return activityRoomReady(city,c,b,room,kind);
 }
 

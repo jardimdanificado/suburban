@@ -1,5 +1,5 @@
 import {queueMotion,sampleMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=party-caps-skin-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=indoor-motion-1';
 import {canStep,terrainWalkable} from './city_terrain.js';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
@@ -22,14 +22,17 @@ function renderSegmentWalkable(world,ax,ay,bx,by){
   }
   return true;
 }
-function sampleCitizenMotion(world,sample,now){
+export function sampleCitizenMotion(world,sample,now){
   const x=sample.entity.x,y=sample.entity.y,done=sampleMotion(sample,now);
   if(!renderSegmentWalkable(world,x,y,sample.entity.x,sample.entity.y)){
     // Keep the last valid rendered point and let later samples carry the
     // citizen around the corner. Snapping to the worker's endpoint made
     // turns and narrow passages look like visible simulation ticks.
-    sample.entity.x=x;sample.entity.y=y;return false;
+    sample.entity.x=x;sample.entity.y=y;sample.blockedSince??=now;
+    if(now-sample.blockedSince>=600&&terrainWalkable(world,Math.floor(sample.to.x),Math.floor(sample.to.y))){sample.entity.x=sample.to.x;sample.entity.y=sample.to.y;sample.points=[];sample.blockedSince=null;return true;}
+    return false;
   }
+  sample.blockedSince=null;
   return done;
 }
 
@@ -42,7 +45,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=party-caps-skin-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=indoor-motion-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });
@@ -90,6 +93,7 @@ export class CitySimulationBridge {
     // Unchanged graph nodes still hold authoritative positions, not an interpolation sample.
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
+    for(const citizen of this.city.citizens)delete citizen._renderInside;
     this.graph.apply(data.packet); bindCityState(this.city);
     this.time.tick = data.tick; this.time.elapsed = data.elapsed;
     this.city._statsCache = null;this.city._uiRevision=(this.city._uiRevision||0)+1;
@@ -101,6 +105,7 @@ export class CitySimulationBridge {
       let sample=this.motionSamples.get(c.id);const existing=!!sample;
       if(!sample){sample={id:c.id,from:{x:c.entity.x,y:c.entity.y},to:{}};this.motionSamples.set(c.id,sample);}
       sample.entity=c.entity;sample.citizen=c;sample.seen=this.city._uiRevision;
+      if(data.indoors)c._renderInside=!!data.indoors[i];
       sample.to.x=data.positions?.[at]===c.id?data.positions[at+1]:c.entity.x;
       sample.to.y=data.positions?.[at]===c.id?data.positions[at+2]:c.entity.y;
       c.entity.x=sample.to.x;c.entity.y=sample.to.y;
@@ -124,6 +129,7 @@ export class CitySimulationBridge {
     for(let i=0;i<positions.length;i+=3){
       const sample=this.motionSamples.get(positions[i]);
       if(!sample||sample.entity.destroyed)continue;
+      if(data.indoors)sample.citizen._renderInside=!!data.indoors[i/3];
       if(needs){const c=sample.citizen,at=i/3*needsStride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)c.needs[CITY_NEED_FIELDS[j]]=needs[at+j];c.happiness=needs[at+CITY_NEED_FIELDS.length];c.mood=needs[at+CITY_NEED_FIELDS.length+1];}
       const x=positions[i+1],y=positions[i+2],fromX=sample.to.x,fromY=sample.to.y;
       sample.from.x=fromX;sample.from.y=fromY;sample.to.x=x;sample.to.y=y;

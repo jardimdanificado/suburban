@@ -20,7 +20,7 @@ import { CityNature } from './city_nature.js';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-caps-skin-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady } from './city_interiors.js';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady } from './city_interiors.js?v=indoor-motion-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';

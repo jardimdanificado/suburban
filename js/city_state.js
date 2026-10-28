@@ -20,7 +20,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js?v=party-caps-skin-1';
+import { CitySimulation } from './city_simulation.js?v=indoor-motion-1';
 import { CityHistory } from './city_history.js';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js';
@@ -43,7 +43,7 @@ const prototypes = new Map([CityPaint,CityFiscal,CityInterventions,CityVehicles,
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
 const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision', 'routeCache', 'routeRevision','familyIndexDirty',
-  'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId']);
+  'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId', '_renderInside']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at
 // large populations; normal fields can be read directly.

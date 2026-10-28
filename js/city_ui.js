@@ -37,7 +37,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=initial-offices-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=party-caps-skin-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=indoor-motion-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

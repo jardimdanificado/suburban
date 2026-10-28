@@ -9,6 +9,8 @@ import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js';
+import {addArchitectureVariations} from './city_architecture_variations.js';
+import {syncSkybridges} from './city_skybridges.js';
 function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
 }
@@ -192,6 +194,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         facade.add(blades); group.userData.millBlades = blades;
       }
       addBuildingDetails(THREE,facade,b);
+      addArchitectureVariations(THREE,facade,b);
       const door = new THREE.Mesh(new THREE.BoxGeometry(.55, 1.4, .04), new THREE.MeshLambertMaterial({ color: 0x293e35 }));
       door.position.set(Math.floor(b.width / 2) + .5, .70, b.depth + .025); facade.add(door);
       const awning = new THREE.Mesh(new THREE.BoxGeometry(1.1, .12, .7), new THREE.MeshLambertMaterial({ color: b.type === 'market' ? 0xdca14b : 0xc9d9a1 }));
@@ -273,6 +276,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); });
     renderer.cityMeshes.delete(id);
   }
+  syncSkybridges(renderer,THREE,entities,world);
 }
 
 const CROP_VISUALS={
