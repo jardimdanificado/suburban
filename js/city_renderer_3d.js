@@ -13,12 +13,14 @@ function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
 }
 function roomCellGeometry(THREE,facadeMask,openingMask){
-  const g=new THREE.BufferGeometry(),v=[],colors=[],h=CITY_FLOOR_HEIGHT-.03,half=.485,wy=.95-(CITY_FLOOR_HEIGHT-h)/2,wh=.215,ww=.215;
+  const g=new THREE.BufferGeometry(),v=[],colors=[],h=CITY_FLOOR_HEIGHT,half=.5,wy=.95,wh=.215,ww=.215;
   const exterior=[1,1,1],interior=[.72,.65,.53];
   const quad=(a,b,c,d,color)=>{for(const point of [a,b,c,a,c,d]){v.push(...point);colors.push(...color);}};
   const wall=(axis,sign,bit)=>{
     const hasWindow=!!(openingMask&bit),wallColor=facadeMask&bit?exterior:interior;
-    const at=sign*half,innerAt=sign*(half-.03),lo=wy-wh,hi=wy+wh;
+    // Exterior faces reach the edge of their tile. Interior partitions stay
+    // slightly inset so neighboring rooms do not draw coplanar wall faces.
+    const at=sign*(facadeMask&bit?half:half-.015),innerAt=at-sign*.03,lo=wy-wh,hi=wy+wh;
     const face=(plane,color)=>{
       const rect=(a0,a1,y0,y1)=>{if(a1<=a0||y1<=y0)return;if(axis==='z')quad([a0,y0,plane],[a1,y0,plane],[a1,y1,plane],[a0,y1,plane],color);else quad([plane,y0,a0],[plane,y0,a1],[plane,y1,a1],[plane,y1,a0],color);};
       if(!hasWindow){rect(-half,half,0,h);return;}
