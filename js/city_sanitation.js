@@ -1,7 +1,6 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=toilet-staff-only-1';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=survival-capacity-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js?v=landlord-stock-market-1';
-import { reserveService } from './city_service_queue.js?v=furniture-farms-fertilizer-1';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 export class CitySanitation {
@@ -66,12 +65,16 @@ export class CitySanitation {
     return residents.some(p => { const r = this.city.relationships.view(p,c); return r && r.affection >= 65 && r.trust >= 50 && r.resentment<30; });
   }
   choose(c,task='toilet') {
+    // Count people already travelling as demand, without granting queue priority.
+    // Otherwise every simultaneous decision picks the same still-empty cubicle.
+    this.inboundMinute??=-1;
+    if(this.inboundMinute!==this.city.minute){this.inboundMinute=this.city.minute;this.inboundFacilities=new Map();for(const person of this.city.citizens){if(person.entity.destroyed)continue;const id=person.task==='toilet'?person.toiletTargetId:person.task==='hygiene'?person.hygieneTargetId:null;if(id)this.inboundFacilities.set(id,(this.inboundFacilities.get(id)||0)+1);}}
     const options = [...this.facilities.values()].filter(f => this.allowed(c, f) && this.city.units.get(f.unitId)?.roomType==='bathroom');
     options.sort((a, b) => this.score(c, a) - this.score(c, b));
     for (const f of options) {
       const b = this.city.building(f.buildingId), path = this.city.findPath(c.entity, b.door); if (path === null) continue;
+      const previous=c.task==='toilet'?c.toiletTargetId:c.task==='hygiene'?c.hygieneTargetId:null;if(previous)this.inboundFacilities.set(previous,Math.max(0,(this.inboundFacilities.get(previous)||0)-1));this.inboundFacilities.set(f.id,(this.inboundFacilities.get(f.id)||0)+1);
       if(task==='toilet')c.toiletTargetId=f.id;else c.hygieneTargetId=f.id;c.task=task;c.targetId=b.id;c.path=path;
-      if(task==='toilet')reserveService(this.city,c,b,'toilet',f.id);
       return true;
     }
     return false;
@@ -80,7 +83,7 @@ export class CitySanitation {
     const b = this.city.building(f.buildingId);
     const entrance=b.officeTenantOf?this.city.building(b.officeTenantOf)||b:b;
     const queued=(entrance.serviceQueue||[]).filter(q=>q.buildingId===b.id&&q.kind==='toilet'&&q.resource===f.id).length,busy=f.occupantId&&f.occupantId!==c.id&&this.city.minute<f.busyUntil;
-    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + queued*24+(busy?8:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
+    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + Math.max(queued,this.inboundFacilities?.get(f.id)||0)*24+(busy?8:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
   }
   addWaste(b, amount = 1) {
     const stored = Math.min(amount, inventoryFree(b)); b.inventory.lixo += stored; b.litter += amount - stored;
@@ -116,7 +119,7 @@ export class CitySanitation {
     const target=b||{id:`street:${place.cellKey}`,door:{x:place.x,y:place.y},entity:{properties:{name:'Via pública'}}},payer=place.scope==='street'?'treasury':this.ownerForCell(b.id,place.unitId),company=this.selectCompany(target),fee=Math.ceil(this.city.currency.price(180+Math.min(20,pile.amount)*80)*(payer==='treasury'?1.5:1));
     if(!company||(this.city.accounts.get(payer)?.balance||0)<fee){pile.jobId=null;return null;}
     const id=this.nextJobId++,accountId=`cleaning:${id}`;this.city.accounts.set(accountId,{name:`Limpeza urbana ${id}`,balance:0});if(!this.city.transfer(payer,accountId,fee,'Reserva de limpeza de fezes',{scope:place.scope,buildingId:place.buildingId??null,cellKey:place.cellKey})){this.city.accounts.delete(accountId);return null;}
-    const job={id,kind:'feces',scope:place.scope,buildingId:place.buildingId??null,unitId:place.unitId??null,cellKey:place.cellKey,door:{x:place.x,y:place.y},payerId:payer,accountId,providerId:company.id,fee,status:'waiting',workerId:null,labor:0,createdAt:this.city.minute};pile.jobId=id;this.jobs.push(job);return job;
+    const job={id,kind:'feces',scope:place.scope,buildingId:place.buildingId??null,unitId:place.unitId??null,cellKey:place.cellKey,door:{x:place.x,y:place.y},payerId:payer,accountId,providerId:company.id,fee,quantity:Math.min(20,pile.amount),status:'waiting',workerId:null,labor:0,createdAt:this.city.minute};pile.jobId=id;this.jobs.push(job);return job;
   }
   disgustNearby(place,offender){
     const city=this.city,amount=place.scope==='building'?city.building(place.buildingId)?.feces?.get(place.cellKey)?.amount:this.streetFeces.get(place.cellKey)?.amount;
@@ -276,11 +279,14 @@ export class CitySanitation {
       }
       if(worker.id!==company.ownerId){if(company.balance<company.wage){this.releaseCitizen(worker);continue;}city.payWage(worker,company);}
       job.labor+=1+(worker.skills.cleaning||0)/50;worker.action=job.scope==='street'?'Limpando fezes da via pública':'Limpando fezes do prédio';city.economy.practice(worker,'cleaning');
-      if(job.labor<12+Math.max(0,pile.amount-1)*8)continue;
-      if(inventoryFree(company)<pile.amount)continue;company.inventory.fezes+=pile.amount;city.economy.produced.fezes+=pile.amount;city.economy.recordGoods('feces-collected','fezes',pile.amount,site?.id,company.id);
-      if(job.scope==='building'){site.feces.delete(job.cellKey);site.fecesRevision=(site.fecesRevision||0)+1;}else this.streetFeces.delete(job.cellKey);this.fecesRevision++;this.cleanedFeces+=pile.amount;
-      const paid=city.transfer(job.accountId,company.accountId,city.accounts.get(job.accountId)?.balance||0,'Serviço de remoção de fezes',{jobId:job.id,scope:job.scope});job.status='completed';job.completedAt=city.minute;job.cleanedAmount=pile.amount;job.workerId=worker.id;worker.cleaningJobId=null;worker.task=null;worker.targetId=null;worker.path=[];worker.workCell=null;
-      city.history.record('service',job.scope==='street'?'Limpeza de fezes em via pública.':'Limpeza de fezes em propriedade privada.',[job.payerId,company.accountId,worker.accountId],{amount:paid?job.fee:0,jobId:job.id,scope:job.scope,buildingId:job.buildingId,cellKey:job.cellKey,quantity:pile.amount});
+      // New deposits must not keep moving the finish line of an existing job.
+      const quantity=Math.min(pile.amount,job.quantity??=Math.min(20,pile.amount));
+      if(job.labor<12+Math.max(0,quantity-1)*8)continue;
+      if(inventoryFree(company)<quantity)continue;company.inventory.fezes+=quantity;city.economy.produced.fezes+=quantity;city.economy.recordGoods('feces-collected','fezes',quantity,site?.id,company.id);
+      pile.amount-=quantity;pile.jobId=null;
+      if(job.scope==='building'){if(pile.amount<=0)site.feces.delete(job.cellKey);site.fecesRevision=(site.fecesRevision||0)+1;}else if(pile.amount<=0)this.streetFeces.delete(job.cellKey);this.fecesRevision++;this.cleanedFeces+=quantity;
+      const paid=city.transfer(job.accountId,company.accountId,city.accounts.get(job.accountId)?.balance||0,'Serviço de remoção de fezes',{jobId:job.id,scope:job.scope});job.status='completed';job.completedAt=city.minute;job.cleanedAmount=quantity;job.workerId=worker.id;worker.cleaningJobId=null;worker.task=null;worker.targetId=null;worker.path=[];worker.workCell=null;
+      city.history.record('service',job.scope==='street'?'Limpeza de fezes em via pública.':'Limpeza de fezes em propriedade privada.',[job.payerId,company.accountId,worker.accountId],{amount:paid?job.fee:0,jobId:job.id,scope:job.scope,buildingId:job.buildingId,cellKey:job.cellKey,quantity});
       city.reputation.completed(company,worker,'limpeza concluída',{jobId:job.id});city.log(`${job.scope==='street'?'A prefeitura':'O proprietário'} pagou a limpeza de fezes ${job.scope==='street'?'na via pública':`em ${site.entity.properties.name}`}.`,'sanitation',[worker.id],{kind:'feces-cleaned',jobId:job.id,scope:job.scope,buildingId:job.buildingId,amount:job.fee});
     }
   }

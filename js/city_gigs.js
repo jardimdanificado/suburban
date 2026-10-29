@@ -1,4 +1,4 @@
-import {activityRoomReady} from './city_interiors.js?v=toilet-staff-only-1';
+import {activityRoomReady} from './city_interiors.js?v=survival-capacity-1';
 
 const ACTIVE=new Set(['open','working']);
 const INTERRUPTIBLE=new Set(['leisure','walk','social','sit','outdoor_leisure']);
@@ -27,7 +27,7 @@ export class CityGigs{
  candidates(job){
   const city=this.city,b=city.building(job.buildingId);if(!b)return [];
   const point=job.kind==='gardening'?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;
-  const eligible=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.role?.includes('councilor')&&!c.jobId&&!(c.businessIds?.length)&&(!c.task||INTERRUPTIBLE.has(c.task))&&!c.indoorLocation&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!city.urgentNeed(c)&&c.needs.energy>25)
+  const eligible=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.role?.includes('councilor')&&!c.jobId&&!(c.businessIds?.length)&&(!c.task||INTERRUPTIBLE.has(c.task))&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!city.urgentNeed(c)&&c.needs.energy>25)
    .sort((a,z)=>Math.hypot(a.entity.x-point.x,a.entity.y-point.y)-Math.hypot(z.entity.x-point.x,z.entity.y-point.y)||a.id-z.id);
   job.availableCandidatePool=eligible.length;if(!eligible.length)return [];
   // A posted gig previously ran A* once for every resident just to find one
@@ -59,8 +59,23 @@ export class CityGigs{
    b.frontageCleanliness=Math.min(100,(b.frontageCleanliness??55)+35);
   }
  }
+ postNeededWork(){
+  const city=this.city;if(!city.citizens.some(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&!city.politics.officeHolder(c)))return;
+  let posted=0;
+  for(const b of city.buildings){
+   if(posted>=4)break;if(b.entity.destroyed||!b.active||b.constructionKind==='open-air')continue;
+   const dirtyInterior=(b.feces?.size||0)>0||(b.litter||0)>0||Number.isFinite(b.cleanliness)&&b.cleanliness<50;
+   const x=Math.floor(b.door.x),y=Math.floor(b.door.y);let dirtyFrontage=false;
+   for(let dy=-3;dy<=3&&!dirtyFrontage;dy++)for(let dx=-3;dx<=3;dx++){const pile=city.sanitation.streetFeces.get(`${x+dx},${y+dy}`);if(pile?.amount&&!pile.jobId&&Math.hypot(dx,dy)<=3){dirtyFrontage=true;break;}}
+   const tenant=b.units?.find(u=>u.tenantId&&city.accounts.has(u.tenantId))?.tenantId,owner=b.ownerId!=null?city.society.citizen(b.ownerId)?.accountId:b.municipal?'treasury':b.accountId;
+   if(dirtyInterior&&this.createCleaningOrder(tenant||owner,b.id,{scope:'interior'})){posted++;continue;}
+   if(dirtyFrontage&&this.createCleaningOrder(owner,b.id,{scope:'frontage'})){posted++;continue;}
+   if((b.repairNeeded||b.condition<70)&&this.createRepairOrder(owner,b.id))posted++;
+  }
+ }
  updateMinute(){
   const city=this.city;
+  if(city.minute%60===0&&city.hour>=7&&city.hour<20)this.postNeededWork();
   for(const job of this.jobs){if(!ACTIVE.has(job.status))continue;const b=city.building(job.buildingId);if(!b){this.cancel(job,'imóvel removido');continue;}
    let worker=city.society.citizen(job.workerId);
    if(worker&&(worker.entity.destroyed||city.urgentNeed(worker))){this.release(job,worker);worker=null;}
@@ -76,7 +91,7 @@ export class CityGigs{
    }else{
     const goal=this.frontagePoint(b);if(Math.hypot(worker.entity.x-goal.x,worker.entity.y-goal.y)>.4||worker.path.length)continue;
    }
-   job.progress++;worker.action=job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'farming':'cleaning');
+   job.progress++;worker.action=job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'agriculture':'cleaning');
    if(job.progress<job.required)continue;
    if(job.kind==='cleaning'||!job.kind)this.clean(job,b);else if(job.kind==='repair'){b.condition=Math.min(100,(b.condition||0)+35);b.repairNeeded=b.condition<70;}else if(job.kind==='gardening'){const planted=city.nature.spawn(job.point.tileX,job.point.tileY,'berry',{buildingId:b.id});if(!planted){this.cancel(job,'canteiro ocupado antes do plantio');continue;}}
    const paid=city.transfer(job.accountId,worker.accountId,city.accounts.get(job.accountId)?.balance||0,`Pagamento por bico de ${job.kind||'faxina'}`,{gigId:job.id,buildingId:b.id,scope:job.scope});

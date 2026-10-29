@@ -1,6 +1,6 @@
 import {CityFurniture} from './city_furniture.js?v=deep-perf-3';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
-import {CitySupplies,pocket} from './city_supplies.js';
+import {CitySupplies,pocket} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax} from './city_sales_tax.js';
@@ -25,7 +25,7 @@ import {skybridgeLinks} from './city_skybridges.js?v=short-passarelas-bridge-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=toilet-staff-only-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=survival-capacity-1';
 import {interiorRoute} from './city_interior_layout.js';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
@@ -34,13 +34,13 @@ import { CityBank } from './city_bank.js?v=landlord-stock-market-1';
 import { quarryDeposits } from './city_terrain.js?v=shared-origin-paths-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
-import { CityHousing, HOUSING_RULES } from './city_housing.js?v=landlord-stock-market-1';
-import { CitySanitation } from './city_sanitation.js?v=toilet-staff-only-1';
+import { CityHousing, HOUSING_RULES } from './city_housing.js?v=survival-capacity-1';
+import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=pocket-water-cutaway-1';
-import { CityWorkMeals } from './city_work_meals.js?v=refectory-survival-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=landlord-stock-market-1';
-import { CityLogistics } from './city_logistics.js?v=furniture-farms-fertilizer-1';
-import { CityGigs } from './city_gigs.js?v=landlord-stock-market-1';
+import { CityWorkMeals } from './city_work_meals.js?v=survival-capacity-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=survival-capacity-1';
+import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
+import { CityGigs } from './city_gigs.js?v=survival-capacity-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=investment-plan-reuse-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=landlord-stock-market-1';
@@ -85,7 +85,7 @@ const URGENT_NEEDS=[['water',18,0],['food',18,0],['health',20,5],['energy',12,0]
 const SERVICE_PRICES={food:180,water:35,health:240,leisure:25,social:0,energy:0,hygiene:0,toilet:0};
 const SERVICE_RATES={food:5,water:8,hygiene:4,social:1.5,leisure:1,health:2};
 const SERVICE_ACTIONS={food:'Comendo no mercado',water:'Bebendo água',energy:'Dormindo',hygiene:'Cuidando da higiene',toilet:'Usando o banheiro',social:'Procurando companhia para conversar',leisure:'Descansando no centro de lazer',health:'Recebendo atendimento'};
-const ESSENTIAL_TASKS=new Set(['water','food','provisions','workmeal','health','toilet','energy']);
+const ESSENTIAL_TASKS=new Set(['water','food','supplies','lake-water','provisions','workmeal','health','toilet','energy']);
 const INTERRUPTIBLE_TASKS=new Set(['work','manage','leisure','social','clean','walk']);
 const CITY_FEED_LIMIT=128,CITY_FEED_TRIM=64;
 const clamp = n => Math.max(0, Math.min(100, n));
@@ -373,7 +373,7 @@ export class CitySimulation {
   }
   rentUnit(citizenId, unitId) {
     const c = this.society.citizen(citizenId), u = this.units.get(unitId);
-    if (!c || !u || !this.building(u.buildingId) || !['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing'].includes(this.building(u.buildingId).type) || (u.ownerId !== c.accountId && (!u.forRent || u.ownerId === 'treasury')) || (u.tenantId && u.tenantId !== c.accountId)) return this.fail('Espaço indisponível para moradia.');
+    if (!c || !u || !this.building(u.buildingId) || !['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing'].includes(this.building(u.buildingId).type) || (u.ownerId !== c.accountId && !u.forRent) || (u.tenantId && u.tenantId !== c.accountId)) return this.fail('Espaço indisponível para moradia.');
     const payer = this.payerFor(c);
     if (u.ownerId !== c.accountId && u.ownerId !== payer && this.accounts.get(payer).balance < u.rent) return this.fail('Saldo insuficiente para o primeiro aluguel.');
     if (c.homeUnitId === u.id) return u;
@@ -600,7 +600,7 @@ export class CitySimulation {
     else if (n.health < 45) { task = 'health'; type = 'clinic'; }
     else if (n.water < 45) { task = 'water'; type = 'utility'; }
     else if (n.food < 45) { task = 'food'; type = 'market'; }
-    else if (n.toilet < 30) { task = 'toilet'; type = 'toilet'; }
+    else if (n.toilet < 45) { task = 'toilet'; type = 'toilet'; }
     else if (n.energy < 25 || ((this.hour >= 22 || this.hour < 6) && n.energy < 80)) { task = 'energy'; type = 'home'; }
     else if (n.hygiene < 35) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
@@ -967,8 +967,9 @@ export class CitySimulation {
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
-      const completingEssential = !c.path.length && (!['toilet','food','health'].includes(c.task)||!!c.indoorLocation?.unitId&&!c.indoorLocation?.path?.length) && ESSENTIAL_TASKS.has(c.task) && n[c.task === 'provisions' || c.task === 'workmeal' ? 'food' : c.task] < (c.task==='energy'?18:75) && !(urgent==='health'&&n.health<10);
-      if (!c.deliveryId && !c.cleaningJobId && !c.informalJobId && urgent && (['workmeal','provisions'].includes(c.task)?'food':c.task) !== urgent && !completingEssential && age >= 6) { c.task = null; c.path = []; }
+      const taskNeed=c.task==='supplies'?this.supplies.need(c):c.task==='lake-water'?'water':['provisions','workmeal'].includes(c.task)?'food':c.task;
+      const completingEssential = !c.path.length && (!['toilet','food','health'].includes(c.task)||!!c.indoorLocation?.unitId&&!c.indoorLocation?.path?.length) && ESSENTIAL_TASKS.has(c.task) && n[taskNeed] < (c.task==='energy'?18:75) && !(urgent==='health'&&n.health<10);
+      if (!c.deliveryId && !c.cleaningJobId && !c.informalJobId && urgent && taskNeed !== urgent && !completingEssential && age >= 6) { c.task = null; c.path = []; }
       if(!c.deliveryId&&!urgent&&!c.conversation&&(INTERRUPTIBLE_TASKS.has(c.task)||(c.task==='energy'&&n.energy>65))){
         for(const child of this.childrenOf(c.id))if(this.society.age(child)<6&&Math.min(child.needs.food,child.needs.water,child.needs.hygiene,child.needs.social)<25){c.task=null;c.path=[];break;}
       }

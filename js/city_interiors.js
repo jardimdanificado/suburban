@@ -1,6 +1,6 @@
 import {roomFurniture} from './city_furniture_catalog.js';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {queueService} from './city_service_queue.js?v=furniture-farms-fertilizer-1';
+import {queueService} from './city_service_queue.js?v=survival-capacity-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js';
 // Outdoor coordinates remain the navigation anchor at the entrance. Interior
 // position, circulation and floor changes are separate physical coordinates.
@@ -95,6 +95,7 @@ export function syncCitizenInterior(city,c){
  if(!s&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)))return true;
  normalizeInterior(city,c);
  const fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
+ if(task==='energy'&&!c.homeUnitId&&c.targetId!=null){c.task=null;c.targetId=null;c.path=[];c.action='Procurando um lugar para dormir';return previous?exit(city,c):true;}
  if(task==='toilet'){
   const facility=city.sanitation.facilities.get(c.toiletTargetId);
   if(!facility||!city.sanitation.allowed(c,facility)){
@@ -154,6 +155,9 @@ export function syncCitizenInterior(city,c){
  if(b.constructionKind!=='open-air'&&(task==='toilet'||task==='food'||task==='workmeal'||task==='supplies')&&!(previous?.buildingId===b.id&&previous.targetUnitId===room?.id&&previous.targetRoomType===kind)){
   const facility=task==='toilet'?city.sanitation.facilities.get(c.toiletTargetId):null,ready=!!room&&activityCellAvailable(city,room,c,kind)&&(!facility||!facility.occupantId||facility.occupantId===c.id||city.minute>=facility.busyUntil);
   if(!queueService(city,c,b,task,task==='toilet'?c.toiletTargetId:'dining',ready))return false;
+ }
+ if(b.constructionKind!=='open-air'&&['work','manage','health','water','hygiene','shopping','job-interview','vote','council-session'].includes(task)&&(!room||c.serviceQueue?.buildingId===b.id&&c.serviceQueue.kind===task)){
+  if(!queueService(city,c,b,task,`room:${kind}`,!!room&&activityCellAvailable(city,room,c,kind)))return false;
  }
  if(!room){
   // A full public shelter must not leave a homeless person waiting forever

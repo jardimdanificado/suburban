@@ -1,7 +1,7 @@
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {setupOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
-import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js?v=toilet-staff-only-1';
+import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js?v=survival-capacity-1';
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
@@ -215,23 +215,26 @@ export class CityDevelopment {
   }
   planBasicHousing() {
     const city=this.city,needs=city.welfare.conditions(),pending=this.projects.filter(p=>!p.cancelled&&p.status!=='completed');
-    const vacant=[...city.housing.homes.values()].filter(h=>city.housing.isSocial(h)&&city.housing.units(h).every(u=>!u.tenantId)).length;
+    const vacant=[...city.housing.homes.values()].filter(h=>city.housing.isSocial(h)&&city.housing.hasBathroom(h)&&city.housing.units(h).some(u=>u.roomType==='bedroom')&&city.housing.units(h).every(u=>!u.tenantId)&&!city.housing.residents(h).length).length;
     const queued=pending.filter(p=>['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)&&p.service==='building');
     const expansions=pending.filter(p=>['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)&&p.service==='expansion');
-    const planned=[...queued,...expansions].reduce((n,p)=>{const b=city.building(p.buildingId);return n+Math.floor((2*(p.width??b?.width??0)+2*(p.depth??b?.depth??0)-4)/2)*p.floors;},0);
-    if(needs.homeless<=vacant+planned || queued.length+expansions.length>=2)return;
+    const planned=[...queued,...expansions].reduce((n,p)=>{const b=city.building(p.buildingId),perimeter=Math.max(0,2*(p.width??b?.width??0)+2*(p.depth??b?.depth??0)-4),floors=p.floors||0;if(p.type==='popular_luxury_housing')return n+floors;if(p.type==='popular_housing')return n+Math.max(0,perimeter-1)*floors;return n+Math.max(0,perimeter*floors-(p.service==='building'?1:0));},0);
+    const limit=Math.max(2,Math.min(10,Math.ceil(needs.homeless/48)));
+    if(needs.homeless<=vacant+planned || queued.length+expansions.length>=limit)return;
     const expandable=city.buildings.filter(b=>['super_popular_housing','popular_housing','popular_luxury_housing'].includes(b.type)&&!b.entity.destroyed&&b.floors<12&&b.units.every(u=>u.ownerId==='treasury')&&!pending.some(p=>p.buildingId===b.id));
     expandable.sort((a,b)=>a.floors-b.floors||a.id-b.id);
     for(const b of expandable){
-      const perFloor=Math.max(1,Math.floor((2*b.width+2*b.depth-4)/2)),floors=Math.min(2,12-b.floors,Math.ceil((needs.homeless-vacant-planned)/perFloor));
+      const perimeter=2*b.width+2*b.depth-4,perFloor=b.type==='popular_luxury_housing'?1:Math.max(1,perimeter-(b.type==='popular_housing'?1:0)),floors=Math.min(2,12-b.floors,Math.ceil((needs.homeless-vacant-planned)/perFloor));
       const cells=b.width*b.depth*floors,cost=cells*DEVELOPMENT_RULES.stonePerCell*city.economy.goods.pedra.price+Math.ceil(cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell)*DEVELOPMENT_RULES.municipalMultiplier);
       if(city.treasury<cost+needs.reserve)continue;
       const project=this.beginExpansion('treasury',b.id,{floors});if(project){project.priority=needs.homeless>needs.population*.3?150:100;return;}
     }
     const lots=this.plots.filter(p=>p.ownerId==='treasury'&&!p.projectId&&!p.buildingId&&!['farm','quarry'].includes(p.type)&&p.width>=3&&p.depth>=3).sort((a,b)=>Math.hypot(a.x-city.spawn.x,a.y-city.spawn.y)-Math.hypot(b.x-city.spawn.x,b.y-city.spawn.y));
-    const cells=3*3*4,cost=cells*DEVELOPMENT_RULES.stonePerCell*city.economy.goods.pedra.price+Math.ceil(cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell)*1.5);
-    if(city.treasury<cost+needs.reserve)return;
-    for(const lot of lots.slice(0,8)){const project=this.beginProject('treasury',lot.id,needs.homeless>needs.population*.5?'super_popular_housing':'popular_housing',{width:3,depth:3,floors:4,priority:needs.homeless>needs.population*.3?150:95});if(project)break;}
+    for(const lot of lots.slice(0,8)){
+      const width=Math.min(5,lot.width),depth=Math.min(5,lot.depth),cells=width*depth*4,cost=cells*DEVELOPMENT_RULES.stonePerCell*city.economy.goods.pedra.price+Math.ceil(cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell)*1.5);
+      if(city.treasury<cost+needs.reserve)continue;
+      const project=this.beginProject('treasury',lot.id,needs.homeless>needs.population*.5?'super_popular_housing':'popular_housing',{width,depth,floors:4,priority:needs.homeless>needs.population*.3?150:95});if(project)break;
+    }
   }
   cityRoadNeedsRepair() {
     const out = [];
@@ -471,7 +474,15 @@ export class CityDevelopment {
     if (!project || project.cancelled || project.status === 'completed') return false;
     if (project.inventory.pedra < project.stone) return false;
     if(['work','manage'].includes(c.task)){c.task='construction';c.workProjectId=project.id;c.targetId=project.builderId||c.targetId;}
-    const index=Math.max(0,Math.floor(project.labor/Math.max(1,DEVELOPMENT_RULES.laborPerCell))),plot=this.plots.find(p=>p.id===project.plotId);
+    const plot=this.plots.find(p=>p.id===project.plotId),parallel=project.service==='building'||project.service==='expansion';
+    let assignment=parallel?c.constructionAssignment:null;
+    if(parallel&&(!assignment||assignment.projectId!==project.id||assignment.labor>=DEVELOPMENT_RULES.laborPerCell)){
+      const next=project.nextWorkCellIndex??Math.floor(project.labor/Math.max(1,DEVELOPMENT_RULES.laborPerCell));
+      project.nextWorkCellIndex=next+1;
+      const cells=Math.max(1,(project.width||plot?.width||1)*(project.depth||plot?.depth||1)*(project.floors||1));
+      assignment=c.constructionAssignment={projectId:project.id,index:next%cells,labor:0};
+    }
+    const index=assignment?assignment.index:Math.max(0,Math.floor(project.labor/Math.max(1,DEVELOPMENT_RULES.laborPerCell)));
     if(project.service==='expansion'){
       const building=this.city.building(project.buildingId),cells=building?.units.filter(u=>u.z===building.floors-1&&!['bathroom','dining'].includes(u.roomType));
       if(cells?.length&&!activityRoomReady(this.city,c,building,cells[index%cells.length],'workspace'))return true;
@@ -479,7 +490,9 @@ export class CityDevelopment {
       const tile=project.service==='bridge'?project.door:['road','road-repair'].includes(project.service)?project.path[Math.min(project.path.length-1,Math.floor(project.labor/DEVELOPMENT_RULES.roadLaborPerTile))]:plot?{x:plot.x+(index%(project.width||plot.width))+.5,y:plot.y+Math.floor(index/(project.width||plot.width))%(project.depth||plot.depth)+.5}:project.door;
       if(!outdoorCellReady(this.city,c,{id:project.id,entity:{x:0,y:0}},{id:`${project.id}:${index}`,x:tile.x-.5,y:tile.y-.5,z:plot?Math.floor(index/((project.width||plot.width)*(project.depth||plot.depth))):0},true))return true;
     }
+    const previousLabor=project.labor;
     project.status = 'building'; project.labor = Math.min(project.requiredLabor, project.labor + 1 + c.skills.construction / 50);
+    if(assignment)assignment.labor+=project.labor-previousLabor;
     if (project.service === 'road' || project.service === 'road-repair') { const tile = project.path[Math.min(project.path.length - 1, Math.floor(project.labor / DEVELOPMENT_RULES.roadLaborPerTile))]; project.door = { ...tile }; }
     this.city.economy.practice(c, 'construction'); this.complete(project); return true;
   }

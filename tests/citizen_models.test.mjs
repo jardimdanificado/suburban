@@ -24,7 +24,7 @@ test('OBJ parser triangulates quads, resolves negative indices and rejects inval
  assert.throws(()=>parseCitizenOBJ('v 0 0 0'));
 });
 test('animation distinguishes actual movement, on-site work, idle and bicycle poses',()=>{
- assert.equal(citizenAnimation({task:null,path:[]}), 'idle');assert.equal(citizenAnimation({task:'work',path:[]}), 'use');assert.equal(citizenAnimation({task:'work',path:[{}]},true),'run');
+ assert.equal(citizenAnimation({task:null,path:[]}), 'idle');assert.equal(citizenAnimation({task:'work',path:[],workCell:{x:0,y:0}}), 'use');assert.equal(citizenAnimation({task:'work',path:[{}]},true),'run');
  assert.equal(citizenAnimation({task:'work',path:[{}]},false),'idle');assert.equal(citizenAnimation({ridingVehicleId:1,ridingVehicleKind:'bicicleta',mobilityTrip:{stage:'riding'}},true),'pedal');assert.deepEqual(citizenFrame('mount',.3),{clip:'use',frame:0});assert.deepEqual(citizenFrame('passenger',.3),{clip:'use',frame:0});
  assert.deepEqual([0,.125,.25].map(time=>citizenFrame('pedal',time).frame),[0,2,4]);
  assert.notEqual(citizenFrame('run',0).frame,citizenFrame('run',.15).frame);assert.equal(citizenFrame('use',.5).frame,0);assert.equal(citizenFrame('seated',.5).frame,2);assert.equal(citizenFrame('use',.75).frame,1);
@@ -33,7 +33,7 @@ test('1024 people share at most nine frame batches and preserve political colors
  const {model,group,requests}=await models();model.begin(.016,1);
  const people=Array.from({length:1024},(_,id)=>person(id));
  for(let i=0;i<people.length;i++){const e=people[i];e.properties.render.color=i;assert(model.add(e,3));}model.end();assert.equal(group.meshes.size,1);const b=[...model.batches.values()][0];assert.equal(b.mesh.count,1024);assert.equal(b.mesh.colors[0],0);assert.equal(b.mesh.colors[900],900);assert.equal(b.mesh.matrices[0].position.y,3);assert.equal(requests.length,9);
- model.begin(.05,1);for(let i=0;i<people.length;i++){const e=people[i];if(i%3===0)e.x+=1;else if(i%3===1)e.properties.citizen.task='work';model.add(e,3);}model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),1024);assert(group.meshes.size<=9);assert(group.meshes.size>=7);
+ model.begin(.05,1);for(let i=0;i<people.length;i++){const e=people[i];if(i%3===0)e.x+=1;else if(i%3===1){e.properties.citizen.task='work';e.properties.citizen.workCell={x:e.x,y:e.y};}model.add(e,3);}model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),1024);assert(group.meshes.size<=9);assert(group.meshes.size>=7);
  model.begin(.016,1);model.end();assert.equal(b.mesh.count,0);
 });
 test('heading follows movement, indoor bodies are shown, first-person bodies stay hidden, pause freezes animation',async()=>{
@@ -49,11 +49,11 @@ test('a failed asset leaves the renderer able to use its existing sprite fallbac
  const model=new CityCitizenModels(THREE,{add(){},remove(){}},{fetchAsset:async()=>({ok:false,status:404})});await model.loading;assert(!model.ready);assert.match(model.error,/404/);assert.equal(model.add(person(1),0),false);
 });
 
-test('walking frames advance only when changing tile and freeze while paused',async()=>{
+test('walking frames advance each quarter tile and freeze while paused',async()=>{
  const {model}=await models(),e=person(71);e.properties.citizen.path=[{x:10,y:0}];model.begin(.01,1);model.add(e,0);e.x=1;model.begin(.01,1);model.add(e,0);model.end();
  const pose=()=>[...model.batches].find(([key,b])=>key.startsWith('run')&&b.count)?.[0],first=pose();assert(first);
  for(let i=0;i<30;i++){model.begin(.1,2);model.add(e,0);model.end();}
- assert.equal(pose(),first);e.x=1.4;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),first);e.x=2;model.begin(.1,1);model.add(e,0);model.end();const moving=pose();assert.notEqual(moving,first);model.begin(.1,0);model.add(e,0);model.end();assert.equal(pose(),moving);
+ assert.equal(pose(),first);e.x=1.24;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),first);e.x=1.25;model.begin(.1,1);model.add(e,0);model.end();assert.notEqual(pose(),first);e.x=2;model.begin(.1,1);model.add(e,0);model.end();const moving=pose();assert.notEqual(moving,first);model.begin(.1,0);model.add(e,0);model.end();assert.equal(pose(),moving);
 });
 test('stationary citizens never cycle through run frames just because their path is still set',async()=>{
  const {model}=await models(),e=person(71);e.properties.citizen.path=[{x:10,y:0}];
@@ -70,8 +70,8 @@ test('bicycle riders pedal through run frames and use frame 0 while boarding or 
  e.properties.citizen.mobilityTrip={stage:'riding'};
  model.begin(0,1);model.add(e,0);model.end();assert.equal(pose(),'run:0');
  model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:0');
- e.x=1;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:2');
- e.x=2;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:4');
+ e.x=.25;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:2');
+ e.x=.5;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:4');
  e.properties.citizen.mobilityTrip.stage='boarding';model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:0');
  e.properties.citizen.mobilityTrip=null;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:0');
  e.properties.citizen.ridingVehicleKind='patinete';assert.equal(citizenAnimation(e.properties.citizen,true),'glide');
@@ -94,4 +94,24 @@ test('citizens wearing different colored clothes share an instance batch without
  const {model}=await models();model.begin(.01,1);
  for(let i=0;i<100;i++){const e=person(i);e.properties.citizen.wardrobe=[{piece:'camisa',color:i%2?'#ff0000':'#0000ff'}];model.add(e,0);}
  model.end();const batch=model.batches.get('idle:0:camisa');assert.equal(batch.count,100);assert.equal(batch.clothingMesh.colors[0],0x0000ff);assert.equal(batch.clothingMesh.colors[99],0xff0000);assert.deepEqual(batch.mesh.matrices[99],batch.clothingMesh.matrices[99]);
+});
+
+ test('distance cadence accumulates diagonal substeps and accounts for multi-tile updates',async()=>{
+ const {model}=await models(),e=person(0);e.properties.citizen.path=[{x:10,y:10}];
+ const pose=()=>[...model.batches].find(([key,b])=>b.count)?.[0];
+ const draw=()=>{model.begin(.1,1);model.add(e,0);model.end();};
+ draw();e.x=.1;e.y=.1;draw();assert.equal(pose(),'run:0');
+ e.x=.2;e.y=.2;draw();assert.equal(pose(),'run:1');
+ e.x+=2;draw();assert.equal(pose(),'run:2');
+ const heading=[...model.batches.values()].find(b=>b.count).mesh.matrices[0].angle;assert.equal(heading,Math.PI/2);
+ for(let i=0;i<10;i++)draw();assert.equal(pose(),'run:2');
+ });
+
+test('rapid movement cannot flicker poses or skip full cycles between worker snapshots',async()=>{
+ const {model}=await models(),e=person(0);e.properties.citizen.path=[{x:100,y:0}];
+ const draw=dt=>{model.begin(dt,1);model.add(e,0);model.end();};const pose=()=>[...model.batches].find(([,b])=>b.count)?.[0];
+ draw(.01);e.x=1.25;draw(.01);assert.equal(pose(),'run:1');
+ for(let i=0;i<5;i++){e.x+=.25;draw(.01);assert.equal(pose(),'run:1');}
+ e.x+=1.25;draw(.1);assert.equal(pose(),'run:2');
+ for(let i=0;i<10;i++)draw(.1);assert.equal(pose(),'run:2');
 });

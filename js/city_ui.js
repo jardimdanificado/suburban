@@ -32,7 +32,7 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js?v=furniture-farms-fertilizer-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=survival-capacity-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
@@ -40,7 +40,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=investment-plan-reuse-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=landlord-stock-market-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=shared-origin-paths-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=survival-capacity-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -793,11 +793,11 @@ export class CityUI {
     if(['vehicles','parking','rentals','models'].includes(this.view())){renderMobility(this,p);return;}
     const city=this.city,system=city.logistics,pending=system.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
     if(this.view()==='informal'){
-      const offers=pending.filter(s=>!s.carrierId&&s.fee>0&&!s.driverId).sort((a,b)=>a.createdAt-b.createdAt),active=pending.filter(s=>!s.carrierId&&s.driverId),recent=system.shipments.filter(s=>s.status==='delivered'&&!s.carrierId&&s.informalDriverId).slice(-30).reverse();
+      const offers=pending.filter(s=>!s.carrierId&&s.fee>0&&!s.driverId).sort((a,b)=>a.createdAt-b.createdAt),active=pending.filter(s=>!s.carrierId&&s.fee>0&&s.driverId&&s.informalDriverId===s.driverId),recent=system.shipments.filter(s=>s.status==='delivered'&&!s.carrierId&&s.fee>0&&s.informalDriverId).slice(-30).reverse();
       p.metrics([['OFERTAS',offers.length,C.gold],['ACEITAS',active.length,C.cyan],['CONCLUÍDAS',recent.length,C.green]]);
       p.heading('FRETES DISPONÍVEIS PARA AUTÔNOMOS');p.note('O pagador deposita o frete em garantia. Um adulto sem emprego ou negócio pode aceitar a carga; a remuneração é liberada quando a mercadoria chega.');
       p.table([{label:'Carga',weight:1.5},{label:'Origem / destino',weight:2},{label:'Pagamento'},{label:'Espera'}],offers.map(s=>({cells:[`${GOODS[s.good]?.label||s.good} × ${s.quantity}`,`${s.seller.entity?.properties.name||s.seller.name} → ${s.buyer.entity?.properties.name||s.buyer.name}`,money(s.fee),stamp(s.createdAt)],click:()=>this.openPanel({selectedShipmentId:s.id})})),{empty:'Nenhuma oferta informal aguardando transportador.'});
-      p.heading('EM ENTREGA');for(const s of active){const c=city.society.citizen(s.driverId);p.record(`Frete #${s.id} · ${GOODS[s.good]?.label||s.good} × ${s.quantity}`,`${name(c?.entity)} · ${money(s.fee)} · ${s.deliveryLeg==='delivery'?'a caminho do destino':'indo buscar a carga'}`,()=>this.openPanel({selectedShipmentId:s.id}));}
+      p.heading('EM ENTREGA');for(const s of active){const c=city.society.citizen(s.driverId);p.record(`Frete #${s.id} · ${GOODS[s.good]?.label||s.good} × ${s.quantity}`,`${name(c?.entity)} · ${money(s.fee)} · ${c?.deliveryLeg==='delivery'?'a caminho do destino':'indo buscar a carga'}`,()=>this.openPanel({selectedShipmentId:s.id}));}
       p.heading('SERVIÇOS CONCLUÍDOS');for(const s of recent){const c=city.society.citizen(s.informalDriverId);p.record(`Frete #${s.id} · ${GOODS[s.good]?.label||s.good} × ${s.quantity}`,`${name(c?.entity)} · recebeu ${money(s.fee)} · ${stamp(s.completedAt)}`,()=>this.openPanel({selectedShipmentId:s.id}));}
       return;
     }

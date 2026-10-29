@@ -111,24 +111,25 @@ export class CityCitizenModels {
     }
     this.ready=true;return true;
   }
-  begin(dt=0,speed=1){this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
+  begin(dt=0,speed=1){this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
   add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,vehicleAngle=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
     const inside=c.ridingVehicleId?null:c._renderIndoorPosition||c.indoorLocation?.position,x=inside?.x??entity.x,y=inside?.y??entity.y;
     let motion=this.motion.get(entity);
-     if(!motion){motion={x,y,tileX:Math.floor(x),tileY:Math.floor(y),tileSteps:0,angle:0,walkDistance:0};this.motion.set(entity,motion);}
+     if(!motion){motion={x,y,angle:0,walkDistance:0,walkFrame:0,lastStepAt:-Infinity};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
-     if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
+     if(moved){motion.angle=Math.atan2(dx,dy);if(!this.animationPaused)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle;
-    const tileX=Math.floor(x),tileY=Math.floor(y);
-    if(tileX!==motion.tileX||tileY!==motion.tileY){motion.tileSteps++;motion.tileX=tileX;motion.tileY=tileY;}
-    // A pending path is not movement. Hold the travel pose between tile changes;
+    // Keep quarter-tile footsteps, but present adjacent poses instead of skipping
+    // a full animation cycle when a worker snapshot jumps several tiles.
+    if(moved&&!this.animationPaused&&motion.walkDistance+1e-8>=.25&&this.clock-motion.lastStepAt>=.1-1e-8){motion.walkFrame++;motion.walkDistance=Math.max(0,motion.walkDistance%.25);motion.lastStepAt=this.clock;}
+    // A pending path is not movement. Hold the travel pose between footsteps;
     // work animations still use the simulation's presentation clock.
     const traveling=moved||!!c.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
-    const sleeping=citizenIsSleeping(c),clip=citizenAnimation(c,traveling),animationTime=clip==='run'||clip==='pedal'?motion.tileSteps/8:this.clock,pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,animationTime,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    const sleeping=citizenIsSleeping(c),clip=citizenAnimation(c,traveling),animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:this.clock,pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,animationTime,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}

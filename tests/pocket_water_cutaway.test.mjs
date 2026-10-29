@@ -44,3 +44,12 @@ test('clearing a desktop selection also clears the inspecting dossier cutaway st
  const {CityDesktop}=await import('../js/city_desktop.js');let cleared=0;const state={selectedProjectId:8,interiorView:{buildingId:11,floor:2},setInteriorView(value){this.interiorView=value;cleared++;}},desktop={manager:{windows:[{state}]},lastSelected:{id:11}};
  CityDesktop.prototype.setSelection.call(desktop,null);assert.equal(state.interiorView,null);assert.equal(desktop.lastSelected,null);assert.equal(cleared,1);
 });
+
+test('urgent hunger selects actual food and does not cancel replenishment on the next minute',()=>{
+ const {city,c,b}=fixture();c.needs.food=5;c.needs.water=95;c.task=null;c.deliveryId=null;c.cleaningJobId=null;c.informalJobId=null;c.mobilityTrip=null;c.ridingVehicleId=null;c.workMeal=null;
+ const hall=city.buildings.find(b=>b.type==='townhall');for(const good in hall.inventory)hall.inventory[good]=0;c.entity.x=hall.door.x;c.entity.y=hall.door.y;
+ assert(city.supplies.route(c));assert.equal(c.task,'supplies');assert(city.economy.mealOffer(city.building(c.targetId),c));assert.notEqual(c.targetId,hall.id);
+ const destination=c.targetId,choose=city.chooseTask.bind(city);let cancelled=0;city.chooseTask=person=>{if(person===c)cancelled++;return choose(person);};
+ for(let i=0;i<3;i++)city.stepMinute();assert.equal(cancelled,0);assert.equal(c.targetId,destination);assert.equal(c.task,'supplies');
+ c.path=[];const target=city.building(destination);c.entity.x=target.door.x;c.entity.y=target.door.y;finishActivityRoute(city,c);city.performTask(c);assert(c.needs.food>30);assert(pocket(c).food.length>0);
+});

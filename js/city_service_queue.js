@@ -24,6 +24,8 @@ export function queueService(city,c,b,kind,resource,ready){
  const ticket=reserveService(city,c,b,kind,resource);
  const older=entrance.serviceQueue.some(q=>q.buildingId===b.id&&queueKind(q.kind)===queueKind(kind)&&q.resource===resource&&q.sequence<ticket.sequence);
  const inside=c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.exiting;
+ // Available rooms, rather than a global one-person-per-minute gate, set
+ // throughput. A multi-floor public building can serve several people at once.
  if(!older&&ready){
   city.furniture?.release(c);
   if(!inside&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.9){const route=city.findPath(c.entity,b.door);if(route!==null)c.path=route;c.action='Indo ao atendimento';return false;}
@@ -32,10 +34,10 @@ export function queueService(city,c,b,kind,resource,ready){
  // A queue can outlast its service capacity; a critically urgent person must
  // eventually leave it instead of waiting forever at zero need.
  if(kind==='toilet'&&!inside&&c.needs.toilet<10&&city.minute-ticket.joinedAt>=90){entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;city.sanitation.emergencyRelief(c);return false;}
- c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':'Aguardando na fila de alimentação';c.facingTarget={x:b.door.x,y:b.door.y};
+ c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':['food','workmeal','supplies'].includes(kind)?'Aguardando na fila de alimentação':'Aguardando na fila de atendimento';c.facingTarget={x:b.door.x,y:b.door.y};
  // Recompute ordinal positions after every departure: followers advance to
  // the head of the line instead of retaining a stale, empty slot.
- const queue=entrance.serviceQueue.filter(q=>q.buildingId===b.id&&queueKind(q.kind)===queueKind(kind)&&q.resource===resource).sort((a,z)=>a.sequence-z.sequence),ordinal=queue.indexOf(ticket),queuedIds=new Set(queue.map(q=>q.citizenId)),occupied=new Set();
+ const queue=entrance.serviceQueue.filter(q=>q.buildingId===b.id&&queueKind(q.kind)===queueKind(kind)&&q.resource===resource).sort((a,z)=>a.sequence-z.sequence),ordinal=queue.indexOf(ticket),occupied=new Set();
  if(inside){
   const location=c.indoorLocation,shell=city.building(b.officeTenantOf)||b,floor=b.officeFloor??location.floor??0,halls=(shell.circulation||[]).filter(u=>u.z===floor),rooms=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cells=halls.length?halls:rooms;
   const reserved=city.units.get(location.targetUnitId||location.unitId);
@@ -47,10 +49,12 @@ export function queueService(city,c,b,kind,resource,ready){
   if(location.queueSlot!==slot){const path=interiorRoute(b,location.position,target);if(path!==null){release();location.path=path;location.targetRoomType='waiting';location.roomType='circulation';location.phase='waiting';location.queueSlot=slot;}}
   return false;
  }
- for(const other of city.citizens)if(!queuedIds.has(other.id)&&!other.entity.destroyed&&!other.indoorLocation){occupied.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)occupied.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}
+ for(const other of city.citizens)if(other.id!==c.id&&!other.entity.destroyed&&!other.indoorLocation){occupied.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)occupied.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}
  if(city.furniture?.queueSeat(c,b)){ticket.slot=`bench:${c.seatId}`;return false;}
- const positions=slots(city,entrance),available=[];for(let i=0;i<positions.length&&available.length<=ordinal;i++){const p=positions[i];if(occupied.has(`${Math.floor(p.x)},${Math.floor(p.y)}`))continue;const path=city.findPath(c.entity,p);if(path!==null)available.push({p,path,index:i});}
- const target=available[ordinal];ticket.slot=target?.index??null;
+ const reserved=new Set(entrance.serviceQueue.filter(q=>q!==ticket&&Number.isInteger(q.slot)).map(q=>q.slot));
+ const positions=slots(city,entrance);let target=null;
+ for(let i=0;i<positions.length;i++){const p=positions[i];if(reserved.has(i)||occupied.has(`${Math.floor(p.x)},${Math.floor(p.y)}`))continue;const path=city.findPath(c.entity,p);if(path!==null){target={p,path,index:i};break;}}
+ ticket.slot=target?.index??null;
  if(target&&Math.hypot(c.entity.x-target.p.x,c.entity.y-target.p.y)>.5)c.path=target.path;
  return false;
 }

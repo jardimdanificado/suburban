@@ -4,6 +4,11 @@ export const HOUSING_RULES = { roomPrice: 120000, roomRent: 120, livingReserve: 
 export const SOCIAL_HOUSING_TYPES = Object.freeze(['super_popular_housing','popular_housing','popular_luxury_housing']);
 export const HOUSING_TYPES = Object.freeze(['residential',...SOCIAL_HOUSING_TYPES,'luxury_housing']);
 const NO_RESIDENTS=Object.freeze([]);
+function resetHousingSleep(c){
+  // Moving into a home should redirect sleep, but must not discard an active
+  // delivery, informal job, appointment or other unrelated commitment.
+  if(c.task==='energy'&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.mobilityTrip&&!c.ridingVehicleId){c.task=null;c.targetId=null;c.path=[];}
+}
 const roomRoll=(b,u,salt=0)=>{let value=(b.id*2654435761^u.x*2246822519^u.y*3266489917^u.z*668265263^salt)>>>0;value^=value>>>16;return value%100;};
 function configureRoomWindow(b,u){const roll=roomRoll(b,u,5);u.hasWindow=u.roomType==='bedroom'||u.roomType==='dining'||u.roomType==='laundry'||u.roomType==='plenary'||u.roomType==='treatment'||u.roomType==='office'&&roll<78||u.roomType==='workspace'&&roll<58||u.roomType==='service'&&roll<42;u.windowStyle=['sash','tall','picture','round','shuttered'][roomRoll(b,u,11)%5];}
 
@@ -18,7 +23,7 @@ export function floorCells(b, z) {
   return cells;
 }
 export class CityHousing {
-  constructor(city) { this.city = city; this.homes = new Map(); this.rentPolicyVersion=2; }
+  constructor(city) { this.city = city; this.homes = new Map(); this.rentPolicyVersion=2; this.sharedRoomHousingVersion=1; }
   addFloor(b, z, ownerId) {
     const spec = this.city.buildingTypes[b.type], units = [];
     const housingType = HOUSING_TYPES.includes(b.type);
@@ -44,7 +49,7 @@ export class CityHousing {
           for(let i=0;i<floorUnits.length;i+=groupSize){const rooms=floorUnits.slice(i,i+groupSize),id=`home:${rooms[0].id}`;if(rooms[1])rooms[1].roomType='bathroom';if(groupSize===4&&rooms[2])rooms[2].roomType='dining';if(groupSize===4&&rooms[3]&&roomRoll(b,rooms[3],29)<62)rooms[3].roomType='laundry';const home={id,buildingId:b.id,unitIds:rooms.map(u=>u.id),createdAt:this.city.minute};for(const u of rooms)u.homeId=id;this.homes.set(id,home);}
           continue;
         }
-        for(let i=0;i<bedrooms.length;i+=2){const rooms=bedrooms.slice(i,i+2),id=`home:${rooms[0].id}`,bathroomUnitId=b.type==='super_popular_housing'?b.sharedBathroomUnitId:bathroom?.id;const home={id,buildingId:b.id,unitIds:rooms.map(u=>u.id),bathroomUnitId,sharedBathroom:shared,sharedBathroomFloor:floor,createdAt:this.city.minute};for(const u of rooms)u.homeId=id;this.homes.set(id,home);}
+        for(const room of bedrooms){const id=`home:${room.id}`,bathroomUnitId=b.type==='super_popular_housing'?b.sharedBathroomUnitId:bathroom?.id;const home={id,buildingId:b.id,unitIds:[room.id],bathroomUnitId,sharedBathroom:shared,sharedBathroomFloor:floor,createdAt:this.city.minute};room.homeId=id;this.homes.set(id,home);}
       }
     }
     if(b.type==='laundromat'&&units[0])units[0].roomType='laundry';
@@ -88,7 +93,7 @@ export class CityHousing {
     this.release(c);
     c.homeShareReason=reason;c.homeShareWith=partner.homeShareWith||partner.id;c.homeId=home.id;c.homeUnitId=partner.homeUnitId;
     this.invalidateResidents();
-    c.homelessSince=null;c.task=null;c.path=[];
+    c.homelessSince=null;resetHousingSleep(c);
     for(const child of this.city.citizens.filter(p=>p.guardianId===c.id && !this.city.society.isAdult(p)))this.houseChild(child,c);
     this.city.history.record('housing',`${c.entity.properties.name} passou a compartilhar moradia com ${partner.entity.properties.name}.`,[c.accountId,this.city.building(home.buildingId)?.accountId],{homeId:home.id,regime:this.isSocial(home)?'social':'shared'});
     return true;
@@ -98,7 +103,7 @@ export class CityHousing {
     if(!city.society.isAdult(c) || !this.isSocial(home) || !this.hasBathroom(home) || !units.some(u=>u.roomType==='bedroom') || units.some(u=>u.tenantId) || this.residents(home).length || city.findPath(c.entity,building.door)===null)return false;
     this.release(c);
     for(const unit of units){unit.tenantId=c.accountId;unit.occupantId=null;unit.rentPayerId=null;unit.arrears=0;unit.missedDays=0;}
-    c.homeId=home.id;c.homeUnitId=units.find(u=>u.roomType==='bedroom').id;c.homelessSince=null;c.task=null;c.path=[];
+    c.homeId=home.id;c.homeUnitId=units.find(u=>u.roomType==='bedroom').id;c.homelessSince=null;resetHousingSleep(c);
     this.invalidateResidents();
     for(const child of city.citizens.filter(p=>p.guardianId===c.id && !city.society.isAdult(p)))this.houseChild(child,c);
     const partner=city.society.citizen(c.partnerId);if(partner && !partner.homeUnitId)this.shareHome(partner,c);
@@ -133,14 +138,14 @@ export class CityHousing {
   }
   rentHome(c, home) {
     const units = this.units(home), payer = this.city.payerFor(c), rent = this.rent(home, c);
-    if (!units.length || !units.some(u => u.roomType === 'bedroom') || units.some(u => u.ownerId !== c.accountId && (!u.forRent || u.ownerId === 'treasury')) || units.some(u => u.tenantId && u.tenantId !== c.accountId) || (this.city.accounts.get(payer)?.balance || 0) < rent) return false;
+    if (this.isSocial(home) || !units.length || !units.some(u => u.roomType === 'bedroom') || units.some(u => u.ownerId !== c.accountId && !u.forRent) || units.some(u => u.tenantId && u.tenantId !== c.accountId) || (this.city.accounts.get(payer)?.balance || 0) < rent) return false;
     if (c.homeId === home.id) return true;
     this.release(c);
     for (const u of units) {
       if (u.ownerId !== c.accountId) this.city.transfer(payer, u.ownerId, u.rent, 'Primeiro aluguel');
       u.tenantId = c.accountId; u.rentPayerId = payer === c.accountId ? null : payer; u.arrears = 0; u.missedDays = 0;
     }
-    c.homeId = home.id; c.homeUnitId = units.find(u => u.roomType === 'bedroom').id; c.task = null; c.path = [];
+    c.homeId = home.id; c.homeUnitId = units.find(u => u.roomType === 'bedroom').id; resetHousingSleep(c);
     this.invalidateResidents();
     this.city.log(`${c.entity.properties.name} passou a morar em ${home.id}, com ${units.length} cômodos.`, 'housing', [c.id], { kind: 'home-lease', homeId: home.id, rent });
     for (const child of this.city.citizens.filter(p => p.guardianId === c.id && !this.city.society.isAdult(p))) this.houseChild(child, c);
@@ -162,6 +167,9 @@ export class CityHousing {
     this.configureSocialHousing();
     for (const home of this.homes.values()) {
       const units = this.units(home), b = this.city.building(home.buildingId); if (!b || !units.length) continue;
+      // Municipal residential properties can be rented while still being
+      // offered for sale. Social homes remain free and use their own queue.
+      if(b.type==='residential'&&units.every(u=>u.ownerId==='treasury'))for(const u of units)u.forRent=true;
       const builder = this.city.accounts.get(units[0].ownerId);
       if (builder?.type === 'builder' && units.every(u => u.ownerId === builder.accountId) && this.city.minute - home.createdAt >= HOUSING_RULES.unsoldRentalAfter) for (const u of units) { u.forSale = true; u.forRent = true; }
     }
@@ -275,6 +283,34 @@ export class CityHousing {
     if (this.city.transfer(payer, u.ownerId, u.rent + u.arrears, 'Aluguel diário')) { u.arrears = 0; u.missedDays = 0; }
     else { u.arrears += u.rent; u.missedDays++; if (u.missedDays >= HOUSING_RULES.defaultDays) { const c = this.city.accounts.get(u.tenantId); if (c) this.release(c); } }
   }
+  migrateSharedRooms(){
+    const city=this.city,peopleByRoom=new Map();
+    for(const c of city.citizens)if(!c.entity.destroyed&&c.homeId&&c.homeUnitId){const key=`${c.homeId}|${c.homeUnitId}`;let people=peopleByRoom.get(key);if(!people)peopleByRoom.set(key,people=[]);people.push(c);}
+    for(const home of [...this.homes.values()]){
+      const b=city.building(home.buildingId);if(!b||!['super_popular_housing','popular_housing'].includes(b.type))continue;
+      const bedrooms=this.units(home).filter(u=>u.roomType==='bedroom');if(bedrooms.length<2)continue;
+      const primaryTenant=bedrooms[0].tenantId;
+      for(const room of bedrooms.slice(1)){
+        const id=`home:${room.id}`;if(this.homes.has(id))continue;
+        home.unitIds=home.unitIds.filter(unitId=>unitId!==room.id);
+        const residents=peopleByRoom.get(`${home.id}|${room.id}`)||[];
+        if(!residents.length&&room.tenantId===primaryTenant){room.tenantId=null;room.rentPayerId=null;room.arrears=0;room.missedDays=0;}
+        for(const c of residents)c.homeId=id;
+        room.homeId=id;this.homes.set(id,{...home,id,unitIds:[room.id]});
+      }
+    }
+    for(const b of city.buildings){
+      if(b.entity.destroyed||!['super_popular_housing','popular_housing'].includes(b.type))continue;
+      for(const room of b.units){
+        if(room.roomType!=='bedroom'||room.homeId&&this.homes.has(room.homeId))continue;
+        const bathroom=b.type==='super_popular_housing'?city.units.get(b.sharedBathroomUnitId):b.units.find(u=>u.z===room.z&&u.roomType==='bathroom');if(!bathroom)continue;
+        const id=`home:${room.id}`;room.homeId=id;this.homes.set(id,{id,buildingId:b.id,unitIds:[room.id],bathroomUnitId:bathroom.id,sharedBathroom:true,sharedBathroomFloor:room.z,createdAt:city.minute});
+      }
+      const homes=[...this.homes.values()].filter(h=>h.buildingId===b.id);
+      for(const bathroom of b.units.filter(u=>u.roomType==='bathroom'))city.sanitation.addFacility(b,{unitId:bathroom.id,homeIds:homes.filter(h=>h.bathroomUnitId===bathroom.id).map(h=>h.id),access:'home'});
+    }
+    this.invalidateResidents();this.sharedRoomHousingVersion=1;
+  }
   reconcile() {
     if(this.rentPolicyVersion!==2){for(const home of this.homes.values()){const b=this.city.building(home.buildingId);if(!b||!HOUSING_TYPES.includes(b.type))continue;const cap=this.city.currency.price(HOUSING_RULES.roomRent*(b.type==='luxury_housing'?2:1));for(const unit of this.units(home))if(unit.rent>cap){unit.rent=cap;unit.arrears=0;unit.missedDays=0;}}this.rentPolicyVersion=2;}
     for (const [id, h] of this.homes) if (!this.city.building(h.buildingId)) this.homes.delete(id);
@@ -285,5 +321,6 @@ export class CityHousing {
       const homes=[...this.homes.values()].filter(h=>h.buildingId===b.id);for(const h of homes)h.bathroomUnitId=bathroom.id;
       const facility=this.city.sanitation.facilities.get(`toilet:${bathroom.id}`);if(facility)facility.homeIds=homes.map(h=>h.id);
     }
+    if(this.sharedRoomHousingVersion!==1)this.migrateSharedRooms();
   }
 }
