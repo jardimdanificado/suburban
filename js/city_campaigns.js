@@ -1,6 +1,6 @@
 import {CityCampaignMaterials} from './city_campaign_materials.js';
 import {describePromise} from './city_mandates.js';
-import { ROAD_TILES, tileAt } from './city_terrain.js?v=public-cleaning-1';
+import { ROAD_TILES, tileAt } from './city_terrain.js?v=office-demand-rollout-1';
 import {issuePartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 
 export class CityCampaigns {

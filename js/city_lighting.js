@@ -1,4 +1,4 @@
-import { ROAD_TILES, tileAt, terrainWalkable, canStep } from './city_terrain.js?v=public-cleaning-1';
+import { ROAD_TILES, tileAt, terrainWalkable, canStep } from './city_terrain.js?v=office-demand-rollout-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 export const LIGHTING_RULES = { roadSpacing: 7, privateSpacing: 3, stone: 2, labor: 20, installationFee: 8000, maxActiveSites: 4 };
 export class CityLighting {

@@ -1,4 +1,4 @@
-import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=service-queues-1';
+import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
 import {equityShares,equityValue} from './city_equity.js';
 import {contextActions} from './city_context_actions.js';
@@ -35,10 +35,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=public-cleaning-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=office-demand-rollout-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=sync-perf-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=interiors-completion-2';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=office-demand-rollout-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

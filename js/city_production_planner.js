@@ -1,8 +1,8 @@
 import {businessFloors} from './city_business_heights.js';
 import {INDUSTRIES} from './city_industries.js';
 import {DEVELOPMENT_RULES} from './city_development.js?v=business-heights-1';
-import {chooseBuildingSite} from './city_terrain.js?v=public-cleaning-1';
-import {OFFICE_ONLY_TYPES,officeSpaceDemand} from './city_offices.js?v=service-queues-1';
+import {chooseBuildingSite} from './city_terrain.js?v=office-demand-rollout-1';
+import {OFFICE_ONLY_TYPES,officeSpaceDemand,officeFloors,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
 const inputs=(type)=>type==='bakery'?{trigo:2}:type==='mill'?{girassol:3}:INDUSTRIES[type]?.inputs||{};
@@ -103,7 +103,15 @@ export function investProductionPlan(economy){
   // Commission several distinct initial firms each investment cycle; later expansion remains demand driven.
   for(const row of rows){
     if(opened>=batchLimit||city.development.projects.filter(p=>pending(p)&&p.productionChain).length>=pipelineLimit+(officeException?1:0))break;
-    if(OFFICE_ONLY_TYPES.has(row.type)){recordResponse(economy,row,'Aguardando locação de andar empresarial e financiamento operacional.');continue;}
+    if(OFFICE_ONLY_TYPES.has(row.type)){
+      const towers=city.economy.businesses.filter(b=>b.type==='office_tower'&&b.municipal),vacant=towers.flatMap(tower=>officeFloors(city,tower).filter(f=>!f.tenantId&&f.units.length&&f.units.every(u=>u.forRent)).map(f=>({tower,floor:f})));
+      const partyReserve=city.politics.parties.filter(p=>p.active&&p.headquarters?.kind!=='office').length,slot=vacant.length>partyReserve?vacant[0]:null,budget=city.currency.price(row.type==='bank'?2000000:100000),reserve=city.welfare.conditions().reserve;
+      if(slot&&city.treasury>=reserve+budget){
+        const office=createMunicipalOffice(city,slot.tower,slot.floor.floor,row.type,budget);
+        if(office){recordResponse(economy,row,'Prefeitura instalou a atividade em um andar público disponível, preservando espaço para sedes partidárias.',{buildingId:office.id});city.log(`A prefeitura abriu ${city.buildingTypes[row.type].label} em um andar do empresarial municipal.`,'business',[],{kind:'municipal-office-opened',buildingId:office.id,towerId:slot.tower.id,floor:slot.floor.floor,type:row.type});opened++;continue;}
+      }
+      recordResponse(economy,row,'Aguardando andar municipal disponível e verba para capital inicial.');continue;
+    }
     const upstreamMissing=row.blockedInputs.filter(g=>plan.some(p=>p.missing&&p.planned===0&&(p.type==='farm'?p.crop===g:INDUSTRIES[p.type]?.outputs[g]||p.type==='bakery'&&g==='pao'||p.type==='mill'&&g==='oleo')));
     if(upstreamMissing.length){recordResponse(economy,row,`Primeiro instalar fornecedores: ${upstreamMissing.map(g=>economy.goods[g].label).join(', ')}.`);continue;}
     if(['iron_mine','bauxite_mine'].includes(row.type))city.development.ensureQuarryPlot();

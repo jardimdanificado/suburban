@@ -7,7 +7,7 @@ import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js?v=public-cleaning-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels } from './city_citizen_models.js?v=vehicle-heading-1';
-import { flagNightFactor } from './city_terrain.js?v=public-cleaning-1';
+import { flagNightFactor } from './city_terrain.js?v=office-demand-rollout-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,

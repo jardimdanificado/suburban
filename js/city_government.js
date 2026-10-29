@@ -19,7 +19,7 @@ import { makePartyFlag, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js
 import { CityCouncil } from './city_council.js';
 import { CityCampaigns } from './city_campaigns.js?v=party-caps-skin-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
-import { ROAD_TILES, tileAt } from './city_terrain.js?v=public-cleaning-1';
+import { ROAD_TILES, tileAt } from './city_terrain.js?v=office-demand-rollout-1';
 import {formatMoney} from './city_ui_format.js';
 
 // Ideological starting points; names are generated separately from word pools.

@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup} from './helpers/city.mjs';
 import {queueService} from '../js/city_service_queue.js';
-import {officeSpaceDemand} from '../js/city_offices.js?v=service-queues-1';
-import {productionPlan} from '../js/city_production_planner.js?v=business-heights-1';
+import {officeSpaceDemand} from '../js/city_offices.js?v=office-demand-rollout-1';
+import {productionPlan} from '../js/city_production_planner.js?v=office-demand-rollout-1';
 
 test('a busy service assigns distinct places and respects order of arrival',()=>{
  const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='public_toilet'),people=city.citizens.filter(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)).slice(0,2),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===b.id);

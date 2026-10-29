@@ -1,4 +1,4 @@
-import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=service-queues-1';
+import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
@@ -26,7 +26,7 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
-import { quarryDeposits } from './city_terrain.js?v=public-cleaning-1';
+import { quarryDeposits } from './city_terrain.js?v=office-demand-rollout-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
@@ -36,9 +36,9 @@ import { CityWorkMeals } from './city_work_meals.js?v=public-cleaning-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=interiors-completion-2';
 import { CityLogistics } from './city_logistics.js?v=interiors-completion-2';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=public-cleaning-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=office-demand-rollout-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=sync-perf-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=public-cleaning-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=office-demand-rollout-1';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -482,7 +482,8 @@ export class CitySimulation {
     else if (n.energy < 65) { task = 'energy'; type = 'home'; }
     if(task==='energy'&&!home){this.routeHomelessToSleep(c);return;}
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
-    if(!urgent&&(task==='leisure'||task==='social'&&n.social>=35)&&n.leisure<95&&this.hour>=6&&this.hour<22){
+    const joblessDuringShift=this.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&this.hour>=8&&this.hour<17;
+    if(!urgent&&!joblessDuringShift&&(task==='leisure'||task==='social'&&n.social>=35)&&n.leisure<95&&this.hour>=6&&this.hour<22){
       const employer=job||company,workplace=employer?.officeTenantOf?this.building(employer.officeTenantOf):employer,dwelling=this.housing.home(c),sites=[...(home?[{site:home,access:'home'}]:[]),...(workplace&&workplace!==home?[{site:workplace,access:'work'}]:[])];
       for(const {site,access} of sites){const spaces=buildingLeisureSpaces(site).filter(s=>s.kind==='roof_terrace'||(access==='home'?dwelling?.unitIds.includes(s.unitId):!employer?.officeTenantOf||s.floor===employer.officeFloor));
        for(const space of spaces){const occupied=this.citizens.filter(other=>other!==c&&other.task==='outdoor_leisure'&&other.outdoorLeisure?.buildingId===site.id&&other.outdoorLeisure.spaceId===space.id).map(other=>other.outdoorLeisure.slot),slot=Array.from({length:space.capacity},(_,i)=>i).find(i=>!occupied.includes(i));if(slot==null)continue;const path=this.findPath(c.entity,site.door);if(path===null)continue;
@@ -490,6 +491,10 @@ export class CitySimulation {
        }
       }
     }
+    // Vacant residents already participate in the application/recruitment
+    // cycle. Avoid sending all of them on purposeless cross-city leisure walks
+    // during working hours while they wait for an employer's decision.
+    if(task==='leisure'&&!urgent&&joblessDuringShift){c.task=null;c.targetId=null;c.path=[];c.action='Procurando trabalho e aguardando seleção';return;}
     if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&this.paint.route(c))return;
     if (task === 'social' && this.relationships.seekContact(c)) return;
     if(task==='hygiene'&&this.sanitation.choose(c,'hygiene'))return;

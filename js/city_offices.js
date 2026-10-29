@@ -1,10 +1,10 @@
 export const OFFICE_BUSINESSES=new Set(['newsroom','research_institute','publisher','bank','builder','carrier','lamp_service','cleaner','clinic','library','clothing_store','thrift_store','pharmacy','sports_shop']);
-export const OFFICE_ONLY_TYPES=new Set(['research_institute','publisher','bank']);
+export const OFFICE_ONLY_TYPES=new Set(['newsroom','research_institute','publisher','bank']);
 export function officeSpaceDemand(city){
  const firms=city.economy.businesses,towers=firms.filter(b=>b.type==='office_tower'),vacant=towers.reduce((n,b)=>n+officeFloors(city,b).filter(f=>!f.tenantId&&f.units.length&&f.units.every(u=>u.forRent)).length,0);
  const researchTarget=city.politics.getResearch().demand().required||1;
  const missingFirms=[...OFFICE_ONLY_TYPES].reduce((n,type)=>n+Math.max(0,(type==='research_institute'?researchTarget:1)-firms.filter(b=>b.type===type).length),0);
- const headquarters=city.politics.parties.filter(p=>p.active&&p.headquarters?.kind==='provisional').length;
+ const headquarters=city.politics.parties.filter(p=>p.active).length;
  const projects=city.development.projects.filter(p=>p.type==='office_tower'&&!p.cancelled&&p.status!=='completed'),planned=projects.reduce((n,p)=>n+(p.floors||3),0),needed=missingFirms+headquarters;
  return {vacant,planned,needed,missing:Math.max(0,needed-vacant-planned),missingFirms,headquarters};
 }
@@ -43,6 +43,10 @@ export function rentOffice(city,towerId,floor,type,founderId){
 export function rentAvailableOffice(city,type,founder,{ownOnly=false}={}){
  if(!OFFICE_BUSINESSES.has(type))return null;
  const towers=city.economy.businesses.filter(b=>b.type==='office_tower'&&(!ownOnly||ownsOfficeTower(b,founder))).sort((a,b)=>Number(ownsOfficeTower(b,founder))-Number(ownsOfficeTower(a,founder)));
+ // Keep enough vacant floors for parties that still have only a provisional
+ // town-hall desk. Otherwise ordinary firms can consume every initial seat.
+ const vacant=towers.reduce((n,b)=>n+officeFloors(city,b).filter(f=>!f.tenantId&&f.units.every(u=>u.forRent)).length,0),reserved=city.politics.parties.filter(p=>p.active&&p.headquarters?.kind!=='office').length;
+ if(vacant<=reserved)return null;
  for(const tower of towers)for(const floor of officeFloors(city,tower))if(!floor.tenantId&&floor.units.every(u=>u.forRent)&&founder.balance>=(ownsOfficeTower(tower,founder)?0:Math.max(city.currency.price(100),floor.rent))+city.currency.price(20000)){const b=rentOffice(city,tower.id,floor.floor,type,founder.id);if(b)return b;}
  return null;
 }
