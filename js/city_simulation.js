@@ -21,7 +21,7 @@ import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
-import {skybridgeLinks} from './city_skybridges.js?v=bridge-clean-1';
+import {skybridgeLinks} from './city_skybridges.js?v=long-span-passarelas-4';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
@@ -416,7 +416,7 @@ export class CitySimulation {
       for(const link of links){
         for(const reverse of [false,true]){
           const from=reverse?link.end:link.start,to=reverse?link.start:link.end,fromAccess=reverse?link.endAccess:link.startAccess,toAccess=reverse?link.startAccess:link.endAccess;
-          const lower=Math.hypot(start.x-fromAccess.x,start.y-fromAccess.y)+Math.hypot(goal.x-toAccess.x,goal.y-toAccess.y)+Math.abs(to.x-from.x)*.76+3;
+          const lower=Math.hypot(start.x-fromAccess.x,start.y-fromAccess.y)+Math.hypot(goal.x-toAccess.x,goal.y-toAccess.y)+Math.hypot(to.x-from.x,to.y-from.y)*.76+3;
           if(lower>=bestScore)continue;
           const first=findTerrainPath(this.world,start,fromAccess,this.occupied,{blockedGrid:this._pathBlockedGrid});
           const last=findTerrainPath(this.world,toAccess,goal,this.occupied,{blockedGrid:this._pathBlockedGrid});
@@ -424,12 +424,13 @@ export class CitySimulation {
           const stairs=10,waypoints=first.slice();
           const append=p=>{const previous=waypoints.at(-1);if(!previous||Math.hypot(previous.x-p.x,previous.y-p.y,(previous.z||0)-(p.z||0))>.001)waypoints.push(p);};
           append(fromAccess);
-          for(let step=1;step<=stairs;step++){const t=step/stairs;append({x:fromAccess.x,y:fromAccess.y+(from.y-fromAccess.y)*t,z:link.height*t,skybridgeId:link.id});}
-          const crossings=Math.max(1,Math.ceil(Math.abs(to.x-from.x)*2));
-          for(let step=1;step<=crossings;step++){const t=step/crossings;append({x:from.x+(to.x-from.x)*t,y:link.y,z:link.height,skybridgeId:link.id});}
-          for(let step=1;step<=stairs;step++){const t=step/stairs;append({x:to.x,y:link.y+(toAccess.y-link.y)*t,z:link.height*(1-t),skybridgeId:link.id});}
+          for(let step=1;step<=stairs;step++){const t=step/stairs;append({x:fromAccess.x+(from.x-fromAccess.x)*t,y:fromAccess.y+(from.y-fromAccess.y)*t,z:link.height*t,skybridgeId:link.id});}
+          // The bridge span is a straight, unobstructed segment. Keeping one
+          // waypoint avoids allocating hundreds of points for city-scale links.
+          append({x:to.x,y:to.y,z:link.height,skybridgeId:link.id});
+          for(let step=1;step<=stairs;step++){const t=step/stairs;append({x:to.x+(toAccess.x-to.x)*t,y:to.y+(toAccess.y-to.y)*t,z:link.height*(1-t),skybridgeId:link.id});}
           for(const point of last)append(point);
-          const score=first.length+last.length+Math.hypot(to.x-from.x,link.height)*.76+3;
+          const score=first.length+last.length+Math.hypot(to.x-from.x,to.y-from.y,link.height)*.76+3;
           if(score<bestScore){bestScore=score;path=waypoints;}
         }
       }

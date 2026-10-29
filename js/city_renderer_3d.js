@@ -13,7 +13,7 @@ import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=deep-perf-3';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-door-alignment-2';
-import {syncSkybridges} from './city_skybridges.js?v=bridge-clean-1';
+import {syncSkybridges} from './city_skybridges.js?v=long-span-passarelas-4';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import {mergeStaticMeshes} from './city_static_mesh.js';
 function buildingMaterial(renderer,THREE,kind,color){
