@@ -1,6 +1,6 @@
 import {CityFurniture} from './city_furniture.js?v=deep-perf-3';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
-import {CitySupplies,pocket} from './city_supplies.js?v=survival-capacity-1';
+import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax} from './city_sales_tax.js';
@@ -46,6 +46,7 @@ import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_econ
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=landlord-stock-market-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=shared-origin-paths-1';
 
+const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
   ...CIVIC_SERVICES,
@@ -963,11 +964,11 @@ export class CitySimulation {
       c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
       this.supplies.useCarried(c);
       if (this.life.minute(c,elapsed)) continue;
-      advanceCitizenInterior(this,c,elapsed);
+      if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);
       if(c.skybridgeTransit){this.finishSkybridgeTransit(c);if(c.skybridgeTransit)continue;}
       if(age>=18&&!c.indoorLocation&&!c.businessIds.length&&!this.politics.officeHolder(c)&&this.minute>=(c.career?.nextDiscoveryAt??c.id%RECRUITMENT_RULES.discoveryInterval))discoverVacancies(this,c);
       if(c.mobilityTrip||c.ridingVehicleId)continue;
-      if (this.workMeals.advance(c)) continue;
+      if (c.workMeal&&this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
       const taskNeed=c.task==='supplies'?this.supplies.need(c):c.task==='lake-water'?'water':['provisions','workmeal'].includes(c.task)?'food':c.task;
@@ -979,21 +980,27 @@ export class CitySimulation {
       if (c.deliveryId || c.cleaningJobId || c.informalJobId) continue;
       if (c.conversation) continue;
       if(!urgent&&c.career?.pendingInterview?.status==='análise')routeToInterview(this,c);
-      if(!urgent&&['work','manage','walk','leisure','social'].includes(c.task)&&Math.min(n.energy,n.health,n.toilet)>30)this.supplies.route(c);
+      const carried=c.pocket;
+      const carriedLow=(carried?.food?.length||0)+(c.provisions||0)<=POCKET_RULES.foodLow||(carried?.water||0)<=POCKET_RULES.waterLow;
+      if(!urgent&&carriedLow&&['work','manage','walk','leisure','social'].includes(c.task)&&Math.min(n.energy,n.health,n.toilet)>30)this.supplies.route(c);
       if (!c.task) {
         // An idle citizen used to repeat the same path/offer search every city
         // minute, even after finishing leisure at 95% or finding no service.
         // Retry on a changed urgent need, at shift boundaries, or after a short
         // delay. At 32× this is only a fraction of a real second.
-        if(this.minute<(c._nextTaskAt||0)&&c._retryUrgent===urgent&&this.minute%60!==0)continue;
+        if(this.minute<(c._nextTaskAt||0)&&c._retryUrgent===urgent)continue;
         c.servicePaid = null; this.chooseTask(c);
       }
       if (!c.path.length && c.task) this.performTask(c);
-      if(!c.task){c._nextTaskAt=this.minute+5;c._retryUrgent=urgent;}
+      if(!c.task){
+        const stable=c.homeUnitId&&n.food>35&&n.water>35&&n.energy>35&&n.health>35&&n.toilet>35;
+        const interval=stable?SIMULATION_LOD.stableDecisionMinutes:SIMULATION_LOD.unstableDecisionMinutes;
+        c._nextTaskAt=this.minute+interval+c.id%interval;c._retryUrgent=urgent;
+      }
     }
     const citizenMs=performance.now()-profileMark;profileMark=performance.now();
     for(const c of this.citizens)if(!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
-    for(const c of this.citizens)this.furniture.syncCitizen(c);
+    for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait)this.furniture.syncCitizen(c);
     if(this.minute%60===0)this.furniture.reconcile();
     const interiorMs=performance.now()-profileMark;profileMark=performance.now();
     advanceRecruitment(this);
