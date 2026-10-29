@@ -1,3 +1,4 @@
+import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=furniture-farms-fertilizer-1';
 import {waterPollutionAt,waterTint} from './city_water.js';
 // =============================================================================
 // Brutopolis Chronicles - 3D Isometric Tycoon Engine (Volumetric 3D Models)
@@ -5,10 +6,10 @@ import {waterPollutionAt,waterTint} from './city_water.js';
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=pocket-water-cutaway-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=furniture-farms-fertilizer-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=queue-sleep-balcony-1';
-import { flagNightFactor } from './city_terrain.js?v=initial-cycle-ref-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=furniture-farms-fertilizer-1';
+import { flagNightFactor } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -27,7 +28,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE
-} from "./world_gen.js?v=map-default-256-1";
+} from "./world_gen.js?v=furniture-farms-fertilizer-1";
 import { globalWallCoords, resolveWallSkin, getEntitiesInViewport, getEntityById, getTileKey } from "./engine.js";
 
 // Optional simulation hooks are deliberately empty in the base framework.
@@ -2849,7 +2850,7 @@ export class RCT3DRenderer {
   constructor(container) {
     this.cityInteriorView=null;
     this._cityInteriorViewHandler=event=>{
-      const view=event.detail?.buildingId==null?null:{buildingId:event.detail.buildingId,floor:event.detail.floor||0};
+      const view=event.detail?.buildingId==null?null:{buildingId:event.detail.buildingId,floor:event.detail.floor||0,hideWalls:event.detail.hideWalls!==false};
       if(view){const b=this.cityDevelopment?.city?.building(view.buildingId);if(!this.cityInteriorView)this.interiorPreviousZoom=this.zoom;if(b)this.setCamera(b.entity.x+b.width/2,b.entity.y+b.depth/2,Math.max(this.zoom,Math.min(5,28/(Math.max(b.width,b.depth)*1.6))));}
       else if(this.interiorPreviousZoom!=null){this.zoom=this.interiorPreviousZoom;this.interiorPreviousZoom=null;}
       this.cityInteriorView=view;
@@ -3228,6 +3229,7 @@ export class RCT3DRenderer {
     };
 
     const buildDict = (isPersp) => ({
+      farmSoil:makeMat(isPersp,{color:0x795438,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
       [TILE_FLOOR]: makeMat(isPersp, { color: 0x3d742c, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.85, 0.02),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
       [TILE_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.25, 0.88, 0.02),
@@ -4753,7 +4755,7 @@ export class RCT3DRenderer {
   getSelectedId() { return this.selectedEntityId; }
 
   getTileBaseHeight(tileType) {
-    switch (tileType) {
+    switch (baseTerrainTile(tileType)) {
       case TILE_WATER: return 0.0;
       case TILE_SAND:
       case TILE_ROAD_SAND:
@@ -5636,6 +5638,7 @@ export class RCT3DRenderer {
 
     const map = world.map;
     const tileMeshBuckets = {
+      farmSoil:{pos:[],uvs:[],colors:[]},
       [TILE_FLOOR]: { pos: [], uvs: [], colors: [] },
       [TILE_SAND]: { pos: [], uvs: [], colors: [] },
       sandClean: { pos: [], uvs: [], colors: [] },
@@ -5698,8 +5701,8 @@ export class RCT3DRenderer {
           zoneMult = 0.32;
         }
 
-        const hasSprite = shouldRenderTerrainSprite(tx, ty, tType);
-        let bucketKey = tType;
+        const hasSprite = !FARM_TILES.has(tType)&&shouldRenderTerrainSprite(tx, ty, tType);
+        let bucketKey = FARM_TILES.has(tType)?"farmSoil":tType;
         if (tType === TILE_SAND && !hasSprite) bucketKey = "sandClean";
 
         const bucket = tileMeshBuckets[bucketKey] || tileMeshBuckets[tType] || tileMeshBuckets[TILE_FLOOR];

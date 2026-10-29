@@ -1,4 +1,4 @@
-import {activityRoomReady} from './city_interiors.js?v=pocket-water-cutaway-1';
+import {activityRoomReady} from './city_interiors.js?v=furniture-farms-fertilizer-1';
 
 const ACTIVE=new Set(['open','working']);
 const cleanFee=(city,building,scope,payerId=null)=>{
@@ -38,10 +38,12 @@ export class CityGigs{
    const unit=this.city.units.get(job.unitId),key=unit?`${unit.x},${unit.y},${unit.z}`:null,pile=key&&b.feces?.get(key);
    if(pile){if(pile.amount>1)pile.amount--;else b.feces.delete(key);b.fecesRevision=(b.fecesRevision||0)+1;this.city.sanitation.fecesRevision++;this.city.sanitation.cleanedFeces++;}
    if((b.litter||0)>0)b.litter=Math.max(0,b.litter-1);
+   if(pile){b.inventory.fezes=(b.inventory.fezes||0)+1;this.city.economy.produced.fezes++;}
    b.cleanliness=Math.min(100,(b.cleanliness??55)+35);
   }else{
    const d=b.door,near=[...this.city.sanitation.streetFeces].filter(([key])=>{const [x,y]=key.split(',').map(Number);return Math.hypot(x+.5-d.x,y+.5-d.y)<=3;}).sort((a,z)=>z[1].amount-a[1].amount);
    if(near.length){const [key,pile]=near[0];if(pile.amount>1)pile.amount--;else this.city.sanitation.streetFeces.delete(key);this.city.sanitation.fecesRevision++;this.city.sanitation.cleanedFeces++;}
+   if(near.length){b.inventory.fezes=(b.inventory.fezes||0)+1;this.city.economy.produced.fezes++;}
    b.frontageCleanliness=Math.min(100,(b.frontageCleanliness??55)+35);
   }
  }

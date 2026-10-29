@@ -1,5 +1,6 @@
+import {FARM_TILES} from './world_gen.js?v=furniture-farms-fertilizer-1';
 import { randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { roadFor } from './city_terrain.js?v=initial-cycle-ref-1';
+import { roadFor } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 // =============================================================================
 // Brutopolis - World & Environment System (Pure JS Engine)
 // =============================================================================
@@ -26,7 +27,7 @@ import {
   MAP_PRESET_HIGHLANDS,
   world_gen_generate,
   world_gen_is_walkable
-} from "./world_gen.js?v=map-default-256-1";
+} from "./world_gen.js?v=furniture-farms-fertilizer-1";
 
 export {
   MAP_WIDTH,
@@ -130,6 +131,7 @@ export class World {
   }
 
   getTileName(t) {
+    if(FARM_TILES.has(t))return "Terra cultivada";
     switch (t) {
       case TILE_FLOOR: return "Planície Fértil";
       case TILE_MOUNTAIN: return "Montanha";

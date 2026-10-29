@@ -1,5 +1,5 @@
 import { inventoryFree } from './city_inventory.js';
-import { tileAt, ROAD_TILES } from './city_terrain.js?v=initial-cycle-ref-1';
+import { tileAt, ROAD_TILES } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 export const PLANT_SPECIES = {
   oak: { label: 'Carvalho', color: 0x6c994b, grow: 3 * 1440, wood: 4, terrain: [0,9] },
   pine: { label: 'Pinheiro', color: 0x527d55, grow: 4 * 1440, wood: 4, terrain: [0,9] },

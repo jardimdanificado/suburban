@@ -3,7 +3,7 @@ export const INDUSTRIAL_GOODS = Object.fromEntries([
   ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
-  ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['jornais','Jornais',3200],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],
+  ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['jornais','Jornais',3200],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],['fezes','Fezes coletadas',90],
   ['bauxita','Bauxita',700],['aluminio','Alumínio',1900],['aco','Aço',2400],['resina','Látex vegetal',280],['borracha','Borracha',950],
   ['rolamentos','Rolamentos',450],['quadro','Quadro de bicicleta',3500],['plataforma','Plataforma de madeira e metal',1200],['rodas','Rodas de mobilidade',500],['corrente','Corrente de bicicleta',900],['capacete','Capacete de proteção',1200],['selim','Selim',650],['pecas','Peças de reposição',700],['botas','Botas para patins',1700],
   ['bicicleta','Bicicleta',14000],['bicicleta_carga','Bicicleta de carga',28000],['patinete','Patinete',9500],['patins','Patins',10500],['skate','Skate',6500],
@@ -64,7 +64,7 @@ export const INDUSTRIES = {
   paper_mill: industry('Prensa de papel',{madeira:3},{papel:12},22,'maintenance','Papel liga a silvicultura à educação.'),
   publisher: industry('Papelaria e encadernação',{papel:5},{livros:1,panfletos:1},24,'social','Encaderna livros e panfletos; cada página preserva dois relatos, inclusive propaganda e anúncios.','services',{need:'leisure',boost:18}),
   pottery: industry('Ateliê de cerâmica',{argila:3,carvao:1},{ceramica:3},18,'maintenance','Utensílios para conforto doméstico.','services',{need:'shelter',boost:8}),
-  composting: industry('Compostagem',{lixo:4},{adubo:2},20,'recycling','Resíduos urbanos retornam como fertilizante às lavouras.'),
+  composting: industry('Usina de adubo',{fezes:4},{adubo:3},20,'recycling','Compra fezes coletadas e transforma em adubo que acelera o crescimento das lavouras.'),
   research_institute: {...industry('Instituto de pesquisa',{}, {},1,'social','Pesquisas eleitorais presenciais financiadas por investidores e empresas; prefeitura contrata somente na falta de investimento privado.','services'),jobs:3,color:0x648caf},
   bank: industry('Banco',{}, {},1,'commerce','Depósitos mantêm reserva integral; crédito usa somente capital próprio disponível.','services'),
 };

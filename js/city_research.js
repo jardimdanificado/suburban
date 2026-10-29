@@ -1,5 +1,5 @@
 import {formatMoney} from './city_ui_format.js';
-import {ROAD_TILES,tileAt} from './city_terrain.js?v=initial-cycle-ref-1';
+import {ROAD_TILES,tileAt} from './city_terrain.js?v=furniture-farms-fertilizer-1';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const live=c=>c&&!c.entity.destroyed;
 const essential=new Set(['council-session','vote','care','caregiving','food','provisions','workmeal','water','health','energy','toilet','construction','campaign','research','interview']);

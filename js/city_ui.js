@@ -1,3 +1,4 @@
+import {roomFurnitureForCity} from './city_furniture_catalog.js';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import {equityShares,equityValue} from './city_equity.js';
@@ -10,7 +11,7 @@ import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js
 import {renderResume,requirements} from './city_employment.js';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
-import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-caps-skin-1';
+import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
 import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-caps-skin-1';
@@ -31,15 +32,15 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js?v=refectory-survival-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=furniture-farms-fertilizer-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=pocket-water-cutaway-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=furniture-farms-fertilizer-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=pocket-water-cutaway-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=pocket-water-cutaway-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=furniture-farms-fertilizer-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -104,7 +105,7 @@ export class CityUI {
     const old=this.listCache.get(key);if(old?.signature===signature)return old.rows;const rows=build();if(this.listCache.size>=32&&!this.listCache.has(key))this.listCache.delete(this.listCache.keys().next().value);this.listCache.set(key,{signature,rows});return rows;
   }
   section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
-  setInteriorView(buildingId,floor=0){this.interiorView=buildingId==null?null:{buildingId,floor};if(typeof window!=='undefined'){const building=buildingId==null?null:this.city.building(buildingId);window.dispatchEvent(new CustomEvent('suburban-interior-view',{detail:building?{buildingId:building.officeTenantOf||buildingId,floor:building.officeTenantOf?building.officeFloor:floor}:null}));}}
+  setInteriorView(buildingId,floor=0,hideWalls=this.interiorView?.hideWalls??true){this.interiorView=buildingId==null?null:{buildingId,floor,hideWalls};if(typeof window!=='undefined'){const building=buildingId==null?null:this.city.building(buildingId);window.dispatchEvent(new CustomEvent('suburban-interior-view',{detail:building?{buildingId:building.officeTenantOf||buildingId,floor:building.officeTenantOf?building.officeFloor:floor,hideWalls}:null}));}}
 
   remember() {
     const route={};for(const key of ['wealthAccountId','wealthLocationId','wealthGoodId','marketSaleId','marketKindId','politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','selectedVehicleId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow','employmentCompanyId','employmentCitizenId','employmentApplicationAt','employmentStatus','employmentPage','employmentCandidatesPage'])route[key]=this[key];
@@ -292,6 +293,7 @@ export class CityUI {
     if (this.detailTab === 'profile') {
       contextActions(this,p,{person:c});
       p.heading('ROTINA ATUAL'); p.note(c.action, C.cyan);
+      if(c.furnitureUse)p.kv('Móvel em uso',c.furnitureUse.label||c.furnitureUse.type);
       if(c.workCell)p.kv('Célula de atividade',`${c.workCell.x+1}, ${c.workCell.y+1} · ${c.workCell.z+1}º andar`);
       if(c.indoorLocation?.path?.length)p.kv('Percurso interno',`${c.indoorLocation.path.length} etapas até ${c.indoorLocation.exiting?'a saída':c.indoorLocation.targetRoomType}`);
       if(c.ridingVehicleId)p.button('VER VEÍCULO EM USO',()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:c.ridingVehicleId,selected:null}));
@@ -380,6 +382,7 @@ export class CityUI {
         p.status('VISTA INTERNA',`Andar ${this.interiorView.floor+1} · pessoas e móveis em simulação`,C.cyan);
         const viewFloors=b.officeTenantOf?[b.officeFloor]:Array.from({length:b.floors},(_,floor)=>floor);
         p.buttons(viewFloors.map(floor=>({label:`${floor+1}º ANDAR`,selected:this.interiorView.floor===floor,click:()=>this.setInteriorView(b.id,floor)})));
+        p.button(this.interiorView.hideWalls?'MOSTRAR PAREDES BAIXAS':'OCULTAR PAREDES',()=>this.setInteriorView(b.id,this.interiorView.floor,!this.interiorView.hideWalls));
         p.button('VOLTAR À FACHADA',()=>this.setInteriorView(null));
       }else p.button('INSPECIONAR INTERIOR',()=>{this.camera(b.entity.x+b.width/2,b.entity.y+b.depth/2);this.setInteriorView(b.id,b.officeTenantOf?b.officeFloor:Math.min(b.floors-1,Math.max(0,this.unitId?city.units.get(this.unitId)?.z||0:0)));});
     }
@@ -452,7 +455,7 @@ export class CityUI {
       }
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, b.accountId);
     } else if(this.detailTab==='infrastructure'){
-      p.heading('ESTRUTURA E SERVIÇOS DO IMÓVEL');
+      p.heading('ESTRUTURA E SERVIÇOS DO IMÓVEL');const furnishings=b.units.flatMap(u=>roomFurnitureForCity(city,b,u)),types=new Map();for(const f of furnishings)types.set(f.label,(types.get(f.label)||0)+1);for(const [label,count]of types)p.kv(label,count);for(const store of b.homeFoodStores?.values()||[])p.kv(`Geladeira · ${city.society.citizen(store.ownerId)?.entity.properties.name||store.ownerId}`,`${store.meals.length} refeições guardadas`);
       p.kv('Andares / limite de ampliação',`${b.floors} / 12`);
       p.meter('Conservação',b.condition??100);
       const post = [...city.lighting.sites.values()].find(post => post.buildingId === b.id && !post.public && post.status !== 'cancelled');
@@ -862,14 +865,14 @@ export class CityUI {
       const waste=system.wasteMetrics();
       p.metrics([['LIXO NA CIDADE',waste.total,C.gold],['PROCESSADO',waste.processed,C.green],['COLETADO / ENTREGUE',system.collected,C.cyan]]);
       p.heading('ETAPAS DO CICLO');p.kv('Aguardando coleta',waste.awaiting);p.kv('Em transporte de coleta',waste.collecting);p.kv('Armazenado nas coletoras',waste.atCollectors);p.kv('A caminho das processadoras',waste.transferring);p.kv('No estoque das processadoras',waste.atProcessors);p.kv('Espalhado',city.buildings.reduce((n,b)=>n+(b.litter||0),0));
-      p.note('A equipe da coletora busca o lixo e entrega às processadoras. Reciclagem: 2 lixos → 1 pedra. Compostagem: 4 lixos → 2 adubos. Ambas exigem trabalho e insumos entregues.');
+      p.note('A equipe da coletora busca o lixo e entrega às processadoras. Reciclagem: 2 lixos → 1 pedra. Adubo: a usina compra e transporta fezes coletadas; 4 fezes → 3 adubos, ou 4 lixos → 2 adubos. Ambas exigem trabalho e insumos entregues.');
       p.table([{label:'Instalação',weight:2},{label:'No estoque'},{label:'Espalhado'}],city.buildings.filter(b=>(b.inventory.lixo||b.litter)&&this.matches(name(b.entity))).sort((a,b)=>(b.inventory.lixo+b.litter)-(a.inventory.lixo+a.litter)).map(b=>({cells:[name(b.entity),b.inventory.lixo,b.litter||0],click:()=>{this.openBuilding(b.id);this.detailTab='stock';},color:b.litter?C.red:C.gray})));
       p.heading('COLETA E PROCESSAMENTO');
       for(const b of city.economy.businesses.filter(b=>['waste_collector','recycler','composting'].includes(b.type))) {
         const owner=city.economy.citizen(b.ownerId),crew=b.workers.length+(owner?1:0),minimum=b.type==='composting'?4:2;
         const status=!crew?'Sem equipe':!owner && b.balance<b.wage?'Sem caixa para salários':b.type==='waste_collector'?inventoryFree(b)<2?'Estoque lotado':b.inventory.lixo?'Aguardando entrega à processadora':'Aguardando coleta':b.inventory.lixo<minimum?(b.incoming.lixo?'Lixo em transporte':'Sem lixo suficiente'):'Insumo disponível para processamento';
         p.card(name(b.entity),`${BUILDING_TYPES[b.type].label} / ${crew} profissionais / ${status}`,()=>this.openBuilding(b.id),false,status==='Sem equipe'||status==='Sem caixa para salários'?C.red:C.green);
-        p.kv('Lixo no estoque / a receber',`${b.inventory.lixo} / ${b.incoming.lixo||0}`);p.kv('Lixo processado',b.wasteProcessed||0);
+        p.kv('Lixo no estoque / a receber',`${b.inventory.lixo} / ${b.incoming.lixo||0}`);p.kv('Lixo processado',b.wasteProcessed||0);if(b.type==='composting'){p.kv('Fezes compradas em estoque',b.inventory.fezes||0);p.kv('Fezes a caminho',b.incoming.fezes||0);p.kv('Adubo pronto para venda',b.inventory.adubo||0);}
         if(b.type==='recycler')p.kv('Pedras produzidas',b.recycledStone||0);
         if(b.type==='composting')p.kv('Adubo produzido',b.compostProduced||0);
       }

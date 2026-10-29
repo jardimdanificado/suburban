@@ -1,4 +1,4 @@
-import {TILE_WATER} from './world_gen.js?v=map-default-256-1';
+import {TILE_WATER} from './world_gen.js?v=furniture-farms-fertilizer-1';
 const DIRECTIONS=[[1,0],[-1,0],[0,1],[0,-1]];
 const indexes=new WeakMap(),clamp=n=>Math.max(0,Math.min(100,n));
 export function waterIndex(world){

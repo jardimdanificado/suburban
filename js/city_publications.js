@@ -1,4 +1,4 @@
-import {appearance,brandPreference} from './city_clothing.js?v=party-caps-skin-1';
+import {appearance,brandPreference} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {inventoryFree} from './city_inventory.js';
 /** Physical paper media. Written entries are independent of journal retention. */
 export const PUBLICATION_RULES=Object.freeze({bookPages:5,maxPages:32,entriesPerPage:2,writersPerHour:4});

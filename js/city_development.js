@@ -1,11 +1,11 @@
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {setupOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
-import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js?v=pocket-water-cutaway-1';
+import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js?v=furniture-farms-fertilizer-1';
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad } from './city_terrain.js?v=initial-cycle-ref-1';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();

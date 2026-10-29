@@ -1,3 +1,5 @@
+import {CityFurniture} from './city_furniture.js';
+import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket} from './city_supplies.js';
 import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
@@ -10,7 +12,7 @@ import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_ser
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment} from './city_employment.js';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=interiors-completion-2';
-import {clothingMood,moveGarments} from './city_clothing.js?v=party-caps-skin-1';
+import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
@@ -23,25 +25,25 @@ import {skybridgeLinks} from './city_skybridges.js?v=bridge-clean-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=pocket-water-cutaway-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=furniture-farms-fertilizer-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
-import { quarryDeposits } from './city_terrain.js?v=initial-cycle-ref-1';
+import { quarryDeposits } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
-import { CitySanitation } from './city_sanitation.js?v=refectory-survival-1';
+import { CitySanitation } from './city_sanitation.js?v=furniture-farms-fertilizer-1';
 import { CityLife } from './city_life.js?v=pocket-water-cutaway-1';
 import { CityWorkMeals } from './city_work_meals.js?v=refectory-survival-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=interiors-completion-2';
-import { CityLogistics } from './city_logistics.js?v=informal-gigs-1';
-import { CityGigs } from './city_gigs.js?v=informal-services-1';
+import { CityLogistics } from './city_logistics.js?v=furniture-farms-fertilizer-1';
+import { CityGigs } from './city_gigs.js?v=furniture-farms-fertilizer-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=pocket-water-cutaway-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=furniture-farms-fertilizer-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=pocket-water-cutaway-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=initial-cycle-ref-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -123,6 +125,7 @@ export class CitySimulation {
     this.gigs = new CityGigs(this);
     this.supplies=new CitySupplies(this);
     this.water=new CityWater(this);
+    this.furniture=new CityFurniture(this);
     this.workMeals = new CityWorkMeals(this);
     this.lighting = new CityLighting(this);
     this.bank = new CityBank(this);
@@ -228,6 +231,7 @@ export class CitySimulation {
     this.economy.initialize();
     this.vehicles.equipInitialWorkers();
     this.nature.initialize();
+    this.furniture.reconcile();
     this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: ${this.citizens.length} moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
     this.syncClock();
   }
@@ -280,6 +284,7 @@ export class CitySimulation {
     this.structureRevision++;
     this.sanitation.setupBuilding(b);
     this.sanitation.setupBusinessRooms(b);
+    if(type==='farm')cultivateFarmTerrain(this,b);
     if (plot) { plot.buildingId = b.id;plot.door={...b.door}; b.plotId = plot.id; } else this.development.attachBuilding(b, ownerAccountId);
     b.accessPath = [terrain.door, ...access];
     layDirtPath(this.world,b.accessPath);
@@ -521,6 +526,7 @@ export class CitySimulation {
     if(task==='leisure'&&!urgent&&joblessDuringShift&&searchEmployment(this,c))return;
     if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&this.paint.route(c))return;
     if (task === 'social' && this.relationships.seekContact(c)) return;
+    if(task==='leisure'&&!urgent&&this.furniture.routeLeisure(c))return;
     if(task==='hygiene'&&this.sanitation.choose(c,'hygiene'))return;
     if (task === 'toilet') {
       if (this.sanitation.choose(c)) { c.toiletWaitingSince=null; return; }
@@ -578,6 +584,8 @@ export class CitySimulation {
     if (task === 'energy'&&home) n.energy = clamp(n.energy + 0.1);
   }
   performTask(c) {
+    if(c.task==='work-wait'){if(!c.seatId&&!syncCitizenInterior(this,c))return;this.furniture.advanceWait(c);return;}
+    if(c.task==='sit'){if(c.path.length)return;c.needs.leisure=clamp(c.needs.leisure+.7);c.action='Descansando sentado no banco';if(this.minute>=c.sitUntil||this.urgentNeed(c)){this.furniture.release(c);c.task=null;}return;}
     if(c.task==='lake-water'){this.supplies.collectLake(c);return;}
     if(!syncCitizenInterior(this,c))return;
     if(c.task==='supplies'){this.supplies.arrive(c);return;}
@@ -609,7 +617,7 @@ export class CitySimulation {
       if (this.development.work(project, c)) {
         if (builder && builder.ownerId !== c.id) this.payWage(c,builder,builder.wage);
         c.action = ['road', 'road-repair'].includes(project.service) ? 'Construindo ou reparando estrada' : project.service === 'lamp' ? 'Instalando poste' : project.service === 'expansion' ? 'Ampliando edifício' : `Construindo no terreno ${project.plotId}`;
-      } else { c.action = 'Aguardando materiais da obra'; c.task = null; }
+      } else { c.action = 'Aguardando materiais da obra';if(builder)this.furniture.waitForInputs(c,builder,'Aguardando materiais da obra');else c.task=null; }
       if (this.urgentNeed(c)) c.task = null;
       return;
     }
@@ -646,6 +654,7 @@ export class CitySimulation {
       // Waiting for ingredients or a customer is still paid time at the assigned workplace.
       if(productive||present){if(!isOwner)this.payWage(c,b,wage);if(productive)this.economy.practice(c,JOB_SKILL[b.type]);}
       if (isOwner) this.economy.practice(c, 'management');
+      if(!productive&&b.type!=='farm'&&b.type!=='forestry'&&Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)>30){this.furniture.waitForInputs(c,b,'Aguardando matéria-prima ou serviço');return;}
       if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
       c.action = b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Gerindo ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
       if (Math.min(n.food, n.water, n.energy, n.toilet, n.hygiene, n.health) < 22) c.task = null;
@@ -847,6 +856,7 @@ export class CitySimulation {
       this.supplies.useCarried(c);
       if (this.life.minute(c,elapsed)) continue;
       advanceCitizenInterior(this,c,elapsed);
+      this.furniture.syncCitizen(c);
       discoverVacancies(this,c);
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (this.workMeals.advance(c)) continue;
@@ -873,6 +883,8 @@ export class CitySimulation {
       if(!c.task){c._nextTaskAt=this.minute+5;c._retryUrgent=urgent;}
     }
     for(const c of this.citizens)if(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation)syncCitizenInterior(this,c);
+    for(const c of this.citizens)this.furniture.syncCitizen(c);
+    if(this.minute%60===0)this.furniture.reconcile();
     advanceRecruitment(this);
     this.gigs.updateMinute();
     disperseCrowds(this);this.society.updateMinute();
@@ -945,7 +957,7 @@ export class CitySimulation {
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     const printed=['livros','panfletos','jornais'].includes(good)?[...this.publications.documents.values()].filter(d=>!d.lost&&d.good===good&&!this.publications.inventoryHolder(d.ownerAccountId)).length:0;
-    return pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

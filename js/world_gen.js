@@ -20,6 +20,12 @@ export const TILE_ROAD_SAND_STONE = 11;   // Sand Stone Brick Road (h = 0.40)
 export const TILE_ROAD_HILL = 12;         // Hill Dirt Road (h = 2.30)
 export const TILE_ROAD_HILL_STONE = 13;   // Hill Stone Brick Road (h = 2.30)
 
+// Cultivated ground retains the exact height class of the replaced tile.
+export const FARM_TILES=new Set([14,15,16,17,18,19]);
+const FARM_BASE={14:TILE_FLOOR,15:TILE_SAND,16:TILE_HILL,17:TILE_STONE,18:TILE_MOUNTAIN,19:TILE_PEAK};
+export const baseTerrainTile=tile=>FARM_BASE[tile]??tile;
+export function farmSoilTile(tile){if(FARM_TILES.has(tile))return tile;return ({[TILE_FLOOR]:14,[TILE_SAND]:15,[TILE_HILL]:16,[TILE_STONE]:17,[TILE_MOUNTAIN]:18,[TILE_PEAK]:19})[tile]??null;}
+
 export const MAP_PRESET_ARCHIPELAGO = {
   seed: 0,
   noise_scale: 0.05,

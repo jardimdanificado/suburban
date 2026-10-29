@@ -25,6 +25,7 @@ export function queueService(city,c,b,kind,resource,ready){
  const older=entrance.serviceQueue.some(q=>q.buildingId===b.id&&queueKind(q.kind)===queueKind(kind)&&q.resource===resource&&q.sequence<ticket.sequence);
  const inside=c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.exiting;
  if(!older&&ready){
+  city.furniture?.release(c);
   if(!inside&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.9){const route=city.findPath(c.entity,b.door);if(route!==null)c.path=route;c.action='Indo ao atendimento';return false;}
   entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;return true;
  }
@@ -47,6 +48,7 @@ export function queueService(city,c,b,kind,resource,ready){
   return false;
  }
  for(const other of city.citizens)if(!queuedIds.has(other.id)&&!other.entity.destroyed&&!other.indoorLocation){occupied.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)occupied.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}
+ if(city.furniture?.queueSeat(c,b)){ticket.slot=`bench:${c.seatId}`;return false;}
  const positions=slots(city,entrance),available=[];for(let i=0;i<positions.length&&available.length<=ordinal;i++){const p=positions[i];if(occupied.has(`${Math.floor(p.x)},${Math.floor(p.y)}`))continue;const path=city.findPath(c.entity,p);if(path!==null)available.push({p,path,index:i});}
  const target=available[ordinal];ticket.slot=target?.index??null;
  if(target&&Math.hypot(c.entity.x-target.p.x,c.entity.y-target.p.y)>.5)c.path=target.path;

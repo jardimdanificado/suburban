@@ -1,7 +1,7 @@
 import {initializeInventory,inventoryFree} from './city_inventory.js';
 import {officeFloors} from './city_offices.js?v=office-demand-rollout-1';
 import {partyCapsHourly,seedPartyCaps,returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
-import {moveGarments} from './city_clothing.js?v=party-caps-skin-1';
+import {moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 
 export function headquartersAccount(p,party){
  const city=p.city,account=p.partyAccount(party);if(!account.inventory)initializeInventory(account,city.economy.goods,160);

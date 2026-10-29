@@ -1,3 +1,4 @@
+import {FARM_TILES,baseTerrainTile} from '../js/world_gen.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World, WorldClock } from '../js/world.js';
@@ -35,8 +36,8 @@ test('settlements across all landscape presets preserve every natural height and
     assert.equal(city.stats().homeless, 512); assert(city.stats().employed > 0); assert.equal(city.stats().entrepreneurs, 0);
     let roads = 0;
     for (let i = 0; i < natural.length; i++) if (natural[i] !== world.map[i]) {
-      roads++; assert(ROAD_TILES.has(world.map[i]));
-      assert([roadFor(natural[i]),dirtRoadFor(natural[i])].includes(world.map[i]));
+      if(FARM_TILES.has(world.map[i]))assert.equal(baseTerrainTile(world.map[i]),natural[i]);
+      else {roads++;assert(ROAD_TILES.has(world.map[i]));assert([roadFor(natural[i]),dirtRoadFor(natural[i])].includes(world.map[i]));}
       assert.equal(tileHeight(natural[i]), tileHeight(world.map[i]));
     }
     assert(roads > 0);
@@ -44,7 +45,7 @@ test('settlements across all landscape presets preserve every natural height and
       if(b.constructionKind!=='open-air'&&!['quarry','iron_mine','bauxite_mine'].includes(b.type))assert(b.terrain.variation<=1.3);
       assert(b.terrain.base >= b.terrain.max);
       for (let y = b.entity.y; y < b.entity.y + b.depth; y++) for (let x = b.entity.x; x < b.entity.x + b.width; x++) {
-        if(b.constructionKind==='open-air'&&ROAD_TILES.has(world.getTile(x,y)))assert.equal(tileHeight(world.getTile(x,y)),tileHeight(natural[y*world.width+x]));else assert.equal(world.getTile(x,y),natural[y*world.width+x]);
+        if(b.constructionKind==='open-air'&&ROAD_TILES.has(world.getTile(x,y)))assert.equal(tileHeight(world.getTile(x,y)),tileHeight(natural[y*world.width+x]));else assert.equal(baseTerrainTile(world.getTile(x,y)),natural[y*world.width+x]);
         assert(terrainWalkable(world, x, y) || ['quarry','iron_mine','bauxite_mine'].includes(b.type) && world.getTile(x,y)===4);
       }
       const route = city.findPath(city.spawn, b.door); assert(route !== null);

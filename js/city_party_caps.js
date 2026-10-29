@@ -1,6 +1,6 @@
 import {headquartersAccount} from './city_party_headquarters.js?v=party-caps-skin-1';
 import {inventoryFree} from './city_inventory.js';
-import {selectClothes} from './city_clothing.js?v=party-caps-skin-1';
+import {selectClothes} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 
 // Caps remain party property while loaned to members. Initial stock is counted
 // as initial goods; later stock must be manufactured, paid for and delivered.

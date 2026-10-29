@@ -1,4 +1,4 @@
-import {moveGarments} from './city_clothing.js?v=party-caps-skin-1';
+import {moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
 import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=interiors-completion-2';
@@ -75,7 +75,7 @@ export class CityLogistics {
     const eligibleCarriers=carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=quantity));
     let carrier = this.leastLoaded(purpose==='lamp-refill'&&eligibleCarriers.some(b=>b.type==='lamp_service')?eligibleCarriers.filter(b=>b.type==='lamp_service'):eligibleCarriers);
     // Collection firms send their own crews, independently of general freight capacity.
-    const wasteOperator=purpose==='waste-collection'?buyer:purpose==='waste-processing' && seller.type==='waste_collector'?seller:null;
+    const wasteOperator=['waste-collection','feces-processing'].includes(purpose)?buyer:purpose==='waste-processing' && seller.type==='waste_collector'?seller:null;
     if(wasteOperator?.active && (city.economy.workingOwner(wasteOperator) || wasteOperator.workers.length && wasteOperator.balance>=wasteOperator.wage))carrier=wasteOperator;
     if(requireCarrier && !carrier)return false;
     // Freight remains a paid offer when no carrier can take it; an idle

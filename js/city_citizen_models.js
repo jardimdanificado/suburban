@@ -6,7 +6,7 @@ export function citizenIsSleeping(c){
  if(s)return s.roomType==='bedroom'&&!s.exiting&&!s.path?.length;
  return c.action==='Dormindo na rua'&&(!c.homelessSleepSpot||Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)<=.3);
 }
-const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','health','vote','council-session']);
+const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','water','hygiene','supplies','shopping','health','vote','council-session']);
 export function citizenAnimation(c,moving=false){
   if(c.mobilityTrip?.stage==='boarding')return 'mount';
   if(c.ridingVehicleId){
@@ -14,12 +14,14 @@ export function citizenAnimation(c,moving=false){
     return ['patinete','patins','skate'].includes(c.ridingVehicleKind)?'glide':'passenger';
   }
   if(moving)return 'run';
+  if(c.seated)return 'seated';
   return WORK_TASKS.has(c.task)&&!c.path?.length?'use':'idle';
 }
 export function citizenFrame(clip,time,phase=0){
   if(clip==='mount'||clip==='passenger')return {clip:'use',frame:0};
+  if(clip==='seated')return {clip:'use',frame:2};
   if(clip==='glide')return {clip:'use',frame:1};
-  const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1,2,1]:CITIZEN_MODEL_FRAMES[clip]||[0],fps=clip==='run'||clip==='pedal'?8:4;
+  const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||[0],fps=clip==='run'||clip==='pedal'?8:4;
   return {clip:clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle',frame:sequence[Math.floor(Math.max(0,time)*fps+phase)%sequence.length]};
 }
 export function parseCitizenOBJ(text){

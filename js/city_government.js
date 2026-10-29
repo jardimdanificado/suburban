@@ -4,7 +4,7 @@ import {electoralPriorities,standingEvidence,personalGovernmentExperience,govern
 import {CityInterventions} from './city_interventions.js';
 import {ideologicalProfile} from './city_ideology.js';
 import {partyAccount,allocatePartyFunds,changePartyFund,illegalPartyFunding} from './city_party_funds.js';
-import {appearance} from './city_clothing.js?v=party-caps-skin-1';
+import {appearance} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {CityResearch} from './city_research.js';
 import {CityGovernmentAgenda} from './city_government_agenda.js';
 import {CityVoting} from './city_voting.js?v=needs-recovery-1';
@@ -19,7 +19,7 @@ import { makePartyFlag, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js
 import { CityCouncil } from './city_council.js';
 import { CityCampaigns } from './city_campaigns.js?v=party-caps-skin-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
-import { ROAD_TILES, tileAt } from './city_terrain.js?v=initial-cycle-ref-1';
+import { ROAD_TILES, tileAt } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 import {formatMoney} from './city_ui_format.js';
 
 // Ideological starting points; names are generated separately from word pools.

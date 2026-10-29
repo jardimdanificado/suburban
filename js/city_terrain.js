@@ -1,8 +1,9 @@
+import {baseTerrainTile} from './world_gen.js?v=furniture-farms-fertilizer-1';
 import {businessFloors} from './city_business_heights.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js?v=initial-cycle-ref-1';
 import {buildingEntrance} from './city_building_geometry.js';
 import {OFFICE_BUSINESSES} from './city_offices.js?v=office-demand-rollout-1';
-import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js?v=map-default-256-1';
+import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js?v=furniture-farms-fertilizer-1';
 
 const heights = [1.1, 5.5, 0, .4, 3.8, 0, 1.1, .4, 1.1, 2.3, 7.5, .4, 2.3, 2.3];
 export const ROAD_TILES = new Set([TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE]);
@@ -11,10 +12,10 @@ export const PAVED_ROAD_TILES = new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_ST
 export const ROAD_RULES = Object.freeze({dirtCost:.8,pavedCost:.55,degradeAt:30,wearPerCell:.01,hygienePerDirtCell:.025,moodPerDirtCell:.006});
 const land = new Set([TILE_FLOOR, TILE_SAND, TILE_HILL, ...ROAD_TILES]);
 export const tileKey = (x, y) => `${x},${y}`;
-export const tileHeight = tile => heights[tile] ?? 0;
+export const tileHeight = tile => heights[baseTerrainTile(tile)] ?? 0;
 export function tileAt(world, x, y) { return x < 0 || y < 0 || x >= world.width || y >= world.height ? TILE_VOID : world.getTile(x, y); }
 export function flagNightFactor(world){const hour=(world?.clock?.hour??12)+(world?.clock?.minute??0)/60;let glow=0;if(hour<5.5||hour>=19)glow=1;else if(hour<7)glow=1-(hour-5.5)/1.5;else if(hour>17.5)glow=(hour-17.5)/1.5;return 1-.82*Math.max(0,Math.min(1,glow));}
-export function terrainWalkable(world, x, y) { return land.has(tileAt(world, x, y)); }
+export function terrainWalkable(world, x, y) { return land.has(baseTerrainTile(tileAt(world, x, y))); }
 export function canStep(world, x, y, nx, ny) { return terrainWalkable(world, nx, ny) && Math.abs(tileHeight(tileAt(world, x, y)) - tileHeight(tileAt(world, nx, ny))) <= 1.25; }
 export function roadFor(tile) {
   if ([TILE_FLOOR, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE].includes(tile)) return TILE_ROAD_GRASS_STONE;
@@ -28,7 +29,7 @@ export function dirtRoadFor(tile){
   if([TILE_HILL,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE].includes(tile))return TILE_ROAD_HILL;
   return null;
 }
-export function roadTravelCost(tile){return PAVED_ROAD_TILES.has(tile)?ROAD_RULES.pavedCost:DIRT_ROAD_TILES.has(tile)?ROAD_RULES.dirtCost:tile===TILE_HILL?1.6:tile===TILE_SAND?1.2:1;}
+export function roadTravelCost(tile){return PAVED_ROAD_TILES.has(tile)?ROAD_RULES.pavedCost:DIRT_ROAD_TILES.has(tile)?ROAD_RULES.dirtCost:baseTerrainTile(tile)===TILE_HILL?1.6:baseTerrainTile(tile)===TILE_SAND?1.2:1;}
 export function wearRoad(world,x,y,amount){
   const tile=tileAt(world,x,y);if(!PAVED_ROAD_TILES.has(tile)||!(amount>0))return;
   const key=tileKey(x,y),condition=Math.max(0,(world.roadCondition?.get(key)??100)-amount);
@@ -209,7 +210,7 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
     for (const [dx, dy] of pathDirections) {
       const x = current.x + dx, y = current.y + dy, nextKey = y * width + x;
       const tile = tileAt(world, x, y);
-      if (!land.has(tile) || Math.abs(currentHeight-tileHeight(tile))>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
+      if (!land.has(baseTerrainTile(tile)) || Math.abs(currentHeight-tileHeight(tile))>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
       if(roadOnly&&!ROAD_TILES.has(tile))continue;
       const cost = current.cost + roadTravelCost(tile) + Math.abs(tileHeight(tile) - currentHeight) * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;

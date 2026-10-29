@@ -1,5 +1,5 @@
 import {businessFloors} from './city_business_heights.js';
-import { inspectBuildingSite } from './city_terrain.js?v=initial-cycle-ref-1';
+import { inspectBuildingSite } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 
 export const ESSENTIAL_SERVICES = new Set(['quarry','builder', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'composting']);
 
@@ -21,9 +21,10 @@ export class CityServiceInvestment {
       const waste=city.sanitation.wasteMetrics();
       const staff=firms.reduce((n,b)=>n+(b.balance>=b.wage?b.workers.length:0)+(city.economy.citizen(b.ownerId)?1:0),0);
       const units=type==='waste_collector'?waste.awaiting+waste.collecting:waste.total;
-      const work=units*(type==='waste_collector'?8:type==='recycler'?4:5),capacity=staff*240;
+      const feces=type==='composting'?city.buildings.reduce((n,b)=>n+(b.inventory.fezes||0),0):0;
+      const work=(units+feces)*(type==='waste_collector'?8:type==='recycler'?4:5),capacity=staff*240;
       const shortage=Math.max(0,work-capacity*.5);
-      return {work,capacity,staff,count:units,oldest:0,score:units>=2?Math.min(300,(staff?0:120)+shortage*.5):0};
+      return {work,capacity,staff,count:units+feces,oldest:0,score:units+feces>=2?Math.min(300,(staff?0:120)+shortage*.5):0};
     }
     const staff = firms.reduce((n,b) => n+(b.balance >= b.wage ? b.workers.length : 0)+(city.economy.citizen(b.ownerId) ? 1 : 0),0);
     let work = 0, oldest = 0, count = 0;

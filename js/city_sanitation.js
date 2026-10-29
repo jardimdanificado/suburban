@@ -1,7 +1,7 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=pocket-water-cutaway-1';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=furniture-farms-fertilizer-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js';
-import { reserveService } from './city_service_queue.js?v=pocket-water-cutaway-1';
+import { reserveService } from './city_service_queue.js?v=furniture-farms-fertilizer-1';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 export class CitySanitation {
@@ -140,7 +140,7 @@ export class CitySanitation {
       c.mood = Math.max(-25, Math.min(25, (c.mood || 0) + (quality >= 95 ? 6 : quality < 25 ? -9 : quality < 60 ? -4 : 0)));
       if (quality < 25) { c.needs.hygiene = clamp(c.needs.hygiene - 5); c.needs.health = clamp(c.needs.health - 1); }
       f.cleanliness = clamp(f.cleanliness - SANITATION_RULES.dirtPerUse);
-      this.addWaste(b, SANITATION_RULES.wastePerUse); c.servicePaid = f.id;
+      this.addWaste(b, SANITATION_RULES.wastePerUse);if('fezes' in b.inventory&&inventoryFree(b)>=1){b.inventory.fezes++;this.city.economy.produced.fezes++;this.city.economy.recordGoods('feces-collected','fezes',1,null,b.id);} c.servicePaid = f.id;
       this.city.log(`${c.entity.properties.name} usou banheiro ${f.access === 'public' ? 'público gratuito' : f.access === 'paid' ? 'pago' : 'privado'}, limpeza ${Math.round(quality)}%.`, 'sanitation', [c.id], { kind: 'toilet-use', facilityId: f.id, quality, waste: SANITATION_RULES.wastePerUse });
     }
     c.needs.toilet = clamp(c.needs.toilet + 10); c.action = `Usando banheiro / limpeza ${Math.round(f.cleanliness)}%`;
@@ -271,6 +271,7 @@ export class CitySanitation {
       if(worker.id!==company.ownerId){if(company.balance<company.wage){this.releaseCitizen(worker);continue;}city.payWage(worker,company);}
       job.labor+=1+(worker.skills.cleaning||0)/50;worker.action=job.scope==='street'?'Limpando fezes da via pública':'Limpando fezes do prédio';city.economy.practice(worker,'cleaning');
       if(job.labor<12+Math.max(0,pile.amount-1)*8)continue;
+      if(inventoryFree(company)<pile.amount)continue;company.inventory.fezes+=pile.amount;city.economy.produced.fezes+=pile.amount;city.economy.recordGoods('feces-collected','fezes',pile.amount,site?.id,company.id);
       if(job.scope==='building'){site.feces.delete(job.cellKey);site.fecesRevision=(site.fecesRevision||0)+1;}else this.streetFeces.delete(job.cellKey);this.fecesRevision++;this.cleanedFeces+=pile.amount;
       const paid=city.transfer(job.accountId,company.accountId,city.accounts.get(job.accountId)?.balance||0,'Serviço de remoção de fezes',{jobId:job.id,scope:job.scope});job.status='completed';job.completedAt=city.minute;job.cleanedAmount=pile.amount;job.workerId=worker.id;worker.cleaningJobId=null;worker.task=null;worker.targetId=null;worker.path=[];worker.workCell=null;
       city.history.record('service',job.scope==='street'?'Limpeza de fezes em via pública.':'Limpeza de fezes em propriedade privada.',[job.payerId,company.accountId,worker.accountId],{amount:paid?job.fee:0,jobId:job.id,scope:job.scope,buildingId:job.buildingId,cellKey:job.cellKey,quantity:pile.amount});
@@ -295,6 +296,15 @@ export class CitySanitation {
     for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : 60)) this.requestCleaning(f.id);
     const city=this.city,hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(hall)this.setupBusinessRooms(hall);
     for(const building of city.buildings)if(!building.entity.destroyed&&['public_toilet','popular_refectory'].includes(building.type))this.setupBusinessRooms(building);
+    // Fertilizer firms buy physical feedstock; payment and transport follow
+    // the same escrow/delivery flow as every other industrial input.
+    for(const buyer of city.economy.businesses.filter(b=>b.type==='composting')){
+      let missing=Math.min(24,Math.max(0,24-(buyer.inventory.fezes||0)-(buyer.incoming.fezes||0)),inventoryFree(buyer));
+      for(const seller of city.buildings.filter(b=>b!==buyer&&b.active&&!b.entity.destroyed&&(b.inventory.fezes||0)>0).sort((a,b)=>Math.hypot(a.door.x-buyer.door.x,a.door.y-buyer.door.y)-Math.hypot(b.door.x-buyer.door.x,b.door.y-buyer.door.y))){
+        const amount=Math.min(missing,seller.inventory.fezes,city.logistics.transportLimit(seller,buyer));if(amount<1)continue;
+        if(city.logistics.order(seller,buyer,'fezes',amount,city.economy.goods.fezes.price,{purpose:'feces-processing'}))missing-=amount;if(missing<=0)break;
+      }
+    }
     const collectors=city.economy.businesses.filter(b=>b.type==='waste_collector');
     const processors=city.economy.businesses.filter(b=>['recycler','composting'].includes(b.type));
     const activeLoads=()=>city.logistics.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));

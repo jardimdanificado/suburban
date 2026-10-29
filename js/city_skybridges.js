@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {ROAD_TILES,tileAt,terrainWalkable} from './city_terrain.js?v=initial-cycle-ref-1';
+import {ROAD_TILES,tileAt,terrainWalkable} from './city_terrain.js?v=furniture-farms-fertilizer-1';
 
 // One deterministic source of truth feeds both pedestrian routing and the renderer.
 export function skybridgeLinks(buildings,world){

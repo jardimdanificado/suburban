@@ -1,5 +1,5 @@
 import {makePartyName} from './city_party_names.js';
-import {ROAD_TILES,tileAt} from './city_terrain.js?v=initial-cycle-ref-1';
+import {ROAD_TILES,tileAt} from './city_terrain.js?v=furniture-farms-fertilizer-1';
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
 export const PARTY_ORGANIZATION_RULES=Object.freeze({initialParties:4,referendumMinutes:1440,founderDistance:.55,proposalInterval:3*1440,founderCooldown:7*1440,campaignBefore:2*1440,campaignAfter:1440,contactInterval:360,maxContactsPerHour:8});
 export class CityPartyOrganization {

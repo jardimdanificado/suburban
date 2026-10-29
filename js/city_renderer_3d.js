@@ -1,3 +1,5 @@
+import {roomFurnitureForCity} from './city_furniture_catalog.js';
+import {furnitureModel} from './city_furniture_models.js';
 import {applyInteriorCutaway} from './city_interior_view.js';
 import {addBuildingDetails} from './city_building_details.js?v=merged-architecture-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
@@ -9,7 +11,7 @@ import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './
 import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=initial-cycle-ref-1';
+import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=furniture-farms-fertilizer-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-door-alignment-2';
 import {syncSkybridges} from './city_skybridges.js?v=bridge-clean-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
@@ -80,6 +82,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   syncCityMobility(renderer,THREE,entities,world);
   syncSkybridges(renderer,THREE,entities,world);
   syncFecesVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
+  syncStreetBenches(renderer,THREE,world);
   const map = world.map;
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
     x>=renderer.renderedMinTx && x+width<=renderer.renderedMaxTx+1 && y>=renderer.renderedMinTy && y+depth<=renderer.renderedMaxTy+1;
@@ -131,12 +134,13 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     if(!inView(entity.x,entity.y,b.width,b.depth)){const existing=renderer.cityMeshes.get(entity.id);if(existing)existing.visible=false;continue;}
     if (b.constructionKind === 'open-air') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
+    const interiorContentKey=b.type==='office_tower'?(b.officeLeases||[]).filter(l=>l.status==='active').map(l=>{const tenant=renderer.cityDevelopment?.city?.building(l.buildingId);return `${tenant?.id}:${tenant?.type}:${tenant?.layoutRevision||0}`;}).join('|'):'';
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
-    if (group && (group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
+    if (group && (group.userData.interiorContentKey!==interiorContentKey || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
       renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
-      group = new THREE.Group(); group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
+      group = new THREE.Group();group.userData.interiorContentKey=interiorContentKey; group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
       const material = buildingMaterial(renderer,THREE,b.architecture==='timber'?'wood':'wall',0xffffff);material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
@@ -150,6 +154,9 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         let facadeMask=0;if(u.y===0)facadeMask|=1;if(u.y===b.depth-1)facadeMask|=2;if(u.x===0)facadeMask|=4;if(u.x===b.width-1)facadeMask|=8;
         const doorMask=doorByUnit.get(u.id)||0,openingMask=u.hasWindow?facadeMask&~doorMask:0,key=`${facadeMask}:${openingMask}:${doorMask}`,bucket=cellMasks.get(key)||[];bucket.push(u);cellMasks.set(key,bucket);
       }
+      const doorFrames=new THREE.Group();group.add(doorFrames);group.userData.doorFrames=doorFrames;
+      for(const u of b.units)for(const [bit,dx,dy]of [[1,0,-1],[2,0,1],[4,-1,0],[8,1,0]])if((doorByUnit.get(u.id)||0)&bit){const frame=new THREE.Group(),mat=new THREE.MeshLambertMaterial({color:0x9b7653});for(const [x,y,w,h]of [[-.25,.72,.06,1.44],[.25,.72,.06,1.44],[0,1.47,.56,.07]]){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,.075),mat);m.position.set(x,y,0);m.castShadow=m.receiveShadow=true;frame.add(m);}frame.position.set(u.x+.5+dx*.49,u.z*CITY_FLOOR_HEIGHT,u.y+.5+dy*.49);if(dx)frame.rotation.y=Math.PI/2;doorFrames.add(frame);}
+      for(const frame of [...doorFrames.children]){frame.updateMatrix();for(const mesh of [...frame.children]){mesh.updateMatrix();mesh.matrix.premultiply(frame.matrix);mesh.matrix.decompose(mesh.position,mesh.quaternion,mesh.scale);doorFrames.add(mesh);}doorFrames.remove(frame);}mergeStaticMeshes(THREE,doorFrames);
       const cellMeshes=[];
       for(const units of cellMasks.values()){
         const first=units[0],facadeMask=(first.y===0?1:0)|(first.y===b.depth-1?2:0)|(first.x===0?4:0)|(first.x===b.width-1?8:0),doorMask=doorByUnit.get(first.id)||0,openingMask=first.hasWindow?facadeMask&~doorMask:0;
@@ -248,38 +255,13 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const slab = new THREE.Mesh(new THREE.BoxGeometry(b.width, .12, b.depth), new THREE.MeshLambertMaterial({ color: 0x7e8776 }));
       slab.position.set(b.width / 2, -.06, b.depth / 2); slab.receiveShadow = true; group.add(slab);group.userData.slab=slab;
       const roomProps = new THREE.Group(),propsByFloor=new Map(),addRoomProp=(u,object)=>{let floor=propsByFloor.get(u.z);if(!floor){floor=new THREE.Group();floor.userData.interiorFloor=u.z;propsByFloor.set(u.z,floor);}floor.add(object);};
-      for (const u of b.units) {
-        if(u.roomType==='office'||u.roomType==='plenary'){const desk=new THREE.Mesh(new THREE.BoxGeometry(.55,.12,.32),new THREE.MeshLambertMaterial({color:u.roomType==='plenary'?0x5f4930:0x947a4e}));desk.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.42,u.y+.4);addRoomProp(u,desk);const seat=new THREE.Mesh(new THREE.BoxGeometry(.26,.28,.26),new THREE.MeshLambertMaterial({color:0x496759}));seat.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.2,u.y+.75);addRoomProp(u,seat);}
-        if(u.roomType==='workspace'){const bench=new THREE.Mesh(new THREE.BoxGeometry(.58,.14,.36),new THREE.MeshLambertMaterial({color:0x947a4e}));bench.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.42,u.y+.72);addRoomProp(u,bench);const seat=new THREE.Mesh(new THREE.BoxGeometry(.25,.28,.25),new THREE.MeshLambertMaterial({color:0x596b62}));seat.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.2,u.y+.30);addRoomProp(u,seat);}
-        if(u.roomType==='service'){const counter=new THREE.Mesh(new THREE.BoxGeometry(.72,.62,.24),new THREE.MeshLambertMaterial({color:0x806246}));counter.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.31,u.y+.72);addRoomProp(u,counter);}
-        if(u.roomType==='treatment'){const bed=new THREE.Mesh(new THREE.BoxGeometry(.64,.18,.34),new THREE.MeshLambertMaterial({color:0xd7d1c4}));bed.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.30,u.y+.5);addRoomProp(u,bed);}
-        if(u.roomType==='bedroom'){
-          const wood=new THREE.MeshLambertMaterial({color:0x76533b}),linen=new THREE.MeshLambertMaterial({color:0xc9c0aa}),pillow=new THREE.MeshLambertMaterial({color:0xe6dfcf});
-          const frame=new THREE.Mesh(new THREE.BoxGeometry(.72,.13,.46),wood);frame.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.20,u.y+.5);addRoomProp(u,frame);
-          const mattress=new THREE.Mesh(new THREE.BoxGeometry(.68,.13,.42),linen);mattress.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.32,u.y+.5);addRoomProp(u,mattress);
-          const cushion=new THREE.Mesh(new THREE.BoxGeometry(.23,.07,.34),pillow);cushion.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.42,u.y+.32);addRoomProp(u,cushion);
-          const headboard=new THREE.Mesh(new THREE.BoxGeometry(.75,.38,.07),wood);headboard.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.35,u.y+.75);addRoomProp(u,headboard);
-        }
-        if (u.roomType === 'bathroom') {
-          const toilet = new THREE.Mesh(new THREE.BoxGeometry(.30, .38, .34), new THREE.MeshLambertMaterial({ color: 0xf1eee3 }));
-          toilet.position.set(u.x + .5, u.z*CITY_FLOOR_HEIGHT + .20, u.y + .5); addRoomProp(u,toilet);
-          const tank = new THREE.Mesh(new THREE.BoxGeometry(.28, .27, .13), new THREE.MeshLambertMaterial({ color: 0xf1eee3 }));
-          tank.position.set(u.x + .5, u.z*CITY_FLOOR_HEIGHT + .50, u.y + .35); addRoomProp(u,tank);
-          const sink=new THREE.Mesh(new THREE.BoxGeometry(.34,.12,.26),new THREE.MeshLambertMaterial({color:0xf1eee3}));sink.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.52,u.y+.78);addRoomProp(u,sink);
-        } else if (u.roomType === 'dining') {
-          const table = new THREE.Mesh(new THREE.BoxGeometry(.68, .12, .48), new THREE.MeshLambertMaterial({ color: 0x805638 }));
-          table.position.set(u.x + .5, u.z*CITY_FLOOR_HEIGHT + .50, u.y + .5); addRoomProp(u,table);
-          for (const dx of [-.23, .23]) for (const dz of [-.15, .15]) {
-            const seat = new THREE.Mesh(new THREE.BoxGeometry(.16, .20, .16), new THREE.MeshLambertMaterial({ color: 0x6a745d }));
-            seat.position.set(u.x + .5 + dx, u.z*CITY_FLOOR_HEIGHT + .27, u.y + .5 + dz); addRoomProp(u,seat);
-          }
-        } else if (u.roomType === 'laundry') {
-          const washer=new THREE.Mesh(new THREE.BoxGeometry(.55,.72,.5),new THREE.MeshLambertMaterial({color:0xd5d8d2}));washer.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.38,u.y+.5);addRoomProp(u,washer);const drum=new THREE.Mesh(new THREE.CylinderGeometry(.15,.15,.035,12),new THREE.MeshLambertMaterial({color:0x526c73}));drum.rotation.x=Math.PI/2;drum.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.4,u.y+.24);addRoomProp(u,drum);
-        }
+      for(const u of b.units)for(const item of roomFurnitureForCity(renderer.cityDevelopment?.city,b,u)){
+        const model=furnitureModel(THREE,item);model.position.set(item.x,item.z*CITY_FLOOR_HEIGHT,item.y);model.updateMatrix();
+        for(const mesh of [...model.children]){mesh.updateMatrix();mesh.matrix.premultiply(model.matrix);mesh.matrix.decompose(mesh.position,mesh.quaternion,mesh.scale);addRoomProp(u,mesh);}
       }
       for(let z=0;z<Math.max(0,b.floors-1);z++)for(let step=0;step<10;step++){
         const wood=new THREE.Mesh(new THREE.BoxGeometry(.42,.18,.075),new THREE.MeshLambertMaterial({color:0x806448}));
-        wood.position.set(Math.floor(b.width/2)+.5,z*CITY_FLOOR_HEIGHT+step*.18+.09,Math.floor(b.depth/2)+.18+step*.075);let floor=propsByFloor.get(z);if(!floor){floor=new THREE.Group();floor.userData.interiorFloor=z;propsByFloor.set(z,floor);}floor.add(wood);
+        wood.castShadow=wood.receiveShadow=true;wood.position.set(Math.floor(b.width/2)+.5,z*CITY_FLOOR_HEIGHT+step*.18+.09,Math.floor(b.depth/2)+.18+step*.075);let floor=propsByFloor.get(z);if(!floor){floor=new THREE.Group();floor.userData.interiorFloor=z;propsByFloor.set(z,floor);}floor.add(wood);
       }
       for(const [floor,objects]of propsByFloor){mergeStaticMeshes(THREE,objects);objects.visible=false;roomProps.add(objects);}
       if (roomProps.children.length) { roomProps.visible = false; group.add(roomProps); group.userData.roomProps = roomProps; }
@@ -319,7 +301,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = Math.floor((renderer.foliageAnimationTick || 0)/20)*.1;
     group.position.set(entity.x, b.terrain.base, entity.y);
     const interior=renderer.cityInteriorView?.buildingId===b.id&&b.constructionKind!=='open-air',interiorFloor=renderer.cityInteriorView?.floor||0;
-    applyInteriorCutaway(THREE,group,interior?interiorFloor:null);
+    applyInteriorCutaway(THREE,group,interior?interiorFloor:null,renderer.cityInteriorView?.hideWalls!==false);
     for(const cells of group.userData.cellMeshes||[group.userData.cells]){const material=cells.material;material.emissive.setHex(renderer.selectedEntityId===entity.id?0x26351a:0x000000);}
     const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
     group.userData.highlight.visible = !interior&&renderer.selectedEntityId === entity.id && !!unit;
@@ -358,7 +340,7 @@ function createFarmPlants(THREE,b){
 }
 function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
   const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),growthByCell=new Float32Array(cells.length);let offset=0;
-  for(const field of b.fields||[]){const count=Math.min(field.area||12,cells.length-offset),age=field.plantedAt==null?0:Math.max(0,minute-field.plantedAt),growth=field.plantedAt==null?0:Math.min(1,age/Math.max(1,plantSet.visual.grow));for(let i=0;i<count;i++)growthByCell[offset+i]=growth;offset+=count;if(offset>=cells.length)break;}
+  for(const field of b.fields||[]){const count=Math.min(field.area||12,cells.length-offset),age=field.plantedAt==null?0:Math.max(0,minute-field.plantedAt)*(field.growthMultiplier||1),growth=field.plantedAt==null?0:Math.min(1,age/Math.max(1,plantSet.visual.grow));for(let i=0;i<count;i++)growthByCell[offset+i]=growth;offset+=count;if(offset>=cells.length)break;}
   const m=renderer._farmPlantMatrix??=new THREE.Matrix4(),pos=renderer._farmPlantPosition??=new THREE.Vector3(),quat=renderer._farmPlantQuaternion??=new THREE.Quaternion(),scale=renderer._farmPlantScale??=new THREE.Vector3(),axis=renderer._farmPlantAxis??=new THREE.Vector3(0,1,0),plantsPerCell=plantSet.visual.height>.7?2:3;
   let n=0,produceCount=0;
   for(let i=0;i<cells.length;i++){const growth=growthByCell[i];if(!growth)continue;const u=cells[i],height=plantSet.visual.height*(.12+.88*growth),ground=surfaceElevation(world,b.entity.x+u.x+.5,b.entity.y+u.y+.5);
@@ -384,7 +366,8 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     patches.receiveShadow = true; group.add(patches); group.userData.patches = patches;
     const rows = b.type==='quarry'?new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color:0xb0b8ba }), b.units.length * 3):null;
     if(rows)group.add(rows);group.userData.rows=rows;
-    if(b.type==='farm'){const cropPlants=createFarmPlants(THREE,b);group.add(cropPlants.group);group.userData.cropPlants=cropPlants;}
+    if(b.type==='farm'){patches.visible=false;const cropPlants=createFarmPlants(THREE,b);group.add(cropPlants.group);group.userData.cropPlants=cropPlants;}
+    if(b.type==='farm')addFarmFence(THREE,group,b,world);
     if(['market','greengrocer'].includes(b.type)){const fixtures=marketFixtures(THREE,b);group.add(fixtures);group.userData.retailFixtures=fixtures;}
     if(b.type==='bike_rack'){
       const metal=new THREE.MeshLambertMaterial({color:0x89999e});
@@ -411,6 +394,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
         walls.position.set(0, CITY_FLOOR_HEIGHT/2, 0); shed.add(walls);
         const door = new THREE.Mesh(new THREE.BoxGeometry(.42, 1.4, .04), new THREE.MeshLambertMaterial({ color: kind === 'bathroom' ? 0x346c8b : 0x533624 }));
         door.position.set(0, .72, .45); shed.add(door);
+        for(const [x,y,w,h]of [[-.25,.72,.06,1.44],[.25,.72,.06,1.44],[0,1.47,.56,.07]]){const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,.07),new THREE.MeshLambertMaterial({color:0xa48155}));frame.position.set(x,y,.475);frame.castShadow=true;shed.add(frame);}
         const sign = new THREE.Mesh(new THREE.BoxGeometry(.22, .13, .05), new THREE.MeshLambertMaterial({ color: kind === 'bathroom' ? 0xffffff : 0xe4c775 }));
         sign.position.set(0, 1.52, .46); shed.add(sign);
         const roof = new THREE.Mesh(new THREE.ConeGeometry(.67, .28, 4), new THREE.MeshLambertMaterial({ color: kind === 'bathroom' ? 0x677d86 : 0x796447 }));
@@ -464,4 +448,17 @@ function syncTownhallFlag(renderer,group,THREE,b,shade=1){
   const banner=new THREE.Mesh(clothFlagGeometry(THREE,1.65,1.04),material);group.userData.governingFlagCloth=banner;group.userData.governingFlagPhase=0;animateClothFlag(banner,flagWindTime(renderer),0);
   banner.userData.partyFlagTexture=texture;banner.position.set(b.width*.5+.85,roof+1.9,b.depth*.5);mast.add(banner);group.userData.governingFlagMaterial=material;
   group.add(mast);group.userData.governingFlagMesh=mast;
+}
+
+function addFarmFence(THREE,group,b,world){
+ const wood=new THREE.MeshLambertMaterial({color:0x9b7950}),fence=new THREE.Group();
+ const segment=(x1,z1,x2,z2)=>{const mx=(x1+x2)/2,mz=(z1+z2)/2;if(Math.hypot(b.entity.x+mx-b.door.x,b.entity.y+mz-b.door.y)<1.35)return;const h1=surfaceElevation(world,b.entity.x+x1,b.entity.y+z1),h2=surfaceElevation(world,b.entity.x+x2,b.entity.y+z2);
+  const post=new THREE.Mesh(new THREE.BoxGeometry(.075,.7,.075),wood);post.position.set(x1,h1+.35,z1);fence.add(post);
+  for(const y of [.25,.55]){const rail=new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(x2-x1,z2-z1,h2-h1),.055,.055),wood);rail.position.set(mx,(h1+h2)/2+y,mz);rail.rotation.y=-Math.atan2(z2-z1,x2-x1);rail.rotation.z=Math.atan2(h2-h1,Math.hypot(x2-x1,z2-z1));fence.add(rail);}
+ };
+ for(let x=0;x<b.width;x++){segment(x+.04,.04,Math.min(b.width-.04,x+1+.04),.04);segment(x+.04,b.depth-.04,Math.min(b.width-.04,x+1+.04),b.depth-.04);}for(let y=0;y<b.depth;y++){segment(.04,y+.04,.04,Math.min(b.depth-.04,y+1+.04));segment(b.width-.04,y+.04,b.width-.04,Math.min(b.depth-.04,y+1+.04));}for(const m of fence.children)m.castShadow=m.receiveShadow=true;mergeStaticMeshes(THREE,fence);group.add(fence);
+}
+function syncStreetBenches(renderer,THREE,world){
+ const furniture=renderer.cityDevelopment?.city?.furniture;if(!furniture)return;const meshes=renderer.streetBenchMeshes??=new Map(),active=new Set(furniture.benches.map(b=>b.id));for(const [id,g]of meshes)if(!active.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
+ for(const b of furniture.benches){let g=meshes.get(b.id);if(!g){g=furnitureModel(THREE,{type:'bench'});mergeStaticMeshes(THREE,g);g.rotation.y=b.angle;g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);renderer.scene.add(g);meshes.set(b.id,g);}g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
 }
