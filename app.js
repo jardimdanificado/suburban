@@ -38,7 +38,16 @@ let lastUiPointerX = -1, lastUiPointerY = -1;
 const profiling = new URLSearchParams(window.location.search).has('profile');
 const frameMetrics = { started: performance.now(), count: 0, simulation: 0, index: 0, scene: 0, ui: 0, cpu: 0, max: 0, terrain:0, city:0, renderEntities:0, entityLoop:0, entityRest:0, citizenClass:0, citizenSurface:0, citizenBody:0, webgl:0 };
 const performanceOutput=profiling?document.createElement('output'):null;
-if(performanceOutput){performanceOutput.id='performance-stats';Object.assign(performanceOutput.style,{position:'absolute',bottom:'30px',right:'8px',maxWidth:'560px',padding:'8px',font:'12px monospace',color:'#fff',background:'#17221de6',zIndex:'9999',pointerEvents:'none',whiteSpace:'pre-wrap'});root.append(performanceOutput);}
+if(performanceOutput){performanceOutput.id='performance-stats';Object.assign(performanceOutput.style,{position:'fixed',right:'8px',bottom:'8px',width:'min(560px, calc(100vw - 16px))',maxHeight:'min(72vh, calc(100dvh - 16px))',boxSizing:'border-box',overflow:'auto',overscrollBehavior:'contain',padding:'8px',font:'clamp(9px, 1.4vw, 12px) monospace',lineHeight:'1.35',color:'#fff',background:'#17221de6',zIndex:'9999',pointerEvents:'auto',whiteSpace:'pre-wrap',overflowWrap:'anywhere'});root.append(performanceOutput);}
+function formatPerformanceLines(value,prefix=''){
+  const lines=[];
+  for(const [key,item]of Object.entries(value||{})){
+    const label=prefix?`${prefix}.${key}`:key;
+    if(item&&typeof item==='object'&&!Array.isArray(item))lines.push(...formatPerformanceLines(item,label));
+    else lines.push(`${label}: ${typeof item==='number'?Number(item.toFixed(2)):String(item)}`);
+  }
+  return lines;
+}
 
 
 let selected = null;
@@ -337,8 +346,9 @@ function frame(now) {
     if(renderMode==='3d'&&renderer3D.frameProfile){frameMetrics.terrain+=renderer3D.frameProfile.terrain;frameMetrics.city+=renderer3D.frameProfile.city;frameMetrics.renderEntities+=renderer3D.frameProfile.entities;frameMetrics.entityLoop+=renderer3D.frameProfile.entityLoop;frameMetrics.entityRest+=renderer3D.frameProfile.entityRest;frameMetrics.citizenClass+=renderer3D.frameProfile.citizenClass;frameMetrics.citizenSurface+=renderer3D.frameProfile.citizenSurface;frameMetrics.citizenBody+=renderer3D.frameProfile.citizenBody;frameMetrics.webgl+=renderer3D.frameProfile.webgl;}
     if(ended-frameMetrics.started>=1000){
       const count=frameMetrics.count;
-      root.dataset.performance=JSON.stringify({fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute});
-      performanceOutput.textContent=root.dataset.performance;
+      const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
+      root.dataset.performance=JSON.stringify(profile);
+      performanceOutput.textContent=formatPerformanceLines(profile).join('\n');
       Object.assign(frameMetrics,{started:ended,count:0,simulation:0,index:0,scene:0,ui:0,cpu:0,max:0,terrain:0,city:0,renderEntities:0,entityLoop:0,entityRest:0,citizenClass:0,citizenSurface:0,citizenBody:0,webgl:0});
     }
   }
