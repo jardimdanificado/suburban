@@ -9,7 +9,7 @@ import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment} from './city_employment.js';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES} from './city_employment.js?v=housing-work-priority-1';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=interiors-completion-2';
 import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
@@ -38,11 +38,11 @@ import { CityHousing, HOUSING_RULES } from './city_housing.js?v=survival-capacit
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=pocket-water-cutaway-1';
 import { CityWorkMeals } from './city_work_meals.js?v=survival-capacity-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=survival-capacity-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=housing-work-priority-1';
 import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
 import { CityGigs } from './city_gigs.js?v=survival-capacity-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=investment-plan-reuse-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=housing-work-priority-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=landlord-stock-market-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=shared-origin-paths-1';
 
@@ -266,7 +266,10 @@ export class CitySimulation {
     if (!hub && !hasSettlementAccess(this.world, terrain.door, x, y, width, depth)) return this.fail('A entrada está isolada ou não há espaço acessível para o restante da cidade.');
 
     if (access === null) return this.fail('Este lote está isolado. Escolha um local conectado à cidade por terra firme.');
-    if (kind !== 'open-air' && this.citizens.some(c => !c.entity.destroyed && c.entity.x >= x && c.entity.x < x + width && c.entity.y >= y && c.entity.y < y + depth)) return this.fail('Há cidadãos neste terreno. Aguarde a passagem deles.');
+    // A staged construction deliberately brings its crew onto the plot. The
+    // completed shell evacuates them in finishBuildingOccupants; rejecting it
+    // merely because a worker is still standing on a work cell strands homes.
+    if (kind !== 'open-air' && !materialSource && this.citizens.some(c => !c.entity.destroyed && c.entity.x >= x && c.entity.x < x + width && c.entity.y >= y && c.entity.y < y + depth)) return this.fail('Há cidadãos neste terreno. Aguarde a passagem deles.');
     const count = width * depth * floors, stone = kind === 'open-air' ? (['park','bike_rack'].includes(type)?Math.ceil(count/4):0) : count * DEVELOPMENT_RULES.stonePerCell, capital = type !== 'townhall' && PUBLIC_TYPES.has(type) && ownerAccountId === 'treasury' ? this.currency.price(50000) : 0;
     const plot = this.development.plots.find(p => p.id === plotId);
     if (!free && (!plot || plot.ownerId !== ownerAccountId || plot.buildingId || plot.x !== x || plot.y !== y || width > plot.width || depth > plot.depth)) return this.fail('É necessário comprar um terreno compatível antes de construir.');
@@ -962,7 +965,7 @@ export class CitySimulation {
       if (this.life.minute(c,elapsed)) continue;
       advanceCitizenInterior(this,c,elapsed);
       if(c.skybridgeTransit){this.finishSkybridgeTransit(c);if(c.skybridgeTransit)continue;}
-      discoverVacancies(this,c);
+      if(age>=18&&!c.indoorLocation&&!c.businessIds.length&&!this.politics.officeHolder(c)&&this.minute>=(c.career?.nextDiscoveryAt??c.id%RECRUITMENT_RULES.discoveryInterval))discoverVacancies(this,c);
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
@@ -975,7 +978,7 @@ export class CitySimulation {
       }
       if (c.deliveryId || c.cleaningJobId || c.informalJobId) continue;
       if (c.conversation) continue;
-      if(!urgent)routeToInterview(this,c);
+      if(!urgent&&c.career?.pendingInterview?.status==='análise')routeToInterview(this,c);
       if(!urgent&&['work','manage','walk','leisure','social'].includes(c.task)&&Math.min(n.energy,n.health,n.toilet)>30)this.supplies.route(c);
       if (!c.task) {
         // An idle citizen used to repeat the same path/offer search every city

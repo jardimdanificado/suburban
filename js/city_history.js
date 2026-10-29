@@ -1,4 +1,4 @@
-import {employmentEvent} from './city_employment.js';
+import {employmentEvent} from './city_employment.js?v=housing-work-priority-1';
 /** Structured event journal, inspired by Brutopolis/event_log.js.
  * Stable IDs, subject/type indices and bounded retention; no entity references in exports. */
 export const HISTORY_LIMIT = 16000;

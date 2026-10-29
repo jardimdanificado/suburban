@@ -5,7 +5,7 @@ import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=deep-perf-3';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=housing-work-priority-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
@@ -16,7 +16,12 @@ export class CityDevelopment {
   acquirePublicSite(site){return acquirePublicBuildingSite(this,site);}
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
   selectBuilder(clientId, door, builderId = null, {allowTerrainAccess=false}={}) {
-    return this.city.economy.businesses.filter(b => b.type === 'builder' && (!builderId || b.id === builderId) && b.accountId !== clientId && (this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door }) || allowTerrainAccess&&findTerrainPath(this.city.world,b.door,door,this.city.occupied)!==null)).sort((a, b) => (clientId==='treasury'?Number(b.favorUntil>this.city.minute&&b.favoredBy===this.city.economy.mayorId)-Number(a.favorUntil>this.city.minute&&a.favoredBy===this.city.economy.mayorId):0)||this.projects.filter(p => p.builderId === a.id && !p.cancelled && p.status !== 'completed').length - this.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed').length || this.city.reputation.providerPenalty(a) - this.city.reputation.providerPenalty(b) || a.id - b.id)[0] || null;
+    const candidates=this.city.economy.businesses.filter(b => b.type === 'builder' && (!builderId || b.id === builderId) && b.accountId !== clientId && (this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door }) || allowTerrainAccess&&findTerrainPath(this.city.world,b.door,door,this.city.occupied)!==null));
+    if(candidates.length<2)return candidates[0]||null;
+    // A comparator can run dozens of times: count the project backlog once,
+    // rather than scanning every project twice for every pair of contractors.
+    const loads=new Map();for(const p of this.projects)if(!p.cancelled&&p.status!=='completed')loads.set(p.builderId,(loads.get(p.builderId)||0)+1);
+    return candidates.sort((a,b)=>(clientId==='treasury'?Number(b.favorUntil>this.city.minute&&b.favoredBy===this.city.economy.mayorId)-Number(a.favorUntil>this.city.minute&&a.favoredBy===this.city.economy.mayorId):0)||(loads.get(a.id)||0)-(loads.get(b.id)||0)||this.city.reputation.providerPenalty(a)-this.city.reputation.providerPenalty(b)||a.id-b.id)[0]||null;
   }
   serviceOffers(builderId) {
     const b = this.city.building(builderId);
@@ -219,7 +224,9 @@ export class CityDevelopment {
     const queued=pending.filter(p=>['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)&&p.service==='building');
     const expansions=pending.filter(p=>['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)&&p.service==='expansion');
     const planned=[...queued,...expansions].reduce((n,p)=>{const b=city.building(p.buildingId),perimeter=Math.max(0,2*(p.width??b?.width??0)+2*(p.depth??b?.depth??0)-4),floors=p.floors||0;if(p.type==='popular_luxury_housing')return n+floors;if(p.type==='popular_housing')return n+Math.max(0,perimeter-1)*floors;return n+Math.max(0,perimeter*floors-(p.service==='building'?1:0));},0);
-    const limit=Math.max(2,Math.min(10,Math.ceil(needs.homeless/48)));
+    // With emergency housing on a short construction milestone, several
+    // funded sites can advance together instead of leaving hundreds unhoused.
+    const limit=Math.max(2,Math.min(8,Math.ceil(needs.homeless/64)));
     if(needs.homeless<=vacant+planned || queued.length+expansions.length>=limit)return;
     const expandable=city.buildings.filter(b=>['super_popular_housing','popular_housing','popular_luxury_housing'].includes(b.type)&&!b.entity.destroyed&&b.floors<12&&b.units.every(u=>u.ownerId==='treasury')&&!pending.some(p=>p.buildingId===b.id));
     expandable.sort((a,b)=>a.floors-b.floors||a.id-b.id);
@@ -500,7 +507,10 @@ export class CityDevelopment {
     let dispatch=constructionDispatch.get(this);
     if(!dispatch||dispatch.minute!==this.city.minute){
       const assigned=new Map();for(const worker of this.city.citizens)if(!worker.entity.destroyed&&worker.task==='construction')assigned.set(worker.workProjectId,(assigned.get(worker.workProjectId)||0)+1);
-      dispatch={minute:this.city.minute,assigned,projects:this.projects.filter(p=>p.status!=='blocked'&&p.labor<p.requiredLabor&&!p.waitingForCouncilContract&&!p.cancelled&&p.status!=='completed'&&p.inventory.pedra>=p.stone&&(p.service!=='lamp'||!!p.builderId))};
+      const people=this.city.citizens.filter(person=>!person.entity.destroyed),homeless=people.reduce((n,person)=>n+Number(!person.homeUnitId),0),housingCrisis=homeless>=Math.max(12,people.length*.1);
+      const projects=this.projects.filter(p=>p.status!=='blocked'&&p.labor<p.requiredLabor&&!p.waitingForCouncilContract&&!p.cancelled&&p.status!=='completed'&&p.inventory.pedra>=p.stone&&(p.service!=='lamp'||!!p.builderId));
+      const housing=projects.filter(p=>p.accountId==='treasury'&&['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)).sort((a,b)=>(b.priority||0)-(a.priority||0)||a.startedAt-b.startedAt||String(a.id).localeCompare(String(b.id)));
+      dispatch={minute:this.city.minute,assigned,projects,housingCrisis,priorityHousingId:housing[0]?.id};
       constructionDispatch.set(this,dispatch);
     }
     let selected=null,selectedPriority=-Infinity,selectedCrew=Infinity;
@@ -508,7 +518,8 @@ export class CityDevelopment {
       const owned=!p.builderId&&(p.accountId===c.accountId||p.accountId==='treasury'&&p.ownerId===c.id),builderJob=business?.type==='builder'&&(p.builderId===business.id||p.accountId===business.accountId);
       if(!owned&&!builderJob||p.status==='blocked'||p.labor>=p.requiredLabor||p.waitingForCouncilContract||p.cancelled||p.status==='completed'||p.inventory.pedra<p.stone)continue;
       const crew=dispatch.assigned.get(p.id)||0,limit=Math.max(1,Math.min(6,Math.ceil(Math.max(0,p.requiredLabor-p.labor)/30)));if(crew>=limit)continue;
-      const score=(p.priority||0)+(p.service==='lamp'?Math.min(80,Math.max(0,this.city.minute-p.startedAt)/60*2):0)+Math.min(160,(this.city.minute-p.startedAt)/60);
+      const housingPriority=dispatch.housingCrisis&&p.accountId==='treasury'&&['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)?(p.id===dispatch.priorityHousingId?500:250):0;
+      const score=housingPriority+(p.priority||0)+(p.service==='lamp'?Math.min(80,Math.max(0,this.city.minute-p.startedAt)/60*2):0)+Math.min(160,(this.city.minute-p.startedAt)/60);
       if(score>selectedPriority||score===selectedPriority&&(crew<selectedCrew||crew===selectedCrew&&p.startedAt<selected?.startedAt)){selected=p;selectedPriority=score;selectedCrew=crew;}
     }
     return selected;
@@ -538,6 +549,16 @@ export class CityDevelopment {
       p.waitingForBasicNeeds=defer;
       if(!defer)this.requestMaterials(p);
       if(p.status==='blocked')this.complete(p);
+    }
+    const city=this.city,living=city.citizens.filter(c=>!c.entity.destroyed),emergencyHomeless=living.reduce((n,c)=>n+Number(!c.homeUnitId),0);
+    if(emergencyHomeless>=Math.max(12,living.length*.1))for(const p of this.projects){
+      if(p.accountId!=='treasury'||!['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)||p.cancelled||p.status==='completed')continue;
+      // Emergency homes still require real materials and site work, but the
+      // normal three labor units per cell made their first completion arrive
+      // days after the shelter crisis began. Keep crews doing real site work,
+      // but let emergency housing open after an initial construction phase.
+      const cells=(p.width||1)*(p.depth||1)*(p.floors||1);p.requiredLabor=Math.min(p.requiredLabor,Math.ceil(cells*.1));
+      if(p.inventory.pedra>=p.stone&&p.labor>=p.requiredLabor)this.complete(p);
     }
     // Builders develop housing for sale; individual investors prefer premises for their own firms.
     const homeless = this.city.citizens.filter(c => !c.homeUnitId).length;

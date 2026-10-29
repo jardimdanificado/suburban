@@ -48,7 +48,7 @@ export function qualification(city,c,b){
   const trainee=!!gaps.length&&policy.allowTraining&&policy.minExperienceMinutes===0&&policy.minRating===0;
   return {eligible:!gaps.length||trainee,trainee,experience,rating,reason:gaps.join('; ')||'Requisitos atendidos'};
 }
-export const RECRUITMENT_RULES=Object.freeze({discoveryRadius:10,discoveryInterval:5,interviewDuration:10,minimumNotice:60});
+export const RECRUITMENT_RULES=Object.freeze({discoveryRadius:10,discoveryInterval:15,interviewDuration:10,minimumNotice:60});
 const vacancyIndexes=new WeakMap();
 function nearbyFirms(city,c){
   let index=vacancyIndexes.get(city);

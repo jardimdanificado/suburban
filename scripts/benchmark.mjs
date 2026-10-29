@@ -10,7 +10,20 @@ const mapSize=Math.max(128,Math.min(1024,Number(process.env.SUBURBAN_BENCH_MAP_S
 const moduleAt=name=>import(pathToFileURL(resolve(root,'js',name)).href);
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
-if(mode==='city-render'){
+if(mode==='builder-selection'){
+  const {CityDevelopment}=await moduleAt('city_development.js');
+  const businesses=Array.from({length:12},(_,i)=>({id:i+1,type:'builder',accountId:`business:${i+1}`,door:{x:i,y:0}}));
+  const city={minute:480,economy:{businesses,mayorId:7,connected:()=>true},reputation:{providerPenalty:b=>b.id%4}},development=new CityDevelopment(city);
+  development.projects=Array.from({length:1000},(_,i)=>({builderId:i%12+1,cancelled:i%7===0,status:i%5===0?'completed':'materials'}));
+  const choices=[],started=performance.now();for(let i=0;i<1000;i++)choices.push(development.selectBuilder('treasury',{x:20,y:20}).id);
+  console.log(JSON.stringify({mode,root,ms:performance.now()-started,selections:choices.length,checksum:hash(choices)}));
+}else if(mode==='building-sites'){
+  const terrain=await moduleAt('city_terrain.js');let reads=0,seed=123,randomCalls=0;
+  const city={world:{width:128,height:128,revision:0,getTile(x,y){reads++;return x>=0&&y>=0&&x<128&&y<128?0:5;}},occupied:new Set(),obstacleRevision:0,buildings:[{entity:{destroyed:false},door:{x:10.5,y:10.5}}],development:{plots:[],overlaps(){return false;}},random(){randomCalls++;seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}};
+  const started=performance.now(),finish=terrain.beginBuildingSiteSearch?.(city)||(()=>{}),sites=[];
+  try{for(let i=0;i<500;i++)sites.push(terrain.chooseBuildingSite(city,35+(i%10)*6,40,4,4,{plotId:i%10,type:['market','bakery','cleaner','clinic'][i%4]}));}finally{finish();}
+  console.log(JSON.stringify({mode,root,ms:performance.now()-started,reads,randomCalls,seed,checksum:hash(sites)}));
+}else if(mode==='city-render'){
   // CPU synchronization only: existing farm meshes, no GPU driver or shader work.
   const {syncCityBuildings}=await moduleAt('city_renderer_3d.js');
   const renderer={scene:{add(){},remove(){}},cityLampLights:Array.from({length:8},()=>({intensity:0})),cityMeshes:new Map()};
@@ -78,6 +91,6 @@ if(mode==='city-render'){
     const state={minute:city.minute,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,activity:c.activity,task:c.task,path:c.path,happiness:c.happiness,x:c.entity.x,y:c.entity.y,balance:c.balance,home:c.homeUnitId,job:c.jobId,interior:c.indoorLocation,career:c.career})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),buildings:city.buildings.map(b=>({id:b.id,inventory:b.inventory,workers:b.workers})),shipments:city.logistics.shipments.map(s=>({id:s.id,status:s.status,driverId:s.driverId,quantity:s.quantity,position:s.position})),terrain:Array.from(city.world.map),accounts:[...city.accounts].map(([k,a])=>[k,a.balance]),history:city.history.nextId,events:city.events,relations:[...city.society.relations]};
     console.log(JSON.stringify({mode,root,population:city.citizens.length,dt,updates:times.length,ms,p50:times[Math.floor(times.length*.5)],p95:times[Math.floor(times.length*.95)],max:times.at(-1),checksum:hash(state)}));
   }
-}else throw Error('Use simulation, snapshots, bridge, throughput, freight, scene or city-render.');
+}else throw Error('Use simulation, snapshots, bridge, throughput, freight, scene, building-sites, builder-selection or city-render.');
 
 function observed(city){return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:c.entity.x,y:c.entity.y,home:c.homeUnitId,job:c.jobId,career:c.career,interior:c.indoorLocation})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),ledger:city.ledger,events:city.events.map(e=>e.id),relations:[...city.society.relations]};}

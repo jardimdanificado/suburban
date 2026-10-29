@@ -85,13 +85,32 @@ export function buildingGround(world, x, y, width, depth, entrance = null) {
   const door = entrance||buildingEntrance(x,y,width,depth);
   return { ...terrain, base: Math.max(terrain.base, surfaceElevation(world, door.x, door.y) + .06), door };
 }
+// One synchronous investment round often tests the same lot for many trades.
+// Keep this scratch state outside the city graph and discard it after the round.
+const buildingSiteSearches=new WeakMap();
+export function beginBuildingSiteSearch(city,stats=null){
+  const previous=buildingSiteSearches.get(city),search={signature:null,orientations:new Map(),blocked:new Map(),stats};
+  buildingSiteSearches.set(city,search);
+  return ()=>{if(previous)buildingSiteSearches.set(city,previous);else buildingSiteSearches.delete(city);};
+}
+const copyBuildingSite=site=>({...site,...(site.door?{door:{...site.door}}:{}),...(site.access?{access:site.access.map(p=>({...p}))}:{})});
 export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,rotation=null}={}){
   if(rotation!==null&&(!Number.isInteger(rotation)||rotation<0||rotation>3))return {error:'Rotação inválida.'};
   const first=rotation??Math.floor(city.random()*4),hub=city.buildings.find(b=>!b.entity.destroyed)?.door;
-  let error='Nenhuma orientação permite acesso ao terreno.',accessBlocked=null;
+  const search=buildingSiteSearches.get(city);
+  if(search?.stats)search.stats.calls=(search.stats.calls||0)+1;
+  if(search){
+    const signature=`${city.world.revision||0}:${city.world.bridgeRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}:${city.world.parkingTiles?.size||0}:${city.world.width}:${city.world.height}:${hub?.x}:${hub?.y}:`+city.development.plots.map(p=>`${p.id},${p.x},${p.y},${p.width},${p.depth}`).join(';');
+    if(signature!==search.signature){search.signature=signature;search.orientations.clear();search.blocked.clear();}
+  }
+  const footprint=`${x},${y},${width},${depth},${plotId}`,category=['quarry','iron_mine','bauxite_mine'].includes(type)?'quarry':type==='farm'?'farm':'building';
+  let error='Nenhuma orientação permite acesso ao terreno.',accessBlocked=search?.blocked.get(footprint)||null;
   for(let attempt=0;attempt<(rotation===null?4:1);attempt++){
-    const turn=(first+attempt)%4,site=inspectBuildingSite(city,x,y,width,depth,{plotId,type,rotation:turn});
-    if(site.error){error=site.error;continue;}
+    const turn=(first+attempt)%4,key=`${footprint}:${category}:${turn}`,cached=search?.orientations.get(key);
+    if(cached){if(search.stats)search.stats.orientationHits=(search.stats.orientationHits||0)+1;if(cached.inaccessible)continue;if(cached.error){error=cached.error;continue;}return copyBuildingSite(cached);}
+    if(search?.stats)search.stats.inspections=(search.stats.inspections||0)+1;
+    const site=inspectBuildingSite(city,x,y,width,depth,{plotId,type,rotation:turn});
+    if(site.error){error=site.error;search?.orientations.set(key,site);continue;}
     if(hub&&!accessBlocked){
       // Plot boundaries are fixed throughout this search. Rasterize once instead
       // of scanning every registered plot for every neighbor visited by A*.
@@ -99,9 +118,12 @@ export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,r
       for(const cell of city.occupied){const comma=cell.indexOf(','),cx=Number(cell.slice(0,comma)),cy=Number(cell.slice(comma+1));if(cx>=0&&cy>=0&&cx<mapWidth&&cy<mapHeight)accessBlocked[cy*mapWidth+cx]=1;}
       const mark=(px,py,w,d)=>{const x0=Math.max(0,px),x1=Math.min(mapWidth,px+w);if(x0>=x1)return;for(let yy=Math.max(0,py);yy<Math.min(mapHeight,py+d);yy++)accessBlocked.fill(1,yy*mapWidth+x0,yy*mapWidth+x1);};
       mark(x,y,width,depth);for(const p of city.development.plots)if(p.id!==plotId)mark(p.x,p.y,p.width,p.depth);
+      search?.blocked.set(footprint,accessBlocked);
     }
+    if(hub&&search?.stats)search.stats.pathSearches=(search.stats.pathSearches||0)+1;
     const access=hub?findTerrainPath(city.world,site.door,hub,city.occupied,{blockedGrid:accessBlocked,preferRoads:false}):[];
-    if(access!==null)return {...site,access};
+    if(access!==null){const result={...site,access};search?.orientations.set(key,result);return search?copyBuildingSite(result):result;}
+    search?.orientations.set(key,{inaccessible:true});
   }
   return {error};
 }

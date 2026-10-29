@@ -7,7 +7,7 @@ import {externalTradeHourly} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=toilet-staff-only-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=deep-perf-3';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=housing-work-priority-1';
 import {productionPlan,investProductionPlan} from './city_production_planner.js?v=investment-plan-reuse-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
@@ -15,9 +15,9 @@ import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
 import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=furniture-farms-fertilizer-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
-import { quarryDeposits } from './city_terrain.js?v=deep-perf-3';
+import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=housing-work-priority-1';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=deep-perf-3';
+import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=housing-work-priority-1';
 
 export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados', construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
 export const CROPS = {
@@ -461,6 +461,7 @@ export class CityEconomy {
     const profile=this.city.profileDiagnostics?{}:null;this.lastInvestmentSearchProfile=profile;
     let stage='demandMs',mark=profile?performance.now():0;
     const nextStage=name=>{if(profile){const now=performance.now();if(stage)profile[stage]=(profile[stage]||0)+now-mark;stage=name;mark=now;}};
+    const finishSiteSearch=beginBuildingSiteSearch(this.city,profile?(profile.siteSearch={}):null);
     try {
       this.updateDemand();nextStage('officeSearchMs');
       const officeStarted=this.investInOfficeBusiness();
@@ -519,7 +520,7 @@ export class CityEconomy {
         }
       }
       return essentialStarted;
-    } finally {nextStage(null);}
+    } finally {finishSiteSearch();nextStage(null);}
   }
   buySeeds(b) {
     if (!['farm','forestry'].includes(b.type) || !b.active || b.seedStock >= 8) return;
