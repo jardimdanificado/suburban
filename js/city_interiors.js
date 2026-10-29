@@ -7,6 +7,8 @@ const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
 const citizenKeys=[];
 const citizen=(city,id)=>city.accounts.get(Number.isInteger(id)&&id>=0&&id<65536?(citizenKeys[id]??=`citizen:${id}`):`citizen:${id}`)||city.society.citizen(id);
 const indoorCitizenCaches=new WeakMap();
+const roomsByBuilding=new WeakMap(),noRooms=Object.freeze([]);
+function roomGroups(b){let cache=roomsByBuilding.get(b);if(!cache||cache.revision!==(b.layoutRevision||0)||cache.units!==b.units||cache.length!==b.units.length){const rooms=new Map();for(const u of b.units){let group=rooms.get(u.roomType);if(!group)rooms.set(u.roomType,group=[]);group.push(u);}cache={revision:b.layoutRevision||0,units:b.units,length:b.units.length,rooms};roomsByBuilding.set(b,cache);}return cache.rooms;}
 function indoorCitizenCache(city){let cache=indoorCitizenCaches.get(city);if(!cache||cache.revision!==city.structureRevision||cache.accounts!==city.accounts){cache={revision:city.structureRevision,accounts:city.accounts,people:[]};indoorCitizenCaches.set(city,cache);}return cache.people;}
 const point=(b,u)=>({x:b.entity.x+u.x+.5,y:b.entity.y+u.y+.5,z:u.z*CITY_FLOOR_HEIGHT});
 function release(city,c){const id=c.indoorLocation?.targetUnitId||c.indoorLocation?.unitId,u=city.units.get(id);if(u?.activityReservedIds)u.activityReservedIds=u.activityReservedIds.filter(id=>id!==c.id);if(c.workCell?.unitId===id)c.workCell=null;}
@@ -24,14 +26,14 @@ function interiorRoute(b,from,to){
  const stair={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:from.z},landing={...stair,z:to.z};
  return [...route(from,stair),...route(stair,landing),...route(landing,to)];
 }
-function leaveEntrance(city,c){
+function leaveEntrance(city,c,occupied=null){
  if(c.task||c.path.length||c.conversation||c.deliveryId||c.mobilityTrip)return;
- const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y),taken=new Set();for(const other of city.citizens)if(other!==c&&!other.entity.destroyed&&!other.indoorLocation){taken.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)taken.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}
- for(let radius=2;radius<=9;radius++){const offsets=[];for(let dx=-radius;dx<=radius;dx++){const dy=radius-Math.abs(dx);offsets.push([dx,dy]);if(dy)offsets.push([dx,-dy]);}const first=(c.id*13+city.minute)%offsets.length;for(let i=0;i<offsets.length;i++){const [dx,dy]=offsets[(first+i)%offsets.length],px=x+dx,py=y+dy,destination={x:px+.5,y:py+.5};if(taken.has(`${px},${py}`)||!city.walkable(px,py))continue;const path=city.findPath(c.entity,destination);if(path?.length){c.path=path;c.task='walk';c.targetId=null;c.action='Saindo da entrada do prédio';return;}}}
+ const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y),taken=occupied||new Set();if(!occupied)for(const other of city.citizens)if(other!==c&&!other.entity.destroyed&&!other.indoorLocation){taken.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)taken.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}
+ for(let radius=2;radius<=9;radius++){const offsets=[];for(let dx=-radius;dx<=radius;dx++){const dy=radius-Math.abs(dx);offsets.push([dx,dy]);if(dy)offsets.push([dx,-dy]);}const first=(c.id*13+city.minute)%offsets.length;for(let i=0;i<offsets.length;i++){const [dx,dy]=offsets[(first+i)%offsets.length],px=x+dx,py=y+dy,destination={x:px+.5,y:py+.5};if(taken.has(`${px},${py}`)||!city.walkable(px,py))continue;const path=city.findPath(c.entity,destination);if(path?.length){c.path=path;c.task='walk';c.targetId=null;c.action='Saindo da entrada do prédio';taken.add(`${px},${py}`);return;}}}
 }
 export function disperseCrowds(city){
  const groups=new Map();for(const c of city.citizens)if(!c.entity.destroyed&&!c.indoorLocation&&!c.path.length){const key=`${Math.floor(c.entity.x)},${Math.floor(c.entity.y)}`,people=groups.get(key)||[];people.push(c);groups.set(key,people);}
- let budget=32;for(const people of groups.values())if(people.length>2)for(const c of people){if(!budget) return;if(c.task||c.conversation||c.deliveryId||c.mobilityTrip||city.urgentNeed(c))continue;leaveEntrance(city,c);if(c.path.length)budget--;}
+ let budget=32,taken=null;for(const people of groups.values())if(people.length>2)for(const c of people){if(!budget) return;if(c.task||c.conversation||c.deliveryId||c.mobilityTrip||city.urgentNeed(c))continue;if(!taken){taken=new Set();for(const other of city.citizens)if(!other.entity.destroyed&&!other.indoorLocation){taken.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)taken.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}}leaveEntrance(city,c,taken);if(c.path.length)budget--;}
 }
 
 function exit(city,c){
@@ -112,7 +114,7 @@ export function syncCitizenInterior(city,c){
  if(previous?.exiting)return false;
  let kind=task==='shopping'&&b.type==='laundromat'?'laundry':['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()?'plenary':'office'):['energy','care','caregiving'].includes(task)?'bedroom':task==='health'?'treatment':!['work','manage'].includes(task)?'service':['work','manage'].includes(task)&&c.role==='councilor'?'office':'workspace';
  if(previous&&!previous.exiting&&previous.buildingId===b.id&&previous.task===task&&previous.targetRoomType===kind&&previous.toiletTargetId===c.toiletTargetId&&previous.layoutRevision===(b.layoutRevision||0)&&city.units.has(previous.targetUnitId))return !previous.path.length;
- if(task==='provisions'&&!b.units.some(u=>u.roomType==='dining'))kind='bedroom';
+ if(task==='provisions'&&!roomGroups(b).has('dining'))kind='bedroom';
  let room;
  if(kind==='office'&&c.councilSession){const member=city.politics.council.members.find(m=>m.citizenId===c.id),office=city.units.get(member?.officeUnitId);if(office?.buildingId===b.id)room=office;}
  if(task==='hygiene')room=city.units.get(city.sanitation.facilities.get(c.hygieneTargetId)?.unitId);
@@ -120,7 +122,11 @@ export function syncCitizenInterior(city,c){
  if(task==='clean'){const job=city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId);room=city.units.get(city.sanitation.facilities.get(job?.facilityId)?.unitId);}
  if(!room&&['energy','care','provisions','hygiene'].includes(task)){const home=city.housing.home(c);if(home?.buildingId===b.id)room=city.housing.units(home).find(u=>u.roomType===kind);if(!room&&kind==='bedroom')room=city.units.get(c.homeUnitId);}
  if(!room&&previous?.buildingId===b.id&&previous.targetRoomType===kind){const assigned=city.units.get(previous.targetUnitId);if(assigned&&activityCellAvailable(city,assigned,c,kind))room=assigned;}
- if(!room){const choices=b.units.filter(u=>u.roomType===kind);if(!choices.length&&['service','treatment'].includes(kind))choices.push(...b.units.filter(u=>u.roomType==='workspace'||u.roomType==='office'));if(!choices.length&&kind==='bedroom'&&!c.homeUnitId)choices.push(...b.units.filter(u=>u.roomType==='workspace'));if(!choices.length&&kind==='workspace')choices.push(...b.units.filter(u=>u.roomType==='office'));room=choices.find(u=>activityCellAvailable(city,u,c,kind));}
+ if(!room){const groups=roomGroups(b),choices=groups.get(kind)||noRooms;room=choices.find(u=>activityCellAvailable(city,u,c,kind));
+  if(!choices.length){if(kind==='service'||kind==='treatment'){for(const u of b.units)if((u.roomType==='workspace'||u.roomType==='office')&&activityCellAvailable(city,u,c,kind)){room=u;break;}}
+   else if(kind==='bedroom'&&!c.homeUnitId)room=(groups.get('workspace')||noRooms).find(u=>activityCellAvailable(city,u,c,kind));
+   else if(kind==='workspace')room=(groups.get('office')||noRooms).find(u=>activityCellAvailable(city,u,c,kind));}}
+
  if(b.constructionKind!=='open-air'&&(task==='toilet'||task==='food')&&!(previous?.buildingId===b.id&&previous.targetUnitId===room?.id&&previous.targetRoomType===kind)){
   const facility=task==='toilet'?city.sanitation.facilities.get(c.toiletTargetId):null,ready=!!room&&activityCellAvailable(city,room,c,kind)&&(!facility||!facility.occupantId||facility.occupantId===c.id||city.minute>=facility.busyUntil);
   if(!queueService(city,c,b,task,task==='toilet'?c.toiletTargetId:'dining',ready))return false;

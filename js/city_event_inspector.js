@@ -1,7 +1,7 @@
 import {PROMISE_METRICS,describePromise} from './city_mandates.js';
 import {renderEventTimeline,renderEventSummary,eventTypeLabel} from './city_event_timeline_ui.js?v=carpool-color-aversion-16';
 import {formatMoney} from './city_ui_format.js';
-import {EVENT_CATEGORIES} from './city_society.js?v=service-queues-1';
+import {EVENT_CATEGORIES} from './city_society.js?v=sync-perf-1';
 const stamp=n=>`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const statuses={waiting:'Aguardando atendimento',materials:'Aguardando materiais',completed:'Concluído',delivered:'Entregue',cancelled:'Cancelado',proposed:'Em votação',executed:'Executado'};
 export function renderEventInspector(ui,p){

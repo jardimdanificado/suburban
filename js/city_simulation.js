@@ -20,7 +20,7 @@ import { CityNature } from './city_nature.js';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-caps-skin-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=service-queues-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=sync-perf-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -36,7 +36,7 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=busi
 import { CityLogistics } from './city_logistics.js?v=office-rollout-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=business-heights-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=service-queues-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=sync-perf-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=business-heights-1';
 
 export const INITIAL_POPULATION = 512;
@@ -177,12 +177,13 @@ export class CitySimulation {
     else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
     if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
     else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Imposto sobre vendas:|Imposto empresarial$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
-    const shipment = a.seller && a.buyer ? a : b.seller && b.buyer ? b : null;
-    const entry = this.history.transaction(from, to, amount, reason, { ...(shipment ? {shipmentId: shipment.id} : {}), ...details });
+    const payroll=reason==='Salário'||reason==='Imposto sobre salário'||reason==='Subsídio salarial municipal';
+    const shipment = payroll?null:a.seller && a.buyer ? a : b.seller && b.buyer ? b : null;
+    const entry = this.history.transaction(from, to, amount, reason, payroll?details:{ ...(shipment ? {shipmentId: shipment.id} : {}), ...details });
     this.ledger.push(Object.freeze({ minute: this.minute, from, to, amount, reason, eventId: entry.id }));
-    recordMarketTransaction(this,from,to,amount,reason,details,entry.id);
+    if(!payroll)recordMarketTransaction(this,from,to,amount,reason,details,entry.id);
     if (this.ledger.length > 1000) this.ledger.shift();
-    applySalesTax(this,from,to,amount,reason,details);
+    if(!payroll)applySalesTax(this,from,to,amount,reason,details);
     if (reason === 'Salário' || reason === 'Subsídio salarial municipal') this.hourlyPayroll.set(to, (this.hourlyPayroll.get(to) || 0) + amount);
     else if (reason !== 'Imposto sobre salário') {
       this.appendCityEvent(entry);

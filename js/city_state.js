@@ -20,7 +20,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js?v=rooftop-bridges-1';
+import { CitySimulation } from './city_simulation.js?v=sync-perf-1';
 import { CityHistory } from './city_history.js';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js';
@@ -33,7 +33,7 @@ import { CityWorkMeals } from './city_work_meals.js';
 import { CityDevelopment } from './city_development.js?v=business-heights-1';
 import { CityLogistics } from './city_logistics.js?v=office-rollout-1';
 import { CityEconomy, GOODS } from './city_economy.js?v=business-heights-1';
-import { CitySociety } from './city_society.js?v=service-queues-1';
+import { CitySociety } from './city_society.js?v=sync-perf-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=business-heights-1';
 import { World, WorldClock } from './world.js';
 
@@ -50,12 +50,15 @@ const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRev
 const accessorFields = new Set(['wage','seedStock','price','balance','totalRevenue','totalExpenses']);
 export const CITY_NEED_FIELDS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
 const needFields=CITY_NEED_FIELDS;
+const socialMemoryFields=['salience','factId','eventId','kind','actorId','targetId','otherId','minute','description','firsthand','truth','impact'];
+const socialFactFields=['id','kind','actorId','targetId','aboutId','creatorId','truth','minute','eventId','description','parentEventId'];
+const hasShape=(object,keys)=>{const own=Object.keys(object);if(own.length!==keys.length)return false;for(let i=0;i<own.length;i++)if(own[i]!==keys[i])return false;return true;};
 const same = (a,b) => {if(!a||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(!Object.is(a[i],b[i]))return false;return true;};
 
 /** Incremental object graph transport. References (including cycles) retain their identity.
  * Only changed nodes cross the worker boundary; journals are not recopied every frame. */
 export class CityStateGraph {
-  constructor() { this.ids = new WeakMap(); this.objects = new Map(); this.previous = new Map(); this.nextId = 1; this.historyCursors = new Map(); this.mapChildren = []; this.relationNodes = new Map(); }
+  constructor() { this.ids = new WeakMap(); this.objects = new Map(); this.previous = new Map(); this.nextId = 1; this.historyCursors = new Map(); this.mapChildren = []; this.relationNodes = new Map(); this.ledgerCursors=new Map(); }
   ref(value) {
     if (value === null || typeof value !== 'object') return value;
     const id = this.ids.get(value);
@@ -94,7 +97,7 @@ export class CityStateGraph {
       // reappearing nodes, avoiding a Map write for every edge on every snapshot.
       if(!previous)this.objects.set(id, object);
       let kind, data, fields=false;
-      if (previous?.kind === 'FrozenObject' || previous?.kind === 'FrozenArray') return id;
+      if (previous?.kind === 'FrozenObject' || previous?.kind === 'FrozenArray' || previous?.kind === 'SocialMemory' || previous?.kind === 'SocialFact') return id;
       // Empty collections have no children to visit and cannot have changed
       // while both their previous and current lengths remain zero.
       if(previous?.data.length===0 && ((previous.kind==='Array'&&object.length===0)||(previous.kind==='Map'&&object.size===0)||(previous.kind==='Set'&&object.size===0)))return id;
@@ -117,9 +120,18 @@ export class CityStateGraph {
       // A previously encoded mutable node can stay on the normal path even if
       // it is frozen later. Avoid probing every object in the graph on each send.
       else if ((!previous || object.appliedAt!=null && object.status!=='análise') && (Array.isArray(object) || Object.getPrototypeOf(object)===Object.prototype) && Object.isFrozen(object) && Object.values(object).every(value=>value===null || typeof value!=='object' && typeof value!=='function')) {
-        kind=Array.isArray(object)?'FrozenArray':'FrozenObject';data=Array.isArray(object)?object.map(reference):Object.entries(object).flatMap(([key,value])=>[key,reference(value)]);
+        if(!Array.isArray(object)&&object.salience!=null&&hasShape(object,socialMemoryFields)){kind='SocialMemory';data=socialMemoryFields.map(key=>object[key]);}
+        else if(!Array.isArray(object)&&object.parentEventId!=null&&hasShape(object,socialFactFields)){kind='SocialFact';data=socialFactFields.map(key=>object[key]);}
+        else{kind=Array.isArray(object)?'FrozenArray':'FrozenObject';data=Array.isArray(object)?object.map(reference):Object.entries(object).flatMap(([key,value])=>[key,reference(value)]);}
       }
       else if (object === root.city.events) { kind = 'CityFeed'; data = object.map(entry => entry.id); }
+      else if(object===root.city.ledger && object.every(entry=>Object.keys(entry).every(key=>['minute','from','to','amount','reason','eventId'].includes(key)))){
+        const old=this.ledgerCursors.get(id);let drop=0,start=0,reset=!old;
+        if(old?.length){const end=object.lastIndexOf(old[old.length-1]);drop=old.length-end-1;if(end<0||drop<0)reset=true;else{start=end+1;for(let i=drop;i<old.length;i++)if(old[i]!==object[i-drop]){reset=true;break;}}}
+        if(reset){drop=0;start=0;}
+        if(reset||drop||start!==object.length){const rows=[];for(let i=start;i<object.length;i++){const e=object[i];rows.push(e.minute,e.from,e.to,e.amount,e.reason,e.eventId);}nodes.push({id,kind:'CityLedger',data:{reset,drop,rows}});}
+        this.ledgerCursors.set(id,object.slice());this.previous.set(id,{kind:'CityLedger',data:[]});return id;
+      }
       else if (ArrayBuffer.isView(object)) { kind = object.constructor.name; data = object instanceof Uint8Array ? object.slice() : Array.from(object); }
       else if (object instanceof Map) { kind = 'Map'; data = []; object.forEach((v,k) => data.push(reference(k),reference(v))); }
       else if (object instanceof Set) { kind = 'Set'; data = []; object.forEach(value => data.push(reference(value))); }
@@ -172,12 +184,12 @@ export class CityStateGraph {
     const rootId = visit(root);
     this.mapRevision = mapRevision;
     this.mapChildren = Array.isArray(map) ? map.map(row => this.ids.get(row)) : [];
-    for(const [id,object] of this.objects)if(!wasVisited(id,object)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); }
+    for(const [id,object] of this.objects)if(!wasVisited(id,object)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); this.ledgerCursors.delete(id); }
     return { rootId, nodes, removed, histories, nextId: this.nextId, ...(packedNeeds?{packedNeeds}:{}) };
   }
   apply(packet) {
     for (const { id, kind, data } of packet.nodes) if (!this.objects.has(id)) {
-      const object = kind === 'Array' || kind === 'FrozenArray' || kind === 'CityFeed' ? [] : kind === 'CityHistory' ? new CityHistory(null) : kind === 'Map' ? new Map() : kind === 'Set' ? new Set() :
+      const object = kind === 'Array' || kind === 'FrozenArray' || kind === 'CityFeed' || kind === 'CityLedger' ? [] : kind === 'CityHistory' ? new CityHistory(null) : kind === 'Map' ? new Map() : kind === 'Set' ? new Set() :
         kind === 'Uint8Array' ? new Uint8Array(data.length) : Object.create(prototypes.get(kind) || Object.prototype);
       this.objects.set(id, object); this.ids.set(object, id);
     }
@@ -186,6 +198,8 @@ export class CityStateGraph {
     for (const { id, kind, data, patch } of packet.nodes) {
       const object = this.objects.get(id);
       if (kind === 'CityFeed') { /* Resolved after journal deltas below. */ }
+      else if(kind==='SocialMemory'||kind==='SocialFact'){const fields=kind==='SocialMemory'?socialMemoryFields:socialFactFields;for(let i=0;i<fields.length;i++)object[fields[i]]=data[i];}
+      else if(kind==='CityLedger'){if(data.reset)object.length=0;else if(data.drop)object.splice(0,data.drop);const rows=data.rows;for(let i=0;i<rows.length;i+=6){const entry={minute:rows[i],from:rows[i+1],to:rows[i+2],amount:rows[i+3],reason:rows[i+4]};if(rows[i+5]!==undefined)entry.eventId=rows[i+5];object.push(Object.freeze(entry));}}
       else if (kind === 'CityHistory') { for (let i=0;i<data.length;i+=2) object[data[i]]=resolve(data[i+1]); }
       else if (kind === 'Map') { object.clear(); for (let i = 0; i < data.length; i += 2) object.set(resolve(data[i]), resolve(data[i + 1])); }
       else if (kind === 'Set') { object.clear(); for (const value of data) object.add(resolve(value)); }
@@ -219,7 +233,7 @@ export class CityStateGraph {
         feed.length=0;
         for (const eventId of data) {const entry=root.city.history.get(eventId)||previous.get(eventId);if(entry)feed.push(entry);}
       }
-      if(kind==='FrozenObject'||kind==='FrozenArray')Object.freeze(this.objects.get(id));
+      if(kind==='FrozenObject'||kind==='FrozenArray'||kind==='SocialMemory'||kind==='SocialFact')Object.freeze(this.objects.get(id));
       if(patch){
         const complete=this.previous.get(id)?.data;
         if(!complete)throw new Error(`Atualização parcial sem estado inicial: ${id}`);

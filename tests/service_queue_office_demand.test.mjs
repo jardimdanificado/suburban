@@ -24,7 +24,7 @@ test('office demand plans another tower when required activities exceed vacant f
 });
 
 test('bathroom tasks enter the real queue and reserve the room in arrival order',async()=>{
- const {syncCitizenInterior}=await import('../js/city_interiors.js?v=service-queues-1');
+ const {syncCitizenInterior}=await import('../js/city_interiors.js?v=sync-perf-1');
  const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='townhall'),people=city.citizens.filter(c=>city.society.isAdult(c)).slice(0,2),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===b.id);
  f.occupantId='occupied';f.busyUntil=city.minute+10;
  for(const c of people){c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='toilet';c.targetId=b.id;c.toiletTargetId=f.id;c.path=[];assert.equal(syncCitizenInterior(city,c),false);}

@@ -102,13 +102,13 @@ export class CitySociety {
     // A spatial grid limits encounters to nearby people, with one conversation per person.
     const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4,tileCounts=new Map();
     const residents=this.city.citizens,contactBudget=Math.max(12,Math.ceil(residents.length*.02));
-    for(const c of residents)if(!c.entity.destroyed&&!c.indoorLocation){const key=`${Math.floor(c.entity.x)},${Math.floor(c.entity.y)}`;tileCounts.set(key,(tileCounts.get(key)||0)+1);}
+    for(const c of residents)if(!c.entity.destroyed&&!c.indoorLocation){const key=Math.floor(c.entity.x)+Math.floor(c.entity.y)*this.city.world.width;tileCounts.set(key,(tileCounts.get(key)||0)+1);}
     const offset=(this.city.minute*37)%Math.max(1,residents.length);
     let contacts=0;
     for(let residentIndex=0;residentIndex<residents.length&&contacts<contactBudget;residentIndex++){
       const c=residents[(offset+residentIndex)%residents.length];
       if (!this.canSocialize(c)) continue;
-      if(!c.indoorLocation&&(tileCounts.get(`${Math.floor(c.entity.x)},${Math.floor(c.entity.y)}`)||0)>1)continue;
+      if(!c.indoorLocation&&(tileCounts.get(Math.floor(c.entity.x)+Math.floor(c.entity.y)*this.city.world.width)||0)>1)continue;
       const x = Math.floor(c.entity.x / 2), y = Math.floor(c.entity.y / 2);
       for (let dx = -1; dx <= 1 && !c.conversation; dx++) for (let dy = -1; dy <= 1 && !c.conversation; dy++) {
         const nearby = buckets.get(x+dx+(y+dy)*stride) || NO_NEIGHBORS;
