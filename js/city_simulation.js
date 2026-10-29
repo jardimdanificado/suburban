@@ -31,7 +31,7 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignmen
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js?v=landlord-stock-market-1';
-import { quarryDeposits } from './city_terrain.js?v=deep-perf-3';
+import { quarryDeposits } from './city_terrain.js?v=investment-plan-reuse-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=landlord-stock-market-1';
@@ -42,9 +42,9 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=land
 import { CityLogistics } from './city_logistics.js?v=furniture-farms-fertilizer-1';
 import { CityGigs } from './city_gigs.js?v=landlord-stock-market-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=landlord-stock-market-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=investment-plan-reuse-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=landlord-stock-market-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=deep-perf-3';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=investment-plan-reuse-1';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -409,7 +409,8 @@ export class CitySimulation {
     if(this._pathBlockedRevision!==blockedRevision){const grid=new Uint8Array(width*height);for(const cell of this.occupied){const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));if(x>=0&&y>=0&&x<width&&y<height)grid[y*width+x]=1;}this._pathBlockedGrid=grid;this._pathBlockedRevision=blockedRevision;}
     const key=`ground:${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
     if(this.pathCache.has(key))return this.pathCache.get(key);
-    const route=findTerrainPath(this.world,start,goal,this.occupied,{blockedGrid:this._pathBlockedGrid}),mapped=route?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p})??null;
+    const shared=findSharedTerrainPath(this,start,goal,this._pathBlockedGrid);
+    const route=shared===undefined?findTerrainPath(this.world,start,goal,this.occupied,{blockedGrid:this._pathBlockedGrid}):shared,mapped=route?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p})??null;
     if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
     this.pathCache.set(key,mapped);return mapped;
   }
@@ -417,7 +418,21 @@ export class CitySimulation {
     if(this._skybridgeCache?.revision!==revision)this._skybridgeCache={revision,links:skybridgeLinks(this.buildings,this.world)};
     return this._skybridgeCache.links;
   }
-  findPath(start, goal, {copy=true,allowSkybridges=true}={}) {
+  findPath(start, goal, options={}) {
+    const profile=this._pathSearchProfile;
+    if(!profile)return this._findPath(start,goal,options);
+    const revision = `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
+    const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
+    const measure=this.pathCacheRevision!==revision||!this.pathCache?.has(key);
+    const started=measure?performance.now():0;
+    const result=this._findPath(start,goal,options);
+    if(measure){
+      const ms=performance.now()-started;profile.searches++;profile.totalMs+=ms;
+      if(ms>profile.maxMs){profile.maxMs=ms;profile.start={x:start.x,y:start.y};profile.goal={x:goal.x,y:goal.y};}
+    }
+    return result;
+  }
+  _findPath(start, goal, {copy=true,allowSkybridges=true}={}) {
     const revision = `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
     if (this.pathCacheRevision !== revision) { this.pathCache = new Map(); this.pathCacheRevision = revision; }
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
@@ -892,6 +907,7 @@ export class CitySimulation {
   }
   stepMinute() {
     const profileStart=performance.now();let profileMark=profileStart;
+    this._pathSearchProfile=this.profileDiagnostics?{minute:this.minute,searches:0,totalMs:0,maxMs:0,start:null,goal:null}:null;
     this.minute++;
     this.indexFamilies();
     this.reconcile();
@@ -978,10 +994,16 @@ export class CitySimulation {
     const societyMs=performance.now()-profileMark;profileMark=performance.now();
     const movers=this._movingCitizens??=[];movers.length=0;
     for(const c of this.citizens)if(c.path.length||c.deliveryId||c.ridingVehicleId)movers.push(c);
+    const moverSetupMs=performance.now()-profileMark;profileMark=performance.now();
     // Spread hourly work across minutes; keep the same order and one run per hour.
     if (this.minute % 60 === 0) this.hourlyPhase = 0;
-    if (this.hourlyPhase != null && this.hourlyPhase < 13) this.economy.hourly(this.hourlyPhase++);
-    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs:performance.now()-profileMark};
+    let economyHourly=null;
+    if (this.hourlyPhase != null && this.hourlyPhase < 13) {
+      const phase=this.hourlyPhase++;
+      if(this.profileDiagnostics){const started=performance.now(),parts=this.economy.hourly(phase);economyHourly={phase,ms:performance.now()-started,...(parts||{})};}
+      else this.economy.hourly(phase);
+    }
+    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
     this.syncClock();
   }
   syncClock() {

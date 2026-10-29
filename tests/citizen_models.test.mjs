@@ -49,19 +49,19 @@ test('a failed asset leaves the renderer able to use its existing sprite fallbac
  const model=new CityCitizenModels(THREE,{add(){},remove(){}},{fetchAsset:async()=>({ok:false,status:404})});await model.loading;assert(!model.ready);assert.match(model.error,/404/);assert.equal(model.add(person(1),0),false);
 });
 
-test('walking frames advance with presentation time and freeze while paused',async()=>{
+test('walking frames advance only when changing tile and freeze while paused',async()=>{
  const {model}=await models(),e=person(71);e.properties.citizen.path=[{x:10,y:0}];model.begin(.01,1);model.add(e,0);e.x=1;model.begin(.01,1);model.add(e,0);model.end();
  const pose=()=>[...model.batches].find(([key,b])=>key.startsWith('run')&&b.count)?.[0],first=pose();assert(first);
  for(let i=0;i<30;i++){model.begin(.1,2);model.add(e,0);model.end();}
- const moving=pose();assert.notEqual(moving,first);model.begin(.1,0);model.add(e,0);model.end();assert.equal(pose(),moving);
+ assert.equal(pose(),first);e.x=1.4;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),first);e.x=2;model.begin(.1,1);model.add(e,0);model.end();const moving=pose();assert.notEqual(moving,first);model.begin(.1,0);model.add(e,0);model.end();assert.equal(pose(),moving);
 });
 test('stationary citizens never cycle through run frames just because their path is still set',async()=>{
  const {model}=await models(),e=person(71);e.properties.citizen.path=[{x:10,y:0}];
  model.begin(.01,1);model.add(e,0);model.end();e.x=1;
  model.begin(.01,1);model.add(e,0);model.end();assert([...model.batches].some(([key,b])=>key.startsWith('run:')&&b.count));
  const pose=()=>[...model.batches].find(([key,b])=>b.count)?.[0];
- model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'idle:0');
- for(let i=0;i<20;i++){model.begin(.1,2);model.add(e,0);model.end();assert.equal(pose(),'idle:0');}
+ const held=pose();model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),held);
+ for(let i=0;i<20;i++){model.begin(.1,2);model.add(e,0);model.end();assert.equal(pose(),held);}
 });
 
 test('bicycle riders pedal through run frames and use frame 0 while boarding or riding as passenger',async()=>{
@@ -70,8 +70,8 @@ test('bicycle riders pedal through run frames and use frame 0 while boarding or 
  e.properties.citizen.mobilityTrip={stage:'riding'};
  model.begin(0,1);model.add(e,0);model.end();assert.equal(pose(),'run:0');
  model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:0');
- model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:2');
- model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:4');
+ e.x=1;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:2');
+ e.x=2;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:4');
  e.properties.citizen.mobilityTrip.stage='boarding';model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:0');
  e.properties.citizen.mobilityTrip=null;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:0');
  e.properties.citizen.ridingVehicleKind='patinete';assert.equal(citizenAnimation(e.properties.citizen,true),'glide');

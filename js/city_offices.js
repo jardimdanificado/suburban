@@ -14,10 +14,24 @@ export function ownsOfficeTower(tower,founder){
  return tower.units.length>0&&tower.units.every(u=>u.ownerId===founder.accountId||u.ownerId===tower.accountId&&tower.ownerId===founder.id);
 }
 export function officeFloors(city,tower){
- return Array.from({length:tower.floors},(_,floor)=>{const units=tower.units.filter(u=>u.z===floor),tenantId=units.find(u=>u.occupantId&&u.occupantId!==tower.accountId)?.occupantId||null;return {floor,units,tenantId,tenant:city.accounts.get(tenantId),rent:units.reduce((n,u)=>n+u.rent,0)};});
+ const rows=Array.from({length:tower.floors},(_,floor)=>({floor,units:[],tenantId:null,tenant:undefined,rent:0}));
+ for(const unit of tower.units){const row=Number.isInteger(unit.z)?rows[unit.z]:null;if(!row)continue;row.units.push(unit);row.rent+=unit.rent;if(!row.tenantId&&unit.occupantId&&unit.occupantId!==tower.accountId)row.tenantId=unit.occupantId;}
+ for(const row of rows)row.tenant=city.accounts.get(row.tenantId);
+ return rows;
+}
+// Scoped to one synchronous founding search, which ends on the first lease.
+// Do not retain this snapshot across rentals, ownership changes or later ticks.
+export function prepareOfficeSearch(city){
+ const towers=city.economy.businesses.filter(b=>b.type==='office_tower'),floors=new Map(towers.map(t=>[t.id,officeFloors(city,t)])),vacantFloors=new Map(towers.map(t=>[t.id,floors.get(t.id).filter(f=>!f.tenantId&&f.units.every(u=>u.forRent))]));
+ return {towers,floors,vacantFloors,ownership:new Map(),vacant:towers.reduce((n,t)=>n+vacantFloors.get(t.id).length,0),reserved:city.politics.parties.filter(p=>p.active&&p.headquarters?.kind!=='office').length};
+}
+function searchOwnsOffice(tower,founder,search){
+ if(!search)return ownsOfficeTower(tower,founder);
+ let owned=search.ownership.get(founder.accountId);if(!owned)search.ownership.set(founder.accountId,owned=new Map());
+ if(!owned.has(tower.id))owned.set(tower.id,ownsOfficeTower(tower,founder));return owned.get(tower.id);
 }
 export function setupOfficeTower(city,tower){if(tower.type!=='office_tower')return;for(const u of tower.units){if(u.occupantId&&u.occupantId!==tower.accountId)continue;u.occupantId=null;u.tenantId=null;u.forSale=false;u.forRent=true;}tower.officeLeases??=[];}
-export function officeStartupCost(city,founder){let best=Infinity;for(const tower of city.economy.businesses)if(tower.type==='office_tower')for(const floor of officeFloors(city,tower))if(!floor.tenantId&&floor.units.length&&floor.units.every(u=>u.forRent))best=Math.min(best,city.currency.price(20000)+(ownsOfficeTower(tower,founder)?0:Math.max(city.currency.price(100),floor.rent)));return best;}
+export function officeStartupCost(city,founder,search=null){let best=Infinity;for(const tower of search?.towers||city.economy.businesses)if(tower.type==='office_tower')for(const floor of search?.vacantFloors.get(tower.id)||officeFloors(city,tower))if(floor.units.length&&(search||!floor.tenantId&&floor.units.every(u=>u.forRent)))best=Math.min(best,city.currency.price(20000)+(searchOwnsOffice(tower,founder,search)?0:Math.max(city.currency.price(100),floor.rent)));return best;}
 export function createMunicipalOffice(city,tower,floor,type,budget=0){
  const spec=city.buildingTypes[type],row=officeFloors(city,tower).find(r=>r.floor===floor);if(!tower?.active||tower.type!=='office_tower'||!OFFICE_BUSINESSES.has(type)||!spec||!row||row.tenantId||!row.units.length||!row.units.every(u=>u.forRent))return null;
  const entity=city.createEntity({x:tower.entity.x,y:tower.entity.y,properties:{name:city.life.buildingName(spec.label),species:'city-building',render:{color:spec.color,style:type}}});
@@ -40,14 +54,14 @@ export function rentOffice(city,towerId,floor,type,founderId){
  const lease={buildingId:b.id,floor,rent,ownerOccupied:own,startedAt:city.minute,lastPaidAt:city.minute,arrears:0,missedDays:0,status:'active'};tower.officeLeases??=[];tower.officeLeases.push(lease);b.officeLease=lease;city.sanitation.setupBuilding(b);city.sanitation.setupBusinessRooms(b);for(const u of b.units){const original=row.units.find(x=>x.x===u.x&&x.y===u.y);if(original)original.roomType=u.roomType;}tower.layoutRevision=(tower.layoutRevision||0)+1;city.structureRevision++;
  city.log(`${b.entity.properties.name} ${own?'ocupou seu próprio':'alugou o'} ${floor+1}º andar de ${tower.entity.properties.name}.`,'business',[founder.id],{kind:'office-lease',buildingId:tower.id,tenantBuildingId:b.id,floor,rent,ownerOccupied:own});return b;
 }
-export function rentAvailableOffice(city,type,founder,{ownOnly=false}={}){
+export function rentAvailableOffice(city,type,founder,{ownOnly=false,search=null}={}){
  if(!OFFICE_BUSINESSES.has(type))return null;
- const towers=city.economy.businesses.filter(b=>b.type==='office_tower'&&(!ownOnly||ownsOfficeTower(b,founder))).sort((a,b)=>Number(ownsOfficeTower(b,founder))-Number(ownsOfficeTower(a,founder)));
+ const towers=(search?.towers||city.economy.businesses).filter(b=>b.type==='office_tower'&&(!ownOnly||searchOwnsOffice(b,founder,search))).sort((a,b)=>Number(searchOwnsOffice(b,founder,search))-Number(searchOwnsOffice(a,founder,search)));
  // Keep enough vacant floors for parties that still have only a provisional
  // town-hall desk. Otherwise ordinary firms can consume every initial seat.
- const vacant=towers.reduce((n,b)=>n+officeFloors(city,b).filter(f=>!f.tenantId&&f.units.every(u=>u.forRent)).length,0),reserved=city.politics.parties.filter(p=>p.active&&p.headquarters?.kind!=='office').length;
+ const vacant=search&&!ownOnly?search.vacant:towers.reduce((n,b)=>n+(search?search.vacantFloors.get(b.id).length:officeFloors(city,b).filter(f=>!f.tenantId&&f.units.every(u=>u.forRent)).length),0),reserved=search?.reserved??city.politics.parties.filter(p=>p.active&&p.headquarters?.kind!=='office').length;
  if(vacant<=reserved)return null;
- for(const tower of towers)for(const floor of officeFloors(city,tower))if(!floor.tenantId&&floor.units.every(u=>u.forRent)&&founder.balance>=(ownsOfficeTower(tower,founder)?0:Math.max(city.currency.price(100),floor.rent))+city.currency.price(20000)){const b=rentOffice(city,tower.id,floor.floor,type,founder.id);if(b)return b;}
+ for(const tower of towers)for(const floor of search?.vacantFloors.get(tower.id)||officeFloors(city,tower))if((search||!floor.tenantId&&floor.units.every(u=>u.forRent))&&founder.balance>=(searchOwnsOffice(tower,founder,search)?0:Math.max(city.currency.price(100),floor.rent))+city.currency.price(20000)){const b=rentOffice(city,tower.id,floor.floor,type,founder.id);if(b)return b;}
  return null;
 }
 export function collectOfficeRents(city){

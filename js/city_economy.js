@@ -1,5 +1,5 @@
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
-import {rentOffice,rentAvailableOffice,officeStartupCost,officeSpaceDemand,setupOfficeTower,officeFloors,OFFICE_BUSINESSES,OFFICE_ONLY_TYPES,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
+import {rentOffice,rentAvailableOffice,officeStartupCost,prepareOfficeSearch,officeSpaceDemand,setupOfficeTower,officeFloors,OFFICE_BUSINESSES,OFFICE_ONLY_TYPES,createMunicipalOffice} from './city_offices.js?v=office-investment-search-1';
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=landlord-stock-market-1';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=deep-perf-3';
@@ -8,7 +8,7 @@ import {outdoorCellReady,workCellReady} from './city_interiors.js?v=toilet-staff
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=deep-perf-3';
-import {productionPlan,investProductionPlan} from './city_production_planner.js?v=office-demand-rollout-1';
+import {productionPlan,investProductionPlan} from './city_production_planner.js?v=investment-plan-reuse-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
@@ -438,68 +438,88 @@ export class CityEconomy {
     if(project&&project.status!=='completed')founder.startupProjectId=project.id;
     this.hire(); this.updateDemand(); return project;
   }
-  invest() {
-    this.updateDemand();
-    if(this.businesses.some(b=>b.type==='office_tower'))for(const demand of this.demands.filter(d=>OFFICE_BUSINESSES.has(d.type)&&d.score>=30).sort((a,b)=>b.score-a.score)){for(const founder of this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.politics.canOwnBusiness(c)&&c.businessIds.length<3&&!c.startupProjectId).sort((a,b)=>Number(b.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))-Number(a.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))||b.balance-a.balance).slice(0,24)){
-      if(rentAvailableOffice(this.city,demand.type,founder,{ownOnly:true})){this.hire();return true;}
-      if(!OFFICE_ONLY_TYPES.has(demand.type)&&this.useOwnedPremises(founder,demand.type)){this.hire();return true;}
-      let loan=null;const budget=officeStartupCost(this.city,founder),deficit=budget-founder.balance;
-      if(Number.isFinite(budget)&&deficit>0&&demand.score>=60&&founder.creditAllowed!==false)for(const bank of this.city.bank.available()){loan=this.city.bank.lendForBusiness(bank,founder,deficit,{type:demand.type,score:demand.score,budget});if(loan)break;}
-      const office=rentAvailableOffice(this.city,demand.type,founder);if(office){if(loan)loan.buildingId=office.id;this.hire();return true;}if(loan)this.city.bank.cancelBusinessLoan(loan);
-    }}
-    // Construction and transport must be staffed before the first factories can receive their materials.
-    this.city.bank.developmentBanks();
-    const extractionStarted=this.serviceInvestment.invest({types:['quarry']});
-    const firstServices=this.serviceInvestment.invest({initialOnly:true})||extractionStarted;
-    // Initial chains have their own funded rollout before expanding established sectors.
-    if(planCivicServices(this.city))return true;
-    if(investProductionPlan(this)||firstServices)return true;
-    if(investOilChain(this))return true;
-    if(bootstrapEnterprise(this))return true;
-    const essentialStarted=this.serviceInvestment.invest();
-    this.updateDemand();
-    const investors = this.city.citizens.filter(c => this.city.society.isAdult(c) && !this.city.politics.officeHolder(c) && c.businessIds.length < 10).sort((a, b) => b.balance * (.8 + (b.traits?.riskTolerance ?? .5) * .4) - a.balance * (.8 + (a.traits?.riskTolerance ?? .5) * .4) || a.id - b.id);
-    const opportunities = this.demands.filter(d => d.score >= 30).map(d => ({ ...d, priority: d.score * (.9 + this.city.random() * .2) })).sort((a, b) => b.priority - a.priority);
-    for (const opportunity of opportunities) {
-      if(ESSENTIAL_SERVICES.has(opportunity.type))continue;
-      const same = [...this.businesses, ...this.city.development.projects.filter(p => p.status !== 'completed' && !p.cancelled)].filter(b => b.type === opportunity.type && (opportunity.type !== 'farm' || b.crop === opportunity.crop));
-      if (same.some(b => b.status) || (same.length && opportunity.score < 60)) continue;
-      const starter=investors.find(c=>!c.jobId&&!c.businessIds.length&&!c.startupProjectId);
-      const rawLot=this.city.development.plots.find(p=>p.ownerId==='treasury'&&p.forSale&&!p.buildingId&&!p.projectId&&(opportunity.type==='farm'?this.city.development.isFarmPlot(p):p.width<=8&&p.depth<=8&&(['quarry','iron_mine','bauxite_mine'].includes(opportunity.type)?p.type==='quarry':!['farm','quarry'].includes(p.type))));
-      if(starter&&rawLot&&opportunity.score>=60){const budget=rawLot.price+this.quote(opportunity.type)+this.city.currency.price(39000);let loan=null;for(const bank of this.city.bank.available()){const need=Math.max(0,budget-starter.balance);if(need)loan=this.city.bank.lendForBusiness(bank,starter,need,{type:opportunity.type,score:opportunity.score,budget});if(loan||!need)break;}if(starter.balance>=budget){const project=this.foundBusiness(starter.id,opportunity.type,opportunity.crop);if(project){if(loan)loan.projectId=project.id;return true;}}if(loan)this.city.bank.cancelBusinessLoan(loan);}
-      const threshold=this.quote(opportunity.type)+this.city.currency.price(15000);
-      const banks=this.city.bank.available();
-      const borrower=investors.find(c=>c.balance<threshold && c.balance>threshold*.4);
-      if(borrower && banks.length) { this.city.bank.withdraw(banks[0],borrower.accountId,Math.min(threshold-borrower.balance,this.city.bank.deposits.get(`deposit:${banks[0].id}:${borrower.accountId}`)?.balance||0)); if(borrower.balance<threshold) this.city.bank.lend(banks[0],borrower.accountId,threshold-borrower.balance); }
-      const candidates = investors.filter(c => c.balance >= threshold);
-      for (const investor of candidates) if (this.foundBusiness(investor.id, opportunity.type, opportunity.crop)) return true;
-    }
-    // The municipality can establish essential services when households cannot finance premises.
-    const pending = this.city.development.projects.filter(p => p.accountId === 'treasury' && !p.cancelled && p.status !== 'completed');
-    const buildingSlotsFull = pending.filter(p => !p.service || p.service === 'building').length >= 2;
-    const needs=this.city.welfare.conditions();
-    const stapleFarms=this.businesses.filter(b=>b.type==='farm'&&!['girassol','trigo'].includes(b.crop));
-    const pendingStaples=this.city.development.projects.filter(p=>p.type==='farm'&&!['girassol','trigo'].includes(p.crop)&&!p.cancelled&&p.status!=='completed');
-    const stapleCapacity=stapleFarms.reduce((n,b)=>n+this.farmCapacity(b).daily,0)+pendingStaples.reduce((n,p)=>n+Math.max(0,(p.width||10)*(p.depth||10)-2)*240/Math.max(120,CROPS[p.crop]?.grow||120),0);
-    const foodFarmMissing=stapleCapacity<needs.population*1.5;
-    const foodPriority=o=>foodFarmMissing&&o.type==='farm'&&!['girassol','trigo'].includes(o.crop);
-    const publicOpportunities = [...opportunities].sort((a, b) => Number(foodPriority(b))-Number(foodPriority(a)) || b.priority - a.priority);
-    this.city.development.ensurePlots();
-    for (const opportunity of publicOpportunities) {
-      if(ESSENTIAL_SERVICES.has(opportunity.type))continue;
-      if(needs.crisis && !foodPriority(opportunity) && !['farm','bakery','kitchen','market','greengrocer','mill'].includes(opportunity.type))continue;
-      // Open-air farming does not consume a masonry construction slot.
-      if (buildingSlotsFull && opportunity.type !== 'farm') continue;
-      if (pending.some(p => p.type === opportunity.type && p.crop === opportunity.crop)) continue;
-      if (opportunity.score < 100 && this.businesses.some(b => b.type === opportunity.type && (b.type !== 'farm' || b.crop === opportunity.crop))) continue;
-      if (this.city.treasury < this.quote(opportunity.type) + this.city.currency.price(100000)) continue;
-      const lots = this.city.development.plots.filter(p => p.ownerId === 'treasury' && !p.buildingId && !p.projectId && (opportunity.type === 'farm' ? this.city.development.isFarmPlot(p) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine'].includes(opportunity.type) ? p.type === 'quarry' : !['quarry', 'farm'].includes(p.type))));
-      for (const lot of lots) {
-        const project = this.city.development.beginProject('treasury', lot.id, opportunity.type, { crop: opportunity.crop, width: opportunity.type === 'farm' ? lot.width : Math.min(4, lot.width), depth: opportunity.type === 'farm' ? lot.depth : Math.min(4, lot.depth), floors: businessFloors(opportunity.type,lot.id) });
-        if (project) return true;
+  investInOfficeBusiness() {
+    const search=prepareOfficeSearch(this.city);if(!search.towers.length)return false;
+    const available=search.vacant>search.reserved;
+    for(const demand of this.demands.filter(d=>OFFICE_BUSINESSES.has(d.type)&&d.score>=30).sort((a,b)=>b.score-a.score)){
+      if(!available&&OFFICE_ONLY_TYPES.has(demand.type))continue;
+      const founders=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.politics.canOwnBusiness(c)&&c.businessIds.length<3&&!c.startupProjectId).sort((a,b)=>Number(b.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))-Number(a.businessIds.some(id=>this.city.building(id)?.type==='office_tower'))||b.balance-a.balance).slice(0,24);
+      for(const founder of founders){
+        if(available&&rentAvailableOffice(this.city,demand.type,founder,{ownOnly:true,search})){this.hire();return true;}
+        if(!OFFICE_ONLY_TYPES.has(demand.type)&&this.useOwnedPremises(founder,demand.type)){this.hire();return true;}
+        // Reserved or occupied floors cannot support a new firm. Avoid issuing
+        // and canceling loans for a lease that cannot be made this round.
+        if(!available)continue;
+        let loan=null;const budget=officeStartupCost(this.city,founder,search),deficit=budget-founder.balance;
+        if(Number.isFinite(budget)&&deficit>0&&demand.score>=60&&founder.creditAllowed!==false)for(const bank of this.city.bank.available()){loan=this.city.bank.lendForBusiness(bank,founder,deficit,{type:demand.type,score:demand.score,budget});if(loan)break;}
+        const office=rentAvailableOffice(this.city,demand.type,founder,{search});if(office){if(loan)loan.buildingId=office.id;this.hire();return true;}if(loan)this.city.bank.cancelBusinessLoan(loan);
       }
     }
-    return essentialStarted;
+    return false;
+  }
+  invest() {
+    const profile=this.city.profileDiagnostics?{}:null;this.lastInvestmentSearchProfile=profile;
+    let stage='demandMs',mark=profile?performance.now():0;
+    const nextStage=name=>{if(profile){const now=performance.now();if(stage)profile[stage]=(profile[stage]||0)+now-mark;stage=name;mark=now;}};
+    try {
+      this.updateDemand();nextStage('officeSearchMs');
+      const officeStarted=this.investInOfficeBusiness();
+      if(officeStarted)return true;
+      // Construction and transport must be staffed before the first factories can receive their materials.
+      nextStage('developmentBanksMs');this.city.bank.developmentBanks();
+      nextStage('extractionInvestmentMs');const extractionStarted=this.serviceInvestment.invest({types:['quarry']});
+      nextStage('initialServicesMs');const firstServices=this.serviceInvestment.invest({initialOnly:true})||extractionStarted;
+      // Initial chains have their own funded rollout before expanding established sectors.
+      nextStage('civicInvestmentMs');if(planCivicServices(this.city))return true;
+      nextStage('productionInvestmentMs');if(investProductionPlan(this)||firstServices)return true;
+      nextStage('oilInvestmentMs');if(investOilChain(this))return true;
+      nextStage('bootstrapMs');if(bootstrapEnterprise(this))return true;
+      nextStage('essentialServicesMs');const essentialStarted=this.serviceInvestment.invest();
+      nextStage('refreshDemandMs');this.updateDemand();nextStage('privateFoundingMs');
+      const investors = this.city.citizens.filter(c => this.city.society.isAdult(c) && !this.city.politics.officeHolder(c) && c.businessIds.length < 10).sort((a, b) => b.balance * (.8 + (b.traits?.riskTolerance ?? .5) * .4) - a.balance * (.8 + (a.traits?.riskTolerance ?? .5) * .4) || a.id - b.id);
+      const opportunities = this.demands.filter(d => d.score >= 30).map(d => ({ ...d, priority: d.score * (.9 + this.city.random() * .2) })).sort((a, b) => b.priority - a.priority);
+      for (const opportunity of opportunities) {
+        if(ESSENTIAL_SERVICES.has(opportunity.type))continue;
+        const same = [...this.businesses, ...this.city.development.projects.filter(p => p.status !== 'completed' && !p.cancelled)].filter(b => b.type === opportunity.type && (opportunity.type !== 'farm' || b.crop === opportunity.crop));
+        if (same.some(b => b.status) || (same.length && opportunity.score < 60)) continue;
+        const starter=investors.find(c=>!c.jobId&&!c.businessIds.length&&!c.startupProjectId);
+        const rawLot=this.city.development.plots.find(p=>p.ownerId==='treasury'&&p.forSale&&!p.buildingId&&!p.projectId&&(opportunity.type==='farm'?this.city.development.isFarmPlot(p):p.width<=8&&p.depth<=8&&(['quarry','iron_mine','bauxite_mine'].includes(opportunity.type)?p.type==='quarry':!['farm','quarry'].includes(p.type))));
+        if(starter&&rawLot&&opportunity.score>=60){const budget=rawLot.price+this.quote(opportunity.type)+this.city.currency.price(39000);let loan=null;for(const bank of this.city.bank.available()){const need=Math.max(0,budget-starter.balance);if(need)loan=this.city.bank.lendForBusiness(bank,starter,need,{type:opportunity.type,score:opportunity.score,budget});if(loan||!need)break;}if(starter.balance>=budget){const project=this.foundBusiness(starter.id,opportunity.type,opportunity.crop);if(project){if(loan)loan.projectId=project.id;return true;}}if(loan)this.city.bank.cancelBusinessLoan(loan);}
+        const threshold=this.quote(opportunity.type)+this.city.currency.price(15000);
+        const banks=this.city.bank.available();
+        const borrower=investors.find(c=>c.balance<threshold && c.balance>threshold*.4);
+        if(borrower && banks.length) { this.city.bank.withdraw(banks[0],borrower.accountId,Math.min(threshold-borrower.balance,this.city.bank.deposits.get(`deposit:${banks[0].id}:${borrower.accountId}`)?.balance||0)); if(borrower.balance<threshold) this.city.bank.lend(banks[0],borrower.accountId,threshold-borrower.balance); }
+        const candidates = investors.filter(c => c.balance >= threshold);
+        for (const investor of candidates) if (this.foundBusiness(investor.id, opportunity.type, opportunity.crop)) return true;
+      }
+      nextStage('municipalFoundingMs');
+      // The municipality can establish essential services when households cannot finance premises.
+      const pending = this.city.development.projects.filter(p => p.accountId === 'treasury' && !p.cancelled && p.status !== 'completed');
+      const buildingSlotsFull = pending.filter(p => !p.service || p.service === 'building').length >= 2;
+      const needs=this.city.welfare.conditions();
+      const stapleFarms=this.businesses.filter(b=>b.type==='farm'&&!['girassol','trigo'].includes(b.crop));
+      const pendingStaples=this.city.development.projects.filter(p=>p.type==='farm'&&!['girassol','trigo'].includes(p.crop)&&!p.cancelled&&p.status!=='completed');
+      const stapleCapacity=stapleFarms.reduce((n,b)=>n+this.farmCapacity(b).daily,0)+pendingStaples.reduce((n,p)=>n+Math.max(0,(p.width||10)*(p.depth||10)-2)*240/Math.max(120,CROPS[p.crop]?.grow||120),0);
+      const foodFarmMissing=stapleCapacity<needs.population*1.5;
+      const foodPriority=o=>foodFarmMissing&&o.type==='farm'&&!['girassol','trigo'].includes(o.crop);
+      const publicOpportunities = [...opportunities].sort((a, b) => Number(foodPriority(b))-Number(foodPriority(a)) || b.priority - a.priority);
+      this.city.development.ensurePlots();
+      for (const opportunity of publicOpportunities) {
+        if(ESSENTIAL_SERVICES.has(opportunity.type))continue;
+        if(needs.crisis && !foodPriority(opportunity) && !['farm','bakery','kitchen','market','greengrocer','mill'].includes(opportunity.type))continue;
+        // Open-air farming does not consume a masonry construction slot.
+        if (buildingSlotsFull && opportunity.type !== 'farm') continue;
+        if (pending.some(p => p.type === opportunity.type && p.crop === opportunity.crop)) continue;
+        if (opportunity.score < 100 && this.businesses.some(b => b.type === opportunity.type && (b.type !== 'farm' || b.crop === opportunity.crop))) continue;
+        if (this.city.treasury < this.quote(opportunity.type) + this.city.currency.price(100000)) continue;
+        const lots = this.city.development.plots.filter(p => p.ownerId === 'treasury' && !p.buildingId && !p.projectId && (opportunity.type === 'farm' ? this.city.development.isFarmPlot(p) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine'].includes(opportunity.type) ? p.type === 'quarry' : !['quarry', 'farm'].includes(p.type))));
+        for (const lot of lots) {
+          const project = this.city.development.beginProject('treasury', lot.id, opportunity.type, { crop: opportunity.crop, width: opportunity.type === 'farm' ? lot.width : Math.min(4, lot.width), depth: opportunity.type === 'farm' ? lot.depth : Math.min(4, lot.depth), floors: businessFloors(opportunity.type,lot.id) });
+          if (project) return true;
+        }
+      }
+      return essentialStarted;
+    } finally {nextStage(null);}
   }
   buySeeds(b) {
     if (!['farm','forestry'].includes(b.type) || !b.active || b.seedStock >= 8) return;
@@ -800,7 +820,12 @@ export class CityEconomy {
       case 9: this.city.paint.hourly();updateClothes(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
       case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
       case 11: this.updateDemand(); updateMarket(this);planSupplyChains(this);tradeSharesHourly(this.city);break;
-      case 12: this.city.vehicles.hourly(); if (this.city.hour % 2 === 0) { this.investInHousing(); this.invest(); } break;
+      case 12: {
+        if(!this.city.profileDiagnostics){this.city.vehicles.hourly();if(this.city.hour%2===0){this.investInHousing();this.invest();}break;}
+        const parts={};let started=performance.now();this.city.vehicles.hourly();parts.vehiclesMs=performance.now()-started;
+        if(this.city.hour%2===0){started=performance.now();this.investInHousing();parts.housingInvestmentMs=performance.now()-started;started=performance.now();this.invest();parts.businessInvestmentMs=performance.now()-started;parts.businessSearch=this.lastInvestmentSearchProfile;}
+        return parts;
+      }
     }
   }
   daily() {

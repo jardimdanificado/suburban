@@ -268,11 +268,6 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
 
         }
       }
-      if (b.type === 'mill') {
-        const blades = new THREE.Group(); blades.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .3, b.depth + .08);blades.rotation.y=-(b.rotation||0)*Math.PI/2;
-        for (let i = 0; i < 4; i++) { const blade = new THREE.Mesh(new THREE.BoxGeometry(.16, 1.5, .06), new THREE.MeshLambertMaterial({ color: 0xe0cd97 })); blade.rotation.z = i * Math.PI / 2; blades.add(blade); }
-        facade.add(blades); group.userData.millBlades = blades;
-      }
       addBuildingDetails(THREE,facade,b);
       addArchitectureVariations(THREE,facade,b,buildingLeisureSpaces(entity.properties.cityBuilding));
       const entranceX=Math.floor(b.width/2)+.5;
@@ -331,7 +326,6 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       group.userData.stairs.instanceMatrix.needsUpdate = true;
       group.userData.terrainRevision = world.revision || 0;
     }
-    if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = Math.floor((renderer.foliageAnimationTick || 0)/20)*.1;
     group.position.set(entity.x, b.terrain.base, entity.y);
     const interior=renderer.cityInteriorView?.buildingId===b.id&&b.constructionKind!=='open-air',interiorFloor=renderer.cityInteriorView?.floor||0;
     applyInteriorCutaway(THREE,group,interior?interiorFloor:null,renderer.cityInteriorView?.hideWalls!==false);

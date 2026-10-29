@@ -116,18 +116,19 @@ export class CityCitizenModels {
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
-    const inside=c._renderIndoorPosition||c.indoorLocation?.position,x=inside?.x??entity.x,y=inside?.y??entity.y;
+    const inside=c.ridingVehicleId?null:c._renderIndoorPosition||c.indoorLocation?.position,x=inside?.x??entity.x,y=inside?.y??entity.y;
     let motion=this.motion.get(entity);
-     if(!motion){motion={x,y,angle:0,walkDistance:0};this.motion.set(entity,motion);}
+     if(!motion){motion={x,y,tileX:Math.floor(x),tileY:Math.floor(y),tileSteps:0,angle:0,walkDistance:0};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle;
-    // Keep the authored animation cycling while a path is active, even between
-    // discrete worker position packets. This preserves the retro step cadence
-    // without incorrectly showing idle for most rendered frames.
+    const tileX=Math.floor(x),tileY=Math.floor(y);
+    if(tileX!==motion.tileX||tileY!==motion.tileY){motion.tileSteps++;motion.tileX=tileX;motion.tileY=tileY;}
+    // A pending path is not movement. Hold the travel pose between tile changes;
+    // work animations still use the simulation's presentation clock.
     const traveling=moved||!!c.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
-    const sleeping=citizenIsSleeping(c),clip=citizenAnimation(c,traveling),pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    const sleeping=citizenIsSleeping(c),clip=citizenAnimation(c,traveling),animationTime=clip==='run'||clip==='pedal'?motion.tileSteps/8:this.clock,pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,animationTime,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}

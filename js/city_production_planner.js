@@ -1,7 +1,7 @@
 import {businessFloors} from './city_business_heights.js';
 import {INDUSTRIES} from './city_industries.js';
 import {DEVELOPMENT_RULES} from './city_development.js?v=business-heights-1';
-import {chooseBuildingSite} from './city_terrain.js?v=deep-perf-3';
+import {chooseBuildingSite} from './city_terrain.js?v=investment-plan-reuse-1';
 import {OFFICE_ONLY_TYPES,officeSpaceDemand,officeFloors,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
@@ -27,14 +27,26 @@ export function productionPlan(economy){
   for(const [type,spec]of Object.entries(INDUSTRIES))for(const good of Object.keys(spec.outputs))if(!producers.has(good))producers.set(good,{type,crop:null});
   for(const good of Object.keys(economy.crops))producers.set(good,{type:'farm',crop:good});
   producers.set('pao',{type:'bakery',crop:null});producers.set('oleo',{type:'mill',crop:null});producers.set('pedra',{type:'quarry',crop:null});
-  const exists=(type,crop)=>firms.filter(b=>b.type===type&&(type!=='farm'||b.crop===crop)).length;
-  const planned=(type,crop)=>projects.filter(b=>b.type===type&&(type!=='farm'||b.crop===crop));
+  const existingByType=new Map(),plannedByType=new Map();
+  for(const b of firms){const id=key(b.type,b.type==='farm'?b.crop:null);let sites=existingByType.get(id);if(!sites)existingByType.set(id,sites=[]);sites.push(b);}
+  for(const p of projects){const id=key(p.type,p.type==='farm'?p.crop:null);let sites=plannedByType.get(id);if(!sites)plannedByType.set(id,sites=[]);sites.push(p);}
+  const exists=(type,crop)=>existingByType.get(key(type,type==='farm'?crop:null))?.length||0;
+  const planned=(type,crop)=>plannedByType.get(key(type,type==='farm'?crop:null))||[];
+  // The recipe graph is normally acyclic. Keep the original trail-sensitive
+  // traversal for cyclic recipes; score dominance is safe only in a DAG.
+  const states=new Map();let acyclic=true;
+  function inspect(type){if(states.get(type)===1){acyclic=false;return;}if(states.get(type)===2)return;states.set(type,1);for(const good of Object.keys(inputs(type))){const provider=producers.get(good);if(provider)inspect(provider.type);}states.set(type,2);}
+  for(const type of [...Object.keys(INDUSTRIES),'bakery','mill'])inspect(type);
+  const expandedScores=new Map();let officeMissing;
   function visit(type,crop,score,origin,trail=new Set()){
-    const id=key(type,crop);if(trail.has(id))return;const path=new Set(trail);path.add(id);
+    const id=key(type,crop);if(!acyclic&&trail.has(id))return;
     const current=exists(type,crop),building=planned(type,crop),target=type==='research_institute'?city.politics.getResearch().demand().required:1;
-    const absent=type==='office_tower'?officeSpaceDemand(city).missing>0:current+building.length<target;
+    const absent=type==='office_tower'?(officeMissing??=officeSpaceDemand(city).missing>0):current+building.length<target;
     const row=rows.get(id)||{type,crop,origins:[],missing:absent,current,planned:building.length,projectId:building[0]?.id,score:0};
     if(!row.origins.includes(origin))row.origins.push(origin);row.score=Math.max(row.score,score);rows.set(id,row);
+    if(acyclic&&(expandedScores.get(id)??-Infinity)>=score)return;
+    expandedScores.set(id,score);
+    const path=acyclic?trail:new Set(trail);if(!acyclic)path.add(id);
     // Both established and planned consumers create demand for the earlier stages.
     for(const good of Object.keys(inputs(type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,score+12,`${city.buildingTypes[type]?.label||type} precisa de ${economy.goods[good]?.label||good}`,path);}
   }
@@ -55,7 +67,7 @@ export function productionPlan(economy){
     row.reason=row.origins.join(' · ');row.state=row.planned?'Materiais e construção em andamento':!row.missing?'Etapa já instalada':responses[id]?.state||'Aguardando investimento';
     if(row.planned){const project=projects.find(p=>p.id===row.projectId);row.response={state:responses[id]?.projectId===row.projectId?responses[id].state:row.state,projectId:row.projectId};if(project?.materialAccountId)row.response.state=project.inventory.pedra>=project.stone?'Materiais entregues; aguardando trabalho na obra.':'Materiais financiados; aguardando compra e transporte.';}
     else if(!row.missing){
-      const sites=firms.filter(b=>b.type===row.type&&(row.type!=='farm'||b.crop===row.crop));
+      const sites=existingByType.get(key(row.type,row.type==='farm'?row.crop:null))||[];
       const hasCrew=sites.some(b=>b.workers.length||city.society.citizen(b.ownerId));
       const hasCapital=sites.some(b=>b.balance>=b.wage*60);
       const shortages=Object.keys(inputs(row.type)).filter(g=>!sites.some(b=>(b.inventory[g]||0)>=(inputs(row.type)[g]||1)));

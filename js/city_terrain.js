@@ -88,11 +88,19 @@ export function buildingGround(world, x, y, width, depth, entrance = null) {
 export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,rotation=null}={}){
   if(rotation!==null&&(!Number.isInteger(rotation)||rotation<0||rotation>3))return {error:'Rotação inválida.'};
   const first=rotation??Math.floor(city.random()*4),hub=city.buildings.find(b=>!b.entity.destroyed)?.door;
-  let error='Nenhuma orientação permite acesso ao terreno.';
+  let error='Nenhuma orientação permite acesso ao terreno.',accessBlocked=null;
   for(let attempt=0;attempt<(rotation===null?4:1);attempt++){
     const turn=(first+attempt)%4,site=inspectBuildingSite(city,x,y,width,depth,{plotId,type,rotation:turn});
     if(site.error){error=site.error;continue;}
-    const access=hub?findTerrainPath(city.world,site.door,hub,city.occupied,{extraBlocked:(xx,yy)=>(xx>=x&&xx<x+width&&yy>=y&&yy<y+depth)||city.development.plots.some(p=>p.id!==plotId&&xx>=p.x&&xx<p.x+p.width&&yy>=p.y&&yy<p.y+p.depth)}):[];
+    if(hub&&!accessBlocked){
+      // Plot boundaries are fixed throughout this search. Rasterize once instead
+      // of scanning every registered plot for every neighbor visited by A*.
+      const mapWidth=city.world.width,mapHeight=city.world.height;accessBlocked=new Uint8Array(mapWidth*mapHeight);
+      for(const cell of city.occupied){const comma=cell.indexOf(','),cx=Number(cell.slice(0,comma)),cy=Number(cell.slice(comma+1));if(cx>=0&&cy>=0&&cx<mapWidth&&cy<mapHeight)accessBlocked[cy*mapWidth+cx]=1;}
+      const mark=(px,py,w,d)=>{const x0=Math.max(0,px),x1=Math.min(mapWidth,px+w);if(x0>=x1)return;for(let yy=Math.max(0,py);yy<Math.min(mapHeight,py+d);yy++)accessBlocked.fill(1,yy*mapWidth+x0,yy*mapWidth+x1);};
+      mark(x,y,width,depth);for(const p of city.development.plots)if(p.id!==plotId)mark(p.x,p.y,p.width,p.depth);
+    }
+    const access=hub?findTerrainPath(city.world,site.door,hub,city.occupied,{blockedGrid:accessBlocked,preferRoads:false}):[];
     if(access!==null)return {...site,access};
   }
   return {error};
@@ -146,6 +154,61 @@ function heapPop(w){
   const node=nodes[last],cost=costs[last],score=scores[last];let i=0;
   while(i*2+1<last){let child=i*2+1;if(child+1<last&&scores[child+1]<scores[child])child++;if(scores[child]>=score)break;nodes[i]=nodes[child];costs[i]=costs[child];scores[i]=scores[child];i=child;}
   nodes[i]=node;costs[i]=cost;scores[i]=score;return first;
+}
+
+// Many residents travel to the same few doors. Expand a reverse shortest-path
+// tree once per popular destination, then reuse its next steps for each origin.
+// One-off destinations keep A*, and the cache retains at most one million cells.
+const sharedDestinations=new WeakMap();
+export function findSharedTerrainPath(city,start,goal,blockedGrid){
+  const world=city.world,width=world.width,height=world.height,size=width*height;
+  const sx=Math.floor(start.x),sy=Math.floor(start.y),gx=Math.floor(goal.x),gy=Math.floor(goal.y);
+  if(sx<0||sy<0||gx<0||gy<0||sx>=width||gx>=width||sy>=height||gy>=height)return null;
+  const origin=sy*width+sx,destination=gy*width+gx,terrain=terrainPathGrid(world);
+  // A* permits leaving an occupied origin; keep that special case there.
+  if(blockedGrid[origin])return undefined;
+  if(!terrain.walkable[origin]||!terrain.walkable[destination]||blockedGrid[destination])return null;
+  const revision=`${world.revision||0}:${city.obstacleRevision||0}:${city.occupied.size}:${width}:${height}`;
+  let cache=sharedDestinations.get(city);
+  if(!cache||cache.revision!==revision){cache={revision,requests:new Map(),fields:new Map()};sharedDestinations.set(city,cache);}
+  let field=cache.fields.get(destination);
+  if(!field){
+    const requests=(cache.requests.get(destination)||0)+1;
+    if(cache.requests.size>=512&&!cache.requests.has(destination))cache.requests.delete(cache.requests.keys().next().value);
+    cache.requests.set(destination,requests);
+    if(requests<4)return undefined;
+    const capacity=Math.max(1,Math.min(16,Math.floor(1048576/size)));
+    if(cache.fields.size>=capacity){
+      let victim=null,fewest=Infinity;
+      for(const [key,item]of cache.fields)if(item.requests<fewest){victim=key;fewest=item.requests;}
+      // Keep similarly popular destinations from evicting one another on every
+      // resident's candidate scan and rebuilding all the same trees again.
+      if(requests<=fewest+4)return undefined;
+      cache.fields.delete(victim);
+    }
+    field={requests,costs:new Float64Array(size),next:new Int32Array(size),closed:new Uint8Array(size),heapNodes:new Int32Array(0),heapCosts:new Float64Array(0),heapScores:new Float64Array(0),heapLength:0};
+    field.costs.fill(Infinity);field.next.fill(-1);field.costs[destination]=0;heapPush(field,destination,0,0);cache.fields.set(destination,field);
+  }else field.requests++;
+  while(!field.closed[origin]&&field.heapLength){
+    const current=heapPop(field),cost=field.poppedCost;
+    if(field.closed[current]||cost!==field.costs[current])continue;
+    field.closed[current]=1;
+    const x=current%width,y=Math.floor(current/width),heightHere=terrain.elevations[current];
+    const enteringCost=terrain.roads[current]?ROAD_RULES.pavedCost:tileCosts[terrain.tiles[current]];
+    for(const [dx,dy]of pathDirections){
+      const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;
+      const neighbor=ny*width+nx,climb=Math.abs(heightHere-terrain.elevations[neighbor]);
+      if(field.closed[neighbor]||!terrain.walkable[neighbor]||blockedGrid[neighbor]||climb>1.25)continue;
+      // Reverse edges must charge entering the current cell, not the neighbor.
+      const candidate=cost+enteringCost+climb*.7;
+      if(candidate>=field.costs[neighbor])continue;
+      field.costs[neighbor]=candidate;field.next[neighbor]=current;heapPush(field,neighbor,candidate,candidate);
+    }
+  }
+  if(!field.closed[origin])return null;
+  const path=[];
+  for(let current=origin;current!==destination;){current=field.next[current];path.push({x:current%width+.5,y:Math.floor(current/width)+.5});}
+  return path;
 }
 
 // Reachability does not need a shortest path for every pair of businesses.

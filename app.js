@@ -1,9 +1,9 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=landlord-stock-market-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=tile-locked-citizens-1';
 import { resolveWorldSettings } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=landlord-stock-market-1";
-import { CityDesktop } from "./js/city_desktop.js?v=landlord-stock-market-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=investment-plan-reuse-1";
+import { CityDesktop } from "./js/city_desktop.js?v=profiler-console-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=road-bridge-render-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=tile-locked-citizens-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
@@ -36,9 +36,24 @@ let lastUiDrawnAt = previousFrame;
 let lastUiPointerX = -1, lastUiPointerY = -1;
 // Opt-in diagnostics, readable without exposing mutable simulation objects to the browser.
 const profiling = new URLSearchParams(window.location.search).has('profile');
+const PROFILER_STALL_THRESHOLD_MS=500;
+let lastProfilerStallLogAt=0;
+let lastLoggedWorkerPeakMs=0;
 const frameMetrics = { started: performance.now(), count: 0, simulation: 0, index: 0, scene: 0, ui: 0, cpu: 0, max: 0, terrain:0, city:0, renderEntities:0, entityLoop:0, entityRest:0, citizenClass:0, citizenSurface:0, citizenBody:0, webgl:0 };
 const performanceOutput=profiling?document.createElement('output'):null;
-if(performanceOutput){performanceOutput.id='performance-stats';Object.assign(performanceOutput.style,{position:'fixed',right:'8px',bottom:'8px',width:'min(560px, calc(100vw - 16px))',maxHeight:'min(72vh, calc(100dvh - 16px))',boxSizing:'border-box',overflow:'auto',overscrollBehavior:'contain',padding:'8px',font:'clamp(9px, 1.4vw, 12px) monospace',lineHeight:'1.35',color:'#fff',background:'#17221de6',zIndex:'9999',pointerEvents:'auto',whiteSpace:'pre-wrap',overflowWrap:'anywhere'});root.append(performanceOutput);}
+const performanceToggle=profiling?document.createElement('button'):null;
+if(performanceOutput&&performanceToggle){
+  performanceOutput.id='performance-stats';
+  Object.assign(performanceOutput.style,{position:'fixed',right:'8px',bottom:'38px',width:'min(560px, calc(100vw - 16px))',maxHeight:'min(72vh, calc(100dvh - 46px))',boxSizing:'border-box',overflow:'auto',overscrollBehavior:'contain',padding:'8px',font:'clamp(9px, 1.4vw, 12px) monospace',lineHeight:'1.35',color:'#fff',background:'#17221de6',zIndex:'9999',pointerEvents:'auto',whiteSpace:'pre-wrap',overflowWrap:'anywhere'});
+  performanceToggle.type='button';performanceToggle.textContent='Ocultar profiler';performanceToggle.setAttribute('aria-controls',performanceOutput.id);performanceToggle.setAttribute('aria-expanded','true');
+  Object.assign(performanceToggle.style,{position:'fixed',right:'8px',bottom:'8px',zIndex:'10000',padding:'4px 8px',border:'1px solid #eee4c8',borderTopColor:'#746950',borderLeftColor:'#746950',borderRadius:'0',background:'#c6b99a',color:'#242014',font:'11px Tahoma, Verdana, sans-serif',cursor:'pointer',pointerEvents:'auto'});
+  performanceToggle.addEventListener('click',()=>{performanceOutput.hidden=!performanceOutput.hidden;performanceToggle.textContent=performanceOutput.hidden?'Mostrar profiler':'Ocultar profiler';performanceToggle.setAttribute('aria-expanded',String(!performanceOutput.hidden));});
+  for(const control of [performanceOutput,performanceToggle]){
+    for(const type of ['pointerdown','pointermove','pointerup','pointercancel','click','dblclick','contextmenu'])control.addEventListener(type,event=>event.stopPropagation());
+    control.addEventListener('wheel',event=>event.stopPropagation(),{passive:true});
+  }
+  root.append(performanceOutput,performanceToggle);
+}
 function formatPerformanceLines(value,prefix=''){
   const lines=[];
   for(const [key,item]of Object.entries(value||{})){
@@ -349,6 +364,14 @@ function frame(now) {
       const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
       root.dataset.performance=JSON.stringify(profile);
       performanceOutput.textContent=formatPerformanceLines(profile).join('\n');
+      const workerPeak=profile.worker?.maxUpdateMs||0;
+      const newWorkerPeak=workerPeak>=PROFILER_STALL_THRESHOLD_MS&&workerPeak>lastLoggedWorkerPeakMs;
+      if((profile.maxCpuMs>=PROFILER_STALL_THRESHOLD_MS||newWorkerPeak)&&ended-lastProfilerStallLogAt>=10000){
+        lastProfilerStallLogAt=ended;
+        if(newWorkerPeak)lastLoggedWorkerPeakMs=workerPeak;
+        const capture={...profile,stallThresholdMs:PROFILER_STALL_THRESHOLD_MS};
+        console.warn(`[Suburban profiler] Engasgo detectado (limiar ${PROFILER_STALL_THRESHOLD_MS} ms). Captura completa:\n${JSON.stringify(capture,null,2)}`);
+      }
       Object.assign(frameMetrics,{started:ended,count:0,simulation:0,index:0,scene:0,ui:0,cpu:0,max:0,terrain:0,city:0,renderEntities:0,entityLoop:0,entityRest:0,citizenClass:0,citizenSurface:0,citizenBody:0,webgl:0});
     }
   }
@@ -393,7 +416,7 @@ for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
 }
 
 // Background simulation starts after UI/editor bindings exist. Commands are serialized by the worker.
-simulationBridge = new CitySimulationBridge({ city, entities, nextId, time,
+simulationBridge = new CitySimulationBridge({ city, entities, nextId, time, profiling,
   noticeTarget: () => cityUI.active,
   notice: (message,target) => { if(target)target.notice=message;else cityUI.notice=message; },
   changed: ({ terrain, entities: changedEntities }) => {

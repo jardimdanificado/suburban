@@ -37,10 +37,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=landlord-stock-market-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=investment-plan-reuse-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=landlord-stock-market-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=landlord-stock-market-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=investment-plan-reuse-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -98,6 +98,7 @@ export class CityUI {
     this.publicationDraft=document.createElement('input');this.publicationDraft.type='text';this.publicationDraft.maxLength=1200;this.publicationDraft.placeholder='Escreva um relato, informação, anúncio ou invenção…';this.publicationDraft.setAttribute('aria-label','Conteúdo a escrever no livro ou panfleto');
     this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput);
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
+    this.profileNextWorld=new URLSearchParams(window.location.search).has('profile');
   }
   resetScroll() { this.scrolls = {}; }
   cachedList(key,build){
@@ -729,6 +730,8 @@ export class CityUI {
       p.note('Cidadãos iniciais (1 a 2.000)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.populationInput,p.x,iy,p.w);
       p.note('Tamanho do mapa (128 a 1024 células por lado)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.mapSizeInput,p.x,iy,p.w);
       p.button(`PAISAGEM: ${WORLD_PRESETS[this.terrain].label}`,()=>{const keys=Object.keys(WORLD_PRESETS);this.terrain=keys[(keys.indexOf(this.terrain)+1)%keys.length];});
+      p.button(`PROFILER NO PRÓXIMO MUNDO: ${this.profileNextWorld?'ATIVADO':'DESATIVADO'}`,()=>{this.profileNextWorld=!this.profileNextWorld;});
+      p.note('Quando ativo, mostra métricas na tela e registra engasgos acima de 500 ms no console.');
       p.note('Gerar terreno reinicia a simulação e descarta a cidade atual.',C.red);
       p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity()&&this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(Number(this.seed.value),this.terrain,Number(this.populationInput.value),Number(this.mapSizeInput.value));});p.button('GERAR TERRENO ALEATÓRIO',()=>{if(this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(randomWorldSeed(),this.terrain,Number(this.populationInput.value),Number(this.mapSizeInput.value));});
     }
@@ -1008,5 +1011,5 @@ export class CityUI {
     const blob=new Blob([JSON.stringify({version:2,cityMinute:this.city.minute,total:this.city.history.total,dropped:this.city.history.dropped,retention:HISTORY_LIMIT,filters:{category:this.logCategory,citizenId:this.logCitizenId,buildingId:this.logBuildingId,accountId:this.logAccountId,reference:this.logReference,query:this.query},events,pendingFinance},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`suburban-historico-dia-${this.city.day}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  startWorld(seed, terrain, population = this.city.initialPopulation ?? 512, size = this.city.world.width ?? 512) { const url = new URL(window.location.href); url.searchParams.set('seed', seed); url.searchParams.set('terrain', terrain); url.searchParams.set('population', population); url.searchParams.set('size',size); window.location.assign(url.href); }
+  startWorld(seed, terrain, population = this.city.initialPopulation ?? 512, size = this.city.world.width ?? 512) { const url = new URL(window.location.href); url.searchParams.set('seed', seed); url.searchParams.set('terrain', terrain); url.searchParams.set('population', population); url.searchParams.set('size',size); if(this.profileNextWorld)url.searchParams.set('profile','1');else url.searchParams.delete('profile'); window.location.assign(url.href); }
 }

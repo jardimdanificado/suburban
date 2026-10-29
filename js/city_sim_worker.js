@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=landlord-stock-market-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=investment-plan-reuse-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -51,6 +51,21 @@ function recordProfile(profile,prefix=''){
   if(!profile)return;
   for(const [key,value]of Object.entries(profile)){
     if(key==='step'){recordProfile(value,`${prefix}step.`);continue;}
+    if(key==='pathSearchPeak'&&value){
+      const current=phasePeaks[`${prefix}pathSearchPeak`];
+      if(!current||profile.pathSearchMaxMs>current.ms)phasePeaks[`${prefix}pathSearchPeak`]={ms:profile.pathSearchMaxMs,minute:profile.minute,...value};
+      continue;
+    }
+    if(key==='economyHourly'&&value){
+      const name=`${prefix}economyHourly`,current=phasePeaks[name];
+      if(!current||value.ms>current.ms)phasePeaks[name]={...value,minute:profile.minute};
+      continue;
+    }
+    if(key==='pathSearches'&&Number.isFinite(value)){
+      const name=`${prefix}pathSearches`,current=phasePeaks[name];
+      if(!current||value>current.count)phasePeaks[name]={count:value,minute:profile.minute};
+      continue;
+    }
     if(!key.endsWith('Ms')||!Number.isFinite(value))continue;
     const name=prefix+key,peak=phasePeaks[name];if(!peak||value>peak.ms)phasePeaks[name]={ms:value,minute:profile.minute};
   }
@@ -82,6 +97,7 @@ self.onmessage = ({ data }) => {
   try {
     if (data.type === 'init') {
       state = graph.apply(data.packet); bindCityState(state.city);
+      state.city.profileDiagnostics=data.profileDiagnostics===true;
       state.city.createEntity = ({ x = 0, y = 0, properties = {}, ...extra }) => {
         const entity = { id: state.nextId++, x, y, destroyed: false, ...extra, properties };
         state.entities.push(entity); return entity;

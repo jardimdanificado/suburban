@@ -1,5 +1,5 @@
-import {queueMotion,sampleMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=landlord-stock-market-1';
+import {queueMotion} from './city_motion.js';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=investment-plan-reuse-1';
 import {canStep,terrainWalkable} from './city_terrain.js?v=deep-perf-3';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
@@ -59,17 +59,17 @@ function receiveInteriorMotion(bridge,packet,now,resetAll=false){
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
 export class CitySimulationBridge {
-  constructor({ city, entities, nextId, time, changed, notice, noticeTarget }) {
-    this.city = city; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice; this.noticeTarget = noticeTarget;
+  constructor({ city, entities, nextId, time, changed, notice, noticeTarget, profiling=false }) {
+    this.city = city; this.city.profileDiagnostics=profiling; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice; this.noticeTarget = noticeTarget;
     this.graph = new CityStateGraph(); this.state = { city, entities, nextId };
     this.active = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=landlord-stock-market-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=investment-plan-reuse-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
-      this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });
+      this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling });
       this.active = true;
       for (const [target, path, method] of [[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],
         ...['setPalette','requestPurchase','requestVehicle','requestBuilding'].map(method=>[city.paint,'paint.',method]),[city.vehicles,'vehicles.','mountFlag'],[city.vehicles,'vehicles.','removeFlag'],[city.economy,'economy.','rentOffice'],[city.economy,'economy.','configureEmployment'],[city.economy,'economy.','offerShares'],[city.economy,'economy.','buyShares'],[city.economy,'economy.','cancelShareOffer'],[city.vehicles,'vehicles.','configureAssembly'],[city.vehicles,'vehicles.','buyVehicle'],[city.vehicles,'vehicles.','transferVehicle'],[city.vehicles,'vehicles.','revisePart'],[city.politics.research,'politics.research.','commissionService'],[city.publications, 'publications.', 'write'], [city.publications, 'publications.', 'read'], [city.publications, 'publications.', 'configure'], [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'],
@@ -171,20 +171,33 @@ export class CitySimulationBridge {
       live.add(v.id);let motion=this.vehicleMotion.get(v.id);
       if(!motion){motion={entity:v.entity,to:{}};this.vehicleMotion.set(v.id,motion);}
       motion.entity=v.entity;
-      const x=positions[i+1],y=positions[i+2],reset=this.time.paused||!motion.points?.length||Math.hypot(x-v.entity.x,y-v.entity.y)>=8;
-      v.x=x;v.y=y;queueMotion(motion,x,y,now,{reset});
-      if(reset){v.entity.x=x;v.entity.y=y;}else sampleMotion(motion,now);
+      const x=positions[i+1],y=positions[i+2];
+      v.x=x;v.y=y;queueMotion(motion,x,y,now,{reset:true});
+      v.entity.x=x;v.entity.y=y;
       v.altitude=positions[i+3];v.angle=positions[i+4];
     }
     for(const id of this.vehicleMotion.keys())if(!live.has(id))this.vehicleMotion.delete(id);
+    this.synchronizeRiders();
+  }
+  synchronizeRiders(){
+    for(const v of this.city.vehicles?.units?.values()||[]){
+      if(!v.entity)continue;
+      const passengers=v.passengerIds||[];
+      for(let i=-1;i<passengers.length;i++){
+        const id=i<0?v.driverId:passengers[i];if(id==null)continue;
+        const c=this.city.society.citizen(id);if(!c||c.ridingVehicleId!==v.id)continue;
+        const side=i<0?0:(i+1)*.34;
+        c.entity.x=v.entity.x+Math.cos(v.angle||0)*side;c.entity.y=v.entity.y-Math.sin(v.angle||0)*side;
+      }
+    }
   }
   interpolate(now) {
-    if(!this.time.paused)for(const motion of this.vehicleMotion.values())sampleMotion(motion,now);
     for(const motion of this.interiorMotion.values())sampleInterior(this,motion,now);
     for (const motion of this.motion.values()) {
       if(this.time.paused)continue;
       if(sampleCitizenMotion(this.city.world,motion,now))this.motion.delete(motion.id);
     }
+    this.synchronizeRiders();
   }
   fail(message) {
     const wasRunning=this.active;
