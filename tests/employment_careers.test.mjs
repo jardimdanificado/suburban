@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,totalMoney} from './helpers/city.mjs';
-import {career,contract,qualification,apply,recordWork,reviewMarket,renderResume,workEfficiency,reviewWages} from '../js/city_employment.js';
+import {setup,totalMoney,finishActivityRoute} from './helpers/city.mjs';
+import {career,contract,qualification,apply,recordWork,reviewMarket,renderResume,workEfficiency,reviewWages,discoverVacancies,routeToInterview,advanceRecruitment} from '../js/city_employment.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 function fixture(){
  const city=setup({starter:true,population:48}),b=city.buildings.find(b=>b.type==='quarry');
@@ -42,9 +42,13 @@ test('employed candidates wait for selection and switch only after a better offe
  c.jobId=old.id;old.workers.push(c.id);old.jobs=old.workers.length;b.jobs=1;
  city.economy.configureEmployment(old.id,{baseWage:5});city.economy.configureEmployment(b.id,{baseWage:20});
  city.economy.staffEssentials=()=>{};career(c).nextSearchAt=0;
+ c.entity.x=b.door.x;c.entity.y=b.door.y;discoverVacancies(city,c,true);
  reviewMarket(city,[b]);const application=career(c).applications.at(-1);assert.equal(application.status,'análise');
  city.economy.hire();assert.equal(c.jobId,old.id);
- city.minute+=61;city.economy.hire();assert.equal(c.jobId,b.id);assert.equal(application.status,'aprovado');assert(!old.workers.includes(c.id));assert.equal(b.workers.filter(id=>id===c.id).length,1);
+ assert(routeToInterview(city,c)===false);
+ city.minute=application.interviewAt-20;assert(routeToInterview(city,c));finishActivityRoute(city,c);
+ city.minute=application.interviewAt;advanceRecruitment(city);assert.equal(c.jobId,old.id);
+ city.minute=application.decideAt;city.economy.hire();assert.equal(c.jobId,b.id);assert.equal(application.status,'aprovado');assert(!old.workers.includes(c.id));assert.equal(b.workers.filter(id=>id===c.id).length,1);
 });
 test('resume renders career and selection records without relying on old events',()=>{
  const {city,b,c}=fixture();contract(city,c,b);apply(city,c,b);const labels=[];

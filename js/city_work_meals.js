@@ -1,6 +1,6 @@
-import {activityCellAvailable,activityRoomReady,outdoorCellReady} from './city_interiors.js?v=informal-gigs-1';
+import {syncCitizenInterior} from './city_interiors.js?v=presential-jobs-meals-1';
 import { preparedOffer } from './city_markets.js';
-import { CROPS } from './city_economy.js?v=office-demand-rollout-1';
+import { CROPS } from './city_economy.js?v=presential-jobs-meals-1';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 
@@ -30,13 +30,18 @@ export class CityWorkMeals {
     return good ? { good, quantity: WORK_MEAL_RULES.units, inputs: { [good]: WORK_MEAL_RULES.units }, quality: 1 } : null;
   }
   stock(holder) { return this.foodGoods().reduce((n, g) => n + (holder.inventory[g] || 0) + (holder.incoming[g] || 0), 0); }
+  completeFloor(holder,z) {
+    if(!holder?.units?.length||!holder.width||!holder.depth)return false;
+    const shell=this.city.building(holder.officeTenantOf)||holder,rooms=holder.units.filter(u=>u.z===z);
+    if(!rooms.some(u=>u.roomType!=='circulation'))return false;
+    const cells=new Set([...rooms,...(shell.circulation||[]).filter(u=>u.z===z)].map(u=>`${u.x},${u.y}`));
+    return cells.size===holder.width*holder.depth;
+  }
   hasFullDiningFloor(holder) {
-    if (!holder?.units?.length || !holder.width || !holder.depth) return false;
-    const area = holder.width * holder.depth;
-    const floors = new Set(holder.units.filter(u => u.roomType === 'dining').map(u => u.z));
-    for (const z of floors) {
-      const rooms = holder.units.filter(u => u.z === z);
-      if (rooms.length === area && rooms.every(u => u.roomType === 'dining')) return true;
+    if(!holder?.units?.length)return false;
+    for(const z of new Set(holder.units.filter(u=>u.roomType==='dining').map(u=>u.z))){
+      const rooms=holder.units.filter(u=>u.z===z&&u.roomType!=='circulation');
+      if(this.completeFloor(holder,z)&&rooms.every(u=>u.roomType==='dining'))return true;
     }
     return false;
   }
@@ -48,7 +53,7 @@ export class CityWorkMeals {
   routeToMeal(c) {
     if(this.city.minute<(c.mealRetryAt||0))return false;
     const b = this.employer(c); if (!b || !this.hasFullDiningFloor(b)) return false;
-    const sites = [b, ...this.city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed')].filter(s => { const offer = this.offer(s, c); return offer && (c.needs.food < 18 || !this.city.buildings.some(shop => this.city.economy.mealScore(c, shop) < Math.hypot(s.door.x - c.entity.x, s.door.y - c.entity.y) - this.city.economy.mealTaste(c, offer) * 45)); }).sort((a, d) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(d.door.x - c.entity.x, d.door.y - c.entity.y));
+    const sites = [b, ...this.city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed')].filter(s => { if(!this.hasFullDiningFloor(s))return false;const offer = this.offer(s, c); return offer && (c.needs.food < 18 || !this.city.buildings.some(shop => this.city.economy.mealScore(c, shop) < Math.hypot(s.door.x - c.entity.x, s.door.y - c.entity.y) - this.city.economy.mealTaste(c, offer) * 45)); }).sort((a, d) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(d.door.x - c.entity.x, d.door.y - c.entity.y));
     for (const site of sites) {
       const path = this.city.findPath(c.entity, site.door); if (path === null) continue;
       c.task = 'workmeal'; c.targetId = b.id; c.mealTargetId = site.id; c.path = path; return true;
@@ -56,6 +61,7 @@ export class CityWorkMeals {
     return false;
   }
   tryStart(c) {
+    if(c.task==='workmeal'&&!c.workMeal&&!this.hasFullDiningFloor(this.employer(c))){c.task=null;c.targetId=null;c.path=[];c.mealResume=null;c.mealTargetId=null;c.mealWaitSince=null;return false;}
     if(c.mobilityTrip||c.ridingVehicleId)return false;
     if (c.workMeal) return true;
     // An optional meal must not interrupt drinking, treatment or other urgent travel.
@@ -64,27 +70,24 @@ export class CityWorkMeals {
     if(this.city.minute<(c.mealRetryAt||0))return false;
     if(c.needs.food>=WORK_MEAL_RULES.foodThreshold||c.conversation)return false;
     const b = this.employer(c);
-    if (!b) return false;
+    if (!b || !this.hasFullDiningFloor(b)) {
+      if(c.task==='workmeal'){c.task=null;c.targetId=null;c.path=[];c.mealResume=null;c.mealTargetId=null;c.mealWaitSince=null;}
+      return false;
+    }
     const holder = this.site(c, b);
+    if(!this.hasFullDiningFloor(holder))return false;
     const atFarm=holder.type==='farm'&&c.entity.x>=holder.entity.x-1&&c.entity.x<=holder.entity.x+holder.width+1&&c.entity.y>=holder.entity.y-1&&c.entity.y<=holder.entity.y+holder.depth+1;
     if(!atFarm&&Math.hypot(c.entity.x-holder.door.x,c.entity.y-holder.door.y)>2&&!c.indoorLocation)return false;
     const offer = this.offer(holder, c); if (!offer) return false;
     if(c.task!=='workmeal'){c.mealResume={task:c.task,targetId:c.targetId,workProjectId:c.workProjectId};c.task='workmeal';c.path=[];c.targetId=b.id;c.mealTargetId=holder.id;}
-    const rooms=this.hasFullDiningFloor(holder)?holder.units.filter(u=>u.roomType==='dining'):[];
-    // A handful of dining cells is not a workplace meal service: require a
-    // complete floor, otherwise the employee eats through ordinary shops and
-    // receives the employer's meal voucher through the normal purchase path.
-    if (!rooms.length) return false;
-    const room=rooms.find(u=>activityCellAvailable(this.city,u,c,'dining'));
-    if(rooms.length&&!room){
-      c.mealWaitSince??=this.city.minute;c.action='Aguardando vaga no refeitório';
-      if(this.city.minute-c.mealWaitSince>=30){c.mealWaitSince=null;c.mealRetryAt=this.city.minute+90;c.task=null;c.path=[];c.mealResume=null;return false;}
+    if(c.path.length)return true;
+    if(!syncCitizenInterior(this.city,c)){
+      c.mealWaitSince??=this.city.minute;
+      if(this.city.minute-c.mealWaitSince>=30&&!c.indoorLocation?.targetUnitId){c.mealWaitSince=null;c.mealRetryAt=this.city.minute+90;c.task=null;c.targetId=null;c.path=[];c.mealResume=null;return false;}
       return true;
     }
+    if(c.indoorLocation?.buildingId!==holder.id||c.indoorLocation?.roomType!=='dining'||c.indoorLocation?.path?.length)return true;
     c.mealWaitSince=null;
-    if(room){if(!activityRoomReady(this.city,c,holder,room,'dining'))return true;}
-    else if(holder.type){c.action='Aguardando refeitório';return false;}
-    else if(!outdoorCellReady(this.city,c,{id:holder.id,entity:holder.door},{x:0,y:0,z:0,id:`site-dining:${holder.id}`}))return true;
     this.city.economy.enjoyMeal(c, offer);
     for (const [good, amount] of Object.entries(offer.inputs)) { holder.inventory[good] -= amount; this.city.economy.consumed[good] += amount; this.city.economy.recordGoods('workplace-meal', good, amount, holder.id, c.id); }
     c.workMeal = { employerId: b.id, siteId: holder.id, startedAt: this.city.minute, elapsed: 0, good: offer.good, quality: offer.quality, resume:c.mealResume?['work','manage','construction','transport'].includes(c.mealResume.task):false,resumeState:c.mealResume };
@@ -105,7 +108,7 @@ export class CityWorkMeals {
   }
   issueVoucher(c, shop) {
     const b = this.employer(c), offer = this.city.economy.mealOffer(shop);
-    if (!b || this.hasFullDiningFloor(b) || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.foodVoucher || !offer) return false;
+    if (!b || this.hasFullDiningFloor(b)&&!(c.mealRetryAt>this.city.minute) || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.foodVoucher || !offer) return false;
     const amount = Math.max(this.city.currency.price(WORK_MEAL_RULES.voucherMinimum), offer.price * WORK_MEAL_RULES.voucherPriceMultiple);
     if (!this.city.transfer(b.accountId, c.accountId, amount, 'Vale-alimentação')) return false;
     c.foodVoucher = { employerId: b.id, amount, issuedAt: this.city.minute };

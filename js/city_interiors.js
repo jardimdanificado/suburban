@@ -1,9 +1,9 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {queueService} from './city_service_queue.js?v=queue-flow-1';
+import {queueService} from './city_service_queue.js?v=presential-jobs-meals-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js';
 // Outdoor coordinates remain the navigation anchor at the entrance. Interior
 // position, circulation and floor changes are separate physical coordinates.
-const INDOOR_TASKS=new Set(['work','manage','shopping','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','informal-service','leisure','social','outdoor_leisure']);
+const INDOOR_TASKS=new Set(['work','manage','shopping','job-interview','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','informal-service','leisure','social','outdoor_leisure']);
 const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
 const citizenKeys=[];
 const citizen=(city,id)=>city.accounts.get(Number.isInteger(id)&&id>=0&&id<65536?(citizenKeys[id]??=`citizen:${id}`):`citizen:${id}`)||city.society.citizen(id);
@@ -92,6 +92,7 @@ export function syncCitizenInterior(city,c){
  normalizeInterior(city,c);
  const task=c.workMeal?'workmeal':c.task,fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
  if(task==='informal-service'&&!gig)return exit(city,c);
+ if(task==='workmeal'&&!city.workMeals.hasFullDiningFloor(b)){c.task=null;c.targetId=null;c.mealTargetId=null;c.mealResume=null;c.path=[];return exit(city,c);}
  if(c.paintWorkId&&previous&&!c.path.length){const job=city.paint.jobs.find(j=>j.id===c.paintWorkId);if(job?.kind==='building'&&job.buildingId===previous.buildingId&&job.status==='painting'&&!previous.exiting)return !previous.path.length;}
  if(c.entity.destroyed){release(city,c);c.indoorLocation=null;return true;}
  if(task==='outdoor_leisure'&&!c.path.length){
@@ -111,7 +112,7 @@ export function syncCitizenInterior(city,c){
  }
  if(c.mobilityTrip||c.ridingVehicleId){return exit(city,c);}
  if(task==='construction'&&project?.service!=='expansion')return exit(city,c);
- if(c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)||fieldWork||!b||(['work','manage'].includes(task)&&OUTDOOR_WORK.has(b.type))||(b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal','clean'].includes(task)))return exit(city,c);
+ if(c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)||fieldWork||!b||(['work','manage'].includes(task)&&OUTDOOR_WORK.has(b.type))||(b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal','clean','job-interview'].includes(task)))return exit(city,c);
  if(previous?.exiting)return false;
  const cleaningJob=task==='clean'?city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId):null;
  let kind=task==='informal-service'?(city.units.get(gig.unitId)?.roomType||'workspace'):task==='shopping'&&b.type==='laundromat'?'laundry':task==='clean'&&cleaningJob?.kind==='feces'&&cleaningJob.scope==='building'?(city.units.get(cleaningJob.unitId)?.roomType||'workspace'):['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()?'plenary':'office'):['energy','care','caregiving'].includes(task)?'bedroom':task==='health'?'treatment':!['work','manage'].includes(task)?'service':['work','manage'].includes(task)&&c.role==='councilor'?'office':'workspace';
@@ -130,7 +131,7 @@ export function syncCitizenInterior(city,c){
    else if(kind==='bedroom'&&!c.homeUnitId)room=(groups.get('workspace')||noRooms).find(u=>activityCellAvailable(city,u,c,kind));
    else if(kind==='workspace')room=(groups.get('office')||noRooms).find(u=>activityCellAvailable(city,u,c,kind));}}
 
- if(b.constructionKind!=='open-air'&&(task==='toilet'||task==='food')&&!(previous?.buildingId===b.id&&previous.targetUnitId===room?.id&&previous.targetRoomType===kind)){
+ if(b.constructionKind!=='open-air'&&(task==='toilet'||task==='food'||task==='workmeal')&&!(previous?.buildingId===b.id&&previous.targetUnitId===room?.id&&previous.targetRoomType===kind)){
   const facility=task==='toilet'?city.sanitation.facilities.get(c.toiletTargetId):null,ready=!!room&&activityCellAvailable(city,room,c,kind)&&(!facility||!facility.occupantId||facility.occupantId===c.id||city.minute>=facility.busyUntil);
   if(!queueService(city,c,b,task,task==='toilet'?c.toiletTargetId:'dining',ready))return false;
  }
@@ -139,7 +140,7 @@ export function syncCitizenInterior(city,c){
   // while exhaustion keeps rising. They can still sleep outdoors, at a cost.
   if(task==='energy'&&!c.homeUnitId){c.sleepWaitingSince??=city.minute;if(city.minute-c.sleepWaitingSince>=30){c.sleepWaitingSince=null;c.targetId=null;c.path=[];c.action='Sem vaga para dormir; buscando descanso na rua';return exit(city,c);}}
   if(b.constructionKind!=='open-air'&&!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5){const from={x:b.door.x,y:b.door.y,z:0},lobby={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:0},path=interiorRoute(b,from,lobby);if(path!==null)c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:from,path,phase:path.length?'walking':'waiting',task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}
-  c.action=`Aguardando célula de ${kind} disponível`;return false;
+  c.action=task==='job-interview'?'Aguardando a seleção no local combinado':`Aguardando célula de ${kind} disponível`;return false;
  }
  if(task==='energy')c.sleepWaitingSince=null;
  return activityRoomReady(city,c,b,room,kind);

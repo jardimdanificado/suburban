@@ -5,7 +5,7 @@ import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork} from './city_employment.js';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment} from './city_employment.js';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=interiors-completion-2';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-caps-skin-1';
@@ -21,7 +21,7 @@ import {skybridgeLinks} from './city_skybridges.js?v=bridge-clean-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=informal-gigs-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=presential-jobs-meals-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -32,12 +32,12 @@ import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
 import { CitySanitation } from './city_sanitation.js?v=public-restrooms-1';
 import { CityLife } from './city_life.js?v=needs-performance-1';
-import { CityWorkMeals } from './city_work_meals.js?v=basic-services-analytics-1';
+import { CityWorkMeals } from './city_work_meals.js?v=presential-jobs-meals-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=interiors-completion-2';
 import { CityLogistics } from './city_logistics.js?v=informal-gigs-1';
 import { CityGigs } from './city_gigs.js?v=informal-services-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=office-demand-rollout-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=presential-jobs-meals-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=sync-perf-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=initial-cycle-ref-1';
 
@@ -328,8 +328,8 @@ export class CitySimulation {
   }
   setWorkplaceDiningFloor(buildingId,floor,enabled=true){
     const b=this.building(buildingId);if(!b||!Number.isInteger(floor)||floor<0||floor>=b.floors)return this.fail('Andar inválido para instalar o refeitório.');
-    const rooms=b.units.filter(u=>u.z===floor),area=b.width*b.depth;
-    if(rooms.length!==area)return this.fail('O refeitório precisa ocupar todas as células de um andar completo.');
+    const rooms=b.units.filter(u=>u.z===floor&&u.roomType!=='circulation');
+    if(!this.workMeals.completeFloor(b,floor))return this.fail('O refeitório precisa ocupar todas as células de um andar completo.');
     if(enabled){
       if(!rooms.every(u=>u.roomType==='workspace'))return this.fail('Escolha um andar livre de banheiros e outros espaços especializados.');
       for(const u of rooms)u.roomType='dining';
@@ -512,10 +512,7 @@ export class CitySimulation {
        }
       }
     }
-    // Vacant residents already participate in the application/recruitment
-    // cycle. Avoid sending all of them on purposeless cross-city leisure walks
-    // during working hours while they wait for an employer's decision.
-    if(task==='leisure'&&!urgent&&joblessDuringShift){c.task=null;c.targetId=null;c.path=[];c.action='Procurando trabalho e aguardando seleção';return;}
+    if(task==='leisure'&&!urgent&&joblessDuringShift&&searchEmployment(this,c))return;
     if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&this.paint.route(c))return;
     if (task === 'social' && this.relationships.seekContact(c)) return;
     if(task==='hygiene'&&this.sanitation.choose(c,'hygiene'))return;
@@ -580,6 +577,7 @@ export class CitySimulation {
     if(['paint-purchase','paint-delivery'].includes(c.task)){this.paint.arrive(c);return;}
     if(c.task==='research'){this.politics.getResearch().fieldWork(c);return;}
     if(c.task==='interview'){this.politics.getResearch().respondentWait(c);return;}
+    if(c.task==='job-interview'){c.action='No local da seleção, aguardando o horário e o resultado';return;}
     if(c.task==='vote'){this.politics.voting.arrive(c);return;}
     if(c.task==='campaign'){this.politics.campaigns.arrive(c);return;}
     if(c.task==='visit'){this.relationships.arrive(c);return;}
@@ -840,6 +838,7 @@ export class CitySimulation {
       c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
       if (this.life.minute(c,elapsed)) continue;
       advanceCitizenInterior(this,c,elapsed);
+      discoverVacancies(this,c);
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (this.workMeals.advance(c)) continue;
       const urgent = this.urgentNeed(c);
@@ -851,6 +850,7 @@ export class CitySimulation {
       }
       if (c.deliveryId || c.cleaningJobId || c.informalJobId) continue;
       if (c.conversation) continue;
+      if(!urgent)routeToInterview(this,c);
       if (!c.task) {
         // An idle citizen used to repeat the same path/offer search every city
         // minute, even after finishing leisure at 95% or finding no service.
@@ -863,6 +863,7 @@ export class CitySimulation {
       if(!c.task){c._nextTaskAt=this.minute+5;c._retryUrgent=urgent;}
     }
     for(const c of this.citizens)if(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation)syncCitizenInterior(this,c);
+    advanceRecruitment(this);
     this.gigs.updateMinute();
     disperseCrowds(this);this.society.updateMinute();
     const movers=this._movingCitizens??=[];movers.length=0;
@@ -922,7 +923,7 @@ export class CitySimulation {
           if(!elevated){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
-        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='job-interview'?'Indo à seleção de emprego':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }

@@ -36,10 +36,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=office-demand-rollout-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=presential-jobs-meals-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=sync-perf-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=informal-gigs-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=presential-jobs-meals-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -621,9 +621,9 @@ export class CityUI {
     const deliveries=city.logistics.shipments.filter(s=>s.buyer?.id===b.id||s.payerAccountId===b.accountId),painting=city.paint.jobs.filter(j=>j.payer===b.accountId||j.clientId===b.id),office=city.building(b.officeTenantOf);
     p.kv('Fretes contratados / recebidos',deliveries.length);p.kv('Serviços de pintura',painting.length);if(office)p.kv('Aluguel empresarial',`${office.entity.properties.name} · ${b.officeFloor+1}º andar`);
     const diningFloors=Array.from({length:b.floors},(_,z)=>b.units.filter(u=>u.z===z));
-    p.heading('ALIMENTAÇÃO DA EQUIPE');const completeDining=diningFloors.findIndex(units=>units.length===b.width*b.depth&&units.every(u=>u.roomType==='dining'));
+    p.heading('ALIMENTAÇÃO DA EQUIPE');const completeDining=diningFloors.findIndex((units,z)=>city.workMeals.completeFloor(b,z)&&units.filter(u=>u.roomType!=='circulation').every(u=>u.roomType==='dining'));
     if(completeDining>=0){p.status('REFEITÓRIO PRÓPRIO',`Andar ${completeDining+1} inteiro · refeições servidas ${b.mealsServed||0}`,C.green);p.button('ENCERRAR REFEITÓRIO',()=>{const ok=city.setWorkplaceDiningFloor(b.id,completeDining,false);this.notice=ok?'Refeitório encerrado.':city.lastError;});}
-    else {p.note('Sem um andar inteiro de refeitório, a empresa paga vale-alimentação quando o funcionário compra uma refeição.');for(let z=0;z<diningFloors.length;z++){const units=diningFloors[z];if(units.length===b.width*b.depth&&units.every(u=>u.roomType==='workspace'))p.button(`CONVERTER ${z+1}º ANDAR EM REFEITÓRIO`,()=>{const ok=city.setWorkplaceDiningFloor(b.id,z,true);this.notice=ok?'Andar completo convertido em refeitório.':city.lastError;});}}
+    else {p.note('Sem um andar inteiro de refeitório, a empresa paga vale-alimentação quando o funcionário compra uma refeição.');for(let z=0;z<diningFloors.length;z++){const units=diningFloors[z];if(city.workMeals.completeFloor(b,z)&&units.filter(u=>u.roomType!=='circulation').every(u=>u.roomType==='workspace'))p.button(`CONVERTER ${z+1}º ANDAR EM REFEITÓRIO`,()=>{const ok=city.setWorkplaceDiningFloor(b.id,z,true);this.notice=ok?'Andar completo convertido em refeitório.':city.lastError;});}}
     p.heading('FINANÇAS E ESTOQUE');p.kv('Caixa',money(b.balance));p.kv('Despesas acumuladas',money(b.totalExpenses||0));p.kv('Salário-base',money(b.wage||0));p.kv('Estoque ocupado',`${inventoryUsed(b)}/${b.inventoryCapacity}`);p.kv('Produtos e insumos',Object.entries(b.inventory||{}).filter(([,n])=>n>0).map(([g,n])=>`${GOODS[g]?.label||g}: ${n}`).join(' · ')||'Sem estoque');
     p.buttons([{label:'ABRIR OPERAÇÃO',click:()=>{this.detailTab='profile';this.resetScroll();}},{label:'ABRIR ESTOQUE',click:()=>{this.detailTab='stock';this.resetScroll();}},{label:'ABRIR HISTÓRICO',click:()=>{this.detailTab='history';this.resetScroll();}}]);
   }

@@ -1,4 +1,4 @@
-import {activityRoomReady} from './city_interiors.js?v=informal-gigs-1';
+import {activityRoomReady} from './city_interiors.js?v=presential-jobs-meals-1';
 
 const ACTIVE=new Set(['open','working']);
 const cleanFee=(city,building,scope,payerId=null)=>{

@@ -1,5 +1,5 @@
 import {qualification,wageFor} from './city_employment.js';
-import {SKILLS} from './city_economy.js?v=office-demand-rollout-1';
+import {SKILLS} from './city_economy.js?v=presential-jobs-meals-1';
 import {formatMoney as money} from './city_ui_format.js';
 const stamp=n=>n==null?'—':`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const label=c=>c?.entity.properties.name||'Pessoa ausente';
@@ -48,14 +48,14 @@ function applicationRows(ui,p,rows,key='employmentPage'){
   pages(ui,p,ordered,key,row=>{
     const {citizen:c,application:a}=row;
     p.record(label(c),`${a.status} · ${a.company} · ${stamp(a.appliedAt)}`,()=>openApplication(ui,row),false,{value:`${money(a.offeredWage*60)}/h`});
-    p.kv('Seleção',`${Number(a.score||0).toFixed(1)} pontos${a.trainee?' · candidato em formação':''}`);p.note(a.reason);
+    p.kv('Seleção',`${Number(a.score||0).toFixed(1)} pontos${a.trainee?' · candidato em formação':''}`);p.note(a.reason);if(a.interviewAt!=null)p.kv('Seleção presencial',`${stamp(a.interviewAt)} · resultado ${stamp(a.decideAt)}`);
   });
   if(!rows.length)p.note('Nenhuma candidatura registrada com estes filtros.');
 }
 function candidateDetail(ui,p,row){
   const city=ui.city,{citizen:c,application:a}=row,b=city.building(a.buildingId);
   p.heading(`CANDIDATURA · ${label(c)}`);p.kv('Empresa',a.company);p.kv('Resultado / etapa',a.status);
-  p.kv('Inscrição',stamp(a.appliedAt));p.kv('Análise prevista',stamp(a.decideAt));p.kv('Decisão registrada',stamp(a.decidedAt));p.note(a.reason);
+  p.kv('Inscrição',stamp(a.appliedAt));p.kv('Comparecimento obrigatório',stamp(a.interviewAt));p.kv('Resultado no local',stamp(a.decideAt));p.kv('Chegada registrada',stamp(a.arrivedAt));p.kv('Resultado recebido',stamp(a.resultReceivedAt));p.kv('Decisão registrada',stamp(a.decidedAt));p.note(a.reason);
   p.kv('Oferta na candidatura',`${money(a.offeredWage*60)}/h`);p.kv('Pontuação na inscrição',Number(a.score||0).toFixed(1));
   p.button('VER VAGA E DEMAIS CANDIDATOS',()=>route(ui,'vacancies',{employmentCompanyId:a.buildingId,employmentCandidatesPage:0}));
   p.buttons([{label:'ABRIR CURRÍCULO',click:()=>openPersonResume(ui,c)},{label:'VER EMPRESA',click:()=>b&&ui.openBuilding(b.id)}]);
