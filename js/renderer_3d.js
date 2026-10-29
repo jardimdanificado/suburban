@@ -4,7 +4,7 @@
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=merged-architecture-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=interior-view-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels } from './city_citizen_models.js?v=vehicle-heading-1';
 import { flagNightFactor } from './city_terrain.js?v=business-heights-1';
@@ -2846,6 +2846,9 @@ export function createRealisticFlameMaterial() {
 
 export class RCT3DRenderer {
   constructor(container) {
+    this.cityInteriorView=null;
+    this._cityInteriorViewHandler=event=>{this.cityInteriorView=event.detail?.buildingId==null?null:{buildingId:event.detail.buildingId,floor:event.detail.floor||0};};
+    if(typeof window!=='undefined')window.addEventListener('suburban-interior-view',this._cityInteriorViewHandler);
     this.mapWidth=MAP_WIDTH;this.mapHeight=MAP_HEIGHT;
     this.container = container;
     this.width = container.clientWidth || window.innerWidth;
@@ -6307,24 +6310,29 @@ export class RCT3DRenderer {
       const e = visibleEntities[i];
       if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.cityVehicle||e.properties.campaignDecoration) continue;
       const profileCitizenStart = this.profileFrame && e.properties.citizen ? performance.now() : 0;
+      const cityCitizen=e.properties.citizen,indoorLocation=cityCitizen?.indoorLocation;
+      const interiorPosition=cityCitizen?._renderIndoorPosition||indoorLocation?.position;
+      const physicalInteriorBuilding=indoorLocation&&this.cityDevelopment?.city?.building(indoorLocation.buildingId),physicalInteriorId=physicalInteriorBuilding?.officeTenantOf||indoorLocation?.buildingId;
+      const renderedFloor=physicalInteriorBuilding?.officeTenantOf?physicalInteriorBuilding.officeFloor:interiorPosition?Math.max(0,Math.floor((interiorPosition.z||0)/CITY_FLOOR_HEIGHT+.001)):indoorLocation?.floor;
+      const showInspectedInterior=!!(indoorLocation&&this.cityInteriorView?.buildingId===physicalInteriorId&&!indoorLocation.exiting&&renderedFloor===this.cityInteriorView.floor);
+      const renderX=showInspectedInterior?(interiorPosition?.x??e.x):e.x,renderY=showInspectedInterior?(interiorPosition?.y??e.y):e.y;
 
-      if (e.x < this.renderedMinTx || e.x > this.renderedMaxTx + 0.99 ||
-          e.y < this.renderedMinTy || e.y > this.renderedMaxTy + 0.99) {
+      if (renderX < this.renderedMinTx || renderX > this.renderedMaxTx + 0.99 ||
+          renderY < this.renderedMinTy || renderY > this.renderedMaxTy + 0.99) {
         continue;
       }
 
       if (knownZones) {
-        const zk = `${Math.floor(e.x / zoneSz)}_${Math.floor(e.y / zoneSz)}`;
+        const zk = `${Math.floor(renderX / zoneSz)}_${Math.floor(renderY / zoneSz)}`;
         if (!knownZones.has(zk)) {
           continue; // Entity is in an unknown zone -> completely hidden
         }
       }
 
-      const cityCitizen=e.properties.citizen;
       const interiorBuilding=cityCitizen?.indoorLocation&&this.cityDevelopment?.city?.building(cityCitizen.indoorLocation.buildingId);
       const exposed=cityCitizen?.indoorLocation&&(cityCitizen.indoorLocation.roomType==='roof_terrace'||cityCitizen.indoorLocation.roomType==='balcony'&&!cityCitizen.indoorLocation.path?.length);
       const renderInside=cityCitizen?cityCitizen._renderInside??!!(cityCitizen.indoorLocation&&!exposed&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air')):false;
-      if(renderInside){
+      if(renderInside&&!showInspectedInterior){
         const sprite=this.entitySprites.get(e.id);
         if(sprite){sprite.visible=false;activeIds.add(e.id);}
         continue;
@@ -6385,12 +6393,14 @@ export class RCT3DRenderer {
         surfaceH = this.getTileSurfaceHeight(map, Math.floor(e.x), Math.floor(e.y), 1, 1);
       } else {
         if(cityCitizen&&exposed&&interiorBuilding)surfaceH=interiorBuilding.terrain?.base??this.getSurfaceElevation(map,e.x,e.y);
+        else if(showInspectedInterior&&interiorBuilding)surfaceH=interiorBuilding.terrain?.base??this.getSurfaceElevation(map,renderX,renderY);
         else if(cityCitizen){
           const cache=this._entitySurfaceCache??=new WeakMap(),cached=cache.get(e);
           if(cached&&cached.x===e.x&&cached.y===e.y&&cached.revision===world.revision)surfaceH=cached.height;
           else{surfaceH=this.getSurfaceElevation(map,e.x,e.y);cache.set(e,{x:e.x,y:e.y,revision:world.revision,height:surfaceH});}
         }else surfaceH = this.getSurfaceElevation(map, isPlantOrItem ? e.x + 0.5 : e.x, isPlantOrItem ? e.y + 0.5 : e.y);
       }
+      const renderSurfaceH=surfaceH+(showInspectedInterior?(interiorPosition?.z||0):0);
       const profileAfterSurface = profileCitizenStart ? performance.now() : 0;
 
       // --- 3D WOOD LOGS (Volumetric Stacked Timber Logs) ---
@@ -6955,14 +6965,14 @@ export class RCT3DRenderer {
 
         if (isStandingTorch) {
           sprite.scale.set(0.68, 0.68, 0.68);
-          sprite.position.set(e.x + 0.5, surfaceH, e.y + 0.5);
+          sprite.position.set(renderX + 0.5, renderSurfaceH, renderY + 0.5);
           sprite.rotation.y = billboardRotY;
           sprite.rotation.z = 0;
           sprite.castShadow = false; // Do not occlude own light source
           sprite.receiveShadow = false;
         } else if (isItem) {
           sprite.scale.set(0.48, 0.48, 0.48);
-          sprite.position.set(e.x, surfaceH, e.y);
+          sprite.position.set(renderX, renderSurfaceH, renderY);
           sprite.rotation.y = billboardRotY;
           sprite.rotation.z = 0;
           sprite.castShadow = true;
@@ -6970,7 +6980,7 @@ export class RCT3DRenderer {
         } else if (isSleeping) {
           // Lying down flat on the ground while sleeping
           sprite.scale.set(0.65, 0.65, 0.65);
-          sprite.position.set(e.x, surfaceH + 0.10, e.y);
+          sprite.position.set(renderX, renderSurfaceH + 0.10, renderY);
           sprite.rotation.y = billboardRotY;
           sprite.rotation.z = Math.PI / 2;
         } else {
@@ -6978,7 +6988,7 @@ export class RCT3DRenderer {
           const cScale = (this.isPerspectiveActive() ? 0.82 : 0.72) * (r.size || 1);
           const cElev = this.isPerspectiveActive() ? 0.04 : 0.0;
           sprite.scale.set(cScale, cScale, cScale);
-          sprite.position.set(e.x, surfaceH + cElev, e.y);
+          sprite.position.set(renderX, renderSurfaceH + cElev, renderY);
           sprite.rotation.y = billboardRotY;
           sprite.rotation.z = 0;
         }

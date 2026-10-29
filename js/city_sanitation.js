@@ -1,4 +1,4 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=needs-recovery-1';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=interior-layout-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
@@ -103,7 +103,7 @@ export class CitySanitation {
   payer(f) {
     const b = this.city.building(f.buildingId); if (!b) return null;
     if (f.access === 'public') return 'treasury';
-    const unit=this.city.units.get(f.unitId);if(unit?.ownerId==='treasury')return 'treasury';
+    const unit=this.city.units.get(f.unitId);if(unit?.ownerId==='treasury'&&f.access!=='paid')return 'treasury';
     if (f.homeId) {
       const home = this.city.housing.homes.get(f.homeId), resident = home && this.city.housing.residents(home).find(c => this.city.society.isAdult(c));
       return resident?.accountId || this.city.units.get(f.unitId)?.ownerId;

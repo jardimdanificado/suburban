@@ -35,6 +35,30 @@ export function sampleCitizenMotion(world,sample,now){
   sample.blockedSince=null;
   return done;
 }
+function renderIndoorPosition(c,position){
+  if(Object.prototype.hasOwnProperty.call(c,'_renderIndoorPosition'))c._renderIndoorPosition=position;
+  else Object.defineProperty(c,'_renderIndoorPosition',{value:position,writable:true,configurable:true,enumerable:false});
+}
+function sampleInterior(bridge,sample,now){
+  if(bridge.time.paused)return;
+  sampleMotion(sample,now);const points=sample.points,target=now-360;if(!points?.length)return;
+  const a=points[0],b=points[1]||a,t=a===b?1:Math.max(0,Math.min(1,(target-a.at)/(b.at-a.at)));
+  renderIndoorPosition(sample.citizen,{x:sample.entity.x,y:sample.entity.y,z:(a.z??0)+((b.z??a.z??0)-(a.z??0))*t});
+}
+function receiveInteriorMotion(bridge,packet,now,resetAll=false){
+  if(!packet)return;
+  const live=new Set();
+  for(let i=0;i<(packet?.length||0);i+=4){
+    const id=packet[i],c=bridge.city.society.citizen(id);if(!c)continue;
+    const x=packet[i+1],y=packet[i+2],z=packet[i+3];
+    if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z)||!c.indoorLocation){renderIndoorPosition(c,null);bridge.interiorMotion.delete(id);continue;}
+    live.add(id);let sample=bridge.interiorMotion.get(id);if(!sample){sample={id,citizen:c,entity:{x,y},to:{}};bridge.interiorMotion.set(id,sample);}sample.citizen=c;
+    const reset=resetAll||!sample.points?.length||Math.hypot(x-sample.to.x,y-sample.to.y,z-(sample.to.z??z))>=8;
+    queueMotion(sample,x,y,now,{reset});sample.to.z=z;sample.points.at(-1).z=z;
+    if(reset)renderIndoorPosition(c,{x,y,z});else sampleInterior(bridge,sample,now);
+  }
+  for(const [id,sample]of bridge.interiorMotion)if(!live.has(id)){renderIndoorPosition(sample.citizen,null);bridge.interiorMotion.delete(id);}
+}
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
 export class CitySimulationBridge {
@@ -42,10 +66,10 @@ export class CitySimulationBridge {
     this.city = city; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice; this.noticeTarget = noticeTarget;
     this.graph = new CityStateGraph(); this.state = { city, entities, nextId };
     this.active = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
-    this.motion = new Map();this.motionSamples=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
+    this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=map-default-256-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=interior-motion-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });
@@ -95,6 +119,7 @@ export class CitySimulationBridge {
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
     for(const citizen of this.city.citizens)delete citizen._renderInside;
     this.graph.apply(data.packet); bindCityState(this.city);
+    this.interiorMotion.clear();for(const c of this.city.citizens)renderIndoorPosition(c,c.indoorLocation?.position?{...c.indoorLocation.position}:null);receiveInteriorMotion(this,data.inside,performance.now(),true);
     this.time.tick = data.tick; this.time.elapsed = data.elapsed;
     this.city._statsCache = null;this.city._uiRevision=(this.city._uiRevision||0)+1;
     const now = performance.now();
@@ -139,6 +164,7 @@ export class CitySimulationBridge {
       if(!reset){this.motion.set(sample.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
       else {sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}
     }
+    receiveInteriorMotion(this,data.inside,now,this.time.paused);
     this.applyVehiclePositions(data.vehicles);
   }
   applyVehiclePositions(positions) {
@@ -159,6 +185,7 @@ export class CitySimulationBridge {
   }
   interpolate(now) {
     if(!this.time.paused)for(const motion of this.vehicleMotion.values())sampleMotion(motion,now);
+    for(const motion of this.interiorMotion.values())sampleInterior(this,motion,now);
     for (const motion of this.motion.values()) {
       if(this.time.paused)continue;
       if(sampleCitizenMotion(this.city.world,motion,now))this.motion.delete(motion.id);
@@ -173,7 +200,7 @@ export class CitySimulationBridge {
     this.city.lighting.siteBuckets=null;
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
-    this.pending.clear(); this.motion.clear();this.motionSamples.clear();this.vehicleMotion.clear();
+    this.pending.clear(); this.motion.clear();this.motionSamples.clear();this.interiorMotion.clear();this.vehicleMotion.clear();
     console.error('Simulação em segundo plano indisponível:', message);
     this.notice(wasRunning?`Simulação pausada após erro: ${String(message).split('\n')[0]}`:'Simulação em segundo plano indisponível; execução local ativada.');
   }

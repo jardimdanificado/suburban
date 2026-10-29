@@ -102,6 +102,7 @@ export class CityUI {
     const old=this.listCache.get(key);if(old?.signature===signature)return old.rows;const rows=build();if(this.listCache.size>=32&&!this.listCache.has(key))this.listCache.delete(this.listCache.keys().next().value);this.listCache.set(key,{signature,rows});return rows;
   }
   section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
+  setInteriorView(buildingId,floor=0){this.interiorView=buildingId==null?null:{buildingId,floor};if(typeof window!=='undefined'){const building=buildingId==null?null:this.city.building(buildingId);window.dispatchEvent(new CustomEvent('suburban-interior-view',{detail:building?{buildingId:building.officeTenantOf||buildingId,floor:building.officeTenantOf?building.officeFloor:floor}:null}));}}
 
   remember() {
     const route={};for(const key of ['wealthAccountId','wealthLocationId','wealthGoodId','marketSaleId','marketKindId','politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','selectedVehicleId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow','employmentCompanyId','employmentCitizenId','employmentApplicationAt','employmentStatus','employmentPage','employmentCandidatesPage'])route[key]=this[key];
@@ -133,16 +134,17 @@ export class CityUI {
   filter() { return this.filters[this.tab] || 'all'; }
   setFilter(id) { this.filters[this.tab] = id; this.resetScroll(); }
   setSelection(entity, unitId = null) {
+    if(this.interiorView&&entity?.id!==this.interiorView.buildingId)this.setInteriorView(null);
     if (entity !== this.selected || unitId !== this.unitId) this.remember();
     const target = entity?.properties.cityVehicle?'transport':entity?.properties.citizen ? 'people' : entity?.properties.cityBuilding ? (this.tab === 'economy' && this.city.economy.businesses.some(b=>b.id===entity.id) ? 'economy' : 'buildings') : this.tab;
     const sameDirectory = this.tab === target, listScroll = this.scrolls.list || 0;
     this.tab = target; if(target==='economy')this.views.economy='overview'; this.selected = entity; this.unitId = unitId; this.detailTab = unitId ? 'units' : 'profile'; this.visible = true;
     this.mobileDetail = !!entity; if (!sameDirectory) { this.query = ''; this.search.value = ''; } this.menuOpen = false; this.resetScroll(); if (sameDirectory) this.scrolls.list=listScroll;
   }
-  toggle() { this.visible = !this.visible; this.element.hidden = !this.visible; }
+  toggle() { this.visible = !this.visible; this.element.hidden = !this.visible;if(!this.visible)this.setInteriorView(null); }
   setPlotSelection(id) { if(this.host)return this.host.setPlotSelection(id); if(this.tab==='land')this.remember(); this.navigate('land'); this.selectedPlotId = id; this.setView('plots'); this.visible = true; }
-  openCitizen(id) { const c = this.city.society.citizen(id); if (c) this.select(c.entity); }
-  openBuilding(id) { const b = this.city.building(id); if (b) this.select(b.entity); }
+  openCitizen(id) { const c = this.city.society.citizen(id); if (c) {this.setInteriorView(null);this.select(c.entity);} }
+  openBuilding(id) { const b = this.city.building(id); if (b) {if(this.interiorView?.buildingId!==id)this.setInteriorView(null);this.select(b.entity);} }
   personLog(id) { this.openHistory(null,{logCitizenId:id}); }
   matches(value) { if(!this.query)return true;if(this.normalizedQuerySource!==this.query){this.normalizedQuerySource=this.query;this.normalizedQuery=normalize(this.query);}return normalize(value).includes(this.normalizedQuery); }
   scrollAt(x, y, delta) {
@@ -367,8 +369,17 @@ export class CityUI {
   }
   building(p, b) {
     const city = this.city;
+    if(this.interiorView&&this.interiorView.buildingId!==b.id)this.setInteriorView(null);
     if(!this.floatingDossier)p.heading(name(b.entity)); p.note(`${BUILDING_TYPES[b.type].label} | ${b.width}x${b.depth}x${b.floors} | ${b.units.length} células`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(b.entity.x, b.entity.y); if(!this.host)this.visible = false; });
+    if(b.constructionKind!=='open-air'){
+      if(this.interiorView?.buildingId===b.id){
+        p.status('VISTA INTERNA',`Andar ${this.interiorView.floor+1} · pessoas e móveis em simulação`,C.cyan);
+        const viewFloors=b.officeTenantOf?[b.officeFloor]:Array.from({length:b.floors},(_,floor)=>floor);
+        p.buttons(viewFloors.map(floor=>({label:`${floor+1}º ANDAR`,selected:this.interiorView.floor===floor,click:()=>this.setInteriorView(b.id,floor)})));
+        p.button('VOLTAR À FACHADA',()=>this.setInteriorView(null));
+      }else p.button('INSPECIONAR INTERIOR',()=>{this.camera(b.entity.x+b.width/2,b.entity.y+b.depth/2);this.setInteriorView(b.id,b.officeTenantOf?b.officeFloor:Math.min(b.floors-1,Math.max(0,this.unitId?city.units.get(this.unitId)?.z||0:0)));});
+    }
     this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['finance','FINANÇAS'], ['infrastructure','ESTRUTURA'], ['paint','PINTURA'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
     if(this.detailTab==='paint'){renderBuildingPaint(this,p,b);return;}
     if (this.detailTab === 'profile') {

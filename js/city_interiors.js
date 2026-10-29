@@ -1,5 +1,6 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {queueService} from './city_service_queue.js?v=needs-recovery-1';
+import {interiorRoute,interiorUsePoint} from './city_interior_layout.js';
 // Outdoor coordinates remain the navigation anchor at the entrance. Interior
 // position, circulation and floor changes are separate physical coordinates.
 const INDOOR_TASKS=new Set(['work','manage','shopping','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','leisure','social','outdoor_leisure']);
@@ -20,12 +21,6 @@ export function activityCellAvailable(city,u,c,kind){
  const capacity=visitor?4:kind==='bathroom'||kind==='office'?1:kind==='dining'||kind==='plenary'?4:kind==='bedroom'?4:1;
  return alreadyReserved||occupants<capacity;
 }
-function route(from,to){const path=[],p={...from};for(const axis of ['x','y','z'])while(Math.abs(p[axis]-to[axis])>.001){p[axis]+=Math.sign(to[axis]-p[axis])*Math.min(1,Math.abs(to[axis]-p[axis]));path.push({...p});}return path;}
-function interiorRoute(b,from,to){
- if(Math.abs(from.z-to.z)<.001)return route(from,to);
- const stair={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:from.z},landing={...stair,z:to.z};
- return [...route(from,stair),...route(stair,landing),...route(landing,to)];
-}
 function leaveEntrance(city,c,occupied=null){
  if(c.task||c.path.length||c.conversation||c.deliveryId||c.mobilityTrip)return;
  const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y),taken=occupied||new Set();if(!occupied)for(const other of city.citizens)if(other!==c&&!other.entity.destroyed&&!other.indoorLocation){taken.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)taken.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}
@@ -40,19 +35,21 @@ function exit(city,c){
  const s=c.indoorLocation;if(!s)return true;
  const b=city.building(s.buildingId);if(!b||b.entity.destroyed){release(city,c);c.indoorLocation=null;return true;}
  if(b.constructionKind==='open-air'){release(city,c);c.indoorLocation=null;return true;}
- if(!s.exiting){release(city,c);s.exiting=true;s.roomType='circulation';c.action='Saindo do prédio';s.unitId=null;s.targetUnitId=null;s.path=interiorRoute(b,s.position||{x:b.door.x,y:b.door.y,z:0},{x:b.door.x,y:b.door.y,z:0});}
+ if(!s.exiting){release(city,c);s.exiting=true;s.phase='leaving';s.roomType='circulation';c.action='Saindo do prédio';s.unitId=null;s.targetUnitId=null;s.path=interiorRoute(b,s.position||{x:b.door.x,y:b.door.y,z:0},{x:b.door.x,y:b.door.y,z:0});}
  if(!s.path.length){c.indoorLocation=null;leaveEntrance(city,c);return true;}return false;
 }
 function normalizeInterior(city,c){
  const old=c.indoorLocation;if(old&&!old.path){const building=city.building(old.buildingId),unit=city.units.get(old.unitId);old.path=[];old.targetUnitId=old.unitId;old.targetRoomType=old.roomType;old.position=building&&unit?point(building,unit):{x:c.entity.x,y:c.entity.y,z:0};}
+ if(old&&!old.phase)old.phase=old.exiting?'leaving':old.path?.length?'walking':'using';
 }
 
 export function advanceCitizenInterior(city,c,minutes=1){
  const s=c.indoorLocation;if(!s?.path?.length)return;
+ s.phase=s.exiting?'leaving':'walking';
  let distance=Math.max(0,minutes);
  while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001)s.path.shift();}
  s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));
- if(!s.path.length){if(s.exiting){c.indoorLocation=null;leaveEntrance(city,c);}else{s.unitId=s.targetUnitId;s.roomType=s.targetRoomType;s.arrivedAt=city.minute;}}
+ if(!s.path.length){if(s.exiting){c.indoorLocation=null;leaveEntrance(city,c);}else{s.unitId=s.targetUnitId;s.roomType=s.targetRoomType;s.arrivedAt=city.minute;s.phase='using';}}
 }
 export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'){
  normalizeInterior(city,c);
@@ -64,13 +61,14 @@ export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'
  if(b.constructionKind==='open-air'&&b.type!=='quarry'){
   const target=point(b,room);
   if(!outdoorCellReady(city,c,b,room)){return false;}
-  release(city,c);c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:room.id,targetRoomType:kind,roomType:kind,floor:room.z,position:target,path:[],task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute,arrivedAt:city.minute,toiletTargetId:c.toiletTargetId};
+  release(city,c);c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:room.id,targetRoomType:kind,roomType:kind,floor:room.z,position:target,path:[],phase:'using',task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute,arrivedAt:city.minute,toiletTargetId:c.toiletTargetId};
  }else{
   if(c.path.length)return false;
   if(!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>1.5){const path=city.findPath(c.entity,b.door);if(path!==null)c.path=path;return false;}
   const from=previous?.buildingId===b.id?previous.position:{x:b.door.x,y:b.door.y,z:0};release(city,c);
-  const target=point(b,room),path=interiorRoute(b,from,target);
-  c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
+  const slot=(room.activityReservedIds||[]).filter(id=>id!==c.id).length,target=interiorUsePoint(b,room,kind,slot),path=interiorRoute(b,from,target);
+  if(path===null){c.action=`Sem rota interna acessível até ${kind}`;return false;}
+  c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,phase:path.length?'walking':'using',task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
  }
  c.workCell={buildingId:b.id,unitId:room.id,x:room.x,y:room.y,z:room.z,target:point(b,room)};
  if(!room.activityReservedIds.includes(c.id))room.activityReservedIds.push(c.id);
@@ -102,10 +100,12 @@ export function syncCitizenInterior(city,c){
    if(previous?.buildingId!==site.id&&previous&&!exit(city,c))return false;
    if(!previous&&Math.hypot(c.entity.x-site.door.x,c.entity.y-site.door.y)>1.5)return false;
    release(city,c);const from=previous?.buildingId===site.id?previous.position:{x:site.door.x,y:site.door.y,z:0},path=interiorRoute(site,from,visit.position);
-   c.indoorLocation={buildingId:site.id,targetUnitId:null,unitId:null,targetRoomType:visit.kind,roomType:path.length?'circulation':visit.kind,floor:visit.floor??site.floors-1,position:{...from},path,task,layoutRevision:site.layoutRevision||0,enteredAt:city.minute};return !path.length;
+   if(path===null){c.action='Sem rota interna acessível até a cobertura';return false;}
+   c.indoorLocation={buildingId:site.id,targetUnitId:null,unitId:null,targetRoomType:visit.kind,roomType:path.length?'circulation':visit.kind,floor:visit.floor??site.floors-1,position:{...from},path,phase:path.length?'walking':'using',task,layoutRevision:site.layoutRevision||0,enteredAt:city.minute};return !path.length;
   }
   if(!activityRoomReady(city,c,site,room,'workspace'))return false;
   const location=c.indoorLocation;location.targetRoomType=visit.kind;location.roomType='circulation';location.path=interiorRoute(site,location.position,visit.position);location.unitId=null;
+  if(location.path===null){c.action='Sem rota interna acessível até o local de lazer';return false;}location.phase=location.path.length?'walking':'using';
   if(!location.path.length){location.unitId=location.targetUnitId;location.roomType=visit.kind;}return !location.path.length;
  }
  if(c.mobilityTrip||c.ridingVehicleId){return exit(city,c);}
@@ -135,7 +135,7 @@ export function syncCitizenInterior(city,c){
   // A full public shelter must not leave a homeless person waiting forever
   // while exhaustion keeps rising. They can still sleep outdoors, at a cost.
   if(task==='energy'&&!c.homeUnitId){c.sleepWaitingSince??=city.minute;if(city.minute-c.sleepWaitingSince>=30){c.sleepWaitingSince=null;c.targetId=null;c.path=[];c.action='Sem vaga para dormir; buscando descanso na rua';return exit(city,c);}}
-  if(b.constructionKind!=='open-air'&&!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5){const from={x:b.door.x,y:b.door.y,z:0},lobby={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:0};c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:from,path:interiorRoute(b,from,lobby),task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}
+  if(b.constructionKind!=='open-air'&&!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5){const from={x:b.door.x,y:b.door.y,z:0},lobby={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:0},path=interiorRoute(b,from,lobby);if(path!==null)c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:from,path,phase:path.length?'walking':'waiting',task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}
   c.action=`Aguardando célula de ${kind} disponível`;return false;
  }
  if(task==='energy')c.sleepWaitingSince=null;
@@ -162,7 +162,7 @@ export function finishBuildingOccupants(city,b){
   const goal=c.path.at(-1),position={x:c.entity.x,y:c.entity.y,z:Math.min(b.floors-1,c.workCell?.z||0)*CITY_FLOOR_HEIGHT};
   if(c.mobilityTrip||c.ridingVehicleId)city.vehicles.releaseTrip(c);
   c.entity.x=b.door.x;c.entity.y=b.door.y;c.path=goal?city.findPath(c.entity,goal)||[]:[];
-  c.indoorLocation={buildingId:b.id,unitId:null,targetUnitId:null,roomType:'circulation',position,path:interiorRoute(b,position,{x:b.door.x,y:b.door.y,z:0}),floor:Math.floor(position.z/CITY_FLOOR_HEIGHT),exiting:true,task:c.task,layoutRevision:b.layoutRevision||0};c.workCell=null;
+  c.indoorLocation={buildingId:b.id,unitId:null,targetUnitId:null,roomType:'circulation',position,path:interiorRoute(b,position,{x:b.door.x,y:b.door.y,z:0})||[],floor:Math.floor(position.z/CITY_FLOOR_HEIGHT),exiting:true,phase:'leaving',task:c.task,layoutRevision:b.layoutRevision||0};c.workCell=null;
  }
  for(const v of city.vehicles.units.values())if(v.active&&!v.scrapped&&v.x>=b.entity.x&&v.x<b.entity.x+b.width&&v.y>=b.entity.y&&v.y<b.entity.y+b.depth){city.vehicles.freeParking(v);v.x=v.entity.x=b.door.x;v.y=v.entity.y=b.door.y;city.vehicles.parkNearby(v,b.door);}
 }

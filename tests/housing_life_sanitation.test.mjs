@@ -115,8 +115,8 @@ test('cleaning contracts obey weekly public and frequent paid intervals and requ
   const job = city.sanitation.requestCleaning(f.id, paid.accountId, cleaner.id); assert(job); assert.equal(f.cleanliness, 10);
   const worker = city.society.citizen(cleaner.ownerId); freshNeeds(worker); worker.conversation = null; worker.workMeal = null; worker.deliveryId = null;
   worker.cleaningJobId = job.id; worker.entity.x = paid.door.x; worker.entity.y = paid.door.y; worker.path = []; job.workerId = worker.id; job.status = 'working';
-  const before = cleaner.balance; for (let i = 0; i < 25; i++) { city.minute++;city.sanitation.updateMinute();finishActivityRoute(city,worker);city.sanitation.updateMinute(); }
-  assert.equal(job.status, 'completed'); assert.equal(f.cleanliness, 100); assert.equal(cleaner.balance - before, job.fee);
+  const before = cleaner.balance, expenses=cleaner.totalExpenses; for (let i = 0; i < 25; i++) { city.minute++;city.sanitation.updateMinute();finishActivityRoute(city,worker);city.sanitation.updateMinute(); }
+  assert.equal(job.status, 'completed'); assert.equal(f.cleanliness, 100); assert.equal(cleaner.balance - before+(cleaner.totalExpenses-expenses), job.fee);
   f.cleanliness = 40; assert.equal(city.sanitation.requestCleaning(f.id), null);
   city.minute = free.lastCleanedAt + SANITATION_RULES.freeCleaningInterval; assert(city.sanitation.requestCleaning(free.id, 'treasury', cleaner.id));
   assert.equal(totalMoney(city), city.currency.netIssued());

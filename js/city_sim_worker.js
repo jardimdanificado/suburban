@@ -22,6 +22,11 @@ function positions() {
   }
   return result;
 }
+function interiorPositions(){
+  const people=state.city.citizens,result=new Float64Array(people.length*4);
+  for(let i=0;i<people.length;i++){const c=people[i],location=c.indoorLocation,at=i*4;result[at]=c.id;result[at+1]=location?.position?.x??NaN;result[at+2]=location?.position?.y??NaN;result[at+3]=location?.position?.z??NaN;}
+  return result;
+}
 function indoorFlags(){
  const city=state.city,people=city.citizens,result=new Uint8Array(people.length);
  for(let i=0;i<people.length;i++){const location=people[i].indoorLocation;if(!location||(location.roomType==='roof_terrace'||location.roomType==='balcony'&&!location.path?.length))continue;const building=city.building(location.buildingId);result[i]=!building||building.constructionKind!=='open-air'?1:0;}
@@ -47,16 +52,16 @@ function snapshot(force = false) {
   if (awaitingAck) { if (force) forceSnapshotPending = true; return false; }
   if (!force && performance.now() - lastSnapshot < stateInterval()) return false;
   const started = performance.now();
-  const packet = graph.encode(state,{packNeeds:true,packPositions:true}), motion = positions(), vehicles = vehiclePositions(),indoors=indoorFlags();
+  const packet = graph.encode(state,{packNeeds:true,packPositions:true}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),indoors=indoorFlags();
   lastSnapshotCost=performance.now()-started;
-  postMessage({ type: 'state', packet, positions: motion, vehicles, indoors, tick, elapsed, workMs: lastSnapshotCost }, [motion.buffer, vehicles.buffer, indoors.buffer, packet.packedNeeds.buffer]);
+  postMessage({ type: 'state', packet, positions: motion, inside, vehicles, indoors, tick, elapsed, workMs: lastSnapshotCost }, [motion.buffer, inside.buffer, vehicles.buffer, indoors.buffer, packet.packedNeeds.buffer]);
   awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
   return true;
 }
 function sendMotion() {
   if (!state || !dirty || paused || performance.now() - lastMotion < MOTION_INTERVAL) return;
-  const motion = positions(), vehicles = vehiclePositions(),needs=vitals(),indoors=indoorFlags();
-  postMessage({ type: 'motion', positions: motion, vehicles, needs, indoors, tick, elapsed }, [motion.buffer, vehicles.buffer, needs.buffer, indoors.buffer]);
+  const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),needs=vitals(),indoors=indoorFlags();
+  postMessage({ type: 'motion', positions: motion, inside, vehicles, needs, indoors, tick, elapsed }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer, indoors.buffer]);
   lastMotion = performance.now();
 }
 function fail(error) {

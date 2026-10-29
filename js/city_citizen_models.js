@@ -103,7 +103,7 @@ export class CityCitizenModels {
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
-    const inside=c.indoorLocation?.position,x=inside?.x??entity.x,y=inside?.y??entity.y;
+    const inside=c._renderIndoorPosition||c.indoorLocation?.position,x=inside?.x??entity.x,y=inside?.y??entity.y;
     let motion=this.motion.get(entity);
      if(!motion){motion={x,y,angle:0,walkDistance:0};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
@@ -113,7 +113,7 @@ export class CityCitizenModels {
     // Animate walking from presentation time rather than traveled distance.
     // Distance-based frame changes tied the pose to simulation updates and
     // made each step visibly click at ordinary speed.
-     const sleeping=c.task==='energy'&&c.targetId==null&&!c.path?.length&&!c.indoorLocation,clip=citizenAnimation(c,moved),pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    const sleeping=c.task==='energy'&&!c.path?.length&&(!c.indoorLocation||c.indoorLocation.roomType==='bedroom'),clip=citizenAnimation(c,moved),pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
     const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
     if(batch.count===batch.capacity){
@@ -126,7 +126,7 @@ export class CityCitizenModels {
       }batch.capacity=capacity;
     }
     const size=(entity.properties.render.size||1)*(perspective?1.05:1);
-    this.position.set(x,surfaceH+(inside?.z||0)+(c.ridingVehicleId? .18:0)+(sleeping?size*.27:0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);if(sleeping)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
+    const indoorBed=c.indoorLocation?.roomType==='bedroom';this.position.set(x,surfaceH+(inside?.z||0)+(c.ridingVehicleId? .18:0)+(sleeping?(indoorBed ? .42 : size*.27):0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);if(sleeping)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count,this.color);
     if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
     const capId=c.political?.partyCapId||c.campaign?.capGarmentId,partyCap=capId&&c.wardrobe?.find(g=>g.garmentId===capId),hat=partyCap||(Number.isInteger(c.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null);
