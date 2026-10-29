@@ -1,6 +1,6 @@
 import {queueMotion,sampleMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=map-default-256-2';
-import {canStep,terrainWalkable} from './city_terrain.js?v=business-heights-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=skybridge-stair-alignment-1';
+import {canStep,terrainWalkable} from './city_terrain.js?v=public-cleaning-1';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
 // directly between those snapshots would draw a straight chord through water
@@ -51,7 +51,7 @@ function receiveInteriorMotion(bridge,packet,now,resetAll=false){
   for(let i=0;i<(packet?.length||0);i+=4){
     const id=packet[i],c=bridge.city.society.citizen(id);if(!c)continue;
     const x=packet[i+1],y=packet[i+2],z=packet[i+3];
-    if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z)||!c.indoorLocation){renderIndoorPosition(c,null);bridge.interiorMotion.delete(id);continue;}
+    if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z)||(!c.indoorLocation&&z<=0)){renderIndoorPosition(c,null);bridge.interiorMotion.delete(id);continue;}
     live.add(id);let sample=bridge.interiorMotion.get(id);if(!sample){sample={id,citizen:c,entity:{x,y},to:{}};bridge.interiorMotion.set(id,sample);}sample.citizen=c;
     const reset=resetAll||!sample.points?.length||Math.hypot(x-sample.to.x,y-sample.to.y,z-(sample.to.z??z))>=8;
     queueMotion(sample,x,y,now,{reset});sample.to.z=z;sample.points.at(-1).z=z;
@@ -69,7 +69,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=sleep-dispersal-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=skybridge-stair-alignment-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state) });

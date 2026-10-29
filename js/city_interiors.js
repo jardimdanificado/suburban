@@ -112,14 +112,15 @@ export function syncCitizenInterior(city,c){
  if(task==='construction'&&project?.service!=='expansion')return exit(city,c);
  if(c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)||fieldWork||!b||(['work','manage'].includes(task)&&OUTDOOR_WORK.has(b.type))||(b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal','clean'].includes(task)))return exit(city,c);
  if(previous?.exiting)return false;
- let kind=task==='shopping'&&b.type==='laundromat'?'laundry':['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()?'plenary':'office'):['energy','care','caregiving'].includes(task)?'bedroom':task==='health'?'treatment':!['work','manage'].includes(task)?'service':['work','manage'].includes(task)&&c.role==='councilor'?'office':'workspace';
+ const cleaningJob=task==='clean'?city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId):null;
+ let kind=task==='shopping'&&b.type==='laundromat'?'laundry':task==='clean'&&cleaningJob?.kind==='feces'&&cleaningJob.scope==='building'?(city.units.get(cleaningJob.unitId)?.roomType||'workspace'):['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()?'plenary':'office'):['energy','care','caregiving'].includes(task)?'bedroom':task==='health'?'treatment':!['work','manage'].includes(task)?'service':['work','manage'].includes(task)&&c.role==='councilor'?'office':'workspace';
  if(previous&&!previous.exiting&&previous.buildingId===b.id&&previous.task===task&&previous.targetRoomType===kind&&previous.toiletTargetId===c.toiletTargetId&&previous.layoutRevision===(b.layoutRevision||0)&&city.units.has(previous.targetUnitId))return !previous.path.length;
  if(task==='provisions'&&!roomGroups(b).has('dining'))kind='bedroom';
  let room;
  if(kind==='office'&&c.councilSession){const member=city.politics.council.members.find(m=>m.citizenId===c.id),office=city.units.get(member?.officeUnitId);if(office?.buildingId===b.id)room=office;}
  if(task==='hygiene')room=city.units.get(city.sanitation.facilities.get(c.hygieneTargetId)?.unitId);
  if(task==='toilet')room=city.units.get(city.sanitation.facilities.get(c.toiletTargetId)?.unitId);
- if(task==='clean'){const job=city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId);room=city.units.get(city.sanitation.facilities.get(job?.facilityId)?.unitId);}
+ if(task==='clean'){const job=city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId);room=city.units.get(job?.unitId||city.sanitation.facilities.get(job?.facilityId)?.unitId);}
  if(!room&&['energy','care','provisions','hygiene'].includes(task)){const home=city.housing.home(c);if(home?.buildingId===b.id)room=city.housing.units(home).find(u=>u.roomType===kind);if(!room&&kind==='bedroom')room=city.units.get(c.homeUnitId);}
  if(!room&&previous?.buildingId===b.id&&previous.targetRoomType===kind){const assigned=city.units.get(previous.targetUnitId);if(assigned&&activityCellAvailable(city,assigned,c,kind))room=assigned;}
  if(!room){const groups=roomGroups(b),choices=groups.get(kind)||noRooms;room=choices.find(u=>activityCellAvailable(city,u,c,kind));
@@ -146,7 +147,8 @@ export function workCellReady(city,c,b){
  const assigned=city.units.get(c.workCell?.unitId),valid=u=>u?.buildingId===b.id&&['workspace','office','plenary'].includes(u.roomType);
  let room=valid(assigned)?assigned:b.units.find(u=>valid(u)&&activityCellAvailable(city,u,c,u.roomType));
  if(b.constructionKind!=='open-air'&&room&&c.indoorLocation?.unitId===room.id&&!c.indoorLocation.path?.length){
-  c.nextWorkRotationAt??=city.minute+30+c.id%31;
+  if(c.nextWorkBuildingId!==b.id){c.nextWorkBuildingId=b.id;c.nextWorkRotationAt=city.minute+30+c.id%31;}
+  else c.nextWorkRotationAt??=city.minute+30+c.id%31;
   if(city.minute>=c.nextWorkRotationAt){const alternatives=b.units.filter(u=>valid(u)&&u.id!==room.id&&activityCellAvailable(city,u,c,u.roomType));if(alternatives.length)room=alternatives[(c.id+Math.floor(city.minute/60))%alternatives.length];c.nextWorkRotationAt=city.minute+45+c.id%30;}
  }
  if(!room){c.action='Aguardando célula de trabalho livre';return false;}

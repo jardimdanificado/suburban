@@ -4,7 +4,7 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=map-default-256-1';
 import {externalTradeHourly} from './city_external_trade.js';
-import {outdoorCellReady,workCellReady} from './city_interiors.js?v=interior-layout-1';
+import {outdoorCellReady,workCellReady} from './city_interiors.js?v=public-cleaning-1';
 import {fundInitialCycleChain} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,apply,finishApplication,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=employment-finish-1';
@@ -13,11 +13,11 @@ import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClot
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
-import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=business-heights-1';
+import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=public-cleaning-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
-import { quarryDeposits } from './city_terrain.js?v=business-heights-1';
+import { quarryDeposits } from './city_terrain.js?v=public-cleaning-1';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=business-heights-1';
+import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=public-cleaning-1';
 
 export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados', construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
 export const CROPS = {
@@ -116,12 +116,13 @@ export class CityEconomy {
   initialize() {
     this.appointMayor();
     const hall = this.city.buildings.find(b => b.type === 'townhall');
-    hall.inventory.pao = this.city.citizens.length * ECONOMY_RULES.mealUnits * ECONOMY_RULES.initialMealsPerCitizen;
-    this.initialStock.pao += hall.inventory.pao;
+    const publicKitchen=this.city.buildings.find(b=>b.type==='popular_refectory');
+    const initialBread=this.city.citizens.length*ECONOMY_RULES.mealUnits*ECONOMY_RULES.initialMealsPerCitizen;
+    if(publicKitchen){publicKitchen.inventory.pao=initialBread;this.initialStock.pao+=initialBread;}else{hall.inventory.pao=initialBread;this.initialStock.pao+=hall.inventory.pao;}
     // Initial compatible public services share a municipal office tower.
     const tower=this.city.buildings.find(b=>b.type==='office_tower'&&b.initialOfficeTypes);if(tower){this.activateMunicipalBusiness(tower,0);for(const [floor,type] of tower.initialOfficeTypes.entries()){const budget=({builder:2000000,bank:2000000,carrier:300000})[type]??100000;const b=createMunicipalOffice(this.city,tower,floor,type,budget);if(!b)throw Error(`Não foi possível instalar ${this.city.buildingTypes[type].label} no empresarial inicial.`);if(type!=='builder'&&type!=='bank'&&type!=='carrier')b.initialCycleChain=true;}}
     // Public starter firms keep construction and extraction available without privileged founders.
-    for (const [type, budget] of [['builder', 2000000], ['quarry', 500000], ['bank', 2000000], ['carrier', 300000]]) {
+    for (const [type, budget] of [['builder', 2000000], ['quarry', 500000], ['bank', 2000000], ['carrier', 300000], ['cleaner',500000]]) {
       const b = this.city.buildings.find(b => b.type === type);
       if (b&&!b.active) this.activateMunicipalBusiness(b, budget);
     }
@@ -277,7 +278,7 @@ export class CityEconomy {
     const extraction=this.serviceInvestment.demand('quarry');items.push({type:'quarry',crop:null,...extraction,required:extraction.work,supply:extraction.capacity,reason:`Obras: ${extraction.work} pedras pendentes; ${extraction.remaining} em depósitos ainda disponíveis; ${extraction.staff} trabalhadores na extração.`});
     for (const type of ['cleaner','builder','waste_collector','recycler','composting']) {
       const service = this.serviceInvestment.demand(type);
-      items.push({type,crop:null,score:service.score,required:service.work,supply:service.capacity,stock:0,reason:`${service.count} ${type==='cleaner'?'banheiros sujos':type==='builder'?'obras pendentes':'unidades de lixo para atender'}; ${service.staff} profissionais; ${service.work} minutos de trabalho pendente`});
+      items.push({type,crop:null,score:service.score,required:service.work,supply:service.capacity,stock:0,reason:`${service.count} ${type==='cleaner'?'banheiros sujos ou focos de fezes':type==='builder'?'obras pendentes':'unidades de lixo para atender'}; ${service.staff} profissionais; ${service.work} minutos de trabalho pendente`});
     }
     for (const type of ['market', 'greengrocer', 'bakery']) {
       const count = businesses.filter(b => b.type === type).length;

@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=map-default-256-2';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=skybridge-stair-alignment-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -24,7 +24,7 @@ function positions() {
 }
 function interiorPositions(){
   const people=state.city.citizens,result=new Float64Array(people.length*4);
-  for(let i=0;i<people.length;i++){const c=people[i],location=c.indoorLocation,at=i*4;result[at]=c.id;result[at+1]=location?.position?.x??NaN;result[at+2]=location?.position?.y??NaN;result[at+3]=location?.position?.z??NaN;}
+  for(let i=0;i<people.length;i++){const c=people[i],location=c.indoorLocation,bridge=c.skybridgeZ>0,at=i*4;result[at]=c.id;result[at+1]=bridge?c.entity.x:location?.position?.x??NaN;result[at+2]=bridge?c.entity.y:location?.position?.y??NaN;result[at+3]=bridge?c.skybridgeZ:location?.position?.z??NaN;}
   return result;
 }
 function indoorFlags(){

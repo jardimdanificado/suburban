@@ -47,7 +47,7 @@ test('an election can recover turnout after widespread simultaneous exhaustion a
 });
 
 test('a critically urgent person abandons a stalled bathroom queue at a real hygiene cost',async()=>{
- const {queueService}=await import('../js/city_service_queue.js');const city=setup({starter:true,population:64}),c=person(city),hall=city.buildings.find(b=>b.type==='townhall'),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===hall.id);
+ const {queueService}=await import('../js/city_service_queue.js');const city=setup({starter:true,population:64}),c=person(city),hall=city.buildings.find(b=>b.type==='public_toilet'),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===hall.id);
  c.entity.x=hall.door.x;c.entity.y=hall.door.y;c.task='toilet';c.targetId=hall.id;c.toiletTargetId=f.id;c.needs.toilet=1;c.needs.hygiene=90;queueService(city,c,hall,'toilet',f.id,false);city.minute+=90;c.path=[];
  queueService(city,c,hall,'toilet',f.id,false);assert.equal(c.task,null);assert.equal(c.needs.toilet,66);assert.equal(c.needs.hygiene,78);assert.equal(hall.serviceQueue.some(q=>q.citizenId===c.id),false);assert.equal(city.sanitation.outdoorIncidents,1);
 });

@@ -22,14 +22,15 @@ function audit(city) {
   }
 }
 
-test('a new city starts with the hall, municipal firms and mint, finite public food and municipal land for sale', () => {
+test('a new city starts with separate public food and toilet buildings, funded cleaning, and municipal land for sale', () => {
   const city = setup({ starter: true });
-  assert.deepEqual(city.buildings.map(b => b.type), ['townhall', 'builder', 'quarry', 'mint', 'bank']);
+  for(const type of ['townhall','builder','quarry','mint','bank','public_toilet','popular_refectory','cleaner'])assert(city.buildings.some(b=>b.type===type),type);
   assert.equal(city.citizens.length, 24); assert.equal(city.stats().entrepreneurs, 0);
-  const hall = city.buildings[0]; assert(hall.inventory.pao >= 24 * 3 * 20);
-  assert.equal(hall.inventory.pao, city.economy.initialStock.pao);
-  const c = city.citizens[10], balance = c.balance, stock = hall.inventory.pao;
-  assert(city.economy.consumeMeal(c, hall)); assert.equal(c.balance, balance); assert.equal(hall.inventory.pao, stock - 3);
+  const hall=city.buildings.find(b=>b.type==='townhall'),refectory=city.buildings.find(b=>b.type==='popular_refectory'),toilet=city.buildings.find(b=>b.type==='public_toilet'),cleaner=city.buildings.find(b=>b.type==='cleaner');
+  assert(refectory.floors>=3&&toilet.floors>=3);assert(refectory.units.filter(u=>u.roomType==='dining').length>=refectory.floors);assert(toilet.units.filter(u=>u.roomType==='bathroom').length>=toilet.floors);assert(refectory.inventory.pao>=24*3*20);assert.equal(refectory.inventory.pao,city.economy.initialStock.pao);assert(cleaner.active&&cleaner.municipal);
+  assert.equal([...city.sanitation.facilities.values()].filter(f=>f.buildingId===hall.id&&f.access==='public').length,0);
+  const c = city.citizens[10], balance = c.balance, stock = refectory.inventory.pao;
+  assert(city.economy.consumeMeal(c, refectory)); assert.equal(c.balance, balance); assert.equal(refectory.inventory.pao, stock - 3);
   assert(city.development.plots.filter(p => !p.buildingId).length >= 10);
   for (const p of city.development.plots.filter(p => !p.buildingId)) { assert.equal(p.ownerId, 'treasury'); assert(p.forSale); assert(!p.forRent); }
   assert(city.buildings.find(b => b.type === 'quarry').workers.length > 0);
@@ -142,7 +143,7 @@ test('a starter city autonomously builds housing, grows food and transports ever
   assert(city.economy.produced.pedra > 0); assert(city.economy.consumed.pedra > 0); assert(city.economy.produced.pao > 0); assert(city.logistics.delivered > 0);
   assert(city.events.some(e => e.data.kind === 'shipment-delivered'));
   assert(city.buildings.some(b=>['residential','popular_housing'].includes(b.type)&&b.units.some(u=>u.tenantId)));
-  assert(city.stats().homeless < city.stats().population); assert(city.buildings[0].inventory.pao > 0); audit(city);
+  assert(city.stats().homeless < city.stats().population); assert(city.buildings.find(b=>b.type==='popular_refectory').inventory.pao > 0); audit(city);
 });
 
 test('demolishing a supplier cancels its active cargo with a refund and conserved items', () => {

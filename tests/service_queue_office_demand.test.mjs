@@ -6,13 +6,13 @@ import {officeSpaceDemand} from '../js/city_offices.js?v=service-queues-1';
 import {productionPlan} from '../js/city_production_planner.js?v=business-heights-1';
 
 test('a busy service assigns distinct places and respects order of arrival',()=>{
- const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='townhall'),people=city.citizens.filter(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)).slice(0,2),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===b.id);
+ const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='public_toilet'),people=city.citizens.filter(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)).slice(0,2),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===b.id);
  for(const c of people){c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='toilet';c.targetId=b.id;c.toiletTargetId=f.id;c.path=[];assert.equal(queueService(city,c,b,'toilet',f.id,false),false);}
  const [first,second]=b.serviceQueue;assert.notEqual(first.slot,second.slot);assert(first.sequence<second.sequence);
  for(const c of people)c.path=[];assert.equal(queueService(city,people[1],b,'toilet',f.id,true),false);assert.equal(queueService(city,people[0],b,'toilet',f.id,true),true);assert.equal(queueService(city,people[1],b,'toilet',f.id,true),true);
 });
 test('a later meal customer cannot overtake an earlier one',()=>{
- const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='townhall'),people=city.citizens.filter(c=>city.society.isAdult(c)).slice(0,2);
+ const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='popular_refectory'),people=city.citizens.filter(c=>city.society.isAdult(c)).slice(0,2);
  for(const c of people){c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='food';c.targetId=b.id;c.path=[];assert.equal(queueService(city,c,b,'food','dining',false),false);}
  for(const c of people)c.path=[];assert.equal(queueService(city,people[1],b,'food','dining',true),false);assert.equal(queueService(city,people[0],b,'food','dining',true),true);assert.equal(queueService(city,people[1],b,'food','dining',true),true);
 });
@@ -25,7 +25,7 @@ test('office demand plans another tower when required activities exceed vacant f
 
 test('bathroom tasks enter the real queue and reserve the room in arrival order',async()=>{
  const {syncCitizenInterior}=await import('../js/city_interiors.js?v=needs-recovery-1');
- const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='townhall'),people=city.citizens.filter(c=>city.society.isAdult(c)).slice(0,2),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===b.id);
+ const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='public_toilet'),people=city.citizens.filter(c=>city.society.isAdult(c)).slice(0,2),f=[...city.sanitation.facilities.values()].find(f=>f.buildingId===b.id);
  f.occupantId='occupied';f.busyUntil=city.minute+10;
  for(const c of people){c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='toilet';c.targetId=b.id;c.toiletTargetId=f.id;c.path=[];assert.equal(syncCitizenInterior(city,c),false);}
  assert.deepEqual(b.serviceQueue.map(q=>q.citizenId),people.map(c=>c.id));

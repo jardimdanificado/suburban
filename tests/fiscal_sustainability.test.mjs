@@ -25,7 +25,7 @@ test('municipal liquidity recovery does not touch private savings or contracted 
 });
 
 test('vulnerable residents keep free public meals while wealthy residents contribute to actual food cost',()=>{
-  const city=setup({starter:true,funded:true,population:48}),hall=city.buildings.find(b=>b.type==='townhall'),poor=city.citizens.find(c=>!c.fixtureInvestor),rich=city.citizens.find(c=>c.fixtureInvestor);city.transfer(poor.accountId,'treasury',poor.balance,'Test poverty');assert.equal(city.economy.mealOffer(hall,poor).price,0);const quote=city.economy.mealOffer(hall,rich);assert(quote.price>0);const cash=rich.balance,treasury=city.treasury;assert(city.economy.consumeMeal(rich,hall));assert.equal(rich.balance,cash-quote.price);assert.equal(city.treasury,treasury+quote.price);
+  const city=setup({starter:true,funded:true,population:48}),hall=city.buildings.find(b=>b.type==='popular_refectory'),poor=city.citizens.find(c=>!c.fixtureInvestor),rich=city.citizens.find(c=>c.fixtureInvestor);city.transfer(poor.accountId,'treasury',poor.balance,'Test poverty');assert.equal(city.economy.mealOffer(hall,poor).price,0);const quote=city.economy.mealOffer(hall,rich),cash=rich.balance,provider=hall.balance;assert(quote.price>0);assert(city.economy.consumeMeal(rich,hall));assert.equal(rich.balance,cash-quote.price);assert.equal(hall.balance,provider+quote.price);
 });
 
 test('enterprise taxes follow positive operating result and unpaid taxes carry forward',()=>{

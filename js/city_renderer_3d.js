@@ -4,13 +4,13 @@ import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
-import {modelSize,buildingPoint,CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
+import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=building-doorway-opening-1';
 import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=business-heights-1';
+import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=public-cleaning-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=merged-architecture-1';
-import {syncSkybridges} from './city_skybridges.js?v=rooftop-bridges-1';
+import {syncSkybridges} from './city_skybridges.js?v=skybridge-stair-alignment-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
 import {mergeStaticMeshes} from './city_static_mesh.js';
 function buildingMaterial(renderer,THREE,kind,color){
@@ -42,6 +42,21 @@ function roomCellGeometry(THREE,facadeMask,openingMask,doorMask=0){
   // instancing so every floor occupies exactly one CITY_FLOOR_HEIGHT.
   g.translate(0,-h/2,0);g.computeVertexNormals();return g;
 }
+function syncFecesVisuals(renderer,THREE,city,world){
+  const sanitation=city?.sanitation;if(!sanitation)return;
+  const revision=sanitation.fecesRevision||0;
+  if(renderer.fecesVisualRevision!==revision){
+    if(renderer.fecesVisuals){renderer.scene.remove(renderer.fecesVisuals);renderer.fecesVisuals.traverse(o=>{if(o!==renderer.fecesVisuals){o.geometry?.dispose();o.material?.dispose();}});}
+    const group=new THREE.Group(),pileGeometry=new THREE.SphereGeometry(.14,7,5),pileMaterial=new THREE.MeshLambertMaterial({color:0x64452e});
+    const add=(x,y,z,amount,area,buildingId=null,floor=null)=>{const mesh=new THREE.Mesh(pileGeometry,pileMaterial),clumps=Math.min(4,Math.max(1,amount));mesh.position.set(x,y,z);mesh.scale.set(1+clumps*.08,.3+clumps*.08,.8+clumps*.1);mesh.userData={fecesArea:area,buildingId,floor};mesh.castShadow=true;group.add(mesh);};
+    const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
+    for(const [key,pile]of sanitation.streetFeces){const [x,y]=key.split(',').map(Number);if(x<minX||x>maxX||y<minY||y>maxY)continue;add(x+.5,surfaceElevation(world,x+.5,y+.5)+.04,y+.5,pile.amount,'street');}
+    for(const b of city.buildings)for(const [key,pile]of b.feces||[]){const unit=b.units.find(u=>`${u.x},${u.y},${u.z}`===key);if(!unit)continue;const x=b.entity.x+unit.x+.5,y=b.entity.y+unit.y+.5;if(x<minX||x>maxX||y<minY||y>maxY)continue;add(x,(b.terrain?.base||0)+unit.z*CITY_FLOOR_HEIGHT+.05,y,pile.amount,'building',b.id,unit.z);}
+    renderer.scene.add(group);renderer.fecesVisuals=group;renderer.fecesVisualRevision=revision;
+  }
+  const view=renderer.cityInteriorView;
+  for(const mesh of renderer.fecesVisuals.children)mesh.visible=mesh.userData.fecesArea==='street'||view?.buildingId===mesh.userData.buildingId&&view?.floor===mesh.userData.floor;
+}
 // Room coordinates count floors; render their physical height consistently with picking.
 
 export function syncCityBuildings(renderer, THREE, entities, world) {
@@ -51,6 +66,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   syncCampaignDecorations(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
   syncSkybridges(renderer,THREE,entities,world);
+  syncFecesVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
   const map = world.map;
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
     x>=renderer.renderedMinTx && x+width<=renderer.renderedMaxTx+1 && y>=renderer.renderedMinTy && y+depth<=renderer.renderedMaxTy+1;
@@ -114,6 +130,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const mineWall={iron_mine:0x77736b,bauxite_mine:0x806b62,clay_pit:0x886b58,sand_pit:0x94866a};
       const matrix = new THREE.Matrix4(), color = new THREE.Color(b.campaignPaint?.color||b.wallColor||(mine?mineWall[b.type]:residential ? style.wall : b.color));
       const cellMasks=new Map(),doorByUnit=new Map(bridgeDoors||[]),occupiedCells=new Set(b.units.map(u=>`${u.x},${u.y},${u.z}`));for(const cell of b.circulation||[])occupiedCells.add(`${cell.x},${cell.y},${cell.z}`);
+      const entranceDoor=buildingEntranceDoor(b);if(entranceDoor)doorByUnit.set(entranceDoor.unitId,(doorByUnit.get(entranceDoor.unitId)||0)|entranceDoor.bit);
       for(const u of b.units)for(const [dx,dy,bit]of [[0,-1,1],[0,1,2],[-1,0,4],[1,0,8]])if(occupiedCells.has(`${u.x+dx},${u.y+dy},${u.z}`))doorByUnit.set(u.id,(doorByUnit.get(u.id)||0)|bit);
       for(const s of buildingLeisureSpaces(b))if(s.kind==='balcony')doorByUnit.set(s.unitId,(doorByUnit.get(s.unitId)||0)|s.doorBit);
       for (const u of b.units) {

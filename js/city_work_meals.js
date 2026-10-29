@@ -1,6 +1,6 @@
-import {activityCellAvailable,activityRoomReady,outdoorCellReady} from './city_interiors.js?v=interior-layout-1';
+import {activityCellAvailable,activityRoomReady,outdoorCellReady} from './city_interiors.js?v=public-cleaning-1';
 import { preparedOffer } from './city_markets.js';
-import { CROPS } from './city_economy.js?v=business-heights-1';
+import { CROPS } from './city_economy.js?v=public-cleaning-1';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 
@@ -102,7 +102,7 @@ export class CityWorkMeals {
   purchase() {
     const city = this.city;
     const employers = city.buildings.filter(b => b.active && !b.entity.destroyed && b.workers.length);
-    const suppliers = city.buildings.filter(b => b.active && !b.entity.destroyed && ['market', 'greengrocer', 'bakery', 'townhall'].includes(b.type));
+    const suppliers = city.buildings.filter(b => b.active && !b.entity.destroyed && ['market', 'greengrocer', 'bakery', 'popular_refectory', 'townhall'].includes(b.type));
     for (const b of employers) {
       const projects = city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed' && p.requiredLabor - p.labor >= 30);
       const sites = [b, ...projects];

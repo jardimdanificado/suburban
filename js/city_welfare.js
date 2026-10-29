@@ -12,11 +12,11 @@ export class CityWelfare {
     const stock=city.buildings.filter(b=>b.active&&!b.entity.destroyed).reduce((n,b)=>n+foods.reduce((s,g)=>s+(b.inventory[g]||0),0),0)+people.reduce((n,c)=>n+c.provisions*3,0);
     const hungry=people.filter(c=>c.needs.food<30).length,homeless=adults.filter(c=>!c.homeUnitId).length;
     this._conditionsMinute=city.minute;
-    return this._conditions={population:people.length,hungry,homeless,foodDays:stock/Math.max(1,people.length*6),reserve:city.fiscal?.reserve()??city.currency.price(Math.max(this.policy.reserve,people.length*3000)),crisis:hungry>=Math.max(3,people.length*.1)||homeless>=Math.max(5,adults.length*.2)};
+    return this._conditions={population:people.length,hungry,homeless,foodDays:stock/Math.max(1,people.length*6),cleanliness:city.sanitation.cleanliness().score,reserve:city.fiscal?.reserve()??city.currency.price(Math.max(this.policy.reserve,people.length*3000)),crisis:hungry>=Math.max(3,people.length*.1)||homeless>=Math.max(5,adults.length*.2)};
   }
   restockPublicMeals() {
     const city=this.city,needs=this.conditions(),foods=city.workMeals.foodGoods();let orders=0;
-    const destinations=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&['townhall','popular_refectory'].includes(b.type));
+    const destinations=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&b.type==='popular_refectory');
     const suppliers=city.economy.businesses.filter(b=>b.type==='farm'||b.type==='bakery'||b.type==='greengrocer'||b.type==='market'||b.type==='kitchen');
     for(const destination of destinations){const target=Math.max(48,Math.ceil(needs.population*6/Math.max(1,destinations.length))),stock=foods.reduce((n,g)=>n+(destination.inventory[g]||0)+(destination.incoming[g]||0),0);let missing=Math.min(target-stock,inventoryFree(destination));
       if(missing<3)continue;
@@ -33,7 +33,7 @@ export class CityWelfare {
     return Math.ceil(Math.max(city.currency.price(this.policy.householdFloor)*factor,(city.fiscal?.foodCost()||city.currency.price(800))*3*factor));
   }
   mealContribution(holder,citizen,offer){
-    if(!offer||!citizen||!['townhall','popular_refectory'].includes(holder.type))return offer;
+    if(!offer||!citizen||holder.type!=='popular_refectory')return offer;
     const city=this.city,payer=city.accounts.get(city.payerFor(citizen)),cash=payer?.balance||0,floor=this.subsistenceFloor(citizen),assets=cash+city.bank.savings(payer?.accountId||city.payerFor(citizen));
     if(assets<=floor*2||cash<=floor)return offer;
     const cost=Object.entries(offer.inputs||{}).reduce((n,[good,q])=>n+(city.economy.goods[good]?.price||0)*q,0);return {...offer,price:Math.min(Math.round(cost),Math.max(0,cash-floor))};

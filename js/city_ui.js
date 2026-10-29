@@ -30,15 +30,15 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js?v=needs-recovery-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=public-cleaning-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=business-heights-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=public-cleaning-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=sync-perf-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=needs-recovery-2';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=interiors-completion-2';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -61,7 +61,7 @@ const VIEWS = {
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
   transport: [['active', 'FRETES'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
-  sanitation: [['facilities', 'BANHEIROS'], ['cleaning', 'FAXINA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
+  sanitation: [['facilities', 'BANHEIROS'], ['cleaning', 'FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
 const FILTERS = {
   people: [['all','TODOS'], ['homeless','SEM CASA'], ['unemployed','SEM TRABALHO'], ['critical','EM RISCO'], ['food','COM FOME'], ['children','CRIANÇAS']],
@@ -739,15 +739,23 @@ export class CityUI {
       p.table([{label:'Pessoa',weight:2},{label:'Causa',weight:1.5},{label:'Idade'},{label:'Momento',weight:1.5}],city.life.deaths.slice(-80).reverse().filter(d=>this.matches(`${d.name} ${d.cause}`)).map(d=>({cells:[d.name,d.cause,`${d.age} anos`,stamp(d.minute)],color:C.red})),{empty:'Nenhuma morte registrada.'});return;
     }
     if(view==='cleaning'){
-      p.metrics([['EM SERVIÇO',jobs.length,C.cyan],['CONCLUÍDAS',system.cleaned,C.green],['BANHEIROS SUJOS',dirty.length,C.gold]]);
-      p.note('Gratuitos: uma limpeza por semana. Pagos: a cada três horas. Privados: a cada dia. O serviço depende de dinheiro e trabalhador disponível.');
+      p.metrics([['EM SERVIÇO',jobs.length,C.cyan],['BANHEIROS',system.cleaned,C.green],['FEZES',system.cleanedFeces,C.gold]]);
+      p.note('A prefeitura contrata empresas de limpeza para as vias públicas. Dentro de um imóvel, a conta fica com o proprietário. O serviço exige caixa e equipe disponível.');
       p.heading('SERVIÇOS DE FAXINA');
       for(const job of [...jobs,...system.jobs.filter(j=>['completed','cancelled'].includes(j.status)).slice(-15).reverse()]){
-        const f=system.facilities.get(job.facilityId),b=f&&city.building(f.buildingId),provider=city.building(job.providerId),worker=city.society.citizen(job.workerId);
-        p.heading(`FAXINA ${job.id}`,job.status==='completed'?C.green:C.cyan);p.note(b?name(b.entity):'Instalação removida');p.kv('Situação',{waiting:'Aguardando equipe',working:'Em execução',completed:'Concluída',cancelled:'Cancelada'}[job.status]);p.kv('Pagamento',money(job.fee));p.kv('Contratante',city.accountName(job.payerId));
+        const f=system.facilities.get(job.facilityId),b=city.building(job.buildingId||f?.buildingId),provider=city.building(job.providerId),worker=city.society.citizen(job.workerId),location=job.kind==='feces'?job.scope==='street'?`Via pública (${job.cellKey})`:b?`${name(b.entity)} (${job.cellKey})`:'Prédio removido':b?name(b.entity):'Instalação removida';
+        p.heading(`${job.kind==='feces'?'REMOÇÃO DE FEZES':'FAXINA'} ${job.id}`,job.status==='completed'?C.green:C.cyan);p.note(location);p.kv('Situação',{waiting:'Aguardando equipe',working:'Em execução',completed:'Concluída',cancelled:'Cancelada'}[job.status]);p.kv('Pagamento',money(job.fee));p.kv('Contratante',city.accountName(job.payerId));
         p.buttons([...(provider?[{label:name(provider.entity),click:()=>this.openBuilding(provider.id)}]:[]),...(worker?[{label:name(worker.entity),click:()=>this.openCitizen(worker.id)}]:[])]);
       }
       if(!system.jobs.length)p.note('Nenhum serviço solicitado ainda.');return;
+    }
+    if(view==='cleanliness'){
+      const clean=system.cleanliness(),rows=[];
+      for(const [cell,pile]of system.streetFeces)rows.push({cells:['Via pública',cell,pile.amount,'Prefeitura'],color:C.red});
+      for(const b of city.buildings)for(const [cell,pile]of b.feces||[])rows.push({cells:[name(b.entity),cell,pile.amount,city.accountName(system.ownerForCell(b.id,b.units.find(u=>`${u.x},${u.y},${u.z}`===cell)?.id))],color:C.gold,click:()=>this.openBuilding(b.id)});
+      p.metrics([['LIMPEZA DA CIDADE',`${clean.score.toFixed(1)}%`,clean.score<60?C.red:C.green],['FEZES NAS RUAS',clean.streetFeces,C.gold],['FEZES EM PRÉDIOS',clean.indoorFeces,C.gold]]);
+      p.kv('Trechos públicos sujos',clean.dirtyStreetTiles);p.kv('Imóveis afetados',clean.dirtyBuildings);p.kv('Lixo espalhado',clean.spilled);p.note('A sujeira causa repulsa, reduz higiene e humor; a limpeza urbana é paga pelo caixa municipal. A limpeza interna é paga pelo proprietário do imóvel.');
+      p.table([{label:'Local',weight:2},{label:'Célula'},{label:'Acúmulo'},{label:'Responsável',weight:1.5}],rows.sort((a,b)=>b.cells[2]-a.cells[2]).slice(0,40));return;
     }
     if(view==='waste'){
       const waste=system.wasteMetrics();
@@ -766,7 +774,7 @@ export class CityUI {
       }
       return;
     }
-    p.metrics([['BANHEIROS',facilities.length,C.cyan],['SUJOS',dirty.length,dirty.length?C.red:C.green],['LIMPEZAS',system.cleaned,C.green]]);this.filterButtons(p);
+    const cleanliness=system.cleanliness();p.metrics([['LIMPEZA DA CIDADE',`${cleanliness.score.toFixed(1)}%`,cleanliness.score<60?C.red:C.green],['BANHEIROS',facilities.length,C.cyan],['SUJOS',dirty.length,dirty.length?C.red:C.green]]);this.filterButtons(p);
     const access={home:'Moradia privada',employees:'Funcionários',public:'Público gratuito',paid:'Público pago'},filter=this.filter();
     const rows=facilities.filter(f=>this.matches(`${city.building(f.buildingId)?.entity.properties.name} ${access[f.access]} ${f.homeId||''}`)).filter(f=>filter==='all'||filter==='public'&&f.access==='public'||filter==='paid'&&f.access==='paid'||filter==='private'&&['home','employees'].includes(f.access)||filter==='dirty'&&f.cleanliness<25).sort((a,b)=>a.cleanliness-b.cleanliness);
     const selected=system.facilities.get(this.selectedFacilityId);

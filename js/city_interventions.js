@@ -1,5 +1,5 @@
 import {syncCorruptionVotes} from './city_corruption_votes.js';
-import {VEHICLE_SPECS} from './city_vehicles.js';
+import {VEHICLE_SPECS} from './city_vehicles.js?v=interiors-completion-2';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 export const INTERVENTIONS={
   praise:{label:'Destacar boas ações',group:'opinion',description:'Divulga um perfil favorável, melhora reputação e alcança parte dos moradores.'},

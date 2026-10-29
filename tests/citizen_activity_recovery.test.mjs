@@ -12,9 +12,10 @@ test('a resident can resume life after waiting for an unavailable toilet, at a r
  city.chooseTask(c);assert.notEqual(c.action,'Aguardando banheiro acessível');
 });
 
-test('a 256-person town hall provides enough separate public bathrooms to serve its population',()=>{
- const city=setup({starter:true,population:256}),hall=city.buildings.find(b=>b.type==='townhall'),publicFacilities=[...city.sanitation.facilities.values()].filter(f=>f.buildingId===hall.id&&f.access==='public');
- assert.equal(publicFacilities.length,8);assert.equal(new Set(publicFacilities.map(f=>f.unitId)).size,8);
+test('a 256-person town starts with a separate multi-floor public toilet building',()=>{
+ const city=setup({starter:true,population:256}),hall=city.buildings.find(b=>b.type==='townhall'),toilet=city.buildings.find(b=>b.type==='public_toilet'),publicFacilities=[...city.sanitation.facilities.values()].filter(f=>f.buildingId===toilet.id&&f.access==='public');
+ assert(toilet);assert(toilet.floors>=3);assert.equal(publicFacilities.length,8);assert.equal(new Set(publicFacilities.map(f=>f.unitId)).size,8);
+ assert.equal([...city.sanitation.facilities.values()].filter(f=>f.buildingId===hall.id&&f.access==='public').length,0);
 });
 
 test('adults with no pressing needs take an outdoor walk instead of crowding the town hall',()=>{

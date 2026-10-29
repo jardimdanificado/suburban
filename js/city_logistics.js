@@ -1,7 +1,7 @@
 import {moveGarments} from './city_clothing.js?v=party-caps-skin-1';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { MAX_CARGO_CAPACITY } from './city_vehicles.js';
+import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=interiors-completion-2';
 
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
 // Urgent food and housing start ahead, while waiting freight gains priority over time.

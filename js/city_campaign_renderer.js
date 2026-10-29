@@ -1,6 +1,6 @@
 import {drawPartyFlag} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
-import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=business-heights-1';
+import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=public-cleaning-1';
 function poster(d,onReady=null){
   const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const ctx=canvas.getContext('2d');ctx.fillStyle=d.flag.background;ctx.fillRect(0,0,512,256);ctx.fillStyle=d.flag.foreground;ctx.fillRect(12,12,488,8);ctx.fillRect(12,236,488,8);
   const isFlag=['flag','window_flag','roof_flag'].includes(d.kind);ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 96px sans-serif';if(isFlag){drawPartyFlag(ctx,d.flag,18,38,220,170,onReady);ctx.fillStyle=d.flag.foreground;ctx.fillText(String(d.partyNumber).padStart(2,'0'),374,128);}else ctx.fillText(String(d.partyNumber).padStart(2,'0'),256,85);if(!isFlag){ctx.font='bold 28px sans-serif';const words=d.candidateName.split(' '),line=[];let y=162;for(const word of words){if(ctx.measureText([...line,word].join(' ')).width>470){ctx.fillText(line.join(' '),256,y);line.length=0;y+=32;}line.push(word);}if(line.length&&y<226)ctx.fillText(line.join(' '),256,y);}

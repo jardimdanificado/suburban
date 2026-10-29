@@ -1,9 +1,9 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=interior-motion-2';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=skybridge-stair-alignment-1';
 import { resolveWorldSettings } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=needs-recovery-2";
-import { CityDesktop } from "./js/city_desktop.js?v=sleep-dispersal-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=public-cleaning-1";
+import { CityDesktop } from "./js/city_desktop.js?v=interiors-completion-2";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=interior-view-2";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=building-doorway-opening-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";

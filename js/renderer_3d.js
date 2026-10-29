@@ -4,10 +4,10 @@
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=interior-view-2";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=public-cleaning-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels } from './city_citizen_models.js?v=vehicle-heading-1';
-import { flagNightFactor } from './city_terrain.js?v=business-heights-1';
+import { flagNightFactor } from './city_terrain.js?v=public-cleaning-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -6315,7 +6315,7 @@ export class RCT3DRenderer {
       const physicalInteriorBuilding=indoorLocation&&this.cityDevelopment?.city?.building(indoorLocation.buildingId),physicalInteriorId=physicalInteriorBuilding?.officeTenantOf||indoorLocation?.buildingId;
       const renderedFloor=physicalInteriorBuilding?.officeTenantOf?physicalInteriorBuilding.officeFloor:interiorPosition?Math.max(0,Math.floor((interiorPosition.z||0)/CITY_FLOOR_HEIGHT+.001)):indoorLocation?.floor;
       const showInspectedInterior=!!(indoorLocation&&this.cityInteriorView?.buildingId===physicalInteriorId&&!indoorLocation.exiting&&renderedFloor===this.cityInteriorView.floor);
-      const renderX=showInspectedInterior?(interiorPosition?.x??e.x):e.x,renderY=showInspectedInterior?(interiorPosition?.y??e.y):e.y;
+      const renderElevated=!!(cityCitizen&&!indoorLocation&&(interiorPosition?.z>0||cityCitizen.skybridgeZ>0)),renderX=showInspectedInterior||renderElevated?(interiorPosition?.x??e.x):e.x,renderY=showInspectedInterior||renderElevated?(interiorPosition?.y??e.y):e.y;
 
       if (renderX < this.renderedMinTx || renderX > this.renderedMaxTx + 0.99 ||
           renderY < this.renderedMinTy || renderY > this.renderedMaxTy + 0.99) {
@@ -6400,7 +6400,7 @@ export class RCT3DRenderer {
           else{surfaceH=this.getSurfaceElevation(map,e.x,e.y);cache.set(e,{x:e.x,y:e.y,revision:world.revision,height:surfaceH});}
         }else surfaceH = this.getSurfaceElevation(map, isPlantOrItem ? e.x + 0.5 : e.x, isPlantOrItem ? e.y + 0.5 : e.y);
       }
-      const renderSurfaceH=surfaceH+(showInspectedInterior?(interiorPosition?.z||0):0);
+      const renderSurfaceH=surfaceH+((showInspectedInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0);
       const profileAfterSurface = profileCitizenStart ? performance.now() : 0;
 
       // --- 3D WOOD LOGS (Volumetric Stacked Timber Logs) ---

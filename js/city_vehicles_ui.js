@@ -1,7 +1,7 @@
 import {contextActions} from './city_context_actions.js';
 import {colorName} from './city_colors.js';
 import {renderVehiclePaint} from './city_paint_ui.js';
-import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js';
+import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=interiors-completion-2';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const title=v=>VEHICLE_SPECS[v.good]?.label||v.good;

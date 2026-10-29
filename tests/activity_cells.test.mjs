@@ -27,7 +27,7 @@ test('workplace meals require the dining cell and no food is consumed in transit
  assert(city.workMeals.tryStart(c));assert.equal(c.workMeal,null);assert.equal(b.inventory.pao,food);assert(c.path.length);walk(c);assert(city.workMeals.tryStart(c));assert(c.workMeal);assert.equal(c.indoorLocation.roomType,'dining');assert.equal(b.inventory.pao,food-3);assert.equal(c.needs.food,20);city.workMeals.advance(c);assert(c.needs.food>20);
 });
 test('workstation reservations are exclusive and interior circulation survives worker snapshots',()=>{
- const city=setup({starter:true,population:128}),b=city.buildings.find(b=>b.type==='bank'),[a,c]=city.citizens.slice(0,2),u=b.units.find(u=>u.roomType==='workspace');for(const person of [a,c]){fresh(person);person.entity.x=b.door.x;person.entity.y=b.door.y;person.task='work';person.targetId=b.id;}
+ const city=setup({starter:true,population:128}),b=city.buildings.find(b=>b.type==='bank'),[a,c]=city.citizens.slice(0,2),u=b.units.find(u=>u.roomType==='workspace'||u.roomType==='office');for(const person of [a,c]){fresh(person);person.entity.x=b.door.x;person.entity.y=b.door.y;person.task='work';person.targetId=b.id;}
  assert.equal(activityRoomReady(city,a,b,u),false);assert.equal(activityRoomReady(city,c,b,u),false);assert.equal(c.indoorLocation,null);assert.deepEqual(u.activityReservedIds,[a.id]);
  const mirror=new CityStateGraph().apply(new CityStateGraph().encode({city})).city;bindCityState(mirror);const ma=mirror.society.citizen(a.id);advanceCitizenInterior(mirror,ma,100);assert.equal(ma.indoorLocation.unitId,u.id);assert.deepEqual(mirror.units.get(u.id).activityReservedIds,[a.id]);
 });

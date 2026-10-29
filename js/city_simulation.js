@@ -3,11 +3,11 @@ import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
-import {CityPaint} from './city_paint.js';
+import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork} from './city_employment.js';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js';
+import {CityVehicles} from './city_vehicles.js?v=interiors-completion-2';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-caps-skin-1';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
@@ -17,27 +17,28 @@ import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
+import {skybridgeLinks} from './city_skybridges.js?v=skybridge-stair-alignment-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=interior-layout-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=public-cleaning-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
-import { quarryDeposits } from './city_terrain.js?v=business-heights-1';
+import { quarryDeposits } from './city_terrain.js?v=public-cleaning-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
-import { CitySanitation } from './city_sanitation.js?v=needs-recovery-1';
+import { CitySanitation } from './city_sanitation.js?v=public-cleaning-1';
 import { CityLife } from './city_life.js?v=needs-performance-1';
-import { CityWorkMeals } from './city_work_meals.js';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=business-heights-1';
-import { CityLogistics } from './city_logistics.js?v=office-rollout-1';
+import { CityWorkMeals } from './city_work_meals.js?v=public-cleaning-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=interiors-completion-2';
+import { CityLogistics } from './city_logistics.js?v=interiors-completion-2';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=business-heights-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=public-cleaning-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=sync-perf-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=business-heights-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=public-cleaning-1';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -361,8 +362,12 @@ export class CitySimulation {
   }
   assignHousingAndJobs() { this.economy.assignHomes(); this.economy.hire(); }
   walkable(x, y) { return !this.occupied.has(key(x, y)) && terrainWalkable(this.world, x, y); }
-  findPath(start, goal, {copy=true}={}) {
-    const revision = `${this.world.revision || 0}:${this.obstacleRevision||0}:${this.occupied.size}`;
+  skybridgeLinksForRevision(revision=`${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`) {
+    if(this._skybridgeCache?.revision!==revision)this._skybridgeCache={revision,links:skybridgeLinks(this.buildings,this.world)};
+    return this._skybridgeCache.links;
+  }
+  findPath(start, goal, {copy=true,allowSkybridges=true}={}) {
+    const revision = `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
     if (this.pathCacheRevision !== revision) { this.pathCache = new Map(); this.pathCacheRevision = revision; }
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
     if (!this.pathCache.has(key)) {
@@ -375,7 +380,31 @@ export class CitySimulation {
       }
       this.pathCache.set(key, findTerrainPath(this.world, start, goal, this.occupied,{blockedGrid:this._pathBlockedGrid}));
     }
-    const path = this.pathCache.get(key);
+    let path = this.pathCache.get(key);
+    if(allowSkybridges&&this.buildings.length>1){
+      let bestScore=path===null?Infinity:path.length||0;
+      const links=this.skybridgeLinksForRevision(revision);
+      for(const link of links){
+        for(const reverse of [false,true]){
+          const from=reverse?link.end:link.start,to=reverse?link.start:link.end,fromAccess=reverse?link.endAccess:link.startAccess,toAccess=reverse?link.startAccess:link.endAccess;
+          const lower=Math.hypot(start.x-fromAccess.x,start.y-fromAccess.y)+Math.hypot(goal.x-toAccess.x,goal.y-toAccess.y)+Math.abs(to.x-from.x)*.76+3;
+          if(lower>=bestScore)continue;
+          const first=findTerrainPath(this.world,start,fromAccess,this.occupied,{blockedGrid:this._pathBlockedGrid});
+          const last=findTerrainPath(this.world,toAccess,goal,this.occupied,{blockedGrid:this._pathBlockedGrid});
+          if(first===null||last===null)continue;
+          const stairs=10,waypoints=first.slice();
+          const append=p=>{const previous=waypoints.at(-1);if(!previous||Math.hypot(previous.x-p.x,previous.y-p.y,(previous.z||0)-(p.z||0))>.001)waypoints.push(p);};
+          append(fromAccess);
+          for(let step=1;step<=stairs;step++){const t=step/stairs;append({x:fromAccess.x,y:fromAccess.y+(from.y-fromAccess.y)*t,z:link.height*t,skybridgeId:link.id});}
+          const crossings=Math.max(1,Math.ceil(Math.abs(to.x-from.x)*2));
+          for(let step=1;step<=crossings;step++){const t=step/crossings;append({x:from.x+(to.x-from.x)*t,y:link.y,z:link.height,skybridgeId:link.id});}
+          for(let step=1;step<=stairs;step++){const t=step/stairs;append({x:to.x,y:link.y+(toAccess.y-link.y)*t,z:link.height*(1-t),skybridgeId:link.id});}
+          for(const point of last)append(point);
+          const score=first.length+last.length+Math.hypot(to.x-from.x,link.height)*.76+3;
+          if(score<bestScore){bestScore=score;path=waypoints;}
+        }
+      }
+    }
     // Keep insertion-order eviction: touching every cache hit costs two Map
     // mutations across the hot path, while FIFO gives the same route answers.
     // Consumers shift their own array but never mutate waypoint coordinates.
@@ -503,7 +532,7 @@ export class CitySimulation {
       if (path !== null) { this.development.reserveConstruction(siteProject); c.path = path; c.task = 'construction'; c.workProjectId = siteProject.id; c.targetId = siteProject.builderId; return; }
     }
     const hall = this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
-    const candidates = type === 'company' ? [company] : task === 'food' ? this.buildings.slice() : type === 'child' ? (childHome ? [childHome] : home ? [home] : []) : type === 'home' ? (home ? [home] : []) : type === 'job' ? [job] : this.buildings.filter(b => !b.entity.destroyed && (b.type === type||['clinic','leisure'].includes(type)&&civicSpec(b)?.need===(type==='clinic'?'health':'leisure')));
+    const candidates = type === 'company' ? [company] : task === 'food' ? this.buildings.filter(b=>b.type!=='townhall') : type === 'child' ? (childHome ? [childHome] : home ? [home] : []) : type === 'home' ? (home ? [home] : []) : type === 'job' ? [job] : this.buildings.filter(b => !b.entity.destroyed && (b.type === type||['clinic','leisure'].includes(type)&&civicSpec(b)?.need===(type==='clinic'?'health':'leisure')));
     if (hall && ((type === 'home' && !home) || ['utility', 'clinic', 'leisure'].includes(type))) { const serviceCost = this.currency.price({ utility: 35, clinic: 240, leisure: 25 }[type] || 0); const cash = this.accounts.get(this.payerFor(c))?.balance || 0; if (!candidates.includes(hall)) candidates.push(hall); if(cash<serviceCost&&!candidates.some(b=>civicSpec(b)&&!b.ownerId&&civicStatus(this,b,c)?.ready))candidates.splice(0,candidates.length,hall); }
     const foodScores=task==='food'?new Map(candidates.map(b=>[b,this.economy.mealScore(c,b)])):null;
     candidates.sort((a, b) => foodScores ? foodScores.get(a)-foodScores.get(b) : Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y));
@@ -848,22 +877,25 @@ export class CitySimulation {
       // up to 60 times before any relevant state can change.
       const load=c.deliveryId?(shipmentIndex?shipmentIndex.get(c.deliveryId):this.logistics.shipments.find(s=>s.id===c.deliveryId)):null;
       if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>(c.equipment?.carrinho?72:c.equipment?.cesta?36:24)){c.action='Aguardando veículo para transportar a carga';continue;}
+      if(!c.path.length&&c.skybridgeZ){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5);
       while (distance > 0 && c.path.length) {
         const p = c.path[0];
-        if (!this.walkable(Math.floor(p.x), Math.floor(p.y)) || !canStep(this.world, Math.floor(c.entity.x), Math.floor(c.entity.y), Math.floor(p.x), Math.floor(p.y))) { c.path = []; c.task = null; break; }
-        const dx = p.x - c.entity.x, dy = p.y - c.entity.y, len = Math.hypot(dx, dy);
-        const tx=Math.floor(p.x),ty=Math.floor(p.y),tile=tileAt(this.world,tx,ty),cost=roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
-        if (len <= available) { c.entity.x = p.x; c.entity.y = p.y; this.recordTraffic(p); c.path.shift(); distance = Math.max(0,distance-len*cost); }
-        else { c.entity.x += dx / len * available; c.entity.y += dy / len * available; distance = 0; }
+        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,tx=Math.floor(p.x),ty=Math.floor(p.y);
+        if(elevated&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
+        if(!elevated&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
+        const dx=p.x-c.entity.x,dy=p.y-c.entity.y,dz=(p.z||0)-(c.skybridgeZ||0),len=Math.hypot(dx,dy,dz);
+        const tile=tileAt(this.world,tx,ty),cost=elevated?1.05:roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
+        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;if(!elevated)this.recordTraffic(p);c.path.shift();distance=Math.max(0,distance-len*cost);}
+        else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;distance=0;}
         if(travelled>0){
           c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;
           c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
-          wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
-          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}
+          if(!elevated){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
+          if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
-        c.action = c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }

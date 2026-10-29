@@ -1,7 +1,7 @@
 import {COLOR_PALETTE,colorAffinity,dislikesColor} from './city_colors.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {inventoryFree} from './city_inventory.js';
-import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=business-heights-1';
+import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=public-cleaning-1';
 
 export const VEHICLE_SPECS=Object.freeze({
   bicicleta:{label:'Bicicleta',speed:8,seats:2,cargo:36},
@@ -25,6 +25,7 @@ const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),1
 /** Human-powered mobility, component provenance, real trips and repairs. */
 export class CityVehicles {
   constructor(city){this.city=city;this.units=new Map();this.models=new Map();this.batches=[];this.lines=[];this.nextId=1;this.nextModelId=1;this.nextBatchId=1;this.lastHour=null;this.activeCount=0;this.stats={distance:0,passengers:0,fares:0,repairs:0};}
+  groundPath(start,goal){return this.city.findPath(start,goal,{allowSkybridges:false});}
   equipInitialWorkers(){
     if(this.initialWorkersEquipped)return;
     this.initialWorkersEquipped=true;const city=this.city,seen=new Set();
@@ -56,7 +57,7 @@ export class CityVehicles {
   reserveParking(v,goal,maxDistance=12){
     if(!PERSONAL_MOBILITY.has(v.good))return null;
     const choices=this.parkingSites().filter(b=>Math.hypot(b.door.x-goal.x,b.door.y-goal.y)<=maxDistance).sort((a,b)=>Math.hypot(a.door.x-goal.x,a.door.y-goal.y)-Math.hypot(b.door.x-goal.x,b.door.y-goal.y));
-    for(const b of choices)for(const slot of b.bikeSlots){if(slot.vehicleId!=null||slot.reservedBy!=null)continue;if(!this.city.walkable(Math.floor(slot.x),Math.floor(slot.y))||this.city.findPath(slot,goal)===null)continue;slot.reservedBy=v.id;return {rackId:b.id,index:slot.index,x:slot.x,y:slot.y};}return null;
+    for(const b of choices)for(const slot of b.bikeSlots){if(slot.vehicleId!=null||slot.reservedBy!=null)continue;if(!this.city.walkable(Math.floor(slot.x),Math.floor(slot.y))||this.groundPath(slot,goal)===null)continue;slot.reservedBy=v.id;return {rackId:b.id,index:slot.index,x:slot.x,y:slot.y};}return null;
   }
   roadsideParking(v,goal,maxDistance=8){
     if(!PERSONAL_MOBILITY.has(v.good))return null;
@@ -72,7 +73,7 @@ export class CityVehicles {
       candidates.push(spot);
     }
     candidates.sort((a,b)=>Math.hypot(a.x-goal.x,a.y-goal.y)-Math.hypot(b.x-goal.x,b.y-goal.y));
-    return candidates.find(spot=>city.findPath(spot,goal)!==null)||null;
+    return candidates.find(spot=>this.groundPath(spot,goal)!==null)||null;
   }
   destinationParking(v,goal){return this.reserveParking(v,goal)||this.roadsideParking(v,goal);}
   freeParking(v,reservation=false){
@@ -251,7 +252,7 @@ export class CityVehicles {
     const candidates=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&!v.driverId&&!v.mechanicId&&!v.paintJobId&&v.condition>15&&(owners.has(v.ownerAccountId)||city.buildings.some(b=>b.type==='bicycle_rental'&&b.active&&b.workers.length&&b.accountId===v.ownerAccountId&&Math.hypot(v.x-c.entity.x,v.y-c.entity.y)<4))&&(!load||VEHICLE_SPECS[v.good].cargo>=load.quantity));
     candidates.sort((a,b)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(b.x-c.entity.x,b.y-c.entity.y));
     for(const v of candidates){
-      const path=city.findPath(c.entity,v);if(path===null||path.length>Math.max(4,c.path.length/2))continue;
+      const path=this.groundPath(c.entity,v);if(path===null||path.length>Math.max(4,c.path.length/2))continue;
       const parking=this.destinationParking(v,goal);
       const rental=!owners.has(v.ownerAccountId);if(rental&&!city.transfer(c.accountId,v.ownerAccountId,city.currency.price(50),'Serviço: aluguel de bicicleta',{vehicleId:v.id})){v.reservedParking=parking;this.freeParking(v,true);continue;}
       if(rental)this.stats.fares+=city.currency.price(50);
@@ -285,7 +286,7 @@ export class CityVehicles {
     const goal=c.mobilityTrip?.goal,resume=c.carpoolResume||{};
     c.ridingVehicleId=null;c.ridingVehicleKind=null;c.ridingAsPassenger=false;c.mobilityTrip=null;c.carpoolResume=null;
     c.task=resume.task??c.task;c.targetId=resume.targetId??c.targetId;
-    if(continueOnFoot&&goal){c.path=this.city.findPath(c.entity,goal)||[];c.mobilityWalkGoal=c.path.length?{...goal}:null;}
+    if(continueOnFoot&&goal){c.path=this.groundPath(c.entity,goal)||[];c.mobilityWalkGoal=c.path.length?{...goal}:null;}
   }
   releaseTrip(c,arrived=false){
     if(c.ridingAsPassenger){this.detachPassenger(c,this.units.get(c.ridingVehicleId),true);return;}
@@ -298,7 +299,7 @@ export class CityVehicles {
       if(arrived){v.parkingHistory??=[];v.parkingHistory.push({minute:this.city.minute,rackId:v.parking?.rackId??null,rackName:v.parking?.kind==='roadside'?'Ao lado da rua':v.parking?this.city.building(v.parking.rackId)?.entity.properties.name:null,x:v.x,y:v.y,citizenId:c.id});if(v.parkingHistory.length>40)v.parkingHistory.shift();}
     }
     c.ridingVehicleId=null;c.ridingVehicleKind=null;c.mobilityTrip=null;
-    if(arrived&&trip?.goal){c.path=this.city.findPath(c.entity,trip.goal)||[];c.mobilityWalkGoal=c.path.length?{...trip.goal}:null;}
+    if(arrived&&trip?.goal){c.path=this.groundPath(c.entity,trip.goal)||[];c.mobilityWalkGoal=c.path.length?{...trip.goal}:null;}
   }
   minute(){
     this.hourly();
@@ -319,7 +320,7 @@ export class CityVehicles {
         if(c.path.length)continue;
         if(Math.hypot(c.entity.x-v.x,c.entity.y-v.y)>2){this.releaseTrip(c);continue;}
         if(!v.reservedParking)v.reservedParking=this.destinationParking(v,c.mobilityTrip.goal);
-        const path=city.findPath(v,v.reservedParking||c.mobilityTrip.goal);if(path===null){this.releaseTrip(c);c.task=null;continue;}
+        const path=this.groundPath(v,v.reservedParking||c.mobilityTrip.goal);if(path===null){this.releaseTrip(c);c.task=null;continue;}
         this.freeParking(v);c.entity.x=v.x;c.entity.y=v.y;c.path=path;c.ridingVehicleId=v.id;c.ridingVehicleKind=v.good;c.mobilityTrip.stage='riding';v.journey={};this.stats.passengers++;
       }
       if(c.ridingVehicleId!==v.id)continue;
@@ -352,13 +353,13 @@ export class CityVehicles {
     if(!c.mechanicJob){
       const v=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&v.condition<75&&!v.paintJobId&&!v.mechanicId&&!v.driverId).sort((a,b)=>a.condition-b.condition)[0];
       if(!v||b.inventory.pecas<1)return false;
-      const path=city.findPath(c.entity,v);if(path===null)return false;
+      const path=this.groundPath(c.entity,v);if(path===null)return false;
       const price=Math.ceil((city.economy.goods.pecas.price+city.currency.price(city.politics.policy.minimumWage*48))*1.35*(v.ownerAccountId==='treasury'?1.5:1));
       if(!city.transfer(v.ownerAccountId,b.accountId,price,'Serviço: reparo de bicicleta ou patins',{vehicleId:v.id,buildingId:b.id}))return false;
       const origin=b.componentLots?.pecas?.[0];this.discardComponents(b,'pecas',1);b.inventory.pecas--;c.mechanicJob={vehicleId:v.id,garageId:b.id,parts:{pecas:1},components:[{good:'pecas',quantity:1,producerId:origin?.producerId??'origem não identificada',producerName:origin?.producerName,design:origin?.design??1}],price,startedAt:city.minute,labor:0};v.mechanicId=c.id;c.path=path;c.indoorLocation=null;return true;
     }
     const job=c.mechanicJob,v=this.units.get(job.vehicleId);if(!v||v.scrapped){for(const [g,n]of Object.entries(job.parts))city.economy.lost[g]+=n;c.mechanicJob=null;return false;}
-    if(Math.hypot(c.entity.x-v.x,c.entity.y-v.y)>.25){c.path=city.findPath(c.entity,v)||[];if(!c.path.length)c.path=[{x:v.x,y:v.y}];return true;}
+    if(Math.hypot(c.entity.x-v.x,c.entity.y-v.y)>.25){c.path=this.groundPath(c.entity,v)||[];if(!c.path.length)c.path=[{x:v.x,y:v.y}];return true;}
     job.labor+=1+(c.skills.maintenance||0)/80;if(job.labor<24)return true;
     for(const [g,n]of Object.entries(job.parts)){city.economy.consumed[g]+=n;city.economy.recordGoods('cycle-repair',g,n,b.id,v.id);}v.condition=100;v.mechanicId=null;(v.maintenanceHistory??=[]).push({minute:city.minute,workshopId:b.id,workshopName:b.entity.properties.name,workerId:c.id,price:job.price,components:job.components||[]});c.mechanicJob=null;this.stats.repairs++;return true;
   }
