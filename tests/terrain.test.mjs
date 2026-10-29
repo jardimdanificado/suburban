@@ -17,7 +17,7 @@ function terrainFixture() {
 test('seeds are random by default, validated in URLs and repeatable when specified', () => {
   const seeds = new Set(Array.from({ length: 16 }, randomWorldSeed)); assert(seeds.size > 1);
   const settings = resolveWorldSettings(new URLSearchParams('seed=12345&terrain=highlands'));
-  assert.deepEqual(settings, { seed: 12345, preset: 'highlands', presetId: 2, population: 512, size: 512 });
+  assert.deepEqual(settings, { seed: 12345, preset: 'highlands', presetId: 2, population: 512, size: 256 });
   assert.deepEqual(settings, resolveWorldSettings(new URLSearchParams('seed=12345&terrain=highlands')));
   for (const bad of ['0', '-1', 'NaN', '123x', '4294967296']) {
     const s = resolveWorldSettings(new URLSearchParams(`seed=${bad}&terrain=bad`));
@@ -113,5 +113,5 @@ test('landscapes use most of the map for land while retaining varied shores and 
 
 test('square maps from 128 to 1024 use their actual dimensions throughout generation',()=>{
  for(const size of [128,256,512,1024]){const world=new World(1,42,size);assert.equal(world.width,size);assert.equal(world.height,size);assert.equal(world.map.length,size*size);assert(world.spawnCenter.x>=0&&world.spawnCenter.x<size);assert(world.spawnCenter.y>=0&&world.spawnCenter.y<size);assert.equal(world.getTile(size,0),5);const tile=world.getTile(size-1,size-1);world.setTile(size-1,size-1,tile===0?3:0);assert.equal(world.getTile(size-1,size-1),tile===0?3:0);}
- assert.equal(resolveWorldSettings(new URLSearchParams()).size,512);assert.equal(resolveWorldSettings(new URLSearchParams('size=128')).size,128);assert.equal(resolveWorldSettings(new URLSearchParams('size=1025')).size,512);
+ assert.equal(new World(1,42).width,256);assert.equal(resolveWorldSettings(new URLSearchParams()).size,256);assert.equal(resolveWorldSettings(new URLSearchParams('size=128')).size,128);assert.equal(resolveWorldSettings(new URLSearchParams('size=1025')).size,256);
 });

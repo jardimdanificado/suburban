@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const mode=process.argv[2]||'simulation';
 const root=process.argv[3]?resolve(process.argv[3]):fileURLToPath(new URL('../',import.meta.url));
 const population=Math.max(1,Number(process.env.SUBURBAN_BENCH_POPULATION)||256);
+const mapSize=Math.max(128,Math.min(1024,Number(process.env.SUBURBAN_BENCH_MAP_SIZE)||128));
 const moduleAt=name=>import(pathToFileURL(resolve(root,'js',name)).href);
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -50,7 +51,7 @@ if(mode==='city-render'){
   const {CitySimulation}=await moduleAt('city_simulation.js'),{World}=await moduleAt('world.js');
   const entities=[];let id=0;
   // Real terrain and prototype exercise the same navigation and worker mirror as the game.
-  const world=new World(1,1337,128);
+  const world=new World(1,1337,mapSize);
   const city=new CitySimulation({world,population,seed:1337,createEntity:data=>{const entity={id:++id,destroyed:false,...data};entities.push(entity);return entity;}});city.initialize();
   if(mode==='throughput'){
     const {CityStateGraph}=await moduleAt('city_state.js'),graph=new CityStateGraph(),state={city,entities,nextId:id+1};graph.encode(state);

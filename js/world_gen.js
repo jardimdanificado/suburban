@@ -2,8 +2,8 @@
 // Brutopolis - Procedural World Generator (Pure JavaScript Port)
 // =============================================================================
 
-export const MAP_WIDTH = 128;
-export const MAP_HEIGHT = 128;
+export const MAP_WIDTH = 256;
+export const MAP_HEIGHT = 256;
 
 export const TILE_FLOOR = 0;              // Fertile Grassland / Lowland Plains (h = 1.10)
 export const TILE_MOUNTAIN = 1;           // Mountain Massif (h = 5.50 - NO ROADS)

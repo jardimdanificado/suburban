@@ -35,7 +35,7 @@ import { CityLogistics } from './city_logistics.js?v=office-rollout-1';
 import { CityEconomy, GOODS } from './city_economy.js?v=business-heights-1';
 import { CitySociety } from './city_society.js?v=sync-perf-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=business-heights-1';
-import { World, WorldClock } from './world.js';
+import { World, WorldClock } from './world.js?v=map-default-256-1';
 
 const prototypes = new Map([CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,

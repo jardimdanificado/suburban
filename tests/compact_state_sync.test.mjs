@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup} from './helpers/city.mjs';
-import {CityStateGraph} from '../js/city_state.js?v=needs-recovery-1';
+import {CityStateGraph} from '../js/city_state.js?v=map-default-256-1';
 
 test('compact ledger faithfully synchronizes appends, trimming, replacement and optional fields',()=>{
  const city=setup({starter:true,population:24}),root={city},source=new CityStateGraph(),mirror=new CityStateGraph();
