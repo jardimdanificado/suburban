@@ -4893,9 +4893,6 @@ export class RCT3DRenderer {
     let bestEntId = -1;
     let closestDist = Infinity;
 
-    const nx = 0.70710678;
-    const nz = 0.70710678;
-
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
       if (!e || e.destroyed || !e.properties || !e.properties.render || e.properties.species === "effect") continue;
@@ -4908,6 +4905,9 @@ export class RCT3DRenderer {
       }
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;
+        // In cutaway mode the building shell is hidden, so it must not mask
+        // people and units that are actually inside it when picking.
+        if(this.cityInteriorView?.buildingId===b.id)continue;
         const base = b.constructionKind === 'open-air' ? b.terrain.min : b.terrain?.base ?? (map ? this.getTileSurfaceHeight(map, e.x, e.y) : 1);
         const box = new THREE.Box3(new THREE.Vector3(e.x, base, e.y), new THREE.Vector3(e.x + b.width, b.constructionKind === 'open-air' ? b.terrain.max + (['market','greengrocer'].includes(b.type)?CITY_FLOOR_HEIGHT+.1:.14) : base + b.floors*CITY_FLOOR_HEIGHT, e.y + b.depth));
         const hit = ray.intersectBox(box, new THREE.Vector3());
@@ -4922,6 +4922,21 @@ export class RCT3DRenderer {
             const unitId = `${b.id}:${x}:${y}:${z}`; this.selectedCityUnitId = b.units.some(u => u.id === unitId) ? unitId : null;
           }
         }
+        continue;
+      }
+
+      const citizen=e.properties.citizen;
+      if(citizen){
+        const location=citizen.indoorLocation,building=location&&this.cityDevelopment?.city?.building(location.buildingId);
+        const exposed=location&&(location.roomType==='roof_terrace'||location.roomType==='balcony'&&!location.path?.length);
+        if(location&&!exposed&&building&&this.cityInteriorView?.buildingId!==(building.officeTenantOf||building.id))continue;
+        const point=location?.position||citizen._renderIndoorPosition;
+        const x=point?.x??e.x,y=point?.y??e.y,z=(point?.z||0)+(citizen.ridingVehicleId ? .18 : 0);
+        const surface=location&&building?(building.terrain?.base??(map?this.getSurfaceElevation(map,x,y):0)):(map?this.getSurfaceElevation(map,x,y):0);
+        const size=Math.max(.65,Math.min(1.2,e.properties.render.size||1)),radius=.19*size;
+        const box=new THREE.Box3(new THREE.Vector3(x-radius,surface+z,y-radius),new THREE.Vector3(x+radius,surface+z+1.08*size,y+radius));
+        const hit=ray.intersectBox(box,new THREE.Vector3());
+        if(hit){const distance=ray.origin.distanceTo(hit);if(distance<closestDist){closestDist=distance;bestEntId=e.id;this.selectedCityUnitId=null;}}
         continue;
       }
 
@@ -4983,9 +4998,7 @@ export class RCT3DRenderer {
         const boxMinZ = isFlora ? posY - bounds.radius : e.y;
         const boxMaxZ = isFlora ? posY + bounds.radius : e.y + fpH;
         const floraScale=isFlora&&e.properties.cityPlant?Math.max(.05,r.size??1):1;
-        const floraMesh=isCherry?this.instCherryLeaves:isBirch?this.instBirchLeaves:isMaple?this.instMapleLeaves:isBerryBush?this.instBerryBushes:isRoseBush?this.instRoseBushes:isTree?(e.properties.species==='pine'?this.instPineLeaves:this.instOakLeaves):isCactus?this.instCacti:null;
-        const geometry=floraMesh?.geometry;if(geometry&&!geometry.boundingBox)geometry.computeBoundingBox();
-        const floraHeight=geometry?.boundingBox?.max.y??bounds.h;
+        const floraHeight=bounds.h;
         const box = new THREE.Box3(
           new THREE.Vector3(isFlora?posX-bounds.radius*floraScale:boxMinX, surfaceH - 0.1, isFlora?posY-bounds.radius*floraScale:boxMinZ),
           new THREE.Vector3(isFlora?posX+bounds.radius*floraScale:boxMaxX, surfaceH + (isFlora?floraHeight*floraScale:Math.max(1.0,bounds.h)), isFlora?posY+bounds.radius*floraScale:boxMaxZ)
@@ -4998,77 +5011,19 @@ export class RCT3DRenderer {
             bestEntId = e.id;
           }
         }
-      } else {
-        const denom = nx * ray.direction.x + nz * ray.direction.z;
-        if (Math.abs(denom) > 1e-4) {
-          const numer = nx * (posX - ray.origin.x) + nz * (posY - ray.origin.z);
-          const t = numer / denom;
-          if (t > 0 && t < closestDist) {
-            const ix = ray.origin.x + t * ray.direction.x;
-            const iy = ray.origin.y + t * ray.direction.y;
-            const iz = ray.origin.z + t * ray.direction.z;
-
-            const dy = iy - surfaceH;
-            const dx = nx * (ix - posX) - nz * (iz - posY);
-
-            if (dy >= -0.2 && dy <= Math.max(1.0, bounds.h) && Math.abs(dx) <= Math.max(0.75, bounds.radius)) {
-              closestDist = t;
-              bestEntId = e.id;
-            }
-          }
-        }
-
-        const centerH = surfaceH + (isItem ? 0.25 : bounds.h * 0.45);
-        const entPos = new THREE.Vector3(posX, centerH, posY);
-        const distToRay = ray.distanceToPoint(entPos);
-        if (distToRay < Math.max(0.75, bounds.radius * 0.95)) {
-          const distAlong = ray.origin.distanceTo(entPos);
-          if (distAlong < closestDist) {
-            closestDist = distAlong;
-            bestEntId = e.id;
-          }
-        }
+      } else if(!isRoad) {
+        // Use a compact volume around the visible object. The old ray-distance
+        // fallback selected nearby entities through empty space and through
+        // foreground objects, which made the clickable area feel arbitrary.
+        const radius=isItem?Math.min(.32,bounds.radius*.55):Math.min(.38,bounds.radius*.7);
+        const height=isItem ? .52 : Math.max(.55,bounds.h*.72);
+        const box=new THREE.Box3(new THREE.Vector3(posX-radius,surfaceH+bounds.yBottom,posY-radius),new THREE.Vector3(posX+radius,surfaceH+height,posY+radius));
+        const hit=ray.intersectBox(box,new THREE.Vector3());
+        if(hit){const distance=ray.origin.distanceTo(hit);if(distance<closestDist){closestDist=distance;bestEntId=e.id;}}
       }
     }
 
     if (bestEntId !== -1) return bestEntId;
-
-    const intersectPoint = new THREE.Vector3();
-    this.groundPlane.constant = -1.0;
-    if (this.raycaster.ray.intersectPlane(this.groundPlane, intersectPoint)) {
-      const tx = Math.floor(intersectPoint.x + 0.5);
-      const ty = Math.floor(intersectPoint.z + 0.5);
-      
-      let closestId = -1;
-      let minD = 1.3;
-      for (const e of entities) {
-        if (e.destroyed || !e.properties || e.properties.citizen?.indoorLocation) continue;
-        // Multi-tile footprint check
-        let eFpW = 1, eFpH = 1;
-        if (e.properties.house) {
-          eFpW = e.properties.house.footprintW || 1;
-          eFpH = e.properties.house.footprintH || 1;
-        } else if (e.properties.leaderHouse) {
-          eFpW = 3; eFpH = 3;
-        } else if (e.properties.warehouse || e.properties.slaughterhouse || e.properties.kitchen || e.properties.artisan_hut) {
-          eFpW = 2; eFpH = 2;
-        }
-        // Direct tile hit within footprint
-        if (tx >= e.x && tx < e.x + eFpW && ty >= e.y && ty < e.y + eFpH) {
-          closestId = e.id;
-          break;
-        }
-        const cx = e.x + eFpW * 0.5;
-        const cy = e.y + eFpH * 0.5;
-        const d = Math.hypot(cx - tx, cy - ty);
-        if (d < minD) {
-          minD = d;
-          closestId = e.id;
-        }
-      }
-      return closestId;
-    }
-
     return -1;
   }
 
@@ -6336,7 +6291,7 @@ export class RCT3DRenderer {
       const physicalInteriorBuilding=indoorLocation&&this.cityDevelopment?.city?.building(indoorLocation.buildingId),physicalInteriorId=physicalInteriorBuilding?.officeTenantOf||indoorLocation?.buildingId;
       const renderedFloor=physicalInteriorBuilding?.officeTenantOf?physicalInteriorBuilding.officeFloor:interiorPosition?Math.max(0,Math.floor((interiorPosition.z||0)/CITY_FLOOR_HEIGHT+.001)):indoorLocation?.floor;
       const showInspectedInterior=!!(indoorLocation&&this.cityInteriorView?.buildingId===physicalInteriorId&&!indoorLocation.exiting&&renderedFloor===this.cityInteriorView.floor);
-      const renderElevated=!!(cityCitizen&&!indoorLocation&&(interiorPosition?.z>0||cityCitizen.skybridgeZ>0)),renderX=showInspectedInterior||renderElevated?(interiorPosition?.x??e.x):e.x,renderY=showInspectedInterior||renderElevated?(interiorPosition?.y??e.y):e.y;
+      const renderElevated=!!(cityCitizen&&!indoorLocation&&(interiorPosition?.z>0||cityCitizen.skybridgeZ>0)),renderAtInterior=!!(cityCitizen&&indoorLocation&&interiorPosition),renderX=showInspectedInterior||renderElevated||renderAtInterior?(interiorPosition?.x??e.x):e.x,renderY=showInspectedInterior||renderElevated||renderAtInterior?(interiorPosition?.y??e.y):e.y;
 
       if (renderX < this.renderedMinTx || renderX > this.renderedMaxTx + 0.99 ||
           renderY < this.renderedMinTy || renderY > this.renderedMaxTy + 0.99) {
@@ -6351,14 +6306,6 @@ export class RCT3DRenderer {
       }
 
       const interiorBuilding=cityCitizen?.indoorLocation&&this.cityDevelopment?.city?.building(cityCitizen.indoorLocation.buildingId);
-      const exposed=cityCitizen?.indoorLocation&&(cityCitizen.indoorLocation.roomType==='roof_terrace'||cityCitizen.indoorLocation.roomType==='balcony'&&!cityCitizen.indoorLocation.path?.length);
-      const renderInside=cityCitizen?cityCitizen._renderInside??!!(cityCitizen.indoorLocation&&!exposed&&(!interiorBuilding||interiorBuilding.constructionKind!=='open-air')):false;
-      if(renderInside&&!showInspectedInterior){
-        const sprite=this.entitySprites.get(e.id);
-        if(sprite){sprite.visible=false;activeIds.add(e.id);}
-        continue;
-      }
-
       const r = e.properties.render;
       const isRoad = !e.properties.brain && (!!e.properties.road || e.properties.name?.includes("Estrada") || e.properties.name?.includes("Rua") || e.properties.name?.includes("Encaixe"));
       const isCampfire = !e.properties.brain && !isRoad && (!!e.properties.campfire || e.properties.name?.includes("Campfire") || e.properties.name?.includes("Fogueira"));
@@ -6413,7 +6360,7 @@ export class RCT3DRenderer {
       } else if (isBuilding) {
         surfaceH = this.getTileSurfaceHeight(map, Math.floor(e.x), Math.floor(e.y), 1, 1);
       } else {
-        if(cityCitizen&&exposed&&interiorBuilding)surfaceH=interiorBuilding.terrain?.base??this.getSurfaceElevation(map,e.x,e.y);
+        if(cityCitizen&&indoorLocation&&interiorBuilding)surfaceH=interiorBuilding.terrain?.base??this.getSurfaceElevation(map,renderX,renderY);
         else if(showInspectedInterior&&interiorBuilding)surfaceH=interiorBuilding.terrain?.base??this.getSurfaceElevation(map,renderX,renderY);
         else if(cityCitizen){
           const cache=this._entitySurfaceCache??=new WeakMap(),cached=cache.get(e);
@@ -6421,7 +6368,7 @@ export class RCT3DRenderer {
           else{surfaceH=this.getSurfaceElevation(map,e.x,e.y);cache.set(e,{x:e.x,y:e.y,revision:world.revision,height:surfaceH});}
         }else surfaceH = this.getSurfaceElevation(map, isPlantOrItem ? e.x + 0.5 : e.x, isPlantOrItem ? e.y + 0.5 : e.y);
       }
-      const renderSurfaceH=surfaceH+((showInspectedInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0);
+      const renderSurfaceH=surfaceH+((renderAtInterior||showInspectedInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0);
       const profileAfterSurface = profileCitizenStart ? performance.now() : 0;
 
       // --- 3D WOOD LOGS (Volumetric Stacked Timber Logs) ---
@@ -6978,7 +6925,7 @@ export class RCT3DRenderer {
         const isSleeping = cityCitizen ? citizenIsSleeping(cityCitizen) : !!e.properties?.life?.isSleeping && !!e.properties?.brain;
         const isStandingTorch = !!e.properties?.torch;
 
-        if (isPossessed || renderInside) {
+        if (isPossessed) {
           sprite.visible = false;
         } else {
           sprite.visible = true;
