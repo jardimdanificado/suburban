@@ -1,7 +1,7 @@
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {rentOffice,rentAvailableOffice,officeStartupCost,officeSpaceDemand,setupOfficeTower,officeFloors,OFFICE_BUSINESSES,OFFICE_ONLY_TYPES,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 import {taxCategory,taxRate} from './city_sales_tax.js';
-import {offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js';
+import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=landlord-stock-market-1';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=deep-perf-3';
 import {externalTradeHourly} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=toilet-staff-only-1';
@@ -66,7 +66,7 @@ export class CityEconomy {
     this.routeCache = new Map();
     this.serviceInvestment = new CityServiceInvestment(city);
   }
-  offerShares(buildingId,sellerId,points){return offerShares(this.city,this.city.building(buildingId),sellerId,points);}
+  offerShares(buildingId,sellerId,points,options={}){return offerShares(this.city,this.city.building(buildingId),sellerId,points,options);}
   buyShares(buildingId,offerId,buyerId,points){return buyShares(this.city,this.city.building(buildingId),offerId,buyerId,points);}
   cancelShareOffer(buildingId,offerId,sellerId){return cancelShareOffer(this.city,this.city.building(buildingId),offerId,sellerId);}
   rentOffice(towerId,floor,type,founderId){return rentOffice(this.city,towerId,floor,type,founderId);}
@@ -809,15 +809,23 @@ export class CityEconomy {
     this.municipalPolicy();
     for(const b of this.city.buildings)if(this.city.fiscal?.municipal(b))this.city.fiscal.distribute(b);
     for (const b of this.businesses) {
-      if(b.equityShares?.length){distributeShareDividends(this.city,b);continue;}
       const owner = this.citizen(b.ownerId);
-      if (!owner) {
-        continue;
+      const reserve=Math.max(this.city.currency.price(5000),(b.wage||0)*Math.max(2,b.jobs||1)*24);
+      if(b.balance<reserve&&owner&&owner.balance>this.city.welfare.subsistenceFloor(owner)+this.city.currency.price(2500))this.city.transfer(owner.accountId,b.accountId,Math.min(this.city.currency.price(10000),owner.balance-this.city.welfare.subsistenceFloor(owner)-this.city.currency.price(1500)),'Aporte emergencial do proprietário');
+      if(b.equityShares?.length){if(b.balance>=reserve)distributeShareDividends(this.city,b);}
+      else if(owner){
+        const profit = Math.max(0, b.totalRevenue - b.totalExpenses - b.dividends),dividend = Math.min(Math.floor(profit * .35), Math.max(0, b.balance - reserve));
+        if(dividend>0){const shares=(b.equityPartners||[{citizenId:owner.id,amount:1}]).filter(a=>this.citizen(a.citizenId)),total=shares.reduce((n,a)=>n+a.amount,0);for(const share of shares){const amount=Math.floor(dividend*share.amount/Math.max(1,total));if(amount&&this.city.transfer(b.accountId,`citizen:${share.citizenId}`,amount,'Distribuição de lucros por quota de capital'))b.dividends+=amount;}}
       }
-      if (b.balance < 5000 && owner.balance > 15000) this.city.transfer(owner.accountId, b.accountId, Math.min(10000, owner.balance - 10000), 'Aporte do proprietário');
-      const profit = Math.max(0, b.totalRevenue - b.totalExpenses - b.dividends);
-      const dividend = Math.min(Math.floor(profit * .35), Math.max(0, b.balance - 18000));
-      if(dividend>0){const shares=(b.equityPartners||[{citizenId:owner.id,amount:1}]).filter(a=>this.citizen(a.citizenId)),total=shares.reduce((n,a)=>n+a.amount,0);for(const share of shares){const amount=Math.floor(dividend*share.amount/Math.max(1,total));if(amount&&this.city.transfer(b.accountId,`citizen:${share.citizenId}`,amount,'Distribuição de lucros por quota de capital'))b.dividends+=amount;}}
+      if(b.balance<reserve){
+        b.financialDistressDays=(b.financialDistressDays||0)+1;
+        if(!(b.shareOffers||[]).some(o=>o.status==='open')){
+          const holders=equityShares(this.city,b).filter(s=>s.accountId!=='treasury'&&s.points>0).sort((a,z)=>z.points-a.points);
+          const holder=holders.find(s=>s.accountId===`citizen:${b.ownerId}`)||holders[0],reserved=(b.shareOffers||[]).filter(o=>o.status==='open'&&o.sellerId===holder?.accountId).reduce((n,o)=>n+o.remaining,0),available=Math.max(0,(holder?.points||0)-reserved);
+          const points=Math.min(available,b.financialDistressDays>=4?2000:500);
+          if(holder&&points){const offer=this.offerShares(b.id,holder.accountId,points,{capitalRaise:true});if(offer&&typeof offer==='object')offer.valuation=Math.max(1,Math.floor(offer.valuation*Math.max(.55,.92-Math.max(0,b.financialDistressDays-1)*.04)));}
+        }else if(b.financialDistressDays>=8){const offer=b.shareOffers.find(o=>o.status==='open'&&o.capitalRaise),holder=offer&&equityShares(this.city,b).find(s=>s.accountId===offer.sellerId);if(holder){const expansion=Math.max(0,holder.points-offer.remaining);offer.points+=expansion;offer.remaining+=expansion;offer.valuation=Math.max(1,Math.floor(offer.valuation*.8));offer.lastRepricedAt=this.city.minute;}}
+      }else b.financialDistressDays=0;
     }
     for (const owner of this.city.citizens) if (!owner.entity.destroyed && this.city.society.isAdult(owner)) {
       for (const u of this.city.units.values()) if (u.ownerId === owner.accountId && ['residential', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing'].includes(this.city.building(u.buildingId)?.type) && u.id !== owner.homeUnitId) {

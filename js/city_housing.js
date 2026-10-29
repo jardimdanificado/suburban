@@ -1,4 +1,5 @@
 import {colorAffinity,buildingColor} from './city_colors.js';
+import {DEVELOPMENT_RULES} from './city_development.js?v=landlord-stock-market-1';
 export const HOUSING_RULES = { roomPrice: 120000, roomRent: 120, livingReserve: 3000, defaultDays: 3, unsoldRentalAfter: 1440 };
 export const SOCIAL_HOUSING_TYPES = Object.freeze(['super_popular_housing','popular_housing','popular_luxury_housing']);
 export const HOUSING_TYPES = Object.freeze(['residential',...SOCIAL_HOUSING_TYPES,'luxury_housing']);
@@ -190,17 +191,66 @@ export class CityHousing {
     }
   }
   invest(initial = false) {
-    const investors = this.city.citizens.filter(c => this.city.society.isAdult(c));
+    const city=this.city,investors=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),homes=[...this.homes.values()],unhoused=investors.reduce((n,c)=>n+Number(!c.homeUnitId),0),demand=unhoused>0,targetRental=Math.max(2,Math.ceil(unhoused/4));
+    let rentalUnits=homes.filter(h=>!this.isSocial(h)&&this.units(h).every(u=>u.forRent&&!u.tenantId)).length;
+    const ownedHomes=new Map();for(const home of homes){const owner=this.units(home).find(u=>u.ownerId!=='treasury')?.ownerId;if(owner)ownedHomes.set(owner,(ownedHomes.get(owner)||0)+1);}
     for (const c of investors) {
       if (!c.homeUnitId) {
-        const home = [...this.homes.values()].sort((a,b)=>this.price(a)*(1-.25*colorAffinity(c,this.homeColor(a)))-this.price(b)*(1-.25*colorAffinity(c,this.homeColor(b)))).find(h => !this.isSocial(h) && this.units(h).every(u => u.forSale && !u.tenantId && u.ownerId !== c.accountId) && this.price(h) + 60000 < c.balance);
-        if (home && this.buyHome(c, home)) this.rentHome(c, home);
+        let home=null,best=Infinity;for(const candidate of homes){if(this.isSocial(candidate))continue;const units=this.units(candidate);if(!units.length||!units.every(u=>u.forSale&&!u.tenantId&&u.ownerId!==c.accountId))continue;const price=this.price(candidate);if(price+60000>=c.balance)continue;const score=price*(1-.25*colorAffinity(c,this.homeColor(candidate)));if(score<best){best=score;home=candidate;}}
+        if(home&&this.buyHome(c,home)&&this.rentHome(c,home))ownedHomes.set(c.accountId,(ownedHomes.get(c.accountId)||0)+1);
       }
-      const demand = this.city.citizens.some(p => !p.homeUnitId && this.city.society.isAdult(p)); if (!demand) continue;
-      for (const home of this.homes.values()) if (!this.isSocial(home) && this.units(home).every(u => u.forSale && !u.tenantId && u.ownerId !== c.accountId) && this.price(home) + (initial ? 140000 : 65000) < c.balance && this.buyHome(c, home)) {
-        for (const u of this.units(home)) { u.forRent = true; u.forSale = false; }
+      if(!demand)continue;
+      const personHomes=ownedHomes.get(c.accountId)||0;
+      const landlord=c.homeUnitId&&(c.rentalPreference>=.76||c.businessIds.length>0||c.landlordSince!=null);
+      if(!landlord||personHomes>=6||rentalUnits>=targetRental)continue;
+      for (const home of homes) {
+        const units=this.units(home),price=this.price(home);if(this.isSocial(home)||!units.length||!units.every(u=>u.forSale&&!u.tenantId&&u.ownerId!==c.accountId))continue;
+        let loan=null;
+        if(price+this.city.currency.price(65000)>c.balance){
+          const downPayment=Math.ceil(price*.25),needed=price-downPayment,banks=this.city.bank.available();
+          if(c.balance<downPayment+this.city.currency.price(HOUSING_RULES.livingReserve))continue;
+          for(const bank of banks){loan=this.city.bank.mortgage(bank,c,needed,{homeId:home.id});if(loan)break;}
+          if(!loan)continue;
+        }
+        if(this.buyHome(c,home)){
+          for(const u of units){u.forRent=true;u.forSale=false;}
+          c.landlordSince??=this.city.minute;c.landlordPortfolio??=[];if(!c.landlordPortfolio.includes(home.id))c.landlordPortfolio.push(home.id);
+          ownedHomes.set(c.accountId,personHomes+1);rentalUnits++;
+          this.city.history.record('property',`${c.entity.properties.name} comprou uma moradia para alugar${loan?' com financiamento imobiliário':''}.`,[c.accountId],{kind:'landlord-acquisition',homeId:home.id,buildingId:home.buildingId,amount:price,loanId:loan?.id||null});
+          this.city.log(`${c.entity.properties.name} entrou no mercado de aluguel e colocou ${units.length} cômodos disponíveis.`, 'housing',[c.id],{kind:'landlord-acquisition',homeId:home.id,buildingId:home.buildingId,units:units.length,loanId:loan?.id||null});
+          break;
+        }
+        if(loan)this.city.bank.cancelMortgage(loan);
       }
     }
+    this.developRentalProperty();
+  }
+  developRentalProperty(){
+    const city=this.city,unhoused=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.homeUnitId).length;
+    if(!unhoused||this.lastRentalDevelopmentDay===city.day)return false;
+    const vacant=[...this.homes.values()].filter(h=>!this.isSocial(h)&&this.units(h).every(u=>!u.tenantId&&(u.forRent||u.forSale))).length;
+    const planned=city.development.projects.filter(p=>p.type==='residential'&&!p.cancelled&&p.status!=='completed').length;
+    if(unhoused<=vacant+planned)return false;
+    this.lastRentalDevelopmentDay=city.day;
+    const investors=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.homeUnitId&&(c.landlordSince!=null||c.rentalPreference>=.89||c.businessIds.length&&c.rentalPreference>=.78))
+      .filter(c=>c.creditAllowed!==false&&!city.politics.officeHolder(c)&&[...this.homes.values()].filter(h=>this.units(h).some(u=>u.ownerId===c.accountId)).length<3)
+      .sort((a,b)=>((b.skills.management||0)+b.rentalPreference*30+b.balance/100000)-((a.skills.management||0)+a.rentalPreference*30+a.balance/100000)||a.id-b.id);
+    const plots=city.development.plots.filter(p=>p.ownerId==='treasury'&&p.forSale&&!p.buildingId&&!p.projectId&&p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&!['farm','quarry'].includes(p.type)).sort((a,b)=>Math.abs(a.width*a.depth-4)-Math.abs(b.width*b.depth-4)||a.price-b.price);
+    for(const owner of investors)for(const plot of plots){
+      const width=Math.min(2,plot.width),depth=Math.min(2,plot.depth),floors=2,cells=width*depth*floors,stone=cells*DEVELOPMENT_RULES.stonePerCell;
+      const constructionFee=cells*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell),materialBudget=stone*city.economy.goods.pedra.price+city.currency.price(24000);
+      const budget=plot.price+stone*city.economy.goods.pedra.price+constructionFee+city.currency.price(20000)+materialBudget;
+      let loan=null;const deficit=Math.max(0,budget-owner.balance);
+      if(deficit){city.bank.developmentBanks();for(const bank of city.bank.available()){loan=city.bank.lendForBusiness(bank,owner,deficit,{type:'residential',score:82,budget});if(loan)break;}if(!loan)continue;}
+      if(!city.development.buyPlot(owner.accountId,plot.id)){if(loan)city.bank.cancelBusinessLoan(loan);continue;}
+      const project=city.development.beginProject(owner.accountId,plot.id,'residential',{width,depth,floors,sell:false,priority:65});
+      if(!project){city.transfer('treasury',owner.accountId,plot.price,'Estorno de terreno: projeto de aluguel não iniciado');plot.ownerId='treasury';plot.forSale=true;if(loan)city.bank.cancelBusinessLoan(loan);continue;}
+      project.landlordDevelopment=true;project.priority=65;
+      if(loan){loan.projectId=project.id;loan.propertyDevelopment=true;loan.purpose='mortgage';loan.installments=1440;loan.dailyPayment=Math.ceil(loan.remaining/1440);loan.rate=.00015;project.loanId=loan.id;}
+      owner.landlordSince??=city.minute;city.history.record('property','Investidor financiou uma construção residencial para oferecer novos aluguéis.',[owner.accountId,loan?.bankId?`business:${loan.bankId}`:null].filter(Boolean),{kind:'landlord-development',projectId:project.id,plotId:plot.id,amount:budget,loanId:loan?.id||null});
+      city.log(`${owner.entity.properties.name} financiou um prédio residencial para ampliar a oferta de aluguel.`, 'housing',[owner.id],{kind:'landlord-development',projectId:project.id,plotId:plot.id,loanId:loan?.id||null,floors});return true;
+    }
+    return false;
   }
   collectRent() {
     const handled = new Set();

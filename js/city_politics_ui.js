@@ -1,5 +1,5 @@
 import {TAX_CATEGORIES,taxRate} from './city_sales_tax.js';
-import {equityShares} from './city_equity.js';
+import {equityShares} from './city_equity.js?v=landlord-stock-market-1';
 import {contextActions} from './city_context_actions.js';
 import {describePoliticalOrientation} from './city_ideology.js';
 import {electoralPriorities} from './city_electoral_behavior.js';

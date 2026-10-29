@@ -1,6 +1,6 @@
 import {headquartersAccount} from './city_party_headquarters.js?v=party-caps-skin-1';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {equityShares} from './city_equity.js';
+import {equityShares} from './city_equity.js?v=landlord-stock-market-1';
 
 // A room's tenant controls its window; an owner only controls an unoccupied room.
 function windowController(city,u){

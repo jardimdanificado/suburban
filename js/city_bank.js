@@ -46,6 +46,19 @@ export class CityBank {
     city.history.record('credit', `Crédito aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount, rate:loan.rate, loanId:loan.id });
     return loan;
   }
+  mortgage(bank,buyer,amount,{homeId}={}){
+    const city=this.city,home=city.housing.homes.get(homeId),units=home&&city.housing.units(home),value=home&&city.housing.price(home);
+    if(!this.policy.creditEnabled||!this.available().includes(bank)||!buyer||buyer.entity.destroyed||buyer.creditAllowed===false||!city.society.isAdult(buyer)||!home||city.housing.isSocial(home)||!units?.length||units.some(u=>!u.forSale||u.tenantId)||!Number.isSafeInteger(amount)||amount<=0||amount>Math.floor(value*.75))return null;
+    if(this.loans.some(l=>l.clientId===buyer.accountId&&l.collateralHomeId===homeId&&!['paid','written-off'].includes(l.status))||this.loans.filter(l=>l.clientId===buyer.accountId&&l.purpose==='mortgage'&&!['paid','written-off','foreclosed'].includes(l.status)).length>=3)return null;
+    const reserve=Math.max(city.currency.price(20000),bank.workers.length*bank.wage*480),cash=Math.max(0,bank.balance-reserve);
+    if(amount>cash||!city.transfer(bank.accountId,buyer.accountId,amount,'Financiamento imobiliário para aquisição de imóvel',{homeId,loanId:this.nextId}))return null;
+    const loan={id:this.nextId++,bankId:bank.id,clientId:buyer.accountId,purpose:'mortgage',collateralHomeId:homeId,collateralHomeIds:[homeId],principal:amount,remaining:amount,interest:0,rate:.00015,installments:1440,dailyPayment:Math.ceil(amount/1440),dueDay:city.day+1,missed:0,status:'active',startedAt:city.minute,paid:0};
+    this.loans.push(loan);city.history.record('credit','Financiamento imobiliário aprovado com o imóvel como garantia.',[buyer.accountId,bank.accountId],{loanId:loan.id,homeId,amount,collateralValue:value,downPayment:Math.max(0,value-amount)});return loan;
+  }
+  cancelMortgage(loan){
+    const bank=this.city.building(loan?.bankId);if(!bank||loan.purpose!=='mortgage'||!this.city.transfer(loan.clientId,bank.accountId,loan.remaining+loan.interest,'Cancelamento de financiamento imobiliário'))return false;
+    loan.remaining=0;loan.interest=0;loan.status='paid';loan.cancelled=true;return true;
+  }
   businessRefusal(reason,proposal){this.lastBusinessRefusal={minute:this.city.minute,type:proposal?.type,crop:proposal?.crop??null,reason};return false;}
   initialChainCredit(proposal){
     if(!proposal?.initialChain||!this.city.buildingTypes[proposal.type])return false;
@@ -117,8 +130,8 @@ export class CityBank {
   }
   daily() {
     const city = this.city;
-    for (const loan of this.loans.filter(l => l.status !== 'paid' && l.status !== 'written-off' && l.dueDay <= city.day)) {
-      if(loan.purpose==='business' && loan.projectId){const project=city.development.projects.find(p=>p.id===loan.projectId);if(project && !project.cancelled && project.status!=='completed'){loan.dueDay=city.day+1;continue;}}
+    for (const loan of this.loans.filter(l => !['paid','written-off','foreclosed'].includes(l.status) && l.dueDay <= city.day)) {
+      if((loan.purpose==='business'||loan.propertyDevelopment)&&loan.projectId){const project=city.development.projects.find(p=>p.id===loan.projectId);if(project && !project.cancelled && project.status!=='completed'){loan.dueDay=city.day+1;continue;}}
       if(loan.initialChain&&loan.operatingStartedAt==null){const project=city.development.projects.find(p=>p.id===loan.projectId);if(project?.status==='completed'){loan.operatingStartedAt=project.completedAt??city.minute;loan.dueDay=city.day+(loan.graceDays||14);continue;}}
       const bank = city.building(loan.bankId), client = city.accounts.get(loan.clientId);
       if (!bank || !client) continue;
@@ -135,6 +148,12 @@ export class CityBank {
       else city.reputation.observe(loan.clientId,'credit',-.75,'parcela incompleta ou em atraso',{loanId:loan.id,due,amount:payment});
       loan.missed = payment < due ? loan.missed+1 : 0;
       loan.status = loan.remaining+loan.interest === 0 ? 'paid' : loan.missed >= 3 ? 'arrears' : 'active';
+      if(loan.purpose==='mortgage'&&loan.missed>=7&&loan.remaining+loan.interest>0){
+        const homes=(loan.collateralHomeIds||[loan.collateralHomeId]).map(id=>city.housing.homes.get(id)).filter(Boolean),units=homes.flatMap(home=>city.housing.units(home));
+        for(const u of units){u.ownerId=bank.accountId;u.forSale=!u.tenantId;u.forRent=true;}
+        const collateralValue=homes.reduce((sum,home)=>sum+city.housing.price(home),0),recovery=Math.min(loan.remaining+loan.interest,collateralValue),loss=Math.max(0,loan.remaining+loan.interest-recovery);bank.totalExpenses=(bank.totalExpenses||0)+loss;
+        loan.remaining=0;loan.interest=0;loan.status='foreclosed';city.log(`O banco retomou ${homes.length?city.building(homes[0].buildingId)?.entity.properties.name||'o imóvel':'a garantia imobiliária'} após inadimplência prolongada.`, 'credit',[loan.clientId],{kind:'mortgage-foreclosure',loanId:loan.id,homeIds:loan.collateralHomeIds||[loan.collateralHomeId],recoveredValue:recovery,loss});
+      }
       if (loan.status === 'paid') city.history.record('credit','Empréstimo quitado.',[loan.clientId,bank.accountId],{loanId:loan.id,amount:loan.paid});
       loan.dueDay = city.day+1;
     }

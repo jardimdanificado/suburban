@@ -1,9 +1,9 @@
 import {roomFurnitureForCity} from './city_furniture_catalog.js';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
-import {equityShares,equityValue} from './city_equity.js';
+import {equityShares,equityValue} from './city_equity.js?v=landlord-stock-market-1';
 import {contextActions} from './city_context_actions.js';
-import {renderMarket} from './city_wealth_ui.js';
+import {renderMarket} from './city_wealth_ui.js?v=landlord-stock-market-1';
 import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './city_paint_ui.js';
 import {colorName} from './city_colors.js';
 import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.js';
@@ -21,7 +21,7 @@ import {renderGovernmentDashboard} from './city_ui_dashboard.js';
 import {ROTATION_LABELS} from './city_building_geometry.js';
 import { renderPublications } from './city_publications_ui.js';
 import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases } from './city_corruption_ui.js';
-import {renderEventInspector} from './city_event_inspector.js?v=highspeed-optimization-1';
+import {renderEventInspector} from './city_event_inspector.js?v=landlord-stock-market-1';
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
@@ -37,10 +37,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=furniture-farms-fertilizer-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=landlord-stock-market-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=highspeed-optimization-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=highspeed-optimization-1';
+import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=landlord-stock-market-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=landlord-stock-market-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -56,7 +56,7 @@ const TABS = [
   ['log', 'HISTÓRICO', 'VIDA URBANA', 'Os acontecimentos e as decisões de cada pessoa.'],
 ];
 const VIEWS = {
-  market: [['overview','PANORAMA'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS']],
+  market: [['overview','PANORAMA'],['shares','AÇÕES'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS']],
   economy: [['overview','EMPRESAS'],['vacancies','VAGAS'],['applications','SELEÇÕES'],['workers','FUNCIONÁRIOS']],
   city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['analysis','ANÁLISES'], ['nature','VEGETAÇÃO']],
   government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
@@ -254,7 +254,7 @@ export class CityUI {
       const rows=this.cachedList('people',()=>{const rows=city.citizens.filter(c=>this.matches(`${name(c.entity)} ${c.action} ${c.profession}`)).filter(c=>filter==='all'||filter==='homeless'&&!c.homeUnitId||filter==='unemployed'&&city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length||filter==='critical'&&Math.min(...Object.values(c.needs))<20||filter==='food'&&c.needs.food<30||filter==='children'&&!city.society.isAdult(c));
       rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:sort==='needs'?Math.min(...Object.values(a.needs))-Math.min(...Object.values(b.needs)):name(a.entity).localeCompare(name(b.entity),'pt-BR'));return rows;});
       p.note(`${rows.length} resultados`,C.muted);
-      p.rows(rows,c=>{const critical=Math.min(...Object.values(c.needs))<20,role=c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.id===city.politics.viceMayorId?'Vice-prefeito':!city.society.isAdult(c)?'Criança':c.businessIds.length?'Empresário':city.building(c.jobId)?.entity.properties.name||'Sem trabalho';
+      p.rows(rows,c=>{const critical=Math.min(...Object.values(c.needs))<20,role=c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.id===city.politics.viceMayorId?'Vice-prefeito':!city.society.isAdult(c)?'Criança':c.landlordSince!=null?'Locador':c.businessIds.length?'Empresário':city.building(c.jobId)?.entity.properties.name||'Sem trabalho';
         p.record(name(c.entity),`${city.society.age(c)} anos · ${c.homeUnitId?role:'Sem casa · '+role}`,()=>this.openCitizen(c.id),this.selected?.id===c.id,{value:money(c.balance),color:critical?C.red:!c.homeUnitId?C.gold:C.green});
       });
       if(!rows.length)p.note('Nenhuma pessoa com estes filtros.');
@@ -284,7 +284,7 @@ export class CityUI {
   }
   citizen(p, c) {
     const city = this.city, society = city.society;
-    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
+    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.landlordSince!=null?'Locador / investidor imobiliário':c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     if(this.host?.controls.observe){const active=this.host.controls.observation?.();p.buttons([{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',c.id)},...(active? [{label:'SAIR DA CÂMERA',click:()=>this.host.controls.observe('off')}]:[])]);}
     if(this.host?.controls.observation?.())p.note('Arraste para olhar ao redor. Na 3ª pessoa, use a roda ou pinça para aproximar. Esc sai da câmera.');
@@ -354,6 +354,9 @@ export class CityUI {
       const units = [...city.units.values()].filter(u => u.ownerId === c.accountId);
       p.kv('Imóveis próprios', units.length); p.kv('Valor anunciado total', money(units.reduce((s, u) => s + u.price, 0)));
       p.kv('Aluguel contratado/dia', money(units.filter(u => u.tenantId && u.tenantId !== c.accountId).reduce((s, u) => s + u.rent, 0)));
+      const rentals=[...city.housing.homes.values()].filter(h=>city.housing.units(h).some(u=>u.ownerId===c.accountId&&(u.forRent||u.tenantId&&u.tenantId!==c.accountId)));
+      const rentalProjects=city.development.projects.filter(project=>project.landlordDevelopment&&project.ownerId===c.id&&!project.cancelled&&project.status!=='completed');
+      if(rentals.length||rentalProjects.length){p.heading('CARTEIRA DE LOCAÇÃO');p.kv('Perfil','Locador / investidor imobiliário');p.kv('Moradias de investimento',rentals.length);p.kv('Receita de aluguel/dia',money(rentals.reduce((n,h)=>n+city.housing.units(h).filter(u=>u.ownerId===c.accountId&&u.tenantId&&u.tenantId!==c.accountId).reduce((s,u)=>s+u.rent,0),0)));p.kv('Unidades vagas',rentals.reduce((n,h)=>n+city.housing.units(h).filter(u=>u.ownerId===c.accountId&&!u.tenantId&&u.forRent).length,0));for(const home of rentals.slice(0,8)){const building=city.building(home.buildingId);if(building)p.button(`${building.entity.properties.name} · ${city.housing.units(home).length} cômodos`,()=>this.openBuilding(building.id));}for(const project of rentalProjects)p.record(`Obra de locação ${project.id}`,`${project.floors} andares · ${project.materialStatus||project.status} · crédito ${money(city.bank.loans.find(loan=>loan.id===project.loanId)?.remaining||0)}`,()=>this.openPanel({tab:'land',views:{land:'projects'}}));}
       const banks=city.buildings.filter(b=>b.type==='bank' && !b.entity.destroyed);
       for(const bank of banks) {
         const deposit=city.bank.deposits.get(`deposit:${bank.id}:${c.accountId}`);
@@ -361,10 +364,10 @@ export class CityUI {
         p.buttons([{label:'DEPOSITAR R$ 100',click:()=>{if(!city.bank.deposit(bank,c.accountId,10000))this.notice='Depósito indisponível: confira saldo e operação do banco.';}},{label:'SACAR DEPÓSITO',click:()=>city.bank.withdraw(bank,c.accountId,deposit?.balance||0)},{label:'PEDIR R$ 100',click:()=>{if(!city.bank.lend(bank,c.accountId,10000))this.notice='Crédito indisponível: é preciso ter renda, limite e caixa no banco.';}}]);
       }
       for(const loan of city.bank.loans.filter(l=>l.clientId===c.accountId)) {
-        p.heading(`EMPRÉSTIMO ${loan.id}`);p.kv('Finalidade',loan.purpose==='business'?`Abertura de empresa / ${loan.installments||180} parcelas`:'Subsistência / 30 parcelas');if(loan.projectId)p.kv('Obra financiada',loan.projectId);p.kv('Banco',city.accountName(`business:${loan.bankId}`));
+        p.heading(`EMPRÉSTIMO ${loan.id}`);p.kv('Finalidade',loan.propertyDevelopment?'Construção de moradia para aluguel':loan.purpose==='business'?`Abertura de empresa / ${loan.installments||180} parcelas`:loan.purpose==='mortgage'?'Financiamento imobiliário':'Subsistência / 30 parcelas');if(loan.projectId)p.kv('Obra financiada',loan.projectId);if(loan.collateralHomeIds?.length)p.kv('Moradias em garantia',loan.collateralHomeIds.length);else if(loan.collateralHomeId)p.kv('Imóvel em garantia',loan.collateralHomeId);p.kv('Banco',city.accountName(`business:${loan.bankId}`));
         if(loan.initialChain){p.kv('Linha de crédito','Primeira instalação da cadeia produtiva');p.kv('Carência',loan.operatingStartedAt==null?'Durante a construção':city.day<loan.dueDay&&loan.paid===0?`Até o dia ${loan.dueDay}`:`${loan.graceDays} dias após a abertura`);p.kv('Recursos do refinanciamento municipal',money(loan.publicRefinance||0));}
         p.kv('Principal a pagar',money(loan.remaining));p.kv('Juros pendentes',money(loan.interest));p.kv('Total pago',money(loan.paid));p.kv('Parcela de principal/dia',money(loan.dailyPayment));p.kv('Dias consecutivos em atraso',loan.missed);
-        p.kv('Contrato',({active:'Ativo',paid:'Quitado',arrears:'Em atraso','written-off':'Encerrado com perda'})[loan.status]);p.kv('Taxa contratada/dia',`${(loan.rate*100).toFixed(2)}%`);
+        p.kv('Contrato',({active:'Ativo',paid:'Quitado',arrears:'Em atraso',foreclosed:'Garantia retomada; dívida encerrada','written-off':'Encerrado com perda'})[loan.status]);p.kv('Taxa contratada/dia',`${(loan.rate*100).toFixed(2)}%`);
       }
       p.heading('EMPRESAS'); for (const id of c.businessIds) { const b = city.building(id); if (b) p.button(name(b.entity), () => this.openBuilding(id)); }
       p.heading('MOVIMENTAÇÕES RECENTES'); this.transactions(p, c.accountId);

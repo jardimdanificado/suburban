@@ -1,6 +1,6 @@
 import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=toilet-staff-only-1';
 import { inventoryFree } from './city_inventory.js';
-import { HOUSING_TYPES } from './city_housing.js';
+import { HOUSING_TYPES } from './city_housing.js?v=landlord-stock-market-1';
 import { reserveService } from './city_service_queue.js?v=furniture-farms-fertilizer-1';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));

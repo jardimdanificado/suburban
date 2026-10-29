@@ -411,6 +411,7 @@ export class CityDevelopment {
     if (!b) { project.status = 'blocked'; project.error = city.lastError; return null; }
     city.reputation.completed(city.building(project.builderId), null, 'edifício concluído', {projectId:project.id});
     p.buildingId = b.id; p.projectId = null; project.status = 'completed'; project.error = null; project.completedAt = city.minute;
+    if(project.landlordDevelopment&&project.loanId){const loan=city.bank.loans.find(item=>item.id===project.loanId);if(loan){loan.collateralHomeIds=[...city.housing.homes.values()].filter(home=>home.buildingId===b.id).map(home=>home.id);loan.collateralHomeId=loan.collateralHomeIds[0]||null;}}
     city.transfer(project.feeAccountId, this.city.building(project.builderId)?.accountId || project.accountId, project.fee, 'Serviço de construção', {projectId:project.id});
     const account = city.accounts.get(project.accountId); if (account?.entity?.properties.cityBuilding) account.totalExpenses += project.fee;
     if(project.materialAccountId)city.transfer(project.materialAccountId,b.accountId,city.accounts.get(project.materialAccountId)?.balance||0,'Capital operacional reservado da nova empresa');

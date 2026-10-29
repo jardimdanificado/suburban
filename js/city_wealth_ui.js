@@ -1,5 +1,6 @@
 import {wealthReport} from './city_wealth.js';
 import {formatMoney as money} from './city_ui_format.js';
+import {equityShares,equityValue} from './city_equity.js?v=landlord-stock-market-1';
 const kinds={cash:'Caixa',savings:'Poupança',reserved:'Reservas',inventory:'Estoques',property:'Imóveis',land:'Terrenos',vehicles:'Bicicletas e patinetes',durables:'Bens pessoais',receivables:'A receber',debt:'Dívidas'};
 const salesKinds={retail:'Varejo',wholesale:'Atacado',service:'Serviços',property:'Imóveis',rent:'Aluguéis'};
 const stamp=m=>`D${Math.floor(m/1440)+1} ${String(Math.floor(m%1440/60)).padStart(2,'0')}:${String(Math.floor(m%60)).padStart(2,'0')}`;
@@ -15,7 +16,7 @@ function accountLink(ui,p,r){p.button(r.name,()=>detail(ui,{wealthAccountId:r.id
 function assetRows(ui,p,report,assets){pages(ui,p,assets.map(a=>({...a,name:a.label,search:`${a.label} ${a.location} ${ui.city.accountName(a.ownerId)}`})),a=>p.record(a.label,`${kinds[a.kind]} · ${a.location} · ${ui.city.accountName(a.ownerId)}`,()=>detail(ui,{wealthAccountId:a.ownerId}),false,{value:money(a.value)}));}
 function saleRows(ui,p,rows){pages(ui,p,rows.map(r=>({...r,search:`${r.buyerName} ${r.sellerName} ${r.reason}`})),r=>p.record(`${stamp(r.minute)} · ${r.reason}`,`${r.buyerName} → ${r.sellerName}`,()=>detail(ui,{marketSaleId:r.id}),false,{value:money(r.amount)}));}
 export function renderMarket(ui,p){
- const city=ui.city,r=wealthReport(city),openAccount=id=>detail(ui,{wealthAccountId:id});
+ const city=ui.city,view=ui.view(),r=view==='shares'?null:wealthReport(city),openAccount=id=>detail(ui,{wealthAccountId:id});
  if(ui.wealthAccountId!=null){
   const direct=r.direct.get(ui.wealthAccountId),owner=r.owners.get(ui.wealthAccountId),a=direct||owner;if(!a){p.note('Conta não encontrada.');return;}
   p.button('‹ VOLTAR AO MERCADO',()=>detail(ui,{}));p.heading(a.name);p.metrics([['Caixa próprio',money(a.cash)],['Poupança',money(a.savings)],['Patrimônio líquido direto',money(a.net)],['Com participações',money(owner?.net??a.net)]]);
@@ -31,7 +32,29 @@ export function renderMarket(ui,p){
  if(ui.wealthLocationId!=null){const place=r.locations.find(l=>l.id===ui.wealthLocationId);p.button('‹ VOLTAR',()=>detail(ui,{}));if(!place){p.note('Local sem bens registrados.');return;}p.heading(place.name);p.kv('Valor dos bens neste local',money(place.value));if(Number.isFinite(place.x)&&Number.isFinite(place.y))p.button('LOCALIZAR',()=>ui.camera(place.x,place.y));assetRows(ui,p,r,place.assets.map(id=>r.assets[id]));return;}
  if(ui.wealthGoodId!=null){const g=r.goods.find(g=>g.good===ui.wealthGoodId),spec=city.economy.goods[ui.wealthGoodId];p.button('‹ VOLTAR',()=>detail(ui,{}));p.heading(spec.label);p.kv('Preço atual por unidade',money(spec.price));p.kv('Quantidade física registrada',g?.quantity||0);pages(ui,p,(g?.holders||[]).map(h=>({...h,name:h.location,search:`${h.location} ${city.accountName(h.ownerId)}`})),h=>p.record(h.location,`${city.accountName(h.ownerId)} · ${h.quantity} unidades`,()=>openAccount(h.ownerId),false,{value:money(h.value)}));return;}
  if(ui.marketSaleId!=null){const s=r.sales.find(s=>s.id===ui.marketSaleId);p.button('‹ VOLTAR',()=>detail(ui,{}));if(!s){p.note('Venda fora da janela de registros retidos.');return;}p.heading(s.reason);p.kv('Quando',stamp(s.minute));p.kv('Tipo',salesKinds[s.kind]);p.kv('Valor pago',money(s.amount));accountLink(ui,p,{id:s.buyer,name:`Comprador: ${s.buyerName}`});accountLink(ui,p,{id:s.seller,name:`Vendedor: ${s.sellerName}`});if(s.good)p.kv('Produto',city.economy.goods[s.good]?.label||s.good);if(s.quantity!=null)p.kv('Quantidade',s.quantity);if(s.buildingId!=null)p.button('VER IMÓVEL / EMPRESA',()=>ui.openBuilding(s.buildingId));if(s.eventId)p.button('INSPECIONAR EVENTO',()=>ui.openEvent(s.eventId));if(s.shipmentId)p.button(`VER FRETE #${s.shipmentId}`,()=>ui.openPanel({tab:'transport',selectedShipmentId:s.shipmentId,views:{transport:'active'}}));return;}
- const view=ui.view();
+ if(view==='shares'){
+  const firms=city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&b.type!=='mint').map(b=>({b,value:equityValue(city,b),shares:equityShares(city,b),offers:(b.shareOffers||[]).filter(o=>o.status==='open')})).sort((a,b)=>b.value-a.value);
+  const openOffers=firms.flatMap(({b,offers})=>offers.map(offer=>({b,offer}))).sort((a,b)=>a.offer.createdAt-b.offer.createdAt);
+  const trades=city.economy.businesses.flatMap(b=>(b.shareHistory||[]).filter(t=>city.minute-t.minute<=1440).map(t=>({...t,b}))).sort((a,b)=>b.minute-a.minute);
+  p.heading('BOLSA DA CIDADE');p.note('Participações são negociadas entre investidores; a avaliação varia com imóveis, caixa, estoque e dívidas. Compras automáticas respeitam reservas pessoais e não garantem liquidez.');
+  p.metrics([['Empresas acompanhadas',firms.length],['Ofertas abertas',openOffers.length],['Negociações nas últimas 24 h',trades.length]]);
+  p.heading('OFERTAS DISPONÍVEIS');
+  for(const {b,offer} of openOffers.slice(0,30)){
+   const points=Math.min(500,offer.remaining),price=Math.max(1,Math.ceil(offer.valuation*points/10000));
+   p.record(`${b.entity.properties.name} · ${(offer.remaining/100).toFixed(2)}%`,`${offer.capitalRaise?'Captação para o caixa da empresa':offer.marketFloat?'Oferta periódica de mercado':'Venda do acionista'} · ${city.accountName(offer.sellerId)} pede ${money(Math.ceil(offer.valuation/100))} por 1% · avaliação ${money(offer.valuation)}`,()=>ui.openBuilding(b.id),false,{value:money(price)});
+   const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.accountId!==offer.sellerId&&c.balance>=price+city.currency.price(20000)).sort((a,z)=>z.balance-a.balance||a.id-z.id).slice(0,3);
+   for(const buyer of buyers)p.button(`COMPRAR ${(points/100).toFixed(2)}% · ${city.accountName(buyer.accountId)} · ${money(price)}`,()=>{const result=city.economy.buyShares(b.id,offer.id,buyer.accountId,points);ui.notice=result?'Participação comprada.':city.lastError||'Oferta indisponível.';});
+  }
+  if(!openOffers.length)p.note('Nenhuma participação está à venda agora. Empresas saudáveis e proprietários com liquidez baixa podem abrir ofertas ao longo do tempo.');
+  p.heading('EMPRESAS ACOMPANHADAS');
+  for(const row of firms.slice(0,40)){
+   const publicPoints=row.shares.find(s=>s.accountId==='treasury')?.points||0,ownerCount=row.shares.filter(s=>s.accountId!=='treasury').length,dayVolume=trades.filter(t=>t.b.id===row.b.id).reduce((n,t)=>n+(t.price||0),0);
+   p.record(row.b.entity.properties.name,`${ownerCount} acionista(s) · ${(publicPoints/100).toFixed(1)}% público · ${row.offers.length} oferta(s) · volume D${Math.floor(city.minute/1440)+1}: ${money(dayVolume)}`,()=>ui.openBuilding(row.b.id),false,{value:money(row.value)});
+  }
+  p.heading('NEGOCIAÇÕES RECENTES');
+  for(const trade of trades.slice(0,20))p.record(trade.b.entity.properties.name,`${stamp(trade.minute)} · ${city.accountName(trade.from)} → ${city.accountName(trade.to)} · ${(trade.points/100).toFixed(2)}%`,()=>ui.openBuilding(trade.b.id),false,{value:money(trade.price||0)});
+  return;
+ }
  if(view==='people'||view==='companies'){
   p.heading(view==='people'?'RIQUEZA DOS CIDADÃOS':'PATRIMÔNIO DAS EMPRESAS');p.note(view==='people'?'Patrimônio líquido inclui bens próprios e participações nas empresas, descontadas as dívidas.':'Valores diretos das empresas. Seus sócios já recebem a participação correspondente no ranking das pessoas.');
   pages(ui,p,view==='people'?r.people:r.companies,a=>p.record(a.name,`Caixa ${money(r.direct.get(a.id)?.cash||0)} · dívidas ${money(a.debt)}${a.companyEquity?` · empresas ${money(a.companyEquity)}`:''}`,()=>openAccount(a.id),false,{value:money(a.net)}));return;
