@@ -22,7 +22,7 @@ import { CityGovernment as CityPolitics } from './city_government.js?v=needs-rec
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=public-cleaning-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-directions-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
@@ -32,7 +32,7 @@ import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
 import { CitySanitation } from './city_sanitation.js?v=public-cleaning-1';
 import { CityLife } from './city_life.js?v=needs-performance-1';
-import { CityWorkMeals } from './city_work_meals.js?v=public-cleaning-1';
+import { CityWorkMeals } from './city_work_meals.js?v=basic-services-analytics-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=interiors-completion-2';
 import { CityLogistics } from './city_logistics.js?v=interiors-completion-2';
 import { inventoryFree } from './city_inventory.js';
@@ -324,6 +324,21 @@ export class CitySimulation {
     if (typeof settings.creditAllowed === 'boolean') c.creditAllowed = settings.creditAllowed;
     return true;
   }
+  setWorkplaceDiningFloor(buildingId,floor,enabled=true){
+    const b=this.building(buildingId);if(!b||!Number.isInteger(floor)||floor<0||floor>=b.floors)return this.fail('Andar inválido para instalar o refeitório.');
+    const rooms=b.units.filter(u=>u.z===floor),area=b.width*b.depth;
+    if(rooms.length!==area)return this.fail('O refeitório precisa ocupar todas as células de um andar completo.');
+    if(enabled){
+      if(!rooms.every(u=>u.roomType==='workspace'))return this.fail('Escolha um andar livre de banheiros e outros espaços especializados.');
+      for(const u of rooms)u.roomType='dining';
+    }else{
+      if(!rooms.every(u=>u.roomType==='dining'))return this.fail('Esse andar não é um refeitório completo.');
+      for(const u of rooms)u.roomType='workspace';
+    }
+    b.layoutRevision=(b.layoutRevision||0)+1;this.structureRevision++;this.reconciledRevision=null;
+    this.log(`${b.entity.properties.name} ${enabled?'passou a oferecer um andar completo de refeitório':'encerrou o refeitório no local'}.`,'economy',[b.ownerId].filter(Boolean),{kind:'workplace-dining-policy',buildingId:b.id,floor,enabled});
+    return true;
+  }
   setPolicies(policies, message) {
     for (const scope of ['currency', 'bank', 'welfare']) if (policies[scope]) Object.assign(this[scope].policy, policies[scope]);
     if (Number.isFinite(policies.taxRate)) this.taxRate = Math.max(-.5, Math.min(.5, policies.taxRate));
@@ -412,8 +427,12 @@ export class CitySimulation {
   }
   urgentNeed(c) {
     // Exhaustion and a dirty bathroom must not postpone treatment until health
-    // reaches zero: rural citizens still need time to travel to a clinic.
-    if(c.needs.health<20)return 'health';
+    // reaches zero: rural citizens still need time to travel to a clinic. But
+    // an early health warning must not lock someone out of food or water when
+    // either is already critically low; restore the immediate survival need
+    // first, then resume medical care on the next decision pass.
+    const basics=Math.min(c.needs.food,c.needs.water);
+    if(c.needs.health<20&&basics>12)return 'health';
     let need,score=Infinity;
     for(const [key,threshold,penalty] of URGENT_NEEDS){const value=c.needs[key];if(value<threshold && (need===undefined || value-penalty<score)){need=key;score=value-penalty;}}
     return need;

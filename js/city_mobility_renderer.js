@@ -43,7 +43,7 @@ function syncCycleFlags(renderer,THREE,vehicles,world,entities){
   const flag=v.mountedFlag?.flag||campaign?.flag;if(!flag)continue;live.add(v.id);const key=JSON.stringify(flag);let material=renderer.cycleFlagMaterials.get(key);
    if(!material){let texture;const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});renderer.cycleFlagMaterials.set(key,material);}material.color.setScalar(flagNightFactor(world));
   let g=renderer.cycleFlags.get(v.id);if(!g){g=new THREE.Group();const pole=new THREE.Mesh(new THREE.CylinderGeometry(.015,.02,1.25,4),new THREE.MeshLambertMaterial({color:0xa5a59a}));pole.position.y=.625;g.add(pole);const cloth=new THREE.Mesh(clothFlagGeometry(THREE,.7,.44),material);cloth.position.set(.35,1.05,0);g.add(cloth);g.userData.cloth=cloth;renderer.scene.add(g);renderer.cycleFlags.set(v.id,g);}
-   g.userData.cloth.material=material;animateClothFlag(g.userData.cloth,flagWindTime(renderer),(v.id||0)*.91);g.position.set(e.x,surfaceElevation(world,e.x,e.y)+.25,e.y);g.rotation.y=v.angle||0;
+   g.userData.cloth.material=material;animateClothFlag(g.userData.cloth,flagWindTime(renderer),0);g.position.set(e.x,surfaceElevation(world,e.x,e.y)+.25,e.y);g.rotation.y=0;
  }
  for(const [id,g]of renderer.cycleFlags)if(!live.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();if(o.material&&!o.material.map)o.material.dispose();});renderer.cycleFlags.delete(id);}
 }

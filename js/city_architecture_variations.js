@@ -13,22 +13,32 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[]){
  const box=(w,h,d,x,y,z,color)=>{if(w<=0||h<=0||d<=0)return;const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;root.add(m);return m;};
  const cylinder=(r,h,x,y,z,color)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),mat(color));m.position.set(x,y,z);m.castShadow=true;root.add(m);return m;};
  const style=HOUSE_STYLES[b.architecture]||HOUSE_STYLES.modern,roofColor=style.roof,wood=0x80644b,metal=0x52656a,cream=0xe3d8bb,green=0x59834e,clay=0xb77856,roof=b.floors*CITY_FLOOR_HEIGHT,front=b.depth;
- const balcony=(floor,x,width,depth,planters=false)=>{
-  const y=floor*CITY_FLOOR_HEIGHT,edge=front+depth;
-  box(width,.13,depth+.08,x,y+.06,front+depth/2,roofColor);
-  box(width,.085,.07,x,y+.7,edge,metal);
-  box(.07,.68,depth,x-width/2+.04,y+.37,front+depth/2,metal);box(.07,.68,depth,x+width/2-.04,y+.37,front+depth/2,metal);
-  for(let n=0;n<=Math.floor(width/.5);n++)box(.045,.64,.045,x-width/2+n*width/Math.max(1,Math.floor(width/.5)),y+.37,edge,metal);
-  if(planters){for(const dx of [-width*.28,width*.28]){box(.38,.22,.24,x+dx,y+.19,edge-.12,clay);box(.32,.3,.22,x+dx,y+.43,edge-.12,green);}}
+ const balcony=space=>{
+  const {floor,side,along,width,depth,planters}=space,y=floor*CITY_FLOOR_HEIGHT,axisX=side==='front'||side==='back',normal=side==='front'?1:side==='back'?-1:side==='left'?-1:1;
+  const wall=side==='front'?b.depth:side==='back'?0:side==='left'?0:b.width,center=wall+normal*depth/2,edge=wall+normal*(depth+.04);
+  if(axisX){box(width,.13,depth+.08,along,y+.06,center,roofColor);box(width,.085,.07,along,y+.7,edge,metal);
+   for(const dx of [-width/2+.04,width/2-.04])box(.07,.68,depth,along+dx,y+.37,wall+normal*depth/2,metal);
+   const count=Math.floor(width/.5);for(let n=0;n<=count;n++)box(.045,.64,.045,along-width/2+n*width/Math.max(1,count),y+.37,edge,metal);
+   if(planters)for(const dx of [-width*.28,width*.28]){box(.38,.22,.24,along+dx,y+.19,wall+normal*(depth-.12),clay);box(.32,.3,.22,along+dx,y+.43,wall+normal*(depth-.12),green);}
+  }else{box(depth+.08,.13,width,center,y+.06,along,roofColor);box(.07,.085,width,edge,y+.7,along,metal);
+   for(const dz of [-width/2+.04,width/2-.04])box(depth,.68,.07,wall+normal*depth/2,y+.37,along+dz,metal);
+   const count=Math.floor(width/.5);for(let n=0;n<=count;n++)box(.045,.64,.045,edge,y+.37,along-width/2+n*width/Math.max(1,count),metal);
+   if(planters)for(const dz of [-width*.28,width*.28]){box(.24,.22,.38,wall+normal*(depth-.12),y+.19,along+dz,clay);box(.22,.3,.32,wall+normal*(depth-.12),y+.43,along+dz,green);}
+  }
+  return {y,axisX,wall,normal};
  };
- const furnishedBalcony=space=>{balcony(space.floor,space.localX,space.width,space.depth,space.planters);const y=space.floor*CITY_FLOOR_HEIGHT;for(const dx of [-.25,.25])box(.06,1.45,.08,space.doorX+dx,y+.725,front+.04,wood);box(.55,.07,.08,space.doorX,y+1.47,front+.04,wood);const side=space.localX+(space.doorX<=space.localX?1:-1)*Math.max(.18,space.width*.3);box(.28,.35,.28,side,y+.3,front+space.depth*.66,0x8c7358);};
+ const furnishedBalcony=space=>{
+  const pos=balcony(space),{y,axisX,wall,normal}=pos,door=space.doorAlong;
+  if(axisX){for(const dx of [-.25,.25])box(.06,1.45,.08,door+dx,y+.725,wall+normal*.04,wood);box(.55,.07,.08,door,y+1.47,wall+normal*.04,wood);box(.28,.35,.28,door+(space.along<=door?1:-1)*Math.max(.18,space.width*.3),y+.3,wall+normal*space.depth*.66,0x8c7358);}
+  else{for(const dz of [-.25,.25])box(.08,1.45,.06,wall+normal*.04,y+.725,door+dz,wood);box(.08,.07,.55,wall+normal*.04,y+1.47,door,wood);box(.28,.35,.28,wall+normal*space.depth*.66,y+.3,door+(space.along<=door?1:-1)*Math.max(.18,space.width*.3),0x8c7358);}
+ };
  if(residential){
   // Several recognizable silhouettes, rather than one tiny accessory.
   for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
   // Distinct horizontal floor bands leave the window openings unobstructed.
   if(variant===2||variant===4)for(let floor=1;floor<b.floors;floor++)box(b.width+.1,.12,.16,b.width/2,floor*CITY_FLOOR_HEIGHT+.12,front+.045,variant===2?cream:roofColor);
   for(let floor=0;floor<b.floors;floor++)for(let col=0;col<b.width;col++){
-   const x=col+.5,y=floor*CITY_FLOOR_HEIGHT;if(spaces.some(s=>s.kind==='balcony'&&s.floor===floor&&Math.abs(s.doorX-x)<.1))continue;
+   const x=col+.5,y=floor*CITY_FLOOR_HEIGHT;if(spaces.some(s=>s.kind==='balcony'&&s.floor===floor&&['front','back'].includes(s.side)&&Math.abs(s.doorAlong-x)<.1))continue;
    if((col+floor+variant)%3===0){box(.52,.12,.22,x,y+.62,front+.13,clay);box(.4,.18,.18,x,y+.76,front+.14,green);}
    else if((col+variant)%4===0){const awning=box(.65,.08,.32,x,y+1.32,front+.16,variant%2?0xb97a60:0x90a6a0);if(awning)awning.rotation.x=.15;}
   }

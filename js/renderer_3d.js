@@ -4,7 +4,7 @@
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=public-cleaning-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=basic-services-analytics-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels } from './city_citizen_models.js?v=vehicle-heading-1';
 import { flagNightFactor } from './city_terrain.js?v=office-demand-rollout-1';

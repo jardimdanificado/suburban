@@ -1,5 +1,5 @@
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-directions-1';
 import {equityShares,equityValue} from './city_equity.js';
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js';
@@ -25,6 +25,7 @@ import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js';
+import { describePoliticalOrientation } from './city_ideology.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js';
 import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
@@ -38,7 +39,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=office-demand-rollout-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=sync-perf-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=office-demand-rollout-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=basic-services-analytics-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -56,12 +57,12 @@ const TABS = [
 const VIEWS = {
   market: [['overview','PANORAMA'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS']],
   economy: [['overview','EMPRESAS'],['vacancies','VAGAS'],['applications','SELEÇÕES'],['workers','FUNCIONÁRIOS']],
-  city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['nature','VEGETAÇÃO']],
+  city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['analysis','ANÁLISES'], ['nature','VEGETAÇÃO']],
   government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
   transport: [['active', 'FRETES'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
-  sanitation: [['facilities', 'BANHEIROS'], ['cleaning', 'FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
+  sanitation: [['facilities', 'BANHEIROS'], ['queues','FILAS'], ['cleaning', 'FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
 const FILTERS = {
   people: [['all','TODOS'], ['homeless','SEM CASA'], ['unemployed','SEM TRABALHO'], ['critical','EM RISCO'], ['food','COM FOME'], ['children','CRIANÇAS']],
@@ -91,9 +92,10 @@ export class CityUI {
     this.mapSizeInput=document.createElement('input');this.mapSizeInput.type='number';this.mapSizeInput.min='128';this.mapSizeInput.max='1024';this.mapSizeInput.step='1';this.mapSizeInput.value=String(city.world.width||256);this.mapSizeInput.setAttribute('aria-label','Tamanho do próximo mapa');
     this.populationInput = document.createElement('input'); this.populationInput.type = 'number'; this.populationInput.min = '1'; this.populationInput.max = '2000'; this.populationInput.step = '1'; this.populationInput.value = String(city.initialPopulation ?? 512); this.populationInput.setAttribute('aria-label', 'Número de cidadãos da próxima cidade');
     this.filterInput=document.createElement('select');this.filterInput.setAttribute('aria-label','Filtrar registros');this.filterInput.addEventListener('change',()=>this.setFilter(this.filterInput.value));
+    this.analyticsTypeInput=document.createElement('select');this.analyticsTypeInput.setAttribute('aria-label','Filtrar empresas por ramo');this.analyticsTypeInput.addEventListener('change',()=>{this.analyticsBusinessType=this.analyticsTypeInput.value;this.resetScroll();});
     this.sortInput=document.createElement('select');this.sortInput.setAttribute('aria-label','Ordenar registros');this.sortInput.addEventListener('change',()=>{this.sorts[this.tab]=this.sortInput.value;this.resetScroll();});
     this.publicationDraft=document.createElement('input');this.publicationDraft.type='text';this.publicationDraft.maxLength=1200;this.publicationDraft.placeholder='Escreva um relato, informação, anúncio ou invenção…';this.publicationDraft.setAttribute('aria-label','Conteúdo a escrever no livro ou panfleto');
-    this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput);
+    this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput);
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
   }
   resetScroll() { this.scrolls = {}; }
@@ -380,8 +382,9 @@ export class CityUI {
         p.button('VOLTAR À FACHADA',()=>this.setInteriorView(null));
       }else p.button('INSPECIONAR INTERIOR',()=>{this.camera(b.entity.x+b.width/2,b.entity.y+b.depth/2);this.setInteriorView(b.id,b.officeTenantOf?b.officeFloor:Math.min(b.floors-1,Math.max(0,this.unitId?city.units.get(this.unitId)?.z||0:0)));});
     }
-    this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['finance','FINANÇAS'], ['infrastructure','ESTRUTURA'], ['paint','PINTURA'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
+    this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['analysis','ANÁLISE'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['finance','FINANÇAS'], ['infrastructure','ESTRUTURA'], ['paint','PINTURA'], ...(b.type === 'builder' ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
     if(this.detailTab==='paint'){renderBuildingPaint(this,p,b);return;}
+    if(this.detailTab==='analysis'){this.businessAnalysis(p,b);return;}
     if (this.detailTab === 'profile') {
       contextActions(this,p,{business:b});
       if(b.type==='bike_rack'){renderParking(this,p);return;}
@@ -557,10 +560,76 @@ export class CityUI {
     const d=rows.find(row=>row.type+':'+(row.crop||'')===this.selectedDemandKey);if(d){p.heading('DETALHES DA OPORTUNIDADE');p.note(d.reason);if(d.response){p.kv('Resposta',d.response.state);if(d.response.projectId)p.kv('Projeto',d.response.projectId);}if(d.required!==undefined){p.kv('Necessidade',d.required);p.kv('Capacidade estimada',d.supply);p.kv('Estoque',d.stock);}}else p.note('Selecione uma oportunidade para ver capacidade, estoque e resposta.');
     p.rows(rows,d=>{const key=d.type+':'+(d.crop||''),selected=this.selectedDemandKey===key;p.record(`${BUILDING_TYPES[d.type].label}${d.crop?' / '+CROPS[d.crop].label:''}`,d.response?.state||d.reason,()=>{this.selectedDemandKey=key;this.resetScroll();},selected,{value:Math.round(d.score)+' pts',color:d.score>=100?C.red:C.cyan});});
   }
+  analyticsFilters(p){
+    const f=this.analyticsFilter??={segment:'all',gender:'all',orientation:'all',political:'all'};
+    const groups=[['segment','PÚBLICO',[['all','Todos'],['workers','Empregados'],['unemployed','Desempregados'],['owners','Empresários'],['homeless','Sem moradia']]],['gender','GÊNERO',[['all','Todos'],['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]],['orientation','ORIENTAÇÃO',[['all','Todas'],['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]],['political','POLÍTICA',[['all','Todas'],['Esquerda','Esquerda'],['Centro-esquerda','Centro-esquerda'],['Centro','Centro'],['Centro-direita','Centro-direita'],['Direita','Direita']]]];
+    for(const [key,label,options]of groups){p.note(label,T.muted);p.buttons(options.map(([id,text])=>({label:text,selected:f[key]===id,click:()=>{f[key]=id;this.resetScroll();}})));}
+    return f;
+  }
+  analytics(p){
+    const city=this.city,f=this.analyticsFilters(p),filterKey=`${f.segment}:${f.gender}:${f.orientation}:${f.political}`,now=performance.now();let cached=this.analyticsViewCache;
+    if(!cached||cached.key!==filterKey||cached.minute!==city.minute&&now-(cached.at||0)>500){
+      const people=city.citizens.filter(c=>!c.entity.destroyed&&(!f.segment||f.segment==='all'||f.segment==='workers'&&!!c.jobId||f.segment==='unemployed'&&city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length||f.segment==='owners'&&c.businessIds.length||f.segment==='homeless'&&!c.homeUnitId)&&(!f.gender||f.gender==='all'||c.socialProfile?.gender===f.gender)&&(!f.orientation||f.orientation==='all'||c.socialProfile?.orientation===f.orientation)&&(!f.political||f.political==='all'||describePoliticalOrientation(c).position===f.political));
+      cached=this.analyticsViewCache={key:filterKey,minute:city.minute,at:now,people,means:Object.fromEntries(['food','water','energy','toilet','hygiene','health'].map(k=>[k,people.length?people.reduce((n,c)=>n+(c.needs[k]||0),0)/people.length:0])),hungry:people.filter(c=>c.task==='food'||c.needs.food<20).length,toilet:people.filter(c=>c.task==='toilet'||c.needs.toilet<20).length,tired:people.filter(c=>c.task==='energy'||c.needs.energy<20).length};
+    }
+    const people=cached.people;
+    const needs=['food','water','energy','toilet','hygiene','health'];
+    p.heading('POPULAÇÃO E NECESSIDADES');p.metrics([['PESSOAS NO FILTRO',people.length,C.cyan],['SEM BANHEIRO',cached.toilet,C.gold],['SEM COMIDA',cached.hungry,C.red],['SEM DESCANSO',cached.tired,C.gold]]);
+    this.analyticsHistory??=new Map();const key=filterKey,hour=Math.floor(city.minute/60),series=this.analyticsHistory.get(key)||[];
+    if(series.at(-1)?.hour!==hour){series.push({hour,minute:city.minute,needs:cached.means,hunger:cached.hungry,toilet:cached.toilet,energy:cached.tired});if(series.length>72)series.shift();this.analyticsHistory.set(key,series);}
+    p.note(`Média das necessidades do grupo filtrado · ${people.length} pessoas. Amostra atual ${stamp(city.minute)}; o painel guarda até 72 coletas horárias observadas nesta sessão.`);
+    for(const n of needs)p.chart(NEED_LABELS[n],series.map(s=>s.needs[n]),n==='food'?C.red:n==='toilet'?C.gold:C.cyan,{height:48,minimum:0,maximum:100});
+    const waitingToilet=people.filter(c=>c.task==='toilet'||c.serviceQueue?.kind==='toilet').length,waitingFood=people.filter(c=>['food','workmeal'].includes(c.task)||c.serviceQueue?.kind==='food').length;
+    const cleanliness=city.sanitation.cleanliness();p.heading('SERVIÇOS E FILAS');p.metrics([['ESPERANDO BANHEIRO',waitingToilet,C.gold],['ESPERANDO COMIDA',waitingFood,C.gold],['FEZES NA CIDADE',cleanliness.streetFeces+cleanliness.indoorFeces,C.red]]);
+    p.buttons([{label:'VER FILAS E INSTALAÇÕES',click:()=>this.go('sanitation',{view:'queues'})},{label:'VER BANHEIROS',click:()=>this.go('sanitation',{view:'facilities'})}]);
+    p.heading('DEMANDA DE MERCADO');const goods=Object.entries(city.economy.market||{}).map(([good,row])=>({good,label:GOODS[good]?.label||good,demand:row.demand||0,stock:row.stock||0,price:city.economy.goods[good]?.price||0})).filter(g=>g.demand||g.stock).sort((a,b)=>b.demand-a.demand).slice(0,12);
+    p.chart('Procura atual pelos produtos mais demandados',goods.map(g=>g.demand),C.cyan,{height:72});
+    p.table([{label:'Produto',weight:2},{label:'Procura'},{label:'Estoque'},{label:'Preço'}],goods.map(g=>({cells:[g.label,Math.round(g.demand),Math.round(g.stock),money(g.price)]})));
+    p.heading('CADEIAS PRODUTIVAS');const plans=(city.economy.productionPlan||[]).filter(r=>r.score>0||r.current||r.planned).sort((a,b)=>b.priority-a.priority).slice(0,18);
+    p.table([{label:'Etapa',weight:2},{label:'Instaladas'},{label:'Planejadas'},{label:'Prioridade'}],plans.map(r=>({cells:[`${BUILDING_TYPES[r.type]?.label||r.type}${r.crop?' · '+(CROPS[r.crop]?.label||r.crop):''}`,r.current||0,r.planned||0,Math.round(r.priority||0)],click:()=>this.openPanel({tab:'production',views:{production:'demand'},selectedDemandKey:`${r.type}:${r.crop||''}`})})));
+    p.heading('NEGÓCIOS');const types=[...new Set(city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed).map(b=>b.type))],filter=this.analyticsBusinessType||'all';p.note('Filtrar por ramo');this.nativeSelect(this.analyticsTypeInput,p,[['all','Todos os ramos'],...types.map(t=>[t,BUILDING_TYPES[t]?.label||t])],filter,p.x,p.y,Math.min(p.w,360));p.space(24);
+    const businesses=city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&(filter==='all'||b.type===filter)).sort((a,b)=>((b.totalRevenue||0)-(b.totalExpenses||0))-((a.totalRevenue||0)-(a.totalExpenses||0)));
+    p.table([{label:'Empresa',weight:2},{label:'Equipe'},{label:'Vendas'},{label:'Resultado'}],businesses.slice(0,80).map(b=>({cells:[name(b.entity),`${b.workers.length}/${b.jobs}`,money(b.totalRevenue||0),money((b.totalRevenue||0)-(b.totalExpenses||0))],click:()=>this.openBuilding(b.id)})));
+  }
+  businessAnalysis(p,b){
+    const city=this.city,rows=(city.marketHistory||[]).filter(s=>s.seller===b.accountId||s.buildingId===b.id),sales=rows.filter(s=>['retail','wholesale'].includes(s.kind)),customers=new Map(),goods=new Map(Object.entries(b.salesStats?.goods||{}).map(([key,r])=>[key,{quantity:r.units,revenue:r.revenue,sales:r.transactions}]));
+    for(const [accountId]of Object.entries(b.salesStats?.customers||{})){const person=city.accounts.get(accountId)?.entity?.properties?.citizen;if(person){const c=city.society.citizen(person.id);if(c)customers.set(c.id,c);}}
+    for(const s of sales){const person=city.accounts.get(s.buyer)?.entity?.properties?.citizen;if(person){const c=city.society.citizen(person.id);if(c)customers.set(c.id,c);}if(b.salesStats?.goods)continue;const key=s.good||'serviço';const row=goods.get(key)||{quantity:0,revenue:0,sales:0};row.quantity+=s.quantity||1;row.revenue+=s.amount||0;row.sales++;goods.set(key,row);}
+    const audience=[...customers.values()].filter(c=>(this.analyticsFilter?.gender==='all'||!this.analyticsFilter?.gender||c.socialProfile?.gender===this.analyticsFilter.gender)&&(this.analyticsFilter?.orientation==='all'||!this.analyticsFilter?.orientation||c.socialProfile?.orientation===this.analyticsFilter.orientation)&&(this.analyticsFilter?.political==='all'||!this.analyticsFilter?.political||describePoliticalOrientation(c).position===this.analyticsFilter.political));
+    const demographicFilter=['gender','orientation','political'].some(k=>this.analyticsFilter?.[k]&&this.analyticsFilter[k]!=='all'),accounts=new Set(audience.map(c=>c.accountId)),selectedCustomers=Object.entries(b.salesStats?.customers||{}).filter(([id])=>accounts.has(id)),selectedGoods=demographicFilter?new Map():goods;
+    if(demographicFilter){for(const[,customer]of selectedCustomers)for(const[g,r]of Object.entries(customer.goods||{})){const item=selectedGoods.get(g)||{quantity:0,revenue:0,sales:0};item.quantity+=r.units||0;item.revenue+=r.revenue||0;item.sales+=r.transactions||0;selectedGoods.set(g,item);}if(!selectedGoods.size)for(const s of sales.filter(s=>accounts.has(s.buyer))){const g=s.good||'serviço',item=selectedGoods.get(g)||{quantity:0,revenue:0,sales:0};item.quantity+=s.quantity||1;item.revenue+=s.amount||0;item.sales++;selectedGoods.set(g,item);}}
+    const filteredSales=demographicFilter?sales.filter(s=>accounts.has(s.buyer)):sales,filteredTransactions=demographicFilter?selectedCustomers.reduce((n,[,r])=>n+r.transactions,0):(b.salesStats?.transactions??sales.length),filteredUnits=demographicFilter?selectedCustomers.reduce((n,[,r])=>n+r.units,0):(b.salesStats?.units??[...goods.values()].reduce((n,r)=>n+r.quantity,0));
+    p.heading('RESULTADOS DA OPERAÇÃO');p.note(`${name(b.entity)} · ${BUILDING_TYPES[b.type]?.label||b.type} · recorte de vendas retido no histórico comercial.`);
+    p.metrics([['VENDAS REGISTRADAS',filteredTransactions,C.cyan],['UNIDADES VENDIDAS',filteredUnits,C.green],['RECEITA COMERCIAL',money(demographicFilter?selectedCustomers.reduce((n,[,r])=>n+r.revenue,0):b.salesStats?.revenue||b.totalRevenue||rows.reduce((n,s)=>n+s.amount,0)),C.gold],['CLIENTES IDENTIFICADOS',audience.length,C.cyan]]);
+    const daily=Array.from({length:14},(_,i)=>{const day=city.day-13+i,dayRows=filteredSales.filter(s=>Math.floor(s.minute/1440)+1===day);return dayRows.reduce((n,s)=>n+(s.quantity||1),0);});p.chart(`Unidades vendidas por dia · ${demographicFilter?'público selecionado':'todos os compradores'} · últimos 14 dias`,daily,C.green,{height:86,minimum:0});
+    p.heading('PRODUTOS E VENDAS');p.table([{label:'Produto',weight:2},{label:'Transações'},{label:'Unidades'},{label:'Receita'}],[...selectedGoods].map(([g,r])=>({cells:[GOODS[g]?.label||g,r.sales,r.quantity,money(r.revenue)]})));
+    const flow=new Map();for(const row of city.economy.goodsLedger||[]){if(row.from!==b.id&&row.to!==b.id)continue;const direction=row.from===b.id?'Saídas':'Entradas',key=`${direction}:${row.good}`,entry=flow.get(key)||{direction,good:row.good,quantity:0,events:0,latest:row.minute};entry.quantity+=row.quantity||0;entry.events++;entry.latest=Math.max(entry.latest,row.minute||0);flow.set(key,entry);}
+    if(INDUSTRIES[b.type]){const industry=INDUSTRIES[b.type],plan=(city.economy.productionPlan||[]).find(r=>r.type===b.type&&(!r.crop||r.crop===b.crop));p.heading('CADEIA DE PRODUÇÃO');p.note(industry.impact);p.kv('Insumos por ciclo',Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(' · ')||'Trabalho e recursos locais');p.kv('Produtos por ciclo',Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(' · ')||'Serviço');if(plan){p.kv('Prioridade da cadeia',Math.round(plan.priority||0));p.note(plan.reason||plan.response?.state||plan.state);}p.table([{label:'Fluxo',weight:1.2},{label:'Produto',weight:2},{label:'Unidades'},{label:'Registros'},{label:'Mais recente'}],[...flow.values()].sort((a,z)=>z.latest-a.latest).map(r=>({cells:[r.direction,GOODS[r.good]?.label||r.good,r.quantity,r.events,stamp(r.latest)]})),{empty:'Ainda não há movimentações de produção registradas para esta empresa.'});}
+    p.heading('CLIENTELA');p.note('Filtre a clientela registrada pelas características simuladas dos compradores; compras por contas institucionais ficam fora do recorte pessoal.');
+    const demo=(key,label,labels)=>{p.note(label,T.muted);p.buttons(labels.map(([id,text])=>({label:text,selected:(this.analyticsFilter?.[key]||'all')===id,click:()=>{this.analyticsFilter??={gender:'all',orientation:'all',political:'all'};this.analyticsFilter[key]=id;this.resetScroll();}})));};
+    demo('gender','GÊNERO', [['all','Todos'],['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]);demo('orientation','ORIENTAÇÃO SEXUAL', [['all','Todas'],['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]);demo('political','ORIENTAÇÃO POLÍTICA', [['all','Todas'],...['Esquerda','Centro-esquerda','Centro','Centro-direita','Direita'].map(x=>[x,x])]);
+    const audienceRows=[];for(const [label,get,keys]of [['Gênero',c=>c.socialProfile?.gender,[['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]],['Orientação sexual',c=>c.socialProfile?.orientation,[['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]],['Orientação política',c=>describePoliticalOrientation(c).position,['Esquerda','Centro-esquerda','Centro','Centro-direita','Direita'].map(x=>[x,x])]])for(const [key,labelValue]of keys)audienceRows.push({cells:[`${label} · ${labelValue}`,audience.filter(c=>get(c)===key).length]});
+    p.table([{label:'Perfil',weight:2},{label:'Compradores'}],audienceRows);
+    p.heading('CONTRATOS E SERVIÇOS');const agreements=(city.economy.supplyAgreements||[]).filter(a=>a.buyerId===b.id||a.sellerId===b.id),cleaning=city.sanitation.jobs.filter(j=>j.payerId===b.accountId),work=city.development.projects.filter(j=>j.accountId===b.accountId&&!j.cancelled&&j.status!=='completed'),purchases=(city.marketHistory||[]).filter(s=>s.buyer===b.accountId&&s.seller!==b.accountId).slice(-24).reverse();
+    p.metrics([['FUNCIONÁRIOS',b.workers.length,C.cyan],['VALES-ALIMENTAÇÃO',b.vouchersIssued||0,C.gold],['REFEIÇÕES NO LOCAL',b.mealsServed||0,C.green],['LIMPEZA CONTRATADA',cleaning.length,C.cyan]]);
+    p.kv('Gasto com vales',money(b.foodVoucherCost||0));p.kv('Obras / serviços em andamento',work.length);p.kv('Acordos de fornecimento',agreements.length);
+    for(const a of agreements)p.record(`${GOODS[a.good]?.label||a.good} · ${a.buyerId===b.id?'compra':'venda'}`,`${city.building(a.buyerId===b.id?a.sellerId:a.buyerId)?.entity.properties.name||'Fornecedor ausente'} · ${money(a.unitPrice)} por unidade`,()=>this.openBuilding(a.buyerId===b.id?a.sellerId:a.buyerId));
+    for(const j of cleaning)p.record(`Faxina ${j.kind==='feces'?'de fezes':'do imóvel'} #${j.id}`,`${j.status} · ${money(j.fee)} · ${city.building(j.providerId)?.entity.properties.name||'Prestador ausente'}`,()=>this.openBuilding(j.providerId));
+    for(const s of purchases)p.record(s.reason,`${stamp(s.minute)} · ${money(s.amount)} · ${s.good?`${GOODS[s.good]?.label||s.good} × ${s.quantity||1}`:'serviço'}`,()=>{const provider=[...city.buildings,...city.economy.businesses].find(x=>x.accountId===s.seller);if(provider)this.openBuilding(provider.id);});
+    const deliveries=city.logistics.shipments.filter(s=>s.buyer?.id===b.id||s.payerAccountId===b.accountId),painting=city.paint.jobs.filter(j=>j.payer===b.accountId||j.clientId===b.id),office=city.building(b.officeTenantOf);
+    p.kv('Fretes contratados / recebidos',deliveries.length);p.kv('Serviços de pintura',painting.length);if(office)p.kv('Aluguel empresarial',`${office.entity.properties.name} · ${b.officeFloor+1}º andar`);
+    const diningFloors=Array.from({length:b.floors},(_,z)=>b.units.filter(u=>u.z===z));
+    p.heading('ALIMENTAÇÃO DA EQUIPE');const completeDining=diningFloors.findIndex(units=>units.length===b.width*b.depth&&units.every(u=>u.roomType==='dining'));
+    if(completeDining>=0){p.status('REFEITÓRIO PRÓPRIO',`Andar ${completeDining+1} inteiro · refeições servidas ${b.mealsServed||0}`,C.green);p.button('ENCERRAR REFEITÓRIO',()=>{const ok=city.setWorkplaceDiningFloor(b.id,completeDining,false);this.notice=ok?'Refeitório encerrado.':city.lastError;});}
+    else {p.note('Sem um andar inteiro de refeitório, a empresa paga vale-alimentação quando o funcionário compra uma refeição.');for(let z=0;z<diningFloors.length;z++){const units=diningFloors[z];if(units.length===b.width*b.depth&&units.every(u=>u.roomType==='workspace'))p.button(`CONVERTER ${z+1}º ANDAR EM REFEITÓRIO`,()=>{const ok=city.setWorkplaceDiningFloor(b.id,z,true);this.notice=ok?'Andar completo convertido em refeitório.':city.lastError;});}}
+    p.heading('FINANÇAS E ESTOQUE');p.kv('Caixa',money(b.balance));p.kv('Despesas acumuladas',money(b.totalExpenses||0));p.kv('Salário-base',money(b.wage||0));p.kv('Estoque ocupado',`${inventoryUsed(b)}/${b.inventoryCapacity}`);p.kv('Produtos e insumos',Object.entries(b.inventory||{}).filter(([,n])=>n>0).map(([g,n])=>`${GOODS[g]?.label||g}: ${n}`).join(' · ')||'Sem estoque');
+    p.buttons([{label:'ABRIR OPERAÇÃO',click:()=>{this.detailTab='profile';this.resetScroll();}},{label:'ABRIR ESTOQUE',click:()=>{this.detailTab='stock';this.resetScroll();}},{label:'ABRIR HISTÓRICO',click:()=>{this.detailTab='history';this.resetScroll();}}]);
+  }
   content(p) {
     if(this.tab==='market')return renderMarket(this,p);
     if(this.tab==='economy')return renderEmployment(this,p);
     if(this.tab==='city'&&this.view()==='services')return renderCivicServices(this,p);
+    if(this.tab==='city'&&this.view()==='analysis')return this.analytics(p);
     if(this.tab==='party-organization'){renderPartyOrganizationWindow(this,p);return;}
     if(this.tab==='party'){renderPartyDossier(this,p);return;}if(this.tab==='contract'){renderContractDossier(this,p);return;}if(this.tab==='poll-response'){renderPollResponseDossier(this,p);return;}
     if(this.tab==='election'){renderElectionMonitor(this,p);return;}
@@ -571,6 +640,7 @@ export class CityUI {
   overview(p) {
     const city=this.city,s=city.stats(), view=this.view();
     if(view==='nature'){this.naturePanel(p);return;}
+    if(view==='analysis'){this.analytics(p);return;}
     if(view==='overview'){
       p.metrics([
         ['HABITANTES',s.population,C.cyan,`${s.children} crianças`,()=>this.go('people')],
@@ -737,6 +807,18 @@ export class CityUI {
     if(view==='deaths'){
       p.metrics([['MORTES',city.life.deathCount,C.red],['NASCIMENTOS',city.society.birthCount,C.green]]);p.heading('MORTES E SOBREVIVÊNCIA');
       p.table([{label:'Pessoa',weight:2},{label:'Causa',weight:1.5},{label:'Idade'},{label:'Momento',weight:1.5}],city.life.deaths.slice(-80).reverse().filter(d=>this.matches(`${d.name} ${d.cause}`)).map(d=>({cells:[d.name,d.cause,`${d.age} anos`,stamp(d.minute)],color:C.red})),{empty:'Nenhuma morte registrada.'});return;
+    }
+    if(view==='queues'){
+      const people=city.citizens.filter(c=>!c.entity.destroyed),occupiedToilets=new Set(facilities.map(f=>f.occupantId).filter(id=>id!=null)),diners=new Set(people.filter(c=>c.indoorLocation?.roomType==='dining').map(c=>c.id)),toiletWaiters=people.filter(c=>(c.task==='toilet'||c.serviceQueue?.kind==='toilet')&&!occupiedToilets.has(c.id)),foodWaiters=people.filter(c=>(['food','workmeal'].includes(c.task)||c.serviceQueue?.kind==='food')&&!c.workMeal&&!diners.has(c.id)),toiletQueues=new Map(),foodQueues=new Map(),inside=new Map();
+      for(const c of people){if(c.task==='toilet'&&c.toiletTargetId&&!occupiedToilets.has(c.id))toiletQueues.set(c.toiletTargetId,(toiletQueues.get(c.toiletTargetId)||0)+1);if(['food','workmeal'].includes(c.task)&&!c.workMeal&&!diners.has(c.id)&&c.targetId!=null)foodQueues.set(c.targetId,(foodQueues.get(c.targetId)||0)+1);if(c.indoorLocation?.buildingId&&c.indoorLocation.roomType==='dining')inside.set(c.indoorLocation.buildingId,(inside.get(c.indoorLocation.buildingId)||0)+1);}
+      const queueFor=(kind,id)=>kind==='toilet'?(toiletQueues.get(id)||0):(foodQueues.get(id)||0);
+      p.metrics([['FILA DE BANHEIRO',toiletWaiters.length,C.gold],['FILA DE ALIMENTAÇÃO',foodWaiters.length,C.gold],['BANHEIROS DISPONÍVEIS',facilities.filter(f=>city.building(f.buildingId)&&f.cleanliness>0).length,C.cyan]]);
+      p.heading('FILAS POR BANHEIRO');p.table([{label:'Banheiro',weight:2},{label:'Acesso'},{label:'Espera'},{label:'Limpeza'}],facilities.map(f=>({cells:[name(city.building(f.buildingId)?.entity),({public:'Público',paid:'Pago',home:'Moradia',employees:'Funcionários'})[f.access]||f.access,queueFor('toilet',f.id),`${Math.round(f.cleanliness)}%`],click:()=>{this.selectedFacilityId=f.id;this.showView('facilities');}})).sort((a,b)=>Number(b.cells[2])-Number(a.cells[2])));
+      const foodTypes=new Set(['market','greengrocer','bakery','popular_refectory','kitchen']);const shops=city.buildings.filter(b=>!b.entity.destroyed&&(foodTypes.has(b.type)||b.units?.some(u=>u.roomType==='dining')));
+      p.heading('FILAS POR RESTAURANTE E REFEITÓRIO');p.note('Inclui cidadãos a caminho ou aguardando atendimento de alimentação; ocupação interna aparece no total de cada estabelecimento.');
+      p.table([{label:'Local',weight:2},{label:'Tipo'},{label:'Fila'},{label:'Pessoas dentro'}],shops.map(b=>({cells:[name(b.entity),BUILDING_TYPES[b.type]?.label||'Refeitório',queueFor('food',b.id),inside.get(b.id)||0],click:()=>this.openBuilding(b.id)})).sort((a,b)=>Number(b.cells[2])-Number(a.cells[2])));
+      p.heading('PESSOAS AGUARDANDO');for(const c of [...toiletWaiters,...foodWaiters].slice(0,100))p.record(name(c.entity),`${c.task==='toilet'?'Banheiro':'Alimentação'} · ${c.action}`,()=>this.openCitizen(c.id));
+      return;
     }
     if(view==='cleaning'){
       p.metrics([['EM SERVIÇO',jobs.length,C.cyan],['BANHEIROS',system.cleaned,C.green],['FEZES',system.cleanedFeces,C.gold]]);

@@ -30,6 +30,16 @@ export class CityWorkMeals {
     return good ? { good, quantity: WORK_MEAL_RULES.units, inputs: { [good]: WORK_MEAL_RULES.units }, quality: 1 } : null;
   }
   stock(holder) { return this.foodGoods().reduce((n, g) => n + (holder.inventory[g] || 0) + (holder.incoming[g] || 0), 0); }
+  hasFullDiningFloor(holder) {
+    if (!holder?.units?.length || !holder.width || !holder.depth) return false;
+    const area = holder.width * holder.depth;
+    const floors = new Set(holder.units.filter(u => u.roomType === 'dining').map(u => u.z));
+    for (const z of floors) {
+      const rooms = holder.units.filter(u => u.z === z);
+      if (rooms.length === area && rooms.every(u => u.roomType === 'dining')) return true;
+    }
+    return false;
+  }
   site(c, employer) {
     if (c.task === 'workmeal' && c.mealTargetId) return this.city.development.projects.find(p => p.id === c.mealTargetId && !p.cancelled && p.status !== 'completed') || employer;
     const project = this.city.development.projects.find(p => p.id === c.workProjectId && !p.cancelled && p.status !== 'completed' && p.builderId === employer.id);
@@ -37,7 +47,7 @@ export class CityWorkMeals {
   }
   routeToMeal(c) {
     if(this.city.minute<(c.mealRetryAt||0))return false;
-    const b = this.employer(c); if (!b) return false;
+    const b = this.employer(c); if (!b || !this.hasFullDiningFloor(b)) return false;
     const sites = [b, ...this.city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed')].filter(s => { const offer = this.offer(s, c); return offer && (c.needs.food < 18 || !this.city.buildings.some(shop => this.city.economy.mealScore(c, shop) < Math.hypot(s.door.x - c.entity.x, s.door.y - c.entity.y) - this.city.economy.mealTaste(c, offer) * 45)); }).sort((a, d) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(d.door.x - c.entity.x, d.door.y - c.entity.y));
     for (const site of sites) {
       const path = this.city.findPath(c.entity, site.door); if (path === null) continue;
@@ -60,7 +70,11 @@ export class CityWorkMeals {
     if(!atFarm&&Math.hypot(c.entity.x-holder.door.x,c.entity.y-holder.door.y)>2&&!c.indoorLocation)return false;
     const offer = this.offer(holder, c); if (!offer) return false;
     if(c.task!=='workmeal'){c.mealResume={task:c.task,targetId:c.targetId,workProjectId:c.workProjectId};c.task='workmeal';c.path=[];c.targetId=b.id;c.mealTargetId=holder.id;}
-    const rooms=holder.units?.filter(u=>u.roomType==='dining')||[];
+    const rooms=this.hasFullDiningFloor(holder)?holder.units.filter(u=>u.roomType==='dining'):[];
+    // A handful of dining cells is not a workplace meal service: require a
+    // complete floor, otherwise the employee eats through ordinary shops and
+    // receives the employer's meal voucher through the normal purchase path.
+    if (!rooms.length) return false;
     const room=rooms.find(u=>activityCellAvailable(this.city,u,c,'dining'));
     if(rooms.length&&!room){
       c.mealWaitSince??=this.city.minute;c.action='Aguardando vaga no refeitório';
@@ -91,7 +105,7 @@ export class CityWorkMeals {
   }
   issueVoucher(c, shop) {
     const b = this.employer(c), offer = this.city.economy.mealOffer(shop);
-    if (!b || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.foodVoucher || !offer) return false;
+    if (!b || this.hasFullDiningFloor(b) || c.needs.food >= WORK_MEAL_RULES.foodThreshold || c.foodVoucher || !offer) return false;
     const amount = Math.max(this.city.currency.price(WORK_MEAL_RULES.voucherMinimum), offer.price * WORK_MEAL_RULES.voucherPriceMultiple);
     if (!this.city.transfer(b.accountId, c.accountId, amount, 'Vale-alimentação')) return false;
     c.foodVoucher = { employerId: b.id, amount, issuedAt: this.city.minute };
@@ -104,6 +118,7 @@ export class CityWorkMeals {
     const employers = city.buildings.filter(b => b.active && !b.entity.destroyed && b.workers.length);
     const suppliers = city.buildings.filter(b => b.active && !b.entity.destroyed && ['market', 'greengrocer', 'bakery', 'popular_refectory', 'townhall'].includes(b.type));
     for (const b of employers) {
+      if (b.type && !this.hasFullDiningFloor(b)) continue;
       const projects = city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed' && p.requiredLabor - p.labor >= 30);
       const sites = [b, ...projects];
       for (const holder of sites) {

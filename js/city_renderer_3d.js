@@ -9,9 +9,9 @@ import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=office-demand-rollout-1';
-import {addArchitectureVariations} from './city_architecture_variations.js?v=merged-architecture-1';
+import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-directions-1';
 import {syncSkybridges} from './city_skybridges.js?v=skybridge-stair-alignment-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-directions-1';
 import {mergeStaticMeshes} from './city_static_mesh.js';
 function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
@@ -46,9 +46,21 @@ function syncFecesVisuals(renderer,THREE,city,world){
   const sanitation=city?.sanitation;if(!sanitation)return;
   const revision=sanitation.fecesRevision||0;
   if(renderer.fecesVisualRevision!==revision){
-    if(renderer.fecesVisuals){renderer.scene.remove(renderer.fecesVisuals);renderer.fecesVisuals.traverse(o=>{if(o!==renderer.fecesVisuals){o.geometry?.dispose();o.material?.dispose();}});}
+    if(renderer.fecesVisuals){renderer.scene.remove(renderer.fecesVisuals);const geometries=new Set(),materials=new Set();renderer.fecesVisuals.traverse(o=>{if(o!==renderer.fecesVisuals){if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)materials.add(m);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();}
     const group=new THREE.Group(),pileGeometry=new THREE.SphereGeometry(.14,7,5),pileMaterial=new THREE.MeshLambertMaterial({color:0x64452e});
-    const add=(x,y,z,amount,area,buildingId=null,floor=null)=>{const mesh=new THREE.Mesh(pileGeometry,pileMaterial),clumps=Math.min(4,Math.max(1,amount));mesh.position.set(x,y,z);mesh.scale.set(1+clumps*.08,.3+clumps*.08,.8+clumps*.1);mesh.userData={fecesArea:area,buildingId,floor};mesh.castShadow=true;group.add(mesh);};
+    const add=(x,y,z,amount,area,buildingId=null,floor=null)=>{
+      const n=Math.max(1,Math.floor(amount)||1),clumps=Math.min(18,n),growth=Math.min(1,Math.log1p(n)/Math.log(19)),overflow=Math.min(3,Math.log1p(Math.max(0,n-18)/6)*.35);
+      const base=new THREE.Mesh(pileGeometry,pileMaterial);base.position.set(x,y,z);base.scale.set(.5+growth*.8,.12+growth*.16+overflow*1.6,.5+growth*.8);base.userData={fecesArea:area,buildingId,floor};base.castShadow=true;group.add(base);
+      // Each deposit adds visible volume on the same tile. Clumps spread in
+      // compact rings and rise in layers; large accumulations keep growing
+      // without spilling across neighboring tiles.
+      for(let i=0;i<clumps;i++){
+        const ring=i===0?0:Math.ceil((Math.sqrt(i+1)-1)/.72),angle=i*2.399963229728653;
+        const radius=Math.min(.27,.055+ring*.055),layer=Math.floor(i/7),mesh=new THREE.Mesh(pileGeometry,pileMaterial);
+        mesh.position.set(x+Math.cos(angle)*radius,y+.09+layer*(.065+overflow*.12),z+Math.sin(angle)*radius);
+        const size=.58+growth*.18;mesh.scale.set(size,.58+growth*.22,size);mesh.userData={fecesArea:area,buildingId,floor};mesh.castShadow=true;group.add(mesh);
+      }
+    };
     const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
     for(const [key,pile]of sanitation.streetFeces){const [x,y]=key.split(',').map(Number);if(x<minX||x>maxX||y<minY||y>maxY)continue;add(x+.5,surfaceElevation(world,x+.5,y+.5)+.04,y+.5,pile.amount,'street');}
     for(const b of city.buildings)for(const [key,pile]of b.feces||[]){const unit=b.units.find(u=>`${u.x},${u.y},${u.z}`===key);if(!unit)continue;const x=b.entity.x+unit.x+.5,y=b.entity.y+unit.y+.5;if(x<minX||x>maxX||y<minY||y>maxY)continue;add(x,(b.terrain?.base||0)+unit.z*CITY_FLOOR_HEIGHT+.05,y,pile.amount,'building',b.id,unit.z);}
@@ -216,7 +228,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         }
       }
       if (b.type === 'mill') {
-        const blades = new THREE.Group(); blades.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .3, b.depth + .08);
+        const blades = new THREE.Group(); blades.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .3, b.depth + .08);blades.rotation.y=-(b.rotation||0)*Math.PI/2;
         for (let i = 0; i < 4; i++) { const blade = new THREE.Mesh(new THREE.BoxGeometry(.16, 1.5, .06), new THREE.MeshLambertMaterial({ color: 0xe0cd97 })); blade.rotation.z = i * Math.PI / 2; blades.add(blade); }
         facade.add(blades); group.userData.millBlades = blades;
       }
@@ -456,7 +468,7 @@ function syncTownhallFlag(renderer,group,THREE,b,shade=1){
   const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});
   texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
   const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);
-  const banner=new THREE.Mesh(clothFlagGeometry(THREE,1.65,1.04),material);group.userData.governingFlagCloth=banner;group.userData.governingFlagPhase=(b.id||0)*.73;animateClothFlag(banner,flagWindTime(renderer),group.userData.governingFlagPhase);
-  banner.userData.partyFlagTexture=texture;banner.rotation.y=(b.rotation||0)*Math.PI/2;banner.position.set(b.width*.5+.85*Math.cos(banner.rotation.y),roof+1.9,b.depth*.5-.85*Math.sin(banner.rotation.y));mast.add(banner);group.userData.governingFlagMaterial=material;
+  const banner=new THREE.Mesh(clothFlagGeometry(THREE,1.65,1.04),material);group.userData.governingFlagCloth=banner;group.userData.governingFlagPhase=0;animateClothFlag(banner,flagWindTime(renderer),0);
+  banner.userData.partyFlagTexture=texture;banner.position.set(b.width*.5+.85,roof+1.9,b.depth*.5);mast.add(banner);group.userData.governingFlagMaterial=material;
   group.add(mast);group.userData.governingFlagMesh=mast;
 }
