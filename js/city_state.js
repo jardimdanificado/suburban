@@ -16,7 +16,7 @@ import {CityPartyOrganization} from './city_party_organization.js';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { CityRelationships } from './city_relationships.js';
-import { CityGovernment } from './city_government.js?v=needs-recovery-1';
+import { CityGovernment } from './city_government.js?v=party-name-tags-1';
 import { CityCouncil } from './city_council.js';
 import { CityCampaigns } from './city_campaigns.js?v=party-caps-skin-1';
 import { CityMandates } from './city_mandates.js';

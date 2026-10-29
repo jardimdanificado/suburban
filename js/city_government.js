@@ -11,7 +11,7 @@ import {CityVoting} from './city_voting.js?v=needs-recovery-1';
 import {CityPoliticalStanding} from './city_political_standing.js';
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
 import {makePartyName,partyNameAgenda} from './city_party_names.js';
-import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js?v=party-caps-skin-1';
+import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js?v=party-name-tags-1';
 import {seedPartyCaps,issuePartyCap,returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investigateCases } from './city_political_institutions.js';
 import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js?v=needs-recovery-1';

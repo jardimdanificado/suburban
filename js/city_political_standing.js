@@ -1,4 +1,4 @@
-import {canJoin} from './city_party_membership.js?v=party-caps-skin-1';
+import {canJoin} from './city_party_membership.js?v=party-name-tags-1';
 import {recordLegislativeOpinion,publicPerformance} from './city_party_public_record.js';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 /** Public standing uses bounded opinion panels; secret crimes never enter these scores. */

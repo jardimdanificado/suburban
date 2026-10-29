@@ -3,7 +3,7 @@ import {equityShares,offerShares,initializeEquity,nationalizeShares} from './cit
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
 import {CityCouncilChamber} from './city_council_chamber.js';
-import {inviteMembers} from './city_party_membership.js?v=party-caps-skin-1';
+import {inviteMembers} from './city_party_membership.js?v=party-name-tags-1';
 import { seatBounds, scandalEligible, publicPressure } from './city_political_institutions.js';
 import {partyNameAgenda} from './city_party_names.js';
 export const BILL_LABELS={entrepreneurCandidates:"Candidatura de empresários",partyFund:'Fundo partidário por eleição',pollMinRate:'Amostra mínima das pesquisas',pollMaxRate:'Amostra máxima das pesquisas',tax:'Imposto salarial',businessTax:'Imposto empresarial',salesTax:'Imposto por ramo',minimumWage:'Salário mínimo',partyLimit:'Limite de partidos',reelectionLimit:'Limite de reeleições',termDays:'Duração do mandato',campaignDays:'Duração da campanha',build:'Construção estatal',worksBudget:'Orçamento de obras do Executivo',worksTransfer:'Transferência para orçamento de obras',nationalize:'Estatização negociada',privatize:'Privatização',inflation:'Controle da inflação',welfare:'Proteção social',roads:'Acesso e iluminação',suspend:'Afastamento temporário do prefeito',convict:'Condenação por corrupção',impeach:'Cassação',confidence:'Impeachment por perda de confiança',councilRate:'Percentual de vereadores na população',councilSeats:'Quantidade de vereadores',councilBudget:'Orçamento salarial da Câmara',mayorBudget:'Salário diário do prefeito'};

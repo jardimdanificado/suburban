@@ -14,6 +14,12 @@ export function membershipProfile(p,c){
   return s;
 }
 export function syncPartyColor(p,c){
+  const name=c.entity?.properties?.name;
+  if(name){
+    c.political.displayNameBase??=name.replace(/\s+\([^()]+\)$/,'');
+    const short=p.party(c.political.partyId)?.short;
+    c.entity.properties.name=short?`${c.political.displayNameBase} (${short})`:c.political.displayNameBase;
+  }
   ensureSkinColor(p.city,c);
 }
 function updateSympathy(s){const best=Object.entries(s.support).sort((a,b)=>b[1].score-a[1].score)[0];s.sympathyPartyId=best&&best[1].score>4?Number(best[0]):null;}

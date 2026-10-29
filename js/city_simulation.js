@@ -22,7 +22,7 @@ import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_cultu
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
 import {skybridgeLinks} from './city_skybridges.js?v=short-passarelas-bridge-1';
-import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=party-name-tags-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=survival-capacity-1';
