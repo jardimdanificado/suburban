@@ -1,6 +1,6 @@
-import {syncCitizenInterior} from './city_interiors.js?v=presential-jobs-meals-1';
+import {syncCitizenInterior} from './city_interiors.js?v=refectory-survival-1';
 import { preparedOffer } from './city_markets.js';
-import { CROPS } from './city_economy.js?v=presential-jobs-meals-1';
+import { CROPS } from './city_economy.js?v=refectory-survival-1';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 

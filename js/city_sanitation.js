@@ -1,4 +1,4 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=presential-jobs-meals-1';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=refectory-survival-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js';
 import { reserveService } from './city_service_queue.js?v=presential-jobs-meals-1';
@@ -30,6 +30,19 @@ export class CitySanitation {
       for(const room of b.units){if(room.roomType!=='bathroom'){room.roomType='bathroom';b.layoutRevision=(b.layoutRevision||0)+1;}this.addFacility(b,{unitId:room.id,access:'public'});}
       return;
     }
+    if(b.type==='popular_refectory'){
+      // Dedicated refectories use every usable floor for meals. Circulation
+      // stays separate and existing toilets keep their real facilities.
+      let changed=false;
+      const bathroom=b.units.find(u=>u.roomType==='bathroom')||b.units.at(-1);
+      if(bathroom&&bathroom.roomType!=='bathroom'){bathroom.roomType='bathroom';changed=true;}
+      for(const room of b.units){
+        if(room.roomType==='bathroom'){this.addFacility(b,{unitId:room.id,access:'public'});continue;}
+        if(room.roomType!=='circulation'&&room.roomType!=='dining'){room.roomType='dining';changed=true;}
+      }
+      if(changed)b.layoutRevision=(b.layoutRevision||0)+1;
+      return;
+    }
     // Reuse existing rooms so repeated setup/expansion cannot duplicate facilities.
     let bathroom = b.units.find(u => u.roomType === 'bathroom');
     bathroom ||= b.units.find(u => u.roomType === 'workspace');
@@ -37,20 +50,8 @@ export class CitySanitation {
       if(bathroom.roomType!=='bathroom'){bathroom.roomType='bathroom';b.layoutRevision=(b.layoutRevision||0)+1;}
       this.addFacility(b, { unitId: bathroom.id, access: ['public_toilet', 'popular_refectory'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees' });
     }
-    // The town hall is the first public food and hygiene service for the
-    // whole population. Give it enough real rooms instead of queuing hundreds
-    // of people at a single four-person table or single toilet.
-    const population=Math.max(this.city.initialPopulation||0,this.city.citizens.length),publicToilets=b.type==='public_toilet',publicDining=b.type==='popular_refectory';
-    const targets={dining:publicDining?Math.min(16,Math.max(b.floors||1,Math.ceil(population/64))):0,bathroom:1};
-    for(const [kind,target]of Object.entries(targets)){
-      let count=b.units.filter(u=>u.roomType===kind).length;
-      const convert=room=>{room.roomType=kind;b.layoutRevision=(b.layoutRevision||0)+1;count++;if(kind==='bathroom')this.addFacility(b,{unitId:room.id,access:publicToilets||publicDining?'public':'employees'});};
-      while(count<target){
-        const workspaces=b.units.filter(u=>u.roomType==='workspace');if(workspaces.length<=Math.max(3,b.jobs||0))break;
-        convert(workspaces[0]);
-      }
-    }
   }
+
   allowed(c, f) {
     const b = this.city.building(f.buildingId); if (!b) return false;
     if (f.access === 'public' || f.access === 'paid') return f.price <= (this.city.accounts.get(this.city.payerFor(c))?.balance || 0);
@@ -293,7 +294,7 @@ export class CitySanitation {
     this.rebalanceWaiting();
     for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : 60)) this.requestCleaning(f.id);
     const city=this.city,hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(hall)this.setupBusinessRooms(hall);
-    for(const building of city.buildings)if(!building.entity.destroyed&&building.type==='public_toilet')this.setupBusinessRooms(building);
+    for(const building of city.buildings)if(!building.entity.destroyed&&['public_toilet','popular_refectory'].includes(building.type))this.setupBusinessRooms(building);
     const collectors=city.economy.businesses.filter(b=>b.type==='waste_collector');
     const processors=city.economy.businesses.filter(b=>['recycler','composting'].includes(b.type));
     const activeLoads=()=>city.logistics.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
@@ -337,5 +338,8 @@ export class CitySanitation {
     }
     return true;
   }
-  reconcile() { for (const [id, f] of this.facilities) if (!this.city.building(f.buildingId) || (f.unitId && !this.city.units.has(f.unitId))) this.facilities.delete(id); }
+  reconcile() {
+    for(const b of this.city.buildings)if(!b.entity.destroyed&&['public_toilet','popular_refectory'].includes(b.type))this.setupBusinessRooms(b);
+    for (const [id, f] of this.facilities) if (!this.city.building(f.buildingId) || (f.unitId && !this.city.units.has(f.unitId))) this.facilities.delete(id);
+  }
 }

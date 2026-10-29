@@ -114,8 +114,15 @@ export function syncCitizenInterior(city,c){
  if(task==='construction'&&project?.service!=='expansion')return exit(city,c);
  if(c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)||fieldWork||!b||(['work','manage'].includes(task)&&OUTDOOR_WORK.has(b.type))||(b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal','clean','job-interview'].includes(task)))return exit(city,c);
  if(previous?.exiting)return false;
+ if(task==='food'&&c.servicePaid!==`${b.id}:food`&&!city.economy.mealOffer(b,c)){
+  c.task=null;c.targetId=null;c.path=[];c.serviceQueue=null;c.facingTarget=null;c.action='Alimento indisponível neste local; procurando outra opção';return exit(city,c);
+ }
  const cleaningJob=task==='clean'?city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId):null;
  let kind=task==='informal-service'?(city.units.get(gig.unitId)?.roomType||'workspace'):task==='shopping'&&b.type==='laundromat'?'laundry':task==='clean'&&cleaningJob?.kind==='feces'&&cleaningJob.scope==='building'?(city.units.get(cleaningJob.unitId)?.roomType||'workspace'):['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()?'plenary':'office'):['energy','care','caregiving'].includes(task)?'bedroom':task==='health'?'treatment':!['work','manage'].includes(task)?'service':['work','manage'].includes(task)&&c.role==='councilor'?'office':'workspace';
+ // Shops serve food purchases at their real sales counter; only a refectory
+ // or a building with dining rooms requires a dining seat. Otherwise a market
+ // can hold hungry customers forever waiting for a room it will never have.
+ if(task==='food'&&b.type!=='popular_refectory'&&!(roomGroups(b).get('dining')||noRooms).length)kind='service';
  if(previous&&!previous.exiting&&previous.buildingId===b.id&&previous.task===task&&previous.targetRoomType===kind&&previous.toiletTargetId===c.toiletTargetId&&previous.layoutRevision===(b.layoutRevision||0)&&city.units.has(previous.targetUnitId))return !previous.path.length;
  if(task==='provisions'&&!roomGroups(b).has('dining'))kind='bedroom';
  let room;
@@ -129,7 +136,7 @@ export function syncCitizenInterior(city,c){
  if(!room){const groups=roomGroups(b),choices=groups.get(kind)||noRooms;room=choices.find(u=>activityCellAvailable(city,u,c,kind));
   if(!choices.length){if(kind==='service'||kind==='treatment'){for(const u of b.units)if((u.roomType==='workspace'||u.roomType==='office')&&activityCellAvailable(city,u,c,kind)){room=u;break;}}
    else if(kind==='bedroom'&&!c.homeUnitId)room=(groups.get('workspace')||noRooms).find(u=>activityCellAvailable(city,u,c,kind));
-   else if(kind==='workspace')room=(groups.get('office')||noRooms).find(u=>activityCellAvailable(city,u,c,kind));}}
+   else if(kind==='workspace')room=(groups.get(b.type==='popular_refectory'?'dining':'office')||noRooms).find(u=>activityCellAvailable(city,u,c,kind));}}
 
  if(b.constructionKind!=='open-air'&&(task==='toilet'||task==='food'||task==='workmeal')&&!(previous?.buildingId===b.id&&previous.targetUnitId===room?.id&&previous.targetRoomType===kind)){
   const facility=task==='toilet'?city.sanitation.facilities.get(c.toiletTargetId):null,ready=!!room&&activityCellAvailable(city,room,c,kind)&&(!facility||!facility.occupantId||facility.occupantId===c.id||city.minute>=facility.busyUntil);
@@ -147,16 +154,16 @@ export function syncCitizenInterior(city,c){
 }
 
 export function workCellReady(city,c,b){
- const assigned=city.units.get(c.workCell?.unitId),valid=u=>u?.buildingId===b.id&&['workspace','office','plenary'].includes(u.roomType);
- let room=valid(assigned)?assigned:b.units.find(u=>valid(u)&&activityCellAvailable(city,u,c,u.roomType));
+ const assigned=city.units.get(c.workCell?.unitId),valid=u=>u?.buildingId===b.id&&(['workspace','office','plenary'].includes(u.roomType)||b.type==='popular_refectory'&&u.roomType==='dining'),kind=u=>u.roomType==='dining'?'workspace':u.roomType;
+ let room=valid(assigned)?assigned:b.units.find(u=>valid(u)&&activityCellAvailable(city,u,c,kind(u)));
  if(b.constructionKind!=='open-air'&&room&&c.indoorLocation?.unitId===room.id&&!c.indoorLocation.path?.length){
   if(c.nextWorkBuildingId!==b.id){c.nextWorkBuildingId=b.id;c.nextWorkRotationAt=city.minute+30+c.id%31;}
   else c.nextWorkRotationAt??=city.minute+30+c.id%31;
-  if(city.minute>=c.nextWorkRotationAt){const alternatives=b.units.filter(u=>valid(u)&&u.id!==room.id&&activityCellAvailable(city,u,c,u.roomType));if(alternatives.length)room=alternatives[(c.id+Math.floor(city.minute/60))%alternatives.length];c.nextWorkRotationAt=city.minute+45+c.id%30;}
+  if(city.minute>=c.nextWorkRotationAt){const alternatives=b.units.filter(u=>valid(u)&&u.id!==room.id&&activityCellAvailable(city,u,c,kind(u)));if(alternatives.length)room=alternatives[(c.id+Math.floor(city.minute/60))%alternatives.length];c.nextWorkRotationAt=city.minute+45+c.id%30;}
  }
  if(!room){c.action='Aguardando célula de trabalho livre';return false;}
  if(b.constructionKind==='open-air')return outdoorCellReady(city,c,b,room);
- return activityRoomReady(city,c,b,room,room.roomType);
+ return activityRoomReady(city,c,b,room,kind(room));
 }
 
 // A finished shell must not strand its construction crew on newly blocked

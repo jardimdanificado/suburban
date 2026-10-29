@@ -31,15 +31,15 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js?v=public-restrooms-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=refectory-survival-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=presential-jobs-meals-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=refectory-survival-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=sync-perf-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=presential-jobs-meals-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=refectory-survival-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
