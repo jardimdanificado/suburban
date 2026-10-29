@@ -99,12 +99,12 @@ export class CitySociety {
       if (!other || Math.hypot(c.entity.x - other.entity.x, c.entity.y - other.entity.y) > 2) { c.conversation = null; if (other) other.conversation = null; }
       else if (this.city.minute >= conversation.until) this.finishConversation(c, other, conversation);
     }
-    // Walkers can pass one another between ten-minute scans. Scan a rotating
-    // slice each minute so ordinary foot traffic has a chance to meet without
-    // comparing every resident with every other resident.
-    // A spatial grid limits encounters to nearby people, with one conversation per person.
+    // Conversation completion remains minute-accurate; discover new encounters
+    // every five minutes and scale the contact budget to keep the same average
+    // social throughput with fewer full-population scans at high simulation speed.
+    if(this.city.minute%5===0){
     const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4,tileCounts=new Map();
-    const residents=this.city.citizens,contactBudget=Math.max(12,Math.ceil(residents.length*.02));
+    const residents=this.city.citizens,contactBudget=Math.max(12,Math.ceil(residents.length*.1));
     for(const c of residents)if(!c.entity.destroyed&&!c.indoorLocation){const key=Math.floor(c.entity.x)+Math.floor(c.entity.y)*this.city.world.width;tileCounts.set(key,(tileCounts.get(key)||0)+1);}
     const offset=(this.city.minute*37)%Math.max(1,residents.length);
     let contacts=0;
@@ -133,6 +133,7 @@ export class CitySociety {
       const key = x+y*stride;
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(c);
+    }
     }
     for(let i=this.expecting.length-1;i>=0;i--)if(this.city.minute>=this.expecting[i].dueAt)this.giveBirth(this.expecting[i]);
   }

@@ -1,9 +1,10 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=bridges-shortwalk-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=highspeed-optimization-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
 let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0, lastSnapshotCost = 0, dirty = false, forceSnapshotPending = false;
-let lastUpdateMs=0,maxUpdateMs=0,maxUpdateMinute=0,updateTotalMs=0,updateCount=0;
+let lastUpdateMs=0,maxUpdateMs=0,maxUpdateMinute=0,updateTotalMs=0,updateCount=0,maxSnapshotMs=0,maxSnapshotMinute=0;
+const phasePeaks={};
 const MIN_STEP = 1 / 60;
 // One city minute is 0.25 simulation seconds. At high speed, advancing it
 // in one call avoids rescanning every citizen several times for subminute
@@ -11,7 +12,10 @@ const MIN_STEP = 1 / 60;
 const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
 // Large cities can spend most of the worker's time creating full snapshots.
 // Keep motion/vitals at 100 ms and adjust only the heavier UI state update.
-const stateInterval = () => Math.max(speed>=32?900:speed>=16?600:400,Math.min(2000,lastSnapshotCost*5));
+// Full graph snapshots are the most expensive worker messages. At fast speeds
+// the compact motion stream keeps people and needs current, so batch the slower
+// business/political/UI graph updates more aggressively.
+const stateInterval = () => Math.max(speed>=32?1500:speed>=16?1000:400,Math.min(3000,lastSnapshotCost*6));
 const MOTION_INTERVAL = 100;
 const allowed = new Set(['paint.setPalette','paint.requestPurchase','paint.requestVehicle','paint.requestBuilding','vehicles.mountFlag','vehicles.removeFlag','politics.leaseHeadquarters','economy.rentOffice','economy.configureEmployment','economy.offerShares','economy.buyShares','economy.cancelShareOffer','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
@@ -43,7 +47,15 @@ function vitals(){
   for(let i=0;i<people.length;i++){const c=people[i],at=i*stride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)result[at+j]=c.needs[CITY_NEED_FIELDS[j]];result[at+CITY_NEED_FIELDS.length]=c.happiness;result[at+CITY_NEED_FIELDS.length+1]=c.mood;}
   return result;
 }
-function workerMetrics(){return{lastUpdateMs,maxUpdateMs,maxUpdateMinute,averageUpdateMs:updateCount?updateTotalMs/updateCount:0};}
+function recordProfile(profile,prefix=''){
+  if(!profile)return;
+  for(const [key,value]of Object.entries(profile)){
+    if(key==='step'){recordProfile(value,`${prefix}step.`);continue;}
+    if(!key.endsWith('Ms')||!Number.isFinite(value))continue;
+    const name=prefix+key,peak=phasePeaks[name];if(!peak||value>peak.ms)phasePeaks[name]={ms:value,minute:profile.minute};
+  }
+}
+function workerMetrics(){return{lastUpdateMs,maxUpdateMs,maxUpdateMinute,averageUpdateMs:updateCount?updateTotalMs/updateCount:0,maxSnapshotMs,maxSnapshotMinute,phasePeaks};}
 function snapshot(force = false) {
   if (!state) return false;
   if (awaitingAck) { if (force) forceSnapshotPending = true; return false; }
@@ -51,6 +63,7 @@ function snapshot(force = false) {
   const started = performance.now();
   const packet = graph.encode(state,{packNeeds:true,packPositions:true}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions();
   lastSnapshotCost=performance.now()-started;
+  if(lastSnapshotCost>maxSnapshotMs){maxSnapshotMs=lastSnapshotCost;maxSnapshotMinute=state.city.minute;}
   postMessage({ type: 'state', packet, positions: motion, inside, vehicles, tick, elapsed, workMs: lastSnapshotCost, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, packet.packedNeeds.buffer]);
   awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
   return true;
@@ -121,7 +134,7 @@ setInterval(() => {
       const deadline = performance.now() + (speed>=16?14:8), step=stepSize();
       let steps = 0;
       while (accumulator >= step && steps < 240 && performance.now() < deadline) {
-        const started=performance.now();state.city.update(step);lastUpdateMs=performance.now()-started;updateTotalMs+=lastUpdateMs;updateCount++;
+        const started=performance.now();state.city.update(step);lastUpdateMs=performance.now()-started;recordProfile(state.city.lastUpdateProfile);updateTotalMs+=lastUpdateMs;updateCount++;
         if(lastUpdateMs>maxUpdateMs){maxUpdateMs=lastUpdateMs;maxUpdateMinute=state.city.minute;}
         accumulator -= step; tick++; elapsed += step; steps++;
       }

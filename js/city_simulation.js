@@ -15,7 +15,7 @@ import {CityVehicles} from './city_vehicles.js?v=interiors-completion-2';
 import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
-import {MIN_PLOT_CELLS} from './city_building_geometry.js';
+import {MIN_PLOT_CELLS,CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
@@ -26,6 +26,7 @@ import { CityGovernment as CityPolitics } from './city_government.js?v=needs-rec
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=toilet-staff-only-1';
+import {interiorRoute} from './city_interior_layout.js';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -39,10 +40,10 @@ import { CityLife } from './city_life.js?v=pocket-water-cutaway-1';
 import { CityWorkMeals } from './city_work_meals.js?v=refectory-survival-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=bridge-shortcuts-1';
 import { CityLogistics } from './city_logistics.js?v=furniture-farms-fertilizer-1';
-import { CityGigs } from './city_gigs.js?v=furniture-farms-fertilizer-1';
+import { CityGigs } from './city_gigs.js?v=highspeed-optimization-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=furniture-farms-fertilizer-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=deep-perf-3';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=highspeed-optimization-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=deep-perf-3';
 
 export const INITIAL_POPULATION = 512;
@@ -403,6 +404,15 @@ export class CitySimulation {
   }
   assignHousingAndJobs() { this.economy.assignHomes(); this.economy.hire(); }
   walkable(x, y) { return !this.occupied.has(key(x, y)) && terrainWalkable(this.world, x, y); }
+  groundPath(start,goal){
+    const width=this.world.width,height=this.world.height,blockedRevision=`${width}:${height}:${this.obstacleRevision||0}:${this.occupied.size}`;
+    if(this._pathBlockedRevision!==blockedRevision){const grid=new Uint8Array(width*height);for(const cell of this.occupied){const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));if(x>=0&&y>=0&&x<width&&y<height)grid[y*width+x]=1;}this._pathBlockedGrid=grid;this._pathBlockedRevision=blockedRevision;}
+    const key=`ground:${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
+    if(this.pathCache.has(key))return this.pathCache.get(key);
+    const route=findTerrainPath(this.world,start,goal,this.occupied,{blockedGrid:this._pathBlockedGrid}),mapped=route?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p})??null;
+    if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
+    this.pathCache.set(key,mapped);return mapped;
+  }
   skybridgeLinksForRevision(revision=`${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`) {
     if(this._skybridgeCache?.revision!==revision)this._skybridgeCache={revision,links:skybridgeLinks(this.buildings,this.world)};
     return this._skybridgeCache.links;
@@ -413,39 +423,45 @@ export class CitySimulation {
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
     const links=allowSkybridges&&this.buildings.length>1?this.skybridgeLinksForRevision(revision):NO_CHILDREN;
     if(links.length){if(!this.skybridgePathCache||this.skybridgePathCacheRevision!==revision){this.skybridgePathCache=new Map();this.skybridgePathCacheRevision=revision;}if(this.skybridgePathCache.has(key)){const route=this.skybridgePathCache.get(key);return route===null?null:copy?route.slice():route;}}
-    if (!this.pathCache.has(key)) {
-      if (this.pathCache.size >= Math.max(2048,Math.min(16384,this.citizens.length*16))) this.pathCache.delete(this.pathCache.keys().next().value);
-      const width=this.world.width,height=this.world.height,blockedRevision=`${width}:${height}:${this.obstacleRevision||0}:${this.occupied.size}`;
-      if(this._pathBlockedRevision!==blockedRevision){
-        const grid=new Uint8Array(width*height);
-        for(const cell of this.occupied){const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));if(x>=0&&y>=0&&x<width&&y<height)grid[y*width+x]=1;}
-        this._pathBlockedGrid=grid;this._pathBlockedRevision=blockedRevision;
+    // Water-separated destinations used to pay for a full A* search before
+    // we learned they could not connect. The component map is cached by map
+    // topology and obstacles, so reject impossible land routes first.
+    if(!this.pathCache.has(key)&&settlementConnected(this,start,goal)===false){
+      const canReachBridge=links.some(link=>
+        settlementConnected(this,start,link.startAccess)!==false&&settlementConnected(this,link.endAccess,goal)!==false||
+        settlementConnected(this,start,link.endAccess)!==false&&settlementConnected(this,link.startAccess,goal)!==false);
+      if(!canReachBridge){
+        if(links.length)this.skybridgePathCache.set(key,null);
+        else{if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);}
+        return null;
       }
-      const route=findTerrainPath(this.world, start, goal, this.occupied,{blockedGrid:this._pathBlockedGrid});
-      this.pathCache.set(key,route?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p})??null);
+    }
+    if (!this.pathCache.has(key)) {
+      const route=this.groundPath(start,goal);
+      if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
+      this.pathCache.set(key,route);
     }
     let path = this.pathCache.get(key);
-    if(path===null&&!links.length&&settlementConnected(this,start,goal)===false)return null;
     if(links.length){
       let bestScore=path===null?Infinity:path.length||0;
       for(const link of links){
         for(const reverse of [false,true]){
-          const from=reverse?link.end:link.start,to=reverse?link.start:link.end,fromAccess=reverse?link.endAccess:link.startAccess,toAccess=reverse?link.startAccess:link.endAccess;
-          const lower=Math.hypot(start.x-fromAccess.x,start.y-fromAccess.y)+Math.hypot(goal.x-toAccess.x,goal.y-toAccess.y)+Math.hypot(to.x-from.x,to.y-from.y)*.76+3;
+          const from=reverse?link.end:link.start,to=reverse?link.start:link.end,fromBuilding=this.building(reverse?link.bId:link.aId),toBuilding=this.building(reverse?link.aId:link.bId),fromUnit=fromBuilding?.units.find(u=>u.id===(reverse?link.buId:link.auId)),toUnit=toBuilding?.units.find(u=>u.id===(reverse?link.auId:link.buId));
+          if(!fromBuilding||!toBuilding||!fromUnit||!toUnit)continue;
+          const lower=Math.hypot(start.x-fromBuilding.door.x,start.y-fromBuilding.door.y)+Math.hypot(goal.x-toBuilding.door.x,goal.y-toBuilding.door.y)+Math.hypot(to.x-from.x,to.y-from.y)*.76+fromBuilding.floors+toBuilding.floors;
           if(lower>=bestScore)continue;
-          const first=findTerrainPath(this.world,start,fromAccess,this.occupied,{blockedGrid:this._pathBlockedGrid})?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p});
-          const last=findTerrainPath(this.world,toAccess,goal,this.occupied,{blockedGrid:this._pathBlockedGrid})?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p});
+          const first=this.groundPath(start,fromBuilding.door),last=this.groundPath(toBuilding.door,goal);
           if(!first||!last)continue;
-          const stairs=10,waypoints=first.slice();
+          const fromPoint={x:fromBuilding.entity.x+fromUnit.x+.5,y:fromBuilding.entity.y+fromUnit.y+.5,z:fromUnit.z*CITY_FLOOR_HEIGHT},toPoint={x:toBuilding.entity.x+toUnit.x+.5,y:toBuilding.entity.y+toUnit.y+.5,z:toUnit.z*CITY_FLOOR_HEIGHT},fromDoor={x:fromBuilding.door.x,y:fromBuilding.door.y,z:0},toDoor={x:toBuilding.door.x,y:toBuilding.door.y,z:0},up=interiorRoute(fromBuilding,fromDoor,fromPoint),down=interiorRoute(toBuilding,toPoint,toDoor);
+          if(!up||!down)continue;
+          const waypoints=first.slice();
           const append=p=>{const previous=waypoints.at(-1);if(!previous||Math.hypot(previous.x-p.x,previous.y-p.y,(previous.z||0)-(p.z||0))>.001)waypoints.push(p);};
-          append(fromAccess);
-          for(let step=1;step<=stairs;step++){const t=step/stairs;append({x:fromAccess.x+(from.x-fromAccess.x)*t,y:fromAccess.y+(from.y-fromAccess.y)*t,z:link.height*t,skybridgeId:link.id});}
-          // The bridge span is a straight, unobstructed segment. Keeping one
-          // waypoint avoids allocating hundreds of points for city-scale links.
+          append(fromDoor);waypoints.push({...fromDoor,skybridgeEntry:{buildingId:fromBuilding.id,unitId:fromUnit.id,linkId:link.id,endpoint:reverse?'end':'start'}});
+          append({...from,z:link.height,skybridgeId:link.id});
           append({x:to.x,y:to.y,z:link.height,skybridgeId:link.id});
-          for(let step=1;step<=stairs;step++){const t=step/stairs;append({x:to.x+(toAccess.x-to.x)*t,y:to.y+(toAccess.y-to.y)*t,z:link.height*(1-t),skybridgeId:link.id});}
+          waypoints.push({x:to.x,y:to.y,z:link.height,skybridgeExit:{buildingId:toBuilding.id,unitId:toUnit.id,linkId:link.id,endpoint:reverse?'start':'end'}});
           for(const point of last)append(point);
-          const score=first.length+last.length+Math.hypot(to.x-from.x,to.y-from.y,link.height)*.76+3;
+          const score=first.length+last.length+up.length+down.length+Math.hypot(to.x-from.x,to.y-from.y,link.height)*.76+3;
           if(score<bestScore){bestScore=score;path=waypoints;}
         }
       }
@@ -455,6 +471,26 @@ export class CitySimulation {
     // mutations across the hot path, while FIFO gives the same route answers.
     // Consumers shift their own array but never mutate waypoint coordinates.
     return path === null ? null : copy?path.slice():path;
+  }
+  beginSkybridgeTransit(c,leg){
+    const building=this.building(leg.buildingId),unit=building?.units.find(u=>u.id===leg.unitId),links=this.skybridgeLinksForRevision(),link=links.find(item=>item.id===leg.linkId);
+    if(!building||!unit||!link||c.indoorLocation)return false;
+    const door={x:building.door.x,y:building.door.y,z:0},room={x:building.entity.x+unit.x+.5,y:building.entity.y+unit.y+.5,z:unit.z*CITY_FLOOR_HEIGHT},boarding=leg.phase==='entry',path=interiorRoute(building,boarding?door:room,boarding?room:door);
+    if(!path)return false;
+    c.skybridgeTransit={...leg,phase:boarding?'boarding':'alighting'};
+    c.indoorLocation={buildingId:building.id,unitId:null,targetUnitId:unit.id,roomType:'circulation',targetRoomType:'circulation',floor:0,position:boarding?door:room,path,phase:'walking',task:c.task,layoutRevision:building.layoutRevision||0,enteredAt:this.minute};
+    c.action=boarding?'Entrando no prédio para acessar a passarela':'Atravessando o prédio para sair da passarela';return true;
+  }
+  finishSkybridgeTransit(c){
+    const transit=c.skybridgeTransit;if(!transit||c.indoorLocation?.path?.length)return;
+    const building=this.building(transit.buildingId),link=this.skybridgeLinksForRevision().find(item=>item.id===transit.linkId);
+    if(!building||!link){c.indoorLocation=null;c.skybridgeTransit=null;c.skybridgeZ=0;c.skybridgeId=null;c.path=[];return;}
+    if(transit.phase==='boarding'){
+      const point=transit.endpoint==='end'?link.end:link.start;c.entity.x=point.x;c.entity.y=point.y;c.skybridgeZ=link.height;c.skybridgeId=link.id;c.indoorLocation=null;transit.phase='crossing';c.action='Saindo do prédio para a passarela';return;
+    }
+    if(transit.phase==='alighting'){
+      c.entity.x=building.door.x;c.entity.y=building.door.y;c.skybridgeZ=0;c.skybridgeId=null;c.indoorLocation=null;c.skybridgeTransit=null;c.action='Saindo do prédio';
+    }
   }
   urgentNeed(c) {
     // Exhaustion and a dirty bathroom must not postpone treatment until health
@@ -855,6 +891,7 @@ export class CitySimulation {
     }
   }
   stepMinute() {
+    const profileStart=performance.now();let profileMark=profileStart;
     this.minute++;
     this.indexFamilies();
     this.reconcile();
@@ -864,18 +901,22 @@ export class CitySimulation {
       this.housing.reconcile(); this.sanitation.reconcile();
       this.reconciledRevision = reconcileRevision;
     }
+    const reconcileMs=performance.now()-profileMark;profileMark=performance.now();
     this.sanitation.updateMinute();
     for (const c of this.citizens)if(c.workMeal||(c.jobId||c.businessIds.length)&&c.needs.food<45)this.workMeals.tryStart(c);
     this.logistics.updateMinute();
+    const servicesMs=performance.now()-profileMark;profileMark=performance.now();
     this.politics.voting.updateMinute();
     this.politics.getResearch().updateMinute();
     this.politics.council.getChamber().minute();
     this.politics.campaigns.getMaterials().minute();
     this.vehicles.minute();
+    const civicMs=performance.now()-profileMark;profileMark=performance.now();
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
     if (this.minute % 60 === 0) this.flushPayroll();
     const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
     for(const [key,shelter] of this.cardboardShelters){const owner=this.society.citizen(shelter.citizenId);if(!owner||owner.entity.destroyed||owner.homeUnitId){this.cardboardShelters.delete(key);this.cardboardRevision++;if(owner){owner.cardboardShelterKey=null;owner.homelessSleepSpot=null;if(!owner.entity.destroyed){owner.inventory??={};owner.inventory.papelao=1;}}}}
+    const setupMs=performance.now()-profileMark;profileMark=performance.now();
     for (const c of this.citizens) {
       const n = c.needs;
       // Idle adults cannot choose another activity until their short retry
@@ -900,6 +941,7 @@ export class CitySimulation {
       this.supplies.useCarried(c);
       if (this.life.minute(c,elapsed)) continue;
       advanceCitizenInterior(this,c,elapsed);
+      if(c.skybridgeTransit){this.finishSkybridgeTransit(c);if(c.skybridgeTransit)continue;}
       discoverVacancies(this,c);
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (this.workMeals.advance(c)) continue;
@@ -925,17 +967,21 @@ export class CitySimulation {
       if (!c.path.length && c.task) this.performTask(c);
       if(!c.task){c._nextTaskAt=this.minute+5;c._retryUrgent=urgent;}
     }
-    for(const c of this.citizens)if(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation)syncCitizenInterior(this,c);
+    const citizenMs=performance.now()-profileMark;profileMark=performance.now();
+    for(const c of this.citizens)if(!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
     for(const c of this.citizens)this.furniture.syncCitizen(c);
     if(this.minute%60===0)this.furniture.reconcile();
+    const interiorMs=performance.now()-profileMark;profileMark=performance.now();
     advanceRecruitment(this);
     this.gigs.updateMinute();
     disperseCrowds(this);this.society.updateMinute();
+    const societyMs=performance.now()-profileMark;profileMark=performance.now();
     const movers=this._movingCitizens??=[];movers.length=0;
     for(const c of this.citizens)if(c.path.length||c.deliveryId||c.ridingVehicleId)movers.push(c);
     // Spread hourly work across minutes; keep the same order and one run per hour.
     if (this.minute % 60 === 0) this.hourlyPhase = 0;
     if (this.hourlyPhase != null && this.hourlyPhase < 13) this.economy.hourly(this.hourlyPhase++);
+    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs:performance.now()-profileMark};
     this.syncClock();
   }
   syncClock() {
@@ -946,14 +992,17 @@ export class CitySimulation {
     this.world.clock.tick(0);
   }
   update(dt) {
+    const profileStart=performance.now();let profileMark=profileStart;
     // One simulation second = four city minutes; all systems share this clock.
     this.accumulator += dt * 4;
     while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); }
+    const minuteStepsMs=performance.now()-profileMark;profileMark=performance.now();
     const movers=this._movingCitizens||[];
     if(this.vehicles.activeCount&&this._lastVehicleScanMinute!==this.minute){
       this._lastVehicleScanMinute=this.minute;
       for(const c of movers)if(!c.ridingVehicleId)this.vehicles.tryTrip(c);
     }
+    const mobilityMs=performance.now()-profileMark;profileMark=performance.now();
     // Many active drivers used to scan the entire shipment list independently
     // on every movement update. Build a temporary index only when it pays off.
     let driverCount=0;for(const c of movers)if(c.deliveryId&&++driverCount>4)break;
@@ -963,8 +1012,9 @@ export class CitySimulation {
       shipmentIndex=new Map();
       for(const s of this.logistics.shipments)if(wanted.delete(s.id)){shipmentIndex.set(s.id,s);if(!wanted.size)break;}
     }
+    const movementSetupMs=performance.now()-profileMark;profileMark=performance.now();
     for (const c of movers) {
-      if(c.ridingVehicleId||c.indoorLocation?.exiting)continue;
+      if(c.ridingVehicleId||c.indoorLocation)continue;
       // Vehicle eligibility is minute based (including its 20-minute search
       // cooldown); polling it on every animation frame repeats the same scans
       // up to 60 times before any relevant state can change.
@@ -975,6 +1025,11 @@ export class CitySimulation {
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5);
       while (distance > 0 && c.path.length) {
         const p = c.path[0];
+        if(p.skybridgeEntry||p.skybridgeExit){
+          c.path.shift();const leg=p.skybridgeEntry?{...p.skybridgeEntry,phase:'entry'}:{...p.skybridgeExit,phase:'exit'};
+          if(!this.beginSkybridgeTransit(c,leg)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;c.skybridgeTransit=null;}
+          break;
+        }
         const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),roadBridge=p.roadBridgeId,elevated=!!(pBridge||roadBridge),tx=Math.floor(p.x),ty=Math.floor(p.y);
         if(pBridge&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)||roadBridge&&!this.world.roadBridges?.some(link=>link.id===roadBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         if(!elevated&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
@@ -992,7 +1047,9 @@ export class CitySimulation {
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }
+    const movementMs=performance.now()-profileMark;profileMark=performance.now();
     this.vehicles.update(dt);
+    this.lastUpdateProfile={minute:this.minute,totalMs:performance.now()-profileStart,minuteStepsMs,mobilityMs,movementSetupMs,movementMs,vehicleMs:performance.now()-profileMark,step:this.lastStepProfile};
   }
   goodsStock(good) {
     const campaignCarried=this.citizens.reduce((n,c)=>n+(c.campaignInventory?.[good]||0),0);

@@ -1,7 +1,7 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=bridges-shortwalk-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=highspeed-optimization-1';
 import { resolveWorldSettings } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=bridges-shortwalk-1";
-import { CityDesktop } from "./js/city_desktop.js?v=bridges-shortwalk-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=highspeed-optimization-1";
+import { CityDesktop } from "./js/city_desktop.js?v=highspeed-optimization-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=road-bridge-render-1";
 import { setActiveEntities } from "./js/engine.js";

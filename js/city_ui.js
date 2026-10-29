@@ -21,7 +21,7 @@ import {renderGovernmentDashboard} from './city_ui_dashboard.js';
 import {ROTATION_LABELS} from './city_building_geometry.js';
 import { renderPublications } from './city_publications_ui.js';
 import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases } from './city_corruption_ui.js';
-import {renderEventInspector} from './city_event_inspector.js';
+import {renderEventInspector} from './city_event_inspector.js?v=highspeed-optimization-1';
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
@@ -39,8 +39,8 @@ import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=furniture-farms-fertilizer-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=deep-perf-3';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=bridges-shortwalk-1';
+import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=highspeed-optimization-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=highspeed-optimization-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
