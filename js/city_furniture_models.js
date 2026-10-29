@@ -3,7 +3,13 @@ export function furnitureModel(THREE,item){
  const box=(w,h,d,x,y,z,color=wood)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const cylinder=(r,h,x,y,z,color=metal)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const type=item.type;
- if(type==='chair'||type==='bench'){const w=type==='bench'?.82:.28;box(w,.07,.27,0,.43,0);box(w,.38,.055,0,.65,-.13);for(const x of [-w*.4,w*.4])for(const z of [-.1,.1])box(.045,.4,.045,x,.2,z,metal);if(item.facing)g.rotation.y=Math.atan2(item.facing.x-item.x,item.facing.y-item.y);}
+ if(type==='chair'||type==='bench'){
+  const bench=type==='bench',w=bench?.78:.28,seatY=bench?.24:.30,legH=seatY-.025;
+  box(w,.055,.27,0,seatY,0);
+  box(w,bench?.28:.30,.045,0,seatY+(bench?.15:.17),-.115);
+  for(const x of [-w*.4,w*.4])for(const z of [-.1,.1])box(.04,legH,.04,x,legH/2,z,metal);
+  if(item.facing)g.rotation.y=Math.atan2(item.facing.x-item.x,item.facing.y-item.y);
+ }
  else if(type==='table'||type==='desk'||type==='counter'||type==='workbench'){const h=type==='counter'?.7:.68;box(.65,.08,.4,0,h,0);for(const x of [-.25,.25])for(const z of [-.13,.13])box(.05,h,.05,x,h/2,z);if(type==='desk')box(.22,.05,.16,.12,h+.08,0,0xd6d1bd);}
  else if(type==='bed'){box(.7,.16,.45,0,.2,0);box(.67,.15,.42,0,.35,0,0xdad4bd);box(.2,.07,.35,-.22,.46,0,cream);box(.04,.54,.46,-.36,.27,0);}
  else if(type==='fridge'){box(.23,.69,.23,0,.35,0,cream);box(.015,.18,.02,.075,.37,.125,metal);box(.23,.02,.01,0,.48,.125,metal);}

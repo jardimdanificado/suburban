@@ -1,4 +1,4 @@
-import {CityFurniture} from './city_furniture.js';
+import {CityFurniture} from './city_furniture.js?v=bench-sidewalk-fix-1';
 import {CitySupplies} from './city_supplies.js';
 import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';

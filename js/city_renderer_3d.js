@@ -1,5 +1,5 @@
 import {roomFurnitureForCity} from './city_furniture_catalog.js';
-import {furnitureModel} from './city_furniture_models.js';
+import {furnitureModel} from './city_furniture_models.js?v=bench-sidewalk-fix-1';
 import {applyInteriorCutaway} from './city_interior_view.js';
 import {addBuildingDetails} from './city_building_details.js?v=merged-architecture-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
