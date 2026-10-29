@@ -4,14 +4,16 @@ import {setup} from './helpers/city.mjs';
 import {syncCitizenInterior,advanceCitizenInterior} from '../js/city_interiors.js?v=needs-recovery-1';
 const person=city=>{const c=city.citizens.find(c=>!city.politics.officeHolder(c));city.economy.leaveJob(c);c.businessIds=[];c.homeUnitId=null;c.homeId=null;c.indoorLocation=null;c.path=[];c.deliveryId=null;c.conversation=null;for(const k of Object.keys(c.needs))c.needs[k]=95;return c;};
 test('a homeless person can recover energy even when another need is critical',()=>{
- const city=setup({starter:true,population:64}),c=person(city);c.needs.energy=0;c.needs.toilet=0;c.task='energy';c.targetId=null;city.performTask(c);assert.equal(c.task,'energy');assert(c.needs.energy>0);
+ const city=setup({starter:true,population:64}),c=person(city);c.needs.energy=0;c.needs.toilet=0;c.task='energy';c.targetId=null;city.performTask(c);assert.equal(c.task,'energy');assert(c.homelessSleepSpot);assert.equal(c.needs.energy,0);
+ c.entity.x=c.homelessSleepSpot.x;c.entity.y=c.homelessSleepSpot.y;c.path=[];city.performTask(c);assert(c.needs.energy>0);
+ c.needs.energy=0;c.needs.toilet=0;
  for(let i=0;i<60;i++)city.update(.25);assert(c.needs.energy>1||c.needs.toilet>1);
 });
 test('a homeless person can leave an overcrowded shelter and sleep outdoors',()=>{
  const city=setup({starter:true,population:64}),c=person(city),hall=city.buildings.find(b=>b.type==='townhall');for(const u of hall.units)if(u.roomType==='workspace'||u.roomType==='bedroom')u.roomType='service';hall.layoutRevision++;
  c.needs.energy=2;c.task='energy';c.targetId=hall.id;c.entity.x=hall.door.x;c.entity.y=hall.door.y;
  assert.equal(syncCitizenInterior(city,c),false);city.minute+=31;syncCitizenInterior(city,c);assert.equal(c.targetId,null);
- for(let i=0;i<8&&c.indoorLocation;i++){advanceCitizenInterior(city,c,100);syncCitizenInterior(city,c);}assert.equal(c.indoorLocation,null);c.path=[];const before=c.needs.energy;city.performTask(c);assert(c.needs.energy>before);
+ for(let i=0;i<8&&c.indoorLocation;i++){advanceCitizenInterior(city,c,100);syncCitizenInterior(city,c);}assert.equal(c.indoorLocation,null);c.path=[];city.chooseTask(c);assert(c.homelessSleepSpot);assert.notEqual(c.targetId,hall.id);c.entity.x=c.homelessSleepSpot.x;c.entity.y=c.homelessSleepSpot.y;c.path=[];const before=c.needs.energy;city.performTask(c);assert(c.needs.energy>before);
 });
 test('voting does not interrupt essential recovery before the voter can travel',()=>{
  const city=setup({starter:true,population:64}),c=person(city),hall=city.buildings.find(b=>b.type==='townhall'),voting=city.politics.voting,e={id:777,pollingBuildingId:hall.id},row={citizenId:c.id};
@@ -20,6 +22,21 @@ test('voting does not interrupt essential recovery before the voter can travel',
 });
 test('a well rested person is not forced back to sleep solely because it is night',()=>{
  const city=setup({starter:true,population:64}),c=person(city);city.minute=23*60;c.needs.energy=95;c.task=null;c.startupProjectId=null;city.chooseTask(c);assert.notEqual(c.task,'energy');
+});
+
+test('a homeless resident sleeps away from the town hall and only recovers at the assigned spot',()=>{
+ const city=setup({starter:true,population:64}),c=person(city),hall=city.buildings.find(b=>b.type==='townhall');
+ city.minute=23*60;c.needs.energy=70;c.entity.x=hall.door.x;c.entity.y=hall.door.y;city.chooseTask(c);
+ assert.equal(c.task,'energy');assert.equal(c.targetId,null);assert(c.homelessSleepSpot);assert(Math.hypot(c.homelessSleepSpot.x-hall.door.x,c.homelessSleepSpot.y-hall.door.y)>=4);
+ assert(c.path.length);const before=c.needs.energy;city.performTask(c);assert.equal(c.needs.energy,before);
+ c.entity.x=c.homelessSleepSpot.x;c.entity.y=c.homelessSleepSpot.y;c.path=[];city.performTask(c);assert(c.needs.energy>before);assert.equal(c.action,'Dormindo na rua');
+});
+
+test('homeless residents are assigned different outdoor sleeping places instead of crowding one entrance',()=>{
+ const city=setup({starter:true,population:64}),hall=city.buildings.find(b=>b.type==='townhall'),people=city.citizens.filter(c=>!city.politics.officeHolder(c)).slice(0,12);
+ city.minute=23*60;for(const c of people){city.economy.leaveJob(c);c.homeUnitId=null;c.homeId=null;c.task=null;c.targetId=null;c.path=[];c.indoorLocation=null;c.needs.energy=70;c.entity.x=hall.door.x;c.entity.y=hall.door.y;city.chooseTask(c);}
+ const spots=people.map(c=>c.homelessSleepSpot).filter(Boolean).map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`);
+ assert.equal(spots.length,people.length);assert.equal(new Set(spots).size,spots.length);assert(people.every(c=>Math.hypot(c.homelessSleepSpot.x-hall.door.x,c.homelessSleepSpot.y-hall.door.y)>=4));
 });
 
 test('an election can recover turnout after widespread simultaneous exhaustion and bathroom need',()=>{

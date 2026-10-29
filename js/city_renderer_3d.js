@@ -162,8 +162,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         const sign=new THREE.Mesh(new THREE.BoxGeometry(b.width*.85,.22,.08),new THREE.MeshLambertMaterial({color:0x4c655c}));sign.position.set(b.width/2,1.6,b.depth+.12);facade.add(sign);
       }
       if(mine){
-        const timber=new THREE.MeshLambertMaterial({color:b.type==='iron_mine'?0x72563d:0x8b6348}),shadow=new THREE.MeshLambertMaterial({color:0x171d1c}),rail=new THREE.MeshLambertMaterial({color:0x555e60});
-        const portal=new THREE.Mesh(new THREE.BoxGeometry(1.35,1.35,.12),shadow);portal.position.set(b.width/2,.68,b.depth+.12);facade.add(portal);
+        const timber=new THREE.MeshLambertMaterial({color:b.type==='iron_mine'?0x72563d:0x8b6348}),rail=new THREE.MeshLambertMaterial({color:0x555e60});
         for(const x of [b.width/2-.72,b.width/2+.72]){const post=new THREE.Mesh(new THREE.BoxGeometry(.12,1.55,.14),timber);post.position.set(x,.78,b.depth+.18);facade.add(post);}
         const lintel=new THREE.Mesh(new THREE.BoxGeometry(1.56,.14,.15),timber);lintel.position.set(b.width/2,1.55,b.depth+.18);facade.add(lintel);
         for(const x of [b.width/2-.5,b.width/2+.5]){const bar=new THREE.Mesh(new THREE.BoxGeometry(.055,.08,.85),rail);bar.position.set(x,.08,b.depth+.62);facade.add(bar);}
@@ -206,12 +205,11 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       }
       addBuildingDetails(THREE,facade,b);
       addArchitectureVariations(THREE,facade,b,buildingLeisureSpaces(entity.properties.cityBuilding));
-      const door = new THREE.Mesh(new THREE.BoxGeometry(.55, 1.4, .04), new THREE.MeshLambertMaterial({ color: 0x293e35 }));
-      door.position.set(Math.floor(b.width / 2) + .5, .70, b.depth + .025); facade.add(door);
+      const entranceX=Math.floor(b.width/2)+.5;
       const awning = new THREE.Mesh(new THREE.BoxGeometry(1.1, .12, .7), new THREE.MeshLambertMaterial({ color: b.type === 'market' ? 0xdca14b : 0xc9d9a1 }));
       const awningColors = { super_popular_housing:0x987f68,popular_luxury_housing:0xb69868,popular_refectory: 0xd88a45, market: 0xdca14b, bakery: 0xc78b52, greengrocer: 0x75a956, clinic: 0xf0eee4, townhall: 0x7693ae, builder: 0xb87c3f, quarry: 0x777f83, luxury_housing: 0xc7a956, popular_housing: 0xa8734d };
       awning.material.color.setHex(awningColors[b.type] ?? 0xc9d9a1);
-      if(!mine){awning.position.set(door.position.x, 1.55, b.depth + .25); awning.castShadow = true; facade.add(awning);}
+      if(!mine){awning.position.set(entranceX, 1.55, b.depth + .25); awning.castShadow = true; facade.add(awning);}
       }
       const highlight = new THREE.Mesh(new THREE.BoxGeometry(1.02, CITY_FLOOR_HEIGHT+.02, 1.02), new THREE.MeshBasicMaterial({ color: 0xf0e6a1, wireframe: true }));
       highlight.visible = false; group.add(highlight); group.userData.highlight = highlight;

@@ -78,7 +78,7 @@ const URGENT_NEEDS=[['water',18,0],['food',18,0],['health',20,5],['energy',12,0]
 const SERVICE_PRICES={food:180,water:35,health:240,leisure:25,social:0,energy:0,hygiene:0,toilet:0};
 const SERVICE_RATES={food:5,water:8,hygiene:4,social:1.5,leisure:1,health:2};
 const SERVICE_ACTIONS={food:'Comendo no mercado',water:'Bebendo água',energy:'Dormindo',hygiene:'Cuidando da higiene',toilet:'Usando o banheiro',social:'Procurando companhia para conversar',leisure:'Descansando no centro de lazer',health:'Recebendo atendimento'};
-const ESSENTIAL_TASKS=new Set(['water','food','provisions','workmeal','health','toilet']);
+const ESSENTIAL_TASKS=new Set(['water','food','provisions','workmeal','health','toilet','energy']);
 const INTERRUPTIBLE_TASKS=new Set(['work','manage','leisure','social','clean','walk']);
 const CITY_FEED_LIMIT=128,CITY_FEED_TRIM=64;
 const clamp = n => Math.max(0, Math.min(100, n));
@@ -389,6 +389,39 @@ export class CitySimulation {
     for(const [key,threshold,penalty] of URGENT_NEEDS){const value=c.needs[key];if(value<threshold && (need===undefined || value-penalty<score)){need=key;score=value-penalty;}}
     return need;
   }
+  routeHomelessToSleep(c) {
+    c.task='energy';c.targetId=null;c.homelessSleepSpot??=null;
+    const spot=c.homelessSleepSpot;
+    if(spot){
+      if(Math.hypot(c.entity.x-spot.x,c.entity.y-spot.y)<=.25&&!c.path.length){c.action='Dormindo na rua';return true;}
+      if(!c.path.length){const path=this.findPath(c.entity,spot);if(path!==null){c.path=path;if(!path.length||Math.hypot(path.at(-1).x-spot.x,path.at(-1).y-spot.y)>.05)c.path.push({...spot});}}
+      c.action='Procurando um lugar tranquilo para dormir';return false;
+    }
+    const blocked=new Set();
+    for(const person of this.citizens){if(person===c||person.entity.destroyed)continue;
+      if(person.homelessSleepSpot)blocked.add(`${Math.floor(person.homelessSleepSpot.x)},${Math.floor(person.homelessSleepSpot.y)}`);
+      if(!person.indoorLocation&&!person.path.length)blocked.add(`${Math.floor(person.entity.x)},${Math.floor(person.entity.y)}`);
+      const destination=person.path?.at(-1);if(destination)blocked.add(`${Math.floor(destination.x)},${Math.floor(destination.y)}`);
+    }
+    const buildings=this.buildings.filter(b=>!b.entity.destroyed),startX=Math.floor(c.entity.x),startY=Math.floor(c.entity.y),candidates=[];
+    for(let radius=3;radius<=12;radius++)for(let dx=-radius;dx<=radius;dx++){
+      const dy=radius-Math.abs(dx);for(const sy of (dy?[1,-1]:[1])){
+        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if(blocked.has(key)||!this.walkable(x,y))continue;
+        const px=x+.5,py=y+.5;if(buildings.some(b=>Math.hypot(px-b.door.x,py-b.door.y)<4))continue;
+        candidates.push({x:px,y:py,score:Math.hypot(px-c.entity.x,py-c.entity.y)+(Math.imul(c.id+17,1103515245)>>>0)%997/10000});
+      }
+    }
+    candidates.sort((a,b)=>a.score-b.score);
+    for(const candidate of candidates){
+      const path=this.findPath(c.entity,candidate);if(path===null)continue;
+      c.homelessSleepSpot={x:candidate.x,y:candidate.y};c.path=path;
+      if(!path.length||Math.hypot(path.at(-1).x-candidate.x,path.at(-1).y-candidate.y)>.05)c.path.push({...candidate});
+      c.action='Procurando um lugar tranquilo para dormir';return false;
+    }
+    // The safe fallback is to rest where the person is, never to send them to
+    // the town hall and turn its entrance into a makeshift dormitory.
+    c.homelessSleepSpot={x:Math.floor(c.entity.x)+.5,y:Math.floor(c.entity.y)+.5};c.path=[];c.action='Dormindo na rua';return true;
+  }
 
   chooseTask(c) {
     const n = c.needs;
@@ -401,7 +434,7 @@ export class CitySimulation {
     const urgent = this.urgentNeed(c);
     // A homeless person who is already exhausted should not have to cross the
     // city and compete for a public indoor room before recovering at all.
-    if(urgent==='energy'&&!home){c.task='energy';c.targetId=null;c.path=[];c.action='Dormindo na rua por exaustão';return;}
+    if(urgent==='energy'&&!home){this.routeHomelessToSleep(c);return;}
     if (urgent) { task = urgent; type = ({ water: 'utility', food: 'market', health: 'clinic', energy: 'home', hygiene: home ? 'home' : 'utility', toilet: 'toilet' })[urgent]; }
     else if (child && this.society.isAdult(c) && Math.min(n.food, n.water, n.energy, n.hygiene) >= 25 && n.health >= 40 && n.toilet >= 15) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
     else if (n.food < 18) { task = 'food'; type = 'market'; }
@@ -418,6 +451,7 @@ export class CitySimulation {
     else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     else if (n.energy < 65) { task = 'energy'; type = 'home'; }
+    if(task==='energy'&&!home){this.routeHomelessToSleep(c);return;}
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
     if(!urgent&&(task==='leisure'||task==='social'&&n.social>=35)&&n.leisure<95&&this.hour>=6&&this.hour<22){
       const employer=job||company,workplace=employer?.officeTenantOf?this.building(employer.officeTenantOf):employer,dwelling=this.housing.home(c),sites=[...(home?[{site:home,access:'home'}]:[]),...(workplace&&workplace!==home?[{site:workplace,access:'work'}]:[])];
@@ -526,7 +560,14 @@ export class CitySimulation {
       if (n.food >= 95) { c.task = null; c.servicePaid = null; }
       return;
     }
-    if(c.task==='energy'&&c.targetId==null&&!c.homeUnitId){c.action='Dormindo na rua';c.needs.energy=clamp(c.needs.energy+.45);if(c.needs.energy>=95||(this.hour>=7&&this.hour<22&&c.needs.energy>65))c.task=null;return;}
+    if(c.task==='energy'&&c.targetId==null&&!c.homeUnitId){
+      if(c.path.length)return;
+      if(!c.homelessSleepSpot){this.routeHomelessToSleep(c);if(c.path.length)return;}
+      if(c.homelessSleepSpot&&Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)>.3){this.routeHomelessToSleep(c);return;}
+      c.action='Dormindo na rua';c.needs.energy=clamp(c.needs.energy+.45);
+      if(c.needs.energy>=95||(this.hour>=7&&this.hour<22&&c.needs.energy>65)){c.task=null;c.homelessSleepSpot=null;}
+      return;
+    }
     const b = this.building(c.targetId), n = c.needs;
     if (!b) { c.task = null; return; }
     const task = c.task;
