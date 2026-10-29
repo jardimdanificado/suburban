@@ -20,7 +20,7 @@ export function reserveService(city,c,b,kind,resource){
 }
 export function queueService(city,c,b,kind,resource,ready){
  const entrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;entrance.serviceQueue??=[];
- entrance.serviceQueue=entrance.serviceQueue.filter(q=>{const p=city.society.citizen(q.citizenId),valid=p&&!p.entity.destroyed&&p.task===q.kind&&p.targetId===q.buildingId&&(q.kind!=='toilet'||p.toiletTargetId===q.resource);if(!valid&&p?.serviceQueue?.buildingId===q.buildingId){p.serviceQueue=null;p.facingTarget=null;}return valid;});
+ entrance.serviceQueue=entrance.serviceQueue.filter(q=>{const p=city.society.citizen(q.citizenId),valid=p&&!p.entity.destroyed&&queueKind(p.task)===queueKind(q.kind)&&p.targetId===q.buildingId&&(q.kind!=='toilet'||p.toiletTargetId===q.resource);if(!valid&&p?.serviceQueue?.buildingId===q.buildingId){p.serviceQueue=null;p.facingTarget=null;}return valid;});
  const ticket=reserveService(city,c,b,kind,resource);
  const older=entrance.serviceQueue.some(q=>q.buildingId===b.id&&queueKind(q.kind)===queueKind(kind)&&q.resource===resource&&q.sequence<ticket.sequence);
  const inside=c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.exiting;

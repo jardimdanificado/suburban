@@ -1,5 +1,5 @@
 import {colorAffinity,buildingColor} from './city_colors.js';
-export const HOUSING_RULES = { roomPrice: 120000, roomRent: 350, livingReserve: 3000, defaultDays: 3, unsoldRentalAfter: 1440 };
+export const HOUSING_RULES = { roomPrice: 120000, roomRent: 120, livingReserve: 3000, defaultDays: 3, unsoldRentalAfter: 1440 };
 export const SOCIAL_HOUSING_TYPES = Object.freeze(['super_popular_housing','popular_housing','popular_luxury_housing']);
 export const HOUSING_TYPES = Object.freeze(['residential',...SOCIAL_HOUSING_TYPES,'luxury_housing']);
 const NO_RESIDENTS=Object.freeze([]);
@@ -17,7 +17,7 @@ export function floorCells(b, z) {
   return cells;
 }
 export class CityHousing {
-  constructor(city) { this.city = city; this.homes = new Map(); }
+  constructor(city) { this.city = city; this.homes = new Map(); this.rentPolicyVersion=2; }
   addFloor(b, z, ownerId) {
     const spec = this.city.buildingTypes[b.type], units = [];
     const housingType = HOUSING_TYPES.includes(b.type);
@@ -226,6 +226,7 @@ export class CityHousing {
     else { u.arrears += u.rent; u.missedDays++; if (u.missedDays >= HOUSING_RULES.defaultDays) { const c = this.city.accounts.get(u.tenantId); if (c) this.release(c); } }
   }
   reconcile() {
+    if(this.rentPolicyVersion!==2){for(const home of this.homes.values()){const b=this.city.building(home.buildingId);if(!b||!HOUSING_TYPES.includes(b.type))continue;const cap=this.city.currency.price(HOUSING_RULES.roomRent*(b.type==='luxury_housing'?2:1));for(const unit of this.units(home))if(unit.rent>cap){unit.rent=cap;unit.arrears=0;unit.missedDays=0;}}this.rentPolicyVersion=2;}
     for (const [id, h] of this.homes) if (!this.city.building(h.buildingId)) this.homes.delete(id);
     for(const b of this.city.buildings)if(b.type==='super_popular_housing'&&b.units.length){
       const bathroom=b.units.find(u=>u.id===b.sharedBathroomUnitId&&u.roomType==='bathroom')||b.units.filter(u=>u.roomType==='bathroom').sort((a,b)=>a.z-b.z)[0];

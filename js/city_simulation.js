@@ -237,6 +237,17 @@ export class CitySimulation {
     this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: ${this.citizens.length} moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
     this.syncClock();
   }
+  clearCardboardSheltersForArea(x,y,width,depth) {
+    let removed=0;
+    for(const [shelterKey,shelter] of this.cardboardShelters||[]) {
+      if(shelter.x<x||shelter.x>=x+width||shelter.y<y||shelter.y>=y+depth)continue;
+      this.cardboardShelters.delete(shelterKey);removed++;
+      const owner=this.society.citizen(shelter.citizenId);
+      if(owner){owner.inventory??={};owner.inventory.papelao=(owner.inventory.papelao||0)+1;owner.cardboardShelterKey=null;owner.homelessSleepSpot=null;if(owner.task==='energy'){owner.task=null;owner.path=[];owner.action='O abrigo foi removido para uma obra; o papelão voltou ao inventário.';}}
+    }
+    if(removed)this.cardboardRevision=(this.cardboardRevision||0)+1;
+    return removed;
+  }
   addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
     if(OFFICE_ONLY_TYPES.has(type)&&!free)return this.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const spec = BUILDING_TYPES[type];
@@ -260,6 +271,7 @@ export class CitySimulation {
     if (!free && (!plot || plot.ownerId !== ownerAccountId || plot.buildingId || plot.x !== x || plot.y !== y || width > plot.width || depth > plot.depth)) return this.fail('É necessário comprar um terreno compatível antes de construir.');
     if (!free && stone && (!materialSource || materialSource.inventory.pedra < stone)) return this.fail(`Obra precisa de ${stone} pedras entregues no terreno.`);
     if (!free && this.treasury < capital) return this.fail('Caixa municipal insuficiente para obra e capital de operação.');
+    this.clearCardboardSheltersForArea(x,y,width,depth);
     const entity = this.createEntity({ x, y, properties: { name: this.life.buildingName(spec.label), species: 'city-building', render: { color: spec.color, style: type === 'super_popular_housing' ? 'popular' : type === 'popular_luxury_housing' ? 'luxury' : type === 'popular_housing' ? 'popular' : type === 'luxury_housing' ? 'luxury' : type === 'popular_refectory' ? 'refectory' : type } } });
     const b = { id: entity.id, entity, type, constructionKind: kind, rotation:terrain.rotation, width, depth, floors, color: spec.color, condition: 100, units: [], balance: 0, jobs: Math.min(spec.jobs ? Math.max(spec.jobs, Math.floor(count / 6)) : 0, 32), wage: 4 + Math.floor(this.random() * 3), stock: 0, workers: [], terrain, door: terrain.door };
     b.architecture = architectureFor(type, entity.id);

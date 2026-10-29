@@ -23,17 +23,15 @@ function renderSegmentWalkable(world,ax,ay,bx,by){
   return true;
 }
 export function sampleCitizenMotion(world,sample,now){
-  const x=sample.entity.x,y=sample.entity.y,done=sampleMotion(sample,now);
-  if(!renderSegmentWalkable(world,x,y,sample.entity.x,sample.entity.y)){
-    // Keep the last valid rendered point and let later samples carry the
-    // citizen around the corner. Snapping to the worker's endpoint made
-    // turns and narrow passages look like visible simulation ticks.
-    sample.entity.x=x;sample.entity.y=y;sample.blockedSince??=now;
-    if(now-sample.blockedSince>=600&&terrainWalkable(world,Math.floor(sample.to.x),Math.floor(sample.to.y))){sample.entity.x=sample.to.x;sample.entity.y=sample.to.y;sample.points=[];sample.blockedSince=null;return true;}
-    return false;
+  // Citizens keep the simulation's discrete, retro step cadence. Interpolate
+  // only when a worker packet skips over a corner along a valid ground path.
+  const x=sample.entity.x,y=sample.entity.y,tx=sample.to.x,ty=sample.to.y;
+  if(renderSegmentWalkable(world,x,y,tx,ty)){
+    sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
-  sample.blockedSince=null;
-  return done;
+  sample.blockedSince??=now;
+  if(now-sample.blockedSince>=600&&terrainWalkable(world,Math.floor(tx),Math.floor(ty))){sample.entity.x=tx;sample.entity.y=ty;sample.points.length=0;sample.blockedSince=null;return true;}
+  return false;
 }
 function renderIndoorPosition(c,position){
   if(Object.prototype.hasOwnProperty.call(c,'_renderIndoorPosition'))c._renderIndoorPosition=position;
@@ -41,9 +39,8 @@ function renderIndoorPosition(c,position){
 }
 function sampleInterior(bridge,sample,now){
   if(bridge.time.paused)return;
-  sampleMotion(sample,now);const points=sample.points,target=now-360;if(!points?.length)return;
-  const a=points[0],b=points[1]||a,t=a===b?1:Math.max(0,Math.min(1,(target-a.at)/(b.at-a.at)));
-  renderIndoorPosition(sample.citizen,{x:sample.entity.x,y:sample.entity.y,z:(a.z??0)+((b.z??a.z??0)-(a.z??0))*t});
+ sample.entity.x=sample.to.x;sample.entity.y=sample.to.y;sample.entity.z=sample.to.z??0;
+ renderIndoorPosition(sample.citizen,{x:sample.entity.x,y:sample.entity.y,z:sample.entity.z});
 }
 function receiveInteriorMotion(bridge,packet,now,resetAll=false){
   if(!packet)return;
@@ -140,11 +137,12 @@ export class CitySimulationBridge {
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
     this.applyVehiclePositions(data.vehicles);
     this.changed({ terrain: revision !== this.city.world.revision, entities: count !== this.entities.length || structure !== this.city.structureRevision });
-    this.metrics={encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
+    this.metrics={...this.metrics,...data.workerMetrics,encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
     this.worker.postMessage({ type: 'ack' });
   }
   receiveMotion(data) {
     const now=performance.now();
+    if(data.workerMetrics)this.metrics={...this.metrics,...data.workerMetrics};
     this.interpolate(now);
     const positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
     this.lastPositionUpdate=now;

@@ -6,7 +6,7 @@ export function citizenIsSleeping(c){
  if(s)return s.roomType==='bedroom'&&!s.exiting&&!s.path?.length;
  return c.action==='Dormindo na rua'&&(!c.homelessSleepSpot||Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)<=.3);
 }
-const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','water','hygiene','supplies','shopping','health','vote','council-session']);
+const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','water','hygiene','supplies','shopping','health','vote','council-session','informal-service','informal-frontage','informal-gardening']);
 export function citizenAnimation(c,moving=false){
   if(c.mobilityTrip?.stage==='boarding')return 'mount';
   if(c.ridingVehicleId){
@@ -15,7 +15,12 @@ export function citizenAnimation(c,moving=false){
   }
   if(moving)return 'run';
   if(c.seated)return 'seated';
-  return WORK_TASKS.has(c.task)&&!c.path?.length?'use':'idle';
+  const activelyUsingFurniture=!!c.furnitureUse&&!c.furnitureUse.seated;
+  const activelyWorkingOutside=!!c.workCell||!!c.forestryJob||!!c.paintWorkId;
+  const activelyInsideWork=!!c.indoorLocation?.unitId&&WORK_TASKS.has(c.task);
+  const activelyOnGig=!!c.informalJobId&&!c.path?.length;
+  const activelyWorking=WORK_TASKS.has(c.task)&&!c.path?.length&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
+  return activelyWorking?'use':'idle';
 }
 export function citizenFrame(clip,time,phase=0){
   if(clip==='mount'||clip==='passenger')return {clip:'use',frame:0};
@@ -118,11 +123,12 @@ export class CityCitizenModels {
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!c.ridingVehicleId)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle;
-    // Animate walking from presentation time rather than traveled distance.
-    // Distance-based frame changes tied the pose to simulation updates and
-    // made each step visibly click at ordinary speed.
-    const sleeping=citizenIsSleeping(c),clip=citizenAnimation(c,moved),pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
-    if(!moved&&!sleeping&&c.facingTarget){const desired=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y),delta=((desired-motion.angle+Math.PI*3)%(Math.PI*2))-Math.PI;motion.angle+=delta*Math.min(1,(this.frameDelta||0)*9);}
+    // Keep the authored animation cycling while a path is active, even between
+    // discrete worker position packets. This preserves the retro step cadence
+    // without incorrectly showing idle for most rendered frames.
+    const traveling=moved||!!c.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
+    const sleeping=citizenIsSleeping(c),clip=citizenAnimation(c,traveling),pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
     if(batch.count===batch.capacity){

@@ -3,6 +3,7 @@ import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
 let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0, lastSnapshotCost = 0, dirty = false, forceSnapshotPending = false;
+let lastUpdateMs=0,maxUpdateMs=0,maxUpdateMinute=0,updateTotalMs=0,updateCount=0;
 const MIN_STEP = 1 / 60;
 // One city minute is 0.25 simulation seconds. At high speed, advancing it
 // in one call avoids rescanning every citizen several times for subminute
@@ -42,6 +43,7 @@ function vitals(){
   for(let i=0;i<people.length;i++){const c=people[i],at=i*stride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)result[at+j]=c.needs[CITY_NEED_FIELDS[j]];result[at+CITY_NEED_FIELDS.length]=c.happiness;result[at+CITY_NEED_FIELDS.length+1]=c.mood;}
   return result;
 }
+function workerMetrics(){return{lastUpdateMs,maxUpdateMs,maxUpdateMinute,averageUpdateMs:updateCount?updateTotalMs/updateCount:0};}
 function snapshot(force = false) {
   if (!state) return false;
   if (awaitingAck) { if (force) forceSnapshotPending = true; return false; }
@@ -49,14 +51,14 @@ function snapshot(force = false) {
   const started = performance.now();
   const packet = graph.encode(state,{packNeeds:true,packPositions:true}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions();
   lastSnapshotCost=performance.now()-started;
-  postMessage({ type: 'state', packet, positions: motion, inside, vehicles, tick, elapsed, workMs: lastSnapshotCost }, [motion.buffer, inside.buffer, vehicles.buffer, packet.packedNeeds.buffer]);
+  postMessage({ type: 'state', packet, positions: motion, inside, vehicles, tick, elapsed, workMs: lastSnapshotCost, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, packet.packedNeeds.buffer]);
   awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
   return true;
 }
 function sendMotion() {
   if (!state || !dirty || paused || performance.now() - lastMotion < MOTION_INTERVAL) return;
   const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),needs=vitals();
-  postMessage({ type: 'motion', positions: motion, inside, vehicles, needs, tick, elapsed }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
+  postMessage({ type: 'motion', positions: motion, inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
   lastMotion = performance.now();
 }
 function fail(error) {
@@ -119,7 +121,9 @@ setInterval(() => {
       const deadline = performance.now() + (speed>=16?14:8), step=stepSize();
       let steps = 0;
       while (accumulator >= step && steps < 240 && performance.now() < deadline) {
-        state.city.update(step); accumulator -= step; tick++; elapsed += step; steps++;
+        const started=performance.now();state.city.update(step);lastUpdateMs=performance.now()-started;updateTotalMs+=lastUpdateMs;updateCount++;
+        if(lastUpdateMs>maxUpdateMs){maxUpdateMs=lastUpdateMs;maxUpdateMinute=state.city.minute;}
+        accumulator -= step; tick++; elapsed += step; steps++;
       }
       if (steps) dirty = true;
     }

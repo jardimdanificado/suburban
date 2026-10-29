@@ -2,7 +2,9 @@
 // The render buffer never predicts beyond known positions, including stops.
 // Keep enough delayed samples to absorb worker scheduling and rendering jitter.
 // This is a visual-only buffer: simulation time and gameplay remain unchanged.
-export const MOTION_BUFFER_MS=360;
+// Motion samples arrive about every 100 ms. Two intervals smooth worker
+// scheduling jitter while keeping citizens close to their simulation position.
+export const MOTION_BUFFER_MS=180;
 export function queueMotion(sample,x,y,now,{reset=false}={}){
   const points=sample.points??=[];
   if(reset||!points.length){sample.previous=null;points.length=0;points.push({x,y,at:now-MOTION_BUFFER_MS});}

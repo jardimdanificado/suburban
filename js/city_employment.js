@@ -197,9 +197,11 @@ export function reviewWages(city,b){
   b.vacancySince??=city.minute;
   if(city.minute-b.vacancySince<1440||b.lastWageReviewDay===city.day)return;
   b.lastWageReviewDay=city.day;
-  // Recruitment pressure raises the offer only when the firm can fund a week of payroll.
-  const next=Math.min(1000,b.baseWage*1.1),payroll=city.currency.price(Math.max(next,city.politics.policy.minimumWage||0))*Math.max(1,b.workers.length+1)*480*7;
-  if(b.balance<Math.max(city.currency.price(20000),payroll))return;
+  // An unfilled vacancy becomes more expensive every day. Require one shift
+  // of payroll in reserve, rather than a full week, so small firms can still
+  // compete for workers without promising wages they cannot pay.
+  const next=Math.min(1000,Math.max(b.baseWage+1,b.baseWage*1.12)),payroll=city.currency.price(Math.max(next,city.politics.policy.minimumWage||0))*Math.max(1,b.workers.length+1)*480;
+  if(b.balance<Math.max(city.currency.price(5000),payroll))return;
   b.baseWage=next;
   city.history.record('employment',`${b.entity.properties.name} elevou sua base salarial para disputar funcionários.`,[b.accountId],{buildingId:b.id,wage:b.wage,action:'revisão salarial'});
 }

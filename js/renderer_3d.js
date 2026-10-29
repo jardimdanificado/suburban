@@ -146,7 +146,11 @@ function getEntityBounds(e) {
   const isSeaweed = isPlantOrFlora && (e.properties?.species === "seaweed" || e.properties?.name?.toLowerCase().includes("seaweed") || e.properties?.name?.toLowerCase().includes("alga"));
   const isTree = !isCactus && !isBerryBush && !isRoseBush && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties?.species === "oak" || e.properties?.species === "pine" || e.properties?.species === "willow" || e.properties?.species === "tree" || !!e.properties?.tree || (r?.skin && r?.skin.toLowerCase().includes("tree")) || (e.properties?.photosynthesis && !e.properties?.life?.isDead));
 
-  if (isTree) return { radius: 1.25, h: 4.8, yBottom: 0.0 };
+  // Tree crowns are visually broad, but letting the whole crown act as a
+  // collider made it possible to select a tree from several tiles away.
+  // Keep selection close to the trunk while retaining enough vertical span
+  // for the visible model.
+  if (isTree) return { radius: 0.48, h: 3.2, yBottom: 0.0 };
   if (isBerryBush || isRoseBush || isShrub) return { radius: 0.9, h: 1.8, yBottom: 0.0 };
   if (isWaterLily || isSeaweed) return { radius: 0.75, h: 0.6, yBottom: 0.0 };
   if (isHouse) {

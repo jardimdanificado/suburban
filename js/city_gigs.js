@@ -9,7 +9,11 @@ const cleanFee=(city,building,scope,payerId=null)=>{
 export class CityGigs{
  constructor(city){this.city=city;this.jobs=[];this.nextId=1;this.completed=0;}
  get(id){return this.jobs.find(j=>j.id===id);}
- quote(buildingId,scope='interior',payerAccountId=null){const b=this.city.building(buildingId);return b?cleanFee(this.city,b,scope,payerAccountId):0;}
+ quote(buildingId,scope='interior',payerAccountId=null){const b=this.city.building(buildingId);if(!b)return 0;const city=this.city;if(scope==='repair')return Math.ceil(city.currency.price(1400+Math.max(0,75-(b.condition||100))*45)*(payerAccountId==='treasury'?1.5:1));if(scope==='garden')return Math.ceil(city.currency.price(1800)*(payerAccountId==='treasury'?1.5:1));return cleanFee(city,b,scope,payerAccountId);}
+ gardenPoint(b){const city=this.city,x=Math.floor(b.entity.x),y=Math.floor(b.entity.y),points=[];for(let px=x-1;px<=x+b.width;px++){points.push([px,y-1],[px,y+b.depth]);}for(let py=y;py<y+b.depth;py++)points.push([x-1,py],[x+b.width,py]);for(const [gx,gy]of points)if(city.walkable(gx,gy)&&city.nature.available(gx,gy,'berry',b.id))return {x:gx+.5,y:gy+.5,tileX:gx,tileY:gy};return null;}
+ createRepairOrder(payerAccountId,buildingId,{fee=null}={}){const city=this.city,b=city.building(buildingId);if(!b||b.constructionKind==='open-air'||!b.units.length||!city.accounts.has(payerAccountId)||!(b.repairNeeded||b.condition<85)||this.jobs.some(j=>j.kind==='repair'&&j.buildingId===b.id&&ACTIVE.has(j.status)))return false;const amount=fee??this.quote(b.id,'repair',payerAccountId),unit=b.units.find(u=>['workspace','office','service'].includes(u.roomType))||b.units[0];return this.reserveOrder(payerAccountId,b,{kind:'repair',scope:'interior',fee:amount,unitId:unit.id,required:24});}
+ createGardenOrder(payerAccountId,buildingId,{fee=null}={}){const city=this.city,b=city.building(buildingId),point=b&&this.gardenPoint(b);if(!b||!point||!city.accounts.has(payerAccountId)||this.jobs.some(j=>j.kind==='gardening'&&j.buildingId===b.id&&ACTIVE.has(j.status)))return false;const amount=fee??this.quote(b.id,'garden',payerAccountId);return this.reserveOrder(payerAccountId,b,{kind:'gardening',scope:'outdoor',fee:amount,point,required:18});}
+ reserveOrder(payerAccountId,b,{kind,scope,fee,unitId=null,point=null,required=20}){const city=this.city;if(!Number.isSafeInteger(fee)||fee<1||(city.accounts.get(payerAccountId)?.balance||0)<fee)return false;const id=this.nextId++,accountId=`gig:${id}`,account={name:`Serviço autônomo ${id}`,balance:0};city.accounts.set(accountId,account);if(!city.transfer(payerAccountId,accountId,fee,`Reserva de bico de ${kind}`,{gigId:id,buildingId:b.id})){city.accounts.delete(accountId);return false;}const job={id,accountId,payerAccountId,buildingId:b.id,unitId,point,kind,scope,fee,status:'open',workerId:null,progress:0,required,createdAt:city.minute,completedAt:null};this.jobs.push(job);const label=kind==='repair'?'pequeno reparo':'jardinagem';city.history.record('service',`Bico de ${label} anunciado para ${b.entity.properties.name}.`,[payerAccountId,b.accountId],{kind:'gig-posted',gigId:id,buildingId:b.id,service:kind,amount:fee,createdAt:city.minute});city.log(`Bico de ${label} #${id} anunciado.`,'work',[],{kind:'gig-posted',gigId:id,buildingId:b.id,service:kind,accounts:[payerAccountId],amount:fee});return job;}
  createCleaningOrder(payerAccountId,buildingId,{scope='interior',fee=null}={}){
   const city=this.city,b=city.building(buildingId);
   if(!b||!['interior','frontage'].includes(scope)||!city.accounts.has(payerAccountId)||this.jobs.some(j=>j.buildingId===b.id&&j.scope===scope&&ACTIVE.has(j.status)))return false;
@@ -22,7 +26,7 @@ export class CityGigs{
  }
  candidates(job){
   const city=this.city,b=city.building(job.buildingId);if(!b)return [];
-  const point=job.scope==='frontage'?this.frontagePoint(b):b.door;
+  const point=job.kind==='gardening'?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;
   return city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.role?.includes('councilor')&&!c.jobId&&!(c.businessIds?.length)&&(!c.task||INTERRUPTIBLE.has(c.task))&&!c.indoorLocation&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!city.urgentNeed(c)&&c.needs.energy>25&&city.findPath(c.entity,point)!==null)
    .sort((a,z)=>Math.hypot(a.entity.x-point.x,a.entity.y-point.y)-Math.hypot(z.entity.x-point.x,z.entity.y-point.y)||a.id-z.id);
  }
@@ -54,27 +58,30 @@ export class CityGigs{
    let worker=city.society.citizen(job.workerId);
    if(worker&&(worker.entity.destroyed||city.urgentNeed(worker))){this.release(job,worker);worker=null;}
    if(!worker){if(city.hour<7||city.hour>=20||city.minute%3!==job.id%3)continue;const candidates=this.candidates(job);job.availableCandidates=candidates.length;worker=candidates[0];if(!worker)continue;
-    const goal=job.scope==='frontage'?this.frontagePoint(b):b.door,path=city.findPath(worker.entity,goal);if(path===null)continue;
-    job.workerId=worker.id;job.status='working';job.startedAt=city.minute;worker.informalJobId=job.id;city.furniture?.release(worker);worker.task=job.scope==='interior'?'informal-service':'informal-frontage';worker.targetId=job.scope==='interior'?b.id:null;worker.path=path;worker.servicePaid=null;city.history.record('service',`${worker.entity.properties.name} aceitou um bico de faxina em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,amount:job.fee,minute:city.minute});city.log(`${worker.entity.properties.name} aceitou o bico de faxina #${job.id}.`,'work',[worker.id],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,amount:job.fee});
+    const goal=job.kind==='gardening'?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door,path=city.findPath(worker.entity,goal);if(path===null)continue;
+    job.workerId=worker.id;job.status='working';job.startedAt=city.minute;worker.informalJobId=job.id;city.furniture?.release(worker);worker.task=job.kind==='gardening'?'informal-gardening':job.scope==='interior'?'informal-service':'informal-frontage';worker.targetId=job.scope==='interior'?b.id:null;worker.path=path;worker.servicePaid=null;const label=job.kind==='repair'?'um reparo':job.kind==='gardening'?'um serviço de jardinagem':'uma faxina';city.history.record('service',`${worker.entity.properties.name} aceitou ${label} em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,service:job.kind,amount:job.fee,minute:city.minute});city.log(`${worker.entity.properties.name} aceitou o bico #${job.id}.`,'work',[worker.id],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,service:job.kind,amount:job.fee});
    }
-   if(job.scope==='interior'){
+   if(job.kind==='gardening'){
+    if(Math.hypot(worker.entity.x-job.point.x,worker.entity.y-job.point.y)>.4||worker.path.length)continue;
+   }else if(job.scope==='interior'){
     const room=city.units.get(job.unitId);if(!room){this.cancel(job,'cômodo removido');continue;}
     if(!activityRoomReady(city,worker,b,room,room.roomType))continue;
    }else{
     const goal=this.frontagePoint(b);if(Math.hypot(worker.entity.x-goal.x,worker.entity.y-goal.y)>.4||worker.path.length)continue;
    }
-   job.progress++;worker.action=job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,'cleaning');
+   job.progress++;worker.action=job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'farming':'cleaning');
    if(job.progress<job.required)continue;
-   this.clean(job,b);const paid=city.transfer(job.accountId,worker.accountId,city.accounts.get(job.accountId)?.balance||0,'Pagamento por faxina informal',{gigId:job.id,buildingId:b.id,scope:job.scope});
+   if(job.kind==='cleaning'||!job.kind)this.clean(job,b);else if(job.kind==='repair'){b.condition=Math.min(100,(b.condition||0)+35);b.repairNeeded=b.condition<70;}else if(job.kind==='gardening'){const planted=city.nature.spawn(job.point.tileX,job.point.tileY,'berry',{buildingId:b.id});if(!planted){this.cancel(job,'canteiro ocupado antes do plantio');continue;}}
+   const paid=city.transfer(job.accountId,worker.accountId,city.accounts.get(job.accountId)?.balance||0,`Pagamento por bico de ${job.kind||'faxina'}`,{gigId:job.id,buildingId:b.id,scope:job.scope});
    job.status='completed';job.completedAt=city.minute;job.completedBy=worker.id;this.completed++;worker.informalJobId=null;worker.task=null;worker.targetId=null;worker.path=[];worker.workCell=null;
-   city.history.record('service',`Faxina informal concluída em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-completed',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,amount:paid?job.fee:0,progress:job.progress});
-   city.log(`${worker.entity.properties.name} concluiu uma faxina paga em ${b.entity.properties.name}.`,'work',[worker.id],{kind:'gig-completed',gigId:job.id,buildingId:b.id,accounts:[job.payerAccountId,worker.accountId],amount:job.fee});
+   const label=job.kind==='repair'?'pequeno reparo':job.kind==='gardening'?'jardinagem':'faxina';city.history.record('service',`${label} informal concluída em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-completed',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,service:job.kind||'cleaning',amount:paid?job.fee:0,progress:job.progress});
+   city.log(`${worker.entity.properties.name} concluiu um bico de ${label} em ${b.entity.properties.name}.`,'work',[worker.id],{kind:'gig-completed',gigId:job.id,buildingId:b.id,accounts:[job.payerAccountId,worker.accountId],amount:job.fee,service:job.kind||'cleaning'});
   }
   if(this.jobs.length>256){const done=this.jobs.filter(j=>!ACTIVE.has(j.status));if(done.length>128)for(const job of done.slice(0,done.length-128))this.jobs.splice(this.jobs.indexOf(job),1);}
  }
- cancel(job,reason='cancelado'){
+  cancel(job,reason='cancelado'){
   if(!ACTIVE.has(job.status))return;const worker=this.city.society.citizen(job.workerId);this.release(job,worker,{reopen:false});
   const amount=this.city.accounts.get(job.accountId)?.balance||0;if(amount)this.city.transfer(job.accountId,job.payerAccountId,amount,'Estorno de serviço informal',{gigId:job.id,buildingId:job.buildingId});
-  job.status='cancelled';job.completedAt=this.city.minute;job.cancelReason=reason;this.city.history.record('service',`Bico de faxina #${job.id} cancelado: ${reason}.`,[job.payerAccountId,job.accountId],{kind:'gig-cancelled',gigId:job.id,buildingId:job.buildingId,scope:job.scope,minute:this.city.minute});this.city.log(`Bico de faxina #${job.id} cancelado: ${reason}.`,'work',worker?[worker.id]:[],{kind:'gig-cancelled',gigId:job.id,buildingId:job.buildingId});
+  job.status='cancelled';job.completedAt=this.city.minute;job.cancelReason=reason;const label=job.kind==='repair'?'reparo':job.kind==='gardening'?'jardinagem':'faxina';this.city.history.record('service',`Bico de ${label} #${job.id} cancelado: ${reason}.`,[job.payerAccountId,job.accountId],{kind:'gig-cancelled',gigId:job.id,buildingId:job.buildingId,scope:job.scope,service:job.kind||'cleaning',minute:this.city.minute});this.city.log(`Bico de ${label} #${job.id} cancelado: ${reason}.`,'work',worker?[worker.id]:[],{kind:'gig-cancelled',gigId:job.id,buildingId:job.buildingId});
  }
 }

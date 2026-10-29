@@ -395,6 +395,7 @@ export class CityDevelopment {
     if (accountId === 'treasury' && fee) project.fee = publicFee;
     if (!city.transfer(accountId, project.feeAccountId, project.fee, 'Reserva do serviço de construção', {projectId:project.id})) { city.accounts.delete(project.feeAccountId); return null; }
     this.projects.push(project); p.projectId = project.id;p.door={...terrain.door};
+    city.clearCardboardSheltersForArea?.(p.x,p.y,width,depth);
     city.log(`${owner.entity.properties.name} iniciou ${city.buildingTypes[type].label} no terreno ${p.id}: ${stone} pedras.`, 'construction', [owner.id], { kind: 'project-started', projectId: project.id, plotId });
     if (!stone) this.complete(project);
     return project;
