@@ -1,3 +1,4 @@
+import {mergeStaticMeshes} from './city_static_mesh.js';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 
 // Small architectural details are part of the model, not floating labels.
@@ -78,4 +79,5 @@ export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  case'quarry':for(const x of [-.3,.2])ball(.32,x,.22,0,0x949a96).scale.y=.65;break;
  case'farm':case'mill':break;
  }
+ mergeStaticMeshes(THREE,root);
 }

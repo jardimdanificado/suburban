@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {queueService} from './city_service_queue.js';
+import {queueService} from './city_service_queue.js?v=needs-recovery-1';
 // Outdoor coordinates remain the navigation anchor at the entrance. Interior
 // position, circulation and floor changes are separate physical coordinates.
 const INDOOR_TASKS=new Set(['work','manage','shopping','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','leisure','social','outdoor_leisure']);
@@ -132,9 +132,13 @@ export function syncCitizenInterior(city,c){
   if(!queueService(city,c,b,task,task==='toilet'?c.toiletTargetId:'dining',ready))return false;
  }
  if(!room){
+  // A full public shelter must not leave a homeless person waiting forever
+  // while exhaustion keeps rising. They can still sleep outdoors, at a cost.
+  if(task==='energy'&&!c.homeUnitId){c.sleepWaitingSince??=city.minute;if(city.minute-c.sleepWaitingSince>=30){c.sleepWaitingSince=null;c.targetId=null;c.path=[];c.action='Sem vaga para dormir; buscando descanso na rua';return exit(city,c);}}
   if(b.constructionKind!=='open-air'&&!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5){const from={x:b.door.x,y:b.door.y,z:0},lobby={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:0};c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:from,path:interiorRoute(b,from,lobby),task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}
   c.action=`Aguardando célula de ${kind} disponível`;return false;
  }
+ if(task==='energy')c.sleepWaitingSince=null;
  return activityRoomReady(city,c,b,room,kind);
 }
 

@@ -1,4 +1,4 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=sync-perf-1';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=needs-recovery-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
@@ -75,6 +75,12 @@ export class CitySanitation {
     const stored = Math.min(amount, inventoryFree(b)); b.inventory.lixo += stored; b.litter += amount - stored;
     this.city.economy.produced.lixo += amount;
     this.city.economy.recordGoods('waste', 'lixo', amount, null, b.id);
+  }
+  emergencyRelief(c) {
+    c.needs.toilet=clamp(c.needs.toilet+65);c.needs.hygiene=clamp(c.needs.hygiene-12);c.mood=Math.max(-25,(c.mood||0)-8);
+    c.toiletWaitingSince=null;c.toiletTargetId=null;c.task=null;c.targetId=null;c.path=[];c.action='Aliviou-se por falta de banheiro';
+    this.outdoorIncidents=(this.outdoorIncidents||0)+1;
+    this.city.log(`${c.entity.properties.name} não encontrou banheiro e precisou se aliviar ao ar livre.`, 'sanitation', [c.id], {kind:'toilet-emergency',x:c.entity.x,y:c.entity.y});
   }
   use(c) {
     const f = this.facilities.get(c.toiletTargetId), b = f && this.city.building(f.buildingId);

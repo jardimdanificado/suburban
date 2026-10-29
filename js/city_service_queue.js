@@ -20,6 +20,9 @@ export function queueService(city,c,b,kind,resource,ready){
   if(!inside&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.9){const route=city.findPath(c.entity,b.door);if(route!==null)c.path=route;c.action='Indo ao atendimento';return false;}
   entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;return true;
  }
+ // A queue can outlast its service capacity; a critically urgent person must
+ // eventually leave it instead of waiting forever at zero need.
+ if(kind==='toilet'&&!inside&&c.needs.toilet<10&&city.minute-ticket.joinedAt>=90){entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;city.sanitation.emergencyRelief(c);return false;}
  c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':'Aguardando na fila de alimentação';
  if(inside)return false;
  if(ticket.slot==null){const used=new Set(entrance.serviceQueue.filter(q=>q!==ticket&&q.slot!=null).map(q=>q.slot)),occupied=new Set();for(const other of city.citizens)if(other!==c&&!other.entity.destroyed&&!other.indoorLocation){occupied.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)occupied.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}const positions=slots(city,entrance);for(let i=0;i<positions.length;i++){if(used.has(i))continue;const p=positions[i];if(occupied.has(`${Math.floor(p.x)},${Math.floor(p.y)}`))continue;const path=city.findPath(c.entity,p);if(path===null)continue;ticket.slot=i;c.path=path;break;}}

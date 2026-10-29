@@ -7,14 +7,14 @@ import {partyAccount,allocatePartyFunds,changePartyFund,illegalPartyFunding} fro
 import {appearance} from './city_clothing.js?v=party-caps-skin-1';
 import {CityResearch} from './city_research.js';
 import {CityGovernmentAgenda} from './city_government_agenda.js';
-import {CityVoting} from './city_voting.js';
+import {CityVoting} from './city_voting.js?v=needs-recovery-1';
 import {CityPoliticalStanding} from './city_political_standing.js';
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
 import {makePartyName,partyNameAgenda} from './city_party_names.js';
 import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js?v=party-caps-skin-1';
 import {seedPartyCaps,issuePartyCap,returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investigateCases } from './city_political_institutions.js';
-import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js';
+import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js?v=needs-recovery-1';
 import { makePartyFlag, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
 import { CityCouncil } from './city_council.js';
 import { CityCampaigns } from './city_campaigns.js?v=party-caps-skin-1';

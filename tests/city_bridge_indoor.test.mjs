@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {CitySimulationBridge,sampleCitizenMotion} from '../js/city_sim_bridge.js?v=sync-perf-1';
+import {CitySimulationBridge,sampleCitizenMotion} from '../js/city_sim_bridge.js?v=needs-recovery-1';
 import {queueMotion} from '../js/city_motion.js';
 import {TILE_FLOOR,TILE_WATER} from '../js/world_gen.js';
 

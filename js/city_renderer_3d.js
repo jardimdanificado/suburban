@@ -1,4 +1,4 @@
-import {addBuildingDetails} from './city_building_details.js?v=housing-flag-windows-1';
+import {addBuildingDetails} from './city_building_details.js?v=merged-architecture-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
@@ -9,7 +9,7 @@ import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=business-heights-1';
-import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-living-2';
+import {addArchitectureVariations} from './city_architecture_variations.js?v=merged-architecture-1';
 import {syncSkybridges} from './city_skybridges.js?v=rooftop-bridges-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=rooftop-bridges-1';
 function buildingMaterial(renderer,THREE,kind,color){

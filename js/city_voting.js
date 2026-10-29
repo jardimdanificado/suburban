@@ -26,6 +26,8 @@ export class CityVoting {
     // to miss the entire polling window. Only urgent needs and committed jobs
     // that cannot safely be interrupted keep a voter from routing to the hall.
     if(city.urgentNeed(c)||c.workMeal||c.deliveryId||c.cleaningJobId){row.reason=city.urgentNeed(c)?`Necessidade urgente: ${city.urgentNeed(c)}`:'Serviço ou entrega em andamento';return false;}
+    const recovering=(c.task==='energy'&&c.needs.energy<50)||(c.task==='toilet'&&c.needs.toilet<60)||(c.task==='food'&&c.needs.food<50);
+    if(recovering){row.reason=c.task==='energy'?'Recuperando energia':c.task==='toilet'?'Usando ou aguardando banheiro':'Recuperando alimentação';row.nextAttemptAt=city.minute+VOTING_RULES.retryMinutes;return false;}
     row.nextAttemptAt=city.minute+VOTING_RULES.retryMinutes;const path=city.findPath(c.entity,hall.door);
     if(path===null){row.reason='Sem caminho acessível até a prefeitura';return true;}
     if(c.conversation){const other=city.society.citizen(c.conversation.a===c.id?c.conversation.b:c.conversation.a);if(other)other.conversation=null;c.conversation=null;}

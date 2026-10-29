@@ -2,6 +2,8 @@ import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {HOUSE_STYLES} from './city_culture.js';
 import {INDUSTRIES} from './city_industries.js';
 
+import {mergeStaticMeshes} from './city_static_mesh.js';
+
 // These additions are architectural meshes, not extra simulated rooms. They
 // sit on the roof or above head height and never reserve street tiles.
 export function addArchitectureVariations(THREE,parent,b,spaces=[]){
@@ -75,4 +77,5 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[]){
    box(Math.max(.8,b.width-.6),.12,Math.max(.6,b.depth*.5),b.width/2,roof+1.25,b.depth*.5,variant%2?0xc98964:0x83a59b);
   }
  }
+ mergeStaticMeshes(THREE,root);
 }
