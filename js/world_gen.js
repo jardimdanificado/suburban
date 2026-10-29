@@ -147,24 +147,19 @@ function island_falloff(dx, dy, radius) {
 
 let s_hmap = new Float32Array(0);
 let tmp_ca = new Uint8Array(0);
+let tmp_ca_vertical = new Uint8Array(0);
 
 function ca_smooth(map, iterations, MAP_WIDTH, MAP_HEIGHT) {
+  if(tmp_ca.length!==map.length)tmp_ca=new Uint8Array(map.length);
+  if(tmp_ca_vertical.length!==map.length)tmp_ca_vertical=new Uint8Array(map.length);
   for (let iter = 0; iter < iterations; iter++) {
     for (let y = 0; y < MAP_HEIGHT; y++) {
-      const yOffset = y * MAP_WIDTH;
+      const yOffset=y*MAP_WIDTH,upOffset=(y-1)*MAP_WIDTH,downOffset=(y+1)*MAP_WIDTH;
+      for(let x=0;x<MAP_WIDTH;x++){let count=map[yOffset+x]!==TILE_WATER;if(y>0&&map[upOffset+x]!==TILE_WATER)count++;if(y+1<MAP_HEIGHT&&map[downOffset+x]!==TILE_WATER)count++;tmp_ca_vertical[yOffset+x]=count;}
       for (let x = 0; x < MAP_WIDTH; x++) {
-        let land = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          const ny = y + dy;
-          if (ny < 0 || ny >= MAP_HEIGHT) continue;
-          const nyOffset = ny * MAP_WIDTH;
-          for (let dx = -1; dx <= 1; dx++) {
-            const nx = x + dx;
-            if (nx < 0 || nx >= MAP_WIDTH) continue;
-            const t = map[nyOffset + nx];
-            if (t !== TILE_WATER) land++;
-          }
-        }
+        let land=tmp_ca_vertical[yOffset+x];
+        if(x>0)land+=tmp_ca_vertical[yOffset+x-1];
+        if(x+1<MAP_WIDTH)land+=tmp_ca_vertical[yOffset+x+1];
         const idx = yOffset + x;
         const cur = map[idx];
         if (cur !== TILE_WATER) {

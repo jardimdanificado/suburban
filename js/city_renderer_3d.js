@@ -11,7 +11,7 @@ import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './
 import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=furniture-farms-fertilizer-1';
+import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=deep-perf-3';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-door-alignment-2';
 import {syncSkybridges} from './city_skybridges.js?v=bridge-clean-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';

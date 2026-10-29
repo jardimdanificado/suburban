@@ -1,9 +1,9 @@
-import {baseTerrainTile} from './world_gen.js?v=furniture-farms-fertilizer-1';
+import {baseTerrainTile} from './world_gen.js?v=deep-perf-3';
 import {businessFloors} from './city_business_heights.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js?v=initial-cycle-ref-1';
 import {buildingEntrance} from './city_building_geometry.js';
 import {OFFICE_BUSINESSES} from './city_offices.js?v=office-demand-rollout-1';
-import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js?v=furniture-farms-fertilizer-1';
+import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js?v=deep-perf-3';
 
 const heights = [1.1, 5.5, 0, .4, 3.8, 0, 1.1, .4, 1.1, 2.3, 7.5, .4, 2.3, 2.3];
 export const ROAD_TILES = new Set([TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE]);
@@ -122,21 +122,28 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
   return { ...terrain, door, rotation };
 }
 
-class MinHeap {
-  items = [];
-  push(node) {
-    const a = this.items; a.push(node); let i = a.length - 1;
-    while (i > 0) { const p = (i - 1) >> 1; if (a[p].score <= node.score) break; a[i] = a[p]; i = p; } a[i] = node;
-  }
-  pop() {
-    const a = this.items, first = a[0], last = a.pop();
-    if (a.length) { let i = 0; while (i * 2 + 1 < a.length) { let child = i * 2 + 1; if (child + 1 < a.length && a[child + 1].score < a[child].score) child++; if (a[child].score >= last.score) break; a[i] = a[child]; i = child; } a[i] = last; }
-    return first;
-  }
-}
-
 const pathWorkspaces = new WeakMap();
+const pathTerrainGrids = new WeakMap();
 const pathDirections = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+const tileCosts=(()=>{const values=new Float64Array(256);for(let tile=0;tile<values.length;tile++)values[tile]=roadTravelCost(tile);return values;})();
+function terrainPathGrid(world){
+  let grid=pathTerrainGrids.get(world);if(grid&&grid.revision===(world.revision||0)&&grid.width===world.width&&grid.height===world.height)return grid;
+  const size=world.width*world.height,tiles=new Uint8Array(size),walkable=new Uint8Array(size),roads=new Uint8Array(size),source=world.map;
+  for(let i=0;i<size;i++){const tile=baseTerrainTile(source?source[i]:world.getTile(i%world.width,Math.floor(i/world.width)));tiles[i]=tile;walkable[i]=land.has(tile)?1:0;roads[i]=ROAD_TILES.has(tile)?1:0;}
+  grid={revision:world.revision||0,width:world.width,height:world.height,tiles,walkable,roads};pathTerrainGrids.set(world,grid);return grid;
+}
+function heapPush(w,node,cost,score){
+  let cap=w.heapNodes.length;if(w.heapLength===cap){cap=Math.max(64,cap*2);const nodes=new Int32Array(cap),costs=new Float64Array(cap),scores=new Float64Array(cap);nodes.set(w.heapNodes);costs.set(w.heapCosts);scores.set(w.heapScores);w.heapNodes=nodes;w.heapCosts=costs;w.heapScores=scores;}
+  const nodes=w.heapNodes,costs=w.heapCosts,scores=w.heapScores;let i=w.heapLength++;
+  while(i>0){const p=(i-1)>>1;if(scores[p]<=score)break;nodes[i]=nodes[p];costs[i]=costs[p];scores[i]=scores[p];i=p;}
+  nodes[i]=node;costs[i]=cost;scores[i]=score;
+}
+function heapPop(w){
+  const nodes=w.heapNodes,costs=w.heapCosts,scores=w.heapScores,first=nodes[0];w.poppedCost=costs[0];const last=w.heapLength-1;w.heapLength=last;if(!last)return first;
+  const node=nodes[last],cost=costs[last],score=scores[last];let i=0;
+  while(i*2+1<last){let child=i*2+1;if(child+1<last&&scores[child+1]<scores[child])child++;if(scores[child]>=score)break;nodes[i]=nodes[child];costs[i]=costs[child];scores[i]=scores[child];i=child;}
+  nodes[i]=node;costs[i]=cost;scores[i]=score;return first;
+}
 
 // Reachability does not need a shortest path for every pair of businesses.
 // Label the settlement's walkable components once per obstacle/terrain change.
@@ -176,46 +183,46 @@ export function settlementConnected(city, a, b) {
 
 export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false,blockedGrid=null } = {}) {
   const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
-  if (!terrainWalkable(world, sx, sy) || !terrainWalkable(world, gx, gy) || blocked.has(tileKey(gx, gy))) return null;
+  if(sx<0||sy<0||gx<0||gy<0||sx>=world.width||gx>=world.width||sy>=world.height||gy>=world.height)return null;
+  const terrain=terrainPathGrid(world),startKey=sy*world.width+sx,goalKey=gy*world.width+gx;
+  if (!terrain.walkable[startKey] || !terrain.walkable[goalKey] || blocked.has(tileKey(gx, gy))) return null;
   // Search the much smaller street network first. Keep off-road shortcuts when
   // following the streets would cost more than a near-direct walk on flat land.
-  if(preferRoads&&!extraBlocked&&ROAD_TILES.has(tileAt(world,sx,sy))&&ROAD_TILES.has(tileAt(world,gx,gy))){
+  if(preferRoads&&!extraBlocked&&terrain.roads[startKey]&&terrain.roads[goalKey]){
     const direct=Math.abs(gx-sx)+Math.abs(gy-sy),roadPath=findTerrainPath(world,start,goal,blocked,{limit:Math.min(limit,Math.max(128,direct*24)),preferRoads:false,roadOnly:true,blockedGrid});
-    if(roadPath){let cost=0,x=sx,y=sy;for(const p of roadPath){const nx=Math.floor(p.x),ny=Math.floor(p.y),tile=tileAt(world,nx,ny);cost+=roadTravelCost(tile)+Math.abs(tileHeight(tile)-tileHeight(tileAt(world,x,y)))*.7;x=nx;y=ny;}
+    if(roadPath){let cost=0,previous=startKey;for(const p of roadPath){const x=Math.floor(p.x),y=Math.floor(p.y),key=y*world.width+x,tile=terrain.tiles[key];cost+=tileCosts[tile]+Math.abs(tileHeight(tile)-tileHeight(terrain.tiles[previous]))*.7;previous=key;}
       if(cost<=direct*1.05)return roadPath;
     }
   }
   const width = world.width, size = width * world.height;
   let workspace = pathWorkspaces.get(world);
   if (!workspace || workspace.costs.length !== size) {
-    workspace = { costs: new Float64Array(size), parents: new Int32Array(size), marks: new Uint32Array(size), generation: 0 };
+    workspace = { costs: new Float64Array(size), parents: new Int32Array(size), marks: new Uint32Array(size), generation: 0,heapNodes:new Int32Array(0),heapCosts:new Float64Array(0),heapScores:new Float64Array(0),heapLength:0 };
     pathWorkspaces.set(world, workspace);
   }
   workspace.generation = (workspace.generation + 1) >>> 0;
   if (!workspace.generation) { workspace.marks.fill(0); workspace.generation = 1; }
   const { costs, parents, marks, generation } = workspace;
-  const startKey = sy * width + sx, goalKey = gy * width + gx;
-  const open = new MinHeap(); costs[startKey] = 0; marks[startKey] = generation;
-  open.push({ x: sx, y: sy, cost: 0, score: 0 });
+  workspace.heapLength=0;costs[startKey] = 0; marks[startKey] = generation;
+  heapPush(workspace,startKey,0,0);
   let visited = 0;
-  while (open.items.length && visited++ < limit) {
-    const current = open.pop(), k = current.y * width + current.x;
-    if (marks[k] !== generation || current.cost !== costs[k]) continue;
+  while (workspace.heapLength && visited++ < limit) {
+    const k=heapPop(workspace),currentCost=workspace.poppedCost;
+    if (marks[k] !== generation || currentCost !== costs[k]) continue;
     if (k === goalKey) {
       const path = []; let step = goalKey;
       while (step !== startKey) { path.push({ x: step % width + .5, y: Math.floor(step / width) + .5 }); step = parents[step]; }
       return path.reverse();
     }
-    const currentHeight=tileHeight(tileAt(world,current.x,current.y));
+    const currentHeight=tileHeight(terrain.tiles[k]),cx=k%width,cy=Math.floor(k/width);
     for (const [dx, dy] of pathDirections) {
-      const x = current.x + dx, y = current.y + dy, nextKey = y * width + x;
-      const tile = tileAt(world, x, y);
-      if (!land.has(baseTerrainTile(tile)) || Math.abs(currentHeight-tileHeight(tile))>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
-      if(roadOnly&&!ROAD_TILES.has(tile))continue;
-      const cost = current.cost + roadTravelCost(tile) + Math.abs(tileHeight(tile) - currentHeight) * .7;
+      const x=cx+dx,y=cy+dy;if(x<0||y<0||x>=width||y>=world.height)continue;const nextKey=y*width+x,tile=terrain.tiles[nextKey],height=tileHeight(tile);
+      if (!terrain.walkable[nextKey] || Math.abs(currentHeight-height)>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
+      if(roadOnly&&!terrain.roads[nextKey])continue;
+      const cost = currentCost + tileCosts[tile] + Math.abs(height-currentHeight) * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
       marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
-      open.push({ x, y, cost, score: cost + (Math.abs(gx - x) + Math.abs(gy - y)) * .55 });
+      heapPush(workspace,nextKey,cost,cost+(Math.abs(gx-x)+Math.abs(gy-y))*.55);
     }
 
   }

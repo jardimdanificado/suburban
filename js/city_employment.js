@@ -62,8 +62,9 @@ function nearbyFirms(city,c){
   return result;
 }
 export function discoverVacancies(city,c,force=false){
+  if(!force&&city.minute<(c.career?.nextDiscoveryAt||0))return;
   if(c.entity.destroyed||c.indoorLocation||!city.society.isAdult(c)||city.politics.officeHolder(c)||c.businessIds.length)return;
-  const cv=career(c);if(!force&&city.minute<(cv.nextDiscoveryAt||0))return;cv.nextDiscoveryAt=city.minute+RECRUITMENT_RULES.discoveryInterval;
+  const cv=career(c);cv.nextDiscoveryAt=city.minute+RECRUITMENT_RULES.discoveryInterval;
   cv.knownVacancies??=[];
   for(const b of nearbyFirms(city,c)){
     let entry=cv.knownVacancies.find(v=>v.buildingId===b.id);if(!entry){entry={buildingId:b.id,discoveredAt:city.minute,source:'Anúncio na fachada'};cv.knownVacancies.push(entry);}

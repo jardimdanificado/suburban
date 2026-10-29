@@ -1,4 +1,4 @@
-import {CityFurniture} from './city_furniture.js';
+import {CityFurniture} from './city_furniture.js?v=deep-perf-3';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket} from './city_supplies.js';
 import {CityWater} from './city_water.js';
@@ -25,12 +25,12 @@ import {skybridgeLinks} from './city_skybridges.js?v=bridge-clean-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=furniture-farms-fertilizer-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=deep-perf-3';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
-import { quarryDeposits } from './city_terrain.js?v=furniture-farms-fertilizer-1';
+import { quarryDeposits } from './city_terrain.js?v=deep-perf-3';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
@@ -42,8 +42,8 @@ import { CityLogistics } from './city_logistics.js?v=furniture-farms-fertilizer-
 import { CityGigs } from './city_gigs.js?v=furniture-farms-fertilizer-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=furniture-farms-fertilizer-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=pocket-water-cutaway-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=furniture-farms-fertilizer-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=deep-perf-3';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=deep-perf-3';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -397,6 +397,8 @@ export class CitySimulation {
     const revision = `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
     if (this.pathCacheRevision !== revision) { this.pathCache = new Map(); this.pathCacheRevision = revision; }
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
+    const links=allowSkybridges&&this.buildings.length>1?this.skybridgeLinksForRevision(revision):NO_CHILDREN;
+    if(links.length){if(!this.skybridgePathCache||this.skybridgePathCacheRevision!==revision){this.skybridgePathCache=new Map();this.skybridgePathCacheRevision=revision;}if(this.skybridgePathCache.has(key)){const route=this.skybridgePathCache.get(key);return route===null?null:copy?route.slice():route;}}
     if (!this.pathCache.has(key)) {
       if (this.pathCache.size >= Math.max(2048,Math.min(16384,this.citizens.length*16))) this.pathCache.delete(this.pathCache.keys().next().value);
       const width=this.world.width,height=this.world.height,blockedRevision=`${width}:${height}:${this.obstacleRevision||0}:${this.occupied.size}`;
@@ -408,9 +410,9 @@ export class CitySimulation {
       this.pathCache.set(key, findTerrainPath(this.world, start, goal, this.occupied,{blockedGrid:this._pathBlockedGrid}));
     }
     let path = this.pathCache.get(key);
-    if(allowSkybridges&&this.buildings.length>1){
+    if(path===null&&!links.length&&settlementConnected(this,start,goal)===false)return null;
+    if(links.length){
       let bestScore=path===null?Infinity:path.length||0;
-      const links=this.skybridgeLinksForRevision(revision);
       for(const link of links){
         for(const reverse of [false,true]){
           const from=reverse?link.end:link.start,to=reverse?link.start:link.end,fromAccess=reverse?link.endAccess:link.startAccess,toAccess=reverse?link.startAccess:link.endAccess;
@@ -432,6 +434,7 @@ export class CitySimulation {
         }
       }
     }
+    if(links.length){if(this.skybridgePathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.skybridgePathCache.delete(this.skybridgePathCache.keys().next().value);this.skybridgePathCache.set(key,path);}
     // Keep insertion-order eviction: touching every cache hit costs two Map
     // mutations across the hot path, while FIFO gives the same route answers.
     // Consumers shift their own array but never mutate waypoint coordinates.
@@ -457,30 +460,43 @@ export class CitySimulation {
       if(!c.path.length){const path=this.findPath(c.entity,spot);if(path!==null){c.path=path;if(!path.length||Math.hypot(path.at(-1).x-spot.x,path.at(-1).y-spot.y)>.05)c.path.push({...spot});}}
       c.action='Procurando um lugar tranquilo para dormir';return false;
     }
-    const blocked=new Set();
-    for(const person of this.citizens){if(person===c||person.entity.destroyed)continue;
-      if(person.homelessSleepSpot)blocked.add(`${Math.floor(person.homelessSleepSpot.x)},${Math.floor(person.homelessSleepSpot.y)}`);
-      if(!person.indoorLocation&&!person.path.length)blocked.add(`${Math.floor(person.entity.x)},${Math.floor(person.entity.y)}`);
-      const destination=person.path?.at(-1);if(destination)blocked.add(`${Math.floor(destination.x)},${Math.floor(destination.y)}`);
+    const width=this.world.width,height=this.world.height,structure=this.structureRevision||0;
+    let safety=this._sleepRouteSafety;
+    if(!safety||safety.structure!==structure||safety.width!==width||safety.height!==height){
+      const clear=new Uint8Array(width*height);
+      for(const b of this.buildings){if(b.entity.destroyed)continue;const cx=Math.floor(b.door.x),cy=Math.floor(b.door.y);
+        for(let dy=-5;dy<=5;dy++)for(let dx=-5;dx<=5;dx++){const x=cx+dx,y=cy+dy;if(x>=0&&y>=0&&x<width&&y<height){const ddx=x+.5-b.door.x,ddy=y+.5-b.door.y;if(ddx*ddx+ddy*ddy<16)clear[y*width+x]=1;}}}
+      safety=this._sleepRouteSafety={structure,width,height,clear};
     }
-    const buildings=this.buildings.filter(b=>!b.entity.destroyed),startX=Math.floor(c.entity.x),startY=Math.floor(c.entity.y),candidates=[];
-    for(let radius=3;radius<=12;radius++)for(let dx=-radius;dx<=radius;dx++){
-      const dy=radius-Math.abs(dx);for(const sy of (dy?[1,-1]:[1])){
-        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if(blocked.has(key)||!this.walkable(x,y))continue;
-        const px=x+.5,py=y+.5;if(buildings.some(b=>Math.hypot(px-b.door.x,py-b.door.y)<4))continue;
-        candidates.push({x:px,y:py,score:Math.hypot(px-c.entity.x,py-c.entity.y)+(Math.imul(c.id+17,1103515245)>>>0)%997/10000});
+    let routing=this._sleepRouteOccupancy;
+    if(!routing||routing.minute!==this.minute){
+      const occupied=new Set();
+      for(const person of this.citizens){if(person===c||person.entity.destroyed)continue;
+        if(person.homelessSleepSpot)occupied.add(`${Math.floor(person.homelessSleepSpot.x)},${Math.floor(person.homelessSleepSpot.y)}`);
+        if(!person.indoorLocation&&!person.path.length)occupied.add(`${Math.floor(person.entity.x)},${Math.floor(person.entity.y)}`);
+        const destination=person.path?.at(-1);if(destination)occupied.add(`${Math.floor(destination.x)},${Math.floor(destination.y)}`);
       }
+      routing=this._sleepRouteOccupancy={minute:this.minute,occupied};
     }
-    candidates.sort((a,b)=>a.score-b.score);
-    for(const candidate of candidates){
-      const path=this.findPath(c.entity,candidate);if(path===null)continue;
-      c.homelessSleepSpot={x:candidate.x,y:candidate.y};c.path=path;
-      if(!path.length||Math.hypot(path.at(-1).x-candidate.x,path.at(-1).y-candidate.y)>.05)c.path.push({...candidate});
-      c.action='Procurando um lugar tranquilo para dormir';return false;
+    const blocked=routing.occupied,startX=Math.floor(c.entity.x),startY=Math.floor(c.entity.y),ownKey=`${startX},${startY}`;
+    // Visit nearby rings in distance order. Sorting each small ring avoids
+    // allocating and sorting hundreds of candidates for every homeless person.
+    for(let radius=3;radius<=12;radius++){
+      const candidates=[];
+      for(let dx=-radius;dx<=radius;dx++){const dy=radius-Math.abs(dx);for(const sy of (dy?[1,-1]:[1])){
+        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if((key!==ownKey&&blocked.has(key))||x<0||y<0||x>=width||y>=height||safety.clear[y*width+x]||!this.walkable(x,y))continue;
+        const px=x+.5,py=y+.5;candidates.push({x:px,y:py,key,score:Math.hypot(px-c.entity.x,py-c.entity.y)+(Math.imul(c.id+17,1103515245)>>>0)%997/10000});
+      }}
+      candidates.sort((a,b)=>a.score-b.score);
+      for(const candidate of candidates){const path=this.findPath(c.entity,candidate);if(path===null)continue;
+        c.homelessSleepSpot={x:candidate.x,y:candidate.y};c.path=path;
+        if(!path.length||Math.hypot(path.at(-1).x-candidate.x,path.at(-1).y-candidate.y)>.05)c.path.push({x:candidate.x,y:candidate.y});
+        blocked.add(candidate.key);c.action='Procurando um lugar tranquilo para dormir';return false;
+      }
     }
     // The safe fallback is to rest where the person is, never to send them to
     // the town hall and turn its entrance into a makeshift dormitory.
-    c.homelessSleepSpot={x:Math.floor(c.entity.x)+.5,y:Math.floor(c.entity.y)+.5};c.path=[];c.action='Dormindo na rua';return true;
+    c.homelessSleepSpot={x:startX+.5,y:startY+.5};blocked.add(ownKey);c.path=[];c.action='Dormindo na rua';return true;
   }
 
   chooseTask(c) {
@@ -856,7 +872,6 @@ export class CitySimulation {
       this.supplies.useCarried(c);
       if (this.life.minute(c,elapsed)) continue;
       advanceCitizenInterior(this,c,elapsed);
-      this.furniture.syncCitizen(c);
       discoverVacancies(this,c);
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (this.workMeals.advance(c)) continue;

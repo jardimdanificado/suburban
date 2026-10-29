@@ -1,4 +1,4 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=furniture-farms-fertilizer-1';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=deep-perf-3';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js';
 import { reserveService } from './city_service_queue.js?v=furniture-farms-fertilizer-1';

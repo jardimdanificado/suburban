@@ -1,7 +1,7 @@
 import {businessFloors} from './city_business_heights.js';
 import {INDUSTRIES} from './city_industries.js';
 import {DEVELOPMENT_RULES} from './city_development.js?v=business-heights-1';
-import {chooseBuildingSite} from './city_terrain.js?v=furniture-farms-fertilizer-1';
+import {chooseBuildingSite} from './city_terrain.js?v=deep-perf-3';
 import {OFFICE_ONLY_TYPES,officeSpaceDemand,officeFloors,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';

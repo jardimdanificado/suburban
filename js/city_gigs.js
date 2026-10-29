@@ -1,4 +1,4 @@
-import {activityRoomReady} from './city_interiors.js?v=furniture-farms-fertilizer-1';
+import {activityRoomReady} from './city_interiors.js?v=deep-perf-3';
 
 const ACTIVE=new Set(['open','working']);
 const cleanFee=(city,building,scope,payerId=null)=>{

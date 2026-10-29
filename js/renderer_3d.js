@@ -1,4 +1,4 @@
-import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=furniture-farms-fertilizer-1';
+import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
 import {waterPollutionAt,waterTint} from './city_water.js';
 // =============================================================================
 // Brutopolis Chronicles - 3D Isometric Tycoon Engine (Volumetric 3D Models)
@@ -9,7 +9,7 @@ import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js?v=furniture-farms-fertilizer-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=furniture-farms-fertilizer-1';
-import { flagNightFactor } from './city_terrain.js?v=furniture-farms-fertilizer-1';
+import { flagNightFactor } from './city_terrain.js?v=deep-perf-3';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -28,7 +28,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE
-} from "./world_gen.js?v=furniture-farms-fertilizer-1";
+} from "./world_gen.js?v=deep-perf-3";
 import { globalWallCoords, resolveWallSkin, getEntitiesInViewport, getEntityById, getTileKey } from "./engine.js";
 
 // Optional simulation hooks are deliberately empty in the base framework.

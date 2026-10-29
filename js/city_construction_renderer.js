@@ -1,4 +1,4 @@
-import {surfaceElevation} from './city_terrain.js?v=furniture-farms-fertilizer-1';
+import {surfaceElevation} from './city_terrain.js?v=deep-perf-3';
 
 // Temporary construction surfaces are visual only: the original terrain remains
 // available to navigation and is revealed again when the project finishes.

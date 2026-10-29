@@ -39,8 +39,8 @@ import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=furniture-farms-fertilizer-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=pocket-water-cutaway-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=furniture-farms-fertilizer-1';
+import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=deep-perf-3';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=deep-perf-3';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

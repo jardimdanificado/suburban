@@ -1,4 +1,4 @@
-import {CityFurniture} from './city_furniture.js?v=bench-sidewalk-fix-1';
+import {CityFurniture} from './city_furniture.js?v=deep-perf-3';
 import {CitySupplies} from './city_supplies.js';
 import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';
@@ -23,7 +23,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js?v=furniture-farms-fertilizer-1';
+import { CitySimulation } from './city_simulation.js?v=deep-perf-3';
 import { CityHistory } from './city_history.js';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js';
@@ -37,7 +37,7 @@ import { CityDevelopment } from './city_development.js?v=interiors-completion-2'
 import { CityLogistics } from './city_logistics.js?v=furniture-farms-fertilizer-1';
 import { CityGigs } from './city_gigs.js?v=furniture-farms-fertilizer-1';
 import { CityEconomy, GOODS } from './city_economy.js?v=furniture-farms-fertilizer-1';
-import { CitySociety } from './city_society.js?v=pocket-water-cutaway-1';
+import { CitySociety } from './city_society.js?v=deep-perf-3';
 import { CityServiceInvestment } from './city_service_investment.js?v=furniture-farms-fertilizer-1';
 import { World, WorldClock } from './world.js?v=furniture-farms-fertilizer-1';
 
@@ -46,7 +46,7 @@ const prototypes = new Map([CityFurniture,CitySupplies,CityWater,CityPaint,CityF
   CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
-const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision', 'routeCache', 'routeRevision','familyIndexDirty',
+const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy', 'routeCache', 'routeRevision','familyIndexDirty',
   'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId', '_renderInside']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at
@@ -188,7 +188,12 @@ export class CityStateGraph {
     const rootId = visit(root);
     this.mapRevision = mapRevision;
     this.mapChildren = Array.isArray(map) ? map.map(row => this.ids.get(row)) : [];
-    for(const [id,object] of this.objects)if(!wasVisited(id,object)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); this.ledgerCursors.delete(id); }
+    // Removal discovery is a full scan of every ID ever mirrored. Defer it for
+    // three snapshots: dead records are invisible to the current root graph,
+    // and batching keeps the worker's hot snapshot path from paying that scan
+    // at 10+ Hz in large cities.
+    this.encodeCount=(this.encodeCount||0)+1;
+    if(this.encodeCount%4===0)for(const [id,object] of this.objects)if(!wasVisited(id,object)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); this.ledgerCursors.delete(id); }
     return { rootId, nodes, removed, histories, nextId: this.nextId, ...(packedNeeds?{packedNeeds}:{}) };
   }
   apply(packet) {

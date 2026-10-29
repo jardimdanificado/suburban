@@ -1,6 +1,6 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js';
-import {ROAD_TILES,tileAt} from './city_terrain.js?v=furniture-farms-fertilizer-1';
+import {ROAD_TILES,tileAt} from './city_terrain.js?v=deep-perf-3';
 export class CityFurniture{
  constructor(city){this.city=city;this.benches=[];this.nextId=1;this.benchLayoutVersion=2;}
  reconcile(){const city=this.city,candidates=new Map();
@@ -48,6 +48,7 @@ export class CityFurniture{
  }
  syncCitizen(c){
   if(c.workWait&&c.task!=='work-wait')c.workWait=null;
+  if(!c.seatId&&!c.indoorLocation){if(c.seated||c.furnitureUse){c.seated=false;c.furnitureUse=null;}return;}
   if(c.seatId){if(!['sit','work-wait','food','workmeal','supplies','toilet'].includes(c.task)||c.entity.destroyed){this.release(c);return;}const [id,slot]=c.seatId.split(':').map(Number),b=this.benches.find(b=>b.id===id),point=b&&this.seatPoint(b,slot);c.seated=!!point&&!c.path.length&&Math.hypot(c.entity.x-point.x,c.entity.y-point.y)<.14;if(c.seated){c.furnitureUse={id:`bench:${c.seatId}`,type:'bench',seated:true};c.facingTarget={x:c.entity.x+Math.sin(b.angle),y:c.entity.y+Math.cos(b.angle)};c.action=c.task==='work-wait'?'Aguardando sentado no banco':'Descansando sentado no banco';}return;}
   const s=c.indoorLocation,u=this.city.units.get(s?.unitId),b=this.city.building(s?.buildingId);c.seated=false;c.furnitureUse=null;
   if(!s||s.exiting||s.path?.length||!u||!b)return;

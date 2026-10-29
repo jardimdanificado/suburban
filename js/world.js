@@ -1,6 +1,6 @@
-import {FARM_TILES} from './world_gen.js?v=furniture-farms-fertilizer-1';
+import {FARM_TILES} from './world_gen.js?v=deep-perf-3';
 import { randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { roadFor } from './city_terrain.js?v=furniture-farms-fertilizer-1';
+import { roadFor } from './city_terrain.js?v=deep-perf-3';
 // =============================================================================
 // Brutopolis - World & Environment System (Pure JS Engine)
 // =============================================================================
@@ -27,7 +27,7 @@ import {
   MAP_PRESET_HIGHLANDS,
   world_gen_generate,
   world_gen_is_walkable
-} from "./world_gen.js?v=furniture-farms-fertilizer-1";
+} from "./world_gen.js?v=deep-perf-3";
 
 export {
   MAP_WIDTH,

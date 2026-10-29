@@ -3,6 +3,7 @@ export const SOCIAL_RULES = { friendAt: 30, closeFriendAt: 65, partnerAt: 68, co
 const pairKey = (a, b) => a < b ? `${a}:${b}` : `${b}:${a}`;
 const topics = ['o bairro', 'o trabalho', 'os planos para o futuro', 'a família', 'a cidade', 'música', 'comida', 'o dia a dia'];
 const NO_NEIGHBORS=Object.freeze([]);
+const ageCache=new WeakMap();
 
 export class CitySociety {
   constructor(city) {
@@ -19,10 +20,12 @@ export class CitySociety {
     return c && c.id === id && c.entity && !c.entity.destroyed ? c : undefined;
   }
   age(c) {
-    if(c._ageValue==null||this.city.minute>=c._nextBirthdayAt||this.city.minute<c.bornAt){
+    const minute=this.city.minute,cached=ageCache.get(c);if(cached?.minute===minute)return cached.value;
+    if(c._ageValue==null||minute>=c._nextBirthdayAt||minute<c.bornAt){
       c._ageValue=c.initialAge+Math.floor((this.city.minute-c.bornAt)/(1440*SOCIAL_RULES.daysPerYear));
       c._nextBirthdayAt=c.bornAt+(c._ageValue-c.initialAge+1)*1440*SOCIAL_RULES.daysPerYear;
     }
+    if(cached){cached.minute=minute;cached.value=c._ageValue;}else ageCache.set(c,{minute,value:c._ageValue});
     return c._ageValue;
   }
   isAdult(c) { return this.age(c) >= 18; }

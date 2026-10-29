@@ -87,11 +87,14 @@ export function outdoorCellReady(city,c,b,u,adjacent=false){
  c.action='Deslocando-se até a célula de atividade';return false;
 }
 export function syncCitizenInterior(city,c){
+ const task=c.workMeal?'workmeal':c.task,s=c.indoorLocation;
+ // Outdoor field workers cannot have an indoor destination to validate.
+ if(!s&&['work','manage'].includes(task)&&(c.forestryJob||c.mechanicJob||c.paintWorkId))return true;
  // An outdoor citizen with no indoor activity has nothing to release or route.
  // Avoid resolving buildings and construction projects on every movement tick.
- if(!c.indoorLocation&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length||c.deliveryId||!INDOOR_TASKS.has(c.workMeal?'workmeal':c.task)))return true;
+ if(!s&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)))return true;
  normalizeInterior(city,c);
- const task=c.workMeal?'workmeal':c.task,fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
+ const fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
  if(task==='work-wait'&&c.seatId)return exit(city,c);
  if(task==='informal-service'&&!gig)return exit(city,c);
  if(task==='workmeal'&&!city.workMeals.hasFullDiningFloor(b)){c.task=null;c.targetId=null;c.mealTargetId=null;c.mealResume=null;c.path=[];return exit(city,c);}

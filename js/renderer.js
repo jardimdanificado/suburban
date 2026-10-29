@@ -20,7 +20,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE
-} from "./world_gen.js?v=furniture-farms-fertilizer-1";
+} from "./world_gen.js?v=deep-perf-3";
 import { globalWallCoords, resolveWallSkin, getEntitiesInViewport } from "./engine.js";
 
 // Framework scenes can opt into blueprints through their own tools. The base
