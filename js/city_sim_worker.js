@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=investment-plan-reuse-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=shared-origin-paths-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -59,6 +59,11 @@ function recordProfile(profile,prefix=''){
     if(key==='economyHourly'&&value){
       const name=`${prefix}economyHourly`,current=phasePeaks[name];
       if(!current||value.ms>current.ms)phasePeaks[name]={...value,minute:profile.minute};
+      continue;
+    }
+    if(key==='pathSearchWork'&&value){
+      const name=`${prefix}pathSearchWork`,current=phasePeaks[name];
+      if(!current||profile.pathSearchTotalMs>current.ms)phasePeaks[name]={ms:profile.pathSearchTotalMs,minute:profile.minute,...value};
       continue;
     }
     if(key==='pathSearches'&&Number.isFinite(value)){

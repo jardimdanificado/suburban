@@ -158,38 +158,60 @@ function heapPop(w){
 
 // Many residents travel to the same few doors. Expand a reverse shortest-path
 // tree once per popular destination, then reuse its next steps for each origin.
-// One-off destinations keep A*, and the cache retains at most one million cells.
+// One-off requests keep A*. Destination and origin caches have separate cell budgets.
 const sharedDestinations=new WeakMap();
+function makeSharedField(size,root,requests=0){
+  const field={requests,costs:new Float64Array(size),next:new Int32Array(size),closed:new Uint8Array(size),heapNodes:new Int32Array(0),heapCosts:new Float64Array(0),heapScores:new Float64Array(0),heapLength:0};
+  field.costs.fill(Infinity);field.next.fill(-1);field.costs[root]=0;heapPush(field,root,0,0);return field;
+}
+function countRouteRequest(requests,key){
+  const count=(requests.get(key)||0)+1;
+  if(requests.size>=512&&!requests.has(key))requests.delete(requests.keys().next().value);
+  requests.set(key,count);return count;
+}
 export function findSharedTerrainPath(city,start,goal,blockedGrid){
   const world=city.world,width=world.width,height=world.height,size=width*height;
   const sx=Math.floor(start.x),sy=Math.floor(start.y),gx=Math.floor(goal.x),gy=Math.floor(goal.y);
   if(sx<0||sy<0||gx<0||gy<0||sx>=width||gx>=width||sy>=height||gy>=height)return null;
   const origin=sy*width+sx,destination=gy*width+gx,terrain=terrainPathGrid(world);
-  // A* permits leaving an occupied origin; keep that special case there.
   if(blockedGrid[origin])return undefined;
   if(!terrain.walkable[origin]||!terrain.walkable[destination]||blockedGrid[destination])return null;
-  const revision=`${world.revision||0}:${city.obstacleRevision||0}:${city.occupied.size}:${width}:${height}`;
+  const revision=`${world.revision||0}:${city.obstacleRevision||0}:${city.occupied.size}:${width}:${height}`,profile=city._pathSearchProfile;
   let cache=sharedDestinations.get(city);
-  if(!cache||cache.revision!==revision){cache={revision,requests:new Map(),fields:new Map()};sharedDestinations.set(city,cache);}
-  let field=cache.fields.get(destination);
+  if(!cache||cache.revision!==revision){
+    cache={revision,requests:new Map(),sourceRequests:new Map(),fields:new Map(),sources:new Map()};sharedDestinations.set(city,cache);
+    if(profile)profile.fieldResets=(profile.fieldResets||0)+1;
+  }
+  const sourceRequests=countRouteRequest(cache.sourceRequests,origin);
+  let field=cache.fields.get(destination),reverse=true;
+  if(field)field.requests++;
+  else{
+    field=cache.sources.get(origin);
+    if(field){reverse=false;cache.sources.delete(origin);cache.sources.set(origin,field);}
+  }
   if(!field){
-    const requests=(cache.requests.get(destination)||0)+1;
-    if(cache.requests.size>=512&&!cache.requests.has(destination))cache.requests.delete(cache.requests.keys().next().value);
-    cache.requests.set(destination,requests);
-    if(requests<4)return undefined;
-    const capacity=Math.max(1,Math.min(16,Math.floor(1048576/size)));
-    if(cache.fields.size>=capacity){
-      let victim=null,fewest=Infinity;
-      for(const [key,item]of cache.fields)if(item.requests<fewest){victim=key;fewest=item.requests;}
-      // Keep similarly popular destinations from evicting one another on every
-      // resident's candidate scan and rebuilding all the same trees again.
-      if(requests<=fewest+4)return undefined;
-      cache.fields.delete(victim);
+    const requests=countRouteRequest(cache.requests,destination);
+    if(requests>=4){
+      const capacity=Math.max(1,Math.min(16,Math.floor(1048576/size)));
+      let admit=cache.fields.size<capacity;
+      if(!admit){
+        let victim=null,fewest=Infinity;for(const [key,item]of cache.fields)if(item.requests<fewest){victim=key;fewest=item.requests;}
+        if(requests>fewest+4){cache.fields.delete(victim);admit=true;}
+      }
+      if(admit){field=makeSharedField(size,destination,requests);cache.fields.set(destination,field);if(profile)profile.destinationFields=(profile.destinationFields||0)+1;}
     }
-    field={requests,costs:new Float64Array(size),next:new Int32Array(size),closed:new Uint8Array(size),heapNodes:new Int32Array(0),heapCosts:new Float64Array(0),heapScores:new Float64Array(0),heapLength:0};
-    field.costs.fill(Infinity);field.next.fill(-1);field.costs[destination]=0;heapPush(field,destination,0,0);cache.fields.set(destination,field);
-  }else field.requests++;
-  while(!field.closed[origin]&&field.heapLength){
+    // A citizen comparing many services (or bridge entrances) also repeats one
+    // origin with different goals. Reuse that forward search even when none of
+    // those destinations qualifies for the popular-destination cache.
+    if(!field&&sourceRequests>=3){
+      const capacity=Math.max(1,Math.min(4,Math.floor(262144/size)));
+      if(cache.sources.size>=capacity)cache.sources.delete(cache.sources.keys().next().value);
+      field=makeSharedField(size,origin);cache.sources.set(origin,field);reverse=false;if(profile)profile.sourceFields=(profile.sourceFields||0)+1;
+    }
+  }
+  if(!field)return undefined;
+  const target=reverse?origin:destination;
+  while(!field.closed[target]&&field.heapLength){
     const current=heapPop(field),cost=field.poppedCost;
     if(field.closed[current]||cost!==field.costs[current])continue;
     field.closed[current]=1;
@@ -199,15 +221,15 @@ export function findSharedTerrainPath(city,start,goal,blockedGrid){
       const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;
       const neighbor=ny*width+nx,climb=Math.abs(heightHere-terrain.elevations[neighbor]);
       if(field.closed[neighbor]||!terrain.walkable[neighbor]||blockedGrid[neighbor]||climb>1.25)continue;
-      // Reverse edges must charge entering the current cell, not the neighbor.
-      const candidate=cost+enteringCost+climb*.7;
+      const edgeCost=reverse?enteringCost:terrain.roads[neighbor]?ROAD_RULES.pavedCost:tileCosts[terrain.tiles[neighbor]],candidate=cost+edgeCost+climb*.7;
       if(candidate>=field.costs[neighbor])continue;
       field.costs[neighbor]=candidate;field.next[neighbor]=current;heapPush(field,neighbor,candidate,candidate);
     }
   }
-  if(!field.closed[origin])return null;
+  if(!field.closed[target])return null;
   const path=[];
-  for(let current=origin;current!==destination;){current=field.next[current];path.push({x:current%width+.5,y:Math.floor(current/width)+.5});}
+  if(reverse){for(let current=origin;current!==destination;){current=field.next[current];path.push({x:current%width+.5,y:Math.floor(current/width)+.5});}}
+  else{for(let current=destination;current!==origin;current=field.next[current])path.push({x:current%width+.5,y:Math.floor(current/width)+.5});path.reverse();}
   return path;
 }
 

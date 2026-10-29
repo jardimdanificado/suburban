@@ -1,6 +1,6 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=tile-locked-citizens-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=shared-origin-paths-1';
 import { resolveWorldSettings } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=investment-plan-reuse-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=shared-origin-paths-1";
 import { CityDesktop } from "./js/city_desktop.js?v=profiler-console-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=tile-locked-citizens-1";

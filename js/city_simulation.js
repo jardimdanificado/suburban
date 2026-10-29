@@ -31,7 +31,7 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignmen
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js?v=landlord-stock-market-1';
-import { quarryDeposits } from './city_terrain.js?v=investment-plan-reuse-1';
+import { quarryDeposits } from './city_terrain.js?v=shared-origin-paths-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=landlord-stock-market-1';
@@ -44,7 +44,7 @@ import { CityGigs } from './city_gigs.js?v=landlord-stock-market-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=investment-plan-reuse-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=landlord-stock-market-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=investment-plan-reuse-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=shared-origin-paths-1';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -405,11 +405,14 @@ export class CitySimulation {
   assignHousingAndJobs() { this.economy.assignHomes(); this.economy.hire(); }
   walkable(x, y) { return !this.occupied.has(key(x, y)) && terrainWalkable(this.world, x, y); }
   groundPath(start,goal){
+    const profile=this._pathSearchProfile;if(profile)profile.groundCalls=(profile.groundCalls||0)+1;
     const width=this.world.width,height=this.world.height,blockedRevision=`${width}:${height}:${this.obstacleRevision||0}:${this.occupied.size}`;
     if(this._pathBlockedRevision!==blockedRevision){const grid=new Uint8Array(width*height);for(const cell of this.occupied){const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));if(x>=0&&y>=0&&x<width&&y<height)grid[y*width+x]=1;}this._pathBlockedGrid=grid;this._pathBlockedRevision=blockedRevision;}
     const key=`ground:${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
-    if(this.pathCache.has(key))return this.pathCache.get(key);
+    if(this.pathCache.has(key)){if(profile)profile.groundCacheHits=(profile.groundCacheHits||0)+1;return this.pathCache.get(key);}
+    if(this.buildings?.length&&settlementConnected(this,start,goal)===false){if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);return null;}
     const shared=findSharedTerrainPath(this,start,goal,this._pathBlockedGrid);
+    if(profile){const counter=shared===undefined?'aStarCalls':'sharedCalls';profile[counter]=(profile[counter]||0)+1;}
     const route=shared===undefined?findTerrainPath(this.world,start,goal,this.occupied,{blockedGrid:this._pathBlockedGrid}):shared,mapped=route?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p})??null;
     if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
     this.pathCache.set(key,mapped);return mapped;
@@ -465,8 +468,9 @@ export class CitySimulation {
           if(!fromBuilding||!toBuilding||!fromUnit||!toUnit)continue;
           const lower=Math.hypot(start.x-fromBuilding.door.x,start.y-fromBuilding.door.y)+Math.hypot(goal.x-toBuilding.door.x,goal.y-toBuilding.door.y)+Math.hypot(to.x-from.x,to.y-from.y)*.76+fromBuilding.floors+toBuilding.floors;
           if(lower>=bestScore)continue;
-          const first=this.groundPath(start,fromBuilding.door),last=this.groundPath(toBuilding.door,goal);
-          if(!first||!last)continue;
+          if(this._pathSearchProfile)this._pathSearchProfile.bridgeChecks=(this._pathSearchProfile.bridgeChecks||0)+1;
+          const first=this.groundPath(start,fromBuilding.door);if(!first)continue;
+          const last=this.groundPath(toBuilding.door,goal);if(!last)continue;
           const fromPoint={x:fromBuilding.entity.x+fromUnit.x+.5,y:fromBuilding.entity.y+fromUnit.y+.5,z:fromUnit.z*CITY_FLOOR_HEIGHT},toPoint={x:toBuilding.entity.x+toUnit.x+.5,y:toBuilding.entity.y+toUnit.y+.5,z:toUnit.z*CITY_FLOOR_HEIGHT},fromDoor={x:fromBuilding.door.x,y:fromBuilding.door.y,z:0},toDoor={x:toBuilding.door.x,y:toBuilding.door.y,z:0},up=interiorRoute(fromBuilding,fromDoor,fromPoint),down=interiorRoute(toBuilding,toPoint,toDoor);
           if(!up||!down)continue;
           const waypoints=first.slice();
@@ -1003,7 +1007,7 @@ export class CitySimulation {
       if(this.profileDiagnostics){const started=performance.now(),parts=this.economy.hourly(phase);economyHourly={phase,ms:performance.now()-started,...(parts||{})};}
       else this.economy.hourly(phase);
     }
-    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
+    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchWork:Object.fromEntries(['groundCalls','groundCacheHits','aStarCalls','sharedCalls','destinationFields','sourceFields','fieldResets','bridgeChecks'].map(key=>[key,this._pathSearchProfile[key]||0])),pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
     this.syncClock();
   }
   syncClock() {

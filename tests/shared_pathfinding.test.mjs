@@ -54,3 +54,24 @@ test('simulation ground routing keeps bridge heights when using shared destinati
     assert(path.some(p=>p.roadBridgeId===7&&p.z===1.1));
   }
 });
+
+test('one origin comparing distinct destinations shares a weighted forward search',()=>{
+  const city=fixture(),start={x:2.5,y:16.5};city._pathSearchProfile={};
+  for(let x=0;x<32;x++)city.world.map[8*32+x]=TILE_ROAD_GRASS_STONE;
+  for(let y=10;y<20;y++)for(let x=10;x<20;x++)city.world.map[y*32+x]=TILE_SAND;
+  for(let i=0;i<12;i++){
+    const goal={x:25.5,y:i+2.5},actual=route(city,start,goal),reference=findTerrainPath(city.world,start,goal,city.occupied,{preferRoads:false});
+    validate(city,start,actual,goal);assert(Math.abs(cost(city,start,actual)-cost(city,start,reference))<1e-8);
+  }
+  assert.equal(city._pathSearchProfile.sourceFields,1);
+  city.blocked[16*32+3]=1;city.occupied.add('3,16');city.obstacleRevision++;
+  validate(city,start,route(city,start,{x:25.5,y:4.5}),{x:25.5,y:4.5});
+});
+
+test('disconnected ground segments are rejected before an expensive search',()=>{
+  const city=Object.assign(Object.create(CitySimulation.prototype),fixture(),{citizens:[],pathCache:new Map(),_pathSearchProfile:{}});
+  const start={x:2.5,y:15.5},goal={x:25.5,y:15.5};
+  city.buildings=[{entity:{destroyed:false},door:start},{entity:{destroyed:false},door:goal}];
+  for(let y=0;y<32;y++)city.world.map[y*32+16]=TILE_WATER;
+  assert.equal(city.groundPath(start,goal),null);assert.equal(city._pathSearchProfile.aStarCalls||0,0);assert.equal(city._pathSearchProfile.sharedCalls||0,0);
+});
