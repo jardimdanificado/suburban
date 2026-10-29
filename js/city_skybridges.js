@@ -4,8 +4,8 @@ import {terrainWalkable} from './city_terrain.js?v=deep-perf-3';
 // One deterministic source of truth feeds both pedestrian routing and the renderer.
 export function skybridgeLinks(buildings,world){
  const physical=buildings.map(e=>e.properties?.cityBuilding||e).filter(b=>b&&!b.entity?.destroyed&&b.constructionKind==='building'),candidates=physical.filter(b=>!b.officeTenantOf&&b.floors>=2&&b.terrain),connections=new Map(),links=[];
- const makeLink=(a,b,axis)=>{
-  const horizontal=axis==='x',aAlong=horizontal?a.entity.x:a.entity.y,bAlong=horizontal?b.entity.x:b.entity.y,aLength=horizontal?a.width:a.depth,bLength=horizontal?b.width:b.depth,gap=bAlong-(aAlong+aLength),spanMax=Math.max(48,Math.floor(((horizontal?world?.width:world?.height)||128)*.75));
+  const makeLink=(a,b,axis)=>{
+  const horizontal=axis==='x',aAlong=horizontal?a.entity.x:a.entity.y,bAlong=horizontal?b.entity.x:b.entity.y,aLength=horizontal?a.width:a.depth,bLength=horizontal?b.width:b.depth,gap=bAlong-(aAlong+aLength),spanMax=5;
   if(gap<1||gap>spanMax||(connections.get(b.id)||0)>=4||Math.abs(a.terrain.base-b.terrain.base)>.25)return null;
   const aAcross=horizontal?a.entity.y:a.entity.x,bAcross=horizontal?b.entity.y:b.entity.x,aAcrossLength=horizontal?a.depth:a.width,bAcrossLength=horizontal?b.depth:b.width,low=Math.max(aAcross,bAcross),high=Math.min(aAcross+aAcrossLength,bAcross+bAcrossLength);if(high-low<1)return null;
   const x0=horizontal?a.entity.x+a.width:a.entity.x,y0=horizontal?a.entity.y:a.entity.y+a.depth,x1=horizontal?b.entity.x:b.entity.x,y1=horizontal?b.entity.y+b.depth:b.entity.y;
@@ -21,12 +21,12 @@ export function skybridgeLinks(buildings,world){
   }
   return null;
  };
- for(const axis of ['x','y']){
+ for(const axis of ['x']){
   const ordered=candidates.slice().sort((a,b)=>(axis==='x'?a.entity.x-b.entity.x:a.entity.y-b.entity.y)||a.entity.x-b.entity.x||a.id-b.id);
   for(let i=0;i<ordered.length&&links.length<64;i++){
    const a=ordered[i];if((connections.get(a.id)||0)>=4)continue;let selected=null;
    for(let j=i+1;j<ordered.length;j++){
-    const b=ordered[j],gap=(axis==='x'?b.entity.x-a.entity.x-a.width:b.entity.y-a.entity.y-a.depth);if(gap>Math.max(48,Math.floor(((axis==='x'?world?.width:world?.height)||128)*.75)))break;
+    const b=ordered[j],gap=b.entity.x-a.entity.x-a.width;if(gap>5)break;
     const link=makeLink(a,b,axis);if(!link)continue;if(gap<=5){selected=link;break;}selected=link;
    }
    if(selected){links.push(selected);connections.set(selected.aId,(connections.get(selected.aId)||0)+1);connections.set(selected.bId,(connections.get(selected.bId)||0)+1);}
@@ -48,7 +48,7 @@ export function syncSkybridges(renderer,THREE,entities,world){
  // the bridge does not depend on which area was rendered first.
  const buildings=city?.buildings||entities.map(e=>e.properties?.cityBuilding).filter(Boolean),byId=new Map(buildings.map(b=>[b.id,b]));
  for(const link of skybridgeLinks(buildings,world)){
-   const a=byId.get(link.aId),b=byId.get(link.bId),bridge=new THREE.Group(),midX=(link.start.x+link.end.x)/2,midY=(link.start.y+link.end.y)/2,height=a.terrain.base+link.height+.07,horizontal=link.axis==='x';
+   const a=byId.get(link.aId),b=byId.get(link.bId),bridge=new THREE.Group(),midX=(link.start.x+link.end.x)/2,midY=(link.start.y+link.end.y)/2,height=a.terrain.base+link.height-.07,horizontal=link.axis==='x';
    bridge.userData={id:link.id,bounds:{x0:Math.min(link.start.x,link.end.x),x1:Math.max(link.start.x,link.end.x),y0:Math.min(link.start.y,link.end.y),y1:Math.max(link.start.y,link.end.y)}};group.add(bridge);
    const deck=new THREE.Mesh(new THREE.BoxGeometry(horizontal?link.gap+.12:.72,.14,horizontal?.72:link.gap+.12),new THREE.MeshLambertMaterial({color:0x8c9892}));deck.position.set(midX,height,midY);deck.castShadow=true;deck.receiveShadow=true;bridge.add(deck);
    const railMaterial=new THREE.MeshLambertMaterial({color:0x637579}),postGeometry=new THREE.BoxGeometry(.04,.66,.04),postMatrices=new THREE.Matrix4(),postCount=Math.max(2,Math.ceil(link.gap/4)+1),posts=new THREE.InstancedMesh(postGeometry,railMaterial,postCount*2);let postIndex=0;

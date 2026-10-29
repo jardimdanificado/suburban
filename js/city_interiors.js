@@ -95,6 +95,13 @@ export function syncCitizenInterior(city,c){
  if(!s&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length||c.deliveryId||!INDOOR_TASKS.has(task)))return true;
  normalizeInterior(city,c);
  const fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
+ if(task==='toilet'){
+  const facility=city.sanitation.facilities.get(c.toiletTargetId);
+  if(!facility||!city.sanitation.allowed(c,facility)){
+   const entrance=b?.officeTenantOf?city.building(b.officeTenantOf):b;if(entrance?.serviceQueue)entrance.serviceQueue=entrance.serviceQueue.filter(q=>q.citizenId!==c.id||q.kind!=='toilet');
+   c.task=null;c.targetId=null;c.toiletTargetId=null;c.path=[];c.serviceQueue=null;c.facingTarget=null;city.furniture?.release(c);return previous?exit(city,c):true;
+  }
+ }
  if(task==='work-wait'&&c.seatId)return exit(city,c);
  if(task==='informal-service'&&!gig)return exit(city,c);
  if(task==='workmeal'&&!city.workMeals.hasFullDiningFloor(b)){c.task=null;c.targetId=null;c.mealTargetId=null;c.mealResume=null;c.path=[];return exit(city,c);}

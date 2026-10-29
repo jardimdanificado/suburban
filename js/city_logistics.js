@@ -3,6 +3,7 @@ import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
 import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=interiors-completion-2';
 
+const INTERRUPTIBLE_GIG_TASKS=new Set(['leisure','walk','social','sit','outdoor_leisure']);
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
 // Urgent food and housing start ahead, while waiting freight gains priority over time.
 export function shipmentPriority(s,minute,hour){
@@ -103,7 +104,7 @@ export class CityLogistics {
   }
   releaseDriver(s) {
     const c = this.city.society.citizen(s.driverId);
-    if (c) { if(c.mobilityTrip)this.city.vehicles.releaseTrip(c);c.deliveryId = null;c.informalHaulId=null; c.task = null; c.path = []; }
+    if (c) { if(c.mobilityTrip)this.city.vehicles.releaseTrip(c);this.city.furniture?.release(c);c.deliveryId = null;c.informalHaulId=null; c.task = null; c.path = []; }
     s.driverId = null;
   }
   cancel(s) {
@@ -139,7 +140,7 @@ export class CityLogistics {
       if(s.requireCarrier)return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25);
       if(!carrier){
         // Owners and temporary public workers can bootstrap an unserved route.
-        if(s.fee>0)ids.push(...this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&!this.city.politics.officeHolder(c)&&!c.task&&!c.path.length&&!c.informalJobId&&!['caregiving','food','water','energy','health','toilet'].includes(c.task)).sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16).map(c=>c.id));
+        if(s.fee>0)ids.push(...this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!(c.businessIds?.length)&&!this.city.politics.officeHolder(c)&&(!c.task||INTERRUPTIBLE_GIG_TASKS.has(c.task))&&!c.indoorLocation&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.workMeal&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!this.city.urgentNeed(c)).sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16).map(c=>c.id));
         ids.push(s.buyer.ownerId, s.seller.ownerId);
         const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
       }
@@ -167,7 +168,7 @@ export class CityLogistics {
         for (const candidate of this.candidates(s)) {
           if (dispatchBudget-- <= 0) break;
           const path = city.findPath(candidate.entity, s.position); if (path === null) continue;
-          c = candidate;c.informalHaulId=!s.carrierId&&!c.jobId&&!c.businessIds.length&&s.fee>0?s.id:null;if(c.informalHaulId)s.informalDriverId=c.id;c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; break;
+          c = candidate;c.informalHaulId=!s.carrierId&&!c.jobId&&!(c.businessIds?.length)&&s.fee>0?s.id:null;if(c.informalHaulId){s.informalDriverId=c.id;city.history.record('service',`${c.entity.properties.name} aceitou o frete informal #${s.id}.`,[s.payerAccountId,c.accountId,s.buyer.accountId],{kind:'haul-gig-accepted',shipmentId:s.id,citizenIds:[c.id],good:s.good,quantity:s.quantity,amount:s.fee,minute:city.minute});city.log(`${c.entity.properties.name} aceitou o frete informal #${s.id}.`,'transport',[c.id],{kind:'haul-gig-accepted',shipmentId:s.id,amount:s.fee});}this.city.furniture?.release(c);c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; break;
         }
         if (!c) {if(s.quantity>24&&city.minute-s.createdAt>=60)this.splitLoad(s,24);continue;}
       }

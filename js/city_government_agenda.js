@@ -32,7 +32,7 @@ export class CityGovernmentAgenda {
   infrastructure(term,execution,metric){
     const city=this.city,dev=city.development,hall=city.buildings.find(b=>live(b)&&b.type==='townhall');if(!hall)return;
     if(metric==='lamps'){const before=new Set(dev.projects.map(p=>p.id));city.lighting.hourly();for(const project of dev.projects)if(!before.has(project.id)&&project.service==='lamp'){project.agendaTermId=term.id;this.record(term,execution,'Instalação de iluminação pública contratada.',{projectId:project.id,action:'contract'});}return;}
-    const active=dev.projects.find(p=>p.accountId==='treasury'&&!p.cancelled&&p.status!=='completed'&&(metric==='connected'?p.service==='road':p.service==='repair'));
+    const active=dev.projects.find(p=>p.accountId==='treasury'&&!p.cancelled&&p.status!=='completed'&&(metric==='connected'?['road','bridge'].includes(p.service):p.service==='repair'));
     if(active){active.agendaTermId=term.id;active.priority=Math.max(active.priority||0,95);execution.blocked='Serviço prioritário em execução.';return;}
     const target=city.buildings.filter(b=>live(b)&&b.id!==hall.id&&(metric==='connected'?!city.politics.roadConnected(b):b.condition<85)).sort((a,b)=>metric==='connected'?city.trafficScore(b.accessPath)-city.trafficScore(a.accessPath):(a.condition||100)-(b.condition||100))[0];
     if(!target){execution.blocked='Aguardando demanda de manutenção ou acesso.';return;}

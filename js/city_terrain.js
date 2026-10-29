@@ -14,9 +14,11 @@ const land = new Set([TILE_FLOOR, TILE_SAND, TILE_HILL, ...ROAD_TILES]);
 export const tileKey = (x, y) => `${x},${y}`;
 export const tileHeight = tile => heights[baseTerrainTile(tile)] ?? 0;
 export function tileAt(world, x, y) { return x < 0 || y < 0 || x >= world.width || y >= world.height ? TILE_VOID : world.getTile(x, y); }
+export function bridgeAt(world,x,y){return world.bridgeTiles?.get(tileKey(x,y))||null;}
+export function isRoadAt(world,x,y){return ROAD_TILES.has(tileAt(world,x,y))||!!bridgeAt(world,x,y);}
 export function flagNightFactor(world){const hour=(world?.clock?.hour??12)+(world?.clock?.minute??0)/60;let glow=0;if(hour<5.5||hour>=19)glow=1;else if(hour<7)glow=1-(hour-5.5)/1.5;else if(hour>17.5)glow=(hour-17.5)/1.5;return 1-.82*Math.max(0,Math.min(1,glow));}
-export function terrainWalkable(world, x, y) { return land.has(baseTerrainTile(tileAt(world, x, y))); }
-export function canStep(world, x, y, nx, ny) { return terrainWalkable(world, nx, ny) && Math.abs(tileHeight(tileAt(world, x, y)) - tileHeight(tileAt(world, nx, ny))) <= 1.25; }
+export function terrainWalkable(world, x, y) { return land.has(baseTerrainTile(tileAt(world, x, y)))||!!bridgeAt(world,x,y); }
+export function canStep(world, x, y, nx, ny) { const a=bridgeAt(world,x,y)?.height??tileHeight(tileAt(world,x,y)),b=bridgeAt(world,nx,ny)?.height??tileHeight(tileAt(world,nx,ny));return terrainWalkable(world, nx, ny) && Math.abs(a-b) <= 1.25; }
 export function roadFor(tile) {
   if ([TILE_FLOOR, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE].includes(tile)) return TILE_ROAD_GRASS_STONE;
   if ([TILE_SAND, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE].includes(tile)) return TILE_ROAD_SAND_STONE;
@@ -128,9 +130,10 @@ const pathDirections = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 const tileCosts=(()=>{const values=new Float64Array(256);for(let tile=0;tile<values.length;tile++)values[tile]=roadTravelCost(tile);return values;})();
 function terrainPathGrid(world){
   let grid=pathTerrainGrids.get(world);if(grid&&grid.revision===(world.revision||0)&&grid.width===world.width&&grid.height===world.height)return grid;
-  const size=world.width*world.height,tiles=new Uint8Array(size),walkable=new Uint8Array(size),roads=new Uint8Array(size),source=world.map;
-  for(let i=0;i<size;i++){const tile=baseTerrainTile(source?source[i]:world.getTile(i%world.width,Math.floor(i/world.width)));tiles[i]=tile;walkable[i]=land.has(tile)?1:0;roads[i]=ROAD_TILES.has(tile)?1:0;}
-  grid={revision:world.revision||0,width:world.width,height:world.height,tiles,walkable,roads};pathTerrainGrids.set(world,grid);return grid;
+  const size=world.width*world.height,tiles=new Uint8Array(size),walkable=new Uint8Array(size),roads=new Uint8Array(size),elevations=new Float32Array(size),source=world.map;
+  for(let i=0;i<size;i++){const tile=baseTerrainTile(source?source[i]:world.getTile(i%world.width,Math.floor(i/world.width)));tiles[i]=tile;walkable[i]=land.has(tile)?1:0;roads[i]=ROAD_TILES.has(tile)?1:0;elevations[i]=tileHeight(tile);}
+  for(const [key,bridge]of world.bridgeTiles||[]){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1)),index=y*world.width+x;if(x>=0&&y>=0&&x<world.width&&y<world.height){walkable[index]=1;roads[index]=1;elevations[index]=bridge.height;}}
+  grid={revision:world.revision||0,width:world.width,height:world.height,tiles,walkable,roads,elevations};pathTerrainGrids.set(world,grid);return grid;
 }
 function heapPush(w,node,cost,score){
   let cap=w.heapNodes.length;if(w.heapLength===cap){cap=Math.max(64,cap*2);const nodes=new Int32Array(cap),costs=new Float64Array(cap),scores=new Float64Array(cap);nodes.set(w.heapNodes);costs.set(w.heapCosts);scores.set(w.heapScores);w.heapNodes=nodes;w.heapCosts=costs;w.heapScores=scores;}
@@ -190,7 +193,7 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
   // following the streets would cost more than a near-direct walk on flat land.
   if(preferRoads&&!extraBlocked&&terrain.roads[startKey]&&terrain.roads[goalKey]){
     const direct=Math.abs(gx-sx)+Math.abs(gy-sy),roadPath=findTerrainPath(world,start,goal,blocked,{limit:Math.min(limit,Math.max(128,direct*24)),preferRoads:false,roadOnly:true,blockedGrid});
-    if(roadPath){let cost=0,previous=startKey;for(const p of roadPath){const x=Math.floor(p.x),y=Math.floor(p.y),key=y*world.width+x,tile=terrain.tiles[key];cost+=tileCosts[tile]+Math.abs(tileHeight(tile)-tileHeight(terrain.tiles[previous]))*.7;previous=key;}
+    if(roadPath){let cost=0,previous=startKey;for(const p of roadPath){const x=Math.floor(p.x),y=Math.floor(p.y),key=y*world.width+x,tile=terrain.tiles[key];cost+=(terrain.roads[key]?ROAD_RULES.pavedCost:tileCosts[tile])+Math.abs(terrain.elevations[key]-terrain.elevations[previous])*.7;previous=key;}
       if(cost<=direct*1.05)return roadPath;
     }
   }
@@ -214,12 +217,12 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
       while (step !== startKey) { path.push({ x: step % width + .5, y: Math.floor(step / width) + .5 }); step = parents[step]; }
       return path.reverse();
     }
-    const currentHeight=tileHeight(terrain.tiles[k]),cx=k%width,cy=Math.floor(k/width);
+    const currentHeight=terrain.elevations[k],cx=k%width,cy=Math.floor(k/width);
     for (const [dx, dy] of pathDirections) {
-      const x=cx+dx,y=cy+dy;if(x<0||y<0||x>=width||y>=world.height)continue;const nextKey=y*width+x,tile=terrain.tiles[nextKey],height=tileHeight(tile);
+      const x=cx+dx,y=cy+dy;if(x<0||y<0||x>=width||y>=world.height)continue;const nextKey=y*width+x,tile=terrain.tiles[nextKey],height=terrain.elevations[nextKey];
       if (!terrain.walkable[nextKey] || Math.abs(currentHeight-height)>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
       if(roadOnly&&!terrain.roads[nextKey])continue;
-      const cost = currentCost + tileCosts[tile] + Math.abs(height-currentHeight) * .7;
+      const cost = currentCost + (terrain.roads[nextKey]?ROAD_RULES.pavedCost:tileCosts[tile]) + Math.abs(height-currentHeight) * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
       marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
       heapPush(workspace,nextKey,cost,cost+(Math.abs(gx-x)+Math.abs(gy-y))*.55);

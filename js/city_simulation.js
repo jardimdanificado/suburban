@@ -21,11 +21,11 @@ import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
-import {skybridgeLinks} from './city_skybridges.js?v=long-span-passarelas-4';
+import {skybridgeLinks} from './city_skybridges.js?v=short-passarelas-bridge-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=deep-perf-3';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=toilet-staff-only-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -34,16 +34,16 @@ import { quarryDeposits } from './city_terrain.js?v=deep-perf-3';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
-import { CitySanitation } from './city_sanitation.js?v=furniture-farms-fertilizer-1';
+import { CitySanitation } from './city_sanitation.js?v=toilet-staff-only-1';
 import { CityLife } from './city_life.js?v=pocket-water-cutaway-1';
 import { CityWorkMeals } from './city_work_meals.js?v=refectory-survival-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=interiors-completion-2';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=bridge-shortcuts-1';
 import { CityLogistics } from './city_logistics.js?v=furniture-farms-fertilizer-1';
 import { CityGigs } from './city_gigs.js?v=furniture-farms-fertilizer-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=furniture-farms-fertilizer-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=deep-perf-3';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=deep-perf-3';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=deep-perf-3';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -109,6 +109,8 @@ export class CitySimulation {
     this.units = new Map();
     this.accounts = new Map([['treasury', { name: 'Prefeitura', balance: 0, totalRevenue: 0, totalExpenses: 0 }], ['supplier', { name: 'Economia externa', balance: 0 }]]);
     this.occupied = new Set();
+    this.cardboardShelters = new Map();
+    this.cardboardRevision = 0;
     this.events = [];
     this.history = new CityHistory(this);
     this.nextEventId = 1;
@@ -298,7 +300,7 @@ export class CitySimulation {
     const identity = this.life.identity(index, options);
     const entity = this.createEntity({ x, y, properties: { name: identity.name, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: 0xe8e8e8 } } });
     const mobilityPriority=.75+((((Math.imul(index+1,2654435761)^this.initialSeed)>>>0)/4294967295)*.5);
-    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, mobilityPriority, mobilityNeed: 8, mobilityTimeLostToday: 0, lastProgressAt: this.minute };
+    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, inventory:{papelao:1}, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, mobilityPriority, mobilityNeed: 8, mobilityTimeLostToday: 0, lastProgressAt: this.minute };
     c.parentIds=options.parentIds||[];ensureSkinColor(this,c);
     c.givenNames = identity.givenNames; c.surnames = Object.freeze(identity.surnames);
     initializeCharacter(this, c); this.reputation.setup(c);
@@ -407,7 +409,8 @@ export class CitySimulation {
         for(const cell of this.occupied){const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));if(x>=0&&y>=0&&x<width&&y<height)grid[y*width+x]=1;}
         this._pathBlockedGrid=grid;this._pathBlockedRevision=blockedRevision;
       }
-      this.pathCache.set(key, findTerrainPath(this.world, start, goal, this.occupied,{blockedGrid:this._pathBlockedGrid}));
+      const route=findTerrainPath(this.world, start, goal, this.occupied,{blockedGrid:this._pathBlockedGrid});
+      this.pathCache.set(key,route?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p})??null);
     }
     let path = this.pathCache.get(key);
     if(path===null&&!links.length&&settlementConnected(this,start,goal)===false)return null;
@@ -418,9 +421,9 @@ export class CitySimulation {
           const from=reverse?link.end:link.start,to=reverse?link.start:link.end,fromAccess=reverse?link.endAccess:link.startAccess,toAccess=reverse?link.startAccess:link.endAccess;
           const lower=Math.hypot(start.x-fromAccess.x,start.y-fromAccess.y)+Math.hypot(goal.x-toAccess.x,goal.y-toAccess.y)+Math.hypot(to.x-from.x,to.y-from.y)*.76+3;
           if(lower>=bestScore)continue;
-          const first=findTerrainPath(this.world,start,fromAccess,this.occupied,{blockedGrid:this._pathBlockedGrid});
-          const last=findTerrainPath(this.world,toAccess,goal,this.occupied,{blockedGrid:this._pathBlockedGrid});
-          if(first===null||last===null)continue;
+          const first=findTerrainPath(this.world,start,fromAccess,this.occupied,{blockedGrid:this._pathBlockedGrid})?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p});
+          const last=findTerrainPath(this.world,toAccess,goal,this.occupied,{blockedGrid:this._pathBlockedGrid})?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p});
+          if(!first||!last)continue;
           const stairs=10,waypoints=first.slice();
           const append=p=>{const previous=waypoints.at(-1);if(!previous||Math.hypot(previous.x-p.x,previous.y-p.y,(previous.z||0)-(p.z||0))>.001)waypoints.push(p);};
           append(fromAccess);
@@ -454,20 +457,30 @@ export class CitySimulation {
     return need;
   }
   routeHomelessToSleep(c) {
+    this.cardboardShelters??=new Map();this.cardboardRevision??=0;
+    c.inventory??={};if(!Number.isFinite(c.inventory.papelao))c.inventory.papelao=1;
     c.task='energy';c.targetId=null;c.homelessSleepSpot??=null;
-    const spot=c.homelessSleepSpot;
+    const existing=c.cardboardShelterKey&&this.cardboardShelters.get(c.cardboardShelterKey);
+    if(existing&&existing.citizenId===c.id)c.homelessSleepSpot={x:existing.x,y:existing.y};
+    let spot=c.homelessSleepSpot;
+    if(spot&&(ROAD_TILES.has(tileAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))||bridgeAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))){if(existing?.citizenId===c.id){this.cardboardShelters.delete(c.cardboardShelterKey);this.cardboardRevision++;}c.cardboardShelterKey=null;c.homelessSleepSpot=null;c.inventory.papelao=1;c.path=[];spot=null;}
     if(spot){
+      const shelter=this.cardboardShelters.get(c.cardboardShelterKey);
+      if(!shelter||shelter.citizenId!==c.id){const x=Math.floor(spot.x),y=Math.floor(spot.y),shelterKey=`${x},${y}`;this.cardboardShelters.set(shelterKey,{citizenId:c.id,x:x+.5,y:y+.5,placedAt:this.minute});c.cardboardShelterKey=shelterKey;c.homelessSleepSpot={x:x+.5,y:y+.5};c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
       if(Math.hypot(c.entity.x-spot.x,c.entity.y-spot.y)<=.25&&!c.path.length){c.action='Dormindo na rua';return true;}
       if(!c.path.length){const path=this.findPath(c.entity,spot);if(path!==null){c.path=path;if(!path.length||Math.hypot(path.at(-1).x-spot.x,path.at(-1).y-spot.y)>.05)c.path.push({...spot});}}
       c.action='Procurando um lugar tranquilo para dormir';return false;
     }
     const width=this.world.width,height=this.world.height,structure=this.structureRevision||0;
     let safety=this._sleepRouteSafety;
-    if(!safety||safety.structure!==structure||safety.width!==width||safety.height!==height){
-      const clear=new Uint8Array(width*height);
+    const plotCount=this.development?.plots.length||0;
+    if(!safety||safety.structure!==structure||safety.plotCount!==plotCount||safety.width!==width||safety.height!==height){
+      const clear=new Uint8Array(width*height),blocked=new Uint8Array(width*height);
+      for(const b of this.buildings){if(b.entity.destroyed)continue;for(let y=b.entity.y;y<b.entity.y+b.depth;y++)for(let x=b.entity.x;x<b.entity.x+b.width;x++)if(x>=0&&y>=0&&x<width&&y<height)blocked[y*width+x]=1;}
+      for(const p of this.development?.plots||[])for(let y=p.y;y<p.y+p.depth;y++)for(let x=p.x;x<p.x+p.width;x++)if(x>=0&&y>=0&&x<width&&y<height)blocked[y*width+x]=1;
       for(const b of this.buildings){if(b.entity.destroyed)continue;const cx=Math.floor(b.door.x),cy=Math.floor(b.door.y);
         for(let dy=-5;dy<=5;dy++)for(let dx=-5;dx<=5;dx++){const x=cx+dx,y=cy+dy;if(x>=0&&y>=0&&x<width&&y<height){const ddx=x+.5-b.door.x,ddy=y+.5-b.door.y;if(ddx*ddx+ddy*ddy<16)clear[y*width+x]=1;}}}
-      safety=this._sleepRouteSafety={structure,width,height,clear};
+      safety=this._sleepRouteSafety={structure,plotCount,width,height,clear,blocked};
     }
     let routing=this._sleepRouteOccupancy;
     if(!routing||routing.minute!==this.minute){
@@ -485,19 +498,20 @@ export class CitySimulation {
     for(let radius=3;radius<=12;radius++){
       const candidates=[];
       for(let dx=-radius;dx<=radius;dx++){const dy=radius-Math.abs(dx);for(const sy of (dy?[1,-1]:[1])){
-        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if((key!==ownKey&&blocked.has(key))||x<0||y<0||x>=width||y>=height||safety.clear[y*width+x]||!this.walkable(x,y))continue;
+        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if((key!==ownKey&&blocked.has(key))||x<0||y<0||x>=width||y>=height||safety.clear[y*width+x]||safety.blocked[y*width+x]||this.cardboardShelters.has(key)||ROAD_TILES.has(tileAt(this.world,x,y))||bridgeAt(this.world,x,y)||!this.walkable(x,y))continue;
         const px=x+.5,py=y+.5;candidates.push({x:px,y:py,key,score:Math.hypot(px-c.entity.x,py-c.entity.y)+(Math.imul(c.id+17,1103515245)>>>0)%997/10000});
       }}
       candidates.sort((a,b)=>a.score-b.score);
       for(const candidate of candidates){const path=this.findPath(c.entity,candidate);if(path===null)continue;
-        c.homelessSleepSpot={x:candidate.x,y:candidate.y};c.path=path;
+        c.homelessSleepSpot={x:candidate.x,y:candidate.y};c.cardboardShelterKey=candidate.key;this.cardboardShelters.set(candidate.key,{citizenId:c.id,x:candidate.x,y:candidate.y,placedAt:this.minute});c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;c.path=path;
         if(!path.length||Math.hypot(path.at(-1).x-candidate.x,path.at(-1).y-candidate.y)>.05)c.path.push({x:candidate.x,y:candidate.y});
         blocked.add(candidate.key);c.action='Procurando um lugar tranquilo para dormir';return false;
       }
     }
     // The safe fallback is to rest where the person is, never to send them to
     // the town hall and turn its entrance into a makeshift dormitory.
-    c.homelessSleepSpot={x:startX+.5,y:startY+.5};blocked.add(ownKey);c.path=[];c.action='Dormindo na rua';return true;
+    if(!safety.blocked[startY*width+startX]&&!safety.clear[startY*width+startX]&&!this.cardboardShelters.has(ownKey)&&!ROAD_TILES.has(tileAt(this.world,startX,startY))&&!bridgeAt(this.world,startX,startY)&&this.walkable(startX,startY)){c.homelessSleepSpot={x:startX+.5,y:startY+.5};c.cardboardShelterKey=ownKey;this.cardboardShelters.set(ownKey,{citizenId:c.id,x:startX+.5,y:startY+.5,placedAt:this.minute});c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
+    blocked.add(ownKey);c.path=[];c.action='Dormindo na rua';return true;
   }
 
   chooseTask(c) {
@@ -651,7 +665,7 @@ export class CitySimulation {
       if(!c.homelessSleepSpot){this.routeHomelessToSleep(c);if(c.path.length)return;}
       if(c.homelessSleepSpot&&Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)>.3){this.routeHomelessToSleep(c);return;}
       c.action='Dormindo na rua';c.needs.energy=clamp(c.needs.energy+.45);
-      if(c.needs.energy>=95||(this.hour>=7&&this.hour<22&&c.needs.energy>65)){c.task=null;c.homelessSleepSpot=null;}
+      if(c.needs.energy>=95||(this.hour>=7&&this.hour<22&&c.needs.energy>65)){c.task=null;}
       return;
     }
     const b = this.building(c.targetId), n = c.needs;
@@ -849,6 +863,7 @@ export class CitySimulation {
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
     if (this.minute % 60 === 0) this.flushPayroll();
     const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
+    for(const [key,shelter] of this.cardboardShelters){const owner=this.society.citizen(shelter.citizenId);if(!owner||owner.entity.destroyed||owner.homeUnitId){this.cardboardShelters.delete(key);this.cardboardRevision++;if(owner){owner.cardboardShelterKey=null;owner.homelessSleepSpot=null;if(!owner.entity.destroyed){owner.inventory??={};owner.inventory.papelao=1;}}}}
     for (const c of this.citizens) {
       const n = c.needs;
       // Idle adults cannot choose another activity until their short retry
@@ -943,16 +958,16 @@ export class CitySimulation {
       // up to 60 times before any relevant state can change.
       const load=c.deliveryId?(shipmentIndex?shipmentIndex.get(c.deliveryId):this.logistics.shipments.find(s=>s.id===c.deliveryId)):null;
       if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>(c.equipment?.carrinho?72:c.equipment?.cesta?36:24)){c.action='Aguardando veículo para transportar a carga';continue;}
-      if(!c.path.length&&c.skybridgeZ){c.skybridgeZ=0;c.skybridgeId=null;}
+      if(!c.path.length&&c.skybridgeZ&&!bridgeAt(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y))){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5);
       while (distance > 0 && c.path.length) {
         const p = c.path[0];
-        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,tx=Math.floor(p.x),ty=Math.floor(p.y);
-        if(elevated&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
+        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),roadBridge=p.roadBridgeId,elevated=!!(pBridge||roadBridge),tx=Math.floor(p.x),ty=Math.floor(p.y);
+        if(pBridge&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)||roadBridge&&!this.world.roadBridges?.some(link=>link.id===roadBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         if(!elevated&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         const dx=p.x-c.entity.x,dy=p.y-c.entity.y,dz=(p.z||0)-(c.skybridgeZ||0),len=Math.hypot(dx,dy,dz);
-        const tile=tileAt(this.world,tx,ty),cost=elevated?1.05:roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
+        const tile=tileAt(this.world,tx,ty),cost=elevated?(roadBridge?0.55:1.05):(bridgeAt(this.world,tx,ty)?0.55:roadTravelCost(tile)),available=distance/cost,travelled=Math.min(len,available);
         if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;if(!elevated)this.recordTraffic(p);c.path.shift();distance=Math.max(0,distance-len*cost);}
         else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;distance=0;}
         if(travelled>0){
@@ -961,7 +976,7 @@ export class CitySimulation {
           if(!elevated){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
-        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à seleção de emprego':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.skybridgeZ>0?(bridgeAt(this.world,tx,ty)?'Atravessando uma ponte':'Atravessando a passarela elevada'):c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à seleção de emprego':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? (c.workProjectId&&this.development.projects.find(p=>p.id===c.workProjectId)?.service==='bridge'?'Construindo uma ponte':'Indo para a obra') : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }

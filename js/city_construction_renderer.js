@@ -11,7 +11,7 @@ export function syncConstructionSites(renderer,THREE,world,development){
   const plot=plots.get(project.plotId),route=project.path||project.route;
   let cells=[];
   if(project.service==='building'&&plot){for(let y=plot.y;y<plot.y+Math.min(plot.depth,project.depth||plot.depth);y++)for(let x=plot.x;x<plot.x+Math.min(plot.width,project.width||plot.width);x++)cells.push({x:x+.5,y:y+.5});}
-  else if((project.service==='road'||project.service==='road-repair')&&route)cells=route.map(p=>({x:Math.floor(p.x)+.5,y:Math.floor(p.y)+.5}));
+  else if((project.service==='road'||project.service==='bridge'||project.service==='road-repair')&&route)cells=route.map(p=>({x:Math.floor(p.x)+.5,y:Math.floor(p.y)+.5}));
   else if(project.door)cells=[{x:project.door.x,y:project.door.y}];
   if(!cells.length)continue;
   const signature=`${world.revision}:${cells.length}:${cells[0].x}:${cells[0].y}:${cells.at(-1).x}:${cells.at(-1).y}`;

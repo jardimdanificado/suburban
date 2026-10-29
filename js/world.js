@@ -100,6 +100,8 @@ export class World {
     this.height = size;
     this.clock = new WorldClock();
     this.map = new Uint8Array(this.width * this.height);
+    this.roadBridges=[];
+    this.bridgeTiles=new Map();
     this.generate(presetId, seed);
   }
 
@@ -117,6 +119,7 @@ export class World {
     world_gen_generate(this.map, { ...cfg, seed, width:this.width, height:this.height }, outCenter);
     this.spawnCenter = outCenter;
     this.groups = []; // Clear groups
+    this.roadBridges=[];this.bridgeTiles.clear();this.bridgeRevision=(this.bridgeRevision||0)+1;
     this.clock.reset();
     return outCenter;
   }

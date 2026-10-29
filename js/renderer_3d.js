@@ -6,7 +6,7 @@ import {waterPollutionAt,waterTint} from './city_water.js';
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=long-span-passarelas-4";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=road-bridge-render-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=furniture-farms-fertilizer-1';
 import { flagNightFactor } from './city_terrain.js?v=deep-perf-3';

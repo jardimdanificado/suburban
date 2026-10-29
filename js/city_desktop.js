@@ -1,5 +1,5 @@
 import {desktopMenus} from './city_desktop_menus.js';
-import {CityUI,money} from './city_ui.js?v=furniture-farms-fertilizer-1';
+import {CityUI,money} from './city_ui.js?v=bridges-shortwalk-1';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js';
