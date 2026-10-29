@@ -1,4 +1,4 @@
-import {surfaceElevation} from './city_terrain.js?v=office-demand-rollout-1';
+import {surfaceElevation} from './city_terrain.js?v=initial-cycle-ref-1';
 
 // Temporary construction surfaces are visual only: the original terrain remains
 // available to navigation and is revealed again when the project finishes.

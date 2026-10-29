@@ -8,10 +8,10 @@ import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './
 import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=office-demand-rollout-1';
-import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-directions-1';
-import {syncSkybridges} from './city_skybridges.js?v=skybridge-stair-alignment-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-directions-1';
+import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=initial-cycle-ref-1';
+import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-door-alignment-2';
+import {syncSkybridges} from './city_skybridges.js?v=bridge-clean-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import {mergeStaticMeshes} from './city_static_mesh.js';
 function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});

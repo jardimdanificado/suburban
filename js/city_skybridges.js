@@ -1,9 +1,11 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {ROAD_TILES,tileAt,terrainWalkable} from './city_terrain.js?v=office-demand-rollout-1';
+import {ROAD_TILES,tileAt,terrainWalkable} from './city_terrain.js?v=initial-cycle-ref-1';
 
 // One deterministic source of truth feeds both pedestrian routing and the renderer.
 export function skybridgeLinks(buildings,world){
- const candidates=buildings.map(e=>e.properties?.cityBuilding||e).filter(b=>b&&!b.entity?.destroyed&&!b.officeTenantOf&&b.constructionKind==='building'&&b.floors>=2&&b.terrain).sort((a,b)=>a.entity.x-b.entity.x||a.entity.y-b.entity.y||a.id-b.id),used=new Set(),links=[];
+ // The bridge prototype uses local east/west door bits. Until rotated facade
+ // masks are modeled here too, only attach it to buildings facing that axis.
+ const candidates=buildings.map(e=>e.properties?.cityBuilding||e).filter(b=>b&&!b.entity?.destroyed&&!b.officeTenantOf&&b.constructionKind==='building'&&b.floors>=2&&b.terrain&&(b.rotation||0)===0).sort((a,b)=>a.entity.x-b.entity.x||a.entity.y-b.entity.y||a.id-b.id),used=new Set(),links=[];
  for(let i=0;i<candidates.length&&links.length<24;i++){const a=candidates[i];if(used.has(a.id))continue;
   for(let j=i+1;j<candidates.length;j++){const b=candidates[j],gap=b.entity.x-(a.entity.x+a.width);if(gap>5)break;if(gap<2||used.has(b.id)||Math.abs(a.terrain.base-b.terrain.base)>.25)continue;
    const low=Math.max(a.entity.y,b.entity.y),high=Math.min(a.entity.y+a.depth,b.entity.y+b.depth);if(high-low<1)continue;
@@ -32,16 +34,7 @@ export function syncSkybridges(renderer,THREE,entities,world){
    bridge.userData={id:link.id,bounds:{x0:link.x0,x1:link.x1,z:link.y}};group.add(bridge);
    const deck=new THREE.Mesh(new THREE.BoxGeometry(link.gap+.12,.14,.72),new THREE.MeshLambertMaterial({color:0x8c9892}));deck.position.set(mid,height,link.y);deck.castShadow=true;deck.receiveShadow=true;bridge.add(deck);
    for(const side of [-.32,.32]){const rail=new THREE.Mesh(new THREE.BoxGeometry(link.gap+.12,.07,.045),new THREE.MeshLambertMaterial({color:0x637579}));rail.position.set(mid,height+.66,link.y+side);bridge.add(rail);for(let k=0;k<=Math.ceil(link.gap);k++){const post=new THREE.Mesh(new THREE.BoxGeometry(.04,.66,.04),new THREE.MeshLambertMaterial({color:0x637579}));post.position.set(link.x0+link.gap*k/Math.ceil(link.gap),height+.33,link.y+side);bridge.add(post);}}
-   for(const [x,mapY,rampX]of [[link.x0,link.y,link.x0+.5],[link.x1,link.y,link.x1-.5]]){
-    // Exterior stair flights visibly connect each sidewalk landing to the deck.
-    // Keep the flight centered on the same x/y line as the pedestrian ramp.
-    // The previous x - 0.5 put the stairs inside the building footprint and
-    // made them look detached from the bridge, often emerging into the road.
-    for(let step=0;step<10;step++){const rise=(step+.5)*link.height/10,run=(step+.5)/10;const tread=new THREE.Mesh(new THREE.BoxGeometry(.78,.09,.17),new THREE.MeshLambertMaterial({color:step%2?0x77857e:0x8b9891}));tread.position.set(rampX,height-link.height+rise,mapY+1-run);bridge.add(tread);}
-    for(const dx of [-.39,.39]){const rail=new THREE.Mesh(new THREE.BoxGeometry(.045,link.height,.045),new THREE.MeshLambertMaterial({color:0x637579}));rail.position.set(rampX,height-link.height/2,mapY+.5+dx);bridge.add(rail);}
-   }
    addDoor(a,link.auId,8);addDoor(b,link.buId,4);
-   for(const x of [link.x0,link.x1]){for(const dz of [-.27,.27]){const frame=new THREE.Mesh(new THREE.BoxGeometry(.08,1.45,.06),new THREE.MeshLambertMaterial({color:0x637579}));frame.position.set(x,height+.72,link.y+dz);bridge.add(frame);}const top=new THREE.Mesh(new THREE.BoxGeometry(.08,.07,.6),new THREE.MeshLambertMaterial({color:0x637579}));top.position.set(x,height+1.45,link.y);bridge.add(top);}
  }
  updateVisibility();
 }

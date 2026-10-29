@@ -1,5 +1,11 @@
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2]});
+export function citizenIsSleeping(c){
+ if(c?.task!=='energy'||c.path?.length||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
+ const s=c.indoorLocation;
+ if(s)return s.roomType==='bedroom'&&!s.exiting&&!s.path?.length;
+ return c.action==='Dormindo na rua'&&(!c.homelessSleepSpot||Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)<=.3);
+}
 const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','health','vote','council-session']);
 export function citizenAnimation(c,moving=false){
   if(c.mobilityTrip?.stage==='boarding')return 'mount';
@@ -98,7 +104,7 @@ export class CityCitizenModels {
     }
     this.ready=true;return true;
   }
-  begin(dt=0,speed=1){this.clock+=Math.max(0,Math.min(.1,dt))*Math.max(0,Math.min(2,speed));for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
+  begin(dt=0,speed=1){this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
   add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,vehicleAngle=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
@@ -113,7 +119,8 @@ export class CityCitizenModels {
     // Animate walking from presentation time rather than traveled distance.
     // Distance-based frame changes tied the pose to simulation updates and
     // made each step visibly click at ordinary speed.
-    const sleeping=c.task==='energy'&&!c.path?.length&&(!c.indoorLocation||c.indoorLocation.roomType==='bedroom'),clip=citizenAnimation(c,moved),pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    const sleeping=citizenIsSleeping(c),clip=citizenAnimation(c,moved),pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,this.clock,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    if(!moved&&!sleeping&&c.facingTarget){const desired=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y),delta=((desired-motion.angle+Math.PI*3)%(Math.PI*2))-Math.PI;motion.angle+=delta*Math.min(1,(this.frameDelta||0)*9);}
     const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
     if(batch.count===batch.capacity){

@@ -1,5 +1,5 @@
 import {businessFloors} from './city_business_heights.js';
-import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
+import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js?v=initial-cycle-ref-1';
 import {buildingEntrance} from './city_building_geometry.js';
 import {OFFICE_BUSINESSES} from './city_offices.js?v=office-demand-rollout-1';
 import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js?v=map-default-256-1';

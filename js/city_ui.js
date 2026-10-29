@@ -1,5 +1,5 @@
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-directions-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import {equityShares,equityValue} from './city_equity.js';
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js';
@@ -31,7 +31,7 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js?v=public-cleaning-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=public-restrooms-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
@@ -39,7 +39,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=office-demand-rollout-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=sync-perf-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=basic-services-analytics-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=informal-gigs-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -61,8 +61,8 @@ const VIEWS = {
   government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
-  transport: [['active', 'FRETES'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
-  sanitation: [['facilities', 'BANHEIROS'], ['queues','FILAS'], ['cleaning', 'FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
+  transport: [['active', 'FRETES'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
+  sanitation: [['facilities', 'BANHEIROS'], ['queues','FILAS'], ['cleaning', 'FAXINA'], ['gigs','BICOS DE FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
 const FILTERS = {
   people: [['all','TODOS'], ['homeless','SEM CASA'], ['unemployed','SEM TRABALHO'], ['critical','EM RISCO'], ['food','COM FOME'], ['children','CRIANÇAS']],
@@ -306,6 +306,7 @@ export class CityUI {
       p.note(city.housing.isSocial(dwelling)?'Moradia popular municipal: ocupação gratuita, sem cobrança de aluguel e sem transferência de propriedade.':'Moradia e alimentação dependem da renda e das reservas. A falta de pagamento por três dias pode encerrar o aluguel.', C.gray);
       if (home) { p.kv('Espaço',`${home.x+1}, ${home.y+1} / ${home.z+1}º andar`); p.kv('Regime', city.housing.isSocial(dwelling)?'Moradia social gratuita':home.ownerId === c.accountId ? 'Proprietário' : home.tenantId !== c.accountId && dwelling ? 'Moradia compartilhada' : 'Inquilino'); p.button(name(city.building(home.buildingId)?.entity), () => this.openBuilding(home.buildingId)); }
       else p.note('Sem moradia', C.red);
+      if(home&&society.isAdult(c)){const price=city.gigs.quote(home.buildingId,'interior',c.accountId);p.button(`CONTRATAR FAXINA · ${money(price)}`,()=>{const order=city.gigs.createCleaningOrder(c.accountId,home.buildingId,{scope:'interior'});this.notice=order?`Faxina #${order.id} anunciada; pagamento reservado.`:'Não foi possível contratar. Confira o saldo e se já há outra faxina ativa.';});}
       this.section(p,'wardrobe','Roupas, aparência e marcas',()=>{p.meter('Apresentação',appearance(c));p.meter('Sujeira e odor',clothingOdor(c),C.red);p.note('Moradores alternam para uma peça limpa quando têm outra. Lavanderias domésticas e comerciais lavam as roupas; roupas sujas prejudicam apresentação e convivência.');p.kv('Preferências por peças',GARMENT_TYPES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));p.kv('Preferências por estilos',CLOTHING_STYLES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));for(const [i,g]of (c.wardrobe||[]).entries()){const owners=(g.ownerHistory||[]).map(h=>`${h.ownerName} · ${stamp(h.minute)}`).join(' → ')||g.brandName,washes=(g.washingHistory||[]).slice(-2).map(w=>`${stamp(w.minute)} ${w.method}`).join(' / ')||'nenhuma';p.record(`${g===wornGarment(c)||g===wornLowerGarment(c)||g===wornHeadwear(c)||g===wornFootwear(c)||c.political?.partyCapId===g.garmentId||c.campaign?.capGarmentId===g.garmentId?'Vestindo: ':''}${g.piece} · ${g.style}`,`${g.brandName} · ${colorName(g.color)} · conservação ${g.condition.toFixed(0)}% · sujeira ${(g.dirt||0).toFixed(0)}% · donos: ${owners} · lavagens: ${washes}`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});}for(const b of city.economy.businesses.filter(b=>['tailor','clothing_store','thrift_store','laundromat'].includes(b.type)).slice(0,12))p.kv(`Afinidade: ${b.entity.properties.name}`,`${brandPreference(c,b.id)>0?'Gosta':'Não gosta'} (${Math.round(brandPreference(c,b.id)*100)})`);});
       this.section(p,'personality','Identidade, personalidade e reputação',()=>{p.heading('IDENTIDADE E PERSONALIDADE');
       p.kv('Gênero',GENDER_LABELS[c.socialProfile.gender]);p.kv('Interesse romântico',ORIENTATION_LABELS[c.socialProfile.orientation]);
@@ -398,6 +399,7 @@ export class CityUI {
       p.metrics([['CAIXA',money(b.balance),b.balance<1000?C.red:C.cyan],['EQUIPE',`${b.workers.length}/${b.jobs}`,C.cyan]]);
       if(civicSpec(b)){const service=civicStatus(city,b);p.heading('ATENDIMENTO');p.kv('Equipe presente / capacidade',`${service.team} / ${service.capacity}`);p.kv('Usuários atendidos agora',service.visitors);p.kv('Visitas concluídas',b.completedVisits||0);p.note(service.reason);}
       p.status(b.active?'EM ATIVIDADE':['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type)?'MORADIA':'INSTALAÇÃO DISPONÍVEL',b.entity.properties.name,b.active?C.green:C.cyan);
+      if(b.units?.length&&b.constructionKind!=='open-air'&&b.type!=='townhall'&&b.type!=='council_chamber'){const payer=b.ownerId?city.economy.citizen(b.ownerId)?.accountId:b.accountId,price=city.gigs.quote(b.id,'interior',payer),front=city.gigs.quote(b.id,'frontage',payer);if(payer&&city.accounts.has(payer)){p.heading('FAXINA INFORMAL');p.note('O pagamento fica reservado e é liberado ao trabalhador quando conclui a limpeza.');p.buttons([{label:`LIMPAR INTERIOR · ${money(price)}`,click:()=>{const order=city.gigs.createCleaningOrder(payer,b.id,{scope:'interior'});this.notice=order?`Faxina #${order.id} anunciada.`:'Não foi possível contratar. Confira o saldo ou uma tarefa já ativa.';}},{label:`LIMPAR FRENTE · ${money(front)}`,click:()=>{const order=city.gigs.createCleaningOrder(payer,b.id,{scope:'frontage'});this.notice=order?`Faxina externa #${order.id} anunciada.`:'Não foi possível contratar. Confira o saldo ou uma tarefa já ativa.';}}]);}}
       const missing=b.active&&INDUSTRIES[b.type]?Object.entries(INDUSTRIES[b.type].inputs).filter(([g,n])=>(b.inventory[g]||0)<n):[];
       if(missing.length)p.status('AGUARDANDO INSUMOS',missing.map(([g,n])=>`${GOODS[g].label}: ${b.inventory[g]||0}/${n}${b.incoming[g]?' · '+b.incoming[g]+' a receber':''}`).join(' · '),C.gold,()=>this.openPanel({detailTab:'stock'}));
       if(b.active&&b.jobs>0&&!b.workers.length&&!b.ownerId)p.status('SEM EQUIPE','Nenhum funcionário contratado para operar esta instalação.',C.red,()=>this.openPanel({detailTab:'staff'}));
@@ -781,6 +783,15 @@ export class CityUI {
   transport(p) {
     if(['vehicles','parking','rentals','models'].includes(this.view())){renderMobility(this,p);return;}
     const city=this.city,system=city.logistics,pending=system.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
+    if(this.view()==='informal'){
+      const offers=pending.filter(s=>!s.carrierId&&s.fee>0&&!s.driverId).sort((a,b)=>a.createdAt-b.createdAt),active=pending.filter(s=>!s.carrierId&&s.driverId),recent=system.shipments.filter(s=>s.status==='delivered'&&!s.carrierId&&s.informalDriverId).slice(-30).reverse();
+      p.metrics([['OFERTAS',offers.length,C.gold],['ACEITAS',active.length,C.cyan],['CONCLUÍDAS',recent.length,C.green]]);
+      p.heading('FRETES DISPONÍVEIS PARA AUTÔNOMOS');p.note('O pagador deposita o frete em garantia. Um adulto sem emprego ou negócio pode aceitar a carga; a remuneração é liberada quando a mercadoria chega.');
+      p.table([{label:'Carga',weight:1.5},{label:'Origem / destino',weight:2},{label:'Pagamento'},{label:'Espera'}],offers.map(s=>({cells:[`${GOODS[s.good]?.label||s.good} × ${s.quantity}`,`${s.seller.entity?.properties.name||s.seller.name} → ${s.buyer.entity?.properties.name||s.buyer.name}`,money(s.fee),stamp(s.createdAt)],click:()=>this.openPanel({selectedShipmentId:s.id})})),{empty:'Nenhuma oferta informal aguardando transportador.'});
+      p.heading('EM ENTREGA');for(const s of active){const c=city.society.citizen(s.driverId);p.record(`Frete #${s.id} · ${GOODS[s.good]?.label||s.good} × ${s.quantity}`,`${name(c?.entity)} · ${money(s.fee)} · ${s.deliveryLeg==='delivery'?'a caminho do destino':'indo buscar a carga'}`,()=>this.openPanel({selectedShipmentId:s.id}));}
+      p.heading('SERVIÇOS CONCLUÍDOS');for(const s of recent){const c=city.society.citizen(s.informalDriverId);p.record(`Frete #${s.id} · ${GOODS[s.good]?.label||s.good} × ${s.quantity}`,`${name(c?.entity)} · recebeu ${money(s.fee)} · ${stamp(s.completedAt)}`,()=>this.openPanel({selectedShipmentId:s.id}));}
+      return;
+    }
     p.metrics([['EM ANDAMENTO',pending.length,C.gold],['ENTREGUES',system.delivered,C.green],['ITENS EM FRETE',pending.reduce((n,s)=>n+s.quantity,0),C.cyan]]);
     this.section(p,'transportDemand','Demanda, capacidade e causas dos atrasos',()=>{
     const demand=system.demandMetrics();p.heading('DEMANDA POR TRANSPORTE');p.kv('Cargas aguardando / transporte próprio',`${demand.waiting} / ${demand.ownHauls}`);p.kv('Transportadores disponíveis',demand.drivers);p.kv('Cargas bloqueadas por armazém cheio',demand.waitingSpace);p.kv('Espera mais antiga',`${Math.round(demand.oldest)} min`);p.kv('Trabalho pendente / capacidade diária',`${demand.work} / ${demand.capacity} min`);p.kv('Lamparinas sem atendimento',demand.lampRequests);p.kv('Índice de demanda',Math.round(demand.score));
@@ -794,7 +805,7 @@ export class CityUI {
       const s=selected;
       p.heading(`FRETE ${s.id} / ${GOODS[s.good].label} x${s.quantity}`,s.status==='delivered'?C.green:s.status==='cancelled'?C.red:C.gold);
       p.note(states[s.status],C.cyan);p.note(`${s.seller.entity?.properties.name||s.seller.name} > ${s.buyer.entity?.properties.name||s.buyer.name}`);
-      p.columns(q=>{q.kv('Mercadoria',money(s.cost));q.kv('Frete',money(s.fee));if(s.serviceFee)q.kv('Serviço de coleta',money(s.serviceFee));},q=>{q.kv('Operador',city.building(s.carrierId)?.entity.properties.name||'Transporte próprio');q.kv('Trajeto',`${s.routeLength} tiles`);});
+      p.columns(q=>{q.kv('Mercadoria',money(s.cost));q.kv('Frete',money(s.fee));if(s.serviceFee)q.kv('Serviço de coleta',money(s.serviceFee));},q=>{q.kv('Operador',city.building(s.carrierId)?.entity.properties.name||(s.informalDriverId?`${name(city.society.citizen(s.informalDriverId)?.entity)} · autônomo`:'Transporte próprio'));q.kv('Trajeto',`${s.routeLength} tiles`);});
       const driver=city.society.citizen(s.driverId);p.buttons([...(city.building(s.seller.id)?[{label:'ORIGEM',click:()=>this.openBuilding(s.seller.id)}]:[]),...(city.building(s.buyer.id)?[{label:'DESTINO',click:()=>this.openBuilding(s.buyer.id)}]:[]),...(driver?[{label:'TRANSPORTADOR',click:()=>this.openCitizen(driver.id)}]:[])]);
       p.note(`${stamp(s.createdAt)}${s.completedAt?' / conclusão '+stamp(s.completedAt):''}`,C.muted);
       return;
@@ -804,6 +815,13 @@ export class CityUI {
   }
   sanitation(p) {
     const city=this.city,system=city.sanitation,view=this.view(),facilities=[...system.facilities.values()],dirty=facilities.filter(f=>f.cleanliness<25),jobs=system.jobs.filter(j=>!['completed','cancelled'].includes(j.status));
+    if(view==='gigs'){
+      const gigs=city.gigs?.jobs||[],active=gigs.filter(j=>['open','working'].includes(j.status)),recent=gigs.filter(j=>['completed','cancelled'].includes(j.status)).slice(-50).reverse();
+      p.metrics([['ABERTAS',active.filter(j=>j.status==='open').length,C.gold],['EM EXECUÇÃO',active.filter(j=>j.status==='working').length,C.cyan],['CONCLUÍDAS',city.gigs?.completed||0,C.green]]);
+      p.heading('QUADRO DE BICOS DE FAXINA');p.note('Moradores adultos sem emprego podem aceitar uma tarefa próxima. O pagamento fica reservado pelo contratante e é liberado ao concluir.');
+      for(const job of [...active,...recent]){const b=city.building(job.buildingId),worker=city.society.citizen(job.workerId),payer=city.accountName(job.payerAccountId),state=job.status==='open'?'Aguardando trabalhador':job.status==='working'?'Em execução':job.status==='completed'?'Concluída':'Cancelada';p.record(`#${job.id} · ${job.scope==='frontage'?'Frente do imóvel':'Interior'} · ${b?name(b.entity):'Imóvel removido'}`,`${state} · ${money(job.fee)} · ${worker?name(worker.entity):payer}${job.status==='working'?` · ${job.progress}/${job.required}`:''}`,()=>b?this.openBuilding(b.id):{});}
+      if(!gigs.length)p.note('Ainda não há faxinas anunciadas. Moradores podem contratar no dossiê da casa; proprietários, no dossiê do imóvel.');return;
+    }
     if(view==='deaths'){
       p.metrics([['MORTES',city.life.deathCount,C.red],['NASCIMENTOS',city.society.birthCount,C.green]]);p.heading('MORTES E SOBREVIVÊNCIA');
       p.table([{label:'Pessoa',weight:2},{label:'Causa',weight:1.5},{label:'Idade'},{label:'Momento',weight:1.5}],city.life.deaths.slice(-80).reverse().filter(d=>this.matches(`${d.name} ${d.cause}`)).map(d=>({cells:[d.name,d.cause,`${d.age} anos`,stamp(d.minute)],color:C.red})),{empty:'Nenhuma morte registrada.'});return;

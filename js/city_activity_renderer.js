@@ -1,5 +1,5 @@
 import {activityBadge,activityBadgeCanvas,activityBadgeKey} from './city_activity_badges.js';
-import {surfaceElevation} from './city_terrain.js?v=office-demand-rollout-1';
+import {surfaceElevation} from './city_terrain.js?v=initial-cycle-ref-1';
 export function syncCityActivityBadges(renderer,THREE,entities,world){
   const sprites=renderer.cityActivitySprites??=new Map(),materials=renderer.cityActivityMaterials??=new Map(),active=new Set();
   if(renderer.showActivityBadges===false){for(const sprite of sprites.values())renderer.scene.remove(sprite);sprites.clear();return;}

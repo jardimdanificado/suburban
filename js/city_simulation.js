@@ -17,28 +17,29 @@ import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
-import {skybridgeLinks} from './city_skybridges.js?v=skybridge-stair-alignment-1';
+import {skybridgeLinks} from './city_skybridges.js?v=bridge-clean-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=public-cleaning-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-directions-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=informal-gigs-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js';
-import { quarryDeposits } from './city_terrain.js?v=office-demand-rollout-1';
+import { quarryDeposits } from './city_terrain.js?v=initial-cycle-ref-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
-import { CitySanitation } from './city_sanitation.js?v=public-cleaning-1';
+import { CitySanitation } from './city_sanitation.js?v=public-restrooms-1';
 import { CityLife } from './city_life.js?v=needs-performance-1';
 import { CityWorkMeals } from './city_work_meals.js?v=basic-services-analytics-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=interiors-completion-2';
-import { CityLogistics } from './city_logistics.js?v=interiors-completion-2';
+import { CityLogistics } from './city_logistics.js?v=informal-gigs-1';
+import { CityGigs } from './city_gigs.js?v=informal-services-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=office-demand-rollout-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=sync-perf-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=office-demand-rollout-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=initial-cycle-ref-1';
 
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -117,6 +118,7 @@ export class CitySimulation {
     this.buildingTypes = BUILDING_TYPES;
     this.development = new CityDevelopment(this);
     this.logistics = new CityLogistics(this);
+    this.gigs = new CityGigs(this);
     this.workMeals = new CityWorkMeals(this);
     this.lighting = new CityLighting(this);
     this.bank = new CityBank(this);
@@ -843,11 +845,11 @@ export class CitySimulation {
       const urgent = this.urgentNeed(c);
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
       const completingEssential = !c.path.length && (!['toilet','food','health'].includes(c.task)||!!c.indoorLocation?.unitId&&!c.indoorLocation?.path?.length) && ESSENTIAL_TASKS.has(c.task) && n[c.task === 'provisions' || c.task === 'workmeal' ? 'food' : c.task] < (c.task==='energy'?18:75) && !(urgent==='health'&&n.health<10);
-      if (!c.deliveryId && !c.cleaningJobId && urgent && (['workmeal','provisions'].includes(c.task)?'food':c.task) !== urgent && !completingEssential && age >= 6) { c.task = null; c.path = []; }
+      if (!c.deliveryId && !c.cleaningJobId && !c.informalJobId && urgent && (['workmeal','provisions'].includes(c.task)?'food':c.task) !== urgent && !completingEssential && age >= 6) { c.task = null; c.path = []; }
       if(!c.deliveryId&&!urgent&&!c.conversation&&(INTERRUPTIBLE_TASKS.has(c.task)||(c.task==='energy'&&n.energy>65))){
         for(const child of this.childrenOf(c.id))if(this.society.age(child)<6&&Math.min(child.needs.food,child.needs.water,child.needs.hygiene,child.needs.social)<25){c.task=null;c.path=[];break;}
       }
-      if (c.deliveryId || c.cleaningJobId) continue;
+      if (c.deliveryId || c.cleaningJobId || c.informalJobId) continue;
       if (c.conversation) continue;
       if (!c.task) {
         // An idle citizen used to repeat the same path/offer search every city
@@ -861,6 +863,7 @@ export class CitySimulation {
       if(!c.task){c._nextTaskAt=this.minute+5;c._retryUrgent=urgent;}
     }
     for(const c of this.citizens)if(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation)syncCitizenInterior(this,c);
+    this.gigs.updateMinute();
     disperseCrowds(this);this.society.updateMinute();
     const movers=this._movingCitizens??=[];movers.length=0;
     for(const c of this.citizens)if(c.path.length||c.deliveryId||c.ridingVehicleId)movers.push(c);

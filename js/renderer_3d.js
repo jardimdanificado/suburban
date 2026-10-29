@@ -4,10 +4,10 @@
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=basic-services-analytics-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=balcony-door-alignment-2";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels } from './city_citizen_models.js?v=vehicle-heading-1';
-import { flagNightFactor } from './city_terrain.js?v=office-demand-rollout-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=queue-sleep-balcony-1';
+import { flagNightFactor } from './city_terrain.js?v=initial-cycle-ref-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -6954,7 +6954,7 @@ export class RCT3DRenderer {
           sprite.customDepthMaterial = depthMat;
         }
 
-        const isSleeping = !!e.properties?.life?.isSleeping && !!e.properties?.brain || !!cityCitizen&&cityCitizen.task==='energy'&&cityCitizen.targetId==null&&!cityCitizen.path.length&&!cityCitizen.indoorLocation;
+        const isSleeping = cityCitizen ? citizenIsSleeping(cityCitizen) : !!e.properties?.life?.isSleeping && !!e.properties?.brain;
         const isStandingTorch = !!e.properties?.torch;
 
         if (isPossessed || renderInside) {

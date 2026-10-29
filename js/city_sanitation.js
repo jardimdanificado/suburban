@@ -1,6 +1,7 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=public-cleaning-1';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=informal-gigs-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js';
+import { reserveService } from './city_service_queue.js?v=queue-flow-1';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 export class CitySanitation {
@@ -25,6 +26,10 @@ export class CitySanitation {
   }
   setupBusinessRooms(b) {
     if (HOUSING_TYPES.includes(b.type)) return;
+    if(b.type==='public_toilet'){
+      for(const room of b.units){if(room.roomType!=='bathroom'){room.roomType='bathroom';b.layoutRevision=(b.layoutRevision||0)+1;}this.addFacility(b,{unitId:room.id,access:'public'});}
+      return;
+    }
     // Reuse existing rooms so repeated setup/expansion cannot duplicate facilities.
     let bathroom = b.units.find(u => u.roomType === 'bathroom');
     bathroom ||= b.units.find(u => u.roomType === 'workspace');
@@ -36,13 +41,13 @@ export class CitySanitation {
     // whole population. Give it enough real rooms instead of queuing hundreds
     // of people at a single four-person table or single toilet.
     const population=Math.max(this.city.initialPopulation||0,this.city.citizens.length),publicToilets=b.type==='public_toilet',publicDining=b.type==='popular_refectory';
-    const targets={dining:publicDining?Math.min(16,Math.max(b.floors||1,Math.ceil(population/64))):0,bathroom:publicToilets?Math.min(16,Math.max(b.floors||1,Math.ceil(population/32))):1};
+    const targets={dining:publicDining?Math.min(16,Math.max(b.floors||1,Math.ceil(population/64))):0,bathroom:1};
     for(const [kind,target]of Object.entries(targets)){
       let count=b.units.filter(u=>u.roomType===kind).length;
+      const convert=room=>{room.roomType=kind;b.layoutRevision=(b.layoutRevision||0)+1;count++;if(kind==='bathroom')this.addFacility(b,{unitId:room.id,access:publicToilets||publicDining?'public':'employees'});};
       while(count<target){
-        const workspaces=b.units.filter(u=>u.roomType==='workspace');if(workspaces.length<=Math.max(publicToilets?0:3,b.jobs||0))break;
-        const room=workspaces[0];room.roomType=kind;b.layoutRevision=(b.layoutRevision||0)+1;count++;
-        if(kind==='bathroom')this.addFacility(b,{unitId:room.id,access:publicToilets||publicDining?'public':'employees'});
+        const workspaces=b.units.filter(u=>u.roomType==='workspace');if(workspaces.length<=Math.max(3,b.jobs||0))break;
+        convert(workspaces[0]);
       }
     }
   }
@@ -61,7 +66,9 @@ export class CitySanitation {
     options.sort((a, b) => this.score(c, a) - this.score(c, b));
     for (const f of options) {
       const b = this.city.building(f.buildingId), path = this.city.findPath(c.entity, b.door); if (path === null) continue;
-      if(task==='toilet')c.toiletTargetId=f.id;else c.hygieneTargetId=f.id;c.task=task; c.targetId = b.id; c.path = path; return true;
+      if(task==='toilet')c.toiletTargetId=f.id;else c.hygieneTargetId=f.id;c.task=task;c.targetId=b.id;c.path=path;
+      if(task==='toilet')reserveService(this.city,c,b,'toilet',f.id);
+      return true;
     }
     return false;
   }
@@ -69,7 +76,7 @@ export class CitySanitation {
     const b = this.city.building(f.buildingId);
     const entrance=b.officeTenantOf?this.city.building(b.officeTenantOf)||b:b;
     const queued=(entrance.serviceQueue||[]).filter(q=>q.buildingId===b.id&&q.kind==='toilet'&&q.resource===f.id).length,busy=f.occupantId&&f.occupantId!==c.id&&this.city.minute<f.busyUntil;
-    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + queued*5+(busy?4:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
+    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + queued*24+(busy?8:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
   }
   addWaste(b, amount = 1) {
     const stored = Math.min(amount, inventoryFree(b)); b.inventory.lixo += stored; b.litter += amount - stored;
@@ -286,6 +293,7 @@ export class CitySanitation {
     this.rebalanceWaiting();
     for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : 60)) this.requestCleaning(f.id);
     const city=this.city,hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(hall)this.setupBusinessRooms(hall);
+    for(const building of city.buildings)if(!building.entity.destroyed&&building.type==='public_toilet')this.setupBusinessRooms(building);
     const collectors=city.economy.businesses.filter(b=>b.type==='waste_collector');
     const processors=city.economy.businesses.filter(b=>['recycler','composting'].includes(b.type));
     const activeLoads=()=>city.logistics.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));

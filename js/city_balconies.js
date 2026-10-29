@@ -3,6 +3,7 @@ import {HOUSE_STYLES} from './city_culture.js';
 const homes=new Set(['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing']);
 const cache=new WeakMap();
 const SIDE_BITS={
+ // The balcony side is facade-local; wall masks use world-facing bits.
  front:[2,8,1,4],back:[1,4,2,8],left:[4,2,8,1],right:[8,1,4,2],
 };
 const hash=(...values)=>{let n=0x811c9dc5;for(const value of values)n=Math.imul(n^value,0x01000193);return n>>>0;};
@@ -31,7 +32,7 @@ export function buildingLeisureSpaces(b){
  const key=`${b.layoutRevision||0}:${b.floors}:${b.rotation||0}:${b.type}:${b.architecture}`,old=cache.get(b);if(old?.key===key)return old.spaces;
  const {width,depth}=modelSize(b),variant=hash(b.id,37)%5,spaces=[];
  const add=(candidate,w,d,planters)=>{
-  const alongLength=['front','back'].includes(candidate.side)?width:depth,balconyWidth=Math.min(Math.max(.6,w),Math.max(.6,alongLength-.14));
+  const alongLength=['front','back'].includes(candidate.side)?width:depth,edgeClearance=Math.min(candidate.along,alongLength-candidate.along),maxCenteredWidth=Math.max(.6,edgeClearance*2-.08),balconyWidth=Math.min(Math.max(.6,w),Math.max(.6,alongLength-.14),maxCenteredWidth);
   const pos=balconyPosition(b,candidate,d),doorBit=SIDE_BITS[candidate.side][(b.rotation||0)%4];
   spaces.push({id:`balcony:${candidate.unit.id}`,kind:'balcony',floor:candidate.unit.z,unitId:candidate.unit.id,side:candidate.side,doorBit,along:candidate.along,doorAlong:candidate.along,width:balconyWidth,depth:d,planters,position:{x:pos.x,y:pos.y,z:candidate.unit.z*CITY_FLOOR_HEIGHT+.14},capacity:1});
  };

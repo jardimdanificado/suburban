@@ -1,4 +1,4 @@
-import {chooseBuildingSite} from './city_terrain.js?v=office-demand-rollout-1';
+import {chooseBuildingSite} from './city_terrain.js?v=initial-cycle-ref-1';
 const mines=new Set(['quarry','iron_mine','bauxite_mine']);
 function dimensions(lot,type){
   if(type==='farm'||mines.has(type))return [[lot.width,lot.depth]];

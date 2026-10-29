@@ -4,7 +4,7 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=map-default-256-1';
 import {externalTradeHourly} from './city_external_trade.js';
-import {outdoorCellReady,workCellReady} from './city_interiors.js?v=public-cleaning-1';
+import {outdoorCellReady,workCellReady} from './city_interiors.js?v=informal-gigs-1';
 import {fundInitialCycleChain} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,apply,finishApplication,reviewMarket,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=employment-finish-1';
@@ -15,9 +15,9 @@ import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
 import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=public-cleaning-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
-import { quarryDeposits } from './city_terrain.js?v=office-demand-rollout-1';
+import { quarryDeposits } from './city_terrain.js?v=initial-cycle-ref-1';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=office-demand-rollout-1';
+import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=initial-cycle-ref-1';
 
 export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados', construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
 export const CROPS = {

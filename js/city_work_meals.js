@@ -1,4 +1,4 @@
-import {activityCellAvailable,activityRoomReady,outdoorCellReady} from './city_interiors.js?v=public-cleaning-1';
+import {activityCellAvailable,activityRoomReady,outdoorCellReady} from './city_interiors.js?v=informal-gigs-1';
 import { preparedOffer } from './city_markets.js';
 import { CROPS } from './city_economy.js?v=office-demand-rollout-1';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
