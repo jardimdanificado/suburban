@@ -56,7 +56,7 @@ export class CitySociety {
   }
   canPartner(a, b) { return !a.partnerId && !b.partnerId && this.city.relationships.compatible(a,b); }
   canSocialize(c) {
-    return !c.entity.destroyed && !c.mobilityTrip && !c.ridingVehicleId && !(c.serviceQueue&&c.serviceQueue.kind===c.task&&c.serviceQueue.buildingId===c.targetId) && (!c.path.length||['walk','leisure','social'].includes(c.task)) && !c.conversation && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving','food','provisions','toilet','hygiene'].includes(c.task) && this.age(c)>=3 && c.task!=='energy' &&
+    return !c.entity.destroyed && !c.mobilityTrip && !c.ridingVehicleId && !(c.serviceQueue&&c.serviceQueue.kind===c.task&&c.serviceQueue.buildingId===c.targetId) && (!c.path.length||['walk','leisure','social'].includes(c.task)) && !c.conversation && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving','food','provisions','supplies','lake-water','toilet','hygiene'].includes(c.task) && this.age(c)>=3 && c.task!=='energy' &&
       this.city.minute-c.lastConversationAt>=SOCIAL_RULES.conversationCooldown && Math.min(c.needs.food,c.needs.water,c.needs.energy)>20;
   }
   canConverse(a, b) {

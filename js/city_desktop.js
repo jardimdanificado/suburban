@@ -1,5 +1,5 @@
 import {desktopMenus} from './city_desktop_menus.js';
-import {CityUI,money} from './city_ui.js?v=refectory-survival-1';
+import {CityUI,money} from './city_ui.js?v=pocket-water-cutaway-1';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js';
@@ -106,7 +106,7 @@ export class CityDesktop {
   setView(id){this.active?.setView?.(id);}
   setFilter(id){this.active?.setFilter?.(id);}
   setSelection(entity,unitId=null){
-    for(const window of this.manager.windows)window.state.selectedProjectId=null;
+    for(const window of this.manager.windows){window.state.selectedProjectId=null;if(window.state.interiorView&&window.state.interiorView.buildingId!==entity?.id)window.state.setInteriorView(null);}
     if(!entity)this.lastSelected=null;
     if(entity?.properties?.cityPlant){const state=this.openModule('city');state.setView('nature');state.selectedPlantId=entity.id;this.lastSelected=entity;return;}
     if(!entity)return;const citizen=entity.properties?.citizen,building=entity.properties?.cityBuilding;if(!citizen&&!building&&!entity.properties?.cityVehicle)return;
@@ -116,7 +116,7 @@ export class CityDesktop {
   }
   setPlotSelection(id){const state=this.create(`plot:${id}`,'land',{title:`Terreno ${id}`,kind:'section'});state.selectedPlotId=id;state.recordWindow=true;state.setView('plots');return state;}
   toggle(){if(!this.manager.windows.length){this.openModule('city');return;}this.hidden=!this.hidden;this.element.hidden=this.hidden;}
-  close(id){const w=this.manager.close(id);if(w){w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
+  close(id){const w=this.manager.close(id);if(w){if(w.state.interiorView)w.state.setInteriorView?.(null);w.state.onClose?.();w.state.element.remove?.();w.state.visible=false;}return w;}
   closeAll(all=false){for(const w of [...this.manager.windows])if(all||!w.pinned)this.close(w.id);}
   pointerDown(x,y){
     if(this.menuOpen){const b=this.menuBounds,toolbarButton=this.menuBarRegions?.some(r=>r.onClick&&x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h);if(toolbarButton||b&&x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h)return false;this.closeMenu();this.menuDismissGesture=true;return true;}

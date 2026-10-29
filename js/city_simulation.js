@@ -1,3 +1,5 @@
+import {CitySupplies,pocket} from './city_supplies.js';
+import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js';
@@ -21,7 +23,7 @@ import {skybridgeLinks} from './city_skybridges.js?v=bridge-clean-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=refectory-survival-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=pocket-water-cutaway-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -31,14 +33,14 @@ import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js';
 import { CitySanitation } from './city_sanitation.js?v=refectory-survival-1';
-import { CityLife } from './city_life.js?v=needs-performance-1';
+import { CityLife } from './city_life.js?v=pocket-water-cutaway-1';
 import { CityWorkMeals } from './city_work_meals.js?v=refectory-survival-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=interiors-completion-2';
 import { CityLogistics } from './city_logistics.js?v=informal-gigs-1';
 import { CityGigs } from './city_gigs.js?v=informal-services-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=refectory-survival-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=sync-perf-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=pocket-water-cutaway-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=pocket-water-cutaway-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, tileAt, roadTravelCost, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=initial-cycle-ref-1';
 
 export const INITIAL_POPULATION = 512;
@@ -119,6 +121,8 @@ export class CitySimulation {
     this.development = new CityDevelopment(this);
     this.logistics = new CityLogistics(this);
     this.gigs = new CityGigs(this);
+    this.supplies=new CitySupplies(this);
+    this.water=new CityWater(this);
     this.workMeals = new CityWorkMeals(this);
     this.lighting = new CityLighting(this);
     this.bank = new CityBank(this);
@@ -298,6 +302,7 @@ export class CitySimulation {
     c.entity.properties.render.size = this.society.age(c) < 6 ? .55 : this.society.isAdult(c) ? 1 : .8;
     c.accountId = `citizen:${c.id}`;
     c.indoorLocation = null;
+    pocket(c).water=options.grant===false?0:6;pocket(c).waterSource='Reserva de chegada';
     entity.properties.citizen = c;
     this.accounts.set(c.accountId, c);
     if (options.grant !== false) this.transfer('treasury', c.accountId, CURRENCY_RULES.citizenGrant, 'Capital inicial do cidadão');
@@ -482,6 +487,7 @@ export class CitySimulation {
     const child = this.childrenOf(c.id).find(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
     let task = 'leisure', type = 'leisure';
     const urgent = this.urgentNeed(c);
+    if((!urgent||['food','water'].includes(urgent))&&this.supplies.route(c))return;
     // A homeless person who is already exhausted should not have to cross the
     // city and compete for a public indoor room before recovering at all.
     if(urgent==='energy'&&!home){this.routeHomelessToSleep(c);return;}
@@ -572,7 +578,9 @@ export class CitySimulation {
     if (task === 'energy'&&home) n.energy = clamp(n.energy + 0.1);
   }
   performTask(c) {
+    if(c.task==='lake-water'){this.supplies.collectLake(c);return;}
     if(!syncCitizenInterior(this,c))return;
+    if(c.task==='supplies'){this.supplies.arrive(c);return;}
     if(c.task==='council-session'){this.politics.council.getChamber().arrive(c);return;}
     if(['paint-purchase','paint-delivery'].includes(c.task)){this.paint.arrive(c);return;}
     if(c.task==='research'){this.politics.getResearch().fieldWork(c);return;}
@@ -836,6 +844,7 @@ export class CitySimulation {
       const totalNeeds=n.food+n.water+n.energy+n.hygiene+n.toilet+n.social+n.leisure+n.health+n.shelter+n.safety;
       let comfort=0;if(c.homeUnitId&&c.homeComfort)for(const key in c.homeComfort)if(c.homeComfort[key]>this.minute)comfort++;
       c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
+      this.supplies.useCarried(c);
       if (this.life.minute(c,elapsed)) continue;
       advanceCitizenInterior(this,c,elapsed);
       discoverVacancies(this,c);
@@ -851,6 +860,7 @@ export class CitySimulation {
       if (c.deliveryId || c.cleaningJobId || c.informalJobId) continue;
       if (c.conversation) continue;
       if(!urgent)routeToInterview(this,c);
+      if(!urgent&&['work','manage','walk','leisure','social'].includes(c.task)&&Math.min(n.energy,n.health,n.toilet)>30)this.supplies.route(c);
       if (!c.task) {
         // An idle citizen used to repeat the same path/offer search every city
         // minute, even after finishing leisure at 95% or finding no service.
@@ -923,7 +933,7 @@ export class CitySimulation {
           if(!elevated){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
-        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='job-interview'?'Indo à seleção de emprego':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à seleção de emprego':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }
@@ -931,10 +941,11 @@ export class CitySimulation {
   }
   goodsStock(good) {
     const campaignCarried=this.citizens.reduce((n,c)=>n+(c.campaignInventory?.[good]||0),0);
+    const pocketGoods=this.supplies.carriedGoods(good);
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     const printed=['livros','panfletos','jornais'].includes(good)?[...this.publications.documents.values()].filter(d=>!d.lost&&d.good===good&&!this.publications.inventoryHolder(d.ownerAccountId)).length:0;
-    return this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

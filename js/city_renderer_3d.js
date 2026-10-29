@@ -1,3 +1,4 @@
+import {applyInteriorCutaway} from './city_interior_view.js';
 import {addBuildingDetails} from './city_building_details.js?v=merged-architecture-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
@@ -159,8 +160,8 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
         group.add(cells);cellMeshes.push(cells);
       }
       const cells=cellMeshes[0];group.userData.cellMeshes=cellMeshes;
-      const floorGeometry=new THREE.BoxGeometry(1,.06,1),floorMaterial=new THREE.MeshLambertMaterial({color:0x928571}),floors=new THREE.InstancedMesh(floorGeometry,floorMaterial,b.units.length),ceilings=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.06,1),floorMaterial,b.units.length),floorLevels=[],floorMatrices=[];
-      for(let i=0;i<b.units.length;i++){const u=b.units[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT-.03,u.y+.5);floors.setMatrixAt(i,matrix);floorMatrices.push(matrix.clone());floorLevels.push(u.z);matrix.makeTranslation(u.x+.5,(u.z+1)*CITY_FLOOR_HEIGHT-.03,u.y+.5);ceilings.setMatrixAt(i,matrix);}
+      const floorCells=[...b.units,...(b.circulation||[])],floorGeometry=new THREE.BoxGeometry(1,.06,1),floorMaterial=new THREE.MeshLambertMaterial({color:0x928571}),floors=new THREE.InstancedMesh(floorGeometry,floorMaterial,floorCells.length),ceilings=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.06,1),floorMaterial,floorCells.length),floorLevels=[],floorMatrices=[];
+      for(let i=0;i<floorCells.length;i++){const u=floorCells[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT-.03,u.y+.5);floors.setMatrixAt(i,matrix);floorMatrices.push(matrix.clone());floorLevels.push(u.z);matrix.makeTranslation(u.x+.5,(u.z+1)*CITY_FLOOR_HEIGHT-.03,u.y+.5);ceilings.setMatrixAt(i,matrix);}
       floors.receiveShadow=true;ceilings.receiveShadow=true;group.add(floors,ceilings);floors.userData.interiorFloors=floorLevels;floors.userData.interiorBaseMatrices=floorMatrices;group.userData.interiorFloors=floors;group.userData.interiorCeilings=ceilings;
       const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',mine?0x454b49:style.roof));
       roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);group.userData.roof=roof;
@@ -245,7 +246,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       const supports = new THREE.InstancedMesh(new THREE.BoxGeometry(.2, 1, .2), new THREE.MeshLambertMaterial({ color: 0x68756a }), b.width * b.depth);
       supports.castShadow = true; supports.receiveShadow = true; group.add(supports); group.userData.supports = supports;
       const slab = new THREE.Mesh(new THREE.BoxGeometry(b.width, .12, b.depth), new THREE.MeshLambertMaterial({ color: 0x7e8776 }));
-      slab.position.set(b.width / 2, -.06, b.depth / 2); slab.receiveShadow = true; group.add(slab);
+      slab.position.set(b.width / 2, -.06, b.depth / 2); slab.receiveShadow = true; group.add(slab);group.userData.slab=slab;
       const roomProps = new THREE.Group(),propsByFloor=new Map(),addRoomProp=(u,object)=>{let floor=propsByFloor.get(u.z);if(!floor){floor=new THREE.Group();floor.userData.interiorFloor=u.z;propsByFloor.set(u.z,floor);}floor.add(object);};
       for (const u of b.units) {
         if(u.roomType==='office'||u.roomType==='plenary'){const desk=new THREE.Mesh(new THREE.BoxGeometry(.55,.12,.32),new THREE.MeshLambertMaterial({color:u.roomType==='plenary'?0x5f4930:0x947a4e}));desk.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.42,u.y+.4);addRoomProp(u,desk);const seat=new THREE.Mesh(new THREE.BoxGeometry(.26,.28,.26),new THREE.MeshLambertMaterial({color:0x496759}));seat.position.set(u.x+.5,u.z*CITY_FLOOR_HEIGHT+.2,u.y+.75);addRoomProp(u,seat);}
@@ -318,18 +319,10 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     if (group.userData.millBlades && b.active) group.userData.millBlades.rotation.z = Math.floor((renderer.foliageAnimationTick || 0)/20)*.1;
     group.position.set(entity.x, b.terrain.base, entity.y);
     const interior=renderer.cityInteriorView?.buildingId===b.id&&b.constructionKind!=='open-air',interiorFloor=renderer.cityInteriorView?.floor||0;
-    if(group.userData.lastInteriorView!==`${interior}:${interiorFloor}`){
-      for(const cells of group.userData.cellMeshes||[]){const floors=cells.userData.interiorFloors||[],base=cells.userData.interiorBaseMatrices||[],m=new THREE.Matrix4();for(let i=0;i<floors.length;i++){m.copy(base[i]);if(interior&&floors[i]!==interiorFloor)m.scale(new THREE.Vector3(1,0,1));cells.setMatrixAt(i,m);}cells.instanceMatrix.needsUpdate=true;}
-      const floorMesh=group.userData.interiorFloors;if(floorMesh){const levels=floorMesh.userData.interiorFloors,base=floorMesh.userData.interiorBaseMatrices,m=new THREE.Matrix4();for(let i=0;i<levels.length;i++){m.copy(base[i]);if(interior&&levels[i]!==interiorFloor)m.scale(new THREE.Vector3(1,0,1));floorMesh.setMatrixAt(i,m);}floorMesh.instanceMatrix.needsUpdate=true;}
-      if(group.userData.interiorCeilings)group.userData.interiorCeilings.visible=!interior;
-      if(group.userData.roomProps){group.userData.roomProps.visible=interior;for(const prop of group.userData.roomProps.children)prop.visible=interior&&prop.userData.interiorFloor===interiorFloor;}
-      if(group.userData.roof)group.userData.roof.visible=!interior;
-      if(group.userData.facade)group.userData.facade.visible=!interior;
-      group.userData.lastInteriorView=`${interior}:${interiorFloor}`;
-    }
+    applyInteriorCutaway(THREE,group,interior?interiorFloor:null);
     for(const cells of group.userData.cellMeshes||[group.userData.cells]){const material=cells.material;material.emissive.setHex(renderer.selectedEntityId===entity.id?0x26351a:0x000000);}
     const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
-    group.userData.highlight.visible = renderer.selectedEntityId === entity.id && !!unit;
+    group.userData.highlight.visible = !interior&&renderer.selectedEntityId === entity.id && !!unit;
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z*CITY_FLOOR_HEIGHT + CITY_FLOOR_HEIGHT/2, unit.y + .5);
   }
   for (const [id, group] of renderer.cityMeshes) if (!active.has(id)) {

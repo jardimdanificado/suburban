@@ -1,6 +1,6 @@
 import {interiorRoute} from './city_interior_layout.js';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-const queueKind=kind=>kind==='workmeal'?'food':kind;
+const queueKind=kind=>['workmeal','supplies'].includes(kind)?'food':kind;
 // Service queues are shared by everyone waiting at the same entrance. Tickets
 // retain arrival order; outdoor places are reserved across all service types.
 const slotCaches=new WeakMap();

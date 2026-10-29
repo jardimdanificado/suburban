@@ -9,7 +9,7 @@ export class CityWelfare {
     const city=this.city;
     if(this._conditionsMinute===city.minute)return this._conditions;
     const people=city.citizens.filter(c=>!c.entity.destroyed),adults=people.filter(c=>city.society.isAdult(c)),foods=city.workMeals.foodGoods();
-    const stock=city.buildings.filter(b=>b.active&&!b.entity.destroyed).reduce((n,b)=>n+foods.reduce((s,g)=>s+(b.inventory[g]||0),0),0)+people.reduce((n,c)=>n+c.provisions*3,0);
+    const stock=city.buildings.filter(b=>b.active&&!b.entity.destroyed).reduce((n,b)=>n+foods.reduce((s,g)=>s+(b.inventory[g]||0),0),0)+people.reduce((n,c)=>n+c.provisions*3+(c.pocket?.food||[]).reduce((sum,m)=>sum+Object.values(m.inputs).reduce((a,q)=>a+q,0),0),0);
     const hungry=people.filter(c=>c.needs.food<30).length,homeless=adults.filter(c=>!c.homeUnitId).length;
     this._conditionsMinute=city.minute;
     return this._conditions={population:people.length,hungry,homeless,foodDays:stock/Math.max(1,people.length*6),cleanliness:city.sanitation.cleanliness().score,reserve:city.fiscal?.reserve()??city.currency.price(Math.max(this.policy.reserve,people.length*3000)),crisis:hungry>=Math.max(3,people.length*.1)||homeless>=Math.max(5,adults.length*.2)};
@@ -45,6 +45,7 @@ export class CityWelfare {
     city.fiscal?.hourly();
     city.bank.householdFinance();
     this.restockPublicMeals();
+    city.water.hourly();
     if (!this.policy.enabled) return;
     const adults = city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c)).sort((a,b) => Number(b.needs.food<30)-Number(a.needs.food<30)||a.balance-b.balance || a.id-b.id);
     for (const [index,c] of adults.entries()) {

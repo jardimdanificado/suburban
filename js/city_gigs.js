@@ -1,4 +1,4 @@
-import {activityRoomReady} from './city_interiors.js?v=refectory-survival-1';
+import {activityRoomReady} from './city_interiors.js?v=pocket-water-cutaway-1';
 
 const ACTIVE=new Set(['open','working']);
 const cleanFee=(city,building,scope,payerId=null)=>{

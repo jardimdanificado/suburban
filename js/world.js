@@ -107,6 +107,7 @@ export class World {
     this.presetId = presetId;
     this.revision = (this.revision || 0) + 1;
     this.topologyRevision = (this.topologyRevision || 0) + 1;
+    this.waterTopologyRevision=(this.waterTopologyRevision||0)+1;
     let cfg = MAP_PRESET_ARCHIPELAGO;
     if (presetId === 1) cfg = MAP_PRESET_CONTINENT;
     else if (presetId === 2) cfg = MAP_PRESET_HIGHLANDS;
@@ -151,6 +152,7 @@ export class World {
     if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
     const previous=this.map[y * this.width + x];
     if (previous === tile) return;
+    if((previous===TILE_WATER)!==(tile===TILE_WATER))this.waterTopologyRevision=(this.waterTopologyRevision||0)+1;
     // Paving changes travel cost, but not reachability or terrain elevation.
     if(roadFor(previous)===null||roadFor(previous)!==roadFor(tile))this.topologyRevision=(this.topologyRevision||0)+1;
     this.map[y * this.width + x] = tile;

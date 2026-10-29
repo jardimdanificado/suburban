@@ -1,3 +1,5 @@
+import {CitySupplies} from './city_supplies.js';
+import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CityFiscal} from './city_fiscal.js';
@@ -20,7 +22,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js?v=refectory-survival-1';
+import { CitySimulation } from './city_simulation.js?v=pocket-water-cutaway-1';
 import { CityHistory } from './city_history.js';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js';
@@ -28,17 +30,17 @@ import { CityLighting } from './city_lighting.js';
 import { CityCurrency } from './city_currency.js';
 import { CityHousing } from './city_housing.js';
 import { CitySanitation } from './city_sanitation.js?v=refectory-survival-1';
-import { CityLife } from './city_life.js?v=needs-performance-1';
+import { CityLife } from './city_life.js?v=pocket-water-cutaway-1';
 import { CityWorkMeals } from './city_work_meals.js?v=refectory-survival-1';
 import { CityDevelopment } from './city_development.js?v=interiors-completion-2';
 import { CityLogistics } from './city_logistics.js?v=informal-gigs-1';
 import { CityGigs } from './city_gigs.js?v=informal-services-1';
-import { CityEconomy, GOODS } from './city_economy.js?v=refectory-survival-1';
-import { CitySociety } from './city_society.js?v=sync-perf-1';
+import { CityEconomy, GOODS } from './city_economy.js?v=pocket-water-cutaway-1';
+import { CitySociety } from './city_society.js?v=pocket-water-cutaway-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=public-cleaning-1';
 import { World, WorldClock } from './world.js?v=map-default-256-1';
 
-const prototypes = new Map([CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
+const prototypes = new Map([CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
   .map(type => [type.name, type.prototype]));
@@ -252,6 +254,7 @@ export class CityStateGraph {
 
 /** Restore computed fields, never serialized as stale monetary values. */
 export function bindCityState(city) {
+  city.supplies??=new CitySupplies(city);city.water??=new CityWater(city);
   city.paint??=new CityPaint(city);
   city.fiscal??=new CityFiscal(city);
   city.housing.invalidateResidents();

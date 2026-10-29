@@ -36,10 +36,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=refectory-survival-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=pocket-water-cutaway-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=sync-perf-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=refectory-survival-1';
+import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=pocket-water-cutaway-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=pocket-water-cutaway-1';
 export const money = formatMoney;
 const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -299,7 +299,7 @@ export class CityUI {
       this.section(p,'personalVehicles','Veículos próprios',()=>{for(const v of city.vehicles.units.values())if(v.active&&v.ownerAccountId===c.accountId)p.record(city.vehicles.model(v)?.name||v.good,`${v.condition.toFixed(0)}% de conservação · força humana`,()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));});
       const inside=city.building(c.indoorLocation?.buildingId);
       if(inside){p.kv('Localização',`${['balcony','roof_terrace'].includes(c.indoorLocation.roomType)?'Em':'Dentro de'} ${name(inside.entity)} · ${c.indoorLocation.floor+1}º andar`);p.kv('Cômodo',{bedroom:'Quarto',bathroom:'Banheiro',dining:'Refeitório',plenary:'Plenário',office:'Gabinete',workspace:'Área da empresa',circulation:'Circulação entre cômodos',service:'Área de atendimento',treatment:'Consultório',balcony:'Varanda',roof_terrace:'Cobertura'}[c.indoorLocation.roomType]||'Interior');p.button('VER PRÉDIO ATUAL',()=>this.openBuilding(inside.id));}
-      p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Provisões', `${c.provisions} refeições`); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
+      p.metrics([['FELICIDADE',`${Math.round(c.happiness)}%`,c.happiness<30?C.red:C.green],['SALDO',money(c.balance),C.gold]]); p.kv('Comida carregada', `${(c.pocket?.food.length||0)+(c.provisions||0)} refeições · reposição quando restar 1`);p.kv('Água nas garrafas',`${c.pocket?.water||0}/6 porções · reposição quando restar 1`);if(c.pocket?.waterSource)p.kv('Origem da água',`${c.pocket.waterSource} · contaminação ${(c.pocket.waterContamination||0).toFixed(1)}%`);if(c.pocket?.lastBasketAt!=null)p.kv('Última cesta básica',stamp(c.pocket.lastBasketAt)); p.kv('Estado da moradia', c.homeUnitId ? 'Abrigado' : 'Morando na rua');
       p.heading('NECESSIDADES'); p.meters(Object.entries(c.needs).map(([id,value])=>[NEED_LABELS[id],value]));
       const home = city.units.get(c.homeUnitId), dwelling = city.housing.home(c); p.heading('MORADIA');
       if (dwelling) { p.kv('Casa', this.homeLabel(dwelling.id)); p.kv('Cômodos', city.housing.units(dwelling).map(u => ({ bathroom: 'Banheiro', dining: 'Refeitório', bedroom: 'Quarto' }[u.roomType] || 'Espaço')).join(' + ')); p.kv('Aluguel total/dia', money(city.housing.rent(dwelling, c))); p.kv(city.housing.isSocial(dwelling)?'Regime':'Valor de compra da casa',city.housing.isSocial(dwelling)?'Ocupação social gratuita':money(city.housing.price(dwelling))); }
@@ -699,7 +699,7 @@ export class CityUI {
     p.buttons([{label:'IMPOSTO +1%',click:()=>this.policyAction('Imposto salarial aumentado.',()=>{this.city.taxRate=Math.min(.5,Math.round((this.city.taxRate+.01)*100)/100);})},{label:'IMPOSTO -1%',click:()=>this.policyAction('Imposto salarial reduzido.',()=>{this.city.taxRate=Math.max(-.5,Math.round((this.city.taxRate-.01)*100)/100);})}]);
     },false);
     this.section(p,'financeBenefits','Benefícios municipais',()=>{
-    p.kv('Orçamento diário',money(welfare.policy.dailyBudget));p.kv('Pago hoje',money(welfare.spentToday));p.kv('Pago desde a fundação',money(welfare.totalPaid));p.kv('Piso por adulto',money(welfare.policy.householdFloor));
+    p.kv('Orçamento diário',money(welfare.policy.dailyBudget));p.kv('Pago hoje',money(welfare.spentToday));p.kv('Pago desde a fundação',money(welfare.totalPaid));p.kv('Cestas básicas retiradas',this.city.supplies?.basketsDistributed||0);p.kv('Refeições distribuídas para levar',this.city.supplies?.mealsDistributed||0);p.kv('Piso por adulto',money(welfare.policy.householdFloor));
     p.buttons([{label:welfare.policy.enabled?'PAUSAR BENEFÍCIOS':'ATIVAR BENEFÍCIOS',click:()=>this.policyAction('Programa de benefícios alterado.',()=>{welfare.policy.enabled=!welfare.policy.enabled;})},{label:'ORÇAMENTO +R$ 100',click:()=>this.policyAction('Orçamento de benefícios ampliado.',()=>{welfare.policy.dailyBudget+=10000;})},{label:'ORÇAMENTO -R$ 100',click:()=>this.policyAction('Orçamento de benefícios reduzido.',()=>{welfare.policy.dailyBudget=Math.max(0,welfare.policy.dailyBudget-10000);})}]);
     p.note('Benefícios consideram saldo, poupança e dependentes; têm teto diário e preservam a reserva do tesouro. Cidadãos com renda podem buscar crédito antes de recorrer ao benefício.');
     p.note('A casa da moeda deposita a emissão no tesouro. A expansão monetária eleva gradualmente os preços. Dinheiro guardado e contratos já reservados mantêm seu valor nominal.');
@@ -855,6 +855,7 @@ export class CityUI {
       for(const b of city.buildings)for(const [cell,pile]of b.feces||[])rows.push({cells:[name(b.entity),cell,pile.amount,city.accountName(system.ownerForCell(b.id,b.units.find(u=>`${u.x},${u.y},${u.z}`===cell)?.id))],color:C.gold,click:()=>this.openBuilding(b.id)});
       p.metrics([['LIMPEZA DA CIDADE',`${clean.score.toFixed(1)}%`,clean.score<60?C.red:C.green],['FEZES NAS RUAS',clean.streetFeces,C.gold],['FEZES EM PRÉDIOS',clean.indoorFeces,C.gold]]);
       p.kv('Trechos públicos sujos',clean.dirtyStreetTiles);p.kv('Imóveis afetados',clean.dirtyBuildings);p.kv('Lixo espalhado',clean.spilled);p.note('A sujeira causa repulsa, reduz higiene e humor; a limpeza urbana é paga pelo caixa municipal. A limpeza interna é paga pelo proprietário do imóvel.');
+      p.heading('CORPOS DE ÁGUA');p.note('Lagos maiores diluem melhor a poluição. Fezes e lixo próximos contaminam a água; beber sem tratamento pode prejudicar a saúde.');p.table([{label:'Lago'},{label:'Volume'},{label:'Poluição'}],(city.world.waterBodies||[]).filter(b=>b.pollution>0).map(b=>({cells:[`Lago ${b.id}`,`${Math.round(b.volume)} L`,`${b.pollution.toFixed(1)}%`],click:()=>this.camera(b.id%city.world.width,Math.floor(b.id/city.world.width))})),{empty:'Nenhum corpo de água contaminado registrado.'});
       p.table([{label:'Local',weight:2},{label:'Célula'},{label:'Acúmulo'},{label:'Responsável',weight:1.5}],rows.sort((a,b)=>b.cells[2]-a.cells[2]).slice(0,40));return;
     }
     if(view==='waste'){

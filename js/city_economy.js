@@ -4,7 +4,7 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=map-default-256-1';
 import {externalTradeHourly} from './city_external_trade.js';
-import {outdoorCellReady,workCellReady} from './city_interiors.js?v=refectory-survival-1';
+import {outdoorCellReady,workCellReady} from './city_interiors.js?v=pocket-water-cutaway-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=presential-jobs-meals-1';
@@ -593,7 +593,7 @@ export class CityEconomy {
     return good ? { good, quantity: MEAL_COMPONENTS[good]?1:ECONOMY_RULES.mealUnits, price: b.type === 'townhall' || b.type === 'popular_refectory' ? 0 : Math.round(this.goods[good].price*1.2*(MEAL_COMPONENTS[good]?1:ECONOMY_RULES.mealUnits)) } : null;
   }
   consumeMeal(c, b) {
-    const offer = this.mealOffer(b, c); if (!offer) { this.failedMeals++; if (b) b.stockouts++; return false; }
+    const baseOffer=this.mealOffer(b,c),offer=baseOffer&&{...baseOffer,quality:(baseOffer.quality||1)+(c.indoorLocation?.roomType==='dining'?.5:0)}; if (!offer) { this.failedMeals++; if (b) b.stockouts++; return false; }
     if (!this.city.transfer(this.city.payerFor(c), b.accountId, offer.price, `Serviço: Alimentação (${GOODS[Object.keys(offer.inputs)[0]]?.label || offer.good})`,{good:offer.good,quantity:offer.quantity||1})) return false;
     for (const [good, amount] of Object.entries(offer.inputs)) { b.inventory[good] -= amount; this.consumed[good] += amount; this.recordGoods('consumption', good, amount, b.id, c.id); }
     this.city.history.record('sale',`Refeição: ${c.entity.properties.name} em ${b.entity.properties.name}.`,[c.accountId,b.accountId],{amount:offer.price,ingredients:{...(offer.ingredients||offer.inputs)},consumedProducts:{...offer.inputs},quality:offer.quality});

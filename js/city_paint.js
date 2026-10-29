@@ -1,4 +1,4 @@
-import {activityRoomReady,outdoorCellReady} from './city_interiors.js?v=refectory-survival-1';
+import {activityRoomReady,outdoorCellReady} from './city_interiors.js?v=pocket-water-cutaway-1';
 import {normalizeColor,colorName,factoryColors,favoriteColors,colorAffinity} from './city_colors.js';
 const paintable=new Set(['bicicleta','bicicleta_carga','patinete']);
 const live=b=>b?.active&&!b.entity.destroyed;

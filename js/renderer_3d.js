@@ -1,10 +1,11 @@
+import {waterPollutionAt,waterTint} from './city_water.js';
 // =============================================================================
 // Brutopolis Chronicles - 3D Isometric Tycoon Engine (Volumetric 3D Models)
 // =============================================================================
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=balcony-door-alignment-2";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=pocket-water-cutaway-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=queue-sleep-balcony-1';
 import { flagNightFactor } from './city_terrain.js?v=initial-cycle-ref-1';
@@ -2847,7 +2848,12 @@ export function createRealisticFlameMaterial() {
 export class RCT3DRenderer {
   constructor(container) {
     this.cityInteriorView=null;
-    this._cityInteriorViewHandler=event=>{this.cityInteriorView=event.detail?.buildingId==null?null:{buildingId:event.detail.buildingId,floor:event.detail.floor||0};};
+    this._cityInteriorViewHandler=event=>{
+      const view=event.detail?.buildingId==null?null:{buildingId:event.detail.buildingId,floor:event.detail.floor||0};
+      if(view){const b=this.cityDevelopment?.city?.building(view.buildingId);if(!this.cityInteriorView)this.interiorPreviousZoom=this.zoom;if(b)this.setCamera(b.entity.x+b.width/2,b.entity.y+b.depth/2,Math.max(this.zoom,Math.min(5,28/(Math.max(b.width,b.depth)*1.6))));}
+      else if(this.interiorPreviousZoom!=null){this.zoom=this.interiorPreviousZoom;this.interiorPreviousZoom=null;}
+      this.cityInteriorView=view;
+    };
     if(typeof window!=='undefined')window.addEventListener('suburban-interior-view',this._cityInteriorViewHandler);
     this.mapWidth=MAP_WIDTH;this.mapHeight=MAP_HEIGHT;
     this.container = container;
@@ -3230,7 +3236,8 @@ export class RCT3DRenderer {
       [TILE_MOUNTAIN]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0xb4afaa, 0x484242, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.25, 0.65, 0.10),
       [TILE_PEAK]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0xd8d8de, 0x686874, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.3, 0.60, 0.12),
       [TILE_WATER]: isPersp ? new THREE.MeshStandardMaterial({
-        color: 0x1668a8,
+        color: 0xffffff,
+        vertexColors: true,
         normalMap: normWaves,
         normalScale: new THREE.Vector2(0.85, 0.85),
         roughness: 0.15,
@@ -3241,7 +3248,7 @@ export class RCT3DRenderer {
         dithering: true
       }) : new THREE.MeshLambertMaterial({
         color: 0xffffff,
-        map: createTintedTexture("Feature_Waves.png", 0x64b4ff, 0x143764, 1.0),
+        map: createTintedTexture("Feature_Waves.png", 0xffffff, 0xaaaaaa, 1.0),
         dithering: true,
         vertexColors: true,
         transparent: false,
@@ -4663,7 +4670,7 @@ export class RCT3DRenderer {
     };
   }
 
-  selectEntity(id) { this.selectedEntityId = id; }
+  selectEntity(id) { this.selectedEntityId = id;if(id==null||id<0)this.cityInteriorView=null; }
 
   setThirdPersonMode(enabled, entityId = null) {
     this.isThirdPersonMode = !!enabled;
@@ -4864,7 +4871,7 @@ export class RCT3DRenderer {
 
   selectAt(screenX, screenY, entities, world = null) {
     const id = this.getEntityAtScreen(screenX, screenY, entities, world);
-    this.selectedEntityId = id;
+    this.selectEntity(id);
     return id;
   }
 
@@ -5323,12 +5330,13 @@ export class RCT3DRenderer {
     const cosX = Math.cos(this.isometricAngleX);
     const sinX = Math.sin(this.isometricAngleX);
 
+    const inspecting=this.cityInteriorView,building=inspecting&&this.cityDevelopment?.city?.building(inspecting.buildingId),focusHeight=building?(building.terrain?.base||0)+inspecting.floor*CITY_FLOOR_HEIGHT+.45:1;
     this.camera.position.set(
       this.camX + distance * sinY * cosX,
-      distance * sinX,
+      distance * sinX+(focusHeight-1),
       this.camY + distance * cosY * cosX
     );
-    this.camera.lookAt(this.camX, 1.0, this.camY);
+    this.camera.lookAt(this.camX, focusHeight, this.camY);
   }
 
   // ---------------------------------------------------------------------------
@@ -5635,7 +5643,7 @@ export class RCT3DRenderer {
       [TILE_STONE]: { pos: [], uvs: [], colors: [] },
       [TILE_MOUNTAIN]: { pos: [], uvs: [], colors: [] },
       [TILE_PEAK]: { pos: [], uvs: [], colors: [] },
-      [TILE_WATER]: { pos: [], uvs: [], colors: [] },
+      [TILE_WATER]: { pos: [], uvs: [], colors: [], waterCells: [], waterLights: [] },
       [TILE_ROAD_GRASS]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_SAND]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_HILL]: { pos: [], uvs: [], colors: [] },
@@ -5733,20 +5741,23 @@ export class RCT3DRenderer {
             tx + 1, ty
           );
 
-          // Uniform clean aquatic lighting without per-tile dark AO border seams
-          bucket.colors.push(zoneMult, zoneMult, zoneMult);
-          bucket.colors.push(zoneMult, zoneMult, zoneMult);
-          bucket.colors.push(zoneMult, zoneMult, zoneMult);
+          // Water tint follows the concentration of the connected water body.
+          bucket.waterCells.push(yOffset+tx);bucket.waterLights.push(zoneMult);
+          const tint=waterTint(waterPollutionAt(world,tx,ty));
+          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
+          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
+          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
 
-          bucket.colors.push(zoneMult, zoneMult, zoneMult);
-          bucket.colors.push(zoneMult, zoneMult, zoneMult);
-          bucket.colors.push(zoneMult, zoneMult, zoneMult);
+          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
+          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
+          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
         } else {
           bucket.uvs.push(
             0, 0, 0, 1, 1, 1,
             0, 0, 1, 1, 1, 0
           );
 
+          if(tType===TILE_WATER){const tint=waterTint(waterPollutionAt(world,tx,ty));bucket.waterCells.push(yOffset+tx);bucket.waterLights.push(zoneMult);for(let i=0;i<6;i++)bucket.colors.push(...tint.map(v=>v*zoneMult));}else{
           // Triangle 1: (0,0), (0,1), (1,1)
           bucket.colors.push(zoneMult * ao00, zoneMult * ao00, zoneMult * ao00);
           bucket.colors.push(zoneMult * ao01, zoneMult * ao01, zoneMult * ao01);
@@ -5756,6 +5767,7 @@ export class RCT3DRenderer {
           bucket.colors.push(zoneMult * ao00, zoneMult * ao00, zoneMult * ao00);
           bucket.colors.push(zoneMult * ao11, zoneMult * ao11, zoneMult * ao11);
           bucket.colors.push(zoneMult * ao10, zoneMult * ao10, zoneMult * ao10);
+          }
         }
 
         if (tType !== TILE_WATER && this.zoom >= 0.45) {
@@ -5943,7 +5955,7 @@ export class RCT3DRenderer {
       mesh.castShadow = false;
 
       if (matKey === String(TILE_WATER)) {
-        this.waterGroup.add(mesh);
+        mesh.userData.waterCells=bucket.waterCells;mesh.userData.waterLights=bucket.waterLights;this.waterGroup.add(mesh);
       } else {
         this.terrainGroup.add(mesh);
       }
@@ -5955,6 +5967,11 @@ export class RCT3DRenderer {
       const lineSegments = new THREE.LineSegments(gridGeom, this.rctGridMaterial);
       this.rctGridLineGroup.add(lineSegments);
     }
+  }
+
+  syncWaterPollution(world){
+    const revision=world.waterPollutionRevision||0;if(this.lastWaterPollutionRevision===revision)return;
+    for(const mesh of this.waterGroup.children){const cells=mesh.userData.waterCells,colors=mesh.geometry?.attributes?.color;if(!cells||!colors)continue;for(let i=0;i<cells.length;i++){const tint=waterTint(waterPollutionAt(world,cells[i]%world.width,Math.floor(cells[i]/world.width))),light=mesh.userData.waterLights[i];for(let j=0;j<6;j++)colors.setXYZ(i*6+j,tint[0]*light,tint[1]*light,tint[2]*light);}colors.needsUpdate=true;}this.lastWaterPollutionRevision=revision;
   }
 
   // ---------------------------------------------------------------------------
@@ -6188,6 +6205,7 @@ export class RCT3DRenderer {
     }
 
     this.rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionCreature);
+    this.syncWaterPollution(world);
     const profileTerrain = this.profileFrame ? performance.now() : 0;
 
     // Current Vision Zone
