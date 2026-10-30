@@ -86,7 +86,7 @@ function syncCardboardShelters(renderer,THREE,city,world){
   const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
   for(const mesh of renderer.cardboardVisuals.children){const tile=mesh.userData.cardboardTile;mesh.visible=!!tile&&tile.x>=minX&&tile.x<=maxX+1&&tile.y>=minY&&tile.y<=maxY+1;}
 }
-function syncRoadBridges(renderer,THREE,world){
+export function syncRoadBridges(renderer,THREE,world){
   const bridges=world.roadBridges||[],revision=world.bridgeRevision||0;
   if(renderer.roadBridgeRevision===revision)return;
   if(renderer.roadBridgeGroup){renderer.scene.remove(renderer.roadBridgeGroup);renderer.roadBridgeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
@@ -94,10 +94,11 @@ function syncRoadBridges(renderer,THREE,world){
   for(const bridge of bridges){
     const horizontal=bridge.axis==='x',tiles=bridge.tiles||[];
     for(let i=0;i<tiles.length;i++){const tile=tiles[i];
-      const base=surfaceElevation(world,tile.x+.5,tile.y+.5),deck=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.98:.86,.2,horizontal?.86:.98),deckMaterial);
-      deck.position.set(tile.x+.5,base+(bridge.height||.8)-.1,tile.y+.5);deck.receiveShadow=true;deck.castShadow=true;group.add(deck);
+      if(!Number.isInteger(tile.x)||!Number.isInteger(tile.y)||tile.x<0||tile.y<0||tile.x>=world.width||tile.y>=world.height)continue;
+      const height=bridge.height??.8,deck=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.98:.86,.2,horizontal?.86:.98),deckMaterial);
+      deck.position.set(tile.x+.5,height-.1,tile.y+.5);deck.receiveShadow=true;deck.castShadow=true;group.add(deck);
       if(i===0||i===tiles.length-1||i%4===0){
-        for(const side of [-.38,.38]){const rail=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.98:.07,.7,horizontal?.07:.98),railMaterial);rail.position.set(tile.x+.5+(horizontal?0:side),base+(bridge.height||.8)+.25,tile.y+.5+(horizontal?side:0));group.add(rail);}
+        for(const side of [-.38,.38]){const rail=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.98:.07,.7,horizontal?.07:.98),railMaterial);rail.position.set(tile.x+.5+(horizontal?0:side),height+.25,tile.y+.5+(horizontal?side:0));group.add(rail);}
       }
     }
   }

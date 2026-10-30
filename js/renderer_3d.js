@@ -3869,17 +3869,20 @@ export class RCT3DRenderer {
     // 3D Elevated Bridges over Water (Wood & Stone Pillars)
     const woodBridgeGeo = createWoodBridgeGeometry();
     this.instWoodBridges = new THREE.InstancedMesh(woodBridgeGeo, this.materials.woodBridge, 1600);
+    this.instWoodBridges.count = 0;
     this.instWoodBridges.receiveShadow = true;
     this.instWoodBridges.castShadow = true;
 
     const stoneBridgeGeo = createStoneBridgeGeometry();
     this.instStoneBridges = new THREE.InstancedMesh(stoneBridgeGeo, this.materials.stoneBridge, 1600);
+    this.instStoneBridges.count = 0;
     this.instStoneBridges.receiveShadow = true;
     this.instStoneBridges.castShadow = true;
 
     // 3D Water Stilt Platform Foundation for Houses & Buildings over water
     const waterPlatformGeo = createWaterPlatformGeometry();
     this.instWaterPlatforms = new THREE.InstancedMesh(waterPlatformGeo, this.materials.waterPlatform, 800);
+    this.instWaterPlatforms.count = 0;
     this.instWaterPlatforms.receiveShadow = true;
     this.instWaterPlatforms.castShadow = true;
 

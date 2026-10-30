@@ -75,6 +75,7 @@ export class CityDevelopment {
   beginBridge(accountId,start,end,{builderId=null,priority=0}={}){
     const city=this.city,world=city.world;if(!start||!end||![start.x,start.y,end.x,end.y].every(Number.isFinite))return null;
     const sx=Math.floor(start.x),sy=Math.floor(start.y),ex=Math.floor(end.x),ey=Math.floor(end.y),horizontal=sy===ey,vertical=sx===ex;if(horizontal===vertical)return null;
+    if(sx<0||sy<0||ex<0||ey<0||sx>=world.width||ex>=world.width||sy>=world.height||ey>=world.height)return null;
     const dx=Math.sign(ex-sx),dy=Math.sign(ey-sy),span=Math.abs(ex-sx)+Math.abs(ey-sy),maxSpan=Math.min(96,Math.max(world.width,world.height)-2);if(span<3||span>maxSpan)return null;
     const access=this.roadAccessTiles(),tiles=[],route=[{x:sx+.5,y:sy+.5}];let x=sx+dx,y=sy+dy;
     while(x!==ex||y!==ey){if(x<0||y<0||x>=world.width||y>=world.height||tileAt(world,x,y)!==2||world.bridgeTiles?.has(`${x},${y}`)||city.occupied.has(`${x},${y}`)||this.roadPlotBlocked(x,y,access))return null;tiles.push({x,y});route.push({x:x+.5,y:y+.5});x+=dx;y+=dy;}
@@ -191,10 +192,10 @@ export class CityDevelopment {
     let attemptedBridge=false;for(const {b} of options){
       let target=targets[0],bestDistance=Infinity;for(const point of targets){const d=(point.x-b.door.x)**2+(point.y-b.door.y)**2;if(d<bestDistance){bestDistance=d;target=point;}}
       const landRoute=findTerrainPath(city.world,target,b.door,city.occupied,{limit:Math.min(12000,Math.max(3000,bestDistance*12))});
-      if(!attemptedBridge&&landRoute&&landRoute.length>Math.max(18,Math.sqrt(bestDistance)*1.8)){
+      if(!attemptedBridge&&(landRoute===null||landRoute.length>Math.max(18,Math.sqrt(bestDistance)*1.8))){
         attemptedBridge=true;
-        const bridgeProject=this.planBridgeShortcut(targets,b.door,landRoute.length);
-        if(bridgeProject){const id=`materials:${bridgeProject.id}`,budget=bridgeProject.stone*city.economy.goods.pedra.price+margin;city.accounts.set(id,{name:`Materiais de ${bridgeProject.name}`,balance:0});if(city.transfer('treasury',id,budget,'Reserva de pedras e frete para ponte',{projectId:bridgeProject.id}))bridgeProject.materialAccountId=id;else city.accounts.delete(id);this.roadPlanning={reason:'Ponte reta priorizada para encurtar o desvio pela água.',projectId:bridgeProject.id,buildingId:b.id};return;}
+        const bridgeProject=this.planBridgeShortcut(targets,b.door,landRoute?.length??Infinity);
+        if(bridgeProject){const id=`materials:${bridgeProject.id}`,budget=bridgeProject.stone*city.economy.goods.pedra.price+margin;city.accounts.set(id,{name:`Materiais de ${bridgeProject.name}`,balance:0});if(city.transfer('treasury',id,budget,'Reserva de pedras e frete para ponte',{projectId:bridgeProject.id}))bridgeProject.materialAccountId=id;else city.accounts.delete(id);this.roadPlanning={reason:'Ponte reta priorizada para conectar margens ou encurtar o desvio pela água.',projectId:bridgeProject.id,buildingId:b.id};return;}
       }
       const project=this.beginRoad('treasury',target,b.door,{maxTiles:tiles,priority:110});
       if(!project)continue;
