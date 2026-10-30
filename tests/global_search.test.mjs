@@ -90,3 +90,18 @@ test('search navigation uses actual desktop dossiers and clears prior item detai
   const person=records.find(r=>r.kind==='Pessoa');activateGlobalResult(desktop,person);assert.equal(desktop.selected.id,person.route.id);assert.equal(desktop.active.detailTab,'profile');
   desktop.openGlobalSearch();assert.equal(desktop.globalSearch.element.parentElement,desktop.element);
 });
+
+test('typing in global search preserves letters and native editing without invoking window shortcuts',async()=>{
+  const doc=dom(),{CityDesktop}=await import('../js/city_desktop.js'),city=setup({starter:true});
+  const desktop=new CityDesktop({city,root:doc.createElement('div'),select(){},camera(){}});desktop.openGlobalSearch();
+  const search=desktop.globalSearch,id=desktop.manager.activeId;
+  for(const code of ['KeyC','KeyO','KeyS','Slash','Backspace','Home','End','Space','ArrowLeft','ArrowRight','Delete']){
+    let prevented=false,stopped=false;
+    search.search.handlers.keydown({code,key:code,preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});
+    assert.equal(prevented,false,`${code} must keep its native text behavior`);assert(stopped);assert.equal(search.visible,true);assert.equal(desktop.manager.activeId,id);
+  }
+  let prevented=false;search.search.handlers.keydown({code:'ArrowDown',preventDefault(){prevented=true;},stopPropagation(){}});
+  assert(prevented);assert.equal(search.index,1);
+  prevented=false;search.search.handlers.keydown({code:'KeyC',ctrlKey:true,preventDefault(){prevented=true;},stopPropagation(){}});assert.equal(prevented,false,'copy remains native');
+  search.search.handlers.keydown({code:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(desktop.manager.find(id),undefined);
+});

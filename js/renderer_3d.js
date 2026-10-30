@@ -3599,6 +3599,7 @@ export class RCT3DRenderer {
 
     const gateSt1Geo = createGateStage1Geometry();
     this.instGatesStage1 = new THREE.InstancedMesh(gateSt1Geo, this.materials.gateBlueprint, 400);
+    this.instGatesStage1.count = 0;
     this.instGatesStage1.castShadow = true;
     this.instGatesStage1.receiveShadow = true;
 
@@ -7420,6 +7421,8 @@ export class RCT3DRenderer {
     this.instGatesClosed.instanceMatrix.needsUpdate = true;
     this.instGatesOpen.count = gateOpenCount;
     this.instGatesOpen.instanceMatrix.needsUpdate = true;
+    this.instGatesStage1.count = gateStage1Count;
+    this.instGatesStage1.instanceMatrix.needsUpdate = true;
     for (let w = 0; w < 2; w++) {
       this.instWarehouseWalls[w].count = warehouseCounts[w];
       this.instWarehouseWalls[w].instanceMatrix.needsUpdate = true;

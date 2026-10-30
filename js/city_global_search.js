@@ -89,8 +89,15 @@ export class CityGlobalSearch extends CityUI {
     for(const input of [this.search,this.filterInput]) {
       input.addEventListener('pointerdown',()=>desktop.manager.raise(this.windowId));
       input.addEventListener('keydown',event=>{
-        if(event.code==='Escape'||event.key==='Escape'){event.preventDefault();event.stopPropagation();desktop.close(this.windowId);}
-        else if(input===this.search&&this.key(event)){event.preventDefault();event.stopPropagation();}
+        // Text editing must not reach directory or city shortcuts (C, /, Backspace…).
+        event.stopPropagation();
+        if(event.isComposing)return;
+        if((event.ctrlKey||event.metaKey)&&event.code==='KeyK'){event.preventDefault();this.search.focus();this.search.select();return;}
+        if(event.ctrlKey||event.metaKey||event.altKey||event.shiftKey)return;
+        if(event.code==='Escape'||event.key==='Escape'){event.preventDefault();desktop.close(this.windowId);}
+        else if(input===this.search&&['ArrowDown','ArrowUp','Enter'].includes(event.code||event.key)){
+          if(this.key(event))event.preventDefault();
+        }
       });
     }
     this.onClose=()=>{this.visible=false;desktop.globalSearch=null;};
