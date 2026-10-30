@@ -36,6 +36,15 @@ test('patrol assignment and cached street beat survive worker state snapshots',(
   assert.equal(copy.policePatrol.stationId,station.id);assert.equal(copy.policePatrol.phase,'patrol');assert.equal(copy.policePatrol.waypointIndex,3);assert.equal(copyStation.patrolOfficerId,officer.id);assert.deepEqual(copyStation.policePatrolPoints.points,station.policePatrolPoints.points);
 });
 
+test('in-progress field investigations preserve the officer route and collected testimony',()=>{
+  const city=setup({starter:true,population:24}),officer=city.citizens[4];let station=city.buildings.find(b=>b.type==='police_station');
+  if(!station)for(const site of city.economy.locateBuilding('police_station')){station=city.addBuilding('police_station',site.x,site.y,{...site,free:true});if(station)break;}
+  assert.ok(station);station.policeInvestigatorId=officer.id;officer.policeInvestigation={caseId:51,stationId:station.id,phase:'witnesses',assignedAt:700,lastPaidMinute:702};
+  city.justice.cases.push({id:51,type:'assault',status:'investigating',reportingStationId:station.id,investigation:{officerId:officer.id,stationId:station.id,status:'active',fieldwork:true,phase:'witnesses',sceneVisitedAt:701,interviewEvidence:[{kind:'police-interview',witnessId:7,identifiedSuspectId:8,confidence:.86,recordedAt:702}],witnessIndex:1},evidence:[],witnesses:[]});
+  const {restored}=restore(city),copy=restored.justice.cases.find(r=>r.id===51),copyOfficer=restored.society.citizen(officer.id),copyStation=restored.building(station.id);
+  assert.equal(copy.investigation.phase,'witnesses');assert.equal(copy.investigation.sceneVisitedAt,701);assert.deepEqual(copy.investigation.interviewEvidence[0],{kind:'police-interview',witnessId:7,identifiedSuspectId:8,confidence:.86,recordedAt:702});assert.equal(copyOfficer.policeInvestigation.caseId,51);assert.equal(copyStation.policeInvestigatorId,officer.id);
+});
+
 test('skill migration is deterministic, preserves existing values and keeps newborn skills at zero',()=>{
   const a={id:7,skills:{combat:12}},b={id:7,skills:{combat:12}},baby={id:8};ensureJusticeSkills(a,2,123);ensureJusticeSkills(b,2,123);assert.deepEqual(a.skills,b.skills);assert.equal(a.skills.combat,12);ensureJusticeSkills(baby,0,123,{newborn:true});assert.ok(JUSTICE_SKILLS.every(skill=>baby.skills[skill]===0));
 });
