@@ -43,7 +43,7 @@ export class CityPaint {
  }
  requestVehicle(id,garageId,color,useOwn=false){
   const city=this.city,v=city.vehicles.units.get(id),garage=city.building(garageId),hex=normalizeColor(color),account=city.accounts.get(v&&(v.possessorAccountId||v.ownerAccountId)),c=account?.entity?.properties.citizen?account:city.society.citizen(account?.ownerId);
-  if(!v?.active||v.scrapped||!paintable.has(v.good)||v.serviceBodyId||v.paintJobId||!live(garage)||garage.type!=='cycle_workshop'||!hex||!c)return city.fail('Veículo, proprietário ou oficina indisponível.');
+  if(!v?.active||v.scrapped||!paintable.has(v.good)||v.serviceBodyId||v.policeRecoveryOfficerId||v.paintJobId||!live(garage)||garage.type!=='cycle_workshop'||!hex||!c)return city.fail('Veículo, proprietário ou oficina indisponível.');
   if(useOwn&&this.available(this.bag(c),hex)<1)return city.fail('O proprietário precisa ter uma lata dessa cor.');
   const job={id:this.nextId++,kind:'vehicle',vehicleId:v.id,providerId:garage.id,clientId:c.id,payer:v.possessorAccountId||v.ownerAccountId,color:hex,quantity:1,useOwn,status:'delivery',createdAt:city.minute,labor:0,requiredLabor:18};
   v.paintJobId=job.id;this.jobs.push(job);return true;

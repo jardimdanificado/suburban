@@ -997,7 +997,7 @@ export class CitySimulation {
       if(c.custodyEscort){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyEscort(c);continue;}
       if(c.custody){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateDetainee(c);continue;}
       if((c.unconsciousUntil||0)>this.minute){c.task=null;c.path=[];c.targetId=null;c.action='Inconsciente após ferimento na cabeça';if(c.indoorLocation?.path)c.indoorLocation.path=[];continue;}
-      if(c.policeRestitution&&this.urgentNeed(c)){c.task=null;c.targetId=null;c.path=[];if(c.indoorLocation?.path?.length)c.indoorLocation.path=[];c.action='Pausa a restituição para atender uma necessidade urgente';}
+      if(c.policeRestitution&&this.urgentNeed(c)){this.justice.pauseVehicleRestitution(c,'necessidade urgente do agente');c.task=null;c.targetId=null;c.path=[];if(c.indoorLocation?.path?.length)c.indoorLocation.path=[];c.action='Pausa a restituição para atender uma necessidade urgente';}
       else if(c.policeRestitution){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceRestitution(c);continue;}
       if(c.policeResponse){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceResponse(c);continue;}
       if(c.policeInvestigation){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceInvestigation(c);continue;}

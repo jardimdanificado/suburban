@@ -1,3 +1,4 @@
+import {dispatchVehicleRestitution,updateVehicleRestitution,pauseVehicleRestitution} from './city_vehicle_restitution.js';
 import {artworkNarrative,narrativeReception} from './city_art_narratives.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {interiorRoute} from './city_interior_layout.js';
@@ -518,7 +519,7 @@ export class CityJustice {
       const relations=city.relationships;layer.socialFactId??=relations.nextFactId++;const memory={id:layer.socialFactId,kind:'public-art',actorId:layer.creatorId??piece.creatorId,targetId:piece.subjectId,aboutId:piece.subjectId??layer.narrative?.participantIds[0]??piece.creatorId,minute:layer.minute??piece.createdAt,eventId:layer.eventId??piece.eventId,truth:layer.truth,artId:piece.id,narrative:layer.narrative?structuredClone(layer.narrative):null,description:`Mensagem urbana: “${layer.message}”.`};relations.facts.set(memory.id,memory);if(relations.facts.size>768)relations.facts.delete(relations.facts.keys().next().value);city.relationships.remember(c,memory,{otherId:subject?.id??null,firsthand:false,truth:believes?layer.truth:null,impact:effect,accepted:believes});if(subject&&c.political)city.politics.remember(c,{kind:'observer-opinion',candidateId:subject.id,truth:layer.truth,believes,effect,description:`Viu arte urbana sobre ${subject.entity.properties.name}: ${layer.message}`});c.mood=Math.max(-25,Math.min(25,(c.mood||0)+effect));
     }}}
   stealVehicle(actor,vehicleId){
-    const city=this.city,v=city.vehicles?.units.get(vehicleId);if(!actor||actor.entity.destroyed||actor.custody||actor.indoorLocation||actor.skybridgeZ||!city.society.isAdult(actor)||!v?.active||v.scrapped||v.driverId||v.paintJobId||v.mechanicId||v.serviceBodyId||actor.ridingVehicleId||dist(actor.entity,v)>1.6||v.ownerAccountId===actor.accountId||v.possessorAccountId)return false;
+    const city=this.city,v=city.vehicles?.units.get(vehicleId);if(!actor||actor.entity.destroyed||actor.custody||actor.indoorLocation||actor.skybridgeZ||!city.society.isAdult(actor)||!v?.active||v.scrapped||v.policeRecoveryOfficerId||v.driverId||v.paintJobId||v.mechanicId||v.serviceBodyId||actor.ridingVehicleId||dist(actor.entity,v)>1.6||v.ownerAccountId===actor.accountId||v.possessorAccountId)return false;
     const owner=city.citizens.find(c=>c.accountId===v.ownerAccountId),record=this.crimeRecord('bicycleTheft',actor.id,owner?.id??null,{vehicleId:v.id,position:{x:v.x,y:v.y}});
     v.possessorAccountId=actor.accountId;v.theft={caseId:record?.id??null,holderId:actor.id,stolenAt:city.minute,originalColor:v.color};v.possessionHistory??=[];v.possessionHistory.push({minute:city.minute,accountId:actor.accountId,reason:'Furto',caseId:record?.id??null});
     city.log(`${actor.entity.properties.name} furtou um veículo estacionado; a propriedade legal foi preservada.`,'justice',[actor.id,owner?.id].filter(Number.isInteger),{kind:'vehicle-stolen',caseId:record?.id,vehicleId:v.id});return record||true;
@@ -527,6 +528,8 @@ export class CityJustice {
     const city=this.city;if(!city.vehicles)return;
     if(suspect.ridingVehicleId||suspect.mobilityTrip)city.vehicles.releaseTrip(suspect);
     for(const v of city.vehicles.units.values())if(v.theft&&v.possessorAccountId===suspect.accountId){
+      const pending=this.cases.find(r=>r.id===v.theft.caseId);if(pending)pending.vehicleRecovery??={status:'awaiting-officer',vehicleId:v.id,ownerId:pending.victimId};
+      if(dist(v,suspect.entity)>1.6||v.driverId||v.policeRecoveryOfficerId)continue;
       const record=this.cases.find(r=>r.id===v.theft.caseId);v.possessorAccountId=null;v.theft=null;v.possessionHistory??=[];v.possessionHistory.push({minute:city.minute,accountId:v.ownerAccountId,reason:'Recuperação policial'});if(record){record.vehicleRecoveredAt=city.minute;record.vehicleRecoverySource='police';}
       city.log(`A polícia recuperou um veículo no local da prisão; o dono pode buscá-lo onde ficou estacionado.`,'justice',[suspect.id],{kind:'vehicle-recovered-police',caseId:record?.id,vehicleId:v.id,position:{x:v.x,y:v.y}});
     }
@@ -544,7 +547,7 @@ export class CityJustice {
     }
     if(v.paintJobId||v.mechanicId)return 'recognized-busy';
     if(driver)city.vehicles.releaseTrip(driver);const oldHolder=v.possessorAccountId;v.possessorAccountId=null;v.theft.recoveredAt=city.minute;v.possessionHistory??=[];v.possessionHistory.push({minute:city.minute,accountId:owner.accountId,reason:'Recuperação pelo proprietário'});v.theft=null;
-    if(record)record.vehicleRecoveredAt=city.minute;
+    if(record){record.vehicleRecoveredAt=city.minute;record.vehicleRecoverySource='owner';}
     city.log(`${owner.entity.properties.name} reconheceu e recuperou seu veículo estacionado.`,'justice',[owner.id],{kind:'vehicle-recovered',vehicleId:v.id,caseId:record?.id,previousPossessor:oldHolder});return 'recovered';
   }
   updateVehicleRecognition(){if(this.city.minute%30!==0||!this.city.vehicles)return;for(const v of this.city.vehicles.units.values())if(v.theft&&v.active&&!v.scrapped){const owner=this.city.citizens.find(c=>c.accountId===v.ownerAccountId);if(owner)this.recognizeStolenVehicle(owner,v);}}
@@ -593,6 +596,7 @@ export class CityJustice {
     if(!recovered)return false;asset.recovered+=recovered;asset.recoveryStatus='returned';asset.lastRecoveredAt=city.minute;city.log(`Bens subtraídos no caso #${record.id} foram devolvidos a ${owner.entity.properties.name}.`,'justice',[suspect.id,owner.id],{kind:'stolen-property-returned',caseId:record.id,assetKind:asset.kind,quantity:recovered});return true;
   }
   updateRestitutionMissions(){
+    dispatchVehicleRestitution(this);
     const city=this.city;
     for(const record of this.cases){
       const asset=record.stolenAsset;if(!asset||!['item','meal'].includes(asset.kind)||record.status!=='convicted'||asset.recoveryStatus!=='awaiting-physical-return')continue;
@@ -637,7 +641,9 @@ export class CityJustice {
     asset.recovered=(asset.recovered||0)+mission.quantity;asset.holderId=owner.id;asset.recoveryStatus=asset.recovered>=asset.quantity?'returned':'partially-returned';asset.lastRecoveredAt=city.minute;asset.recoveryWaitingReason=null;mission.status='completed';mission.completedAt=city.minute;mission.waitingReason=null;officer.path=[];officer.targetId=null;officer.task='police-restitution';mission.phase='return';officer.action=`Retornando à delegacia após entregar os bens do caso #${record.id}`;
     city.log(`A polícia devolveu fisicamente ${asset.kind==='meal'?'o alimento':`${mission.quantity} ${asset.good}`} a ${owner.entity.properties.name}.`,'justice',[officer.id,owner.id],{kind:'stolen-property-returned',caseId:record.id,assetKind:asset.kind,quantity:mission.quantity,physical:true});return true;
   }
+  pauseVehicleRestitution(officer,reason){pauseVehicleRestitution(this,officer,reason);}
   updatePoliceRestitution(officer){
+    if(officer.policeRestitution?.kind==='vehicle')return updateVehicleRestitution(this,officer);
     const city=this.city,mission=officer.policeRestitution,record=this.cases.find(r=>r.id===mission?.caseId),asset=record?.stolenAsset,station=city.building(mission?.stationId),suspect=city.society.citizen(mission?.suspectId),owner=city.society.citizen(mission?.ownerId);if(!mission||!record||!asset||!station||!suspect||!owner)return false;
     if(officer.entity.destroyed||officer.jobId!==station.id||city.urgentNeed?.(officer)){mission.waitingReason='agente ou condições de serviço indisponíveis';return false;}
     if(mission.lastPaidMinute!==city.minute){if(!city.payWage(officer,station))mission.waitingReason='aguardando verba salarial';mission.lastPaidMinute=city.minute;}

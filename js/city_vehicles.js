@@ -194,7 +194,7 @@ export class CityVehicles {
     v.ownershipHistory??=[];v.ownershipHistory.push({minute:this.city.minute,from,to,fromName:this.city.accountName(from),toName:this.city.accountName(to),price,reason});v.ownerAccountId=to;
   }
   transferVehicle(id,to,price=0){
-    const v=this.units.get(id),city=this.city;if(!v?.active||v.scrapped||v.serviceBodyId||v.possessorAccountId&&v.possessorAccountId!==v.ownerAccountId||v.driverId||v.mechanicId||!city.accounts.has(to)||!Number.isSafeInteger(price)||price<0)return city.fail('Equipamento, comprador ou valor indisponível.');
+    const v=this.units.get(id),city=this.city;if(!v?.active||v.scrapped||v.serviceBodyId||v.policeRecoveryOfficerId||v.possessorAccountId&&v.possessorAccountId!==v.ownerAccountId||v.driverId||v.mechanicId||!city.accounts.has(to)||!Number.isSafeInteger(price)||price<0)return city.fail('Equipamento, comprador ou valor indisponível.');
     if(to===v.ownerAccountId)return false;if(price&&!city.transfer(to,v.ownerAccountId,price,'Compra de bicicleta ou patinete usado',{vehicleId:id}))return false;
     this.recordOwner(v,to,price,price?'Venda de equipamento usado':'Transferência de equipamento');city.history.record('ownership',`Novo proprietário de ${VEHICLE_SPECS[v.good].label} #${id}: ${city.accountName(to)}.`,[to],{vehicleId:id,amount:price});return true;
   }
@@ -220,7 +220,7 @@ export class CityVehicles {
     const owners=new Set([c.accountId,this.city.building(c.jobId)?.accountId]);
     for(const id of c.businessIds||[])owners.add(this.city.building(id)?.accountId);
     let capacity=base;
-    for(const v of this.units.values())if(v.active&&!v.scrapped&&v.condition>15&&!v.mechanicId&&owners.has(this.accessAccount(v))&&(!v.driverId||v.driverId===c.id)){capacity=Math.max(capacity,VEHICLE_SPECS[v.good].cargo);if(capacity>=MAX_CARGO_CAPACITY)break;}
+    for(const v of this.units.values())if(v.active&&!v.scrapped&&v.condition>15&&!v.mechanicId&&!v.policeRecoveryOfficerId&&owners.has(this.accessAccount(v))&&(!v.driverId||v.driverId===c.id)){capacity=Math.max(capacity,VEHICLE_SPECS[v.good].cargo);if(capacity>=MAX_CARGO_CAPACITY)break;}
     return injuredCarryCapacity(c,capacity);
   }
   hourly(){
@@ -246,18 +246,18 @@ export class CityVehicles {
     }
   }
   startServiceTrip(c,v,goal){
-    if(!v?.active||v.scrapped||v.serviceBodyId&&v.serviceBodyId!==c.funeralBodyId||v.driverId||v.mechanicId||v.paintJobId||v.condition<=15||c.indoorLocation||c.mobilityTrip||c.ridingVehicleId)return false;
+    if(!v?.active||v.scrapped||v.policeRecoveryOfficerId||v.serviceBodyId&&v.serviceBodyId!==c.funeralBodyId||v.driverId||v.mechanicId||v.paintJobId||v.condition<=15||c.indoorLocation||c.mobilityTrip||c.ridingVehicleId)return false;
     const path=this.groundPath(c.entity,v);if(path===null||this.groundPath(v,goal)===null)return false;
     v.reservedParking=this.destinationParking(v,goal);v.driverId=c.id;c.mobilityTrip={kind:'cycle',vehicleId:v.id,goal:{...goal},stage:'boarding'};c.path=path;v.status='Funcionário a caminho para serviço';return true;
   }
   tryTrip(c){
     if(c.mobilityWalkGoal){const last=c.path.at(-1);if(last&&Math.floor(last.x)===Math.floor(c.mobilityWalkGoal.x)&&Math.floor(last.y)===Math.floor(c.mobilityWalkGoal.y))return;c.mobilityWalkGoal=null;}
-    if(c.funeralBodyId)return;
+    if(c.funeralBodyId||c.policeRestitution?.kind==='vehicle')return;
     if(!this.activeCount||c.skybridgeTransit||c.skybridgeZ||c.mobilityTrip||c.ridingVehicleId||c.path.length<3||!this.city.society.isAdult(c)||c.conversation||c.workMeal||this.city.minute-(c.lastVehicleSearchAt??-Infinity)<20)return;
     c.lastVehicleSearchAt=this.city.minute;const city=this.city,goal=c.path.at(-1);
     if(!c.path.some(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))))return;
     const owners=new Set([c.accountId,city.building(c.jobId)?.accountId,...c.businessIds.map(id=>city.building(id)?.accountId)]),load=c.deliveryId?city.logistics.shipments.find(s=>s.id===c.deliveryId):null;
-    const candidates=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&!v.driverId&&!v.mechanicId&&!v.paintJobId&&!v.serviceBodyId&&v.condition>15&&(owners.has(this.accessAccount(v))||!v.possessorAccountId&&city.buildings.some(b=>b.type==='bicycle_rental'&&b.active&&b.workers.length&&b.accountId===v.ownerAccountId&&Math.hypot(v.x-c.entity.x,v.y-c.entity.y)<4))&&(!load||VEHICLE_SPECS[v.good].cargo>=load.quantity));
+    const candidates=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&!v.driverId&&!v.mechanicId&&!v.paintJobId&&!v.serviceBodyId&&!v.policeRecoveryOfficerId&&v.condition>15&&(owners.has(this.accessAccount(v))||!v.possessorAccountId&&city.buildings.some(b=>b.type==='bicycle_rental'&&b.active&&b.workers.length&&b.accountId===v.ownerAccountId&&Math.hypot(v.x-c.entity.x,v.y-c.entity.y)<4))&&(!load||VEHICLE_SPECS[v.good].cargo>=load.quantity));
     candidates.sort((a,b)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(b.x-c.entity.x,b.y-c.entity.y));
     for(const v of candidates){
       const path=this.groundPath(c.entity,v);if(path===null||path.length>Math.max(4,c.path.length/2))continue;
@@ -322,6 +322,12 @@ export class CityVehicles {
   update(dt){
     if(!this.activeCount)return;const city=this.city;
     for(const v of this.units.values()){
+      if(v.policeRecoveryOfficerId){
+        const officer=city.society.citizen(v.policeRecoveryOfficerId),mission=officer?.policeRestitution;
+        if(!officer||officer.entity.destroyed||officer.custody||officer.task!=='police-restitution'||mission?.vehicleId!==v.id||mission.phase!=='to-owner'){
+          if(officer)city.justice.pauseVehicleRestitution(officer,'transporte físico interrompido');v.policeRecoveryOfficerId=null;
+        }else{v.x=officer.entity.x+(v.policeRecoveryOffset?.x||0);v.y=officer.entity.y+(v.policeRecoveryOffset?.y||0);v.altitude=surfaceElevation(city.world,v.x,v.y);if(v.entity){v.entity.x=v.x;v.entity.y=v.y;}continue;}
+      }
       if(!v.active||v.scrapped||!v.driverId)continue;
       v.passengerIds??=[];
       const c=city.society.citizen(v.driverId);if(!c||c.entity.destroyed){for(const id of [...(v.passengerIds||[])]){const passenger=city.society.citizen(id);if(passenger)this.detachPassenger(passenger,v,false);}v.driverId=null;continue;}
@@ -360,7 +366,7 @@ export class CityVehicles {
   garageWork(b,c){
     const city=this.city;
     if(!c.mechanicJob){
-      const v=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&(!v.possessorAccountId||v.possessorAccountId===v.ownerAccountId)&&v.condition<75&&!v.serviceBodyId&&!v.paintJobId&&!v.mechanicId&&!v.driverId).sort((a,b)=>a.condition-b.condition)[0];
+      const v=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&(!v.possessorAccountId||v.possessorAccountId===v.ownerAccountId)&&v.condition<75&&!v.serviceBodyId&&!v.policeRecoveryOfficerId&&!v.paintJobId&&!v.mechanicId&&!v.driverId).sort((a,b)=>a.condition-b.condition)[0];
       if(!v||b.inventory.pecas<1)return false;
       const path=this.groundPath(c.entity,v);if(path===null)return false;
       const price=Math.ceil((city.economy.goods.pecas.price+city.currency.price(city.politics.policy.minimumWage*48))*1.35*(v.ownerAccountId==='treasury'?1.5:1));
