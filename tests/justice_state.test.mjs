@@ -29,12 +29,18 @@ test('partial justice state preserves enacted flags and rebuilds stable counters
   bindCityState(city);assert.equal(city.justice.nextCaseId,11);assert.equal(city.justice.nextBodyId,6);assert.equal(city.justice.nextArtId,8);assert.equal(city.justice.art[0].nextLayerId,10);assert.equal(city.justice.policies.cleanRecord,true);assert.equal(city.justice.policies.penalCode.graffiti.criminal,false);assert.equal(city.justice.policies.penalCode.graffiti.cassation,false);assert.equal(city.justice.policies.penalCode.graffiti.severity,0);assert.ok(city.justice.policies.penalCode.murder);
 });
 
+test('municipal police orders and an officer en route survive worker snapshots',()=>{
+  const city=setup({starter:true,population:24}),officer=city.citizens[4];let station=city.buildings.find(b=>b.type==='police_station');if(!station)for(const site of city.economy.locateBuilding('police_station')){station=city.addBuilding('police_station',site.x,site.y,{...site,free:true});if(station)break;}assert.ok(station);
+  const order={id:3,minute:720,mayorId:city.citizens[2].id,stationId:station.id,officerId:officer.id,artId:8,action:'damage-opposition-art',status:'accepted',pressure:.82};city.justice.policeOrders.push(order);city.justice.nextPoliceOrderId=4;officer.policePatrol={stationId:station.id,phase:'patrol',startedAt:700};officer.policeOrder={orderId:3,artId:8,phase:'travel',lastPaidMinute:721};
+  const {restored}=restore(city),copy=restored.justice,copyOfficer=restored.society.citizen(officer.id);assert.deepEqual(copy.policeOrders[0],order);assert.equal(copy.nextPoliceOrderId,4);assert.deepEqual(copyOfficer.policeOrder,officer.policeOrder);
+});
+
 test('patrol assignment and cached street beat survive worker state snapshots',()=>{
   const city=setup({starter:true,population:24}),officer=city.citizens[3];let station=city.buildings.find(b=>b.type==='police_station');
   if(!station)for(const site of city.economy.locateBuilding('police_station')){station=city.addBuilding('police_station',site.x,site.y,{...site,free:true});if(station)break;}
-  assert.ok(station);officer.policePatrol={stationId:station.id,phase:'patrol',startedAt:600,waypointIndex:3,waitUntil:608,lastPaidMinute:607};station.patrolOfficerId=officer.id;station.policePatrolPoints={revision:city.structureRevision,points:[{x:station.door.x+5,y:station.door.y+.5}]};
+  assert.ok(station);officer.policePatrol={stationId:station.id,phase:'patrol',shift:'night',startedAt:600,waypointIndex:3,waitUntil:608,lastPaidMinute:607};station.patrolOfficerId=officer.id;station.policeShiftAssignments={day:city.day,dayOfficerId:officer.id-1,nightOfficerId:officer.id};station.policePatrolPoints={revision:city.structureRevision,points:[{x:station.door.x+5,y:station.door.y+.5}]};
   const {restored}=restore(city),copy=restored.society.citizen(officer.id),copyStation=restored.building(station.id);
-  assert.equal(copy.policePatrol.stationId,station.id);assert.equal(copy.policePatrol.phase,'patrol');assert.equal(copy.policePatrol.waypointIndex,3);assert.equal(copyStation.patrolOfficerId,officer.id);assert.deepEqual(copyStation.policePatrolPoints.points,station.policePatrolPoints.points);
+  assert.equal(copy.policePatrol.stationId,station.id);assert.equal(copy.policePatrol.phase,'patrol');assert.equal(copy.policePatrol.shift,'night');assert.equal(copy.policePatrol.waypointIndex,3);assert.equal(copyStation.patrolOfficerId,officer.id);assert.deepEqual(copyStation.policeShiftAssignments,station.policeShiftAssignments);assert.deepEqual(copyStation.policePatrolPoints.points,station.policePatrolPoints.points);
 });
 
 test('in-progress field investigations preserve the officer route and collected testimony',()=>{
@@ -63,6 +69,12 @@ test('an active police scene response retains the assigned patrol and on-site ev
   city.justice.cases.push({id:53,type:'assault',status:'reported',scene:{buildingId:null,height:0},position:{x:12.5,y:13.5},witnesses:[{citizenId:officer.id,role:'police-officer',confidence:.75}],evidence:[{kind:'police-scene-response',officerId:officer.id,observedAt:952}],response:{status:'dispatched',officerId:officer.id,stationId:station.id,phase:'scene',dispatchedAt:950},investigation:null});
   const {restored}=restore(city),copy=restored.justice.cases.find(r=>r.id===53),copyOfficer=restored.society.citizen(officer.id),copyStation=restored.building(station.id);
   assert.equal(copy.response.phase,'scene');assert.equal(copy.response.officerId,officer.id);assert.equal(copy.evidence[0].kind,'police-scene-response');assert.equal(copyOfficer.policeResponse.caseId,53);assert.equal(copyOfficer.policeResponse.resumePatrolPhase,'return');assert.equal(copyOfficer.policePatrol.phase,'respond');assert.equal(copyStation.patrolOfficerId,officer.id);
+});
+
+test('an in-progress physical restitution and the officer-held stolen item survive snapshots',()=>{
+  const city=setup({starter:true,population:24}),officer=city.citizens[3],suspect=city.citizens[4],owner=city.citizens[5],mission={status:'in-progress',caseId:81,stationId:10,officerId:officer.id,suspectId:suspect.id,ownerId:owner.id,phase:'to-owner',startedAt:900,lastPaidMinute:902};officer.inventory??={};officer.inventory.madeira=2;officer.policeRestitution=mission;
+  const record={id:81,type:'theft',status:'convicted',chargedCitizenId:suspect.id,stolenAsset:{kind:'item',good:'madeira',quantity:2,recovered:0,holderId:officer.id,ownerId:owner.id,recoveryStatus:'in-transit',recoveryMission:mission}};city.justice.cases.push(record);
+  const {restored}=restore(city),copy=restored.justice.cases.find(r=>r.id===81),copyOfficer=restored.society.citizen(officer.id);assert.equal(copy.stolenAsset.recoveryMission.phase,'to-owner');assert.equal(copyOfficer.policeRestitution,copy.stolenAsset.recoveryMission);assert.equal(copyOfficer.inventory.madeira,2);assert.equal(copy.stolenAsset.holderId,officer.id);
 });
 
 test('skill migration is deterministic, preserves existing values and keeps newborn skills at zero',()=>{

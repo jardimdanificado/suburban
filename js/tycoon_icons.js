@@ -24,6 +24,16 @@ export function tycoonIcon(ctx,key,x,y,scale=2){
     rect(1,7,14,7,brick);rect(3,2,2,8,dark);rect(10,1,2,9,dark);rect(4,1,3,1,'#c3c6ba');rect(11,0,3,1,'#c3c6ba');for(const p of[2,6,10])rect(p,9,3,3,light);if(key==='production'){rect(6,4,1,9,'#e5c64b');line([[4,5],[6,7],[9,4]],'#f4d56a');}
   }else if(key==='transport'){
     rect(1,6,9,6,blue);rect(10,8,4,4,brick);rect(11,6,2,3,light);rect(2,12,3,3,ink);rect(10,12,3,3,ink);rect(3,13,1,1,'#c8c9bc');rect(11,13,1,1,'#c8c9bc');
+  }else if(key==='urban-art'){
+    rect(3,1,2,14,dark);rect(5,2,8,6,'#c75c52');rect(6,3,6,1,light);rect(6,5,4,1,blue);line([[2,14],[13,14]],ink);rect(10,9,2,4,blue);line([[10,9],[14,6]],ink);rect(13,5,2,2,'#e1bf61');
+  }else if(key==='safety'){
+    line([[8,1],[14,4],[13,10],[8,15],[3,10],[2,4],[8,1]],ink);rect(4,4,8,6,blue);rect(5,5,6,4,light);line([[6,7],[8,9],[11,6]],green);rect(7,11,2,2,brick);
+  }else if(key==='forensics'){
+    rect(6,1,4,5,'#d8b379');rect(5,2,6,1,dark);rect(4,6,8,7,blue);rect(2,8,3,2,light);rect(11,8,3,2,light);rect(6,13,2,2,ink);rect(9,13,2,2,ink);rect(7,7,2,5,'#f4ebc5');rect(5,8,6,2,'#f4ebc5');
+  }else if(key==='justice'){
+    rect(7,2,2,11,dark);rect(3,13,10,2,ink);line([[2,5],[14,5]],ink);line([[8,3],[3,5],[3,9]],dark);line([[8,3],[13,5],[13,9]],dark);line([[1,9],[5,9],[4,11],[2,11],[1,9]],blue);line([[11,9],[15,9],[14,11],[12,11],[11,9]],brick);rect(6,0,4,2,'#d8b379');
+  }else if(key==='custody'){
+    rect(2,2,12,12,dark);rect(3,3,10,10,light);for(const x of[4,7,10,13])rect(x,4,1,9,blue);rect(6,7,4,4,'#d8b379');rect(7,8,2,3,ink);rect(5,6,6,2,ink);rect(7,4,2,2,ink);
   }else if(key==='sanitation'){
     rect(4,6,9,8,'#6496ac');rect(3,5,11,2,light);rect(6,2,5,3,light);rect(6,8,2,4,'#a0c9d6');rect(11,8,1,4,ink);line([[1,13],[3,8],[3,4]],green);
   }else if(key==='publications'){

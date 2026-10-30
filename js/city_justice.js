@@ -11,10 +11,10 @@ const BASE_PENAL_CODE=Object.freeze({graffiti:{criminal:true,severity:10,fine:10
 
 /** Physical death records and municipal recovery of remains. */
 export class CityJustice {
-  constructor(city){this.city=city;this.bodies=[];this.nextBodyId=1;this.corpseRevision=0;this.art=[];this.nextArtId=1;this.artRevision=0;this.artFactId=1;this.cases=[];this.nextCaseId=1;this.lastWorksDay=null;this.lastMinute=null;this.lastArtReactionMinute=null;this.penalCodeRevision=0;this.policies={cleanRecord:false,parliamentaryImmunity:false,penalCode:Object.fromEntries(Object.entries(BASE_PENAL_CODE).map(([id,rule])=>[id,{...rule,fineOnly:false,politicalDisqualification:false,cleanRecordDisqualifying:false,cassation:true}]))};}
+  constructor(city){this.city=city;this.bodies=[];this.nextBodyId=1;this.corpseRevision=0;this.art=[];this.nextArtId=1;this.artRevision=0;this.artFactId=1;this.cases=[];this.nextCaseId=1;this.policeOrders=[];this.nextPoliceOrderId=1;this.lastWorksDay=null;this.lastMinute=null;this.lastArtReactionMinute=null;this.penalCodeRevision=0;this.policies={cleanRecord:false,parliamentaryImmunity:false,penalCode:Object.fromEntries(Object.entries(BASE_PENAL_CODE).map(([id,rule])=>[id,{...rule,fineOnly:false,politicalDisqualification:false,cleanRecordDisqualifying:false,cassation:true}]))};}
   ensureState(){
-    this.bodies??=[];this.art??=[];this.cases??=[];this.corpseRevision??=0;this.artRevision??=0;this.artFactId??=1;this.penalCodeRevision??=0;
-    this.nextBodyId=Math.max(this.nextBodyId||1,this.bodies.reduce((n,b)=>Math.max(n,b.id+1),1));this.nextArtId=Math.max(this.nextArtId||1,this.art.reduce((n,a)=>Math.max(n,a.id+1),1));this.nextCaseId=Math.max(this.nextCaseId||1,this.cases.reduce((n,c)=>Math.max(n,c.id+1),1));
+    this.bodies??=[];this.art??=[];this.cases??=[];this.policeOrders??=[];this.corpseRevision??=0;this.artRevision??=0;this.artFactId??=1;this.penalCodeRevision??=0;
+    this.nextBodyId=Math.max(this.nextBodyId||1,this.bodies.reduce((n,b)=>Math.max(n,b.id+1),1));this.nextArtId=Math.max(this.nextArtId||1,this.art.reduce((n,a)=>Math.max(n,a.id+1),1));this.nextCaseId=Math.max(this.nextCaseId||1,this.cases.reduce((n,c)=>Math.max(n,c.id+1),1));this.nextPoliceOrderId=Math.max(this.nextPoliceOrderId||1,this.policeOrders.reduce((n,o)=>Math.max(n,o.id+1),1));
     this.policies??={};this.policies.cleanRecord??=false;this.policies.parliamentaryImmunity??=false;this.policies.penalCode??={};
     for(const [type,base]of Object.entries(BASE_PENAL_CODE)){const defaults={...base,fineOnly:false,politicalDisqualification:false,cleanRecordDisqualifying:false,cassation:true};this.policies.penalCode[type]??={...defaults};for(const [key,value]of Object.entries(defaults))this.policies.penalCode[type][key]??=value;}
     for(const piece of this.art){piece.layers??=[];piece.seenBy??={};piece.damaged??=0;piece.nextLayerId=Math.max(piece.nextLayerId||1,[...piece.layers,...(piece.removedLayers||[])].reduce((n,l)=>Math.max(n,l.id+1),1));}
@@ -155,26 +155,64 @@ export class CityJustice {
     }
     body.status='cremation-wait';body.action='Aguardando cremação';city.log(`Autópsia de ${body.name}: ${cause}; horário estimado ${estimate} (margem de ${uncertainty} minutos).`,'justice',[body.citizenId,examiner.id],{kind:'autopsy-completed',bodyId:body.id,caseId:body.criminalCaseId??null,cause,estimatedDeathMinute:estimate,uncertainty,suspicious});return body.autopsy;
   }
-  updateMinute(){if(this.lastMinute===this.city.minute)return;this.lastMinute=this.city.minute;this.planFacilities();this.updatePolicePatrols();for(const body of this.bodies)if(body.status!=='cremated')this.updateBody(body);this.updateCorpseExposure();this.dispatchReports();this.updateInvestigations();this.updateCourtCases();this.updateVehicleRecognition();if(this.city.minute%30===0)this.reactToArt();}
+  updateMinute(){if(this.lastMinute===this.city.minute)return;this.lastMinute=this.city.minute;this.planFacilities();this.updatePolicePatrols();for(const body of this.bodies)if(body.status!=='cremated')this.updateBody(body);this.updateCorpseExposure();this.dispatchReports();this.updateInvestigations();this.updateCourtCases();this.updateRestitutionMissions();this.updateVehicleRecognition();if(this.city.minute%30===0)this.reactToArt();}
+  policeShift(hour=this.city.hour){if(hour>=8&&hour<17)return'day';if(hour>=20||hour<5)return'night';return null;}
+  policeShiftActive(){return this.policeShift()!=null;}
   policeOnDuty(c){return !!c?.policePatrol&&!c.entity.destroyed&&!c.custody&&(c.unconsciousUntil||0)<=this.city.minute;}
   updatePolicePatrols(){
-    const city=this.city,dayShift=city.hour>=8&&city.hour<17;
+    const city=this.city,shift=this.policeShift(),onShift=shift!=null;
     for(const station of this.activeBuildings('police_station')){
       let officer=city.society.citizen(station.patrolOfficerId);
       if(!officer||officer.entity.destroyed||officer.jobId!==station.id||!officer.policePatrol){station.patrolOfficerId=null;officer=null;}
-      if(officer&&!officer.policeResponse&&dayShift){
+      if(officer&&!officer.policeResponse&&onShift){
         const queued=this.cases.filter(r=>r.response?.stationId===station.id&&r.response.status==='awaiting-officer').sort((a,b)=>b.severity-a.severity||a.occurredAt-b.occurredAt)[0];
         if(queued){this.dispatchPoliceResponse(queued,officer);continue;}
       }
       const pendingCase=this.cases.some(r=>r.reportingStationId===station.id&&['reporting','reported','investigating'].includes(r.status)),queuedResponse=this.cases.some(r=>r.response?.stationId===station.id&&r.response.status==='awaiting-officer'),activeStaff=this.staffed(station);
-      if(officer){if(!officer.policeResponse&&(!dayShift||pendingCase&&activeStaff<=1))officer.policePatrol.phase='return';continue;}
-      if(!dayShift||pendingCase&&activeStaff<=1&&!queuedResponse)continue;
+      if(officer){if(!officer.policeResponse&&(!onShift||pendingCase&&activeStaff<=1))officer.policePatrol.phase='return';continue;}
+      if(!onShift||pendingCase&&activeStaff<=1&&!queuedResponse)continue;
+      station.policeShiftAssignments??={day:city.day,dayOfficerId:null,nightOfficerId:null};
+      if(station.policeShiftAssignments.day!==city.day)station.policeShiftAssignments={day:city.day,dayOfficerId:null,nightOfficerId:null};
+      const otherShiftOfficerId=station.policeShiftAssignments[shift==='day'?'nightOfficerId':'dayOfficerId'];
+      if(shift==='night'&&activeStaff<2)continue;
       const activeInvestigators=new Set(this.cases.filter(r=>r.status==='investigating'&&r.investigation?.status==='active').map(r=>r.investigation.officerId));
-      officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.custody&&!c.custodyEscort&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.conversation&&!c.funeralBodyId&&!c.deliveryId&&!c.cleaningJobId&&!c.paintWorkId&&!activeInvestigators.has(c.id)&&!city.urgentNeed?.(c));
+      officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&c.id!==otherShiftOfficerId&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.custody&&!c.custodyEscort&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.conversation&&!c.funeralBodyId&&!c.deliveryId&&!c.cleaningJobId&&!c.paintWorkId&&!activeInvestigators.has(c.id)&&!city.urgentNeed?.(c));
       if(!officer)continue;
       station.patrolOfficerId=officer.id;officer.policePatrol={stationId:station.id,phase:'exit',startedAt:city.minute,waypointIndex:(officer.id+station.id)%8,waitUntil:0,lastPaidMinute:null};officer.task='police-patrol';officer.targetId=null;officer.path=[];officer.action='Iniciando patrulhamento a pé';
+      station.policeShiftAssignments[shift==='day'?'dayOfficerId':'nightOfficerId']=officer.id;officer.policePatrol.shift=shift;this.considerMunicipalPoliceOrder(station,officer);
       city.log(`${officer.entity.properties.name} saiu da delegacia para patrulhar a região.`, 'justice',[officer.id],{kind:'police-patrol-started',buildingId:station.id});
     }
+  }
+  municipalPolicePressure(mayor){
+    if(!mayor)return 0;const ideology=mayor.political?.ideology?.liberty??0,loyalty=mayor.political?.loyalty??0,party=mayor.political?.partyId,partyControl=this.city.politics?.party?.(party)?.ideology?.liberty??0;
+    return Math.max(0,Math.min(1,.5-ideology*.28-(mayor.traits?.empathy??.5)*.16-(mayor.traits?.honesty??.5)*.12-partyControl*.12+loyalty*.08));
+  }
+  considerMunicipalPoliceOrder(station,officer){
+    const city=this.city,mayor=city.society.citizen(city.economy.mayorId),pressure=this.municipalPolicePressure(mayor);if(!mayor||pressure<.58||city.minute-(station.lastPoliticalOrderAt??-Infinity)<1440)return null;
+    const artTarget=this.art.filter(piece=>!piece.entity.destroyed&&piece.partyId!=null&&piece.partyId!==mayor.political?.partyId&&['banner','painting','flags','graffiti'].includes(piece.kind)).map(piece=>({piece,path:city.findPath(officer.entity,piece.entity)})).filter(x=>x.path!==null&&dist(officer.entity,x.piece.entity)<18).sort((a,b)=>dist(officer.entity,a.piece.entity)-dist(officer.entity,b.piece.entity))[0];
+    const oppositionTarget=pressure>=.82&&!artTarget?city.citizens.filter(c=>c.id!==officer.id&&c.id!==mayor.id&&!c.entity.destroyed&&!c.indoorLocation&&!c.custody&&c.needs?.health>35&&city.society.isAdult(c)&&c.political?.partyId!=null&&c.political.partyId!==mayor.political?.partyId&&dist(officer.entity,c.entity)<10&&city.findPath(officer.entity,c.entity)!==null).sort((a,b)=>dist(officer.entity,a.entity)-dist(officer.entity,b.entity))[0]:null;
+    const target=artTarget?{kind:'art',piece:artTarget.piece}:oppositionTarget?{kind:'person',citizen:oppositionTarget}:null;if(!target)return null;
+    const chance=target.kind==='art'?Math.min(.18,(pressure-.5)*.32):Math.min(.05,Math.max(.005,(pressure-.78)*.25));if(city.random()>chance)return null;
+    station.lastPoliticalOrderAt=city.minute;const order={id:this.nextPoliceOrderId++,minute:city.minute,mayorId:mayor.id,stationId:station.id,officerId:officer.id,artId:target.piece?.id??null,targetId:target.citizen?.id??null,action:target.kind==='art'?'damage-opposition-art':'assault-opposition',status:'issued',pressure};this.policeOrders.push(order);if(this.policeOrders.length>256)this.policeOrders.shift();
+    const partyLoyalty=officer.political?.partyId===mayor.political?.partyId ? 0.14 : 0,obedience=Math.max(.08,Math.min(.92,.3+pressure*.32+partyLoyalty-(officer.traits?.honesty??.5)*.28));
+    const subject=target.kind==='art'?`a obra #${order.artId}`:`a pessoa ${target.citizen.entity.properties.name}`;
+    if(city.random()>obedience){order.status='refused';order.decidedAt=city.minute;order.reason='agente recusou a ordem';city.log(`${officer.entity.properties.name} recusou ordem municipal abusiva contra ${subject}.`,'justice',[officer.id,mayor.id].concat(target.citizen?[target.citizen.id]:[]),{kind:'police-order-refused',orderId:order.id,artId:order.artId,targetId:order.targetId,buildingId:station.id});return order;}
+    if((officer.traits?.honesty??.5)>.78&&city.random()<.35){order.status='reported';order.decidedAt=city.minute;order.reason='agente comunicou a ordem';city.log(`${officer.entity.properties.name} comunicou ordem municipal abusiva contra ${subject} antes de executá-la.`,'justice',[officer.id,mayor.id].concat(target.citizen?[target.citizen.id]:[]),{kind:'police-order-reported',orderId:order.id,artId:order.artId,targetId:order.targetId,buildingId:station.id});return order;}
+    officer.policeOrder={orderId:order.id,artId:order.artId,targetId:order.targetId,targetKind:target.kind,phase:'travel',lastPaidMinute:null};officer.action=target.kind==='art'?'Recebeu ordem municipal para danificar arte de oposição':'Recebeu ordem municipal para agredir opositor';order.status='accepted';order.acceptedAt=city.minute;
+    city.log(`A prefeitura enviou uma ordem abusiva à delegacia contra ${subject}.`,'justice',[mayor.id,officer.id].concat(target.citizen?[target.citizen.id]:[]),{kind:'police-order-issued',orderId:order.id,artId:order.artId,targetId:order.targetId,buildingId:station.id,position:{x:(target.piece||target.citizen.entity).x,y:(target.piece||target.citizen.entity).y}});return order;
+  }
+  updatePolicePoliticalOrder(officer){
+    const city=this.city,mission=officer.policeOrder,order=this.policeOrders.find(o=>o.id===mission?.orderId),piece=this.art.find(a=>a.id===mission?.artId&&!a.entity.destroyed),target=city.society.citizen(mission?.targetId),destination=mission?.targetKind==='art'?piece?.entity:target?.entity;if(!mission||!order)return false;
+    const station=city.building(order.stationId);if(!station||officer.jobId!==station.id||officer.entity.destroyed||city.urgentNeed?.(officer)){order.status='interrupted';order.decidedAt=city.minute;order.reason=!station?'delegacia indisponível':'diligência interrompida';officer.policeOrder=null;officer.path=[];officer.action='Ordem municipal interrompida';return false;}
+    if(mission.lastPaidMinute!==city.minute){if(!city.payWage(officer,station))officer.action='Ordem municipal aguardando pagamento do turno';mission.lastPaidMinute=city.minute;}
+    if(!destination||mission.targetKind==='person'&&(target.entity.destroyed||target.custody)){order.status='target-missing';order.decidedAt=city.minute;order.reason=mission.targetKind==='art'?'obra removida antes da chegada':'pessoa não está mais acessível';officer.policeOrder=null;return false;}
+    if(officer.indoorLocation||officer.path.length)return true;
+    if(dist(officer.entity,destination)>1.4){const path=city.findPath(officer.entity,destination);if(path===null){order.status='blocked';order.decidedAt=city.minute;order.reason='sem rota acessível ao alvo';officer.action='Ordem municipal sem rota acessível';officer.policeOrder=null;officer.policePatrol.phase='patrol';return false;}officer.path=path;officer.action=mission.targetKind==='art'?'A caminho da obra indicada pela ordem municipal':'Perseguindo opositor por ordem municipal';mission.phase='travel';return true;}
+    let executed=false,records=[];if(mission.targetKind==='art'){executed=this.damageArtwork(piece.id,15+city.random()*10,officer.id);const record=piece.damageHistory?.at(-1)?.caseId?this.cases.find(c=>c.id===piece.damageHistory.at(-1).caseId):null;if(record)records.push(record);}else{const before=this.cases.length;executed=!!this.combatEncounter(officer,target,{forced:true});records=this.cases.slice(before).filter(r=>r.offenderId===officer.id&&r.victimId===target.id);}
+    for(const record of records){record.details.municipalOrderId=order.id;record.details.orderedByMayorId=order.mayorId;record.evidence.push({kind:'municipal-order',orderId:order.id,mayorId:order.mayorId,officerId:officer.id,artId:order.artId??null,targetId:order.targetId??null,recordedAt:city.minute,source:'official-order-register'});}
+    order.status=executed?'executed':'failed';order.decidedAt=city.minute;order.reason=mission.targetKind==='art'?(executed?'obra danificada':'ato não foi concluído'):(executed?'opositor agredido':'agressão não foi concluída');
+    city.log(executed?`A polícia executou uma ordem municipal abusiva; os atos e a autoria foram registrados.`:`A polícia não conseguiu executar uma ordem municipal abusiva.`,'justice',[officer.id,order.mayorId].concat(target?[target.id]:[]),{kind:'police-order-executed',orderId:order.id,caseIds:records.map(r=>r.id),artId:order.artId??null,targetId:order.targetId??null,buildingId:station.id,position:{x:destination.x,y:destination.y}});
+    officer.policeOrder=null;officer.policePatrol.phase='patrol';officer.task='police-patrol';return true;
   }
   policePatrolPoints(station){
     if(station.policePatrolPoints?.revision===this.city.structureRevision)return station.policePatrolPoints.points;
@@ -193,6 +231,7 @@ export class CityJustice {
   updatePolicePatrol(c){
     const city=this.city,patrol=c.policePatrol,station=city.building(patrol?.stationId);if(!patrol)return false;
     if(c.policeResponse)return true;
+    if(c.policeOrder)return this.updatePolicePoliticalOrder(c);
     if(!station?.active||station.entity.destroyed||c.jobId!==station.id||c.entity.destroyed)return this.stopPolicePatrol(c,'Patrulha interrompida: delegacia ou vínculo de trabalho indisponível');
     if(city.urgentNeed?.(c))return this.stopPolicePatrol(c,'Patrulha interrompida por uma necessidade urgente');
     if(patrol.lastPaidMinute!==city.minute){if(!city.payWage(c,station)){patrol.phase='return';c.action='Patrulha interrompida: aguardando salário municipal';}patrol.lastPaidMinute=city.minute;}
@@ -230,7 +269,7 @@ export class CityJustice {
   finishPoliceResponse(c,record,station,status='completed'){
     const city=this.city,response=record.response,mission=c.policeResponse;c.policeResponse=null;c.path=[];c.targetId=null;c.task='police-patrol';c.action=status==='completed'?'Registrou a ocorrência no local; retomando patrulha':'Resposta policial interrompida';
     response.status=status;response.completedAt=city.minute;response.phase='finished';if(status!=='completed')response.reason??='agente indisponível';
-    if(c.policePatrol)c.policePatrol.phase=status==='completed'&&city.hour>=8&&city.hour<17?(mission?.resumePatrolPhase==='return'?'return':'patrol'):'return';
+    if(c.policePatrol)c.policePatrol.phase=status==='completed'&&this.policeShiftActive()?(mission?.resumePatrolPhase==='return'?'return':'patrol'):'return';
     city.log(status==='completed'?`A patrulha registrou a ocorrência #${record.id} no local.`:`A resposta à ocorrência #${record.id} foi interrompida.`,'justice',[c.id],{kind:'police-response-finished',caseId:record.id,status,position:{x:c.entity.x,y:c.entity.y}});return true;
   }
   updatePoliceResponse(c){
@@ -513,13 +552,80 @@ export class CityJustice {
     city.log(`${actor.entity.properties.name} furtou ${kind==='money'?'dinheiro':kind==='meal'?'alimento':'um objeto'} de ${target.entity.properties.name}.`,'justice',[actor.id,target.id],{kind:'property-stolen',caseId:record?.id,parentEventId,assetKind:kind,amount:asset.amount,good:asset.good,quantity:asset.quantity});return record||true;
   }
   recoverStolenAsset(record,suspect){
-    const city=this.city,asset=record.stolenAsset,owner=city.society.citizen(asset?.ownerId);if(!asset||!owner||asset.holderId!==suspect?.id)return false;
+    const city=this.city,asset=record.stolenAsset,owner=city.society.citizen(asset?.ownerId);if(!asset||asset.recoveryMission?.status==='in-progress'||!owner||asset.holderId!==suspect?.id)return false;
     if(asset.kind!=='money'&&(dist(owner.entity,suspect.entity)>1.6||(owner.indoorLocation?.buildingId??null)!==(suspect.indoorLocation?.buildingId??null)||(owner.indoorLocation?.unitId??null)!==(suspect.indoorLocation?.unitId??null))){asset.recoveryStatus='awaiting-physical-return';return false;}
     let recovered=0;
     if(asset.kind==='money'){const amount=Math.min(Math.max(0,asset.amount-asset.recovered),Math.max(0,city.accounts.get(suspect.accountId)?.balance||0));if(amount&&city.transfer(suspect.accountId,owner.accountId,amount,'Devolução de dinheiro subtraído',{caseId:record.id}))recovered=amount;}
     else if(asset.kind==='item'){recovered=Math.min(Math.max(0,asset.quantity-asset.recovered),suspect.inventory?.[asset.good]||0);if(recovered){owner.inventory??={};suspect.inventory[asset.good]-=recovered;if(asset.good==='porrete'&&suspect.inventory[asset.good]<=0&&suspect.equipment?.weapon?.good===asset.good)suspect.equipment.weapon=null;owner.inventory[asset.good]=(owner.inventory[asset.good]||0)+recovered;}}
     else if(asset.kind==='meal'&&!asset.recovered){const index=suspect.pocket?.food.findIndex(meal=>meal.stolenCaseId===record.id)??-1;if(index>=0&&(owner.pocket?.food?.length||0)<4){owner.pocket??={food:[],water:0,waterContamination:0};const [meal]=suspect.pocket.food.splice(index,1);delete meal.stolenCaseId;owner.pocket.food.push(meal);recovered=1;}}
     if(!recovered)return false;asset.recovered+=recovered;asset.recoveryStatus='returned';asset.lastRecoveredAt=city.minute;city.log(`Bens subtraídos no caso #${record.id} foram devolvidos a ${owner.entity.properties.name}.`,'justice',[suspect.id,owner.id],{kind:'stolen-property-returned',caseId:record.id,assetKind:asset.kind,quantity:recovered});return true;
+  }
+  updateRestitutionMissions(){
+    const city=this.city;
+    for(const record of this.cases){
+      const asset=record.stolenAsset;if(!asset||!['item','meal'].includes(asset.kind)||record.status!=='convicted'||asset.recoveryStatus!=='awaiting-physical-return')continue;
+      if(asset.recoveryMission?.status==='in-progress'||asset.recoveryMission?.status==='blocked'&&city.minute<(asset.recoveryMission.retryAt||Infinity))continue;
+      const suspect=city.society.citizen(asset.holderId),owner=city.society.citizen(asset.ownerId);if(!suspect||suspect.entity.destroyed||suspect.dead||!owner||owner.entity.destroyed)continue;
+      const stations=this.activeBuildings('police_station').filter(b=>this.staffed(b)>0).sort((a,b)=>dist(a.door,suspect.entity)-dist(b.door,suspect.entity));let assignment=null;
+      for(const station of stations){const officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.policePatrol&&!c.policeResponse&&!c.policeInvestigation&&!c.policeRestitution&&!c.custodyEscort&&!c.funeralBodyId&&!c.deliveryId&&!city.urgentNeed?.(c));if(officer){assignment={station,officer};break;}}
+      if(!assignment){asset.recoveryWaitingReason='aguardando policial disponível na delegacia';continue;}
+      const {station,officer}=assignment;asset.recoveryMission={status:'in-progress',caseId:record.id,stationId:station.id,officerId:officer.id,suspectId:suspect.id,ownerId:owner.id,phase:'to-suspect',startedAt:city.minute,lastPaidMinute:null};officer.policeRestitution=asset.recoveryMission;officer.task='police-restitution';officer.path=[];officer.targetId=null;officer.action=`Recolhendo bem do caso #${record.id}`;asset.recoveryWaitingReason=null;
+      city.log(`A polícia enviou ${officer.entity.properties.name} para recuperar fisicamente os bens do caso #${record.id}.`,'justice',[officer.id,suspect.id,owner.id],{kind:'police-restitution-dispatched',caseId:record.id,buildingId:station.id});
+    }
+  }
+  enterRestitutionInterior(officer,building,target){
+    const path=interiorRoute(building,{x:building.door.x,y:building.door.y,z:0},{x:target.position.x,y:target.position.y,z:(target.floor||0)*CITY_FLOOR_HEIGHT});if(path===null)return false;
+    const unit=this.city.units.get(target.unitId);officer.indoorLocation={buildingId:building.id,unitId:path.length?null:target.unitId,targetUnitId:target.unitId,targetRoomType:unit?.roomType||'workspace',roomType:path.length?'circulation':unit?.roomType||'workspace',floor:target.floor||0,position:{x:building.door.x,y:building.door.y,z:0},path,phase:path.length?'walking':'using',task:'police-restitution',layoutRevision:building.layoutRevision||0,enteredAt:this.city.minute};return true;
+  }
+  leaveRestitutionInterior(officer,building,mission){
+    const room=officer.indoorLocation;if(!room)return false;const path=interiorRoute(building,room.position||{x:officer.entity.x,y:officer.entity.y,z:0},{x:building.door.x,y:building.door.y,z:0});if(path===null){mission.waitingReason='sem rota interna para sair do prédio';return false;}
+    room.unitId=null;room.targetUnitId=null;room.roomType='circulation';room.targetRoomType='circulation';room.exiting=true;room.phase='leaving';room.path=path;room.task='police-restitution';return true;
+  }
+  collectRestitutionAsset(record,officer,suspect){
+    const city=this.city,asset=record.stolenAsset,mission=asset?.recoveryMission;if(!asset||!mission||mission.phase!=='collect')return false;
+    if(asset.kind==='item'){
+      const available=Math.max(0,suspect.inventory?.[asset.good]||0),quantity=Math.min(available,Math.max(0,asset.quantity-(asset.recovered||0))),capacity=injuredCarryCapacity(officer,officer.equipment?.carrinho?72:officer.equipment?.cesta?36:24),used=Object.values(officer.inventory||{}).reduce((n,q)=>n+(Number(q)||0),0);
+      if(!quantity||used+quantity>capacity){mission.waitingReason=!quantity?'bem não está mais com o suspeito':'policial sem capacidade de carga';asset.recoveryWaitingReason=mission.waitingReason;mission.status='blocked';mission.phase='return';mission.retryAt=city.minute+360;if(!quantity)asset.recoveryStatus='unavailable';return false;}
+      officer.inventory??={};suspect.inventory[asset.good]-=quantity;if(asset.good==='porrete'&&suspect.inventory[asset.good]<=0&&suspect.equipment?.weapon?.good===asset.good)suspect.equipment.weapon=null;officer.inventory[asset.good]=(officer.inventory[asset.good]||0)+quantity;mission.quantity=quantity;
+    }else{
+      const index=suspect.pocket?.food?.findIndex(meal=>meal.stolenCaseId===record.id)??-1;if(index<0||officer.pocket?.food?.length>=4){mission.waitingReason=index<0?'alimento não está mais com o suspeito':'policial sem espaço para levar o alimento';asset.recoveryWaitingReason=mission.waitingReason;mission.status='blocked';mission.phase='return';mission.retryAt=city.minute+360;if(index<0)asset.recoveryStatus='unavailable';return false;}
+      officer.pocket??={food:[],water:0,waterContamination:0};const [meal]=suspect.pocket.food.splice(index,1);officer.pocket.food.push(meal);mission.meal=meal;mission.quantity=1;
+    }
+    asset.holderId=officer.id;asset.recoveryStatus='in-transit';mission.phase='to-owner';mission.waitingReason=null;city.log(`O agente recolheu fisicamente o bem do caso #${record.id} e está levando-o à vítima.`,'justice',[officer.id,suspect.id],{kind:'stolen-property-seized',caseId:record.id,assetKind:asset.kind,quantity:mission.quantity});return true;
+  }
+  deliverRestitutionAsset(record,officer,owner){
+    const city=this.city,asset=record.stolenAsset,mission=asset?.recoveryMission;if(!asset||!mission||mission.phase!=='deliver')return false;
+    if(asset.kind==='item'){
+      const quantity=Math.min(mission.quantity||0,officer.inventory?.[asset.good]||0);if(!quantity){mission.waitingReason='bem apreendido não está mais com o agente';return false;}
+      owner.inventory??={};officer.inventory[asset.good]-=quantity;owner.inventory[asset.good]=(owner.inventory[asset.good]||0)+quantity;mission.quantity=quantity;
+    }else{
+      const index=officer.pocket?.food?.indexOf(mission.meal)??-1;if(index<0||owner.pocket?.food?.length>=4){mission.waitingReason=index<0?'alimento apreendido não está mais com o agente':'vítima sem espaço para receber o alimento';return false;}
+      const [meal]=officer.pocket.food.splice(index,1);delete meal.stolenCaseId;owner.pocket??={food:[],water:0,waterContamination:0};owner.pocket.food.push(meal);mission.meal=meal;
+    }
+    asset.recovered=(asset.recovered||0)+mission.quantity;asset.holderId=owner.id;asset.recoveryStatus=asset.recovered>=asset.quantity?'returned':'partially-returned';asset.lastRecoveredAt=city.minute;asset.recoveryWaitingReason=null;mission.status='completed';mission.completedAt=city.minute;mission.waitingReason=null;officer.path=[];officer.targetId=null;officer.task='police-restitution';mission.phase='return';officer.action=`Retornando à delegacia após entregar os bens do caso #${record.id}`;
+    city.log(`A polícia devolveu fisicamente ${asset.kind==='meal'?'o alimento':`${mission.quantity} ${asset.good}`} a ${owner.entity.properties.name}.`,'justice',[officer.id,owner.id],{kind:'stolen-property-returned',caseId:record.id,assetKind:asset.kind,quantity:mission.quantity,physical:true});return true;
+  }
+  updatePoliceRestitution(officer){
+    const city=this.city,mission=officer.policeRestitution,record=this.cases.find(r=>r.id===mission?.caseId),asset=record?.stolenAsset,station=city.building(mission?.stationId),suspect=city.society.citizen(mission?.suspectId),owner=city.society.citizen(mission?.ownerId);if(!mission||!record||!asset||!station||!suspect||!owner)return false;
+    if(officer.entity.destroyed||officer.jobId!==station.id||city.urgentNeed?.(officer)){mission.waitingReason='agente ou condições de serviço indisponíveis';return false;}
+    if(mission.lastPaidMinute!==city.minute){if(!city.payWage(officer,station))mission.waitingReason='aguardando verba salarial';mission.lastPaidMinute=city.minute;}
+    const targetCitizen=mission.phase==='to-suspect'?suspect:mission.phase==='to-owner'?owner:null;
+    if(officer.indoorLocation){const room=officer.indoorLocation;if(room.path?.length)return true;
+      if(mission.phase==='return'||!targetCitizen||targetCitizen.indoorLocation?.buildingId!==room.buildingId){const building=city.building(room.buildingId);if(!building)return false;if(!room.exiting)return this.leaveRestitutionInterior(officer,building,mission);return true;}
+      const location=targetCitizen.indoorLocation,building=city.building(location.buildingId);if(!building)return false;
+      if(room.buildingId!==building.id){return this.leaveRestitutionInterior(officer,city.building(room.buildingId),mission);}
+      const sameRoom=room.unitId===location.unitId&&room.floor===location.floor,position=location.position||targetCitizen.entity;
+      if(sameRoom&&dist(room.position||officer.entity,position)<=1.35){if(mission.phase==='to-suspect'){mission.phase='collect';this.collectRestitutionAsset(record,officer,suspect);return true;}mission.phase='deliver';this.deliverRestitutionAsset(record,officer,owner);return true;}
+      const unit=city.units.get(location.unitId),path=interiorRoute(building,room.position||{x:officer.entity.x,y:officer.entity.y,z:0},{x:position.x,y:position.y,z:(unit?.z||location.floor||0)*CITY_FLOOR_HEIGHT});if(path===null){mission.waitingReason='sem rota interna até a pessoa';return false;}room.unitId=null;room.targetUnitId=location.unitId;room.roomType='circulation';room.targetRoomType=unit?.roomType||location.roomType||'workspace';room.floor=unit?.z||location.floor||0;room.path=path;room.phase=path.length?'walking':'using';return true;
+    }
+    if(mission.phase==='return'){
+      if(dist(officer.entity,station.door)>1.2){const path=city.findPath(officer.entity,station.door);if(path===null){mission.waitingReason='sem rota de retorno à delegacia';return false;}officer.path=path;return true;}
+      if(mission.status!=='blocked')mission.status='completed';mission.returnedAt=city.minute;officer.policeRestitution=null;officer.task='work';officer.targetId=station.id;officer.action='Retornou à delegacia após a restituição';return true;
+    }
+    if(officer.path.length)return true;
+    if(targetCitizen.indoorLocation){const building=city.building(targetCitizen.indoorLocation.buildingId);if(!building){mission.waitingReason='prédio da pessoa indisponível';return false;}if(dist(officer.entity,building.door)>1.2){const path=city.findPath(officer.entity,building.door);if(path===null){mission.waitingReason='sem rota até o prédio';return false;}officer.path=path;return true;}if(!this.enterRestitutionInterior(officer,building,targetCitizen.indoorLocation)){mission.waitingReason='sem rota interna até a pessoa';return false;}return true;}
+    const position=targetCitizen.entity;if(dist(officer.entity,position)>1.35){const path=city.findPath(officer.entity,position);if(path===null){mission.waitingReason='sem rota até a pessoa';return false;}officer.path=path;if(!path.length&&dist(officer.entity,position)>.1)officer.path=[{x:position.x,y:position.y}];return true;}
+    if(mission.phase==='to-suspect'){mission.phase='collect';this.collectRestitutionAsset(record,officer,suspect);}else{mission.phase='deliver';this.deliverRestitutionAsset(record,officer,owner);}return true;
   }
   observationPosition(c){return c?.indoorLocation?.position||c?.entity;}
   observationScene(c){const room=c?.indoorLocation;return {buildingId:room?.buildingId??null,unitId:room?.unitId??null,floor:room?.floor??null,height:c?.skybridgeZ||0};}

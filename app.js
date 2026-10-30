@@ -1,7 +1,7 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=service-capacity-3';
 import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=service-capacity-3";
-import { CityDesktop } from "./js/city_desktop.js?v=managed-search-1";
+import { CityDesktop } from "./js/city_desktop.js?v=justice-panels-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=survival-capacity-1";
 import { setActiveEntities } from "./js/engine.js";

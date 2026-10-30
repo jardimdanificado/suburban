@@ -12,9 +12,27 @@ function fixture({minute=540,officerPosition={x:8,y:8},indoor=false}={}){
  const justice=new CityJustice(city);city.justice=justice;return {city,justice,station,officer,actor,victim};
 }
 
-test('staffed police stations assign an available working officer during the paid day shift only',()=>{
+test('a single-officer police station assigns day patrols but reserves night duty for a second employee',()=>{
  const {city,justice,station,officer}=fixture({indoor:true});justice.updatePolicePatrols();assert.equal(station.patrolOfficerId,officer.id);assert.equal(officer.policePatrol.phase,'exit');assert.equal(officer.task,'police-patrol');
  officer.policePatrol=null;station.patrolOfficerId=null;city.hour=21;justice.updatePolicePatrols();assert.equal(officer.policePatrol,null);assert.equal(station.patrolOfficerId,null);
+});
+
+test('an authoritarian mayor order is refused or physically executed and linked to a vandalism case',()=>{
+ const {city,justice,station,officer,actor,victim}=fixture({minute:720,officerPosition:{x:8,y:8}}),mayor={id:4,entity:{x:12,y:8,properties:{name:'Prefeito'}},traits:{honesty:.1,empathy:.1},political:{partyId:1,loyalty:.8,ideology:{liberty:-1}}};
+ city.citizens.push(mayor);city.society.citizen=id=>city.citizens.find(c=>c.id===id);city.economy.mayorId=mayor.id;city.politics={party:()=>({ideology:{liberty:-.5}})};city.payWage=()=>true;officer.traits={honesty:.1};officer.political={partyId:1,loyalty:.9};officer.policePatrol={stationId:station.id,phase:'patrol',waypointIndex:0,lastPaidMinute:null};
+ const piece={id:1,kind:'banner',message:'Mensagem da oposição',creatorId:victim.id,subjectId:null,buildingId:null,partyId:2,entity:{x:10,y:8,destroyed:false,properties:{}},scene:{buildingId:null,unitId:null,floor:null,height:0},layers:[],damaged:0};justice.art.push(piece);
+ let draws=[0,.99];city.random=()=>draws.shift()??.99;const refused=justice.considerMunicipalPoliceOrder(station,officer);assert.equal(refused.status,'refused');assert.equal(piece.damaged,0);
+ station.lastPoliticalOrderAt=city.minute-1441;city.random=()=>0;const accepted=justice.considerMunicipalPoliceOrder(station,officer);assert.equal(accepted.status,'accepted');assert.ok(officer.policeOrder);justice.updatePolicePoliticalOrder(officer);assert.deepEqual(officer.path,[{x:piece.entity.x,y:piece.entity.y}]);officer.entity.x=piece.entity.x;officer.entity.y=piece.entity.y;officer.path=[];justice.updatePolicePoliticalOrder(officer);
+ assert.equal(accepted.status,'executed');assert.ok(piece.damaged>0);const record=justice.cases.find(c=>c.type==='vandalism');assert.ok(record);assert.equal(record.offenderId,officer.id);assert.equal(record.details.orderedByMayorId,mayor.id);assert.equal(record.evidence.at(-1).kind,'municipal-order');
+});
+
+test('night patrol uses a second public employee and remains active through 04:59',()=>{
+ const {city,justice,station,officer}=fixture({indoor:true}),nightOfficer={id:4,accountId:'citizen:4',jobId:station.id,task:'work',entity:{x:5,y:5,properties:{name:'Oficial noturno'}},needs:{health:90,energy:90,food:90,water:90,toilet:90},skills:{investigation:60},path:[],indoorLocation:{buildingId:station.id,unitId:2,position:{x:5,y:5},path:[]}};
+ city.citizens.push(nightOfficer);city.society.citizen=id=>city.citizens.find(c=>c.id===id);city.accounts.set(nightOfficer.accountId,{balance:1000});station.workers.push(nightOfficer.id);station.jobs=3;
+ justice.updatePolicePatrols();assert.equal(officer.policePatrol.shift,'day');officer.policePatrol=null;officer.task='work';station.patrolOfficerId=null;
+ city.hour=20;city.minute=1200;justice.updatePolicePatrols();assert.equal(station.patrolOfficerId,nightOfficer.id,JSON.stringify({staffed:justice.staffed(station),assignment:station.policeShiftAssignments,workers:station.workers.map(id=>city.society.citizen(id)?.task),shift:justice.policeShift()}));assert.equal(nightOfficer.policePatrol.shift,'night');
+ city.hour=4;city.minute=1680;justice.updatePolicePatrols();assert.equal(nightOfficer.policePatrol.phase,'exit');assert.equal(justice.policeShift(),'night');
+ city.hour=5;city.minute=1740;justice.updatePolicePatrols();assert.equal(nightOfficer.policePatrol.phase,'return');assert.equal(justice.policeShift(),null);
 });
 
 test('officers walk to reachable patrol points and return to their station without teleporting',()=>{
