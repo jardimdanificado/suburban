@@ -18,9 +18,16 @@ export function dispatchVehicleRestitution(justice){
     if(['returned','in-progress'].includes(recovery.status))continue;
     if(!vehicle?.active||vehicle.scrapped){recovery.waitingReason='veículo indisponível';continue;}
     if(!owner||owner.entity.destroyed||vehicle.ownerAccountId!==owner.accountId){recovery.waitingReason='proprietário legal indisponível ou alterado';continue;}
+    if(recovery.status==='awaiting-stop'){
+      const previous=recovery.mission,officer=city.society.citizen(previous?.officerId);
+      if(vehicle.driverId||previous?.status==='in-progress'&&officer&&!officer.entity.destroyed&&!officer.custody){recovery.waitingReason=vehicle.driverId?'Aguardando a bicicleta parar após a interceptação policial':'Agente retornando à delegacia antes de nova abordagem';continue;}
+      recovery.status='awaiting-officer';
+    }
     const otherRecovery=justice.cases.find(other=>other!==record&&other.details?.vehicleId===vehicle.id&&other.vehicleRecovery?.status==='in-progress');if(otherRecovery){recovery.waitingReason=`recuperação já atribuída ao caso #${otherRecovery.id}`;continue;}
     if(!vehicle.theft&&!vehicle.policeRecoveryOfficerId){recovery.status='returned';recovery.returnedAt=city.minute;recovery.waitingReason=null;record.vehicleRecoveredAt??=city.minute;record.vehicleRecoverySource??='police-arrest';continue;}
-    if(vehicle.driverId||vehicle.mechanicId||vehicle.paintJobId||vehicle.serviceBodyId||vehicle.policeRecoveryOfficerId){recovery.waitingReason='veículo em uso ou reservado';continue;}
+    if(vehicle.mechanicId||vehicle.paintJobId||vehicle.serviceBodyId||vehicle.policeRecoveryOfficerId){recovery.waitingReason='veículo em serviço ou reservado';continue;}
+    const driver=vehicle.driverId?city.society.citizen(vehicle.driverId):null,interceptGoal=driver?.mobilityTrip?.goal;
+    if(vehicle.driverId&&(!driver||!interceptGoal)){recovery.status='awaiting-stop';recovery.waitingReason='Bicicleta ocupada sem destino alcançável; aguardando parada';continue;}
     let assignment;
     for(const station of justice.activeBuildings('police_station')){
       const officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.policeAudit&&!c.policePatrol&&!c.policeResponse&&!c.policeInvestigation&&!c.policeRestitution&&!c.custodyEscort&&!c.custody&&!c.funeralBodyId&&!c.deliveryId&&!city.urgentNeed?.(c));
@@ -28,10 +35,10 @@ export function dispatchVehicleRestitution(justice){
     }
     if(!assignment){recovery.waitingReason='aguardando policial disponível na delegacia';continue;}
     const {station,officer}=assignment;
-    if(city.findPath(station.door,vehicle)===null){recovery.waitingReason='sem rota até o veículo';continue;}
-    const mission={kind:'vehicle',caseId:record.id,stationId:station.id,officerId:officer.id,vehicleId:vehicle.id,ownerId:owner.id,phase:'to-vehicle',startedAt:city.minute,status:'in-progress'};
+    if(city.findPath(station.door,interceptGoal||vehicle)===null){recovery.waitingReason=driver?'sem rota até o destino atual do ciclista':'sem rota até o veículo';continue;}
+    const mission={kind:'vehicle',caseId:record.id,stationId:station.id,officerId:officer.id,vehicleId:vehicle.id,ownerId:owner.id,phase:driver?'intercept':'to-vehicle',targetDriverId:driver?.id??null,interceptGoal:interceptGoal?{...interceptGoal}:null,interceptUntil:driver?city.minute+180:null,startedAt:city.minute,status:'in-progress'};
     recovery.status='in-progress';recovery.waitingReason=null;recovery.mission=mission;officer.policeRestitution=mission;officer.task='police-restitution';officer.path=[];officer.targetId=null;officer.action=`Indo recuperar o veículo do caso #${record.id}`;
-    city.log(`A polícia iniciou a recuperação física do veículo do caso #${record.id}.`,'justice',[officer.id,owner.id],{kind:'vehicle-restitution-dispatched',caseId:record.id,vehicleId:vehicle.id,buildingId:station.id});
+    city.log(driver?`A polícia iniciou a interceptação física da bicicleta furtada #${vehicle.id}; a equipe segue o destino atual do ciclista.`:`A polícia iniciou a recuperação física do veículo do caso #${record.id}.`,'justice',[officer.id,owner.id,...(driver?[driver.id]:[])],{kind:driver?'vehicle-restitution-interception-dispatched':'vehicle-restitution-dispatched',caseId:record.id,vehicleId:vehicle.id,buildingId:station.id,targetDriverId:driver?.id??null,interceptGoal:interceptGoal?{...interceptGoal}:null});
   }
 }
 
@@ -51,6 +58,17 @@ export function updateVehicleRestitution(justice,officer){
   if(mission.payBlockedMinute===city.minute)return false;
   officer.task='police-restitution';mission.waitingReason=null;recovery.waitingReason=null;
   if(officer.indoorLocation){if(officer.indoorLocation.path?.length)return true;return justice.leaveRestitutionInterior(officer,city.building(officer.indoorLocation.buildingId),mission);}
+  if(mission.phase==='intercept'){
+    const driver=city.society.citizen(vehicle?.driverId),goal=driver?.mobilityTrip?.goal;
+    if(!driver){mission.phase='to-vehicle';mission.interceptGoal=null;mission.targetDriverId=null;officer.path=[];}
+    else{
+      if(goal&&(goal.x!==mission.interceptGoal?.x||goal.y!==mission.interceptGoal?.y)){mission.interceptGoal={...goal};officer.path=[];}
+      if(city.minute>=(mission.interceptUntil??Infinity)){mission.status='interrupted';mission.phase='return';mission.waitingReason='ciclista não parou durante a janela de interceptação';recovery.status='awaiting-stop';recovery.waitingReason=mission.waitingReason;officer.path=[];officer.action='Intercepção encerrada; retornando enquanto aguarda uma parada';}
+      else if(officer.path.length)return true;
+      else if(mission.interceptGoal&&distance(officer.entity,mission.interceptGoal)>1.2)return route(city,officer,mission.interceptGoal,recovery,mission,'sem rota até o destino do ciclista');
+      else{mission.waitingReason='aguardando a bicicleta parar no destino do ciclista';recovery.waitingReason=mission.waitingReason;officer.action='Aguardando a bicicleta estacionar para a apreensão';return false;}
+    }
+  }
   if(officer.path.length)return true;
   if(mission.phase==='return'){
     if(distance(officer.entity,station.door)>1.2)return route(city,officer,station.door,recovery,mission,'sem rota de retorno à delegacia');

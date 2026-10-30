@@ -193,6 +193,7 @@ export class CitySimulation {
     if (!a || !b || !Number.isSafeInteger(amount) || amount < 0 || a.balance < amount) return false;
     if (from === to || amount === 0) return true;
     if(from==='treasury'&&this.fiscal&&!this.fiscal.allows(amount,reason,details))return false;
+    if(this.justice?.trackStolenMoneyTransfer&&!this.justice.trackStolenMoneyTransfer(from,to,amount,details))return false;
     a.balance -= amount; b.balance += amount;
     this.fiscal?.record(from,to,amount,reason,details);
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
