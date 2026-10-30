@@ -121,7 +121,11 @@ Cada obra registra autor, patrocinador, proprietário, autorização, suporte f�
 - Escândalos, condenações e crenças sobre crimes podem gerar protestos contra homenagens. Não transmitir o crime oculto para todos: a reação depende de conhecimento local.
 - A limpeza é paga inicialmente pelo dono do suporte. Havendo responsabilização, o autor pode pagar diretamente ou ressarcir o gasto já realizado. Não cobrar duas vezes nem criar pagamento fictício se ele não tiver recursos.
 
-### Acontecimentos retratados — pendente de implementação
+### Acontecimentos retratados — implementação parcial
+
+Etapa implementada: encomendas permitem selecionar um evento do histórico ou uma narrativa inventada, preservar sua referência e resumo, participantes e versão textual até a instalação. Obras e memórias guardam a narrativa; leitores usam ceticismo e experiências próprias, podendo estranhar participantes incompatíveis com suas lembranças, sem consultar a classificação interna de veracidade. A história pode circular por conversas com origem e confiança preservadas. O painel de Arte Urbana mostra referências, participantes e leituras recentes; o formulário acompanha o gerenciador de janelas. Pinturas e banners com narrativa têm uma composição inicial de figuras representando participantes. Snapshots e deltas preservam a referência mesmo sem o evento no feed. Ainda faltam cenas específicas para cada tipo de acontecimento, grupos escultóricos, edição completa de papéis/local/data/fontes pela UI, contrapropaganda autônoma e contestação pública mais elaborada.
+
+Validação desta etapa: os 170 testes `justice*.test.mjs` passaram, incluindo cinco testes de narrativas e um de encomenda com referência histórica arquivada. O teste de destacar o formulário confirma que escolhas e texto são copiados e continuam independentes. A suíte de navegação, após corrigir a ausência de `window.location` na fixture, mantém uma falha ao localizar o controle “Câmara”; a mesma falha foi reproduzida em uma cópia de `HEAD`. A composição visual passou por verificação sintática, mas ainda requer inspeção visual no mundo.
 
 Obras podem representar um evento, momento ou acontecimento específico: uma inauguração, eleição, protesto, batalha, crime, resgate, encontro, conquista coletiva ou episódio da vida de uma pessoa. A representação pode aparecer no texto e na composição visual de pinturas, murais, estátuas, monumentos, banners e demais suportes, com participantes e elementos da cena; não se limita a uma legenda.
 

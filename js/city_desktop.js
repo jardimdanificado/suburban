@@ -59,7 +59,7 @@ export class CityDesktop {
     Object.assign(state,properties);state.selected=entity;state.sectionWindow=true;state.scrolls={...source.scrolls};state.query=source.query||'';state.search.value=state.query;
     state.seed.value=source.seed?.value??state.seed.value;state.populationInput.value=source.populationInput?.value??state.populationInput.value;state.mapSizeInput.value=source.mapSizeInput?.value??state.mapSizeInput.value;
     state.publicationDraft.value=source.publicationDraft?.value??state.publicationDraft.value;
-    for(const key of ['artworkBuildingInput','artworkKindInput','artworkSubjectInput','artworkPartyInput','artworkTruthInput','artworkDraft'])state[key].value=source[key]?.value??state[key].value;
+    for(const key of ['artworkBuildingInput','artworkKindInput','artworkSubjectInput','artworkPartyInput','artworkTruthInput','artworkNarrativeInput','artworkEventInput','artworkDraft'])state[key].value=source[key]?.value??state[key].value;
     if(source.frozenEvents)state.frozenEvents=[...source.frozenEvents];
     if(source.eventSnapshot)state.eventSnapshot=source.eventSnapshot;if(source.electionSnapshot)state.electionSnapshot=source.electionSnapshot;
     const window=this.manager.find(id);window.title=state.sectionTitle();return state;

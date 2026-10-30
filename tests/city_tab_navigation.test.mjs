@@ -6,7 +6,7 @@ import { setup } from './helpers/city.mjs';
 
 function harness(width=1440) {
   const ctx=new Proxy({}, {get:(target,key)=>key in target?target[key]:key==='measureText'?s=>({width:String(s).length*7}):()=>{}});
-  globalThis.window={innerWidth:width,innerHeight:900,devicePixelRatio:1};
+  globalThis.window={innerWidth:width,innerHeight:900,devicePixelRatio:1,location:{search:''}};
   globalThis.document={createElement:()=>({style:{},value:'',setAttribute(){},addEventListener(){},append(){},remove(){},getContext:()=>ctx})};
   const city=setup({starter:true});
   const ui=new ManagementCanvasUI({style:{},clientWidth:width,clientHeight:900,getContext:()=>ctx});
@@ -56,6 +56,12 @@ test('citizen dossier tabs stay together and can be explicitly detached',()=>{
   const detached=state.openCurrentInWindow();assert.equal(detached.selected,state.selected);
   assert.equal(detached.detailTab,'skills');assert.equal(h.desktop.manager.windows.length,count+1);
   detached.openPanel({detailTab:'history'});assert.equal(state.detailTab,'skills');
+});
+
+test('detaching art commissions preserves the chosen narrative without sharing the form fields',()=>{
+  const h=harness(),source=h.desktop.openDestination('city','arts');source.artworkNarrativeInput.value='invented';source.artworkEventInput.value='42';source.artworkDraft.value='A história da praça';
+  const detached=source.openCurrentInWindow();assert.equal(detached.artworkNarrativeInput.value,'invented');assert.equal(detached.artworkEventInput.value,'42');assert.equal(detached.artworkDraft.value,'A história da praça');
+  detached.artworkNarrativeInput.value='none';assert.equal(source.artworkNarrativeInput.value,'invented');assert.doesNotThrow(h.draw);
 });
 
 test('election notices and views share one window per election',()=>{

@@ -34,3 +34,11 @@ test('a commissioned statue waits for a stone supply and consumes two actual sto
 test('an unfunded site cannot commission free urban art',()=>{
  const {city,site}=fixture();city.accounts.get(site.accountId).balance=0;assert.equal(city.gigs.createArtworkOrder(site.accountId,site.id,{kind:'painting',message:'Sem patrocínio'}),false);assert.equal(city.gigs.jobs.length,0);assert.equal(city.justice.art.length,0);
 });
+
+test('an art commission retains a historical source after the journal entry is removed',()=>{
+ const {city,site}=fixture(),event={id:91,message:'A praça foi inaugurada',minute:1,citizenIds:[1,2]};city.history.get=id=>id===91?event:null;
+ const before=city.accounts.get(site.accountId).balance;
+ assert.equal(city.gigs.createArtworkOrder(site.accountId,site.id,{message:'Sem fonte',narrative:{mode:'faithful',sourceEventId:99}}),false);assert.equal(city.accounts.get(site.accountId).balance,before);
+ const job=city.gigs.createArtworkOrder(site.accountId,site.id,{message:'A praça de todos',narrative:{mode:'faithful',sourceEventId:91}});assert.ok(job);city.history.get=()=>null;finish(city,job);
+ assert.equal(job.status,'completed');assert.equal(city.justice.art[0].narrative.source.message,event.message);assert.equal(city.justice.art[0].narrative.sourceEventId,91);
+});

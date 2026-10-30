@@ -100,9 +100,9 @@ export class CityRelationships {
       if(av.trust<15 || bv.trust<15 || av.affection<0 || bv.affection<0 || av.resentment>85 || bv.resentment>85)this.endPartnership(a,b,'perda de confiança e convivência');
     }
   }
-  remember(c,fact,{otherId=null,firsthand=true,truth=fact.truth,impact=0}={}) {
+  remember(c,fact,{otherId=null,firsthand=true,truth=fact.truth,impact=0,accepted=null}={}) {
     const salience=fact.kind==='loss'?90:serious.has(fact.kind)?80:['partnership','proposal','rejection'].includes(fact.kind)?65:positive.has(fact.kind)?35:25;
-    const memory=Object.freeze({salience,factId:fact.id,eventId:fact.eventId,kind:fact.kind,actorId:fact.actorId,targetId:fact.targetId,otherId,minute:fact.minute,description:fact.description,firsthand,truth,impact});
+    const memory=Object.freeze({...(fact.narrative?{artId:fact.artId,narrative:structuredClone(fact.narrative),accepted}:{}),salience,factId:fact.id,eventId:fact.eventId,kind:fact.kind,actorId:fact.actorId,targetId:fact.targetId,otherId,minute:fact.minute,description:fact.description,firsthand,truth,impact});
     const rows=c.social.memories,index=rows.findIndex(m=>m.factId===fact.id);
     if(index>=0)rows.splice(index,1);
     rows.push(memory);
@@ -218,7 +218,7 @@ export class CityRelationships {
     let fact=null;
     if(trait(speaker,'honesty')<.35 && this.city.random()<.35)fact=this.fabricate(speaker,listener,parentEventId);
     if(!fact) {
-      const known=[...speaker.social.memories.slice(-8),...speaker.social.beliefs.slice(-8)].map(m=>this.facts.get(m.factId)).filter(f=>f && (positive.has(f.kind)||serious.has(f.kind)||f.kind==='insult') && f.actorId!==listener.id);
+      const known=[...speaker.social.memories.slice(-8),...speaker.social.beliefs.slice(-8)].filter(m=>!m.narrative||m.accepted!==false).map(m=>this.facts.get(m.factId)).filter(f=>f && (positive.has(f.kind)||serious.has(f.kind)||f.kind==='insult'||f.kind==='public-art'&&f.narrative) && f.actorId!==listener.id);
       if(!known.length)return false;fact=known[Math.floor(this.city.random()*known.length)];
     }
     const believed=speaker.social.beliefs.find(b=>b.factId===fact.id);
@@ -232,7 +232,7 @@ export class CityRelationships {
     const sourceTrust=this.view(listener,speaker,true).trust+(appearance(speaker)-50)*.12,bias=this.view(listener,about)?.affection||0;
     const chance=bounded(.42+sourceTrust/220-trait(listener,'skepticism')*.4+(bias<0 && !positive.has(fact.kind) ? .12 : 0),.05,.95);
     const believes=witness?witness.truth:this.city.random()<chance;
-    const impact=believes ? positive.has(fact.kind)?{affection:5,trust:4,respect:3,resentment:-2}:{affection:-8,trust:-6,respect:-3,resentment:6}:{};
+    const impact=believes&&!fact.narrative ? positive.has(fact.kind)?{affection:5,trust:4,respect:3,resentment:-2}:{affection:-8,trust:-6,respect:-3,resentment:6}:{};
     const personalBetrayal=believes && fact.kind==='betrayal' && listener.partnerId===aboutId;
     if(personalBetrayal){impact.affection=-20;impact.trust=-30;impact.resentment=25;}
     if(believes)this.shift(listener,about,impact);
@@ -241,7 +241,7 @@ export class CityRelationships {
     if(rival && rival!==listener)this.shift(listener,rival,rivalImpact);
     const moodDelta=personalBetrayal?-4-listener.socialProfile.jealousy*3:0;
     if(moodDelta)listener.mood=bounded(listener.mood+moodDelta,-25,25);
-    const belief=Object.freeze({factId:fact.id,eventId:fact.eventId,kind:fact.kind,aboutId,sourceId:speaker.id,description:fact.description,believes,corrected:false,confidence:Math.round(chance*100),hops:(believed?.hops||0)+1,heardAt:this.city.minute,affectionDelta:impact.affection||0,trustDelta:impact.trust||0,respectDelta:impact.respect||0,resentmentDelta:impact.resentment||0,rivalId:rival && rival!==listener?rival.id:null,rivalAffectionDelta:rivalImpact.affection||0,rivalResentmentDelta:rivalImpact.resentment||0,moodDelta});
+    const belief=Object.freeze({...(fact.narrative?{artId:fact.artId,narrative:structuredClone(fact.narrative),narrativeSourceEventId:fact.narrative.sourceEventId}:{}),factId:fact.id,eventId:fact.eventId,kind:fact.kind,aboutId,sourceId:speaker.id,description:fact.description,believes,corrected:false,confidence:Math.round(chance*100),hops:(believed?.hops||0)+1,heardAt:this.city.minute,affectionDelta:impact.affection||0,trustDelta:impact.trust||0,respectDelta:impact.respect||0,resentmentDelta:impact.resentment||0,rivalId:rival && rival!==listener?rival.id:null,rivalAffectionDelta:rivalImpact.affection||0,rivalResentmentDelta:rivalImpact.resentment||0,moodDelta});
     listener.social.heardFacts.push(fact.id);if(listener.social.heardFacts.length>96)listener.social.heardFacts.shift();
     listener.social.beliefs.push(belief);if(listener.social.beliefs.length>RELATIONSHIP_RULES.beliefs)listener.social.beliefs.shift();this.rumorsShared++;
     this.city.log(`${speaker.entity.properties.name} contou a ${listener.entity.properties.name} uma história sobre ${about.entity.properties.name} (${labels[fact.kind]||fact.kind}); ${listener.entity.properties.name} ${believes?'acreditou':'ficou em dúvida'}.`,'social',[speaker.id,listener.id,about.id],{kind:'rumor-heard',socialFactId:fact.id,sourceId:speaker.id,listenerId:listener.id,believes,objectiveTruth:fact.truth,parentEventId:fact.eventId,conversationEventId:parentEventId});
@@ -254,7 +254,7 @@ export class CityRelationships {
       if(!belief.believes || belief.corrected || this.city.minute-(belief.deniedAt??-Infinity)<360)continue;
       const fact=this.facts.get(belief.factId);if(!fact || fact.truth)continue;
       const proof=corrector.social.memories.some(m=>m.firsthand && ((m.factId===fact.id && m.truth===false && corrector.id!==fact.creatorId) || (fact.evidenceFactId!=null && m.factId===fact.evidenceFactId && m.truth)));
-      if(proof || corrector.id===fact.actorId)return this.refute(corrector,listener,fact,conversation.eventId,proof);
+      if(proof || !fact.narrative&&corrector.id===fact.actorId)return this.refute(corrector,listener,fact,conversation.eventId,proof);
     }
     return false;
   }

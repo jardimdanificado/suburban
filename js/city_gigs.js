@@ -1,3 +1,4 @@
+import {artworkNarrative} from './city_art_narratives.js';
 import {activityRoomReady} from './city_interiors.js?v=service-capacity-3';
 
 const ACTIVE=new Set(['open','working']);
@@ -13,12 +14,13 @@ export class CityGigs{
  artworkMaterial(kind){return ['statue','monument'].includes(kind)?{good:'pedra',quantity:2}:{good:'tinta',quantity:1};}
  artworkSupplier(kind){const city=this.city,{good,quantity}=this.artworkMaterial(kind);return city.buildings.filter(b=>b.active&&!b.entity.destroyed&&(good==='tinta'?b.type==='paintworks'&&city.paint.available(b)>=quantity:(b.inventory?.[good]||0)>=quantity)).sort((a,z)=>a.id-z.id)[0]||null;}
  artworkQuote(buildingId,kind,payerAccountId){const city=this.city,b=city.building(buildingId),supplier=this.artworkSupplier(kind);if(!b)return 0;const required=['statue','monument'].includes(kind)?42:24,material=this.artworkMaterial(kind),supply=material.good==='tinta'?(supplier?city.paint.quote(supplier,city.paint.stock(supplier)[0]?.color,material.quantity):city.economy.goods.tinta.price*material.quantity):city.economy.goods[material.good].price*material.quantity,labor=required*(city.politics.policy.minimumWage||1),base=city.currency.price(900+supply+labor);return Math.ceil(base*(payerAccountId==='treasury'?1.5:1));}
- createArtworkOrder(payerAccountId,buildingId,{kind='banner',message='',subjectId=null,truth=null,commercial=false,partyId=null,color=null,fee=null}={}){
+ createArtworkOrder(payerAccountId,buildingId,{kind='banner',message='',subjectId=null,truth=null,commercial=false,partyId=null,color=null,fee=null,narrative=null}={}){
   const city=this.city,b=city.building(buildingId),allowed=['banner','painting','graffiti','flags','statue','monument'];if(!b||!b.active||b.entity.destroyed||!allowed.includes(kind)||!String(message).trim()||!city.accounts.has(payerAccountId))return false;
   const owner=b.ownerId!=null?city.society.citizen(b.ownerId)?.accountId:b.municipal?'treasury':b.accountId,tenant=b.units?.find(u=>u.tenantId===payerAccountId);if(payerAccountId!==owner&&payerAccountId!==b.accountId&&!tenant&&!b.municipal)return false;
+  const account=artworkNarrative(city,narrative);if(narrative&&!account)return false;
   const point=this.frontagePoint(b),material=this.artworkMaterial(kind),required=['statue','monument'].includes(kind)?42:24,amount=fee??this.artworkQuote(b.id,kind,payerAccountId);if(!point||!amount)return false;
   const job=this.reserveOrder(payerAccountId,b,{kind:'art-installation',scope:'outdoor',fee:amount,point,required});if(!job)return false;
-  job.artwork={kind,message:String(message).trim().slice(0,180),subjectId,truth,commercial:!!commercial,partyId,color};job.artworkMaterial=material;job.waitingReason=this.artworkSupplier(kind)?null:`Aguardando ${material.good==='tinta'?'tinta':'pedra'} em estoque`;
+  job.artwork={narrative:account,kind,message:String(message).trim().slice(0,180),subjectId,truth,commercial:!!commercial,partyId,color};job.artworkMaterial=material;job.waitingReason=this.artworkSupplier(kind)?null:`Aguardando ${material.good==='tinta'?'tinta':'pedra'} em estoque`;
   return job;
  }
  consumeArtworkMaterial(job){
@@ -118,7 +120,7 @@ export class CityGigs{
    if(job.progress<job.required)continue;
    if(job.kind==='art-installation'){
     if(!this.consumeArtworkMaterial(job)){this.release(job,worker);job.waitingReason=`Aguardando material ou verba para ${job.artworkMaterial.good}`;continue;}
-    const piece=city.justice.createArtwork({kind:job.artwork.kind,message:job.artwork.message,creatorId:worker.id,subjectId:job.artwork.subjectId,buildingId:b.id,x:job.point.x,y:job.point.y,truth:job.artwork.truth,commercial:job.artwork.commercial,partyId:job.artwork.partyId,color:job.artwork.color?parseInt(String(job.artwork.color).replace('#',''),16):0xc9b979});
+    const piece=city.justice.createArtwork({narrative:job.artwork.narrative,kind:job.artwork.kind,message:job.artwork.message,creatorId:worker.id,subjectId:job.artwork.subjectId,buildingId:b.id,x:job.point.x,y:job.point.y,truth:job.artwork.truth,commercial:job.artwork.commercial,partyId:job.artwork.partyId,color:job.artwork.color?parseInt(String(job.artwork.color).replace('#',''),16):0xc9b979});
     if(!piece){this.cancel(job,'não foi possível instalar a obra encomendada');continue;}job.artworkId=piece.id;
    }
    if(job.kind==='art-cleaning'&&!city.justice.canCompleteArtworkCleaning(job)){this.cancel(job,'a camada ou a obra mudou antes da limpeza');continue;}
