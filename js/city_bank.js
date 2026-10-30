@@ -142,7 +142,7 @@ export class CityBank {
       const payment = Math.min(Math.max(0,client.balance-protectedCash),due);
       if (payment && city.transfer(loan.clientId,bank.accountId,payment,'Parcela de empréstimo',{loanId:loan.id})) {
         const paidInterest = Math.min(payment,loan.interest);
-        loan.interest -= paidInterest; loan.remaining -= payment-paidInterest; loan.paid += payment; bank.totalRevenue += paidInterest;this.repayDevelopment(bank,payment-paidInterest,loan);
+        loan.interest -= paidInterest; loan.remaining -= payment-paidInterest; loan.paid += payment; city.recordBusinessRevenue(bank,paidInterest);this.repayDevelopment(bank,payment-paidInterest,loan);
       }
       if (payment >= due) city.reputation.observe(loan.clientId,'credit',1,'parcela paga no prazo',{loanId:loan.id,amount:payment});
       else city.reputation.observe(loan.clientId,'credit',-.75,'parcela incompleta ou em atraso',{loanId:loan.id,due,amount:payment});
@@ -170,7 +170,7 @@ export class CityBank {
       const bank = this.city.building(loan.bankId);
       const due = loan.remaining+loan.interest, amount = Math.min(c.balance,due);
       if (bank && amount && this.city.transfer(c.accountId,bank.accountId,amount,'Liquidação de dívida do espólio',{loanId:loan.id})) {
-        const interest = Math.min(amount,loan.interest); loan.interest -= interest; loan.remaining -= amount-interest; bank.totalRevenue += interest;this.repayDevelopment(bank,amount-interest,loan);
+        const interest = Math.min(amount,loan.interest); loan.interest -= interest; loan.remaining -= amount-interest; city.recordBusinessRevenue(bank,interest);this.repayDevelopment(bank,amount-interest,loan);
       }
       loan.status = loan.remaining+loan.interest ? 'written-off' : 'paid';
       if (bank && loan.status === 'written-off') bank.totalExpenses += loan.remaining+loan.interest;

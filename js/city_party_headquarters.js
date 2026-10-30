@@ -37,7 +37,7 @@ export function leaseHeadquarters(p,partyId,towerId,floor){
  const city=p.city,party=p.party(partyId),tower=city.building(towerId);if(!party?.active||!tower?.active||tower.entity.destroyed||tower.type!=='office_tower')return city.fail('Partido ou empresarial indisponível.');
  const account=headquartersAccount(p,party),row=officeFloors(city,tower).find(r=>r.floor===floor);if(!row||row.tenantId||!row.units.length||!row.units.every(u=>u.forRent))return city.fail('Andar indisponível.');
  if(Object.values(account.incoming).some(n=>n>0))return city.fail('A mudança exige a conclusão ou o cancelamento das entregas pendentes.');
- const rent=Math.max(city.currency.price(100),row.rent);if(account.balance<rent||!city.transfer(account.accountId,tower.accountId,rent,'Primeiro aluguel de sede partidária',{partyId,buildingId:tower.id,floor}))return city.fail('O fundo partidário não cobre o primeiro aluguel.');tower.totalRevenue+=rent;
+ const rent=Math.max(city.currency.price(100),row.rent);if(account.balance<rent||!city.transfer(account.accountId,tower.accountId,rent,'Primeiro aluguel de sede partidária',{partyId,buildingId:tower.id,floor}))return city.fail('O fundo partidário não cobre o primeiro aluguel.');city.recordBusinessRevenue(tower,rent);
  return assign(p,party,tower,row.units[0],floor,'office',rent);
 }
 export function headquartersHourly(p){
@@ -45,7 +45,7 @@ export function headquartersHourly(p){
   const h=ensureHeadquarters(p,party);if(!h)continue;const account=headquartersAccount(p,party);
   seedPartyCaps(p,party);
   partyCapsHourly(p,party);
-  if(h.kind==='office'&&h.lastRentDay!==city.day){h.lastRentDay=city.day;const landlord=city.building(h.buildingId),amount=h.rent+h.arrears;if(landlord?.active&&city.transfer(account.accountId,landlord.accountId,amount,'Aluguel de sede partidária',{partyId:party.id,buildingId:landlord.id,floor:h.floor})){landlord.totalRevenue+=amount;h.arrears=0;h.missedDays=0;}else{h.arrears+=h.rent;h.missedDays++;if(h.missedDays>=3){releaseLocation(city,party);party.headquarters=null;ensureHeadquarters(p,party);}}}
+  if(h.kind==='office'&&h.lastRentDay!==city.day){h.lastRentDay=city.day;const landlord=city.building(h.buildingId),amount=h.rent+h.arrears;if(landlord?.active&&city.transfer(account.accountId,landlord.accountId,amount,'Aluguel de sede partidária',{partyId:party.id,buildingId:landlord.id,floor:h.floor})){city.recordBusinessRevenue(landlord,amount);h.arrears=0;h.missedDays=0;}else{h.arrears+=h.rent;h.missedDays++;if(h.missedDays>=3){releaseLocation(city,party);party.headquarters=null;ensureHeadquarters(p,party);}}}
   if(h.kind==='provisional'&&!Object.values(account.incoming).some(n=>n>0)){
    const tower=city.economy.businesses.find(b=>b.type==='office_tower'&&officeFloors(city,b).some(f=>!f.tenantId&&f.units.every(u=>u.forRent)&&account.balance>=f.rent*3));const row=tower&&officeFloors(city,tower).find(f=>!f.tenantId&&f.units.every(u=>u.forRent)&&account.balance>=f.rent*3);if(row)leaseHeadquarters(p,party.id,tower.id,row.floor);
   }

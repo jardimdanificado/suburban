@@ -4,7 +4,7 @@ import {ideologicalProfile,ideologicalPromiseWeight} from './city_ideology.js';
 import {outcomeAssessment,promiseAssessment,promiseDifficulty} from './city_promise_evaluation.js';
 import {governmentPerformance} from './city_government_performance.js';
 export const PROMISE_METRICS={
-  treasuryHealth:{label:'Saúde do caixa da prefeitura',unit:'%',higher:true},operatingHealth:{label:'Equilíbrio de custeio municipal',unit:'%',higher:true},companyProductivity:{label:'Empresas ativas com equipe e vendas',unit:'%',higher:true},
+  treasuryHealth:{label:'Saúde do caixa da prefeitura',unit:'%',higher:true},operatingHealth:{label:'Equilíbrio de custeio municipal',unit:'%',higher:true},companyProductivity:{label:'Empresas ativas com equipe e receita nos últimos 30 dias',unit:'%',higher:true},
   ...Object.fromEntries(Object.entries(TAX_CATEGORIES).map(([key,spec])=>[`salesTax_${key}`,{label:`Imposto: ${spec.label}`,unit:'%',higher:false}])),
   health:{label:'Moradores com saúde acima de 60',unit:'%',higher:true},water:{label:'Moradores com água acima de 45',unit:'%',higher:true},rest:{label:'Moradores descansados',unit:'%',higher:true},hygiene:{label:'Moradores com higiene acima de 50',unit:'%',higher:true},
   clinics:{label:'Clínicas ativas',unit:'',higher:true},waterWorks:{label:'Serviços de água ativos',unit:'',higher:true},parks:{label:'Centros de lazer ativos',unit:'',higher:true},carriers:{label:'Transportadoras ativas',unit:'',higher:true},cleaners:{label:'Empresas de limpeza ativas',unit:'',higher:true},builders:{label:'Construtoras ativas',unit:'',higher:true},

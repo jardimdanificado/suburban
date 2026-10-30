@@ -196,7 +196,7 @@ export class CitySimulation {
     a.balance -= amount; b.balance += amount;
     this.fiscal?.record(from,to,amount,reason,details);
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
-    else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) b.totalRevenue += amount;
+    else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) this.recordBusinessRevenue(b,amount);
     if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
     else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Imposto sobre vendas:|Imposto empresarial$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
     const payroll=reason==='Salário'||reason==='Imposto sobre salário'||reason==='Subsídio salarial municipal';
@@ -210,6 +210,14 @@ export class CitySimulation {
     else if (reason !== 'Imposto sobre salário') {
       this.appendCityEvent(entry);
     }
+    return true;
+  }
+  recordBusinessRevenue(building,amount){
+    if(!building||!Number.isSafeInteger(amount)||amount<=0)return false;
+    building.totalRevenue=(building.totalRevenue||0)+amount;
+    const day=this.day??Math.floor(this.minute/1440),history=building.revenueHistory??=[];
+    const last=history[history.length-1];if(last?.day===day)last.amount+=amount;else history.push({day,amount});
+    const cutoff=day-31;while(history.length&&history[0].day<cutoff)history.shift();
     return true;
   }
   initialize() {
@@ -993,7 +1001,7 @@ export class CitySimulation {
       if (this.life.minute(c,elapsed)) continue;
       this.justice.updateInjuries(c);
       if(c.custodyWaterDelivery){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyWaterDelivery(c);continue;}
-      if(c.funeralBodyId){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!c.funeralInterior&&!syncCitizenInterior(this,c))continue;this.justice.updateFuneralWorker(c);continue;}
+      if(c.funeralBodyId){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.skybridgeTransit)this.finishSkybridgeTransit(c);if(c.skybridgeTransit){this.justice.updateFuneralWorker(c);continue;}if(c.indoorLocation&&!c.funeralInterior&&!syncCitizenInterior(this,c))continue;this.justice.updateFuneralWorker(c);continue;}
       if(c.custodyEscort){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyEscort(c);continue;}
       if(c.custody){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateDetainee(c);continue;}
       if((c.unconsciousUntil||0)>this.minute){c.task=null;c.path=[];c.targetId=null;c.action='Inconsciente após ferimento na cabeça';if(c.indoorLocation?.path)c.indoorLocation.path=[];continue;}
@@ -1103,7 +1111,7 @@ export class CitySimulation {
       // up to 60 times before any relevant state can change.
       const load=c.deliveryId?(shipmentIndex?shipmentIndex.get(c.deliveryId):this.logistics.shipments.find(s=>s.id===c.deliveryId)):null;
       if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>injuredCarryCapacity(c,c.equipment?.carrinho?72:c.equipment?.cesta?36:24)){c.action='Aguardando veículo para transportar a carga';continue;}
-      if(!c.path.length&&c.skybridgeZ&&!bridgeAt(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y))){c.skybridgeZ=0;c.skybridgeId=null;}
+      if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId&&!bridgeAt(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y))){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * this.justice.mobilityFactor(c);
       while (distance > 0 && c.path.length) {

@@ -59,8 +59,8 @@ test('citizen dossier tabs stay together and can be explicitly detached',()=>{
 });
 
 test('detaching art commissions preserves the chosen narrative without sharing the form fields',()=>{
-  const h=harness(),source=h.desktop.openDestination('city','arts');source.artworkNarrativeInput.value='invented';source.artworkEventInput.value='42';source.artworkDraft.value='A história da praça';
-  const detached=source.openCurrentInWindow();assert.equal(detached.artworkNarrativeInput.value,'invented');assert.equal(detached.artworkEventInput.value,'42');assert.equal(detached.artworkDraft.value,'A história da praça');
+  const h=harness(),source=h.desktop.openDestination('city','arts');source.artworkNarrativeInput.value='invented';source.artworkEventInput.value='42';source.artworkPlacementInput.value='unit:10:0:0:0';source.artworkDraft.value='A história da praça';
+  const detached=source.openCurrentInWindow();assert.equal(detached.artworkNarrativeInput.value,'invented');assert.equal(detached.artworkEventInput.value,'42');assert.equal(detached.artworkPlacementInput.value,'unit:10:0:0:0');assert.equal(detached.artworkDraft.value,'A história da praça');
   detached.artworkNarrativeInput.value='none';assert.equal(source.artworkNarrativeInput.value,'invented');assert.doesNotThrow(h.draw);
 });
 

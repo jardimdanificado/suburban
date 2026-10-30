@@ -35,6 +35,24 @@ test('an unfunded site cannot commission free urban art',()=>{
  const {city,site}=fixture();city.accounts.get(site.accountId).balance=0;assert.equal(city.gigs.createArtworkOrder(site.accountId,site.id,{kind:'painting',message:'Sem patrocínio'}),false);assert.equal(city.gigs.jobs.length,0);assert.equal(city.justice.art.length,0);
 });
 
+test('an artist can spontaneously sponsor and physically install art on property they occupy',()=>{
+ const {city,site,artist,paintShop}=fixture();site.active=false;site.units=[{ownerId:artist.accountId,tenantId:null}];city.accounts.get(artist.accountId).balance=10000;city.minute=12*1440+600;city.hour=10;
+ const job=city.gigs.postSpontaneousArtwork();assert.ok(job);assert.equal(job.payerAccountId,artist.accountId);assert.equal(job.preferredArtistId,artist.id);assert.ok(job.artwork.message.length>0);assert.equal(city.gigs.postSpontaneousArtwork(),null);
+ finish(city,job);assert.equal(job.status,'completed');assert.equal(city.justice.art[0].creatorId,artist.id);assert.equal(city.justice.art[0].buildingId,site.id);assert.equal(paintShop.inventory.tinta,4);assert.equal(city.economy.consumed.tinta,1);
+});
+
+test('spontaneous art does not use property without ownership or tenancy',()=>{
+ const {city,site,artist}=fixture();city.accounts.get(artist.accountId).balance=10000;city.minute=12*1440+600;city.hour=10;city.citizens[0].skills.artistic=100;city.citizens[0].lastSpontaneousArtworkAt=city.minute-31*1440;site.units=[];
+ assert.equal(city.gigs.postSpontaneousArtwork(),null);assert.equal(city.justice.art.length,0);assert.equal(city.gigs.jobs.length,0);
+});
+
+test('an indoor commission routes to a real room and is visible only from that room and floor',()=>{
+ const {city,site,artist}=fixture(),room={id:'10:0:0:0',buildingId:site.id,x:0,y:0,z:0,roomType:'bedroom'};site.units=[room];city.units.set(room.id,room);const job=city.gigs.createArtworkOrder(site.accountId,site.id,{kind:'painting',message:'Dentro de casa',supportUnitId:room.id});assert.ok(job);assert.equal(job.scope,'interior-art');assert.equal(job.unitId,room.id);assert.equal(job.artworkSupport.floor,0);assert.equal(city.gigs.candidates(job)[0],artist);
+ city.minute=4;city.gigs.updateMinute();assert.equal(artist.task,'informal-service');artist.indoorLocation={buildingId:site.id,unitId:room.id,targetUnitId:room.id,floor:0,position:{...job.point},path:[]};
+ for(let i=0;i<60&&job.status!=='completed';i++){city.minute++;city.gigs.updateMinute();}
+ assert.equal(job.status,'completed');const piece=city.justice.art[0];assert.deepEqual(piece.support,job.artworkSupport);assert.deepEqual(piece.scene,{buildingId:site.id,unitId:room.id,floor:0,height:0});assert.equal(city.justice.canObserve(artist,piece.entity,piece.scene),true);artist.indoorLocation.floor=1;assert.equal(city.justice.canObserve(artist,piece.entity,piece.scene),false);
+});
+
 test('an art commission retains a historical source after the journal entry is removed',()=>{
  const {city,site}=fixture(),event={id:91,message:'A praça foi inaugurada',minute:1,citizenIds:[1,2]};city.history.get=id=>id===91?event:null;
  const before=city.accounts.get(site.accountId).balance;

@@ -203,7 +203,7 @@ export class CityVehicles {
     const city=this.city,v=this.units.get(id),dealer=v&&city.buildings.find(b=>b.accountId===v.holderAccountId&&b.type==='cycle_shop'&&b.active&&!b.entity.destroyed);
     if(!v||v.active||v.scrapped||!dealer||dealer.inventory[v.good]<1||!city.accounts.has(account))return false;
     const price=this.vehiclePrice(v);if(!city.transfer(account,dealer.accountId,price,'Compra de mobilidade individual',{vehicleId:id,modelId:v.modelId,buildingId:dealer.id}))return false;
-    this.recordOwner(v,account,price,'Compra na loja');dealer.totalRevenue+=price;dealer.inventory[v.good]--;this.activate(v,account,dealer);return true;
+    this.recordOwner(v,account,price,'Compra na loja');city.recordBusinessRevenue(dealer,price);dealer.inventory[v.good]--;this.activate(v,account,dealer);return true;
   }
   mountFlag(id,partyId){
     const city=this.city,v=this.units.get(id),party=city.politics.party(partyId),owner=v&&city.accounts.get(v.ownerAccountId);

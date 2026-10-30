@@ -39,7 +39,7 @@ export class CityPaint {
   const city=this.city;if(!live(b)||this.available(b,color)<n||this.bag(c).inventory.tinta+n>16)return false;
   const price=Math.max(this.quote(b,color,n),Math.ceil(city.economy.goods.tinta.price*n*(custom?1.75:1)));
   if(!city.transfer(c.accountId,b.accountId,price,'Compra de tinta por cor',{buildingId:b.id,color,quantity:n}))return false;
-  const lots=this.take(b,n,color);this.bag(c).inventory.tinta+=n;c.paintBag.paintLots.push(...lots);city.economy.recordGoods('paint-purchase','tinta',n,b.id,c.id);b.totalRevenue+=price;c.paintPurchase=null;return true;
+  const lots=this.take(b,n,color);this.bag(c).inventory.tinta+=n;c.paintBag.paintLots.push(...lots);city.economy.recordGoods('paint-purchase','tinta',n,b.id,c.id);city.recordBusinessRevenue(b,price);c.paintPurchase=null;return true;
  }
  requestVehicle(id,garageId,color,useOwn=false){
   const city=this.city,v=city.vehicles.units.get(id),garage=city.building(garageId),hex=normalizeColor(color),account=city.accounts.get(v&&(v.possessorAccountId||v.ownerAccountId)),c=account?.entity?.properties.citizen?account:city.society.citizen(account?.ownerId);
