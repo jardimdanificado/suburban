@@ -29,6 +29,19 @@ test('medical treatment requires an actual health visit and cannot be applied tw
   city.minute=196;justice.updateInjuries(c);assert.equal(c.combatInjuries,null);assert.equal(c.skills.maintenance,60);
 });
 
+test('severe torso or head wounds lose health once per simulation minute until treatment stops bleeding',()=>{
+  let minute=100;const events=[],c=person();c.needs.health=90;c.combatInjuries=[{region:'tronco',severity:6,recoversAt:500}];const city={get minute(){return minute;},log:(message,channel,ids,details)=>events.push(details)},justice=new CityJustice(city);
+  justice.updateInjuries(c);justice.updateInjuries(c);assert.equal(c.needs.health,90-.072);assert.equal(c.combatInjuries[0].bloodLoss,.072);assert.equal(events.filter(e=>e?.kind==='injury-bleeding').length,1);
+  minute=101;justice.updateInjuries(c);assert.equal(Number(c.needs.health.toFixed(3)),89.856);
+  const clinic={id:10,type:'clinic',active:true,entity:{destroyed:false}};c.civicVisit={buildingId:10,need:'health'};justice.treatInjuries(c,clinic);justice.treatInjuries(c,clinic);assert.equal(c.combatInjuries[0].bleedingRate,0);assert.equal(c.combatInjuries[0].bleedingStoppedAt,101);assert.equal(events.filter(e=>e?.kind==='injury-bleeding-stopped').length,1);
+  minute=102;justice.updateInjuries(c);assert.equal(Number(c.needs.health.toFixed(3)),89.856);
+});
+
+test('minor wounds do not bleed and an invalid clinic visit cannot stop severe bleeding',()=>{
+  const c=person(),city={minute:100,log:()=>{}},justice=new CityJustice(city),minor={region:'braço',severity:3,recoversAt:300};c.combatInjuries=[minor];justice.updateInjuries(c);assert.equal(minor.bleedingRate,0);
+  const severe={region:'cabeça',severity:7,recoversAt:300};c.combatInjuries=[severe];justice.updateInjuries(c);const clinic={id:11,type:'clinic',active:true,entity:{destroyed:false}};justice.treatInjuries(c,clinic);assert.ok(severe.bleedingRate>0);assert.equal(severe.bleedingStoppedAt,undefined);
+});
+
 test('an injured driver drops an oversized shipment at their actual location for reassignment',()=>{
   const c=person();c.deliveryId=1;c.combatInjuries=[{region:'costas',severity:8}];
   const shipment={id:1,driverId:1,quantity:20,pickedUp:true,good:'madeira',status:'delivery',position:{x:0,y:0},seller:{active:true,entity:{}},buyer:{active:true,entity:{}},createdAt:0,lastDispatchAttempt:99};

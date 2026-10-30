@@ -1,5 +1,19 @@
 const text=(value,limit)=>String(value??'').trim().slice(0,limit);
 
+export function artworkParticipants(event,subjectId=null){const ids=[...new Set((event?.citizenIds||[]).filter(Number.isInteger))];if(Number.isInteger(subjectId)&&!ids.includes(subjectId)){if(ids.length>=12)ids[11]=subjectId;else ids.push(subjectId);}return ids.slice(0,12);}
+
+/** Select visual motifs only from the story the artist chose to tell. */
+export function narrativeSceneType(narrative){
+  const source=narrative?.source||{},words=`${source.kind||''} ${source.message||''} ${narrative?.title||''} ${narrative?.description||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(/protest|manifest|demonstr|repress|passeata/.test(words))return 'protest';
+  if(/eleic|vot|urna|campanh|candid/.test(words))return 'election';
+  if(/crime|assalt|agred|homicid|roub|ataque|conflit/.test(words))return 'conflict';
+  if(/hospital|saude|resgat|socor|cura|atendiment/.test(words))return 'care';
+  if(/inaugur|construc|abertur|ponte|edific/.test(words))return 'civic';
+  if(/fest|celebr|comemor|encontro|conquista/.test(words))return 'celebration';
+  return 'gathering';
+}
+
 export function artworkNarrative(city,input){
   if(!input)return null;
   const mode=['faithful','distorted','invented'].includes(input.mode)?input.mode:'invented';

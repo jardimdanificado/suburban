@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {artworkNarrative,narrativeReception} from '../js/city_art_narratives.js';
+import {artworkNarrative,artworkParticipants,narrativeReception,narrativeSceneType} from '../js/city_art_narratives.js';
 import {setup} from './helpers/city.mjs';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 
@@ -10,6 +10,13 @@ test('a historical narrative preserves its source without rewriting the event',(
   assert.deepEqual(narrative.participantIds,[3]);assert.equal(narrative.source.message,event.message);narrative.source.citizenIds.push(8);assert.deepEqual(event.citizenIds,[1,2]);
   city.history.get=()=>null;assert.deepEqual(artworkNarrative(city,narrative).source,narrative.source);
   assert.equal(artworkNarrative(city,{mode:'faithful',sourceEventId:99}),null);
+});
+
+test('selected historical artworks include the event participants and choose scene motifs from the artist-facing story',()=>{
+  const participants=artworkParticipants({citizenIds:[2,4,2,7]},4);assert.deepEqual(participants,[2,4,7]);assert.deepEqual(artworkParticipants(null,9),[9]);
+  assert.equal(narrativeSceneType({source:{kind:'protest-started',message:'Ato público'},title:'Vozes da praça'}),'protest');
+  assert.equal(narrativeSceneType({source:{kind:'city',message:'Inauguração de uma ponte'},title:'A nova travessia'}),'civic');
+  assert.equal(narrativeSceneType({source:{kind:'city',message:'Evento municipal'},title:'O resgate heroico',mode:'invented'}),'care');
 });
 
 test('invented events never acquire a historical identity and hidden accuracy does not determine belief',()=>{

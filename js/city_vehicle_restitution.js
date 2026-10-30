@@ -21,7 +21,7 @@ export function dispatchVehicleRestitution(justice){
     if(vehicle.driverId||vehicle.mechanicId||vehicle.paintJobId||vehicle.serviceBodyId||vehicle.policeRecoveryOfficerId){recovery.waitingReason='veículo em uso ou reservado';continue;}
     let assignment;
     for(const station of justice.activeBuildings('police_station')){
-      const officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.policePatrol&&!c.policeResponse&&!c.policeInvestigation&&!c.policeRestitution&&!c.custodyEscort&&!c.custody&&!c.funeralBodyId&&!c.deliveryId&&!city.urgentNeed?.(c));
+      const officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.policeAudit&&!c.policePatrol&&!c.policeResponse&&!c.policeInvestigation&&!c.policeRestitution&&!c.custodyEscort&&!c.custody&&!c.funeralBodyId&&!c.deliveryId&&!city.urgentNeed?.(c));
       if(officer){assignment={station,officer};break;}
     }
     if(!assignment){recovery.waitingReason='aguardando policial disponível na delegacia';continue;}

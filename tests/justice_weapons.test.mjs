@@ -29,7 +29,7 @@ test('a baton strengthens a real assault, wears down, and does not make a health
 
 test('a severe head strike can briefly incapacitate a resident and the timer restores consciousness',()=>{
  const actor={id:1,accountId:'citizen:1',entity:{x:0,y:0,properties:{name:'Atacante'}},skills:{combat:0},equipment:{weapon:{good:'porrete',name:'Porrete de madeira',damage:5,range:1.8,durability:5}},inventory:{porrete:1}},target={id:2,accountId:'citizen:2',entity:{x:1,y:0,properties:{name:'Vítima'}},skills:{combat:0},needs:{health:100},task:'work',path:[{x:5,y:5}],targetId:12};
- let rolls=[.99,.99,.99,0,.99,.99,.99],minute=100;const city={get minute(){return minute;},hour:12,citizens:[actor,target],buildings:[],world:{cityLampPosts:[]},society:{getRelation:()=>null,citizen:id=>id===1?actor:target},random:()=>rolls.shift()??.99,economy:{practice(){}},log:()=>({id:1}),justice:null};const justice=new CityJustice(city);city.justice=justice;
+ let rolls=[.99,.99,.99,.99,0,.99,.99],minute=100;const city={get minute(){return minute;},hour:12,citizens:[actor,target],buildings:[],world:{cityLampPosts:[]},society:{getRelation:()=>null,citizen:id=>id===1?actor:target},random:()=>rolls.shift()??.99,economy:{practice(){}},log:()=>({id:1}),justice:null};const justice=new CityJustice(city);city.justice=justice;
  assert.equal(justice.combatEncounter(actor,target,{forced:true}),true);assert.ok(target.unconsciousUntil>city.minute);assert.equal(target.action,'Inconsciente após ferimento na cabeça');assert.deepEqual(target.path,[]);assert.equal(target.task,null);
  minute=target.unconsciousUntil;justice.updateInjuries(target);assert.equal(target.unconsciousUntil,null);assert.equal(target.action,null);
 });
