@@ -1,3 +1,4 @@
+import {ensureJusticeSkills} from './city_justice_skills.js';
 import {CityFurniture} from './city_furniture.js?v=deep-perf-3';
 import {CitySupplies} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
@@ -25,6 +26,7 @@ import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CitySimulation } from './city_simulation.js?v=service-capacity-3';
 import { CityHistory } from './city_history.js';
+import { CityJustice } from './city_justice.js';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js?v=landlord-stock-market-1';
 import { CityLighting } from './city_lighting.js';
@@ -43,7 +45,7 @@ import { World, WorldClock } from './world.js?v=furniture-farms-fertilizer-1';
 
 const prototypes = new Map([CityFurniture,CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
-  CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, World, WorldClock]
+  CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, CityJustice, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
 const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy', 'routeCache', 'routeRevision','familyIndexDirty',
@@ -260,6 +262,10 @@ export class CityStateGraph {
 
 /** Restore computed fields, never serialized as stale monetary values. */
 export function bindCityState(city) {
+  city.justice??=new CityJustice(city);
+  if(Object.getPrototypeOf(city.justice)!==CityJustice.prototype)Object.setPrototypeOf(city.justice,CityJustice.prototype);
+  city.justice.city=city;city.justice.ensureState();
+  for(const [index,c]of city.citizens.entries())ensureJusticeSkills(c,index,city.initialSeed,{newborn:c.initialAge===0});
   city.furniture??=new CityFurniture(city);
   city.supplies??=new CitySupplies(city);city.water??=new CityWater(city);
   city.paint??=new CityPaint(city);

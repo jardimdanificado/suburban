@@ -30,6 +30,7 @@ export function civicVisit(city,c,b){
    c.civicVisit={buildingId:b.id,need:c.task,startedAt:city.minute};const cache=occupancy.get(city);cache.counts.set(b.id,(cache.counts.get(b.id)||0)+1);b.serviceVisits=(b.serviceVisits||0)+1;
    city.history.record('service',`${c.entity.properties.name} iniciou atendimento em ${b.entity.properties.name}.`,[c.accountId,b.accountId],{buildingId:b.id,service:c.task,amount:fee});
  }
+ if(spec.need==='health')city.justice?.treatInjuries(c,b);
  const need=c.task==='social'?'social':spec.need;c.needs[need]=clamp(c.needs[need]+spec.rate);
  if(b.type==='park')c.needs.health=clamp(c.needs.health+.15);
  if(b.type==='sports_center'){c.needs.health=clamp(c.needs.health+.25);c.needs.energy=clamp(c.needs.energy-.1);}

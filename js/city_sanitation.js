@@ -55,6 +55,7 @@ export class CitySanitation {
     const b = this.city.building(f.buildingId); if (!b) return false;
     // Older persistent saves may still mark the town hall toilet as public.
     // Enforce its staff-only rule here as well as migrating its facility data.
+    if(b.type==='jail'&&c.custody?.jailId===b.id)return b.active;
     if(b.type==='townhall')return b.active&&c.jobId===b.id;
     if (f.access === 'public' || f.access === 'paid') return f.price <= (this.city.accounts.get(this.city.payerFor(c))?.balance || 0);
     if (f.access === 'employees') return b.active && (c.jobId === b.id || c.id === b.ownerId);
@@ -69,12 +70,20 @@ export class CitySanitation {
     // Otherwise every simultaneous decision picks the same still-empty cubicle.
     this.inboundMinute??=-1;
     if(this.inboundMinute!==this.city.minute){this.inboundMinute=this.city.minute;this.inboundFacilities=new Map();for(const person of this.city.citizens){if(person.entity.destroyed)continue;const id=person.task==='toilet'?person.toiletTargetId:person.task==='hygiene'?person.hygieneTargetId:null;if(id)this.inboundFacilities.set(id,(this.inboundFacilities.get(id)||0)+1);}}
+    c.trespassToiletFacilityId=null;
     const options = [...this.facilities.values()].filter(f => this.allowed(c, f) && this.city.units.get(f.unitId)?.roomType==='bathroom');
     options.sort((a, b) => this.score(c, a) - this.score(c, b));
-    for (const f of options) {
+    const illegal=task==='toilet'&&!c.custody&&(c.needs?.toilet??100)<20&&this.city.minute-(c.toiletWaitingSince??this.city.minute)>=90;
+    const candidates=[...options.map(f=>({f,trespass:false}))];
+    if(illegal){
+      const privateFacilities=[...this.facilities.values()].filter(f=>f.access==='employees'&&this.city.units.get(f.unitId)?.roomType==='bathroom'&&!this.allowed(c,f)).filter(f=>{const b=this.city.building(f.buildingId);return b?.active&&!b.entity.destroyed&&!['jail','townhall','hospital','clinic','public_toilet','paid_toilet','popular_refectory'].includes(b.type)&&(b.ownerId!=null||this.city.economy.businesses.some(x=>x.id===b.id));}).map(f=>({f,trespass:true})).sort((a,b)=>this.score(c,a.f)-this.score(c,b.f));
+      candidates.push(...privateFacilities);
+    }
+    for (const {f,trespass} of candidates) {
       const b = this.city.building(f.buildingId), path = this.city.findPath(c.entity, b.door); if (path === null) continue;
       const previous=c.task==='toilet'?c.toiletTargetId:c.task==='hygiene'?c.hygieneTargetId:null;if(previous)this.inboundFacilities.set(previous,Math.max(0,(this.inboundFacilities.get(previous)||0)-1));this.inboundFacilities.set(f.id,(this.inboundFacilities.get(f.id)||0)+1);
-      if(task==='toilet')c.toiletTargetId=f.id;else c.hygieneTargetId=f.id;c.task=task;c.targetId=b.id;c.path=path;
+      if(task==='toilet'){c.toiletTargetId=f.id;if(trespass)c.trespassToiletFacilityId=f.id;}else c.hygieneTargetId=f.id;c.task=task;c.targetId=b.id;c.path=path;
+      if(trespass)c.action='Indo usar sem autorização o banheiro de uma propriedade privada';
       return true;
     }
     return false;
@@ -137,23 +146,25 @@ export class CitySanitation {
   }
   use(c) {
     const f = this.facilities.get(c.toiletTargetId), b = f && this.city.building(f.buildingId);
-    if (!f || !b || !this.allowed(c, f) || (f.occupantId && f.occupantId !== c.id && this.city.minute < f.busyUntil)) {
+    const trespass=!!f&&c.trespassToiletFacilityId===f.id&&!this.allowed(c,f);
+    if (!f || !b || (!this.allowed(c, f)&&!trespass) || (f.occupantId && f.occupantId !== c.id && this.city.minute < f.busyUntil)) {
       const entrance=b?.officeTenantOf?this.city.building(b.officeTenantOf):b;if(entrance?.serviceQueue)entrance.serviceQueue=entrance.serviceQueue.filter(q=>q.citizenId!==c.id||q.kind!=='toilet');
       this.city.furniture?.release(c);c.task=null;c.toiletTargetId=null;c.toiletWaitingSince=null;c.targetId=null;c.path=[];c.serviceQueue=null;c.facingTarget=null;return false;
     }
     const room=this.city.units.get(f.unitId);if(!room||!activityRoomReady(this.city,c,b,room,'bathroom'))return false;
     if (c.servicePaid !== f.id) {
-      if (!this.city.transfer(this.city.payerFor(c), b.accountId, f.price, 'Serviço: Banheiro')) { c.task = null; return false; }
+     if (!trespass&&!this.city.transfer(this.city.payerFor(c), b.accountId, f.price, 'Serviço: Banheiro')) { c.task = null; return false; }
       b.lastToiletUseAt = this.city.minute; f.occupantId = c.id; f.busyUntil = this.city.minute + 20; f.uses++;
       const quality = f.cleanliness;
       c.mood = Math.max(-25, Math.min(25, (c.mood || 0) + (quality >= 95 ? 6 : quality < 25 ? -9 : quality < 60 ? -4 : 0)));
       if (quality < 25) { c.needs.hygiene = clamp(c.needs.hygiene - 5); c.needs.health = clamp(c.needs.health - 1); }
       f.cleanliness = clamp(f.cleanliness - SANITATION_RULES.dirtPerUse);
       this.addWaste(b, SANITATION_RULES.wastePerUse);if('fezes' in b.inventory&&inventoryFree(b)>=1){b.inventory.fezes++;this.city.economy.produced.fezes++;this.city.economy.recordGoods('feces-collected','fezes',1,null,b.id);} c.servicePaid = f.id;
-      this.city.log(`${c.entity.properties.name} usou banheiro ${f.access === 'public' ? 'público gratuito' : f.access === 'paid' ? 'pago' : 'privado'}, limpeza ${Math.round(quality)}%.`, 'sanitation', [c.id], { kind: 'toilet-use', facilityId: f.id, quality, waste: SANITATION_RULES.wastePerUse });
+       this.city.log(`${c.entity.properties.name} usou banheiro ${trespass?'privado sem autorização':f.access === 'public' ? 'público gratuito' : f.access === 'paid' ? 'pago' : 'privado'}, limpeza ${Math.round(quality)}%.`, 'sanitation', [c.id], { kind: 'toilet-use', facilityId: f.id, quality, waste: SANITATION_RULES.wastePerUse,trespass });
+       if(trespass)this.city.justice?.recordTrespassUse(c,b,f);
     }
     c.needs.toilet = clamp(c.needs.toilet + 10); c.action = `Usando banheiro / limpeza ${Math.round(f.cleanliness)}%`;
-    if (c.needs.toilet >= 95) { f.occupantId = null; c.task = null; c.servicePaid = null; c.toiletTargetId = null; }
+    if (c.needs.toilet >= 95) { f.occupantId = null; c.task = null; c.servicePaid = null; c.toiletTargetId = null;c.trespassToiletFacilityId=null; }
     return true;
   }
   payer(f) {

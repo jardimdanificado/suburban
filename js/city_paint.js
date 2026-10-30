@@ -42,10 +42,10 @@ export class CityPaint {
   const lots=this.take(b,n,color);this.bag(c).inventory.tinta+=n;c.paintBag.paintLots.push(...lots);city.economy.recordGoods('paint-purchase','tinta',n,b.id,c.id);b.totalRevenue+=price;c.paintPurchase=null;return true;
  }
  requestVehicle(id,garageId,color,useOwn=false){
-  const city=this.city,v=city.vehicles.units.get(id),garage=city.building(garageId),hex=normalizeColor(color),account=city.accounts.get(v?.ownerAccountId),c=account?.entity?.properties.citizen?account:city.society.citizen(account?.ownerId);
-  if(!v?.active||v.scrapped||!paintable.has(v.good)||v.paintJobId||!live(garage)||garage.type!=='cycle_workshop'||!hex||!c)return city.fail('Veículo, proprietário ou oficina indisponível.');
+  const city=this.city,v=city.vehicles.units.get(id),garage=city.building(garageId),hex=normalizeColor(color),account=city.accounts.get(v&&(v.possessorAccountId||v.ownerAccountId)),c=account?.entity?.properties.citizen?account:city.society.citizen(account?.ownerId);
+  if(!v?.active||v.scrapped||!paintable.has(v.good)||v.serviceBodyId||v.paintJobId||!live(garage)||garage.type!=='cycle_workshop'||!hex||!c)return city.fail('Veículo, proprietário ou oficina indisponível.');
   if(useOwn&&this.available(this.bag(c),hex)<1)return city.fail('O proprietário precisa ter uma lata dessa cor.');
-  const job={id:this.nextId++,kind:'vehicle',vehicleId:v.id,providerId:garage.id,clientId:c.id,payer:v.ownerAccountId,color:hex,quantity:1,useOwn,status:'delivery',createdAt:city.minute,labor:0,requiredLabor:18};
+  const job={id:this.nextId++,kind:'vehicle',vehicleId:v.id,providerId:garage.id,clientId:c.id,payer:v.possessorAccountId||v.ownerAccountId,color:hex,quantity:1,useOwn,status:'delivery',createdAt:city.minute,labor:0,requiredLabor:18};
   v.paintJobId=job.id;this.jobs.push(job);return true;
  }
  requestBuilding(id,payer,color,useOwn=false){
@@ -103,7 +103,7 @@ export class CityPaint {
   if(city.politics.active?.status==='campaign'){const factory=city.economy.businesses.find(b=>live(b)&&b.type==='paintworks');if(factory)for(const party of city.politics.parties.filter(p=>p.active)){factory.paintColorOrders??=[];if(this.available(factory,party.flag.background)<4&&!factory.paintColorOrders.some(o=>o.color===party.flag.background))factory.paintColorOrders.push({color:party.flag.background,partyId:party.id});}}
   // Discretionary repainting is infrequent, affordable and driven by personal taste.
   const c=city.citizens.find(c=>c.id%168===hour%168&&!c.entity.destroyed&&c.balance>city.currency.price(30000)&&city.minute-(c.lastPaintDecisionAt??-Infinity)>1440*7);
-  if(c){c.lastPaintDecisionAt=city.minute;const v=[...city.vehicles.units.values()].find(v=>v.active&&v.ownerAccountId===c.accountId&&paintable.has(v.good)&&!v.paintJobId&&colorAffinity(c,v.color)<-.25),b=city.buildings.find(b=>live(b)&&b.type==='cycle_workshop');if(v&&b)this.requestVehicle(v.id,b.id,favoriteColors(c)[0].hex);}
+  if(c){c.lastPaintDecisionAt=city.minute;const v=[...city.vehicles.units.values()].find(v=>v.active&&(v.possessorAccountId||v.ownerAccountId)===c.accountId&&paintable.has(v.good)&&!v.paintJobId&&colorAffinity(c,v.color)<-.25),b=city.buildings.find(b=>live(b)&&b.type==='cycle_workshop');if(v&&b)this.requestVehicle(v.id,b.id,favoriteColors(c)[0].hex);}
   while(this.jobs.length>160){const i=this.jobs.findIndex(j=>['completed','cancelled'].includes(j.status));if(i<0)break;this.jobs.splice(i,1);}
  }
  goodsStock(good){return good==='tinta'?this.city.citizens.reduce((n,c)=>n+(c.paintBag?.inventory.tinta||0),0)+this.jobs.reduce((n,j)=>n+(j.materials||[]).reduce((n,l)=>n+l.quantity,0),0):0;}

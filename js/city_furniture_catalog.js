@@ -8,6 +8,7 @@ export function roomFurniture(b,u){
  const key=`${b.type}:${u.roomType}:${b.layoutRevision||0}`,cached=roomCaches.get(u);if(cached?.key===key)return cached.items;
  const items=[],add=(type,x,y,label,extra={})=>{const f={id:`furniture:${u.id}:${type}:${items.length}`,type,x:u.x+x,y:u.y+y,z:u.z,label,...extra};items.push(f);return f;},chair=(x,y,fx,fy,label='Cadeira')=>add('chair',x,y,label,{seated:true,facing:{x:u.x+fx,y:u.y+fy}});
  if(u.roomType==='bedroom'){add('bed',.5,.52,'Cama',{sleeping:true});add('chest',.78,.83,'Baú de roupas e itens',{storage:'clothes'});add('fridge',.18,.82,'Geladeira doméstica',{storage:'food'});}
+ else if(u.roomType==='cell'){add('bed',.5,.52,'Beliche da cela',{sleeping:true});add('chest',.82,.82,'Armário da cela');}
  else if(u.roomType==='bathroom'){add('toilet',.5,.5,'Vaso sanitário',{seated:true,facing:{x:u.x+.5,y:u.y+.9}});add('sink',.5,.85,'Lavatório');}
  else if(u.roomType==='dining'){add('table',.5,.5,'Mesa de refeições');chair(.17,.5,.5,.5);chair(.83,.5,.5,.5);chair(.5,.17,.5,.5);chair(.5,.83,.5,.5);if((u.x+u.y)%4===0)add('fridge',.87,.87,'Geladeira do refeitório',{storage:'food'});}
  else if(u.roomType==='treatment'){add('bed',.5,.55,'Maca de atendimento');add('lab',.78,.86,'Mesa clínica');}

@@ -166,7 +166,7 @@ export class CityLogistics {
       if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential' && !(s.good==='lixo' && s.purpose==='waste-collection')) || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
       let c = city.society.citizen(s.driverId);
       if (c?.workMeal) continue;
-      if (c && (city.urgentNeed(c) || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }
+      if (c && (city.urgentNeed(c) || this.capacity(c)<s.quantity || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }
       if (!c) {
         s.driverId = null;
         if (city.hour < 7 || city.hour >= 20 || s.lastDispatchAttempt!=null&&city.minute-s.lastDispatchAttempt<5 || dispatchBudget <= 0) continue;

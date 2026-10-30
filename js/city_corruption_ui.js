@@ -34,8 +34,10 @@ export function renderCorruptionInspector(ui,p){
   p.links([['summary','ESQUEMA'],['money','DINHEIRO'],['evidence','INVESTIGAÇÃO']].map(([id,label])=>({label,selected:tab===id,click:()=>ui.openPanel({corruptionTab:id})})));
   p.kv('Situação',status(r));
   contextActions(ui,p,{caseRecord:r});
-  if(r.convictedIds?.length)p.kv('Condenados',r.convictedIds.map(id=>city.accountName(`citizen:${id}`)).join(', '));
-  for(const bill of gov.council.bills.filter(b=>b.type==='convict'&&b.payload.caseId===r.id))p.record('Votação de condenação',`${city.accountName(`citizen:${bill.payload.targetId}`)} · ${bill.status} · ${bill.yes??0} a ${bill.no??0}`,()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'council',billId:bill.id}));
+  if(r.justiceCaseId!=null){p.kv('Processo policial / judicial',`#${r.justiceCaseId} · ${r.judicialStatus||r.policeInvestigationStatus||'aguardando polícia'}`);p.button('ABRIR ARTE E JUSTIÇA',()=>ui.openPanel({tab:'city',views:{city:'arts'},selected:null}));}
+  if(r.legacyLegislativeConvictedIds?.length)p.note('Há deliberações legislativas anteriores no histórico; a condenação criminal atual depende do tribunal.');
+  if(r.convictedIds?.length)p.kv('Condenados pelo tribunal',r.convictedIds.map(id=>city.accountName(`citizen:${id}`)).join(', '));
+  for(const bill of gov.council.bills.filter(b=>b.type==='convict'&&b.payload.caseId===r.id))p.record('Deliberação legislativa anterior',`${city.accountName(`citizen:${bill.payload.targetId}`)} · ${bill.status} · ${bill.yes??0} a ${bill.no??0}`,()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'council',billId:bill.id}));
   if(!discovered(r))p.note('Informação secreta da simulação: a população ainda não descobriu este esquema.');
   if(tab==='summary'){
     p.note(mechanisms[r.type]||'As movimentações registradas mostram a execução financeira deste esquema.');

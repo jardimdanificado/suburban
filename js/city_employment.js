@@ -1,3 +1,4 @@
+import {injuryWorkFactor} from './city_injury_effects.js';
 /** Career records are independent of the bounded event journal and survive snapshots. */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function career(c){const cv=c.career??={jobs:[],applications:[],worked:{},motivation:50};if(cv.pendingInterview&&(cv.pendingInterview.status!=='análise'||!cv.applications.includes(cv.pendingInterview)))cv.pendingInterview=null;return cv;}
@@ -190,7 +191,7 @@ export function renderResume(ui,p,c,money){
   if(!cv.applications.length)p.note('Nenhuma candidatura registrada.');
 }
 
-export function workEfficiency(c,b){return c.jobId===b.id?.85+career(c).motivation*.003:1;}
+export function workEfficiency(c,b){return (c.jobId===b.id?.85+career(c).motivation*.003:1)*injuryWorkFactor(c);}
 
 export function reviewWages(city,b){
   if(b.jobs<=b.workers.length){b.vacancySince=null;return;}

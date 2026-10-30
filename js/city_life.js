@@ -10,13 +10,15 @@ export class CityLife {
   die(c, cause) {
     if (c.entity.destroyed || c.dead) return false;
     c.dead = true; c.diedAt = this.city.minute; c.deathCause = cause;
-    const event = { citizenId: c.id, name: c.entity.properties.name, minute: this.city.minute, age: this.city.society.age(c), cause,needs:{...c.needs},task:c.task,action:c.action,targetId:c.targetId,skybridgeTransit:c.skybridgeTransit?{...c.skybridgeTransit}:null,position:{x:c.entity.x,y:c.entity.y} };
+    this.city.justice?.onDetaineeDeath(c);
+    const event = { citizenId: c.id, name: c.entity.properties.name, minute: this.city.minute, age: this.city.society.age(c), cause,needs:{...c.needs},task:c.task,action:c.action,targetId:c.targetId,circumstances:c.deathCircumstances?{...c.deathCircumstances}:null,injuries:(c.combatInjuries||[]).map(w=>({region:w.region,severity:w.severity,minute:w.minute})),skybridgeTransit:c.skybridgeTransit?{...c.skybridgeTransit}:null,position:c.indoorLocation?.position?{...c.indoorLocation.position}:{x:c.entity.x,y:c.entity.y,z:c.skybridgeZ||0} };
     this.deathCount++; this.deaths.push(event); if (this.deaths.length > 1000) this.deaths.shift();
     for (const s of this.city.logistics.shipments) if (s.driverId === c.id) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.city.logistics.releaseDriver(s); s.status = 'waiting'; }
     this.city.sanitation?.releaseCitizen(c);
     for(const meal of c.pocket?.food||[])for(const [g,q]of Object.entries(meal.inputs))this.city.economy.lost[g]+=q;if(c.pocket)c.pocket.food=[];
     c.path = []; c.task = null; c.workMeal = null; c.entity.destroyed = true;
-    this.city.log(`${event.name} morreu: ${cause}, aos ${event.age} anos.`, 'death', [c.id, c.partnerId, ...c.childIds].filter(Boolean), { kind: 'death', ...event });
+    event.eventId=this.city.log(`${event.name} morreu: ${cause}, aos ${event.age} anos.`, 'death', [c.id, c.partnerId, ...c.childIds].filter(Boolean), { kind: 'death', ...event }).id;
+    this.city.justice?.registerDeath(c,event);
     this.city.relationships.onLoss(c,cause);
     return true;
   }

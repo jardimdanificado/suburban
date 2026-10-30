@@ -1,3 +1,4 @@
+import {injuryMovementFactor} from './city_injury_effects.js';
 import {roomFurniture} from './city_furniture_catalog.js';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {queueService} from './city_service_queue.js?v=service-capacity-3';
@@ -47,7 +48,7 @@ function normalizeInterior(city,c){
 export function advanceCitizenInterior(city,c,minutes=1){
  const s=c.indoorLocation;if(!s?.path?.length)return;
  s.phase=s.exiting?'leaving':'walking';
- let distance=Math.max(0,minutes);
+ let distance=Math.max(0,minutes)*injuryMovementFactor(c);
  while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001)s.path.shift();}
  s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));
  if(!s.path.length){if(s.exiting){c.indoorLocation=null;leaveEntrance(city,c);}else{s.unitId=s.targetUnitId;s.roomType=s.targetRoomType;s.arrivedAt=city.minute;s.phase='using';}}
@@ -87,6 +88,7 @@ export function outdoorCellReady(city,c,b,u,adjacent=false){
  c.action='Deslocando-se até a célula de atividade';return false;
 }
 export function syncCitizenInterior(city,c){
+ if(c.funeralInterior&&c.task==='funeral')return !c.indoorLocation?.path?.length;
  const task=c.workMeal?'workmeal':c.task,s=c.indoorLocation,queued=!!c.serviceQueue&&c.serviceQueue.buildingId===c.targetId&&c.serviceQueue.kind===task;
  // Outdoor field workers cannot have an indoor destination to validate.
  if(!s&&['work','manage'].includes(task)&&(c.forestryJob||c.mechanicJob||c.paintWorkId))return true;
@@ -94,11 +96,14 @@ export function syncCitizenInterior(city,c){
  // Avoid resolving buildings and construction projects on every movement tick.
  if(!s&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length&&!queued||c.deliveryId||!INDOOR_TASKS.has(task)))return true;
  normalizeInterior(city,c);
+ if(task==='custody-water'&&c.custodyWaterDelivery&&s?.buildingId===c.custodyWaterDelivery.jailId)return !s.exiting&&!s.path.length;
+  if(task==='custody'&&c.custody&&s?.buildingId===c.custody.jailId&&s.targetRoomType==='cell'&&!s.exiting)return !s.path.length;
  const fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
  if(task==='energy'&&!c.homeUnitId&&c.targetId!=null){c.task=null;c.targetId=null;c.path=[];c.action='Procurando um lugar para dormir';return previous?exit(city,c):true;}
  if(task==='toilet'){
   const facility=city.sanitation.facilities.get(c.toiletTargetId);
-  if(!facility||!city.sanitation.allowed(c,facility)){
+   const trespass=c.trespassToiletFacilityId===facility?.id&&!c.custody;
+   if(!facility||(!city.sanitation.allowed(c,facility)&&!trespass)){
    const entrance=b?.officeTenantOf?city.building(b.officeTenantOf):b;if(entrance?.serviceQueue)entrance.serviceQueue=entrance.serviceQueue.filter(q=>q.citizenId!==c.id||q.kind!=='toilet');
    c.task=null;c.targetId=null;c.toiletTargetId=null;c.path=[];c.serviceQueue=null;c.facingTarget=null;city.furniture?.release(c);return previous?exit(city,c):true;
   }

@@ -1,6 +1,6 @@
 // Every batch reserves real inputs and requires paid, on-site work. Prices are cents.
 export const INDUSTRIAL_GOODS = Object.fromEntries([
-  ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
+  ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['porrete','Porrete de madeira',900],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
   ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['jornais','Jornais',3200],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],['fezes','Fezes coletadas',90],
@@ -31,7 +31,7 @@ export const INDUSTRIES = {
   cycle_workshop:industry('Oficina de mobilidade',{pecas:1,tinta:1},{},24,'maintenance','Mecânicos levam peças até equipamentos avariados e cobram pelo reparo.','services'),
   bicycle_rental:industry('Locadora de bicicletas',{},{},1,'commerce','Compra bicicletas e aluga o uso por viagem a moradores próximos.','services'),
   kitchen: industry('Cozinha e marmitaria',{feijao:2,arroz:2,alface:1,tomate:1},{marmita:3},18,'baking','Prepara marmitas com ingredientes reais e preserva suas preferências.','food'),
-  artisan: industry('Loja do artesão',{madeira:3,fibras:2},{cesta:2,carrinho:1},24,'construction','Artesanato em madeira: cestas e carrinhos ampliam a capacidade individual de transporte.','services',{need:'energy',boost:0}),
+  artisan: industry('Loja do artesão',{madeira:3,fibras:2},{cesta:2,carrinho:1,porrete:1},24,'construction','Artesanato em madeira: cestas e carrinhos ampliam a capacidade individual de transporte; porretes são equipamentos duráveis de defesa pessoal.','services',{need:'energy',boost:0}),
   forestry: industry('Silvicultura',{}, {madeira:4},45,'agriculture','Replantio obrigatório; sustenta móveis, papel e combustível.'),
   sawmill: industry('Serraria',{madeira:3},{tabuas:5},18,'maintenance','Madeira beneficiada para mobiliário e ferramentas.'),
   charcoal: industry('Carvoaria',{madeira:3},{carvao:4},24,'maintenance','Combustível para fornos; consome a madeira das florestas cultivadas.'),
@@ -66,6 +66,7 @@ export const INDUSTRIES = {
   pottery: industry('Ateliê de cerâmica',{argila:3,carvao:1},{ceramica:3},18,'maintenance','Utensílios para conforto doméstico.','services',{need:'shelter',boost:8}),
   composting: industry('Usina de adubo',{fezes:4},{adubo:3},20,'recycling','Compra fezes coletadas e transforma em adubo que acelera o crescimento das lavouras.'),
   research_institute: {...industry('Instituto de pesquisa',{}, {},1,'social','Pesquisas eleitorais presenciais financiadas por investidores e empresas; prefeitura contrata somente na falta de investimento privado.','services'),jobs:3,color:0x648caf},
+  legal_office: industry('Escritório de advocacia',{}, {},1,'law','Atendimento jurídico particular e defesa criminal.','services'),
   bank: industry('Banco',{}, {},1,'commerce','Depósitos mantêm reserva integral; crédito usa somente capital próprio disponível.','services'),
 };
 export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva','marmita','marmita_simples','marmita_rustica'];

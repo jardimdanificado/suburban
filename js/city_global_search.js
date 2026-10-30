@@ -50,6 +50,9 @@ export function globalSearchRecords(desktop) {
   for(const p of city.development?.projects || []) if(!p.cancelled) add('Obra',p.id,p.name || `Obra ${p.id}`,p.status,{type:'contract',id:p.id},'contrato projeto construção');
   for(const p of values(city.politics?.parties)) add('Partido',p.id,p.name,p.short,{type:'party',id:p.id});
   for(const doc of values(city.publications?.documents)) add('Publicação',doc.id,doc.title,city.accountName(doc.ownerAccountId),{type:'destination',tab:'publications',overrides:{selectedPublicationId:doc.id}},'livro jornal panfleto');
+  for(const art of city.justice?.art||[])if(!art.entity.destroyed)add('Arte urbana',art.id,art.layers.at(-1)?.message||art.message,`${city.justice.labelArt(art.kind)} · ${art.truth===false?'mensagem falsa':'mensagem pública'}`,{type:'urban-art',id:art.id},'pichação banner estátua monumento pintura');
+  for(const record of city.justice?.cases||[])if(!['closed','dismissed'].includes(record.status))add('Ocorrência',record.id,`Caso ${record.id} · ${city.justice.labelCrime(record.type)}`,`${record.status} · severidade ${record.severity}`,{type:'justice-case',id:record.id},'crime polícia investigação BO');
+  for(const body of city.justice?.activeBodies()||[])add('Corpo',body.id,body.name,`${body.cause} · ${body.status}`,{type:'corpse',id:body.id},'IML morte autópsia');
   // History is bounded by the simulation's retention limit; search only retained records.
   for(const e of city.history?.query({limit:Infinity}) || city.events || []) add('Evento',e.id,e.message,`Histórico · dia ${Math.floor(e.minute/1440)+1}`,{type:'event',id:e.id},e.category);
   return records;
@@ -73,6 +76,9 @@ export function activateGlobalResult(desktop, result) {
   if(r.type==='party') return !!desktop.openParty(r.id);
   if(r.type==='contract') return !!desktop.openContract(r.id);
   if(r.type==='event') {if(!city.history.get(r.id))return false;desktop.openEvent(r.id);return true;}
+  if(r.type==='urban-art'){const art=city.justice?.art.find(a=>a.id===r.id&&!a.entity.destroyed);if(!art)return false;desktop.openDestination('city','arts');desktop.camera?.(art.entity.x,art.entity.y);return true;}
+  if(r.type==='justice-case'){const record=city.justice?.cases.find(c=>c.id===r.id);if(!record)return false;desktop.openDestination('city','arts');if(record.position)desktop.camera?.(record.position.x,record.position.y);return true;}
+  if(r.type==='corpse'){const body=city.justice?.bodies.find(b=>b.id===r.id&&b.status!=='cremated');if(!body)return false;desktop.openDestination('sanitation','deaths');desktop.camera?.(body.entity.x,body.entity.y);return true;}
   return false;
 }
 

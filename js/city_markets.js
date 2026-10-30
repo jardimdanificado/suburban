@@ -1,7 +1,8 @@
+import {injuredCarryCapacity,injuryWorkFactor} from './city_injury_effects.js';
 import { INDUSTRIES, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-export function carryCapacity(c){return c?.equipment?.carrinho?72:c?.equipment?.cesta?36:24;}
+export function carryCapacity(c){return injuredCarryCapacity(c,c?.equipment?.carrinho?72:c?.equipment?.cesta?36:24);}
 export function updateMarket(economy){
   const city=economy.city,people=city.citizens.filter(c=>!c.entity.destroyed),firms=economy.businesses;
   economy.market??={};
@@ -33,7 +34,7 @@ export function planSupplyChains(economy){
 export function kitchenWork(economy,b,c){
   const ready=KITCHEN_RECIPES.filter(r=>Object.entries(r.inputs).every(([g,n])=>b.inventory[g]>=n)&&b.inventory[r.good]<48&&inventoryFree(b)>=Math.max(0,r.quantity-Object.values(r.inputs).reduce((n,v)=>n+v,0)));
   const recipe=ready.sort((a,d)=>b.inventory[a.good]-b.inventory[d.good])[0];if(!recipe)return false;
-  b.cookingLabor=(b.cookingLabor||0)+1+(c.skills.baking||0)/80;if(b.cookingLabor<recipe.labor)return true;b.cookingLabor-=recipe.labor;
+  b.cookingLabor=(b.cookingLabor||0)+(1+(c.skills.baking||0)/80)*injuryWorkFactor(c);if(b.cookingLabor<recipe.labor)return true;b.cookingLabor-=recipe.labor;
   for(const [good,quantity] of Object.entries(recipe.inputs)){b.inventory[good]-=quantity;economy.consumed[good]+=quantity;economy.recordGoods('recipe-input',good,quantity,b.id,null);}
   b.inventory[recipe.good]+=recipe.quantity;economy.produced[recipe.good]+=recipe.quantity;economy.recordGoods('production',recipe.good,recipe.quantity,null,b.id);
   b.lastRecipe=recipe.good;return true;

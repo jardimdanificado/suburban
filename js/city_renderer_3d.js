@@ -86,6 +86,28 @@ function syncCardboardShelters(renderer,THREE,city,world){
   const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
   for(const mesh of renderer.cardboardVisuals.children){const tile=mesh.userData.cardboardTile;mesh.visible=!!tile&&tile.x>=minX&&tile.x<=maxX+1&&tile.y>=minY&&tile.y<=maxY+1;}
 }
+function syncCorpseVisuals(renderer,THREE,city,world){
+  const justice=city?.justice;if(!justice)return;
+  const live=new Set(justice.bodies.filter(b=>b.status!=='cremated').map(b=>b.id)),meshes=renderer.corpseMeshes??=new Map();
+  for(const [id,group]of meshes)if(!live.has(id)){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
+  const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
+  for(const body of justice.bodies){if(body.status==='cremated')continue;let group=meshes.get(body.id);if(!group){group=new THREE.Group();const cloth=new THREE.MeshLambertMaterial({color:body.status==='autopsy'?0xe6e0d5:0x4b5551}),skin=new THREE.MeshLambertMaterial({color:0xc49b78});const torso=new THREE.Mesh(new THREE.BoxGeometry(.34,.17,.48),cloth);torso.position.y=.12;group.add(torso);const head=new THREE.Mesh(new THREE.SphereGeometry(.115,8,6),skin);head.position.set(0,.14,.34);group.add(head);for(const side of [-1,1]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.36),cloth);leg.position.set(side*.105,.08,-.29);group.add(leg);const arm=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.34),cloth);arm.position.set(side*.22,.105,.02);arm.rotation.y=side*.18;group.add(arm);}group.userData.bodyId=body.id;group.userData.skinMaterial=skin;meshes.set(body.id,group);renderer.scene.add(group);}
+    const band=Math.min(3,Math.floor((body.decomposition||0)/25));if(group.userData.decompositionBand!==band){group.userData.skinMaterial.color.setHex([0xc49b78,0xaaa080,0x898673,0x686d61][band]);group.userData.decompositionBand=band;}
+    const x=body.entity.x,y=body.entity.y;group.position.set(x,surfaceElevation(world,x,y)+(body.currentInterior?.position.z||body.skybridgeZ||0)+.025,y);group.visible=x>=minX-1&&x<=maxX+1&&y>=minY-1&&y<=maxY+1;
+  }
+}
+function syncUrbanArt(renderer,THREE,city,world){
+  const justice=city?.justice;if(!justice)return;const meshes=renderer.urbanArtMeshes??=new Map(),live=new Set(justice.art.filter(a=>!a.entity.destroyed).map(a=>a.id));
+  for(const [id,group]of meshes)if(!live.has(id)){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});meshes.delete(id);}
+  for(const piece of justice.art){if(piece.entity.destroyed||piece.campaignDecorationId&&!piece.layers.length)continue;const face=piece.layers.at(-1)||piece,key=`${piece.id}:${piece.layers.length}:${face.message}:${piece.damaged}`;let group=meshes.get(piece.id);
+    if(group?.userData.key!==key){if(group){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});}group=new THREE.Group();
+      if(['statue','monument'].includes(piece.kind)){const stone=new THREE.MeshLambertMaterial({color:piece.damaged>0?0x716d64:piece.color}),base=new THREE.Mesh(new THREE.BoxGeometry(.75,.42,.75),stone),body=new THREE.Mesh(new THREE.CylinderGeometry(.18,.25,.8,7),stone),head=new THREE.Mesh(new THREE.SphereGeometry(.2,8,6),stone);base.position.y=.21;body.position.y=.78;head.position.y=1.32;group.add(base,body,head);}
+      else{const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const ctx=canvas.getContext('2d'),background=`#${(face.color??piece.color).toString(16).padStart(6,'0')}`;ctx.fillStyle=background;ctx.fillRect(0,0,512,256);ctx.fillStyle='rgba(0,0,0,.23)';ctx.fillRect(14,14,484,228);ctx.fillStyle='#f3ead3';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 42px sans-serif';const words=String(face.message).split(/\s+/);let lines=[],line='';for(const word of words){if(line&&ctx.measureText(`${line} ${word}`).width>440){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}if(line)lines.push(line);const lineH=52,start=128-(lines.length-1)*lineH/2;for(let i=0;i<lines.length&&i<4;i++)ctx.fillText(lines[i],256,start+i*lineH,448);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide});const width=piece.kind==='flags'?1.4:2.1,height=piece.kind==='flags'?.55:1;const panel=new THREE.Mesh(new THREE.PlaneGeometry(width,height),material);panel.position.y=piece.kind==='graffiti'?1.05:1.35;group.add(panel);if(['banner','flags'].includes(piece.kind)){const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,1.9,5),new THREE.MeshLambertMaterial({color:0x76664b}));pole.position.set(-width*.52,.95,0);group.add(pole);}}
+      group.userData.key=key;group.rotation.y=piece.rotation||0;meshes.set(piece.id,group);renderer.scene.add(group);
+    }
+    const x=piece.entity.x,y=piece.entity.y;group.position.set(x,surfaceElevation(world,x,y)+.04,y);group.visible=!Number.isFinite(renderer.renderedMinTx)||x>=renderer.renderedMinTx-2&&x<=renderer.renderedMaxTx+2&&y>=renderer.renderedMinTy-2&&y<=renderer.renderedMaxTy+2;
+  }
+}
 export function syncRoadBridges(renderer,THREE,world){
   const bridges=world.roadBridges||[],revision=world.bridgeRevision||0;
   if(renderer.roadBridgeRevision===revision)return;
@@ -115,6 +137,8 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   syncSkybridges(renderer,THREE,entities,world);
   syncRoadBridges(renderer,THREE,world);
   syncCardboardShelters(renderer,THREE,renderer.cityDevelopment?.city,world);
+  syncCorpseVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
+  syncUrbanArt(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncFecesVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncStreetBenches(renderer,THREE,world);
   const map = world.map;

@@ -14,6 +14,7 @@ export function renderVehicle(ui,p,v){
   p.metrics([['CONSERVAÇÃO',`${v.condition.toFixed(0)}%`,v.condition<30?C.red:C.green],['VELOCIDADE NA RUA',`${spec.speed} células/s`]]);
   p.heading('IDENTIDADE E PROPRIEDADE');p.kv('Registro individual',v.id);p.kv('Marca',model?.brand||'Sem registro');p.kv('Modelo / revisão',model?.name||'Sem registro');p.kv('Origem',v.initial?'Equipamento da fundação':v.imported?'Importado':'Produção local');
   p.button(`DONO: ${city.accountName(v.ownerAccountId)}`,()=>ownerLink(ui,v.ownerAccountId));
+  if(v.possessorAccountId&&v.possessorAccountId!==v.ownerAccountId){p.kv('Posse atual',city.accountName(v.possessorAccountId));p.note('O registro de propriedade permanece com o dono legal.');}
   if(model?.manufacturerId!=null)p.button(`FABRICANTE: ${city.building(model.manufacturerId)?.entity.properties.name||model.brand}`,()=>ui.openBuilding(model.manufacturerId));
   p.kv('Fabricação / registro',stamp(v.createdAt??model?.createdAt??0));p.kv('Lote',v.batchId??(v.initial?'Patrimônio inicial':'Sem lote registrado'));
   if(!v.active)p.kv('Preço de venda',money(system.vehiclePrice(v)));p.kv('Situação',v.status||(!v.active?'No estoque':v.driverId?'Em viagem':'Estacionado'));

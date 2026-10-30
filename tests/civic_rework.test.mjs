@@ -28,8 +28,8 @@ test('case intervention applies to the selected case even if another is more sev
  const result=p.intervene('expose',c.id,{caseId:first.id});assert(result);assert.equal(result.caseId,first.id);assert(first.evidence>0);assert.equal(second.evidence,0);
 });
 
-test('chamber excludes the accused from a proven corruption vote and records condemnation',()=>{
- const city=setup({starter:true,population:128}),p=city.politics,council=p.council,people=council.people();assert(people.length>=3);const accused=people[0],record={id:778,accusedId:accused.id,participantIds:[accused.id],proven:true,severity:85,awareIds:city.citizens.filter(c=>city.society.isAdult(c)).slice(0,20).map(c=>c.id)};p.corruption.push(record);p.scandals.push(record);
- const bill=council.propose(people[1],'convict',{targetId:accused.id,caseId:record.id});assert(bill);council.getChamber=()=>({open:()=>true,present:()=>people,hall:()=>({id:123})});council.preference=()=>({yes:true,reason:'Provas'});council.vote(bill);
- assert.equal(bill.status,'executed');assert(record.convictedIds.includes(accused.id));assert(!bill.votes.some(v=>v.citizenId===accused.id));assert.equal(bill.votes.length,people.length-1);
+test('criminal corruption convictions are referred to police and courts instead of a chamber vote',()=>{
+ const city=setup({starter:true,population:128}),p=city.politics,council=p.council,people=council.people();assert(people.length>=3);const accused=people[0],record={id:778,accusedId:accused.id,participantIds:[accused.id],proven:true,severity:85,occurredAt:city.minute-60,discoveredAt:city.minute,evidence:.9,evidenceEventId:778,awareIds:[]};p.corruption.push(record);p.scandals.push(record);
+ assert.equal(council.propose(people[1],'convict',{targetId:accused.id,caseId:record.id}),null);assert.match(city.lastError,/tribunal/);
+ const process=city.justice.referCorruption(record);assert(process);assert.equal(process.status,'reported');assert.equal(process.details.corruptionCaseId,record.id);assert.deepEqual(record.convictedIds,[]);assert.equal(city.justice.referCorruption(record),process);
 });

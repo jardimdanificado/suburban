@@ -9,8 +9,8 @@ export const GENDER_LABELS = { man:'Homem', woman:'Mulher', nonbinary:'Não bin�
 const bounded = (n,min=0,max=100) => Math.max(min,Math.min(max,n));
 const trait = (c,key) => c.traits?.[key] ?? .5;
 const positive = new Set(['praise','gift','food-shared','support','mentoring','care','good-work','friendship','ride-share','reconciliation']);
-const serious = new Set(['betrayal','humiliation','unpaid-work','breakup']);
-const labels = { praise:'um elogio',gift:'ajuda financeira','food-shared':'partilha de comida',support:'apoio emocional',mentoring:'uma orientação profissional',care:'cuidado familiar',insult:'uma ofensa',humiliation:'uma humilhação',betrayal:'uma quebra de fidelidade','unpaid-work':'um salário não pago','good-work':'trabalho remunerado',competition:'uma disputa',reconciliation:'uma reconciliação','ride-share':'uma carona de bicicleta',rejection:'uma proposta rejeitada',flirt:'uma aproximação romântica',proposal:'uma proposta de relacionamento',partnership:'o início de um relacionamento',breakup:'uma separação',loss:'uma perda',apology:'um pedido de desculpas' };
+const serious = new Set(['betrayal','humiliation','unpaid-work','breakup','murder','assault','robbery','theft','vandalism','corruption']);
+const labels = {murder:'um homicídio',assault:'uma agressão',robbery:'um roubo',theft:'um furto',vandalism:'uma depredação',corruption:'um caso de corrupção', praise:'um elogio',gift:'ajuda financeira','food-shared':'partilha de comida',support:'apoio emocional',mentoring:'uma orientação profissional',care:'cuidado familiar',insult:'uma ofensa',humiliation:'uma humilhação',betrayal:'uma quebra de fidelidade','unpaid-work':'um salário não pago','good-work':'trabalho remunerado',competition:'uma disputa',reconciliation:'uma reconciliação','ride-share':'uma carona de bicicleta',rejection:'uma proposta rejeitada',flirt:'uma aproximação romântica',proposal:'uma proposta de relacionamento',partnership:'o início de um relacionamento',breakup:'uma separação',loss:'uma perda',apology:'um pedido de desculpas' };
 
 export class CityRelationships {
   constructor(city) { this.city=city;this.facts=new Map();this.nextFactId=1;this.rumorsShared=0;this.corrections=0; }
@@ -158,6 +158,7 @@ export class CityRelationships {
     if(this.correctRumor(a,b,conversation)||this.correctRumor(b,a,conversation))return;
     const av=this.view(a,b,true),bv=this.view(b,a,true),parentEventId=conversation.eventId;
     const actor=this.city.random()<.5?a:b,target=actor===a?b:a,recipient=this.view(target,actor);
+    if(this.city.justice?.considerTheft(actor,target,parentEventId))return;
     if(recipient.resentment>20 && trait(actor,'empathy')>.5 && this.city.minute-recipient.lastApologyAt>360 && this.city.random()<.5) {this.apologize(actor,target,parentEventId);return;}
     if((av.resentment+bv.resentment)>65 && this.city.random()<.5) {this.conflict(actor,target,parentEventId);return;}
     if(target.social.grief.some(g=>g.until>this.city.minute) && trait(actor,'empathy')>.5 && this.view(actor,target).trust>=25) {
@@ -188,6 +189,7 @@ export class CityRelationships {
     return false;
   }
   conflict(actor,target,parentEventId) {
+    this.city.justice?.combatEncounter(actor,target,{parentEventId});
     const intimidation=actor.socialProfile.assertiveness-target.socialProfile.assertiveness;
     const kind=intimidation>.3 && trait(actor,'empathy')<.4?'humiliation':'insult';
     this.shift(target,actor,{affection:kind==='humiliation'?-18:-10,trust:-8,respect:-5,resentment:kind==='humiliation'?20:12,fear:Math.max(0,intimidation*15)});

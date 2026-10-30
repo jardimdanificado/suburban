@@ -77,7 +77,8 @@ export function investigateCases(p){
       record.discoveredAt=city.minute;record.evidence=.15+city.random()*.25;p.scandals.push(record);if(p.scandals.length>96)p.scandals.shift();
       city.log('Uma denúncia abriu investigação de possíveis irregularidades.','government',[record.accusedId],{kind:'corruption-investigation',corruptionCaseId:record.id});
     }
-    if(!record.proven){
+    if(city.justice)city.justice.referCorruption(record);
+    if(!city.justice&&!record.proven){
       const allies=p.council.people().filter(c=>c.political.partyId===record.partyId).length/Math.max(1,p.council.seats);
       if(city.random()<allies*(1-(city.society.citizen(record.accusedId)?.traits?.honesty??.5))*.12){record.coverUps=(record.coverUps||0)+1;record.evidence=Math.max(0,(record.evidence||0)-.2);if(record.coverUps>=2){record.archived=true;record.outcome='Investigação arquivada por obstrução e proteção política';continue;}}
       if(city.random()<.18*(1-record.concealment)){record.evidence=Math.min(1,(record.evidence||0)+.15+city.random()*.2);}
@@ -87,11 +88,6 @@ export function investigateCases(p){
     const listeners=p.campaigns.sample(voters.filter(c=>!record.awareIds.includes(c.id)),reach);
     for(const voter of listeners){record.awareIds.push(voter.id);p.remember(voter,{kind:record.proven?'proven-scandal':'corruption-rumor',caseId:record.id,partyId:record.partyId,candidateId:record.accusedId,effect:record.proven?-record.severity/4:-2,description:record.proven?'Conheceu provas de corrupção e seus participantes.':'Ouviu denúncia ainda sob investigação.'});}
     syncCorruptionVotes(p,record);
-    if(record.proven)for(const targetId of [...new Set([record.accusedId,...(record.participantIds||[])])]){
-      if(p.council.bills.some(b=>b.type==='convict'&&b.payload.caseId===record.id&&b.payload.targetId===targetId))continue;
-      const author=p.council.people().find(c=>c.id!==targetId&&!record.participantIds?.includes(c.id));
-      if(author)p.council.propose(author,'convict',{targetId,caseId:record.id},'Condenação por corrupção comprovada');
-    }
     record.publicAttention=publicPressure(p,record);
     if(scandalEligible(p,record))for(const targetId of [...new Set([record.accusedId,...(record.participantIds||[])])]){
       if(record.impeachedIds?.includes(targetId)||p.council.bills.some(b=>b.type==='impeach'&&b.payload.caseId===record.id&&b.payload.targetId===targetId))continue;
