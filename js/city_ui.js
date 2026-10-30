@@ -361,6 +361,8 @@ export class CityUI {
       if (job) p.button(name(job.entity), () => this.openBuilding(job.id));
       else p.note(c.businessIds.length ? 'Empresário' : society.isAdult(c) ? 'Sem emprego' : 'Criança');
       p.kv('Salário líquido hoje', money(c.salaryToday));p.kv('Imposto retido hoje',money(c.taxPaidToday||0));p.kv('Complemento municipal hoje',money(c.wageSubsidyToday||0)); p.kv('Vale-alimentação hoje', money(c.mealAllowanceToday)); p.note('As habilidades aumentam com a prática e influenciam contratação e remuneração.');
+      if(c.forensicDisqualifiedAt!=null){p.status('INABILITAÇÃO PERICIAL',`Afastado por condenação · ${stamp(c.forensicDisqualifiedAt)}`,'#e8757a');p.button('ABRIR PROCESSO DE CONDENAÇÃO',()=>this.openPanel({tab:'justice',views:{justice:'cases'},justiceCaseId:c.forensicDisqualificationCaseId}));}
+      if(c.judicialDisqualifiedAt!=null){p.status('INABILITAÇÃO JUDICIAL',`Impedido permanentemente de atuar como juiz · ${stamp(c.judicialDisqualifiedAt)}`,'#e8757a');p.button('ABRIR PROCESSO DE CONDENAÇÃO',()=>this.openPanel({tab:'justice',views:{justice:'cases'},justiceCaseId:c.judicialDisqualificationCaseId}));}
       p.meters(Object.entries(c.skills).map(([id,v])=>[SKILLS[id],v,C.cyan]));
     } else if (this.detailTab === 'history') {
       this.journal(p,c.accountId);

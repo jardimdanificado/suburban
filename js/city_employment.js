@@ -38,6 +38,7 @@ export function requirements(city,b){
   return b.hiringPolicy;
 }
 export function qualification(city,c,b){
+  if(b.type==='iml'&&c.forensicDisqualifiedAt!=null)return {eligible:false,trainee:false,experience:c.career?.worked?.forensics||0,rating:0,reason:'inabilitado para exercer perícia por condenação judicial'};
   const policy=requirements(city,b),skill=city.economy.jobSkill(b),cv=career(c),experience=cv.worked[skill]||0;
   let weighted=0,minutes=0;for(const row of cv.jobs)if(row.skill===skill&&row.workedMinutes>0){weighted+=row.rating*row.workedMinutes;minutes+=row.workedMinutes;}
   const rating=minutes?weighted/minutes:50;

@@ -4,7 +4,7 @@ const vehicleFor=(city,record)=>city.vehicles?.units.get(record.details?.vehicle
 export function dispatchVehicleRestitution(justice){
   const city=justice.city;
   for(const record of justice.cases){
-    if(record.type!=='bicycleTheft'||record.status!=='convicted'||record.vehicleRecoverySource==='owner')continue;
+    if(!['bicycleTheft','vehicleReceiving'].includes(record.type)||record.status!=='convicted'||record.vehicleRecoverySource==='owner')continue;
     const vehicle=vehicleFor(city,record),owner=city.society.citizen(record.victimId);
     const recovery=record.vehicleRecovery??={status:'awaiting-officer',vehicleId:record.details?.vehicleId,ownerId:record.victimId};
     if(recovery.status==='in-progress'){
@@ -18,6 +18,8 @@ export function dispatchVehicleRestitution(justice){
     if(['returned','in-progress'].includes(recovery.status))continue;
     if(!vehicle?.active||vehicle.scrapped){recovery.waitingReason='veículo indisponível';continue;}
     if(!owner||owner.entity.destroyed||vehicle.ownerAccountId!==owner.accountId){recovery.waitingReason='proprietário legal indisponível ou alterado';continue;}
+    const otherRecovery=justice.cases.find(other=>other!==record&&other.details?.vehicleId===vehicle.id&&other.vehicleRecovery?.status==='in-progress');if(otherRecovery){recovery.waitingReason=`recuperação já atribuída ao caso #${otherRecovery.id}`;continue;}
+    if(!vehicle.theft&&!vehicle.policeRecoveryOfficerId){recovery.status='returned';recovery.returnedAt=city.minute;recovery.waitingReason=null;record.vehicleRecoveredAt??=city.minute;record.vehicleRecoverySource??='police-arrest';continue;}
     if(vehicle.driverId||vehicle.mechanicId||vehicle.paintJobId||vehicle.serviceBodyId||vehicle.policeRecoveryOfficerId){recovery.waitingReason='veículo em uso ou reservado';continue;}
     let assignment;
     for(const station of justice.activeBuildings('police_station')){
