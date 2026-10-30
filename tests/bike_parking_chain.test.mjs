@@ -81,3 +81,24 @@ test('missing or full racks fall back to reserved spaces beside roads, never on 
  const c=city.accounts.get(v.ownerAccountId);c.entity.x=v.x;c.entity.y=v.y;v.driverId=c.id;v.reservedParking=spot;c.ridingVehicleId=v.id;c.mobilityTrip={vehicleId:v.id,goal,stage:'riding'};
  system.releaseTrip(c,true);assert.equal(v.parking.kind,'roadside');assert.equal(c.ridingVehicleId,null);assert.equal(v.reservedParking,null);assert.equal(v.parkingHistory.at(-1).rackName,'Ao lado da rua');
 });
+
+test('passengers remain on the vehicle route and disembark on a reachable cell beside a building',()=>{
+ const city=setup({starter:true,population:64}),system=city.vehicles,[driver,passenger]=city.citizens.slice(0,2),b=city.buildings.find(b=>b.type==='townhall');
+ const id=system.nextId;system.registerUnits(b,'bicicleta',1,null);const v=system.units.get(id);system.activate(v,driver.accountId,b);
+ const goal={...b.door};v.x=goal.x;v.y=goal.y;v.angle=0;v.driverId=driver.id;v.passengerIds=[passenger.id];
+ driver.entity.x=v.x;driver.entity.y=v.y;driver.path=[goal];driver.ridingVehicleId=v.id;driver.mobilityTrip={vehicleId:v.id,goal,stage:'riding'};
+ passenger.mobilityTrip={vehicleId:v.id,goal,stage:'passenger'};passenger.ridingVehicleId=v.id;passenger.ridingAsPassenger=true;passenger.carpoolResume={task:'water',targetId:b.id};
+ system.update(.01);
+ assert.equal(passenger.ridingVehicleId,null);assert.deepEqual({x:passenger.entity.x,y:passenger.entity.y},goal);
+ assert(city.walkable(Math.floor(passenger.entity.x),Math.floor(passenger.entity.y)));assert.notEqual(city.findPath(passenger.entity,b.door),null);
+});
+
+test('a saved resident stranded inside a shell can reach essential services again without restoring needs',()=>{
+ const city=setup({starter:true,population:64}),c=city.citizens[0],b=city.buildings.find(b=>b.type==='townhall');
+ c.entity.x=b.entity.x+.2;c.entity.y=b.entity.y+.2;c.indoorLocation=null;c.path=[];c.task=null;c._nextTaskAt=city.minute+5;const before={...c.needs};
+ assert(city.life.recoverBlockedPosition(c));assert.deepEqual({x:c.entity.x,y:c.entity.y},b.door);assert.deepEqual(c.needs,before);
+ assert.notEqual(city.findPath(c.entity,city.buildings.find(b=>b.type==='public_toilet').door),null);
+ assert.equal(city.life.recoverBlockedPosition(c),false);
+ c.indoorLocation={buildingId:b.id};c.entity.x=b.entity.x+.2;c.entity.y=b.entity.y+.2;
+ assert.equal(city.life.recoverBlockedPosition(c),false);
+});

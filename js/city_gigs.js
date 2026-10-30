@@ -1,4 +1,4 @@
-import {activityRoomReady} from './city_interiors.js?v=survival-capacity-1';
+import {activityRoomReady} from './city_interiors.js?v=service-capacity-3';
 
 const ACTIVE=new Set(['open','working']);
 const INTERRUPTIBLE=new Set(['leisure','walk','social','sit','outdoor_leisure']);

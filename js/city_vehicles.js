@@ -245,7 +245,7 @@ export class CityVehicles {
   }
   tryTrip(c){
     if(c.mobilityWalkGoal){const last=c.path.at(-1);if(last&&Math.floor(last.x)===Math.floor(c.mobilityWalkGoal.x)&&Math.floor(last.y)===Math.floor(c.mobilityWalkGoal.y))return;c.mobilityWalkGoal=null;}
-    if(!this.activeCount||c.mobilityTrip||c.ridingVehicleId||c.path.length<3||!this.city.society.isAdult(c)||c.conversation||c.workMeal||this.city.minute-(c.lastVehicleSearchAt??-Infinity)<20)return;
+    if(!this.activeCount||c.skybridgeTransit||c.skybridgeZ||c.mobilityTrip||c.ridingVehicleId||c.path.length<3||!this.city.society.isAdult(c)||c.conversation||c.workMeal||this.city.minute-(c.lastVehicleSearchAt??-Infinity)<20)return;
     c.lastVehicleSearchAt=this.city.minute;const city=this.city,goal=c.path.at(-1);
     if(!c.path.some(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))))return;
     const owners=new Set([c.accountId,city.building(c.jobId)?.accountId,...c.businessIds.map(id=>city.building(id)?.accountId)]),load=c.deliveryId?city.logistics.shipments.find(s=>s.id===c.deliveryId):null;
@@ -264,7 +264,7 @@ export class CityVehicles {
     if(!['bicicleta','bicicleta_carga'].includes(v.good)||v.passengerIds.length>=VEHICLE_SPECS[v.good].seats-1||driver.mobilityTrip?.stage!=='riding')return false;
     const goal=driver.mobilityTrip.goal;if(!goal)return false;const city=this.city;
     for(const passenger of city.citizens){
-      if(passenger===driver||passenger.entity.destroyed||passenger.indoorLocation||passenger.mobilityTrip||passenger.ridingVehicleId||passenger.conversation||passenger.workMeal||passenger.deliveryId||passenger.path.length===0||city.minute-(passenger.lastCarpoolAt??-Infinity)<240||['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving'].includes(passenger.task))continue;
+      if(passenger===driver||passenger.entity.destroyed||passenger.indoorLocation||passenger.skybridgeTransit||passenger.skybridgeZ||passenger.mobilityTrip||passenger.ridingVehicleId||passenger.conversation||passenger.workMeal||passenger.deliveryId||passenger.path.length===0||city.minute-(passenger.lastCarpoolAt??-Infinity)<240||['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving'].includes(passenger.task))continue;
       const passengerGoal=passenger.path.at(-1);if(!passengerGoal||Math.hypot(passengerGoal.x-goal.x,passengerGoal.y-goal.y)>3)continue;
       if(Math.hypot(passenger.entity.x-v.x,passenger.entity.y-v.y)>2)continue;
       const relation=city.relationships.view(driver,passenger),reverse=city.relationships.view(passenger,driver);
@@ -282,7 +282,8 @@ export class CityVehicles {
     return false;
   }
   detachPassenger(c,v,continueOnFoot=true){
-    if(v)v.passengerIds=(v.passengerIds||[]).filter(id=>id!==c.id);
+    // The vehicle route is walkable; a visual seat offset can fall inside walls.
+    if(v){v.passengerIds=(v.passengerIds||[]).filter(id=>id!==c.id);c.entity.x=v.x;c.entity.y=v.y;}
     const goal=c.mobilityTrip?.goal,resume=c.carpoolResume||{};
     c.ridingVehicleId=null;c.ridingVehicleKind=null;c.ridingAsPassenger=false;c.mobilityTrip=null;c.carpoolResume=null;
     c.task=resume.task??c.task;c.targetId=resume.targetId??c.targetId;
@@ -336,7 +337,7 @@ export class CityVehicles {
         v.x=c.entity.x;v.y=c.entity.y;v.altitude=surfaceElevation(city.world,v.x,v.y);v.entity.x=v.x;v.entity.y=v.y;
         v.carpoolScanDistance=(v.carpoolScanDistance||0)+travel;
         if(v.carpoolScanDistance>=.75){v.carpoolScanDistance%=.75;this.tryCarpool(v,c);}
-         for(let i=v.passengerIds.length-1;i>=0;i--){const passenger=city.society.citizen(v.passengerIds[i]);if(!passenger||passenger.entity.destroyed){v.passengerIds.splice(i,1);continue;}const side=(i+1)*.34;passenger.entity.x=v.x+Math.cos(v.angle||0)*side;passenger.entity.y=v.y-Math.sin(v.angle||0)*side;const goal=passenger.mobilityTrip?.goal;if(goal&&Math.hypot(goal.x-v.x,goal.y-v.y)<=.8)this.detachPassenger(passenger,v,true);}
+         for(let i=v.passengerIds.length-1;i>=0;i--){const passenger=city.society.citizen(v.passengerIds[i]);if(!passenger||passenger.entity.destroyed){v.passengerIds.splice(i,1);continue;}passenger.entity.x=v.x;passenger.entity.y=v.y;const goal=passenger.mobilityTrip?.goal;if(goal&&Math.hypot(goal.x-v.x,goal.y-v.y)<=.8)this.detachPassenger(passenger,v,true);}
         v.status=road?`Usando ${VEHICLE_SPECS[v.good].label.toLowerCase()}`:'Levando equipamento fora da rua';c.action=v.status;
         if(v.condition<=15){this.releaseTrip(c);break;}
       }

@@ -10,7 +10,7 @@ export class CityLife {
   die(c, cause) {
     if (c.entity.destroyed || c.dead) return false;
     c.dead = true; c.diedAt = this.city.minute; c.deathCause = cause;
-    const event = { citizenId: c.id, name: c.entity.properties.name, minute: this.city.minute, age: this.city.society.age(c), cause,needs:{...c.needs},task:c.task,targetId:c.targetId,position:{x:c.entity.x,y:c.entity.y} };
+    const event = { citizenId: c.id, name: c.entity.properties.name, minute: this.city.minute, age: this.city.society.age(c), cause,needs:{...c.needs},task:c.task,action:c.action,targetId:c.targetId,skybridgeTransit:c.skybridgeTransit?{...c.skybridgeTransit}:null,position:{x:c.entity.x,y:c.entity.y} };
     this.deathCount++; this.deaths.push(event); if (this.deaths.length > 1000) this.deaths.shift();
     for (const s of this.city.logistics.shipments) if (s.driverId === c.id) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.city.logistics.releaseDriver(s); s.status = 'waiting'; }
     this.city.sanitation?.releaseCitizen(c);
@@ -44,6 +44,22 @@ export class CityLife {
       const activity=c.activity??=( {x:0,y:0,needs:{}} );activity.x=c.entity.x;activity.y=c.entity.y;for(const key of NEED_KEYS)activity.needs[key]=n[key];
     }
     return false;
+  }
+  recoverBlockedPosition(c) {
+    const city=this.city;
+    if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ||city.walkable(Math.floor(c.entity.x),Math.floor(c.entity.y)))return false;
+    // Repair invalid ground positions, including walls and water after a route interruption.
+    const building=city.buildings.find(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&c.entity.x>=b.entity.x&&c.entity.x<b.entity.x+b.width&&c.entity.y>=b.entity.y&&c.entity.y<b.entity.y+b.depth);
+    let destination=building?.door;
+    if(!destination)for(let radius=1;radius<=3&&!destination;radius++)for(let dx=-radius;dx<=radius&&!destination;dx++)for(let dy=-radius;dy<=radius;dy++){
+      const x=Math.floor(c.entity.x)+dx,y=Math.floor(c.entity.y)+dy;
+      const candidate={x:x+.5,y:y+.5},hub=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
+      if(city.walkable(x,y)&&(!hub||city.findPath(candidate,hub.door)!==null)){destination=candidate;break;}
+    }
+    if(!destination||!city.walkable(Math.floor(destination.x),Math.floor(destination.y)))return false;
+    const goal=c.path.at(-1);c.entity.x=destination.x;c.entity.y=destination.y;
+    c.path=goal?city.findPath(c.entity,goal)||[]:[];c._nextTaskAt=0;c.lastProgressAt=city.minute;
+    return true;
   }
   resetTask(c, reason) {
     if(c.mobilityTrip)this.city.vehicles.releaseTrip(c);

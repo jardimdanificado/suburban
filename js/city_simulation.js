@@ -11,7 +11,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES} from './city_employment.js?v=housing-work-priority-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=interiors-completion-2';
+import {CityVehicles} from './city_vehicles.js?v=skybridge-survival-2';
 import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
@@ -25,7 +25,7 @@ import {skybridgeLinks} from './city_skybridges.js?v=short-passarelas-bridge-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-name-tags-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=survival-capacity-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=service-capacity-3';
 import {interiorRoute} from './city_interior_layout.js';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
@@ -36,14 +36,14 @@ import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=survival-capacity-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
-import { CityLife } from './city_life.js?v=pocket-water-cutaway-1';
+import { CityLife } from './city_life.js?v=service-capacity-3';
 import { CityWorkMeals } from './city_work_meals.js?v=survival-capacity-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=housing-work-priority-1';
 import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
 import { CityGigs } from './city_gigs.js?v=survival-capacity-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=housing-work-priority-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=landlord-stock-market-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=skybridge-survival-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=shared-origin-paths-1';
 
 const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
@@ -508,11 +508,26 @@ export class CitySimulation {
     const transit=c.skybridgeTransit;if(!transit||c.indoorLocation?.path?.length)return;
     const building=this.building(transit.buildingId),link=this.skybridgeLinksForRevision().find(item=>item.id===transit.linkId);
     if(!building||!link){c.indoorLocation=null;c.skybridgeTransit=null;c.skybridgeZ=0;c.skybridgeId=null;c.path=[];return;}
+    // A social interaction, job cancellation or an old save can lose the
+    // remaining waypoints. Finish the physical crossing before choosing again.
+    if(c.conversation){const other=this.society.citizen(c.conversation.a===c.id?c.conversation.b:c.conversation.a);if(other)other.conversation=null;c.conversation=null;}
+    if(c.mobilityTrip||c.ridingVehicleId){this.vehicles.releaseTrip(c);c.path=[];}
+    if(transit.phase==='crossing'){
+      c.skybridgeZ=link.height;c.skybridgeId=link.id;
+      if(!c.path.some(point=>point.skybridgeExit?.linkId===link.id)){
+        const endpoint=Math.hypot(c.entity.x-link.start.x,c.entity.y-link.start.y)<=Math.hypot(c.entity.x-link.end.x,c.entity.y-link.end.y)?'start':'end';
+        const point=endpoint==='start'?link.start:link.end;
+        c.path=[{...point,z:link.height,skybridgeId:link.id},{...point,z:link.height,skybridgeExit:{buildingId:endpoint==='start'?link.aId:link.bId,unitId:endpoint==='start'?link.auId:link.buId,linkId:link.id,endpoint,interrupted:true}}];
+        c.lastProgressAt=this.minute;c.action='Concluindo a saída da passarela';
+      }
+      return;
+    }
     if(transit.phase==='boarding'){
       const point=transit.endpoint==='end'?link.end:link.start;c.entity.x=point.x;c.entity.y=point.y;c.skybridgeZ=link.height;c.skybridgeId=link.id;c.indoorLocation=null;transit.phase='crossing';c.action='Saindo do prédio para a passarela';return;
     }
     if(transit.phase==='alighting'){
       c.entity.x=building.door.x;c.entity.y=building.door.y;c.skybridgeZ=0;c.skybridgeId=null;c.indoorLocation=null;c.skybridgeTransit=null;c.action='Saindo do prédio';
+      if(transit.interrupted){c.task=null;c.targetId=null;c._nextTaskAt=0;}
     }
   }
   urgentNeed(c) {
@@ -534,13 +549,14 @@ export class CitySimulation {
     const existing=c.cardboardShelterKey&&this.cardboardShelters.get(c.cardboardShelterKey);
     if(existing&&existing.citizenId===c.id)c.homelessSleepSpot={x:existing.x,y:existing.y};
     let spot=c.homelessSleepSpot;
-    if(spot&&(ROAD_TILES.has(tileAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))||bridgeAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))){if(existing?.citizenId===c.id){this.cardboardShelters.delete(c.cardboardShelterKey);this.cardboardRevision++;}c.cardboardShelterKey=null;c.homelessSleepSpot=null;c.inventory.papelao=1;c.path=[];spot=null;}
+    const abandonSpot=()=>{const shelter=this.cardboardShelters.get(c.cardboardShelterKey);if(shelter?.citizenId===c.id){this.cardboardShelters.delete(c.cardboardShelterKey);this.cardboardRevision++;}c.cardboardShelterKey=null;c.homelessSleepSpot=null;c.inventory.papelao=Math.max(1,c.inventory.papelao);c.path=[];spot=null;};
+    if(spot&&(!this.walkable(Math.floor(spot.x),Math.floor(spot.y))||ROAD_TILES.has(tileAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))||bridgeAt(this.world,Math.floor(spot.x),Math.floor(spot.y))))abandonSpot();
     if(spot){
       const shelter=this.cardboardShelters.get(c.cardboardShelterKey);
       if(!shelter||shelter.citizenId!==c.id){const x=Math.floor(spot.x),y=Math.floor(spot.y),shelterKey=`${x},${y}`;this.cardboardShelters.set(shelterKey,{citizenId:c.id,x:x+.5,y:y+.5,placedAt:this.minute});c.cardboardShelterKey=shelterKey;c.homelessSleepSpot={x:x+.5,y:y+.5};c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
       if(Math.hypot(c.entity.x-spot.x,c.entity.y-spot.y)<=.25&&!c.path.length){c.action='Dormindo na rua';return true;}
-      if(!c.path.length){const path=this.findPath(c.entity,spot);if(path!==null){c.path=path;if(!path.length||Math.hypot(path.at(-1).x-spot.x,path.at(-1).y-spot.y)>.05)c.path.push({...spot});}}
-      c.action='Procurando um lugar tranquilo para dormir';return false;
+      if(!c.path.length){const path=this.findPath(c.entity,spot);if(path===null)abandonSpot();else{c.path=path;if(!path.length||Math.hypot(path.at(-1).x-spot.x,path.at(-1).y-spot.y)>.05)c.path.push({...spot});}}
+      if(spot){c.action='Procurando um lugar tranquilo para dormir';return false;}
     }
     const width=this.world.width,height=this.world.height,structure=this.structureRevision||0;
     let safety=this._sleepRouteSafety;
@@ -942,6 +958,7 @@ export class CitySimulation {
     for(const [key,shelter] of this.cardboardShelters){const owner=this.society.citizen(shelter.citizenId);if(!owner||owner.entity.destroyed||owner.homeUnitId){this.cardboardShelters.delete(key);this.cardboardRevision++;if(owner){owner.cardboardShelterKey=null;owner.homelessSleepSpot=null;if(!owner.entity.destroyed){owner.inventory??={};owner.inventory.papelao=1;}}}}
     const setupMs=performance.now()-profileMark;profileMark=performance.now();
     for (const c of this.citizens) {
+      this.life.recoverBlockedPosition(c);
       const n = c.needs;
       // Idle adults cannot choose another activity until their short retry
       // window expires. Accumulate their passive need changes in one pass;

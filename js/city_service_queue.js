@@ -18,22 +18,28 @@ export function reserveService(city,c,b,kind,resource){
  if(!ticket){ticket={citizenId:c.id,buildingId:b.id,kind,resource,joinedAt:city.minute,sequence:entrance.nextServiceTicket=(entrance.nextServiceTicket||0)+1,slot:null};entrance.serviceQueue.push(ticket);c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence};}
  return ticket;
 }
-export function queueService(city,c,b,kind,resource,ready){
+export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=null){
  const entrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;entrance.serviceQueue??=[];
  entrance.serviceQueue=entrance.serviceQueue.filter(q=>{const p=city.society.citizen(q.citizenId),valid=p&&!p.entity.destroyed&&queueKind(p.task)===queueKind(q.kind)&&p.targetId===q.buildingId&&(q.kind!=='toilet'||p.toiletTargetId===q.resource);if(!valid&&p?.serviceQueue?.buildingId===q.buildingId){p.serviceQueue=null;p.facingTarget=null;}return valid;});
  const ticket=reserveService(city,c,b,kind,resource);
- const older=entrance.serviceQueue.some(q=>q.buildingId===b.id&&queueKind(q.kind)===queueKind(kind)&&q.resource===resource&&q.sequence<ticket.sequence);
+ const older=entrance.serviceQueue.some(q=>q.buildingId===b.id&&queueKind(q.kind)===queueKind(kind)&&q.resource===resource&&!q.admittedUnitId&&q.sequence<ticket.sequence);
  const inside=c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.exiting;
  // Available rooms, rather than a global one-person-per-minute gate, set
  // throughput. A multi-floor public building can serve several people at once.
- if(!older&&ready){
+ if((!older||ticket.admittedUnitId===room?.id&&!!room)&&ready){
+  // Reserve the real room before walking from the queue to the entrance.
+  // Admitted people no longer block the next ticket when other rooms are free.
+  const wasAdmitted=!!room&&ticket.admittedUnitId===room.id;
+  if(room){ticket.admittedUnitId=room.id;c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence,unitId:room.id,roomKind};room.activityReservedIds??=[];if(!room.activityReservedIds.includes(c.id))room.activityReservedIds.push(c.id);}
   city.furniture?.release(c);
-  if(!inside&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.9){const route=city.findPath(c.entity,b.door);if(route!==null)c.path=route;c.action='Indo ao atendimento';return false;}
+  if(!inside&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.9){if(!wasAdmitted||!c.path.length){const route=city.findPath(c.entity,b.door);if(route!==null)c.path=route;}c.action='Indo ao atendimento';return false;}
   entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;return true;
  }
  // A queue can outlast its service capacity; a critically urgent person must
  // eventually leave it instead of waiting forever at zero need.
  if(kind==='toilet'&&!inside&&c.needs.toilet<10&&city.minute-ticket.joinedAt>=90){entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;city.sanitation.emergencyRelief(c);return false;}
+ // Moving toward a waiting place must not postpone admission or restart the walk.
+ if(c.path.length)return false;
  c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':['food','workmeal','supplies'].includes(kind)?'Aguardando na fila de alimentação':'Aguardando na fila de atendimento';c.facingTarget={x:b.door.x,y:b.door.y};
  // Recompute ordinal positions after every departure: followers advance to
  // the head of the line instead of retaining a stale, empty slot.
