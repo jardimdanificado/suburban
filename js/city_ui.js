@@ -73,7 +73,7 @@ export const VIEWS = {
   'urban-art': [['overview','OBRAS E MENSAGENS'],['orders','ENCOMENDAS'],['damage','DANOS E LIMPEZA']],
   safety: [['overview','OPERAÇÃO'],['calls','CHAMADOS'],['cases','OCORRÊNCIAS']],
   forensics: [['overview','VISÃO GERAL'],['bodies','CORPOS'],['reports','LAUDOS']],
-  justice: [['overview','VISÃO GERAL'],['cases','PROCESSOS'],['services','TRIBUNAIS E DEFESA']],
+  justice: [['overview','VISÃO GERAL'],['cases','PROCESSOS'],['laws','CÓDIGO PENAL'],['services','TRIBUNAIS E DEFESA']],
   custody: [['overview','VISÃO GERAL'],['people','CUSTODIADOS'],['orders','VAGAS E MANDADOS']],
   sanitation: [['facilities', 'BANHEIROS'], ['queues','FILAS'], ['cleaning', 'FAXINA'], ['gigs','BICOS DE FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };

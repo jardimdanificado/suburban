@@ -26,6 +26,13 @@ test('an authoritarian mayor order is refused or physically executed and linked 
  assert.equal(accepted.status,'executed');assert.ok(piece.damaged>0);const record=justice.cases.find(c=>c.type==='vandalism');assert.ok(record);assert.equal(record.offenderId,officer.id);assert.equal(record.details.orderedByMayorId,mayor.id);assert.equal(record.evidence.at(-1).kind,'municipal-order');
 });
 
+test('extreme municipal pressure can physically pursue and assault a visible opposition member',()=>{
+ const {city,justice,station,officer,actor}=fixture({minute:720,officerPosition:{x:8,y:8}}),mayor={id:4,entity:{x:16,y:8,properties:{name:'Prefeito'}},traits:{honesty:.05,empathy:.05},political:{partyId:1,loyalty:.9,ideology:{liberty:-1}}};
+ city.citizens.push(mayor);city.society.citizen=id=>city.citizens.find(c=>c.id===id);city.economy.mayorId=mayor.id;city.politics={party:()=>({ideology:{liberty:-.5}})};city.payWage=()=>true;city.random=()=>0;officer.traits={honesty:.05};officer.political={partyId:1,loyalty:.9};officer.policePatrol={stationId:station.id,phase:'patrol',waypointIndex:0,lastPaidMinute:null};actor.political={partyId:2};actor.entity.x=12;actor.entity.y=8;
+ const order=justice.considerMunicipalPoliceOrder(station,officer);assert.equal(order.action,'assault-opposition');assert.equal(order.targetId,actor.id);assert.equal(order.status,'accepted');justice.updatePolicePoliticalOrder(officer);assert.deepEqual(officer.path,[{x:actor.entity.x,y:actor.entity.y}]);const origin={x:officer.entity.x,y:officer.entity.y};assert.notDeepEqual(origin,{x:actor.entity.x,y:actor.entity.y});officer.entity.x=11;officer.entity.y=8;officer.path=[];const health=actor.needs.health;justice.updatePolicePoliticalOrder(officer);
+ const assault=justice.cases.find(c=>c.type==='assault'&&c.offenderId===officer.id&&c.victimId===actor.id);assert.ok(assault);assert.ok(actor.needs.health<health);assert.equal(assault.details.municipalOrderId,order.id);assert.equal(assault.details.orderedByMayorId,mayor.id);assert.equal(assault.evidence.at(-1).kind,'municipal-order');assert.equal(order.status,'executed');
+});
+
 test('night patrol uses a second public employee and remains active through 04:59',()=>{
  const {city,justice,station,officer}=fixture({indoor:true}),nightOfficer={id:4,accountId:'citizen:4',jobId:station.id,task:'work',entity:{x:5,y:5,properties:{name:'Oficial noturno'}},needs:{health:90,energy:90,food:90,water:90,toilet:90},skills:{investigation:60},path:[],indoorLocation:{buildingId:station.id,unitId:2,position:{x:5,y:5},path:[]}};
  city.citizens.push(nightOfficer);city.society.citizen=id=>city.citizens.find(c=>c.id===id);city.accounts.set(nightOfficer.accountId,{balance:1000});station.workers.push(nightOfficer.id);station.jobs=3;
