@@ -38,3 +38,17 @@ test('art reading shares the social fact namespace and never overwrites crime ev
   justice.reactToArt();assert.equal(city.relationships.facts.get(crimeMemory.factId),crimeFact);assert.ok(art.socialFactId>crimeMemory.factId);assert.equal(crimeFact.caseId,record.id);const nextId=city.relationships.nextFactId;
   city.minute+=240;justice.reactToArt();assert.equal(city.relationships.nextFactId,nextId);assert.equal(city.relationships.facts.get(art.socialFactId).kind,'public-art');
 });
+
+test('people who share knowledge of a subject form a recorded protest against their monument',()=>{
+  const {justice,city,art}=fixture(),organizer=city.citizens[1];for(const c of city.citizens.slice(0,2))c.social.memories.push({actorId:3,kind:'murder',truth:true,firsthand:true});city.random=()=>0;
+  assert.equal(justice.considerArtProtest(organizer,art),true);const protest=justice.protests[0];
+  assert.equal(protest.status,'active');assert.deepEqual(protest.participantIds,[1,2]);assert.equal(protest.artId,art.id);assert.equal(protest.vandalismCaseId,justice.cases[0].id);assert.equal(justice.cases[0].details.protestId,protest.id);
+});
+
+test('authoritarian police physically repress a collective protest and preserve the linked assault case',()=>{
+  const {justice,city,art}=fixture(),organizer=city.citizens[1];for(const c of city.citizens.slice(0,2))c.social.memories.push({actorId:3,kind:'murder',truth:true,firsthand:true});city.random=()=>0;justice.considerArtProtest(organizer,art);const protest=justice.protests[0];
+  const station={id:10,type:'police_station',active:true,entity:{destroyed:false,properties:{name:'Delegacia'}},door:{x:4,y:4},workers:[4],balance:10000},officer={id:4,accountId:'citizen:4',jobId:10,task:'work',entity:{x:.3,y:0,properties:{name:'Oficial'}},needs:{health:90,energy:90},skills:{combat:0},traits:{honesty:.05},political:{partyId:1},policePatrol:{stationId:10,phase:'patrol'},path:[],action:'Em ronda'},mayor={id:5,entity:{x:8,y:8,properties:{name:'Prefeito'}},traits:{honesty:.05,empathy:.05},political:{partyId:1,loyalty:.9,ideology:{liberty:-1}}};
+  city.citizens.push(officer,mayor);city.society.citizen=id=>city.citizens.find(c=>c.id===id);city.society.getRelation=()=>({views:{}});city.economy={mayorId:mayor.id,practice(){}};city.politics={party:()=>({ideology:{liberty:-.5}})};city.buildings=[station];city.building=id=>id===station.id?station:null;city.findPath=(from,to)=>[{x:to.x,y:to.y}];city.urgentNeed=()=>false;city.payWage=()=>true;
+  const order=justice.considerMunicipalPoliceOrder(station,officer);assert.equal(order.action,'repress-protest');assert.equal(order.protestId,protest.id);assert.equal(order.status,'accepted');justice.updatePolicePoliticalOrder(officer);
+  const assault=justice.cases.find(c=>c.type==='assault'&&c.offenderId===officer.id&&c.victimId===order.targetId);assert.ok(assault);assert.equal(assault.details.protestId,protest.id);assert.equal(assault.details.municipalOrderId,order.id);assert.equal(assault.evidence.at(-1).protestId,protest.id);assert.equal(protest.status,'repressed');assert.ok(protest.dispersedParticipantIds.length);assert.ok(city.society.citizen(protest.dispersedParticipantIds[0]).path.length);
+});

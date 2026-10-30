@@ -1,12 +1,14 @@
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {governmentExpectations} from './city_government_expectations.js';
 import {outcomeAssessment,promiseAssessment} from './city_promise_evaluation.js';
+import {governmentPerformance} from './city_government_performance.js';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 export function seatBounds(city){const population=city.citizens.filter(c=>!c.entity.destroyed).length;const min=Math.max(1,Math.ceil(population*.05));return {population,min,max:Math.max(min,Math.floor(population*.125))};}
 export function publicPressure(p,record){const living=p.city.citizens.filter(c=>!c.entity.destroyed&&p.city.society.isAdult(c));const aware=new Set(record.awareIds||[]);return living.length?living.filter(c=>aware.has(c.id)).length/living.length*100:0;}
 export function scandalEligible(p,record){return !!record?.proven&&(record.severity||0)>=60&&publicPressure(p,record)>=65&&!record.archived;}
 export function approvalReport(p){
   const city=p.city,now=p.conditions(),t=p.mandates.current;
+  const finance=governmentPerformance(city),financialBaseline=t?.baseline||finance,financialLatest=t?.latest||finance;
   const fulfilled=t?.promises.filter(pr=>pr.fulfilled).length||0,total=t?.promises.length||0;
   const outcomes=t?(t.outcomes||outcomeAssessment(t.baseline,t.latest)):null;
   const assessments=t?.promises.map(pr=>pr.assessment||promiseAssessment(pr,t,city.minute))||[];
@@ -20,6 +22,12 @@ export function approvalReport(p){
     {label:'Condições atuais: moradia',points:(.5-now.homeless)*6,detail:`${((1-now.homeless)*100).toFixed(1)}% abrigados`},
     {label:'Condições atuais: alimentação',points:(.5-now.hunger)*8,detail:`${((1-now.hunger)*100).toFixed(1)}% sem fome`},
     {label:'Condições atuais: ocupação',points:(now.employment-.5)*4,detail:`${(now.employment*100).toFixed(1)}% com ocupação`},
+    {label:'Caixa municipal e reserva',points:(finance.cashHealth-50)*.16,detail:`Caixa ${Math.round(finance.cash)}; reserva social ${Math.round(finance.reserve)}. Indicador ${finance.cashHealth.toFixed(1)}/100; caixa zerado recebe avaliação mínima.`},
+    {label:'Equilíbrio do custeio público',points:(finance.operatingHealth-50)*.16,detail:`Saldo de custeio nos últimos dias: ${Math.round(finance.operatingBalance)}. Indicador ${finance.operatingHealth.toFixed(1)}/100, calculado em relação às despesas correntes.`},
+    {label:'Produtividade das empresas ativas',points:(finance.companyProductivity-50)*.1,detail:`${finance.productiveCompanies}/${finance.activeCompanies} empresas ativas têm equipe e receita registrada; indicador ${finance.companyProductivity.toFixed(1)}/100.`},
+    {label:'Mudança da saúde do caixa desde a posse',points:((financialLatest.treasuryHealth??finance.cashHealth)-(financialBaseline.treasuryHealth??finance.cashHealth))*.1,detail:`${(financialBaseline.treasuryHealth??finance.cashHealth).toFixed(1)} → ${(financialLatest.treasuryHealth??finance.cashHealth).toFixed(1)}/100 desde a posse.`},
+    {label:'Mudança do equilíbrio de custeio desde a posse',points:((financialLatest.operatingHealth??finance.operatingHealth)-(financialBaseline.operatingHealth??finance.operatingHealth))*.1,detail:`${(financialBaseline.operatingHealth??finance.operatingHealth).toFixed(1)} → ${(financialLatest.operatingHealth??finance.operatingHealth).toFixed(1)}/100 desde a posse.`},
+    {label:'Mudança da produtividade empresarial desde a posse',points:((financialLatest.companyProductivity??finance.companyProductivity)-(financialBaseline.companyProductivity??finance.companyProductivity))*.08,detail:`${(financialBaseline.companyProductivity??finance.companyProductivity).toFixed(1)} → ${(financialLatest.companyProductivity??finance.companyProductivity).toFixed(1)}/100 desde a posse.`},
     ...(outcomes?.rows||[]).map(row=>({label:`Mudança desde a posse: ${row.label.toLowerCase()}`,points:row.points*(row.points<0?1.8:.6),detail:`Início ${row.baseline.toFixed(1)}% → agora ${row.current.toFixed(1)}%; variação ${row.change>0?'+':''}${row.change.toFixed(1)} pontos percentuais. Ganhos têm peso moderado; retrocessos descontam com mais força.`})),
     {label:'Avanço da promessa',points:mean('partial')*.4,detail:'Até 4,8 pontos pelo avanço real, antes do ajuste às expectativas'},
     {label:'Execução comprovada do plano',points:mean('initiative')*.5,detail:'Até 3 pontos por execução comprovada enquanto a promessa está pendente'},
@@ -42,7 +50,7 @@ export function approvalReport(p){
   // Diminishing returns preserve room for disagreement instead of clamping at unanimity.
   const score=50+49.5*Math.tanh(delta/50);
   rows.forEach(Object.freeze);
-  return {version:4,expectations,minute:city.minute,startingScore:50,score,raw,adjustment:score-raw,rows,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment,outcomePoints:outcomes?.points||0,promisePoints};
+  return {version:5,expectations,minute:city.minute,startingScore:50,score,raw,adjustment:score-raw,rows,finance,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment,outcomePoints:outcomes?.points||0,promisePoints};
 }
 export function criticalApproval(p){
   p.approvalReport=approvalReport(p);p.approval=p.approvalReport.score;

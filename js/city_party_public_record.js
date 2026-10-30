@@ -58,10 +58,12 @@ export function publicPerformance(p,party){
     row.minute=term.endedAt??p.city.minute;row.ended=term.endedAt!=null;
     row.management=clamp((term.outcomes?.points||0)*.35,-12,14);
     row.promises=clamp(term.promises.reduce((n,pr)=>n+(pr.assessment?.points||0),0)/Math.max(1,term.promises.length)*.25,-12,14);
+    const indicators=term.latest||{},fiscalMean=(Number(indicators.treasuryHealth??50)+Number(indicators.operatingHealth??50)+Number(indicators.companyProductivity??50))/3;
+    row.fiscal=clamp((fiscalMean-50)*.18,-9,9);
     row.fulfilled=term.promises.filter(pr=>pr.fulfilled).length;row.total=term.promises.length;
   }
   if(party.governmentRecords.length>32)party.governmentRecords.splice(0,party.governmentRecords.length-32);
   const latest=party.governmentRecords.slice(-3),mean=key=>latest.reduce((n,r)=>n+r[key],0)/Math.max(1,latest.length);
   const management=mean('management'),promises=mean('promises'),legislative=clamp((party.archivedLegislativePoints||0)+(party.publicRecords||[]).reduce((n,r)=>n+r.points,0),-20,20);
-  return {management,promises,legislative,performance:management+promises};
+  const fiscal=mean('fiscal');return {management,promises,fiscal,legislative,performance:management+promises+fiscal};
 }
