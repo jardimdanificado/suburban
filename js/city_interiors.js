@@ -96,6 +96,7 @@ export function syncCitizenInterior(city,c){
  // Avoid resolving buildings and construction projects on every movement tick.
  if(!s&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length&&!queued||c.deliveryId||!INDOOR_TASKS.has(task)))return true;
  normalizeInterior(city,c);
+ if(task==='police-investigation')return true;
  if(task==='custody-water'&&c.custodyWaterDelivery&&s?.buildingId===c.custodyWaterDelivery.jailId)return !s.exiting&&!s.path.length;
   if(task==='custody'&&c.custody&&s?.buildingId===c.custody.jailId&&s.targetRoomType==='cell'&&!s.exiting)return !s.path.length;
  const fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;

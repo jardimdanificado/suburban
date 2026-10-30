@@ -4,6 +4,7 @@ import {setup} from './helpers/city.mjs';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 import {CityJustice} from '../js/city_justice.js';
 import {ensureJusticeSkills,JUSTICE_SKILLS} from '../js/city_justice_skills.js';
+import {CITY_FLOOR_HEIGHT} from '../js/city_building_geometry.js';
 
 function restore(city){const sender=new CityStateGraph(),receiver=new CityStateGraph(),snapshot=receiver.apply(sender.encode({city}));bindCityState(snapshot.city);return {sender,receiver,restored:snapshot.city};}
 
@@ -43,6 +44,25 @@ test('in-progress field investigations preserve the officer route and collected 
   city.justice.cases.push({id:51,type:'assault',status:'investigating',reportingStationId:station.id,investigation:{officerId:officer.id,stationId:station.id,status:'active',fieldwork:true,phase:'witnesses',sceneVisitedAt:701,interviewEvidence:[{kind:'police-interview',witnessId:7,identifiedSuspectId:8,confidence:.86,recordedAt:702}],witnessIndex:1},evidence:[],witnesses:[]});
   const {restored}=restore(city),copy=restored.justice.cases.find(r=>r.id===51),copyOfficer=restored.society.citizen(officer.id),copyStation=restored.building(station.id);
   assert.equal(copy.investigation.phase,'witnesses');assert.equal(copy.investigation.sceneVisitedAt,701);assert.deepEqual(copy.investigation.interviewEvidence[0],{kind:'police-interview',witnessId:7,identifiedSuspectId:8,confidence:.86,recordedAt:702});assert.equal(copyOfficer.policeInvestigation.caseId,51);assert.equal(copyStation.policeInvestigatorId,officer.id);
+});
+
+test('restored interior investigation preserves scene identity, floor and internal route',()=>{
+  const city=setup({starter:true,population:24}),officer=city.citizens[4];let station=city.buildings.find(b=>b.type==='police_station');
+  if(!station)for(const site of city.economy.locateBuilding('police_station')){station=city.addBuilding('police_station',site.x,site.y,{...site,free:true});if(station)break;}
+  const scene=city.buildings.find(b=>b.id!==station.id&&b.units?.length);assert.ok(station&&scene);const unit=scene.units[0],route=[{x:scene.entity.x+unit.x+.5,y:scene.entity.y+unit.y+.5,z:unit.z*CITY_FLOOR_HEIGHT}];
+  station.policeInvestigatorId=officer.id;officer.policeInvestigation={caseId:52,stationId:station.id,phase:'scene',assignedAt:800,lastPaidMinute:802};officer.task='police-investigation';officer.indoorLocation={buildingId:scene.id,unitId:null,targetUnitId:unit.id,targetRoomType:unit.roomType,roomType:'circulation',floor:unit.z,position:{x:scene.door.x,y:scene.door.y,z:0},path:route,phase:'walking',task:'police-investigation',layoutRevision:scene.layoutRevision||0};
+  city.justice.cases.push({id:52,type:'assault',status:'investigating',scene:{buildingId:scene.id,unitId:unit.id,floor:unit.z,height:0},position:{x:route[0].x,y:route[0].y},investigation:{officerId:officer.id,stationId:station.id,status:'active',fieldwork:true,phase:'scene',fieldNotes:[],interviewEvidence:[],witnessIndex:0},evidence:[],witnesses:[]});
+  const {restored}=restore(city),copy=restored.justice.cases.find(r=>r.id===52),copyOfficer=restored.society.citizen(officer.id);
+  assert.equal(copy.scene.buildingId,scene.id);assert.equal(copy.scene.unitId,unit.id);assert.equal(copy.investigation.phase,'scene');assert.equal(copyOfficer.indoorLocation.buildingId,scene.id);assert.equal(copyOfficer.indoorLocation.targetUnitId,unit.id);assert.deepEqual(copyOfficer.indoorLocation.path,route);assert.equal(copyOfficer.policeInvestigation.phase,'scene');
+});
+
+test('an active police scene response retains the assigned patrol and on-site evidence across snapshots',()=>{
+  const city=setup({starter:true,population:24}),officer=city.citizens[3];let station=city.buildings.find(b=>b.type==='police_station');
+  if(!station)for(const site of city.economy.locateBuilding('police_station')){station=city.addBuilding('police_station',site.x,site.y,{...site,free:true});if(station)break;}
+  assert.ok(station);station.patrolOfficerId=officer.id;officer.policePatrol={stationId:station.id,phase:'respond',waypointIndex:4};officer.policeResponse={caseId:53,stationId:station.id,phase:'scene',dispatchedAt:950,lastPaidMinute:951,resumePatrolPhase:'return'};
+  city.justice.cases.push({id:53,type:'assault',status:'reported',scene:{buildingId:null,height:0},position:{x:12.5,y:13.5},witnesses:[{citizenId:officer.id,role:'police-officer',confidence:.75}],evidence:[{kind:'police-scene-response',officerId:officer.id,observedAt:952}],response:{status:'dispatched',officerId:officer.id,stationId:station.id,phase:'scene',dispatchedAt:950},investigation:null});
+  const {restored}=restore(city),copy=restored.justice.cases.find(r=>r.id===53),copyOfficer=restored.society.citizen(officer.id),copyStation=restored.building(station.id);
+  assert.equal(copy.response.phase,'scene');assert.equal(copy.response.officerId,officer.id);assert.equal(copy.evidence[0].kind,'police-scene-response');assert.equal(copyOfficer.policeResponse.caseId,53);assert.equal(copyOfficer.policeResponse.resumePatrolPhase,'return');assert.equal(copyOfficer.policePatrol.phase,'respond');assert.equal(copyStation.patrolOfficerId,officer.id);
 });
 
 test('skill migration is deterministic, preserves existing values and keeps newborn skills at zero',()=>{

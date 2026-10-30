@@ -162,9 +162,13 @@ export class CityJustice {
     for(const station of this.activeBuildings('police_station')){
       let officer=city.society.citizen(station.patrolOfficerId);
       if(!officer||officer.entity.destroyed||officer.jobId!==station.id||!officer.policePatrol){station.patrolOfficerId=null;officer=null;}
-      const pendingCase=this.cases.some(r=>r.reportingStationId===station.id&&['reporting','reported','investigating'].includes(r.status)),activeStaff=this.staffed(station);
-      if(officer){if(!dayShift||pendingCase&&activeStaff<=1)officer.policePatrol.phase='return';continue;}
-      if(!dayShift||pendingCase&&activeStaff<=1)continue;
+      if(officer&&!officer.policeResponse&&dayShift){
+        const queued=this.cases.filter(r=>r.response?.stationId===station.id&&r.response.status==='awaiting-officer').sort((a,b)=>b.severity-a.severity||a.occurredAt-b.occurredAt)[0];
+        if(queued){this.dispatchPoliceResponse(queued,officer);continue;}
+      }
+      const pendingCase=this.cases.some(r=>r.reportingStationId===station.id&&['reporting','reported','investigating'].includes(r.status)),queuedResponse=this.cases.some(r=>r.response?.stationId===station.id&&r.response.status==='awaiting-officer'),activeStaff=this.staffed(station);
+      if(officer){if(!officer.policeResponse&&(!dayShift||pendingCase&&activeStaff<=1))officer.policePatrol.phase='return';continue;}
+      if(!dayShift||pendingCase&&activeStaff<=1&&!queuedResponse)continue;
       const activeInvestigators=new Set(this.cases.filter(r=>r.status==='investigating'&&r.investigation?.status==='active').map(r=>r.investigation.officerId));
       officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.custody&&!c.custodyEscort&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.conversation&&!c.funeralBodyId&&!c.deliveryId&&!c.cleaningJobId&&!c.paintWorkId&&!activeInvestigators.has(c.id)&&!city.urgentNeed?.(c));
       if(!officer)continue;
@@ -188,6 +192,7 @@ export class CityJustice {
   }
   updatePolicePatrol(c){
     const city=this.city,patrol=c.policePatrol,station=city.building(patrol?.stationId);if(!patrol)return false;
+    if(c.policeResponse)return true;
     if(!station?.active||station.entity.destroyed||c.jobId!==station.id||c.entity.destroyed)return this.stopPolicePatrol(c,'Patrulha interrompida: delegacia ou vínculo de trabalho indisponível');
     if(city.urgentNeed?.(c))return this.stopPolicePatrol(c,'Patrulha interrompida por uma necessidade urgente');
     if(patrol.lastPaidMinute!==city.minute){if(!city.payWage(c,station)){patrol.phase='return';c.action='Patrulha interrompida: aguardando salário municipal';}patrol.lastPaidMinute=city.minute;}
@@ -210,8 +215,50 @@ export class CityJustice {
     const path=city.findPath(c.entity,point);if(path===null){patrol.waypointIndex=(patrol.waypointIndex+1)%points.length;c.action='Desviando de trecho sem acesso';return false;}
     c.path=path;if(!path.length){patrol.waypointIndex=(patrol.waypointIndex+1)%points.length;patrol.waitUntil=city.minute+4;}c.action='Patrulhando a pé';return true;
   }
+  dispatchPoliceResponse(record,assignedOfficer=null){
+    const city=this.city;if(!record?.position||record.scene?.buildingId!=null)return false;
+    const witness=record.witnesses.find(w=>w.role==='police-officer'),observingOfficer=witness&&city.society.citizen(witness.citizenId),officer=assignedOfficer||observingOfficer,patrol=officer?.policePatrol,stationId=record.response?.stationId??patrol?.stationId;
+    if(!officer||!patrol||officer.entity.destroyed||officer.custody)return false;
+    const station=city.building(stationId);if(!station?.active||station.entity.destroyed)return false;
+    if(officer.policeResponse){
+      record.response={status:'awaiting-officer',officerId:null,stationId:station.id,queuedAt:record.response?.queuedAt??city.minute,phase:'queue'};return false;
+    }
+    record.response={status:'dispatched',officerId:officer.id,stationId:station.id,dispatchedAt:city.minute,phase:'scene',routeFailures:0};
+    officer.policeResponse={caseId:record.id,stationId:station.id,phase:'scene',dispatchedAt:city.minute,lastPaidMinute:null,resumePatrolPhase:patrol.phase==='return'?'return':'patrol'};patrol.phase='respond';officer.task='police-response';officer.path=[];officer.targetId=null;officer.action=`Respondendo à ocorrência #${record.id}`;
+    city.log(`A patrulha enviou ${officer.entity.properties.name} ao local da ocorrência #${record.id}.`,'justice',[officer.id],{kind:'police-response-dispatched',caseId:record.id,buildingId:station.id,position:{...record.position}});return true;
+  }
+  finishPoliceResponse(c,record,station,status='completed'){
+    const city=this.city,response=record.response,mission=c.policeResponse;c.policeResponse=null;c.path=[];c.targetId=null;c.task='police-patrol';c.action=status==='completed'?'Registrou a ocorrência no local; retomando patrulha':'Resposta policial interrompida';
+    response.status=status;response.completedAt=city.minute;response.phase='finished';if(status!=='completed')response.reason??='agente indisponível';
+    if(c.policePatrol)c.policePatrol.phase=status==='completed'&&city.hour>=8&&city.hour<17?(mission?.resumePatrolPhase==='return'?'return':'patrol'):'return';
+    city.log(status==='completed'?`A patrulha registrou a ocorrência #${record.id} no local.`:`A resposta à ocorrência #${record.id} foi interrompida.`,'justice',[c.id],{kind:'police-response-finished',caseId:record.id,status,position:{x:c.entity.x,y:c.entity.y}});return true;
+  }
+  updatePoliceResponse(c){
+    const city=this.city,mission=c.policeResponse,record=this.cases.find(r=>r.id===mission?.caseId),station=city.building(mission?.stationId);if(!mission||!record||!record.response)return false;
+    if(!station?.active||station.entity.destroyed||c.jobId!==station.id||c.entity.destroyed){record.response.reason='delegacia ou agente indisponível';return this.finishPoliceResponse(c,record,station,'interrupted');}
+    if(city.urgentNeed?.(c)){record.response.reason='necessidade urgente do agente';return this.finishPoliceResponse(c,record,station,'interrupted');}
+    if(mission.lastPaidMinute!==city.minute){if(!city.payWage(c,station)){record.response.reason='falta de verba salarial';mission.phase='return';record.response.phase='return';}mission.lastPaidMinute=city.minute;}
+    if(c.indoorLocation){record.response.reason='agente está dentro de um prédio';mission.phase='return';record.response.phase='return';return false;}
+    if(c.path.length)return true;
+    if(mission.phase==='scene'){
+      const target=record.position;
+      if(!target){record.response.reason='local da ocorrência desconhecido';mission.phase='return';record.response.phase='return';}
+      else if(dist(c.entity,target)>1.2){const path=city.findPath(c.entity,target);if(path===null){mission.routeFailures=(mission.routeFailures||0)+1;record.response.reason='sem rota até a ocorrência';if(mission.routeFailures<3)return false;mission.phase='return';record.response.phase='return';}else{c.path=path;if(!path.length&&dist(c.entity,target)>.1)c.path=[{x:target.x,y:target.y}];c.action=`Indo ao local da ocorrência #${record.id}`;return true;}}
+      else {
+        const officerWitness=record.witnesses.find(w=>w.citizenId===c.id&&w.role==='police-officer');record.response.arrivedAt=city.minute;record.response.phase='report';record.response.sceneNotes=[{kind:'police-scene-response',officerId:c.id,position:{x:c.entity.x,y:c.entity.y},scene:{...record.scene},observedAt:city.minute}];
+        record.evidence??=[];record.evidence.push({...record.response.sceneNotes[0],sourceEventId:record.eventId});
+        if(record.status==='unreported'){record.status='reported';record.reportedAt=city.minute;record.reportSource='police-response';record.reportingStationId=station.id;record.statement={reporterId:c.id,description:'A patrulha chegou ao local após observar a ocorrência.',confidence:officerWitness?.confidence??.5};city.log(`A polícia registrou o BO #${record.id} após resposta no local.`,'justice',[c.id,record.victimId].filter(Number.isInteger),{kind:'crime-reported-by-police',caseId:record.id,buildingId:station.id});}
+        return this.finishPoliceResponse(c,record,station,'completed');
+      }
+    }
+    if(mission.phase==='return'){
+      if(dist(c.entity,station.door)>1.2){const path=city.findPath(c.entity,station.door);if(path===null)return false;c.path=path;c.action='Retornando à delegacia após resposta';return true;}
+      return this.finishPoliceResponse(c,record,station,record.response.reason?'interrupted':'completed');
+    }
+    return true;
+  }
   startPoliceInvestigation(record,station,officer){
-    const city=this.city,fieldwork=record.scene?.buildingId==null&&record.position&&typeof city.findPath==='function';
+    const city=this.city,fieldwork=!!record.position&&typeof city.findPath==='function'&&(record.scene?.buildingId==null||!!city.building(record.scene.buildingId));
     record.investigation={officerId:officer.id,stationId:station.id,startedAt:city.minute,concludesAt:fieldwork?null:city.minute+180,status:'active',...(fieldwork?{fieldwork:true,phase:'exit',fieldNotes:[],interviewEvidence:[],witnessIndex:0,routeFailures:0}:{})};
     if(fieldwork){officer.policeInvestigation={caseId:record.id,stationId:station.id,phase:'exit',assignedAt:city.minute,lastPaidMinute:null};officer.task='police-investigation';officer.targetId=null;officer.path=[];officer.action=`Saindo para investigar o caso #${record.id}`;}
     record.status='investigating';city.log(fieldwork?`A polícia iniciou diligências presenciais no caso #${record.id}.`:`A polícia iniciou a análise documental do caso #${record.id}.`,'justice',[officer.id],{kind:fieldwork?'investigation-fieldwork-started':'investigation-started',caseId:record.id,buildingId:station.id});
@@ -222,21 +269,57 @@ export class CityJustice {
     investigation.fieldworkResult=result;investigation.completedAt=city.minute;investigation.concludesAt=city.minute;investigation.phase='analysis';
     city.log(result==='completed'?`As diligências do caso #${record.id} foram entregues à delegacia.`:`As diligências do caso #${record.id} foram interrompidas: ${investigation.blockedReason||'agente indisponível'}.`,'justice',[c.id],{kind:'investigation-fieldwork-finished',caseId:record.id,result});return true;
   }
+  enterInvestigationScene(c,record,building,mission){
+    const city=this.city,unit=city.units.get(record.scene?.unitId),target={...(record.position||{}),z:unit?unit.z*CITY_FLOOR_HEIGHT:(record.scene?.floor||0)*CITY_FLOOR_HEIGHT};
+    if(!building||!unit||unit.buildingId!==building.id){record.investigation.blockedReason='cômodo da cena não está disponível';mission.phase='return';record.investigation.phase='return';return false;}
+    const from={x:building.door.x,y:building.door.y,z:0},path=interiorRoute(building,from,target);
+    if(path===null){record.investigation.blockedReason='sem rota interna até a cena';mission.phase='return';record.investigation.phase='return';return false;}
+    c.indoorLocation={buildingId:building.id,unitId:path.length?null:unit.id,targetUnitId:unit.id,targetRoomType:unit.roomType,roomType:path.length?'circulation':unit.roomType,floor:unit.z,position:from,path,phase:path.length?'walking':'using',task:'police-investigation',layoutRevision:building.layoutRevision||0,enteredAt:city.minute};
+    mission.phase='scene';record.investigation.phase='scene';c.action=`Inspecionando o interior do caso #${record.id}`;return true;
+  }
+  leaveInvestigationInterior(c,building,mission,record){
+    const room=c.indoorLocation;if(!room)return false;
+    const path=interiorRoute(building,room.position||{x:c.entity.x,y:c.entity.y,z:0},{x:building.door.x,y:building.door.y,z:0});
+    if(path===null){record.investigation.blockedReason='sem rota interna para sair do prédio';return false;}
+    room.unitId=null;room.targetUnitId=null;room.roomType='circulation';room.targetRoomType='circulation';room.exiting=true;room.phase='leaving';room.path=path;room.task='police-investigation';mission.phase='exit-scene';record.investigation.phase='exit-scene';c.action='Saindo do prédio após a diligência';return true;
+  }
   updatePoliceInvestigation(c){
     const city=this.city,mission=c.policeInvestigation,record=this.cases.find(r=>r.id===mission?.caseId),station=city.building(mission?.stationId),investigation=record?.investigation;
     if(!mission||!record||!investigation||record.status!=='investigating')return false;
     if(!station?.active||station.entity.destroyed||c.jobId!==station.id||c.entity.destroyed){investigation.blockedReason='delegacia ou agente indisponível';return this.finishPoliceInvestigation(c,record,station,'interrupted');}
     if(city.urgentNeed?.(c)){investigation.blockedReason='necessidade urgente do agente';return this.finishPoliceInvestigation(c,record,station,'interrupted');}
     if(mission.lastPaidMinute!==city.minute){if(!city.payWage(c,station)){investigation.blockedReason='falta de verba para o salário';mission.phase='return';investigation.phase='return';}mission.lastPaidMinute=city.minute;}
+    const sceneBuilding=record.scene?.buildingId!=null?city.building(record.scene.buildingId):null;
+    if(mission.phase==='exit-scene'&&!c.indoorLocation){mission.phase='return';investigation.phase='return';}
     if(c.indoorLocation){
-      const room=c.indoorLocation;if(room.buildingId!==station.id){investigation.blockedReason='agente está em outro prédio';mission.phase='return';investigation.phase='return';}
-      else if(!room.exiting){const path=interiorRoute(station,room.position||{x:c.entity.x,y:c.entity.y,z:0},{x:station.door.x,y:station.door.y,z:0});if(path===null){investigation.blockedReason='sem rota interna para sair';mission.phase='return';investigation.phase='return';}else{room.unitId=null;room.targetUnitId=null;room.roomType='circulation';room.targetRoomType='circulation';room.exiting=true;room.phase='leaving';room.path=path;room.task='police-investigation';c.action=`Saindo para investigar o caso #${record.id}`;return true;}}
-      if(c.indoorLocation?.path?.length)return true;
-      if(c.indoorLocation&&!c.indoorLocation.exiting)return false;
-      if(c.indoorLocation?.exiting)return true;
+      const room=c.indoorLocation;
+      if(room.path?.length)return true;
+      if(mission.phase==='exit'&&room.buildingId===station.id){const path=interiorRoute(station,room.position||{x:c.entity.x,y:c.entity.y,z:0},{x:station.door.x,y:station.door.y,z:0});if(path===null){investigation.blockedReason='sem rota interna para sair da delegacia';mission.phase='return';investigation.phase='return';}else{room.unitId=null;room.targetUnitId=null;room.roomType='circulation';room.targetRoomType='circulation';room.exiting=true;room.phase='leaving';room.path=path;room.task='police-investigation';c.action=`Saindo para investigar o caso #${record.id}`;return true;}}
+      else if(['approach-interior','scene','witnesses'].includes(mission.phase)&&sceneBuilding&&room.buildingId===sceneBuilding.id){
+        if(mission.phase==='approach-interior')mission.phase='scene';
+        if(mission.phase==='scene'){
+          const targetUnit=city.units.get(record.scene?.unitId),target=record.position;
+          if(targetUnit&&room.unitId===targetUnit.id&&room.floor===targetUnit.z&&target&&dist(room.position||c.entity,target)<=1.2){investigation.sceneVisitedAt=city.minute;investigation.fieldNotes.push({kind:'scene-inspection',officerId:c.id,position:{...target},scene:{...record.scene},recordedAt:city.minute});mission.phase='witnesses';investigation.phase='witnesses';investigation.witnessIndex=0;city.log(`O agente ${c.entity.properties.name} inspecionou o interior do caso #${record.id}.`,'justice',[c.id],{kind:'scene-inspected',caseId:record.id,position:{...target},buildingId:sceneBuilding.id,unitId:targetUnit.id});return true;}
+          const path=target&&interiorRoute(sceneBuilding,room.position||{x:c.entity.x,y:c.entity.y,z:0},{...target,z:targetUnit?targetUnit.z*CITY_FLOOR_HEIGHT:0});if(path===null||!target){investigation.blockedReason='sem rota interna até a cena';mission.phase='return';investigation.phase='return';}else{room.unitId=null;room.targetUnitId=targetUnit?.id??null;room.roomType='circulation';room.targetRoomType=targetUnit?.roomType??'workspace';room.path=path;room.phase=path.length?'walking':'using';c.action='Percorrendo o interior até a cena';return true;}
+        }
+        if(mission.phase==='witnesses'){
+          const witnessRecord=record.witnesses[ investigation.witnessIndex ],witness=city.society.citizen(witnessRecord?.citizenId);
+          if(witness&&witness.indoorLocation?.buildingId===sceneBuilding.id&&!witness.entity.destroyed&&!witness.custody&&(witness.unconsciousUntil||0)<=city.minute&&(witness.needs?.health??100)>20){
+            if(witness.indoorLocation.unitId!==room.unitId||Math.abs(witness.indoorLocation.floor-room.floor)>0||dist(room.position||c.entity,witness.indoorLocation.position||witness.entity)>1.35){const target=witness.indoorLocation.position||witness.entity,path=interiorRoute(sceneBuilding,room.position||{x:c.entity.x,y:c.entity.y,z:0},{...target,z:(witness.indoorLocation.floor||0)*CITY_FLOOR_HEIGHT});if(path===null){witnessRecord.interviewStatus='no-route';witnessRecord.interviewAttemptAt=city.minute;investigation.witnessIndex++;return true;}room.unitId=null;room.targetUnitId=witness.indoorLocation.unitId;room.roomType='circulation';room.targetRoomType=witness.indoorLocation.roomType;room.path=path;room.phase=path.length?'walking':'using';c.action=`Indo ouvir testemunha do caso #${record.id}`;return true;}
+          }
+          if(!witnessRecord){mission.phase='return';investigation.phase='return';}
+          else if(!witness||witness.indoorLocation?.buildingId!==sceneBuilding.id||witness.entity.destroyed||witness.custody||(witness.unconsciousUntil||0)>city.minute||(witness.needs?.health??100)<=20){witnessRecord.interviewStatus='unavailable';witnessRecord.interviewAttemptAt=city.minute;investigation.witnessIndex++;return true;}
+          else {const honesty=witness.traits?.honesty??.5,skill=this.skillFactor(c,'investigation'),identified=witnessRecord.identifiedSuspectId!=null,confidence=identified?Math.max(.05,Math.min(.98,witnessRecord.confidence*(.55+skill*.35+honesty*.1))):null,cooperates=city.random()<Math.max(.2,Math.min(.98,.45+honesty*.35+(witness.traits?.riskTolerance??.5)*.1+skill*.1));witnessRecord.interviewStatus=cooperates?'interviewed':'declined';witnessRecord.interviewAttemptAt=city.minute;witnessRecord.interviewedBy=c.id;if(cooperates)investigation.interviewEvidence.push({kind:'police-interview',witnessId:witness.id,recordedAt:city.minute,confidence:confidence??.25,identifiedSuspectId:identified?witnessRecord.identifiedSuspectId:null,scene:{...witnessRecord.scene}});investigation.witnessIndex++;return true;}
+        }
+      }else if(mission.phase==='return'||mission.phase==='exit-scene'||room.buildingId!==station.id){const building=city.building(room.buildingId);if(!building){investigation.blockedReason='prédio do agente não está disponível';return false;}if(!room.exiting)return this.leaveInvestigationInterior(c,building,mission,record);return true;}
     }
     if(c.path.length)return true;
-    if(mission.phase==='exit'){mission.phase='scene';investigation.phase='scene';}
+    if(mission.phase==='exit'){if(record.scene?.buildingId!=null){mission.phase='approach-interior';investigation.phase='approach-interior';}else{mission.phase='scene';investigation.phase='scene';}}
+    if(mission.phase==='approach-interior'){
+      if(!sceneBuilding){investigation.blockedReason='prédio da cena não está disponível';mission.phase='return';investigation.phase='return';}
+      else if(dist(c.entity,sceneBuilding.door)>1.2){const path=city.findPath(c.entity,sceneBuilding.door);if(path===null){investigation.blockedReason='sem rota até o prédio da cena';mission.phase='return';investigation.phase='return';}else{c.path=path;c.action=`Indo ao prédio do caso #${record.id}`;return true;}}
+      else return this.enterInvestigationScene(c,record,sceneBuilding,mission);
+    }
     if(mission.phase==='scene'){
       const target=record.position;
       if(!target){investigation.blockedReason='local da ocorrência desconhecido';mission.phase='return';investigation.phase='return';}
@@ -254,9 +337,12 @@ export class CityJustice {
         else city.log(`${witness.entity.properties.name} não prestou depoimento no caso #${record.id}.`,'justice',[c.id,witness.id],{kind:'witness-declined-interview',caseId:record.id,witnessId:witness.id});
         investigation.witnessIndex++;return true;
       }
+      if(c.indoorLocation&&sceneBuilding)return this.leaveInvestigationInterior(c,sceneBuilding,mission,record);
       mission.phase='return';investigation.phase='return';
     }
+    if(mission.phase==='exit-scene'){return true;}
     if(mission.phase==='return'){
+      if(c.indoorLocation){const building=city.building(c.indoorLocation.buildingId);if(building)return this.leaveInvestigationInterior(c,building,mission,record);investigation.blockedReason='prédio do agente não está disponível';return false;}
       if(dist(c.entity,station.door)>1.2){const path=city.findPath(c.entity,station.door);if(path===null){mission.routeFailures=(mission.routeFailures||0)+1;investigation.blockedReason='sem rota de retorno à delegacia';return false;}c.path=path;c.action=`Retornando à delegacia com o caso #${record.id}`;return true;}
       return this.finishPoliceInvestigation(c,record,station,investigation.blockedReason?'interrupted':'completed');
     }
@@ -458,7 +544,7 @@ export class CityJustice {
       if(city.random()<confidence)witnesses.push({citizenId:witness.id,confidence,identifiedSuspectId:confidence>(patrolling ? .55 : .72)?offenderId:null,noticedAt:city.minute,scene:{...scene},role:patrolling?'police-officer':null});
     }
     const record={id:this.nextCaseId++,type,offenderId,victimId,occurredAt,scene:{...scene},visibility,position:position?{x:position.x,y:position.y}:null,reportedAt:null,status:'unreported',severity:rule.severity??50,originalRule:{...rule},rule:{...rule},penalCodeRevision:this.penalCodeRevision||0,evidence:[],witnesses,witnessIds:witnesses.map(w=>w.citizenId),investigation:null,trial:null,details:{...details}};
-    this.cases.push(record);record.eventId=this.city.log(`Registro de ocorrência: ${type}.`,'justice',[offenderId,victimId].filter(Number.isInteger),{kind:'crime-recorded',caseId:record.id,crime:type}).id;this.rememberObservedCrime(record);return record;
+    this.cases.push(record);record.eventId=this.city.log(`Registro de ocorrência: ${type}.`,'justice',[offenderId,victimId].filter(Number.isInteger),{kind:'crime-recorded',caseId:record.id,crime:type}).id;this.rememberObservedCrime(record);this.dispatchPoliceResponse(record);return record;
   }
   recordTrespassUse(c,building,facility){
     const city=this.city;c.trespassHistory??={};const previous=c.trespassHistory[building.id];if(previous!=null&&city.minute-previous<1440)return null;
@@ -506,7 +592,7 @@ export class CityJustice {
     for(const record of this.cases){
       if(record.status==='arrest-requested'){const suspect=city.society.citizen(record.investigation?.suspectId),protectedMember=this.policies.parliamentaryImmunity&&city.politics.council.members.some(m=>m.citizenId===suspect?.id);if(!protectedMember||record.immunityAuthorization==='approved')this.arrest(record.id,suspect?.id);continue;}
       if(record.status==='arrest-requested'&&record.immunityAuthorization==='approved'){this.arrest(record.id,record.investigation?.suspectId);continue;}
-      if(record.status==='reported'&&!record.investigation){if(!stations.length)continue;const station=stations.find(b=>b.id===record.reportingStationId)||stations[0],needsFieldwork=record.scene?.buildingId==null&&record.position&&typeof city.findPath==='function',officer=station.workers.map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&c.jobId===station.id&&!c.policePatrol&&!c.policeInvestigation&&!c.custodyEscort&&(!needsFieldwork||c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length)&&!this.cases.some(other=>other!==record&&other.status==='investigating'&&other.investigation?.officerId===c.id));if(!officer)continue;if(needsFieldwork)station.policeInvestigatorId=officer.id;this.startPoliceInvestigation(record,station,officer);continue;}
+      if(record.status==='reported'&&!record.investigation){if(!stations.length)continue;const station=stations.find(b=>b.id===record.reportingStationId)||stations[0],needsFieldwork=!!record.position&&typeof city.findPath==='function'&&(record.scene?.buildingId==null||!!city.building(record.scene.buildingId)),officer=station.workers.map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&c.jobId===station.id&&!c.policePatrol&&!c.policeInvestigation&&!c.custodyEscort&&(!needsFieldwork||c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length)&&!this.cases.some(other=>other!==record&&other.status==='investigating'&&other.investigation?.officerId===c.id));if(!officer)continue;if(needsFieldwork)station.policeInvestigatorId=officer.id;this.startPoliceInvestigation(record,station,officer);continue;}
       if(record.status!=='investigating'||!record.investigation)continue;
       const officer=city.society.citizen(record.investigation.officerId);if(record.investigation.fieldwork&&!record.investigation.completedAt){if(!officer||officer.entity.destroyed||officer.policeInvestigation?.caseId!==record.id){record.investigation.blockedReason='agente morreu ou saiu do serviço';record.investigation.fieldworkResult='interrupted';record.investigation.completedAt=city.minute;record.investigation.concludesAt=city.minute;record.investigation.phase='analysis';const station=city.building(record.investigation.stationId);if(station?.policeInvestigatorId===record.investigation.officerId)station.policeInvestigatorId=null;}else continue;}if(city.minute<(record.investigation.concludesAt??Infinity))continue;
       const investigation=record.investigation,interviewLeads=investigation.fieldwork?(investigation.interviewEvidence||[]).filter(e=>e.identifiedSuspectId!=null).map(e=>({...e,citizenId:e.witnessId})):record.witnesses.filter(w=>w.identifiedSuspectId!=null),witnesses=interviewLeads.sort((a,b)=>b.confidence-a.confidence),document=record.evidence.find(e=>e.kind==='financial-record'&&e.implicatedCitizenId!=null),lead=witnesses[0]||(document?{identifiedSuspectId:document.implicatedCitizenId,confidence:Math.min(.95,Math.max(document.confidence,.6+(officer?.skills?.investigation||0)/250+(officer?.traits?.honesty??.5)*.18)),documentEventId:document.eventId}:null),honesty=officer?.traits?.honesty??.5,successChance=Math.max(.05,Math.min(.98,(lead?.confidence??.08)*.72+honesty*.28));let suspectId=null,fraud=false;
