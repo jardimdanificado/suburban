@@ -1,7 +1,7 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=service-capacity-3';
 import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=service-capacity-3";
-import { CityDesktop } from "./js/city_desktop.js?v=survival-capacity-1";
+import { CityDesktop } from "./js/city_desktop.js?v=managed-search-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=survival-capacity-1";
 import { setActiveEntities } from "./js/engine.js";
@@ -287,6 +287,7 @@ root.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 window.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'KeyK') { event.preventDefault(); if(!event.repeat)cityUI.openGlobalSearch(); return; }
   if (event.ctrlKey || event.metaKey || event.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
   if(event.code==='Escape'&&renderer3D.isPerspectiveActive()){renderer3D.setThirdPersonMode(false);event.preventDefault();return;}
   if (cityUI.key(event)) { event.preventDefault(); return; }

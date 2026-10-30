@@ -42,7 +42,7 @@ import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-defaul
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=skybridge-survival-2';
 import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=service-capacity-3';
 export const money = formatMoney;
-const TABS = [
+export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
   ['government', 'GOVERNO', 'CIDADE', 'Prefeito, patrimônio público e orçamento municipal.'],
   ['people', 'PESSOAS', 'HABITANTES', 'Rotinas, necessidades, famílias e condições de vida.'],
@@ -55,7 +55,7 @@ const TABS = [
   ['sanitation', 'SANEAMENTO', 'VIDA URBANA', 'Banheiros, serviços de limpeza e ciclo dos resíduos.'],
   ['log', 'HISTÓRICO', 'VIDA URBANA', 'Os acontecimentos e as decisões de cada pessoa.'],
 ];
-const VIEWS = {
+export const VIEWS = {
   market: [['overview','PANORAMA'],['shares','AÇÕES'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS']],
   economy: [['overview','EMPRESAS'],['vacancies','VAGAS'],['applications','SELEÇÕES'],['workers','FUNCIONÁRIOS']],
   city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['analysis','ANÁLISES'], ['nature','VEGETAÇÃO']],
@@ -65,7 +65,7 @@ const VIEWS = {
   transport: [['active', 'FRETES'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
   sanitation: [['facilities', 'BANHEIROS'], ['queues','FILAS'], ['cleaning', 'FAXINA'], ['gigs','BICOS DE FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
-const FILTERS = {
+export const FILTERS = {
   people: [['all','TODOS'], ['homeless','SEM CASA'], ['unemployed','SEM TRABALHO'], ['critical','EM RISCO'], ['food','COM FOME'], ['children','CRIANÇAS']],
       buildings: [['all','TODOS'], ['residential','MORADIAS'], ['public','PÚBLICOS'], ['private','PRIVADOS']],
   economy: [['all','TODAS'], ['food','ALIMENTAÇÃO'], ['services','SERVIÇOS'], ['industry','INDÚSTRIA']],
@@ -97,9 +97,11 @@ export class CityUI {
     this.sortInput=document.createElement('select');this.sortInput.setAttribute('aria-label','Ordenar registros');this.sortInput.addEventListener('change',()=>{this.sorts[this.tab]=this.sortInput.value;this.resetScroll();});
     this.publicationDraft=document.createElement('input');this.publicationDraft.type='text';this.publicationDraft.maxLength=1200;this.publicationDraft.placeholder='Escreva um relato, informação, anúncio ou invenção…';this.publicationDraft.setAttribute('aria-label','Conteúdo a escrever no livro ou panfleto');
     this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput);
+    for(const input of this.inputs)input.hidden=true;
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
     this.profileNextWorld=new URLSearchParams(window.location.search).has('profile');
   }
+  get inputs(){return [this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput];}
   resetScroll() { this.scrolls = {}; }
   cachedList(key,build){
     this.listCache??=new Map();const signature=`${this.city.minute}:${this.city.structureRevision}:${this.city._uiRevision||0}:${this.query}:${this.filter()}:${this.sorts[this.tab]}:${Math.floor(performance.now()/250)}`;
@@ -170,7 +172,7 @@ export class CityUI {
     return false;
   }
   beginInputs(){this.frameInputs??=new Set();this.frameInputs.clear();}
-  finishInputs(){for(const input of[this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.sortInput,this.publicationDraft,this.worksBudgetInput,this.worksTransferInput]){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
+  finishInputs(){for(const input of this.inputs){const hidden=!this.frameInputs?.has(input);if(input.hidden!==hidden)input.hidden=hidden;}}
   inputAt(input,x,y,w){this.frameInputs?.add(input);const signature=`${x}:${y}:${w}`;if(input.layoutSignature!==signature){Object.assign(input.style,{left:`${x}px`,top:`${y}px`,width:`${w}px`});input.layoutSignature=signature;}if(input.hidden)input.hidden=false;}
   drawFloating(ui,window) {
     this.floating=true;this.politicsNavigationPinned=false;this.floatingDossier=window.kind==='dossier';if(this.element.hidden)this.element.hidden=false;this.visible=true;this.zones=[];this.beginInputs();

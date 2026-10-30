@@ -1,5 +1,6 @@
+import {CityGlobalSearch} from './city_global_search.js?v=managed-search-1';
 import {desktopMenus} from './city_desktop_menus.js';
-import {CityUI,money} from './city_ui.js?v=survival-capacity-1';
+import {CityUI,money} from './city_ui.js?v=managed-search-1';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js';
@@ -16,6 +17,8 @@ export class CityDesktop {
     this.element=document.createElement('div');this.element.className='city-desktop-inputs';root.append(this.element);this.openModule('city');
     this.tooltipElement=document.createElement('div');this.tooltipElement.className='city-tooltip';this.tooltipElement.setAttribute('role','tooltip');this.tooltipElement.hidden=true;root.append(this.tooltipElement);
   }
+  get modules(){return CITY_WINDOWS;}
+  openGlobalSearch(){this.globalSearch??=new CityGlobalSearch(this,this.element);this.globalSearch.open();}
   get visible(){return !this.hidden&&this.manager.windows.length>0;}
   get active(){return this.manager.active?.state;}
   get tab(){return this.active?.tab||'city';}
@@ -30,7 +33,7 @@ export class CityDesktop {
     const[w,h]=kind==='inspector'?[540,500]:kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
     const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'||kind==='section'?near:null});window.kind=kind;state.windowId=id;
     if(entity)state.setSelection(entity,unitId);this.hidden=false;
-    for(const input of[state.search,state.seed,state.populationInput,state.mapSizeInput,state.filterInput,state.sortInput,state.publicationDraft])input.addEventListener('pointerdown',()=>this.manager.raise(id));
+    for(const input of state.inputs || [])input.addEventListener('pointerdown',()=>this.manager.raise(id));
     return state;
   }
   openPanel(source,overrides={},{separate=false}={}){
@@ -147,6 +150,7 @@ export class CityDesktop {
     if(!this.visible)return false;
     if(event.code==='Escape'&&this.menuOpen){this.menuOpen=false;return true;}
     if(event.code==='Escape'){const w=[...this.manager.windows].reverse().find(w=>!w.pinned);if(w)this.close(w.id);return true;}
+    if(this.active?.tab==='global-search'&&this.active.key(event))return true;
     if(event.code==='Slash'){this.active?.search?.focus?.();return true;}
     if(['PageDown','PageUp','Home','End','Backspace'].includes(event.code))return this.active?.key(event)||false;return false;
   }
@@ -154,6 +158,7 @@ export class CityDesktop {
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
     let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speed}×`,this.controls.speed,false]];
     const entries=[
+      {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),
       ...CITY_WINDOWS.map(([tab,label])=>({label,icon:tab,w:29,click:()=>{this.closeMenu();this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
       ...this.menuGroups.map(g=>({id:g.id,label:g.label,icon:g.id==='tools'?'settings':'windows',w:36,click:()=>this.toggleMenu(g.id),selected:this.menuOpen&&this.menuId===g.id}))
@@ -194,12 +199,12 @@ export class CityDesktop {
     const point=ui.pointer,hover=point&&this.manager.at(point.x,point.y),resize=hover&&this.manager.resizeAt(hover,point.x,point.y);if(ui.canvas.style)ui.canvas.style.cursor=this.manager.gesture?.kind==='resize'||resize?'nwse-resize':this.manager.gesture?.kind==='move'||hover&&this.manager.caption(hover,point.x,point.y)?'move':'default';
     if(this.element.hidden===this.visible)this.element.hidden=!this.visible;if(this.visible){for(const [i,w] of this.manager.windows.entries()){const rect=this.manager.rect(w),covered=this.manager.windows.slice(i+1).some(above=>{const r=this.manager.rect(above);return r.x<=rect.x&&r.y<=rect.y&&r.x+r.w>=rect.x+rect.w&&r.y+r.h>=rect.y+rect.h;});if(covered){w.state.element.hidden=true;w.state.zones=[];continue;}if(w.state.element.hidden)w.state.element.hidden=false;this.frame(ui,w);}this.occludeInputs();const hit=point&&ui.hitTest(point.x,point.y);if(hit?.label){const key=hit.label;if(this.hoverHint?.key!==key)this.hoverHint={key,since:performance.now()};if(/^(Fechar|Fixar|Recolher|Ampliar|Redimensionar):/.test(key)||performance.now()-this.hoverHint.since>600)this.tooltip={text:key,x:point.x,y:point.y+24};}else this.hoverHint=null;}
     ui.regions.push(...(this.menuBarRegions||[]));
-    if(this.menuOpen){for(const w of this.manager.windows)for(const input of[w.state.search,w.state.seed,w.state.populationInput,w.state.mapSizeInput,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean))input.hidden=true;this.drawMenu(ui);}
+    if(this.menuOpen){for(const w of this.manager.windows)for(const input of w.state.inputs || [])input.hidden=true;this.drawMenu(ui);}
     this.tooltipElement.hidden=!this.tooltip||this.menuOpen||!!this.manager.gesture;
     if(!this.tooltipElement.hidden){const {text,x,y}=this.tooltip,w=Math.min(440,ui.width-8,Math.ceil(ui.textWidth(text))+18);this.tooltipElement.textContent=text;Object.assign(this.tooltipElement.style,{left:`${Math.max(4,Math.min(x,ui.width-w-4))}px`,top:`${Math.max(0,Math.min(y,ui.height-190))}px`,width:`${w}px`});}
   }
   drawMap(ui,w){
-    const state=w.state,world=this.city.world;state.zones=[];for(const input of[state.search,state.seed,state.populationInput,state.mapSizeInput,state.filterInput,state.sortInput,state.publicationDraft])input.hidden=true;
+    const state=w.state,world=this.city.world;state.zones=[];for(const input of state.inputs || [])input.hidden=true;
     this.mapCanvas??=document.createElement('canvas');
     if(this.mapRevision!==world.revision||this.mapCanvas.width!==world.width){
       this.mapCanvas.width=world.width;this.mapCanvas.height=world.height;const ctx=this.mapCanvas.getContext('2d'),colors=['#7b9748','#4776a3','#66786a','#baad76','#adaba1','#263f49','#797965','#92905d','#797b65','#8caa61','#ae9c73','#5d705c','#a6a88a','#67805d'];
@@ -213,7 +218,7 @@ export class CityDesktop {
   }
   occludeInputs(){
     const windows=this.manager.windows;
-    windows.forEach((w,i)=>{for(const input of[w.state.search,w.state.seed,w.state.populationInput,w.state.mapSizeInput,w.state.filterInput,w.state.sortInput,w.state.publicationDraft].filter(Boolean)){
+    windows.forEach((w,i)=>{for(const input of w.state.inputs || []){
       if(input.hidden)continue;const rect={x:parseFloat(input.style.left),y:parseFloat(input.style.top),w:parseFloat(input.style.width),h:20};let visible=[rect];
       for(const above of windows.slice(i+1)){
         const cover=this.manager.rect(above);visible=visible.flatMap(part=>{

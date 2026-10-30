@@ -8,6 +8,8 @@ python3 scripts/serve.py
 
 Abra `http://127.0.0.1:8000`. O servidor impede o cache de código da página e do worker. Arraste o mapa para mover a câmera e use a roda para aproximar. A barra superior abre janelas e controla pausa, velocidade e visualização. O minimapa e o botão de centralizar ajudam a navegar pelo terreno. Espaço pausa; +/− altera a velocidade; F3 alterna 2D/3D. Um segundo simulado representa quatro minutos da cidade.
 
+A **Busca geral**, na lupa da barra superior ou em **Ctrl+K** (⌘K no macOS), reúne pessoas, prédios, empresas, produtos, roupas, móveis, cômodos, veículos, terrenos, obras, plantas, partidos, publicações, eventos retidos e destinos da interface. Digite nomes, tipos ou IDs, com ou sem acentos, e combine palavras. Use o filtro para escolher o tipo de registro; ↑/↓ selecionam, Enter abre e Esc fecha. Selecionar uma pessoa ou imóvel abre sua ficha e centraliza o mapa; selecionar uma janela aberta a traz para frente. A busca é uma janela do gerenciador: arraste o título para mover, use o canto inferior direito para redimensionar e os controles do título para fixar, recolher ou maximizar. A posição e o tamanho são lembrados ao reabrir. O índice é atualizado ao abrir a busca.
+
 ## Madeira, artesanato e publicações
 
 Moradores filiados usam a cor de fundo da bandeira do partido; independentes ficam em cinza claro, inclusive no minimapa. A cor acompanha filiações e desfiliações.
