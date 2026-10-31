@@ -1,5 +1,6 @@
 {
-  "name": "brutopolis-experience-framework",
+  "name": "suburban-chronicles",
+  "version": "0.126.0",
   "private": true,
   "type": "module",
   "scripts": {

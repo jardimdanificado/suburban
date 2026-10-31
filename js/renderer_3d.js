@@ -93,6 +93,9 @@ const STATIC_FOLIAGE_KEYS = [
   'mapleLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseFlowers', 'grassFoliage'
 ];
 
+export const MIN_CAMERA_ZOOM = 0.25;
+const MAX_CAMERA_ZOOM = 5.0;
+
 function getCreatureEmoteSkin(e) {
   if (!e || !e.properties) return null;
   // Items, plants, structures and inanimate objects must NEVER display creature emotes
@@ -4741,7 +4744,7 @@ export class RCT3DRenderer {
       this.camY = Math.max(0, Math.min(this.mapHeight, y));
     }
     if (typeof zoom === "number" && !isNaN(zoom)) {
-      this.zoom = Math.max(0.08, Math.min(5.0, zoom));
+      this.zoom = Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, zoom));
     }
   }
 

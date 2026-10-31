@@ -2,6 +2,7 @@ export const POLITICS_SECTIONS=[['overview','Governo'],['approval','Avaliação'
 export const POLITICS_GROUPS=[['management','Gestão',['overview','approval','promises']],['institutions','Instituições',['parties','council','institutes','research-services']],['elections','Eleições',['campaign','polls','results']],['oversight','Fiscalização',['scandals']]];
 const details={profile:'Perfil',skills:'Trabalho',resume:'Currículo',history:'Histórico',family:'Família',memories:'Memórias',politics:'Política',finance:'Finanças',infrastructure:'Infraestrutura',assets:'Conta',stock:'Estoque',staff:'Equipe',services:'Serviços',units:'Unidades'};
 export function sectionTitle(state){
+  if(state.tab==='newgame'||state.tab==='new-game')return 'Novo Jogo';
   if(state.tab==='economy'&&!state.selected&&state.employmentCompanyId!=null)return `Trabalho · ${state.city.building(state.employmentCompanyId)?.entity.properties.name||'Empresa'}${state.employmentCitizenId!=null?' · Candidatura':''}`;
   if(state.tab==='party-organization')return state.partyProposalId?`Fundação partidária #${state.partyProposalId}`:state.partyOrganizationView==='membership'?'Campanhas de filiação':'Registro de partidos';
   if(state.tab==='land'&&state.recordWindow)return `Terreno ${state.selectedPlotId}`;

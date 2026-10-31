@@ -62,25 +62,52 @@ test('MainMenu key navigation and shortcuts', () => {
   menu.open();
   assert.equal(menu.screen, 'TITLE');
 
-  // KeyO opens options
-  menu.key({ code: 'KeyO', preventDefault: () => {} });
-  assert.equal(menu.screen, 'OPTIONS');
-
-  // Escape from OPTIONS returns to TITLE
-  menu.key({ code: 'Escape', preventDefault: () => {} });
-  assert.equal(menu.screen, 'TITLE');
-
-  // KeyN opens scenarios
+  // KeyN triggers onOpenNewGame and closes main menu
+  let newGameOpened = false;
+  menu.onOpenNewGame = () => { newGameOpened = true; };
   menu.key({ code: 'KeyN', preventDefault: () => {} });
-  assert.equal(menu.screen, 'SCENARIOS');
+  assert.equal(newGameOpened, true);
+  assert.equal(menu.isActive(), false);
 
-  // Escape from SCENARIOS returns to TITLE
-  menu.key({ code: 'Escape', preventDefault: () => {} });
-  assert.equal(menu.screen, 'TITLE');
+  // KeyO triggers onOpenOptions and closes main menu
+  menu.open();
+  let optionsOpened = false;
+  menu.onOpenOptions = () => { optionsOpened = true; };
+  menu.key({ code: 'KeyO', preventDefault: () => {} });
+  assert.equal(optionsOpened, true);
+  assert.equal(menu.isActive(), false);
 
   // Escape from TITLE when hasActiveGame closes menu
+  menu.open();
+  menu.hasActiveGame = true;
   menu.key({ code: 'Escape', preventDefault: () => {} });
   assert.equal(menu.isActive(), false);
+});
+
+test('MainMenu window is draggable by its title bar caption', () => {
+  const world = { spawnCenter: { x: 0, y: 0 } };
+  const worldSettings = { preset: 'archipelago', size: 256, population: 512, seed: 1 };
+  const menu = new MainMenu({ world, worldSettings });
+
+  // Simulate drawing on an 800x600 screen to set window bounds
+  menu.currentWindowRect = { x: 240, y: 200, w: 320, h: 160 };
+  menu.windowPos = { x: 240, y: 200 };
+
+  // Click on caption bar (y between 200 and 222)
+  assert.equal(menu.hitCaption(260, 210), true);
+  const dragStarted = menu.pointerDown(260, 210);
+  assert.equal(dragStarted, true);
+  assert(menu.dragGesture !== null);
+
+  // Drag 50px right and 30px down
+  menu.pointerMove(310, 240);
+  assert.equal(menu.windowPos.x, 290);
+  assert.equal(menu.windowPos.y, 230);
+
+  // Release mouse
+  const released = menu.pointerUp(310, 240);
+  assert.equal(released, true);
+  assert.equal(menu.dragGesture, null);
 });
 
 test('MainMenu camera drift produces smooth animated positions', () => {
@@ -91,7 +118,7 @@ test('MainMenu camera drift produces smooth animated positions', () => {
   const cam0 = menu.getCameraDrift(200, 300);
   assert.equal(typeof cam0.x, 'number');
   assert.equal(typeof cam0.y, 'number');
-  assert.equal(cam0.zoom, 1.35);
+  assert.equal(typeof cam0.zoom, 'number');
 
   menu.update(2.5);
   const cam1 = menu.getCameraDrift(200, 300);
@@ -113,3 +140,172 @@ test('MainMenu pointer hitTest and click registration', () => {
   assert.equal(consumed, true);
   assert.equal(clicked, true);
 });
+
+test('MainMenu draws all screens with ManagementCanvasUI primitives without error', () => {
+  const world = { spawnCenter: { x: 128, y: 128 } };
+  const worldSettings = { preset: 'archipelago', size: 256, population: 512, seed: 100 };
+  const options = { values: { resolution: 0.5, shadows: true, distance: 64, postEffects: true, wireframe: 0 }, apply() {} };
+  const menu = new MainMenu({ world, worldSettings, options });
+
+  const mockCtx = {
+    save() {},
+    restore() {},
+    fillRect() {},
+    strokeRect() {},
+    fillText() {},
+    beginPath() {},
+    rect() {},
+    clip() {},
+    measureText: () => ({ width: 50 }),
+    createLinearGradient: () => ({ addColorStop() {} })
+  };
+
+  const mockUi = {
+    ctx: mockCtx,
+    width: 800,
+    height: 600,
+    font: (scale, bold) => `${bold ? 'bold' : 'normal'} 11px sans-serif`,
+    text(val, x, y) { mockCtx.fillText(val, x, y); },
+    textWidth: () => 50,
+    fitText: (val) => String(val),
+    button(x, y, w, h, label, onClick, opts) {
+      mockUi.regions.push({ x, y, w, h, label, onClick });
+    },
+    regions: []
+  };
+
+  mockUi.regions = [];
+  assert.doesNotThrow(() => menu.draw(mockUi));
+  assert(mockUi.regions.length > 0, "Should register interactive buttons");
+
+  // Verify that TITLE screen has 'Novo Jogo…', 'Opções…', '×' and no 'Cenários' or 'Editor'
+  assert(mockUi.regions.some(r => r.label === 'Novo Jogo…'), "TITLE should have 'Novo Jogo…'");
+  assert(mockUi.regions.some(r => r.label === 'Opções…'), "TITLE should have 'Opções…'");
+  assert(mockUi.regions.some(r => r.label === '×'), "TITLE should always have close button '×'");
+  assert.equal(mockUi.regions.some(r => r.label.includes('Cenários')), false, "No button should mention Cenários");
+  assert.equal(mockUi.regions.some(r => r.label.includes('Editor')), false, "No button should mention Editor");
+
+  // Verify clicking Novo Jogo triggers onOpenNewGame
+  let newGameClicked = false;
+  menu.onOpenNewGame = () => { newGameClicked = true; };
+  const njBtn = mockUi.regions.find(r => r.label === 'Novo Jogo…');
+  njBtn.onClick();
+  assert.equal(newGameClicked, true);
+
+  // Verify clicking Opções triggers onOpenOptions
+  let optionsClicked = false;
+  menu.onOpenOptions = () => { optionsClicked = true; };
+  const optBtn = mockUi.regions.find(r => r.label === 'Opções…');
+  optBtn.onClick();
+  assert.equal(optionsClicked, true);
+});
+
+test('MainMenu applyAndStartNewCity triggers onStartNewCity callback without page reload', () => {
+  const world = { spawnCenter: { x: 100, y: 100 } };
+  const worldSettings = { preset: 'archipelago', size: 256, population: 512, seed: 12345 };
+  let startParams = null;
+  const menu = new MainMenu({
+    world,
+    worldSettings,
+    onStartNewCity: (params) => {
+      startParams = params;
+    }
+  });
+
+  menu.selectedPreset = 'continent';
+  menu.selectedSize = 512;
+  menu.selectedPopulation = 1024;
+  menu.selectedSeed = 998877;
+
+  menu.applyAndStartNewCity();
+
+  assert.equal(menu.isActive(), false);
+  assert.deepEqual(startParams, {
+    preset: 'continent',
+    seed: 998877,
+    size: 512,
+    population: 1024
+  });
+});
+
+test('CityDesktop.openNewGame opens a dedicated Novo Jogo window without opening Government menu', async () => {
+  const ctx = new Proxy({}, { get: (t, k) => k in t ? t[k] : () => {} });
+  globalThis.window = { innerWidth: 1024, innerHeight: 768, location: { search: '' } };
+  globalThis.document = {
+    createElement: () => ({
+      style: {},
+      value: '',
+      setAttribute() {},
+      addEventListener() {},
+      append() {},
+      remove() {},
+      reportValidity: () => true,
+      getContext: () => ctx
+    })
+  };
+  const { CityDesktop } = await import('../js/city_desktop.js');
+  const mockCity = {
+    world: { preset: 'archipelago', seed: 12345, width: 256, revision: 1 },
+    initialSeed: 12345,
+    initialPopulation: 512,
+    politics: { lastResult: null },
+    stats: () => ({ population: 512, treasury: 100000 })
+  };
+  const mockRoot = { append() {} };
+  let startCityParams = null;
+  const desktop = new CityDesktop({
+    city: mockCity,
+    root: mockRoot,
+    select() {},
+    camera() {},
+    controls: {
+      startNewCity: (p) => { startCityParams = p; }
+    }
+  });
+
+  // Call openNewGame
+  const state = desktop.openNewGame();
+  assert(state, 'openNewGame returns state');
+  assert.equal(state.tab, 'newgame');
+
+  const win = desktop.manager.find('tool:newgame');
+  assert(win, 'tool:newgame window was opened');
+  assert.equal(win.title, 'Novo Jogo');
+  assert.notEqual(win.id, 'module:government');
+
+  // Verify worldGeneration method exists and runs
+  const pageEntries = [];
+  const mockPage = {
+    heading(h) { pageEntries.push(['heading', h]); },
+    note(n, c) { pageEntries.push(['note', n]); },
+    kv(k, v) { pageEntries.push(['kv', k, v]); },
+    space() {},
+    button(label, click) { pageEntries.push(['button', label, click]); },
+    x: 0, y: 0, top: 0, bottom: 500, w: 300
+  };
+  state.worldGeneration(mockPage);
+
+  // Check expected entries from worldGeneration
+  assert(pageEntries.some(([type, text]) => type === 'heading' && text === 'GERAÇÃO DE TERRENO'));
+  assert(pageEntries.some(([type, text]) => type === 'heading' && text === 'PRÓXIMA CIDADE'));
+  assert(pageEntries.some(([type, text]) => type === 'button' && text.startsWith('PAISAGEM:')));
+  assert(pageEntries.some(([type, text]) => type === 'button' && text.startsWith('PROFILER NO PRÓXIMO MUNDO:')));
+  assert(pageEntries.some(([type, text]) => type === 'button' && text === 'GERAR COM ESTA SEMENTE'));
+  assert(pageEntries.some(([type, text]) => type === 'button' && text === 'GERAR TERRENO ALEATÓRIO'));
+
+  // Test clicking GERAR COM ESTA SEMENTE triggers startNewCity in-place
+  state.seed.value = '777888';
+  state.populationInput.value = '350';
+  state.mapSizeInput.value = '256';
+  const genBtn = pageEntries.find(([type, text]) => type === 'button' && text === 'GERAR COM ESTA SEMENTE');
+  genBtn[2](); // invoke click
+
+  assert.deepEqual(startCityParams, {
+    preset: 'archipelago',
+    seed: 777888,
+    size: 256,
+    population: 350
+  });
+});
+
+

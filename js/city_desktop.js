@@ -7,7 +7,7 @@ import {tycoonIcon} from './tycoon_icons.js';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
 export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['map','Mapa da cidade']];
-const sizes={market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450]};
+const sizes={market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],newgame:[400,470]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop with tabbed modules and optional detached views. */
@@ -102,8 +102,36 @@ export class CityDesktop {
   openTool(id,tool){
     const existing=this.manager.find(`tool:${id}`);if(existing){this.manager.raise(existing.id);return existing.state;}
     const title=id==='options'?'Opções':'Editor de mapa',element=document.createElement('div');this.element.append(element);
-    const state={tab:id,element,zones:[],drawFloating:(ui,w)=>{tool.floatingBounds={x:w.x,y:w.y,w:w.w,h:w.h-18};clipCanvasRegion(ui,w.x+3,w.y+26,w.w-6,w.h-44,()=>tool.draw(ui));},scrollAt:(x,y,d)=>tool.scrollAt(x,y,d),key:()=>false,onClose:()=>{tool.open=false;tool.floatingBounds=null;tool.bounds=null;tool.endStroke?.();}};
-    const w=this.manager.open({id:`tool:${id}`,title,width:id==='options'?460:330,height:id==='options'?390:380,minWidth:300,minHeight:210,state});w.kind='tool';tool.open=true;this.hidden=false;return state;
+    const state={tab:id,element,zones:[],drawFloating:(ui,w)=>{tool.floatingBounds={x:w.x,y:w.y,w:w.w,h:w.h-18};clipCanvasRegion(ui,w.x+3,w.y+26,w.w-6,w.h-44,()=>tool.draw(ui));},scrollAt:(x,y,d)=>tool.scrollAt(x,y,d),key:()=>false,onClose:()=>{tool.open=false;tool.floatingBounds=null;tool.bounds=null;tool.endStroke?.();if(id==='options'&&this.controls.hasActiveGame&&!this.controls.hasActiveGame())this.controls.mainMenu?.();}};
+    const w=this.manager.open({id:`tool:${id}`,title,width:id==='options'?460:330,height:id==='options'?390:380,minWidth:300,minHeight:210,state});
+    if(!this.manager.saved.has(`tool:${id}`)){
+      w.x=Math.max(4,Math.floor((this.manager.width-w.w)/2));
+      w.y=Math.max(this.manager.top+4,Math.floor((this.manager.height-w.h)/2));
+      this.manager.constrain(w);
+    }
+    w.kind='tool';tool.open=true;this.hidden=false;return state;
+  }
+  openNewGame(){
+    const existing=this.manager.find('tool:newgame');
+    if(existing){
+      this.manager.raise(existing.id);
+      if(existing.shaded)this.manager.shade(existing.id);
+      this.hidden=false;
+      return existing.state;
+    }
+    const state=this.create('tool:newgame','newgame',{title:'Novo Jogo',kind:'section'});
+    state.onClose=()=>{
+      if(this.controls.hasActiveGame&&!this.controls.hasActiveGame()){
+        this.controls.mainMenu?.();
+      }
+    };
+    const win=this.manager.find('tool:newgame');
+    if(win&&!this.manager.saved.has('tool:newgame')){
+      win.x=Math.max(4,Math.floor((this.manager.width-win.w)/2));
+      win.y=Math.max(this.manager.top+4,Math.floor((this.manager.height-win.h)/2));
+      this.manager.constrain(win);
+    }
+    return state;
   }
   toggleModule(tab){const current=this.manager.find(`module:${tab}`);if(current)return this.close(current.id);return this.openModule(tab);}
   openModule(tab){const state=this.create(`module:${tab}`,tab);state.visible=true;return state;}

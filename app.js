@@ -1,5 +1,5 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=service-capacity-3';
-import { resolveWorldSettings } from './js/world_settings.js';
+import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=service-capacity-3";
 import { CityDesktop } from "./js/city_desktop.js?v=justice-panels-1";
 import { World } from "./js/world.js";
@@ -9,7 +9,7 @@ import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
 import { SimulationTime } from "./js/simulation_time.js";
 import { OptionsPanel } from "./js/options.js?v=resolution-options-1";
-import { MainMenu } from "./js/main_menu.js";
+import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
@@ -32,18 +32,28 @@ export const mainMenu = new MainMenu({
   options,
   renderer: renderer3D,
   time,
-  onStartGame: () => startOrResumeGame()
+  onStartGame: () => startOrResumeGame(),
+  onStartNewCity: (params) => startNewCity(params),
+  onOpenNewGame: () => {
+    if (typeof cityUI !== 'undefined') {
+      cityUI.hidden = false;
+      cityUI.element.hidden = false;
+      cityUI.openNewGame();
+    }
+  },
+  onOpenOptions: () => {
+    if (typeof cityUI !== 'undefined') {
+      cityUI.hidden = false;
+      cityUI.element.hidden = false;
+      cityUI.openTool('options', options);
+    }
+  }
 });
 const autoStart = urlParams.has('autostart') || urlParams.has('skipmenu');
 if (autoStart) mainMenu.close(); else mainMenu.open();
 
 export function openMainMenu() {
   mainMenu.open();
-  if (typeof cityUI !== 'undefined') {
-    cityUI.hidden = true;
-    cityUI.element.hidden = true;
-  }
-  if (!time.paused) togglePause();
 }
 
 export function startOrResumeGame() {
@@ -51,8 +61,10 @@ export function startOrResumeGame() {
   if (typeof cityUI !== 'undefined') {
     cityUI.hidden = false;
     cityUI.element.hidden = false;
+    if (cityUI.manager.windows.length === 0) {
+      cityUI.openModule('city');
+    }
   }
-  if (time.paused) togglePause();
 }
 world.onTileChange = (x, y) => {
   renderer3D.invalidateTerrainAt(x, y);
@@ -198,6 +210,23 @@ function onPointerDown(event) {
       event.preventDefault();
       return;
     }
+    if (event.button === 2) {
+      rightClickConsumed = false;
+      if (cityUI.rightClick(x, y)) {
+        event.preventDefault();
+        rightClickConsumed = true;
+        cityUI.pointerUp();
+        dragging = editingGesture = pointerOnUI = false;
+        pointerDown = lastPointer = null;
+        return;
+      }
+    }
+    if (cityUI.visible && (cityUI.pointerDown(x, y) || legacyUI.hitTest(x, y) || cityUI.manager.at(x, y))) {
+      pointerOnUI = true;
+      pointerDown = { x: event.clientX, y: event.clientY };
+      lastPointer = pointerDown;
+      return;
+    }
     return;
   }
   if(event.button===2){
@@ -236,6 +265,7 @@ function onPointerMove(event) {
   mousePosition = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   if (mainMenu.isActive()) {
     mainMenu.pointerMove(mousePosition.x, mousePosition.y);
+    if (cityUI.visible) cityUI.pointerMove(mousePosition.x, mousePosition.y);
     return;
   }
   if(event.pointerType==='touch'&&touchPointers.has(event.pointerId)){
@@ -275,7 +305,15 @@ function onPointerUp(event) {
     const rect = root.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    mainMenu.pointerUp(x, y);
+    const menuHandled = mainMenu.pointerUp(x, y);
+    if (!menuHandled && cityUI.visible) {
+      const cityHandled = cityUI.pointerUp();
+      if (!cityHandled && event.button === 0 && pointerOnUI && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 6) {
+        legacyUI.clickAt(x, y);
+      }
+    } else if (cityUI.visible) {
+      cityUI.pointerUp();
+    }
     dragging = editingGesture = pointerOnUI = false;
     pointerDown = lastPointer = null;
     return;
@@ -344,6 +382,11 @@ root.addEventListener("wheel", (event) => {
 
 window.addEventListener("keydown", (event) => {
   if (mainMenu.isActive()) {
+    if (event.code === 'Escape' && cityUI?.visible && cityUI?.manager?.windows?.length > 0) {
+      cityUI.key(event);
+      event.preventDefault();
+      return;
+    }
     if (mainMenu.key(event)) return;
   }
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'KeyK') { event.preventDefault(); if(!event.repeat)cityUI.openGlobalSearch(); return; }
@@ -379,22 +422,34 @@ function frame(now) {
 
   if (mainMenu.isActive()) {
     mainMenu.update(dt);
-    const cam = mainMenu.getCameraDrift(world.spawnCenter.x, world.spawnCenter.y);
-    renderer3D.setCamera(cam.x, cam.y, cam.zoom);
-    renderer3D.setPaused(false);
+    if (!mainMenu.hasActiveGame) {
+      const cam = mainMenu.getCameraDrift(world.spawnCenter.x, world.spawnCenter.y);
+      renderer3D.setCamera(cam.x, cam.y, cam.zoom);
+    }
+    const paused = time.paused;
+    renderer3D.setPaused(paused);
     renderer3D.simTick = time.tick;
     setActiveEntities(entities);
     renderer3D.cityDevelopment = city.development;
     renderer3D.cityLogistics = city.logistics;
+
+    if (simulationBridge?.active) { simulationBridge.control(); simulationBridge.interpolate(now); }
+    else time.advance(dt, advanceSimulation);
+
     const renderDt = Math.min((now - lastRenderedAt) / 1000, 0.25);
     lastRenderedAt = now;
-    renderer3D.render(world, entities, time.elapsed, renderDt, 0.5);
+    renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
 
     const pointerX = mousePosition.x;
     const pointerY = mousePosition.y;
     legacyUI.beginFrame(pointerX, pointerY);
+
+    if (cityUI.visible) {
+      cityUI.draw(legacyUI);
+    }
     mainMenu.draw(legacyUI);
-    cityUI.element.hidden = true;
+    cityUI.element.hidden = !cityUI.visible;
+
     requestAnimationFrame(frame);
     return;
   }
@@ -482,7 +537,7 @@ function selectEntity(entity, unitId = null) {
   window.dispatchEvent(new CustomEvent("experience:select", { detail: selected }));
 }
 
-export const city = new CitySimulation({ world, createEntity, population: worldSettings.population });
+export let city = new CitySimulation({ world, createEntity, population: worldSettings.population });
 let cityGenerationError = null;
 try { city.initialize(); } catch (error) {
   cityGenerationError = error.message;
@@ -491,6 +546,8 @@ try { city.initialize(); } catch (error) {
 }
 export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
   mainMenu: openMainMenu,
+  hasActiveGame: () => mainMenu.hasActiveGame,
+  startNewCity: (params) => startNewCity(params),
   pause:togglePause, speed:()=>time.setSpeed(time.speed===32?0.5:time.speed*2), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
   center:()=>{renderer3D.setThirdPersonMode(false);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
   observe:(mode,id)=>{renderer3D.setThirdPersonMode(mode==='third',id);},
@@ -500,8 +557,7 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   renderer3D.setCamera(x, y);
 } });
 if (mainMenu.isActive()) {
-  cityUI.hidden = true;
-  cityUI.element.hidden = true;
+  cityUI.manager.closeAll(true);
 }
 if (cityGenerationError) cityUI.notice = cityGenerationError;
 for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
@@ -509,13 +565,90 @@ for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
 }
 
 // Background simulation starts after UI/editor bindings exist. Commands are serialized by the worker.
-simulationBridge = new CitySimulationBridge({ city, entities, nextId, time, profiling,
-  noticeTarget: () => cityUI.active,
-  notice: (message,target) => { if(target)target.notice=message;else cityUI.notice=message; },
-  changed: ({ terrain, entities: changedEntities }) => {
-    nextId = simulationBridge.state.nextId;
-    if (terrain) renderer3D.invalidateTerrainAt(NaN, NaN);
-    if (changedEntities) renderer3D.forceStaticInstanceUpdate();
-    if (selected?.destroyed) selectEntity(null);
-  },
-});
+function initSimulationBridge() {
+  if (simulationBridge) {
+    simulationBridge.worker?.terminate();
+    simulationBridge.active = false;
+    simulationBridge = null;
+  }
+  simulationBridge = new CitySimulationBridge({ city, entities, nextId, time, profiling,
+    noticeTarget: () => cityUI.active,
+    notice: (message,target) => { if(target)target.notice=message;else cityUI.notice=message; },
+    changed: ({ terrain, entities: changedEntities }) => {
+      nextId = simulationBridge.state.nextId;
+      if (terrain) renderer3D.invalidateTerrainAt(NaN, NaN);
+      if (changedEntities) renderer3D.forceStaticInstanceUpdate();
+      if (selected?.destroyed) selectEntity(null);
+    },
+  });
+}
+initSimulationBridge();
+
+export function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 512 } = {}) {
+  if (simulationBridge) {
+    simulationBridge.worker?.terminate();
+    simulationBridge.active = false;
+    simulationBridge = null;
+  }
+
+  entities.length = 0;
+  nextId = 1;
+  selected = null;
+  renderer3D.selectEntity(-1);
+  renderer3D.setThirdPersonMode(false);
+
+  const matchedPreset = SUBURBAN_PRESETS.find(p => p.id === preset);
+  const presetId = matchedPreset ? matchedPreset.presetId : (WORLD_PRESETS[preset]?.id ?? 0);
+  worldSettings.preset = preset;
+  worldSettings.presetId = presetId;
+  worldSettings.seed = seed;
+  worldSettings.size = size;
+  worldSettings.population = population;
+
+  if (world.width !== size || world.height !== size) {
+    world.width = size;
+    world.height = size;
+    world.map = new Uint8Array(size * size);
+  }
+  world.preset = preset;
+  world.generate(presetId, seed);
+
+  renderer3D.clear();
+  renderer3D.mapWidth = world.width;
+  renderer3D.mapHeight = world.height;
+  renderer3D.currentMap = world.map;
+  renderer3D.currentWorldRevision = world.revision;
+  renderer3D.setCamera(world.spawnCenter.x, world.spawnCenter.y, 1.2);
+
+  city = new CitySimulation({ world, createEntity, population });
+  let genError = null;
+  try {
+    city.initialize();
+  } catch (err) {
+    genError = err.message;
+    city.log(err.message, 'city', [], { kind: 'generation-failed' });
+    city.syncClock();
+  }
+
+  if (typeof cityUI !== 'undefined') {
+    cityUI.city = city;
+    cityUI.lastSelected = null;
+    cityUI.electionNotices = new Set();
+    cityUI.lastElectionResultId = city.politics.lastResult?.id ?? null;
+    cityUI.element.replaceChildren();
+    cityUI.manager.closeAll(true);
+    cityUI.openModule('city');
+    cityUI.notice = genError || `Nova cidade fundada com sucesso! (${size}×${size}, ${population} hab.)`;
+  }
+
+  mainMenu.camBaseX = world.spawnCenter.x;
+  mainMenu.camBaseY = world.spawnCenter.y;
+  mainMenu.selectedPreset = preset;
+  mainMenu.selectedSeed = seed;
+  mainMenu.selectedSize = size;
+  mainMenu.selectedPopulation = population;
+
+  initSimulationBridge();
+  startOrResumeGame();
+}
+
