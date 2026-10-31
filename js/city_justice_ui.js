@@ -17,6 +17,7 @@ function caseCard(ui,p,record,{showActions=true}={}){
   p.heading(`CASO #${record.id} · ${label}`);
   p.status(status,`${record.severity}/100 · fato ${stamp(record.occurredAt)}${record.reportedAt!=null?` · BO ${stamp(record.reportedAt)}`:''}`,record.status==='convicted'?'#ef6b73':record.status==='no-suspect'?'#e6b953':'#77c8df');
   if(record.recidivismApplied)p.note(`Agravante votada por reincidência: severidade base ${record.baseSeverity}/100 + ${record.details?.recidivismBonus} por condenação anterior desta infração.`);
+  if(record.type==='graffiti')p.kv('Suporte / autorização',`${record.details?.artworkKind?j.labelArt(record.details.artworkKind):'obra urbana'} · ${record.details?.ownerAuthorized?'autorizada pelo proprietário':'sem autorização registrada'}`);
   p.kv('Vítima / comunicante',victim?.entity.properties.name||'Sem vítima identificada');
   p.kv('Pessoa apontada',record.investigation?.suspectId!=null||record.chargedCitizenId!=null?suspect?.entity.properties.name||'Não localizada':'Nenhuma conclusão oficial');
   if(record.type==='vandalism')p.kv('Dano / limiar penal',`${record.details?.damage??0}/100 pontos · mínimo vigente no fato: ${record.rule?.minimumDamage??0}`);

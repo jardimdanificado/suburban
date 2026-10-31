@@ -234,7 +234,7 @@ A Câmara poderá alterar as regras gerais por tipo de conduta, além de votar d
 | Configuração votável | Exemplos e efeito |
 | --- | --- |
 | Enquadramento da conduta | Permitida, infração administrativa ou crime. A Câmara pode liberar pichação ou voltar a criminalizá-la. |
-| Condições do enquadramento | Diferenciar autorização do dono, tipo de suporte, invasão, limiar mínimo de dano por ato, violência e reincidência. O proprietário pode autorizar ou revogar pichação por obra; com a defesa de autorização ativa, a camada autorizada não gera crime. Permitir pichação não legaliza automaticamente agressão, invasão ou destruição cometidas junto dela. |
+| Condições do enquadramento | Diferenciar autorização do dono, tipo de suporte, invasão, limiar mínimo de dano por ato, violência e reincidência. A Câmara pode isentar por votação categorias de obra (banner, pintura, pichação, estátua, bandeirinha ou monumento). O proprietário pode autorizar ou revogar pichação por obra; com a defesa de autorização ativa, a camada autorizada não gera crime. Permitir pichação não legaliza automaticamente agressão, invasão ou destruição cometidas junto dela. |
 | Gravidade | Classificação e agravantes/atenuantes utilizados na prioridade policial, cautelares e sentença; inclui bônus votável por reincidência, aplicado apenas após condenação anterior pela mesma infração. |
 | Penalidade financeira | Apenas multa/taxa punitiva, valor fixo ou proporcional ao dano, com limites e destinatário definidos. O registro identifica se é sanção administrativa ou criminal; cobrar não equivale a condenar por outro delito. |
 | Outras consequências | Reparação/limpeza, indenização, possibilidade de prisão e duração mínima/máxima da pena, com combinações explícitas. |

@@ -168,7 +168,11 @@ p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento /
             {label:`GATILHO: ${rule.cassationTrigger==='conviction'?'CONDENAÇÃO':'PRISÃO'} · ALTERNAR`,click:()=>update({cassationTrigger:rule.cassationTrigger==='conviction'?'arrest':'conviction'})}
           ]);
           p.buttons([{label:'AGRAVANTE POR REINCIDÊNCIA −10',click:()=>update({recidivismSeverityBonus:Math.max(0,(rule.recidivismSeverityBonus||0)-10)})},{label:'AGRAVANTE POR REINCIDÊNCIA +10',click:()=>update({recidivismSeverityBonus:Math.min(50,(rule.recidivismSeverityBonus||0)+10)})}]);
-          if(crime==='graffiti'){p.kv('Autorização do proprietário',rule.ownerConsentDefense?'A obra autorizada não gera crime de pichação':'A autorização não afasta o crime');p.buttons([{label:rule.ownerConsentDefense?'CRIMINALIZAR MESMO COM AUTORIZAÇÃO':'RESPEITAR AUTORIZAÇÃO DO DONO',click:()=>update({ownerConsentDefense:!rule.ownerConsentDefense})}]);}
+          if(crime==='graffiti'){
+            p.kv('Autorização do proprietário',rule.ownerConsentDefense?'A obra autorizada não gera crime de pichação':'A autorização não afasta o crime');p.buttons([{label:rule.ownerConsentDefense?'CRIMINALIZAR MESMO COM AUTORIZAÇÃO':'RESPEITAR AUTORIZAÇÃO DO DONO',click:()=>update({ownerConsentDefense:!rule.ownerConsentDefense})}]);
+            const artworkKinds={banner:'BANNERS',painting:'PINTURAS',graffiti:'PICHAÇÕES',statue:'ESTÁTUAS',flags:'BANDEIRINHAS',monument:'MONUMENTOS'},exempt=new Set(rule.exemptArtworkKinds||[]);p.kv('Suportes isentos de crime',exempt.size?[...exempt].map(kind=>artworkKinds[kind]||kind).join(', '):'Nenhum');
+            p.buttons(Object.entries(artworkKinds).map(([kind,label])=>({label:`${exempt.has(kind)?'CRIMINALIZAR':'ISENTAR'} ${label}`,click:()=>update({exemptArtworkKinds:exempt.has(kind)?[...exempt].filter(item=>item!==kind):[...exempt,kind]})})));
+          }
           if(crime==='vandalism'){p.kv('Dano mínimo por ato',`${rule.minimumDamage||0}/100 pontos de integridade`);p.buttons([{label:'LIMIAR DE DANO −10',click:()=>update({minimumDamage:Math.max(0,(rule.minimumDamage||0)-10)})},{label:'LIMIAR DE DANO +10',click:()=>update({minimumDamage:Math.min(100,(rule.minimumDamage||0)+10)})}]);}
           p.buttons([{label:'MULTA -100',click:()=>update({fine:Math.max(0,rule.fine-100)})},{label:'MULTA +100',click:()=>update({fine:rule.fine+100})}]);
         }
