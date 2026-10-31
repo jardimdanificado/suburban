@@ -37,3 +37,8 @@ test('the crematorium leg uses the same physical pickup and delivery reservation
  const {justice,c,iml:crematorium,body,bike,arrive}=fixture();crematorium.type='crematorium';body.status='cremation-wait';body.autopsy={completedAt:50,cause:'velhice'};
  assert.equal(justice.beginTransport(body,crematorium,'crematorium'),true);justice.updateFuneralWorker(c);arrive(body.entity);justice.updateFuneralWorker(c);assert.equal(body.pickedUp,true);justice.updateFuneralWorker(c);arrive(crematorium.door);justice.updateFuneralWorker(c);assert.equal(body.status,'cremating');assert.equal(body.cremationEndsAt,220);assert.equal(body.autopsy.cause,'velhice');assert.equal(bike.serviceBodyId,null);
 });
+
+test('the IML and crematorium share their public cargo-bike fleet',()=>{
+ const {justice,city,iml:crematorium,body,bike}=fixture(),iml={id:9,type:'iml',active:true,accountId:'building:9',workers:[],entity:{}};city.buildings.push(iml);crematorium.type='crematorium';body.status='cremation-wait';bike.ownerAccountId=iml.accountId;
+ assert.equal(justice.beginTransport(body,crematorium,'crematorium'),true);assert.equal(body.vehicleId,bike.id);assert.equal(bike.serviceBodyId,body.id);
+});

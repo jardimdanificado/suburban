@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CityJustice} from '../js/city_justice.js';
 import {CityVehicles} from '../js/city_vehicles.js';
+import {CityStateGraph,bindCityState} from '../js/city_state.js';
+import {setup} from './helpers/city.mjs';
 import {CityEconomy} from '../js/city_economy.js';
 
 function fixture(type='iml'){
@@ -37,4 +39,14 @@ test('funeral services accept only their real procedure supplies',()=>{
 test('public funeral operators participate in purchase of real cargo bicycles',()=>{
  const iml={id:10,type:'iml',active:true,entity:{},accountId:'building:10',workers:[1,2,3],inventory:{}},shop={id:20,type:'cycle_shop',active:true,entity:{},accountId:'building:20',inventory:{bicicleta_carga:1}},city={minute:100,day:1,buildings:[iml,shop],citizens:[],economy:{businesses:[],goods:{bicicleta_carga:{price:1000}}},building:id=>id==='building:20'?shop:null};
  const vehicles=new CityVehicles(city),bike={id:1,good:'bicicleta_carga',active:false,holderAccountId:shop.accountId};vehicles.units.set(1,bike);vehicles.parkingReport=()=>({missing:0});vehicles.financeVehicle=(company,unit)=>company===iml&&unit===bike;let bought=false;vehicles.buyVehicle=(account,id)=>{assert.equal(account,iml.accountId);assert.equal(id,1);bike.active=true;bike.ownerAccountId=account;bought=true;return true;};vehicles.hourly();assert.ok(bought);
+});
+
+test('the IML gets the last available cargo bicycle before larger ordinary businesses',()=>{
+ const iml={id:10,type:'iml',active:true,entity:{},accountId:'building:10',workers:[1],inventory:{}},business={id:11,type:'factory',active:true,entity:{},accountId:'business:11',workers:Array.from({length:20},(_,i)=>i+2)},shop={id:20,type:'cycle_shop',active:true,entity:{},accountId:'building:20',inventory:{bicicleta_carga:1}},city={minute:100,day:1,buildings:[iml,business,shop],citizens:[],economy:{businesses:[business],goods:{bicicleta_carga:{price:1000}}},building:id=>id==='building:20'?shop:null};
+ const vehicles=new CityVehicles(city),bike={id:1,good:'bicicleta_carga',active:false,holderAccountId:shop.accountId};vehicles.units.set(1,bike);vehicles.parkingReport=()=>({missing:0});vehicles.financeVehicle=(company,unit)=>company===iml&&unit===bike;vehicles.buyVehicle=(account,id)=>{if(account!==iml.accountId||id!==bike.id)return false;bike.active=true;bike.ownerAccountId=account;return true;};vehicles.hourly();assert.equal(bike.ownerAccountId,iml.accountId);
+});
+
+test('one initial cargo bicycle stays reserved until a funeral operator is built',()=>{
+ const city=setup({starter:true,population:48}),bike=[...city.vehicles.units.values()].find(v=>v.good==='bicicleta_carga'&&v.funeralFleetReserve);assert.ok(bike);const sender=new CityStateGraph(),receiver=new CityStateGraph(),snapshot=receiver.apply(sender.encode({city}));bindCityState(snapshot.city);assert.equal([...snapshot.city.vehicles.units.values()].find(v=>v.id===bike.id).funeralFleetReserve,true);city.buildings.push({id:900,type:'factory',active:true,entity:{destroyed:false},accountId:'business:900',workers:Array.from({length:20},(_,i)=>i+1),inventory:{}});city.vehicles.financeVehicle=()=>true;city.vehicles.buyVehicle=(account,id)=>{bike.active=true;bike.ownerAccountId=account;return true;};city.vehicles.hourly();assert.equal(bike.active,false);
+ const iml={id:901,type:'iml',active:true,entity:{destroyed:false},accountId:'building:901',workers:[1],inventory:{}};city.buildings.push(iml);city.accounts.set(iml.accountId,{balance:100000});city.minute+=60;city.vehicles.hourly();assert.equal(bike.active,true);assert.equal(bike.ownerAccountId,iml.accountId);
 });
