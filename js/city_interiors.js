@@ -111,6 +111,23 @@ export function syncCitizenInterior(city,c){
  }
  if(task==='work-wait'&&c.seatId)return exit(city,c);
  if(task==='informal-service'&&!gig)return exit(city,c);
+ if(task==='informal-service'&&gig?.artworkSupport?.kind==='skybridge'){
+  const support=gig.artworkSupport,site=city.building(support.buildingId),link=(city.skybridgeLinksForRevision?.()||[]).find(item=>item.id===support.linkId);if(!site||site.entity.destroyed||!link){c.task=null;c.informalJobId=null;return exit(city,c);}
+  if(support.phase==='returning'||c.skybridgeTransit||c.skybridgeZ>0&&c.skybridgeId===link.id)return true;
+  if(previous)return exit(city,c);
+  if(Math.hypot(c.entity.x-site.door.x,c.entity.y-site.door.y)>1.5)return false;
+  if(!city.beginSkybridgeTransit?.(c,{buildingId:site.id,unitId:support.unitId,linkId:link.id,endpoint:support.endpoint,phase:'entry'})){c.action='Aguardando acesso físico à passarela';return false;}
+  return true;
+ }
+ if(task==='informal-service'&&gig?.artworkSupport?.kind==='roof-terrace'){
+  const site=city.building(gig.buildingId);if(!site||site.entity.destroyed){c.task=null;c.informalJobId=null;return exit(city,c);}
+  if(previous?.buildingId===site.id&&previous.targetRoomType==='roof_terrace')return !previous.path.length;
+  if(previous?.buildingId!==site.id&&previous&&!exit(city,c))return false;
+  if(!previous&&Math.hypot(c.entity.x-site.door.x,c.entity.y-site.door.y)>1.5)return false;
+  const from=previous?.buildingId===site.id?previous.position:{x:site.door.x,y:site.door.y,z:0};release(city,c);const path=interiorRoute(site,from,gig.point);
+  if(path===null){c.action='Sem rota interna acessível até a cobertura da obra';return false;}
+  c.indoorLocation={buildingId:site.id,targetUnitId:null,unitId:null,targetRoomType:'roof_terrace',roomType:path.length?'circulation':'roof_terrace',floor:gig.artworkSupport.floor??site.floors-1,position:{...from},path,phase:path.length?'walking':'using',task,layoutRevision:site.layoutRevision||0,enteredAt:previous?.buildingId===site.id?previous.enteredAt:city.minute};return !path.length;
+ }
  if(task==='workmeal'&&!city.workMeals.hasFullDiningFloor(b)){c.task=null;c.targetId=null;c.mealTargetId=null;c.mealResume=null;c.path=[];return exit(city,c);}
  if(c.paintWorkId&&previous&&!c.path.length){const job=city.paint.jobs.find(j=>j.id===c.paintWorkId);if(job?.kind==='building'&&job.buildingId===previous.buildingId&&job.status==='painting'&&!previous.exiting)return !previous.path.length;}
  if(c.entity.destroyed){release(city,c);c.indoorLocation=null;return true;}

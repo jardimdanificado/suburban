@@ -246,6 +246,16 @@ export class CityGovernment extends CityPolitics {
     const mayor=city.economy.mayorId===c.id;if(mayor){if(!c.actingMayor||!this.suspendedExecutive)this.mandates.finish('Impeachment');city.economy.mayorId=null;if(this.suspendedExecutive&&this.viceMayorId===c.id)this.viceMayorId=null;this.releaseDuties(c,'Impeachment');}else if(this.viceMayorId===c.id)this.viceMayorId=null;else this.council.remove(c.id,'Cassação por corrupção');c.role='citizen';
     city.log(`${c.entity.properties.name} perdeu o mandato${confidence?' por perda de confiança popular':'; impedimento nas próximas duas eleições'}.`,'government',[c.id],{kind:'politician-impeached',corruptionCaseId:caseId,billId,blockedUntilTerm:c.political.blockedUntilTerm});if(mayor)this.ensureMayor();return true;
   }
+  cassateCriminalMandate(citizenId,caseId,trigger='conviction'){
+    const city=this.city,c=city.society.citizen(citizenId);if(!c)return false;
+    const mayor=city.economy.mayorId===citizenId,vice=this.viceMayorId===citizenId,suspended=this.suspendedExecutive?.citizenId===citizenId,councilor=this.council.members.some(m=>m.citizenId===citizenId);if(!mayor&&!vice&&!suspended&&!councilor)return false;
+    const cause=trigger==='arrest'?'prisão':'condenação',reason=`Cassação do mandato por ${cause}`;
+    if(suspended){const acting=city.society.citizen(city.economy.mayorId);this.suspendedExecutive=null;if(acting&&acting.id!==citizenId){acting.actingMayor=false;this.takeOffice(acting,'Sucessão após cassação criminal do titular');}else{city.economy.mayorId=null;this.releaseDuties(c,reason);this.ensureMayor();}}
+    else if(mayor){this.mandates.finish(reason);city.economy.mayorId=null;this.releaseDuties(c,reason);c.role='citizen';this.ensureMayor();}
+    else if(vice){this.viceMayorId=null;c.role='citizen';}
+    else this.council.remove(citizenId,reason);
+    city.log(`${c.entity.properties.name} perdeu o mandato por ${cause} no caso #${caseId}.`,'government',[citizenId],{kind:'criminal-mandate-cassation',caseId,trigger,office:mayor||suspended?'mayor':vice?'vice-mayor':'council'});return true;
+  }
   daily(){this.organize();this.mandates.update();reviewMembership(this);this.liquidateEmptyParties();
     if(!this.city.society.citizen(this.viceMayorId))this.viceMayorId=null;
     for(const c of [this.city.society.citizen(this.city.economy.mayorId),this.city.society.citizen(this.viceMayorId),...this.council.people()].filter(Boolean))if((c.traits?.honesty??.5)<.45&&this.city.random()<.035)organizeScheme(this,c);

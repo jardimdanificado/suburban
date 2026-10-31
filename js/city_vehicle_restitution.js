@@ -20,7 +20,8 @@ export function dispatchVehicleRestitution(justice){
     if(!owner||owner.entity.destroyed||vehicle.ownerAccountId!==owner.accountId){recovery.waitingReason='proprietário legal indisponível ou alterado';continue;}
     if(recovery.status==='awaiting-stop'){
       const previous=recovery.mission,officer=city.society.citizen(previous?.officerId);
-      if(vehicle.driverId||previous?.status==='in-progress'&&officer&&!officer.entity.destroyed&&!officer.custody){recovery.waitingReason=vehicle.driverId?'Aguardando a bicicleta parar após a interceptação policial':'Agente retornando à delegacia antes de nova abordagem';continue;}
+      const officerReturning=officer?.policeRestitution?.kind==='vehicle'&&officer.policeRestitution.caseId===record.id&&!officer.entity.destroyed&&!officer.custody;
+      if(vehicle.driverId||officerReturning){recovery.waitingReason=vehicle.driverId?'Aguardando a bicicleta parar após a interceptação policial':'Agente retornando à delegacia antes de nova abordagem';continue;}
       recovery.status='awaiting-officer';
     }
     const otherRecovery=justice.cases.find(other=>other!==record&&other.details?.vehicleId===vehicle.id&&other.vehicleRecovery?.status==='in-progress');if(otherRecovery){recovery.waitingReason=`recuperação já atribuída ao caso #${otherRecovery.id}`;continue;}
@@ -58,10 +59,12 @@ export function updateVehicleRestitution(justice,officer){
   if(mission.payBlockedMinute===city.minute)return false;
   officer.task='police-restitution';mission.waitingReason=null;recovery.waitingReason=null;
   if(officer.indoorLocation){if(officer.indoorLocation.path?.length)return true;return justice.leaveRestitutionInterior(officer,city.building(officer.indoorLocation.buildingId),mission);}
+  if(mission.phase==='to-vehicle'&&vehicle?.driverId){const driver=city.society.citizen(vehicle.driverId),goal=driver?.mobilityTrip?.goal;if(driver&&goal){mission.phase='intercept';mission.targetDriverId=driver.id;mission.interceptGoal={...goal};mission.interceptUntil=city.minute+180;officer.path=[];officer.action='Bicicleta voltou a circular; seguindo o destino do ciclista';}else{recovery.waitingReason=mission.waitingReason='veículo ocupado sem destino para interceptação';return false;}}
   if(mission.phase==='intercept'){
     const driver=city.society.citizen(vehicle?.driverId),goal=driver?.mobilityTrip?.goal;
     if(!driver){mission.phase='to-vehicle';mission.interceptGoal=null;mission.targetDriverId=null;officer.path=[];}
     else{
+      mission.targetDriverId=driver.id;
       if(goal&&(goal.x!==mission.interceptGoal?.x||goal.y!==mission.interceptGoal?.y)){mission.interceptGoal={...goal};officer.path=[];}
       if(city.minute>=(mission.interceptUntil??Infinity)){mission.status='interrupted';mission.phase='return';mission.waitingReason='ciclista não parou durante a janela de interceptação';recovery.status='awaiting-stop';recovery.waitingReason=mission.waitingReason;officer.path=[];officer.action='Intercepção encerrada; retornando enquanto aguarda uma parada';}
       else if(officer.path.length)return true;

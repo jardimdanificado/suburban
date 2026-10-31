@@ -155,9 +155,21 @@ p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento /
         for(const [type,label]of [['cleanRecord','Lei da ficha limpa'],['parliamentaryImmunity','Imunidade parlamentar']]){p.kv(label,justice.policies[type]?'Em vigor':'Desativada');p.button(`PROPOR ${justice.policies[type]?'REVOGAR':'APROVAR'} ${label.toUpperCase()}`,()=>submit(type,{value:!justice.policies[type]}));}
         p.heading('REGRAS POR INFRAÇÃO');p.note('A Câmara decide se cada conduta é crime, sua severidade, multa e efeitos políticos. Regras mais brandas revisam processos anteriores; aumentos de pena valem para fatos novos. Descriminalizar não apaga reparações civis já reconhecidas.');
         for(const [crime,label]of Object.entries(CRIME_TYPES)){const rule=justice.policies.penalCode[crime];if(!rule)continue;
-          p.kv(label,`${rule.criminal?'Crime':'Descriminalizada'} · severidade ${rule.severity} · multa ${money(rule.fine)}`);
+          p.kv(label,`${rule.criminal?'Crime':'Descriminalizada'} · severidade ${rule.severity} · multa ${money(rule.fine)} · reincidência +${rule.recidivismSeverityBonus||0}`);
           const update=changes=>submit('penalCode',{crime,rule:{...rule,...changes}});
-          p.buttons([{label:rule.criminal?'DESCRIMINALIZAR':'DEFINIR COMO CRIME',click:()=>update({criminal:!rule.criminal})},{label:'SEVERIDADE -10',click:()=>update({severity:Math.max(0,rule.severity-10)})},{label:'SEVERIDADE +10',click:()=>update({severity:Math.min(100,rule.severity+10)})},{label:rule.fineOnly?'PERMITIR PRISÃO':'SOMENTE MULTA',click:()=>update({fineOnly:!rule.fineOnly})},{label:rule.politicalDisqualification?'PRESERVAR DIREITOS POLÍTICOS':'SUSPENDER DIREITOS POLÍTICOS',click:()=>update({politicalDisqualification:!rule.politicalDisqualification})},{label:rule.cleanRecordDisqualifying?'FICHA LIMPA NÃO BLOQUEIA':'IMPEDIR CANDIDATURA PELA FICHA LIMPA',click:()=>update({cleanRecordDisqualifying:!rule.cleanRecordDisqualifying})},{label:rule.cassation?'NÃO CASSAR MANDATO':'CASSAR MANDATO APÓS PRISÃO',click:()=>update({cassation:!rule.cassation})}]);
+          p.buttons([
+            {label:rule.criminal?'DESCRIMINALIZAR':'DEFINIR COMO CRIME',click:()=>update({criminal:!rule.criminal})},
+            {label:'SEVERIDADE -10',click:()=>update({severity:Math.max(0,rule.severity-10)})},
+            {label:'SEVERIDADE +10',click:()=>update({severity:Math.min(100,rule.severity+10)})},
+            {label:rule.fineOnly?'PERMITIR PRISÃO':'SOMENTE MULTA',click:()=>update({fineOnly:!rule.fineOnly})},
+            {label:rule.politicalDisqualification?'PRESERVAR DIREITOS POLÍTICOS':'SUSPENDER DIREITOS POLÍTICOS',click:()=>update({politicalDisqualification:!rule.politicalDisqualification})},
+            {label:rule.cleanRecordDisqualifying?'FICHA LIMPA NÃO BLOQUEIA':'IMPEDIR CANDIDATURA PELA FICHA LIMPA',click:()=>update({cleanRecordDisqualifying:!rule.cleanRecordDisqualifying})},
+            {label:rule.cassation?'NÃO CASSAR MANDATO':rule.cassationTrigger==='conviction'?'CASSAR MANDATO NA CONDENAÇÃO':'CASSAR MANDATO NA PRISÃO',click:()=>update({cassation:!rule.cassation})},
+            {label:`GATILHO: ${rule.cassationTrigger==='conviction'?'CONDENAÇÃO':'PRISÃO'} · ALTERNAR`,click:()=>update({cassationTrigger:rule.cassationTrigger==='conviction'?'arrest':'conviction'})}
+          ]);
+          p.buttons([{label:'AGRAVANTE POR REINCIDÊNCIA −10',click:()=>update({recidivismSeverityBonus:Math.max(0,(rule.recidivismSeverityBonus||0)-10)})},{label:'AGRAVANTE POR REINCIDÊNCIA +10',click:()=>update({recidivismSeverityBonus:Math.min(50,(rule.recidivismSeverityBonus||0)+10)})}]);
+          if(crime==='graffiti'){p.kv('Autorização do proprietário',rule.ownerConsentDefense?'A obra autorizada não gera crime de pichação':'A autorização não afasta o crime');p.buttons([{label:rule.ownerConsentDefense?'CRIMINALIZAR MESMO COM AUTORIZAÇÃO':'RESPEITAR AUTORIZAÇÃO DO DONO',click:()=>update({ownerConsentDefense:!rule.ownerConsentDefense})}]);}
+          if(crime==='vandalism'){p.kv('Dano mínimo por ato',`${rule.minimumDamage||0}/100 pontos de integridade`);p.buttons([{label:'LIMIAR DE DANO −10',click:()=>update({minimumDamage:Math.max(0,(rule.minimumDamage||0)-10)})},{label:'LIMIAR DE DANO +10',click:()=>update({minimumDamage:Math.min(100,(rule.minimumDamage||0)+10)})}]);}
           p.buttons([{label:'MULTA -100',click:()=>update({fine:Math.max(0,rule.fine-100)})},{label:'MULTA +100',click:()=>update({fine:rule.fine+100})}]);
         }
       });

@@ -22,7 +22,7 @@ export function artworkNarrative(city,input){
   if(mode!=='invented'&&(!source||source.id!==Number(input.sourceEventId)))return null;
   const participantIds=[...new Set((input.participantIds||source?.citizenIds||[]).filter(Number.isInteger))].slice(0,12),roles=new Set(['protagonist','antagonist','victim','witness','leader','rescuer','participant']);
   const participantRoles=(input.participantRoles||[]).filter(row=>row&&participantIds.includes(row.citizenId)&&roles.has(row.role)).slice(0,12).map(row=>({citizenId:row.citizenId,role:row.role}));
-  return {mode,sourceEventId:mode==='invented'?null:source.id,source:mode==='invented'?null:structuredClone(source),title:text(input.title||source?.message,180),description:text(input.description,500),claimedMinute:Number.isFinite(input.claimedMinute)?input.claimedMinute:source?.minute??null,claimedDate:text(input.claimedDate,80),claimedPlace:text(input.claimedPlace,120),participantIds,participantRoles,sourceClaim:text(input.sourceClaim,180)};
+  return {mode,sourceEventId:mode==='invented'?null:source.id,source:mode==='invented'?null:structuredClone(source),title:text(input.title||source?.message,180),description:text(input.description,500),claimedMinute:Number.isFinite(input.claimedMinute)?input.claimedMinute:source?.minute??null,claimedDate:text(input.claimedDate,80),claimedPlace:text(input.claimedPlace,120),participantIds,participantRoles,sourceClaim:text(input.sourceClaim,180),responseToArtId:Number.isSafeInteger(input.responseToArtId)?input.responseToArtId:null};
 }
 
 export function narrativeRoleForParticipant(narrative,citizenId){return narrative?.participantRoles?.find(row=>row.citizenId===citizenId)?.role||'participant';}

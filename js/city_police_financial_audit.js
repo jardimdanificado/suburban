@@ -1,21 +1,23 @@
-const leads=record=>new Set([...(record.witnesses||[]).filter(w=>w.confidence>=.7).map(w=>w.identifiedSuspectId),...(record.evidence||[]).filter(e=>e.confidence>=.7).map(e=>e.implicatedCitizenId)].filter(Number.isInteger));
+const leads=record=>new Set([...(record.witnesses||[]).filter(w=>w.confidence>=.7).map(w=>w.identifiedSuspectId),...(record.evidence||[]).filter(e=>e.confidence>=.7).flatMap(e=>[e.implicatedCitizenId,e.identifiedSuspectId]),...(record.investigation?.interviewEvidence||[]).filter(e=>e.confidence>=.7).map(e=>e.identifiedSuspectId)].filter(Number.isInteger));
 
 export function dispatchPoliceAudits(justice){
   const city=justice.city,hour=Math.floor(city.minute/60);if(justice.lastAuditAssignmentHour===hour)return;justice.lastAuditAssignmentHour=hour;
   const activeInvestigators=new Set(justice.cases.filter(r=>r.status==='investigating').map(r=>r.investigation?.officerId));
+  const occupiedStations=new Set(justice.cases.filter(r=>r.investigation?.financialAudit?.status==='active').map(r=>r.investigation.financialAudit.stationId));
   for(const source of justice.cases){
-    const investigation=source.investigation;if(source.status!=='no-suspect'||!investigation||investigation.finishedAt==null||!leads(source).size)continue;
+    const investigation=source.investigation,reviewableStatus=['no-suspect','arrest-requested','arrested','charged','convicted','acquitted','appeal-pending'].includes(source.status);if(!reviewableStatus||!investigation||investigation.finishedAt==null||!leads(source).size)continue;
     const audit=investigation.financialAudit??={status:'waiting',progress:0,required:90,createdAt:city.minute,caseIds:[]};
     if(['completed','inconclusive'].includes(audit.status))continue;
     const previous=city.society.citizen(audit.officerId);if(audit.status==='active'&&previous&&!previous.entity.destroyed&&previous.policeAudit?.caseId===source.id)continue;
     audit.status='waiting';let assignment;
     for(const station of justice.activeBuildings('police_station')){
+      if(occupiedStations.has(station.id))continue;
       const witnessIds=new Set((source.witnesses||[]).map(w=>w.citizenId));
       const officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&c.id!==investigation.officerId&&!leads(source).has(c.id)&&!witnessIds.has(c.id)&&!activeInvestigators.has(c.id)&&!c.entity.destroyed&&!c.custody&&!c.workMeal&&!c.conversation&&!c.mobilityTrip&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.policeAudit&&!c.policeInvestigation&&!c.policePatrol&&!c.policeResponse&&!c.policeRestitution&&!c.custodyEscort&&!city.urgentNeed?.(c));
       if(officer){assignment={station,officer};break;}
     }
     if(!assignment){audit.waitingReason='aguardando auditor disponível que não esteja envolvido no inquérito';continue;}
-    const {station,officer}=assignment;audit.status='active';audit.officerId=officer.id;audit.stationId=station.id;audit.startedAt??=city.minute;audit.waitingReason=null;officer.policeAudit={caseId:source.id};officer.action=`Auditando registros financeiros do inquérito #${source.id}`;
+    const {station,officer}=assignment;audit.status='active';audit.officerId=officer.id;audit.stationId=station.id;audit.startedAt??=city.minute;audit.waitingReason=null;occupiedStations.add(station.id);officer.policeAudit={caseId:source.id};officer.action=`Auditando registros financeiros do inquérito #${source.id}`;
   }
 }
 
@@ -26,8 +28,9 @@ export function updatePoliceAudit(justice,officer){
   if(audit.lastWorkedMinute===city.minute)return true;audit.lastWorkedMinute=city.minute;
   if(!city.payWage(officer,station)){audit.waitingReason='aguardando verba salarial';return false;}
   audit.waitingReason=null;audit.progress++;if(audit.progress<audit.required)return true;
-  const involved=leads(source),target=city.society.citizen(investigation.officerId),from=investigation.startedAt??source.occurredAt??0,to=investigation.finishedAt;
-  const witnessPairs=(source.witnesses||[]).filter(w=>involved.has(w.identifiedSuspectId)).map(w=>({payer:city.society.citizen(w.identifiedSuspectId),witness:city.society.citizen(w.citizenId)})).filter(pair=>pair.payer&&pair.witness&&pair.payer!==pair.witness);
+  const involved=leads(source),target=city.society.citizen(investigation.officerId),from=source.occurredAt??investigation.startedAt??0,to=investigation.finishedAt;
+  const statements=[...(source.witnesses||[]),...(investigation.interviewEvidence||[]),...(source.evidence||[]).filter(e=>['witness-identification','police-interview'].includes(e.kind))],pairKeys=new Set(),witnessPairs=[];
+  for(const statement of statements){const witnessId=statement.witnessId??statement.citizenId,payerId=statement.identifiedSuspectId;if(!Number.isInteger(witnessId)||!involved.has(payerId))continue;const key=`${payerId}:${witnessId}`;if(pairKeys.has(key))continue;pairKeys.add(key);const payer=city.society.citizen(payerId),witness=city.society.citizen(witnessId);if(payer&&witness&&payer!==witness)witnessPairs.push({payer,witness});}
   const relatedBodies=justice.bodies.filter(body=>(body.criminalCaseId===source.id||body.circumstances?.caseId===source.id)&&body.autopsy?.examinerId!=null&&body.autopsy.completedAt>=(source.occurredAt??from));
   const forensicPairs=relatedBodies.flatMap(body=>[...involved].map(id=>({payer:city.society.citizen(id),examiner:city.society.citizen(body.autopsy.examinerId),body})).filter(pair=>pair.payer&&pair.examiner&&pair.payer!==pair.examiner));
   const matchesForensicPayment=(pair,e)=>e.from===pair.payer.accountId&&e.to===pair.examiner.accountId&&e.minute>=(pair.body.autopsyStartedAt??Math.max(0,pair.body.autopsy.completedAt-1440))&&e.minute<=pair.body.autopsy.completedAt;

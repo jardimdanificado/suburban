@@ -2,6 +2,7 @@ import {artworkNarrative} from './city_art_narratives.js';
 import {activityRoomReady} from './city_interiors.js?v=service-capacity-3';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
+import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 
 const ACTIVE=new Set(['open','working']);
 const INTERRUPTIBLE=new Set(['leisure','walk','social','sit','outdoor_leisure']);
@@ -16,16 +17,17 @@ export class CityGigs{
  artworkMaterial(kind){return ['statue','monument'].includes(kind)?{good:'pedra',quantity:2}:{good:'tinta',quantity:1};}
  artworkSupplier(kind){const city=this.city,{good,quantity}=this.artworkMaterial(kind);return city.buildings.filter(b=>b.active&&!b.entity.destroyed&&(good==='tinta'?b.type==='paintworks'&&city.paint.available(b)>=quantity:(b.inventory?.[good]||0)>=quantity)).sort((a,z)=>a.id-z.id)[0]||null;}
  artworkQuote(buildingId,kind,payerAccountId){const city=this.city,b=city.building(buildingId),supplier=this.artworkSupplier(kind);if(!b)return 0;const required=['statue','monument'].includes(kind)?42:24,material=this.artworkMaterial(kind),supply=material.good==='tinta'?(supplier?city.paint.quote(supplier,city.paint.stock(supplier)[0]?.color,material.quantity):city.economy.goods.tinta.price*material.quantity):city.economy.goods[material.good].price*material.quantity,labor=required*(city.politics.policy.minimumWage||1),base=city.currency.price(900+supply+labor);return Math.ceil(base*(payerAccountId==='treasury'?1.5:1));}
- createArtworkOrder(payerAccountId,buildingId,{kind='banner',message='',subjectId=null,truth=null,commercial=false,partyId=null,color=null,fee=null,narrative=null,preferredArtistId=null,supportUnitId=null}={}){
+ createArtworkOrder(payerAccountId,buildingId,{kind='banner',message='',subjectId=null,truth=null,purpose='expression',commercial=false,partyId=null,color=null,fee=null,narrative=null,preferredArtistId=null,supportUnitId=null,supportKind='interior-wall',supportLinkId=null,supportEndpoint=null}={}){
   const city=this.city,b=city.building(buildingId),allowed=['banner','painting','graffiti','flags','statue','monument'];if(!b||b.entity.destroyed||b.constructionKind==='open-air'||!allowed.includes(kind)||!String(message).trim()||!city.accounts.has(payerAccountId))return false;
   const owner=b.ownerId!=null?city.society.citizen(b.ownerId)?.accountId:b.municipal?'treasury':b.accountId,unitSponsor=b.units?.some(u=>u.ownerId===payerAccountId||u.tenantId===payerAccountId);if(payerAccountId!==owner&&payerAccountId!==b.accountId&&!unitSponsor&&!b.municipal)return false;
-  const account=artworkNarrative(city,narrative);if(narrative&&!account)return false;
-  const room=supportUnitId==null?null:b.units.find(u=>u.id===supportUnitId);if(supportUnitId!=null&&!room)return false;
-  const point=room?interiorUsePoint(b,room,room.roomType,0,'informal-service'):this.frontagePoint(b);if(!point||room&&interiorRoute(b,{x:b.door.x,y:b.door.y,z:0},point)===null)return false;
+  const account=artworkNarrative(city,narrative),sponsorId=city.citizens.find(c=>c.accountId===payerAccountId)?.id??(b.municipal?city.economy.mayorId:city.society.citizen(b.ownerId)?.id??null);if(narrative&&!account)return false;if(purpose==='defamation'&&(!Number.isInteger(subjectId)||!city.society.citizen(subjectId)||sponsorId==null||!(!account&&truth===false||account?.mode==='distorted'||account?.mode==='invented')))return false;
+  const link=supportKind==='skybridge'?(city.skybridgeLinksForRevision?.()||[]).find(item=>item.id===supportLinkId):null,endpoint=supportKind==='skybridge'?(supportEndpoint==='end'||supportEndpoint==='start'?supportEndpoint:b.id===link?.bId?'end':'start'):null,endpointBuildingId=endpoint==='end'?link?.bId:link?.aId,roomId=supportKind==='skybridge'?(endpoint==='end'?link?.buId:link?.auId):supportUnitId==null?null:Number(supportUnitId),room=roomId==null?null:b.units.find(u=>u.id===roomId),roof=supportKind==='roof-terrace'&&room?buildingLeisureSpaces(b).find(s=>s.kind==='roof_terrace'&&s.unitId===room.id):null;
+  if(supportKind==='skybridge'&&(!link||![link.aId,link.bId].includes(b.id)||endpointBuildingId!==b.id||!room)||supportUnitId!=null&&supportKind!=='skybridge'&&!room||supportKind==='roof-terrace'&&!roof)return false;
+  const bridgePoint=link?{x:(link.start.x+link.end.x)/2,y:(link.start.y+link.end.y)/2,z:link.height}:null,point=supportKind==='skybridge'?bridgePoint:roof?roof.position:room?interiorUsePoint(b,room,room.roomType,0,'informal-service'):this.frontagePoint(b),routePoint=room?{x:b.entity.x+room.x+.5,y:b.entity.y+room.y+.5,z:room.z*CITY_FLOOR_HEIGHT}:null;if(!point||room&&interiorRoute(b,{x:b.door.x,y:b.door.y,z:0},routePoint)===null)return false;
   const material=this.artworkMaterial(kind),required=['statue','monument'].includes(kind)?42:24,amount=fee??this.artworkQuote(b.id,kind,payerAccountId);if(!amount)return false;
   const job=this.reserveOrder(payerAccountId,b,{kind:'art-installation',scope:room?'interior-art':'outdoor',unitId:room?.id||null,fee:amount,point,required});if(!job)return false;
-  const side=room?room.y===0?'north':room.x===b.width-1?'east':room.y===b.depth-1?'south':'west':null;
-  job.artwork={narrative:account,kind,message:String(message).trim().slice(0,180),subjectId,truth,commercial:!!commercial,partyId,color};job.artworkSupport=room?{kind:'interior-wall',buildingId:b.id,unitId:room.id,floor:room.z,side,rotation:({north:0,east:-Math.PI/2,south:Math.PI,west:Math.PI/2})[side]}:null;job.artworkMaterial=material;job.preferredArtistId=Number.isInteger(preferredArtistId)?preferredArtistId:null;job.waitingReason=this.artworkSupplier(kind)?null:`Aguardando ${material.good==='tinta'?'tinta':'pedra'} em estoque`;
+  const side=room&&!roof?room.y===0?'north':room.x===b.width-1?'east':room.y===b.depth-1?'south':'west':null;
+  job.artwork={narrative:account,kind,message:String(message).trim().slice(0,180),subjectId,truth,purpose,sponsorId,sponsorAccountId:payerAccountId,commercial:!!commercial,partyId,color};job.artworkSupport=supportKind==='skybridge'?{kind:'skybridge',buildingId:b.id,unitId:room.id,floor:room.z,linkId:link.id,endpoint,position:bridgePoint}:roof?{kind:'roof-terrace',buildingId:b.id,unitId:room.id,floor:Math.floor(roof.position.z/CITY_FLOOR_HEIGHT),position:{...roof.position}}:room?{kind:'interior-wall',buildingId:b.id,unitId:room.id,floor:room.z,side,rotation:({north:0,east:-Math.PI/2,south:Math.PI,west:Math.PI/2})[side]}:null;job.artworkMaterial=material;job.preferredArtistId=Number.isInteger(preferredArtistId)?preferredArtistId:null;job.waitingReason=this.artworkSupplier(kind)?null:`Aguardando ${material.good==='tinta'?'tinta':'pedra'} em estoque`;
   return job;
  }
  postSpontaneousArtwork(){
@@ -81,7 +83,8 @@ export class CityGigs{
   // worker. Probe a small rotating batch; unreachable candidates do not starve
   // everyone farther down the list because the next dispatch advances the cursor.
   const count=Math.min(24,eligible.length),start=(job.candidateCursor||0)%eligible.length,reachable=[];
-  for(let i=0;i<count;i++){const candidate=eligible[(start+i)%eligible.length],inside=candidate.indoorLocation?.buildingId===b.id;if((inside||city.findPath(candidate.entity,point)!==null)&&(!job.artworkSupport||interiorRoute(b,{x:b.door.x,y:b.door.y,z:0},job.point)!==null)){reachable.push(candidate);break;}}
+  const support=job.artworkSupport,bridge=support?.kind==='skybridge'?(city.skybridgeLinksForRevision?.()||[]).find(item=>item.id===support.linkId):null,interiorTarget=support?.kind==='skybridge'?bridge&&{x:b.entity.x+b.units.find(u=>u.id===support.unitId).x+.5,y:b.entity.y+b.units.find(u=>u.id===support.unitId).y+.5,z:support.floor*CITY_FLOOR_HEIGHT}:support?{x:job.point.x,y:job.point.y,z:job.point.z||0}:null;
+  for(let i=0;i<count;i++){const candidate=eligible[(start+i)%eligible.length],inside=candidate.indoorLocation?.buildingId===b.id;if((inside||city.findPath(candidate.entity,point)!==null)&&(!support||interiorTarget&&interiorRoute(b,{x:b.door.x,y:b.door.y,z:0},interiorTarget)!==null)){reachable.push(candidate);break;}}
   job.candidateCursor=(start+count)%eligible.length;return reachable;
  }
  frontagePoint(b){
@@ -89,7 +92,7 @@ export class CityGigs{
   return points.find(p=>city.walkable(Math.floor(p.x),Math.floor(p.y))&&city.findPath(d,p)!==null)||{x:d.x,y:d.y};
  }
  release(job,c,{reopen=true}={}){
-  if(c){if(c.informalJobId===job.id){c.task=null;c.targetId=null;c.action='';}this.city.furniture?.release(c);c.informalJobId=null;c.workCell=null;c.path=[];}
+  if(c){if(c.informalJobId===job.id){c.task=null;c.targetId=null;c.action='';}this.city.furniture?.release(c);c.informalJobId=null;c.workCell=null;c.path=[];if(job.artworkSupport?.kind==='skybridge'&&(c.skybridgeZ>0||c.skybridgeTransit?.phase==='crossing'))this.city.justice.routeWorkerOffSkybridge(c);}
   job.workerId=null;if(reopen){job.status='open';job.progress=0;}
  }
  clean(job,b){
@@ -125,14 +128,21 @@ export class CityGigs{
   const city=this.city;
   this.postSpontaneousArtwork();
   if(city.minute%60===0&&city.hour>=7&&city.hour<20)this.postNeededWork();
-  for(const job of this.jobs){if(!ACTIVE.has(job.status))continue;const b=city.building(job.buildingId);if(!b){this.cancel(job,'imóvel removido');continue;}
+  for(const job of this.jobs){if(!ACTIVE.has(job.status))continue;const b=city.building(job.buildingId);if(!b){this.cancel(job,'imóvel removido');continue;}if(job.artworkSupport?.kind==='skybridge'&&(!(city.skybridgeLinksForRevision?.()||[]).some(link=>link.id===job.artworkSupport.linkId)||!b.units.some(unit=>unit.id===job.artworkSupport.unitId))){this.cancel(job,'passarela ou acesso ao prédio removido');continue;}
    let worker=city.society.citizen(job.workerId);
-   if(worker&&(worker.entity.destroyed||city.urgentNeed(worker))){this.release(job,worker);worker=null;}
+   if(worker&&(worker.entity.destroyed||city.urgentNeed(worker)&&!(job.artworkSupport?.kind==='skybridge'&&job.artworkSupport.phase==='returning'))){this.release(job,worker);worker=null;}
    if(!worker){if(city.hour<7||city.hour>=20||city.minute%3!==job.id%3)continue;const candidates=this.candidates(job);job.availableCandidates=job.availableCandidatePool??candidates.length;worker=candidates[0];if(!worker)continue;
     const goal=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door,path=job.artworkSupport&&worker.indoorLocation?.buildingId===b.id?[]:city.findPath(worker.entity,goal);if(path===null)continue;
     job.workerId=worker.id;job.status='working';job.startedAt=city.minute;worker.informalJobId=job.id;city.furniture?.release(worker);worker.task=job.kind==='gardening'?'informal-gardening':job.artworkSupport?'informal-service':job.kind==='art-installation'?'informal-art-installation':job.scope==='interior'?'informal-service':'informal-frontage';worker.targetId=job.artworkSupport||job.scope==='interior'?b.id:null;worker.path=path;worker.servicePaid=null;const label=job.kind==='repair'?'um reparo':job.kind==='gardening'?'um serviço de jardinagem':job.kind==='art-installation'?'uma instalação artística':job.kind==='art-cleaning'?'uma limpeza de arte':'uma faxina';city.history.record('service',`${worker.entity.properties.name} aceitou ${label} em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,service:job.kind,amount:job.fee,minute:city.minute});city.log(`${worker.entity.properties.name} aceitou o bico #${job.id}.`,'work',[worker.id],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,service:job.kind,amount:job.fee});
    }
-   if(job.artworkSupport){const location=worker.indoorLocation;if(!location||location.buildingId!==b.id||location.unitId!==job.unitId||location.path?.length)continue;if(!job.artworkSupport.cleaning&&Math.hypot(location.position.x-job.point.x,location.position.y-job.point.y,(location.position.z||0)-job.point.z)>.2)continue;
+   if(job.artworkSupport?.kind==='skybridge'){
+    const support=job.artworkSupport,link=(city.skybridgeLinksForRevision?.()||[]).find(item=>item.id===support.linkId);if(!link){this.cancel(job,'passarela removida antes de concluir o trabalho');continue;}
+    if(support.phase==='returning'){if(worker.skybridgeTransit||worker.indoorLocation||worker.skybridgeZ>0||worker.path.length||Math.hypot(worker.entity.x-b.door.x,worker.entity.y-b.door.y)>.8)continue;job.progress=job.required;}
+    else{
+     if(worker.skybridgeTransit?.phase==='crossing'&&worker.skybridgeId===link.id&&worker.skybridgeZ>0&&!worker.indoorLocation){worker.skybridgeTransit=null;worker.path=[{x:job.point.x,y:job.point.y,z:link.height,skybridgeId:link.id}];worker.action='Atravessando a passarela até a obra';continue;}
+     if(worker.skybridgeTransit||worker.indoorLocation||worker.skybridgeZ<=0||worker.skybridgeId!==link.id||worker.path.length||Math.hypot(worker.entity.x-job.point.x,worker.entity.y-job.point.y,(worker.skybridgeZ||0)-link.height)>.2)continue;
+    }
+   }else if(job.artworkSupport){const location=worker.indoorLocation;if(!location||location.buildingId!==b.id||location.path?.length)continue;if(job.artworkSupport.kind==='roof-terrace'?location.targetRoomType!=='roof_terrace':location.unitId!==job.unitId)continue;if(!job.artworkSupport.cleaning&&Math.hypot(location.position.x-job.point.x,location.position.y-job.point.y,(location.position.z||0)-job.point.z)>.2)continue;
    }else if(['gardening','art-cleaning','art-installation'].includes(job.kind)){
     if(Math.hypot(worker.entity.x-job.point.x,worker.entity.y-job.point.y)>.4||worker.path.length)continue;
    }else if(job.scope==='interior'){
@@ -141,12 +151,16 @@ export class CityGigs{
    }else{
     const goal=this.frontagePoint(b);if(Math.hypot(worker.entity.x-goal.x,worker.entity.y-goal.y)>.4||worker.path.length)continue;
    }
-   job.progress+=job.kind==='art-installation'?Math.max(.5,1+(worker.skills?.artistic||0)/80):1;worker.action=job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.kind==='art-installation'?'Criando arte urbana':job.kind==='art-cleaning'?'Limpando obra urbana':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'agriculture':job.kind==='art-installation'?'artistic':'cleaning');
+   if(job.artworkSupport?.phase!=='returning')job.progress+=job.kind==='art-installation'?Math.max(.5,1+(worker.skills?.artistic||0)/80):1;worker.action=job.artworkSupport?.phase==='returning'?'Voltando pela passarela após o serviço':job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.kind==='art-installation'?'Criando arte urbana':job.kind==='art-cleaning'?'Limpando obra urbana':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'agriculture':job.kind==='art-installation'?'artistic':'cleaning');
    if(job.progress<job.required)continue;
-   if(job.kind==='art-installation'){
+   if(job.kind==='art-installation'&&!job.artworkId){
     if(!this.consumeArtworkMaterial(job)){this.release(job,worker);job.waitingReason=`Aguardando material ou verba para ${job.artworkMaterial.good}`;continue;}
-    const piece=city.justice.createArtwork({narrative:job.artwork.narrative,kind:job.artwork.kind,message:job.artwork.message,creatorId:worker.id,subjectId:job.artwork.subjectId,buildingId:b.id,x:job.point.x,y:job.point.y,support:job.artworkSupport,truth:job.artwork.truth,commercial:job.artwork.commercial,partyId:job.artwork.partyId,color:job.artwork.color?parseInt(String(job.artwork.color).replace('#',''),16):0xc9b979});
-    if(!piece){this.cancel(job,'não foi possível instalar a obra encomendada');continue;}job.artworkId=piece.id;
+    const piece=city.justice.createArtwork({narrative:job.artwork.narrative,kind:job.artwork.kind,message:job.artwork.message,creatorId:worker.id,subjectId:job.artwork.subjectId,sponsorId:job.artwork.sponsorId,sponsorAccountId:job.payerAccountId,purpose:job.artwork.purpose,buildingId:b.id,x:job.point.x,y:job.point.y,support:job.artworkSupport,truth:job.artwork.truth,commercial:job.artwork.commercial,partyId:job.artwork.partyId,color:job.artwork.color?parseInt(String(job.artwork.color).replace('#',''),16):0xc9b979});
+    if(!piece){this.cancel(job,'não foi possível instalar a obra encomendada');continue;}job.artworkId=piece.id;city.justice.registerArtworkDefamation(piece);
+   }
+   if(job.artworkSupport?.kind==='skybridge'&&job.artworkSupport.phase!=='returning'){
+    const support=job.artworkSupport,link=(city.skybridgeLinksForRevision?.()||[]).find(item=>item.id===support.linkId),point=support.endpoint==='end'?link?.end:link?.start;if(!link||!point){this.cancel(job,'conexão da passarela removida antes do retorno');continue;}
+    support.phase='returning';worker.path=[{x:point.x,y:point.y,z:link.height,skybridgeId:link.id},{x:point.x,y:point.y,z:link.height,skybridgeExit:{buildingId:support.buildingId,unitId:support.unitId,linkId:link.id,endpoint:support.endpoint}}];worker.targetId=support.buildingId;worker.action='Voltando pela passarela à saída do prédio';continue;
    }
    if(job.kind==='art-cleaning'&&!city.justice.canCompleteArtworkCleaning(job)){this.cancel(job,'a camada ou a obra mudou antes da limpeza');continue;}
    if(job.kind==='cleaning'||!job.kind)this.clean(job,b);else if(job.kind==='repair'){b.condition=Math.min(100,(b.condition||0)+35);b.repairNeeded=b.condition<70;}else if(job.kind==='gardening'){const planted=city.nature.spawn(job.point.tileX,job.point.tileY,'berry',{buildingId:b.id});if(!planted){this.cancel(job,'canteiro ocupado antes do plantio');continue;}}
