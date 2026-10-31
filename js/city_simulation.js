@@ -55,6 +55,7 @@ export const BUILDING_TYPES = {
   iml:{inputs:{sabao:1},label:'Instituto Médico Legal',color:0xc5d1d2,rent:0,price:115000,jobs:3},
   crematorium:{inputs:{carvao:3},label:'Crematório municipal',color:0x938a83,rent:0,price:95000,jobs:2},
   police_station:{label:'Delegacia de polícia',color:0x778c9d,rent:0,price:145000,jobs:6},
+  council_oversight_office:{label:'Comissão de fiscalização da Câmara',color:0x769c8a,rent:0,price:115000,jobs:3},
   jail:{inputs:{sabao:1,remedio:1},label:'Cadeia municipal',color:0x73716d,rent:0,price:175000,jobs:5},
   courthouse:{label:'Tribunal municipal',color:0xb5a078,rent:0,price:160000,jobs:5},
   bike_rack:{label:'Bicicletário',color:0x638e9b,rent:0,price:18000,jobs:0},
@@ -1015,6 +1016,7 @@ export class CitySimulation {
         c.task='combat-flee';c.targetId=safe.id;c.action=`Fugindo da agressão para ${safe.entity.properties.name}`;continue;
       }
       if(c.graffitiMission){this.justice.updateGraffitiMission(c);continue;}
+      if(c.policeOversight){const urgent=this.urgentNeed(c);this.justice.updatePoliceOversight(c);if(c.policeOversight||!urgent)continue;}
       if(c.policeAudit){const urgent=this.urgentNeed(c);this.justice.updatePoliceAudit(c);if(c.policeAudit||!urgent)continue;}
       if(c.policeArrestEscort){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceArrestEscort(c);continue;}
       if(c.policeRestitution&&this.urgentNeed(c)){this.justice.pauseVehicleRestitution(c,'necessidade urgente do agente');c.task=null;c.targetId=null;c.path=[];if(c.indoorLocation?.path?.length)c.indoorLocation.path=[];c.action='Pausa a restituição para atender uma necessidade urgente';}
