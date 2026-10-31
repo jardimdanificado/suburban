@@ -2868,6 +2868,8 @@ export class RCT3DRenderer {
     this.width = container.clientWidth || window.innerWidth;
     this.height = container.clientHeight || window.innerHeight;
     this.scaleFactor = 0.5; // Defaults directly to 50% Retro Pixel Mode
+    this.categoryResolutions = { people: 1, world: 1 };
+    this.categoryRenderTargets = new Map();
 
     // 1. Scene & Pure Black Void Background
     this.scene = new THREE.Scene();
@@ -2955,7 +2957,11 @@ export class RCT3DRenderer {
     this.renderTarget.depthTexture = new THREE.DepthTexture();
     this.renderTarget.depthTexture.format = THREE.DepthFormat;
     this.renderTarget.depthTexture.type = THREE.UnsignedIntType;
-
+    this.categoryCompositeTarget = new THREE.WebGLRenderTarget(
+      Math.max(160, Math.floor(this.width * this.scaleFactor)),
+      Math.max(120, Math.floor(this.height * this.scaleFactor)),
+      { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat, depthBuffer: false }
+    );
     this.postScene = new THREE.Scene();
     this.postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.postMaterial = new THREE.ShaderMaterial({
@@ -3130,6 +3136,47 @@ export class RCT3DRenderer {
     });
     const postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMaterial);
     this.postScene.add(postQuad);
+
+    this.categoryScene = new THREE.Scene();
+    this.categoryCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    // Two pixelation categories: "world" (terrain, water, vegetation,
+    // constructions and every other prop) and "people" (citizens, their
+    // clothes and the vehicles they ride).
+    this.categoryCompositeMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        tWorld: { value: this.renderTarget.texture }, tWorldDepth: { value: this.renderTarget.depthTexture },
+        tPeople: { value: this.renderTarget.texture }, tPeopleDepth: { value: this.renderTarget.depthTexture },
+        uWorldRes: { value: new THREE.Vector2(0, 0) }, uPeopleRes: { value: new THREE.Vector2(0, 0) }
+      },
+      vertexShader: `varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}`,
+      fragmentShader: `
+        uniform sampler2D tWorld,tWorldDepth,tPeople,tPeopleDepth;
+        uniform vec2 uWorldRes,uPeopleRes;
+        varying vec2 vUv;
+        vec2 texelCenter(vec2 uv,vec2 res){return res.x>0.5?floor(uv*res)/res+0.5/res:uv;}
+        void main(){
+          // The world is the full scene without people/vehicles and is used
+          // as the base image, so its own background fills the sky.
+          vec4 color=texture2D(tWorld,texelCenter(vUv,uWorldRes));
+          // People only replace a pixel when they sit in front of the world
+          // surface at that texel. When they are inside a building the wall
+          // depth wins and the crisp world pixel is kept instead.
+          if(uPeopleRes.x>0.5){
+            vec2 q=texelCenter(vUv,uPeopleRes);
+            vec4 person=texture2D(tPeople,q);
+            if(person.a>.01&&texture2D(tPeopleDepth,q).x<=texture2D(tWorldDepth,q).x+.0000001){
+              color.rgb=person.rgb+color.rgb*(1.0-person.a);
+            }
+          }
+          gl_FragColor=vec4(color.rgb,1.0);
+          #include <colorspace_fragment>
+        }
+      `,
+      precision: "highp",
+      depthTest: false, depthWrite: false
+    });
+    this.categoryQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.categoryCompositeMaterial);
+    this.categoryScene.add(this.categoryQuad);
 
     this.updateRendererResolution();
 
@@ -3976,16 +4023,25 @@ export class RCT3DRenderer {
     this.instStoneBridges.frustumCulled = false;
     this.instWaterPlatforms.frustumCulled = false;
 
+    this.terrainCategoryGroup = new THREE.Group();
+    this.waterCategoryGroup = new THREE.Group();
     this.instancedGroup = new THREE.Group();
-    this.instancedGroup.add(
+    this.vegetationGroup = new THREE.Group();
+    this.constructionGroup = new THREE.Group();
+    this.vegetationGroup.add(
       this.instOakTrunks, this.instOakLeaves,
       this.instPineTrunks, this.instPineLeaves,
       this.instCherryTrunks, this.instCherryLeaves,
       this.instBirchTrunks, this.instBirchLeaves,
       this.instMapleTrunks, this.instMapleLeaves,
       this.instBerryBushes, this.instBerryOrnaments,
-      this.instRoseBushes, this.instRoseFlowers,
-      this.instCacti, this.instWalls, this.instWoodWalls, this.instMixedWalls, this.instBoneWalls, this.instWallsStage1,
+      this.instRoseBushes, this.instRoseFlowers, this.instCacti, this.instGrassTufts
+    );
+    this.constructionGroup.add(
+      this.instRoads, this.instRoadSnaps, this.instWoodBridges, this.instStoneBridges, this.instWaterPlatforms
+    );
+    this.constructionGroup.add(
+      this.instWalls, this.instWoodWalls, this.instMixedWalls, this.instBoneWalls, this.instWallsStage1,
       this.instGatesClosed, this.instGatesOpen, this.instGatesStage1,
       ...this.instWarehouseWalls, ...this.instWarehouseRoofs,
       ...this.instSlaughterhouseWalls, ...this.instSlaughterhouseRoofs,
@@ -3998,23 +4054,24 @@ export class RCT3DRenderer {
       this.instHouseWalls, this.instHouseRoofs,
       this.instHousePegs, this.instHouseStage1,
       this.instHouseStage2, this.instHouseStage3,
-      this.instGrassTufts,
       this.instWoodLogs, this.instStoneItems,
       this.instTorches, this.instTorchesUnlit, this.instTorchFlames,
-      this.instWoodCampfires, this.instCampfireFlames,
-      this.instRoads, this.instRoadSnaps,
-      this.instWoodBridges, this.instStoneBridges, this.instWaterPlatforms
+      this.instWoodCampfires, this.instCampfireFlames
     );
-    this.scene.add(this.instancedGroup);
+    this.scene.add(this.terrainCategoryGroup, this.waterCategoryGroup, this.vegetationGroup, this.constructionGroup);
 
     // Dynamic Billboard Entities (Creatures, Humanoids, Items)
     this.billboardGeo = new THREE.PlaneGeometry(1.0, 1.0);
     this.billboardGeo.translate(0, 0.50, 0);
     this.entityGroup = new THREE.Group();
+    this.peopleGroup = new THREE.Group();
+    this.vehicleGroup = new THREE.Group();
+    this.categoryOtherGroup = new THREE.Group();
+    this.scene.add(this.peopleGroup, this.vehicleGroup, this.categoryOtherGroup);
     this.scene.add(this.entityGroup);
     this.entitySprites = new Map();
-    this.cityCitizenBatches=new CityCitizenBatches(THREE,this.entityGroup,this.billboardGeo);
-    this.cityCitizenModels=new CityCitizenModels(THREE,this.entityGroup);
+    this.cityCitizenBatches=new CityCitizenBatches(THREE,this.peopleGroup,this.billboardGeo);
+    this.cityCitizenModels=new CityCitizenModels(THREE,this.peopleGroup);
 
     // Floating UI Group (Emotes, Held Items & Clan House Flags)
     this.uiIconGeo = new THREE.PlaneGeometry(0.40, 0.40);
@@ -4030,10 +4087,10 @@ export class RCT3DRenderer {
 
     // Terrain & Water Groups
     this.terrainGroup = new THREE.Group();
-    this.scene.add(this.terrainGroup);
+    this.terrainCategoryGroup.add(this.terrainGroup);
 
     this.waterGroup = new THREE.Group();
-    this.scene.add(this.waterGroup);
+    this.waterCategoryGroup.add(this.waterGroup);
 
     // RCT Dark Quad Line Overlay Group (for GRID mode)
     this.rctGridLineGroup = new THREE.Group();
@@ -4333,6 +4390,9 @@ export class RCT3DRenderer {
     if (this.renderTarget) {
       this.renderTarget.setSize(internalW, internalH);
     }
+    this.categoryCompositeTarget?.setSize(internalW, internalH);
+    this.postMaterial?.uniforms?.uResolution?.value?.set(internalW, internalH);
+    for (const target of this.categoryRenderTargets?.values() || []) this.resizeCategoryTarget(target);
 
     const canvasDom = this.renderer.domElement;
     if (canvasDom) {
@@ -4343,6 +4403,157 @@ export class RCT3DRenderer {
   setResolutionScale(factor) {
     this.scaleFactor = Math.max(0.25, Math.min(2.0, Number(factor) || 1.0));
     this.updateRendererResolution();
+    for (const target of this.categoryRenderTargets.values()) this.resizeCategoryTarget(target);
+  }
+
+  setCategoryResolution(category, value) {
+    if (!Object.hasOwn(this.categoryResolutions, category)) return false;
+    const scale = Number(value);
+    if (![0.25, 0.5, 0.75, 1].includes(scale)) return false;
+    if (this.categoryResolutions[category] === scale) return true;
+    this.categoryResolutions[category] = scale;
+    const target = this.categoryRenderTargets.get(category);
+    if (target) this.resizeCategoryTarget(target);
+    const compositeTarget = this.categoryCompositeTarget;
+    if (compositeTarget) {
+      const width = Math.max(1, Math.floor(this.width * this.scaleFactor));
+      const height = Math.max(1, Math.floor(this.height * this.scaleFactor));
+      if (compositeTarget.width !== width || compositeTarget.height !== height) compositeTarget.setSize(width, height);
+    }
+    return true;
+  }
+
+  resizeCategoryTarget(target) {
+    const categoryScale = this.categoryResolutions[target.userData.category] ?? 1;
+    const width = Math.max(1, Math.floor(this.width * this.scaleFactor * categoryScale));
+    const height = Math.max(1, Math.floor(this.height * this.scaleFactor * categoryScale));
+    if (target.width !== width || target.height !== height) target.setSize(width, height);
+  }
+
+  categoryTarget(category) {
+    let target = this.categoryRenderTargets.get(category);
+    if (target) return target;
+    target = new THREE.WebGLRenderTarget(1, 1, {
+      minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat, depthBuffer: true
+    });
+    target.userData ??= {};
+    target.userData.category = category;
+    target.depthTexture = new THREE.DepthTexture(1, 1);
+    target.depthTexture.format = THREE.DepthFormat;
+    target.depthTexture.type = THREE.UnsignedIntType;
+    target.depthTexture.minFilter = THREE.NearestFilter;
+    target.depthTexture.magFilter = THREE.NearestFilter;
+    this.categoryRenderTargets.set(category, target);
+    this.resizeCategoryTarget(target);
+    return target;
+  }
+
+  renderCategoryLayers(camera) {
+    if (this.categoryResolutions.people >= 1 && this.categoryResolutions.world >= 1) return false;
+
+    const directChildren = [...this.scene.children];
+    const originalVisibility = new Map(directChildren.map(object => [object, object.visible]));
+    const originalBackground = this.scene.background;
+    const originalClearColor = this.renderer.getClearColor(new THREE.Color()).clone();
+    const originalClearAlpha = this.renderer.getClearAlpha();
+    const originalAutoClear = this.renderer.autoClear;
+    const shadowMap = this.renderer.shadowMap;
+    const originalShadowAutoUpdate = shadowMap.autoUpdate;
+    const originalShadowNeedsUpdate = shadowMap.needsUpdate;
+    const isPeople = object => object === this.peopleGroup || object === this.vehicleGroup;
+    const stillVisible = object => originalVisibility.get(object) ?? true;
+
+    try {
+      this.renderer.autoClear = false;
+      const uniforms = this.categoryCompositeMaterial.uniforms;
+
+      // 1) World pass: the whole scene except people/vehicles and the floating
+      // UI. It keeps the sky background and becomes the base of the composite.
+      for (const object of directChildren) object.visible = !isPeople(object) && object !== this.floatingUiGroup && stillVisible(object);
+      this.scene.background = originalBackground;
+      const worldTarget = this.categoryTarget("world");
+      this.renderer.setRenderTarget(worldTarget);
+      this.renderer.setClearColor(originalClearColor, originalClearAlpha);
+      this.renderer.clear(true, true, true);
+      this.renderer.render(this.scene, camera);
+      shadowMap.autoUpdate = false;
+      shadowMap.needsUpdate = false;
+
+      // 2) People pass: only citizens, their clothes and their vehicles, on a
+      // transparent background so the depth test can hide them behind walls.
+      for (const object of directChildren) object.visible = isPeople(object) ? stillVisible(object) : (object.isLight || object === this.sunLight?.target);
+      this.scene.background = null;
+      const peopleTarget = this.categoryTarget("people");
+      this.renderer.setRenderTarget(peopleTarget);
+      this.renderer.setClearColor(0x000000, 0);
+      this.renderer.clear(true, true, true);
+      this.renderer.render(this.scene, camera);
+
+      this.scene.background = originalBackground;
+      for (const [object, visible] of originalVisibility) object.visible = visible;
+
+      // 3) Composite: people replace the world only where they are in front.
+      uniforms.tWorld.value = worldTarget.texture;
+      uniforms.tWorldDepth.value = worldTarget.depthTexture;
+      uniforms.uWorldRes.value.set(worldTarget.width, worldTarget.height);
+      uniforms.tPeople.value = peopleTarget.texture;
+      uniforms.tPeopleDepth.value = peopleTarget.depthTexture;
+      uniforms.uPeopleRes.value.set(peopleTarget.width, peopleTarget.height);
+      const applyPostEffects = this.isPerspectiveActive() && this.postEffectsEnabled;
+      const composeTarget = applyPostEffects ? this.categoryCompositeTarget : null;
+      this.renderer.setRenderTarget(composeTarget);
+      this.renderer.setClearColor(originalClearColor, originalClearAlpha);
+      this.renderer.clear(true, true, true);
+      this.renderer.render(this.categoryScene, this.categoryCamera);
+
+      // 4) Floating 3D UI stays outside both pixelation categories and is
+      // drawn crisp over the composited frame. The background must be null
+      // here, otherwise a color background forces a clear that would wipe the
+      // composite we just drew into the same target.
+      if (this.floatingUiGroup) {
+        for (const object of directChildren) object.visible = object === this.floatingUiGroup || object.isLight || object === this.sunLight?.target;
+        this.scene.background = null;
+        this.renderer.setRenderTarget(composeTarget);
+        this.renderer.render(this.scene, camera);
+        this.scene.background = originalBackground;
+        for (const [object, visible] of originalVisibility) object.visible = visible;
+      }
+      if (applyPostEffects) {
+        this.applyPostEffectUniforms(camera);
+        this.postMaterial.uniforms.tDepth.value = worldTarget.depthTexture;
+        this.postMaterial.uniforms.tDiffuse.value = this.categoryCompositeTarget.texture;
+        this.renderer.setRenderTarget(null);
+        this.renderer.clear(true, true, true);
+        this.renderer.render(this.postScene, this.postCamera);
+      }
+      return true;
+    } finally {
+      this.scene.background = originalBackground;
+      for (const [object, visible] of originalVisibility) object.visible = visible;
+      this.renderer.autoClear = originalAutoClear;
+      shadowMap.autoUpdate = originalShadowAutoUpdate;
+      shadowMap.needsUpdate = originalShadowNeedsUpdate;
+      this.renderer.setClearColor(originalClearColor, originalClearAlpha);
+      this.renderer.setRenderTarget(null);
+    }
+  }
+
+  applyPostEffectUniforms(camera) {
+    const dofOpt = this.graphicOptions?.dofStrength || "HIGH";
+    const dofVal = dofOpt === "LOW" ? 0.85 : dofOpt === "MED" ? 1.45 : dofOpt === "HIGH" ? (this.isFirstPersonActive() ? 2.1 : 1.35) : 0;
+    this.postMaterial.uniforms.uDofStrength.value = dofVal;
+    this.postMaterial.uniforms.uChroma.value = this.graphicOptions?.chroma !== false ? 1 : 0;
+    const aoType = { CONTACT: 0, CREVICE: 1, SSAO: 2, DEEP: 3 }[this.graphicOptions?.aoType || "SSAO"] ?? 2;
+    const aoIntensity = { LOW: 0.45, MED: 0.7, HIGH: 1, ULTRA: 1.45 }[this.graphicOptions?.aoIntensity || "HIGH"] ?? 1;
+    this.postMaterial.uniforms.uAoEnabled.value = this.graphicOptions?.ambientOcclusion !== false ? 1 : 0;
+    this.postMaterial.uniforms.uAoType.value = aoType;
+    this.postMaterial.uniforms.uAoIntensity.value = aoIntensity;
+    this.postMaterial.uniforms.uBrightness.value = typeof this.graphicOptions?.brightness === "number" ? this.graphicOptions.brightness : 1;
+    this.postMaterial.uniforms.uContrast.value = typeof this.graphicOptions?.contrast === "number" ? this.graphicOptions.contrast : 1;
+    this.postMaterial.uniforms.uAlpha.value = typeof this.graphicOptions?.alpha === "number" ? this.graphicOptions.alpha : 1;
+    this.postMaterial.uniforms.uCameraNear.value = camera.near || 0.05;
+    this.postMaterial.uniforms.uCameraFar.value = camera.far || 800;
+    this.postMaterial.uniforms.uResolution.value.set(Math.max(160, Math.floor(this.width * this.scaleFactor)), Math.max(120, Math.floor(this.height * this.scaleFactor)));
   }
 
   get resolutionScale() {
@@ -4618,7 +4829,7 @@ export class RCT3DRenderer {
 
   disposeTerrainChunk(chunk) {
     if (!chunk) return;
-    for (const group of [chunk.terrain, chunk.water, chunk.grid]) {
+    for (const group of [chunk.terrain, chunk.water, chunk.vegetation, chunk.grid]) {
       if (!group) continue;
       for (const object of [...group.children]) {
         group.remove(object);
@@ -4719,11 +4930,14 @@ export class RCT3DRenderer {
       this.waterGroup.remove(m); 
       if (m.geometry) m.geometry.dispose();
     }
+    for (const group of [...(this.vegetationGroup?.children || [])]) {
+      if (group.userData?.terrainChunkVegetation) this.disposeTerrainChunk({ vegetation: group });
+    }
 
-    if(this.mobilityBatches){for(const b of this.mobilityBatches.values()){this.scene.remove(b.mesh);b.mesh.dispose();b.geometry.dispose();b.material.dispose();}this.mobilityBatches.clear();this.mobilityStreetStamp=null;}
+    if(this.mobilityBatches){for(const b of this.mobilityBatches.values()){b.mesh.parent?.remove(b.mesh);b.mesh.dispose();b.geometry.dispose();b.material.dispose();}this.mobilityBatches.clear();this.mobilityStreetStamp=null;}
     if (this.entitySprites) {
       for (const spr of this.entitySprites.values()) {
-        this.entityGroup.remove(spr);
+        spr.parent?.remove(spr);
       }
       this.entitySprites.clear();
     }
@@ -5665,6 +5879,7 @@ export class RCT3DRenderer {
       if (isVisible) {
         if (!chunk.terrain.parent) this.terrainGroup.add(chunk.terrain);
         if (!chunk.water.parent) this.waterGroup.add(chunk.water);
+        if (chunk.vegetation.children.length && !chunk.vegetation.parent) this.vegetationGroup.add(chunk.vegetation);
         if (gridEnabled && chunk.grid.children.length && !chunk.grid.parent) this.rctGridLineGroup.add(chunk.grid);
         if (!gridEnabled && chunk.grid.parent) this.rctGridLineGroup.remove(chunk.grid);
       }
@@ -5675,6 +5890,7 @@ export class RCT3DRenderer {
       if (!chunk) continue;
       chunk.terrain.parent?.remove(chunk.terrain);
       chunk.water.parent?.remove(chunk.water);
+      chunk.vegetation.parent?.remove(chunk.vegetation);
       chunk.grid.parent?.remove(chunk.grid);
     }
     this.visibleTerrainChunkKeys = visible;
@@ -5731,7 +5947,9 @@ export class RCT3DRenderer {
     this.lastVisionKnownCount = knownCount;
     this.lastBuiltFullWorld = this.renderFullWorld;
 
-    const chunk = { signature, lastUsed: performance.now(), terrain: new THREE.Group(), water: new THREE.Group(), grid: new THREE.Group() };
+    const vegetation = new THREE.Group();
+    vegetation.userData.terrainChunkVegetation = true;
+    const chunk = { signature, lastUsed: performance.now(), terrain: new THREE.Group(), water: new THREE.Group(), vegetation, grid: new THREE.Group() };
 
     const map = world.map;
     const tileMeshBuckets = {
@@ -6041,7 +6259,7 @@ export class RCT3DRenderer {
 
     chunkGrassTufts.count = foliageCount;
     chunkGrassTufts.instanceMatrix.needsUpdate = true;
-    if (foliageCount) chunk.terrain.add(chunkGrassTufts);
+    if (foliageCount) chunk.vegetation.add(chunkGrassTufts);
 
     for (const [matKey, bucket] of Object.entries(tileMeshBuckets)) {
       if (bucket.pos.length === 0) continue;
@@ -7026,7 +7244,10 @@ export class RCT3DRenderer {
           sprite.customDepthMaterial = depthMat;
           sprite.renderOrder = 10;
           sprite.userData = { entityId: e.id };
-          this.entityGroup.add(sprite);
+          const category = cityCitizen || (!!e.properties?.brain && !isItem && !isDoor) ? "people" : "other";
+          const parent = category === "people" ? this.peopleGroup : this.categoryOtherGroup;
+          sprite.userData.categoryParent = parent;
+          parent.add(sprite);
           this.entitySprites.set(e.id, sprite);
         } else if (sprite.material !== billboardMatCache.get(matKey) || sprite.material.map !== tex) {
           let mat = billboardMatCache.get(matKey);
@@ -7053,6 +7274,12 @@ export class RCT3DRenderer {
             depthMatCache.set(matKey, depthMat);
           }
           sprite.customDepthMaterial = depthMat;
+        }
+        const desiredParent = cityCitizen || (!!e.properties?.brain && !isItem && !isDoor) ? this.peopleGroup : this.categoryOtherGroup;
+        if (sprite.parent !== desiredParent) {
+          sprite.parent?.remove(sprite);
+          desiredParent.add(sprite);
+          sprite.userData.categoryParent = desiredParent;
         }
 
         const isSleeping = cityCitizen ? citizenIsSleeping(cityCitizen) : !!e.properties?.life?.isSleeping && !!e.properties?.brain;
@@ -7654,7 +7881,7 @@ export class RCT3DRenderer {
     // Clean inactive dynamic billboards
     for (const [id, spr] of this.entitySprites.entries()) {
       if (!activeIds.has(id)) {
-        this.entityGroup.remove(spr);
+        spr.parent?.remove(spr);
         this.entitySprites.delete(id);
       }
     }
@@ -7701,54 +7928,21 @@ export class RCT3DRenderer {
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
-    if (this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget) {
+    this.postMaterial.uniforms.tDiffuse.value = this.renderTarget.texture;
+    this.postMaterial.uniforms.tDepth.value = this.renderTarget.depthTexture;
+    this.applyPostEffectUniforms(activeCam);
+    const renderedInLayers = this.renderCategoryLayers(activeCam);
+    if (!renderedInLayers) {
+      if (this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget) {
       this.renderer.setRenderTarget(this.renderTarget);
+      this.renderer.clear(true, true, true);
       this.renderer.render(this.scene, activeCam);
-      this.renderer.setRenderTarget(null);
-      this.postMaterial.uniforms.tDiffuse.value = this.renderTarget.texture;
-
-      const dofOpt = this.graphicOptions?.dofStrength || "HIGH";
-      let dofVal = 0.0;
-      if (dofOpt === "LOW") dofVal = 0.85;
-      else if (dofOpt === "MED") dofVal = 1.45;
-      else if (dofOpt === "HIGH") dofVal = this.isFirstPersonActive() ? 2.1 : 1.35;
-      this.postMaterial.uniforms.uDofStrength.value = dofVal;
-
-      this.postMaterial.uniforms.uChroma.value = (this.graphicOptions?.chroma !== false) ? 1.0 : 0.0;
-
-      // Configure Ambient Occlusion (AO) Pass
-      const aoEnabled = (this.graphicOptions?.ambientOcclusion !== false);
-      const aoTypeStr = this.graphicOptions?.aoType || "SSAO";
-      let aoTypeInt = 2;
-      if (aoTypeStr === "CONTACT") aoTypeInt = 0;
-      else if (aoTypeStr === "CREVICE") aoTypeInt = 1;
-      else if (aoTypeStr === "SSAO") aoTypeInt = 2;
-      else if (aoTypeStr === "DEEP") aoTypeInt = 3;
-
-      const aoIntStr = this.graphicOptions?.aoIntensity || "HIGH";
-      let aoIntensityVal = 1.0;
-      if (aoIntStr === "LOW") aoIntensityVal = 0.45;
-      else if (aoIntStr === "MED") aoIntensityVal = 0.70;
-      else if (aoIntStr === "HIGH") aoIntensityVal = 1.00;
-      else if (aoIntStr === "ULTRA") aoIntensityVal = 1.45;
-
-      this.postMaterial.uniforms.uAoEnabled.value = aoEnabled ? 1.0 : 0.0;
-      this.postMaterial.uniforms.uAoType.value = aoTypeInt;
-      this.postMaterial.uniforms.uAoIntensity.value = aoIntensityVal;
-      this.postMaterial.uniforms.uBrightness.value = (typeof this.graphicOptions?.brightness === "number") ? this.graphicOptions.brightness : 1.0;
-      this.postMaterial.uniforms.uContrast.value = (typeof this.graphicOptions?.contrast === "number") ? this.graphicOptions.contrast : 1.0;
-      this.postMaterial.uniforms.uAlpha.value = (typeof this.graphicOptions?.alpha === "number") ? this.graphicOptions.alpha : 1.0;
-      this.postMaterial.uniforms.uCameraNear.value = activeCam.near || 0.05;
-      this.postMaterial.uniforms.uCameraFar.value = activeCam.far || 800.0;
-      this.postMaterial.uniforms.uResolution.value.set(
-        Math.max(160, Math.floor(this.width * this.scaleFactor)),
-        Math.max(120, Math.floor(this.height * this.scaleFactor))
-      );
-
-      this.renderer.render(this.postScene, this.postCamera);
-    } else {
-      this.renderer.setRenderTarget(null);
-      this.renderer.render(this.scene, activeCam);
+        this.renderer.setRenderTarget(null);
+        this.renderer.render(this.postScene, this.postCamera);
+      } else {
+        this.renderer.setRenderTarget(null);
+        this.renderer.render(this.scene, activeCam);
+      }
     }
     const frameCpuMs = performance.now() - frameStart;
     this.terrainFrameAverageMs = (this.terrainFrameAverageMs || frameCpuMs) * 0.92 + frameCpuMs * 0.08;

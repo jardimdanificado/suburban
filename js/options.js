@@ -4,8 +4,7 @@ const BOOL = [[false, "OFF"], [true, "ON"]];
 const GRAPHICS = [
   { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 1].map(v => [v, `${v * 100}%`]), default: 0.25 },
   ...[
-    ["terrain", "PIXELS TERRENO"], ["water", "PIXELS AGUA"], ["vegetation", "PIXELS VEGETACAO"],
-    ["construction", "PIXELS CONSTRUCOES"], ["people", "PIXELS PESSOAS"], ["vehicles", "PIXELS VEICULOS"]
+    ["people", "PIXELS PESSOAS"], ["world", "PIXELS MUNDO"]
   ].map(([category, label]) => ({ key: `${category}Resolution`, category, label, values: [0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 1 })),
   { key: "shadows", label: "SOMBRAS", values: BOOL, default: true },
   { key: "shadowQuality", label: "MAPA SOMBRAS", values: [512, 1024, 2048, 4096].map(v => [v, `${v}`]), default: 512 },

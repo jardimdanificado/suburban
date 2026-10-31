@@ -18,7 +18,7 @@ export function syncConstructionSites(renderer,THREE,world,development){
   live.add(project.id);let site=renderer.constructionMeshes.get(project.id);
   const visible=!Number.isFinite(renderer.renderedMinTx)||cells.every(c=>c.x>=renderer.renderedMinTx&&c.x<=renderer.renderedMaxTx+1&&c.y>=renderer.renderedMinTy&&c.y<=renderer.renderedMaxTy+1);
   if(!visible){if(site)site.visible=false;continue;}if(site)site.visible=true;
-  if(site&&site.userData.signature!==signature){renderer.scene.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(project.id);site=null;}
+  if(site&&site.userData.signature!==signature){site.parent?.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(project.id);site=null;}
   if(site)continue;
   site=new THREE.Group();site.userData.signature=signature;
   const ground=new THREE.InstancedMesh(new THREE.BoxGeometry(.93,.035,.93),new THREE.MeshLambertMaterial({color:0x9d8059}),cells.length),matrix=new THREE.Matrix4();
@@ -29,7 +29,7 @@ export function syncConstructionSites(renderer,THREE,world,development){
    for(const dx of [-.27,.27]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.07,.65,.07),wood);leg.position.set(dx,.32,0);marker.add(leg);}
    const plank=new THREE.Mesh(new THREE.BoxGeometry(.78,.22,.09),stripe);plank.position.set(0,.55,0);marker.add(plank);site.add(marker);
   }
-  renderer.scene.add(site);renderer.constructionMeshes.set(project.id,site);
+  (renderer.constructionGroup||renderer.scene).add(site);renderer.constructionMeshes.set(project.id,site);
  }
- for(const [id,site] of renderer.constructionMeshes)if(!live.has(id)){renderer.scene.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(id);}
+ for(const [id,site] of renderer.constructionMeshes)if(!live.has(id)){site.parent?.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(id);}
 }

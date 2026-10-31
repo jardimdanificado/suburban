@@ -40,8 +40,8 @@ export function syncSkybridges(renderer,THREE,entities,world){
  const city=renderer.cityDevelopment?.city,revision=city?.structureRevision??entities.length,key=`${revision}:${world.revision??0}`;
  const updateVisibility=()=>{for(const bridge of renderer.skybridgeGroup?.children||[]){const p=bridge.userData.bounds;bridge.visible=!Number.isFinite(renderer.renderedMinTx)||p.x1>=renderer.renderedMinTx&&p.x0<=renderer.renderedMaxTx+1&&p.y1>=renderer.renderedMinTy&&p.y0<=renderer.renderedMaxTy+1;}};
  if(renderer.skybridgeRevision===key){updateVisibility();return;}renderer.skybridgeRevision=key;
- if(renderer.skybridgeGroup){renderer.scene.remove(renderer.skybridgeGroup);renderer.skybridgeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
- const group=new THREE.Group();renderer.skybridgeGroup=group;renderer.scene.add(group);renderer.skybridgeDoors=new Map();
+ if(renderer.skybridgeGroup){renderer.skybridgeGroup.parent?.remove(renderer.skybridgeGroup);renderer.skybridgeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
+ const group=new THREE.Group();renderer.skybridgeGroup=group;(renderer.constructionGroup||renderer.scene).add(group);renderer.skybridgeDoors=new Map();
  const addDoor=(building,unitId,bit)=>{let doors=renderer.skybridgeDoors.get(building.id);if(!doors)renderer.skybridgeDoors.set(building.id,doors=new Map());doors.set(unitId,(doors.get(unitId)||0)|bit);};
  // `entities` is the camera's visible subset. Derive the network from the
  // complete city so endpoints outside the current viewport still exist and
