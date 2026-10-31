@@ -867,6 +867,7 @@ export class Renderer {
         if (e.properties?.heldItem) heldItems.push(e.properties.heldItem);
         if (e.properties?.equipment?.mainHand) heldItems.push(e.properties.equipment.mainHand);
         if (e.properties?.equipment?.offHand) heldItems.push(e.properties.equipment.offHand);
+        const weapon=e.properties?.citizen?.equipment?.weapon;if(weapon)heldItems.push({name:weapon.name,skin:weapon.good==='porrete'?'Item_Wood.png':'Item_Nugget.png',resourceType:'weapon',tint:weapon.good==='porrete'?0xffffff:weapon.kind==='firearm'?0x4a4f57:0x9aa4ab});
 
         if (tileSize >= 12 && (emoteTex || heldItems.length > 0)) {
           const iconSize = Math.floor(tileSize * 0.48);

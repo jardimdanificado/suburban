@@ -48,7 +48,7 @@ export class CityLogistics {
     if(!carriers.length)return;
     const jobs=this.shipments.filter(s=>!['delivered','cancelled','waiting-space'].includes(s.status));
     const load=new Map(carriers.map(b=>[b.id,jobs.filter(s=>s.driverId && s.carrierId===b.id).reduce((n,s)=>n+Math.max(8,s.routeLength),0)]));
-    const dispatchPriority=s=>s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:s.purpose==='sanitation'?-3:Number(['critical-infrastructure','lighting-input','lamp-refill'].includes(s.purpose))?-2:0;
+    const dispatchPriority=s=>s.purpose==='public-meals'?-5:s.purpose==='work-meals'?-4:s.purpose==='sanitation'?-3:s.purpose==='funeral-procedure'?-2.5:Number(['critical-infrastructure','lighting-input','lamp-refill'].includes(s.purpose))?-2:0;
     for(const s of jobs.filter(s=>!s.driverId && !(s.allowFreelanceUntil>city.minute) && this.city.building(s.carrierId)?.type!=='waste_collector').sort((a,b)=>dispatchPriority(a)-dispatchPriority(b)||a.createdAt-b.createdAt).slice(0,64)) {
       const options=carriers.filter(b=>(s.purpose==='lamp-refill'||b.type==='carrier')&&[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=s.quantity)&&city.economy.connected(b,{id:`cargo:${s.id}`,door:s.position}));
       options.sort((a,b)=>(s.purpose==='lamp-refill'?Number(b.type==='lamp_service')-Number(a.type==='lamp_service'):0)||(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);

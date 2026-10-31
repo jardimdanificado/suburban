@@ -7,6 +7,11 @@ export function narrativeSceneType(narrative){
   const source=narrative?.source||{},words=`${source.kind||''} ${source.message||''} ${narrative?.title||''} ${narrative?.description||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   if(/protest|manifest|demonstr|repress|passeata/.test(words))return 'protest';
   if(/eleic|vot|urna|campanh|candid/.test(words))return 'election';
+  if(/tribunal|julgament|sentenc|prisao|cadeia|juiz|defesa|audiencia/.test(words))return 'justice';
+  if(/funeral|enterro|velorio|luto|homenagem postuma|memorial/.test(words))return 'funeral';
+  if(/enchent|inund|incend|desabament|deslizament|tempestade|catastrof/.test(words))return 'disaster';
+  if(/trabalh|greve|operari|colheita|safra|oficina|construcao/.test(words))return 'work';
+  if(/casament|nasciment|reencontro|reuniao|amizade|familia/.test(words))return 'reunion';
   if(/crime|assalt|agred|homicid|roub|ataque|conflit/.test(words))return 'conflict';
   if(/hospital|saude|resgat|socor|cura|atendiment/.test(words))return 'care';
   if(/inaugur|construc|abertur|ponte|edific/.test(words))return 'civic';
@@ -34,5 +39,28 @@ export function narrativeReception(c,narrative){
   const knownPeople=memories.flatMap(m=>[m.actorId,m.targetId]).filter(Number.isInteger),omittedPerson=knownPeople.some(id=>!narrative.participantIds.includes(id)),roleContradiction=(narrative.participantRoles||[]).some(({citizenId,role})=>memories.some(m=>role==='victim'&&m.actorId===citizenId||role==='antagonist'&&m.targetId===citizenId||role==='witness'&&[m.actorId,m.targetId].includes(citizenId)));
   const contradiction=omittedPerson||roleContradiction;
   const support=(c.social?.beliefs||[]).some(b=>b.narrativeSourceEventId===narrative.sourceEventId&&narrative.sourceEventId!=null&&b.believes&&!b.corrected);
-  return {familiarity,contradiction,acceptance:Math.max(.05,Math.min(.95,.45+(c.traits?.openness??.5)*.12-critical*.22+(contradiction?-.35:familiarity?.16:0)+(support?.12:0)))};
+  const wording=[narrative.title,narrative.description,narrative.sourceClaim,narrative.source?.message].filter(Boolean).join(' '),tone=artworkReception(c,{}, {message:wording});
+  return {familiarity,contradiction,acceptance:Math.max(.05,Math.min(.95,.45+(c.traits?.openness??.5)*.12-critical*.22+(contradiction?-.35:familiarity?.16:0)+(support?.12:0))),effect:tone.effect,tone:tone.tone};
+}
+
+/** Evaluate ordinary artwork from its public wording and the observer's own knowledge. */
+export function artworkReception(c,piece,layer,{knowsWrongdoing=false}={}){
+  const subjectId=piece?.subjectId,message=`${layer?.message||piece?.message||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const memories=c.social?.memories||[],beliefs=c.social?.beliefs||[],related=Number.isInteger(subjectId)?memories.filter(m=>m.actorId===subjectId||m.targetId===subjectId||m.aboutId===subjectId):[];
+  const familiarity=related.length>0,critical=c.political?.criticalSense??.5,openness=c.traits?.openness??.5,empathy=c.traits?.empathy??.5;
+  const praise=/\b(homenagem|heroi|heroina|honra|grande|justo|justa|salvou|defendeu|merece|confianca|vitoria|conquista)\b/.test(message);
+  const accusation=/\b(culpad|assassin|criminos|ladrao|ladra|roubou|corrupt|mentiros|traidor|traidora|violento|violenta|abuso|injustica)\b/.test(message);
+  const protest=/\b(abaixo|fora|protest|resist|justica|direitos|greve|luta|memoria|esquec|incompleta)\b/.test(message);
+  const commercial=piece?.commercial===true||/\b(compre|promocao|oferta|melhor|loja|empresa|produto)\b/.test(message);
+  const supporter=Number.isInteger(piece?.partyId)&&c.political?.partyId===piece.partyId;
+  const knowsAgainst=knowsWrongdoing&&praise,knowsFor=knowsWrongdoing&&accusation;
+  const contradiction=knowsAgainst||knowsFor;
+  const acceptance=Math.max(.05,Math.min(.95,.43+openness*.18-critical*.2+(familiarity?.09:0)+(supporter?.1:0)+(knowsFor?.2:0)-(knowsAgainst?.35:0)-(commercial&&critical>.6?.08:0)));
+  let effect=0;
+  if(praise)effect=empathy*.8+(familiarity?.35:0);
+  if(accusation)effect=-.5-empathy*.8-(knowsWrongdoing?.8:0);
+  if(protest)effect-=.35+critical*.25;
+  if(commercial)effect+=.25;
+  if(supporter)effect+=.25;
+  return {familiarity,contradiction,acceptance,effect:Math.max(-2,Math.min(2,effect)),tone:{praise,accusation,protest,commercial,supporter}};
 }

@@ -1014,7 +1014,9 @@ export class CitySimulation {
         if(!c.path.length){const path=this.findPath(c.entity,safe.door);if(path===null){c.combatFlee.waitingReason='sem rota para local seguro';c.action='Aguardando rota para fugir da agressão';continue;}c.path=path;if(!path.length&&Math.hypot(c.entity.x-safe.door.x,c.entity.y-safe.door.y)>.1)c.path=[{x:safe.door.x,y:safe.door.y}];}
         c.task='combat-flee';c.targetId=safe.id;c.action=`Fugindo da agressão para ${safe.entity.properties.name}`;continue;
       }
+      if(c.graffitiMission){this.justice.updateGraffitiMission(c);continue;}
       if(c.policeAudit){const urgent=this.urgentNeed(c);this.justice.updatePoliceAudit(c);if(c.policeAudit||!urgent)continue;}
+      if(c.policeArrestEscort){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceArrestEscort(c);continue;}
       if(c.policeRestitution&&this.urgentNeed(c)){this.justice.pauseVehicleRestitution(c,'necessidade urgente do agente');c.task=null;c.targetId=null;c.path=[];if(c.indoorLocation?.path?.length)c.indoorLocation.path=[];c.action='Pausa a restituição para atender uma necessidade urgente';}
       else if(c.policeRestitution){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceRestitution(c);continue;}
       if(c.policeResponse){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceResponse(c);continue;}

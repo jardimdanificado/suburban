@@ -1,6 +1,6 @@
 // Every batch reserves real inputs and requires paid, on-site work. Prices are cents.
 export const INDUSTRIAL_GOODS = Object.fromEntries([
-  ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['porrete','Porrete de madeira',900],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
+  ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['porrete','Porrete de madeira',900],['barra_ferro','Bastão de ferro',2100],['faca','Faca de trabalho',1800],['garrucha','Garrucha artesanal',18000],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
   ['ervas','Ervas medicinais',220],['remedio','Remédio',1800],['papel','Papel',500],['jornais','Jornais',3200],['livros','Livros',4300],['panfletos','Panfletos',700],['ceramica','Cerâmica',850],['adubo','Adubo orgânico',350],['fezes','Fezes coletadas',90],
@@ -36,8 +36,8 @@ export const INDUSTRIES = {
   sawmill: industry('Serraria',{madeira:3},{tabuas:5},18,'maintenance','Madeira beneficiada para mobiliário e ferramentas.'),
   charcoal: industry('Carvoaria',{madeira:3},{carvao:4},24,'maintenance','Combustível para fornos; consome a madeira das florestas cultivadas.'),
   iron_mine: industry('Mina de ferro',{}, {minerio:3},35,'mining','Extrai reservas finitas de afloramentos rochosos.'),
-  foundry: industry('Fundição',{minerio:3,carvao:2},{ferro:2},30,'maintenance','Liga mineração e combustível à fabricação de equipamentos.'),
-  toolmaker: industry('Ferramentaria',{ferro:2,tabuas:1},{ferramentas:1},22,'maintenance','Ferramentas consumidas pelos trabalhadores aumentam a produtividade.','industry',{need:'energy',boost:5}),
+  foundry: industry('Fundição',{minerio:3,carvao:2},{ferro:2,barra_ferro:1},30,'maintenance','Produz ferro e bastões maciços a partir de minério e carvão; o metal é vendido como equipamento defensivo.'),
+  toolmaker: industry('Ferramentaria',{ferro:4,tabuas:3},{ferramentas:1},22,'maintenance','Produz ferramentas, facas e garruchas artesanais com ferro e madeira beneficiada.','industry',{need:'energy',boost:5}),
   clay_pit: industry('Barreiro',{}, {argila:5},22,'mining','Extrai argila de reservas locais finitas para tijolos e cerâmica.'),
   brickworks: industry('Olaria',{argila:4,carvao:1},{tijolos:3},18,'construction','Tijolos para manutenção e conforto das moradias.','industry',{need:'shelter',boost:12}),
   sand_pit: industry('Areeiro',{}, {areia:4},24,'mining','Areia de reservas locais para vidros.'),
