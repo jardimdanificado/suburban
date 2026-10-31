@@ -50,7 +50,7 @@ function syncFecesVisuals(renderer,THREE,city,world){
   const sanitation=city?.sanitation;if(!sanitation)return;
   const revision=sanitation.fecesRevision||0;
   if(renderer.fecesVisualRevision!==revision){
-    if(renderer.fecesVisuals){renderer.fecesVisuals.parent?.remove(renderer.fecesVisuals);const geometries=new Set(),materials=new Set();renderer.fecesVisuals.traverse(o=>{if(o!==renderer.fecesVisuals){if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)materials.add(m);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();}
+    if(renderer.fecesVisuals){renderer.scene.remove(renderer.fecesVisuals);const geometries=new Set(),materials=new Set();renderer.fecesVisuals.traverse(o=>{if(o!==renderer.fecesVisuals){if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)materials.add(m);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();}
     const group=new THREE.Group(),pileGeometry=new THREE.SphereGeometry(.14,7,5),pileMaterial=new THREE.MeshLambertMaterial({color:0x64452e});
     const add=(x,y,z,amount,area,buildingId=null,floor=null)=>{
       const n=Math.max(1,Math.floor(amount)||1),clumps=Math.min(18,n),growth=Math.min(1,Math.log1p(n)/Math.log(19)),overflow=Math.min(3,Math.log1p(Math.max(0,n-18)/6)*.35);
@@ -68,7 +68,7 @@ function syncFecesVisuals(renderer,THREE,city,world){
     const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
     for(const [key,pile]of sanitation.streetFeces){const [x,y]=key.split(',').map(Number);if(x<minX||x>maxX||y<minY||y>maxY)continue;add(x+.5,surfaceElevation(world,x+.5,y+.5)+.04,y+.5,pile.amount,'street');}
     for(const b of city.buildings)for(const [key,pile]of b.feces||[]){const unit=b.units.find(u=>`${u.x},${u.y},${u.z}`===key);if(!unit)continue;const x=b.entity.x+unit.x+.5,y=b.entity.y+unit.y+.5;if(x<minX||x>maxX||y<minY||y>maxY)continue;add(x,(b.terrain?.base||0)+unit.z*CITY_FLOOR_HEIGHT+.05,y,pile.amount,'building',b.id,unit.z);}
-    (renderer.categoryOtherGroup||renderer.scene).add(group);renderer.fecesVisuals=group;renderer.fecesVisualRevision=revision;
+    renderer.scene.add(group);renderer.fecesVisuals=group;renderer.fecesVisualRevision=revision;
   }
   const view=renderer.cityInteriorView;
   for(const mesh of renderer.fecesVisuals.children)mesh.visible=mesh.userData.fecesArea==='street'||view?.buildingId===mesh.userData.buildingId&&view?.floor===mesh.userData.floor;
@@ -76,13 +76,13 @@ function syncFecesVisuals(renderer,THREE,city,world){
 function syncCardboardShelters(renderer,THREE,city,world){
   if(!city)return;const shelters=city.cardboardShelters||new Map(),revision=city.cardboardRevision||0;
   if(renderer.cardboardVisualRevision!==revision){
-    if(renderer.cardboardVisuals){renderer.cardboardVisuals.parent?.remove(renderer.cardboardVisuals);renderer.cardboardVisuals.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
+    if(renderer.cardboardVisuals){renderer.scene.remove(renderer.cardboardVisuals);renderer.cardboardVisuals.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
     const group=new THREE.Group(),mat=new THREE.MeshLambertMaterial({color:0x92704b}),foldMat=new THREE.MeshLambertMaterial({color:0x604a34});
     for(const site of shelters.values()){
       const x=site.x,y=site.y,z=surfaceElevation(world,x,y)+.035,matBox=new THREE.Mesh(new THREE.BoxGeometry(.78,.045,.58),mat),fold=new THREE.Mesh(new THREE.BoxGeometry(.12,.065,.56),foldMat);
       matBox.position.set(x,z,y);fold.position.set(x-.25,z+.035,y);matBox.rotation.y=(site.citizenId%4)*Math.PI/2;fold.rotation.y=matBox.rotation.y;matBox.receiveShadow=true;fold.castShadow=true;matBox.userData.cardboardTile=fold.userData.cardboardTile={x,y};group.add(matBox,fold);
     }
-    renderer.cardboardVisuals=group;renderer.cardboardVisualRevision=revision;(renderer.categoryOtherGroup||renderer.scene).add(group);
+    renderer.cardboardVisuals=group;renderer.cardboardVisualRevision=revision;renderer.scene.add(group);
   }
   const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
   for(const mesh of renderer.cardboardVisuals.children){const tile=mesh.userData.cardboardTile;mesh.visible=!!tile&&tile.x>=minX&&tile.x<=maxX+1&&tile.y>=minY&&tile.y<=maxY+1;}
@@ -90,9 +90,9 @@ function syncCardboardShelters(renderer,THREE,city,world){
 function syncCorpseVisuals(renderer,THREE,city,world){
   const justice=city?.justice;if(!justice)return;
   const live=new Set(justice.bodies.filter(b=>b.status!=='cremated').map(b=>b.id)),meshes=renderer.corpseMeshes??=new Map();
-  for(const [id,group]of meshes)if(!live.has(id)){group.parent?.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
+  for(const [id,group]of meshes)if(!live.has(id)){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
   const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
-  for(const body of justice.bodies){if(body.status==='cremated')continue;let group=meshes.get(body.id);if(!group){group=new THREE.Group();const cloth=new THREE.MeshLambertMaterial({color:body.status==='autopsy'?0xe6e0d5:0x4b5551}),skin=new THREE.MeshLambertMaterial({color:0xc49b78});const torso=new THREE.Mesh(new THREE.BoxGeometry(.34,.17,.48),cloth);torso.position.y=.12;group.add(torso);const head=new THREE.Mesh(new THREE.SphereGeometry(.115,8,6),skin);head.position.set(0,.14,.34);group.add(head);for(const side of [-1,1]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.36),cloth);leg.position.set(side*.105,.08,-.29);group.add(leg);const arm=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.34),cloth);arm.position.set(side*.22,.105,.02);arm.rotation.y=side*.18;group.add(arm);}group.userData.bodyId=body.id;group.userData.skinMaterial=skin;meshes.set(body.id,group);(renderer.peopleGroup||renderer.categoryOtherGroup||renderer.scene).add(group);}
+  for(const body of justice.bodies){if(body.status==='cremated')continue;let group=meshes.get(body.id);if(!group){group=new THREE.Group();const cloth=new THREE.MeshLambertMaterial({color:body.status==='autopsy'?0xe6e0d5:0x4b5551}),skin=new THREE.MeshLambertMaterial({color:0xc49b78});const torso=new THREE.Mesh(new THREE.BoxGeometry(.34,.17,.48),cloth);torso.position.y=.12;group.add(torso);const head=new THREE.Mesh(new THREE.SphereGeometry(.115,8,6),skin);head.position.set(0,.14,.34);group.add(head);for(const side of [-1,1]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.36),cloth);leg.position.set(side*.105,.08,-.29);group.add(leg);const arm=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.34),cloth);arm.position.set(side*.22,.105,.02);arm.rotation.y=side*.18;group.add(arm);}group.userData.bodyId=body.id;group.userData.skinMaterial=skin;meshes.set(body.id,group);renderer.scene.add(group);}
     const band=Math.min(3,Math.floor((body.decomposition||0)/25));if(group.userData.decompositionBand!==band){group.userData.skinMaterial.color.setHex([0xc49b78,0xaaa080,0x898673,0x686d61][band]);group.userData.decompositionBand=band;}
     const vehicle=body.currentVehicleId?city.vehicles?.units.get(body.currentVehicleId):null,x=vehicle?.x??body.entity.x,y=vehicle?.y??body.entity.y,base=vehicle?(vehicle.altitude??surfaceElevation(world,x,y))+.42:surfaceElevation(world,x,y)+(body.currentInterior?.position.z||body.skybridgeZ||0);group.position.set(x,base+.025,y);group.visible=x>=minX-1&&x<=maxX+1&&y>=minY-1&&y<=maxY+1;
   }
@@ -126,14 +126,14 @@ function addNarrativeStatue(THREE,group,piece,face,stone){
 }
 function syncUrbanArt(renderer,THREE,city,world){
   const justice=city?.justice;if(!justice)return;const meshes=renderer.urbanArtMeshes??=new Map(),live=new Set(justice.art.filter(a=>!a.entity.destroyed||a.debris).map(a=>a.id));
-   for(const [id,group]of meshes)if(!live.has(id)){group.parent?.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});meshes.delete(id);}
-   for(const piece of justice.art){if(piece.entity.destroyed&&!piece.debris||!piece.entity.destroyed&&piece.campaignDecorationId&&!piece.layers.length)continue;const face=piece.layers.at(-1)||piece,key=`${piece.id}:${piece.entity.destroyed?'debris':`${piece.layers.length}:${face.message}:${piece.damaged}:${JSON.stringify(face.narrative||null)}`}:${JSON.stringify(piece.support||null)}`;let group=meshes.get(piece.id);
-     if(group?.userData.key!==key){if(group){group.parent?.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});}group=new THREE.Group();
+  for(const [id,group]of meshes)if(!live.has(id)){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});meshes.delete(id);}
+  for(const piece of justice.art){if(piece.entity.destroyed&&!piece.debris||!piece.entity.destroyed&&piece.campaignDecorationId&&!piece.layers.length)continue;const face=piece.layers.at(-1)||piece,key=`${piece.id}:${piece.entity.destroyed?'debris':`${piece.layers.length}:${face.message}:${piece.damaged}:${JSON.stringify(face.narrative||null)}`}:${JSON.stringify(piece.support||null)}`;let group=meshes.get(piece.id);
+    if(group?.userData.key!==key){if(group){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});}group=new THREE.Group();
       if(piece.entity.destroyed){const seed=(piece.id*2654435761)>>>0,masonry=['statue','monument'].includes(piece.kind),stone=new THREE.MeshLambertMaterial({color:piece.damaged>0?0x716d64:piece.color??0x8a857a}),dark=new THREE.MeshLambertMaterial({color:0x625e57});for(let i=0;i<7;i++){const n=(seed+i*1013904223)>>>0,angle=(n%6283)/1000,radius=.12+((n>>>8)%100)/220,width=.12+((n>>>16)%14)/100,height=masonry?.08+((n>>>20)%18)/100:.018,depth=.12+((n>>>24)%14)/100,fragment=new THREE.Mesh(new THREE.BoxGeometry(width,height,depth),i%3===0&&masonry?dark:stone);fragment.position.set(Math.cos(angle)*radius,height*.5,Math.sin(angle)*radius);fragment.rotation.set(masonry?((n>>>4)%80)/100:0,angle,masonry?((n>>>12)%80)/100:0);group.add(fragment);}}
       else if(['statue','monument'].includes(piece.kind)){const stone=new THREE.MeshLambertMaterial({color:piece.damaged>0?0x716d64:piece.color});if(face.narrative)addNarrativeStatue(THREE,group,piece,face,stone);else{const base=new THREE.Mesh(new THREE.BoxGeometry(.75,.42,.75),stone),body=new THREE.Mesh(new THREE.CylinderGeometry(.18,.25,.8,7),stone),head=new THREE.Mesh(new THREE.SphereGeometry(.2,8,6),stone);base.position.y=.21;body.position.y=.78;head.position.y=1.32;group.add(base,body,head);}}
       else if(piece.kind==='flags'&&!face.narrative){const ropeMaterial=new THREE.MeshLambertMaterial({color:0x6b543b}),colors=[0xd84d43,0xe8bd43,0x4d9b67,0x4b78b6,0xbd5a9b];for(let i=0;i<4;i++){const rope=new THREE.Mesh(new THREE.CylinderGeometry(.012,.012,.39,5),ropeMaterial);rope.position.set(-.585+i*.39,1.35-Math.abs(1.5-i)*.035,0);rope.rotation.z=Math.PI/2;group.add(rope);}for(let i=0;i<5;i++){const pennant=new THREE.Shape();pennant.moveTo(-.16,.11);pennant.lineTo(.16,.11);pennant.lineTo(0,-.22);pennant.closePath();const mesh=new THREE.Mesh(new THREE.ShapeGeometry(pennant),new THREE.MeshLambertMaterial({color:colors[i],side:THREE.DoubleSide}));mesh.position.set(-.78+i*.39,1.32-Math.abs(2-i)*.035,.018);group.add(mesh);}const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='#654a35';ctx.fillRect(0,0,512,128);ctx.fillStyle='#f5e5c4';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 42px sans-serif';ctx.fillText(String(face.message),256,64,470);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const plaque=new THREE.Mesh(new THREE.PlaneGeometry(1.72,.43),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));plaque.position.set(0,.76,.01);group.add(plaque);}
       else{const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const ctx=canvas.getContext('2d'),background=`#${(face.color??piece.color).toString(16).padStart(6,'0')}`;ctx.fillStyle=background;ctx.fillRect(0,0,512,256);ctx.fillStyle='rgba(0,0,0,.23)';ctx.fillRect(14,14,484,228);if(face.narrative)drawArtNarrative(ctx,face.narrative);ctx.fillStyle='#f3ead3';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 42px sans-serif';const words=String(face.message).split(/\s+/);let lines=[],line='';for(const word of words){if(line&&ctx.measureText(`${line} ${word}`).width>440){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}if(line)lines.push(line);const lineH=52,start=face.narrative?46:128-(lines.length-1)*lineH/2;for(let i=0;i<lines.length&&i<(face.narrative?2:4);i++)ctx.fillText(lines[i],256,start+i*lineH,448);const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide});const width=2.1,height=1;const panel=new THREE.Mesh(new THREE.PlaneGeometry(width,height),material);panel.position.y=piece.kind==='graffiti'?1.05:1.35;group.add(panel);if(piece.kind==='banner'){const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,1.9,5),new THREE.MeshLambertMaterial({color:0x76664b}));pole.position.set(-width*.52,.95,0);group.add(pole);}}
-       group.userData.key=key;group.rotation.y=piece.entity.destroyed?0:piece.rotation||0;group.renderOrder=30;group.traverse(object=>{object.frustumCulled=false;if(object.isMesh)object.renderOrder=30;});meshes.set(piece.id,group);(renderer.constructionGroup||renderer.scene).add(group);
+      group.userData.key=key;group.rotation.y=piece.entity.destroyed?0:piece.rotation||0;group.renderOrder=30;group.traverse(object=>{object.frustumCulled=false;if(object.isMesh)object.renderOrder=30;});meshes.set(piece.id,group);renderer.scene.add(group);
     }
     let x=piece.entity.x,y=piece.entity.y;const support=piece.support;
     // Older installations could be placed on the doorway tile, inside the
@@ -171,7 +171,7 @@ function syncUrbanArt(renderer,THREE,city,world){
 export function syncRoadBridges(renderer,THREE,world){
   const bridges=world.roadBridges||[],revision=world.bridgeRevision||0;
   if(renderer.roadBridgeRevision===revision)return;
-  if(renderer.roadBridgeGroup){renderer.roadBridgeGroup.parent?.remove(renderer.roadBridgeGroup);renderer.roadBridgeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
+  if(renderer.roadBridgeGroup){renderer.scene.remove(renderer.roadBridgeGroup);renderer.roadBridgeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
   const group=new THREE.Group(),deckMaterial=new THREE.MeshLambertMaterial({color:0x77766c}),railMaterial=new THREE.MeshLambertMaterial({color:0x524c40});
   for(const bridge of bridges){
     const horizontal=bridge.axis==='x',tiles=bridge.tiles||[];
@@ -184,7 +184,7 @@ export function syncRoadBridges(renderer,THREE,world){
       }
     }
   }
-  renderer.roadBridgeGroup=group;renderer.roadBridgeRevision=revision;(renderer.constructionGroup||renderer.scene).add(group);
+  renderer.roadBridgeGroup=group;renderer.roadBridgeRevision=revision;renderer.scene.add(group);
 }
 // Room coordinates count floors; render their physical height consistently with picking.
 
@@ -217,7 +217,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       lamp = new THREE.Group();
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(.04, .07, 2, 6), new THREE.MeshLambertMaterial({ color: 0x424b42 })); pole.position.y = 1; lamp.add(pole);
       const lantern = new THREE.Mesh(new THREE.BoxGeometry(.25, .35, .25), new THREE.MeshLambertMaterial({ color: 0xe3b65f })); lantern.position.y = 2.08; lamp.add(lantern); lamp.userData.lantern = lantern;
-      (lamp.userData.cityCategoryParent || renderer.constructionGroup || renderer.scene).add(lamp); renderer.lampMeshes.set(post.id, lamp);
+      renderer.scene.add(lamp); renderer.lampMeshes.set(post.id, lamp);
     }
     if(lamp.userData.terrainRevision!==world.revision||lamp.userData.x!==post.x||lamp.userData.y!==post.y||lamp.userData.height!==post.height){
       lamp.position.set(post.x,surfaceElevation(world,post.x,post.y)+(post.height||0),post.y);
@@ -227,7 +227,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     lamp.visible = inView(post.x,post.y) && (!post.buildingId || liveBuildings.has(post.buildingId));
     if(post.lit&&lamp.visible)cityNightLights.push({x:lamp.position.x,y:lamp.position.y+2.1,z:lamp.position.z,color:0xffbc63,distance:6,decay:2,intensity:2.6,priority:-2,distSq:(post.x-(renderer.camX||0))**2+(post.y-(renderer.camY||0))**2});
   }
-  for (const [id, mesh] of renderer.lampMeshes) if (!liveLamps.has(id)) { mesh.parent?.remove(mesh); mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.lampMeshes.delete(id); }
+  for (const [id, mesh] of renderer.lampMeshes) if (!liveLamps.has(id)) { renderer.scene.remove(mesh); mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.lampMeshes.delete(id); }
   renderer.lampSiteMeshes ??= new Map();
   const sites = new Set();
   for (const site of world.cityLampSites || []) {
@@ -237,12 +237,12 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     let marker = renderer.lampSiteMeshes.get(site.id);
     if (!marker) {
       marker = new THREE.Mesh(new THREE.BoxGeometry(.9, .12, .9), new THREE.MeshLambertMaterial({ color: 0xc69543 }));
-      (marker.userData.cityCategoryParent || renderer.constructionGroup || renderer.scene).add(marker); renderer.lampSiteMeshes.set(site.id, marker);
+      renderer.scene.add(marker); renderer.lampSiteMeshes.set(site.id, marker);
     }
     marker.visible=true;
     marker.position.set(site.x, surfaceElevation(world, site.x, site.y) + .08, site.y);
   }
-  for (const [id, marker] of renderer.lampSiteMeshes) if (!sites.has(id)) { marker.parent?.remove(marker); marker.geometry.dispose(); marker.material.dispose(); renderer.lampSiteMeshes.delete(id); }
+  for (const [id, marker] of renderer.lampSiteMeshes) if (!sites.has(id)) { renderer.scene.remove(marker); marker.geometry.dispose(); marker.material.dispose(); renderer.lampSiteMeshes.delete(id); }
   renderer.cityMeshes ??= new Map();
   const active = new Set();
   for (const entity of entities) {
@@ -255,7 +255,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     const interiorContentKey=b.type==='office_tower'?(b.officeLeases||[]).filter(l=>l.status==='active').map(l=>{const tenant=renderer.cityDevelopment?.city?.building(l.buildingId);return `${tenant?.id}:${tenant?.type}:${tenant?.layoutRevision||0}`;}).join('|'):'';
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
     if (group && (group.userData.interiorContentKey!==interiorContentKey || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
-      group.parent?.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
+      renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
       group = new THREE.Group();group.userData.interiorContentKey=interiorContentKey; group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
@@ -382,7 +382,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       stairs.receiveShadow = true; group.add(stairs); group.userData.stairs = stairs;
       group.userData.cells = cells;
       renderer.decorateCityMaterials?.(group);
-       (renderer.constructionGroup || renderer.scene).add(group);
+      renderer.scene.add(group);
       renderer.cityMeshes.set(entity.id, group);
     }
     group.visible=true;
@@ -420,7 +420,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z*CITY_FLOOR_HEIGHT + CITY_FLOOR_HEIGHT/2, unit.y + .5);
   }
   for (const [id, group] of renderer.cityMeshes) if (!active.has(id)) {
-    group.parent?.remove(group);
+    renderer.scene.remove(group);
     group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); });
     renderer.cityMeshes.delete(id);
   }
@@ -470,7 +470,7 @@ function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
 function syncOpenAir(renderer, THREE, entity, b, world) {
   let group = renderer.cityMeshes.get(entity.id);
   const signature=`retail-v2:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}:${b.paintRevision||0}`;
-  if (group && group.userData.signature !== signature) { group.parent?.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
+  if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;
     addBuildingDetails(THREE,group,b,{outdoor:true,ground:surfaceElevation(world,entity.x+b.width/2,entity.y+b.depth/2)});
@@ -519,7 +519,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     const highlight = new THREE.Mesh(new THREE.BoxGeometry(1.02, .10, 1.02), new THREE.MeshBasicMaterial({ color: 0xf8b800, wireframe: true }));
     highlight.visible = false; group.add(highlight); group.userData.highlight = highlight;
     renderer.decorateCityMaterials?.(group);
-     renderer.cityMeshes.set(entity.id, group); (renderer.constructionGroup || renderer.scene).add(group);
+    renderer.cityMeshes.set(entity.id, group); renderer.scene.add(group);
   }
   group.visible=true;
   if (group.userData.terrainRevision !== (world.revision || 0)) {
@@ -571,6 +571,6 @@ function addFarmFence(THREE,group,b,world){
  for(let x=0;x<b.width;x++){segment(x+.04,.04,Math.min(b.width-.04,x+1+.04),.04);segment(x+.04,b.depth-.04,Math.min(b.width-.04,x+1+.04),b.depth-.04);}for(let y=0;y<b.depth;y++){segment(.04,y+.04,.04,Math.min(b.depth-.04,y+1+.04));segment(b.width-.04,y+.04,b.width-.04,Math.min(b.depth-.04,y+1+.04));}for(const m of fence.children)m.castShadow=m.receiveShadow=true;mergeStaticMeshes(THREE,fence);group.add(fence);
 }
 function syncStreetBenches(renderer,THREE,world){
- const furniture=renderer.cityDevelopment?.city?.furniture;if(!furniture)return;const meshes=renderer.streetBenchMeshes??=new Map(),active=new Set(furniture.benches.map(b=>b.id));for(const [id,g]of meshes)if(!active.has(id)){g.parent?.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
-  for(const b of furniture.benches){let g=meshes.get(b.id);if(!g){g=furnitureModel(THREE,{type:'bench'});mergeStaticMeshes(THREE,g);g.rotation.y=b.angle;g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);(renderer.constructionGroup||renderer.scene).add(g);meshes.set(b.id,g);}g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
+ const furniture=renderer.cityDevelopment?.city?.furniture;if(!furniture)return;const meshes=renderer.streetBenchMeshes??=new Map(),active=new Set(furniture.benches.map(b=>b.id));for(const [id,g]of meshes)if(!active.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
+ for(const b of furniture.benches){let g=meshes.get(b.id);if(!g){g=furnitureModel(THREE,{type:'bench'});mergeStaticMeshes(THREE,g);g.rotation.y=b.angle;g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);renderer.scene.add(g);meshes.set(b.id,g);}g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
 }

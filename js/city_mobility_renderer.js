@@ -5,15 +5,15 @@ const colors={bicicleta:0x397e99,bicicleta_carga:0xbd793c,patinete:0x62a69a,pati
 const inView=(r,x,y,margin=4)=>!Number.isFinite(r.renderedMinTx)||x-margin>=r.renderedMinTx&&x+margin<=r.renderedMaxTx+1&&y-margin>=r.renderedMinTy&&y+margin<=r.renderedMaxTy+1;
 function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
   renderer.mobilityBatches??=new Map();let b=renderer.mobilityBatches.get(key);
-  if(!b||b.capacity<capacity){const geometry=b?.geometry||makeGeometry(),material=b?.material||makeMaterial();if(b){b.mesh.parent?.remove(b.mesh);b.mesh.dispose();}
-    const count=Math.max(32,2**Math.ceil(Math.log2(Math.max(1,capacity)))),mesh=new THREE.InstancedMesh(geometry,material,count);mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;(renderer.vehicleGroup||renderer.scene).add(mesh);b={mesh,geometry,material,capacity:count};renderer.mobilityBatches.set(key,b);
+  if(!b||b.capacity<capacity){const geometry=b?.geometry||makeGeometry(),material=b?.material||makeMaterial();if(b){renderer.scene.remove(b.mesh);b.mesh.dispose();}
+    const count=Math.max(32,2**Math.ceil(Math.log2(Math.max(1,capacity)))),mesh=new THREE.InstancedMesh(geometry,material,count);mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=true;renderer.scene.add(mesh);b={mesh,geometry,material,capacity:count};renderer.mobilityBatches.set(key,b);
   }return b;
 }
 export function syncCityMobility(renderer,THREE,entities,world){
   const vehicles=entities.filter(e=>!e.destroyed&&e.properties?.cityVehicle&&inView(renderer,e.x,e.y,1));
   if(!vehicles.length){
     for(const b of renderer.mobilityBatches?.values()||[])b.mesh.count=0;
-    for(const [id,g] of renderer.cycleFlags||[]){g.parent?.remove(g);g.traverse(o=>{o.geometry?.dispose();if(o.material&&!o.material.map)o.material.dispose();});renderer.cycleFlags.delete(id);}
+    for(const [id,g] of renderer.cycleFlags||[]){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();if(o.material&&!o.material.map)o.material.dispose();});renderer.cycleFlags.delete(id);}
     return;
   }
   const matrix=renderer._mobilityMatrix??=new THREE.Matrix4(),position=renderer._mobilityPosition??=new THREE.Vector3(),quaternion=renderer._mobilityQuaternion??=new THREE.Quaternion(),scale=renderer._mobilityScale??=new THREE.Vector3(),color=renderer._mobilityColor??=new THREE.Color(),axis=renderer._mobilityAxis??=new THREE.Vector3(0,1,0);
@@ -42,8 +42,8 @@ function syncCycleFlags(renderer,THREE,vehicles,world,entities){
  for(const e of vehicles){const v=e.properties.cityVehicle,rider=v.driverId&&riders.get(v.driverId);const campaign=rider?.task==='campaign'&&rider.campaignInventory?.bandeiras>0?rider.campaign:null;
   const flag=v.mountedFlag?.flag||campaign?.flag;if(!flag)continue;live.add(v.id);const key=JSON.stringify(flag);let material=renderer.cycleFlagMaterials.get(key);
    if(!material){let texture;const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});renderer.cycleFlagMaterials.set(key,material);}material.color.setScalar(flagNightFactor(world));
-   let g=renderer.cycleFlags.get(v.id);if(!g){g=new THREE.Group();const pole=new THREE.Mesh(new THREE.CylinderGeometry(.015,.02,1.25,4),new THREE.MeshLambertMaterial({color:0xa5a59a}));pole.position.y=.625;g.add(pole);const cloth=new THREE.Mesh(clothFlagGeometry(THREE,.7,.44),material);cloth.position.set(.35,1.05,0);g.add(cloth);g.userData.cloth=cloth;(renderer.vehicleGroup||renderer.scene).add(g);renderer.cycleFlags.set(v.id,g);}
+  let g=renderer.cycleFlags.get(v.id);if(!g){g=new THREE.Group();const pole=new THREE.Mesh(new THREE.CylinderGeometry(.015,.02,1.25,4),new THREE.MeshLambertMaterial({color:0xa5a59a}));pole.position.y=.625;g.add(pole);const cloth=new THREE.Mesh(clothFlagGeometry(THREE,.7,.44),material);cloth.position.set(.35,1.05,0);g.add(cloth);g.userData.cloth=cloth;renderer.scene.add(g);renderer.cycleFlags.set(v.id,g);}
    g.userData.cloth.material=material;animateClothFlag(g.userData.cloth,flagWindTime(renderer),0);g.position.set(e.x,surfaceElevation(world,e.x,e.y)+.25,e.y);g.rotation.y=0;
  }
-  for(const [id,g]of renderer.cycleFlags)if(!live.has(id)){g.parent?.remove(g);g.traverse(o=>{o.geometry?.dispose();if(o.material&&!o.material.map)o.material.dispose();});renderer.cycleFlags.delete(id);}
+ for(const [id,g]of renderer.cycleFlags)if(!live.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();if(o.material&&!o.material.map)o.material.dispose();});renderer.cycleFlags.delete(id);}
 }

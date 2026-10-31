@@ -71,7 +71,6 @@ function rendererMock() {
   return {
     shadowsEnabled: true, wireframeMode: 0, graphicOptions: {},
     setResolutionScale(value) { this.scaleFactor = value; },
-    setCategoryResolution(category, value) { (this.categoryResolutions ??= {})[category] = value; },
     toggleShadows() { this.shadowsEnabled = !this.shadowsEnabled; },
     setShadowQuality(value) { this.shadowQuality = value; },
     toggleWireframe() { this.wireframeMode = (this.wireframeMode + 1) % 3; },
@@ -86,16 +85,6 @@ test("graphics options apply renderer hooks and persist validated preferences", 
   const panel = new OptionsPanel({ renderer, time: new SimulationTime({now:()=>0}), step() {}, storage });
   assert.equal(renderer.scaleFactor, 1);
   assert.equal(renderer.shadowsEnabled, false);
-  for (const category of ["people", "world"]) {
-    assert.equal(renderer.categoryResolutions[category], 1);
-    assert.deepEqual(panel.values[`${category}Resolution`], 1);
-  }
-  for (const [category, value] of [["people", 0.25], ["world", 0.5]]) {
-    assert.equal(panel.apply(`${category}Resolution`, value), true);
-    assert.equal(renderer.categoryResolutions[category], value);
-    assert.equal(JSON.parse(saved)[`${category}Resolution`], value);
-  }
-  assert.equal(panel.apply("worldResolution", 0.6), false);
   panel.apply("wireframe", 2);
   assert.equal(renderer.wireframeMode, 2);
   panel.apply("brightness", 1.25);
