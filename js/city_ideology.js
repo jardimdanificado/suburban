@@ -24,6 +24,7 @@ export function policyAffinity(profile,city,type,payload={}){
     case'welfare':return dir(city.welfare.policy.dailyBudget)*(profile.redistribution*1.2-profile.fiscal*.35+.15);
     case'nationalize':return profile.ownership*1.6+profile.regulation*.2;
     case'privatize':return -profile.ownership*1.6-profile.regulation*.2;
+    case'dailyPrivatizationLimit':{const current=city.politics.policy.dailyPrivatizationLimit??1,delta=Math.sign(v-current),needs=city.welfare.conditions(),urgent=!!needs.crisis||city.treasury<needs.reserve;return delta*(profile.economy*.75-profile.ownership*.7-profile.regulation*.15+(urgent?1.6:0));}
     case'build':return profile.ownership*.9+(socialBuildings.includes(payload.buildingType)?profile.redistribution*.65+.2:0)+(environmental.includes(payload.buildingType)?profile.green*.7:0)-profile.fiscal*.25;
     case'inflation':return Math.sign(city.currency.policy.dailyLimit-v)*(.35+profile.fiscal*.65+Math.min(1,Math.max(0,city.currency.dailyInflation)*40));
     case'partyLimit':return dir(p.policy.partyLimit)*profile.liberty;

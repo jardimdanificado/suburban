@@ -5,7 +5,7 @@ import {waterPollutionAt,waterTint} from './city_water.js';
 // =============================================================================
 
 import * as THREE from "https://esm.sh/three@0.160.0";
-import { CITY_FLOOR_HEIGHT } from "./city_building_geometry.js";
+import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import { syncCityBuildings } from "./city_renderer_3d.js?v=tile-locked-citizens-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=survival-capacity-1';
@@ -4998,8 +4998,10 @@ export class RCT3DRenderer {
         // In cutaway mode the building shell is hidden, so it must not mask
         // people and units that are actually inside it when picking.
         if(this.cityInteriorView?.buildingId===b.id)continue;
-        const base = b.constructionKind === 'open-air' ? b.terrain.min : b.terrain?.base ?? (map ? this.getTileSurfaceHeight(map, e.x, e.y) : 1);
-        const box = new THREE.Box3(new THREE.Vector3(e.x, base, e.y), new THREE.Vector3(e.x + b.width, b.constructionKind === 'open-air' ? b.terrain.max + (['market','greengrocer'].includes(b.type)?CITY_FLOOR_HEIGHT+.1:.14) : base + b.floors*CITY_FLOOR_HEIGHT, e.y + b.depth));
+        const openAir=b.constructionKind==='open-air',centerX=e.x+b.width/2,centerY=e.y+b.depth/2;
+        const terrainBase=b.terrain?.base ?? (map ? this.getTileSurfaceHeight(map,e.x,e.y) : 1),surfaceBase=map?this.getSurfaceElevation(map,centerX,centerY):b.terrain?.base??0;
+        const {base,top}=cityBuildingPickVerticalBounds({constructionKind:b.constructionKind,type:b.type,floors:b.floors,base:terrainBase,surfaceBase});
+        const box = new THREE.Box3(new THREE.Vector3(e.x, base, e.y), new THREE.Vector3(e.x + b.width, top, e.y + b.depth));
         const hit = ray.intersectBox(box, new THREE.Vector3());
         if (hit) {
           const distance = ray.origin.distanceTo(hit);

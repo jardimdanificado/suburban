@@ -14,6 +14,7 @@ export function legislativeOpinion(city,c,bill){
     case'welfare':return Math.sign(v-city.welfare.policy.dailyBudget)*(-e*.55+((c.needs.food<45||!c.homeUnitId) ? .7 : .1));
     case'build':return -.5*e+((['super_popular_housing','popular_housing','popular_luxury_housing'].includes(bill.payload.buildingType)&&!c.homeUnitId) ? .8 : .25);
     case'nationalize':return -e;case'privatize':return e;
+    case'dailyPrivatizationLimit':{const delta=Math.sign(v-(p.policy.dailyPrivatizationLimit??1)),needs=city.welfare.conditions(),urgent=!!needs.crisis||city.treasury<needs.reserve;return delta*(e*.7-ideologicalProfile(c).ownership*.65+(urgent?1.6:0));}
     case'roads':return .65;case'inflation':return Math.sign(city.currency.policy.dailyLimit-v)*(.2+Math.min(.8,Math.max(0,city.currency.dailyInflation)*40));
     case'pollMinRate':case'pollMaxRate':return Math.sign(v-(p.policy[bill.type]??(bill.type==='pollMinRate'?5:20)))*((c.political.criticalSense??.5)*.7-(c.traits?.frugality??.5)*.3);
     case'partyLimit':return change('partyLimit')*(i.liberty*.7+.1);

@@ -58,7 +58,7 @@ export class CityPoliticalStanding {
       const ownVotes=p.parties.flatMap(party=>(party.publicRecords||[]).slice(-24).filter(r=>r.votes?.some(v=>v.citizenId===c.id)));
       for(const voter of panel){const view=city.relationships.view(voter,c);if(view)relations+=(view.trust-50)*.16+(view.affection-20)*.1-(view.resentment||0)*.2;if(voter.id===c.id)relations+=15;else if(city.society.related(voter,c))relations+=5;
         ideology+=(.5-p.distance(voter.political.ideology,s.ideology)/2.8)*8;
-        memories+=clamp(voter.political.memories.filter(m=>m.candidateId===c.id&&['campaign-rally','defamation','campaign-accountability','campaign-correction'].includes(m.kind)).reduce((n,m)=>n+(m.effect||0),0),-20,15);
+        memories+=clamp(voter.political.memories.filter(m=>m.candidateId===c.id&&['campaign-rally','defamation','campaign-accountability','campaign-correction','policy-reaction'].includes(m.kind)).reduce((n,m)=>n+(m.effect||0),0),-20,15);
         for(const r of ownVotes){const vote=r.votes.find(v=>v.citizenId===c.id);votes+=(r.individualOpinions?.[voter.id]||0)*(vote.yes?1:-1)*.5;}
         for(const {record:r,aware} of casesByCitizen.get(c.id)||[])if(aware.has(voter.id))scandals-=(r.severity||40)*(r.proven?.3:.04);
       }
