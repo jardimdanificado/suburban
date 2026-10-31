@@ -457,6 +457,22 @@ export class CityJustice {
     if(path===null){record.investigation.blockedReason='sem rota interna para sair do prédio';return false;}
     room.unitId=null;room.targetUnitId=null;room.roomType='circulation';room.targetRoomType='circulation';room.exiting=true;room.phase='leaving';room.path=path;room.task='police-investigation';mission.phase=nextPhase;record.investigation.phase=nextPhase; c.action='Saindo do prédio após a diligência';return true;
   }
+  beginVehicleInspection(c,record,mission,investigation){
+    if(!['bicycleTheft','vehicleReceiving'].includes(record.type))return false;
+    const vehicle=this.city.vehicles?.units.get(record.details?.vehicleId);
+    if(!vehicle||vehicle.scrapped){investigation.vehicleInspection={status:'unavailable',startedAt:this.city.minute,vehicleId:record.details?.vehicleId??null,reason:'veículo não está disponível para inspeção'};investigation.fieldNotes.push({kind:'vehicle-inspection-unavailable',vehicleId:record.details?.vehicleId??null,recordedAt:this.city.minute,reason:investigation.vehicleInspection.reason});mission.phase='return';investigation.phase='return';return true;}
+    mission.phase='vehicle-approach';mission.vehicleInspectionStartedAt=this.city.minute;mission.vehicleWaitSince=null;investigation.phase='vehicle-approach';investigation.vehicleInspection={status:'active',vehicleId:vehicle.id,startedAt:this.city.minute,waitLimit:180};c.action=`Indo verificar o veículo #${vehicle.id}`;return true;
+  }
+  updateVehicleInspection(c,record,mission,investigation){
+    const city=this.city,vehicle=city.vehicles?.units.get(record.details?.vehicleId);
+    if(!vehicle||vehicle.scrapped){investigation.vehicleInspection={...investigation.vehicleInspection,status:'unavailable',completedAt:city.minute,reason:'veículo deixou de estar disponível'};investigation.fieldNotes.push({kind:'vehicle-inspection-unavailable',vehicleId:record.details?.vehicleId??null,recordedAt:city.minute,reason:'veículo deixou de estar disponível'});mission.phase='return';investigation.phase='return';return true;}
+    const driver=vehicle.driverId!=null?city.society.citizen(vehicle.driverId):null,occupied=!!driver&&!driver.entity.destroyed&&(driver.mobilityTrip?.vehicleId===vehicle.id||driver.ridingVehicleId===vehicle.id),target=occupied?driver.entity:vehicle;
+    if(occupied)mission.vehicleWaitSince??=city.minute;
+    if(dist(c.entity,target)>1.5){const path=city.findPath(c.entity,target);if(path===null){investigation.blockedReason='sem rota física até a posição conhecida do veículo';c.path=[];return false;}c.path=path;if(!path.length)c.path=[{x:target.x,y:target.y}];c.action=occupied?`Acompanhando a rota do veículo #${vehicle.id}`:`Indo verificar o veículo #${vehicle.id}`;return true;}
+    if(occupied){c.path=[];c.action=`Aguardando o veículo #${vehicle.id} parar para inspeção`;if(city.minute-(mission.vehicleWaitSince??city.minute)<180)return true;investigation.vehicleInspection={...investigation.vehicleInspection,status:'unavailable',completedAt:city.minute,reason:'veículo permaneceu em movimento durante o prazo da diligência'};investigation.fieldNotes.push({kind:'vehicle-inspection-unavailable',vehicleId:vehicle.id,recordedAt:city.minute,reason:investigation.vehicleInspection.reason});mission.phase='return';investigation.phase='return';return true;}
+    const theftAt=record.occurredAt??0,paintHistory=(vehicle.paintHistory||[]).filter(entry=>entry.minute>=theftAt).map(entry=>({minute:entry.minute,color:entry.color,workshopId:entry.workshopId??null,workerId:entry.workerId??null,price:entry.price??null}));
+    const note={kind:'vehicle-registry-inspection',officerId:c.id,vehicleId:vehicle.id,recordedAt:city.minute,position:{x:vehicle.x,y:vehicle.y},legalOwnerAccountId:vehicle.ownerAccountId??null,currentPossessorAccountId:vehicle.possessorAccountId??vehicle.ownerAccountId??null,color:vehicle.color??null,paintHistory};investigation.fieldNotes.push(note);investigation.vehicleInspection={...investigation.vehicleInspection,status:'completed',completedAt:city.minute,position:{...note.position},legalOwnerAccountId:note.legalOwnerAccountId,currentPossessorAccountId:note.currentPossessorAccountId,color:note.color,paintHistory};investigation.blockedReason=null;city.log(`O agente ${c.entity.properties.name} conferiu o cadastro observável do veículo #${vehicle.id} no caso #${record.id}.`,'justice',[c.id],{kind:'vehicle-inspected',caseId:record.id,vehicleId:vehicle.id,position:{...note.position},paintCount:paintHistory.length});mission.phase='return';investigation.phase='return';return true;
+  }
   enterInvestigationWitness(c,witness,building,mission){
     const room=witness.indoorLocation,unit=cityUnitForInvestigation(this.city,room),target=room.position||witness.entity;
     if(!unit||unit.buildingId!==building.id)return false;
@@ -478,7 +494,7 @@ export class CityJustice {
     if(city.urgentNeed?.(c)){investigation.blockedReason='necessidade urgente do agente';return this.finishPoliceInvestigation(c,record,station,'interrupted');}
     if(mission.lastPaidMinute!==city.minute){if(!city.payWage(c,station)){investigation.blockedReason='falta de verba para o salário';mission.phase='return';investigation.phase='return';}mission.lastPaidMinute=city.minute;}
     const sceneBuilding=record.scene?.buildingId!=null?city.building(record.scene.buildingId):null;
-    if(mission.phase==='exit-scene'&&!c.indoorLocation){mission.phase='return';investigation.phase='return';}
+    if(mission.phase==='exit-scene'&&!c.indoorLocation){if(!this.beginVehicleInspection(c,record,mission,investigation)){mission.phase='return';investigation.phase='return';}}
     if(mission.phase==='exit-scene-to-witnesses'&&!c.indoorLocation){mission.phase='witnesses';investigation.phase='witnesses';}
     if(mission.phase==='exit-witness-interior'&&!c.indoorLocation){mission.witnessBuildingId=null;mission.witnessInterviewDone=false;mission.phase='witnesses';investigation.phase='witnesses';investigation.witnessIndex++;}
     if(c.indoorLocation){
@@ -545,9 +561,10 @@ export class CityJustice {
         investigation.witnessIndex++;return true;
       }
       if(c.indoorLocation&&sceneBuilding)return this.leaveInvestigationInterior(c,sceneBuilding,mission,record);
-      mission.phase='return';investigation.phase='return';
+      if(!this.beginVehicleInspection(c,record,mission,investigation)){mission.phase='return';investigation.phase='return';}
     }
     if(mission.phase==='exit-scene'){return true;}
+    if(mission.phase==='vehicle-approach')return this.updateVehicleInspection(c,record,mission,investigation);
     if(mission.phase==='return'){
       if(c.indoorLocation){const building=city.building(c.indoorLocation.buildingId);if(building)return this.leaveInvestigationInterior(c,building,mission,record);investigation.blockedReason='prédio do agente não está disponível';return false;}
       if(dist(c.entity,station.door)>1.2){const path=city.findPath(c.entity,station.door);if(path===null){mission.routeFailures=(mission.routeFailures||0)+1;investigation.blockedReason='sem rota de retorno à delegacia';return false;}c.path=path;c.action=`Retornando à delegacia com o caso #${record.id}`;return true;}
