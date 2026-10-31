@@ -2918,6 +2918,10 @@ export class RCT3DRenderer {
     this.shadowsEnabled = true;
     this.renderFullWorld = false;
     this.lastBuiltFullWorld = false;
+    this.terrainChunkSize = 32;
+    this.terrainChunks = new Map();
+    this.visibleTerrainChunkKeys = new Set();
+    this._terrainHasLocalInvalidation = false;
 
     // Current Rendered Terrain Bounds
     this.renderedMinTx = 0;
@@ -4373,6 +4377,7 @@ export class RCT3DRenderer {
 
   toggleWireframe() {
     this.wireframeMode = (this.wireframeMode + 1) % 3;
+    this.invalidateTerrainAt(NaN, NaN);
     
     if (this.wireframeMode === 0) {
       this.rctGridLineGroup.visible = false;
@@ -4512,6 +4517,13 @@ export class RCT3DRenderer {
     for (const [k, mat] of Object.entries(activeDict)) {
       this.materials[k] = mat;
     }
+    for (const chunk of this.terrainChunks?.values() || []) {
+      for (const mesh of chunk.terrain.children) {
+        if (!mesh.isMesh || mesh === this.instGrassTufts) continue;
+        const key = mesh.userData.terrainMaterialKey;
+        if (key && activeDict[key]) mesh.material = activeDict[key];
+      }
+    }
 
     if (this.instHouseWalls && activeDict.houseWall) this.instHouseWalls.material = activeDict.houseWall;
     if (this.instHouseRoofs && activeDict.houseRoof) this.instHouseRoofs.material = activeDict.houseRoof;
@@ -4584,9 +4596,7 @@ export class RCT3DRenderer {
   }
 
   toggleFullWorld() {
-    this.renderFullWorld = !this.renderFullWorld;
-    this.lastBuiltCamTileX = -9999;
-    this.lastBuiltCamTileY = -9999;
+    this.setFullWorld(!this.renderFullWorld);
     return this.renderFullWorld;
   }
 
@@ -4600,6 +4610,72 @@ export class RCT3DRenderer {
     this.renderFullWorld = !!enabled;
     this.lastBuiltCamTileX = -9999;
     this.lastBuiltCamTileY = -9999;
+    this.invalidateTerrainAt(NaN, NaN);
+  }
+
+  disposeTerrainChunk(chunk) {
+    if (!chunk) return;
+    for (const group of [chunk.terrain, chunk.water, chunk.grid]) {
+      if (!group) continue;
+      for (const object of [...group.children]) {
+        group.remove(object);
+        if (!object.userData?.sharedTerrainGeometry) object.geometry?.dispose();
+      }
+      group.parent?.remove(group);
+    }
+  }
+
+  invalidateTerrainAt(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      for (const chunk of this.terrainChunks?.values() || []) this.disposeTerrainChunk(chunk);
+      this.terrainChunks?.clear();
+      this.visibleTerrainChunkKeys?.clear();
+      this._terrainHasLocalInvalidation = false;
+      this.terrainDirty = true;
+      return;
+    }
+    const size = this.terrainChunkSize || 32;
+    const cx = Math.floor(x / size), cy = Math.floor(y / size);
+    // Corner heights, AO, shore faces and water colors depend on adjacent tiles.
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const key = `${cx + dx},${cy + dy}`;
+      const chunk = this.terrainChunks?.get(key);
+      if (chunk) {
+        this.disposeTerrainChunk(chunk);
+        this.terrainChunks.delete(key);
+      }
+    }
+    this._terrainHasLocalInvalidation = true;
+    this.terrainDirty = true;
+  }
+
+  terrainViewportBounds() {
+    const camera = this.isPerspectiveActive() ? this.fpCamera : this.camera;
+    if (!camera) return { minTx: 0, maxTx: this.mapWidth - 1, minTy: 0, maxTy: this.mapHeight - 1 };
+    camera.updateMatrixWorld(true);
+    const raycaster = new THREE.Raycaster();
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const points = [];
+    const reach = this.isPerspectiveActive() ? Math.min(camera.far || 120, this.scene.fog?.far || camera.far || 120) : Infinity;
+    for (const [x, y] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+      const point = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(plane, point)) {
+        if (Number.isFinite(reach) && point.distanceTo(raycaster.ray.origin) > reach) points.push(raycaster.ray.at(reach, point));
+        else points.push(point);
+      }
+      else if (Number.isFinite(reach)) points.push(raycaster.ray.at(reach, point));
+    }
+    if (!points.length) return { minTx: 0, maxTx: this.mapWidth - 1, minTy: 0, maxTy: this.mapHeight - 1 };
+    const margin = this.isPerspectiveActive() ? 3 : 4;
+    const clampX = value => Math.max(0, Math.min(this.mapWidth - 1, value));
+    const clampY = value => Math.max(0, Math.min(this.mapHeight - 1, value));
+    return {
+      minTx: clampX(Math.floor(Math.min(...points.map(p => p.x)) - margin)),
+      maxTx: clampX(Math.ceil(Math.max(...points.map(p => p.x)) + margin)),
+      minTy: clampY(Math.floor(Math.min(...points.map(p => p.z)) - margin)),
+      maxTy: clampY(Math.ceil(Math.max(...points.map(p => p.z)) + margin))
+    };
   }
 
   getFullWorldModeName() {
@@ -4618,6 +4694,9 @@ export class RCT3DRenderer {
   isSimPaused() { return this.isPaused; }
 
   clear() {
+    for (const chunk of this.terrainChunks?.values() || []) this.disposeTerrainChunk(chunk);
+    this.terrainChunks?.clear();
+    this.visibleTerrainChunkKeys?.clear();
     this.cityCitizenBatches?.clear();
     this.cityCitizenModels?.clear();
     this.lastBuiltCamTileX = -9999;
@@ -5525,6 +5604,90 @@ export class RCT3DRenderer {
   // ---------------------------------------------------------------------------
 
   rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionTarget = null) {
+    const nextChunkSize = this.zoom < 0.12 ? 256 : this.zoom < 0.2 ? 128 : this.zoom < 0.55 ? 64 : 32;
+    if (this.terrainChunkSize !== nextChunkSize) {
+      for (const chunk of this.terrainChunks.values()) this.disposeTerrainChunk(chunk);
+      this.terrainChunks.clear();
+      this.visibleTerrainChunkKeys.clear();
+      this.terrainChunkSize = nextChunkSize;
+    }
+    const chunkSize = this.terrainChunkSize;
+    if (this.terrainDirty && !this._terrainHasLocalInvalidation) {
+      for (const chunk of this.terrainChunks.values()) this.disposeTerrainChunk(chunk);
+      this.terrainChunks.clear();
+    }
+    this.terrainDirty = false;
+    this._terrainHasLocalInvalidation = false;
+
+    const known = new Set();
+    if (visionTarget && !visionTarget.destroyed) {
+      known.add(`${Math.floor(visionTarget.x / 8)}_${Math.floor(visionTarget.y / 8)}`);
+      for (const key of Object.keys(visionTarget.properties.brain?.geoMemory || {})) known.add(key.replace(',', '_'));
+      for (const key of visionTarget.properties.group?.claimedZones || []) known.add(key.replace(',', '_'));
+    }
+    const visionSignature = visionTarget && !visionTarget.destroyed ? [...known].sort().join(';') : 'all';
+    const gridEnabled = this.wireframeMode === 1 && this.zoom >= 0.45;
+    const detailTier = this.terrainDetailTier ?? 2;
+    const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
+    const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}`;
+    const visible = new Set();
+    const x0 = Math.max(0, Math.floor(minTx / chunkSize)), x1 = Math.floor(Math.min(this.mapWidth - 1, maxTx) / chunkSize);
+    const y0 = Math.max(0, Math.floor(minTy / chunkSize)), y1 = Math.floor(Math.min(this.mapHeight - 1, maxTy) / chunkSize);
+    const build = new Set();
+    for (let cy = y0 - 1; cy <= y1 + 1; cy++) for (let cx = x0 - 1; cx <= x1 + 1; cx++) {
+      if (cx < 0 || cy < 0 || cx * chunkSize >= this.mapWidth || cy * chunkSize >= this.mapHeight) continue;
+      const key = `${cx},${cy}`;
+      const isVisible = cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
+      if (isVisible) visible.add(key);
+      build.add(key);
+      const centerX = Math.min(this.mapWidth - 1, cx * chunkSize + chunkSize / 2);
+      const centerY = Math.min(this.mapHeight - 1, cy * chunkSize + chunkSize / 2);
+      const distance = Math.hypot(centerX - this.camX, centerY - this.camY);
+      const detailRadius = detailTier === 0 ? 20 : detailTier === 1 ? 40 : 64;
+      const chunkDetailBand = zoomBand === 0 || distance > detailRadius + chunkSize ? 0 : distance > detailRadius ? 1 : 2;
+      const chunkSignature = `${signature}|c${chunkDetailBand}`;
+      let chunk = this.terrainChunks.get(key);
+      if (chunk && chunk.signature !== chunkSignature) {
+        this.disposeTerrainChunk(chunk);
+        this.terrainChunks.delete(key);
+        chunk = null;
+      }
+      if (!chunk) {
+        chunk = this.buildTerrainChunk(world, cx * chunkSize, Math.min(this.mapWidth - 1, (cx + 1) * chunkSize - 1), cy * chunkSize, Math.min(this.mapHeight - 1, (cy + 1) * chunkSize - 1), visionTarget, chunkSignature, chunkDetailBand);
+        this.terrainChunks.set(key, chunk);
+      }
+      chunk.lastUsed = performance.now();
+      if (isVisible) {
+        if (!chunk.terrain.parent) this.terrainGroup.add(chunk.terrain);
+        if (!chunk.water.parent) this.waterGroup.add(chunk.water);
+        if (gridEnabled && chunk.grid.children.length && !chunk.grid.parent) this.rctGridLineGroup.add(chunk.grid);
+        if (!gridEnabled && chunk.grid.parent) this.rctGridLineGroup.remove(chunk.grid);
+      }
+    }
+    for (const key of this.visibleTerrainChunkKeys) {
+      if (visible.has(key)) continue;
+      const chunk = this.terrainChunks.get(key);
+      if (!chunk) continue;
+      chunk.terrain.parent?.remove(chunk.terrain);
+      chunk.water.parent?.remove(chunk.water);
+      chunk.grid.parent?.remove(chunk.grid);
+    }
+    this.visibleTerrainChunkKeys = visible;
+    if (this.terrainChunks.size > 64) {
+      const unused = [...this.terrainChunks.entries()].filter(([key]) => !build.has(key)).sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+      while (this.terrainChunks.size > 64 && unused.length) {
+        const [key, chunk] = unused.shift();
+        this.disposeTerrainChunk(chunk);
+        this.terrainChunks.delete(key);
+      }
+    }
+    this.renderedMinTx = Math.max(0, minTx); this.renderedMaxTx = Math.min(this.mapWidth - 1, maxTx);
+    this.renderedMinTy = Math.max(0, minTy); this.renderedMaxTy = Math.min(this.mapHeight - 1, maxTy);
+  }
+
+  buildTerrainChunk(world, minTx, maxTx, minTy, maxTy, visionTarget, signature, detailBand = 2) {
+    const gridEnabled = this.wireframeMode === 1 && this.zoom >= 0.45;
+    const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
     const curTileX = Math.floor(this.camX);
     const curTileY = Math.floor(this.camY);
     const curZoom = Math.round(this.zoom * 8);
@@ -5555,49 +5718,15 @@ export class RCT3DRenderer {
       knownCount = knownZones.size;
     }
 
-    // Rebuild only when camera moves outside the cached inner buffer margin (6 tiles buffer)
-    const distCamX = Math.abs(curTileX - this.lastBuiltCamTileX);
-    const distCamY = Math.abs(curTileY - this.lastBuiltCamTileY);
-    const inBufferMargin = distCamX < 6 && distCamY < 6;
-
-    if (this.terrainDirty && this.rapidCityMode && inBufferMargin &&
-        curZoom === this.lastBuiltZoom &&
-        performance.now() - (this.lastTerrainBuildAt || 0) < 250 &&
-        this.terrainGroup.children.length > 0) return;
-
-    if (!this.terrainDirty && inBufferMargin &&
-        curZoom === this.lastBuiltZoom && curVisionZx === this.lastVisionZoneX &&
-        curVisionZy === this.lastVisionZoneY && knownCount === this.lastVisionKnownCount &&
-        this.lastBuiltFullWorld === this.renderFullWorld &&
-        this.terrainGroup.children.length > 0) {
-      return;
-    }
-
     this.lastBuiltCamTileX = curTileX;
     this.lastBuiltCamTileY = curTileY;
-    this.terrainDirty = false;
-    this.lastTerrainBuildAt = performance.now();
     this.lastBuiltZoom = curZoom;
     this.lastVisionZoneX = curVisionZx;
     this.lastVisionZoneY = curVisionZy;
     this.lastVisionKnownCount = knownCount;
     this.lastBuiltFullWorld = this.renderFullWorld;
 
-    while (this.terrainGroup.children.length > 0) {
-      const m = this.terrainGroup.children[0];
-      this.terrainGroup.remove(m);
-      if (m.geometry) m.geometry.dispose();
-    }
-    while (this.waterGroup.children.length > 0) {
-      const m = this.waterGroup.children[0];
-      this.waterGroup.remove(m);
-      if (m.geometry) m.geometry.dispose();
-    }
-    while (this.rctGridLineGroup.children.length > 0) {
-      const m = this.rctGridLineGroup.children[0];
-      this.rctGridLineGroup.remove(m);
-      if (m.geometry) m.geometry.dispose();
-    }
+    const chunk = { signature, lastUsed: performance.now(), terrain: new THREE.Group(), water: new THREE.Group(), grid: new THREE.Group() };
 
     const map = world.map;
     const tileMeshBuckets = {
@@ -5622,18 +5751,19 @@ export class RCT3DRenderer {
     const matHelper = new THREE.Matrix4();
     let foliageCount = 0;
     const isPersp = this.isPerspectiveActive();
+    const chunkGrassTufts = new THREE.InstancedMesh(this.instGrassTufts.geometry, this.instGrassTufts.material, 5000);
+    chunkGrassTufts.count = 0;
+    chunkGrassTufts.frustumCulled = false;
+    chunkGrassTufts.userData.sharedTerrainGeometry = true;
 
     const clampedMinTx = Math.max(0, Math.min(this.mapWidth - 1, minTx));
     const clampedMaxTx = Math.max(0, Math.min(this.mapWidth - 1, maxTx));
     const clampedMinTy = Math.max(0, Math.min(this.mapHeight - 1, minTy));
     const clampedMaxTy = Math.max(0, Math.min(this.mapHeight - 1, maxTy));
 
-    this.renderedMinTx = clampedMinTx;
-    this.renderedMaxTx = clampedMaxTx;
-    this.renderedMinTy = clampedMinTy;
-    this.renderedMaxTy = clampedMaxTy;
-
     const lineElevOffset = 0.006;
+    const chunkMinTx = clampedMinTx, chunkMaxTx = clampedMaxTx;
+    const chunkMinTy = clampedMinTy, chunkMaxTy = clampedMaxTy;
 
     const isWaterAt = (tx, ty) => {
       if (tx < 0 || tx >= this.mapWidth || ty < 0 || ty >= this.mapHeight) return true;
@@ -5664,7 +5794,7 @@ export class RCT3DRenderer {
           zoneMult = 0.32;
         }
 
-        const hasSprite = !FARM_TILES.has(tType)&&shouldRenderTerrainSprite(tx, ty, tType);
+        const hasSprite = detailBand === 2 && !FARM_TILES.has(tType)&&shouldRenderTerrainSprite(tx, ty, tType);
         let bucketKey = FARM_TILES.has(tType)?"farmSoil":tType;
         if (tType === TILE_SAND && !hasSprite) bucketKey = "sandClean";
 
@@ -5736,7 +5866,7 @@ export class RCT3DRenderer {
           }
         }
 
-        if (tType !== TILE_WATER && this.zoom >= 0.45) {
+        if (tType !== TILE_WATER && gridEnabled) {
           gridLinePositions.push(
             tx, h00 + lineElevOffset, ty,
             tx + 1, h10 + lineElevOffset, ty
@@ -5745,13 +5875,13 @@ export class RCT3DRenderer {
             tx, h00 + lineElevOffset, ty,
             tx, h01 + lineElevOffset, ty + 1
           );
-          if (ty === clampedMaxTy) {
+          if (ty === this.mapHeight - 1) {
             gridLinePositions.push(
               tx, h01 + lineElevOffset, ty + 1,
               tx + 1, h11 + lineElevOffset, ty + 1
             );
           }
-          if (tx === clampedMaxTx) {
+          if (tx === this.mapWidth - 1) {
             gridLinePositions.push(
               tx + 1, h10 + lineElevOffset, ty,
               tx + 1, h11 + lineElevOffset, ty + 1
@@ -5761,15 +5891,15 @@ export class RCT3DRenderer {
 
         // 3D Natural Grass Tufts (Clean, small, fine tufts with dense placement in 1P/3P)
         if (tType === TILE_FLOOR || tType === TILE_HILL) {
-          if (!isPersp) {
+          if (!isPersp && detailBand > 0) {
             // Isometric view: classic 8% density
             if (shouldSpawnGrassTuft(tx, ty) && foliageCount < 1200) {
               const midH = Math.min(h00, h10, h11, h01);
               matHelper.identity();
               matHelper.setPosition(tx + 0.5, midH - 0.04, ty + 0.5);
-              this.instGrassTufts.setMatrixAt(foliageCount++, matHelper);
+              chunkGrassTufts.setMatrixAt(foliageCount++, matHelper);
             }
-          } else {
+          } else if (isPersp && detailBand > 0) {
             // 1P/3P Perspective Mode: High density of small, delicate natural grass tufts planted firmly into ground
             let tHash = Math.imul(tx ^ Math.imul(ty, 198491317), 445582319);
             tHash = Math.imul(tHash ^ (tHash >>> 11), 892341233) >>> 0;
@@ -5801,7 +5931,7 @@ export class RCT3DRenderer {
                 this._scaleMatrix.makeScale(scale, scale, scale);
                 matHelper.multiply(this._scaleMatrix);
 
-                this.instGrassTufts.setMatrixAt(foliageCount++, matHelper);
+                chunkGrassTufts.setMatrixAt(foliageCount++, matHelper);
               }
             }
           }
@@ -5814,7 +5944,7 @@ export class RCT3DRenderer {
           const cliffTopAO = 0.95 * zoneMult;
 
           // 1. South Face (+Y, at ty + 1, facing +Z)
-          if (ty === clampedMaxTy || isWaterAt(tx, ty + 1)) {
+          if (ty === this.mapHeight - 1 || isWaterAt(tx, ty + 1)) {
             bucket.pos.push(
               tx, baseH, ty + 1,
               tx + 1, baseH, ty + 1,
@@ -5836,7 +5966,7 @@ export class RCT3DRenderer {
           }
 
           // 2. East Face (+X, at tx + 1, facing +X)
-          if (tx === clampedMaxTx || isWaterAt(tx + 1, ty)) {
+          if (tx === this.mapWidth - 1 || isWaterAt(tx + 1, ty)) {
             bucket.pos.push(
               tx + 1, baseH, ty + 1,
               tx + 1, baseH, ty,
@@ -5858,7 +5988,7 @@ export class RCT3DRenderer {
           }
 
           // 3. North Face (-Y, at ty, facing -Z)
-          if (ty === clampedMinTy || isWaterAt(tx, ty - 1)) {
+          if (ty === 0 || isWaterAt(tx, ty - 1)) {
             bucket.pos.push(
               tx + 1, baseH, ty,
               tx, baseH, ty,
@@ -5880,7 +6010,7 @@ export class RCT3DRenderer {
           }
 
           // 4. West Face (-X, at tx, facing -X)
-          if (tx === clampedMinTx || isWaterAt(tx - 1, ty)) {
+          if (tx === 0 || isWaterAt(tx - 1, ty)) {
             bucket.pos.push(
               tx, baseH, ty,
               tx, baseH, ty + 1,
@@ -5904,8 +6034,9 @@ export class RCT3DRenderer {
       }
     }
 
-    this.instGrassTufts.count = foliageCount;
-    this.instGrassTufts.instanceMatrix.needsUpdate = true;
+    chunkGrassTufts.count = foliageCount;
+    chunkGrassTufts.instanceMatrix.needsUpdate = true;
+    if (foliageCount) chunk.terrain.add(chunkGrassTufts);
 
     for (const [matKey, bucket] of Object.entries(tileMeshBuckets)) {
       if (bucket.pos.length === 0) continue;
@@ -5917,13 +6048,14 @@ export class RCT3DRenderer {
 
       const mat = this.materials[matKey] || this.materials[TILE_FLOOR];
       const mesh = new THREE.Mesh(geom, mat);
+      mesh.userData.terrainMaterialKey = matKey;
       mesh.receiveShadow = true;
       mesh.castShadow = false;
 
       if (matKey === String(TILE_WATER)) {
-        mesh.userData.waterCells=bucket.waterCells;mesh.userData.waterLights=bucket.waterLights;this.waterGroup.add(mesh);
+        mesh.userData.waterCells=bucket.waterCells;mesh.userData.waterLights=bucket.waterLights;chunk.water.add(mesh);
       } else {
-        this.terrainGroup.add(mesh);
+        chunk.terrain.add(mesh);
       }
     }
 
@@ -5931,13 +6063,14 @@ export class RCT3DRenderer {
       const gridGeom = new THREE.BufferGeometry();
       gridGeom.setAttribute("position", new THREE.Float32BufferAttribute(gridLinePositions, 3));
       const lineSegments = new THREE.LineSegments(gridGeom, this.rctGridMaterial);
-      this.rctGridLineGroup.add(lineSegments);
+      chunk.grid.add(lineSegments);
     }
+    return chunk;
   }
 
   syncWaterPollution(world){
     const revision=world.waterPollutionRevision||0;if(this.lastWaterPollutionRevision===revision)return;
-    for(const mesh of this.waterGroup.children){const cells=mesh.userData.waterCells,colors=mesh.geometry?.attributes?.color;if(!cells||!colors)continue;for(let i=0;i<cells.length;i++){const tint=waterTint(waterPollutionAt(world,cells[i]%world.width,Math.floor(cells[i]/world.width))),light=mesh.userData.waterLights[i];for(let j=0;j<6;j++)colors.setXYZ(i*6+j,tint[0]*light,tint[1]*light,tint[2]*light);}colors.needsUpdate=true;}this.lastWaterPollutionRevision=revision;
+    for(const chunk of this.terrainChunks.values())for(const mesh of chunk.water.children){const cells=mesh.userData.waterCells,colors=mesh.geometry?.attributes?.color;if(!cells||!colors)continue;for(let i=0;i<cells.length;i++){const tint=waterTint(waterPollutionAt(world,cells[i]%world.width,Math.floor(cells[i]/world.width))),light=mesh.userData.waterLights[i];for(let j=0;j<6;j++)colors.setXYZ(i*6+j,tint[0]*light,tint[1]*light,tint[2]*light);}colors.needsUpdate=true;}this.lastWaterPollutionRevision=revision;
   }
 
   // ---------------------------------------------------------------------------
@@ -6095,6 +6228,7 @@ export class RCT3DRenderer {
 
   render(world, entities, time, dt, simSpeed = 1.0, visionCreature = null, visualizedGroupId = null) {
     if (!this.width || !this.height || !world) return;
+    const frameStart = performance.now();
     const profileStart = this.profileFrame ? performance.now() : 0;
     this.mapWidth=world.width;this.mapHeight=world.height;
     this.currentMap = world.map;
@@ -6150,25 +6284,11 @@ export class RCT3DRenderer {
     this.updateCamera(entities, dt);
     const nightGlow = this.updateDayNightLighting(world);
 
-    let minTx, maxTx, minTy, maxTy;
-    const maxDist = (this.max3DRenderDistance !== undefined) ? this.max3DRenderDistance : 64;
-    if (this.renderFullWorld || maxDist === 0) {
-      minTx = 0;
-      maxTx = this.mapWidth - 1;
-      minTy = 0;
-      maxTy = this.mapHeight - 1;
-    } else {
-      const aspect = this.width / this.height;
-      const isPerspActive = this.isPerspectiveActive();
-      const viewSize = isPerspActive ? 128 : Math.min(maxDist, 28 / this.zoom);
-      const diagonal = Math.hypot(viewSize * aspect, viewSize);
-      const radius = isPerspActive ? 128 : Math.min(maxDist || 64, Math.ceil(diagonal * 1.25) + 3);
-
-      minTx = Math.max(0, Math.floor(this.camX - radius));
-      maxTx = Math.min(this.mapWidth - 1, Math.ceil(this.camX + radius));
-      minTy = Math.max(0, Math.floor(this.camY - radius));
-      maxTy = Math.min(this.mapHeight - 1, Math.ceil(this.camY + radius));
-    }
+    const bounds = this.terrainViewportBounds();
+    const minTx = this.renderFullWorld ? 0 : bounds.minTx;
+    const maxTx = this.renderFullWorld ? this.mapWidth - 1 : bounds.maxTx;
+    const minTy = this.renderFullWorld ? 0 : bounds.minTy;
+    const maxTy = this.renderFullWorld ? this.mapHeight - 1 : bounds.maxTy;
 
     this.rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionCreature);
     this.syncWaterPollution(world);
@@ -7624,6 +7744,16 @@ export class RCT3DRenderer {
     } else {
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.scene, activeCam);
+    }
+    const frameCpuMs = performance.now() - frameStart;
+    this.terrainFrameAverageMs = (this.terrainFrameAverageMs || frameCpuMs) * 0.92 + frameCpuMs * 0.08;
+    this.terrainAdaptFrame = (this.terrainAdaptFrame || 0) + 1;
+    if (this.terrainAdaptFrame >= 120) {
+      this.terrainAdaptFrame = 0;
+      const average = this.terrainFrameAverageMs;
+      const current = this.terrainDetailTier ?? 2;
+      const next = average > 24 ? Math.max(0, current - 1) : average < 13 ? Math.min(2, current + 1) : current;
+      if (next !== current) { this.terrainDetailTier = next; }
     }
     if (this.profileFrame) this.frameProfile = {terrain:profileTerrain-profileStart,city:profileCity-profileTerrain,entities:profilePrepared-profileCity,entityLoop:profileEntityLoop-profileCity,entityRest:profilePrepared-profileEntityLoop,citizenClass:profileCitizenClass,citizenSurface:profileCitizenSurface,citizenBody:profileCitizenBody,webgl:performance.now()-profilePrepared};
   }

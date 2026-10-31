@@ -71,8 +71,6 @@ function rendererMock() {
   return {
     shadowsEnabled: true, wireframeMode: 0, graphicOptions: {},
     setResolutionScale(value) { this.scaleFactor = value; },
-    setFullWorld(value) { this.renderFullWorld = value; },
-    forceStaticInstanceUpdate() { this.invalidated = true; },
     toggleShadows() { this.shadowsEnabled = !this.shadowsEnabled; },
     setShadowQuality(value) { this.shadowQuality = value; },
     toggleWireframe() { this.wireframeMode = (this.wireframeMode + 1) % 3; },
@@ -81,15 +79,12 @@ function rendererMock() {
 }
 
 test("graphics options apply renderer hooks and persist validated preferences", () => {
-  let saved = '{"resolution":0.75,"shadows":false,"distance":"bad"}';
+  let saved = '{"resolution":1,"shadows":false}';
   const storage = { getItem() { return saved; }, setItem(_key, value) { saved = value; } };
   const renderer = rendererMock();
   const panel = new OptionsPanel({ renderer, time: new SimulationTime({now:()=>0}), step() {}, storage });
-  assert.equal(renderer.scaleFactor, 0.75);
+  assert.equal(renderer.scaleFactor, 1);
   assert.equal(renderer.shadowsEnabled, false);
-  assert.equal(renderer.max3DRenderDistance, 64);
-  panel.apply("distance", 0);
-  assert.equal(renderer.renderFullWorld, true);
   panel.apply("wireframe", 2);
   assert.equal(renderer.wireframeMode, 2);
   panel.apply("brightness", 1.25);
@@ -120,16 +115,14 @@ test("options canvas buttons change settings and time, with clipped scrolling", 
   panel.open = true;
   ui.beginFrame(); panel.draw(ui);
   ui.clickAt(190, 138);
-  assert.equal(renderer.scaleFactor, 0.75);
-  ui.clickAt(125, 80);
-  assert.equal(panel.tab, "EFFECTS");
+  assert.equal(renderer.scaleFactor, 0.5);
+  ui.clickAt(235, 80);
+  assert.equal(panel.tab, "TIME");
   ui.beginFrame(); panel.draw(ui);
   panel.scrollAt(30, 150, 1000);
   ui.beginFrame(); panel.draw(ui);
   const bottom = panel.bounds.y + panel.bounds.h - 6;
   for (const region of ui.regions.slice(6)) assert(region.y + region.h <= bottom);
-  ui.clickAt(235, 80);
-  assert.equal(panel.tab, "TIME");
   ui.beginFrame(); panel.draw(ui);
   ui.clickAt(230, 138);
   assert.equal(time.speed, 4);

@@ -467,7 +467,7 @@ function getGlyphAtlas(color) {
 /**
  * Draws crisp text using high-performance GPU-accelerated glyph atlas.
  */
-function drawText8x8(text, startX, startY, color = "#ffffff", scale = 1) {
+export function drawText8x8(text, startX, startY, color = "#ffffff", scale = 1) {
   if (text === undefined || text === null) return;
   const str = String(text);
   const atlas = getGlyphAtlas(color);
@@ -518,17 +518,18 @@ function wrapText8x8(text, maxCharsPerLine) {
   return lines;
 }
 
-function drawText8x8Centered(text, startY, color = "#ffffff", scale = 1, shadowColor = "#000000", shadowOffset = 2) {
+export function drawText8x8Centered(text, startY, color = "#ffffff", scale = 1, shadowColor = "#000000", shadowOffset = 2, customWidth = null) {
   if (text === undefined || text === null) return;
   const str = String(text);
   const textWidth = str.length * 8 * scale;
-  const startX = Math.floor((CANVAS_WIDTH - textWidth) / 2);
+  const totalW = customWidth || CANVAS_WIDTH;
+  const startX = Math.floor((totalW - textWidth) / 2);
   if (shadowColor) {
     drawText8x8(str, startX + shadowOffset, startY + shadowOffset, shadowColor, scale);
   }
   drawText8x8(str, startX, startY, color, scale);
 }
-function drawNESBox(x, y, w, h) {
+export function drawNESBox(x, y, w, h) {
   ctx.save();
   ctx.fillStyle = "#000000";
   ctx.fillRect(x, y, w, h);
@@ -539,7 +540,7 @@ function drawNESBox(x, y, w, h) {
   ctx.restore();
 }
 
-function drawNESButton(x, y, w, h, text, isSelected = false, isDanger = false) {
+export function drawNESButton(x, y, w, h, text, isSelected = false, isDanger = false) {
   const isHover = mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
 
   ctx.save();
@@ -561,7 +562,7 @@ function drawNESButton(x, y, w, h, text, isSelected = false, isDanger = false) {
   ctx.restore();
 }
 
-function drawNESProgressBar(x, y, w, h, val, max, label, color = "#58d854") {
+export function drawNESProgressBar(x, y, w, h, val, max, label, color = "#58d854") {
   const pct = Math.max(0, Math.min(1, max > 0 ? val / max : 0));
   ctx.save();
 

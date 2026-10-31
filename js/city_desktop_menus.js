@@ -3,6 +3,8 @@ export function desktopMenus(d){
   const item=(label,click,extra={})=>({label,click,...extra}),separator={separator:true};
   return [
     {id:'tools',label:'Ferramentas',items:[
+      item('Menu principal (Esc)',()=>d.controls.mainMenu?.()),
+      separator,
       item('Opções',()=>d.controls.options?.()),
       item('Editor de mapa',()=>d.controls.editor?.()),
       item('Terreno, semente e geração',()=>d.openDestination('government','world')),

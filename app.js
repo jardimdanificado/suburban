@@ -3,18 +3,20 @@ import { resolveWorldSettings } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=service-capacity-3";
 import { CityDesktop } from "./js/city_desktop.js?v=justice-panels-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=survival-capacity-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=terrain-chunks-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
 import { SimulationTime } from "./js/simulation_time.js";
 import { OptionsPanel } from "./js/options.js?v=resolution-options-1";
+import { MainMenu } from "./js/main_menu.js";
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
 const container3D = document.querySelector("#container-3d");
 const renderer3D = new RCT3DRenderer(container3D);
-const worldSettings = resolveWorldSettings(new URLSearchParams(window.location.search));
+const urlParams = new URLSearchParams(window.location.search);
+const worldSettings = resolveWorldSettings(urlParams);
 const world = new World(worldSettings.presetId, worldSettings.seed, worldSettings.size);
 world.preset = worldSettings.preset;
 const entities = [];
@@ -24,8 +26,36 @@ let optionStorage = null;
 try { optionStorage = window.localStorage; } catch {}
 export const options = new OptionsPanel({ renderer: renderer3D, time, step: stepSimulation, storage: optionStorage });
 export const editor = new MapEditor({ world, entities, destroyEntity });
-world.onTileChange = () => {
-  renderer3D.terrainDirty = true;
+export const mainMenu = new MainMenu({
+  world,
+  worldSettings,
+  options,
+  renderer: renderer3D,
+  time,
+  onStartGame: () => startOrResumeGame()
+});
+const autoStart = urlParams.has('autostart') || urlParams.has('skipmenu');
+if (autoStart) mainMenu.close(); else mainMenu.open();
+
+export function openMainMenu() {
+  mainMenu.open();
+  if (typeof cityUI !== 'undefined') {
+    cityUI.hidden = true;
+    cityUI.element.hidden = true;
+  }
+  if (!time.paused) togglePause();
+}
+
+export function startOrResumeGame() {
+  mainMenu.close();
+  if (typeof cityUI !== 'undefined') {
+    cityUI.hidden = false;
+    cityUI.element.hidden = false;
+  }
+  if (time.paused) togglePause();
+}
+world.onTileChange = (x, y) => {
+  renderer3D.invalidateTerrainAt(x, y);
   renderer3D.forceStaticInstanceUpdate();
 };
 let nextId = 1;
@@ -157,6 +187,19 @@ function moveCameraByPointer(dx,dy,zoom){
 }
 
 function onPointerDown(event) {
+  if (mainMenu.isActive()) {
+    const rect = root.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    if (mainMenu.pointerDown(x, y)) {
+      pointerOnUI = true;
+      pointerDown = { x: event.clientX, y: event.clientY };
+      lastPointer = pointerDown;
+      event.preventDefault();
+      return;
+    }
+    return;
+  }
   if(event.button===2){
     rightClickConsumed=false;const rect=root.getBoundingClientRect();
     if(cityUI.rightClick(event.clientX-rect.left,event.clientY-rect.top)){event.preventDefault();rightClickConsumed=true;cityUI.pointerUp();dragging=editingGesture=pointerOnUI=false;pointerDown=lastPointer=null;return;}
@@ -191,6 +234,10 @@ function onPointerDown(event) {
 function onPointerMove(event) {
   const rect = root.getBoundingClientRect();
   mousePosition = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  if (mainMenu.isActive()) {
+    mainMenu.pointerMove(mousePosition.x, mousePosition.y);
+    return;
+  }
   if(event.pointerType==='touch'&&touchPointers.has(event.pointerId)){
     touchPointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
     if(pinchGesture&&touchPointers.size>=2){
@@ -224,6 +271,15 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if (mainMenu.isActive()) {
+    const rect = root.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    mainMenu.pointerUp(x, y);
+    dragging = editingGesture = pointerOnUI = false;
+    pointerDown = lastPointer = null;
+    return;
+  }
   if(event.pointerType==='touch'&&touchPointers.has(event.pointerId)){
     touchPointers.delete(event.pointerId);
     if(pinchGesture){
@@ -287,6 +343,9 @@ root.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 window.addEventListener("keydown", (event) => {
+  if (mainMenu.isActive()) {
+    if (mainMenu.key(event)) return;
+  }
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'KeyK') { event.preventDefault(); if(!event.repeat)cityUI.openGlobalSearch(); return; }
   if (event.ctrlKey || event.metaKey || event.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
   if(event.code==='Escape'&&renderer3D.isPerspectiveActive()){renderer3D.setThirdPersonMode(false);event.preventDefault();return;}
@@ -300,6 +359,11 @@ window.addEventListener("keydown", (event) => {
   if (event.code === "Escape") {
     if (options.open) options.toggle();
     else if (editor.open) editor.toggle();
+    else {
+      openMainMenu();
+      event.preventDefault();
+      return;
+    }
   }
   if (["Minus", "NumpadSubtract"].includes(event.code)) { event.preventDefault(); time.changeSpeed(-1); }
   if (["Equal", "NumpadAdd"].includes(event.code)) { event.preventDefault(); time.changeSpeed(1); }
@@ -312,6 +376,29 @@ function frame(now) {
   resize();
   const dt = Math.min((now - previousFrame) / 1000, 0.25);
   previousFrame = now;
+
+  if (mainMenu.isActive()) {
+    mainMenu.update(dt);
+    const cam = mainMenu.getCameraDrift(world.spawnCenter.x, world.spawnCenter.y);
+    renderer3D.setCamera(cam.x, cam.y, cam.zoom);
+    renderer3D.setPaused(false);
+    renderer3D.simTick = time.tick;
+    setActiveEntities(entities);
+    renderer3D.cityDevelopment = city.development;
+    renderer3D.cityLogistics = city.logistics;
+    const renderDt = Math.min((now - lastRenderedAt) / 1000, 0.25);
+    lastRenderedAt = now;
+    renderer3D.render(world, entities, time.elapsed, renderDt, 0.5);
+
+    const pointerX = mousePosition.x;
+    const pointerY = mousePosition.y;
+    legacyUI.beginFrame(pointerX, pointerY);
+    mainMenu.draw(legacyUI);
+    cityUI.element.hidden = true;
+    requestAnimationFrame(frame);
+    return;
+  }
+
   if (simulationBridge?.active) { simulationBridge.control(); simulationBridge.interpolate(now); }
   else time.advance(dt, advanceSimulation);
   const rapidMode=simulationBridge?.active&&time.speed>=16&&city.citizens.length>=512;
@@ -403,6 +490,7 @@ try { city.initialize(); } catch (error) {
   city.syncClock();
 }
 export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
+  mainMenu: openMainMenu,
   pause:togglePause, speed:()=>time.setSpeed(time.speed===32?0.5:time.speed*2), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
   center:()=>{renderer3D.setThirdPersonMode(false);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
   observe:(mode,id)=>{renderer3D.setThirdPersonMode(mode==='third',id);},
@@ -411,6 +499,10 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   renderer3D.setThirdPersonMode(false);
   renderer3D.setCamera(x, y);
 } });
+if (mainMenu.isActive()) {
+  cityUI.hidden = true;
+  cityUI.element.hidden = true;
+}
 if (cityGenerationError) cityUI.notice = cityGenerationError;
 for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
   editor.registerPrefab(type, { label: spec.label, create: (x, y) => city.addBuilding(type, x, y)?.entity });
@@ -422,7 +514,7 @@ simulationBridge = new CitySimulationBridge({ city, entities, nextId, time, prof
   notice: (message,target) => { if(target)target.notice=message;else cityUI.notice=message; },
   changed: ({ terrain, entities: changedEntities }) => {
     nextId = simulationBridge.state.nextId;
-    if (terrain) world.onTileChange?.();
+    if (terrain) renderer3D.invalidateTerrainAt(NaN, NaN);
     if (changedEntities) renderer3D.forceStaticInstanceUpdate();
     if (selected?.destroyed) selectEntity(null);
   },
