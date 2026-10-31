@@ -1,7 +1,10 @@
 const leads=record=>new Set([...(record.witnesses||[]).filter(w=>w.confidence>=.7).map(w=>w.identifiedSuspectId),...(record.evidence||[]).filter(e=>e.confidence>=.7).flatMap(e=>[e.implicatedCitizenId,e.identifiedSuspectId]),...(record.investigation?.interviewEvidence||[]).filter(e=>e.confidence>=.7).map(e=>e.identifiedSuspectId)].filter(Number.isInteger));
+const financialHistory=justice=>justice.city.history?.financeArchive?.length?justice.city.history.financeArchive:(justice.city.history?.entries||[]).filter(event=>event.kind==='finance');
+function financeAfterId(history,id){let low=0,high=history.length;while(low<high){const middle=(low+high)>>>1;if(history[middle].id<=id)low=middle+1;else high=middle;}return history.slice(low);}
 
 function triangulatedTransfers(history,pairs){
-  const transfers=(history||[]).filter(event=>event.kind==='finance'&&event.amount>0&&event.from&&event.to);
+  const payers=new Set(pairs.map(pair=>pair.payer.accountId)),recipients=new Set(pairs.map(pair=>pair.recipient.accountId)),from=Math.min(...pairs.map(pair=>pair.from)),to=Math.max(...pairs.map(pair=>pair.to));
+  const transfers=(history||[]).filter(event=>event.kind==='finance'&&event.amount>0&&event.from&&event.to&&event.minute>=from&&event.minute<=to&&(payers.has(event.from)||recipients.has(event.to)));
   const outgoing=new Map();for(const event of transfers){const rows=outgoing.get(event.from)||[];rows.push(event);outgoing.set(event.from,rows);}
   const results=[],seen=new Set();
   for(const pair of pairs){
@@ -16,6 +19,30 @@ function triangulatedTransfers(history,pairs){
   return results;
 }
 
+function auditPairs(justice,source){
+  const city=justice.city,investigation=source.investigation,involved=leads(source),from=source.occurredAt??investigation.startedAt??0,to=city.minute,target=city.society.citizen(investigation.officerId),pairs=[];
+  if(target)for(const id of involved){const payer=city.society.citizen(id);if(payer&&payer!==target)pairs.push({payer,recipient:target,from,to,kind:'police-bribery'});}
+  const statements=[...(source.witnesses||[]),...(investigation.interviewEvidence||[]),...(source.evidence||[]).filter(e=>['witness-identification','police-interview'].includes(e.kind))],seen=new Set();
+  for(const statement of statements){const witnessId=statement.witnessId??statement.citizenId,payerId=statement.identifiedSuspectId;if(!Number.isInteger(witnessId)||!involved.has(payerId))continue;const key=`${payerId}:${witnessId}`;if(seen.has(key))continue;seen.add(key);const payer=city.society.citizen(payerId),recipient=city.society.citizen(witnessId);if(payer&&recipient&&payer!==recipient)pairs.push({payer,recipient,from,to,kind:'witness-bribery'});}
+  for(const body of justice.bodies){if((body.criminalCaseId!==source.id&&body.circumstances?.caseId!==source.id)||body.autopsy?.examinerId==null)continue;const recipient=city.society.citizen(body.autopsy.examinerId);for(const id of involved){const payer=city.society.citizen(id);if(payer&&recipient&&payer!==recipient)pairs.push({payer,recipient,body,from:body.autopsyStartedAt??Math.max(0,(body.autopsy.completedAt??city.minute)-1440),to:body.autopsy.completedAt??city.minute,kind:'forensic-bribery'});}}
+  return pairs;
+}
+
+function newRelevantDocuments(justice,source,audit){
+  const history=financialHistory(justice),cursor=audit.historyCursor??0,pairs=auditPairs(justice,source),finance=financeAfterId(history,cursor).filter(e=>e.amount>0&&e.from&&e.to);if(!finance.length||!pairs.length)return null;
+  const candidates=finance.filter(event=>pairs.some(pair=>(event.from===pair.payer.accountId||event.to===pair.recipient.accountId)&&event.minute>=pair.from));if(!candidates.length)return null;
+  const hasDirect=candidates.some(event=>pairs.some(pair=>event.from===pair.payer.accountId&&event.to===pair.recipient.accountId&&event.minute>=pair.from));
+  const relatedChains=triangulatedTransfers(history,pairs).filter(item=>item.source.id>cursor||item.event.id>cursor);
+  if(!hasDirect&&!relatedChains.length)return null;
+  return Math.max(...candidates.map(event=>event.minute),...relatedChains.map(item=>item.event.minute));
+}
+
+function markHistoryGap(city,source,audit){
+  const history=city.history;if(!history)return;const from=source.occurredAt??source.investigation?.startedAt??0,cursor=audit.historyCursor??0;
+  if(history.financeDroppedLegacyUnknown&&audit.historyCursor==null){audit.historyGap??={fromEventId:1,throughEventId:history.financeDroppedThroughId||history.entries?.[0]?.id||0,detectedAt:city.minute,legacyUnknown:true};return;}
+  if((history.financeDroppedThroughMinute??-1)>=from&&history.financeDroppedThroughId>cursor)audit.historyGap??={fromEventId:cursor+1,throughEventId:history.financeDroppedThroughId,detectedAt:city.minute};
+}
+
 export function dispatchPoliceAudits(justice){
   const city=justice.city,hour=Math.floor(city.minute/60);if(justice.lastAuditAssignmentHour===hour)return;justice.lastAuditAssignmentHour=hour;
   const activeInvestigators=new Set(justice.cases.filter(r=>r.status==='investigating').map(r=>r.investigation?.officerId));
@@ -23,7 +50,13 @@ export function dispatchPoliceAudits(justice){
   for(const source of justice.cases){
     const investigation=source.investigation,reviewableStatus=['no-suspect','arrest-requested','arrested','charged','convicted','acquitted','appeal-pending'].includes(source.status);if(!reviewableStatus||!investigation||investigation.finishedAt==null||!leads(source).size)continue;
     const audit=investigation.financialAudit??={status:'waiting',progress:0,required:90,createdAt:city.minute,caseIds:[]};
-    if(['completed','inconclusive'].includes(audit.status))continue;
+    markHistoryGap(city,source,audit);
+    if(['completed','inconclusive'].includes(audit.status)){
+      if(audit.historyCursor==null){audit.historyCursor=(city.history?.nextId??1)-1;continue;}
+      const nextId=city.history?.nextId??1;
+      const discoveredUntil=newRelevantDocuments(justice,source,audit);if(discoveredUntil==null){audit.historyCursor=nextId-1;continue;}
+      audit.status='waiting';audit.progress=0;audit.reviewUntil=Math.max(audit.reviewUntil??investigation.finishedAt,discoveredUntil);audit.scanCursor=null;audit.reanalysisCount=(audit.reanalysisCount||0)+1;audit.reopenedAt=city.minute;audit.waitingReason='novo documento financeiro relevante; reanálise aguardando auditor';audit.completedAt=null;
+    }
     const previous=city.society.citizen(audit.officerId);if(audit.status==='active'&&previous&&!previous.entity.destroyed&&previous.policeAudit?.caseId===source.id)continue;
     audit.status='waiting';let assignment;
     for(const station of justice.activeBuildings('police_station')){
@@ -33,7 +66,7 @@ export function dispatchPoliceAudits(justice){
       if(officer){assignment={station,officer};break;}
     }
     if(!assignment){audit.waitingReason='aguardando auditor disponível que não esteja envolvido no inquérito';continue;}
-    const {station,officer}=assignment;audit.status='active';audit.officerId=officer.id;audit.stationId=station.id;audit.startedAt??=city.minute;audit.waitingReason=null;occupiedStations.add(station.id);officer.policeAudit={caseId:source.id};officer.action=`Auditando registros financeiros do inquérito #${source.id}`;
+    const {station,officer}=assignment;audit.status='active';audit.officerId=officer.id;audit.stationId=station.id;audit.startedAt??=city.minute;audit.scanCursor=(city.history?.nextId??1)-1;audit.reviewUntil=Math.max(audit.reviewUntil??investigation.finishedAt,city.minute);audit.waitingReason=null;occupiedStations.add(station.id);officer.policeAudit={caseId:source.id};officer.action=`Auditando registros financeiros do inquérito #${source.id}`;
   }
 }
 
@@ -44,16 +77,16 @@ export function updatePoliceAudit(justice,officer){
   if(audit.lastWorkedMinute===city.minute)return true;audit.lastWorkedMinute=city.minute;
   if(!city.payWage(officer,station)){audit.waitingReason='aguardando verba salarial';return false;}
   audit.waitingReason=null;audit.progress++;if(audit.progress<audit.required)return true;
-  const involved=leads(source),target=city.society.citizen(investigation.officerId),from=source.occurredAt??investigation.startedAt??0,to=investigation.finishedAt;
+  const involved=leads(source),target=city.society.citizen(investigation.officerId),from=source.occurredAt??investigation.startedAt??0,to=Math.max(investigation.finishedAt,audit.reviewUntil??investigation.finishedAt);
   const statements=[...(source.witnesses||[]),...(investigation.interviewEvidence||[]),...(source.evidence||[]).filter(e=>['witness-identification','police-interview'].includes(e.kind))],pairKeys=new Set(),witnessPairs=[];
   for(const statement of statements){const witnessId=statement.witnessId??statement.citizenId,payerId=statement.identifiedSuspectId;if(!Number.isInteger(witnessId)||!involved.has(payerId))continue;const key=`${payerId}:${witnessId}`;if(pairKeys.has(key))continue;pairKeys.add(key);const payer=city.society.citizen(payerId),witness=city.society.citizen(witnessId);if(payer&&witness&&payer!==witness)witnessPairs.push({payer,witness});}
   const relatedBodies=justice.bodies.filter(body=>(body.criminalCaseId===source.id||body.circumstances?.caseId===source.id)&&body.autopsy?.examinerId!=null&&body.autopsy.completedAt>=(source.occurredAt??from));
   const forensicPairs=relatedBodies.flatMap(body=>[...involved].map(id=>({payer:city.society.citizen(id),recipient:city.society.citizen(body.autopsy.examinerId),body,kind:'forensic-bribery',from:body.autopsyStartedAt??Math.max(0,body.autopsy.completedAt-1440),to:body.autopsy.completedAt})).filter(pair=>pair.payer&&pair.recipient&&pair.payer!==pair.recipient));
   const matchesForensicPayment=(pair,e)=>e.from===pair.payer.accountId&&e.to===pair.recipient.accountId&&e.minute>=pair.from&&e.minute<=pair.to;
   const policePairs=target?[...involved].map(id=>({payer:city.society.citizen(id),recipient:target,from,to,kind:'police-bribery'})).filter(pair=>pair.payer&&pair.payer!==target):[];
-  const triangulated=triangulatedTransfers(city.history?.entries,[...witnessPairs.map(pair=>({...pair,recipient:pair.witness,from,to,kind:'witness-bribery'})),...forensicPairs,...policePairs]);
-  const documents=(city.history?.entries||[]).filter(e=>{
-    if(e.kind!=='finance'||e.amount<=0)return false;
+  const financeHistoryRows=financialHistory(justice),triangulated=triangulatedTransfers(financeHistoryRows,[...witnessPairs.map(pair=>({...pair,recipient:pair.witness,from,to,kind:'witness-bribery'})),...forensicPairs,...policePairs]);
+  const documents=financeHistoryRows.filter(e=>{
+    if(e.amount<=0)return false;
     const duringInvestigation=e.minute>=from&&e.minute<=to;
     const investigatorPayment=duringInvestigation&&e.to===target?.accountId&&[...involved].some(id=>city.society.citizen(id)?.accountId===e.from);
     const witnessPayment=duringInvestigation&&witnessPairs.some(pair=>pair.payer.accountId===e.from&&pair.witness.accountId===e.to);
@@ -61,9 +94,10 @@ export function updatePoliceAudit(justice,officer){
     return investigatorPayment||witnessPayment||forensicPayment;
   });
   const chance=Math.min(.95,.25+(officer.skills?.investigation||0)/200+(officer.traits?.honesty??.5)*.2),found=(documents.length+triangulated.length)>0&&city.random()<chance;
-  audit.completedAt=city.minute;audit.status=found?'completed':'inconclusive';audit.documentCount=found?documents.length+triangulated.length:0;officer.policeAudit=null;officer.action='Concluiu a auditoria financeira';
+  audit.completedAt=city.minute;audit.historyCursor=audit.scanCursor??((city.history?.nextId??1)-1);audit.scanCursor=null;audit.status=found?'completed':'inconclusive';audit.documentCount=found?documents.length+triangulated.length:(audit.findings||[]).length;officer.policeAudit=null;officer.action='Concluiu a auditoria financeira';
   if(!found)return true;
-  audit.findings=[...documents.map(e=>({eventId:e.id,from:e.from,to:e.to,amount:e.amount,minute:e.minute,reason:e.reason,kind:witnessPairs.some(pair=>pair.payer.accountId===e.from&&pair.witness.accountId===e.to)?'witness-bribery':forensicPairs.some(pair=>matchesForensicPayment(pair,e))?'forensic-bribery':'investigator-payment'})),...triangulated.map(item=>({eventId:item.event.id,intermediaryTransferEventId:item.source.id,intermediaryAccountId:item.intermediaryAccountId,from:item.event.from,to:item.event.to,amount:item.amount,minute:item.event.minute,reason:item.event.reason,kind:`triangulated-${item.kind}`}))];
+  const newFindings=[...documents.map(e=>({eventId:e.id,from:e.from,to:e.to,amount:e.amount,minute:e.minute,reason:e.reason,kind:witnessPairs.some(pair=>pair.payer.accountId===e.from&&pair.witness.accountId===e.to)?'witness-bribery':forensicPairs.some(pair=>matchesForensicPayment(pair,e))?'forensic-bribery':'investigator-payment'})),...triangulated.map(item=>({eventId:item.event.id,intermediaryTransferEventId:item.source.id,intermediaryAccountId:item.intermediaryAccountId,from:item.event.from,to:item.event.to,amount:item.amount,minute:item.event.minute,reason:item.event.reason,kind:`triangulated-${item.kind}`}))];
+  const findingKeys=new Set((audit.findings||[]).map(item=>`${item.eventId}:${item.intermediaryTransferEventId??''}`));audit.findings=[...(audit.findings||[]),...newFindings.filter(item=>!findingKeys.has(`${item.eventId}:${item.intermediaryTransferEventId??''}`))];
   const audited=[...documents.map(document=>({document})),...triangulated.map(item=>({document:item.event,triangulated:item}))];
   for(const item of audited){
     const {document,triangulated:chain}=item,witnessPair=chain?.kind==='witness-bribery'?chain.pair:witnessPairs.find(pair=>pair.payer.accountId===document.from&&pair.witness.accountId===document.to),forensicPair=chain?.kind==='forensic-bribery'?chain.pair:forensicPairs.find(pair=>matchesForensicPayment(pair,document)),payer=chain?.pair.payer||witnessPair?.payer||forensicPair?.payer||city.citizens.find(c=>c.accountId===document.from),recipient=chain?.pair.recipient||witnessPair?.witness||forensicPair?.recipient||target,type=chain?.kind==='witness-bribery'||witnessPair?'witnessBribery':chain?.kind==='forensic-bribery'||forensicPair?'forensicBribery':'policeBribery';if(!payer||!recipient)continue;

@@ -154,7 +154,8 @@ export function syncCitizenInterior(city,c){
   c.task=null;c.targetId=null;c.path=[];c.serviceQueue=null;c.facingTarget=null;c.action='Alimento indisponível neste local; procurando outra opção';return exit(city,c);
  }
  const cleaningJob=task==='clean'?city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId):null;
- let kind=task==='informal-service'?(city.units.get(gig.unitId)?.roomType||'workspace'):task==='shopping'&&b.type==='laundromat'?'laundry':task==='clean'&&cleaningJob?.kind==='feces'&&cleaningJob.scope==='building'?(city.units.get(cleaningJob.unitId)?.roomType||'workspace'):['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()?'plenary':'office'):['energy','care','caregiving'].includes(task)?'bedroom':task==='health'?'treatment':!['work','manage','work-wait'].includes(task)?'service':['work','manage'].includes(task)&&c.role==='councilor'?'office':'workspace';
+ const councilMember=task==='council-session'?city.politics.council.members.find(member=>member.citizenId===c.id):null,councilOffice=city.units.get(councilMember?.officeUnitId);
+ let kind=task==='informal-service'?(city.units.get(gig.unitId)?.roomType||'workspace'):task==='shopping'&&b.type==='laundromat'?'laundry':task==='clean'&&cleaningJob?.kind==='feces'&&cleaningJob.scope==='building'?(city.units.get(cleaningJob.unitId)?.roomType||'workspace'):['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()||!councilOffice?'plenary':'office'):['energy','care','caregiving'].includes(task)?'bedroom':task==='health'?'treatment':!['work','manage','work-wait'].includes(task)?'service':['work','manage'].includes(task)&&c.role==='councilor'?'office':'workspace';
  // Shops serve food purchases at their real sales counter; only a refectory
  // or a building with dining rooms requires a dining seat. Otherwise a market
  // can hold hungry customers forever waiting for a room it will never have.
@@ -165,7 +166,7 @@ export function syncCitizenInterior(city,c){
  const pendingRoom=c.serviceQueue?.buildingId===b.id&&c.serviceQueue.kind===task?city.units.get(c.serviceQueue.unitId):null;
  if(pendingRoom&&activityCellAvailable(city,pendingRoom,c,kind))room=pendingRoom;
  if(task==='informal-service')room=city.units.get(gig.unitId);
- if(kind==='office'&&c.councilSession){const member=city.politics.council.members.find(m=>m.citizenId===c.id),office=city.units.get(member?.officeUnitId);if(office?.buildingId===b.id)room=office;}
+ if(kind==='office'&&c.councilSession&&councilOffice?.buildingId===b.id)room=councilOffice;
  if(task==='water'&&!room)room=b.units.find(u=>roomFurniture(b,u).some(f=>f.type==='water_cooler')&&activityCellAvailable(city,u,c,'service'));
  if(task==='hygiene')room=city.units.get(city.sanitation.facilities.get(c.hygieneTargetId)?.unitId);
  if(task==='toilet')room=city.units.get(city.sanitation.facilities.get(c.toiletTargetId)?.unitId);

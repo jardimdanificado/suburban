@@ -2,6 +2,7 @@ import {employmentEvent} from './city_employment.js?v=housing-work-priority-1';
 /** Structured event journal, inspired by Brutopolis/event_log.js.
  * Stable IDs, subject/type indices and bounded retention; no entity references in exports. */
 export const HISTORY_LIMIT = 16000;
+export const FINANCE_HISTORY_LIMIT = 100000;
 const categories = { employment: 'work', ownership: 'housing', sale: 'economy', service: 'economy', finance: 'finance', credit: 'credit', reputation: 'reputation' };
 const unique = values => [...new Set(values.filter(value => value !== null && value !== undefined && value !== ''))];
 export class CityHistory {
@@ -9,6 +10,7 @@ export class CityHistory {
     this.city = city; this.journals = new Map(); this.nextId = 1;
     this.entries = []; this.byId = new Map(); this.byKind = new Map(); this.byCategory = new Map();
     this.byCitizen = new Map(); this.byBuilding = new Map(); this.byReference = new Map();
+    this.financeArchive=[];this.financeArchiveById=new Map();this.financeDropped=0;this.financeDroppedThroughId=0;this.financeDroppedThroughMinute=null;this.financeDroppedLegacyUnknown=false;
     this.total = 0; this.dropped = 0; this.lastGoodsEvent = new Map();
     this.pendingFinance = new Map(); this.pendingFinanceRevision = 0;
   }
@@ -46,6 +48,7 @@ export class CityHistory {
   }
   appendEntry(entry) {
     this.total++; this.entries.push(entry); this.byId.set(entry.id, entry);
+    if(entry.kind==='finance'&&!this.financeArchiveById.has(entry.id)){this.financeArchive.push(entry);this.financeArchiveById.set(entry.id,entry);if(this.financeArchive.length>FINANCE_HISTORY_LIMIT){const removed=this.financeArchive.shift();this.financeArchiveById.delete(removed.id);this.financeDropped++;this.financeDroppedThroughId=Math.max(this.financeDroppedThroughId,removed.id);this.financeDroppedThroughMinute=removed.minute;}}
     this.index(this.byKind, entry.kind, entry); this.index(this.byCategory, entry.category, entry);
     for (const id of entry.citizenIds) this.index(this.byCitizen, id, entry);
     for (const id of entry.buildingIds) this.index(this.byBuilding, id, entry);
@@ -82,26 +85,35 @@ export class CityHistory {
     const after = cursor?.lastId ?? 0;
     const count = Math.max(0, this.nextId - 1 - after);
     const entries = count ? this.entries.slice(Math.max(0, this.entries.length - count)) : [];
+    const financeAfter=cursor?.financeLastId??0;let low=0,high=this.financeArchive.length;while(low<high){const mid=(low+high)>>>1;if(this.financeArchive[mid].id<=financeAfter)low=mid+1;else high=mid;}const financeEntries=!cursor?this.financeArchive.slice():this.financeArchive.slice(low);
     const totals = [];
     const versions = cursor?.versions || new Map();
     for (const [account,journal] of this.journals) if (versions.get(account) !== journal.total) {
       totals.push([account,journal.total,{...journal.totals}]); versions.set(account,journal.total);
     }
-    return { payload: { reset: !cursor, entries, totals, nextId: this.nextId, total: this.total,
+    return { payload: { reset: !cursor, entries, financeEntries,financeLastId:this.financeArchive.at(-1)?.id??0,financeFloor:this.financeArchive[0]?.id??this.nextId,financeDropped:this.financeDropped,financeDroppedThroughId:this.financeDroppedThroughId,financeDroppedThroughMinute:this.financeDroppedThroughMinute,financeDroppedLegacyUnknown:this.financeDroppedLegacyUnknown,totals, nextId: this.nextId, total: this.total,
       dropped: this.dropped, floor: this.entries[0]?.id ?? this.nextId,
       goods: count || !cursor ? [...this.lastGoodsEvent] : null,
       pendingFinance: !cursor || cursor.pendingRevision !== this.pendingFinanceRevision ? [...this.pendingFinance].map(([key,value])=>[key,{...value}]) : null,
       pendingRevision: this.pendingFinanceRevision },
-      cursor: {lastId:this.nextId-1,versions,pendingRevision:this.pendingFinanceRevision} };
+      cursor: {lastId:this.nextId-1,financeLastId:this.financeArchive.at(-1)?.id??0,versions,pendingRevision:this.pendingFinanceRevision} };
   }
   applySnapshot(payload) {
     if (payload.reset) {
       this.entries.length = 0;
+      this.financeArchive.length=0;this.financeArchiveById.clear();
+      this.financeDropped=0;this.financeDroppedThroughId=0;this.financeDroppedThroughMinute=null;this.financeDroppedLegacyUnknown=false;
       for (const map of [this.journals,this.byId,this.byKind,this.byCategory,this.byCitizen,this.byBuilding,this.byReference,this.lastGoodsEvent]) map.clear();
       this.total=0; this.dropped=0;
     }
     for (const entry of payload.entries) if (!this.byId.has(entry.id)) this.appendEntry(entry);
     this.pruneBefore(payload.floor);
+    for(const entry of payload.financeEntries||[])if(!this.financeArchiveById.has(entry.id)){this.financeArchive.push(entry);this.financeArchiveById.set(entry.id,entry);}
+    if(payload.reset)this.financeArchive.sort((a,b)=>a.id-b.id);if(payload.financeFloor!=null){let cut=0;while(cut<this.financeArchive.length&&this.financeArchive[cut].id<payload.financeFloor){this.financeArchiveById.delete(this.financeArchive[cut].id);cut++;}if(cut)this.financeArchive.splice(0,cut);}
+    if(payload.financeDropped!=null)this.financeDropped=payload.financeDropped;else if(payload.reset&&payload.dropped>0){this.financeDroppedThroughId=Math.max(this.financeDroppedThroughId,(payload.floor||1)-1);this.financeDroppedLegacyUnknown=true;}
+    if(payload.financeDroppedThroughId!=null)this.financeDroppedThroughId=payload.financeDroppedThroughId;
+    if(payload.financeDroppedThroughMinute!=null)this.financeDroppedThroughMinute=payload.financeDroppedThroughMinute;
+    if(payload.financeDroppedLegacyUnknown!=null)this.financeDroppedLegacyUnknown=payload.financeDroppedLegacyUnknown;
     for (const [account,total,totals] of payload.totals) {
       let journal=this.journals.get(account);
       if (!journal) {journal={byKind:{},total:0,totals:{}};this.journals.set(account,journal);}
@@ -112,7 +124,7 @@ export class CityHistory {
     this.pendingFinanceRevision=payload.pendingRevision??0;
     this.nextId=payload.nextId;this.total=payload.total;this.dropped=payload.dropped;
   }
-  get(id) { return this.byId.get(Number(id)); }
+  get(id) { id=Number(id);return this.byId.get(id)||this.financeArchiveById.get(id); }
   query({ category = 'all', kind = 'all', citizenId = null, buildingId = null, accountId = null, reference = null, query = '', beforeId = Infinity, limit = 100 } = {}) {
     const sources = [this.entries];
     if (category !== 'all') sources.push(this.byCategory.get(category) || []);
