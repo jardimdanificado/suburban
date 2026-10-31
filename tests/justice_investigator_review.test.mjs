@@ -19,7 +19,7 @@ test('documented contradictions create one linked complaint without declaring th
 
 test('an implicated investigator cannot review their own case and another station can take it',()=>{
   const {city,justice,source,defender}=fixture();justice.reviewDefenseEvidence(source,defender);const inquiry=justice.cases[1],other=city.buildings.pop();
-  justice.updateInvestigations();assert.equal(inquiry.investigation,null);assert.match(inquiry.investigationWaitingReason,/sob apuração/);
+  justice.updateInvestigations();assert.equal(inquiry.investigation,null);assert.match(inquiry.investigationWaitingReason,/investigador independente/);
   city.buildings.push(other);justice.updateInvestigations();assert.equal(inquiry.investigation.officerId,5);assert.equal(inquiry.investigation.stationId,11);
   city.minute+=180;justice.updateInvestigations();assert.equal(inquiry.investigation.suspectId,2);assert.equal(inquiry.status,'arrest-requested');assert.equal(inquiry.evidence.at(-1).sourceEventId,inquiry.evidence[0].eventId);
 });

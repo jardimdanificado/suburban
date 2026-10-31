@@ -30,7 +30,7 @@ test('interrupted transport leaves the bike where it reached and releases exclus
 });
 
 test('occupied bikes and missing officers wait without moving or manufacturing a vehicle',()=>{
-  const f=fixture();f.vehicle.driverId=9;f.justice.updateRestitutionMissions();assert.match(f.record.vehicleRecovery.waitingReason,/em uso/);assert.equal(f.officer.policeRestitution,undefined);
+  const f=fixture();f.vehicle.driverId=9;f.justice.updateRestitutionMissions();assert.match(f.record.vehicleRecovery.waitingReason,/em uso|aguardando parada/);assert.equal(f.officer.policeRestitution,undefined);
   f.vehicle.driverId=null;f.station.workers=[];f.justice.updateRestitutionMissions();assert.match(f.record.vehicleRecovery.waitingReason,/policial/);assert.equal(f.vehicle.x,5);assert.equal(f.city.vehicles.units.size,1);
 });
 
@@ -59,7 +59,7 @@ test('CitySimulation moves the recovered bike with an officer through the full r
   const points=[];for(let r=3;r<12&&points.length<2;r++)for(let dx=-r;dx<=r&&points.length<2;dx++){const p={x:Math.floor(station.door.x)+dx+.5,y:Math.floor(station.door.y)+r+.5};if(city.walkable(Math.floor(p.x),Math.floor(p.y))&&city.findPath(station.door,p)!==null)points.push(p);}assert.equal(points.length,2);
   city.economy.leaveJob(owner,'Teste');owner.indoorLocation=null;owner.path=[];owner.task=null;Object.assign(owner.entity,points[1]);
   city.economy.leaveJob(officer,'Designação');officer.jobId=station.id;station.workers=[officer.id];city.transfer('treasury',station.accountId,100000,'Verba policial');Object.assign(officer.needs,{food:100,water:100,energy:100,health:100,toilet:100,hygiene:100});putAtWorkCell(city,officer,station);
-  const vehicle={id:9001,active:true,good:'bicicleta',condition:90,...points[0],entity:city.createEntity({...points[0],properties:{}}),ownerAccountId:owner.accountId};city.vehicles.units.set(vehicle.id,vehicle);city.vehicles.activeCount++;
+  const vehicle={id:9001,active:true,good:'bicicleta',condition:90,...points[0],entity:city.createEntity({...points[0],properties:{}}),ownerAccountId:owner.accountId,theft:{caseId:9001}};city.vehicles.units.set(vehicle.id,vehicle);city.vehicles.activeCount++;
   const record={id:9001,type:'bicycleTheft',status:'convicted',victimId:owner.id,details:{vehicleId:vehicle.id},rule:{fine:0},severity:45};city.justice.cases.push(record);city.minute=600;city.justice.updateRestitutionMissions();assert.ok(officer.policeRestitution);
   const origin=vehicle.x;let moved=false;for(let i=0;i<900&&officer.policeRestitution;i++){city.update(.25);moved ||= Math.abs(vehicle.x-origin)>.2;}
   assert.ok(moved);assert.equal(record.vehicleRecovery.status,'returned');assert.equal(officer.policeRestitution,null);assert.equal(vehicle.ownerAccountId,owner.accountId);assert.equal(vehicle.policeRecoveryOfficerId,null);

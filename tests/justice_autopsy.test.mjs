@@ -5,8 +5,8 @@ import {CityJustice} from '../js/city_justice.js';
 function fixture(){
   const examiner={id:2,jobId:10,skills:{forensics:65},task:'work',path:[],indoorLocation:{buildingId:10,path:[]},entity:{properties:{name:'Perita'}}},officer={id:3,jobId:11,traits:{honesty:1},entity:{properties:{name:'Policial'}}};
   const victim={id:1,entity:{destroyed:true},needs:{health:0}},people=new Map([[1,victim],[2,examiner],[3,officer]]);
-  const iml={id:10,type:'iml',active:true,workers:[2],inventory:{sabao:1},entity:{}},station={id:11,type:'police_station',active:true,workers:[3],entity:{}};
-  const events=[],city={minute:1000,hour:16,world:{},citizens:[victim,examiner,officer],buildings:[iml,station],society:{citizen:id=>people.get(id)},building:id=>[iml,station].find(b=>b.id===id),random:()=>.75,log:(message,...details)=>events.push({message,details}),accountName:id=>id,economy:{consumed:{},recordGoods:()=>{},practice:()=>{}}};
+  const iml={id:10,type:'iml',active:true,workers:[2],inventory:{sabao:1},balance:10000,wage:0,entity:{}},station={id:11,type:'police_station',active:true,workers:[3],entity:{}};
+  const events=[],city={minute:1000,hour:16,world:{},citizens:[victim,examiner,officer],buildings:[iml,station],society:{citizen:id=>people.get(id)},building:id=>[iml,station].find(b=>b.id===id),politics:{mayorId:null},currency:{price:value=>value},random:()=>.75,log:(message,...details)=>events.push({message,details}),accountName:id=>id,economy:{mayorId:null,consumed:{},recordGoods:()=>{},practice:()=>{}}};
   const justice=new CityJustice(city),body={id:1,citizenId:1,name:'Pessoa',cause:'velhice',diedAt:800,position:{x:2,y:3},injuries:[],status:'autopsy',autopsyEndsAt:900,imlBuildingId:10};justice.bodies.push(body);
   return {justice,city,body,examiner,iml,events};
 }

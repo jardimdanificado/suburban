@@ -4,8 +4,8 @@ import {CityJustice} from '../js/city_justice.js';
 import {CityVehicles} from '../js/city_vehicles.js';
 
 function fixture(){
- const c={id:1,accountId:'citizen:1',jobId:10,entity:{x:0,y:0,properties:{name:'Funcionário'}},path:[],needs:{health:90}},iml={id:10,type:'iml',active:true,accountId:'building:10',workers:[1],door:{x:20,y:0},entity:{}},body={id:1,name:'Pessoa',citizenId:9,status:'waiting',entity:{x:10,y:0},position:{x:10,y:0}};
- let urgent=false,wages=0;const city={minute:100,buildings:[iml],society:{citizen:id=>id===1?c:null},building:id=>id===10?iml:null,findPath:(start,goal)=>[{x:goal.x,y:goal.y}],urgentNeed:()=>urgent,payWage:()=>{wages++;return true;},log:()=>({id:1})};city.vehicles=new CityVehicles(city);city.vehicles.destinationParking=()=>null;const bike={id:1,good:'bicicleta_carga',active:true,condition:100,ownerAccountId:iml.accountId,x:0,y:0};city.vehicles.units.set(1,bike);const justice=new CityJustice(city);justice.bodies.push(body);
+ const c={id:1,accountId:'citizen:1',jobId:10,entity:{x:0,y:0,properties:{name:'Funcionário'}},path:[],needs:{health:90}},iml={id:10,type:'iml',active:true,accountId:'building:10',workers:[1],door:{x:20,y:0},balance:10000,wage:0,entity:{}},body={id:1,name:'Pessoa',citizenId:9,status:'waiting',entity:{x:10,y:0},position:{x:10,y:0}};
+ let urgent=false,wages=0;const city={minute:100,buildings:[iml],politics:{mayorId:null},economy:{mayorId:null},currency:{price:value=>value},society:{citizen:id=>id===1?c:null},building:id=>id===10?iml:null,findPath:(start,goal)=>[{x:goal.x,y:goal.y}],urgentNeed:()=>urgent,payWage:()=>{wages++;return true;},log:()=>({id:1})};city.vehicles=new CityVehicles(city);city.vehicles.destinationParking=()=>null;const bike={id:1,good:'bicicleta_carga',active:true,condition:100,ownerAccountId:iml.accountId,x:0,y:0};city.vehicles.units.set(1,bike);const justice=new CityJustice(city);justice.bodies.push(body);
  const arrive=goal=>{c.entity.x=goal.x;c.entity.y=goal.y;bike.x=goal.x;bike.y=goal.y;bike.driverId=null;c.path=[];c.mobilityTrip=null;c.ridingVehicleId=null;};
  return {justice,city,c,iml,body,bike,arrive,setUrgent:value=>{urgent=value;},wages:()=>wages};
 }

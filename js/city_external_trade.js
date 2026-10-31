@@ -1,4 +1,5 @@
 import {INDUSTRIES} from './city_industries.js';
+import {inventoryFree} from './city_inventory.js';
 // External customers collect excess ordinary merchandise at the producer.
 // The reserve is part of the existing monetary base, so payments are transfers.
 export const EXTERNAL_TRADE_RULES=Object.freeze({initialReserveFraction:.02,minimumFirmStock:24,maximumPerSale:12,maximumSalesPerHour:4,priceFactor:1.1,importPriceFactor:2.25,maximumImportQuantity:24});

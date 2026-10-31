@@ -47,10 +47,10 @@ test('an indoor scene requires entering the real building and interviewing a wit
  city.minute++;justice.updatePoliceInvestigation(officer);assert.equal(record.investigation.fieldworkResult,'completed');justice.updateInvestigations();assert.equal(record.investigation.suspectId,3);
 });
 
-test('an indoor case waits for an idle investigator who is physically in the assigned station',()=>{
+test('an indoor case can dispatch an idle investigator even if the worker is away from the station',()=>{
  const {city,justice,station,officer,record}=fixture(),room={id:21,buildingId:20,x:0,y:0,z:0,roomType:'workspace'},source={id:20,type:'residential',active:true,entity:{x:20,y:20,properties:{name:'Casa'}},width:1,depth:1,floors:1,units:[room],circulation:[],door:{x:21,y:22}};
  city.buildings.push(source);city.units=new Map([[room.id,room]]);city.building=id=>city.buildings.find(b=>b.id===id)||null;record.scene={buildingId:source.id,unitId:room.id,floor:0,height:0};record.position={x:20.5,y:20.5};
- justice.updateInvestigations();assert.equal(record.investigation,undefined);officer.indoorLocation={buildingId:station.id,path:[],position:{x:1,y:1,z:0}};justice.updateInvestigations();assert.equal(record.investigation.fieldwork,true);assert.equal(officer.policeInvestigation.caseId,record.id);assert.equal(station.policeInvestigatorId,officer.id);
+ justice.updateInvestigations();assert.equal(record.investigation.fieldwork,true);assert.equal(officer.policeInvestigation.caseId,record.id);assert.equal(station.policeInvestigatorId,officer.id);
 });
 
 test('a dead or missing investigator releases the station and closes unfinished fieldwork as interrupted',()=>{

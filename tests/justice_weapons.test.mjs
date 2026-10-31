@@ -34,9 +34,9 @@ test('a severe head strike can briefly incapacitate a resident and the timer res
  minute=target.unconsciousUntil;justice.updateInjuries(target);assert.equal(target.unconsciousUntil,null);assert.equal(target.action,null);
 });
 
-test('stealing the equipped baton removes it from the victim and recovery returns the item',()=>{
+test('stealing the equipped baton removes it from the victim and records pending police restitution',()=>{
  const actor={id:1,accountId:'citizen:1',entity:{x:0,y:0,properties:{name:'Pessoa 1'}},inventory:{},needs:{health:90},traits:{},skills:{}},victim={id:2,accountId:'citizen:2',entity:{x:1,y:0,properties:{name:'Pessoa 2'}},inventory:{porrete:1},equipment:{weapon:{good:'porrete',name:'Porrete de madeira',durability:4}},needs:{health:90},traits:{},skills:{}},innocent={id:3,accountId:'citizen:3',entity:{x:1,y:1,properties:{name:'Pessoa 3'}},inventory:{},needs:{health:90},traits:{},skills:{}};
  const accounts=new Map([[actor.accountId,{balance:1000}],[victim.accountId,{balance:1000}],[innocent.accountId,{balance:1000}]]),city={minute:100,hour:12,citizens:[actor,victim,innocent],accounts,buildings:[],world:{cityLampPosts:[]},society:{citizen:id=>[actor,victim,innocent].find(c=>c.id===id),isAdult:()=>true},economy:{goods:{porrete:{}}},random:()=>.99,log:()=>({id:1}),transfer(from,to,amount){const source=accounts.get(from),destination=accounts.get(to);if(!source||!destination||source.balance<amount)return false;source.balance-=amount;destination.balance+=amount;return true;}};const justice=new CityJustice(city);
  const record=justice.attemptTheft(actor,victim,{kind:'item',good:'porrete'});assert.ok(record);assert.equal(victim.equipment.weapon,null);assert.equal(victim.inventory.porrete,0);assert.equal(actor.inventory.porrete,1);
- assert.equal(justice.recoverStolenAsset(record,innocent),false);assert.equal(justice.recoverStolenAsset(record,actor),true);assert.equal(actor.inventory.porrete,0);assert.equal(victim.inventory.porrete,1);
+ assert.equal(justice.recoverStolenAsset(record,innocent),false);assert.equal(justice.recoverStolenAsset(record,actor),false);assert.equal(record.stolenAsset.recoveryStatus,'awaiting-physical-return');assert.equal(actor.inventory.porrete,1);assert.equal(victim.inventory.porrete,0);
 });

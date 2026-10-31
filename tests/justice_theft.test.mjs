@@ -8,19 +8,19 @@ function fixture(){
   return {justice:new CityJustice(city),city,actor:people[0],victim:people[1],innocent:people[2],money:()=>[...accounts.values()].reduce((n,a)=>n+a.balance,0)};
 }
 
-test('money theft and recovery conserve balances and cannot recover twice',()=>{
+test('money theft is recorded and police recovery does not transfer it without physical delivery',()=>{
   const {justice,city,actor,victim,money}=fixture(),before=money(),record=justice.attemptTheft(actor,victim,{amount:150});assert.equal(city.accounts.get(actor.accountId).balance,1150);assert.equal(city.accounts.get(victim.accountId).balance,850);assert.equal(money(),before);
-  assert.equal(justice.recoverStolenAsset(record,actor),true);assert.equal(justice.recoverStolenAsset(record,actor),false);assert.equal(money(),before);assert.equal(city.accounts.get(actor.accountId).balance,1000);
+  assert.equal(justice.recoverStolenAsset(record,actor),false);assert.equal(justice.recoverStolenAsset(record,actor),false);assert.equal(record.stolenAsset.recoveryStatus,'awaiting-physical-return');assert.equal(money(),before);assert.equal(city.accounts.get(actor.accountId).balance,1150);
 });
 
-test('object theft transfers stock and remote recovery does not teleport the item',()=>{
+test('object theft transfers stock and recovery waits for police delivery instead of teleporting the item',()=>{
   const {justice,actor,victim}=fixture(),record=justice.attemptTheft(actor,victim,{kind:'item',good:'madeira',quantity:2});assert.equal(actor.inventory.madeira,5);assert.equal(victim.inventory.madeira,1);
-  victim.entity.x=10;assert.equal(justice.recoverStolenAsset(record,actor),false);assert.equal(victim.inventory.madeira,1);victim.entity.x=2;assert.equal(justice.recoverStolenAsset(record,actor),true);assert.equal(actor.inventory.madeira,3);assert.equal(victim.inventory.madeira,3);
+  victim.entity.x=10;assert.equal(justice.recoverStolenAsset(record,actor),false);assert.equal(victim.inventory.madeira,1);victim.entity.x=2;assert.equal(justice.recoverStolenAsset(record,actor),false);assert.equal(record.stolenAsset.recoveryStatus,'awaiting-physical-return');assert.equal(actor.inventory.madeira,5);assert.equal(victim.inventory.madeira,1);
 });
 
 test('meal theft preserves the actual meal, ingredients and packing time',()=>{
   const {justice,actor,victim}=fixture(),meal={good:'marmita',inputs:{marmita:1},ingredients:{arroz:2},packedAt:123};victim.pocket.food.push(meal);const record=justice.attemptTheft(actor,victim,{kind:'meal'});
-  assert.equal(victim.pocket.food.length,0);assert.equal(actor.pocket.food[0],meal);assert.equal(justice.recoverStolenAsset(record,actor),true);assert.equal(victim.pocket.food[0],meal);assert.equal(meal.packedAt,123);assert.deepEqual(meal.ingredients,{arroz:2});
+  assert.equal(victim.pocket.food.length,0);assert.equal(actor.pocket.food[0],meal);assert.equal(justice.recoverStolenAsset(record,actor),false);assert.equal(record.stolenAsset.recoveryStatus,'awaiting-physical-return');assert.equal(actor.pocket.food[0],meal);assert.equal(meal.packedAt,123);assert.deepEqual(meal.ingredients,{arroz:2});
 });
 
 test('consumed food cannot be recreated and innocent suspects have no stolen property seized',()=>{

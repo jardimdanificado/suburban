@@ -4,7 +4,7 @@ import {CityJustice} from '../js/city_justice.js';
 
 function fixture(){
   const actor={id:1,entity:{x:0,y:0},needs:{health:100}},witness={id:2,entity:{x:.2,y:0},needs:{health:100},traits:{skepticism:.5}};
-  const city={minute:100,hour:12,world:{cityLampPosts:[]},buildings:[],citizens:[actor,witness],society:{citizen:id=>city.citizens.find(c=>c.id===id)},random:()=>.5,log:()=>({id:1})};
+  const city={minute:100,hour:12,world:{cityLampPosts:[]},buildings:[],units:new Map(),citizens:[actor,witness],society:{citizen:id=>city.citizens.find(c=>c.id===id)},building:id=>city.buildings.find(b=>b.id===id)||null,random:()=>.5,log:()=>({id:1})};
   return {justice:new CityJustice(city),city,actor,witness};
 }
 
@@ -23,7 +23,7 @@ test('an intervening building blocks exterior observation',()=>{
 });
 
 test('interior observation uses real room positions and excludes other rooms, floors and outdoors',()=>{
-  const {justice,city,actor,witness}=fixture();actor.indoorLocation={buildingId:5,unitId:7,floor:1,position:{x:20,y:20,z:3}};witness.indoorLocation={buildingId:5,unitId:7,floor:1,position:{x:20.2,y:20,z:3}};
+  const {justice,city,actor,witness}=fixture();city.buildings.push({id:5,entity:{x:19,y:19},width:2,depth:2,floors:2,units:[{id:7,x:0,y:0,z:1,hasWindow:true}],circulation:[]});city.units.set(7,city.buildings[0].units[0]);actor.indoorLocation={buildingId:5,unitId:7,floor:1,position:{x:20,y:20,z:3}};witness.indoorLocation={buildingId:5,unitId:7,floor:1,position:{x:20.2,y:20,z:3}};
   const record=justice.crimeRecord('assault',1,null);assert.equal(record.position.x,20);assert.equal(record.scene.unitId,7);assert.equal(record.witnesses.length,1);
   witness.indoorLocation.unitId=8;assert.equal(justice.crimeRecord('assault',1,null).witnesses.length,0);
   witness.indoorLocation.unitId=7;witness.indoorLocation.floor=2;assert.equal(justice.crimeRecord('assault',1,null).witnesses.length,0);

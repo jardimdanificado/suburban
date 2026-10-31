@@ -25,7 +25,7 @@ export function dispatchVehicleRestitution(justice){
       recovery.status='awaiting-officer';
     }
     const otherRecovery=justice.cases.find(other=>other!==record&&other.details?.vehicleId===vehicle.id&&other.vehicleRecovery?.status==='in-progress');if(otherRecovery){recovery.waitingReason=`recuperação já atribuída ao caso #${otherRecovery.id}`;continue;}
-    if(!vehicle.theft&&!vehicle.policeRecoveryOfficerId){recovery.status='returned';recovery.returnedAt=city.minute;recovery.waitingReason=null;record.vehicleRecoveredAt??=city.minute;record.vehicleRecoverySource??='police-arrest';continue;}
+    if(!vehicle.theft&&!vehicle.policeRecoveryOfficerId&&!recovery.mission){recovery.status='returned';recovery.returnedAt=city.minute;recovery.waitingReason=null;record.vehicleRecoveredAt??=city.minute;record.vehicleRecoverySource??='police-arrest';continue;}
     if(vehicle.mechanicId||vehicle.paintJobId||vehicle.serviceBodyId||vehicle.policeRecoveryOfficerId){recovery.waitingReason='veículo em serviço ou reservado';continue;}
     const driver=vehicle.driverId?city.society.citizen(vehicle.driverId):null,interceptGoal=driver?.mobilityTrip?.goal;
     if(vehicle.driverId&&(!driver||!interceptGoal)){recovery.status='awaiting-stop';recovery.waitingReason='Bicicleta ocupada sem destino alcançável; aguardando parada';continue;}

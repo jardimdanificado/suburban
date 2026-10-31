@@ -5,8 +5,8 @@ import {CityVehicles} from '../js/city_vehicles.js';
 import {CityEconomy} from '../js/city_economy.js';
 
 function fixture(type='iml'){
- const worker={id:1,jobId:10,task:'work',entity:{properties:{name:'Servidor'}},path:[],indoorLocation:{buildingId:10,path:[]},skills:{forensics:50}},b={id:10,type,active:true,entity:{},workers:[1],width:3,depth:3,floors:1,inventory:{sabao:2,carvao:6}},city={minute:100,hour:10,buildings:[b],society:{citizen:id=>id===1?worker:null},building:id=>id===10?b:null,random:()=>.5,log:()=>({id:1}),economy:{consumed:{},recordGoods:()=>{},practice:()=>{}}};
- const justice=new CityJustice(city),body={id:1,citizenId:99,name:'Pessoa',diedAt:1,cause:'velhice',injuries:[],status:type==='iml'?'autopsy':'cremating',imlBuildingId:10,crematoriumId:10,locationBuildingId:10,entity:{x:0,y:0}};justice.bodies.push(body);return {justice,city,body,b,worker};
+ const worker={id:1,jobId:10,task:'work',entity:{properties:{name:'Servidor'}},path:[],indoorLocation:{buildingId:10,path:[]},skills:{forensics:50}},b={id:10,type,active:true,entity:{},workers:[1],width:3,depth:3,floors:1,inventory:{sabao:2,carvao:6},balance:10000,wage:0},city={minute:100,hour:10,buildings:[b],society:{citizen:id=>id===1?worker:null},building:id=>id===10?b:null,random:()=>.5,log:()=>({id:1}),economy:{mayorId:null,consumed:{},recordGoods:()=>{},practice:()=>{}}};
+ city.politics={mayorId:null};city.currency={price:value=>value};const justice=new CityJustice(city),body={id:1,citizenId:99,name:'Pessoa',diedAt:1,cause:'velhice',injuries:[],status:type==='iml'?'autopsy':'cremating',imlBuildingId:10,crematoriumId:10,locationBuildingId:10,entity:{x:0,y:0}};justice.bodies.push(body);return {justice,city,body,b,worker};
 }
 
 test('autopsy consumes one soap and requires ninety distinct staffed minutes',()=>{
@@ -35,6 +35,6 @@ test('funeral services accept only their real procedure supplies',()=>{
 
 
 test('public funeral operators participate in purchase of real cargo bicycles',()=>{
- const iml={id:10,type:'iml',active:true,entity:{},accountId:'building:10',workers:[1,2,3]},shop={id:20,type:'cycle_shop',active:true,entity:{},accountId:'building:20'},city={minute:100,day:1,buildings:[iml,shop],citizens:[],economy:{businesses:[]},building:id=>id==='building:20'?shop:null};
+ const iml={id:10,type:'iml',active:true,entity:{},accountId:'building:10',workers:[1,2,3],inventory:{}},shop={id:20,type:'cycle_shop',active:true,entity:{},accountId:'building:20',inventory:{bicicleta_carga:1}},city={minute:100,day:1,buildings:[iml,shop],citizens:[],economy:{businesses:[],goods:{bicicleta_carga:{price:1000}}},building:id=>id==='building:20'?shop:null};
  const vehicles=new CityVehicles(city),bike={id:1,good:'bicicleta_carga',active:false,holderAccountId:shop.accountId};vehicles.units.set(1,bike);vehicles.parkingReport=()=>({missing:0});vehicles.financeVehicle=(company,unit)=>company===iml&&unit===bike;let bought=false;vehicles.buyVehicle=(account,id)=>{assert.equal(account,iml.accountId);assert.equal(id,1);bike.active=true;bike.ownerAccountId=account;bought=true;return true;};vehicles.hourly();assert.ok(bought);
 });
