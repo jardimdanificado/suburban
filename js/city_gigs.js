@@ -31,17 +31,24 @@ export class CityGigs{
   return job;
  }
  postSpontaneousArtwork(){
-  const city=this.city,day=Math.floor(city.minute/1440)+1;if(city.minute%1440!==600||this.lastSpontaneousArtworkDay===day||city.minute-this.lastSpontaneousArtworkAt<7*1440)return null;this.lastSpontaneousArtworkDay=day;
-  const hash=n=>Math.imul(n|0,2654435761)>>>0,artists=city.citizens.filter(c=>!c.entity.destroyed&&!c.dead&&city.society.isAdult(c)&&(c.skills?.artistic||0)>=28&&!c.jobId&&!(c.businessIds||[]).length&&!c.custody&&!c.informalJobId&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&(!c.task||INTERRUPTIBLE.has(c.task))&&!city.urgentNeed(c)&&(c.needs?.energy??0)>50&&(c.needs?.health??0)>50&&city.minute-(c.lastSpontaneousArtworkAt??-Infinity)>=30*1440)
-   .map(c=>({citizen:c,roll:hash(c.id*31+day*7919)%100})).filter(row=>row.roll<4).sort((a,b)=>(b.citizen.skills.artistic-a.citizen.skills.artistic)||a.roll-b.roll||a.citizen.id-b.citizen.id);
+  const city=this.city,day=Math.floor(city.minute/1440)+1;
+  // Check several times per day so an available, idle artist can actually act
+  // during ordinary play. The cooldown and one-job cap keep this from flooding
+  // the city with commissioned work.
+  if(city.minute%360!==600%360||city.hour<8||city.hour>=19||this.lastSpontaneousArtworkAt===city.minute||city.minute-this.lastSpontaneousArtworkAt<720)return null;
+  this.lastSpontaneousArtworkDay=day;
+  const artists=city.citizens.filter(c=>!c.entity.destroyed&&!c.dead&&city.society.isAdult(c)&&(c.skills?.artistic||0)>=12&&!c.jobId&&!(c.businessIds||[]).length&&!c.custody&&!c.informalJobId&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&(!c.task||INTERRUPTIBLE.has(c.task))&&!city.urgentNeed(c)&&(c.needs?.energy??0)>38&&(c.needs?.health??0)>45&&city.minute-(c.lastSpontaneousArtworkAt??-Infinity)>=14*1440)
+   .map(c=>({citizen:c,roll:Math.floor(city.random()*100)})).filter(row=>row.roll<28).sort((a,b)=>(b.citizen.skills.artistic-a.citizen.skills.artistic)||a.roll-b.roll||a.citizen.id-b.citizen.id);
   for(const {citizen,roll} of artists){
    const account=city.accounts.get(citizen.accountId);if(!account)continue;
    const sites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.units?.some(u=>u.ownerId===citizen.accountId||u.tenantId===citizen.accountId)&&!this.jobs.some(j=>j.kind==='art-installation'&&j.buildingId===b.id&&ACTIVE.has(j.status))).sort((a,b)=>a.id-b.id);
    for(const site of sites){
-    const kind=roll%4===0?'painting':'banner',fee=this.artworkQuote(site.id,kind,citizen.accountId);if(!fee||account.balance<fee)continue;
-    const partyId=roll%3===0&&city.politics?.party?.(citizen.political?.partyId)?.active?citizen.political.partyId:null;
-    const messages=partyId?['Um futuro melhor começa no bairro','Nossa cidade merece cuidado','Vozes do bairro, decisões para todos']:['O bairro também faz parte da cidade','Cuidar daqui é construir futuro','A cidade também é de quem vive nela'];
-    const job=this.createArtworkOrder(citizen.accountId,site.id,{kind,message:messages[roll%messages.length],truth:null,partyId,preferredArtistId:citizen.id});
+    const kind=roll%5===0?'painting':'banner',fee=this.artworkQuote(site.id,kind,citizen.accountId);if(!fee||account.balance<fee)continue;
+    const partyId=roll%7===0&&city.politics?.party?.(citizen.political?.partyId)?.active?citizen.political.partyId:null;
+    const themes=['A cidade cabe numa janela','O silêncio depois da chuva','Retrato de uma rua acordada','Pequenas coisas que sustentam o bairro','Memória de um lugar comum','O peso de uma promessa','Jardim onde havia pressa','Quem cuida também constrói','Uma praça para todos os nomes','Ainda estamos aqui','Amanhã começa na calçada','Vizinhos sob o mesmo céu','O que a cidade deixa para trás','Uma luz acesa no fim da rua','Casa é onde alguém lembra de você'];
+    const messages=partyId?['Um futuro melhor começa no bairro','Nossa cidade merece cuidado','Vozes do bairro, decisões para todos']:themes;
+    const message=messages[Math.floor(city.random()*messages.length)];
+    const job=this.createArtworkOrder(citizen.accountId,site.id,{kind,message,truth:null,partyId,preferredArtistId:citizen.id});
     if(!job)continue;citizen.lastSpontaneousArtworkAt=city.minute;this.lastSpontaneousArtworkAt=city.minute;
     city.log(`${citizen.entity.properties.name} financiou espontaneamente uma obra urbana em ${site.entity.properties.name}.`,'justice',[citizen.id,site.id],{kind:'spontaneous-art-sponsored',gigId:job.id,buildingId:site.id,partyId});return job;
    }
@@ -88,8 +95,14 @@ export class CityGigs{
   job.candidateCursor=(start+count)%eligible.length;return reachable;
  }
  frontagePoint(b){
-  const d=b.door,city=this.city,points=[[0,0],[1,0],[-1,0],[0,1],[0,-1]].map(([x,y])=>({x:Math.floor(d.x)+x+.5,y:Math.floor(d.y)+y+.5}));
-  return points.find(p=>city.walkable(Math.floor(p.x),Math.floor(p.y))&&city.findPath(d,p)!==null)||{x:d.x,y:d.y};
+  const d=b.door,city=this.city,points=[];
+  for(let radius=1;radius<=5;radius++)for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
+   if(Math.max(Math.abs(dx),Math.abs(dy))!==radius)continue;
+   points.push({x:Math.floor(d.x)+dx+.5,y:Math.floor(d.y)+dy+.5});
+  }
+  const outsideBuilding=p=>!city.buildings.some(other=>!other.entity.destroyed&&p.x>=other.entity.x&&p.x<other.entity.x+other.width&&p.y>=other.entity.y&&p.y<other.entity.y+other.depth);
+  const options=points.filter(p=>outsideBuilding(p)&&city.walkable(Math.floor(p.x),Math.floor(p.y))&&city.findPath(d,p)!==null).sort((a,z)=>Math.hypot(a.x-d.x,a.y-d.y)-Math.hypot(z.x-d.x,z.y-d.y)||a.y-z.y||a.x-z.x);
+  return options[0]||{x:d.x,y:d.y};
  }
  release(job,c,{reopen=true}={}){
   if(c){if(c.informalJobId===job.id){c.task=null;c.targetId=null;c.action='';}this.city.furniture?.release(c);c.informalJobId=null;c.workCell=null;c.path=[];if(job.artworkSupport?.kind==='skybridge'&&(c.skybridgeZ>0||c.skybridgeTransit?.phase==='crossing'))this.city.justice.routeWorkerOffSkybridge(c);}

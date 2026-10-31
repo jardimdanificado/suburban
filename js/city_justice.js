@@ -78,7 +78,7 @@ export class CityJustice {
   activeBuildings(type){return this.city.buildings.filter(b=>b.type===type&&b.active&&!b.entity.destroyed);}
   staffed(b){return (b.workers||[]).map(id=>this.city.society.citizen(id)).filter(c=>c&&!c.entity.destroyed&&c.jobId===b.id).length;}
   planFacilities(){
-    const city=this.city;if(this.lastWorksDay===city.day)return;this.lastWorksDay=city.day;
+    const city=this.city,hour=Math.floor(city.minute/60);if(this.lastWorksPlanHour===hour)return;this.lastWorksPlanHour=hour;this.lastWorksDay=city.day;
     if(city.welfare.conditions().foodDays<1||city.treasury<city.welfare.conditions().reserve+50000)return;
     city.politics.fundInitialWorksBudget();
     for(const [type,needed]of [['police_station',this.cases.some(c=>!['closed','dismissed','convicted','acquitted','decriminalized'].includes(c.status))],['council_oversight_office',this.cases.some(c=>c.type==='investigationFraud'&&!['completed','inconclusive'].includes(c.externalReview?.status))],['jail',this.cases.some(c=>(['arrested','arrest-requested'].includes(c.status)||c.status==='convicted'&&c.sentence?.completedAt==null&&c.sentence?.suspendedAt==null)&&!c.rule.fineOnly)],['courthouse',this.cases.some(c=>['charged','trial','arrested'].includes(c.status))],['iml',this.bodies.some(b=>b.status==='waiting'||b.status==='transporting'||b.status==='autopsy')],['crematorium',this.bodies.some(b=>b.status==='cremation-wait'||b.status==='cremation-transporting'||b.status==='cremating')]]){
