@@ -27,6 +27,8 @@ export const INDUSTRIES = {
   skate_workshop:industry('Oficina de skates',{plataforma:1,rodas:4,rolamentos:2},{skate:1},45,'construction','Monta skates com fornecedores e modelos identificados.'),
   cycle_assembler:industry('Montadora de bicicletas e patinetes',{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},{bicicleta:1,bicicleta_carga:1,patinete:1,patins:1},65,'maintenance','Monta lotes com peças reais; cada alteração de fornecedor ou revisão define outro modelo.'),
   cycle_shop:industry('Loja de mobilidade',{bicicleta:1,bicicleta_carga:1,patinete:1,patins:1,skate:1},{},1,'commerce','Vende equipamentos reais, com proprietário, fabricante, modelo e histórico.','services'),
+  domestic_trader:industry('Empresa de comércio interno',{},{},2,'commerce','Intermedeia compras entre empresas locais e organiza os fretes e pagamentos da cadeia municipal.','services'),
+  import_exporter:industry('Empresa de comércio exterior',{},{},2,'commerce','Intermedeia importações e exportações, cobra comissão e recolhe tarifas comerciais aprovadas pela Câmara.','services'),
   sports_shop:industry('Loja de artigos esportivos',{capacete:1},{},1,'commerce','Fornece proteção para praticantes de esportes.','services',{need:'safety',boost:12}),
   cycle_workshop:industry('Oficina de mobilidade',{pecas:1,tinta:1},{},24,'maintenance','Mecânicos levam peças até equipamentos avariados e cobram pelo reparo.','services'),
   bicycle_rental:industry('Locadora de bicicletas',{},{},1,'commerce','Compra bicicletas e aluga o uso por viagem a moradores próximos.','services'),

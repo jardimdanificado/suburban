@@ -1,6 +1,7 @@
 import {injuredCarryCapacity,injuryMovementFactor,injuryWorkFactor} from './city_injury_effects.js';
 import {COLOR_PALETTE,colorAffinity,dislikesColor} from './city_colors.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
+import {fictionalForeignBrand} from './city_external_trade.js';
 import {inventoryFree} from './city_inventory.js';
 import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=deep-perf-3';
 
@@ -45,6 +46,11 @@ export class CityVehicles {
         city.history.record('ownership',`${c.entity.properties.name} começou com ${VEHICLE_SPECS[good].label.toLowerCase()} para trabalhar em ${b.entity.properties.name}.`,[c.accountId,b.accountId],{vehicleId:v.id,buildingId:b.id,good,initial:true});
       }
     }
+  }
+  initializeStarterStock(){
+    const city=this.city,assembler=city.buildings.find(b=>b.type==='cycle_assembler'&&b.active&&!b.entity.destroyed);if(!assembler||assembler.initialVehicleStockCreated)return;
+    assembler.initialVehicleStockCreated=true;const population=city.initialPopulation||city.citizens.length,stock={bicicleta:32,bicicleta_carga:6,patinete:8,patins:6};
+    for(const [good,base]of Object.entries(stock)){const quantity=Math.max(1,Math.round(base*population/512));if(inventoryFree(assembler)<quantity)break;assembler.inventory[good]=(assembler.inventory[good]||0)+quantity;const firstId=this.nextId;this.registerUnits(assembler,good,quantity);const model=this.model(this.units.get(firstId));if(model&&!model.initialPartsSeeded){model.initialPartsSeeded=true;model.components=Object.entries(VEHICLE_RECIPES[good]||{}).map(([part,amount])=>({good:part,quantity:amount,producerId:`import:${part}`,producerName:fictionalForeignBrand(part),brand:fictionalForeignBrand(part),origin:'Importação internacional',design:1}));}city.economy.produced[good]=(city.economy.produced[good]||0)+quantity;city.economy.initialStock[good]=(city.economy.initialStock[good]||0)+quantity;city.economy.recordGoods('initial-vehicle-stock',good,quantity,null,assembler.id);}
   }
   parkingSites(){
     return this.city.buildings.filter(b=>b.type==='bike_rack'&&b.active&&!b.entity.destroyed).map(b=>{
@@ -114,7 +120,7 @@ export class CityVehicles {
     b.vehicleKind=kind;b.vehicleBatchSize=size;b.productionLabor=0;this.city.economy.updateDemand();return true;
   }
   discardComponents(b,good,quantity){let remaining=quantity;const lots=b.componentLots?.[good];if(!lots)return;while(remaining>0&&lots.length){const lot=lots[0],take=Math.min(remaining,lot.quantity);lot.quantity-=take;remaining-=take;if(!lot.quantity)lots.shift();}}
-  coherentLots(b,good){const groups=new Map();for(const lot of b.componentLots?.[good]||[]){const id=JSON.stringify([lot.producerId,lot.design]),old=groups.get(id);if(old)old.quantity+=lot.quantity;else groups.set(id,{producerId:lot.producerId,producerName:lot.producerName,design:lot.design,quantity:lot.quantity});}if(!groups.size&&b.inventory[good]>0)groups.set('legacy',{producerId:'origem não identificada',design:1,quantity:b.inventory[good]});return [...groups.values()].sort((a,b)=>b.quantity-a.quantity);}
+  coherentLots(b,good){const groups=new Map();for(const lot of b.componentLots?.[good]||[]){const id=JSON.stringify([lot.producerId,lot.design,lot.brand]),old=groups.get(id);if(old)old.quantity+=lot.quantity;else groups.set(id,{producerId:lot.producerId,producerName:lot.producerName,brand:lot.brand||null,origin:lot.origin||'Produção local',design:lot.design,quantity:lot.quantity});}if(!groups.size&&b.inventory[good]>0)groups.set('legacy',{producerId:'origem não identificada',design:1,quantity:b.inventory[good]});return [...groups.values()].sort((a,b)=>b.quantity-a.quantity);}
   revisePart(id){const b=this.city.building(id);if(!b||!Object.keys(this.city.buildingTypes[b.type]?.outputs||{}).some(g=>parts.has(g)))return false;b.partDesign=(b.partDesign||1)+1;return true;}
   produced(b,outputs){for(const [good,quantity]of Object.entries(outputs)){if(parts.has(good)){b.componentLots??={};(b.componentLots[good]??=[]).push({producerId:b.id,producerName:b.entity.properties.name,design:b.partDesign||1,quantity});}if(VEHICLE_SPECS[good])this.registerUnits(b,good,quantity);}}
   loseStock(holder,good,quantity){if(VEHICLE_SPECS[good])for(const v of [...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.good===good&&v.holderAccountId===holder.accountId).slice(0,quantity)){v.scrapped=true;v.holderAccountId=null;if(v.entity)v.entity.destroyed=true;}if(parts.has(good))this.discardComponents(holder,good,quantity);}
@@ -122,7 +128,7 @@ export class CityVehicles {
     if(parts.has(good)){
       from.componentLots??={};to.componentLots??={};const source=from.componentLots[good]??=[],target=to.componentLots[good]??=[];let remaining=quantity;
       while(remaining>0&&source.length){const lot=source[0],take=Math.min(remaining,lot.quantity);target.push({...lot,quantity:take});lot.quantity-=take;remaining-=take;if(!lot.quantity)source.shift();}
-      if(remaining)target.push({producerId:from.entity?.id??from.id,design:from.partDesign||1,quantity:remaining});
+      if(remaining)target.push({producerId:from.externalImport?`import:${good}`:from.entity?.id??from.id,producerName:from.entity?.properties?.name||from.name,brand:from.importBrand||null,origin:from.externalImport?'Importação internacional':'Produção local',design:from.partDesign||1,quantity:remaining});
     }
     if(VEHICLE_SPECS[good])for(const v of [...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.good===good&&v.holderAccountId===from.accountId).slice(0,quantity)){v.holderAccountId=to.accountId;if(to.seller&&to.buyer){if(v.entity)v.entity.destroyed=true;v.status='Em transporte';}else{this.recordOwner(v,to.accountId,from.cost?from.cost/from.quantity:0,'Transferência na cadeia de comercialização');this.placeDisplay(v,to);}}
   }
@@ -130,10 +136,10 @@ export class CityVehicles {
     const bill=[];b.componentLots??={};
     for(const [good,count]of Object.entries(recipe)){
       let remaining=count*quantity;const lots=b.componentLots[good]??=[],supplier=this.coherentLots(b,good).find(l=>l.quantity>=remaining);
-      for(let i=0;i<lots.length&&remaining>0;){const lot=lots[i];if(supplier&&(lot.producerId!==supplier.producerId||lot.design!==supplier.design)){i++;continue;}const take=Math.min(remaining,lot.quantity);bill.push({good,producerId:lot.producerId,producerName:lot.producerName||this.city.building(lot.producerId)?.entity.properties.name,design:lot.design,quantity:take});lot.quantity-=take;remaining-=take;if(!lot.quantity)lots.splice(i,1);else i++;}
+      for(let i=0;i<lots.length&&remaining>0;){const lot=lots[i];if(supplier&&(lot.producerId!==supplier.producerId||lot.design!==supplier.design||lot.brand!==supplier.brand)){i++;continue;}const take=Math.min(remaining,lot.quantity);bill.push({good,producerId:lot.producerId,producerName:lot.producerName||this.city.building(lot.producerId)?.entity.properties.name,brand:lot.brand||null,origin:lot.origin||'Produção local',design:lot.design,quantity:take});lot.quantity-=take;remaining-=take;if(!lot.quantity)lots.splice(i,1);else i++;}
       if(remaining)bill.push({good,producerId:'origem não identificada',design:1,quantity:remaining});
       b.inventory[good]-=count*quantity;this.city.economy.consumed[good]+=count*quantity;this.city.economy.recordGoods('vehicle-assembly-input',good,count*quantity,b.id,null);
-    }const grouped=new Map();for(const p of bill){const id=JSON.stringify([p.good,p.producerId,p.design]),old=grouped.get(id);if(old)old.quantity+=p.quantity;else grouped.set(id,{...p});}return [...grouped.values()];
+    }const grouped=new Map();for(const p of bill){const id=JSON.stringify([p.good,p.producerId,p.design,p.brand]),old=grouped.get(id);if(old)old.quantity+=p.quantity;else grouped.set(id,{...p});}return [...grouped.values()];
   }
   assemblyWork(b,c){
     const city=this.city,plan=this.recipeFor(b);if(!plan)return false;
@@ -142,7 +148,7 @@ export class CityVehicles {
       if(b.vehicleBatchSize&&consistent<plan.size)return false;
       plan.size=Math.min(plan.size,consistent);if(plan.size<1)return false;
       if(inventoryFree(b)<plan.size||!Object.entries(plan.inputs).every(([g,n])=>b.inventory[g]>=n*plan.size)||b.inventory[plan.good]>=12)return false;
-      const components=this.takeComponents(b,plan.inputs,plan.size),signature=JSON.stringify([b.id,plan.good,Object.entries(plan.inputs),components.map(p=>[p.good,p.producerId,p.design,p.quantity/plan.size]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))]);
+      const components=this.takeComponents(b,plan.inputs,plan.size),signature=JSON.stringify([b.id,plan.good,Object.entries(plan.inputs),components.map(p=>[p.good,p.producerId,p.design,p.brand,p.quantity/plan.size]).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))]);
       let model=this.models.get(signature);
       if(!model){const id=this.nextModelId++;model={id,signature,kind:plan.good,manufacturerId:b.id,brand:b.entity.properties.name,name:`${VEHICLE_SPECS[plan.good].label} ${id}-${String(hash(signature)%1000).padStart(3,'0')}`,components:components.map(p=>({...p,quantity:p.quantity/plan.size})),createdAt:city.minute};this.models.set(signature,model);}
       const batch={id:this.nextBatchId++,modelId:model.id,manufacturerId:b.id,good:plan.good,quantity:plan.size,components,startedAt:city.minute,labor:0,requiredLabor:80*plan.size,status:'assembly'};
@@ -159,14 +165,15 @@ export class CityVehicles {
     if(modelId==null){const signature=`${b.id}:${good}:${b.partDesign||1}`,existing=this.models.get(signature);let model=existing;if(!model){model={id:this.nextModelId++,signature,kind:good,manufacturerId:b.id,brand:b.entity.properties.name,name:`${VEHICLE_SPECS[good].label} ${b.partDesign||1}`,components:Object.entries(VEHICLE_RECIPES[good]).map(([good,quantity])=>({good,quantity,producerId:b.id,design:1})),createdAt:this.city.minute};this.models.set(signature,model);}modelId=model.id;}
     for(let i=0;i<quantity;i++){const id=this.nextId++,v={id,good,modelId,batchId,manufacturerId:b.id,holderAccountId:b.accountId,ownerAccountId:b.accountId,active:false,scrapped:false,condition:100,color:COLOR_PALETTE[(b.id+i*7)%COLOR_PALETTE.length].hex,distance:0,passengerIds:[],driverId:null,journey:null};v.createdAt=this.city.minute;v.ownershipHistory=[{minute:this.city.minute,from:null,to:b.accountId,toName:b.entity.properties.name,price:0,reason:'Fabricação'}];this.units.set(id,v);this.placeDisplay(v,b);}
   }
-  placeDisplay(v,building){
+  placeDisplay(v,building,slotOverride=null){
     if(!building?.door)return;
-    // Finished vehicles are visible while waiting for sale, so a working
-    // factory or cycle_shop has an unmistakable in-world result.
+    // Unsold stock is displayed on the seller's own lot, never on the public
+    // street. Inventory beyond the lot's visible capacity remains represented
+    // by its vehicle record and the seller's stock ledger.
     if(v.entity)v.entity.destroyed=true;
-    const siblings=[...this.units.values()].filter(other=>other!==v&&!other.active&&!other.scrapped&&other.holderAccountId===building.accountId).length;
-    const x=building.door.x+(siblings%3-1)*1.1,y=building.door.y+Math.floor(siblings/3)*1.1;
-    v.entity=this.city.createEntity({x,y,properties:{name:`${this.model(v)?.brand} · ${this.model(v)?.name}`,cityVehicle:v,render:{color:0x52879a}}});
+    const siblings=slotOverride??[...this.units.values()].filter(other=>other!==v&&!other.active&&!other.scrapped&&other.holderAccountId===building.accountId).length;
+    const width=Math.max(1,building.width||1),depth=Math.max(1,building.depth||1),slot=siblings%(width*depth*4),tileX=Math.floor(slot/4)%width,tileY=Math.floor(slot/(width*4))%depth,quarter=slot%4,x=building.entity.x+tileX+(quarter%2?.72:.28),y=building.entity.y+tileY+(quarter>=2?.72:.28);
+    v.entity=this.city.createEntity({x,y,altitude:surfaceElevation(this.city.world,x,y),properties:{name:`${this.model(v)?.brand} · ${this.model(v)?.name}`,cityVehicle:v,render:{color:0x52879a}}});
   }
   spec(v){return VEHICLE_SPECS[v.good];}
   financeVehicle(company,v){
@@ -200,7 +207,7 @@ export class CityVehicles {
   }
   vehiclePrice(v){return Math.ceil(this.city.economy.goods[v.good].price*1.18);}
   buyVehicle(account,id){
-    const city=this.city,v=this.units.get(id),dealer=v&&city.buildings.find(b=>b.accountId===v.holderAccountId&&b.type==='cycle_shop'&&b.active&&!b.entity.destroyed);
+    const city=this.city,v=this.units.get(id),dealer=v&&city.buildings.find(b=>b.accountId===v.holderAccountId&&['cycle_shop','cycle_assembler'].includes(b.type)&&b.active&&!b.entity.destroyed);
     if(!v||v.active||v.scrapped||!dealer||dealer.inventory[v.good]<1||!city.accounts.has(account))return false;
     const price=this.vehiclePrice(v);if(!city.transfer(account,dealer.accountId,price,'Compra de mobilidade individual',{vehicleId:id,modelId:v.modelId,buildingId:dealer.id}))return false;
     this.recordOwner(v,account,price,'Compra na loja');city.recordBusinessRevenue(dealer,price);dealer.inventory[v.good]--;this.activate(v,account,dealer);return true;
@@ -226,11 +233,11 @@ export class CityVehicles {
   hourly(){
     const city=this.city,hour=Math.floor(city.minute/60);if(this.lastHour===hour)return;this.lastHour=hour;
     const parking=this.parkingReport();if(parking.missing>0&&this.lastParkingPlanDay!==city.day&&!city.development.projects.some(p=>p.type==='bike_rack'&&!p.cancelled&&p.status!=='completed')){this.lastParkingPlanDay=city.day;if(city.welfare.conditions().foodDays>=1){city.politics.fundInitialWorksBudget();city.politics.startPublicWork('bike_rack');}}
-    const units=[...this.units.values()],unsold=units.filter(v=>!v.active&&!v.scrapped&&city.buildings.some(b=>b.type==='cycle_shop'&&b.active&&b.accountId===v.holderAccountId)),ownedBy=account=>units.filter(v=>v.active&&!v.scrapped&&v.ownerAccountId===account),owners=new Set(units.filter(v=>v.active&&!v.scrapped).map(v=>v.ownerAccountId));
+    const units=[...this.units.values()],unsold=units.filter(v=>!v.active&&!v.scrapped&&city.buildings.some(b=>['cycle_shop','cycle_assembler'].includes(b.type)&&b.active&&b.accountId===v.holderAccountId&&b.inventory[v.good]>0)),ownedBy=account=>units.filter(v=>v.active&&!v.scrapped&&v.ownerAccountId===account),owners=new Set(units.filter(v=>v.active&&!v.scrapped).map(v=>v.ownerAccountId));
     for(const company of [...city.economy.businesses,...city.buildings.filter(b=>['iml','crematorium'].includes(b.type)&&b.active&&!b.entity.destroyed)].filter(b=>b.active&&!b.entity.destroyed).sort((a,b)=>b.workers.length-a.workers.length||a.id-b.id)){
       const target=Math.max(1,Math.ceil(Math.max(1,company.workers.length)/4));let fleet=ownedBy(company.accountId).filter(v=>v.good==='bicicleta_carga').length;
       while(fleet<target){const v=unsold.find(v=>!v.active&&v.good==='bicicleta_carga');if(!v)break;const dealer=city.building(v.holderAccountId);let acquired=false;
-        if(dealer?.accountId===company.accountId&&dealer.type==='cycle_shop'&&dealer.inventory[v.good]>0){dealer.inventory[v.good]--;this.activate(v,company.accountId,dealer);city.history.record('ownership',`${dealer.entity.properties.name} destinou uma bicicleta de carga à equipe.`,[company.accountId],{vehicleId:v.id,good:v.good,companyFleet:true});acquired=true;}
+        if(dealer?.accountId===company.accountId&&['cycle_shop','cycle_assembler'].includes(dealer.type)&&dealer.inventory[v.good]>0){dealer.inventory[v.good]--;this.activate(v,company.accountId,dealer);city.history.record('ownership',`${dealer.entity.properties.name} destinou uma bicicleta de carga à equipe.`,[company.accountId],{vehicleId:v.id,good:v.good,companyFleet:true});acquired=true;}
         else acquired=this.financeVehicle(company,v)&&this.buyVehicle(company.accountId,v.id);
         if(!acquired)break;fleet++;owners.add(company.accountId);
       }
@@ -311,6 +318,7 @@ export class CityVehicles {
     if(arrived&&trip?.goal){c.path=this.groundPath(c.entity,trip.goal)||[];c.mobilityWalkGoal=c.path.length?{...trip.goal}:null;}
   }
   minute(){
+    if(!this.saleDisplaysReconciled){for(const building of this.city.buildings.filter(b=>['cycle_assembler','cycle_shop'].includes(b.type)&&!b.entity.destroyed)){const stock=[...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.holderAccountId===building.accountId).sort((a,b)=>a.id-b.id);stock.forEach((v,index)=>{const inside=v.entity&&v.entity.x>=building.entity.x&&v.entity.x<building.entity.x+building.width&&v.entity.y>=building.entity.y&&v.entity.y<building.entity.y+building.depth;if(!inside)this.placeDisplay(v,building,index);});}this.saleDisplaysReconciled=true;}
     this.hourly();
     for(const v of this.units.values()){if(v.parking&&v.parking.kind!=='roadside'&&!this.city.building(v.parking.rackId)){v.parking=null;v.status='Bicicletário removido';}if(v.reservedParking&&!v.driverId)this.freeParking(v,true);}
     for(const c of this.city.citizens){

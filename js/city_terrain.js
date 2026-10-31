@@ -361,10 +361,10 @@ export function generateSettlement(city) {
   const origin = { ...world.spawnCenter };
   let hub = null;
   const hallFloors=Math.min(8,Math.max(2,Math.ceil((city.initialPopulation||0)/80)));
-  // Put civic back-office services in the starter tower, then leave four full
-  // floors for the initial parties plus one expansion reserve.
-  const officeTypes=['builder','bank','carrier','newsroom','research_institute','research_institute','publisher',...INITIAL_CYCLE_STAGES].filter(type=>OFFICE_BUSINESSES.has(type));
-  const specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length+5], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bike_rack',4,2,1], ...INITIAL_CYCLE_STAGES.filter(type=>!OFFICE_BUSINESSES.has(type)).map(type=>[type,type==='farm'?8:3,type==='farm'?8:3,businessFloors(type,'startup')]), ['bike_rack',4,2,1], ['public_toilet',4,4,4], ['popular_refectory',4,4,4], ['cleaner',3,3,businessFloors('cleaner','startup')]];
+  // Build civic/essential premises and a final assembler only; component makers
+  // are demand-driven businesses instead of a guaranteed starter supply chain.
+  const officeTypes=['builder','bank','carrier','newsroom','research_institute','research_institute','publisher'].filter(type=>OFFICE_BUSINESSES.has(type));
+  const specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length+5], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bike_rack',4,2,1], ['cycle_assembler',3,3,businessFloors('cycle_assembler','startup')], ['bike_rack',4,2,1], ['public_toilet',4,4,4], ['popular_refectory',4,4,4], ['cleaner',3,3,businessFloors('cleaner','startup')]];
   for (const [type, w, d, h] of specs) {
     const angle = city.random() * Math.PI * 2, radius = hub ? (type==='bike_rack'?4+city.random()*3:8+city.random()*13) : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };

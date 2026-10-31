@@ -36,10 +36,10 @@ export class CityLogistics {
   }
   splitLoad(s,limit=24){
     if(s.driverId||s.quantity<=limit)return;
-    while(s.quantity>limit){const quantity=limit,unitCost=s.cost/s.quantity,cost=Math.round(unitCost*quantity),fee=Math.floor(s.fee*quantity/s.quantity),serviceFee=Math.floor((s.serviceFee||0)*quantity/s.quantity),id=this.nextId++,accountId=`shipment:${id}`;
-      const part={...s,id,accountId,name:`Frete ${id}`,balance:0,quantity,cost,fee,serviceFee,driverId:null,status:'waiting',position:{...s.position},incoming:{},inventory:{...s.inventory},componentLots:{},inventoryCapacity:limit};part.inventory[s.good]=quantity;
+    while(s.quantity>limit){const quantity=limit,unitCost=s.cost/s.quantity,cost=Math.round(unitCost*quantity),fee=Math.floor(s.fee*quantity/s.quantity),serviceFees=(s.serviceFees||[]).map(f=>({...f,amount:Math.floor(f.amount*quantity/s.quantity)})),serviceFee=serviceFees.length?serviceFees.reduce((n,f)=>n+f.amount,0):Math.floor((s.serviceFee||0)*quantity/s.quantity),id=this.nextId++,accountId=`shipment:${id}`;
+      const part={...s,id,accountId,name:`Frete ${id}`,balance:0,quantity,cost,fee,serviceFee,serviceFees,driverId:null,status:'waiting',position:{...s.position},incoming:{},inventory:{...s.inventory},componentLots:{},inventoryCapacity:limit};part.inventory[s.good]=quantity;
       this.city.accounts.set(accountId,part);if(!this.city.transfer(s.accountId,accountId,cost+fee+serviceFee,'Divisão de carga: equipamento indisponível')){this.city.accounts.delete(accountId);break;}
-      if(s.good==='tinta')part.paintLots=[];this.city.paint.move(s,part,s.good,quantity);s.quantity-=quantity;s.cost-=cost;s.fee-=fee;s.serviceFee-=serviceFee;s.inventory[s.good]=s.quantity;if(s.good==='roupas'){part.garments=[];moveGarments(s,part,quantity);}this.city.publications.moveStock(s,part,s.good,quantity);this.city.vehicles.moveStock(s,part,s.good,quantity);this.shipments.push(part);
+      if(s.good==='tinta')part.paintLots=[];this.city.paint.move(s,part,s.good,quantity);s.quantity-=quantity;s.cost-=cost;s.fee-=fee;s.serviceFee-=serviceFee;s.serviceFees=(s.serviceFees||[]).map((f,i)=>({...f,amount:f.amount-serviceFees[i].amount}));s.inventory[s.good]=s.quantity;if(s.good==='roupas'){part.garments=[];moveGarments(s,part,quantity);}this.city.publications.moveStock(s,part,s.good,quantity);this.city.vehicles.moveStock(s,part,s.good,quantity);this.shipments.push(part);
     }
   }
   rebalanceWaiting() {
@@ -67,7 +67,7 @@ export class CityLogistics {
   }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
   publicOrder(s){return s.payerAccountId==='treasury'||s.buyer.accountId==='treasury'||s.buyer.municipal;}
-  order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, requireCarrier = false,garmentIds=null } = {}) {
+  order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, serviceFees = [], requireCarrier = false,garmentIds=null } = {}) {
     const city = this.city;
     if(good==='roupas'&&!garmentIds&&seller?.type==='tailor'&&seller.garments?.some(g=>g.reservedPartyId!=null)){garmentIds=seller.garments.filter(g=>g.reservedPartyId==null).slice(0,quantity).map(g=>g.garmentId);if(garmentIds.length<quantity)return false;}
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0 || garmentIds&&(good!=='roupas'||garmentIds.length!==quantity||new Set(garmentIds).size!==quantity||garmentIds.some(id=>!seller.garments?.some(g=>g.garmentId===id)))) return false;
@@ -83,13 +83,13 @@ export class CityLogistics {
     // resident can claim the reserved service fee as an independent hauler.
     let fee = city.currency.price(Math.max(120, (route.length + (carrier?Math.abs(carrier.door.x-seller.door.x)+Math.abs(carrier.door.y-seller.door.y):0)) * 12 + quantity * 4));
     fee = Math.ceil(fee*(payerAccountId==='treasury'?1.5:1)) + (requireCarrier?city.currency.price(payerAccountId==='treasury'?180:120):0);
-    if (!Number.isSafeInteger(serviceFee) || serviceFee < 0 || (serviceFee && !city.accounts.has(serviceAccountId))) return false;
+    const fees=[...(serviceFee?[{amount:serviceFee,accountId:serviceAccountId}]:[]),...serviceFees].filter(f=>f?.amount>0);if(fees.some(f=>!Number.isSafeInteger(f.amount)||!city.accounts.has(f.accountId)))return false;serviceFee=fees.reduce((n,f)=>n+f.amount,0);
     const cost = quantity * unitPrice;
     const funds = city.accounts.get(payerAccountId)?.balance || 0;
     if (!requireCarrier && carrier && funds < cost + fee + serviceFee && funds >= cost + serviceFee) { carrier = null; fee = 0; }
     if (funds < cost + fee + serviceFee) return false;
     const id = this.nextId++, accountId = `shipment:${id}`;
-    const s = { id, accountId, payerAccountId, purpose, requireCarrier, serviceFee, serviceAccountId, name: `Frete ${id}`, balance: 0, seller, buyer, good, quantity, cost, fee, carrierId: carrier?.id || null, driverId: null, status: 'waiting', pickedUp: false, createdAt: city.minute, routeLength: route.length };
+    const s = { id, accountId, payerAccountId, purpose, requireCarrier, serviceFee, serviceAccountId, serviceFees:fees, name: `Frete ${id}`, balance: 0, seller, buyer, good, quantity, cost, fee, carrierId: carrier?.id || null, driverId: null, status: 'waiting', pickedUp: false, createdAt: city.minute, routeLength: route.length };
     initializeInventory(s, city.economy.goods, Math.max(24,quantity)); s.inventory[good] = quantity;
     city.accounts.set(accountId, s);
     if (!city.transfer(payerAccountId, accountId, cost + fee + serviceFee, 'Reserva de compra e frete',{shipmentId:id,purpose,good,essential:purpose==='public-meals'})) { city.accounts.delete(accountId); return false; }
@@ -211,13 +211,13 @@ export class CityLogistics {
         city.publications.moveStock(s,s.buyer,s.good,s.quantity);city.vehicles.moveStock(s,s.buyer,s.good,s.quantity);city.paint.move(s,s.buyer,s.good,s.quantity);
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
         if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
-        city.transfer(s.accountId, s.seller.accountId, s.cost, `Atacado: ${city.economy.goods[s.good].label}`,{good:s.good,quantity:s.quantity,shipmentId:s.id});
+        city.transfer(s.accountId, s.seller.accountId, s.cost, `${s.imported?'Importação':'Atacado'}: ${city.economy.goods[s.good].label}`,{good:s.good,quantity:s.quantity,shipmentId:s.id,...(s.imported?{imported:true,brand:s.importBrand}: {})});
         const carrier = city.building(s.carrierId);
         const informal=c.informalHaulId===s.id&&s.fee>0;
         if(!informal)s.informalDriverId=null;
         const freightPayee=carrier?.active?carrier.accountId:c.accountId;
         city.transfer(s.accountId, freightPayee, s.fee, carrier?.active ? 'Frete entregue' : 'Pagamento de frete informal',{shipmentId:s.id,informal});
-        if (s.serviceFee) city.transfer(s.accountId, s.serviceAccountId, s.serviceFee, 'Serviço de coleta');
+        if(s.serviceFees?.length){for(const service of s.serviceFees)city.transfer(s.accountId,service.accountId,service.amount,'Comissão ou tarifa comercial',{shipmentId:s.id,good:s.good,quantity:s.quantity});}else if (s.serviceFee) city.transfer(s.accountId, s.serviceAccountId, s.serviceFee, 'Serviço de coleta');
         const buyerAccount = city.accounts.get(s.payerAccountId || s.buyer.accountId);
         if (buyerAccount?.entity?.properties.cityBuilding) { buyerAccount.totalExpenses += s.cost + s.fee + (s.serviceFee || 0); if (s.purpose === 'work-meals') buyerAccount.mealPurchaseCost += s.cost + s.fee; }
         if(s.purpose==='waste-collection')city.sanitation.collected+=s.quantity;
@@ -227,7 +227,7 @@ export class CityLogistics {
         city.reputation.completed(carrier, c, 'entrega concluída', {shipmentId:s.id});
         city.economy.practice(c, 'logistics', 10); this.releaseDriver(s);
         s.status = 'delivered'; s.completedAt = city.minute; this.delivered++;
-        city.log(`Frete ${s.id} entregue: ${s.quantity} ${city.economy.goods[s.good].label}${carrier?' por transportadora':informal?' por trabalhador autônomo':' por transporte próprio'}.`, 'transport', [c.id], { kind: 'shipment-delivered', shipmentId: s.id, buildingIds:[s.seller.entity?.id,s.buyer.entity?.id,carrier?.id].filter(id=>id!=null), accounts:[s.seller.accountId,s.buyer.accountId,s.payerAccountId].filter(Boolean), good:s.good, quantity:s.quantity,informal });
+        city.log(`Frete ${s.id} entregue: ${s.quantity} ${city.economy.goods[s.good].label}${s.imported?` importados de ${s.importBrand||s.seller.name}`:''}${carrier?' por transportadora':informal?' por trabalhador autônomo':' por transporte próprio'}.`, 'transport', [c.id], { kind: s.imported?'import-delivered':'shipment-delivered', shipmentId: s.id, buildingIds:[s.seller.entity?.id,s.buyer.entity?.id,carrier?.id].filter(id=>id!=null), accounts:[s.seller.accountId,s.buyer.accountId,s.payerAccountId].filter(Boolean), good:s.good, quantity:s.quantity,informal,imported:!!s.imported,brand:s.importBrand||null });
       }
     }
     // Retain every active load, plus the latest 100 completed records.

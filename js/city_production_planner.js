@@ -52,7 +52,7 @@ export function productionPlan(economy){
   }
   for(const d of economy.demands)if(d.score>=30&&(INDUSTRIES[d.type]||['bakery','mill'].includes(d.type)||d.type==='farm'&&d.crop==='trigo'))visit(d.type,d.crop,d.type==='farm'&&d.crop==='trigo'?240:Math.min(190,d.score),d.reason);
   // The first installation of each sector is an explicit development objective, independent of empty shelves.
-  for(const type of Object.keys(INDUSTRIES))visit(type,null,type==='bank'?320:type==='research_institute'?220:type==='newsroom'?210:rolloutPriority[type]||145,'Iniciar a primeira produção desta cadeia.');
+  for(const type of Object.keys(INDUSTRIES))if(!['domestic_trader','import_exporter'].includes(type))visit(type,null,type==='bank'?320:type==='research_institute'?220:type==='newsroom'?210:rolloutPriority[type]||145,'Iniciar a primeira produção desta cadeia.');
   for(const crop of Object.keys(economy.crops))visit('farm',crop,crop==='trigo'?240:140,'Diversidade inicial das matérias-primas e da alimentação.');
   // Bread is a basic consumption need even before the first bakery has opened.
   if(city.citizens.some(c=>!c.entity.destroyed))visit('bakery',null,200,'Alimentação: pão e farinha precisam de lavouras de trigo.');

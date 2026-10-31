@@ -165,6 +165,7 @@ export class CityBank {
     }
   }
   closeClient(c, heir) {
+    const city=this.city;
     for (const [key,deposit] of this.deposits) if (deposit.clientId === c.accountId && deposit.balance) this.city.transfer(key,c.accountId,deposit.balance,'Resgate de poupança do espólio');
     for (const loan of this.loans.filter(l => l.clientId === c.accountId && !['paid','written-off'].includes(l.status))) {
       const bank = this.city.building(loan.bankId);

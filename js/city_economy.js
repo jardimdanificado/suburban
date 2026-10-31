@@ -5,7 +5,7 @@ import {rentOffice,rentAvailableOffice,officeStartupCost,prepareOfficeSearch,off
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=landlord-stock-market-1';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=deep-perf-3';
-import {externalTradeHourly} from './city_external_trade.js';
+import {externalTradeHourly,orderImport} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=toilet-staff-only-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
@@ -132,6 +132,7 @@ export class CityEconomy {
       if (b&&!b.active) this.activateMunicipalBusiness(b, budget);
     }
     fundInitialCycleChain(this.city);
+    this.city.vehicles?.initializeStarterStock();
     this.city.development.ensurePlots();
     this.hire();
     this.updateDemand();
@@ -196,6 +197,8 @@ export class CityEconomy {
   }
   hire() {
     this.appointMayor();
+    const stations=this.city.buildings.filter(b=>b.type==='police_station'&&b.active&&!b.entity.destroyed).sort((a,b)=>a.id-b.id),target=Math.max(0,Math.min(1000,Math.floor(this.city.politics?.policy?.policeStaffing??6))),base=stations.length?Math.floor(target/stations.length):0,remainder=stations.length?target%stations.length:0;
+    stations.forEach((station,index)=>{station.jobs=base+(index<remainder?1:0);});
     this.staffEssentials();
     for (const c of this.city.citizens) if (c.jobId && c.id!==this.mayorId) {
       const b = this.city.building(c.jobId);
@@ -295,6 +298,7 @@ export class CityEconomy {
     for (const [type,spec] of Object.entries(INDUSTRIES)) {
       if(type==='composting')continue;
       if(['cycle_shop','sports_shop','cycle_workshop','bicycle_rental'].includes(type)){const count=businesses.filter(b=>b.type===type).length,target=type==='bicycle_rental'?Math.max(1,Math.ceil(population/400)):Math.max(1,Math.ceil(population/300));items.push({type,crop:null,score:count<target?110:0,required:target,supply:count,stock:0,reason:'Mobilidade individual: bicicletas, patins, lojas, aluguel e reparos.'});continue;}
+      if(type==='domestic_trader'||type==='import_exporter'){const firms=businesses.filter(b=>b.type===type),activeTrade=type==='domestic_trader'?businesses.length>=5:(this.externalTrade?.imports||0)+(this.externalTrade?.sales||0)>0||Object.values(this.market||{}).some(row=>row.demand>0);items.push({type,crop:null,score:firms.length?0:activeTrade?115:0,required:activeTrade?1:0,supply:firms.length,stock:0,reason:spec.impact});continue;}
       if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
       const firms=businesses.filter(b=>b.type===type);
       const needed=(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?activeCitizens.filter(c=>this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
@@ -553,6 +557,8 @@ export class CityEconomy {
     if (!GOODS[good]) return false;
     const pendingBodies=this.city.justice?.bodies||[],funeralPriority=buyer?.type==='iml'&&pendingBodies.some(body=>['waiting','transporting','autopsy'].includes(body.status))||buyer?.type==='crematorium'&&pendingBodies.some(body=>['cremation-wait','cremation-transporting','cremating'].includes(body.status));
     const options=good==='girassol'&&buyer.type==='mill'?{purpose:'lighting-input'}:funeralPriority?{purpose:'funeral-procedure'}:{};
+    const broker=this.businesses.find(b=>b.type==='domestic_trader'&&b.active&&!b.entity.destroyed&&b.accountId!==seller.accountId&&b.accountId!==buyer.accountId);
+    if(broker&&PRIVATE_TYPES.has(seller.type)&&PRIVATE_TYPES.has(buyer.type)){const amount=Math.ceil(quantity*unitPrice*.01);if(amount>0)options.serviceFees=[{amount,accountId:broker.accountId}];}
     return this.city.logistics.order(seller, buyer, good, quantity, unitPrice,options);
   }
 
@@ -574,12 +580,25 @@ export class CityEconomy {
         const target = scarce?batch:buyer.type==='publisher'&&good==='papel'?Math.max(12,(buyer.bookPages||5)*3):buyer.type==='kitchen'?18:batch ? batch*6 : buyer.type === 'bakery' ? 24 : 18;
         if (buyer.inventory[good] + (buyer.incoming[good] || 0) > target / 2) continue;
         let remaining = Math.max(0, target - buyer.inventory[good] - (buyer.incoming[good] || 0));
-        const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || b.type==='kitchen'&&MEAL_COMPONENTS[good] || INDUSTRIES[b.type]?.outputs[good]) && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) + this.city.reputation.providerPenalty(a) + this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),a) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y) - this.city.reputation.providerPenalty(b) - this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),b));
+        const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || b.type==='kitchen'&&MEAL_COMPONENTS[good] || INDUSTRIES[b.type]?.outputs[good] || b.type==='import_exporter') && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) + this.city.reputation.providerPenalty(a) + this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),a) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y) - this.city.reputation.providerPenalty(b) - this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),b));
         sellers.sort((a,b)=>Number(this.supplyAgreements.some(r=>r.sellerId===b.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute))-Number(this.supplyAgreements.some(r=>r.sellerId===a.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute)));
         for (const seller of sellers) {
           const reserve = buyer.workers.length * buyer.wage * 90;
           const quantity = Math.min(this.city.logistics.transportLimit(seller,buyer), inventoryFree(buyer), remaining, seller.inventory[good], Math.max(0, Math.floor((buyer.balance - reserve) / this.goods[good].price)));
-          if (quantity > 0 && this.transferGoods(seller, buyer, good, quantity, this.supplyAgreements.find(r=>r.sellerId===seller.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute)?.unitPrice||this.goods[good].price)) remaining -= quantity;
+          const agreement=this.supplyAgreements.find(r=>r.sellerId===seller.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute),unitPrice=agreement?.unitPrice??(seller.type==='import_exporter'?Math.ceil((seller.importedUnitPrice?.[good]||this.goods[good].price)*1.12):this.goods[good].price);
+          if (quantity > 0 && this.transferGoods(seller, buyer, good, quantity, unitPrice)) remaining -= quantity;
+        }
+        // Import only after checking local makers and their available stock. The
+        // import price includes a substantial premium and still uses real freight.
+        const localMakers=businesses.some(b=>b.active&&!b.entity.destroyed&&(
+          b.type==='farm'&&b.crop===good||b.type==='bakery'&&good==='pao'||b.type==='mill'&&good==='oleo'||
+          INDUSTRIES[b.type]?.outputs?.[good]));
+        const finishedVehicleStock=buyer.type==='cycle_assembler'?['bicicleta','bicicleta_carga','patinete','patins'].reduce((n,type)=>n+(buyer.inventory[type]||0),0):0;
+        const assemblerHasStarterStock=buyer.type==='cycle_assembler'&&finishedVehicleStock>=Math.max(12,Math.ceil((this.city.initialPopulation||this.city.citizens.length)/12));
+        const canImport=(batch||!localMakers)&&remaining>0&&!assemblerHasStarterStock&&!['lixo','sementes','pedra'].includes(good);
+        if(canImport&&inventoryFree(buyer)>0){
+          const importer=businesses.find(b=>b.type==='import_exporter'&&b.active&&!b.entity.destroyed&&b.id!==buyer.id),target=importer||buyer,limit=Math.min(remaining,inventoryFree(target),this.city.logistics.transportLimit(null,target),24),reserve=target.workers.length*target.wage*90;
+          if(limit>0&&target.balance>reserve){const shipment=orderImport(this.city,target,good,limit);if(shipment)remaining-=limit;}
         }
       }
     }
