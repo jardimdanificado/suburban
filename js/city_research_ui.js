@@ -52,7 +52,7 @@ export function renderResearchDirectory(ui,p){
     p.metrics([['INSTITUTOS ATIVOS',institutes.length],['COLETAS EM CAMPO',collecting],['PESQUISAS PUBLICADAS',published]]);
     p.kv('Amostra mínima / máxima em vigor',`${min}% / ${max}% do eleitorado adulto`);
     p.note('A Câmara pode fixar o mínimo entre 5% e 10% e o máximo entre 15% e 20%. Cada coleta preserva os limites em vigor quando foi registrada.');
-    p.windowLink('PROPOR MUDANÇA DOS LIMITES',()=>ui.openPanel({politicsTab:'council',councilView:'propose',billId:null}));
+    p.windowLink('ALTERAR LIMITES AGORA',()=>ui.openPanel({politicsTab:'council',councilView:'propose',billId:null}));
     p.heading('INSTITUTOS EM OPERAÇÃO');
     for(const b of institutes)p.record(b.entity.properties.name,`${b.workers.length} funcionários · caixa ${money(b.balance)}`,()=>ui.openBuilding(b.id));
     if(!research.institutes().length)p.note('Nenhum instituto em operação. Obras usam a cadeia normal de construção.');

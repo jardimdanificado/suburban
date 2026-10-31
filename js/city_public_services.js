@@ -58,6 +58,6 @@ export function renderCivicServices(ui,p){
  p.table([{label:'Instalação',weight:2},{label:'Equipe'},{label:'Ocupação'},{label:'Condição',weight:3}],rows.filter(({b})=>ui.matches(b.entity.properties.name+' '+civicSpec(b).label)).map(({b,status:s})=>({cells:[b.entity.properties.name,s.team,`${s.visitors}/${s.capacity}`,s.reason],click:()=>ui.openBuilding(b.id)})));
  p.heading('NOVOS ESPAÇOS');for(const [type,spec]of Object.entries(CIVIC_SERVICES)){
    p.kv(spec.label,`${sites.filter(b=>b.type===type).length} em operação · ${city.development.projects.filter(o=>o.type===type&&!o.cancelled&&o.status!=='completed').length} em construção`);
-   p.button(`SOLICITAR OBRA: ${spec.label}`,()=>city.politics.startPublicWork(type));
+   p.button(`CONTRATAR AGORA: ${spec.label}`,()=>city.politics.startPublicWork(type));
  }
 }

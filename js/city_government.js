@@ -44,8 +44,9 @@ export class CityGovernment extends CityPolitics {
   worksAccount(){let account=this.city.accounts.get('works-budget');if(!account){account={name:'Orçamento municipal de obras',balance:0,totalRevenue:0,totalExpenses:0};this.city.accounts.set('works-budget',account);}return account;}
   ensureWorksBudget(){const balance=this.worksAccount().balance||0;this.policy.worksBudget=balance;return balance;}
   fundInitialWorksBudget(){if(this.worksBudgetInitialized)return;const city=this.city,account=this.worksAccount(),target=this.policy.worksBudgetTarget??this.policy.worksBudget??city.currency.price(5000000),reserve=city.welfare.conditions().reserve,free=Math.max(0,city.treasury-reserve),amount=Math.min(Math.max(0,target-account.balance),Math.floor(free*.2));if(amount&&city.transfer('treasury','works-budget',amount,'Dotação inicial do orçamento municipal de obras')){this.policy.worksBudget=account.balance;this.policy.worksBudgetTarget=target;this.worksBudgetInitialized=true;}}
-  requestWorksBudget(value){const mayor=this.city.society.citizen(this.city.economy.mayorId);if(!mayor)return this.city.fail('Não há prefeito em exercício para encaminhar o pedido.');return this.council.propose(mayor,'worksBudget',{value},`Prefeito solicita orçamento de obras de ${formatMoney(value)}`);}
-  requestWorksTransfer(value){const mayor=this.city.society.citizen(this.city.economy.mayorId);if(!mayor)return this.city.fail('Não há prefeito em exercício para encaminhar o pedido.');return this.council.propose(mayor,'worksTransfer',{value},`Prefeito solicita transferência de ${formatMoney(value)} para obras`);}
+  applyPlayerDirective(type,payload={}){return this.intervene('divineGovernment',null,{type,payload});}
+  requestWorksBudget(value){return this.applyPlayerDirective('worksBudget',{value});}
+  requestWorksTransfer(value){return this.applyPlayerDirective('worksTransfer',{value});}
   startPublicWork(type,crop='milho'){
     const city=this.city,mayor=city.society.citizen(city.economy.mayorId);if(!mayor||mayor.entity.destroyed)return city.fail('Não há prefeito em exercício.');if(!city.buildingTypes[type]||['townhall','mint','council_chamber'].includes(type))return city.fail('Tipo de obra indisponível para contratação direta.');
     const farm=type==='farm',mine=['quarry','iron_mine'].includes(type),site=city.development.publicBuildingSite(type);

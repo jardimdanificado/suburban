@@ -78,7 +78,7 @@ export function renderCorruptionInspector(ui,p){
     p.meter('Evidência reunida',(r.evidence||0)*100);p.meter('Eleitores informados',r.publicAttention||0);
     p.kv('Obstruções / proteções',r.coverUps||0);if(r.outcome)p.note(r.outcome);
     p.note('Conhecer os envolvidos nesta janela não equivale a prova pública. A investigação precisa reunir evidências e o escândalo precisa ganhar repercussão para permitir uma cassação.');
-    if(r.proven&&r.accusedId===city.economy.mayorId&&!gov.suspendedExecutive)p.button('PEDIR AFASTAMENTO POR 2 DIAS',()=>gov.submitBill('suspend',{targetId:r.accusedId,caseId:r.id,value:2}));
+    if(r.proven&&r.accusedId===city.economy.mayorId&&!gov.suspendedExecutive)p.button('AFASTAR PREFEITO POR 2 DIAS AGORA',()=>{const result=gov.applyPlayerDirective('suspend',{targetId:r.accusedId,caseId:r.id,value:2});ui.notice=result?.description||city.lastError||'A ordem não pôde ser aplicada.';});
     if(r.evidenceEventId)p.button('DOCUMENTAÇÃO FINANCEIRA',()=>ui.openEvent(r.evidenceEventId));
     p.button('HISTÓRICO DESTE CASO',()=>ui.openHistory(`corruptionCaseId:${r.id}`));
   }

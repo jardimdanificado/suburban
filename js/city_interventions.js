@@ -29,6 +29,7 @@ export const INTERVENTIONS={
   divineBankLiquidity:{label:'Injetar liquidez no banco',group:'god',description:'Transfere recursos do tesouro para o banco financiar depósitos e empréstimos.'},
   divineDebtRelief:{label:'Perdoar uma dívida',group:'god',description:'Encerra imediatamente o empréstimo escolhido e remove juros e saldo devedor.'},
   divineConvocation:{label:'Convocar a Câmara ao plenário',group:'god',description:'Restaura as condições dos vereadores e inicia imediatamente o deslocamento até a sessão.'},
+  divineGovernment:{label:'Ordem direta de governo',group:'god',description:'Aplica imediatamente uma decisão administrativa, econômica, legal ou de obra sem encaminhá-la à Câmara.'},
 };
 export class CityInterventions {
   constructor(city){this.city=city;this.records=[];this.nextId=1;this.cooldowns=new Map();}
@@ -36,7 +37,7 @@ export class CityInterventions {
     const city=this.city,p=city.politics,spec=INTERVENTIONS[kind];if(!spec)return city.fail('Intervenção desconhecida.');
     const key=`${kind}:${targetId??'city'}`;if(spec.group!=='god'&&city.minute-(this.cooldowns.get(key)??-Infinity)<30)return city.fail('Aguarde 30 minutos da cidade para repetir esta intervenção no mesmo alvo.');
     const c=city.society.citizen(targetId),e=p.active,n=e?.candidates.find(n=>n.citizenId===targetId),record={id:this.nextId,kind,title:spec.label,targetId,minute:city.minute,affected:0,cost:0,description:'',truth:kind!=='rumor'};
-    const live=c&&!c.entity.destroyed;if(['opinion','campaign','god'].includes(spec.group)&&!['debate','divineRepair','divineHarvest'].includes(kind)&&!live)return city.fail('Selecione uma pessoa viva.');
+    const live=c&&!c.entity.destroyed;if(['opinion','campaign','god'].includes(spec.group)&&!['debate','divineRepair','divineHarvest','divineGovernment'].includes(kind)&&!live)return city.fail('Selecione uma pessoa viva.');
     if(spec.group==='campaign'&&(!e||e.status!=='campaign'))return city.fail('Esta intervenção precisa de uma campanha eleitoral em andamento.');
     if(['endorsement','rally','rigPoll'].includes(kind)&&!n)return city.fail('Selecione um candidato a prefeito desta eleição.');
     const audience=()=>p.campaigns.audience(Math.max(1,Math.ceil(city.citizens.length*.25)));
@@ -130,6 +131,24 @@ export class CityInterventions {
       const hall=city.politics.council.getChamber().hall();if(!hall)return city.fail('A Câmara ainda não tem plenário construído.');let routed=0;
       for(const person of city.politics.council.people()){if(!person||person.deliveryId||person.cleaningJobId)continue;for(const key of Object.keys(person.needs))person.needs[key]=Math.max(person.needs[key],55);const path=city.findPath(person.entity,hall.door);if(path===null)continue;person.task='council-session';person.targetId=hall.id;person.councilSession={buildingId:hall.id,startedAt:city.minute,observerConvocation:true};person.path=path;person.action='Convocado pelo observador para o plenário';routed++;}
       record.affected=routed;record.buildingId=hall.id;record.description=`${routed} vereadores iniciaram imediatamente o deslocamento para o plenário.`;
+    }else if(kind==='divineGovernment'){
+      const type=options.type,payload=options.payload||{},council=city.politics.council;
+      if(type==='releasePrisoner'){
+        const caseRecord=city.justice.cases.find(r=>r.id===payload.caseId),person=city.society.citizen(payload.targetId??caseRecord?.investigation?.suspectId);
+        if(!caseRecord||!person?.custody||person.custody.caseId!==caseRecord.id)return city.fail('A pessoa não está presa neste caso.');
+        if(caseRecord.sentence){caseRecord.sentence.suspendedAt=city.minute;caseRecord.sentence.executionStatus='released-by-player';}caseRecord.playerReleaseAt=city.minute;caseRecord.playerReleaseInterventionId=record.id;
+        if(!city.justice.release(person,'Libertação direta do jogador'))return city.fail('Não foi possível libertar a pessoa agora.');record.affected=1;record.targetId=person.id;record.caseId=caseRecord.id;record.description=`${person.entity.properties.name} foi libertado imediatamente por ordem direta do jogador.`;
+      }else if(type==='partyLimit'){
+        if(!Number.isSafeInteger(payload.value)||payload.value<1||payload.value>100)return city.fail('O limite de partidos deve ser um número inteiro entre 1 e 100.');const previous=city.politics.policy.partyLimit;city.politics.policy.partyLimit=payload.value;record.affected=1;record.description=`Limite de partidos alterado imediatamente de ${previous} para ${payload.value}. Partidos existentes mantêm seus membros; novas fundações respeitam o novo limite.`;
+      }else{
+        const supported=new Set(['tax','businessTax','salesTax','tradeTax','policeStaffing','minimumWage','reelectionLimit','termDays','campaignDays','pollMinRate','pollMaxRate','inflation','welfare','roads','councilSeats','councilRate','councilBudget','mayorBudget','partyFund','worksBudget','worksTransfer','cleanRecord','parliamentaryImmunity','penalCode','arrestAuthorization','entrepreneurCandidates','nationalize','privatize','suspend','confidence','build','convict','impeach']);
+        if(!supported.has(type)||!council)return city.fail('Comando de governo inválido.');
+        const bill={id:`observer:${record.id}`,type,payload:{...payload},title:`Ordem direta: ${type}`,authorId:city.economy.mayorId,proposedAt:city.minute,status:'approved',attempts:0,result:null};
+        council.execute(bill);
+        if(bill.status==='dismissed'||bill.status==='executing'&&!bill.projectId)return city.fail(bill.result||city.lastError||'A ordem não pôde ser aplicada.');
+        record.billType=type;record.projectId=bill.projectId??null;record.caseId=payload.caseId??null;record.buildingId=payload.buildingId??bill.buildingId??null;record.affected=1;
+        record.description=bill.projectId?`Ordem direta aplicada. Obra #${bill.projectId} contratada imediatamente e em execução.`:`Ordem direta aplicada: ${bill.result||type} (sem votação ou aprovação da Câmara).`;
+      }
     }else if(kind==='ride'){
       const system=city.vehicles,v=system.units.get(targetId);if(!v?.active||v.scrapped||v.driverId||v.condition<=15)return city.fail('Escolha um equipamento conservado e sem usuário ocupado.');
       const owner=city.accounts.get(v.ownerAccountId)?.entity?.properties.citizen,company=city.buildings.find(b=>b.accountId===v.ownerAccountId),people=owner?[owner]:(company?.workers||[]).map(id=>city.society.citizen(id)),rider=people.find(c=>c&&!c.entity.destroyed&&city.society.isAdult(c)&&!c.mobilityTrip&&!c.deliveryId&&!c.cleaningJobId&&!c.researchAssignment&&!c.campaign&&!c.conversation&&!city.urgentNeed(c));

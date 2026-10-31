@@ -40,7 +40,7 @@ export function renderVehicle(ui,p,v){
 export function renderParking(ui,p){
  const city=ui.city,system=city.vehicles,report=system.parkingReport();p.heading('BICICLETÁRIOS · BIKES E PATINETES');p.metrics([['VAGAS',report.capacity],['OCUPADAS',report.occupied],['RESERVADAS',report.reserved],['FORA DOS BICICLETÁRIOS',report.outside]]);
  p.note('A vaga é reservada antes da viagem. Ao chegar, o cidadão estaciona e termina o percurso a pé. Sem vaga próxima, procura espaço ao lado da rua e termina o trajeto a pé.');
- p.button('SOLICITAR NOVO BICICLETÁRIO',()=>city.politics.startPublicWork('bike_rack'));
+ p.button('CONTRATAR BICICLETÁRIO AGORA',()=>city.politics.startPublicWork('bike_rack'));
  for(const b of report.sites){p.heading(b.entity.properties.name);p.button('LOCALIZAR BICICLETÁRIO',()=>ui.camera(b.entity.x,b.entity.y));p.table([{label:'Vaga'},{label:'Equipamento',weight:2},{label:'Proprietário',weight:2},{label:'Estado'}],b.bikeSlots.map(slot=>{const v=system.units.get(slot.vehicleId??slot.reservedBy);return {cells:[slot.index+1,v?`${title(v)} #${v.id}`:'Livre',v?city.accountName(v.ownerAccountId):'—',slot.vehicleId!=null?'Estacionado':slot.reservedBy!=null?'Reservado':'Disponível'],...(v?{click:()=>ui.openPanel({selectedVehicleId:v.id})}:{})};}));}
 }
 export function renderAssembly(ui,p,b){
