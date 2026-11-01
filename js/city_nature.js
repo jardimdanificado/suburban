@@ -30,8 +30,9 @@ export class CityNature {
   spawn(x, y, species, { mature = false, buildingId = null } = {}) {
     if (this.plants.size >= NATURE_RULES.maxPlants || !this.available(x,y,species,buildingId)) return null;
     const spec = PLANT_SPECIES[species], city = this.city;
+    const scaleSeed=Math.abs(Math.sin(x*12.9898+y*78.233+species.length*0.31)*43758.5453)%1;
     const entity = city.createEntity({x,y,properties:{name:spec.label,species,tree:spec.wood>0,render:{color:spec.color,size:mature?1:.3,skin:'feature_tree_full.png'}}});
-    const plant = { id:entity.id,entity,species,x,y,buildingId,plantedAt:city.minute-(mature?spec.grow:0),stage:mature?'mature':'seedling' };
+    const plant = { id:entity.id,entity,species,x,y,buildingId,visualScale:0.76+scaleSeed*0.52,plantedAt:city.minute-(mature?spec.grow:0),stage:mature?'mature':'seedling' };
     entity.properties.cityPlant = plant;
     this.plants.set(plant.id,plant); this.tiles.set(`${x},${y}`,plant.id); city.structureRevision++;
     return plant;

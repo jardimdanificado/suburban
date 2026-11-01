@@ -128,6 +128,208 @@ function shouldSpawnGrassTuft(x, y) {
   return hash % 100 < 14; // Sparse enough for performance, visible at the map view.
 }
 
+function terrainTextureHash(x, y, tileType) {
+  let hash = Math.imul(x ^ Math.imul(y, 374761393), 668265263);
+  hash = Math.imul(hash ^ (hash >>> 13) ^ Math.imul(tileType + 1, 1274126177), 2246822519) >>> 0;
+  return hash;
+}
+
+function terrainTextureCategory(tileType) {
+  if (tileType === TILE_STONE) return "rock";
+  if (tileType === TILE_MOUNTAIN) return "mountain";
+  if (tileType === TILE_PEAK) return "peak";
+  if (tileType === TILE_ROAD_GRASS || tileType === TILE_ROAD_SAND || tileType === TILE_ROAD_HILL) return "dirtRoad";
+  if (tileType === TILE_ROAD_GRASS_STONE || tileType === TILE_ROAD_SAND_STONE || tileType === TILE_ROAD_HILL_STONE) return "pavedRoad";
+  return null;
+}
+
+function pushTerrainTileUvs(bucket, x, y, tileType) {
+  if (tileType === TILE_WATER) {
+    const u0 = x / 8, u1 = (x + 1) / 8, v0 = y / 8, v1 = (y + 1) / 8;
+    bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
+    return;
+  }
+  if (tileType === TILE_FLOOR || tileType === TILE_HILL) {
+    const u0 = x / 8, u1 = (x + 1) / 8, v0 = y / 8, v1 = (y + 1) / 8;
+    bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
+    return;
+  }
+  const corners = [[0, 0], [0, 1], [1, 1], [0, 0], [1, 1], [1, 0]];
+  const category = terrainTextureCategory(tileType);
+  if (!category) {
+    for (const point of corners) bucket.uvs.push(...point);
+    return;
+  }
+  const hash = terrainTextureHash(x, y, tileType), orientation = hash & 7;
+  const scale = .76 + ((hash >>> 4) & 3) * .16, offsetU = ((hash >>> 9) & 3) * .19, offsetV = ((hash >>> 11) & 3) * .19;
+  for (const [u, v] of corners) {
+    let point;
+    switch (orientation) {
+      case 1: point = [v, 1 - u]; break;
+      case 2: point = [1 - u, 1 - v]; break;
+      case 3: point = [1 - v, u]; break;
+      case 4: point = [1 - u, v]; break;
+      case 5: point = [u, 1 - v]; break;
+      case 6: point = [v, u]; break;
+      case 7: point = [1 - v, 1 - u]; break;
+      default: point = [u, v];
+    }
+    bucket.uvs.push(point[0] * scale + offsetU, point[1] * scale + offsetV);
+  }
+}
+
+function createTerrainSurfaceTexture(style, variant) {
+  const size = 32, canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  let seed = Math.imul(variant + 1, 2654435761) ^ Math.imul(style.length, 2246822519);
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 0xffffffff; };
+  const palettes = {
+    rock: { base: "#383a38", stones: ["#777b73", "#96988b", "#b3aa94", "#595e59", "#826f5b"] },
+    mountain: { base: "#292d2e", stones: ["#565d5b", "#7a8078", "#a29c8c", "#3e4848", "#68665d"] },
+    peak: { base: "#45484b", stones: ["#92999a", "#c1c1b4", "#737e84", "#d1c9b6", "#a6a99f"] },
+    dirtRoad: { base: "#77583b", stones: ["#a87b4b", "#c49a60", "#906443", "#b68a55", "#654a35"] },
+    pavedRoad: { base: "#3f3b38", stones: ["#a17c5b", "#c09a6c", "#876950", "#b68d62", "#715b4b"] }
+  }[style];
+  ctx.fillStyle = palettes.base;
+  ctx.fillRect(0, 0, size, size);
+  if (style === "dirtRoad") {
+    // Warm packed earth with two broken wheel tracks and scattered gravel.
+    for (let y = 0; y < size; y += 4) {
+      const sway = Math.sin(y * .19 + variant * 1.7) * 2;
+      for (const track of [9, 22]) {
+        ctx.fillStyle = y % 12 < 4 ? "#60472f" : "#9b7045";
+        ctx.fillRect(track + sway, y, 2 + (y % 3), 4);
+      }
+    }
+    for (let pebble = 0; pebble < 110; pebble++) {
+      ctx.fillStyle = palettes.stones[Math.floor(random() * palettes.stones.length)];
+      ctx.fillRect(Math.floor(random() * size), Math.floor(random() * size), 1 + Math.floor(random() * 3), 1 + (random() < .25 ? 1 : 0));
+    }
+    for (let patch = 0; patch < 14; patch++) {
+      ctx.fillStyle = patch % 2 ? "#bd9259" : "#594431";
+      ctx.fillRect(Math.floor(random() * size), Math.floor(random() * size), 3 + Math.floor(random() * 8), 1 + Math.floor(random() * 3));
+    }
+  } else if (style === "pavedRoad") {
+    // Deliberately regular, staggered cobbles make roads read as built surfaces.
+    const rowHeight = 8;
+    for (let row = -1; row < 6; row++) {
+      const y = row * rowHeight, offset = row % 2 ? -7 : 0;
+      for (let x = offset - 10; x < size + 8;) {
+        const width = 9 + Math.floor(random() * 5), height = 6 + Math.floor(random() * 2);
+        ctx.fillStyle = palettes.stones[Math.floor(random() * palettes.stones.length)];
+        ctx.fillRect(x + 1, y + 1, width - 2, height);
+        ctx.fillStyle = "rgba(28,24,22,.42)";
+        ctx.fillRect(x, y, width, 1);
+        x += width;
+      }
+    }
+  } else {
+    // Natural stone uses broken, irregular facets rather than rows of blocks.
+    const cell = style === "peak" ? 10 : style === "mountain" ? 13 : 16;
+    for (let cy = -1; cy < size / cell + 1; cy++) for (let cx = -1; cx < size / cell + 1; cx++) {
+      const x = cx * cell + (random() - .5) * 5, y = cy * cell + (random() - .5) * 5;
+      const w = cell * (.68 + random() * .42), h = cell * (.62 + random() * .40);
+      const jag = style === "peak" ? 3.5 : 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x + random() * jag, y + random() * jag);
+      ctx.lineTo(x + w * .53, y - random() * jag);
+      ctx.lineTo(x + w + random() * jag, y + h * .28);
+      ctx.lineTo(x + w * .78, y + h + random() * jag);
+      ctx.lineTo(x + random() * jag, y + h * .76);
+      ctx.closePath();
+      ctx.fillStyle = palettes.stones[Math.floor(random() * palettes.stones.length)];
+      ctx.fill();
+      if (style !== "rock" && random() > .48) {
+        ctx.strokeStyle = "rgba(24,28,28,.45)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+    // Small mineral flecks add texture without a costly high-resolution map.
+    for (let fleck = 0; fleck < 70; fleck++) {
+      ctx.fillStyle = fleck % 3 ? "rgba(220,210,185,.22)" : "rgba(20,24,24,.30)";
+      ctx.fillRect(Math.floor(random() * size), Math.floor(random() * size), 1 + Math.floor(random() * 2), 1);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  applyTextureAnisotropy(texture);
+  return texture;
+}
+
+function createCaribbeanWaterTexture() {
+  const size = 256, canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d"), image = ctx.createImageData(size, size), data = image.data;
+  const hash = (x, y) => {
+    let value = Math.imul(x ^ Math.imul(y, 374761393), 668265263);
+    value = Math.imul(value ^ (value >>> 13), 1274126177) >>> 0;
+    return value / 0xffffffff;
+  };
+  const noise = (x, y, cells) => {
+    const gx = x / size * cells, gy = y / size * cells, ix = Math.floor(gx), iy = Math.floor(gy);
+    const fx = gx - ix, fy = gy - iy, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const wrap = value => (value % cells + cells) % cells;
+    const a = hash(wrap(ix), wrap(iy)), b = hash(wrap(ix + 1), wrap(iy)), c = hash(wrap(ix), wrap(iy + 1)), d = hash(wrap(ix + 1), wrap(iy + 1));
+    return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
+  };
+  const palette = [[44, 139, 169], [48, 165, 187], [65, 190, 191], [100, 213, 198], [174, 241, 218]];
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const broad = noise(x, y, 4), patch = noise(x, y, 9), fine = noise(x, y, 17);
+    const warpX = (noise(x + 37, y - 19, 3) - .5) * 34;
+    const warpY = (noise(x - 53, y + 71, 4) - .5) * 34;
+    const flow = Math.sin(((x + warpX) / size * 4 + (y + warpY) / size * 1.5) * Math.PI * 2 + (broad - .5) * 2.8);
+    const crossFlow = Math.sin(((x - warpY) / size * 2 - (y + warpX) / size * 3) * Math.PI * 2 + (fine - .5) * 1.7);
+    const bands = flow * .58 + crossFlow * .26 + (patch - .5) * 1.20 + (broad - .5) * .52;
+    const position = Math.max(0, Math.min(3.999, (bands + 1.55) / 3.1 * 4));
+    const lower = Math.floor(position), fraction = position - lower;
+    const blend = fraction * fraction * (3 - 2 * fraction);
+    const i = (y * size + x) * 4, a = palette[lower], b = palette[lower + 1];
+    data[i] = a[0] + (b[0] - a[0]) * blend;
+    data[i + 1] = a[1] + (b[1] - a[1]) * blend;
+    data[i + 2] = a[2] + (b[2] - a[2]) * blend;
+    data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  // Short broken crests catch light without forming closed curls or loops.
+  for (let i = 0; i < 46; i++) {
+    const x = hash(i + 151, 19) * size, y = hash(i + 23, 97) * size;
+    const length = 4 + hash(i + 3, 281) * 9, angle = (hash(i + 89, 311) - .5) * 1.15;
+    const bend = (hash(i + 45, 7) - .5) * 3.2;
+    for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+      if (x + ox + length < 0 || x + ox > size || y + oy + 5 < 0 || y + oy - 5 > size) continue;
+      ctx.beginPath();
+      ctx.moveTo(x + ox, y + oy);
+      ctx.lineTo(x + ox + Math.cos(angle) * length * .48, y + oy + Math.sin(angle) * length * .48 + bend);
+      ctx.lineTo(x + ox + Math.cos(angle) * length, y + oy + Math.sin(angle) * length);
+      ctx.strokeStyle = i % 5 === 0 ? "#efffe8" : "#a8f4da";
+      ctx.lineWidth = .8 + hash(i + 120, 41) * .8;
+      ctx.lineCap = "butt";
+      ctx.stroke();
+    }
+  }
+  // Small scattered glints add highlights without making a repeated star pattern.
+  for (let i = 0; i < 34; i++) {
+    const x = Math.floor(hash(i + 321, 53) * size), y = Math.floor(hash(i + 16, 79) * size);
+    ctx.fillStyle = i % 4 === 0 ? "#f2ffe9" : "#baf6de";
+    ctx.fillRect(x, y, 1 + (i % 3 === 0 ? 1 : 0), 1);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  applyTextureAnisotropy(texture);
+  return texture;
+}
+
 // ---------------------------------------------------------------------------
 // Entity Bounds Helper for Accurate 3D Picking & Hover
 // ---------------------------------------------------------------------------
@@ -433,6 +635,35 @@ export function applyWindFoliageShader(mat, deformScale = 0.20) {
   };
 }
 
+function applyPalmWindShader(mat, deformScale = 0.11) {
+  if (!mat) return;
+  mat.userData.foliageShader = null;
+  const prevCompile = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader) => {
+    if (prevCompile) prevCompile(shader);
+    shader.uniforms.uSimTick = { value: 0.0 };
+    mat.userData.foliageShader = shader;
+    shader.vertexShader = `uniform float uSimTick;\n` + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `
+      vec3 palmPos = position;
+      float palmSeed = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
+      float frondReach = clamp(length(position.xz) / 1.8, 0.0, 1.0);
+      float tipWeight = smoothstep(0.12, 0.82, frondReach);
+      float breeze = sin(uSimTick * 0.035 + palmSeed * 6.28318 + frondReach * 1.8);
+      float crossBreeze = cos(uSimTick * 0.026 + palmSeed * 4.1 + frondReach * 1.3);
+      palmPos.x += breeze * ${deformScale.toFixed(4)} * tipWeight;
+      palmPos.z += crossBreeze * ${ (deformScale * 0.42).toFixed(4) } * tipWeight;
+      palmPos.y -= abs(breeze) * ${ (deformScale * 0.12).toFixed(4) } * tipWeight;
+      vec4 mvPosition = vec4(palmPos, 1.0);
+      #ifdef USE_INSTANCING
+        mvPosition = instanceMatrix * mvPosition;
+      #endif
+      mvPosition = modelViewMatrix * mvPosition;
+      gl_Position = projectionMatrix * mvPosition;
+    `);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 3D Procedural Geometries (Saguaro Cactus, Natural Grass, Houses)
 // ---------------------------------------------------------------------------
@@ -516,23 +747,41 @@ function createSaguaroCactusGeometry() {
 
 function createPalmFrondsGeometry() {
   const positions = [], indices = [];
-  const fronds = 10, segments = 12;
+  const fronds = 9, segments = 16;
   for (let frond = 0; frond < fronds; frond++) {
     const angle = frond * Math.PI * 2 / fronds;
     const dx = Math.cos(angle), dz = Math.sin(angle), sideX = -dz, sideZ = dx;
-    const start = positions.length / 3;
+    const centerline = [];
     for (let i = 0; i <= segments; i++) {
       const t = i / segments;
-      const reach = 0.16 + t * 1.62;
-      const y = 2.65 + Math.sin(t * Math.PI) * 0.44 - t * 0.78;
-      const width = Math.sin(Math.PI * Math.pow(t, 0.72)) * 0.25;
-      const scallop = i > 0 && i < segments ? (i % 2 ? 0.08 : -0.025) : 0;
-      positions.push(dx * reach + sideX * (-width + scallop), y, dz * reach + sideZ * (-width + scallop));
-      positions.push(dx * reach + sideX * (width - scallop), y, dz * reach + sideZ * (width - scallop));
+      centerline.push([dx * (0.12 + t * 1.72), 2.68 + Math.sin(t * Math.PI) * 0.18 - t * 1.08, dz * (0.12 + t * 1.72)]);
+    }
+    // The central rib gives each leaf a strong, tapered silhouette.
+    let ribStart = positions.length / 3;
+    for (let i = 0; i <= segments; i++) {
+      const [x, y, z] = centerline[i], t = i / segments;
+      const halfWidth = 0.012 * (1 - t * 0.55);
+      positions.push(x + sideX * halfWidth, y + 0.012, z + sideZ * halfWidth);
+      positions.push(x - sideX * halfWidth, y + 0.012, z - sideZ * halfWidth);
     }
     for (let i = 0; i < segments; i++) {
-      const a = start + i * 2;
+      const a = ribStart + i * 2;
       indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+    // Narrow paired leaflets branch from both sides of the rib like a feather.
+    for (let i = 2; i < 15; i++) {
+      const t = i / segments, [x, y, z] = centerline[i];
+      const length = Math.sin(Math.PI * t) * 0.54 + 0.08;
+      for (const sign of [-1, 1]) {
+        const start = positions.length / 3;
+        const baseX = x + sideX * sign * 0.018, baseZ = z + sideZ * sign * 0.018;
+        const backX = baseX - dx * 0.12, backZ = baseZ - dz * 0.12;
+        const tipX = baseX + sideX * sign * length - dx * 0.12;
+        const tipZ = baseZ + sideZ * sign * length - dz * 0.12;
+        const tipY = y - 0.16 - length * 0.12;
+        positions.push(backX, y + 0.008, backZ, tipX, tipY, tipZ, baseX, y, baseZ);
+        indices.push(start, start + 1, start + 2);
+      }
     }
   }
   const geometry = new THREE.BufferGeometry();
@@ -540,6 +789,47 @@ function createPalmFrondsGeometry() {
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
+}
+
+function createTropicalCanopyGeometry() {
+  const lobes = [];
+  const addLobe = (x, y, z, radius, sx, sy, sz, detail = 8) => {
+    const lobe = new THREE.SphereGeometry(radius, detail, 6);
+    lobe.scale(sx, sy, sz);
+    lobe.translate(x, y, z);
+    lobes.push(lobe);
+  };
+  addLobe(0, 1.93, 0, 0.75, 1.22, 0.64, 1.08, 10);
+  addLobe(-0.54, 1.80, 0.08, 0.52, 1.04, 0.70, 1.0);
+  addLobe(0.52, 1.82, -0.10, 0.54, 1.02, 0.72, 1.02);
+  addLobe(0.04, 1.82, 0.53, 0.50, 1.00, 0.70, 1.0);
+  addLobe(-0.06, 1.82, -0.52, 0.51, 1.00, 0.70, 1.0);
+  addLobe(0.02, 2.22, 0.02, 0.48, 1.02, 0.74, 1.0);
+  return mergeBufferGeometries(lobes);
+}
+
+function createTropicalTrunkGeometry() {
+  const pieces = [];
+  const trunk = new THREE.CylinderGeometry(0.16, 0.25, 1.8, 7);
+  trunk.translate(0, 0.7, 0);
+  pieces.push(trunk);
+  for (let i = 0; i < 4; i++) {
+    const angle = i * Math.PI / 2 + Math.PI / 4;
+    const branch = new THREE.CylinderGeometry(0.045, 0.11, 0.88, 5);
+    branch.rotateZ(-0.62);
+    branch.rotateY(angle);
+    branch.translate(Math.cos(angle) * 0.16, 1.08, Math.sin(angle) * 0.16);
+    pieces.push(branch);
+  }
+  return mergeBufferGeometries(pieces);
+}
+
+function getTreeVisualScale(entity) {
+  const savedScale = entity.properties?.cityPlant?.visualScale;
+  if (Number.isFinite(savedScale)) return savedScale;
+  const species = entity.properties?.species || '';
+  const seed = Math.abs(Math.sin(entity.x * 12.9898 + entity.y * 78.233 + species.length * 0.31) * 43758.5453) % 1;
+  return 0.76 + seed * 0.52;
 }
 
 function createCherryBlossomTrunkGeometry() {
@@ -3311,6 +3601,7 @@ export class RCT3DRenderer {
     // 4.6 Texture-Derived & Procedural Normal Maps
     const normGrass = generateProceduralTerrainNormalMap("grass", 0.90);
     const caribbeanGrass = createCaribbeanGrassTexture();
+    const caribbeanWater = createCaribbeanWaterTexture();
     const normSand = generateProceduralTerrainNormalMap("sand", 0.40);
     const normOak = generateProceduralFoliageNormalMap("oak", 1.0);
     const normPine = generateProceduralFoliageNormalMap("pine", 1.0);
@@ -3320,7 +3611,6 @@ export class RCT3DRenderer {
     const normBrickA = createNormalMapFromTexture("Feature_Brick_A.png", 1.2);
     const normBrickB = createNormalMapFromTexture("Feature_Brick_B.png", 1.0);
     const normBrickC = createNormalMapFromTexture("Feature_Brick_C.png", 1.2);
-    const normWaves = generateWaterNormalMap(0.9);
 
     const makeMat = (isPersp, baseParams, normalMap = null, normalScale = 1.0, roughness = 0.65, metalness = 0.05) => {
       // Normals/depth strictly active in 1P and 3P perspective mode!
@@ -3336,7 +3626,51 @@ export class RCT3DRenderer {
       return new THREE.MeshStandardMaterial(params);
     };
 
+    const waterMotionUniform = { value: 0 };
+    const addWaterMotionShader = material => {
+      material.onBeforeCompile = shader => {
+        shader.uniforms.uCaribbeanWaterTime = waterMotionUniform;
+        shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>
+          uniform float uCaribbeanWaterTime;
+          float caribbeanWaveHeight(vec2 p) {
+            return sin(p.x * 1.55 + p.y * 0.82 + uCaribbeanWaterTime * 1.15) * 0.16
+              + sin(p.x * 0.72 - p.y * 1.7 - uCaribbeanWaterTime * 0.82) * 0.105
+              + cos(p.x * 0.35 + p.y * 0.45 + uCaribbeanWaterTime * 0.5) * 0.07;
+          }`);
+        shader.vertexShader = shader.vertexShader.replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
+          float waterNormalStep = 0.08;
+          float waterDx = (caribbeanWaveHeight(position.xz + vec2(waterNormalStep, 0.0)) - caribbeanWaveHeight(position.xz - vec2(waterNormalStep, 0.0))) / (2.0 * waterNormalStep);
+          float waterDz = (caribbeanWaveHeight(position.xz + vec2(0.0, waterNormalStep)) - caribbeanWaveHeight(position.xz - vec2(0.0, waterNormalStep))) / (2.0 * waterNormalStep);
+          objectNormal = normalize(vec3(-waterDx, 1.0, -waterDz));`);
+        shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+          transformed.y += caribbeanWaveHeight(position.xz);`);
+        material.userData.caribbeanWaterShader = shader;
+      };
+      material.customProgramCacheKey = () => "caribbean-water-displacement-v1";
+      material.userData.caribbeanWaterTime = waterMotionUniform;
+      return material;
+    };
+    const makeWaterMaterial = () => addWaterMotionShader(new THREE.MeshStandardMaterial({
+      map: caribbeanWater, color: 0xffffff, vertexColors: true, roughness: 0.34, metalness: 0.03,
+      transparent: false, depthWrite: true, side: THREE.DoubleSide, dithering: true
+    }));
+    const makeFoamMaterial = () => addWaterMotionShader(new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide
+    }));
+
+    const terrainSurfaceMaterials = (isPersp, category, style, normalMap, normalScale, roughness, metalness) => Object.fromEntries(
+      Array.from({length:4},(_,variant)=>[
+        `terrain${category}${variant}`,
+        makeMat(isPersp,{map:createTerrainSurfaceTexture(style,variant),color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},normalMap,normalScale,roughness,metalness)
+      ])
+    );
+
     const buildDict = (isPersp) => ({
+      ...terrainSurfaceMaterials(isPersp,'Rock','rock',normStoneB,1.1,.70,.08),
+      ...terrainSurfaceMaterials(isPersp,'Mountain','mountain',normStoneC,1.25,.65,.10),
+      ...terrainSurfaceMaterials(isPersp,'Peak','peak',normStoneC,1.3,.60,.12),
+      ...terrainSurfaceMaterials(isPersp,'DirtRoad','dirtRoad',normSand,.9,.75,.05),
+      ...terrainSurfaceMaterials(isPersp,'PavedRoad','pavedRoad',normBrickA,1.1,.65,.08),
       farmSoil:makeMat(isPersp,{color:0x795438,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.85, 0.02),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
@@ -3345,26 +3679,8 @@ export class RCT3DRenderer {
       [TILE_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa5a5af, 0x3a3a44, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 1.1, 0.70, 0.08),
       [TILE_MOUNTAIN]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0xb4afaa, 0x484242, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.25, 0.65, 0.10),
       [TILE_PEAK]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0xd8d8de, 0x686874, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.3, 0.60, 0.12),
-      [TILE_WATER]: isPersp ? new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        vertexColors: true,
-        normalMap: normWaves,
-        normalScale: new THREE.Vector2(0.85, 0.85),
-        roughness: 0.15,
-        metalness: 0.15,
-        transparent: false,
-        depthWrite: true,
-        side: THREE.DoubleSide,
-        dithering: true
-      }) : new THREE.MeshLambertMaterial({
-        color: 0xffffff,
-        map: createTintedTexture("Feature_Waves.png", 0xffffff, 0xaaaaaa, 1.0),
-        dithering: true,
-        vertexColors: true,
-        transparent: false,
-        opacity: 1.0,
-        side: THREE.DoubleSide
-      }),
+      [TILE_WATER]: makeWaterMaterial(),
+      waterFoam: makeFoamMaterial(),
       [TILE_ROAD_GRASS]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa67c52, 0x3d2816, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 0.9, 0.75, 0.05),
       [TILE_ROAD_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa67c52, 0x3d2816, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 0.9, 0.75, 0.05),
       [TILE_ROAD_HILL]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa67c52, 0x3d2816, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 0.9, 0.75, 0.05),
@@ -3561,6 +3877,7 @@ export class RCT3DRenderer {
         }
       }
       applyWindFoliageShader(dict.oakLeaves, 0.055);
+      applyPalmWindShader(dict.palmLeaves, 0.11);
       applyWindFoliageShader(dict.pineLeaves, 0.038);
       applyWindFoliageShader(dict.cherryLeaves, 0.050);
       applyWindFoliageShader(dict.birchLeaves, 0.052);
@@ -3584,15 +3901,12 @@ export class RCT3DRenderer {
     this.maxInstances = 1200;
 
     // Oak Trees
-    const oakTrunkGeo = new THREE.CylinderGeometry(0.16, 0.25, 1.8, 6);
-    oakTrunkGeo.translate(0, 0.7, 0);
+    const oakTrunkGeo = createTropicalTrunkGeometry();
     this.instOakTrunks = new THREE.InstancedMesh(oakTrunkGeo, this.materials.treeTrunk, this.maxInstances);
     this.instOakTrunks.castShadow = true;
     this.instOakTrunks.receiveShadow = true;
 
-    const oakLeafGeo = new THREE.SphereGeometry(1, 9, 6);
-    oakLeafGeo.scale(1.2, 0.58, 1.05);
-    oakLeafGeo.translate(0, 1.95, 0);
+    const oakLeafGeo = createTropicalCanopyGeometry();
     this.instOakLeaves = new THREE.InstancedMesh(oakLeafGeo, this.materials.oakLeaves, this.maxInstances);
     this.instOakLeaves.castShadow = true;
     this.instOakLeaves.receiveShadow = true;
@@ -3600,6 +3914,13 @@ export class RCT3DRenderer {
     // Caribbean palms: a tall narrow trunk and a crown of long, drooping fronds.
     const palmTrunkGeo = new THREE.CylinderGeometry(0.105, 0.19, 2.55, 7);
     palmTrunkGeo.translate(0, 1.275, 0);
+    const palmTrunkPositions = palmTrunkGeo.attributes.position;
+    for (let i = 0; i < palmTrunkPositions.count; i++) {
+      const t = palmTrunkPositions.getY(i) / 2.55;
+      palmTrunkPositions.setX(i, palmTrunkPositions.getX(i) + 0.14 * t * t);
+    }
+    palmTrunkPositions.needsUpdate = true;
+    palmTrunkGeo.computeVertexNormals();
     this.instPalmTrunks = new THREE.InstancedMesh(palmTrunkGeo, this.materials.treeTrunk, this.maxInstances);
     this.instPalmTrunks.castShadow = true;
     this.instPalmTrunks.receiveShadow = true;
@@ -5988,7 +6309,7 @@ export class RCT3DRenderer {
       [TILE_STONE]: { pos: [], uvs: [], colors: [] },
       [TILE_MOUNTAIN]: { pos: [], uvs: [], colors: [] },
       [TILE_PEAK]: { pos: [], uvs: [], colors: [] },
-      [TILE_WATER]: { pos: [], uvs: [], colors: [], waterCells: [], waterLights: [] },
+      [TILE_WATER]: { pos: [], uvs: [], colors: [], waterCells: [], waterLights: [], waterShoreMix: [] },
       [TILE_ROAD_GRASS]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_SAND]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_HILL]: { pos: [], uvs: [], colors: [] },
@@ -5996,6 +6317,10 @@ export class RCT3DRenderer {
       [TILE_ROAD_SAND_STONE]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_HILL_STONE]: { pos: [], uvs: [], colors: [] }
     };
+    const waterFoamBucket = { pos: [], uvs: [], colors: [] };
+    for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad']) for (let variant=0;variant<4;variant++) {
+      tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
+    }
 
     const gridLinePositions = [];
     const matHelper = new THREE.Matrix4();
@@ -6019,6 +6344,38 @@ export class RCT3DRenderer {
     const isWaterAt = (tx, ty) => {
       if (tx < 0 || tx >= this.mapWidth || ty < 0 || ty >= this.mapHeight) return true;
       return map[ty * this.mapWidth + tx] === TILE_WATER;
+    };
+    const waterCornerMix = (cx, cy) => {
+      let landTouches = 0;
+      for (let dy = -1; dy <= 0; dy++) for (let dx = -1; dx <= 0; dx++) {
+        if (!isWaterAt(cx + dx, cy + dy)) landTouches++;
+      }
+      return landTouches * 0.15;
+    };
+    const addWaterFoamEdge = (tx, ty, side, sideIndex) => {
+      let seed = terrainTextureHash(tx, ty, TILE_WATER + sideIndex + 1);
+      const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 0xffffffff; };
+      const point = (along, inward) => {
+        if (side === 0) return [tx + along, ty + inward];
+        if (side === 1) return [tx + along, ty + 1 - inward];
+        if (side === 2) return [tx + inward, ty + along];
+        return [tx + 1 - inward, ty + along];
+      };
+      const samples = Array.from({length:5},(_,i)=>({
+        t:i/4,
+        shoreInset:0.012+random()*0.024,
+        foamWidth:0.20+random()*0.12
+      }));
+      for (let segment = 0; segment < 4; segment++) {
+        const start=samples[segment],end=samples[segment+1];
+        const a=point(start.t,start.shoreInset),b=point(end.t,end.shoreInset);
+        const c=point(end.t,end.foamWidth),d=point(start.t,start.foamWidth);
+        for (const [p, color] of [[a,[1,1,0.94]],[d,[0.77,0.99,0.91]],[c,[0.84,1,0.94]],[a,[1,1,0.94]],[c,[0.84,1,0.94]],[b,[1,1,0.94]]]) {
+          waterFoamBucket.pos.push(p[0], 0.085, p[1]);
+          waterFoamBucket.uvs.push(p[0], p[1]);
+          waterFoamBucket.colors.push(...color);
+        }
+      }
     };
 
     for (let ty = clampedMinTy; ty <= clampedMaxTy; ty++) {
@@ -6046,8 +6403,13 @@ export class RCT3DRenderer {
         }
 
         const hasSprite = detailBand === 2 && !FARM_TILES.has(tType)&&shouldRenderTerrainSprite(tx, ty, tType);
+        const textureCategory=terrainTextureCategory(tType);
         let bucketKey = FARM_TILES.has(tType)?"farmSoil":tType;
         if (tType === TILE_SAND && !hasSprite) bucketKey = "sandClean";
+        if (textureCategory) {
+          const materialCategory={rock:'Rock',mountain:'Mountain',peak:'Peak',dirtRoad:'DirtRoad',pavedRoad:'PavedRoad'}[textureCategory];
+          bucketKey=`terrain${materialCategory}${terrainTextureHash(tx,ty,tType)&3}`;
+        }
 
         const bucket = tileMeshBuckets[bucketKey] || tileMeshBuckets[tType] || tileMeshBuckets[TILE_FLOOR];
         if (!bucket) continue;
@@ -6067,54 +6429,43 @@ export class RCT3DRenderer {
           h00 = h10 = h11 = h01 = 0.08;
         }
 
-        bucket.pos.push(
-          tx, h00, ty,
-          tx, h01, ty + 1,
-          tx + 1, h11, ty + 1,
-
-          tx, h00, ty,
-          tx + 1, h11, ty + 1,
-          tx + 1, h10, ty
-        );
-        if (tType === TILE_WATER && isPersp) {
-          // Perspective mode: continuous world coordinates at 1.0 original tile texture scale
-          bucket.uvs.push(
-            tx, ty,
-            tx, ty + 1,
-            tx + 1, ty + 1,
-
-            tx, ty,
-            tx + 1, ty + 1,
-            tx + 1, ty
-          );
-
-          // Water tint follows the concentration of the connected water body.
-          bucket.waterCells.push(yOffset+tx);bucket.waterLights.push(zoneMult);
-          const tint=waterTint(waterPollutionAt(world,tx,ty));
-          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
-          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
-          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
-
-          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
-          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
-          bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
+        if (tType === TILE_WATER) {
+          // Four smaller quads per tile give the animated vertex waves enough geometry to bend.
+          const tint = waterTint(waterPollutionAt(world, tx, ty));
+          const cornerMixes = [waterCornerMix(tx,ty),waterCornerMix(tx,ty+1),waterCornerMix(tx+1,ty+1),waterCornerMix(tx+1,ty)];
+          const waterVertex = (px, pz, fx, fy) => {
+            const mix=cornerMixes[0]*(1-fx)*(1-fy)+cornerMixes[1]*(1-fx)*fy+cornerMixes[2]*fx*fy+cornerMixes[3]*fx*(1-fy);
+            const color=tint.map((value,i)=>{const bright=0.58+value*0.42,shallow=[0.76,0.98,0.86][i];return (bright*(1-mix)+shallow*mix)*zoneMult;});
+            bucket.pos.push(px,0.08,pz);bucket.uvs.push(px/8,pz/8);bucket.colors.push(...color);
+            bucket.waterCells.push(yOffset+tx);bucket.waterLights.push(zoneMult);bucket.waterShoreMix.push(mix);
+          };
+          for (let gy=0;gy<2;gy++) for(let gx=0;gx<2;gx++) {
+            const x0=gx/2,x1=(gx+1)/2,y0=gy/2,y1=(gy+1)/2;
+            for(const [fx,fy] of [[x0,y0],[x0,y1],[x1,y1],[x0,y0],[x1,y1],[x1,y0]]) waterVertex(tx+fx,ty+fy,fx,fy);
+          }
+          if (!isWaterAt(tx,ty-1)) addWaterFoamEdge(tx,ty,0,0);
+          if (!isWaterAt(tx,ty+1)) addWaterFoamEdge(tx,ty,1,1);
+          if (!isWaterAt(tx-1,ty)) addWaterFoamEdge(tx,ty,2,2);
+          if (!isWaterAt(tx+1,ty)) addWaterFoamEdge(tx,ty,3,3);
         } else {
-          if (tType === TILE_FLOOR || tType === TILE_HILL) {
-            const u0 = tx / 8, u1 = (tx + 1) / 8, v0 = ty / 8, v1 = (ty + 1) / 8;
-            bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
-          } else {
-            bucket.uvs.push(0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0);
-          }
+          bucket.pos.push(
+            tx, h00, ty,
+            tx, h01, ty + 1,
+            tx + 1, h11, ty + 1,
 
-          if(tType===TILE_WATER){const tint=waterTint(waterPollutionAt(world,tx,ty));bucket.waterCells.push(yOffset+tx);bucket.waterLights.push(zoneMult);for(let i=0;i<6;i++)bucket.colors.push(...tint.map(v=>v*zoneMult));}else{
+            tx, h00, ty,
+            tx + 1, h11, ty + 1,
+            tx + 1, h10, ty
+          );
+          pushTerrainTileUvs(bucket, tx, ty, tType);
+          const textureTone=textureCategory?0.82+((terrainTextureHash(tx,ty,tType)>>>8)%33)/100:1;
           // Triangle 1: (0,0), (0,1), (1,1)
-          bucket.colors.push(zoneMult * ao00, zoneMult * ao00, zoneMult * ao00);
-          bucket.colors.push(zoneMult * ao01, zoneMult * ao01, zoneMult * ao01);
-          bucket.colors.push(zoneMult * ao11, zoneMult * ao11, zoneMult * ao11);
-          bucket.colors.push(zoneMult * ao00, zoneMult * ao00, zoneMult * ao00);
-          bucket.colors.push(zoneMult * ao11, zoneMult * ao11, zoneMult * ao11);
-          bucket.colors.push(zoneMult * ao10, zoneMult * ao10, zoneMult * ao10);
-          }
+          bucket.colors.push(zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone);
+          bucket.colors.push(zoneMult * ao01 * textureTone, zoneMult * ao01 * textureTone, zoneMult * ao01 * textureTone);
+          bucket.colors.push(zoneMult * ao11 * textureTone, zoneMult * ao11 * textureTone, zoneMult * ao11 * textureTone);
+          bucket.colors.push(zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone);
+          bucket.colors.push(zoneMult * ao11 * textureTone, zoneMult * ao11 * textureTone, zoneMult * ao11 * textureTone);
+          bucket.colors.push(zoneMult * ao10 * textureTone, zoneMult * ao10 * textureTone, zoneMult * ao10 * textureTone);
         }
 
         if (tType !== TILE_WATER && gridEnabled) {
@@ -6309,10 +6660,23 @@ export class RCT3DRenderer {
       mesh.castShadow = false;
 
       if (matKey === String(TILE_WATER)) {
-        mesh.userData.waterCells=bucket.waterCells;mesh.userData.waterLights=bucket.waterLights;chunk.water.add(mesh);
+        mesh.userData.waterCells=bucket.waterCells;mesh.userData.waterLights=bucket.waterLights;mesh.userData.waterShoreMix=bucket.waterShoreMix;chunk.water.add(mesh);
       } else {
         chunk.terrain.add(mesh);
       }
+    }
+
+    if (waterFoamBucket.pos.length) {
+      const foamGeometry = new THREE.BufferGeometry();
+      foamGeometry.setAttribute("position", new THREE.Float32BufferAttribute(waterFoamBucket.pos, 3));
+      foamGeometry.setAttribute("uv", new THREE.Float32BufferAttribute(waterFoamBucket.uvs, 2));
+      foamGeometry.setAttribute("color", new THREE.Float32BufferAttribute(waterFoamBucket.colors, 3));
+      foamGeometry.computeVertexNormals();
+      const foamMesh = new THREE.Mesh(foamGeometry, this.materials.waterFoam);
+      foamMesh.userData.terrainMaterialKey = "waterFoam";
+      foamMesh.receiveShadow = false;
+      foamMesh.castShadow = false;
+      chunk.water.add(foamMesh);
     }
 
     if (gridLinePositions.length > 0) {
@@ -6326,7 +6690,18 @@ export class RCT3DRenderer {
 
   syncWaterPollution(world){
     const revision=world.waterPollutionRevision||0;if(this.lastWaterPollutionRevision===revision)return;
-    for(const chunk of this.terrainChunks.values())for(const mesh of chunk.water.children){const cells=mesh.userData.waterCells,colors=mesh.geometry?.attributes?.color;if(!cells||!colors)continue;for(let i=0;i<cells.length;i++){const tint=waterTint(waterPollutionAt(world,cells[i]%world.width,Math.floor(cells[i]/world.width))),light=mesh.userData.waterLights[i];for(let j=0;j<6;j++)colors.setXYZ(i*6+j,tint[0]*light,tint[1]*light,tint[2]*light);}colors.needsUpdate=true;}this.lastWaterPollutionRevision=revision;
+    const shallows=[0.76,0.98,0.86];
+    for(const chunk of this.terrainChunks.values())for(const mesh of chunk.water.children){
+      const cells=mesh.userData.waterCells,colors=mesh.geometry?.attributes?.color,mixes=mesh.userData.waterShoreMix;
+      if(!cells||!colors)continue;
+      for(let i=0;i<cells.length;i++){
+        const tint=waterTint(waterPollutionAt(world,cells[i]%world.width,Math.floor(cells[i]/world.width))),light=mesh.userData.waterLights[i];
+        const mix=mixes?.[i]||0,brightTint=tint.map(value=>0.58+value*0.42);
+        colors.setXYZ(i,(brightTint[0]*(1-mix)+shallows[0]*mix)*light,(brightTint[1]*(1-mix)+shallows[1]*mix)*light,(brightTint[2]*(1-mix)+shallows[2]*mix)*light);
+      }
+      colors.needsUpdate=true;
+    }
+    this.lastWaterPollutionRevision=revision;
   }
 
   // ---------------------------------------------------------------------------
@@ -6497,22 +6872,22 @@ export class RCT3DRenderer {
     }
 
     const effectiveSpeed = (this.isPaused || simSpeed <= 0) ? 0.0 : simSpeed;
-    if (effectiveSpeed > 0) {
-      this.waterTime += dt * effectiveSpeed;
-      this.flameTime += dt * effectiveSpeed;
-
-      const waterMat = this.materials[TILE_WATER];
-      if (waterMat) {
-        if (waterMat.map) {
-          waterMat.map.offset.x = (this.waterTime * 0.12) % 1;
-          waterMat.map.offset.y = (this.waterTime * 0.08) % 1;
-        }
-        if (waterMat.normalMap) {
-          waterMat.normalMap.offset.x = (this.waterTime * 0.09) % 1;
-          waterMat.normalMap.offset.y = (this.waterTime * 0.06) % 1;
-        }
+    // Water keeps a gentle environmental drift even while the simulation is paused.
+    this.waterTime += dt * (effectiveSpeed > 0 ? effectiveSpeed : 0.65);
+    for (const dict of [this.materials, this.materialsIso, this.materialsPerspective]) {
+      const uniform = dict?.[TILE_WATER]?.userData?.caribbeanWaterTime;
+      if (uniform) uniform.value = this.waterTime;
+    }
+    const waterMat = this.materials[TILE_WATER];
+    if (waterMat) {
+      if (waterMat.map) {
+        waterMat.map.offset.x = (this.waterTime * 0.035) % 1;
+        waterMat.map.offset.y = (this.waterTime * 0.022) % 1;
       }
-      this.waterGroup.position.y = Math.sin(this.waterTime * 2.8) * 0.035;
+    }
+    this.waterGroup.position.y = Math.sin(this.waterTime * 2.8) * 0.012;
+    if (effectiveSpeed > 0) {
+      this.flameTime += dt * effectiveSpeed;
 
       // Update GPU Wind Vertex Sway on all tree species, cacti, bushes, roses and grass
       const currentTickVal = this.simTick || 0;
@@ -6825,7 +7200,7 @@ export class RCT3DRenderer {
       else if (isPalm && palmCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 9187), 982451653) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
-        const size = (r.size || 1) * (e.properties.species === 'royal_palm' ? 1.12 : 1);
+        const size = (r.size || 1) * getTreeVisualScale(e) * (e.properties.species === 'royal_palm' ? 1.08 : 1);
         scaleMatrix.makeScale(size, size, size);
         mMatrix.multiply(scaleMatrix);
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
@@ -6836,12 +7211,13 @@ export class RCT3DRenderer {
       else if (isTree && !isPine && !isPalm && oakCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 45211), 982451653) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
-        if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
+        const treeSize = (r.size || 1) * getTreeVisualScale(e);
+        scaleMatrix.makeScale(treeSize, treeSize, treeSize);mMatrix.multiply(scaleMatrix);
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instOakTrunks.setMatrixAt(oakCount, mMatrix);
         this.instOakLeaves.setMatrixAt(oakCount, mMatrix);
         const canopyColors = { flamboyant: 0xd46b38, sea_grape: 0x557b3c, tropical_almond: 0x71934c, mangrove: 0x416f45 };
-        this.instOakLeaves.setColorAt(oakCount, new THREE.Color(canopyColors[e.properties.species] || 0x78a94e));
+        this.instOakLeaves.setColorAt(oakCount, this.tempColor1.setHex(canopyColors[e.properties.species] || 0x78a94e));
         oakCount++;
       }
       // --- 3D PINE TREES (Natural Random Rotation) ---
