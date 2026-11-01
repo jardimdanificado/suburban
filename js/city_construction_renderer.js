@@ -51,6 +51,15 @@ function addConstructionPerimeter(THREE,world,site,cells){
    if(axis==='x')tape.rotation.z=Math.atan2(h1-h0,segment);else tape.rotation.x=-Math.atan2(h1-h0,segment);
    site.add(tape);
   }
+  // Terrain steps get a vertical stake where the fence crosses into the
+  // neighboring level. The corner stakes already cover both ends of an edge.
+  for(let boundary=Math.ceil(start+1e-6);boundary<end-1e-6;boundary++){
+   const before=axis==='x'?surfaceElevation(world,boundary-.25,fixed):surfaceElevation(world,fixed,boundary-.25);
+   const after=axis==='x'?surfaceElevation(world,boundary+.25,fixed):surfaceElevation(world,fixed,boundary+.25);
+   if(Math.abs(after-before)<.08)continue;
+   const x=axis==='x'?boundary:fixed,z=axis==='z'?boundary:fixed;
+   addPerimeterPost(THREE,site,world,x,z,materials.wood);
+  }
  };
  edge('x',z0,x0,x1);edge('x',z1,x0,x1);edge('z',x0,z0,z1);edge('z',x1,z0,z1);
  const corners=[[x0,z0],[x1,z0],[x1,z1],[x0,z1]];
