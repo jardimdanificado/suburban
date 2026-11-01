@@ -8,8 +8,9 @@ import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js";
 import { SimulationTime } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js?v=resolution-options-1";
+import { OptionsPanel } from "./js/options.js?v=audio-mixer-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
+import { suburbanAudio } from "./js/suburban_audio.js";
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
@@ -144,6 +145,17 @@ export function renderUI(ui, _api) {
   cityUI.draw(ui);
 }
 
+function syncAudioListener() {
+  const camera = renderer3D.isPerspectiveActive() ? renderer3D.fpCamera : renderer3D.camera;
+  if (!camera?.position) return;
+  camera.updateMatrixWorld(true);
+  const m = camera.matrixWorld.elements;
+  suburbanAudio.setListener3D(camera.position.x, camera.position.y, camera.position.z, {
+    forwardX: -m[8], forwardY: -m[9], forwardZ: -m[10],
+    upX: m[4], upY: m[5], upZ: m[6],
+  });
+}
+
 
 const api = {
   world,
@@ -199,6 +211,7 @@ function moveCameraByPointer(dx,dy,zoom){
 }
 
 function onPointerDown(event) {
+  void suburbanAudio.unlock().catch(() => {});
   if (mainMenu.isActive()) {
     const rect = root.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -306,10 +319,13 @@ function onPointerUp(event) {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     const menuHandled = mainMenu.pointerUp(x, y);
+    if (menuHandled && event.button === 0) suburbanAudio.play("ui.click");
     if (!menuHandled && cityUI.visible) {
       const cityHandled = cityUI.pointerUp();
+      if (cityHandled && event.button === 0) suburbanAudio.play("ui.click");
       if (!cityHandled && event.button === 0 && pointerOnUI && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 6) {
         legacyUI.clickAt(x, y);
+        suburbanAudio.play("ui.click");
       }
     } else if (cityUI.visible) {
       cityUI.pointerUp();
@@ -333,12 +349,13 @@ function onPointerUp(event) {
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
   if (cityUI.pointerUp()) {
+    if (event.button === 0) suburbanAudio.play("ui.click");
     dragging=editingGesture=pointerOnUI=false;pointerDown=lastPointer=null;return;
   }
   if (editingGesture) {
     editor.endStroke();
   } else if (pointerOnUI && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 6) {
-    if (event.button === 0) legacyUI.clickAt(x, y);
+    if (event.button === 0) { legacyUI.clickAt(x, y); suburbanAudio.play("ui.click"); }
   } else if (!renderer3D.isPerspectiveActive() && event.button === 0 && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 4) {
     const id = renderer3D.selectAt(event.clientX, event.clientY, entities, world);
     selectEntity(entities.find((entity) => entity.id === id) || null, renderer3D.selectedCityUnitId);
@@ -439,6 +456,7 @@ function frame(now) {
     const renderDt = Math.min((now - lastRenderedAt) / 1000, 0.25);
     lastRenderedAt = now;
     renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
+    syncAudioListener();
 
     const pointerX = mousePosition.x;
     const pointerY = mousePosition.y;
@@ -474,6 +492,7 @@ function frame(now) {
   renderer3D.cityDevelopment=city.development;
   renderer3D.cityLogistics=city.logistics;
   renderer3D.profileFrame=profiling;renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
+  syncAudioListener();
   const sceneEnded = profiling ? performance.now() : 0;
   const pointerX = mousePosition.x;
   const pointerY = mousePosition.y;
