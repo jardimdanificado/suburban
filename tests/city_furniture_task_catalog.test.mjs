@@ -5,7 +5,7 @@ import {resolve} from 'node:path';
 import {furnitureInteraction,roomFurniture,TASK_DESTINATION_KINDS,TASK_FURNITURE_PROFILES} from '../js/city_furniture_catalog.js';
 import {interiorRoute,interiorUsePoint} from '../js/city_interior_layout.js';
 import {BUILDING_ACTIVITY_PROFILE_TYPES,buildingActivityProfile} from '../js/city_building_activity_profiles.js';
-import {BUILDING_TYPES} from '../js/city_simulation.js?v=interiors-completion-4';
+import {BUILDING_TYPES} from '../js/city_simulation.js?v=interiors-completion-6';
 import {activityRoomReady,advanceCitizenInterior} from '../js/city_interiors.js';
 
 const root=resolve(import.meta.dirname,'..');
@@ -77,6 +77,17 @@ test('each indoor task family routes to its task-appropriate furniture',()=>{
  ];
  for(const [task,type,roomType]of cases){const b={...layoutBuilding(),type,width:5,depth:5,units:Array.from({length:25},(_,i)=>({id:`${type}:${i}`,x:i%5,y:Math.floor(i/5),z:0,roomType:'workspace'}))},u=b.units.find(u=>u.x===2&&u.y===2);u.roomType=roomType;const interaction=furnitureInteraction(b,u,roomType,0,task);assert.ok(interaction,task);assert.ok(interaction.item.id.startsWith(`furniture:${u.id}:`),task);assert.ok(interiorRoute(b,b.door,interaction.point),`${task} has no navigable approach`);}
  const justice={...layoutBuilding(),type:'police_station',width:5,depth:5,units:[{id:'police-office',x:2,y:2,z:0,roomType:'office'},{id:'police-service',x:3,y:2,z:0,roomType:'service'}]};for(const [task,u,expected]of [['police-patrol',justice.units[0],'equipment_locker'],['police-investigation',justice.units[0],'evidence_board'],['police-restitution',justice.units[1],'evidence_counter']])assert.equal(furnitureInteraction(justice,u,u.roomType,0,task).item.type,expected,task);const response=furnitureInteraction(justice,justice.units[0],'office',0,'police-response');assert.equal(response.taskStation.type,'dispatch_desk');assert.equal(response.item.type,'chair');
+});
+
+test('job interviews use a real meeting seat in industrial workplaces and service rooms',()=>{
+ for(const [type,roomType] of [['recycler','workspace'],['composting','workspace'],['waste_collector','workspace'],['recycler','service']]){
+  const b={...layoutBuilding(),type,width:5,depth:5,units:Array.from({length:25},(_,i)=>({id:`${type}:${roomType}:${i}`,x:i%5,y:Math.floor(i/5),z:0,roomType:'workspace'}))};
+  const unit=b.units.find(u=>u.x===2&&u.y===2);unit.roomType=roomType;b.door={x:2.5,y:-.5};
+  const interaction=furnitureInteraction(b,unit,roomType,0,'job-interview');
+  assert.ok(interaction,`${type}/${roomType} has an interview station`);
+  assert.equal(interaction.item.type,'meeting_chair',`${type}/${roomType} uses a meeting seat`);
+  assert.ok(interiorRoute(b,b.door,interaction.point),`${type}/${roomType} interview seat is reachable`);
+ }
 });
 
 test('approach paths stay clear of furniture footprints and approach slots remain outside them',()=>{

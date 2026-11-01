@@ -1,4 +1,4 @@
-import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=interiors-completion-5';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-1';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 
 // Logical, renderer-independent walk graph. Nodes are reconstructed from a

@@ -1,8 +1,8 @@
 import {injuryMovementFactor} from './city_injury_effects.js';
-import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=interiors-completion-5';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-1';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {queueService} from './city_service_queue.js?v=service-capacity-3';
-import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-5';
+import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-6';
 // Outdoor coordinates remain the navigation anchor at the entrance. Interior
 // position, circulation and floor changes are separate physical coordinates.
 const INDOOR_TASKS=new Set(['work','manage','work-wait','shopping','supplies','job-interview','justice-report','police-oversight','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','informal-service','leisure','social','outdoor_leisure']);

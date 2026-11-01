@@ -1,5 +1,5 @@
 import {ensureJusticeSkills} from './city_justice_skills.js';
-import {CityFurniture} from './city_furniture.js?v=interiors-completion-5';
+import {CityFurniture} from './city_furniture.js?v=interiors-completion-6';
 import {CitySupplies} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';
@@ -24,9 +24,9 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js?v=interiors-completion-5';
+import { CitySimulation } from './city_simulation.js?v=interiors-completion-6';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=interiors-completion-5';
+import { CityJustice } from './city_justice.js?v=interiors-completion-6';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js?v=landlord-stock-market-1';
 import { CityLighting } from './city_lighting.js';

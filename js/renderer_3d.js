@@ -6,9 +6,9 @@ import {waterPollutionAt,waterTint} from './city_water.js';
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=interiors-completion-5";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=interiors-completion-6";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=interiors-completion-5';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=interiors-completion-6';
 import { flagNightFactor } from './city_terrain.js?v=deep-perf-3';
 import { ASSET_DATA } from "./assets_data.js";
 import {

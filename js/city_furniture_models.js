@@ -3,7 +3,7 @@ export function furnitureModel(THREE,item){
  const box=(w,h,d,x,y,z,color=wood)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const cylinder=(r,h,x,y,z,color=metal)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const type=item.type;
- if(type==='chair'||type==='bench'){
+ if(type==='chair'||type==='meeting_chair'||type==='council_chair'||type==='bench'){
   const bench=type==='bench',w=bench?.78:.28,seatY=bench?.24:.30,legH=seatY-.025;
   box(w,.055,.27,0,seatY,0);
   box(w,bench?.28:.30,.045,0,seatY+(bench?.15:.17),-.115);

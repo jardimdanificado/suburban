@@ -6,7 +6,7 @@ import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=terrain-chunks-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
-import { MapEditor } from "./js/map_editor.js";
+import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime } from "./js/simulation_time.js";
 import { OptionsPanel } from "./js/options.js?v=graphics-time-only-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
@@ -560,7 +560,7 @@ if (mainMenu.isActive()) {
 }
 if (cityGenerationError) cityUI.notice = cityGenerationError;
 for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
-  editor.registerPrefab(type, { label: spec.label, create: (x, y) => city.addBuilding(type, x, y)?.entity });
+  editor.registerPrefab(type, { label: spec.label, create: (x, y) => city.addBuilding(type, x, y, { free: true }) });
 }
 
 // Background simulation starts after UI/editor bindings exist. Commands are serialized by the worker.

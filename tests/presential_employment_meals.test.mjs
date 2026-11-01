@@ -4,6 +4,7 @@ import {setup,finishActivityRoute} from './helpers/city.mjs';
 import {career,discoverVacancies,reviewMarket,apply,routeToInterview,advanceRecruitment} from '../js/city_employment.js';
 import {syncCitizenInterior,advanceCitizenInterior} from '../js/city_interiors.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
+import {furnitureInteraction} from '../js/city_furniture_catalog.js';
 
 function fixture(){
  const city=setup({starter:true,population:48}),b=city.buildings.find(b=>b.type==='builder');
@@ -16,6 +17,9 @@ function fixture(){
 function attend(city,c,b,a){
  city.minute=a.interviewAt-20;c.entity.x=b.door.x;c.entity.y=b.door.y;assert(routeToInterview(city,c));finishActivityRoute(city,c);
  assert.equal(c.indoorLocation.buildingId,b.id);
+ const room=city.units.get(c.indoorLocation.unitId),interaction=furnitureInteraction(b,room,c.indoorLocation.roomType,0,'job-interview');
+ assert.ok(interaction,'the attended interview has a physical furniture interaction');
+ assert.equal(c.indoorLocation.furnitureId,interaction.item.id,'the candidate arrives at the selected interview seat');
 }
 
 test('initial offices initialize the real cycle supply chain without a missing constant',()=>{

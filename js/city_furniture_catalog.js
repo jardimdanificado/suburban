@@ -40,7 +40,7 @@ export function roomFurniture(b,u){
  else if(u.roomType==='dining'){add('table',.5,.5,'Mesa de refeições');chair(.14,.5,.5,.5);chair(.86,.5,.5,.5);chair(.5,.14,.5,.5);chair(.5,.86,.5,.5);if((u.x+u.y)%4===0)add('fridge',.87,.87,'Geladeira do refeitório',{storage:'food'});}
  else if(u.roomType==='treatment'){if(['iml','crematorium'].includes(b.type))add('gurney',.36,.55,'Maca de transporte');else add('exam_bed',.32,.55,'Maca de atendimento');add('lab',.72,.18,'Mesa clínica');chair(.75,.84,.72,.18,'Cadeira de atendimento');}
  else if(u.roomType==='laundry'){add('washer',.5,.72,'Máquina de lavar');add('chest',.82,.3,'Baú de roupas');}
- else if(u.roomType==='service'){add(b.type==='police_station'?'evidence_counter':'counter',.5,.78,b.type==='police_station'?'Balcão de evidências':'Balcão de atendimento');const retail=['market','bakery','greengrocer','restaurant','clothing_store','sports_shop','cycle_shop','thrift_store','pharmacy','paintworks'].includes(b.type);if(retail){add('rack',.26,.25,'Expositor de produtos',{visualScale:.62,footprint:{width:.4,depth:.2}});add('shelf',.74,.25,'Prateleira de produtos',{visualScale:.65,footprint:{width:.38,depth:.2}});}else add('shelf',.25,.25,'Prateleira de serviço');if(['police_station','courthouse','iml','crematorium'].includes(b.type)){if(b.type==='police_station')add('equipment_locker',.78,.25,'Armário de equipamento');else add('filing_cabinet',.76,.25,'Arquivo de serviço');}}
+ else if(u.roomType==='service'){add(b.type==='police_station'?'evidence_counter':'counter',.5,.78,b.type==='police_station'?'Balcão de evidências':'Balcão de atendimento');const retail=['market','bakery','greengrocer','restaurant','clothing_store','sports_shop','cycle_shop','thrift_store','pharmacy','paintworks'].includes(b.type);if(retail){add('rack',.26,.25,'Expositor de produtos',{visualScale:.62,footprint:{width:.4,depth:.2}});add('shelf',.74,.25,'Prateleira de produtos',{visualScale:.65,footprint:{width:.38,depth:.2}});}else add('shelf',.25,.25,'Prateleira de serviço');if(['police_station','courthouse','iml','crematorium'].includes(b.type)){if(b.type==='police_station')add('equipment_locker',.78,.25,'Armário de equipamento');else add('filing_cabinet',.76,.25,'Arquivo de serviço');}add('meeting_chair',.14,.52,'Cadeira de entrevista',{seated:true,visualScale:.62,facing:{x:u.x+.5,y:u.y+.78}});}
  else if(u.roomType==='waiting'){if(['library','theater','leisure','park','sports_center'].includes(b.type))add('sofa',.5,.5,'Assento coletivo',{capacity:2});else add('bench',.5,.5,'Banco de espera',{capacity:2});}
  else if(u.roomType==='balcony'){add('chair',.25,.5,'Cadeira de varanda',{seated:true,facing:{x:u.x+.5,y:u.y+.2},visualScale:.62});add('table',.72,.18,'Mesa lateral de varanda',{visualScale:.62});}
  else if(u.roomType==='roof_terrace'){add('sofa',.5,.5,'Assento da cobertura',{capacity:4});}
@@ -51,6 +51,7 @@ export function roomFurniture(b,u){
   if(u.roomType==='office'&&!justice)chair(.15,.15,.5,.5,'Cadeira de visitante');
   if(justice){add('evidence_board',.25,.82,'Quadro de evidências');if(b.type==='police_station')add('equipment_locker',.82,.82,'Armário de equipamento');else add('filing_cabinet',.82,.82,'Arquivo de processos');}
   if(u.roomType==='workspace'&&!justice&&(u.x+u.y)%5===0)add('chest',.18,.18,'Armário de ferramentas');
+  if(['workspace','office'].includes(u.roomType))add('meeting_chair',.85,.14,'Cadeira de entrevista',{seated:true,visualScale:.62,facing:{x:u.x+.5,y:u.y+.5}});
  }
  const stairCell=u.x===Math.floor(b.width/2)&&u.y===Math.floor(b.depth/2);
  if(['workspace','service','office','plenary','treatment','waiting'].includes(u.roomType)&&!stairCell)add('water_cooler',.12,.86,'Bebedouro');
@@ -69,7 +70,7 @@ export function furnitureInteraction(b,u,kind,slot=0,task=null){
  else if(task==='care')item=pick('crib')||pick('bed');
  else if(task==='health')item=pick('exam_bed')||pick('bed');
  else if(task==='vote')item=pick('ballot_booth')||pick('counter');
- else if(['job-interview','interview','visit','social','leisure','sit','work-wait','caregiving','outdoor_leisure'].includes(task))item=items.filter(f=>['chair','bench','sofa','council_chair'].includes(f.type))[slot%Math.max(1,items.filter(f=>['chair','bench','sofa','council_chair'].includes(f.type)).length)];
+ else if(['job-interview','interview','visit','social','leisure','sit','work-wait','caregiving','outdoor_leisure'].includes(task)){const seats=items.filter(f=>['meeting_chair','chair','bench','sofa','council_chair'].includes(f.type));item=seats[slot%Math.max(1,seats.length)];if(!item&&types.includes('desk'))item=pick('desk')||workstation;}
  else if(task==='police-investigation')item=pick('evidence_board')||workstation;
  else if(task==='police-oversight')item=pick('evidence_board')||pick('desk')||workstation;
  else if(task==='police-patrol')item=pick('equipment_locker')||pick('desk')||workstation;
@@ -99,15 +100,20 @@ export function furnitureInteraction(b,u,kind,slot=0,task=null){
  else if(['workspace','office','plenary'].includes(kind))item=items.find(f=>f.type==='chair')||workstation;
  if(!item)return null;
  const pose=item.seated?'seated':profile?.pose||'use',hw=(item.footprint?.width||.4)/2,hd=(item.footprint?.depth||.3)/2,clear=.13;
- const berth=task==='energy'&&item.bunk?slot%2:0,posePoint={x:b.entity.x+item.x,y:b.entity.y+item.y,z:u.z*1.8+(berth?.78:.18)};let at={x:item.x,y:item.y};
+ const keepClearOfExteriorWalls=(p)=>{
+  const margin=.3,x0=u.x===0?margin:0,x1=u.x+1===b.width?1-margin:1,y0=u.y===0?margin:0,y1=u.y+1===b.depth?1-margin:1;
+  return{x:Math.max(u.x+x0,Math.min(u.x+x1,p.x)),y:Math.max(u.y+y0,Math.min(u.y+y1,p.y))};
+ };
+ const berth=task==='energy'&&item.bunk?slot%2:0,safeFurniture=keepClearOfExteriorWalls({x:item.x,y:item.y}),posePoint={x:b.entity.x+safeFurniture.x,y:b.entity.y+safeFurniture.y,z:u.z*1.8+(berth?.78:.18)};let at={x:item.x,y:item.y};
  if(pose==='lying')at={x:item.x,y:item.y+hd+clear};
  else if(!item.seated){
   const candidates=[{x:item.x,y:item.y+hd+clear},{x:item.x-hw-clear,y:item.y},{x:item.x+hw+clear,y:item.y},{x:item.x,y:item.y-hd-clear}];
   const free=p=>p.x>=u.x+.08&&p.x<=u.x+.92&&p.y>=u.y+.08&&p.y<=u.y+.92&&!items.some(other=>other!==item&&Math.abs(p.x-other.x)<(other.footprint?.width||.4)/2+.09&&Math.abs(p.y-other.y)<(other.footprint?.depth||.3)/2+.09);
   at=candidates.find(free)||candidates.find(p=>p.x>=u.x&&p.x<=u.x+1&&p.y>=u.y&&p.y<=u.y+1)||candidates[0];
  }
- const point={x:b.entity.x+at.x,y:b.entity.y+at.y,z:u.z*1.8},facing=item.facing?{x:b.entity.x+item.facing.x,y:b.entity.y+item.facing.y}:{x:b.entity.x+item.x,y:b.entity.y+item.y},taskStation=item.type==='chair'&&workstation?.requiresSeat?workstation:item;
- return {item,taskStation,slot,pose,point,posePoint,facing};
+ const facing=item.facing?{x:b.entity.x+item.facing.x,y:b.entity.y+item.facing.y}:{x:b.entity.x+item.x,y:b.entity.y+item.y},taskStation=item.type==='chair'&&workstation?.requiresSeat?workstation:item;
+ at=keepClearOfExteriorWalls(at);
+ return {item,taskStation,slot,pose,point:{x:b.entity.x+at.x,y:b.entity.y+at.y,z:u.z*1.8},posePoint,facing};
 }
 
 export function roomFurnitureForCity(city,b,u){
