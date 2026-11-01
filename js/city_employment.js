@@ -148,7 +148,9 @@ export function advanceRecruitment(city){
     if(c&&!c.career?.applications.includes(a)){finishApplication(a,'retirado','Inscrição retirada',city.minute);releaseInterview(c,a);continue;}
     if(!c||c.entity.destroyed||!b?.active||b.entity.destroyed||city.politics.officeHolder(c)||c.businessIds.length){finishApplication(a,'retirado','Candidato ou empresa indisponível',city.minute);if(c)releaseInterview(c,a);continue;}
     if(a.interviewAt==null){a.interviewAt=appointmentTime(city,c,b);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;c.career.pendingInterview=a;}
-    const present=c.task==='job-interview'&&c.targetId===b.id&&c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.exiting;
+    const present=c.task==='job-interview'&&c.targetId===b.id&&(b.constructionKind==='open-air'
+      ? !c.indoorLocation&&!c.path.length&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=.8
+      : c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.exiting);
     if(present)a.arrivedAt??=city.minute;
     if(city.minute<a.interviewAt)continue;
     if(!present){a.absentAt=city.minute;finishApplication(a,'reprovado',a.checkedInAt!=null?'Saiu da seleção antes de receber o resultado':'Não compareceu ao local no horário marcado',city.minute);releaseInterview(c,a);continue;}

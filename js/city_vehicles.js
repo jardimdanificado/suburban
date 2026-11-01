@@ -8,12 +8,13 @@ import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_
 export const VEHICLE_SPECS=Object.freeze({
   bicicleta:{label:'Bicicleta',speed:8,seats:2,cargo:36},
   bicicleta_carga:{label:'Bicicleta de carga',speed:6.5,seats:2,cargo:96},
+  carrinho:{label:'Carrinho de mão',speed:4,seats:1,cargo:72},
   patinete:{label:'Patinete',speed:7,seats:1,cargo:24},
   patins:{label:'Patins',speed:6,seats:1,cargo:24},
   skate:{label:'Skate',speed:6.5,seats:1,cargo:24},
 });
 export const MAX_CARGO_CAPACITY=Math.max(72,...Object.values(VEHICLE_SPECS).map(spec=>spec.cargo));
-const PERSONAL_MOBILITY=new Set(Object.keys(VEHICLE_SPECS));
+const PERSONAL_MOBILITY=new Set(['bicicleta','bicicleta_carga','patinete','patins','skate']);
 export const VEHICLE_RECIPES=Object.freeze({
   bicicleta:{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},
   bicicleta_carga:{quadro:2,rodas:3,corrente:1,selim:1,plataforma:1,rolamentos:3},
@@ -48,9 +49,16 @@ export class CityVehicles {
     }
   }
   initializeStarterStock(){
-    const city=this.city,assembler=city.buildings.find(b=>b.type==='cycle_assembler'&&b.active&&!b.entity.destroyed);if(!assembler||assembler.initialVehicleStockCreated)return;
-    assembler.initialVehicleStockCreated=true;const population=city.initialPopulation||city.citizens.length,stock={bicicleta:32,bicicleta_carga:6,patinete:8,patins:6};
-    for(const [good,base]of Object.entries(stock)){const quantity=Math.max(1,Math.round(base*population/512));if(inventoryFree(assembler)<quantity)break;assembler.inventory[good]=(assembler.inventory[good]||0)+quantity;const firstId=this.nextId;this.registerUnits(assembler,good,quantity);const firstVehicle=this.units.get(firstId);if(good==='bicicleta_carga'&&firstVehicle)firstVehicle.funeralFleetReserve=true;const model=this.model(firstVehicle);if(model&&!model.initialPartsSeeded){model.initialPartsSeeded=true;model.components=Object.entries(VEHICLE_RECIPES[good]||{}).map(([part,amount])=>({good:part,quantity:amount,producerId:`import:${part}`,producerName:fictionalForeignBrand(part),brand:fictionalForeignBrand(part),origin:'Importação internacional',design:1}));}city.economy.produced[good]=(city.economy.produced[good]||0)+quantity;city.economy.recordGoods('initial-vehicle-stock',good,quantity,null,assembler.id);}
+    const city=this.city,assembler=city.buildings.find(b=>b.type==='cycle_assembler'&&b.active&&!b.entity.destroyed);if(!assembler)return;
+    const population=city.initialPopulation||city.citizens.length;
+    if(!assembler.initialVehicleStockCreated){
+      assembler.initialVehicleStockCreated=true;const stock={bicicleta:32,bicicleta_carga:6,patinete:8,patins:6};
+      for(const [good,base]of Object.entries(stock)){const quantity=Math.max(1,Math.round(base*population/512));if(inventoryFree(assembler)<quantity)break;assembler.inventory[good]=(assembler.inventory[good]||0)+quantity;const firstId=this.nextId;this.registerUnits(assembler,good,quantity);const firstVehicle=this.units.get(firstId);if(good==='bicicleta_carga'&&firstVehicle)firstVehicle.funeralFleetReserve=true;const model=this.model(firstVehicle);if(model&&!model.initialPartsSeeded){model.initialPartsSeeded=true;model.components=Object.entries(VEHICLE_RECIPES[good]||{}).map(([part,amount])=>({good,quantity:amount,producerId:`import:${part}`,producerName:fictionalForeignBrand(part),brand:fictionalForeignBrand(part),origin:'Importação internacional',design:1}));}city.economy.produced[good]=(city.economy.produced[good]||0)+quantity;city.economy.recordGoods('initial-vehicle-stock',good,quantity,null,assembler.id);}
+    }
+    if(!assembler.initialHandcartStockCreated){
+      const quantity=Math.max(2,Math.round(4*population/512));
+      if(inventoryFree(assembler)>=quantity){assembler.initialHandcartStockCreated=true;assembler.inventory.carrinho=(assembler.inventory.carrinho||0)+quantity;this.registerUnits(assembler,'carrinho',quantity);city.economy.initialStock.carrinho=(city.economy.initialStock.carrinho||0)+quantity;city.economy.produced.carrinho=(city.economy.produced.carrinho||0)+quantity;city.economy.recordGoods('initial-vehicle-stock','carrinho',quantity,null,assembler.id);}
+    }
   }
   parkingSites(){
     return this.city.buildings.filter(b=>b.type==='bike_rack'&&b.active&&!b.entity.destroyed).map(b=>{
@@ -67,7 +75,7 @@ export class CityVehicles {
     for(const b of choices)for(const slot of b.bikeSlots){if(slot.vehicleId!=null||slot.reservedBy!=null)continue;if(!this.city.walkable(Math.floor(slot.x),Math.floor(slot.y))||this.groundPath(slot,goal)===null)continue;slot.reservedBy=v.id;return {rackId:b.id,index:slot.index,x:slot.x,y:slot.y};}return null;
   }
   roadsideParking(v,goal,maxDistance=8){
-    if(!PERSONAL_MOBILITY.has(v.good))return null;
+    if(!PERSONAL_MOBILITY.has(v.good)&&v.good!=='carrinho')return null;
     const city=this.city,candidates=[],occupied=new Set();
     for(const other of this.units.values())if(other.id!==v.id&&!other.scrapped)for(const p of [other.parking,other.reservedParking])if(p)occupied.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     for(let dy=-maxDistance;dy<=maxDistance;dy++)for(let dx=-maxDistance;dx<=maxDistance;dx++){
@@ -162,7 +170,7 @@ export class CityVehicles {
   }
   registerUnits(b,good,quantity,modelId=null,batchId=null){
     if(!VEHICLE_SPECS[good])return;
-    if(modelId==null){const signature=`${b.id}:${good}:${b.partDesign||1}`,existing=this.models.get(signature);let model=existing;if(!model){model={id:this.nextModelId++,signature,kind:good,manufacturerId:b.id,brand:b.entity.properties.name,name:`${VEHICLE_SPECS[good].label} ${b.partDesign||1}`,components:Object.entries(VEHICLE_RECIPES[good]).map(([good,quantity])=>({good,quantity,producerId:b.id,design:1})),createdAt:this.city.minute};this.models.set(signature,model);}modelId=model.id;}
+    if(modelId==null){const signature=`${b.id}:${good}:${b.partDesign||1}`,existing=this.models.get(signature);let model=existing;if(!model){model={id:this.nextModelId++,signature,kind:good,manufacturerId:b.id,brand:b.entity.properties.name,name:`${VEHICLE_SPECS[good].label} ${b.partDesign||1}`,components:Object.entries(VEHICLE_RECIPES[good]||{}).map(([good,quantity])=>({good,quantity,producerId:b.id,design:1})),createdAt:this.city.minute};this.models.set(signature,model);}modelId=model.id;}
     for(let i=0;i<quantity;i++){const id=this.nextId++,v={id,good,modelId,batchId,manufacturerId:b.id,holderAccountId:b.accountId,ownerAccountId:b.accountId,active:false,scrapped:false,condition:100,color:COLOR_PALETTE[(b.id+i*7)%COLOR_PALETTE.length].hex,distance:0,passengerIds:[],driverId:null,journey:null};v.createdAt=this.city.minute;v.ownershipHistory=[{minute:this.city.minute,from:null,to:b.accountId,toName:b.entity.properties.name,price:0,reason:'Fabricação'}];this.units.set(id,v);this.placeDisplay(v,b);}
   }
   placeDisplay(v,building,slotOverride=null){
@@ -238,15 +246,38 @@ export class CityVehicles {
     for(const v of this.units.values())if(v.active&&!v.scrapped&&v.condition>15&&!v.mechanicId&&!v.policeRecoveryOfficerId&&owners.has(this.accessAccount(v))&&(!v.driverId||v.driverId===c.id)){capacity=Math.max(capacity,VEHICLE_SPECS[v.good].cargo);if(capacity>=MAX_CARGO_CAPACITY)break;}
     return injuredCarryCapacity(c,capacity);
   }
+  buyCompanyCart(company,seller){
+    const city=this.city,price=city.economy.goods.carrinho?.price||0;
+    if(!seller||seller.type!=='artisan'||(seller.inventory.carrinho||0)<1||!price||!city.transfer(company.accountId,seller.accountId,price,'Atacado: carrinho de mão',{good:'carrinho',quantity:1,buildingId:company.id,sellerId:seller.id}))return false;
+    seller.inventory.carrinho--;city.economy.recordGoods('durable-purchase','carrinho',1,seller.id,company.id);
+    const cart=this.activateProducedCart(seller,company.accountId,company,price,'Compra empresarial em loja artesanal');if(!cart)return false;
+    city.history.record('ownership',`${company.entity.properties.name} comprou um carrinho de mão de ${seller.entity.properties.name} para ampliar o transporte da equipe.`,[company.accountId,seller.accountId],{vehicleId:cart.id,buildingId:company.id,sellerId:seller.id,good:'carrinho',price,companyFleet:true});
+    return true;
+  }
+  activateProducedCart(seller,account,parkingBuilding,price=0,reason='Compra de carrinho de mão'){
+    let cart=[...this.units.values()].find(v=>!v.active&&!v.scrapped&&v.good==='carrinho'&&v.holderAccountId===seller.accountId);
+    if(!cart){const id=this.nextId;this.registerUnits(seller,'carrinho',1);cart=this.units.get(id);}if(!cart)return null;
+    this.recordOwner(cart,account,price,reason);this.activate(cart,account,parkingBuilding);return cart;
+  }
+  buyCompanyBasket(company,seller){
+    const city=this.city,price=city.economy.goods.cesta?.price||0,worker=company.workers.map(id=>city.society.citizen(id)).find(c=>c&&!c.entity.destroyed&&!c.equipment?.cesta&&!c.equipment?.carrinho);
+    if(!worker||!seller||seller.type!=='artisan'||(seller.inventory.cesta||0)<1||!price||!city.transfer(company.accountId,seller.accountId,price,'Atacado: cestas',{good:'cesta',quantity:1,buildingId:company.id,sellerId:seller.id}))return false;
+    seller.inventory.cesta--;city.economy.recordGoods('durable-purchase','cesta',1,seller.id,company.id);worker.equipment??={};worker.equipment.cesta={boughtAt:city.minute,buildingId:seller.id,companyId:company.id};
+    city.history.record('ownership',`${company.entity.properties.name} comprou uma cesta de ${seller.entity.properties.name} para ${worker.entity.properties.name}.`,[company.accountId,seller.accountId,worker.accountId],{buildingId:company.id,sellerId:seller.id,citizenId:worker.id,good:'cesta',price,companyFleet:true});return true;
+  }
   hourly(){
-    const city=this.city,hour=Math.floor(city.minute/60);if(this.lastHour===hour)return;this.lastHour=hour;
+    const city=this.city,hour=Math.floor(city.minute/60);if(this.lastHour===hour)return;this.lastHour=hour;this.initializeStarterStock();
     const parking=this.parkingReport();if(parking.missing>0&&this.lastParkingPlanDay!==city.day&&!city.development.projects.some(p=>p.type==='bike_rack'&&!p.cancelled&&p.status!=='completed')){this.lastParkingPlanDay=city.day;if(city.welfare.conditions().foodDays>=1){city.politics.fundInitialWorksBudget();city.politics.startPublicWork('bike_rack');}}
     const units=[...this.units.values()],unsold=units.filter(v=>!v.active&&!v.scrapped&&city.buildings.some(b=>['cycle_shop','cycle_assembler'].includes(b.type)&&b.active&&b.accountId===v.holderAccountId&&b.inventory[v.good]>0)),ownedBy=account=>units.filter(v=>v.active&&!v.scrapped&&v.ownerAccountId===account),owners=new Set(units.filter(v=>v.active&&!v.scrapped).map(v=>v.ownerAccountId));
     for(const company of [...city.economy.businesses,...city.buildings.filter(b=>['iml','crematorium'].includes(b.type)&&b.active&&!b.entity.destroyed)].filter(b=>b.active&&!b.entity.destroyed).sort((a,b)=>Number(['iml','crematorium'].includes(b.type))-Number(['iml','crematorium'].includes(a.type))||b.workers.length-a.workers.length||a.id-b.id)){
-      const target=Math.max(1,Math.ceil(Math.max(1,company.workers.length)/4));let fleet=ownedBy(company.accountId).filter(v=>v.good==='bicicleta_carga'&&v.condition>15).length;
-      while(fleet<target){const funeralOperator=['iml','crematorium'].includes(company.type),v=unsold.find(v=>!v.active&&v.good==='bicicleta_carga'&&(funeralOperator||!v.funeralFleetReserve));if(!v)break;const dealer=city.building(v.holderAccountId);let acquired=false;
+      const target=Math.max(1,Math.ceil(Math.max(1,company.workers.length)/4));let fleet=ownedBy(company.accountId).filter(v=>['bicicleta_carga','carrinho'].includes(v.good)&&v.condition>15).length;
+      while(fleet<target){const funeralOperator=['iml','crematorium'].includes(company.type),v=unsold.find(v=>!v.active&&v.good==='bicicleta_carga'&&(funeralOperator||!v.funeralFleetReserve));let acquired=false;
+        if(v){const dealer=city.building(v.holderAccountId);
         if(dealer?.accountId===company.accountId&&['cycle_shop','cycle_assembler'].includes(dealer.type)&&dealer.inventory[v.good]>0){dealer.inventory[v.good]--;this.activate(v,company.accountId,dealer);city.history.record('ownership',`${dealer.entity.properties.name} destinou uma bicicleta de carga à equipe.`,[company.accountId],{vehicleId:v.id,good:v.good,companyFleet:true});acquired=true;}
-        else acquired=this.financeVehicle(company,v)&&this.buyVehicle(company.accountId,v.id);
+        else acquired=this.financeVehicle(company,v)&&this.buyVehicle(company.accountId,v.id);}
+        if(!acquired){const cart=unsold.find(v=>!v.active&&!v.scrapped&&v.good==='carrinho'&&city.building(v.holderAccountId)?.inventory.carrinho>0);if(cart){acquired=this.financeVehicle(company,cart)&&this.buyVehicle(company.accountId,cart.id);if(acquired){this.freeParking(cart);this.parkNearby(cart,company.door);}}}
+        if(!acquired){const artisan=city.economy.businesses.find(b=>b.active&&!b.entity.destroyed&&b.type==='artisan'&&(b.inventory.carrinho||0)>0&&company.balance>=city.economy.goods.carrinho.price);acquired=this.buyCompanyCart(company,artisan);}
+        if(!acquired){const artisan=city.economy.businesses.find(b=>b.active&&!b.entity.destroyed&&b.type==='artisan'&&(b.inventory.cesta||0)>0&&company.balance>=city.economy.goods.cesta.price);acquired=this.buyCompanyBasket(company,artisan);if(acquired)break;}
         if(!acquired)break;fleet++;owners.add(company.accountId);
       }
       if(['iml','crematorium'].includes(company.type)&&fleet===0&&!units.some(v=>v.active&&!v.scrapped&&v.good==='bicicleta_carga'&&v.condition>15&&(v.possessorAccountId||v.ownerAccountId)===company.accountId))this.provisionFuneralFleetBike(company);
@@ -257,7 +288,7 @@ export class CityVehicles {
     }
     const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!owners.has(c.accountId)&&c.mobilityNeed>=12).sort((a,b)=>(b.mobilityNeed*(b.mobilityPriority||1)-a.mobilityNeed*(a.mobilityPriority||1))||b.balance-a.balance||a.id-b.id).slice(0,6);
     for(const c of buyers){
-      const offered=unsold.filter(v=>!v.active&&v.good!=='bicicleta_carga'&&!dislikesColor(c,v.color)&&this.vehiclePrice(v)+city.currency.price(2500)<c.balance).sort((a,b)=>Number(b.good===['bicicleta','patins','skate','patinete'][c.id%4])-Number(a.good===['bicicleta','patins','skate','patinete'][c.id%4])||this.vehiclePrice(a)*(1-.3*colorAffinity(c,a.color))-this.vehiclePrice(b)*(1-.3*colorAffinity(c,b.color)));
+      const offered=unsold.filter(v=>!v.active&&!['bicicleta_carga','carrinho'].includes(v.good)&&!dislikesColor(c,v.color)&&this.vehiclePrice(v)+city.currency.price(2500)<c.balance).sort((a,b)=>Number(b.good===['bicicleta','patins','skate','patinete'][c.id%4])-Number(a.good===['bicicleta','patins','skate','patinete'][c.id%4])||this.vehiclePrice(a)*(1-.3*colorAffinity(c,a.color))-this.vehiclePrice(b)*(1-.3*colorAffinity(c,b.color)));
       if(offered[0]&&this.buyVehicle(c.accountId,offered[0].id)){owners.add(c.accountId);c.mobilityNeed*=.22;}
     }
   }

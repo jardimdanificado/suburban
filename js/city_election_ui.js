@@ -18,11 +18,30 @@ function polls(ui,p,e){
   const poll=e.polls.find(r=>r.id===ui.monitorPollId)||e.polls.at(-1);
   if(!poll){p.note('Aguardando a primeira pesquisa.');return;}
   contextActions(ui,p,{poll});
-  p.button('ACOMPANHAR A MAIS RECENTE',()=>{ui.monitorPollId=null;},ui.monitorPollId==null);p.links(e.polls.map(r=>({label:`${stamp(r.minute)}`,click:()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:r.id})})));
+  p.button('PESQUISA MAIS RECENTE',()=>{ui.monitorPollId=null;},ui.monitorPollId==null);
+  p.heading(`TODAS AS PESQUISAS · ${e.polls.length}`);
+  p.table([{label:'Data'},{label:'Instituto',weight:2},{label:'Amostra'},{label:'Indecisos'},{label:'Margem'}],e.polls.slice().reverse().map(r=>({cells:[stamp(r.minute),r.instituteName||'Instituto não identificado',r.sampleSize,r.undecided,`±${r.marginOfError.toFixed(1)} p.p.`],selected:r.id===poll.id,click:()=>{ui.monitorPollId=r.id;}})));
   if(poll.instituteName)p.kv('Instituto',poll.instituteName);p.kv('Última atualização',stamp(poll.minute));p.metrics([['ENTREVISTADOS',poll.sampleSize],['INDECISOS',poll.undecided],['MARGEM',`±${poll.marginOfError.toFixed(1)} p.p.`]]);
   p.table([{label:'Candidato',weight:2},{label:'Intenção'},{label:'Rejeição'}],poll.results.map(r=>({cells:[r.name,`${(r.intentions/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`,`${(r.rejections/Math.max(1,poll.sampleSize)*100).toFixed(1)}%`],click:()=>ui.openCitizen(r.candidateId)})));
   p.kv('Aprovação entre entrevistados',`${poll.approval.toFixed(1)}%`);ui.section(p,`monitorMethod:${poll.id}`,'Método e financiamento',()=>renderPollMethod(ui,p,poll));
-  p.button('RESPOSTAS E MOTIVOS',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'polls',electionId:e.id,pollId:poll.id}));
+  ui.section(p,`electionPollResponses:${poll.id}`,'Respostas individuais e motivos',()=>{const rows=poll.responses||[];for(const row of pages(ui,p,rows,'monitorPollResponsePage',8))p.record(row.name,`${row.decided?ui.city.accountName(`citizen:${row.candidateId}`):'Indeciso'} · ${row.reason}`,()=>ui.openCitizen(row.citizenId));});
+}
+function campaign(ui,p,e){
+  const city=ui.city,gov=city.politics,materials=gov.campaigns.getMaterials(),agents=city.citizens.filter(c=>c.campaign?.electionId===e.id).length;
+  p.metrics([['CANDIDATURAS',e.candidates.length],['AGENTES NAS RUAS',agents],['ELEITORES CONTATADOS',e.contactedIds?.size||0],['PROPAGANDAS ATIVAS',materials.decorations.filter(d=>d.until>city.minute&&d.electionId===e.id).length]]);
+  p.kv('Período',`${stamp(e.startedAt)} → ${stamp(e.voteAt)}`);
+  p.table([{label:'Candidatura',weight:2},{label:'Partido'},{label:'Slogan da campanha',weight:2.3},{label:'Slogan do partido',weight:2.3},{label:'Coligação / apoios',weight:2},{label:'Promessas'}],e.candidates.map(n=>({cells:[n.name,gov.party(n.partyId)?.short||'—',n.slogan||'—',n.partySlogan||gov.party(n.partyId)?.slogan||'—',(n.endorsementPartyIds||[]).map(id=>gov.party(id)?.short||id).join(' + '),n.promises?.length||0],click:()=>ui.openCitizen(n.citizenId)})));
+  if(e.councilCandidates?.length){p.heading('CANDIDATURAS À CÂMARA');p.table([{label:'Candidato',weight:2},{label:'Partido'},{label:'Slogan',weight:2.5}],e.councilCandidates.map(n=>({cells:[n.name,gov.party(n.partyId)?.short||'—',n.slogan||gov.party(n.partyId)?.slogan||'—'],click:()=>ui.openCitizen(n.citizenId)})));}
+  p.heading('PROGRAMA DAS CANDIDATURAS');
+  for(const n of e.candidates)p.block(n.name,`${gov.party(n.partyId)?.short||'—'} · ${n.slogan||'Sem slogan'}`,q=>{q.kv('Slogan partidário',n.partySlogan||gov.party(n.partyId)?.slogan||'—');if(n.viceName)q.kv('Vice-prefeito',`${n.viceName} · ${gov.party(n.vicePartyId)?.short||'—'}`);for(const promise of n.promises||[])q.record(promise.title,`${promise.higher?'Aumentar':'Reduzir'} até ${promise.target}`);const finance=n.campaignFinance;if(finance)q.kv('Financiamento recebido / gasto',`${finance.received||0} / ${finance.spent||0}`);});
+  const events=[...(e.events||[])].reverse();p.heading('ATIVIDADE DE CAMPANHA');for(const event of pages(ui,p,events,'monitorCampaignPage',10))p.record(stamp(event.minute),event.message,()=>ui.openEvent(event.eventId));if(!events.length)p.note('Nenhuma atividade de campanha registrada.');
+}
+function coalitions(ui,p,e){
+  const city=ui.city,gov=city.politics;p.heading('COLIGAÇÕES E APOIOS');
+  if(e.coalitions?.length)p.table([{label:'Partidos',weight:2},{label:'Candidato a prefeito',weight:2},{label:'Vice-prefeito',weight:2},{label:'Data'}],e.coalitions.map(row=>({cells:[row.partyIds.map(id=>gov.party(id)?.short||id).join(' + '),city.society.citizen(row.mayorId)?.entity.properties.name||'—',city.society.citizen(row.viceId)?.entity.properties.name||'—',stamp(row.minute)]})));
+  else p.note('Esta eleição não registrou coligação com vice compartilhado.');
+  p.heading('DECISÃO DE CADA PARTIDO');
+  p.table([{label:'Partido',weight:2},{label:'Filiados'},{label:'Vereadores'},{label:'Candidatura ou acordo',weight:3}],(e.nominationReport||[]).map(row=>{const n=e.candidates.find(candidate=>candidate.endorsementPartyIds?.includes(row.partyId)),party=gov.party(row.partyId);return{cells:[party?.name||row.partyName,row.members,row.representatives??0,`${row.status}${n?` · ${n.name}${n.viceName?` / vice ${n.viceName}`:''}`:''}`],click:()=>ui.openParty(row.partyId)};}));
 }
 function ballots(ui,p,e){
   p.note('Visão do observador: os votos e motivos abaixo são os efetivamente registrados na urna, com horário e escolhas individuais.');
@@ -57,12 +76,16 @@ function council(ui,p,e){
 export function renderElectionMonitor(ui,p){
   const city=ui.city,e=electionFor(ui);if(!e){p.note('Registro desta eleição indisponível.');return;}
   contextActions(ui,p,{election:e});
-  const mode=ui.electionView||'polls';p.heading(`ELEIÇÃO ${e.id} · ${e.round||1}º TURNO · ${phases[e.status]||e.status}`);
-  if(e.firstRoundId)p.button('RESULTADO DO PRIMEIRO TURNO',()=>ui.host?.openElection(e.firstRoundId,'results'));
-  if(e.runoffId)p.button('ACOMPANHAR SEGUNDO TURNO',()=>ui.host?.openElection(e.runoffId,'polls'));
+  const mode=ui.electionView||(['campaign','scheduled'].includes(e.status)?'campaign':'polls');p.heading(`ELEIÇÃO ${e.id} · ${e.round||1}º TURNO · ${phases[e.status]||e.status}`);
+  const elections=[city.politics.active,city.politics.lastResult,...city.politics.elections].filter((item,index,all)=>item&&all.findIndex(row=>row?.id===item.id)===index).sort((a,b)=>b.id-a.id);
+  if(elections.length>1)p.links(elections.map(item=>({label:`ELEIÇÃO ${item.id} · ${item.round||1}º TURNO`,selected:item.id===e.id,click:()=>ui.openPanel({electionId:item.id,electionView:item.status==='completed'?'results':'campaign'})})));
+  if(e.firstRoundId)p.button('VER PRIMEIRO TURNO',()=>ui.openPanel({electionId:e.firstRoundId,electionView:'results'}));
+  if(e.runoffId)p.button('VER SEGUNDO TURNO',()=>ui.openPanel({electionId:e.runoffId,electionView:'campaign'}));
   if(e.status==='runoff-required')p.note('Nenhuma chapa obteve mais de 50% dos votos válidos. As duas primeiras disputarão o segundo turno. A Câmara será empossada com o resultado final, usando somente os votos do primeiro turno.');
   if(e.status==='scheduled')p.note(`A campanha começa em ${stamp(e.startedAt)} e dura ${(e.voteAt-e.startedAt)/1440} dias, metade do período do primeiro turno.`);
-  p.links([['polls','PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.openPanel({electionView:id})})));
+  p.links([['campaign','CAMPANHAS'],['coalitions','COLIGAÇÕES'],['polls','TODAS AS PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.openPanel({electionView:id})})));
+  if(mode==='campaign'){campaign(ui,p,e);return;}
+  if(mode==='coalitions'){coalitions(ui,p,e);return;}
   if(mode==='polls'){p.kv('Dia da votação presencial',stamp(e.voteAt));polls(ui,p,e);return;}
   if(['campaign','scheduled'].includes(e.status)){p.note(`Votação presencial na prefeitura a partir de ${stamp(e.voteAt)}. A contagem começa com os votos efetivamente depositados.`);return;}
   p.metrics([['VOTOS REGISTRADOS',e.ballots.length],['ELEITORADO',e.electorateSize??e.ballots.length],['NÃO VOTARAM',Math.max(0,(e.electorateSize??e.ballots.length)-e.ballots.length)]]);

@@ -1,12 +1,28 @@
 import { inventoryFree } from './city_inventory.js';
 import { tileAt, ROAD_TILES } from './city_terrain.js?v=mine-adjacent-1';
+import { TILE_WATER } from './world_gen.js?v=deep-perf-3';
 export const PLANT_SPECIES = {
-  coconut_palm: { label: 'Coqueiro', color: 0x548d38, grow: 4 * 1440, wood: 4, terrain: [0,9] },
-  royal_palm: { label: 'Palmeira-real', color: 0x6a9b46, grow: 4 * 1440, wood: 4, terrain: [0,9] },
+  coconut_palm: { label: 'Coqueiro', color: 0x548d38, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
+  royal_palm: { label: 'Palmeira-real', color: 0x6a9b46, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
+  banana: { label: 'Bananeira', color: 0x5c9639, grow: 2 * 1440, wood: 0, tree: true, terrain: [0] },
+  mango: { label: 'Mangueira', color: 0x568341, grow: 4 * 1440, wood: 4, terrain: [0,9] },
+  guava: { label: 'Goiabeira', color: 0x68964b, grow: 3 * 1440, wood: 3, terrain: [0,9] },
+  jackfruit: { label: 'Jaqueira', color: 0x4e7d3c, grow: 5 * 1440, wood: 4, terrain: [0] },
+  breadfruit: { label: 'Fruta-pão', color: 0x548447, grow: 4 * 1440, wood: 4, terrain: [0] },
+  papaya: { label: 'Mamoeiro', color: 0x65954a, grow: 2 * 1440, wood: 0, tree: true, terrain: [0] },
+  avocado: { label: 'Abacateiro', color: 0x4f7842, grow: 4 * 1440, wood: 4, terrain: [0,9] },
+  tamarind: { label: 'Tamarindeiro', color: 0x63854b, grow: 4 * 1440, wood: 4, terrain: [0,9] },
+  cacao: { label: 'Cacaueiro', color: 0x3e7046, grow: 3 * 1440, wood: 2, terrain: [0] },
+  soursop: { label: 'Gravioleira', color: 0x4b7e49, grow: 4 * 1440, wood: 3, terrain: [0] },
+  ackee: { label: 'Akee', color: 0x598340, grow: 4 * 1440, wood: 3, terrain: [0] },
+  lime: { label: 'Limoeiro', color: 0x6f9144, grow: 3 * 1440, wood: 3, terrain: [0,9] },
+  allspice: { label: 'Pimenteira-da-jamaica', color: 0x4d7b44, grow: 4 * 1440, wood: 3, terrain: [0] },
   flamboyant: { label: 'Flamboyant', color: 0x658d38, grow: 3 * 1440, wood: 4, terrain: [0,9] },
   sea_grape: { label: 'Uva-da-praia', color: 0x77964c, grow: 3 * 1440, wood: 4, terrain: [0,9] },
   tropical_almond: { label: 'Amendoeira-da-praia', color: 0x638849, grow: 3 * 1440, wood: 4, terrain: [0,9] },
   mangrove: { label: 'Mangue', color: 0x4e7948, grow: 4 * 1440, wood: 4, terrain: [0] },
+  hibiscus: { label: 'Hibisco tropical', color: 0x5c8f43, grow: 2 * 1440, wood: 0, tree: false, terrain: [0,9] },
+  bougainvillea: { label: 'Buganvília', color: 0x668d43, grow: 2 * 1440, wood: 0, tree: false, terrain: [0,9] },
   oak: { label: 'Carvalho', color: 0x6c994b, grow: 3 * 1440, wood: 4, terrain: [0,9] },
   pine: { label: 'Pinheiro', color: 0x527d55, grow: 4 * 1440, wood: 4, terrain: [0,9] },
   willow: { label: 'Salgueiro', color: 0x81a967, grow: 3 * 1440, wood: 4, terrain: [0] },
@@ -15,7 +31,7 @@ export const PLANT_SPECIES = {
   cherry_blossom: { label: 'Cerejeira', color: 0xd899b1, grow: 3 * 1440, wood: 4, terrain: [0] },
   berry: { label: 'Amoreira', color: 0x73934c, grow: 1440, wood: 0, terrain: [0,9] },
 };
-export const NATURE_RULES = { maxPlants: 640, maxSeeds: 160, germinationMinutes: 360, seedAttemptsPerHour: 12 };
+export const NATURE_RULES = { maxPlants: 1000, maxSeeds: 240, germinationMinutes: 360, seedAttemptsPerHour: 12 };
 /** Bounded vegetation population. Seeds are records until germination, not extra entities. */
 export class CityNature {
   constructor(city) { this.city = city; this.plants = new Map(); this.tiles = new Map(); this.seeds = []; this.germinated = 0; this.harvested = 0; this.lost = 0; }
@@ -31,19 +47,39 @@ export class CityNature {
     if (this.plants.size >= NATURE_RULES.maxPlants || !this.available(x,y,species,buildingId)) return null;
     const spec = PLANT_SPECIES[species], city = this.city;
     const scaleSeed=Math.abs(Math.sin(x*12.9898+y*78.233+species.length*0.31)*43758.5453)%1;
-    const entity = city.createEntity({x,y,properties:{name:spec.label,species,tree:spec.wood>0,render:{color:spec.color,size:mature?1:.3,skin:'feature_tree_full.png'}}});
+    const entity = city.createEntity({x,y,properties:{name:spec.label,species,tree:spec.tree??(spec.wood>0),render:{color:spec.color,size:mature?1:.3,skin:'feature_tree_full.png'}}});
     const plant = { id:entity.id,entity,species,x,y,buildingId,visualScale:0.76+scaleSeed*0.52,plantedAt:city.minute-(mature?spec.grow:0),stage:mature?'mature':'seedling' };
     entity.properties.cityPlant = plant;
     this.plants.set(plant.id,plant); this.tiles.set(`${x},${y}`,plant.id); city.structureRevision++;
     return plant;
   }
+  normalizePlantSpecies(plant) {
+    if(!plant)return null;
+    let species=plant.species??plant.entity?.properties?.species;
+    if(!PLANT_SPECIES[species]){
+      const savedName=plant.entity?.properties?.name;
+      species=Object.keys(PLANT_SPECIES).find(key=>PLANT_SPECIES[key].label===savedName)||'tropical_almond';
+      plant.species=species;
+      const props=plant.entity?.properties;
+      if(props){props.species=species;props.tree=PLANT_SPECIES[species].tree??(PLANT_SPECIES[species].wood>0);props.name=PLANT_SPECIES[species].label;props.render??={};props.render.color=PLANT_SPECIES[species].color;props.render.skin??='feature_tree_full.png';}
+    }
+    plant.species=species;
+    return PLANT_SPECIES[species];
+  }
   initialize() {
     const hall=this.city.buildings.find(b=>b.type==='townhall'); if(!hall)return;
-    const species=['coconut_palm','royal_palm','flamboyant','sea_grape','tropical_almond','mangrove','berry'];
-    for(let attempt=0;attempt<900 && this.plants.size<160;attempt++) {
+    const species=['coconut_palm','royal_palm','banana','mango','guava','jackfruit','breadfruit','papaya','avocado','tamarind','cacao','soursop','ackee','lime','allspice','flamboyant','sea_grape','tropical_almond','mangrove','hibiscus','bougainvillea','berry'];
+    for(let attempt=0;attempt<2600 && this.plants.size<320;attempt++) {
       const angle=this.city.random()*Math.PI*2,distance=22+this.city.random()*95;
       const x=Math.floor(hall.door.x+Math.cos(angle)*distance),y=Math.floor(hall.door.y+Math.sin(angle)*distance);
       this.spawn(x,y,species[attempt%species.length],{mature:true});
+    }
+    // Add a dense, irregular fringe of palms along any reachable shoreline.
+    // Sampling the whole map keeps bays and small coves from being overlooked.
+    const waterSide=(x,y)=>[[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,-1],[-1,1],[1,1]].some(([dx,dy])=>tileAt(this.city.world,x+dx,y+dy)===TILE_WATER);
+    for(let attempt=0;attempt<9000&&this.plants.size<460;attempt++){
+      const x=Math.floor(this.city.random()*this.city.world.width),y=Math.floor(this.city.random()*this.city.world.height);
+      if(waterSide(x,y))this.spawn(x,y,this.city.random()<.84?'coconut_palm':'royal_palm',{mature:true});
     }
     this.city.log(`${this.plants.size} árvores e arbustos compõem a vegetação inicial.`, 'nature', [], {kind:'vegetation-founded',quantity:this.plants.size});
   }
@@ -53,10 +89,12 @@ export class CityNature {
   }
   remove(plant, reason, details={}) {
     plant.entity.destroyed=true;this.plants.delete(plant.id);this.tiles.delete(`${plant.x},${plant.y}`);this.city.structureRevision++;
-    return this.city.log(`${PLANT_SPECIES[plant.species].label}: ${reason}.`,'nature',[],{kind:'plant-removed',plantId:plant.id,buildingId:plant.buildingId,...details});
+    const label=this.normalizePlantSpecies(plant)?.label||'Vegetação';
+    return this.city.log(`${label}: ${reason}.`,'nature',[],{kind:'plant-removed',plantId:plant.id,buildingId:plant.buildingId,...details});
   }
   hourly() {
     const city=this.city;
+    for(const plant of this.plants.values())this.normalizePlantSpecies(plant);
     for(const c of city.citizens){const job=c.forestryJob;if(!job)continue;const b=city.building(job.buildingId);if(c.entity.destroyed||!b||city.politics.officeHolder(c)||c.jobId!==b.id&&b.ownerId!==c.id){if(job.load){city.economy.lost.madeira+=job.load;city.log('Madeira em transporte perdida após interrupção da atividade florestal.','nature',[c.id],{kind:'forestry-cargo-lost',quantity:job.load,buildingId:job.buildingId});}c.forestryJob=null;}}
     for(const plant of [...this.plants.values()]) {
       if(plant.buildingId && !city.building(plant.buildingId))plant.buildingId=null;
@@ -86,12 +124,13 @@ export class CityNature {
   }
   validExisting(p) {
     const city=this.city;
-    return PLANT_SPECIES[p.species].terrain.includes(tileAt(city.world,p.x,p.y)) && !city.occupied.has(`${p.x},${p.y}`) &&
+    const species=this.normalizePlantSpecies(p);if(!species)return false;
+    return species.terrain.includes(tileAt(city.world,p.x,p.y)) && !city.occupied.has(`${p.x},${p.y}`) &&
       !city.development.plots.some(l=>(p.buildingId == null || l.buildingId!==p.buildingId) && p.x>=l.x && p.x<l.x+l.width && p.y>=l.y && p.y<l.y+l.depth) &&
       ![...city.lighting.sites.values()].some(l=>l.built && Math.floor(l.x)===p.x && Math.floor(l.y)===p.y);
   }
   forestryTree(b) {
-    return [...this.plants.values()].filter(p=>PLANT_SPECIES[p.species].wood && p.stage==='mature' && (!p.buildingId || p.buildingId===b.id) && Math.hypot(p.x-b.door.x,p.y-b.door.y)<=14 && this.validExisting(p))
+    return [...this.plants.values()].filter(p=>this.normalizePlantSpecies(p)?.wood && p.stage==='mature' && (!p.buildingId || p.buildingId===b.id) && Math.hypot(p.x-b.door.x,p.y-b.door.y)<=14 && this.validExisting(p))
       .sort((a,c)=>Math.hypot(a.x-b.door.x,a.y-b.door.y)-Math.hypot(c.x-b.door.x,c.y-b.door.y))[0];
   }
   // Workers reserve one tree or planting site and physically visit it.
@@ -102,14 +141,14 @@ export class CityNature {
     if(!job){
       if(inventoryFree(b)<4||b.inventory.madeira>=48||city.minute<(b.forestryBlockedUntil||0))return false;
       const claimed=new Set(city.citizens.filter(v=>v.forestryJob).map(v=>v.forestryJob.treeId));
-      const tree=[...this.plants.values()].filter(p=>p.stage==='mature'&&PLANT_SPECIES[p.species].wood&&(!p.buildingId||p.buildingId===b.id)&&!claimed.has(p.id)&&Math.hypot(p.x-b.door.x,p.y-b.door.y)<=14&&this.validExisting(p)).sort((a,d)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(d.x-c.entity.x,d.y-c.entity.y))[0];
+      const tree=[...this.plants.values()].filter(p=>p.stage==='mature'&&this.normalizePlantSpecies(p)?.wood&&(!p.buildingId||p.buildingId===b.id)&&!claimed.has(p.id)&&Math.hypot(p.x-b.door.x,p.y-b.door.y)<=14&&this.validExisting(p)).sort((a,d)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(d.x-c.entity.x,d.y-c.entity.y))[0];
       if(b.seedStock<1&&!(c.forestrySeeds>0))return false;
       if(tree)job={buildingId:b.id,treeId:tree.id,x:tree.x+.5,y:tree.y+.5,species:tree.species,stage:'cut',labor:0,load:0};
       else{
         const planted=[...this.plants.values()].filter(p=>p.buildingId===b.id).length+this.seeds.filter(p=>p.buildingId===b.id).length;
         if(planted>=16)return false;
         for(let i=0;i<24&&!job;i++){
-          const x=Math.floor(b.door.x+city.random()*24-12),y=Math.floor(b.door.y+city.random()*24-12),species=city.random()<.48?'coconut_palm':city.random()<.5?'sea_grape':'tropical_almond';
+          const x=Math.floor(b.door.x+city.random()*24-12),y=Math.floor(b.door.y+city.random()*24-12),options=tileAt(city.world,x,y)===0?['banana','mango','guava','jackfruit','breadfruit','papaya','cacao','soursop','ackee','lime','allspice','coconut_palm','sea_grape']:['mango','guava','avocado','tamarind','lime','coconut_palm','royal_palm','tropical_almond'],species=options[Math.floor(city.random()*options.length)];
           if(this.available(x,y,species,b.id)&&!this.seeds.some(s=>s.x===x&&s.y===y)&&!city.citizens.some(v=>v.forestryJob?.x===x+.5&&v.forestryJob?.y===y+.5))job={buildingId:b.id,x:x+.5,y:y+.5,species,stage:'plant',labor:0,load:0};
         }
       }
@@ -128,7 +167,7 @@ export class CityNature {
       c.forestryJob=null;c.action='Descarregando a madeira cortada';return true;
     }
     if(job.stage==='cut'){
-      const tree=this.plants.get(job.treeId);if(!tree||tree.stage!=='mature'){c.forestryJob=null;return false;}
+      const tree=this.plants.get(job.treeId);if(!tree||tree.stage!=='mature'){c.forestryJob=null;return false;}this.normalizePlantSpecies(tree);
       job.labor+=1+(c.skills.agriculture||0)/80+(c.toolUntil>city.minute?.3:0);c.action=`Cortando ${PLANT_SPECIES[tree.species].label.toLowerCase()}`;
       if(job.labor<45)return true;
       const event=this.harvest(b,tree,c);if(!event)return false;

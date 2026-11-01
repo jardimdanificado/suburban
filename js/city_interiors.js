@@ -5,7 +5,7 @@ import {queueService} from './city_service_queue.js?v=service-capacity-8';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
 // Entity coordinates follow the resident through outdoor and indoor tiles.
 // Indoor metadata adds the floor, room and the remaining interior route.
-const INDOOR_TASKS=new Set(['work','manage','work-wait','shopping','supplies','job-interview','justice-report','police-oversight','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','informal-service','leisure','social','outdoor_leisure']);
+const INDOOR_TASKS=new Set(['work','manage','work-wait','shopping','supplies','job-interview','justice-report','police-oversight','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','clean','informal-service','leisure','social','outdoor_leisure']);
 const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
 const citizenKeys=[];
 const citizen=(city,id)=>city.accounts.get(Number.isInteger(id)&&id>=0&&id<65536?(citizenKeys[id]??=`citizen:${id}`):`citizen:${id}`)||city.society.citizen(id);
@@ -111,6 +111,10 @@ export function syncCitizenInterior(city,c){
  if(task==='custody-water'&&c.custodyWaterDelivery&&s?.buildingId===c.custodyWaterDelivery.jailId)return !s.exiting&&!s.path.length;
   if(task==='custody'&&c.custody&&s?.buildingId===c.custody.jailId&&s.targetRoomType==='cell'&&!s.exiting)return !s.path.length;
  const fieldWork=['work','manage'].includes(task)&&(c.mechanicJob||c.forestryJob||c.paintWorkId),targetId=c.workMeal?.siteId??c.targetId,project=task==='construction'?city.development.projects.find(p=>p.id===c.workProjectId):null,b=city.building(project?.service==='expansion'?project.buildingId:targetId),previous=c.indoorLocation,gig=task==='informal-service'?city.gigs?.get(c.informalJobId):null;
+ // Open-air employers such as quarries have no interior floor to wait on.
+ // Keeping interview candidates outdoors lets the renderer use their actual
+ // ground height instead of the site's highest terrain sample.
+ if(task==='job-interview'&&b?.constructionKind==='open-air')return previous?exit(city,c):true;
  if(task==='energy'&&!c.homeUnitId&&c.targetId!=null){c.task=null;c.targetId=null;c.path=[];c.action='Procurando um lugar para dormir';return previous?exit(city,c):true;}
  if(task==='toilet'){
   const facility=city.sanitation.facilities.get(c.toiletTargetId);

@@ -1,6 +1,6 @@
 import { ROAD_TILES, tileAt, terrainWalkable, canStep } from './city_terrain.js?v=mine-adjacent-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
-export const LIGHTING_RULES = { roadSpacing: 7, privateSpacing: 3, stone: 2, labor: 20, installationFee: 8000, maxActiveSites: 4 };
+export const LIGHTING_RULES = { roadSpacing: 6, privateSpacing: 3, stone: 2, labor: 20, installationFee: 8000, maxActiveSites: 6, maxPublicActiveSites: 5 };
 export class CityLighting {
   constructor(city) { this.city = city; this.posts = []; this.propertyStores = new Map(); this.roadPosts = new Map(); this.sites = new Map(); this.siteBuckets = new Map(); }
   siteBucketKey(x, y) { return `${Math.floor(x / LIGHTING_RULES.roadSpacing)},${Math.floor(y / LIGHTING_RULES.roadSpacing)}`; }
@@ -63,7 +63,7 @@ export class CityLighting {
     const city = this.city;
     if (post.projectId || post.built || post.status === 'cancelled') return;
     const pending = city.development.projects.filter(p => p.service === 'lamp' && !p.cancelled && p.status !== 'completed');
-    if (pending.length >= LIGHTING_RULES.maxActiveSites || pending.filter(p=>this.sites.get(p.lampId)?.public===post.public).length>=(post.public?3:1) || !this.freeSite(Math.floor(post.x), Math.floor(post.y), city.building(post.buildingId))) return;
+    if (pending.length >= LIGHTING_RULES.maxActiveSites || pending.filter(p=>this.sites.get(p.lampId)?.public===post.public).length>=(post.public?LIGHTING_RULES.maxPublicActiveSites:1) || !this.freeSite(Math.floor(post.x), Math.floor(post.y), city.building(post.buildingId))) return;
     const builder = city.development.selectBuilder(post.payerId, post.door);
     const fee = city.currency.price(LIGHTING_RULES.installationFee);
     const budget = Math.ceil(fee * (post.payerId === 'treasury' ? 1.5 : 1)) + LIGHTING_RULES.stone * city.economy.goods.pedra.price;

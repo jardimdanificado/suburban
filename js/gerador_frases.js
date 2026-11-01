@@ -33,6 +33,31 @@ const substantivosDoCatalogo = substantivos.filter(nome =>
   palavrasDoCatalogo.has(nome.lema) && palavrasDoCatalogo.has(nome.plural)
 );
 
+const temas = {
+  arte: [
+    {lema:'arte',plural:'artes',genero:'f',tags:['texto','objeto']},
+    {lema:'memória',plural:'memórias',genero:'f',tags:['texto']},
+    {lema:'cidade',plural:'cidades',genero:'f',tags:['lugar','passeio']},
+    {lema:'rua',plural:'ruas',genero:'f',tags:['lugar','passeio','corrida']},
+    {lema:'praça',plural:'praças',genero:'f',tags:['lugar','passeio','corrida']},
+    {lema:'luta',plural:'lutas',genero:'f',tags:['texto']},
+    {lema:'esperança',plural:'esperanças',genero:'f',tags:['texto']},
+    {lema:'retrato',plural:'retratos',genero:'m',tags:['objeto','texto']},
+  ],
+  politica: [
+    {lema:'povo',plural:'povos',genero:'m',tags:['pessoa','agente']},
+    {lema:'cidade',plural:'cidades',genero:'f',tags:['lugar','passeio']},
+    {lema:'bairro',plural:'bairros',genero:'m',tags:['lugar','passeio','corrida']},
+    {lema:'trabalho',plural:'trabalhos',genero:'m',tags:['texto','objeto']},
+    {lema:'futuro',plural:'futuros',genero:'m',tags:['texto']},
+    {lema:'justiça',plural:'justiças',genero:'f',tags:['texto']},
+    {lema:'união',plural:'uniões',genero:'f',tags:['objeto','texto']},
+    {lema:'moradia',plural:'moradias',genero:'f',tags:['lugar']},
+    {lema:'direito',plural:'direitos',genero:'m',tags:['texto']},
+    {lema:'mudança',plural:'mudanças',genero:'f',tags:['texto']},
+  ],
+};
+
 const adjetivos = [
   ['bonito','bonita','bonitos','bonitas',['pessoa','animal','lugar','natureza','planta','comércio','comida','bebida','texto','objeto','som']],
   ['alegre','alegre','alegres','alegres',['pessoa','animal']],
@@ -48,6 +73,12 @@ const adjetivos = [
   ['forte','forte','fortes','fortes',['pessoa','animal','natureza','bebida','som']],
   ['colorido','colorida','coloridos','coloridas',['lugar','planta','objeto']],
   ['amigável','amigável','amigáveis','amigáveis',['pessoa','animal']],
+  ['justo','justa','justos','justas',['pessoa','lugar','texto','objeto']],
+  ['livre','livre','livres','livres',['pessoa','lugar','texto']],
+  ['unido','unida','unidos','unidas',['pessoa','lugar']],
+  ['digno','digna','dignos','dignas',['pessoa','lugar','texto']],
+  ['seguro','segura','seguros','seguras',['pessoa','lugar']],
+  ['próspero','próspera','prósperos','prósperas',['pessoa','lugar','comércio']],
   ['distante','distante','distantes','distantes',['lugar','natureza']],
 ];
 const adjData = adjetivos.map(([ms, fs, mp, fp, tags]) => ({ formas:[ms,fs,mp,fp], tags }));
@@ -149,7 +180,7 @@ function gerarOracao(nomes, random) {
   const transitivos = verbos.filter(v => v.objetos);
   const tipo = random() < 0.32 ? 'copulativa' : random() < 0.5 ? 'intransitiva' : 'transitiva';
   const tempo = tempoAleatorio(random);
-  if (tipo === 'copulativa') {
+  const copulativa=()=>{
     const candidatas = nomes.filter(nome => adjData.some(adj => combina(nome.tags,adj.tags)));
     const sujeito = sintagmaNominal(escolher(candidatas,random),random);
     const adjetivosPossiveis = adjData.filter(adj => combina(sujeito.nome.tags,adj.tags));
@@ -157,9 +188,11 @@ function gerarOracao(nomes, random) {
     const indice = (sujeito.plural ? 2 : 0) + (sujeito.genero === 'f' ? 1 : 0);
     const copula = tempo === 'presente' ? (sujeito.plural ? 'estão' : 'está') : tempo === 'passado' ? (sujeito.plural ? 'estavam' : 'estava') : (sujeito.plural ? 'estarão' : 'estará');
     return `${sujeito.texto} ${copula} ${adj.formas[indice]}`;
-  }
+  };
+  if (tipo === 'copulativa') return copulativa();
   const candidatosVerbo = tipo === 'transitiva' ? transitivos : intransitivos;
   const possibilidades = candidatosVerbo.flatMap(verb => nomes.filter(n => combina(n.tags,verb.sujeitos)).map(nome => ({verb,nome})));
+  if(!possibilidades.length)return copulativa();
   const {verb,nome} = escolher(possibilidades,random);
   const sujeito = sintagmaNominal(nome,random);
   const verbo = formaDoVerbo(verb,sujeito.plural,tempo);
@@ -188,9 +221,9 @@ function gerarOracaoComLexemaNovo(nomes, foco, random) {
 }
 
 /** Gera uma frase por regras gramaticais com combinações novas a cada chamada. */
-export function gerarFrase({ random = Math.random, substantivos: extras = [] } = {}) {
+export function gerarFrase({ random = Math.random, substantivos: extras = [], somenteExtras = false } = {}) {
   if (typeof random !== 'function') throw new TypeError('random precisa ser uma função');
-  const nomes = [...substantivosDoCatalogo,...extras].filter(nome => nome && typeof nome.lema === 'string' && typeof nome.plural === 'string' && ['m','f'].includes(nome.genero) && Array.isArray(nome.tags) && nome.tags.length);
+  const nomes = [...(somenteExtras?[]:substantivosDoCatalogo),...extras].filter(nome => nome && typeof nome.lema === 'string' && typeof nome.plural === 'string' && ['m','f'].includes(nome.genero) && Array.isArray(nome.tags) && nome.tags.length);
   if (!nomes.length) throw new RangeError('O léxico não tem substantivos válidos');
   // Algumas saídas ganham um neologismo novo feito com o combinador real do
   // catálogo; o sentido gramatical vem das raízes que foram combinadas.
@@ -219,6 +252,13 @@ export function gerarFrase({ random = Math.random, substantivos: extras = [] } =
     return `${abertura}${primeira} ${escolher(conectores,random)} ${segunda}.`;
   }
   return `${abertura}${primeira}.`;
+}
+
+/** Produz uma frase curta de arte ou política usando a mesma gramática do gerador. */
+export function gerarFraseTematica(tema,{random=Math.random}={}){
+  const substantivos=temas[tema];
+  if(!substantivos)throw new RangeError(`Tema de frase desconhecido: ${tema}`);
+  return gerarFrase({random,substantivos,somenteExtras:true});
 }
 
 /** Transforma uma palavra combinada em lexema que a gramática pode flexionar. */

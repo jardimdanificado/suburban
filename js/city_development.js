@@ -183,7 +183,9 @@ export class CityDevelopment {
     const city=this.city,pending=this.projects.filter(p=>['road','bridge'].includes(p.service)&&!p.cancelled&&p.status!=='completed'&&p.status!=='blocked');
     if(pending.length>=2){this.roadPlanning={reason:'Duas frentes de rua em execução.',pending:pending.length};return;}
     const perTile=DEVELOPMENT_RULES.roadStonePerTile*city.economy.goods.pedra.price+Math.ceil(city.currency.price(DEVELOPMENT_RULES.roadFeePerTile)*DEVELOPMENT_RULES.municipalMultiplier),margin=city.currency.price(12000);
-    const tiles=Math.min(8,Math.floor((city.treasury-needs.reserve-margin)/perTile));
+    // Keep road works moving once the social reserve is covered. Larger lots
+    // avoid spending an entire planning cycle on a short paved segment.
+    const tiles=Math.min(12,Math.floor((city.treasury-needs.reserve-margin)/perTile));
     if(tiles<1){this.roadPlanning={reason:'Caixa aguardando orçamento para trecho de rua, após reserva social.',required:perTile+margin};return;}
     const network=new Map(),queue=[];
     const addRoad=(x,y,origin=false)=>{x=Math.floor(x);y=Math.floor(y);const k=`${x},${y}`;if((!isRoadAt(city.world,x,y)&&!origin)||network.has(k)||!city.walkable(x,y))return;network.set(k,{x:x+.5,y:y+.5});queue.push({x,y});};
@@ -193,7 +195,9 @@ export class CityDevelopment {
     const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!network.has(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`)).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])}));
     // Busy dirt shortcuts also qualify for paving, even after every door has a paved connection.
     const doors=new Set(buildings.map(({b})=>`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`));
-    for(const [key,traffic]of city.traffic)if(traffic>=8&&!doors.has(key)){const [x,y]=key.split(',').map(Number);if(DIRT_ROAD_TILES.has(tileAt(city.world,x,y)))buildings.push({b:{id:`traffic:${key}`,door:{x:x+.5,y:y+.5}},traffic});}
+    // Pave frequently used dirt shortcuts before they become as busy as a
+    // main building entrance; traffic is accumulated gradually in new cities.
+    for(const [key,traffic]of city.traffic)if(traffic>=4&&!doors.has(key)){const [x,y]=key.split(',').map(Number);if(DIRT_ROAD_TILES.has(tileAt(city.world,x,y)))buildings.push({b:{id:`traffic:${key}`,door:{x:x+.5,y:y+.5}},traffic});}
     buildings.sort((a,b)=>b.traffic-a.traffic||String(a.b.id).localeCompare(String(b.b.id),undefined,{numeric:true}));
     if(!targets.length){this.roadPlanning={reason:'Aguardando definição do primeiro trecho conectado à rua da prefeitura.'};return;}
     const offset=(this.roadCursor||0)%Math.max(1,buildings.length),options=buildings.slice(offset).concat(buildings.slice(0,offset)).slice(0,8);

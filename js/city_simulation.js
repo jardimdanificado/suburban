@@ -11,41 +11,41 @@ import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=workforce-road-mines-1';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=quarry-interview-ground-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=skybridge-survival-2';
+import {CityVehicles} from './city_vehicles.js?v=handcart-starter-stock-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 import {MIN_PLOT_CELLS,CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geometry.js?v=visual-flow-4';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
-import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
+import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=restored-building-styles-1';
 import { CityRelationships } from './city_relationships.js';
-import { CityNature } from './city_nature.js';
+import { CityNature } from './city_nature.js?v=caribbean-quarry-interviews-1';
 import {skybridgeLinks} from './city_skybridges.js?v=short-passarelas-bridge-1';
-import { CityGovernment as CityPolitics } from './city_government.js?v=interparty-relations-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=party-slogans-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=combat-animation-integration-1';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=interiors-completion-11';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=voting-outdoor-1';
 import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
-import { CityBank } from './city_bank.js?v=landlord-stock-market-1';
+import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { quarryDeposits } from './city_terrain.js?v=mine-adjacent-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
-import { CityHousing, HOUSING_RULES } from './city_housing.js?v=survival-capacity-1';
+import { CityHousing, HOUSING_RULES } from './city_housing.js?v=caribbean-quarry-interviews-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=service-capacity-3';
 import { CityWorkMeals } from './city_work_meals.js?v=survival-capacity-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=workforce-road-mines-1';
 import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
-import { CityGigs } from './city_gigs.js?v=survival-capacity-1';
+import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=workforce-road-mines-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=business-recovery-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=skybridge-survival-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=mine-adjacent-1';
 
@@ -301,7 +301,9 @@ export class CitySimulation {
     const entity = this.createEntity({ x, y, properties: { name: this.life.buildingName(spec.label), species: 'city-building', render: { color: spec.color, style: type === 'super_popular_housing' ? 'popular' : type === 'popular_luxury_housing' ? 'luxury' : type === 'popular_housing' ? 'popular' : type === 'luxury_housing' ? 'luxury' : type === 'popular_refectory' ? 'refectory' : type } } });
     const b = { id: entity.id, entity, type, constructionKind: kind, rotation:terrain.rotation, width, depth, floors, color: spec.color, condition: 100, units: [], balance: 0, jobs: Math.min(spec.jobs ? Math.max(spec.jobs, Math.floor(count / 6)) : 0, 32), wage: 4 + Math.floor(this.random() * 3), stock: 0, workers: [], terrain, door: terrain.door };
     b.architecture = architectureFor(type, entity.id);
-    if (['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(type)) b.architectureColor = HOUSE_STYLES[b.architecture].wall;
+    if (['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(type)) {
+      b.architectureColor = HOUSE_STYLES[b.architecture].wall;
+    }
     this.reputation.setup(b);
     this.economy.setupBuilding(b);
     entity.properties.cityBuilding = b;
@@ -1133,7 +1135,7 @@ export class CitySimulation {
       // cooldown); polling it on every animation frame repeats the same scans
       // up to 60 times before any relevant state can change.
       const load=c.deliveryId?(shipmentIndex?shipmentIndex.get(c.deliveryId):this.logistics.shipments.find(s=>s.id===c.deliveryId)):null;
-      if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>injuredCarryCapacity(c,c.equipment?.carrinho?72:c.equipment?.cesta?36:24)){c.action='Aguardando veículo para transportar a carga';continue;}
+      if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>this.vehicles.cargoCapacity(c)){c.action='Aguardando veículo para transportar a carga';continue;}
       if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId&&!bridgeAt(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y))){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * this.justice.mobilityFactor(c);

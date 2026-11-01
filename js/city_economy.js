@@ -6,10 +6,10 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=landlord-stock-market-1';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=deep-perf-3';
 import {externalTradeHourly,orderImport} from './city_external_trade.js';
-import {outdoorCellReady,workCellReady} from './city_interiors.js?v=interiors-completion-11';
+import {outdoorCellReady,workCellReady} from './city_interiors.js?v=quarry-interview-ground-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=workforce-road-mines-1';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=quarry-interview-ground-1';
 import {productionPlan,investProductionPlan} from './city_production_planner.js?v=investment-plan-reuse-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
@@ -814,7 +814,7 @@ export class CityEconomy {
     if(b?.type==='toolmaker'&&b.active&&!b.entity.destroyed&&(b.inventory.garrucha||0)>0&&!c.equipment?.weapon&&c.needs.safety<42&&(c.traits?.riskTolerance??.5)>.94&&(c.skills?.combat||0)>=35&&this.city.society.isAdult(c)&&c.balance>=this.goods.garrucha.price)return {good:'garrucha',spec:INDUSTRIES.toolmaker,price:this.goods.garrucha.price};
     if(b?.type==='foundry'&&b.active&&!b.entity.destroyed&&(b.inventory.barra_ferro||0)>0&&!c.equipment?.weapon&&c.needs.safety<48&&(c.traits?.riskTolerance??.5)>.78&&c.balance>=this.goods.barra_ferro.price)return {good:'barra_ferro',spec:INDUSTRIES.foundry,price:this.goods.barra_ferro.price};
     if(b?.type==='toolmaker'&&b.active&&!b.entity.destroyed&&(b.inventory.faca||0)>0&&!c.equipment?.weapon&&c.needs.safety<55&&(c.traits?.riskTolerance??.5)>.72&&c.balance>=this.goods.faca.price)return {good:'faca',spec:INDUSTRIES.toolmaker,price:this.goods.faca.price};
-    if(b?.type==='artisan'&&b.active&&!b.entity.destroyed){if((b.inventory.porrete||0)>0&&!c.equipment?.weapon&&c.needs.safety<65&&(c.traits?.riskTolerance??.5)>.62&&c.balance>=this.goods.porrete.price)return {good:'porrete',spec:INDUSTRIES.artisan,price:this.goods.porrete.price};const good=['carrinho','cesta'].find(g=>b.inventory[g]>0&&c.balance>=this.goods[g].price&&carryCapacity(c)<(g==='carrinho'?72:36));return good?{good,spec:INDUSTRIES.artisan,price:this.goods[good].price}:null;}
+    if(b?.type==='artisan'&&b.active&&!b.entity.destroyed){if((b.inventory.porrete||0)>0&&!c.equipment?.weapon&&c.needs.safety<65&&(c.traits?.riskTolerance??.5)>.62&&c.balance>=this.goods.porrete.price)return {good:'porrete',spec:INDUSTRIES.artisan,price:this.goods.porrete.price};const capacity=this.city.vehicles?.cargoCapacity(c)??carryCapacity(c),good=['carrinho','cesta'].find(g=>b.inventory[g]>0&&c.balance>=this.goods[g].price&&capacity<(g==='carrinho'?72:36));return good?{good,spec:INDUSTRIES.artisan,price:this.goods[good].price}:null;}
     const spec=INDUSTRIES[b?.type];
     if(!b?.active || b.entity.destroyed || !spec?.use) return null;
     if(b.type==='publisher'){const owned=this.city.publications.owned(c.accountId);const good=['livros','panfletos'].find(g=>b.inventory[g]>0&&c.balance>=this.goods[g].price&&!owned.some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d)));return good?{good,spec,price:this.goods[good].price}:null;}
@@ -834,11 +834,11 @@ export class CityEconomy {
       return washed>0;
     }
     if(!this.city.transfer(c.accountId,b.accountId,price,`Serviço: Venda de ${this.goods[good].label}`,{good,quantity:1}))return false;
-    b.inventory[good]--;const publication=['livros','panfletos','jornais'].includes(good),durable=publication||good==='roupas'||['porrete','barra_ferro','faca','garrucha'].includes(good);if(!durable)this.consumed[good]++;this.recordGoods(durable?'durable-purchase':'household-consumption',good,1,b.id,c.id);
+    b.inventory[good]--;const publication=['livros','panfletos','jornais'].includes(good),durable=publication||good==='roupas'||['porrete','barra_ferro','faca','garrucha','cesta','carrinho'].includes(good);if(!durable)this.consumed[good]++;this.recordGoods(durable?'durable-purchase':'household-consumption',good,1,b.id,c.id);
     if(good==='roupas'){buyClothes(this.city,c,b,offer.garmentIndex);return true;}
     if(['porrete','barra_ferro','faca','garrucha'].includes(good)){const weapon=good==='porrete'?{name:'Porrete de madeira',damage:2.4,range:1.8,durability:5}:good==='faca'?{name:'Faca de trabalho',damage:3.4,range:1.55,durability:4}:good==='garrucha'?{name:'Garrucha artesanal',damage:4.6,range:5.5,durability:6,kind:'firearm'}:{name:'Bastão de ferro',damage:3.1,range:1.75,durability:7};c.equipment??={};c.inventory??={};c.inventory[good]=(c.inventory[good]||0)+1;c.equipment.weapon={good,...weapon,boughtAt:this.city.minute,buildingId:b.id};return true;}
     if(good==='jornais'){const doc=this.city.publications.documents.get(offer.documentId);this.city.publications.move(doc,c.accountId);c.newspaperEditions??=[];c.newspaperEditions.push(doc.editionKey);c.newspaperEditions=c.newspaperEditions.slice(-32);this.city.publications.read(doc.id,c.id);return true;}
-    if(good==='cesta'||good==='carrinho'){c.equipment??={};c.equipment[good]={boughtAt:this.city.minute,buildingId:b.id};return true;}
+    if(good==='cesta'||good==='carrinho'){c.equipment??={};c.equipment[good]={boughtAt:this.city.minute,buildingId:b.id};if(good==='carrinho')this.city.vehicles?.activateProducedCart(b,c.accountId,b,price,'Compra pessoal em loja artesanal');return true;}
     c.needs[spec.use.need]=Math.min(100,c.needs[spec.use.need]+spec.use.boost);
     if(spec.use.need==='shelter'){c.homeComfort??={};c.homeComfort[good]=this.city.minute+7*1440;}
     if(good==='livros'||good==='panfletos'){this.city.publications.takeStock(b,c,good);this.practice(c,'management',60);}

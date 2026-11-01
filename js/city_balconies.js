@@ -1,5 +1,5 @@
 import {buildingPoint,modelSize,CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {HOUSE_STYLES} from './city_culture.js';
+import {HOUSE_STYLES} from './city_culture.js?v=restored-building-styles-1';
 const homes=new Set(['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing']);
 const cache=new WeakMap();
 const SIDE_BITS={

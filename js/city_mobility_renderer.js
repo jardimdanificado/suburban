@@ -1,7 +1,7 @@
 import {partyFlagCanvas} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=mine-adjacent-1';
-const colors={bicicleta:0x397e99,bicicleta_carga:0xbd793c,patinete:0x62a69a,patins:0xd5b345,skate:0x765038};
+const colors={bicicleta:0x397e99,bicicleta_carga:0xbd793c,carrinho:0x8b6743,patinete:0x62a69a,patins:0xd5b345,skate:0x765038};
 const inView=(r,x,y,margin=4)=>!Number.isFinite(r.renderedMinTx)||x-margin>=r.renderedMinTx&&x+margin<=r.renderedMaxTx+1&&y-margin>=r.renderedMinTy&&y+margin<=r.renderedMaxTy+1;
 function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
   renderer.mobilityBatches??=new Map();let b=renderer.mobilityBatches.get(key);
@@ -20,11 +20,17 @@ export function syncCityMobility(renderer,THREE,entities,world){
   const matrix=renderer._mobilityMatrix??=new THREE.Matrix4(),position=renderer._mobilityPosition??=new THREE.Vector3(),quaternion=renderer._mobilityQuaternion??=new THREE.Quaternion(),scale=renderer._mobilityScale??=new THREE.Vector3(),color=renderer._mobilityColor??=new THREE.Color(),axis=renderer._mobilityAxis??=new THREE.Vector3(0,1,0);
   const place=(mesh,index,x,y,z,sx,sy,sz,angle=0,tint=null)=>{position.set(x,y,z);quaternion.setFromAxisAngle(axis,angle);scale.set(sx,sy,sz);matrix.compose(position,quaternion,scale);mesh.setMatrixAt(index,matrix);if(tint!=null)mesh.setColorAt(index,color.setHex(tint));};
   for(const [key,b]of renderer.mobilityBatches)if(key==='cycle-frames'||key.startsWith('cycle-frames-'))b.mesh.count=0;
-  const body=batch(renderer,THREE,'cycle-frames',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0xffffff}),vehicles.length*7),wheel=batch(renderer,THREE,'cycle-wheels',()=>new THREE.TorusGeometry(.22,.035,5,12),()=>new THREE.MeshLambertMaterial({color:0x252725}),vehicles.length*8);let n=0,w=0;
+  const body=batch(renderer,THREE,'cycle-frames',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0xffffff}),vehicles.length*14),wheel=batch(renderer,THREE,'cycle-wheels',()=>new THREE.TorusGeometry(.22,.035,5,12),()=>new THREE.MeshLambertMaterial({color:0x252725}),vehicles.length*8);let n=0,w=0;
   for(const e of vehicles){const v=e.properties.cityVehicle,h=surfaceElevation(world,e.x,e.y),angle=v.angle||0,tint=v.color?parseInt(v.color.slice(1),16):colors[v.good]||0x52879a;
     const part=(dx,dy,dz,sx,sy,sz,color=tint)=>place(body.mesh,n++,e.x+dx*Math.cos(angle)+dz*Math.sin(angle),h+dy,e.y-dx*Math.sin(angle)+dz*Math.cos(angle),sx,sy,sz,angle,color);
     const tire=(dx,dz,size=1)=>place(wheel.mesh,w++,e.x+dx*Math.cos(angle)+dz*Math.sin(angle),h+.23*size,e.y-dx*Math.sin(angle)+dz*Math.cos(angle),size,size,size,angle+Math.PI/2);
-    if(['bicicleta','bicicleta_carga'].includes(v.good)){
+    if(v.good==='carrinho'){
+      part(0,.48,.52,.58,.14,.72,0x9b7549);part(0,.58,.52,.5,.035,.62,0x62472f);
+      part(0,.39,.12,.06,.48,.06,0x735230);part(0,.61,-.14,.06,.84,.06,0x735230);
+      part(-.3,.44,.3,.06,.08,.12,0x735230);part(.3,.44,.3,.06,.08,.12,0x735230);
+      tire(-.34,.32,.78);tire(.34,.32,.78);
+      for(let i=0;i<4;i++)part(0,.7+i*.025,.48,.44-i*.045,.025,.54-i*.045,0xc99a5f);
+    }else if(['bicicleta','bicicleta_carga'].includes(v.good)){
       part(0,.42,0,.08,.08,.65);part(0,.54,-.2,.08,.26,.08);part(0,.54,.2,.08,.26,.08);part(0,.64,-.12,.24,.08,.26,0x343437);part(0,.8,.35,.5,.05,.06,0x777777);tire(0,-.42);tire(0,.42);
       if(v.good==='bicicleta_carga'){part(0,.46,-.6,.55,.25,.44);tire(.24,-.5);}
     }else if(v.good==='patinete'){

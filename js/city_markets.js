@@ -44,7 +44,7 @@ export function updateMarket(economy){
   for(const good of Object.keys(economy.goods)){
     const previous=economy.market[good]||{multiplier:1},food=city.workMeals.foodGoods().includes(good),likes=people.reduce((n,c)=>n+Math.max(0,c.foodPreferences?.[good]||0),0);
     const consumer=Object.values(INDUSTRIES).find(spec=>spec.use&&spec.outputs[good]);
-    const wants=consumer?people.filter(c=>['livros','panfletos'].includes(good)?!city.publications.owned(c.accountId).some(d=>d.good===good&&d.entries.length<city.publications.capacity(d)):good==='cesta'||good==='carrinho'?carryCapacity(c)<(good==='carrinho'?72:36):c.needs[consumer.use.need]<80).length:0;
+    const wants=consumer?people.filter(c=>['livros','panfletos'].includes(good)?!city.publications.owned(c.accountId).some(d=>d.good===good&&d.entries.length<city.publications.capacity(d)):good==='cesta'||good==='carrinho'?(city.vehicles?.cargoCapacity(c)??carryCapacity(c))<(good==='carrinho'?72:36):c.needs[consumer.use.need]<80).length:0;
     const retail=food?people.length*.3+likes*.8:wants*.35;
     const demand=retail+(good==='oleo'?(economy.lightingSupplyReport?.oilRequired||0):0)+firms.reduce((n,b)=>n+(b.inputDemand?.[good]||0),0)+city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').reduce((n,p)=>n+(good==='pedra'?Math.max(0,p.stone-(p.inventory.pedra||0)-(p.incoming.pedra||0)):0),0);
     const stock=city.buildings.filter(b=>b.active&&!b.entity.destroyed).reduce((n,b)=>n+(b.inventory[good]||0),0);

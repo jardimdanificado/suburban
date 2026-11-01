@@ -60,6 +60,46 @@ export class CityBank {
     loan.remaining=0;loan.interest=0;loan.status='paid';loan.cancelled=true;return true;
   }
   businessRefusal(reason,proposal){this.lastBusinessRefusal={minute:this.city.minute,type:proposal?.type,crop:proposal?.crop??null,reason};return false;}
+  recoveryPlans(){this.reorganizationPlans??=[];this.nextReorganizationId??=this.reorganizationPlans.reduce((n,p)=>Math.max(n,p.id+1),1);return this.reorganizationPlans;}
+  businessLoan(business){
+    const city=this.city,owner=city.society.citizen(business?.ownerId);if(!business||!owner)return null;
+    const projects=city.development.projects.filter(p=>p.buildingId===business.id||p.plotId===business.plotId);
+    return this.loans.filter(l=>l.purpose==='business'&&l.clientId===owner.accountId&&l.businessType===business.type&&!['paid','written-off','foreclosed'].includes(l.status))
+      .sort((a,b)=>Number(projects.some(p=>p.id===b.projectId))-Number(projects.some(p=>p.id===a.projectId))||b.missed-a.missed||b.startedAt-a.startedAt)[0]||null;
+  }
+  fileRecoveryPlan(businessId,requesterId=null){
+    const city=this.city,business=city.building(businessId),owner=business&&city.society.citizen(business.ownerId),loan=business&&this.businessLoan(business),plans=this.recoveryPlans();
+    if(!business||!business.active||business.entity.destroyed||!owner||requesterId!=null&&requesterId!==owner.id)return city.fail('Somente a empresa ativa e seu responsável podem requerer recuperação judicial.');
+    if(!loan)return city.fail('A empresa não possui financiamento empresarial em aberto que possa ser incluído no plano.');
+    if(plans.some(p=>p.businessId===business.id&&['protection','under-review','active'].includes(p.status)))return city.fail('A empresa já tem um processo de recuperação em andamento.');
+    const last=plans.filter(p=>p.businessId===business.id).sort((a,b)=>b.filedAt-a.filedAt)[0];if(last&&city.minute<(last.cooldownUntil||last.filedAt+30*1440))return city.fail('A empresa precisa aguardar 30 dias antes de apresentar outro plano.');
+    const distress=(business.financialDistressDays||0)>=2,arrears=loan.missed>=2||loan.status==='arrears';
+    if(!distress&&!arrears)return city.fail('O pedido exige ao menos dois dias de dificuldade financeira ou parcelas em atraso.');
+    const bank=city.building(loan.bankId),plan={id:this.nextReorganizationId++,businessId:business.id,businessName:business.entity.properties.name,ownerId:owner.id,ownerAccountId:owner.accountId,loanId:loan.id,bankId:loan.bankId,creditorAccountId:bank?.accountId??null,filedAt:city.minute,status:'protection',voteAt:city.minute+1440,protectionUntil:city.minute+3*1440,originalTerms:{rate:loan.rate,installments:loan.installments,dailyPayment:loan.dailyPayment},proposedTerms:{installments:360,rate:Math.min(loan.rate,.00025)},votes:[],reason:null};
+    plans.push(plan);loan.recoveryPlanId=plan.id;
+    const event=city.history.record('credit',`${plan.businessName} pediu recuperação judicial para reorganizar o financiamento empresarial.`,[business.accountId,owner.accountId,bank?.accountId].filter(Boolean),{kind:'business-recovery-filed',recoveryPlanId:plan.id,businessId:business.id,loanId:loan.id,amount:loan.remaining+loan.interest});
+    plan.eventId=event.id;city.log(`${plan.businessName} pediu recuperação judicial; a cobrança da dívida ficará suspensa enquanto o tribunal analisa o plano.`,'credit',[owner.id],{kind:'business-recovery-filed',recoveryPlanId:plan.id,businessId:business.id,loanId:loan.id});return plan;
+  }
+  advanceRecoveryPlans(){
+    const city=this.city,plans=this.recoveryPlans();
+    for(const loan of this.loans.filter(l=>l.purpose==='business'&&l.missed>=3&&l.status==='arrears')){
+      const business=city.economy.businesses.find(b=>b.active&&!b.entity.destroyed&&city.society.citizen(b.ownerId)?.accountId===loan.clientId&&b.type===loan.businessType);
+      if(business&&!plans.some(p=>p.businessId===business.id&&['protection','under-review','active'].includes(p.status)))this.fileRecoveryPlan(business.id,business.ownerId);
+    }
+    for(const plan of plans){
+      if(plan.status==='protection'&&city.minute>=plan.voteAt)plan.status='under-review';
+      if(plan.status==='under-review'){
+        const court=city.justice.activeBuildings('courthouse').find(b=>city.justice.staffed(b)>0),business=city.building(plan.businessId),loan=this.loans.find(l=>l.id===plan.loanId);
+        if(court&&business?.active&&!business.entity.destroyed&&loan&&loan.remaining+loan.interest>0){
+          const viable=(business.workers.length>0||Object.values(business.inventory||{}).some(n=>n>0)||(business.lastSaleAt!=null&&city.minute-business.lastSaleAt<=30*1440));
+          plan.votes=[{creditorAccountId:plan.creditorAccountId,yes:viable,minute:city.minute}];plan.courtId=court.id;plan.heardAt=city.minute;
+          if(viable){plan.status='active';plan.approvedAt=city.minute;loan.status='restructured';loan.rate=plan.proposedTerms.rate;loan.installments=plan.proposedTerms.installments;loan.dailyPayment=Math.ceil((loan.remaining+loan.interest)/loan.installments);loan.missed=0;loan.dueDay=city.day+1;
+            city.history.record('credit','O tribunal homologou o plano de recuperação judicial; parcelas foram reprogramadas para 360 dias com juros reduzidos.',[business.accountId,plan.ownerAccountId,plan.creditorAccountId].filter(Boolean),{kind:'business-recovery-approved',recoveryPlanId:plan.id,businessId:business.id,loanId:loan.id,installments:loan.installments,rate:loan.rate});city.log(`O tribunal homologou a recuperação judicial de ${business.entity.properties.name}; o financiamento ganhou prazo maior e juros menores.`,'credit',[plan.ownerId],{kind:'business-recovery-approved',recoveryPlanId:plan.id,businessId:business.id,loanId:loan.id});
+          }else{plan.status='rejected';plan.reason='A empresa não demonstrou atividade suficiente para sustentar o plano.';plan.cooldownUntil=city.minute+30*1440;loan.recoveryPlanId=null;}
+        }else if(city.minute>=plan.protectionUntil){plan.status='rejected';plan.reason=court?'A empresa encerrou as atividades antes da homologação.':'Não havia tribunal com equipe disponível dentro do prazo de proteção.';plan.cooldownUntil=city.minute+30*1440;if(loan)loan.recoveryPlanId=null;}
+      }
+    }
+  }
   initialChainCredit(proposal){
     if(!proposal?.initialChain||!this.city.buildingTypes[proposal.type])return false;
     const target=proposal.type==='research_institute'?this.city.politics.getResearch().demand().required:1;
@@ -130,7 +170,10 @@ export class CityBank {
   }
   daily() {
     const city = this.city;
+    this.advanceRecoveryPlans();
     for (const loan of this.loans.filter(l => !['paid','written-off','foreclosed'].includes(l.status) && l.dueDay <= city.day)) {
+      const protection=this.recoveryPlans().find(p=>p.loanId===loan.id&&['protection','under-review'].includes(p.status)&&city.minute<p.protectionUntil);
+      if(protection){loan.dueDay=city.day+1;continue;}
       if((loan.purpose==='business'||loan.propertyDevelopment)&&loan.projectId){const project=city.development.projects.find(p=>p.id===loan.projectId);if(project && !project.cancelled && project.status!=='completed'){loan.dueDay=city.day+1;continue;}}
       if(loan.initialChain&&loan.operatingStartedAt==null){const project=city.development.projects.find(p=>p.id===loan.projectId);if(project?.status==='completed'){loan.operatingStartedAt=project.completedAt??city.minute;loan.dueDay=city.day+(loan.graceDays||14);continue;}}
       const bank = city.building(loan.bankId), client = city.accounts.get(loan.clientId);
@@ -148,6 +191,9 @@ export class CityBank {
       else city.reputation.observe(loan.clientId,'credit',-.75,'parcela incompleta ou em atraso',{loanId:loan.id,due,amount:payment});
       loan.missed = payment < due ? loan.missed+1 : 0;
       loan.status = loan.remaining+loan.interest === 0 ? 'paid' : loan.missed >= 3 ? 'arrears' : 'active';
+      const recovery=this.recoveryPlans().find(p=>p.loanId===loan.id&&p.status==='active');
+      if(recovery&&loan.status==='paid'){recovery.status='completed';recovery.completedAt=city.minute;}
+      else if(recovery&&loan.missed>=14){recovery.status='failed';recovery.failedAt=city.minute;recovery.reason='A empresa deixou de cumprir o plano por 14 dias consecutivos.';recovery.cooldownUntil=city.minute+30*1440;loan.recoveryPlanId=null;loan.rate=recovery.originalTerms.rate;loan.installments=recovery.originalTerms.installments;loan.dailyPayment=recovery.originalTerms.dailyPayment;city.log(`O plano de recuperação de ${city.building(recovery.businessId)?.entity.properties.name||'uma empresa'} foi encerrado por novo inadimplemento.`,'credit',[recovery.ownerId],{kind:'business-recovery-failed',recoveryPlanId:recovery.id,loanId:loan.id});}
       if(loan.purpose==='mortgage'&&loan.missed>=7&&loan.remaining+loan.interest>0){
         const homes=(loan.collateralHomeIds||[loan.collateralHomeId]).map(id=>city.housing.homes.get(id)).filter(Boolean),units=homes.flatMap(home=>city.housing.units(home));
         for(const u of units){u.ownerId=bank.accountId;u.forSale=!u.tenantId;u.forRent=true;}

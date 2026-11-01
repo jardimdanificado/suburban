@@ -1,5 +1,6 @@
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
+import {gerarFraseTematica} from './gerador_frases.js?v=phrase-slogans-1';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
@@ -16,8 +17,8 @@ import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
-import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-relations-1';
-import {renderElectionMonitor} from './city_election_ui.js?v=needs-recovery-1';
+import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-slogans-1';
+import {renderElectionMonitor} from './city_election_ui.js?v=full-election-console-1';
 import {sectionTitle} from './city_ui_sections.js';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
 import {ROTATION_LABELS} from './city_building_geometry.js';
@@ -30,9 +31,9 @@ import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody}
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js';
 import { describePoliticalOrientation } from './city_ideology.js';
-import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js';
+import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=restored-building-styles-1';
 import { REPUTATION_LABELS } from './city_reputation.js';
-import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js';
+import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=caribbean-fruit-trees-1';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js?v=survival-capacity-1';
@@ -40,10 +41,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=workforce-road-mines-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=business-recovery-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=skybridge-survival-2';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=workforce-road-mines-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=restored-building-styles-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -74,7 +75,7 @@ export const VIEWS = {
   'urban-art': [['overview','OBRAS E MENSAGENS'],['orders','ENCOMENDAS'],['damage','DANOS E LIMPEZA']],
   safety: [['overview','OPERAÇÃO'],['calls','CHAMADOS'],['cases','OCORRÊNCIAS']],
   forensics: [['overview','VISÃO GERAL'],['bodies','CORPOS'],['reports','LAUDOS']],
-  justice: [['overview','VISÃO GERAL'],['cases','PROCESSOS'],['laws','CÓDIGO PENAL'],['services','TRIBUNAIS E DEFESA']],
+  justice: [['overview','VISÃO GERAL'],['cases','PROCESSOS'],['recovery','RECUPERAÇÃO'],['laws','CÓDIGO PENAL'],['services','TRIBUNAIS E DEFESA']],
   custody: [['overview','VISÃO GERAL'],['people','CUSTODIADOS'],['orders','VAGAS E MANDADOS']],
   sanitation: [['facilities', 'BANHEIROS'], ['queues','FILAS'], ['cleaning', 'FAXINA'], ['gigs','BICOS DE FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
@@ -124,6 +125,7 @@ export class CityUI {
     this.artworkSourceClaimInput=document.createElement('input');this.artworkSourceClaimInput.type='text';this.artworkSourceClaimInput.maxLength=180;this.artworkSourceClaimInput.placeholder='Fonte alegada…';this.artworkSourceClaimInput.setAttribute('aria-label','Fonte alegada da narrativa artística');
     this.artworkRoleInputs=Array.from({length:6},(_,i)=>{const input=document.createElement('select');input.setAttribute('aria-label',`Papel da figura ${i+1} na narrativa artística`);return input;});
     this.artworkDraft=document.createElement('input');this.artworkDraft.type='text';this.artworkDraft.maxLength=180;this.artworkDraft.placeholder='Mensagem da obra…';this.artworkDraft.setAttribute('aria-label','Mensagem da obra urbana');
+    this.artworkDraft.value=gerarFraseTematica('arte');
     this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput);
     for(const input of this.inputs)input.hidden=true;
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
@@ -315,7 +317,7 @@ export class CityUI {
   }
   citizen(p, c) {
     const city = this.city, society = city.society;
-    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.landlordSince!=null?'Locador / investidor imobiliário':c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
+    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.landlordSince!=null?'Locador / investidor imobiliário':c.businessIds.length?'Empresário':'Morador'} · Carga: ${city.vehicles?.cargoCapacity(c)??carryCapacity(c)} itens`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     if(this.host?.controls.observe){const active=this.host.controls.observation?.();p.buttons([{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',c.id)},{label:'SEGUIR NO MAPA',click:()=>this.host.controls.observe('follow',c.id)},...(active? [{label:'SAIR DA CÂMERA',click:()=>this.host.controls.observe('off')}]:[])]);}
     if(this.host?.controls.observation?.())p.note('Arraste para olhar ao redor. Na 3ª pessoa, use a roda ou pinça para aproximar. Câmera livre em Ferramentas: WASD move, Espaço sobe, Control desce e Shift acelera. Esc sai da câmera.');
@@ -489,6 +491,7 @@ export class CityUI {
     } else if(this.detailTab==='finance'){
       p.heading('FINANÇAS E PROPRIEDADE');
       for(const loan of city.bank.loans.filter(l=>l.clientId===b.accountId&&l.purpose==='vehicle')){p.kv(`Crédito do veículo ${loan.vehicleId}`,money(loan.remaining+loan.interest));p.kv('Parcela diária',money(loan.dailyPayment));}
+      if(city.economy.businesses.includes(b)&&b.ownerId!=null){const loan=city.bank.businessLoan(b),plans=city.bank.recoveryPlans(),plan=plans.filter(x=>x.businessId===b.id).sort((a,d)=>d.filedAt-a.filedAt)[0];if(loan){p.heading('RECUPERAÇÃO JUDICIAL');p.kv('Dívida empresarial vinculada',money(loan.remaining+loan.interest));p.kv('Parcelas em atraso',loan.missed||0);if(plan){const status=({protection:'Proteção contra cobrança','under-review':'Aguardando decisão do tribunal',active:'Plano homologado e em cumprimento',completed:'Plano concluído',rejected:'Pedido não homologado',failed:'Plano encerrado por inadimplência'})[plan.status]||plan.status;p.kv('Processo',`#${plan.id} · ${status}`);p.kv('Condições propostas',`${plan.proposedTerms?.installments||360} parcelas · juros ${(100*(plan.proposedTerms?.rate||0)).toFixed(3)}% ao dia`);if(plan.reason)p.note(plan.reason);}if(!plan||!['protection','under-review','active'].includes(plan.status)){p.note('O plano pode suspender a cobrança por até três dias enquanto um tribunal com equipe avalia a continuidade da empresa.');p.button('REQUERER RECUPERAÇÃO JUDICIAL',()=>{const result=city.bank.fileRecoveryPlan(b.id,b.ownerId);this.notice=result===true?'Pedido de recuperação judicial enviado ao tribunal.':result?`Pedido de recuperação judicial #${result.id} protocolado.`:city.lastError||'Não foi possível protocolar o pedido.';});}}}
       p.metrics([[b.type==='townhall'?'SALDO MUNICIPAL':'CAIXA',money(b.balance),b.balance<1000?C.red:C.gold],['EQUIPE',`${occupiedPositions(city,b)}/${b.jobs}`,C.cyan]]); p.kv(b.type==='townhall'?'Entradas acumuladas':'Receita acumulada', money(b.totalRevenue)); p.kv(b.type==='townhall'?'Saídas acumuladas':'Despesas acumuladas', money(b.totalExpenses)); if(b.type==='townhall')p.note('Este saldo é o tesouro municipal, o mesmo exibido na barra. Recebe impostos e emissão e paga obras, benefícios e despesas da sede. Reservas de contratos já saíram do saldo disponível.');else p.kv('Dividendos pagos', money(b.dividends));
       const agreements=(city.economy.supplyAgreements||[]).filter(a=>a.buyerId===b.id||a.sellerId===b.id);if(agreements.length){p.heading('ACORDOS DE FORNECIMENTO');for(const a of agreements)p.note(`${GOODS[a.good].label}: ${city.accountName(city.building(a.sellerId)?.accountId)} → ${city.accountName(city.building(a.buyerId)?.accountId)}, ${money(a.unitPrice)}/unidade`);}if(b.active&&city.economy.businesses.includes(b)){
         const shares=equityShares(city,b),valuation=equityValue(city,b);p.heading('PARTICIPAÇÕES DA EMPRESA');p.kv('Valor estimado da empresa',money(valuation));p.note('Participações são frações da empresa. O maior acionista privado administra quando a prefeitura não detém mais da metade.');
@@ -756,7 +759,7 @@ export class CityUI {
       this.artworkRoleInputs.forEach((input,index)=>{p.note(`Figura ${index+1}`);const y=p.y;this.nativeSelect(input,p,roleOptions,input.value||'',p.x,y,p.w);p.space(24);});
       p.note('A obra guarda sua versão e os papéis que atribui. Eles orientam a cena visual e não alteram o histórico real nem provam a narrativa.');
     }
-    p.note('Texto da obra');if(this.artworkMaterialInput.value==='fezes')p.note('Obras com fezes recebem sentido de protesto negativo e o prefixo “PROTESTO”.');const artDraftY=p.y;p.space(24);if(artDraftY>=p.top&&artDraftY+20<=p.bottom)this.inputAt(this.artworkDraft,p.x,artDraftY,p.w);
+    p.note('Título e mensagem da obra');p.button('GERAR OUTRA FRASE',()=>{this.artworkDraft.value=gerarFraseTematica('arte');});if(this.artworkMaterialInput.value==='fezes')p.note('Obras com fezes recebem sentido de protesto negativo e o prefixo “PROTESTO”.');const artDraftY=p.y;p.space(24);if(artDraftY>=p.top&&artDraftY+20<=p.bottom)this.inputAt(this.artworkDraft,p.x,artDraftY,p.w);
     const selectedMaterial=this.artworkMaterialInput.value==='tinta'?null:this.artworkMaterialInput.value;
     if(artSites.length)p.button('ENCOMENDAR · '+money(city.gigs.artworkQuote(chosenSite.id,this.artworkKindInput.value||'banner',chosenSite.municipal?'treasury':chosenSite.accountId,selectedMaterial)),()=>{
       const building=city.building(Number(this.artworkBuildingInput.value)||chosenSite.id),payer=building?.municipal?'treasury':building?.accountId,truth=this.artworkTruthInput.value==='opinion'?null:this.artworkTruthInput.value==='false'?false:true,purpose=this.artworkPurposeInput.value||'expression',partyId=this.artworkPartyInput.value?Number(this.artworkPartyInput.value):null,subjectId=this.artworkSubjectInput.value?Number(this.artworkSubjectInput.value):null,commercial=city.economy.businesses.some(company=>company.id===building?.id),placement=this.artworkPlacementInput.value||'outdoor',isRoof=placement.startsWith('roof:'),isBridge=placement.startsWith('bridge:'),supportUnitId=placement.startsWith('unit:')||isRoof?placement.slice(placement.indexOf(':')+1):null,supportLinkId=isBridge?placement.slice(placement.indexOf(':')+1):null,participants=artworkParticipants(city.history?.get(Number(this.artworkEventInput.value)),subjectId),participantRoles=this.artworkRoleInputs.map(input=>{const [id,role]=String(input.value||'').split(':');return {citizenId:Number(id),role};}).filter(row=>Number.isInteger(row.citizenId)&&row.role),narrative=narrativeMode!=='none'?{mode:narrativeMode,sourceEventId:Number(this.artworkEventInput.value)||null,title:this.artworkDraft.value,description:this.artworkDraft.value,claimedPlace:this.artworkClaimedPlaceInput.value,claimedDate:this.artworkClaimedDateInput.value,sourceClaim:this.artworkSourceClaimInput.value,participantIds:participants,participantRoles}:null;

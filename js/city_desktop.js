@@ -1,6 +1,6 @@
 import {CityGlobalSearch} from './city_global_search.js?v=justice-panels-1';
 import {desktopMenus} from './city_desktop_menus.js?v=freecam-tools-2';
-import {CityUI,money} from './city_ui.js?v=freecam-tools-2';
+import {CityUI,money} from './city_ui.js?v=phrase-slogans-1';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js';
@@ -93,7 +93,7 @@ export class CityDesktop {
     const gov=this.city.politics;
     if(this.lastElectionNoticeMinute!=null&&this.city.minute<this.lastElectionNoticeMinute){this.electionNotices.clear();this.lastElectionResultId=gov.lastResult?.id??null;}this.lastElectionNoticeMinute=this.city.minute;
     const active=gov.active;
-    if(active){const view=['campaign','scheduled'].includes(active.status)?'polls':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);}}
+    if(active){const view=['campaign','scheduled'].includes(active.status)?'campaign':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);}}
     if(gov.lastResult&&gov.lastResult.id!==this.lastElectionResultId){this.lastElectionResultId=gov.lastResult.id;this.openElection(gov.lastResult.id,'results');}
   }
   openEvent(id,snapshot=null){const state=this.create(`event:${id}`,'event',{title:`Inspetor do evento #${id}`,kind:'inspector'});state.selectedEventId=id;state.eventSnapshot??=snapshot||this.city.history.get(id);return state;}

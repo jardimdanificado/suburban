@@ -1,7 +1,7 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=doorway-queue-4';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=party-slogans-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=workforce-road-mines-5";
-import { CityDesktop } from "./js/city_desktop.js?v=freecam-tools-2";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=party-slogans-1";
+import { CityDesktop } from "./js/city_desktop.js?v=full-election-console-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js";
 import { setActiveEntities } from "./js/engine.js";

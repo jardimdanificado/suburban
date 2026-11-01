@@ -14,12 +14,12 @@ function configureRoomWindow(b,u){const roll=roomRoll(b,u,5);u.hasWindow=u.roomT
 
 /** Only facade cells can be owned. Interior cells are common circulation. */
 export function floorCells(b, z) {
-  const cells = [];
-  if (b.constructionKind === 'open-air'||b.type==='council_chamber'&&z===0) { for (let y = 0; y < b.depth; y++) for (let x = 0; x < b.width; x++) cells.push({ x, y, z }); return cells; }
-  for (let x = 0; x < b.width; x++) cells.push({ x, y: 0, z });
-  for (let y = 1; y < b.depth; y++) cells.push({ x: b.width - 1, y, z });
-  if (b.depth > 1) for (let x = b.width - 2; x >= 0; x--) cells.push({ x, y: b.depth - 1, z });
-  if (b.width > 1) for (let y = b.depth - 2; y > 0; y--) cells.push({ x: 0, y, z });
+  const cells = [],x0=0,y0=0,width=b.width,depth=b.depth,x1=width-1,y1=depth-1;
+  if (b.constructionKind === 'open-air'||b.type==='council_chamber'&&z===0) { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells.push({ x, y, z }); return cells; }
+  for (let x = x0; x <= x1; x++) cells.push({ x, y: y0, z });
+  for (let y = y0+1; y <= y1; y++) cells.push({ x: x1, y, z });
+  if (depth > 1) for (let x = x1 - 1; x >= x0; x--) cells.push({ x, y: y1, z });
+  if (width > 1) for (let y = y1 - 1; y > y0; y--) cells.push({ x: x0, y, z });
   return cells;
 }
 export class CityHousing {
@@ -31,7 +31,10 @@ export class CityHousing {
       const u = { id: `${b.id}:${x}:${y}:${z}`, buildingId: b.id, x, y, z, width: 1, depth: 1, roomType:b.type==='council_chamber'?(z===0?'plenary':'office'):housingType?'bedroom':'workspace', homeId: null, ownerId, tenantId: null, occupantId: !housingType && b.active ? b.accountId : null, rent: this.city.currency.price(housingType ? HOUSING_RULES.roomRent * (b.type === 'luxury_housing' ? 2 : 1) : spec.rent), price: this.city.currency.price(housingType ? HOUSING_RULES.roomPrice * (b.type === 'luxury_housing' ? 3 : 1) : spec.price), forSale:ownerId==='treasury'&&!['council_chamber',...SOCIAL_HOUSING_TYPES].includes(b.type), forRent: false, arrears: 0, missedDays: 0 };
       b.units.push(u); this.city.units.set(u.id, u); units.push(u);
     }
-    if (b.constructionKind !== 'open-air'&&!(b.type==='council_chamber'&&z===0)) for (let y = 1; y < b.depth - 1; y++) for (let x = 1; x < b.width - 1; x++) (b.circulation ??= []).push({ x, y, z });
+    if (b.constructionKind !== 'open-air'&&!(b.type==='council_chamber'&&z===0)) {
+      const x0=0,y0=0,width=b.width,depth=b.depth;
+      for (let y=y0+1;y<y0+depth-1;y++)for(let x=x0+1;x<x0+width-1;x++)(b.circulation??=[]).push({x,y,z});
+    }
     if (housingType) {
       const shared = b.type==='popular_housing'||b.type==='super_popular_housing';
       const floorGroups=new Map();for(const u of units){let a=floorGroups.get(u.z);if(!a)floorGroups.set(u.z,a=[]);a.push(u);}
