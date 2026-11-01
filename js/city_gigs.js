@@ -2,7 +2,7 @@ import {artworkNarrative} from './city_art_narratives.js';
 import {activityRoomReady} from './city_interiors.js?v=interiors-completion-11';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {buildingLeisureSpaces} from './city_balconies.js?v=caribbean-50-styles-1';
+import {buildingLeisureSpaces} from './city_balconies.js?v=portuguese-colonial-forms-6';
 import {gerarFraseTematica} from './gerador_frases.js?v=catalog-lexicon-1';
 
 const ACTIVE=new Set(['open','working']);

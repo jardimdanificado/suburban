@@ -22,7 +22,51 @@ const CARIBBEAN_ARCHITECTURE=Object.fromEntries(CARIBBEAN_FORMS.flatMap(form=>CA
   `caribe_${form.id}_${palette.id}`,
   {label:`${form.label} · ${palette.label}`,wall:palette.wall,roof:palette.roof,accent:palette.accent,trim:palette.trim,roofKind:form.roofKind,motif:form.motif},
 ])));
-const CARIBBEAN_ARCHITECTURE_IDS=Object.keys(CARIBBEAN_ARCHITECTURE);
+const PORTUGUESE_COLONIAL_PALETTES=[
+  {id:'cal',label:'Cal e azul de azulejo',wall:0xe8dfc9,roof:0x874a38,accent:0x315b78,trim:0xf7edda},
+  {id:'ocre',label:'Ocre queimado',wall:0xc48b52,roof:0x754336,accent:0x344e67,trim:0xe4c995},
+  {id:'verde',label:'Verde colonial',wall:0x87956d,roof:0x68483b,accent:0x384d43,trim:0xd6c79f},
+  {id:'rosa',label:'Rosa antigo',wall:0xc77f78,roof:0x71483f,accent:0x3c526a,trim:0xe5c9ac},
+  {id:'amarelo',label:'Amarelo açafrão',wall:0xd8b34e,roof:0x80503b,accent:0x315e79,trim:0xf0d995},
+  {id:'azul',label:'Azul caiado',wall:0x7798a5,roof:0x514e4b,accent:0x344d67,trim:0xd7d1bc},
+  {id:'terracota',label:'Terracota',wall:0xb8644d,roof:0x493c37,accent:0xd6b66d,trim:0xe1bf9c},
+  {id:'violeta',label:'Violeta mineral',wall:0x8b718a,roof:0x51434a,accent:0xd0a35f,trim:0xd8c6ad},
+];
+const PORTUGUESE_COLONIAL_FORMS=[
+  {id:'sobrado',label:'Sobrado de sacadas',roofKind:'hip'},
+  {id:'pombalino',label:'Fachada pombalina',roofKind:'flat'},
+  {id:'barroco',label:'Portal barroco',roofKind:'hip'},
+  {id:'rural',label:'Casa-grande rural',roofKind:'gable'},
+  {id:'quinta',label:'Quinta senhorial',roofKind:'hip'},
+  {id:'terrea',label:'Casa térrea urbana',roofKind:'hip'},
+  {id:'azulejo',label:'Casa de fachada azulejada',roofKind:'gable'},
+  {id:'acores',label:'Casa açoriana',roofKind:'gable'},
+  {id:'mercantil',label:'Sobrado mercantil',roofKind:'gable'},
+];
+const PORTUGUESE_COLONIAL_STYLES=Object.fromEntries(PORTUGUESE_COLONIAL_FORMS.flatMap(form=>PORTUGUESE_COLONIAL_PALETTES.map(palette=>[
+  `portuguese_colonial_${form.id}_${palette.id}`,
+  {label:`${form.label} · ${palette.label}`,wall:palette.wall,roof:palette.roof,accent:palette.accent,trim:palette.trim,roofKind:form.roofKind,motif:'portuguese_colonial',colonialForm:form.id},
+])));
+const PORTUGUESE_COLONIAL_PALETTE_IDS=PORTUGUESE_COLONIAL_PALETTES.map(palette=>palette.id);
+const DUTCH_COLONIAL_PALETTES=[
+  {id:'delft',label:'Azul Delft',wall:0x527997,roof:0x493e39,accent:0xd2b36c,trim:0xe6d9bd},
+  {id:'garnet',label:'Vermelho-garnet',wall:0x9d5147,roof:0x483d38,accent:0xe2bf72,trim:0xe2cbb0},
+  {id:'mustard',label:'Amarelo mostarda',wall:0xc39b45,roof:0x55463d,accent:0x426b69,trim:0xe4d2ad},
+  {id:'malachite',label:'Verde-malaquita',wall:0x55796a,roof:0x443f39,accent:0xc69a5d,trim:0xd7c8aa},
+  {id:'coral',label:'Coral de Willemstad',wall:0xc8705c,roof:0x56433d,accent:0x3e6479,trim:0xe7d3b7},
+  {id:'indigo',label:'Índigo e areia',wall:0x445d78,roof:0x453c3b,accent:0xc9a35e,trim:0xdac8a8},
+];
+const DUTCH_COLONIAL_FORMS=[
+  {id:'stepped',label:'Frontão escalonado'},
+  {id:'neck',label:'Frontão de pescoço'},
+  {id:'curved',label:'Frontão curvo caribenho'},
+  {id:'straight',label:'Frontão reto oitocentista'},
+  {id:'gallery',label:'Casa-galeria de Willemstad'},
+];
+const DUTCH_COLONIAL_STYLES=Object.fromEntries(DUTCH_COLONIAL_FORMS.flatMap(form=>DUTCH_COLONIAL_PALETTES.map(palette=>[
+  `dutch_colonial_${form.id}_${palette.id}`,
+  {label:`Colonial holandês · ${form.label} · ${palette.label}`,wall:palette.wall,roof:palette.roof,accent:palette.accent,trim:palette.trim,roofKind:form.id==='gallery'?'hip':'gable',motif:'dutch_colonial',dutchForm:form.id},
+])));
 // Adapted from Brutopolis' inherited surnames, individual traits and house-style catalogue.
 // Pure data/helpers keep these features usable both in the worker and the UI.
 export const TRAIT_LABELS = { diligence: 'Dedicação', empathy: 'Empatia', honesty: 'Honestidade', skepticism: 'Ceticismo', riskTolerance: 'Tolerância a risco', frugality: 'Frugalidade', ambition: 'Ambição' };
@@ -51,6 +95,8 @@ export const HOUSE_STYLES = {
   hillside_villa: { label: 'Vila tropical escalonada', wall: 0xe6d4b2, roof: 0x9a674b, roofKind: 'hip' },
   st_lucia_villa: { label: 'Vila crioula colorida', wall: 0xb4d2bd, roof: 0x9a604b, roofKind: 'gable' },
   ...CARIBBEAN_ARCHITECTURE,
+  ...PORTUGUESE_COLONIAL_STYLES,
+  ...DUTCH_COLONIAL_STYLES,
   modern: { label: 'Fachada contemporânea', wall: 0xd7dfdb, roof: 0x506054, roofKind: 'flat' },
 };
 export function initializeCharacter(city, citizen) {
@@ -63,9 +109,12 @@ export function initializeCharacter(city, citizen) {
   citizen.savingsRate = Math.round((.05 + citizen.traits.frugality * .4) * 100) / 100;
 }
 export function architectureFor(type, id) {
-  const caribbean=['gingerbread','island_cottage','shotgun','coastal_concrete','chattel_house','colonial_veranda','coral_stone','pastel_cottage','veranda_duplex','courtyard_house','stilt_house','breezeway_house','coral_gable','tin_roof_cottage','island_rowhouse','wraparound_veranda','art_deco_island','hillside_villa','st_lucia_villa'];
-  const popular=['super_popular_housing','popular_housing'].includes(type),luxury=['popular_luxury_housing','luxury_housing'].includes(type);
-  const legacyPool=popular?caribbean.filter(style=>!['hacienda','hillside_villa','art_deco_island'].includes(style)):luxury?caribbean.filter(style=>!['shotgun','chattel_house','stilt_house'].includes(style)):caribbean;
-  const pool=[...legacyPool,...CARIBBEAN_ARCHITECTURE_IDS,...(popular?['adobe','cottage']:luxury?['hacienda','art_deco_island','modern']:['adobe','cottage','timber','hacienda','modern'])];
-  return pool[((Math.imul(id + 19, 2654435761) >>> 0) % pool.length)];
+  const numericId=Number(id)||0,seed=(Math.imul(numericId+29,2246822519)>>>0);
+  if(seed%5===0){const form=DUTCH_COLONIAL_FORMS[seed%DUTCH_COLONIAL_FORMS.length],palette=DUTCH_COLONIAL_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%DUTCH_COLONIAL_PALETTES.length];return `dutch_colonial_${form.id}_${palette.id}`;}
+  const forms=type==='luxury_housing'||type==='popular_luxury_housing'?['quinta','barroco','sobrado','azulejo']:
+    ['townhall','council_chamber','courthouse','bank'].includes(type)?['pombalino','barroco','sobrado','mercantil']:
+    ['residential','popular_housing','super_popular_housing'].includes(type)?['sobrado','terrea','azulejo','acores','pombalino','quinta']:
+    ['sobrado','mercantil','azulejo','acores','pombalino','rural'];
+  const form=forms[seed%forms.length],palette=PORTUGUESE_COLONIAL_PALETTE_IDS[(Math.imul(numericId+19,2654435761)>>>0)%PORTUGUESE_COLONIAL_PALETTE_IDS.length];
+  return `portuguese_colonial_${form}_${palette}`;
 }

@@ -1,6 +1,6 @@
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
 import {waterPollutionAt,waterTint} from './city_water.js';
-import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=caribbean-pixel-2';
+import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=portuguese-roof-tiles-2';
 // =============================================================================
 // Brutopolis Chronicles - 3D Isometric Tycoon Engine (Volumetric 3D Models)
 // =============================================================================
@@ -8,7 +8,7 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,weatherPixelTexture
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=caribbean-50-styles-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=portuguese-colonial-forms-6";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=bank-door-bench-offset-1';
 import { flagNightFactor } from './city_terrain.js?v=mine-adjacent-1';
@@ -5188,10 +5188,9 @@ export class RCT3DRenderer {
     variant=(variant>>>0)%32;
     let map;
     if(kind==='roof'){
-      const source=createTintedTexture('Feature_Brick_C.png',0xffffff,0x999999,1);
-      map=weatherPixelTexture(THREE,source,'roof',variant%8);
+      map=portugueseClayTileTexture(THREE,color,variant%8);
     }else map=caribbeanBuildingPixelTexture(THREE,kind==='wood'?'wood':'plaster',variant%8);
-    const material=new THREE.MeshLambertMaterial({color,map,side:THREE.DoubleSide});
+    const material=new THREE.MeshLambertMaterial({color:kind==='roof'?0xffffff:color,map,side:THREE.DoubleSide});
     applyRetroDitherToMaterial(material);return material;
   }
   decorateCityMaterials(group){group.traverse(object=>{for(const material of [object.material].flat())if(material?.isMeshLambertMaterial)applyRetroDitherToMaterial(material);});}
@@ -7032,7 +7031,7 @@ export class RCT3DRenderer {
     }
 
     this.cityAnimationTime=(this.cityAnimationTime||0)+dt*effectiveSpeed;
-    syncCityBuildings(this, THREE, entities, world);
+    syncCityBuildings(this, THREE, entities, world, dt);
     const profileCity = this.profileFrame ? performance.now() : 0;
 
     // Render 3D Volumetric Instanced Entities

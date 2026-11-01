@@ -46,6 +46,31 @@ export function caribbeanBuildingPixelTexture(THREE, kind = 'plaster', variant =
   });
 }
 
+export function portugueseClayTileTexture(THREE, baseColor = 0x9b5740, variant = 0) {
+  const key=`portuguese-clay-tiles:${baseColor>>>0}:${variant>>>0}`;
+  if(textureCache.has(key))return textureCache.get(key);
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
+  const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
+  const color=[(baseColor>>>16)&255,(baseColor>>>8)&255,baseColor&255];
+  const shade=(amount)=>`rgb(${color.map(channel=>Math.max(0,Math.min(255,Math.round(channel*amount)))).join(',')})`;
+  ctx.fillStyle=shade(.48);ctx.fillRect(0,0,256,256);
+  // Overlapping half-round clay tiles, staggered like traditional roof rows.
+  for(let row=-1;row<17;row++){
+    const y=row*16,offset=(row&1)?8:0;
+    for(let col=-1;col<17;col++){
+      const x=col*16-offset,tileSeed=(Math.imul((row%16+16)%16+1,0x45d9f3b)^Math.imul((col%16+16)%16+1,0x119de1f3)^variant^baseColor)>>>0,tileRandom=randomFrom(tileSeed),light=.84+tileRandom()*.25;
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+16,y);ctx.lineTo(x+16,y+11);
+      ctx.quadraticCurveTo(x+8,y+16,x,y+11);ctx.closePath();ctx.fillStyle=shade(light);ctx.fill();
+      ctx.fillStyle=shade(1.15);ctx.fillRect(x+2,y+1,2,8);ctx.fillStyle=shade(.66);ctx.fillRect(x+13,y+2,2,9);
+      ctx.fillStyle=shade(.53);ctx.fillRect(x+1,y+10,14,2);
+      if(tileRandom()>.91){ctx.fillStyle=shade(.76);ctx.fillRect(x+5,y+4,2,1);}
+    }
+  }
+  const texture=new THREE.CanvasTexture(canvas);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+  texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
+  textureCache.set(key,texture);return texture;
+}
+
 // Keep the game's 16×16 asset drawing and add only a few climate-worn pixels.
 export function weatherPixelTexture(THREE, source, materialKind, variant = 0) {
   if (!source?.image || source.userData?.hasSource === false) return source;
