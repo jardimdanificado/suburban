@@ -33,6 +33,14 @@ test('murder case moves from arrest dispatch through physical custody to a five-
   assert.equal(record.trial.jury.verdict,'convicted');
 });
 
+test('an interrupted physical arrest escort pauses both people and resumes after urgent needs and salary blocks',()=>{
+  const f=fixture(),{justice,record,suspect,officer,city,jail}=f;assert.equal(justice.arrest(record.id,suspect.id),true);assert.equal(justice.updatePoliceArrestEscort(officer),true);assert.equal(record.status,'arrested');assert.equal(suspect.custody.status,'in-transit');assert.ok(officer.path.length);assert.ok(suspect.path.length);
+  let urgent=true;city.urgentNeed=()=>urgent;const original={x:suspect.entity.x,y:suspect.entity.y};justice.updatePoliceArrestEscort(officer);assert.equal(officer.path.length,0);assert.equal(suspect.path.length,0);assert.deepEqual({x:suspect.entity.x,y:suspect.entity.y},original);assert.match(record.arrestEscort.waitingReason,/necessidade urgente/);
+  urgent=false;city.payWage=()=>false;city.minute++;justice.updatePoliceArrestEscort(officer);assert.equal(officer.path.length,0);assert.equal(suspect.path.length,0);assert.match(record.arrestEscort.waitingReason,/verba salarial/);
+  city.payWage=()=>true;city.minute++;justice.updatePoliceArrestEscort(officer);assert.ok(officer.path.length);assert.deepEqual({x:suspect.entity.x,y:suspect.entity.y},original);assert.equal(suspect.custody.status,'in-transit');
+  jail.active=false;city.minute++;justice.updatePoliceArrestEscort(officer);assert.equal(officer.policeArrestEscort,null);assert.deepEqual({x:suspect.entity.x,y:suspect.entity.y},original);assert.equal(suspect.custody.status,'in-transit');assert.match(record.arrestWaitingReason,/indisponível/);
+});
+
 test('popular jury acquits when its majority votes not guilty',()=>{
   const f=fixture(.99),{justice,record,city}=f;record.status='charged';justice.updateCourtCases();assert.equal(record.trial.jury.memberIds.length,5);city.minute=record.trial.hearingAt;justice.updateCourtCases();assert.equal(record.status,'acquitted');assert.equal(record.trial.jury.notGuiltyVotes,5);assert.equal(record.trial.jury.verdict,'acquitted');
 });
@@ -46,6 +54,14 @@ test('independent oversight assigns its auditor as soon as the reviewer becomes 
   const source={id:2,type:'theft',status:'no-suspect',investigation:{officerId:city.citizens[1].id,suspectId:city.citizens[0].id},witnesses:[],evidence:[]},complaint={id:3,type:'investigationFraud',status:'reported',details:{reviewedCaseId:2,investigatorUnderReviewId:city.citizens[1].id},evidence:[]};justice.cases.push(source,complaint);
   justice.dispatchExternalPoliceReviews();assert.equal(complaint.externalReview.status,'waiting');
   reviewer.indoorLocation={buildingId:office.id,path:[]};city.minute++;justice.dispatchExternalPoliceReviews();assert.equal(complaint.externalReview.status,'active');assert.equal(complaint.externalReview.reviewerId,reviewer.id);
+});
+
+test('the paid oversight commission verifies source records and reports discrepancies without deciding guilt',()=>{
+  const f=fixture(),{city,justice}=f,reviewer=city.citizens[5],officer=city.citizens[1],source={id:2,type:'theft',status:'no-suspect',victimId:12,investigation:{officerId:officer.id,suspectId:city.citizens[0].id,interviewEvidence:[{kind:'police-interview',witnessId:8,identifiedSuspectId:9,sourceEventId:501}],reportedInterviews:[],suspectId:city.citizens[0].id},witnesses:[{citizenId:8,identifiedSuspectId:9,interviewStatus:'interviewed'}],evidence:[]},complaint={id:3,type:'investigationFraud',status:'reported',details:{reviewedCaseId:2,investigatorUnderReviewId:officer.id},evidence:[{kind:'investigation-record',sourceCaseId:2,officialSuspectId:city.citizens[0].id,originalInterviewEvidence:source.investigation.interviewEvidence,officialReportedInterviewIndexes:[],contradictions:[{contradictionKind:'investigator-concealment',sourceInterviewIndex:0,witnessId:8,originalSuspectId:9,recordedSuspectId:city.citizens[0].id}]}]};
+  const office={id:60,type:'council_oversight_office',active:true,entity:{destroyed:false,properties:{name:'Comissão'}},workers:[reviewer.id],accountId:'oversight'};reviewer.jobId=office.id;reviewer.task='work';reviewer.skills.law=80;reviewer.indoorLocation={buildingId:office.id,path:[]};city.buildings.push(office);justice.cases.push(source,complaint);
+  let paid=0;city.payWage=()=>{paid++;return true;};justice.dispatchExternalPoliceReviews();assert.equal(complaint.externalReview.status,'active');
+  for(let minute=0;minute<90;minute++){city.minute++;justice.updatePoliceOversight(reviewer);}
+  assert.equal(paid,90);assert.equal(complaint.externalReview.status,'completed');assert.equal(complaint.externalReview.progress,90);assert.equal(complaint.externalReview.verifiedDiscrepancies,1);assert.equal(complaint.externalReview.report.verifiedDiscrepancies[0].independentSourceInterview.sourceEventId,501);assert.equal(complaint.evidence.at(-1).kind,'external-review');assert.equal(source.status,'no-suspect');assert.equal(complaint.offenderId??null,null);assert.equal(complaint.chargedCitizenId??null,null);assert.equal(reviewer.policeOversight,null);
 });
 
 test('a conviction for investigative fraud removes the officer, excludes tainted evidence and reopens the case for another investigator',()=>{

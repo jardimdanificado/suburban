@@ -102,6 +102,13 @@ test('investigator disqualification and reopened fraud case survive snapshots an
   officer.policeDisqualifiedAt=city.minute+30;source.details.sanctionReviewedAt=city.minute+30;source.investigationWaitingReason='Aguardando novo investigador';const delta=receiver.apply(sender.encode({city}));bindCityState(delta.city);assert.equal(copyOfficer.policeDisqualifiedAt,city.minute+30);assert.equal(copy.details.sanctionReviewedAt,city.minute+30);assert.equal(copy.investigationWaitingReason,'Aguardando novo investigador');
 });
 
+test('an active oversight review and its assigned reviewer survive snapshots and deltas',()=>{
+  const city=setup({starter:true,population:24}),reviewer=city.citizens[5];let office=city.buildings.find(b=>b.type==='council_oversight_office');if(!office)for(const site of city.economy.locateBuilding('council_oversight_office')){office=city.addBuilding('council_oversight_office',site.x,site.y,{...site,free:true});if(office)break;}assert.ok(office);reviewer.jobId=office.id;reviewer.task='police-oversight';reviewer.indoorLocation={buildingId:office.id,path:[]};office.workers=[reviewer.id];
+  const mission={caseId:92,officeId:office.id},complaint={id:92,type:'investigationFraud',status:'reported',details:{reviewedCaseId:90},externalReview:{status:'active',officeId:office.id,reviewerId:reviewer.id,reviewedCaseId:90,startedAt:100,progress:43,required:90,lastWorkedMinute:142},evidence:[]};reviewer.policeOversight=mission;city.justice.cases.push(complaint);
+  const {sender,receiver,restored}=restore(city),copy=restored.justice.cases.find(record=>record.id===92),copyReviewer=restored.society.citizen(reviewer.id);assert.equal(copy.externalReview.progress,43);assert.equal(copyReviewer.policeOversight.caseId,92);assert.equal(restored.building(office.id).workers[0],reviewer.id);
+  complaint.externalReview.progress=44;complaint.externalReview.lastWorkedMinute=143;mission.lastWorkedMinute=143;const delta=receiver.apply(sender.encode({city}));bindCityState(delta.city);assert.equal(delta.city.justice.cases.find(record=>record.id===92).externalReview.progress,44);assert.equal(delta.city.society.citizen(reviewer.id).policeOversight.lastWorkedMinute,143);
+});
+
 test('skill migration is deterministic, preserves existing values and keeps newborn skills at zero',()=>{
   const a={id:7,skills:{combat:12}},b={id:7,skills:{combat:12}},baby={id:8};ensureJusticeSkills(a,2,123);ensureJusticeSkills(b,2,123);assert.deepEqual(a.skills,b.skills);assert.equal(a.skills.combat,12);ensureJusticeSkills(baby,0,123,{newborn:true});assert.ok(JUSTICE_SKILLS.every(skill=>baby.skills[skill]===0));
 });

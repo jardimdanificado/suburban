@@ -80,3 +80,26 @@ test('the live simulation enters an interior scene, inspects it, and exits throu
  let entered=false,exited=false;for(let i=0;i<240&&(i===0||record.status==='investigating');i++){city.update(.25);entered||=officer.indoorLocation?.buildingId===sceneBuilding.id;exited||=entered&&officer.indoorLocation?.buildingId!==sceneBuilding.id;}
  assert.equal(record.investigation?.fieldworkResult,'completed');assert.ok(record.investigation.sceneVisitedAt>=600);assert.ok(entered,'investigator never entered the scene building');assert.ok(exited,'investigator never exited the scene building');assert.equal(record.status,'no-suspect');
 });
+
+test('the live simulation travels from an interior scene to a witness in a different building',()=>{
+ const city=setup({starter:true,population:40});let station,sceneBuilding,witnessBuilding;
+ for(const type of ['police_station','theater','library']){let building;for(const site of city.economy.locateBuilding(type)){building=city.addBuilding(type,site.x,site.y,{...site,free:true});if(building)break;}assert.ok(building,`missing ${type}`);if(type==='police_station')station=building;else if(type==='theater')sceneBuilding=building;else witnessBuilding=building;}
+ const eligible=city.citizens.filter(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)&&c.id!==city.economy.mayorId&&Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.health,c.needs.toilet)>65&&!c.justiceReportCaseId);
+ const [officer,witness]=eligible;assert.ok(officer&&witness&&officer.id!==witness.id);
+ for(const c of [officer,witness]){if(c.jobId)city.economy.leaveJob(c,'Designação de diligência entre prédios');c.path=[];c.indoorLocation=null;Object.assign(c.needs,{food:100,water:100,energy:100,health:100,toilet:100,hygiene:100});}
+ officer.jobId=station.id;station.workers=[officer.id];city.transfer('treasury',station.accountId,100000,'Caixa para diligência');putAtWorkCell(city,officer,station);
+ witness.jobId=witnessBuilding.id;witnessBuilding.workers=[witness.id];putAtWorkCell(city,witness,witnessBuilding);
+ const sceneUnit=sceneBuilding.units.find(u=>u.roomType==='workspace')||sceneBuilding.units[0],position={x:sceneBuilding.entity.x+sceneUnit.x+.5,y:sceneBuilding.entity.y+sceneUnit.y+.5};
+ const witnessRecord={citizenId:witness.id,confidence:.98,identifiedSuspectId:city.citizens.find(c=>c.id!==officer.id&&c.id!==witness.id)?.id??null,scene:{buildingId:sceneBuilding.id,unitId:sceneUnit.id,floor:sceneUnit.z,height:0}};
+ const record={id:993,type:'vandalism',offenderId:null,victimId:null,status:'reported',reportingStationId:station.id,scene:{buildingId:sceneBuilding.id,unitId:sceneUnit.id,floor:sceneUnit.z,height:0},position,witnesses:[witnessRecord],evidence:[],rule:{fineOnly:false},severity:30};
+ city.justice.cases.push(record);city.minute=600;city.justice.lastMinute=599;
+ let visitedWitnessBuilding=false,previousPosition={x:officer.entity.x,y:officer.entity.y};
+ for(let i=0;i<1600&&record.status==='reported'||i<1600&&record.status==='investigating';i++){
+  city.update(.25);
+  const mission=officer.policeInvestigation;
+  visitedWitnessBuilding ||= mission?.witnessBuildingId===witnessBuilding.id&&officer.indoorLocation?.buildingId===witnessBuilding.id;
+  const moved=Math.hypot(officer.entity.x-previousPosition.x,officer.entity.y-previousPosition.y);assert.ok(moved<2,`investigator jumped ${moved} cells`);previousPosition={x:officer.entity.x,y:officer.entity.y};
+  if(record.status==='no-suspect'||record.status==='arrest-requested')break;
+ }
+ assert.ok(visitedWitnessBuilding,'investigator never entered the witness building');assert.ok(record.investigation.interviewEvidence.some(e=>e.witnessId===witness.id));assert.equal(witnessRecord.interviewStatus,'interviewed');assert.equal(record.investigation.fieldworkResult,'completed');
+});

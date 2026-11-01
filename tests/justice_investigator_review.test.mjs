@@ -28,3 +28,8 @@ test('hidden fraud without a discovered contradiction does not open a case and d
   const {justice,source,defender}=fixture();source.investigation.fraud=true;source.witnesses[0].identifiedSuspectId=1;assert.equal(justice.reviewDefenseEvidence(source,defender),false);assert.equal(justice.cases.length,1);
   const other=fixture();other.justice.policies.penalCode.investigationFraud.criminal=false;other.justice.reviewDefenseEvidence(other.source,other.defender);assert.equal(other.justice.cases.length,1);assert.equal(other.source.investigation.reviewReferralStatus,'not-criminal');
 });
+
+test('a defense can expose an invented police interview when the witness declined to speak',()=>{
+  const {justice,source,defender}=fixture();source.investigation.fieldwork=true;source.investigation.interviewEvidence=[];source.investigation.interviewReportEventId=77;source.witnesses[0].interviewStatus='declined';source.evidence=[{kind:'police-interview',witnessId:4,identifiedSuspectId:1,reportedSuspectId:9,sourceInterviewEventId:null,confidence:.9}];
+  assert.equal(justice.reviewDefenseEvidence(source,defender),true);const contradiction=source.evidence.find(item=>item.contradictionKind==='investigator-fabrication');assert.ok(contradiction);assert.equal(contradiction.originalSuspectId,9);assert.equal(contradiction.recordedSuspectId,1);const complaint=justice.cases.find(item=>item.type==='investigationFraud');assert.ok(complaint);assert.equal(complaint.status,'reported');assert.equal(complaint.offenderId,null);
+});

@@ -30,7 +30,8 @@ export class CityGovernment extends CityPolitics {
   partyAccount(party){return partyAccount(this,party);}
   leaseHeadquarters(partyId,towerId,floor){return leaseHeadquarters(this,partyId,towerId,floor);}
   changePartyFund(value,bill){return changePartyFund(this,value,bill);}
-  intervene(kind,targetId=null,options={}){return (this.interventions??=new CityInterventions(this.city)).perform(kind,targetId,options);}
+  executePlayerAction(kind,targetId=null,options={}){return (this.interventions??=new CityInterventions(this.city)).dispatch(kind,targetId,options);}
+  intervene(kind,targetId=null,options={}){return this.executePlayerAction(kind,targetId,options);}
   getResearch(){return this.research??=new CityResearch(this.city);}
   assignPartyNumbers(){for(const party of this.parties.filter(p=>!p.active)){if(!Number.isInteger(party.number)||party.number<10||party.number>99)party.number=10+party.id*17%90;party.ballotLabel=`${party.number} · ${party.short}`;}const used=new Set();for(const party of this.parties.filter(p=>p.active)){if(!Number.isInteger(party.number)||party.number<10||party.number>99||used.has(party.number)){const free=Array.from({length:90},(_,i)=>10+(i+party.id*17)%90).find(n=>!used.has(n));party.number=free??null;}if(party.number!=null)used.add(party.number);party.ballotLabel=`${party.number??'—'} · ${party.short}`;}}
   party(id){return this.parties.find(p=>p.id===id);}
@@ -44,7 +45,7 @@ export class CityGovernment extends CityPolitics {
   worksAccount(){let account=this.city.accounts.get('works-budget');if(!account){account={name:'Orçamento municipal de obras',balance:0,totalRevenue:0,totalExpenses:0};this.city.accounts.set('works-budget',account);}return account;}
   ensureWorksBudget(){const balance=this.worksAccount().balance||0;this.policy.worksBudget=balance;return balance;}
   fundInitialWorksBudget(){if(this.worksBudgetInitialized)return;const city=this.city,account=this.worksAccount(),target=this.policy.worksBudgetTarget??this.policy.worksBudget??city.currency.price(5000000),reserve=city.welfare.conditions().reserve,free=Math.max(0,city.treasury-reserve),amount=Math.min(Math.max(0,target-account.balance),Math.floor(free*.2));if(amount&&city.transfer('treasury','works-budget',amount,'Dotação inicial do orçamento municipal de obras')){this.policy.worksBudget=account.balance;this.policy.worksBudgetTarget=target;this.worksBudgetInitialized=true;}}
-  applyPlayerDirective(type,payload={}){return this.intervene('divineGovernment',null,{type,payload});}
+  applyPlayerDirective(type,payload={}){return this.executePlayerAction('divineGovernment',null,{type,payload});}
   requestWorksBudget(value){return this.applyPlayerDirective('worksBudget',{value});}
   requestWorksTransfer(value){return this.applyPlayerDirective('worksTransfer',{value});}
   startPublicWork(type,crop='milho'){

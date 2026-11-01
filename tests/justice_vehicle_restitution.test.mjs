@@ -39,6 +39,12 @@ test('death of the assigned officer frees the bike and leaves a visible pending 
   f.justice.updateRestitutionMissions();assert.equal(f.vehicle.policeRecoveryOfficerId,null);assert.equal(f.vehicle.x,7);assert.equal(f.officer.policeRestitution,null);assert.equal(f.record.vehicleRecovery.status,'awaiting-officer');assert.match(f.record.vehicleRecovery.waitingReason,/policial/);
 });
 
+test('police follows a moving stolen bicycle to its destination and seizes it only after it stops',()=>{
+  const f=fixture(),driver={id:4,accountId:'citizen:4',task:'travel',entity:{x:5,y:1,properties:{name:'Ciclista'}},path:[],mobilityTrip:{vehicleId:f.vehicle.id,goal:{x:20,y:1}}};f.city.citizens.push(driver);driver.ridingVehicleId=f.vehicle.id;f.vehicle.driverId=driver.id;f.vehicle.possessorAccountId=driver.accountId;f.justice.updateRestitutionMissions();const mission=f.officer.policeRestitution;assert.equal(mission.phase,'intercept');assert.deepEqual(mission.interceptGoal,{x:20,y:1});
+  f.officer.indoorLocation=null;f.justice.updatePoliceRestitution(f.officer);assert.deepEqual(f.officer.path,[{x:20,y:1}]);f.officer.entity.x=20;f.officer.entity.y=1;f.officer.path=[];f.city.minute++;f.justice.updatePoliceRestitution(f.officer);assert.equal(f.vehicle.driverId,driver.id);assert.equal(f.vehicle.policeRecoveryOfficerId,undefined);assert.match(mission.waitingReason,/aguardando a bicicleta parar/);
+  driver.entity.x=20;driver.entity.y=1;driver.mobilityTrip=null;driver.ridingVehicleId=null;f.vehicle.x=20;f.vehicle.y=1;f.vehicle.driverId=null;f.city.minute++;f.justice.updatePoliceRestitution(f.officer);assert.equal(f.vehicle.policeRecoveryOfficerId,f.officer.id);assert.equal(f.vehicle.possessorAccountId,null);assert.equal(f.vehicle.ownerAccountId,f.owner.accountId);assert.equal(mission.phase,'to-owner');
+});
+
 test('lack of wages pauses transportation and a later payment can resume it',()=>{
   const f=fixture();collect(f);f.city.minute++;f.city.payWage=()=>false;f.justice.updatePoliceRestitution(f.officer);assert.equal(f.vehicle.policeRecoveryOfficerId,null);assert.match(f.record.vehicleRecovery.waitingReason,/salarial/);
   f.city.minute++;f.city.payWage=()=>true;f.justice.updatePoliceRestitution(f.officer);assert.equal(f.vehicle.policeRecoveryOfficerId,3);assert.equal(f.officer.policeRestitution.phase,'to-owner');

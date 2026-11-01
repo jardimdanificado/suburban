@@ -1,6 +1,7 @@
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {VEHICLE_SPECS} from './city_vehicles.js?v=skybridge-survival-2';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+const DIRECTIVE_LABELS={publicWork:'Contratação de obra pública',veto:'Veto do prefeito',releasePrisoner:'Libertação de pessoa presa',arrestAuthorization:'Autorização de prisão',worksBudget:'Ajuste da verba de obras',worksTransfer:'Transferência para obras',privatize:'Oferta de participação estatal',nationalize:'Estatização de empresa',policeStaffing:'Ajuste do efetivo policial',parliamentaryImmunity:'Regra de imunidade parlamentar',cleanRecord:'Regra da ficha limpa',penalCode:'Ajuste do código penal',suspend:'Afastamento do prefeito',build:'Obra pública',convict:'Condenação política',impeach:'Cassação de mandato'};
 export const INTERVENTIONS={
   praise:{label:'Destacar boas ações',group:'opinion',description:'Divulga um perfil favorável, melhora reputação e alcança parte dos moradores.'},
   rumor:{label:'Espalhar um boato',group:'opinion',description:'Tenta prejudicar a imagem. Pessoas críticas podem desconfiar; o efeito enfraquece com o tempo.'},
@@ -33,10 +34,10 @@ export const INTERVENTIONS={
 };
 export class CityInterventions {
   constructor(city){this.city=city;this.records=[];this.nextId=1;this.cooldowns=new Map();}
-  perform(kind,targetId=null,options={}){
+  dispatch(kind,targetId=null,options={}){
     const city=this.city,p=city.politics,spec=INTERVENTIONS[kind];if(!spec)return city.fail('Intervenção desconhecida.');
     const key=`${kind}:${targetId??'city'}`;if(spec.group!=='god'&&city.minute-(this.cooldowns.get(key)??-Infinity)<30)return city.fail('Aguarde 30 minutos da cidade para repetir esta intervenção no mesmo alvo.');
-    const c=city.society.citizen(targetId),e=p.active,n=e?.candidates.find(n=>n.citizenId===targetId),record={id:this.nextId,kind,title:spec.label,targetId,minute:city.minute,affected:0,cost:0,description:'',truth:kind!=='rumor'};
+    const c=city.society.citizen(targetId),e=p.active,n=e?.candidates.find(n=>n.citizenId===targetId),record={id:this.nextId,kind,title:kind==='divineGovernment'?(DIRECTIVE_LABELS[options.type]||`Ordem direta: ${options.type||'governo'}`):spec.label,targetId,minute:city.minute,affected:0,cost:0,description:'',truth:kind!=='rumor'};
     const live=c&&!c.entity.destroyed;if(['opinion','campaign','god'].includes(spec.group)&&!['debate','divineRepair','divineHarvest','divineGovernment'].includes(kind)&&!live)return city.fail('Selecione uma pessoa viva.');
     if(spec.group==='campaign'&&(!e||e.status!=='campaign'))return city.fail('Esta intervenção precisa de uma campanha eleitoral em andamento.');
     if(['endorsement','rally','rigPoll'].includes(kind)&&!n)return city.fail('Selecione um candidato a prefeito desta eleição.');
@@ -133,7 +134,13 @@ export class CityInterventions {
       record.affected=routed;record.buildingId=hall.id;record.description=`${routed} vereadores iniciaram imediatamente o deslocamento para o plenário.`;
     }else if(kind==='divineGovernment'){
       const type=options.type,payload=options.payload||{},council=city.politics.council;
-      if(type==='releasePrisoner'){
+      if(type==='publicWork'){
+        const project=city.politics.startPublicWork(payload.buildingType,payload.crop||'milho');if(!project)return false;
+        record.projectId=project.id;record.buildingId=project.buildingId??null;record.affected=1;record.description=`Obra pública contratada imediatamente: ${city.buildingTypes[payload.buildingType]?.label||payload.buildingType} (projeto #${project.id}).`;
+      }else if(type==='veto'){
+        if(!city.politics.vetoBill(payload.billId))return false;
+        record.billId=payload.billId;record.affected=1;record.description=`Veto do prefeito ao projeto #${payload.billId} registrado imediatamente.`;
+      }else if(type==='releasePrisoner'){
         const caseRecord=city.justice.cases.find(r=>r.id===payload.caseId),person=city.society.citizen(payload.targetId??caseRecord?.investigation?.suspectId);
         if(!caseRecord||!person?.custody||person.custody.caseId!==caseRecord.id)return city.fail('A pessoa não está presa neste caso.');
         if(caseRecord.sentence){caseRecord.sentence.suspendedAt=city.minute;caseRecord.sentence.executionStatus='released-by-player';}caseRecord.playerReleaseAt=city.minute;caseRecord.playerReleaseInterventionId=record.id;
@@ -160,4 +167,5 @@ export class CityInterventions {
 
     this.nextId++;this.cooldowns.set(key,city.minute);record.eventId=city.log(`Intervenção do observador: ${record.description}`,'government',live&&(spec.group!=='economy'||kind==='importVehicle')?[c.id]:[],{kind:'observer-intervention',interventionId:record.id,action:kind,targetId,buildingId:record.buildingId,vehicleId:record.vehicleId,corruptionCaseId:record.caseId,amount:record.cost,affected:record.affected,truth:record.truth}).id;this.records.push(record);if(this.records.length>200)this.records.shift();city.lastError='';return record;
   }
+  perform(kind,targetId=null,options={}){return this.dispatch(kind,targetId,options);}
 }

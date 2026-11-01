@@ -1,8 +1,8 @@
 import {INTERVENTIONS} from './city_interventions.js';
 import {formatMoney} from './city_ui_format.js';
 export function interventionAction(ui,kind,id,options={}){
- const result=ui.city.politics.intervene(kind,id,options);
- ui.notice=result===true?'Comando enviado; aguardando resultado da simulação.':result?.description||ui.city.lastError||'Não foi possível concluir a intervenção.';
+ const result=ui.city.politics.executePlayerAction(kind,id,options);
+ ui.notice=result===true?'Comando aplicado imediatamente.':result?.description||ui.city.lastError||'Não foi possível concluir a intervenção.';
  return result;
 }
 export function contextActions(ui,p,{person=null,business=null,vehicle=null,caseRecord=null,poll=null,election=null}={}){

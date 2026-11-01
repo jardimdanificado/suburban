@@ -1,7 +1,7 @@
 import {INTERVENTIONS} from './city_interventions.js';
 import {formatMoney as money} from './city_ui_format.js';
 export function renderInterventions(ui,p){
-  const city=ui.city,gov=city.politics,mode=ui.interventionView||'opinion',people=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),target=city.society.citizen(ui.interventionTargetId),act=(kind,id=target?.id,options={})=>{const result=gov.intervene(kind,id,options);ui.notice=result?.description||city.lastError||'Não foi possível iniciar a intervenção.';return result;};
+  const city=ui.city,gov=city.politics,mode=ui.interventionView||'opinion',people=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),target=city.society.citizen(ui.interventionTargetId),act=(kind,id=target?.id,options={})=>{const result=gov.executePlayerAction(kind,id,options);ui.notice=result?.description||(result===true?'Comando aplicado imediatamente.':city.lastError)||'Não foi possível concluir a intervenção.';return result;};
   p.note('Marcadores no mapa: bandeira = campanha; lupa = pesquisador; balão = entrevistado; urna = votação; pacote = entrega; capacete = obra; vassoura = faxina; cruz = cuidados; plenário = vereador.');
   p.note('Ações do observador para participar da simulação. Opiniões alteram escolhas futuras; votos já depositados permanecem registrados. Efeitos sobre opinião enfraquecem com o tempo.');
   p.links([['god','PODERES DIRETOS'],['opinion','IMAGEM E OPINIÃO'],['campaign','ELEIÇÕES'],['economy','ECONOMIA E VEÍCULOS'],['history','INTERVENÇÕES FEITAS']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.openPanel({interventionView:id})})));
