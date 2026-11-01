@@ -23,7 +23,7 @@ import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=portuguese-colonial-forms-6';
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js?v=caribbean-quarry-interviews-1';
-import {skybridgeLinks} from './city_skybridges.js?v=short-passarelas-bridge-1';
+import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-slogans-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
@@ -41,7 +41,7 @@ import { CityHousing, HOUSING_RULES } from './city_housing.js?v=caribbean-quarry
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=service-capacity-3';
 import { CityWorkMeals } from './city_work_meals.js?v=survival-capacity-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=workforce-road-mines-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=connected-dirt-paving-2';
 import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';

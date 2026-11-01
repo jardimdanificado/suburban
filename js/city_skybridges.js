@@ -1,5 +1,7 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {terrainWalkable} from './city_terrain.js?v=mine-adjacent-1';
+import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=portuguese-colonial-forms-8';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
 
 // One deterministic source of truth feeds both pedestrian routing and the renderer.
 export function skybridgeLinks(buildings,world){
@@ -37,9 +39,9 @@ export function skybridgeLinks(buildings,world){
 
 // Elevated links use separate pedestrian waypoints and leave the road tiles open.
 export function syncSkybridges(renderer,THREE,entities,world){
- const city=renderer.cityDevelopment?.city,revision=city?.structureRevision??entities.length,key=`${revision}:${world.revision??0}`;
+ const city=renderer.cityDevelopment?.city,revision=city?.structureRevision??entities.length,terrainRevision=world.topologyRevision??world.revision??0,key=`${revision}:${terrainRevision}:${world.bridgeRevision??0}`;
  const updateVisibility=()=>{for(const bridge of renderer.skybridgeGroup?.children||[]){const p=bridge.userData.bounds;bridge.visible=!Number.isFinite(renderer.renderedMinTx)||p.x1>=renderer.renderedMinTx&&p.x0<=renderer.renderedMaxTx+1&&p.y1>=renderer.renderedMinTy&&p.y0<=renderer.renderedMaxTy+1;}};
- if(renderer.skybridgeRevision===key){updateVisibility();return;}renderer.skybridgeRevision=key;
+ const styleKey=`${key}:colonial-3`;if(renderer.skybridgeRevision===styleKey){updateVisibility();return;}renderer.skybridgeRevision=styleKey;
  if(renderer.skybridgeGroup){renderer.scene.remove(renderer.skybridgeGroup);renderer.skybridgeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
  const group=new THREE.Group();renderer.skybridgeGroup=group;renderer.scene.add(group);renderer.skybridgeDoors=new Map();
  const addDoor=(building,unitId,bit)=>{let doors=renderer.skybridgeDoors.get(building.id);if(!doors)renderer.skybridgeDoors.set(building.id,doors=new Map());doors.set(unitId,(doors.get(unitId)||0)|bit);};
@@ -48,12 +50,24 @@ export function syncSkybridges(renderer,THREE,entities,world){
  // the bridge does not depend on which area was rendered first.
  const buildings=city?.buildings||entities.map(e=>e.properties?.cityBuilding).filter(Boolean),byId=new Map(buildings.map(b=>[b.id,b]));
  for(const link of skybridgeLinks(buildings,world)){
-   const a=byId.get(link.aId),b=byId.get(link.bId),bridge=new THREE.Group(),midX=(link.start.x+link.end.x)/2,midY=(link.start.y+link.end.y)/2,height=a.terrain.base+link.height-.07,horizontal=link.axis==='x';
-   bridge.userData={id:link.id,bounds:{x0:Math.min(link.start.x,link.end.x),x1:Math.max(link.start.x,link.end.x),y0:Math.min(link.start.y,link.end.y),y1:Math.max(link.start.y,link.end.y)}};group.add(bridge);
-   const deck=new THREE.Mesh(new THREE.BoxGeometry(horizontal?link.gap+.12:.72,.14,horizontal?.72:link.gap+.12),new THREE.MeshLambertMaterial({color:0x8c9892}));deck.position.set(midX,height,midY);deck.castShadow=true;deck.receiveShadow=true;bridge.add(deck);
-   const railMaterial=new THREE.MeshLambertMaterial({color:0x637579}),postGeometry=new THREE.BoxGeometry(.04,.66,.04),postMatrices=new THREE.Matrix4(),postCount=Math.max(2,Math.ceil(link.gap/4)+1),posts=new THREE.InstancedMesh(postGeometry,railMaterial,postCount*2);let postIndex=0;
-   for(const side of [-.32,.32]){const rail=new THREE.Mesh(new THREE.BoxGeometry(horizontal?link.gap+.12:.045,.07,horizontal?.045:link.gap+.12),railMaterial);rail.position.set(midX+(horizontal?0:side),height+.66,midY+(horizontal?side:0));bridge.add(rail);for(let k=0;k<postCount;k++){const t=k/(postCount-1),x=link.start.x+(link.end.x-link.start.x)*t+(horizontal?0:side),y=link.start.y+(link.end.y-link.start.y)*t+(horizontal?side:0);postMatrices.makeTranslation(x,height+.33,y);posts.setMatrixAt(postIndex++,postMatrices);}}
-   posts.instanceMatrix.needsUpdate=true;posts.castShadow=true;posts.frustumCulled=false;bridge.add(posts);
+   const a=byId.get(link.aId),b=byId.get(link.bId),bridge=new THREE.Group(),midX=(link.start.x+link.end.x)/2,midY=(link.start.y+link.end.y)/2,height=a.terrain.base+link.height-.07,horizontal=link.axis==='x',style=HOUSE_STYLES[architectureFor(a.type,a.id)]||HOUSE_STYLES.modern,dutch=style.motif==='dutch_colonial';
+   bridge.userData={id:link.id,bounds:{x0:Math.min(link.start.x,link.end.x),x1:Math.max(link.start.x,link.end.x),y0:Math.min(link.start.y,link.end.y),y1:Math.max(link.start.y,link.end.y)}};group.add(bridge);const deckParts=new THREE.Group(),railParts=new THREE.Group(),trimParts=new THREE.Group();
+   const deckColor=dutch?0x80583d:0xb7a98d,railColor=dutch?style.accent:0x343a3a,trimColor=dutch?style.trim:style.accent,deckMaterial=new THREE.MeshLambertMaterial({color:deckColor}),railMaterial=new THREE.MeshLambertMaterial({color:railColor}),trimMaterial=new THREE.MeshLambertMaterial({color:trimColor}),length=link.gap+.12,width=.72;
+   const deck=new THREE.Mesh(new THREE.BoxGeometry(horizontal?length:width,.14,horizontal?width:length),deckMaterial);deck.position.set(midX,height,midY);deck.castShadow=true;deck.receiveShadow=true;deckParts.add(deck);
+   const postGeometry=new THREE.BoxGeometry(.07,.66,.07),postMatrices=new THREE.Matrix4(),postCount=Math.max(2,Math.ceil(link.gap/.65)+1),posts=new THREE.InstancedMesh(postGeometry,railMaterial,postCount*2);let postIndex=0;
+   for(const side of [-.32,.32]){
+    const rail=new THREE.Mesh(new THREE.BoxGeometry(horizontal?length:.055,.075,horizontal?.055:length),railMaterial);rail.position.set(midX+(horizontal?0:side),height+.66,midY+(horizontal?side:0));rail.castShadow=true;railParts.add(rail);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(horizontal?length:.11,.045,horizontal?.11:length),trimMaterial);cap.position.set(midX+(horizontal?0:side),height+.72,midY+(horizontal?side:0));trimParts.add(cap);
+    for(let k=0;k<postCount;k++){const t=k/(postCount-1),x=link.start.x+(link.end.x-link.start.x)*t+(horizontal?0:side),y=link.start.y+(link.end.y-link.start.y)*t+(horizontal?side:0);postMatrices.makeTranslation(x,height+.33,y);posts.setMatrixAt(postIndex++,postMatrices);}
+   }
+   if(dutch){
+    for(let plank=0;plank<Math.max(2,Math.ceil(link.gap/.5));plank++){const t=(plank+.5)/Math.max(2,Math.ceil(link.gap/.5)),x=link.start.x+(link.end.x-link.start.x)*t,y=link.start.y+(link.end.y-link.start.y)*t,line=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.035:.72,.012,horizontal?.72:.035),trimMaterial);line.position.set(x,height+.076,y);trimParts.add(line);}
+   }else{
+    for(let side of [-.32,.32])for(let post=1;post<postCount-1;post++){
+     const t=post/(postCount-1),x=link.start.x+(link.end.x-link.start.x)*t+(horizontal?0:side),y=link.start.y+(link.end.y-link.start.y)*t+(horizontal?side:0),baluster=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.035:.045,.3,horizontal?.045:.035),trimMaterial);baluster.position.set(x,height+.33,y);trimParts.add(baluster);
+    }
+   }
+   for(const parts of [deckParts,railParts,trimParts]){mergeStaticMeshes(THREE,parts);bridge.add(parts);}posts.instanceMatrix.needsUpdate=true;posts.castShadow=true;posts.frustumCulled=false;bridge.add(posts);
    addDoor(a,link.auId,horizontal?8:2);addDoor(b,link.buId,horizontal?4:1);
  }
  updateVisibility();

@@ -21,8 +21,9 @@ export class CityDevelopment {
   acquirePublicSite(site){return acquirePublicBuildingSite(this,site);}
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
   selectBuilder(clientId, door, builderId = null, {allowTerrainAccess=false,service='building'}={}) {
+    if(!door||!Number.isFinite(door.x)||!Number.isFinite(door.y))return null;
     const specialist=contractorForService(service);
-    const candidates=this.city.economy.businesses.filter(b => contractorHandles(b.type,service) && (!builderId || b.id === builderId) && b.accountId !== clientId && (this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door }) || allowTerrainAccess&&findTerrainPath(this.city.world,b.door,door,this.city.occupied)!==null));
+    const candidates=this.city.economy.businesses.filter(b => contractorHandles(b.type,service) && b.door && Number.isFinite(b.door.x)&&Number.isFinite(b.door.y) && (!builderId || b.id === builderId) && b.accountId !== clientId && (this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door }) || allowTerrainAccess&&findTerrainPath(this.city.world,b.door,door,this.city.occupied)!==null));
     if(candidates.length<2)return candidates[0]||null;
     // A comparator can run dozens of times: count the project backlog once,
     // rather than scanning every project twice for every pair of contractors.
@@ -70,10 +71,13 @@ export class CityDevelopment {
     const access=this.roadAccessTiles();
     const path=findTerrainPath(city.world,start,end,city.occupied,{extraBlocked:(x,y)=>this.roadPlotBlocked(x,y,access)});if(path===null)return null;
     const full=[{x:Math.floor(start.x)+.5,y:Math.floor(start.y)+.5},...path];
-    const indexes=full.map((p,i)=>!isRoadAt(city.world,Math.floor(p.x),Math.floor(p.y))?i:-1).filter(i=>i>=0).slice(0,maxTiles);
+    // Dirt roads are roads for routing, but they are still eligible for the
+    // paving contract. Only paved tiles and non-road surfaces are skipped.
+    const indexes=full.map((p,i)=>{const tile=tileAt(city.world,Math.floor(p.x),Math.floor(p.y));return !PAVED_ROAD_TILES.has(tile)&&roadFor(tile)!==null?i:-1;}).filter(i=>i>=0).slice(0,maxTiles);
     if(!indexes.length)return null;
     const last=indexes.at(-1),next=full[last+1],includeNext=next&&isRoadAt(city.world,Math.floor(next.x),Math.floor(next.y));
-    const route=full.slice(Math.max(0,indexes[0]-1),last+1+(includeNext?1:0)),tiles=route.filter(p=>!isRoadAt(city.world,Math.floor(p.x),Math.floor(p.y)));
+    const route=full.slice(Math.max(0,indexes[0]-1),last+1+(includeNext?1:0)),tiles=route.filter(p=>{const tile=tileAt(city.world,Math.floor(p.x),Math.floor(p.y));return !PAVED_ROAD_TILES.has(tile)&&roadFor(tile)!==null;});
+    if(!tiles.length)return null;
     if(tiles.some(p=>this.roadPlotBlocked(Math.floor(p.x),Math.floor(p.y),access))||this.projects.some(p=>p.service==='road'&&!p.cancelled&&p.status!=='completed'&&p.status!=='blocked'&&p.path.some(t=>tiles.some(n=>n.x===t.x&&n.y===t.y))))return null;
     const builder=this.selectBuilder(accountId,tiles[0],builderId,{allowTerrainAccess:true,service:'road'});
     const project=this.registerService(accountId,builder,{service:'road',type:'road',name:`Estrada de ${tiles.length} células`,path:tiles,route,plotAccessTiles:route.filter(p=>access.has(`${Math.floor(p.x)},${Math.floor(p.y)}`)).map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`),door:{...tiles[0]},priority,stone:tiles.length*DEVELOPMENT_RULES.roadStonePerTile,requiredLabor:tiles.length*DEVELOPMENT_RULES.roadLaborPerTile,fee:tiles.length*city.currency.price(DEVELOPMENT_RULES.roadFeePerTile)});
@@ -193,7 +197,12 @@ export class CityDevelopment {
     for(let head=0;head<queue.length;head++){const {x,y}=queue[head];for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(canStep(city.world,x,y,x+dx,y+dy))addRoad(x+dx,y+dy);}
     const targets=[...network.values()];
     const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!network.has(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`)).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])}));
-    // Busy dirt shortcuts also qualify for paving, even after every door has a paved connection.
+    // Connected dirt roads must remain paving candidates too. Building access
+    // paths are laid as dirt when buildings are placed, so checking only for
+    // disconnected doors would otherwise make the whole initial network ineligible.
+    const pendingTiles=new Set(pending.flatMap(p=>(p.path||[]).map(t=>`${Math.floor(t.x)},${Math.floor(t.y)}`)));
+    for(const point of targets){const x=Math.floor(point.x),y=Math.floor(point.y),key=`${x},${y}`;if(DIRT_ROAD_TILES.has(tileAt(city.world,x,y))&&!pendingTiles.has(key))buildings.push({b:{id:`dirt:${key}`,door:point},traffic:city.trafficScore([point]),connectedDirt:true});}
+    // Busy dirt shortcuts outside the connected network also qualify for paving.
     const doors=new Set(buildings.map(({b})=>`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`));
     // Pave frequently used dirt shortcuts before they become as busy as a
     // main building entrance; traffic is accumulated gradually in new cities.
@@ -201,10 +210,10 @@ export class CityDevelopment {
     buildings.sort((a,b)=>b.traffic-a.traffic||String(a.b.id).localeCompare(String(b.b.id),undefined,{numeric:true}));
     if(!targets.length){this.roadPlanning={reason:'Aguardando definição do primeiro trecho conectado à rua da prefeitura.'};return;}
     const offset=(this.roadCursor||0)%Math.max(1,buildings.length),options=buildings.slice(offset).concat(buildings.slice(0,offset)).slice(0,8);
-    let attemptedBridge=false;for(const {b} of options){
-      let target=targets[0],bestDistance=Infinity;for(const point of targets){const d=(point.x-b.door.x)**2+(point.y-b.door.y)**2;if(d<bestDistance){bestDistance=d;target=point;}}
+    let attemptedBridge=false;for(const {b,connectedDirt} of options){
+      let target=targets[0],bestDistance=Infinity;const pavedTargets=connectedDirt?targets.filter(point=>PAVED_ROAD_TILES.has(tileAt(city.world,Math.floor(point.x),Math.floor(point.y)))):targets;const starts=pavedTargets.length?pavedTargets:connectedDirt?[{x:Math.floor(hall.door.x)+.5,y:Math.floor(hall.door.y)+.5}]:targets;for(const point of starts){const d=(point.x-b.door.x)**2+(point.y-b.door.y)**2;if(d<bestDistance){bestDistance=d;target=point;}}
       const landRoute=findTerrainPath(city.world,target,b.door,city.occupied,{limit:Math.min(12000,Math.max(3000,bestDistance*12))});
-      if(!attemptedBridge&&(landRoute===null||landRoute.length>Math.max(18,Math.sqrt(bestDistance)*1.8))){
+      if(!connectedDirt&&!attemptedBridge&&(landRoute===null||landRoute.length>Math.max(18,Math.sqrt(bestDistance)*1.8))){
         attemptedBridge=true;
         const bridgeProject=this.planBridgeShortcut(targets,b.door,landRoute?.length??Infinity);
         if(bridgeProject){const id=`materials:${bridgeProject.id}`,budget=bridgeProject.stone*city.economy.goods.pedra.price+margin;city.accounts.set(id,{name:`Materiais de ${bridgeProject.name}`,balance:0});if(city.transfer('treasury',id,budget,'Reserva de pedras e frete para ponte',{projectId:bridgeProject.id}))bridgeProject.materialAccountId=id;else city.accounts.delete(id);this.roadPlanning={reason:'Ponte reta priorizada para conectar margens ou encurtar o desvio pela água.',projectId:bridgeProject.id,buildingId:b.id};return;}

@@ -1,5 +1,5 @@
 import {buildingPoint,modelSize,CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {HOUSE_STYLES} from './city_culture.js?v=portuguese-colonial-forms-6';
+import {HOUSE_STYLES} from './city_culture.js?v=portuguese-colonial-forms-7';
 const homes=new Set(['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing']);
 const cache=new WeakMap();
 const SIDE_BITS={
@@ -33,14 +33,14 @@ export function buildingLeisureSpaces(b){
  const {width,depth}=modelSize(b),variant=hash(b.id,37)%5,spaces=[];
  const add=(candidate,w,d,planters)=>{
   const alongLength=['front','back'].includes(candidate.side)?width:depth,edgeClearance=Math.min(candidate.along,alongLength-candidate.along),maxCenteredWidth=Math.max(.6,edgeClearance*2-.08),balconyWidth=Math.min(Math.max(.6,w),Math.max(.6,alongLength-.14),maxCenteredWidth);
-  const pos=balconyPosition(b,candidate,d),doorBit=SIDE_BITS[candidate.side][(b.rotation||0)%4];
-  spaces.push({id:`balcony:${candidate.unit.id}`,kind:'balcony',floor:candidate.unit.z,unitId:candidate.unit.id,side:candidate.side,doorBit,along:candidate.along,doorAlong:candidate.along,width:balconyWidth,depth:d,planters,position:{x:pos.x,y:pos.y,z:candidate.unit.z*CITY_FLOOR_HEIGHT+.14},capacity:1});
+  const pos=balconyPosition(b,candidate,d),doorBit=SIDE_BITS[candidate.side][(b.rotation||0)%4],styleVariant=hash(b.id,candidate.unit.z,candidate.unit.x,candidate.unit.y,17)%4;
+  spaces.push({id:`balcony:${candidate.unit.id}`,kind:'balcony',floor:candidate.unit.z,unitId:candidate.unit.id,side:candidate.side,doorBit,along:candidate.along,doorAlong:candidate.along,width:balconyWidth,depth:d,planters,styleVariant,balconyStyle:['iron','stone','wood','lattice'][styleVariant],position:{x:pos.x,y:pos.y,z:candidate.unit.z*CITY_FLOOR_HEIGHT+.14},capacity:1});
  };
  for(let floor=1;floor<b.floors;floor++){
   const candidates=sideCandidates(b,floor);
   if(homes.has(b.type)){
    const byUnit=new Map();for(const candidate of candidates){let list=byUnit.get(candidate.unit.id);if(!list)byUnit.set(candidate.unit.id,list=[]);list.push(candidate);}
-   for(const [unitId,options]of byUnit){const unit=options[0].unit;if(hash(b.id,floor,unit.x,unit.y)%3!==0)continue;const pick=hash(b.id,floor,unit.x,unit.y,11)%options.length,candidate=options[pick],alongLength=['front','back'].includes(candidate.side)?width:depth;
+   for(const [unitId,options]of byUnit){const unit=options[0].unit;if(hash(b.id,floor,unit.x,unit.y)%5>1)continue;const pick=hash(b.id,floor,unit.x,unit.y,11)%options.length,candidate=options[pick],alongLength=['front','back'].includes(candidate.side)?width:depth;
     add(candidate,Math.min(.82,alongLength-.14),hash(b.id,floor,candidate.unit.x,candidate.unit.y)%2?.68:.85,(hash(b.id,candidate.unit.x,candidate.unit.y,floor)%3)===0);
    }
   }else if((floor+variant)%2===0&&candidates.length){

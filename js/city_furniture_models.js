@@ -15,9 +15,22 @@ export function furnitureModel(THREE,item){
  }
  else if(type==='chair'||type==='meeting_chair'||type==='council_chair'||type==='bench'){
   const bench=type==='bench',w=bench?.78:.28,seatY=bench?.24:.30,legH=seatY-.025;
-  box(w,.055,.27,0,seatY,0);
-  box(w,bench?.28:.30,.045,0,seatY+(bench?.15:.17),-.115);
-  for(const x of [-w*.4,w*.4])for(const z of [-.1,.1])box(.04,legH,.04,x,legH/2,z,metal);
+  if(bench&&Number.isInteger(item.colonialStyle)){
+   const style=item.colonialStyle,seatColor=style===0?0x586c61:style===1?0x815538:style===2?0x714c37:0xc5b99f,frameColor=style===0?0x30383a:style===1?0xddd0b4:style===2?0x37423d:0x96866d;
+   for(let slat=0;slat<4;slat++)box(w,.045,.052,0,seatY,(slat-1.5)*.066,seatColor);
+   for(const x of [-.31,.31]){
+    if(style===1||style===3){box(.12,.24,.3,x,.12,0,frameColor);box(.15,.05,.33,x,.265,0,seatColor);}
+    else{for(const z of [-.11,.11])box(.055,.24,.055,x,.12,z,frameColor);box(.055,.06,.28,x,.22,0,frameColor);}
+    box(.055,.62,.055,x,.48,-.145,frameColor);
+   }
+   for(let slat=0;slat<3;slat++)box(w,.07,.045,0,.39+slat*.12,-.145,seatColor);
+   if(style===0||style===2)for(const x of [-.36,.36])box(.05,.055,.28,x,.43,-.005,frameColor);
+   if(style===1)for(const x of [-.31,.31])box(.11,.09,.09,x,.77,-.145,seatColor);
+  }else{
+   box(w,.055,.27,0,seatY,0);
+   box(w,bench?.28:.30,.045,0,seatY+(bench?.15:.17),-.115);
+   for(const x of [-w*.4,w*.4])for(const z of [-.1,.1])box(.04,legH,.04,x,legH/2,z,metal);
+  }
   if(item.facing)g.rotation.y=Math.atan2(item.facing.x-item.x,item.facing.y-item.y);
  }
  else if(type==='table'||type==='desk'||type==='counter'||type==='workbench'){const h=type==='counter'?.7:.68;box(.65,.08,.4,0,h,0);for(const x of [-.25,.25])for(const z of [-.13,.13])box(.05,h,.05,x,h/2,z);if(type==='desk')box(.22,.05,.16,.12,h+.08,0,0xd6d1bd);}

@@ -1,6 +1,6 @@
 import {businessFloors} from './city_business_heights.js';
 import {INDUSTRIES} from './city_industries.js';
-import {DEVELOPMENT_RULES} from './city_development.js?v=workforce-road-mines-1';
+import {DEVELOPMENT_RULES} from './city_development.js?v=connected-dirt-paving-2';
 import {chooseBuildingSite} from './city_terrain.js?v=mine-adjacent-1';
 import {OFFICE_ONLY_TYPES,officeSpaceDemand,officeFloors,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 const key=(type,crop)=>`${type}:${crop||''}`;

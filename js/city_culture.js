@@ -35,7 +35,7 @@ const PORTUGUESE_COLONIAL_PALETTES=[
 const PORTUGUESE_COLONIAL_FORMS=[
   {id:'sobrado',label:'Sobrado de sacadas',roofKind:'hip'},
   {id:'pombalino',label:'Fachada pombalina',roofKind:'flat'},
-  {id:'barroco',label:'Portal barroco',roofKind:'hip'},
+  {id:'barroco',label:'Portal barroco',roofKind:'mansard'},
   {id:'rural',label:'Casa-grande rural',roofKind:'gable'},
   {id:'quinta',label:'Quinta senhorial',roofKind:'hip'},
   {id:'terrea',label:'Casa térrea urbana',roofKind:'hip'},
@@ -57,15 +57,17 @@ const DUTCH_COLONIAL_PALETTES=[
   {id:'indigo',label:'Índigo e areia',wall:0x445d78,roof:0x453c3b,accent:0xc9a35e,trim:0xdac8a8},
 ];
 const DUTCH_COLONIAL_FORMS=[
-  {id:'stepped',label:'Frontão escalonado'},
-  {id:'neck',label:'Frontão de pescoço'},
-  {id:'curved',label:'Frontão curvo caribenho'},
-  {id:'straight',label:'Frontão reto oitocentista'},
-  {id:'gallery',label:'Casa-galeria de Willemstad'},
+  {id:'stepped',label:'Frontão escalonado',roofKind:'gable'},
+  {id:'neck',label:'Frontão de pescoço',roofKind:'gable'},
+  {id:'curved',label:'Frontão curvo caribenho',roofKind:'gable'},
+  {id:'straight',label:'Frontão reto oitocentista',roofKind:'mansard'},
+  {id:'gallery',label:'Casa-galeria de Willemstad',roofKind:'hip'},
+  {id:'shed_gallery',label:'Galeria com telhado de uma água',roofKind:'shed'},
+  {id:'dormer',label:'Frontão com águas-furtadas',roofKind:'gable'},
 ];
 const DUTCH_COLONIAL_STYLES=Object.fromEntries(DUTCH_COLONIAL_FORMS.flatMap(form=>DUTCH_COLONIAL_PALETTES.map(palette=>[
   `dutch_colonial_${form.id}_${palette.id}`,
-  {label:`Colonial holandês · ${form.label} · ${palette.label}`,wall:palette.wall,roof:palette.roof,accent:palette.accent,trim:palette.trim,roofKind:form.id==='gallery'?'hip':'gable',motif:'dutch_colonial',dutchForm:form.id},
+  {label:`Colonial holandês · ${form.label} · ${palette.label}`,wall:palette.wall,roof:palette.roof,accent:palette.accent,trim:palette.trim,roofKind:form.roofKind,motif:'dutch_colonial',dutchForm:form.id},
 ])));
 // Adapted from Brutopolis' inherited surnames, individual traits and house-style catalogue.
 // Pure data/helpers keep these features usable both in the worker and the UI.
@@ -110,7 +112,7 @@ export function initializeCharacter(city, citizen) {
 }
 export function architectureFor(type, id) {
   const numericId=Number(id)||0,seed=(Math.imul(numericId+29,2246822519)>>>0);
-  if(seed%5===0){const form=DUTCH_COLONIAL_FORMS[seed%DUTCH_COLONIAL_FORMS.length],palette=DUTCH_COLONIAL_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%DUTCH_COLONIAL_PALETTES.length];return `dutch_colonial_${form.id}_${palette.id}`;}
+  if(seed%10<7){const form=DUTCH_COLONIAL_FORMS[seed%DUTCH_COLONIAL_FORMS.length],palette=DUTCH_COLONIAL_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%DUTCH_COLONIAL_PALETTES.length];return `dutch_colonial_${form.id}_${palette.id}`;}
   const forms=type==='luxury_housing'||type==='popular_luxury_housing'?['quinta','barroco','sobrado','azulejo']:
     ['townhall','council_chamber','courthouse','bank'].includes(type)?['pombalino','barroco','sobrado','mercantil']:
     ['residential','popular_housing','super_popular_housing'].includes(type)?['sobrado','terrea','azulejo','acores','pombalino','quinta']:

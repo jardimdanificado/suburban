@@ -82,7 +82,7 @@ export function syncConstructionSites(renderer,THREE,world,development){
   else if((project.service==='road'||project.service==='bridge'||project.service==='road-repair')&&route)cells=route.map(p=>({x:Math.floor(p.x)+.5,y:Math.floor(p.y)+.5}));
   else if(project.door)cells=[{x:project.door.x,y:project.door.y}];
   if(!cells.length)continue;
-  const signature=`${world.revision}:${project.service}:${cells.map(c=>`${c.x},${c.y}`).join(';')}`;
+  const terrainRevision=world.topologyRevision??world.revision??0,signature=`${terrainRevision}:${world.bridgeRevision??0}:${project.service}:${cells.map(c=>`${c.x},${c.y}`).join(';')}`;
   live.add(project.id);let site=renderer.constructionMeshes.get(project.id);
   const visible=!Number.isFinite(renderer.renderedMinTx)||cells.every(c=>c.x>=renderer.renderedMinTx&&c.x<=renderer.renderedMaxTx+1&&c.y>=renderer.renderedMinTy&&c.y<=renderer.renderedMaxTy+1);
   if(!visible){if(site)site.visible=false;continue;}if(site)site.visible=true;

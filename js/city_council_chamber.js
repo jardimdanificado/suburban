@@ -1,4 +1,4 @@
-import {DEVELOPMENT_RULES} from './city_development.js?v=workforce-road-mines-1';
+import {DEVELOPMENT_RULES} from './city_development.js?v=connected-dirt-paving-2';
 import {chooseBuildingSite} from './city_terrain.js?v=mine-adjacent-1';
 
 /** The legislature needs real premises, offices and in-person plenary sessions. */

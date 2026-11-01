@@ -8,7 +8,7 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileT
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=portuguese-colonial-forms-6";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=colonial-benches-3";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=bank-door-bench-offset-1';
 import { flagNightFactor } from './city_terrain.js?v=mine-adjacent-1';
@@ -202,7 +202,7 @@ function createTerrainSurfaceTexture(style, variant) {
     mountain: { base: "#292d2e", stones: ["#565d5b", "#7a8078", "#a29c8c", "#3e4848", "#68665d"] },
     peak: { base: "#45484b", stones: ["#92999a", "#c1c1b4", "#737e84", "#d1c9b6", "#a6a99f"] },
     dirtRoad: { base: "#77583b", stones: ["#a87b4b", "#c49a60", "#906443", "#b68a55", "#654a35"] },
-    pavedRoad: { base: "#3f3b38", stones: ["#a17c5b", "#c09a6c", "#876950", "#b68d62", "#715b4b"] }
+    pavedRoad: { base: "#41474a", stones: ["#8b969b", "#a8afb1", "#748187", "#969fa2", "#5f6b70"] }
   }[style];
   ctx.fillStyle = palettes.base;
   ctx.fillRect(0, 0, size, size);
@@ -276,7 +276,7 @@ function createTerrainSurfaceTexture(style, variant) {
 }
 
 function createCaribbeanWaterTexture() {
-  const size = 256, canvas = document.createElement("canvas");
+  const size = 128, canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d"), image = ctx.createImageData(size, size), data = image.data;
   const hash = (x, y) => {
@@ -310,7 +310,7 @@ function createCaribbeanWaterTexture() {
   }
   ctx.putImageData(image, 0, 0);
   // Short broken crests catch light without forming closed curls or loops.
-  for (let i = 0; i < 46; i++) {
+  for (let i = 0; i < 28; i++) {
     const x = hash(i + 151, 19) * size, y = hash(i + 23, 97) * size;
     const length = 4 + hash(i + 3, 281) * 9, angle = (hash(i + 89, 311) - .5) * 1.15;
     const bend = (hash(i + 45, 7) - .5) * 3.2;
@@ -327,7 +327,7 @@ function createCaribbeanWaterTexture() {
     }
   }
   // Small scattered glints add highlights without making a repeated star pattern.
-  for (let i = 0; i < 34; i++) {
+  for (let i = 0; i < 20; i++) {
     const x = Math.floor(hash(i + 321, 53) * size), y = Math.floor(hash(i + 16, 79) * size);
     ctx.fillStyle = i % 4 === 0 ? "#f2ffe9" : "#baf6de";
     ctx.fillRect(x, y, 1 + (i % 3 === 0 ? 1 : 0), 1);
@@ -2626,7 +2626,7 @@ export function createNormalMapFromTexture(skinName, intensity = 1.6) {
 // Non-Repetitive Pixelated Water Normal Map Generator (1P & 3P Aquatic Waves)
 // ---------------------------------------------------------------------------
 function generateWaterNormalMap(intensity = 1.6) {
-  const size = 64;
+  const size = 48;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -3709,9 +3709,9 @@ export class RCT3DRenderer {
       [TILE_PEAK]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0xd8d8de, 0x686874, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.3, 0.60, 0.12),
       [TILE_WATER]: makeWaterMaterial(),
       waterFoam: makeFoamMaterial(),
-      [TILE_ROAD_GRASS]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa67c52, 0x3d2816, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 0.9, 0.75, 0.05),
-      [TILE_ROAD_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa67c52, 0x3d2816, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 0.9, 0.75, 0.05),
-      [TILE_ROAD_HILL]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa67c52, 0x3d2816, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 0.9, 0.75, 0.05),
+      [TILE_ROAD_GRASS]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xb6a98a, 0x5d5140, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.72, 0.05),
+      [TILE_ROAD_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xb6a98a, 0x5d5140, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.72, 0.05),
+      [TILE_ROAD_HILL]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xb6a98a, 0x5d5140, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.72, 0.05),
       [TILE_ROAD_GRASS_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       [TILE_ROAD_SAND_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       [TILE_ROAD_HILL_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
@@ -3881,8 +3881,8 @@ export class RCT3DRenderer {
       boneHouseWall: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xf5f3ea, 0x5a554a, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.65, 0.05),
       boneHouseRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xe6e2d3, 0x3d3830, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.65, 0.05),
       boneWall: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xf5f3ea, 0x5a554a, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.65, 0.05),
-      road: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0x9b7653, 0x4a3520, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 0.9, 0.75, 0.05),
-      roadSnap: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0xd8ba80, 0x6a5024, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+      road: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xb4a88b, 0x5c5141, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.72, 0.05),
+      roadSnap: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0xd7c497, 0x79684d, 1.0), dithering: true, side: THREE.DoubleSide }, null),
       waterWellBase: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xd8d7de, 0x3a3842, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.60, 0.05),
       waterWellWood: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xd4a373, 0x4a3525, 1.0), dithering: true, side: THREE.DoubleSide }, null),
       waterWellRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
@@ -6731,8 +6731,8 @@ export class RCT3DRenderer {
       foamGeometry.setAttribute("color", new THREE.Float32BufferAttribute(waterFoamBucket.colors, 3));
       foamGeometry.computeVertexNormals();
       const foamMesh = new THREE.Mesh(foamGeometry, this.materials.waterFoam);
-      foamMesh.userData.terrainMaterialKey = "waterFoam";
       foamMesh.visible = flagNightFactor(world) > 0.18;
+      foamMesh.userData.terrainMaterialKey = "waterFoam";
       foamMesh.receiveShadow = false;
       foamMesh.castShadow = false;
       chunk.water.add(foamMesh);
@@ -6941,16 +6941,22 @@ export class RCT3DRenderer {
     }
     const foamMat = this.materials.waterFoam;
     const daylight = flagNightFactor(world);
+    const daylightChanged = this._lastWaterDaylight !== daylight;
     const foamOpacity = THREE.MathUtils.clamp((daylight - 0.18) / 0.82, 0, 1);
-    if (foamMat) {
+    if (foamMat && daylightChanged) {
       foamMat.color.setScalar(daylight);
       foamMat.opacity = foamOpacity;
     }
-    for (const chunk of this.terrainChunks?.values() || []) {
-      for (const mesh of chunk.water.children) {
-        if (mesh.userData.terrainMaterialKey === "waterFoam") mesh.visible = foamOpacity > 0;
+    const foamVisible = foamOpacity > 0;
+    if (this._waterFoamVisible !== foamVisible) {
+      for (const chunk of this.terrainChunks?.values() || []) {
+        for (const mesh of chunk.water.children) {
+          if (mesh.userData.terrainMaterialKey === "waterFoam") mesh.visible = foamVisible;
+        }
       }
+      this._waterFoamVisible = foamVisible;
     }
+    this._lastWaterDaylight = daylight;
     for (const dict of [this.materials, this.materialsIso, this.materialsPerspective]) {
       const mat = dict?.[TILE_WATER];
       if (!mat) continue;

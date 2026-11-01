@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {HOUSE_STYLES} from './city_culture.js?v=portuguese-colonial-forms-6';
+import {HOUSE_STYLES} from './city_culture.js?v=portuguese-colonial-forms-7';
 import {INDUSTRIES} from './city_industries.js';
 
 import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
@@ -10,27 +10,53 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
  const residential=['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),civic=['townhall','council_chamber'].includes(b.type),industrial=['builder','mill','sawmill','foundry','steel_mill','brickworks','glassworks','paper_mill','weaving','cycle_assembler','rubberworks'].includes(b.type)||INDUSTRIES[b.type]?.category==='industry';
  const seed=(Math.imul(b.id+37,2654435761)>>>0),variant=seed%15,mats=new Map(),root=new THREE.Group(),windowControls=new THREE.Group(),windowShutters=[];parent.add(root,windowControls);
  const mat=color=>{if(!mats.has(color))mats.set(color,new THREE.MeshLambertMaterial({color}));return mats.get(color);};
- const box=(w,h,d,x,y,z,color)=>{if(w<=0||h<=0||d<=0)return;const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;root.add(m);return m;};
+ const addBox=(w,h,d,x,y,z,color)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;root.add(m);return m;};
+ const box=(w,h,d,x,y,z,color)=>{
+  if(w<=0||h<=0||d<=0)return;
+  const opening=entryDoorDetails?.unit,side=entryDoorDetails?.side,bandBottom=y-h/2,bandTop=y+h/2;
+  if(opening&&h<=.24&&bandBottom<1.45&&bandTop>0){
+   const frontSide=side==='front'||side==='back',along=frontSide?opening.x+.5:opening.y+.5,halfOpening=.25;
+   const onFacade=frontSide?d<=.24&&Math.abs(z-(side==='front'?b.depth:0))<=.24:w<=.24&&Math.abs(x-(side==='right'?b.width:0))<=.24;
+   if(onFacade){
+    const start=frontSide?x-w/2:z-d/2,end=frontSide?x+w/2:z+d/2,left=along-halfOpening,right=along+halfOpening;
+    if(start<right&&end>left){
+     let first=null;
+     if(start<left)first=addBox(frontSide?left-start:w,h,frontSide?d:left-start,frontSide?(start+left)/2:x,y,frontSide?z:(start+left)/2,color);
+     if(end>right){const second=addBox(frontSide?end-right:w,h,frontSide?d:end-right,frontSide?(right+end)/2:x,y,frontSide?z:(right+end)/2,color);first??=second;}
+     return first;
+    }
+   }
+  }
+  return addBox(w,h,d,x,y,z,color);
+ };
  const cylinder=(r,h,x,y,z,color)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),mat(color));m.position.set(x,y,z);m.castShadow=true;root.add(m);return m;};
+ const leaf=(r,x,y,z,color)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(r,6,5),mat(color));m.position.set(x,y,z);m.castShadow=true;root.add(m);return m;};
  const style=HOUSE_STYLES[b.architecture]||HOUSE_STYLES.modern,roofColor=style.roof,wood=0x543b2e,metal=0x303b43,cream=style.trim??0xfff3df,green=0x59834e,clay=0xb77856,roof=b.floors*CITY_FLOOR_HEIGHT,front=b.depth,roofX=b.roofX??0,roofY=b.roofY??0,roofWidth=b.roofWidth??b.width,roofDepth=b.roofDepth??b.depth;
  const balcony=space=>{
-  const {floor,side,width,depth,planters}=space,along=space.doorAlong??space.along,y=floor*CITY_FLOOR_HEIGHT,axisX=side==='front'||side==='back',normal=side==='front'?1:side==='back'?-1:side==='left'?-1:1,colonial=style.motif==='portuguese_colonial',deckColor=colonial?(colonialForm==='rural'?0x76533b:colonialForm==='quinta'?0xd1c09e:0xc9b99d):roofColor,railColor=colonial&&colonialForm==='rural'?0x76533b:metal;
+  const {floor,side,width,depth,planters}=space,along=space.doorAlong??space.along,y=floor*CITY_FLOOR_HEIGHT,axisX=side==='front'||side==='back',normal=side==='front'?1:side==='back'?-1:side==='left'?-1:1,colonial=style.motif==='portuguese_colonial',railStyle=space.balconyStyle||'iron',deckColor=colonial?(colonialForm==='rural'?0x76533b:colonialForm==='quinta'?0xd1c09e:0xc9b99d):railStyle==='wood'?0x76533b:roofColor,railColor=railStyle==='stone'?style.trim:railStyle==='wood'?0x76533b:colonial&&colonialForm==='rural'?0x76533b:metal;
   const wall=side==='front'?b.depth:side==='back'?0:side==='left'?0:b.width,center=wall+normal*depth/2,edge=wall+normal*(depth+.04);
   if(axisX){box(width,.13,depth+.08,along,y+.06,center,deckColor);box(width,.085,.07,along,y+.7,edge,railColor);
    for(const dx of [-width/2+.04,width/2-.04])box(.07,.68,depth,along+dx,y+.37,wall+normal*depth/2,colonial?cream:railColor);
-   const count=Math.floor(width/(colonial?.34:.5));for(let n=0;n<=count;n++){const x=along-width/2+n*width/Math.max(1,count);box(colonial?.035:.045,.64,.045,x,y+.37,edge,railColor);if(colonial&&n<count)box(.12,.1,.045,x+width/Math.max(1,count)*.5,y+.37,edge,railColor);}
-   if(planters)for(const dx of [-width*.28,width*.28]){box(.38,.22,.24,along+dx,y+.19,wall+normal*(depth-.12),clay);box(.32,.3,.22,along+dx,y+.43,wall+normal*(depth-.12),green);}
+   const count=Math.max(2,Math.floor(width/(railStyle==='stone'?.38:.5)));for(let n=0;n<=count;n++){const x=along-width/2+n*width/count,postWidth=railStyle==='stone'?.075:railStyle==='wood'?.06:.035;box(postWidth,railStyle==='stone'?.48:.64,.045,x,y+(railStyle==='stone'?.31:.37),edge,railColor);if(railStyle==='lattice'&&n<count){for(const direction of [-1,1]){const brace=box(.035,.62,.035,x+width/count*.5,y+.37,edge,railColor);brace.rotation.z=direction*.48;}}else if(colonial&&n<count)box(.12,.1,.045,x+width/count*.5,y+.37,edge,railColor);}
+   if(planters)for(const dx of [-width*.28,width*.28]){const px=along+dx,pz=wall+normal*(depth-.12);box(.3,.18,.2,px,y+.17,pz,clay);for(let leafIndex=0;leafIndex<3;leafIndex++)leaf(.1,px+(leafIndex-1)*.1,y+.32+(leafIndex%2)*.07,pz,leafIndex===1?green:0x709b55);}
   }else{box(depth+.08,.13,width,center,y+.06,along,deckColor);box(.07,.085,width,edge,y+.7,along,railColor);
    for(const dz of [-width/2+.04,width/2-.04])box(depth,.68,.07,wall+normal*depth/2,y+.37,along+dz,colonial?cream:railColor);
-   const count=Math.floor(width/(colonial?.34:.5));for(let n=0;n<=count;n++){const z=along-width/2+n*width/Math.max(1,count);box(.045,.64,colonial?.035:.045,edge,y+.37,z,railColor);if(colonial&&n<count)box(.045,.1,.12,edge,y+.37,z+width/Math.max(1,count)*.5,railColor);}
-   if(planters)for(const dz of [-width*.28,width*.28]){box(.24,.22,.38,wall+normal*(depth-.12),y+.19,along+dz,clay);box(.22,.3,.32,wall+normal*(depth-.12),y+.43,along+dz,green);}
+   const count=Math.max(2,Math.floor(width/(railStyle==='stone'?.38:.5)));for(let n=0;n<=count;n++){const z=along-width/2+n*width/count,postWidth=railStyle==='stone'?.075:railStyle==='wood'?.06:.035;box(.045,railStyle==='stone'?.48:.64,postWidth,edge,y+(railStyle==='stone'?.31:.37),z,railColor);if(railStyle==='lattice'&&n<count){for(const direction of [-1,1]){const brace=box(.035,.62,.035,edge,y+.37,z+width/count*.5,railColor);brace.rotation.x=direction*.48;}}else if(colonial&&n<count)box(.045,.1,.12,edge,y+.37,z+width/count*.5,railColor);}
+   if(planters)for(const dz of [-width*.28,width*.28]){const px=wall+normal*(depth-.12),pz=along+dz;box(.2,.18,.3,px,y+.17,pz,clay);for(let leafIndex=0;leafIndex<3;leafIndex++)leaf(.1,px,y+.32+(leafIndex%2)*.07,pz+(leafIndex-1)*.1,leafIndex===1?green:0x709b55);}
   }
   return {y,axisX,wall,normal};
  };
  const furnishedBalcony=space=>{
-  const pos=balcony(space),{y,axisX,wall,normal}=pos,door=space.doorAlong,postColor=style.motif==='portuguese_colonial'?(colonialForm==='rural'?0x76533b:colonialForm==='barroco'?style.accent:metal):wood,capColor=style.motif==='portuguese_colonial'?(colonialForm==='quinta'?style.accent:cream):wood;
-  if(axisX){for(const dx of [-.25,.25])box(.06,1.45,.08,door+dx,y+.725,wall+normal*.04,postColor);box(.55,.07,.08,door,y+1.47,wall+normal*.04,capColor);box(.28,.35,.28,door+(space.along<=door?1:-1)*Math.max(.18,space.width*.3),y+.3,wall+normal*space.depth*.66,0x8c7358);}
-  else{for(const dz of [-.25,.25])box(.08,1.45,.06,wall+normal*.04,y+.725,door+dz,postColor);box(.08,.07,.55,wall+normal*.04,y+1.47,door,capColor);box(.28,.35,.28,wall+normal*space.depth*.66,y+.3,door+(space.along<=door?1:-1)*Math.max(.18,space.width*.3),0x8c7358);}
+  const pos=balcony(space),{y,axisX,wall,normal}=pos,door=space.doorAlong,gallery=space.balconyStyle==='wood'||style.dutchForm==='gallery'||style.dutchForm==='shed_gallery',postColor=style.motif==='portuguese_colonial'?(colonialForm==='rural'?0x76533b:colonialForm==='barroco'?style.accent:metal):wood;
+  if(gallery){
+   if(axisX){for(const dx of [-space.width/2+.08,space.width/2-.08])box(.09,1.42,.09,door+dx,y+.72,wall+normal*(space.depth-.04),postColor);box(space.width,.09,space.depth,door,y+1.45,wall+normal*space.depth*.5,roofColor);for(let beam=0;beam<4;beam++)box(.035,.05,space.depth,door-space.width*.42+beam*space.width*.28,y+1.52,wall+normal*space.depth*.5,wood);}
+   else{for(const dz of [-space.width/2+.08,space.width/2-.08])box(.09,1.42,.09,wall+normal*(space.depth-.04),y+.72,door+dz,postColor);box(space.depth,.09,space.width,wall+normal*space.depth*.5,y+1.45,door,roofColor);for(let beam=0;beam<4;beam++)box(space.depth,.05,.035,wall+normal*space.depth*.5,y+1.52,door-space.width*.42+beam*space.width*.28,wood);}
+  }else if(space.balconyStyle==='stone'){
+   const cap=axisX?box(space.width,.06,.08,door,y+.66,wall+normal*(space.depth+.04),style.trim):box(.08,.06,space.width,wall+normal*(space.depth+.04),y+.66,door,style.trim);
+  }else if(space.balconyStyle==='iron'){
+   if(axisX){for(const dx of [-.25,.25])box(.035,.8,.05,door+dx,y+.4,wall+normal*(space.depth+.04),style.accent);}
+   else for(const dz of [-.25,.25])box(.05,.8,.035,wall+normal*(space.depth+.04),y+.4,door+dz,style.accent);
+  }
  };
  const motif=style.motif,accent=style.accent??clay,trim=style.trim??cream,colonialForm=style.colonialForm??style.dutchForm??'sobrado';
  if(!residential&&style.motif){
@@ -218,16 +244,18 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   for(const {unit:u,side,openingBit,closed=false} of windowDetails){
    const expectedBit=({back:1,front:2,left:4,right:8})[side];
    if(!u.hasWindow||openingBit!==expectedBit)continue;
-   const floorY=u.z*CITY_FLOOR_HEIGHT,centerY=floorY+.96;
+   const floorY=u.z*CITY_FLOOR_HEIGHT,centerY=floorY+.96,windowStyle=(Math.imul(u.x*17+u.y*31+u.z*47+seed,2654435761)>>>0)%4;
    if(side==='front'||side==='back'){
     const sign=side==='front'?1:-1,z=u.y+(sign>0?1:0)+sign*.055,x=u.x+.5;
     box(.05,.88,.14,x-.19,centerY,z+sign*.025,style.trim);box(.05,.88,.14,x+.19,centerY,z+sign*.025,style.trim);
     box(.42,.07,.15,x,floorY+1.46,z+sign*.02,style.trim);box(.42,.07,.15,x,floorY+.46,z+sign*.02,style.trim);
     for(const shutterSide of [-1,1])addShutter(x+shutterSide*.18,centerY,z+sign*.04,frontShutterGeometry,frontSlatGeometry,shutterSide,sign,'front',closed,u.z);
-    // A shallow tiled hood and small iron brackets shade the opening.
-    const hoodDepth=colonialForm==='rural'?.34:.27,hoodWidth=dutch?.46:colonialForm==='barroco'?.5:.46;
-    box(hoodWidth,.06,hoodDepth,x,floorY+1.55,z+sign*hoodDepth*.5,roofColor);
-    for(const bracketSide of [-1,1])box(.045,colonialForm==='rural'?.2:.14,hoodDepth*.6,x+bracketSide*hoodWidth*.38,floorY+1.46,z+sign*hoodDepth*.55,metal);
+    // Four head treatments add variety without covering the open glazing.
+    const hoodDepth=windowStyle===1?.32:windowStyle===3?.2:.25,hoodWidth=windowStyle===2?.54:.46;
+    if(windowStyle===1){const arch=new THREE.Mesh(new THREE.TorusGeometry(.2,.035,5,12,Math.PI),mat(style.trim));arch.position.set(x,floorY+1.4,z+sign*.09);root.add(arch);}
+    else if(windowStyle===2){box(.11,.14,.09,x-.27,floorY+1.53,z+sign*.08,style.accent);box(.11,.14,.09,x+.27,floorY+1.53,z+sign*.08,style.accent);}
+    else if(windowStyle===3)box(.58,.045,.1,x,floorY+1.63,z+sign*.07,style.accent);
+    if(windowStyle!==3){box(hoodWidth,.055,hoodDepth,x,floorY+1.55,z+sign*hoodDepth*.5,roofColor);for(const bracketSide of [-1,1])box(.04,windowStyle===2?.11:.15,hoodDepth*.55,x+bracketSide*hoodWidth*.38,floorY+1.45,z+sign*hoodDepth*.55,metal);}
     if(colonialForm==='barroco')for(const direction of [-1,1]){const hood=box(.22,.045,.08,x+direction*.13,floorY+1.62,z+sign*.1,style.trim);hood.rotation.z=-direction*.42;}
     if(colonialForm==='pombalino')box(.58,.04,.11,x,floorY+1.63,z+sign*.07,style.accent);
     if(colonialForm==='quinta')cylinder(.075,.035,x,floorY+1.61,z+sign*.09,style.accent);
@@ -236,11 +264,12 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     box(.14,.88,.05,x+sign*.025,centerY,z-.19,style.trim);box(.14,.88,.05,x+sign*.025,centerY,z+.19,style.trim);
     box(.14,.07,.42,x+sign*.02,floorY+1.46,z,style.trim);box(.14,.07,.42,x+sign*.02,floorY+.46,z,style.trim);
     for(const shutterSide of [-1,1])addShutter(x+sign*.04,centerY,z+shutterSide*.18,sideShutterGeometry,sideSlatGeometry,shutterSide,sign,'side',closed,u.z);
-    const hoodDepth=dutch?.27:colonialForm==='rural'?.34:.27,hoodWidth=dutch?.46:colonialForm==='barroco'?.5:.46;
-    box(hoodDepth,.06,hoodWidth,x+sign*hoodDepth*.5,floorY+1.55,z,roofColor);
-    for(const bracketSide of [-1,1])box(hoodDepth*.6,colonialForm==='rural'?.2:.14,.045,x+sign*hoodDepth*.55,floorY+1.46,z+bracketSide*hoodWidth*.38,metal);
+    const hoodDepth=windowStyle===1?.32:windowStyle===3?.2:.25,hoodWidth=windowStyle===2?.54:.46;
+    if(windowStyle===1){const arch=new THREE.Mesh(new THREE.TorusGeometry(.2,.035,5,12,Math.PI),mat(style.trim));arch.position.set(x+sign*.09,floorY+1.4,z);arch.rotation.y=sign*Math.PI/2;root.add(arch);}
+    else if(windowStyle===2){box(.09,.14,.11,x+sign*.08,floorY+1.53,z-.27,style.accent);box(.09,.14,.11,x+sign*.08,floorY+1.53,z+.27,style.accent);}
+    else if(windowStyle===3)box(.1,.045,.58,x+sign*.07,floorY+1.63,z,style.accent);
+    if(windowStyle!==3){box(hoodDepth,.055,hoodWidth,x+sign*hoodDepth*.5,floorY+1.55,z,roofColor);for(const bracketSide of [-1,1])box(hoodDepth*.55,windowStyle===2?.11:.15,.04,x+sign*hoodDepth*.55,floorY+1.45,z+bracketSide*hoodWidth*.38,metal);}
     if(colonialForm==='barroco')for(const direction of [-1,1]){const hood=box(.08,.045,.22,x+sign*.1,floorY+1.62,z+direction*.13,style.trim);hood.rotation.z=-direction*.42;}
-    if(colonialForm==='pombalino')box(.11,.04,.58,x+sign*.07,floorY+1.63,z,style.accent);
     if(colonialForm==='quinta')cylinder(.075,.035,x+sign*.09,floorY+1.61,z,style.accent);
    }
    if(u.z===0&&(u.x+u.y)%2===0){
@@ -278,11 +307,24 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    }else if(style.dutchForm==='straight'){
     box(b.width*.86,.12,.14,b.width/2,baseY,gableZ,style.trim);
     for(const x of [.2,b.width-.2])box(.11,.2,.15,x,baseY+.12,gableZ,style.accent);
-   }else if(style.dutchForm==='gallery'){
+   }else if(style.dutchForm==='gallery'||style.dutchForm==='shed_gallery'){
     const porch=Math.min(.58,b.depth*.18),porchZ=front+porch*.58;
     box(b.width+.08,.1,porch,b.width/2,1.68,front+porch*.42,style.roof);
     for(const x of [.24,b.width-.24]){box(.1,1.58,.1,x,.8,porchZ,style.trim);box(.17,.09,.17,x,1.62,porchZ,style.accent);}
     box(Math.max(.4,b.width-.42),.055,.06,b.width/2,.72,porchZ+.08,style.accent);
+    if(style.dutchForm==='shed_gallery'){
+     const awning=box(b.width+.12,.09,porch+.14,b.width/2,1.78,front+porch*.4,style.roof);if(awning)awning.rotation.x=-.12;
+     for(let x=.35;x<b.width-.2;x+=.7)box(.045,.12,.045,x,1.68,front+porch*.72,style.accent);
+    }
+   }else if(style.dutchForm==='dormer'){
+    const count=Math.max(1,Math.floor(b.width/2));
+    for(let n=0;n<count;n++){
+     const x=(n+.5)*b.width/count,w=Math.min(.62,b.width/count*.62);
+     box(w,.34,.12,x,baseY+.23,gableZ,style.wall);
+     box(w*.72,.055,.15,x,baseY+.43,gableZ+.02,style.trim);
+     box(.045,.27,.16,x-w*.36,baseY+.29,gableZ+.02,style.trim);box(.045,.27,.16,x+w*.36,baseY+.29,gableZ+.02,style.trim);
+     box(.06,.3,.16,x,baseY+.29,gableZ+.025,style.accent);
+    }
    }
   }else if(colonialForm==='azulejo'){
    box(b.width,.22,.045,b.width/2,.2,front+.025,style.accent);
@@ -320,8 +362,33 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   };
   for(let floor=1;floor<b.floors;floor++)addCornice(floor*CITY_FLOOR_HEIGHT+.02);
   addCornice(roof-.2);
-  box(b.width+.12,.18,.2,b.width/2,.09,front+.04,style.accent);
+  if(entryDoorDetails?.side==='front'){
+   const doorAlong=entryDoorDetails.unit.x+.5,leftEdge=doorAlong-.25,rightEdge=doorAlong+.25,leftStart=-.06,rightEnd=b.width+.06;
+   if(leftEdge>leftStart)box(leftEdge-leftStart,.18,.2,(leftStart+leftEdge)/2,.09,front+.04,style.accent);
+   if(rightEnd>rightEdge)box(rightEnd-rightEdge,.18,.2,(rightEdge+rightEnd)/2,.09,front+.04,style.accent);
+  }else box(b.width+.12,.18,.2,b.width/2,.09,front+.04,style.accent);
   for(const x of [.09,b.width-.09])box(.15,roof,.14,x,roof/2,front+.045,style.trim);
+  // Tropical creepers stay on the facade edges, clear of doors and window cuts.
+  if(seed%4!==0){
+   const vineX=seed%2?.13:b.width-.13,vineColor=seed%3===0?0x718b43:0x547846;
+   for(let y=.32;y<roof-.12;y+=.22){
+    const sway=Math.sin(y*3+variant)*.035;
+    box(.025,.23,.035,vineX+sway,y,front+.12,vineColor);
+    if(Math.floor(y*5)%2===0){
+     const side=Math.floor(y*7)%2?1:-1;
+     const leafMesh=leaf(.075,vineX+sway+side*.07,y+.035,front+.13,Math.floor(y*3)%2?0x77974e:0x4e7542);
+     leafMesh.scale.set(1.35,.72,.55);
+    }
+   }
+  }
+  if(dutch&&seed%3===1){
+   const planterX=seed%2?.42:b.width-.42;
+   box(.34,.22,.3,planterX,.18,front+.17,0xa86148);
+   for(let stem=0;stem<4;stem++){
+    const plantLeaf=leaf(.095,planterX+(stem-1.5)*.075,.36+(stem%2)*.06,front+.17,stem%2?0x6f934c:0x4e7948);
+    plantLeaf.scale.set(.72,1.6,.7);
+   }
+  }
   if(colonialForm==='pombalino'){
    for(const x of [.18,b.width-.18])box(.1,roof,.12,x,roof/2,front+.11,style.accent);
    box(b.width+.08,.2,.16,b.width/2,roof+.16,front+.04,style.trim);
