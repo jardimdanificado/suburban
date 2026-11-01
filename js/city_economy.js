@@ -9,7 +9,7 @@ import {externalTradeHourly,orderImport} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=interiors-completion-7';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=housing-work-priority-1';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=workforce-road-mines-1';
 import {productionPlan,investProductionPlan} from './city_production_planner.js?v=investment-plan-reuse-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
@@ -187,7 +187,7 @@ export class CityEconomy {
       b.workers=b.workers.filter(id=>{const c=this.citizen(id);if(!c||c.jobId!==b.id||seen.has(id))return false;seen.add(id);return true;});
       for(const id of assigned.get(b.id)||[])if(!seen.has(id)){b.workers.push(id);seen.add(id);}
       b.jobs=Math.max(b.type==='townhall'&&seen.has(this.mayorId)?1:0,Number.isFinite(b.jobs)?Math.max(0,Math.floor(b.jobs)):0);
-      const excess=b.workers.length-b.jobs;if(excess<=0)continue;
+      const excess=b.workers.length+Number(b.jobs>0&&!!this.workingOwner(b))-b.jobs;if(excess<=0)continue;
       const candidates=b.workers.map(id=>this.citizen(id)).filter(c=>c&&c.id!==this.mayorId).sort((a,c)=>Number(!!(a.deliveryId||a.cleaningJobId))-Number(!!(c.deliveryId||c.cleaningJobId))||this.hiringScore(a,b)-this.hiringScore(c,b)||a.id-c.id);
       for(const c of candidates.slice(0,excess)){
         if(c.deliveryId){const shipment=city.logistics.shipments.find(s=>s.id===c.deliveryId);if(shipment){if(shipment.pickedUp)shipment.position={x:c.entity.x,y:c.entity.y};city.logistics.releaseDriver(shipment);shipment.status='waiting';}else c.deliveryId=null;}
@@ -439,7 +439,7 @@ export class CityEconomy {
     const existing = city.buildings.find(b => b.type === type && (!b.active || b.municipal) && !b.entity.destroyed && b.units.every(u => u.ownerId === 'treasury' && u.forSale));
     if (existing) return this.purchasePremises(existing, founder, crop);
     city.development.ensurePlots();
-    const fertile = p => type === 'farm' ? city.development.isFarmPlot(p) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine'].includes(type) ? (!city.world.map || p.type === 'quarry') : !['quarry', 'farm'].includes(p.type));
+    const fertile = p => type === 'farm' ? city.development.isFarmPlot(p) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine', 'bauxite_mine'].includes(type) ? (!city.world.map || p.type === 'quarry') : !['quarry', 'farm'].includes(p.type));
     let boughtLot=false;
     let lot = city.development.plots.find(p => p.ownerId === founder.accountId && !p.buildingId && !p.projectId && fertile(p));
     if (!lot) {
@@ -529,7 +529,7 @@ export class CityEconomy {
         if (pending.some(p => p.type === opportunity.type && p.crop === opportunity.crop)) continue;
         if (opportunity.score < 100 && this.businesses.some(b => b.type === opportunity.type && (b.type !== 'farm' || b.crop === opportunity.crop))) continue;
         if (this.city.treasury < this.quote(opportunity.type) + this.city.currency.price(100000)) continue;
-        const lots = this.city.development.plots.filter(p => p.ownerId === 'treasury' && !p.buildingId && !p.projectId && (opportunity.type === 'farm' ? this.city.development.isFarmPlot(p) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine'].includes(opportunity.type) ? p.type === 'quarry' : !['quarry', 'farm'].includes(p.type))));
+        const lots = this.city.development.plots.filter(p => p.ownerId === 'treasury' && !p.buildingId && !p.projectId && (opportunity.type === 'farm' ? this.city.development.isFarmPlot(p) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine', 'bauxite_mine'].includes(opportunity.type) ? p.type === 'quarry' : !['quarry', 'farm'].includes(p.type))));
         for (const lot of lots) {
           const project = this.city.development.beginProject('treasury', lot.id, opportunity.type, { crop: opportunity.crop, width: opportunity.type === 'farm' ? lot.width : Math.min(4, lot.width), depth: opportunity.type === 'farm' ? lot.depth : Math.min(4, lot.depth), floors: businessFloors(opportunity.type,lot.id) });
           if (project) return true;
@@ -759,6 +759,7 @@ export class CityEconomy {
     if(b.type==='clothing_store')return b.inventory.roupas>0;
     if(b.type==='composting'&&(b.inventory.fezes||0)<4&&b.inventory.lixo>=4)spec={...spec,inputs:{lixo:4},outputs:{adubo:2}};
     if(b.type==='laundromat')return b.inventory.sabao>0;
+    if(['road_paving','road_maintenance'].includes(b.type))return false;
     if(b.type==='thrift_store'){
       const garment=b.garments?.find(g=>(g.dirt||0)>=8);if(!garment||b.inventory.sabao<1)return false;
       b.laundryLabor=(b.laundryLabor||0)+(1+(c.skills.commerce||0)/80)*workEfficiency(c,b);
@@ -782,10 +783,11 @@ export class CityEconomy {
     if(inventoryFree(b)<Math.max(0,net) || Object.entries(spec.outputs).some(([g])=>b.inventory[g]>=(b.type==='paintworks'&&b.paintColorOrders?.length?180:48))) return false;
     // Mines must own actual rock deposits; other primary sites have finite extraction reserves.
     if(['iron_mine','bauxite_mine'].includes(b.type)) {
-      b.deposits ??= quarryDeposits(this.city.world,b.entity.x,b.entity.y,b.width,b.depth);
+      const revision=this.city.world.revision||0;if(b.depositRevision!==revision||!b.deposits){b.deposits=quarryDeposits(this.city.world,b.entity.x,b.entity.y,b.width,b.depth);b.depositRevision=revision;}
       if(!b.deposits.length) return false;
       const reserves=b.type==='iron_mine'?(this.city.world.ironReserves??=new Map()):(this.city.world.bauxiteReserves??=new Map());
-      b.activeOre=b.deposits.find(p=>(reserves.get(`${p.x},${p.y}`)??120)>0);if(!b.activeOre)return false;
+      const target=b.deposits.find(p=>(reserves.get(`${p.x},${p.y}`)??120)>0);if(!target)return false;b.activeOre=target;
+      const cell={id:`${b.id}:ore:${target.x}:${target.y}`,x:target.x-b.entity.x,y:target.y-b.entity.y,z:0};if(!outdoorCellReady(this.city,c,b,cell,true))return true;
     }
     if(['clay_pit','sand_pit'].includes(b.type) && (b.extractionReserve??=b.width*b.depth*120)<Object.values(spec.outputs)[0])return false;
     b.productionLabor=(b.productionLabor||0)+(1+(c.skills[spec.skill]||0)/80+(c.toolUntil>this.city.minute ? .3 : 0))*workEfficiency(c,b);
@@ -852,7 +854,7 @@ export class CityEconomy {
   productionWork(b, c) {
     if(!c||!['work','manage'].includes(c.task)||c.jobId!==b.id&&c.id!==b.ownerId&&!c.businessIds?.includes(b.id))return false;
     if(['builder','cycle_workshop'].includes(b.type)&&this.city.paint.work(b,c))return true;
-    if(!['farm','quarry','forestry'].includes(b.type)&&!c.mechanicJob&&!workCellReady(this.city,c,b))return false;
+    if(!['farm','quarry','iron_mine','bauxite_mine','forestry'].includes(b.type)&&!c.mechanicJob&&!workCellReady(this.city,c,b))return false;
     if(b.type==='kitchen')return kitchenWork(this,b,c);
     if (INDUSTRIES[b.type]) return this.industrialWork(b,c,INDUSTRIES[b.type]);
     if (b.type === 'mill') {

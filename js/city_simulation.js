@@ -10,7 +10,7 @@ import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES} from './city_employment.js?v=housing-work-priority-1';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=workforce-road-mines-1';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=skybridge-survival-2';
 import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
@@ -40,11 +40,11 @@ import { CityHousing, HOUSING_RULES } from './city_housing.js?v=survival-capacit
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=service-capacity-3';
 import { CityWorkMeals } from './city_work_meals.js?v=survival-capacity-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=founding-works-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=workforce-road-mines-1';
 import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
 import { CityGigs } from './city_gigs.js?v=survival-capacity-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=founding-works-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=workforce-road-mines-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=skybridge-survival-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=mine-adjacent-1';
 
@@ -270,12 +270,12 @@ export class CitySimulation {
     if(removed)this.cardboardRevision=(this.cardboardRevision||0)+1;
     return removed;
   }
-  addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
+  addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = ['farm','quarry','iron_mine','bauxite_mine','park','bike_rack'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
     if(OFFICE_ONLY_TYPES.has(type)&&!free)return this.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const spec = BUILDING_TYPES[type];
-    if (type === 'quarry' && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A mina precisa ter uma tile de rocha preta adjacente.');
+    if (['quarry','iron_mine','bauxite_mine'].includes(type) && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A mina precisa ter uma tile de rocha preta adjacente.');
     if (!spec) return this.fail('Tipo de prédio inválido.');
-    if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
+    if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
     width ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 3);
     depth ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 2);
     floors ??= 2 + Math.floor(this.random() * 4);
@@ -786,7 +786,7 @@ export class CitySimulation {
       const isOwner = task === 'manage' && b.ownerId === c.id;
       const wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30));
       if (!isOwner && b.balance < wage) { this.payWage(c,b,wage); c.action = 'Empregador sem caixa'; c.task = null; return; }
-      if(b.constructionKind==='open-air'&&!['farm','quarry','forestry'].includes(b.type)){const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cell=cells[c.id%Math.max(1,cells.length)];if(cell&&!outdoorCellReady(this,c,b,cell))return;}
+      if(b.constructionKind==='open-air'&&!['farm','quarry','iron_mine','bauxite_mine','forestry'].includes(b.type)){const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cell=cells[c.id%Math.max(1,cells.length)];if(cell&&!outdoorCellReady(this,c,b,cell))return;}
       const productive = this.economy.productionWork(b, c);
       const present=!!(c.indoorLocation?.buildingId===b.id&&c.indoorLocation.unitId&&!c.indoorLocation.path?.length)||
         !!(c.workCell?.buildingId===b.id&&c.workCell.target&&!c.path.length&&Math.hypot(c.entity.x-c.workCell.target.x,c.entity.y-c.workCell.target.y)<.2);
@@ -795,7 +795,7 @@ export class CitySimulation {
       if (isOwner) this.economy.practice(c, 'management');
       if(!productive&&b.type!=='farm'&&b.type!=='forestry'&&Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)>30){this.furniture.waitForInputs(c,b,'Aguardando matéria-prima ou serviço');return;}
       if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
-      c.action = b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Gerindo ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
+      c.action = b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Trabalhando na própria empresa sem salário · ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
       if (Math.min(n.food, n.water, n.energy, n.toilet, n.hygiene, n.health) < 22) c.task = null;
       return;
     }
@@ -1165,7 +1165,7 @@ export class CitySimulation {
     const people = this.citizens.filter(c => !c.entity.destroyed);
     const units = [...this.units.values()];
     const employers=this.buildings.filter(b=>b.active&&!b.entity.destroyed);
-    const jobs=employers.reduce((n,b)=>n+b.jobs,0),vacancies=employers.reduce((n,b)=>n+Math.max(0,b.jobs-b.workers.length),0);
+    const jobs=employers.reduce((n,b)=>n+b.jobs,0),vacancies=employers.reduce((n,b)=>n+Math.max(0,b.jobs-occupiedPositions(this,b)),0);
     return this._statsCache = { mayorId: this.economy.mayorId, entrepreneurs: people.filter(c => c.businessIds.length).length, moneySupply: this.currency.supply(), moneyIssued: this.currency.issued, priceIndex: this.currency.priceIndex, inflation: this.currency.dailyInflation, businesses: this.economy.businesses.length, population: people.length, children: people.filter(c => !this.society.isAdult(c)).length, couples: people.filter(c => c.partnerId).length / 2, friendships: [...this.society.relations.values()].filter(r => r.active!==false && ['friend', 'close'].includes(r.status)).length, births: this.society.birthCount, deaths: this.life.deathCount, employed: people.filter(c => c.jobId).length, homeless: people.filter(c => !c.homeUnitId).length, happiness: people.length ? Math.round(people.reduce((s, c) => s + c.happiness, 0) / people.length) : 0, units: units.length, occupied: units.filter(u => u.tenantId || u.occupantId).length, jobs, vacancies, treasury: this.treasury };
   }
 }

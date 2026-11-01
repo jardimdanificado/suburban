@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {terrainWalkable} from './city_terrain.js?v=deep-perf-3';
+import {terrainWalkable} from './city_terrain.js?v=mine-adjacent-1';
 
 // One deterministic source of truth feeds both pedestrian routing and the renderer.
 export function skybridgeLinks(buildings,world){

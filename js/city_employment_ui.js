@@ -1,5 +1,5 @@
-import {qualification,wageFor} from './city_employment.js?v=housing-work-priority-1';
-import {SKILLS} from './city_economy.js?v=founding-works-1';
+import {qualification,wageFor,openPositions,occupiedPositions,ownerSelfHire} from './city_employment.js?v=workforce-road-mines-1';
+import {SKILLS} from './city_economy.js?v=workforce-road-mines-1';
 import {formatMoney as money} from './city_ui_format.js';
 const stamp=n=>n==null?'—':`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const label=c=>c?.entity.properties.name||'Pessoa ausente';
@@ -17,7 +17,7 @@ export function employmentReport(city){
     if(c.jobId&&!city.politics.officeHolder(c)){const b=city.building(c.jobId);if(b)workers.push({citizen:c,building:b,contract:c.career?.jobs.findLast(r=>r.buildingId===b.id&&r.endedAt==null)});}
     else if(!c.jobId&&!c.businessIds.length&&city.society.isAdult(c)&&!city.politics.officeHolder(c))unemployed++;
   }
-  return {firms,byCompany,applications,workers,unemployed,vacancies:firms.reduce((n,b)=>n+Math.max(0,b.jobs-b.workers.length),0)};
+  return {firms,byCompany,applications,workers,unemployed,vacancies:firms.reduce((n,b)=>n+openPositions(city,b),0)};
 }
 const reportFor=ui=>ui.cachedList?ui.cachedList('employment-report',()=>employmentReport(ui.city)):employmentReport(ui.city);
 const matches=(ui,text)=>!ui.matches||ui.matches(text);
@@ -75,10 +75,10 @@ function candidateDetail(ui,p,row){
 }
 function companyDetail(ui,p,b,report){
   const city=ui.city,rows=report.byCompany.get(b.id)||[],waiting=rows.filter(r=>r.application.status==='análise');
-  p.heading(b.entity.properties.name);p.metrics([['VAGAS',Math.max(0,b.jobs-b.workers.length)],['EM ANÁLISE',waiting.length],['BASE/HORA',money(b.wage*60)],['CAIXA',money(b.balance)]]);
+  p.heading(b.entity.properties.name);p.metrics([['VAGAS',openPositions(city,b)],['EM ANÁLISE',waiting.length],['BASE/HORA',money(b.wage*60)],['CAIXA',money(b.balance)]]);
   p.button('ABRIR EMPRESA E AJUSTAR CONTRATAÇÃO',()=>openCompanyStaff(ui,b));
   p.kv('Área profissional',SKILLS[city.economy.jobSkill(b)]||city.economy.jobSkill(b));showPolicy(p,b);
-  p.kv('Equipe / capacidade',`${b.workers.length}/${b.jobs}`);p.kv('Folha base estimada por 8h trabalhadas',money(b.wage*b.workers.length*480));
+  p.kv('Equipe / capacidade',`${occupiedPositions(city,b)}/${b.jobs}${ownerSelfHire(city,b)?' · proprietário trabalha sem salário':''}`);p.kv('Folha base estimada por 8h trabalhadas',money(b.wage*b.workers.length*480));
   p.kv('Capacidade de pagar um minuto à equipe',b.balance>=b.wage*Math.max(1,b.workers.length)?'Caixa suficiente':'Caixa insuficiente');
   if(b.vacancySince!=null)p.kv('Vagas persistentes desde',stamp(b.vacancySince));
   p.note('O piso é a base da empresa. Habilidade pode elevar a remuneração individual; deslocamentos, insumos e trabalho efetivo limitam o total recebido.');
@@ -97,10 +97,10 @@ export function renderEmployment(ui,p){
   const status=ui.employmentStatus||'all';
   if(view==='vacancies'){
     filters(ui,p,[['all','TODAS'],['entry','PRIMEIRO EMPREGO'],['experienced','EXIGE EXPERIÊNCIA'],['unfunded','SEM CAIXA']]);
-    const rows=report.firms.filter(b=>b.jobs>b.workers.length&&matches(ui,`${b.entity.properties.name} ${SKILLS[city.economy.jobSkill(b)]||b.type}`)).filter(b=>status==='all'||status==='entry'&&policyFor(b).minExperienceMinutes===0&&policyFor(b).minRating===0||status==='experienced'&&policyFor(b).minExperienceMinutes>0||status==='unfunded'&&b.balance<b.wage*Math.max(1,b.workers.length+1)).sort((a,b)=>b.wage-a.wage||a.id-b.id);
+    const rows=report.firms.filter(b=>openPositions(city,b)>0&&matches(ui,`${b.entity.properties.name} ${SKILLS[city.economy.jobSkill(b)]||b.type}`)).filter(b=>status==='all'||status==='entry'&&policyFor(b).minExperienceMinutes===0&&policyFor(b).minRating===0||status==='experienced'&&policyFor(b).minExperienceMinutes>0||status==='unfunded'&&b.balance<b.wage*Math.max(1,b.workers.length+1)).sort((a,b)=>b.wage-a.wage||a.id-b.id);
     p.note('Ordenadas por salário base. Selecione uma vaga para ver os requisitos completos e todos os candidatos.');
     pages(ui,p,rows,'employmentPage',b=>{const policy=policyFor(b),waiting=(report.byCompany.get(b.id)||[]).filter(r=>r.application.status==='análise').length;
-      p.record(b.entity.properties.name,`${Math.max(0,b.jobs-b.workers.length)} vagas · ${SKILLS[city.economy.jobSkill(b)]||b.type} · ${waiting} candidatos em análise`,()=>route(ui,'vacancies',{employmentCompanyId:b.id,employmentCandidatesPage:0}),false,{value:`${money(b.wage*60)}/h`});
+      p.record(b.entity.properties.name,`${openPositions(city,b)} vagas · ${SKILLS[city.economy.jobSkill(b)]||b.type} · ${waiting} candidatos em análise`,()=>route(ui,'vacancies',{employmentCompanyId:b.id,employmentCandidatesPage:0}),false,{value:`${money(b.wage*60)}/h`});
       p.kv('Requisitos',`Habilidade ${policy.minSkill}/100 · experiência ${hours(policy.minExperienceMinutes)} · referências ${policy.minRating}/100`);
     });if(!rows.length)p.note('Nenhuma vaga aberta com estes filtros.');
   }else if(view==='applications'){
@@ -118,6 +118,6 @@ export function renderEmployment(ui,p){
 }
 export function renderCompanyRecruitment(ui,p,b){
   const report=reportFor(ui),rows=report.byCompany.get(b.id)||[],waiting=rows.filter(r=>r.application.status==='análise');
-  p.heading('VAGAS E PROCESSOS SELETIVOS');p.kv('Vagas abertas / candidatos em análise',`${Math.max(0,b.jobs-b.workers.length)} / ${waiting.length}`);
+  p.heading('VAGAS E PROCESSOS SELETIVOS');p.kv('Vagas abertas / candidatos em análise',`${openPositions(ui.city,b)} / ${waiting.length}`);
   p.buttons([{label:'VER CANDIDATOS DESTA EMPRESA',click:()=>route(ui,'applications',{employmentCompanyId:b.id,employmentCandidatesPage:0})},{label:'MERCADO DE TRABALHO',click:()=>route(ui,'vacancies')}]);
 }

@@ -1,4 +1,4 @@
-import {chooseBuildingSite} from './city_terrain.js?v=deep-perf-3';
+import {chooseBuildingSite} from './city_terrain.js?v=mine-adjacent-1';
 const mines=new Set(['quarry','iron_mine','bauxite_mine']);
 function dimensions(lot,type){
   if(type==='farm'||mines.has(type))return [[lot.width,lot.depth]];

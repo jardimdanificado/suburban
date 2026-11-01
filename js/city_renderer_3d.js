@@ -12,13 +12,14 @@ import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './
 import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=deep-perf-3';
-import {quarryDeposits} from './city_terrain.js?v=deep-perf-3';
+import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=mine-adjacent-1';
+import {quarryDeposits} from './city_terrain.js?v=mine-adjacent-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-door-alignment-2';
 import {syncSkybridges} from './city_skybridges.js?v=short-passarelas-bridge-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import {mergeStaticMeshes} from './city_static_mesh.js';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
+const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
 function buildingMaterial(renderer,THREE,kind,color){
   return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
 }
@@ -414,7 +415,9 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
       for (let i = 0; i < 4; i++) {
         const point=buildingPoint(b,Math.floor(front.width/2)+.5,front.depth+(i+.5)*.22);
         const ground=renderer.getSurfaceElevation(map,entity.x+point.x,entity.y+point.y);
-        const top = base - (base - entrance) * (i + 1) / 4;
+        // The first tread meets the raised threshold; remaining treads descend
+        // toward the outside ground instead of leaving a gap below the door.
+        const top = base - (base - entrance) * i / 3;
         const height = Math.max(.025, top - ground);
         matrix.makeRotationY((b.rotation||0)*Math.PI/2);matrix.scale(new THREE.Vector3(1,height,1));matrix.setPosition(point.x,ground+height/2-base,point.y);
         group.userData.stairs.setMatrixAt(i, matrix);
@@ -480,8 +483,8 @@ function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
 // Open-air premises follow every patch of the natural surface; no slab, walls or roof.
 function syncOpenAir(renderer, THREE, entity, b, world) {
   let group = renderer.cityMeshes.get(entity.id);
-  const quarry= b.type==='quarry'?quarryDeposits(world,entity.x,entity.y,b.width,b.depth):[];
-  const signature=`retail-v2:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}:${b.paintRevision||0}:${b.type==='quarry'?`${world.revision}:${quarry.map(p=>`${p.x},${p.y}`).join(';')}`:''}`;
+  const quarry=b.type==='quarry'||OPEN_PIT_MINES.has(b.type)?quarryDeposits(world,entity.x,entity.y,b.width,b.depth):[];
+  const signature=`retail-v3:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}:${b.paintRevision||0}:${b.type==='quarry'||OPEN_PIT_MINES.has(b.type)?`${world.revision}:${quarry.map(p=>`${p.x},${p.y}`).join(';')}`:''}`;
   if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;
@@ -489,9 +492,9 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : b.type==='farm'?0x795c3d:['market','greengrocer'].includes(b.type)?0xb5a68d:0x6e7940 }), b.units.length);
     patches.receiveShadow = true; group.add(patches); group.userData.patches = patches;
     if(b.type==='farm'){patches.visible=false;const cropPlants=createFarmPlants(THREE,b);group.add(cropPlants.group);group.userData.cropPlants=cropPlants;}
-    if(b.type==='quarry'){
+    if(b.type==='quarry'||OPEN_PIT_MINES.has(b.type)){
       patches.visible=false;
-      const rubbleOffsets=[[-.17,-.12],[.16,.13]],geometry=new THREE.DodecahedronGeometry(.2,0),material=new THREE.MeshLambertMaterial({color:0x888b88,flatShading:true}),rubble=new THREE.InstancedMesh(geometry,material,Math.max(1,quarry.length*rubbleOffsets.length)),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),quaternion=new THREE.Quaternion(),scale=new THREE.Vector3(),colors=[0x777a78,0x969792,0x656a68];let count=0;
+      const rubbleOffsets=[[-.17,-.12],[.16,.13]],geometry=new THREE.DodecahedronGeometry(.2,0),material=new THREE.MeshLambertMaterial({color:0x888b88,flatShading:true}),rubble=new THREE.InstancedMesh(geometry,material,Math.max(1,quarry.length*rubbleOffsets.length)),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),quaternion=new THREE.Quaternion(),scale=new THREE.Vector3(),colors=b.type==='bauxite_mine'?[0x9b6547,0xb47a50,0x77513d]:b.type==='iron_mine'?[0x666c6c,0x969b98,0x555b5b]:[0x777a78,0x969792,0x656a68];let count=0;
       for(let deposit=0;deposit<quarry.length;deposit++)for(let chip=0;chip<rubbleOffsets.length;chip++){
         const rock=quarry[deposit],offset=rubbleOffsets[chip],size=.8+((rock.x*17+rock.y*31+chip*13)%5)*.12,x=rock.x+.5+offset[0],z=rock.y+.5+offset[1],ground=surfaceElevation(world,x,z);
         position.set(x-entity.x,ground+.2*size*.62,z-entity.y);quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),(rock.x*11+rock.y*7+chip)%6);scale.set(size*1.18,size*.58,size);matrix.compose(position,quaternion,scale);rubble.setMatrixAt(count,matrix);rubble.setColorAt(count,new THREE.Color(colors[(rock.x+rock.y+chip)%colors.length]));count++;

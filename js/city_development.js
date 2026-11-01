@@ -9,6 +9,8 @@ import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
+const contractorForService=service=>service==='road'?'road_paving':service==='road-repair'?'road_maintenance':null;
+const contractorHandles=(type,service)=>type==='builder'||type===contractorForService(service);
 const FOUNDING_ESSENTIAL_WORKS = Object.freeze([
   ['iml', 110], ['police_station', 105], ['crematorium', 100], ['courthouse', 95], ['jail', 90],
 ]);
@@ -18,17 +20,20 @@ export class CityDevelopment {
   publicBuildingSite(type,options={}){return findPublicBuildingSite(this,type,options);}
   acquirePublicSite(site){return acquirePublicBuildingSite(this,site);}
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
-  selectBuilder(clientId, door, builderId = null, {allowTerrainAccess=false}={}) {
-    const candidates=this.city.economy.businesses.filter(b => b.type === 'builder' && (!builderId || b.id === builderId) && b.accountId !== clientId && (this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door }) || allowTerrainAccess&&findTerrainPath(this.city.world,b.door,door,this.city.occupied)!==null));
+  selectBuilder(clientId, door, builderId = null, {allowTerrainAccess=false,service='building'}={}) {
+    const specialist=contractorForService(service);
+    const candidates=this.city.economy.businesses.filter(b => contractorHandles(b.type,service) && (!builderId || b.id === builderId) && b.accountId !== clientId && (this.city.economy.connected(b, { id: `site:${door.x}:${door.y}`, door }) || allowTerrainAccess&&findTerrainPath(this.city.world,b.door,door,this.city.occupied)!==null));
     if(candidates.length<2)return candidates[0]||null;
     // A comparator can run dozens of times: count the project backlog once,
     // rather than scanning every project twice for every pair of contractors.
     const loads=new Map();for(const p of this.projects)if(!p.cancelled&&p.status!=='completed')loads.set(p.builderId,(loads.get(p.builderId)||0)+1);
-    return candidates.sort((a,b)=>(clientId==='treasury'?Number(b.favorUntil>this.city.minute&&b.favoredBy===this.city.economy.mayorId)-Number(a.favorUntil>this.city.minute&&a.favoredBy===this.city.economy.mayorId):0)||(loads.get(a.id)||0)-(loads.get(b.id)||0)||this.city.reputation.providerPenalty(a)-this.city.reputation.providerPenalty(b)||a.id-b.id)[0]||null;
+    return candidates.sort((a,b)=>Number(b.type===specialist)-Number(a.type===specialist)||(clientId==='treasury'?Number(b.favorUntil>this.city.minute&&b.favoredBy===this.city.economy.mayorId)-Number(a.favorUntil>this.city.minute&&a.favoredBy===this.city.economy.mayorId):0)||(loads.get(a.id)||0)-(loads.get(b.id)||0)||this.city.reputation.providerPenalty(a)-this.city.reputation.providerPenalty(b)||a.id-b.id)[0]||null;
   }
   serviceOffers(builderId) {
     const b = this.city.building(builderId);
-    if (!b?.active || b.type !== 'builder') return [];
+    if (!b?.active || !['builder','road_paving','road_maintenance'].includes(b.type)) return [];
+    if(b.type==='road_paving')return[{service:'road',label:'Pavimentação de estrada',feePerCell:this.city.currency.price(DEVELOPMENT_RULES.roadFeePerTile)}];
+    if(b.type==='road_maintenance')return[{service:'road-repair',label:'Manutenção de estrada',feePerCell:this.city.currency.price(2500)}];
     return [{ service: 'building', label: 'Empreendimento sob medida', feePerCell: this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) }, { service: 'road', label: 'Construção de estrada', feePerCell: this.city.currency.price(DEVELOPMENT_RULES.roadFeePerTile) }, { service:'bridge',label:'Ponte sobre água',feePerCell:this.city.currency.price(DEVELOPMENT_RULES.bridgeFeePerTile) }, { service: 'expansion', label: 'Ampliação de edifício', feePerCell: this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) }];
   }
   registerService(accountId, builder, details) {
@@ -70,7 +75,7 @@ export class CityDevelopment {
     const last=indexes.at(-1),next=full[last+1],includeNext=next&&isRoadAt(city.world,Math.floor(next.x),Math.floor(next.y));
     const route=full.slice(Math.max(0,indexes[0]-1),last+1+(includeNext?1:0)),tiles=route.filter(p=>!isRoadAt(city.world,Math.floor(p.x),Math.floor(p.y)));
     if(tiles.some(p=>this.roadPlotBlocked(Math.floor(p.x),Math.floor(p.y),access))||this.projects.some(p=>p.service==='road'&&!p.cancelled&&p.status!=='completed'&&p.status!=='blocked'&&p.path.some(t=>tiles.some(n=>n.x===t.x&&n.y===t.y))))return null;
-    const builder=this.selectBuilder(accountId,tiles[0],builderId,{allowTerrainAccess:true});
+    const builder=this.selectBuilder(accountId,tiles[0],builderId,{allowTerrainAccess:true,service:'road'});
     const project=this.registerService(accountId,builder,{service:'road',type:'road',name:`Estrada de ${tiles.length} células`,path:tiles,route,plotAccessTiles:route.filter(p=>access.has(`${Math.floor(p.x)},${Math.floor(p.y)}`)).map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`),door:{...tiles[0]},priority,stone:tiles.length*DEVELOPMENT_RULES.roadStonePerTile,requiredLabor:tiles.length*DEVELOPMENT_RULES.roadLaborPerTile,fee:tiles.length*city.currency.price(DEVELOPMENT_RULES.roadFeePerTile)});
     if(project){project.requiredBudget=project.fee+project.stone*city.economy.goods.pedra.price;project.targetDoor={...end};}
     return project;
@@ -172,7 +177,7 @@ export class CityDevelopment {
     const repairable = city.buildings.filter(b => b.repairNeeded && !this.projects.some(p => p.service === 'repair' && p.buildingId === b.id && p.status !== 'completed' && !p.cancelled));
     if (city.treasury > city.currency.price(500000)) for (const b of repairable) if (this.beginRepair('treasury', b.id)) break;
     const damagedRoad = this.cityRoadNeedsRepair();
-    if (damagedRoad.length && city.random() < .01 && city.treasury > city.currency.price(1000000) && !this.projects.some(p => p.service === 'road-repair' && p.status !== 'completed' && !p.cancelled)) this.beginRoadRepair('treasury', damagedRoad.sort((a,b)=>city.trafficScore([b])-city.trafficScore([a])).slice(0, 12));
+    if (damagedRoad.length && (city.random() < .12||city.economy.businesses.some(b=>b.type==='road_maintenance')) && city.treasury > city.currency.price(1000000) && !this.projects.some(p => p.service === 'road-repair' && p.status !== 'completed' && !p.cancelled)) this.beginRoadRepair('treasury', damagedRoad.sort((a,b)=>city.trafficScore([b])-city.trafficScore([a])).slice(0, 12));
   }
   planRoadNetwork(hall,needs){
     const city=this.city,pending=this.projects.filter(p=>['road','bridge'].includes(p.service)&&!p.cancelled&&p.status!=='completed'&&p.status!=='blocked');
@@ -264,7 +269,7 @@ export class CityDevelopment {
   }
   beginRoadRepair(accountId, path, { builderId = null } = {}) {
     if (!path?.length) return null;
-    const builder = this.selectBuilder(accountId, path[0], builderId);
+    const builder = this.selectBuilder(accountId, path[0], builderId,{service:'road-repair'});
     return this.registerService(accountId, builder, { service: 'road-repair', type: 'road', name: `Reparo de ${path.length} trechos de estrada`, path, route: path, door: { ...path[0] }, stone: path.length, requiredLabor: path.length * DEVELOPMENT_RULES.roadLaborPerTile, fee: path.length * this.city.currency.price(2500) });
   }
   homeCount(buildingId) { return [...this.city.housing.homes.values()].filter(h => h.buildingId === buildingId).length; }
@@ -400,12 +405,12 @@ export class CityDevelopment {
     if (!p || p.ownerId !== accountId || p.projectId || !Number.isSafeInteger(price) || price < 1 || !Number.isSafeInteger(rent) || rent < 0) return false;
     Object.assign(p, { price, rent, forSale: p.ownerId === 'treasury' || !!forSale, forRent: p.ownerId !== 'treasury' && !!forRent }); return true;
   }
-  beginProject(accountId, plotId, type, { kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = null, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
+  beginProject(accountId, plotId, type, { kind = ['farm','quarry','iron_mine','bauxite_mine','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = null, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
     if(OFFICE_ONLY_TYPES.has(type))return this.city.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
     const autoFloors=floors===null;
     floors ??= ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing','office_tower'].includes(type)?3:businessFloors(type,plotId);
-    if ((kind === 'open-air' && !['farm', 'quarry', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
+    if ((kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;
     if(width*depth<MIN_PLOT_CELLS||p.width*p.depth<MIN_PLOT_CELLS)return city.fail('Terrenos e prédios precisam de pelo menos 4 células de área.');
     if ((p.type === 'quarry' && !['quarry','iron_mine','bauxite_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;
@@ -536,7 +541,7 @@ export class CityDevelopment {
     }
     let selected=null,selectedPriority=-Infinity,selectedCrew=Infinity;
     for(const p of dispatch.projects){
-      const owned=!p.builderId&&(p.accountId===c.accountId||p.accountId==='treasury'&&p.ownerId===c.id),builderJob=business?.type==='builder'&&(p.builderId===business.id||p.accountId===business.accountId);
+      const owned=!p.builderId&&(p.accountId===c.accountId||p.accountId==='treasury'&&p.ownerId===c.id),builderJob=business&&contractorHandles(business.type,p.service)&&(p.builderId===business.id||p.accountId===business.accountId);
       if(!owned&&!builderJob||p.status==='blocked'||p.labor>=p.requiredLabor||p.waitingForCouncilContract||p.cancelled||p.status==='completed'||p.inventory.pedra<p.stone)continue;
       const crew=dispatch.assigned.get(p.id)||0,limit=Math.max(1,Math.min(6,Math.ceil(Math.max(0,p.requiredLabor-p.labor)/30)));if(crew>=limit)continue;
       const housingPriority=dispatch.housingCrisis&&p.accountId==='treasury'&&['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type)?(p.id===dispatch.priorityHousingId?500:250):0;
@@ -547,13 +552,13 @@ export class CityDevelopment {
   }
   reserveConstruction(project){const dispatch=constructionDispatch.get(this);if(dispatch?.minute===this.city.minute)dispatch.assigned.set(project.id,(dispatch.assigned.get(project.id)||0)+1);}
   balanceContracts() {
-    const builders=this.city.economy.businesses.filter(b=>b.type==='builder' && (b.workers.length || this.city.economy.workingOwner(b)));
+    const builders=this.city.economy.businesses.filter(b=>['builder','road_paving','road_maintenance'].includes(b.type) && (b.workers.length || this.city.economy.workingOwner(b)));
     if(builders.length<2)return;
     const load=new Map(builders.map(b=>[b.id,0])),dispatched=new Set(this.city.citizens.filter(c=>!c.entity.destroyed&&c.task==='construction').map(c=>c.workProjectId));
     const projects=this.projects.filter(p=>!p.cancelled && p.status!=='completed' && p.builderId);
     for(const p of projects.filter(p=>p.labor>0||dispatched.has(p.id)))load.set(p.builderId,(load.get(p.builderId)||0)+Math.max(0,p.requiredLabor-p.labor));
     for(const p of projects.filter(p=>p.labor===0&&!dispatched.has(p.id)).sort((a,b)=>(b.priority||0)-(a.priority||0)||a.startedAt-b.startedAt)) {
-      const options=builders.filter(b=>b.accountId!==p.accountId && this.city.economy.connected(b,{id:`site:${p.door.x}:${p.door.y}`,door:p.door}));
+      const options=builders.filter(b=>b.accountId!==p.accountId && contractorHandles(b.type,p.service) && this.city.economy.connected(b,{id:`site:${p.door.x}:${p.door.y}`,door:p.door}));
       options.sort((a,b)=>(load.get(a.id)||0)/Math.max(1,a.workers.length+(a.ownerId?1:0))-(load.get(b.id)||0)/Math.max(1,b.workers.length+(b.ownerId?1:0))||a.id-b.id);
       const next=options[0];if(!next)continue;
       if(p.builderId!==next.id){p.builderId=next.id;this.city.history.record('service',`Contrato ${p.id} atribuído a ${next.entity.properties.name} antes do início do trabalho.`,[p.accountId,next.accountId],{projectId:p.id});}

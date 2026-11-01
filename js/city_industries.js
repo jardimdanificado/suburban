@@ -10,6 +10,8 @@ export const INDUSTRIAL_GOODS = Object.fromEntries([
 ].map(([id,label,price])=>[id,{label,price}]));
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
+  road_paving:industry('Empresa de asfaltamento',{}, {},1,'construction','Executa contratos municipais e privados de pavimentação com acabamento de asfalto.','services'),
+  road_maintenance:industry('Manutenção de estradas',{}, {},1,'maintenance','Executa contratos de conservação e recuperação de vias desgastadas.','services'),
   steel_mill:industry('Siderúrgica',{ferro:3,carvao:2},{aco:3},35,'maintenance','Aço estrutural para quadros, correntes e rolamentos.'),
   bauxite_mine:industry('Mina de bauxita',{}, {bauxita:3},40,'mining','Extrai reservas minerais para componentes leves.'),
   aluminum_smelter:industry('Refinaria de alumínio',{bauxita:3,carvao:2},{aluminio:2},38,'maintenance','Alumínio refinado para quadros e plataformas leves.'),

@@ -1,6 +1,6 @@
 import {FARM_TILES} from './world_gen.js?v=deep-perf-3';
 import { randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { roadFor } from './city_terrain.js?v=deep-perf-3';
+import { roadFor } from './city_terrain.js?v=mine-adjacent-1';
 // =============================================================================
 // Brutopolis - World & Environment System (Pure JS Engine)
 // =============================================================================

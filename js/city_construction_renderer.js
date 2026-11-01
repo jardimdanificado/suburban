@@ -1,4 +1,4 @@
-import {cornerHeight,surfaceElevation} from './city_terrain.js?v=deep-perf-3';
+import {cornerHeight,surfaceElevation} from './city_terrain.js?v=mine-adjacent-1';
 
 // Construction visuals cover the terrain without changing its navigation tiles.
 function addFarmSoil(THREE,world,cells,site){

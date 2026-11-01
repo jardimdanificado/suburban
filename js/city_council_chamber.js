@@ -1,5 +1,5 @@
-import {DEVELOPMENT_RULES} from './city_development.js?v=founding-works-1';
-import {chooseBuildingSite} from './city_terrain.js?v=deep-perf-3';
+import {DEVELOPMENT_RULES} from './city_development.js?v=workforce-road-mines-1';
+import {chooseBuildingSite} from './city_terrain.js?v=mine-adjacent-1';
 
 /** The legislature needs real premises, offices and in-person plenary sessions. */
 export class CityCouncilChamber {
