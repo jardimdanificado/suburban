@@ -9,6 +9,7 @@ const GRAPHICS = [
 ];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const EFFECTS = [
+  effect("isometricEffects", "EFEITOS NO ISOMETRICO", BOOL, false),
   { key: "postEffects", label: "POS EFEITOS", values: BOOL, default: true },
   effect("normalMaps", "NORMAL MAPS", BOOL, true),
   effect("dofStrength", "PROFUNDIDADE", ["OFF", "LOW", "MED", "HIGH"].map(v => [v, v]), "HIGH"),
@@ -83,7 +84,7 @@ export class OptionsPanel {
       for (const item of [...GRAPHICS, ...EFFECTS]) this.apply(item.key, item.default);
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
-    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "VISUAIS 3P"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
+    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS VISUAIS"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
       const bw = Math.floor((w - 24) / 3);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
@@ -106,7 +107,7 @@ export class OptionsPanel {
     } else {
       this.maxScroll = Math.max(0, rows.length * 30 + 22 - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
-      ui.text("AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
+      ui.text(this.tab === "VISUAL" ? "ISO: DOF E ABERRACAO DISPONIVEIS; SEM NEBLINA." : "AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
       rows.forEach((row, i) => {
         const ry = contentY + 22 + i * 30 - this.scroll;
         if (ry + 30 < contentY || ry > bottom) return;

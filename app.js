@@ -1,14 +1,14 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=service-capacity-3';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=workforce-road-mines-1";
-import { CityDesktop } from "./js/city_desktop.js?v=justice-panels-1";
+import { CityDesktop } from "./js/city_desktop.js?v=camera-modes-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=ao-disabled-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=effects-tween-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js?v=no-ao-options-1";
+import { OptionsPanel } from "./js/options.js?v=effects-tween-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 
 const root = document.querySelector("#experience");
@@ -390,7 +390,12 @@ window.addEventListener("keydown", (event) => {
   }
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'KeyK') { event.preventDefault(); if(!event.repeat)cityUI.openGlobalSearch(); return; }
   if (event.ctrlKey || event.metaKey || event.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
-  if(event.code==='Escape'&&renderer3D.isPerspectiveActive()){renderer3D.setThirdPersonMode(false);event.preventDefault();return;}
+  if(event.code==='Escape'&&(renderer3D.isPerspectiveActive()||renderer3D.followCharacterId!==null)){renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);event.preventDefault();return;}
+  if(renderer3D.isFirstPersonActive()&&(renderer3D.fpEntityId===null||renderer3D.fpEntityId===undefined)){
+    const moves={KeyW:[0,0,1],KeyS:[0,0,-1],KeyA:[-1,0,0],KeyD:[1,0,0],KeyE:[0,1,0],KeyQ:[0,-1,0]};
+    const move=moves[event.code];
+    if(move){event.preventDefault();renderer3D.moveFreeCamera(...move,event.shiftKey?2.5:0.8);return;}
+  }
   if (cityUI.key(event)) { event.preventDefault(); return; }
   if (event.code === "Space" && !event.repeat) {
     event.preventDefault();
@@ -548,11 +553,12 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   hasActiveGame: () => mainMenu.hasActiveGame,
   startNewCity: (params) => startNewCity(params),
   pause:togglePause, speed:()=>time.setSpeed(time.speed===32?0.5:time.speed*2), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
-  center:()=>{renderer3D.setThirdPersonMode(false);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
-  observe:(mode,id)=>{renderer3D.setThirdPersonMode(mode==='third',id);},
-  observation:()=>renderer3D.isPerspectiveActive(),
+  center:()=>{renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
+  observe:(mode,id)=>{if(mode==='third')renderer3D.setThirdPersonMode(true,id);else if(mode==='follow')renderer3D.setFollowCharacter(id);else if(mode==='free')renderer3D.setFreeCameraMode(true);else {renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);}},
+  observation:()=>renderer3D.isPerspectiveActive()||renderer3D.followCharacterId!==null,
 }, camera(x, y) {
   renderer3D.setThirdPersonMode(false);
+  renderer3D.setFollowCharacter(null);
   renderer3D.setCamera(x, y);
 } });
 if (mainMenu.isActive()) {

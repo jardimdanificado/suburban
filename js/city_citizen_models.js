@@ -121,17 +121,25 @@ export class CityCitizenModels {
     this.ready=true;return true;
   }
   begin(dt=0,speed=1){this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
-  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,vehicleAngle=null}={}){
+  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
     const inside=c.ridingVehicleId?null:c._renderIndoorPosition||c.indoorLocation?.position,posePoint=!c.path?.length&&(c.furnitureUse?.pose==='lying'||c.furnitureUse?.seated)?c.furnitureUse.posePoint:null,x=posePoint?.x??inside?.x??entity.x,y=posePoint?.y??inside?.y??entity.y;
     let motion=this.motion.get(entity);
-     if(!motion){motion={x,y,angle:0,walkDistance:0,walkFrame:0,lastStepAt:-Infinity};this.motion.set(entity,motion);}
+     if(!motion){motion={x,y,renderX:x,renderY:y,angle:0,renderAngle:0,walkDistance:0,walkFrame:0,lastStepAt:-Infinity};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!this.animationPaused)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle;
+    let renderX=x,renderY=y,renderAngle=motion.angle;
+    if(smoothMovement){
+      const alpha=1-Math.exp(-Math.max(0.001,this.frameDelta||0.016)*14);
+      motion.renderX+=(x-motion.renderX)*alpha;motion.renderY+=(y-motion.renderY)*alpha;
+      const angleDelta=Math.atan2(Math.sin(motion.angle-motion.renderAngle),Math.cos(motion.angle-motion.renderAngle));
+      motion.renderAngle+=angleDelta*alpha;
+      renderX=motion.renderX;renderY=motion.renderY;renderAngle=motion.renderAngle;
+    }else{motion.renderX=x;motion.renderY=y;motion.renderAngle=motion.angle;}
     // Keep quarter-tile footsteps, but present adjacent poses instead of skipping
     // a full animation cycle when a worker snapshot jumps several tiles.
     if(moved&&!this.animationPaused&&motion.walkDistance+1e-8>=.25&&this.clock-motion.lastStepAt>=.1-1e-8){motion.walkFrame++;motion.walkDistance=Math.max(0,motion.walkDistance%.25);motion.lastStepAt=this.clock;}
@@ -155,7 +163,7 @@ export class CityCitizenModels {
       }batch.capacity=capacity;
     }
     const size=(entity.properties.render.size||1)*(perspective?1.05:1);
-    this.position.set(x,surfaceH+(posePoint?.z??inside?.z??0)+(c.ridingVehicleId? .18:0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
+    this.position.set(renderX,surfaceH+(posePoint?.z??inside?.z??0)+(c.ridingVehicleId? .18:0),renderY);this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count,this.color);
     if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
     const capId=c.political?.partyCapId||c.campaign?.capGarmentId,partyCap=capId&&c.wardrobe?.find(g=>g.garmentId===capId),hat=partyCap||(Number.isInteger(c.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null);

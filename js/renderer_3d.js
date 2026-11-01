@@ -9,7 +9,7 @@ import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_buildin
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
 import { syncCityBuildings } from "./city_renderer_3d.js?v=workforce-road-mines-3";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=combat-animation-integration-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=camera-smoothing-1';
 import { flagNightFactor } from './city_terrain.js?v=mine-adjacent-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
@@ -2860,6 +2860,7 @@ export class RCT3DRenderer {
     this.thirdPersonInteriorOverride=false;this.thirdPersonSavedInteriorView=null;
     this._cityInteriorViewHandler=event=>{
       const view=event.detail?.buildingId==null?null:{buildingId:event.detail.buildingId,floor:event.detail.floor||0,hideWalls:event.detail.hideWalls!==false};
+      if(this.isThirdPersonActive()&&view)return;
       if(this.thirdPersonInteriorOverride)this.thirdPersonSavedInteriorView=view;
       if(view){const b=this.cityDevelopment?.city?.building(view.buildingId);if(!this.cityInteriorView)this.interiorPreviousZoom=this.zoom;if(b)this.setCamera(b.entity.x+b.width/2,b.entity.y+b.depth/2,Math.max(this.zoom,Math.min(5,28/(Math.max(b.width,b.depth)*1.6))));}
       else if(this.interiorPreviousZoom!=null){this.zoom=this.interiorPreviousZoom;this.interiorPreviousZoom=null;}
@@ -2905,9 +2906,21 @@ export class RCT3DRenderer {
     this.isFirstPersonMode = false;
     this.isThirdPersonMode = false;
     this.fpCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+    this.tpCameraPosition = new THREE.Vector3();
+    this.tpCameraTarget = new THREE.Vector3();
+    this.tpDesiredPosition = new THREE.Vector3();
+    this.tpDesiredTarget = new THREE.Vector3();
+    this.tpCameraInitialized = false;
+    this.tpCameraAnglesInitialized = false;
+    this.tpCameraYaw = 0;
+    this.tpCameraPitch = 0;
     this.fpYaw = 0; // Horizontal rotation radians
     this.fpPitch = 0; // Vertical pitch radians
     this.fpEntityId = null;
+    this.followCharacterId = null;
+    this.freeCamX = this.camX;
+    this.freeCamY = 14;
+    this.freeCamZ = this.camY;
     this.tpDistance = 4.5; // Third-person orbital distance
     this.tpMinDistance = 1.2;
     this.tpMaxDistance = 24.0;
@@ -3157,6 +3170,17 @@ export class RCT3DRenderer {
       this.scene.add(pl);
       this.nightLightPool.push(pl);
     }
+    this.followMarker = new THREE.Mesh(
+      new THREE.CircleGeometry(0.42, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffd36a, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide })
+    );
+    this.followMarker.rotation.x = -Math.PI / 2;
+    this.followMarker.visible = false;
+    this.scene.add(this.followMarker);
+    this.followLight = new THREE.PointLight(0xffd36a, 1.8, 4.5, 1.8);
+    this.followLight.castShadow = false;
+    this.followLight.visible = false;
+    this.scene.add(this.followLight);
 
     // Reusable Math and Transform objects for Zero-Alloc Rendering
     this._mMatrix = new THREE.Matrix4();
@@ -3183,6 +3207,7 @@ export class RCT3DRenderer {
 
     // 4.5 Graphic Options (Calibrated via in-game Settings Modal)
     this.graphicOptions = {
+      isometricEffects: false,
       normalMaps: true,
       dofStrength: "HIGH",
       chroma: true,
@@ -4434,7 +4459,8 @@ export class RCT3DRenderer {
   }
 
   applyAnisotropyForMode(isPersp = this.isPerspectiveActive()) {
-    const aniso = isPersp ? (this.graphicOptions.anisotropy || 4) : 1;
+    const effectsEnabledForView = isPersp || this.graphicOptions?.isometricEffects === true;
+    const aniso = effectsEnabledForView ? (this.graphicOptions.anisotropy || 4) : 1;
     currentGlobalAnisotropy = aniso;
 
     for (const tex of REGISTERED_TEXTURES) {
@@ -4498,7 +4524,7 @@ export class RCT3DRenderer {
   syncActiveMaterials(isPersp = this.isPerspectiveActive()) {
     this.applyAnisotropyForMode(isPersp);
 
-    const useNormalMaps = isPersp && (this.graphicOptions.normalMaps !== false);
+    const useNormalMaps = (isPersp || this.graphicOptions.isometricEffects === true) && (this.graphicOptions.normalMaps !== false);
     const activeDict = useNormalMaps ? this.materialsPerspective : this.materialsIso;
 
     for (const [k, mat] of Object.entries(activeDict)) {
@@ -4751,16 +4777,53 @@ export class RCT3DRenderer {
   setThirdPersonMode(enabled, entityId = null) {
     if(this.isThirdPersonActive()&&(!enabled||Number(entityId)!==this.fpEntityId))this.syncThirdPersonInteriorView(null);
     this.isThirdPersonMode = !!enabled;
-    if (enabled) this.isFirstPersonMode = false;
+    if (!enabled) this.followCharacterId = null;
+    this.isFirstPersonMode = false;
+    if (enabled) {
+      this.followCharacterId = null;
+      this.cityInteriorView = null;
+      this.thirdPersonInteriorOverride = false;
+      this.thirdPersonSavedInteriorView = null;
+    }
     this.fpEntityId = enabled && entityId !== null && entityId !== undefined ? Number(entityId) : null;
     if (enabled && entityId !== null && entityId !== undefined) {
       this.selectedEntityId = Number(entityId);
+      this.tpCameraInitialized = false;
+      this.tpCameraAnglesInitialized = false;
       this.fpYaw = 0;
       this.fpPitch = 0.35; // Default angled down view towards creature
       this.tpDistance = 4.5;
       this.lastBuiltCamTileX = -9999;
       this.lastBuiltCamTileY = -9999;
     }
+  }
+
+  setFreeCameraMode(enabled = true) {
+    if (!enabled) {
+      this.isFirstPersonMode = false;
+      this.isThirdPersonMode = false;
+      this.fpEntityId = null;
+      return;
+    }
+    this.syncThirdPersonInteriorView(null);
+    this.isFirstPersonMode = true;
+    this.isThirdPersonMode = false;
+    this.fpEntityId = null;
+    this.followCharacterId = null;
+    this.freeCamX = this.camX;
+    this.freeCamY = Math.max(8, this.currentMap ? this.getSurfaceElevation(this.currentMap, this.camX, this.camY) + 8 : 12);
+    this.freeCamZ = this.camY;
+    this.fpYaw = 0;
+    this.fpPitch = -0.18;
+  }
+
+  setFollowCharacter(entityId = null) {
+    this.syncThirdPersonInteriorView(null);
+    this.isFirstPersonMode = false;
+    this.isThirdPersonMode = false;
+    this.fpEntityId = null;
+    this.followCharacterId = entityId == null ? null : Number(entityId);
+    if (this.followCharacterId !== null) this.selectedEntityId = this.followCharacterId;
   }
 
   syncThirdPersonInteriorView(targetEnt){
@@ -4795,6 +4858,12 @@ export class RCT3DRenderer {
       // up/down
       this.freeCamY += dy * speed;
     }
+  }
+
+  findCameraEntity(id, entities) {
+    let entity = entities ? entities.find(e => e && Number(e.id) === Number(id)) : null;
+    if (!entity && typeof getEntityById === "function") entity = getEntityById(id);
+    return entity && !entity.destroyed && (!entity.properties?.life || !entity.properties.life.isDead) ? entity : null;
   }
 
   rotatePerspectiveCamera(dYaw, dPitch) {
@@ -5280,15 +5349,14 @@ export class RCT3DRenderer {
   }
 
   updateCamera(entities = null, dt = 0.016) {
+    this.followMarker.visible = false;
+    this.followLight.visible = false;
     if (this.isPerspectiveActive()) {
-      let targetEnt = entities ? entities.find(e => e && Number(e.id) === Number(this.fpEntityId)) : null;
-      if (!targetEnt && typeof getEntityById === "function") {
-        targetEnt = getEntityById(this.fpEntityId);
-      }
+      const targetEnt = this.findCameraEntity(this.fpEntityId, entities);
 
-      if (targetEnt && !targetEnt.destroyed && (!targetEnt.properties?.life || !targetEnt.properties.life.isDead)) {
-        this.syncThirdPersonInteriorView(this.isThirdPersonActive()?targetEnt:null);
+      if (targetEnt) {
         const indoorLocation=targetEnt.properties?.citizen?.indoorLocation,inside=indoorLocation?.position;
+        const indoorBuilding=this.isThirdPersonActive()&&indoorLocation?this.cityDevelopment?.city?.building(indoorLocation.buildingId):null;
         const eyeX = inside?.x??targetEnt.x;
         const eyeZ = inside?.y??targetEnt.y;
         const surfaceH = this.currentMap ? this.getSurfaceElevation(this.currentMap, eyeX, eyeZ) : 1.0;
@@ -5332,11 +5400,47 @@ export class RCT3DRenderer {
         const cosYaw = Math.cos(this.fpYaw);
 
         if (this.isThirdPersonActive()) {
-          // 3P Orbital Camera: Orbit behind/around creature and look directly at creature
-          const desired={x:eyeX-sinYaw*cosPitch*this.tpDistance,y:eyeY+sinPitch*this.tpDistance,z:eyeZ-cosYaw*cosPitch*this.tpDistance};
-          const safe=this.resolveThirdPersonCamera({x:eyeX,y:eyeY,z:eyeZ},desired,this.cityDevelopment?.city,indoorLocation?.buildingId??null);
-          this.fpCamera.position.set(safe.x,safe.y,safe.z);
-          this.fpCamera.lookAt(eyeX, eyeY, eyeZ);
+          const followSmoothing=1-Math.exp(-Math.max(0.001,dt||0.016)*7.5);
+          if(!this.tpCameraAnglesInitialized){this.tpCameraYaw=this.fpYaw;this.tpCameraPitch=this.fpPitch;this.tpCameraAnglesInitialized=true;}
+          else {
+            const yawDelta=Math.atan2(Math.sin(this.fpYaw-this.tpCameraYaw),Math.cos(this.fpYaw-this.tpCameraYaw));
+            this.tpCameraYaw+=yawDelta*followSmoothing;
+            this.tpCameraPitch+=(this.fpPitch-this.tpCameraPitch)*followSmoothing;
+          }
+          const orbitCosPitch=Math.cos(this.tpCameraPitch),orbitSinPitch=Math.sin(this.tpCameraPitch),orbitSinYaw=Math.sin(this.tpCameraYaw),orbitCosYaw=Math.cos(this.tpCameraYaw);
+          let desiredCamera, lookTarget;
+          if (indoorBuilding) {
+            const b=indoorBuilding, centerX=b.entity.x+b.width/2, centerZ=b.entity.y+b.depth/2;
+            const dx=(b.door?.x??centerX)-centerX, dz=(b.door?.y??centerZ)-centerZ, length=Math.hypot(dx,dz)||1;
+            const doorYaw=Math.atan2(dx/length,dz/length), outsideYaw=doorYaw+this.tpCameraYaw;
+            const radius=Math.hypot(b.width/2,b.depth/2)+Math.max(3,this.tpDistance);
+            const base=b.terrain?.base??(this.currentMap?this.getSurfaceElevation(this.currentMap,centerX,centerZ):0);
+            desiredCamera={x:centerX+Math.sin(outsideYaw)*radius,y:base+Math.max(2.5,Math.min(5,b.floors*1.2)),z:centerZ+Math.cos(outsideYaw)*radius};
+            lookTarget={x:centerX,y:base+Math.max(1.2,Math.min(3,b.floors*.55)),z:centerZ};
+          } else {
+            // Orbit from outside and keep the building facade intact while the resident is indoors.
+            const desired={x:eyeX-orbitSinYaw*orbitCosPitch*this.tpDistance,y:eyeY+orbitSinPitch*this.tpDistance,z:eyeZ-orbitCosYaw*orbitCosPitch*this.tpDistance};
+            const safe=this.resolveThirdPersonCamera({x:eyeX,y:eyeY,z:eyeZ},desired,this.cityDevelopment?.city,null);
+            desiredCamera=safe;
+            lookTarget={x:eyeX,y:eyeY,z:eyeZ};
+          }
+          if (!this.tpCameraInitialized) {
+            this.tpCameraPosition.set(desiredCamera.x,desiredCamera.y,desiredCamera.z);
+            this.tpCameraTarget.set(lookTarget.x,lookTarget.y,lookTarget.z);
+            this.tpCameraInitialized=true;
+          } else {
+            this.tpDesiredPosition.set(desiredCamera.x,desiredCamera.y,desiredCamera.z);
+            this.tpDesiredTarget.set(lookTarget.x,lookTarget.y,lookTarget.z);
+            this.tpCameraPosition.lerp(this.tpDesiredPosition,followSmoothing);
+            this.tpCameraTarget.lerp(this.tpDesiredTarget,followSmoothing);
+          }
+          this.fpCamera.position.copy(this.tpCameraPosition);
+          this.fpCamera.lookAt(this.tpCameraTarget);
+          const followGroundY=surfaceH+(inside?.z??0);
+          this.followMarker.position.set(eyeX, followGroundY + 0.045, eyeZ);
+          this.followMarker.visible = true;
+          this.followLight.position.set(eyeX, followGroundY + 0.32, eyeZ);
+          this.followLight.visible = true;
         } else {
           // 1P First Person Camera: Position at creature eyes and look forward
           this.fpCamera.position.set(eyeX, eyeY, eyeZ);
@@ -5381,6 +5485,12 @@ export class RCT3DRenderer {
         this.isThirdPersonMode = false;
         this.fpEntityId = null;
       }
+    }
+
+    if (this.followCharacterId !== null) {
+      const target=this.findCameraEntity(this.followCharacterId,entities);
+      if (target) { this.camX=target.x; this.camY=target.y; }
+      else this.followCharacterId=null;
     }
 
     const aspect = this.width / this.height;
@@ -5455,6 +5565,7 @@ export class RCT3DRenderer {
     this.renderer.setClearColor(this.tempColor1, 1.0);
 
     const isPersp = this.isPerspectiveActive();
+    const effectsEnabledForView = isPersp || this.graphicOptions?.isometricEffects === true;
     const isNight = timeOfDay < 5.0 || timeOfDay > 19.5;
 
     if (isPersp) {
@@ -5534,9 +5645,9 @@ export class RCT3DRenderer {
 
     // Position and Orient 3D Sun & Moon in Sky Dome during 1P/3P Perspective Mode
     if (this.celestialGroup) {
-      if (this.isPerspectiveActive()) {
+      if (effectsEnabledForView) {
         this.celestialGroup.visible = true;
-        const activeCam = this.fpCamera;
+        const activeCam = isPersp ? this.fpCamera : this.camera;
         const enableGodRays = this.graphicOptions.godRays !== false;
 
         // Sun passes above and below the earth horizon continuously
@@ -5573,9 +5684,10 @@ export class RCT3DRenderer {
             this.lensFlareGroup.visible = true;
             const rayX = -scr.x;
             const rayY = -scr.y;
-            const fovRad = (activeCam.fov * Math.PI) / 180.0;
             const planeDist = 1.8;
-            const halfH = Math.tan(fovRad / 2.0) * planeDist;
+            const halfH = activeCam.isPerspectiveCamera
+              ? Math.tan((activeCam.fov * Math.PI) / 360.0) * planeDist
+              : (activeCam.top - activeCam.bottom) / 2;
             const halfW = halfH * activeCam.aspect;
 
             for (const elem of this.lensFlareElements) {
@@ -6996,7 +7108,7 @@ export class RCT3DRenderer {
         const isConsciousCreature = !isItem && !isDoor && !!e.properties?.brain;
         const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
         const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
-        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,{hidden:isPossessed,dimmed:!inCurZone,perspective:this.isPerspectiveActive(),vehicleAngle});
+        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,{hidden:isPossessed,dimmed:!inCurZone,perspective:this.isPerspectiveActive(),smoothMovement:this.isThirdPersonActive(),vehicleAngle});
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
         }else{
@@ -7721,7 +7833,8 @@ export class RCT3DRenderer {
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
-    if (this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget) {
+    const useIsometricPostEffects = this.graphicOptions?.isometricEffects === true;
+    if ((this.isPerspectiveActive() || useIsometricPostEffects) && this.postEffectsEnabled && this.renderTarget) {
       this.renderer.setRenderTarget(this.renderTarget);
       this.renderer.render(this.scene, activeCam);
       this.renderer.setRenderTarget(null);
@@ -7729,12 +7842,13 @@ export class RCT3DRenderer {
 
       const dofOpt = this.graphicOptions?.dofStrength || "HIGH";
       let dofVal = 0.0;
-      if (dofOpt === "LOW") dofVal = 0.85;
-      else if (dofOpt === "MED") dofVal = 1.45;
-      else if (dofOpt === "HIGH") dofVal = this.isFirstPersonActive() ? 2.1 : 1.35;
+      const dofEnabledForView=this.isPerspectiveActive()||useIsometricPostEffects;
+      if (dofEnabledForView && dofOpt === "LOW") dofVal = 0.85;
+      else if (dofEnabledForView && dofOpt === "MED") dofVal = 1.45;
+      else if (dofEnabledForView && dofOpt === "HIGH") dofVal = this.isFirstPersonActive() ? 2.1 : 1.35;
       this.postMaterial.uniforms.uDofStrength.value = dofVal;
 
-      this.postMaterial.uniforms.uChroma.value = (this.graphicOptions?.chroma !== false) ? 1.0 : 0.0;
+      this.postMaterial.uniforms.uChroma.value = dofEnabledForView && this.graphicOptions?.chroma !== false ? 1.0 : 0.0;
 
       // Screen-space ambient occlusion created visible bands in close perspective views.
       this.postMaterial.uniforms.uAoEnabled.value=0;
