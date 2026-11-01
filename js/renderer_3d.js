@@ -1,4 +1,6 @@
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
+import {streetSurfaceTextures} from './street_surface_textures.js?v=natural-streets-2';
+import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {waterPollutionAt,waterTint} from './city_water.js';
 import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=portuguese-roof-tiles-2';
 // =============================================================================
@@ -8,9 +10,9 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileT
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=colonial-benches-3";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=makeshift-sleep-mats-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=bank-door-bench-offset-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=natural-streets-2';
 import { flagNightFactor } from './city_terrain.js?v=road-bank-fit-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,roadSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=road-bank-fit-1';
 import { ASSET_DATA } from "./assets_data.js";
@@ -133,7 +135,7 @@ function shouldRenderTerrainSprite(x, y, tileType) {
 function shouldSpawnGrassTuft(x, y) {
   let hash = Math.imul(x ^ Math.imul(y, 198491317), 445582319);
   hash = Math.imul(hash ^ (hash >>> 11), 892341233) >>> 0;
-  return hash % 100 < 14; // Sparse enough for performance, visible at the map view.
+  return hash % 100 < 20; // Small patches; the ground texture supplies the dense turf.
 }
 
 function terrainTextureHash(x, y, tileType) {
@@ -173,6 +175,10 @@ function pushTerrainTileUvs(bucket, x, y, tileType, categoryOverride = null) {
     for (const point of corners) bucket.uvs.push(...point);
     return;
   }
+  if(category==='pavedRoad'||category==='sidewalk'){
+    for(const [u,v]of corners)bucket.uvs.push(x+u,y+v);
+    return;
+  }
   const hash = terrainTextureHash(x, y, tileType), orientation = hash & 7;
   const scale = .76 + ((hash >>> 4) & 3) * .16, offsetU = ((hash >>> 9) & 3) * .19, offsetV = ((hash >>> 11) & 3) * .19;
   for (const [u, v] of corners) {
@@ -203,8 +209,6 @@ function createTerrainSurfaceTexture(style, variant) {
     mountain: { base: "#292d2e", stones: ["#565d5b", "#7a8078", "#a29c8c", "#3e4848", "#68665d"] },
     peak: { base: "#45484b", stones: ["#92999a", "#c1c1b4", "#737e84", "#d1c9b6", "#a6a99f"] },
     dirtRoad: { base: "#77583b", stones: ["#a87b4b", "#c49a60", "#906443", "#b68a55", "#654a35"] },
-    pavedRoad: { base: "#41474a", stones: ["#8b969b", "#a8afb1", "#748187", "#969fa2", "#5f6b70"] },
-    sidewalk: { base: "#737e81", stones: ["#adb6b7", "#c1c7c6", "#8e9a9d", "#a7b0b1", "#7c898d"] },
     retainingWall: { base: "#4a5255", stones: ["#858f91", "#6e7a7e", "#a1a8a8", "#5e6a6e", "#929a99"] }
   }[style];
   ctx.fillStyle = palettes.base;
@@ -239,20 +243,6 @@ function createTerrainSurfaceTexture(style, variant) {
         ctx.fillRect(x + 1, y + 1, width - 2, height - 1);
         ctx.fillStyle = "rgba(232,238,236,.22)";
         ctx.fillRect(x + 1, y + 1, width - 2, 1);
-        x += width;
-      }
-    }
-  } else if (style === "pavedRoad" || style === "sidewalk") {
-    // Deliberately regular, staggered cobbles make roads read as built surfaces.
-    const rowHeight = style === "sidewalk" ? 10 : 8;
-    for (let row = -1; row < 6; row++) {
-      const y = row * rowHeight, offset = row % 2 ? -7 : 0;
-      for (let x = offset - 10; x < size + 8;) {
-        const width = 9 + Math.floor(random() * 5), height = 6 + Math.floor(random() * 2);
-        ctx.fillStyle = palettes.stones[Math.floor(random() * palettes.stones.length)];
-        ctx.fillRect(x + 1, y + 1, width - 2, height);
-        ctx.fillStyle = "rgba(28,24,22,.42)";
-        ctx.fillRect(x, y, width, 1);
         x += width;
       }
     }
@@ -598,10 +588,12 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
   };
 }
 
-export function applyWindFoliageShader(mat, deformScale = 0.20) {
+export function applyWindFoliageShader(mat, deformScale = 0.20, rootHeight = 0.25) {
   if (!mat) return;
   mat.userData.foliageShader = null;
   const prevCompile = mat.onBeforeCompile;
+  const previousKey=mat.customProgramCacheKey?.()||'';
+  mat.customProgramCacheKey=()=>`${previousKey}:foliage:${deformScale}:${rootHeight}`;
   mat.onBeforeCompile = (shader) => {
     if (prevCompile) prevCompile(shader);
     shader.uniforms.uSimTick = { value: 0.0 };
@@ -637,7 +629,7 @@ export function applyWindFoliageShader(mat, deformScale = 0.20) {
       int state = int(mod(epoch, 3.0));
       
       vec3 morphedPos = position;
-      float heightFactor = max(0.0, position.y - 0.25);
+      float heightFactor = max(0.0, position.y - ${rootHeight.toFixed(4)});
       
       if (state == 0) {
         // Skew & sideways stretch
@@ -1014,31 +1006,12 @@ function createRoseBushFlowersGeometry() {
   return mergeBufferGeometries(geos);
 }
 
-function createNaturalGrassGeometry(w = 0.44, h = 0.38) {
-  const blades = [];
-  for (const angle of [0, Math.PI / 3, -Math.PI / 3, Math.PI / 2]) {
-    const blade = new THREE.BufferGeometry();
-    blade.setAttribute("position", new THREE.Float32BufferAttribute([
-      0, 0, 0, -w * .24, h * .48, 0, w * .035, h, 0,
-      0, 0, 0, w * .035, h, 0, w * .28, h * .52, 0
-    ], 3));
-    blade.setAttribute("color", new THREE.Float32BufferAttribute([
-      .78, .9, .58, .9, 1, .68, 1, 1, .72,
-      .78, .9, .58, 1, 1, .72, .86, .95, .58
-    ], 3));
-    blade.computeVertexNormals();
-    blade.rotateY(angle);
-    blades.push(blade);
-  }
-  const merged = mergeBufferGeometries(blades), positions = merged.attributes.position.array, colors = new Float32Array(positions.length);
-  for (let i = 0; i < positions.length; i += 3) {
-    const height = Math.max(0, Math.min(1, positions[i + 1] / h));
-    colors[i] = 0.72 + height * 0.24;
-    colors[i + 1] = 0.84 + height * 0.16;
-    colors[i + 2] = 0.48 + height * 0.18;
-  }
-  merged.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  return merged;
+function createNaturalGrassGeometry() {
+  const surface=groundGrassSurface(),geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(surface.positions,3));
+  geometry.setAttribute("color",new THREE.Float32BufferAttribute(surface.colors,3));
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 function createPitchedRoofGeometry(width = 1.68, depth = 1.68, height = 0.78) {
@@ -2794,7 +2767,7 @@ function generateProceduralTerrainNormalMap(type, intensity = 0.45) {
 }
 
 function createCaribbeanGrassTexture() {
-  const size = 128, canvas = document.createElement("canvas");
+  const size = 256, canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d"), image = ctx.createImageData(size, size), data = image.data;
   const hash = (x, y) => {
@@ -2813,25 +2786,28 @@ function createCaribbeanGrassTexture() {
     const broad = noise(x, y, 3), patch = noise(x, y, 8), grain = noise(x, y, 21);
     const tone = Math.max(0, Math.min(1, broad * .58 + patch * .37 + grain * .05));
     const i = (y * size + x) * 4;
-    data[i] = 70 + tone * 58;
-    data[i + 1] = 118 + tone * 64;
-    data[i + 2] = 47 + tone * 34;
+    data[i] = 64 + tone * 34;
+    data[i + 1] = 98 + tone * 45;
+    data[i + 2] = 42 + tone * 24;
     data[i + 3] = 255;
   }
   ctx.putImageData(image, 0, 0);
-  // Short sunlit blades add a little Caribbean warmth without adding geometry.
-  for (let i = 0; i < 40; i++) {
-    const x = Math.floor(hash(i + 91, 17) * size), y = Math.floor(hash(i + 37, 83) * size);
-    const length = 2 + Math.floor(hash(i + 7, 211) * 4);
-    ctx.fillStyle = i % 5 === 0 ? "#b6b966" : i % 3 === 0 ? "#8ab451" : "#70a448";
-    ctx.fillRect(x, y, length, 1);
-    if (x + length >= size) ctx.fillRect(x - size, y, length, 1);
+  // Dense, low-contrast turf underneath the separate three-dimensional blades.
+  for(let i=0;i<4200;i++){
+    const x=hash(i+91,17)*size,y=hash(i+37,83)*size,length=1+hash(i+7,211)*3;
+    const angle=hash(i+41,23)*Math.PI*2,dx=Math.cos(angle)*length,dy=Math.sin(angle)*length;
+    ctx.strokeStyle=i%9===0?"rgba(148,152,92,.2)":i%3===0?"rgba(118,151,75,.28)":"rgba(42,76,35,.22)";
+    ctx.lineWidth=.55;
+    for(const ox of [-size,0,size])for(const oy of [-size,0,size]){
+      if(x+ox+4<0||x+ox-4>size||y+oy+4<0||y+oy-4>size)continue;
+      ctx.beginPath();ctx.moveTo(x+ox,y+oy);ctx.quadraticCurveTo(x+ox+dx*.6+.5,y+oy+dy*.4,x+ox+dx,y+oy+dy);ctx.stroke();
+    }
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
   texture.colorSpace = THREE.SRGBColorSpace;
   applyTextureAnisotropy(texture);
   return texture;
@@ -3532,6 +3508,9 @@ export class RCT3DRenderer {
             finalCol = clamp(finalCol * uBrightness, 0.0, 1.0);
             gl_FragColor = vec4(finalCol, a * uAlpha);
           }
+          // The render target is linear. Convert once when presenting the
+          // completed image, so perspective views preserve material colours.
+          #include <colorspace_fragment>
         }
       `,
       depthTest: false,
@@ -3706,10 +3685,11 @@ export class RCT3DRenderer {
     }));
 
     const terrainSurfaceMaterials = (isPersp, category, style, normalMap, normalScale, roughness, metalness) => Object.fromEntries(
-      Array.from({length:4},(_,variant)=>[
-        `terrain${category}${variant}`,
-        makeMat(isPersp,{map:createTerrainSurfaceTexture(style,variant),color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},normalMap,normalScale,roughness,metalness)
-      ])
+      Array.from({length:4},(_,variant)=>{
+        const street=style==='pavedRoad'||style==='sidewalk';
+        const surface=street?streetSurfaceTextures(THREE,style,variant):{map:createTerrainSurfaceTexture(style,variant),normalMap};
+        return [`terrain${category}${variant}`,makeMat(isPersp,{map:surface.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},surface.normalMap,normalScale,roughness,metalness)];
+      })
     );
 
     const buildDict = (isPersp) => ({
@@ -3717,11 +3697,11 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'Mountain','mountain',normStoneC,1.25,.65,.10),
       ...terrainSurfaceMaterials(isPersp,'Peak','peak',normStoneC,1.3,.60,.12),
       ...terrainSurfaceMaterials(isPersp,'DirtRoad','dirtRoad',normSand,.9,.75,.05),
-      ...terrainSurfaceMaterials(isPersp,'PavedRoad','pavedRoad',normBrickA,1.1,.65,.08),
-      ...terrainSurfaceMaterials(isPersp,'Sidewalk','sidewalk',normBrickA,1.1,.65,.08),
+      ...terrainSurfaceMaterials(isPersp,'PavedRoad','pavedRoad',normBrickA,.65,.92,.015),
+      ...terrainSurfaceMaterials(isPersp,'Sidewalk','sidewalk',normBrickA,.25,.95,0),
       ...terrainSurfaceMaterials(isPersp,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
       farmSoil:makeMat(isPersp,{map:caribbeanGroundTexture(THREE,'farm'),color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
-      [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.85, 0.02),
+      [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
       [TILE_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.25, 0.88, 0.02),
       [TILE_HILL]: makeMat(isPersp, { map: caribbeanGrass, color: 0xc2d0a0, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.82, 0.02),
@@ -3737,7 +3717,7 @@ export class RCT3DRenderer {
       [TILE_ROAD_SAND_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       [TILE_ROAD_HILL_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       cliff: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0x887a6a, 0x2b2218, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.1, 0.72, 0.05),
-      grassFoliage: makeMat(isPersp, { color: 0xffffff, vertexColors: true, dithering: true, transparent: false, depthWrite: true, depthTest: true, side: THREE.DoubleSide }, normGrass, 0.65, 0.85, 0.02),
+      grassFoliage: makeMat(isPersp, { color: 0xffffff, vertexColors: true, dithering: true, transparent: false, depthWrite: true, depthTest: true, side: THREE.DoubleSide }, null, 0, 1, 0),
       treeTrunk: makeMat(isPersp, { color: 0x583c1e, dithering: true }, null),
       oakLeaves: makeMat(isPersp, { color: 0x3e8226, dithering: true }, normOak, 1.2, 0.65, 0.02),
       palmLeaves: makeMat(isPersp, { color: 0x478d32, dithering: true, side: THREE.DoubleSide }, normOak, 0.9, 0.72, 0.01),
@@ -3960,7 +3940,7 @@ export class RCT3DRenderer {
       applyWindFoliageShader(dict.bushLeaves, 0.035);
       applyWindFoliageShader(dict.bushBerries, 0.035);
       applyWindFoliageShader(dict.roseFlowers, 0.035);
-      applyWindFoliageShader(dict.grassFoliage, 0.025);
+      applyWindFoliageShader(dict.grassFoliage, 0.07, 0);
     }
 
     // Dark Quad Grid Material (RCT Style)
@@ -4337,7 +4317,7 @@ export class RCT3DRenderer {
     this.instHouseStage3.receiveShadow = true;
 
     // Natural Grass Tufts (Proportional height, delicate blades, high buffer capacity)
-    const grassGeo = createNaturalGrassGeometry(0.44, 0.42);
+    const grassGeo = createNaturalGrassGeometry();
     this.instGrassTufts = new THREE.InstancedMesh(grassGeo, this.materials.grassFoliage, 5000);
 
     // 3D Volumetric Resource Items (Wood Logs and Stone Blocks)
@@ -5242,7 +5222,7 @@ export class RCT3DRenderer {
       if (m.geometry) m.geometry.dispose();
     }
 
-    if(this.mobilityBatches){for(const b of this.mobilityBatches.values()){this.scene.remove(b.mesh);b.mesh.dispose();b.geometry.dispose();b.material.dispose();}this.mobilityBatches.clear();this.mobilityStreetStamp=null;}
+    if(this.mobilityBatches){for(const b of this.mobilityBatches.values()){this.scene.remove(b.mesh);b.mesh.dispose();b.geometry.dispose();b.material.dispose();}this.mobilityBatches.clear();this.mobilityTemplates?.clear();this.mobilityStreetStamp=null;}
     if (this.entitySprites) {
       for (const spr of this.entitySprites.values()) {
         this.entityGroup.remove(spr);
@@ -5577,7 +5557,7 @@ export class RCT3DRenderer {
 
       if(e.properties.cityBuilding?.officeTenantOf)continue;
       if(e.properties.cityVehicle){
-        const v=e.properties.cityVehicle,h=v.altitude??1,length=v.good==='carrinho'?.95:v.good==='bicicleta_carga'?.85:v.good==='patins'?.3:.55,halfWidth=v.good==='carrinho'?.4:v.good==='bicicleta_carga'?.3:.22,sin=Math.abs(Math.sin(v.angle||0)),cos=Math.abs(Math.cos(v.angle||0)),ex=sin*length+cos*halfWidth,ez=cos*length+sin*halfWidth;
+        const v=e.properties.cityVehicle,h=v.altitude??1,length=v.good==='carrinho'?.95:v.good==='bicicleta_carga'?1:v.good==='patins'?.3:v.good==='bicicleta'?.72:.55,halfWidth=v.good==='carrinho'||v.good==='bicicleta_carga'?.4:.24,sin=Math.abs(Math.sin(v.angle||0)),cos=Math.abs(Math.cos(v.angle||0)),ex=sin*length+cos*halfWidth,ez=cos*length+sin*halfWidth;
         const box=new THREE.Box3(new THREE.Vector3(e.x-ex,h,e.y-ez),new THREE.Vector3(e.x+ex,h+.95,e.y+ez)),hit=ray.intersectBox(box,new THREE.Vector3());
         if(hit){const d=ray.origin.distanceTo(hit);if(d<closestDist){closestDist=d;bestEntId=e.id;this.selectedCityUnitId=null;}}continue;
       }
@@ -6396,7 +6376,7 @@ export class RCT3DRenderer {
     chunkGrassTufts.count = 0;
     chunkGrassTufts.frustumCulled = false;
     chunkGrassTufts.userData.sharedTerrainGeometry = true;
-    const tuftPalette = [0xa8d25f, 0x82b94a, 0x639b3d, 0xc2bd59].map(color => new THREE.Color(color));
+    const tuftPalette = [0x779756, 0x6e8d4d, 0x5f8248, 0x8c9e63].map(color => new THREE.Color(color));
 
     const clampedMinTx = Math.max(0, Math.min(this.mapWidth - 1, minTx));
     const clampedMaxTx = Math.max(0, Math.min(this.mapWidth - 1, maxTx));
@@ -6536,7 +6516,8 @@ export class RCT3DRenderer {
             tx + 1, h10, ty
           );
           pushTerrainTileUvs(bucket, tx, ty, tType,isSidewalk?'sidewalk':null);
-          const textureTone=textureCategory?0.82+((terrainTextureHash(tx,ty,tType)>>>8)%33)/100:1;
+          const toneHash=terrainTextureHash(tx,ty,tType)>>>8;
+          const textureTone=isSidewalk?1:textureCategory==='pavedRoad'?(.96+(toneHash%9)/100):textureCategory?(.82+(toneHash%33)/100):1;
           // Triangle 1: (0,0), (0,1), (1,1)
           bucket.colors.push(zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone);
           bucket.colors.push(zoneMult * ao01 * textureTone, zoneMult * ao01 * textureTone, zoneMult * ao01 * textureTone);
@@ -6572,13 +6553,15 @@ export class RCT3DRenderer {
         // 3D Natural Grass Tufts (Clean, small, fine tufts with dense placement in 1P/3P)
         if (!isSidewalk && (tType === TILE_FLOOR || tType === TILE_HILL)) {
           if (!isPersp && detailBand > 0) {
-            // Isometric view: classic 8% density
+            // Short, scattered clumps over the dense turf texture.
             if (shouldSpawnGrassTuft(tx, ty) && foliageCount < 1200) {
-              const midH = Math.min(h00, h10, h11, h01);
-              matHelper.identity();
-              matHelper.setPosition(tx + 0.5, midH - 0.04, ty + 0.5);
+              const hash=terrainTextureHash(tx,ty,tType),ox=.22+(hash&255)/255*.56,oy=.22+((hash>>>8)&255)/255*.56;
+              const groundY=ox<=oy?h00+(h01-h00)*oy+(h11-h01)*ox:h00+(h10-h00)*ox+(h11-h10)*oy;
+              matHelper.makeRotationY((hash>>>16)/65535*Math.PI*2);
+              this._scaleMatrix.makeScale(.9, .8+((hash>>>24)&255)/255*.45,.9);matHelper.multiply(this._scaleMatrix);
+              matHelper.setPosition(tx+ox,groundY-.008,ty+oy);
               chunkGrassTufts.setMatrixAt(foliageCount, matHelper);
-              chunkGrassTufts.setColorAt(foliageCount, tuftPalette[(tx * 17 + ty * 31) & 3]);
+              chunkGrassTufts.setColorAt(foliageCount, tuftPalette[(hash>>>4)&3]);
               foliageCount++;
             }
           } else if (isPersp && detailBand > 0) {
@@ -6601,7 +6584,7 @@ export class RCT3DRenderer {
                 } else {
                   groundY = h00 + (h10 - h00) * ox + (h11 - h10) * oy;
                 }
-                const tuftY = groundY - 0.06;
+                const tuftY = groundY - 0.008;
 
                 const rotY = (((subHash >> 16) & 0xFF) / 255.0) * Math.PI * 2;
                 const scale = 0.85 + (((subHash >> 24) & 0xFF) / 255.0) * 0.35;

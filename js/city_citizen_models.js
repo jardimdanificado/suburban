@@ -1,3 +1,4 @@
+import {wickerBasketSurface} from './city_mobility_models.js?v=natural-streets-2';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
 export function citizenIsSleeping(c){
@@ -79,19 +80,8 @@ export function headwearSurface(data,piece){
   const ring=(radius,y,i)=>{const angle=i*Math.PI*2/12;return [x+Math.cos(angle)*radius,y,z+Math.sin(angle)*radius];};
   const base=top-.025,height=piece==='chapéu'?.11:piece==='cesta'?.13:.065,radius=piece==='chapéu'?.09:piece==='cesta'?.145:.095;
   if(piece==='cesta'){
-    const inner=radius*.72,lower=base+.012,upper=base+height,lowerRadius=inner*.82;
-    for(let i=0;i<12;i++){
-      const a=ring(lowerRadius,lower,i),b=ring(lowerRadius,lower,i+1),c=ring(inner,upper,i+1),d=ring(inner,upper,i);
-      tri(a,b,c);tri(a,c,d);
-    }
-    for(let band=0;band<3;band++){
-      const y=lower+(upper-lower)*(band/3),r=lowerRadius+(inner-lowerRadius)*(band/3);
-      for(let i=0;i<12;i++){
-        const a=ring(r,y,i),b=ring(r,y,i+1),c=ring(r+.008,y,i+1),d=ring(r+.008,y,i);
-        tri(a,b,c);tri(a,c,d);
-      }
-    }
-    return {positions:new Float32Array(positions),normals:new Float32Array(normals)};
+    const basket=wickerBasketSurface({x,y:base+.012,z,width:.25,depth:.22,height:.13,segments:12,courses:4});
+    return {positions:basket.positions,normals:basket.normals};
   }
   for(let i=0;i<12;i++){const a=ring(radius,base,i),b=ring(radius,base,i+1),c=ring(radius*.72,base+height,i+1),d=ring(radius*.72,base+height,i);tri(a,b,c);tri(a,c,d);tri(d,c,[x,base+height,z]);
     if(piece==='chapéu'){const outer=ring(.14,base,i),next=ring(.14,base,i+1);tri(a,outer,next);tri(a,next,b);}}

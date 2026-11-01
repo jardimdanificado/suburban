@@ -1,7 +1,8 @@
 import {partyFlagCanvas} from './city_party_flags.js';
+import {mobilityModelGeometry} from './city_mobility_models.js?v=natural-streets-2';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=road-bank-fit-1';
-const colors={bicicleta:0x397e99,bicicleta_carga:0xbd793c,carrinho:0x8b6743,patinete:0x62a69a,patins:0xd5b345,skate:0x765038};
+const colors={bicicleta:0x386b78,bicicleta_carga:0x9b603f,carrinho:0x52645b,patinete:0x648d82,patins:0xa3774b,skate:0x414943};
 const inView=(r,x,y,margin=4)=>!Number.isFinite(r.renderedMinTx)||x-margin>=r.renderedMinTx&&x+margin<=r.renderedMaxTx+1&&y-margin>=r.renderedMinTy&&y+margin<=r.renderedMaxTy+1;
 function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
   renderer.mobilityBatches??=new Map();let b=renderer.mobilityBatches.get(key);
@@ -18,31 +19,27 @@ export function syncCityMobility(renderer,THREE,entities,world){
     return;
   }
   const matrix=renderer._mobilityMatrix??=new THREE.Matrix4(),position=renderer._mobilityPosition??=new THREE.Vector3(),quaternion=renderer._mobilityQuaternion??=new THREE.Quaternion(),scale=renderer._mobilityScale??=new THREE.Vector3(),color=renderer._mobilityColor??=new THREE.Color(),axis=renderer._mobilityAxis??=new THREE.Vector3(0,1,0);
-  const place=(mesh,index,x,y,z,sx,sy,sz,angle=0,tint=null)=>{position.set(x,y,z);quaternion.setFromAxisAngle(axis,angle);scale.set(sx,sy,sz);matrix.compose(position,quaternion,scale);mesh.setMatrixAt(index,matrix);if(tint!=null)mesh.setColorAt(index,color.setHex(tint));};
-  for(const [key,b]of renderer.mobilityBatches)if(key==='cycle-frames'||key.startsWith('cycle-frames-'))b.mesh.count=0;
-  const body=batch(renderer,THREE,'cycle-frames',()=>new THREE.BoxGeometry(1,1,1),()=>new THREE.MeshLambertMaterial({color:0xffffff}),vehicles.length*14),wheel=batch(renderer,THREE,'cycle-wheels',()=>new THREE.TorusGeometry(.22,.035,5,12),()=>new THREE.MeshLambertMaterial({color:0x252725}),vehicles.length*8);let n=0,w=0;
-  for(const e of vehicles){const v=e.properties.cityVehicle,h=surfaceElevation(world,e.x,e.y),angle=v.angle||0,tint=v.color?parseInt(v.color.slice(1),16):colors[v.good]||0x52879a;
-    const part=(dx,dy,dz,sx,sy,sz,color=tint)=>place(body.mesh,n++,e.x+dx*Math.cos(angle)+dz*Math.sin(angle),h+dy,e.y-dx*Math.sin(angle)+dz*Math.cos(angle),sx,sy,sz,angle,color);
-    const tire=(dx,dz,size=1)=>place(wheel.mesh,w++,e.x+dx*Math.cos(angle)+dz*Math.sin(angle),h+.23*size,e.y-dx*Math.sin(angle)+dz*Math.cos(angle),size,size,size,angle+Math.PI/2);
-    if(v.good==='carrinho'){
-      part(0,.48,.52,.58,.14,.72,0x9b7549);part(0,.58,.52,.5,.035,.62,0x62472f);
-      part(0,.39,.12,.06,.48,.06,0x735230);part(0,.61,-.14,.06,.84,.06,0x735230);
-      part(-.3,.44,.3,.06,.08,.12,0x735230);part(.3,.44,.3,.06,.08,.12,0x735230);
-      tire(-.34,.32,.78);tire(.34,.32,.78);
-      for(let i=0;i<4;i++)part(0,.7+i*.025,.48,.44-i*.045,.025,.54-i*.045,0xc99a5f);
-    }else if(['bicicleta','bicicleta_carga'].includes(v.good)){
-      part(0,.42,0,.08,.08,.65);part(0,.54,-.2,.08,.26,.08);part(0,.54,.2,.08,.26,.08);part(0,.64,-.12,.24,.08,.26,0x343437);part(0,.8,.35,.5,.05,.06,0x777777);tire(0,-.42);tire(0,.42);
-      if(v.good==='bicicleta_carga'){part(0,.46,-.6,.55,.25,.44);tire(.24,-.5);}
-    }else if(v.good==='patinete'){
-      part(0,.18,0,.24,.08,.72);part(0,.52,.3,.05,.65,.05,0x777777);part(0,.85,.3,.5,.05,.05);tire(0,-.3,.55);tire(0,.3,.55);
-    }else if(v.good==='skate'){
-      part(0,.18,0,.32,.07,.85);for(const x of [-.18,.18])for(const z of [-.3,.3])tire(x,z,.4);
-    }else{
-      for(const x of [-.18,.18]){part(x,.21,0,.18,.22,.38);for(const z of [-.18,-.06,.06,.18])tire(x,z,.3);}
+  const pitchAxis=renderer._mobilityPitchAxis??=new THREE.Vector3(1,0,0),pitchRotation=renderer._mobilityPitch??=new THREE.Quaternion();
+  renderer.mobilityTemplates??=new Map();
+  for(const b of renderer.mobilityBatches.values())b.mesh.count=0;
+  const groups=new Map();for(const e of vehicles){const kind=e.properties.cityVehicle.good;if(!groups.has(kind))groups.set(kind,[]);groups.get(kind).push(e);}
+  for(const [kind,list]of groups){
+    let model=renderer.mobilityTemplates.get(kind);if(!model){model=mobilityModelGeometry(THREE,kind);renderer.mobilityTemplates.set(kind,model);}
+    const makeMaterial=()=>new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide});
+    const fixed=batch(renderer,THREE,`cycle-detail-${kind}`,()=>model.fixed,makeMaterial,list.length);
+    const painted=batch(renderer,THREE,`cycle-paint-${kind}`,()=>model.paint,makeMaterial,list.length);
+    for(let i=0;i<list.length;i++){
+      const e=list[i],v=e.properties.cityVehicle,angle=v.angle||0,h=surfaceElevation(world,e.x,e.y);
+      const along=kind==='carrinho'?.3:.42,dx=Math.sin(angle)*along,dz=Math.cos(angle)*along;
+      const pitch=Math.atan2(surfaceElevation(world,e.x+dx,e.y+dz)-surfaceElevation(world,e.x-dx,e.y-dz),along*2);
+      position.set(e.x,h,e.y);scale.set(1,1,1);quaternion.setFromAxisAngle(axis,angle);pitchRotation.setFromAxisAngle(pitchAxis,-pitch);quaternion.multiply(pitchRotation);matrix.compose(position,quaternion,scale);
+      fixed.mesh.setMatrixAt(i,matrix);painted.mesh.setMatrixAt(i,matrix);
+      const tint=typeof v.color==='number'?v.color:typeof v.color==='string'&&/^#[0-9a-f]{6}$/i.test(v.color)?parseInt(v.color.slice(1),16):colors[kind]||0x52879a;
+      painted.mesh.setColorAt(i,color.setHex(tint));
     }
+    for(const b of [fixed,painted]){b.mesh.count=list.length;b.mesh.instanceMatrix.needsUpdate=true;if(b.mesh.instanceColor)b.mesh.instanceColor.needsUpdate=true;}
   }
   syncCycleFlags(renderer,THREE,vehicles,world,entities);
-  body.mesh.count=n;wheel.mesh.count=w;body.mesh.instanceMatrix.needsUpdate=true;wheel.mesh.instanceMatrix.needsUpdate=true;if(body.mesh.instanceColor)body.mesh.instanceColor.needsUpdate=true;
 }
 
 function syncCycleFlags(renderer,THREE,vehicles,world,entities){

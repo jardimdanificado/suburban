@@ -295,7 +295,7 @@ export class CityDevelopment {
     }
     if (city.world.map) for (let y = 0; y < city.world.height; y++) for (let x = 0; x < city.world.width; x++) {
       const tile = tileAt(city.world, x, y);
-      if (PAVED_ROAD_TILES.has(tile) && city.random() < .015) wearRoad(city.world,x,y,10);
+      if (PAVED_ROAD_TILES.has(tile) && city.random() < .015) wearRoad(city.world,x,y,2.5);
     }
   }
   ownerCitizen(accountId) {

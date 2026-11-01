@@ -4,13 +4,13 @@ import {applyInteriorCutaway} from './city_interior_view.js';
 import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
 import {addBuildingDetails} from './city_building_details.js?v=mine-sign-1';
 import {syncConstructionSites} from './city_construction_renderer.js?v=construction-visuals-7';
-import {syncCityMobility} from './city_mobility_renderer.js';
+import {syncCityMobility} from './city_mobility_renderer.js?v=natural-streets-2';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
 import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=building-doorway-opening-2';
 import { partyFlagCanvas } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=bank-door-bench-offset-1';
+import {citizenIsSleeping} from './city_citizen_models.js?v=natural-streets-2';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=portuguese-colonial-forms-7';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=road-bank-fit-1';
@@ -121,12 +121,21 @@ function syncCardboardShelters(renderer,THREE,city,world){
   if(!city)return;const shelters=city.cardboardShelters||new Map(),revision=city.cardboardRevision||0;
   if(renderer.cardboardVisualRevision!==revision){
     if(renderer.cardboardVisuals){renderer.scene.remove(renderer.cardboardVisuals);renderer.cardboardVisuals.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
-    const group=new THREE.Group(),mat=new THREE.MeshLambertMaterial({color:0x92704b}),pillowMat=new THREE.MeshLambertMaterial({color:0xc6b99c});
+    const group=new THREE.Group();
     for(const site of shelters.values()){
-      const x=site.x,y=site.y,z=surfaceElevation(world,x,y)+.035,bed=new THREE.Group();
+      const x=site.x,y=site.y,z=surfaceElevation(world,x,y)+.035,bed=new THREE.Group(),style=((site.citizenId||0)*3)%4;
       bed.position.set(x,z,y);bed.rotation.y=(site.citizenId%4)*Math.PI/2;bed.userData.cardboardTile={x,y};
-      const matBox=new THREE.Mesh(new THREE.BoxGeometry(.78,.045,.58),mat),pillow=new THREE.Mesh(new THREE.BoxGeometry(.2,.075,.17),pillowMat);
-      matBox.receiveShadow=true;pillow.position.set(-.25,.06,-.16);pillow.castShadow=true;bed.add(matBox,pillow);group.add(bed);
+      const makeMat=(w,d,h,color,px=0,pz=0,py=h/2)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));mesh.position.set(px,py,pz);mesh.receiveShadow=true;bed.add(mesh);return mesh;};
+      if(style===0){
+        makeMat(.78,.58,.045,0x92704b);makeMat(.32,.56,.018,0xb18a5d,-.20,.01,.054);makeMat(.2,.16,.065,0xc6b99c,-.25,-.17,.082);
+      }else if(style===1){
+        makeMat(.84,.62,.025,0x6d6254);makeMat(.30,.62,.018,0x857965,-.21,0,.047);makeMat(.18,.20,.075,0x9b8d76,-.27,-.17,.085);
+      }else if(style===2){
+        makeMat(.86,.60,.026,0x665d52);makeMat(.29,.26,.012,0x92734f,-.22,-.12,.045);makeMat(.27,.25,.012,0x77705b,.18,.13,.045);makeMat(.22,.18,.07,0xaaa08c,-.27,-.18,.082);
+      }else{
+        makeMat(.80,.58,.032,0x75634e);for(const offset of [-.24,-.12,0,.12,.24])makeMat(.025,.55,.009,offset%0.24===0?0x987d5b:0x514d43,offset,.0,.052);makeMat(.19,.17,.065,0xb3a48a,-.26,-.17,.084);
+      }
+      group.add(bed);
     }
     renderer.cardboardVisuals=group;renderer.cardboardVisualRevision=revision;renderer.scene.add(group);
   }
