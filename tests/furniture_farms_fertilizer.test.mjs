@@ -10,10 +10,10 @@ import {cultivateFarmTerrain} from '../js/city_farm_ground.js';
 import {CROPS} from '../js/city_economy.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 
-function fixture(){const city=setup({starter:true,population:48}),c=city.citizens.find(c=>!city.politics.officeHolder(c)&&!c.businessIds.length);city.economy.leaveJob(c);c.indoorLocation=null;c.path=[];c.conversation=null;for(const n in c.needs)c.needs[n]=95;return {city,c};}
+function fixture(options={}){const city=setup({starter:options.starter??true,population:48}),c=city.citizens.find(c=>!city.politics.officeHolder(c)&&!c.businessIds.length);city.economy.leaveJob(c);c.indoorLocation=null;c.path=[];c.conversation=null;for(const n in c.needs)c.needs[n]=95;return {city,c};}
 test('every production industry has an explicitly named workstation and usable equipment',()=>{
  for(const type of Object.keys(INDUSTRIES)){assert(WORKSTATIONS[type],type);const u={id:`unit:${type}`,x:0,y:0,z:0,roomType:'workspace'},b={type,entity:{x:0,y:0},layoutRevision:0};const equipment=roomFurniture(b,u).find(f=>f.workstation);assert(equipment,type);assert.notEqual(equipment.label,'Posto de atendimento',type);assert(furnitureInteraction(b,u,'workspace'),type);}
- const b={type:'residential'},u={id:'bedroom',x:0,y:0,z:0,roomType:'bedroom'};assert.deepEqual(roomFurniture(b,u).filter(f=>['bed','chest','fridge'].includes(f.type)).map(f=>f.type),['bed','chest','fridge']);
+ const b={type:'residential'},u={id:'bedroom',x:0,y:0,z:0,roomType:'bedroom'},home=roomFurniture(b,u),beds=home.filter(f=>f.type==='bed');assert.deepEqual(home.filter(f=>['bed','chest','fridge'].includes(f.type)).map(f=>f.type),['bed','bed','chest','fridge']);assert.equal(beds.length,2);assert(beds.every(bed=>bed.bunk&&bed.capacity===2));assert(home.some(f=>f.type==='crib'));assert(home.some(f=>f.type==='chair'));
 });
 test('people occupy a real dining chair and stay on use/2 until moving again',()=>{
  const {city,c}=fixture(),b=city.buildings.find(b=>b.type==='popular_refectory');c.task='food';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;finishActivityRoute(city,c);city.furniture.syncCitizen(c);assert(c.seated);assert.equal(c.furnitureUse.type,'chair');assert.deepEqual(citizenFrame(citizenAnimation(c,false),200),{clip:'use',frame:2});assert.equal(citizenAnimation(c,true),'run');
@@ -27,7 +27,7 @@ test('a worker short of materials waits at a real bench or indoors and retries w
 });
 test('cultivated tiles preserve every original height class and the interpolated terrain surface',()=>{
  for(const original of [0,3,9,4,1,10]){const farm=farmSoilTile(original);assert(FARM_TILES.has(farm));assert.equal(tileHeight(farm),tileHeight(original));assert.equal(baseTerrainTile(farm),original);}
- const {city}=fixture(),b=city.buildings.find(b=>b.type==='farm'),points=b.units.slice(0,8).map(u=>({x:b.entity.x+u.x+.4,y:b.entity.y+u.y+.3})),before=points.map(p=>surfaceElevation(city.world,p.x,p.y));cultivateFarmTerrain(city,b);assert.deepEqual(points.map(p=>surfaceElevation(city.world,p.x,p.y)),before);
+ const {city}=fixture({starter:false}),b=city.buildings.find(b=>b.type==='farm'),points=b.units.slice(0,8).map(u=>({x:b.entity.x+u.x+.4,y:b.entity.y+u.y+.3})),before=points.map(p=>surfaceElevation(city.world,p.x,p.y));cultivateFarmTerrain(city,b);assert.deepEqual(points.map(p=>surfaceElevation(city.world,p.x,p.y)),before);
  const unit=b.units.find(u=>u.roomType==='workspace');assert(findTerrainPath(city.world,b.door,{x:b.entity.x+unit.x+.5,y:b.entity.y+unit.y+.5},city.occupied)!==null);
 });
 test('toilet use creates contained feedstock which fertilizer firms buy and physically receive',()=>{
@@ -38,7 +38,7 @@ test('composting consumes purchased feces and produces saleable fertilizer after
  const {city,c}=fixture(),b=city.buildings.find(b=>b.type==='cycle_assembler');b.type='composting';b.layoutRevision++;b.inventory.fezes=4;b.inventory.lixo=0;b.inventory.adubo=0;b.productionLabor=0;c.jobId=b.id;b.workers.push(c.id);c.task='work';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;finishActivityRoute(city,c);const used=city.economy.consumed.fezes;for(let i=0;i<30&&b.inventory.adubo===0;i++)city.economy.productionWork(b,c);assert.equal(b.inventory.fezes,0);assert.equal(b.inventory.adubo,3);assert.equal(city.economy.consumed.fezes-used,4);
 });
 test('fertilized crops can actually be harvested earlier instead of merely reducing sowing work',()=>{
- const {city}=fixture(),b=city.buildings.find(b=>b.type==='farm'),grow=CROPS[b.crop].grow,field={plantedAt:city.minute-grow/1.5,requiredLabor:10,labor:10,yield:6,cellLabor:[10],harvestedCells:[false],growthMultiplier:1.5};b.inventory[b.crop]=0;
+ const {city}=fixture({starter:false}),b=city.buildings.find(b=>b.type==='farm'),grow=CROPS[b.crop].grow,field={plantedAt:city.minute-grow/1.5,requiredLabor:10,labor:10,yield:6,cellLabor:[10],harvestedCells:[false],growthMultiplier:1.5};b.inventory[b.crop]=0;
  const plain={...field,cellLabor:[10],harvestedCells:[false],growthMultiplier:1};assert.equal(city.economy.harvest(b,plain,0),false);assert(city.economy.harvest(b,field,0));assert.equal(b.inventory[b.crop],6);
 });
 test('furniture reservations and refrigerated goods survive worker snapshots without duplicating food',()=>{

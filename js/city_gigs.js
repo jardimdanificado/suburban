@@ -1,6 +1,6 @@
 import {artworkNarrative} from './city_art_narratives.js';
-import {activityRoomReady} from './city_interiors.js?v=service-capacity-3';
-import {interiorRoute,interiorUsePoint} from './city_interior_layout.js';
+import {activityRoomReady} from './city_interiors.js?v=interiors-completion-5';
+import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-5';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 

@@ -11,7 +11,19 @@ export function furnitureModel(THREE,item){
   if(item.facing)g.rotation.y=Math.atan2(item.facing.x-item.x,item.facing.y-item.y);
  }
  else if(type==='table'||type==='desk'||type==='counter'||type==='workbench'){const h=type==='counter'?.7:.68;box(.65,.08,.4,0,h,0);for(const x of [-.25,.25])for(const z of [-.13,.13])box(.05,h,.05,x,h/2,z);if(type==='desk')box(.22,.05,.16,.12,h+.08,0,0xd6d1bd);}
- else if(type==='bed'){box(.7,.16,.45,0,.2,0);box(.67,.15,.42,0,.35,0,0xdad4bd);box(.2,.07,.35,-.22,.46,0,cream);box(.04,.54,.46,-.36,.27,0);}
+ else if(type==='bed'){box(.7,.16,.45,0,.2,0);box(.67,.15,.42,0,.35,0,0xdad4bd);box(.2,.07,.35,-.22,.46,0,cream);box(.04,item.bunk?1:.54,.46,-.36,item.bunk?.5:.27,0);if(item.bunk){box(.7,.12,.45,0,.68,0);box(.67,.12,.42,0,.79,0,0xdad4bd);box(.2,.055,.35,-.22,.9,0,cream);for(const x of [-.31,.31])box(.035,.9,.035,x,.49,0);}}
+ else if(type==='cot'||type==='exam_bed'||type==='gurney'){box(.68,.1,.38,0,.42,0,metal);box(.66,.08,.36,0,.51,0,cream);for(const x of [-.27,.27])for(const z of [-.13,.13]){box(.035,.4,.035,x,.2,z,metal);if(type==='gurney')cylinder(.045,.035,x,.05,z,metal);}if(type==='exam_bed')box(.08,.08,.28,-.26,.58,0,cream);}
+ else if(type==='crib'){box(.6,.08,.4,0,.24,0,wood);for(const x of [-.3,.3])for(const z of [-.2,.2])box(.035,.46,.035,x,.48,z);for(let x=-.24;x<=.25;x+=.12)box(.025,.38,.025,x,.48,.2,wood);}
+ else if(type==='shower'){box(.36,.04,.36,0,.04,0,0x99b9c1);for(const x of [-.18,.18])for(const z of [-.18,.18])box(.025,.8,.025,x,.4,z,metal);box(.36,.035,.36,0,.8,0,0xa8c6cc);cylinder(.045,.05,.1,.65,.1,metal);}
+ else if(type==='sofa'){box(.62,.16,.32,0,.25,0,0x657a6d);box(.62,.28,.07,0,.43,-.13,0x53695d);for(const x of [-.3,.3])box(.07,.25,.32,x,.34,0,0x596f63);for(const x of [-.23,.23])box(.035,.2,.035,x,.1,-.1,metal);}
+ else if(type==='ballot_booth'){for(const x of [-.2,.2])box(.035,.75,.035,x,.37,0,wood);box(.45,.05,.4,0,.74,0,wood);box(.3,.04,.24,0,.66,.02,0x887d67);}
+ else if(type==='evidence_board'){box(.55,.55,.035,0,.95,-.04,0xd5c7a3);for(const [x,y]of [[-.17,.08],[.14,.04],[0,-.12]]){const pin=cylinder(.018,.025,x,.95+y,0,0xa04c44);pin.rotation.x=Math.PI/2;}}
+ else if(['filing_cabinet','cabinet','pantry'].includes(type)){box(.28,.72,.3,0,.36,0,type==='pantry'?wood:metal);for(const y of [.2,.4,.6])box(.23,.025,.26,0,y,0,cream);}
+ else if(['shelf','bookshelf'].includes(type)){for(const x of [-.24,.24])box(.035,.9,.035,x,.45,0,metal);for(const y of [.18,.44,.7])box(.55,.035,.28,0,y,0,wood);if(type==='bookshelf')for(let i=0;i<5;i++)box(.07,.22,.08,-.18+i*.09,.55,.02,[0x98764f,0x496884,0x9b5852][i%3]);}
+ else if(type==='play_mat'){box(.46,.035,.42,0,.025,0,0x7c9a69);for(const [x,z,color]of [[-.12,0,0xe0c156],[.12,0,0x8b6c96],[0,.12,0x608b98]])cylinder(.045,.03,x,.05,z,color);}
+ else if(['broom','cleaning_kit','gardening_kit','equipment_locker'].includes(type)){box(type==='broom'?.05:.28,type==='broom'?.8:.6,.08,0,.35,0,type==='gardening_kit'?0x776242:metal);if(type==='broom')box(.22,.08,.08,0,.05,0,wood);}
+ else if(type==='podium'){box(.36,.62,.3,0,.31,0,wood);box(.45,.06,.36,0,.66,0,wood);}
+ else if(['service_desk','dispatch_desk','evidence_counter','blueprint_table','loading_dock','paint_station','reservoir','tray_table'].includes(type)){const dims=type==='loading_dock'?[.65,.18,.48]:[.52,.66,.36];box(dims[0],.07,dims[1],0,dims[2]===.18?.55:.66,0,type==='reservoir'?0x6696a0:wood);if(type==='reservoir')cylinder(.22,.48,0,.25,0,0x6696a0);else for(const x of [-dims[0]*.38,dims[0]*.38])box(.045,.62,.25,x,.31,0,metal);}
  else if(type==='fridge'){box(.23,.69,.23,0,.35,0,cream);box(.015,.18,.02,.075,.37,.125,metal);box(.23,.02,.01,0,.48,.125,metal);}
  else if(type==='chest'){box(.26,.28,.23,0,.14,0);box(.29,.05,.25,0,.3,0,0x9b764a);box(.035,.07,.025,0,.21,.13,metal);}
  else if(type==='water_cooler'){box(.18,.46,.18,0,.23,0,cream);cylinder(.07,.2,0,.59,0,0x598faa);box(.1,.02,.08,0,.36,.13,metal);}
@@ -30,5 +42,6 @@ export function furnitureModel(THREE,item){
  else if(type==='sieve'){box(.63,.12,.4,0,.53,0,metal);for(let x=-.25;x<=.25;x+=.1)box(.02,.03,.38,x,.61,0,0x303b39);box(.06,.5,.06,-.25,.25,0);box(.06,.5,.06,.25,.25,0);}
  else if(type==='lab'||type==='pump'){box(.6,.08,.32,0,.67,0,cream);for(const x of [-.24,.24])box(.05,.65,.05,x,.33,0,metal);for(const x of [-.15,.1])cylinder(.045,.18,x,.8,0,0x5a8e83);}
  else {box(.6,.08,.36,0,.65,0);box(.05,.63,.26,-.23,.32,0);box(.05,.63,.26,.23,.32,0);}
+ if(item.visualScale)g.scale.setScalar(item.visualScale);
  return g;
 }

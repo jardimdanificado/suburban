@@ -50,6 +50,8 @@ export function recordLegislativeOpinion(standing,bill,override=false){
     party.publicRecords.push(record);
     if(party.publicRecords.length>96){const removed=party.publicRecords.shift();party.archivedLegislativePoints=clamp((party.archivedLegislativePoints||0)+removed.points,-20,20);}
   }
+  const groups=[...new Set(bill.votes.map(v=>v.partyId))].map(partyId=>({partyId,votes:bill.votes.filter(v=>v.partyId===partyId)})).filter(row=>row.votes.length);
+  for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++){const a=groups[i],b=groups[j],stanceA=a.votes.filter(v=>v.yes).length/a.votes.length,stanceB=b.votes.filter(v=>v.yes).length/b.votes.length,alignment=1-Math.abs(stanceA-stanceB),key=`bill:${bill.id}:${override?'override':'vote'}:${Math.min(a.partyId,b.partyId)}:${Math.max(a.partyId,b.partyId)}`;p.interactParties?.(a.partyId,b.partyId,{kind:alignment>=.6?'legislative-cooperation':'legislative-disagreement',delta:alignment>=.6?1.5:-1,description:alignment>=.6?`Bancadas votaram de forma parecida em “${bill.title}”.`:`Bancadas divergiram na votação de “${bill.title}”.`,key});}
   standing.lastPeriod=null;
 }
 export function publicPerformance(p,party){

@@ -34,6 +34,9 @@ if(mode==='builder-selection'){
     return {id,x:id%20*12,y:Math.floor(id/20)*12,properties:{cityBuilding:b}};
   });
   const world={revision:0,map:[],cityLampPosts:[],cityLampSites:[]};
+  // Keep static bridge geometry out of this CPU synchronization workload. The
+  // benchmark renderer intentionally has no Three.js constructors or GPU.
+  renderer.skybridgeRevision=`${entities.length}:${world.revision}`;renderer.roadBridgeRevision=world.bridgeRevision||0;
   for(let i=0;i<20;i++)syncCityBuildings(renderer,{},entities,world);
   const start=performance.now();for(let i=0;i<300;i++)syncCityBuildings(renderer,{},entities,world);
   console.log(JSON.stringify({mode,root,buildings:500,spaces:50000,frames:300,ms:performance.now()-start,checksum:hash([...renderer.cityMeshes].map(([id,g])=>[id,g.visible,g.userData.highlight.visible]))}));

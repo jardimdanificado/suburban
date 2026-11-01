@@ -1,6 +1,6 @@
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {roomFurnitureForCity} from './city_furniture_catalog.js';
+import {roomFurnitureForCity} from './city_furniture_catalog.js?v=interiors-completion-5';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import {equityShares,equityValue} from './city_equity.js?v=landlord-stock-market-1';
@@ -16,7 +16,7 @@ import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
-import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-caps-skin-1';
+import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-relations-1';
 import {renderElectionMonitor} from './city_election_ui.js?v=needs-recovery-1';
 import {sectionTitle} from './city_ui_sections.js';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
@@ -43,7 +43,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=housing-work-priority-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=skybridge-survival-2';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=service-capacity-3';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=interiors-completion-5';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -289,7 +289,7 @@ export class CityUI {
       });
       if(!rows.length)p.note('Nenhuma pessoa com estes filtros.');
     } else {
-      const residences=['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'],food=['farm','bakery','market','greengrocer','popular_refectory'],services=['cleaner','carrier','lamp_service','paid_toilet','public_toilet','waste_collector'],rows=this.cachedList(`buildings:${business}`,()=>{const rows=(business?city.economy.businesses:city.buildings.filter(b=>!b.entity.destroyed)).filter(b=>this.matches(`${name(b.entity)} ${BUILDING_TYPES[b.type].label} ${CROPS[b.crop]?.label||''}`)).filter(b=>filter==='all'||filter==='residential'&&residences.includes(b.type)||filter==='public'&&!b.ownerId&&!residences.includes(b.type)||filter==='private'&&!!b.ownerId||filter==='food'&&(food.includes(b.type)||INDUSTRIES[b.type]?.category==='food')||filter==='services'&&(services.includes(b.type)||INDUSTRIES[b.type]?.category==='services')||filter==='industry'&&(['builder','quarry','recycler','mill'].includes(b.type)||INDUSTRIES[b.type]?.category==='industry'));
+      const residences=['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'],food=['farm','bakery','market','greengrocer','restaurant','popular_refectory'],services=['cleaner','carrier','lamp_service','paid_toilet','public_toilet','waste_collector'],rows=this.cachedList(`buildings:${business}`,()=>{const rows=(business?city.economy.businesses:city.buildings.filter(b=>!b.entity.destroyed)).filter(b=>this.matches(`${name(b.entity)} ${BUILDING_TYPES[b.type].label} ${CROPS[b.crop]?.label||''}`)).filter(b=>filter==='all'||filter==='residential'&&residences.includes(b.type)||filter==='public'&&!b.ownerId&&!residences.includes(b.type)||filter==='private'&&!!b.ownerId||filter==='food'&&(food.includes(b.type)||INDUSTRIES[b.type]?.category==='food')||filter==='services'&&(services.includes(b.type)||INDUSTRIES[b.type]?.category==='services')||filter==='industry'&&(['builder','quarry','recycler','mill'].includes(b.type)||INDUSTRIES[b.type]?.category==='industry'));
       rows.sort((a,b)=>sort==='cash'?b.balance-a.balance:name(a.entity).localeCompare(name(b.entity),'pt-BR'));return rows;});p.note(`${rows.length} resultados`,C.muted);
       p.rows(rows,b=>p.record(name(b.entity),`${CROPS[b.crop]?.label||BUILDING_TYPES[b.type].label} · ${business?b.workers.length+'/'+b.jobs+' na equipe':b.units.length+' espaços'}`,()=>this.openBuilding(b.id),this.selected?.id===b.id,{value:business?money(b.balance):b.floors+' andares',color:b.active?C.green:residences.includes(b.type)?C.cyan:C.gold}));
       if(!rows.length)p.note('Nenhuma instalação com estes filtros.');
@@ -962,7 +962,7 @@ export class CityUI {
       const queueFor=(kind,id)=>kind==='toilet'?(toiletQueues.get(id)||0):(foodQueues.get(id)||0);
       p.metrics([['FILA DE BANHEIRO',toiletWaiters.length,C.gold],['FILA DE ALIMENTAÇÃO',foodWaiters.length,C.gold],['BANHEIROS DISPONÍVEIS',facilities.filter(f=>city.building(f.buildingId)&&f.cleanliness>0).length,C.cyan]]);
       p.heading('FILAS POR BANHEIRO');p.table([{label:'Banheiro',weight:2},{label:'Acesso'},{label:'Espera'},{label:'Limpeza'}],facilities.map(f=>({cells:[name(city.building(f.buildingId)?.entity),({public:'Público',paid:'Pago',home:'Moradia',employees:'Funcionários'})[f.access]||f.access,queueFor('toilet',f.id),`${Math.round(f.cleanliness)}%`],click:()=>{this.selectedFacilityId=f.id;this.showView('facilities');}})).sort((a,b)=>Number(b.cells[2])-Number(a.cells[2])));
-      const foodTypes=new Set(['market','greengrocer','bakery','popular_refectory','kitchen']);const shops=city.buildings.filter(b=>!b.entity.destroyed&&(foodTypes.has(b.type)||b.units?.some(u=>u.roomType==='dining')));
+      const foodTypes=new Set(['market','greengrocer','bakery','restaurant','popular_refectory','kitchen']);const shops=city.buildings.filter(b=>!b.entity.destroyed&&(foodTypes.has(b.type)||b.units?.some(u=>u.roomType==='dining')));
       p.heading('FILAS POR RESTAURANTE E REFEITÓRIO');p.note('Inclui cidadãos a caminho ou aguardando atendimento de alimentação; ocupação interna aparece no total de cada estabelecimento.');
       p.table([{label:'Local',weight:2},{label:'Tipo'},{label:'Fila'},{label:'Pessoas dentro'}],shops.map(b=>({cells:[name(b.entity),BUILDING_TYPES[b.type]?.label||'Refeitório',queueFor('food',b.id),inside.get(b.id)||0],click:()=>this.openBuilding(b.id)})).sort((a,b)=>Number(b.cells[2])-Number(a.cells[2])));
       p.heading('PESSOAS AGUARDANDO');for(const c of [...toiletWaiters,...foodWaiters].slice(0,100))p.record(name(c.entity),`${c.task==='toilet'?'Banheiro':'Alimentação'} · ${c.action}`,()=>this.openCitizen(c.id));

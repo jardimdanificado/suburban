@@ -1,5 +1,5 @@
 import {canJoin} from './city_party_membership.js?v=party-name-tags-1';
-import {recordLegislativeOpinion,publicPerformance} from './city_party_public_record.js';
+import {recordLegislativeOpinion,publicPerformance} from './city_party_public_record.js?v=party-relations-1';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 /** Public standing uses bounded opinion panels; secret crimes never enter these scores. */
 export class CityPoliticalStanding {
@@ -43,7 +43,7 @@ export class CityPoliticalStanding {
       }
     }
     for(const party of p.parties){const original=party.reputationIncidents.filter(i=>i.role==='origin').reduce((n,i)=>n+i.penalty,0),hosting=party.reputationIncidents.filter(i=>i.role==='host').reduce((n,i)=>n+i.penalty,0),effects=publicPerformance(p,party);
-      party.publicReputation=clamp(50+effects.performance+effects.legislative-original-hosting);party.reputationReport={minute:city.minute,baseline:50,...effects,originalPenalty:original,hostingPenalty:hosting,score:party.publicReputation};
+      party.publicReputation=clamp(50+effects.performance+effects.legislative-original-hosting+(party.mergerPopularityAdjustment||0));party.reputationReport={minute:city.minute,baseline:50,...effects,originalPenalty:original,hostingPenalty:hosting,mergerAdjustment:party.mergerPopularityAdjustment||0,score:party.publicReputation};
     }
   }
   refresh(force=false){

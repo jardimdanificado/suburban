@@ -26,6 +26,10 @@ Em **Governo → Eleições → Avaliação**, **a nota começa em 50 pontos, a 
 
 Partidos têm nomes de duas ou três palavras, combinando organizações e termos compatíveis com sua ideologia. Uma palavra do `vocabulario.js` aparece com chance de 2,5%; em dissidências, ela entra no meio ou no fim do nome-base do partido de origem. Nomes e siglas evitam duplicatas; o sorteio usa a semente da cidade. Partidos sem filiados vivos são liquidados automaticamente, saem da disputa e liberam uma vaga no limite. Os registros e nomes permanecem no histórico. Quatro partidos existem na fundação, com limite inicial de oito registros ativos; vagas abertas não são preenchidas automaticamente por siglas vazias. Novos partidos exigem dois amigos adultos com ideias próximas e sem representação, seguidos de consulta popular após um dia. São necessários maioria dos votos válidos e quórum de 25% dos adultos. Fundadores, origem, votos e motivos ficam em Governo → Eleições → Partidos.
 
+As candidaturas próprias a prefeito ficam com os partidos que têm mais vereadores, até o limite eleitoral vigente. Partidos fora dessas vagas podem negociar uma coligação com indicação de vice-prefeito ou declarar apoio a uma chapa; a convenção e o número de vereadores aparecem no resultado eleitoral.
+
+O diretório de partidos registra a relação entre cada par. Coligações e apoios eleitorais melhoram a relação; competição e divergências em votações da Câmara a desgastam. Um partido que passe duas eleições legislativas seguidas sem cadeira entra em risco. Durante o prazo de negociação, pode fundir-se com um partido de relação favorável e popularidade próxima; a sigla resultante recebe nome com palavras dos dois partidos, orientação e reputação médias, além dos filiados e históricos de ambos. Sem acordo ou representação no prazo, o partido é liquidado.
+
 A iluminação demanda uma unidade de óleo por poste a cada noite de doze horas. O planejamento inclui reserva, carga inicial e obras próximas da conclusão. Essa necessidade alimenta a demanda por girassol, moinhos e o preço do óleo. A prefeitura pode contratar a etapa ausente com prioridade de obra e transporte, respeitando a reserva de subsistência e sem duplicar projetos pendentes. **Produção → Iluminação** mostra as metas e o gargalo da cadeia.
 
 ## Terrenos e orientação dos prédios
@@ -101,6 +105,8 @@ Mercados, hortifrutis, padarias, fazendas e serviços surgem conforme a demanda 
 A contratação combina habilidade profissional (75% da pontuação), confiança (15%) e afeto (10%) na relação com o dono. Pessoas ganham habilidades praticando sua profissão ou outras atividades: agricultura, panificação, comércio, gestão, administração pública, saúde, manutenção, comunicação e cuidados. Conversas e cuidados com filhos também ensinam. A habilidade melhora a produtividade agrícola e da padaria e influencia a remuneração.
 
 As rotinas de trabalho acontecem entre 08:00 e 17:00, com salários pelo trabalho efetivo e imposto de 10%. Proprietários que administram a própria empresa não recebem salário dela; podem receber lucros. Fazendas em crescimento e padarias sem matéria-prima não geram salários ou produção fictícios enquanto aguardam. Os serviços públicos recebem orçamento autorizado pelo prefeito.
+
+O tesouro repõe o caixa operacional de empresas e serviços municipais a cada hora para manter até dois dias de salários das vagas aprovadas, priorizando atividades essenciais e sem ultrapassar a reserva social protegida. Isso inclui delegacias e demais estatais municipais.
 
 ## Alimentos com origem e demanda
 

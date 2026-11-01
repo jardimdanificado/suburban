@@ -12,9 +12,11 @@ assign({group:'governo',roomTypes:['workspace','office','plenary'],station:'gabi
 assign({group:'escritório',roomTypes:['office','workspace','waiting'],station:'mesa e área de atendimento',fallback:'estação de trabalho no andar alugado'},['office_tower','research_institute','newsroom']);
 assign({group:'finanças',roomTypes:['workspace','office','waiting'],station:'mesa de atendimento financeiro',fallback:'estação de trabalho financeira'},['bank']);
 assign({group:'comércio',roomTypes:['service','waiting','workspace'],station:'balcão e estoque',fallback:'balcão de serviço'},['market','bakery','greengrocer','cycle_shop','sports_shop','cycle_workshop','bicycle_rental','clothing_store','laundromat','thrift_store','pharmacy','publisher','pottery','artisan']);
+assign({group:'restaurante',roomTypes:['workspace','dining','service','waiting'],station:'cozinha, salão e atendimento',fallback:'cozinha ou salão de refeições'},['restaurant']);
 assign({group:'produção',roomTypes:['workspace','service'],station:'bancada de produção',fallback:'bancada genérica de oficina'},Object.keys(INDUSTRIES).filter(type=>!exact.has(type)&&!['farm','forestry','dairy_farm','fiber_farm','herb_farm','rubber_grove','iron_mine','bauxite_mine','clay_pit','sand_pit','quarry'].includes(type)));
 assign({group:'atividade ao ar livre',roomTypes:['workspace','bathroom','dining'],station:'célula de plantio, extração ou obra',fallback:'atividade externa; banheiro/refeitório físico local quando construído'},['farm','forestry','dairy_farm','fiber_farm','herb_farm','rubber_grove','iron_mine','bauxite_mine','clay_pit','sand_pit','quarry']);
 assign({group:'infraestrutura e logística',roomTypes:['workspace','service','waiting'],station:'posto de serviço e pátio',fallback:'área operacional ou guichê'},['bike_rack','mill','cleaner','waste_collector','recycler','builder','lamp_service','carrier']);
+assign({group:'justiça e segurança',roomTypes:['office','workspace','service','treatment','cell'],station:'mesa de ocorrência, atendimento, exame e cela',fallback:'posto administrativo ou cela/instalação de serviço existente'},['iml','crematorium','police_station','council_oversight_office','jail','courthouse']);
 
 export function buildingActivityProfile(type){return exact.get(type)||null;}
 export function buildingPrimaryWorkRoom(type){return exact.get(type)?.roomTypes?.[0]||'workspace';}

@@ -1,4 +1,4 @@
-import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=service-capacity-3';
+import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=interiors-completion-5';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js?v=landlord-stock-market-1';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
@@ -159,7 +159,7 @@ export class CitySanitation {
       b.lastToiletUseAt = this.city.minute; f.occupantId = c.id; f.busyUntil = this.city.minute + 20; f.uses++;
       const quality = f.cleanliness;
       c.mood = Math.max(-25, Math.min(25, (c.mood || 0) + (quality >= 95 ? 6 : quality < 25 ? -9 : quality < 60 ? -4 : 0)));
-      if (quality < 25) { c.needs.hygiene = clamp(c.needs.hygiene - 5); c.needs.health = clamp(c.needs.health - 1); }
+      if (quality < 25) { c.needs.hygiene = clamp(c.needs.hygiene - 5); c.needs.health = clamp(c.needs.health - 1);c.healthDepletionSource='insalubridade e falta de higiene'; }
       f.cleanliness = clamp(f.cleanliness - SANITATION_RULES.dirtPerUse);
       this.addWaste(b, SANITATION_RULES.wastePerUse);if('fezes' in b.inventory&&inventoryFree(b)>=1){b.inventory.fezes++;this.city.economy.produced.fezes++;this.city.economy.recordGoods('feces-collected','fezes',1,null,b.id);} c.servicePaid = f.id;
        this.city.log(`${c.entity.properties.name} usou banheiro ${trespass?'privado sem autorização':f.access === 'public' ? 'público gratuito' : f.access === 'paid' ? 'pago' : 'privado'}, limpeza ${Math.round(quality)}%.`, 'sanitation', [c.id], { kind: 'toilet-use', facilityId: f.id, quality, waste: SANITATION_RULES.wastePerUse,trespass });

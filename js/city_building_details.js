@@ -3,7 +3,7 @@ import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 
 // Small architectural details are part of the model, not floating labels.
 const THEMES={
- bakery:'bread',kitchen:'pot',popular_refectory:'pot',flour_mill:'silo',pasta_factory:'pasta',cannery:'jars',cheesemaker:'cheese',dairy_farm:'milk',poultry:'eggs',
+ bakery:'bread',kitchen:'pot',restaurant:'pot',popular_refectory:'pot',flour_mill:'silo',pasta_factory:'pasta',cannery:'jars',cheesemaker:'cheese',dairy_farm:'milk',poultry:'eggs',
  builder:'crane',lamp_service:'oil_lamp',carrier:'cargo',waste_collector:'bins',cleaner:'brush',recycler:'recycling',composting:'compost',
  sawmill:'logs',forestry:'logs',charcoal:'kiln',iron_mine:'mine',bauxite_mine:'mine',foundry:'furnace',steel_mill:'furnace',aluminum_smelter:'furnace',clay_pit:'mine',sand_pit:'mine',brickworks:'bricks',glassworks:'glass',
  toolmaker:'tools',artisan:'basket',furniture:'chair',pottery:'pottery',paper_mill:'paper',publisher:'books',newsroom:'newspaper',

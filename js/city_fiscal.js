@@ -1,4 +1,4 @@
-const essentialTypes=new Set(['farm','bakery','kitchen','market','greengrocer','popular_refectory','clinic','hospital','utility','cleaner','waste_collector','recycler','carrier','mint']);
+const essentialTypes=new Set(['farm','bakery','kitchen','market','greengrocer','popular_refectory','clinic','hospital','utility','cleaner','waste_collector','recycler','carrier','mint','police_station','jail','courthouse','iml','crematorium']);
 export class CityFiscal {
   constructor(city){this.city=city;this.days=[];this.worksAdvance=0;this.recovered=0;this.lastRecoveryHour=null;}
   foodCost(){const city=this.city;if(this.foodMinute===city.minute)return this.foodValue;const goods=city.workMeals?.foodGoods()||['pao'];this.foodMinute=city.minute;return this.foodValue=Math.ceil(Math.min(...goods.map(g=>city.economy.goods[g]?.price||Infinity).filter(Number.isFinite))*9.6);}
@@ -46,7 +46,7 @@ export class CityFiscal {
     if(amount&&this.city.transfer(b.accountId,'treasury',amount,emergency?'Resultado de empresa municipal para reserva social':'Lucro de empresa municipal',{buildingId:b.id,fiscalRecovery:emergency})){if(emergency)this.recovered+=amount;b.fiscalDistributedProfit=(b.fiscalDistributedProfit||0)+Math.min(amount,profit);return amount;}return 0;
   }
   hourly(){
-    const city=this.city,hour=Math.floor(city.minute/60);if(this.lastRecoveryHour===hour)return;this.lastRecoveryHour=hour;const reserve=this.reserve();
+    const city=this.city,hour=Math.floor(city.minute/60);if(this.lastRecoveryHour===hour)return;this.lastRecoveryHour=hour;const reserve=this.reserve();this.fundServices();
     if(city.treasury<reserve){this.requestRevenueReview();for(const b of city.buildings){this.distribute(b,true);if(city.treasury>=reserve)break;}
       const works=city.accounts.get('works-budget'),amount=Math.min(works?.balance||0,Math.max(0,reserve-city.treasury));if(amount&&city.transfer('works-budget','treasury',amount,'Adiantamento do orçamento de obras para subsistência',{fiscalRecovery:true})){this.worksAdvance+=amount;this.recovered+=amount;city.politics.policy.worksBudget=works.balance;city.log('Verba de obras ainda não contratada adiantada para proteger alimentação e benefícios.','economy',[],{kind:'fiscal-emergency-liquidity',amount,worksAdvance:this.worksAdvance});}
     }else if(this.worksAdvance>0){const amount=Math.min(this.worksAdvance,Math.max(0,city.treasury-reserve*1.25));if(amount&&city.transfer('treasury','works-budget',amount,'Recomposição do adiantamento da verba de obras',{fiscalRecovery:true})){this.worksAdvance-=amount;city.politics.policy.worksBudget=city.accounts.get('works-budget').balance;}}
@@ -62,7 +62,7 @@ export class CityFiscal {
   daily(){for(const b of this.city.buildings){const expenses=Math.max(0,b.totalExpenses-(b.fiscalLastExpenses||0));b.fiscalLastExpenses=b.totalExpenses;b.fiscalDailyExpenses=b.fiscalDailyExpenses==null?expenses:b.fiscalDailyExpenses*.7+expenses*.3;}}
   fundServices(){
     const city=this.city;for(const b of city.buildings.filter(b=>this.municipal(b)).sort((a,b)=>Number(essentialTypes.has(b.type))-Number(essentialTypes.has(a.type)))){
-      const target=Math.max(city.currency.price(20000),b.workers.length*b.wage*480*2),missing=Math.max(0,target-b.balance),available=Math.max(0,city.treasury-this.reserve()),amount=Math.min(missing,available);if(amount>0)city.transfer('treasury',b.accountId,amount,'Orçamento autorizado pelo prefeito',{buildingId:b.id,essential:false});
+      const payrollSlots=Math.max(b.workers.length,b.jobs||0),target=Math.max(city.currency.price(20000),payrollSlots*b.wage*480*2),missing=Math.max(0,target-b.balance),available=Math.max(0,city.treasury-this.reserve()),amount=Math.min(missing,available);if(amount>0)city.transfer('treasury',b.accountId,amount,'Orçamento autorizado pelo prefeito',{buildingId:b.id,essential:true});
     }
   }
   report(){

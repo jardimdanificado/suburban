@@ -1,4 +1,4 @@
-import {furnitureInteraction} from './city_furniture_catalog.js';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=interiors-completion-5';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 
 // Logical, renderer-independent walk graph. Nodes are reconstructed from a
@@ -14,11 +14,12 @@ export const INTERIOR_ROOM_PROFILES=Object.freeze({
   treatment:{interaction:'treatment',furniture:'exam-bed',capacity:1},circulation:{interaction:'transit',furniture:null},
   waiting:{interaction:'queue',furniture:null},balcony:{interaction:'leisure',furniture:'balcony-layout'},roof_terrace:{interaction:'leisure',furniture:'roof-layout'},
 });
+export function interiorStairAxis(building){return building.depth>=building.width?'y':'x';}
 
 export function interiorLayout(building){
   const cached=layouts.get(building),units=building.units||[],circulation=building.circulation||[];
   if(cached&&cached.revision===(building.layoutRevision||0)&&cached.units===units&&cached.circulation===circulation&&cached.width===building.width&&cached.depth===building.depth&&cached.floors===building.floors&&cached.rotation===(building.rotation||0))return cached.layout;
-  const nodes=new Map(),byFloor=Array.from({length:building.floors||1},()=>[]);
+  const nodes=new Map(),byFloor=Array.from({length:building.floors||1},()=>[]),unitsByCell=new Map((building.units||[]).map(u=>[keyOf(u.x,u.y,u.z),u]));
   for(const unit of building.units||[]){
     const key=keyOf(unit.x,unit.y,unit.z),node={key,x:unit.x,y:unit.y,z:unit.z,kind:'room',unitId:unit.id,roomType:unit.roomType};
     nodes.set(key,node);byFloor[unit.z]?.push(node);
@@ -52,7 +53,53 @@ export function interiorLayout(building){
     const lower=nodes.get(stairKeys[i-1]),upper=nodes.get(stairKeys[i]);
     if(upper.z===lower.z+1){neighbors.get(lower.key).push(upper.key);neighbors.get(upper.key).push(lower.key);}
   }
-  const layout={nodes,neighbors,byFloor,stairKeys,routes:new Map()};layouts.set(building,{revision:building.layoutRevision||0,units,circulation,width:building.width,depth:building.depth,floors:building.floors,rotation:building.rotation||0,layout});return layout;
+  // Refined quarter-tile navigation adds real furniture footprints to the
+  // room graph. The coarse graph above remains useful for floor/room lookup;
+  // paths use only walk nodes and never cut through a declared prop volume.
+  const walkNodes=new Map(),walkNeighbors=new Map(),walkBlocked=new Set(),scale=4;
+  for(let z=0;z<(building.floors||1);z++)for(let y=0;y<building.depth;y++)for(let x=0;x<building.width;x++){
+    const unit=unitsByCell.get(keyOf(x,y,z));
+    if(unit)for(const item of roomFurniture(building,unit)){
+      const fx=item.x-x,fy=item.y-y,w=item.footprint?.width||.4,d=item.footprint?.depth||.3;
+      for(let sy=0;sy<scale;sy++)for(let sx=0;sx<scale;sx++){const px=(sx+.5)/scale,py=(sy+.5)/scale;if(Math.abs(px-fx)<w/2&&Math.abs(py-fy)<d/2)walkBlocked.add(`${x*scale+sx},${y*scale+sy},${z}`);}
+    }
+  }
+  // Keep one landing clear for the visible stairwell in compact footprints.
+  // The rendered stairs occupy this circulation point; treating it as blocked
+  // by a decorative workstation would create a phantom connected floor graph.
+  const stairTileX=Math.floor(building.width/2),stairTileY=Math.floor(building.depth/2),gridStairX=stairTileX*scale+Math.floor(scale/2),gridStairY=stairTileY*scale+Math.floor(scale/2);
+  if((building.floors||1)>1)for(let z=0;z<(building.floors||1);z++)walkBlocked.delete(`${gridStairX},${gridStairY},${z}`);
+  const door=building.door;if(door){const sideDistances=[['left',Math.abs(door.x-building.entity.x)],['right',Math.abs(door.x-(building.entity.x+building.width))],['north',Math.abs(door.y-building.entity.y)],['south',Math.abs(door.y-(building.entity.y+building.depth))]],side=sideDistances.sort((a,b)=>a[1]-b[1])[0][0];
+    // Only the actual ground-floor doorway is an opening in the exterior wall.
+    // Keep furniture solid beyond that threshold; routes must go around it.
+    for(let offset=0;offset<=1;offset++){
+      if(side==='south'||side==='north'){const gx=Math.max(0,Math.min(building.width*scale-1,Math.floor((door.x-building.entity.x)*scale)))+offset-1,gy=side==='south'?building.depth*scale-1:0;walkBlocked.delete(`${gx},${gy},0`);}
+      else {const gy=Math.max(0,Math.min(building.depth*scale-1,Math.floor((door.y-building.entity.y)*scale)))+offset-1,gx=side==='right'?building.width*scale-1:0;walkBlocked.delete(`${gx},${gy},0`);}
+    }
+  }
+  // Internal doors are centered in the room boundary. Clear only the quarter
+  // tiles covered by the visible opening, preserving furniture immediately
+  // beside it and keeping narrow floor plans connected.
+  for(let z=0;z<(building.floors||1);z++)for(let y=0;y<building.depth;y++)for(let x=0;x<building.width;x++){
+    for(const [dx,dy]of [[1,0],[0,1]])if(x+dx<building.width&&y+dy<building.depth){
+      for(let offset=1;offset<=2;offset++){
+        if(dx){for(const gx of [x*scale+scale-1,(x+1)*scale])walkBlocked.delete(`${gx},${y*scale+offset},${z}`);}
+        else {for(const gy of [y*scale+scale-1,(y+1)*scale])walkBlocked.delete(`${x*scale+offset},${gy},${z}`);}
+      }
+    }
+  }
+  for(let z=0;z<(building.floors||1);z++)for(let y=0;y<building.depth*scale;y++)for(let x=0;x<building.width*scale;x++){
+    const tileX=Math.floor(x/scale),tileY=Math.floor(y/scale),key=`${x},${y},${z}`;if(walkBlocked.has(key))continue;
+    const node={key,x:building.entity.x+(x+.5)/scale,y:building.entity.y+(y+.5)/scale,z:z*CITY_FLOOR_HEIGHT,localX:x,localY:y,floor:z};walkNodes.set(key,node);
+  }
+  for(const node of walkNodes.values()){
+    const adjacent=[];for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]]){const key=`${node.localX+dx},${node.localY+dy},${node.floor}`;if(walkNodes.has(key))adjacent.push(key);}walkNeighbors.set(node.key,adjacent);
+  }
+  for(let z=0;z<(building.floors||1)-1;z++){
+    const lower=`${gridStairX},${gridStairY},${z}`,upper=`${gridStairX},${gridStairY},${z+1}`;
+    if(walkNodes.has(lower)&&walkNodes.has(upper)){walkNeighbors.get(lower).push(upper);walkNeighbors.get(upper).push(lower);}
+  }
+  const layout={nodes,neighbors,byFloor,stairKeys,routes:new Map(),walkNodes,walkNeighbors,scale};layouts.set(building,{revision:building.layoutRevision||0,units,circulation,width:building.width,depth:building.depth,floors:building.floors,rotation:building.rotation||0,layout});return layout;
 }
 
 const worldPoint=(building,node)=>{const offset=(node.stair||node.kind!=='room')?0.5:0.18;return {x:building.entity.x+node.x+offset,y:building.entity.y+node.y+offset,z:node.z*CITY_FLOOR_HEIGHT};};
@@ -70,29 +117,36 @@ function nearestNode(layout,building,point,z=null){
 }
 
 export function interiorRoute(building,from,to){
-  const layout=interiorLayout(building),start=nearestNode(layout,building,from),floors=building.floors||1;
-  const roofTarget=to.z!=null&&Math.floor(to.z/CITY_FLOOR_HEIGHT)>=floors;
-  const goal=roofTarget?layout.nodes.get(`${Math.floor(building.width/2)},${Math.floor(building.depth/2)},${floors-1}`):nearestNode(layout,building,to,to.z!=null?Math.round(to.z/CITY_FLOOR_HEIGHT):null);
-  if(!start||!goal)return null;
-  const routeKey=`${start.key}>${goal.key}`;let keys=layout.routes.get(routeKey);
-  if(!keys){const previous=new Map(),queue=[start.key];previous.set(start.key,null);
-    for(let head=0;head<queue.length;head++){
-      const key=queue[head];if(key===goal.key)break;
-      for(const next of layout.neighbors.get(key)||[])if(!previous.has(next)){previous.set(next,key);queue.push(next);}
-    }
-    if(!previous.has(goal.key))return null;keys=[];for(let key=goal.key;key!==null;key=previous.get(key))keys.push(key);keys.reverse();layout.routes.set(routeKey,keys);if(layout.routes.size>256)layout.routes.delete(layout.routes.keys().next().value);
+  const layout=interiorLayout(building),floors=building.floors||1,scale=layout.scale,roofTarget=to.z!=null&&Math.floor(to.z/CITY_FLOOR_HEIGHT)>=floors;
+  const keyAt=p=>{const floor=Math.max(0,Math.min(floors-1,Math.round((p.z||0)/CITY_FLOOR_HEIGHT))),x=Math.max(0,Math.min(building.width*scale-1,Math.floor((p.x-building.entity.x)*scale))),y=Math.max(0,Math.min(building.depth*scale-1,Math.floor((p.y-building.entity.y)*scale)));return `${x},${y},${floor}`;};
+  const nearest=(p,floor=null)=>{let key=keyAt(p);if((floor==null||layout.walkNodes.get(key)?.floor===floor)&&layout.walkNodes.has(key))return key;let best=null,distance=Infinity;for(const node of layout.walkNodes.values()){if(floor!=null&&node.floor!==floor)continue;const d=(node.x-p.x)**2+(node.y-p.y)**2+((node.z-(p.z||0))*1.3)**2;if(d<distance){best=node.key;distance=d;}}return best;};
+  const targetFloor=roofTarget?floors-1:to.z!=null?Math.round(to.z/CITY_FLOOR_HEIGHT):null,start=nearest(from),wantedGoal=roofTarget?nearest({x:building.entity.x+(Math.floor(building.width/2)+.5),y:building.entity.y+(Math.floor(building.depth/2)+.5),z:(floors-1)*CITY_FLOOR_HEIGHT},floors-1):nearest(to,targetFloor);
+  if(!start||!wantedGoal)return null;
+  const requestedKey=`${start}>${wantedGoal}`;let keys=layout.routes.get(requestedKey),goal=wantedGoal;
+  if(!keys){const previous=new Map([[start,null]]),queue=[start];for(let head=0;head<queue.length;head++){const key=queue[head];for(const next of layout.walkNeighbors.get(key)||[])if(!previous.has(next)){previous.set(next,key);queue.push(next);}}
+    if(!previous.has(goal)){let best=null,distance=Infinity;for(const key of previous.keys()){const node=layout.walkNodes.get(key);if(targetFloor!=null&&node.floor!==targetFloor)continue;const d=(node.x-to.x)**2+(node.y-to.y)**2+((node.z-(to.z||0))*1.3)**2;if(d<distance){best=key;distance=d;}}goal=best;}
+    if(!goal||!previous.has(goal))return null;keys=[];for(let key=goal;key!==null;key=previous.get(key))keys.push(key);keys.reverse();const routeKey=`${start}>${goal}`;layout.routes.set(routeKey,keys);if(layout.routes.size>256)layout.routes.delete(layout.routes.keys().next().value);
   }
-  const inside=point=>point.x>=building.entity.x&&point.x<building.entity.x+building.width&&point.y>=building.entity.y&&point.y<building.entity.y+building.depth;
-  const path=keys.slice(inside(from)?1:0).map(key=>worldPoint(building,layout.nodes.get(key)));
-  if(roofTarget){const stair=worldPoint(building,goal),landing={...stair,z:to.z};if(!path.length||Math.hypot(path.at(-1).x-stair.x,path.at(-1).y-stair.y)>.01)path.push(stair);path.push(landing);if(Math.hypot(to.x-landing.x,to.y-landing.y)>.01)path.push({...to});}
-  // Preserve the requested interaction point only inside the destination tile.
-  if(path.length&&Math.floor(to.x-building.entity.x)===goal.x&&Math.floor(to.y-building.entity.y)===goal.y)path[path.length-1]={...to};
-  if(!inside(to)&&!roofTarget)path.push({...to});
+  const inside=p=>p.x>=building.entity.x&&p.x<building.entity.x+building.width&&p.y>=building.entity.y&&p.y<building.entity.y+building.depth;
+  const route=keys.map(key=>{const p=layout.walkNodes.get(key);return {x:p.x,y:p.y,z:p.z};});
+  // Remove collinear intermediate nodes to keep paths compact on worker packets.
+  const compressed=[];for(let i=0;i<route.length;i++){const prev=route[i-1],cur=route[i],next=route[i+1];if(!prev||!next||prev.z!==cur.z||next.z!==cur.z||((cur.x-prev.x)*(next.y-cur.y)!==(cur.y-prev.y)*(next.x-cur.x)))compressed.push(cur);}
+  const stairPath=[];for(let i=0;i<compressed.length;i++){
+    const a=compressed[i],b=compressed[i+1];stairPath.push(a);
+    if(b&&a.z!==b.z){const low=Math.min(a.z,b.z),direction=b.z>a.z?1:-1,baseFloor=Math.round(low/CITY_FLOOR_HEIGHT),axis=interiorStairAxis(building),centerX=building.entity.x+Math.floor(building.width/2)+.5,centerY=building.entity.y+Math.floor(building.depth/2)+.5;
+      const steps=Array.from({length:10},(_,step)=>({x:axis==='x'?centerX-.32+step*.075:centerX,y:axis==='y'?centerY-.32+step*.075:centerY,z:baseFloor*CITY_FLOOR_HEIGHT+step*.18+.09}));if(direction<0)steps.reverse();stairPath.push(...steps);
+    }
+  }
+  if(compressed.length)stairPath.push(compressed.at(-1));
+  const path=stairPath.slice(inside(from)?1:0);
+  if(roofTarget){const stair={x:building.entity.x+Math.floor(building.width/2)+.5,y:building.entity.y+Math.floor(building.depth/2)+.5,z:(floors-1)*CITY_FLOOR_HEIGHT},landing={...stair,z:to.z};if(!path.length||Math.hypot(path.at(-1).x-stair.x,path.at(-1).y-stair.y)>.01)path.push(stair);path.push(landing);if(Math.hypot(to.x-landing.x,to.y-landing.y)>.01)path.push({...to});}
+  if(path.length){if(inside(to)&&!roofTarget)path[path.length-1]={...to};else if(!roofTarget)path.push({...to});}
+  else if(!inside(to)&&!roofTarget)path.push({...to});
   return path;
 }
 
 export function interiorUsePoint(building,unit,kind='generic',slot=0,task=null){
-  const furniture=furnitureInteraction(building,unit,task==='water'?'water_cooler':task==='hygiene'?'sink':task==='clean'?'cleaning':kind,slot);if(furniture)return furniture.point;
+  const furniture=furnitureInteraction(building,unit,kind,slot,task);if(furniture)return furniture.point;
   const center=worldPoint(building,{x:unit.x,y:unit.y,z:unit.z});
   const offsets={bathroom:[[-.22,0]],bedroom:[[0,-.22]],dining:[[-.24,.24],[.24,.24],[-.24,-.24],[.24,-.24]],office:[[0,-.23]],plenary:[[0,-.23]],workspace:[[0,-.23]],laundry:[[0,-.23]],service:[[0,-.23]],treatment:[[0,-.23]]};
   const [dx,dy]=(offsets[kind]||[[0,-.23]])[slot%(offsets[kind]||[[0,-.23]]).length];

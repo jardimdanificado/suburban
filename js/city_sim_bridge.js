@@ -1,5 +1,5 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=service-capacity-3';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=interiors-completion-5';
 import {canStep,terrainWalkable} from './city_terrain.js?v=deep-perf-3';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
@@ -36,6 +36,9 @@ export function sampleCitizenMotion(world,sample,now){
 function renderIndoorPosition(c,position){
   if(Object.prototype.hasOwnProperty.call(c,'_renderIndoorPosition'))c._renderIndoorPosition=position;
   else Object.defineProperty(c,'_renderIndoorPosition',{value:position,writable:true,configurable:true,enumerable:false});
+  const inside=!!position;
+  if(Object.prototype.hasOwnProperty.call(c,'_renderInside'))c._renderInside=inside;
+  else Object.defineProperty(c,'_renderInside',{value:inside,writable:true,configurable:true,enumerable:false});
 }
 function sampleInterior(bridge,sample,now){
   if(bridge.time.paused)return;
@@ -66,7 +69,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=service-capacity-3', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=player-action-command-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling });
@@ -158,6 +161,10 @@ export class CitySimulationBridge {
       queueMotion(sample,x,y,now,{reset});
       if(!reset){this.motion.set(sample.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
       else {sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}
+      // Older/diagnostic motion packets carried a compact inside bit beside
+      // ground coordinates. Keep it readable while current packets use the
+      // richer four-float interior position stream below.
+      if(data.indoors)renderIndoorPosition(sample.citizen,data.indoors[i/3]?{x,y,z:0}:null);
     }
     receiveInteriorMotion(this,data.inside,now,this.time.paused);
     this.applyVehiclePositions(data.vehicles);

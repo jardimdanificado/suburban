@@ -1,5 +1,5 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
-import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=interiors-completion-5';
 import {ROAD_TILES,tileAt} from './city_terrain.js?v=deep-perf-3';
 export class CityFurniture{
  constructor(city){this.city=city;this.benches=[];this.nextId=1;this.benchLayoutVersion=2;}
@@ -51,8 +51,9 @@ export class CityFurniture{
   if(!c.seatId&&!c.indoorLocation){if(c.seated||c.furnitureUse){c.seated=false;c.furnitureUse=null;}return;}
   if(c.seatId){if(!['sit','work-wait','food','workmeal','supplies','toilet'].includes(c.task)||c.entity.destroyed){this.release(c);return;}const [id,slot]=c.seatId.split(':').map(Number),b=this.benches.find(b=>b.id===id),point=b&&this.seatPoint(b,slot);c.seated=!!point&&!c.path.length&&Math.hypot(c.entity.x-point.x,c.entity.y-point.y)<.14;if(c.seated){c.furnitureUse={id:`bench:${c.seatId}`,type:'bench',seated:true};c.facingTarget={x:c.entity.x+Math.sin(b.angle),y:c.entity.y+Math.cos(b.angle)};c.action=c.task==='work-wait'?'Aguardando sentado no banco':'Descansando sentado no banco';}return;}
   const s=c.indoorLocation,u=this.city.units.get(s?.unitId),b=this.city.building(s?.buildingId);c.seated=false;c.furnitureUse=null;
+  if(c.task==='outdoor_leisure'&&c.outdoorLeisure&&b?.id===c.outdoorLeisure.buildingId&&!s.exiting&&!s.path?.length){const visit=c.outdoorLeisure,position=visit.position||s.position,center={x:b.entity.x+b.width/2,y:b.entity.y+b.depth/2};c.seated=true;c.furnitureUse={id:`${visit.spaceId}:seat:${visit.slot}`,type:'chair',label:visit.kind==='balcony'?'Cadeira da varanda':'Cadeira da cobertura',seated:true,pose:'seated',slot:visit.slot,posePoint:{x:position.x,y:position.y,z:position.z??s.position?.z??0}};c.facingTarget=center;return;}
   if(!s||s.exiting||s.path?.length||!u||!b)return;
-  const use=furnitureInteraction(b,u,c.task==='water'?'water_cooler':c.task==='hygiene'?'sink':c.task==='clean'?'cleaning':s.targetRoomType,Math.max(0,(u.activityReservedIds||[]).indexOf(c.id)));if(use){c.furnitureUse={id:use.item.id,type:use.item.type,label:use.item.label,seated:!!use.item.seated};c.seated=!!use.item.seated;c.facingTarget=use.facing;}
+  const useTask=c.workMeal?'workmeal':c.task,use=furnitureInteraction(b,u,s.targetRoomType,s.furnitureSlot??Math.max(0,(u.activityReservedIds||[]).indexOf(c.id)),useTask);if(use&&(!s.furnitureId||s.furnitureId===use.item.id)){c.furnitureUse={id:use.item.id,type:use.item.type,label:use.item.label,stationId:use.taskStation?.id||use.item.id,stationType:use.taskStation?.type||use.item.type,stationLabel:use.taskStation?.label||use.item.label,seated:!!use.item.seated,pose:use.pose,slot:use.slot,posePoint:use.posePoint};c.seated=!!use.item.seated;c.facingTarget=use.facing;}else {c.seated=false;c.furnitureUse=null;}
   const home=this.city.housing.home(c);if(home?.buildingId===b.id)this.storeAtHome(c,b,home);
  }
  storeAtHome(c,b,home){

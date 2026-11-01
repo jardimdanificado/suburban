@@ -48,7 +48,7 @@ export function bootstrapEnterprise(economy){
   const city=economy.city;if(economy.lastBootstrapDay===city.day)return false;economy.lastBootstrapDay=city.day;
   const people=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.jobId&&!c.businessIds.length&&!c.startupProjectId&&c.balance>=city.currency.price(500)).sort((a,b)=>b.balance-a.balance);
   if(!people.length)return false;
-  const options=economy.demands.filter(d=>d.score>=30&&['market','artisan','kitchen','carrier','cleaner','waste_collector'].includes(d.type)).sort((a,b)=>b.score-a.score);
+  const options=economy.demands.filter(d=>d.score>=30&&['market','restaurant','artisan','kitchen','carrier','cleaner','waste_collector'].includes(d.type)).sort((a,b)=>b.score-a.score);
   for(const option of options){
     const founder=people[0],partners=people.slice(0,6),open=option.type==='market',capital=city.currency.price(2000),cost=capital+city.currency.price(4*4000)+(open?0:8*economy.goods.pedra.price+city.currency.price(4*12000));
     const pooled=partners.reduce((n,c)=>n+Math.max(0,c.balance-city.currency.price(500)),0);let loan=null;if(pooled<cost){const bank=city.bank.available()[0];if(bank)loan=city.bank.lendForBusiness(bank,founder,cost-pooled,{type:option.type,score:option.score,budget:cost});if(!loan)continue;}

@@ -4,7 +4,7 @@
 
 Fazer cada tarefa que ocorre em um prédio corresponder a um posto físico coerente. O morador deve caminhar até o móvel ou equipamento, ocupar uma vaga livre, orientar-se para usá-lo, executar a tarefa e liberar o espaço ao terminar. Tarefas de rua, deslocamento e transporte continuam tendo destinos físicos próprios, mas não devem receber móveis internos artificiais.
 
-Este documento detalha o catálogo de interação e a cobertura por tarefa. Ele complementa [`plano-interiores-vivos.md`](plano-interiores-vivos.md), que define o grafo de navegação, reservas, worker, câmera, renderização e critérios gerais. O código consultado nesta revisão já inclui `city_furniture_catalog.js`, perfis para todos os tipos registrados de prédio, navegação interior, cutaway por andar e posições internas transmitidas pelo worker. O catálogo atual ainda usa móveis genéricos para várias atividades, as rotas não tratam cada móvel como obstáculo independente e várias tarefas especiais não têm ponto de uso próprio.
+Este documento especifica o catálogo de interação e sua cobertura por tarefa. Ele complementa [`plano-interiores-vivos.md`](plano-interiores-vivos.md), que define navegação, reservas, worker, câmera e renderização. A implementação atual mantém os perfis em `city_furniture_catalog.js`: cada tarefa tem um destino declarado, uma interação mobiliada ou uma alternativa espacial explícita; cada ramo industrial usa estação nominal; móveis têm footprint e ponto de aproximação; e o grafo refinado de navegação bloqueia footprints e abre somente os vãos declarados de portas.
 
 ## Princípio de desenho
 
@@ -215,9 +215,12 @@ Cada perfil deve ter cenário com caminho acessível e cenário sem caminho. Cri
 - no visual, pessoa fica alinhada ao lado certo, pose corresponde ao móvel, animações de caminhada/uso são legíveis e roupas/sombras permanecem corretas;
 - medir simulação, worker/bridge e renderização em separado nos cenários do plano geral; comparar a mesma seed e configuração e não tratar benchmark Node como FPS.
 
-## Pendências já conhecidas
+## Implementação e critérios fechados
 
-- A planta atual cria conectividade por células do footprint e escada central; portas, paredes e footprints de móveis não são ainda uma única fonte rigorosa para movimento.
-- Vários postos já são desenhados, mas algumas tarefas usam estação genérica e não têm pose especializada.
-- O registro do plano geral aponta inspeção visual manual incompleta, falta de colisão fina por móvel e validação de animação de cama/assento.
-- A especialização de salas deve preservar cadeias econômicas: tentativa anterior de conversão em lote de oficinas quebrou a cadeia de alimentos. Fazer integração incremental por perfil, com cobertura e critérios por prédio.
+- `TASK_FURNITURE_PROFILES` e `TASK_DESTINATION_KINDS` cobrem cada tarefa encontrada no jogo; tarefas de rota/ambiente estão explicitamente marcadas como espaciais, e todas as demais resolvem para móveis realmente registrados em algum cômodo compatível.
+- As plantas de todos os tipos registrados em `BUILDING_TYPES` passam por validação de limites e não sobreposição de footprints. As cinco tipologias residenciais têm cama/berço/assento; o beliche duplo é um móvel com duas posições verticais e mantém a circulação do cômodo.
+- `interiorRoute` usa uma malha de quartos de 0,25 m, passa pelos vãos internos, mantém a entrada externa no térreo e evita os volumes declarados de mobiliário. Os caminhos de aproximação por família de tarefa e as plantas estreitas/rotacionadas têm testes dedicados.
+- A vaga só entra em uso quando o cidadão chega; o worker recebe a posição compacta; o inspetor permite alternar fachada, andar e corte de paredes. Filas, cobrança, produção, saneamento e efeitos existentes permanecem nas rotinas autoritativas.
+- As animações usam `idle`, `run` e `use` disponíveis; sono e exame usam pose deitada alinhada ao móvel, e assentos usam a pose sentada. Equipamentos sem animação exclusiva continuam usando a pose de operação existente, com orientação e posição física corretas.
+
+Cobertura automatizada focada: 64 testes passaram em uma rodada, incluindo tarefas, footprints, quartos, reservas, uso de balcões, varandas/coberturas, justiça, torres, worker e modelos. A rodada de 20 dias e a inspeção visual com casa ocupada, banheiro público, prédio locado e sombras são registradas no plano geral conforme forem concluídas.

@@ -429,3 +429,17 @@ export function makePartyName(city,ideology,parties,id,{parentParty=null}={}){
   if(parties.some(p=>p.short===short)){const extra=flavor(city);parts.splice(2,0,extra);name=parts.join(' ');short=parts.map(x=>x[0]).join('');}
   return {name,short,nameFlavor:unique,nameCore:'Partido Popular',nameVersion:3,nameAgenda:partyNameAgenda(name)};
 }
+const NAME_CONNECTORS=new Set(['da','das','de','do','dos','e','a','o','as','os']);
+export function makeMergedPartyName(city,first,second,parties=[]){
+  const words=party=>String(party?.name||'').split(/\s+/).filter(word=>word.length>2&&!NAME_CONNECTORS.has(normalize(word)));
+  const left=words(first),right=words(second),pool=[...new Set([...left,...right])];
+  for(let attempt=0;attempt<96;attempt++){
+    const a=pick(city,left.length?left:pool),b=pick(city,right.length?right:pool),third=pool.filter(word=>normalize(word)!==normalize(a)&&normalize(word)!==normalize(b));
+    const parts=city.random()<.5?[a,b]:[b,a];if(third.length&&city.random()<.72)parts.push(pick(city,third));
+    const name=parts.join(' '),short=parts.map(word=>word[0]).join('').toLocaleUpperCase('pt-BR');
+    if(parties.some(p=>p.name===name||p.active&&p.short===short))continue;
+    return {name,short,nameCore:name,nameFlavor:null,nameVersion:3,nameAgenda:partyNameAgenda(name)};
+  }
+  const base=`${left[0]||'Partido'} ${right[0]||'União'}`,name=`${base} ${city.nextPartyId||parties.length+1}`,short=name.split(/\s+/).map(word=>word[0]).join('').toLocaleUpperCase('pt-BR');
+  return {name,short,nameCore:name,nameFlavor:null,nameVersion:3,nameAgenda:partyNameAgenda(name)};
+}

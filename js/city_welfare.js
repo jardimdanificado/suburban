@@ -1,4 +1,3 @@
-import { inventoryFree } from './city_inventory.js';
 /** Means-tested transfers use existing treasury funds and a daily envelope. */
 export class CityWelfare {
   constructor(city) {
@@ -15,18 +14,7 @@ export class CityWelfare {
     return this._conditions={population:people.length,hungry,homeless,foodDays:stock/Math.max(1,people.length*6),cleanliness:city.sanitation.cleanliness().score,reserve:city.fiscal?.reserve()??city.currency.price(Math.max(this.policy.reserve,people.length*3000)),crisis:hungry>=Math.max(3,people.length*.1)||homeless>=Math.max(5,adults.length*.2)};
   }
   restockPublicMeals() {
-    const city=this.city,needs=this.conditions(),foods=city.workMeals.foodGoods();let orders=0;
-    const destinations=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&b.type==='popular_refectory');
-    const suppliers=city.economy.businesses.filter(b=>b.type==='farm'||b.type==='bakery'||b.type==='greengrocer'||b.type==='market'||b.type==='kitchen');
-    for(const destination of destinations){const target=Math.max(48,Math.ceil(needs.population*6/Math.max(1,destinations.length))),stock=foods.reduce((n,g)=>n+(destination.inventory[g]||0)+(destination.incoming[g]||0),0);let missing=Math.min(target-stock,inventoryFree(destination));
-      if(missing<3)continue;
-      for(const supplier of suppliers.slice().sort((a,b)=>Math.hypot(a.door.x-destination.door.x,a.door.y-destination.door.y)-Math.hypot(b.door.x-destination.door.x,b.door.y-destination.door.y))){
-        for(const good of foods){const reserve=supplier.type==='farm'?6:Math.max(6,supplier.workers.length*3),qty=Math.min(city.logistics.transportLimit(supplier,destination),missing,Math.max(0,(supplier.inventory[good]||0)-reserve));if(qty<3)continue;
-          if(city.logistics.order(supplier,destination,good,qty,city.economy.goods[good].price,{payerAccountId:'treasury',purpose:'public-meals'})){missing-=qty;if(++orders>=6)return;}
-          if(missing<3)break;
-        }if(missing<3)break;
-      }
-    }
+    this.city.economy.refillPopularRefectory();
   }
   subsistenceFloor(c){
     const city=this.city,dependents=city.childrenOf(c.id).filter(child=>!child.entity.destroyed&&!city.society.isAdult(child)).length,factor=1+dependents*.5;

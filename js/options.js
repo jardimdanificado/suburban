@@ -1,5 +1,4 @@
 import { SPEED_TIERS } from "./simulation_time.js";
-import { suburbanAudio } from "./suburban_audio.js";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
 const GRAPHICS = [
@@ -25,14 +24,6 @@ const EFFECTS = [
   effect("brightness", "BRILHO", [0.5, 0.75, 1, 1.25, 1.5].map(v => [v, `${v}`]), 1),
   effect("contrast", "CONTRASTE", [0.5, 0.75, 1, 1.25, 1.5].map(v => [v, `${v}`]), 1),
 ];
-const AUDIO = [
-  { key: "master", label: "VOLUME GERAL" },
-  { key: "music", label: "MUSICA" },
-  { key: "ambience", label: "AMBIENTE" },
-  { key: "sfx", label: "EFEITOS" },
-  { key: "ui", label: "INTERFACE" },
-].map(row => ({ ...row, values: [0, 0.25, 0.5, 0.75, 1].map(v => [v, `${Math.round(v * 100)}%`]), default: suburbanAudio.volumes[row.key] }));
-
 export class OptionsPanel {
   constructor({ renderer, time, step, storage = null }) {
     this.renderer = renderer;
@@ -58,13 +49,6 @@ export class OptionsPanel {
 
   apply(key, value, persist = true) {
     const item = [...GRAPHICS, ...EFFECTS].find(row => row.key === key);
-    if (key in suburbanAudio.volumes) {
-      const row = AUDIO.find(item => item.key === key);
-      if (!row?.values.some(([v]) => v === value)) return false;
-      this.values[key] = value;
-      suburbanAudio.setBusVolume(key, value);
-      return true;
-    }
     if (!item || !item.values.some(([v]) => v === value)) return false;
     const r = this.renderer;
     if (item.graphic) r.setGraphicOptions({ [key]: value });
@@ -102,11 +86,11 @@ export class OptionsPanel {
       for (const item of [...GRAPHICS, ...EFFECTS]) this.apply(item.key, item.default);
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
-    [["GRAPHICS", "GRAFICOS"], ["AUDIO", "AUDIO"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
-      const bw = Math.floor((w - 24) / 3);
+    [["GRAPHICS", "GRAFICOS"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
+      const bw = Math.floor((w - 20) / 2);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
-    const rows = this.tab === "AUDIO" ? AUDIO : (this.tab === "GRAPHICS" ? GRAPHICS : EFFECTS);
+    const rows = this.tab === "GRAPHICS" ? GRAPHICS : EFFECTS;
     const contentY = y + 62, bottom = y + h - (floating?40:6);
     const first = ui.regions.length;
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();
@@ -125,12 +109,12 @@ export class OptionsPanel {
     } else {
       this.maxScroll = Math.max(0, rows.length * 30 + 22 - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
-      ui.text(this.tab === "AUDIO" ? "MIXAGEM DE AUDIO" : (this.tab === "GRAPHICS" ? "AJUSTES DO RENDERIZADOR 3D" : "CAMERAS EM PERSPECTIVA"), x + 12, contentY + 4 - this.scroll, "#3cbcfc");
+      ui.text("AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
       rows.forEach((row, i) => {
         const ry = contentY + 22 + i * 30 - this.scroll;
         if (ry + 30 < contentY || ry > bottom) return;
         ui.text(row.label, x + 12, ry + 6);
-        const current = this.tab === "AUDIO" ? suburbanAudio.volumes[row.key] : this.values[row.key];
+        const current = this.values[row.key];
         const exactIndex = row.values.findIndex(([v]) => v === current);
         const index = exactIndex >= 0 ? exactIndex : row.values.reduce((best, [value], i) =>
           Math.abs(value - current) < Math.abs(row.values[best][0] - current) ? i : best, 0);

@@ -34,7 +34,11 @@ test('a desperate resident may trespass to use a private workplace sink, and the
  const room=city.units.get(facility.unitId);owner.indoorLocation={buildingId:building.id,unitId:room.id,floor:room.z,roomType:'bathroom',position:{x:building.entity.x+room.x+.5,y:building.entity.y+room.y+.5,z:room.z*1.8},path:[]};city.random=()=>0;
  for(let i=0;i<80&&actor.needs.hygiene<95;i++){city.minute++;advanceCitizenInterior(city,actor,100);syncCitizenInterior(city,actor);city.performTask(actor);}
  assert(actor.needs.hygiene>=95,'the person must finish using the sink before a report is created');assert.equal(city.justice.cases.length,1);assert.equal(city.justice.cases[0].details.purpose,'unauthorized-hygiene-use');assert.equal(city.justice.cases[0].details.buildingId,building.id);
- assert(city.justice.cases[0].witnesses.some(w=>w.citizenId===owner.id),'the physically present property owner must be able to witness the trespass');city.justice.dispatchReports();assert.equal(city.justice.cases[0].reporterId,owner.id);assert.equal(owner.task,'justice-report');
+ assert(city.justice.cases[0].witnesses.some(w=>w.citizenId===owner.id),'the physically present property owner must be able to witness the trespass');city.justice.dispatchReports();const report=city.justice.cases[0];assert.equal(report.reporterId,owner.id);assert.equal(owner.task,'justice-report');
+ const reportStation=city.building(report.reportingStationId);owner.indoorLocation=null;owner.path=[];owner.entity.x=reportStation.door.x;owner.entity.y=reportStation.door.y;
+ assert.equal(city.justice.arriveToReport(owner),false);assert.equal(report.status,'reporting','the report remains open until the resident reaches the service counter');assert.equal(owner.indoorLocation?.phase,'walking');
+ for(let i=0;i<100&&owner.indoorLocation?.path?.length;i++)advanceCitizenInterior(city,owner,100);
+ assert.equal(city.justice.arriveToReport(owner),true);assert.equal(report.status,'reported');assert.equal(owner.task,null);assert.match(report.statement.description,/balcão/);
  const rendered=[],panel=new Proxy({}, {get:(_target,key)=> (...args)=>rendered.push([key,...args])}),ui={city,view:()=> 'cases',justiceCaseId:city.justice.cases[0].id,matches:()=>true};renderJustice(ui,panel);
  assert(rendered.some(row=>row[0]==='kv'&&row[1]==='Uso não autorizado'&&row[2]==='Uso de pia para higiene'));assert(rendered.some(row=>row[0]==='kv'&&row[1]==='Imóvel afetado'&&row[2]===building.entity.properties.name));
 });

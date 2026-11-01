@@ -1,5 +1,5 @@
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=deep-perf-3';
+import {CityFurniture} from './city_furniture.js?v=interiors-completion-5';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
@@ -23,12 +23,12 @@ import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_cultu
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js';
 import {skybridgeLinks} from './city_skybridges.js?v=short-passarelas-bridge-1';
-import { CityGovernment as CityPolitics } from './city_government.js?v=party-name-tags-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=interparty-relations-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=service-capacity-3';
-import {interiorRoute} from './city_interior_layout.js';
+import { CityJustice } from './city_justice.js?v=interiors-completion-5';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=interiors-completion-5';
+import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-5';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -78,6 +78,7 @@ export const BUILDING_TYPES = {
   popular_luxury_housing: { label: 'Moradia popular de luxo', color: 0xd0b98f, rent: HOUSING_RULES.roomRent * 1.25, price: HOUSING_RULES.roomPrice * 1.5, jobs: 0 },
   luxury_housing: { label: 'Moradia de luxo', color: 0xd6c99c, rent: HOUSING_RULES.roomRent * 2, price: HOUSING_RULES.roomPrice * 3, jobs: 0 },
   popular_refectory: { label: 'Refeitório popular', color: 0xd89d62, rent: 0, price: 90000, jobs: 4 },
+  restaurant: { label: 'Restaurante', color: 0xb85f47, rent: 110, price: 105000, jobs: 6 },
   market: { label: 'Mercado', color: 0xe2ab65, rent: 90, price: 60000, jobs: 6 },
   farm: { label: 'Fazenda', color: 0x98ad61, rent: 0, price: 50000, jobs: 1 },
   bakery: { label: 'Padaria', color: 0xdbb581, rent: 80, price: 60000, jobs: 2 },
