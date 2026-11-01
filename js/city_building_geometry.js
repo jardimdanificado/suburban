@@ -1,6 +1,9 @@
 export const CITY_FLOOR_HEIGHT=1.8;
 export function cityBuildingPickVerticalBounds({constructionKind,type,floors=1,base=0,surfaceBase=base}){
-  if(constructionKind==='open-air'){
+  // Quarries are outdoor, ground-level work sites. Keep their picking volume
+  // close to the visible surface even if a stale save or caller reports them
+  // as a regular building with one floor.
+  if(constructionKind==='open-air'||type==='quarry'){
     const height=['market','greengrocer'].includes(type)?CITY_FLOOR_HEIGHT+.1:.14;
     return {base:surfaceBase,top:surfaceBase+height};
   }

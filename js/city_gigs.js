@@ -37,11 +37,11 @@ export class CityGigs{
   // the city with commissioned work.
   if(city.minute%360!==600%360||city.hour<8||city.hour>=19||this.lastSpontaneousArtworkAt===city.minute||city.minute-this.lastSpontaneousArtworkAt<720)return null;
   this.lastSpontaneousArtworkDay=day;
-  const artists=city.citizens.filter(c=>!c.entity.destroyed&&!c.dead&&city.society.isAdult(c)&&(c.skills?.artistic||0)>=12&&!c.jobId&&!(c.businessIds||[]).length&&!c.custody&&!c.informalJobId&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&(!c.task||INTERRUPTIBLE.has(c.task))&&!city.urgentNeed(c)&&(c.needs?.energy??0)>38&&(c.needs?.health??0)>45&&city.minute-(c.lastSpontaneousArtworkAt??-Infinity)>=14*1440)
-   .map(c=>({citizen:c,roll:Math.floor(city.random()*100)})).filter(row=>row.roll<28).sort((a,b)=>(b.citizen.skills.artistic-a.citizen.skills.artistic)||a.roll-b.roll||a.citizen.id-b.citizen.id);
+  const artists=city.citizens.filter(c=>!c.entity.destroyed&&!c.dead&&city.society.isAdult(c)&&(c.skills?.artistic||0)>=12&&!c.custody&&!c.informalJobId&&!c.deliveryId&&!c.workMeal&&!c.paintWorkId&&!c.mechanicJob&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.path?.length&&(!c.task||INTERRUPTIBLE.has(c.task))&&!city.urgentNeed(c)&&(c.needs?.energy??0)>38&&(c.needs?.health??0)>45&&city.minute-(c.lastSpontaneousArtworkAt??-Infinity)>=7*1440)
+   .map(c=>({citizen:c,roll:Math.floor(city.random()*100)})).filter(row=>row.roll<40).sort((a,b)=>(b.citizen.skills.artistic-a.citizen.skills.artistic)||a.roll-b.roll||a.citizen.id-b.citizen.id);
   for(const {citizen,roll} of artists){
    const account=city.accounts.get(citizen.accountId);if(!account)continue;
-   const sites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.units?.some(u=>u.ownerId===citizen.accountId||u.tenantId===citizen.accountId)&&!this.jobs.some(j=>j.kind==='art-installation'&&j.buildingId===b.id&&ACTIVE.has(j.status))).sort((a,b)=>a.id-b.id);
+   const sites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&(b.units?.some(u=>u.ownerId===citizen.accountId||u.tenantId===citizen.accountId)||b.municipal&&['townhall','council_chamber','library','theater','sports_center'].includes(b.type))&&!this.jobs.some(j=>j.kind==='art-installation'&&j.buildingId===b.id&&ACTIVE.has(j.status))).sort((a,b)=>a.id-b.id);
    for(const site of sites){
     const kind=roll%5===0?'painting':'banner',fee=this.artworkQuote(site.id,kind,citizen.accountId);if(!fee||account.balance<fee)continue;
     const partyId=roll%7===0&&city.politics?.party?.(citizen.political?.partyId)?.active?citizen.political.partyId:null;
@@ -83,7 +83,7 @@ export class CityGigs{
   if(job.kind==='art-installation'&&!this.artworkSupplier(job.artwork?.kind)){job.waitingReason=`Aguardando ${job.artworkMaterial?.good==='pedra'?'pedra':'tinta'} em estoque`;return [];}
   if(job.kind==='art-installation')job.waitingReason=null;
   const point=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;
-  const eligible=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&(!job.preferredArtistId||c.id===job.preferredArtistId)&&(!job.artworkSupport||!c.indoorLocation||c.indoorLocation.buildingId===b.id)&&!c.role?.includes('councilor')&&!c.jobId&&!(c.businessIds?.length)&&(!c.task||INTERRUPTIBLE.has(c.task))&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!city.urgentNeed(c)&&c.needs.energy>25&&(job.kind!=='art-installation'||(c.skills?.artistic||0)>0))
+  const eligible=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&(!job.preferredArtistId||c.id===job.preferredArtistId)&&(!job.artworkSupport||!c.indoorLocation||c.indoorLocation.buildingId===b.id)&&!c.role?.includes('councilor')&&(job.preferredArtistId===c.id||!c.jobId)&&(job.preferredArtistId===c.id||!(c.businessIds?.length))&&(!c.task||INTERRUPTIBLE.has(c.task))&&!c.path?.length&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!city.urgentNeed(c)&&c.needs.energy>25&&(job.kind!=='art-installation'||(c.skills?.artistic||0)>0))
    .sort((a,z)=>job.kind==='art-installation'?((z.skills?.artistic||0)-(a.skills?.artistic||0)||Math.hypot(a.entity.x-point.x,a.entity.y-point.y)-Math.hypot(z.entity.x-point.x,z.entity.y-point.y)||a.id-z.id):Math.hypot(a.entity.x-point.x,a.entity.y-point.y)-Math.hypot(z.entity.x-point.x,z.entity.y-point.y)||a.id-z.id);
   job.availableCandidatePool=eligible.length;if(!eligible.length)return [];
   // A posted gig previously ran A* once for every resident just to find one

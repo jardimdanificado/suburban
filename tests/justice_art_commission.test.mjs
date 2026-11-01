@@ -41,6 +41,11 @@ test('an artist can spontaneously sponsor and physically install art on property
  finish(city,job);assert.equal(job.status,'completed');assert.equal(city.justice.art[0].creatorId,artist.id);assert.equal(city.justice.art[0].buildingId,site.id);assert.equal(paintShop.inventory.tinta,4);assert.equal(city.economy.consumed.tinta,1);
 });
 
+test('an employed artist can sponsor art at a public cultural site while off duty',()=>{
+ const {city,artist}=fixture();const library={id:11,type:'library',municipal:true,active:true,entity:{x:9,y:8,destroyed:false,properties:{name:'Biblioteca municipal'}},accountId:'building:11',door:{x:9.5,y:8.5},width:2,depth:2,units:[]};city.buildings.push(library);city.accounts.set(library.accountId,{balance:0});city.accounts.get(artist.accountId).balance=10000;artist.jobId=50;artist.businessIds=[50];artist.task='work';city.minute=12*1440+600;city.hour=10;
+ assert.equal(city.gigs.postSpontaneousArtwork(),null);artist.task='leisure';const job=city.gigs.postSpontaneousArtwork();assert.ok(job);assert.equal(job.payerAccountId,artist.accountId);assert.equal(job.buildingId,library.id);assert.equal(job.preferredArtistId,artist.id);finish(city,job);assert.equal(job.status,'completed');assert.equal(city.justice.art[0].creatorId,artist.id);
+});
+
 test('spontaneous art does not use property without ownership or tenancy',()=>{
  const {city,site,artist}=fixture();city.accounts.get(artist.accountId).balance=10000;city.minute=12*1440+600;city.hour=10;city.citizens[0].skills.artistic=100;city.citizens[0].lastSpontaneousArtworkAt=city.minute-31*1440;site.units=[];
  assert.equal(city.gigs.postSpontaneousArtwork(),null);assert.equal(city.justice.art.length,0);assert.equal(city.gigs.jobs.length,0);

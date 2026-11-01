@@ -47,7 +47,8 @@ export class ManagementCanvasUI extends LegacyCanvasUI {
     ctx.save();ctx.beginPath();ctx.rect(x+5,top+3,Math.max(0,w-10),Math.max(0,height-5));ctx.clip();
     ctx.font=this.font(1,selected);ctx.textBaseline='middle';ctx.textAlign='center';ctx.fillStyle=T.ink;
     let title=readableLabel(label);
-    if(ctx.measureText(title).width>w-16){let low=0,high=title.length;while(low<high){const middle=Math.ceil((low+high)/2);if(ctx.measureText(title.slice(0,middle)+'…').width<=w-16)low=middle;else high=middle-1;}title=low?title.slice(0,low)+'…':'';}
+    const measure=text=>ctx.measureText(text)?.width??text.length*7;
+    if(measure(title)>w-16){let low=0,high=title.length;while(low<high){const middle=Math.ceil((low+high)/2);if(measure(title.slice(0,middle)+'…')<=w-16)low=middle;else high=middle-1;}title=low?title.slice(0,low)+'…':'';}
     ctx.fillText(title,x+w/2,top+height/2+.5);ctx.restore();
     this.regions.push({x,y:top,w,h:height,label,onClick});
   }

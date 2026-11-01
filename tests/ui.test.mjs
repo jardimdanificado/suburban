@@ -98,7 +98,7 @@ test('dossiers retain directory search and scroll; back restores context and sel
   h.inspector.setSelection(b.entity);h.inspector.navigate('production');h.inspector.setView('demand');
   h.inspector.back(); assert.equal(h.inspector.tab,'people');assert.equal(h.inspector.selected,b.entity);assert.equal(h.inspector.query,'Ana');
   h.inspector.back(); assert.equal(h.inspector.selected,a.entity);assert.equal(h.inspector.scrolls.list,95);
-  h.inspector.scrolls[`detail:${a.entity.id}:${h.inspector.detailTab}`]=0;h.draw();h.buttons.find(b=>b.label==='TRABALHO').click();assert.equal(h.inspector.scrolls.list,Math.min(95,h.inspector.zones.find(z=>z.key==='list').max));
+  h.inspector.scrolls[`detail:${a.entity.id}:${h.inspector.detailTab}`]=0;h.draw();h.ui.regions.find(r=>r.label==='TRABALHO').onClick();assert.equal(h.inspector.scrolls.list,Math.min(95,h.inspector.zones.find(z=>z.key==='list').max));
 });
 
 test('compact navigation hides text inputs, scrolls on short screens and closes with Escape', () => {

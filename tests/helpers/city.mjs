@@ -28,7 +28,11 @@ function developFixture(city) {
   for (const [i,type] of ['builder','quarry'].entries()) {
     const b=city.buildings.find(b=>b.type===type);b.active=false;b.municipal=false;
     city.transfer(b.accountId,'treasury',b.balance,'Fixture privatization');
-    for(const u of b.units){u.price=1000;u.occupantId=null;u.forSale=true;}
+    // This fixture models direct ownership transfer of the public premises.
+    // Seed buildings now register their units under the business account, so
+    // reset those titles to the treasury before simulating the test purchase.
+    for(const u of b.units){u.ownerId='treasury';u.price=1000;u.occupantId=null;u.forSale=true;}
+    const lot=city.development.plots.find(p=>p.id===b.plotId);if(lot){lot.ownerId='treasury';lot.forSale=true;}
     if(!city.economy.purchasePremises(b,wealthy[i],null))throw Error('Fixture starter purchase');
   }
   const specs = [['residential', 5], ['residential', 5], ['clinic', 2], ['utility', 2], ['leisure', 2], ['market', 2], ['bakery', 2], ['greengrocer', 2], ['farm', 1, 'maca'], ['farm', 1, 'trigo']];
