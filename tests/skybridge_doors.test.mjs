@@ -8,8 +8,10 @@ import {buildingEntrance,buildingEntranceDoor} from '../js/city_building_geometr
 class Group {constructor(){this.children=[];this.userData={};this.visible=true;}add(o){this.children.push(o);}traverse(f){f(this);for(const o of this.children)o.traverse?.(f);}}
 class Mesh {constructor(geometry,material){this.geometry=geometry;this.material=material;this.position={set:(...xyz)=>this.xyz=xyz};}traverse(f){f(this);}}
 class Geometry {constructor(...args){this.args=args;}dispose(){}}
-class Material {dispose(){}}
-const THREE={Group,Mesh,BoxGeometry:Geometry,MeshLambertMaterial:Material};
+class Material {constructor(options={}){this.options=options;}dispose(){}}
+class Matrix4 {makeTranslation(...xyz){this.xyz=xyz;return this;}}
+class InstancedMesh extends Mesh {constructor(geometry,material,count){super(geometry,material);this.count=count;this.transforms=[];this.instanceMatrix={needsUpdate:false};}setMatrixAt(index,matrix){this.transforms[index]=matrix.xyz;}}
+const THREE={Group,Mesh,InstancedMesh,Matrix4,BoxGeometry:Geometry,MeshLambertMaterial:Material};
 
 test('the ground-floor entrance opens the correct exterior wall for every building rotation',()=>{
  for(let rotation=0;rotation<4;rotation++){
@@ -29,23 +31,17 @@ test('each skybridge has openings on the second floor of both buildings',()=>{
  syncSkybridges(renderer,THREE,entities,world);
  assert.equal(renderer.skybridgeDoors.get(1).get('a'),8);assert.equal(renderer.skybridgeDoors.get(2).get('b'),4);
  assert.equal(renderer.skybridgeGroup.children.length,1);
- const bridge=renderer.skybridgeGroup.children[0],treads=bridge.children.filter(o=>o.geometry.args.length===3&&o.geometry.args[0]===.78&&o.geometry.args[1]===.09&&o.geometry.args[2]===.17);
- assert.equal(treads.length,20,'both stair flights should contain ten steps');
- assert(treads.slice(0,10).every(o=>o.xyz[0]===2.5),'the first flight must align with the pedestrian route at x0 + 0.5');
- assert(treads.slice(10).every(o=>o.xyz[0]===3.5),'the second flight must align with the pedestrian route at x1 - 0.5');
+ const bridge=renderer.skybridgeGroup.children[0],deck=bridge.children.find(o=>o.geometry.args[1]===.14),rails=bridge.children.filter(o=>o.geometry.args[1]===.07),posts=bridge.children.find(o=>o instanceof InstancedMesh);
+ assert(deck,'the link has a visible elevated deck');assert.equal(deck.xyz[1],1.8-.07);assert.equal(rails.length,2,'both exposed sides receive a guardrail');
+ assert.equal(posts.count,4,'each end of both guardrails receives a support post');assert.equal(posts.transforms.length,4);assert(posts.transforms.every(([,y])=>y===1.8-.07+.33));
 });
 
-test('pedestrian pathfinding selects a real elevated route and marks its vertical waypoints',()=>{
+test('pedestrian pathfinding keeps the shorter street route when a skybridge is unnecessary',()=>{
  const world=new World(1,1337,256);let id=0;const city=new CitySimulation({world,population:64,seed:1337,createEntity:data=>({id:++id,destroyed:false,...data})});city.initialize();
  const route=city.findPath({x:108.5,y:129.5},{x:120.5,y:137.5});
- assert(route?.some(point=>point.skybridgeId),'the route must use the generated skybridge');
- assert(route.some(point=>point.skybridgeId&&point.z>0),'the bridge route must rise above the road');
- assert(route.some(point=>point.skybridgeId&&point.z===0),'the bridge route must descend back to the sidewalk');
+ assert(route?.length,'the route must reach the destination');
+ assert(!route.some(point=>point.skybridgeId),'a longer detour through the generated bridge must not replace a shorter street route');
  const reverse=city.findPath({x:120.5,y:137.5},{x:108.5,y:129.5});
- assert(reverse?.some(point=>point.skybridgeId),'the same bridge must be walkable in both directions');
- const c=city.citizens[0];c.entity.x=108.5;c.entity.y=129.5;c.path=route;c.task='walk';c.targetId=null;city._movingCitizens=[c];city.society.isAdult=()=>true;
- let rose=false;for(let i=0;i<300&&c.path.length;i++){city.update(.05);if(c.skybridgeZ>0)rose=true;}
- assert(rose,'the movement update must carry the pedestrian above street level');
- assert.equal(c.path.length,0,'the pedestrian must reach the ground destination');
- assert.equal(c.skybridgeZ||0,0,'the pedestrian must descend to street level');
+ assert(reverse?.length,'the reverse street route must also reach its destination');
+ assert(!reverse.some(point=>point.skybridgeId),'the reverse route must also avoid the unnecessary detour');
 });

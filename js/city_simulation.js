@@ -833,6 +833,7 @@ export class CitySimulation {
     const rate=task==='energy'?(c.homeUnitId?.9:.45):SERVICE_RATES[task];
     if (rate===undefined) { this.life.resetTask(c, 'serviço indisponível'); return; }
     n[task] = clamp(n[task] + rate);
+    if(task==='hygiene'&&n.hygiene>=95){const facility=this.sanitation.facilities.get(c.hygieneTargetId);if(facility&&c.trespassHygieneFacilityId===facility.id){const building=this.building(facility.buildingId);if(building)this.justice.recordTrespassUse(c,building,facility,'unauthorized-hygiene-use');}c.trespassHygieneFacilityId=null;c.hygieneWaitingSince=null;}
     if(b.type==='townhall'&&task==='health'&&n.health>=65){n.health=65;c.task=null;c.servicePaid=null;return;}
     c.action = SERVICE_ACTIONS[task];
     if (task === 'social') { n.social = clamp(n.social - rate); c.socialWaitStarted ??= this.minute; if (this.minute - c.socialWaitStarted >= 30) { c.task = null; c.socialWaitStarted = null; n.leisure = clamp(n.leisure + 3); } }

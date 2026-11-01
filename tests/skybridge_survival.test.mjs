@@ -4,7 +4,9 @@ import {setup} from './helpers/city.mjs';
 import {advanceCitizenInterior} from '../js/city_interiors.js';
 
 function fixture(){
- const city=setup({starter:true,population:64}),link=city.skybridgeLinksForRevision().find(link=>link.gap>1);assert(link,'the settlement has a real elevated link');
+ const city=setup({starter:true,population:64});let link=city.skybridgeLinksForRevision().find(link=>link.gap>1);
+ if(!link)for(const site of city.economy.locateBuilding('residential')){city.addBuilding('residential',site.x,site.y,{...site,floors:3,free:true});link=city.skybridgeLinksForRevision().find(item=>item.gap>1);if(link)break;}
+ assert(link,'the fixture creates a pair of elevated buildings with a usable link');
  const c=city.citizens.find(c=>!city.politics.officeHolder(c)),other=city.citizens.find(p=>p!==c&&!city.politics.officeHolder(p));
  for(const p of [c,other]){p.conversation=null;p.path=[];p.task='walk';p.indoorLocation=null;for(const k in p.needs)p.needs[k]=95;}
  const b=city.building(link.aId);c.entity.x=b.door.x;c.entity.y=b.door.y;

@@ -70,10 +70,12 @@ export class CitySanitation {
     // Otherwise every simultaneous decision picks the same still-empty cubicle.
     this.inboundMinute??=-1;
     if(this.inboundMinute!==this.city.minute){this.inboundMinute=this.city.minute;this.inboundFacilities=new Map();for(const person of this.city.citizens){if(person.entity.destroyed)continue;const id=person.task==='toilet'?person.toiletTargetId:person.task==='hygiene'?person.hygieneTargetId:null;if(id)this.inboundFacilities.set(id,(this.inboundFacilities.get(id)||0)+1);}}
-    c.trespassToiletFacilityId=null;
+    if(task==='toilet')c.trespassToiletFacilityId=null;else if(task==='hygiene')c.trespassHygieneFacilityId=null;
     const options = [...this.facilities.values()].filter(f => this.allowed(c, f) && this.city.units.get(f.unitId)?.roomType==='bathroom');
     options.sort((a, b) => this.score(c, a) - this.score(c, b));
-    const illegal=task==='toilet'&&!c.custody&&(c.needs?.toilet??100)<20&&this.city.minute-(c.toiletWaitingSince??this.city.minute)>=90;
+    if(task==='hygiene')c.hygieneWaitingSince??=this.city.minute;
+    const need=task==='hygiene'?'hygiene':'toilet',waitingSince=task==='hygiene'?(c.hygieneWaitingSince??this.city.minute):(c.toiletWaitingSince??this.city.minute);
+    const illegal=['toilet','hygiene'].includes(task)&&!c.custody&&(c.needs?.[need]??100)<20&&this.city.minute-waitingSince>=90;
     const candidates=[...options.map(f=>({f,trespass:false}))];
     if(illegal){
       const privateFacilities=[...this.facilities.values()].filter(f=>f.access==='employees'&&this.city.units.get(f.unitId)?.roomType==='bathroom'&&!this.allowed(c,f)).filter(f=>{const b=this.city.building(f.buildingId);return b?.active&&!b.entity.destroyed&&!['jail','townhall','hospital','clinic','public_toilet','paid_toilet','popular_refectory'].includes(b.type)&&(b.ownerId!=null||this.city.economy.businesses.some(x=>x.id===b.id));}).map(f=>({f,trespass:true})).sort((a,b)=>this.score(c,a.f)-this.score(c,b.f));
@@ -82,8 +84,8 @@ export class CitySanitation {
     for (const {f,trespass} of candidates) {
       const b = this.city.building(f.buildingId), path = this.city.findPath(c.entity, b.door); if (path === null) continue;
       const previous=c.task==='toilet'?c.toiletTargetId:c.task==='hygiene'?c.hygieneTargetId:null;if(previous)this.inboundFacilities.set(previous,Math.max(0,(this.inboundFacilities.get(previous)||0)-1));this.inboundFacilities.set(f.id,(this.inboundFacilities.get(f.id)||0)+1);
-      if(task==='toilet'){c.toiletTargetId=f.id;if(trespass)c.trespassToiletFacilityId=f.id;}else c.hygieneTargetId=f.id;c.task=task;c.targetId=b.id;c.path=path;
-      if(trespass)c.action='Indo usar sem autorização o banheiro de uma propriedade privada';
+      if(task==='toilet'){c.toiletTargetId=f.id;if(trespass)c.trespassToiletFacilityId=f.id;}else{c.hygieneTargetId=f.id;if(trespass)c.trespassHygieneFacilityId=f.id;else c.hygieneWaitingSince=null;}c.task=task;c.targetId=b.id;c.path=path;
+      if(trespass)c.action=task==='hygiene'?'Indo usar sem autorização a pia de uma propriedade privada':'Indo usar sem autorização o banheiro de uma propriedade privada';
       return true;
     }
     return false;

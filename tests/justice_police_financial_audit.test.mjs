@@ -7,7 +7,7 @@ import {CityStateGraph,bindCityState} from '../js/city_state.js';
 import {renderJustice,renderSafety} from '../js/city_justice_ui.js';
 
 function fixture(){
-  const people=[1,2,3,4,5].map(id=>({id,accountId:`citizen:${id}`,jobId:id>1&&id<4?10:null,task:'work',entity:{x:1,y:1,properties:{name:`Pessoa ${id}`}},path:[],needs:{health:90},traits:{honesty:1},skills:{investigation:90},indoorLocation:id>1&&id<4?{buildingId:10,path:[]}:null}));
+  const people=[1,2,3,4,5,6].map(id=>({id,accountId:`citizen:${id}`,jobId:id>1&&id<4?10:null,task:'work',entity:{x:1,y:1,properties:{name:`Pessoa ${id}`}},path:[],needs:{health:90},traits:{honesty:1},skills:{investigation:90},indoorLocation:id>1&&id<4?{buildingId:10,path:[]}:null,...(id===6?{partnerId:1}:{})}));
   const station={id:10,type:'police_station',active:true,entity:{},workers:[2,3]},transaction={id:70,kind:'finance',from:'citizen:1',to:'citizen:2',amount:200,minute:120,reason:'Transferência pessoal'};
   const city={minute:300,hour:5,citizens:people,world:{},buildings:[station],history:{entries:[transaction]},society:{citizen:id=>people.find(p=>p.id===id)},building:id=>id===10?station:null,random:()=>0,payWage:()=>true,urgentNeed:()=>false,log:()=>({id:90})};
   const justice=new CityJustice(city);city.justice=justice;const source={id:1,type:'theft',status:'no-suspect',occurredAt:90,details:{},witnesses:[{citizenId:4,identifiedSuspectId:1,confidence:.95}],evidence:[],investigation:{officerId:2,stationId:10,startedAt:100,finishedAt:200,status:'inconclusive'}};justice.cases.push(source);justice.nextCaseId=2;return {city,justice,source,auditor:people[2],officer:people[1],transaction};
@@ -25,6 +25,33 @@ test('a financial audit discovers a suspect’s payment to the judge assigned to
   const f=fixture();f.source.trial={status:'hearing-scheduled',judgeId:5,scheduledAt:110,hearingAt:260};f.transaction.to='citizen:5';f.transaction.minute=180;dispatchPoliceAudits(f.justice);finish(f);
   const audit=f.source.investigation.financialAudit;assert.equal(audit.status,'completed');assert.equal(audit.findings[0].kind,'judge-bribery');assert.equal(audit.findings[0].eventId,70);
   const complaints=f.justice.cases.filter(c=>c.type==='judgeBribery');assert.equal(complaints.length,2);assert.deepEqual(new Set(complaints.map(c=>c.details.role)),new Set(['payer','recipient']));assert.ok(complaints.every(c=>c.details.source==='financial-audit'&&c.evidence.some(e=>e.eventId===70)));
+});
+
+test('a documented partner’s payment to the assigned judge is audited for the defendant’s case',()=>{
+  const f=fixture();f.city.history.entries=[];f.source.status='charged';f.source.chargedCitizenId=1;f.source.trial={status:'hearing-scheduled',judgeId:5,scheduledAt:110,hearingAt:260};f.city.history.entries.push({id:71,kind:'finance',from:'citizen:6',to:'citizen:5',amount:200,minute:180,reason:'Transferência pessoal'});
+  dispatchPoliceAudits(f.justice);finish(f);const audit=f.source.investigation.financialAudit;assert.equal(audit.status,'completed');assert.equal(audit.findings[0].kind,'judge-bribery');assert.equal(audit.findings[0].from,'citizen:6');
+  const complaints=f.justice.cases.filter(c=>c.type==='judgeBribery');assert.equal(complaints.length,2);assert.ok(complaints.every(c=>c.details.beneficiaryId===1));
+});
+
+test('an audit reopens once when a new witness payment is later added to the financial ledger',()=>{
+  const f=fixture();f.city.history.entries=[];dispatchPoliceAudits(f.justice);finish(f);const audit=f.source.investigation.financialAudit;assert.equal(audit.status,'inconclusive');
+  f.city.minute++;const transfer={...f.transaction,id:71,from:'citizen:1',to:'citizen:4',minute:f.city.minute,amount:200};f.city.history.entries.push(transfer);dispatchPoliceAudits(f.justice);
+  assert.equal(audit.status,'active');assert.equal(audit.reanalysisCount,1);assert.equal(audit.reopenedAt,f.city.minute);assert.equal(f.auditor.policeAudit.caseId,f.source.id);
+});
+
+test('the independent audit links a triangulated witness payment without duplicating its transfer',()=>{
+  const f=fixture();f.city.history.entries=[];f.city.history.entries.push(
+    {id:71,kind:'finance',from:'citizen:1',to:'citizen:5',amount:200,minute:110,reason:'Transferência pessoal'},
+    {id:72,kind:'finance',from:'citizen:5',to:'citizen:4',amount:200,minute:120,reason:'Transferência pessoal'});
+  dispatchPoliceAudits(f.justice);finish(f);const audit=f.source.investigation.financialAudit;
+  assert.equal(audit.status,'completed');assert.equal(audit.findings[0].kind,'triangulated-witness-bribery');assert.equal(audit.findings[0].eventId,72);assert.equal(audit.findings[0].intermediaryTransferEventId,71);
+  const complaints=f.justice.cases.filter(c=>c.type==='witnessBribery');assert.equal(complaints.length,2);assert.ok(complaints.every(c=>c.evidence[0].relatedEventIds.join(',')==='71,72'));
+});
+
+test('new transactions outside the relevant hearing window do not trigger reanalysis',()=>{
+  const f=fixture();f.city.history.entries=[];f.source.trial={status:'hearing-scheduled',judgeId:5,scheduledAt:100,hearingAt:220};dispatchPoliceAudits(f.justice);finish(f);const audit=f.source.investigation.financialAudit;assert.equal(audit.status,'inconclusive');
+  f.city.minute++;f.city.history.entries.push({id:71,kind:'finance',from:'citizen:1',to:'citizen:5',amount:200,minute:221,reason:'Transferência posterior'});f.city.history.entries.push({id:72,kind:'finance',from:'citizen:5',to:'citizen:5',amount:200,minute:222,reason:'Movimentação posterior'});dispatchPoliceAudits(f.justice);
+  assert.equal(audit.status,'inconclusive');assert.equal(audit.reanalysisCount||0,0);assert.equal(f.justice.cases.length,1);
 });
 
 test('a hidden agreement, a payment outside the handling period and unrelated transactions are not evidence',()=>{

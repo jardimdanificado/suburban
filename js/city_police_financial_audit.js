@@ -2,6 +2,15 @@ const leads=record=>new Set([...(record.witnesses||[]).filter(w=>w.confidence>=.
 const financialHistory=justice=>justice.city.history?.financeArchive?.length?justice.city.history.financeArchive:(justice.city.history?.entries||[]).filter(event=>event.kind==='finance');
 function financeAfterId(history,id){let low=0,high=history.length;while(low<high){const middle=(low+high)>>>1;if(history[middle].id<=id)low=middle+1;else high=middle;}return history.slice(low);}
 
+function judicialPayers(city,source,involved){
+  const defendant=city.society.citizen(source.chargedCitizenId),ids=new Set(involved);
+  if(defendant)for(const person of city.citizens||[]){
+    const family=person.partnerId===defendant.id||defendant.partnerId===person.id||(person.parentIds||[]).includes(defendant.id)||(defendant.parentIds||[]).includes(person.id)||(person.childIds||[]).includes(defendant.id)||(defendant.childIds||[]).includes(person.id),sameParty=person.political?.partyId!=null&&person.political.partyId===defendant.political?.partyId,sharedBusiness=(person.businessIds||[]).some(id=>(defendant.businessIds||[]).includes(id));
+    if(family||sameParty||sharedBusiness||person.id===source.trial?.defenderId)ids.add(person.id);
+  }
+  return [...ids].map(id=>city.society.citizen(id)).filter(Boolean);
+}
+
 function triangulatedTransfers(history,pairs){
   const payers=new Set(pairs.map(pair=>pair.payer.accountId)),recipients=new Set(pairs.map(pair=>pair.recipient.accountId)),from=Math.min(...pairs.map(pair=>pair.from)),to=Math.max(...pairs.map(pair=>pair.to));
   const transfers=(history||[]).filter(event=>event.kind==='finance'&&event.amount>0&&event.from&&event.to&&event.minute>=from&&event.minute<=to&&(payers.has(event.from)||recipients.has(event.to)));
@@ -24,15 +33,15 @@ function auditPairs(justice,source){
   if(target)for(const id of involved){const payer=city.society.citizen(id);if(payer&&payer!==target)pairs.push({payer,recipient:target,from,to,kind:'police-bribery'});}
   const statements=[...(source.witnesses||[]),...(investigation.interviewEvidence||[]),...(source.evidence||[]).filter(e=>['witness-identification','police-interview'].includes(e.kind))],seen=new Set();
   for(const statement of statements){const witnessId=statement.witnessId??statement.citizenId,payerId=statement.identifiedSuspectId;if(!Number.isInteger(witnessId)||!involved.has(payerId))continue;const key=`${payerId}:${witnessId}`;if(seen.has(key))continue;seen.add(key);const payer=city.society.citizen(payerId),recipient=city.society.citizen(witnessId);if(payer&&recipient&&payer!==recipient)pairs.push({payer,recipient,from,to,kind:'witness-bribery'});}
-  const judge=city.society.citizen(source.trial?.judgeId),trialFrom=source.trial?.scheduledAt??source.trial?.assignedAt??source.trial?.hearingAt-180,trialTo=source.trial?.hearingAt??to;if(source.type!=='judgeBribery'&&judge&&Number.isFinite(trialFrom))for(const id of involved){const payer=city.society.citizen(id);if(payer&&payer!==judge)pairs.push({payer,recipient:judge,from:trialFrom,to:trialTo,kind:'judge-bribery'});}
+  const judge=city.society.citizen(source.trial?.judgeId),trialFrom=source.trial?.scheduledAt??source.trial?.assignedAt??source.trial?.hearingAt-180,trialTo=source.trial?.hearingAt??to;if(source.type!=='judgeBribery'&&judge&&Number.isFinite(trialFrom))for(const payer of judicialPayers(city,source,involved))if(payer!==judge)pairs.push({payer,recipient:judge,from:trialFrom,to:trialTo,kind:'judge-bribery'});
   for(const body of justice.bodies){if((body.criminalCaseId!==source.id&&body.circumstances?.caseId!==source.id)||body.autopsy?.examinerId==null)continue;const recipient=city.society.citizen(body.autopsy.examinerId);for(const id of involved){const payer=city.society.citizen(id);if(payer&&recipient&&payer!==recipient)pairs.push({payer,recipient,body,from:body.autopsyStartedAt??Math.max(0,(body.autopsy.completedAt??city.minute)-1440),to:body.autopsy.completedAt??city.minute,kind:'forensic-bribery'});}}
   return pairs;
 }
 
 function newRelevantDocuments(justice,source,audit){
   const history=financialHistory(justice),cursor=audit.historyCursor??0,pairs=auditPairs(justice,source),finance=financeAfterId(history,cursor).filter(e=>e.amount>0&&e.from&&e.to);if(!finance.length||!pairs.length)return null;
-  const candidates=finance.filter(event=>pairs.some(pair=>(event.from===pair.payer.accountId||event.to===pair.recipient.accountId)&&event.minute>=pair.from));if(!candidates.length)return null;
-  const hasDirect=candidates.some(event=>pairs.some(pair=>event.from===pair.payer.accountId&&event.to===pair.recipient.accountId&&event.minute>=pair.from));
+  const candidates=finance.filter(event=>pairs.some(pair=>(event.from===pair.payer.accountId||event.to===pair.recipient.accountId)&&event.minute>=pair.from&&event.minute<=pair.to));if(!candidates.length)return null;
+  const hasDirect=candidates.some(event=>pairs.some(pair=>event.from===pair.payer.accountId&&event.to===pair.recipient.accountId&&event.minute>=pair.from&&event.minute<=pair.to));
   const relatedChains=triangulatedTransfers(history,pairs).filter(item=>item.source.id>cursor||item.event.id>cursor);
   if(!hasDirect&&!relatedChains.length)return null;
   return Math.max(...candidates.map(event=>event.minute),...relatedChains.map(item=>item.event.minute));
@@ -81,7 +90,7 @@ export function updatePoliceAudit(justice,officer){
   for(const statement of statements){const witnessId=statement.witnessId??statement.citizenId,payerId=statement.identifiedSuspectId;if(!Number.isInteger(witnessId)||!involved.has(payerId))continue;const key=`${payerId}:${witnessId}`;if(pairKeys.has(key))continue;pairKeys.add(key);const payer=city.society.citizen(payerId),witness=city.society.citizen(witnessId);if(payer&&witness&&payer!==witness)witnessPairs.push({payer,witness});}
   const relatedBodies=justice.bodies.filter(body=>(body.criminalCaseId===source.id||body.circumstances?.caseId===source.id)&&body.autopsy?.examinerId!=null&&body.autopsy.completedAt>=(source.occurredAt??from));
   const forensicPairs=relatedBodies.flatMap(body=>[...involved].map(id=>({payer:city.society.citizen(id),recipient:city.society.citizen(body.autopsy.examinerId),body,kind:'forensic-bribery',from:body.autopsyStartedAt??Math.max(0,body.autopsy.completedAt-1440),to:body.autopsy.completedAt})).filter(pair=>pair.payer&&pair.recipient&&pair.payer!==pair.recipient));
-  const judge=city.society.citizen(source.trial?.judgeId),judgeFrom=source.trial?.scheduledAt??source.trial?.assignedAt??(source.trial?.hearingAt!=null?source.trial.hearingAt-180:null),judgeTo=source.trial?.hearingAt??to,judgePairs=source.type!=='judgeBribery'&&judge&&Number.isFinite(judgeFrom)?[...involved].map(id=>({payer:city.society.citizen(id),recipient:judge,kind:'judge-bribery',from:judgeFrom,to:judgeTo})).filter(pair=>pair.payer&&pair.payer!==judge):[];
+  const judge=city.society.citizen(source.trial?.judgeId),judgeFrom=source.trial?.scheduledAt??source.trial?.assignedAt??(source.trial?.hearingAt!=null?source.trial.hearingAt-180:null),judgeTo=source.trial?.hearingAt??to,judgePairs=source.type!=='judgeBribery'&&judge&&Number.isFinite(judgeFrom)?judicialPayers(city,source,involved).map(payer=>({payer,recipient:judge,kind:'judge-bribery',from:judgeFrom,to:judgeTo})).filter(pair=>pair.payer!==judge):[];
   const matchesForensicPayment=(pair,e)=>e.from===pair.payer.accountId&&e.to===pair.recipient.accountId&&e.minute>=pair.from&&e.minute<=pair.to;
   const policePairs=target?[...involved].map(id=>({payer:city.society.citizen(id),recipient:target,from,to,kind:'police-bribery'})).filter(pair=>pair.payer&&pair.payer!==target):[];
   const financeHistoryRows=financialHistory(justice),triangulated=triangulatedTransfers(financeHistoryRows,[...witnessPairs.map(pair=>({...pair,recipient:pair.witness,from,to,kind:'witness-bribery'})),...forensicPairs,...judgePairs,...policePairs]);
