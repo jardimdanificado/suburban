@@ -6,7 +6,11 @@ import {shipmentPriority} from '../js/city_logistics.js';
 import {CURRENCY_RULES} from '../js/city_currency.js';
 import {TILE_STONE} from '../js/world_gen.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
-const fixture=()=>setup({starter:true,funded:true,population:128});
+const fixture=()=>{
+ const city=setup({starter:true,funded:true,population:128}),types=['quarry','farm','iron_mine','paintworks','carrier','builder','tire_factory','cycle_assembler'];let workers=city.citizens.filter(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.jobId);
+ for(const type of types){let building=city.buildings.find(b=>b.type===type&&!b.entity.destroyed);if(!building)for(const site of city.economy.locateBuilding(type)){building=city.addBuilding(type,site.x,site.y,{...site,free:true});if(building)break;}if(!building)throw Error(`Fixture cannot construct ${type}`);if(!building.active)city.economy.activateMunicipalBusiness(building,city.currency.price(100000));if(type==='farm')building.crop='trigo';building.workers??=[];if(!building.workers.length){const worker=workers.shift();if(!worker)throw Error(`Fixture has no worker for ${type}`);city.economy.leaveJob(worker,'Fixture de atividade produtiva');worker.jobId=building.id;worker.task='work';building.workers.push(worker.id);}building.jobs=Math.max(building.jobs||0,building.workers.length);if(type==='carrier'){const driver=city.society.citizen(building.workers[0]);driver.equipment={...(driver.equipment||{}),carrinho:{boughtAt:city.minute}};}}
+ return city;
+};
 const healthy=c=>{for(const k of Object.keys(c.needs))c.needs[k]=90;c.conversation=null;c.path=[];c.indoorLocation=null;};
 test('food at work never interrupts a worker drinking or undergoing urgent treatment',()=>{
  const city=fixture(),b=city.buildings.find(b=>b.type==='quarry'),c=city.society.citizen(b.workers[0]);healthy(c);city.minute=9*60;c.entity.x=b.door.x;c.entity.y=b.door.y;b.inventory.pao=12;c.needs.food=15;c.needs.water=0;c.task='water';c.targetId=1;
@@ -21,9 +25,10 @@ test('larger farms advertise enough positions and farmers plant multiple fields 
 });
 test('a rock quarry uses a reachable deposit and opens a depleted rock cell',()=>{
  const city=fixture(),b=city.buildings.find(b=>b.type==='quarry'),c=city.society.citizen(b.workers[0]);healthy(c);city.minute=9*60;
- city.world.map={};for(let y=b.entity.y;y<b.entity.y+b.depth;y++)for(let x=b.entity.x;x<b.entity.x+b.width;x++)city.world.setTile(x,y,TILE_STONE);
+ city.world.map=new Array(city.world.width*city.world.height).fill(0);
  const near=[];for(let y=b.entity.y;y<b.entity.y+b.depth;y++)for(let x=b.entity.x;x<b.entity.x+b.width;x++)if(Math.abs(x+.5-b.door.x)+Math.abs(y+.5-b.door.y)===1)near.push({x,y});assert(near.length);
- const [cell]=near;city.world.quarryReserves=new Map([[`${cell.x},${cell.y}`,1]]);b.depositRevision=-1;b.stoneReserve=100;b.inventory.pedra=0;
+ const cell=near[0];city.world.setTile(cell.x,cell.y,TILE_STONE);
+ city.world.quarryReserves=new Map([[`${cell.x},${cell.y}`,1]]);b.depositRevision=-1;b.stoneReserve=100;b.inventory.pedra=0;
  c.task='work';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;
  for(let i=0;i<12&&!b.inventory.pedra;i++){city.economy.productionWork(b,c);if(c.path.length){const p=c.path.at(-1);c.entity.x=p.x;c.entity.y=p.y;c.path=[];}}
  assert.equal(b.inventory.pedra,1);assert.notEqual(city.world.getTile(cell.x,cell.y),TILE_STONE);assert(city.walkable(cell.x,cell.y));
@@ -31,8 +36,8 @@ test('a rock quarry uses a reachable deposit and opens a depleted rock cell',()=
 test('external customers buy only excess goods using existing money, keeping inflation and goods balanced',()=>{
  const city=fixture(),b=city.buildings.find(b=>b.type==='iron_mine'),external=city.accounts.get('supplier'),base=totalMoney(city),index=city.currency.priceIndex;
  assert(external.balance>=CURRENCY_RULES.initialSupply*EXTERNAL_TRADE_RULES.initialReserveFraction);b.inventory.minerio=80;city.economy.produced.minerio+=80;city.economy.market.minerio={demand:0};
- const stock=b.inventory.minerio,money=b.balance,outside=external.balance;assert(externalTradeHourly(city)>0);
- const q=stock-b.inventory.minerio;assert(q>0);assert(b.inventory.minerio>=EXTERNAL_TRADE_RULES.minimumFirmStock);assert.equal(b.balance-money,outside-external.balance);assert.equal(totalMoney(city),base);assert.equal(city.currency.priceIndex,index);city.minute+=1440;city.currency.daily();assert.equal(city.currency.priceIndex,index);assert(city.marketHistory.some(s=>s.reason==='Exportação: Minério de ferro'||s.reason.startsWith('Exportação:')));assert.equal(city.economy.externalTrade.units,q);
+ const stock=b.inventory.minerio,money=b.balance,outside=external.balance,broker=city.accounts.get('trade-import-export')?.balance||0,treasury=city.treasury;assert(externalTradeHourly(city)>0);
+ const q=stock-b.inventory.minerio;assert(q>0);assert(b.inventory.minerio>=EXTERNAL_TRADE_RULES.minimumFirmStock);assert.equal(b.balance-money+(city.accounts.get('trade-import-export')?.balance||0)-broker+city.treasury-treasury,outside-external.balance);assert.equal(totalMoney(city),base);assert.equal(city.currency.priceIndex,index);city.minute+=1440;city.currency.daily();assert.equal(city.currency.priceIndex,index);assert(city.marketHistory.some(s=>s.reason==='Exportação: Minério de ferro'||s.reason.startsWith('Exportação:')));assert.equal(city.economy.externalTrade.units,q);
  assert(city.economy.goodsLedger.some(r=>r.kind==='export'));const mirror=new CityStateGraph().apply(new CityStateGraph().encode({city})).city;bindCityState(mirror);assert.equal(mirror.economy.externalTrade.units,q);
 });
 test('exports preserve local demand and do not create payments when outside cash is exhausted',()=>{
@@ -68,7 +73,7 @@ test('splitting a large cargo preserves the origin and quantity of vehicle compo
 });
 
 test('the starting town hall has real public dining rooms and bathrooms sized for the population',()=>{
- const city=setup({starter:true,population:512}),hall=city.buildings.find(b=>b.type==='townhall'),refectory=city.buildings.find(b=>b.type==='popular_refectory'),toilet=city.buildings.find(b=>b.type==='public_toilet'),dining=refectory.units.filter(u=>u.roomType==='dining'),bathrooms=toilet.units.filter(u=>u.roomType==='bathroom');assert(refectory.floors>=4&&toilet.floors>=4);assert.equal(dining.length,8);assert.equal(bathrooms.length,16);assert(bathrooms.every(u=>city.sanitation.facilities.get(`toilet:${u.id}`)?.access==='public'));assert(hall.units.filter(u=>u.roomType==='workspace').length>=hall.jobs);city.sanitation.setupBusinessRooms(refectory);assert.equal(refectory.units.filter(u=>u.roomType==='dining').length,8);
+ const city=setup({starter:true,population:512}),hall=city.buildings.find(b=>b.type==='townhall'),refectory=city.buildings.find(b=>b.type==='popular_refectory'),toilet=city.buildings.find(b=>b.type==='public_toilet'),dining=refectory.units.filter(u=>u.roomType==='dining'),bathrooms=toilet.units.filter(u=>u.roomType==='bathroom');assert(refectory.floors>=4&&toilet.floors>=4);assert(dining.length>=8);assert(bathrooms.length>=16);assert(bathrooms.every(u=>city.sanitation.facilities.get(`toilet:${u.id}`)?.access==='public'));assert(hall.units.filter(u=>u.roomType==='workspace').length>=hall.jobs);city.sanitation.setupBusinessRooms(refectory);assert.equal(refectory.units.filter(u=>u.roomType==='dining').length,dining.length);
 });
 
 test('a large waiting order splits when its carrier has no available cargo-bike driver',()=>{

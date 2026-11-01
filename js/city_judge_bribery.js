@@ -5,9 +5,16 @@ function sameScene(justice,a,b){
   return left.buildingId===right.buildingId&&left.unitId===right.unitId&&left.floor===right.floor&&Math.abs(left.height-right.height)<=.5;
 }
 
+function hasDocumentedInterest(city,record,payer){
+  const defendant=city.society.citizen(record?.chargedCitizenId);if(!defendant)return false;if(payer.id===defendant.id||record.trial?.defenderId===payer.id)return true;
+  if(payer.partnerId===defendant.id||defendant.partnerId===payer.id||(payer.parentIds||[]).includes(defendant.id)||(defendant.parentIds||[]).includes(payer.id)||(payer.childIds||[]).includes(defendant.id)||(defendant.childIds||[]).includes(payer.id))return true;
+  if(payer.political?.partyId!=null&&payer.political.partyId===defendant.political?.partyId)return true;
+  const defendantBusinesses=new Set(defendant.businessIds||[]);return (payer.businessIds||[]).some(id=>defendantBusinesses.has(id));
+}
+
 export function offerJudgeBribe(justice,record,payer,amount){
   const city=justice.city,trial=record?.trial,judge=city.society.citizen(trial?.judgeId);
-  if(!record||record.type==='judgeBribery'||trial?.status!=='hearing-scheduled'||trial.judgeBribe||!payer||payer.id!==record.chargedCitizenId||!judge||payer===judge||
+  if(!record||record.type==='judgeBribery'||trial?.status!=='hearing-scheduled'||trial.judgeBribe||!payer||!hasDocumentedInterest(city,record,payer)||!judge||payer===judge||
     payer.entity.destroyed||judge.entity.destroyed||payer.custody||judge.custody||(payer.needs?.health??100)<=20||(judge.needs?.health??100)<=20||
     (payer.unconsciousUntil||0)>city.minute||(judge.unconsciousUntil||0)>city.minute||!Number.isSafeInteger(amount)||amount<=0||
     !sameScene(justice,payer,judge)||!near(justice.observationPosition(payer),justice.observationPosition(judge)))return false;
@@ -15,11 +22,11 @@ export function offerJudgeBribe(justice,record,payer,amount){
   const accepted=city.random()<Math.max(.02,Math.min(.95,(1-(judge.traits?.honesty??.5))*.8));
   if(accepted&&!city.transfer(payer.accountId,judge.accountId,amount,'Pagamento clandestino a juiz',{caseId:record.id,payerId:payer.id,judgeId:judge.id}))return false;
   const event=city.log(accepted?'Um juiz recebeu dinheiro para favorecer uma das partes.':'Um juiz recusou e registrou uma oferta de suborno.','justice',[payer.id,judge.id],{kind:accepted?'judge-bribe-paid':'judge-bribe-refused',caseId:record.id,amount:accepted?amount:0,offeredAmount:amount});
-  const bribe=trial.judgeBribe={status:accepted?'paid':'refused',caseId:record.id,payerId:payer.id,judgeId:judge.id,amount:accepted?amount:0,offeredAmount:amount,minute:city.minute,eventId:event.id,paymentEventId:accepted?(city.ledger?.at(-1)?.eventId??event.id):null,caseIds:[]};
+  const bribe=trial.judgeBribe={status:accepted?'paid':'refused',caseId:record.id,payerId:payer.id,beneficiaryId:record.chargedCitizenId,judgeId:judge.id,amount:accepted?amount:0,offeredAmount:amount,minute:city.minute,eventId:event.id,paymentEventId:accepted?(city.ledger?.at(-1)?.eventId??event.id):null,caseIds:[]};
   const accused=accepted?[payer,judge]:[payer];
   for(const person of accused){
     const role=person===judge?'recipient':'payer';
-    const complaint=justice.crimeRecord('judgeBribery',person.id,person===judge?payer.id:judge.id,{sourceCaseId:record.id,payerId:payer.id,judgeId:judge.id,role,attempted:!accepted,amount:bribe.amount,bribeEventId:event.id,paymentEventId:bribe.paymentEventId,position:{...justice.observationPosition(judge)},scene:{...justice.observationScene(judge)}});
+    const complaint=justice.crimeRecord('judgeBribery',person.id,person===judge?payer.id:judge.id,{sourceCaseId:record.id,payerId:payer.id,beneficiaryId:record.chargedCitizenId,judgeId:judge.id,role,attempted:!accepted,amount:bribe.amount,bribeEventId:event.id,paymentEventId:bribe.paymentEventId,position:{...justice.observationPosition(judge)},scene:{...justice.observationScene(judge)}});
     if(!complaint)continue;bribe.caseIds.push(complaint.id);
     if(!accepted&&person===payer){complaint.status='reported';complaint.reportedAt=city.minute;complaint.reportSource='judge-refusal';complaint.statement={reporterId:judge.id,description:'O juiz recusou e denunciou a tentativa de compra da decisão.',confidence:.95};}
   }

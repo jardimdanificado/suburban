@@ -12,3 +12,14 @@ test('a chamber president is replaced only by a remaining member of the same par
   council.remove(leader.id,'Cassação criminal');assert.equal(council.leaderId,successor.id);assert.equal(council.leaderPartyId,4);
   council.remove(successor.id,'Cassação criminal');assert.equal(council.leaderId,null);assert.equal(council.leaderPartyId,4);assert.equal(council.members.some(member=>member.citizenId===otherParty.id),true);
 });
+
+test('ficha limpa starts disabled and only blocks a convicted candidate for marked offenses when approved',()=>{
+  const city=setup({starter:true,population:48}),government=city.politics,justice=city.justice;government.organize();const candidate=city.citizens.find(c=>city.society.isAdult(c)&&!government.officeHolder(c));assert(candidate);assert.equal(justice.policies.cleanRecord,false);assert.equal(justice.policies.parliamentaryImmunity,false);const party=government.parties.find(p=>p.active);candidate.political.partyId=party.id;if(!party.memberIds.includes(candidate.id))party.memberIds.push(candidate.id);
+  const record=justice.crimeRecord('graffiti',candidate.id,null);record.chargedCitizenId=candidate.id;record.status='convicted';record.rule={...record.rule,politicalDisqualification:false,cleanRecordDisqualifying:true};justice.policies.penalCode.graffiti.cleanRecordDisqualifying=true;assert.equal(government.canRun(candidate),true);
+  justice.policies.cleanRecord=true;assert.equal(government.canRun(candidate),false);justice.policies.cleanRecord=false;record.rule.politicalDisqualification=true;assert.equal(government.canRun(candidate),false);
+});
+
+test('mayoral candidate limit is clamped to at least two and at most half the party limit',()=>{
+  const city=setup({starter:true,population:128}),government=city.politics;government.policy.partyLimit=8;government.policy.mayorCandidateLimit=1;government.beginElection();assert.equal(government.active.mayorCandidateLimitAtOpening,2);assert.equal(government.active.candidates.length,2);assert(government.active.nominationReport.some(row=>row.status==='Sem vaga no limite de candidaturas'));
+  government.active=null;government.policy.mayorCandidateLimit=99;government.beginElection();assert.equal(government.active.mayorCandidateLimitAtOpening,4);assert.equal(government.active.candidates.length,4);
+});

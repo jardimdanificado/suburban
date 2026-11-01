@@ -18,6 +18,13 @@ test('the initial equipment grant is idempotent and does not keep issuing new bi
  const city=setup({starter:true,population:64}),count=city.vehicles.units.size,money=totalMoney(city),stock=city.economy.initialStock.bicicleta_carga;
  city.vehicles.equipInitialWorkers();city.vehicles.hourly();assert.equal(city.vehicles.units.size,count);assert.equal(city.economy.initialStock.bicicleta_carga,stock);assert.equal(totalMoney(city),money);
 });
+test('initial assembled vehicle stock is counted once in goods conservation',()=>{
+ const city=setup({starter:true,population:64});
+ for(const good of ['bicicleta','bicicleta_carga','patinete','patins']){
+  const expected=city.economy.initialStock[good]+city.economy.produced[good]-city.economy.consumed[good]-city.economy.lost[good];
+  assert.equal(city.goodsStock(good),expected,good);
+ }
+});
 test('initial bikes are usable on a normal citizen trip from the beginning',()=>{
  const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='carrier'),c=city.society.citizen(b.workers[0]),bike=[...city.vehicles.units.values()].find(v=>v.ownerAccountId===c.accountId);
  c.path=city.findPath(c.entity,b.door);c.task='work';c.targetId=b.id;c.lastVehicleSearchAt=-Infinity;c.conversation=null;c.workMeal=null;

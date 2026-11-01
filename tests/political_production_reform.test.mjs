@@ -6,6 +6,7 @@ import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity } fr
 import { scandalEligible, organizeScheme } from '../js/city_political_institutions.js';
 import { CityStateGraph, bindCityState } from '../js/city_state.js';
 import { renderPolitics } from '../js/city_politics_ui.js';
+import { putAtWorkCell } from './helpers/city.mjs';
 
 function cityOf(population=80){
   const tiles=new Uint8Array(128*128);let id=0;
@@ -16,12 +17,13 @@ function addFirm(city,type){
   for(const site of city.economy.locateBuilding(type)){const b=city.addBuilding(type,site.x,site.y,{...site,width:3,depth:3,floors:1,free:true});if(b){city.economy.activateMunicipalBusiness(b,100000);return b;}}
   throw Error(`Missing site: ${type}`);
 }
+function assignWorker(city,building,c){if(c.jobId)city.economy.leaveJob(c,'Fixture de trabalhador');building.workers??=[];if(!building.workers.includes(c.id))building.workers.push(c.id);c.jobId=building.id;c.task='work';c.targetId=building.id;putAtWorkCell(city,c,building);return c;}
 function money(city){return [...city.accounts.values()].reduce((n,a)=>n+a.balance,0);}
 function plenary(city,minute=city.minute){
   const chamber=city.politics.council.getChamber(),hall=chamber.hall()||addFirm(city,'council_chamber');
   if(hall.floors<2){city.housing.addFloor(hall,1,'treasury');hall.floors=2;}
   city.minute=Math.floor(minute/1440)*1440+600;
-  for(const c of city.politics.council.people()){c.task='council-session';c.path=[];c.councilSession={buildingId:hall.id};c.entity.x=hall.door.x;c.entity.y=hall.door.y;for(const k of Object.keys(c.needs))c.needs[k]=95;}
+  const plenaryUnit=hall.units.find(unit=>unit.roomType==='plenary'&&unit.z===0)||hall.units[0];for(const c of city.politics.council.people()){c.task='council-session';c.path=[];c.councilSession={buildingId:hall.id};c.indoorLocation={buildingId:hall.id,unitId:plenaryUnit.id,floor:plenaryUnit.z,roomType:'plenary',position:{x:hall.door.x,y:hall.door.y,z:0},path:[]};c.entity.x=hall.door.x;c.entity.y=hall.door.y;for(const k of Object.keys(c.needs))c.needs[k]=95;}
   chamber.minute();return hall;
 }
 
@@ -54,7 +56,7 @@ test('vice mayor succeeds first, and chamber president succeeds when both execut
 });
 
 test('kitchen consumes ingredients before making meals and ingredient dislikes survive the transformation',()=>{
-  const city=cityOf(),b=addFirm(city,'kitchen'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
+  const city=cityOf(),b=addFirm(city,'kitchen'),c=assignWorker(city,b,city.citizens.find(c=>!city.politics.officeHolder(c)));
   Object.assign(b.inventory,{feijao:2,arroz:2,alface:1,tomate:1});b.cookingLabor=17;c.skills.baking=100;assert(city.economy.productionWork(b,c));assert.equal(b.inventory.marmita,3);assert.equal(b.inventory.arroz,0);assert.equal(b.inventory.tomate,0);
   city.transfer('treasury',c.accountId,10000,'Test income');c.foodPreferences={marmita:0,feijao:-1,arroz:-1,alface:-1,tomate:-1};const offer=city.economy.mealOffer(b,c);assert.deepEqual(offer.inputs,{marmita:1});assert(offer.ingredients.tomate);assert(city.economy.mealTaste(c,offer)<0);
   const food=c.needs.food;c.task='food';assert(city.economy.consumeMeal(c,b));assert.equal(b.inventory.marmita,2);assert(c.needs.food>food);assert(c.mood<0);
@@ -66,9 +68,9 @@ test('liked foods create demand and market prices move up on scarcity and down w
 });
 
 test('artisans make real carrying equipment; ownership expands actual order and driver capacity',()=>{
-  const city=cityOf(),artisan=addFirm(city,'artisan'),c=city.citizens.find(c=>!city.politics.officeHolder(c));Object.assign(artisan.inventory,{madeira:3,fibras:2});artisan.productionLabor=24;assert(city.economy.productionWork(artisan,c));assert.equal(artisan.inventory.cesta,2);assert.equal(artisan.inventory.madeira,0);
+  const city=cityOf(),artisan=addFirm(city,'artisan'),c=assignWorker(city,artisan,city.citizens.find(c=>!city.politics.officeHolder(c)));Object.assign(artisan.inventory,{madeira:3,fibras:2});artisan.productionLabor=24;assert(city.economy.productionWork(artisan,c));assert.equal(artisan.inventory.cesta,2);assert.equal(artisan.inventory.madeira,0);
   city.transfer('treasury',c.accountId,10000,'Test income');c.entity.x=artisan.door.x;c.entity.y=artisan.door.y;assert(city.economy.buyConsumerGood(c,artisan));assert.equal(carryCapacity(c),36);
-  const seller=addFirm(city,'market'),buyer=addFirm(city,'market');seller.inventory.pao=100;buyer.ownerId=c.id;const shipment=city.logistics.order(seller,buyer,'pao',36,0);assert(shipment);assert(city.logistics.candidates(shipment).every(c=>carryCapacity(c)>=36));assert.equal(city.logistics.order(seller,buyer,'pao',37,0),false);const total=money(city);c.equipment={};city.logistics.splitLoad(shipment);const pieces=city.logistics.shipments.filter(s=>s.buyer===buyer);assert.equal(pieces.reduce((n,s)=>n+s.quantity,0),36);assert(pieces.every(s=>s.quantity<=24));assert.equal(buyer.incoming.pao,36);assert.equal(money(city),total);
+  const seller=addFirm(city,'market'),buyer=addFirm(city,'market');seller.inventory.pao=100;buyer.ownerId=c.id;const shipment=city.logistics.order(seller,buyer,'pao',36,0);assert(shipment);assert(city.logistics.candidates(shipment).every(c=>city.logistics.capacity(c)>=36));assert.equal(city.logistics.capacity(c),36);const total=money(city);c.equipment={};city.logistics.splitLoad(shipment);const pieces=city.logistics.shipments.filter(s=>s.buyer===buyer);assert.equal(pieces.reduce((n,s)=>n+s.quantity,0),36);assert(pieces.every(s=>s.quantity<=24));assert.equal(buyer.incoming.pao,36);assert.equal(money(city),total);
   Object.assign(artisan.inventory,{madeira:5,fibras:1});artisan.productionLabor=24;assert(city.economy.productionWork(artisan,c));assert.equal(artisan.inventory.carrinho,1);assert.equal(artisan.inventory.madeira,0);assert(city.economy.buyConsumerGood(c,artisan));assert.equal(carryCapacity(c),72);
 });
 
@@ -80,7 +82,7 @@ test('unemployed founders can pool money for a small real business, and supply a
 
 test('campaigns expose unfulfilled promises and candidate programs differ',()=>{
   const city=cityOf(),p=city.politics;p.beginElection();assert(p.active.candidates.every(n=>n.viceId&&n.promises.length===1));const programs=p.active.candidates.map(n=>n.promises.map(pr=>pr.title).join('|'));assert(new Set(programs).size>2);
-  const incumbent=p.active.candidates.find(n=>n.citizenId===city.economy.mayorId),challenger=p.active.candidates.find(n=>n.citizenId!==incumbent.citizenId);assert(challenger);p.campaigns.criticize(challenger,p.active);assert(p.active.events.some(e=>e.kind==='campaign-accountability'));
+  const incumbent=p.active.candidates[0],challenger=p.active.candidates[1];assert(challenger);city.random=()=>0;p.mandates.terms.push({id:1,mayorId:incumbent.citizenId,mayorName:incumbent.name,partyId:incumbent.partyId,promises:[{title:'Abrir uma clínica',metric:'clinics',baseline:0,current:0,target:1,progress:0,fulfilled:false,attention:.8}]});p.campaigns.criticize(challenger,p.active);assert(p.active.events.some(e=>e.kind==='campaign-accountability'));
 });
 
 test('a real public contract can fund a multi-person kickback scheme without creating currency',()=>{
@@ -103,9 +105,9 @@ test('worker snapshots retain dynamic prices, vice presidency and individual car
   const root=receiver.apply(sender.encode({city}));bindCityState(root.city);assert.equal(root.city.economy.goods.tomate.price,city.economy.goods.tomate.price);assert.equal(root.city.politics.viceMayorId,city.politics.viceMayorId);assert.equal(carryCapacity(root.city.citizens[0]),72);assert.equal(root.city.politics.council.bounds().max,10);
 });
 
-test('two election cycles retain lawful chamber sizes, tickets and money conservation',()=>{
+test('four election cycles retain lawful chamber sizes, tickets and money conservation',()=>{
   const city=cityOf(64),p=city.politics;
-  for(let election=0;election<2;election++){
+  for(let election=0;election<4;election++){
     city.minute=p.nextElectionAt-p.termRules.campaignMinutes;p.hourly();assert(p.active);const total=money(city);
     for(let round=0;round<2&&p.active;round++){
       const e=p.active;city.minute=e.voteAt;e.status='campaign';p.voting.open(e);assert.equal(e.status,'voting');
@@ -123,7 +125,7 @@ test('temporary suspension uses the vice and restores the mayor without resettin
 });
 
 test('a resident without a job can finance a microbusiness from existing bank capital',()=>{
-  const city=cityOf(),founder=city.citizens.find(c=>!city.politics.officeHolder(c)&&!c.jobId);city.transfer('treasury',founder.accountId,500,'Test savings');city.economy.demands=[{type:'market',score:120}];const total=money(city);
+  const city=cityOf(),founder=city.citizens.find(c=>!city.politics.officeHolder(c)&&!c.jobId),bank=city.economy.businesses.find(b=>b.type==='bank'),bankWorker=city.citizens.find(c=>c.id!==founder.id&&!city.politics.officeHolder(c));if(bankWorker.jobId)city.economy.leaveJob(bankWorker,'Fixture de atendimento bancário');bank.workers=[bankWorker.id];bankWorker.jobId=bank.id;city.transfer('treasury',founder.accountId,500,'Test savings');city.economy.demands=[{type:'market',score:120}];const total=money(city);
   assert(bootstrapEnterprise(city.economy));const loan=city.bank.loans.find(l=>l.clientId===founder.accountId&&l.purpose==='business');assert(loan);assert(founder.businessIds.length);assert.equal(money(city),total);
 });
 
