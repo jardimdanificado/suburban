@@ -1,5 +1,5 @@
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
-import {streetSurfaceTextures} from './street_surface_textures.js?v=natural-streets-12';
+import {streetSurfaceTextures} from './street_surface_textures.js?v=natural-streets-14';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {waterPollutionAt,waterTint} from './city_water.js';
 import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=portuguese-roof-tiles-2';
@@ -14,7 +14,7 @@ import { syncCityBuildings } from "./city_renderer_3d.js?v=remove-roof-hat-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=natural-streets-2';
 import { flagNightFactor } from './city_terrain.js?v=sidewalk-grade-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-4';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -3702,6 +3702,7 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'Sidewalk','sidewalk',normBrickA,.25,.95,0),
       ...terrainSurfaceMaterials(isPersp,'SidewalkTree','sidewalkTree',normBrickA,.3,.94,0),
       ...terrainSurfaceMaterials(isPersp,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
+      terrainSewerPipe:makeMat(isPersp,{color:0xffffff,vertexColors:true,dithering:true,side:THREE.DoubleSide},null,1,.88,.03),
       farmSoil:makeMat(isPersp,{map:caribbeanGroundTexture(THREE,'farm'),color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
@@ -6363,12 +6364,30 @@ export class RCT3DRenderer {
       [TILE_ROAD_HILL]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_GRASS_STONE]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_SAND_STONE]: { pos: [], uvs: [], colors: [] },
-      [TILE_ROAD_HILL_STONE]: { pos: [], uvs: [], colors: [] }
+      [TILE_ROAD_HILL_STONE]: { pos: [], uvs: [], colors: [] },
+      terrainSewerPipe:{pos:[],uvs:[],colors:[]}
     };
     const waterFoamBucket = { pos: [], uvs: [], colors: [] };
     for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','SidewalkTree','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
     }
+    const pipeBucket=tileMeshBuckets.terrainSewerPipe,linearChannel=value=>{value/=255;return value<=.04045?value/12.92:((value+.055)/1.055)**2.4;};
+    const pipeColor=hex=>[linearChannel(hex>>>16&255),linearChannel(hex>>>8&255),linearChannel(hex&255)];
+    const pushPipeSegment=(a,b,radius,color)=>{
+      const axis=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],length=Math.hypot(...axis);if(length<.025)return;
+      const d=axis.map(value=>value/length),ref=Math.abs(d[1])>.9?[1,0,0]:[0,1,0],cross=(u,v)=>[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],normalize=v=>{const n=Math.hypot(...v)||1;return v.map(value=>value/n);},u=normalize(cross(d,ref)),v=cross(d,u),tint=pipeColor(color),sides=8;
+      for(let i=0;i<sides;i++){
+        const aa=i*Math.PI*2/sides,bb=(i+1)*Math.PI*2/sides,n0=u.map((value,k)=>value*Math.cos(aa)+v[k]*Math.sin(aa)),n1=u.map((value,k)=>value*Math.cos(bb)+v[k]*Math.sin(bb));
+        const p0=a.map((value,k)=>value+n0[k]*radius),p1=a.map((value,k)=>value+n1[k]*radius),p2=b.map((value,k)=>value+n1[k]*radius),p3=b.map((value,k)=>value+n0[k]*radius);
+        for(const [point,along,around]of [[p0,0,i/sides],[p1,0,(i+1)/sides],[p2,1,(i+1)/sides],[p0,0,i/sides],[p2,1,(i+1)/sides],[p3,1,i/sides]]){pipeBucket.pos.push(...point);pipeBucket.uvs.push(along,around);pipeBucket.colors.push(...tint);}
+      }
+    };
+    const addSewerPipe=(ax,az,bx,bz,ya,yb,offsetX=0,offsetZ=0)=>{
+      const start=[ax+offsetX,ya,az+offsetZ],end=[bx+offsetX,yb,bz+offsetZ],point=t=>start.map((value,i)=>value+(end[i]-value)*t);
+      pushPipeSegment(start,end,.035,0x626767);
+      const length=Math.hypot(end[0]-start[0],end[2]-start[2]);
+      if(length>.42)for(const t of [.08,.92])pushPipeSegment(point(t),point(Math.min(1,t+.045)),.048,0x786b57);
+    };
 
     const gridLinePositions = [];
     const matHelper = new THREE.Matrix4();
@@ -6491,6 +6510,11 @@ export class RCT3DRenderer {
           // across neighboring tiles instead of stretching an image per panel.
           for(const [point,u]of [[a,face.from],[b,face.to],[c,face.to],[a,face.from],[c,face.to],[d,face.from]]){
             wall.pos.push(...point);wall.uvs.push(u,point[1]);wall.colors.push(tone,tone,tone);
+          }
+          const wallHeightA=face.highA-face.lowA,wallHeightB=face.highB-face.lowB;
+          if(Math.max(wallHeightA,wallHeightB)>.42){
+            const [ox,oz]=face.side===0?[0,-.045]:face.side===1?[.045,0]:face.side===2?[0,.045]:[-.045,0];
+            addSewerPipe(face.ax,face.ay,face.bx,face.by,face.lowA+Math.min(.28,wallHeightA*.32),face.lowB+Math.min(.28,wallHeightB*.32),ox,oz);
           }
         }
 
@@ -6629,10 +6653,17 @@ export class RCT3DRenderer {
           const baseH = 0.0;
           const cliffBaseAO = 0.65 * zoneMult;
           const cliffTopAO = 0.95 * zoneMult;
+          const cliffBucket=side=>streetCorners?tileMeshBuckets[`terrainRetainingWall${terrainTextureHash(tx,ty,tType+side)&3}`]:bucket;
+          const cliffPipe=(side,ax,az,bx,bz,topA,topB)=>{
+            if(!streetCorners||Math.max(topA,topB)<.46)return;
+            const [ox,oz]=side===0?[0,-.045]:side===1?[.045,0]:side===2?[0,.045]:[-.045,0];
+            addSewerPipe(ax,az,bx,bz,Math.min(.28,Math.max(.08,topA*.3)),Math.min(.28,Math.max(.08,topB*.3)),ox,oz);
+          };
 
           // 1. South Face (+Y, at ty + 1, facing +Z)
           if (ty === this.mapHeight - 1 || isWaterAt(tx, ty + 1)) {
-            bucket.pos.push(
+            const wallBucket=cliffBucket(2);
+            wallBucket.pos.push(
               tx, baseH, ty + 1,
               tx + 1, baseH, ty + 1,
               tx + 1, h11, ty + 1,
@@ -6641,8 +6672,8 @@ export class RCT3DRenderer {
               tx + 1, h11, ty + 1,
               tx, h01, ty + 1
             );
-            bucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
-            bucket.colors.push(
+            wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
+            wallBucket.colors.push(
               cliffBaseAO, cliffBaseAO, cliffBaseAO,
               cliffBaseAO, cliffBaseAO, cliffBaseAO,
               cliffTopAO, cliffTopAO, cliffTopAO,
@@ -6650,11 +6681,13 @@ export class RCT3DRenderer {
               cliffTopAO, cliffTopAO, cliffTopAO,
               cliffTopAO, cliffTopAO, cliffTopAO
             );
+            cliffPipe(2,tx,ty+1,tx+1,ty+1,h01,h11);
           }
 
           // 2. East Face (+X, at tx + 1, facing +X)
           if (tx === this.mapWidth - 1 || isWaterAt(tx + 1, ty)) {
-            bucket.pos.push(
+            const wallBucket=cliffBucket(1);
+            wallBucket.pos.push(
               tx + 1, baseH, ty + 1,
               tx + 1, baseH, ty,
               tx + 1, h10, ty,
@@ -6663,8 +6696,8 @@ export class RCT3DRenderer {
               tx + 1, h10, ty,
               tx + 1, h11, ty + 1
             );
-            bucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
-            bucket.colors.push(
+            wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
+            wallBucket.colors.push(
               cliffBaseAO, cliffBaseAO, cliffBaseAO,
               cliffBaseAO, cliffBaseAO, cliffBaseAO,
               cliffTopAO, cliffTopAO, cliffTopAO,
@@ -6672,11 +6705,13 @@ export class RCT3DRenderer {
               cliffTopAO, cliffTopAO, cliffTopAO,
               cliffTopAO, cliffTopAO, cliffTopAO
             );
+            cliffPipe(1,tx+1,ty+1,tx+1,ty,h11,h10);
           }
 
           // 3. North Face (-Y, at ty, facing -Z)
           if (ty === 0 || isWaterAt(tx, ty - 1)) {
-            bucket.pos.push(
+            const wallBucket=cliffBucket(0);
+            wallBucket.pos.push(
               tx + 1, baseH, ty,
               tx, baseH, ty,
               tx, h00, ty,
@@ -6685,8 +6720,8 @@ export class RCT3DRenderer {
               tx, h00, ty,
               tx + 1, h10, ty
             );
-            bucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
-            bucket.colors.push(
+            wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
+            wallBucket.colors.push(
               cliffBaseAO, cliffBaseAO, cliffBaseAO,
               cliffBaseAO, cliffBaseAO, cliffBaseAO,
               cliffTopAO, cliffTopAO, cliffTopAO,
@@ -6694,11 +6729,13 @@ export class RCT3DRenderer {
               cliffTopAO, cliffTopAO, cliffTopAO,
               cliffTopAO, cliffTopAO, cliffTopAO
             );
+            cliffPipe(0,tx+1,ty,tx,ty,h10,h00);
           }
 
           // 4. West Face (-X, at tx, facing -X)
           if (tx === 0 || isWaterAt(tx - 1, ty)) {
-            bucket.pos.push(
+            const wallBucket=cliffBucket(3);
+            wallBucket.pos.push(
               tx, baseH, ty,
               tx, baseH, ty + 1,
               tx, h01, ty + 1,
@@ -6707,8 +6744,8 @@ export class RCT3DRenderer {
               tx, h01, ty + 1,
               tx, h00, ty
             );
-            bucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
-            bucket.colors.push(
+            wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
+            wallBucket.colors.push(
               cliffBaseAO, cliffBaseAO, cliffBaseAO,
               cliffBaseAO, cliffBaseAO, cliffBaseAO,
               cliffTopAO, cliffTopAO, cliffTopAO,
@@ -6716,6 +6753,7 @@ export class RCT3DRenderer {
               cliffTopAO, cliffTopAO, cliffTopAO,
               cliffTopAO, cliffTopAO, cliffTopAO
             );
+            cliffPipe(3,tx,ty,tx,ty+1,h00,h01);
           }
         }
       }

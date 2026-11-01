@@ -8,9 +8,10 @@ body{margin:0;background:#19251e;color:#f4eddb;font:13px system-ui}#view{width:1
 <header><details open><summary>Rua, calçada e veículos</summary><p>Calçada nivelada com a rua, anel de terra para árvore e arrimo na encosta.</p><div id="controls"></div><p id="status"></p><p id="error"></p></details></header>
 <div id="view"></div>
 <script type="module">
-import {RCT3DRenderer} from '../../js/renderer_3d.js?v=natural-streets-12';
+import {RCT3DRenderer} from '../../js/renderer_3d.js?v=natural-streets-14';
 import {setActiveEntities} from '../../js/engine.js';
-import {terrainSurfaceElevation} from '../../js/road_terrain_geometry.js?v=sidewalk-grade-1';
+import {terrainSurfaceElevation} from '../../js/road_terrain_geometry.js?v=sidewalk-grade-4';
+import {TILE_WATER} from '../../js/world_gen.js?v=deep-perf-3';
 const error=document.querySelector('#error'),status=document.querySelector('#status');
 window.addEventListener('error',event=>error.textContent+=event.message+'\n');
 window.addEventListener('unhandledrejection',event=>error.textContent+=String(event.reason)+'\n');
@@ -18,7 +19,7 @@ try{
   const view=document.querySelector('#view'),renderer=new RCT3DRenderer(view),width=18,height=18;
   const world={width,height,map:new Uint8Array(width*height),revision:1,clock:{hour:12,minute:0},groups:[],sidewalkTiles:new Set(),sidewalkTreeTiles:new Set(),getTile(x,y){return this.map[y*width+x];}};
   for(let x=1;x<17;x++){world.map[8*width+x]=8;for(const y of [7,9])world.sidewalkTiles.add(y*width+x);}
-  world.map[6*width+3]=9;world.sidewalkTreeTiles.add(7*width+13);
+  world.map[6*width+3]=9;world.map[6*width+13]=TILE_WATER;world.sidewalkTreeTiles.add(7*width+13);
   const kinds=['bicicleta','bicicleta_carga','carrinho','patinete','skate','patins'],names=['Bicicleta','Bike de carga','Carrinho','Patinete','Skate','Patins'];
   const tree={id:99,x:13.5,y:7.5,destroyed:false,properties:{name:'Coqueiro',species:'coconut_palm',tree:true,cityPlant:{visualScale:1.1},render:{color:0x548d38,size:1.1,skin:'feature_tree_full.png'}}};
   const entities=[tree,...kinds.map((good,i)=>({id:100+i,x:3+i*2.3,y:8.5,destroyed:false,properties:{name:names[i],render:{color:0xffffff},cityVehicle:{id:100+i,good,angle:Math.PI/2}}}))];
@@ -31,7 +32,7 @@ try{
     renderer.setFreeCameraMode(true);renderer.freeCamX=e.x+dx;renderer.freeCamY=h+.45+dy;renderer.freeCamZ=e.y+dz;renderer.fpYaw=Math.atan2(-dx,-dz);renderer.fpPitch=Math.atan2(-dy,Math.hypot(dx,dz));
     status.textContent=names[index]+' — modelo completo com cores e materiais independentes.';
   }
-  button('Rua e calçadas',overview);button('Árvore e arrimo',()=>{renderer.setFreeCameraMode(true);renderer.freeCamX=13.8;renderer.freeCamY=3;renderer.freeCamZ=8.3;renderer.fpYaw=0;renderer.fpPitch=-.72;status.textContent='Anel de terra ao redor do coqueiro; a calçada se mantém no nível da rua.';});names.forEach((name,i)=>button(name,()=>closeup(i)));
+  button('Rua e calçadas',overview);button('Árvore e arrimo + esgoto',()=>{renderer.setFreeCameraMode(true);renderer.freeCamX=13.5;renderer.freeCamY=.55;renderer.freeCamZ=6.85;renderer.fpYaw=Math.PI;renderer.fpPitch=-.06;status.textContent='Anel de terra ao redor do coqueiro; arrimo com cano de esgoto acompanha a borda junto à água.';});names.forEach((name,i)=>button(name,()=>closeup(i)));
   button('Pedra de perto',()=>{renderer.setFreeCameraMode(true);renderer.freeCamX=11;renderer.freeCamY=3.3;renderer.freeCamZ=8.5;renderer.fpPitch=-Math.PI/2+.001;renderer.fpYaw=0;status.textContent='Granulação e normal map usam as mesmas juntas e bordas das pedras.';});
   button('Grama de perto',()=>{renderer.setFreeCameraMode(true);renderer.freeCamX=8;renderer.freeCamY=1.65;renderer.freeCamZ=11.8;renderer.fpYaw=0;renderer.fpPitch=-.25;status.textContent='Grama rasteira com lâminas finas, alturas variadas e raízes ajustadas ao solo.';});
   overview();function frame(){renderer.render(world,entities,world.clock,1/60,0);requestAnimationFrame(frame);}requestAnimationFrame(frame);
