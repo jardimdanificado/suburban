@@ -13,10 +13,12 @@ test('granite uses mostly cool natural stone with sparse warm mineral seams and 
   const pixels=a.size*a.size;
   assert(cool>pixels*.55);assert(warm>pixels*.002&&warm<pixels*.06);assert(relief>pixels*.04);
 });
-test('sidewalk slabs are lighter and much quieter than the street',()=>{
-  const road=streetSurfacePixels('pavedRoad'),walk=streetSurfacePixels('sidewalk');
-  const stats=pixels=>{let n=0,sum=0,squares=0;for(let i=0;i<pixels.data.length;i+=4){const v=(pixels.data[i]+pixels.data[i+1]+pixels.data[i+2])/3;sum+=v;squares+=v*v;n++;}return {mean:sum/n,variance:squares/n-(sum/n)**2};};
-  const r=stats(road),w=stats(walk);assert(w.mean>r.mean+60);assert(w.variance<r.variance*.12);
+test('Portuguese sidewalk uses irregular natural white and gray stones with an earth ring for trees',()=>{
+  const walk=streetSurfacePixels('sidewalk'),tree=streetSurfacePixels('sidewalkTree');
+  let gray=0,pale=0,min=255;
+  for(let i=0;i<walk.data.length;i+=4){const value=(walk.data[i]+walk.data[i+1]+walk.data[i+2])/3;min=Math.min(min,value);if(value>=120&&value<160)gray++;if(value>=160)pale++;}
+  const pixels=walk.size*walk.size;assert(gray>pixels*.2);assert(pale>pixels*.2);assert(min>75,'natural stone and joints stay out of near-black tones');
+  const center=(Math.floor(tree.size/2)*tree.size+Math.floor(tree.size/2))*4;assert(tree.data[center]>tree.data[center+1]+15&&tree.data[center+1]>tree.data[center+2]+10);
 });
 test('grass is a small patch of narrow, rooted blades with finite non-degenerate triangles',()=>{
   const {positions,colors}=groundGrassSurface();assert.equal(positions.length,colors.length);assert(positions.every(Number.isFinite));

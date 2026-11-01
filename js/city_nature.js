@@ -1,5 +1,5 @@
 import { inventoryFree } from './city_inventory.js';
-import { tileAt, ROAD_TILES } from './city_terrain.js?v=road-bank-fit-1';
+import { tileAt, ROAD_TILES } from './city_terrain.js?v=sidewalk-grade-1';
 import { TILE_WATER } from './world_gen.js?v=deep-perf-3';
 export const PLANT_SPECIES = {
   coconut_palm: { label: 'Coqueiro', color: 0x548d38, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
@@ -89,6 +89,7 @@ export class CityNature {
   }
   remove(plant, reason, details={}) {
     plant.entity.destroyed=true;this.plants.delete(plant.id);this.tiles.delete(`${plant.x},${plant.y}`);this.city.structureRevision++;
+    this.city.world.setSidewalk?.(plant.x,plant.y,{tree:false});
     const label=this.normalizePlantSpecies(plant)?.label||'Vegetação';
     return this.city.log(`${label}: ${reason}.`,'nature',[],{kind:'plant-removed',plantId:plant.id,buildingId:plant.buildingId,...details});
   }

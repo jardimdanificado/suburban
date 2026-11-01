@@ -1,6 +1,6 @@
 import {FARM_TILES} from './world_gen.js?v=deep-perf-3';
 import { randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { roadFor } from './city_terrain.js?v=road-bank-fit-1';
+import { roadFor } from './city_terrain.js?v=sidewalk-grade-1';
 // =============================================================================
 // Brutopolis - World & Environment System (Pure JS Engine)
 // =============================================================================
@@ -28,6 +28,8 @@ import {
   world_gen_generate,
   world_gen_is_walkable
 } from "./world_gen.js?v=deep-perf-3";
+
+const SIDEWALK_TERRAIN=new Set([TILE_FLOOR,TILE_HILL,TILE_SAND]);
 
 export {
   MAP_WIDTH,
@@ -104,6 +106,7 @@ export class World {
     this.bridgeTiles=new Map();
     // Sidewalk surface is independent of the road tile, so road wear cannot erase it.
     this.sidewalkTiles=new Set();
+    this.sidewalkTreeTiles=new Set();
     this.generate(presetId, seed);
   }
 
@@ -123,6 +126,7 @@ export class World {
     this.groups = []; // Clear groups
     this.roadBridges=[];this.bridgeTiles.clear();this.bridgeRevision=(this.bridgeRevision||0)+1;
     this.sidewalkTiles?.clear();
+    this.sidewalkTreeTiles?.clear();
     this.clock.reset();
     return outCenter;
   }
@@ -161,7 +165,7 @@ export class World {
     const previous=this.map[y * this.width + x];
     if (previous === tile) return;
     const sidewalkKey=y*this.width+x;
-    if(this.sidewalkTiles?.has(sidewalkKey)&&![TILE_FLOOR,TILE_SAND].includes(tile))this.sidewalkTiles.delete(sidewalkKey);
+    if(this.sidewalkTiles?.has(sidewalkKey)&&!SIDEWALK_TERRAIN.has(tile)){this.sidewalkTiles.delete(sidewalkKey);this.sidewalkTreeTiles?.delete(sidewalkKey);}
     if((previous===TILE_WATER)!==(tile===TILE_WATER))this.waterTopologyRevision=(this.waterTopologyRevision||0)+1;
     // Paving changes travel cost, but not reachability or terrain elevation.
     if(roadFor(previous)===null||roadFor(previous)!==roadFor(tile))this.topologyRevision=(this.topologyRevision||0)+1;
@@ -172,13 +176,13 @@ export class World {
     }
   }
 
-  setSidewalk(x,y) {
+  setSidewalk(x,y,{tree=false}={}) {
     if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>=this.width||y<0||y>=this.height)return false;
     const tile=this.getTile(x,y);
-    if(tile!==TILE_FLOOR&&tile!==TILE_SAND)return false;
-    const sidewalks=this.sidewalkTiles??=new Set(),key=y*this.width+x;
-    if(sidewalks.has(key))return false;
-    sidewalks.add(key);
+    if(!SIDEWALK_TERRAIN.has(tile))return false;
+    const sidewalks=this.sidewalkTiles??=new Set(),treeTiles=this.sidewalkTreeTiles??=new Set(),key=y*this.width+x;
+    if(sidewalks.has(key)&&treeTiles.has(key)===tree)return false;
+    sidewalks.add(key);if(tree)treeTiles.add(key);else treeTiles.delete(key);
     this.revision=(this.revision||0)+1;
     this.onTileChange?.(x,y,tile);
     return true;

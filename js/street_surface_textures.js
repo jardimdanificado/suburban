@@ -4,24 +4,39 @@ const cache=new WeakMap();
 const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 function hash(x,y,seed=0){let n=Math.imul(x^Math.imul(y,374761393)^seed,668265263);n=Math.imul(n^(n>>>13),1274126177);return (n>>>0)/4294967295;}
 const mix=(a,b,t)=>a+(b-a)*t;
-export function streetSurfacePixels(style,variant=0,size=style==='sidewalk'?128:256){
+export function streetSurfacePixels(style,variant=0,size=style.startsWith('sidewalk')?128:256){
   const data=new Uint8ClampedArray(size*size*4),heights=new Float32Array(size*size);
   const palette=[[68,75,96],[82,78,103],[63,72,91],[103,101,116],[75,84,104],[116,108,116],[89,92,108],[72,78,99]];
   const stones=Array.from({length:12},(_,i)=>({color:palette[Math.floor(hash(i,2,variant+17)*palette.length)],rust:hash(i,7,variant+61)<.32,phase:hash(i,9,variant+31)*6.28}));
   for(let y=0;y<size;y++)for(let x=0;x<size;x++){
     const index=y*size+x,p=index*4,fine=hash(x,y,variant*93+5);
-    if(style==='sidewalk'){
-      const slabX=Math.floor(x/(size/2)),slabY=Math.floor(y/(size/2));
-      const localX=x%(size/2),localY=y%(size/2),edge=Math.min(localX,localY,size/2-1-localX,size/2-1-localY);
-      const joint=edge<1.6||Math.min(localX,size/2-localX)<1.2||Math.min(localY,size/2-localY)<1.2;
-      const slab=hash(slabX,slabY,variant+97),base=slab>.72?[177,176,168]:slab<.18?[161,166,164]:[169,171,165];
-      const grain=(fine-.5)*7+(hash(Math.floor(x/5),Math.floor(y/5),variant+311)-.5)*3;
-      const wear=(1-clamp(edge/8))*(-4)+Math.sin(x*.052+y*.018+slab*8)*1.5;
-      const shade=joint?-17:wear;
-      data[p]=base[0]+grain+shade;data[p+1]=base[1]+grain+shade;data[p+2]=base[2]+grain+shade;
-      const subtleVein=Math.max(0,1-Math.abs((localY+Math.sin(localX*.075+slab*9)*5)-24)/2.2)*clamp((slab-.56)*2.4);
-      for(let c=0;c<3;c++)data[p+c]=mix(data[p+c],[188,177,157][c],subtleVein*.12);
-      heights[index]=joint?.40:.49+clamp(edge/8)*.045+(fine-.5)*.018;
+    if(style.startsWith('sidewalk')){
+      const dx=x-size/2,dy=y-size/2,distance=Math.hypot(dx,dy),angle=Math.atan2(dy,dx),soilEdge=size*.185+Math.sin(angle*9+variant)*1.5+Math.sin(angle*17)*.7;
+      if(style==='sidewalkTree'&&distance<soilEdge){
+        const soil=(fine-.5)*13+(hash(Math.floor(x/4),Math.floor(y/4),variant+701)-.5)*10;
+        const rim=clamp((soilEdge-distance)/3);
+        data[p]=104+soil+rim*9;data[p+1]=79+soil*.72+rim*7;data[p+2]=53+soil*.48+rim*5;
+        heights[index]=.39+rim*.025+(fine-.5)*.008;
+      }else{
+        // Portuguese flagstone mosaic: independently placed black and pale
+        // tesserae, with irregular joints and no repeating graphic motif.
+        const cell=16,cellsPerSide=size/cell,gx=Math.floor(x/cell),gy=Math.floor(y/cell);
+        let nearest=Infinity,second=Infinity,nearestStone=0;
+        for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){
+          const cx=gx+ox,cy=gy+oy,wrappedX=((cx%cellsPerSide)+cellsPerSide)%cellsPerSide,wrappedY=((cy%cellsPerSide)+cellsPerSide)%cellsPerSide;
+          let dx=x-(wrappedX*cell+cell*(.5+(hash(wrappedX,wrappedY,variant+401)-.5)*.62));
+          let dy=y-(wrappedY*cell+cell*(.5+(hash(wrappedY,wrappedX,variant+409)-.5)*.62));
+          dx-=Math.round(dx/size)*size;dy-=Math.round(dy/size)*size;
+          const d=Math.hypot(dx,dy),stone=hash(wrappedX,wrappedY,variant+419);
+          if(d<nearest){second=nearest;nearest=d;nearestStone=stone;}else if(d<second)second=d;
+        }
+        const seam=second-nearest,boundaryNoise=(hash(Math.floor(x/2),Math.floor(y/2),variant+701)-.5)*.72,joint=seam<.82+boundaryNoise;
+        const stoneTone=nearestStone<.14?[103,111,124]:nearestStone<.43?[117,125,138]:nearestStone<.76?[133,142,153]:[151,154,148];
+        const base=joint?[100,108,120]:stoneTone,grain=(fine-.5)*7+(hash(gx,gy,variant+503)-.5)*5;
+        const fleck=fine>.992?9:fine<.012?-7:0,bevel=clamp(seam/2.4),light=joint?1:.92+bevel*.08;
+        data[p]=base[0]*light+grain+fleck;data[p+1]=base[1]*light+grain*.88+fleck*.84;data[p+2]=base[2]*light+grain*.7+fleck*.62;
+        heights[index]=joint?.34:.42+bevel*.075+(fine-.5)*.025;
+      }
     }else{
       const rowHeight=size/4,pitch=size/3,row=Math.floor(y/rowHeight),shift=(row&1)*pitch*.5;
       const column=Math.floor((x+shift)/pitch),localX=(x+shift)%pitch,localY=y%rowHeight,stone=stones[row*3+column%3];

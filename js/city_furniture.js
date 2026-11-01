@@ -1,6 +1,6 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
-import {ROAD_TILES,tileAt} from './city_terrain.js?v=road-bank-fit-1';
+import {ROAD_TILES,tileAt} from './city_terrain.js?v=sidewalk-grade-1';
 import {TILE_SAND} from './world_gen.js?v=deep-perf-3';
 export class CityFurniture{
  constructor(city){this.city=city;this.benches=[];this.nextId=1;this.benchLayoutVersion=3;}

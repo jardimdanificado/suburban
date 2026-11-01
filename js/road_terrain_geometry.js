@@ -12,7 +12,7 @@ function cacheFor(world){
   let cache=caches.get(world);
   if(!cache||cache.map!==world.map||cache.width!==world.width||cache.height!==world.height){
     const size=(world.width+1)*(world.height+1);
-    cache={map:world.map,width:world.width,height:world.height,revision:world.revision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size),roads:new Map()};
+    cache={map:world.map,width:world.width,height:world.height,revision:world.revision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size),roads:new Map(),sidewalks:new Map()};
     caches.set(world,cache);
   }
   if(cache.revision!==world.revision){cache.revision=world.revision;cache.roads.clear();cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
@@ -63,19 +63,37 @@ export function roadSurfaceCorners(world,x,y){
 
 // Each panel closes the actual gap between the road mesh and the bank mesh.
 // Splitting where the two profiles cross avoids a slab above either surface.
+const sidewalkAt=(world,x,y)=>world.sidewalkTiles?.has(y*world.width+x)||false;
+export function sidewalkSurfaceCorners(world,x,y){
+  if(!sidewalkAt(world,x,y))return null;
+  const cache=Number.isFinite(world.revision)?cacheFor(world):null,key=y*world.width+x;
+  if(cache?.sidewalks.has(key))return cache.sidewalks.get(key);
+  const sums=[0,0,0,0],counts=[0,0,0,0],add=(indices,values)=>indices.forEach((index,i)=>{sums[index]+=values[i];counts[index]++;});
+  const north=roadSurfaceCorners(world,x,y-1),east=roadSurfaceCorners(world,x+1,y),south=roadSurfaceCorners(world,x,y+1),west=roadSurfaceCorners(world,x-1,y);
+  // Extend the adjacent street's cross section across the sidewalk tile so
+  // its paving and the road stay flush, including on ramps.
+  if(north)add([0,1,3,2],[north[3],north[2],north[3],north[2]]);
+  if(south)add([3,2,0,1],[south[0],south[1],south[0],south[1]]);
+  if(west)add([0,3,1,2],[west[1],west[2],west[1],west[2]]);
+  if(east)add([1,2,0,3],[east[0],east[3],east[0],east[3]]);
+  const corners=[0,1,2,3].map(i=>counts[i]?sums[i]/counts[i]:terrainCornerHeight(world,x+(i===1||i===2?1:0),y+(i>=2?1:0)));
+  cache?.sidewalks.set(key,corners);return corners;
+}
+export function streetSurfaceCorners(world,x,y){return roadSurfaceCorners(world,x,y)||sidewalkSurfaceCorners(world,x,y);}
+
 export function roadRetainingFaces(world,x,y){
-  const road=roadSurfaceCorners(world,x,y);if(!road)return [];
+  const surface=streetSurfaceCorners(world,x,y);if(!surface)return [];
   const faces=[];
   for(let side=0;side<EDGES.length;side++){
     const edge=EDGES[side],neighbor=at(world,x+edge.dx,y+edge.dy);
-    if(neighbor===TILE_WATER||neighbor===TILE_VOID||ROADS.has(neighbor)||world.bridgeTiles?.has(`${x+edge.dx},${y+edge.dy}`))continue;
+    if(neighbor===TILE_WATER||neighbor===TILE_VOID||ROADS.has(neighbor)||sidewalkAt(world,x+edge.dx,y+edge.dy)||world.bridgeTiles?.has(`${x+edge.dx},${y+edge.dy}`))continue;
     const [ax,ay]=CORNERS[edge.a],[bx,by]=CORNERS[edge.b];
-    const groundA=terrainCornerHeight(world,x+ax,y+ay),groundB=terrainCornerHeight(world,x+bx,y+by),roadA=road[edge.a],roadB=road[edge.b];
-    const deltaA=groundA-roadA,deltaB=groundB-roadB;
+    const groundA=terrainCornerHeight(world,x+ax,y+ay),groundB=terrainCornerHeight(world,x+bx,y+by),surfaceA=surface[edge.a],surfaceB=surface[edge.b];
+    const deltaA=groundA-surfaceA,deltaB=groundB-surfaceB;
     if(Math.max(Math.abs(deltaA),Math.abs(deltaB))<.02)continue;
     const cuts=deltaA*deltaB<0?[0,deltaA/(deltaA-deltaB),1]:[0,1];
     for(let i=1;i<cuts.length;i++){
-      const from=cuts[i-1],to=cuts[i],ra=roadA+(roadB-roadA)*from,rb=roadA+(roadB-roadA)*to,ga=groundA+(groundB-groundA)*from,gb=groundA+(groundB-groundA)*to;
+      const from=cuts[i-1],to=cuts[i],ra=surfaceA+(surfaceB-surfaceA)*from,rb=surfaceA+(surfaceB-surfaceA)*to,ga=groundA+(groundB-groundA)*from,gb=groundA+(groundB-groundA)*to;
       faces.push({side,from,to,ax:x+ax+(bx-ax)*from,ay:y+ay+(by-ay)*from,bx:x+ax+(bx-ax)*to,by:y+ay+(by-ay)*to,lowA:Math.min(ra,ga),lowB:Math.min(rb,gb),highA:Math.max(ra,ga),highB:Math.max(rb,gb)});
     }
   }
@@ -84,8 +102,8 @@ export function roadRetainingFaces(world,x,y){
 
 export function terrainSurfaceElevation(world,x,y){
   const tx=Math.floor(x),ty=Math.floor(y);if(at(world,tx,ty)===TILE_WATER)return .08;
-  const road=roadSurfaceCorners(world,tx,ty),u=x-tx,v=y-ty;
-  const h00=road?road[0]:terrainCornerHeight(world,tx,ty),h10=road?road[1]:terrainCornerHeight(world,tx+1,ty),h11=road?road[2]:terrainCornerHeight(world,tx+1,ty+1),h01=road?road[3]:terrainCornerHeight(world,tx,ty+1);
+  const surface=streetSurfaceCorners(world,tx,ty),u=x-tx,v=y-ty;
+  const h00=surface?surface[0]:terrainCornerHeight(world,tx,ty),h10=surface?surface[1]:terrainCornerHeight(world,tx+1,ty),h11=surface?surface[2]:terrainCornerHeight(world,tx+1,ty+1),h01=surface?surface[3]:terrainCornerHeight(world,tx,ty+1);
   // Use the same diagonal as the rendered triangles, including non-planar turns.
   return u<=v?h00*(1-v)+h01*(v-u)+h11*u:h00*(1-u)+h10*(u-v)+h11*v;
 }

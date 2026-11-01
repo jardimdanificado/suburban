@@ -1,5 +1,5 @@
 import {baseTerrainTile} from './world_gen.js?v=deep-perf-3';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation} from './road_terrain_geometry.js?v=road-bank-fit-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation} from './road_terrain_geometry.js?v=sidewalk-grade-1';
 import {businessFloors} from './city_business_heights.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js?v=initial-cycle-ref-1';
 import {buildingEntrance} from './city_building_geometry.js';
@@ -118,7 +118,7 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
     if (occupied.has(tileKey(xx, yy))) return { error: 'Deixe uma célula livre entre os prédios.' };
     if (xx >= x && xx < x + width && yy >= y && yy < y + depth) {
       if (!terrainWalkable(world, xx, yy) && !(quarry && tileAt(world, xx, yy) === TILE_STONE)) return { error: 'O prédio precisa caber em terra firme, fora da água e das encostas rochosas.' };
-      if (ROAD_TILES.has(tileAt(world, xx, yy))||world.sidewalkTiles?.has(yy*world.width+xx)||world.parkingTiles?.has(tileKey(xx,yy))) return { error: 'A construção não pode ocupar uma rua ou calçada.' };
+      if (ROAD_TILES.has(tileAt(world, xx, yy))||world.parkingTiles?.has(tileKey(xx,yy))) return { error: 'A construção não pode ocupar uma rua.' };
     }
   }
   let door = buildingEntrance(x,y,width,depth,rotation);
@@ -334,7 +334,7 @@ export function hasSettlementAccess(world, door, x, y, width, depth) {
   return seen.size >= 256;
 }
 
-export function pavePath(world, path, blockedTiles = null) {
+export function pavePath(world, path, blockedTiles = null, treeTiles = null) {
   for (const p of path) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(world, x, y), road = roadFor(tile); if (road !== null && road !== tile) {world.setTile(x, y, road);(world.roadCondition??=new Map()).set(tileKey(x,y),100);} }
   const route=path.map(p=>({x:Math.floor(p.x),y:Math.floor(p.y)})),sidewalks=new Set();
   const addSideCells=(x,y,dx,dy)=>{if(dx)for(const sideY of [-1,1])sidewalks.add(`${x},${y+sideY}`);else if(dy)for(const sideX of [-1,1])sidewalks.add(`${x+sideX},${y}`);else for(const [sideX,sideY]of [[1,0],[-1,0],[0,1],[0,-1]])sidewalks.add(`${x+sideX},${y+sideY}`);};
@@ -344,7 +344,7 @@ export function pavePath(world, path, blockedTiles = null) {
     if(next)addSideCells(point.x,point.y,next.x-point.x,next.y-point.y);
     if(!previous&&!next)addSideCells(point.x,point.y,0,0);
   }
-  for(const key of sidewalks){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1)),blocked=typeof blockedTiles==='function'?blockedTiles(x,y,key):blockedTiles?.has(key);if(blocked)continue;const tile=tileAt(world,x,y);if(tile===TILE_FLOOR||tile===TILE_SAND)world.setSidewalk?.(x,y);}
+  for(const key of sidewalks){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1)),tree=treeTiles?.has(key)||false,blocked=typeof blockedTiles==='function'?blockedTiles(x,y,key):blockedTiles?.has(key);if(blocked)continue;const tile=tileAt(world,x,y);if(tile===TILE_FLOOR||tile===TILE_HILL||tile===TILE_SAND)world.setSidewalk?.(x,y,{tree});}
 }
 
 export function generateSettlement(city) {

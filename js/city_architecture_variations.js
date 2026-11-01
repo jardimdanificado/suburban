@@ -389,16 +389,9 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     plantLeaf.scale.set(.72,1.6,.7);
    }
   }
-  if(colonialForm==='pombalino'){
-   for(const x of [.18,b.width-.18])box(.1,roof,.12,x,roof/2,front+.11,style.accent);
-   box(b.width+.08,.2,.16,b.width/2,roof+.16,front+.04,style.trim);
-   for(let i=0;i<=Math.floor(b.width/.32);i++){const x=.18+i*(b.width-.36)/Math.max(1,Math.floor(b.width/.32));box(.07,.22,.07,x,roof+.28,front+.05,style.trim);}
-  }else if(colonialForm==='barroco'){
+  if(colonialForm==='barroco'){
    const pediment=new THREE.Mesh(new THREE.ConeGeometry(Math.max(.38,b.width*.25),.44,3),mat(style.accent));pediment.position.set(b.width/2,roof+.35,front+.08);root.add(pediment);
    box(Math.min(1.5,b.width*.7),.08,.12,b.width/2,roof+.13,front+.08,style.trim);
-  }else if(colonialForm==='quinta'){
-   box(Math.min(1.6,b.width*.72),.09,.14,b.width/2,roof+.16,front+.07,style.accent);
-   for(const x of [.28,b.width-.28])box(.16,.3,.16,x,roof+.29,front+.08,style.trim);
   }
   // Door plaques and entrance canopies require a real ground-floor doorway.
   const entryUnit=entryDoorDetails?.unit,entrySide=entryDoorDetails?.side,validEntry=!!entryUnit&&!!entrySide;

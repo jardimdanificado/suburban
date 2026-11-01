@@ -1,4 +1,4 @@
-import { ROAD_TILES, tileAt, terrainWalkable, canStep } from './city_terrain.js?v=road-bank-fit-1';
+import { ROAD_TILES, tileAt, terrainWalkable, canStep } from './city_terrain.js?v=sidewalk-grade-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 export const LIGHTING_RULES = { roadSpacing: 6, privateSpacing: 3, stone: 2, labor: 20, installationFee: 8000, maxActiveSites: 6, maxPublicActiveSites: 5 };
 export class CityLighting {

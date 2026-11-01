@@ -1,5 +1,5 @@
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
-import {streetSurfaceTextures} from './street_surface_textures.js?v=natural-streets-2';
+import {streetSurfaceTextures} from './street_surface_textures.js?v=natural-streets-12';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {waterPollutionAt,waterTint} from './city_water.js';
 import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=portuguese-roof-tiles-2';
@@ -10,11 +10,11 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileT
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=makeshift-sleep-mats-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=remove-roof-hat-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=natural-streets-2';
-import { flagNightFactor } from './city_terrain.js?v=road-bank-fit-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,roadSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=road-bank-fit-1';
+import { flagNightFactor } from './city_terrain.js?v=sidewalk-grade-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -39,6 +39,7 @@ import { globalWallCoords, resolveWallSkin, getEntitiesInViewport, getEntityById
 // Optional simulation hooks are deliberately empty in the base framework.
 const getClanBlueprintTiles = () => [];
 const currentZoneSize = 8;
+const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
 
 // Cache for raw asset images
 const textureCache = new Map();
@@ -3686,7 +3687,7 @@ export class RCT3DRenderer {
 
     const terrainSurfaceMaterials = (isPersp, category, style, normalMap, normalScale, roughness, metalness) => Object.fromEntries(
       Array.from({length:4},(_,variant)=>{
-        const street=style==='pavedRoad'||style==='sidewalk';
+        const street=style==='pavedRoad'||style.startsWith('sidewalk');
         const surface=street?streetSurfaceTextures(THREE,style,variant):{map:createTerrainSurfaceTexture(style,variant),normalMap};
         return [`terrain${category}${variant}`,makeMat(isPersp,{map:surface.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},surface.normalMap,normalScale,roughness,metalness)];
       })
@@ -3699,6 +3700,7 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'DirtRoad','dirtRoad',normSand,.9,.75,.05),
       ...terrainSurfaceMaterials(isPersp,'PavedRoad','pavedRoad',normBrickA,.65,.92,.015),
       ...terrainSurfaceMaterials(isPersp,'Sidewalk','sidewalk',normBrickA,.25,.95,0),
+      ...terrainSurfaceMaterials(isPersp,'SidewalkTree','sidewalkTree',normBrickA,.3,.94,0),
       ...terrainSurfaceMaterials(isPersp,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
       farmSoil:makeMat(isPersp,{map:caribbeanGroundTexture(THREE,'farm'),color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
@@ -6364,7 +6366,7 @@ export class RCT3DRenderer {
       [TILE_ROAD_HILL_STONE]: { pos: [], uvs: [], colors: [] }
     };
     const waterFoamBucket = { pos: [], uvs: [], colors: [] };
-    for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','RetainingWall']) for (let variant=0;variant<4;variant++) {
+    for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','SidewalkTree','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
     }
 
@@ -6448,24 +6450,29 @@ export class RCT3DRenderer {
           zoneMult = 0.32;
         }
 
-        const isSidewalk=world.sidewalkTiles?.has(yOffset+tx)||false;
+        const sidewalkKey=yOffset+tx,isSidewalk=world.sidewalkTiles?.has(sidewalkKey)||false,isTreeSidewalk=isSidewalk&&world.sidewalkTreeTiles?.has(sidewalkKey);
+        const adjacentPavedRoads=[];
+        if(isSidewalk&&!isTreeSidewalk)for(const edge of [{dx:0,dy:-1},{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0}]){
+          const rx=tx+edge.dx,ry=ty+edge.dy,roadType=world.getTile?.(rx,ry);
+          if(PAVED_ROAD_TILES.has(roadType))adjacentPavedRoads.push({...edge,x:rx,y:ry,type:roadType});
+        }
         const hasSprite = detailBand === 2 && !isSidewalk && !FARM_TILES.has(tType)&&shouldRenderTerrainSprite(tx, ty, tType);
-        const textureCategory=isSidewalk?'sidewalk':terrainTextureCategory(tType);
+        const textureCategory=isTreeSidewalk?'sidewalkTree':isSidewalk?'sidewalk':terrainTextureCategory(tType);
         let bucketKey = isSidewalk?`terrainSidewalk${terrainTextureHash(tx,ty,tType)&3}`:FARM_TILES.has(tType)?"farmSoil":tType;
         if (tType === TILE_SAND && !hasSprite) bucketKey = "sandClean";
         if (textureCategory) {
-          const materialCategory={rock:'Rock',mountain:'Mountain',peak:'Peak',dirtRoad:'DirtRoad',pavedRoad:'PavedRoad',sidewalk:'Sidewalk'}[textureCategory];
+          const materialCategory={rock:'Rock',mountain:'Mountain',peak:'Peak',dirtRoad:'DirtRoad',pavedRoad:'PavedRoad',sidewalk:'Sidewalk',sidewalkTree:'SidewalkTree'}[textureCategory];
           bucketKey=`terrain${materialCategory}${terrainTextureHash(tx,ty,tType)&3}`;
         }
 
         const bucket = tileMeshBuckets[bucketKey] || tileMeshBuckets[tType] || tileMeshBuckets[TILE_FLOOR];
         if (!bucket) continue;
 
-        const roadCorners=roadSurfaceCorners(world,tx,ty);
-        let h00 = roadCorners?roadCorners[0]:this.getCornerHeight(map, tx, ty);
-        let h10 = roadCorners?roadCorners[1]:this.getCornerHeight(map, tx + 1, ty);
-        let h11 = roadCorners?roadCorners[2]:this.getCornerHeight(map, tx + 1, ty + 1);
-        let h01 = roadCorners?roadCorners[3]:this.getCornerHeight(map, tx, ty + 1);
+        const streetCorners=streetSurfaceCorners(world,tx,ty);
+        let h00 = streetCorners?streetCorners[0]:this.getCornerHeight(map, tx, ty);
+        let h10 = streetCorners?streetCorners[1]:this.getCornerHeight(map, tx + 1, ty);
+        let h11 = streetCorners?streetCorners[2]:this.getCornerHeight(map, tx + 1, ty + 1);
+        let h01 = streetCorners?streetCorners[3]:this.getCornerHeight(map, tx, ty + 1);
 
         // Procedural Contact Ambient Occlusion for each corner
         const ao00 = this.getCornerAO(map, tx, ty);
@@ -6477,7 +6484,7 @@ export class RCT3DRenderer {
           h00 = h10 = h11 = h01 = 0.08;
         }
 
-        if(roadCorners)for(const face of roadRetainingFaces(world,tx,ty)){
+        if(streetCorners)for(const face of roadRetainingFaces(world,tx,ty)){
           const variant=terrainTextureHash(tx,ty,tType+face.side)&3,wall=tileMeshBuckets[`terrainRetainingWall${variant}`],tone=zoneMult*.92;
           const a=[face.ax,face.lowA,face.ay],b=[face.bx,face.lowB,face.by],c=[face.bx,face.highB,face.by],d=[face.ax,face.highA,face.ay];
           // World-height UVs keep masonry courses aligned along slopes and
@@ -6505,6 +6512,19 @@ export class RCT3DRenderer {
           if (!isWaterAt(tx,ty+1)) addWaterFoamEdge(tx,ty,1,1);
           if (!isWaterAt(tx-1,ty)) addWaterFoamEdge(tx,ty,2,2);
           if (!isWaterAt(tx+1,ty)) addWaterFoamEdge(tx,ty,3,3);
+        } else if(adjacentPavedRoads.length){
+          const regions=[[0,0,.5,.5],[.5,0,1,.5],[0,.5,.5,1],[.5,.5,1,1]],ao=(u,v)=>ao00*(1-u)*(1-v)+ao10*u*(1-v)+ao11*u*v+ao01*(1-u)*v;
+          const height=(u,v)=>u<=v?h00*(1-v)+h01*(v-u)+h11*u:h00*(1-u)+h10*(u-v)+h11*v;
+          const addRegion=(target,u0,v0,u1,v1,tone)=>{
+            for(const [u,v]of [[u0,v0],[u0,v1],[u1,v1],[u0,v0],[u1,v1],[u1,v0]]){
+              target.pos.push(tx+u,height(u,v),ty+v);target.uvs.push(tx+u,ty+v);const shade=zoneMult*ao(u,v)*tone;target.colors.push(shade,shade,shade);
+            }
+          };
+          for(let region=0;region<regions.length;region++){
+            const [u0,v0,u1,v1]=regions[region],road=adjacentPavedRoads.find(edge=>edge.dy<0&&region<2||edge.dy>0&&region>=2||edge.dx<0&&(region===0||region===2)||edge.dx>0&&(region===1||region===3));
+            if(road){const variant=terrainTextureHash(road.x,road.y,road.type)&3,toneHash=terrainTextureHash(road.x,road.y,road.type)>>>8,tone=.96+(toneHash%9)/100;addRegion(tileMeshBuckets[`terrainPavedRoad${variant}`],u0,v0,u1,v1,tone);}
+            else addRegion(bucket,u0,v0,u1,v1,1);
+          }
         } else {
           bucket.pos.push(
             tx, h00, ty,

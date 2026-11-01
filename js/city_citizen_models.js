@@ -1,4 +1,4 @@
-import {wickerBasketSurface} from './city_mobility_models.js?v=natural-streets-2';
+import {wickerBasketSurface} from './city_mobility_models.js?v=cargo-box-rear-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
 export function citizenIsSleeping(c){
