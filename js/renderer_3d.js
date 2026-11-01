@@ -3654,8 +3654,9 @@ export class RCT3DRenderer {
       map: caribbeanWater, color: 0xffffff, vertexColors: true, roughness: 0.34, metalness: 0.03,
       transparent: false, depthWrite: true, side: THREE.DoubleSide, dithering: true
     }));
-    const makeFoamMaterial = () => addWaterMotionShader(new THREE.MeshBasicMaterial({
-      vertexColors: true, transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide
+    const makeFoamMaterial = () => addWaterMotionShader(new THREE.MeshLambertMaterial({
+      vertexColors: true, transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide,
+      emissive: 0x000000, emissiveIntensity: 0
     }));
 
     const terrainSurfaceMaterials = (isPersp, category, style, normalMap, normalScale, roughness, metalness) => Object.fromEntries(
@@ -6872,13 +6873,18 @@ export class RCT3DRenderer {
     }
 
     const effectiveSpeed = (this.isPaused || simSpeed <= 0) ? 0.0 : simSpeed;
-    // Water keeps a gentle environmental drift even while the simulation is paused.
-    this.waterTime += dt * (effectiveSpeed > 0 ? effectiveSpeed : 0.65);
+    if (effectiveSpeed > 0) this.waterTime += dt * effectiveSpeed;
     for (const dict of [this.materials, this.materialsIso, this.materialsPerspective]) {
       const uniform = dict?.[TILE_WATER]?.userData?.caribbeanWaterTime;
       if (uniform) uniform.value = this.waterTime;
     }
     const waterMat = this.materials[TILE_WATER];
+    const foamMat = this.materials.waterFoam;
+    if (foamMat) {
+      const daylight = flagNightFactor(world);
+      foamMat.color.setScalar(daylight);
+      foamMat.opacity = THREE.MathUtils.clamp((daylight - 0.18) / 0.82, 0, 1);
+    }
     if (waterMat) {
       if (waterMat.map) {
         waterMat.map.offset.x = (this.waterTime * 0.035) % 1;

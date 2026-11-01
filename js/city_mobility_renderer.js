@@ -38,6 +38,7 @@ export function syncCityMobility(renderer,THREE,entities,world){
   const matrix=renderer._mobilityMatrix??=new THREE.Matrix4(),position=renderer._mobilityPosition??=new THREE.Vector3(),quaternion=renderer._mobilityQuaternion??=new THREE.Quaternion(),scale=renderer._mobilityScale??=new THREE.Vector3(),color=renderer._mobilityColor??=new THREE.Color(),axis=renderer._mobilityAxis??=new THREE.Vector3(0,1,0);
   const place=(mesh,index,x,y,z,sx,sy,sz,angle=0,tint=null)=>{position.set(x,y,z);quaternion.setFromAxisAngle(axis,angle);scale.set(sx,sy,sz);matrix.compose(position,quaternion,scale);mesh.setMatrixAt(index,matrix);if(tint!=null)mesh.setColorAt(index,color.setHex(tint));};
   const envMap=paintReflectionEnvironment(renderer,THREE),bodyCounts=new Map(),bodyMeshes=new Map(),finishPopulation=new Map();
+  const daylight=flagNightFactor(world),reflectionDay=Math.max(0,Math.min(1,(daylight-.18)/.82)),reflectionFactor=reflectionDay*reflectionDay;
   for(const e of vehicles){const finish=vehiclePaintFinish(e.properties.cityVehicle);finishPopulation.set(finish,(finishPopulation.get(finish)||0)+1);}
   for(const [key,b]of renderer.mobilityBatches)if(key==='cycle-frames'||key.startsWith('cycle-frames-'))b.mesh.count=0;
   const bodyFor=finish=>{
@@ -62,7 +63,7 @@ export function syncCityMobility(renderer,THREE,entities,world){
     }
   }
   syncCycleFlags(renderer,THREE,vehicles,world,entities);
-  for(const [finish,body]of bodyMeshes){body.mesh.count=bodyCounts.get(finish);body.mesh.instanceMatrix.needsUpdate=true;if(body.mesh.instanceColor)body.mesh.instanceColor.needsUpdate=true;}
+  for(const [finish,body]of bodyMeshes){const style=PAINT_FINISHES[finish];body.material.envMapIntensity=style.envMapIntensity*reflectionFactor;body.material.clearcoat=style.clearcoat*reflectionFactor;body.mesh.count=bodyCounts.get(finish);body.mesh.instanceMatrix.needsUpdate=true;if(body.mesh.instanceColor)body.mesh.instanceColor.needsUpdate=true;}
   wheel.mesh.count=w;wheel.mesh.instanceMatrix.needsUpdate=true;
 }
 
