@@ -10,7 +10,7 @@ export function applyInteriorCutaway(THREE,group,floor=null,hideWalls=false){
 }
 export function interiorViewForLocation(location,building){
  if(!location||location.exiting||!building||building.destroyed||building.entity?.destroyed)return null;
- const floor=building.officeTenantOf?building.officeFloor:location.floor??0;
+ const floor=location.position?Math.max(0,Math.floor((location.position.z||0)/CITY_FLOOR_HEIGHT+.001)):location.floor??building.officeFloor??0;
  return {buildingId:building.officeTenantOf||building.id,floor,hideWalls:true};
 }
 export function syncThirdPersonInteriorView(renderer,targetEnt){

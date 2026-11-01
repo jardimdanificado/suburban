@@ -336,30 +336,6 @@ function createCaribbeanWaterTexture() {
   return texture;
 }
 
-function createNightWaterTexture(source) {
-  const size = source.image.width || 256, canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(source.image, 0, 0, size, size);
-  const image = ctx.getImageData(0, 0, size, size), data = image.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const luminance = (data[i] * .2126 + data[i + 1] * .7152 + data[i + 2] * .0722) / 255;
-    // Keep ripples, but clamp every highlight into deep moonlit blue-green.
-    data[i] = Math.round(8 + luminance * 15);
-    data[i + 1] = Math.round(30 + luminance * 28);
-    data[i + 2] = Math.round(43 + luminance * 32);
-    data[i + 3] = 255;
-  }
-  ctx.putImageData(image, 0, 0);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.magFilter = texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  applyTextureAnisotropy(texture);
-  return texture;
-}
-
 // ---------------------------------------------------------------------------
 // Entity Bounds Helper for Accurate 3D Picking & Hover
 // ---------------------------------------------------------------------------
@@ -3634,9 +3610,17 @@ export class RCT3DRenderer {
     const normGrass = generateProceduralTerrainNormalMap("grass", 0.90);
     const caribbeanGrass = createCaribbeanGrassTexture();
     const caribbeanWater = createCaribbeanWaterTexture();
-    const caribbeanNightWater = createNightWaterTexture(caribbeanWater);
-    this.caribbeanWaterDayTexture = caribbeanWater;
-    this.caribbeanWaterNightTexture = caribbeanNightWater;
+    // Keep the water plane below the terrain as a horizon fill. It covers the
+    // outside of the finite map when the camera looks past its edge.
+    const seaGeometry = new THREE.PlaneGeometry(10000, 10000);
+    seaGeometry.rotateX(-Math.PI / 2);
+    this.infiniteSea = new THREE.Mesh(seaGeometry, new THREE.MeshLambertMaterial({
+      color: 0x143746, side: THREE.DoubleSide, fog: true, depthWrite: true
+    }));
+    this.infiniteSea.position.y = -0.12;
+    this.infiniteSea.renderOrder = -1;
+    this.infiniteSea.receiveShadow = true;
+    this.scene.add(this.infiniteSea);
     const normSand = generateProceduralTerrainNormalMap("sand", 0.40);
     const normOak = generateProceduralFoliageNormalMap("oak", 1.0);
     const normPine = generateProceduralFoliageNormalMap("pine", 1.0);
@@ -3668,9 +3652,11 @@ export class RCT3DRenderer {
         shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>
           uniform float uCaribbeanWaterTime;
           float caribbeanWaveHeight(vec2 p) {
-            return sin(p.x * 1.55 + p.y * 0.82 + uCaribbeanWaterTime * 1.15) * 0.16
-              + sin(p.x * 0.72 - p.y * 1.7 - uCaribbeanWaterTime * 0.82) * 0.105
-              + cos(p.x * 0.35 + p.y * 0.45 + uCaribbeanWaterTime * 0.5) * 0.07;
+            float waves = sin(p.x * 1.55 + p.y * 0.82 + uCaribbeanWaterTime * 1.15) * 0.10
+              + sin(p.x * 0.72 - p.y * 1.7 - uCaribbeanWaterTime * 0.82) * 0.075
+              + cos(p.x * 0.35 + p.y * 0.45 + uCaribbeanWaterTime * 0.5) * 0.05;
+            // Keep troughs above the ground while retaining visible wave crests.
+            return max(-0.065, waves);
           }`);
         shader.vertexShader = shader.vertexShader.replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
           float waterNormalStep = 0.08;
@@ -6102,13 +6088,6 @@ export class RCT3DRenderer {
       this.scene.fog = null;
     }
 
-    if (this.infiniteSea) {
-      this.scene.remove(this.infiniteSea);
-      if (this.infiniteSea.geometry) this.infiniteSea.geometry.dispose();
-      if (this.infiniteSea.material) this.infiniteSea.material.dispose();
-      this.infiniteSea = null;
-    }
-
     const baseSunIntensity=k1.sunI+(k2.sunI-k1.sunI)*sAlpha,baseAmbientIntensity=k1.ambI+(k2.ambI-k1.ambI)*sAlpha;
     const sunIntensity = (baseSunIntensity+(0.32-baseSunIntensity)*moonlightHold) * (isPersp ? 1.25 : 1.0);
     const ambIntensity = (baseAmbientIntensity+(0.24-baseAmbientIntensity)*moonlightHold) * (isPersp ? 1.15 : 1.0);
@@ -6950,8 +6929,6 @@ export class RCT3DRenderer {
     const foamMat = this.materials.waterFoam;
     const daylight = flagNightFactor(world);
     const foamOpacity = THREE.MathUtils.clamp((daylight - 0.18) / 0.82, 0, 1);
-    const nightWater = daylight <= 0.45;
-    const selectedWaterTexture = nightWater ? this.caribbeanWaterNightTexture : this.caribbeanWaterDayTexture;
     if (foamMat) {
       foamMat.color.setScalar(daylight);
       foamMat.opacity = foamOpacity;
@@ -6964,9 +6941,8 @@ export class RCT3DRenderer {
     for (const dict of [this.materials, this.materialsIso, this.materialsPerspective]) {
       const mat = dict?.[TILE_WATER];
       if (!mat) continue;
-      if (mat.map !== selectedWaterTexture) { mat.map = selectedWaterTexture; mat.needsUpdate = true; }
-      mat.color.setScalar(nightWater ? 1 : daylight);
-      mat.roughness = 0.34 + (1 - daylight) * 0.60;
+      // Let scene lighting and shadows control the water brightness naturally.
+      mat.color.setScalar(1);
     }
     const waterMat = this.materials[TILE_WATER];
     if (waterMat) {
@@ -7139,7 +7115,7 @@ export class RCT3DRenderer {
       const cityCitizen=e.properties.citizen,indoorLocation=cityCitizen?.indoorLocation;
       const interiorPosition=cityCitizen?._renderIndoorPosition||indoorLocation?.position;
       const physicalInteriorBuilding=indoorLocation&&this.cityDevelopment?.city?.building(indoorLocation.buildingId),physicalInteriorId=physicalInteriorBuilding?.officeTenantOf||indoorLocation?.buildingId;
-      const renderedFloor=physicalInteriorBuilding?.officeTenantOf?physicalInteriorBuilding.officeFloor:interiorPosition?Math.max(0,Math.floor((interiorPosition.z||0)/CITY_FLOOR_HEIGHT+.001)):indoorLocation?.floor;
+      const renderedFloor=interiorPosition?Math.max(0,Math.floor((interiorPosition.z||0)/CITY_FLOOR_HEIGHT+.001)):indoorLocation?.floor??physicalInteriorBuilding?.officeFloor;
       const showInspectedInterior=!!(indoorLocation&&this.cityInteriorView?.buildingId===physicalInteriorId&&!indoorLocation.exiting&&renderedFloor===this.cityInteriorView.floor);
       const renderElevated=!!(cityCitizen&&!indoorLocation&&(interiorPosition?.z>0||cityCitizen.skybridgeZ>0)),renderAtInterior=!!(cityCitizen&&indoorLocation&&interiorPosition),renderX=showInspectedInterior||renderElevated||renderAtInterior?(interiorPosition?.x??e.x):e.x,renderY=showInspectedInterior||renderElevated||renderAtInterior?(interiorPosition?.y??e.y):e.y;
 

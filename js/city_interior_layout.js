@@ -1,5 +1,5 @@
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
-import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
+import {CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geometry.js';
 
 // Logical, renderer-independent walk graph. Nodes are reconstructed from a
 // building's rooms and circulation; only immutable geometry is cached.
@@ -117,6 +117,15 @@ function nearestNode(layout,building,point,z=null){
 }
 
 export function interiorRoute(building,from,to){
+  const outside=from.x<building.entity.x||from.x>=building.entity.x+building.width||from.y<building.entity.y||from.y>=building.entity.y+building.depth;
+  if(outside&&(from.z||0)<CITY_FLOOR_HEIGHT/2){
+    const entry=buildingInteriorEntrance(building);
+    if(entry){
+      const remaining=interiorRoute(building,entry,to);if(remaining===null)return null;
+      const door={x:building.door.x,y:building.door.y,z:0},approach=Math.hypot(from.x-door.x,from.y-door.y)>1e-6?[door]:[];
+      return [...approach,entry,...remaining];
+    }
+  }
   const layout=interiorLayout(building),floors=building.floors||1,scale=layout.scale,roofTarget=to.z!=null&&Math.floor(to.z/CITY_FLOOR_HEIGHT)>=floors;
   const keyAt=p=>{const floor=Math.max(0,Math.min(floors-1,Math.round((p.z||0)/CITY_FLOOR_HEIGHT))),x=Math.max(0,Math.min(building.width*scale-1,Math.floor((p.x-building.entity.x)*scale))),y=Math.max(0,Math.min(building.depth*scale-1,Math.floor((p.y-building.entity.y)*scale)));return `${x},${y},${floor}`;};
   const nearest=(p,floor=null)=>{let key=keyAt(p);if((floor==null||layout.walkNodes.get(key)?.floor===floor)&&layout.walkNodes.has(key))return key;let best=null,distance=Infinity;for(const node of layout.walkNodes.values()){if(floor!=null&&node.floor!==floor)continue;const d=(node.x-p.x)**2+(node.y-p.y)**2+((node.z-(p.z||0))*1.3)**2;if(d<distance){best=node.key;distance=d;}}return best;};

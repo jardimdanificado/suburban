@@ -8,6 +8,7 @@ import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js?v=landlord-stock-market-1';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
+import {streetMarketFor,discoverStreetMarket} from './city_markets.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=workforce-road-mines-1';
@@ -464,6 +465,9 @@ export class CitySimulation {
     return result;
   }
   _findPath(start, goal, {copy=true,allowSkybridges=true}={}) {
+    // Plan the outdoor leg from the exit; the resident walks there first.
+    const location=start.properties?.citizen?.indoorLocation;
+    if(location){const site=this.building(location.buildingId),shell=this.building(site?.officeTenantOf)||site;if(shell)start=shell.door;}
     const revision = `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
     if (this.pathCacheRevision !== revision) { this.pathCache = new Map(); this.pathCacheRevision = revision; }
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
@@ -635,6 +639,11 @@ export class CitySimulation {
     let task = 'leisure', type = 'leisure';
     const urgent = this.urgentNeed(c);
     if((!urgent||['food','water'].includes(urgent))&&this.supplies.route(c))return;
+    const streetStall=streetMarketFor(this.economy,c);
+    if(!urgent&&streetStall&&this.society.isAdult(c)&&Math.min(n.food,n.water,n.energy,n.health,n.toilet)>25&&!c.conversation&&!c.deliveryId&&!c.workMeal){
+      const path=this.findPath(c.entity,streetStall.position);
+      if(path!==null){c.path=path;if(!path.length||Math.hypot(path.at(-1).x-streetStall.position.x,path.at(-1).y-streetStall.position.y)>.05)c.path.push({...streetStall.position});c.targetId=null;c.task='market-vending';c.action='Indo anunciar produtos na feira';return;}
+    }
     // A homeless person who is already exhausted should not have to cross the
     // city and compete for a public indoor room before recovering at all.
     if(urgent==='energy'&&!home){this.routeHomelessToSleep(c);return;}
@@ -727,6 +736,7 @@ export class CitySimulation {
   }
   performTask(c) {
     if(c.task==='work-wait'){if(!c.seatId&&!syncCitizenInterior(this,c))return;this.furniture.advanceWait(c);return;}
+    if(c.task==='market-vending'){const stall=streetMarketFor(this.economy,c);if(!stall){c.marketStall=null;c.task=null;c.targetId=null;c.path=[];c.action='Encerrando o mercado de rua';return;}if(this.urgentNeed(c)){c.task=null;c.targetId=null;c.path=[];return;}c.action=`Anunciando ${this.building(stall.businessId)?.entity.properties.name||'produtos'} na feira`;this.economy.practice(c,'management',1);return;}
     if(c.task==='sit'){if(c.path.length)return;c.needs.leisure=clamp(c.needs.leisure+.7);c.action='Descansando sentado no banco';if(this.minute>=c.sitUntil||this.urgentNeed(c)){this.furniture.release(c);c.task=null;}return;}
     if(c.task==='lake-water'){this.supplies.collectLake(c);return;}
     if(!syncCitizenInterior(this,c))return;
@@ -1009,14 +1019,14 @@ export class CitySimulation {
       this.supplies.useCarried(c);
       if (this.life.minute(c,elapsed)) continue;
       this.justice.updateInjuries(c);
-      if(c.custodyWaterDelivery){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyWaterDelivery(c);continue;}
-      if(c.funeralBodyId){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.skybridgeTransit)this.finishSkybridgeTransit(c);if(c.skybridgeTransit){this.justice.updateFuneralWorker(c);continue;}if(c.indoorLocation&&!c.funeralInterior&&!syncCitizenInterior(this,c))continue;this.justice.updateFuneralWorker(c);continue;}
-      if(c.custodyEscort){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyEscort(c);continue;}
-      if(c.custody){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateDetainee(c);continue;}
+      if(c.custodyWaterDelivery){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyWaterDelivery(c);continue;}
+      if(c.funeralBodyId){if(c.skybridgeTransit)this.finishSkybridgeTransit(c);if(c.skybridgeTransit){this.justice.updateFuneralWorker(c);continue;}if(c.indoorLocation&&!c.funeralInterior&&!syncCitizenInterior(this,c))continue;this.justice.updateFuneralWorker(c);continue;}
+      if(c.custodyEscort){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyEscort(c);continue;}
+      if(c.custody){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateDetainee(c);continue;}
       if((c.unconsciousUntil||0)>this.minute){c.task=null;c.path=[];c.targetId=null;c.action='Inconsciente após ferimento na cabeça';if(c.indoorLocation?.path)c.indoorLocation.path=[];continue;}
       if((c.surrenderedUntil||0)>this.minute){c.task=null;c.path=[];c.targetId=null;c.action='Rendido após agressão';if(c.indoorLocation?.path)c.indoorLocation.path=[];continue;}
       if(c.combatFlee?.status==='running'){
-        if(c.indoorLocation){if(c.indoorLocation.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c)){c.action='Saindo do prédio para fugir da agressão';continue;}}
+        if(c.indoorLocation){if(c.indoorLocation&&!syncCitizenInterior(this,c)){c.action='Saindo do prédio para fugir da agressão';continue;}}
         let safe=this.building(c.combatFlee.safeBuildingId);if(!safe||safe.entity.destroyed){const route=this.justice.combatFleeRoute(c);if(!route){c.combatFlee.waitingReason='sem rota para local seguro';c.action='Aguardando rota para fugir da agressão';continue;}safe=route.building;c.combatFlee.safeBuildingId=safe.id;c.path=route.path;c.targetId=safe.id;}
         if(!c.path.length&&Math.hypot(c.entity.x-safe.door.x,c.entity.y-safe.door.y)<=1.2){c.combatFlee.status='arrived';c.combatFlee.arrivedAt=this.minute;c.combatFlee.endsAt=this.minute+30;c.combatFlee.waitingReason=null;c.task=null;c.targetId=null;c.action=`Chegou a ${safe.entity.properties.name} após fugir da agressão`;this.log(`${c.entity.properties.name} alcançou ${safe.entity.properties.name} após fugir da agressão.`,'justice',[c.id,safe.id],{kind:'combat-flee-arrived',safeBuildingId:safe.id});continue;}
         if(!c.path.length){const path=this.findPath(c.entity,safe.door);if(path===null){c.combatFlee.waitingReason='sem rota para local seguro';c.action='Aguardando rota para fugir da agressão';continue;}c.path=path;if(!path.length&&Math.hypot(c.entity.x-safe.door.x,c.entity.y-safe.door.y)>.1)c.path=[{x:safe.door.x,y:safe.door.y}];}
@@ -1025,13 +1035,12 @@ export class CitySimulation {
       if(c.graffitiMission){this.justice.updateGraffitiMission(c);continue;}
       if(c.policeOversight){const urgent=this.urgentNeed(c);this.justice.updatePoliceOversight(c);if(c.policeOversight||!urgent)continue;}
       if(c.policeAudit){const urgent=this.urgentNeed(c);this.justice.updatePoliceAudit(c);if(c.policeAudit||!urgent)continue;}
-      if(c.policeArrestEscort){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceArrestEscort(c);continue;}
+      if(c.policeArrestEscort){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceArrestEscort(c);continue;}
       if(c.policeRestitution&&this.urgentNeed(c)){this.justice.pauseVehicleRestitution(c,'necessidade urgente do agente');c.task=null;c.targetId=null;c.path=[];if(c.indoorLocation?.path?.length)c.indoorLocation.path=[];c.action='Pausa a restituição para atender uma necessidade urgente';}
-      else if(c.policeRestitution){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceRestitution(c);continue;}
-      if(c.policeResponse){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceResponse(c);continue;}
-      if(c.policeInvestigation){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceInvestigation(c);continue;}
-      if(c.policePatrol){if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePolicePatrol(c);continue;}
-      if(c.indoorLocation?.path?.length)advanceCitizenInterior(this,c,elapsed);
+      else if(c.policeRestitution){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceRestitution(c);continue;}
+      if(c.policeResponse){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceResponse(c);continue;}
+      if(c.policeInvestigation){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceInvestigation(c);continue;}
+      if(c.policePatrol){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePolicePatrol(c);continue;}
       if(c.skybridgeTransit){this.finishSkybridgeTransit(c);if(c.skybridgeTransit)continue;}
       if(age>=18&&!c.indoorLocation&&!c.businessIds.length&&!this.politics.officeHolder(c)&&this.minute>=(c.career?.nextDiscoveryAt??c.id%RECRUITMENT_RULES.discoveryInterval))discoverVacancies(this,c);
       if(c.mobilityTrip||c.ridingVehicleId)continue;
@@ -1075,7 +1084,7 @@ export class CitySimulation {
     disperseCrowds(this);this.society.updateMinute();
     const societyMs=performance.now()-profileMark;profileMark=performance.now();
     const movers=this._movingCitizens??=[];movers.length=0;
-    for(const c of this.citizens)if(c.path.length||c.deliveryId||c.ridingVehicleId)movers.push(c);
+    for(const c of this.citizens)if(c.path.length||c.indoorLocation?.path?.length||c.deliveryId||c.ridingVehicleId)movers.push(c);
     const moverSetupMs=performance.now()-profileMark;profileMark=performance.now();
     // Spread hourly work across minutes; keep the same order and one run per hour.
     if (this.minute % 60 === 0) this.hourlyPhase = 0;
@@ -1104,7 +1113,7 @@ export class CitySimulation {
     const movers=this._movingCitizens||[];
     if(this.vehicles.activeCount&&this._lastVehicleScanMinute!==this.minute){
       this._lastVehicleScanMinute=this.minute;
-      for(const c of movers)if(!c.ridingVehicleId)this.vehicles.tryTrip(c);
+      for(const c of movers)if(!c.ridingVehicleId&&!c.indoorLocation)this.vehicles.tryTrip(c);
     }
     const mobilityMs=performance.now()-profileMark;profileMark=performance.now();
     // Many active drivers used to scan the entire shipment list independently
@@ -1118,7 +1127,8 @@ export class CitySimulation {
     }
     const movementSetupMs=performance.now()-profileMark;profileMark=performance.now();
     for (const c of movers) {
-      if(c.ridingVehicleId||c.indoorLocation)continue;
+      if(c.ridingVehicleId)continue;
+      if(c.indoorLocation){advanceCitizenInterior(this,c,dt*(this.society.isAdult(c)?4:2.5));continue;}
       // Vehicle eligibility is minute based (including its 20-minute search
       // cooldown); polling it on every animation frame repeats the same scans
       // up to 60 times before any relevant state can change.
@@ -1139,7 +1149,7 @@ export class CitySimulation {
         if(!elevated&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         const dx=p.x-c.entity.x,dy=p.y-c.entity.y,dz=(p.z||0)-(c.skybridgeZ||0),len=Math.hypot(dx,dy,dz);
         const tile=tileAt(this.world,tx,ty),cost=elevated?(roadBridge?0.55:1.05):(bridgeAt(this.world,tx,ty)?0.55:roadTravelCost(tile)),available=distance/cost,travelled=Math.min(len,available);
-        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;if(!elevated)this.recordTraffic(p);c.path.shift();distance=Math.max(0,distance-len*cost);}
+        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;if(!elevated){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
         else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;distance=0;}
         if(travelled>0){
           c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;

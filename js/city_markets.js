@@ -3,6 +3,41 @@ import { INDUSTRIES, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.
 import { inventoryFree } from './city_inventory.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function carryCapacity(c){return injuredCarryCapacity(c,c?.equipment?.carrinho?72:c?.equipment?.cesta?36:24);}
+const STREET_MERCHANT_TYPES=new Set(['market','greengrocer','bakery','restaurant','cycle_shop','clothing_store','sports_shop','thrift_store','pharmacy','artisan','publisher']);
+const live=c=>!!c?.entity&&!c.entity.destroyed;
+function hasStreetProducts(b){return STREET_MERCHANT_TYPES.has(b.type)||INDUSTRIES[b.type]?.category==='services';}
+function prepareStreetMarkets(economy){
+  const city=economy.city,owners=new Set(),vendors=[];
+  for(const business of economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&hasStreetProducts(b))){const owner=city.society.citizen(business.ownerId)||business.workers.map(id=>city.society.citizen(id)).find(live);if(!live(owner)||owners.has(owner.id))continue;owners.add(owner.id);vendors.push({business,owner});}
+  economy.streetMarkets=[];economy.streetMarketsDay=city.day;
+  for(const c of city.citizens)if(c.marketStall){c.marketStall=null;if(c.task==='market-vending'){c.task=null;c.targetId=null;c.path=[];}}
+  if(vendors.length<2)return;
+  const siteCount=Math.min(4,Math.floor(vendors.length/2),Math.max(1,Math.ceil(city.citizens.length/70)));
+  const candidates=[...city.traffic.entries()].sort((a,b)=>b[1]-a[1]).map(([key,flow])=>{const [x,y]=key.split(',').map(Number);return{x:x+.5,y:y+.5,flow};});
+  for(const b of city.buildings.filter(b=>b.active&&!b.entity.destroyed&&['market','greengrocer','townhall','popular_refectory'].includes(b.type)))candidates.push({x:b.door.x,y:b.door.y,flow:city.traffic.get(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`)||0});
+  candidates.push({x:city.spawn.x,y:city.spawn.y,flow:0});
+  const sites=[];for(const point of candidates){if(sites.length>=siteCount)break;if(!city.walkable(Math.floor(point.x),Math.floor(point.y))||sites.some(s=>Math.hypot(s.x-point.x,s.y-point.y)<8))continue;sites.push({...point,id:`${city.day}:${sites.length+1}`,vendors:[]});}
+  if(!sites.length)return;
+  vendors.sort((a,b)=>Number(a.business.type!=='market')-Number(b.business.type!=='market')||a.business.id-b.business.id);
+  vendors.forEach(({business,owner},index)=>{const site=sites[index%sites.length],slot=site.vendors.length,occupied=new Set(site.vendors.map(v=>`${Math.floor(v.position.x)},${Math.floor(v.position.y)}`));let position=null;
+    for(let radius=1;radius<=4&&!position;radius++)for(let step=0;step<12&&!position;step++){const angle=(slot*2.399963229728653+step*Math.PI/6),x=site.x+Math.cos(angle)*radius,y=site.y+Math.sin(angle)*radius,key=`${Math.floor(x)},${Math.floor(y)}`;if(occupied.has(key)||!city.walkable(Math.floor(x),Math.floor(y))||city.buildings.some(b=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth))continue;position={x:Math.floor(x)+.5,y:Math.floor(y)+.5};}
+    position??={x:site.x,y:site.y};site.vendors.push({businessId:business.id,ownerId:owner.id,name:business.entity.properties.name,position});owner.marketStall={marketId:site.id,businessId:business.id,position,until:city.minute+(17-city.hour)*60};if(['work','manage','work-wait'].includes(owner.task)){city.furniture.release(owner);owner.workWait=null;owner.task=null;owner.targetId=null;owner.path=[];owner.serviceQueue=null;}});
+  economy.streetMarkets=sites;
+  const vendorCount=sites.reduce((n,s)=>n+s.vendors.length,0);
+  city.log(`Comerciantes abriram ${sites.length} feiras de rua nos pontos mais movimentados, com ${vendorCount} lojas anunciando seus produtos.`, 'business',sites.flatMap(s=>s.vendors.map(v=>v.ownerId)),{kind:'street-markets-opened',markets:sites.map(s=>({id:s.id,x:s.x,y:s.y,traffic:s.flow,vendorIds:s.vendors.map(v=>v.businessId)}))});
+}
+export function streetMarketFor(economy,c){
+  const stall=c?.marketStall;if(!stall||economy.city.minute>=stall.until||economy.city.hour<8||economy.city.hour>=17)return null;
+  return stall;
+}
+export function discoverStreetMarket(economy,c,point){
+  if(!live(c)||c.marketStall)return;
+  const city=economy.city;
+  for(const site of economy.streetMarkets||[])if(Math.hypot(point.x-site.x,point.y-site.y)<=2.6){
+    c.knownAdvertisements??={};for(const vendor of site.vendors)c.knownAdvertisements[vendor.businessId]=Math.max(c.knownAdvertisements[vendor.businessId]||0,city.minute+3*1440);
+    c.lastMarketDiscoveryAt=city.minute;return;
+  }
+}
 export function updateMarket(economy){
   const city=economy.city,people=city.citizens.filter(c=>!c.entity.destroyed),firms=economy.businesses;
   economy.market??={};
@@ -17,6 +52,7 @@ export function updateMarket(economy){
     const multiplier=Math.round(clamp(previous.multiplier+clamp(target-previous.multiplier,-.035,.035),.55,2.5)*1000)/1000;
     economy.market[good]={multiplier,demand,stock,likes,updatedAt:city.minute};
   }
+  if(city.hour>=8&&economy.streetMarketsDay!==city.day)prepareStreetMarkets(economy);
 }
 export function planSupplyChains(economy){
   const city=economy.city,firms=economy.businesses;

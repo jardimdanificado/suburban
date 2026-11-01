@@ -261,7 +261,7 @@ export class CityEconomy {
     for (const type of ['market', 'greengrocer', 'bakery', 'restaurant']) {
       const count = businesses.filter(b => b.type === type).length;
       const wealthy=activeCitizens.filter(c=>(c.balance||0)>=this.city.currency.price(12000)).length;
-      const target = type==='restaurant'?Math.ceil(wealthy/48):Math.max(1, Math.ceil(population / (type === 'market' ? 32 : 36)));
+      const target = type==='restaurant'?Math.ceil(wealthy/48):Math.max(1, Math.ceil(population / (type === 'market' ? 20 : 36)));
       const shortage = Math.max(0, target - count);
       items.push({ type, crop: null, score: shortage ? ({ market: 90, greengrocer: 85, bakery: 80, restaurant: 74 })[type] + shortage * 10 : 0, reason: type==='restaurant'?`${wealthy} moradores têm renda para refeições preparadas`:count ? 'População e capacidade de atendimento' : 'Este tipo de comércio ainda não existe' });
     }
@@ -825,7 +825,7 @@ export class CityEconomy {
   }
   buyConsumerGood(c,b) {
     const offer=this.consumerOffer(c,b);
-    if(!offer || Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)>2) return false;
+    if(!offer || (c.indoorLocation?.buildingId!==b.id&&Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)>2)) return false;
     const {good,spec,price}=offer;
     if(offer.service==='laundry'){
       if(!this.city.transfer(c.accountId,b.accountId,price,'Lavagem de roupas',{good:'sabao',quantity:1}))return false;

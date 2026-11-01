@@ -30,6 +30,6 @@ test('bathroom tasks enter the real queue and reserve the room in arrival order'
  for(const c of people){c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='toilet';c.targetId=b.id;c.toiletTargetId=f.id;c.path=[];assert.equal(syncCitizenInterior(city,c),false);}
  assert.deepEqual(b.serviceQueue.map(q=>q.citizenId),people.map(c=>c.id));
  f.occupantId=null;for(const c of people){c.path=[];c.entity.x=b.door.x;c.entity.y=b.door.y;}
- syncCitizenInterior(city,people[1]);assert.equal(people[1].indoorLocation,null);
+ syncCitizenInterior(city,people[1]);assert.equal(people[1].indoorLocation?.buildingId,b.id);assert.equal(people[1].indoorLocation?.targetRoomType,'waiting');
  syncCitizenInterior(city,people[0]);assert.equal(people[0].indoorLocation?.buildingId,b.id);assert.equal(b.serviceQueue[0].citizenId,people[1].id);
 });

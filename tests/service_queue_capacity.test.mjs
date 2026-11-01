@@ -2,13 +2,39 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup} from './helpers/city.mjs';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
-import {reserveService} from '../js/city_service_queue.js';
-import {syncCitizenInterior,activityCellAvailable} from '../js/city_interiors.js';
+import {reserveService,queueService} from '../js/city_service_queue.js';
+import {syncCitizenInterior,activityCellAvailable,advanceCitizenInterior} from '../js/city_interiors.js';
 
 function prepare(city,c,b){
  city.economy.leaveJob(c);c.businessIds=[];c.path=[];c.indoorLocation=null;c.deliveryId=null;c.cleaningJobId=null;c.informalJobId=null;c.conversation=null;c.workMeal=null;c.mobilityTrip=null;c.ridingVehicleId=null;
  for(const key in c.needs)c.needs[key]=95;c.needs.water=0;c.provisions=4;c.pocket={water:0,food:[],receivedWater:0};c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='supplies';c.supplyNeed='water';c.targetId=b.id;
 }
+
+test('waiting customers enter circulation and leave the indoor queue when a counter opens',()=>{
+ const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='popular_refectory'),people=city.citizens.slice(0,24);
+ for(const [i,c]of people.entries()){
+  prepare(city,c,b);
+  queueService(city,c,b,'supplies',i%2?'water':'food',false);
+  const s=c.indoorLocation,target=s?.path.at(-1)||s?.position;
+  assert.equal(s?.buildingId,b.id,'customers enter even when the counters are full');
+  assert(s.path.length,'waiting customers walk away from the doorway');
+  assert(b.circulation.some(u=>u.z===Math.round(target.z/1.8)&&Math.floor(target.x-b.entity.x)===u.x&&Math.floor(target.y-b.entity.y)===u.y),'waiting destinations are in circulation');
+  assert.equal(c.path.length,0,'waiting does not send anyone back outside');
+ }
+ assert.equal(new Set(people.map(c=>c.indoorLocation.queueSlot)).size,people.length,'service types share distinct waiting positions');
+ const first=people[0];advanceCitizenInterior(city,first,1000);
+ const room=b.units.find(u=>u.roomType==='dining');
+ assert.equal(queueService(city,first,b,'supplies','food',true,room,'service'),true);
+ assert.equal(b.serviceQueue.some(q=>q.citizenId===first.id),false);
+ assert.equal(first.indoorLocation.buildingId,b.id,'admission retains the indoor position');
+});
+
+test('office customers enter the tower and wait on the service floor',()=>{
+ const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.officeTenantOf&&b.officeFloor>0),c=city.citizens.find(c=>!city.politics.officeHolder(c));assert(b);
+ prepare(city,c,b);queueService(city,c,b,'supplies','dining',false);
+ const s=c.indoorLocation,target=s?.path.at(-1);
+ assert.equal(s?.buildingId,b.id);assert(target,'the waiting route crosses the interior stairs');assert.equal(target.z,b.officeFloor*1.8);assert.equal(c.path.length,0);
+});
 
 test('waiting pedestrians reserve available rooms while walking in the queue without overbooking a counter',()=>{
  const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='popular_refectory'),people=city.citizens.slice(0,6);

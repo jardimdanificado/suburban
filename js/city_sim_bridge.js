@@ -159,7 +159,8 @@ export class CitySimulationBridge {
       const dx=x-fromX,dy=y-fromY;
       const reset=this.time.paused||Math.hypot(dx,dy)>=8;
       queueMotion(sample,x,y,now,{reset});
-      if(!reset){this.motion.set(sample.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
+      if(sample.citizen.indoorLocation){sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}
+      else if(!reset){this.motion.set(sample.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
       else {sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}
       // Older/diagnostic motion packets carried a compact inside bit beside
       // ground coordinates. Keep it readable while current packets use the

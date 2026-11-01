@@ -61,8 +61,9 @@ test('fine navigation keeps furniture footprints blocked even beside the buildin
 });
 
 test('following a resident exposes their occupied floor and restores exterior view on exit',()=>{
- assert.deepEqual(interiorViewForLocation({buildingId:8,floor:2,position:{x:1.5,y:2.5,z:6.4}},{id:8}),{buildingId:8,floor:2,hideWalls:true});
- assert.deepEqual(interiorViewForLocation({buildingId:21,floor:0,position:{x:1,y:2,z:0}},{id:21,officeTenantOf:4,officeFloor:6}),{buildingId:4,floor:6,hideWalls:true});
+ assert.deepEqual(interiorViewForLocation({buildingId:8,floor:2,position:{x:1.5,y:2.5,z:3.6}},{id:8}),{buildingId:8,floor:2,hideWalls:true});
+ assert.deepEqual(interiorViewForLocation({buildingId:21,floor:0,position:{x:1,y:2,z:0}},{id:21,officeTenantOf:4,officeFloor:6}),{buildingId:4,floor:0,hideWalls:true});
+ assert.deepEqual(interiorViewForLocation({buildingId:21,floor:6,position:{x:1,y:2,z:10.8}},{id:21,officeTenantOf:4,officeFloor:6}),{buildingId:4,floor:6,hideWalls:true});
  assert.equal(interiorViewForLocation({buildingId:8,floor:2,exiting:true},{id:8}),null);
  assert.equal(interiorViewForLocation({buildingId:8,floor:2},{id:8,destroyed:true}),null);
 });

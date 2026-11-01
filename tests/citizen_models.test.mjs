@@ -12,8 +12,9 @@ class InstancedMesh{constructor(geometry,material,capacity){Object.assign(this,{
 const THREE={Vector3,Matrix4,Quaternion,Color,BufferGeometry,Float32BufferAttribute,InstancedMesh,DoubleSide:2,DynamicDrawUsage:1,MeshLambertMaterial:class{constructor(options){this.options=options;}}};
 function person(id,x=0,y=0){return {id,x,y,properties:{render:{color:0xc42b24},citizen:{task:null,path:[]}}};}
 async function models(){const requests=[],group={meshes:new Set(),add(m){this.meshes.add(m);},remove(m){this.meshes.delete(m);}},model=new CityCitizenModels(THREE,group,{fetchAsset:async url=>{requests.push(String(url));return {ok:true,text:()=>fs.readFile(url,'utf8')};}});await model.loading;return{model,requests,group};}
-test('all nine supplied OBJ frames parse as finite triangular meshes with shared world scale',async()=>{
- const {model,requests}=await models();assert(model.ready);assert.equal(requests.length,9);assert.equal(model.frames.size,9);
+const frameCount=Object.values(CITIZEN_MODEL_FRAMES).reduce((sum,frames)=>sum+frames.length,0);
+test('all supplied OBJ frames parse as finite triangular meshes with shared world scale',async()=>{
+ const {model,requests}=await models();assert(model.ready);assert.equal(requests.length,frameCount);assert.equal(model.frames.size,frameCount);
  for(const [clip,frames]of Object.entries(CITIZEN_MODEL_FRAMES))for(const frame of frames){const geometry=model.frames.get(`${clip}:${frame}`),p=geometry.attributes.position.array,n=geometry.attributes.normal.array;assert(p.length>0);assert(p.every(Number.isFinite));assert(n.every(Number.isFinite));assert.equal(p.length,n.length);assert(Math.max(...p.filter((_,i)=>i%3===1))<1.1);assert(Math.min(...p.filter((_,i)=>i%3===1))>=-.001);}
 });
 test('OBJ parser triangulates quads, resolves negative indices and rejects invalid meshes',()=>{
@@ -32,7 +33,7 @@ test('animation distinguishes actual movement, on-site work, idle and bicycle po
 test('1024 people share at most nine frame batches and preserve political colors through growth',async()=>{
  const {model,group,requests}=await models();model.begin(.016,1);
  const people=Array.from({length:1024},(_,id)=>person(id));
- for(let i=0;i<people.length;i++){const e=people[i];e.properties.render.color=i;assert(model.add(e,3));}model.end();assert.equal(group.meshes.size,1);const b=[...model.batches.values()][0];assert.equal(b.mesh.count,1024);assert.equal(b.mesh.colors[0],0);assert.equal(b.mesh.colors[900],900);assert.equal(b.mesh.matrices[0].position.y,3);assert.equal(requests.length,9);
+ for(let i=0;i<people.length;i++){const e=people[i];e.properties.render.color=i;assert(model.add(e,3));}model.end();assert.equal(group.meshes.size,1);const b=[...model.batches.values()][0];assert.equal(b.mesh.count,1024);assert.equal(b.mesh.colors[0],0);assert.equal(b.mesh.colors[900],900);assert.equal(b.mesh.matrices[0].position.y,3);assert.equal(requests.length,frameCount);
  model.begin(.05,1);for(let i=0;i<people.length;i++){const e=people[i];if(i%3===0)e.x+=1;else if(i%3===1){e.properties.citizen.task='work';e.properties.citizen.workCell={x:e.x,y:e.y};}model.add(e,3);}model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),1024);assert(group.meshes.size<=9);assert(group.meshes.size>=7);
  model.begin(.016,1);model.end();assert.equal(b.mesh.count,0);
 });
@@ -42,13 +43,21 @@ test('heading follows movement, indoor bodies are shown, first-person bodies sta
  model.begin(.1,1);model.add(e,2,{hidden:true});model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),0);
  e.properties.citizen.indoorLocation={buildingId:1,position:{x:4,y:5,z:1.8}};model.begin(.1,1);model.add(e,2);model.end();assert.equal([...model.batches.values()].reduce((n,b)=>n+b.count,0),1);
 });
+test('a walking interior resident keeps the physical position and walking pose instead of snapping to furniture',async()=>{
+ const {model}=await models(),e=person(1),c=e.properties.citizen;
+ c.task='food';c.path=[];c.indoorLocation={buildingId:1,position:{x:2,y:3,z:0},path:[{x:2,y:3.5,z:0}]};
+ c.furnitureUse={pose:'lying',posePoint:{x:50,y:50,z:0}};
+ model.begin(.05,1);model.add(e,0);model.end();
+ const walking=[...model.batches.entries()].find(([key,b])=>key.startsWith('run')&&b.count);assert(walking,'the body uses the walking animation while crossing the door');
+ assert.equal(walking[1].mesh.matrices[0].position.x,2);assert.equal(walking[1].mesh.matrices[0].position.z,3);
+});
 test('sleepers and patients on an exam bed use the lying pose at their physical furniture point',async()=>{
  const {model}=await models(),e=person(88);e.properties.citizen.task='health';e.properties.citizen.indoorLocation={buildingId:1,roomType:'treatment',position:{x:2,y:3,z:1.8},path:[]};e.properties.citizen.furnitureUse={pose:'lying',posePoint:{x:2.5,y:3.25,z:1.98}};
  model.begin(.1,1);model.add(e,4);model.end();let batch=[...model.batches.values()].find(b=>b.count);assert(batch);assert.equal(batch.mesh.matrices[0].lying,true);assert.equal(batch.mesh.matrices[0].position.x,2.5);assert.equal(batch.mesh.matrices[0].position.y,5.98);assert.equal(batch.mesh.matrices[0].position.z,3.25);
  e.properties.citizen.task='energy';e.properties.citizen.indoorLocation.roomType='bedroom';model.begin(.1,1);model.add(e,4);model.end();batch=[...model.batches.values()].find(b=>b.count);assert.equal(batch.mesh.matrices[0].lying,true);
 });
 test('clearing a city keeps loaded geometry and resets character motion without fetching again',async()=>{
- const {model,group,requests}=await models();model.add(person(2),0);model.end();model.clear();assert.equal(group.meshes.size,0);assert(model.ready);assert.equal(model.frames.size,9);model.add(person(3),0);model.end();assert.equal(requests.length,9);assert.equal(group.meshes.size,1);
+ const {model,group,requests}=await models();model.add(person(2),0);model.end();model.clear();assert.equal(group.meshes.size,0);assert(model.ready);assert.equal(model.frames.size,frameCount);model.add(person(3),0);model.end();assert.equal(requests.length,frameCount);assert.equal(group.meshes.size,1);
 });
 test('a failed asset leaves the renderer able to use its existing sprite fallback',async()=>{
  const model=new CityCitizenModels(THREE,{add(){},remove(){}},{fetchAsset:async()=>({ok:false,status:404})});await model.loading;assert(!model.ready);assert.match(model.error,/404/);assert.equal(model.add(person(1),0),false);

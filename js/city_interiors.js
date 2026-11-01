@@ -3,8 +3,8 @@ import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
 import {queueService} from './city_service_queue.js?v=service-capacity-8';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
-// Outdoor coordinates remain the navigation anchor at the entrance. Interior
-// position, circulation and floor changes are separate physical coordinates.
+// Entity coordinates follow the resident through outdoor and indoor tiles.
+// Indoor metadata adds the floor, room and the remaining interior route.
 const INDOOR_TASKS=new Set(['work','manage','work-wait','shopping','supplies','job-interview','justice-report','police-oversight','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','vote','clean','informal-service','leisure','social','outdoor_leisure']);
 const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
 const citizenKeys=[];
@@ -37,7 +37,15 @@ function exit(city,c){
  const s=c.indoorLocation;if(!s)return true;
  const b=city.building(s.buildingId);if(!b||b.entity.destroyed){release(city,c);c.indoorLocation=null;return true;}
  if(b.constructionKind==='open-air'){release(city,c);c.indoorLocation=null;return true;}
- if(!s.exiting){release(city,c);s.exiting=true;s.phase='leaving';s.roomType='circulation';c.action='Saindo do prédio';s.unitId=null;s.targetUnitId=null;const path=interiorRoute(b,s.position||{x:b.door.x,y:b.door.y,z:0},{x:b.door.x,y:b.door.y,z:0});if(path===null){c.indoorLocation=null;leaveEntrance(city,c);return true;}s.path=path;}
+ if(!s.exiting){
+  const shell=city.building(b.officeTenantOf)||b,door={x:shell.door.x,y:shell.door.y,z:0};
+  let path=interiorRoute(shell,s.position||{x:c.entity.x,y:c.entity.y,z:0},door);
+  // An interrupted stair step or furniture interaction may lie between graph
+  // nodes. Retrace the actual walked tiles when that point has no graph exit.
+  if(path===null&&s.trail?.length){const origin=s.trail[0],remaining=Math.hypot(origin.x-door.x,origin.y-door.y,(origin.z||0))<.001?[]:interiorRoute(shell,origin,door);if(remaining!==null)path=[...s.trail.slice().reverse().map(p=>({...p})),...remaining];}
+  if(path===null){c.action='Aguardando rota de saída do prédio';return false;}
+  release(city,c);s.exiting=true;s.phase='leaving';s.roomType='circulation';c.action='Saindo do prédio';s.unitId=null;s.targetUnitId=null;s.path=path;
+ }
  if(!s.path.length){c.indoorLocation=null;leaveEntrance(city,c);return true;}return false;
 }
 function normalizeInterior(city,c){
@@ -47,9 +55,11 @@ function normalizeInterior(city,c){
 
 export function advanceCitizenInterior(city,c,minutes=1){
  const s=c.indoorLocation;if(!s?.path?.length)return;
+ s.trail??=[{...s.position}];
  s.phase=s.exiting?'leaving':'walking';
  let distance=Math.max(0,minutes)*injuryMovementFactor(c);
- while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001)s.path.shift();}
+ while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001){s.path.shift();if(!s.exiting){const visited=s.trail.findIndex(q=>Math.hypot(q.x-target.x,q.y-target.y,(q.z||0)-(target.z||0))<.001);if(visited>=0)s.trail.length=visited+1;else s.trail.push({...target});}}}
+ c.entity.x=s.position.x;c.entity.y=s.position.y;
  s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));
  if(!s.path.length){if(s.exiting){c.indoorLocation=null;leaveEntrance(city,c);}else{s.unitId=s.targetUnitId;s.roomType=s.targetRoomType;s.arrivedAt=city.minute;s.phase='using';}}
 }
@@ -66,13 +76,12 @@ export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'
   release(city,c);c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:room.id,targetRoomType:kind,roomType:kind,floor:room.z,position:target,path:[],phase:'using',task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute,arrivedAt:city.minute,toiletTargetId:c.toiletTargetId};
  }else{
   if(c.path.length)return false;
-  const entry=buildingInteriorEntrance(b)||b.door;
   if(!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.75){const path=city.findPath(c.entity,b.door);if(path!==null)c.path=path;return false;}
-  const from=previous?.buildingId===b.id?previous.position:{...entry,z:0};release(city,c);
+  const from=previous?.buildingId===b.id?previous.position:{x:c.entity.x,y:c.entity.y,z:0};release(city,c);
   const usedSlots=new Set();for(const [index,id]of (room.activityReservedIds||[]).entries()){if(id===c.id)continue;const other=city.society.citizen(id),assigned=other?.indoorLocation?.furnitureSlot;if(Number.isInteger(assigned))usedSlots.add(assigned);else usedSlots.add(index);}
-  let slot=0;while(usedSlots.has(slot)&&slot<8)slot++;const interaction=furnitureInteraction(b,room,kind,slot,c.workMeal?'workmeal':c.task),target=interaction?.point||interiorUsePoint(b,room,kind,slot,c.task),path=interiorRoute(b,from,target);
+  let slot=0;while(usedSlots.has(slot)&&slot<8)slot++;const interaction=furnitureInteraction(b,room,kind,slot,c.workMeal?'workmeal':c.task),target=interaction?.point||interiorUsePoint(b,room,kind,slot,c.task),path=interiorRoute(city.building(b.officeTenantOf)||b,from,target);
   if(path===null){c.action=`Sem rota interna acessível até ${kind}`;return false;}
-  c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,phase:path.length?'walking':'using',task:c.workMeal?'workmeal':c.task,furnitureId:interaction?.item.id||null,furnitureSlot:slot,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
+  c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,trail:previous?.buildingId===b.id?previous.trail:[{...from}],phase:path.length?'walking':'using',task:c.workMeal?'workmeal':c.task,furnitureId:interaction?.item.id||null,furnitureSlot:slot,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
  }
  c.workCell={buildingId:b.id,unitId:room.id,x:room.x,y:room.y,z:room.z,target:point(b,room)};
  if(!room.activityReservedIds.includes(c.id))room.activityReservedIds.push(c.id);
@@ -192,7 +201,7 @@ export function syncCitizenInterior(city,c){
   // A full public shelter must not leave a homeless person waiting forever
   // while exhaustion keeps rising. They can still sleep outdoors, at a cost.
   if(task==='energy'&&!c.homeUnitId){c.sleepWaitingSince??=city.minute;if(city.minute-c.sleepWaitingSince>=30){c.sleepWaitingSince=null;c.targetId=null;c.path=[];c.action='Sem vaga para dormir; buscando descanso na rua';return exit(city,c);}}
-  if(b.constructionKind!=='open-air'&&!previous){const entry=buildingInteriorEntrance(b);if(entry&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.75){if(!c.path.length){const path=city.findPath(c.entity,b.door);if(path!==null)c.path=path;}c.action='Indo para a fila dentro da entrada';return false;}if(entry)c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,roomType:'circulation',targetRoomType:'waiting',floor:0,position:{x:entry.x,y:entry.y,z:0},path:[],phase:'waiting',queueSlot:'inside-door',task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}
+  if(b.constructionKind!=='open-air'&&!previous){const entry=buildingInteriorEntrance(b);if(entry&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.75){if(!c.path.length){const path=city.findPath(c.entity,b.door);if(path!==null)c.path=path;}c.action='Indo para a fila dentro da entrada';return false;}if(entry){const from={x:c.entity.x,y:c.entity.y,z:0},path=interiorRoute(b,from,entry);if(path!==null)c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,roomType:'circulation',targetRoomType:'waiting',floor:0,position:from,path,phase:path.length?'walking':'waiting',queueSlot:'inside-door',task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}}
   c.action=task==='job-interview'?'Aguardando a seleção no local combinado':`Aguardando célula de ${kind} disponível`;return false;
  }
  if(task==='energy')c.sleepWaitingSince=null;

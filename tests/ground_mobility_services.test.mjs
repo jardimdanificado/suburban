@@ -60,7 +60,7 @@ test('hospital treatment requires present staff and consumes real supplies once 
  city.minute++;b.workers=[];assert.equal(civicStatus(city,b).ready,false);
 });
 test('open-air civic visitors are checked at the entrance without requiring a work cell',()=>{
- const {city,b,c}=hospital();b.constructionKind='open-air';for(const id of b.workers){const worker=city.society.citizen(id);worker.workCell={buildingId:b.id,target:{x:b.door.x,y:b.door.y}};}c.workCell=null;c.civicVisit={buildingId:b.id,need:'health',startedAt:city.minute};
+ const {city,b,c}=hospital();b.constructionKind='open-air';for(const id of b.workers){const worker=city.society.citizen(id);worker.indoorLocation=null;worker.entity.x=b.door.x;worker.entity.y=b.door.y;worker.workCell={buildingId:b.id,target:{x:b.door.x,y:b.door.y}};}c.workCell=null;c.civicVisit={buildingId:b.id,need:'health',startedAt:city.minute};
  assert(civicVisit(city,c,b));assert(c.civicVisit);assert(civicVisit(city,c,b));assert.equal(c.needs.health,28);
 });
 test('hospital capacity prevents extra patients and shortages are explained',()=>{
