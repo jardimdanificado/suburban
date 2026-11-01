@@ -9,7 +9,7 @@ import {funeralSpec} from './city_funeral_services.js';
 import {interiorLayout,interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {injuryMovementFactor,injuredCarryCapacity} from './city_injury_effects.js';
 import {CITY_FLOOR_HEIGHT,buildingPoint} from './city_building_geometry.js';
-import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=interiors-completion-7';
+import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=interiors-completion-11';
 import {civicStatus,civicVisit} from './city_public_services.js';
 import {inventoryFree} from './city_inventory.js';
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);

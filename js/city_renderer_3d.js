@@ -517,11 +517,36 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
       }
     }
     if(b.type==='park'){
-      for(const [x,z]of [[.7,.7],[b.width-.7,b.depth-.7]]){
-        const ground=surfaceElevation(world,entity.x+x,entity.y+z),wood=new THREE.MeshLambertMaterial({color:0x79553d});
-        const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,.8,5),wood);trunk.position.set(x,ground+.4,z);group.add(trunk);
-        const crown=new THREE.Mesh(new THREE.SphereGeometry(.5,6,5),new THREE.MeshLambertMaterial({color:0x4f944e}));crown.position.set(x,ground+1,z);group.add(crown);
-        const bench=new THREE.Mesh(new THREE.BoxGeometry(.7,.15,.3),wood);bench.position.set(x,ground+.25,Math.min(b.depth-.2,z+.6));group.add(bench);
+      const wood=new THREE.MeshLambertMaterial({color:0x79553d}),palmWood=new THREE.MeshLambertMaterial({color:0x8b6847}),palmGreen=new THREE.MeshLambertMaterial({color:0x397b43}),flowerMats=[0xe85d57,0xf0bb48,0xf0e4c1,0xc64b73].map(color=>new THREE.MeshLambertMaterial({color})),stoneMats=[0xd9c69c,0xbda77c,0xe4d3ad].map(color=>new THREE.MeshLambertMaterial({color}));
+      const gardenSpots=[[.62,.72],[b.width-.62,.72],[.62,b.depth-.72],[b.width-.62,b.depth-.72]], flowerGeo=new THREE.SphereGeometry(.095,6,5),leafGeo=new THREE.SphereGeometry(1,6,4),trunkGeo=new THREE.CylinderGeometry(.065,.12,1.75,6),pavingGeo=new THREE.BoxGeometry(.38,.045,.32);
+      // A warm stone walkway and small tiled landing make the park entrance read clearly.
+      const pathLength=Math.min(1.5,Math.max(.7,b.depth*.38)),pathX=b.width/2;
+      for(let row=0;row<3;row++)for(let col=0;col<3;col++){
+        const x=pathX+(col-1)*.39,z=b.depth-pathLength+(row+.5)*pathLength/3,ground=surfaceElevation(world,entity.x+x,entity.y+z),tile=new THREE.Mesh(pavingGeo,stoneMats[(row+col)%stoneMats.length]);tile.position.set(x,ground+.035,z);group.add(tile);
+      }
+      // Tropical planting beds mix palms, broad leaves, and bright island flowers.
+      for(let bed=0;bed<gardenSpots.length;bed++){
+        const [x,z]=gardenSpots[bed],ground=surfaceElevation(world,entity.x+x,entity.y+z),trunk=new THREE.Mesh(trunkGeo,palmWood);trunk.position.set(x,ground+.83,z);trunk.rotation.z=(bed%2?-.13:.12);group.add(trunk);
+        const crownY=ground+1.7;
+        for(let frond=0;frond<7;frond++){
+          const angle=frond*Math.PI*2/7,leaf=new THREE.Mesh(leafGeo,palmGreen);leaf.scale.set(.12,.07,.58);leaf.position.set(x+Math.sin(angle)*.34,crownY-.12,z+Math.cos(angle)*.34);leaf.rotation.y=angle;leaf.rotation.x=.24;group.add(leaf);
+        }
+        for(let shrub=0;shrub<3;shrub++){
+          const angle=shrub*Math.PI*2/3+.4,px=x+Math.sin(angle)*.37,pz=z+Math.cos(angle)*.37,base=new THREE.Mesh(leafGeo,new THREE.MeshLambertMaterial({color:[0x42844a,0x57924b,0x397744][shrub]}));base.scale.set(.21,.17,.22);base.position.set(px,ground+.18,pz);group.add(base);
+          const petalMat=flowerMats[(bed+shrub)%flowerMats.length];
+          for(let petal=0;petal<5;petal++){const a=petal*Math.PI*2/5,blossom=new THREE.Mesh(flowerGeo,petalMat);blossom.scale.set(.065,.035,.09);blossom.position.set(px+Math.cos(a)*.07,ground+.38,pz+Math.sin(a)*.07);group.add(blossom);}
+          const center=new THREE.Mesh(flowerGeo,flowerMats[1]);center.scale.set(.035,.035,.035);center.position.set(px,ground+.4,pz);group.add(center);
+        }
+      }
+      // A compact timber shade with a palm-thatch roof and colorful public benches.
+      const shadeX=b.width/2,shadeZ=Math.min(b.depth-1.2,1.45),postMaterial=palmWood,thatch=new THREE.MeshLambertMaterial({color:0xb99255});
+      for(const x of [shadeX-.58,shadeX+.58])for(const z of [shadeZ-.42,shadeZ+.42]){const post=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,1.75,5),postMaterial);post.position.set(x,surfaceElevation(world,entity.x+x,entity.y+z)+.875,z);group.add(post);}
+      for(const z of [shadeZ-.42,shadeZ+.42]){const beam=new THREE.Mesh(new THREE.BoxGeometry(1.3,.1,.1),postMaterial);beam.position.set(shadeX,surfaceElevation(world,entity.x+shadeX,entity.y+z)+1.72,z);group.add(beam);}
+      for(let slat=0;slat<6;slat++){const roof=new THREE.Mesh(new THREE.BoxGeometry(.1,.07,1.02),thatch);roof.position.set(shadeX-.52+slat*.208,surfaceElevation(world,entity.x+shadeX,entity.y+shadeZ)+1.82,shadeZ);group.add(roof);}
+      for(let seat=0;seat<2;seat++){
+        const x=seat===0?.9:b.width-.9,z=seat===0?b.depth*.55:b.depth*.56,ground=surfaceElevation(world,entity.x+x,entity.y+z),bench=new THREE.Mesh(new THREE.BoxGeometry(.78,.12,.27),wood);bench.position.set(x,ground+.28,z);group.add(bench);
+        for(const legX of [-.29,.29]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.07,.28,.08),wood);leg.position.set(x+legX,ground+.14,z);group.add(leg);}
+        const back=new THREE.Mesh(new THREE.BoxGeometry(.78,.3,.07),wood);back.position.set(x,ground+.48,z-.12);group.add(back);
       }
     }
     group.userData.sheds = [];

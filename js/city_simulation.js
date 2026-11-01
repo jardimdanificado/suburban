@@ -16,7 +16,7 @@ import {CityVehicles} from './city_vehicles.js?v=skybridge-survival-2';
 import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
-import {MIN_PLOT_CELLS,CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
+import {MIN_PLOT_CELLS,CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geometry.js?v=visual-flow-4';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js';
@@ -27,7 +27,7 @@ import { CityGovernment as CityPolitics } from './city_government.js?v=interpart
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=combat-animation-integration-1';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=interiors-completion-7';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=interiors-completion-11';
 import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
@@ -317,7 +317,11 @@ export class CitySimulation {
     if (!free && stone) { materialSource.inventory.pedra -= stone; this.economy.consumed.pedra += stone; this.economy.recordGoods('construction', 'pedra', stone, materialSource.id, b.id); }
     this.transfer('treasury', b.accountId, capital, 'Capital inicial');
     for (let z = 0; z < floors; z++) this.housing.addFloor(b, z, ownerAccountId);
-    if (kind !== 'open-air') {for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) this.occupied.add(key(xx, yy));this.obstacleRevision=(this.obstacleRevision||0)+1;}
+    if (kind !== 'open-air') {
+      const entry=buildingInteriorEntrance(b),entryX=entry&&Math.floor(entry.x),entryY=entry&&Math.floor(entry.y);
+      for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) if(xx!==entryX||yy!==entryY)this.occupied.add(key(xx, yy));
+      this.obstacleRevision=(this.obstacleRevision||0)+1;
+    }
     this.buildings.push(b);
     this.buildingsById.set(b.id, b);
     this.structureRevision++;

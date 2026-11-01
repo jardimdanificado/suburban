@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=interiors-completion-7';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=doorway-queue-4';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;

@@ -1,7 +1,7 @@
 import {injuryMovementFactor} from './city_injury_effects.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
-import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {queueService} from './city_service_queue.js?v=service-capacity-3';
+import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
+import {queueService} from './city_service_queue.js?v=service-capacity-8';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
 // Outdoor coordinates remain the navigation anchor at the entrance. Interior
 // position, circulation and floor changes are separate physical coordinates.
@@ -66,8 +66,9 @@ export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'
   release(city,c);c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:room.id,targetRoomType:kind,roomType:kind,floor:room.z,position:target,path:[],phase:'using',task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute,arrivedAt:city.minute,toiletTargetId:c.toiletTargetId};
  }else{
   if(c.path.length)return false;
-  if(!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>1.5){const path=city.findPath(c.entity,b.door);if(path!==null)c.path=path;return false;}
-  const from=previous?.buildingId===b.id?previous.position:{x:b.door.x,y:b.door.y,z:0};release(city,c);
+  const entry=buildingInteriorEntrance(b)||b.door;
+  if(!previous&&Math.hypot(c.entity.x-entry.x,c.entity.y-entry.y)>.25){const path=city.findPath(c.entity,entry);if(path!==null)c.path=path;return false;}
+  const from=previous?.buildingId===b.id?previous.position:{...entry,z:0};release(city,c);
   const usedSlots=new Set();for(const [index,id]of (room.activityReservedIds||[]).entries()){if(id===c.id)continue;const other=city.society.citizen(id),assigned=other?.indoorLocation?.furnitureSlot;if(Number.isInteger(assigned))usedSlots.add(assigned);else usedSlots.add(index);}
   let slot=0;while(usedSlots.has(slot)&&slot<8)slot++;const interaction=furnitureInteraction(b,room,kind,slot,c.workMeal?'workmeal':c.task),target=interaction?.point||interiorUsePoint(b,room,kind,slot,c.task),path=interiorRoute(b,from,target);
   if(path===null){c.action=`Sem rota interna acessível até ${kind}`;return false;}
@@ -191,7 +192,7 @@ export function syncCitizenInterior(city,c){
   // A full public shelter must not leave a homeless person waiting forever
   // while exhaustion keeps rising. They can still sleep outdoors, at a cost.
   if(task==='energy'&&!c.homeUnitId){c.sleepWaitingSince??=city.minute;if(city.minute-c.sleepWaitingSince>=30){c.sleepWaitingSince=null;c.targetId=null;c.path=[];c.action='Sem vaga para dormir; buscando descanso na rua';return exit(city,c);}}
-  if(b.constructionKind!=='open-air'&&!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=1.5){const from={x:b.door.x,y:b.door.y,z:0},lobby={x:b.entity.x+Math.floor(b.width/2)+.5,y:b.entity.y+Math.floor(b.depth/2)+.5,z:0},path=interiorRoute(b,from,lobby);if(path!==null)c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:from,path,phase:path.length?'walking':'waiting',task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}
+  if(b.constructionKind!=='open-air'&&!previous){const entry=buildingInteriorEntrance(b);if(entry&&Math.hypot(c.entity.x-entry.x,c.entity.y-entry.y)>.25){if(!c.path.length){const path=city.findPath(c.entity,entry);if(path!==null)c.path=path;}c.action='Indo para a fila dentro da entrada';return false;}if(entry)c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,roomType:'circulation',targetRoomType:'waiting',floor:0,position:{x:c.entity.x,y:c.entity.y,z:0},path:[],phase:'waiting',queueSlot:'inside-door',task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};}
   c.action=task==='job-interview'?'Aguardando a seleção no local combinado':`Aguardando célula de ${kind} disponível`;return false;
  }
  if(task==='energy')c.sleepWaitingSince=null;

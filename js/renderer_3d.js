@@ -91,7 +91,7 @@ const EMOTE_SKINS = [
 
 const STATIC_FOLIAGE_KEYS = [
   'oakLeaves', 'pineLeaves', 'cherryLeaves', 'birchLeaves',
-  'mapleLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseFlowers', 'grassFoliage'
+  'mapleLeaves', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseFlowers', 'grassFoliage'
 ];
 
 export const MIN_CAMERA_ZOOM = 0.25;
@@ -125,7 +125,7 @@ function shouldRenderTerrainSprite(x, y, tileType) {
 function shouldSpawnGrassTuft(x, y) {
   let hash = Math.imul(x ^ Math.imul(y, 198491317), 445582319);
   hash = Math.imul(hash ^ (hash >>> 11), 892341233) >>> 0;
-  return hash % 100 < 8; // Controlled 8% natural density
+  return hash % 100 < 14; // Sparse enough for performance, visible at the map view.
 }
 
 // ---------------------------------------------------------------------------
@@ -514,6 +514,34 @@ function createSaguaroCactusGeometry() {
   return merged;
 }
 
+function createPalmFrondsGeometry() {
+  const positions = [], indices = [];
+  const fronds = 10, segments = 12;
+  for (let frond = 0; frond < fronds; frond++) {
+    const angle = frond * Math.PI * 2 / fronds;
+    const dx = Math.cos(angle), dz = Math.sin(angle), sideX = -dz, sideZ = dx;
+    const start = positions.length / 3;
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const reach = 0.16 + t * 1.62;
+      const y = 2.65 + Math.sin(t * Math.PI) * 0.44 - t * 0.78;
+      const width = Math.sin(Math.PI * Math.pow(t, 0.72)) * 0.25;
+      const scallop = i > 0 && i < segments ? (i % 2 ? 0.08 : -0.025) : 0;
+      positions.push(dx * reach + sideX * (-width + scallop), y, dz * reach + sideZ * (-width + scallop));
+      positions.push(dx * reach + sideX * (width - scallop), y, dz * reach + sideZ * (width - scallop));
+    }
+    for (let i = 0; i < segments; i++) {
+      const a = start + i * 2;
+      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 function createCherryBlossomTrunkGeometry() {
   const geos = [];
   const trunk = new THREE.CylinderGeometry(0.15, 0.25, 1.4, 6);
@@ -664,16 +692,30 @@ function createRoseBushFlowersGeometry() {
 }
 
 function createNaturalGrassGeometry(w = 0.44, h = 0.38) {
-  const p1 = new THREE.PlaneGeometry(w, h);
-  p1.translate(0, h * 0.36, 0);
-
-  const p2 = p1.clone();
-  p2.rotateY(Math.PI / 3);
-
-  const p3 = p1.clone();
-  p3.rotateY(-Math.PI / 3);
-
-  return mergeBufferGeometries([p1, p2, p3]);
+  const blades = [];
+  for (const angle of [0, Math.PI / 3, -Math.PI / 3, Math.PI / 2]) {
+    const blade = new THREE.BufferGeometry();
+    blade.setAttribute("position", new THREE.Float32BufferAttribute([
+      0, 0, 0, -w * .24, h * .48, 0, w * .035, h, 0,
+      0, 0, 0, w * .035, h, 0, w * .28, h * .52, 0
+    ], 3));
+    blade.setAttribute("color", new THREE.Float32BufferAttribute([
+      .78, .9, .58, .9, 1, .68, 1, 1, .72,
+      .78, .9, .58, 1, 1, .72, .86, .95, .58
+    ], 3));
+    blade.computeVertexNormals();
+    blade.rotateY(angle);
+    blades.push(blade);
+  }
+  const merged = mergeBufferGeometries(blades), positions = merged.attributes.position.array, colors = new Float32Array(positions.length);
+  for (let i = 0; i < positions.length; i += 3) {
+    const height = Math.max(0, Math.min(1, positions[i + 1] / h));
+    colors[i] = 0.72 + height * 0.24;
+    colors[i + 1] = 0.84 + height * 0.16;
+    colors[i + 2] = 0.48 + height * 0.18;
+  }
+  merged.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return merged;
 }
 
 function createPitchedRoofGeometry(width = 1.68, depth = 1.68, height = 0.78) {
@@ -2428,6 +2470,50 @@ function generateProceduralTerrainNormalMap(type, intensity = 0.45) {
   return tex;
 }
 
+function createCaribbeanGrassTexture() {
+  const size = 128, canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d"), image = ctx.createImageData(size, size), data = image.data;
+  const hash = (x, y) => {
+    let value = Math.imul(x ^ Math.imul(y, 374761393), 668265263);
+    value = Math.imul(value ^ (value >>> 13), 1274126177) >>> 0;
+    return value / 0xffffffff;
+  };
+  const noise = (x, y, cells) => {
+    const gx = x / size * cells, gy = y / size * cells, ix = Math.floor(gx), iy = Math.floor(gy);
+    const fx = gx - ix, fy = gy - iy, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const wrap = value => (value % cells + cells) % cells;
+    const a = hash(wrap(ix), wrap(iy)), b = hash(wrap(ix + 1), wrap(iy)), c = hash(wrap(ix), wrap(iy + 1)), d = hash(wrap(ix + 1), wrap(iy + 1));
+    return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
+  };
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const broad = noise(x, y, 3), patch = noise(x, y, 8), grain = noise(x, y, 21);
+    const tone = Math.max(0, Math.min(1, broad * .58 + patch * .37 + grain * .05));
+    const i = (y * size + x) * 4;
+    data[i] = 70 + tone * 58;
+    data[i + 1] = 118 + tone * 64;
+    data[i + 2] = 47 + tone * 34;
+    data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  // Short sunlit blades add a little Caribbean warmth without adding geometry.
+  for (let i = 0; i < 40; i++) {
+    const x = Math.floor(hash(i + 91, 17) * size), y = Math.floor(hash(i + 37, 83) * size);
+    const length = 2 + Math.floor(hash(i + 7, 211) * 4);
+    ctx.fillStyle = i % 5 === 0 ? "#b6b966" : i % 3 === 0 ? "#8ab451" : "#70a448";
+    ctx.fillRect(x, y, length, 1);
+    if (x + length >= size) ctx.fillRect(x - size, y, length, 1);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  applyTextureAnisotropy(texture);
+  return texture;
+}
+
 // ---------------------------------------------------------------------------
 // Foliage & Plant Pixelated Normal Map Generator (Oak, Pine, Cactus)
 // ---------------------------------------------------------------------------
@@ -3224,6 +3310,7 @@ export class RCT3DRenderer {
     this._lastPerspState = null;
     // 4.6 Texture-Derived & Procedural Normal Maps
     const normGrass = generateProceduralTerrainNormalMap("grass", 0.90);
+    const caribbeanGrass = createCaribbeanGrassTexture();
     const normSand = generateProceduralTerrainNormalMap("sand", 0.40);
     const normOak = generateProceduralFoliageNormalMap("oak", 1.0);
     const normPine = generateProceduralFoliageNormalMap("pine", 1.0);
@@ -3251,10 +3338,10 @@ export class RCT3DRenderer {
 
     const buildDict = (isPersp) => ({
       farmSoil:makeMat(isPersp,{color:0x795438,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
-      [TILE_FLOOR]: makeMat(isPersp, { color: 0x3d742c, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.85, 0.02),
+      [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.85, 0.02),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
       [TILE_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.25, 0.88, 0.02),
-      [TILE_HILL]: makeMat(isPersp, { color: 0x486c28, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.82, 0.02),
+      [TILE_HILL]: makeMat(isPersp, { map: caribbeanGrass, color: 0xc2d0a0, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.82, 0.02),
       [TILE_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa5a5af, 0x3a3a44, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 1.1, 0.70, 0.08),
       [TILE_MOUNTAIN]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0xb4afaa, 0x484242, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.25, 0.65, 0.10),
       [TILE_PEAK]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0xd8d8de, 0x686874, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.3, 0.60, 0.12),
@@ -3285,9 +3372,10 @@ export class RCT3DRenderer {
       [TILE_ROAD_SAND_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       [TILE_ROAD_HILL_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       cliff: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0x887a6a, 0x2b2218, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.1, 0.72, 0.05),
-      grassFoliage: makeMat(isPersp, { map: createTintedTexture("Feature_Grass.png", 0x3c7228, 0x000000, 0.0), dithering: true, transparent: false, alphaTest: 0.5, depthWrite: true, depthTest: true, side: THREE.DoubleSide }, normGrass, 0.65, 0.85, 0.02),
+      grassFoliage: makeMat(isPersp, { color: 0xffffff, vertexColors: true, dithering: true, transparent: false, depthWrite: true, depthTest: true, side: THREE.DoubleSide }, normGrass, 0.65, 0.85, 0.02),
       treeTrunk: makeMat(isPersp, { color: 0x583c1e, dithering: true }, null),
       oakLeaves: makeMat(isPersp, { color: 0x3e8226, dithering: true }, normOak, 1.2, 0.65, 0.02),
+      palmLeaves: makeMat(isPersp, { color: 0x478d32, dithering: true, side: THREE.DoubleSide }, normOak, 0.9, 0.72, 0.01),
       pineLeaves: makeMat(isPersp, { color: 0x205222, dithering: true }, normPine, 1.2, 0.65, 0.02),
       cactus: makeMat(isPersp, { color: 0x3c7c2c, dithering: true }, normCactus, 1.2, 0.75, 0.02),
       cherryTrunk: makeMat(isPersp, { color: 0x3e2418, dithering: true }, null),
@@ -3496,17 +3584,29 @@ export class RCT3DRenderer {
     this.maxInstances = 1200;
 
     // Oak Trees
-    const oakTrunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 1.5, 6);
-    oakTrunkGeo.translate(0, 0.55, 0);
+    const oakTrunkGeo = new THREE.CylinderGeometry(0.16, 0.25, 1.8, 6);
+    oakTrunkGeo.translate(0, 0.7, 0);
     this.instOakTrunks = new THREE.InstancedMesh(oakTrunkGeo, this.materials.treeTrunk, this.maxInstances);
     this.instOakTrunks.castShadow = true;
     this.instOakTrunks.receiveShadow = true;
 
-    const oakLeafGeo = new THREE.DodecahedronGeometry(0.85);
-    oakLeafGeo.translate(0, 1.55, 0);
+    const oakLeafGeo = new THREE.SphereGeometry(1, 9, 6);
+    oakLeafGeo.scale(1.2, 0.58, 1.05);
+    oakLeafGeo.translate(0, 1.95, 0);
     this.instOakLeaves = new THREE.InstancedMesh(oakLeafGeo, this.materials.oakLeaves, this.maxInstances);
     this.instOakLeaves.castShadow = true;
     this.instOakLeaves.receiveShadow = true;
+
+    // Caribbean palms: a tall narrow trunk and a crown of long, drooping fronds.
+    const palmTrunkGeo = new THREE.CylinderGeometry(0.105, 0.19, 2.55, 7);
+    palmTrunkGeo.translate(0, 1.275, 0);
+    this.instPalmTrunks = new THREE.InstancedMesh(palmTrunkGeo, this.materials.treeTrunk, this.maxInstances);
+    this.instPalmTrunks.castShadow = true;
+    this.instPalmTrunks.receiveShadow = true;
+    const palmFrondsGeo = createPalmFrondsGeometry();
+    this.instPalmFronds = new THREE.InstancedMesh(palmFrondsGeo, this.materials.palmLeaves, this.maxInstances);
+    this.instPalmFronds.castShadow = true;
+    this.instPalmFronds.receiveShadow = true;
 
     // Pine Trees
     const pineTrunkGeo = new THREE.CylinderGeometry(0.12, 0.20, 1.25, 5);
@@ -3907,6 +4007,8 @@ export class RCT3DRenderer {
     // Disable Frustum Culling on Instanced Meshes (Manual Viewport Spatial Grid Culling is active)
     this.instOakTrunks.frustumCulled = false;
     this.instOakLeaves.frustumCulled = false;
+    this.instPalmTrunks.frustumCulled = false;
+    this.instPalmFronds.frustumCulled = false;
     this.instPineTrunks.frustumCulled = false;
     this.instPineLeaves.frustumCulled = false;
     this.instCacti.frustumCulled = false;
@@ -3989,6 +4091,7 @@ export class RCT3DRenderer {
     this.instancedGroup = new THREE.Group();
     this.instancedGroup.add(
       this.instOakTrunks, this.instOakLeaves,
+      this.instPalmTrunks, this.instPalmFronds,
       this.instPineTrunks, this.instPineLeaves,
       this.instCherryTrunks, this.instCherryLeaves,
       this.instBirchTrunks, this.instBirchLeaves,
@@ -4599,6 +4702,7 @@ export class RCT3DRenderer {
     }
     if (this.instBoneWalls && activeDict.boneWall) this.instBoneWalls.material = activeDict.boneWall;
     if (this.instOakLeaves && activeDict.oakLeaves) this.instOakLeaves.material = activeDict.oakLeaves;
+    if (this.instPalmFronds && activeDict.palmLeaves) this.instPalmFronds.material = activeDict.palmLeaves;
     if (this.instPineLeaves && activeDict.pineLeaves) this.instPineLeaves.material = activeDict.pineLeaves;
     if (this.instCacti && activeDict.cactus) this.instCacti.material = activeDict.cactus;
     if (this.instCampfireFlames && activeDict.campfireFlames) this.instCampfireFlames.material = activeDict.campfireFlames;
@@ -5901,6 +6005,7 @@ export class RCT3DRenderer {
     chunkGrassTufts.count = 0;
     chunkGrassTufts.frustumCulled = false;
     chunkGrassTufts.userData.sharedTerrainGeometry = true;
+    const tuftPalette = [0xa8d25f, 0x82b94a, 0x639b3d, 0xc2bd59].map(color => new THREE.Color(color));
 
     const clampedMinTx = Math.max(0, Math.min(this.mapWidth - 1, minTx));
     const clampedMaxTx = Math.max(0, Math.min(this.mapWidth - 1, maxTx));
@@ -5994,18 +6099,18 @@ export class RCT3DRenderer {
           bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
           bucket.colors.push(tint[0]*zoneMult,tint[1]*zoneMult,tint[2]*zoneMult);
         } else {
-          bucket.uvs.push(
-            0, 0, 0, 1, 1, 1,
-            0, 0, 1, 1, 1, 0
-          );
+          if (tType === TILE_FLOOR || tType === TILE_HILL) {
+            const u0 = tx / 8, u1 = (tx + 1) / 8, v0 = ty / 8, v1 = (ty + 1) / 8;
+            bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
+          } else {
+            bucket.uvs.push(0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0);
+          }
 
           if(tType===TILE_WATER){const tint=waterTint(waterPollutionAt(world,tx,ty));bucket.waterCells.push(yOffset+tx);bucket.waterLights.push(zoneMult);for(let i=0;i<6;i++)bucket.colors.push(...tint.map(v=>v*zoneMult));}else{
           // Triangle 1: (0,0), (0,1), (1,1)
           bucket.colors.push(zoneMult * ao00, zoneMult * ao00, zoneMult * ao00);
           bucket.colors.push(zoneMult * ao01, zoneMult * ao01, zoneMult * ao01);
           bucket.colors.push(zoneMult * ao11, zoneMult * ao11, zoneMult * ao11);
-
-          // Triangle 2: (0,0), (1,1), (1,0)
           bucket.colors.push(zoneMult * ao00, zoneMult * ao00, zoneMult * ao00);
           bucket.colors.push(zoneMult * ao11, zoneMult * ao11, zoneMult * ao11);
           bucket.colors.push(zoneMult * ao10, zoneMult * ao10, zoneMult * ao10);
@@ -6043,7 +6148,9 @@ export class RCT3DRenderer {
               const midH = Math.min(h00, h10, h11, h01);
               matHelper.identity();
               matHelper.setPosition(tx + 0.5, midH - 0.04, ty + 0.5);
-              chunkGrassTufts.setMatrixAt(foliageCount++, matHelper);
+              chunkGrassTufts.setMatrixAt(foliageCount, matHelper);
+              chunkGrassTufts.setColorAt(foliageCount, tuftPalette[(tx * 17 + ty * 31) & 3]);
+              foliageCount++;
             }
           } else if (isPersp && detailBand > 0) {
             // 1P/3P Perspective Mode: High density of small, delicate natural grass tufts planted firmly into ground
@@ -6051,8 +6158,8 @@ export class RCT3DRenderer {
             tHash = Math.imul(tHash ^ (tHash >>> 11), 892341233) >>> 0;
             const spawnChance = tHash % 100;
 
-            if (spawnChance < (tType === TILE_HILL ? 70 : 80)) {
-              const numTufts = (spawnChance < 30) ? 3 : ((spawnChance < 60) ? 2 : 1);
+            if (spawnChance < (tType === TILE_HILL ? 64 : 72)) {
+              const numTufts = (spawnChance < 24) ? 3 : ((spawnChance < 48) ? 2 : 1);
               for (let k = 0; k < numTufts; k++) {
                 if (foliageCount >= 5000) break;
                 const subHash = Math.imul(tHash ^ (k * 1337 + 7), 2654435761) >>> 0;
@@ -6077,7 +6184,9 @@ export class RCT3DRenderer {
                 this._scaleMatrix.makeScale(scale, scale, scale);
                 matHelper.multiply(this._scaleMatrix);
 
-                chunkGrassTufts.setMatrixAt(foliageCount++, matHelper);
+                chunkGrassTufts.setMatrixAt(foliageCount, matHelper);
+                chunkGrassTufts.setColorAt(foliageCount, tuftPalette[subHash & 3]);
+                foliageCount++;
               }
             }
           }
@@ -6182,6 +6291,7 @@ export class RCT3DRenderer {
 
     chunkGrassTufts.count = foliageCount;
     chunkGrassTufts.instanceMatrix.needsUpdate = true;
+    if (chunkGrassTufts.instanceColor) chunkGrassTufts.instanceColor.needsUpdate = true;
     if (foliageCount) chunk.terrain.add(chunkGrassTufts);
 
     for (const [matKey, bucket] of Object.entries(tileMeshBuckets)) {
@@ -6490,6 +6600,7 @@ export class RCT3DRenderer {
     const shouldUpdateStaticInstances = distInstCamX >= 2 || distInstCamY >= 2 || zoomDelta > 0.04 || entityCountChanged || this._forceInstUpdate;
 
     let oakCount = 0;
+    let palmCount = 0;
     let pineCount = 0;
     let cherryCount = 0;
     let birchCount = 0;
@@ -6600,6 +6711,7 @@ export class RCT3DRenderer {
       const isRoseBush = isPlantOrFlora && (e.properties.species === "rose_bush" || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
       const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
       const isPine = isTree && (e.properties.species === "pine" || (r.skin && r.skin.toLowerCase().includes("pine")));
+      const isPalm = isTree && (e.properties.species === "coconut_palm" || e.properties.species === "royal_palm");
 
       const isWoodLog = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "wood" || e.properties.name?.includes("Wood Log") || e.properties.name?.includes("Madeira") || r.skin === "Item_Wood.png");
       const isStoneItem = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "stone" || e.properties.name?.includes("Stone Block") || e.properties.name?.includes("Pedra"));
@@ -6710,13 +6822,26 @@ export class RCT3DRenderer {
         roseBushCount++;
       }
       // --- 3D OAK TREES (Natural Random Rotation) ---
-      else if (isTree && !isPine && oakCount < this.maxInstances) {
+      else if (isPalm && palmCount < this.maxInstances) {
+        const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 9187), 982451653) >>> 0) % 628) / 100.0);
+        mMatrix.makeRotationY(rotY);
+        const size = (r.size || 1) * (e.properties.species === 'royal_palm' ? 1.12 : 1);
+        scaleMatrix.makeScale(size, size, size);
+        mMatrix.multiply(scaleMatrix);
+        mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
+        this.instPalmTrunks.setMatrixAt(palmCount, mMatrix);
+        this.instPalmFronds.setMatrixAt(palmCount, mMatrix);
+        palmCount++;
+      }
+      else if (isTree && !isPine && !isPalm && oakCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 45211), 982451653) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
         if (e.properties.cityPlant) { const size=r.size||1; scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix); }
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instOakTrunks.setMatrixAt(oakCount, mMatrix);
         this.instOakLeaves.setMatrixAt(oakCount, mMatrix);
+        const canopyColors = { flamboyant: 0xd46b38, sea_grape: 0x557b3c, tropical_almond: 0x71934c, mangrove: 0x416f45 };
+        this.instOakLeaves.setColorAt(oakCount, new THREE.Color(canopyColors[e.properties.species] || 0x78a94e));
         oakCount++;
       }
       // --- 3D PINE TREES (Natural Random Rotation) ---
@@ -7633,6 +7758,12 @@ export class RCT3DRenderer {
       this.instOakTrunks.instanceMatrix.needsUpdate = true;
     this.instOakLeaves.count = oakCount;
     this.instOakLeaves.instanceMatrix.needsUpdate = true;
+    if (this.instOakLeaves.instanceColor) this.instOakLeaves.instanceColor.needsUpdate = true;
+
+    this.instPalmTrunks.count = palmCount;
+    this.instPalmTrunks.instanceMatrix.needsUpdate = true;
+    this.instPalmFronds.count = palmCount;
+    this.instPalmFronds.instanceMatrix.needsUpdate = true;
 
     this.instPineTrunks.count = pineCount;
     this.instPineTrunks.instanceMatrix.needsUpdate = true;

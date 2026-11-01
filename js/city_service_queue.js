@@ -1,5 +1,5 @@
 import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
-import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
+import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
 const queueKind=kind=>['workmeal','supplies'].includes(kind)?'food':kind;
 // Service queues are shared by everyone waiting at the same entrance. Tickets
 // retain arrival order; outdoor places are reserved across all service types.
@@ -27,19 +27,26 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
  // Available rooms, rather than a global one-person-per-minute gate, set
  // throughput. A multi-floor public building can serve several people at once.
  if((!older||ticket.admittedUnitId===room?.id&&!!room)&&ready){
-  // Reserve the real room before walking from the queue to the entrance.
+  // Reserve the real room before walking from the queue to the interior entry tile.
   // Admitted people no longer block the next ticket when other rooms are free.
   const wasAdmitted=!!room&&ticket.admittedUnitId===room.id;
   if(room){ticket.admittedUnitId=room.id;c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence,unitId:room.id,roomKind};room.activityReservedIds??=[];if(!room.activityReservedIds.includes(c.id))room.activityReservedIds.push(c.id);}
   city.furniture?.release(c);
-  if(!inside&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.9){if(!wasAdmitted||!c.path.length){const route=city.findPath(c.entity,b.door);if(route!==null)c.path=route;}c.action='Indo ao atendimento';return false;}
+  const entry=buildingInteriorEntrance(b)||b.door;
+  if(!inside&&Math.hypot(c.entity.x-entry.x,c.entity.y-entry.y)>.25){if(!wasAdmitted||!c.path.length){const route=city.findPath(c.entity,entry);if(route!==null)c.path=route;}c.action='Indo ao atendimento';return false;}
   entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;return true;
  }
  // A queue can outlast its service capacity; a critically urgent person must
  // eventually leave it instead of waiting forever at zero need.
  if(kind==='toilet'&&!inside&&c.needs.toilet<10&&city.minute-ticket.joinedAt>=90){entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;city.sanitation.emergencyRelief(c);return false;}
- // Moving toward a waiting place must not postpone admission or restart the walk.
+ // Visitors use the same ground route as pedestrians to reach the clear
+ // interior doorway tile. They become indoor only after reaching that tile.
  if(c.path.length)return false;
+ if(!inside&&b.constructionKind!=='open-air'){
+  const entry=buildingInteriorEntrance(b);
+  if(entry&&Math.hypot(c.entity.x-entry.x,c.entity.y-entry.y)>.25){const route=city.findPath(c.entity,entry);if(route!==null)c.path=route;c.action='Aguardando na fila dentro da entrada';return false;}
+  if(entry){c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:{x:c.entity.x,y:c.entity.y,z:0},path:[],phase:'waiting',queueSlot:'inside-door',task:kind,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};return false;}
+ }
  c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':['food','workmeal','supplies'].includes(kind)?'Aguardando na fila de alimentação':'Aguardando na fila de atendimento';c.facingTarget={x:b.door.x,y:b.door.y};
  // Recompute ordinal positions after every departure: followers advance to
  // the head of the line instead of retaining a stale, empty slot.
@@ -48,9 +55,10 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
   const location=c.indoorLocation,shell=city.building(b.officeTenantOf)||b,floor=b.officeFloor??location.floor??0,halls=(shell.circulation||[]).filter(u=>u.z===floor),rooms=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cells=halls.length?halls:rooms;
   const reserved=city.units.get(location.targetUnitId||location.unitId);
   const release=()=>{if(reserved?.activityReservedIds)reserved.activityReservedIds=reserved.activityReservedIds.filter(id=>id!==c.id);location.unitId=null;location.targetUnitId=null;c.workCell=null;};
-  // Keep indoor lines in circulation space. If the lobby is full, join the
-  // outdoor queue rather than waiting on occupied dining seats.
-  if(!cells.length||ordinal>=cells.length*4){const path=interiorRoute(b,location.position,{x:b.door.x,y:b.door.y,z:0});if(path!==null){release();location.path=path;location.exiting=true;location.phase='leaving';location.roomType='circulation';}return false;}
+  // Keep indoor lines in circulation space. If every marked waiting spot is
+  // occupied, let later arrivals wait in the lobby instead of sending them
+  // back outside or placing them in occupied dining seats.
+  if(location.queueSlot==='inside-door'||!cells.length||ordinal>=cells.length*4)return false;
   const cell=cells[Math.floor(ordinal/4)],slot=`${cell.x},${cell.y},${cell.z}:${ordinal%4}`,offsets=[[-.25,-.25],[.25,-.25],[-.25,.25],[.25,.25]],offset=offsets[ordinal%4],target={x:b.entity.x+cell.x+.5+offset[0],y:b.entity.y+cell.y+.5+offset[1],z:cell.z*CITY_FLOOR_HEIGHT};
   if(location.queueSlot!==slot){const path=interiorRoute(b,location.position,target);if(path!==null){release();location.path=path;location.targetRoomType='waiting';location.roomType='circulation';location.phase='waiting';location.queueSlot=slot;}}
   return false;

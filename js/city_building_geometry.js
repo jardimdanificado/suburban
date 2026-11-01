@@ -28,3 +28,9 @@ export function buildingEntranceDoor(b){
   }
   return null;
 }
+export function buildingInteriorEntrance(b){
+  const doorway=buildingEntranceDoor(b),unit=doorway&&b.units.find(candidate=>candidate.id===doorway.unitId);
+  if(!unit)return null;
+  const x=b.entity.x+unit.x+.5,y=b.entity.y+unit.y+.5,centerX=b.entity.x+b.width/2,centerY=b.entity.y+b.depth/2,dx=centerX-x,dy=centerY-y,distance=Math.hypot(dx,dy)||1;
+  return {x:x+dx/distance*.35,y:y+dy/distance*.35,z:0};
+}

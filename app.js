@@ -1,6 +1,6 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=service-capacity-3';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=doorway-queue-4';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=workforce-road-mines-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=workforce-road-mines-5";
 import { CityDesktop } from "./js/city_desktop.js?v=freecam-tools-2";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=moonlight-plateau-2";
@@ -8,7 +8,7 @@ import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js?v=moonlight-graphics-tab-1";
+import { OptionsPanel } from "./js/options.js?v=moonlight-graphics-tab-2";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 
 const root = document.querySelector("#experience");
