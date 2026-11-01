@@ -1,5 +1,5 @@
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=interiors-completion-7';
+import {CityFurniture} from './city_furniture.js?v=beach-chair-1';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
@@ -33,20 +33,20 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignmen
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js?v=landlord-stock-market-1';
-import { quarryDeposits } from './city_terrain.js?v=shared-origin-paths-1';
+import { quarryDeposits } from './city_terrain.js?v=mine-adjacent-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=survival-capacity-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=service-capacity-3';
 import { CityWorkMeals } from './city_work_meals.js?v=survival-capacity-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=housing-work-priority-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=founding-works-1';
 import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
 import { CityGigs } from './city_gigs.js?v=survival-capacity-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=housing-work-priority-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=founding-works-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=skybridge-survival-2';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=shared-origin-paths-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=mine-adjacent-1';
 
 const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
 export const INITIAL_POPULATION = 512;
@@ -103,8 +103,9 @@ const key = (x, y) => `${x},${y}`;
 
 
 export class CitySimulation {
-  constructor({ world, createEntity, seed = world.seed ?? 1337, population = INITIAL_POPULATION }) {
+  constructor({ world, createEntity, seed = world.seed ?? 1337, population = INITIAL_POPULATION, startFoundingWorks = false }) {
     this.initialPopulation = population;
+    this.startFoundingWorks = startFoundingWorks;
     this.traffic = new Map();
     this.world = world;
     this.createEntity = createEntity;
@@ -272,7 +273,7 @@ export class CitySimulation {
   addBuilding(type, x, y, { width, depth, floors, free = false, plotId = null, ownerAccountId = 'treasury', kind = ['farm','quarry','park','bike_rack'].includes(type) ? 'open-air' : 'building', materialSource = null, rotation = null } = {}) {
     if(OFFICE_ONLY_TYPES.has(type)&&!free)return this.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const spec = BUILDING_TYPES[type];
-    if (type === 'quarry' && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A pedreira precisa de um depósito rochoso junto à área de extração.');
+    if (type === 'quarry' && this.world.map && !quarryDeposits(this.world, x, y, width || 4, depth || 4).length) return this.fail('A mina precisa ter uma tile de rocha preta adjacente.');
     if (!spec) return this.fail('Tipo de prédio inválido.');
     if (!['open-air', 'building'].includes(kind) || (kind === 'open-air' && !['farm', 'quarry', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type))) return this.fail('Tipo de ocupação incompatível com esta construção.');
     width ??= type === 'farm' ? 10 : 3 + Math.floor(this.random() * 3);

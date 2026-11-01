@@ -3,7 +3,17 @@ export function furnitureModel(THREE,item){
  const box=(w,h,d,x,y,z,color=wood)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const cylinder=(r,h,x,y,z,color=metal)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const type=item.type;
- if(type==='chair'||type==='meeting_chair'||type==='council_chair'||type==='bench'){
+ if(type==='beach_chair'){
+  const canvas=[0xd7524a,0xf0d9ab,0x4386aa,0xf0d9ab,0xd7524a];
+  box(.44,.035,.29,0,.3,.035,0xe9dfc7);
+  const back=box(.44,.39,.035,0,.56,-.12,0xe9dfc7);back.rotation.x=-.3;
+  for(let i=0;i<5;i++){const x=(i-2)*.086;box(.064,.012,.28,x,.323,.035,canvas[i]);const backStripe=box(.064,.37,.012,x,.56,-.143,canvas[i]);backStripe.rotation.x=-.3;}
+  for(const x of [-.19,.19]){
+   const front=box(.035,.42,.035,x,.21,.12,metal),rear=box(.035,.47,.035,x,.23,-.105,metal);front.rotation.z=x<0?-.08:.08;rear.rotation.x=-.28;
+   box(.035,.035,.38,x,.35,.005,metal);
+  }
+ }
+ else if(type==='chair'||type==='meeting_chair'||type==='council_chair'||type==='bench'){
   const bench=type==='bench',w=bench?.78:.28,seatY=bench?.24:.30,legH=seatY-.025;
   box(w,.055,.27,0,seatY,0);
   box(w,bench?.28:.30,.045,0,seatY+(bench?.15:.17),-.115);

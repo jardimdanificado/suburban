@@ -1,4 +1,4 @@
-import {DEVELOPMENT_RULES} from './city_development.js?v=business-heights-1';
+import {DEVELOPMENT_RULES} from './city_development.js?v=founding-works-1';
 import {chooseBuildingSite} from './city_terrain.js?v=deep-perf-3';
 
 /** The legislature needs real premises, offices and in-person plenary sessions. */

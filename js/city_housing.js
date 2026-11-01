@@ -1,5 +1,5 @@
 import {colorAffinity,buildingColor} from './city_colors.js';
-import {DEVELOPMENT_RULES} from './city_development.js?v=landlord-stock-market-1';
+import {DEVELOPMENT_RULES} from './city_development.js?v=founding-works-1';
 export const HOUSING_RULES = { roomPrice: 120000, roomRent: 120, livingReserve: 3000, defaultDays: 3, unsoldRentalAfter: 1440 };
 export const SOCIAL_HOUSING_TYPES = Object.freeze(['super_popular_housing','popular_housing','popular_luxury_housing']);
 export const HOUSING_TYPES = Object.freeze(['residential',...SOCIAL_HOUSING_TYPES,'luxury_housing']);

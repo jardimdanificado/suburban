@@ -141,7 +141,7 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
   }
   let door = buildingEntrance(x,y,width,depth,rotation);
   if (quarry || type === 'farm') {
-    if (quarry && world.map && !quarryDeposits(world, x, y, width, depth).length) return { error: 'A área da pedreira precisa ocupar rochas.' };
+    if (quarry && world.map && !quarryDeposits(world, x, y, width, depth).length) return { error: 'A mina precisa ter uma tile de rocha preta adjacente.' };
     const doors = [door];
     for (let dx = 0; dx < width; dx++) { doors.push({ x: x + dx + .5, y: y + depth + .5 }, { x: x + dx + .5, y: y - .5 }); }
     for (let dy = 0; dy < depth; dy++) { doors.push({ x: x - .5, y: y + dy + .5 }, { x: x + width + .5, y: y + dy + .5 }); }
@@ -400,8 +400,14 @@ export function generateSettlement(city) {
 // Extraction is tied to rocky tiles inside the quarry footprint.
 export function quarryDeposits(world, x, y, width, depth) {
   const deposits = [];
-  for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) {
-    if (tileAt(world, xx, yy) === TILE_STONE) deposits.push({ x: xx, y: yy });
+  // The mine occupies usable ground; extraction deposits sit just outside its footprint.
+  for (let xx = x; xx < x + width; xx++) {
+    if (tileAt(world, xx, y - 1) === TILE_STONE) deposits.push({ x: xx, y: y - 1 });
+    if (tileAt(world, xx, y + depth) === TILE_STONE) deposits.push({ x: xx, y: y + depth });
+  }
+  for (let yy = y; yy < y + depth; yy++) {
+    if (tileAt(world, x - 1, yy) === TILE_STONE) deposits.push({ x: x - 1, y: yy });
+    if (tileAt(world, x + width, yy) === TILE_STONE) deposits.push({ x: x + width, y: yy });
   }
   return deposits;
 }

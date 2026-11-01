@@ -1,6 +1,6 @@
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-2';
+import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import {equityShares,equityValue} from './city_equity.js?v=landlord-stock-market-1';
@@ -40,10 +40,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=housing-work-priority-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=founding-works-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=skybridge-survival-2';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=interiors-completion-7';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=beach-chair-2';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

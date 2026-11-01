@@ -1,5 +1,5 @@
 import {injuryMovementFactor} from './city_injury_effects.js';
-import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-2';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {queueService} from './city_service_queue.js?v=service-capacity-3';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';

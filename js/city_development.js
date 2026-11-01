@@ -5,10 +5,13 @@ import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=housing-work-priority-1';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=mine-adjacent-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
+const FOUNDING_ESSENTIAL_WORKS = Object.freeze([
+  ['iml', 110], ['police_station', 105], ['crematorium', 100], ['courthouse', 95], ['jail', 90],
+]);
 export const DEVELOPMENT_RULES = { landPerCell: 4000, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 12000, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 8000, bridgeStonePerTile:4,bridgeLaborPerTile:6,bridgeFeePerTile:40000,bridgeHeight:.8,municipalMultiplier: 1.5, wearInterval: 30 * 1440, repairThreshold: 60 };
 export class CityDevelopment {
   constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; }
@@ -319,7 +322,7 @@ export class CityDevelopment {
     if(this.plots.some(p=>p.ownerId==='treasury'&&p.type==='quarry'&&!p.buildingId&&!p.projectId))return;
     const city=this.city;if(this.nextQuarrySearchAt>city.minute)return;this.nextQuarrySearchAt=city.minute+60;
     const center=city.world.spawnCenter||city.spawn,total=Math.max(32,Math.ceil(Math.max(city.world.width||64,city.world.height||64)/6)*32);
-    for(let i=0;i<48;i++){const index=(this.quarryPlotCursor||0)%total;this.quarryPlotCursor=index+1;const radius=8+Math.floor(index/32)*6,angle=index%32*Math.PI/16,x=Math.floor(center.x+Math.cos(angle)*radius),y=Math.floor(center.y+Math.sin(angle)*radius);if(tileAt(city.world,x,y)!==4)continue;if(this.createPlot(x-1,y-1,3,3,{type:'quarry'}))return;}
+    for(let i=0;i<48;i++){const index=(this.quarryPlotCursor||0)%total;this.quarryPlotCursor=index+1;const radius=8+Math.floor(index/32)*6,angle=index%32*Math.PI/16,x=Math.floor(center.x+Math.cos(angle)*radius),y=Math.floor(center.y+Math.sin(angle)*radius);if(tileAt(city.world,x,y)!==4)continue;for(const [px,py]of [[x+1,y-1],[x-3,y-1],[x-1,y+1],[x-1,y-3]])if(this.createPlot(px,py,3,3,{type:'quarry'}))return;}
   }
   ensurePlots(count = 18) {
     const available = () => this.plots.filter(p => !p.landingReserved && !p.buildingId && !p.projectId && p.ownerId === 'treasury');
@@ -365,6 +368,23 @@ export class CityDevelopment {
       if (created) stock = supply();
       if (stock.urban >= count && stock.rural >= ruralTarget) return;
     }
+  }
+
+  startFoundingEssentialWorks() {
+    const city=this.city,started=[];
+    for(const [type,priority] of FOUNDING_ESSENTIAL_WORKS){
+      if(city.buildings.some(b=>b.type===type&&!b.entity.destroyed)||this.projects.some(p=>p.type===type&&!p.cancelled&&p.status!=='completed'))continue;
+      const site=this.publicBuildingSite(type,{allowPurchase:false});
+      if(!site||!this.acquirePublicSite(site))continue;
+      const builder=this.selectBuilder('treasury',site.door);
+      if(!builder)continue;
+      const project=this.beginProject('treasury',site.lot.id,type,{width:site.width,depth:site.depth,floors:1,builderId:builder.id,priority,rotation:site.rotation});
+      if(!project)continue;
+      project.foundingEssential=true;
+      project.name=`Obra inicial: ${city.buildingTypes[type].label}`;
+      started.push(project);
+    }
+    return started;
   }
 
   buyPlot(accountId, plotId) {

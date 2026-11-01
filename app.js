@@ -1,9 +1,9 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=service-capacity-3';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=service-capacity-3";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=beach-chair-2";
 import { CityDesktop } from "./js/city_desktop.js?v=justice-panels-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=combat-animation-integration-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=beach-chair-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -536,7 +536,7 @@ function selectEntity(entity, unitId = null) {
   window.dispatchEvent(new CustomEvent("experience:select", { detail: selected }));
 }
 
-export let city = new CitySimulation({ world, createEntity, population: worldSettings.population });
+export let city = new CitySimulation({ world, createEntity, population: worldSettings.population, startFoundingWorks: true });
 let cityGenerationError = null;
 try { city.initialize(); } catch (error) {
   cityGenerationError = error.message;
@@ -619,7 +619,7 @@ export function startNewCity({ preset = 'archipelago', seed = 482910, size = 256
   renderer3D.currentWorldRevision = world.revision;
   renderer3D.setCamera(world.spawnCenter.x, world.spawnCenter.y, 1.2);
 
-  city = new CitySimulation({ world, createEntity, population });
+  city = new CitySimulation({ world, createEntity, population, startFoundingWorks: true });
   let genError = null;
   try {
     city.initialize();

@@ -5,7 +5,7 @@ import {resolve} from 'node:path';
 import {furnitureInteraction,roomFurniture,TASK_DESTINATION_KINDS,TASK_FURNITURE_PROFILES} from '../js/city_furniture_catalog.js';
 import {interiorRoute,interiorUsePoint} from '../js/city_interior_layout.js';
 import {BUILDING_ACTIVITY_PROFILE_TYPES,buildingActivityProfile} from '../js/city_building_activity_profiles.js';
-import {BUILDING_TYPES} from '../js/city_simulation.js?v=interiors-completion-7';
+import {BUILDING_TYPES} from '../js/city_simulation.js?v=beach-chair-2';
 import {activityRoomReady,advanceCitizenInterior} from '../js/city_interiors.js';
 
 const root=resolve(import.meta.dirname,'..');

@@ -17,9 +17,9 @@ import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
 import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=furniture-farms-fertilizer-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
-import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=housing-work-priority-1';
+import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=mine-adjacent-1';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=housing-work-priority-1';
+import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=mine-adjacent-1';
 
 export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados',artistic:'Arte',combat:'Combate',investigation:'Investigação',forensics:'Perícia',law:'Direito',construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
 export const CROPS = {
@@ -137,6 +137,7 @@ export class CityEconomy {
     this.city.development.ensurePlots();
     this.hire();
     this.updateDemand();
+    if(this.city.startFoundingWorks)this.city.development.startFoundingEssentialWorks();
   }
   appointMayor() { return this.city.politics.ensureMayor(); }
   leaveJob(c, reason = 'Troca de ocupação') {

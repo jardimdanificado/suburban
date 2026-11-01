@@ -34,6 +34,14 @@ export function workstationFor(type){return WORKSTATIONS[type]||{kind:basic[type
 export function roomFurniture(b,u){
  const key=`${b.type}:${u.roomType}:${b.layoutRevision||0}`,cached=roomCaches.get(u);if(cached?.key===key)return cached.items;
  const serviceOperator=['builder','carrier','waste_collector','recycler','lamp_service'].includes(b.type),outerX=u.x+.5<b.width/2?.3:.7,outerY=u.y+.5<b.depth/2?.3:.7,innerX=outerX<.5?.65:.35,innerY=outerY<.5?.65:.35;
+ // Keep the actual entrance cell as a small vestibule in compact service
+ // buildings. A fixed furniture arrangement cannot know which wall the door
+ // is on, so occupying this cell can seal the only ground-floor route to the
+ // stair. The workstations remain available in adjacent rooms.
+ if(serviceOperator&&b.door&&u.z===0){
+  const localX=Math.max(0,Math.min(b.width-1,Math.floor(b.door.x-b.entity.x))),localY=Math.max(0,Math.min(b.depth-1,Math.floor(b.door.y-b.entity.y)));
+  if(u.x===localX&&u.y===localY){roomCaches.set(u,{key,items:[]});return [];}
+ }
  const items=[],add=(type,x,y,label,extra={})=>{const size=FURNITURE_FOOTPRINTS[type]||[.42,.32],f={id:`furniture:${u.id}:${type}:${items.length}`,unitId:u.id,roomType:u.roomType,type,x:u.x+x,y:u.y+y,z:u.z,label,footprint:{width:size[0],depth:size[1]},visualScale:.8,...extra};items.push(f);return f;},chair=(x,y,fx,fy,label='Cadeira')=>add('chair',x,y,label,{seated:true,visualScale:.62,facing:{x:u.x+fx,y:u.y+fy}});
  if(u.roomType==='bedroom'){add('bed',.25,.18,'Beliche familiar · dois leitos',{sleeping:true,bunk:true,capacity:2,visualScale:.55});add('bed',.75,.18,'Beliche familiar · dois leitos',{sleeping:true,bunk:true,capacity:2,visualScale:.55});add('chest',.16,.68,'Baú de roupas e itens',{storage:'clothes'});add('fridge',.84,.68,'Geladeira doméstica',{storage:'food'});if(HOUSING_FURNITURE_TYPES.has(b.type)){add('crib',.5,.82,'Berço',{childOnly:true,visualScale:.62,footprint:{width:.36,depth:.28}});chair(.5,.5,.6,.75,'Cadeira de cuidado e visita');}}
  else if(u.roomType==='cell'){add('cot',.28,.55,'Catre da cela',{sleeping:true});add('toilet',.76,.72,'Sanitário da cela',{seated:true});add('tray_table',.75,.22,'Mesa rebatível da cela');add('chest',.2,.84,'Armário da cela');}

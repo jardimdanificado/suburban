@@ -20,12 +20,17 @@ test('routes stay inside narrow footprints and connect floors through a stair no
   for(const p of route){assert.ok(p.x>=10&&p.x<11);assert.ok(p.y>=20&&p.y<24);assert.ok(p.z>=0&&p.z<3*1.8);}
 });
 
-test('service company interiors keep an entrance-to-stair corridor clear of work furniture',()=>{
- const b={type:'waste_collector',entity:{x:32,y:61},width:3,depth:3,floors:3,rotation:0,layoutRevision:1,door:{x:31.5,y:62.5},circulation:[0,1,2].map(z=>({x:1,y:1,z})),units:[]};
- for(let z=0;z<3;z++)for(const [x,y] of [[0,0],[1,0],[2,0],[2,1],[2,2],[1,2],[0,2],[0,1]])b.units.push({id:`${z}:${x}:${y}`,x,y,z,roomType:x===0&&y===1&&z===2?'bathroom':x===0&&y===0?'laundry':'workspace'});
- const room=b.units.find(u=>u.x===0&&u.y===1&&u.z===2),seat=roomFurniture(b,room).find(item=>item.type==='toilet');assert(seat);
- const target=interiorUsePoint(b,room,'bathroom',0,'toilet'),route=interiorRoute(b,b.door,target);
- assert(route);assert(route.some(point=>point.z===3.6));assert.equal(route.at(-1).x,target.x);assert.equal(route.at(-1).y,target.y);
+test('service company entrances on all four walls preserve a furnished route to an upper bathroom',()=>{
+ const doors=[{x:31.5,y:62.5},{x:35.5,y:62.5},{x:33.5,y:60.5},{x:33.5,y:64.5}];
+ for(const door of doors){
+  const b={type:'waste_collector',entity:{x:32,y:61},width:3,depth:3,floors:3,rotation:0,layoutRevision:1,door,circulation:[0,1,2].map(z=>({x:1,y:1,z})),units:[]};
+  for(let z=0;z<3;z++)for(const [x,y] of [[0,0],[1,0],[2,0],[2,1],[2,2],[1,2],[0,2],[0,1]])b.units.push({id:`${z}:${x}:${y}`,x,y,z,roomType:x===0&&y===1&&z===2?'bathroom':x===0&&y===0?'laundry':'workspace'});
+  const entryX=Math.max(0,Math.min(2,Math.floor(door.x-b.entity.x))),entryY=Math.max(0,Math.min(2,Math.floor(door.y-b.entity.y))),entry=b.units.find(u=>u.x===entryX&&u.y===entryY&&u.z===0);
+  assert.deepEqual(roomFurniture(b,entry),[],'the entrance cell is an unobstructed vestibule');
+  const room=b.units.find(u=>u.x===0&&u.y===1&&u.z===2),seat=roomFurniture(b,room).find(item=>item.type==='toilet');assert(seat);
+  const target=interiorUsePoint(b,room,'bathroom',0,'toilet'),route=interiorRoute(b,door,target);
+  assert(route,`no route from ${JSON.stringify(door)}`);assert(route.some(point=>point.z===3.6));assert.equal(route.at(-1).x,target.x);assert.equal(route.at(-1).y,target.y);
+ }
 });
 
 test('every supported quarter-turn keeps routes deterministic and interaction points in footprint',()=>{

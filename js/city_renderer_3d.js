@@ -1,9 +1,9 @@
-import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-2';
-import {furnitureModel} from './city_furniture_models.js?v=interiors-completion-7';
+import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
+import {furnitureModel} from './city_furniture_models.js?v=beach-chair-1';
 import {applyInteriorCutaway} from './city_interior_view.js';
 import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
 import {addBuildingDetails} from './city_building_details.js?v=merged-architecture-1';
-import {syncConstructionSites} from './city_construction_renderer.js';
+import {syncConstructionSites} from './city_construction_renderer.js?v=construction-visuals-5';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
@@ -13,6 +13,7 @@ import { partyFlagCanvas } from './city_party_flags.js';
 import { HOUSE_STYLES } from './city_culture.js';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=deep-perf-3';
+import {quarryDeposits} from './city_terrain.js?v=deep-perf-3';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-door-alignment-2';
 import {syncSkybridges} from './city_skybridges.js?v=short-passarelas-bridge-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
@@ -479,16 +480,24 @@ function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
 // Open-air premises follow every patch of the natural surface; no slab, walls or roof.
 function syncOpenAir(renderer, THREE, entity, b, world) {
   let group = renderer.cityMeshes.get(entity.id);
-  const signature=`retail-v2:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}:${b.paintRevision||0}`;
+  const quarry= b.type==='quarry'?quarryDeposits(world,entity.x,entity.y,b.width,b.depth):[];
+  const signature=`retail-v2:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}:${b.paintRevision||0}:${b.type==='quarry'?`${world.revision}:${quarry.map(p=>`${p.x},${p.y}`).join(';')}`:''}`;
   if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;
     addBuildingDetails(THREE,group,b,{outdoor:true,ground:surfaceElevation(world,entity.x+b.width/2,entity.y+b.depth/2)});
     const patches = new THREE.InstancedMesh(new THREE.BoxGeometry(.94, .045, .94), new THREE.MeshLambertMaterial({ color: b.type === 'quarry' ? 0x94988d : b.type==='farm'?0x795c3d:['market','greengrocer'].includes(b.type)?0xb5a68d:0x6e7940 }), b.units.length);
     patches.receiveShadow = true; group.add(patches); group.userData.patches = patches;
-    const rows = b.type==='quarry'?new THREE.InstancedMesh(new THREE.BoxGeometry(.06, .08, .70), new THREE.MeshLambertMaterial({ color:0xb0b8ba }), b.units.length * 3):null;
-    if(rows)group.add(rows);group.userData.rows=rows;
     if(b.type==='farm'){patches.visible=false;const cropPlants=createFarmPlants(THREE,b);group.add(cropPlants.group);group.userData.cropPlants=cropPlants;}
+    if(b.type==='quarry'){
+      patches.visible=false;
+      const rubbleOffsets=[[-.17,-.12],[.16,.13]],geometry=new THREE.DodecahedronGeometry(.2,0),material=new THREE.MeshLambertMaterial({color:0x888b88,flatShading:true}),rubble=new THREE.InstancedMesh(geometry,material,Math.max(1,quarry.length*rubbleOffsets.length)),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),quaternion=new THREE.Quaternion(),scale=new THREE.Vector3(),colors=[0x777a78,0x969792,0x656a68];let count=0;
+      for(let deposit=0;deposit<quarry.length;deposit++)for(let chip=0;chip<rubbleOffsets.length;chip++){
+        const rock=quarry[deposit],offset=rubbleOffsets[chip],size=.8+((rock.x*17+rock.y*31+chip*13)%5)*.12,x=rock.x+.5+offset[0],z=rock.y+.5+offset[1],ground=surfaceElevation(world,x,z);
+        position.set(x-entity.x,ground+.2*size*.62,z-entity.y);quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),(rock.x*11+rock.y*7+chip)%6);scale.set(size*1.18,size*.58,size);matrix.compose(position,quaternion,scale);rubble.setMatrixAt(count,matrix);rubble.setColorAt(count,new THREE.Color(colors[(rock.x+rock.y+chip)%colors.length]));count++;
+      }
+      rubble.count=count;rubble.instanceMatrix.needsUpdate=true;if(rubble.instanceColor)rubble.instanceColor.needsUpdate=true;rubble.castShadow=true;rubble.receiveShadow=true;group.add(rubble);group.userData.quarryRubble=rubble;
+    }
     if(b.type==='farm')addFarmFence(THREE,group,b,world);
     if(['market','greengrocer'].includes(b.type)){const fixtures=marketFixtures(THREE,b);group.add(fixtures);group.userData.retailFixtures=fixtures;}
     if(b.type==='bike_rack'){
@@ -538,10 +547,9 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     b.units.forEach((u, i) => {
       const ground = surfaceElevation(world, entity.x + u.x + .5, entity.y + u.y + .5);
       matrix.makeTranslation(u.x + .5, ground + .035, u.y + .5); group.userData.patches.setMatrixAt(i, matrix);
-      if(group.userData.rows)for (let r = 0; r < 3; r++) { matrix.makeTranslation(u.x + .2 + r * .3, ground + .08, u.y + .5); group.userData.rows.setMatrixAt(i * 3 + r, matrix); }
     });
     for (const { unit, mesh } of group.userData.sheds || []) mesh.position.set(unit.x + .5, surfaceElevation(world, entity.x + unit.x + .5, entity.y + unit.y + .5) + .06, unit.y + .5);
-    group.userData.patches.instanceMatrix.needsUpdate = true;if(group.userData.rows)group.userData.rows.instanceMatrix.needsUpdate=true;
+    group.userData.patches.instanceMatrix.needsUpdate = true;
     if(group.userData.retailFixtures)positionMarketFixtures(THREE,group.userData.retailFixtures,b,u=>surfaceElevation(world,entity.x+u.x+.5,entity.y+u.y+.5)+.06);
     group.userData.terrainRevision = world.revision || 0;
   }
@@ -582,5 +590,5 @@ function addFarmFence(THREE,group,b,world){
 }
 function syncStreetBenches(renderer,THREE,world){
  const furniture=renderer.cityDevelopment?.city?.furniture;if(!furniture)return;const meshes=renderer.streetBenchMeshes??=new Map(),active=new Set(furniture.benches.map(b=>b.id));for(const [id,g]of meshes)if(!active.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
- for(const b of furniture.benches){let g=meshes.get(b.id);if(!g){g=furnitureModel(THREE,{type:'bench'});mergeStaticMeshes(THREE,g);g.rotation.y=b.angle;g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);renderer.scene.add(g);meshes.set(b.id,g);}g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
+ for(const b of furniture.benches){let g=meshes.get(b.id);if(!g){g=furnitureModel(THREE,{type:b.kind==='beach_chair'?'beach_chair':'bench'});mergeStaticMeshes(THREE,g);g.rotation.y=b.angle;g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);renderer.scene.add(g);meshes.set(b.id,g);}g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
 }

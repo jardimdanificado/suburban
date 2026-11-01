@@ -1,7 +1,57 @@
-import {surfaceElevation} from './city_terrain.js?v=deep-perf-3';
+import {cornerHeight,surfaceElevation} from './city_terrain.js?v=deep-perf-3';
 
-// Temporary construction surfaces are visual only: the original terrain remains
-// available to navigation and is revealed again when the project finishes.
+// Construction visuals cover the terrain without changing its navigation tiles.
+function addFarmSoil(THREE,world,cells,site){
+ const positions=[];
+ for(const cell of cells){
+  const x=Math.floor(cell.x),y=Math.floor(cell.y),h00=cornerHeight(world,x,y)+.025,h10=cornerHeight(world,x+1,y)+.025,h11=cornerHeight(world,x+1,y+1)+.025,h01=cornerHeight(world,x,y+1)+.025;
+  positions.push(x,h00,y,x,h01,y+1,x+1,h11,y+1,x,h00,y,x+1,h11,y+1,x+1,h10,y);
+ }
+ const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.computeVertexNormals();
+ const soil=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({color:0x777a7b,side:THREE.DoubleSide}));soil.receiveShadow=true;site.add(soil);
+}
+function addSawhorse(THREE,site,world,x,z,axis,{wood,yellow,black}){
+ const ground=surfaceElevation(world,x,z),stand=new THREE.Group();stand.position.set(x,ground,z);if(axis==='z')stand.rotation.y=Math.PI/2;
+ const beam=(a,b,width,material)=>{const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),delta=end.clone().sub(start),mesh=new THREE.Mesh(new THREE.BoxGeometry(width,delta.length(),width),material);mesh.position.copy(start.add(end).multiplyScalar(.5));mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());mesh.castShadow=true;stand.add(mesh);};
+ // Two splayed A frames keep the warning board visibly supported from either side.
+ for(const side of [-1,1])for(const depth of [-1,1])beam([side*.16,.68,depth*.065],[side*.25,.03,depth*.16],.065,wood);
+ for(const side of [-1,1]){const brace=new THREE.Mesh(new THREE.BoxGeometry(.05,.05,.3),wood);brace.position.set(side*.205,.28,0);brace.castShadow=true;stand.add(brace);}
+ const board=new THREE.Mesh(new THREE.BoxGeometry(.62,.15,.085),yellow);board.position.y=.72;board.castShadow=true;stand.add(board);
+ for(let i=-2;i<=2;i+=2){const stripe=new THREE.Mesh(new THREE.BoxGeometry(.085,.17,.1),black);stripe.position.set(i*.12,.72,.004);stripe.rotation.z=.42;stand.add(stripe);}
+ site.add(stand);
+}
+function addPerimeterPost(THREE,site,world,x,z,wood){
+ const post=new THREE.Mesh(new THREE.BoxGeometry(.075,.9,.075),wood);post.position.set(x,surfaceElevation(world,x,z)+.45,z);post.rotation.z=((Math.round(x*13+z*7)%3)-1)*.045;post.castShadow=true;site.add(post);
+}
+function addConstructionMaterials(THREE,site,world,cells,materials){
+ const x0=Math.min(...cells.map(c=>c.x))-.5,x1=Math.max(...cells.map(c=>c.x))+.5,z0=Math.min(...cells.map(c=>c.y))-.5,z1=Math.max(...cells.map(c=>c.y))+.5;
+ if(x1-x0<2.7||z1-z0<2.7){addSawhorse(THREE,site,world,(x0+x1)/2,(z0+z1)/2,'x',materials);return;}
+ const concrete=new THREE.MeshLambertMaterial({color:0x999b98}),cx=x0+.58,cz=z0+.6,base=surfaceElevation(world,cx,cz);
+ // A small pallet with a staggered stack of concrete blocks.
+ for(let i=-1;i<=1;i++){const slat=new THREE.Mesh(new THREE.BoxGeometry(.58,.055,.075),materials.wood);slat.position.set(cx,base+.07,cz+i*.17);slat.castShadow=true;site.add(slat);}
+ for(let row=0;row<2;row++)for(let col=0;col<3;col++){const block=new THREE.Mesh(new THREE.BoxGeometry(.17,.12,.13),concrete);block.position.set(cx+(col-1)*.19+(row?.08:0),base+.16+row*.12,cz+(col%2?-.08:.08));block.castShadow=true;block.receiveShadow=true;site.add(block);}
+ // Planks laid beside the pallet suggest unfinished carpentry work.
+ const px=x1-.55,pz=z1-.48,plankBase=surfaceElevation(world,px,pz)+.04;
+ for(let i=0;i<3;i++){const plank=new THREE.Mesh(new THREE.BoxGeometry(.72,.07,.09),materials.wood);plank.position.set(px,plankBase+i*.075,pz+(i-1)*.1);plank.rotation.y=i===1?.035:0;plank.castShadow=true;site.add(plank);}
+ const innerX=(x0+x1)/2,innerZ=(z0+z1)/2;addSawhorse(THREE,site,world,innerX,innerZ,'x',materials);
+}
+function addConstructionPerimeter(THREE,world,site,cells){
+ if(!cells.length)return;
+ const x0=Math.min(...cells.map(c=>c.x))-.5,x1=Math.max(...cells.map(c=>c.x))+.5,z0=Math.min(...cells.map(c=>c.y))-.5,z1=Math.max(...cells.map(c=>c.y))+.5;
+ const materials={wood:new THREE.MeshLambertMaterial({color:0x76543a}),yellow:new THREE.MeshLambertMaterial({color:0xf2c328}),black:new THREE.MeshLambertMaterial({color:0x17191a})};
+ const edge=(axis,fixed,start,end)=>{
+  const length=end-start,step=.42;
+  for(let distance=0,index=0;distance<length-1e-6;distance+=step,index++){
+   const segment=Math.min(step,length-distance),along=start+distance+segment/2,x=axis==='x'?along:fixed,z=axis==='z'?along:fixed,h=surfaceElevation(world,x,z)+.66,material=index%2?materials.black:materials.yellow;
+   const tape=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?segment:.035,.055,axis==='z'?segment:.035),material);tape.position.set(x,h,z);site.add(tape);
+  }
+ };
+ edge('x',z0,x0,x1);edge('x',z1,x0,x1);edge('z',x0,z0,z1);edge('z',x1,z0,z1);
+ const corners=[[x0,z0],[x1,z0],[x1,z1],[x0,z1]];
+ for(const [x,z]of corners)addPerimeterPost(THREE,site,world,x,z,materials.wood);
+ return materials;
+}
+
 export function syncConstructionSites(renderer,THREE,world,development){
  if(!development)return;
  renderer.constructionMeshes??=new Map();
@@ -14,22 +64,16 @@ export function syncConstructionSites(renderer,THREE,world,development){
   else if((project.service==='road'||project.service==='bridge'||project.service==='road-repair')&&route)cells=route.map(p=>({x:Math.floor(p.x)+.5,y:Math.floor(p.y)+.5}));
   else if(project.door)cells=[{x:project.door.x,y:project.door.y}];
   if(!cells.length)continue;
-  const signature=`${world.revision}:${cells.length}:${cells[0].x}:${cells[0].y}:${cells.at(-1).x}:${cells.at(-1).y}`;
+  const signature=`${world.revision}:${project.service}:${cells.map(c=>`${c.x},${c.y}`).join(';')}`;
   live.add(project.id);let site=renderer.constructionMeshes.get(project.id);
   const visible=!Number.isFinite(renderer.renderedMinTx)||cells.every(c=>c.x>=renderer.renderedMinTx&&c.x<=renderer.renderedMaxTx+1&&c.y>=renderer.renderedMinTy&&c.y<=renderer.renderedMaxTy+1);
   if(!visible){if(site)site.visible=false;continue;}if(site)site.visible=true;
   if(site&&site.userData.signature!==signature){renderer.scene.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(project.id);site=null;}
   if(site)continue;
   site=new THREE.Group();site.userData.signature=signature;
-  const ground=new THREE.InstancedMesh(new THREE.BoxGeometry(.93,.035,.93),new THREE.MeshLambertMaterial({color:0x9d8059}),cells.length),matrix=new THREE.Matrix4();
-  cells.forEach((c,i)=>{matrix.makeTranslation(c.x,surfaceElevation(world,c.x,c.y)+.045,c.y);ground.setMatrixAt(i,matrix);});ground.instanceMatrix.needsUpdate=true;site.add(ground);
-  const positions=cells.length===1?[cells[0]]:[cells[0],cells.at(-1)];
-  const wood=new THREE.MeshLambertMaterial({color:0x82552e}),stripe=new THREE.MeshLambertMaterial({color:0xe4a436});
-  for(const pos of positions){const marker=new THREE.Group(),h=surfaceElevation(world,pos.x,pos.y);marker.position.set(pos.x,h,pos.y);
-   for(const dx of [-.27,.27]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.07,.65,.07),wood);leg.position.set(dx,.32,0);marker.add(leg);}
-   const plank=new THREE.Mesh(new THREE.BoxGeometry(.78,.22,.09),stripe);plank.position.set(0,.55,0);marker.add(plank);site.add(marker);
-  }
+  addFarmSoil(THREE,world,cells,site);
+  if(project.service==='building'){const materials=addConstructionPerimeter(THREE,world,site,cells);addConstructionMaterials(THREE,site,world,cells,materials);}
   renderer.scene.add(site);renderer.constructionMeshes.set(project.id,site);
  }
- for(const [id,site] of renderer.constructionMeshes)if(!live.has(id)){renderer.scene.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(id);}
+ for(const [id,site]of renderer.constructionMeshes)if(!live.has(id)){renderer.scene.remove(site);site.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.constructionMeshes.delete(id);}
 }
