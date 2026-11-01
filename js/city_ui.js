@@ -1,9 +1,9 @@
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {gerarFraseTematica} from './gerador_frases.js?v=phrase-slogans-1';
+import {gerarFraseTematica} from './gerador_frases.js?v=catalog-lexicon-1';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
-import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
+import {buildingLeisureSpaces} from './city_balconies.js?v=caribbean-50-styles-1';
 import {equityShares,equityValue} from './city_equity.js?v=landlord-stock-market-1';
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js?v=landlord-stock-market-1';
@@ -31,7 +31,7 @@ import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody}
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js';
 import { describePoliticalOrientation } from './city_ideology.js';
-import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=restored-building-styles-1';
+import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=caribbean-50-styles-1';
 import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=caribbean-fruit-trees-1';
 import { HISTORY_LIMIT } from './city_history.js';
@@ -44,7 +44,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=business-recovery-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=skybridge-survival-2';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=restored-building-styles-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=caribbean-50-styles-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

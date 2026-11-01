@@ -8,7 +8,7 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,weatherPixelTexture
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=restored-building-styles-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=caribbean-50-styles-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=bank-door-bench-offset-1';
 import { flagNightFactor } from './city_terrain.js?v=mine-adjacent-1';

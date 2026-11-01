@@ -24,7 +24,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js?v=restored-building-styles-1';
+import { CitySimulation } from './city_simulation.js?v=caribbean-50-styles-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=combat-animation-integration-1';
 import { CityWelfare } from './city_welfare.js';

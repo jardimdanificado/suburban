@@ -3,7 +3,7 @@ import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance
 import {PLANT_SPECIES} from './city_nature.js';
 import {POLITICS_SECTIONS} from './city_ui_sections.js';
 import {CityUI,TABS, VIEWS, FILTERS} from './city_ui.js?v=phrase-slogans-1';
-import {BUILDING_TYPES} from './city_simulation.js?v=restored-building-styles-1';
+import {BUILDING_TYPES} from './city_simulation.js?v=caribbean-50-styles-1';
 
 export const normalizeSearch = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const values = collection => collection instanceof Map ? [...collection.values()] : collection || [];

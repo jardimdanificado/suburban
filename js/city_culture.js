@@ -1,4 +1,28 @@
 import {initializeColors} from './city_colors.js';
+const CARIBBEAN_FORMS=[
+  {id:'gingerbread',label:'Renda gingerbread',motif:'gingerbread',roofKind:'gable'},
+  {id:'chattel',label:'Casa chattel elevada',motif:'chattel',roofKind:'gable'},
+  {id:'shotgun',label:'Galeria shotgun',motif:'shotgun',roofKind:'gable'},
+  {id:'stilt',label:'Casa de pilotis',motif:'stilt',roofKind:'hip'},
+  {id:'coral',label:'Pedra coralina',motif:'coral',roofKind:'hip'},
+  {id:'breeze',label:'Blocos de brisa',motif:'breeze',roofKind:'flat'},
+  {id:'colonial',label:'Varanda colonial',motif:'colonial',roofKind:'hip'},
+  {id:'art_deco',label:'Art déco tropical',motif:'art_deco',roofKind:'flat'},
+  {id:'courtyard',label:'Pátio caribenho',motif:'courtyard',roofKind:'flat'},
+  {id:'tin',label:'Telha metálica insular',motif:'tin',roofKind:'gable'},
+];
+const CARIBBEAN_PALETTES=[
+  {id:'laguna',label:'Azul-laguna',wall:0x76b9b3,roof:0x386f73,accent:0xf1d8a6,trim:0xffedc9},
+  {id:'goiaba',label:'Rosa-goiaba',wall:0xe7a39b,roof:0x8d4e56,accent:0xf0ca83,trim:0xffe3cf},
+  {id:'manga',label:'Manga madura',wall:0xe7bd67,roof:0x557d78,accent:0xc86f55,trim:0xffedbd},
+  {id:'hibisco',label:'Hibisco coral',wall:0xd77969,roof:0x496e72,accent:0xf0c985,trim:0xffe2bd},
+  {id:'menta',label:'Menta costeira',wall:0xb4d3ad,roof:0x586f66,accent:0xd98870,trim:0xf4e5bd},
+];
+const CARIBBEAN_ARCHITECTURE=Object.fromEntries(CARIBBEAN_FORMS.flatMap(form=>CARIBBEAN_PALETTES.map(palette=>[
+  `caribe_${form.id}_${palette.id}`,
+  {label:`${form.label} · ${palette.label}`,wall:palette.wall,roof:palette.roof,accent:palette.accent,trim:palette.trim,roofKind:form.roofKind,motif:form.motif},
+])));
+const CARIBBEAN_ARCHITECTURE_IDS=Object.keys(CARIBBEAN_ARCHITECTURE);
 // Adapted from Brutopolis' inherited surnames, individual traits and house-style catalogue.
 // Pure data/helpers keep these features usable both in the worker and the UI.
 export const TRAIT_LABELS = { diligence: 'Dedicação', empathy: 'Empatia', honesty: 'Honestidade', skepticism: 'Ceticismo', riskTolerance: 'Tolerância a risco', frugality: 'Frugalidade', ambition: 'Ambição' };
@@ -26,6 +50,7 @@ export const HOUSE_STYLES = {
   art_deco_island: { label: 'Casa art déco tropical', wall: 0xe1c9a7, roof: 0x4f7977, roofKind: 'flat' },
   hillside_villa: { label: 'Vila tropical escalonada', wall: 0xe6d4b2, roof: 0x9a674b, roofKind: 'hip' },
   st_lucia_villa: { label: 'Vila crioula colorida', wall: 0xb4d2bd, roof: 0x9a604b, roofKind: 'gable' },
+  ...CARIBBEAN_ARCHITECTURE,
   modern: { label: 'Fachada contemporânea', wall: 0xd7dfdb, roof: 0x506054, roofKind: 'flat' },
 };
 export function initializeCharacter(city, citizen) {
@@ -39,10 +64,8 @@ export function initializeCharacter(city, citizen) {
 }
 export function architectureFor(type, id) {
   const caribbean=['gingerbread','island_cottage','shotgun','coastal_concrete','chattel_house','colonial_veranda','coral_stone','pastel_cottage','veranda_duplex','courtyard_house','stilt_house','breezeway_house','coral_gable','tin_roof_cottage','island_rowhouse','wraparound_veranda','art_deco_island','hillside_villa','st_lucia_villa'];
-  const pool = type==='super_popular_housing' ? ['shotgun','island_cottage','chattel_house','pastel_cottage','island_rowhouse','coastal_concrete','gingerbread']
-    : type==='popular_housing' ? ['gingerbread','shotgun','chattel_house','pastel_cottage','breezeway_house','island_rowhouse','coastal_concrete','coral_gable']
-    : type==='popular_luxury_housing' ? ['hacienda','colonial_veranda','veranda_duplex','courtyard_house','art_deco_island','st_lucia_villa','coastal_concrete','wraparound_veranda']
-    : type==='luxury_housing' ? ['hacienda','wraparound_veranda','hillside_villa','colonial_veranda','coral_stone','courtyard_house','art_deco_island','st_lucia_villa']
-    : [...caribbean,'adobe','cottage','timber','hacienda','modern'];
+  const popular=['super_popular_housing','popular_housing'].includes(type),luxury=['popular_luxury_housing','luxury_housing'].includes(type);
+  const legacyPool=popular?caribbean.filter(style=>!['hacienda','hillside_villa','art_deco_island'].includes(style)):luxury?caribbean.filter(style=>!['shotgun','chattel_house','stilt_house'].includes(style)):caribbean;
+  const pool=[...legacyPool,...CARIBBEAN_ARCHITECTURE_IDS,...(popular?['adobe','cottage']:luxury?['hacienda','art_deco_island','modern']:['adobe','cottage','timber','hacienda','modern'])];
   return pool[((Math.imul(id + 19, 2654435761) >>> 0) % pool.length)];
 }

@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {HOUSE_STYLES} from './city_culture.js?v=restored-building-styles-1';
+import {HOUSE_STYLES} from './city_culture.js?v=caribbean-50-styles-1';
 import {INDUSTRIES} from './city_industries.js';
 
 import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
@@ -32,9 +32,74 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[]){
   if(axisX){for(const dx of [-.25,.25])box(.06,1.45,.08,door+dx,y+.725,wall+normal*.04,wood);box(.55,.07,.08,door,y+1.47,wall+normal*.04,wood);box(.28,.35,.28,door+(space.along<=door?1:-1)*Math.max(.18,space.width*.3),y+.3,wall+normal*space.depth*.66,0x8c7358);}
   else{for(const dz of [-.25,.25])box(.08,1.45,.06,wall+normal*.04,y+.725,door+dz,wood);box(.08,.07,.55,wall+normal*.04,y+1.47,door,wood);box(.28,.35,.28,wall+normal*space.depth*.66,y+.3,door+(space.along<=door?1:-1)*Math.max(.18,space.width*.3),0x8c7358);}
  };
+ const motif=style.motif,accent=style.accent??clay,trim=style.trim??cream;
+ if(!residential&&style.motif){
+  box(b.width+.12,.11,.16,b.width/2,1.58,front+.08,trim);
+  if(motif==='gingerbread')for(let i=0;i<Math.max(3,Math.floor(b.width*1.5));i++){const x=.12+i*(b.width-.24)/Math.max(2,Math.floor(b.width*1.5)-1);box(.07,.2,.07,x,1.8,front+.16,i%2?accent:roofColor);box(.19,.055,.08,x,1.92,front+.16,trim);}
+  else if(motif==='chattel'||motif==='shotgun')for(let x=.4;x<b.width-.12;x+=.8){for(const side of [-1,1])box(.09,.48,.09,x+side*.29,1.05,front+.15,accent);box(.7,.07,.13,x,1.31,front+.17,trim);}
+  else if(motif==='stilt')for(const x of [.22,b.width-.22]){box(.12,1.15,.12,x,.58,front+.12,accent);box(.19,.1,.19,x,1.17,front+.12,trim);}
+  else if(motif==='coral')for(const x of [.13,b.width-.13])for(let row=0;row<4;row++)box(.15,.2,.1,x,.36+row*.32,front+.1,row%2?accent:trim);
+  else if(motif==='breeze')for(let i=0;i<Math.max(3,Math.floor(b.width*1.3));i++){const x=.16+i*(b.width-.32)/Math.max(2,Math.floor(b.width*1.3)-1);if(i%2===0){box(.18,.18,.1,x,.82,front+.16,accent);box(.18,.18,.1,x,1.1,front+.16,trim);}}
+  else if(motif==='colonial')for(const x of [.25,b.width-.25]){cylinder(.075,1.5,x,.78,front+.16,trim);box(.17,.1,.17,x,1.55,front+.16,accent);}
+  else if(motif==='art_deco')for(const x of [.18,b.width-.18]){box(.13,1.8,.14,x,.9,front+.12,accent);box(.24,.1,.2,x,1.75,front+.13,trim);}
+  else if(motif==='courtyard'){for(const x of [.2,b.width-.2])box(.08,.6,.08,x,1.3,front+.15,accent);box(b.width-.3,.08,.12,b.width/2,1.65,front+.15,trim);}
+  else if(motif==='tin')for(let i=0;i<=Math.max(3,Math.floor(b.width/.3));i++){const x=.12+i*(b.width-.24)/Math.max(3,Math.floor(b.width/.3));box(.035,.12,.18,x,1.65,front+.12,i%2?accent:trim);}
+ }
  if(residential){
   // Several recognizable silhouettes, rather than one tiny accessory.
   for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
+  if(motif==='gingerbread'){
+   const porch=.72;box(b.width+.12,.1,porch,b.width/2,1.68,front+porch*.42,roofColor);
+   for(const x of [.22,b.width-.22]){box(.09,1.62,.09,x,.81,front+porch*.76,wood);box(.18,.09,.18,x,1.65,front+porch*.76,trim);}
+   for(let i=0;i<Math.max(3,Math.floor(b.width*2));i++){const x=.12+i*(b.width-.24)/Math.max(2,Math.floor(b.width*2)-1);box(.07,.22,.07,x,1.88,front+.18,i%2?accent:trim);box(.2,.055,.08,x,1.99,front+.18,roofColor);}
+   for(let floor=0;floor<b.floors;floor++)for(let x=.35;x<b.width-.2;x+=1.15){box(.07,.28,.08,x,floor*CITY_FLOOR_HEIGHT+1.05,front+.15,accent);box(.36,.055,.08,x,floor*CITY_FLOOR_HEIGHT+1.21,front+.15,trim);}
+  }else if(motif==='chattel'){
+   const porch=.58;box(b.width+.14,.1,porch,b.width/2,1.58,front+porch*.42,roofColor);
+   for(const x of [.2,b.width-.2]){box(.1,1.54,.1,x,.77,front+porch*.78,wood);box(.15,.11,.15,x,1.56,front+porch*.78,trim);}
+   for(let i=0;i<Math.max(3,Math.floor(b.width*2));i++){const x=.16+i*(b.width-.32)/Math.max(2,Math.floor(b.width*2)-1);box(.055,.55,.07,x,.35,front+.12,i%2?accent:trim);}
+   for(let floor=0;floor<b.floors;floor++)for(let x=.45;x<b.width-.2;x+=1.1){box(.11,.42,.09,x-.34,floor*CITY_FLOOR_HEIGHT+.94,front+.14,accent);box(.11,.42,.09,x+.34,floor*CITY_FLOOR_HEIGHT+.94,front+.14,accent);}
+  }else if(motif==='shotgun'){
+   const porch=Math.max(.62,Math.min(.9,b.depth*.28));box(b.width+.16,.11,porch,b.width/2,1.72,front+porch*.42,roofColor);
+   const count=Math.max(2,Math.floor(b.width/.8));for(let i=0;i<=count;i++){const x=.16+i*(b.width-.32)/count;box(.07,1.68,.08,x,.84,front+porch*.76,wood);box(.15,.1,.15,x,1.7,front+porch*.76,trim);}
+   box(b.width-.3,.07,.07,b.width/2,.72,front+porch*.94,accent);
+   for(let x=.4;x<b.width-.2;x+=1.05)for(const side of [-1,1])box(.085,.42,.09,x+side*.34,.98,front+.15,accent);
+  }else if(motif==='stilt'){
+   for(const x of [.24,b.width-.24])for(const z of [.22,b.depth-.22]){box(.12,1.12,.12,x,.55,z,wood);box(.2,.11,.2,x,1.12,z,trim);}
+   for(const x of [.32,b.width-.32]){box(.09,1.25,.09,x,.62,front+.1,accent);box(.09,1.25,.09,x,.62,.1,accent);}
+   const porch=.68;box(b.width+.12,.1,porch,b.width/2,1.45,front+porch*.42,roofColor);
+   for(let i=0;i<=Math.max(2,Math.floor(b.width/.5));i++){const x=.15+i*(b.width-.3)/Math.max(2,Math.floor(b.width/.5));box(.04,.56,.045,x,1.15,front+porch*.88,trim);}
+  }else if(motif==='coral'){
+   for(const x of [.12,b.width-.12])for(let floor=0;floor<b.floors;floor++)for(let row=0;row<4;row++)box(.16,.22,.1,x,floor*CITY_FLOOR_HEIGHT+.32+row*.36,front+.08,row%2?accent:trim);
+   for(let x=.3;x<b.width-.15;x+=.9){box(.48,.08,.11,x,1.52,front+.1,accent);box(.34,.055,.13,x,1.62,front+.1,trim);}
+   box(b.width+.1,.12,.34,b.width/2,.22,front+.05,roofColor);
+  }else if(motif==='breeze'){
+   for(let floor=0;floor<b.floors;floor++){
+    const y=floor*CITY_FLOOR_HEIGHT+.43,columns=Math.max(3,Math.floor(b.width*1.5));
+    for(let i=0;i<columns;i++){const x=.15+i*(b.width-.3)/Math.max(1,columns-1);if(i%2===0){box(.16,.18,.1,x,y,front+.14,accent);box(.16,.18,.1,x,y+.27,front+.14,trim);}}
+   }
+   for(const x of [.16,b.width-.16])box(.12,b.floors*CITY_FLOOR_HEIGHT,.12,x,b.floors*CITY_FLOOR_HEIGHT/2,front+.05,trim);
+   box(b.width+.12,.12,.52,b.width/2,1.68,front+.22,roofColor);
+  }else if(motif==='colonial'){
+   const porch=Math.min(.74,Math.max(.5,b.depth*.24));box(b.width+.16,.12,porch,b.width/2,1.7,front+porch*.4,roofColor);
+   const count=Math.max(2,Math.floor(b.width/1.2));for(let i=0;i<=count;i++){const x=.22+i*(b.width-.44)/count;cylinder(.075,1.62,x,.82,front+porch*.78,trim);box(.18,.1,.18,x,1.65,front+porch*.78,accent);}
+   box(b.width-.3,.075,.07,b.width/2,.75,front+porch*.94,accent);
+   for(let x=.4;x<b.width-.2;x+=1.05){box(.11,.36,.1,x-.34,1.05,front+.13,accent);box(.11,.36,.1,x+.34,1.05,front+.13,accent);box(.82,.07,.16,x,1.27,front+.15,trim);}
+  }else if(motif==='art_deco'){
+   for(const x of [.2,b.width-.2]){box(.14,b.floors*CITY_FLOOR_HEIGHT,.15,x,b.floors*CITY_FLOOR_HEIGHT/2,front+.06,accent);box(.25,.12,.2,x,b.floors*CITY_FLOOR_HEIGHT-.18,front+.07,trim);}
+   const width=Math.min(1.25,b.width-.3);for(let tier=0;tier<4;tier++)box(Math.max(.25,width-tier*.18,.1),.1,.14,b.width/2,1.32+tier*.15,front+.13, tier%2?trim:accent);
+   for(let x=.32;x<b.width-.1;x+=1.15)for(let floor=0;floor<b.floors;floor++){box(.09,.68,.1,x,floor*CITY_FLOOR_HEIGHT+.92,front+.14,accent);box(.22,.08,.13,x,floor*CITY_FLOOR_HEIGHT+1.28,front+.16,trim);}
+  }else if(motif==='courtyard'){
+   const pergolaY=roof+.35;
+   for(const x of [.25,b.width-.25]){box(.11,1.2,.11,x,roof+.6,b.depth*.6,wood);box(.2,.12,.2,x,roof+1.16,b.depth*.6,accent);}
+   for(let i=0;i<Math.max(3,Math.floor(b.width/.45));i++){const x=.2+i*(b.width-.4)/Math.max(2,Math.floor(b.width/.45)-1);box(.055,.07,b.depth*.35,x,pergolaY,b.depth*.6,trim);}
+   box(b.width+.1,.1,.36,b.width/2,1.7,front+.18,roofColor);
+   for(let x=.4;x<b.width-.2;x+=1.1){box(.38,.18,.24,x,.42,front+.14,accent);box(.3,.22,.2,x,.62,front+.14,green);}
+  }else if(motif==='tin'){
+   for(let i=0;i<=Math.max(3,Math.floor(b.width/.28));i++){const x=.12+i*(b.width-.24)/Math.max(3,Math.floor(b.width/.28));box(.035,.08,.52,x,b.floors*CITY_FLOOR_HEIGHT+.04,b.depth/2,metal);}
+   box(b.width+.16,.1,.2,b.width/2,1.62,front+.08,accent);
+   for(const x of [.2,b.width-.2]){box(.12,.18,.18,x,1.49,front+.1,trim);box(.08,.65,.08,x,.33,front+.12,wood);}
+   for(let floor=0;floor<b.floors;floor++)for(let x=.42;x<b.width-.1;x+=1.15){box(.1,.38,.08,x-.32,floor*CITY_FLOOR_HEIGHT+.92,front+.14,accent);box(.1,.38,.08,x+.32,floor*CITY_FLOOR_HEIGHT+.92,front+.14,accent);}
+  }
   // Distinct horizontal floor bands leave the window openings unobstructed.
   if(variant===2||variant===4)for(let floor=1;floor<b.floors;floor++)box(b.width+.1,.12,.16,b.width/2,floor*CITY_FLOOR_HEIGHT+.12,front+.045,variant===2?cream:roofColor);
   for(let floor=0;floor<b.floors;floor++)for(let col=0;col<b.width;col++){
