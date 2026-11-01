@@ -1,4 +1,4 @@
-import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-6';
+import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 const queueKind=kind=>['workmeal','supplies'].includes(kind)?'food':kind;
 // Service queues are shared by everyone waiting at the same entrance. Tickets

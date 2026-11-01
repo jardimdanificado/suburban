@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup,totalMoney,putAtWorkCell,finishActivityRoute} from './helpers/city.mjs';
-import {externalTradeHourly,EXTERNAL_TRADE_RULES} from '../js/city_external_trade.js';
+import {externalTradeHourly,orderImport,EXTERNAL_TRADE_RULES} from '../js/city_external_trade.js';
 import {shipmentPriority} from '../js/city_logistics.js';
 import {CURRENCY_RULES} from '../js/city_currency.js';
 import {TILE_STONE} from '../js/world_gen.js';
@@ -38,7 +38,12 @@ test('external customers buy only excess goods using existing money, keeping inf
  assert(external.balance>=CURRENCY_RULES.initialSupply*EXTERNAL_TRADE_RULES.initialReserveFraction);b.inventory.minerio=80;city.economy.produced.minerio+=80;city.economy.market.minerio={demand:0};
  const stock=b.inventory.minerio,money=b.balance,outside=external.balance,broker=city.accounts.get('trade-import-export')?.balance||0,treasury=city.treasury;assert(externalTradeHourly(city)>0);
  const q=stock-b.inventory.minerio;assert(q>0);assert(b.inventory.minerio>=EXTERNAL_TRADE_RULES.minimumFirmStock);assert.equal(b.balance-money+(city.accounts.get('trade-import-export')?.balance||0)-broker+city.treasury-treasury,outside-external.balance);assert.equal(totalMoney(city),base);assert.equal(city.currency.priceIndex,index);city.minute+=1440;city.currency.daily();assert.equal(city.currency.priceIndex,index);assert(city.marketHistory.some(s=>s.reason==='Exportação: Minério de ferro'||s.reason.startsWith('Exportação:')));assert.equal(city.economy.externalTrade.units,q);
- assert(city.economy.goodsLedger.some(r=>r.kind==='export'));const mirror=new CityStateGraph().apply(new CityStateGraph().encode({city})).city;bindCityState(mirror);assert.equal(mirror.economy.externalTrade.units,q);
+ city.economy.externalTrade.importedGoods={marmita_simples:5};assert(city.economy.goodsLedger.some(r=>r.kind==='export'));const mirror=new CityStateGraph().apply(new CityStateGraph().encode({city})).city;bindCityState(mirror);assert.equal(mirror.economy.externalTrade.units,q);assert.equal(mirror.economy.externalTrade.importedGoods.marmita_simples,5);
+});
+test('foreign food deliveries are recorded by good for exact stock conservation',()=>{
+ const seller={id:'import:marmita_simples',importBrand:'Armazém Exterior',door:{x:2,y:2},inventory:{marmita_simples:0}},buyer={id:4,active:true,entity:{destroyed:false},door:{x:3,y:3}},city={economy:{goods:{marmita_simples:{price:600}},businesses:[],externalImporters:new Map([['marmita_simples',seller]])},accounts:new Map(),findPath:()=>[],logistics:{order:()=>({id:1,fee:1})},politics:{policy:{}},log:()=>{}};
+ const shipment=orderImport(city,buyer,'marmita_simples',5);
+ assert(shipment);assert.equal(city.economy.externalTrade.importedGoods.marmita_simples,5);
 });
 test('exports preserve local demand and do not create payments when outside cash is exhausted',()=>{
  const city=fixture(),b=city.buildings.find(b=>b.type==='iron_mine');for(const firm of city.economy.businesses)for(const g of Object.keys(firm.inventory))firm.inventory[g]=0;b.inventory.minerio=50;city.economy.market.minerio={demand:100};assert.equal(externalTradeHourly(city),0);assert.equal(b.inventory.minerio,50);

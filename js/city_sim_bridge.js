@@ -1,5 +1,5 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=interiors-completion-6';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=interiors-completion-7';
 import {canStep,terrainWalkable} from './city_terrain.js?v=deep-perf-3';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating

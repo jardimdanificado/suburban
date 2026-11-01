@@ -8,3 +8,18 @@ export function applyInteriorCutaway(THREE,group,floor=null,hideWalls=false){
  if(group.userData.roomProps){group.userData.roomProps.visible=interior;for(const prop of group.userData.roomProps.children)prop.visible=interior&&prop.userData.interiorFloor===floor;}
  group.userData.lastInteriorView=key;
 }
+export function interiorViewForLocation(location,building){
+ if(!location||location.exiting||!building||building.destroyed||building.entity?.destroyed)return null;
+ const floor=building.officeTenantOf?building.officeFloor:location.floor??0;
+ return {buildingId:building.officeTenantOf||building.id,floor,hideWalls:true};
+}
+export function syncThirdPersonInteriorView(renderer,targetEnt){
+ const citizen=targetEnt?.properties?.citizen,location=citizen?.indoorLocation,building=location&&renderer.cityDevelopment?.city?.building(location.buildingId);
+ const next=renderer.isThirdPersonActive()?interiorViewForLocation(location,building):null;
+ if(next){
+  if(!renderer.thirdPersonInteriorOverride){renderer.thirdPersonSavedInteriorView=renderer.cityInteriorView;renderer.thirdPersonInteriorOverride=true;}
+  renderer.cityInteriorView=next;
+ }else if(renderer.thirdPersonInteriorOverride){
+  renderer.cityInteriorView=renderer.thirdPersonSavedInteriorView;renderer.thirdPersonSavedInteriorView=null;renderer.thirdPersonInteriorOverride=false;
+ }
+}

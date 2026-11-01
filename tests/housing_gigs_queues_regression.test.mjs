@@ -23,6 +23,12 @@ test('dirty properties generate funded informal work and the worker receives the
  assert.equal(frontage.status,'completed');assert.equal(worker.balance,before+frontage.fee);assert.equal(totalMoney(city),total);
 });
 
+test('interior litter cleanup removes one conserved unit from the building',()=>{
+ const city=setup({starter:true,population:24}),hall=city.buildings.find(b=>b.type==='townhall');hall.litter=2;city.economy.produced.lixo+=2;
+ const beforeLost=city.economy.lost.lixo,beforeStock=city.goodsStock('lixo');city.gigs.clean({scope:'interior',unitId:null},hall);
+ assert.equal(hall.litter,1);assert.equal(city.economy.lost.lixo,beforeLost+1);assert.equal(city.goodsStock('lixo'),beforeStock-1);
+});
+
 test('paid freight with a busy carrier becomes available to an unemployed resident indoors',()=>{
  const city=setup({starter:true,funded:true,population:24}),carrier=city.economy.businesses.find(b=>b.type==='carrier'),worker=city.citizens.find(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)&&c.id!==carrier.ownerId&&!carrier.workers.includes(c.id));assert(carrier&&worker);
  makeFree(city,worker);worker.indoorLocation={buildingId:city.buildings[0].id,position:{x:worker.entity.x,y:worker.entity.y,z:0},path:[]};

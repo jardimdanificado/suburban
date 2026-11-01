@@ -1,5 +1,5 @@
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=interiors-completion-6';
+import {CityFurniture} from './city_furniture.js?v=interiors-completion-7';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
@@ -26,9 +26,9 @@ import {skybridgeLinks} from './city_skybridges.js?v=short-passarelas-bridge-1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=interparty-relations-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=interiors-completion-6';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=interiors-completion-6';
-import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-6';
+import { CityJustice } from './city_justice.js?v=combat-animation-integration-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=interiors-completion-7';
+import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -1155,7 +1155,7 @@ export class CitySimulation {
     const pocketGoods=this.supplies.carriedGoods(good);
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
-    const printed=['livros','panfletos','jornais'].includes(good)?[...this.publications.documents.values()].filter(d=>!d.lost&&d.good===good&&!this.publications.inventoryHolder(d.ownerAccountId)).length:0;
+    let printed=0;if(['livros','panfletos','jornais'].includes(good)){const matched=new Map();for(const doc of this.publications.documents.values()){if(doc.lost||doc.good!==good)continue;const holder=this.publications.inventoryHolder(doc.ownerAccountId),count=matched.get(doc.ownerAccountId)||0,represented=holder?.inventory?.[good]||0;if(count>=represented)printed++;matched.set(doc.ownerAccountId,count+1);}}
     return this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {

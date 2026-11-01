@@ -6,9 +6,10 @@ import {waterPollutionAt,waterTint} from './city_water.js';
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=interiors-completion-6";
+import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
+import { syncCityBuildings } from "./city_renderer_3d.js?v=combat-animation-integration-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=interiors-completion-6';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=combat-animation-integration-1';
 import { flagNightFactor } from './city_terrain.js?v=deep-perf-3';
 import { ASSET_DATA } from "./assets_data.js";
 import {
@@ -2856,8 +2857,10 @@ export function createRealisticFlameMaterial() {
 export class RCT3DRenderer {
   constructor(container) {
     this.cityInteriorView=null;
+    this.thirdPersonInteriorOverride=false;this.thirdPersonSavedInteriorView=null;
     this._cityInteriorViewHandler=event=>{
       const view=event.detail?.buildingId==null?null:{buildingId:event.detail.buildingId,floor:event.detail.floor||0,hideWalls:event.detail.hideWalls!==false};
+      if(this.thirdPersonInteriorOverride)this.thirdPersonSavedInteriorView=view;
       if(view){const b=this.cityDevelopment?.city?.building(view.buildingId);if(!this.cityInteriorView)this.interiorPreviousZoom=this.zoom;if(b)this.setCamera(b.entity.x+b.width/2,b.entity.y+b.depth/2,Math.max(this.zoom,Math.min(5,28/(Math.max(b.width,b.depth)*1.6))));}
       else if(this.interiorPreviousZoom!=null){this.zoom=this.interiorPreviousZoom;this.interiorPreviousZoom=null;}
       this.cityInteriorView=view;
@@ -4765,6 +4768,7 @@ export class RCT3DRenderer {
   selectEntity(id) { this.selectedEntityId = id;if(id==null||id<0)this.cityInteriorView=null; }
 
   setThirdPersonMode(enabled, entityId = null) {
+    if(this.isThirdPersonActive()&&(!enabled||Number(entityId)!==this.fpEntityId))this.syncThirdPersonInteriorView(null);
     this.isThirdPersonMode = !!enabled;
     if (enabled) this.isFirstPersonMode = false;
     this.fpEntityId = enabled && entityId !== null && entityId !== undefined ? Number(entityId) : null;
@@ -4776,6 +4780,10 @@ export class RCT3DRenderer {
       this.lastBuiltCamTileX = -9999;
       this.lastBuiltCamTileY = -9999;
     }
+  }
+
+  syncThirdPersonInteriorView(targetEnt){
+    syncFollowInteriorView(this,targetEnt);
   }
 
   isFirstPersonActive() {
@@ -5267,6 +5275,7 @@ export class RCT3DRenderer {
       }
 
       if (targetEnt && !targetEnt.destroyed && (!targetEnt.properties?.life || !targetEnt.properties.life.isDead)) {
+        this.syncThirdPersonInteriorView(this.isThirdPersonActive()?targetEnt:null);
         const inside=targetEnt.properties?.citizen?.indoorLocation?.position;
         const eyeX = inside?.x??targetEnt.x;
         const eyeZ = inside?.y??targetEnt.y;
@@ -5357,6 +5366,7 @@ export class RCT3DRenderer {
         this.camY = this.freeCamZ;
         return;
       } else {
+        this.syncThirdPersonInteriorView(null);
         this.isFirstPersonMode = false;
         this.isThirdPersonMode = false;
         this.fpEntityId = null;

@@ -14,7 +14,7 @@ function firm(city,type){
   const site=city.economy.locateBuilding(type).find(s=>!city.development.overlaps(s.x,s.y,s.width,s.depth));assert(site,type);
   const b=city.addBuilding(type,site.x,site.y,{...site,free:true});assert(b,type);city.economy.activateMunicipalBusiness(b,100000);return b;
 }
-function goodsAudit(city){for(const good of Object.keys(GOODS))assert.equal(city.economy.initialStock[good]+city.economy.produced[good]-city.economy.consumed[good]-city.economy.lost[good],city.goodsStock(good),good);}
+function goodsAudit(city){for(const good of Object.keys(GOODS))assert.equal(city.economy.initialStock[good]+city.economy.produced[good]+(city.economy.externalTrade?.importedGoods?.[good]||0)-city.economy.consumed[good]-city.economy.lost[good],city.goodsStock(good),good);}
 
 test('publication ownership follows physical freight, cancellation and demolition without duplicating copies',()=>{
   const city=setup({starter:true,population:64}),publisher=firm(city,'publisher'),buyer=firm(city,'market'),author=city.citizens[3];
@@ -118,6 +118,7 @@ test('newspapers consume physical paper and retain editorial facts within their 
   assert(city.economy.productionWork(b,editor));const doc=city.publications.owned(b.accountId).find(d=>d.good==='jornais');
   assert(doc);assert(doc.pages>=3&&doc.pages<=5);assert(doc.entries.length<=doc.pages*2);
   assert(doc.entries.some(e=>e.sourceEventId===original.id));assert.equal(city.economy.consumed.papel,doc.pages);goodsAudit(city);
+  b.inventory.jornais--;city.publications.move(doc,editor.accountId);assert.equal(city.goodsStock('jornais'),1);goodsAudit(city);
 });
 
 test('research agents interview nearby unique voters and publish an approximate funded poll',()=>{

@@ -1,6 +1,6 @@
 import {artworkNarrative} from './city_art_narratives.js';
-import {activityRoomReady} from './city_interiors.js?v=interiors-completion-6';
-import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-6';
+import {activityRoomReady} from './city_interiors.js?v=interiors-completion-7';
+import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
 
@@ -112,7 +112,7 @@ export class CityGigs{
   if(job.scope==='interior'){
    const unit=this.city.units.get(job.unitId),key=unit?`${unit.x},${unit.y},${unit.z}`:null,pile=key&&b.feces?.get(key);
    if(pile){if(pile.amount>1)pile.amount--;else b.feces.delete(key);b.fecesRevision=(b.fecesRevision||0)+1;this.city.sanitation.fecesRevision++;this.city.sanitation.cleanedFeces++;}
-   if((b.litter||0)>0)b.litter=Math.max(0,b.litter-1);
+   if((b.litter||0)>0){b.litter=Math.max(0,b.litter-1);this.city.economy.lost.lixo++;this.city.economy.recordGoods('litter-cleanup','lixo',1,b.id,null);}
    if(pile){b.inventory.fezes=(b.inventory.fezes||0)+1;this.city.economy.produced.fezes++;}
    b.cleanliness=Math.min(100,(b.cleanliness??55)+35);
   }else{

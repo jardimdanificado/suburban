@@ -66,7 +66,7 @@ test('municipal homes cannot be rented and affordable complete homes are preferr
 });
 
 test('critical health does not trap a hungry worker in an endless refused meal', () => {
-  const city = setup({ starter: true, funded: true }), employer = city.economy.businesses.find(b => b.workers.length), c = city.society.citizen(employer.workers[0]);
+  const city = setup({ starter: true, funded: true }), employer = business(city,'bakery'), c = city.citizens[3];city.economy.leaveJob(c);c.jobId=employer.id;employer.workers.push(c.id);
   city.minute = 9 * 60; freshNeeds(c); c.needs.food = 0; c.needs.health = 1; c.needs.water = 1; c.needs.toilet = 1;
   c.entity.x = employer.door.x; c.entity.y = employer.door.y; c.conversation = null; c.task = 'workmeal'; employer.inventory.pao += 3;
   assert.equal(city.workMeals.tryStart(c),false);assert.equal(c.workMeal,null);
@@ -93,7 +93,7 @@ test('bathroom access distinguishes public, paid, employees, residents and close
   const f = [...city.sanitation.facilities.values()].find(f => f.homeId === home.id);
   assert(city.sanitation.allowed(tenant, f)); assert(!city.sanitation.allowed(outsider, f));
   const relation=city.society.getRelation(tenant,outsider,true);Object.assign(relation.views[tenant.id],{affection:80,trust:80,status:'close'});city.relationships.sync(relation);assert(city.sanitation.allowed(outsider,f));
-  const company = city.economy.businesses.find(b => b.workers.length), privateToilet = [...city.sanitation.facilities.values()].find(f => f.buildingId === company.id);
+  const company = business(city,'market'), privateToilet = [...city.sanitation.facilities.values()].find(f => f.buildingId === company.id);
   outsider.jobId = null; assert(!city.sanitation.allowed(outsider, privateToilet)); outsider.jobId = company.id; assert(city.sanitation.allowed(outsider, privateToilet));
   const paid = build(city, 'paid_toilet'), fee = [...city.sanitation.facilities.values()].find(f => f.buildingId === paid.id);
   city.transfer(outsider.accountId, 'treasury', outsider.balance, 'Test poverty'); assert(!city.sanitation.allowed(outsider, fee));
@@ -149,5 +149,5 @@ test('twenty days sustain routines, food supply, sanitation and exact money/mate
   assert(city.citizens.length >= 20); assert(city.economy.produced.pao > 0); assert(city.sanitation.cleaned > 0); assert(city.economy.consumed.lixo > 0);
   for (const c of city.citizens) for (const value of Object.values(c.needs)) assert(Number.isFinite(value) && value >= 0 && value <= 100);
   assert.equal(totalMoney(city), city.currency.netIssued());
-  for (const good of Object.keys(GOODS)) assert.equal(city.economy.initialStock[good] + city.economy.produced[good], city.economy.consumed[good] + city.economy.lost[good] + city.goodsStock(good), good);
+  for (const good of Object.keys(GOODS)) assert.equal(city.economy.initialStock[good] + city.economy.produced[good] + (city.economy.externalTrade?.importedGoods?.[good]||0), city.economy.consumed[good] + city.economy.lost[good] + city.goodsStock(good), good);
 });

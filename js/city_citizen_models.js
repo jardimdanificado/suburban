@@ -1,5 +1,5 @@
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
-export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2]});
+export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
 export function citizenIsSleeping(c){
  if(c?.task!=='energy'||c.path?.length||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
  const s=c.indoorLocation;
@@ -8,26 +8,35 @@ export function citizenIsSleeping(c){
 }
 const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','water','hygiene','supplies','shopping','health','vote','council-session','informal-service','informal-frontage','informal-gardening']);
 export function citizenAnimation(c,moving=false){
+  if(c.dead)return 'morto';
+  if(c.unconsciousUntil)return 'derrotado';
+  if(c.surrenderedUntil)return 'sentado_no_chao';
   if(c.mobilityTrip?.stage==='boarding')return 'mount';
   if(c.ridingVehicleId){
     if(['bicicleta','bicicleta_carga'].includes(c.ridingVehicleKind))return c.mobilityTrip?.stage==='riding'?'pedal':'passenger';
     return ['patinete','patins','skate'].includes(c.ridingVehicleKind)?'glide':'passenger';
   }
   if(moving)return 'run';
+  if(c.combatReaction)return 'derrotado';
+  if(c.combatAnimation?.clip)return c.combatAnimation.clip;
+  if(citizenIsSleeping(c))return 'dormindo';
+  if(c.task==='sit'||c.furnitureUse?.type==='bench')return 'sentado_no_banco';
   if(c.seated)return 'seated';
+  if(c.policePatrol)return 'a_postos';
   const activelyUsingFurniture=!!c.furnitureUse&&!c.furnitureUse.seated;
   const activelyWorkingOutside=!!c.workCell||!!c.forestryJob||!!c.paintWorkId;
   const activelyInsideWork=!!c.indoorLocation?.unitId&&WORK_TASKS.has(c.task);
   const activelyOnGig=!!c.informalJobId&&!c.path?.length;
   const activelyWorking=WORK_TASKS.has(c.task)&&!c.path?.length&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
-  return activelyWorking?'use':'idle';
+  if(!activelyWorking)return 'idle';
+  return ['food','workmeal','provisions','toilet','hygiene','water','health','shopping','supplies','care','caregiving','leisure','social','vote'].includes(c.task)?'use_alt':'use';
 }
-export function citizenFrame(clip,time,phase=0){
+export function citizenFrame(clip,time,phase=0,oneShot=false){
   if(clip==='mount'||clip==='passenger')return {clip:'use',frame:0};
   if(clip==='seated')return {clip:'use',frame:2};
   if(clip==='glide')return {clip:'use',frame:1};
-  const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||[0],fps=clip==='run'||clip==='pedal'?8:4;
-  return {clip:clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle',frame:sequence[Math.floor(Math.max(0,time)*fps+phase)%sequence.length]};
+  const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||[0],fps=['run','pedal','murro','chute','derrotado'].includes(clip)?8:4,index=Math.floor(Math.max(0,time)*fps+phase);
+  return {clip:clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle',frame:sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length]};
 }
 export function parseCitizenOBJ(text){
   const vertices=[],normals=[],triangles=[];
@@ -100,7 +109,7 @@ export class CityCitizenModels {
     const origin=[(idle.min[0]+idle.max[0])/2,Math.min(...entries.map(e=>e.data.bounds.min[1])),(idle.min[2]+idle.max[2])/2],factor=1.05/height;
     for(const {key,data}of entries){const positions=data.positions;for(let i=0;i<positions.length;i++)positions[i]=(positions[i]-origin[i%3])*factor;
       const geometry=new this.THREE.BufferGeometry();geometry.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new this.THREE.Float32BufferAttribute(data.normals,3));geometry.computeBoundingSphere();this.frames.set(key,geometry);
-      const source=key.startsWith('idle:')?'idle':'animated';
+      const source=/^(run|use):/.test(key)?'animated':'idle';
       for(const piece of RENDERED_GARMENTS){
         const parts=splitGarmentSurface(data,masks[source][piece]);
         const make=(positions,normals)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));g.computeBoundingSphere();return g;};
@@ -129,7 +138,10 @@ export class CityCitizenModels {
     // A pending path is not movement. Hold the travel pose between footsteps;
     // work animations still use the simulation's presentation clock.
     const traveling=moved||!!c.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
-    const sleeping=citizenIsSleeping(c),lying=!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:this.clock,pose=sleeping?{clip:'idle',frame:0}:citizenFrame(clip,animationTime,(entity.id*13)%17),key=`${pose.clip}:${pose.frame}`;
+    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=['murro','chute','derrotado'].includes(clip),actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
+    if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
+    else motion.actionToken=null;
+    const animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
     const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,batchKey=piece?`${key}:${piece}`:key,outfit=piece?this.outfits.get(batchKey):null;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
@@ -143,7 +155,7 @@ export class CityCitizenModels {
       }batch.capacity=capacity;
     }
     const size=(entity.properties.render.size||1)*(perspective?1.05:1);
-    const indoorBed=c.indoorLocation?.roomType==='bedroom';this.position.set(x,surfaceH+(posePoint?.z??inside?.z??0)+(c.ridingVehicleId? .18:0)+(sleeping?(indoorBed ? .42 : size*.27):0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);if(sleeping||lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
+    this.position.set(x,surfaceH+(posePoint?.z??inside?.z??0)+(c.ridingVehicleId? .18:0),y);this.quaternion.setFromAxisAngle(this.axis,motion.angle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count,this.color);
     if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
     const capId=c.political?.partyCapId||c.campaign?.capGarmentId,partyCap=capId&&c.wardrobe?.find(g=>g.garmentId===capId),hat=partyCap||(Number.isInteger(c.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null);

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {INTERIOR_ROOM_PROFILES,interiorLayout,interiorRoute,interiorUsePoint} from '../js/city_interior_layout.js';
+import {interiorViewForLocation,syncThirdPersonInteriorView} from '../js/city_interior_view.js';
 import {roomFurniture} from '../js/city_furniture_catalog.js';
 
 function building({width=4,depth=3,floors=2,rotation=0}={}){
@@ -17,6 +18,14 @@ test('routes stay inside narrow footprints and connect floors through a stair no
   const b=building({width:1,depth:4,floors:3});for(const unit of b.units)unit.roomType='circulation';const start={x:10.5,y:20.5,z:0},target=interiorUsePoint(b,b.units.find(u=>u.z===2&&u.y===3),'bathroom');
   const route=interiorRoute(b,start,target);assert.ok(Array.isArray(route));assert.ok(route.some(p=>p.z>0));assert.deepEqual(route.at(-1),target);
   for(const p of route){assert.ok(p.x>=10&&p.x<11);assert.ok(p.y>=20&&p.y<24);assert.ok(p.z>=0&&p.z<3*1.8);}
+});
+
+test('service company interiors keep an entrance-to-stair corridor clear of work furniture',()=>{
+ const b={type:'waste_collector',entity:{x:32,y:61},width:3,depth:3,floors:3,rotation:0,layoutRevision:1,door:{x:31.5,y:62.5},circulation:[0,1,2].map(z=>({x:1,y:1,z})),units:[]};
+ for(let z=0;z<3;z++)for(const [x,y] of [[0,0],[1,0],[2,0],[2,1],[2,2],[1,2],[0,2],[0,1]])b.units.push({id:`${z}:${x}:${y}`,x,y,z,roomType:x===0&&y===1&&z===2?'bathroom':x===0&&y===0?'laundry':'workspace'});
+ const room=b.units.find(u=>u.x===0&&u.y===1&&u.z===2),seat=roomFurniture(b,room).find(item=>item.type==='toilet');assert(seat);
+ const target=interiorUsePoint(b,room,'bathroom',0,'toilet'),route=interiorRoute(b,b.door,target);
+ assert(route);assert(route.some(point=>point.z===3.6));assert.equal(route.at(-1).x,target.x);assert.equal(route.at(-1).y,target.y);
 });
 
 test('every supported quarter-turn keeps routes deterministic and interaction points in footprint',()=>{
@@ -44,4 +53,21 @@ test('fine navigation keeps furniture footprints blocked even beside the buildin
       assert.ok(!overlaps||stairLanding,`walk node overlaps ${item.label} in ${unit.id}`);
     }
   }
+});
+
+test('following a resident exposes their occupied floor and restores exterior view on exit',()=>{
+ assert.deepEqual(interiorViewForLocation({buildingId:8,floor:2,position:{x:1.5,y:2.5,z:6.4}},{id:8}),{buildingId:8,floor:2,hideWalls:true});
+ assert.deepEqual(interiorViewForLocation({buildingId:21,floor:0,position:{x:1,y:2,z:0}},{id:21,officeTenantOf:4,officeFloor:6}),{buildingId:4,floor:6,hideWalls:true});
+ assert.equal(interiorViewForLocation({buildingId:8,floor:2,exiting:true},{id:8}),null);
+ assert.equal(interiorViewForLocation({buildingId:8,floor:2},{id:8,destroyed:true}),null);
+});
+
+test('third-person follow opens the resident floor and restores the prior inspection when they leave',()=>{
+ const home={id:8},resident={properties:{citizen:{indoorLocation:{buildingId:8,floor:2,position:{x:1.5,y:2.5,z:3.6}}}}};
+ const renderer={cityInteriorView:{buildingId:5,floor:0,hideWalls:false},thirdPersonInteriorOverride:false,thirdPersonSavedInteriorView:null,isThirdPersonActive:()=>true,cityDevelopment:{city:{building:id=>id===8?home:null}}};
+ syncThirdPersonInteriorView(renderer,resident);
+ assert.deepEqual(renderer.cityInteriorView,{buildingId:8,floor:2,hideWalls:true});assert.equal(renderer.thirdPersonInteriorOverride,true);
+ resident.properties.citizen.indoorLocation=null;
+ syncThirdPersonInteriorView(renderer,resident);
+ assert.deepEqual(renderer.cityInteriorView,{buildingId:5,floor:0,hideWalls:false});assert.equal(renderer.thirdPersonInteriorOverride,false);assert.equal(renderer.thirdPersonSavedInteriorView,null);
 });

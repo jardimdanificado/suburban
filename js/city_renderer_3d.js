@@ -1,7 +1,7 @@
-import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-1';
-import {furnitureModel} from './city_furniture_models.js?v=interiors-completion-6';
+import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-2';
+import {furnitureModel} from './city_furniture_models.js?v=interiors-completion-7';
 import {applyInteriorCutaway} from './city_interior_view.js';
-import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-6';
+import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
 import {addBuildingDetails} from './city_building_details.js?v=merged-architecture-1';
 import {syncConstructionSites} from './city_construction_renderer.js';
 import {syncCityMobility} from './city_mobility_renderer.js';
@@ -90,11 +90,14 @@ function syncCardboardShelters(renderer,THREE,city,world){
 }
 function syncCorpseVisuals(renderer,THREE,city,world){
   const justice=city?.justice;if(!justice)return;
+  const mortoGeometry=renderer.cityCitizenModels?.frames?.get('morto:0');
   const live=new Set(justice.bodies.filter(b=>b.status!=='cremated').map(b=>b.id)),meshes=renderer.corpseMeshes??=new Map();
-  for(const [id,group]of meshes)if(!live.has(id)){renderer.scene.remove(group);group.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
+  for(const [id,group]of meshes)if(!live.has(id)){renderer.scene.remove(group);group.traverse(o=>{if(o.geometry!==mortoGeometry)o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
   const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
-  for(const body of justice.bodies){if(body.status==='cremated')continue;let group=meshes.get(body.id);if(!group){group=new THREE.Group();const cloth=new THREE.MeshLambertMaterial({color:body.status==='autopsy'?0xe6e0d5:0x4b5551}),skin=new THREE.MeshLambertMaterial({color:0xc49b78});const torso=new THREE.Mesh(new THREE.BoxGeometry(.34,.17,.48),cloth);torso.position.y=.12;group.add(torso);const head=new THREE.Mesh(new THREE.SphereGeometry(.115,8,6),skin);head.position.set(0,.14,.34);group.add(head);for(const side of [-1,1]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.36),cloth);leg.position.set(side*.105,.08,-.29);group.add(leg);const arm=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.34),cloth);arm.position.set(side*.22,.105,.02);arm.rotation.y=side*.18;group.add(arm);}group.userData.bodyId=body.id;group.userData.skinMaterial=skin;meshes.set(body.id,group);renderer.scene.add(group);}
-    const band=Math.min(3,Math.floor((body.decomposition||0)/25));if(group.userData.decompositionBand!==band){group.userData.skinMaterial.color.setHex([0xc49b78,0xaaa080,0x898673,0x686d61][band]);group.userData.decompositionBand=band;}
+  for(const body of justice.bodies){if(body.status==='cremated')continue;let group=meshes.get(body.id);if(!group){group=new THREE.Group();group.userData.bodyId=body.id;meshes.set(body.id,group);renderer.scene.add(group);}
+    if(mortoGeometry&&!group.userData.usesMortoModel){group.traverse(o=>{if(o!==group){o.geometry?.dispose();o.material?.dispose();}});group.clear();const material=new THREE.MeshLambertMaterial({color:0xc49b78}),mesh=new THREE.Mesh(mortoGeometry,material);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);group.userData.decompositionMaterial=material;group.userData.usesMortoModel=true;}
+    else if(!group.userData.usesMortoModel&&!group.children.length){const cloth=new THREE.MeshLambertMaterial({color:body.status==='autopsy'?0xe6e0d5:0x4b5551}),skin=new THREE.MeshLambertMaterial({color:0xc49b78});const torso=new THREE.Mesh(new THREE.BoxGeometry(.34,.17,.48),cloth);torso.position.y=.12;group.add(torso);const head=new THREE.Mesh(new THREE.SphereGeometry(.115,8,6),skin);head.position.set(0,.14,.34);group.add(head);for(const side of [-1,1]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,.36),cloth);leg.position.set(side*.105,.08,-.29);group.add(leg);const arm=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.34),cloth);arm.position.set(side*.22,.105,.02);arm.rotation.y=side*.18;group.add(arm);}group.userData.decompositionMaterial=skin;}
+    const band=Math.min(3,Math.floor((body.decomposition||0)/25));if(group.userData.decompositionBand!==band){group.userData.decompositionMaterial.color.setHex([0xc49b78,0xaaa080,0x898673,0x686d61][band]);group.userData.decompositionBand=band;}
     const vehicle=body.currentVehicleId?city.vehicles?.units.get(body.currentVehicleId):null,x=vehicle?.x??body.entity.x,y=vehicle?.y??body.entity.y,base=vehicle?(vehicle.altitude??surfaceElevation(world,x,y))+.42:surfaceElevation(world,x,y)+(body.currentInterior?.position.z||body.skybridgeZ||0);group.position.set(x,base+.025,y);group.visible=x>=minX-1&&x<=maxX+1&&y>=minY-1&&y<=maxY+1;
   }
 }
