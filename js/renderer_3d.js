@@ -302,7 +302,6 @@ export function createTintedTexture(skinName, fgHex = 0xffffff, bgHex = 0x000000
 // ---------------------------------------------------------------------------
 
 const retroDitherMaterials=new WeakSet();
-const retroDitherCameraFactor={value:1};
 export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) {
   if (!mat || retroDitherMaterials.has(mat)) return;
   retroDitherMaterials.add(mat);
@@ -310,9 +309,7 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
   const prevCompile = mat.onBeforeCompile;
   mat.onBeforeCompile = (shader) => {
     if (prevCompile) prevCompile(shader);
-    shader.uniforms.uRetroDitherCameraFactor=retroDitherCameraFactor;
     shader.fragmentShader = `
-      uniform float uRetroDitherCameraFactor;
       float getBayer4x4(vec2 p) {
         vec2 m = mod(floor(p), 4.0);
         int x = int(m.x);
@@ -342,9 +339,10 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
     ` + shader.fragmentShader;
 
     const ditherCode = `
+      #include <dithering_fragment>
       // Controlled retro Bayer dithering on colors, 3D lighting gradients and shadow falloffs
-      float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)} * uRetroDitherCameraFactor;
-      float dSteps = mix(64.0, ${steps.toFixed(1)}, uRetroDitherCameraFactor);
+      float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)};
+      float dSteps = ${steps.toFixed(1)};
       gl_FragColor.rgb = floor(gl_FragColor.rgb * dSteps + bayer + 0.5) / dSteps;
     `;
 
@@ -357,8 +355,8 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
       shader.fragmentShader = shader.fragmentShader.replace(
         'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
         `gl_FragColor = vec4( outgoingLight, diffuseColor.a );
-        float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)} * uRetroDitherCameraFactor;
-        float dSteps = mix(64.0, ${steps.toFixed(1)}, uRetroDitherCameraFactor);
+        float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)};
+        float dSteps = ${steps.toFixed(1)};
         gl_FragColor.rgb = floor(gl_FragColor.rgb * dSteps + bayer + 0.5) / dSteps;`
       );
     }
@@ -2972,6 +2970,7 @@ export class RCT3DRenderer {
         uAoEnabled: { value: 1.0 },
         uAoType: { value: 2 }, // 0 = CONTACT, 1 = CREVICE, 2 = SSAO, 3 = DEEP
         uAoIntensity: { value: 1.0 },
+        uAoMaxRadius: { value: 36.0 },
         uBrightness: { value: 1.0 },
         uContrast: { value: 1.0 },
         uAlpha: { value: 1.0 },
@@ -2994,6 +2993,7 @@ export class RCT3DRenderer {
         uniform float uAoEnabled;
         uniform int uAoType;
         uniform float uAoIntensity;
+        uniform float uAoMaxRadius;
         uniform float uBrightness;
         uniform float uContrast;
         uniform float uAlpha;
@@ -3009,27 +3009,9 @@ export class RCT3DRenderer {
           return (2.0 * uCameraNear * uCameraFar) / (uCameraFar + uCameraNear - z_ndc * (uCameraFar - uCameraNear));
         }
 
-        // 4x4 Bayer Dither Matrix for ordered noise
-        float bayer4x4(vec2 p) {
-          int x = int(mod(p.x, 4.0));
-          int y = int(mod(p.y, 4.0));
-          int idx = x + y * 4;
-          if (idx == 0) return 0.0 / 16.0;
-          if (idx == 1) return 8.0 / 16.0;
-          if (idx == 2) return 2.0 / 16.0;
-          if (idx == 3) return 10.0 / 16.0;
-          if (idx == 4) return 12.0 / 16.0;
-          if (idx == 5) return 4.0 / 16.0;
-          if (idx == 6) return 14.0 / 16.0;
-          if (idx == 7) return 6.0 / 16.0;
-          if (idx == 8) return 3.0 / 16.0;
-          if (idx == 9) return 11.0 / 16.0;
-          if (idx == 10) return 1.0 / 16.0;
-          if (idx == 11) return 9.0 / 16.0;
-          if (idx == 12) return 15.0 / 16.0;
-          if (idx == 13) return 7.0 / 16.0;
-          if (idx == 14) return 13.0 / 16.0;
-          return 5.0 / 16.0;
+        // Non-repeating screen-space noise avoids Bayer's visible 4x4 bands in SSAO.
+        float interleavedGradientNoise(vec2 p) {
+          return fract(52.9829189 * fract(0.06711056 * p.x + 0.00583715 * p.y));
         }
 
         float calculateAO(vec2 uv, float centerDepth) {
@@ -3043,10 +3025,10 @@ export class RCT3DRenderer {
           else if (uAoType == 3) baseRadius = 11.5; // DEEP (Deep ambient room and landscape occlusion)
 
           vec2 texel = 1.0 / max(uResolution, vec2(160.0, 120.0));
-          float projRadius = clamp((baseRadius * 18.0) / max(centerDepth, 0.8), 1.5, 36.0);
+          float projRadius = clamp((baseRadius * 18.0) / max(centerDepth, 0.8), 1.5, uAoMaxRadius);
 
-          float dither = bayer4x4(gl_FragCoord.xy);
-          float angleBase = dither * 6.2831853;
+          float noise = interleavedGradientNoise(gl_FragCoord.xy);
+          float angleBase = noise * 6.2831853;
 
           float occlusion = 0.0;
           const int TAPS = 8;
@@ -3209,9 +3191,6 @@ export class RCT3DRenderer {
       godRays: true,
       lensFlare: true,
       anisotropy: 4,
-      ambientOcclusion: true,
-      aoType: "SSAO", // "CONTACT" | "CREVICE" | "SSAO" | "DEEP"
-      aoIntensity: "HIGH", // "LOW" | "MED" | "HIGH" | "ULTRA"
       brightness: 1.0,
       contrast: 1.0,
       alpha: 1.0
@@ -4820,10 +4799,10 @@ export class RCT3DRenderer {
 
   rotatePerspectiveCamera(dYaw, dPitch) {
     if (this.isThirdPersonActive()) {
-      // 3P Orbital Camera: Dragging right orbits camera right, dragging down lowers / dragging up raises
+      // 3P uses inverted vertical drag: dragging down raises the orbit, dragging up lowers it.
       this.fpYaw = (this.fpYaw - dYaw) % (Math.PI * 2);
       if (this.fpYaw < 0) this.fpYaw += Math.PI * 2;
-      this.fpPitch = Math.max(-Math.PI * 0.15, Math.min(Math.PI * 0.45, this.fpPitch + dPitch));
+      this.fpPitch = Math.max(-Math.PI * 0.15, Math.min(Math.PI * 0.45, this.fpPitch - dPitch));
     } else {
       // 1P First Person Camera: Dragging right turns right, dragging up looks up
       this.fpYaw = (this.fpYaw + dYaw) % (Math.PI * 2);
@@ -4852,6 +4831,37 @@ export class RCT3DRenderer {
   adjustThirdPersonDistance(delta) {
     this.tpDistance = Math.max(this.tpMinDistance, Math.min(this.tpMaxDistance, this.tpDistance + delta));
   }
+
+  thirdPersonBuildingIndex(city){
+    if(!city)return null;
+    const revision=`${city.structureRevision||0}:${city.buildings.length}`;
+    if(this._thirdPersonCollisionRevision===revision)return this._thirdPersonBuildingCells;
+    const cells=new Map();
+    for(const b of city.buildings){
+      if(b.entity.destroyed||b.constructionKind==='open-air')continue;
+      for(let y=Math.floor(b.entity.y);y<Math.ceil(b.entity.y+b.depth);y++)for(let x=Math.floor(b.entity.x);x<Math.ceil(b.entity.x+b.width);x++)cells.set(`${x},${y}`,b);
+    }
+    this._thirdPersonCollisionRevision=revision;this._thirdPersonBuildingCells=cells;return cells;
+  }
+
+  resolveThirdPersonCamera(target,desired,city,insideBuildingId=null){
+    const dx=desired.x-target.x,dy=desired.y-target.y,dz=desired.z-target.z,distance=Math.hypot(dx,dy,dz);
+    if(distance<.001)return desired;
+    const buildings=this.thirdPersonBuildingIndex(city),steps=Math.max(1,Math.ceil(distance/.18));let safeDistance=distance;
+    for(let i=1;i<=steps;i++){
+      const along=distance*i/steps,x=target.x+dx*along/distance,y=target.y+dy*along/distance,z=target.z+dz*along/distance;
+      if(this.currentMap&&y<this.getSurfaceElevation(this.currentMap,x,z)+.28){safeDistance=Math.max(0,along-.2);break;}
+      const building=buildings?.get(`${Math.floor(x)},${Math.floor(z)}`);
+      if(building&&building.id!==insideBuildingId){
+        const base=building.terrain?.base??(this.currentMap?this.getSurfaceElevation(this.currentMap,x,z):0),roof=base+Math.max(1,building.floors||1)*CITY_FLOOR_HEIGHT;
+        if(y>base+.12&&y<roof){safeDistance=Math.max(0,along-.24);break;}
+      }
+    }
+    const position=new THREE.Vector3(target.x+dx*safeDistance/distance,target.y+dy*safeDistance/distance,target.z+dz*safeDistance/distance);
+    if(this.currentMap)position.y=Math.max(position.y,this.getSurfaceElevation(this.currentMap,position.x,position.z)+.3);
+    return position;
+  }
+
   getSelectedId() { return this.selectedEntityId; }
 
   getTileBaseHeight(tileType) {
@@ -5278,7 +5288,7 @@ export class RCT3DRenderer {
 
       if (targetEnt && !targetEnt.destroyed && (!targetEnt.properties?.life || !targetEnt.properties.life.isDead)) {
         this.syncThirdPersonInteriorView(this.isThirdPersonActive()?targetEnt:null);
-        const inside=targetEnt.properties?.citizen?.indoorLocation?.position;
+        const indoorLocation=targetEnt.properties?.citizen?.indoorLocation,inside=indoorLocation?.position;
         const eyeX = inside?.x??targetEnt.x;
         const eyeZ = inside?.y??targetEnt.y;
         const surfaceH = this.currentMap ? this.getSurfaceElevation(this.currentMap, eyeX, eyeZ) : 1.0;
@@ -5323,11 +5333,9 @@ export class RCT3DRenderer {
 
         if (this.isThirdPersonActive()) {
           // 3P Orbital Camera: Orbit behind/around creature and look directly at creature
-          const camPosX = eyeX - sinYaw * cosPitch * this.tpDistance;
-          const camPosY = eyeY + sinPitch * this.tpDistance;
-          const camPosZ = eyeZ - cosYaw * cosPitch * this.tpDistance;
-
-          this.fpCamera.position.set(camPosX, camPosY, camPosZ);
+          const desired={x:eyeX-sinYaw*cosPitch*this.tpDistance,y:eyeY+sinPitch*this.tpDistance,z:eyeZ-cosYaw*cosPitch*this.tpDistance};
+          const safe=this.resolveThirdPersonCamera({x:eyeX,y:eyeY,z:eyeZ},desired,this.cityDevelopment?.city,indoorLocation?.buildingId??null);
+          this.fpCamera.position.set(safe.x,safe.y,safe.z);
           this.fpCamera.lookAt(eyeX, eyeY, eyeZ);
         } else {
           // 1P First Person Camera: Position at creature eyes and look forward
@@ -7712,11 +7720,6 @@ export class RCT3DRenderer {
 
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
-    if(this.isThirdPersonActive()){
-      const distanceFactor=Math.max(0,Math.min(1,(this.tpDistance-this.tpMinDistance)/(10-this.tpMinDistance)));
-      const horizonFactor=Math.max(0,Math.min(1,1-Math.abs(this.fpPitch)/.22));
-      retroDitherCameraFactor.value=(.08+.34*distanceFactor)*(1-.75*horizonFactor);
-    }else retroDitherCameraFactor.value=1;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     if (this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget) {
       this.renderer.setRenderTarget(this.renderTarget);
@@ -7733,25 +7736,9 @@ export class RCT3DRenderer {
 
       this.postMaterial.uniforms.uChroma.value = (this.graphicOptions?.chroma !== false) ? 1.0 : 0.0;
 
-      // Configure Ambient Occlusion (AO) Pass
-      const aoEnabled = (this.graphicOptions?.ambientOcclusion !== false);
-      const aoTypeStr = this.graphicOptions?.aoType || "SSAO";
-      let aoTypeInt = 2;
-      if (aoTypeStr === "CONTACT") aoTypeInt = 0;
-      else if (aoTypeStr === "CREVICE") aoTypeInt = 1;
-      else if (aoTypeStr === "SSAO") aoTypeInt = 2;
-      else if (aoTypeStr === "DEEP") aoTypeInt = 3;
-
-      const aoIntStr = this.graphicOptions?.aoIntensity || "HIGH";
-      let aoIntensityVal = 1.0;
-      if (aoIntStr === "LOW") aoIntensityVal = 0.45;
-      else if (aoIntStr === "MED") aoIntensityVal = 0.70;
-      else if (aoIntStr === "HIGH") aoIntensityVal = 1.00;
-      else if (aoIntStr === "ULTRA") aoIntensityVal = 1.45;
-
-      this.postMaterial.uniforms.uAoEnabled.value = aoEnabled ? 1.0 : 0.0;
-      this.postMaterial.uniforms.uAoType.value = aoTypeInt;
-      this.postMaterial.uniforms.uAoIntensity.value = aoIntensityVal;
+      // Screen-space ambient occlusion created visible bands in close perspective views.
+      this.postMaterial.uniforms.uAoEnabled.value=0;
+      this.postMaterial.uniforms.uAoIntensity.value=0;
       this.postMaterial.uniforms.uBrightness.value = (typeof this.graphicOptions?.brightness === "number") ? this.graphicOptions.brightness : 1.0;
       this.postMaterial.uniforms.uContrast.value = (typeof this.graphicOptions?.contrast === "number") ? this.graphicOptions.contrast : 1.0;
       this.postMaterial.uniforms.uAlpha.value = (typeof this.graphicOptions?.alpha === "number") ? this.graphicOptions.alpha : 1.0;

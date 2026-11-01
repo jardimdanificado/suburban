@@ -18,9 +18,6 @@ const EFFECTS = [
   effect("godRays", "RAIOS DE SOL", BOOL, true),
   effect("lensFlare", "LENS FLARE", BOOL, true),
   effect("anisotropy", "ANISOTROPIA", [1, 2, 4, 8, 16].map(v => [v, `${v}X`]), 4),
-  effect("ambientOcclusion", "OCLUSAO", BOOL, true),
-  effect("aoType", "TIPO OCLUSAO", ["CONTACT", "CREVICE", "SSAO", "DEEP"].map(v => [v, v]), "SSAO"),
-  effect("aoIntensity", "FORCA OCLUSAO", ["LOW", "MED", "HIGH", "ULTRA"].map(v => [v, v]), "HIGH"),
   effect("brightness", "BRILHO", [0.5, 0.75, 1, 1.25, 1.5].map(v => [v, `${v}`]), 1),
   effect("contrast", "CONTRASTE", [0.5, 0.75, 1, 1.25, 1.5].map(v => [v, `${v}`]), 1),
 ];
@@ -86,8 +83,8 @@ export class OptionsPanel {
       for (const item of [...GRAPHICS, ...EFFECTS]) this.apply(item.key, item.default);
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
-    [["GRAPHICS", "GRAFICOS"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
-      const bw = Math.floor((w - 20) / 2);
+    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "VISUAIS 3P"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
+      const bw = Math.floor((w - 24) / 3);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
     const rows = this.tab === "GRAPHICS" ? GRAPHICS : EFFECTS;
