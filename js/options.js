@@ -105,11 +105,12 @@ export class OptionsPanel {
       ui.button(x + 138, after, 90, 24, "PASSO", () => this.step());
       ui.text("ESPACO: PAUSA\n-/+: VELOCIDADE\n.: UM PASSO QUANDO PAUSADO", x + 12, after + 42);
     } else {
-      this.maxScroll = Math.max(0, rows.length * 30 + 22 - (bottom - contentY));
+      const headingHeight = this.tab === "VISUAL" ? 0 : 22;
+      this.maxScroll = Math.max(0, rows.length * 30 + headingHeight - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
-      ui.text(this.tab === "VISUAL" ? "ISO: DOF E ABERRACAO DISPONIVEIS; SEM NEBLINA." : "AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
+      if (headingHeight) ui.text("AJUSTES DO RENDERIZADOR 3D", x + 12, contentY + 4 - this.scroll, "#3cbcfc");
       rows.forEach((row, i) => {
-        const ry = contentY + 22 + i * 30 - this.scroll;
+        const ry = contentY + headingHeight + i * 30 - this.scroll;
         if (ry + 30 < contentY || ry > bottom) return;
         ui.text(row.label, x + 12, ry + 6);
         const current = this.values[row.key];
