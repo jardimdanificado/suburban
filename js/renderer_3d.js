@@ -67,9 +67,9 @@ const DAY_NIGHT_KEYFRAMES = [
   { t: 15.5, sun: 0xfffaea, amb: 0xdde8f5, bg: 0xdde8f5, sunI: 1.40, ambI: 0.82 }, // Afternoon
   { t: 17.0, sun: 0xffab4c, amb: 0xb57870, bg: 0xb57870, sunI: 1.10, ambI: 0.68 }, // Sunset start
   { t: 18.2, sun: 0xff6a35, amb: 0x8a4565, bg: 0x8a4565, sunI: 0.80, ambI: 0.52 }, // Sunset golden hour
-  { t: 19.5, sun: 0x5a346b, amb: 0x1c1228, bg: 0x1c1228, sunI: 0.32, ambI: 0.24 }, // Dusk twilight
-  { t: 21.0, sun: 0x080e18, amb: 0x080e18, bg: 0x080e18, sunI: 0.06, ambI: 0.18 }, // Nightfall
-  { t: 24.0, sun: 0x060a12, amb: 0x060a12, bg: 0x060a12, sunI: 0.05, ambI: 0.16 }  // Wrap to midnight
+  { t: 19.5, sun: 0x5a346b, amb: 0x1c1228, bg: 0x1c1228, sunI: 0.32, ambI: 0.24 }, // Darkest dusk
+  { t: 21.0, sun: 0x080e18, amb: 0x080e18, bg: 0x080e18, sunI: 0.015, ambI: 0.015 }, // Nightfall
+  { t: 24.0, sun: 0x060a12, amb: 0x060a12, bg: 0x060a12, sunI: 0.015, ambI: 0.015 }  // Wrap to midnight
 ];
 
 const EMOTE_SKINS = [
@@ -3209,6 +3209,7 @@ export class RCT3DRenderer {
     this.graphicOptions = {
       isometricEffects: false,
       normalMaps: true,
+      moonlight: false,
       dofStrength: "HIGH",
       chroma: true,
       waterReflections: true,
@@ -5529,6 +5530,12 @@ export class RCT3DRenderer {
     const hour = clock.hour !== undefined ? clock.hour : 12;
     const minute = clock.minute !== undefined ? clock.minute : 0;
     const timeOfDay = hour + minute / 60.0;
+    const smooth01=value=>{const t=Math.max(0,Math.min(1,value));return t*t*(3-2*t);};
+    let moonlightHold=0;
+    if(this.graphicOptions?.moonlight===true){
+      if(timeOfDay>=19.5||timeOfDay<4.5)moonlightHold=1;
+      else if(timeOfDay<5.5)moonlightHold=1-smooth01(timeOfDay-4.5);
+    }
 
     let k1 = DAY_NIGHT_KEYFRAMES[0];
     let k2 = DAY_NIGHT_KEYFRAMES[1];
@@ -5549,11 +5556,13 @@ export class RCT3DRenderer {
     this.tempColor1.setHex(k1.sun);
     this.tempColor2.setHex(k2.sun);
     this.tempColor1.lerp(this.tempColor2, sAlpha);
+    if(moonlightHold>0)this.tempColor1.lerp(this.tempColor2.setHex(0x5a346b),moonlightHold);
     this.sunLight.color.copy(this.tempColor1);
 
     this.tempColor1.setHex(k1.amb);
     this.tempColor2.setHex(k2.amb);
     this.tempColor1.lerp(this.tempColor2, sAlpha);
+    if(moonlightHold>0)this.tempColor1.lerp(this.tempColor2.setHex(0x1c1228),moonlightHold);
     this.ambientLight.color.copy(this.tempColor1);
 
     // Atmospheric sky background & ambient fog (eliminates black void outside map)
@@ -5565,7 +5574,6 @@ export class RCT3DRenderer {
     this.renderer.setClearColor(this.tempColor1, 1.0);
 
     const isPersp = this.isPerspectiveActive();
-    const effectsEnabledForView = isPersp || this.graphicOptions?.isometricEffects === true;
     const isNight = timeOfDay < 5.0 || timeOfDay > 19.5;
 
     if (isPersp) {
@@ -5610,8 +5618,9 @@ export class RCT3DRenderer {
       this.infiniteSea = null;
     }
 
-    const sunIntensity = (k1.sunI + (k2.sunI - k1.sunI) * sAlpha) * (isPersp ? 1.25 : 1.0);
-    const ambIntensity = (k1.ambI + (k2.ambI - k1.ambI) * sAlpha) * (isPersp ? 1.15 : 1.0);
+    const baseSunIntensity=k1.sunI+(k2.sunI-k1.sunI)*sAlpha,baseAmbientIntensity=k1.ambI+(k2.ambI-k1.ambI)*sAlpha;
+    const sunIntensity = (baseSunIntensity+(0.32-baseSunIntensity)*moonlightHold) * (isPersp ? 1.25 : 1.0);
+    const ambIntensity = (baseAmbientIntensity+(0.24-baseAmbientIntensity)*moonlightHold) * (isPersp ? 1.15 : 1.0);
 
     this.sunLight.intensity = sunIntensity;
     this.ambientLight.intensity = ambIntensity;
@@ -5645,7 +5654,7 @@ export class RCT3DRenderer {
 
     // Position and Orient 3D Sun & Moon in Sky Dome during 1P/3P Perspective Mode
     if (this.celestialGroup) {
-      if (effectsEnabledForView) {
+      if (isPersp) {
         this.celestialGroup.visible = true;
         const activeCam = isPersp ? this.fpCamera : this.camera;
         const enableGodRays = this.graphicOptions.godRays !== false;

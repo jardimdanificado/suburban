@@ -317,8 +317,8 @@ export class CityUI {
     const city = this.city, society = city.society;
     if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.landlordSince!=null?'Locador / investidor imobiliário':c.businessIds.length?'Empresário':'Morador'} · Carga: ${carryCapacity(c)} itens`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
-    if(this.host?.controls.observe){const active=this.host.controls.observation?.();p.buttons([{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',c.id)},{label:'SEGUIR NO MAPA',click:()=>this.host.controls.observe('follow',c.id)},{label:'CÂMERA LIVRE',click:()=>this.host.controls.observe('free')},...(active? [{label:'SAIR DA CÂMERA',click:()=>this.host.controls.observe('off')}]:[])]);}
-    if(this.host?.controls.observation?.())p.note('Arraste para olhar ao redor. Na 3ª pessoa, use a roda ou pinça para aproximar. Na câmera livre, use W/A/S/D e Q/E; Shift acelera. Esc sai da câmera.');
+    if(this.host?.controls.observe){const active=this.host.controls.observation?.();p.buttons([{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',c.id)},{label:'SEGUIR NO MAPA',click:()=>this.host.controls.observe('follow',c.id)},...(active? [{label:'SAIR DA CÂMERA',click:()=>this.host.controls.observe('off')}]:[])]);}
+    if(this.host?.controls.observation?.())p.note('Arraste para olhar ao redor. Na 3ª pessoa, use a roda ou pinça para aproximar. Câmera livre em Ferramentas: WASD move, Espaço sobe, Control desce e Shift acelera. Esc sai da câmera.');
     this.dossierTabs(p, [['profile', 'PERFIL'], ['colors','CORES'], ['skills', 'TRABALHO'], ['resume','CURRÍCULO'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'CONTA'], ['history', 'HISTÓRICO']]);
     if(this.detailTab==='colors'){renderColorPreferences(this,p,c);return;}
     if (this.detailTab === 'profile') {

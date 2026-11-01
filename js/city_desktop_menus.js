@@ -9,6 +9,7 @@ export function desktopMenus(d){
       item('Editor de mapa',()=>d.controls.editor?.()),
       item('Terreno, semente e geração',()=>d.openDestination('government','world')),
       item('Centralizar câmera',()=>d.controls.center?.()),
+      item(d.controls.freeCameraActive?.()?'Sair da câmera livre':'Câmera livre',()=>d.controls.observe?.(d.controls.freeCameraActive?.()?'off':'free'),{checked:()=>!!d.controls.freeCameraActive?.()}),
       separator,
       item('Pausar / continuar',()=>d.controls.pause?.(),{checked:()=>!!d.chromeState?.paused}),
       item('Alterar velocidade',()=>d.controls.speed?.())
