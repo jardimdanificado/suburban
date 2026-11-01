@@ -6384,9 +6384,9 @@ export class RCT3DRenderer {
     };
     const addSewerPipe=(ax,az,bx,bz,ya,yb,offsetX=0,offsetZ=0)=>{
       const start=[ax+offsetX,ya,az+offsetZ],end=[bx+offsetX,yb,bz+offsetZ],point=t=>start.map((value,i)=>value+(end[i]-value)*t);
-      pushPipeSegment(start,end,.035,0x626767);
+      pushPipeSegment(start,end,.08,0x9aa6a3);
       const length=Math.hypot(end[0]-start[0],end[2]-start[2]);
-      if(length>.42)for(const t of [.08,.92])pushPipeSegment(point(t),point(Math.min(1,t+.045)),.048,0x786b57);
+      if(length>.42)for(const t of [.08,.92])pushPipeSegment(point(t),point(Math.min(1,t+.045)),.11,0xc1a376);
     };
 
     const gridLinePositions = [];
@@ -6513,8 +6513,8 @@ export class RCT3DRenderer {
           }
           const wallHeightA=face.highA-face.lowA,wallHeightB=face.highB-face.lowB;
           if(Math.max(wallHeightA,wallHeightB)>.42){
-            const [ox,oz]=face.side===0?[0,-.045]:face.side===1?[.045,0]:face.side===2?[0,.045]:[-.045,0];
-            addSewerPipe(face.ax,face.ay,face.bx,face.by,face.lowA+Math.min(.28,wallHeightA*.32),face.lowB+Math.min(.28,wallHeightB*.32),ox,oz);
+            const [ox,oz]=face.side===0?[0,-.12]:face.side===1?[.12,0]:face.side===2?[0,.12]:[-.12,0];
+            addSewerPipe(face.ax,face.ay,face.bx,face.by,face.lowA+Math.min(.5,wallHeightA*.48),face.lowB+Math.min(.5,wallHeightB*.48),ox,oz);
           }
         }
 
@@ -6656,8 +6656,8 @@ export class RCT3DRenderer {
           const cliffBucket=side=>streetCorners?tileMeshBuckets[`terrainRetainingWall${terrainTextureHash(tx,ty,tType+side)&3}`]:bucket;
           const cliffPipe=(side,ax,az,bx,bz,topA,topB)=>{
             if(!streetCorners||Math.max(topA,topB)<.46)return;
-            const [ox,oz]=side===0?[0,-.045]:side===1?[.045,0]:side===2?[0,.045]:[-.045,0];
-            addSewerPipe(ax,az,bx,bz,Math.min(.28,Math.max(.08,topA*.3)),Math.min(.28,Math.max(.08,topB*.3)),ox,oz);
+            const [ox,oz]=side===0?[0,-.12]:side===1?[.12,0]:side===2?[0,.12]:[-.12,0];
+            addSewerPipe(ax,az,bx,bz,Math.min(.52,Math.max(.18,topA*.48)),Math.min(.52,Math.max(.18,topB*.48)),ox,oz);
           };
 
           // 1. South Face (+Y, at ty + 1, facing +Z)
