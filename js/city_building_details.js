@@ -1,4 +1,4 @@
-import {mergeStaticMeshes} from './city_static_mesh.js';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 
 // Small architectural details are part of the model, not floating labels.
@@ -40,7 +40,18 @@ export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  case'logs':for(const [x,y] of [[-.24,.17],[.24,.17],[0,.48]]){const m=cyl(.17,.17,.9,x,y,0,wood,7);m.rotation.x=Math.PI/2;}break;
  case'kiln':cyl(.45,.5,.6,0,.3,0,0x5c5650);cyl(.09,.09,.35,0,.77,0,metal);break;
  case'ore':case'clay':case'sand':for(const [x,r] of [[-.25,.28],[.18,.36],[.4,.2]])ball(r,x,r*.65,0,kind==='ore'?(b.type==='bauxite_mine'?0xb87652:0x7f8585):kind==='clay'?0xa7684c:0xd2bb83).scale.y=.7;break;
- case'mine':{const pit=['clay_pit','sand_pit'].includes(b.type),timber=b.type==='iron_mine'?0x72563d:b.type==='bauxite_mine'?0x8b6348:0x74634c,ore=b.type==='clay_pit'?0xa7684c:b.type==='sand_pit'?0xd2bb83:b.type==='bauxite_mine'?0xb87652:0x7f8585;if(pit){for(const x of [-.32,0,.32])ball(.3,x,.2,0,ore).scale.y=.65;const belt=box(.8,.07,.12,0,.58,-.12,metal);belt.rotation.z=-.38;for(const x of [-.25,.25])box(.06,.42,.08,x,.32,-.12,metal);}else{for(const x of [-.42,.42]){box(.09,1.35,.09,x,.68,0,timber);const brace=box(.065,.95,.08,x*.55,.45,0,metal);brace.rotation.z=x<0?-.48:.48;}box(1,.09,.09,0,1.32,0,timber);cyl(.24,.24,.12,0,1.28,0,metal,10);box(.05,.95,.05,0,.68,0,metal);}break;}
+case'mine':{const pit=['clay_pit','sand_pit'].includes(b.type),timber=b.type==='iron_mine'?0x72563d:b.type==='bauxite_mine'?0x8b6348:0x74634c,ore=b.type==='clay_pit'?0xa7684c:b.type==='sand_pit'?0xd2bb83:b.type==='bauxite_mine'?0xb87652:0x7f8585;if(pit){for(const x of [-.32,0,.32])ball(.3,x,.2,0,ore).scale.y=.65;const belt=box(.8,.07,.12,0,.58,-.12,metal);belt.rotation.z=-.38;for(const x of [-.25,.25])box(.06,.42,.08,x,.32,-.12,metal);}else{for(const x of [-.58,.58]){box(.1,1.45,.1,x,.72,0,timber);const brace=box(.07,1.05,.08,x*.55,.48,0,metal);brace.rotation.z=x<0?-.48:.48;}box(1.35,.11,.11,0,1.42,0,timber);cyl(.27,.27,.14,0,1.36,0,metal,10);box(.06,1.05,.06,0,.72,0,metal);
+  // A physical sign gives the mine a clear identity from the isometric camera.
+  const canvas=document.createElement('canvas');canvas.width=320;canvas.height=112;const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#242b2a';ctx.fillRect(0,0,320,112);ctx.fillStyle='#d5b34e';ctx.fillRect(5,5,310,102);ctx.fillStyle='#302d25';ctx.fillRect(13,13,294,86);
+  ctx.fillStyle='#d5b34e';ctx.font='bold 62px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('MINA',160,58);
+  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+  const sign=new THREE.Mesh(new THREE.BoxGeometry(1.5,.54,.09),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));sign.position.set(0,1.92,.08);sign.userData.skipStaticMerge=true;sign.userData.mineSignTexture=texture;root.add(sign);
+  box(.76,.72,.1,0,.38,.13,0x171a19);box(.94,.12,.14,0,.78,.13,timber);for(const x of [-.48,.48])box(.12,.82,.14,x,.41,.13,timber);
+  for(const x of [-.34,-.17,0,.17,.34])box(.045,.035,.85,x,.05,.72,metal);
+  box(.49,.23,.46,0,.31,.7,0x625342);
+  for(const x of [-.34,.34]){const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.11,.11,.05,10),mat(0x343a3b));wheel.rotation.z=Math.PI/2;wheel.position.set(x,.15,.7);root.add(wheel);}
+ }break;}
  case'furnace':box(.75,.8,.7,0,.4,0,b.type==='steel_mill'?0x6e5045:b.type==='aluminum_smelter'?0x8b9696:0x67625e);cyl(.13,.18,.9,.2,1.2,0,0x505657);if(b.type==='steel_mill')cyl(.11,.15,.65,-.25,1.1,0,0x505657);box(.27,.25,.03,0,.33,.36,0xe68a3d);break;
  case'bricks':for(const [x,y] of [[-.22,.1],[.22,.1],[0,.32]])box(.4,.2,.25,x,y,0,0xb25e45);break;
  case'glass':for(const x of [-.24,0,.24])box(.12,.7,.45,x,.4,0,0x83b9be);break;

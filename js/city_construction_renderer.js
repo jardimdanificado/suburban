@@ -42,13 +42,19 @@ function addConstructionPerimeter(THREE,world,site,cells){
  const edge=(axis,fixed,start,end)=>{
   const length=end-start,step=.42;
   for(let distance=0,index=0;distance<length-1e-6;distance+=step,index++){
-   const segment=Math.min(step,length-distance),along=start+distance+segment/2,x=axis==='x'?along:fixed,z=axis==='z'?along:fixed,h=surfaceElevation(world,x,z)+.66,material=index%2?materials.black:materials.yellow;
-   const tape=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?segment:.035,.055,axis==='z'?segment:.035),material);tape.position.set(x,h,z);site.add(tape);
+   const segment=Math.min(step,length-distance),from=start+distance,to=from+segment,along=(from+to)/2;
+   const x0=axis==='x'?from:fixed,z0=axis==='z'?from:fixed,x1=axis==='x'?to:fixed,z1=axis==='z'?to:fixed;
+   const h0=surfaceElevation(world,x0,z0)+.66,h1=surfaceElevation(world,x1,z1)+.66;
+   const x=axis==='x'?along:fixed,z=axis==='z'?along:fixed,material=index%2?materials.black:materials.yellow;
+   const tape=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?segment:.035,.055,axis==='z'?segment:.035),material);
+   tape.position.set(x,(h0+h1)/2,z);
+   if(axis==='x')tape.rotation.z=Math.atan2(h1-h0,segment);else tape.rotation.x=-Math.atan2(h1-h0,segment);
+   site.add(tape);
   }
  };
  edge('x',z0,x0,x1);edge('x',z1,x0,x1);edge('z',x0,z0,z1);edge('z',x1,z0,z1);
  const corners=[[x0,z0],[x1,z0],[x1,z1],[x0,z1]];
- for(const [x,z]of corners)addPerimeterPost(THREE,site,world,x,z,materials.wood);
+ for(const [x,z]of corners){addPerimeterPost(THREE,site,world,x,z,materials.wood);const join=new THREE.Mesh(new THREE.BoxGeometry(.045,.055,.045),materials.yellow);join.position.set(x,surfaceElevation(world,x,z)+.66,z);site.add(join);}
  return materials;
 }
 

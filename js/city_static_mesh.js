@@ -2,7 +2,7 @@
 // transforms and colors into one mesh preserves the model while avoiding a
 // draw call (and shadow draw) for every rail, planter and roof accessory.
 export function mergeStaticMeshes(THREE,root){
- const parts=root.children.filter(m=>m.isMesh&&m.geometry?.attributes?.position&&m.geometry?.attributes?.normal&&!Array.isArray(m.material));
+ const parts=root.children.filter(m=>m.isMesh&&!m.userData.skipStaticMerge&&m.geometry?.attributes?.position&&m.geometry?.attributes?.normal&&!Array.isArray(m.material));
  if(parts.some(m=>m.castShadow!==parts[0].castShadow||m.receiveShadow!==parts[0].receiveShadow))return;
  if(parts.length<2)return;
  const geometries=[];let vertices=0;

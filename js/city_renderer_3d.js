@@ -2,8 +2,8 @@ import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance
 import {furnitureModel} from './city_furniture_models.js?v=beach-chair-1';
 import {applyInteriorCutaway} from './city_interior_view.js';
 import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
-import {addBuildingDetails} from './city_building_details.js?v=merged-architecture-1';
-import {syncConstructionSites} from './city_construction_renderer.js?v=construction-visuals-5';
+import {addBuildingDetails} from './city_building_details.js?v=mine-sign-1';
+import {syncConstructionSites} from './city_construction_renderer.js?v=construction-visuals-6';
 import {syncCityMobility} from './city_mobility_renderer.js';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
@@ -17,7 +17,7 @@ import {quarryDeposits} from './city_terrain.js?v=mine-adjacent-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=balcony-door-alignment-2';
 import {syncSkybridges} from './city_skybridges.js?v=short-passarelas-bridge-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignment-2';
-import {mergeStaticMeshes} from './city_static_mesh.js';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
 const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
 function buildingMaterial(renderer,THREE,kind,color){
@@ -262,7 +262,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     const interiorContentKey=b.type==='office_tower'?(b.officeLeases||[]).filter(l=>l.status==='active').map(l=>{const tenant=renderer.cityDevelopment?.city?.building(l.buildingId);return `${tenant?.id}:${tenant?.type}:${tenant?.layoutRevision||0}`;}).join('|'):'';
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
     if (group && (group.userData.interiorContentKey!==interiorContentKey || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
-      renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
+      renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose();object.userData.mineSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
       group = new THREE.Group();group.userData.interiorContentKey=interiorContentKey; group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
@@ -435,7 +435,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
   }
   for (const [id, group] of renderer.cityMeshes) if (!active.has(id)) {
     renderer.scene.remove(group);
-    group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose(); });
+    group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose();object.userData.mineSignTexture?.dispose(); });
     renderer.cityMeshes.delete(id);
   }
 }
@@ -485,7 +485,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
   let group = renderer.cityMeshes.get(entity.id);
   const quarry=b.type==='quarry'||OPEN_PIT_MINES.has(b.type)?quarryDeposits(world,entity.x,entity.y,b.width,b.depth):[];
   const signature=`retail-v3:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}:${b.paintRevision||0}:${b.type==='quarry'||OPEN_PIT_MINES.has(b.type)?`${world.revision}:${quarry.map(p=>`${p.x},${p.y}`).join(';')}`:''}`;
-  if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
+  if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose();o.userData.mineSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;
     addBuildingDetails(THREE,group,b,{outdoor:true,ground:surfaceElevation(world,entity.x+b.width/2,entity.y+b.depth/2)});
