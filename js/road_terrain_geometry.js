@@ -1,0 +1,91 @@
+import {baseTerrainTile,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE} from './world_gen.js?v=deep-perf-3';
+
+const HEIGHTS=[1.1,5.5,0,.4,3.8,0,1.1,.4,1.1,2.3,7.5,.4,2.3,2.3];
+const ROADS=new Set([TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE]);
+const CORNERS=[[0,0],[1,0],[1,1],[0,1]];
+const EDGES=[{dx:0,dy:-1,a:0,b:1},{dx:1,dy:0,a:1,b:2},{dx:0,dy:1,a:3,b:2},{dx:-1,dy:0,a:0,b:3}];
+const caches=new WeakMap();
+
+export const terrainTileHeight=tile=>HEIGHTS[baseTerrainTile(tile)]??0;
+const at=(world,x,y)=>x<0||y<0||x>=world.width||y>=world.height?TILE_VOID:world.map?world.map[y*world.width+x]:world.getTile(x,y);
+function cacheFor(world){
+  let cache=caches.get(world);
+  if(!cache||cache.map!==world.map||cache.width!==world.width||cache.height!==world.height){
+    const size=(world.width+1)*(world.height+1);
+    cache={map:world.map,width:world.width,height:world.height,revision:world.revision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size),roads:new Map()};
+    caches.set(world,cache);
+  }
+  if(cache.revision!==world.revision){cache.revision=world.revision;cache.roads.clear();cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
+  return cache;
+}
+function naturalCorner(world,x,y){
+  let sum=0,count=0;
+  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tile=at(world,x+dx,y+dy);if(tile!==TILE_WATER&&tile!==TILE_VOID){sum+=terrainTileHeight(tile);count++;}}
+  return count?sum/count:0;
+}
+export function terrainCornerHeight(world,x,y){
+  if(!Number.isFinite(world.revision)||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>world.width||y>world.height)return naturalCorner(world,x,y);
+  const cache=cacheFor(world),index=y*(world.width+1)+x;
+  if(cache.marks[index]!==cache.generation){cache.values[index]=naturalCorner(world,x,y);cache.marks[index]=cache.generation;}
+  return cache.values[index];
+}
+
+// Only connected streets determine the road grade. An uphill bank beside a
+// level road must not pull that road sideways into a ramp.
+function connectedRoadCorner(world,x,y,vx,vy){
+  const tiles=[at(world,vx-1,vy-1),at(world,vx,vy-1),at(world,vx-1,vy),at(world,vx,vy)];
+  let mask=0;for(let i=0;i<4;i++)if(ROADS.has(tiles[i]))mask|=1<<i;
+  let component=1<<((y===vy?2:0)+(x===vx?1:0)),previous;
+  do{
+    previous=component;
+    if(component&1)component|=mask&6;
+    if(component&2)component|=mask&9;
+    if(component&4)component|=mask&9;
+    if(component&8)component|=mask&6;
+  }while(component!==previous);
+  let sum=0,count=0;for(let i=0;i<4;i++)if(component&(1<<i)){sum+=terrainTileHeight(tiles[i]);count++;}
+  return sum/count;
+}
+export function roadSurfaceCorners(world,x,y){
+  if(!ROADS.has(at(world,x,y)))return null;
+  const cache=Number.isFinite(world.revision)?cacheFor(world):null,key=y*world.width+x;
+  if(cache?.roads.has(key))return cache.roads.get(key);
+  const north=ROADS.has(at(world,x,y-1)),east=ROADS.has(at(world,x+1,y)),south=ROADS.has(at(world,x,y+1)),west=ROADS.has(at(world,x-1,y));
+  const horizontal=east||west,vertical=north||south;
+  const corners=CORNERS.map(([dx,dy])=>{
+    // Leave the end apron joined to ordinary ground (and building entrances).
+    const openEnd=(!horizontal&&!vertical)||(horizontal&&!vertical&&!(dx?east:west))||(vertical&&!horizontal&&!(dy?south:north));
+    return openEnd?terrainCornerHeight(world,x+dx,y+dy):connectedRoadCorner(world,x,y,x+dx,y+dy);
+  });
+  cache?.roads.set(key,corners);
+  return corners;
+}
+
+// Each panel closes the actual gap between the road mesh and the bank mesh.
+// Splitting where the two profiles cross avoids a slab above either surface.
+export function roadRetainingFaces(world,x,y){
+  const road=roadSurfaceCorners(world,x,y);if(!road)return [];
+  const faces=[];
+  for(let side=0;side<EDGES.length;side++){
+    const edge=EDGES[side],neighbor=at(world,x+edge.dx,y+edge.dy);
+    if(neighbor===TILE_WATER||neighbor===TILE_VOID||ROADS.has(neighbor)||world.bridgeTiles?.has(`${x+edge.dx},${y+edge.dy}`))continue;
+    const [ax,ay]=CORNERS[edge.a],[bx,by]=CORNERS[edge.b];
+    const groundA=terrainCornerHeight(world,x+ax,y+ay),groundB=terrainCornerHeight(world,x+bx,y+by),roadA=road[edge.a],roadB=road[edge.b];
+    const deltaA=groundA-roadA,deltaB=groundB-roadB;
+    if(Math.max(Math.abs(deltaA),Math.abs(deltaB))<.02)continue;
+    const cuts=deltaA*deltaB<0?[0,deltaA/(deltaA-deltaB),1]:[0,1];
+    for(let i=1;i<cuts.length;i++){
+      const from=cuts[i-1],to=cuts[i],ra=roadA+(roadB-roadA)*from,rb=roadA+(roadB-roadA)*to,ga=groundA+(groundB-groundA)*from,gb=groundA+(groundB-groundA)*to;
+      faces.push({side,from,to,ax:x+ax+(bx-ax)*from,ay:y+ay+(by-ay)*from,bx:x+ax+(bx-ax)*to,by:y+ay+(by-ay)*to,lowA:Math.min(ra,ga),lowB:Math.min(rb,gb),highA:Math.max(ra,ga),highB:Math.max(rb,gb)});
+    }
+  }
+  return faces;
+}
+
+export function terrainSurfaceElevation(world,x,y){
+  const tx=Math.floor(x),ty=Math.floor(y);if(at(world,tx,ty)===TILE_WATER)return .08;
+  const road=roadSurfaceCorners(world,tx,ty),u=x-tx,v=y-ty;
+  const h00=road?road[0]:terrainCornerHeight(world,tx,ty),h10=road?road[1]:terrainCornerHeight(world,tx+1,ty),h11=road?road[2]:terrainCornerHeight(world,tx+1,ty+1),h01=road?road[3]:terrainCornerHeight(world,tx,ty+1);
+  // Use the same diagonal as the rendered triangles, including non-planar turns.
+  return u<=v?h00*(1-v)+h01*(v-u)+h11*u:h00*(1-u)+h10*(u-v)+h11*v;
+}

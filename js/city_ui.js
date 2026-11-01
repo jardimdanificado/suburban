@@ -33,7 +33,7 @@ import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIO
 import { describePoliticalOrientation } from './city_ideology.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=portuguese-colonial-forms-6';
 import { REPUTATION_LABELS } from './city_reputation.js';
-import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=caribbean-fruit-trees-1';
+import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=road-bank-fit-1';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js?v=survival-capacity-1';

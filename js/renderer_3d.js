@@ -11,7 +11,8 @@ import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_inte
 import { syncCityBuildings } from "./city_renderer_3d.js?v=colonial-benches-3";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=bank-door-bench-offset-1';
-import { flagNightFactor } from './city_terrain.js?v=mine-adjacent-1';
+import { flagNightFactor } from './city_terrain.js?v=road-bank-fit-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,roadSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=road-bank-fit-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -150,24 +151,24 @@ function terrainTextureCategory(tileType) {
   return null;
 }
 
-function pushTerrainTileUvs(bucket, x, y, tileType) {
+function pushTerrainTileUvs(bucket, x, y, tileType, categoryOverride = null) {
   if (tileType === TILE_WATER) {
     const u0 = x / 8, u1 = (x + 1) / 8, v0 = y / 8, v1 = (y + 1) / 8;
     bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
     return;
   }
-  if (tileType === TILE_FLOOR || tileType === TILE_HILL) {
+  const category = categoryOverride || terrainTextureCategory(tileType);
+  if (!category && (tileType === TILE_FLOOR || tileType === TILE_HILL)) {
     const u0 = x / 8, u1 = (x + 1) / 8, v0 = y / 8, v1 = (y + 1) / 8;
     bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
     return;
   }
-  if (FARM_TILES.has(tileType)) {
+  if (!category && FARM_TILES.has(tileType)) {
     const u0 = x / 2, u1 = (x + 1) / 2, v0 = y / 2, v1 = (y + 1) / 2;
     bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
     return;
   }
   const corners = [[0, 0], [0, 1], [1, 1], [0, 0], [1, 1], [1, 0]];
-  const category = terrainTextureCategory(tileType);
   if (!category) {
     for (const point of corners) bucket.uvs.push(...point);
     return;
@@ -202,7 +203,9 @@ function createTerrainSurfaceTexture(style, variant) {
     mountain: { base: "#292d2e", stones: ["#565d5b", "#7a8078", "#a29c8c", "#3e4848", "#68665d"] },
     peak: { base: "#45484b", stones: ["#92999a", "#c1c1b4", "#737e84", "#d1c9b6", "#a6a99f"] },
     dirtRoad: { base: "#77583b", stones: ["#a87b4b", "#c49a60", "#906443", "#b68a55", "#654a35"] },
-    pavedRoad: { base: "#41474a", stones: ["#8b969b", "#a8afb1", "#748187", "#969fa2", "#5f6b70"] }
+    pavedRoad: { base: "#41474a", stones: ["#8b969b", "#a8afb1", "#748187", "#969fa2", "#5f6b70"] },
+    sidewalk: { base: "#737e81", stones: ["#adb6b7", "#c1c7c6", "#8e9a9d", "#a7b0b1", "#7c898d"] },
+    retainingWall: { base: "#4a5255", stones: ["#858f91", "#6e7a7e", "#a1a8a8", "#5e6a6e", "#929a99"] }
   }[style];
   ctx.fillStyle = palettes.base;
   ctx.fillRect(0, 0, size, size);
@@ -223,9 +226,25 @@ function createTerrainSurfaceTexture(style, variant) {
       ctx.fillStyle = patch % 2 ? "#bd9259" : "#594431";
       ctx.fillRect(Math.floor(random() * size), Math.floor(random() * size), 3 + Math.floor(random() * 8), 1 + Math.floor(random() * 3));
     }
-  } else if (style === "pavedRoad") {
+  } else if (style === "retainingWall") {
+    // Staggered stone courses, like the exposed side of a raised terrain tile.
+    const mortar = "#444b4d";
+    ctx.fillStyle = mortar;
+    ctx.fillRect(0, 0, size, size);
+    for (let row = -1; row < 6; row++) {
+      const y = row * 7, offset = row % 2 ? -6 : 0;
+      for (let x = offset - 10; x < size + 8;) {
+        const width = 8 + Math.floor(random() * 5), height = 6;
+        ctx.fillStyle = palettes.stones[Math.floor(random() * palettes.stones.length)];
+        ctx.fillRect(x + 1, y + 1, width - 2, height - 1);
+        ctx.fillStyle = "rgba(232,238,236,.22)";
+        ctx.fillRect(x + 1, y + 1, width - 2, 1);
+        x += width;
+      }
+    }
+  } else if (style === "pavedRoad" || style === "sidewalk") {
     // Deliberately regular, staggered cobbles make roads read as built surfaces.
-    const rowHeight = 8;
+    const rowHeight = style === "sidewalk" ? 10 : 8;
     for (let row = -1; row < 6; row++) {
       const y = row * rowHeight, offset = row % 2 ? -7 : 0;
       for (let x = offset - 10; x < size + 8;) {
@@ -3699,6 +3718,8 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'Peak','peak',normStoneC,1.3,.60,.12),
       ...terrainSurfaceMaterials(isPersp,'DirtRoad','dirtRoad',normSand,.9,.75,.05),
       ...terrainSurfaceMaterials(isPersp,'PavedRoad','pavedRoad',normBrickA,1.1,.65,.08),
+      ...terrainSurfaceMaterials(isPersp,'Sidewalk','sidewalk',normBrickA,1.1,.65,.08),
+      ...terrainSurfaceMaterials(isPersp,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
       farmSoil:makeMat(isPersp,{map:caribbeanGroundTexture(THREE,'farm'),color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.85, 0.02),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
@@ -5425,25 +5446,11 @@ export class RCT3DRenderer {
   getSelectedId() { return this.selectedEntityId; }
 
   getTileBaseHeight(tileType) {
-    switch (baseTerrainTile(tileType)) {
-      case TILE_WATER: return 0.0;
-      case TILE_SAND:
-      case TILE_ROAD_SAND:
-      case TILE_ROAD_SAND_STONE: return 0.40;
-      case TILE_FLOOR:
-      case TILE_ROAD_GRASS:
-      case TILE_ROAD_GRASS_STONE: return 1.10;
-      case TILE_HILL:
-      case TILE_ROAD_HILL:
-      case TILE_ROAD_HILL_STONE: return 2.30;
-      case TILE_STONE: return 3.80;
-      case TILE_MOUNTAIN: return 5.50;
-      case TILE_PEAK: return 7.50;
-      default: return 0.0;
-    }
+    return terrainTileHeight(tileType);
   }
 
   getCornerHeight(map, vx, vy) {
+    if(this.currentWorld?.map===map)return terrainCornerHeight(this.currentWorld,vx,vy);
     const cacheable=Number.isInteger(vx)&&Number.isInteger(vy)&&vx>=0&&vy>=0&&vx<=this.mapWidth&&vy<=this.mapHeight;
     let cache=this._cornerHeightCache,index;
     if(cacheable){
@@ -5521,6 +5528,7 @@ export class RCT3DRenderer {
   }
 
   getSurfaceElevation(map, x, y) {
+    if(this.currentWorld?.map===map)return terrainSurfaceElevation(this.currentWorld,x,y);
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     const t = this.getTileTypeAt(map, tx, ty);
@@ -6376,7 +6384,7 @@ export class RCT3DRenderer {
       [TILE_ROAD_HILL_STONE]: { pos: [], uvs: [], colors: [] }
     };
     const waterFoamBucket = { pos: [], uvs: [], colors: [] };
-    for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad']) for (let variant=0;variant<4;variant++) {
+    for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
     }
 
@@ -6460,22 +6468,24 @@ export class RCT3DRenderer {
           zoneMult = 0.32;
         }
 
-        const hasSprite = detailBand === 2 && !FARM_TILES.has(tType)&&shouldRenderTerrainSprite(tx, ty, tType);
-        const textureCategory=terrainTextureCategory(tType);
-        let bucketKey = FARM_TILES.has(tType)?"farmSoil":tType;
+        const isSidewalk=world.sidewalkTiles?.has(yOffset+tx)||false;
+        const hasSprite = detailBand === 2 && !isSidewalk && !FARM_TILES.has(tType)&&shouldRenderTerrainSprite(tx, ty, tType);
+        const textureCategory=isSidewalk?'sidewalk':terrainTextureCategory(tType);
+        let bucketKey = isSidewalk?`terrainSidewalk${terrainTextureHash(tx,ty,tType)&3}`:FARM_TILES.has(tType)?"farmSoil":tType;
         if (tType === TILE_SAND && !hasSprite) bucketKey = "sandClean";
         if (textureCategory) {
-          const materialCategory={rock:'Rock',mountain:'Mountain',peak:'Peak',dirtRoad:'DirtRoad',pavedRoad:'PavedRoad'}[textureCategory];
+          const materialCategory={rock:'Rock',mountain:'Mountain',peak:'Peak',dirtRoad:'DirtRoad',pavedRoad:'PavedRoad',sidewalk:'Sidewalk'}[textureCategory];
           bucketKey=`terrain${materialCategory}${terrainTextureHash(tx,ty,tType)&3}`;
         }
 
         const bucket = tileMeshBuckets[bucketKey] || tileMeshBuckets[tType] || tileMeshBuckets[TILE_FLOOR];
         if (!bucket) continue;
 
-        let h00 = this.getCornerHeight(map, tx, ty);
-        let h10 = this.getCornerHeight(map, tx + 1, ty);
-        let h11 = this.getCornerHeight(map, tx + 1, ty + 1);
-        let h01 = this.getCornerHeight(map, tx, ty + 1);
+        const roadCorners=roadSurfaceCorners(world,tx,ty);
+        let h00 = roadCorners?roadCorners[0]:this.getCornerHeight(map, tx, ty);
+        let h10 = roadCorners?roadCorners[1]:this.getCornerHeight(map, tx + 1, ty);
+        let h11 = roadCorners?roadCorners[2]:this.getCornerHeight(map, tx + 1, ty + 1);
+        let h01 = roadCorners?roadCorners[3]:this.getCornerHeight(map, tx, ty + 1);
 
         // Procedural Contact Ambient Occlusion for each corner
         const ao00 = this.getCornerAO(map, tx, ty);
@@ -6485,6 +6495,16 @@ export class RCT3DRenderer {
 
         if (tType === TILE_WATER) {
           h00 = h10 = h11 = h01 = 0.08;
+        }
+
+        if(roadCorners)for(const face of roadRetainingFaces(world,tx,ty)){
+          const variant=terrainTextureHash(tx,ty,tType+face.side)&3,wall=tileMeshBuckets[`terrainRetainingWall${variant}`],tone=zoneMult*.92;
+          const a=[face.ax,face.lowA,face.ay],b=[face.bx,face.lowB,face.by],c=[face.bx,face.highB,face.by],d=[face.ax,face.highA,face.ay];
+          // World-height UVs keep masonry courses aligned along slopes and
+          // across neighboring tiles instead of stretching an image per panel.
+          for(const [point,u]of [[a,face.from],[b,face.to],[c,face.to],[a,face.from],[c,face.to],[d,face.from]]){
+            wall.pos.push(...point);wall.uvs.push(u,point[1]);wall.colors.push(tone,tone,tone);
+          }
         }
 
         if (tType === TILE_WATER) {
@@ -6515,7 +6535,7 @@ export class RCT3DRenderer {
             tx + 1, h11, ty + 1,
             tx + 1, h10, ty
           );
-          pushTerrainTileUvs(bucket, tx, ty, tType);
+          pushTerrainTileUvs(bucket, tx, ty, tType,isSidewalk?'sidewalk':null);
           const textureTone=textureCategory?0.82+((terrainTextureHash(tx,ty,tType)>>>8)%33)/100:1;
           // Triangle 1: (0,0), (0,1), (1,1)
           bucket.colors.push(zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone, zoneMult * ao00 * textureTone);
@@ -6550,7 +6570,7 @@ export class RCT3DRenderer {
         }
 
         // 3D Natural Grass Tufts (Clean, small, fine tufts with dense placement in 1P/3P)
-        if (tType === TILE_FLOOR || tType === TILE_HILL) {
+        if (!isSidewalk && (tType === TILE_FLOOR || tType === TILE_HILL)) {
           if (!isPersp && detailBand > 0) {
             // Isometric view: classic 8% density
             if (shouldSpawnGrassTuft(tx, ty) && foliageCount < 1200) {
@@ -6921,6 +6941,7 @@ export class RCT3DRenderer {
     const frameStart = performance.now();
     const profileStart = this.profileFrame ? performance.now() : 0;
     this.mapWidth=world.width;this.mapHeight=world.height;
+    this.currentWorld = world;
     this.currentMap = world.map;
     this.currentWorldRevision = world.revision;
 

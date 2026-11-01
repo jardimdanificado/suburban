@@ -1,18 +1,18 @@
 import {baseTerrainTile} from './world_gen.js?v=deep-perf-3';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation} from './road_terrain_geometry.js?v=road-bank-fit-1';
 import {businessFloors} from './city_business_heights.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js?v=initial-cycle-ref-1';
 import {buildingEntrance} from './city_building_geometry.js';
 import {OFFICE_BUSINESSES} from './city_offices.js?v=office-demand-rollout-1';
 import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js?v=deep-perf-3';
 
-const heights = [1.1, 5.5, 0, .4, 3.8, 0, 1.1, .4, 1.1, 2.3, 7.5, .4, 2.3, 2.3];
 export const ROAD_TILES = new Set([TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE]);
 export const DIRT_ROAD_TILES = new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL]);
 export const PAVED_ROAD_TILES = new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
 export const ROAD_RULES = Object.freeze({dirtCost:.8,pavedCost:.55,degradeAt:30,wearPerCell:.01,hygienePerDirtCell:.025,moodPerDirtCell:.006});
 const land = new Set([TILE_FLOOR, TILE_SAND, TILE_HILL, ...ROAD_TILES]);
 export const tileKey = (x, y) => `${x},${y}`;
-export const tileHeight = tile => heights[baseTerrainTile(tile)] ?? 0;
+export const tileHeight = terrainTileHeight;
 export function tileAt(world, x, y) { return x < 0 || y < 0 || x >= world.width || y >= world.height ? TILE_VOID : world.getTile(x, y); }
 export function bridgeAt(world,x,y){return world.bridgeTiles?.get(tileKey(x,y))||null;}
 export function isRoadAt(world,x,y){return ROAD_TILES.has(tileAt(world,x,y))||!!bridgeAt(world,x,y);}
@@ -42,22 +42,7 @@ export function wearRoad(world,x,y,amount){
 export function layDirtPath(world,path){
   for(const p of path){const x=Math.floor(p.x),y=Math.floor(p.y),tile=tileAt(world,x,y);if(ROAD_TILES.has(tile))continue;const road=dirtRoadFor(tile);if(road!==null)world.setTile(x,y,road);}
 }
-// Match the renderer's interpolated corners, without changing any terrain tile.
-const cornerCaches=new WeakMap();
-function computeCornerHeight(world,x,y){
-  let sum=0,count=0;
-  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tile=tileAt(world,x+dx,y+dy);if(tile!==TILE_WATER&&tile!==TILE_VOID){sum+=tileHeight(tile);count++;}}
-  return count?sum/count:0;
-}
-export function cornerHeight(world,x,y){
-  if(!Number.isFinite(world.revision)||!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>world.width||y>world.height)return computeCornerHeight(world,x,y);
-  let cache=cornerCaches.get(world);
-  if(!cache||cache.width!==world.width||cache.height!==world.height){const size=(world.width+1)*(world.height+1);cache={width:world.width,height:world.height,values:new Float64Array(size),marks:new Uint32Array(size),generation:0};cornerCaches.set(world,cache);}
-  if(cache.revision!==world.revision){cache.revision=world.revision;cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
-  const index=y*(cache.width+1)+x;
-  if(cache.marks[index]!==cache.generation){cache.values[index]=computeCornerHeight(world,x,y);cache.marks[index]=cache.generation;}
-  return cache.values[index];
-}
+export const cornerHeight=terrainCornerHeight;
 
 export function surfaceBounds(world, x, y, width, depth) {
   let min = Infinity, max = -Infinity;
@@ -66,10 +51,7 @@ export function surfaceBounds(world, x, y, width, depth) {
   }
   return { min, max, variation: max - min, base: max + .06 };
 }
-export function surfaceElevation(world, x, y) {
-  const tx = Math.floor(x), ty = Math.floor(y), u = x - tx, v = y - ty;
-  return cornerHeight(world, tx, ty) * (1 - u) * (1 - v) + cornerHeight(world, tx + 1, ty) * u * (1 - v) + cornerHeight(world, tx, ty + 1) * (1 - u) * v + cornerHeight(world, tx + 1, ty + 1) * u * v;
-}
+export const surfaceElevation=terrainSurfaceElevation;
 /** A saleable plot has one elevation, including its interpolated surface and entrance. */
 export function flatSiteLevel(world, x, y, width, depth) {
   const level = tileHeight(tileAt(world, x, y));
@@ -136,7 +118,7 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
     if (occupied.has(tileKey(xx, yy))) return { error: 'Deixe uma célula livre entre os prédios.' };
     if (xx >= x && xx < x + width && yy >= y && yy < y + depth) {
       if (!terrainWalkable(world, xx, yy) && !(quarry && tileAt(world, xx, yy) === TILE_STONE)) return { error: 'O prédio precisa caber em terra firme, fora da água e das encostas rochosas.' };
-      if (ROAD_TILES.has(tileAt(world, xx, yy))||world.parkingTiles?.has(tileKey(xx,yy))) return { error: 'A construção não pode ocupar uma rua.' };
+      if (ROAD_TILES.has(tileAt(world, xx, yy))||world.sidewalkTiles?.has(yy*world.width+xx)||world.parkingTiles?.has(tileKey(xx,yy))) return { error: 'A construção não pode ocupar uma rua ou calçada.' };
     }
   }
   let door = buildingEntrance(x,y,width,depth,rotation);
@@ -352,8 +334,17 @@ export function hasSettlementAccess(world, door, x, y, width, depth) {
   return seen.size >= 256;
 }
 
-export function pavePath(world, path) {
+export function pavePath(world, path, blockedTiles = null) {
   for (const p of path) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(world, x, y), road = roadFor(tile); if (road !== null && road !== tile) {world.setTile(x, y, road);(world.roadCondition??=new Map()).set(tileKey(x,y),100);} }
+  const route=path.map(p=>({x:Math.floor(p.x),y:Math.floor(p.y)})),sidewalks=new Set();
+  const addSideCells=(x,y,dx,dy)=>{if(dx)for(const sideY of [-1,1])sidewalks.add(`${x},${y+sideY}`);else if(dy)for(const sideX of [-1,1])sidewalks.add(`${x+sideX},${y}`);else for(const [sideX,sideY]of [[1,0],[-1,0],[0,1],[0,-1]])sidewalks.add(`${x+sideX},${y+sideY}`);};
+  for(let i=0;i<route.length;i++){
+    const point=route[i],previous=route[i-1],next=route[i+1];
+    if(previous)addSideCells(point.x,point.y,point.x-previous.x,point.y-previous.y);
+    if(next)addSideCells(point.x,point.y,next.x-point.x,next.y-point.y);
+    if(!previous&&!next)addSideCells(point.x,point.y,0,0);
+  }
+  for(const key of sidewalks){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1)),blocked=typeof blockedTiles==='function'?blockedTiles(x,y,key):blockedTiles?.has(key);if(blocked)continue;const tile=tileAt(world,x,y);if(tile===TILE_FLOOR||tile===TILE_SAND)world.setSidewalk?.(x,y);}
 }
 
 export function generateSettlement(city) {

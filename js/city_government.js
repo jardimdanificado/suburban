@@ -20,7 +20,7 @@ import { CityCouncil } from './city_council.js';
 import { CityCampaigns } from './city_campaigns.js?v=party-slogans-1';
 import {gerarFraseTematica} from './gerador_frases.js?v=catalog-lexicon-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
-import { ROAD_TILES, tileAt } from './city_terrain.js?v=mine-adjacent-1';
+import { ROAD_TILES, tileAt } from './city_terrain.js?v=road-bank-fit-1';
 import {formatMoney} from './city_ui_format.js';
 
 // Ideological starting points; names are generated separately from word pools.

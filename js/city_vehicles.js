@@ -3,7 +3,7 @@ import {COLOR_PALETTE,colorAffinity,dislikesColor} from './city_colors.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {fictionalForeignBrand} from './city_external_trade.js';
 import {inventoryFree} from './city_inventory.js';
-import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=mine-adjacent-1';
+import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=road-bank-fit-1';
 
 export const VEHICLE_SPECS=Object.freeze({
   bicicleta:{label:'Bicicleta',speed:8,seats:2,cargo:36},
@@ -80,7 +80,7 @@ export class CityVehicles {
     for(const other of this.units.values())if(other.id!==v.id&&!other.scrapped)for(const p of [other.parking,other.reservedParking])if(p)occupied.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     for(let dy=-maxDistance;dy<=maxDistance;dy++)for(let dx=-maxDistance;dx<=maxDistance;dx++){
       const x=Math.floor(goal.x)+dx,y=Math.floor(goal.y)+dy;
-      if(!city.walkable(x,y)||ROAD_TILES.has(tileAt(city.world,x,y)))continue;
+      if(!city.walkable(x,y)||ROAD_TILES.has(tileAt(city.world,x,y))||city.world.sidewalkTiles?.has(y*city.world.width+x))continue;
       const neighbor=[[1,0],[-1,0],[0,1],[0,-1]].find(([sx,sy])=>ROAD_TILES.has(tileAt(city.world,x+sx,y+sy))&&canStep(city.world,x,y,x+sx,y+sy));
       if(!neighbor||occupied.has(`${x},${y}`))continue;
       if(city.buildings.some(b=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth))continue;

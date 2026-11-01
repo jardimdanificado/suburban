@@ -1,4 +1,4 @@
-import {cornerHeight,surfaceElevation} from './city_terrain.js?v=mine-adjacent-1';
+import {cornerHeight,surfaceElevation} from './city_terrain.js?v=road-bank-fit-1';
 import {caribbeanGroundTexture} from './caribbean_pixel_materials.js?v=caribbean-pixel-2';
 
 // Construction visuals cover the terrain without changing its navigation tiles.

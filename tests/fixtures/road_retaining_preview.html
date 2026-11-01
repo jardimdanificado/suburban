@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>Muros de arrimo — cena de verificação</title>
+<style>
+  body{margin:0;background:#19251e;color:#f4eddb;font:14px system-ui}#view{width:100vw;height:100vh}header{position:absolute;left:24px;top:20px;z-index:2;background:#18251ee8;padding:16px;border:1px solid #71816f}summary{font-size:18px;font-weight:bold;cursor:pointer}p{margin:8px 0}button{padding:8px;margin:4px 8px 0 0}#status{font:12px monospace}#error{color:#ffbcb3;white-space:pre-wrap}
+</style>
+<header><details open><summary>Muros de arrimo</summary><p id="description"></p><button id="cut">Corte e subida</button><button id="flat">Rua plana</button><button id="rotate">Girar 90°</button><p id="status">Carregando renderizador…</p><p id="error"></p></details></header>
+<div id="view"></div>
+<script type="module">
+import {RCT3DRenderer} from '../../js/renderer_3d.js?v=road-bank-fit-1';
+import {TILE_FLOOR,TILE_HILL,TILE_ROAD_GRASS_STONE,TILE_ROAD_HILL_STONE} from '../../js/world_gen.js?v=deep-perf-3';
+import {setActiveEntities} from '../../js/engine.js';
+import {roadSurfaceCorners,roadRetainingFaces,terrainSurfaceElevation} from '../../js/road_terrain_geometry.js?v=road-bank-fit-1';
+const error=document.querySelector('#error'),status=document.querySelector('#status');
+window.addEventListener('error',event=>error.textContent+=event.message+'\n');
+window.addEventListener('unhandledrejection',event=>error.textContent+=String(event.reason)+'\n');
+try{
+  const view=document.querySelector('#view'),renderer=new RCT3DRenderer(view);
+  const world={width:24,height:24,map:new Uint8Array(24*24),revision:1,clock:{hour:12,minute:0},groups:[],sidewalkTiles:new Set(),getTile(x,y){return this.map[y*this.width+x];}};
+  setActiveEntities([]);renderer.setResolutionScale(1);renderer.mapWidth=24;renderer.mapHeight=24;renderer.setCamera(12,11.5,3.3);
+  renderer.shadowsEnabled=false;renderer.wireframeMode=0;
+  function setup(flat=false){
+    world.map.fill(TILE_FLOOR);
+    if(!flat)for(let y=0;y<11;y++)for(let x=0;x<24;x++)world.map[y*24+x]=TILE_HILL;
+    for(let x=2;x<22;x++)world.map[11*24+x]=flat||x<12?TILE_ROAD_GRASS_STONE:TILE_ROAD_HILL_STONE;
+    world.revision++;renderer.invalidateTerrainAt(NaN,NaN);
+    let panels=0;for(let x=2;x<22;x++)panels+=roadRetainingFaces(world,x,11).length;
+    document.querySelector('#description').textContent=flat?'Rua nivelada: nenhum muro deve aparecer.':'Estrada baixa junto ao barranco, subida real e estrada alta sustentada na borda.';
+    const corners=roadSurfaceCorners(world,8,11),height=terrainSurfaceElevation(world,8.5,11.5);
+    status.textContent=`${panels} faces de contenção · altura da rua ${height.toFixed(2)} · desnível transversal ${(Math.max(...corners)-Math.min(...corners)).toFixed(2)}`;
+  }
+  setup();document.querySelector('#cut').onclick=()=>setup();document.querySelector('#flat').onclick=()=>setup(true);
+  document.querySelector('#rotate').onclick=()=>{renderer.fixedRotationY+=Math.PI/2;renderer.currentRotationY=renderer.fixedRotationY;};
+  function frame(){renderer.render(world,[],world.clock,1/60,0);requestAnimationFrame(frame);}requestAnimationFrame(frame);
+  window.addEventListener('resize',()=>renderer.resize(view.clientWidth,view.clientHeight));
+}catch(cause){error.textContent=cause.stack||String(cause);}
+</script>
+</html>
