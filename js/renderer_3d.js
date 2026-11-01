@@ -302,6 +302,7 @@ export function createTintedTexture(skinName, fgHex = 0xffffff, bgHex = 0x000000
 // ---------------------------------------------------------------------------
 
 const retroDitherMaterials=new WeakSet();
+const retroDitherCameraFactor={value:1};
 export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) {
   if (!mat || retroDitherMaterials.has(mat)) return;
   retroDitherMaterials.add(mat);
@@ -309,7 +310,9 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
   const prevCompile = mat.onBeforeCompile;
   mat.onBeforeCompile = (shader) => {
     if (prevCompile) prevCompile(shader);
+    shader.uniforms.uRetroDitherCameraFactor=retroDitherCameraFactor;
     shader.fragmentShader = `
+      uniform float uRetroDitherCameraFactor;
       float getBayer4x4(vec2 p) {
         vec2 m = mod(floor(p), 4.0);
         int x = int(m.x);
@@ -339,10 +342,9 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
     ` + shader.fragmentShader;
 
     const ditherCode = `
-      #include <dithering_fragment>
       // Controlled retro Bayer dithering on colors, 3D lighting gradients and shadow falloffs
-      float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)};
-      float dSteps = ${steps.toFixed(1)};
+      float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)} * uRetroDitherCameraFactor;
+      float dSteps = mix(64.0, ${steps.toFixed(1)}, uRetroDitherCameraFactor);
       gl_FragColor.rgb = floor(gl_FragColor.rgb * dSteps + bayer + 0.5) / dSteps;
     `;
 
@@ -355,8 +357,8 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
       shader.fragmentShader = shader.fragmentShader.replace(
         'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
         `gl_FragColor = vec4( outgoingLight, diffuseColor.a );
-        float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)};
-        float dSteps = ${steps.toFixed(1)};
+        float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)} * uRetroDitherCameraFactor;
+        float dSteps = mix(64.0, ${steps.toFixed(1)}, uRetroDitherCameraFactor);
         gl_FragColor.rgb = floor(gl_FragColor.rgb * dSteps + bayer + 0.5) / dSteps;`
       );
     }
@@ -7710,6 +7712,11 @@ export class RCT3DRenderer {
 
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
+    if(this.isThirdPersonActive()){
+      const distanceFactor=Math.max(0,Math.min(1,(this.tpDistance-this.tpMinDistance)/(10-this.tpMinDistance)));
+      const horizonFactor=Math.max(0,Math.min(1,1-Math.abs(this.fpPitch)/.22));
+      retroDitherCameraFactor.value=(.08+.34*distanceFactor)*(1-.75*horizonFactor);
+    }else retroDitherCameraFactor.value=1;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     if (this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget) {
       this.renderer.setRenderTarget(this.renderTarget);
