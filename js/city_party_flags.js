@@ -26,6 +26,16 @@ export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null) {
   ctx.fillStyle=flag.foreground;
   if(flag.pattern===1)ctx.fillRect(x,y+h*.42,w,h*.16);
   if(flag.pattern===2){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+w*.5,y+h*.5);ctx.lineTo(x,y+h);ctx.fill();}
+  // Sparse one-pixel pigment changes suggest woven cloth without drawing a conspicuous grid.
+  let grainSeed=2166136261;
+  for(const char of `${flag.background}${flag.foreground}${flag.pattern}`)grainSeed=Math.imul(grainSeed^char.charCodeAt(0),16777619);
+  const grain=()=>{grainSeed=(Math.imul(grainSeed,1664525)+1013904223)>>>0;return grainSeed/0x100000000;};
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.globalAlpha=.10;
+  for(let i=0;i<20;i++){
+    ctx.fillStyle=i%2?'#f4e8ca':'#303c37';
+    ctx.fillRect(Math.floor(x+grain()*w),Math.floor(y+grain()*h),1+(i%4===0?1:0),1);
+  }
+  ctx.restore();
   const key=flag.skin+flag.foreground+flag.background;
   let tex=textures.get(key);
   if(!tex && typeof document!=='undefined') {

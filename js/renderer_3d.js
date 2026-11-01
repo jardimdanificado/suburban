@@ -1,5 +1,6 @@
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
 import {waterPollutionAt,waterTint} from './city_water.js';
+import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=caribbean-pixel-2';
 // =============================================================================
 // Brutopolis Chronicles - 3D Isometric Tycoon Engine (Volumetric 3D Models)
 // =============================================================================
@@ -151,6 +152,11 @@ function pushTerrainTileUvs(bucket, x, y, tileType) {
   }
   if (tileType === TILE_FLOOR || tileType === TILE_HILL) {
     const u0 = x / 8, u1 = (x + 1) / 8, v0 = y / 8, v1 = (y + 1) / 8;
+    bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
+    return;
+  }
+  if (FARM_TILES.has(tileType)) {
+    const u0 = x / 2, u1 = (x + 1) / 2, v0 = y / 2, v1 = (y + 1) / 2;
     bucket.uvs.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
     return;
   }
@@ -330,6 +336,30 @@ function createCaribbeanWaterTexture() {
   return texture;
 }
 
+function createNightWaterTexture(source) {
+  const size = source.image.width || 256, canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(source.image, 0, 0, size, size);
+  const image = ctx.getImageData(0, 0, size, size), data = image.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const luminance = (data[i] * .2126 + data[i + 1] * .7152 + data[i + 2] * .0722) / 255;
+    // Keep ripples, but clamp every highlight into deep moonlit blue-green.
+    data[i] = Math.round(8 + luminance * 15);
+    data[i + 1] = Math.round(30 + luminance * 28);
+    data[i + 2] = Math.round(43 + luminance * 32);
+    data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  applyTextureAnisotropy(texture);
+  return texture;
+}
+
 // ---------------------------------------------------------------------------
 // Entity Bounds Helper for Accurate 3D Picking & Hover
 // ---------------------------------------------------------------------------
@@ -430,6 +460,8 @@ export function createTintedTexture(skinName, fgHex = 0xffffff, bgHex = 0x000000
   const bgB = bgHex & 0xff;
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.userData.sourceSkin = base;
+  tex.userData.hasSource = !!img;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
@@ -3585,7 +3617,7 @@ export class RCT3DRenderer {
     this.graphicOptions = {
       isometricEffects: false,
       normalMaps: true,
-      moonlight: false,
+      moonlight: true,
       dofStrength: "HIGH",
       chroma: true,
       waterReflections: true,
@@ -3602,6 +3634,9 @@ export class RCT3DRenderer {
     const normGrass = generateProceduralTerrainNormalMap("grass", 0.90);
     const caribbeanGrass = createCaribbeanGrassTexture();
     const caribbeanWater = createCaribbeanWaterTexture();
+    const caribbeanNightWater = createNightWaterTexture(caribbeanWater);
+    this.caribbeanWaterDayTexture = caribbeanWater;
+    this.caribbeanWaterNightTexture = caribbeanNightWater;
     const normSand = generateProceduralTerrainNormalMap("sand", 0.40);
     const normOak = generateProceduralFoliageNormalMap("oak", 1.0);
     const normPine = generateProceduralFoliageNormalMap("pine", 1.0);
@@ -3672,7 +3707,7 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'Peak','peak',normStoneC,1.3,.60,.12),
       ...terrainSurfaceMaterials(isPersp,'DirtRoad','dirtRoad',normSand,.9,.75,.05),
       ...terrainSurfaceMaterials(isPersp,'PavedRoad','pavedRoad',normBrickA,1.1,.65,.08),
-      farmSoil:makeMat(isPersp,{color:0x795438,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
+      farmSoil:makeMat(isPersp,{map:caribbeanGroundTexture(THREE,'farm'),color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.85, 0.02),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
       [TILE_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.25, 0.88, 0.02),
@@ -3866,6 +3901,31 @@ export class RCT3DRenderer {
 
     this.materialsIso = buildDict(false);
     this.materialsPerspective = buildDict(true);
+    const weatherMaterials = dict => {
+      const replace = (material, kind, variant) => {
+        if (!material?.map) return;
+        material.map = weatherPixelTexture(THREE, material.map, kind, variant);
+        material.needsUpdate = true;
+      };
+      for (const [key, kind] of Object.entries({
+        houseWall:'plaster', stoneHouseWall:'stone', woodHouseWall:'wood',
+        wall:'plaster', woodWall:'wood', mixedWall:'plaster', warehouse:'plaster',
+        stoneWarehouse:'stone', slaughterhouseTimber:'wood', slaughterhouseStone:'stone',
+        kitchenBrick:'plaster', kitchenTimber:'wood', boneHouseWall:'stone', boneWall:'stone'
+      })) replace(dict[key], kind, key.length);
+      for (const [key, kind] of Object.entries({houseRoof:'roof', woodHouseRoof:'wood', stoneHouseRoof:'stone', boneHouseRoof:'stone', waterWellRoof:'roof'})) {
+        replace(dict[key], kind, key.length);
+      }
+      const wallArrays = ['houseWallVariants','leaderWallVariants','warehouseWalls','slaughterhouseWalls','kitchenWalls'];
+      for (const key of wallArrays) dict[key]?.forEach((material,index)=>replace(material,'plaster',index));
+      for (const key of ['houseRoofVariants','leaderRoofVariants','warehouseRoofs','slaughterhouseRoofs','kitchenRoofs']) {
+        dict[key]?.forEach((material,index)=>{
+          if(!material.map?.userData?.sourceSkin?.toLowerCase().includes('wood')) replace(material,'roof',index);
+        });
+      }
+    };
+    weatherMaterials(this.materialsIso);
+    weatherMaterials(this.materialsPerspective);
     this.materials = Object.assign({}, this.materialsIso);
 
     // Apply Bayer ordered dithering to all materials in both Isometric and 1P/3P Perspective modes
@@ -5124,9 +5184,14 @@ export class RCT3DRenderer {
 
   setTps(tps) { this.targetTps = tps; }
   getTps() { return this.targetTps; }
-  createCityBuildingMaterial(kind,color){
-    const feature=kind==='wood'?'Feature_Wood.png':kind==='roof'?'Feature_Brick_C.png':'Feature_Brick_B.png';
-    const material=new THREE.MeshLambertMaterial({color,...(kind==='roof'?{map:createTintedTexture(feature,0xffffff,0x999999,1)}:{}),side:THREE.DoubleSide});
+  createCityBuildingMaterial(kind,color,variant=0){
+    variant=(variant>>>0)%32;
+    let map;
+    if(kind==='roof'){
+      const source=createTintedTexture('Feature_Brick_C.png',0xffffff,0x999999,1);
+      map=weatherPixelTexture(THREE,source,'roof',variant%8);
+    }else map=caribbeanBuildingPixelTexture(THREE,kind==='wood'?'wood':'plaster',variant%8);
+    const material=new THREE.MeshLambertMaterial({color,map,side:THREE.DoubleSide});
     applyRetroDitherToMaterial(material);return material;
   }
   decorateCityMaterials(group){group.traverse(object=>{for(const material of [object.material].flat())if(material?.isMeshLambertMaterial)applyRetroDitherToMaterial(material);});}
@@ -6675,6 +6740,7 @@ export class RCT3DRenderer {
       foamGeometry.computeVertexNormals();
       const foamMesh = new THREE.Mesh(foamGeometry, this.materials.waterFoam);
       foamMesh.userData.terrainMaterialKey = "waterFoam";
+      foamMesh.visible = flagNightFactor(world) > 0.18;
       foamMesh.receiveShadow = false;
       foamMesh.castShadow = false;
       chunk.water.add(foamMesh);
@@ -6873,18 +6939,36 @@ export class RCT3DRenderer {
     }
 
     const effectiveSpeed = (this.isPaused || simSpeed <= 0) ? 0.0 : simSpeed;
-    if (effectiveSpeed > 0) this.waterTime += dt * effectiveSpeed;
+    // Keep water animation on the same fixed simulation frames as foliage sway.
+    // The fallback preserves standalone renderer use when no simulation tick is supplied.
+    if (Number.isFinite(this.simTick)) this.waterTime = this.simTick / 60;
+    else if (effectiveSpeed > 0) this.waterTime += dt * effectiveSpeed;
     for (const dict of [this.materials, this.materialsIso, this.materialsPerspective]) {
       const uniform = dict?.[TILE_WATER]?.userData?.caribbeanWaterTime;
       if (uniform) uniform.value = this.waterTime;
     }
-    const waterMat = this.materials[TILE_WATER];
     const foamMat = this.materials.waterFoam;
+    const daylight = flagNightFactor(world);
+    const foamOpacity = THREE.MathUtils.clamp((daylight - 0.18) / 0.82, 0, 1);
+    const nightWater = daylight <= 0.45;
+    const selectedWaterTexture = nightWater ? this.caribbeanWaterNightTexture : this.caribbeanWaterDayTexture;
     if (foamMat) {
-      const daylight = flagNightFactor(world);
       foamMat.color.setScalar(daylight);
-      foamMat.opacity = THREE.MathUtils.clamp((daylight - 0.18) / 0.82, 0, 1);
+      foamMat.opacity = foamOpacity;
     }
+    for (const chunk of this.terrainChunks?.values() || []) {
+      for (const mesh of chunk.water.children) {
+        if (mesh.userData.terrainMaterialKey === "waterFoam") mesh.visible = foamOpacity > 0;
+      }
+    }
+    for (const dict of [this.materials, this.materialsIso, this.materialsPerspective]) {
+      const mat = dict?.[TILE_WATER];
+      if (!mat) continue;
+      if (mat.map !== selectedWaterTexture) { mat.map = selectedWaterTexture; mat.needsUpdate = true; }
+      mat.color.setScalar(nightWater ? 1 : daylight);
+      mat.roughness = 0.34 + (1 - daylight) * 0.60;
+    }
+    const waterMat = this.materials[TILE_WATER];
     if (waterMat) {
       if (waterMat.map) {
         waterMat.map.offset.x = (this.waterTime * 0.035) % 1;

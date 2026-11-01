@@ -32,8 +32,8 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
   const wasAdmitted=!!room&&ticket.admittedUnitId===room.id;
   if(room){ticket.admittedUnitId=room.id;c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence,unitId:room.id,roomKind};room.activityReservedIds??=[];if(!room.activityReservedIds.includes(c.id))room.activityReservedIds.push(c.id);}
   city.furniture?.release(c);
-  const entry=buildingInteriorEntrance(b)||b.door;
-  if(!inside&&Math.hypot(c.entity.x-entry.x,c.entity.y-entry.y)>.25){if(!wasAdmitted||!c.path.length){const route=city.findPath(c.entity,entry);if(route!==null)c.path=route;}c.action='Indo ao atendimento';return false;}
+  const entry=buildingInteriorEntrance(b)||b.door,approach=entrance.door||b.door;
+  if(!inside&&Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.75){if(!wasAdmitted||!c.path.length){const route=city.findPath(c.entity,approach);if(route!==null)c.path=route;}c.action='Indo ao atendimento';return false;}
   entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;return true;
  }
  // A queue can outlast its service capacity; a critically urgent person must
@@ -43,9 +43,8 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
  // interior doorway tile. They become indoor only after reaching that tile.
  if(c.path.length)return false;
  if(!inside&&b.constructionKind!=='open-air'){
-  const entry=buildingInteriorEntrance(b);
-  if(entry&&Math.hypot(c.entity.x-entry.x,c.entity.y-entry.y)>.25){const route=city.findPath(c.entity,entry);if(route!==null)c.path=route;c.action='Aguardando na fila dentro da entrada';return false;}
-  if(entry){c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:{x:c.entity.x,y:c.entity.y,z:0},path:[],phase:'waiting',queueSlot:'inside-door',task:kind,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};return false;}
+  const entry=buildingInteriorEntrance(b),approach=entrance.door||b.door;
+  if(entry&&Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.75){const route=city.findPath(c.entity,approach);if(route!==null)c.path=route;c.action='Aguardando na fila do lado de fora';return false;}
  }
  c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':['food','workmeal','supplies'].includes(kind)?'Aguardando na fila de alimentação':'Aguardando na fila de atendimento';c.facingTarget={x:b.door.x,y:b.door.y};
  // Recompute ordinal positions after every departure: followers advance to
@@ -58,7 +57,7 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
   // Keep indoor lines in circulation space. If every marked waiting spot is
   // occupied, let later arrivals wait in the lobby instead of sending them
   // back outside or placing them in occupied dining seats.
-  if(location.queueSlot==='inside-door'||!cells.length||ordinal>=cells.length*4)return false;
+  if(!cells.length||ordinal>=cells.length*4)return false;
   const cell=cells[Math.floor(ordinal/4)],slot=`${cell.x},${cell.y},${cell.z}:${ordinal%4}`,offsets=[[-.25,-.25],[.25,-.25],[-.25,.25],[.25,.25]],offset=offsets[ordinal%4],target={x:b.entity.x+cell.x+.5+offset[0],y:b.entity.y+cell.y+.5+offset[1],z:cell.z*CITY_FLOOR_HEIGHT};
   if(location.queueSlot!==slot){const path=interiorRoute(b,location.position,target);if(path!==null){release();location.path=path;location.targetRoomType='waiting';location.roomType='circulation';location.phase='waiting';location.queueSlot=slot;}}
   return false;

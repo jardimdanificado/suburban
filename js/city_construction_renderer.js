@@ -1,14 +1,17 @@
 import {cornerHeight,surfaceElevation} from './city_terrain.js?v=mine-adjacent-1';
+import {caribbeanGroundTexture} from './caribbean_pixel_materials.js?v=caribbean-pixel-2';
 
 // Construction visuals cover the terrain without changing its navigation tiles.
 function addFarmSoil(THREE,world,cells,site){
- const positions=[];
+ const positions=[],uvs=[];
  for(const cell of cells){
   const x=Math.floor(cell.x),y=Math.floor(cell.y),h00=cornerHeight(world,x,y)+.025,h10=cornerHeight(world,x+1,y)+.025,h11=cornerHeight(world,x+1,y+1)+.025,h01=cornerHeight(world,x,y+1)+.025;
   positions.push(x,h00,y,x,h01,y+1,x+1,h11,y+1,x,h00,y,x+1,h11,y+1,x+1,h10,y);
+  const u0=x/2,u1=(x+1)/2,v0=y/2,v1=(y+1)/2;
+  uvs.push(u0,v0,u0,v1,u1,v1,u0,v0,u1,v1,u1,v0);
  }
- const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.computeVertexNormals();
- const soil=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({color:0x777a7b,side:THREE.DoubleSide}));soil.receiveShadow=true;site.add(soil);
+ const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geometry.computeVertexNormals();
+ const soil=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({map:caribbeanGroundTexture(THREE,'construction'),color:0xffffff,side:THREE.DoubleSide}));soil.receiveShadow=true;site.add(soil);
 }
 function addSawhorse(THREE,site,world,x,z,axis,{wood,yellow,black}){
  const ground=surfaceElevation(world,x,z),stand=new THREE.Group();stand.position.set(x,ground,z);if(axis==='z')stand.rotation.y=Math.PI/2;

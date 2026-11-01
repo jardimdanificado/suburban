@@ -20,20 +20,21 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=balcony-door-alignmen
 import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
 const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
-function buildingMaterial(renderer,THREE,kind,color){
-  return renderer.createCityBuildingMaterial?.(kind,color)||new THREE.MeshLambertMaterial({color});
+function buildingMaterial(renderer,THREE,kind,color,variant=0){
+  return renderer.createCityBuildingMaterial?.(kind,color,variant)||new THREE.MeshLambertMaterial({color});
 }
+function buildingTextureVariant(id){let hash=2166136261;for(const char of String(id??''))hash=Math.imul(hash^char.charCodeAt(0),16777619);return (hash>>>0)%32;}
 function roomCellGeometry(THREE,facadeMask,openingMask,doorMask=0){
-  const g=new THREE.BufferGeometry(),v=[],colors=[],h=CITY_FLOOR_HEIGHT,half=.5,wy=.95,wh=.215,ww=.215;
+  const g=new THREE.BufferGeometry(),v=[],uvs=[],colors=[],h=CITY_FLOOR_HEIGHT,half=.5,wy=.95,wh=.215,ww=.215;
   const exterior=[1,1,1],interior=[.72,.65,.53];
-  const quad=(a,b,c,d,color)=>{for(const point of [a,b,c,a,c,d]){v.push(...point);colors.push(...color);}};
+  const quad=(a,b,c,d,color,uv)=>{const corners=[[a,uv[0],uv[1]],[b,uv[2],uv[1]],[c,uv[2],uv[3]],[a,uv[0],uv[1]],[c,uv[2],uv[3]],[d,uv[0],uv[3]]];for(const [point,u,vv] of corners){v.push(...point);uvs.push(u,vv);colors.push(...color);}};
   const wall=(axis,sign,bit)=>{
     const hasWindow=!!(openingMask&bit),hasDoor=!!(doorMask&bit),wallColor=facadeMask&bit?exterior:interior;
     // Exterior faces reach the edge of their tile. Interior partitions stay
     // slightly inset so neighboring rooms do not draw coplanar wall faces.
     const at=sign*(facadeMask&bit?half:half-.015),innerAt=at-sign*.03,lo=wy-wh,hi=wy+wh;
     const face=(plane,color)=>{
-      const rect=(a0,a1,y0,y1)=>{if(a1<=a0||y1<=y0)return;if(axis==='z')quad([a0,y0,plane],[a1,y0,plane],[a1,y1,plane],[a0,y1,plane],color);else quad([plane,y0,a0],[plane,y0,a1],[plane,y1,a1],[plane,y1,a0],color);};
+      const rect=(a0,a1,y0,y1)=>{if(a1<=a0||y1<=y0)return;const uv=[a0+half,y0,a1+half,y1];if(axis==='z')quad([a0,y0,plane],[a1,y0,plane],[a1,y1,plane],[a0,y1,plane],color,uv);else quad([plane,y0,a0],[plane,y0,a1],[plane,y1,a1],[plane,y1,a0],color,uv);};
       if(hasDoor){rect(-half,-.22,0,1.45);rect(.22,half,0,1.45);rect(-half,half,1.45,h);return;}
       if(!hasWindow){rect(-half,half,0,h);return;}
       rect(-half,half,0,lo);rect(-half,half,hi,h);
@@ -43,7 +44,7 @@ function roomCellGeometry(THREE,facadeMask,openingMask,doorMask=0){
     face(innerAt,interior);
   };
   for(const [bit,axis,sign] of [[1,'z',-1],[2,'z',1],[4,'x',-1],[8,'x',1]])wall(axis,sign,bit);
-  g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
   // The wall vertices are described from floor level (0..h), while each
   // instance is placed at the floor center. Center the geometry before
   // instancing so every floor occupies exactly one CITY_FLOOR_HEIGHT.
@@ -271,7 +272,7 @@ export function syncCityBuildings(renderer, THREE, entities, world) {
     }
     if (!group) {
       group = new THREE.Group();group.userData.interiorContentKey=interiorContentKey; group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
-      const material = buildingMaterial(renderer,THREE,b.architecture==='timber'?'wood':'wall',0xffffff);material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
+      const material = buildingMaterial(renderer,THREE,b.architecture==='timber'?'wood':'wall',0xffffff,buildingTextureVariant(b.id??entity.id));material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
       const mineWall={iron_mine:0x77736b,bauxite_mine:0x806b62,clay_pit:0x886b58,sand_pit:0x94866a};

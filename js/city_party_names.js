@@ -80,6 +80,7 @@ export const PARTY_ORGANIZATIONS=Object.freeze(
     ["Concertação", "f"], 
     ["Causa", "f"], 
     ["Concentração", "f"], 
+    ["Fraternidade", "f"], 
     ["Conexão", "f"], 
     ["Representação", "f"]]);
 export const POLITICAL_WORDS=Object.freeze({
