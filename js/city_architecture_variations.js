@@ -2,7 +2,7 @@ import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {HOUSE_STYLES} from './city_culture.js?v=portuguese-colonial-forms-7';
 import {INDUSTRIES} from './city_industries.js';
 
-import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
 // These additions are architectural meshes, not extra simulated rooms. They
 // sit on the roof or above head height and never reserve street tiles.
@@ -227,19 +227,32 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
  }
  if(motif==='portuguese_colonial'||motif==='dutch_colonial'){
   const dutch=motif==='dutch_colonial',colonialForm=dutch?style.dutchForm:style.colonialForm;
-  // Frames are emitted only for the wall cutout selected by the renderer.
+  // Preserve animated shutters, but replace their many scene nodes with a
+  // handful of instanced batches per building facade.
   const shutterPanelMaterial=new THREE.MeshLambertMaterial({color:style.accent}),shutterSlatMaterial=new THREE.MeshLambertMaterial({color:style.trim});
-  const frontShutterGeometry=new THREE.BoxGeometry(.2,.76,.045),frontSlatGeometry=new THREE.BoxGeometry(.2,.035,.07),sideShutterGeometry=new THREE.BoxGeometry(.045,.76,.2),sideSlatGeometry=new THREE.BoxGeometry(.07,.035,.2);
-  const addShutter=(pivotX,pivotY,pivotZ,geometry,slatGeometry,shutterSide,normal,axis,closed,floor)=>{
-  const pivot=new THREE.Group();pivot.position.set(pivotX,pivotY,pivotZ);windowControls.add(pivot);
-   const glass=new THREE.Mesh(axis==='front'?new THREE.BoxGeometry(.135,.66,.012):new THREE.BoxGeometry(.012,.66,.135),new THREE.MeshLambertMaterial({color:0x91bac3,transparent:true,opacity:.2,depthWrite:false,side:THREE.DoubleSide}));
-   glass.position.set(axis==='front'?-shutterSide*.1:normal*.014,0,axis==='front'?normal*.014:-shutterSide*.1);pivot.add(glass);
-   const panel=new THREE.Mesh(geometry,shutterPanelMaterial);panel.position.set(axis==='front'?-shutterSide*.1:normal*.035,0,axis==='front'?normal*.035:-shutterSide*.1);pivot.add(panel);
-   for(let slat=0;slat<4;slat++){
-    const louver=new THREE.Mesh(slatGeometry,shutterSlatMaterial);louver.position.set(axis==='front'?-shutterSide*.1:normal*.065,-.24+slat*.16,axis==='front'?normal*.065:-shutterSide*.1);pivot.add(louver);
+  const shutterGlassMaterial=new THREE.MeshLambertMaterial({color:0x91bac3,transparent:true,opacity:.2,depthWrite:false,side:THREE.DoubleSide});
+  const shutterGeometry={front:{glass:new THREE.BoxGeometry(.135,.66,.012),panel:new THREE.BoxGeometry(.2,.76,.045),slat:new THREE.BoxGeometry(.2,.035,.07)},side:{glass:new THREE.BoxGeometry(.012,.66,.135),panel:new THREE.BoxGeometry(.045,.76,.2),slat:new THREE.BoxGeometry(.07,.035,.2)}};
+  const shutterParts={front:{glass:[],panel:[],slats:[]},side:{glass:[],panel:[],slats:[]}},shutterMatrix=new THREE.Matrix4(),shutterPosition=new THREE.Vector3(),shutterQuaternion=new THREE.Quaternion(),shutterScale=new THREE.Vector3(1,1,1),shutterAxis=new THREE.Vector3(0,1,0),shutterOffset=new THREE.Vector3();
+  const addShutter=(pivotX,pivotY,pivotZ,shutterSide,normal,axis,closed,floor)=>{
+   const openAngle=axis==='front'?shutterSide*normal*Math.PI*.44:-shutterSide*normal*Math.PI*.44,parts=shutterParts[axis];
+   const record={floor,axis,pivotX,pivotY,pivotZ,shutterSide,normal,closedAngle:0,openAngle,angle:closed?0:openAngle,targetAngle:closed?0:openAngle,partIndex:parts.panel.length};
+   parts.glass.push(record);parts.panel.push(record);parts.slats.push(record);windowShutters.push(record);
+  };
+  const buildShutterBatches=()=>{
+   for(const axis of ['front','side']){
+    const parts=shutterParts[axis];if(!parts.panel.length)continue;
+    const makeBatch=(kind,capacity,geometry,material)=>{const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;windowControls.add(mesh);return mesh;};
+    const meshes={glass:makeBatch('glass',parts.glass.length,shutterGeometry[axis].glass,shutterGlassMaterial),panel:makeBatch('panel',parts.panel.length,shutterGeometry[axis].panel,shutterPanelMaterial),slats:makeBatch('slats',parts.slats.length*4,shutterGeometry[axis].slat,shutterSlatMaterial)};
+    const write=record=>{
+     shutterQuaternion.setFromAxisAngle(shutterAxis,record.angle);
+     const place=(mesh,index,offset)=>{shutterOffset.set(offset[0],offset[1],offset[2]).applyQuaternion(shutterQuaternion);shutterPosition.set(record.pivotX,record.pivotY,record.pivotZ).add(shutterOffset);shutterMatrix.compose(shutterPosition,shutterQuaternion,shutterScale);mesh.setMatrixAt(index,shutterMatrix);};
+     const x=axis==='front'?-record.shutterSide*.1:record.normal*.014,z=axis==='front'?record.normal*.014:-record.shutterSide*.1;
+     place(meshes.glass,record.partIndex,[x,0,z]);place(meshes.panel,record.partIndex,[axis==='front'?-record.shutterSide*.1:record.normal*.035,0,axis==='front'?record.normal*.035:-record.shutterSide*.1]);
+     for(let slat=0;slat<4;slat++)place(meshes.slats,record.partIndex*4+slat,[axis==='front'?-record.shutterSide*.1:record.normal*.065,-.24+slat*.16,axis==='front'?record.normal*.065:-record.shutterSide*.1]);
+    };
+    for(const record of parts.panel){record.writeMatrices=()=>write(record);record.dirtyMeshes=meshes;write(record);}
+    for(const mesh of Object.values(meshes))mesh.instanceMatrix.needsUpdate=true;
    }
-   const openAngle=axis==='front'?shutterSide*normal*Math.PI*.44:-shutterSide*normal*Math.PI*.44;
-   pivot.rotation.y=closed?0:openAngle;windowShutters.push({pivot,floor,closedAngle:0,openAngle});
   };
   for(const {unit:u,side,openingBit,closed=false} of windowDetails){
    const expectedBit=({back:1,front:2,left:4,right:8})[side];
@@ -249,7 +262,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     const sign=side==='front'?1:-1,z=u.y+(sign>0?1:0)+sign*.055,x=u.x+.5;
     box(.05,.88,.14,x-.19,centerY,z+sign*.025,style.trim);box(.05,.88,.14,x+.19,centerY,z+sign*.025,style.trim);
     box(.42,.07,.15,x,floorY+1.46,z+sign*.02,style.trim);box(.42,.07,.15,x,floorY+.46,z+sign*.02,style.trim);
-    for(const shutterSide of [-1,1])addShutter(x+shutterSide*.18,centerY,z+sign*.04,frontShutterGeometry,frontSlatGeometry,shutterSide,sign,'front',closed,u.z);
+    for(const shutterSide of [-1,1])addShutter(x+shutterSide*.18,centerY,z+sign*.04,shutterSide,sign,'front',closed,u.z);
     // Four head treatments add variety without covering the open glazing.
     const hoodDepth=windowStyle===1?.32:windowStyle===3?.2:.25,hoodWidth=windowStyle===2?.54:.46;
     if(windowStyle===1){const arch=new THREE.Mesh(new THREE.TorusGeometry(.2,.035,5,12,Math.PI),mat(style.trim));arch.position.set(x,floorY+1.4,z+sign*.09);root.add(arch);}
@@ -263,7 +276,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     const sign=side==='right'?1:-1,x=u.x+(sign>0?1:0)+sign*.055,z=u.y+.5;
     box(.14,.88,.05,x+sign*.025,centerY,z-.19,style.trim);box(.14,.88,.05,x+sign*.025,centerY,z+.19,style.trim);
     box(.14,.07,.42,x+sign*.02,floorY+1.46,z,style.trim);box(.14,.07,.42,x+sign*.02,floorY+.46,z,style.trim);
-    for(const shutterSide of [-1,1])addShutter(x+sign*.04,centerY,z+shutterSide*.18,sideShutterGeometry,sideSlatGeometry,shutterSide,sign,'side',closed,u.z);
+    for(const shutterSide of [-1,1])addShutter(x+sign*.04,centerY,z+shutterSide*.18,shutterSide,sign,'side',closed,u.z);
     const hoodDepth=windowStyle===1?.32:windowStyle===3?.2:.25,hoodWidth=windowStyle===2?.54:.46;
     if(windowStyle===1){const arch=new THREE.Mesh(new THREE.TorusGeometry(.2,.035,5,12,Math.PI),mat(style.trim));arch.position.set(x+sign*.09,floorY+1.4,z);arch.rotation.y=sign*Math.PI/2;root.add(arch);}
     else if(windowStyle===2){box(.09,.14,.11,x+sign*.08,floorY+1.53,z-.27,style.accent);box(.09,.14,.11,x+sign*.08,floorY+1.53,z+.27,style.accent);}
@@ -284,6 +297,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     }
    }
   }
+  buildShutterBatches();
   if(dutch){
    const gableZ=front+.13,baseY=roof+.17;
    if(style.dutchForm==='stepped'){

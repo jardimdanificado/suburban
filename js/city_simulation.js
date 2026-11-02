@@ -1,5 +1,5 @@
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=beach-chair-1';
+import {CityFurniture} from './city_furniture.js?v=beach-rest-spots-2';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';

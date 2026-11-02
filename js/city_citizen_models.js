@@ -22,6 +22,7 @@ export function citizenAnimation(c,moving=false){
   if(c.combatReaction)return 'derrotado';
   if(c.combatAnimation?.clip)return c.combatAnimation.clip;
   if(citizenIsSleeping(c))return 'dormindo';
+  if(c.furnitureUse?.pose==='ground_sit')return 'sentado_no_chao';
   if(c.task==='sit'||c.furnitureUse?.type==='bench')return 'sentado_no_banco';
   if(c.seated)return 'seated';
   if(c.policePatrol)return 'a_postos';

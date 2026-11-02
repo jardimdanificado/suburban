@@ -1,5 +1,5 @@
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
-import {furnitureModel} from './city_furniture_models.js?v=colonial-benches-3';
+import {furnitureModel} from './city_furniture_models.js?v=beach-parasols-1';
 import {applyInteriorCutaway} from './city_interior_view.js';
 import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
 import {addBuildingDetails} from './city_building_details.js?v=mine-sign-1';
@@ -10,17 +10,18 @@ import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_anima
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
 import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=building-doorway-opening-2';
 import { partyFlagCanvas } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=natural-streets-2';
+import {citizenIsSleeping} from './city_citizen_models.js?v=beach-ground-poses-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=portuguese-colonial-forms-7';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=sidewalk-grade-1';
 import {quarryDeposits} from './city_terrain.js?v=sidewalk-grade-1';
-import {addArchitectureVariations} from './city_architecture_variations.js?v=remove-roof-hat-1';
+import {addArchitectureVariations} from './city_architecture_variations.js?v=window-shutter-batches-4';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=portuguese-colonial-forms-7';
-import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
 const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
+const EMPTY_FLOORS=new Set();
 function buildingMaterial(renderer,THREE,kind,color,variant=0){
   return renderer.createCityBuildingMaterial?.(kind,color,variant)||new THREE.MeshLambertMaterial({color});
 }
@@ -533,9 +534,16 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     group.position.set(entity.x, b.terrain.base, entity.y);
     const interior=renderer.cityInteriorView?.buildingId===b.id&&b.constructionKind!=='open-air',interiorFloor=renderer.cityInteriorView?.floor||0;
     applyInteriorCutaway(THREE,group,interior?interiorFloor:null,renderer.cityInteriorView?.hideWalls!==false);
-    for(const shutter of group.userData.portugueseWindowShutters||[]){
-      const target= sleepingFloorsByBuilding.get(b.id)?.has(shutter.floor)?shutter.closedAngle:shutter.openAngle;
-      shutter.pivot.rotation.y+=(target-shutter.pivot.rotation.y)*Math.min(1,Math.max(0,dt)*7);
+    const windowShutters=group.userData.portugueseWindowShutters||[],sleepingFloors=sleepingFloorsByBuilding.get(b.id)||EMPTY_FLOORS,shutterState=[...sleepingFloors].sort((a,b)=>a-b).join(',');
+    if(group.userData.shutterState!==shutterState){
+      group.userData.shutterState=shutterState;const active=[];
+      for(const shutter of windowShutters){shutter.targetAngle=sleepingFloors.has(shutter.floor)?shutter.closedAngle:shutter.openAngle;if(Math.abs(shutter.targetAngle-shutter.angle)>.001)active.push(shutter);}
+      group.userData.animatingShutters=active;
+    }
+    const animating=group.userData.animatingShutters;
+    if(animating?.length){const dirty=new Set(),alpha=Math.min(1,Math.max(0,dt)*7);
+      for(let i=animating.length-1;i>=0;i--){const shutter=animating[i],delta=shutter.targetAngle-shutter.angle;if(Math.abs(delta)<=.001){shutter.angle=shutter.targetAngle;animating.splice(i,1);}else shutter.angle+=delta*alpha;shutter.writeMatrices();for(const mesh of Object.values(shutter.dirtyMeshes))dirty.add(mesh);}
+      for(const mesh of dirty)mesh.instanceMatrix.needsUpdate=true;
     }
     for(const cells of group.userData.cellMeshes||[group.userData.cells]){const material=cells.material;material.emissive.setHex(renderer.selectedEntityId===entity.id?0x26351a:0x000000);}
     const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
@@ -752,5 +760,5 @@ function addFarmFence(THREE,group,b,world,style){
 }
 function syncStreetBenches(renderer,THREE,world){
  const furniture=renderer.cityDevelopment?.city?.furniture;if(!furniture)return;const meshes=renderer.streetBenchMeshes??=new Map(),active=new Set(furniture.benches.map(b=>b.id));for(const [id,g]of meshes)if(!active.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
- for(const b of furniture.benches){let g=meshes.get(b.id);if(g&&g.userData.colonialVersion!==3){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(b.id);g=null;}if(!g){let styleHash=0;for(const char of String(b.id))styleHash=Math.imul(styleHash^char.charCodeAt(0),16777619);const colonialStyle=(styleHash>>>0)%4;g=furnitureModel(THREE,{type:b.kind==='beach_chair'?'beach_chair':'bench',colonialStyle});g.userData.colonialVersion=3;mergeStaticMeshes(THREE,g);g.rotation.y=b.angle;g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);renderer.scene.add(g);meshes.set(b.id,g);}g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
+ for(const b of furniture.benches){let g=meshes.get(b.id);if(g&&g.userData.colonialVersion!==4){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(b.id);g=null;}if(!g){let styleHash=0;for(const char of String(b.id))styleHash=Math.imul(styleHash^char.charCodeAt(0),16777619);const style=(styleHash>>>0)%8,beach=b.kind==='beach_chair'||b.kind==='beach_ground',umbrellaStyle=beach&&(b.kind==='beach_ground'||style%3!==0)?(style+Math.floor(styleHash/8))%8:null;g=furnitureModel(THREE,{type:b.kind==='beach_chair'?'beach_chair':b.kind==='beach_ground'?'beach_ground':'bench',colonialStyle:style%4,variant:style,umbrellaStyle});g.userData.colonialVersion=4;mergeStaticMeshes(THREE,g);g.rotation.y=b.angle;g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);renderer.scene.add(g);meshes.set(b.id,g);}g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
 }

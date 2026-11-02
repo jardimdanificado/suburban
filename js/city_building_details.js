@@ -1,4 +1,4 @@
-import {mergeStaticMeshes} from './city_static_mesh.js?v=mine-sign-1';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 
 // Small architectural details are part of the model, not floating labels.

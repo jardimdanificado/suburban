@@ -4,14 +4,18 @@ export function furnitureModel(THREE,item){
  const cylinder=(r,h,x,y,z,color=metal)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const type=item.type;
  if(type==='beach_chair'){
-  const canvas=[0xd7524a,0xf0d9ab,0x4386aa,0xf0d9ab,0xd7524a];
+  const fabrics=[[0xc95548,0xf0dfbd],[0x347d91,0xe9d6ae],[0x71894c,0xf1d49b],[0x765b91,0xe9d8c0],[0xd18b3e,0xf3e3bd],[0x397264,0xd6c8a7],[0xb84d68,0xf0d9c8],[0x476c9a,0xe3d5b9]],fabric=fabrics[Math.abs(item.variant||0)%fabrics.length],frame=[0x8a6444,0x6b7775,0x9b7751,0x515e61][Math.abs(item.variant||0)%4],pattern=Math.abs(item.variant||0)%4;
   box(.44,.035,.29,0,.3,.035,0xe9dfc7);
   const back=box(.44,.39,.035,0,.56,-.12,0xe9dfc7);back.rotation.x=-.3;
-  for(let i=0;i<5;i++){const x=(i-2)*.086;box(.064,.012,.28,x,.323,.035,canvas[i]);const backStripe=box(.064,.37,.012,x,.56,-.143,canvas[i]);backStripe.rotation.x=-.3;}
+  for(let i=0;i<5;i++){const x=(i-2)*.086,color=pattern===1?(i%2?fabric[0]:fabric[1]):pattern===2?(i<2?fabric[0]:fabric[1]):pattern===3?(i===2?fabric[1]:fabric[0]):(i%2?fabric[1]:fabric[0]);box(.064,.012,.28,x,.323,.035,color);const backStripe=box(.064,.37,.012,x,.56,-.143,color);backStripe.rotation.x=-.3;}
   for(const x of [-.19,.19]){
-   const front=box(.035,.42,.035,x,.21,.12,metal),rear=box(.035,.47,.035,x,.23,-.105,metal);front.rotation.z=x<0?-.08:.08;rear.rotation.x=-.28;
-   box(.035,.035,.38,x,.35,.005,metal);
+   const front=box(.035,.42,.035,x,.21,.12,frame),rear=box(.035,.47,.035,x,.23,-.105,frame);front.rotation.z=x<0?-.08:.08;rear.rotation.x=-.28;
+   box(.035,.035,.38,x,.35,.005,frame);
   }
+  if(item.umbrellaStyle!=null)addBeachUmbrella(THREE,g,item.umbrellaStyle,-.02,-.46);
+ }
+ else if(type==='beach_ground'){
+  if(item.umbrellaStyle!=null)addBeachUmbrella(THREE,g,item.umbrellaStyle,0,-.12);
  }
  else if(type==='chair'||type==='meeting_chair'||type==='council_chair'||type==='bench'){
   const bench=type==='bench',w=bench?.78:.28,seatY=bench?.24:.30,legH=seatY-.025;
@@ -67,4 +71,16 @@ export function furnitureModel(THREE,item){
  else {box(.6,.08,.36,0,.65,0);box(.05,.63,.26,-.23,.32,0);box(.05,.63,.26,.23,.32,0);}
  if(item.visualScale)g.scale.setScalar(item.visualScale);
  return g;
+}
+
+function addBeachUmbrella(THREE,group,style,x,z){
+ const palettes=[[0xc95146,0xf0dfc3],[0x347a8a,0xf3dfb4],[0x66844b,0xe7d49e],[0x755890,0xeee0c9],[0xd18b43,0xf3e3bd],[0x397264,0xd6c8a7],[0xb84d68,0xf0d9c8],[0x476c9a,0xe3d5b9]],colors=palettes[Math.abs(style)%palettes.length],make=(geometry,color,px,py,pz)=>{const m=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({color}));m.position.set(px,py,pz);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;};
+ make(new THREE.CylinderGeometry(.025,.032,1.75,7),0x74614c,x,.88,z);
+ make(new THREE.CylinderGeometry(.11,.1,.045,8),0x776a58,x,.035,z);
+ const canopyY=1.78,segments=8;
+ for(let i=0;i<segments;i++){
+  const start=i*Math.PI*2/segments,geometry=new THREE.ConeGeometry(.68,.2,1,1,false,start,Math.PI*2/segments),panel=make(geometry,i%2?colors[1]:colors[0],x,canopyY,z);
+ }
+ make(new THREE.SphereGeometry(.055,6,4),0xd9c89e,x,canopyY+.105,z);
+ for(let i=0;i<4;i++){const angle=i*Math.PI/2,spoke=make(new THREE.BoxGeometry(.55,.018,.022),0x706654,x,canopyY-.075,z);spoke.rotation.y=angle;}
 }
