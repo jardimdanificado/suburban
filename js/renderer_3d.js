@@ -3599,6 +3599,10 @@ export class RCT3DRenderer {
     // Keep the shader's point-light uniform budget safely below WebGL limits.
     this.maxNightLights = 32;
     this.maxShadowPointLights = 0; // Point lights do direct local shading; sun/moon provides directional shadows
+    this.cursorLightAxis = new THREE.Vector3();
+    this.cursorSpotlight = new THREE.SpotLight(0xffbc63,0,28,.4,.8,1.4);
+    this.cursorSpotlight.castShadow=false;this.cursorSpotlight.visible=false;this.cursorSpotlightTarget=new THREE.Object3D();
+    this.cursorSpotlight.target=this.cursorSpotlightTarget;this.scene.add(this.cursorSpotlight,this.cursorSpotlightTarget);
     this.nightLightPool = [];
     for (let i = 0; i < this.maxNightLights; i++) {
       const pl = new THREE.PointLight(0xffaa44, 0, 24, 1.2);
@@ -8268,16 +8272,19 @@ export class RCT3DRenderer {
       cursorTile=valid?cache.tile:this.getTileAtScreen(this.mouseX,this.mouseY,world);
       if(!valid)this.mouseLightTerrainCache={x:this.mouseX,y:this.mouseY,map,cameraX:camera.position.x,cameraY:camera.position.y,cameraZ:camera.position.z,cameraRX:camera.rotation.x,cameraRY:camera.rotation.y,zoom:this.zoom,tile:cursorTile};
     }
+    const cursorLightActive=!!cursorTile&&nightGlow>.015;
+    this.cursorSpotlight.visible=cursorLightActive;
+    if(cursorLightActive){
+      const x=cursorTile.exactX!==undefined?cursorTile.exactX:cursorTile.x+.5,z=cursorTile.exactZ!==undefined?cursorTile.exactZ:cursorTile.y+.5,sH=cursorTile.exactY!==undefined?cursorTile.exactY:this.getSurfaceElevation(map,cursorTile.x,cursorTile.y);
+      this.camera.getWorldDirection(this.cursorLightAxis);
+      const sourceDistance=18,sourceX=x-this.cursorLightAxis.x*sourceDistance,sourceY=sH-this.cursorLightAxis.y*sourceDistance,sourceZ=z-this.cursorLightAxis.z*sourceDistance;
+      this.cursorSpotlight.position.set(sourceX,sourceY,sourceZ);this.cursorSpotlightTarget.position.set(x,sH,z);this.cursorSpotlight.distance=28;this.cursorSpotlight.intensity=nightGlow*22;
+    }else this.cursorSpotlight.intensity=0;
     if (nightGlow > 0.02) {
       let candidateCount = 0;
       const focusX = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.x : this.camX;
       const focusY = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.z : this.camY;
       let maxPool = this.lightCandidatesPool.length;
-
-      if(cursorTile&&candidateCount<maxPool){
-        const x=cursorTile.exactX!==undefined?cursorTile.exactX:cursorTile.x+.5,z=cursorTile.exactZ!==undefined?cursorTile.exactZ:cursorTile.y+.5,sH=cursorTile.exactY!==undefined?cursorTile.exactY:this.getSurfaceElevation(map,cursorTile.x,cursorTile.y),c=this.lightCandidatesPool[candidateCount++],dx=x-focusX,dz=z-focusY;
-        c.x=x;c.y=sH+2.1;c.z=z;c.color=0xffbc63;c.distance=6;c.decay=2;c.intensity=2.6*nightGlow;c.priority=-3;c.distSq=dx*dx+dz*dz;
-      }
 
       // City lamps and oil-carrying people share the bounded night-light pool.
       const cityLights=this.cityNightLights||[];

@@ -85,7 +85,6 @@ export function promiseRelevant(city,c,metric){
   return (c.political?.engagement||0)>.6;
 }
 const cityLampCount=city=>city.lighting.posts.filter(p=>p.built).length;
-const slogans={fed:'Ninguém vai passar fome',housed:'Casa para todas as pessoas',employed:'Uma ocupação para cada adulto',lamps:'Nenhum poste público sem óleo',connected:'Todo prédio ligado à estrada',clean:'Cidade limpa, dignidade para todos',publicHomes:'Construir moradia popular',publicMeals:'Abrir um refeitório popular',stateFirms:'Ampliar a produção municipal',inflation:'Conter a inflação',tax:'Aliviar o imposto do trabalhador',wage:'Valorizar o salário mínimo',deliveries:'Destravar as entregas',happiness:'Melhorar a vida no bairro'};
 export class CityMandates {
   constructor(city){this.city=city;this.terms=[];this.current=null;this.nextId=1;this.lastDay=null;this.lastHour=null;}
   metrics() {

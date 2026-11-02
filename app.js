@@ -1,7 +1,7 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=substances-sleep-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=phrase-scope-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=favela-tree-roads-1";
-import { CityDesktop } from "./js/city_desktop.js?v=speech-default-off-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=phrase-scope-1";
+import { CityDesktop } from "./js/city_desktop.js?v=phrase-scope-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js";
 import { setActiveEntities } from "./js/engine.js";

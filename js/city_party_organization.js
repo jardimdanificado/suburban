@@ -1,7 +1,7 @@
 import {makePartyName} from './city_party_names.js';
 import {ROAD_TILES,tileAt} from './city_terrain.js?v=quarry-outskirts-1';
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
-export const PARTY_ORGANIZATION_RULES=Object.freeze({initialParties:4,referendumMinutes:1440,founderDistance:.55,proposalInterval:3*1440,founderCooldown:7*1440,campaignBefore:2*1440,campaignAfter:1440,contactInterval:360,maxContactsPerHour:8});
+export const PARTY_ORGANIZATION_RULES=Object.freeze({initialParties:7,referendumMinutes:1440,founderDistance:.55,proposalInterval:3*1440,founderCooldown:7*1440,campaignBefore:2*1440,campaignAfter:1440,contactInterval:360,maxContactsPerHour:8});
 export class CityPartyOrganization {
   constructor(city){this.city=city;this.proposals=[];this.nextId=1;this.lastProposalAt=-Infinity;this.lastSearchDay=null;this.lastHour=null;this.contacts=[];this.totalContacts=0;this.totalJoined=0;}
   representation(c){

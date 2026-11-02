@@ -20,7 +20,7 @@ function addFirm(city,type){
 function assignWorker(city,building,c){if(c.jobId)city.economy.leaveJob(c,'Fixture de trabalhador');building.workers??=[];if(!building.workers.includes(c.id))building.workers.push(c.id);c.jobId=building.id;c.task='work';c.targetId=building.id;putAtWorkCell(city,c,building);return c;}
 function money(city){return [...city.accounts.values()].reduce((n,a)=>n+a.balance,0);}
 function plenary(city,minute=city.minute){
-  const chamber=city.politics.council.getChamber(),hall=chamber.hall()||addFirm(city,'council_chamber');
+  const chamber=city.politics.council.getChamber(),hall=chamber.buildings()[0]||addFirm(city,'council_chamber');
   if(hall.floors<2){city.housing.addFloor(hall,1,'treasury');hall.floors=2;}
   city.minute=Math.floor(minute/1440)*1440+600;
   const plenaryUnit=hall.units.find(unit=>unit.roomType==='plenary'&&unit.z===0)||hall.units[0];for(const c of city.politics.council.people()){c.task='council-session';c.path=[];c.councilSession={buildingId:hall.id};c.indoorLocation={buildingId:hall.id,unitId:plenaryUnit.id,floor:plenaryUnit.z,roomType:'plenary',position:{x:hall.door.x,y:hall.door.y,z:0},path:[]};c.entity.x=hall.door.x;c.entity.y=hall.door.y;for(const k of Object.keys(c.needs))c.needs[k]=95;}
