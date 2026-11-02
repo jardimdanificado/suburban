@@ -28,6 +28,14 @@ function polls(ui,p,e){
   p.kv('Aprovação entre entrevistados',`${poll.approval.toFixed(1)}%`);ui.section(p,`monitorMethod:${poll.id}`,'Método e financiamento',()=>renderPollMethod(ui,p,poll));
   ui.section(p,`electionPollResponses:${poll.id}`,'Respostas individuais e motivos',()=>{const rows=poll.responses||[];for(const row of pages(ui,p,rows,'monitorPollResponsePage',8))p.record(row.name,`${row.decided?ui.city.accountName(`citizen:${row.candidateId}`):'Indeciso'} · ${row.reason}`,()=>ui.openCitizen(row.citizenId));});
 }
+function supportRows(gov,e){
+  const rows=[];for(const nomination of e.candidates||[]){const coalition=new Set(nomination.coalitionPartyIds||[]),supporters=new Set([...(nomination.endorsementPartyIds||[]),...coalition]);supporters.delete(nomination.partyId);for(const partyId of supporters){const party=gov.party(partyId);rows.push({candidate:nomination,partyId,partyName:party?.name||`Partido #${partyId}`,kind:coalition.has(partyId)?`Coligação formal · vice ${nomination.viceName||'não indicado'}`:'Apoio eleitoral · sem vice compartilhado'});}}
+  return rows;
+}
+function supportTable(ui,p,e,gov){
+  p.heading('PARTIDOS QUE APOIAM CADA CHAPA');const rows=supportRows(gov,e);if(!rows.length){p.note('Nenhum partido registrou apoio adicional nesta eleição. O partido do próprio candidato não conta como apoio externo.');return;}
+  p.table([{label:'Candidato a prefeito',weight:2},{label:'Partido da chapa',weight:2},{label:'Partido apoiador',weight:2.4},{label:'Tipo de acordo',weight:2.5}],rows.map(row=>({cells:[row.candidate.name,gov.party(row.candidate.partyId)?.name||`Partido #${row.candidate.partyId}`,row.partyName,row.kind],click:()=>ui.openCitizen(row.candidate.citizenId)})));
+}
 function mediaEvent(ui,p,event,gov){
   const debate=event.kind==='debate',turns=event.turns||[];p.block(`${debate?'Debate':'Entrevista'} · ${event.topic}`,`${event.hostName} · ${stamp(event.startedAt)} · ${event.status==='live'?'AO VIVO':'encerrado'}`,q=>{
     if(debate){
@@ -43,8 +51,9 @@ function campaign(ui,p,e){
   const city=ui.city,gov=city.politics,materials=gov.campaigns.getMaterials(),agents=city.citizens.filter(c=>c.campaignPresence?.electionId===e.id).length,streetAgents=city.citizens.filter(c=>c.campaign?.electionId===e.id).length;
   p.metrics([['CANDIDATURAS',e.candidates.length],['MEMBROS EM CAMPANHA AMBULANTE',agents],['AGENTES DE RUA DESIGNADOS',streetAgents],['ELEITORES CONTATADOS',e.contactedIds?.size||0],['PROPAGANDAS ATIVAS',materials.decorations.filter(d=>d.until>city.minute&&d.electionId===e.id).length]]);
   p.kv('Período',`${stamp(e.startedAt)} → ${stamp(e.voteAt)}`);
+  supportTable(ui,p,e,gov);
   p.heading('DEBATES E ENTREVISTAS DOS JORNAIS');const media=(e.mediaEvents||[]).slice().reverse();if(!media.length)p.note('Os jornais locais ainda não abriram uma entrevista ou debate. A cobertura começa quando há uma redação editorial ativa.');for(const event of media.slice(0,8))mediaEvent(ui,p,event,gov);
-  p.table([{label:'Candidatura',weight:2},{label:'Partido'},{label:'Slogan de campanha',weight:2.3},{label:'Coligação / apoios',weight:2},{label:'Promessas'}],e.candidates.map(n=>({cells:[n.name,gov.party(n.partyId)?.short||'—',n.slogan||'—',(n.endorsementPartyIds||[]).map(id=>gov.party(id)?.short||id).join(' + '),n.promises?.length||0],click:()=>ui.openCitizen(n.citizenId)})));
+  p.table([{label:'Candidatura',weight:2},{label:'Partido'},{label:'Slogan de campanha',weight:2.3},{label:'Partidos apoiadores',weight:2},{label:'Promessas'}],e.candidates.map(n=>({cells:[n.name,gov.party(n.partyId)?.short||'—',n.slogan||'—',(n.endorsementPartyIds||[]).filter(id=>id!==n.partyId).map(id=>gov.party(id)?.short||`#${id}`).join(', ')||'Nenhum',n.promises?.length||0],click:()=>ui.openCitizen(n.citizenId)})));
   if(e.councilCandidates?.length){p.heading('CANDIDATURAS À CÂMARA');p.table([{label:'Candidato',weight:2},{label:'Partido'}],e.councilCandidates.map(n=>({cells:[n.name,gov.party(n.partyId)?.short||'—'],click:()=>ui.openCitizen(n.citizenId)})));}
   p.heading('POSIÇÕES SOBRE SUBSTÂNCIAS');for(const n of e.candidates){const candidate=city.society.citizen(n.citizenId);p.record(n.name,Object.keys(SUBSTANCES).map(id=>{const stance=substanceStance(candidate,id);return `${SUBSTANCES[id].label}: ${stance>.5?'liberar':stance<-.35?'proibir':'regulamentar'}`;}).join(' · '),()=>ui.openCitizen(n.citizenId));}
   p.heading('PROGRAMA DAS CANDIDATURAS');
@@ -52,9 +61,10 @@ function campaign(ui,p,e){
   const events=[...(e.events||[])].reverse();p.heading('ATIVIDADE DE CAMPANHA');for(const event of pages(ui,p,events,'monitorCampaignPage',10))p.record(stamp(event.minute),event.message,()=>ui.openEvent(event.eventId));if(!events.length)p.note('Nenhuma atividade de campanha registrada.');
 }
 function coalitions(ui,p,e){
-  const city=ui.city,gov=city.politics;p.heading('COLIGAÇÕES E APOIOS');
+  const city=ui.city,gov=city.politics;p.heading('COLIGAÇÕES FORMAIS COM VICE');
   if(e.coalitions?.length)p.table([{label:'Partidos',weight:2},{label:'Candidato a prefeito',weight:2},{label:'Vice-prefeito',weight:2},{label:'Data'}],e.coalitions.map(row=>({cells:[row.partyIds.map(id=>gov.party(id)?.short||id).join(' + '),city.society.citizen(row.mayorId)?.entity.properties.name||'—',city.society.citizen(row.viceId)?.entity.properties.name||'—',stamp(row.minute)]})));
-  else p.note('Esta eleição não registrou coligação com vice compartilhado.');
+  else p.note('Esta eleição não registrou coligação formal com vice compartilhado.');
+  supportTable(ui,p,e,gov);
   p.heading('DECISÃO DE CADA PARTIDO');
   p.table([{label:'Partido',weight:2},{label:'Filiados'},{label:'Vereadores'},{label:'Candidatura ou acordo',weight:3}],(e.nominationReport||[]).map(row=>{const n=e.candidates.find(candidate=>candidate.endorsementPartyIds?.includes(row.partyId)),party=gov.party(row.partyId);return{cells:[party?.name||row.partyName,row.members,row.representatives??0,`${row.status}${n?` · ${n.name}${n.viceName?` / vice ${n.viceName}`:''}`:''}`],click:()=>ui.openParty(row.partyId)};}));
 }
@@ -98,7 +108,7 @@ export function renderElectionMonitor(ui,p){
   if(e.runoffId)p.button('VER SEGUNDO TURNO',()=>ui.openPanel({electionId:e.runoffId,electionView:'campaign'}));
   if(e.status==='runoff-required')p.note('Nenhuma chapa obteve mais de 50% dos votos válidos. As duas primeiras disputarão o segundo turno. A Câmara será empossada com o resultado final, usando somente os votos do primeiro turno.');
   if(e.status==='scheduled')p.note(`A campanha começa em ${stamp(e.startedAt)} e dura ${(e.voteAt-e.startedAt)/1440} dias, metade do período do primeiro turno.`);
-  p.links([['campaign','CAMPANHAS'],['coalitions','COLIGAÇÕES'],['polls','TODAS AS PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.openPanel({electionView:id})})));
+  p.links([['campaign','CAMPANHAS'],['coalitions','APOIOS / COLIGAÇÕES'],['polls','TODAS AS PESQUISAS'],['count','APURAÇÃO'],['results','RESULTADO']].map(([id,label])=>({label,selected:mode===id,click:()=>ui.openPanel({electionView:id})})));
   if(mode==='campaign'){campaign(ui,p,e);return;}
   if(mode==='coalitions'){coalitions(ui,p,e);return;}
   if(mode==='polls'){p.kv('Dia da votação presencial',stamp(e.voteAt));polls(ui,p,e);return;}
