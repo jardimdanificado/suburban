@@ -1031,7 +1031,7 @@ export class CitySimulation {
       if(c.custodyWaterDelivery){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyWaterDelivery(c);continue;}
       if(c.funeralBodyId){if(c.skybridgeTransit)this.finishSkybridgeTransit(c);if(c.skybridgeTransit){this.justice.updateFuneralWorker(c);continue;}if(c.indoorLocation&&!c.funeralInterior&&!syncCitizenInterior(this,c))continue;this.justice.updateFuneralWorker(c);continue;}
       if(c.custodyEscort){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyEscort(c);continue;}
-      if(c.custody){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateDetainee(c);continue;}
+      if(c.custody&&c.custody.status!=='awaiting-escort'){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateDetainee(c);continue;}
       if((c.unconsciousUntil||0)>this.minute){c.task=null;c.path=[];c.targetId=null;c.action='Inconsciente após ferimento na cabeça';if(c.indoorLocation?.path)c.indoorLocation.path=[];continue;}
       if((c.surrenderedUntil||0)>this.minute){c.task=null;c.path=[];c.targetId=null;c.action='Rendido após agressão';if(c.indoorLocation?.path)c.indoorLocation.path=[];continue;}
       if(c.combatFlee?.status==='running'){
@@ -1044,7 +1044,7 @@ export class CitySimulation {
       if(c.graffitiMission){this.justice.updateGraffitiMission(c);continue;}
       if(c.policeOversight){const urgent=this.urgentNeed(c);this.justice.updatePoliceOversight(c);if(c.policeOversight||!urgent)continue;}
       if(c.policeAudit){const urgent=this.urgentNeed(c);this.justice.updatePoliceAudit(c);if(c.policeAudit||!urgent)continue;}
-      if(c.policeArrestEscort){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceArrestEscort(c);continue;}
+      if(c.policeArrestEscort){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;const urgent=this.urgentNeed(c);this.justice.updatePoliceArrestEscort(c);if(!urgent)continue;}
       if(c.policeRestitution&&this.urgentNeed(c)){this.justice.pauseVehicleRestitution(c,'necessidade urgente do agente');c.task=null;c.targetId=null;c.path=[];if(c.indoorLocation?.path?.length)c.indoorLocation.path=[];c.action='Pausa a restituição para atender uma necessidade urgente';}
       else if(c.policeRestitution){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceRestitution(c);continue;}
       if(c.policeResponse){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceResponse(c);continue;}
