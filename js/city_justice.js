@@ -1589,7 +1589,9 @@ export class CityJustice {
     if(care){custody.lastCareAt=city.minute;city.history.record('service',`Cuidados de custódia prestados a ${c.entity.properties.name}.`,[c.accountId,jail.accountId],{kind:'custody-care',caseId:custody.caseId,buildingId:jail.id,workerId:worker.id,medicalReferralNeeded:custody.medicalReferralNeeded});}
   }
   servePrisoner(c,jail){
-    const city=this.city,p=c.pocket??=( {food:[],water:0,waterContamination:0,waterSource:null} );if(city.minute<(c.custody.nextRationAt||0))return;c.custody.nextRationAt=city.minute+30;
+    const city=this.city,p=c.pocket??=( {food:[],water:0,waterContamination:0,waterSource:null} ),foodEmergency=c.needs.food<20&&p.food.length===0,waterEmergency=c.needs.water<20&&p.water===0;
+    if(city.minute<(c.custody.nextRationAt||0)&&!foodEmergency&&!waterEmergency)return;
+    c.custody.nextRationAt=city.minute+(foodEmergency||waterEmergency?5:30);
     if(c.needs.food<65&&p.food.length<4){
       const offer=city.economy.mealOffer(jail,c);
       if(offer&&Object.entries(offer.inputs).every(([good,q])=>(jail.inventory[good]||0)>=q)){

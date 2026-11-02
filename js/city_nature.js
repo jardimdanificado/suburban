@@ -37,7 +37,7 @@ export class CityNature {
   constructor(city) { this.city = city; this.plants = new Map(); this.tiles = new Map(); this.seeds = []; this.germinated = 0; this.harvested = 0; this.lost = 0; }
   available(x, y, species, buildingId = null, ignorePlantId = null) {
     const city = this.city, key = `${x},${y}`, spec = PLANT_SPECIES[species];
-    if (!spec || !spec.terrain.includes(tileAt(city.world,x,y)) || ROAD_TILES.has(tileAt(city.world,x,y)) || city.world.sidewalkTiles?.has(y*city.world.width+x) || city.cardboardShelters?.has(key) || city.occupied.has(key) || this.tiles.has(key) && this.tiles.get(key) !== ignorePlantId) return false;
+    if (!spec || !spec.terrain.includes(tileAt(city.world,x,y)) || ROAD_TILES.has(tileAt(city.world,x,y)) || city.world.hasSidewalk?.(x,y) || city.cardboardShelters?.has(key) || city.occupied.has(key) || this.tiles.has(key) && this.tiles.get(key) !== ignorePlantId) return false;
     if (city.development.plots.some(p => (buildingId == null || p.buildingId !== buildingId) && x >= p.x && x < p.x+p.width && y >= p.y && y < p.y+p.depth)) return false;
     if (city.development.projects.some(p => !p.cancelled && p.status !== 'completed' && p.path?.some(t => Math.floor(t.x) === x && Math.floor(t.y) === y))) return false;
     if ([...city.lighting.sites.values()].some(p => p.status !== 'cancelled' && Math.floor(p.x) === x && Math.floor(p.y) === y)) return false;
@@ -89,7 +89,7 @@ export class CityNature {
   }
   remove(plant, reason, details={}) {
     plant.entity.destroyed=true;this.plants.delete(plant.id);this.tiles.delete(`${plant.x},${plant.y}`);this.city.structureRevision++;
-    this.city.world.setSidewalk?.(plant.x,plant.y,{tree:false});
+    this.city.world.removeSidewalk?.(plant.x,plant.y);
     const label=this.normalizePlantSpecies(plant)?.label||'Vegetação';
     return this.city.log(`${label}: ${reason}.`,'nature',[],{kind:'plant-removed',plantId:plant.id,buildingId:plant.buildingId,...details});
   }

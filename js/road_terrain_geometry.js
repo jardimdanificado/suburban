@@ -15,7 +15,7 @@ function cacheFor(world){
     cache={map:world.map,width:world.width,height:world.height,revision:world.revision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size),roads:new Map(),sidewalks:new Map()};
     caches.set(world,cache);
   }
-  if(cache.revision!==world.revision){cache.revision=world.revision;cache.roads.clear();cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
+  if(cache.revision!==world.revision){cache.revision=world.revision;cache.roads.clear();cache.sidewalks.clear();cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
   return cache;
 }
 function naturalCorner(world,x,y){
@@ -63,7 +63,10 @@ export function roadSurfaceCorners(world,x,y){
 
 // Each panel closes the actual gap between the road mesh and the bank mesh.
 // Splitting where the two profiles cross avoids a slab above either surface.
-const sidewalkAt=(world,x,y)=>world.sidewalkTiles?.has(y*world.width+x)||false;
+const sidewalkAt=(world,x,y)=>{
+  if(!world.sidewalkTiles?.has(y*world.width+x))return false;
+  return [[0,-1],[1,0],[0,1],[-1,0]].some(([dx,dy])=>ROADS.has(at(world,x+dx,y+dy)));
+};
 export function sidewalkSurfaceCorners(world,x,y){
   if(!sidewalkAt(world,x,y))return null;
   const cache=Number.isFinite(world.revision)?cacheFor(world):null,key=y*world.width+x;

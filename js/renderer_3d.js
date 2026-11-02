@@ -15,7 +15,7 @@ import { syncCityBuildings } from "./city_renderer_3d.js?v=substances-dither-smo
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=sleep-pose-label-1';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-4';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-5';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -6584,7 +6584,7 @@ export class RCT3DRenderer {
           zoneMult = 0.32;
         }
 
-        const sidewalkKey=yOffset+tx,isSidewalk=world.sidewalkTiles?.has(sidewalkKey)||false,isTreeSidewalk=isSidewalk&&world.sidewalkTreeTiles?.has(sidewalkKey);
+        const sidewalkKey=yOffset+tx,isSidewalk=!!world.hasSidewalk?.(tx,ty),isTreeSidewalk=isSidewalk&&world.sidewalkTreeTiles?.has(sidewalkKey);
         const adjacentPavedRoads=[];
         if(isSidewalk&&!isTreeSidewalk)for(const edge of [{dx:0,dy:-1},{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0}]){
           const rx=tx+edge.dx,ry=ty+edge.dy,roadType=world.getTile?.(rx,ry);

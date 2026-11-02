@@ -42,7 +42,7 @@ import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=substances-sleep-1';
 import { CitySociety } from './city_society.js?v=substances-sleep-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=furniture-farms-fertilizer-1';
-import { World, WorldClock } from './world.js?v=sidewalk-grade-2';
+import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';
 
 const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,

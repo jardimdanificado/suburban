@@ -1027,6 +1027,12 @@ export class CitySimulation {
       let comfort=0;if(c.homeUnitId&&c.homeComfort)for(const key in c.homeComfort)if(c.homeComfort[key]>this.minute)comfort++;
       c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + (c.substanceModifiers?.mood||0) + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
       if(!sleeping)this.supplies.useCarried(c);
+      // Custody rations must be issued before the mortality check. Otherwise a
+      // prisoner who reaches zero food on this minute can die before the jail
+      // gets its chance to provide a ration. This also covers escort queues
+      // and transport, where updateDetainee intentionally does not run the
+      // in-cell care cycle yet.
+      if(c.custody){const jail=this.building(c.custody.jailId);if(jail?.active&&!jail.entity.destroyed){this.justice.servePrisoner(c,jail);this.supplies.useCarried(c);}}
       if (this.life.minute(c,elapsed)) continue;
       this.justice.updateInjuries(c);
       if(c.custodyWaterDelivery){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyWaterDelivery(c);continue;}

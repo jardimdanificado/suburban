@@ -1,6 +1,6 @@
 import {FARM_TILES} from './world_gen.js?v=deep-perf-3';
 import { randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { roadFor } from './city_terrain.js?v=quarry-outskirts-1';
+import { roadFor, ROAD_TILES } from './city_terrain.js?v=quarry-outskirts-1';
 // =============================================================================
 // Brutopolis - World & Environment System (Pure JS Engine)
 // =============================================================================
@@ -170,6 +170,12 @@ export class World {
     // Paving changes travel cost, but not reachability or terrain elevation.
     if(roadFor(previous)===null||roadFor(previous)!==roadFor(tile))this.topologyRevision=(this.topologyRevision||0)+1;
     this.map[y * this.width + x] = tile;
+    // A sidewalk belongs to the street edge. Remove any now unsupported
+    // sidewalk panels when a road is paved, erased, or rerouted.
+    for(const [dx,dy] of [[0,0],[0,-1],[1,0],[0,1],[-1,0]]){
+      const sx=x+dx,sy=y+dy,key=sy*this.width+sx;
+      if(this.sidewalkTiles?.has(key)&&!this.hasSidewalk(sx,sy))this.removeSidewalk(sx,sy);
+    }
     this.revision++;
     if (typeof this.onTileChange === "function") {
       this.onTileChange(x, y, tile);
@@ -180,12 +186,29 @@ export class World {
     if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>=this.width||y<0||y>=this.height)return false;
     const tile=this.getTile(x,y);
     if(!SIDEWALK_TERRAIN.has(tile))return false;
+    if(!this.adjacentRoad(x,y))return false;
     const sidewalks=this.sidewalkTiles??=new Set(),treeTiles=this.sidewalkTreeTiles??=new Set(),key=y*this.width+x;
     if(sidewalks.has(key)&&treeTiles.has(key)===tree)return false;
     sidewalks.add(key);if(tree)treeTiles.add(key);else treeTiles.delete(key);
     this.revision=(this.revision||0)+1;
     this.onTileChange?.(x,y,tile);
     return true;
+  }
+
+  adjacentRoad(x,y) {
+    return [[0,-1],[1,0],[0,1],[-1,0]].some(([dx,dy])=>ROAD_TILES.has(this.getTile(x+dx,y+dy)));
+  }
+
+  hasSidewalk(x,y) {
+    return Number.isInteger(x)&&Number.isInteger(y)&&this.sidewalkTiles?.has(y*this.width+x)&&this.adjacentRoad(x,y);
+  }
+
+  removeSidewalk(x,y) {
+    if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||x>=this.width||y<0||y>=this.height)return false;
+    const key=y*this.width+x,removed=this.sidewalkTiles?.delete(key)||false;
+    this.sidewalkTreeTiles?.delete(key);
+    if(removed){this.revision=(this.revision||0)+1;this.onTileChange?.(x,y,this.getTile(x,y));}
+    return removed;
   }
 
   isWalkable(x, y, moveType = 1) {

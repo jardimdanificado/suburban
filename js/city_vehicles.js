@@ -80,7 +80,7 @@ export class CityVehicles {
     for(const other of this.units.values())if(other.id!==v.id&&!other.scrapped)for(const p of [other.parking,other.reservedParking])if(p)occupied.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     for(let dy=-maxDistance;dy<=maxDistance;dy++)for(let dx=-maxDistance;dx<=maxDistance;dx++){
       const x=Math.floor(goal.x)+dx,y=Math.floor(goal.y)+dy;
-      if(!city.walkable(x,y)||ROAD_TILES.has(tileAt(city.world,x,y))||city.world.sidewalkTiles?.has(y*city.world.width+x))continue;
+      if(!city.walkable(x,y)||ROAD_TILES.has(tileAt(city.world,x,y))||city.world.hasSidewalk?.(x,y))continue;
       const neighbor=[[1,0],[-1,0],[0,1],[0,-1]].find(([sx,sy])=>ROAD_TILES.has(tileAt(city.world,x+sx,y+sy))&&canStep(city.world,x,y,x+sx,y+sy));
       if(!neighbor||occupied.has(`${x},${y}`))continue;
       if(city.buildings.some(b=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth))continue;
