@@ -1,4 +1,4 @@
-import {appearance,brandPreference} from './city_clothing.js?v=clothing-visual-catalog-1';
+import {appearance,brandPreference} from './city_clothing.js?v=clothing-visual-catalog-2';
 import {inventoryFree} from './city_inventory.js';
 /** Physical paper media. Written entries are independent of journal retention. */
 export const PUBLICATION_RULES=Object.freeze({bookPages:5,maxPages:32,entriesPerPage:2,writersPerHour:4});

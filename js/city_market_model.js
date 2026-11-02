@@ -3,7 +3,7 @@ import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=sertanejo-house-
 /** Retail stalls share one instanced mesh per premises, including striped canopies. */
 export function marketFixtures(THREE,b){
   const units=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),count=Math.min(12,units.length),parts=[];
-  const style=HOUSE_STYLES[architectureFor(b.type,b.id)]||HOUSE_STYLES.modern,dutch=style.motif==='dutch_colonial',color=style.accent??(b.type==='greengrocer'?0x49854b:0xc75840),cloth=style.trim??0xf3e4bd,wood=dutch?0x654733:0x815a3d,variant=(Math.imul((Number(b.id)||0)+31,2654435761)>>>0)%3;
+  const style=HOUSE_STYLES[architectureFor(b.type,b.id)]||HOUSE_STYLES.modern,dutch=style.motif==='dutch_colonial',color=b.type==='greengrocer'?0x4f914b:style.accent??0xc75840,cloth=style.trim??0xf3e4bd,wood=dutch?0x654733:0x815a3d,variant=(Math.imul((Number(b.id)||0)+31,2654435761)>>>0)%3;
   for(let i=0;i<count;i++){
     const unit=units[Math.floor(i*units.length/count)],add=(x,y,z,w,h,d,tint)=>parts.push({unit,x,y,z,w,h,d,tint});
     for(let stripe=0;stripe<4;stripe++)add(-.36+stripe*.24,CITY_FLOOR_HEIGHT,0,.24,.10,.96,variant===1?color:stripe%2?cloth:color);

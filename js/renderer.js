@@ -625,15 +625,23 @@ export class Renderer {
         const color = hexToRgba32(b.campaignPaint?parseInt(b.campaignPaint.color.slice(1),16):b.wallColor?parseInt(b.wallColor.slice(1),16):b.architectureColor || b.color, 255);
         for (let y = 0; y < b.depth; y++) for (let x = 0; x < b.width; x++) {
           const px = Math.floor(sx + x * tileSize), py = Math.floor(sy + y * tileSize);
-          drawBox32(buf32, width, height, px + 1, py + 1, Math.floor(tileSize) - 2, Math.floor(tileSize) - 2, colorScale(color, globalLight));
-          drawBox32(buf32, width, height, px + Math.floor(tileSize * .25), py + Math.floor(tileSize * .25), Math.floor(tileSize * .45), Math.floor(tileSize * .35), rgba32(60, 83, 77));
+          if(b.type!=='greengrocer'){
+            drawBox32(buf32, width, height, px + 1, py + 1, Math.floor(tileSize) - 2, Math.floor(tileSize) - 2, colorScale(color, globalLight));
+            drawBox32(buf32, width, height, px + Math.floor(tileSize * .25), py + Math.floor(tileSize * .25), Math.floor(tileSize * .45), Math.floor(tileSize * .35), rgba32(60, 83, 77));
+          }
         }
         if(['market','greengrocer'].includes(b.type))for(let y=0;y<b.depth;y++)for(let x=0;x<b.width;x++){
           const px=Math.floor(sx+x*tileSize),py=Math.floor(sy+y*tileSize),band=Math.max(1,Math.floor(tileSize/4));
           for(let stripe=0;stripe<4;stripe++)drawBox32(buf32,width,height,px+stripe*band,py+1,band,Math.max(2,Math.floor(tileSize*.42)),stripe%2?rgba32(238,222,182):b.type==='market'?rgba32(194,79,56):rgba32(69,127,74));
-          drawBox32(buf32,width,height,px+2,py+Math.floor(tileSize*.65),Math.max(2,Math.floor(tileSize)-4),Math.max(1,Math.floor(tileSize*.18)),rgba32(154,111,57));
+          if(b.type==='greengrocer'){
+            const postColor=rgba32(116,79,48),fruitColors=[rgba32(219,65,44),rgba32(236,177,42),rgba32(92,151,54),rgba32(198,76,38)];
+            drawBox32(buf32,width,height,px+Math.floor(tileSize*.12),py+Math.floor(tileSize*.43),Math.max(1,Math.floor(tileSize*.07)),Math.max(2,Math.floor(tileSize*.38)),postColor);
+            drawBox32(buf32,width,height,px+Math.floor(tileSize*.81),py+Math.floor(tileSize*.43),Math.max(1,Math.floor(tileSize*.07)),Math.max(2,Math.floor(tileSize*.38)),postColor);
+            drawBox32(buf32,width,height,px+2,py+Math.floor(tileSize*.65),Math.max(2,Math.floor(tileSize)-4),Math.max(1,Math.floor(tileSize*.13)),rgba32(154,111,57));
+            if(tileSize>=8)for(let fruit=0;fruit<4;fruit++)drawBox32(buf32,width,height,px+Math.floor(tileSize*(.2+fruit*.16)),py+Math.floor(tileSize*.57),Math.max(1,Math.floor(tileSize*.11)),Math.max(1,Math.floor(tileSize*.09)),fruitColors[fruit]);
+          }else drawBox32(buf32,width,height,px+2,py+Math.floor(tileSize*.65),Math.max(2,Math.floor(tileSize)-4),Math.max(1,Math.floor(tileSize*.18)),rgba32(154,111,57));
         }
-        if(b.constructionKind!=='open-air'){
+        if(b.constructionKind!=='open-air'&&b.type!=='greengrocer'){
           const turn=b.rotation||0,dx=[0,1,0,-1][turn],dy=[1,0,-1,0][turn];
           const px=Math.floor(sx+(b.door.x-e.x-dx*.6)*tileSize),py=Math.floor(sy+(b.door.y-e.y-dy*.6)*tileSize);
           drawBox32(buf32,width,height,px-(turn%2?1:Math.floor(tileSize*.2)),py-(turn%2?Math.floor(tileSize*.2):1),turn%2?2:Math.max(2,Math.floor(tileSize*.4)),turn%2?Math.max(2,Math.floor(tileSize*.4)):2,rgba32(38,51,47));

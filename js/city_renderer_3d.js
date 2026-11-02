@@ -2,12 +2,12 @@ import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance
 import {furnitureModel} from './city_furniture_models.js?v=beach-parasols-1';
 import {applyInteriorCutaway} from './city_interior_view.js';
 import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
-import {addBuildingDetails} from './city_building_details.js?v=mine-sign-1';
+import {addBuildingDetails} from './city_building_details.js?v=greengrocer-fruit-stalls-1';
 import {syncConstructionSites} from './city_construction_renderer.js?v=ground-realism-2';
 import {syncCityMobility} from './city_mobility_renderer.js?v=natural-streets-2';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
-import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
+import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=greengrocer-fruit-stalls-1';
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=lively-street-market-stalls-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=building-doorway-opening-2';
 import { partyFlagCanvas } from './city_party_flags.js';
@@ -380,7 +380,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     active.add(entity.id);
     if(b.constructionKind!=='open-air')b.architecture=architectureFor(b.type,b.id);
     if(!inView(entity.x,entity.y,b.width,b.depth)){const existing=renderer.cityMeshes.get(entity.id);if(existing)existing.visible=false;continue;}
-    if (b.constructionKind === 'open-air') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
+    if (b.constructionKind === 'open-air' || b.type === 'greengrocer') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     const interiorContentKey=b.type==='office_tower'?(b.officeLeases||[]).filter(l=>l.status==='active').map(l=>{const tenant=renderer.cityDevelopment?.city?.building(l.buildingId);return `${tenant?.id}:${tenant?.type}:${tenant?.layoutRevision||0}`;}).join('|'):'';
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
@@ -640,7 +640,7 @@ function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
 function syncOpenAir(renderer, THREE, entity, b, world) {
   let group = renderer.cityMeshes.get(entity.id);
   const quarry=b.type==='quarry'||OPEN_PIT_MINES.has(b.type)?quarryDeposits(world,entity.x,entity.y,b.width,b.depth):[];
-  const signature=`retail-v7-rack-ground:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}:${b.paintRevision||0}:${b.type==='quarry'||OPEN_PIT_MINES.has(b.type)?`${world.revision}:${quarry.map(p=>`${p.x},${p.y}`).join(';')}`:''}`;
+  const signature=`retail-v8-fruit-stalls:${b.type}:${b.width}:${b.depth}:${b.crop}:${b.layoutRevision||0}:${b.units.length}:${b.rotation||0}:${b.paintRevision||0}:${b.type==='quarry'||OPEN_PIT_MINES.has(b.type)?`${world.revision}:${quarry.map(p=>`${p.x},${p.y}`).join(';')}`:''}`;
   if (group && group.userData.signature !== signature) { renderer.scene.remove(group); group.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose();o.userData.mineSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null; }
   if (!group) {
     group = new THREE.Group(); group.userData.signature = signature;

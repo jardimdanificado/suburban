@@ -1,4 +1,5 @@
 import { makeIdentity, makeBuildingName } from './city_names.js';
+import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-3';
 export const LIFE_RULES = { starvationMinutes: 720, dehydrationMinutes: 360, terminalHealthMinutes: 120, stalledMinutes: 120 };
 const NEED_KEYS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
 export class CityLife {
@@ -33,7 +34,7 @@ export class CityLife {
       for(const k of NEED_KEYS)if(!Number.isFinite(n[k])){n[k]=20;this.resetTask(c,'valor de necessidade inválido');}
     }
     c.deprivation ??= { food: 0, water: 0, health: 0 };
-    c.bodyHeightCm??=170;c.bodyWeightKg??=24*(c.bodyHeightCm/100)**2;c.bodyFoodNeedTotal??=0;c.bodyFoodNeedMinutes??=0;
+    initializeBodyMetrics(c,this.city.initialSeed);
     c.bodyFoodNeedTotal+=Math.max(0,Math.min(100,n.food))*elapsed;c.bodyFoodNeedMinutes+=elapsed;
     if(c.bodyFoodNeedMinutes>=1440){const days=c.bodyFoodNeedMinutes/1440,averageFood=c.bodyFoodNeedTotal/c.bodyFoodNeedMinutes,height=c.bodyHeightCm/100,change=Math.max(-.012,Math.min(.012,(averageFood-55)/45*.012))*days;c.bodyWeightKg=Math.max(15.5*height*height,Math.min(39*height*height,c.bodyWeightKg+change));c.bodyFoodNeedTotal=0;c.bodyFoodNeedMinutes=0;c.bodyWeightUpdatedAt=this.city.minute;}
     c.deprivation.food=n.food<=0?c.deprivation.food+elapsed:0;

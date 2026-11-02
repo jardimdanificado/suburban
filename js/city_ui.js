@@ -15,7 +15,7 @@ import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=substances-sleep-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
-import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=clothing-visual-catalog-1';
+import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=clothing-visual-catalog-2';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
 import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=phrase-scope-1';
@@ -45,7 +45,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=substances-sleep-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=substances-sleep-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=body-phenotype-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=body-phenotype-2';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

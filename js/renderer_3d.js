@@ -11,9 +11,9 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseC
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=substances-dither-smoke-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=greengrocer-fruit-stalls-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=clothing-visual-catalog-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=body-morph-9';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-5';
 import { ASSET_DATA } from "./assets_data.js";

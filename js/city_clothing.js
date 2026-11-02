@@ -19,11 +19,16 @@ function identifyGarment(city,g){g.garmentId??=`garment-${city.nextGarmentId=(ci
 function changeOwner(city,g,ownerId,ownerName,event){identifyGarment(city,g);const previous=g.ownerHistory.at(-1);if(previous?.ownerId===ownerId)return;g.storedAtFurnitureId=null;g.storedInBuildingId=null;g.ownerHistory.push({ownerId,ownerName,minute:city.minute,event});g.ownerHistory=g.ownerHistory.slice(-16);}
 export function initializeClothes(city,c){
   if(!c.wardrobe){const piece=c.id%7===0?'vestido':c.id%9===0?'macacão':c.id%4===0?'casaco':'camisa';c.wardrobe=[{piece,style:CLOTHING_STYLES[c.id%5],color:favoriteColors(c).find(color=>colorAffinity(c,color.hex)>.55)?.hex||favoriteColors(c)[0].hex,brandId:null,brandName:'Roupa de chegada',quality:45,condition:65,dirt:0,acquiredAt:city.minute}];changeOwner(city,c.wardrobe[0],c.accountId,c.entity.properties.name,'roupa inicial');c.clothingUpdatedAt=city.minute;}
-  if(c.initialOutfitCompleted)return;c.initialOutfitCompleted=true;
-  const initial=c.wardrobe.some(g=>g.brandName==='Roupa de chegada');if(!initial)return;
-  const add=piece=>{const colors=favoriteColors(c),g={piece,style:CLOTHING_STYLES[(c.id+2)%5],color:colors[(c.id+1)%colors.length]?.hex||'#675f58',brandId:null,brandName:'Roupa de chegada',quality:40,condition:60,dirt:0,acquiredAt:city.minute};changeOwner(city,g,c.accountId,c.entity.properties.name,'roupa inicial');c.wardrobe.push(g);};
-  if(!c.wardrobe.some(g=>LOWER_BODY_TYPES.has(g.piece))&&!c.wardrobe.some(g=>['vestido','macacão'].includes(g.piece)))add(['calça','shorts','calça','saia'][c.id%4]);
-  if(!c.wardrobe.some(g=>FOOTWEAR_TYPES.has(g.piece)))add(c.id%5===0?'botas':'sapatos');selectClothes(c);
+  if(!c.initialOutfitCompleted){c.initialOutfitCompleted=true;const initial=c.wardrobe.some(g=>g.brandName==='Roupa de chegada');if(initial){
+    const add=piece=>{const colors=favoriteColors(c),g={piece,style:CLOTHING_STYLES[(c.id+2)%5],color:colors[(c.id+1)%colors.length]?.hex||'#675f58',brandId:null,brandName:'Roupa de chegada',quality:40,condition:60,dirt:0,acquiredAt:city.minute};changeOwner(city,g,c.accountId,c.entity.properties.name,'roupa inicial');c.wardrobe.push(g);};
+    if(!c.wardrobe.some(g=>LOWER_BODY_TYPES.has(g.piece))&&!c.wardrobe.some(g=>['vestido','vestido estampado','macacão','terno'].includes(g.piece)))add(['calça','shorts','calça','saia'][c.id%4]);
+    if(!c.wardrobe.some(g=>FOOTWEAR_TYPES.has(g.piece)))add(c.id%5===0?'botas':'sapatos');
+  }}
+  // One-time wardrobe migration lets current residents actually wear the newly added designs.
+  if(c.visualWardrobeCatalogVersion<1){c.visualWardrobeCatalogVersion=1;const colors=favoriteColors(c),color=colors[(c.id*7)%colors.length]?.hex||'#675f58',piece=['camisa estampada','vestido estampado','camisa social','terno','saia','biquíni','maiô','calça social'][c.id%8],style=piece.includes('estampado')?'estampado':piece==='terno'||piece==='camisa social'||piece==='calça social'?'social':piece==='saia'?'clássico':'colorido',g={piece,style,color,brandId:null,brandName:'Coleção de estreia',quality:100,condition:100,dirt:0,acquiredAt:city.minute};changeOwner(city,g,c.accountId,c.entity.properties.name,'catálogo visual');c.wardrobe.push(g);
+    if(c.id%3===0){const hats=['cartola','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','boné'],hat={piece:hats[Math.floor(c.id/3)%hats.length],style:'clássico',color,brandId:null,brandName:'Coleção de estreia',quality:100,condition:100,dirt:0,acquiredAt:city.minute};changeOwner(city,hat,c.accountId,c.entity.properties.name,'catálogo visual');c.wardrobe.push(hat);}
+  }
+  selectClothes(c);
 }
 const appearanceCache=new WeakMap();
 export function appearance(c){

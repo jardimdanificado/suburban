@@ -10,7 +10,7 @@ const THEMES={
  weaving:'fabric',fiber_farm:'fabric',flagmaker:'fabric',tailor:'fabric',clothing_store:'fabric',thrift_store:'fabric',laundromat:'fabric',paintworks:'paint',soapworks:'soap',pharmacy:'medicine',herb_farm:'plant',
  rubber_grove:'rubber',rubberworks:'rubber',bearing_factory:'bearing',frame_factory:'frame',deck_factory:'deck',tire_factory:'wheel',chain_factory:'chain',safety_equipment:'helmet',saddle_factory:'saddle',cycle_parts:'tools',sports_shoes:'boot',skate_workshop:'deck',cycle_assembler:'frame',cycle_shop:'wheel',cycle_workshop:'wheel',bicycle_rental:'wheel',sports_shop:'ball',
  utility:'water',mint:'coins',bank:'bank',townhall:'civic',council_chamber:'civic',research_institute:'research',clinic:'medical',hospital:'medical',library:'books',theater:'theater',sports_center:'ball',leisure:'ball',public_toilet:'water',paid_toilet:'water',
- office_tower:'office',residential:'home',super_popular_housing:'housing',popular_housing:'housing',popular_luxury_housing:'luxury',luxury_housing:'luxury',market:'market',greengrocer:'plant',mill:'mill',farm:'farm',quarry:'quarry',park:'plant'
+ office_tower:'office',residential:'home',super_popular_housing:'housing',popular_housing:'housing',popular_luxury_housing:'luxury',luxury_housing:'luxury',market:'market',mill:'mill',farm:'farm',quarry:'quarry',park:'plant'
 };
 export function addBuildingDetails(THREE,parent,b,{ground=0,outdoor=false}={}){
  const kind=THEMES[b.type];if(!kind)return;
