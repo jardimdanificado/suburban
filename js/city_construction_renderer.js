@@ -1,4 +1,4 @@
-import {cornerHeight,surfaceElevation} from './city_terrain.js?v=sidewalk-grade-1';
+import {cornerHeight,surfaceElevation} from './city_terrain.js?v=quarry-outskirts-1';
 import {caribbeanGroundSurfaceTextures} from './caribbean_pixel_materials.js?v=ground-realism-2';
 
 // Construction visuals cover the terrain without changing its navigation tiles.

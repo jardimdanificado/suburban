@@ -262,6 +262,7 @@ function onPointerDown(event) {
 function onPointerMove(event) {
   const rect = root.getBoundingClientRect();
   mousePosition = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  renderer3D.setMousePos(mousePosition.x,mousePosition.y);
   if (mainMenu.isActive()) {
     mainMenu.pointerMove(mousePosition.x, mousePosition.y);
     if (cityUI.visible) cityUI.pointerMove(mousePosition.x, mousePosition.y);
@@ -355,6 +356,7 @@ function onPointerUp(event) {
 
 root.addEventListener("pointerdown", onPointerDown);
 root.addEventListener("pointermove", onPointerMove);
+root.addEventListener("pointerleave",()=>renderer3D.setMousePos(undefined,undefined));
 root.addEventListener("pointerup", onPointerUp);
 root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if(cityUI.doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
 root.addEventListener("pointercancel", () => {

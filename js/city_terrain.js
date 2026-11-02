@@ -357,17 +357,18 @@ export function generateSettlement(city) {
   const officeTypes=['builder','bank','carrier','newsroom','research_institute','research_institute','publisher'].filter(type=>OFFICE_BUSINESSES.has(type));
   const specs = [['townhall', 4, 4, hallFloors], ['office_tower', 3, 3, officeTypes.length+5], ['quarry', 4, 4, 1], ['mint', 3, 3, 1], ['bike_rack',4,2,1], ['cycle_assembler',3,3,businessFloors('cycle_assembler','startup')], ['bike_rack',4,2,1], ['public_toilet',4,4,4], ['popular_refectory',4,4,4], ['cleaner',3,3,businessFloors('cleaner','startup')]];
   for (const [type, w, d, h] of specs) {
-    const angle = city.random() * Math.PI * 2, radius = hub ? (type==='bike_rack'?4+city.random()*3:8+city.random()*13) : 0;
+    const angle = city.random() * Math.PI * 2, radius = hub ? (type==='bike_rack'?4+city.random()*3:type==='quarry'?30+city.random()*10:8+city.random()*13) : 0;
     const preferred = { x: (hub?.x ?? origin.x) + Math.cos(angle) * radius, y: (hub?.y ?? origin.y) + Math.sin(angle) * radius };
     let placed = null;
-    for (const searchRadius of [24, 48, 96]) {
+    for (const searchRadius of type==='quarry'?[96]:[24,48,96]) {
       const candidates = [];
       const center = hub || origin;
       for (let y = Math.max(1, Math.floor(center.y - searchRadius)); y < Math.min(world.height - d - 1, center.y + searchRadius); y++) for (let x = Math.max(1, Math.floor(center.x - searchRadius)); x < Math.min(world.width - w - 1, center.x + searchRadius); x++) {
+        if(type==='quarry'&&world.map&&!quarryDeposits(world,x,y,w,d).length)continue;
         const site = inspectBuildingSite(city, x, y, w, d, { type });
         if (site.error) continue;
-        if (type === 'quarry' && world.map && !quarryDeposits(world, x, y, w, d).length) continue;
-        const score = Math.hypot(x - preferred.x, y - preferred.y) + site.variation * 8 + city.random() * 3 + (flatSiteLevel(world, x, y, w, d) === null ? 10000 : 0);
+        const fromCenter=Math.hypot(x-center.x,y-center.y),centerPenalty=type==='quarry'?Math.max(0,38-fromCenter)*9+Math.max(0,fromCenter-58)*2:0;
+        const score = (type==='quarry'?centerPenalty+Math.hypot(x-preferred.x,y-preferred.y)*.2:Math.hypot(x-preferred.x,y-preferred.y)) + site.variation * 8 + city.random() * 3 + (flatSiteLevel(world, x, y, w, d) === null ? 10000 : 0);
         candidates.push({ x, y, score });
       }
       candidates.sort((a, b) => a.score - b.score);

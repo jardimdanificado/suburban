@@ -6,7 +6,7 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CityFiscal} from './city_fiscal.js';
 import {CityInterventions} from './city_interventions.js?v=interiors-completion-2';
-import {CityVehicles} from './city_vehicles.js?v=handcart-starter-stock-1';
+import {CityVehicles} from './city_vehicles.js?v=indoor-display-centering-1';
 import {CityCampaignMaterials} from './city_campaign_materials.js';
 import {CityCouncilChamber} from './city_council_chamber.js';
 import {CityResearch} from './city_research.js';

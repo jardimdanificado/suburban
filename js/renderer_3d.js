@@ -10,10 +10,10 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseC
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=ground-realism-2";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=tropical-plants-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=beach-ground-poses-1';
-import { flagNightFactor } from './city_terrain.js?v=sidewalk-grade-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flags-1';
+import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-4';
 import { ASSET_DATA } from "./assets_data.js";
 import {
@@ -675,7 +675,7 @@ function applyPalmWindShader(mat, deformScale = 0.11) {
     shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `
       vec3 palmPos = position;
       float palmSeed = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
-      float frondReach = clamp(length(position.xz) / 1.8, 0.0, 1.0);
+      float frondReach = clamp(length(position.xz) / 2.1, 0.0, 1.0);
       float tipWeight = smoothstep(0.12, 0.82, frondReach);
       // Match the tree canopy cadence: hold each wind pose for a seeded
       // 15–24 simulation frames, then advance together on the next foliage tick.
@@ -786,7 +786,7 @@ function createPalmFrondsGeometry() {
     const centerline = [];
     for (let i = 0; i <= segments; i++) {
       const t = i / segments;
-      centerline.push([dx * (0.12 + t * 1.72), 2.68 + Math.sin(t * Math.PI) * 0.18 - t * 1.08, dz * (0.12 + t * 1.72)]);
+      centerline.push([0.48 + dx * (0.12 + t * 2.02), 4.14 + Math.sin(t * Math.PI) * 0.22 - t * 1.42, dz * (0.12 + t * 2.02)]);
     }
     // The central rib gives each leaf a strong, tapered silhouette.
     let ribStart = positions.length / 3;
@@ -821,6 +821,33 @@ function createPalmFrondsGeometry() {
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
+}
+
+function createBananaLeavesGeometry(){
+  const positions=[],indices=[],leaves=9,segments=12;
+  for(let leaf=0;leaf<leaves;leaf++){
+    const angle=leaf*Math.PI*2/leaves+(leaf%2)*.12,dx=Math.cos(angle),dz=Math.sin(angle),sx=-dz,sz=dx,start=positions.length/3,length=1.12+(leaf%3)*.16;
+    for(let row=0;row<=segments;row++){
+      const t=row/segments,radius=.08+t*length,y=1.46+Math.sin(t*Math.PI*.86)*.76-t*.55,halfWidth=.015+Math.sin(Math.PI*t)*(.16+(leaf%3)*.012);
+      const x=dx*radius,z=dz*radius;
+      positions.push(x-sx*halfWidth,y-.025,z-sz*halfWidth,x,y+.035,z,x+sx*halfWidth,y-.025,z+sz*halfWidth);
+    }
+    for(let row=0;row<segments;row++){
+      const a=start+row*3,b=a+3;indices.push(a,a+1,b,a+1,b+1,b,a+1,a+2,b+1,a+2,b+2,b+1);
+    }
+  }
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+}
+
+function createBananaBunchGeometry(){
+  const pieces=[];
+  for(let fruit=0;fruit<8;fruit++){
+    const angle=fruit*Math.PI*2/8,reach=.15+(fruit%2)*.045,x=Math.cos(angle),z=Math.sin(angle),curve=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(x*.035,1.48,z*.035),new THREE.Vector3(x*reach*.55,1.37,z*reach*.55),new THREE.Vector3(x*reach,1.12,z*reach),new THREE.Vector3(x*reach*.82,1.02,z*reach*.82)
+    ]);
+    pieces.push(new THREE.TubeGeometry(curve,6,.045,5,false));
+  }
+  return mergeBufferGeometries(pieces);
 }
 
 function createTropicalCanopyGeometry() {
@@ -3990,12 +4017,12 @@ export class RCT3DRenderer {
     this.instOakLeaves.receiveShadow = true;
 
     // Caribbean palms: a tall narrow trunk and a crown of long, drooping fronds.
-    const palmTrunkGeo = new THREE.CylinderGeometry(0.105, 0.19, 2.55, 7);
-    palmTrunkGeo.translate(0, 1.275, 0);
+    const palmTrunkGeo = new THREE.CylinderGeometry(0.075, 0.17, 4.05, 7);
+    palmTrunkGeo.translate(0, 2.025, 0);
     const palmTrunkPositions = palmTrunkGeo.attributes.position;
     for (let i = 0; i < palmTrunkPositions.count; i++) {
-      const t = palmTrunkPositions.getY(i) / 2.55;
-      palmTrunkPositions.setX(i, palmTrunkPositions.getX(i) + 0.14 * t * t);
+      const t = palmTrunkPositions.getY(i) / 4.05;
+      palmTrunkPositions.setX(i, palmTrunkPositions.getX(i) + 0.48 * t * t);
     }
     palmTrunkPositions.needsUpdate = true;
     palmTrunkGeo.computeVertexNormals();
@@ -4012,6 +4039,12 @@ export class RCT3DRenderer {
     this.instTropicalFruits = new THREE.InstancedMesh(tropicalFruitGeo, new THREE.MeshLambertMaterial({color:0xffffff}), this.maxInstances * 4);
     this.instTropicalFruits.castShadow = true;
     this.instTropicalFruits.receiveShadow = true;
+
+    const bananaStemGeo=new THREE.CylinderGeometry(.18,.27,1.52,7);bananaStemGeo.translate(0,.76,0);
+    this.instBananaStems=new THREE.InstancedMesh(bananaStemGeo,new THREE.MeshLambertMaterial({color:0xffffff}),this.maxInstances);
+    this.instBananaLeaves=new THREE.InstancedMesh(createBananaLeavesGeometry(),this.materials.oakLeaves,this.maxInstances);
+    this.instBananaFruits=new THREE.InstancedMesh(createBananaBunchGeometry(),new THREE.MeshLambertMaterial({color:0xffffff}),this.maxInstances);
+    for(const mesh of [this.instBananaStems,this.instBananaLeaves,this.instBananaFruits]){mesh.castShadow=true;mesh.receiveShadow=true;}
 
     // Pine Trees
     const pineTrunkGeo = new THREE.CylinderGeometry(0.12, 0.20, 1.25, 5);
@@ -4415,6 +4448,7 @@ export class RCT3DRenderer {
     this.instPalmTrunks.frustumCulled = false;
     this.instPalmFronds.frustumCulled = false;
     this.instTropicalFruits.frustumCulled = false;
+    this.instBananaStems.frustumCulled=false;this.instBananaLeaves.frustumCulled=false;this.instBananaFruits.frustumCulled=false;
     this.instPineTrunks.frustumCulled = false;
     this.instPineLeaves.frustumCulled = false;
     this.instCacti.frustumCulled = false;
@@ -4499,6 +4533,7 @@ export class RCT3DRenderer {
       this.instOakTrunks, this.instOakLeaves,
       this.instPalmTrunks, this.instPalmFronds,
       this.instTropicalFruits,
+      this.instBananaStems,this.instBananaLeaves,this.instBananaFruits,
       this.instPineTrunks, this.instPineLeaves,
       this.instCherryTrunks, this.instCherryLeaves,
       this.instBirchTrunks, this.instBirchLeaves,
@@ -5198,6 +5233,7 @@ export class RCT3DRenderer {
 
 
   setMousePos(x, y) {
+    if(x!==this.mouseX||y!==this.mouseY)this.mouseLightTerrainCache=null;
     this.mouseX = x;
     this.mouseY = y;
   }
@@ -6013,7 +6049,7 @@ export class RCT3DRenderer {
           const followGroundY=surfaceH+(inside?.z??0);
           this.followMarker.position.set(eyeX, followGroundY + 0.045, eyeZ);
           this.followMarker.visible = true;
-          this.followLight.position.set(eyeX, followGroundY + 0.32, eyeZ);
+          this.followLight.position.set(eyeX, followGroundY + 1.22, eyeZ);
           this.followLight.visible = true;
         } else {
           // 1P First Person Camera: Position at creature eyes and look forward
@@ -7218,6 +7254,7 @@ export class RCT3DRenderer {
     let oakCount = 0;
     let palmCount = 0;
     let tropicalFruitCount = 0;
+    let bananaCount=0,bananaFruitCount=0;
     let pineCount = 0;
     let cherryCount = 0;
     let birchCount = 0;
@@ -7443,6 +7480,14 @@ export class RCT3DRenderer {
         this.instRoseFlowers.setMatrixAt(roseBushCount, mMatrix);
         this.instRoseFlowers.setColorAt(roseBushCount,this.tempColor1.setHex(TROPICAL_FLOWER_COLORS[e.properties.species]||0xff3366));
         roseBushCount++;
+      }
+      // Broad paddle leaves and hanging banana hands give banana plants their
+      // own silhouette instead of reusing the round fruit-tree canopy.
+      else if(isTree&&e.properties.species==='banana'&&bananaCount<this.maxInstances){
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),5371),982451653)>>>0)%628)/100),size=(r.size||1)*getTreeVisualScale(e);
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        this.instBananaStems.setMatrixAt(bananaCount,mMatrix);this.instBananaLeaves.setMatrixAt(bananaCount,mMatrix);this.instBananaStems.setColorAt(bananaCount,this.tempColor1.setHex(0x668f49));this.instBananaLeaves.setColorAt(bananaCount,this.tempColor1.setHex(0xffffff));
+        if(r.size>=.8){this.instBananaFruits.setMatrixAt(bananaFruitCount,mMatrix);this.instBananaFruits.setColorAt(bananaFruitCount,this.tempColor1.setHex(0xf0d246));bananaFruitCount++;}bananaCount++;
       }
       // --- 3D OAK TREES (Natural Random Rotation) ---
       else if (isPalm && palmCount < this.maxInstances) {
@@ -8248,6 +8293,20 @@ export class RCT3DRenderer {
 
     // --- REAL MULTI-POINT DYNAMIC NIGHT LIGHTS (Placed directly at entities) ---
     let lightIdx = 0;
+    // Reserve one point light for the mouse tip in every lighting condition.
+    // This keeps the cursor anchored to the terrain while the remaining pool
+    // continues to serve lamps and other night lights.
+    if(!this.isPerspectiveActive()&&this.mouseX!==undefined&&this.mouseY!==undefined){
+      const camera=this.camera,cache=this.mouseLightTerrainCache,valid=cache&&cache.x===this.mouseX&&cache.y===this.mouseY&&cache.map===map&&cache.cameraX===camera.position.x&&cache.cameraY===camera.position.y&&cache.cameraZ===camera.position.z&&cache.cameraRX===camera.rotation.x&&cache.cameraRY===camera.rotation.y&&cache.zoom===this.zoom;
+      const mouseTile=valid?cache.tile:this.getTileAtScreen(this.mouseX,this.mouseY,world);
+      if(!valid)this.mouseLightTerrainCache={x:this.mouseX,y:this.mouseY,map,cameraX:camera.position.x,cameraY:camera.position.y,cameraZ:camera.position.z,cameraRX:camera.rotation.x,cameraRY:camera.rotation.y,zoom:this.zoom,tile:mouseTile};
+      if(mouseTile){
+        const sH=mouseTile.exactY!==undefined?mouseTile.exactY:this.getSurfaceElevation(map,mouseTile.x,mouseTile.y),cursor=this.nightLightPool[0];
+        cursor.color.setHex(0xffe7ae);cursor.distance=18;cursor.decay=1.15;cursor.intensity=6.5;
+        cursor.position.set(mouseTile.exactX!==undefined?mouseTile.exactX:mouseTile.x+.5,sH+2.2,mouseTile.exactZ!==undefined?mouseTile.exactZ:mouseTile.y+.5);
+        lightIdx=1;
+      }
+    }
     if (nightGlow > 0.02) {
       let candidateCount = 0;
       const focusX = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.x : this.camX;
@@ -8369,24 +8428,6 @@ export class RCT3DRenderer {
 
       }
 
-      // 5. Mouse Cursor Light in Isometric Mode
-      if (!this.isPerspectiveActive() && this.mouseX !== undefined && this.mouseY !== undefined && candidateCount < maxPool) {
-        const mouseTile = this.getTileAtScreen(this.mouseX, this.mouseY, world);
-        if (mouseTile) {
-          const sH = (mouseTile.exactY !== undefined) ? mouseTile.exactY : this.getSurfaceElevation(map, mouseTile.x, mouseTile.y);
-          const c = this.lightCandidatesPool[candidateCount++];
-          c.x = (mouseTile.exactX !== undefined) ? mouseTile.exactX : (mouseTile.x + 0.5);
-          c.y = sH + 1.2;
-          c.z = (mouseTile.exactZ !== undefined) ? mouseTile.exactZ : (mouseTile.y + 0.5);
-          c.color = 0xffffff;
-          c.distance = 24.0;
-          c.decay = 1.0;
-          c.intensity = nightGlow * 6.0;
-          c.priority = -1; // Highest priority so mouse light is always visible
-          c.distSq = 0;
-        }
-      }
-
       // Sort candidate lights in-place up to candidateCount
       const activeCandidates = this.lightCandidatesPool.slice(0, candidateCount);
       activeCandidates.sort((a, b) => {
@@ -8427,6 +8468,7 @@ export class RCT3DRenderer {
     this.instTropicalFruits.count=tropicalFruitCount;
     this.instTropicalFruits.instanceMatrix.needsUpdate=true;
     if(this.instTropicalFruits.instanceColor)this.instTropicalFruits.instanceColor.needsUpdate=true;
+    for(const [mesh,count]of [[this.instBananaStems,bananaCount],[this.instBananaLeaves,bananaCount],[this.instBananaFruits,bananaFruitCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
 
     this.instPineTrunks.count = pineCount;
     this.instPineTrunks.instanceMatrix.needsUpdate = true;

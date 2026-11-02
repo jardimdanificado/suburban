@@ -1,7 +1,7 @@
 import {moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=handcart-starter-stock-1';
+import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=indoor-display-centering-1';
 
 const INTERRUPTIBLE_GIG_TASKS=new Set(['leisure','walk','social','sit','outdoor_leisure']);
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */

@@ -1,5 +1,5 @@
 import {syncCorruptionVotes} from './city_corruption_votes.js';
-import {VEHICLE_SPECS} from './city_vehicles.js?v=handcart-starter-stock-1';
+import {VEHICLE_SPECS} from './city_vehicles.js?v=indoor-display-centering-1';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const DIRECTIVE_LABELS={publicWork:'Contratação de obra pública',veto:'Veto do prefeito',releasePrisoner:'Libertação de pessoa presa',arrestAuthorization:'Autorização de prisão',worksBudget:'Ajuste da verba de obras',worksTransfer:'Transferência para obras',privatize:'Oferta de participação estatal',nationalize:'Estatização de empresa',policeStaffing:'Ajuste do efetivo policial',parliamentaryImmunity:'Regra de imunidade parlamentar',cleanRecord:'Regra da ficha limpa',penalCode:'Ajuste do código penal',suspend:'Afastamento do prefeito',build:'Obra pública',convict:'Condenação política',impeach:'Cassação de mandato'};
 export const INTERVENTIONS={

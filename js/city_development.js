@@ -5,7 +5,7 @@ import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=sidewalk-grade-1';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=quarry-outskirts-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();

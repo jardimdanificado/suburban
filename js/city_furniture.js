@@ -1,6 +1,6 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
-import {ROAD_TILES,tileAt} from './city_terrain.js?v=sidewalk-grade-1';
+import {ROAD_TILES,tileAt} from './city_terrain.js?v=quarry-outskirts-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
 function furnitureFacingAngle(city,furniture){
  const tx=Math.floor(furniture.x),ty=Math.floor(furniture.y),beach=furniture.kind==='beach_chair'||furniture.kind==='beach_ground';

@@ -13,7 +13,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=quarry-interview-ground-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=handcart-starter-stock-1';
+import {CityVehicles} from './city_vehicles.js?v=indoor-display-centering-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
@@ -34,7 +34,7 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-style
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
-import { quarryDeposits } from './city_terrain.js?v=sidewalk-grade-1';
+import { quarryDeposits } from './city_terrain.js?v=quarry-outskirts-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=caribbean-quarry-interviews-1';
@@ -47,7 +47,7 @@ import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=overhead-billboards-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=skybridge-survival-2';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=sidewalk-grade-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=quarry-outskirts-1';
 
 const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
 export const INITIAL_POPULATION = 512;

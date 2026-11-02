@@ -3,7 +3,7 @@ import {COLOR_PALETTE,colorAffinity,dislikesColor} from './city_colors.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {fictionalForeignBrand} from './city_external_trade.js';
 import {inventoryFree} from './city_inventory.js';
-import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=sidewalk-grade-1';
+import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=quarry-outskirts-1';
 
 export const VEHICLE_SPECS=Object.freeze({
   bicicleta:{label:'Bicicleta',speed:8,seats:2,cargo:36},
@@ -180,7 +180,11 @@ export class CityVehicles {
     // by its vehicle record and the seller's stock ledger.
     if(v.entity)v.entity.destroyed=true;
     const siblings=slotOverride??[...this.units.values()].filter(other=>other!==v&&!other.active&&!other.scrapped&&other.holderAccountId===building.accountId).length;
-    const width=Math.max(1,building.width||1),depth=Math.max(1,building.depth||1),slot=siblings%(width*depth*4),tileX=Math.floor(slot/4)%width,tileY=Math.floor(slot/(width*4))%depth,quarter=slot%4,x=building.entity.x+tileX+(quarter%2?.72:.28),y=building.entity.y+tileY+(quarter>=2?.72:.28);
+    const width=Math.max(1,building.width||1),depth=Math.max(1,building.depth||1),marginX=Math.min(.83,width/2),marginY=Math.min(.83,depth/2),spanX=Math.max(0,width-2*marginX),spanY=Math.max(0,depth-2*marginY),slotsX=Math.max(1,Math.floor(spanX/1.15)+1),slotsY=Math.max(1,Math.floor(spanY/1.15)+1),capacity=slotsX*slotsY,slot=siblings%capacity,tileX=slot%slotsX,tileY=Math.floor(slot/slotsX),x=building.entity.x+marginX+(slotsX>1?tileX*spanX/(slotsX-1):spanX/2),y=building.entity.y+marginY+(slotsY>1?tileY*spanY/(slotsY-1):spanY/2);
+    // Keep the full vehicle footprint inside the factory/sales floor. The old
+    // quarter-tile corner slots pushed bicycle wheels and handlebars through
+    // the outer walls of the building.
+    v.angle=((tileX+tileY+building.id)%2)*Math.PI/2;
     v.entity=this.city.createEntity({x,y,altitude:surfaceElevation(this.city.world,x,y),properties:{name:`${this.model(v)?.brand} · ${this.model(v)?.name}`,cityVehicle:v,render:{color:0x52879a}}});
   }
   spec(v){return VEHICLE_SPECS[v.good];}
@@ -358,7 +362,7 @@ export class CityVehicles {
     if(arrived&&trip?.goal){c.path=this.groundPath(c.entity,trip.goal)||[];c.mobilityWalkGoal=c.path.length?{...trip.goal}:null;}
   }
   minute(){
-    if(!this.saleDisplaysReconciled){for(const building of this.city.buildings.filter(b=>['cycle_assembler','cycle_shop'].includes(b.type)&&!b.entity.destroyed)){const stock=[...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.holderAccountId===building.accountId).sort((a,b)=>a.id-b.id);stock.forEach((v,index)=>{const inside=v.entity&&v.entity.x>=building.entity.x&&v.entity.x<building.entity.x+building.width&&v.entity.y>=building.entity.y&&v.entity.y<building.entity.y+building.depth;if(!inside)this.placeDisplay(v,building,index);});}this.saleDisplaysReconciled=true;}
+    if(!this.saleDisplaysReconciled){for(const building of this.city.buildings.filter(b=>['cycle_assembler','cycle_shop'].includes(b.type)&&!b.entity.destroyed)){const stock=[...this.units.values()].filter(v=>!v.active&&!v.scrapped&&v.holderAccountId===building.accountId).sort((a,b)=>a.id-b.id),mx=Math.min(.83,building.width/2),my=Math.min(.83,building.depth/2);stock.forEach((v,index)=>{const e=v.entity,inside=e&&e.x>=building.entity.x+mx-1e-3&&e.x<=building.entity.x+building.width-mx+1e-3&&e.y>=building.entity.y+my-1e-3&&e.y<=building.entity.y+building.depth-my+1e-3;if(!inside)this.placeDisplay(v,building,index);});}this.saleDisplaysReconciled=true;}
     this.hourly();
     for(const v of this.units.values()){if(v.parking&&v.parking.kind!=='roadside'&&!this.city.building(v.parking.rackId)){v.parking=null;v.status='Bicicletário removido';}if(v.reservedParking&&!v.driverId)this.freeParking(v,true);}
     for(const c of this.city.citizens){

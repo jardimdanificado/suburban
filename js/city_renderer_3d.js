@@ -8,13 +8,14 @@ import {syncCityMobility} from './city_mobility_renderer.js?v=natural-streets-2'
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js';
+import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=lively-street-market-stalls-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=building-doorway-opening-2';
 import { partyFlagCanvas } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=beach-ground-poses-1';
+import {citizenIsSleeping} from './city_citizen_models.js?v=campaign-flags-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=sertanejo-house-styles-1';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=sidewalk-grade-1';
-import {quarryDeposits} from './city_terrain.js?v=sidewalk-grade-1';
+import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
+import {quarryDeposits} from './city_terrain.js?v=quarry-outskirts-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=sertanejo-house-styles-1';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -119,26 +120,55 @@ function syncFecesVisuals(renderer,THREE,city,world){
   for(const mesh of renderer.fecesVisuals.children)mesh.visible=mesh.userData.fecesArea==='street'||view?.buildingId===mesh.userData.buildingId&&view?.floor===mesh.userData.floor;
 }
 function syncCardboardShelters(renderer,THREE,city,world){
-  if(!city)return;const shelters=city.cardboardShelters||new Map(),revision=city.cardboardRevision||0;
-  if(renderer.cardboardVisualRevision!==revision){
+  if(!city)return;const shelters=city.cardboardShelters||new Map(),minute=city.minute??0,stageOf=site=>Math.max(0,Math.min(4,Math.floor(Math.max(0,minute-(site.placedAt??minute))/(2*1440)))),signature=[city.cardboardRevision||0,...[...shelters.values()].map(site=>`${site.citizenId}:${stageOf(site)}`)].join('|');
+  if(renderer.cardboardVisualSignature!==signature){
     if(renderer.cardboardVisuals){renderer.scene.remove(renderer.cardboardVisuals);renderer.cardboardVisuals.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
     const group=new THREE.Group();
     for(const site of shelters.values()){
-      const x=site.x,y=site.y,z=surfaceElevation(world,x,y)+.035,bed=new THREE.Group(),style=((site.citizenId||0)*3)%4;
-      bed.position.set(x,z,y);bed.rotation.y=(site.citizenId%4)*Math.PI/2;bed.userData.cardboardTile={x,y};
-      const makeMat=(w,d,h,color,px=0,pz=0,py=h/2)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));mesh.position.set(px,py,pz);mesh.receiveShadow=true;bed.add(mesh);return mesh;};
-      if(style===0){
-        makeMat(.78,.58,.045,0x92704b);makeMat(.32,.56,.018,0xb18a5d,-.20,.01,.054);makeMat(.2,.16,.065,0xc6b99c,-.25,-.17,.082);
-      }else if(style===1){
-        makeMat(.84,.62,.025,0x6d6254);makeMat(.30,.62,.018,0x857965,-.21,0,.047);makeMat(.18,.20,.075,0x9b8d76,-.27,-.17,.085);
-      }else if(style===2){
-        makeMat(.86,.60,.026,0x665d52);makeMat(.29,.26,.012,0x92734f,-.22,-.12,.045);makeMat(.27,.25,.012,0x77705b,.18,.13,.045);makeMat(.22,.18,.07,0xaaa08c,-.27,-.18,.082);
-      }else{
-        makeMat(.80,.58,.032,0x75634e);for(const offset of [-.24,-.12,0,.12,.24])makeMat(.025,.55,.009,offset%0.24===0?0x987d5b:0x514d43,offset,.0,.052);makeMat(.19,.17,.065,0xb3a48a,-.26,-.17,.084);
+      const x=site.x,y=site.y,z=surfaceElevation(world,x,y)+.035,bed=new THREE.Group(),seed=Math.imul((site.citizenId||0)+31,2654435761)>>>0,style=seed%8,stage=stageOf(site),palette=[0x92704b,0x6d6254,0x665d52,0x75634e,0x80684d,0x665e56,0x897052,0x625b50],wood=[0x8e6943,0x70533b,0x9a744b,0x635643][(seed>>>4)%4],canvas=[0x6c7771,0x837c69,0x6b747d,0x8b745a,0x6d625d][(seed>>>8)%5],ox=((seed>>>12)%3-1)*.12,oz=((seed>>>14)%3-1)*.12;
+      bed.position.set(x+ox,z,y+oz);bed.rotation.y=((seed>>>16)%4)*Math.PI/2;bed.userData.cardboardTile={x,y};
+      const makeMat=(w,d,h,color,px=0,pz=0,py=h/2,rx=0,rz=0)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));mesh.position.set(px,py,pz);mesh.rotation.set(rx,0,rz);mesh.castShadow=true;mesh.receiveShadow=true;bed.add(mesh);return mesh;};
+      const gableRoof=(left,right,ridge=1.25)=>{makeMat(.40,.68,.045,left,-.19,0,ridge-.10,0,.40);makeMat(.40,.68,.045,right,.19,0,ridge-.10,0,-.40);makeMat(.045,.73,.05,wood,0,0,ridge+.005);};
+      const roof=()=>{
+        if(stage===2){
+          if(style%3===1){makeMat(.78,.70,.05,canvas,0,0,1.11,0,style%2?.18:-.18);makeMat(.18,.34,.035,wood,.24,.16,1.16,0,-.18);}
+          else{gableRoof(canvas,style%2?wood:canvas,1.25);makeMat(.27,.23,.025,style%2?canvas:wood,-.25,.16,1.17,0,.40);}
+          // Loose cloth tails make this read as a tarp tied over a pole frame.
+          makeMat(.72,.035,.15,canvas,0,.33,1.02,-.05,0);
+          return;
+        }
+        const metal=[0x687675,0x818786,0x746d62,0x927a58][(seed>>>20)%4],metalPatch=[0x8d918b,0x746254,0x5e6f70,0xa18a65][(seed>>>23)%4];
+        if(style===0||style===5||style===7){
+          gableRoof(style===5?metal:canvas,style===7?metalPatch:canvas,1.29);
+          makeMat(.30,.26,.025,style===5?canvas:metalPatch,-.23,-.17,1.21,0,.40);makeMat(.27,.22,.025,style===0?metalPatch:wood,.24,.14,1.20,0,-.40);
+        }else if(style===1||style===6){
+          makeMat(.78,.72,.055,style===1?canvas:metal,0,0,1.08,0,style===1?.20:-.20);
+          for(let rib=0;rib<5;rib++)makeMat(.035,.68,.024,rib%2?metalPatch:wood,-.34+rib*.17,0,1.09+(style===1?.20:-.20)*(-.34+rib*.17),0,style===1?.20:-.20);
+          makeMat(.16,.23,.03,style===1?metalPatch:canvas,.23,.16,1.15,0,style===1?.20:-.20);
+        }else if(style===2||style===3){
+          gableRoof(style===2?metal:wood,style===2?metalPatch:canvas,1.30);
+          for(let rib=0;rib<6;rib++){
+            const px=-.38+rib*.152,side=px<0?1:-1;
+            makeMat(.022,.64,.022,rib%3===0?wood:metalPatch,px,0,1.17+(.22-Math.abs(px))*.42,0,side*.40);
+          }
+        }else{
+          gableRoof(canvas,metal,1.25);
+          for(let patch=0;patch<4;patch++)makeMat(.20,.17,.03,patch%2?metalPatch:wood,-.25+(patch%2)*.48,-.20+Math.floor(patch/2)*.39,1.16,0,patch%2?-.4:.4);
+        }
+      };
+      // Every stage keeps the original cardboard bedding and grows a distinct
+      // one-tile shelter around it as the makeshift home persists.
+      makeMat(.68,.50,.035,palette[style]);makeMat(.26,.40,.018,0xb18a5d,-.16,.01,.047);makeMat(.18,.16,.06,0xc6b99c,-.22,-.16,.078);
+      if(stage>=1){for(const [px,pz]of [[-.34,-.27],[.34,-.27],[-.34,.27],[.34,.27]])makeMat(.035,.035,.72,wood,px,pz,.36);makeMat(.035,.035,.68,wood,-.34,0,.71);makeMat(.035,.035,.68,wood,.34,0,.71);}
+      if(stage>=2){for(const [px,pz]of [[-.34,-.27],[.34,-.27],[-.34,.27],[.34,.27]])makeMat(.035,.035,.30,wood,px,pz,.84);makeMat(.72,.035,.04,wood,0,-.30,.98);makeMat(.72,.035,.04,wood,0,.30,.98);roof();}
+      if(stage>=3){
+        const wallA=[0x8f7658,0x9a805d,0x786a57,0xa18460][style%4],wallB=[0x6d5d4b,0x82715a,0x9b805d,0x665c50][(style+1)%4];
+        makeMat(.055,.48,.60,wallA,-.31,0,.34);makeMat(.055,.48,.60,wallB,.31,0,.34);makeMat(.62,.055,.60,wallB,0,-.24,.34);makeMat(.22,.055,.60,wallA,-.20,.24,.34);makeMat(.22,.055,.60,wallB,.20,.24,.34);
       }
-      group.add(bed);
+      if(stage>=4){makeMat(.24,.23,.28,0x7a5d40,-.34,.26,.16);makeMat(.26,.25,.035,0x8c7450,-.34,.26,.32);makeMat(.12,.12,.48,wood,.37,.25,.24);makeMat(.16,.16,.08,canvas,.37,.25,.50);}
+      mergeStaticMeshes(THREE,bed);group.add(bed);
     }
-    renderer.cardboardVisuals=group;renderer.cardboardVisualRevision=revision;renderer.scene.add(group);
+    renderer.cardboardVisuals=group;renderer.cardboardVisualSignature=signature;renderer.scene.add(group);
   }
   const minX=renderer.renderedMinTx??-Infinity,maxX=renderer.renderedMaxTx??Infinity,minY=renderer.renderedMinTy??-Infinity,maxY=renderer.renderedMaxTy??Infinity;
   for(const bed of renderer.cardboardVisuals.children){const tile=bed.userData.cardboardTile;bed.visible=!!tile&&tile.x>=minX&&tile.x<=maxX+1&&tile.y>=minY&&tile.y<=maxY+1;}
@@ -280,6 +310,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
   syncUrbanArt(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncFecesVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncStreetBenches(renderer,THREE,world);
+  syncStreetMarketStalls(renderer,THREE,world);
   const map = world.map;
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
     x>=renderer.renderedMinTx && x+width<=renderer.renderedMaxTx+1 && y>=renderer.renderedMinTy && y+depth<=renderer.renderedMaxTy+1;

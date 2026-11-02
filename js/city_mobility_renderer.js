@@ -1,7 +1,7 @@
 import {partyFlagCanvas} from './city_party_flags.js';
 import {mobilityModelGeometry} from './city_mobility_models.js?v=cargo-box-rear-1';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
-import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=sidewalk-grade-1';
+import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=quarry-outskirts-1';
 const colors={bicicleta:0x386b78,bicicleta_carga:0x9b603f,carrinho:0x52645b,patinete:0x648d82,patins:0xa3774b,skate:0x414943};
 const inView=(r,x,y,margin=4)=>!Number.isFinite(r.renderedMinTx)||x-margin>=r.renderedMinTx&&x+margin<=r.renderedMaxTx+1&&y-margin>=r.renderedMinTy&&y+margin<=r.renderedMaxTy+1;
 function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
