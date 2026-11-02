@@ -44,7 +44,8 @@ export function tycoonIcon(ctx,key,x,y,scale=2){
     rect(2,2,12,12,dark);rect(3,3,10,10,light);for(const i of[5,8,11])rect(5,i,6,1,ink);if(key==='windows'){rect(0,0,11,9,blue);rect(1,2,9,6,light);}
   }else if(key==='settings'){
     for(const i of[3,7,11]){rect(1,i,14,2,ink);rect(i,i-2,3,6,'#b3b5a5');rect(i+1,i-1,1,4,light);}
-  }else if(key==='pause'){rect(4,3,3,11,ink);rect(10,3,3,11,ink);}
+  }else if(key==='speech'){rect(2,2,12,1,ink);rect(1,3,14,7,ink);rect(3,10,7,1,ink);rect(3,3,10,6,light);rect(4,5,1,1,ink);rect(7,5,1,1,ink);rect(10,5,1,1,ink);rect(3,11,2,3,ink);rect(4,11,2,1,light);}
+  else if(key==='pause'){rect(4,3,3,11,ink);rect(10,3,3,11,ink);}
   else if(key==='play'||key==='fast'){for(const offset of key==='fast'?[0,6]:[3])for(let i=0;i<6;i++)rect(offset+1+i,3+i/2,1,11-i,ink);}
   else if(key==='editor'){line([[2,13],[13,2]],ink);line([[3,14],[14,3]],'#d9b24c');rect(11,1,3,3,'#cb6f53');}
   else if(key==='3d'){rect(3,4,10,9,brick);line([[3,4],[8,1],[13,4],[8,7],[3,4]],light);line([[8,7],[8,14]],ink);}

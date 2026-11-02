@@ -88,7 +88,7 @@ export class CityWorkMeals {
     }
     if(c.indoorLocation?.buildingId!==holder.id||c.indoorLocation?.roomType!=='dining'||c.indoorLocation?.path?.length)return true;
     c.mealWaitSince=null;
-    this.city.economy.enjoyMeal(c, offer);
+    this.city.economy.enjoyMeal(c, offer, false);
     for (const [good, amount] of Object.entries(offer.inputs)) { holder.inventory[good] -= amount; this.city.economy.consumed[good] += amount; this.city.economy.recordGoods('workplace-meal', good, amount, holder.id, c.id); }
     c.workMeal = { employerId: b.id, siteId: holder.id, startedAt: this.city.minute, elapsed: 0, good: offer.good, quality: offer.quality, resume:c.mealResume?['work','manage','construction','transport'].includes(c.mealResume.task):false,resumeState:c.mealResume };
     b.mealsServed++;
@@ -100,6 +100,7 @@ export class CityWorkMeals {
     c.workMeal.elapsed++; c.needs.food = Math.min(100, c.needs.food + 5 * c.workMeal.quality);
     c.action = 'Comendo refeição fornecida pela empresa';
     if (c.needs.food >= 95 || c.workMeal.elapsed >= WORK_MEAL_RULES.duration) {
+      c.lastMealEvent = { sequence: (c.lastMealEvent?.sequence || 0) + 1, minute: this.city.minute };
       const resume = c.workMeal.resume,state=c.workMeal.resumeState; c.workMeal = null; c.foodVoucher = null;c.mealResume=null;
       if(resume&&state){c.task=state.task;c.targetId=state.targetId;c.workProjectId=state.workProjectId;}
       if (!resume) { c.task = null; c.path = []; c.servicePaid = null; }

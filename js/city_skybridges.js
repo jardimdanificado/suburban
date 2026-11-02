@@ -1,6 +1,6 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {terrainWalkable} from './city_terrain.js?v=sidewalk-grade-1';
-import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=portuguese-colonial-forms-8';
+import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=sertanejo-house-styles-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
 // One deterministic source of truth feeds both pedestrian routing and the renderer.

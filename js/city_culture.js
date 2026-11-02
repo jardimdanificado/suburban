@@ -69,6 +69,24 @@ const DUTCH_COLONIAL_STYLES=Object.fromEntries(DUTCH_COLONIAL_FORMS.flatMap(form
   `dutch_colonial_${form.id}_${palette.id}`,
   {label:`Colonial holandês · ${form.label} · ${palette.label}`,wall:palette.wall,roof:palette.roof,accent:palette.accent,trim:palette.trim,roofKind:form.roofKind,motif:'dutch_colonial',dutchForm:form.id},
 ])));
+const SERTANEJO_PALETTES=[
+  {id:'cal',label:'Cal e barro',wall:0xe4d7bf,roof:0x81503a,accent:0xa65e43,trim:0xf1e5ce},
+  {id:'umbu',label:'Verde umbuzeiro',wall:0xb4ad79,roof:0x664b3c,accent:0x556e50,trim:0xe1d0ac},
+  {id:'barro',label:'Barro vermelho',wall:0xc58c59,roof:0x754536,accent:0x52717a,trim:0xe5c99b},
+  {id:'anil',label:'Azul anil',wall:0x839da0,roof:0x55463d,accent:0x355a76,trim:0xe4d8c1},
+  {id:'mandacaru',label:'Amarelo mandacaru',wall:0xd4b45e,roof:0x76503d,accent:0x6a7952,trim:0xefe0bd},
+];
+const SERTANEJO_FORMS=[
+  {id:'taipa',label:'Casa de taipa caiada',roofKind:'gable'},
+  {id:'alpendre',label:'Casa sertaneja com alpendre',roofKind:'hip'},
+  {id:'fazenda',label:'Casa de fazenda do sertão',roofKind:'gable'},
+  {id:'platibanda',label:'Casa urbana com platibanda',roofKind:'flat'},
+  {id:'pedra',label:'Casa de pedra do semiárido',roofKind:'hip'},
+];
+const SERTANEJO_STYLES=Object.fromEntries(SERTANEJO_FORMS.flatMap(form=>SERTANEJO_PALETTES.map(palette=>[
+  `sertanejo_${form.id}_${palette.id}`,
+  {label:`${form.label} · ${palette.label}`,wall:palette.wall,roof:palette.roof,accent:palette.accent,trim:palette.trim,roofKind:form.roofKind,motif:'sertanejo',sertanejoForm:form.id},
+])));
 // Adapted from Brutopolis' inherited surnames, individual traits and house-style catalogue.
 // Pure data/helpers keep these features usable both in the worker and the UI.
 export const TRAIT_LABELS = { diligence: 'Dedicação', empathy: 'Empatia', honesty: 'Honestidade', skepticism: 'Ceticismo', riskTolerance: 'Tolerância a risco', frugality: 'Frugalidade', ambition: 'Ambição' };
@@ -99,6 +117,7 @@ export const HOUSE_STYLES = {
   ...CARIBBEAN_ARCHITECTURE,
   ...PORTUGUESE_COLONIAL_STYLES,
   ...DUTCH_COLONIAL_STYLES,
+  ...SERTANEJO_STYLES,
   modern: { label: 'Fachada contemporânea', wall: 0xd7dfdb, roof: 0x506054, roofKind: 'flat' },
 };
 export function initializeCharacter(city, citizen) {
@@ -112,7 +131,9 @@ export function initializeCharacter(city, citizen) {
 }
 export function architectureFor(type, id) {
   const numericId=Number(id)||0,seed=(Math.imul(numericId+29,2246822519)>>>0);
-  if(seed%10<7){const form=DUTCH_COLONIAL_FORMS[seed%DUTCH_COLONIAL_FORMS.length],palette=DUTCH_COLONIAL_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%DUTCH_COLONIAL_PALETTES.length];return `dutch_colonial_${form.id}_${palette.id}`;}
+  const familyRoll=seed%20;
+  if(familyRoll<11){const form=DUTCH_COLONIAL_FORMS[seed%DUTCH_COLONIAL_FORMS.length],palette=DUTCH_COLONIAL_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%DUTCH_COLONIAL_PALETTES.length];return `dutch_colonial_${form.id}_${palette.id}`;}
+  if(familyRoll>=18){const form=SERTANEJO_FORMS[(seed>>>4)%SERTANEJO_FORMS.length],palette=SERTANEJO_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%SERTANEJO_PALETTES.length];return `sertanejo_${form.id}_${palette.id}`;}
   const forms=type==='luxury_housing'||type==='popular_luxury_housing'?['quinta','barroco','sobrado','azulejo']:
     ['townhall','council_chamber','courthouse','bank'].includes(type)?['pombalino','barroco','sobrado','mercantil']:
     ['residential','popular_housing','super_popular_housing'].includes(type)?['sobrado','terrea','azulejo','acores','pombalino','quinta']:

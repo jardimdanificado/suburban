@@ -184,9 +184,9 @@ export class CityDesktop {
     if(event.code==='Slash'){this.active?.search?.focus?.();return true;}
     if(['PageDown','PageUp','Home','End','Backspace'].includes(event.code))return this.active?.key(event)||false;return false;
   }
-  drawChrome(ui,{clockText='',paused=false,speed=1,renderMode='3d'}={}){
+  drawChrome(ui,{clockText='',paused=false,speed=1,renderMode='3d',speechBubblesVisible=false}={}){
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
-    let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speed}×`,this.controls.speed,false]];
+    let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speed}×`,this.controls.speed,false],['speech',speechBubblesVisible?'Ocultar balões':'Mostrar balões',this.controls.speechBubbles,speechBubblesVisible]];
     const entries=[
       {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),

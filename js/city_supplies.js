@@ -7,7 +7,7 @@ export class CitySupplies{
   if(n.water<POCKET_RULES.drinkAt&&p.water>0){p.water--;n.water=Math.min(100,n.water+40);const risk=p.waterContamination||0;if(risk>0){n.health=Math.max(0,n.health-risk*.12);c.mood=Math.max(-25,(c.mood||0)-risk*.025);}c.lastDrink={minute:city.minute,source:p.waterSource,contamination:risk};c.action='Bebendo água da garrafa';}
   if(n.food>=POCKET_RULES.eatAt)return;
   const meal=p.food.shift();if(meal){const dining=c.indoorLocation?.roomType==='dining',quality=(Number.isFinite(meal.quality)?Math.max(0,meal.quality):1)+(dining?.5:0);for(const [g,q]of Object.entries(meal.inputs))city.economy.consumed[g]+=q;city.economy.enjoyMeal(c,meal);n.food=Math.min(100,n.food+30+quality*4);c.lastMealQuality=quality;c.lastPocketMealAt=city.minute;c.action=dining?'Comendo sua refeição no refeitório':'Comendo a comida que carregava';if(dining)c.mood=Math.min(25,(c.mood||0)+2);}
-  else if(c.provisions>0){c.provisions--;n.food=Math.min(100,n.food+34);c.action='Comendo uma provisão que carregava';}
+  else if(c.provisions>0){c.provisions--;n.food=Math.min(100,n.food+34);c.lastMealEvent={sequence:(c.lastMealEvent?.sequence||0)+1,minute:city.minute};c.action='Comendo uma provisão que carregava';}
  }
  need(c){const b=this.city.building(c.targetId),urgent=this.city.urgentNeed(c);if(urgent==='water'&&['townhall','utility','popular_refectory'].includes(b?.type))return 'water';return c.supplyNeed||'food';}
  low(c){const p=pocket(c);return {food:p.food.length+(c.provisions||0)<=POCKET_RULES.foodLow,water:p.water<=POCKET_RULES.waterLow};}

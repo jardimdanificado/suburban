@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=portuguese-colonial-forms-8';
+import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=sertanejo-house-styles-1';
 /** Retail stalls share one instanced mesh per premises, including striped canopies. */
 export function marketFixtures(THREE,b){
   const units=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),count=Math.min(12,units.length),parts=[];

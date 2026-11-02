@@ -1,14 +1,32 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {ROAD_TILES,tileAt} from './city_terrain.js?v=sidewalk-grade-1';
-import {TILE_SAND} from './world_gen.js?v=deep-perf-3';
+import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
+function furnitureFacingAngle(city,furniture){
+ const tx=Math.floor(furniture.x),ty=Math.floor(furniture.y),beach=furniture.kind==='beach_chair'||furniture.kind==='beach_ground';
+ if(beach){
+  for(let radius=1;radius<=12;radius++){
+   let nearest=null,nearestDistance=Infinity;
+   for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
+    if(Math.max(Math.abs(dx),Math.abs(dy))!==radius||tileAt(city.world,tx+dx,ty+dy)!==TILE_WATER)continue;
+    const distance=dx*dx+dy*dy;if(distance<nearestDistance){nearestDistance=distance;nearest={x:dx,y:dy};}
+   }
+   if(nearest)return Math.atan2(nearest.x,nearest.y);
+  }
+ }
+ let nearestRoad=null,nearestRoadDistance=Infinity;
+ for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(ROAD_TILES.has(tileAt(city.world,tx+dx,ty+dy))){const distance=dx*dx+dy*dy;if(distance<nearestRoadDistance){nearestRoadDistance=distance;nearestRoad={x:dx,y:dy};}}
+ if(nearestRoad)return Math.atan2(nearestRoad.x,nearestRoad.y);
+ return Number.isFinite(furniture.angle)?furniture.angle:0;
+}
 export class CityFurniture{
- constructor(city){this.city=city;this.benches=[];this.nextId=1;this.benchLayoutVersion=4;}
+ constructor(city){this.city=city;this.benches=[];this.nextId=1;this.benchLayoutVersion=5;}
  reconcile(){const city=this.city,candidates=new Map();
   // Saved cities from the earlier layout may have benches sitting on roads.
   // Rebuild that layout once so the new placement rules also fix existing saves.
-  if((this.benchLayoutVersion||0)<4){for(const c of city.citizens)if(c.seatId)this.release(c);this.benches=[];this.nextId=1;this.benchLayoutVersion=4;}
+  if((this.benchLayoutVersion||0)<5){for(const c of city.citizens)if(c.seatId)this.release(c);this.benches=[];this.nextId=1;this.benchLayoutVersion=5;}
   const removed=new Set(this.benches.filter(b=>!city.walkable(Math.floor(b.x),Math.floor(b.y))).map(b=>b.id));if(removed.size){for(const c of city.citizens)if(c.seatId&&removed.has(Number(c.seatId.split(':')[0]))){this.release(c);c.path=[];if(c.task==='sit')c.task=null;}this.benches=this.benches.filter(b=>!removed.has(b.id));}
+  for(const bench of this.benches)bench.angle=furnitureFacingAngle(city,bench);
   for(const b of city.buildings)if(b.type==='farm'&&!b.farmSoilReady)cultivateFarmTerrain(city,b);
   for(const b of city.buildings)for(const p of [b.door,...(b.accessPath||[])])candidates.set(`${Math.floor(p.x)},${Math.floor(p.y)}`,p);
   for(const [key,count]of city.traffic)if(count>5){const [x,y]=key.split(',').map(Number);candidates.set(key,{x:x+.5,y:y+.5});}
@@ -19,8 +37,8 @@ export class CityFurniture{
     const occupiedByBuilding=city.buildings.some(b=>x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth);
     if(!city.walkable(x,y)||ROAD_TILES.has(tile)||city.occupied.has(`${x},${y}`)||occupiedByBuilding||this.benches.some(b=>Math.hypot(b.x-x-.5,b.y-y-.5)<5)||city.buildings.some(b=>Math.hypot(b.door.x-x-.5,b.door.y-y-.5)<1.5))continue;
     // Keep the complete bench footprint inside this single non-road tile.
-    // The front points away from the road so people sit facing the sidewalk.
-    const beach=tile===TILE_SAND,id=this.nextId++,beachGround=beach&&id%4===0;this.benches.push({id,x:x+.5,y:y+.5,angle:Math.atan2(dx,dy),kind:beach?(beachGround?'beach_ground':'beach_chair'):'bench',seats:beach?[null]:[null,null],builtAt:city.minute});break;
+    // Benches face the street; beach seating faces the nearest water tile.
+    const beach=tile===TILE_SAND,id=this.nextId++,beachGround=beach&&id%4===0,bench={id,x:x+.5,y:y+.5,angle:Math.atan2(-dx,-dy),kind:beach?(beachGround?'beach_ground':'beach_chair'):'bench',seats:beach?[null]:[null,null],builtAt:city.minute};bench.angle=furnitureFacingAngle(city,bench);this.benches.push(bench);break;
    }if(this.benches.length>=limit)break;
   }
  }

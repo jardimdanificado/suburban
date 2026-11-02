@@ -1,5 +1,5 @@
 import {cornerHeight,surfaceElevation} from './city_terrain.js?v=sidewalk-grade-1';
-import {caribbeanGroundTexture} from './caribbean_pixel_materials.js?v=caribbean-pixel-2';
+import {caribbeanGroundSurfaceTextures} from './caribbean_pixel_materials.js?v=ground-realism-2';
 
 // Construction visuals cover the terrain without changing its navigation tiles.
 function addFarmSoil(THREE,world,cells,site){
@@ -11,7 +11,8 @@ function addFarmSoil(THREE,world,cells,site){
   uvs.push(u0,v0,u0,v1,u1,v1,u0,v0,u1,v1,u1,v0);
  }
  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geometry.computeVertexNormals();
- const soil=new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({map:caribbeanGroundTexture(THREE,'construction'),color:0xffffff,side:THREE.DoubleSide}));soil.receiveShadow=true;site.add(soil);
+ const ground=caribbeanGroundSurfaceTextures(THREE,'construction'),soilMaterial=new THREE.MeshStandardMaterial({map:ground.map,normalMap:ground.normalMap,normalScale:new THREE.Vector2(.38,.38),color:0xffffff,roughness:.94,metalness:0,side:THREE.DoubleSide});
+ const soil=new THREE.Mesh(geometry,soilMaterial);soil.receiveShadow=true;site.add(soil);
 }
 function addSawhorse(THREE,site,world,x,z,axis,{wood,yellow,black}){
  const ground=surfaceElevation(world,x,z),stand=new THREE.Group();stand.position.set(x,ground,z);if(axis==='z')stand.rotation.y=Math.PI/2;

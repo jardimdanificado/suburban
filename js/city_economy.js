@@ -665,9 +665,10 @@ export class CityEconomy {
     const cash=this.city.accounts.get(this.city.payerFor(c))?.balance||0,wealth=Math.min(1,cash/Math.max(1,this.city.currency.price(12000))),priceSensitivity=(.65+(c.traits?.frugality??.5)*.7)*(1-wealth*.8),restaurantBonus=b.type==='restaurant'?wealth*10:0;
     return Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y) - ((c.knownAdvertisements?.[b.id]||0)>this.city.minute?2:0) + choice*(offer.price / Math.max(1, this.city.currency.price(100)) * priceSensitivity - this.mealTaste(c, offer) * 45 - restaurantBonus + this.city.reputation.providerPenalty(b) + this.city.relationships.businessPenalty(c,b));
   }
-  enjoyMeal(c, offer) {
+  enjoyMeal(c, offer, showBillboard = true) {
     const taste = this.mealTaste(c, offer);
     c.lastMealTaste = taste;
+    if(showBillboard)c.lastMealEvent = { sequence: (c.lastMealEvent?.sequence || 0) + 1, minute: this.city.minute };
     c.mood = Math.max(-25, Math.min(25, (c.mood || 0) + taste * 8));
   }
   mealOffer(b, citizen = null) {

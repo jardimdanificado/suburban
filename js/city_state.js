@@ -1,5 +1,5 @@
 import {ensureJusticeSkills} from './city_justice_skills.js';
-import {CityFurniture} from './city_furniture.js?v=beach-rest-spots-2';
+import {CityFurniture} from './city_furniture.js?v=road-and-water-bench-facing-1';
 import {CitySupplies} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';

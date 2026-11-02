@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {HOUSE_STYLES} from './city_culture.js?v=portuguese-colonial-forms-7';
+import {HOUSE_STYLES} from './city_culture.js?v=sertanejo-house-styles-1';
 import {INDUSTRIES} from './city_industries.js';
 
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
@@ -58,7 +58,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    else for(const dz of [-.25,.25])box(.05,.8,.035,wall+normal*(space.depth+.04),y+.4,door+dz,style.accent);
   }
  };
- const motif=style.motif,accent=style.accent??clay,trim=style.trim??cream,colonialForm=style.colonialForm??style.dutchForm??'sobrado';
+ const motif=style.motif,accent=style.accent??clay,trim=style.trim??cream,colonialForm=style.colonialForm??style.dutchForm??'sobrado',sertanejoForm=style.sertanejoForm??'taipa';
  if(!residential&&style.motif){
   box(b.width+.12,.11,.16,b.width/2,1.58,front+.08,trim);
   if(motif==='gingerbread')for(let i=0;i<Math.max(3,Math.floor(b.width*1.5));i++){const x=.12+i*(b.width-.24)/Math.max(2,Math.floor(b.width*1.5)-1);box(.07,.2,.07,x,1.8,front+.16,i%2?accent:roofColor);box(.19,.055,.08,x,1.92,front+.16,trim);}
@@ -69,12 +69,26 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   else if(motif==='colonial')for(const x of [.25,b.width-.25]){cylinder(.075,1.5,x,.78,front+.16,trim);box(.17,.1,.17,x,1.55,front+.16,accent);}
   else if(motif==='art_deco')for(const x of [.18,b.width-.18]){box(.13,1.8,.14,x,.9,front+.12,accent);box(.24,.1,.2,x,1.75,front+.13,trim);}
   else if(motif==='courtyard'){for(const x of [.2,b.width-.2])box(.08,.6,.08,x,1.3,front+.15,accent);box(b.width-.3,.08,.12,b.width/2,1.65,front+.15,trim);}
+  else if(motif==='sertanejo'){for(const x of [.14,b.width-.14]){box(.16,1.25,.11,x,.63,front+.08,accent);box(.24,.09,.15,x,1.28,front+.11,trim);}box(b.width-.28,.1,.14,b.width/2,1.52,front+.08,trim);}
   else if(motif==='tin')for(let i=0;i<=Math.max(3,Math.floor(b.width/.3));i++){const x=.12+i*(b.width-.24)/Math.max(3,Math.floor(b.width/.3));box(.035,.12,.18,x,1.65,front+.12,i%2?accent:trim);}
  }
  if(residential){
   // Several recognizable silhouettes, rather than one tiny accessory.
   for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
-  if(motif==='gingerbread'){
+  if(motif==='sertanejo'){
+   const porch=sertanejoForm==='alpendre'||sertanejoForm==='fazenda'?Math.min(.78,Math.max(.52,b.depth*.25)):.34;
+   if(sertanejoForm==='alpendre'||sertanejoForm==='fazenda'){
+    box(b.width+.12,.11,porch,b.width/2,1.67,front+porch*.43,roofColor);
+    const postCount=Math.max(2,Math.floor(b.width/1.7));for(let i=0;i<=postCount;i++){const x=.2+i*(b.width-.4)/postCount;box(.1,1.62,.1,x,.81,front+porch*.78,sertanejoForm==='fazenda'?wood:trim);box(.18,.09,.18,x,1.64,front+porch*.78,accent);}
+    if(sertanejoForm==='fazenda'){box(b.width-.32,.075,.07,b.width/2,.72,front+porch*.94,wood);for(let i=0;i<=Math.max(2,Math.floor(b.width/.48));i++)box(.035,.5,.04,.16+i*(b.width-.32)/Math.max(2,Math.floor(b.width/.48)),.39,front+porch*.94,trim);}
+   }else if(sertanejoForm==='platibanda'){
+    box(b.width+.12,.15,.17,b.width/2,roof+.12,front+.04,trim);for(const x of [.2,b.width-.2])box(.12,.3,.14,x,roof+.33,front+.05,accent);
+   }else{
+    for(const x of [.16,b.width-.16]){box(.16,1.25,.12,x,.63,front+.08,accent);box(.24,.09,.16,x,1.28,front+.11,trim);}
+    box(b.width+.08,.1,.32,b.width/2,.2,front+.04,style.sertanejoForm==='pedra'?accent:roofColor);
+   }
+   const frame=style.trim;for(const {unit,side} of windowDetails){if(side!=='front'&&side!=='back')continue;if(!unit?.hasWindow)continue;const sign=side==='front'?1:-1,x=unit.x+.5,z=unit.y+(sign>0?1:0)+sign*.075,y=unit.z*CITY_FLOOR_HEIGHT+.96;for(const shutterSide of [-1,1])box(.12,.52,.055,x+shutterSide*.22,y,z,frame);box(.5,.055,.08,x,y+.32,z,accent);}
+  }else if(motif==='gingerbread'){
    const porch=.72;box(b.width+.12,.1,porch,b.width/2,1.68,front+porch*.42,roofColor);
    for(const x of [.22,b.width-.22]){box(.09,1.62,.09,x,.81,front+porch*.76,wood);box(.18,.09,.18,x,1.65,front+porch*.76,trim);}
    for(let i=0;i<Math.max(3,Math.floor(b.width*2));i++){const x=.12+i*(b.width-.24)/Math.max(2,Math.floor(b.width*2)-1);box(.07,.22,.07,x,1.88,front+.18,i%2?accent:trim);box(.2,.055,.08,x,1.99,front+.18,roofColor);}
@@ -161,8 +175,6 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    const y=roof+.17;
    for(const z of [roofY+.12,roofY+roofDepth-.12])box(roofWidth-.2,.38,.1,roofX+roofWidth/2,y+.19,z,cream);
    for(const x of [roofX+.12,roofX+roofWidth-.12])box(.1,.38,roofDepth-.2,x,y+.19,roofY+roofDepth/2,cream);
-   box(.8,.12,.36,roofX+roofWidth*.25,y+.35,roofY+roofDepth*.72,wood);for(const x of [roofX+roofWidth*.25-.3,roofX+roofWidth*.25+.3])box(.08,.32,.3,x,y+.16,roofY+roofDepth*.72,wood);
-   box(.42,.1,.42,roofX+roofWidth*.73,y+.42,roofY+roofDepth*.72,cream);box(.07,.4,.07,roofX+roofWidth*.73,y+.2,roofY+roofDepth*.72,metal);
    if(variant===0||variant===3){
     for(const x of [roofX+.45,roofX+roofWidth-.45])for(const z of [roofY+.45,roofY+roofDepth-.45]){box(.13,1.35,.13,x,y+.7,z,wood);box(.6,.24,.45,x,y+.12,z,clay);box(.5,.42,.35,x,y+.42,z,green);}
     for(const z of [roofY+.45,roofY+roofDepth-.45])box(Math.max(.2,roofWidth-.9),.12,.12,roofX+roofWidth/2,y+1.4,z,wood);
@@ -180,11 +192,8 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   }
  }else if(!civic){
   if(b.type==='office_tower'){
-   // Recessed terraces and projecting canopies make office buildings legible.
+   // Recessed terraces keep the roofline clear of the old post-and-slab cap.
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
-   box(Math.max(.6,b.width*.7),.2,Math.max(.6,b.depth*.65),b.width/2,roof+.22,b.depth/2,metal);
-   for(const x of [.4,b.width-.4])for(const z of [.4,b.depth-.4])box(.1,.85,.1,x,roof+.7,z,metal);
-   box(b.width-.5,.12,b.depth-.5,b.width/2,roof+1.15,b.depth/2,0x9db8b8);
   }else if(industrial){
    // Large roof equipment and alternating shed forms identify workshops.
    if(variant===0||variant===2){const count=1+seed%2;for(let i=0;i<count;i++){const x=b.width*(i+1)/(count+1);cylinder(.25,1.75,x,roof+.98,b.depth*.48,metal);cylinder(.34,.16,x,roof+1.88,b.depth*.48,cream);}}
@@ -217,12 +226,9 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    const signColors=[0xd88d63,0x5d8c83,0xe1bd70,0x72879a];box(Math.min(1.1,b.width*.52),.16,.06,b.width/2,2.15,b.depth+.17,signColors[variant%signColors.length]);
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
   }else{
-   // Repeated facade projections and a roof canopy give small services a
-   // recognizable profile without covering their existing windows.
+   // Preserve the roof silhouette on small services; their facade already
+   // carries the identifying sign and architectural details.
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
-   box(Math.max(.7,b.width*.7),.2,Math.max(.7,b.depth*.55),b.width/2,roof+.22,b.depth/2,metal);
-   for(const x of [.45,b.width-.45])box(.1,1.05,.1,x,roof+.7,b.depth*.5,wood);
-   box(Math.max(.8,b.width-.6),.12,Math.max(.6,b.depth*.5),b.width/2,roof+1.25,b.depth*.5,variant%2?0xc98964:0x83a59b);
   }
  }
  if(motif==='portuguese_colonial'||motif==='dutch_colonial'){

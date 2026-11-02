@@ -161,3 +161,54 @@ export function caribbeanGroundTexture(THREE, kind = 'farm', variant = 0) {
     }
   });
 }
+
+export function caribbeanGroundSurfaceTextures(THREE, kind='farm', variant=0){
+  const key=`ground-real:${kind}:${variant}`;if(textureCache.has(key))return textureCache.get(key);
+  const size=512,canvas=document.createElement('canvas');canvas.width=canvas.height=size;
+  const ctx=canvas.getContext('2d'),image=ctx.createImageData(size,size),data=image.data,heights=new Float32Array(size*size);
+  let seed=variant+1;for(const char of kind)seed=Math.imul(seed^char.charCodeAt(0),16777619);
+  const hash=(x,y,salt=0)=>{let n=Math.imul((x^Math.imul(y,374761393)^salt^seed),668265263);n=Math.imul(n^(n>>>13),1274126177);return (n^(n>>>16))>>>0;};
+  const wrap=(v,n)=>(v%n+n)%n;
+  const noise=(x,y,cells,salt)=>{
+    const gx=x/size*cells,gy=y/size*cells,ix=Math.floor(gx),iy=Math.floor(gy),fx=gx-ix,fy=gy-iy;
+    const sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy);
+    const a=hash(wrap(ix,cells),wrap(iy,cells),salt)/4294967295,b=hash(wrap(ix+1,cells),wrap(iy,cells),salt)/4294967295,c=hash(wrap(ix,cells),wrap(iy+1,cells),salt)/4294967295,d=hash(wrap(ix+1,cells),wrap(iy+1,cells),salt)/4294967295;
+    return (a+(b-a)*sx)*(1-sy)+(c+(d-c)*sx)*sy;
+  };
+  const farm=kind==='farm',dark=farm?[72,53,36]:[82,69,53],light=farm?[145,112,75]:[151,127,93];
+  const cells=farm?22:27,cellSize=size/cells;
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const gx=Math.floor(x/cellSize),gy=Math.floor(y/cellSize);let nearest=Infinity,second=Infinity,seedTone=.5;
+    for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){
+      const cx=wrap(gx+ox,cells),cy=wrap(gy+oy,cells),jitterX=.5+(hash(cx,cy,17)/4294967295-.5)*.48,jitterY=.5+(hash(cx,cy,29)/4294967295-.5)*.48;
+      let dx=x-(cx*cellSize+cellSize*jitterX),dy=y-(cy*cellSize+cellSize*jitterY);dx-=Math.round(dx/size)*size;dy-=Math.round(dy/size)*size;
+      const distance=Math.hypot(dx,dy);if(distance<nearest){second=nearest;nearest=distance;seedTone=hash(cx,cy,43)/4294967295;}else if(distance<second)second=distance;
+    }
+    const fine=noise(x,y,112,307),grain=noise(x,y,220,401),edgeGap=second-nearest;
+    const seam=edgeGap<1.05+(noise(x,y,80,419)-.5)*.65?1:0;
+    let relief=(seedTone-.5)*.38+(fine-.5)*.12+(grain-.5)*.055-seam*.13;
+    let furrow=0;
+    if(farm){
+      const warp=(noise(x,y,5,503)-.5)*.12,phase=y/size*6+warp+Math.sin(x/size*Math.PI*2)*.025,line=Math.abs(Math.sin(phase*Math.PI*2));
+      furrow=line<.055?.11:line<.12?.055:line<.2?-.025:0;
+      relief-=furrow;
+    }else{
+      // Loose construction earth has broad tamped patches and scattered aggregate.
+      if(grain>.965)relief+=.12;else if(grain<.045)relief-=.09;
+    }
+    const value=Math.max(0,Math.min(1,.53+relief+(grain-.5)*.08)),fleck=grain>.988?9:grain<.012?-8:0,index=y*size+x,p=index*4;
+    for(let channel=0;channel<3;channel++)data[p+channel]=Math.round((dark[channel]+(light[channel]-dark[channel])*value+fleck)/3)*3;
+    data[p+3]=255;heights[index]=relief+(grain-.5)*.045-furrow*.42;
+  }
+  ctx.putImageData(image,0,0);
+  const normalCanvas=document.createElement('canvas');normalCanvas.width=normalCanvas.height=size;
+  const nctx=normalCanvas.getContext('2d'),normalImage=nctx.createImageData(size,size),normalData=normalImage.data;
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const p=(y*size+x)*4,left=heights[y*size+(x-1+size)%size],right=heights[y*size+(x+1)%size],up=heights[((y-1+size)%size)*size+x],down=heights[((y+1)%size)*size+x];
+    const nx=(left-right)*1.2,ny=(up-down)*1.2,length=Math.hypot(nx,ny,1);
+    normalData[p]=(nx/length*.5+.5)*255;normalData[p+1]=(ny/length*.5+.5)*255;normalData[p+2]=(1/length*.5+.5)*255;normalData[p+3]=255;
+  }
+  nctx.putImageData(normalImage,0,0);
+  const make=(source,color)=>{const texture=new THREE.CanvasTexture(source);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.generateMipmaps=true;texture.anisotropy=8;if(color)texture.colorSpace=THREE.SRGBColorSpace;return texture;};
+  const result={map:make(canvas,true),normalMap:make(normalCanvas,false)};textureCache.set(key,result);return result;
+}

@@ -1,8 +1,8 @@
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
-import {streetSurfaceTextures} from './street_surface_textures.js?v=natural-streets-14';
+import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {waterPollutionAt,waterTint} from './city_water.js';
-import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=portuguese-roof-tiles-2';
+import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=ground-realism-2';
 // =============================================================================
 // Brutopolis Chronicles - 3D Isometric Tycoon Engine (Volumetric 3D Models)
 // =============================================================================
@@ -10,7 +10,7 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundTexture,portugueseClayTileT
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=window-shutter-batches-4";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=ground-realism-2";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=beach-ground-poses-1';
 import { flagNightFactor } from './city_terrain.js?v=sidewalk-grade-1';
@@ -665,6 +665,8 @@ function applyPalmWindShader(mat, deformScale = 0.11) {
   if (!mat) return;
   mat.userData.foliageShader = null;
   const prevCompile = mat.onBeforeCompile;
+  const previousKey=mat.customProgramCacheKey?.()||'';
+  mat.customProgramCacheKey=()=>`${previousKey}:palm-foliage:${deformScale}`;
   mat.onBeforeCompile = (shader) => {
     if (prevCompile) prevCompile(shader);
     shader.uniforms.uSimTick = { value: 0.0 };
@@ -675,8 +677,12 @@ function applyPalmWindShader(mat, deformScale = 0.11) {
       float palmSeed = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
       float frondReach = clamp(length(position.xz) / 1.8, 0.0, 1.0);
       float tipWeight = smoothstep(0.12, 0.82, frondReach);
-      float breeze = sin(uSimTick * 0.035 + palmSeed * 6.28318 + frondReach * 1.8);
-      float crossBreeze = cos(uSimTick * 0.026 + palmSeed * 4.1 + frondReach * 1.3);
+      // Match the tree canopy cadence: hold each wind pose for a seeded
+      // 15–24 simulation frames, then advance together on the next foliage tick.
+      float interval = 15.0 + floor(palmSeed * 10.0);
+      float windEpoch = floor((uSimTick + palmSeed * 100.0) / interval);
+      float breeze = sin(windEpoch * 0.68 + palmSeed * 6.28318 + frondReach * 1.8);
+      float crossBreeze = cos(windEpoch * 0.52 + palmSeed * 4.1 + frondReach * 1.3);
       palmPos.x += breeze * ${deformScale.toFixed(4)} * tipWeight;
       palmPos.z += crossBreeze * ${ (deformScale * 0.42).toFixed(4) } * tipWeight;
       palmPos.y -= abs(breeze) * ${ (deformScale * 0.12).toFixed(4) } * tipWeight;
@@ -3372,6 +3378,7 @@ export class RCT3DRenderer {
         uAoMaxRadius: { value: 36.0 },
         uBrightness: { value: 1.0 },
         uContrast: { value: 1.0 },
+        uSaturation: { value: 1.0 },
         uAlpha: { value: 1.0 },
         uCameraNear: { value: 0.1 },
         uCameraFar: { value: 1000.0 },
@@ -3395,6 +3402,7 @@ export class RCT3DRenderer {
         uniform float uAoMaxRadius;
         uniform float uBrightness;
         uniform float uContrast;
+        uniform float uSaturation;
         uniform float uAlpha;
         uniform float uCameraNear;
         uniform float uCameraFar;
@@ -3503,10 +3511,14 @@ export class RCT3DRenderer {
             // Apply Contrast and Brightness calibration
             finalCol = (finalCol - 0.5) * uContrast + 0.5;
             finalCol = clamp(finalCol * uBrightness, 0.0, 1.0);
+            float luminance = dot(finalCol, vec3(0.2126, 0.7152, 0.0722));
+            finalCol = mix(vec3(luminance), finalCol, uSaturation);
             gl_FragColor = vec4(finalCol, a * uAlpha);
           } else {
             vec3 finalCol = (baseColor - 0.5) * uContrast + 0.5;
             finalCol = clamp(finalCol * uBrightness, 0.0, 1.0);
+            float luminance = dot(finalCol, vec3(0.2126, 0.7152, 0.0722));
+            finalCol = mix(vec3(luminance), finalCol, uSaturation);
             gl_FragColor = vec4(finalCol, a * uAlpha);
           }
           // The render target is linear. Convert once when presenting the
@@ -3526,6 +3538,13 @@ export class RCT3DRenderer {
     canvasDom.style.width = "100%";
     canvasDom.style.height = "100%";
     this.container.appendChild(canvasDom);
+    this.overheadBillboardCanvas=document.createElement("canvas");
+    this.overheadBillboardCanvas.setAttribute("aria-hidden","true");
+    Object.assign(this.overheadBillboardCanvas.style,{position:"absolute",inset:"0",width:"100%",height:"100%",zIndex:"4",pointerEvents:"none"});
+    this.container.appendChild(this.overheadBillboardCanvas);
+    this.overheadBillboardContext=this.overheadBillboardCanvas.getContext("2d");
+    this.overheadProjection=new THREE.Vector3();
+    this.speechBubblesVisible=false;
 
     // 4. Directional Sun & Ambient Lighting
     this.ambientLight = new THREE.AmbientLight(0xdde8f5, 0.90);
@@ -3605,6 +3624,7 @@ export class RCT3DRenderer {
       fog: "LIGHT",
       godRays: true,
       lensFlare: true,
+      overheadBillboards: true,
       anisotropy: 4,
       brightness: 1.0,
       contrast: 1.0,
@@ -3693,6 +3713,7 @@ export class RCT3DRenderer {
       })
     );
 
+    const farmGround=caribbeanGroundSurfaceTextures(THREE,'farm');
     const buildDict = (isPersp) => ({
       ...terrainSurfaceMaterials(isPersp,'Rock','rock',normStoneB,1.1,.70,.08),
       ...terrainSurfaceMaterials(isPersp,'Mountain','mountain',normStoneC,1.25,.65,.10),
@@ -3703,7 +3724,7 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'SidewalkTree','sidewalkTree',normBrickA,.3,.94,0),
       ...terrainSurfaceMaterials(isPersp,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
       terrainSewerPipe:makeMat(isPersp,{color:0xffffff,vertexColors:true,dithering:true,side:THREE.DoubleSide},null,1,.88,.03),
-      farmSoil:makeMat(isPersp,{map:caribbeanGroundTexture(THREE,'farm'),color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.25,.95,.01),
+      farmSoil:makeMat(isPersp,{map:farmGround.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},farmGround.normalMap,.38,.91,.005),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
       [TILE_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.25, 0.88, 0.02),
@@ -4935,8 +4956,79 @@ export class RCT3DRenderer {
   }
 
   setOverheadBadgesVisible(visible = true) {
-    if (this.floatingUiGroup) {
-      this.floatingUiGroup.visible = !!visible;
+    this.speechBubblesVisible=!!visible;
+    for(const [key,sprite] of this.floatingUiSprites||[])if(key.endsWith('_emote'))sprite.visible=this.speechBubblesVisible;
+    if(this.overheadBillboardContext)this.overheadBillboardContext.clearRect(0,0,this.overheadBillboardCanvas.width,this.overheadBillboardCanvas.height);
+  }
+
+  isOverheadBillboardOccluded(camera, projected, item) {
+    const city=this.cityDevelopment?.city;
+    if(!city||!camera||!item)return false;
+    const buildings=this.thirdPersonBuildingIndex(city);
+    if(!buildings?.size)return false;
+
+    // Start at the near plane for this screen position. This also works with
+    // the orthographic/isometric camera, where a ray from camera.position
+    // would not match the pixel occupied by the character.
+    this._overheadOcclusionStart??=new THREE.Vector3();
+    this._overheadOcclusionEnd??=new THREE.Vector3();
+    this._overheadOcclusionStart.set(projected.x,projected.y,-1).unproject(camera);
+    this._overheadOcclusionEnd.set(item.x,item.y,item.z);
+    const start=this._overheadOcclusionStart,end=this._overheadOcclusionEnd;
+    const dx=end.x-start.x,dy=end.y-start.y,dz=end.z-start.z,distance=Math.hypot(dx,dy,dz);
+    if(distance<.5)return false;
+    const steps=Math.ceil((distance-.3)/.45);
+    for(let i=1;i<=steps;i++){
+      const along=Math.min(distance-.2,i*.45),x=start.x+dx*along/distance,y=start.y+dy*along/distance,z=start.z+dz*along/distance;
+      const building=buildings.get(`${Math.floor(x)},${Math.floor(z)}`);
+      if(!building)continue;
+      const base=building.terrain?.base??(this.currentMap?this.getSurfaceElevation(this.currentMap,x,z):0);
+      const roof=base+Math.max(1,building.floors||1)*CITY_FLOOR_HEIGHT;
+      if(y>base+.12&&y<roof)return true;
+    }
+    return false;
+  }
+
+  drawOverheadBillboards(camera) {
+    const canvas=this.overheadBillboardCanvas,ctx=this.overheadBillboardContext;
+    if(!canvas||!ctx)return;
+    const width=canvas.clientWidth||this.width,height=canvas.clientHeight||this.height,dpr=Math.min(2,window.devicePixelRatio||1);
+    const pixelWidth=Math.round(width*dpr),pixelHeight=Math.round(height*dpr);
+    if(canvas.width!==pixelWidth||canvas.height!==pixelHeight){canvas.width=pixelWidth;canvas.height=pixelHeight;}
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+    if(!this.speechBubblesVisible||!this.graphicOptions.overheadBillboards||!camera)return;
+    ctx.imageSmoothingEnabled=true;
+    for(const item of this.overheadBillboardQueue||[]){
+      this.overheadProjection.set(item.x,item.y,item.z).project(camera);
+      const p=this.overheadProjection;if(p.z < -1||p.z > 1)continue;
+      if(this.isOverheadBillboardOccluded(camera,p,item))continue;
+      const x=(p.x*.5+.5)*width,y=(-p.y*.5+.5)*height;
+      if(x < -60||x > width+60||y < -80||y > height+50)continue;
+      ctx.save();ctx.textAlign="center";ctx.textBaseline="middle";
+      if(item.kind==="speech"||item.kind==="action"){
+        const label=String(item.label||"conversa").slice(0,22),isCampaign=item.variant==="campaign";
+        ctx.font="6px 'Press Start 2P', monospace";
+        const bw=Math.max(30,Math.ceil(ctx.measureText(label).width)+10),bh=17,bx=Math.round(x-bw/2+(item.offsetX||0)),by=Math.round(y-35);
+        const shape=(ox=0,oy=0)=>{ctx.beginPath();ctx.moveTo(bx+2+ox,by+oy);ctx.lineTo(bx+bw-2+ox,by+oy);ctx.lineTo(bx+bw-2+ox,by+2+oy);ctx.lineTo(bx+bw+ox,by+2+oy);ctx.lineTo(bx+bw+ox,by+bh-3+oy);ctx.lineTo(bx+bw-2+ox,by+bh-3+oy);ctx.lineTo(bx+bw-2+ox,by+bh-1+oy);ctx.lineTo(bx+bw*.58+ox,by+bh-1+oy);ctx.lineTo(bx+bw*.47+ox,by+bh+4+oy);ctx.lineTo(bx+bw*.49+ox,by+bh-1+oy);ctx.lineTo(bx+2+ox,by+bh-1+oy);ctx.lineTo(bx+2+ox,by+bh-3+oy);ctx.lineTo(bx+ox,by+bh-3+oy);ctx.lineTo(bx+ox,by+2+oy);ctx.lineTo(bx+2+ox,by+2+oy);ctx.closePath();};
+        ctx.fillStyle="rgba(20,27,23,.45)";shape(1,2);ctx.fill();
+        ctx.fillStyle=isCampaign?"#594638":"#34433b";shape();ctx.fill();
+        ctx.fillStyle=isCampaign?"#ead2a5":"#d8c9a4";ctx.fillRect(bx+3,by+3,bw-6,bh-7);
+        ctx.fillStyle="#403d32";ctx.fillText(label,Math.round(bx+bw/2),by+8.5);
+      }else if(item.kind==="meal"){
+        const cx=Math.round(x+(item.offsetX||0)),cy=Math.round(y-29);
+        ctx.fillStyle="rgba(20,27,23,.45)";ctx.fillRect(cx-7,cy-5,15,13);
+        ctx.fillStyle="#34433b";ctx.fillRect(cx-8,cy-6,15,13);
+        ctx.fillStyle="#d8c9a4";ctx.fillRect(cx-7,cy-5,13,11);
+        ctx.fillStyle="#876a42";ctx.fillRect(cx-4,cy-2,1,4);ctx.fillRect(cx-3,cy-3,6,1);ctx.fillRect(cx+3,cy-2,2,4);ctx.fillRect(cx-2,cy+2,5,1);
+        ctx.fillStyle="#c28c54";ctx.fillRect(cx-3,cy-2,6,3);ctx.fillRect(cx-1,cy-3,3,1);
+        ctx.fillStyle="#e1b978";ctx.fillRect(cx-2,cy-1,3,1);
+      }else{
+        const progress=Math.max(0,Math.min(1,(performance.now()-item.startedAt)/1450));
+        ctx.globalAlpha=1-progress;ctx.font="8px 'Press Start 2P', monospace";ctx.lineJoin="miter";ctx.lineWidth=2.5;
+        ctx.strokeStyle="#e2d4b2";ctx.fillStyle="#b74435";
+        const label=`-${item.amount}`;ctx.strokeText(label,Math.round(x),Math.round(y-40-progress*20));ctx.fillText(label,Math.round(x),Math.round(y-40-progress*20));
+      }
+      ctx.restore();
     }
   }
 
@@ -6093,8 +6185,9 @@ export class RCT3DRenderer {
     }
 
     const baseSunIntensity=k1.sunI+(k2.sunI-k1.sunI)*sAlpha,baseAmbientIntensity=k1.ambI+(k2.ambI-k1.ambI)*sAlpha;
-    const sunIntensity = (baseSunIntensity+(0.32-baseSunIntensity)*moonlightHold) * (isPersp ? 1.25 : 1.0);
-    const ambIntensity = (baseAmbientIntensity+(0.24-baseAmbientIntensity)*moonlightHold) * (isPersp ? 1.15 : 1.0);
+    const thirdPerson = this.isThirdPersonActive();
+    const sunIntensity = (baseSunIntensity+(0.32-baseSunIntensity)*moonlightHold) * (isPersp ? (thirdPerson ? 1.08 : 1.25) : 1.0);
+    const ambIntensity = (baseAmbientIntensity+(0.24-baseAmbientIntensity)*moonlightHold) * (isPersp ? (thirdPerson ? 1.04 : 1.15) : 1.0);
 
     this.sunLight.intensity = sunIntensity;
     this.ambientLight.intensity = ambIntensity;
@@ -7109,6 +7202,7 @@ export class RCT3DRenderer {
     this._activeUiIds.clear();
     const activeIds = this._activeIds;
     const activeUiIds = this._activeUiIds;
+    this.overheadBillboardQueue??=[];this.overheadBillboardQueue.length=0;
     this.cityCitizenBatches.begin();
     this.cityCitizenModels.begin(dt,effectiveSpeed);
     let selectedPos = null;
@@ -7918,6 +8012,31 @@ export class RCT3DRenderer {
 
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
         if (isConsciousCreature && !e.properties?.citizen?.indoorLocation) {
+          const citizen=e.properties?.citizen;
+          if(this.graphicOptions.overheadBillboards&&citizen){
+            const now=frameStart;
+            this.overheadEvents??=new Map();
+            let events=this.overheadEvents.get(e.id);
+            if(!events){events={damageSeq:null,mealSeq:null,damageUntil:0,mealUntil:0,damageAmount:0};this.overheadEvents.set(e.id,events);}
+            const damage=citizen.lastDamageEvent,meal=citizen.lastMealEvent;
+            if(damage?.sequence!=null){if(events.damageSeq===null)events.damageSeq=damage.sequence;else if(events.damageSeq!==damage.sequence){events.damageSeq=damage.sequence;events.damageAmount=damage.amount||1;events.damageStarted=now;events.damageUntil=now+1450;}}
+            if(meal?.sequence!=null){if(events.mealSeq===null)events.mealSeq=meal.sequence;else if(events.mealSeq!==meal.sequence){events.mealSeq=meal.sequence;events.mealUntil=now+1550;}}
+            const headY=surfaceH+(modelRendered?1.25:.90)+floatBob+.38;
+            const addOverhead=(kind,extra={})=>this.overheadBillboardQueue.push({kind,x:e.x,y:headY,z:e.y,...extra});
+            if(this.speechBubblesVisible&&citizen.conversation?.a===citizen.id)addOverhead("speech",{label:citizen.conversation.topic||"conversa"});
+            const campaign=citizen.campaign;
+            if(this.speechBubblesVisible&&citizen.task==='campaign'&&campaign&&!citizen.path.length&&!citizen.ridingVehicleId&&['canvass','rally','membership'].includes(campaign.type)){
+              const city=this.cityDevelopment?.city,election=city?.politics?.active,nomination=election?.candidates?.find(candidate=>candidate.citizenId===campaign.candidateId),theme=nomination?.promises?.[0]?.title||nomination?.slogan||city?.politics?.party(campaign.partyId)?.short||"propostas";
+              addOverhead("speech",{label:`${campaign.type==='membership'?'partido':theme}`,variant:"campaign"});
+            }
+            if(this.speechBubblesVisible&&!citizen.conversation&&!campaign&&!citizen.path?.length&&!citizen.ridingVehicleId){
+              const actionLabels={work:"trabalho",'work-wait':"aguardando",manage:"empresa",construction:"obra",clean:"limpeza",food:"comida",shopping:"compras",'market-vending':"venda",workmeal:"refeição",provisions:"lanche",water:"água",'lake-water':"água",energy:"descanso",health:"saúde",toilet:"banheiro",hygiene:"higiene",social:"convívio",visit:"visita",care:"cuidado",caregiving:"família",vote:"votação",'council-session':"Câmara",research:"pesquisa",interview:"entrevista",'job-interview':"emprego",transport:"entrega",'paint-delivery':"tinta",'paint-purchase':"compras",supplies:"abastecimento",'combat-flee':"perigo",custody:"custódia",'custody-escort':"escolta",'custody-water':"água",funeral:"luto",'justice-report':"justiça",'police-arrest-escort':"escolta",'police-investigation':"investigação",'police-oversight':"fiscalização",'police-patrol':"patrulha",'police-response':"ocorrência",'police-restitution':"restituição",'urban-graffiti':"grafite",leisure:"lazer",outdoor_leisure:"praia",sit:"descanso",walk:"passeio"};
+              const actionLabel=actionLabels[citizen.task];
+              if(actionLabel)addOverhead("action",{label:actionLabel});
+            }
+            if(events.mealUntil>now)addOverhead("meal",{offsetX:18});
+            if(events.damageUntil>now)addOverhead("damage",{amount:events.damageAmount,startedAt:events.damageStarted});
+          }
           const campaign=e.properties?.citizen?.campaign;
           if(campaign?.flag && e.properties.citizen.task==='campaign'&&!e.properties.citizen.ridingVehicleId) {
             const flag=campaign.flag,uiKey=`${e.id}_campaign_flag`;
@@ -8004,6 +8123,7 @@ export class RCT3DRenderer {
                 }
                 emMesh.material = emMat;
               }
+              emMesh.visible=this.speechBubblesVisible;
 
               const offset = startOffset + iconIdx * iconSpacing;
               emMesh.position.set(e.x + offset * rx, headY, e.y + offset * rz);
@@ -8479,6 +8599,7 @@ export class RCT3DRenderer {
     for (const [key, spr] of this.floatingUiSprites.entries()) {
       if (!activeUiIds.has(key)) {
         this.floatingUiGroup.remove(spr);
+        if (spr.userData?.ownedOverheadMaterial) spr.material?.dispose();
         this.floatingUiSprites.delete(key);
       }
     }
@@ -8539,6 +8660,7 @@ export class RCT3DRenderer {
       this.postMaterial.uniforms.uAoIntensity.value=0;
       this.postMaterial.uniforms.uBrightness.value = (typeof this.graphicOptions?.brightness === "number") ? this.graphicOptions.brightness : 1.0;
       this.postMaterial.uniforms.uContrast.value = (typeof this.graphicOptions?.contrast === "number") ? this.graphicOptions.contrast : 1.0;
+      this.postMaterial.uniforms.uSaturation.value = this.isThirdPersonActive() ? 0.82 : 1.0;
       this.postMaterial.uniforms.uAlpha.value = (typeof this.graphicOptions?.alpha === "number") ? this.graphicOptions.alpha : 1.0;
       this.postMaterial.uniforms.uCameraNear.value = activeCam.near || 0.05;
       this.postMaterial.uniforms.uCameraFar.value = activeCam.far || 800.0;
@@ -8552,6 +8674,7 @@ export class RCT3DRenderer {
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.scene, activeCam);
     }
+    this.drawOverheadBillboards(activeCam);
     const frameCpuMs = performance.now() - frameStart;
     this.terrainFrameAverageMs = (this.terrainFrameAverageMs || frameCpuMs) * 0.92 + frameCpuMs * 0.08;
     this.terrainAdaptFrame = (this.terrainAdaptFrame || 0) + 1;
