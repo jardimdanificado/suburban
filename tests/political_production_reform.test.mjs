@@ -45,8 +45,8 @@ test('proven small cases do not auto-impeach; serious cases need widespread awar
 });
 
 test('mayor veto hurts approval and the chamber can override it with weighted supermajority',()=>{
-  const city=cityOf(),p=city.politics,c=p.council;const bill=c.propose(c.people()[0],'tax',{value:.12});plenary(city);c.preference=()=>({yes:true,reason:'test electorate'});c.vote(bill);assert.equal(bill.status,'awaiting-sanction');
-  p.updateApproval();const before=p.approval;assert(p.vetoBill(bill.id));assert.equal(bill.status,'vetoed');assert(p.approval<before);c.vote(bill,true);assert.equal(bill.status,'executed');assert.equal(city.taxRate,.12);assert(bill.vetoOverridden);
+  const city=cityOf(),p=city.politics,c=p.council;const bill=c.propose(c.people()[0],'tax',{value:.22});plenary(city);c.preference=()=>({yes:true,reason:'test electorate'});c.vote(bill);assert.equal(bill.status,'awaiting-sanction');
+  p.updateApproval();const before=p.approval;assert(p.vetoBill(bill.id));assert.equal(bill.status,'vetoed');assert(p.approval<before);c.vote(bill,true);assert.equal(bill.status,'executed');assert.equal(city.taxRate,.22);assert(bill.vetoOverridden);
 });
 
 test('vice mayor succeeds first, and chamber president succeeds when both executive offices are vacant',()=>{
@@ -75,7 +75,7 @@ test('artisans make real carrying equipment; ownership expands actual order and 
 });
 
 test('unemployed founders can pool money for a small real business, and supply agreements connect producers',()=>{
-  const city=cityOf();city.welfare.policy.reserve=0;for(const c of city.citizens.filter(c=>!city.politics.officeHolder(c)&&!c.jobId).slice(0,6))city.transfer('treasury',c.accountId,4000,'Test savings');
+  const city=cityOf();city.welfare.policy.reserve=0;for(const c of city.citizens.filter(c=>!city.politics.officeHolder(c)&&!c.jobId).slice(0,6))city.transfer('treasury',c.accountId,50000,'Test savings');
   city.economy.demands=[{type:'market',score:120}];const total=money(city);assert(bootstrapEnterprise(city.economy));assert(city.buildings.some(b=>b.type==='market'&&b.micro));assert.equal(money(city),total);
   const mill=addFirm(city,'sawmill'),forestry=addFirm(city,'forestry');forestry.inventory.madeira=20;city.economy.updateDemand();planSupplyChains(city.economy);assert(city.economy.supplyAgreements.some(a=>a.sellerId===forestry.id&&a.buyerId===mill.id&&a.good==='madeira'));
 });
@@ -124,9 +124,9 @@ test('temporary suspension uses the vice and restores the mayor without resettin
   city.minute+=2*1440;p.resumeExecutive();assert.equal(city.economy.mayorId,original);assert.equal(p.viceMayorId,vice);assert.equal(p.mandates.current,term);assert.equal(p.nextElectionAt,deadline);
 });
 
-test('a resident without a job can finance a microbusiness from existing bank capital',()=>{
-  const city=cityOf(),founder=city.citizens.find(c=>!city.politics.officeHolder(c)&&!c.jobId),bank=city.economy.businesses.find(b=>b.type==='bank'),bankWorker=city.citizens.find(c=>c.id!==founder.id&&!city.politics.officeHolder(c));if(bankWorker.jobId)city.economy.leaveJob(bankWorker,'Fixture de atendimento bancário');bank.workers=[bankWorker.id];bankWorker.jobId=bank.id;city.transfer('treasury',founder.accountId,500,'Test savings');city.economy.demands=[{type:'market',score:120}];const total=money(city);
-  assert(bootstrapEnterprise(city.economy));const loan=city.bank.loans.find(l=>l.clientId===founder.accountId&&l.purpose==='business');assert(loan);assert(founder.businessIds.length);assert.equal(money(city),total);
+test('an employed resident can finance a microbusiness from existing bank capital',()=>{
+  const city=cityOf(),founder=city.citizens.find(c=>!city.politics.officeHolder(c)&&!!c.jobId&&!c.businessIds.length),bank=city.economy.businesses.find(b=>b.type==='bank'),bankWorker=city.citizens.find(c=>c.id!==founder.id&&!city.politics.officeHolder(c));if(bankWorker.jobId)city.economy.leaveJob(bankWorker,'Fixture de atendimento bancário');bank.workers=[bankWorker.id];bankWorker.jobId=bank.id;assert(city.transfer('treasury',bank.accountId,city.currency.price(50000),'Test bank equity'));city.transfer('treasury',founder.accountId,500,'Test savings');city.economy.demands=[{type:'market',score:120}];const total=money(city),treasury=city.treasury;
+  assert(bootstrapEnterprise(city.economy));const loan=city.bank.loans.find(l=>l.clientId===founder.accountId&&l.purpose==='business');assert(loan);assert.equal(loan.publicRefinance,0);assert(founder.businessIds.length);assert.equal(money(city),total);assert(city.treasury>=treasury);
 });
 
 test('politics panels render new constitutional and production metrics without missing values',()=>{

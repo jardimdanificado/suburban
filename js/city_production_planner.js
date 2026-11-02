@@ -10,16 +10,7 @@ const vehicleFactories=new Set(['bearing_factory','frame_factory','deck_factory'
 const startupCapital=(city,economy,type)=>type==='cycle_shop'
   ? Math.ceil(['bicicleta','bicicleta_carga','patins','skate'].reduce((n,g)=>n+economy.goods[g].price,0)*3)+city.currency.price(100000)
   : type==='bicycle_rental'?Math.ceil(economy.goods.bicicleta.price*3)+city.currency.price(100000)
-  : city.currency.price(type==='bank'?2000000:type==='research_institute'?100000:type==='cycle_assembler'?600000:vehicleFactories.has(type)?180000:60000);
-// Get the vehicle supply chain off the ground in dependency order. The long tail
-// of optional industries can still open later as the production queue clears.
-const rolloutPriority={
-  iron_mine:220,foundry:205,steel_mill:205,bauxite_mine:200,aluminum_smelter:190,
-  rubber_grove:195,rubberworks:185,glassworks:185,forestry:185,sawmill:175,
-  bearing_factory:170,frame_factory:170,deck_factory:170,tire_factory:170,
-  chain_factory:170,safety_equipment:170,saddle_factory:170,cycle_assembler:155,
-  cycle_shop:145,
-};
+  : city.currency.price(type==='bank'?2000000:type==='research_institute'?100000:type==='cycle_assembler'?600000:vehicleFactories.has(type)?180000:({market:200000,greengrocer:75000,bakery:60000,restaurant:75000}[type]||60000));
 /** Demand follows recipes before factories exist, preventing empty chains from remaining invisible. */
 export function productionPlan(economy){
   const city=economy.city,firms=economy.businesses,projects=city.development.projects.filter(pending),rows=new Map(),since=economy.productionWaitSince??={},responses=economy.productionResponses??={};
@@ -53,14 +44,14 @@ export function productionPlan(economy){
     for(const good of Object.keys(inputs(type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,score+12,`${city.buildingTypes[type]?.label||type} precisa de ${economy.goods[good]?.label||good}`,path);}
   }
   for(const d of economy.demands)if(d.score>=30&&(INDUSTRIES[d.type]||['bakery','mill'].includes(d.type)||d.type==='farm'&&d.crop==='trigo'))visit(d.type,d.crop,d.type==='farm'&&d.crop==='trigo'?240:Math.min(190,d.score),d.reason);
-  // The first installation of each sector is an explicit development objective, independent of empty shelves.
-  for(const type of Object.keys(INDUSTRIES))if(!['domestic_trader','import_exporter'].includes(type))visit(type,null,type==='bank'?320:type==='research_institute'?220:type==='newsroom'?210:rolloutPriority[type]||145,'Iniciar a primeira produção desta cadeia.');
-  for(const crop of Object.keys(economy.crops))visit('farm',crop,crop==='trigo'?240:140,'Diversidade inicial das matérias-primas e da alimentação.');
-  // Bread is a basic consumption need even before the first bakery has opened.
-  if(city.citizens.some(c=>!c.entity.destroyed))visit('bakery',null,200,'Alimentação: pão e farinha precisam de lavouras de trigo.');
-  for(const type of ['market','greengrocer'])visit(type,null,210,'Distribuição inicial: levar a produção agrícola ao comércio de alimentos.');
+  // Seed production only where the measured demand above needs another firm.
+  // Opening every industry and crop at once created unsupported companies,
+  // stranded inventory, and a construction queue sized for a much larger city.
   if(city.citizens.length>=64)visit('office_tower',null,Math.max(185,economy.demands.find(d=>d.type==='office_tower')?.score||0),'Andares para sedes partidárias e atividades que precisam de empresarial.');
-  for(const b of [...firms,...projects])for(const good of Object.keys(inputs(b.type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,150,`Abastecer ${city.buildingTypes[b.type]?.label||b.type}`);}
+  // Expand suppliers only when a live firm is actually short on an input.
+  // Looking at every recipe entry also opened factories for stocked or idle
+  // businesses, creating debt and inventory with no near-term use.
+  for(const b of firms)for(const [good,amount] of Object.entries(b.inputDemand||{}))if(amount>0){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,150,`Abastecer ${city.buildingTypes[b.type]?.label||b.type}`);}
   const result=[];
   for(const [id,row]of rows){
     if(row.missing){since[id]??=city.minute;row.waitMinutes=city.minute-since[id];row.priority=row.score+Math.min(180,row.waitMinutes/60*3);}
@@ -90,7 +81,11 @@ function fundProject(economy,project,capital,freight){
 }
 export function investProductionPlan(economy){
   const city=economy.city,plan=productionPlan(economy),needs=city.welfare.conditions(),active=city.development.projects.filter(pending);
-  const pipelineLimit=Math.max(6,Math.min(12,Math.ceil(city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)).length/40)));
+  const adultCount=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)).length;
+  // Keep construction exposure proportional to the available workforce. A
+  // six-project minimum let a 48-person town borrow and fund more new firms
+  // than it could staff or supply at once.
+  const pipelineLimit=Math.max(2,Math.min(8,Math.ceil(adultCount/80)));
   city.bank.developmentBanks();
   const pipelineFull=active.filter(p=>p.productionChain).length>=pipelineLimit;
   // Reserve one extra slot for the first shared office building when a backed-up
@@ -113,7 +108,7 @@ export function investProductionPlan(economy){
   // The government assigns initial ventures to capable residents, spreading ownership and keeping managers within a small portfolio.
   const managerLoad=c=>c.businessIds.length+active.filter(p=>p.ownerId===c.id).length;
   const founderPool=adults.filter(c=>!city.politics.officeHolder(c)&&managerLoad(c)<3&&c.creditAllowed!==false&&!city.bank.loans.some(l=>l.clientId===c.accountId&&l.purpose==='business'&&!['paid','written-off'].includes(l.status)));
-  const batchLimit=3,assignedManagers=new Set();let opened=0;
+  const batchLimit=1,assignedManagers=new Set();let opened=0;
   // Commission several distinct initial firms each investment cycle; later expansion remains demand driven.
   for(const row of rows){
     if(opened>=batchLimit||city.development.projects.filter(p=>pending(p)&&p.productionChain).length>=pipelineLimit+(officeException?1:0))break;

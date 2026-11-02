@@ -1,6 +1,6 @@
 import {substanceStance} from './city_substances.js';
 import {SUBSTANCES,SUBSTANCE_REGIMES} from './city_substance_catalog.js';
-import {TAX_CATEGORIES,taxRate} from './city_sales_tax.js';
+import {TAX_CATEGORIES,taxRate,MINIMUM_WAGE_TAX_RATE,MINIMUM_BUSINESS_TAX_RATE} from './city_sales_tax.js';
 import {equityShares,offerShares,initializeEquity,nationalizeShares} from './city_equity.js?v=daily-mayor-privatization-1';
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
@@ -83,7 +83,9 @@ export class CityCouncil {
     if(type==='entrepreneurCandidates'){if(typeof payload.value!=='boolean')return city.fail('Escolha permitir ou proibir a candidatura de empresários.');if(payload.value===(city.politics.policy.entrepreneurCandidates!==false))return city.fail('Essa regra já está em vigor.');title??=payload.value?'Permitir candidatura de empresários':'Proibir candidatura de empresários';}
     if(type==='mayorCandidateLimit'){const max=Math.floor(city.politics.policy.partyLimit/2);if(!Number.isSafeInteger(payload.value)||payload.value<2||payload.value>max)return city.fail(`O limite de candidaturas deve ficar entre 2 e ${max}, metade do limite de partidos.`);if(payload.value===city.politics.policy.mayorCandidateLimit)return city.fail('Esse limite já está em vigor.');title??=`Fixar em ${payload.value} o limite de candidaturas a prefeito`;}
     if(type==='partyLimit'&&(!Number.isSafeInteger(payload.value)||payload.value<4||payload.value>1000))return city.fail('O limite de partidos deve ser um número inteiro entre 4 e 1.000 para permitir ao menos duas candidaturas a prefeito.');
-    if(type==='salesTax'&&(!TAX_CATEGORIES[payload.category]||!Number.isFinite(payload.value)||payload.value<0||payload.value>.5))return city.fail('Ramo ou alíquota inválida: escolha um ramo e valor entre 0% e 50%.');
+    if(type==='tax'&&(!Number.isFinite(payload.value)||payload.value<MINIMUM_WAGE_TAX_RATE||payload.value>.5))return city.fail(`O imposto salarial deve ficar entre ${(MINIMUM_WAGE_TAX_RATE*100).toFixed(0)}% e 50%.`);
+    if(type==='businessTax'&&(!Number.isFinite(payload.value)||payload.value<MINIMUM_BUSINESS_TAX_RATE||payload.value>.5))return city.fail(`O imposto empresarial deve ficar entre ${(MINIMUM_BUSINESS_TAX_RATE*100).toFixed(0)}% e 50%.`);
+    if(type==='salesTax'&&(!TAX_CATEGORIES[payload.category]||!Number.isFinite(payload.value)||payload.value<TAX_CATEGORIES[payload.category].rate||payload.value>.5))return city.fail('Ramo ou alíquota inválida: a alíquota deve ser pelo menos o dobro da taxa anterior do ramo e no máximo 50%.');
     if(type==='salesTax')title??=`${TAX_CATEGORIES[payload.category].label}: imposto de ${(payload.value*100).toFixed(1)}%`;
     if(type==='policeStaffing'&&(!Number.isSafeInteger(payload.value)||payload.value<0||payload.value>1000))return city.fail('O efetivo policial desejado deve ser um número inteiro entre 0 e 1.000.');
     if(type==='policeStaffing'){if(payload.value===(city.politics.policy.policeStaffing??6))return city.fail('Esse efetivo já está aprovado.');title??=`Fixar efetivo policial em ${payload.value} agente(s)`;}
@@ -188,10 +190,10 @@ export class CityCouncil {
       case'worksTransfer':{const account=city.politics.worksAccount(),amount=Math.round(bill.payload.value);if(city.treasury-amount<needs.reserve||!city.transfer('treasury','works-budget',amount,'Transferência aprovada para orçamento de obras',{billId:bill.id})){wait='Aguardando caixa livre no tesouro para realizar a transferência aprovada';break;}policy.worksBudget=account.balance;policy.worksBudgetTarget=account.balance;city.politics.worksBudgetInitialized=true;bill.transferredToWorksBudget=amount;break;}
       case'suspend':if(!p.suspendMayor(bill.payload.value,bill.payload.caseId,bill.id)){bill.status='dismissed';bill.result='Afastamento perdeu as condições de execução';return;}break;
       case'confidence':if(!p.impeach(bill.payload.targetId,null,bill.id,true)){bill.status='dismissed';bill.result='Aprovação recuperada ou mandato encerrado';return;}break;
-      case'tax':city.taxRate=clamp(bill.payload.value,-.5,.5);break;
+      case'tax':city.taxRate=clamp(bill.payload.value,MINIMUM_WAGE_TAX_RATE,.5);break;
       case'substanceLaw':if(!city.substances.setLaw(bill.payload.substance,bill.payload.regime,bill.payload.limit,bill.id)){bill.status='dismissed';bill.result='Regulação inválida';return;}break;
-      case'businessTax':policy.businessTax=clamp(bill.payload.value,-.2,.5);break;
-      case'salesTax':policy.salesTaxes??={};policy.salesTaxes[bill.payload.category]=clamp(bill.payload.value,0,.5);break;
+      case'businessTax':policy.businessTax=clamp(bill.payload.value,MINIMUM_BUSINESS_TAX_RATE,.5);break;
+      case'salesTax':policy.salesTaxes??={};policy.salesTaxes[bill.payload.category]=clamp(bill.payload.value,TAX_CATEGORIES[bill.payload.category].rate,.5);break;
       case'tradeTax':policy.importTaxes??={};policy.exportTaxes??={};policy.importTaxes[bill.payload.good]=clamp(bill.payload.importRate,0,1);policy.exportTaxes[bill.payload.good]=clamp(bill.payload.exportRate,0,1);break;
       case'policeStaffing':policy.policeStaffing=clamp(Math.round(bill.payload.value),0,1000);city.economy.hire();break;
       case'minimumWage':policy.minimumWage=Math.max(1,Math.round(bill.payload.value));break;
@@ -215,7 +217,7 @@ export class CityCouncil {
       }
       case'pollMinRate':case'pollMaxRate':{const min=bill.type==='pollMinRate'?5:15,max=bill.type==='pollMinRate'?10:20;if(!Number.isFinite(bill.payload.value)||bill.payload.value<min||bill.payload.value>max){wait='Parâmetro fora dos limites legais de amostragem';break;}policy[bill.type]=bill.payload.value;break;}
       case'welfare':city.welfare.policy.enabled=true;city.welfare.policy.dailyBudget=Math.max(0,Math.round(bill.payload.value));break;
-      case'inflation':city.currency.policy.mode='automatic';city.currency.policy.inflationTarget=Math.max(0,bill.payload.target??.001);city.currency.policy.dailyLimit=Math.max(0,Math.round(bill.payload.value));if(!needs.crisis)city.currency.retire(Math.min(city.currency.price(50000),Math.max(0,city.treasury-Math.max(needs.reserve,city.currency.policy.treasuryReserve))));break;
+      case'inflation':city.currency.policy.mode='capped';city.currency.policy.inflationTarget=Math.max(0,bill.payload.target??.001);city.currency.policy.dailyLimit=Math.max(0,Math.round(bill.payload.value));if(!needs.crisis)city.currency.retire(Math.min(city.currency.price(50000),Math.max(0,city.treasury-Math.max(needs.reserve,city.currency.policy.treasuryReserve))));break;
       case'roads':policy.infrastructurePriority=bill.payload.value;for(const project of city.development.projects)if(project.accountId==='treasury'&&!project.cancelled&&project.status!=='completed'&&project.priority<100){if(project.politicalPriority==null)project.politicalPriority=project.priority||0;project.priority=project.politicalPriority+(bill.payload.value==='lamps'&&project.service==='lamp'||bill.payload.value==='roads'&&['road','road-repair'].includes(project.service)?50:0);}break;
       case'nationalize':wait=this.transferFirm(bill,true);break;
       case'privatize':wait=this.transferFirm(bill,false);break;

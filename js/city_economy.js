@@ -41,6 +41,11 @@ export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).
 // Keep a multi-week public food reserve so farms can be founded, staffed,
 // planted and harvested before the town hall's opening stock runs out.
 export const ECONOMY_RULES = { workingCapital: 20000, mealUnits: 3, initialMealsPerCitizen: 96, farmBatch: 12, farmLabor: 120 };
+const RETAIL_STARTUP_CAPITAL=Object.freeze({market:200000,greengrocer:75000,bakery:60000,restaurant:75000});
+function startupCash(city,type){
+  const base=type==='bank'?200000:type==='research_institute'?100000:ECONOMY_RULES.workingCapital;
+  return city.currency.price(Math.max(base,RETAIL_STARTUP_CAPITAL[type]||0));
+}
 export const MEAL_RECIPES = {
   pao: { label: 'Pão simples', inputs: { pao: 3 }, quality: 1 },
   refogado: { label: 'Refeição de feijão e cebola', inputs: { feijao: 2, cebola: 1 }, quality: 2 },
@@ -138,8 +143,13 @@ export class CityEconomy {
     this.city.vehicles?.initializeStarterStock();
     this.city.development.ensurePlots();
     this.hire();
+    this.staffInitialPublicOperations();
     this.updateDemand();
     if(this.city.startFoundingWorks)this.city.development.startFoundingEssentialWorks();
+  }
+  staffInitialPublicOperations(){
+    const city=this.city,priorities=['popular_refectory','bank','builder','quarry','carrier','cleaner','mint','cycle_assembler'],available=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.jobId&&!c.businessIds.length).sort((a,b)=>this.hiringScore(b,city.buildings.find(x=>x.type==='builder'))-this.hiringScore(a,city.buildings.find(x=>x.type==='builder'))||a.id-b.id);
+    for(const type of priorities){const b=city.buildings.find(x=>x.type===type&&x.active&&!x.entity.destroyed&&city.fiscal.municipal(x)&&x.jobs>0);if(!b||b.balance<b.wage*60||b.workers.length>=b.jobs)continue;const citizen=available.shift();if(!citizen)break;citizen.jobId=b.id;citizen.profession=this.jobSkill(b);b.workers.push(citizen.id);city.history.employment(citizen,b,'contratação','Equipe operacional inicial da cidade');city.log(`${citizen.entity.properties.name} foi contratado para iniciar a operação municipal em ${b.entity.properties.name}.`,'work',[citizen.id],{kind:'starter-public-employment',buildingId:b.id});}
   }
   appointMayor() { return this.city.politics.ensureMayor(); }
   leaveJob(c, reason = 'Troca de ocupação') {
@@ -169,7 +179,7 @@ export class CityEconomy {
     const remaining=Math.max(0,Math.min(b.stoneReserve??12000,rock)),staff=b.workers.length+(this.workingOwner(b)?1:0);
     return {remaining,staff,daily:Math.min(remaining,staff*80),potential:Math.min(remaining,Math.max(staff,b.jobs||0)*80)};
   }
-  workingOwner(b){const c=this.citizen(b?.ownerId);return c&&c.role!=='councilor'?c:null;}
+  workingOwner(b){const c=this.citizen(b?.ownerId);return c&&c.role!=='councilor'&&!(b.workers||[]).includes(c.id)?c:null;}
   staffEssentials() {
     const city=this.city,needs=city.welfare.conditions(),projects=city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed'),stone=projects.reduce((n,p)=>n+Math.max(0,p.stone-p.inventory.pedra-(p.incoming.pedra||0)),0),freight=city.logistics.demandMetrics(),firms=this.businesses;
     const builderLoad=new Map(),quarryRemaining=new Map();let usableQuarries=0,carriers=0;
@@ -228,6 +238,28 @@ export class CityEconomy {
     }
     return this.routeCache.get(key);
   }
+  retailAssortment(b) {
+    if(!['market','greengrocer'].includes(b?.type))return [];
+    if(Array.isArray(b.retailAssortment)&&b.retailAssortment.length)return b.retailAssortment;
+    const candidates=edible.filter(g=>this.accepts(b,g));
+    if(b.type==='market')candidates.push('pao');
+    const preference=new Map();
+    for(const c of this.city.citizens)for(const [good,value]of Object.entries(c.foodPreferences||{}))if(value>0)preference.set(good,(preference.get(good)||0)+value);
+    const score=good=>this.businesses.reduce((n,seller)=>{
+      let amount=seller.inventory[good]||0;
+      if(seller.type==='farm'&&seller.crop===good)amount+=this.farmCapacity(seller,true).daily/24;
+      else if(INDUSTRIES[seller.type]?.outputs?.[good])amount+=seller.workers.length*INDUSTRIES[seller.type].outputs[good]*12/Math.max(1,INDUSTRIES[seller.type].labor);
+      else if(seller.type==='bakery'&&good==='pao')amount+=seller.workers.length*12;
+      return n+amount;
+    },0)*6+(preference.get(good)||0)*2;
+    const rank=(a,d)=>score(d)-score(a)||a.localeCompare(d);
+    // Keep staple portions affordable to households with modest cash. Premium
+    // foods can round out the basket, but must not crowd every low-cost option
+    // off a new shop's shelves.
+    const staples=candidates.filter(g=>['pao','feijao','milho','mandioca','arroz','alface','tomate','cebola'].includes(g)).sort(rank).slice(0,2);
+    b.retailAssortment=[...staples,...candidates.filter(g=>!staples.includes(g)).sort(rank)].slice(0,4);
+    return b.retailAssortment;
+  }
   updateDemand() {
     const activeCitizens = this.city.citizens.filter(c => !c.entity.destroyed);
     const population = activeCitizens.length;
@@ -235,7 +267,7 @@ export class CityEconomy {
     const farms = businesses.filter(b => b.type === 'farm');
     const buyers = businesses.filter(b => retailTypes.has(b.type));
     const industrialBusinesses = businesses.filter(b => INDUSTRIES[b.type]);
-    for (const b of businesses) b.inputDemand = b.type==='kitchen'?Object.fromEntries([...new Set(KITCHEN_RECIPES.flatMap(r=>Object.keys(r.inputs)))].map(g=>[g,Math.max(0,18-(b.inventory[g]||0)-(b.incoming[g]||0))])):b.type==='mill'?{girassol:Math.max(0,36-b.inventory.girassol-(b.incoming.girassol||0))}:INDUSTRIES[b.type] ? Object.fromEntries(Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs).map(([g,n])=>[g,Math.max(0,(b.type==='cycle_assembler'?n*Math.max(6,b.vehicleBatchSize||3):b.type==='publisher'&&g==='papel'?Math.max(12,(b.bookPages||5)*3):n*6)-b.inventory[g]-(b.incoming[g]||0))])) : b.type === 'bakery' ? { trigo: Math.max(0, 24 - b.inventory.trigo) } : b.type==='restaurant' ? Object.fromEntries(restaurantGoods.map(g=>[g,Math.max(0,6-b.inventory[g]-(b.incoming[g]||0))])) : !retailTypes.has(b.type) ? {} : Object.fromEntries(edible.filter(g => this.accepts(b, g)).map(g => [g, Math.max(0, 12 - b.inventory[g])]));
+    for (const b of businesses) b.inputDemand = b.type==='kitchen'?Object.fromEntries([...new Set(KITCHEN_RECIPES.flatMap(r=>Object.keys(r.inputs)))].map(g=>[g,Math.max(0,18-(b.inventory[g]||0)-(b.incoming[g]||0))])):b.type==='mill'?{girassol:Math.max(0,36-b.inventory.girassol-(b.incoming.girassol||0))}:INDUSTRIES[b.type] ? Object.fromEntries(Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs).map(([g,n])=>[g,Math.max(0,(b.type==='cycle_assembler'?n*Math.max(6,b.vehicleBatchSize||3):b.type==='publisher'&&g==='papel'?Math.max(12,(b.bookPages||5)*3):n*6)-b.inventory[g]-(b.incoming[g]||0))])) : b.type === 'bakery' ? { trigo: Math.max(0, 24 - b.inventory.trigo) } : b.type==='restaurant' ? Object.fromEntries(restaurantGoods.map(g=>[g,Math.max(0,6-b.inventory[g]-(b.incoming[g]||0))])) : ['market','greengrocer'].includes(b.type) ? Object.fromEntries(this.retailAssortment(b).map(g=>[g,Math.max(0,12-(b.inventory[g]||0)-(b.incoming[g]||0))])) : !retailTypes.has(b.type) ? {} : Object.fromEntries(edible.filter(g => this.accepts(b, g)).map(g => [g, Math.max(0, 12 - b.inventory[g])]));
     for(const b of this.city.buildings)if(b.active&&!b.entity.destroyed&&(civicSpec(b)||justiceServiceSpec(b)))b.inputDemand=Object.fromEntries(Object.entries(b.type==='library'?{livros:1}:(civicSpec(b)||justiceServiceSpec(b)).inputs).map(([g,n])=>[g,Math.max(0,n*6-(b.inventory[g]||0)-(b.incoming[g]||0))]));
     const stockByGood = new Map(), inputDemandByGood = new Map(), totalInputDemandByGood = new Map(), foodPreferenceByGood = new Map();
     for (const b of businesses) {
@@ -263,7 +295,11 @@ export class CityEconomy {
     for (const type of ['market', 'greengrocer', 'bakery', 'restaurant']) {
       const count = businesses.filter(b => b.type === type).length;
       const wealthy=activeCitizens.filter(c=>(c.balance||0)>=this.city.currency.price(12000)).length;
-      const target = type==='restaurant'?Math.ceil(wealthy/48):Math.max(1, Math.ceil(population / (type === 'market' ? 20 : 36)));
+      // Retail capacity should grow only after its service area exists. A
+      // forced minimum of one opened markets and groceries in tiny towns
+      // already fully served by the public refectory, leaving them with wages
+      // and restocking costs but no customers.
+      const target = type==='restaurant'?Math.floor(wealthy/96):Math.floor(population / ({market:150,greengrocer:120,bakery:256}[type]||120));
       const shortage = Math.max(0, target - count);
       items.push({ type, crop: null, score: shortage ? ({ market: 90, greengrocer: 85, bakery: 80, restaurant: 74 })[type] + shortage * 10 : 0, reason: type==='restaurant'?`${wealthy} moradores têm renda para refeições preparadas`:count ? 'População e capacidade de atendimento' : 'Este tipo de comércio ainda não existe' });
     }
@@ -362,10 +398,10 @@ export class CityEconomy {
     return b.type === 'farm' ? Math.min(property, 1000) : property + (b.municipal ? b.balance + Object.entries(b.inventory).reduce((n, [good, qty]) => n + qty * this.goods[good].price, 0) : 0);
   }
   quote(type, building = null) {
-    if (building) return this.premisesPrice(building) + this.city.currency.price(type==='bank'?200000:ECONOMY_RULES.workingCapital);
-    if (type === 'farm') return this.city.currency.price(ECONOMY_RULES.workingCapital);
+    if (building) return this.premisesPrice(building) + startupCash(this.city,type);
+    if (type === 'farm') return startupCash(this.city,type);
     const cells = 18;
-    return cells * (2 * this.goods.pedra.price + this.city.currency.price(10000)) + this.city.currency.price(type==='bank'?200000:ECONOMY_RULES.workingCapital);
+    return cells * (2 * this.goods.pedra.price + this.city.currency.price(10000)) + startupCash(this.city,type);
   }
 
   setupFarm(b) {
@@ -406,10 +442,14 @@ export class CityEconomy {
     if (b.type === 'quarry') b.stoneReserve ??= 12000;
     for (const u of b.units) { u.forSale = u.forRent = false; u.occupantId = b.accountId; }
     if (!founder.businessIds.includes(b.id)) founder.businessIds.push(b.id);
-    const amount = Math.min(this.city.currency.price(b.type==='bank'?200000:ECONOMY_RULES.workingCapital), founder.balance);
+    const amount = Math.min(startupCash(this.city,b.type), founder.balance);
     if (capitalize && amount) this.city.transfer(founder.accountId, b.accountId, amount, 'Capital de empresa');
-    if (!capitalize && b.balance === 0) this.city.transfer(founder.accountId, b.accountId, Math.min(this.city.currency.price(b.type==='bank'?200000:ECONOMY_RULES.workingCapital), founder.balance), 'Capital de empresa');
-    if (founder.jobId) this.leaveJob(founder);
+    if (!capitalize && b.balance === 0) this.city.transfer(founder.accountId, b.accountId, Math.min(startupCash(this.city,b.type), founder.balance), 'Capital de empresa');
+    if (founder.jobId) this.leaveJob(founder,'Passou a trabalhar na própria empresa');
+    // A small firm starts with its founder doing one real job. This preserves
+    // production and household income instead of leaving the founder outside
+    // the labor market while the new company waits for its first hire.
+    if(b.jobs>0&&b.workers.length<b.jobs){founder.jobId=b.id;founder.profession=this.jobSkill(b);b.workers.push(founder.id);this.city.history.employment(founder,b,'contratação','Empreendedor assumiu um posto operacional na própria empresa');}
     this.city.log(`${founder.entity.properties.name} fundou ${b.entity.properties.name}${crop ? ` para cultivar ${CROPS[crop].label.toLowerCase()}` : ''}.`, 'business', [founder.id], { kind: 'business-founded', buildingId: b.id, type: b.type, crop });
     if(b.type==='office_tower')setupOfficeTower(this.city,b);
     this.buySeeds(b); return b;
@@ -419,7 +459,7 @@ export class CityEconomy {
     if(b&&OFFICE_ONLY_TYPES.has(b.type)&&!b.officeTenantOf)return null;
     if (!b || (b.active && !b.municipal) || b.entity.destroyed || !founder || !this.city.society.isAdult(founder) || this.city.politics.officeHolder(founder) || !PRIVATE_TYPES.has(b.type) || !b.units.every(u => u.ownerId === 'treasury' && u.forSale)) return null;
     const price = this.premisesPrice(b);
-    if (founder.balance < price + this.city.currency.price(ECONOMY_RULES.workingCapital) || !this.city.transfer(founder.accountId, 'treasury', price, 'Compra de instalações para empresa')) return null;
+    if (founder.balance < price + startupCash(this.city,b.type) || !this.city.transfer(founder.accountId, 'treasury', price, 'Compra de instalações para empresa')) return null;
     for (const u of b.units) u.ownerId = founder.accountId;
     const plot = this.city.development.plots.find(p => p.id === b.plotId); if (plot) { plot.ownerId = founder.accountId; plot.forSale = false; }
     this.city.history.ownership(b,'treasury',founder.accountId,{action:'purchase',amount:price});
@@ -484,6 +524,9 @@ export class CityEconomy {
     const finishSiteSearch=beginBuildingSiteSearch(this.city,profile?(profile.siteSearch={}):null);
     try {
       this.updateDemand();nextStage('officeSearchMs');
+      // Give the first viable food retailer access to private bank liquidity
+      // before office and production projects compete for it.
+      if(this.demands.some(d=>['market','greengrocer'].includes(d.type)&&d.score>=30)&&bootstrapEnterprise(this))return true;
       const officeStarted=this.investInOfficeBusiness();
       if(officeStarted)return true;
       // Construction and transport must be staffed before the first factories can receive their materials.
@@ -586,13 +629,15 @@ export class CityEconomy {
         if(good==='lixo' && buyer.type==='composting')continue;
         const batch=(this.city.vehicles.recipeFor(buyer)?.inputs||(buyer.type==='library'?{livros:1}:(civicSpec(buyer)||justiceServiceSpec(buyer))?.inputs)||INDUSTRIES[buyer.type]?.inputs)?.[good];
         const scarce=batch&&(available[good]||0)<(batchDemand[good]||0);
-        const target = scarce?batch:buyer.type==='publisher'&&good==='papel'?Math.max(12,(buyer.bookPages||5)*3):buyer.type==='kitchen'?18:buyer.type==='restaurant'?6:batch ? batch*6 : buyer.type === 'bakery' ? 24 : 18;
+        const target = scarce?batch:buyer.type==='publisher'&&good==='papel'?Math.max(12,(buyer.bookPages||5)*3):buyer.type==='kitchen'?18:buyer.type==='restaurant'?6:['market','greengrocer'].includes(buyer.type)?(this.retailAssortment(buyer).includes(good)?12:0):batch ? batch*6 : buyer.type === 'bakery' ? 24 : 18;
         if (buyer.inventory[good] + (buyer.incoming[good] || 0) > target / 2) continue;
         let remaining = Math.max(0, target - buyer.inventory[good] - (buyer.incoming[good] || 0));
         const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || b.type==='kitchen'&&MEAL_COMPONENTS[good] || INDUSTRIES[b.type]?.outputs[good] || b.type==='import_exporter') && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) + this.city.reputation.providerPenalty(a) + this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),a) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y) - this.city.reputation.providerPenalty(b) - this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),b));
         sellers.sort((a,b)=>Number(this.supplyAgreements.some(r=>r.sellerId===b.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute))-Number(this.supplyAgreements.some(r=>r.sellerId===a.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute)));
         for (const seller of sellers) {
-          const reserve = buyer.workers.length * buyer.wage * 90;
+          const reserve = ['market','greengrocer','bakery','restaurant'].includes(buyer.type)
+            ? Math.max(this.city.currency.price(5000),this.city.fiscal.businessReserve(buyer))
+            : buyer.workers.length * buyer.wage * 90;
           const quantity = Math.min(this.city.logistics.transportLimit(seller,buyer), inventoryFree(buyer), remaining, seller.inventory[good], Math.max(0, Math.floor((buyer.balance - reserve) / this.goods[good].price)));
           const agreement=this.supplyAgreements.find(r=>r.sellerId===seller.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute),unitPrice=agreement?.unitPrice??(seller.type==='import_exporter'?Math.ceil((seller.importedUnitPrice?.[good]||this.goods[good].price)*1.12):this.goods[good].price);
           if (quantity > 0 && this.transferGoods(seller, buyer, good, quantity, unitPrice)) remaining -= quantity;
@@ -604,10 +649,12 @@ export class CityEconomy {
           INDUSTRIES[b.type]?.outputs?.[good]));
         const finishedVehicleStock=buyer.type==='cycle_assembler'?['bicicleta','bicicleta_carga','patinete','patins'].reduce((n,type)=>n+(buyer.inventory[type]||0),0):0;
         const assemblerHasStarterStock=buyer.type==='cycle_assembler'&&finishedVehicleStock>=Math.max(12,Math.ceil((this.city.initialPopulation||this.city.citizens.length)/12));
-        const canImport=(batch||!localMakers)&&remaining>0&&!assemblerHasStarterStock&&!['lixo','sementes','pedra'].includes(good);
+        const canImport=(batch||!localMakers||['market','greengrocer','bakery','restaurant'].includes(buyer.type))&&remaining>0&&!assemblerHasStarterStock&&!['lixo','sementes','pedra'].includes(good);
         if(canImport&&inventoryFree(buyer)>0){
-          const importer=businesses.find(b=>b.type==='import_exporter'&&b.active&&!b.entity.destroyed&&b.id!==buyer.id),target=importer||buyer,limit=Math.min(remaining,inventoryFree(target),this.city.logistics.transportLimit(null,target),24),reserve=target.workers.length*target.wage*90;
-          if(limit>0&&target.balance>reserve){const shipment=orderImport(this.city,target,good,limit);if(shipment)remaining-=limit;}
+          const importer=businesses.find(b=>b.type==='import_exporter'&&b.active&&!b.entity.destroyed&&b.id!==buyer.id),target=importer||buyer,retailBuyer=['market','greengrocer','bakery','restaurant'].includes(buyer.type),reserve=retailBuyer?Math.max(this.city.currency.price(5000),this.city.fiscal.businessReserve(target)):target.workers.length*target.wage*90;
+          const freightHeadroom=this.city.currency.price((this.city.world.width+this.city.world.height+24*4)*12),unitCost=Math.ceil(this.goods[good].price*2.25)+Math.ceil(this.goods[good].price*(this.city.politics?.policy?.importTaxes?.[good]||0))+Math.ceil(this.goods[good].price*.03),affordable=retailBuyer?Math.floor(Math.max(0,target.balance-reserve-freightHeadroom)/Math.max(1,unitCost)):24;
+          const limit=Math.min(remaining,inventoryFree(target),this.city.logistics.transportLimit(null,target),24,affordable);
+          if(limit>0&&target.balance>reserve){const shipment=orderImport(this.city,target,good,limit,{reserveBalance:retailBuyer?reserve:0});if(shipment)remaining-=limit;}
         }
       }
     }
@@ -667,7 +714,11 @@ export class CityEconomy {
     if (!offer || offer.price > (this.city.accounts.get(this.city.payerFor(c))?.balance || 0)) return Infinity;
     const choice=Math.min(1,Math.max(0,(c.needs.food-10)/30));
     const cash=this.city.accounts.get(this.city.payerFor(c))?.balance||0,wealth=Math.min(1,cash/Math.max(1,this.city.currency.price(12000))),priceSensitivity=(.65+(c.traits?.frugality??.5)*.7)*(1-wealth*.8),restaurantBonus=b.type==='restaurant'?wealth*10:0;
-    return Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y) - ((c.knownAdvertisements?.[b.id]||0)>this.city.minute?2:0) + choice*(offer.price / Math.max(1, this.city.currency.price(100)) * priceSensitivity - this.mealTaste(c, offer) * 45 - restaurantBonus + this.city.reputation.providerPenalty(b) + this.city.relationships.businessPenalty(c,b));
+    // Keep the free meal as the easy choice for families receiving assistance.
+    // Residents who can pay should give nearby private grocers a fair chance
+    // to win customers instead of routing every meal through the public hall.
+    const paidPublicMeal=['popular_refectory','townhall'].includes(b.type)&&this.city.welfare&&!this.city.welfare.mealAssistanceEligible(c)?24:0;
+    return Math.hypot(b.door.x - c.entity.x, b.door.y - c.entity.y) + paidPublicMeal - ((c.knownAdvertisements?.[b.id]||0)>this.city.minute?2:0) + choice*(offer.price / Math.max(1, this.city.currency.price(100)) * priceSensitivity - this.mealTaste(c, offer) * 45 - restaurantBonus + this.city.reputation.providerPenalty(b) + this.city.relationships.businessPenalty(c,b));
   }
   enjoyMeal(c, offer, showBillboard = true) {
     const taste = this.mealTaste(c, offer);
@@ -677,7 +728,7 @@ export class CityEconomy {
   }
   mealOffer(b, citizen = null) {
     if (!b?.active || b.entity.destroyed || (!retailTypes.has(b.type) && !['townhall','farm','popular_refectory','jail'].includes(b.type) && INDUSTRIES[b.type]?.category !== 'food')) return null;
-    const packed=b.type==='jail'||b.type==='restaurant'?null:preparedOffer(this,b,citizen,true);if(packed&&(!citizen||packed.price<=(this.city.accounts.get(this.city.payerFor(citizen))?.balance||0)))return this.city.welfare.mealContribution(b,citizen,packed);if(b.type==='kitchen')return null;
+    const packed=b.type==='jail'||b.type==='restaurant'?null:preparedOffer(this,b,citizen,true);if(packed&&(!citizen||packed.price<=(this.city.accounts.get(this.city.payerFor(citizen))?.balance||0))){if(packed.price>0)packed.price=Math.ceil(packed.price*1.35);return this.city.welfare.mealContribution(b,citizen,packed);}if(b.type==='kitchen')return null;
     const free=b.type==='townhall'||b.type==='popular_refectory'||b.type==='jail',cash=citizen?(this.city.accounts.get(this.city.payerFor(citizen))?.balance||0):Infinity;
     let details=null,bestScore=-Infinity;
     for(const option of mealOptions(this.recipes)){
@@ -691,13 +742,13 @@ export class CityEconomy {
     if(!details){if(b.type==='restaurant')return null;const fallback=this.foodOffer(b);return fallback?this.city.welfare.mealContribution(b,citizen,{...fallback,inputs:{[fallback.good]:fallback.quantity},quality:1}):null;}
     const inputValue=details.entries.reduce((n,[g,q])=>n+(this.goods[g]?.price||0)*q,0);
     const quality = details.quality + (b.mealQuality || 0) - 1;
-    const restaurantPrice=b.type==='restaurant'?Math.ceil(inputValue*1.6):Math.round(inputValue);
+    const restaurantPrice=b.type==='restaurant'?Math.ceil(inputValue*1.6):Math.ceil(inputValue*1.35);
     return this.city.welfare.mealContribution(b,citizen,{ good: details.good, label:details.label||details.good, quantity: 1, inputs: details.inputs, quality, price: free ? 0 : restaurantPrice });
   }
   foodOffer(b) {
     const goods = b.type === 'bakery' ? ['pao'] : [...edible, 'pao'];
     const good = goods.filter(g => b.inventory[g] >= (MEAL_COMPONENTS[g]?1:ECONOMY_RULES.mealUnits)).sort((a, c) => b.inventory[c] - b.inventory[a])[0];
-    return good ? { good, quantity: MEAL_COMPONENTS[good]?1:ECONOMY_RULES.mealUnits, price: b.type === 'townhall' || b.type === 'popular_refectory' ? 0 : Math.round(this.goods[good].price*1.2*(MEAL_COMPONENTS[good]?1:ECONOMY_RULES.mealUnits)) } : null;
+    return good ? { good, quantity: MEAL_COMPONENTS[good]?1:ECONOMY_RULES.mealUnits, price: b.type === 'townhall' || b.type === 'popular_refectory' ? 0 : Math.round(this.goods[good].price*1.35*(MEAL_COMPONENTS[good]?1:ECONOMY_RULES.mealUnits)) } : null;
   }
   consumeMeal(c, b) {
     const baseOffer=this.mealOffer(b,c),offer=baseOffer&&{...baseOffer,quality:(baseOffer.quality||1)+(c.indoorLocation?.roomType==='dining'?.5:0)}; if (!offer) { this.failedMeals++; if (b) b.stockouts++; return false; }
@@ -936,7 +987,7 @@ export class CityEconomy {
     for(const b of this.city.buildings)if(this.city.fiscal?.municipal(b))this.city.fiscal.distribute(b);
     for (const b of this.businesses) {
       const owner = this.citizen(b.ownerId);
-      const reserve=Math.max(this.city.currency.price(5000),(b.wage||0)*Math.max(2,b.jobs||1)*24);
+      const reserve=this.city.fiscal?.businessReserve(b)??Math.max(this.city.currency.price(5000),b.workers.length*(b.wage||0)*480*7);
       if(b.balance<reserve&&owner&&owner.balance>this.city.welfare.subsistenceFloor(owner)+this.city.currency.price(2500))this.city.transfer(owner.accountId,b.accountId,Math.min(this.city.currency.price(10000),owner.balance-this.city.welfare.subsistenceFloor(owner)-this.city.currency.price(1500)),'Aporte emergencial do proprietário');
       if(b.equityShares?.length){if(b.balance>=reserve)distributeShareDividends(this.city,b);}
       else if(owner){

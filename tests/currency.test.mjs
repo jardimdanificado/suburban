@@ -4,6 +4,7 @@ import { setup, totalMoney, putAtWorkCell } from './helpers/city.mjs';
 import { CURRENCY_RULES } from '../js/city_currency.js';
 import { GOODS } from '../js/city_economy.js';
 import { DEVELOPMENT_RULES } from '../js/city_development.js';
+import {taxRate} from '../js/city_sales_tax.js';
 
 function printer(city) {
   city.currency.policy.mode='capped';
@@ -66,20 +67,20 @@ test('issuance raises actual goods, services, property and wage quotes without i
   }
   const cash=c.balance,index=city.currency.priceIndex;
   assert(index>1);assert(city.currency.dailyInflation>0);assert(unit.price>price);
-  assert(city.economy.goods.pedra.price>stone);assert(builder.wage>1001);assert.equal(city.economy.goods.pedra.price,city.currency.price(GOODS.pedra.price));
+  assert(city.economy.goods.pedra.price>stone);assert(builder.wage>1001);assert.equal(city.economy.goods.pedra.price,city.currency.price(GOODS.pedra.price*(1+taxRate(city,'materials'))));
   assert.equal(city.development.serviceOffers(builder.id)[0].feePerCell,city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell));
-  assert.equal(city.economy.mealOffer(city.buildings[0]).price,0);
+  assert.equal(city.economy.mealOffer(city.buildings.find(building=>building.type==='popular_refectory')).price,0);
   assert.equal(order.balance,escrow);assert.equal(order.cost,cost);
   city.currency.daily();assert.equal(city.currency.priceIndex,index);assert.equal(c.balance,cash);
-  assert.equal(other.economy.goods.pedra.price,GOODS.pedra.price);assert.equal(other.currency.priceIndex,1);
+  assert.equal(other.economy.goods.pedra.price,other.currency.price(GOODS.pedra.price*(1+taxRate(other,'materials'))));assert.equal(other.currency.priceIndex,1);
   assert.equal(totalMoney(city),city.currency.netIssued());
 });
 
-test('without a mint, autonomous budgets and investment preserve the initial money supply',()=>{
+test('fixed daily issuance does not depend on staffing the mint',()=>{
   const city=setup({starter:true});city.buildings.find(b=>b.type==='mint').entity.destroyed=true;
   for(let i=0;i<2*1440*4;i++)city.update(1/16);
-  assert.equal(city.currency.issued,CURRENCY_RULES.initialSupply);assert.equal(totalMoney(city),CURRENCY_RULES.initialSupply);
-  assert.equal(city.currency.priceIndex,1);assert.equal(city.currency.dailyInflation,0);
+  assert.equal(city.currency.issued,CURRENCY_RULES.initialSupply+2*CURRENCY_RULES.mintDailyLimit);assert.equal(totalMoney(city),city.currency.netIssued());
+  assert(city.currency.priceIndex>1);assert(city.currency.dailyInflation>0);
 });
 
 test('buying a municipal firm includes its cash and stock, preventing a subsidized takeover',()=>{

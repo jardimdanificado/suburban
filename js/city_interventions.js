@@ -1,5 +1,6 @@
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {VEHICLE_SPECS} from './city_vehicles.js?v=indoor-display-centering-1';
+import {TAX_CATEGORIES,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const DIRECTIVE_LABELS={publicWork:'Contratação de obra pública',veto:'Veto do prefeito',releasePrisoner:'Libertação de pessoa presa',arrestAuthorization:'Autorização de prisão',worksBudget:'Ajuste da verba de obras',worksTransfer:'Transferência para obras',privatize:'Oferta de participação estatal',nationalize:'Estatização de empresa',policeStaffing:'Ajuste do efetivo policial',parliamentaryImmunity:'Regra de imunidade parlamentar',cleanRecord:'Regra da ficha limpa',penalCode:'Ajuste do código penal',suspend:'Afastamento do prefeito',build:'Obra pública',convict:'Condenação política',impeach:'Cassação de mandato'};
 export const INTERVENTIONS={
@@ -119,8 +120,8 @@ export class CityInterventions {
       const amount=city.currency.price(Math.max(1000,Math.min(10000000,Number(options.amount)||100000)));if(!city.currency.issue(amount))return city.fail('A emissão não pôde ser registrada no tesouro.');
       record.cost=amount;record.affected=1;record.description=`A prefeitura recebeu ${city.currency.format?city.currency.format(amount):`R$ ${(amount/100).toFixed(2)}`} por emissão extraordinária; o dinheiro entrou no tesouro.`;
     }else if(kind==='divineDecree'){
-      const value=Number(options.value),category=options.category;if(!Number.isFinite(value)||value<0||value>.5)return city.fail('A alíquota deve ficar entre 0% e 50%.');
-      const before=category?city.politics.policy.salesTaxes?.[category]:city.taxRate;if(category){if(!Object.hasOwn(city.politics.policy.salesTaxes||{},category))return city.fail('Categoria de imposto desconhecida.');city.politics.policy.salesTaxes[category]=value;}else city.taxRate=value;
+      const value=Number(options.value),category=options.category,minimum=category?TAX_CATEGORIES[category]?.rate:MINIMUM_WAGE_TAX_RATE;if(!Number.isFinite(value)||!minimum||value<minimum||value>.5)return city.fail('A alíquota deve ser pelo menos o dobro da taxa anterior e no máximo 50%.');
+      const before=category?city.politics.policy.salesTaxes?.[category]:city.taxRate;if(category){city.politics.policy.salesTaxes[category]=value;}else city.taxRate=value;
       record.affected=1;record.description=`Decreto econômico: ${category?`imposto de ${category}`:'imposto salarial'} alterado imediatamente de ${Math.round(before*100)}% para ${Math.round(value*100)}%.`;
     }else if(kind==='divineBankLiquidity'){
       const b=city.building(targetId);if(!b||b.type!=='bank'||b.entity.destroyed)return city.fail('Selecione um banco ativo.');const amount=city.currency.price(Math.max(1000,Math.min(1000000,Number(options.amount)||25000))),reserve=city.welfare.conditions().reserve;

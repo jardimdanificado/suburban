@@ -486,7 +486,7 @@ export class CityUI {
       p.kv('Tipo de ocupação', b.constructionKind === 'open-air' ? 'Ar livre / no nível do solo' : 'Edifício');
       p.button(`TERRENO ${b.plotId}`, () => this.setPlotSelection(b.plotId));
       p.kv('Situação', b.active ? 'Em atividade' : b.type === 'residential' ? 'Residencial' : 'Instalação disponível');
-      if(b.type==='mint'){p.kv('Emitido hoje',money(city.currency.issuedToday));p.kv('Inflação acumulada',`${((city.currency.priceIndex-1)*100).toFixed(2)}%`);p.note('A emissão entra no tesouro e depende de um funcionário trabalhando nesta instalação.');}
+      if(b.type==='mint'){p.kv('Emitido hoje',money(city.currency.issuedToday));p.kv('Inflação acumulada',`${((city.currency.priceIndex-1)*100).toFixed(2)}%`);p.note('A cota diária entra no tesouro mesmo sem funcionário na casa da moeda.');}
       p.note('Gestor da empresa'); if (b.ownerId) p.button(name(city.economy.citizen(b.ownerId)?.entity), () => this.openCitizen(b.ownerId)); else p.note(b.municipal?'Empresa municipal / patrimônio público':b.equityShares?.length?'Sem gestor elegível no momento':'Serviço público');
 
       if(['super_popular_housing','popular_housing','popular_luxury_housing'].includes(b.type)){const social=[...city.housing.homes.values()].filter(h=>h.buildingId===b.id && city.housing.isSocial(h));if(social.length){p.heading('OCUPAÇÃO SOCIAL');p.kv('Famílias abrigadas / moradias',`${social.filter(h=>city.housing.residents(h).length>0).length} / ${social.length}`);p.kv('Moradores',city.citizens.filter(c=>!c.entity.destroyed && social.some(h=>h.id===c.homeId)).length);p.kv('Adultos sem teto na cidade',city.citizens.filter(c=>!c.entity.destroyed && city.society.isAdult(c) && !c.homeUnitId).length);p.note('Ocupação gratuita com propriedade municipal. Famílias sem teto com dependentes e menos recursos têm prioridade.');}}
@@ -809,11 +809,11 @@ export class CityUI {
     p.kv('Dinheiro emitido',money(currency.issued));p.kv('Emitido hoje',money(currency.issuedToday));
     p.kv('Inflação diária',`${(currency.dailyInflation*100).toFixed(2)}%`);p.kv('Inflação acumulada',`${((currency.priceIndex-1)*100).toFixed(2)}%`);
     p.kv('Emissão líquida',money(currency.netIssued()));p.kv('Moeda retirada',money(currency.burned));
-    p.kv('Modo de emissão',({automatic:'Automático',capped:'Cota fixa',paused:'Pausado'})[currency.policy.mode]);
-    p.buttons([['automatic','AUTOMÁTICO'],['capped','COTA FIXA'],['paused','PAUSAR EMISSÃO']].map(([mode,label])=>({label,selected:currency.policy.mode===mode,click:()=>this.policyAction(`Política monetária: ${label}.`,()=>{currency.policy.mode=mode;})})));
-    p.kv('Teto de emissão/dia',money(currency.policy.dailyLimit));
+    p.kv('Regime de emissão',currency.policy.mode==='paused'?'Pausado':'Cota diária fixa');
+    p.buttons([['capped','MANTER COTA FIXA'],['paused','PAUSAR EMISSÃO']].map(([mode,label])=>({label,selected:currency.policy.mode===mode,click:()=>this.policyAction(`Política monetária: ${label}.`,()=>{currency.policy.mode=mode;})})));
+    p.kv('Cota de emissão/dia',money(currency.policy.dailyLimit));
     p.buttons([{label:'REDUZIR COTA',click:()=>this.policyAction('Cota de emissão reduzida.',()=>{currency.policy.dailyLimit=Math.max(0,currency.policy.dailyLimit-10000);})},{label:'AUMENTAR COTA',click:()=>this.policyAction('Cota de emissão aumentada.',()=>{currency.policy.dailyLimit=Math.min(500000,currency.policy.dailyLimit+10000);})},{label:'RETIRAR R$ 1.000',click:()=>{if(!currency.retire(100000))this.notice='É preciso preservar a reserva do tesouro e a base monetária mínima.';}}]);
-    p.note(`Automático: suspende emissão com inflação diária acima de ${(currency.policy.inflationTarget*100).toFixed(2)}% ou tesouro acima da reserva de ${money(currency.policy.treasuryReserve)}.`);
+    p.note('A cota é emitida diariamente sem depender de funcionário na casa da moeda. A Câmara pode alterar o valor por projeto; o prefeito não muda a emissão automaticamente ao assumir.');
     },true);
     this.section(p,'financeBank','Crédito e poupança',()=>{
     p.kv('Poupança protegida',money([...bank.deposits.values()].reduce((n,d)=>n+d.balance,0)));p.kv('Juros de novos empréstimos/dia',`${(bank.policy.loanRate*100).toFixed(2)}%`);p.kv('Rendimento da poupança/dia',`${(bank.policy.savingsRate*100).toFixed(2)}%`);

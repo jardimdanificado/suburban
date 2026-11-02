@@ -83,13 +83,20 @@ export function preparedOffer(economy,b,c=null,affordable=false){
   if(!good)return null;return {good,quantity:1,inputs:{[good]:1},ingredients:MEAL_COMPONENTS[good].ingredients,quality:MEAL_COMPONENTS[good].quality,price:['townhall','popular_refectory'].includes(b.type)?0:economy.goods[good].price};
 }
 export function bootstrapEnterprise(economy){
-  const city=economy.city;if(economy.lastBootstrapDay===city.day)return false;economy.lastBootstrapDay=city.day;
-  const people=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.jobId&&!c.businessIds.length&&!c.startupProjectId&&c.balance>=city.currency.price(500)).sort((a,b)=>b.balance-a.balance);
+  const city=economy.city;if(economy.lastBootstrapDay===city.day)return false;
+  // Business ownership is a capital decision, not a requirement to quit a
+  // resident's day job. Restricting founders to unemployed residents meant
+  // the first shop became impossible exactly as hiring improved.
+  const people=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.businessIds.length&&!c.startupProjectId&&c.balance>=city.currency.price(500)).sort((a,b)=>b.balance-a.balance);
   if(!people.length)return false;
-  const options=economy.demands.filter(d=>d.score>=30&&['market','restaurant','artisan','kitchen','carrier','cleaner','waste_collector'].includes(d.type)).sort((a,b)=>b.score-a.score);
+  const options=economy.demands.filter(d=>d.score>=30&&['market','greengrocer','restaurant','artisan','kitchen','carrier','cleaner','waste_collector'].includes(d.type)).sort((a,b)=>Number(!['market','greengrocer'].includes(a.type))-Number(!['market','greengrocer'].includes(b.type))||b.score-a.score);
+  if(!people.length||!options.length)return false;
+  // Do not consume the daily attempt before any resident can fund a business;
+  // early in a new city, household balances start at zero and grow through work.
+  economy.lastBootstrapDay=city.day;
   for(const option of options){
-    const founder=people[0],partners=people.slice(0,6),open=option.type==='market',capital=city.currency.price(2000),cost=capital+city.currency.price(4*4000)+(open?0:8*economy.goods.pedra.price+city.currency.price(4*12000));
-    const pooled=partners.reduce((n,c)=>n+Math.max(0,c.balance-city.currency.price(500)),0);let loan=null;if(pooled<cost){const bank=city.bank.available()[0];if(bank)loan=city.bank.lendForBusiness(bank,founder,cost-pooled,{type:option.type,score:option.score,budget:cost});if(!loan)continue;}
+    const founder=people[0],partners=people.slice(0,6),open=option.type==='market',capital=city.currency.price(({market:200000,greengrocer:75000,restaurant:75000,bakery:60000})[option.type]||2000),cost=capital+city.currency.price(4*4000)+(open?0:8*economy.goods.pedra.price+city.currency.price(4*12000));
+    const pooled=partners.reduce((n,c)=>n+Math.max(0,c.balance-city.currency.price(500)),0);let loan=null;if(pooled<cost){const bank=city.bank.available()[0],need=cost-pooled,bankReserve=bank&&Math.max(city.currency.price(20000),bank.workers.length*bank.wage*480);if(bank&&(bank.balance-bankReserve)>=need)loan=city.bank.lendForBusiness(bank,founder,need,{type:option.type,score:option.score,budget:cost,initialChain:open,allowPublicRefinance:false});if(!loan)continue;}
     let lot=city.development.plots.find(p=>p.ownerId===founder.accountId&&!p.projectId&&!p.buildingId&&p.width*p.depth===4);
     if(!lot){for(let radius=6;radius<=26&&!lot;radius+=4)for(let i=0;i<12&&!lot;i++){const angle=i*Math.PI/6,x=Math.floor(city.spawn.x+Math.cos(angle)*radius),y=Math.floor(city.spawn.y+Math.sin(angle)*radius);const shapes=[[2,2],[4,1],[1,4]],first=Math.floor(city.random()*shapes.length);for(let shape=0;shape<shapes.length&&!lot;shape++){const [width,depth]=shapes[(first+shape)%shapes.length];const candidate=city.development.createPlot(x,y,width,depth);if(candidate)lot=candidate;}}}
     if(!lot){if(loan)city.bank.cancelBusinessLoan(loan);continue;}

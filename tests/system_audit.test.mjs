@@ -57,11 +57,11 @@ test('installed campaign materials are consumed once and departing citizens leav
   assert.equal(city.economy.lost.tinta,2);assert.equal(city.economy.lost.sementes,1);assert.equal(city.economy.lost.roupas,1);
 });
 
-test('negative salary tax pays an exact treasury subsidy without creating money',()=>{
+test('legacy tax cuts cannot bypass the minimum wage tax or create money',()=>{
   const city=setup(),b=city.economy.businesses.find(b=>b.type==='market'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
   city.taxRate=-.1;const cash=c.balance,treasury=city.treasury,balance=b.balance,supply=city.currency.supply();
   for(let i=0;i<10;i++)assert(city.payWage(c,b,4));
-  assert.equal(c.balance-cash,44);assert.equal(treasury-city.treasury,4);assert.equal(balance-b.balance,40);assert.equal(city.currency.supply(),supply);
+  assert.equal(c.balance-cash,32);assert.equal(city.treasury-treasury,8);assert.equal(balance-b.balance,40);assert.equal(city.currency.supply(),supply);
 });
 
 test('scarce wood supplies first batches across competing chains instead of six batches to one buyer',()=>{

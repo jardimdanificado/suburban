@@ -4,13 +4,17 @@ import {setup,totalMoney,finishShipment} from './helpers/city.mjs';
 import {taxCategory,taxRate} from '../js/city_sales_tax.js';
 
 test('sector taxes are included in the price, paid to the treasury and conserve money',()=>{
- const city=setup({starter:true,funded:true,population:64}),shop=city.economy.businesses.find(b=>b.type==='builder'),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000),before=[buyer.balance,shop.balance,city.treasury],total=totalMoney(city),amount=1080;
- assert.equal(taxRate(city,'food'),.08);assert.equal(city.politics.policy.businessTax,.08);assert(city.transfer(buyer.accountId,shop.accountId,amount,'Serviço: Alimentação',{good:'feijao'}));assert.equal(buyer.balance,before[0]-amount);assert.equal(shop.balance,before[1]+1000);assert.equal(city.treasury,before[2]+80);assert.equal(totalMoney(city),total);assert.equal(shop.salesTaxPaid,80);assert.equal(taxCategory('bicicleta'),'mobility');
+ const city=setup({starter:true,funded:true,population:64}),shop=city.economy.businesses.find(b=>b.type==='builder'),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000),before=[buyer.balance,shop.balance,city.treasury],total=totalMoney(city),amount=1160;
+ assert.equal(taxRate(city,'food'),.16);assert.equal(city.politics.policy.businessTax,.16);assert(city.transfer(buyer.accountId,shop.accountId,amount,'Serviço: Alimentação',{good:'feijao'}));assert.equal(buyer.balance,before[0]-amount);assert.equal(shop.balance,before[1]+1000);assert.equal(city.treasury,before[2]+160);assert.equal(totalMoney(city),total);assert.equal(shop.salesTaxPaid,160);assert.equal(taxCategory('bicicleta'),'mobility');
 });
 
 test('council changes one sector tax and the next sale uses the new rate',()=>{
- const city=setup({starter:true,funded:true,population:64}),p=city.politics,b=city.economy.businesses.find(b=>b.type==='builder'),buyer=city.citizens.find(c=>!p.officeHolder(c)&&c.balance>1000),bill=p.council.propose(p.council.people()[0],'salesTax',{category:'food',value:.2});assert(bill);bill.attempts=0;p.council.execute(bill);assert.equal(taxRate(city,'food'),.2);assert.equal(taxRate(city,'mobility'),.12);const before=city.treasury;assert(city.transfer(buyer.accountId,b.accountId,1200,'Serviço: Alimentação',{good:'pao'}));assert.equal(city.treasury-before,200);
- const metrics=p.mandates.metrics();assert.equal(metrics.salesTax_food,20);assert.equal(metrics.salesTax_mobility,12);
+ const city=setup({starter:true,funded:true,population:64}),p=city.politics,b=city.economy.businesses.find(b=>b.type==='builder'),buyer=city.citizens.find(c=>!p.officeHolder(c)&&c.balance>1000),bill=p.council.propose(p.council.people()[0],'salesTax',{category:'food',value:.2});assert(bill);bill.attempts=0;p.council.execute(bill);assert.equal(taxRate(city,'food'),.2);assert.equal(taxRate(city,'mobility'),.24);const before=city.treasury;assert(city.transfer(buyer.accountId,b.accountId,1200,'Serviço: Alimentação',{good:'pao'}));assert.equal(city.treasury-before,200);
+ const metrics=p.mandates.metrics();assert.equal(metrics.salesTax_food,20);assert.equal(metrics.salesTax_mobility,24);
+});
+
+test('wholesale inputs are not taxed again before the final sale',()=>{
+ const city=setup({starter:true,funded:true,population:64}),firms=city.economy.businesses.filter(b=>b.accountId!=='treasury'),seller=firms.find(b=>b.type==='builder'),buyer=firms.find(b=>b.type==='bank'),before=[buyer.balance,seller.balance,city.treasury];assert(seller&&buyer);assert(city.transfer(buyer.accountId,seller.accountId,1160,'Atacado: feijão',{good:'feijao',quantity:1}));assert.equal(buyer.balance,before[0]-1160);assert.equal(seller.balance,before[1]+1160);assert.equal(city.treasury,before[2]);
 });
 
 test('lamp specialist creates demand, employs workers and is preferred for lamp refills',()=>{

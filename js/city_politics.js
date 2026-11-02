@@ -1,9 +1,10 @@
 // Municipal adaptation of Brutopolis' candidate ranking, voter details and political history.
+import {MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 export const POLITICS_RULES = { termMinutes: 12 * 1440, campaignMinutes: 3 * 1440, maxCandidates: 8, retainedElections: 24 };
 export const POLITICAL_PLATFORMS = {
-  social: { label: 'Proteção social', taxRate: .18, dailyBudget: 160000, dailyLimit: 80000 },
-  balanced: { label: 'Serviços e equilíbrio', taxRate: .1, dailyBudget: 100000, dailyLimit: 60000 },
-  thrift: { label: 'Tributos menores e reserva', taxRate: .03, dailyBudget: 60000, dailyLimit: 40000 },
+  social: { label: 'Proteção social', taxRate: .2, dailyBudget: 160000, dailyLimit: 20000 },
+  balanced: { label: 'Serviços e equilíbrio', taxRate: .2, dailyBudget: 100000, dailyLimit: 20000 },
+  thrift: { label: 'Tributos menores e reserva', taxRate: .2, dailyBudget: 60000, dailyLimit: 20000 },
 };
 export class CityPolitics {
   constructor(city) {
@@ -86,9 +87,9 @@ export class CityPolitics {
   }
   applyPlatform(id,election) {
     const city=this.city,p=POLITICAL_PLATFORMS[id];
-    city.taxRate=p.taxRate;city.welfare.policy.dailyBudget=p.dailyBudget;city.welfare.policy.enabled=true;city.currency.policy.dailyLimit=p.dailyLimit;
-    election.appliedPolicy={...p};
-    city.history.record('government',`Programa eleito aplicado: ${p.label}; imposto ${Math.round(p.taxRate*100)}%, benefícios R$ ${(p.dailyBudget/100).toFixed(2)}/dia e teto de emissão R$ ${(p.dailyLimit/100).toFixed(2)}/dia.`,['treasury',`citizen:${election.winnerId}`],{action:'elected-policy',electionId:election.id,...p});
+    city.taxRate=Math.max(MINIMUM_WAGE_TAX_RATE,p.taxRate);city.welfare.policy.dailyBudget=p.dailyBudget;city.welfare.policy.enabled=true;
+    const policy={...p,dailyLimit:city.currency.policy.dailyLimit};election.appliedPolicy=policy;
+    city.history.record('government',`Programa eleito aplicado: ${p.label}; imposto ${Math.round(p.taxRate*100)}%, benefícios R$ ${(p.dailyBudget/100).toFixed(2)}/dia e cota de emissão preservada em R$ ${(policy.dailyLimit/100).toFixed(2)}/dia.`,['treasury',`citizen:${election.winnerId}`],{action:'elected-policy',electionId:election.id,...policy});
   }
   retain(election) {this.elections.push(election);if(this.elections.length>POLITICS_RULES.retainedElections)this.elections.shift();}
   hourly() {

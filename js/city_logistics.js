@@ -67,7 +67,7 @@ export class CityLogistics {
   }
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
   publicOrder(s){return s.payerAccountId==='treasury'||s.buyer.accountId==='treasury'||s.buyer.municipal;}
-  order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, serviceFees = [], requireCarrier = false,garmentIds=null } = {}) {
+  order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, serviceFees = [], requireCarrier = false,garmentIds=null,reserveBalance=0 } = {}) {
     const city = this.city;
     if(city.substances&&!city.substances.canTrade(good,seller,buyer,{quantity}))return false;
     if(good==='roupas'&&!garmentIds&&seller?.type==='tailor'&&seller.garments?.some(g=>g.reservedPartyId!=null)){garmentIds=seller.garments.filter(g=>g.reservedPartyId==null).slice(0,quantity).map(g=>g.garmentId);if(garmentIds.length<quantity)return false;}
@@ -87,8 +87,8 @@ export class CityLogistics {
     const fees=[...(serviceFee?[{amount:serviceFee,accountId:serviceAccountId}]:[]),...serviceFees].filter(f=>f?.amount>0);if(fees.some(f=>!Number.isSafeInteger(f.amount)||!city.accounts.has(f.accountId)))return false;serviceFee=fees.reduce((n,f)=>n+f.amount,0);
     const cost = quantity * unitPrice;
     const funds = city.accounts.get(payerAccountId)?.balance || 0;
-    if (!requireCarrier && carrier && funds < cost + fee + serviceFee && funds >= cost + serviceFee) { carrier = null; fee = 0; }
-    if (funds < cost + fee + serviceFee) return false;
+    if (!requireCarrier && carrier && funds < cost + fee + serviceFee + reserveBalance && funds >= cost + serviceFee + reserveBalance) { carrier = null; fee = 0; }
+    if (funds < cost + fee + serviceFee + reserveBalance) return false;
     const id = this.nextId++, accountId = `shipment:${id}`;
     const s = { id, accountId, payerAccountId, purpose, requireCarrier, serviceFee, serviceAccountId, serviceFees:fees, name: `Frete ${id}`, balance: 0, seller, buyer, good, quantity, cost, fee, carrierId: carrier?.id || null, driverId: null, status: 'waiting', pickedUp: false, createdAt: city.minute, routeLength: route.length };
     initializeInventory(s, city.economy.goods, Math.max(24,quantity)); s.inventory[good] = quantity;

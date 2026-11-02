@@ -1,15 +1,16 @@
 /** A deliberately simple monetary model: issuance dilutes a fixed initial monetary base.
  * Transfers never issue currency. Existing escrows, debts and cash keep their nominal value.
  */
-export const CURRENCY_RULES = { initialSupply: 32000000, citizenGrant: 0, mintPerWorkMinute: 200, mintDailyLimit: 80000, priceAdjustment: .35 };
+export const CURRENCY_RULES = { initialSupply: 32000000, citizenGrant: 0, mintPerWorkMinute: 200, mintDailyLimit: 20000, priceAdjustment: .35 };
 
 export class CityCurrency {
   constructor(city) {
-    this.city = city; this.burned = 0; this.policy = {mode:'automatic',dailyLimit:CURRENCY_RULES.mintDailyLimit,inflationTarget:.001,treasuryReserve:2000000}; this.issued = 0; this.issuedToday = 0; this.issuedYesterday = 0;
-    this.priceIndex = 1; this.dailyInflation = 0; this.mintDay = city.day;
+    this.city = city; this.burned = 0; this.policy = {mode:'capped',dailyLimit:CURRENCY_RULES.mintDailyLimit,inflationTarget:.001,treasuryReserve:2000000}; this.issued = 0; this.issuedToday = 0; this.issuedYesterday = 0;this.emittedQuotaDay=null;
+    this.priceIndex = 1; this.dailyInflation = 0; this.mintDay = city.day;this.quotaVersion=1;
     this.lastPriceDay = city.day; this.history = []; this.hourlyIssued = 0;
   }
   netIssued() { return this.issued-this.burned; }
+  migrateQuotaPolicy(){if(this.policy.mode==='automatic'||!Number.isFinite(this.policy.dailyLimit)){this.policy.dailyLimit=CURRENCY_RULES.mintDailyLimit;if(this.policy.mode!=='paused')this.policy.mode='capped';this.emittedQuotaDay=null;}else if((this.quotaVersion||0)<1){this.policy.dailyLimit=CURRENCY_RULES.mintDailyLimit;if(this.policy.mode!=='paused')this.policy.mode='capped';this.emittedQuotaDay=null;}this.quotaVersion=1;}
   retire(amount) {
     if(!Number.isSafeInteger(amount) || amount<=0 || this.city.treasury-amount<Math.max(this.policy.treasuryReserve,this.city.fiscal?.reserve()||0) || this.netIssued()-amount<CURRENCY_RULES.initialSupply*.5)return false;
     const treasury=this.city.accounts.get('treasury');
@@ -18,9 +19,9 @@ export class CityCurrency {
     this.city.history.record('policy','Moeda retirada do tesouro e de circulação.',['treasury'],{amount});return true;
   }
   emissionLimit() {
+    this.migrateQuotaPolicy();
     if(this.policy.mode==='paused')return 0;
-    if(this.policy.mode==='automatic' && (this.dailyInflation>this.policy.inflationTarget || this.city.treasury>=Math.max(this.policy.treasuryReserve,this.city.fiscal?.reserve()||0)))return 0;
-    return Math.max(0,this.policy.dailyLimit);
+    return Math.max(0,Math.floor(Number(this.policy.dailyLimit)||0));
   }
   price(base) { return Math.max(0, Math.round(base * this.priceIndex)); }
   supply() { return [...this.city.accounts.values()].reduce((n, a) => n + a.balance, 0); }
@@ -48,7 +49,7 @@ export class CityCurrency {
   }
   rollDay() {
     if (this.mintDay === this.city.day) return;
-    this.issuedYesterday = this.issuedToday; this.issuedToday = 0; this.mintDay = this.city.day;
+    this.issuedYesterday = this.issuedToday; this.issuedToday = 0; this.mintDay = this.city.day;this.emittedQuotaDay=null;
   }
   hourly() {
     if (!this.hourlyIssued) return;
@@ -56,9 +57,11 @@ export class CityCurrency {
     this.hourlyIssued = 0;
   }
   daily() {
+    this.migrateQuotaPolicy();
+    this.rollDay();
+    if(this.emittedQuotaDay!==this.city.day){this.emittedQuotaDay=this.city.day;const quota=Math.max(0,Math.floor(this.policy.dailyLimit||0)),remaining=Math.max(0,quota-this.issuedToday);if(this.policy.mode!=='paused'&&remaining)this.issue(remaining);}
     if (this.lastPriceDay === this.city.day) return;
     this.lastPriceDay = this.city.day;
-    this.rollDay();
     const previous = this.priceIndex, target = this.netIssued() / CURRENCY_RULES.initialSupply;
     this.priceIndex += (target - previous) * CURRENCY_RULES.priceAdjustment;
     this.dailyInflation = this.priceIndex / previous - 1;

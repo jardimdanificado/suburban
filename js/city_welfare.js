@@ -20,11 +20,15 @@ export class CityWelfare {
     const city=this.city,dependents=city.childrenOf(c.id).filter(child=>!child.entity.destroyed&&!city.society.isAdult(child)).length,factor=1+dependents*.5;
     return Math.ceil(Math.max(city.currency.price(this.policy.householdFloor)*factor,(city.fiscal?.foodCost()||city.currency.price(800))*3*factor));
   }
+  mealAssistanceEligible(c){
+    const city=this.city,payer=city.accounts.get(city.payerFor(c)),cash=payer?.balance||0,floor=this.subsistenceFloor(c),assets=cash+city.bank.savings(payer?.accountId||city.payerFor(c));
+    return assets<=floor*2||cash<=floor;
+  }
   mealContribution(holder,citizen,offer){
-    if(!offer||!citizen||holder.type!=='popular_refectory')return offer;
-    const city=this.city,payer=city.accounts.get(city.payerFor(citizen)),cash=payer?.balance||0,floor=this.subsistenceFloor(citizen),assets=cash+city.bank.savings(payer?.accountId||city.payerFor(citizen));
-    if(assets<=floor*2||cash<=floor)return offer;
-    const cost=Object.entries(offer.inputs||{}).reduce((n,[good,q])=>n+(city.economy.goods[good]?.price||0)*q,0);return {...offer,price:Math.min(Math.round(cost),Math.max(0,cash-floor))};
+    if(!offer||!citizen||!['popular_refectory','townhall'].includes(holder.type))return offer;
+    const city=this.city,payer=city.accounts.get(city.payerFor(citizen)),cash=payer?.balance||0,floor=this.subsistenceFloor(citizen);
+    if(this.mealAssistanceEligible(citizen))return offer;
+    const cost=Object.entries(offer.inputs||{}).reduce((n,[good,q])=>n+(city.economy.goods[good]?.price||0)*q,0),price=Math.ceil(cost*1.5);return {...offer,price:Math.min(price,Math.max(0,cash-floor))};
   }
   hourly() {
     const city = this.city;

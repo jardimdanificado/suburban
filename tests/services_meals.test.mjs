@@ -114,6 +114,20 @@ test('a meal voucher is generous, comes from the employer and cannot be repeated
   assert.equal(city.workMeals.issueVoucher(c, shop), false); assert.equal(b.vouchersIssued, 1); assert.equal(c.mealAllowanceToday, amount); assert.equal(totalMoney(city), city.currency.netIssued());
 });
 
+test('a food shop stocks a compact local basket, keeps working cash, and wins paying customers without displacing free meals', () => {
+  const city=setup(),shop=city.economy.businesses.find(b=>b.type==='market'),hall=city.buildings.find(b=>b.type==='popular_refectory');
+  city.economy.updateDemand();const assortment=[...shop.retailAssortment];assert.equal(assortment.length,4);assert(assortment.some(g=>['pao','feijao','milho','mandioca','arroz','alface','tomate','cebola'].includes(g)));assert.deepEqual(Object.keys(shop.inputDemand).sort(),assortment.slice().sort());
+  const owner=city.society.citizen(shop.ownerId),startupCash=city.currency.price(200000);assert(city.transfer(owner.accountId,shop.accountId,Math.max(0,startupCash-shop.balance),'Test private retail capital'));
+  const minimumCash=city.fiscal.businessReserve(shop);city.economy.trade();
+  assert(shop.balance>=minimumCash);assert(Object.keys(shop.incoming).length>0);assert(Object.keys(shop.incoming).every(g=>assortment.includes(g)));
+  const shipment=city.logistics.shipments.find(s=>s.buyer===shop&&assortment.includes(s.good));assert(shipment);finishShipment(city,shipment);assert(shop.inventory[shipment.good]>0);assert(shop.balance>=minimumCash);
+  const rich=city.citizens.find(c=>c.fixtureInvestor),poor=city.citizens.find(c=>!c.fixtureInvestor);city.transfer(poor.accountId,'treasury',poor.balance,'Test vulnerable household');assert(city.welfare.mealAssistanceEligible(poor));
+  shop.inventory[shipment.good]=Math.max(shop.inventory[shipment.good],12);hall.inventory.pao=120;shop.door.x=hall.door.x=64;shop.door.y=hall.door.y=64;rich.entity.x=poor.entity.x=66;rich.entity.y=poor.entity.y=64;
+  assert(city.economy.mealScore(rich,shop)<city.economy.mealScore(rich,hall));assert(city.economy.mealScore(poor,hall)<city.economy.mealScore(poor,shop));
+  city.transfer('treasury',rich.accountId,city.currency.price(300000),'Test disposable income');rich.provisions=0;rich.pocket={food:[],water:7,waterContamination:0,receivedMeals:0,receivedWater:0};rich.needs.food=70;assert(!city.welfare.mealAssistanceEligible(rich));city.chooseTask(rich);assert.equal(rich.task,'food');assert.equal(rich.targetId,shop.id,`expected shop ${shop.id}; selected ${rich.targetId} (${city.building(rich.targetId)?.type})`);
+  const shopCash=shop.balance;assert(city.economy.consumeMeal(rich,shop));assert(shop.balance>shopCash);assert.equal(city.economy.mealOffer(hall,poor).price,0);assert(city.economy.consumeMeal(poor,hall));
+});
+
 test('food for a construction site is bought by its employer, shipped physically and eaten at that site', () => {
   const city = setup(), b = builderOf(city), p = city.development.beginExpansion('treasury', city.buildings[0].id); assert(p);
   city.workMeals.purchase(); const s = city.logistics.shipments.find(s => s.buyer === p && s.purpose === 'work-meals'); assert(s); assert.equal(s.payerAccountId, b.accountId); assert.equal(p.inventory[s.good], 0);

@@ -4,7 +4,7 @@ export class CityBank {
     this.city = city; this.deposits = new Map(); this.loans = []; this.nextId = 1;
     this.policy = { creditEnabled: true, loanRate: .002, savingsRate: .0005, cashReserve: 10000 };
   }
-  available() { return this.city.economy.businesses.filter(b => b.type === 'bank' && (b.workers.length||this.city.economy.citizen(b.ownerId)) && b.balance >= b.wage); }
+  available() { const city=this.city;return city.economy.businesses.filter(b => {if(b.type!=='bank'||!b.active||b.entity.destroyed||b.balance<b.wage)return false;const staffed=b.workers.length||city.economy.citizen(b.ownerId),selfService=city.fiscal?.municipal(b)&&b.balance>=city.currency.price(20000);return staffed||selfService;}); }
   developmentBanks(){
     const city=this.city,banks=city.economy.businesses.filter(b=>b.type==='bank');
     if(this.lastDevelopmentPreparation!==city.minute){
@@ -139,9 +139,11 @@ export class CityBank {
     const topUp=initial&&existing&&proposal.projectId===existing.projectId&&(completion||!existing.startupTopUpUsed)&&city.development.projects.some(p=>p.id===proposal.projectId&&!p.cancelled&&p.status!=='completed'&&(completion||!p.materialAccountId));
     if(topUp&&existing.bankId!==bank.id)return reject('Complemento precisa ser contratado no banco do empréstimo original.');
     if(existing&&!topUp)return reject('Empreendedor já possui financiamento empresarial em andamento.');
-    const reserve=Math.max(city.currency.price(20000),bank.workers.length*bank.wage*480),cash=Math.max(0,bank.balance-reserve);
+    const operatingReserve=Math.max(city.currency.price(20000),bank.workers.length*bank.wage*480);
+    const firstFoodShopPending=!['market','greengrocer'].includes(proposal.type)&&!city.economy.businesses.some(b=>['market','greengrocer'].includes(b.type)&&b.active&&!b.entity.destroyed)&&city.economy.demands?.some(d=>['market','greengrocer'].includes(d.type)&&d.score>=30);
+    const reserve=operatingReserve+(firstFoodShopPending?city.currency.price(230000):0),cash=Math.max(0,bank.balance-reserve);
     let refinance=0;
-    if(initial&&amount>cash){refinance=this.refinanceDevelopment(bank,amount-cash,proposal);if(refinance===false)return false;}
+    if(initial&&amount>cash){if(proposal.allowPublicRefinance===false||firstFoodShopPending)return reject('O banco preserva a liquidez necessária para a primeira loja de alimentos e não possui caixa livre para esta abertura sem aporte do tesouro.');refinance=this.refinanceDevelopment(bank,amount-cash,proposal);if(refinance===false)return false;}
     if(!initial&&amount>cash*.75*Math.min(1,city.reputation.creditFactor(founder)*(1+city.relationships.personalOpinion(city.relationships.businessPerson(bank),founder)/100)))return reject('Caixa ou limite de risco insuficiente no crédito comum.');
     if(!city.transfer(bank.accountId,founder.accountId,amount,'Crédito empresarial para atender demanda',{loanId:topUp?existing.id:this.nextId,businessType:proposal.type,initialChain:initial}))return reject('Transferência de crédito indisponível.');
     if(topUp){existing.principal+=amount;existing.remaining+=amount;existing.initialChain=true;existing.startupTopUpUsed=true;existing.completionDraws=(existing.completionDraws||0)+(completion?1:0);existing.graceDays=14;existing.operatingStartedAt=null;existing.installments=240;existing.dailyPayment=Math.ceil(existing.remaining/240);existing.publicRefinance=(existing.publicRefinance||0)+refinance;existing.publicRefinanceRemaining=(existing.publicRefinanceRemaining||0)+refinance;existing.rate=Math.min(existing.rate,.00025);existing.status='active';existing.missed=0;existing.dueDay=city.day+1;this.lastBusinessRefusal=null;city.history.record('credit',completion?'Complemento auditado pelo custo atual dos materiais da obra.':'Complemento único do financiamento para concluir a cadeia inicial.',[founder.accountId,bank.accountId],{loanId:existing.id,projectId:proposal.projectId,amount,publicRefinance:refinance});return existing;}

@@ -94,7 +94,7 @@ export class CitySanitation {
     const b = this.city.building(f.buildingId);
     const entrance=b.officeTenantOf?this.city.building(b.officeTenantOf)||b:b;
     const queued=(entrance.serviceQueue||[]).filter(q=>q.buildingId===b.id&&q.kind==='toilet'&&q.resource===f.id).length,busy=f.occupantId&&f.occupantId!==c.id&&this.city.minute<f.busyUntil;
-    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + Math.max(queued,this.inboundFacilities?.get(f.id)||0)*24+(busy?8:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 8 : 0) - (c.jobId === b.id ? 4 : 0);
+    return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + Math.max(queued,this.inboundFacilities?.get(f.id)||0)*24+(busy?8:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 24 : 0) - (c.jobId === b.id ? 4 : 0);
   }
   addWaste(b, amount = 1) {
     const stored = Math.min(amount, inventoryFree(b)); b.inventory.lixo += stored; b.litter += amount - stored;

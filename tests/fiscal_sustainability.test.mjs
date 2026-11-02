@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup,totalMoney} from './helpers/city.mjs';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
+import {reviewWages} from '../js/city_employment.js';
 function reduceTreasury(city,cash){if(!city.accounts.has('test-reserves'))city.accounts.set('test-reserves',{balance:0,name:'Test reserves'});assert(city.transfer('treasury','test-reserves',city.treasury-cash,'Test protected balances'));}
 function drainMunicipalSurplus(city){for(const b of city.buildings)if(b.accountId!=='treasury'&&b.balance)city.transfer(b.accountId,'test-reserves',b.balance,'Test no operating surplus');}
 
@@ -24,14 +25,25 @@ test('municipal liquidity recovery does not touch private savings or contracted 
   const city=setup({starter:true,funded:true,population:48}),bank=city.economy.businesses.find(b=>b.type==='bank'),c=city.citizens.find(c=>c.fixtureInvestor);assert(city.bank.deposit(bank,c.accountId,10000));city.accounts.set('construction-fee:protected',{balance:0});assert(city.transfer('treasury','construction-fee:protected',50000,'Test contracted escrow'));reduceTreasury(city,1000);const savings=city.bank.savings(c.accountId),escrow=city.accounts.get('construction-fee:protected').balance;city.fiscal.hourly();assert.equal(city.bank.savings(c.accountId),savings);assert.equal(city.accounts.get('construction-fee:protected').balance,escrow);
 });
 
-test('vulnerable residents keep free public meals while wealthy residents contribute to actual food cost',()=>{
-  const city=setup({starter:true,funded:true,population:48}),hall=city.buildings.find(b=>b.type==='popular_refectory'),poor=city.citizens.find(c=>!c.fixtureInvestor),rich=city.citizens.find(c=>c.fixtureInvestor);city.transfer(poor.accountId,'treasury',poor.balance,'Test poverty');assert.equal(city.economy.mealOffer(hall,poor).price,0);const quote=city.economy.mealOffer(hall,rich),cash=rich.balance,provider=hall.balance;assert(quote.price>0);assert(city.economy.consumeMeal(rich,hall));assert.equal(rich.balance,cash-quote.price);assert.equal(hall.balance,provider+quote.price);
+test('vulnerable residents keep free public meals while wealthy residents pay a retail-equivalent price',()=>{
+  const city=setup({starter:true,funded:true,population:48}),hall=city.buildings.find(b=>b.type==='popular_refectory'),poor=city.citizens.find(c=>!c.fixtureInvestor),rich=city.citizens.find(c=>c.fixtureInvestor);city.transfer(poor.accountId,'treasury',poor.balance,'Test poverty');assert.equal(city.economy.mealOffer(hall,poor).price,0);const quote=city.economy.mealOffer(hall,rich),cash=rich.balance,provider=hall.balance,treasury=city.treasury,tax=Math.floor(quote.price*16/116);assert(quote.price>0);assert(city.economy.consumeMeal(rich,hall));assert.equal(rich.balance,cash-quote.price);assert.equal(hall.balance,provider+quote.price-tax);assert.equal(city.treasury,treasury+tax);
 });
 
-test('enterprise taxes follow positive operating result and unpaid taxes carry forward',()=>{
+test('small towns do not seed retail shops without enough customers to support them',()=>{
+  const city=setup({starter:true,funded:true,population:48});city.economy.updateDemand();
+  for(const type of ['market','greengrocer','bakery'])assert.equal(city.economy.demands.find(d=>d.type===type)?.score,0,`${type} should wait for a larger service area`);
+});
+
+test('enterprise taxes follow positive operating result, respect the doubled minimum and carry arrears',()=>{
   const city=setup({starter:true,funded:true,population:48}),b=city.economy.businesses.find(b=>b.type==='builder'),owner=city.citizens.find(c=>c.fixtureInvestor);b.ownerId=owner.id;b.municipal=false;b.totalRevenue=10000;b.totalExpenses=12000;b.politicalTaxRevenue=0;b.politicalTaxExpenses=0;city.politics.policy.businessTax=.1;city.politics.daily();assert.equal(b.businessTaxDue||0,0);assert.equal(b.businessTaxPaid||0,0);
-  b.totalRevenue+=20000;city.politics.daily();assert.equal(b.businessTaxPaid,2000);
-  city.accounts.set('test-reserves',{name:'Test reserves',balance:0});city.transfer(b.accountId,'test-reserves',b.balance,'Test firm without cash');b.totalRevenue+=10000;city.politics.daily();assert.equal(b.businessTaxDue,1000);
+  assert.equal(city.politics.policy.businessTax,.16);b.totalRevenue+=20000;city.politics.daily();assert.equal(b.businessTaxPaid,3200);
+  city.accounts.set('test-reserves',{name:'Test reserves',balance:0});city.transfer(b.accountId,'test-reserves',b.balance,'Test firm without cash');b.totalRevenue+=10000;city.politics.daily();assert.equal(b.businessTaxDue,1600);
+});
+
+test('vacant positions cannot compound wage offers beyond a sustainable legal-floor premium',()=>{
+  const city=setup({starter:true,population:48}),b=city.economy.businesses.find(b=>b.type==='builder');b.jobs=1;b.workers=[];b.baseWage=5;b.balance=1000000;b.vacancySince=0;
+  for(let day=1;day<=30;day++){city.minute=day*1440;b.lastWageReviewDay=null;reviewWages(city,b);}
+  assert(b.baseWage>=5);assert(b.baseWage<=city.politics.policy.minimumWage*1.5);
 });
 
 test('loan collection preserves food money and municipal grant routines do not subsidize private firms',()=>{

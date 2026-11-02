@@ -6,7 +6,7 @@ import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=overhead-billboards-1';
 import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
-import {applySalesTax} from './city_sales_tax.js';
+import {applySalesTax,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
@@ -161,7 +161,7 @@ export class CitySimulation {
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
-    this.taxRate = 0.1;
+    this.taxRate = MINIMUM_WAGE_TAX_RATE;
     this.wageSubsidies = {paidToday:0,totalPaid:0,unpaidToday:0};
     this.lastError = '';
   }
@@ -402,7 +402,7 @@ export class CitySimulation {
   }
   setPolicies(policies, message) {
     for (const scope of ['currency', 'bank', 'welfare']) if (policies[scope]) Object.assign(this[scope].policy, policies[scope]);
-    if (Number.isFinite(policies.taxRate)) this.taxRate = Math.max(-.5, Math.min(.5, policies.taxRate));
+    if (Number.isFinite(policies.taxRate)) this.taxRate = Math.max(MINIMUM_WAGE_TAX_RATE, Math.min(.5, policies.taxRate));
     this.history.record('policy', message, ['treasury']);
   }
   rentUnit(citizenId, unitId) {
@@ -658,6 +658,7 @@ export class CitySimulation {
     else if (n.food < 18) { task = 'food'; type = 'market'; }
     else if (n.health < 45) { task = 'health'; type = 'clinic'; }
     else if (n.water < 45) { task = 'water'; type = 'utility'; }
+    else if (n.food < 72 && !this.welfare.mealAssistanceEligible(c)) { task = 'food'; type = 'market'; }
     else if (n.food < 45) { task = 'food'; type = 'market'; }
     else if (n.toilet < 45) { task = 'toilet'; type = 'toilet'; }
     else if (wantsSleep(this,c)) { task = 'energy'; type = 'home'; }
@@ -871,7 +872,7 @@ export class CitySimulation {
       if(c.unpaidWageDay!==this.day){c.unpaidWageDay=this.day;this.reputation.observe(b.accountId,'commerce',-1,'falta de caixa para o salário',{citizenIds:[c.id]});this.relationships.workEvent(b,c,false);}
       return false;
     }
-    const rate=Math.max(-.5,Math.min(.5,Number(this.taxRate)||0));
+    const rate=Math.max(MINIMUM_WAGE_TAX_RATE,Math.min(.5,Number(this.taxRate)||0));
     // Separate fractional cents preserve accuracy when the policy changes direction.
     const remainderKey=rate<0?'subsidyRemainder':'taxRemainder';
     const exact=wage*Math.abs(rate)+(c[remainderKey]||0);

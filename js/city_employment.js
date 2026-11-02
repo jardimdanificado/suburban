@@ -52,7 +52,7 @@ export function qualification(city,c,b){
   return {eligible:!gaps.length||trainee,trainee,experience,rating,reason:gaps.join('; ')||'Requisitos atendidos'};
 }
 export const RECRUITMENT_RULES=Object.freeze({discoveryRadius:10,discoveryInterval:15,interviewDuration:10,minimumNotice:60});
-export function ownerSelfHire(city,b){return Number((b.jobs||0)>0&&!!city.economy.workingOwner(b));}
+export function ownerSelfHire(city,b){const owner=city.economy.workingOwner(b);return Number((b.jobs||0)>0&&!!owner&&owner.jobId!==b.id);}
 export function occupiedPositions(city,b){return b.workers.length+ownerSelfHire(city,b);}
 export function openPositions(city,b){return Math.max(0,b.jobs-occupiedPositions(city,b));}
 const vacancyIndexes=new WeakMap();
@@ -206,10 +206,11 @@ export function reviewWages(city,b){
   b.vacancySince??=city.minute;
   if(city.minute-b.vacancySince<1440||b.lastWageReviewDay===city.day)return;
   b.lastWageReviewDay=city.day;
-  // An unfilled vacancy becomes more expensive every day. Require one shift
-  // of payroll in reserve, rather than a full week, so small firms can still
-  // compete for workers without promising wages they cannot pay.
-  const next=Math.min(1000,Math.max(b.baseWage+1,b.baseWage*1.12)),payroll=city.currency.price(Math.max(next,city.politics.policy.minimumWage||0))*Math.max(1,vacancies)*480;
+  // Raise offers gradually and keep them tied to the legal wage floor. A 12%
+  // daily increase compounded without a ceiling made payroll unaffordable
+  // within weeks, even when the firm's vacancy was caused by a skill mismatch.
+  const floor=Math.max(1,city.politics.policy.minimumWage||0),ceiling=Math.max(b.baseWage,floor*1.5),next=Math.min(ceiling,b.baseWage*1.01),payroll=city.currency.price(Math.max(next,floor))*Math.max(1,vacancies)*480;
+  if(next<=b.baseWage)return;
   if(b.balance<Math.max(city.currency.price(5000),payroll))return;
   b.baseWage=next;
   city.history.record('employment',`${b.entity.properties.name} elevou sua base salarial para disputar funcionários.`,[b.accountId],{buildingId:b.id,wage:b.wage,action:'revisão salarial'});
