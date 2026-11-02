@@ -1,3 +1,4 @@
+import {syncSubstanceSmoke} from './city_substance_smoke.js';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
@@ -10,9 +11,9 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseC
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=tropical-plants-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=substances-dither-smoke-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flags-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=sleep-pose-label-1';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-4';
 import { ASSET_DATA } from "./assets_data.js";
@@ -3605,13 +3606,6 @@ export class RCT3DRenderer {
       this.scene.add(pl);
       this.nightLightPool.push(pl);
     }
-    this.mouseSpotlight=new THREE.SpotLight(0xffe3b0,0,24,Math.atan2(2.6,13.5),.62,1.25);
-    this.mouseSpotlight.castShadow=false;this.mouseSpotlight.visible=false;this.mouseSpotlightTarget=new THREE.Object3D();
-    this.mouseSpotlight.target=this.mouseSpotlightTarget;this.scene.add(this.mouseSpotlight,this.mouseSpotlightTarget);
-    this.mouseBeamMaterial=new THREE.MeshBasicMaterial({color:0xffe7bc,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending});
-    this.mouseBeam=new THREE.Mesh(new THREE.CylinderGeometry(.045,2.6,14,24,1,true),this.mouseBeamMaterial);this.mouseBeam.visible=false;this.mouseBeam.renderOrder=8;this.scene.add(this.mouseBeam);
-    this.mouseBeamSource=new THREE.Mesh(new THREE.SphereGeometry(.16,8,6),new THREE.MeshBasicMaterial({color:0xfff0cf,transparent:true,opacity:0,depthWrite:false}));this.mouseBeamSource.visible=false;this.scene.add(this.mouseBeamSource);
-    this.mouseBeamPool=new THREE.Mesh(new THREE.CircleGeometry(1,24),new THREE.MeshBasicMaterial({color:0xffe5ae,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));this.mouseBeamPool.rotation.x=-Math.PI/2;this.mouseBeamPool.visible=false;this.scene.add(this.mouseBeamPool);
     this.followMarker = new THREE.Mesh(
       new THREE.CircleGeometry(0.42, 24),
       new THREE.MeshBasicMaterial({ color: 0xffd36a, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide })
@@ -3757,7 +3751,6 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'Sidewalk','sidewalk',normBrickA,.25,.95,0),
       ...terrainSurfaceMaterials(isPersp,'SidewalkTree','sidewalkTree',normBrickA,.3,.94,0),
       ...terrainSurfaceMaterials(isPersp,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
-      terrainSewerPipe:makeMat(isPersp,{color:0xffffff,vertexColors:true,dithering:true,side:THREE.DoubleSide},null,1,.88,.03),
       farmSoil:makeMat(isPersp,{map:farmGround.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},farmGround.normalMap,.38,.91,.005),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
@@ -5056,6 +5049,7 @@ export class RCT3DRenderer {
         ctx.fillStyle=isCampaign?"#594638":"#34433b";shape();ctx.fill();
         ctx.fillStyle=isCampaign?"#ead2a5":"#d8c9a4";ctx.fillRect(bx+3,by+3,bw-6,bh-7);
         ctx.fillStyle="#403d32";ctx.fillText(label,Math.round(bx+bw/2),by+8.5);
+      }else if(item.kind==='substance'){ctx.font='15px sans-serif';ctx.fillStyle='#e6ddc5';ctx.fillText(item.label,Math.round(x+(item.offsetX||0)),Math.round(y-12));
       }else if(item.kind==="meal"){
         const cx=Math.round(x+(item.offsetX||0)),cy=Math.round(y-29);
         ctx.fillStyle="rgba(20,27,23,.45)";ctx.fillRect(cx-7,cy-5,15,13);
@@ -6501,30 +6495,11 @@ export class RCT3DRenderer {
       [TILE_ROAD_GRASS_STONE]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_SAND_STONE]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_HILL_STONE]: { pos: [], uvs: [], colors: [] },
-      terrainSewerPipe:{pos:[],uvs:[],colors:[]}
     };
     const waterFoamBucket = { pos: [], uvs: [], colors: [] };
     for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','SidewalkTree','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
     }
-    const pipeBucket=tileMeshBuckets.terrainSewerPipe,linearChannel=value=>{value/=255;return value<=.04045?value/12.92:((value+.055)/1.055)**2.4;};
-    const pipeColor=hex=>[linearChannel(hex>>>16&255),linearChannel(hex>>>8&255),linearChannel(hex&255)];
-    const pushPipeSegment=(a,b,radius,color)=>{
-      const axis=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],length=Math.hypot(...axis);if(length<.025)return;
-      const d=axis.map(value=>value/length),ref=Math.abs(d[1])>.9?[1,0,0]:[0,1,0],cross=(u,v)=>[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],normalize=v=>{const n=Math.hypot(...v)||1;return v.map(value=>value/n);},u=normalize(cross(d,ref)),v=cross(d,u),tint=pipeColor(color),sides=8;
-      for(let i=0;i<sides;i++){
-        const aa=i*Math.PI*2/sides,bb=(i+1)*Math.PI*2/sides,n0=u.map((value,k)=>value*Math.cos(aa)+v[k]*Math.sin(aa)),n1=u.map((value,k)=>value*Math.cos(bb)+v[k]*Math.sin(bb));
-        const p0=a.map((value,k)=>value+n0[k]*radius),p1=a.map((value,k)=>value+n1[k]*radius),p2=b.map((value,k)=>value+n1[k]*radius),p3=b.map((value,k)=>value+n0[k]*radius);
-        for(const [point,along,around]of [[p0,0,i/sides],[p1,0,(i+1)/sides],[p2,1,(i+1)/sides],[p0,0,i/sides],[p2,1,(i+1)/sides],[p3,1,i/sides]]){pipeBucket.pos.push(...point);pipeBucket.uvs.push(along,around);pipeBucket.colors.push(...tint);}
-      }
-    };
-    const addSewerPipe=(ax,az,bx,bz,ya,yb,offsetX=0,offsetZ=0)=>{
-      const start=[ax+offsetX,ya,az+offsetZ],end=[bx+offsetX,yb,bz+offsetZ],point=t=>start.map((value,i)=>value+(end[i]-value)*t);
-      pushPipeSegment(start,end,.08,0x9aa6a3);
-      const length=Math.hypot(end[0]-start[0],end[2]-start[2]);
-      if(length>.42)for(const t of [.08,.92])pushPipeSegment(point(t),point(Math.min(1,t+.045)),.11,0xc1a376);
-    };
-
     const gridLinePositions = [];
     const matHelper = new THREE.Matrix4();
     let foliageCount = 0;
@@ -6646,11 +6621,6 @@ export class RCT3DRenderer {
           // across neighboring tiles instead of stretching an image per panel.
           for(const [point,u]of [[a,face.from],[b,face.to],[c,face.to],[a,face.from],[c,face.to],[d,face.from]]){
             wall.pos.push(...point);wall.uvs.push(u,point[1]);wall.colors.push(tone,tone,tone);
-          }
-          const wallHeightA=face.highA-face.lowA,wallHeightB=face.highB-face.lowB;
-          if(Math.max(wallHeightA,wallHeightB)>.42){
-            const [ox,oz]=face.side===0?[0,-.12]:face.side===1?[.12,0]:face.side===2?[0,.12]:[-.12,0];
-            addSewerPipe(face.ax,face.ay,face.bx,face.by,face.lowA+Math.min(.5,wallHeightA*.48),face.lowB+Math.min(.5,wallHeightB*.48),ox,oz);
           }
         }
 
@@ -6790,12 +6760,6 @@ export class RCT3DRenderer {
           const cliffBaseAO = 0.65 * zoneMult;
           const cliffTopAO = 0.95 * zoneMult;
           const cliffBucket=side=>streetCorners?tileMeshBuckets[`terrainRetainingWall${terrainTextureHash(tx,ty,tType+side)&3}`]:bucket;
-          const cliffPipe=(side,ax,az,bx,bz,topA,topB)=>{
-            if(!streetCorners||Math.max(topA,topB)<.46)return;
-            const [ox,oz]=side===0?[0,-.12]:side===1?[.12,0]:side===2?[0,.12]:[-.12,0];
-            addSewerPipe(ax,az,bx,bz,Math.min(.52,Math.max(.18,topA*.48)),Math.min(.52,Math.max(.18,topB*.48)),ox,oz);
-          };
-
           // 1. South Face (+Y, at ty + 1, facing +Z)
           if (ty === this.mapHeight - 1 || isWaterAt(tx, ty + 1)) {
             const wallBucket=cliffBucket(2);
@@ -6817,7 +6781,6 @@ export class RCT3DRenderer {
               cliffTopAO, cliffTopAO, cliffTopAO,
               cliffTopAO, cliffTopAO, cliffTopAO
             );
-            cliffPipe(2,tx,ty+1,tx+1,ty+1,h01,h11);
           }
 
           // 2. East Face (+X, at tx + 1, facing +X)
@@ -6841,7 +6804,6 @@ export class RCT3DRenderer {
               cliffTopAO, cliffTopAO, cliffTopAO,
               cliffTopAO, cliffTopAO, cliffTopAO
             );
-            cliffPipe(1,tx+1,ty+1,tx+1,ty,h11,h10);
           }
 
           // 3. North Face (-Y, at ty, facing -Z)
@@ -6865,7 +6827,6 @@ export class RCT3DRenderer {
               cliffTopAO, cliffTopAO, cliffTopAO,
               cliffTopAO, cliffTopAO, cliffTopAO
             );
-            cliffPipe(0,tx+1,ty,tx,ty,h10,h00);
           }
 
           // 4. West Face (-X, at tx, facing -X)
@@ -6889,7 +6850,6 @@ export class RCT3DRenderer {
               cliffTopAO, cliffTopAO, cliffTopAO,
               cliffTopAO, cliffTopAO, cliffTopAO
             );
-            cliffPipe(3,tx,ty,tx,ty+1,h00,h01);
           }
         }
       }
@@ -7928,7 +7888,8 @@ export class RCT3DRenderer {
         const isConsciousCreature = !isItem && !isDoor && !!e.properties?.brain;
         const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
         const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
-        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,{hidden:isPossessed,dimmed:!inCurZone,perspective:this.isPerspectiveActive(),smoothMovement:this.isThirdPersonActive(),vehicleAngle});
+        const activeElection=this.cityDevelopment?.city?.politics?.active;
+        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,{hidden:isPossessed,dimmed:!inCurZone,perspective:this.isPerspectiveActive(),smoothMovement:this.isThirdPersonActive(),vehicleAngle,activeCampaignElectionId:activeElection?.id,activeCampaignStatus:activeElection?.status});
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
         }else{
@@ -8075,14 +8036,15 @@ export class RCT3DRenderer {
             if(meal?.sequence!=null){if(events.mealSeq===null)events.mealSeq=meal.sequence;else if(events.mealSeq!==meal.sequence){events.mealSeq=meal.sequence;events.mealUntil=now+1550;}}
             const headY=surfaceH+(modelRendered?1.25:.90)+floatBob+.38;
             const addOverhead=(kind,extra={})=>this.overheadBillboardQueue.push({kind,x:e.x,y:headY,z:e.y,...extra});
-            if(this.speechBubblesVisible&&citizen.conversation?.a===citizen.id)addOverhead("speech",{label:citizen.conversation.topic||"conversa"});
+            const substanceUse=citizen.lastSubstanceUse,substanceNow=this.cityDevelopment?.city?.minute??0;if(this.speechBubblesVisible&&substanceUse?.usingUntil>substanceNow){addOverhead('speech',{label:`${substanceUse.icon} ${substanceUse.label}`,variant:'substance'});addOverhead('substance',{label:substanceUse.icon,offsetX:24});}
+            if(this.speechBubblesVisible&&!(substanceUse?.usingUntil>substanceNow)&&citizen.conversation?.a===citizen.id)addOverhead("speech",{label:citizen.conversation.topic||"conversa"});
             const campaign=citizen.campaign;
             if(this.speechBubblesVisible&&citizen.task==='campaign'&&campaign&&!citizen.path.length&&!citizen.ridingVehicleId&&['canvass','rally','membership'].includes(campaign.type)){
               const city=this.cityDevelopment?.city,election=city?.politics?.active,nomination=election?.candidates?.find(candidate=>candidate.citizenId===campaign.candidateId),theme=nomination?.promises?.[0]?.title||nomination?.slogan||city?.politics?.party(campaign.partyId)?.short||"propostas";
               addOverhead("speech",{label:`${campaign.type==='membership'?'partido':theme}`,variant:"campaign"});
             }
-            if(this.speechBubblesVisible&&!citizen.conversation&&!campaign&&!citizen.path?.length&&!citizen.ridingVehicleId){
-              const actionLabels={work:"trabalho",'work-wait':"aguardando",manage:"empresa",construction:"obra",clean:"limpeza",food:"comida",shopping:"compras",'market-vending':"venda",workmeal:"refeição",provisions:"lanche",water:"água",'lake-water':"água",energy:"descanso",health:"saúde",toilet:"banheiro",hygiene:"higiene",social:"convívio",visit:"visita",care:"cuidado",caregiving:"família",vote:"votação",'council-session':"Câmara",research:"pesquisa",interview:"entrevista",'job-interview':"emprego",transport:"entrega",'paint-delivery':"tinta",'paint-purchase':"compras",supplies:"abastecimento",'combat-flee':"perigo",custody:"custódia",'custody-escort':"escolta",'custody-water':"água",funeral:"luto",'justice-report':"justiça",'police-arrest-escort':"escolta",'police-investigation':"investigação",'police-oversight':"fiscalização",'police-patrol':"patrulha",'police-response':"ocorrência",'police-restitution':"restituição",'urban-graffiti':"grafite",leisure:"lazer",outdoor_leisure:"praia",sit:"descanso",walk:"passeio"};
+            if(this.speechBubblesVisible&&!(substanceUse?.usingUntil>substanceNow)&&!citizen.conversation&&!campaign&&!citizen.path?.length&&!citizen.ridingVehicleId){
+              const actionLabels={'substance-vending':'negociando','substance-use':'consumindo','substance-buy':'comprando','substance-production':'preparando','substance-deposit':'armazenando',work:"trabalho",'work-wait':"aguardando",manage:"empresa",construction:"obra",clean:"limpeza",food:"comida",shopping:"compras",'market-vending':"venda",workmeal:"refeição",provisions:"lanche",water:"água",'lake-water':"água",energy:"descanso",health:"saúde",toilet:"banheiro",hygiene:"higiene",social:"convívio",visit:"visita",care:"cuidado",caregiving:"família",vote:"votação",'council-session':"Câmara",research:"pesquisa",interview:"entrevista",'job-interview':"emprego",transport:"entrega",'paint-delivery':"tinta",'paint-purchase':"compras",supplies:"abastecimento",'combat-flee':"perigo",custody:"custódia",'custody-escort':"escolta",'custody-water':"água",funeral:"luto",'justice-report':"justiça",'police-arrest-escort':"escolta",'police-investigation':"investigação",'police-oversight':"fiscalização",'police-patrol':"patrulha",'police-response':"ocorrência",'police-restitution':"restituição",'urban-graffiti':"grafite",leisure:"lazer",outdoor_leisure:"praia",sit:"descanso",walk:"passeio"};
               const actionLabel=actionLabels[citizen.task];
               if(actionLabel)addOverhead("action",{label:actionLabel});
             }
@@ -8298,28 +8260,24 @@ export class RCT3DRenderer {
       }
     }
 
-    // Night-only searchlight: a visible shaft descends from above the cursor,
-    // while a shadowless spotlight brightens the terrain and nearby scenery.
+    // Resolve the cursor tile once; the actual cursor illumination joins the
+    // same point-light pool and uses the same warm falloff as a street lamp.
     let cursorTile=null,lightIdx=0;
     if(!this.isPerspectiveActive()&&this.mouseX!==undefined&&this.mouseY!==undefined){
       const camera=this.camera,cache=this.mouseLightTerrainCache,valid=cache&&cache.x===this.mouseX&&cache.y===this.mouseY&&cache.map===map&&cache.cameraX===camera.position.x&&cache.cameraY===camera.position.y&&cache.cameraZ===camera.position.z&&cache.cameraRX===camera.rotation.x&&cache.cameraRY===camera.rotation.y&&cache.zoom===this.zoom;
       cursorTile=valid?cache.tile:this.getTileAtScreen(this.mouseX,this.mouseY,world);
       if(!valid)this.mouseLightTerrainCache={x:this.mouseX,y:this.mouseY,map,cameraX:camera.position.x,cameraY:camera.position.y,cameraZ:camera.position.z,cameraRX:camera.rotation.x,cameraRY:camera.rotation.y,zoom:this.zoom,tile:cursorTile};
     }
-    const cursorActive=!!cursorTile&&nightGlow>.015;
-    this.mouseSpotlight.visible=this.mouseBeam.visible=this.mouseBeamSource.visible=this.mouseBeamPool.visible=cursorActive;
-    if(cursorActive){
-      const sH=cursorTile.exactY!==undefined?cursorTile.exactY:this.getSurfaceElevation(map,cursorTile.x,cursorTile.y),x=cursorTile.exactX!==undefined?cursorTile.exactX:cursorTile.x+.5,z=cursorTile.exactZ!==undefined?cursorTile.exactZ:cursorTile.y+.5,beamHeight=14,top=sH+beamHeight;
-      this.mouseSpotlight.intensity=nightGlow*95;this.mouseSpotlight.distance=24;this.mouseSpotlight.position.set(x,top-.12,z);this.mouseSpotlightTarget.position.set(x,sH,z);
-      this.mouseBeam.position.set(x,sH+beamHeight/2,z);this.mouseBeamMaterial.opacity=.11*nightGlow;
-      this.mouseBeamSource.position.set(x,top-.1,z);this.mouseBeamSource.material.opacity=.88*nightGlow;
-      this.mouseBeamPool.position.set(x,sH+.035,z);this.mouseBeamPool.scale.setScalar(2.6);this.mouseBeamPool.material.opacity=.17*nightGlow;
-    }else this.mouseSpotlight.intensity=0;
     if (nightGlow > 0.02) {
       let candidateCount = 0;
       const focusX = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.x : this.camX;
       const focusY = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.z : this.camY;
       let maxPool = this.lightCandidatesPool.length;
+
+      if(cursorTile&&candidateCount<maxPool){
+        const x=cursorTile.exactX!==undefined?cursorTile.exactX:cursorTile.x+.5,z=cursorTile.exactZ!==undefined?cursorTile.exactZ:cursorTile.y+.5,sH=cursorTile.exactY!==undefined?cursorTile.exactY:this.getSurfaceElevation(map,cursorTile.x,cursorTile.y),c=this.lightCandidatesPool[candidateCount++],dx=x-focusX,dz=z-focusY;
+        c.x=x;c.y=sH+2.1;c.z=z;c.color=0xffbc63;c.distance=6;c.decay=2;c.intensity=2.6*nightGlow;c.priority=-3;c.distSq=dx*dx+dz*dz;
+      }
 
       // City lamps and oil-carrying people share the bounded night-light pool.
       const cityLights=this.cityNightLights||[];
@@ -8637,6 +8595,7 @@ export class RCT3DRenderer {
 
     this.cityCitizenBatches.end();
     this.cityCitizenModels.end();
+    syncSubstanceSmoke(THREE,this,this.cityDevelopment?.city,time);
     // Clean inactive dynamic billboards
     for (const [id, spr] of this.entitySprites.entries()) {
       if (!activeIds.has(id)) {

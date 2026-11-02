@@ -127,6 +127,7 @@ export function searchEmployment(city,c){
   return false;
 }
 export function routeToInterview(city,c){
+  if(c.sleep?.active||c.sleep?.minutes>0)return false;
   const a=c.career?.pendingInterview;if(!a||a.status!=='análise'||city.minute>a.decideAt)return false;
   const b=city.building(a.buildingId);if(!b?.active||b.entity.destroyed)return false;
   const lead=Math.max(30,Math.ceil(Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)*2+(b.officeFloor||0)*5+15));
@@ -198,7 +199,7 @@ export function renderResume(ui,p,c,money){
   if(!cv.applications.length)p.note('Nenhuma candidatura registrada.');
 }
 
-export function workEfficiency(c,b){return (c.jobId===b.id?.85+career(c).motivation*.003:1)*injuryWorkFactor(c);}
+export function workEfficiency(c,b){return (c.jobId===b.id?.85+career(c).motivation*.003:1)*injuryWorkFactor(c)*(c.substanceModifiers?.cognition||1);}
 
 export function reviewWages(city,b){
   const vacancies=openPositions(city,b);if(vacancies<=0){b.vacancySince=null;return;}

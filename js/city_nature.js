@@ -1,5 +1,5 @@
 import { inventoryFree } from './city_inventory.js';
-import { tileAt, ROAD_TILES } from './city_terrain.js?v=quarry-outskirts-1';
+import { tileAt, ROAD_TILES } from './city_terrain.js?v=favela-tree-roads-1';
 import { TILE_WATER } from './world_gen.js?v=deep-perf-3';
 export const PLANT_SPECIES = {
   coconut_palm: { label: 'Coqueiro', color: 0x548d38, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
@@ -37,7 +37,7 @@ export class CityNature {
   constructor(city) { this.city = city; this.plants = new Map(); this.tiles = new Map(); this.seeds = []; this.germinated = 0; this.harvested = 0; this.lost = 0; }
   available(x, y, species, buildingId = null, ignorePlantId = null) {
     const city = this.city, key = `${x},${y}`, spec = PLANT_SPECIES[species];
-    if (!spec || !spec.terrain.includes(tileAt(city.world,x,y)) || ROAD_TILES.has(tileAt(city.world,x,y)) || city.world.sidewalkTiles?.has(y*city.world.width+x) || city.occupied.has(key) || this.tiles.has(key) && this.tiles.get(key) !== ignorePlantId) return false;
+    if (!spec || !spec.terrain.includes(tileAt(city.world,x,y)) || ROAD_TILES.has(tileAt(city.world,x,y)) || city.world.sidewalkTiles?.has(y*city.world.width+x) || city.cardboardShelters?.has(key) || city.occupied.has(key) || this.tiles.has(key) && this.tiles.get(key) !== ignorePlantId) return false;
     if (city.development.plots.some(p => (buildingId == null || p.buildingId !== buildingId) && x >= p.x && x < p.x+p.width && y >= p.y && y < p.y+p.depth)) return false;
     if (city.development.projects.some(p => !p.cancelled && p.status !== 'completed' && p.path?.some(t => Math.floor(t.x) === x && Math.floor(t.y) === y))) return false;
     if ([...city.lighting.sites.values()].some(p => p.status !== 'cancelled' && Math.floor(p.x) === x && Math.floor(p.y) === y)) return false;
@@ -126,7 +126,7 @@ export class CityNature {
   validExisting(p) {
     const city=this.city;
     const species=this.normalizePlantSpecies(p);if(!species)return false;
-    return species.terrain.includes(tileAt(city.world,p.x,p.y)) && !city.occupied.has(`${p.x},${p.y}`) &&
+    return species.terrain.includes(tileAt(city.world,p.x,p.y)) && !city.cardboardShelters?.has(`${p.x},${p.y}`) && !city.occupied.has(`${p.x},${p.y}`) &&
       !city.development.plots.some(l=>(p.buildingId == null || l.buildingId!==p.buildingId) && p.x>=l.x && p.x<l.x+l.width && p.y>=l.y && p.y<l.y+l.depth) &&
       ![...city.lighting.sites.values()].some(l=>l.built && Math.floor(l.x)===p.x && Math.floor(l.y)===p.y);
   }

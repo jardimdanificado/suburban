@@ -4,7 +4,7 @@ const byGood=new Map(Object.entries(groups).flatMap(([category,goods])=>goods.sp
 export function taxCategory(good,reason=''){if(/^Serviço: Alimentação/.test(reason))return 'food';return byGood.get(good)||'services';}
 export function taxRate(city,category){const value=city.politics?.policy?.salesTaxes?.[category];return Number.isFinite(value)?value:TAX_CATEGORIES[category]?.rate??.1;}
 export function applySalesTax(city,from,to,amount,reason,details){
- if(to==='treasury'||from===to||amount<=0||!city.accounts.get(to)?.entity?.properties?.cityBuilding||!(/^(Serviço:|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)))return 0;
+ if(to==='treasury'||from===to||amount<=0||!city.accounts.get(to)?.entity?.properties?.cityBuilding||!(/^(Compra pessoal de substância|Serviço:|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)))return 0;
  const category=taxCategory(details.good,reason),rate=Math.max(0,Math.min(.5,taxRate(city,category))),tax=Math.floor(amount*rate/(1+rate));
  if(tax&&city.transfer(to,'treasury',tax,`Imposto sobre vendas: ${TAX_CATEGORIES[category].label}`,{taxCategory:category,taxableAmount:amount,good:details.good,shipmentId:details.shipmentId,projectId:details.projectId})){const b=city.accounts.get(to);b.salesTaxPaid=(b.salesTaxPaid||0)+tax;return tax;}return 0;
 }

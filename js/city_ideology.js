@@ -9,7 +9,7 @@ export function ideologicalProfile(subject){
   const source=i||{},agenda=citizen?{}:subject?.nameAgenda||partyNameAgenda(name),text=normalize(name);
   const has=re=>re.test(text)?1:0,economy=clamp((source.economy||0)+(agenda.economy||0)*.7),liberty=clamp((source.liberty||0)+(agenda.liberty||0)*.6),green=clamp((source.green??.4)+(agenda.green||0),0,1);
   const redistribution=clamp(-economy*.8+(agenda.social||0)*.9),ownership=clamp(-economy*.65+(agenda.state||0)*1.1+has(/comunist|estatist|estadist|coletivist/)*.35-has(/anarqu|libertari/)*.4),regulation=clamp(-economy*.5-liberty*.25+green*.15+has(/sindicat|trabalh/)*.2),fiscal=clamp(economy*.45+(citizen?(subject.traits?.frugality??.5)-.5:0)+has(/fiscal|auster|conserv/)*.4-has(/desenvolv|expans/)*.25),cooperation=clamp(-economy*.5+liberty*.25+has(/cooper|solidari|mutual/)*.4);
-  const side=economy<-.65?'esquerda':economy<-.2?'centro-esquerda':economy>.65?'direita':economy>.2?'centro-direita':'centro',current=ownership>.5?'estatal':ownership<-.4?'privada':cooperation>.4?'cooperativa':'mista';
+  const side=economy<-.88?'ultra-esquerda':economy<-.65?'extrema-esquerda':economy<-.2?'esquerda':economy>.88?'ultra-direita':economy>.65?'extrema-direita':economy>.2?'direita':'centro',current=ownership>.5?'estatal':ownership<-.4?'privada':cooperation>.4?'cooperativa':'mista';
   const profile=Object.freeze({economy,liberty,green,redistribution,ownership,regulation,fiscal,cooperation,label:`${side} · economia ${current} · ${liberty>.25?'libertária':liberty<-.25?'centralizadora':'pluralista'}`});
   if(subject)profiles.set(subject,{ideology:i,name,agenda:subject.nameAgenda,frugality,profile});return profile;
 }
@@ -58,9 +58,19 @@ export function ideologicalPromiseWeight(profile,metric){
 /** Human descriptions summarize existing policy axes; they do not change anyone's beliefs. */
 export function describePoliticalOrientation(subject){
   if(!subject?.political?.ideology&&!subject?.ideology)return {label:'Orientação ainda não definida',position:'Ainda não definida',ideology:'Sem corrente definida',economic:'Sem preferência definida',civil:'Sem preferência definida',environment:'Sem preferência definida'};
-  const p=ideologicalProfile(subject),position=p.economy<-.65?'Esquerda':p.economy<-.2?'Centro-esquerda':p.economy>.65?'Direita':p.economy>.2?'Centro-direita':'Centro';
+  const p=ideologicalProfile(subject),position=p.economy<-.88?'Ultraesquerda':p.economy<-.65?'Extrema esquerda':p.economy<-.2?'Esquerda':p.economy>.88?'Ultradireita':p.economy>.65?'Extrema direita':p.economy>.2?'Direita':'Centro';
   let ideology;
-  if(p.economy<-.65)ideology=p.liberty>.45&&p.ownership<.55?'Socialismo libertário':p.liberty>.25?'Socialismo democrático':p.liberty<-.25?'Socialismo estatista':'Socialismo';
+  const name=normalize(subject?.name||'');
+  if(/anarcocapital|anarco-capital/.test(name))ideology='Anarcocapitalismo';
+  else if(/anarqu/.test(name))ideology='Anarquismo';
+  else if(/fasc|integralist/.test(name))ideology='Fascismo';
+  else if(/stalin/.test(name))ideology='Stalinismo';
+  else if(/maoist|mao[ií]s/.test(name))ideology='Maoismo';
+  else if(/getul/.test(name))ideology='Getulismo';
+  else if(/nacional|patriot/.test(name))ideology=/patriot/.test(name)?'Patriotismo':'Nacionalismo';
+  else if(/fundamental/.test(name))ideology='Fundamentalismo político secular';
+  else if(/capitalist|mercantil|privatist/.test(name))ideology='Capitalismo';
+  else if(p.economy<-.65)ideology=p.liberty>.45&&p.ownership<.55?'Socialismo libertário':p.liberty>.25?'Socialismo democrático':p.liberty<-.25?'Socialismo estatista':'Socialismo';
   else if(p.economy<-.2)ideology=p.liberty<-.35?'Desenvolvimentismo estatista':'Social-democracia';
   else if(p.economy>.65)ideology=p.liberty>.6?'Liberalismo libertário':p.liberty<-.25?'Capitalismo autoritário':'Liberalismo econômico';
   else if(p.economy>.2)ideology=p.ownership>.35?'Desenvolvimentismo estatal':p.fiscal>.45?'Conservadorismo fiscal':p.liberty<-.35?'Direita centralizadora':'Liberalismo moderado';

@@ -1,3 +1,5 @@
+import {CitySubstances} from './city_substances.js';
+import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
 import {CityFurniture} from './city_furniture.js?v=road-and-water-bench-facing-1';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
@@ -8,10 +10,10 @@ import {applySalesTax} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
-import {streetMarketFor,discoverStreetMarket} from './city_markets.js';
+import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-stall-door-clearance-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=quarry-interview-ground-1';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=substances-sleep-1';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=indoor-display-centering-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=furniture-farms-fertilizer-1';
@@ -22,32 +24,32 @@ import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=sertanejo-house-styles-1';
 import { CityRelationships } from './city_relationships.js';
-import { CityNature } from './city_nature.js?v=tree-sidewalk-1';
+import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
-import { CityGovernment as CityPolitics } from './city_government.js?v=privatization-chamber-limit-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=substances-sleep-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=overhead-billboards-1';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=voting-outdoor-1';
+import { CityJustice } from './city_justice.js?v=substances-sleep-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=substances-sleep-1';
 import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
-import { quarryDeposits } from './city_terrain.js?v=quarry-outskirts-1';
+import { quarryDeposits } from './city_terrain.js?v=favela-tree-roads-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=caribbean-quarry-interviews-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
-import { CityLife } from './city_life.js?v=service-capacity-3';
-import { CityWorkMeals } from './city_work_meals.js?v=overhead-billboards-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=sidewalk-grade-2';
-import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
+import { CityLife } from './city_life.js?v=substances-sleep-1';
+import { CityWorkMeals } from './city_work_meals.js?v=substances-sleep-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=favela-tree-roads-1';
+import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=overhead-billboards-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=skybridge-survival-2';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=quarry-outskirts-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=substances-sleep-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=substances-sleep-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=favela-tree-roads-1';
 
 const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
 export const INITIAL_POPULATION = 512;
@@ -155,6 +157,7 @@ export class CitySimulation {
     this.officialJournal = new CityOfficialJournal(this);
     this.vehicles = new CityVehicles(this);
     this.paint = new CityPaint(this);
+    this.substances=new CitySubstances(this);this.substanceSchemaVersion=1;
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -201,7 +204,7 @@ export class CitySimulation {
     a.balance -= amount; b.balance += amount;
     this.fiscal?.record(from,to,amount,reason,details);
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
-    else if (b.entity?.properties.cityBuilding && /^(Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) this.recordBusinessRevenue(b,amount);
+    else if (b.entity?.properties.cityBuilding && /^(Compra pessoal de substância|Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) this.recordBusinessRevenue(b,amount);
     if(from==='treasury') a.totalExpenses=(a.totalExpenses||0)+amount;
     else if (a.entity?.properties.cityBuilding && /^(Salário$|Imposto sobre salário$|Imposto sobre vendas:|Imposto empresarial$|Vale-alimentação$|Atacado:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) a.totalExpenses += amount;
     const payroll=reason==='Salário'||reason==='Imposto sobre salário'||reason==='Subsídio salarial municipal';
@@ -580,7 +583,8 @@ export class CitySimulation {
     if(existing&&existing.citizenId===c.id)c.homelessSleepSpot={x:existing.x,y:existing.y};
     let spot=c.homelessSleepSpot;
     const abandonSpot=()=>{const shelter=this.cardboardShelters.get(c.cardboardShelterKey);if(shelter?.citizenId===c.id){this.cardboardShelters.delete(c.cardboardShelterKey);this.cardboardRevision++;}c.cardboardShelterKey=null;c.homelessSleepSpot=null;c.inventory.papelao=Math.max(1,c.inventory.papelao);c.path=[];spot=null;};
-    if(spot&&(!this.walkable(Math.floor(spot.x),Math.floor(spot.y))||ROAD_TILES.has(tileAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))||bridgeAt(this.world,Math.floor(spot.x),Math.floor(spot.y))))abandonSpot();
+    const hasTreeAt=(x,y)=>{const id=this.nature?.tiles?.get(`${x},${y}`);return !!this.nature?.plants.get(id)?.entity.properties.tree;};
+    if(spot&&(!this.walkable(Math.floor(spot.x),Math.floor(spot.y))||ROAD_TILES.has(tileAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))||bridgeAt(this.world,Math.floor(spot.x),Math.floor(spot.y))||hasTreeAt(Math.floor(spot.x),Math.floor(spot.y))))abandonSpot();
     if(spot){
       const shelter=this.cardboardShelters.get(c.cardboardShelterKey);
       if(!shelter||shelter.citizenId!==c.id){const x=Math.floor(spot.x),y=Math.floor(spot.y),shelterKey=`${x},${y}`;this.cardboardShelters.set(shelterKey,{citizenId:c.id,x:x+.5,y:y+.5,placedAt:this.minute});c.cardboardShelterKey=shelterKey;c.homelessSleepSpot={x:x+.5,y:y+.5};c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
@@ -615,7 +619,7 @@ export class CitySimulation {
     for(let radius=3;radius<=12;radius++){
       const candidates=[];
       for(let dx=-radius;dx<=radius;dx++){const dy=radius-Math.abs(dx);for(const sy of (dy?[1,-1]:[1])){
-        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if((key!==ownKey&&blocked.has(key))||x<0||y<0||x>=width||y>=height||safety.clear[y*width+x]||safety.blocked[y*width+x]||this.cardboardShelters.has(key)||ROAD_TILES.has(tileAt(this.world,x,y))||bridgeAt(this.world,x,y)||!this.walkable(x,y))continue;
+        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if((key!==ownKey&&blocked.has(key))||x<0||y<0||x>=width||y>=height||safety.clear[y*width+x]||safety.blocked[y*width+x]||this.cardboardShelters.has(key)||hasTreeAt(x,y)||ROAD_TILES.has(tileAt(this.world,x,y))||bridgeAt(this.world,x,y)||!this.walkable(x,y))continue;
         const px=x+.5,py=y+.5;candidates.push({x:px,y:py,key,score:Math.hypot(px-c.entity.x,py-c.entity.y)+(Math.imul(c.id+17,1103515245)>>>0)%997/10000});
       }}
       candidates.sort((a,b)=>a.score-b.score);
@@ -627,7 +631,7 @@ export class CitySimulation {
     }
     // The safe fallback is to rest where the person is, never to send them to
     // the town hall and turn its entrance into a makeshift dormitory.
-    if(!safety.blocked[startY*width+startX]&&!safety.clear[startY*width+startX]&&!this.cardboardShelters.has(ownKey)&&!ROAD_TILES.has(tileAt(this.world,startX,startY))&&!bridgeAt(this.world,startX,startY)&&this.walkable(startX,startY)){c.homelessSleepSpot={x:startX+.5,y:startY+.5};c.cardboardShelterKey=ownKey;this.cardboardShelters.set(ownKey,{citizenId:c.id,x:startX+.5,y:startY+.5,placedAt:this.minute});c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
+    if(!safety.blocked[startY*width+startX]&&!safety.clear[startY*width+startX]&&!this.cardboardShelters.has(ownKey)&&!hasTreeAt(startX,startY)&&!ROAD_TILES.has(tileAt(this.world,startX,startY))&&!bridgeAt(this.world,startX,startY)&&this.walkable(startX,startY)){c.homelessSleepSpot={x:startX+.5,y:startY+.5};c.cardboardShelterKey=ownKey;this.cardboardShelters.set(ownKey,{citizenId:c.id,x:startX+.5,y:startY+.5,placedAt:this.minute});c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
     blocked.add(ownKey);c.path=[];c.action='Dormindo na rua';return true;
   }
 
@@ -642,7 +646,7 @@ export class CitySimulation {
     const urgent = this.urgentNeed(c);
     if((!urgent||['food','water'].includes(urgent))&&this.supplies.route(c))return;
     const streetStall=streetMarketFor(this.economy,c);
-    if(!urgent&&streetStall&&this.society.isAdult(c)&&Math.min(n.food,n.water,n.energy,n.health,n.toilet)>25&&!c.conversation&&!c.deliveryId&&!c.workMeal){
+    if(!urgent&&!wantsSleep(this,c)&&streetStall&&this.society.isAdult(c)&&Math.min(n.food,n.water,n.energy,n.health,n.toilet)>25&&!c.conversation&&!c.deliveryId&&!c.workMeal){
       const path=this.findPath(c.entity,streetStall.position);
       if(path!==null){c.path=path;if(!path.length||Math.hypot(path.at(-1).x-streetStall.position.x,path.at(-1).y-streetStall.position.y)>.05)c.path.push({...streetStall.position});c.targetId=null;c.task='market-vending';c.action='Indo anunciar produtos na feira';return;}
     }
@@ -656,7 +660,7 @@ export class CitySimulation {
     else if (n.water < 45) { task = 'water'; type = 'utility'; }
     else if (n.food < 45) { task = 'food'; type = 'market'; }
     else if (n.toilet < 45) { task = 'toilet'; type = 'toilet'; }
-    else if (n.energy < 25 || ((this.hour >= 22 || this.hour < 6) && n.energy < 80)) { task = 'energy'; type = 'home'; }
+    else if (wantsSleep(this,c)) { task = 'energy'; type = 'home'; }
     else if (n.hygiene < 35) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
     else if (child && this.society.isAdult(c)) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
@@ -664,7 +668,7 @@ export class CitySimulation {
     else if (company && this.hour >= 8 && this.hour < 17) { task = 'manage'; type = 'company'; }
     else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
-    else if (n.energy < 65) { task = 'energy'; type = 'home'; }
+    else if (this.substances?.consider(c))return;
     if(task==='energy'&&!home){this.routeHomelessToSleep(c);return;}
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
     const joblessDuringShift=this.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&this.hour>=8&&this.hour<17;
@@ -742,6 +746,7 @@ export class CitySimulation {
     if(c.task==='sit'){if(c.path.length)return;c.needs.leisure=clamp(c.needs.leisure+.7);c.action='Descansando sentado no banco';if(this.minute>=c.sitUntil||this.urgentNeed(c)){this.furniture.release(c);c.task=null;}return;}
     if(c.task==='lake-water'){this.supplies.collectLake(c);return;}
     if(!syncCitizenInterior(this,c))return;
+    if(this.substances?.perform(c))return;
     if(c.task==='justice-report'){this.justice.arriveToReport(c);return;}
     if(c.task==='supplies'){this.supplies.arrive(c);return;}
     if(c.task==='council-session'){this.politics.council.getChamber().arrive(c);return;}
@@ -788,8 +793,7 @@ export class CitySimulation {
       if(c.path.length)return;
       if(!c.homelessSleepSpot){this.routeHomelessToSleep(c);if(c.path.length)return;}
       if(c.homelessSleepSpot&&Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)>.3){this.routeHomelessToSleep(c);return;}
-      c.action='Dormindo na rua';c.needs.energy=clamp(c.needs.energy+.45);
-      if(c.needs.energy>=95||(this.hour>=7&&this.hour<22&&c.needs.energy>65)){c.task=null;}
+      sleepMinute(this,c,{street:true});
       return;
     }
     const b = this.building(c.targetId), n = c.needs;
@@ -848,7 +852,8 @@ export class CitySimulation {
       if (task === 'food' ? !this.economy.consumeMeal(c, b) : !this.transfer(this.payerFor(c), b.accountId, b.type === 'townhall' ? 0 : price, `Serviço: ${NEED_LABELS[task] || task}`)) { c.action = 'Sem dinheiro para o serviço'; c.task = null; return; }
       c.servicePaid = `${b.id}:${task}`;
     }
-    const rate=task==='energy'?(c.homeUnitId?.9:.45):SERVICE_RATES[task];
+    if(task==='energy'){sleepMinute(this,c,{street:!c.homeUnitId});return;}
+    const rate=SERVICE_RATES[task];
     if (rate===undefined) { this.life.resetTask(c, 'serviço indisponível'); return; }
     n[task] = clamp(n[task] + rate);
     if(task==='hygiene'&&n.hygiene>=95){const facility=this.sanitation.facilities.get(c.hygieneTargetId);if(facility&&c.trespassHygieneFacilityId===facility.id){const building=this.building(facility.buildingId);if(building)this.justice.recordTrespassUse(c,building,facility,'unauthorized-hygiene-use');}c.trespassHygieneFacilityId=null;c.hygieneWaitingSince=null;}
@@ -1003,22 +1008,24 @@ export class CitySimulation {
       // window expires. Accumulate their passive need changes in one pass;
       // active workers, travelers, conversations and children still run each
       // minute. The window is at most five city minutes.
-      if(!c.entity.destroyed&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==0)continue;
+      if(!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==0)continue;
       const elapsed=Math.max(1,this.minute-(c._lastNeedsAt??this.minute-1));c._lastNeedsAt=this.minute;c._idleHomeId=c.homeUnitId;
       const age=this.society.age(c);
       if(c._renderAge!==age){c._renderAge=age;c.entity.properties.render.size=age<6?.55:age>=18?1:.8;}
       // These fixed fields are the hottest loop; direct access avoids temporary
       // iterators and dynamic property lookups for every resident and city minute.
-      n.food=clamp(n.food-.065*elapsed);n.water=clamp(n.water-.09*elapsed);n.energy=clamp(n.energy-.055*elapsed);
-      n.hygiene=clamp(n.hygiene-.045*elapsed);n.toilet=clamp(n.toilet-.085*elapsed);n.social=clamp(n.social-.035*elapsed);n.leisure=clamp(n.leisure-.035*elapsed);
+      const sleeping=c.task==='energy'&&c.sleep?.active&&!c.path.length;const restMetabolism=sleeping?.4:1;
+      n.food=clamp(n.food-.065*elapsed*restMetabolism);n.water=clamp(n.water-.09*elapsed*restMetabolism);n.energy=clamp(n.energy-.055*elapsed);
+      this.substances?.minute(c,elapsed);if(c.sleep?.active&&c.task!=='energy')interruptSleep(this,c);
+      n.hygiene=clamp(n.hygiene-.045*elapsed);n.toilet=clamp(n.toilet-.085*elapsed*restMetabolism);n.social=clamp(n.social-.035*elapsed);n.leisure=clamp(n.leisure-.035*elapsed);
       n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2)*elapsed);
       n.safety = clamp(n.safety + (hasTownhall ? 0.08 : -0.1)*elapsed);
       n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025)*elapsed);
       c.mood = (c.mood || 0) * (elapsed===1?.998:Math.pow(.998,elapsed));
       const totalNeeds=n.food+n.water+n.energy+n.hygiene+n.toilet+n.social+n.leisure+n.health+n.shelter+n.safety;
       let comfort=0;if(c.homeUnitId&&c.homeComfort)for(const key in c.homeComfort)if(c.homeComfort[key]>this.minute)comfort++;
-      c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
-      this.supplies.useCarried(c);
+      c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + (c.substanceModifiers?.mood||0) + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
+      if(!sleeping)this.supplies.useCarried(c);
       if (this.life.minute(c,elapsed)) continue;
       this.justice.updateInjuries(c);
       if(c.custodyWaterDelivery){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyWaterDelivery(c);continue;}
@@ -1047,6 +1054,8 @@ export class CitySimulation {
       if(age>=18&&!c.indoorLocation&&!c.businessIds.length&&!this.politics.officeHolder(c)&&this.minute>=(c.career?.nextDiscoveryAt??c.id%RECRUITMENT_RULES.discoveryInterval))discoverVacancies(this,c);
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       if (c.workMeal&&this.workMeals.advance(c)) continue;
+      if(c.task!=='energy'&&wantsSleep(this,c)&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!['food','water','health','toilet','hygiene','care','caregiving','provisions','workmeal','supplies'].includes(c.task)){c.task=null;c.path=[];}
+      if(c.task==='energy'&&c.sleep?.active&&!c.path.length&&Math.min(n.food,n.water,n.health,n.toilet)>5){this.performTask(c);continue;}
       const urgent = this.urgentNeed(c);
       if (urgent && c.conversation) { const other = this.society.citizen(c.conversation.a === c.id ? c.conversation.b : c.conversation.a); if (other) other.conversation = null; c.conversation = null; }
       const taskNeed=c.task==='supplies'?this.supplies.need(c):c.task==='lake-water'?'water':['provisions','workmeal'].includes(c.task)?'food':c.task;
@@ -1079,7 +1088,7 @@ export class CitySimulation {
     const citizenMs=performance.now()-profileMark;profileMark=performance.now();
     for(const c of this.citizens)if(!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
     for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait)this.furniture.syncCitizen(c);
-    if(this.minute%60===0)this.furniture.reconcile();
+    if(this.minute%60===0){this.furniture.reconcile();this.substances?.hourly();}
     const interiorMs=performance.now()-profileMark;profileMark=performance.now();
     advanceRecruitment(this);
     this.gigs.updateMinute();
@@ -1173,7 +1182,7 @@ export class CitySimulation {
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     let printed=0;if(['livros','panfletos','jornais'].includes(good)){const matched=new Map();for(const doc of this.publications.documents.values()){if(doc.lost||doc.good!==good)continue;const holder=this.publications.inventoryHolder(doc.ownerAccountId),count=matched.get(doc.ownerAccountId)||0,represented=holder?.inventory?.[good]||0;if(count>=represented)printed++;matched.set(doc.ownerAccountId,count+1);}}
-    return this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0)+(c.substanceHomeStock?.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

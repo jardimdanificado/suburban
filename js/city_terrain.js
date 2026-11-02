@@ -334,8 +334,12 @@ export function hasSettlementAccess(world, door, x, y, width, depth) {
   return seen.size >= 256;
 }
 
-export function pavePath(world, path, blockedTiles = null, treeTiles = null) {
-  for (const p of path) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(world, x, y), road = roadFor(tile); if (road !== null && road !== tile) {world.setTile(x, y, road);(world.roadCondition??=new Map()).set(tileKey(x,y),100);} }
+export function pavePath(world, path, blockedTiles = null, treeTiles = null, onPaveTile = null) {
+  for (const p of path) {
+    const x = Math.floor(p.x), y = Math.floor(p.y), key=tileKey(x,y), tile = tileAt(world, x, y), road = roadFor(tile);
+    if (road !== null && road !== tile) {world.setTile(x, y, road);(world.roadCondition??=new Map()).set(key,100);}
+    if (ROAD_TILES.has(tileAt(world,x,y))) onPaveTile?.(x,y,'road');
+  }
   const route=path.map(p=>({x:Math.floor(p.x),y:Math.floor(p.y)})),sidewalks=new Set();
   const addSideCells=(x,y,dx,dy)=>{if(dx)for(const sideY of [-1,1])sidewalks.add(`${x},${y+sideY}`);else if(dy)for(const sideX of [-1,1])sidewalks.add(`${x+sideX},${y}`);else for(const [sideX,sideY]of [[1,0],[-1,0],[0,1],[0,-1]])sidewalks.add(`${x+sideX},${y+sideY}`);};
   for(let i=0;i<route.length;i++){
@@ -344,7 +348,7 @@ export function pavePath(world, path, blockedTiles = null, treeTiles = null) {
     if(next)addSideCells(point.x,point.y,next.x-point.x,next.y-point.y);
     if(!previous&&!next)addSideCells(point.x,point.y,0,0);
   }
-  for(const key of sidewalks){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1)),tree=treeTiles?.has(key)||false,blocked=typeof blockedTiles==='function'?blockedTiles(x,y,key):blockedTiles?.has(key);if(blocked)continue;const tile=tileAt(world,x,y);if(tile===TILE_FLOOR||tile===TILE_HILL||tile===TILE_SAND)world.setSidewalk?.(x,y,{tree});}
+  for(const key of sidewalks){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1)),tree=treeTiles?.has(key)||false,blocked=typeof blockedTiles==='function'?blockedTiles(x,y,key):blockedTiles?.has(key);if(blocked)continue;const tile=tileAt(world,x,y);if(tile===TILE_FLOOR||tile===TILE_HILL||tile===TILE_SAND){world.setSidewalk?.(x,y,{tree});onPaveTile?.(x,y,'sidewalk');}}
 }
 
 export function generateSettlement(city) {

@@ -72,10 +72,10 @@ test('professions and conversations increase the appropriate skills only through
   assert(worker.skills.agriculture > agriculture);
 });
 
-test('farms support all twelve crops including sunflowers and cannot harvest without seeds, work and elapsed growth', () => {
+test('farms preserve all twelve food and oil crops including sunflowers and cannot harvest without seeds, work and elapsed growth', () => {
   const city = setup(), farm = city.economy.businesses.find(b => b.type === 'farm');
-  assert.deepEqual(Object.keys(CROPS), ['arroz', 'alface', 'tomate', 'girassol', 'maca', 'goiaba', 'trigo', 'milho', 'mandioca', 'cebola', 'feijao', 'coentro']);
-  for (const crop of Object.keys(CROPS)) {
+  assert.deepEqual(Object.keys(CROPS).filter(g=>!CROPS[g].nonFood), ['arroz', 'alface', 'tomate', 'girassol', 'maca', 'goiaba', 'trigo', 'milho', 'mandioca', 'cebola', 'feijao', 'coentro']);
+  for (const crop of Object.keys(CROPS).filter(g=>!CROPS[g].nonFood)) {
     farm.crop = crop; const field = { plantedAt: city.minute, labor: 0 };
     assert.equal(city.economy.harvest(farm, field), false);
     field.labor = ECONOMY_RULES.farmLabor; assert.equal(city.economy.harvest(farm, field), false);

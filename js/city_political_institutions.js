@@ -2,6 +2,7 @@ import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {governmentExpectations} from './city_government_expectations.js';
 import {outcomeAssessment,promiseAssessment} from './city_promise_evaluation.js';
 import {governmentPerformance} from './city_government_performance.js';
+import {ideologicalProfile} from './city_ideology.js';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 export function seatBounds(city){const population=city.citizens.filter(c=>!c.entity.destroyed).length;const min=Math.max(1,Math.ceil(population*.05));return {population,min,max:Math.max(min,Math.floor(population*.125))};}
 export function publicPressure(p,record){const living=p.city.citizens.filter(c=>!c.entity.destroyed&&p.city.society.isAdult(c));const aware=new Set(record.awareIds||[]);return living.length?living.filter(c=>aware.has(c.id)).length/living.length*100:0;}
@@ -16,6 +17,7 @@ export function approvalReport(p){
   const scandals=p.scandals.filter(s=>s.proven&&s.accusedId===city.economy.mayorId).reduce((n,s)=>n+publicPressure(p,s)/100*(s.severity||20)*.2,0);
   const vetoPenalty=(p.vetoes||[]).filter(v=>v.mayorId===city.economy.mayorId).reduce((n,v)=>n+Math.max(0,28-(city.minute-v.minute)/1440*2),0);
   const expectations=governmentExpectations(p);
+  const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),economicConcern=adults.reduce((sum,c)=>{const ideology=ideologicalProfile(c);return sum+(ideology.economy<-.9&&ideology.liberty<-.45?.25:.45+Math.max(0,ideology.fiscal)*.55);},0)/Math.max(1,adults.length),deficitRatio=finance.expenses?Math.max(0,-finance.operatingBalance)/finance.expenses:0,deficitPenalty=-Math.min(8,deficitRatio*12)*economicConcern;
   const rows=[
     {label:'Fundo partidário',points:(p.partyFundChanges||[]).filter(r=>r.mayorId===city.economy.mayorId).reduce((n,r)=>n+r.points*Math.exp(-(city.minute-r.minute)/(12*1440)),0),detail:'Aumentar o fundo eleitoral gera desaprovação; reduzir gera aprovação. Efeito decai ao longo de 12 dias.'},
     {label:'Condições atuais: felicidade',points:(now.happiness-50)*.06,detail:`${now.happiness.toFixed(1)}/100; peso menor que o avanço desde a posse`},
@@ -24,6 +26,7 @@ export function approvalReport(p){
     {label:'Condições atuais: ocupação',points:(now.employment-.5)*4,detail:`${(now.employment*100).toFixed(1)}% com ocupação`},
     {label:'Caixa municipal e reserva',points:(finance.cashHealth-50)*.16,detail:`Caixa ${Math.round(finance.cash)}; reserva social ${Math.round(finance.reserve)}. Indicador ${finance.cashHealth.toFixed(1)}/100; caixa zerado recebe avaliação mínima.`},
     {label:'Equilíbrio do custeio público',points:(finance.operatingHealth-50)*.16,detail:`Saldo de custeio nos últimos dias: ${Math.round(finance.operatingBalance)}. Indicador ${finance.operatingHealth.toFixed(1)}/100, calculado em relação às despesas correntes.`},
+    {label:'Déficit recente de receita municipal',points:deficitPenalty,detail:`Saldo recente ${Math.round(finance.operatingBalance)} para despesas de ${Math.round(finance.expenses)}; penalidade ampliada quando a receita não cobre serviços e reduzida entre eleitorados explicitamente antieconômicos (sensibilidade média ${economicConcern.toFixed(2)}).`},
     {label:'Produtividade das empresas ativas',points:(finance.companyProductivity-50)*.1,detail:`${finance.productiveCompanies}/${finance.activeCompanies} empresas ativas têm equipe e receita ${finance.revenueWindowReady?'nos últimos 30 dias':'registrada desde o início do acompanhamento'}; indicador ${finance.companyProductivity.toFixed(1)}/100.`},
     {label:'Mudança da saúde do caixa desde a posse',points:((financialLatest.treasuryHealth??finance.cashHealth)-(financialBaseline.treasuryHealth??finance.cashHealth))*.1,detail:`${(financialBaseline.treasuryHealth??finance.cashHealth).toFixed(1)} → ${(financialLatest.treasuryHealth??finance.cashHealth).toFixed(1)}/100 desde a posse.`},
     {label:'Mudança do equilíbrio de custeio desde a posse',points:((financialLatest.operatingHealth??finance.operatingHealth)-(financialBaseline.operatingHealth??finance.operatingHealth))*.1,detail:`${(financialBaseline.operatingHealth??finance.operatingHealth).toFixed(1)} → ${(financialLatest.operatingHealth??finance.operatingHealth).toFixed(1)}/100 desde a posse.`},

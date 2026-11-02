@@ -44,7 +44,7 @@ export class CityLife {
       c.lastActivityCheckAt=this.city.minute;
       const watched = c.activity;
       const need = c.task==='provisions'||c.task==='workmeal' ? 'food' : c.task;
-      const progress = !watched || Math.hypot(c.entity.x - watched.x, c.entity.y - watched.y) > .05 || (n[need] !== undefined && n[need] > (watched.needs[need] ?? 0) + .05) || c.conversation || c.workMeal || ['work', 'manage', 'construction', 'clean'].includes(c.task);
+      const progress = !watched || Math.hypot(c.entity.x - watched.x, c.entity.y - watched.y) > .05 || (n[need] !== undefined && n[need] > (watched.needs[need] ?? 0) + .05) || c.conversation || c.workMeal || c.task==='energy'&&c.sleep?.active || c.task==='substance-production' || ['work', 'manage', 'construction', 'clean'].includes(c.task);
       if (progress) c.lastProgressAt = this.city.minute;
       if (c.task && !c.deliveryId && !c.cleaningJobId && this.city.minute - (c.lastProgressAt ?? this.city.minute) >= LIFE_RULES.stalledMinutes) this.resetTask(c, 'atividade sem progresso');
       const activity=c.activity??=( {x:0,y:0,needs:{}} );activity.x=c.entity.x;activity.y=c.entity.y;for(const key of NEED_KEYS)activity.needs[key]=n[key];

@@ -1,3 +1,4 @@
+import {CitySubstances} from './city_substances.js';
 import {ensureJusticeSkills} from './city_justice_skills.js';
 import {CityFurniture} from './city_furniture.js?v=road-and-water-bench-facing-1';
 import {CitySupplies} from './city_supplies.js?v=survival-capacity-1';
@@ -11,39 +12,39 @@ import {CityCampaignMaterials} from './city_campaign_materials.js';
 import {CityCouncilChamber} from './city_council_chamber.js';
 import {CityResearch} from './city_research.js';
 import {CityGovernmentAgenda} from './city_government_agenda.js';
-import {CityVoting} from './city_voting.js?v=needs-recovery-1';
-import {CityPoliticalStanding} from './city_political_standing.js?v=party-relations-1';
+import {CityVoting} from './city_voting.js?v=substances-sleep-1';
+import {CityPoliticalStanding} from './city_political_standing.js?v=electorate-popularity-1';
 import {CityPartyOrganization} from './city_party_organization.js';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { CityRelationships } from './city_relationships.js';
-import { CityGovernment } from './city_government.js?v=privatization-chamber-limit-1';
+import { CityGovernment } from './city_government.js?v=substances-sleep-1';
 import { CityCouncil } from './city_council.js';
-import { CityCampaigns } from './city_campaigns.js?v=party-slogans-1';
+import { CityCampaigns } from './city_campaigns.js?v=substances-sleep-1';
 import { CityMandates } from './city_mandates.js';
-import { CityNature } from './city_nature.js?v=tree-sidewalk-1';
+import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation } from './city_simulation.js?v=sidewalk-grade-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=favela-tree-roads-1';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=combat-animation-integration-1';
+import { CityJustice } from './city_justice.js?v=substances-sleep-1';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency } from './city_currency.js';
 import { CityHousing } from './city_housing.js?v=caribbean-quarry-interviews-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
-import { CityLife } from './city_life.js?v=service-capacity-3';
-import { CityWorkMeals } from './city_work_meals.js?v=survival-capacity-1';
-import { CityDevelopment } from './city_development.js?v=sidewalk-grade-2';
-import { CityLogistics } from './city_logistics.js?v=survival-capacity-1';
+import { CityLife } from './city_life.js?v=substances-sleep-1';
+import { CityWorkMeals } from './city_work_meals.js?v=substances-sleep-1';
+import { CityDevelopment } from './city_development.js?v=favela-tree-roads-1';
+import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
-import { CityEconomy, GOODS } from './city_economy.js?v=business-recovery-1';
-import { CitySociety } from './city_society.js?v=skybridge-survival-2';
+import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=substances-sleep-1';
+import { CitySociety } from './city_society.js?v=substances-sleep-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=furniture-farms-fertilizer-1';
 import { World, WorldClock } from './world.js?v=sidewalk-grade-2';
 
-const prototypes = new Map([CityFurniture,CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
+const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, CityJustice, World, WorldClock]
   .map(type => [type.name, type.prototype]));
@@ -269,8 +270,10 @@ export function bindCityState(city) {
   for(const [index,c]of city.citizens.entries())ensureJusticeSkills(c,index,city.initialSeed,{newborn:c.initialAge===0});
   city.furniture??=new CityFurniture(city);
   city.supplies??=new CitySupplies(city);city.water??=new CityWater(city);
+  city.substances??=new CitySubstances(city);city.substances.city=city;city.substances.ensureState();
   city.paint??=new CityPaint(city);
   city.fiscal??=new CityFiscal(city);
+  if(city.substanceSchemaVersion!==1){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={label:spec.label};for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=1;}
   city.housing.invalidateResidents();
   city.buildingsById ??= new Map(); city.buildingsById.clear();
   city.childrenByGuardian ??= new Map();

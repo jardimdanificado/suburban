@@ -1,11 +1,11 @@
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {setupOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
-import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js?v=interiors-completion-11';
+import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city_interiors.js?v=substances-sleep-1';
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=quarry-outskirts-1';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=favela-tree-roads-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
@@ -124,7 +124,7 @@ export class CityDevelopment {
       if (project.route.some(t => this.roadPlotBlocked(Math.floor(t.x),Math.floor(t.y),access)) || project.route.some(p => !city.walkable(Math.floor(p.x), Math.floor(p.y))) || project.route.some((p, i, route) => i && !canStep(city.world, Math.floor(route[i - 1].x), Math.floor(route[i - 1].y), Math.floor(p.x), Math.floor(p.y)))) { project.status = 'blocked'; project.error = 'Trajeto deixou de ser acessível.'; return null; }
       const lampPostTiles=new Set([...city.lighting.sites.values()].filter(post=>post.status!=='cancelled').map(post=>`${Math.floor(post.x)},${Math.floor(post.y)}`));
       const treeTiles=new Set([...(city.nature?.tiles||new Map())].filter(([key,id])=>city.nature.plants.get(id)?.entity.properties.tree).map(([key])=>key));
-      pavePath(city.world,project.route,(x,y,key)=>(city.occupied.has(key)&&!lampPostTiles.has(key))||(city.nature?.tiles?.has(key)&&!treeTiles.has(key)),treeTiles); result = project;
+      pavePath(city.world,project.route,(x,y,key)=>(city.occupied.has(key)&&!lampPostTiles.has(key))||(city.nature?.tiles?.has(key)&&!treeTiles.has(key)),treeTiles,(x,y)=>city.clearCardboardSheltersForArea?.(x,y,1,1)); result = project;
       if (project.service === 'road-repair') for (const p of project.route) { const x = Math.floor(p.x), y = Math.floor(p.y), tile = tileAt(city.world, x, y); if (ROAD_TILES.has(tile)) { city.world.setTile(x, y, roadFor(tile)); city.world.roadCondition?.set(`${x},${y}`, 100); } }
       if (project.service === 'road') project.service = 'road';
     } else {

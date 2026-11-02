@@ -43,7 +43,7 @@ export class UIPage {
     const start=this.y,ctx=this.ui.ctx;
     if(this.visible(25)){ctx.fillStyle=T.face;ctx.fillRect(this.x,start,this.w,24);this.ui.text(fit(this.ui,title,this.w-20),this.x+10,start+5,T.ink);}
     const body=new UIPage(this.ui,this.x+10,start+30,this.w-20,this.top,this.bottom);
-    if(subtitle)body.note(subtitle);draw(body);const end=body.y+8;
+    if(subtitle)body.note(subtitle);if(typeof draw==='function')draw(body);const end=body.y+8;
     if(end>this.top&&start<this.bottom){ctx.strokeStyle=T.line;ctx.strokeRect(this.x+.5,start+.5,this.w-1,end-start-1);}
     this.y=end+12;
   }

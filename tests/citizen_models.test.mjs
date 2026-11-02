@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,citizenAnimation,citizenFrame,CityCitizenModels} from '../js/city_citizen_models.js';
+import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,citizenAnimation,citizenFrame,citizenIsSleeping,CityCitizenModels} from '../js/city_citizen_models.js';
 class Vector3{constructor(x=0,y=0,z=0){this.set(x,y,z);}set(x,y,z){Object.assign(this,{x,y,z});return this;}}
 class Matrix4{compose(p,q,s){this.data={position:{...p},angle:q.angle,lying:!!q.lying,scale:{...s}};return this;}}
-class Quaternion{setFromAxisAngle(axis,angle){this.angle=angle;return this;}multiply(){this.lying=true;return this;}}
+class Quaternion{setFromAxisAngle(axis,angle){this.angle=angle;this.lying=false;return this;}multiply(){this.lying=true;return this;}}
 class Color{setHex(value){this.value=value;return this;}}
 class BufferGeometry{constructor(){this.attributes={};}setAttribute(k,v){this.attributes[k]=v;}computeBoundingSphere(){}}
 class Float32BufferAttribute{constructor(array,itemSize){Object.assign(this,{array,itemSize});}}
@@ -54,7 +54,11 @@ test('a walking interior resident keeps the physical position and walking pose i
 test('sleepers and patients on an exam bed use the lying pose at their physical furniture point',async()=>{
  const {model}=await models(),e=person(88);e.properties.citizen.task='health';e.properties.citizen.indoorLocation={buildingId:1,roomType:'treatment',position:{x:2,y:3,z:1.8},path:[]};e.properties.citizen.furnitureUse={pose:'lying',posePoint:{x:2.5,y:3.25,z:1.98}};
  model.begin(.1,1);model.add(e,4);model.end();let batch=[...model.batches.values()].find(b=>b.count);assert(batch);assert.equal(batch.mesh.matrices[0].lying,true);assert.equal(batch.mesh.matrices[0].position.x,2.5);assert.equal(batch.mesh.matrices[0].position.y,5.98);assert.equal(batch.mesh.matrices[0].position.z,3.25);
- e.properties.citizen.task='energy';e.properties.citizen.indoorLocation.roomType='bedroom';model.begin(.1,1);model.add(e,4);model.end();batch=[...model.batches.values()].find(b=>b.count);assert.equal(batch.mesh.matrices[0].lying,true);
+ e.properties.citizen.task='energy';e.properties.citizen.sleep={active:true};e.properties.citizen.indoorLocation.roomType='bedroom';model.begin(.1,1);model.add(e,4);model.end();batch=[...model.batches.values()].find(b=>b.count);assert.equal(batch.mesh.geometry,model.frames.get('dormindo:0'));assert.equal(batch.mesh.matrices[0].lying,false);
+});
+test('street sleepers use the horizontal sleep model at their assigned spot; travel and other tasks keep their own animation',async()=>{
+ const {model}=await models(),e=person(91),c=e.properties.citizen;c.entity={x:0,y:0};c.task='energy';c.sleep={active:true};c.homelessSleepSpot={x:0,y:0};c.action='Dormindo no abrigo de rua · 45/480 min';assert.equal(citizenIsSleeping(c),true);assert.equal(citizenAnimation(c), 'dormindo');model.begin(.1,1);model.add(e,0);model.end();let sleeping=[...model.batches].find(([key,b])=>key==='dormindo:0'&&b.count);assert(sleeping);assert(Math.max(...sleeping[1].mesh.geometry.attributes.position.array.filter((_,i)=>i%3===1))<.4);
+ c.path=[{x:2,y:0}];assert.equal(citizenIsSleeping(c),false);assert.equal(citizenAnimation(c,true),'run');c.path=[];c.task='food';c.sleep.active=false;c.workCell={x:0,y:0};assert.equal(citizenAnimation(c), 'use_alt');
 });
 test('clearing a city keeps loaded geometry and resets character motion without fetching again',async()=>{
  const {model,group,requests}=await models();model.add(person(2),0);model.end();model.clear();assert.equal(group.meshes.size,0);assert(model.ready);assert.equal(model.frames.size,frameCount);model.add(person(3),0);model.end();assert.equal(requests.length,frameCount);assert.equal(group.meshes.size,1);

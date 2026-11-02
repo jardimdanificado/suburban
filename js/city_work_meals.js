@@ -1,6 +1,6 @@
-import {syncCitizenInterior} from './city_interiors.js?v=interiors-completion-11';
+import {syncCitizenInterior} from './city_interiors.js?v=substances-sleep-1';
 import { preparedOffer } from './city_markets.js';
-import { CROPS } from './city_economy.js?v=business-recovery-1';
+import { CROPS } from './city_economy.js?v=substances-sleep-1';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 
@@ -14,7 +14,7 @@ export class CityWorkMeals {
     if(!b)for(const id of c.businessIds){const candidate=this.city.building(id);if(candidate?.active&&this.offer(candidate)){b=candidate;break;}}
     return b?.active && (b.workers.includes(c.id) || b.ownerId === c.id) && hour >= (b.type === 'carrier' ? 7 : 8) && hour < (b.type === 'carrier' ? 20 : 17) ? b : null;
   }
-  foodGoods() { return [...Object.keys(CROPS).filter(g=>!['trigo','girassol'].includes(g)),...INDUSTRIAL_FOODS,'pao']; }
+  foodGoods() { return [...Object.keys(CROPS).filter(g=>!['trigo','girassol'].includes(g)&&!CROPS[g].nonFood),...INDUSTRIAL_FOODS,'pao']; }
   offer(holder, citizen = null) {
     const packed=preparedOffer(this.city.economy,holder,citizen);if(packed)return {...packed,price:0};
     if (holder.type === 'bakery' && holder.inventory.pao >= WORK_MEAL_RULES.units) return { good: 'pao', quantity: WORK_MEAL_RULES.units, inputs: { pao: WORK_MEAL_RULES.units }, quality: 1 };

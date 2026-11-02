@@ -1,5 +1,5 @@
 import {artworkNarrative} from './city_art_narratives.js';
-import {activityRoomReady} from './city_interiors.js?v=interiors-completion-11';
+import {activityRoomReady} from './city_interiors.js?v=substances-sleep-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';

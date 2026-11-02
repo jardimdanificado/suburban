@@ -59,8 +59,8 @@ export class CitySociety {
   }
   canPartner(a, b) { return !a.partnerId && !b.partnerId && this.city.relationships.compatible(a,b); }
   canSocialize(c) {
-    return !c.entity.destroyed && !c.policeAudit && !c.policeOversight && !c.skybridgeTransit && !c.skybridgeZ && !c.mobilityTrip && !c.ridingVehicleId && !(c.serviceQueue&&c.serviceQueue.kind===c.task&&c.serviceQueue.buildingId===c.targetId) && (!c.path.length||['walk','leisure','social'].includes(c.task)) && !c.conversation && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving','food','provisions','supplies','lake-water','toilet','hygiene'].includes(c.task) && this.age(c)>=3 && c.task!=='energy' &&
-      this.city.minute-c.lastConversationAt>=SOCIAL_RULES.conversationCooldown && Math.min(c.needs.food,c.needs.water,c.needs.energy)>20;
+    return !c.entity.destroyed && !c.policeAudit && !c.policeOversight && !c.skybridgeTransit && !c.skybridgeZ && !c.mobilityTrip && !c.ridingVehicleId && !(c.serviceQueue&&c.serviceQueue.kind===c.task&&c.serviceQueue.buildingId===c.targetId) && (!c.path.length||['walk','leisure','social'].includes(c.task)) && !c.conversation && !c.deliveryId && !c.cleaningJobId && !c.workMeal && !['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving','food','provisions','supplies','lake-water','toilet','hygiene','substance-buy','substance-production','substance-deposit','substance-vending'].includes(c.task) && this.age(c)>=3 && c.task!=='energy' &&
+      !c.sleep?.active&&this.city.minute-c.lastConversationAt>=SOCIAL_RULES.conversationCooldown/(c.substanceModifiers?.sociability||1) && Math.min(c.needs.food,c.needs.water,c.needs.energy)>20;
   }
   canConverse(a, b) {
     const ap=a.indoorLocation?.position||a.entity,bp=b.indoorLocation?.position||b.entity,dx=ap.x-bp.x,dy=ap.y-bp.y,dz=(ap.z||0)-(bp.z||0);
@@ -128,7 +128,7 @@ export class CitySociety {
           const relation=this.relations.get(pairKey(c.id,other.id));
           if(!relation && ((this.contactIndex.get(c.id)?.size||0)>=64 || (this.contactIndex.get(other.id)?.size||0)>=64))continue;
           const v=relation?.views?.[c.id];if(v && (v.fear>50 || v.status==='enemy') && !(v.resentment>55 && c.socialProfile.assertiveness>.6))continue;const score=(v?.affection||0)+(v?0:(this.city.minute+c.id)%6===0?55:0)+(other.partnerId===c.id?20:0)-(v?.fear||0)*.5+(v?.resentment>55 && c.socialProfile.assertiveness>.6?40:0);if(score>best){candidate=other;best=score;}}
-        if (candidate && this.city.random() < 1-Math.pow(1-c.personality.sociability*0.14,10) && this.startConversation(c, candidate, nearby.filter(other=>other!==c && other!==candidate && Math.hypot(other.entity.x-c.entity.x,other.entity.y-c.entity.y)<=2).slice(0,4).map(other=>other.id)))contacts++;
+        if (candidate && this.city.random() < 1-Math.pow(1-Math.min(.8,c.personality.sociability*0.14*(c.substanceModifiers?.sociability||1)),10) && this.startConversation(c, candidate, nearby.filter(other=>other!==c && other!==candidate && Math.hypot(other.entity.x-c.entity.x,other.entity.y-c.entity.y)<=2).slice(0,4).map(other=>other.id)))contacts++;
       }
       const key = x+y*stride;
       if (!buckets.has(key)) buckets.set(key, []);

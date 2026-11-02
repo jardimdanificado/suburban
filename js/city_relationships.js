@@ -142,7 +142,8 @@ export class CityRelationships {
   greet(a,b,warm) {
     const r=this.city.society.getRelation(a,b,true);r.conversations++;r.lastContact=this.city.minute;r.familiarity=bounded(r.familiarity+5);
     for(const [observer,target] of [[a,b],[b,a]]) {
-      const v=this.view(observer,target),empathy=trait(observer,'empathy');
+      const v=this.view(observer,target),empathy=trait(observer,'empathy'),communication=target.substanceModifiers?.speech||1;
+      if(warm)this.shift(observer,target,{trust:(communication-1)*3,affection:(communication-1)*2});
       this.shift(observer,target,{affection:warm?2+empathy*3:-3-(observer.socialProfile.temper*4),trust:warm?1+empathy:-2,respect:warm?1:-1,resentment:warm?-empathy:2});
       if(this.compatible(observer,target))v.attraction=bounded(v.attraction*.95+this.attraction(observer,target)*.05+(warm?1:-2));
       observer.needs.social=bounded(observer.needs.social+(warm?16:3));observer.needs.leisure=bounded(observer.needs.leisure+4);

@@ -4,10 +4,10 @@ import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=fla
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
 export function citizenIsSleeping(c){
- if(c?.task!=='energy'||c.path?.length||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
+ if(c?.task!=='energy'||!c.sleep?.active||c.path?.length||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
  const s=c.indoorLocation;
  if(s)return s.roomType==='bedroom'&&!s.exiting&&!s.path?.length;
- return c.action==='Dormindo na rua'&&(!c.homelessSleepSpot||Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)<=.3);
+ return !!c.homelessSleepSpot&&!!c.entity&&Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)<=.3;
 }
 const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','water','hygiene','supplies','shopping','health','vote','council-session','informal-service','informal-frontage','informal-gardening']);
 export function citizenAnimation(c,moving=false){
@@ -130,7 +130,7 @@ export class CityCitizenModels {
     this.ready=true;return true;
   }
   begin(dt=0,speed=1){this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));this.activeCampaignFlags.clear();for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
-  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null}={}){
+  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,activeCampaignElectionId=null,activeCampaignStatus=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
@@ -174,14 +174,15 @@ export class CityCitizenModels {
     }
     const size=(entity.properties.render.size||1)*(perspective?1.05:1);
     this.position.set(renderX,surfaceH+(posePoint?.z??inside?.z??0)+(c.ridingVehicleId? .18:0),renderY);this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);
-    const flag=c.campaign?.partyFlag||c.campaign?.flag;
+    const presence=c.campaignPresence?.electionId===activeCampaignElectionId&&activeCampaignStatus==='campaign'?c.campaignPresence:null;
+    const flag=c.campaign?.partyFlag||c.campaign?.flag||presence?.partyFlag;
     if(flag&&!c.ridingVehicleId&&!c.mobilityTrip&&!c.deliveryId){
       const flagKey=JSON.stringify(flag);let carrier=this.campaignFlags.get(entity.id);
       if(!carrier||carrier.flagKey!==flagKey){if(carrier){this.group.remove(carrier.group);carrier.group.traverse(o=>{o.geometry?.dispose();if(o.material!==carrier.material)o.material?.dispose();});}let material=this.campaignFlagMaterials.get(flagKey);if(!material){let texture;const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;material=new this.THREE.MeshLambertMaterial({map:texture,side:this.THREE.DoubleSide});this.campaignFlagMaterials.set(flagKey,material);}const group=new this.THREE.Group(),pole=new this.THREE.Mesh(new this.THREE.CylinderGeometry(.018,.024,1.18,5),new this.THREE.MeshLambertMaterial({color:0x795b3e})),cloth=new this.THREE.Mesh(clothFlagGeometry(this.THREE,.48,.30),material);pole.position.set(-.24,.59,0);cloth.position.set(0,1.02,0);group.add(pole,cloth);group.userData.cloth=cloth;this.group.add(group);carrier={group,material,flagKey};this.campaignFlags.set(entity.id,carrier);}
       carrier.group.position.copy(this.position);carrier.group.scale.setScalar(size);carrier.group.rotation.y=0;animateClothFlag(carrier.group.userData.cloth,Math.floor(this.clock*10)/10,(entity.id%19)*.31);this.activeCampaignFlags.add(entity.id);
     }
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count,this.color);
-    if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
+    if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:presence?.color?Number.parseInt(String(presence.color).replace('#',''),16):hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
     const capId=c.political?.partyCapId||c.campaign?.capGarmentId,partyCap=capId&&c.wardrobe?.find(g=>g.garmentId===capId),wornHat=partyCap||(Number.isInteger(c.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null),hat=c.equipment?.cesta?{piece:'cesta',color:0xb8874f}:wornHat;
     const footwear=Number.isInteger(c.footwearIndex)&&c.footwearIndex>=0?c.wardrobe?.[c.footwearIndex]:null;
     const lower=Number.isInteger(c.lowerWearIndex)&&c.lowerWearIndex>=0?c.wardrobe?.[c.lowerWearIndex]:null;

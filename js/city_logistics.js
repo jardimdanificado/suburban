@@ -39,7 +39,7 @@ export class CityLogistics {
     while(s.quantity>limit){const quantity=limit,unitCost=s.cost/s.quantity,cost=Math.round(unitCost*quantity),fee=Math.floor(s.fee*quantity/s.quantity),serviceFees=(s.serviceFees||[]).map(f=>({...f,amount:Math.floor(f.amount*quantity/s.quantity)})),serviceFee=serviceFees.length?serviceFees.reduce((n,f)=>n+f.amount,0):Math.floor((s.serviceFee||0)*quantity/s.quantity),id=this.nextId++,accountId=`shipment:${id}`;
       const part={...s,id,accountId,name:`Frete ${id}`,balance:0,quantity,cost,fee,serviceFee,serviceFees,driverId:null,status:'waiting',position:{...s.position},incoming:{},inventory:{...s.inventory},componentLots:{},inventoryCapacity:limit};part.inventory[s.good]=quantity;
       this.city.accounts.set(accountId,part);if(!this.city.transfer(s.accountId,accountId,cost+fee+serviceFee,'Divisão de carga: equipamento indisponível')){this.city.accounts.delete(accountId);break;}
-      if(s.good==='tinta')part.paintLots=[];this.city.paint.move(s,part,s.good,quantity);s.quantity-=quantity;s.cost-=cost;s.fee-=fee;s.serviceFee-=serviceFee;s.serviceFees=(s.serviceFees||[]).map((f,i)=>({...f,amount:f.amount-serviceFees[i].amount}));s.inventory[s.good]=s.quantity;if(s.good==='roupas'){part.garments=[];moveGarments(s,part,quantity);}this.city.publications.moveStock(s,part,s.good,quantity);this.city.vehicles.moveStock(s,part,s.good,quantity);this.shipments.push(part);
+      part.substanceLots={};this.city.substances?.moveLots(s,part,s.good,quantity);if(s.good==='tinta')part.paintLots=[];this.city.paint.move(s,part,s.good,quantity);s.quantity-=quantity;s.cost-=cost;s.fee-=fee;s.serviceFee-=serviceFee;s.serviceFees=(s.serviceFees||[]).map((f,i)=>({...f,amount:f.amount-serviceFees[i].amount}));s.inventory[s.good]=s.quantity;if(s.good==='roupas'){part.garments=[];moveGarments(s,part,quantity);}this.city.publications.moveStock(s,part,s.good,quantity);this.city.vehicles.moveStock(s,part,s.good,quantity);this.shipments.push(part);
     }
   }
   rebalanceWaiting() {
@@ -69,6 +69,7 @@ export class CityLogistics {
   publicOrder(s){return s.payerAccountId==='treasury'||s.buyer.accountId==='treasury'||s.buyer.municipal;}
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, serviceFees = [], requireCarrier = false,garmentIds=null } = {}) {
     const city = this.city;
+    if(city.substances&&!city.substances.canTrade(good,seller,buyer,{quantity}))return false;
     if(good==='roupas'&&!garmentIds&&seller?.type==='tailor'&&seller.garments?.some(g=>g.reservedPartyId!=null)){garmentIds=seller.garments.filter(g=>g.reservedPartyId==null).slice(0,quantity).map(g=>g.garmentId);if(garmentIds.length<quantity)return false;}
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0 || garmentIds&&(good!=='roupas'||garmentIds.length!==quantity||new Set(garmentIds).size!==quantity||garmentIds.some(id=>!seller.garments?.some(g=>g.garmentId===id)))) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
@@ -95,6 +96,7 @@ export class CityLogistics {
     if (!city.transfer(payerAccountId, accountId, cost + fee + serviceFee, 'Reserva de compra e frete',{shipmentId:id,purpose,good,essential:purpose==='public-meals'})) { city.accounts.delete(accountId); return false; }
     if(good==='roupas')moveGarments(seller,s,quantity,garmentIds);
     city.publications.moveStock(seller,s,good,quantity);city.vehicles.moveStock(seller,s,good,quantity);city.paint.move(seller,s,good,quantity);
+    city.substances?.moveLots(seller,s,good,quantity);
     seller.inventory[good] -= quantity; buyer.incoming[good] = (buyer.incoming[good] || 0) + quantity;
     // Until pickup the reserved cargo stays at the supplier's entrance.
     s.position = { ...seller.door }; this.shipments.push(s);
@@ -113,7 +115,7 @@ export class CityLogistics {
     s.buyer.incoming[s.good] = Math.max(0, (s.buyer.incoming[s.good] || 0) - s.quantity);
     const hall = this.city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
     const destination = !s.seller.entity?.destroyed && inventoryFree(s.seller) >= s.quantity ? s.seller : hall;
-    if (destination && inventoryFree(destination) >= s.quantity) {destination.inventory[s.good] += s.quantity;if(s.good==='roupas')moveGarments(s,destination,s.quantity);this.city.publications.moveStock(s,destination,s.good,s.quantity);this.city.vehicles.moveStock(s,destination,s.good,s.quantity);this.city.paint.move(s,destination,s.good,s.quantity);}
+    if (destination && inventoryFree(destination) >= s.quantity) {this.city.substances?.moveLots(s,destination,s.good,s.quantity);destination.inventory[s.good] += s.quantity;if(s.good==='roupas')moveGarments(s,destination,s.quantity);this.city.publications.moveStock(s,destination,s.good,s.quantity);this.city.vehicles.moveStock(s,destination,s.good,s.quantity);this.city.paint.move(s,destination,s.good,s.quantity);}
     else {this.city.economy.lost[s.good] += s.quantity;this.city.publications.loseStock(s,s.good,s.quantity);this.city.vehicles.loseStock(s,s.good,s.quantity);}
     s.inventory[s.good] = 0;
     const buyerAccount = this.city.accounts.get(s.payerAccountId || s.buyer.accountId);
@@ -164,6 +166,7 @@ export class CityLogistics {
     let dispatchBudget = 32;
     for (const s of pending) {
       if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential' && !(s.good==='lixo' && s.purpose==='waste-collection')) || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
+      if(city.substances&&!city.substances.canTrade(s.good,s.seller,s.buyer,{quantity:s.quantity})){this.cancel(s);continue;}
       let c = city.society.citizen(s.driverId);
       if (c?.workMeal) continue;
       if (c && (city.urgentNeed(c) || this.capacity(c)<s.quantity || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }
@@ -209,6 +212,7 @@ export class CityLogistics {
         if (inventoryFree(s.buyer) < s.quantity) { s.buyer.incoming[s.good] += s.quantity; s.status = 'waiting-space'; continue; }
         if(s.good==='roupas'){if(s.purpose==='liquidated-party-caps')for(const g of s.garments||[]){g.ownerHistory??=[];g.ownerHistory.push({ownerId:s.buyer.accountId,ownerName:s.buyer.entity.properties.name,minute:city.minute,event:'compra de boné de partido liquidado'});g.formerPartyId=g.liquidatedPartyId;delete g.liquidatedPartyId;}moveGarments(s,s.buyer,s.quantity);}
         city.publications.moveStock(s,s.buyer,s.good,s.quantity);city.vehicles.moveStock(s,s.buyer,s.good,s.quantity);city.paint.move(s,s.buyer,s.good,s.quantity);
+        city.substances?.moveLots(s,s.buyer,s.good,s.quantity);
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
         if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
         city.transfer(s.accountId, s.seller.accountId, s.cost, `${s.imported?'Importação':'Atacado'}: ${city.economy.goods[s.good].label}`,{good:s.good,quantity:s.quantity,shipmentId:s.id,...(s.imported?{imported:true,brand:s.importBrand}: {})});

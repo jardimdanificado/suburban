@@ -5,7 +5,7 @@ import {queueService} from './city_service_queue.js?v=service-capacity-8';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
 // Entity coordinates follow the resident through outdoor and indoor tiles.
 // Indoor metadata adds the floor, room and the remaining interior route.
-const INDOOR_TASKS=new Set(['work','manage','work-wait','shopping','supplies','job-interview','justice-report','police-oversight','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','clean','informal-service','leisure','social','outdoor_leisure']);
+const INDOOR_TASKS=new Set(['substance-production','substance-deposit','work','manage','work-wait','shopping','supplies','job-interview','justice-report','police-oversight','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','clean','informal-service','leisure','social','outdoor_leisure']);
 const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
 const citizenKeys=[];
 const citizen=(city,id)=>city.accounts.get(Number.isInteger(id)&&id>=0&&id<65536?(citizenKeys[id]??=`citizen:${id}`):`citizen:${id}`)||city.society.citizen(id);
@@ -57,7 +57,7 @@ export function advanceCitizenInterior(city,c,minutes=1){
  const s=c.indoorLocation;if(!s?.path?.length)return;
  s.trail??=[{...s.position}];
  s.phase=s.exiting?'leaving':'walking';
- let distance=Math.max(0,minutes)*injuryMovementFactor(c);
+ let distance=Math.max(0,minutes)*injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1);
  while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001){s.path.shift();if(!s.exiting){const visited=s.trail.findIndex(q=>Math.hypot(q.x-target.x,q.y-target.y,(q.z||0)-(target.z||0))<.001);if(visited>=0)s.trail.length=visited+1;else s.trail.push({...target});}}}
  c.entity.x=s.position.x;c.entity.y=s.position.y;
  s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));
@@ -170,7 +170,7 @@ export function syncCitizenInterior(city,c){
  }
  const cleaningJob=task==='clean'?city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId):null;
  const councilMember=task==='council-session'?city.politics.council.members.find(member=>member.citizenId===c.id):null,councilOffice=city.units.get(councilMember?.officeUnitId);
- let kind=task==='informal-service'?(city.units.get(gig.unitId)?.roomType||'workspace'):task==='shopping'&&b.type==='laundromat'?'laundry':task==='clean'&&cleaningJob?.kind==='feces'&&cleaningJob.scope==='building'?(city.units.get(cleaningJob.unitId)?.roomType||'workspace'):['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()||!councilOffice?'plenary':'office'):task==='police-oversight'?'office':['energy','care','caregiving'].includes(task)?'bedroom':['health'].includes(task)?'treatment':['work','manage','work-wait'].includes(task)?(c.role==='councilor'?'office':'workspace'):'service';
+ let kind=task==='informal-service'?(city.units.get(gig.unitId)?.roomType||'workspace'):task==='shopping'&&b.type==='laundromat'?'laundry':task==='clean'&&cleaningJob?.kind==='feces'&&cleaningJob.scope==='building'?(city.units.get(cleaningJob.unitId)?.roomType||'workspace'):['toilet','hygiene','clean'].includes(task)?'bathroom':['food','workmeal','provisions'].includes(task)?'dining':task==='council-session'?(city.politics.council.getChamber().open()||!councilOffice?'plenary':'office'):task==='police-oversight'?'office':['energy','care','caregiving','substance-production','substance-deposit'].includes(task)?'bedroom':['health'].includes(task)?'treatment':['work','manage','work-wait'].includes(task)?(c.role==='councilor'?'office':'workspace'):'service';
  // Shops serve food purchases at their real sales counter; only a refectory
  // or a building with dining rooms requires a dining seat. Otherwise a market
  // can hold hungry customers forever waiting for a room it will never have.
@@ -186,7 +186,7 @@ export function syncCitizenInterior(city,c){
  if(task==='toilet')room=city.units.get(city.sanitation.facilities.get(c.toiletTargetId)?.unitId);
  if(task==='police-oversight'&&!room){const workrooms=roomGroups(b).get('workspace')||noRooms;room=workrooms.find(u=>activityCellAvailable(city,u,c,'workspace'));if(room)kind='workspace';}
  if(task==='clean'){const job=city.sanitation.jobs?.find(j=>j.id===c.cleaningJobId);room=city.units.get(job?.unitId||city.sanitation.facilities.get(job?.facilityId)?.unitId);}
- if(!room&&['energy','care','provisions','hygiene'].includes(task)){const home=city.housing.home(c);if(home?.buildingId===b.id)room=city.housing.units(home).find(u=>u.roomType===kind);if(!room&&kind==='bedroom')room=city.units.get(c.homeUnitId);}
+ if(!room&&['energy','care','provisions','hygiene','substance-production','substance-deposit'].includes(task)){const home=city.housing.home(c);if(home?.buildingId===b.id)room=city.housing.units(home).find(u=>u.roomType===kind);if(!room&&kind==='bedroom')room=city.units.get(c.homeUnitId);}
  if(!room&&task==='provisions'){const homeUnit=city.units.get(c.homeUnitId);if(homeUnit?.buildingId===b.id&&activityCellAvailable(city,homeUnit,c,homeUnit.roomType)){room=homeUnit;kind=homeUnit.roomType;}}
  if(!room&&previous?.buildingId===b.id&&previous.targetRoomType===kind){const assigned=city.units.get(previous.targetUnitId);if(assigned&&activityCellAvailable(city,assigned,c,kind))room=assigned;}
  if(!room){const groups=roomGroups(b),choices=groups.get(kind)||noRooms;room=choices.find(u=>activityCellAvailable(city,u,c,kind));

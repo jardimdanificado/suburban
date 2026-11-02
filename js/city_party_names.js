@@ -198,6 +198,7 @@ export const POLITICAL_WORDS=Object.freeze({
     "Reparador",
     "Universalista",
     "Transformador"
+    ,"Stalinista","Maoista","Ultraesquerdista","Coletivista radical"
   ],
   "right": [
     "Liberal",
@@ -235,7 +236,8 @@ export const POLITICAL_WORDS=Object.freeze({
     "Tecnocrático",
     "Modernizador",
     "Bolsonarista",
-    "Crescimentista"
+    "Crescimentista",
+    "Fascista","Ultradireitista","Anarcocapitalista","Getulista"
   ],
   "green": [
     "Verde",
@@ -299,7 +301,8 @@ export const POLITICAL_WORDS=Object.freeze({
     "Nacionalizador",
     "Restaurador",
     "Uniformizador",
-    "Normativo"
+    "Normativo",
+    "Fascista","Stalinista","Maoista","Getulista","Fundamentalista cívico","Patriota"
   ],
   "liberty": [
     "Libertário",
@@ -318,6 +321,7 @@ export const POLITICAL_WORDS=Object.freeze({
     "Insurgente",
     "Livre",
     "Voluntário",
+    "Anarcocapitalista","Anarquista","Ultralibertário",
     "Autônomo",
     "Desobediente",
     "Liberador",

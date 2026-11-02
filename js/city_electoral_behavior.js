@@ -5,6 +5,9 @@ export function electoralPriorities(c){
   const traits=c.traits||{},u=salt=>hash(c.id,salt)/4294967296;
   return s.electoralPriorities=Object.freeze({ideology:14+(1-(traits.openness??.5))*7+u(31)*7,competence:.65+u(37)*.65,material:.65+(traits.empathy??.5)*.4+u(41)*.45,renewal:.25+(s.independence??.6)*.5+u(43)*.35,green:.5+u(47),civil:.6+u(53)*.8});
 }
+export function voterElectorates(c){
+  const groups=['todos'];if(c.jobId||c.role==='worker')groups.push('trabalhadores');if(c.businessIds?.length)groups.push('empreendedores');if(!c.homeUnitId)groups.push('sem-moradia');if(c.needs.food<55||c.balance<10000)groups.push('baixa-renda');if(c.role==='councilor'||c.role==='mayor')groups.push('servidores');if((c.political?.ideology?.green||0)>.6)groups.push('ambientalistas');if((c.traits?.openness||.5)>.7)groups.push('reformistas');return groups;
+}
 export function captureGovernmentExperience(city,c,termId){
   return c.political.governmentExperience={termId,happiness:c.happiness,food:c.needs.food,health:c.needs.health,housed:!!c.homeUnitId,employed:!!(c.jobId||c.businessIds.length||c.role==='councilor')};
 }
@@ -16,7 +19,7 @@ export function personalGovernmentExperience(city,c,term){
 export function governingStreak(p,partyId){let count=0;for(let i=p.mandates.terms.length-1;i>=0;i--){const term=p.mandates.terms[i];if(term.partyId!==partyId)break;count+=term.provisional?.5:1;}return count;}
 /** Public image is useful evidence, but correlated measures cannot compound without limit. */
 export function standingEvidence(p,voter,candidate,party){
-  const governing=p.mandates.current?.partyId===party.id,record=p.mandates.recordScore(candidate.id,party.id),parts=[['popularidade pessoal',((candidate.political.popularity??50)-50)*.12],['reputação do partido',((party.publicReputation??50)-50)*.1],['balanço dos governos',Math.tanh(record/24)*8]];
+  const groupPopularity=candidate.political.popularityByElectorate,group=voterElectorates(voter).map(key=>groupPopularity?.[key]).filter(Boolean),segmented=group.length?group.reduce((n,row)=>n+row.score,0)/group.length:(candidate.political.popularity??50),governing=p.mandates.current?.partyId===party.id,record=p.mandates.recordScore(candidate.id,party.id),parts=[['popularidade nos eleitorados deste eleitor', (segmented-50)*.14],['reputação do partido',((party.publicReputation??50)-50)*.1],['balanço dos governos',Math.tanh(record/24)*8]];
   if(governing)parts.push(['avaliação da gestão do partido',Math.tanh((p.approval-50)/30)*6]);
   const positive=parts.reduce((n,[,v])=>n+Math.max(0,v),0),scale=positive>18?18/positive:1;
   return parts.map(([reason,value])=>({reason,value:value>0?value*scale:value}));

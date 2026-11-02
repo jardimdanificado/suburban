@@ -1,0 +1,28 @@
+import {SUBSTANCES,SUBSTANCE_REGIMES,HEMP,REFINING_LEAVES} from './city_substance_catalog.js';
+import {substanceStance} from './city_substances.js';
+const labels={pending:'Em análise',approved:'Aprovado',rejected:'Recusado',revoked:'Revogado'};
+const percent=n=>`${(100*(n||0)).toFixed(1)}%`;
+export function renderCitizenSubstances(ui,p,c){
+ const city=ui.city,state=city.substances?.initialize(c);if(!state)return;
+ p.heading('SONO E SUBSTÂNCIAS');const sleep=c.sleep;if(sleep)p.kv('Sono',sleep.active?`Dormindo: ${sleep.minutes}/480 minutos`:`${sleep.minutes?`${sleep.minutes} minutos de sono a retomar · `:''}último bloco completo: ${sleep.lastDuration||0} minutos`);
+ p.kv('Pulmões',`${(state.lungs*100).toFixed(3)}%`);p.kv('Rotina',state.nocturnal?'Preferência por atividade noturna':'Atividade diurna');
+ if(state.effects.length){for(const e of state.effects)p.record(`${SUBSTANCES[e.id].icon} Sob efeito de ${SUBSTANCES[e.id].label}`,`Mais ${Math.ceil(e.until-city.minute)} min · qualidade ${e.quality.toFixed(0)}/100`);const m=c.substanceModifiers;p.note(`Mobilidade ${percent(m?.mobility)} · comunicação ${percent(m?.speech)} · capacidade cognitiva ${percent(m?.cognition)}${m?.flee?' · evita conflitos e prefere fugir':''}`);}else p.note('Sem efeitos ativos.');
+ p.table([{label:'Substância',weight:1.5},{label:'Paladar'},{label:'Usos'},{label:'Dependência'},{label:'Tolerância'},{label:'Abstinência'}],Object.entries(state.uses).map(([id,u])=>({cells:[`${SUBSTANCES[id].icon} ${SUBSTANCES[id].label}`,u.liking>.2?'Gosta':u.liking<-.2?'Não gosta':'Neutro',u.count,percent(u.dependence),percent(u.tolerance),percent(u.withdrawal)]})));
+ const carried=Object.entries(c.inventory||{}).filter(([g,q])=>q>0&&city.substances.controlled(g));if(carried.length)p.table([{label:'Porte',weight:2},{label:'Unidades'},{label:'Qualidade'}],carried.map(([g,q])=>({cells:[city.economy.goods[g]?.label||g,q,`${city.substances.quality(c,g).toFixed(0)}/100`]})));
+ if(c.substanceCraft)p.kv('Atividade doméstica',`${Math.floor(c.substanceCraft.progress||0)}/${c.substanceCraft.labor} minutos de trabalho${c.substanceCraft.paid?' · instalação paga':''}`);
+}
+export function renderSubstancePolicy(ui,p){
+ const city=ui.city,system=city.substances;if(!system)return;p.heading('SUBSTÂNCIAS, LICENÇAS E SAÚDE');p.note('Regimes e limites são votados pela Câmara. Licenças agrícolas são requerimentos formais; transporte comercial autorizado não usa o limite de porte pessoal.');
+ const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));
+ for(const [id,spec]of Object.entries({...SUBSTANCES,canhamo:HEMP})){
+  const law=system.law(id),users=adults.filter(c=>c.substanceState?.uses[id]?.count>0),dependent=users.filter(c=>c.substanceState.uses[id].dependence>=.2),stock=city.goodsStock(id);
+  p.heading(`${spec.icon||'🧵'} ${spec.label}`);p.kv('Lei em vigor',`${SUBSTANCE_REGIMES[law.regime]} · ${id==='canhamo'?'sem teto de porte':law.regime==='regulated'?`limite pessoal ${law.limit} unidades`:'porte conforme o regime'}`);p.kv('Estoque / usuários / dependentes',`${stock} unidades · ${users.length} pessoas · ${dependent.length} com dependência ≥20%`);
+  if(id==='folha_coca')p.note(`O lote doméstico abstrato de coca refinada exige ${REFINING_LEAVES} folhas. O limite de porte inicial é menor que esse lote.`);
+  ui.substanceDraftLimits??={};const draft=id==='canhamo'?null:ui.substanceDraftLimits[id]??Math.max(1,law.limit||4);const submit=(regime,limit=draft)=>{const author=city.politics.council.people().find(c=>c.id===ui.proposalAuthorId)||city.politics.council.people()[0];if(!author){ui.notice='A Câmara precisa de vereador para apresentar o projeto.';return;}const bill=city.politics.submitBill('substanceLaw',{substance:id,regime,limit:regime==='prohibited'?id==='canhamo'?null:0:limit},author.id);ui.notice=bill?'Projeto encaminhado à Câmara.':city.lastError||'Já existe projeto semelhante em tramitação.';};
+  p.buttons(Object.entries(SUBSTANCE_REGIMES).map(([regime,label])=>({label:`PROPOR ${label.toUpperCase()}`,selected:law.regime===regime,click:()=>submit(regime)})));
+  if(id!=='canhamo'){p.kv('Limite proposto',`${draft} unidades`);p.buttons([{label:'LIMITE −1',click:()=>{ui.substanceDraftLimits[id]=Math.max(1,draft-1);}},{label:'LIMITE +1',click:()=>{ui.substanceDraftLimits[id]=Math.min(1000,draft+1);}},{label:'VOTAR NOVO LIMITE',click:()=>submit('regulated')}]);}
+ }
+ p.heading('REQUERIMENTOS AGRÍCOLAS');for(const request of system.permits.slice(-24).reverse())p.record(`#${request.id} · ${city.building(request.buildingId)?.entity.properties.name||'Estabelecimento removido'}`,`${SUBSTANCES[request.substance]?.label||'Cânhamo'} · ${labels[request.status]}${request.reason?` · ${request.reason}`:''}`,()=>ui.openBuilding(request.buildingId));
+ p.heading('POSIÇÕES DOS PARTIDOS');for(const party of city.politics.parties.filter(p=>p.active))p.record(party.short,Object.keys(SUBSTANCES).map(id=>{const stance=substanceStance(party,id);return `${SUBSTANCES[id].label}: ${stance>.5?'liberação':stance<-.35?'proibição':'regulação'}`;}).join(' · '),()=>ui.openParty(party.id));
+ p.note('Danos e durações são coeficientes desta simulação ficcional. Qualidade, frequência, dependência e abstinência aparecem na ficha de cada morador.');
+}

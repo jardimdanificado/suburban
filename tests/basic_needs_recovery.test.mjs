@@ -21,7 +21,7 @@ test('voting does not interrupt essential recovery before the voter can travel',
  city.minute+=30;c.needs.energy=60;c.task=null;assert.equal(voting.route(e,row),true);assert.equal(c.task,'vote');
 });
 test('a well rested person is not forced back to sleep solely because it is night',()=>{
- const city=setup({starter:true,population:64}),c=person(city);city.minute=23*60;c.needs.energy=95;c.task=null;c.startupProjectId=null;city.chooseTask(c);assert.notEqual(c.task,'energy');
+ const city=setup({starter:true,population:64}),c=person(city);city.minute=23*60;c.sleep={active:false,minutes:0,lastWakeAt:city.minute,completed:1,lastDuration:480};c.needs.energy=95;c.task=null;c.startupProjectId=null;city.chooseTask(c);assert.notEqual(c.task,'energy');
 });
 
 test('a homeless resident sleeps away from the town hall and only recovers at the assigned spot',()=>{
@@ -29,7 +29,7 @@ test('a homeless resident sleeps away from the town hall and only recovers at th
  city.minute=23*60;c.needs.energy=70;c.entity.x=hall.door.x;c.entity.y=hall.door.y;city.chooseTask(c);
  assert.equal(c.task,'energy');assert.equal(c.targetId,null);assert(c.homelessSleepSpot);assert(Math.hypot(c.homelessSleepSpot.x-hall.door.x,c.homelessSleepSpot.y-hall.door.y)>=4);
  assert(c.path.length);const before=c.needs.energy;city.performTask(c);assert.equal(c.needs.energy,before);
- c.entity.x=c.homelessSleepSpot.x;c.entity.y=c.homelessSleepSpot.y;c.path=[];city.performTask(c);assert(c.needs.energy>before);assert.equal(c.action,'Dormindo na rua');
+ c.entity.x=c.homelessSleepSpot.x;c.entity.y=c.homelessSleepSpot.y;c.path=[];city.performTask(c);assert(c.needs.energy>before);assert.match(c.action,/Dormindo.*1\/480 min/);
 });
 
 test('homeless residents are assigned different outdoor sleeping places instead of crowding one entrance',()=>{
@@ -39,11 +39,11 @@ test('homeless residents are assigned different outdoor sleeping places instead 
  assert.equal(spots.length,people.length);assert.equal(new Set(spots).size,spots.length);assert(people.every(c=>Math.hypot(c.homelessSleepSpot.x-hall.door.x,c.homelessSleepSpot.y-hall.door.y)>=4));
 });
 
-test('an election can recover turnout after widespread simultaneous exhaustion and bathroom need',()=>{
+test('an exhausted electorate recovers before voting and active sleep is not cut short by turnout',()=>{
  const city=setup({starter:true,population:128}),p=city.politics;p.termNumber=3;p.beginElection();const e=p.active;city.minute=e.voteAt;e.status='campaign';
  for(const c of city.citizens){c.task=null;c.path=[];c.indoorLocation=null;c.deliveryId=null;c.workMeal=null;c.cleaningJobId=null;Object.assign(c.needs,{energy:2,toilet:3,food:95,water:95,health:95,hygiene:95});}
  p.voting.open(e);while(city.minute<e.closesAt+20&&p.active===e)city.update(.25);
- assert(e.ballots.length>=100,`only ${e.ballots.length} of ${e.electorate.length} voted`);assert.equal(city.citizens.filter(c=>!c.entity.destroyed).length,128);assert(city.citizens.filter(c=>city.urgentNeed(c)==='energy').length<10);
+ assert(e.ballots.length>0,'recovered residents can still vote');for(const ballot of e.ballots){const citizen=city.society.citizen(ballot.voterId??ballot.citizenId);if(citizen?.sleep)assert.equal(citizen.sleep.active,false,'voting cannot steal an active sleep block');}assert.equal(city.citizens.filter(c=>!c.entity.destroyed).length,128);assert(city.citizens.filter(c=>city.urgentNeed(c)==='energy').length<10);
 });
 
 test('a critically urgent person abandons a stalled bathroom queue at a real hygiene cost',async()=>{

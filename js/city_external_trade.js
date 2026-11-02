@@ -17,6 +17,7 @@ function importGate(city,buyer){
  for(const p of points){const door={x:p.x+.5,y:p.y+.5};if(city.findPath(door,buyer.door)!==null)return door;}return null;
 }
 export function orderImport(city,buyer,good,quantity){
+ if(city.substances&&!city.substances.canTrade(good,null,buyer,{quantity}))return false;
  const economy=city.economy,goods=economy.goods[good];if(!goods||!buyer?.active||buyer.entity?.destroyed||quantity<1)return false;
  if(!city.accounts.has('external-trade'))city.accounts.set('external-trade',{name:'Comércio exterior',balance:0,totalRevenue:0,totalExpenses:0});
  economy.externalImporters??=new Map();let seller=economy.externalImporters.get(good);

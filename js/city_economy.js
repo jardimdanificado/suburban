@@ -1,3 +1,4 @@
+import {SUBSTANCE_CROPS,SUBSTANCES} from './city_substance_catalog.js';
 import {justiceServiceSpec} from './city_justice_services.js';
 import {JUSTICE_SKILLS,ensureJusticeSkills} from './city_justice_skills.js';
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
@@ -6,11 +7,11 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=daily-mayor-privatization-1';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=deep-perf-3';
 import {externalTradeHourly,orderImport} from './city_external_trade.js';
-import {outdoorCellReady,workCellReady} from './city_interiors.js?v=quarry-interview-ground-1';
+import {outdoorCellReady,workCellReady} from './city_interiors.js?v=substances-sleep-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=quarry-interview-ground-1';
-import {productionPlan,investProductionPlan} from './city_production_planner.js?v=investment-plan-reuse-1';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=substances-sleep-1';
+import {productionPlan,investProductionPlan} from './city_production_planner.js?v=substances-sleep-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
@@ -23,6 +24,7 @@ import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './
 
 export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados',artistic:'Arte',combat:'Combate',investigation:'Investigação',forensics:'Perícia',law:'Direito',construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
 export const CROPS = {
+  ...SUBSTANCE_CROPS,
   arroz:{label:'Arroz',grow:150,price:95},alface:{label:'Alface',grow:75,price:80},tomate:{label:'Tomate',grow:100,price:110},
   girassol: { label: 'Girassol', grow: 180, price: 140 },
   maca: { label: 'Maçã', grow: 180, price: 100 }, goiaba: { label: 'Goiaba', grow: 160, price: 100 },
@@ -34,7 +36,7 @@ export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de g
 export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'restaurant', 'builder', 'quarry', 'carrier', 'lamp_service', 'office_tower', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill','clinic','library']);
 export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'iml','crematorium','police_station','council_oversight_office','jail','courthouse','townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing', 'popular_refectory']);
 const retailTypes = new Set(['bakery', 'greengrocer', 'market', 'restaurant']);
-const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)), ...INDUSTRIAL_FOODS];
+const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)&&!CROPS[g].nonFood), ...INDUSTRIAL_FOODS];
 export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', restaurant:'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', council_chamber:'governance', iml:'forensics', crematorium:'care',police_station:'investigation',council_oversight_office:'law',jail:'care',courthouse:'law',legal_office:'law', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', lamp_service: 'logistics', office_tower:'management', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
 // Keep a multi-week public food reserve so farms can be founded, staffed,
 // planted and harvested before the town hall's opening stock runs out.
@@ -265,7 +267,7 @@ export class CityEconomy {
       const shortage = Math.max(0, target - count);
       items.push({ type, crop: null, score: shortage ? ({ market: 90, greengrocer: 85, bakery: 80, restaurant: 74 })[type] + shortage * 10 : 0, reason: type==='restaurant'?`${wealthy} moradores têm renda para refeições preparadas`:count ? 'População e capacidade de atendimento' : 'Este tipo de comércio ainda não existe' });
     }
-    const stapleCrops=Object.keys(CROPS).filter(g=>!['trigo','girassol'].includes(g));
+    const stapleCrops=Object.keys(CROPS).filter(g=>!['trigo','girassol'].includes(g)&&!CROPS[g].nonFood);
     const foodWeights=Object.fromEntries(stapleCrops.map(g=>[g,population*.35+(foodPreferenceByGood.get(g)||0)]));
     const totalFoodWeight=Object.values(foodWeights).reduce((n,v)=>n+v,0)||1;
     for (const [crop, spec] of Object.entries(CROPS)) {
@@ -275,7 +277,8 @@ export class CityEconomy {
       const processingNeed=inputDemandByGood.get(crop)||0;
       const grainConsumers=businesses.filter(b=>b.type==='bakery'||INDUSTRIES[b.type]?.inputs.trigo).length;
       const downstream = crop === 'trigo' ? grainConsumers : buyers.filter(b => this.accepts(b, crop)).length;
-      const dailyNeed = crop === 'trigo' ? Math.ceil(Math.max(population*(bakeries?2:.5),processingNeed)) : crop==='girassol'?Math.max(oil.sunflowerRequired,processingNeed):Math.ceil(population*6*(foodWeights[crop]||0)/totalFoodWeight)+processingNeed;
+      const substanceNeed=spec.nonFood?(this.city.substances?.law(spec.substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&this.city.substances?.law('cannabis')?.regime!=='prohibited')?0:Math.ceil(population*(SUBSTANCES[spec.substance]?.popularity||.2)*.6)+processingNeed):null;
+      const dailyNeed = substanceNeed??(crop === 'trigo' ? Math.ceil(Math.max(population*(bakeries?2:.5),processingNeed)) : crop==='girassol'?Math.max(oil.sunflowerRequired,processingNeed):Math.ceil(population*6*(foodWeights[crop]||0)/totalFoodWeight)+processingNeed);
       const capacity = producers.reduce((n,b)=>n+this.farmCapacity(b,true).daily,0);
       // A shop's refill target is not population consumption: treating every
       // empty shelf as new demand made one small town open farms for every crop.
@@ -304,7 +307,8 @@ export class CityEconomy {
       if(type==='domestic_trader'||type==='import_exporter'){const firms=businesses.filter(b=>b.type===type),activeTrade=type==='domestic_trader'?businesses.length>=5:(this.externalTrade?.imports||0)+(this.externalTrade?.sales||0)>0||Object.values(this.market||{}).some(row=>row.demand>0);items.push({type,crop:null,score:firms.length?0:activeTrade?115:0,required:activeTrade?1:0,supply:firms.length,stock:0,reason:spec.impact});continue;}
       if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
       const firms=businesses.filter(b=>b.type===type);
-      const needed=(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?activeCitizens.filter(c=>this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
+      const substanceNeed=Object.keys(spec.outputs).reduce((n,g)=>n+(SUBSTANCES[g]&&this.city.substances?.law(g)?.regime!=='prohibited'?population*SUBSTANCES[g].popularity*.4:0),0);
+      const needed=substanceNeed+(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?activeCitizens.filter(c=>this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
       const stock=Object.keys(spec.outputs).reduce((n,g)=>n+(stockByGood.get(g)||0),0);
       const supply=firms.reduce((n,b)=>n+Math.max(1,b.workers.length)*240/spec.labor*Object.values(spec.outputs).reduce((a,v)=>a+v,0),0);
       const inputAvailability=Object.entries(spec.inputs).length?Object.entries(spec.inputs).reduce((n,[g,q])=>n+Math.min(2,(stockByGood.get(g)||0)/Math.max(1,q*6)),0)/Object.keys(spec.inputs).length:1;
@@ -368,7 +372,7 @@ export class CityEconomy {
     const area = Math.max(1,b.width*b.depth-2);
     b.fields = Array.from({length:Math.ceil(area/12)},(_,i) => {
       const cells = Math.min(12,area-i*12);
-      return {area:cells,yield:cells,requiredLabor:Math.ceil(ECONOMY_RULES.farmLabor*cells/12),labor:0,plantedAt:null};
+      return {area:cells,yield:Math.max(1,Math.floor(cells*(CROPS[b.crop]?.yieldFactor||1))),requiredLabor:Math.ceil(ECONOMY_RULES.farmLabor*cells/12*(CROPS[b.crop]?.laborFactor||1)),labor:0,plantedAt:null};
     });
     b.jobs = Math.min(32,Math.max(1,Math.ceil(area/18)));
   }
@@ -514,7 +518,7 @@ export class CityEconomy {
       const pending = this.city.development.projects.filter(p => p.accountId === 'treasury' && !p.cancelled && p.status !== 'completed');
       const buildingSlotsFull = pending.filter(p => !p.service || p.service === 'building').length >= 2;
       const needs=this.city.welfare.conditions();
-      const stapleFarms=this.businesses.filter(b=>b.type==='farm'&&!['girassol','trigo'].includes(b.crop));
+      const stapleFarms=this.businesses.filter(b=>b.type==='farm'&&!['girassol','trigo'].includes(b.crop)&&!CROPS[b.crop]?.nonFood);
       const pendingStaples=this.city.development.projects.filter(p=>p.type==='farm'&&!['girassol','trigo'].includes(p.crop)&&!p.cancelled&&p.status!=='completed');
       const stapleCapacity=stapleFarms.reduce((n,b)=>n+this.farmCapacity(b).daily,0)+pendingStaples.reduce((n,p)=>n+Math.max(0,(p.width||10)*(p.depth||10)-2)*240/Math.max(120,CROPS[p.crop]?.grow||120),0);
       const foodFarmMissing=stapleCapacity<needs.population*1.5;
@@ -709,6 +713,9 @@ export class CityEconomy {
     return true;
   }
   farmWork(b,c){
+    if(!c||c.entity.destroyed)return false;
+    if(this.city.substances&&!this.city.substances.canFarm(b))return false;
+    b.lastSubstanceGrowerSkill=c.skills.agriculture;if(b.substanceIllegalCultivation)c.lastSubstanceCrime={kind:'substanceCultivation',good:b.crop,minute:this.city.minute,buildingId:b.id};
     this.buySeeds(b);
     const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType));let offset=0,best=null;
     search: for(const field of b.fields){
@@ -746,12 +753,15 @@ export class CityEconomy {
     const total=field.yield||ECONOMY_RULES.farmBatch,perCell=cellIndex==null?total:Math.floor(total*(cellIndex+1)/field.cellLabor.length)-Math.floor(total*cellIndex/field.cellLabor.length);
     if(inventoryFree(b)<perCell||field.plantedAt===null||field.labor<(field.requiredLabor||ECONOMY_RULES.farmLabor)||(this.city.minute-field.plantedAt)*(field.growthMultiplier||1)<CROPS[b.crop].grow||cellIndex!=null&&field.harvestedCells[cellIndex])return false;
     b.inventory[b.crop]+=perCell;this.produced[b.crop]+=perCell;this.recordGoods('harvest',b.crop,perCell,null,b.id);
+    this.city.substances?.harvest(b,b.crop,perCell);
     if(cellIndex!=null){field.harvestedCells[cellIndex]=true;field.harvestedQuantity=(field.harvestedQuantity||0)+perCell;if(!field.harvestedCells.every(Boolean))return true;}
     this.city.log(`${b.entity.properties.name} colheu ${total} unidades de ${CROPS[b.crop].label.toLowerCase()}.`,'production',[b.ownerId],{kind:'harvest',buildingId:b.id,crop:b.crop,quantity:total});
     field.plantedAt=null;field.labor=0;field.cellLabor=null;field.harvestedCells=null;field.harvestedQuantity=0;field.growthMultiplier=1;field.fertilized=false;return true;
   }
 
   industrialWork(b,c,spec) {
+    if(this.city.substances&&!this.city.substances.canProduce(b))return false;
+    if(b.type==='tobacco_workshop'){const cannabis=this.city.substances?.law('cannabis')?.regime!=='prohibited'&&(b.inventory.flor_cannabis||0)>=2&&((b.inventory.cannabis||0)<(b.inventory.tabaco||0)||b.inventory.folha_tabaco<6);spec={...spec,inputs:cannabis?{flor_cannabis:2,papel:1}:{folha_tabaco:6,papel:1},outputs:cannabis?{cannabis:2}:{tabaco:12}};if(this.city.substances?.law(cannabis?'cannabis':'tabaco')?.regime==='prohibited')return false;}
     if(['cycle_assembler','skate_workshop'].includes(b.type))return this.city.vehicles.assemblyWork(b,c);
     if(b.type==='cycle_workshop')return this.city.vehicles.garageWork(b,c);
     if(b.type==='cycle_shop')return ['bicicleta','bicicleta_carga','patins','skate'].some(g=>b.inventory[g]>0);
@@ -794,8 +804,10 @@ export class CityEconomy {
     b.productionLabor=(b.productionLabor||0)+(1+(c.skills[spec.skill]||0)/80+(c.toolUntil>this.city.minute ? .3 : 0))*workEfficiency(c,b);
     if(b.productionLabor<spec.labor)return true;
     b.productionLabor-=spec.labor;
+    const substanceQuality=this.city.substances?.recipeQuality(b,c,spec);this.city.substances?.consumedInputs(b,spec);
     for(const [g,n] of Object.entries(spec.inputs)){this.city.paint.discard(b,g,n);b.inventory[g]-=n;this.city.vehicles.discardComponents(b,g,n);this.consumed[g]+=n;if(g==='lixo')b.wasteProcessed=(b.wasteProcessed||0)+n;this.recordGoods('recipe-input',g,n,b.id,null);}
     for(const [g,n] of Object.entries(spec.outputs)){b.inventory[g]+=n;this.produced[g]+=n;if(b.type==='composting')b.compostProduced=(b.compostProduced||0)+n;this.recordGoods('production',g,n,null,b.id);}
+    this.city.substances?.produced(b,spec,substanceQuality);
     this.city.vehicles.produced(b,spec.outputs);
     if(b.type==='paintworks')this.city.paint.produced(b,spec.outputs.tinta);
     if(b.type==='tailor')manufactureClothes(this.city,b,spec.outputs.roupas);

@@ -1,3 +1,5 @@
+import {substanceStance} from './city_substances.js';
+import {SUBSTANCES} from './city_substance_catalog.js';
 import {ensureHeadquarters,headquartersHourly,stockHeadquarters,leaseHeadquarters,closeHeadquarters} from './city_party_headquarters.js?v=party-caps-skin-1';
 import {electPartyLeader} from './city_party_leadership.js';
 import {electoralPriorities,standingEvidence,personalGovernmentExperience,governingStreak,campaignMemory,personalAffinity} from './city_electoral_behavior.js';
@@ -6,18 +8,18 @@ import {ideologicalProfile} from './city_ideology.js';
 import {partyAccount,allocatePartyFunds,changePartyFund,illegalPartyFunding} from './city_party_funds.js';
 import {appearance} from './city_clothing.js?v=furniture-farms-fertilizer-1';
 import {CityResearch} from './city_research.js';
-import {CityGovernmentAgenda} from './city_government_agenda.js';
-import {CityVoting} from './city_voting.js?v=needs-recovery-1';
-import {CityPoliticalStanding} from './city_political_standing.js?v=party-relations-1';
+import {CityGovernmentAgenda} from './city_government_agenda.js?v=substances-sleep-1';
+import {CityVoting} from './city_voting.js?v=substances-sleep-1';
+import {CityPoliticalStanding} from './city_political_standing.js?v=electorate-popularity-1';
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
-import {makePartyName,makeMergedPartyName,partyNameAgenda} from './city_party_names.js?v=party-relations-1';
+import {makePartyName,makeMergedPartyName,partyNameAgenda} from './city_party_names.js?v=expanded-secular-spectrum-1';
 import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js?v=party-name-tags-1';
 import {seedPartyCaps,issuePartyCap,returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
 import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investigateCases } from './city_political_institutions.js';
 import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js?v=needs-recovery-1';
 import { makePartyFlag, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
 import { CityCouncil } from './city_council.js';
-import { CityCampaigns } from './city_campaigns.js?v=party-slogans-1';
+import { CityCampaigns } from './city_campaigns.js?v=substances-sleep-1';
 import {gerarFraseTematica} from './gerador_frases.js?v=catalog-lexicon-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=quarry-outskirts-1';
@@ -25,7 +27,10 @@ import {formatMoney} from './city_ui_format.js';
 import {listDailyPrivatization} from './city_equity.js?v=daily-mayor-privatization-1';
 
 // Ideological starting points; names are generated separately from word pools.
-export const PARTY_FAMILIES=[[-1,.2,.35],[-.65,.3,.2],[-.4,.65,1],[-.2,.3,.45],[.05,.05,.25],[.7,.7,.15],[.6,-.75,.1],[1,1,.25]];
+// The coordinates deliberately cover democratic, revolutionary, authoritarian,
+// nationalist, statist and market-libertarian currents without a religious axis.
+export const PARTY_FAMILIES=[[-1,.2,.35],[-.65,.3,.2],[-.4,.65,1],[-.2,.3,.45],[.05,.05,.25],[.7,.7,.15],[.6,-.75,.1],[1,1,.25],[-1,1,.1],[-1,-1,.2],[-.95,-.8,.3],[-.85,-.55,.35],[-.9,.15,.25],[-.8,-.25,.2],[.95,.9,.1],[.95,-.9,.1],[.9,-.7,.15],[.82,-.35,.2],[.75,.2,.3],[.55,.45,.45],[.45,-.65,.2],[.35,.8,.7]];
+const PARTY_FAMILY_ORDER=[0,8,14,9,19,5,10,15,2,20,11,17,1,18,12,16,6,3,13,21,4,7];
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 const partyRelationIndexes=new WeakMap();
 export class CityGovernment extends CityPolitics {
@@ -107,7 +112,7 @@ export class CityGovernment extends CityPolitics {
     if(this.parties.filter(p=>p.active).length>=this.policy.partyLimit)return null;
     const proposal=this.organization.proposals.find(r=>r.id===proposalId);
     if(initial?this.parties.length>=PARTY_ORGANIZATION_RULES.initialParties:!proposal||proposal.status!=='approved'||proposal.partyId!=null)return null;
-    const id=this.nextPartyId++,[economy,liberty,green]=PARTY_FAMILIES[[0,2,5,6][(id-1)%4]];
+    const id=this.nextPartyId++,[economy,liberty,green]=PARTY_FAMILIES[PARTY_FAMILY_ORDER[(id-1)%PARTY_FAMILY_ORDER.length]];
     const ideology=proposal?.ideology||Object.freeze({economy,liberty,green});
     const naming=proposal?Object.fromEntries(['name','short','nameFlavor','nameCore','nameVersion'].map(key=>[key,proposal[key]])):makePartyName(this.city,ideology,this.parties,id);
     const party={id,...naming,slogan:gerarFraseTematica('politica',{random:()=>this.city.random()}),ideology,nameAgenda:naming.nameAgenda||partyNameAgenda(naming.name),parentPartyId:proposal?.parentPartyId??null,approvalId:proposalId,flag:makePartyFlag(this.city,id-1,(proposal?.founderIds||[]).map(id=>this.city.society.citizen(id))),initialParty:initial,founderIds:proposal?.founderIds?.slice()||[],active:true,memberIds:[],leaderId:null,successorIds:[],history:[],foundedAt:this.city.minute};
@@ -210,6 +215,7 @@ export class CityGovernment extends CityPolitics {
     add('conhecimento da candidatura',known*8-2);add('apresentação e credibilidade',(appearance(candidate)-50)*.06);add('capacidade administrativa',candidate.skills.governance*(.045+known*.055)*priorities.competence);add('reputação pessoal',(city.reputation.score(candidate,'civic')-50)*.1);
     for(const row of standingEvidence(this,voter,candidate,party))add(row.reason,row.value);
     add('afinidade ideológica',clamp(1-this.distance(voter.political.ideology,party.ideology)/1.4,-1,1)*priorities.ideology);
+    add('política sobre substâncias',Object.keys(SUBSTANCES).reduce((n,id)=>n+(1-Math.abs(substanceStance(voter,id)-substanceStance(candidate,id)))*(id==='coca'?1.5:.5),0));
     const vi=ideologicalProfile(voter),pi=ideologicalProfile(party);add('redistribuição e serviços sociais',(1-Math.abs(vi.redistribution-pi.redistribution))*4);add('propriedade pública ou privada',(1-Math.abs(vi.ownership-pi.ownership))*4);add('liberdades civis',(1-Math.abs(vi.liberty-pi.liberty))*3*priorities.civil);add('prioridade ambiental',(1-Math.abs(vi.green-pi.green))*3*priorities.green);
     if(sameParty)add('filiação partidária',8*voter.political.loyalty);else if(nomination?.endorsementPartyIds?.includes(voter.political.partyId)){const memberParty=this.party(voter.political.partyId),affinity=memberParty?clamp(1-this.distance(memberParty.ideology,party.ideology)/1.6,0,1):0;add('apoio da coligação',5*voter.political.loyalty*affinity*(1-(voter.political.independence??.5)*.4));}
     if(relation)add('afinidade pessoal',relation.affection*.09+relation.trust*.08-relation.resentment*.12);add('identificação com a pessoa',personalAffinity(voter,candidate));if(city.society.related(voter,candidate)&&voter!==candidate)add('família',10);
@@ -236,7 +242,7 @@ export class CityGovernment extends CityPolitics {
   voterScore(voter,candidate,platform){return this.voterAssessment(voter,candidate,platform,this.active?.candidates.find(n=>n.citizenId===candidate.id)).score;}
   intentions(voter,candidates=this.active?.candidates||[]){return candidates.map(n=>{const c=this.city.society.citizen(n.citizenId);return c&&this.party(n.partyId)?.active&&this.canRun(c,'mayor',true)?{...this.voterAssessment(voter,c,n.platform,n),candidateId:c.id,partyId:n.partyId}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score||a.candidateId-b.candidateId);}
   vote(){
-    const city=this.city,e=this.active;if(!e||!e.readyToFinish)return;this.mandates.update(true);
+    const city=this.city,e=this.active;if(!e||!e.readyToFinish)return;for(const citizen of city.citizens)if(citizen.campaignPresence?.electionId===e.id)citizen.campaignPresence=null;this.mandates.update(true);
     const eligible=this.voting.available(e),eligibleIds=new Set(eligible.map(n=>n.citizenId));
     e.ranking=e.candidates.map(n=>({...n,votes:e.mayorCounts?.[n.citizenId]||0,eligible:eligibleIds.has(n.citizenId)})).sort((a,b)=>b.votes-a.votes||((city.society.citizen(b.citizenId)?.skills.governance||0)-(city.society.citizen(a.citizenId)?.skills.governance||0))||a.citizenId-b.citizenId);
     e.councilRanking=e.councilCandidates.map(n=>({...n,votes:e.councilCounts?.[n.citizenId]||0})).sort((a,b)=>b.votes-a.votes||a.citizenId-b.citizenId);
@@ -326,7 +332,8 @@ export class CityGovernment extends CityPolitics {
       if(this.policy.businessTax<0){const amount=Math.min(value,Math.max(0,city.treasury-city.welfare.conditions().reserve));if(amount)city.transfer('treasury',b.accountId,amount,'Subsídio empresarial');b.businessSubsidyUnpaid=(b.businessSubsidyUnpaid||0)+value-amount;}
       else{b.businessTaxDue=(b.businessTaxDue||0)+value;const operatingReserve=b.workers.length*b.wage*480,amount=Math.min(b.businessTaxDue,Math.max(0,b.balance-operatingReserve));if(amount&&city.transfer(b.accountId,'treasury',amount,'Imposto empresarial')){b.businessTaxDue-=amount;b.businessTaxPaid=(b.businessTaxPaid||0)+amount;}}
     }
+    for(const loan of this.stateEquityLoans||[]){if(loan.remaining<=0)continue;const resident=this.city.society.citizen(loan.citizenId);if(!resident||resident.entity.destroyed)continue;const reserve=Math.max(this.city.currency.price(8000),(resident.jobId?this.city.building(resident.jobId)?.wage||0:0)*240),amount=Math.min(loan.remaining,Math.max(0,Math.floor((resident.balance-reserve)*.08)));if(amount>=1&&this.city.transfer(resident.accountId,'treasury',amount,'Parcela do empréstimo de participação em estatal',{termId:loan.termId,buildingId:loan.buildingId,citizenId:resident.id})){loan.remaining-=amount;loan.lastPaymentAt=this.city.minute;}}
     listDailyPrivatization(this.city);
   }
-  hourly(){this.fundInitialWorksBudget();this.policy.partyFund??=80000;for(const party of this.parties)this.partyAccount(party);for(const pending of [...(this.pendingPartyFunding||[])])allocatePartyFunds(this,pending);allocatePartyFunds(this,this.active);headquartersHourly(this);stockHeadquarters(this,this.active);illegalPartyFunding(this);this.syncGoverningFlag();this.liquidateEmptyParties();this.resumeExecutive();this.ensureMayor();if(this.lastDaily!==this.city.day){this.lastDaily=this.city.day;this.daily();}this.agenda.hourly();this.mandates.update();this.updateApproval();this.council.hourly();this.getResearch().ensureSupply();this.organization.hourly();this.investigate();this.assignPartyNumbers();this.standing.refresh();this.standing.replaceUnavailable();if(this.nextElectionAt===null)return;if(!this.active)this.nextElectionAt=this.voting.schedule(this.nextElectionAt);if(!this.active&&this.city.minute>=this.nextElectionAt-this.termRules.campaignMinutes)this.beginElection();if(this.active?.status==='scheduled'&&this.city.minute>=this.active.startedAt)this.active.status='campaign';if(this.active?.status==='campaign')this.campaigns.hourly(this.active);}
+  hourly(){this.fundInitialWorksBudget();this.policy.partyFund??=80000;for(const party of this.parties)this.partyAccount(party);for(const pending of [...(this.pendingPartyFunding||[])])allocatePartyFunds(this,pending);allocatePartyFunds(this,this.active);headquartersHourly(this);stockHeadquarters(this,this.active);illegalPartyFunding(this);this.syncGoverningFlag();this.liquidateEmptyParties();this.resumeExecutive();this.ensureMayor();if(this.lastDaily!==this.city.day){this.lastDaily=this.city.day;this.daily();}this.agenda.hourly();this.mandates.update();this.updateApproval();this.council.hourly();this.getResearch().ensureSupply();this.organization.hourly();this.investigate();this.assignPartyNumbers();this.standing.refresh();this.standing.replaceUnavailable();if(this.active&&this.active.status!=='campaign')for(const citizen of this.city.citizens)if(citizen.campaignPresence?.electionId===this.active.id)citizen.campaignPresence=null;if(this.nextElectionAt===null)return;if(!this.active)this.nextElectionAt=this.voting.schedule(this.nextElectionAt);if(!this.active&&this.city.minute>=this.nextElectionAt-this.termRules.campaignMinutes)this.beginElection();if(this.active?.status==='scheduled'&&this.city.minute>=this.active.startedAt)this.active.status='campaign';if(this.active?.status==='campaign')this.campaigns.hourly(this.active);}
 }

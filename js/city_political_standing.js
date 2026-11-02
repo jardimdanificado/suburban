@@ -1,5 +1,6 @@
 import {canJoin} from './city_party_membership.js?v=party-name-tags-1';
 import {recordLegislativeOpinion,publicPerformance} from './city_party_public_record.js?v=party-relations-1';
+import {voterElectorates} from './city_electoral_behavior.js';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 /** Public standing uses bounded opinion panels; secret crimes never enter these scores. */
 export class CityPoliticalStanding {
@@ -63,7 +64,10 @@ export class CityPoliticalStanding {
         for(const {record:r,aware} of casesByCitizen.get(c.id)||[])if(aware.has(voter.id))scandals-=(r.severity||40)*(r.proven?.3:.04);
       }
       for(const [label,value] of [['Relações e família',relations],['Afinidade das ideias',ideology],['Memória das campanhas',memories],['Votos na Câmara',votes],['Escândalos conhecidos',scandals]])components.push({label,points:value/Math.max(1,panel.length)});
-      const raw=50+components.reduce((n,a)=>n+a.points,0);s.popularity=clamp(raw);s.popularityReport={minute:city.minute,score:s.popularity,raw,sampleSize:panel.length,electorate:voters.length,components};
+      const raw=50+components.reduce((n,a)=>n+a.points,0);s.popularity=clamp(raw);
+      const groups=['todos','trabalhadores','empreendedores','sem-moradia','baixa-renda','servidores','ambientalistas','reformistas'],segmented={};
+      for(const group of groups){const subset=panel.filter(v=>voterElectorates(v).includes(group));if(!subset.length)continue;let support=0;for(const v of subset){const affinity=1-p.distance(v.political.ideology,s.ideology)/2.8,mem=v.political.memories.filter(m=>m.candidateId===c.id||m.partyId===s.partyId).reduce((sum,m)=>sum+(m.effect||0),0);support+=clamp(50+(affinity-.5)*32+Math.max(-15,Math.min(15,mem*.4))+(city.relationships.view(v,c)?.trust-50||0)*.08);}segmented[group]={score:support/subset.length,size:subset.length};}
+      s.popularityByElectorate=segmented;s.popularityReport={minute:city.minute,score:s.popularity,raw,sampleSize:panel.length,electorate:voters.length,components,electorates:segmented};
     }
     for(const party of p.parties.filter(a=>a.active)){const {candidate,reason}=this.nomination(party);party.preferredCandidateId=candidate?.id??null;party.nominationReason=reason;}
   }

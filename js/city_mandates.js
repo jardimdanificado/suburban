@@ -16,7 +16,43 @@ export const PROMISE_METRICS={
   publicHomes:{label:'Moradias populares concluídas',unit:'',higher:true},publicMeals:{label:'Refeitórios populares concluídos',unit:'',higher:true},stateFirms:{label:'Empresas estatais ativas',unit:'',higher:true},
   inflation:{label:'Inflação diária absoluta',unit:'%',higher:false},tax:{label:'Imposto salarial',unit:'%',higher:false},wage:{label:'Piso/hora em preços iniciais',unit:'centavos',higher:true},
   deliveries:{label:'Entregas pendentes',unit:'',higher:false},happiness:{label:'Felicidade média',unit:'%',higher:true},
+  marketRecoveries:{label:'Planos de recuperação de mercados executados',unit:'',higher:true},rentVouchers:{label:'Vales de aluguel concedidos',unit:'',higher:true},stateEquityLoans:{label:'Créditos de participação em estatais concedidos',unit:'',higher:true},
 };
+// Secular public-policy menu. Several options share a measurable outcome, but
+// each represents a distinct instrument that parties can campaign on.
+export const GOVERNMENT_INITIATIVES=[
+  {id:'food-tax-relief',title:'Isenção seletiva para alimentos essenciais',metric:'salesTax_food',axis:'redistribution'},
+  {id:'textile-credit',title:'Crédito tributário para confecções e reparos',metric:'salesTax_clothing',axis:'workers'},
+  {id:'mobility-credit',title:'Incentivo fiscal para transporte e mobilidade',metric:'salesTax_mobility',axis:'public'},
+  {id:'press-credit',title:'Desconto fiscal para gráficas e imprensa local',metric:'salesTax_publications',axis:'liberty'},
+  {id:'energy-credit',title:'Crédito para produção e economia de energia',metric:'salesTax_energy',axis:'green'},
+  {id:'services-credit',title:'Incentivo temporário a serviços de bairro',metric:'salesTax_services',axis:'market'},
+  {id:'market-revival',title:'Fundo de recuperação de mercados em crise',metric:'marketRecoveries',axis:'public'},
+  {id:'market-coops',title:'Conversão de mercados falidos em cooperativas',metric:'marketRecoveries',axis:'cooperation'},
+  {id:'housing-credit',title:'Financiamento habitacional com prestação acessível',metric:'housed',axis:'redistribution'},
+  {id:'rent-voucher',title:'Vale-aluguel temporário para famílias vulneráveis',metric:'rentVouchers',axis:'redistribution'},
+  {id:'public-housing',title:'Construção de moradia pública perto do emprego',metric:'publicHomes',axis:'public'},
+  {id:'state-equity-loan',title:'Participação de estatal como crédito produtivo ao morador',metric:'stateEquityLoans',axis:'public'},
+  {id:'microcredit',title:'Microcrédito com carência para pequenos negócios',metric:'smallFirms',axis:'market'},
+  {id:'worker-coops',title:'Capital semente para cooperativas de trabalhadores',metric:'artisans',axis:'cooperation'},
+  {id:'startup-rebate',title:'Devolução de imposto para empresas iniciantes',metric:'smallFirms',axis:'market'},
+  {id:'local-procurement',title:'Compras públicas de fornecedores locais',metric:'employed',axis:'workers'},
+  {id:'wage-subsidy',title:'Subsídio temporário para contratação e salário',metric:'employed',axis:'workers'},
+  {id:'apprenticeships',title:'Aprendizagem remunerada para novos trabalhadores',metric:'publicJobs',axis:'workers'},
+  {id:'food-reserve',title:'Estoque municipal de alimentos para emergências',metric:'foodReserve',axis:'public'},
+  {id:'farm-diversity',title:'Diversificação agrícola com sementes e assistência',metric:'foodVariety',axis:'green'},
+  {id:'clean-energy',title:'Energia comunitária de baixo custo',metric:'oilReserve',axis:'green'},
+  {id:'street-paving',title:'Pavimentação e ligação de ruas desconectadas',metric:'connected',axis:'public'},
+  {id:'market-streets',title:'Ruas comerciais iluminadas e seguras',metric:'lamps',axis:'workers'},
+  {id:'building-repair',title:'Mutirão de reforma de imóveis degradados',metric:'preservation',axis:'public'},
+  {id:'neighborhood-clinics',title:'Clínicas de bairro com custeio garantido',metric:'clinics',axis:'redistribution'},
+  {id:'public-kitchens',title:'Cozinhas comunitárias com refeições completas',metric:'publicMeals',axis:'redistribution'},
+  {id:'skills-grants',title:'Bolsa de formação técnica ligada às vagas locais',metric:'literacy',axis:'workers'},
+  {id:'urban-gardens',title:'Hortas urbanas em terrenos ociosos',metric:'foodVariety',axis:'green'},
+  {id:'waste-recycling',title:'Incentivo à reciclagem e compra de material recuperado',metric:'recycling',axis:'green'},
+  {id:'municipal-audit',title:'Auditoria de contratos e equilíbrio do caixa público',metric:'treasuryHealth',axis:'fiscal'},
+  {id:'business-tax-review',title:'Revisão progressiva do imposto empresarial',metric:'operatingHealth',axis:'fiscal'},
+];
 export function describePromise(pr){
   const spec=PROMISE_METRICS[pr.metric],unit=spec.unit||'',format=n=>`${Number(n).toFixed(['%','dias'].includes(unit)?1:0)}${unit==='%'?'%':unit?' '+unit:''}`;
   return `${pr.title}: ${spec.label.toLowerCase()} de ${format(pr.campaignBaseline??pr.baseline)} para ${format(pr.target)}`;
@@ -27,6 +63,9 @@ export function promiseRelevant(city,c,metric){
   if(metric==='treasuryHealth')return (city.politics?.approvalReport?.finance?.cashHealth??100)<75||(c.traits?.frugality??.5)>.65;
   if(metric==='operatingHealth')return (city.politics?.approvalReport?.finance?.operatingHealth??100)<70||(c.traits?.frugality??.5)>.65;
   if(metric==='companyProductivity')return c.businessIds?.length>0||!c.jobId;
+  if(metric==='marketRecoveries')return c.businessIds?.some(id=>city.building(id)?.type==='market')||!!(c.jobId&&city.building(c.jobId)?.type==='market');
+  if(metric==='rentVouchers')return !c.homeUnitId&&c.balance<city.currency.price(20000);
+  if(metric==='stateEquityLoans')return !c.businessIds?.length&&c.balance<city.currency.price(30000);
   if(['fed','publicMeals','kitchens','foodReserve','foodVariety'].includes(metric))return n.food<70;
   if(['housed','publicHomes'].includes(metric))return !c.homeUnitId;
   if(['employed','smallFirms','publicJobs'].includes(metric))return !c.jobId&&!c.businessIds.length;
@@ -55,10 +94,10 @@ export class CityMandates {
     const active=type=>buildings.filter(b=>b.type===type&&b.active).length;
     const readings=people.reduce((n,c)=>n+Object.values(c.publicationReading||{}).reduce((n,v)=>n+v,0),0);
     const publicFinance=governmentPerformance(city);
-    return {...Object.fromEntries(Object.keys(TAX_CATEGORIES).map(key=>[`salesTax_${key}`,taxRate(city,key)*100])),treasuryHealth:publicFinance.cashHealth,operatingHealth:publicFinance.operatingHealth,companyProductivity:publicFinance.companyProductivity,health:pct(people.filter(c=>c.needs.health>=60).length,people.length),water:pct(people.filter(c=>c.needs.water>=45).length,people.length),rest:pct(people.filter(c=>c.needs.energy>=50).length,people.length),hygiene:pct(people.filter(c=>c.needs.hygiene>=50).length,people.length),
+    return {...Object.fromEntries(Object.keys(TAX_CATEGORIES).map(key=>[`salesTax_${key}`,taxRate(city,key)*100])),treasuryHealth:publicFinance.cashHealth,operatingHealth:publicFinance.operatingHealth,companyProductivity:publicFinance.companyProductivity,marketRecoveries:city.economy.businesses.reduce((n,b)=>n+(b.governmentRecovery?.length||0),0),rentVouchers:city.politics.rentVouchers?.length||0,stateEquityLoans:city.politics.stateEquityLoans?.length||0,health:pct(people.filter(c=>c.needs.health>=60).length,people.length),water:pct(people.filter(c=>c.needs.water>=45).length,people.length),rest:pct(people.filter(c=>c.needs.energy>=50).length,people.length),hygiene:pct(people.filter(c=>c.needs.hygiene>=50).length,people.length),
       clinics:active('clinic')+active('hospital'),waterWorks:active('utility'),parks:active('leisure')+active('park')+active('sports_center')+active('library')+active('theater'),carriers:active('carrier'),cleaners:active('cleaner'),builders:active('builder'),preservation:buildings.length?buildings.reduce((n,b)=>n+(b.condition??100),0)/buildings.length:100,
       waste:city.sanitation.wasteMetrics().awaiting,cultivatedTrees:[...city.nature.plants.values()].filter(p=>p.buildingId).length+city.nature.seeds.filter(p=>p.buildingId).length,oilReserve:city.goodsStock('oleo'),oilMills:active('mill'),sunflowerFarms:buildings.filter(b=>b.type==='farm'&&b.crop==='girassol'&&b.active).length,
-      woodStock:city.goodsStock('madeira'),paperStock:city.goodsStock('papel'),publishedTexts:city.publications.nextEntryId-1,readers:pct(people.filter(c=>Object.values(c.publicationReading||{}).some(n=>n>0)).length,people.length),banks:active('bank'),paidLoans:city.bank.loans.filter(l=>l.status==='paid').length,publicJobs:buildings.filter(b=>b.municipal&&b.active).reduce((n,b)=>n+b.workers.length,0),foodVariety:new Set(buildings.filter(b=>b.type==='farm'&&b.active&&!['trigo','girassol'].includes(b.crop)).map(b=>b.crop)).size,kitchens:buildings.filter(b=>b.type==='kitchen'&&b.active).length,artisans:buildings.filter(b=>b.type==='artisan'&&b.active).length,equipped:pct(people.filter(c=>c.equipment?.cesta||c.equipment?.carrinho).length,people.length),savers:pct(people.filter(c=>city.bank.savings(c.accountId)>0).length,people.length),smallFirms:buildings.filter(b=>b.micro||b.equityPartners?.length>1).length,foodReserve:city.welfare.conditions().foodDays,literacy:readings,recycling:buildings.reduce((n,b)=>n+(b.wasteProcessed||0),0),fed:pct(people.filter(c=>c.needs.food>=30).length,people.length),housed:pct(people.filter(c=>c.homeUnitId).length,people.length),employed:pct(adults.filter(c=>c.jobId||c.businessIds.length||c.role==='councilor').length,adults.length),lamps:posts.length?pct(posts.filter(p=>p.fuel>0).length,posts.length):0,
+      woodStock:city.goodsStock('madeira'),paperStock:city.goodsStock('papel'),publishedTexts:city.publications.nextEntryId-1,readers:pct(people.filter(c=>Object.values(c.publicationReading||{}).some(n=>n>0)).length,people.length),banks:active('bank'),paidLoans:city.bank.loans.filter(l=>l.status==='paid').length,publicJobs:buildings.filter(b=>b.municipal&&b.active).reduce((n,b)=>n+b.workers.length,0),foodVariety:new Set(buildings.filter(b=>b.type==='farm'&&b.active&&!['trigo','girassol'].includes(b.crop)&&!city.economy.crops[b.crop]?.nonFood).map(b=>b.crop)).size,kitchens:buildings.filter(b=>b.type==='kitchen'&&b.active).length,artisans:buildings.filter(b=>b.type==='artisan'&&b.active).length,equipped:pct(people.filter(c=>c.equipment?.cesta||c.equipment?.carrinho).length,people.length),savers:pct(people.filter(c=>city.bank.savings(c.accountId)>0).length,people.length),smallFirms:buildings.filter(b=>b.micro||b.equityPartners?.length>1).length,foodReserve:city.welfare.conditions().foodDays,literacy:readings,recycling:buildings.reduce((n,b)=>n+(b.wasteProcessed||0),0),fed:pct(people.filter(c=>c.needs.food>=30).length,people.length),housed:pct(people.filter(c=>c.homeUnitId).length,people.length),employed:pct(adults.filter(c=>c.jobId||c.businessIds.length||c.role==='councilor').length,adults.length),lamps:posts.length?pct(posts.filter(p=>p.fuel>0).length,posts.length):0,
       connected:pct(buildings.filter(b=>city.politics.roadConnected(b)).length,buildings.length),clean:city.sanitation.cleanliness().score,
       publicHomes:buildings.filter(b=>['super_popular_housing','popular_housing','popular_luxury_housing'].includes(b.type)).reduce((n,b)=>n+[...city.housing.homes.values()].filter(h=>h.buildingId===b.id && city.housing.isSocial(h)).length,0),publicMeals:buildings.filter(b=>b.type==='popular_refectory' && b.active).length,stateFirms:buildings.filter(b=>b.municipal && b.active).length,
       inflation:Math.abs(city.currency.dailyInflation*100),tax:city.taxRate*100,wage:city.politics.policy.minimumWage*60,deliveries:city.logistics.shipments.filter(s=>!['delivered','cancelled'].includes(s.status)).length,happiness:people.reduce((n,c)=>n+c.happiness,0)/Math.max(1,people.length)};
@@ -75,7 +114,7 @@ export class CityMandates {
       ['stateFirms','Produção pública de bens essenciais',base.stateFirms+1+seed%2],['inflation','Proteger o poder de compra da cesta básica',.1],
       ['tax','Devolver renda ao trabalhador reduzindo o imposto',Math.max(-20,base.tax-3-seed%5)],['wage','Piso salarial com ganho real no mandato',base.wage+30+(seed%4)*30],
       ['deliveries','Pacto com transportadores para diminuir atrasos',Math.floor(base.deliveries*.4)],['happiness','Melhorar a satisfação dos bairros menos atendidos',Math.min(95,base.happiness+12)],
-      ['foodVariety','Horta diversa: ampliar legumes, verduras e grãos locais',Math.min(Object.keys(this.city.economy.crops).filter(c=>!['trigo','girassol'].includes(c)).length,base.foodVariety+2)],['kitchens','Abrir cozinhas de bairro para marmitas completas',base.kitchens+1+seed%2],
+      ['foodVariety','Horta diversa: ampliar legumes, verduras e grãos locais',Math.min(Object.keys(this.city.economy.crops).filter(c=>!['trigo','girassol'].includes(c)&&!this.city.economy.crops[c].nonFood).length,base.foodVariety+2)],['kitchens','Abrir cozinhas de bairro para marmitas completas',base.kitchens+1+seed%2],
       ['artisans','Polo de artesanato em madeira e fibras',base.artisans+1],['equipped','Programa de cestas e carrinhos para trabalhadores',Math.min(100,base.equipped+20+seed%15)],
       ['savers','Poupança para famílias formarem uma reserva',Math.min(95,base.savers+15)],['smallFirms','Apoiar negócios de desempregados e cooperativas',base.smallFirms+2+seed%3],
       ['foodReserve','Formar reserva alimentar para enfrentar crises',Math.max(3,Math.min(7,base.foodReserve+2))],['literacy','Mais livros e aprendizado para trabalhadores',base.literacy+10+seed%20],
@@ -92,21 +131,24 @@ export class CityMandates {
       ['banks','Ampliar a rede bancária e o acesso a serviços financeiros',base.banks+1],['paidLoans','Apoiar a quitação de empréstimos das famílias',base.paidLoans+3+seed%4],['publicJobs','Criar postos de trabalho em empresas municipais',base.publicJobs+4+seed%4],
 
     ];
+    const axisFit={redistribution:profile.redistribution,workers:profile.regulation+profile.redistribution*.4,public:profile.ownership+profile.redistribution*.35,cooperation:profile.cooperation,market:profile.economy,green:profile.green,fiscal:profile.fiscal,liberty:profile.liberty};
+    for(const initiative of GOVERNMENT_INITIATIVES){const key=initiative.metric,spec=PROMISE_METRICS[key];if(!spec)continue;const start=base[key]??0,delta=spec.unit==='%'?2:Math.max(1,Math.round(Math.abs(start)*.2));let target=start+(spec.higher?delta:-delta);if(key==='treasuryHealth'||key==='operatingHealth')target=Math.min(100,start+15);if(key==='housed')target=100;if(key.startsWith('salesTax_'))target=Math.max(0,start-2);catalog.push([key,initiative.title,target,initiative.id,axisFit[initiative.axis]||0]);}
     const preferred=e<-.3?['housed','publicHomes','publicMeals','wage','stateFirms','clinics','water','publicJobs','health']:e>.3?['tax','smallFirms','savers','deliveries','artisans','carriers','paidLoans','banks']:['kitchens','fed','clean','foodVariety','connected','preservation','hygiene','readers'];
     const priorityMetric={'Alimentação':'fed','Moradia':'housed','Emprego e renda':'employed','Saúde':'health','Higiene e saneamento':'clean','Transporte e acesso':'connected'},research=this.city.politics.getResearch?.(),survey=research?.studies.filter(s=>s.mode==='service'&&s.status==='published'&&s.serviceType==='public-priorities'&&(s.subjectId===candidate.id||s.requesterAccountId===candidate.accountId||s.subjectId===party.id)).sort((a,b)=>b.completedAt-a.completedAt)[0],surveyPriority=new Set((survey?.report?.rows||[]).slice(0,3).map(r=>priorityMetric[r.label]).filter(Boolean));
     const environmental=['recycling','foodVariety','clean','cultivatedTrees','waste'];
-    const viable=catalog.filter(([key,,target])=>(target-base[key])*(PROMISE_METRICS[key].higher?1:-1)>.01);
+    const viable=catalog.filter(([key,,target])=>PROMISE_METRICS[key]&&(target-base[key])*(PROMISE_METRICS[key].higher?1:-1)>.01);
     // Distinct main commitments within the same election, with bounded seeded variation.
     const unused=viable.filter(([key])=>!usedMetrics.includes(key)),pool=unused.length?unused:viable;
-    const ranked=pool.map(row=>({row,rank:this.city.random()*1.6+ideologicalPromiseWeight(profile,row[0])+(preferred.includes(row[0])?.7:0)+(green>.6&&environmental.includes(row[0])?.7:0)+(surveyPriority.has(row[0])?1.6:0)})).sort((a,b)=>b.rank-a.rank);
+    const ranked=pool.map(row=>({row,rank:this.city.random()*1.6+ideologicalPromiseWeight(profile,row[0])+(preferred.includes(row[0])?.7:0)+(green>.6&&environmental.includes(row[0])?.7:0)+(surveyPriority.has(row[0])?1.6:0)+(row[4]||0)})).sort((a,b)=>b.rank-a.rank);
     const ambition=Math.max(0,Math.min(1,.1+(candidate.traits?.ambition??.5)*.55+(1-(candidate.traits?.honesty??.5))*.2+this.city.random()*.35));
-    return ranked.slice(0,1).map(({row:[metric,title,target]})=>{
+    return ranked.slice(0,1).map(({row})=>{
+      const [metric,title,target]=row;
       const spec=PROMISE_METRICS[metric],factor=.4+ambition*1.9;
       let adjusted=base[metric]+(target-base[metric])*factor;
       if(spec.unit==='%')adjusted=metric==='tax'?Math.max(-50,Math.min(50,adjusted)):metric==='inflation'?Math.max(0,adjusted):Math.max(0,Math.min(100,adjusted));
       else if(!spec.unit)adjusted=spec.higher?Math.ceil(adjusted):Math.max(0,Math.floor(adjusted));
       adjusted=Math.round(adjusted*10)/10;
-      return {metric,title,target:adjusted,...promiseDifficulty(metric,base[metric],adjusted,spec),candidateAmbition:ambition,campaignBaseline:base[metric],current:base[metric],higher:spec.higher};
+      return {metric,title,target:adjusted,initiativeId:row[3]||null,...promiseDifficulty(metric,base[metric],adjusted,spec),candidateAmbition:ambition,campaignBaseline:base[metric],current:base[metric],higher:spec.higher};
     });
   }
 
