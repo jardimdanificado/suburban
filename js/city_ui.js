@@ -15,7 +15,7 @@ import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=substances-sleep-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
-import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=furniture-farms-fertilizer-1';
+import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=clothing-visual-catalog-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
 import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=phrase-scope-1';
@@ -45,7 +45,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=substances-sleep-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=substances-sleep-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=phrase-scope-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=body-phenotype-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -318,7 +318,7 @@ export class CityUI {
   }
   citizen(p, c) {
     const city = this.city, society = city.society;
-    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.landlordSince!=null?'Locador / investidor imobiliário':c.businessIds.length?'Empresário':'Morador'} · Carga: ${city.vehicles?.cargoCapacity(c)??carryCapacity(c)} itens`);
+    if(!this.floatingDossier)p.heading(name(c.entity), C.gold); p.note(`${society.age(c)} anos · ${c.id===city.economy.mayorId?(city.politics.isProvisionalMayor(c)?'Prefeito provisório':'Prefeito'):c.landlordSince!=null?'Locador / investidor imobiliário':c.businessIds.length?'Empresário':'Morador'} · Carga: ${city.vehicles?.cargoCapacity(c)??carryCapacity(c)} itens`);p.kv('Altura',`${Math.round(c.bodyHeightCm||170)} cm`);p.kv('Peso',`${(c.bodyWeightKg||24*((c.bodyHeightCm||170)/100)**2).toFixed(1)} kg`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     if(this.host?.controls.observe){const active=this.host.controls.observation?.();p.buttons([{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',c.id)},{label:'SEGUIR NO MAPA',click:()=>this.host.controls.observe('follow',c.id)},...(active? [{label:'SAIR DA CÂMERA',click:()=>this.host.controls.observe('off')}]:[])]);}
     if(this.host?.controls.observation?.())p.note('Arraste para olhar ao redor. Na 3ª pessoa, use a roda ou pinça para aproximar. Câmera livre em Ferramentas: WASD move, Espaço sobe, Control desce e Shift acelera. Esc sai da câmera.');

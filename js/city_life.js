@@ -33,6 +33,9 @@ export class CityLife {
       for(const k of NEED_KEYS)if(!Number.isFinite(n[k])){n[k]=20;this.resetTask(c,'valor de necessidade inválido');}
     }
     c.deprivation ??= { food: 0, water: 0, health: 0 };
+    c.bodyHeightCm??=170;c.bodyWeightKg??=24*(c.bodyHeightCm/100)**2;c.bodyFoodNeedTotal??=0;c.bodyFoodNeedMinutes??=0;
+    c.bodyFoodNeedTotal+=Math.max(0,Math.min(100,n.food))*elapsed;c.bodyFoodNeedMinutes+=elapsed;
+    if(c.bodyFoodNeedMinutes>=1440){const days=c.bodyFoodNeedMinutes/1440,averageFood=c.bodyFoodNeedTotal/c.bodyFoodNeedMinutes,height=c.bodyHeightCm/100,change=Math.max(-.012,Math.min(.012,(averageFood-55)/45*.012))*days;c.bodyWeightKg=Math.max(15.5*height*height,Math.min(39*height*height,c.bodyWeightKg+change));c.bodyFoodNeedTotal=0;c.bodyFoodNeedMinutes=0;c.bodyWeightUpdatedAt=this.city.minute;}
     c.deprivation.food=n.food<=0?c.deprivation.food+elapsed:0;
     c.deprivation.water=n.water<=0?c.deprivation.water+elapsed:0;
     c.deprivation.health=n.health<=0?c.deprivation.health+elapsed:0;

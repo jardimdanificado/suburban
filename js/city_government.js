@@ -6,7 +6,7 @@ import {electoralPriorities,standingEvidence,personalGovernmentExperience,govern
 import {CityInterventions} from './city_interventions.js';
 import {ideologicalProfile} from './city_ideology.js';
 import {partyAccount,allocatePartyFunds,changePartyFund,illegalPartyFunding} from './city_party_funds.js';
-import {appearance} from './city_clothing.js?v=furniture-farms-fertilizer-1';
+import {appearance} from './city_clothing.js?v=clothing-visual-catalog-1';
 import {CityResearch} from './city_research.js';
 import {CityGovernmentAgenda} from './city_government_agenda.js?v=substances-sleep-1';
 import {CityVoting} from './city_voting.js?v=substances-sleep-1';
