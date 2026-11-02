@@ -10,5 +10,13 @@ export function initializeBodyMetrics(c,seed=0){
 export function bodyFatAmount(c){
   initializeBodyMetrics(c,c.bodyMetricsSeed||0);
   const height=c.bodyHeightCm/100,bmi=c.bodyWeightKg/(height*height);
-  return Math.max(-.48,Math.min(1.1,(bmi-22)/12));
+  // BMI makes the same weight read differently on short and tall citizens;
+  // the wider range keeps genuinely high weights visible in the low-poly mesh.
+  return Math.max(-.42,Math.min(1.8,(bmi-21)/11));
+}
+export function bodyMovementSpeedFactor(c){
+  initializeBodyMetrics(c,c.bodyMetricsSeed||0);
+  const heightFactor=Math.max(.86,Math.min(1.14,1+(c.bodyHeightCm-170)*.0025));
+  const height=c.bodyHeightCm/100,bmi=c.bodyWeightKg/(height*height),fitnessFactor=Math.max(.72,Math.min(1.1,1.06-(bmi-22)*.02));
+  return heightFactor*fitnessFactor;
 }

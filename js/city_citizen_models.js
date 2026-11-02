@@ -1,7 +1,7 @@
 import {wickerBasketSurface} from './city_mobility_models.js?v=cargo-box-rear-1';
 import {partyFlagCanvas} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=flag-wind-tick-13';
-import {bodyFatAmount} from './city_body_metrics.js?v=body-morph-3';
+import {bodyFatAmount} from './city_body_metrics.js?v=body-morph-4';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
 export function citizenIsSleeping(c){
@@ -188,10 +188,10 @@ export class CityCitizenModels {
     if(!this.THREE.InstancedBufferAttribute)return material;
     material.onBeforeCompile=shader=>{
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;');
-      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nfloat normalTorsoRing = smoothstep(0.40, 0.53, position.y) * (1.0 - smoothstep(0.78, 0.89, position.y)) * (1.0 - smoothstep(0.12, 0.19, abs(position.x)));\nfloat normalArmRing = smoothstep(0.48, 0.57, position.y) * (1.0 - smoothstep(0.78, 0.86, position.y)) * smoothstep(0.09, 0.16, abs(position.x));\nfloat normalLegRing = smoothstep(0.12, 0.22, position.y) * (1.0 - smoothstep(0.42, 0.52, position.y)) * smoothstep(0.05, 0.12, abs(position.x));\nfloat normalHeadRing = smoothstep(0.83, 0.91, position.y) * (1.0 - smoothstep(1.02, 1.10, position.y)) * (1.0 - smoothstep(0.06, 0.12, abs(position.x)));\nfloat normalRingX = 1.0 + instanceFat * (normalTorsoRing * 0.46 + normalLegRing * 0.12);\nfloat normalRingZ = 1.0 + instanceFat * (normalTorsoRing * 0.46 + normalArmRing * 0.34 + normalLegRing * 0.34 + normalHeadRing * 0.18);\nobjectNormal.x /= normalRingX;\nobjectNormal.z /= normalRingZ;\nobjectNormal = normalize(objectNormal);');
-      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nfloat torsoRing = smoothstep(0.40, 0.53, transformed.y) * (1.0 - smoothstep(0.78, 0.89, transformed.y)) * (1.0 - smoothstep(0.12, 0.19, abs(transformed.x)));\nfloat armRing = smoothstep(0.48, 0.57, transformed.y) * (1.0 - smoothstep(0.78, 0.86, transformed.y)) * smoothstep(0.09, 0.16, abs(transformed.x));\nfloat legRing = smoothstep(0.12, 0.22, transformed.y) * (1.0 - smoothstep(0.42, 0.52, transformed.y)) * smoothstep(0.05, 0.12, abs(transformed.x));\nfloat headRing = smoothstep(0.83, 0.91, transformed.y) * (1.0 - smoothstep(1.02, 1.10, transformed.y)) * (1.0 - smoothstep(0.06, 0.12, abs(transformed.x)));\nfloat ringScaleX = 1.0 + instanceFat * (torsoRing * 0.46 + legRing * 0.12);\nfloat ringScaleZ = 1.0 + instanceFat * (torsoRing * 0.46 + armRing * 0.34 + legRing * 0.34 + headRing * 0.18);\ntransformed.x *= ringScaleX;\ntransformed.z *= ringScaleZ;');
+      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nfloat normalTorsoRing = smoothstep(0.40, 0.53, position.y) * (1.0 - smoothstep(0.78, 0.89, position.y)) * (1.0 - smoothstep(0.12, 0.19, abs(position.x)));\nfloat normalArmRing = smoothstep(0.48, 0.57, position.y) * (1.0 - smoothstep(0.78, 0.86, position.y)) * smoothstep(0.09, 0.16, abs(position.x));\nfloat normalLegRing = smoothstep(0.12, 0.22, position.y) * (1.0 - smoothstep(0.42, 0.52, position.y)) * smoothstep(0.05, 0.12, abs(position.x));\nfloat normalHeadRing = smoothstep(0.83, 0.91, position.y) * (1.0 - smoothstep(1.02, 1.10, position.y)) * (1.0 - smoothstep(0.06, 0.12, abs(position.x)));\nfloat normalRingX = 1.0 + instanceFat * (normalTorsoRing * 0.60 + normalLegRing * 0.22);\nfloat normalRingZ = 1.0 + instanceFat * (normalTorsoRing * 0.60 + normalArmRing * 0.40 + normalLegRing * 0.46 + normalHeadRing * 0.22);\nobjectNormal.x /= normalRingX;\nobjectNormal.z /= normalRingZ;\nobjectNormal = normalize(objectNormal);');
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nfloat torsoRing = smoothstep(0.40, 0.53, transformed.y) * (1.0 - smoothstep(0.78, 0.89, transformed.y)) * (1.0 - smoothstep(0.12, 0.19, abs(transformed.x)));\nfloat armRing = smoothstep(0.48, 0.57, transformed.y) * (1.0 - smoothstep(0.78, 0.86, transformed.y)) * smoothstep(0.09, 0.16, abs(transformed.x));\nfloat legRing = smoothstep(0.12, 0.22, transformed.y) * (1.0 - smoothstep(0.42, 0.52, transformed.y)) * smoothstep(0.05, 0.12, abs(transformed.x));\nfloat headRing = smoothstep(0.83, 0.91, transformed.y) * (1.0 - smoothstep(1.02, 1.10, transformed.y)) * (1.0 - smoothstep(0.06, 0.12, abs(transformed.x)));\nfloat ringScaleX = 1.0 + instanceFat * (torsoRing * 0.60 + legRing * 0.22);\nfloat ringScaleZ = 1.0 + instanceFat * (torsoRing * 0.60 + armRing * 0.40 + legRing * 0.46 + headRing * 0.22);\ntransformed.x *= ringScaleX;\ntransformed.z *= ringScaleZ;');
     };
-    material.customProgramCacheKey=()=> 'citizen-weight-morph-10';
+    material.customProgramCacheKey=()=> 'citizen-weight-morph-11';
     return material;
   }
   enableSkirtMorph(material){
@@ -220,11 +220,12 @@ export class CityCitizenModels {
       ctx.fillStyle='#555';ctx.beginPath();ctx.moveTo(28,8);ctx.lineTo(36,8);ctx.lineTo(35,17);ctx.lineTo(39,43);ctx.lineTo(32,57);ctx.lineTo(25,43);ctx.lineTo(29,17);ctx.closePath();ctx.fill();
       ctx.strokeStyle='#777';ctx.lineWidth=3;ctx.strokeRect(45,25,10,12);
     }else if(piece==='vestido estampado'){
-      ctx.strokeStyle='#999';ctx.lineWidth=2;for(let x=-64;x<128;x+=12){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+64,64);ctx.stroke();}
-      ctx.fillStyle='#bbb';for(let y=8;y<64;y+=16)for(let x=8;x<64;x+=16){ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();}
+      ctx.fillStyle='#173f69';for(let x=-64;x<128;x+=18){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+8,0);ctx.lineTo(x+72,64);ctx.lineTo(x+64,64);ctx.closePath();ctx.fill();}
+      for(let y=8;y<72;y+=20)for(let x=8;x<72;x+=20){ctx.fillStyle='#f5c842';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#c43e56';ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.fill();}
     }else{
-      ctx.fillStyle='#999';for(let y=5;y<64;y+=14)for(let x=5;x<64;x+=14){ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill();}
-      ctx.fillStyle='#ccc';for(let y=12;y<64;y+=28)for(let x=12;x<64;x+=28){ctx.fillRect(x-1,y-5,2,10);ctx.fillRect(x-5,y-1,10,2);}
+      ctx.fillStyle='#182d4c';for(let y=0;y<64;y+=16)for(let x=0;x<64;x+=16)if((x+y)%32===0)ctx.fillRect(x,y,16,16);
+      ctx.fillStyle='#f5c842';for(let y=8;y<72;y+=16)for(let x=8;x<72;x+=16){ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();}
+      ctx.strokeStyle='#bd3d4f';ctx.lineWidth=3;for(let x=-64;x<128;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+64,64);ctx.stroke();}
     }
     const texture=new this.THREE.CanvasTexture(canvas);texture.wrapS=this.THREE.ClampToEdgeWrapping;texture.wrapT=this.THREE.ClampToEdgeWrapping;texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;
     const material=this.enableWeightMorph(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.printMaterials.set(piece,material);return material;

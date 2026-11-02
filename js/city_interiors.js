@@ -1,4 +1,5 @@
 import {injuryMovementFactor} from './city_injury_effects.js';
+import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
 import {queueService} from './city_service_queue.js?v=service-capacity-8';
@@ -57,7 +58,7 @@ export function advanceCitizenInterior(city,c,minutes=1){
  const s=c.indoorLocation;if(!s?.path?.length)return;
  s.trail??=[{...s.position}];
  s.phase=s.exiting?'leaving':'walking';
- let distance=Math.max(0,minutes)*injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1);
+ let distance=Math.max(0,minutes)*injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1)*bodyMovementSpeedFactor(c);
  while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001){s.path.shift();if(!s.exiting){const visited=s.trail.findIndex(q=>Math.hypot(q.x-target.x,q.y-target.y,(q.z||0)-(target.z||0))<.001);if(visited>=0)s.trail.length=visited+1;else s.trail.push({...target});}}}
  c.entity.x=s.position.x;c.entity.y=s.position.y;
  s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));

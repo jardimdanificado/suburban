@@ -10,7 +10,7 @@ const preferenceSeeds=new Map();
 export const clothingPreference=(id,key)=>{let seed=preferenceSeeds.get(key);if(seed===undefined){seed=[...String(key)].reduce((n,c)=>(Math.imul(n,31)+c.charCodeAt(0))|0,17);preferenceSeeds.set(key,seed);}return ((Math.imul(id+71,seed)>>>0)%201-100)/100;};
 export function brandPreference(c,id){if(!c||id==null)return 0;c.brandPreferences??={};return c.brandPreferences[id]??=clothingPreference(c.id,`marca:${id}`);}
 export function companyPreference(c,b){return b?brandPreference(c,b.id)*2:0;}
-export function garmentScore(c,g){const affinity=colorAffinity(c,g.color);return g.condition*.55+(100-(g.dirt||0))*.3+g.quality*.15+clothingPreference(c.id,g.piece)*10+clothingPreference(c.id,g.style)*8+brandPreference(c,g.brandId)*7+affinity*12+(affinity<=-.65?-120:0);}
+export function garmentScore(c,g){const affinity=colorAffinity(c,g.color),patterned=['camisa estampada','vestido estampado'].includes(g.piece);return g.condition*.55+(100-(g.dirt||0))*.3+g.quality*.15+clothingPreference(c.id,g.piece)*10+clothingPreference(c.id,g.style)*8+brandPreference(c,g.brandId)*7+affinity*12+(patterned?40:0)+(affinity<=-.65?-120:0);}
 export function wornGarment(c){return c?.wearingIndex===-1?null:c?.wardrobe?.[Number.isInteger(c?.wearingIndex)?c.wearingIndex:0];}
 export function wornHeadwear(c){return Number.isInteger(c?.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null;}
 export function wornFootwear(c){return Number.isInteger(c?.footwearIndex)&&c.footwearIndex>=0?c.wardrobe?.[c.footwearIndex]:null;}
@@ -28,6 +28,9 @@ export function initializeClothes(city,c){
   if(c.visualWardrobeCatalogVersion<1){c.visualWardrobeCatalogVersion=1;const colors=favoriteColors(c),color=colors[(c.id*7)%colors.length]?.hex||'#675f58',piece=['camisa estampada','vestido estampado','camisa social','terno','saia','biquíni','maiô','calça social'][c.id%8],style=piece.includes('estampado')?'estampado':piece==='terno'||piece==='camisa social'||piece==='calça social'?'social':piece==='saia'?'clássico':'colorido',g={piece,style,color,brandId:null,brandName:'Coleção de estreia',quality:100,condition:100,dirt:0,acquiredAt:city.minute};changeOwner(city,g,c.accountId,c.entity.properties.name,'catálogo visual');c.wardrobe.push(g);
     if(c.id%3===0){const hats=['cartola','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','boné'],hat={piece:hats[Math.floor(c.id/3)%hats.length],style:'clássico',color,brandId:null,brandName:'Coleção de estreia',quality:100,condition:100,dirt:0,acquiredAt:city.minute};changeOwner(city,hat,c.accountId,c.entity.properties.name,'catálogo visual');c.wardrobe.push(hat);}
   }
+  // Existing saves get a vivid everyday print too; the earlier catalog gave
+  // prints to too few residents, so players could easily miss them in crowds.
+  if(c.visualWardrobePatternVersion<1){c.visualWardrobePatternVersion=1;if(c.id%2===0){const colors=favoriteColors(c),color=colors[(c.id*11+3)%colors.length]?.hex||'#675f58',piece=c.id%4===0?'vestido estampado':'camisa estampada',g={piece,style:'estampado',color,brandId:null,brandName:'Coleção de estampas',quality:100,condition:100,dirt:0,acquiredAt:city.minute};changeOwner(city,g,c.accountId,c.entity.properties.name,'catálogo de estampas');c.wardrobe.push(g);}}
   selectClothes(c);
 }
 const appearanceCache=new WeakMap();

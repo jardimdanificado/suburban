@@ -8,8 +8,9 @@ import {artworkNarrative,artworkReception,narrativeReception} from './city_art_n
 import {funeralSpec} from './city_funeral_services.js';
 import {interiorLayout,interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {injuryMovementFactor,injuredCarryCapacity} from './city_injury_effects.js';
+import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {CITY_FLOOR_HEIGHT,buildingPoint} from './city_building_geometry.js';
-import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=substances-sleep-1';
+import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=body-mobility-1';
 import {civicStatus,civicVisit} from './city_public_services.js';
 import {inventoryFree} from './city_inventory.js';
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -647,7 +648,7 @@ export class CityJustice {
     const steps=Math.max(1,Math.ceil(dist(from,to)/.2));for(let i=1;i<steps;i++){const x=from.x+(to.x-from.x)*i/steps,y=from.y+(to.y-from.y)*i/steps;if(this.city.buildings.some(building=>!building.entity.destroyed&&building.constructionKind!=='open-air'&&buildingContainsPoint(building,x,y)))return false;}return true;
   }
   injuryBleedingRate(region,severity){if(severity>=6&&['cabeça','tronco','costas'].includes(region))return Number((.018+severity*.009).toFixed(3));if(severity>=7&&['braço','mão','perna','pé'].includes(region))return Number((.01+severity*.004).toFixed(3));return 0;}
-  mobilityFactor(c){return injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1);}
+  mobilityFactor(c){return injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1)*bodyMovementSpeedFactor(c);}
   treatInjuries(c,building){
     if(!building?.active||building.entity.destroyed||!['clinic','hospital'].includes(building.type)||c.civicVisit?.buildingId!==building.id||c.civicVisit?.need!=='health')return;
     for(const wound of c.combatInjuries||[]){if(wound.lastTreatmentAt===this.city.minute)continue;wound.lastTreatmentAt=this.city.minute;wound.recoversAt=Math.max(this.city.minute,wound.recoversAt-2);
