@@ -5,7 +5,7 @@ import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=overhead-bi
 import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax} from './city_sales_tax.js';
-import {inheritShares,liquidateShareCash} from './city_equity.js?v=landlord-stock-market-1';
+import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
 import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js';
@@ -24,7 +24,7 @@ import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_cultu
 import { CityRelationships } from './city_relationships.js';
 import { CityNature } from './city_nature.js?v=tree-sidewalk-1';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
-import { CityGovernment as CityPolitics } from './city_government.js?v=party-slogans-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=privatization-chamber-limit-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=overhead-billboards-1';

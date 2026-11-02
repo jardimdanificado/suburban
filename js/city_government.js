@@ -22,6 +22,7 @@ import {gerarFraseTematica} from './gerador_frases.js?v=catalog-lexicon-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=quarry-outskirts-1';
 import {formatMoney} from './city_ui_format.js';
+import {listDailyPrivatization} from './city_equity.js?v=daily-mayor-privatization-1';
 
 // Ideological starting points; names are generated separately from word pools.
 export const PARTY_FAMILIES=[[-1,.2,.35],[-.65,.3,.2],[-.4,.65,1],[-.2,.3,.45],[.05,.05,.25],[.7,.7,.15],[.6,-.75,.1],[1,1,.25]];
@@ -325,6 +326,7 @@ export class CityGovernment extends CityPolitics {
       if(this.policy.businessTax<0){const amount=Math.min(value,Math.max(0,city.treasury-city.welfare.conditions().reserve));if(amount)city.transfer('treasury',b.accountId,amount,'Subsídio empresarial');b.businessSubsidyUnpaid=(b.businessSubsidyUnpaid||0)+value-amount;}
       else{b.businessTaxDue=(b.businessTaxDue||0)+value;const operatingReserve=b.workers.length*b.wage*480,amount=Math.min(b.businessTaxDue,Math.max(0,b.balance-operatingReserve));if(amount&&city.transfer(b.accountId,'treasury',amount,'Imposto empresarial')){b.businessTaxDue-=amount;b.businessTaxPaid=(b.businessTaxPaid||0)+amount;}}
     }
+    listDailyPrivatization(this.city);
   }
   hourly(){this.fundInitialWorksBudget();this.policy.partyFund??=80000;for(const party of this.parties)this.partyAccount(party);for(const pending of [...(this.pendingPartyFunding||[])])allocatePartyFunds(this,pending);allocatePartyFunds(this,this.active);headquartersHourly(this);stockHeadquarters(this,this.active);illegalPartyFunding(this);this.syncGoverningFlag();this.liquidateEmptyParties();this.resumeExecutive();this.ensureMayor();if(this.lastDaily!==this.city.day){this.lastDaily=this.city.day;this.daily();}this.agenda.hourly();this.mandates.update();this.updateApproval();this.council.hourly();this.getResearch().ensureSupply();this.organization.hourly();this.investigate();this.assignPartyNumbers();this.standing.refresh();this.standing.replaceUnavailable();if(this.nextElectionAt===null)return;if(!this.active)this.nextElectionAt=this.voting.schedule(this.nextElectionAt);if(!this.active&&this.city.minute>=this.nextElectionAt-this.termRules.campaignMinutes)this.beginElection();if(this.active?.status==='scheduled'&&this.city.minute>=this.active.startedAt)this.active.status='campaign';if(this.active?.status==='campaign')this.campaigns.hourly(this.active);}
 }

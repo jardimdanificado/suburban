@@ -4,9 +4,10 @@ const living=(city,id)=>{const a=city.accounts.get(id);return id==='treasury'||!
 export function privatizationQuota(city){
  const p=city.politics,day=Math.floor(city.minute/1440);
  p.policy.dailyPrivatizationLimit??=1;
- if(p.privatizationQuotaDay!==day){p.privatizationQuotaDay=day;p.privatizedTodayPoints=0;}
+ if(p.privatizationQuotaDay!==day){p.privatizationQuotaDay=day;p.privatizationListedTodayPoints=0;p.privatizationSoldTodayPoints=0;}
  const limit=Math.max(0,Math.min(10,p.policy.dailyPrivatizationLimit)),allowed=Math.round(limit*100);
- return {day,limit,allowed,sold:Math.max(0,p.privatizedTodayPoints||0),remaining:Math.max(0,allowed-(p.privatizedTodayPoints||0))};
+ const offered=Math.max(0,p.privatizationListedTodayPoints||0),sold=Math.max(0,p.privatizationSoldTodayPoints||0);
+ return {day,limit,allowed,offered,sold,remaining:Math.max(0,allowed-Math.max(offered,sold))};
 }
 function privatizationReaction(city,b,points,treasuryBefore){
  const mayor=city.society.citizen(city.economy.mayorId);if(!mayor)return;
@@ -47,25 +48,49 @@ export function initializeEquity(city,b){
  if(lot){lot.ownerId=b.accountId;lot.forSale=false;lot.forRent=false;}
  control(city,b);return true;
 }
-export function offerShares(city,b,sellerId,points,{billId=null,capitalRaise=false}={}){
+export function offerShares(city,b,sellerId,points,{billId=null,capitalRaise=false,dailyPrivatization=false}={}){
  if(!b?.active||b.entity.destroyed||['townhall','mint'].includes(b.type)||b.officialJournal)return city.fail('Empresa indisponível para negociação.');
  if(!Number.isSafeInteger(points)||points<1||points>TOTAL)return city.fail('Informe um percentual válido de 0,01% a 100%.');
+ const publicOffer=sellerId==='treasury'&&!capitalRaise;
+ if(publicOffer&&!billId&&dailyPrivatization){const quota=privatizationQuota(city);if(points>quota.remaining)return city.fail(`A cota diária permite ofertar mais ${(quota.remaining/100).toFixed(2)}% hoje.`);}
  const shares=equityShares(city,b),owned=shares.find(s=>s.accountId===sellerId)?.points||0,reserved=(b.shareOffers||[]).filter(o=>o.status==='open'&&o.sellerId===sellerId).reduce((n,o)=>n+o.remaining,0);
  if(points>owned-reserved)return city.fail('A participação disponível é menor que a quantidade solicitada.');
  const valuation=equityValue(city,b);if(!initializeEquity(city,b))return null;
- const offer={id:(b.nextShareOfferId??1),sellerId,points,remaining:points,valuation,createdAt:city.minute,status:'open',billId,capitalRaise:!!capitalRaise};b.nextShareOfferId=offer.id+1;b.shareOffers.push(offer);
+ const offer={id:(b.nextShareOfferId??1),sellerId,points,remaining:points,valuation,createdAt:city.minute,status:'open',billId,capitalRaise:!!capitalRaise,dailyPrivatization:!!dailyPrivatization};b.nextShareOfferId=offer.id+1;b.shareOffers.push(offer);
+ if(publicOffer&&!billId&&dailyPrivatization){const p=city.politics;p.privatizationListedTodayPoints=(p.privatizationListedTodayPoints||0)+points;}
  city.log(capitalRaise?`${city.accountName(sellerId)} abriu captação para ${b.entity.properties.name} em troca de ${(points/100).toFixed(2)}% de participação.`:`${city.accountName(sellerId)} colocou ${(points/100).toFixed(2)}% de ${b.entity.properties.name} à venda.`,'business',[],{kind:capitalRaise?'share-capital-raise':'share-offer',buildingId:b.id,offerId:offer.id,billId,points,valuation,capitalRaise:!!capitalRaise});return offer;
 }
 export function buyShares(city,b,offerId,buyerId,points){
  const offer=b?.shareOffers?.find(o=>o.id===offerId&&o.status==='open'),buyer=city.accounts.get(buyerId);
  if(!offer||!b.active||b.entity.destroyed||!buyer||!living(city,buyerId)||buyerId===offer.sellerId)return city.fail('Oferta ou comprador indisponível.');
  if(!Number.isSafeInteger(points)||points<1||points>offer.remaining)return city.fail('Quantidade fora do saldo da oferta.');
- const publicPrivatization=offer.sellerId==='treasury',quota=publicPrivatization?privatizationQuota(city):null;
- if(quota){points=Math.min(points,quota.remaining);if(points<1)return city.fail('A cota diária de privatização já foi usada.');}
+ const publicPrivatization=offer.sellerId==='treasury'&&!offer.capitalRaise;
+ if(publicPrivatization&&!offer.billId&&!offer.dailyPrivatization){const quota=privatizationQuota(city),saleCapacity=Math.max(0,quota.allowed-quota.sold);points=Math.min(points,saleCapacity);if(points<1)return city.fail('A cota diária de privatização já foi usada.');}
  const seller=b.equityShares.find(s=>s.accountId===offer.sellerId);if(!seller||seller.points<points)return city.fail('O vendedor não possui mais essa participação.');
  const treasuryBefore=city.treasury,price=Math.max(1,Math.ceil(offer.valuation*points/TOTAL)),recipient=offer.capitalRaise?b.accountId:offer.sellerId;if(!Number.isSafeInteger(price)||!city.transfer(buyerId,recipient,price,offer.capitalRaise?'Aporte de capital por venda de participação':'Compra de participação empresarial',{buildingId:b.id,offerId,points}))return city.fail('Saldo insuficiente para comprar a participação.');
  seller.points-=points;let acquired=b.equityShares.find(s=>s.accountId===buyerId);if(!acquired){acquired={accountId:buyerId,points:0};b.equityShares.push(acquired);}acquired.points+=points;b.equityShares=b.equityShares.filter(s=>s.points>0);offer.remaining-=points;if(!offer.remaining)offer.status='sold';
- const event={minute:city.minute,from:offer.sellerId,to:buyerId,points,price,offerId,billId:offer.billId,capitalRaise:!!offer.capitalRaise};b.shareHistory.push(event);if(b.shareHistory.length>160)b.shareHistory.shift();city.history.ownership(b,offer.sellerId,buyerId,{action:offer.capitalRaise?'capital-raise':'share-purchase',amount:price,points,offerId,billId:offer.billId});if(quota){city.politics.privatizedTodayPoints=quota.sold+points;privatizationReaction(city,b,points,treasuryBefore);}control(city,b);return event;
+ const event={minute:city.minute,from:offer.sellerId,to:buyerId,points,price,offerId,billId:offer.billId,capitalRaise:!!offer.capitalRaise};b.shareHistory.push(event);if(b.shareHistory.length>160)b.shareHistory.shift();city.history.ownership(b,offer.sellerId,buyerId,{action:offer.capitalRaise?'capital-raise':'share-purchase',amount:price,points,offerId,billId:offer.billId});if(publicPrivatization){const quota=privatizationQuota(city);city.politics.privatizationSoldTodayPoints=quota.sold+points;privatizationReaction(city,b,points,treasuryBefore);}control(city,b);return event;
+}
+export function listDailyPrivatization(city){
+ const quota=privatizationQuota(city),p=city.politics;if(quota.remaining<1||p.lastDailyPrivatizationDay===quota.day)return null;
+ const eligible=city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&!['townhall','mint'].includes(b.type)&&!b.officialJournal)
+  .map(b=>({b,publicPoints:equityShares(city,b).find(s=>s.accountId==='treasury')?.points||0}))
+  .filter(row=>row.publicPoints>0)
+  .sort((a,b)=>a.b.id-b.b.id);
+ if(!eligible.length){p.lastDailyPrivatizationDay=quota.day;return null;}
+ const after=eligible.findIndex(row=>row.b.id>(p.lastDailyPrivatizationBuildingId??-Infinity)),ordered=after<0?eligible:[...eligible.slice(after),...eligible.slice(0,after)];
+ for(const {b,publicPoints} of ordered){
+  const reserved=(b.shareOffers||[]).filter(o=>o.status==='open'&&o.sellerId==='treasury').reduce((n,o)=>n+o.remaining,0),available=Math.max(0,publicPoints-reserved),points=Math.min(quota.remaining,available);
+  if(points<1)continue;
+  let offer=(b.shareOffers||[]).find(o=>o.status==='open'&&o.sellerId==='treasury'&&o.dailyPrivatization);
+  if(offer){offer.points+=points;offer.remaining+=points;offer.valuation=equityValue(city,b);offer.lastListedAt=city.minute;p.privatizationListedTodayPoints=(p.privatizationListedTodayPoints||0)+points;}
+  else offer=offerShares(city,b,'treasury',points,{dailyPrivatization:true});
+  if(!offer)continue;
+  p.lastDailyPrivatizationDay=quota.day;p.lastDailyPrivatizationBuildingId=b.id;
+  city.log(`A prefeitura colocou ${(points/100).toFixed(2)}% de ${b.entity.properties.name} no mercado de ações, dentro da cota diária.`,'government',[],{kind:'daily-privatization-offer',buildingId:b.id,offerId:offer.id,points,limit:quota.limit});
+  return offer;
+ }
+ p.lastDailyPrivatizationDay=quota.day;return null;
 }
 export function cancelShareOffer(city,b,offerId,sellerId){const offer=b?.shareOffers?.find(o=>o.id===offerId&&o.status==='open'&&o.sellerId===sellerId);if(!offer)return city.fail('Oferta indisponível.');offer.status='cancelled';offer.cancelledAt=city.minute;return true;}
 export function tradeSharesHourly(city){

@@ -1,5 +1,5 @@
 import {TAX_CATEGORIES,taxRate} from './city_sales_tax.js';
-import {equityShares,offerShares,initializeEquity,nationalizeShares} from './city_equity.js?v=landlord-stock-market-1';
+import {equityShares,offerShares,initializeEquity,nationalizeShares} from './city_equity.js?v=daily-mayor-privatization-1';
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
 import {CityCouncilChamber} from './city_council_chamber.js';
@@ -89,6 +89,7 @@ export class CityCouncil {
     if(type==='tradeTax'&&(!city.economy.goods[payload.good]||!Number.isFinite(payload.importRate)||!Number.isFinite(payload.exportRate)||payload.importRate<0||payload.importRate>1||payload.exportRate<0||payload.exportRate>1))return city.fail('Escolha um produto e tarifas de importação e exportação entre 0% e 100%.');
     if(type==='tradeTax')title??=`Tarifas de ${city.economy.goods[payload.good].label}: importar ${(payload.importRate*100).toFixed(0)}%, exportar ${(payload.exportRate*100).toFixed(0)}%`;
     if(type==='privatize'&&payload.percent!=null&&(!Number.isFinite(payload.percent)||payload.percent<=0||payload.percent>100))return city.fail('Percentual de privatização deve ficar entre 0,01% e 100%.');
+    if(type==='privatize'){const company=city.building(payload.buildingId);title??=`Privatizar ${(payload.percent??100).toFixed(1)}% de ${company?.entity.properties.name||'empresa pública'}`;}
     if(type==='impeach'&&!city.politics.scandals.some(r=>r.id===payload.caseId&&scandalEligible(city.politics,r)&&(r.accusedId===payload.targetId||r.participantIds?.includes(payload.targetId))))return city.fail('Faltam prova, gravidade ou repercussão popular.');
     if(type==='confidence'&&(city.politics.approval>=20||city.politics.lowApprovalSince==null||city.minute-city.politics.lowApprovalSince<3*1440||payload.targetId!==city.economy.mayorId))return city.fail('Perda de confiança exige aprovação abaixo de 20% por três dias.');
     if(['termDays','campaignDays'].includes(type)){
@@ -155,10 +156,11 @@ export class CityCouncil {
       if(!initializeEquity(city,b))return city.lastError||'Imóvel incompatível com estatização';
       return nationalizeShares(city,b,bill)||null;
     }
-    const available=equityShares(city,b).find(s=>s.accountId==='treasury')?.points||0,points=Math.round((bill.payload.percent??100)*100);
+    const available=equityShares(city,b).find(s=>s.accountId==='treasury')?.points||0,points=Math.round((bill.payload.percent??100)*100),alreadyOffered=(b.shareOffers||[]).filter(o=>o.status==='open'&&o.sellerId==='treasury').reduce((n,o)=>n+o.remaining,0);
     if(!Number.isSafeInteger(points)||points<1||points>available)return 'Percentual público indisponível';
     const existing=b.shareOffers?.find(o=>o.billId===bill.id&&o.status==='open');if(existing)return null;
-    const offer=offerShares(city,b,'treasury',points,{billId:bill.id});if(!offer)return city.lastError||'Oferta de privatização indisponível';
+    const pointsToOffer=Math.max(0,points-alreadyOffered);if(!pointsToOffer)return null;
+    const offer=offerShares(city,b,'treasury',pointsToOffer,{billId:bill.id});if(!offer)return city.lastError||'Oferta de privatização indisponível';
     bill.shareOfferId=offer.id;return null;
   }
   execute(bill) {

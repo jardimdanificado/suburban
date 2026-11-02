@@ -1,5 +1,5 @@
 import {TAX_CATEGORIES,taxRate} from './city_sales_tax.js';
-import {equityShares,privatizationQuota} from './city_equity.js?v=landlord-stock-market-1';
+import {equityShares,privatizationQuota} from './city_equity.js?v=daily-mayor-privatization-1';
 import {contextActions} from './city_context_actions.js';
 import {describePoliticalOrientation} from './city_ideology.js';
 import {electoralPriorities} from './city_electoral_behavior.js';
@@ -210,7 +210,7 @@ p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento /
       });
       fold(ui,p,'petitionOwnership','Estatizar ou privatizar empresas',()=>{
       p.heading('PROPRIEDADE DAS EMPRESAS');
-      const quota=privatizationQuota(city),rate=gov.policy.dailyPrivatizationLimit??1;p.heading('COTA DIÁRIA DE PRIVATIZAÇÃO');p.kv('Limite aprovado',`${rate.toFixed(1)}% do capital total das estatais por dia`);p.kv('Usada hoje / disponível',`${(quota.sold/100).toFixed(2)}% / ${(quota.remaining/100).toFixed(2)}%`);p.note('A Câmara pode ajustar a cota entre 0% e 10%. O limite soma as participações compradas em todas as empresas públicas; vendas parciais contam apenas o que foi efetivamente negociado. Em emergência fiscal, a oposição à privatização tende a diminuir.');p.buttons([-1,1].map(direction=>({label:`COTA ${direction>0?'+':'−'}0,5 P.P.`,click:()=>submit('dailyPrivatizationLimit',{value:Math.max(0,Math.min(10,Math.round((rate+direction*.5)*10)/10))})})));
+      const quota=privatizationQuota(city),rate=gov.policy.dailyPrivatizationLimit??1;p.heading('COTA DIÁRIA DE PRIVATIZAÇÃO');p.kv('Limite aprovado',`${rate.toFixed(1)}% das participações por dia`);p.kv('Ofertado hoje / ainda pode ofertar',`${(quota.offered/100).toFixed(2)}% / ${(quota.remaining/100).toFixed(2)}%`);p.kv('Comprado hoje',`${(quota.sold/100).toFixed(2)}%`);p.note('O prefeito coloca ações de estatais no mercado automaticamente todos os dias, até o limite aprovado, sem votação para cada oferta. A cota mede o total ofertado entre as empresas públicas. Para privatizar além dela, é necessário um projeto aprovado pela Câmara; as ações aprovadas ficam disponíveis para compra. A própria cota também só muda por projeto aprovado.');p.buttons([-1,1].map(direction=>({label:`PROPOR COTA ${direction>0?'+':'−'}0,5 P.P.`,click:()=>{const value=Math.max(0,Math.min(10,Math.round((rate+direction*.5)*10)/10)),bill=gov.submitBill('dailyPrivatizationLimit',{value});ui.notice=bill?.title?`Proposta apresentada à Câmara: ${bill.title}.`:city.lastError||'A proposta não pôde ser apresentada.';}})));
       for(const b of paginate(ui,p,city.economy.businesses.filter(b=>(b.ownerId||b.municipal)&&!['townhall','mint'].includes(b.type)&&ui.matches(b.entity.properties.name)),'publicOwnershipPage',8)){const publicShare=equityShares(city,b).find(s=>s.accountId==='treasury')?.points||0;p.button(`PARTICIPAÇÕES: ${b.entity.properties.name} · ${(publicShare/100).toFixed(0)}% pública`,()=>ui.openBuilding(b.id));if(publicShare<10000)p.button(`NEGOCIAR ESTATIZAÇÃO: ${b.entity.properties.name}`,()=>submit('nationalize',{buildingId:b.id}));}
       });
 

@@ -3,7 +3,7 @@ import {JUSTICE_SKILLS,ensureJusticeSkills} from './city_justice_skills.js';
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {rentOffice,rentAvailableOffice,officeStartupCost,prepareOfficeSearch,officeSpaceDemand,setupOfficeTower,officeFloors,OFFICE_BUSINESSES,OFFICE_ONLY_TYPES,createMunicipalOffice} from './city_offices.js?v=office-investment-search-1';
 import {taxCategory,taxRate} from './city_sales_tax.js';
-import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=landlord-stock-market-1';
+import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=daily-mayor-privatization-1';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=deep-perf-3';
 import {externalTradeHourly,orderImport} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=quarry-interview-ground-1';

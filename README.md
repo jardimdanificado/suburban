@@ -503,7 +503,7 @@ Vereadores propõem projetos automaticamente segundo o programa e as condições
 
 O piso inicial é de cinco centavos por minuto de trabalho (R$ 3 por hora), reajustado pelo índice de preços. Ele é aplicado na remuneração real de empregados. O imposto empresarial incide sobre a receita contabilizada desde a cobrança anterior, uma vez por dia; valores negativos subsidiam a empresa conforme o caixa municipal.
 
-Aprovação não cria um prédio instantaneamente. Obras aguardam terreno, orçamento, construtora, materiais, frete e trabalho. Estatizações pagam o proprietário privado e preservam a operação da empresa; privatizações exigem autorização e comprador com recursos, registrando a mudança de propriedade. As propostas informam se foram rejeitadas, executadas ou estão aguardando condições. O programa do prefeito eleito é encaminhado à Câmara na posse.
+Aprovação não cria um prédio instantaneamente. Obras aguardam terreno, orçamento, construtora, materiais, frete e trabalho. Estatizações pagam o proprietário privado e preservam a operação da empresa. O prefeito oferta ações públicas automaticamente todos os dias até a cota aprovada pela Câmara; privatizações acima dela exigem projeto aprovado. A transferência das ações e o recebimento dependem de compradores. As propostas informam se foram rejeitadas, executadas ou estão aguardando condições. O programa do prefeito eleito é encaminhado à Câmara na posse.
 
 ### Campanha, pesquisas e memória
 

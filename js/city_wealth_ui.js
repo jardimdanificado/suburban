@@ -1,6 +1,6 @@
 import {wealthReport} from './city_wealth.js';
 import {formatMoney as money} from './city_ui_format.js';
-import {equityShares,equityValue} from './city_equity.js?v=landlord-stock-market-1';
+import {equityShares,equityValue} from './city_equity.js?v=daily-mayor-privatization-1';
 const kinds={cash:'Caixa',savings:'Poupança',reserved:'Reservas',inventory:'Estoques',property:'Imóveis',land:'Terrenos',vehicles:'Bicicletas e patinetes',durables:'Bens pessoais',receivables:'A receber',debt:'Dívidas'};
 const salesKinds={retail:'Varejo',wholesale:'Atacado',service:'Serviços',property:'Imóveis',rent:'Aluguéis'};
 const stamp=m=>`D${Math.floor(m/1440)+1} ${String(Math.floor(m%1440/60)).padStart(2,'0')}:${String(Math.floor(m%60)).padStart(2,'0')}`;

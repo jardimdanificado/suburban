@@ -3605,6 +3605,13 @@ export class RCT3DRenderer {
       this.scene.add(pl);
       this.nightLightPool.push(pl);
     }
+    this.mouseSpotlight=new THREE.SpotLight(0xffe3b0,0,24,Math.atan2(2.6,13.5),.62,1.25);
+    this.mouseSpotlight.castShadow=false;this.mouseSpotlight.visible=false;this.mouseSpotlightTarget=new THREE.Object3D();
+    this.mouseSpotlight.target=this.mouseSpotlightTarget;this.scene.add(this.mouseSpotlight,this.mouseSpotlightTarget);
+    this.mouseBeamMaterial=new THREE.MeshBasicMaterial({color:0xffe7bc,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending});
+    this.mouseBeam=new THREE.Mesh(new THREE.CylinderGeometry(.045,2.6,14,24,1,true),this.mouseBeamMaterial);this.mouseBeam.visible=false;this.mouseBeam.renderOrder=8;this.scene.add(this.mouseBeam);
+    this.mouseBeamSource=new THREE.Mesh(new THREE.SphereGeometry(.16,8,6),new THREE.MeshBasicMaterial({color:0xfff0cf,transparent:true,opacity:0,depthWrite:false}));this.mouseBeamSource.visible=false;this.scene.add(this.mouseBeamSource);
+    this.mouseBeamPool=new THREE.Mesh(new THREE.CircleGeometry(1,24),new THREE.MeshBasicMaterial({color:0xffe5ae,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));this.mouseBeamPool.rotation.x=-Math.PI/2;this.mouseBeamPool.visible=false;this.scene.add(this.mouseBeamPool);
     this.followMarker = new THREE.Mesh(
       new THREE.CircleGeometry(0.42, 24),
       new THREE.MeshBasicMaterial({ color: 0xffd36a, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide })
@@ -8291,22 +8298,23 @@ export class RCT3DRenderer {
       }
     }
 
-    // --- REAL MULTI-POINT DYNAMIC NIGHT LIGHTS (Placed directly at entities) ---
-    let lightIdx = 0;
-    // Reserve one point light for the mouse tip in every lighting condition.
-    // This keeps the cursor anchored to the terrain while the remaining pool
-    // continues to serve lamps and other night lights.
+    // Night-only searchlight: a visible shaft descends from above the cursor,
+    // while a shadowless spotlight brightens the terrain and nearby scenery.
+    let cursorTile=null,lightIdx=0;
     if(!this.isPerspectiveActive()&&this.mouseX!==undefined&&this.mouseY!==undefined){
       const camera=this.camera,cache=this.mouseLightTerrainCache,valid=cache&&cache.x===this.mouseX&&cache.y===this.mouseY&&cache.map===map&&cache.cameraX===camera.position.x&&cache.cameraY===camera.position.y&&cache.cameraZ===camera.position.z&&cache.cameraRX===camera.rotation.x&&cache.cameraRY===camera.rotation.y&&cache.zoom===this.zoom;
-      const mouseTile=valid?cache.tile:this.getTileAtScreen(this.mouseX,this.mouseY,world);
-      if(!valid)this.mouseLightTerrainCache={x:this.mouseX,y:this.mouseY,map,cameraX:camera.position.x,cameraY:camera.position.y,cameraZ:camera.position.z,cameraRX:camera.rotation.x,cameraRY:camera.rotation.y,zoom:this.zoom,tile:mouseTile};
-      if(mouseTile){
-        const sH=mouseTile.exactY!==undefined?mouseTile.exactY:this.getSurfaceElevation(map,mouseTile.x,mouseTile.y),cursor=this.nightLightPool[0];
-        cursor.color.setHex(0xffe7ae);cursor.distance=18;cursor.decay=1.15;cursor.intensity=6.5;
-        cursor.position.set(mouseTile.exactX!==undefined?mouseTile.exactX:mouseTile.x+.5,sH+2.2,mouseTile.exactZ!==undefined?mouseTile.exactZ:mouseTile.y+.5);
-        lightIdx=1;
-      }
+      cursorTile=valid?cache.tile:this.getTileAtScreen(this.mouseX,this.mouseY,world);
+      if(!valid)this.mouseLightTerrainCache={x:this.mouseX,y:this.mouseY,map,cameraX:camera.position.x,cameraY:camera.position.y,cameraZ:camera.position.z,cameraRX:camera.rotation.x,cameraRY:camera.rotation.y,zoom:this.zoom,tile:cursorTile};
     }
+    const cursorActive=!!cursorTile&&nightGlow>.015;
+    this.mouseSpotlight.visible=this.mouseBeam.visible=this.mouseBeamSource.visible=this.mouseBeamPool.visible=cursorActive;
+    if(cursorActive){
+      const sH=cursorTile.exactY!==undefined?cursorTile.exactY:this.getSurfaceElevation(map,cursorTile.x,cursorTile.y),x=cursorTile.exactX!==undefined?cursorTile.exactX:cursorTile.x+.5,z=cursorTile.exactZ!==undefined?cursorTile.exactZ:cursorTile.y+.5,beamHeight=14,top=sH+beamHeight;
+      this.mouseSpotlight.intensity=nightGlow*95;this.mouseSpotlight.distance=24;this.mouseSpotlight.position.set(x,top-.12,z);this.mouseSpotlightTarget.position.set(x,sH,z);
+      this.mouseBeam.position.set(x,sH+beamHeight/2,z);this.mouseBeamMaterial.opacity=.11*nightGlow;
+      this.mouseBeamSource.position.set(x,top-.1,z);this.mouseBeamSource.material.opacity=.88*nightGlow;
+      this.mouseBeamPool.position.set(x,sH+.035,z);this.mouseBeamPool.scale.setScalar(2.6);this.mouseBeamPool.material.opacity=.17*nightGlow;
+    }else this.mouseSpotlight.intensity=0;
     if (nightGlow > 0.02) {
       let candidateCount = 0;
       const focusX = (this.selectedEntityId > 0 && selectedPos) ? selectedPos.x : this.camX;
