@@ -22,7 +22,7 @@ import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from
 import {renderElectionMonitor} from './city_election_ui.js?v=election-support-map-1';
 import {sectionTitle} from './city_ui_sections.js';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
-import {ROTATION_LABELS} from './city_building_geometry.js';
+import {ROTATION_LABELS,buildingFacadeBannerSupport} from './city_building_geometry.js';
 import { renderPublications } from './city_publications_ui.js';
 import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases } from './city_corruption_ui.js';
 import {renderEventInspector} from './city_event_inspector.js?v=landlord-stock-market-1';
@@ -46,7 +46,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=substance-brands-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=substance-brands-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=banner-placement-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -771,7 +771,7 @@ export class CityUI {
       this.notice=job?`Encomenda artística #${job.id} anunciada para ${isRoof?'a cobertura':isBridge?'a passarela':isWindow?'a janela':supportUnitId?'o interior':'a fachada'}; o pagamento ficará reservado até a conclusão.`:'Não foi possível encomendar: confira o texto, o saldo, o local e a disponibilidade de artista ou material.';
     });
     p.note('Pessoa para comprar ou reproduzir uma obra');const buyerOptions=[['','Escolha uma pessoa'],...city.citizens.filter(c=>!c.entity.destroyed&&!c.dead).map(c=>[String(c.id),c.entity.properties.name])];this.nativeSelect(this.artworkBuyerInput,p,buyerOptions,this.artworkBuyerInput.value||'',p.x,p.y,p.w);p.space(24);
-    const locateArtwork=(piece,job=null)=>{const support=piece?.support||job?.artworkSupport;if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);this.setInteriorView(building.id,unit.z);}}else if(piece)this.camera(piece.entity.x,piece.entity.y);else if(job)this.camera(job.point.x,job.point.y);};
+    const locateArtwork=(piece,job=null)=>{const support=piece?.support||job?.artworkSupport||job?.artworkFacadeSupport;if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);this.setInteriorView(building.id,unit.z);}}else if(piece){const facade=piece.kind==='banner'&&piece.buildingId!=null?support?.position||buildingFacadeBannerSupport(city.building(piece.buildingId))?.position:null;this.camera(facade?.x??piece.entity.x,facade?.y??piece.entity.y);}else if(job){const facade=job.artworkFacadeSupport?.position;this.camera(facade?.x??job.point.x,facade?.y??job.point.y);}};
     const artJobs=city.gigs.jobs.filter(j=>j.kind==='art-installation'&&['open','working'].includes(j.status));if(artJobs.length){p.heading('ENCOMENDAS EM ANDAMENTO');for(const job of artJobs.slice(-10).reverse()){const site=city.building(job.buildingId),support=job.artworkSupport,place=support?.kind==='skybridge'?'passarela elevada':support?.kind==='roof-terrace'?'cobertura':support?`interior · andar ${support.floor+1}`:'fachada';p.record(`#${job.id} · ${justice.labelArt(job.artwork.kind)} · ${job.artwork.message}`,`${place} · ${job.status==='working'?`${Math.floor(job.progress)}/${job.required} · ${city.society.citizen(job.workerId)?.entity.properties.name||'artista'}`:'Aguardando artista'}${job.waitingReason?` · ${job.waitingReason}`:''} · ${money(job.fee)}`,()=>site&&locateArtwork(null,job));}}
     const artSponsor=a=>a.sponsorId!=null?city.society.citizen(a.sponsorId)?.entity.properties.name||'Desconhecido':a.sponsorAccountId==='treasury'?'Tesouro municipal':city.accountName(a.sponsorAccountId)||'não identificado';
     const artistRows=[...new Set(justice.art.map(a=>a.creatorId).filter(Number.isInteger))].map(id=>justice.artistProfile(id)).sort((a,b)=>b.renown-a.renown||b.legacy-a.legacy),materialLabel={pedra:'pedra',argila:'argila',ferro:'ferro',aco:'aço',ceramica:'cerâmica',fezes:'fezes'};
