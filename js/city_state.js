@@ -1,6 +1,6 @@
 import {CitySubstances} from './city_substances.js';
 import {ensureJusticeSkills} from './city_justice_skills.js';
-import {CityFurniture} from './city_furniture.js?v=road-and-water-bench-facing-1';
+import {CityFurniture} from './city_furniture.js?v=personal-beach-setups-1';
 import {CitySupplies} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';
@@ -25,7 +25,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=production-plan-profile-19';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=personal-beach-setups-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=conversation-witness-grid-6';
 import { CityWelfare } from './city_welfare.js';

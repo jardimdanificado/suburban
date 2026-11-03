@@ -1,5 +1,5 @@
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
-import {furnitureModel} from './city_furniture_models.js?v=beach-parasols-1';
+import {furnitureModel} from './city_furniture_models.js?v=personal-beach-equipment-2';
 import {applyInteriorCutaway} from './city_interior_view.js?v=interior-cell-batch-1';
 import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
 import {addBuildingDetails} from './city_building_details.js?v=static-facade-batch-5';
@@ -11,7 +11,7 @@ import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=gr
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=textured-market-produce-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=building-doorway-opening-2';
 import { partyFlagCanvas } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=bike-rider-sync-1';
+import {citizenIsSleeping} from './city_citizen_models.js?v=personal-beach-setups-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-neoclassical-1';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
@@ -310,6 +310,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
   syncUrbanArt(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncFecesVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncStreetBenches(renderer,THREE,world);
+  syncBeachLeisureProps(renderer,THREE,world);
   syncStreetMarketStalls(renderer,THREE,world);
   const map = world.map;
   const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
@@ -825,5 +826,14 @@ function addFarmFence(THREE,group,b,world,style){
 }
 function syncStreetBenches(renderer,THREE,world){
  const furniture=renderer.cityDevelopment?.city?.furniture;if(!furniture)return;const meshes=renderer.streetBenchMeshes??=new Map(),active=new Set(furniture.benches.map(b=>b.id));for(const [id,g]of meshes)if(!active.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(id);}
- for(const b of furniture.benches){let g=meshes.get(b.id);if(g&&g.userData.colonialVersion!==4){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(b.id);g=null;}if(!g){let styleHash=0;for(const char of String(b.id))styleHash=Math.imul(styleHash^char.charCodeAt(0),16777619);const style=(styleHash>>>0)%8,beach=b.kind==='beach_chair'||b.kind==='beach_ground',umbrellaStyle=beach&&(b.kind==='beach_ground'||style%3!==0)?(style+Math.floor(styleHash/8))%8:null;g=furnitureModel(THREE,{type:b.kind==='beach_chair'?'beach_chair':b.kind==='beach_ground'?'beach_ground':'bench',colonialStyle:style%4,variant:style,umbrellaStyle});g.userData.colonialVersion=4;mergeStaticMeshes(THREE,g);g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);renderer.scene.add(g);meshes.set(b.id,g);}g.rotation.y=b.angle;g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
+ for(const b of furniture.benches){let g=meshes.get(b.id);if(g&&g.userData.colonialVersion!==5){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});meshes.delete(b.id);g=null;}if(!g){let styleHash=0;for(const char of String(b.id))styleHash=Math.imul(styleHash^char.charCodeAt(0),16777619);const style=(styleHash>>>0)%8;g=furnitureModel(THREE,{type:'bench',colonialStyle:style%4,variant:style});g.userData.colonialVersion=5;mergeStaticMeshes(THREE,g);g.position.set(b.x,surfaceElevation(world,b.x,b.y)+.02,b.y);renderer.scene.add(g);meshes.set(b.id,g);}g.rotation.y=b.angle;g.visible=b.x>=(renderer.renderedMinTx??0)&&b.x<=(renderer.renderedMaxTx??world.width)&&b.y>=(renderer.renderedMinTy??0)&&b.y<=(renderer.renderedMaxTy??world.height);}
+}
+function syncBeachLeisureProps(renderer,THREE,world){
+ const citizens=renderer.cityDevelopment?.city?.citizens||[],props=renderer.beachLeisureProps??=new Map(),active=new Map();
+ for(const c of citizens){const setup=c.beachLeisure;if(!c.entity.destroyed&&c.task==='beach_leisure'&&setup&&!c.path?.length)active.set(c.id,{c,setup});}
+ for(const [id,g]of props)if(!active.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});props.delete(id);}
+ for(const [id,{setup}]of active){let g=props.get(id);const towel=setup.kind==='beach_ground'&&setup.variant%2===0,styleKey=`${setup.kind}:${setup.variant}:${setup.umbrellaStyle}:${towel}`;if(g&&g.userData.styleKey!==styleKey){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});props.delete(id);g=null;}
+  if(!g){g=furnitureModel(THREE,{type:setup.kind,variant:setup.variant,umbrellaStyle:setup.umbrellaStyle,towel});mergeStaticMeshes(THREE,g);g.userData.styleKey=styleKey;renderer.scene.add(g);props.set(id,g);}
+  g.position.set(setup.x,surfaceElevation(world,setup.x,setup.y)+.02,setup.y);g.rotation.y=setup.angle;g.visible=setup.x>=(renderer.renderedMinTx??0)&&setup.x<=(renderer.renderedMaxTx??world.width)&&setup.y>=(renderer.renderedMinTy??0)&&setup.y<=(renderer.renderedMaxTy??world.height);
+ }
 }

@@ -1,7 +1,7 @@
 import {CitySubstances} from './city_substances.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=road-and-water-bench-facing-1';
+import {CityFurniture} from './city_furniture.js?v=personal-beach-setups-1';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=overhead-billboards-1';
 import {CityWater} from './city_water.js';
@@ -751,6 +751,12 @@ export class CitySimulation {
     if(c.task==='work-wait'){if(!c.seatId&&!syncCitizenInterior(this,c))return;this.furniture.advanceWait(c);return;}
     if(c.task==='market-vending'){const stall=streetMarketFor(this.economy,c);if(!stall){c.marketStall=null;c.task=null;c.targetId=null;c.path=[];c.action='Encerrando o mercado de rua';return;}if(this.urgentNeed(c)){c.task=null;c.targetId=null;c.path=[];return;}c.action=`Anunciando ${this.building(stall.businessId)?.entity.properties.name||'produtos'} na feira`;this.economy.practice(c,'management',1);return;}
     if(c.task==='sit'){if(c.path.length)return;c.needs.leisure=clamp(c.needs.leisure+.7);c.action='Descansando sentado no banco';if(this.minute>=c.sitUntil||this.urgentNeed(c)){this.furniture.release(c);c.task=null;}return;}
+    if(c.task==='beach_leisure'){
+      const setup=c.beachLeisure;if(!setup){c.task=null;return;}
+      if(c.path.length){c.action='Indo montar as coisas na praia';return;}
+      c.needs.leisure=clamp(c.needs.leisure+.9);c.mood=Math.min(25,(c.mood||0)+.02);c.action='Descansando na praia';
+      if(c.needs.leisure>=95||this.minute>=setup.until||this.urgentNeed(c)){c.task=null;c.beachLeisure=null;c.seated=false;c.furnitureUse=null;c.path=[];c.action='Recolhendo as coisas da praia';}return;
+    }
     if(c.task==='lake-water'){this.supplies.collectLake(c);return;}
     if(!syncCitizenInterior(this,c))return;
     if(this.substances?.perform(c))return;
@@ -1104,7 +1110,7 @@ export class CitySimulation {
     }
     this._citizenLoopProfile=null;const citizenMs=performance.now()-profileMark;profileMark=performance.now();
     for(const c of this.citizens)if(!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
-    for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait)this.furniture.syncCitizen(c);
+    for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait||c.task==='beach_leisure'||c.beachLeisure)this.furniture.syncCitizen(c);
     if(this.minute%60===0){this.furniture.reconcile();this.substances?.hourly();}
     const interiorMs=performance.now()-profileMark;profileMark=performance.now();
     advanceRecruitment(this);

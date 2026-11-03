@@ -20,11 +20,12 @@ function furnitureFacingAngle(city,furniture){
  return Number.isFinite(furniture.angle)?furniture.angle:0;
 }
 export class CityFurniture{
- constructor(city){this.city=city;this.benches=[];this.nextId=1;this.benchLayoutVersion=5;}
+ constructor(city){this.city=city;this.benches=[];this.nextId=1;this.benchLayoutVersion=6;}
  reconcile(){const city=this.city,candidates=new Map();
   // Saved cities from the earlier layout may have benches sitting on roads.
   // Rebuild that layout once so the new placement rules also fix existing saves.
   if((this.benchLayoutVersion||0)<5){for(const c of city.citizens)if(c.seatId)this.release(c);this.benches=[];this.nextId=1;this.benchLayoutVersion=5;}
+  if((this.benchLayoutVersion||0)<6){const beachIds=new Set(this.benches.filter(b=>b.kind==='beach_chair'||b.kind==='beach_ground').map(b=>b.id));for(const c of city.citizens)if(c.seatId&&beachIds.has(Number(c.seatId.split(':')[0]))){this.release(c);if(c.task==='sit'){c.task=null;c.path=[];}}this.benches=this.benches.filter(b=>!beachIds.has(b.id));this.benchLayoutVersion=6;}
   const removed=new Set(this.benches.filter(b=>!city.walkable(Math.floor(b.x),Math.floor(b.y))).map(b=>b.id));if(removed.size){for(const c of city.citizens)if(c.seatId&&removed.has(Number(c.seatId.split(':')[0]))){this.release(c);c.path=[];if(c.task==='sit')c.task=null;}this.benches=this.benches.filter(b=>!removed.has(b.id));}
   for(const bench of this.benches)bench.angle=furnitureFacingAngle(city,bench);
   for(const b of city.buildings)if(b.type==='farm'&&!b.farmSoilReady)cultivateFarmTerrain(city,b);
@@ -35,10 +36,10 @@ export class CityFurniture{
    const rx=Math.floor(p.x),ry=Math.floor(p.y);if(!ROAD_TILES.has(tileAt(city.world,rx,ry)))continue;
    for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]]){const x=rx+dx,y=ry+dy,tile=tileAt(city.world,x,y);
     const occupiedByBuilding=city.buildings.some(b=>x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth);
-    if(!city.walkable(x,y)||ROAD_TILES.has(tile)||city.occupied.has(`${x},${y}`)||occupiedByBuilding||this.benches.some(b=>Math.hypot(b.x-x-.5,b.y-y-.5)<5)||city.buildings.some(b=>Math.hypot(b.door.x-x-.5,b.door.y-y-.5)<1.5))continue;
+    if(tile===TILE_SAND||!city.walkable(x,y)||ROAD_TILES.has(tile)||city.occupied.has(`${x},${y}`)||occupiedByBuilding||this.benches.some(b=>Math.hypot(b.x-x-.5,b.y-y-.5)<5)||city.buildings.some(b=>Math.hypot(b.door.x-x-.5,b.door.y-y-.5)<1.5))continue;
     // Keep the complete bench footprint inside this single non-road tile.
-    // Benches face the street; beach seating faces the nearest water tile.
-    const beach=tile===TILE_SAND,id=this.nextId++,beachGround=beach&&id%4===0,bench={id,x:x+.5,y:y+.5,angle:Math.atan2(-dx,-dy),kind:beach?(beachGround?'beach_ground':'beach_chair'):'bench',seats:beach?[null]:[null,null],builtAt:city.minute};bench.angle=furnitureFacingAngle(city,bench);this.benches.push(bench);break;
+    // Fixed benches face the street; beach gear belongs to each visitor.
+    const bench={id:this.nextId++,x:x+.5,y:y+.5,angle:Math.atan2(-dx,-dy),kind:'bench',seats:[null,null],builtAt:city.minute};this.benches.push(bench);break;
    }if(this.benches.length>=limit)break;
   }
  }
@@ -61,12 +62,32 @@ export class CityFurniture{
   if(b.constructionKind!=='open-air'){const path=city.findPath(c.entity,b.door);if(path!==null){c.path=path;c.action='Indo aguardar dentro da empresa';return true;}}
   c.task=null;c.workWait=null;return false;
  }
- routeLeisure(c){if(c.needs.leisure>=85)return false;const seat=this.claimBench(c,c.entity,10);if(!seat)return false;c.task='sit';c.targetId=null;c.path=seat.path||[];c.sitUntil=this.city.minute+30;c.action='Indo descansar no banco';return true;}
+ routeLeisure(c){if(c.needs.leisure>=85)return false;if(this.routeBeach(c))return true;const seat=this.claimBench(c,c.entity,10);if(!seat)return false;c.task='sit';c.targetId=null;c.path=seat.path||[];c.sitUntil=this.city.minute+30;c.action='Indo descansar no banco';return true;}
+ routeBeach(c){
+  const city=this.city,origin=c.entity,cx=Math.floor(origin.x),cy=Math.floor(origin.y),candidates=[];
+  for(let y=Math.max(0,cy-14);y<=Math.min(city.world.height-1,cy+14);y++)for(let x=Math.max(0,cx-14);x<=Math.min(city.world.width-1,cx+14);x++){
+   if(tileAt(city.world,x,y)!==TILE_SAND||!city.walkable(x,y)||city.nature?.tiles?.has(`${x},${y}`))continue;
+   let shore=false;for(let dy=-2;dy<=2&&!shore;dy++)for(let dx=-2;dx<=2;dx++)if(Math.abs(dx)+Math.abs(dy)<=2&&tileAt(city.world,x+dx,y+dy)===TILE_WATER){shore=true;break;}
+   if(!shore)continue;const point={x:x+.5,y:y+.5},distance=Math.hypot(point.x-origin.x,point.y-origin.y);if(distance>14)continue;
+   if(city.citizens.some(other=>other!==c&&other.task==='beach_leisure'&&other.beachLeisure&&Math.hypot(other.beachLeisure.x-point.x,other.beachLeisure.y-point.y)<1.15))continue;
+   candidates.push({point,distance});
+  }
+  candidates.sort((a,b)=>a.distance-b.distance);
+  for(const {point}of candidates.slice(0,12)){
+   const path=city.findPath(origin,point);if(path===null)continue;const end=path.at(-1)||origin;if(Math.hypot(end.x-point.x,end.y-point.y)>.04)path.push({...point});
+   const seed=Math.imul((Number(c.id)||0)+city.minute+31,2654435761)>>>0,choice=seed%3,kind=choice===1?'beach_ground':'beach_chair';
+   c.beachLeisure={x:point.x,y:point.y,angle:furnitureFacingAngle(city,{...point,kind:'beach_chair'}),kind,variant:(seed>>>4)%8,umbrellaStyle:choice===0?null:(seed>>>9)%8,until:city.minute+45};
+   c.task='beach_leisure';c.targetId=null;c.path=path;c.action='Indo descansar na praia';return true;
+  }
+  return false;
+ }
  advanceWait(c){const city=this.city,b=city.building(c.workWait?.employerId);if(!b||!b.active||city.minute>=c.workWait.retryAt||city.urgentNeed(c)||city.hour<8||city.hour>=17){this.release(c);c.task=null;c.workWait=null;c.path=[];return;}
   if(c.seatId||c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.path?.length){c.action=c.workWait.reason+(c.seatId?' · sentado no banco':' · dentro da empresa');if(c.jobId===b.id)city.payWage(c,b);}
  }
  syncCitizen(c){
+  if(c.task!=='beach_leisure'&&c.beachLeisure)c.beachLeisure=null;
   if(c.workWait&&c.task!=='work-wait')c.workWait=null;
+  if(c.task==='beach_leisure'&&c.beachLeisure){const beach=c.beachLeisure,arrived=!c.path.length&&Math.hypot(c.entity.x-beach.x,c.entity.y-beach.y)<.2,chair=beach.kind==='beach_chair';c.seated=arrived&&chair;c.furnitureUse=arrived?{id:`beach:${c.id}`,type:beach.kind,label:chair?'Cadeira de praia pessoal':'Descanso na areia',seated:c.seated,pose:chair?'seated':'ground_sit'}:null;c.action=arrived?'Descansando na praia':'Indo montar as coisas na praia';c.facingTarget={x:c.entity.x+Math.sin(beach.angle),y:c.entity.y+Math.cos(beach.angle)};return;}
   if(!c.seatId&&!c.indoorLocation){if(c.seated||c.furnitureUse){c.seated=false;c.furnitureUse=null;}return;}
   if(c.seatId){if(!['sit','work-wait','food','workmeal','supplies','toilet'].includes(c.task)||c.entity.destroyed){this.release(c);return;}const [id,slot]=c.seatId.split(':').map(Number),b=this.benches.find(b=>b.id===id),point=b&&this.seatPoint(b,slot);c.seated=!!point&&!c.path.length&&Math.hypot(c.entity.x-point.x,c.entity.y-point.y)<.14;if(c.seated){const beach=['beach_chair','beach_ground'].includes(b.kind),groundPose=b.kind==='beach_ground'?(b.id%2?'ground_sit':'lying'):null;c.furnitureUse={id:`bench:${c.seatId}`,type:'bench',label:b.kind==='beach_chair'?'Cadeira de praia':b.kind==='beach_ground'?'Descanso na praia':'Banco',seated:true,...(groundPose?{pose:groundPose}:{})};c.facingTarget={x:c.entity.x+Math.sin(b.angle),y:c.entity.y+Math.cos(b.angle)};c.action=c.task==='work-wait'?'Aguardando sentado':b.kind==='beach_chair'?'Descansando na cadeira de praia':b.kind==='beach_ground'?(groundPose==='lying'?'Deitado na areia':'Sentado na areia'):'Descansando sentado no banco';}return;}
   const s=c.indoorLocation,u=this.city.units.get(s?.unitId),b=this.city.building(s?.buildingId);c.seated=false;c.furnitureUse=null;

@@ -1,9 +1,9 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=bike-rider-layout-2';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=personal-beach-setups-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=substance-activity-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=personal-beach-setups-1";
 import { CityDesktop } from "./js/city_desktop.js?v=election-support-map-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=bike-rider-sync-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=personal-beach-equipment-2";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";

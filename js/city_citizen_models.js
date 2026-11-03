@@ -34,7 +34,7 @@ export function citizenAnimation(c,moving=false){
   if(c.combatAnimation?.clip)return c.combatAnimation.clip;
   if(citizenIsSleeping(c))return 'dormindo';
   if(c.furnitureUse?.pose==='ground_sit')return 'sentado_no_chao';
-  if(c.task==='sit'||c.furnitureUse?.type==='bench')return 'sentado_no_banco';
+  if(c.task==='sit'||c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')return 'sentado_no_banco';
   if(c.seated)return 'seated';
   if(c.policePatrol)return 'a_postos';
   const activelyUsingFurniture=!!c.furnitureUse&&!c.furnitureUse.seated;
@@ -395,7 +395,7 @@ export class CityCitizenModels {
       motion.renderAngle+=angleDelta*alpha;
       renderX=motion.renderX;renderY=motion.renderY;renderAngle=motion.renderAngle;
     }else{motion.renderX=x;motion.renderY=y;motion.renderAngle=motion.angle;}
-    if(c.furnitureUse?.type==='bench'&&c.furnitureUse.seated){renderX+=Math.sin(renderAngle)*.16;renderY+=Math.cos(renderAngle)*.16;}
+    if((c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')&&c.furnitureUse.seated){renderX+=Math.sin(renderAngle)*.16;renderY+=Math.cos(renderAngle)*.16;}
     // Keep quarter-tile footsteps, but present adjacent poses instead of skipping
     // a full animation cycle when a worker snapshot jumps several tiles.
     if(moved&&!this.animationPaused&&motion.walkDistance+1e-8>=.25&&this.clock-motion.lastStepAt>=.1-1e-8){motion.walkFrame++;motion.walkDistance=Math.max(0,motion.walkDistance%.25);motion.lastStepAt=this.clock;}

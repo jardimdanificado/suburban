@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=production-plan-profile-19';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=personal-beach-setups-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
