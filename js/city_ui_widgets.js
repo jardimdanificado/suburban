@@ -125,13 +125,17 @@ export class UIPage {
   columns(left,right){if(this.w<520){left(this);right(this);return;}const gap=10,width=Math.floor((this.w-gap)/2),a=new UIPage(this.ui,this.x,this.y,width,this.top,this.bottom),b=new UIPage(this.ui,this.x+width+gap,this.y,this.w-width-gap,this.top,this.bottom);left(a);right(b);this.y=Math.max(a.y,b.y);}
   table(columns,rows,{empty='Nenhum registro encontrado.'}={}){
     if(!rows.length){this.note(empty);return;}
+    const drawCell=(column,value,row,index,x,y,width,height,color)=>{
+      if(typeof column.renderCell==='function'){column.renderCell({ctx:this.ui.ctx,ui:this.ui,row,index,value,x,y,width,height,color});return;}
+      const text=fit(this.ui,value,width-12),px=numeric(value)?x+width-widthOf(this.ui,text)-6:x+6;this.ui.text(text,px,y+(height-(this.touch()?13:13))/2,readableInk(color));
+    };
     const total=columns.reduce((n,c)=>n+(c.weight||1),0),widths=columns.map(c=>Math.floor(this.w*(c.weight||1)/total));
     if(this.w<300||Math.min(...widths)<48){
       const height=(this.touch()?31:27)+(columns.length-1)*(this.touch()?17:15);
       this.rows(rows,row=>{
         if(!this.visible(height))return;
         const ctx=this.ui.ctx;ctx.fillStyle=row.selected?T.selected:T.row;ctx.fillRect(this.x,this.y,this.w,height-3);
-        this.ui.text(fit(this.ui,row.cells[0],this.w-12),this.x+6,this.y+4,readableInk(row.color||T.ink));
+        drawCell(columns[0],row.cells[0],row,0,this.x,this.y+4,this.w,14,row.color||T.ink);
         for(let j=1;j<columns.length;j++){
           const label=fit(this.ui,columns[j].label,this.w*.42-8),value=fit(this.ui,row.cells[j],this.w*.58-12);
           this.ui.text(label,this.x+6,this.y+(this.touch()?25:21)+(j-1)*(this.touch()?17:15),T.muted);this.ui.text(value,this.x+this.w-widthOf(this.ui,value)-6,this.y+(this.touch()?25:21)+(j-1)*(this.touch()?17:15),T.ink);
@@ -141,7 +145,7 @@ export class UIPage {
     }
     const rowHeight=this.touch()?27:21,headerHeight=this.touch()?25:22;
     if(this.visible(headerHeight)){this.ui.ctx.fillStyle=T.face;this.ui.ctx.fillRect(this.x,this.y,this.w,headerHeight);let x=this.x;columns.forEach((c,i)=>{this.ui.text(fit(this.ui,c.label,widths[i]-12),x+6,this.y+(this.touch()?6:4),T.ink);x+=widths[i];});}this.y+=headerHeight;
-      this.rows(rows,(row,i)=>{if(this.visible(rowHeight)){const ctx=this.ui.ctx;ctx.fillStyle=row.selected?T.selected:i%2?T.row:T.paper;ctx.fillRect(this.x,this.y,this.w,rowHeight);let x=this.x;row.cells.forEach((value,j)=>{const text=fit(this.ui,value,widths[j]-12),px=numeric(value)?x+widths[j]-widthOf(this.ui,text)-6:x+6;this.ui.text(text,px,this.y+(this.touch()?7:4),readableInk(row.color||T.ink));x+=widths[j];});this.ui.regions.push({x:this.x,y:this.y,w:this.w,h:rowHeight,label:row.cells.map((v,j)=>`${columns[j]?.label}: ${v}`).join(' · '),onClick:row.click});}},rowHeight);this.space(4);
+      this.rows(rows,(row,i)=>{if(this.visible(rowHeight)){const ctx=this.ui.ctx;ctx.fillStyle=row.selected?T.selected:i%2?T.row:T.paper;ctx.fillRect(this.x,this.y,this.w,rowHeight);let x=this.x;row.cells.forEach((value,j)=>{drawCell(columns[j],value,row,j,x,this.y,widths[j],rowHeight,row.color||T.ink);x+=widths[j];});this.ui.regions.push({x:this.x,y:this.y,w:this.w,h:rowHeight,label:row.cells.map((v,j)=>`${columns[j]?.label}: ${v}`).join(' · '),onClick:row.click});}},rowHeight);this.space(4);
   }
   disclosure(label,open,click){this.button(`${open?'−':'+'} ${label}`,click,open);}
 }
