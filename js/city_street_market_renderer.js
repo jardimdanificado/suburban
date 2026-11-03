@@ -1,3 +1,4 @@
+import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
 import {surfaceElevation} from './city_terrain.js?v=quarry-outskirts-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
@@ -49,7 +50,7 @@ function stallGroup(THREE,site,vendor,business){
  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=64;const ctx=canvas.getContext('2d');
  ctx.fillStyle=`#${canopy.toString(16).padStart(6,'0')}`;ctx.fillRect(0,0,256,64);ctx.fillStyle='#f4e9cf';ctx.fillRect(4,4,248,56);
  ctx.fillStyle=`#${canopy.toString(16).padStart(6,'0')}`;ctx.font='bold 24px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
- const label=String(vendor.name||'FEIRA').toLocaleUpperCase('pt-BR');ctx.fillText(label.length>20?`${label.slice(0,18)}…`:label,128,32,232);
+ const label=String(vendor.name||'FEIRA').toLocaleUpperCase('pt-BR');drawPixelText(ctx,label.length>20?`${label.slice(0,18)}…`:label,128,32,232);
  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
  const sign=new THREE.Mesh(new THREE.PlaneGeometry(.86,.22),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));sign.position.set(0,1.58,.405);sign.userData.marketSignTexture=texture;sign.userData.skipStaticMerge=true;group.add(sign);
  for(const x of [-.48,.48]){box(.07,.12,.07,x,1.59,.4,wood);box(.06,.06,.06,x,1.68,.4,accent);}

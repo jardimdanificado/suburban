@@ -1,6 +1,7 @@
 import {ASSET_DATA} from './assets_data.js';
 import {SPRITE_CLASSIFICATIONS} from './sprite_classification.js';
 import {ideologicalProfile,politicalPosition} from './city_ideology.js';
+import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
 
 export const COUNCIL_INSTITUTIONAL_FLAG=Object.freeze({foreground:'#f5e9bf',background:'#4c655c',skin:'Feature_Flower.png',pattern:1});
 const PARTY_EMBLEMS=Object.freeze(ASSET_DATA.filter(asset=>/\.png$/i.test(asset.filename)).map(asset=>asset.filename));
@@ -67,7 +68,7 @@ function tintedSprite(filename,foreground,background,onReady){
 function drawText(ctx,text,flag,x,y,w,h){
  const px=h*.16,centerX=x+w/2,centerY=y+h/2;ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';ctx.imageSmoothingEnabled=false;
  let size=Math.max(5,px);ctx.font=`bold ${size}px monospace`;while(ctx.measureText(text.value).width>w*.96&&size>4){size--;ctx.font=`bold ${size}px monospace`;}
- ctx.lineWidth=Math.max(1,h*.025);ctx.strokeStyle=flag.background;ctx.fillStyle=flag.foreground;ctx.strokeText(text.value,centerX,centerY,w*.98);ctx.fillText(text.value,centerX,centerY,w*.98);ctx.restore();
+ ctx.fillStyle=flag.foreground;drawPixelText(ctx,text.value,centerX,centerY,w*.98);ctx.restore();
 }
 export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
  if(!flag)return;ctx.fillStyle=flag.background;ctx.fillRect(x,y,w,h);ctx.fillStyle=flag.foreground;

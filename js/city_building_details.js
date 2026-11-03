@@ -1,5 +1,6 @@
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-5';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
+import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
 
 // Small architectural details are part of the model, not floating labels.
 const THEMES={
@@ -44,8 +45,8 @@ case'mine':{const pit=['clay_pit','sand_pit'].includes(b.type),timber=b.type==='
   // A physical sign gives the mine a clear identity from the isometric camera.
   const canvas=document.createElement('canvas');canvas.width=320;canvas.height=112;const ctx=canvas.getContext('2d');
   ctx.fillStyle='#242b2a';ctx.fillRect(0,0,320,112);ctx.fillStyle='#d5b34e';ctx.fillRect(5,5,310,102);ctx.fillStyle='#302d25';ctx.fillRect(13,13,294,86);
-  ctx.fillStyle='#d5b34e';ctx.font='bold 62px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('MINA',160,58);
-  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+  ctx.fillStyle='#d5b34e';ctx.font='bold 62px monospace';ctx.textAlign='center';ctx.textBaseline='middle';drawPixelText(ctx,'MINA',160,58);
+  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
   const sign=new THREE.Mesh(new THREE.BoxGeometry(1.5,.54,.09),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));sign.position.set(0,1.92,.08);sign.userData.skipStaticMerge=true;sign.userData.mineSignTexture=texture;root.add(sign);
   box(.76,.72,.1,0,.38,.13,0x171a19);box(.94,.12,.14,0,.78,.13,timber);for(const x of [-.48,.48])box(.12,.82,.14,x,.41,.13,timber);
   for(const x of [-.34,-.17,0,.17,.34])box(.045,.035,.85,x,.05,.72,metal);
