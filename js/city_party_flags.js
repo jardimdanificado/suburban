@@ -19,13 +19,17 @@ const ICON_LAYOUTS=Object.freeze({
     {name:'horizontal',slots:[{x:.03,y:.16,w:.43,h:.68},{x:.54,y:.16,w:.43,h:.68}]},{name:'vertical',slots:[{x:.22,y:.02,w:.56,h:.43},{x:.22,y:.55,w:.56,h:.43}]},
     {name:'diagonal-descendente',slots:[{x:.02,y:.02,w:.42,h:.58},{x:.56,y:.4,w:.42,h:.58}]},{name:'diagonal-ascendente',slots:[{x:.56,y:.02,w:.42,h:.58},{x:.02,y:.4,w:.42,h:.58}]},
     {name:'duas-faixas-laterais',slots:[{x:.02,y:.22,w:.3,h:.56},{x:.68,y:.22,w:.3,h:.56}]},{name:'duas-colunas',slots:[{x:.19,y:.04,w:.28,h:.92},{x:.53,y:.04,w:.28,h:.92}]},
-    {name:'cantos-opostos',slots:[{x:.03,y:.03,w:.35,h:.48},{x:.62,y:.49,w:.35,h:.48}]},{name:'topo-e-base',slots:[{x:.32,y:.02,w:.36,h:.36},{x:.32,y:.62,w:.36,h:.36}]}
+    {name:'cantos-opostos',slots:[{x:.03,y:.03,w:.35,h:.48},{x:.62,y:.49,w:.35,h:.48}]},{name:'topo-e-base',slots:[{x:.32,y:.02,w:.36,h:.36},{x:.32,y:.62,w:.36,h:.36}]},
+    {name:'faixa-horizontal-centralizada',slots:[{x:.03,y:.08,w:.44,h:.84},{x:.53,y:.08,w:.44,h:.84}]},
+    {name:'composicao-metades-verticais',slots:[{x:.08,y:.14,w:.84,h:.72,clip:{x:.08,y:.08,w:.42,h:.84},detailGroup:'composicao'},{x:.08,y:.14,w:.84,h:.72,clip:{x:.5,y:.08,w:.42,h:.84},detailGroup:'composicao'}]},
+    {name:'composicao-metades-horizontais',slots:[{x:.08,y:.14,w:.84,h:.72,clip:{x:.08,y:.08,w:.84,h:.42},detailGroup:'composicao'},{x:.08,y:.14,w:.84,h:.72,clip:{x:.08,y:.5,w:.84,h:.42},detailGroup:'composicao'}]}
   ],
   3:[
     {name:'triangulo',slots:[{x:.34,y:.02,w:.32,h:.45},{x:.02,y:.52,w:.42,h:.46},{x:.56,y:.52,w:.42,h:.46}]},{name:'linha-tripla',slots:[{x:.02,y:.2,w:.3,h:.6},{x:.35,y:.2,w:.3,h:.6},{x:.68,y:.2,w:.3,h:.6}]},
     {name:'coluna-tripla',slots:[{x:.3,y:.01,w:.4,h:.29},{x:.3,y:.355,w:.4,h:.29},{x:.3,y:.7,w:.4,h:.29}]},{name:'tres-cantos',slots:[{x:.02,y:.02,w:.36,h:.47},{x:.62,y:.02,w:.36,h:.47},{x:.32,y:.52,w:.36,h:.46}]},
     {name:'lado-centro-lado',slots:[{x:.02,y:.3,w:.3,h:.4},{x:.35,y:.15,w:.3,h:.7},{x:.68,y:.3,w:.3,h:.4}]},{name:'degrau',slots:[{x:.02,y:.54,w:.3,h:.44},{x:.35,y:.28,w:.3,h:.44},{x:.68,y:.02,w:.3,h:.44}]},
-    {name:'duas-em-cima-uma-embaixo',slots:[{x:.08,y:.02,w:.38,h:.46},{x:.54,y:.02,w:.38,h:.46},{x:.31,y:.52,w:.38,h:.46}]},{name:'uma-em-cima-duas-embaixo',slots:[{x:.31,y:.02,w:.38,h:.46},{x:.08,y:.52,w:.38,h:.46},{x:.54,y:.52,w:.38,h:.46}]}
+    {name:'duas-em-cima-uma-embaixo',slots:[{x:.08,y:.02,w:.38,h:.46},{x:.54,y:.02,w:.38,h:.46},{x:.31,y:.52,w:.38,h:.46}]},{name:'uma-em-cima-duas-embaixo',slots:[{x:.31,y:.02,w:.38,h:.46},{x:.08,y:.52,w:.38,h:.46},{x:.54,y:.52,w:.38,h:.46}]},
+    {name:'faixa-tripla-centralizada',slots:[{x:.02,y:.16,w:.3,h:.68},{x:.35,y:.16,w:.3,h:.68},{x:.68,y:.16,w:.3,h:.68}]}
   ],
   4:[
     {name:'quadrantes',slots:[{x:0,y:0,w:.5,h:.5},{x:.5,y:0,w:.5,h:.5},{x:0,y:.5,w:.5,h:.5},{x:.5,y:.5,w:.5,h:.5}]},
@@ -33,6 +37,7 @@ const ICON_LAYOUTS=Object.freeze({
     {name:'losango',slots:[{x:.34,y:.01,w:.32,h:.28},{x:.02,y:.36,w:.3,h:.28},{x:.68,y:.36,w:.3,h:.28},{x:.34,y:.71,w:.32,h:.28}]},
     {name:'linha-de-quatro',slots:[{x:.01,y:.28,w:.23,h:.44},{x:.26,y:.28,w:.23,h:.44},{x:.51,y:.28,w:.23,h:.44},{x:.76,y:.28,w:.23,h:.44}]},
     {name:'coluna-de-quatro',slots:[{x:.27,y:.01,w:.46,h:.23},{x:.27,y:.26,w:.46,h:.23},{x:.27,y:.51,w:.46,h:.23},{x:.27,y:.76,w:.46,h:.23}]},
+    {name:'faixa-de-quatro-centralizada',slots:[{x:.01,y:.24,w:.23,h:.52},{x:.26,y:.24,w:.23,h:.52},{x:.51,y:.24,w:.23,h:.52},{x:.76,y:.24,w:.23,h:.52}]},
     {name:'grade-aberta',slots:[{x:.04,y:.03,w:.38,h:.38},{x:.58,y:.03,w:.38,h:.38},{x:.04,y:.59,w:.38,h:.38},{x:.58,y:.59,w:.38,h:.38}]},
     {name:'anel-quadrado',slots:[{x:.02,y:.02,w:.3,h:.38},{x:.68,y:.02,w:.3,h:.38},{x:.02,y:.6,w:.3,h:.38},{x:.68,y:.6,w:.3,h:.38}]},
     {name:'mosaico-de-quartos',slots:[{x:0,y:0,w:.5,h:.5,crop:{x:0,y:0,w:.5,h:.5}},{x:.5,y:0,w:.5,h:.5,crop:{x:.5,y:0,w:.5,h:.5}},{x:0,y:.5,w:.5,h:.5,crop:{x:0,y:.5,w:.5,h:.5}},{x:.5,y:.5,w:.5,h:.5,crop:{x:.5,y:.5,w:.5,h:.5}}]}
@@ -118,10 +123,10 @@ function chooseText(city,party,kind){
 }
 function buildTexts(city,party,boxes,palette){return Object.freeze(boxes.map(box=>Object.freeze({...box,value:chooseText(city,party,box.kind),color:palette[2]||palette[1]})).filter(text=>text.value));}
 function layoutEmblems(city,party,layout,palette){
- const used=new Set();return Object.freeze(layout.slots.map((slot,index)=>{
+ const used=new Set(),detailModes=new Map();return Object.freeze(layout.slots.map((slot,index)=>{
   const skin=weightedSprite(city,party,used);used.add(skin);const area=layout.iconArea;
-  const color=palette[3]||palette[1],shade=color;
-  return Object.freeze({skin,x:area.x+slot.x*area.w,y:area.y+slot.y*area.h,w:slot.w*area.w,h:slot.h*area.h,...(slot.crop?{crop:Object.freeze({...slot.crop})}:{}),color,shade,backgroundMode:city.random()<.07?'tile':'transparent'});
+  const color=palette[3]||palette[1],shade=color,detailGroup=slot.detailGroup??index;if(!detailModes.has(detailGroup))detailModes.set(detailGroup,city.random()<.8?'detailed':'flat');
+  return Object.freeze({skin,x:area.x+slot.x*area.w,y:area.y+slot.y*area.h,w:slot.w*area.w,h:slot.h*area.h,...(slot.crop?{crop:Object.freeze({...slot.crop})}:{}),...(slot.clip?{clip:Object.freeze({x:area.x+slot.clip.x*area.w,y:area.y+slot.clip.y*area.h,w:slot.clip.w*area.w,h:slot.clip.h*area.h})}:{}),color,shade,detailMode:detailModes.get(detailGroup),backgroundMode:city.random()<.07?'tile':'transparent'});
  }));
 }
 function flagPalette(city,hue,background,foreground){
@@ -145,14 +150,15 @@ export function makePartyFlag(city,index,founders=[],party=null){
  const textChoices=count===0?TEXT_LAYOUTS.filter(item=>TEXT_ONLY_LAYOUT_IDS.has(item.id)):TEXT_LAYOUTS.filter(item=>!TEXT_ONLY_LAYOUT_IDS.has(item.id)),compatibleLayouts=textChoices.filter(item=>textLayoutCompatible(item,backgroundStyle,aspect)),textLayout=compatibleLayouts[Math.floor(city.random()*compatibleLayouts.length)]||textChoices[0];
  if(count===0&&textLayout.id.endsWith('-com-fundo')&&backgroundStyle==='solid')backgroundStyle=['stripes-horizontal','stripes-vertical','stripes-diagonal','quartered','circle','double-circle','diamond','star','cross','chevron','border'][Math.floor(city.random()*11)];
  const layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors);
- return Object.freeze({foreground,background,colors,paletteVersion:2,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:'random',emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
+ return Object.freeze({foreground,background,colors,paletteVersion:2,detailVersion:1,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:'random',emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
 export function upgradePartyFlagPalette(city,flag){
- if(!flag||flag.paletteVersion>=2)return flag;
- const colors=flagPalette(city,0,flag.background||'#222222',flag.foreground||'#f5e9bf');
- const emblems=Object.freeze((flag.emblems||[]).map(emblem=>Object.freeze({...emblem,color:colors[3],shade:colors[3]})));
- const texts=Object.freeze((flag.texts||[]).map(text=>Object.freeze({...text,color:colors[2]})));
- return Object.freeze({...flag,colors,paletteVersion:2,emblems,texts});
+ if(!flag)return flag;const updatePalette=flag.paletteVersion<2,updateDetails=(flag.detailVersion||0)<1;if(!updatePalette&&!updateDetails)return flag;
+ const colors=updatePalette?flagPalette(city,0,flag.background||'#222222',flag.foreground||'#f5e9bf'):flag.colors;
+ const sourceEmblems=flag.emblems|| (flag.skin?[{skin:flag.skin,x:.3,y:.12,w:.4,h:.76}]:[]);
+ const emblems=Object.freeze(sourceEmblems.map(emblem=>Object.freeze({...emblem,...(updatePalette?{color:colors[3],shade:colors[3]}:{}),detailMode:emblem.detailMode||(city.random()<.8?'detailed':'flat')})));
+ const texts=Object.freeze((flag.texts||[]).map(text=>Object.freeze({...text,...(updatePalette?{color:colors[2]}:{})})));
+ return Object.freeze({...flag,colors,paletteVersion:2,detailVersion:1,emblems,texts});
 }
 function requestImage(filename,onReady){
  let image=imageCache.get(filename);if(image?.complete&&image.naturalWidth)return image;
@@ -189,6 +195,13 @@ function drawText(ctx,text,flag,x,y,w,h){
  let size=Math.max(5,boxHeight*.74);ctx.font=`bold ${size}px monospace`;while(ctx.measureText(text.value).width>axisLength*.96&&size>4){size--;ctx.font=`bold ${size}px monospace`;}
  ctx.fillStyle=text.color||flag.colors?.[2]||flag.foreground;drawPixelText(ctx,text.value,0,0,axisLength*.96);ctx.restore();
 }
+function internalDetailColor(primary,flag){
+ const background=flag.background,candidates=[flag.colors?.[2],flag.foreground,flag.colors?.[1],'#f5e9bf','#17244b'].filter((color,index,all)=>color&&color!==primary&&all.indexOf(color)===index);
+ let best=null,score=-1;
+ for(const color of candidates){const detailContrast=flagContrast(primary,color),fieldContrast=flagContrast(background,color);if(detailContrast<1.7||fieldContrast<1.7)continue;const value=detailContrast+Math.min(fieldContrast,5)*.3;if(value>score){best=color;score=value;}}
+ if(best)return best;
+ return flagContrast(primary,'#ffffff')+flagContrast(background,'#ffffff')>=flagContrast(primary,'#111111')+flagContrast(background,'#111111')?'#ffffff':'#111111';
+}
 function starPath(ctx,cx,cy,outer,inner,points=5){ctx.beginPath();for(let i=0;i<points*2;i++){const angle=-Math.PI/2+i*Math.PI/points,r=i%2?inner:outer,x=cx+Math.cos(angle)*r,y=cy+Math.sin(angle)*r;if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);}ctx.closePath();}
 function drawFlagBackground(ctx,flag,x,y,w,h){
  const colors=flag.colors?.length?flag.colors:[flag.background,flag.foreground],accent=colors[1]||flag.foreground,style=flag.backgroundStyle;
@@ -218,12 +231,12 @@ export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
  for(const emblem of emblems){
   const contained=patternContainsRect(flag.backgroundStyle,{x:emblem.x,y:emblem.y,w:emblem.w,h:emblem.h},w/h);
   let knockout=contained&&flag.colors?.[1]&&flagContrast(flag.background,flag.colors[1])>=3;
-  const textInk=flag.colors?.[2],preferredInk=flag.colors?.[3]||flag.foreground,transparent=emblem.backgroundMode!=='tile';
-  let ink,image;
-  if(knockout){ink=flag.background;image=tintedSprite(emblem.skin,ink,ink,flag.background,true,onReady);if(!image)knockout=false;}
-  if(!knockout){ink=emblem.color===textInk?(preferredInk!==textInk?preferredInk:flag.colors?.[1]||flag.foreground):(emblem.color||preferredInk);image=tintedSprite(emblem.skin,ink,ink,flag.background,transparent,onReady)||tintedSprite(emblem.skin,ink,ink,flag.background,false,onReady);}
+  const textInk=flag.colors?.[2],preferredInk=flag.colors?.[3]||flag.foreground,transparent=emblem.backgroundMode!=='tile',detailed=emblem.detailMode!=='flat';
+  let ink,shade,image;
+  if(knockout){ink=flag.background;shade=detailed?flag.colors[1]:ink;image=tintedSprite(emblem.skin,ink,shade,flag.background,true,onReady);if(!image)knockout=false;}
+  if(!knockout){ink=emblem.color===textInk?(preferredInk!==textInk?preferredInk:flag.colors?.[1]||flag.foreground):(emblem.color||preferredInk);shade=detailed?internalDetailColor(ink,flag):ink;image=tintedSprite(emblem.skin,ink,shade,flag.background,transparent,onReady)||tintedSprite(emblem.skin,ink,shade,flag.background,false,onReady);}
   if(!image)continue;
-  ctx.save();ctx.imageSmoothingEnabled=false;const dx=x+emblem.x*w,dy=y+emblem.y*h,dw=emblem.w*w,dh=emblem.h*h,crop=emblem.crop,sx=crop?crop.x*image.width:0,sy=crop?crop.y*image.height:0,sw=crop?crop.w*image.width:image.width,sh=crop?crop.h*image.height:image.height,scale=Math.min(dw/sw,dh/sh),drawW=sw*scale,drawH=sh*scale,drawX=dx+(dw-drawW)/2,drawY=dy+(dh-drawH)/2;ctx.drawImage(image,sx,sy,sw,sh,drawX,drawY,drawW,drawH);ctx.restore();
+  ctx.save();ctx.imageSmoothingEnabled=false;const dx=x+emblem.x*w,dy=y+emblem.y*h,dw=emblem.w*w,dh=emblem.h*h,crop=emblem.crop,sx=crop?crop.x*image.width:0,sy=crop?crop.y*image.height:0,sw=crop?crop.w*image.width:image.width,sh=crop?crop.h*image.height:image.height,scale=Math.min(dw/sw,dh/sh),drawW=sw*scale,drawH=sh*scale,drawX=dx+(dw-drawW)/2,drawY=dy+(dh-drawH)/2;if(emblem.clip){ctx.beginPath();ctx.rect(x+emblem.clip.x*w,y+emblem.clip.y*h,emblem.clip.w*w,emblem.clip.h*h);ctx.clip();}ctx.drawImage(image,sx,sy,sw,sh,drawX,drawY,drawW,drawH);ctx.restore();
  }
  for(const original of flag.texts||[]){
   let box=currentTextBox(flag,original),text=original;
