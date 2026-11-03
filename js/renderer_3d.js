@@ -15,6 +15,7 @@ import { syncCityBuildings } from "./city_renderer_3d.js?v=wardrobe-expansion-1"
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=wardrobe-expansion-1';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
+import {partyFlagCanvas} from './city_party_flags.js?v=party-flag-composition-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-6';
 import { ASSET_DATA } from "./assets_data.js";
 import {
@@ -57,6 +58,7 @@ const textureCache = new Map();
 const billboardMatCache = new Map();
 const depthMatCache = new Map();
 const uiMatCache = new Map();
+const partyFlagTextureCache=new Map();
 const rawImages = new Map();
 
 for (const item of ASSET_DATA) {
@@ -8102,7 +8104,7 @@ export class RCT3DRenderer {
           if(campaign?.flag && e.properties.citizen.task==='campaign'&&!e.properties.citizen.ridingVehicleId) {
             const flag=campaign.flag,uiKey=`${e.id}_campaign_flag`;
             activeUiIds.add(uiKey);
-            const tex=createTintedTexture(flag.skin,parseInt(flag.foreground.slice(1),16),parseInt(flag.background.slice(1),16),1);
+            const flagKey=JSON.stringify(flag);let tex=partyFlagTextureCache.get(flagKey);if(!tex){let texture;const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;tex=texture;partyFlagTextureCache.set(flagKey,tex);}
             let mat=uiMatCache.get(tex.uuid);
             if(!mat){mat=new THREE.MeshLambertMaterial({map:tex,transparent:true,alphaTest:.05,depthTest:true,side:THREE.DoubleSide});uiMatCache.set(tex.uuid,mat);}
             mat.color.setScalar(flagNightFactor(world));
