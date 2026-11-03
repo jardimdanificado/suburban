@@ -13,7 +13,7 @@ import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_buildin
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
 import { syncCityBuildings } from "./city_renderer_3d.js?v=personal-beach-equipment-2";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=personal-beach-setups-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=personal-beach-setups-3';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-5';
 import { ASSET_DATA } from "./assets_data.js";
@@ -5341,7 +5341,8 @@ export class RCT3DRenderer {
     if(kind==='roof'){
       map=portugueseClayTileTexture(THREE,color,variant%8);
     }else ({map,normalMap}=caribbeanBuildingSurfaceTextures(THREE,kind==='wood'?'wood':'plaster',variant%8));
-    const material=new THREE.MeshLambertMaterial({color:kind==='roof'?0xffffff:color,map,normalMap,side:THREE.DoubleSide});
+    const materialParams={color:kind==='roof'?0xffffff:color,map,side:THREE.DoubleSide};if(normalMap)materialParams.normalMap=normalMap;
+    const material=new THREE.MeshLambertMaterial(materialParams);
     if(kind==='roof')applyRetroDitherToMaterial(material,24,0);
     else applyRetroDitherToMaterial(material);
     return material;
@@ -5746,7 +5747,7 @@ export class RCT3DRenderer {
         const exposed=location&&(location.roomType==='roof_terrace'||location.roomType==='balcony'&&!location.path?.length);
         if(location&&!exposed&&building&&this.cityInteriorView?.buildingId!==(building.officeTenantOf||building.id))continue;
         const point=location?.position||citizen._renderIndoorPosition;
-        const x=point?.x??e.x,y=point?.y??e.y,z=(point?.z||0)+(citizen.ridingVehicleId ? .18 : 0);
+        const crowdOffset=this._citizenRenderOffsets?.get(e.id),x=(point?.x??e.x)+(crowdOffset?.x||0),y=(point?.y??e.y)+(crowdOffset?.y||0),z=(point?.z||0)+(citizen.ridingVehicleId ? .18 : 0);
         const surface=location&&building?(building.terrain?.base??(map?this.getSurfaceElevation(map,x,y):0)):(map?this.getSurfaceElevation(map,x,y):0);
         const size=Math.max(.65,Math.min(1.2,e.properties.render.size||1)),radius=.19*size;
         const box=new THREE.Box3(new THREE.Vector3(x-radius,surface+z,y-radius),new THREE.Vector3(x+radius,surface+z+1.08*size,y+radius));
@@ -7236,7 +7237,10 @@ export class RCT3DRenderer {
     const perspectiveActive=this.isPerspectiveActive(),firstPersonActive=this.isFirstPersonActive(),thirdPersonActive=this.isThirdPersonActive();
     const activeElection=this.cityDevelopment?.city?.politics?.active;
     const activeElectionId=activeElection?.id,activeElectionStatus=activeElection?.status;
-    const citizenModelOptions={hidden:false,dimmed:false,perspective:perspectiveActive,smoothMovement:thirdPersonActive,vehicleAngle:null,activeCampaignElectionId:activeElectionId,activeCampaignStatus:activeElectionStatus};
+    const citizenModelOptions={hidden:false,dimmed:false,perspective:perspectiveActive,smoothMovement:thirdPersonActive,vehicleAngle:null,visualOffset:null,activeCampaignElectionId:activeElectionId,activeCampaignStatus:activeElectionStatus};
+    const movingCitizenGroups=new Map(),citizenRenderOffsets=this._citizenRenderOffsets??=new Map();citizenRenderOffsets.clear();
+    for(const entity of visibleEntities){const citizen=entity?.properties?.citizen,path=citizen?.path,motion=this.cityCitizenModels.motion.get(entity);if(!citizen||entity.destroyed||citizen.ridingVehicleId||(!path?.length&&!citizen._renderPathActive))continue;let dx=path?.length?path[0].x-entity.x:entity.x-(motion?.x??entity.x),dy=path?.length?path[0].y-entity.y:entity.y-(motion?.y??entity.y),length=Math.hypot(dx,dy);if(length<1e-5&&motion){dx=entity.x-motion.x;dy=entity.y-motion.y;length=Math.hypot(dx,dy);}if(length<1e-5)continue;const direction=Math.round(Math.atan2(dy,dx)/(Math.PI/4)),key=`${Math.floor(entity.x)},${Math.floor(entity.y)},${direction}`;let group=movingCitizenGroups.get(key);if(!group)movingCitizenGroups.set(key,group=[]);group.push({entity,dx:dx/length,dy:dy/length});}
+    for(const group of movingCitizenGroups.values()){group.sort((a,b)=>a.entity.id-b.entity.id);const columns=Math.ceil(Math.sqrt(group.length)),rows=Math.ceil(group.length/columns),pitch=Math.min(.12,.28/Math.max(.5,Math.hypot((columns-1)/2,(rows-1)/2)));group.forEach(({entity,dx,dy},index)=>{const lateral=index%columns-(columns-1)/2,longitudinal=Math.floor(index/columns)-(rows-1)/2,sideX=dy,sideY=-dx,x=(sideX*lateral+dx*longitudinal)*pitch,y=(sideY*lateral+dy*longitudinal)*pitch;citizenRenderOffsets.set(entity.id,{x,y});});}
     let selectedPos = null;
 
     const curCamTileX = Math.floor(this.camX);
@@ -7932,7 +7936,7 @@ export class RCT3DRenderer {
         const isConsciousCreature = !isItem && !isDoor && !!e.properties?.brain;
         const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
         const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
-        citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;
+        citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;
         const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions);
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;

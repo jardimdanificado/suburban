@@ -374,7 +374,7 @@ export class CityCitizenModels {
     this.ready=true;return true;
   }
   begin(dt=0,speed=1){this.frameToken++;this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));this.activeCampaignFlags.clear();for(const batch of this.activeBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;if(batch.clothingMesh)batch.clothingMesh.count=0;}this.activeBatches.clear();for(const batch of this.activeHeadwearBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;}this.activeHeadwearBatches.clear();}
-  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,activeCampaignElectionId=null,activeCampaignStatus=null}={}){
+  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,activeCampaignElectionId=null,activeCampaignStatus=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
@@ -395,6 +395,7 @@ export class CityCitizenModels {
       motion.renderAngle+=angleDelta*alpha;
       renderX=motion.renderX;renderY=motion.renderY;renderAngle=motion.renderAngle;
     }else{motion.renderX=x;motion.renderY=y;motion.renderAngle=motion.angle;}
+    if(visualOffset){renderX+=visualOffset.x;renderY+=visualOffset.y;}
     if((c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')&&c.furnitureUse.seated){renderX+=Math.sin(renderAngle)*.16;renderY+=Math.cos(renderAngle)*.16;}
     // Keep quarter-tile footsteps, but present adjacent poses instead of skipping
     // a full animation cycle when a worker snapshot jumps several tiles.
