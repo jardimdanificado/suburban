@@ -18,7 +18,7 @@ import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=wardrobe-expansion-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
-import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-flag-thumbnails-1';
+import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-identity-electorate-orientation-1';
 import {renderElectionMonitor} from './city_election_ui.js?v=election-support-map-1';
 import {sectionTitle} from './city_ui_sections.js';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';

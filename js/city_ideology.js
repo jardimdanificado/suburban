@@ -1,4 +1,4 @@
-import {partyNameAgenda} from './city_party_names.js';
+import {partyNameAgenda} from './city_party_names.js?v=party-vocabulary-position-names-2';
 const clamp=(n,a=-1,b=1)=>Math.max(a,Math.min(b,n));
 const profiles=new WeakMap();
 const normalize=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();

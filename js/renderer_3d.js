@@ -15,7 +15,7 @@ import { syncCityBuildings } from "./city_renderer_3d.js?v=pixel-text-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=wardrobe-expansion-1';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
-import {partyFlagCanvas} from './city_party_flags.js?v=party-flag-negative-space-1';
+import {partyFlagCanvas} from './city_party_flags.js?v=party-flag-text-only-variants-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-6';
 import { ASSET_DATA } from "./assets_data.js";
 import {

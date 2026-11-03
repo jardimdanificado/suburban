@@ -12,7 +12,7 @@ import {CityGovernmentAgenda} from './city_government_agenda.js?v=substances-sle
 import {CityVoting} from './city_voting.js?v=substances-sleep-1';
 import {CityPoliticalStanding} from './city_political_standing.js?v=wardrobe-expansion-1';
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
-import {makePartyName,makeMergedPartyName,partyNameAgenda} from './city_party_names.js?v=party-vocabulary-1';
+import {makePartyName,makeMergedPartyName,partyNameAgenda} from './city_party_names.js?v=party-vocabulary-position-names-2';
 import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js?v=wardrobe-expansion-1';
 import {seedPartyCaps,issuePartyCap,returnPartyCap} from './city_party_caps.js?v=wardrobe-expansion-1';
 import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investigateCases } from './city_political_institutions.js';

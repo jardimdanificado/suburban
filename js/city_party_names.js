@@ -1,4 +1,4 @@
-import {vocabulario} from './vocabulario.js';
+import {vocabulario,palavrasPorVertentePolitica} from './vocabulario.js?v=party-name-political-vocabulary-1';
 export const PARTY_ORGANIZATIONS=Object.freeze(
   [
     ["Partido", "m"], 
@@ -389,7 +389,8 @@ const capitalize=s=>s[0].toLocaleUpperCase('pt-BR')+s.slice(1).toLocaleLowerCase
 const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 // Keep vocabulary words recognizable but occasional in ordinary party names.
-const VOCABULARY_NAME_CHANCE=.08;
+const VOCABULARY_NAME_CHANCE=.15;
+const POSITIONAL_VOCABULARY_NAME_CHANCE=.9;
 const wordPatterns=new Map(),agendaCache=new Map();
 const wordMatch=(text,word)=>{let pattern=wordPatterns.get(word);if(!pattern){pattern=new RegExp(`(?:^|[^\\p{L}])${normalize(word).replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}(?:$|[^\\p{L}])`,'u');wordPatterns.set(word,pattern);}return pattern.test(text);};
 /** Political meaning carried by a party name. Negative economy favors redistribution; positive favors markets. */
@@ -403,7 +404,18 @@ export function partyNameAgenda(name=''){
   const result=Object.freeze({economy:clamp((right-left)*.2,-.55,.55),state:clamp((state-liberty)*.2,-.6,.6),liberty:clamp((liberty-state)*.18,-.5,.5),green:clamp(green*.12,0,.5),social:clamp(social*.1,0,.45)});
   if(agendaCache.size>=2048)agendaCache.delete(agendaCache.keys().next().value);agendaCache.set(text,result);return result;
 }
-function flavor(city){for(let i=0;i<48;i++){const word=pick(city,vocabulario.palavras);if(typeof word==='string'&&/^[\p{L}]{4,14}$/u.test(word))return capitalize(word);}return 'Horizonte';}
+let vocabularyNamesByPosition=null;
+function politicalVocabularyNames(){
+  if(vocabularyNamesByPosition)return vocabularyNamesByPosition;
+  const positions=['Ultraesquerda','Extrema esquerda','Esquerda','Centro-esquerda','Centro','Centro-direita','Direita','Extrema direita','Ultradireita'],grouped=new Map(positions.map(position=>[position,palavrasPorVertentePolitica(position).filter(word=>/^[\p{L}]{4,14}$/u.test(word))]));
+  vocabularyNamesByPosition=grouped;return grouped;
+}
+function ideologyPosition(economy){return economy<-.88?'Ultraesquerda':economy<-.65?'Extrema esquerda':economy<-.4?'Esquerda':economy<-.2?'Centro-esquerda':economy<=.2?'Centro':economy<=.4?'Centro-direita':economy<=.65?'Direita':economy<=.88?'Extrema direita':'Ultradireita';}
+function flavor(city,position=null){
+  const words=position?politicalVocabularyNames().get(position)||[]:vocabulario.palavras;
+  for(let i=0;i<48;i++){const word=pick(city,words);if(typeof word==='string'&&/^[\p{L}]{4,14}$/u.test(word))return capitalize(word);}
+  return null;
+}
 export function makePartyName(city,ideology,parties,id,{parentParty=null}={}){
   const pool=[...POLITICAL_WORDS.common,...(ideology.economy<-.3?POLITICAL_WORDS.left:ideology.economy>.3?POLITICAL_WORDS.right:[])];
   if(ideology.green>.65)pool.push(...POLITICAL_WORDS.green,...POLITICAL_WORDS.green);
@@ -412,9 +424,10 @@ export function makePartyName(city,ideology,parties,id,{parentParty=null}={}){
   for(let attempt=0;attempt<64;attempt++){
     const [organization,gender]=pick(city,PARTY_ORGANIZATIONS);let adjective=pick(city,pool);if(gender==='f')adjective=feminine(adjective);
     const core=parentParty?(parentParty.nameCore||parentParty.name.split(/\s+/).slice(0,2).join(' ')):`${organization} ${adjective}`;
-    const unique=(parentParty||city.random()<VOCABULARY_NAME_CHANCE)?flavor(city):null;
+    const wantsVocabularyName=city.random()<VOCABULARY_NAME_CHANCE,position=ideologyPosition(ideology.economy);
+    let unique=wantsVocabularyName?flavor(city,city.random()<POSITIONAL_VOCABULARY_NAME_CHANCE?position:null):null;
     let parts;
-    if(parentParty){const [first,last]=core.split(' ');parts=city.random()<.5?[first,unique,last]:[first,last,unique];}
+    if(parentParty){const [first,last]=core.split(' ');parts=unique?(city.random()<.5?[first,unique,last]:[first,last,unique]):[first,adjective,last];}
     else if(unique)parts=[organization,adjective,unique];
     else if(city.random()<.35)parts=[organization,adjective,pick(city,POLITICAL_WORDS.causes)];
     else{const extra=pool.map(w=>gender==='f'?feminine(w):w).filter(w=>w!==adjective);const third=pick(city,extra);parts=city.random()<.45?[organization,adjective,third]:[organization,adjective];}

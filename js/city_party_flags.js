@@ -8,6 +8,7 @@ const PARTY_EMBLEMS=Object.freeze(ASSET_DATA.filter(asset=>/\.png$/i.test(asset.
 const imageCache=new Map(),tintedCache=new Map(),pendingImages=new Map();
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const ICON_LAYOUTS=Object.freeze({
+  0:[{name:'apenas-texto',slots:[]}],
   1:[
     {name:'centro',slots:[{x:.3,y:.18,w:.4,h:.64}]},{name:'centro-amplo',slots:[{x:.2,y:.08,w:.6,h:.82}]},
     {name:'canto-superior-esquerdo',slots:[{x:.04,y:.04,w:.38,h:.54}]},{name:'canto-inferior-direito',slots:[{x:.58,y:.42,w:.38,h:.54}]},
@@ -45,8 +46,15 @@ const TEXT_LAYOUTS=Object.freeze([
   {id:'frase-na-lateral-direita',boxes:[{x:.825,y:.08,w:.16,h:.84,rotation:Math.PI/2,kind:'word'}],area:{x:.04,y:.035,w:.74,h:.93}},
   {id:'frase-em-cima-numero-embaixo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'phrase'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}},
   {id:'texto-nas-duas-laterais',boxes:[{x:.01,y:.12,w:.15,h:.76,rotation:-Math.PI/2,kind:'word'},{x:.84,y:.12,w:.15,h:.76,rotation:Math.PI/2,kind:'number'}],area:{x:.2,y:.04,w:.6,h:.92}},
-  {id:'nome-e-numero-em-faixas',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}}
+  {id:'nome-e-numero-em-faixas',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}},
+  {id:'somente-numero',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.78}},
+  {id:'somente-nome',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'}],area:{x:.04,y:.15,w:.92,h:.78}},
+  {id:'nome-e-numero',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}},
+  {id:'nome-com-fundo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'}],area:{x:.04,y:.15,w:.92,h:.78}},
+  {id:'numero-com-fundo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.78}},
+  {id:'nome-numero-com-fundo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}}
 ]);
+const TEXT_ONLY_LAYOUT_IDS=new Set(['somente-numero','somente-nome','nome-e-numero','nome-com-fundo','numero-com-fundo','nome-numero-com-fundo']);
 const inside=(a,b)=>a.x>=b.x-1e-6&&a.y>=b.y-1e-6&&a.x+a.w<=b.x+b.w+1e-6&&a.y+a.h<=b.y+b.h+1e-6;
 function patternContainsRect(style,rect,aspect){
  const bands=[{x:0,y:0,w:1,h:.2},{x:0,y:.4,w:1,h:.2},{x:0,y:.8,w:1,h:.2}];
@@ -133,7 +141,10 @@ function flagPalette(city,hue,background,foreground){
 export function makePartyFlag(city,index,founders=[],party=null){
  const hue=city.random()*360,background=randomColor(hue,.19,.78);let foreground=randomColor((hue+180)%360,.88,.58);
  if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';
- const colors=flagPalette(city,hue,background,foreground),count=1+Math.floor(city.random()*4),arrangements=ICON_LAYOUTS[count],arrangement=arrangements[Math.floor(city.random()*arrangements.length)],aspect=120/76,backgroundChoices=['solid','solid','solid','solid','stripes-horizontal','stripes-horizontal','stripes-vertical','stripes-diagonal','quartered','circle','double-circle','diamond','star','cross','chevron','border'],backgroundStyle=backgroundChoices[Math.floor(city.random()*backgroundChoices.length)],compatibleLayouts=TEXT_LAYOUTS.filter(item=>textLayoutCompatible(item,backgroundStyle,aspect)),textLayout=compatibleLayouts[Math.floor(city.random()*compatibleLayouts.length)]||TEXT_LAYOUTS[0],layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors);
+ const colors=flagPalette(city,hue,background,foreground),count=city.random()<.15?0:1+Math.floor(city.random()*4),arrangements=ICON_LAYOUTS[count],arrangement=arrangements[Math.floor(city.random()*arrangements.length)],aspect=120/76,backgroundChoices=['solid','solid','solid','solid','stripes-horizontal','stripes-horizontal','stripes-vertical','stripes-diagonal','quartered','circle','double-circle','diamond','star','cross','chevron','border'];let backgroundStyle=backgroundChoices[Math.floor(city.random()*backgroundChoices.length)];
+ const textChoices=count===0?TEXT_LAYOUTS.filter(item=>TEXT_ONLY_LAYOUT_IDS.has(item.id)):TEXT_LAYOUTS.filter(item=>!TEXT_ONLY_LAYOUT_IDS.has(item.id)),compatibleLayouts=textChoices.filter(item=>textLayoutCompatible(item,backgroundStyle,aspect)),textLayout=compatibleLayouts[Math.floor(city.random()*compatibleLayouts.length)]||textChoices[0];
+ if(count===0&&textLayout.id.endsWith('-com-fundo')&&backgroundStyle==='solid')backgroundStyle=['stripes-horizontal','stripes-vertical','stripes-diagonal','quartered','circle','double-circle','diamond','star','cross','chevron','border'][Math.floor(city.random()*11)];
+ const layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors);
  return Object.freeze({foreground,background,colors,paletteVersion:2,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:'random',emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
 export function upgradePartyFlagPalette(city,flag){
