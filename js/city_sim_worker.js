@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=citizen-task-stagger-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=production-plan-profile-5';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -54,7 +54,7 @@ function vitals(){
 function recordProfile(profile,prefix=''){
   if(!profile)return;
   for(const [key,value]of Object.entries(profile)){
-    if(key==='step'){recordProfile(value,`${prefix}step.`);continue;}
+    if(key==='step'||key==='societyDetail'||key==='conversationParts'||key==='businessSearch'){recordProfile(value,`${prefix}${key==='step'?'step.':key==='societyDetail'?'societyDetail.':key==='conversationParts'?'conversationParts.':'businessSearch.'}`);continue;}
     if(key==='pathSearchPeak'&&value){
       const current=phasePeaks[`${prefix}pathSearchPeak`];
       if(!current||profile.pathSearchMaxMs>current.ms)phasePeaks[`${prefix}pathSearchPeak`]={ms:profile.pathSearchMaxMs,minute:profile.minute,...value};
@@ -63,6 +63,7 @@ function recordProfile(profile,prefix=''){
     if(key==='economyHourly'&&value){
       const name=`${prefix}economyHourly`,current=phasePeaks[name];
       if(!current||value.ms>current.ms)phasePeaks[name]={...value,minute:profile.minute};
+      recordProfile(value,`${prefix}economyHourly.`);
       continue;
     }
     if(key==='pathSearchWork'&&value){
@@ -73,6 +74,14 @@ function recordProfile(profile,prefix=''){
     if(key==='pathSearches'&&Number.isFinite(value)){
       const name=`${prefix}pathSearches`,current=phasePeaks[name];
       if(!current||value>current.count)phasePeaks[name]={count:value,minute:profile.minute};
+      continue;
+    }
+    if((key==='completedCount'||key==='prejudiceActCount')&&Number.isFinite(value)){
+      const name=prefix+key,peak=phasePeaks[name];if(!peak||value>peak.count)phasePeaks[name]={count:value,minute:profile.minute};
+      continue;
+    }
+    if(key.endsWith('CacheHits')&&Number.isFinite(value)){
+      const name=prefix+key,peak=phasePeaks[name];if(!peak||value>peak.count)phasePeaks[name]={count:value,minute:profile.minute};
       continue;
     }
     if(!key.endsWith('Ms')||!Number.isFinite(value))continue;

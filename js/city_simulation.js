@@ -30,7 +30,7 @@ import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
 import { CityGovernment as CityPolitics } from './city_government.js?v=discrimination-laws-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=discrimination-laws-1';
+import { CityJustice } from './city_justice.js?v=conversation-witness-grid-1';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=body-mobility-1';
 import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -48,8 +48,8 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=fave
 import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=substances-sleep-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=society-phase-profile-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=production-plan-profile-5';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=favela-tree-roads-1';
 
 const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});

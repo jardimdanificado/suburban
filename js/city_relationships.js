@@ -142,17 +142,25 @@ export class CityRelationships {
     return !!a && !!b && a.affection>=65 && b.affection>=55 && a.trust>=60 && b.trust>=50 && a.resentment<25 && b.resentment<25;
   }
   greet(a,b,warm,witnessIds=[]) {
+    const profile=this.city.profileDiagnostics?this.city.society._conversationProfile:null;
     const r=this.city.society.getRelation(a,b,true);r.conversations++;r.lastContact=this.city.minute;r.familiarity=bounded(r.familiarity+5);
     for(const [observer,target] of [[a,b],[b,a]]) {
       const v=this.view(observer,target),empathy=trait(observer,'empathy'),communication=target.substanceModifiers?.speech||1;
       if(warm)this.shift(observer,target,{trust:(communication-1)*3,affection:(communication-1)*2});
       this.shift(observer,target,{affection:warm?2+empathy*3:-3-(observer.socialProfile.temper*4),trust:warm?1+empathy:-2,respect:warm?1:-1,resentment:warm?-empathy:2});
+      let phase=profile?performance.now():0;
       const biases=prejudiceAgainstTypes(observer,target),strength=biases.reduce((n,item)=>n+item.strength,0),shared=prejudicesInCommon(observer,target);
+      if(profile){profile.prejudiceScanMs+=performance.now()-phase;phase=performance.now();}
       if(strength>0)this.shift(observer,target,{affection:-Math.min(16,strength*11),trust:-strength*4,respect:-strength*4,resentment:strength*7});
       if(shared>0)this.shift(observer,target,{affection:Math.min(7,shared*5),trust:Math.min(3,shared*2),respect:Math.min(2,shared)});
-      if(biases.length&&strength>=.58&&this.city.random()<.025+Math.min(.11,strength*.08))this.city.justice?.recordPrejudiceAct(observer,target,biases[0].type,biases[0].strength,witnessIds);
+      if(biases.length&&strength>=.58&&this.city.random()<.025+Math.min(.11,strength*.08)){
+        const started=profile?performance.now():0;this.city.justice?.recordPrejudiceAct(observer,target,biases[0].type,biases[0].strength,witnessIds);
+        if(profile){profile.prejudiceActMs+=performance.now()-started;profile.prejudiceActCount++;}
+      }
       if(this.compatible(observer,target))v.attraction=bounded(v.attraction*.95+this.attraction(observer,target)*.05+(warm?1:-2));
+      if(profile){profile.compatibilityMs+=performance.now()-phase;phase=performance.now();}
       observer.needs.social=bounded(observer.needs.social+(warm?16:3));observer.needs.leisure=bounded(observer.needs.leisure+4);
+      if(profile)profile.otherGreetMs+=performance.now()-phase;
     }
     this.updateBond(a,b,r);
   }

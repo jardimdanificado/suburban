@@ -90,23 +90,33 @@ export class CitySociety {
   }
   finishConversation(a,b,conversation) {
     const relationship=this.city.relationships,r=this.getRelation(a,b,true),av=r.views[a.id],bv=r.views[b.id];
+    const profile=this._conversationProfile,mark=profile?performance.now():0;
     this.city.economy.practice(a,'social',5);this.city.economy.practice(b,'social',5);
+    if(profile)profile.practiceMs+=performance.now()-mark;
     const chance=Math.max(.08,Math.min(.95,.58+((a.traits?.empathy??.5)+(b.traits?.empathy??.5))*.15+(av.affection+bv.affection)/600-(av.resentment+bv.resentment)/300));
+    let phase=profile?performance.now():0;
     relationship.greet(a,b,this.city.random()<chance,conversation.witnessIds||[]);
+    if(profile){profile.greetMs+=performance.now()-phase;phase=performance.now();}
     a.conversation=b.conversation=null;
     relationship.interact(a,b,conversation);
+    if(profile){profile.interactMs+=performance.now()-phase;phase=performance.now();}
     this.city.politics.campaigns.conversation(a,b);
+    if(profile){profile.campaignMs+=performance.now()-phase;phase=performance.now();}
     relationship.updateBond(a,b,r);
+    if(profile){profile.updateBondMs+=performance.now()-phase;profile.completedCount++;}
   }
   updateBond(a,b,r) {this.city.relationships.updateBond(a,b,r);}
   updateMinute() {
     const profiling=this.city.profileDiagnostics===true,profile=profiling?{}:null,conversationStart=profiling?performance.now():0;
-    for (const c of this.city.citizens) if (!c.entity.destroyed && c.conversation && c.conversation.a === c.id) {
+    this._conversationProfile=profiling?{minute:this.city.minute,completedCount:0,practiceMs:0,greetMs:0,interactMs:0,campaignMs:0,updateBondMs:0,prejudiceScanMs:0,prejudiceActMs:0,prejudiceActCount:0,compatibilityMs:0,otherGreetMs:0}:null;
+    const justice=this.city.justice;justice?.beginSocialResolution?.();
+    try{for (const c of this.city.citizens) if (!c.entity.destroyed && c.conversation && c.conversation.a === c.id) {
       const other = this.citizen(c.conversation.b), conversation = c.conversation;
       if (!other || Math.hypot(c.entity.x - other.entity.x, c.entity.y - other.entity.y) > 2) { c.conversation = null; if (other) other.conversation = null; }
       else if (this.city.minute >= conversation.until) this.finishConversation(c, other, conversation);
-    }
-    if(profile)profile.conversationResolutionMs=performance.now()-conversationStart;
+    }}finally{justice?.endSocialResolution?.();}
+    if(profile){profile.conversationResolutionMs=performance.now()-conversationStart;profile.conversationParts=this._conversationProfile;}
+    this._conversationProfile=null;
     // Conversation completion remains minute-accurate; discover new encounters
     // every five minutes and scale the contact budget to keep the same average
     // social throughput with fewer full-population scans at high simulation speed.
@@ -148,7 +158,7 @@ export class CitySociety {
     }
     const birthStart=profiling?performance.now():0;
     for(let i=this.expecting.length-1;i>=0;i--)if(this.city.minute>=this.expecting[i].dueAt)this.giveBirth(this.expecting[i]);
-    if(profile){profile.contactSearchMs=contactSearchMs;profile.birthResolutionMs=performance.now()-birthStart;this.lastUpdateProfile=profile;}
+    if(profile){profile.minute=this.city.minute;profile.contactSearchMs=contactSearchMs;profile.birthResolutionMs=performance.now()-birthStart;this.lastUpdateProfile=profile;}
   }
   planChild(a, b) {
     const r = this.getRelation(a, b);

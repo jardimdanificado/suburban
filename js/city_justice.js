@@ -1075,6 +1075,19 @@ export class CityJustice {
     if(mission.phase==='to-suspect'){mission.phase='collect';this.collectRestitutionAsset(record,officer,suspect);}else{mission.phase='deliver';this.deliverRestitutionAsset(record,officer,owner);}return true;
   }
   observationPosition(c){return c?.indoorLocation?.position||c?.entity;}
+  beginSocialResolution(){this._socialWitnessMinute=this.city.minute;this._socialWitnessBuckets=null;}
+  endSocialResolution(){this._socialWitnessMinute=null;this._socialWitnessBuckets=null;}
+  socialWitnessCandidates(position){
+    if(this._socialWitnessMinute!==this.city.minute||!position)return null;
+    if(!this._socialWitnessBuckets){
+      const buckets=new Map();
+      for(const citizen of this.city.citizens){const point=this.observationPosition(citizen);if(!point)continue;const x=Math.floor(point.x/4),y=Math.floor(point.y/4),key=`${x},${y}`;let rows=buckets.get(key);if(!rows)buckets.set(key,rows=[]);rows.push(citizen);}
+      this._socialWitnessBuckets=buckets;
+    }
+    const x=Math.floor(position.x/4),y=Math.floor(position.y/4),candidates=[];
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)candidates.push(...(this._socialWitnessBuckets.get(`${x+dx},${y+dy}`)||[]));
+    return candidates;
+  }
   observationScene(c){const room=c?.indoorLocation;return {buildingId:room?.buildingId??null,unitId:room?.unitId??null,floor:room?.floor??null,height:c?.skybridgeZ||0};}
   interiorLineOfSight(building,from,to,floor){
     if(!building||building.entity.destroyed)return false;const layout=interiorLayout(building),cell=point=>({x:Math.floor(point.x-building.entity.x),y:Math.floor(point.y-building.entity.y),z:floor}),nodeAt=p=>layout.nodes.get(`${p.x},${p.y},${p.z}`),start=cell(from),end=cell(to);if(!nodeAt(start)||!nodeAt(end))return false;
@@ -1122,7 +1135,7 @@ export class CityJustice {
     if(!actor||!target||!PREJUDICE_TYPES[type])return null;this.prejudiceIncidents??=[];this.nextPrejudiceIncidentId??=1;this.policies??={};this.policies.prejudiceLaws??={};this.policies.prejudiceLaws[type]??=true;this.policies.penalCode??={};this.policies.penalCode[type]??={...BASE_PENAL_CODE[type],fineOnly:false,politicalDisqualification:false,cleanRecordDisqualifying:false,recidivismSeverityBonus:0,cassation:true,cassationTrigger:'arrest'};
     actor.prejudiceIncidentCooldowns??={};const cooldownKey=`${type}:${target.id}`;if(this.city.minute-(actor.prejudiceIncidentCooldowns[cooldownKey]??-Infinity)<360)return null;actor.prejudiceIncidentCooldowns[cooldownKey]=this.city.minute;
     const city=this.city,relationships=city.relationships,partyId=actor.political?.partyId??null,noticed=[...new Set([target.id,...witnessIds])].filter(id=>id!==actor.id&&city.society.citizen(id)),position=this.observationPosition(target)||actor.entity,criminal=city.justice.policies.prejudiceLaws?.[type]!==false&&city.justice.policies.penalCode?.[type]?.criminal!==false;
-    let criminalCase=null;if(criminal)criminalCase=this.crimeRecord(type,actor.id,target.id,{prejudiceType:type,discriminatoryAct:true,strength,position:{x:position.x,y:position.y},useExactPosition:true});
+    let criminalCase=null;if(criminal)criminalCase=this.crimeRecord(type,actor.id,target.id,{prejudiceType:type,discriminatoryAct:true,strength,position:{x:position.x,y:position.y},useExactPosition:true},{witnessCandidates:this.socialWitnessCandidates(position)});
     if(criminalCase){criminalCase.discoveredAt=city.minute;criminalCase.awareIds=[...new Set([...(criminalCase.awareIds||[]),...noticed])];criminalCase.details.prejudiceIncidentPending=true;const witnessIdsSet=new Set(criminalCase.witnessIds||[]);if(!witnessIdsSet.has(target.id)){criminalCase.witnessIds.push(target.id);criminalCase.witnesses.push({citizenId:target.id,confidence:1,identifiedSuspectId:actor.id,noticedAt:city.minute,scene:criminalCase.scene,role:'victim'});this.rememberObservedCrime(criminalCase);}}
     const incident={id:this.nextPrejudiceIncidentId++,type,offenderId:actor.id,victimId:target.id,partyId,occurredAt:city.minute,strength,noticedBy:noticed,crimeCaseId:criminalCase?.id??null,criminal,discoveredAt:noticed.length?city.minute:null};this.prejudiceIncidents.push(incident);if(this.prejudiceIncidents.length>1024)this.prejudiceIncidents.shift();
     relationships?.shift(target,actor,{affection:-14-10*strength,trust:-10,respect:-10,resentment:18+18*strength});target.mood=Math.max(-25,(target.mood||0)-5);
@@ -1133,12 +1146,12 @@ export class CityJustice {
     city.log(`${actor.entity.properties.name} discriminou ${target.entity.properties.name} por ${PREJUDICE_TYPES[type].label.toLowerCase()}${criminal?' · conduta proibida por lei':' · discriminação ainda permitida por lei'}.`,'justice',[actor.id,target.id,...noticed.filter(id=>id!==target.id)],{kind:'prejudice-incident',prejudiceIncidentId:incident.id,prejudiceType:type,crimeCaseId:criminalCase?.id??null,partyId,criminal,noticedBy:noticed,strength});
     return incident;
   }
-  crimeRecord(type,offenderId,victimId,details={},{observe=true,occurredAt=this.city.minute}={}){
+  crimeRecord(type,offenderId,victimId,details={},{observe=true,occurredAt=this.city.minute,witnessCandidates=null}={}){
     const rule=this.policies.penalCode[type]||{criminal:true,severity:50,fine:0,politicalDisqualification:false};
     if(!rule.criminal||type==='graffiti'&&((rule.ownerConsentDefense&&details.ownerAuthorized)||(rule.exemptArtworkKinds||[]).includes(details.artworkKind))||type==='vandalism'&&(details.damage??0)<(rule.minimumDamage||0))return null;
     const city=this.city,source=city.society.citizen(offenderId)||city.society.citizen(victimId),scene=details.scene||this.observationScene(source),position=details.useExactPosition?details.position:scene.buildingId!=null?this.observationPosition(source):details.position||this.observationPosition(source)||null,daylight=city.hour>=7&&city.hour<19,priorConviction=Number.isInteger(offenderId)&&this.cases.some(previous=>previous.type===type&&previous.status==='convicted'&&(previous.chargedCitizenId??previous.offenderId)===offenderId&&previous.convictionAnnulledAt==null&&previous.decriminalizedAt==null&&previous.verdictAt!=null&&previous.verdictAt<=occurredAt),recidivismBonus=priorConviction?Math.max(0,Math.min(50,Math.floor(rule.recidivismSeverityBonus||0))):0,effectiveRule={...rule,severity:Math.min(100,(rule.severity??50)+recidivismBonus)};
     const visibility=this.sceneIllumination(scene,position,daylight),witnesses=[];
-    if(observe&&position)for(const witness of city.citizens){
+    if(observe&&position)for(const witness of witnessCandidates||city.citizens){
       if(witness.id===offenderId||!this.canObserve(witness,position,scene))continue;
       const distance=dist(position,this.observationPosition(witness)),patrolling=this.policeOnDuty(witness),attention=this.skillFactor(witness,'investigation')*(patrolling?1.2+(witness.skills?.investigation||0)/500:1),confidence=Math.max(0,Math.min(1,(1-distance/4)*visibility*(.72+(witness.traits?.skepticism??.5)*.28)*attention));
       if(city.random()<confidence)witnesses.push({citizenId:witness.id,confidence,identifiedSuspectId:confidence>(patrolling ? .55 : .72)?offenderId:null,noticedAt:city.minute,scene:{...scene},role:patrolling?'police-officer':null});
