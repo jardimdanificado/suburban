@@ -1,3 +1,4 @@
+import {initializePrejudices,prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
 export const EVENT_CATEGORIES = { publication: 'Livros e panfletos', policy: 'Políticas públicas', nature: 'Vegetação', reputation: 'Reputação', finance: 'Finanças', credit: 'Crédito', death: 'Mortes', justice:'Justiça e segurança', sanitation: 'Saneamento', land: 'Terrenos', construction: 'Construção', transport: 'Transportes', city: 'Cidade', economy: 'Economia', housing: 'Moradia', work: 'Trabalho', social: 'Convívio', relationship: 'Relacionamentos', family: 'Famílias', government: 'Governo', business: 'Empresas', production: 'Produção' };
 export const SOCIAL_RULES = { friendAt: 30, closeFriendAt: 65, partnerAt: 68, conversationCooldown: 30, gestationMinutes: 3 * 1440, daysPerYear: 12, maxChildren: 2 };
 const pairKey = (a, b) => a < b ? `${a}:${b}` : `${b}:${a}`;
@@ -33,7 +34,7 @@ export class CitySociety {
     const { age = 20 + Math.floor(this.city.random() * 24), parentIds = [] } = options;
     Object.assign(c, { initialAge: age, bornAt: this.city.minute, parentIds: [...parentIds], childIds: [], partnerId: null, expectingId: null, lastBirthAt: null, guardianId: parentIds[0] ?? null, personality: { sociability: 0.3 + this.city.random() * 0.7, kindness: 0.4 + this.city.random() * 0.6, interest: Math.floor(this.city.random() * topics.length), wantsRomance: this.city.random() < 0.9, wantsChildren: this.city.random() < 0.8 }, conversation: null, lastConversationAt: -Infinity });
     Object.freeze(c.personality);
-    this.city.relationships.initialize(c, options);
+    this.city.relationships.initialize(c, options);initializePrejudices(c,this.city.initialSeed);
   }
   getRelation(a, b, create = false) {
     const key = pairKey(a.id, b.id);
@@ -86,7 +87,7 @@ export class CitySociety {
     const relationship=this.city.relationships,r=this.getRelation(a,b,true),av=r.views[a.id],bv=r.views[b.id];
     this.city.economy.practice(a,'social',5);this.city.economy.practice(b,'social',5);
     const chance=Math.max(.08,Math.min(.95,.58+((a.traits?.empathy??.5)+(b.traits?.empathy??.5))*.15+(av.affection+bv.affection)/600-(av.resentment+bv.resentment)/300));
-    relationship.greet(a,b,this.city.random()<chance);
+    relationship.greet(a,b,this.city.random()<chance,conversation.witnessIds||[]);
     a.conversation=b.conversation=null;
     relationship.interact(a,b,conversation);
     this.city.politics.campaigns.conversation(a,b);
@@ -127,7 +128,7 @@ export class CitySociety {
           if(other.conversation || !(dx*dx+dy*dy<=4))continue;
           const relation=this.relations.get(pairKey(c.id,other.id));
           if(!relation && ((this.contactIndex.get(c.id)?.size||0)>=64 || (this.contactIndex.get(other.id)?.size||0)>=64))continue;
-          const v=relation?.views?.[c.id];if(v && (v.fear>50 || v.status==='enemy') && !(v.resentment>55 && c.socialProfile.assertiveness>.6))continue;const score=(v?.affection||0)+(v?0:(this.city.minute+c.id)%6===0?55:0)+(other.partnerId===c.id?20:0)-(v?.fear||0)*.5+(v?.resentment>55 && c.socialProfile.assertiveness>.6?40:0);if(score>best){candidate=other;best=score;}}
+          const v=relation?.views?.[c.id];if(v && (v.fear>50 || v.status==='enemy') && !(v.resentment>55 && c.socialProfile.assertiveness>.6))continue;const score=(v?.affection||0)+(v?0:(this.city.minute+c.id)%6===0?55:0)+(other.partnerId===c.id?20:0)-(v?.fear||0)*.5+(v?.resentment>55 && c.socialProfile.assertiveness>.6?40:0)+prejudiceCandidateAffinity(c,other);if(score>best){candidate=other;best=score;}}
         if (candidate && this.city.random() < 1-Math.pow(1-Math.min(.8,c.personality.sociability*0.14*(c.substanceModifiers?.sociability||1)),10) && this.startConversation(c, candidate, nearby.filter(other=>other!==c && other!==candidate && Math.hypot(other.entity.x-c.entity.x,other.entity.y-c.entity.y)<=2).slice(0,4).map(other=>other.id)))contacts++;
       }
       const key = x+y*stride;

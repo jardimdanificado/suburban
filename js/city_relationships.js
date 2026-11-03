@@ -1,4 +1,5 @@
 import {appearance,companyPreference} from './city_clothing.js?v=clothing-visual-catalog-2';
+import {initializePrejudices,prejudiceAgainstTypes,prejudicesInCommon} from './city_prejudice.js?v=discrimination-laws-1';
 // Personal relationships react to encounters and known facts, not to a scan of all pairs.
 export const RELATIONSHIP_RULES = { memories: 24, beliefs: 24, grief: 8, facts: 768, gossipHops: 6, proposalCooldown: 1440, visitCooldown: 60, visitDistance: 32, visitPathBudget: 3 };
 export const FEELING_LABELS = { affection: 'Afeto', trust: 'Confiança', respect: 'Respeito', attraction: 'Atração', resentment: 'Ressentimento', fear: 'Receio' };
@@ -9,13 +10,14 @@ export const GENDER_LABELS = { man:'Homem', woman:'Mulher', nonbinary:'Não bin�
 const bounded = (n,min=0,max=100) => Math.max(min,Math.min(max,n));
 const trait = (c,key) => c.traits?.[key] ?? .5;
 const positive = new Set(['praise','gift','food-shared','support','mentoring','care','good-work','friendship','ride-share','reconciliation']);
-const serious = new Set(['betrayal','humiliation','unpaid-work','breakup','murder','assault','robbery','theft','vandalism','corruption']);
-const labels = {murder:'um homicídio',assault:'uma agressão',robbery:'um roubo',theft:'um furto',vandalism:'uma depredação',corruption:'um caso de corrupção', praise:'um elogio',gift:'ajuda financeira','food-shared':'partilha de comida',support:'apoio emocional',mentoring:'uma orientação profissional',care:'cuidado familiar',insult:'uma ofensa',humiliation:'uma humilhação',betrayal:'uma quebra de fidelidade','unpaid-work':'um salário não pago','good-work':'trabalho remunerado',competition:'uma disputa',reconciliation:'uma reconciliação','ride-share':'uma carona de bicicleta',rejection:'uma proposta rejeitada',flirt:'uma aproximação romântica',proposal:'uma proposta de relacionamento',partnership:'o início de um relacionamento',breakup:'uma separação',loss:'uma perda',apology:'um pedido de desculpas' };
+const serious = new Set(['betrayal','humiliation','unpaid-work','breakup','murder','assault','robbery','theft','vandalism','corruption','prejudice']);
+const labels = {murder:'um homicídio',assault:'uma agressão',robbery:'um roubo',theft:'um furto',vandalism:'uma depredação',corruption:'um caso de corrupção',prejudice:'um ato de preconceito', praise:'um elogio',gift:'ajuda financeira','food-shared':'partilha de comida',support:'apoio emocional',mentoring:'uma orientação profissional',care:'cuidado familiar',insult:'uma ofensa',humiliation:'uma humilhação',betrayal:'uma quebra de fidelidade','unpaid-work':'um salário não pago','good-work':'trabalho remunerado',competition:'uma disputa',reconciliation:'uma reconciliação','ride-share':'uma carona de bicicleta',rejection:'uma proposta rejeitada',flirt:'uma aproximação romântica',proposal:'uma proposta de relacionamento',partnership:'o início de um relacionamento',breakup:'uma separação',loss:'uma perda',apology:'um pedido de desculpas' };
 
 export class CityRelationships {
   constructor(city) { this.city=city;this.facts=new Map();this.nextFactId=1;this.rumorsShared=0;this.corrections=0; }
   initialize(c,options={}) {
     const random=()=>this.city.random(),roll=random();
+    initializePrejudices(c,this.city.initialSeed);
     c.socialProfile=Object.freeze({gender:options.gender|| (roll<.48?'woman':roll<.96?'man':'nonbinary'),orientation:options.orientation|| (random()<.12?'bi':random()<.08?'homo':!c.personality.wantsRomance?'aromantic':'hetero'),fidelity:.2+random()*.75,jealousy:.1+random()*.8,forgiveness:.1+random()*.8,assertiveness:.1+random()*.8,temper:.1+random()*.8});
     c.social={memories:[],beliefs:[],heardFacts:[],grief:[],lastVisitAt:-Infinity,romanceAfter:0,comfortUntil:0};
   }
@@ -139,12 +141,16 @@ export class CityRelationships {
     const a=this.view(host,guest),b=this.view(guest,host);
     return !!a && !!b && a.affection>=65 && b.affection>=55 && a.trust>=60 && b.trust>=50 && a.resentment<25 && b.resentment<25;
   }
-  greet(a,b,warm) {
+  greet(a,b,warm,witnessIds=[]) {
     const r=this.city.society.getRelation(a,b,true);r.conversations++;r.lastContact=this.city.minute;r.familiarity=bounded(r.familiarity+5);
     for(const [observer,target] of [[a,b],[b,a]]) {
       const v=this.view(observer,target),empathy=trait(observer,'empathy'),communication=target.substanceModifiers?.speech||1;
       if(warm)this.shift(observer,target,{trust:(communication-1)*3,affection:(communication-1)*2});
       this.shift(observer,target,{affection:warm?2+empathy*3:-3-(observer.socialProfile.temper*4),trust:warm?1+empathy:-2,respect:warm?1:-1,resentment:warm?-empathy:2});
+      const biases=prejudiceAgainstTypes(observer,target),strength=biases.reduce((n,item)=>n+item.strength,0),shared=prejudicesInCommon(observer,target);
+      if(strength>0)this.shift(observer,target,{affection:-Math.min(16,strength*11),trust:-strength*4,respect:-strength*4,resentment:strength*7});
+      if(shared>0)this.shift(observer,target,{affection:Math.min(7,shared*5),trust:Math.min(3,shared*2),respect:Math.min(2,shared)});
+      if(biases.length&&strength>=.58&&this.city.random()<.025+Math.min(.11,strength*.08))this.city.justice?.recordPrejudiceAct(observer,target,biases[0].type,biases[0].strength,witnessIds);
       if(this.compatible(observer,target))v.attraction=bounded(v.attraction*.95+this.attraction(observer,target)*.05+(warm?1:-2));
       observer.needs.social=bounded(observer.needs.social+(warm?16:3));observer.needs.leisure=bounded(observer.needs.leisure+4);
     }

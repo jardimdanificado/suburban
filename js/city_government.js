@@ -10,7 +10,7 @@ import {appearance} from './city_clothing.js?v=clothing-visual-catalog-2';
 import {CityResearch} from './city_research.js';
 import {CityGovernmentAgenda} from './city_government_agenda.js?v=substances-sleep-1';
 import {CityVoting} from './city_voting.js?v=substances-sleep-1';
-import {CityPoliticalStanding} from './city_political_standing.js?v=electorate-popularity-1';
+import {CityPoliticalStanding} from './city_political_standing.js?v=discrimination-laws-1';
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
 import {makePartyName,makeMergedPartyName,partyNameAgenda} from './city_party_names.js?v=expanded-secular-spectrum-1';
 import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty} from './city_party_membership.js?v=party-name-tags-1';
@@ -22,6 +22,7 @@ import { makePartyFlag, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js
 import { CityCouncil } from './city_council.js';
 import { CityCampaigns } from './city_campaigns.js?v=phrase-scope-1';
 import {gerarFraseTematica} from './gerador_frases.js?v=catalog-lexicon-1';
+import {prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=quarry-outskirts-1';
 import {formatMoney} from './city_ui_format.js';
@@ -215,7 +216,7 @@ export class CityGovernment extends CityPolitics {
     const exposure=voter.political.candidateContacts?.[`${this.active?.id}:${candidate.id}`]||voter.political.candidateContacts?.[`${this.active?.firstRoundId}:${candidate.id}`],sameParty=voter.political.partyId===party.id,known=voter===candidate?1:Math.min(1,.15+(exposure?.count||0)*.16+(relation?.trust>.1?.15:0)+(sameParty?.2:0)+(candidate.id===city.economy.mayorId?.15:0));
     add('conhecimento da candidatura',known*8-2);add('apresentação e credibilidade',(appearance(candidate)-50)*.06);add('capacidade administrativa',candidate.skills.governance*(.045+known*.055)*priorities.competence);add('reputação pessoal',(city.reputation.score(candidate,'civic')-50)*.1);
     for(const row of standingEvidence(this,voter,candidate,party))add(row.reason,row.value);
-    add('afinidade ideológica',clamp(1-this.distance(voter.political.ideology,party.ideology)/1.4,-1,1)*priorities.ideology);
+    add('afinidade ideológica',clamp(1-this.distance(voter.political.ideology,party.ideology)/1.4,-1,1)*priorities.ideology);add('afinidade em preconceitos',prejudiceCandidateAffinity(voter,candidate));
     add('política sobre substâncias',Object.keys(SUBSTANCES).reduce((n,id)=>n+(1-Math.abs(substanceStance(voter,id)-substanceStance(candidate,id)))*(id==='coca'?1.5:.5),0));
     const vi=ideologicalProfile(voter),pi=ideologicalProfile(party);add('redistribuição e serviços sociais',(1-Math.abs(vi.redistribution-pi.redistribution))*4);add('propriedade pública ou privada',(1-Math.abs(vi.ownership-pi.ownership))*4);add('liberdades civis',(1-Math.abs(vi.liberty-pi.liberty))*3*priorities.civil);add('prioridade ambiental',(1-Math.abs(vi.green-pi.green))*3*priorities.green);
     if(sameParty)add('filiação partidária',8*voter.political.loyalty);else if(nomination?.endorsementPartyIds?.includes(voter.political.partyId)){const memberParty=this.party(voter.political.partyId),affinity=memberParty?clamp(1-this.distance(memberParty.ideology,party.ideology)/1.6,0,1):0;add('apoio da coligação',5*voter.political.loyalty*affinity*(1-(voter.political.independence??.5)*.4));}

@@ -14,6 +14,7 @@ import { drawPartyFlag } from './city_party_flags.js';
 import { PROMISE_METRICS,GOVERNMENT_INITIATIVES } from './city_mandates.js';
 import { CRIME_TYPES } from './city_justice.js';
 import {recentBusinessRevenue} from './city_government_performance.js';
+import {PREJUDICE_TYPES} from './city_prejudice.js?v=discrimination-laws-1';
 const money=formatMoney;
 const stamp=n=>`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const relationLabel=score=>score>=65?'Boa':score>=45?'Regular':'Tensa';
@@ -163,9 +164,10 @@ p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento /
       fold(ui,p,'petitionJustice','Código penal e regras de elegibilidade',()=>{
         const justice=city.justice;p.heading('POLÍTICAS DE INTEGRIDADE PARLAMENTAR');p.note('As duas regras começam desligadas. A imunidade exige autorização da Câmara para prender um parlamentar; sem imunidade, vale o procedimento normal.');
         for(const [type,label]of [['cleanRecord','Lei da ficha limpa'],['parliamentaryImmunity','Imunidade parlamentar']]){p.kv(label,justice.policies[type]?'Em vigor':'Desativada');p.button(`${justice.policies[type]?'DESATIVAR':'ATIVAR'} AGORA · ${label.toUpperCase()}`,()=>submit(type,{value:!justice.policies[type]}));}
+        fold(ui,p,'prejudiceLaws','Pautas e leis contra discriminação',()=>{p.note('Cada pauta trata de atos discriminatórios, não de crenças privadas. A proposta vai ao plenário e os vereadores votam pela proibição ou liberação dos atos para aquele tipo específico.');for(const [prejudice,spec]of Object.entries(PREJUDICE_TYPES)){const prohibited=justice.policies.prejudiceLaws?.[prejudice]!==false;p.kv(spec.label,prohibited?'Atos proibidos · crime no código penal':'Atos permitidos · sem punição criminal');p.button(`APRESENTAR À CÂMARA · ${prohibited?'LIBERAR':'PROIBIR'} ${spec.label.toUpperCase()}`,()=>{const bill=gov.submitBill('prejudiceLaw',{prejudice,prohibited:!prohibited});ui.notice=bill?.title?`Pauta apresentada à Câmara: ${bill.title}.`:city.lastError||'A proposta não pôde ser apresentada.';});}});
         const jury=justice.popularJuryBounds(),jurySize=Math.max(jury.minimum,Math.min(jury.maximum,justice.policies.popularJurySize??jury.minimum)),juryStep=jurySize<15?1:5;p.heading('TAMANHO DO JÚRI POPULAR');p.kv('Em vigor',`${jurySize} jurados · faixa legal ${jury.minimum}–${jury.maximum} · população ${jury.population}`);p.note('A Câmara pode votar a quantidade. O mínimo é cinco pessoas ou 5% da população, o que for maior; o teto é 15% da população.');p.buttons([-1,1].map(direction=>({label:`PROPOR ${jurySize+(direction*juryStep)} JURADOS`,click:()=>{const value=jurySize+direction*juryStep;if(value<jury.minimum||value>jury.maximum){ui.notice=`O tamanho permitido está entre ${jury.minimum} e ${jury.maximum} jurados.`;return;}const bill=gov.submitBill('popularJurySize',{value});ui.notice=bill?.title?`Proposta apresentada à Câmara: ${bill.title}.`:city.lastError||'A proposta não pôde ser apresentada.';}})));
         p.heading('REGRAS POR INFRAÇÃO');p.note('As regras alteradas aqui entram em vigor imediatamente. Regras mais brandas também revisam processos anteriores; mudanças mais severas valem para fatos novos. Descriminalizar não apaga reparações civis já reconhecidas.');
-        for(const [crime,label]of Object.entries(CRIME_TYPES)){const rule=justice.policies.penalCode[crime];if(!rule)continue;
+        for(const [crime,label]of Object.entries(CRIME_TYPES)){const rule=justice.policies.penalCode[crime];if(!rule||PREJUDICE_TYPES[crime])continue;
           p.kv(label,`${rule.criminal?'Crime':'Descriminalizada'} · severidade ${rule.severity} · multa ${money(rule.fine)} · reincidência +${rule.recidivismSeverityBonus||0}`);
           const update=changes=>submit('penalCode',{crime,rule:{...rule,...changes}});
           p.buttons([

@@ -30,7 +30,7 @@ import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
 import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js';
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
-import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js';
+import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js?v=discrimination-laws-1';
 import { describePoliticalOrientation } from './city_ideology.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=sertanejo-house-styles-1';
 import { REPUTATION_LABELS } from './city_reputation.js';
@@ -44,8 +44,8 @@ import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=substances-sleep-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=substances-sleep-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=body-phenotype-2';
+import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=discrimination-laws-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=discrimination-laws-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
