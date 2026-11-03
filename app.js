@@ -1,6 +1,6 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=production-plan-profile-5';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=production-plan-profile-9';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=production-plan-profile-5";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=production-plan-profile-9";
 import { CityDesktop } from "./js/city_desktop.js?v=election-support-map-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=exterior-doorframe-cull-3";

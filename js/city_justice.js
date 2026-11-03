@@ -6,7 +6,7 @@ import {offerForensicBribe,considerForensicBribe,preserveReportedForensicEvidenc
 import {dispatchVehicleRestitution,updateVehicleRestitution,pauseVehicleRestitution} from './city_vehicle_restitution.js';
 import {artworkNarrative,artworkReception,narrativeReception} from './city_art_narratives.js';
 import {funeralSpec} from './city_funeral_services.js';
-import {interiorLayout,interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
+import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {injuryMovementFactor,injuredCarryCapacity} from './city_injury_effects.js';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {CITY_FLOOR_HEIGHT,buildingPoint} from './city_building_geometry.js';
@@ -1075,27 +1075,53 @@ export class CityJustice {
     if(mission.phase==='to-suspect'){mission.phase='collect';this.collectRestitutionAsset(record,officer,suspect);}else{mission.phase='deliver';this.deliverRestitutionAsset(record,officer,owner);}return true;
   }
   observationPosition(c){return c?.indoorLocation?.position||c?.entity;}
-  beginSocialResolution(){this._socialWitnessMinute=this.city.minute;this._socialWitnessBuckets=null;}
-  endSocialResolution(){this._socialWitnessMinute=null;this._socialWitnessBuckets=null;}
+  beginSocialResolution(){this._socialWitnessMinute=this.city.minute;this._socialWitnessBuckets=null;this._socialOpaqueBuildingBuckets=null;this._socialInteriorSightCache=new Map();}
+  endSocialResolution(){this._socialWitnessMinute=null;this._socialWitnessBuckets=null;this._socialOpaqueBuildingBuckets=null;this._socialInteriorSightCache=null;}
   socialWitnessCandidates(position){
     if(this._socialWitnessMinute!==this.city.minute||!position)return null;
     if(!this._socialWitnessBuckets){
       const buckets=new Map();
-      for(const citizen of this.city.citizens){const point=this.observationPosition(citizen);if(!point)continue;const x=Math.floor(point.x/4),y=Math.floor(point.y/4),key=`${x},${y}`;let rows=buckets.get(key);if(!rows)buckets.set(key,rows=[]);rows.push(citizen);}
+      for(const citizen of this.city.citizens){const point=this.observationPosition(citizen);if(!point)continue;const x=Math.floor(point.x/2),y=Math.floor(point.y/2),key=`${x},${y}`;let rows=buckets.get(key);if(!rows)buckets.set(key,rows=[]);rows.push(citizen);}
       this._socialWitnessBuckets=buckets;
     }
-    const x=Math.floor(position.x/4),y=Math.floor(position.y/4),candidates=[];
-    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)candidates.push(...(this._socialWitnessBuckets.get(`${x+dx},${y+dy}`)||[]));
+    const x=Math.floor(position.x/2),y=Math.floor(position.y/2),candidates=[];
+    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)candidates.push(...(this._socialWitnessBuckets.get(`${x+dx},${y+dy}`)||[]));
     return candidates;
+  }
+  opaqueBuildingCandidatesAt(x,y){
+    if(this._socialWitnessMinute!==this.city.minute)return this.city.buildings;
+    if(!this._socialOpaqueBuildingBuckets){
+      const buckets=new Map();
+      for(const building of this.city.buildings){
+        if(building.constructionKind==='open-air'||!(building.width>0&&building.depth>0))continue;
+        const rotated=(building.rotation||0)%2!==0,width=rotated?building.depth:building.width,depth=rotated?building.width:building.depth;
+        const minX=Math.floor(building.entity.x/4),maxX=Math.floor((building.entity.x+width-1e-9)/4),minY=Math.floor(building.entity.y/4),maxY=Math.floor((building.entity.y+depth-1e-9)/4);
+        for(let cellY=minY;cellY<=maxY;cellY++)for(let cellX=minX;cellX<=maxX;cellX++){
+          const key=`${cellX},${cellY}`;let rows=buckets.get(key);if(!rows)buckets.set(key,rows=[]);rows.push(building);
+        }
+      }
+      this._socialOpaqueBuildingBuckets=buckets;
+    }
+    return this._socialOpaqueBuildingBuckets.get(`${Math.floor(x/4)},${Math.floor(y/4)}`)||[];
   }
   observationScene(c){const room=c?.indoorLocation;return {buildingId:room?.buildingId??null,unitId:room?.unitId??null,floor:room?.floor??null,height:c?.skybridgeZ||0};}
   interiorLineOfSight(building,from,to,floor){
-    if(!building||building.entity.destroyed)return false;const layout=interiorLayout(building),cell=point=>({x:Math.floor(point.x-building.entity.x),y:Math.floor(point.y-building.entity.y),z:floor}),nodeAt=p=>layout.nodes.get(`${p.x},${p.y},${p.z}`),start=cell(from),end=cell(to);if(!nodeAt(start)||!nodeAt(end))return false;
-    const connected=(a,b)=>{const node=nodeAt(a),next=nodeAt(b);return !!node&&!!next&&(layout.neighbors.get(node.key)||[]).includes(next.key);};
-    const transition=(a,b)=>{const dx=b.x-a.x,dy=b.y-a.y;if(Math.abs(dx)>1||Math.abs(dy)>1)return false;if(dx&&dy){const xFirst={x:b.x,y:a.y,z:floor},yFirst={x:a.x,y:b.y,z:floor};return connected(a,xFirst)&&connected(xFirst,b)&&connected(a,yFirst)&&connected(yFirst,b);}return connected(a,b);};
-    const steps=Math.max(1,Math.ceil(dist(from,to)/.12));let previous=start;
-    for(let i=1;i<=steps;i++){const t=i/steps,current=cell({x:from.x+(to.x-from.x)*t,y:from.y+(to.y-from.y)*t});if(current.x===previous.x&&current.y===previous.y)continue;if(!transition(previous,current))return false;previous=current;}
-    return previous.x===end.x&&previous.y===end.y;
+    if(!building||building.entity.destroyed)return false;
+    const cache=this._socialWitnessMinute===this.city.minute?this._socialInteriorSightCache:null,key=cache?`${building.id}:${floor}:${from.x},${from.y}:${to.x},${to.y}`:null;
+    if(cache?.has(key)){const profile=this.city.profileDiagnostics?this.city.society?._conversationProfile:null;if(profile)profile.prejudiceInteriorSightCacheHits=(profile.prejudiceInteriorSightCacheHits||0)+1;return cache.get(key);}
+    const finish=visible=>{if(cache)cache.set(key,visible);return visible;};
+    const ox=building.entity.x,oy=building.entity.y,width=building.width,depth=building.depth,floors=building.floors||1;
+    const sx=Math.floor(from.x-ox),sy=Math.floor(from.y-oy),ex=Math.floor(to.x-ox),ey=Math.floor(to.y-oy),inside=(x,y)=>floor>=0&&floor<floors&&x>=0&&x<width&&y>=0&&y<depth;
+    if(!inside(sx,sy)||!inside(ex,ey))return finish(false);
+    const steps=Math.max(1,Math.ceil(dist(from,to)/.12));let previousX=sx,previousY=sy;
+    for(let i=1;i<=steps;i++){
+      const t=i/steps,currentX=Math.floor(from.x+(to.x-from.x)*t-ox),currentY=Math.floor(from.y+(to.y-from.y)*t-oy);
+      if(currentX===previousX&&currentY===previousY)continue;
+      const dx=currentX-previousX,dy=currentY-previousY;if(Math.abs(dx)>1||Math.abs(dy)>1)return finish(false);
+      if(dx&&dy&&(!inside(currentX,previousY)||!inside(previousX,currentY)))return finish(false);
+      previousX=currentX;previousY=currentY;
+    }
+    return finish(previousX===ex&&previousY===ey);
   }
   observeThroughWindow(observer,position,scene,building){
     const unit=this.city.units?.get(scene.unitId),point=this.observationPosition(observer);if(!unit||!unit.hasWindow||unit.windowStyle==='shuttered'||unit.z!==scene.floor||!Number.isInteger(scene.floor)||scene.floor<0||!building||building.constructionKind==='open-air'||!point)return false;
@@ -1104,19 +1130,23 @@ export class CityJustice {
     if(unit.x===0)addSide(4,unit.x,unit.y+.5,-1,0);if(unit.x===building.width-1)addSide(8,unit.x+1,unit.y+.5,1,0);if(unit.y===0)addSide(1,unit.x+.5,unit.y,0,-1);if(unit.y===building.depth-1)addSide(2,unit.x+.5,unit.y+1,0,1);
     const visibleSide=sides.find(side=>unit.z!==0||!building.door||Math.hypot(building.door.x-side.x,building.door.y-side.y)>.65);if(!visibleSide)return false;
     const eyeHeight=(observer.skybridgeZ||0)+1,targetHeight=scene.floor*CITY_FLOOR_HEIGHT+.95;if(Math.abs(eyeHeight-targetHeight)>2.2)return false;
-    const samples=Math.max(1,Math.ceil(dist(point,position)/.2));for(let i=1;i<samples;i++){const t=i/samples,sx=point.x+(position.x-point.x)*t,sy=point.y+(position.y-point.y)*t;if(buildingContainsPoint(building,sx,sy))continue;if(this.city.buildings.some(other=>other.id!==building.id&&!other.entity.destroyed&&other.constructionKind!=='open-air'&&buildingContainsPoint(other,sx,sy)))return false;}
+    const samples=Math.max(1,Math.ceil(dist(point,position)/.2));for(let i=1;i<samples;i++){const t=i/samples,sx=point.x+(position.x-point.x)*t,sy=point.y+(position.y-point.y)*t;if(buildingContainsPoint(building,sx,sy))continue;if(this.opaqueBuildingCandidatesAt(sx,sy).some(other=>other.id!==building.id&&!other.entity.destroyed&&other.constructionKind!=='open-air'&&buildingContainsPoint(other,sx,sy)))return false;}
     return true;
   }
   canObserve(c,position,scene){
+    const profile=this.city.profileDiagnostics?this.city.society?._conversationProfile:null;
     if(!c||c.entity.destroyed||(c.needs?.health??100)<=20||(c.unconsciousUntil||0)>this.city.minute)return false;
     const own=this.observationScene(c),point=this.observationPosition(c);if(!point||dist(point,position)>3.2)return false;
-    if(scene.buildingId!=null){const building=this.city.building(scene.buildingId);if(own.buildingId===scene.buildingId){if(own.unitId!==scene.unitId||own.floor!==scene.floor)return false;return this.interiorLineOfSight(building,point,position,scene.floor??0);}if(own.buildingId==null)return this.observeThroughWindow(c,position,scene,building);return false;}
+    if(scene.buildingId!=null){const building=this.city.building(scene.buildingId);if(own.buildingId===scene.buildingId){if(own.unitId!==scene.unitId||own.floor!==scene.floor)return false;const started=profile?performance.now():0,visible=this.interiorLineOfSight(building,point,position,scene.floor??0);if(profile)profile.prejudiceInteriorSightMs=(profile.prejudiceInteriorSightMs||0)+performance.now()-started;return visible;}if(own.buildingId==null){const started=profile?performance.now():0,visible=this.observeThroughWindow(c,position,scene,building);if(profile)profile.prejudiceWindowSightMs=(profile.prejudiceWindowSightMs||0)+performance.now()-started;return visible;}return false;}
     if(own.buildingId!=null||Math.abs(own.height-scene.height)>.5)return false;
+    const started=profile?performance.now():0;
     const steps=Math.max(1,Math.ceil(dist(point,position)/.2));
+    let blocked=false;
     for(let i=1;i<steps;i++){const x=point.x+(position.x-point.x)*i/steps,y=point.y+(position.y-point.y)*i/steps;
-      if(this.city.buildings.some(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.width>0&&b.depth>0&&buildingContainsPoint(b,x,y)))return false;
+      if(this.opaqueBuildingCandidatesAt(x,y).some(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&b.width>0&&b.depth>0&&buildingContainsPoint(b,x,y))){blocked=true;break;}
     }
-    return true;
+    if(profile)profile.prejudiceExteriorSightMs=(profile.prejudiceExteriorSightMs||0)+performance.now()-started;
+    return !blocked;
   }
   artObserverAt(c,piece,radius=2.6){
     const location=c?.indoorLocation,support=piece?.support,position=this.observationPosition(c);if(!position)return false;
@@ -1150,12 +1180,17 @@ export class CityJustice {
     const rule=this.policies.penalCode[type]||{criminal:true,severity:50,fine:0,politicalDisqualification:false};
     if(!rule.criminal||type==='graffiti'&&((rule.ownerConsentDefense&&details.ownerAuthorized)||(rule.exemptArtworkKinds||[]).includes(details.artworkKind))||type==='vandalism'&&(details.damage??0)<(rule.minimumDamage||0))return null;
     const city=this.city,source=city.society.citizen(offenderId)||city.society.citizen(victimId),scene=details.scene||this.observationScene(source),position=details.useExactPosition?details.position:scene.buildingId!=null?this.observationPosition(source):details.position||this.observationPosition(source)||null,daylight=city.hour>=7&&city.hour<19,priorConviction=Number.isInteger(offenderId)&&this.cases.some(previous=>previous.type===type&&previous.status==='convicted'&&(previous.chargedCitizenId??previous.offenderId)===offenderId&&previous.convictionAnnulledAt==null&&previous.decriminalizedAt==null&&previous.verdictAt!=null&&previous.verdictAt<=occurredAt),recidivismBonus=priorConviction?Math.max(0,Math.min(50,Math.floor(rule.recidivismSeverityBonus||0))):0,effectiveRule={...rule,severity:Math.min(100,(rule.severity??50)+recidivismBonus)};
-    const visibility=this.sceneIllumination(scene,position,daylight),witnesses=[];
+    const visibility=this.sceneIllumination(scene,position,daylight),witnesses=[],socialProfile=details.discriminatoryAct&&city.profileDiagnostics?city.society?._conversationProfile:null;
+    let witnessCandidateCount=0,canObserveMs=0,witnessResolveMs=0;
     if(observe&&position)for(const witness of witnessCandidates||city.citizens){
-      if(witness.id===offenderId||!this.canObserve(witness,position,scene))continue;
+      witnessCandidateCount++;if(witness.id===offenderId)continue;
+      let started=socialProfile?performance.now():0;const observable=this.canObserve(witness,position,scene);if(socialProfile)canObserveMs+=performance.now()-started;if(!observable)continue;
+      started=socialProfile?performance.now():0;
       const distance=dist(position,this.observationPosition(witness)),patrolling=this.policeOnDuty(witness),attention=this.skillFactor(witness,'investigation')*(patrolling?1.2+(witness.skills?.investigation||0)/500:1),confidence=Math.max(0,Math.min(1,(1-distance/4)*visibility*(.72+(witness.traits?.skepticism??.5)*.28)*attention));
       if(city.random()<confidence)witnesses.push({citizenId:witness.id,confidence,identifiedSuspectId:confidence>(patrolling ? .55 : .72)?offenderId:null,noticedAt:city.minute,scene:{...scene},role:patrolling?'police-officer':null});
+      if(socialProfile)witnessResolveMs+=performance.now()-started;
     }
+    if(socialProfile){socialProfile.prejudiceWitnessCandidateCount=(socialProfile.prejudiceWitnessCandidateCount||0)+witnessCandidateCount;socialProfile.prejudiceCanObserveMs=(socialProfile.prejudiceCanObserveMs||0)+canObserveMs;socialProfile.prejudiceWitnessResolveMs=(socialProfile.prejudiceWitnessResolveMs||0)+witnessResolveMs;}
     const record={id:this.nextCaseId++,type,offenderId,victimId,occurredAt,scene:{...scene},visibility,position:position?{x:position.x,y:position.y}:null,reportedAt:null,status:'unreported',severity:effectiveRule.severity,baseSeverity:rule.severity??50,recidivismApplied:recidivismBonus>0,originalRule:{...effectiveRule},rule:{...effectiveRule},penalCodeRevision:this.penalCodeRevision||0,evidence:[],witnesses,witnessIds:witnesses.map(w=>w.citizenId),investigation:null,trial:null,details:{...details,...(recidivismBonus?{recidivismApplied:true,recidivismBonus}:{})}};
     this.cases.push(record);record.eventId=this.city.log(`Registro de ocorrência: ${type}.`,'justice',[offenderId,victimId].filter(Number.isInteger),{kind:'crime-recorded',caseId:record.id,crime:type}).id;this.rememberObservedCrime(record);this.dispatchPoliceResponse(record);return record;
   }

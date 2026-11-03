@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=production-plan-profile-5';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=production-plan-profile-9';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -76,7 +76,7 @@ function recordProfile(profile,prefix=''){
       if(!current||value>current.count)phasePeaks[name]={count:value,minute:profile.minute};
       continue;
     }
-    if((key==='completedCount'||key==='prejudiceActCount')&&Number.isFinite(value)){
+    if((key==='completedCount'||key==='prejudiceActCount'||key.endsWith('CandidateCount'))&&Number.isFinite(value)){
       const name=prefix+key,peak=phasePeaks[name];if(!peak||value>peak.count)phasePeaks[name]={count:value,minute:profile.minute};
       continue;
     }

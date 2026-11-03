@@ -11,12 +11,12 @@ import {outdoorCellReady,workCellReady} from './city_interiors.js?v=substances-s
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=perf-employment-stagger-1';
-import {productionPlan,investProductionPlan} from './city_production_planner.js?v=production-plan-profile-5';
+import {productionPlan,investProductionPlan} from './city_production_planner.js?v=production-plan-profile-9';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=tropical-caribbean-prints-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
-import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=furniture-farms-fertilizer-1';
+import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=service-investment-founder-index-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=quarry-outskirts-1';
 import { inventoryFree, initializeInventory } from './city_inventory.js';

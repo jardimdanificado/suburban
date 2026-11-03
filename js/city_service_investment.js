@@ -96,6 +96,11 @@ export class CityServiceInvestment {
     const city = this.city;
     city.development.ensurePlots();
     const demands = [...ESSENTIAL_SERVICES].map(type => ({type,...this.demand(type)})).filter(d => d.score >= 60&&(!types||types.includes(d.type))&&(!initialOnly||!city.economy.businesses.some(b=>b.type===d.type))).sort((a,b) => (a.type === 'builder' ? -1 : b.type === 'builder' ? 1 : b.score-a.score));
+    // Candidate eligibility is shared by every service demand. Build it once
+    // per investment pass instead of rescanning all citizens and all projects
+    // for every service type.
+    const projectAccounts = new Set(city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').map(p=>p.accountId));
+    const eligibleFounders = city.citizens.filter(c=>city.society.isAdult(c)&&!c.entity.destroyed&&!city.politics.officeHolder(c)&&!c.businessIds.length&&!c.deliveryId&&!c.cleaningJobId);
     let started = false;
     for (const demand of demands) {
       const pending = this.pending(demand.type);
@@ -104,7 +109,8 @@ export class CityServiceInvestment {
       const plot = this.lots(demand.type)[0];
       if (!plot) { this.decisions.set(demand.type,{state:'Aguardando terreno urbano acessível',minute:city.minute}); continue; }
       const plan = this.plan(demand.type,plot);
-      const candidates = city.citizens.filter(c => city.society.isAdult(c) && !c.entity.destroyed && !city.politics.officeHolder(c) && !c.businessIds.length && !c.deliveryId && !c.cleaningJobId && !city.development.projects.some(p => p.accountId === c.accountId && !p.cancelled && p.status !== 'completed')).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[({quarry:'mining',builder:'construction',carrier:'logistics',lamp_service:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0)-(a.skills[({quarry:'mining',builder:'construction',carrier:'logistics',lamp_service:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type]]||0) || a.id-b.id);
+      const skill=({quarry:'mining',builder:'construction',carrier:'logistics',lamp_service:'logistics',cleaner:'cleaning',waste_collector:'logistics',recycler:'recycling',composting:'recycling'})[demand.type];
+      const candidates = eligibleFounders.filter(c=>!projectAccounts.has(c.accountId)).sort((a,b) => Number(!!a.jobId)-Number(!!b.jobId) || (b.skills[skill]||0)-(a.skills[skill]||0) || a.id-b.id);
       let project = null;
       for (const founder of candidates) {
         let loan = null;
@@ -112,7 +118,7 @@ export class CityServiceInvestment {
         if (need && founder.creditAllowed!==false) for (const bank of city.bank.available()) { loan = city.bank.lendForBusiness(bank,founder,need,{type:demand.type,initialChain:!city.economy.businesses.some(b=>b.type===demand.type&&(demand.type!=='quarry'||city.economy.quarryStatus(b).remaining>0)),score:demand.score,budget:plan.total}); if (loan) break; }
         if (founder.balance < plan.total) continue;
         if (city.development.buyPlot(founder.accountId,plot.id)) project = this.start(founder.accountId,plan,loan);
-        if (project) break;
+        if (project) {projectAccounts.add(founder.accountId);break;}
         // A synchronous failed opening returns the unused financing instead of creating a phantom debt.
         if (plot.ownerId === founder.accountId && !plot.projectId) { city.transfer('treasury',founder.accountId,plot.price,'Estorno de terreno de empreendimento'); plot.ownerId='treasury';plot.forSale=true; }
         if (loan) city.bank.cancelBusinessLoan(loan);
