@@ -4,51 +4,68 @@ import {voterElectorates} from './city_electoral_behavior.js';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 /** Public standing uses bounded opinion panels; secret crimes never enter these scores. */
 export class CityPoliticalStanding {
-  constructor(city){this.city=city;this.lastPeriod=null;}
+  constructor(city){this.city=city;this.lastPeriod=null;this.partyReputationRulesVersion=0;}
   cases(){const p=this.city.politics;return [...new Map([...p.corruption,...p.scandals].map(r=>[r.id,r])).values()];}
   origins(record){return record.partyAffiliations?.length?record.partyAffiliations:[{citizenId:record.accusedId,partyId:record.partyId}];}
   accepted(c,party){
-    for(const record of this.cases())if(this.origins(record).some(a=>a.citizenId===c.id)&&!this.origins(record).some(a=>a.partyId===party.id)){
+    for(const record of this.cases())if(record.discoveredAt!=null&&record.proven&&this.city.minute>(record.provenAt??record.discoveredAt)&&this.origins(record).some(a=>a.citizenId===c.id)&&!this.origins(record).some(a=>a.partyId===party.id)){
       record.hostingParties??=[];if(!record.hostingParties.some(a=>a.partyId===party.id&&a.citizenId===c.id))record.hostingParties.push({partyId:party.id,citizenId:c.id,joinedAt:this.city.minute});
     }
-    // Preserve hosting consequences even after the detailed case leaves retention.
+    const recordsById=new Map(this.cases().map(record=>[record.id,record]));
     for(const origin of this.city.politics.parties)if(origin.id!==party.id)for(const incident of origin.reputationIncidents||[])if(incident.role==='origin'&&incident.proven&&(incident.citizenIds||[incident.citizenId]).includes(c.id)){
+      const source=recordsById.get(incident.caseId),provenAt=source?.provenAt??source?.discoveredAt;
+      if(!source||!source.proven||source.discoveredAt==null||!Number.isFinite(provenAt)||this.city.minute<=provenAt)continue;
       party.reputationIncidents??=[];let host=party.reputationIncidents.find(i=>i.caseId===incident.caseId&&i.role==='host');
-      if(!host){host={caseId:incident.caseId,role:'host',citizenId:c.id,citizenIds:[c.id],recordedAt:this.city.minute,occurredAt:incident.occurredAt,penalty:incident.penalty*.08,proven:true};party.reputationIncidents.push(host);const event=this.city.log(`${party.short} acolheu envolvido em escândalo de ${origin.short}; marca reputacional de ${host.penalty.toFixed(2)} pontos.`,'government',[c.id],{kind:'party-hosting-reputation',partyId:party.id,corruptionCaseId:incident.caseId,penalty:host.penalty});host.eventId=event.id;}
+      if(!host){host={caseId:incident.caseId,role:'host',citizenId:c.id,citizenIds:[c.id],joinedAt:this.city.minute,provenAt,recordedAt:this.city.minute,occurredAt:incident.occurredAt,penalty:incident.penalty*.08,proven:true};party.reputationIncidents.push(host);const event=this.city.log(`${party.short} acolheu envolvido em escândalo de ${origin.short}; marca reputacional de ${host.penalty.toFixed(2)} pontos.`,'government',[c.id],{kind:'party-hosting-reputation',partyId:party.id,corruptionCaseId:incident.caseId,penalty:host.penalty});host.eventId=event.id;}
     }
     this.lastPeriod=null;
   }
   legislativeOpinion(bill,override=false){recordLegislativeOpinion(this,bill,override);}
   partyReputations(){
     const city=this.city,p=city.politics,adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),living=new Set(adults.map(c=>c.id));
-    for(const party of p.parties){party.reputationIncidents??=[];party.publicReputation??=50;}
+    const cases=this.cases(),caseById=new Map(cases.map(record=>[record.id,record]));
+    for(const record of cases){const provenAt=record.provenAt??record.discoveredAt;if(!record.proven||record.discoveredAt==null||!Number.isFinite(provenAt)){record.hostingParties=[];continue;}record.hostingParties=(record.hostingParties||[]).filter(host=>Number.isFinite(host.joinedAt)&&host.joinedAt>provenAt);}
+    const prejudiceById=new Map((city.justice?.prejudiceIncidents||[]).map(incident=>[incident.id,incident]));
+    for(const party of p.parties){party.reputationIncidents??=[];party.publicReputation??=50;for(const incident of party.reputationIncidents)if(incident.role==='prejudice'){
+      const source=prejudiceById.get(Number(String(incident.caseId).replace(/^prejudice-/,''))),known=source?new Set((source.awareIds||source.noticedBy||[]).filter(id=>living.has(id))).size:0,exposure=source?known/Math.max(1,adults.length):Number.isFinite(incident.exposure)?incident.exposure:0;
+      incident.exposure=exposure;incident.penalty=Math.min(4,(1.5+Math.max(0,Math.min(1,source?.strength??.65))*2)*Math.sqrt(Math.max(0,Math.min(1,exposure))));
+    }party.reputationIncidents=party.reputationIncidents.filter(incident=>{
+      const record=caseById.get(incident.caseId);
+      if(incident.role==='origin'){if(record)return !!incident.proven&&!!record.proven&&record.discoveredAt!=null;return !!incident.proven&&Number.isFinite(incident.provenAt);}
+      if(incident.role!=='host')return true;
+      if(!record)return Number.isFinite(incident.joinedAt)&&Number.isFinite(incident.provenAt)&&incident.joinedAt>incident.provenAt;
+      return !!record.proven&&record.discoveredAt!=null&&(record.hostingParties||[]).some(host=>host.partyId===party.id&&(incident.citizenIds||[incident.citizenId]).includes(host.citizenId));
+    });}
     for(const record of this.cases()){
-      if(record.discoveredAt==null)continue;
+      // Opening an investigation is not public proof and must not create a party incident.
+      if(record.discoveredAt==null||!record.proven)continue;
       const origins=this.origins(record),reach=(record.awareIds||[]).filter(id=>living.has(id)).length/Math.max(1,adults.length);
       // Record the receiving party even if the crime was only discovered after a move.
-      for(const origin of origins){const c=city.society.citizen(origin.citizenId),party=p.party(c?.political?.partyId);if(party&&!origins.some(a=>a.partyId===party.id)){
+      for(const origin of origins){const c=city.society.citizen(origin.citizenId),party=p.party(c?.political?.partyId),provenAt=record.provenAt??record.discoveredAt;if(party&&!origins.some(a=>a.partyId===party.id)&&Number.isFinite(c?.political?.membershipSince)&&c.political.membershipSince>provenAt){
         record.hostingParties??=[];if(!record.hostingParties.some(a=>a.partyId===party.id&&a.citizenId===c.id))record.hostingParties.push({partyId:party.id,citizenId:c.id,joinedAt:c.political.membershipSince});
       }}
       const affected=[...new Map(origins.filter(a=>a.partyId!=null).map(a=>[a.partyId,{...a,role:'origin'}])).values(),...new Map((record.hostingParties||[]).filter(a=>!origins.some(o=>o.partyId===a.partyId)).map(a=>[a.partyId,{...a,role:'host'}])).values()];
       for(const a of affected){const party=p.party(a.partyId);if(!party)continue;
         let incident=party.reputationIncidents.find(i=>i.caseId===record.id&&i.role===a.role);
-        if(!incident){incident={caseId:record.id,role:a.role,citizenId:a.citizenId,recordedAt:city.minute,occurredAt:record.occurredAt,penalty:0,proven:false};party.reputationIncidents.push(incident);}
+        if(!incident){incident={caseId:record.id,role:a.role,citizenId:a.citizenId,joinedAt:a.role==='host'?Math.min(...record.hostingParties.filter(o=>o.partyId===party.id).map(o=>o.joinedAt)):null,provenAt:record.provenAt??record.discoveredAt,recordedAt:city.minute,occurredAt:record.occurredAt,penalty:0,proven:false};party.reputationIncidents.push(incident);}
+        if(a.role==='host'){incident.joinedAt??=Math.min(...record.hostingParties.filter(o=>o.partyId===party.id).map(o=>o.joinedAt));incident.provenAt??=record.provenAt??record.discoveredAt;}
+        else incident.provenAt??=record.provenAt??record.discoveredAt;
         incident.citizenIds=[...new Set((a.role==='origin'?origins:record.hostingParties||[]).filter(o=>o.partyId===party.id).map(o=>o.citizenId))];
         const before=incident.penalty,wasProven=incident.proven;
-        const penalty=(record.severity||40)*(record.proven?.22:.03)*(.3+.7*reach)*(a.role==='host'?.08:1);
-        incident.penalty=record.archived&&!record.proven?0:Math.max(incident.penalty,penalty);incident.proven=!!record.proven;
+        const penalty=(record.severity||40)*.22*(.3+.7*reach)*(a.role==='host'?.08:1);
+        incident.penalty=Math.max(incident.penalty,penalty);incident.proven=true;
         if(Math.abs(before-incident.penalty)>=.5||wasProven!==incident.proven||!incident.eventId){
           const kind=a.role==='origin'?'party-scandal-reputation':'party-hosting-reputation';
           const event=city.log(`${party.short}: ${a.role==='origin'?'escândalo ocorrido durante a filiação':'acolhimento de envolvido em escândalo de outro partido'}; marca reputacional de ${incident.penalty.toFixed(2)} pontos.`,'government',[a.citizenId],{kind,partyId:party.id,corruptionCaseId:record.id,penalty:incident.penalty,role:a.role,proven:record.proven});incident.eventId=event.id;
         }
       }
     }
-    for(const party of p.parties){const original=party.reputationIncidents.filter(i=>i.role==='origin'||i.role==='prejudice').reduce((n,i)=>n+i.penalty,0),hosting=party.reputationIncidents.filter(i=>i.role==='host').reduce((n,i)=>n+i.penalty,0),prejudice=party.reputationIncidents.filter(i=>i.role==='prejudice').reduce((n,i)=>n+i.penalty,0),effects=publicPerformance(p,party);
+    for(const party of p.parties){const original=party.reputationIncidents.filter(i=>i.role==='prejudice'||i.role==='origin'&&i.proven&&Number.isFinite(i.provenAt)).reduce((n,i)=>n+i.penalty,0),hosting=party.reputationIncidents.filter(i=>i.role==='host'&&i.proven&&Number.isFinite(i.joinedAt)&&Number.isFinite(i.provenAt)&&i.joinedAt>i.provenAt).reduce((n,i)=>n+i.penalty,0),prejudice=party.reputationIncidents.filter(i=>i.role==='prejudice').reduce((n,i)=>n+i.penalty,0),effects=publicPerformance(p,party);
       party.publicReputation=clamp(50+effects.performance+effects.legislative-original-hosting+(party.mergerPopularityAdjustment||0));party.reputationReport={minute:city.minute,baseline:50,...effects,originalPenalty:original,prejudicePenalty:prejudice,hostingPenalty:hosting,mergerAdjustment:party.mergerPopularityAdjustment||0,score:party.publicReputation};
     }
   }
   refresh(force=false){
-    const city=this.city,p=city.politics,period=Math.floor(city.minute/360);if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
+    const city=this.city,p=city.politics,period=Math.floor(city.minute/360);if(this.partyReputationRulesVersion!==3){this.partyReputationRulesVersion=3;this.lastPeriod=null;}if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
     const voters=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));for(const c of voters)p.initializeCitizen(c);
     this.partyReputations();const cases=this.cases().filter(r=>r.discoveredAt!=null),casesByCitizen=new Map();
     for(const record of cases){const item={record,aware:new Set(record.awareIds||[])};for(const id of new Set([record.accusedId,...this.origins(record).map(a=>a.citizenId)])){if(!casesByCitizen.has(id))casesByCitizen.set(id,[]);casesByCitizen.get(id).push(item);}}

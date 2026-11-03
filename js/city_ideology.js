@@ -2,6 +2,8 @@ import {partyNameAgenda} from './city_party_names.js';
 const clamp=(n,a=-1,b=1)=>Math.max(a,Math.min(b,n));
 const profiles=new WeakMap();
 const normalize=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+export const POLITICAL_POSITIONS=['Ultraesquerda','Extrema esquerda','Esquerda','Centro-esquerda','Centro','Centro-direita','Direita','Extrema direita','Ultradireita'];
+export function politicalPosition(economy){return economy<-.88?'Ultraesquerda':economy<-.65?'Extrema esquerda':economy<-.4?'Esquerda':economy<-.2?'Centro-esquerda':economy<=.2?'Centro':economy<=.4?'Centro-direita':economy<=.65?'Direita':economy<=.88?'Extrema direita':'Ultradireita';}
 /** Distinct policy preferences. Economic side does not determine civil liberties. */
 export function ideologicalProfile(subject){
   const citizen=!!subject?.political,i=citizen?subject.political.ideology:subject?.ideology,name=citizen?'':subject?.name||'',frugality=citizen?subject.traits?.frugality:null,cached=subject&&profiles.get(subject);
@@ -9,7 +11,7 @@ export function ideologicalProfile(subject){
   const source=i||{},agenda=citizen?{}:subject?.nameAgenda||partyNameAgenda(name),text=normalize(name);
   const has=re=>re.test(text)?1:0,economy=clamp((source.economy||0)+(agenda.economy||0)*.15),liberty=clamp((source.liberty||0)+(agenda.liberty||0)*.6),green=clamp((source.green??.4)+(agenda.green||0),0,1);
   const redistribution=clamp(-economy*.8+(agenda.social||0)*.9),ownership=clamp(-economy*.65+(agenda.state||0)*1.1+has(/comunist|estatist|estadist|coletivist/)*.35-has(/anarqu|libertari/)*.4),regulation=clamp(-economy*.5-liberty*.25+green*.15+has(/sindicat|trabalh/)*.2),fiscal=clamp(economy*.45+(citizen?(subject.traits?.frugality??.5)-.5:0)+has(/fiscal|auster|conserv/)*.4-has(/desenvolv|expans/)*.25),cooperation=clamp(-economy*.5+liberty*.25+has(/cooper|solidari|mutual/)*.4);
-  const side=economy<-.88?'ultra-esquerda':economy<-.65?'extrema-esquerda':economy<-.2?'centro-esquerda':economy>.88?'ultra-direita':economy>.65?'extrema-direita':economy>.2?'centro-direita':'centro',current=ownership>.5?'estatal':ownership<-.4?'privada':cooperation>.4?'cooperativa':'mista';
+  const side=politicalPosition(economy).toLowerCase().replaceAll(' ','-'),current=ownership>.5?'estatal':ownership<-.4?'privada':cooperation>.4?'cooperativa':'mista';
   const profile=Object.freeze({economy,liberty,green,redistribution,ownership,regulation,fiscal,cooperation,label:`${side} · economia ${current} · ${liberty>.25?'libertária':liberty<-.25?'centralizadora':'pluralista'}`});
   if(subject)profiles.set(subject,{ideology:i,name,agenda:subject.nameAgenda,frugality,profile});return profile;
 }
@@ -58,7 +60,7 @@ export function ideologicalPromiseWeight(profile,metric){
 /** Human descriptions summarize existing policy axes; they do not change anyone's beliefs. */
 export function describePoliticalOrientation(subject){
   if(!subject?.political?.ideology&&!subject?.ideology)return {label:'Orientação ainda não definida',position:'Ainda não definida',ideology:'Sem corrente definida',economic:'Sem preferência definida',civil:'Sem preferência definida',environment:'Sem preferência definida'};
-  const p=ideologicalProfile(subject),position=p.economy<-.88?'Ultraesquerda':p.economy<-.65?'Extrema esquerda':p.economy<-.2?'Centro-esquerda':p.economy>.88?'Ultradireita':p.economy>.65?'Extrema direita':p.economy>.2?'Centro-direita':'Centro';
+  const p=ideologicalProfile(subject),position=politicalPosition(p.economy);
   let ideology;
   const name=normalize(subject?.name||'');
   if(/anarcocapital|anarco-capital/.test(name))ideology='Anarcocapitalismo';

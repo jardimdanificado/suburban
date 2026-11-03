@@ -46,7 +46,7 @@ export function renderCorruptionInspector(ui,p){
     if(r.headquartersBuildingId!=null){const headquarters=city.building(r.headquartersBuildingId);p.kv('Sede vinculada ao caixa clandestino',headquarters?.entity.properties.name||'Imóvel indisponível');if(headquarters)p.button('VER SEDE VINCULADA',()=>ui.openBuilding(headquarters.id));}
     p.kv('Quando ocorreu',stamp(r.occurredAt));p.kv('Partido do articulador à época',party?.name||'Sem partido');
     if(party?.flag){if(p.visible(40))drawPartyFlag(p.ui.ctx,party.flag,p.x,p.y,58,36);p.y+=41;}
-    p.heading('REPUTAÇÃO DOS PARTIDOS');for(const affected of gov.parties){const incidents=(affected.reputationIncidents||[]).filter(i=>i.caseId===r.id);for(const incident of incidents)p.kv(`${affected.short} · ${incident.role==='origin'?'à época do crime':'acolhimento posterior'}`,`−${incident.penalty.toFixed(2)} pontos`);}
+    p.heading('REPUTAÇÃO DOS PARTIDOS');for(const affected of gov.parties){const incidents=(affected.reputationIncidents||[]).filter(i=>i.caseId===r.id);for(const incident of incidents)p.kv(`${affected.short} · ${incident.role==='origin'?'partido do filiado à época':incident.role==='host'?'acolhimento após comprovação':'ato de preconceito por filiado'}`,`−${incident.penalty.toFixed(2)} pontos`);}
     if(!discovered(r))p.note('Sem efeito público na reputação enquanto o esquema permanecer secreto.');
     p.heading('QUEM PARTICIPOU');
     const roles=new Map((r.roles||[]).map(role=>[role.citizenId,role.role]));

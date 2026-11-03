@@ -18,7 +18,7 @@ import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=tropical-caribbean-prints-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
-import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=phrase-scope-1';
+import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-prejudice-standing-1';
 import {renderElectionMonitor} from './city_election_ui.js?v=election-support-map-1';
 import {sectionTitle} from './city_ui_sections.js';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
@@ -32,7 +32,7 @@ import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody}
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js?v=discrimination-laws-1';
 import { PREJUDICE_TYPES, initializePrejudices } from './city_prejudice.js?v=discrimination-laws-1';
-import { describePoliticalOrientation } from './city_ideology.js';
+import { describePoliticalOrientation, POLITICAL_POSITIONS } from './city_ideology.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=sertanejo-house-styles-1';
 import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tree-sidewalk-1';
@@ -46,7 +46,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=substance-brands-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=banner-placement-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=party-prejudice-standing-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -616,7 +616,7 @@ export class CityUI {
   }
   analyticsFilters(p){
     const f=this.analyticsFilter??={segment:'all',gender:'all',orientation:'all',political:'all'};
-    const groups=[['segment','PÚBLICO',[['all','Todos'],['workers','Empregados'],['unemployed','Desempregados'],['owners','Empresários'],['homeless','Sem moradia']]],['gender','GÊNERO',[['all','Todas'],['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]],['orientation','ORIENTAÇÃO',[['all','Todas'],['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]],['political','POLÍTICA',[['all','Todas'],...['Ultraesquerda','Extrema esquerda','Centro-esquerda','Centro','Centro-direita','Extrema direita','Ultradireita'].map(x=>[x,x])]]];
+    const groups=[['segment','PÚBLICO',[['all','Todos'],['workers','Empregados'],['unemployed','Desempregados'],['owners','Empresários'],['homeless','Sem moradia']]],['gender','GÊNERO',[['all','Todas'],['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]],['orientation','ORIENTAÇÃO',[['all','Todas'],['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]],['political','POLÍTICA',[['all','Todas'],...POLITICAL_POSITIONS.map(x=>[x,x])]]];
     for(const [key,label,options]of groups){p.note(label,T.muted);p.buttons(options.map(([id,text])=>({label:text,selected:f[key]===id,click:()=>{f[key]=id;this.resetScroll();}})));}
     return f;
   }
@@ -663,8 +663,8 @@ export class CityUI {
     if(INDUSTRIES[b.type]){const industry=INDUSTRIES[b.type],plan=(city.economy.productionPlan||[]).find(r=>r.type===b.type&&(!r.crop||r.crop===b.crop));p.heading('CADEIA DE PRODUÇÃO');p.note(industry.impact);p.kv('Insumos por ciclo',Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(' · ')||'Trabalho e recursos locais');p.kv('Produtos por ciclo',Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(' · ')||'Serviço');if(plan){p.kv('Prioridade da cadeia',Math.round(plan.priority||0));p.note(plan.reason||plan.response?.state||plan.state);}p.table([{label:'Fluxo',weight:1.2},{label:'Produto',weight:2},{label:'Unidades'},{label:'Registros'},{label:'Mais recente'}],[...flow.values()].sort((a,z)=>z.latest-a.latest).map(r=>({cells:[r.direction,GOODS[r.good]?.label||r.good,r.quantity,r.events,stamp(r.latest)]})),{empty:'Ainda não há movimentações de produção registradas para esta empresa.'});}
     p.heading('CLIENTELA');p.note('Filtre a clientela registrada pelas características simuladas dos compradores; compras por contas institucionais ficam fora do recorte pessoal.');
     const demo=(key,label,labels)=>{p.note(label,T.muted);p.buttons(labels.map(([id,text])=>({label:text,selected:(this.analyticsFilter?.[key]||'all')===id,click:()=>{this.analyticsFilter??={gender:'all',orientation:'all',political:'all'};this.analyticsFilter[key]=id;this.resetScroll();}})));};
-    demo('gender','GÊNERO', [['all','Todos'],['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]);demo('orientation','ORIENTAÇÃO SEXUAL', [['all','Todas'],['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]);demo('political','ORIENTAÇÃO POLÍTICA', [['all','Todas'],...['Ultraesquerda','Extrema esquerda','Centro-esquerda','Centro','Centro-direita','Extrema direita','Ultradireita'].map(x=>[x,x])]);
-    const audienceRows=[];for(const [label,get,keys]of [['Gênero',c=>c.socialProfile?.gender,[['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]],['Orientação sexual',c=>c.socialProfile?.orientation,[['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]],['Orientação política',c=>describePoliticalOrientation(c).position,['Ultraesquerda','Extrema esquerda','Centro-esquerda','Centro','Centro-direita','Extrema direita','Ultradireita'].map(x=>[x,x])]])for(const [key,labelValue]of keys)audienceRows.push({cells:[`${label} · ${labelValue}`,audience.filter(c=>get(c)===key).length]});
+    demo('gender','GÊNERO', [['all','Todos'],['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]);demo('orientation','ORIENTAÇÃO SEXUAL', [['all','Todas'],['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]);demo('political','ORIENTAÇÃO POLÍTICA', [['all','Todas'],...POLITICAL_POSITIONS.map(x=>[x,x])]);
+    const audienceRows=[];for(const [label,get,keys]of [['Gênero',c=>c.socialProfile?.gender,[['woman','Mulheres'],['man','Homens'],['nonbinary','Não binários']]],['Orientação sexual',c=>c.socialProfile?.orientation,[['hetero','Outro gênero'],['homo','Mesmo gênero'],['bi','Diferentes gêneros'],['aromantic','Sem interesse romântico']]],['Orientação política',c=>describePoliticalOrientation(c).position,POLITICAL_POSITIONS.map(x=>[x,x])]])for(const [key,labelValue]of keys)audienceRows.push({cells:[`${label} · ${labelValue}`,audience.filter(c=>get(c)===key).length]});
     p.table([{label:'Perfil',weight:2},{label:'Compradores'}],audienceRows);
     p.heading('CONTRATOS E SERVIÇOS');const agreements=(city.economy.supplyAgreements||[]).filter(a=>a.buyerId===b.id||a.sellerId===b.id),cleaning=city.sanitation.jobs.filter(j=>j.payerId===b.accountId),work=city.development.projects.filter(j=>j.accountId===b.accountId&&!j.cancelled&&j.status!=='completed'),purchases=(city.marketHistory||[]).filter(s=>s.buyer===b.accountId&&s.seller!==b.accountId).slice(-24).reverse();
     p.metrics([['FUNCIONÁRIOS',b.workers.length,C.cyan],['VALES-ALIMENTAÇÃO',b.vouchersIssued||0,C.gold],['REFEIÇÕES NO LOCAL',b.mealsServed||0,C.green],['LIMPEZA CONTRATADA',cleaning.length,C.cyan]]);
