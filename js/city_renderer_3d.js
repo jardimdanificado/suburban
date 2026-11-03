@@ -1,5 +1,5 @@
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
-import {furnitureModel} from './city_furniture_models.js?v=personal-beach-equipment-2';
+import {furnitureModel} from './city_furniture_models.js?v=personal-beach-equipment-3';
 import {applyInteriorCutaway} from './city_interior_view.js?v=interior-cell-batch-1';
 import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
 import {addBuildingDetails} from './city_building_details.js?v=static-facade-batch-5';
@@ -832,7 +832,7 @@ function syncBeachLeisureProps(renderer,THREE,world){
  const citizens=renderer.cityDevelopment?.city?.citizens||[],props=renderer.beachLeisureProps??=new Map(),active=new Map();
  for(const c of citizens){const setup=c.beachLeisure;if(!c.entity.destroyed&&c.task==='beach_leisure'&&setup&&!c.path?.length)active.set(c.id,{c,setup});}
  for(const [id,g]of props)if(!active.has(id)){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});props.delete(id);}
- for(const [id,{setup}]of active){let g=props.get(id);const towel=setup.kind==='beach_ground'&&setup.variant%2===0,styleKey=`${setup.kind}:${setup.variant}:${setup.umbrellaStyle}:${towel}`;if(g&&g.userData.styleKey!==styleKey){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});props.delete(id);g=null;}
+ for(const [id,{setup}]of active){let g=props.get(id);const towel=setup.towel??(setup.kind==='beach_ground'&&setup.variant%2===0),styleKey=`${setup.kind}:${setup.variant}:${setup.umbrellaStyle}:${towel}`;if(g&&g.userData.styleKey!==styleKey){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});props.delete(id);g=null;}
   if(!g){g=furnitureModel(THREE,{type:setup.kind,variant:setup.variant,umbrellaStyle:setup.umbrellaStyle,towel});mergeStaticMeshes(THREE,g);g.userData.styleKey=styleKey;renderer.scene.add(g);props.set(id,g);}
   g.position.set(setup.x,surfaceElevation(world,setup.x,setup.y)+.02,setup.y);g.rotation.y=setup.angle;g.visible=setup.x>=(renderer.renderedMinTx??0)&&setup.x<=(renderer.renderedMaxTx??world.width)&&setup.y>=(renderer.renderedMinTy??0)&&setup.y<=(renderer.renderedMaxTy??world.height);
  }

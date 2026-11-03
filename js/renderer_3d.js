@@ -1,4 +1,4 @@
-import {syncSubstanceSmoke} from './city_substance_smoke.js';
+import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
@@ -11,7 +11,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=personal-beach-equipment-2";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=personal-beach-equipment-3";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=personal-beach-setups-4';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';

@@ -1,7 +1,7 @@
 import {CitySubstances} from './city_substances.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=personal-beach-setups-1';
+import {CityFurniture} from './city_furniture.js?v=personal-beach-setups-2';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=overhead-billboards-1';
 import {CityWater} from './city_water.js';
@@ -48,7 +48,7 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=plot
 import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=substance-market-demand-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=beverage-chains-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=favela-tree-roads-1';
 
@@ -158,7 +158,7 @@ export class CitySimulation {
     this.officialJournal = new CityOfficialJournal(this);
     this.vehicles = new CityVehicles(this);
     this.paint = new CityPaint(this);
-    this.substances=new CitySubstances(this);this.substanceSchemaVersion=1;
+    this.substances=new CitySubstances(this);this.substanceSchemaVersion=2;
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;

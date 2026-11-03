@@ -1,4 +1,4 @@
-import {SUBSTANCE_CROPS,SUBSTANCES} from './city_substance_catalog.js';
+import {SUBSTANCE_CROPS,SUBSTANCES,SUBSTANCE_CONTROLLED_GOODS} from './city_substance_catalog.js';
 import {justiceServiceSpec} from './city_justice_services.js';
 import {JUSTICE_SKILLS,ensureJusticeSkills} from './city_justice_skills.js';
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
@@ -11,7 +11,7 @@ import {outdoorCellReady,workCellReady} from './city_interiors.js?v=substances-s
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=perf-employment-stagger-1';
-import {productionPlan,investProductionPlan} from './city_production_planner.js?v=production-plan-profile-16';
+import {productionPlan,investProductionPlan} from './city_production_planner.js?v=beverage-chains-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=tropical-caribbean-prints-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
@@ -31,6 +31,7 @@ export const CROPS = {
   trigo: { label: 'Trigo', grow: 120, price: 90 }, milho: { label: 'Milho', grow: 100, price: 95 },
   mandioca: { label: 'Mandioca', grow: 200, price: 105 }, cebola: { label: 'Cebola', grow: 140, price: 95 },
   feijao: { label: 'Feijão', grow: 150, price: 100 }, coentro: { label: 'Coentro', grow: 80, price: 90 },
+  cevada:{label:'Cevada',grow:125,price:105,nonFood:true},lupulo:{label:'Lúpulo',grow:150,price:190,nonFood:true},uva:{label:'Uva',grow:170,price:150,nonFood:true},
 };
 export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 450 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
 export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'restaurant', 'builder', 'quarry', 'carrier', 'lamp_service', 'office_tower', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill','clinic','library']);
@@ -313,7 +314,7 @@ export class CityEconomy {
       const processingNeed=inputDemandByGood.get(crop)||0;
       const grainConsumers=businesses.filter(b=>b.type==='bakery'||INDUSTRIES[b.type]?.inputs.trigo).length;
       const downstream = crop === 'trigo' ? grainConsumers : buyers.filter(b => this.accepts(b, crop)).length;
-      const substanceNeed=spec.nonFood?(this.city.substances?.law(spec.substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&this.city.substances?.law('cannabis')?.regime!=='prohibited')?0:Math.ceil(population*(SUBSTANCES[spec.substance]?.popularity||.2)*.8)+processingNeed):null;
+      const substanceNeed=spec.nonFood&&spec.substance?(this.city.substances?.law(spec.substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&this.city.substances?.law('cannabis')?.regime!=='prohibited')?0:Math.ceil(population*(SUBSTANCES[spec.substance]?.popularity||.2)*.8)+processingNeed):null;
       const dailyNeed = substanceNeed??(crop === 'trigo' ? Math.ceil(Math.max(population*(bakeries?2:.5),processingNeed)) : crop==='girassol'?Math.max(oil.sunflowerRequired,processingNeed):Math.ceil(population*6*(foodWeights[crop]||0)/totalFoodWeight)+processingNeed);
       const capacity = producers.reduce((n,b)=>n+this.farmCapacity(b,true).daily,0);
       // A shop's refill target is not population consumption: treating every
@@ -343,7 +344,7 @@ export class CityEconomy {
       if(type==='domestic_trader'||type==='import_exporter'){const firms=businesses.filter(b=>b.type===type),activeTrade=type==='domestic_trader'?businesses.length>=5:(this.externalTrade?.imports||0)+(this.externalTrade?.sales||0)>0||Object.values(this.market||{}).some(row=>row.demand>0);items.push({type,crop:null,score:firms.length?0:activeTrade?115:0,required:activeTrade?1:0,supply:firms.length,stock:0,reason:spec.impact});continue;}
       if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
       const firms=businesses.filter(b=>b.type===type);
-      const substanceNeed=Object.keys(spec.outputs).reduce((n,g)=>n+(SUBSTANCES[g]&&this.city.substances?.law(g)?.regime!=='prohibited'?population*SUBSTANCES[g].popularity*.65:0),0);
+      const substanceNeed=Object.keys(spec.outputs).reduce((n,g)=>{const id=SUBSTANCE_CONTROLLED_GOODS[g]||g,substance=SUBSTANCES[id];return n+(substance&&this.city.substances?.law(id)?.regime!=='prohibited'?population*substance.popularity*.65:0);},0);
       const needed=substanceNeed+(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?activeCitizens.filter(c=>this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
       const stock=Object.keys(spec.outputs).reduce((n,g)=>n+(stockByGood.get(g)||0),0);
       const supply=firms.reduce((n,b)=>n+Math.max(1,b.workers.length)*240/spec.labor*Object.values(spec.outputs).reduce((a,v)=>a+v,0),0);

@@ -34,7 +34,7 @@ export function productionPlan(economy){
   const expandedScores=new Map();let officeMissing;
   function visit(type,crop,score,origin,trail=new Set()){
     if(type==='coca_laboratory'&&city.substances?.law('coca')?.regime==='prohibited')return;
-    const substance=type==='farm'?economy.crops[crop]?.substance:type==='distillery'?'alcool':type==='coffee_roaster'?'cafe':null;if(substance&&city.substances?.law(substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&city.substances?.law('cannabis')?.regime!=='prohibited'))return;
+    const substance=type==='farm'?economy.crops[crop]?.substance:['distillery','brewery','winery'].includes(type)?'alcool':type==='coffee_roaster'?'cafe':null;if(substance&&city.substances?.law(substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&city.substances?.law('cannabis')?.regime!=='prohibited'))return;
     const id=key(type,crop);if(!acyclic&&trail.has(id))return;
     const current=exists(type,crop),building=planned(type,crop),target=type==='research_institute'?city.politics.getResearch().demand().required:1;
     const absent=type==='office_tower'?(officeMissing??=officeSpaceDemand(city).missing>0):current+building.length<target;
