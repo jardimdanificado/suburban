@@ -43,12 +43,12 @@ import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=body-weight-2';
-import { CityWorkMeals } from './city_work_meals.js?v=substances-sleep-1';
+import { CityWorkMeals } from './city_work_meals.js?v=substance-brands-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=plot-overlap-spatial-1';
 import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=beverage-chains-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=substance-brands-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=favela-tree-roads-1';
 
@@ -158,7 +158,7 @@ export class CitySimulation {
     this.officialJournal = new CityOfficialJournal(this);
     this.vehicles = new CityVehicles(this);
     this.paint = new CityPaint(this);
-    this.substances=new CitySubstances(this);this.substanceSchemaVersion=2;
+    this.substances=new CitySubstances(this);this.substanceSchemaVersion=3;
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -674,6 +674,7 @@ export class CitySimulation {
     else if (c.role!=='councilor' && c.startupProjectId && this.hour >= 8 && this.hour < 17 && this.development.projects.some(p=>p.id===c.startupProjectId && !p.builderId && !p.cancelled && p.status!=='completed' && p.inventory.pedra>=p.stone)) { task='work';type='startup'; }
     else if (company && this.hour >= 8 && this.hour < 17) { task = 'manage'; type = 'company'; }
     else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
+    else if (this.substances?.routeBar(c))return;
     else if (this.substances?.consider(c))return;
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     if(task==='energy'&&!home){this.routeHomelessToSleep(c);return;}
@@ -1033,7 +1034,7 @@ export class CitySimulation {
       const sleeping=c.task==='energy'&&c.sleep?.active&&!c.path.length;const restMetabolism=sleeping?.4:1;
       n.food=clamp(n.food-.065*elapsed*restMetabolism);n.water=clamp(n.water-.09*elapsed*restMetabolism);n.energy=clamp(n.energy-.055*elapsed);
       this.substances?.minute(c,elapsed);if(c.sleep?.active&&c.task!=='energy')interruptSleep(this,c);
-      n.hygiene=clamp(n.hygiene-.045*elapsed);n.toilet=clamp(n.toilet-.085*elapsed*restMetabolism);n.social=clamp(n.social-.035*elapsed);n.leisure=clamp(n.leisure-.035*elapsed);
+      n.hygiene=clamp(n.hygiene-.045*elapsed);n.toilet=clamp(n.toilet-(.085+(c.substanceModifiers?.toiletDrain||0))*elapsed*restMetabolism);n.energy=clamp(n.energy-(c.substanceModifiers?.energyDrain||0)*elapsed);n.social=clamp(n.social-.035*elapsed);n.leisure=clamp(n.leisure-.035*elapsed);
       n.shelter = clamp(n.shelter + (c.homeUnitId ? 0.5 : -0.2)*elapsed);
       n.safety = clamp(n.safety + (hasTownhall ? 0.08 : -0.1)*elapsed);
       n.health = clamp(n.health + (Math.min(n.food, n.water, n.energy, n.hygiene) < 10 ? -.12 : .025)*elapsed);

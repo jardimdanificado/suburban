@@ -43,10 +43,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=beverage-chains-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=substance-brands-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=discrimination-laws-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=substance-brands-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -658,7 +658,7 @@ export class CityUI {
     p.heading('PRODUTOS E VENDAS');p.table([{label:'Produto',weight:2},{label:'Transações'},{label:'Unidades'},{label:'Receita'}],[...selectedGoods].map(([g,r])=>({cells:[GOODS[g]?.label||g,r.sales,r.quantity,money(r.revenue)]})));
     const flow=new Map();for(const row of city.economy.goodsLedger||[]){if(row.from!==b.id&&row.to!==b.id)continue;const direction=row.from===b.id?'Saídas':'Entradas',key=`${direction}:${row.good}`,entry=flow.get(key)||{direction,good:row.good,quantity:0,events:0,latest:row.minute};entry.quantity+=row.quantity||0;entry.events++;entry.latest=Math.max(entry.latest,row.minute||0);flow.set(key,entry);}
     if(b.substanceBlocked)p.note(b.substanceBlocked,C.red);
-    const substanceStock=Object.entries(b.inventory||{}).filter(([g,q])=>q>0&&city.substances?.controlled(g));if(substanceStock.length){p.heading('QUALIDADE DOS LOTES');p.table([{label:'Produto',weight:2},{label:'Estoque'},{label:'Qualidade'}],substanceStock.map(([g,q])=>({cells:[GOODS[g]?.label||g,q,`${city.substances.quality(b,g).toFixed(0)}/100`]})));}
+    const substanceStock=Object.entries(b.inventory||{}).filter(([g,q])=>q>0&&city.substances?.controlled(g));if(substanceStock.length){p.heading('QUALIDADE, MARCAS E INTENSIDADE DOS LOTES');p.table([{label:'Produto',weight:2},{label:'Estoque'},{label:'Qualidade'},{label:'Marca / intensidade',weight:2}],substanceStock.map(([g,q])=>{const lots=city.substances.lots(b,g),labels=[...new Set(lots.filter(l=>l.quantity>0).map(l=>`${l.brandName||GOODS[g]?.label||g}${l.intensity?` · ${l.intensity}% ${l.intensityUnit||''}`:''}`))];return {cells:[GOODS[g]?.label||g,q,`${city.substances.quality(b,g).toFixed(0)}/100`,labels.join(' / ')||'—']};}));}
     if(INDUSTRIES[b.type]){const industry=INDUSTRIES[b.type],plan=(city.economy.productionPlan||[]).find(r=>r.type===b.type&&(!r.crop||r.crop===b.crop));p.heading('CADEIA DE PRODUÇÃO');p.note(industry.impact);p.kv('Insumos por ciclo',Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(' · ')||'Trabalho e recursos locais');p.kv('Produtos por ciclo',Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g]?.label||g}`).join(' · ')||'Serviço');if(plan){p.kv('Prioridade da cadeia',Math.round(plan.priority||0));p.note(plan.reason||plan.response?.state||plan.state);}p.table([{label:'Fluxo',weight:1.2},{label:'Produto',weight:2},{label:'Unidades'},{label:'Registros'},{label:'Mais recente'}],[...flow.values()].sort((a,z)=>z.latest-a.latest).map(r=>({cells:[r.direction,GOODS[r.good]?.label||r.good,r.quantity,r.events,stamp(r.latest)]})),{empty:'Ainda não há movimentações de produção registradas para esta empresa.'});}
     p.heading('CLIENTELA');p.note('Filtre a clientela registrada pelas características simuladas dos compradores; compras por contas institucionais ficam fora do recorte pessoal.');
     const demo=(key,label,labels)=>{p.note(label,T.muted);p.buttons(labels.map(([id,text])=>({label:text,selected:(this.analyticsFilter?.[key]||'all')===id,click:()=>{this.analyticsFilter??={gender:'all',orientation:'all',political:'all'};this.analyticsFilter[key]=id;this.resetScroll();}})));};
