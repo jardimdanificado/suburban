@@ -3,7 +3,7 @@ import {activityRoomReady} from './city_interiors.js?v=substances-sleep-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
 import {CITY_FLOOR_HEIGHT,buildingFacadeBannerSupport} from './city_building_geometry.js';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {gerarFraseTematica} from './gerador_frases.js?v=catalog-lexicon-1';
+import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-language-1';
 
 const ACTIVE=new Set(['open','working']);
 const INTERRUPTIBLE=new Set(['leisure','walk','social','sit','outdoor_leisure']);

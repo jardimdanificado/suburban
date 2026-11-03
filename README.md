@@ -531,6 +531,10 @@ Estas regras são mecânicas da simulação. A expansão política teve conferê
 
 A escolha usa a semente da cidade e um número limitado de tentativas, sem filtrar o catálogo inteiro a cada nome. O catálogo permanece nos módulos JavaScript, fora do estado sincronizado com o worker. É carregado uma vez em cada contexto JavaScript e só é consultado ao criar identidades e instalações. Os nomes existentes são preservados durante a sessão.
 
+O módulo também oferece análise lexical sob demanda para as 320 mil entradas, sem duplicar os metadados no catálogo. `classificarPalavraCompleta(palavra)` informa classes gramaticais, gênero provável, temas, vertente política quando há evidência e um nível de confiança; `iterarPalavrasClassificadas()` percorre todas as entradas sem materializar outra cópia. Além das classes gramaticais comuns, reconhece compostos, particípios, nomes próprios prováveis, nomes de letras, prefixos, sufixos, siglas e formas gráficas. Quando as regras não conseguem determinar a classe, uma palavra lexical recebe o rótulo provisório de substantivo provável com baixa confiança; símbolos e entradas realmente não reconhecidas ficam indeterminados. Palavras sem conteúdo ideológico não recebem vertente.
+
+`conjugarVerbo(lema, {tempo, pessoa, modo})` cobre conjugações regulares e os principais verbos irregulares do indicativo, presente do subjuntivo, gerúndio e particípio. `gerarFraseTematica(tema)` monta frases a partir de relações lexicais por tema, com artigos, adjetivos e verbos concordantes. Os temas incluem política, cidade, trabalho, economia, moradia, família, alimentação, saúde, mobilidade, educação e cultura, segurança e justiça, meio ambiente, substâncias, moda, esportes e cotidiano. A classificação política usa o espectro de nove posições do jogo e só atribui posição a termos ideológicos explícitos.
+
 
 ## Redução do custo de sincronização
 

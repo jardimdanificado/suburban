@@ -20,8 +20,8 @@ import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politi
 import { TAX_CATEGORIES, MINIMUM_WAGE_TAX_RATE, MINIMUM_BUSINESS_TAX_RATE } from './city_sales_tax.js';
 import { makePartyFlag, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
 import { CityCouncil } from './city_council.js?v=wardrobe-expansion-1';
-import { CityCampaigns } from './city_campaigns.js?v=wardrobe-expansion-1';
-import {gerarFraseTematica} from './gerador_frases.js?v=catalog-lexicon-1';
+import { CityCampaigns } from './city_campaigns.js?v=vocabulary-language-1';
+import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-language-1';
 import {prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=quarry-outskirts-1';

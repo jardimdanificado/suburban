@@ -384930,3 +384930,248 @@ export const vocabulario = {
         "ol"
     ]
 }
+
+// Tags are computed from the existing lexicon instead of being duplicated on
+// every entry. This keeps the source compact while exposing the full catalog.
+const semAcento = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+const normalizaLexema = value => String(value ?? '').normalize('NFC').trim().toLocaleLowerCase('pt-BR');
+const funcoesGramaticais = new Map(), cacheAnaliseLexical = new Map(), cacheClassesLexicais=new Map();
+const prefixosLexicais = new Set(vocabulario.prefixos.map(normalizaLexema)), sufixosLexicais = new Set(vocabulario.sufixos.map(normalizaLexema));
+let palavrasNormalizadas = null, indiceVerbos = null;
+const PALAVRAS_FUNCIONAIS = {
+  artigo:['o','a','os','as','um','uma','uns','umas'],
+  preposição:['ante','após','até','com','contra','de','desde','em','entre','para','perante','por','sem','sob','sobre','trás'],
+  conjunção:['e','nem','mas','porém','contudo','todavia','ou','porque','porquanto','portanto','logo','que','se','caso','embora','conforme','como','enquanto'],
+  pronome:['eu','tu','ele','ela','nós','vós','eles','elas','me','te','se','nos','vos','mim','ti','si','comigo','contigo','consigo','lhe','lhes','isso','isto','aquilo','quem','qual','quais','alguém','ninguém','algo','nada','tudo'],
+  determinante:['meu','minha','meus','minhas','teu','tua','teus','tuas','seu','sua','seus','suas','nosso','nossa','nossos','nossas','vosso','vossa','este','esta','estes','estas','esse','essa','esses','essas','aquele','aquela','aqueles','aquelas','algum','alguma','alguns','algumas','nenhum','nenhuma','cada','todo','toda','todos','todas','outro','outra','outros','outras','muito','muita','pouco','pouca','vários','várias'],
+  interjeição:['ah','oh','ei','olá','opa','oba','ufa','ai','ui','eita','ixi','oxalá','socorro','bravo','viva','tomara','puxa','caramba','nossa'],
+};
+for(const [classe,lista]of Object.entries(PALAVRAS_FUNCIONAIS))for(const word of lista){const key=normalizaLexema(word),items=funcoesGramaticais.get(key)||[];items.push(classe);funcoesGramaticais.set(key,items);}
+for(const word of ['ao','aos','à','às','do','dos','da','das','no','nos','na','nas','pelo','pelos','pela','pelas','dum','duma','duns','dumas','neste','nesta','nestes','nestas','naquele','naquela','naqueles','naquelas'])funcoesGramaticais.set(normalizaLexema(word),['contração']);
+const numerais=new Set(['zero','um','uma','dois','duas','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','catorze','quatorze','quinze','dezesseis','dezassete','dezessete','dezoito','dezenove','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa','cem','cento','mil','milhão','bilhão','primeiro','segundo','terceiro','último'].map(normalizaLexema));
+const adjetivosLexicais=new Set(['bonito','bonita','alegre','curioso','curiosa','calmo','calma','quieto','quieta','antigo','antiga','pequeno','pequena','grande','cheiroso','cheirosa','fresco','fresca','doce','forte','colorido','colorida','amigável','justo','justa','livre','unido','unida','digno','digna','seguro','segura','próspero','próspera','social','socialista','democrático','democrática','liberal','conservador','conservadora','progressista','público','pública','local','acessível','saudável','sustentável','republicano','republicana','moderado','moderada','nacionalista'].map(normalizaLexema));
+const vertentesPoliticas=new Map();
+function registrarVertente(label,words){for(const word of words)vertentesPoliticas.set(semAcento(word),label);}
+registrarVertente('Ultraesquerda',['stalinista','maoista','ultraesquerdista','marxista-leninista','maoismo','stalinismo','ultracomunista']);
+registrarVertente('Extrema esquerda',['comunista','revolucionário','revolucionária','anticapitalista','proletário','proletária','classista','insurgente','bolchevique','trotskista','trotskismo']);
+registrarVertente('Esquerda',['socialista','marxista','trabalhista','sindicalista','operário','operária','operariado','camponês','camponesa','agrário','redistributivo','emancipador','comunal','comunitarista','laborista','mutualista','socializante','coletivista','igualitário','igualitária','antifascista','anticolonial','antioligárquico','lulista','vermelho','fabiano','cooperativista','cooperativo','ecossocialista']);
+registrarVertente('Centro-esquerda',['socialdemocrata','social-democrata','progressista','reformista-social','socialdemocracia','socialdemocrático','socialdemocrática']);
+registrarVertente('Centro',['centrista','centrismo']);
+registrarVertente('Centro-direita',['democrata-cristão','democrata-cristã','democracia-cristã','liberal-conservador','liberal-conservadora']);
+registrarVertente('Direita',['liberal','capitalista','mercantil','conservador','conservadora','privatista','privatizador','privatizadora','liberalizante','neoliberal','monetarista','ortodoxo','ortodoxa','austero','austera','meritocrático','meritocrática','individualista','tradicionalista','contratualista','institucionalista']);
+registrarVertente('Extrema direita',['fascista','bolsonarista','integralista','ultranacionalista','supremacista','ultradireitista']);
+registrarVertente('Ultradireita',['ultralibertário','ultralibertária','ultraliberal','ultradireita','neofascista','nazista','anarcocapitalista']);
+const temasLexicais=Object.freeze({
+  politica:/polit|govern|prefeit|vereador|elei[cç]|partid|campanh|debat|democr|rep[uú]blic|impost|tribut|legis|soberan|liberdad|autoridad|corrup|cidadan|protest|sindicat|social|comunist|capitalist|liberal|conservador|marx|anarqu|fasc|naz|monarqu|federal|libert|esquerd|direit|burgues|proletar|centrismo|ideolog|nacional|ultranacional|democrata-crist|lulist|bolsonar|stalin|maoist|nazist|neofasc|ultralibert|ultraliberal/,
+  cidade:/cidade|bairro|rua|avenida|pra[cç]a|cal[cç]ad|estrada|ilumina|infraestrutur|obra|munic[ií]pi|urbano|rural|comunidade|vizinhan/,
+  trabalho:/trabalh|empreg|sal[aá]ri|renda|profiss|of[ií]cio|ocup|carreir|oper[aá]ri|patr[aã]o|funcion[aá]ri|sindicat|aposent|produ[cç][aã]o|empresa/,
+  economia:/econom|com[eé]rci|neg[oó]ci|mercad|pre[cç]o|dinheir|moeda|infla|banc|cr[eé]dit|finan[cç]|impost|tribut|capital|lucro|d[ií]vida|invest|or[cç]ament|empresa/,
+  moradia:/morad|habita|alug|im[oó]vel|resid[eê]nci|casa|teto|constru[cç][aã]o|inquilin|propriet[aá]ri/,
+  familia:/fam[ií]li|parent|filh|m[aã]e|pai$|casal|casament|nasc|crian[cç]|irm[aã]o|av[oó]|parente|amizad|romanc|relacion/,
+  alimentacao:/alimenta|comida|comest|cozinha|almo[cç]|jantar|p[aã]o$|arroz|feij[aã]o|fruta|verdura|legume|carne|leite|queijo|fome|colheit|plant|agricultur|fazend|lavour|trigo|milho|mandioca|cafe|cerveja|vinho|bebida/,
+  saude:/sa[uú]de|m[eé]dic|hospital|cl[ií]nic|doen[cç]|tratamento|rem[eé]di|farm[aá]c|enferm|higien|nutri|vacina|terapia|sintoma/,
+  mobilidade:/transporte|tr[aâ]nsit|rua|estrada|biciclet|ve[ií]cul|carro|onibus|caminh[aã]o|entrega|mobilidade|roda|cal[cç]ada|ponte|ferrovia/,
+  educacao_cultura:/educa[cç][aã]o|escola|ensino|professor|aluno|estud|livro|leitura|leitor|bibliotec|cultura|musica|arte|artista|teatro|pintura|escultura|poesia|jornal|imprensa|publica[cç][aã]o|ciencia/,
+  seguranca_justica:/seguran[cç]|pol[ií]cia|crime|justi[cç]|pris[aã]o|julg|tribunal|direito|liberdad|viol[eê]n|guarda|defesa|fiscaliza[cç][aã]o|investiga[cç][aã]o/,
+  meio_ambiente:/ambiente|ecolog|natureza|florest|arvore|planta|animal|biodivers|clima|energia|agua|rio$|mar$|oceano|lixo|reciclag|res[ií]du|saneamento|polui[cç][aã]o|conserva[cç][aã]o|agroecolog/,
+  substancias:/alcool|cerveja|vinho|tequila|tabaco|nicotina|cannabis|canhamo|maconha|cocaina|coca|folha|refinamento|droga|bebida|cafeina|fumo|fum[aá]vel/,
+  moda:/moda|roupa|vestu[aá]rio|tecido|costura|camisa|cal[cç]a|vestido|sapato|bota|chapeu|luva|confec[cç][aã]o|estilo/,
+  esportes_lazer:/esport|jogo|lazer|descanso|praia|ferias|brinc|recrea[cç][aã]o|passeio|dan[cç]a|futebol|nadar|biciclet/,
+  cotidiano:/cotidian|rotina|vizinhan|conversa|not[ií]cia|familia|amizad|passeio/,
+});
+export const TEMAS_DO_JOGO=Object.freeze(Object.keys(temasLexicais));
+function catalogoSet(){return palavrasNormalizadas||=new Set(vocabulario.palavras.map(word=>normalizaLexema(word)));}
+function palavraPertenceAoCatalogo(word){return catalogoSet().has(normalizaLexema(word));}
+function verboRegular(lemma,tempo,index){
+  const end=lemma.slice(-2);let stem=lemma.slice(0,-2);if(!['ar','er','ir'].includes(end))return null;
+  if(tempo==='presente'){
+    if(/uir$/.test(lemma)&&!/guir$/.test(lemma)){const stems=[stem+'o',stem+'is',stem+'i',stem+'ímos',stem+'ís',stem+'em'];return stems[index];}
+    const endings=end==='ar'?['o','as','a','amos','ais','am']:['o','es','e',end==='er'?'emos':'imos',end==='er'?'eis':'is','em'];
+    if(index===2&&/zir$/.test(lemma))return stem;
+    if(index===0&&/cer$/.test(lemma))stem=stem.slice(0,-1)+'ç';else if(index===0&&/(ger|gir)$/.test(lemma))stem=stem.slice(0,-1)+'j';else if(index===0&&/guir$/.test(lemma))stem=stem.slice(0,-3)+'ig';
+    if(/ear$/.test(lemma)&&[0,1,2,5].includes(index))stem+='i';return stem+endings[index];
+  }
+  if(tempo==='pretérito-perfeito')return stem+(end==='ar'?['ei','aste','ou','amos','astes','aram'][index]:end==='er'?['i','este','eu','emos','estes','eram'][index]:['i','iste','iu','imos','istes','iram'][index]);
+  if(tempo==='pretérito-imperfeito')return stem+(end==='ar'?['ava','avas','ava','ávamos','áveis','avam'][index]:['ia','ias','ia','íamos','íeis','iam'][index]);
+  if(tempo==='futuro')return lemma+['ei','ás','á','emos','eis','ão'][index];
+  if(tempo==='condicional')return lemma+['ia','ias','ia','íamos','íeis','iam'][index];
+  if(tempo==='subjuntivo-presente')return stem+(end==='ar'?['e','es','e','emos','eis','em'][index]:['a','as','a','amos','ais','am'][index]);
+  if(tempo==='gerundio')return stem+(end==='ar'?'ando':end==='ir'?'indo':'endo');
+  if(tempo==='participio')return stem+(end==='ar'?'ado':'ido');return null;
+}
+const irregulares={
+  ser:{presente:['sou','és','é','somos','sois','são'],'pretérito-perfeito':['fui','foste','foi','fomos','fostes','foram'],'pretérito-imperfeito':['era','eras','era','éramos','éreis','eram'],'subjuntivo-presente':['seja','sejas','seja','sejamos','sejais','sejam'],gerundio:['sendo','sendo','sendo','sendo','sendo','sendo'],participio:['sido','sido','sido','sido','sido','sido']},
+  estar:{presente:['estou','estás','está','estamos','estais','estão'],'pretérito-perfeito':['estive','estiveste','esteve','estivemos','estivestes','estiveram'],'pretérito-imperfeito':['estava','estavas','estava','estávamos','estáveis','estavam'],'subjuntivo-presente':['esteja','estejas','esteja','estejamos','estejais','estejam']},
+  ter:{presente:['tenho','tens','tem','temos','tendes','têm'],'pretérito-perfeito':['tive','tiveste','teve','tivemos','tivestes','tiveram'],'pretérito-imperfeito':['tinha','tinhas','tinha','tínhamos','tínheis','tinham'],'subjuntivo-presente':['tenha','tenhas','tenha','tenhamos','tenhais','tenham'],gerundio:['tendo','tendo','tendo','tendo','tendo','tendo'],participio:['tido','tido','tido','tido','tido','tido']},
+  haver:{presente:['hei','hás','há','havemos','haveis','hão'],'pretérito-perfeito':['houve','houveste','houve','houvemos','houvestes','houveram'],'pretérito-imperfeito':['havia','havias','havia','havíamos','havíeis','haviam'],'subjuntivo-presente':['haja','hajas','haja','hajamos','hajais','hajam']},
+  ir:{presente:['vou','vais','vai','vamos','ides','vão'],'pretérito-perfeito':['fui','foste','foi','fomos','fostes','foram'],'pretérito-imperfeito':['ia','ias','ia','íamos','íeis','iam'],'subjuntivo-presente':['vá','vás','vá','vamos','vades','vão'],'gerundio':['indo']},
+  vir:{presente:['venho','vens','vem','vimos','vindes','vêm'],'pretérito-perfeito':['vim','vieste','veio','viemos','viestes','vieram'],'pretérito-imperfeito':['vinha','vinhas','vinha','vínhamos','vínheis','vinham'],'subjuntivo-presente':['venha','venhas','venha','venhamos','venhais','venham']},
+  fazer:{presente:['faço','fazes','faz','fazemos','fazeis','fazem'],'pretérito-perfeito':['fiz','fizeste','fez','fizemos','fizestes','fizeram'],'pretérito-imperfeito':['fazia','fazias','fazia','fazíamos','fazíeis','faziam'],'subjuntivo-presente':['faça','faças','faça','façamos','façais','façam'],participio:['feito','feito','feito','feito','feito','feito'],futuroStem:'far',condicionalStem:'far'},
+  dizer:{presente:['digo','dizes','diz','dizemos','dizeis','dizem'],'pretérito-perfeito':['disse','disseste','disse','dissemos','dissestes','disseram'],'pretérito-imperfeito':['dizia','dizias','dizia','dizíamos','dizíeis','diziam'],'subjuntivo-presente':['diga','digas','diga','digamos','digais','digam'],participio:['dito','dito','dito','dito','dito','dito'],futuroStem:'dir',condicionalStem:'dir'},
+  trazer:{presente:['trago','trazes','traz','trazemos','trazeis','trazem'],'pretérito-perfeito':['trouxe','trouxeste','trouxe','trouxemos','trouxestes','trouxeram'],'pretérito-imperfeito':['trazia','trazias','trazia','trazíamos','trazíeis','traziam'],futuroStem:'trar',condicionalStem:'trar'},
+  poder:{presente:['posso','podes','pode','podemos','podeis','podem'],'pretérito-perfeito':['pude','pudeste','pôde','pudemos','pudestes','puderam'],'pretérito-imperfeito':['podia','podias','podia','podíamos','podíeis','podiam'],'subjuntivo-presente':['possa','possas','possa','possamos','possais','possam']},
+  pôr:{presente:['ponho','pões','põe','pomos','pondes','põem'],'pretérito-perfeito':['pus','puseste','pôs','pusemos','pusestes','puseram'],'pretérito-imperfeito':['punha','punhas','punha','púnhamos','púnheis','punham'],'subjuntivo-presente':['ponha','ponhas','ponha','ponhamos','ponhais','ponham'],gerundio:['pondo','pondo','pondo','pondo','pondo','pondo'],participio:['posto','posto','posto','posto','posto','posto'],futuroStem:'por',condicionalStem:'por'},
+  querer:{presente:['quero','queres','quer','queremos','quereis','querem'],'pretérito-perfeito':['quis','quiseste','quis','quisemos','quisestes','quiseram'],'pretérito-imperfeito':['queria','querias','queria','queríamos','queríeis','queriam'],'subjuntivo-presente':['queira','queiras','queira','queiramos','queirais','queiram']},
+  saber:{presente:['sei','sabes','sabe','sabemos','sabeis','sabem'],'pretérito-perfeito':['soube','soubeste','soube','soubemos','soubestes','souberam'],'pretérito-imperfeito':['sabia','sabias','sabia','sabíamos','sabíeis','sabiam'],'subjuntivo-presente':['saiba','saibas','saiba','saibamos','saibais','saibam']},
+  dar:{presente:['dou','dás','dá','damos','dais','dão'],'pretérito-perfeito':['dei','deste','deu','demos','destes','deram'],'pretérito-imperfeito':['dava','davas','dava','dávamos','dáveis','davam'],'subjuntivo-presente':['dê','dês','dê','demos','deis','deem']},
+  ver:{presente:['vejo','vês','vê','vemos','vedes','veem'],'pretérito-perfeito':['vi','viste','viu','vimos','vistes','viram'],'pretérito-imperfeito':['via','vias','via','víamos','víeis','viam'],'subjuntivo-presente':['veja','vejas','veja','vejamos','vejais','vejam'],participio:['visto','visto','visto','visto','visto','visto']},
+  ler:{presente:['leio','lês','lê','lemos','ledes','leem'],'pretérito-perfeito':['li','leste','leu','lemos','lestes','leram'],'pretérito-imperfeito':['lia','lias','lia','líamos','líeis','liam'],'subjuntivo-presente':['leia','leias','leia','leiamos','leiais','leiam']},
+  sair:{presente:['saio','sais','sai','saímos','saís','saem'],'pretérito-perfeito':['saí','saíste','saiu','saímos','saístes','saíram'],'pretérito-imperfeito':['saía','saías','saía','saíamos','saíeis','saíam'],'subjuntivo-presente':['saia','saias','saia','saiamos','saiais','saiam']},
+  cair:{presente:['caio','cais','cai','caímos','caís','caem'],'pretérito-perfeito':['caí','caíste','caiu','caímos','caístes','caíram'],'pretérito-imperfeito':['caía','caías','caía','caíamos','caíeis','caíam'],'subjuntivo-presente':['caia','caias','caia','caiamos','caiais','caiam']},
+  pedir:{presente:['peço','pedes','pede','pedimos','pedis','pedem'],'pretérito-perfeito':['pedi','pediste','pediu','pedimos','pedistes','pediram'],'pretérito-imperfeito':['pedia','pedias','pedia','pedíamos','pedíeis','pediam'],'subjuntivo-presente':['peça','peças','peça','peçamos','peçais','peçam']},
+  dormir:{presente:['durmo','dormes','dorme','dormimos','dormis','dormem'],'pretérito-perfeito':['dormi','dormiste','dormiu','dormimos','dormistes','dormiram'],'pretérito-imperfeito':['dormia','dormias','dormia','dormíamos','dormíeis','dormiam'],'subjuntivo-presente':['durma','durmas','durma','durmamos','durmais','durmam']},
+  sentir:{presente:['sinto','sentes','sente','sentimos','sentis','sentem'],'pretérito-perfeito':['senti','sentiste','sentiu','sentimos','sentistes','sentiram'],'pretérito-imperfeito':['sentia','sentias','sentia','sentíamos','sentíeis','sentiam'],'subjuntivo-presente':['sinta','sintas','sinta','sintamos','sintais','sintam']},
+  ouvir:{presente:['ouço','ouves','ouve','ouvimos','ouvis','ouvem'],'pretérito-perfeito':['ouvi','ouviste','ouviu','ouvimos','ouvistes','ouviram'],'pretérito-imperfeito':['ouvia','ouvias','ouvia','ouvíamos','ouvíeis','ouviam'],'subjuntivo-presente':['ouça','ouças','ouça','ouçamos','ouçais','ouçam']},
+  construir:{presente:['construo','constróis','constrói','construímos','construís','constroem'],'pretérito-perfeito':['construí','construíste','construiu','construímos','construístes','construíram'],'pretérito-imperfeito':['construía','construías','construía','construíamos','construíeis','construíam'],'subjuntivo-presente':['construa','construas','construa','construamos','construais','construam'],'gerundio':['construindo','construindo','construindo','construindo','construindo','construindo'],'participio':['construído','construído','construído','construído','construído','construído']},
+  destruir:{presente:['destruo','destróis','destrói','destruímos','destruís','destroem'],'pretérito-perfeito':['destruí','destruíste','destruiu','destruímos','destruístes','destruíram'],'pretérito-imperfeito':['destruía','destruías','destruía','destruíamos','destruíeis','destruíam'],'subjuntivo-presente':['destrua','destruas','destrua','destruamos','destruais','destruam'],'gerundio':['destruindo','destruindo','destruindo','destruindo','destruindo','destruindo'],'participio':['destruído','destruído','destruído','destruído','destruído','destruído']},
+};
+function formasVerbo(lemma,tempo){const key=normalizaLexema(lemma),irregular=irregulares[key];if(irregular?.[tempo])return irregular[tempo];if(tempo==='futuro'||tempo==='condicional'){const endings=tempo==='futuro'?['ei','ás','á','emos','eis','ão']:['ia','ias','ia','íamos','íeis','iam'],base=irregular?.[tempo==='futuro'?'futuroStem':'condicionalStem']||key;return endings.map(end=>base+end);}return Array.from({length:6},(_,i)=>verboRegular(key,tempo,i));}
+function indicePessoa(pessoa=3,numero='singular'){
+  const labels={eu:0,tu:1,ele:2,ela:2,você:2,voce:2,nós:3,nos:3,vós:4,vos:4,eles:5,elas:5,vocês:5,voces:5};
+  if(typeof pessoa==='string'&&Object.hasOwn(labels,normalizaLexema(pessoa)))return labels[normalizaLexema(pessoa)];
+  if(Number.isInteger(pessoa)&&pessoa>=1&&pessoa<=3)return pessoa-1+(numero==='plural'?3:0);
+  if(Number.isInteger(pessoa)&&pessoa>=4&&pessoa<=6)return pessoa-1;return 2;
+}
+export function conjugarVerbo(lemma,{tempo='presente',pessoa=3,numero='singular',modo='indicativo'}={}){
+  const aliases={'presente do indicativo':'presente','pretérito perfeito':'pretérito-perfeito','pretérito perfeito do indicativo':'pretérito-perfeito','pretérito imperfeito':'pretérito-imperfeito','futuro do presente':'futuro','futuro do pretérito':'condicional','condicional':'condicional','gerúndio':'gerundio','particípio':'participio'};
+  tempo=aliases[normalizaLexema(tempo)]||tempo;if(modo!=='indicativo'&&modo!=='subjuntivo')return null;if(tempo==='subjuntivo'||modo==='subjuntivo'&&tempo==='presente')tempo='subjuntivo-presente';
+  let key=normalizaLexema(lemma),prefix='';if(key!=='pôr'&&key.endsWith('por')){prefix=key.slice(0,-3);key='pôr';}if(!/(ar|er|ir)$/.test(key)&&key!=='pôr')return null;const form=formasVerbo(key,tempo)?.[indicePessoa(pessoa,numero)];return form?prefix+form:null;
+}
+function catalogoVerbal(){
+  if(indiceVerbos)return indiceVerbos;const set=catalogoSet(),found=new Map();
+  for(const lemma of set){if(!/^[\p{L}]+(?:ar|er|ir)$/u.test(lemma)||lemma.length<4)continue;
+    const samples=[...new Set([...formasVerbo(lemma,'presente'),...formasVerbo(lemma,'pretérito-perfeito'),formasVerbo(lemma,'gerundio')[0],formasVerbo(lemma,'participio')[0]])].filter(Boolean),evidence=samples.filter(form=>set.has(normalizaLexema(form))).length;
+    if(evidence>=3||irregulares[lemma])found.set(lemma,{lema:lemma,classes:['verbo'],confianca:evidence>=3?.9:.72});
+  }
+  for(const lemma of Object.keys(irregulares))if(set.has(normalizaLexema(lemma)))found.set(normalizaLexema(lemma),{lema:normalizaLexema(lemma),classes:['verbo'],confianca:.95});
+  for(const lemma of set)if(/por$/.test(lemma)&&lemma!=='pôr'&&lemma.length>4){const forms=Array.from({length:6},(_,i)=>conjugarVerbo(lemma,{pessoa:i+1})),evidence=forms.filter(form=>set.has(normalizaLexema(form))).length;if(evidence>=2)found.set(lemma,{lema,classes:['verbo'],confianca:.86});}
+  indiceVerbos=found;return found;
+}
+function pluralRegular(word){if(/m$/.test(word))return word.slice(0,-1)+'ns';if(/[rz]$/.test(word))return word+'es';if(/ão$/.test(word))return word.slice(0,-2)+'ões';if(/[aeou]l$/.test(word))return word.slice(0,-1)+'is';if(/il$/.test(word))return word.slice(0,-1)+'s';return word+'s';}
+function lemasFlexionados(word,has){const key=normalizaLexema(word),out=new Set([key]),singular=normalizaLexema(converterParaSingular(key));if(singular!==key&&has(singular))out.add(singular);if(key.endsWith('as')||key.endsWith('os')){const base=key.slice(0,-1);for(const candidate of [base.slice(0,-1)+'o',base.slice(0,-1)+'a'])if(has(candidate))out.add(candidate);}return [...out];}
+function inferirGenero(word){const key=normalizaLexema(word);if(/ista$/.test(key))return 'neutro';if(classificarPalavra(key)!=='neutro')return classificarPalavra(key);if(/(dor|tor|or|eiro|ário|ório|mento|ismo)$/.test(key))return 'masculino';if(/(dora|tora|ora|eira|ária|ória|ção|são|dade|tude|agem|ância|ência|ura|ez|eza)$/.test(key))return 'feminino';return 'neutro';}
+export function classificarTemas(word){const key=semAcento(word);return Object.entries(temasLexicais).filter(([,pattern])=>pattern.test(key)).map(([theme])=>theme);}
+export function classificarVertentePolitica(word){const key=semAcento(word),candidates=[key,semAcento(converterParaSingular(key))];for(const suffix of ['as','os','a','o'])if(key.length>suffix.length+4)candidates.push(key.slice(0,-suffix.length));for(const candidate of candidates)if(vertentesPoliticas.has(candidate))return vertentesPoliticas.get(candidate);return null;}
+function identificarClasses(raw){
+  const key=normalizaLexema(raw),source=String(raw??'');if(cacheClassesLexicais.has(source))return cacheClassesLexicais.get(source);const classes=[...(funcoesGramaticais.get(key)||[])],words=catalogoSet(),verbs=catalogoVerbal(),has=form=>words.has(normalizaLexema(form));
+  if(numerais.has(key)||/^(?:\d+(?:[.,]\d+)?|[ªº])$/u.test(key))classes.push('numeral');
+  if(/^[\p{L}]+mente$/u.test(key)||['hoje','ontem','amanhã','agora','aqui','ali','lá','bem','mal','muito','pouco','sempre','nunca','talvez','sim','não','já','ainda','também','depois','antes','cedo','tarde','longe','perto'].includes(key))classes.push('advérbio');
+  const dottedParts=source.split('.').filter(Boolean),ordinalAbbreviation=/[ªº]\.?$/u.test(source),titleCaseTail=dottedParts.length>1&&/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]/u.test(dottedParts.at(-1)),shortAbbreviationParts=dottedParts.length>1&&dottedParts.every(part=>[...part].length<=4),dottedAbbreviation=key.includes('.')&&dottedParts.length>1&&(ordinalAbbreviation||!titleCaseTail&&dottedParts.every(part=>part.length===1||part===part.toLocaleLowerCase('pt-BR')||part===part.toLocaleUpperCase('pt-BR')))||key.includes('.')&&shortAbbreviationParts||/^[\p{L}]{1,}\.$/u.test(key);
+  if(dottedAbbreviation||/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ]{2,}$/.test(source))classes.push('abreviação/sigla');
+  if(/[\p{S}\p{P}]/u.test(source)&&!/[\p{L}\p{M}]/u.test(source)||/[^\p{L}\p{M}'’.-]/u.test(source)||/[²³]/u.test(source))classes.push('símbolo/forma gráfica');
+  if(prefixosLexicais.has(key))classes.push('prefixo');if(sufixosLexicais.has(key))classes.push('sufixo');
+  if(/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}'-]+$/u.test(source)&&source.length>1)classes.push('substantivo próprio provável');
+  if(/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}]+\.[\p{L}]+\.?$/u.test(source)&&!dottedAbbreviation)classes.push('substantivo próprio provável');
+  if(/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ]\.[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\p{L}]+$/u.test(source))classes.push('substantivo próprio provável');
+  if(/^[\p{L}]$/u.test(key)&&!['ª','º'].includes(key))classes.push('nome de letra');
+  const lemmas=lemasFlexionados(key,has),gender=inferirGenero(lemmas.find(item=>inferirGenero(item)!=='neutro')||key),pluralForms=lemmas.flatMap(item=>[pluralRegular(item),...(item.endsWith('ão')?[item.slice(0,-2)+'ãos',item.slice(0,-2)+'ães']:[])]);
+  const infinitivo=/^[\p{L}]{4,}(?:ar|er|ir)$/u.test(key),participle=/(?:ad[oa]s?|id[oa]s?)$/u.test(key),nominalSuffix=/(?:ção|são|ssão|dade|tude|ice|ez|eza|agem|ância|ência|aria|eria|mento|ismo|ista|eiro|eira|logia|grafia|nomia|ite|ose|oma|ura|or|dor|tor)$/u.test(key),adjectiveSuffix=!/mente$/u.test(key)&&/(?:ável|ível|ico|ica|íaco|íaca|oso|osa|ento|enta|ante|ente|ário|ária|ivo|iva|ino|ina|ano|ana|ense|ês|esa|al|el|il|udo|uda|ado|ada|ido|ida|nte)$/u.test(key);
+  if(verbs.has(key)||infinitivo||/(?:ando|endo|indo)$/u.test(key))classes.push('verbo');
+  if(participle)classes.push('particípio','adjetivo');
+  if((gender!=='neutro'&&!funcoesGramaticais.has(key)&&(pluralForms.some(has)||lemmas.some(item=>has(item)&&has(item+'s'))||nominalSuffix))||nominalSuffix)if(!verbs.has(key)||nominalSuffix)classes.push('substantivo');
+  if(adjetivosLexicais.has(key)||lemmas.some(item=>adjetivosLexicais.has(item))||adjectiveSuffix)classes.push('adjetivo');
+  if(key.includes('-')){
+    const parts=key.split('-').filter(part=>part.length>1),inherit=new Set(['substantivo','substantivo próprio provável','adjetivo','advérbio','verbo','particípio','numeral']);
+    for(const part of parts)for(const cls of identificarClasses(part))if(inherit.has(cls))classes.push(cls);
+    classes.push('palavra composta');
+  }
+  if(!classes.length&&/^[\p{L}\p{M}'-]+$/u.test(key))classes.push('substantivo provável');
+  if(!classes.length)classes.push('classe indeterminada');const result=[...new Set(classes)];if(cacheClassesLexicais.size>50000)cacheClassesLexicais.clear();cacheClassesLexicais.set(source,result);return result;
+}
+export function classificarPalavraCompleta(word){
+  const raw=String(word??''),key=normalizaLexema(raw),cacheKey=`${raw}`;if(cacheAnaliseLexical.has(cacheKey))return cacheAnaliseLexical.get(cacheKey);
+  const classes=identificarClasses(raw),temas=classificarTemas(raw),vertentePolitica=classificarVertentePolitica(raw),has=form=>catalogoSet().has(normalizaLexema(form)),lemmas=lemasFlexionados(key,has),gender=inferirGenero(lemmas.find(item=>inferirGenero(item)!=='neutro')||key),confidence=classes.includes('classe indeterminada')?0.15:classes.includes('substantivo provável')?0.38:classes.includes('verbo')&&!catalogoVerbal().has(key)?0.62:classes.includes('adjetivo')&&!adjetivosLexicais.has(key)?0.58:classes.includes('substantivo próprio provável')?0.55:classes.includes('substantivo')||classes.includes('adjetivo')?0.7:0.95;
+  const info=Object.freeze({palavra:raw,lema:lemmas.find(item=>item!==key)||key,classes:Object.freeze(classes),classePrincipal:classes[0],genero:gender,temas:Object.freeze(temas),vertentePolitica,confianca:confidence});if(cacheAnaliseLexical.size>50000)cacheAnaliseLexical.clear();cacheAnaliseLexical.set(cacheKey,info);return info;
+}
+export function* iterarPalavrasClassificadas(){for(const word of vocabulario.palavras)yield classificarPalavraCompleta(word);}
+const substantivosDeFrase={
+  politica:[['partido','m','partidos'],['governo','m','governos'],['morador','m','moradores'],['vereador','m','vereadores'],['proposta','f','propostas'],['eleição','f','eleições'],['direito','m','direitos'],['liberdade','f','liberdades'],['política','f','políticas'],['voto','m','votos'],['serviço','m','serviços']],
+  cidade:[['cidade','f','cidades'],['bairro','m','bairros'],['rua','f','ruas'],['praça','f','praças'],['morador','m','moradores'],['comunidade','f','comunidades'],['serviço','m','serviços'],['obra','f','obras']],
+  trabalho:[['trabalhador','m','trabalhadores'],['empresa','f','empresas'],['emprego','m','empregos'],['salário','m','salários'],['renda','f','rendas'],['equipe','f','equipes'],['serviço','m','serviços'],['negócio','m','negócios']],
+  economia:[['empresa','f','empresas'],['mercado','m','mercados'],['negócio','m','negócios'],['preço','m','preços'],['renda','f','rendas'],['trabalhador','m','trabalhadores'],['imposto','m','impostos'],['cooperativa','f','cooperativas']],
+  moradia:[['família','f','famílias'],['moradia','f','moradias'],['casa','f','casas'],['bairro','m','bairros'],['aluguel','m','aluguéis'],['imóvel','m','imóveis'],['morador','m','moradores']],
+  familia:[['família','f','famílias'],['criança','f','crianças'],['morador','m','moradores'],['amizade','f','amizades'],['bairro','m','bairros'],['casa','f','casas']],
+  alimentacao:[['alimento','m','alimentos'],['comida','f','comidas'],['cozinha','f','cozinhas'],['horta','f','hortas'],['feira','f','feiras'],['família','f','famílias'],['trabalhador','m','trabalhadores']],
+  saude:[['saúde','f','saúdes'],['clínica','f','clínicas'],['médico','m','médicos'],['morador','m','moradores'],['família','f','famílias'],['serviço','m','serviços']],
+  mobilidade:[['rua','f','ruas'],['bicicleta','f','bicicletas'],['transporte','m','transportes'],['bairro','m','bairros'],['morador','m','moradores'],['entrega','f','entregas']],
+  educacao_cultura:[['escola','f','escolas'],['professor','m','professores'],['livro','m','livros'],['cultura','f','culturas'],['artista','m','artistas'],['morador','m','moradores'],['biblioteca','f','bibliotecas']],
+  seguranca_justica:[['direito','m','direitos'],['justiça','f','justiças'],['morador','m','moradores'],['polícia','f','polícias'],['bairro','m','bairros'],['liberdade','f','liberdades']],
+  meio_ambiente:[['árvore','f','árvores'],['rio','m','rios'],['floresta','f','florestas'],['horta','f','hortas'],['bairro','m','bairros'],['resíduo','m','resíduos'],['água','f','águas']],
+  substancias:[['bebida','f','bebidas'],['cannabis','f','cannabis'],['tabaco','m','tabacos'],['café','m','cafés'],['morador','m','moradores'],['bairro','m','bairros']],
+  moda:[['roupa','f','roupas'],['tecido','m','tecidos'],['costureiro','m','costureiros'],['loja','f','lojas'],['morador','m','moradores'],['trabalhador','m','trabalhadores']],
+  esportes_lazer:[['praia','f','praias'],['esporte','m','esportes'],['jogo','m','jogos'],['parque','m','parques'],['morador','m','moradores'],['família','f','famílias']],
+  cotidiano:[['morador','m','moradores'],['bairro','m','bairros'],['família','f','famílias'],['cidade','f','cidades'],['trabalho','m','trabalhos'],['comida','f','comidas']],
+};
+const predicadosDeFrase={
+  politica:[['debater','sobre'],['propor',''],['defender',''],['ampliar',''],['planejar','']],
+  cidade:[['melhorar',''],['construir',''],['iluminar',''],['conectar','a'],['cuidar','de']],
+  trabalho:[['buscar',''],['oferecer',''],['valorizar',''],['criar',''],['garantir','']],
+  economia:[['fortalecer',''],['organizar',''],['apoiar',''],['reduzir',''],['ampliar','']],
+  moradia:[['construir',''],['reformar',''],['oferecer',''],['proteger',''],['planejar','']],
+  familia:[['cuidar','de'],['apoiar',''],['acompanhar',''],['proteger',''],['visitar','']],
+  alimentacao:[['preparar',''],['produzir',''],['distribuir',''],['cultivar',''],['compartilhar','']],
+  saude:[['cuidar','de'],['ampliar',''],['oferecer',''],['proteger',''],['atender','']],
+  mobilidade:[['conectar',''],['melhorar',''],['organizar',''],['ampliar',''],['planejar','']],
+  educacao_cultura:[['ensinar',''],['publicar',''],['criar',''],['ampliar',''],['valorizar','']],
+  seguranca_justica:[['proteger',''],['garantir',''],['defender',''],['investigar',''],['debater','']],
+  meio_ambiente:[['preservar',''],['cultivar',''],['recuperar',''],['proteger',''],['reduzir','']],
+  substancias:[['debater','sobre'],['regular',''],['fiscalizar',''],['produzir',''],['informar','sobre']],
+  moda:[['produzir',''],['costurar',''],['vender',''],['reparar',''],['escolher','']],
+  esportes_lazer:[['organizar',''],['praticar',''],['visitar',''],['ampliar',''],['apoiar','']],
+  cotidiano:[['cuidar','de'],['melhorar',''],['compartilhar',''],['organizar',''],['visitar','']],
+};
+const relacoesDeFrase={
+  politica:[['partido','defender','proposta'],['governo','ampliar','serviço'],['vereador','propor','política'],['eleição','mobilizar','morador']],
+  cidade:[['prefeitura','iluminar','rua'],['morador','cuidar','bairro','de'],['obra','melhorar','praça'],['serviço','atender','comunidade']],
+  trabalho:[['trabalhador','buscar','emprego'],['empresa','oferecer','emprego'],['salário','sustentar','família'],['equipe','realizar','serviço']],
+  economia:[['cooperativa','fortalecer','mercado'],['mercado','oferecer','emprego'],['imposto','financiar','serviço'],['empresa','criar','negócio']],
+  moradia:[['governo','oferecer','casa'],['família','procurar','moradia'],['morador','reformar','casa'],['bairro','abrigar','família']],
+  familia:[['família','apoiar','criança'],['morador','visitar','família'],['amizade','aproximar','morador'],['criança','alegrar','família']],
+  alimentacao:[['feira','vender','alimento'],['cozinha','preparar','comida'],['família','compartilhar','comida'],['horta','produzir','alimento']],
+  saude:[['clínica','atender','morador'],['médico','cuidar','família','de'],['serviço','proteger','saúde'],['saúde','fortalecer','comunidade']],
+  mobilidade:[['bicicleta','conectar','bairro'],['transporte','ligar','cidade'],['morador','percorrer','rua'],['entrega','abastecer','mercado']],
+  educacao_cultura:[['professor','ensinar','morador'],['biblioteca','oferecer','livro'],['artista','criar','cultura'],['escola','valorizar','educação']],
+  seguranca_justica:[['polícia','proteger','morador'],['direito','garantir','liberdade'],['justiça','defender','morador'],['bairro','acolher','comunidade']],
+  meio_ambiente:[['árvore','proteger','bairro'],['morador','preservar','rio'],['horta','cultivar','árvore'],['floresta','abrigar','animal']],
+  substancias:[['morador','consumir','bebida'],['bairro','debater','cannabis'],['tabaco','prejudicar','saúde'],['morador','produzir','café']],
+  moda:[['costureiro','produzir','roupa'],['loja','vender','tecido'],['roupa','proteger','morador'],['trabalhador','costurar','roupa']],
+  esportes_lazer:[['morador','praticar','esporte'],['família','visitar','praia'],['parque','acolher','família'],['jogo','juntar','morador']],
+  cotidiano:[['família','compartilhar','comida'],['morador','visitar','bairro'],['morador','melhorar','casa'],['amizade','aproximar','família']],
+};
+const adjectivosDeFrase=[['justo','justa','justos','justas'],['digno','digna','dignos','dignas'],['seguro','segura','seguros','seguras'],['público','pública','públicos','públicas'],['local','local','locais','locais'],['livre','livre','livres','livres'],['acessível','acessível','acessíveis','acessíveis'],['saudável','saudável','saudáveis','saudáveis'],['sustentável','sustentável','sustentáveis','sustentáveis'],['forte','forte','fortes','fortes']];
+const adjetivosPorSubstantivo={partido:['democrático'],governo:['democrático'],vereador:['local'],proposta:['justo'],morador:['local'],serviço:['público','acessível'],cidade:['seguro'],bairro:['seguro'],rua:['seguro'],praça:['público'],trabalhador:['digno'],empresa:['local'],emprego:['digno'],salário:['justo'],mercado:['local'],negócio:['local'],preço:['justo'],cooperativa:['local'],família:['unido'],moradia:['acessível'],casa:['seguro'],alimento:['saudável'],comida:['saudável'],clínica:['público'],médico:['local'],bicicleta:['seguro'],transporte:['público'],escola:['público'],professor:['local'],livro:['acessível'],cultura:['livre'],direito:['justo'],liberdade:['livre'],árvore:['saudável'],floresta:['saudável'],roupa:['digno'],tecido:['local'],praia:['seguro'],esporte:['saudável'],parque:['público'],biblioteca:['público'],feira:['local'],horta:['local']};
+const aliasesTema={arte:'educacao_cultura',cultura:'educacao_cultura',educacao:'educacao_cultura',educação:'educacao_cultura',politica:'politica',política:'politica',emprego:'trabalho',habitacao:'moradia',habitação:'moradia',aluguel:'moradia',saúde:'saude',health:'saude',alimentação:'alimentacao',transporte:'mobilidade',justica:'seguranca_justica',justiça:'seguranca_justica',segurança:'seguranca_justica',ambiente:'meio_ambiente',natureza:'meio_ambiente',substância:'substancias',substâncias:'substancias',esporte:'esportes_lazer',esportes:'esportes_lazer',lazer:'esportes_lazer',família:'familia',cotidiano:'cotidiano',moda:'moda',cidade:'cidade',economia:'economia'};
+const escolhe=(list,random)=>list[Math.floor(Math.max(0,Math.min(.999999999,random()))*list.length)];
+const numerosArtigo={m:['o','um','os','uns'],f:['a','uma','as','umas']};
+const concordanciaAdjetivo=(adjective,gender,plural)=>{const row=adjectivosDeFrase.find(item=>item[0]===adjective);return row?row[(gender==='f'?1:0)+(plural?2:0)]:adjective;};
+function montarSintagma(noun,random,{determinado=false,adjective=false}={}){
+  const fixedSingular=['saúde','cannabis','tabaco','café','comida','polícia','justiça','política'],plural=random()<.27&&!fixedSingular.includes(noun[0]),gender=noun[1],definite=determinado||fixedSingular.includes(noun[0])||random()<.62,article=numerosArtigo[gender][definite?(plural?2:0):(plural?3:1)],form=plural?noun[2]:noun[0];
+  let result=`${article} ${form}`;if(adjective&&random()<.42){const choices=(adjetivosPorSubstantivo[noun[0]]||[]).map(word=>adjectivosDeFrase.find(item=>item[0]===word)).filter(Boolean);if(choices.length){const adj=escolhe(choices,random)[0];result+=` ${concordanciaAdjetivo(adj,gender,plural)}`;}}
+  return {text:result,plural,gender};
+}
+function unirPreposicao(preposition,phrase){
+  if(!preposition)return phrase;const [article,...rest]=phrase.split(' '),forms={de:{o:'do',a:'da',os:'dos',as:'das',um:'de um',uma:'de uma',uns:'de uns',umas:'de umas'},em:{o:'no',a:'na',os:'nos',as:'nas',um:'em um',uma:'em uma',uns:'em uns',umas:'em umas'},a:{o:'ao',a:'à',os:'aos',as:'às',um:'a um',uma:'a uma'},por:{o:'pelo',a:'pela',os:'pelos',as:'pelas',um:'por um',uma:'por uma'}};
+  const first=forms[preposition]?.[article]||`${preposition} ${article}`;return `${first}${rest.length?` ${rest.join(' ')}`:''}`;
+}
+function frasesBanco(tema){
+  const aliases=aliasesTema[normalizaLexema(tema)]||normalizaLexema(tema),selected=substantivosDeFrase[aliases]||substantivosDeFrase.cotidiano;
+  return {key:substantivosDeFrase[aliases]?aliases:'cotidiano',nouns:selected.filter(([word])=>palavraPertenceAoCatalogo(word)),predicates:predicadosDeFrase[aliases]||predicadosDeFrase.cotidiano};
+}
+export function gerarFrase({tema=null,random=Math.random,complexidade='variada'}={}){
+  if(typeof random!=='function')throw new TypeError('random precisa ser uma função');
+  const bank=frasesBanco(tema||'cotidiano');if(!bank.nouns.length)throw new RangeError('O catálogo não tem substantivos disponíveis para esse tema');
+  const nounMap=new Map(bank.nouns.map(item=>[item[0],item])),frames=(relacoesDeFrase[bank.key]||relacoesDeFrase.cotidiano).filter(([subject,,object])=>nounMap.has(subject)&&nounMap.has(object));if(!frames.length)throw new RangeError(`O tema ${bank.key} não tem relações lexicais suficientes para formar uma frase`);
+  const build=frame=>{const [subjectWord,verbWord,objectWord,preposition='']=frame,subjectNoun=nounMap.get(subjectWord),subject=montarSintagma(subjectNoun,random,{adjective:random()<.2}),object=montarSintagma(nounMap.get(objectWord),random),verb=conjugarVerbo(verbWord,{tempo:random()<.85?'presente':'pretérito-perfeito',pessoa:subject.plural?6:3});return `${subject.text} ${verb} ${unirPreposicao(preposition,object.text)}`;};
+  const capitalize=text=>text.charAt(0).toLocaleUpperCase('pt-BR')+text.slice(1),selected=escolhe(frames,random);let sentence=build(selected);
+  if((complexidade==='complexa'||complexidade==='variada')&&frames.length>1&&random()<(complexidade==='complexa'?.55:.24)){const second=escolhe(frames.filter(frame=>frame!==selected),random);sentence+=`, enquanto ${build(second)}`;}
+  return `${capitalize(sentence)}.`;
+}
+export function gerarFraseTematica(tema,{random=Math.random,complexidade='variada'}={}){
+  const key=normalizaLexema(tema);if(!tema||(!aliasesTema[key]&&!temasLexicais[key]))throw new RangeError(`Tema desconhecido: ${tema}`);
+  return gerarFrase({tema:key,random,complexidade});
+}
+export function criarSubstantivoCombinado(palavra1,palavra2,{genero,tags}={}){
+  if(!['masculino','feminino'].includes(genero))throw new TypeError('Informe gênero como masculino ou feminino');if(!Array.isArray(tags)||!tags.length)throw new TypeError('Informe etiquetas semânticas');
+  const lema=vocabulario.combinar(palavra1,palavra2,'eufonia',genero,'singular'),plural=vocabulario.combinar(palavra1,palavra2,'eufonia',genero,'plural');if(classificarPalavra(lema)!==genero||converterParaSingular(plural)!==lema)throw new RangeError('A combinação não produziu formas coerentes de gênero e número');return {lema,plural,genero,classes:['substantivo'],temas:[...new Set(tags)]};
+}
+Object.assign(vocabulario,{classificarPalavraCompleta,classificarTemas,classificarVertentePolitica,iterarPalavrasClassificadas,conjugarVerbo,gerarFrase,gerarFraseTematica,criarSubstantivoCombinado});
