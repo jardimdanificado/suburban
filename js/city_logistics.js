@@ -1,4 +1,4 @@
-import {moveGarments} from './city_clothing.js?v=clothing-visual-catalog-2';
+import {moveGarments} from './city_clothing.js?v=tropical-caribbean-prints-1';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
 import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=indoor-display-centering-1';

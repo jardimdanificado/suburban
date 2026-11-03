@@ -16,7 +16,7 @@ import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_ser
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=substances-sleep-1';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=indoor-display-centering-1';
-import {clothingMood,moveGarments} from './city_clothing.js?v=clothing-pattern-catalog-3';
+import {clothingMood,moveGarments} from './city_clothing.js?v=tropical-caribbean-prints-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';

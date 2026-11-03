@@ -2,6 +2,7 @@ import {wickerBasketSurface} from './city_mobility_models.js?v=cargo-box-rear-1'
 import {partyFlagCanvas} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {bodyFatAmount} from './city_body_metrics.js?v=body-morph-4';
+import {TROPICAL_PRINTS} from './city_clothing.js?v=tropical-caribbean-prints-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
 export function citizenIsSleeping(c){
@@ -212,23 +213,34 @@ export class CityCitizenModels {
     const attribute=mesh.geometry.attributes.instanceFat;if(!attribute)return;
     attribute.array[index]=bodyFatAmount(citizen);
   }
-  printedMaterial(piece){
-    if(this.printMaterials.has(piece))return this.printMaterials.get(piece);
+  printedMaterial(piece,baseColor='#ffffff',printId='hibisco'){
+    const baseHex=typeof baseColor==='number'?`#${baseColor.toString(16).padStart(6,'0')}`:typeof baseColor==='string'&&/^#[0-9a-f]{6}$/i.test(baseColor)?baseColor:'#ffffff',patternId=TROPICAL_PRINTS.includes(printId)?printId:'hibisco',key=`${piece}:${baseHex}:${patternId}`;
+    if(this.printMaterials.has(key))return this.printMaterials.get(key);
     if(typeof document==='undefined'||!this.THREE.CanvasTexture)return this.material;
-    const canvas=document.createElement('canvas');canvas.width=canvas.height=64;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,64,64);
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const ctx=canvas.getContext('2d'),rgb=[1,3,5].map(i=>parseInt(baseHex.slice(i,i+2),16)),luminance=(rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722)/255,ink=luminance>.5?'#17495c':'#f7edce',leaf=luminance>.5?'#17633f':'#66d99a',leafLight=luminance>.5?'#2e9862':'#a4efb9',coral=luminance>.5?'#cf365f':'#ff7585',sun=luminance>.5?'#efb932':'#ffe26b',lagoon=luminance>.5?'#168a91':'#65e0d3';ctx.fillStyle=baseHex;ctx.fillRect(0,0,128,128);
+    const flower=(x,y,r,petal=coral,center=sun)=>{ctx.fillStyle=petal;for(let i=0;i<5;i++){const a=i*Math.PI*2/5;ctx.beginPath();ctx.ellipse(x+Math.cos(a)*r*.64,y+Math.sin(a)*r*.64,r*.38,r*.7,a,0,Math.PI*2);ctx.fill();}ctx.fillStyle=center;ctx.beginPath();ctx.arc(x,y,r*.27,0,Math.PI*2);ctx.fill();ctx.strokeStyle=ink;ctx.lineWidth=Math.max(1,r*.1);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+r*.58,y-r*.18);ctx.stroke();ctx.fillStyle=sun;ctx.beginPath();ctx.arc(x+r*.62,y-r*.2,r*.11,0,Math.PI*2);ctx.fill();};
+    const tropicalLeaf=(x,y,length,angle,color=leaf)=>{ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(length*.45,-length*.18,length,0);ctx.quadraticCurveTo(length*.48,length*.22,0,0);ctx.fill();ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(length*.48,length*.02,length,0);ctx.stroke();ctx.restore();};
+    const palm=(x,y,scale=1,angle=0)=>{ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.strokeStyle=leafLight;ctx.lineWidth=3*scale;ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(10*scale,-15*scale,2*scale,-48*scale);ctx.stroke();for(let side of [-1,1])for(let i=0;i<5;i++){const t=i/5,px=2*scale+side*t*5*scale,py=-8*scale-t*39*scale;ctx.strokeStyle=i%2?leaf:leafLight;ctx.lineWidth=2*scale;ctx.beginPath();ctx.moveTo(px,py);ctx.quadraticCurveTo(px+side*12*scale,py-3*scale,px+side*25*scale,py+side*5*scale);ctx.stroke();}ctx.restore();};
+    const pineapple=(x,y,scale=1)=>{ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.fillStyle=sun;ctx.beginPath();ctx.ellipse(0,6,11,17,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle=ink;ctx.lineWidth=2;for(let d=-10;d<=10;d+=8){ctx.beginPath();ctx.moveTo(d,-6);ctx.lineTo(d+8,18);ctx.stroke();}for(let d=-10;d<=10;d+=10){ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(d,-23);ctx.lineTo(4,-9);ctx.fillStyle=leaf;ctx.fill();}ctx.restore();};
     if(piece==='camisa social'){
-      ctx.fillStyle='#555';ctx.beginPath();ctx.moveTo(28,8);ctx.lineTo(36,8);ctx.lineTo(35,17);ctx.lineTo(39,43);ctx.lineTo(32,57);ctx.lineTo(25,43);ctx.lineTo(29,17);ctx.closePath();ctx.fill();
-      ctx.strokeStyle='#777';ctx.lineWidth=3;ctx.strokeRect(45,25,10,12);
-    }else if(piece==='vestido estampado'){
-      ctx.fillStyle='#173f69';for(let x=-64;x<128;x+=18){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+8,0);ctx.lineTo(x+72,64);ctx.lineTo(x+64,64);ctx.closePath();ctx.fill();}
-      for(let y=8;y<72;y+=20)for(let x=8;x<72;x+=20){ctx.fillStyle='#f5c842';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#c43e56';ctx.beginPath();ctx.arc(x,y,2,0,Math.PI*2);ctx.fill();}
+      ctx.fillStyle='#374052';ctx.beginPath();ctx.moveTo(56,16);ctx.lineTo(72,16);ctx.lineTo(70,34);ctx.lineTo(78,86);ctx.lineTo(64,114);ctx.lineTo(50,86);ctx.lineTo(58,34);ctx.closePath();ctx.fill();
+      ctx.strokeStyle='#a8a39a';ctx.lineWidth=6;ctx.strokeRect(90,50,20,24);
+    }else if(patternId==='ondas-caribenhas'){
+      for(let row=-1;row<6;row++){const y=row*27;for(const [color,phase]of [[lagoon,0],[ink,9],[leafLight,18]]){ctx.strokeStyle=color;ctx.lineWidth=8;ctx.beginPath();for(let x=-8;x<=136;x+=4){const py=y+phase+Math.sin((x+row*11)/18)*8;if(x===-8)ctx.moveTo(x,py);else ctx.lineTo(x,py);}ctx.stroke();}}
+      for(const x of [22,86]){ctx.fillStyle=sun;ctx.beginPath();ctx.arc(x,30+(x%3)*14,8,0,Math.PI*2);ctx.fill();}
+    }else if(patternId==='palmeiras'){
+      palm(28,60,.82,-.14);palm(95,127,.9,Math.PI);palm(112,31,.62,.65);tropicalLeaf(13,105,34,-.35,leaf);tropicalLeaf(66,67,30,.5,leafLight);
+    }else if(patternId==='folhagem'){
+      for(let row=0;row<3;row++)for(let col=0;col<3;col++){const x=col*54+12+(row%2)*20,y=row*52+12;tropicalLeaf(x,y,37,-.65+(col%2)*.5,(row+col)%2?leaf:leafLight);tropicalLeaf(x+15,y+17,32,.7,leaf);ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+22,y-15);ctx.stroke();if((row+col)%2===0){ctx.fillStyle=coral;ctx.beginPath();ctx.arc(x+28,y+25,4,0,Math.PI*2);ctx.fill();}}
+    }else if(patternId==='frutas-tropicais'){
+      pineapple(30,40,.92);pineapple(99,108,.76);for(const [x,y,scale]of [[91,38,.8],[37,104,.75],[99,72,.56]]){ctx.fillStyle=coral;ctx.beginPath();ctx.ellipse(x,y,12*scale,18*scale,-.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y-13*scale);ctx.quadraticCurveTo(x+9*scale,y-26*scale,x+17*scale,y-20*scale);ctx.stroke();tropicalLeaf(x+5*scale,y-16*scale,15*scale,-.5,leafLight);}
+    }else if(patternId==='flores-miudas'){
+      for(let y=12,row=0;y<136;y+=30,row++)for(let x=10+(row%2)*15;x<136;x+=30){flower(x,y,8,(row%2)?coral:sun,(x+y)%2?ink:leafLight);tropicalLeaf(x+7,y+12,13,.7,leaf);}
     }else{
-      ctx.fillStyle='#182d4c';for(let y=0;y<64;y+=16)for(let x=0;x<64;x+=16)if((x+y)%32===0)ctx.fillRect(x,y,16,16);
-      ctx.fillStyle='#f5c842';for(let y=8;y<72;y+=16)for(let x=8;x<72;x+=16){ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();}
-      ctx.strokeStyle='#bd3d4f';ctx.lineWidth=3;for(let x=-64;x<128;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+64,64);ctx.stroke();}
+      for(let y=24,row=0;y<152;y+=64,row++)for(let x=28+(row%2)*37;x<152;x+=72){flower(x,y,22,coral,sun);tropicalLeaf(x-28,y+22,29,-.8,leaf);tropicalLeaf(x+27,y+24,25,.55,leafLight);}
     }
     const texture=new this.THREE.CanvasTexture(canvas);texture.wrapS=this.THREE.ClampToEdgeWrapping;texture.wrapT=this.THREE.ClampToEdgeWrapping;texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;
-    const material=this.enableWeightMorph(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.printMaterials.set(piece,material);return material;
+    const material=this.enableWeightMorph(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.printMaterials.set(key,material);return material;
   }
   async load(){
     if(!this.fetchAsset)throw Error('Carregamento de OBJ indisponível');
@@ -302,13 +314,13 @@ export class CityCitizenModels {
     else motion.actionToken=null;
     const animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
-    const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,lower=Number.isInteger(c.lowerWearIndex)&&c.lowerWearIndex>=0?c.wardrobe?.[c.lowerWearIndex]:null,lowerSkirt=['saia','saia longa'].includes(lower?.piece)?lower.piece:null,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key);
+    const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,printed=['camisa social','camisa estampada','vestido estampado'].includes(piece),garmentHex=typeof garment?.color==='number'?`#${garment.color.toString(16).padStart(6,'0')}`:typeof garment?.color==='string'&&/^#[0-9a-f]{6}$/i.test(garment.color)?garment.color:'#8d806e',printId=garment?.printId||TROPICAL_PRINTS[entity.id%TROPICAL_PRINTS.length],garmentMaterial=printed?this.printedMaterial(piece,garmentHex,printId):null,lower=Number.isInteger(c.lowerWearIndex)&&c.lowerWearIndex>=0?c.wardrobe?.[c.lowerWearIndex]:null,lowerSkirt=['saia','saia longa'].includes(lower?.piece)?lower.piece:null,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}${printed?`:${garmentHex}:${printId}`:''}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key);
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
     if(batch.count===batch.capacity){
       const capacity=Math.max(32,batch.capacity*2),mesh=new this.THREE.InstancedMesh(this.instancedGeometry(bodySource,capacity),this.material,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;
       if(batch.mesh){for(let i=0;i<batch.count;i++){batch.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);batch.mesh.getColorAt(i,this.color);mesh.setColorAt(i,this.color);const oldFat=batch.mesh.geometry.attributes.instanceFat,newFat=mesh.geometry.attributes.instanceFat;if(oldFat&&newFat)newFat.array[i]=oldFat.array[i];}this.group.remove(batch.mesh);batch.mesh.dispose();}
       this.group.add(mesh);batch.mesh=mesh;
-      if(outfit){const clothing=new this.THREE.InstancedMesh(this.instancedGeometry(outfit.clothes,capacity),outfit.material||this.material,capacity);clothing.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);clothing.frustumCulled=false;clothing.castShadow=true;clothing.receiveShadow=true;
+      if(outfit){const clothing=new this.THREE.InstancedMesh(this.instancedGeometry(outfit.clothes,capacity),garmentMaterial||outfit.material||this.material,capacity);clothing.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);clothing.frustumCulled=false;clothing.castShadow=true;clothing.receiveShadow=true;
         if(batch.clothingMesh){for(let i=0;i<batch.count;i++){batch.clothingMesh.getMatrixAt(i,this.matrix);clothing.setMatrixAt(i,this.matrix);batch.clothingMesh.getColorAt(i,this.color);clothing.setColorAt(i,this.color);const oldFat=batch.clothingMesh.geometry.attributes.instanceFat,newFat=clothing.geometry.attributes.instanceFat;if(oldFat&&newFat)newFat.array[i]=oldFat.array[i];}this.group.remove(batch.clothingMesh);batch.clothingMesh.dispose();}
         this.group.add(clothing);batch.clothingMesh=clothing;
       }batch.capacity=capacity;
@@ -323,7 +335,7 @@ export class CityCitizenModels {
       carrier.group.position.copy(this.position);carrier.group.scale.setScalar(size);carrier.group.rotation.y=0;animateClothFlag(carrier.group.userData.cloth,Math.floor(this.clock*10)/10,(entity.id%19)*.31);this.activeCampaignFlags.add(entity.id);
     }
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count,this.color);
-    if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);this.setInstanceFat(batch.clothingMesh,batch.count,c);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:presence?.color?Number.parseInt(String(presence.color).replace('#',''),16):hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
+    if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);this.setInstanceFat(batch.clothingMesh,batch.count,c);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:printed?0xffffff:presence?.color?Number.parseInt(String(presence.color).replace('#',''),16):hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
     const capId=c.political?.partyCapId||c.campaign?.capGarmentId,partyCap=capId&&c.wardrobe?.find(g=>g.garmentId===capId),wornHat=partyCap||(Number.isInteger(c.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null),hat=c.equipment?.cesta?{piece:'cesta',color:0xb8874f}:wornHat;
     const footwear=Number.isInteger(c.footwearIndex)&&c.footwearIndex>=0?c.wardrobe?.[c.footwearIndex]:null;
     for(const item of [hat,footwear,lower])if(item&&['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta','sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa'].includes(item.piece)){
