@@ -13,7 +13,13 @@ const ICON_LAYOUTS=Object.freeze({
     {name:'centro',slots:[{x:.3,y:.18,w:.4,h:.64}]},{name:'centro-amplo',slots:[{x:.2,y:.08,w:.6,h:.82}]},
     {name:'canto-superior-esquerdo',slots:[{x:.04,y:.04,w:.38,h:.54}]},{name:'canto-inferior-direito',slots:[{x:.58,y:.42,w:.38,h:.54}]},
     {name:'centro-esquerda',slots:[{x:.04,y:.22,w:.38,h:.56}]},{name:'centro-direita',slots:[{x:.58,y:.22,w:.38,h:.56}]},
-    {name:'alto-central',slots:[{x:.3,y:.02,w:.4,h:.5}]},{name:'baixo-central',slots:[{x:.3,y:.48,w:.4,h:.5}]}
+    {name:'alto-central',slots:[{x:.3,y:.02,w:.4,h:.5}]},{name:'baixo-central',slots:[{x:.3,y:.48,w:.4,h:.5}]},
+    {name:'motivo-horizontal-5',slots:Array.from({length:5},(_,i)=>({x:.025+i*.19,y:.32,w:.14,h:.36,repeatGroup:'motivo',detailGroup:'motivo'}))},
+    {name:'motivo-horizontal-7',slots:Array.from({length:7},(_,i)=>({x:.015+i*.14,y:.34,w:.11,h:.32,repeatGroup:'motivo',detailGroup:'motivo'}))},
+    {name:'motivo-horizontal-9',slots:Array.from({length:9},(_,i)=>({x:.015+i*.108,y:.36,w:.08,h:.28,repeatGroup:'motivo',detailGroup:'motivo'}))},
+    {name:'motivo-vertical-5',slots:Array.from({length:5},(_,i)=>({x:.4,y:.02+i*.19,w:.2,h:.15,repeatGroup:'motivo',detailGroup:'motivo'}))},
+    {name:'motivo-diagonal-5',slots:Array.from({length:5},(_,i)=>({x:.025+i*.19,y:.04+i*.14,w:.15,h:.34,repeatGroup:'motivo',detailGroup:'motivo'}))},
+    {name:'motivo-circular-6',slots:Array.from({length:6},(_,i)=>{const a=-Math.PI/2+i*Math.PI/3;return{x:.5+Math.cos(a)*.31-.07,y:.5+Math.sin(a)*.34-.15,w:.14,h:.3,repeatGroup:'motivo',detailGroup:'motivo'};})}
   ],
   2:[
     {name:'horizontal',slots:[{x:.03,y:.16,w:.43,h:.68},{x:.54,y:.16,w:.43,h:.68}]},{name:'vertical',slots:[{x:.22,y:.02,w:.56,h:.43},{x:.22,y:.55,w:.56,h:.43}]},
@@ -57,9 +63,20 @@ const TEXT_LAYOUTS=Object.freeze([
   {id:'nome-e-numero',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}},
   {id:'nome-com-fundo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'}],area:{x:.04,y:.15,w:.92,h:.78}},
   {id:'numero-com-fundo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.78}},
-  {id:'nome-numero-com-fundo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}}
+  {id:'nome-numero-com-fundo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}},
+  {id:'slogan-em-faixa-central',boxes:[{x:.08,y:.43,w:.84,h:.14,kind:'phrase'}],area:{x:.05,y:.04,w:.9,h:.34}},
+  {id:'nome-em-faixa-central',boxes:[{x:.08,y:.43,w:.84,h:.14,kind:'name'}],area:{x:.05,y:.04,w:.9,h:.34}},
+  {id:'numero-em-faixa-central',boxes:[{x:.2,y:.42,w:.6,h:.16,kind:'number'}],area:{x:.05,y:.04,w:.9,h:.34}},
+  {id:'nome-a-direita-do-simbolo',boxes:[{x:.68,y:.28,w:.29,h:.44,kind:'name'}],area:{x:.03,y:.12,w:.59,h:.76}},
+  {id:'nome-a-esquerda-do-simbolo',boxes:[{x:.03,y:.28,w:.29,h:.44,kind:'name'}],area:{x:.38,y:.12,w:.59,h:.76}},
+  {id:'nome-numero-lado-a-lado-acima',boxes:[{x:.03,y:.015,w:.58,h:.09,kind:'name'},{x:.65,y:.015,w:.32,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.76}},
+  {id:'nome-numero-lado-a-lado-abaixo',boxes:[{x:.03,y:.895,w:.58,h:.09,kind:'name'},{x:.65,y:.895,w:.32,h:.09,kind:'number'}],area:{x:.04,y:.04,w:.92,h:.76}},
+  {id:'nome-superior-numero-inferior-cantos',boxes:[{x:.04,y:.015,w:.42,h:.09,kind:'name'},{x:.54,y:.895,w:.42,h:.09,kind:'number'}],area:{x:.08,y:.15,w:.84,h:.7}},
+  {id:'slogan-superior-nome-inferior',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'phrase'},{x:.04,y:.895,w:.92,h:.09,kind:'name'}],area:{x:.04,y:.15,w:.92,h:.7}},
+  {id:'nome-e-numero-em-faixa-central',boxes:[{x:.04,y:.43,w:.61,h:.14,kind:'name'},{x:.68,y:.43,w:.28,h:.14,kind:'number'}],area:{x:.04,y:.04,w:.92,h:.34}},
+  {id:'palavra-em-canto-superior',boxes:[{x:.62,y:.025,w:.34,h:.1,kind:'word'}],area:{x:.04,y:.15,w:.92,h:.78}}
 ]);
-const TEXT_ONLY_LAYOUT_IDS=new Set(['somente-numero','somente-nome','nome-e-numero','nome-com-fundo','numero-com-fundo','nome-numero-com-fundo']);
+const TEXT_ONLY_LAYOUT_IDS=new Set(['somente-numero','somente-nome','nome-e-numero','nome-com-fundo','numero-com-fundo','nome-numero-com-fundo','slogan-em-faixa-central','nome-em-faixa-central','numero-em-faixa-central','nome-a-direita-do-simbolo','nome-a-esquerda-do-simbolo','nome-numero-lado-a-lado-acima','nome-numero-lado-a-lado-abaixo','nome-superior-numero-inferior-cantos','slogan-superior-nome-inferior','nome-e-numero-em-faixa-central','palavra-em-canto-superior']);
 export const PARTY_FLAG_BACKGROUNDS=Object.freeze([
  'solid','stripes-horizontal','stripes-horizontal-2','stripes-horizontal-3','stripes-horizontal-4','stripes-horizontal-6',
  'stripes-vertical','stripes-vertical-2','stripes-vertical-3','stripes-vertical-4','stripes-vertical-6',
@@ -75,7 +92,17 @@ export const PARTY_FLAG_BACKGROUNDS=Object.freeze([
  'border','double-border','top-bottom-border','side-borders','top-bar','bottom-bar',
  'triangle-left','triangle-right','triangle-top','triangle-bottom','triangles-4',
  'wave-horizontal','wave-vertical','wave-double','wave-diagonal','dots-small','dots-large',
- 'fess-top','fess-bottom','pale-left','pale-center','pale-right'
+ 'fess-top','fess-bottom','pale-left','pale-center','pale-right',
+ 'bicolor-diagonal','bicolor-diagonal-reverse','diagonal-band','diagonal-band-reverse','diagonal-band-double',
+ 'triangle-hoist','triangle-fly','triangle-top-wide','triangle-bottom-wide','pile-left','pile-right','pile-top','pile-bottom',
+ 'chevron-band','chevron-band-reverse','pall','pall-inverted','gyronny-4','gyronny-6','gyronny-8','saltire-quartered',
+ 'cross-fimbriated','cross-offset','nordic-cross-centered','nordic-cross-double','cross-canton','cross-four-cantons',
+ 'canton-diagonal','canton-cross','canton-star','canton-circle','canton-double','canton-striped',
+ 'fess-narrow','fess-wide','fess-double','chief','base-stripe','pale-wide-left','pale-wide-center','pale-wide-right','pale-double',
+ 'bordure','bordure-double','bordure-canton','central-disc-ring','crescent-left','crescent-right','crescent-center',
+ 'crescent-star-left','crescent-star-right','sunburst-canton','sunburst-left','lozengy-diagonal','checkerboard-6',
+ 'wave-band','wave-band-double','sawtooth-top','sawtooth-bottom','sawtooth-left','sawtooth-right','serrated-hoist','serrated-fly',
+ 'quartered-cross','diagonal-quarter','diagonal-quarter-reverse','central-frame','central-medallion','hoist-stripe','fly-stripe'
 ]);
 const inside=(a,b)=>a.x>=b.x-1e-6&&a.y>=b.y-1e-6&&a.x+a.w<=b.x+b.w+1e-6&&a.y+a.h<=b.y+b.h+1e-6;
 function patternContainsRect(style,rect,aspect){
@@ -100,13 +127,8 @@ function patternContainsRect(style,rect,aspect){
 function textLayoutCompatible(layout,style,aspect){
  if(!layout.boxes.length)return true;
  return layout.boxes.every(box=>{
-  if(patternContainsRect(style,box,aspect))return true;
-  if(style==='solid')return true;
-  if(style==='stripes-horizontal')return false;
-  if(style==='stripes-vertical')return false;
-  if(style==='quartered'||style==='stripes-diagonal'||style==='chevron'||style==='border')return false;
-  if(box.rotation)return ['circle','double-circle','diamond','star'].includes(style)&&(box.x+box.w<=.175||box.x>=.825);
-  return ['circle','double-circle','diamond','star','cross','solid'].includes(style)&&(box.y+box.h<=.105||box.y>=.895);
+  const width=box.rotation?box.h:box.w,height=box.rotation?box.w:box.h;
+  return box.x>=0&&box.y>=0&&box.x+box.w<=1&&box.y+box.h<=1&&width>.04&&height<=.2;
  });
 }
 export const PARTY_FLAG_LAYOUTS=Object.freeze(Object.entries(ICON_LAYOUTS).flatMap(([count,arrangements])=>arrangements.flatMap(arrangement=>TEXT_LAYOUTS.map(textLayout=>Object.freeze({id:`${count}-${arrangement.name}-${textLayout.id}`,count:Number(count),arrangement:arrangement.name,textLayout:textLayout.id,slots:Object.freeze(arrangement.slots.map(slot=>Object.freeze({...slot}))),iconArea:Object.freeze({...textLayout.area}),textBoxes:Object.freeze(textLayout.boxes.map(box=>Object.freeze({...box})))})))));
@@ -140,8 +162,8 @@ function chooseText(city,party,kind){
 }
 function buildTexts(city,party,boxes,palette){return Object.freeze(boxes.map(box=>Object.freeze({...box,value:chooseText(city,party,box.kind),color:palette[2]||palette[1]})).filter(text=>text.value));}
 function layoutEmblems(city,party,layout,palette){
- const used=new Set(),detailModes=new Map();return Object.freeze(layout.slots.map((slot,index)=>{
-  const skin=weightedSprite(city,party,used);used.add(skin);const area=layout.iconArea;
+ const used=new Set(),detailModes=new Map(),repeatSkins=new Map();return Object.freeze(layout.slots.map((slot,index)=>{
+  let skin;if(slot.repeatGroup&&repeatSkins.has(slot.repeatGroup))skin=repeatSkins.get(slot.repeatGroup);else{skin=weightedSprite(city,party,used);used.add(skin);if(slot.repeatGroup)repeatSkins.set(slot.repeatGroup,skin);}const area=layout.iconArea;
   const color=palette[3]||palette[1],shade=color,detailGroup=slot.detailGroup??index;if(!detailModes.has(detailGroup))detailModes.set(detailGroup,city.random()<.8?'detailed':'flat');
   return Object.freeze({skin,x:area.x+slot.x*area.w,y:area.y+slot.y*area.h,w:slot.w*area.w,h:slot.h*area.h,...(slot.crop?{crop:Object.freeze({...slot.crop})}:{}),...(slot.clip?{clip:Object.freeze({x:area.x+slot.clip.x*area.w,y:area.y+slot.clip.y*area.h,w:slot.clip.w*area.w,h:slot.clip.h*area.h})}:{}),color,shade,detailMode:detailModes.get(detailGroup),backgroundMode:city.random()<.07?'tile':'transparent'});
  }));
@@ -160,10 +182,29 @@ function flagPalette(city,hue,background,foreground){
  addAccent();addAccent();
  return Object.freeze(colors);
 }
+function arrangementPreferences(style,count){
+ if(!count)return [];
+ if(/canton|sunburst-canton/.test(style))return count===1?['canto-superior-esquerdo','alto-central','centro-esquerda']:count===2?['horizontal','cantos-opostos','duas-colunas']:count===3?['duas-em-cima-uma-embaixo','tres-cantos']:['quatro-cantos','quadrantes','grade-aberta'];
+ if(style==='crescent-star-left'||style==='crescent-left')return count===1?['canto-superior-esquerdo','centro-esquerda','motivo-circular-6']:count===2?['horizontal','cantos-opostos']:count===3?['triangulo','tres-cantos']:['quatro-cantos','quadrantes'];
+ if(style==='crescent-star-right'||style==='crescent-right')return count===1?['canto-inferior-direito','centro-direita','motivo-circular-6']:count===2?['horizontal','cantos-opostos']:count===3?['triangulo','tres-cantos']:['quatro-cantos','quadrantes'];
+ if(/triangle-top|pile-top|sawtooth-top|chief/.test(style))return count===1?['baixo-central','canto-inferior-direito','centro']:count===2?['topo-e-base','horizontal','diagonal-descendente']:count===3?['linha-tripla','duas-em-cima-uma-embaixo']:['linha-de-quatro','quadrantes'];
+ if(/triangle-bottom|pile-bottom|sawtooth-bottom|base-stripe/.test(style))return count===1?['alto-central','canto-superior-esquerdo','centro']:count===2?['topo-e-base','horizontal','diagonal-ascendente']:count===3?['linha-tripla','uma-em-cima-duas-embaixo']:['linha-de-quatro','quadrantes'];
+ if(style==='sun-disc-left'||style==='sunburst-left')return count===1?['centro-direita','canto-inferior-direito','baixo-central']:count===2?['horizontal','cantos-opostos']:count===3?['triangulo','tres-cantos']:['quatro-cantos','quadrantes'];
+ if(/triangle-hoist|triangle-left|pile-left|chevron-band-reverse|chevron$/.test(style))return count===1?['centro-direita','canto-inferior-direito','baixo-central']:count===2?['horizontal','cantos-opostos','diagonal-descendente']:count===3?['triangulo','duas-em-cima-uma-embaixo']:['quatro-cantos','losango'];
+ if(/triangle-fly|triangle-right|pile-right|chevron-band$|chevron-right/.test(style))return count===1?['centro-esquerda','canto-superior-esquerdo','baixo-central']:count===2?['horizontal','cantos-opostos','diagonal-ascendente']:count===3?['triangulo','uma-em-cima-duas-embaixo']:['quatro-cantos','losango'];
+ if(/nordic-cross|cross-offset/.test(style))return count===1?['centro-direita','centro','canto-inferior-direito']:count===2?['horizontal','cantos-opostos']:count===3?['linha-tripla','lado-centro-lado']:['quatro-cantos','linha-de-quatro'];
+ if(/circle|disc|sun|diamond|saltire|cross|star|crescent|medallion|pall|gyronny|diagonal-band|bicolor-diagonal/.test(style))return count===1?['centro','centro-amplo','alto-central']:count===2?['horizontal','vertical','cantos-opostos']:count===3?['triangulo','linha-tripla','tres-cantos']:['quadrantes','quatro-cantos','anel-quadrado'];
+ if(/stripes|fess|pale|wave|border|bordure/.test(style))return count===1?['centro','centro-amplo','motivo-horizontal-5']:count===2?['horizontal','duas-faixas-laterais','topo-e-base']:count===3?['linha-tripla','coluna-tripla','triangulo']:['linha-de-quatro','quadrantes','grade-aberta'];
+ return [];
+}
+function chooseFlagArrangement(city,arrangements,style,count){
+ const preferred=new Set(arrangementPreferences(style,count)),matches=arrangements.filter(arrangement=>preferred.has(arrangement.name)),pool=matches.length&&city.random()<.78?matches:arrangements;
+ return pool[Math.floor(city.random()*pool.length)];
+}
 export function makePartyFlag(city,index,founders=[],party=null){
  const hue=city.random()*360,background=randomColor(hue,.19,.78);let foreground=randomColor((hue+180)%360,.88,.58);
  if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';
- const colors=flagPalette(city,hue,background,foreground),count=city.random()<.15?0:1+Math.floor(city.random()*4),arrangements=ICON_LAYOUTS[count],arrangement=arrangements[Math.floor(city.random()*arrangements.length)],aspect=120/76,backgroundChoices=[...Array(27).fill('solid'),...PARTY_FLAG_BACKGROUNDS.filter(style=>style!=='solid')];let backgroundStyle=backgroundChoices[Math.floor(city.random()*backgroundChoices.length)];
+ const colors=flagPalette(city,hue,background,foreground),count=city.random()<.15?0:1+Math.floor(city.random()*4),arrangements=ICON_LAYOUTS[count],aspect=120/76,backgroundChoices=[...Array(51).fill('solid'),...PARTY_FLAG_BACKGROUNDS.filter(style=>style!=='solid')];let backgroundStyle=backgroundChoices[Math.floor(city.random()*backgroundChoices.length)];const arrangement=chooseFlagArrangement(city,arrangements,backgroundStyle,count);
  const textChoices=count===0?TEXT_LAYOUTS.filter(item=>TEXT_ONLY_LAYOUT_IDS.has(item.id)):TEXT_LAYOUTS.filter(item=>!TEXT_ONLY_LAYOUT_IDS.has(item.id)),compatibleLayouts=textChoices.filter(item=>textLayoutCompatible(item,backgroundStyle,aspect)),textLayout=compatibleLayouts[Math.floor(city.random()*compatibleLayouts.length)]||textChoices[0];
  if(count===0&&textLayout.id.endsWith('-com-fundo')&&backgroundStyle==='solid')backgroundStyle=PARTY_FLAG_BACKGROUNDS.filter(style=>style!=='solid')[Math.floor(city.random()*(PARTY_FLAG_BACKGROUNDS.length-1))];
  const layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors);
@@ -255,6 +296,69 @@ function drawFlagBackground(ctx,flag,x,y,w,h){
  const colors=flag.colors?.length?flag.colors:[flag.background,flag.foreground],accent=colors[1]||flag.foreground,style=flag.backgroundStyle;
  ctx.fillStyle=flag.background;ctx.fillRect(x,y,w,h);ctx.fillStyle=colors[1]||flag.foreground;
  if(!style){if(flag.pattern===1)ctx.fillRect(x,y+h*.42,w,h*.16);else if(flag.pattern===2){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+w*.5,y+h*.5);ctx.lineTo(x,y+h);ctx.fill();}return;}
+ const polygon=points=>{ctx.beginPath();points.forEach(([px,py],i)=>i?ctx.lineTo(px,py):ctx.moveTo(px,py));ctx.closePath();ctx.fill();};
+ if(style==='bicolor-diagonal'||style==='bicolor-diagonal-reverse'){
+  const reverse=style.endsWith('reverse');polygon(reverse?[[x,y],[x+w,y],[x,y+h]]:[[x+w,y],[x+w,y+h],[x,y+h]]);return;
+ }
+ if(style==='diagonal-band'||style==='diagonal-band-reverse'||style==='diagonal-band-double'){
+  ctx.save();ctx.translate(x+w/2,y+h/2);ctx.rotate(style.includes('reverse')?Math.PI/4:-Math.PI/4);const band=Math.min(w,h)*(style==='diagonal-band-double'?.12:.24);ctx.fillRect(-w,-band/2,w*2,band);if(style==='diagonal-band-double'){ctx.fillRect(-w,-band*1.25,w*2,band*.35);ctx.fillRect(-w,band*.9,w*2,band*.35);}ctx.restore();return;
+ }
+ if(['triangle-hoist','triangle-fly','triangle-top-wide','triangle-bottom-wide','pile-left','pile-right','pile-top','pile-bottom'].includes(style)){
+  if(style==='triangle-hoist'||style==='pile-left')polygon([[x,y],[x+w*.52,y+h/2],[x,y+h]]);
+  else if(style==='triangle-fly'||style==='pile-right')polygon([[x+w,y],[x+w,y+h],[x+w*.48,y+h/2]]);
+  else if(style==='triangle-top-wide'||style==='pile-top')polygon([[x,y],[x+w,y],[x+w/2,y+h*.58]]);
+  else polygon([[x,y+h],[x+w,y+h],[x+w/2,y+h*.42]]);return;
+ }
+ if(style==='chevron-band'||style==='chevron-band-reverse'){
+  const reverse=style.endsWith('reverse'),points=reverse?[[x+w,y],[x+w*.42,y+h/2],[x+w,y+h],[x+w*.78,y+h],[x+w*.2,y+h/2],[x+w*.78,y]]:[[x,y],[x+w*.22,y],[x+w*.8,y+h/2],[x+w*.22,y+h],[x,y+h],[x+w*.58,y+h/2]];polygon(points);return;
+ }
+ if(style==='pall'||style==='pall-inverted'){
+  const inv=style==='pall-inverted';polygon(inv?[[x,y+h],[x+w*.22,y+h],[x+w/2,y+h*.52],[x+w*.78,y+h],[x+w,y+h],[x+w/2,y]]:[[x,y],[x+w*.22,y],[x+w/2,y+h*.48],[x+w*.78,y],[x+w,y],[x+w/2,y+h]]);return;
+ }
+ const gyronny=style.match(/^gyronny-(4|6|8)$/);if(gyronny){const count=Number(gyronny[1]),cx=x+w/2,cy=y+h/2,outer=Math.hypot(w,h);for(let i=0;i<count;i+=2){const a=-Math.PI/2+i*Math.PI*2/count,b=a+Math.PI*2/count;polygon([[cx,cy],[cx+Math.cos(a)*outer,cy+Math.sin(a)*outer],[cx+Math.cos(b)*outer,cy+Math.sin(b)*outer]]);}return;}
+ if(style==='diagonal-quarter'||style==='diagonal-quarter-reverse'||style==='saltire-quartered'){
+  if(style==='saltire-quartered'){const cx=x+w/2,cy=y+h/2;polygon([[x,y],[x+w,y],[cx,cy]]);polygon([[x,y+h],[x+w,y+h],[cx,cy]]);}
+  else if(style==='diagonal-quarter')polygon([[x,y],[x+w,y],[x,y+h]]);else polygon([[x+w,y],[x+w,y+h],[x,y+h]]);return;
+ }
+ if(style==='lozengy-diagonal'){for(let i=-1;i<5;i++){ctx.beginPath();ctx.moveTo(x+i*w/4,y);ctx.lineTo(x+(i+1)*w/4,y);ctx.lineTo(x+(i+2)*w/4,y+h);ctx.lineTo(x+(i+1)*w/4,y+h);ctx.closePath();ctx.fill();}return;}
+ if(style==='cross-fimbriated'||style==='cross-offset'||style==='nordic-cross-centered'||style==='nordic-cross-double'||style==='cross-four-cantons'){
+  const cx=style==='cross-offset'?x+w*.38:x+w*.5,wide=Math.min(w,h)*(style==='cross-fimbriated'?.3:.22),narrow=wide*.58;ctx.fillStyle=accent;ctx.fillRect(cx-wide/2,y,wide,h);ctx.fillRect(x,y+h/2-wide/2,w,wide);
+  if(style==='cross-fimbriated'){ctx.fillStyle=flag.foreground;ctx.fillRect(cx-narrow/2,y,narrow,h);ctx.fillRect(x,y+h/2-narrow/2,w,narrow);ctx.fillStyle=accent;}
+  if(style==='nordic-cross-double'){ctx.fillRect(cx+wide*.7-wide*.18,y,wide*.36,h);ctx.fillRect(x,y+h/2+wide*.7-wide*.18,w,wide*.36);}if(style==='cross-four-cantons'){const size=Math.min(w,h)*.18;for(const [px,py]of [[.12,.12],[.72,.12],[.12,.72],[.72,.72]])ctx.fillRect(x+w*px,y+h*py,w*size,h*size);}return;
+ }
+ if(style==='cross-canton'||style==='canton-cross'||style==='canton-star'||style==='canton-circle'||style==='canton-double'||style==='canton-striped'||style==='canton-diagonal'){
+  const cw=w*.52,ch=h*.54;ctx.fillRect(x,y,cw,ch);ctx.fillStyle=flag.background;
+  if(style==='cross-canton'||style==='canton-cross'){ctx.fillRect(x+cw*.42,y,cw*.16,ch);ctx.fillRect(x,y+ch*.42,cw,ch*.16);}
+  else if(style==='canton-diagonal')polygon([[x,y],[x+cw,y],[x,y+ch]]);
+  else if(style==='canton-star'){starPath(ctx,x+cw*.5,y+ch*.5,Math.min(cw,ch)*.34,Math.min(cw,ch)*.15);ctx.fill();}
+  else if(style==='canton-double'){ctx.fillStyle=accent;ctx.fillRect(x+cw,y+ch,w-cw,h-ch);}
+  else if(style==='canton-circle'){circlePath(ctx,x+cw*.5,y+ch*.5,Math.min(cw,ch)*.32);}
+  else if(style==='canton-striped'){ctx.fillStyle=accent;for(let i=0;i<4;i++)ctx.fillRect(x,y+ch*i/4,cw,ch/8);}
+  return;
+ }
+ if(style==='fess-narrow'||style==='fess-wide'||style==='fess-double'||style==='chief'||style==='base-stripe'){
+  const hh=style==='fess-narrow'?.13:style==='fess-wide'?.42:.2;if(style==='chief')ctx.fillRect(x,y,w,h*.27);else if(style==='base-stripe')ctx.fillRect(x,y+h*.73,w,h*.27);else{ctx.fillRect(x,y+h*(.5-hh/2),w,h*hh);if(style==='fess-double'){ctx.fillRect(x,y+h*.22,w,h*.1);ctx.fillRect(x,y+h*.68,w,h*.1);}}return;
+ }
+ if(style==='pale-wide-left'||style==='pale-wide-center'||style==='pale-wide-right'||style==='pale-double'||style==='hoist-stripe'||style==='fly-stripe'){
+  if(style==='hoist-stripe')ctx.fillRect(x,y,w*.22,h);else if(style==='fly-stripe')ctx.fillRect(x+w*.78,y,w*.22,h);else if(style==='pale-double'){ctx.fillRect(x+w*.25,y,w*.12,h);ctx.fillRect(x+w*.63,y,w*.12,h);}else{const center=style==='pale-wide-left'?0:style==='pale-wide-center'?.36:.72;ctx.fillRect(x+w*center,y,w*.28,h);}return;
+ }
+ if(style==='bordure'||style==='bordure-double'||style==='bordure-canton'||style==='central-frame'||style==='central-disc-ring'||style==='central-medallion'){
+  const t=Math.min(w,h)*(style==='central-medallion'?.08:.12);if(style==='central-frame'){ctx.fillRect(x+w*.18,y+h*.16,w*.64,h*.68);ctx.fillStyle=flag.background;ctx.fillRect(x+w*.24,y+h*.23,w*.52,h*.54);}
+  else if(style==='central-disc-ring'||style==='central-medallion'){circlePath(ctx,x+w*.5,y+h*.5,Math.min(w,h)*.42);ctx.fillStyle=flag.background;circlePath(ctx,x+w*.5,y+h*.5,Math.min(w,h)*(style==='central-disc-ring'?.3:.27));if(style==='central-medallion'){ctx.fillStyle=accent;circlePath(ctx,x+w*.5,y+h*.5,Math.min(w,h)*.12);}}
+  else{ctx.fillRect(x,y,w,t);ctx.fillRect(x,y+h-t,w,t);ctx.fillRect(x,y,t,h);ctx.fillRect(x+w-t,y,t,h);if(style==='bordure-double'){const u=t*1.8;ctx.fillStyle=flag.background;ctx.fillRect(x+u,y+u,w-2*u,h-2*u);}if(style==='bordure-canton'){ctx.fillStyle=flag.background;ctx.fillRect(x+t,y+t,w*.45,h*.42);}}return;
+ }
+ if(style==='crescent-left'||style==='crescent-right'||style==='crescent-center'||style==='crescent-star-left'||style==='crescent-star-right'){
+  const right=style.endsWith('right'),cx=x+w*(style.endsWith('center')?.5:right?.72:.28),cy=y+h*.5,r=Math.min(w,h)*.36;circlePath(ctx,cx,cy,r);ctx.fillStyle=flag.background;circlePath(ctx,cx+(right?-1:1)*r*.42,cy-r*.1,r*.82);return;
+ }
+ if(style==='sunburst-canton'||style==='sunburst-left'){const cx=x+w*(style==='sunburst-canton'?.22:.32),cy=y+h*(style==='sunburst-canton'?.26:.5);drawSunburst(ctx,cx,cy,16,Math.min(w,h)*.48);circlePath(ctx,cx,cy,Math.min(w,h)*.16);return;}
+ if(style==='wave-band'||style==='wave-band-double'){const bands=style==='wave-band-double'?2:1;for(let row=0;row<bands;row++){const cy=y+h*(.42+row*.3),th=h*.2;ctx.beginPath();ctx.moveTo(x,cy-th/2);for(let i=0;i<=32;i++)ctx.lineTo(x+w*i/32,cy+Math.sin(i/32*Math.PI*4)*th*.45);for(let i=32;i>=0;i--)ctx.lineTo(x+w*i/32,cy+Math.sin(i/32*Math.PI*4)*th*.45+th);ctx.closePath();ctx.fill();}return;}
+ if(style==='sawtooth-top'||style==='sawtooth-bottom'||style==='sawtooth-left'||style==='sawtooth-right'||style==='serrated-hoist'||style==='serrated-fly'){
+  const horizontal=style==='sawtooth-top'||style==='sawtooth-bottom',teeth=8;if(horizontal){const top=style==='sawtooth-top';ctx.beginPath();ctx.moveTo(x,top?y:y+h);for(let i=0;i<teeth;i++)ctx.lineTo(x+w*(i+.5)/teeth,top?y+h*.24:y+h*.76),ctx.lineTo(x+w*(i+1)/teeth,top?y:y+h);ctx.lineTo(x+w,top?y:y+h);ctx.lineTo(x+w,top?y+h:y);ctx.lineTo(x,top?y+h:y);ctx.closePath();ctx.fill();}
+  else{const left=style==='sawtooth-left'||style==='serrated-hoist';ctx.beginPath();ctx.moveTo(left?x+w:x,y);ctx.lineTo(left?x:x+w,y);for(let i=0;i<teeth;i++)ctx.lineTo(left?x+w*.24:x+w*.76,y+h*(i+.5)/teeth),ctx.lineTo(left?x:x+w,y+h*(i+1)/teeth);ctx.lineTo(left?x:x+w,y+h);ctx.lineTo(left?x+w:x,y+h);ctx.closePath();ctx.fill();}return;
+ }
+ if(style==='quartered-cross'){
+  ctx.fillRect(x,y,w/2,h/2);ctx.fillRect(x+w/2,y+h/2,w/2,h/2);ctx.fillStyle=flag.background;ctx.fillRect(x+w*.42,y,w*.16,h);ctx.fillRect(x,y+h*.42,w,h*.16);return;
+ }
  const stripes=style.match(/^stripes-(horizontal|vertical|diagonal|diagonal-reverse)(?:-(\d+))?$/);if(stripes){fillStripes(ctx,x,y,w,h,stripes[1],Number(stripes[2]||5));return;}
  const checks=style.match(/^checkerboard-(\d+)$/);if(checks){const n=Number(checks[1]),cw=w/n,ch=h/n;for(let row=0;row<n;row++)for(let col=0;col<n;col++)if((row+col)%2===0)ctx.fillRect(x+col*cw,y+row*ch,cw+.5,ch+.5);return;}
  const canton=style.match(/^canton-(top|bottom)-(left|right)$/);if(canton){ctx.fillRect(x+(canton[2]==='right'?w*.56:0),y+(canton[1]==='bottom'?h*.52:0),w*.44,h*.48);return;}
@@ -312,13 +416,12 @@ export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
   ctx.save();ctx.imageSmoothingEnabled=false;const dx=x+emblem.x*w,dy=y+emblem.y*h,dw=emblem.w*w,dh=emblem.h*h,crop=emblem.crop,sx=crop?crop.x*image.width:0,sy=crop?crop.y*image.height:0,sw=crop?crop.w*image.width:image.width,sh=crop?crop.h*image.height:image.height,scale=Math.min(dw/sw,dh/sh),drawW=sw*scale,drawH=sh*scale,drawX=dx+(dw-drawW)/2,drawY=dy+(dh-drawH)/2;if(emblem.clip){ctx.beginPath();ctx.rect(x+emblem.clip.x*w,y+emblem.clip.y*h,emblem.clip.w*w,emblem.clip.h*h);ctx.clip();}ctx.drawImage(image,sx,sy,sw,sh,drawX,drawY,drawW,drawH);ctx.restore();
  }
  for(const original of flag.texts||[]){
-  let box=currentTextBox(flag,original),text=original;
-  if(!textLayoutCompatible({boxes:[box]},flag.backgroundStyle,w/h)){
-   box={x:.04,y:original.y<.5?.015:.895,w:.92,h:.09};
+  const box=currentTextBox(flag,original),contained=patternContainsRect(flag.backgroundStyle,box,w/h);let text=original;
+  if(contained&&flag.colors?.[1]&&flagContrast(flag.background,flag.colors[1])>=3){text={...original,color:flag.background};}
+  else if(flag.backgroundStyle&&flag.backgroundStyle!=='solid'){
    const ink=flagContrast(flag.background,flag.foreground)>=3?flag.foreground:(flagContrast(flag.background,'#ffffff')>=flagContrast(flag.background,'#111111')?'#ffffff':'#111111');
-   ctx.fillStyle=flag.background;ctx.fillRect(x+box.x*w,y+box.y*h,box.w*w,box.h*h);
-   text={...original,color:ink};
-  }else if(patternContainsRect(flag.backgroundStyle,box,w/h)&&flag.colors?.[1]&&flagContrast(flag.background,flag.colors[1])>=3){text={...original,color:flag.background};}
+   ctx.fillStyle=flag.background;ctx.fillRect(x+box.x*w,y+box.y*h,box.w*w,box.h*h);text={...original,color:ink};
+  }
   drawText(ctx,text,flag,x+box.x*w,y+box.y*h,box.w*w,box.h*h);
  }
  ctx.strokeStyle=flag.foreground;ctx.strokeRect(x,y,w,h);ctx.restore();
