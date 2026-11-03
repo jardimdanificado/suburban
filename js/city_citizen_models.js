@@ -23,7 +23,7 @@ export function citizenAnimation(c,moving=false){
   if(c.dead)return 'morto';
   if(c.unconsciousUntil)return 'derrotado';
   if(c.surrenderedUntil)return 'sentado_no_chao';
-  if(c.mobilityTrip?.stage==='boarding')return 'mount';
+  if(c.mobilityTrip?.stage==='boarding')return moving?'run':'idle';
   if(c.ridingVehicleId){
     if(c.ridingVehicleKind==='carrinho')return 'run';
     if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
@@ -103,8 +103,11 @@ export function garmentSurface(reference,piece){
 // Headwear uses a separate mesh so a hat and the main garment can be worn together.
 // Its anchor is computed independently for each animated OBJ frame.
 export function headwearSurface(data,piece){
-  const p=data.positions;let top=-Infinity;for(let i=1;i<p.length;i+=3)top=Math.max(top,p[i]);
-  let x=0,z=0,n=0;for(let i=0;i<p.length;i+=3)if(p[i+1]>=top-.07){x+=p[i];z+=p[i+2];n++;}x/=n||1;z/=n||1;
+  const p=data.positions;let top=-Infinity;for(let i=1;i<p.length;i+=3)if(Math.abs(p[i-1])<=.14&&p[i+1]>.62)top=Math.max(top,p[i+1]);
+  if(!Number.isFinite(top))for(let i=1;i<p.length;i+=3)top=Math.max(top,p[i+1]);
+  let x=0,z=0,n=0;for(let i=0;i<p.length;i+=3)if(p[i+1]>=top-.07&&Math.abs(p[i])<=.14){x+=p[i];z+=p[i+2];n++;}
+  if(!n)for(let i=0;i<p.length;i+=3)if(p[i+1]>=top-.07){x+=p[i];z+=p[i+2];n++;}
+  x/=n||1;z/=n||1;
   const positions=[],normals=[],tri=(a,b,c)=>{const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2],nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,len=Math.hypot(nx,ny,nz)||1;for(const q of [a,b,c]){positions.push(...q);normals.push(nx/len,ny/len,nz/len);}};
   const ring=(radius,y,i,tilt=0)=>{const angle=i*Math.PI*2/16;return [x+Math.cos(angle)*radius,y+Math.sin(angle)*tilt,z+Math.sin(angle)*radius];};
   const base=top-.025;

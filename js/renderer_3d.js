@@ -13,7 +13,7 @@ import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_buildin
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
 import { syncCityBuildings } from "./city_renderer_3d.js?v=personal-beach-equipment-2";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=personal-beach-setups-3';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=personal-beach-setups-4';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-5';
 import { ASSET_DATA } from "./assets_data.js";

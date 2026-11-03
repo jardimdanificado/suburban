@@ -13,7 +13,7 @@ export function syncCampaignDecorations(renderer,THREE,entities,world){
       const sign=new THREE.Mesh(isFlag?clothFlagGeometry(THREE,w,h):new THREE.PlaneGeometry(w,h),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));sign.userData.partyFlagTexture=texture;if(isFlag)sign.userData.flutterPhase=0;sign.position.set(isFlag&&!isWindow?w*.5:0,isWindow?0:isFlag?1.6:1.35,0);group.add(sign);
       if(isFlag&&!isWindow){const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.04,2,5),new THREE.MeshLambertMaterial({color:0xa58a60}));pole.position.y=1;group.add(pole);}renderer.scene.add(group);renderer.campaignMeshes.set(e.id,group);
     }
-    group.visible=true;if(group.children[0]?.material)group.children[0].material.color.setScalar(flagNightFactor(world));if(['flag','window_flag','roof_flag'].includes(d.kind))animateClothFlag(group.children[0],flagWindTime(renderer),0);group.rotation.y=0;group.position.set(e.x,d.height??surfaceElevation(world,e.x,e.y),e.y);
+    group.visible=true;if(group.children[0]?.material)group.children[0].material.color.setScalar(flagNightFactor(world));if(['flag','window_flag','roof_flag'].includes(d.kind))animateClothFlag(group.children[0],flagWindTime(renderer),0);group.rotation.y=d.kind==='banner'?(d.rotation||0)*Math.PI/2:0;group.position.set(e.x,d.height??surfaceElevation(world,e.x,e.y),e.y);
   }
   for(const [id,group]of renderer.campaignMeshes)if(!active.has(id)){renderer.scene.remove(group);group.traverse(o=>{o.userData.partyFlagTexture?.dispose();o.geometry?.dispose();o.material?.dispose();});renderer.campaignMeshes.delete(id);}
 }
