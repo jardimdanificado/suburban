@@ -138,7 +138,7 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
 
 const pathWorkspaces = new WeakMap();
 const pathTerrainGrids = new WeakMap();
-const pathDirections = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+const pathDx = [1, 0, -1, 0], pathDy = [0, 1, 0, -1];
 const tileCosts=(()=>{const values=new Float64Array(256);for(let tile=0;tile<values.length;tile++)values[tile]=roadTravelCost(tile);return values;})();
 function terrainPathGrid(world){
   let grid=pathTerrainGrids.get(world);if(grid&&grid.revision===(world.revision||0)&&grid.width===world.width&&grid.height===world.height)return grid;
@@ -221,8 +221,8 @@ export function findSharedTerrainPath(city,start,goal,blockedGrid){
     field.closed[current]=1;
     const x=current%width,y=Math.floor(current/width),heightHere=terrain.elevations[current];
     const enteringCost=terrain.roads[current]?ROAD_RULES.pavedCost:tileCosts[terrain.tiles[current]];
-    for(const [dx,dy]of pathDirections){
-      const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;
+    for(let direction=0;direction<4;direction++){
+      const nx=x+pathDx[direction],ny=y+pathDy[direction];if(nx<0||ny<0||nx>=width||ny>=height)continue;
       const neighbor=ny*width+nx,climb=Math.abs(heightHere-terrain.elevations[neighbor]);
       if(field.closed[neighbor]||!terrain.walkable[neighbor]||blockedGrid[neighbor]||climb>1.25)continue;
       const edgeCost=reverse?enteringCost:terrain.roads[neighbor]?ROAD_RULES.pavedCost:tileCosts[terrain.tiles[neighbor]],candidate=cost+edgeCost+climb*.7;
@@ -262,7 +262,7 @@ export function settlementConnected(city, a, b) {
     for(let head=0;head<queue.length;head++){
       const index=queue[head],x=index%width+x0,y=Math.floor(index/width)+y0;
       if(x===x0&&x0>0||y===y0&&y0>0||x===x1&&x1<world.width-1||y===y1&&y1<world.height-1)sealed=false;
-      for(const [dx,dy]of pathDirections){const nx=x+dx,ny=y+dy,ni=(ny-y0)*width+nx-x0;
+      for(let direction=0;direction<4;direction++){const nx=x+pathDx[direction],ny=y+pathDy[direction],ni=(ny-y0)*width+nx-x0;
         if(nx<x0||ny<y0||nx>x1||ny>y1||labels[ni]||!city.walkable(nx,ny)||!canStep(world,x,y,nx,ny))continue;
         labels[ni]=label;queue.push(ni);
       }
@@ -307,11 +307,13 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
       return path.reverse();
     }
     const currentHeight=terrain.elevations[k],cx=k%width,cy=Math.floor(k/width);
-    for (const [dx, dy] of pathDirections) {
-      const x=cx+dx,y=cy+dy;if(x<0||y<0||x>=width||y>=world.height)continue;const nextKey=y*width+x,tile=terrain.tiles[nextKey],height=terrain.elevations[nextKey];
-      if (!terrain.walkable[nextKey] || Math.abs(currentHeight-height)>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
+    for (let direction=0;direction<4;direction++) {
+      const x=cx+pathDx[direction],y=cy+pathDy[direction];if(x<0||y<0||x>=width||y>=world.height)continue;const nextKey=y*width+x,tile=terrain.tiles[nextKey];
+      if(!terrain.walkable[nextKey])continue;
+      const climb=Math.abs(currentHeight-terrain.elevations[nextKey]);
+      if (climb>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
       if(roadOnly&&!terrain.roads[nextKey])continue;
-      const cost = currentCost + (terrain.roads[nextKey]?ROAD_RULES.pavedCost:tileCosts[tile]) + Math.abs(height-currentHeight) * .7;
+      const cost = currentCost + (terrain.roads[nextKey]?ROAD_RULES.pavedCost:tileCosts[tile]) + climb * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
       marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
       heapPush(workspace,nextKey,cost,cost+(Math.abs(gx-x)+Math.abs(gy-y))*.55);

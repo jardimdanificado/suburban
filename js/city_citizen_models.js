@@ -12,6 +12,12 @@ export function citizenIsSleeping(c){
  return !!c.homelessSleepSpot&&!!c.entity&&Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)<=.3;
 }
 const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','water','hygiene','supplies','shopping','health','vote','council-session','informal-service','informal-frontage','informal-gardening']);
+const BIKE_KINDS=new Set(['bicicleta','bicicleta_carga']),GLIDE_KINDS=new Set(['patinete','patins','skate']);
+const ALT_USE_TASKS=new Set(['food','workmeal','provisions','toilet','hygiene','water','health','shopping','supplies','care','caregiving','leisure','social','vote']);
+const ACTION_CLIPS=new Set(['run','pedal','murro','chute','derrotado']),POSED_SKIRT_FRAMES=new Set(['dormindo:0','morto:0','derrotado:0','derrotado:1']);
+const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']);
+const LOWER_PIECES=new Set(['sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa']);
+const RENDERED_ACCESSORIES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta','sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa']);
 export function citizenAnimation(c,moving=false){
   if(c.dead)return 'morto';
   if(c.unconsciousUntil)return 'derrotado';
@@ -19,8 +25,8 @@ export function citizenAnimation(c,moving=false){
   if(c.mobilityTrip?.stage==='boarding')return 'mount';
   if(c.ridingVehicleId){
     if(c.ridingVehicleKind==='carrinho')return 'run';
-    if(['bicicleta','bicicleta_carga'].includes(c.ridingVehicleKind))return c.mobilityTrip?.stage==='riding'?'pedal':'passenger';
-    return ['patinete','patins','skate'].includes(c.ridingVehicleKind)?'glide':'passenger';
+    if(BIKE_KINDS.has(c.ridingVehicleKind))return c.mobilityTrip?.stage==='riding'?'pedal':'passenger';
+    return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
   if(moving)return 'run';
   if(c.combatReaction)return 'derrotado';
@@ -36,13 +42,13 @@ export function citizenAnimation(c,moving=false){
   const activelyOnGig=!!c.informalJobId&&!c.path?.length;
   const activelyWorking=WORK_TASKS.has(c.task)&&!c.path?.length&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
   if(!activelyWorking)return 'idle';
-  return ['food','workmeal','provisions','toilet','hygiene','water','health','shopping','supplies','care','caregiving','leisure','social','vote'].includes(c.task)?'use_alt':'use';
+  return ALT_USE_TASKS.has(c.task)?'use_alt':'use';
 }
 export function citizenFrame(clip,time,phase=0,oneShot=false){
   if(clip==='mount'||clip==='passenger')return {clip:'use',frame:0};
   if(clip==='seated')return {clip:'use',frame:2};
   if(clip==='glide')return {clip:'use',frame:1};
-  const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||[0],fps=['run','pedal','murro','chute','derrotado'].includes(clip)?8:4,index=Math.floor(Math.max(0,time)*fps+phase);
+  const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||[0],fps=ACTION_CLIPS.has(clip)?8:4,index=Math.floor(Math.max(0,time)*fps+phase);
   return {clip:clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle',frame:sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length]};
 }
 export function parseCitizenOBJ(text){
@@ -180,7 +186,7 @@ export function hipKneeSkirtBodyMask(data,skirt){
 }
 export class CityCitizenModels {
   constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/model/',import.meta.url)}={}){
-    this.THREE=THREE;this.group=group;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearBatches=new Map();this.batches=new Map();this.motion=new WeakMap();this.printMaterials=new Map();this.clock=0;this.ready=false;this.error=null;
+    this.THREE=THREE;this.group=group;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearBatches=new Map();this.batches=new Map();this.activeBatches=new Set();this.activeHeadwearBatches=new Set();this.motion=new WeakMap();this.bodyShapeCache=new WeakMap();this.appearanceCache=new WeakMap();this.printMaterials=new Map();this.clock=0;this.frameToken=0;this.ready=false;this.error=null;
     this.matrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.lyingRotation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/2);this.color=new THREE.Color();
     this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});this.enableWeightMorph(this.material);this.skirtMaterial=this.enableSkirtMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.campaignFlags=new Map();this.campaignFlagMaterials=new Map();this.activeCampaignFlags=new Set();
     this.loading=this.load().catch(error=>{this.error=error.message;console.warn('Modelos dos cidadãos indisponíveis; usando sprites.',error.message);return false;});
@@ -188,11 +194,11 @@ export class CityCitizenModels {
   enableWeightMorph(material){
     if(!this.THREE.InstancedBufferAttribute)return material;
     material.onBeforeCompile=shader=>{
-      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;');
-      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nfloat normalTorsoRing = smoothstep(0.40, 0.53, position.y) * (1.0 - smoothstep(0.78, 0.89, position.y)) * (1.0 - smoothstep(0.12, 0.19, abs(position.x)));\nfloat normalArmRing = smoothstep(0.48, 0.57, position.y) * (1.0 - smoothstep(0.78, 0.86, position.y)) * smoothstep(0.09, 0.16, abs(position.x));\nfloat normalLegRing = smoothstep(0.12, 0.22, position.y) * (1.0 - smoothstep(0.42, 0.52, position.y)) * smoothstep(0.05, 0.12, abs(position.x));\nfloat normalHeadRing = smoothstep(0.83, 0.91, position.y) * (1.0 - smoothstep(1.02, 1.10, position.y)) * (1.0 - smoothstep(0.06, 0.12, abs(position.x)));\nfloat normalRingX = 1.0 + instanceFat * (normalTorsoRing * 0.60 + normalLegRing * 0.22);\nfloat normalRingZ = 1.0 + instanceFat * (normalTorsoRing * 0.60 + normalArmRing * 0.40 + normalLegRing * 0.46 + normalHeadRing * 0.22);\nobjectNormal.x /= normalRingX;\nobjectNormal.z /= normalRingZ;\nobjectNormal = normalize(objectNormal);');
-      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nfloat torsoRing = smoothstep(0.40, 0.53, transformed.y) * (1.0 - smoothstep(0.78, 0.89, transformed.y)) * (1.0 - smoothstep(0.12, 0.19, abs(transformed.x)));\nfloat armRing = smoothstep(0.48, 0.57, transformed.y) * (1.0 - smoothstep(0.78, 0.86, transformed.y)) * smoothstep(0.09, 0.16, abs(transformed.x));\nfloat legRing = smoothstep(0.12, 0.22, transformed.y) * (1.0 - smoothstep(0.42, 0.52, transformed.y)) * smoothstep(0.05, 0.12, abs(transformed.x));\nfloat headRing = smoothstep(0.83, 0.91, transformed.y) * (1.0 - smoothstep(1.02, 1.10, transformed.y)) * (1.0 - smoothstep(0.06, 0.12, abs(transformed.x)));\nfloat ringScaleX = 1.0 + instanceFat * (torsoRing * 0.60 + legRing * 0.22);\nfloat ringScaleZ = 1.0 + instanceFat * (torsoRing * 0.60 + armRing * 0.40 + legRing * 0.46 + headRing * 0.22);\ntransformed.x *= ringScaleX;\ntransformed.z *= ringScaleZ;');
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec2 weightMorph;');
+      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nfloat ringScaleX = 1.0 + instanceFat * weightMorph.x;\nfloat ringScaleZ = 1.0 + instanceFat * weightMorph.y;\nobjectNormal.x /= ringScaleX;\nobjectNormal.z /= ringScaleZ;\nobjectNormal = normalize(objectNormal);');
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.x *= ringScaleX;\ntransformed.z *= ringScaleZ;');
     };
-    material.customProgramCacheKey=()=> 'citizen-weight-morph-11';
+    material.customProgramCacheKey=()=> 'citizen-weight-morph-13';
     return material;
   }
   enableSkirtMorph(material){
@@ -207,13 +213,97 @@ export class CityCitizenModels {
   }
   instancedGeometry(source,capacity){
     if(!this.THREE.InstancedBufferAttribute)return source;
-    const geometry=source.clone();geometry.setAttribute('instanceFat',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));return geometry;
+    const geometry=source.clone(),positions=geometry.attributes.position;
+    const morphFactors=new Float32Array(positions.count*2);
+    const smooth=(edge0,edge1,value)=>{const t=Math.max(0,Math.min(1,(value-edge0)/(edge1-edge0)));return t*t*(3-2*t);};
+    for(let i=0;i<positions.count;i++){
+      const x=positions.getX(i),y=positions.getY(i),ax=Math.abs(x);
+      const torso=smooth(.40,.53,y)*(1-smooth(.78,.89,y))*(1-smooth(.12,.19,ax));
+      const arm=smooth(.48,.57,y)*(1-smooth(.78,.86,y))*smooth(.09,.16,ax);
+      const leg=smooth(.12,.22,y)*(1-smooth(.42,.52,y))*smooth(.05,.12,ax);
+      const head=smooth(.83,.91,y)*(1-smooth(1.02,1.10,y))*(1-smooth(.06,.12,ax));
+      morphFactors[i*2]=torso*.60+leg*.22;
+      morphFactors[i*2+1]=torso*.60+arm*.40+leg*.46+head*.22;
+    }
+    geometry.setAttribute('weightMorph',new this.THREE.BufferAttribute(morphFactors,2));
+    geometry.setAttribute('instanceFat',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));geometry.setAttribute('instancePattern',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));return geometry;
   }
   setInstanceFat(mesh,index,citizen){
     const attribute=mesh.geometry.attributes.instanceFat;if(!attribute)return;
-    attribute.array[index]=bodyFatAmount(citizen);
+    // Body shape changes with height/weight, not with the render frame. Reuse
+    // the per-citizen value and upload the instanced buffer only when needed.
+    let shape=this.bodyShapeCache.get(citizen);
+    if(!shape||shape.weight!==citizen.bodyWeightKg||shape.height!==citizen.bodyHeightCm){shape={weight:citizen.bodyWeightKg,height:citizen.bodyHeightCm,fat:bodyFatAmount(citizen)};this.bodyShapeCache.set(citizen,shape);}
+    if(attribute.array[index]!==shape.fat){attribute.array[index]=shape.fat;mesh.userData.instanceFatDirty=true;}
+  }
+  setInstancePattern(mesh,index,patternId){
+    const attribute=mesh.geometry.attributes.instancePattern;if(!attribute)return;
+    const pattern=Math.max(0,TROPICAL_PRINTS.indexOf(patternId));
+    if(attribute.array[index]!==pattern){attribute.array[index]=pattern;mesh.userData.instancePatternDirty=true;}
+  }
+  flushInstancePattern(mesh){const attribute=mesh.geometry.attributes.instancePattern;if(attribute&&mesh.userData.instancePatternDirty){attribute.needsUpdate=true;mesh.userData.instancePatternDirty=false;}}
+  setInstanceColor(mesh,index,color){
+    const attribute=mesh.instanceColor,offset=index*3;
+    if(attribute&&Math.abs(attribute.array[offset]-color.r)<1e-6&&Math.abs(attribute.array[offset+1]-color.g)<1e-6&&Math.abs(attribute.array[offset+2]-color.b)<1e-6)return;
+    mesh.setColorAt(index,color);mesh.userData.instanceColorDirty=true;
+  }
+  appearanceFor(c,entity){
+    const wardrobe=c.wardrobe,wearingIndex=c.wearingIndex,garment=wearingIndex===-1?null:wardrobe?.[Number.isInteger(wearingIndex)?wearingIndex:0],lowerIndex=c.lowerWearIndex,lower=Number.isInteger(lowerIndex)&&lowerIndex>=0?wardrobe?.[lowerIndex]:null,headwearIndex=c.headwearIndex,headwear=Number.isInteger(headwearIndex)&&headwearIndex>=0?wardrobe?.[headwearIndex]:null,footwearIndex=c.footwearIndex,footwear=Number.isInteger(footwearIndex)&&footwearIndex>=0?wardrobe?.[footwearIndex]:null,capId=c.political?.partyCapId||c.campaign?.capGarmentId,cesta=!!c.equipment?.cesta;
+    let appearance=this.appearanceCache.get(c);
+    const capStillMatches=!capId||appearance?.capId===capId&&(cesta||wardrobe?.[appearance.partyCapIndex]===appearance.partyCap&&appearance.partyCap?.garmentId===capId);
+    if(appearance&&capStillMatches&&appearance.wardrobe===wardrobe&&appearance.wearingIndex===wearingIndex&&appearance.garment===garment&&appearance.garmentPiece===garment?.piece&&appearance.garmentColor===garment?.color&&appearance.printIdValue===garment?.printId&&appearance.lowerIndex===lowerIndex&&appearance.lower===lower&&appearance.lowerPiece===lower?.piece&&appearance.lowerColor===lower?.color&&appearance.headwearIndex===headwearIndex&&appearance.headwear===headwear&&appearance.headwearPiece===headwear?.piece&&appearance.headwearColor===headwear?.color&&appearance.footwearIndex===footwearIndex&&appearance.footwear===footwear&&appearance.footwearPiece===footwear?.piece&&appearance.footwearColor===footwear?.color&&appearance.partyCapPiece===appearance.partyCap?.piece&&appearance.partyCapColor===appearance.partyCap?.color&&appearance.capId===capId&&appearance.cesta===cesta)return appearance;
+    const piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,printed=PRINTED_GARMENTS.has(piece),patterned=PATTERNED_GARMENTS.has(piece),garmentHex=typeof garment?.color==='number'?`#${garment.color.toString(16).padStart(6,'0')}`:typeof garment?.color==='string'&&/^#[0-9a-f]{6}$/i.test(garment.color)?garment.color:'#8d806e',printId=garment?.printId||TROPICAL_PRINTS[entity.id%TROPICAL_PRINTS.length],garmentMaterial=printed?this.printedMaterial(piece,garmentHex,printId):null,lowerSkirt=SKIRT_PIECES.has(lower?.piece)?lower.piece:null;
+    let partyCap=null,partyCapIndex=-1;
+    if(capId&&!cesta){partyCapIndex=wardrobe?.findIndex(item=>item.garmentId===capId)??-1;if(partyCapIndex>=0)partyCap=wardrobe[partyCapIndex];}
+    const hat=cesta?{piece:'cesta',color:0xb8874f}:partyCap||headwear,items=[hat,footwear,lower];
+    appearance={wardrobe,wearingIndex,garment,garmentPiece:garment?.piece,garmentColor:garment?.color,printIdValue:garment?.printId,lowerIndex,lower,lowerPiece:lower?.piece,lowerColor:lower?.color,headwearIndex,headwear,headwearPiece:headwear?.piece,headwearColor:headwear?.color,footwearIndex,footwear,footwearPiece:footwear?.piece,footwearColor:footwear?.color,capId,cesta,partyCap,partyCapIndex,partyCapPiece:partyCap?.piece,partyCapColor:partyCap?.color,piece,printed,patterned,garmentHex,printId,garmentMaterial,lowerSkirt,items};
+    this.appearanceCache.set(c,appearance);return appearance;
+  }
+  setInstanceMatrix(mesh,index,matrix){
+    const attribute=mesh.instanceMatrix,offset=index*16,elements=matrix.elements;
+    let changed=false;
+    for(let i=0;i<16;i++)if(Math.abs(attribute.array[offset+i]-elements[i])>1e-6){changed=true;break;}
+    if(!changed)return;
+    mesh.setMatrixAt(index,matrix);mesh.userData.instanceMatrixDirty=true;
+    mesh.userData.matrixDirtyMin=Math.min(mesh.userData.matrixDirtyMin??index,index);
+    mesh.userData.matrixDirtyMax=Math.max(mesh.userData.matrixDirtyMax??index,index);
+  }
+  flushInstanceMatrix(mesh){
+    if(!mesh.userData.instanceMatrixDirty)return;
+    const attribute=mesh.instanceMatrix,min=mesh.userData.matrixDirtyMin,max=mesh.userData.matrixDirtyMax;
+    if(typeof attribute.addUpdateRange==='function'&&Number.isFinite(min)&&Number.isFinite(max))attribute.addUpdateRange(min*16,(max-min+1)*16);
+    attribute.needsUpdate=true;mesh.userData.instanceMatrixDirty=false;mesh.userData.matrixDirtyMin=null;mesh.userData.matrixDirtyMax=null;
   }
   printedMaterial(piece,baseColor='#ffffff',printId='hibisco'){
+    if(piece==='camisa estampada'||piece==='vestido estampado')return this.tropicalPrintMaterial();
+    return this.legacyPrintedMaterial(piece,baseColor,printId);
+  }
+  tropicalPrintMaterial(){
+    if(this.printAtlasMaterial)return this.printAtlasMaterial;
+    if(typeof document==='undefined'||!this.THREE.CanvasTexture)return this.material;
+    const tileSize=128,canvas=document.createElement('canvas');canvas.width=tileSize*TROPICAL_PRINTS.length;canvas.height=tileSize;
+    const ctx=canvas.getContext('2d');
+    for(let i=0;i<TROPICAL_PRINTS.length;i++){
+      const id=TROPICAL_PRINTS[i],source=this.legacyPrintedMaterial('camisa estampada','#ffffff',id).map.image;
+      const tile=document.createElement('canvas');tile.width=tile.height=tileSize;const tileCtx=tile.getContext('2d');tileCtx.drawImage(source,0,0);
+      const image=tileCtx.getImageData(0,0,tileSize,tileSize),pixels=image.data;
+      for(let p=0;p<pixels.length;p+=4){const alpha=255-Math.min(pixels[p],pixels[p+1],pixels[p+2]);if(alpha<12){pixels[p+3]=0;continue;}pixels[p]=Math.min(255,Math.round(pixels[p]*255/alpha));pixels[p+1]=Math.min(255,Math.round(pixels[p+1]*255/alpha));pixels[p+2]=Math.min(255,Math.round(pixels[p+2]*255/alpha));pixels[p+3]=alpha;}
+      tileCtx.putImageData(image,0,0);ctx.drawImage(tile,i*tileSize,0);
+    }
+    for(const id of TROPICAL_PRINTS){const key=`camisa estampada:#ffffff:${id}`,temporary=this.printMaterials.get(key);if(temporary){temporary.map?.dispose();temporary.dispose();this.printMaterials.delete(key);}}
+    const texture=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;
+    const material=this.enableWeightMorph(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide})),baseCompile=material.onBeforeCompile,baseCacheKey=material.customProgramCacheKey;
+    material.onBeforeCompile=shader=>{
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instancePattern;\nvarying float vCitizenPattern;');
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvCitizenPattern = instancePattern;');
+      baseCompile(shader);
+      shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying float vCitizenPattern;');
+      shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>','#ifdef USE_MAP\n  vec2 patternUv = vec2((mod(floor(vCitizenPattern + 0.5), 6.0) + fract(vMapUv.x * 2.0)) / 6.0, fract(vMapUv.y * 2.0));\n  vec4 tropicalPattern = texture2D(map, patternUv);\n  diffuseColor.rgb = mix(diffuseColor.rgb, tropicalPattern.rgb * vColor, tropicalPattern.a);\n#endif');
+    };
+    material.customProgramCacheKey=()=>`${baseCacheKey()}:citizen-print-atlas-1`;
+    this.printAtlasMaterial=material;return material;
+  }
+  legacyPrintedMaterial(piece,baseColor='#ffffff',printId='hibisco'){
     const baseHex=typeof baseColor==='number'?`#${baseColor.toString(16).padStart(6,'0')}`:typeof baseColor==='string'&&/^#[0-9a-f]{6}$/i.test(baseColor)?baseColor:'#ffffff',patternId=TROPICAL_PRINTS.includes(printId)?printId:'hibisco',key=`${piece}:${baseHex}:${patternId}`;
     if(this.printMaterials.has(key))return this.printMaterials.get(key);
     if(typeof document==='undefined'||!this.THREE.CanvasTexture)return this.material;
@@ -257,7 +347,7 @@ export class CityCitizenModels {
       const source=/^(run|use):/.test(key)?'animated':'idle';
       const skirtCuts={};
       for(const piece of ['saia','saia longa']){
-        if(key==='use:2'||key.startsWith('sentado_no_')||['dormindo:0','morto:0','derrotado:0','derrotado:1'].includes(key)){
+        if(key==='use:2'||key.startsWith('sentado_no_')||POSED_SKIRT_FRAMES.has(key)){
           const mask=posedSkirtMask(data,key);skirtCuts[piece]={mask,parts:splitGarmentSurface(data,mask,piece)};
         }else{
           const surface=hipKneeSkirtSurface(data,piece),mask=hipKneeSkirtBodyMask(data,surface),parts=splitGarmentSurface(data,mask,piece);parts.clothes=surface.positions;parts.clothesNormals=surface.normals;skirtCuts[piece]={mask,parts};
@@ -268,21 +358,21 @@ export class CityCitizenModels {
         if(piece==='saia'||piece==='saia longa')parts=skirtCuts[piece].parts;
         else parts=splitGarmentSurface(data,masks[source][piece],piece);
         const make=(positions,normals,withUV=false,hideBack=false)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));if(withUV){let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(let v=0;v<positions.length;v+=3){minX=Math.min(minX,positions[v]);maxX=Math.max(maxX,positions[v]);minY=Math.min(minY,positions[v+1]);maxY=Math.max(maxY,positions[v+1]);}const width=Math.max(.001,maxX-minX),height=Math.max(.001,maxY-minY),uv=new Float32Array(positions.length/3*2);for(let v=0,j=0;v<positions.length;v+=3){uv[j++]=hideBack&&normals[v+2]<-.25?2:(positions[v]-minX)/width;uv[j++]=(positions[v+1]-minY)/height;}g.setAttribute('uv',new this.THREE.Float32BufferAttribute(uv,2));}g.computeBoundingSphere();return g;};
-        const printed=['camisa social','camisa estampada','vestido estampado'].includes(piece);
-        const garmentMaterial=printed?this.printedMaterial(piece):['saia','saia longa'].includes(piece)?this.skirtMaterial:this.material;
+        const printed=PRINTED_GARMENTS.has(piece);
+        const garmentMaterial=printed?this.printedMaterial(piece):SKIRT_PIECES.has(piece)?this.skirtMaterial:this.material;
         const outfit={body:make(parts.body,parts.bodyNormals),clothes:make(parts.clothes,parts.clothesNormals,printed,piece==='camisa social'),material:garmentMaterial};
-        if(['camisa','camisa social','camisa estampada','terno','casaco','trapos'].includes(piece))for(const skirtPiece of ['saia','saia longa']){
+        if(['camisa','camisa social','camisa estampada','terno','casaco','trapos'].includes(piece))for(const skirtPiece of SKIRT_PIECES){
           const union=new Uint8Array(skirtCuts[skirtPiece].mask.length),upperMask=masks[source][piece];for(let i=0;i<union.length;i++)union[i]=Number(skirtCuts[skirtPiece].mask[i]||upperMask[i]);
           const combined=splitGarmentSurface(data,union,piece);outfit[skirtPiece==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']=make(combined.body,combined.bodyNormals);
         }
         this.outfits.set(`${key}:${piece}`,outfit);
-        if(['sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa'].includes(piece)){const surface=parts.clothes.slice();for(let i=0;i<surface.length;i++)surface[i]+=parts.clothesNormals[i]*.002;this.headwear.set(`${key}:${piece}`,make(surface,parts.clothesNormals));}
+        if(LOWER_PIECES.has(piece)){const surface=parts.clothes.slice();for(let i=0;i<surface.length;i++)surface[i]+=parts.clothesNormals[i]*.002;this.headwear.set(`${key}:${piece}`,make(surface,parts.clothesNormals));}
       }
       for(const piece of ['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta']){const part=headwearSurface(data,piece),g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(part.positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(part.normals,3));g.computeBoundingSphere();this.headwear.set(`${key}:${piece}`,g);}
     }
     this.ready=true;return true;
   }
-  begin(dt=0,speed=1){this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));this.activeCampaignFlags.clear();for(const batch of this.batches.values())batch.count=0;for(const batch of this.headwearBatches.values())batch.count=0;}
+  begin(dt=0,speed=1){this.frameToken++;this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));this.activeCampaignFlags.clear();for(const batch of this.activeBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;if(batch.clothingMesh)batch.clothingMesh.count=0;}this.activeBatches.clear();for(const batch of this.activeHeadwearBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;}this.activeHeadwearBatches.clear();}
   add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,activeCampaignElectionId=null,activeCampaignStatus=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
@@ -309,24 +399,29 @@ export class CityCitizenModels {
     // A pending path is not movement. Hold the travel pose between footsteps;
     // work animations still use the simulation's presentation clock.
     const traveling=moved||!!c.path?.length||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
-    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=['murro','chute','derrotado'].includes(clip),actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
+    const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
     else motion.actionToken=null;
     const animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
-    const garment=c.wearingIndex===-1?null:c.wardrobe?.[Number.isInteger(c.wearingIndex)?c.wearingIndex:0],piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,printed=['camisa social','camisa estampada','vestido estampado'].includes(piece),garmentHex=typeof garment?.color==='number'?`#${garment.color.toString(16).padStart(6,'0')}`:typeof garment?.color==='string'&&/^#[0-9a-f]{6}$/i.test(garment.color)?garment.color:'#8d806e',printId=garment?.printId||TROPICAL_PRINTS[entity.id%TROPICAL_PRINTS.length],garmentMaterial=printed?this.printedMaterial(piece,garmentHex,printId):null,lower=Number.isInteger(c.lowerWearIndex)&&c.lowerWearIndex>=0?c.wardrobe?.[c.lowerWearIndex]:null,lowerSkirt=['saia','saia longa'].includes(lower?.piece)?lower.piece:null,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}${printed?`:${garmentHex}:${printId}`:''}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key);
-    let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}
+    const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,printId,garmentMaterial,lower,lowerSkirt}=appearance,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}${printed&&!patterned?`:${garmentHex}:${printId}`:''}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key);
+    let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}this.activeBatches.add(batch);
     if(batch.count===batch.capacity){
       const capacity=Math.max(32,batch.capacity*2),mesh=new this.THREE.InstancedMesh(this.instancedGeometry(bodySource,capacity),this.material,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;
-      if(batch.mesh){for(let i=0;i<batch.count;i++){batch.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);batch.mesh.getColorAt(i,this.color);mesh.setColorAt(i,this.color);const oldFat=batch.mesh.geometry.attributes.instanceFat,newFat=mesh.geometry.attributes.instanceFat;if(oldFat&&newFat)newFat.array[i]=oldFat.array[i];}this.group.remove(batch.mesh);batch.mesh.dispose();}
+      if(batch.mesh){for(let i=0;i<batch.count;i++){batch.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);batch.mesh.getColorAt(i,this.color);this.setInstanceColor(mesh,i,this.color);const oldFat=batch.mesh.geometry.attributes.instanceFat,newFat=mesh.geometry.attributes.instanceFat;if(oldFat&&newFat){newFat.array[i]=oldFat.array[i];mesh.userData.instanceFatDirty=true;}const oldPattern=batch.mesh.geometry.attributes.instancePattern,newPattern=mesh.geometry.attributes.instancePattern;if(oldPattern&&newPattern){newPattern.array[i]=oldPattern.array[i];mesh.userData.instancePatternDirty=true;}}if(batch.count){mesh.userData.instanceMatrixDirty=true;mesh.userData.matrixDirtyMin=0;mesh.userData.matrixDirtyMax=batch.count-1;}this.group.remove(batch.mesh);batch.mesh.dispose();}
       this.group.add(mesh);batch.mesh=mesh;
       if(outfit){const clothing=new this.THREE.InstancedMesh(this.instancedGeometry(outfit.clothes,capacity),garmentMaterial||outfit.material||this.material,capacity);clothing.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);clothing.frustumCulled=false;clothing.castShadow=true;clothing.receiveShadow=true;
-        if(batch.clothingMesh){for(let i=0;i<batch.count;i++){batch.clothingMesh.getMatrixAt(i,this.matrix);clothing.setMatrixAt(i,this.matrix);batch.clothingMesh.getColorAt(i,this.color);clothing.setColorAt(i,this.color);const oldFat=batch.clothingMesh.geometry.attributes.instanceFat,newFat=clothing.geometry.attributes.instanceFat;if(oldFat&&newFat)newFat.array[i]=oldFat.array[i];}this.group.remove(batch.clothingMesh);batch.clothingMesh.dispose();}
+        if(batch.clothingMesh){for(let i=0;i<batch.count;i++){batch.clothingMesh.getMatrixAt(i,this.matrix);clothing.setMatrixAt(i,this.matrix);batch.clothingMesh.getColorAt(i,this.color);this.setInstanceColor(clothing,i,this.color);const oldFat=batch.clothingMesh.geometry.attributes.instanceFat,newFat=clothing.geometry.attributes.instanceFat;if(oldFat&&newFat){newFat.array[i]=oldFat.array[i];clothing.userData.instanceFatDirty=true;}const oldPattern=batch.clothingMesh.geometry.attributes.instancePattern,newPattern=clothing.geometry.attributes.instancePattern;if(oldPattern&&newPattern){newPattern.array[i]=oldPattern.array[i];clothing.userData.instancePatternDirty=true;}}if(batch.count){clothing.userData.instanceMatrixDirty=true;clothing.userData.matrixDirtyMin=0;clothing.userData.matrixDirtyMax=batch.count-1;}this.group.remove(batch.clothingMesh);batch.clothingMesh.dispose();}
         this.group.add(clothing);batch.clothingMesh=clothing;
       }batch.capacity=capacity;
     }
-    const size=(entity.properties.render.size||1)*(perspective?1.05:1);
-    this.position.set(renderX,surfaceH+(posePoint?.z??inside?.z??0)+(c.ridingVehicleId? .18:0),renderY);this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*(c.bodyHeightCm||170)/170,size);this.matrix.compose(this.position,this.quaternion,this.scale);batch.mesh.setMatrixAt(batch.count,this.matrix);this.setInstanceFat(batch.mesh,batch.count,c);
+    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,positionY=surfaceH+(posePoint?.z??inside?.z??0)+(c.ridingVehicleId? .18:0),bodyIndex=batch.count;
+    const transformUnchanged=motion.bodyBatch===batch&&motion.bodyMesh===batch.mesh&&motion.clothingMesh===batch.clothingMesh&&motion.bodyIndex===bodyIndex&&motion.bodyFrame===this.frameToken-1&&motion.bodyX===renderX&&motion.bodyY===positionY&&motion.bodyZ===renderY&&motion.bodyAngle===renderAngle&&motion.bodySize===size&&motion.bodyHeightScale===heightScale&&motion.bodyLying===lying;
+    this.position.set(renderX,positionY,renderY);
+    let matrixReady=transformUnchanged;
+    if(!transformUnchanged){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);this.setInstanceMatrix(batch.mesh,bodyIndex,this.matrix);motion.bodyBatch=batch;motion.bodyMesh=batch.mesh;motion.clothingMesh=batch.clothingMesh;motion.bodyIndex=bodyIndex;motion.bodyX=renderX;motion.bodyY=positionY;motion.bodyZ=renderY;motion.bodyAngle=renderAngle;motion.bodySize=size;motion.bodyHeightScale=heightScale;motion.bodyLying=lying;matrixReady=true;}
+    motion.bodyFrame=this.frameToken;
+    this.setInstanceFat(batch.mesh,bodyIndex,c);
     const presence=c.campaignPresence?.electionId===activeCampaignElectionId&&activeCampaignStatus==='campaign'?c.campaignPresence:null;
     const flag=c.campaign?.partyFlag||c.campaign?.flag||presence?.partyFlag;
     if(flag&&!c.ridingVehicleId&&!c.mobilityTrip&&!c.deliveryId){
@@ -334,23 +429,34 @@ export class CityCitizenModels {
       if(!carrier||carrier.flagKey!==flagKey){if(carrier){this.group.remove(carrier.group);carrier.group.traverse(o=>{o.geometry?.dispose();if(o.material!==carrier.material)o.material?.dispose();});}let material=this.campaignFlagMaterials.get(flagKey);if(!material){let texture;const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});texture=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;material=new this.THREE.MeshLambertMaterial({map:texture,side:this.THREE.DoubleSide});this.campaignFlagMaterials.set(flagKey,material);}const group=new this.THREE.Group(),pole=new this.THREE.Mesh(new this.THREE.CylinderGeometry(.018,.024,1.18,5),new this.THREE.MeshLambertMaterial({color:0x795b3e})),cloth=new this.THREE.Mesh(clothFlagGeometry(this.THREE,.48,.30),material);pole.position.set(-.24,.59,0);cloth.position.set(0,1.02,0);group.add(pole,cloth);group.userData.cloth=cloth;this.group.add(group);carrier={group,material,flagKey};this.campaignFlags.set(entity.id,carrier);}
       carrier.group.position.copy(this.position);carrier.group.scale.setScalar(size);carrier.group.rotation.y=0;animateClothFlag(carrier.group.userData.cloth,Math.floor(this.clock*10)/10,(entity.id%19)*.31);this.activeCampaignFlags.add(entity.id);
     }
-    this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);batch.mesh.setColorAt(batch.count,this.color);
-    if(batch.clothingMesh){batch.clothingMesh.setMatrixAt(batch.count,this.matrix);this.setInstanceFat(batch.clothingMesh,batch.count,c);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:printed?0xffffff:presence?.color?Number.parseInt(String(presence.color).replace('#',''),16):hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));batch.clothingMesh.setColorAt(batch.count,this.color);}batch.count++;
-    const capId=c.political?.partyCapId||c.campaign?.capGarmentId,partyCap=capId&&c.wardrobe?.find(g=>g.garmentId===capId),wornHat=partyCap||(Number.isInteger(c.headwearIndex)&&c.headwearIndex>=0?c.wardrobe?.[c.headwearIndex]:null),hat=c.equipment?.cesta?{piece:'cesta',color:0xb8874f}:wornHat;
-    const footwear=Number.isInteger(c.footwearIndex)&&c.footwearIndex>=0?c.wardrobe?.[c.footwearIndex]:null;
-    for(const item of [hat,footwear,lower])if(item&&['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta','sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa'].includes(item.piece)){
-      const itemKey=`${key}:${item.piece}`,isLowerClothing=['sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa'].includes(item.piece);let head=this.headwearBatches.get(itemKey);
-      if(!head){head={count:0,capacity:0,mesh:null};this.headwearBatches.set(itemKey,head);}
+    this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);this.setInstanceColor(batch.mesh,batch.count,this.color);
+    if(batch.clothingMesh){if(!transformUnchanged)this.setInstanceMatrix(batch.clothingMesh,bodyIndex,this.matrix);this.setInstanceFat(batch.clothingMesh,bodyIndex,c);if(patterned)this.setInstancePattern(batch.clothingMesh,bodyIndex,printId);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:patterned?hex:printed?0xffffff:presence?.color?Number.parseInt(String(presence.color).replace('#',''),16):hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,garment.dirt/140));this.setInstanceColor(batch.clothingMesh,bodyIndex,this.color);}batch.count++;
+    const items=appearance.items;
+    motion.accessoryTransforms??=[{},{},{}];
+    for(let itemIndex=0;itemIndex<3;itemIndex++){const item=items[itemIndex];if(!item||!RENDERED_ACCESSORIES.has(item.piece)){motion.accessoryTransforms[itemIndex].key=null;continue;}
+      const itemKey=`${key}:${item.piece}`,isLowerClothing=LOWER_PIECES.has(item.piece);let head=this.headwearBatches.get(itemKey);
+      if(!head){head={count:0,capacity:0,mesh:null};this.headwearBatches.set(itemKey,head);}this.activeHeadwearBatches.add(head);
       if(head.count===head.capacity){
-        const capacity=Math.max(32,head.capacity*2),source=this.headwear.get(itemKey),itemMaterial=['saia','saia longa'].includes(item.piece)?this.skirtMaterial:this.material,mesh=new this.THREE.InstancedMesh(isLowerClothing?this.instancedGeometry(source,capacity):source,itemMaterial,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;
-        if(head.mesh){for(let i=0;i<head.count;i++){head.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);head.mesh.getColorAt(i,this.color);mesh.setColorAt(i,this.color);const oldFat=head.mesh.geometry.attributes.instanceFat,newFat=mesh.geometry.attributes.instanceFat;if(oldFat&&newFat)newFat.array[i]=oldFat.array[i];}this.group.remove(head.mesh);head.mesh.dispose();}
+        const capacity=Math.max(32,head.capacity*2),source=this.headwear.get(itemKey),itemMaterial=SKIRT_PIECES.has(item.piece)?this.skirtMaterial:this.material,mesh=new this.THREE.InstancedMesh(isLowerClothing?this.instancedGeometry(source,capacity):source,itemMaterial,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=true;mesh.receiveShadow=true;
+        if(head.mesh){for(let i=0;i<head.count;i++){head.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);head.mesh.getColorAt(i,this.color);this.setInstanceColor(mesh,i,this.color);const oldFat=head.mesh.geometry.attributes.instanceFat,newFat=mesh.geometry.attributes.instanceFat;if(oldFat&&newFat){newFat.array[i]=oldFat.array[i];mesh.userData.instanceFatDirty=true;}}if(head.count){mesh.userData.instanceMatrixDirty=true;mesh.userData.matrixDirtyMin=0;mesh.userData.matrixDirtyMax=head.count-1;}this.group.remove(head.mesh);head.mesh.dispose();}
         this.group.add(mesh);head.mesh=mesh;head.capacity=capacity;this.matrix.compose(this.position,this.quaternion,this.scale);
       }
-      head.mesh.setMatrixAt(head.count,this.matrix);if(isLowerClothing)this.setInstanceFat(head.mesh,head.count,c);
-      const raw=item.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(item.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,item.dirt/140));head.mesh.setColorAt(head.count++,this.color);
+      const accessoryIndex=head.count,accessoryTransform=motion.accessoryTransforms[itemIndex],accessoryUnchanged=transformUnchanged&&accessoryTransform.key===itemKey&&accessoryTransform.batch===head&&accessoryTransform.mesh===head.mesh&&accessoryTransform.index===accessoryIndex;
+      if(!accessoryUnchanged){if(!matrixReady){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);matrixReady=true;}this.setInstanceMatrix(head.mesh,accessoryIndex,this.matrix);}
+      accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isLowerClothing)this.setInstanceFat(head.mesh,accessoryIndex,c);
+      const raw=item.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(item.dirt||0)>0)this.color.lerp(new this.THREE.Color(0x62584b),Math.min(.72,item.dirt/140));this.setInstanceColor(head.mesh,head.count,this.color);head.count++;
     }
     return true;
   }
-  end(){for(const batch of this.batches.values()){batch.mesh.count=batch.count;if(batch.count){batch.mesh.instanceMatrix.needsUpdate=true;if(batch.mesh.instanceColor)batch.mesh.instanceColor.needsUpdate=true;const fat=batch.mesh.geometry.attributes.instanceFat;if(fat)fat.needsUpdate=true;}if(batch.clothingMesh){batch.clothingMesh.count=batch.count;if(batch.count){batch.clothingMesh.instanceMatrix.needsUpdate=true;if(batch.clothingMesh.instanceColor)batch.clothingMesh.instanceColor.needsUpdate=true;const fat=batch.clothingMesh.geometry.attributes.instanceFat;if(fat)fat.needsUpdate=true;}}}for(const batch of this.headwearBatches.values()){batch.mesh.count=batch.count;if(batch.count){batch.mesh.instanceMatrix.needsUpdate=true;if(batch.mesh.instanceColor)batch.mesh.instanceColor.needsUpdate=true;const fat=batch.mesh.geometry.attributes.instanceFat;if(fat)fat.needsUpdate=true;}}for(const [id,carrier]of this.campaignFlags)if(!this.activeCampaignFlags.has(id)){this.group.remove(carrier.group);carrier.group.traverse(o=>{o.geometry?.dispose();if(o.material!==carrier.material)o.material?.dispose();});this.campaignFlags.delete(id);}}
-  clear(){for(const b of this.batches.values()){this.group.remove(b.mesh);b.mesh.dispose();if(b.clothingMesh){this.group.remove(b.clothingMesh);b.clothingMesh.dispose();}}for(const b of this.headwearBatches.values()){this.group.remove(b.mesh);b.mesh.dispose();}for(const carrier of this.campaignFlags.values()){this.group.remove(carrier.group);carrier.group.traverse(o=>{o.geometry?.dispose();if(o.material!==carrier.material)o.material?.dispose();});}for(const material of this.campaignFlagMaterials.values()){material.map?.dispose();material.dispose();}this.campaignFlags.clear();this.campaignFlagMaterials.clear();this.activeCampaignFlags.clear();this.batches.clear();this.headwearBatches.clear();this.motion=new WeakMap();this.clock=0;}
+  end(){
+    const flushBatch=batch=>{
+      batch.mesh.count=batch.count;
+      if(batch.count){this.flushInstanceMatrix(batch.mesh);if(batch.mesh.instanceColor&&batch.mesh.userData.instanceColorDirty){batch.mesh.instanceColor.needsUpdate=true;batch.mesh.userData.instanceColorDirty=false;}const fat=batch.mesh.geometry.attributes.instanceFat;if(fat&&batch.mesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.mesh.userData.instanceFatDirty=false;}this.flushInstancePattern(batch.mesh);}
+      if(batch.clothingMesh){batch.clothingMesh.count=batch.count;if(batch.count){this.flushInstanceMatrix(batch.clothingMesh);if(batch.clothingMesh.instanceColor&&batch.clothingMesh.userData.instanceColorDirty){batch.clothingMesh.instanceColor.needsUpdate=true;batch.clothingMesh.userData.instanceColorDirty=false;}const fat=batch.clothingMesh.geometry.attributes.instanceFat;if(fat&&batch.clothingMesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.clothingMesh.userData.instanceFatDirty=false;}this.flushInstancePattern(batch.clothingMesh);}}
+    };
+    for(const batch of this.activeBatches)flushBatch(batch);
+    for(const batch of this.activeHeadwearBatches){batch.mesh.count=batch.count;if(batch.count){this.flushInstanceMatrix(batch.mesh);if(batch.mesh.instanceColor&&batch.mesh.userData.instanceColorDirty){batch.mesh.instanceColor.needsUpdate=true;batch.mesh.userData.instanceColorDirty=false;}const fat=batch.mesh.geometry.attributes.instanceFat;if(fat&&batch.mesh.userData.instanceFatDirty){fat.needsUpdate=true;batch.mesh.userData.instanceFatDirty=false;}this.flushInstancePattern(batch.mesh);}}
+    for(const [id,carrier]of this.campaignFlags)if(!this.activeCampaignFlags.has(id)){this.group.remove(carrier.group);carrier.group.traverse(o=>{o.geometry?.dispose();if(o.material!==carrier.material)o.material?.dispose();});this.campaignFlags.delete(id);}
+  }
+  clear(){for(const b of this.batches.values()){this.group.remove(b.mesh);b.mesh.dispose();if(b.clothingMesh){this.group.remove(b.clothingMesh);b.clothingMesh.dispose();}}for(const b of this.headwearBatches.values()){this.group.remove(b.mesh);b.mesh.dispose();}for(const carrier of this.campaignFlags.values()){this.group.remove(carrier.group);carrier.group.traverse(o=>{o.geometry?.dispose();if(o.material!==carrier.material)o.material?.dispose();});}for(const material of this.campaignFlagMaterials.values()){material.map?.dispose();material.dispose();}this.campaignFlags.clear();this.campaignFlagMaterials.clear();this.activeCampaignFlags.clear();this.activeBatches.clear();this.activeHeadwearBatches.clear();this.batches.clear();this.headwearBatches.clear();this.motion=new WeakMap();this.clock=0;}
 }

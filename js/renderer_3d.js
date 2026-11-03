@@ -11,9 +11,9 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseC
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=third-person-interior-2';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=greengrocer-fruit-stalls-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=courthouse-neoclassical-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=tropical-caribbean-prints-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-active-batches-2';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-5';
 import { ASSET_DATA } from "./assets_data.js";
@@ -3326,6 +3326,7 @@ export class RCT3DRenderer {
     this.isFirstPersonMode = false;
     this.isThirdPersonMode = false;
     this.fpCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+    this.freeCamFov = this.fpCamera.fov;
     this.tpCameraPosition = new THREE.Vector3();
     this.tpCameraTarget = new THREE.Vector3();
     this.tpDesiredPosition = new THREE.Vector3();
@@ -3386,6 +3387,7 @@ export class RCT3DRenderer {
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
       format: THREE.RGBAFormat,
+      type: THREE.HalfFloatType,
       depthBuffer: true
     });
     this.renderTarget.depthTexture = new THREE.DepthTexture();
@@ -3538,24 +3540,26 @@ export class RCT3DRenderer {
             vec3 finalCol = mix(baseColor, blurCol.rgb, blend * 0.65);
             // Apply Contrast and Brightness calibration
             finalCol = (finalCol - 0.5) * uContrast + 0.5;
-            finalCol = clamp(finalCol * uBrightness, 0.0, 1.0);
+            finalCol = max(finalCol * uBrightness, 0.0);
             float luminance = dot(finalCol, vec3(0.2126, 0.7152, 0.0722));
             finalCol = mix(vec3(luminance), finalCol, uSaturation);
             gl_FragColor = vec4(finalCol, a * uAlpha);
           } else {
             vec3 finalCol = (baseColor - 0.5) * uContrast + 0.5;
-            finalCol = clamp(finalCol * uBrightness, 0.0, 1.0);
+            finalCol = max(finalCol * uBrightness, 0.0);
             float luminance = dot(finalCol, vec3(0.2126, 0.7152, 0.0722));
             finalCol = mix(vec3(luminance), finalCol, uSaturation);
             gl_FragColor = vec4(finalCol, a * uAlpha);
           }
-          // The render target is linear. Convert once when presenting the
-          // completed image, so perspective views preserve material colours.
+          // The render target is linear. Convert it once to display color,
+          // matching the direct render output.
+          #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }
       `,
       depthTest: false,
-      depthWrite: false
+      depthWrite: false,
+      toneMapped: true
     });
     const postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMaterial);
     this.postScene.add(postQuad);
@@ -3607,6 +3611,7 @@ export class RCT3DRenderer {
     for (let i = 0; i < this.maxNightLights; i++) {
       const pl = new THREE.PointLight(0xffaa44, 0, 24, 1.2);
       pl.castShadow = false;
+      pl.visible = false;
       this.scene.add(pl);
       this.nightLightPool.push(pl);
     }
@@ -5404,6 +5409,7 @@ export class RCT3DRenderer {
 
   setThirdPersonMode(enabled, entityId = null) {
     if(this.isThirdPersonActive()&&(!enabled||Number(entityId)!==this.fpEntityId))this.syncThirdPersonInteriorView(null);
+    this.fpCamera.fov=75;this.fpCamera.updateProjectionMatrix();
     this.isThirdPersonMode = !!enabled;
     if (!enabled) this.followCharacterId = null;
     this.isFirstPersonMode = false;
@@ -5428,6 +5434,7 @@ export class RCT3DRenderer {
 
   setFreeCameraMode(enabled = true) {
     if (!enabled) {
+      this.freeCamFov=this.fpCamera.fov;this.fpCamera.fov=75;this.fpCamera.updateProjectionMatrix();
       this.isFirstPersonMode = false;
       this.isThirdPersonMode = false;
       this.fpEntityId = null;
@@ -5441,12 +5448,14 @@ export class RCT3DRenderer {
     this.freeCamX = this.camX;
     this.freeCamY = Math.max(8, this.currentMap ? this.getSurfaceElevation(this.currentMap, this.camX, this.camY) + 8 : 12);
     this.freeCamZ = this.camY;
+    this.fpCamera.fov=this.freeCamFov;this.fpCamera.updateProjectionMatrix();
     this.fpYaw = 0;
     this.fpPitch = -0.18;
   }
 
   setFollowCharacter(entityId = null) {
     this.syncThirdPersonInteriorView(null);
+    this.fpCamera.fov=75;this.fpCamera.updateProjectionMatrix();
     this.isFirstPersonMode = false;
     this.isThirdPersonMode = false;
     this.fpEntityId = null;
@@ -5472,19 +5481,11 @@ export class RCT3DRenderer {
 
   moveFreeCamera(dx, dy, dz, speed) {
     if (this.isFirstPersonActive() && (this.fpEntityId === null || this.fpEntityId === undefined)) {
-      const sinYaw = Math.sin(this.fpYaw);
-      const cosYaw = Math.cos(this.fpYaw);
-      
-      // forward/backward
-      this.freeCamX += (sinYaw * dz) * speed;
-      this.freeCamZ += (cosYaw * dz) * speed;
-      
-      // left/right
-      this.freeCamX += (cosYaw * dx) * speed;
-      this.freeCamZ -= (sinYaw * dx) * speed;
-      
-      // up/down
-      this.freeCamY += dy * speed;
+      const sinYaw=Math.sin(this.fpYaw),cosYaw=Math.cos(this.fpYaw),cosPitch=Math.cos(this.fpPitch),sinPitch=Math.sin(this.fpPitch);
+      // Forward follows the viewing direction; strafing stays level.
+      this.freeCamX+=(sinYaw*cosPitch*dz-cosYaw*dx)*speed;
+      this.freeCamY+=(sinPitch*dz+dy)*speed;
+      this.freeCamZ+=(cosYaw*cosPitch*dz+sinYaw*dx)*speed;
     }
   }
 
@@ -5527,6 +5528,13 @@ export class RCT3DRenderer {
 
   adjustThirdPersonDistance(delta) {
     this.tpDistance = Math.max(this.tpMinDistance, Math.min(this.tpMaxDistance, this.tpDistance + delta));
+  }
+
+  adjustFreeCameraFov(delta) {
+    if(!this.isFirstPersonActive()||this.fpEntityId!=null)return;
+    this.fpCamera.fov=Math.max(35,Math.min(100,this.fpCamera.fov+delta));
+    this.freeCamFov=this.fpCamera.fov;
+    this.fpCamera.updateProjectionMatrix();
   }
 
   thirdPersonBuildingIndex(city){
@@ -8416,6 +8424,7 @@ export class RCT3DRenderer {
         pl.decay = c.decay;
         pl.intensity = c.intensity;
         pl.position.set(c.x, c.y, c.z);
+        pl.visible = true;
         lightIdx++;
       }
     }
@@ -8424,6 +8433,7 @@ export class RCT3DRenderer {
     while (lightIdx < this.maxNightLights) {
       const pl = this.nightLightPool[lightIdx++];
       pl.intensity = 0;
+      pl.visible = false;
     }
 
     if (shouldUpdateStaticInstances) {
@@ -8655,13 +8665,17 @@ export class RCT3DRenderer {
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     const useIsometricPostEffects = this.graphicOptions?.isometricEffects === true;
-    if ((this.isPerspectiveActive() || useIsometricPostEffects) && this.postEffectsEnabled && this.renderTarget) {
+    const dofOpt=this.graphicOptions?.dofStrength||"HIGH";
+    const dofRequested=['LOW','MED','HIGH'].includes(dofOpt);
+    const chromaRequested=this.graphicOptions?.chroma!==false;
+    const colorAdjustmentRequested=(this.graphicOptions?.brightness??1)!==1||(this.graphicOptions?.contrast??1)!==1;
+    const postProcessingRequested=dofRequested||chromaRequested||colorAdjustmentRequested;
+    if ((this.isPerspectiveActive() || useIsometricPostEffects) && this.postEffectsEnabled && this.renderTarget && postProcessingRequested) {
       this.renderer.setRenderTarget(this.renderTarget);
       this.renderer.render(this.scene, activeCam);
       this.renderer.setRenderTarget(null);
       this.postMaterial.uniforms.tDiffuse.value = this.renderTarget.texture;
 
-      const dofOpt = this.graphicOptions?.dofStrength || "HIGH";
       let dofVal = 0.0;
       const dofEnabledForView=this.isPerspectiveActive()||useIsometricPostEffects;
       if (dofEnabledForView && dofOpt === "LOW") dofVal = 0.85;
@@ -8676,7 +8690,7 @@ export class RCT3DRenderer {
       this.postMaterial.uniforms.uAoIntensity.value=0;
       this.postMaterial.uniforms.uBrightness.value = (typeof this.graphicOptions?.brightness === "number") ? this.graphicOptions.brightness : 1.0;
       this.postMaterial.uniforms.uContrast.value = (typeof this.graphicOptions?.contrast === "number") ? this.graphicOptions.contrast : 1.0;
-      this.postMaterial.uniforms.uSaturation.value = this.isThirdPersonActive() ? 0.82 : 1.0;
+      this.postMaterial.uniforms.uSaturation.value = 1.0;
       this.postMaterial.uniforms.uAlpha.value = (typeof this.graphicOptions?.alpha === "number") ? this.graphicOptions.alpha : 1.0;
       this.postMaterial.uniforms.uCameraNear.value = activeCam.near || 0.05;
       this.postMaterial.uniforms.uCameraFar.value = activeCam.far || 800.0;

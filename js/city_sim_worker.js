@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=phrase-scope-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=citizen-task-stagger-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -15,7 +15,11 @@ const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
 // Full graph snapshots are the most expensive worker messages. At fast speeds
 // the compact motion stream keeps people and needs current, so batch the slower
 // business/political/UI graph updates more aggressively.
-const stateInterval = () => Math.max(speed>=32?1500:speed>=16?1000:400,Math.min(3000,lastSnapshotCost*6));
+const stateInterval = () => {
+  const people=state?.city?.citizens?.length||0;
+  const populationFloor=people>=1024?1600:people>=512?900:400;
+  return Math.max(speed>=32?1500:speed>=16?1000:populationFloor,populationFloor,Math.min(3000,lastSnapshotCost*6));
+};
 const MOTION_INTERVAL = 100;
 const allowed = new Set(['paint.setPalette','paint.requestPurchase','paint.requestVehicle','paint.requestBuilding','vehicles.mountFlag','vehicles.removeFlag','politics.leaseHeadquarters','economy.rentOffice','economy.configureEmployment','economy.offerShares','economy.buyShares','economy.cancelShareOffer','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.executePlayerAction','politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'bank.fileRecoveryPlan', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
@@ -102,6 +106,7 @@ self.onmessage = ({ data }) => {
   try {
     if (data.type === 'init') {
       state = graph.apply(data.packet); bindCityState(state.city);
+      state.city.staggerInitialTaskDecisions();
       state.city.profileDiagnostics=data.profileDiagnostics===true;
       state.city.createEntity = ({ x = 0, y = 0, properties = {}, ...extra }) => {
         const entity = { id: state.nextId++, x, y, destroyed: false, ...extra, properties };

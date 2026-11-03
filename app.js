@@ -1,14 +1,14 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=phrase-scope-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=citizen-task-stagger-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=phrase-scope-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=citizen-task-stagger-1";
 import { CityDesktop } from "./js/city_desktop.js?v=election-support-map-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=citizen-active-batches-2";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js?v=resolution-75-percent-1";
+import { OptionsPanel } from "./js/options.js?v=full-detail-performance-2";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 
 const root = document.querySelector("#experience");
@@ -110,10 +110,12 @@ function formatPerformanceLines(value,prefix=''){
 let selected = null;
 const renderMode = "3d";
 let dragging = false;
+let cameraLookDrag = false;
 let pointerDown = null;
 let rightClickConsumed = false;
 let lastPointer = null;
 const touchPointers = new Map();
+const freeCameraKeys = new Set();
 let pinchGesture = null;
 let mousePosition = { x: -1, y: -1 };
 let pointerOnUI = false;
@@ -196,6 +198,15 @@ function moveCameraByPointer(dx,dy,zoom){
   const factor=56/(zoom*Math.max(100,root.clientHeight));
   renderer3D.setCamera(renderer3D.getCameraX()-(dx*.70710678+dy*1.22474487)*factor,renderer3D.getCameraY()-(-dx*.70710678+dy*1.22474487)*factor,zoom);
 }
+function updateFreeCameraMovement(dt){
+  if(!renderer3D.isFirstPersonActive()||renderer3D.fpEntityId!=null){freeCameraKeys.clear();return;}
+  let x=Number(freeCameraKeys.has('KeyD'))-Number(freeCameraKeys.has('KeyA'));
+  let y=Number(freeCameraKeys.has('Space')||freeCameraKeys.has('KeyE'))-Number(freeCameraKeys.has('ControlLeft')||freeCameraKeys.has('ControlRight')||freeCameraKeys.has('KeyQ'));
+  let z=Number(freeCameraKeys.has('KeyW'))-Number(freeCameraKeys.has('KeyS'));
+  const length=Math.hypot(x,y,z);if(!length)return;
+  const fast=freeCameraKeys.has('ShiftLeft')||freeCameraKeys.has('ShiftRight');
+  renderer3D.moveFreeCamera(x/length,y/length,z/length,12*Math.min(dt,.05)*(fast?3:1));
+}
 
 function onPointerDown(event) {
   if (mainMenu.isActive()) {
@@ -249,6 +260,7 @@ function onPointerDown(event) {
   }
   pointerDown = { x: event.clientX, y: event.clientY };
   lastPointer = pointerDown;
+  cameraLookDrag=event.button===2&&renderer3D.isPerspectiveActive();
   if (cityUI.pointerDown(x,y)) { pointerOnUI=true; return; }
   if (pointerOnUI) return;
   if (event.button === 0 && editor.open && !renderer3D.isPerspectiveActive()) {
@@ -295,8 +307,9 @@ function onPointerMove(event) {
   if (!dragging || !lastPointer) return;
   const dx = event.clientX - lastPointer.x;
   const dy = event.clientY - lastPointer.y;
-  if(renderer3D.isPerspectiveActive())renderer3D.rotatePerspectiveCamera(dx*.006,-dy*.006);
-  else moveCameraByPointer(dx,dy,renderer3D.getCameraZoom());
+  if(renderer3D.isPerspectiveActive()){
+    if(cameraLookDrag)renderer3D.rotatePerspectiveCamera(renderer3D.isFirstPersonActive()?-dx*.004:dx*.004,-dy*.004);
+  }else moveCameraByPointer(dx,dy,renderer3D.getCameraZoom());
   lastPointer = { x: event.clientX, y: event.clientY };
 }
 
@@ -315,6 +328,7 @@ function onPointerUp(event) {
       cityUI.pointerUp();
     }
     dragging = editingGesture = pointerOnUI = false;
+    cameraLookDrag=false;
     pointerDown = lastPointer = null;
     return;
   }
@@ -333,7 +347,7 @@ function onPointerUp(event) {
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
   if (cityUI.pointerUp()) {
-    dragging=editingGesture=pointerOnUI=false;pointerDown=lastPointer=null;return;
+    dragging=editingGesture=pointerOnUI=false;cameraLookDrag=false;pointerDown=lastPointer=null;return;
   }
   if (editingGesture) {
     editor.endStroke();
@@ -348,6 +362,7 @@ function onPointerUp(event) {
     }
   }
   dragging = false;
+  cameraLookDrag=false;
   editingGesture = false;
   pointerOnUI = false;
   pointerDown = null;
@@ -364,6 +379,7 @@ root.addEventListener("pointercancel", () => {
   cityUI.pointerUp();
   editor.endStroke();
   editingGesture = dragging = pointerOnUI = false;
+  cameraLookDrag=false;
   touchPointers.clear();pinchGesture=null;
   pointerDown = lastPointer = null;
 });
@@ -376,6 +392,7 @@ root.addEventListener("wheel", (event) => {
   event.preventDefault();
   const renderer = renderer3D;
   if(renderer.isThirdPersonActive()){renderer.adjustThirdPersonDistance(event.deltaY*.005);return;}
+  if(renderer.isFirstPersonActive()){renderer.adjustFreeCameraFov(event.deltaY*.025);return;}
   if(renderer.isPerspectiveActive())return;
   const zoom = renderer.getCameraZoom() * (event.deltaY < 0 ? 1.12 : 0.89);
   renderer.setCamera(renderer.getCameraX(), renderer.getCameraY(), zoom);
@@ -393,16 +410,11 @@ window.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'KeyK') { event.preventDefault(); if(!event.repeat)cityUI.openGlobalSearch(); return; }
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
   const freeCameraActive=renderer3D.isFirstPersonActive()&&(renderer3D.fpEntityId===null||renderer3D.fpEntityId===undefined);
-  if(freeCameraActive&&(event.code==='Space'||event.code==='ControlLeft'||event.code==='ControlRight')){
-    event.preventDefault();renderer3D.moveFreeCamera(0,event.code==='Space'?1:-1,0,event.shiftKey?2.5:0.8);return;
+  if(freeCameraActive&&['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','Space','ControlLeft','ControlRight','ShiftLeft','ShiftRight'].includes(event.code)){
+    event.preventDefault();freeCameraKeys.add(event.code);return;
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   if(event.code==='Escape'&&(renderer3D.isPerspectiveActive()||renderer3D.followCharacterId!==null)){renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);event.preventDefault();return;}
-  if(freeCameraActive){
-    const moves={KeyW:[0,0,1],KeyS:[0,0,-1],KeyA:[-1,0,0],KeyD:[1,0,0],KeyE:[0,1,0],KeyQ:[0,-1,0]};
-    const move=moves[event.code];
-    if(move){event.preventDefault();renderer3D.moveFreeCamera(...move,event.shiftKey?2.5:0.8);return;}
-  }
   if (cityUI.key(event)) { event.preventDefault(); return; }
   if (event.code === "Space" && !event.repeat) {
     event.preventDefault();
@@ -423,6 +435,8 @@ window.addEventListener("keydown", (event) => {
   if (["Equal", "NumpadAdd"].includes(event.code)) { event.preventDefault(); time.changeSpeed(1); }
   if (event.code === "Period" && !event.repeat) stepSimulation();
 });
+window.addEventListener('keyup',event=>freeCameraKeys.delete(event.code));
+window.addEventListener('blur',()=>{freeCameraKeys.clear();cameraLookDrag=false;});
 window.addEventListener("resize", resize);
 
 function frame(now) {
@@ -430,6 +444,7 @@ function frame(now) {
   resize();
   const dt = Math.min((now - previousFrame) / 1000, 0.25);
   previousFrame = now;
+  updateFreeCameraMovement(dt);
 
   if (mainMenu.isActive()) {
     mainMenu.update(dt);
@@ -515,7 +530,8 @@ function frame(now) {
     if(renderMode==='3d'&&renderer3D.frameProfile){frameMetrics.terrain+=renderer3D.frameProfile.terrain;frameMetrics.city+=renderer3D.frameProfile.city;frameMetrics.renderEntities+=renderer3D.frameProfile.entities;frameMetrics.entityLoop+=renderer3D.frameProfile.entityLoop;frameMetrics.entityRest+=renderer3D.frameProfile.entityRest;frameMetrics.citizenClass+=renderer3D.frameProfile.citizenClass;frameMetrics.citizenSurface+=renderer3D.frameProfile.citizenSurface;frameMetrics.citizenBody+=renderer3D.frameProfile.citizenBody;frameMetrics.webgl+=renderer3D.frameProfile.webgl;}
     if(ended-frameMetrics.started>=1000){
       const count=frameMetrics.count;
-      const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
+      const citizenModels=renderer3D.cityCitizenModels;
+      const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),citizenModelBatches:citizenModels?.batches.size,citizenModelBatchesActive:citizenModels?.activeBatches.size,citizenAccessoryBatches:citizenModels?.headwearBatches.size,citizenAccessoryBatchesActive:citizenModels?.activeHeadwearBatches.size,drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
       root.dataset.performance=JSON.stringify(profile);
       performanceOutput.textContent=formatPerformanceLines(profile).join('\n');
       const workerPeak=profile.worker?.maxUpdateMs||0;
@@ -587,9 +603,12 @@ function initSimulationBridge() {
   simulationBridge = new CitySimulationBridge({ city, entities, nextId, time, profiling,
     noticeTarget: () => cityUI.active,
     notice: (message,target) => { if(target)target.notice=message;else cityUI.notice=message; },
-    changed: ({ terrain, entities: changedEntities }) => {
+    changed: ({ terrain, terrainTiles, entities: changedEntities }) => {
       nextId = simulationBridge.state.nextId;
-      if (terrain) renderer3D.invalidateTerrainAt(NaN, NaN);
+      if(terrain){
+        if(terrainTiles){const size=renderer3D.terrainChunkSize||32,seen=new Set();for(const point of terrainTiles){const cx=Math.floor(point.x/size),cy=Math.floor(point.y/size),key=`${cx},${cy}`;if(seen.has(key))continue;seen.add(key);renderer3D.invalidateTerrainAt(point.x,point.y);}}
+        else renderer3D.invalidateTerrainAt(NaN, NaN);
+      }
       if (changedEntities) renderer3D.forceStaticInstanceUpdate();
       if (selected?.destroyed) selectEntity(null);
     },

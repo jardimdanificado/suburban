@@ -10,7 +10,7 @@ import {externalTradeHourly,orderImport} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=substances-sleep-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=substances-sleep-1';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=perf-employment-stagger-1';
 import {productionPlan,investProductionPlan} from './city_production_planner.js?v=substances-sleep-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=tropical-caribbean-prints-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
@@ -848,7 +848,11 @@ export class CityEconomy {
       const revision=this.city.world.revision||0;if(b.depositRevision!==revision||!b.deposits){b.deposits=quarryDeposits(this.city.world,b.entity.x,b.entity.y,b.width,b.depth);b.depositRevision=revision;}
       if(!b.deposits.length) return false;
       const reserves=b.type==='iron_mine'?(this.city.world.ironReserves??=new Map()):(this.city.world.bauxiteReserves??=new Map());
-      const target=b.deposits.find(p=>(reserves.get(`${p.x},${p.y}`)??120)>0);if(!target)return false;b.activeOre=target;
+      const target=b.deposits.find(p=>(reserves.get(`${p.x},${p.y}`)??120)>0&&[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{
+        const x=p.x+dx,y=p.y+dy;
+        return this.city.walkable(x,y)&&this.city.findPath(c.entity,{x:x+.5,y:y+.5})!==null;
+      }));
+      if(!target){c.workCell=null;c.action='Aguardando acesso a uma reserva mineral';return false;}b.activeOre=target;
       const cell={id:`${b.id}:ore:${target.x}:${target.y}`,x:target.x-b.entity.x,y:target.y-b.entity.y,z:0};if(!outdoorCellReady(this.city,c,b,cell,true))return true;
     }
     if(['clay_pit','sand_pit'].includes(b.type) && (b.extractionReserve??=b.width*b.depth*120)<Object.values(spec.outputs)[0])return false;

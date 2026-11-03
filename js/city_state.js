@@ -25,14 +25,14 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=discrimination-laws-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=citizen-task-stagger-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=discrimination-laws-1';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency } from './city_currency.js';
-import { CityHousing } from './city_housing.js?v=caribbean-quarry-interviews-1';
+import { CityHousing } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=body-weight-2';
 import { CityWorkMeals } from './city_work_meals.js?v=substances-sleep-1';
@@ -40,7 +40,7 @@ import { CityDevelopment } from './city_development.js?v=favela-tree-roads-1';
 import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=substances-sleep-1';
-import { CitySociety } from './city_society.js?v=discrimination-laws-1';
+import { CitySociety } from './city_society.js?v=perf-adult-check-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=furniture-farms-fertilizer-1';
 import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';
 
@@ -50,7 +50,7 @@ const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
 const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy', 'routeCache', 'routeRevision','familyIndexDirty',
-  'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId']);
+  'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_initialTaskStaggerUntil', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at
 // large populations; normal fields can be read directly.
@@ -263,11 +263,11 @@ export class CityStateGraph {
 }
 
 /** Restore computed fields, never serialized as stale monetary values. */
-export function bindCityState(city) {
+export function bindCityState(city,{rebuildIndexes=true}={}) {
   city.justice??=new CityJustice(city);
   if(Object.getPrototypeOf(city.justice)!==CityJustice.prototype)Object.setPrototypeOf(city.justice,CityJustice.prototype);
   city.justice.city=city;city.justice.ensureState();
-  for(const [index,c]of city.citizens.entries())ensureJusticeSkills(c,index,city.initialSeed,{newborn:c.initialAge===0});
+  if(rebuildIndexes)for(const [index,c]of city.citizens.entries())ensureJusticeSkills(c,index,city.initialSeed,{newborn:c.initialAge===0});
   city.furniture??=new CityFurniture(city);
   city.supplies??=new CitySupplies(city);city.water??=new CityWater(city);
   city.substances??=new CitySubstances(city);city.substances.city=city;city.substances.ensureState();
@@ -275,22 +275,25 @@ export function bindCityState(city) {
   city.fiscal??=new CityFiscal(city);
   if(city.substanceSchemaVersion!==1){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={label:spec.label};for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=1;}
   city.housing.invalidateResidents();
-  city.buildingsById ??= new Map(); city.buildingsById.clear();
+  city.buildingsById ??= new Map();
   city.childrenByGuardian ??= new Map();
   city.economy.routeCache ??= new Map();
-  for (const b of city.buildings) {
-    city.buildingsById.set(b.id, b);
-    if (!Object.getOwnPropertyDescriptor(b, 'wage')?.get) {
-      Object.defineProperty(b, 'wage', { configurable: true, get: () => city.currency.price(Math.max(b.baseWage,city.politics?.policy?.minimumWage||0)), set: value => { b.baseWage = value / city.currency.priceIndex; } });
-      Object.defineProperty(b, 'seedStock', { configurable: true, get: () => b.inventory.sementes, set: value => { b.inventory.sementes = value; } });
-      if (b.type === 'townhall') for (const field of ['balance', 'totalRevenue', 'totalExpenses']) Object.defineProperty(b, field, {
-        configurable: true, enumerable: true, get: () => city.accounts.get('treasury')[field] || 0,
-        set: value => { city.accounts.get('treasury')[field] = value; },
-      });
+  if(rebuildIndexes){
+    city.buildingsById.clear();
+    for (const b of city.buildings) {
+      city.buildingsById.set(b.id, b);
+      if (!Object.getOwnPropertyDescriptor(b, 'wage')?.get) {
+        Object.defineProperty(b, 'wage', { configurable: true, get: () => city.currency.price(Math.max(b.baseWage,city.politics?.policy?.minimumWage||0)), set: value => { b.baseWage = value / city.currency.priceIndex; } });
+        Object.defineProperty(b, 'seedStock', { configurable: true, get: () => b.inventory.sementes, set: value => { b.inventory.sementes = value; } });
+        if (b.type === 'townhall') for (const field of ['balance', 'totalRevenue', 'totalExpenses']) Object.defineProperty(b, field, {
+          configurable: true, enumerable: true, get: () => city.accounts.get('treasury')[field] || 0,
+          set: value => { city.accounts.get('treasury')[field] = value; },
+        });
+      }
     }
   }
   for (const [id, good] of Object.entries(city.economy.goods)) if (!Object.getOwnPropertyDescriptor(good, 'price')?.get) Object.defineProperty(good, 'price', {
     enumerable: true, configurable: true, get: () => city.currency.price(GOODS[id].price*(city.economy.market?.[id]?.multiplier||1)*(1+taxRate(city,taxCategory(id)))),
   });
-  city.indexFamilies();
+  if(rebuildIndexes){city.familyIndexDirty=true;city.indexFamilies();}
 }

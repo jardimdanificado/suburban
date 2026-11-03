@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {HOUSE_STYLES} from './city_culture.js?v=sertanejo-house-styles-1';
+import {HOUSE_STYLES} from './city_culture.js?v=courthouse-neoclassical-1';
 import {INDUSTRIES} from './city_industries.js';
 
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
@@ -201,12 +201,30 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    else {box(Math.max(.8,b.width*.65),1.1,Math.max(.65,b.depth*.45),b.width*.5,roof+.67,b.depth*.5,variant===3?0xb97559:0x7d9598);box(Math.max(.9,b.width*.72),.15,Math.max(.75,b.depth*.53),b.width*.5,roof+1.3,b.depth*.5,metal);}
    box(Math.max(.8,b.width*.55),.35,Math.max(.65,b.depth*.36),b.width*.5,roof+.29,b.depth*.7,0x89999a);
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
-  }else if(['police_station','jail','crematorium','iml','courthouse','council_oversight_office'].includes(b.type)){
-   const palettes={police_station:[0x526e70,0xe1d5b8],jail:[0x766d61,0xb9a88c],crematorium:[0xa7755d,0xe8d9bd],iml:[0x68838a,0xe5e4d8],courthouse:[0x9c7b58,0xe2d5b7],council_oversight_office:[0x65827e,0xded4b7]},[accent,light]=palettes[b.type];
-   const porch=Math.min(.7,b.depth*.24),frontZ=b.depth+porch*.55;
-   box(b.width+.12,.13,porch,b.width/2,1.72,frontZ,variant%2?accent:style.roof);
-   for(const x of [.3,b.width-.3]){cylinder(.08,1.65,x,.82,frontZ+porch*.34,light);box(.18,.1,.18,x,1.68,frontZ+porch*.34,accent);}
-   box(b.width-.35,.07,.07,b.width/2,.76,frontZ+porch*.72,accent);
+ }else if(['police_station','jail','crematorium','iml','courthouse','council_oversight_office'].includes(b.type)){
+   const palettes={police_station:[0x526e70,0xe1d5b8],jail:[0x766d61,0xb9a88c],crematorium:[0xa7755d,0xe8d9bd],iml:[0x68838a,0xe5e4d8],courthouse:[0x596a70,0xf0e8d9],council_oversight_office:[0x65827e,0xded4b7]},[accent,light]=palettes[b.type];
+   const porch=Math.min(.78,Math.max(.55,b.depth*.22)),frontZ=b.depth+porch*.55;
+   if(b.type==='courthouse'){
+    const porticoZ=b.depth+porch*.52,columns=Math.max(4,Math.floor(b.width/1.15)-(Math.floor(b.width/1.15)%2)),columnStart=Math.max(.38,(b.width-(columns-1)*Math.min(1.25,(b.width-.76)/(columns-1)))/2),columnGap=(b.width-2*columnStart)/(columns-1);
+    box(b.width+.3,.22,.28,b.width/2,.12,b.depth+.13,0xb8ad98);
+    box(b.width+.14,.13,porch,b.width/2,1.76,b.depth+porch*.5,light);
+    for(let i=0;i<columns;i++){
+     const x=columnStart+i*columnGap;
+     cylinder(.135,1.48,x,.91,porticoZ,light);
+     cylinder(.2,.13,x,.19,porticoZ,0xc7bca7);
+     cylinder(.2,.11,x,1.68,porticoZ,0xc7bca7);
+    }
+    box(b.width+.25,.24,.22,b.width/2,1.78,porticoZ,light);
+    box(b.width+.32,.09,.25,b.width/2,1.94,porticoZ,accent);
+    const pedimentShape=new THREE.Shape();pedimentShape.moveTo(0,0);pedimentShape.lineTo(b.width/2,.48);pedimentShape.lineTo(b.width,0);pedimentShape.closePath();
+    const pediment=new THREE.Mesh(new THREE.ExtrudeGeometry(pedimentShape,{depth:.12,bevelEnabled:false}),mat(light));pediment.position.set(0,1.98,porticoZ+.06);pediment.castShadow=true;root.add(pediment);
+    const seal=new THREE.Mesh(new THREE.TorusGeometry(.19,.035,6,16),mat(accent));seal.rotation.x=Math.PI/2;seal.position.set(b.width/2,2.18,porticoZ+.195);root.add(seal);
+    for(let i=0;i<3;i++)box(b.width+.46-i*.12,.09,.2,b.width/2,.055+i*.075,porticoZ+porch*.45+.18+i*.2,0xb8ad98);
+   }else{
+    box(b.width+.12,.13,porch,b.width/2,1.72,frontZ,variant%2?accent:style.roof);
+    for(const x of [.3,b.width-.3]){cylinder(.08,1.65,x,.82,frontZ+porch*.34,light);box(.18,.1,.18,x,1.68,frontZ+porch*.34,accent);}
+    box(b.width-.35,.07,.07,b.width/2,.76,frontZ+porch*.72,accent);
+   }
    if(b.type==='police_station'){
     box(b.width*.36,.68,b.depth*.36,b.width*.76,roof+.33,b.depth*.25,light);box(b.width*.42,.15,b.depth*.42,b.width*.76,roof+.76,b.depth*.25,accent);
     for(const x of [b.width*.3,b.width*.7])box(.44,.13,.18,x,1.94,b.depth+.11,variant%2?light:0x63877d);
@@ -219,11 +237,13 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    }else if(b.type==='iml'){
     box(b.width*.34,.92,.18,b.width*.72,roof+.5,b.depth*.25,light);box(b.width*.42,.13,.25,b.width*.72,roof+1,b.depth*.25,accent);
     for(let i=0;i<5;i++)box(.26,.08,.1,.35+i*.34,1.98,b.depth+.15,variant%2?light:0x9fb1a9);
+   }else if(b.type==='courthouse'){
+    // The neoclassical portico above replaces the old generic columns.
    }else{
     for(let i=0;i<4;i++)cylinder(.075,1.65,.38+i*(b.width-.76)/3,.82,b.depth+.17,light);
     const pediment=new THREE.Mesh(new THREE.ConeGeometry(Math.max(.7,b.width*.48),.48,3),mat(accent));pediment.rotation.y=Math.PI/2;pediment.position.set(b.width/2,1.86,b.depth+.16);root.add(pediment);
    }
-   const signColors=[0xd88d63,0x5d8c83,0xe1bd70,0x72879a];box(Math.min(1.1,b.width*.52),.16,.06,b.width/2,2.15,b.depth+.17,signColors[variant%signColors.length]);
+   const signColors=[0xd88d63,0x5d8c83,0xe1bd70,0x72879a];box(Math.min(1.1,b.width*.52),.16,.06,b.width/2,2.15,b.depth+.17,b.type==='courthouse'?accent:signColors[variant%signColors.length]);
    for(const space of spaces.filter(s=>s.kind==='balcony'))furnishedBalcony(space);
   }else{
    // Preserve the roof silhouette on small services; their facade already

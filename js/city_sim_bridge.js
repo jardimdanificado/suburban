@@ -1,5 +1,5 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=phrase-scope-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=citizen-task-stagger-1';
 import {canStep,terrainWalkable} from './city_terrain.js?v=quarry-outskirts-1';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
@@ -26,6 +26,12 @@ export function sampleCitizenMotion(world,sample,now){
   // Citizens keep the simulation's discrete, retro step cadence. Interpolate
   // only when a worker packet skips over a corner along a valid ground path.
   const x=sample.entity.x,y=sample.entity.y,tx=sample.to.x,ty=sample.to.y;
+  // Most worker updates move a citizen within the same tile. The current tile
+  // is already known to be walkable, so avoid sampling its terrain repeatedly
+  // on every motion packet and render frame.
+  if(Math.floor(x)===Math.floor(tx)&&Math.floor(y)===Math.floor(ty)){
+    sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
+  }
   if(renderSegmentWalkable(world,x,y,tx,ty)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
@@ -69,7 +75,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=phrase-scope-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=citizen-task-stagger-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling });
@@ -108,7 +114,10 @@ export class CitySimulationBridge {
     if (data.type === 'motion') { this.receiveMotion(data); return; }
     if (data.type !== 'state') return;
     const receiveStarted=performance.now();
-    const revision = this.city.world.revision, count = this.entities.length, structure = this.city.structureRevision;
+    const world=this.city.world,revision=world.revision,count=this.entities.length,structure=this.city.structureRevision,map=world.map;
+    const mapId=this.graph.ids.get(map),mapChanged=data.packet.nodes.some(node=>node.id===mapId&&node.kind==='Uint8Array'),previousMap=mapChanged?map.slice():null;
+    const sidewalks=world.sidewalkTiles,sidewalkId=sidewalks&&this.graph.ids.get(sidewalks),sidewalksChanged=sidewalkId!=null&&data.packet.nodes.some(node=>node.id===sidewalkId&&node.kind==='Set'),previousSidewalks=sidewalksChanged?new Set(sidewalks):null;
+    const bridges=world.bridgeTiles,bridgeId=bridges&&this.graph.ids.get(bridges),bridgesChanged=bridgeId!=null&&data.packet.nodes.some(node=>node.id===bridgeId&&node.kind==='Map'),previousBridges=bridgesChanged?new Map([...bridges].map(([key,value])=>[key,`${value?.id??''}:${value?.height??''}`])):null;
     for(const c of this.city.citizens){
       let sample=this.motionSamples.get(c.id);
       if(!sample){sample={id:c.id,from:{},to:{},entity:c.entity};this.motionSamples.set(c.id,sample);}
@@ -117,7 +126,26 @@ export class CitySimulationBridge {
     // Unchanged graph nodes still hold authoritative positions, not an interpolation sample.
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
-    this.graph.apply(data.packet); bindCityState(this.city);
+    this.graph.apply(data.packet);
+    const structureChanged=count!==this.entities.length||structure!==this.city.structureRevision;
+    bindCityState(this.city,{rebuildIndexes:structureChanged});
+    const terrainChanged=revision!==world.revision;
+    let terrainTiles;
+    if(terrainChanged){
+      const currentMap=world.map,currentSidewalks=world.sidewalkTiles,currentBridges=world.bridgeTiles;
+      const unknown=mapChanged&&(map!==currentMap||previousMap?.length!==currentMap.length)||!sidewalks&&currentSidewalks||!bridges&&currentBridges;
+      if(!unknown){
+        const dirty=new Set(),addIndex=index=>{if(Number.isInteger(index)&&index>=0&&index<world.width*world.height)dirty.add(index);},addPointKey=key=>{
+          if(Number.isInteger(key)){addIndex(key);return;}
+          const comma=String(key).indexOf(',');if(comma<0)return;
+          const x=Number(String(key).slice(0,comma)),y=Number(String(key).slice(comma+1));if(Number.isInteger(x)&&Number.isInteger(y))addIndex(y*world.width+x);
+        };
+        if(previousMap)for(let i=0;i<previousMap.length;i++)if(previousMap[i]!==currentMap[i])addIndex(i);
+        if(previousSidewalks){for(const key of previousSidewalks)if(!currentSidewalks?.has(key))addPointKey(key);for(const key of currentSidewalks||[])if(!previousSidewalks.has(key))addPointKey(key);}
+        if(previousBridges){const current=new Map([...(currentBridges||[])].map(([key,value])=>[key,`${value?.id??''}:${value?.height??''}`]));for(const [key,value]of previousBridges)if(current.get(key)!==value)addPointKey(key);for(const key of current.keys())if(!previousBridges.has(key))addPointKey(key);}
+        terrainTiles=[...dirty].map(index=>({x:index%world.width,y:Math.floor(index/world.width)}));
+      }
+    }
     this.interiorMotion.clear();for(const c of this.city.citizens)renderIndoorPosition(c,c.indoorLocation?.position?{...c.indoorLocation.position}:null);receiveInteriorMotion(this,data.inside,performance.now(),true);
     this.time.tick = data.tick; this.time.elapsed = data.elapsed;
     this.city._statsCache = null;this.city._uiRevision=(this.city._uiRevision||0)+1;
@@ -139,7 +167,7 @@ export class CitySimulationBridge {
     }
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
     this.applyVehiclePositions(data.vehicles);
-    this.changed({ terrain: revision !== this.city.world.revision, entities: count !== this.entities.length || structure !== this.city.structureRevision });
+    this.changed({ terrain: terrainChanged, terrainTiles, entities: structureChanged });
     this.metrics={...this.metrics,...data.workerMetrics,encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
     this.worker.postMessage({ type: 'ack' });
   }

@@ -118,6 +118,7 @@ export const HOUSE_STYLES = {
   ...PORTUGUESE_COLONIAL_STYLES,
   ...DUTCH_COLONIAL_STYLES,
   ...SERTANEJO_STYLES,
+  courthouse_neoclassical:{label:'Tribunal neoclássico',wall:0xd2c7b2,roof:0x514b43,accent:0x596a70,trim:0xf0e8d9,roofKind:'flat'},
   modern: { label: 'Fachada contemporânea', wall: 0xd7dfdb, roof: 0x506054, roofKind: 'flat' },
 };
 export function initializeCharacter(city, citizen) {
@@ -130,6 +131,7 @@ export function initializeCharacter(city, citizen) {
   citizen.savingsRate = Math.round((.05 + citizen.traits.frugality * .4) * 100) / 100;
 }
 export function architectureFor(type, id) {
+  if(type==='courthouse')return 'courthouse_neoclassical';
   const numericId=Number(id)||0,seed=(Math.imul(numericId+29,2246822519)>>>0);
   const familyRoll=seed%20;
   if(familyRoll<11){const form=DUTCH_COLONIAL_FORMS[seed%DUTCH_COLONIAL_FORMS.length],palette=DUTCH_COLONIAL_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%DUTCH_COLONIAL_PALETTES.length];return `dutch_colonial_${form.id}_${palette.id}`;}

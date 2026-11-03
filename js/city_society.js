@@ -29,7 +29,12 @@ export class CitySociety {
     if(cached){cached.minute=minute;cached.value=c._ageValue;}else ageCache.set(c,{minute,value:c._ageValue});
     return c._ageValue;
   }
-  isAdult(c) { return this.age(c) >= 18; }
+  isAdult(c) {
+    // Most adulthood checks occur many times between birthdays. Evaluate the
+    // already-computed age directly; age() refreshes it on birthday boundaries.
+    const minute=this.city.minute;
+    return c._ageValue!=null&&minute>=c.bornAt&&minute<c._nextBirthdayAt?c._ageValue>=18:this.age(c)>=18;
+  }
   initializeCitizen(c, options = {}) {
     const { age = 20 + Math.floor(this.city.random() * 24), parentIds = [] } = options;
     Object.assign(c, { initialAge: age, bornAt: this.city.minute, parentIds: [...parentIds], childIds: [], partnerId: null, expectingId: null, lastBirthAt: null, guardianId: parentIds[0] ?? null, personality: { sociability: 0.3 + this.city.random() * 0.7, kindness: 0.4 + this.city.random() * 0.6, interest: Math.floor(this.city.random() * topics.length), wantsRomance: this.city.random() < 0.9, wantsChildren: this.city.random() < 0.8 }, conversation: null, lastConversationAt: -Infinity });

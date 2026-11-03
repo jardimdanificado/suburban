@@ -13,7 +13,7 @@ import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-stall-door-clearance-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=substances-sleep-1';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=perf-employment-stagger-1';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=indoor-display-centering-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=tropical-caribbean-prints-1';
@@ -40,7 +40,7 @@ import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { quarryDeposits } from './city_terrain.js?v=favela-tree-roads-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
-import { CityHousing, HOUSING_RULES } from './city_housing.js?v=caribbean-quarry-interviews-1';
+import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=body-weight-2';
 import { CityWorkMeals } from './city_work_meals.js?v=substances-sleep-1';
@@ -49,7 +49,7 @@ import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=substances-sleep-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=discrimination-laws-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=perf-adult-check-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=favela-tree-roads-1';
 
 const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
@@ -263,6 +263,10 @@ export class CitySimulation {
     this.furniture.reconcile();
     this.log(`Cidade fundada sobre o relevo natural. Semente ${this.world.seed ?? this.initialSeed}: ${this.citizens.length} moradores e serviços conectados.`, 'city', [], { kind: 'foundation', seed: this.world.seed ?? this.initialSeed });
     this.syncClock();
+    this.staggerInitialTaskDecisions();
+  }
+  staggerInitialTaskDecisions(){
+    for(const c of this.citizens)if(c._initialTaskStaggerUntil==null&&!c.task&&!c.path?.length)c._initialTaskStaggerUntil=this.minute+c.id%SIMULATION_LOD.unstableDecisionMinutes;
   }
   clearCardboardSheltersForArea(x,y,width,depth) {
     let removed=0;
@@ -348,7 +352,7 @@ export class CitySimulation {
     const identity = this.life.identity(index, options);
     const entity = this.createEntity({ x, y, properties: { name: identity.name, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: 0xe8e8e8 } } });
     const mobilityPriority=.75+((((Math.imul(index+1,2654435761)^this.initialSeed)>>>0)/4294967295)*.5);
-    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, inventory:{papelao:1}, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, mobilityPriority, mobilityNeed: 8, mobilityTimeLostToday: 0, bodyMetricsSeed:this.initialSeed, lastProgressAt: this.minute };
+    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, inventory:{papelao:1}, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, mobilityPriority, mobilityNeed: 8, mobilityTimeLostToday: 0, bodyMetricsSeed:this.initialSeed, lastProgressAt: this.minute,_initialTaskStaggerUntil:this.minute+entity.id%SIMULATION_LOD.unstableDecisionMinutes };
     initializeBodyMetrics(c,this.initialSeed);
     c.parentIds=options.parentIds||[];ensureSkinColor(this,c);
     c.givenNames = identity.givenNames; c.surnames = Object.freeze(identity.surnames);
@@ -1080,6 +1084,7 @@ export class CitySimulation {
       const carriedLow=(carried?.food?.length||0)+(c.provisions||0)<=POCKET_RULES.foodLow||(carried?.water||0)<=POCKET_RULES.waterLow;
       if(!urgent&&carriedLow&&['work','manage','walk','leisure','social'].includes(c.task)&&Math.min(n.energy,n.health,n.toilet)>30)this.supplies.route(c);
       if (!c.task) {
+        if(c._initialTaskStaggerUntil!=null){if(this.minute<c._initialTaskStaggerUntil&&!urgent)continue;c._initialTaskStaggerUntil=null;}
         // An idle citizen used to repeat the same path/offer search every city
         // minute, even after finishing leisure at 95% or finding no service.
         // Retry on a changed urgent need, at shift boundaries, or after a short

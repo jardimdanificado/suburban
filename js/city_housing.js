@@ -1,5 +1,6 @@
 import {colorAffinity,buildingColor} from './city_colors.js';
 import {DEVELOPMENT_RULES} from './city_development.js?v=sidewalk-grade-2';
+import {settlementConnected} from './city_terrain.js?v=favela-tree-roads-1';
 export const HOUSING_RULES = { roomPrice: 120000, roomRent: 120, livingReserve: 3000, defaultDays: 3, unsoldRentalAfter: 1440 };
 export const SOCIAL_HOUSING_TYPES = Object.freeze(['super_popular_housing','popular_housing','popular_luxury_housing']);
 export const HOUSING_TYPES = Object.freeze(['residential',...SOCIAL_HOUSING_TYPES,'luxury_housing']);
@@ -101,9 +102,13 @@ export class CityHousing {
     this.city.history.record('housing',`${c.entity.properties.name} passou a compartilhar moradia com ${partner.entity.properties.name}.`,[c.accountId,this.city.building(home.buildingId)?.accountId],{homeId:home.id,regime:this.isSocial(home)?'social':'shared'});
     return true;
   }
-  grantSocialHome(c,home) {
+  grantSocialHome(c,home,prevalidatedVacancy=false) {
     const city=this.city,units=this.units(home),building=city.building(home.buildingId);
-    if(!city.society.isAdult(c) || !this.isSocial(home) || !this.hasBathroom(home) || !units.some(u=>u.roomType==='bedroom') || units.some(u=>u.tenantId) || this.residents(home).length || city.findPath(c.entity,building.door)===null)return false;
+    if(!city.society.isAdult(c) || !this.isSocial(home) || !this.hasBathroom(home) || !units.some(u=>u.roomType==='bedroom') || units.some(u=>u.tenantId) || !prevalidatedVacancy&&this.residents(home).length)return false;
+    // Allocation only needs reachability, not a retained waypoint list. A
+    // connected ground component proves a route exists; unknown components
+    // and possible skybridge routes fall back to path search without copying.
+    if(settlementConnected(city,c.entity,building.door)!==true&&city.findPath(c.entity,building.door,{copy:false})===null)return false;
     this.release(c);
     for(const unit of units){unit.tenantId=c.accountId;unit.occupantId=null;unit.rentPayerId=null;unit.arrears=0;unit.missedDays=0;}
     c.homeId=home.id;c.homeUnitId=units.find(u=>u.roomType==='bedroom').id;c.homelessSince=null;resetHousingSleep(c);
@@ -129,7 +134,7 @@ export class CityHousing {
       if(c.homeUnitId)continue;
       const partner=city.society.citizen(c.partnerId);
       if(partner?.homeUnitId && this.shareHome(c,partner))continue;
-      for(let i=0;i<vacant.length;i++)if(this.grantSocialHome(c,vacant[i])){vacant.splice(i,1);break;}
+      for(let i=0;i<vacant.length;i++)if(this.grantSocialHome(c,vacant[i],true)){vacant.splice(i,1);break;}
     }
   }
   release(c) {
@@ -180,42 +185,76 @@ export class CityHousing {
   assign() {
     this.market();
     this.assignSocialHomes();
+    const candidateHousingOptions=[],optionsByHome=new Map();
+    for(const home of this.homes.values()){
+      const building=this.city.building(home.buildingId);if(!building)continue;
+      const units=this.units(home);if(!units.length)continue;
+      const bedroom=units.find(u=>u.roomType==='bedroom'),hasBathroom=!!home.bathroomUnitId&&this.city.units.get(home.bathroomUnitId)?.roomType==='bathroom'||units.some(u=>u.roomType==='bathroom');
+      const social=SOCIAL_HOUSING_TYPES.includes(building.type)&&units.every(u=>u.ownerId==='treasury');
+      const option={home,building,units,bedroom,hasBathroom,social,price:units.reduce((sum,u)=>sum+u.price,0),color:building.wallColors?.[bedroom?.id]||buildingColor(building)};if(!social)candidateHousingOptions.push(option);optionsByHome.set(home.id,option);
+    }
     for (const c of this.city.citizens) {
       if (c.entity.destroyed) continue;
       if (!this.city.society.isAdult(c)) { const parent = this.city.society.guardian(c); if (parent) this.houseChild(c, parent); continue; }
-      const partner = this.city.society.citizen(c.partnerId), partnerHome = partner && this.home(partner);
+      const partner = this.city.society.citizen(c.partnerId), partnerHome = partner && this.home(partner),existingHome=this.home(c);
+      if(existingHome&&optionsByHome.get(existingHome.id)?.hasBathroom&&!c.homeShareWith&&!(partnerHome&&c.homeId!==partnerHome.id&&partner.id<c.id))continue;
       if (partnerHome && c.homeId !== partnerHome.id && (!this.home(c) || partner.id<c.id)) this.shareHome(c,partner);
       if(c.homeShareWith){const host=this.city.society.citizen(c.homeShareWith),shared=this.home(c);const permitted=host && shared && host.homeId===c.homeId && (partner?.homeId===c.homeId || this.city.relationships.canShareHome(host,c));if(!permitted){this.release(c);c.homeShareWith=null;}}
       if(!this.home(c))for(const relation of this.city.society.relationsFor(c.id).slice(0,6)){const friend=this.city.society.citizen(relation.a===c.id?relation.b:relation.a);if(friend && this.home(friend) && this.shareHome(c,friend,'friend'))break;}
       const current = this.home(c);
       if (current && this.hasBathroom(current)) continue;
-      const candidates = [...this.homes.values()].filter(h => this.city.building(h.buildingId) && this.units(h).every(u => !u.tenantId || u.tenantId === c.accountId));
-      candidates.sort((a, b) => Number(this.hasBathroom(b)) - Number(this.hasBathroom(a)) || this.rent(a,c)*(1-.25*colorAffinity(c,this.homeColor(a)))-this.rent(b,c)*(1-.25*colorAffinity(c,this.homeColor(b))));
-      for (const h of candidates) {
-        if (current && !this.hasBathroom(h)) continue;
-        const units = this.units(h), owned = units.every(u => u.ownerId === c.accountId);
-        if (owned && this.rentHome(c, h)) break;
-        if (this.price(h) + this.city.currency.price(HOUSING_RULES.livingReserve) <= c.balance && this.buyHome(c, h) && this.rentHome(c, h)) break;
+      let best=null,bestHasBathroom=false,bestScore=Infinity;
+      const payer=this.city.payerFor(c),payerBalance=this.city.accounts.get(payer)?.balance||0,reserve=this.city.currency.price(HOUSING_RULES.livingReserve),sustainableRentLimit=c.balance-Math.min(1500,c.balance*.25);
+      for(const option of candidateHousingOptions){
+        const {home,units,bedroom,hasBathroom}=option;
+        if(!units.every(u=>!u.tenantId||u.tenantId===c.accountId))continue;
+        if(current&&!hasBathroom)continue;
+        const owned=units.every(u=>u.ownerId===c.accountId),rent=units.reduce((sum,u)=>sum+(u.ownerId===c.accountId?0:u.rent),0),rentable=!!bedroom&&units.every(u=>u.ownerId===c.accountId||u.forRent)&&payerBalance>=rent;
+        const buyable=units.every(u=>u.forSale&&u.ownerId!==c.accountId)&&c.balance>=option.price+reserve;
+        if(!rentable||!owned&&!buyable&&rent>sustainableRentLimit)continue;
+        const score=rent*(1-.25*colorAffinity(c,option.color));
+        if(best===null||Number(hasBathroom)>Number(bestHasBathroom)||hasBathroom===bestHasBathroom&&score<bestScore){best=option;bestHasBathroom=hasBathroom;bestScore=score;}
+      }
+      if(best){
+        const owned=best.units.every(u=>u.ownerId===c.accountId);
+        if(owned&&this.rentHome(c,best.home))continue;
+        if(best.price+reserve<=c.balance&&this.buyHome(c,best.home)&&this.rentHome(c,best.home))continue;
         // Keep money for the next meals; a lease must be sustainable beyond its first payment.
-        if (this.rent(h, c) + Math.min(1500, c.balance * .25) <= c.balance && this.rentHome(c, h)) break;
+        if(this.rent(best.home,c)+Math.min(1500,c.balance*.25)<=c.balance&&this.rentHome(c,best.home))continue;
       }
     }
   }
   invest(initial = false) {
     const city=this.city,investors=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),homes=[...this.homes.values()],unhoused=investors.reduce((n,c)=>n+Number(!c.homeUnitId),0),demand=unhoused>0,targetRental=Math.max(2,Math.ceil(unhoused/4));
-    let rentalUnits=homes.filter(h=>!this.isSocial(h)&&this.units(h).every(u=>u.forRent&&!u.tenantId)).length;
-    const ownedHomes=new Map();for(const home of homes){const owner=this.units(home).find(u=>u.ownerId!=='treasury')?.ownerId;if(owner)ownedHomes.set(owner,(ownedHomes.get(owner)||0)+1);}
+    let rentalUnits=0,vacantRentalHomes=0;
+    const ownedHomes=new Map(),homesByOwner=new Map(),availableHomes=[];
+    for(const home of homes){
+      const units=this.units(home),building=city.building(home.buildingId),social=SOCIAL_HOUSING_TYPES.includes(building?.type)&&units.length>0&&units.every(u=>u.ownerId==='treasury');
+      const forRent=units.length>0&&units.every(u=>u.forRent&&!u.tenantId),forSale=units.length>0&&units.every(u=>u.forSale&&!u.tenantId);
+      if(!social&&forRent)rentalUnits++;
+      if(!social&&units.length>0&&units.every(u=>!u.tenantId&&(u.forRent||u.forSale)))vacantRentalHomes++;
+      if(!social&&forSale){availableHomes.push({home,units,price:units.reduce((sum,u)=>sum+u.price,0)});}
+      const owners=new Set();
+      for(const unit of units)if(unit.ownerId!=='treasury')owners.add(unit.ownerId);
+      const owner=[...owners][0];if(owner)ownedHomes.set(owner,(ownedHomes.get(owner)||0)+1);
+      for(const accountId of owners)homesByOwner.set(accountId,(homesByOwner.get(accountId)||0)+1);
+    }
+    const availableHomeIds=new Set(availableHomes.map(option=>option.home.id));
     for (const c of investors) {
       if (!c.homeUnitId) {
-        let home=null,best=Infinity;for(const candidate of homes){if(this.isSocial(candidate))continue;const units=this.units(candidate);if(!units.length||!units.every(u=>u.forSale&&!u.tenantId&&u.ownerId!==c.accountId))continue;const price=this.price(candidate);if(price+60000>=c.balance)continue;const score=price*(1-.25*colorAffinity(c,this.homeColor(candidate)));if(score<best){best=score;home=candidate;}}
-        if(home&&this.buyHome(c,home)&&this.rentHome(c,home))ownedHomes.set(c.accountId,(ownedHomes.get(c.accountId)||0)+1);
+        let bestOption=null,best=Infinity;for(const option of availableHomes){const {home,units,price}=option;if(!availableHomeIds.has(home.id)||!units.every(u=>u.ownerId!==c.accountId)||price+60000>=c.balance)continue;const score=price*(1-.25*colorAffinity(c,this.homeColor(home)));if(score<best){best=score;bestOption=option;}}
+        if(bestOption&&this.buyHome(c,bestOption.home)){
+          availableHomeIds.delete(bestOption.home.id);
+          homesByOwner.set(c.accountId,(homesByOwner.get(c.accountId)||0)+1);
+          if(this.rentHome(c,bestOption.home)){ownedHomes.set(c.accountId,(ownedHomes.get(c.accountId)||0)+1);vacantRentalHomes--;}
+        }
       }
       if(!demand)continue;
       const personHomes=ownedHomes.get(c.accountId)||0;
       const landlord=c.homeUnitId&&(c.rentalPreference>=.76||c.businessIds.length>0||c.landlordSince!=null);
       if(!landlord||personHomes>=6||rentalUnits>=targetRental)continue;
-      for (const home of homes) {
-        const units=this.units(home),price=this.price(home);if(this.isSocial(home)||!units.length||!units.every(u=>u.forSale&&!u.tenantId&&u.ownerId!==c.accountId))continue;
+      for (const {home,units,price} of availableHomes) {
+        if(!availableHomeIds.has(home.id)||!units.every(u=>u.ownerId!==c.accountId))continue;
         let loan=null;
         if(price+this.city.currency.price(65000)>c.balance){
           const downPayment=Math.ceil(price*.25),needed=price-downPayment,banks=this.city.bank.available();
@@ -226,7 +265,7 @@ export class CityHousing {
         if(this.buyHome(c,home)){
           for(const u of units){u.forRent=true;u.forSale=false;}
           c.landlordSince??=this.city.minute;c.landlordPortfolio??=[];if(!c.landlordPortfolio.includes(home.id))c.landlordPortfolio.push(home.id);
-          ownedHomes.set(c.accountId,personHomes+1);rentalUnits++;
+          ownedHomes.set(c.accountId,personHomes+1);homesByOwner.set(c.accountId,(homesByOwner.get(c.accountId)||0)+1);availableHomeIds.delete(home.id);rentalUnits++;
           this.city.history.record('property',`${c.entity.properties.name} comprou uma moradia para alugar${loan?' com financiamento imobiliário':''}.`,[c.accountId],{kind:'landlord-acquisition',homeId:home.id,buildingId:home.buildingId,amount:price,loanId:loan?.id||null});
           this.city.log(`${c.entity.properties.name} entrou no mercado de aluguel e colocou ${units.length} cômodos disponíveis.`, 'housing',[c.id],{kind:'landlord-acquisition',homeId:home.id,buildingId:home.buildingId,units:units.length,loanId:loan?.id||null});
           break;
@@ -234,17 +273,19 @@ export class CityHousing {
         if(loan)this.city.bank.cancelMortgage(loan);
       }
     }
-    this.developRentalProperty();
+    this.developRentalProperty({homesByOwner,vacantRentalHomes});
   }
-  developRentalProperty(){
+  developRentalProperty(profile=null){
     const city=this.city,unhoused=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.homeUnitId).length;
     if(!unhoused||this.lastRentalDevelopmentDay===city.day)return false;
-    const vacant=[...this.homes.values()].filter(h=>!this.isSocial(h)&&this.units(h).every(u=>!u.tenantId&&(u.forRent||u.forSale))).length;
+    const vacant=profile?.vacantRentalHomes??[...this.homes.values()].filter(h=>!this.isSocial(h)&&this.units(h).every(u=>!u.tenantId&&(u.forRent||u.forSale))).length;
     const planned=city.development.projects.filter(p=>p.type==='residential'&&!p.cancelled&&p.status!=='completed').length;
     if(unhoused<=vacant+planned)return false;
     this.lastRentalDevelopmentDay=city.day;
+    let investorHomes=profile?.homesByOwner;
+    if(!investorHomes){investorHomes=new Map();for(const home of this.homes.values())for(const owner of new Set(this.units(home).map(u=>u.ownerId).filter(id=>id!=='treasury')))investorHomes.set(owner,(investorHomes.get(owner)||0)+1);}
     const investors=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.homeUnitId&&(c.landlordSince!=null||c.rentalPreference>=.89||c.businessIds.length&&c.rentalPreference>=.78))
-      .filter(c=>c.creditAllowed!==false&&!city.politics.officeHolder(c)&&[...this.homes.values()].filter(h=>this.units(h).some(u=>u.ownerId===c.accountId)).length<3)
+      .filter(c=>c.creditAllowed!==false&&!city.politics.officeHolder(c)&&(investorHomes.get(c.accountId)||0)<3)
       .sort((a,b)=>((b.skills.management||0)+b.rentalPreference*30+b.balance/100000)-((a.skills.management||0)+a.rentalPreference*30+a.balance/100000)||a.id-b.id);
     const plots=city.development.plots.filter(p=>p.ownerId==='treasury'&&p.forSale&&!p.buildingId&&!p.projectId&&p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&!['farm','quarry'].includes(p.type)).sort((a,b)=>Math.abs(a.width*a.depth-4)-Math.abs(b.width*b.depth-4)||a.price-b.price);
     for(const owner of investors)for(const plot of plots){
