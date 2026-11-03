@@ -10,8 +10,8 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseC
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-1';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=static-cell-batch-3";
+import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
+import { syncCityBuildings } from "./city_renderer_3d.js?v=static-cell-batch-10";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-shadow-draws-3';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
@@ -41,6 +41,16 @@ import { globalWallCoords, resolveWallSkin, getEntitiesInViewport, getEntityById
 const getClanBlueprintTiles = () => [];
 const currentZoneSize = 8;
 const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
+const CITIZEN_ACTION_LABELS={
+  'substance-vending':'negociando','substance-use':'consumindo','substance-buy':'comprando','substance-production':'preparando','substance-deposit':'armazenando',
+  work:'trabalho','work-wait':'aguardando',manage:'empresa',construction:'obra',clean:'limpeza',food:'comida',shopping:'compras','market-vending':'venda',
+  workmeal:'refeição',provisions:'lanche',water:'água','lake-water':'água',energy:'descanso',health:'saúde',toilet:'banheiro',hygiene:'higiene',social:'convívio',
+  visit:'visita',care:'cuidado',caregiving:'família',vote:'votação','council-session':'Câmara',research:'pesquisa',interview:'entrevista','job-interview':'emprego',
+  transport:'entrega','paint-delivery':'tinta','paint-purchase':'compras',supplies:'abastecimento','combat-flee':'perigo',custody:'custódia','custody-escort':'escolta',
+  'custody-water':'água',funeral:'luto','justice-report':'justiça','police-arrest-escort':'escolta','police-investigation':'investigação',
+  'police-oversight':'fiscalização','police-patrol':'patrulha','police-response':'ocorrência','police-restitution':'restituição','urban-graffiti':'grafite',
+  leisure:'lazer',outdoor_leisure:'praia',sit:'descanso',walk:'passeio'
+};
 
 // Cache for raw asset images
 const textureCache = new Map();
@@ -7220,6 +7230,10 @@ export class RCT3DRenderer {
     this.overheadBillboardQueue??=[];this.overheadBillboardQueue.length=0;
     this.cityCitizenBatches.begin();
     this.cityCitizenModels.begin(dt,effectiveSpeed);
+    const perspectiveActive=this.isPerspectiveActive(),firstPersonActive=this.isFirstPersonActive(),thirdPersonActive=this.isThirdPersonActive();
+    const activeElection=this.cityDevelopment?.city?.politics?.active;
+    const activeElectionId=activeElection?.id,activeElectionStatus=activeElection?.status;
+    const citizenModelOptions={hidden:false,dimmed:false,perspective:perspectiveActive,smoothMovement:thirdPersonActive,vehicleAngle:null,activeCampaignElectionId:activeElectionId,activeCampaignStatus:activeElectionStatus};
     let selectedPos = null;
 
     const curCamTileX = Math.floor(this.camX);
@@ -7291,6 +7305,7 @@ export class RCT3DRenderer {
     this._clanGroups.clear();
     const occupiedHouseTiles = this._occupiedHouseTiles;
     const clanGroups = this._clanGroups;
+    const entityRenderClasses=this._entityRenderClasses??=new WeakMap();
 
     if (world?.groups && Array.isArray(world.groups)) {
       for (let i = 0; i < world.groups.length; i++) {
@@ -7303,6 +7318,17 @@ export class RCT3DRenderer {
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
       if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.cityVehicle||e.properties.campaignDecoration) continue;
+      const cachedClass=entityRenderClasses.get(e);
+      if(!shouldUpdateStaticInstances&&cachedClass?.static&&cachedClass.properties===e.properties&&cachedClass.render===e.properties.render){
+        if(e.x<this.renderedMinTx||e.x>this.renderedMaxTx+.99||e.y<this.renderedMinTy||e.y>this.renderedMaxTy+.99)continue;
+        if(knownZones&&!knownZones.has(`${Math.floor(e.x/zoneSz)}_${Math.floor(e.y/zoneSz)}`))continue;
+        if(this.selectedEntityId&&e.id===this.selectedEntityId){
+          const h=e.properties.house,fpW=cachedClass.isHouse?(h?.footprintW||1):1,fpH=cachedClass.isHouse?(h?.footprintH||1):1;
+          const calcElev=map?(cachedClass.isHouse?this.getTileSurfaceHeight(map,Math.floor(e.x),Math.floor(e.y),fpW,fpH):this.getSurfaceElevation(map,cachedClass.isPlantOrItem?e.x+.5:e.x,cachedClass.isPlantOrItem?e.y+.5:e.y)):.1;
+          selectedPos={x:e.x+(fpW-1)*.5,y:calcElev,z:e.y+(fpH-1)*.5,fpW,fpH};
+        }
+        continue;
+      }
       const profileCitizenStart = this.profileFrame && e.properties.citizen ? performance.now() : 0;
       const cityCitizen=e.properties.citizen,indoorLocation=cityCitizen?.indoorLocation;
       const interiorPosition=cityCitizen?._renderIndoorPosition||indoorLocation?.position;
@@ -7325,36 +7351,39 @@ export class RCT3DRenderer {
 
       const interiorBuilding=cityCitizen?.indoorLocation&&this.cityDevelopment?.city?.building(cityCitizen.indoorLocation.buildingId);
       const r = e.properties.render;
-      const isRoad = !e.properties.brain && (!!e.properties.road || e.properties.name?.includes("Estrada") || e.properties.name?.includes("Rua") || e.properties.name?.includes("Encaixe"));
-      const isCampfire = !e.properties.brain && !isRoad && (!!e.properties.campfire || e.properties.name?.includes("Campfire") || e.properties.name?.includes("Fogueira"));
-      const isTorch = !e.properties.brain && !isRoad && !isCampfire && (!!e.properties.torch || e.properties.name?.includes("Torch") || e.properties.name?.includes("Tocha"));
-      const isWarehouse = !e.properties.brain && !isRoad && (!!e.properties.warehouse || e.properties.name?.includes("Armazém") || e.properties.name?.includes("Depósito"));
-      const isSlaughterhouse = !e.properties.brain && !isRoad && !isWarehouse && (!!e.properties.slaughterhouse || e.properties.name?.includes("Abatedouro"));
-      const isKitchen = !e.properties.brain && !isRoad && !isWarehouse && !isSlaughterhouse && (!!e.properties.kitchen || e.properties.name?.includes("Cozinha"));
-      const isWell = !e.properties.brain && !isRoad && !isWarehouse && !isSlaughterhouse && !isKitchen && (!!e.properties.well || !!e.properties.isWell || e.properties.name?.includes("Poço") || e.properties.name?.includes("Well"));
-      const isArtisanHut = !e.properties.brain && !isRoad && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && (!!e.properties.artisan_hut || e.properties.name?.includes("Artesão") || e.properties.name?.includes("Cabana do Construtor"));
-      const isDoor = !e.properties.brain && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && !!e.properties.door;
-
-      const isPlantOrFlora = !e.properties.brain && !e.properties.mouth && !e.properties.terrestrial && !e.properties.edible && !e.properties.resourceType && !e.properties.item && !e.properties.weapon && !e.properties.armor && !e.properties.material;
-      const isCactus = isPlantOrFlora && (e.properties.species === "cactus" || e.properties.name?.toLowerCase().includes("cactus") || e.properties.name?.toLowerCase().includes("cacto"));
-      const isCherry = isPlantOrFlora && (e.properties.species === "cherry_blossom" || e.properties.name?.toLowerCase().includes("cerejeira") || e.properties.name?.toLowerCase().includes("sakura"));
-      const isBirch = isPlantOrFlora && (e.properties.species === "birch" || e.properties.name?.toLowerCase().includes("bétula") || e.properties.name?.toLowerCase().includes("betula"));
-      const isMaple = isPlantOrFlora && (e.properties.species === "maple" || e.properties.name?.toLowerCase().includes("bordo") || e.properties.name?.toLowerCase().includes("maple"));
-      const isBerryBush = isPlantOrFlora && (e.properties.species === "berry" || e.properties.name?.toLowerCase().includes("amora") || (e.properties.species === "bush" && !e.properties.name?.toLowerCase().includes("florido")));
-      const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
-      const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
-      const isPine = isTree && (e.properties.species === "pine" || (r.skin && r.skin.toLowerCase().includes("pine")));
-      const isPalm = isTree && (e.properties.species === "coconut_palm" || e.properties.species === "royal_palm");
-
-      const isWoodLog = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "wood" || e.properties.name?.includes("Wood Log") || e.properties.name?.includes("Madeira") || r.skin === "Item_Wood.png");
-      const isStoneItem = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "stone" || e.properties.name?.includes("Stone Block") || e.properties.name?.includes("Pedra"));
-      const isHouse = !e.properties.brain && !isWoodLog && !isStoneItem && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (!!e.properties.house || !!e.properties.leaderHouse || (e.properties.species === "structure" && (r.skin === "Overworld_House.png" || e.properties.name?.includes("Casa") || e.properties.name?.includes("Manor") || e.properties.name?.includes("Villa") || e.properties.name?.includes("Chalet") || e.properties.name?.includes("Cottage") || e.properties.name?.includes("Cabin") || e.properties.name?.includes("Hut") || e.properties.name?.includes("Lodge") || e.properties.name?.includes("Ranch") || e.properties.name?.includes("Hacienda") || e.properties.name?.includes("Hall") || e.properties.name?.includes("Grange") || e.properties.name?.includes("Hermitage") || e.properties.name?.includes("Palácio") || e.properties.name?.includes("Ossuário") || e.properties.name?.includes("Castelo"))));
-      const isLeaderHouse = isHouse && (!!e.properties.leaderHouse || !!e.properties.house?.isLeaderHouse || e.properties.name?.includes("Palácio") || e.properties.name?.includes("Citadel"));
-      const isWall = !e.properties.brain && !isDoor && !isHouse && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && !isWoodLog && !isStoneItem && !isTree && !isCactus && !isBerryBush && !isRoseBush && (r.skin?.startsWith("Wall_") || e.properties.name?.includes("Muralha") || e.properties.name?.includes("Paliçada") || e.properties.name?.includes("Muro") || (e.properties.structure && !e.properties.edible && !e.properties.resourceType));
-
-      const isBuilding = isHouse || isWall || isDoor || isWarehouse || isSlaughterhouse || isKitchen || isWell || isArtisanHut;
-      const isPlantOrItem = isTree || isCactus || isBerryBush || isRoseBush || isWoodLog || isStoneItem || isTorch || isCampfire || isRoad;
-      const isItem = !e.properties.brain && !isBuilding && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isWoodLog && !isStoneItem && !isTorch && !isCampfire && !isRoad;
+      let classification=cachedClass?.properties===e.properties&&cachedClass.render===r?cachedClass:null;
+      if(!classification){
+        const isRoad = !e.properties.brain && (!!e.properties.road || e.properties.name?.includes("Estrada") || e.properties.name?.includes("Rua") || e.properties.name?.includes("Encaixe"));
+        const isCampfire = !e.properties.brain && !isRoad && (!!e.properties.campfire || e.properties.name?.includes("Campfire") || e.properties.name?.includes("Fogueira"));
+        const isTorch = !e.properties.brain && !isRoad && !isCampfire && (!!e.properties.torch || e.properties.name?.includes("Torch") || e.properties.name?.includes("Tocha"));
+        const isWarehouse = !e.properties.brain && !isRoad && (!!e.properties.warehouse || e.properties.name?.includes("Armazém") || e.properties.name?.includes("Depósito"));
+        const isSlaughterhouse = !e.properties.brain && !isRoad && !isWarehouse && (!!e.properties.slaughterhouse || e.properties.name?.includes("Abatedouro"));
+        const isKitchen = !e.properties.brain && !isRoad && !isWarehouse && !isSlaughterhouse && (!!e.properties.kitchen || e.properties.name?.includes("Cozinha"));
+        const isWell = !e.properties.brain && !isRoad && !isWarehouse && !isSlaughterhouse && !isKitchen && (!!e.properties.well || !!e.properties.isWell || e.properties.name?.includes("Poço") || e.properties.name?.includes("Well"));
+        const isArtisanHut = !e.properties.brain && !isRoad && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && (!!e.properties.artisan_hut || e.properties.name?.includes("Artesão") || e.properties.name?.includes("Cabana do Construtor"));
+        const isDoor = !e.properties.brain && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && !!e.properties.door;
+        const isPlantOrFlora = !e.properties.brain && !e.properties.mouth && !e.properties.terrestrial && !e.properties.edible && !e.properties.resourceType && !e.properties.item && !e.properties.weapon && !e.properties.armor && !e.properties.material;
+        const isCactus = isPlantOrFlora && (e.properties.species === "cactus" || e.properties.name?.toLowerCase().includes("cactus") || e.properties.name?.toLowerCase().includes("cacto"));
+        const isCherry = isPlantOrFlora && (e.properties.species === "cherry_blossom" || e.properties.name?.toLowerCase().includes("cerejeira") || e.properties.name?.toLowerCase().includes("sakura"));
+        const isBirch = isPlantOrFlora && (e.properties.species === "birch" || e.properties.name?.toLowerCase().includes("bétula") || e.properties.name?.toLowerCase().includes("betula"));
+        const isMaple = isPlantOrFlora && (e.properties.species === "maple" || e.properties.name?.toLowerCase().includes("bordo") || e.properties.name?.toLowerCase().includes("maple"));
+        const isBerryBush = isPlantOrFlora && (e.properties.species === "berry" || e.properties.name?.toLowerCase().includes("amora") || (e.properties.species === "bush" && !e.properties.name?.toLowerCase().includes("florido")));
+        const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
+        const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
+        const isPine = isTree && (e.properties.species === "pine" || (r.skin && r.skin.toLowerCase().includes("pine")));
+        const isPalm = isTree && (e.properties.species === "coconut_palm" || e.properties.species === "royal_palm");
+        const isWoodLog = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "wood" || e.properties.name?.includes("Wood Log") || e.properties.name?.includes("Madeira") || r.skin === "Item_Wood.png");
+        const isStoneItem = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "stone" || e.properties.name?.includes("Stone Block") || e.properties.name?.includes("Pedra"));
+        const isHouse = !e.properties.brain && !isWoodLog && !isStoneItem && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (!!e.properties.house || !!e.properties.leaderHouse || (e.properties.species === "structure" && (r.skin === "Overworld_House.png" || e.properties.name?.includes("Casa") || e.properties.name?.includes("Manor") || e.properties.name?.includes("Villa") || e.properties.name?.includes("Chalet") || e.properties.name?.includes("Cottage") || e.properties.name?.includes("Cabin") || e.properties.name?.includes("Hut") || e.properties.name?.includes("Lodge") || e.properties.name?.includes("Ranch") || e.properties.name?.includes("Hacienda") || e.properties.name?.includes("Hall") || e.properties.name?.includes("Grange") || e.properties.name?.includes("Hermitage") || e.properties.name?.includes("Palácio") || e.properties.name?.includes("Ossuário") || e.properties.name?.includes("Castelo"))));
+        const isLeaderHouse = isHouse && (!!e.properties.leaderHouse || !!e.properties.house?.isLeaderHouse || e.properties.name?.includes("Palácio") || e.properties.name?.includes("Citadel"));
+        const isWall = !e.properties.brain && !isDoor && !isHouse && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && !isWoodLog && !isStoneItem && !isTree && !isCactus && !isBerryBush && !isRoseBush && (r.skin?.startsWith("Wall_") || e.properties.name?.includes("Muralha") || e.properties.name?.includes("Paliçada") || e.properties.name?.includes("Muro") || (e.properties.structure && !e.properties.edible && !e.properties.resourceType));
+        const isBuilding = isHouse || isWall || isDoor || isWarehouse || isSlaughterhouse || isKitchen || isWell || isArtisanHut;
+        const isPlantOrItem = isTree || isCactus || isBerryBush || isRoseBush || isWoodLog || isStoneItem || isTorch || isCampfire || isRoad;
+        const isItem = !e.properties.brain && !isBuilding && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isWoodLog && !isStoneItem && !isTorch && !isCampfire && !isRoad;
+        classification={properties:e.properties,render:r,isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem,static:(isBuilding||isPlantOrItem)&&!isDoor};
+        entityRenderClasses.set(e,classification);
+      }
+      const {isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem}=classification;
       const profileAfterClass = profileCitizenStart ? performance.now() : 0;
 
       const isStaticEntity = isBuilding || isPlantOrItem;
@@ -7895,13 +7924,13 @@ export class RCT3DRenderer {
       }
       // --- DYNAMIC BILLBOARDS (Creatures, Humanoids, Items, Doors) ---
       else {
-        const billboardRotY = this.isPerspectiveActive() ? (this.fpYaw + Math.PI) : this.fixedRotationY;
-        const isPossessed = this.isFirstPersonActive() && Number(e.id) === Number(this.fpEntityId);
+        const billboardRotY = perspectiveActive ? (this.fpYaw + Math.PI) : this.fixedRotationY;
+        const isPossessed = firstPersonActive && Number(e.id) === Number(this.fpEntityId);
         const isConsciousCreature = !isItem && !isDoor && !!e.properties?.brain;
         const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
         const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
-        const activeElection=this.cityDevelopment?.city?.politics?.active;
-        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,{hidden:isPossessed,dimmed:!inCurZone,perspective:this.isPerspectiveActive(),smoothMovement:this.isThirdPersonActive(),vehicleAngle,activeCampaignElectionId:activeElection?.id,activeCampaignStatus:activeElection?.status});
+        citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;
+        const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions);
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;
         }else{
@@ -8011,8 +8040,8 @@ export class RCT3DRenderer {
           sprite.rotation.z = Math.PI / 2;
         } else {
           // Compact scale for creatures with subtle elevation in 1P/3P mode so they don't clip ground
-          const cScale = (this.isPerspectiveActive() ? 0.82 : 0.72) * (r.size || 1);
-          const cElev = this.isPerspectiveActive() ? 0.04 : 0.0;
+          const cScale = (perspectiveActive ? 0.82 : 0.72) * (r.size || 1);
+          const cElev = perspectiveActive ? 0.04 : 0.0;
           sprite.scale.set(cScale, cScale, cScale);
           sprite.position.set(renderX, renderSurfaceH + cElev, renderY);
           sprite.rotation.y = billboardRotY;
@@ -8025,7 +8054,7 @@ export class RCT3DRenderer {
           sprite.material.color.setHex(0xff3333);
         } else if (!inCurZone) {
           sprite.material.color.setHex(0x555555); // Dimmed
-        } else if (this.isPerspectiveActive() && isConsciousCreature) {
+        } else if (perspectiveActive && isConsciousCreature) {
           sprite.material.color.setHex(0xffffff); // Crisp and vibrant in perspective
         } else {
           sprite.material.color.setHex(0xffffff); // Full bright
@@ -8056,8 +8085,7 @@ export class RCT3DRenderer {
               addOverhead("speech",{label:`${campaign.type==='membership'?'partido':theme}`,variant:"campaign"});
             }
             if(this.speechBubblesVisible&&!(substanceUse?.usingUntil>substanceNow)&&!citizen.conversation&&!campaign&&!citizen.path?.length&&!citizen.ridingVehicleId){
-              const actionLabels={'substance-vending':'negociando','substance-use':'consumindo','substance-buy':'comprando','substance-production':'preparando','substance-deposit':'armazenando',work:"trabalho",'work-wait':"aguardando",manage:"empresa",construction:"obra",clean:"limpeza",food:"comida",shopping:"compras",'market-vending':"venda",workmeal:"refeição",provisions:"lanche",water:"água",'lake-water':"água",energy:"descanso",health:"saúde",toilet:"banheiro",hygiene:"higiene",social:"convívio",visit:"visita",care:"cuidado",caregiving:"família",vote:"votação",'council-session':"Câmara",research:"pesquisa",interview:"entrevista",'job-interview':"emprego",transport:"entrega",'paint-delivery':"tinta",'paint-purchase':"compras",supplies:"abastecimento",'combat-flee':"perigo",custody:"custódia",'custody-escort':"escolta",'custody-water':"água",funeral:"luto",'justice-report':"justiça",'police-arrest-escort':"escolta",'police-investigation':"investigação",'police-oversight':"fiscalização",'police-patrol':"patrulha",'police-response':"ocorrência",'police-restitution':"restituição",'urban-graffiti':"grafite",leisure:"lazer",outdoor_leisure:"praia",sit:"descanso",walk:"passeio"};
-              const actionLabel=actionLabels[citizen.task];
+              const actionLabel=CITIZEN_ACTION_LABELS[citizen.task];
               if(actionLabel)addOverhead("action",{label:actionLabel});
             }
             if(events.mealUntil>now)addOverhead("meal",{offsetX:18});

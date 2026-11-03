@@ -3,6 +3,13 @@ export function applyInteriorCutaway(THREE,group,floor=null,hideWalls=false){
  const interior=floor!=null,key=interior?`inside:${floor}:${hideWalls}`:'facade';if(group.userData.lastInteriorView===key)return;
  const m=new THREE.Matrix4(),hidden=new THREE.Vector3(0,0,0),lowWall=new THREE.Vector3(1,.16,1);
  for(const cells of group.userData.cellMeshes||[]){
+  const floorRanges=cells.userData.combinedCellFloors;
+  if(floorRanges){
+   const range=interior?floorRanges.get(floor):null;cells.visible=!interior||!!range;
+   cells.geometry.setDrawRange(range?.start||0,range?.count??cells.userData.cellVertexCount);
+   cells.scale.y=interior&&hideWalls ? .16 : 1;cells.position.y=interior&&hideWalls ? floor*CITY_FLOOR_HEIGHT*.84+CITY_FLOOR_HEIGHT*.08 : 0;
+   continue;
+  }
   if(Number.isInteger(cells.userData.combinedCellFloor)){
    const level=cells.userData.combinedCellFloor;cells.visible=!interior||level===floor;
    cells.scale.y=interior&&level===floor&&hideWalls?0.16:1;
@@ -11,8 +18,13 @@ export function applyInteriorCutaway(THREE,group,floor=null,hideWalls=false){
   }
   const levels=cells.userData.interiorFloors||[],base=cells.userData.interiorBaseMatrices||[];for(let i=0;i<levels.length;i++){m.copy(base[i]);if(interior){if(levels[i]!==floor||hideWalls)m.scale(hidden);else{m.scale(lowWall);m.elements[13]=floor*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT*.08;}}cells.setMatrixAt(i,m);}cells.instanceMatrix.needsUpdate=true;
  }
- const floors=group.userData.interiorFloors;if(floors){const levels=floors.userData.interiorFloors,base=floors.userData.interiorBaseMatrices;for(let i=0;i<levels.length;i++){m.copy(base[i]);if(interior&&levels[i]!==floor)m.scale(hidden);floors.setMatrixAt(i,m);}floors.instanceMatrix.needsUpdate=true;}
- for(const key of ['interiorCeilings','roof','facade','supports','slab','stairs'])if(group.userData[key])group.userData[key].visible=!interior;
+ const floors=group.userData.interiorFloors,ceilings=group.userData.interiorCeilings;
+ if(floors&&floors===ceilings){const levels=floors.userData.interiorFloors,base=floors.userData.interiorBaseMatrices,floorCount=floors.userData.floorInstanceCount;for(let i=0;i<levels.length;i++){m.copy(base[i]);if(interior&&(i>=floorCount||levels[i]!==floor))m.scale(hidden);floors.setMatrixAt(i,m);}floors.instanceMatrix.needsUpdate=true;}
+ else{
+  if(floors){const levels=floors.userData.interiorFloors,base=floors.userData.interiorBaseMatrices;for(let i=0;i<levels.length;i++){m.copy(base[i]);if(interior&&levels[i]!==floor)m.scale(hidden);floors.setMatrixAt(i,m);}floors.instanceMatrix.needsUpdate=true;}
+  if(ceilings){const levels=ceilings.userData.interiorFloors,base=ceilings.userData.interiorBaseMatrices;for(let i=0;i<levels.length;i++){m.copy(base[i]);if(interior)m.scale(hidden);ceilings.setMatrixAt(i,m);}ceilings.instanceMatrix.needsUpdate=true;}
+ }
+ for(const key of ['interiorCeilings','roof','facade','supports','slab','stairs'])if(group.userData[key]&&!(key==='interiorCeilings'&&group.userData[key]===floors))group.userData[key].visible=!interior;
  if(group.userData.doorFrames)group.userData.doorFrames.visible=interior;
  if(group.userData.exteriorDoorFrames)group.userData.exteriorDoorFrames.visible=!interior;
  if(group.userData.roomProps){group.userData.roomProps.visible=interior;for(const prop of group.userData.roomProps.children)prop.visible=interior&&prop.userData.interiorFloor===floor;}

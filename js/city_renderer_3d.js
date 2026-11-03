@@ -19,7 +19,7 @@ import {quarryDeposits} from './city_terrain.js?v=quarry-outskirts-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=static-facade-batch-5';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-5';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-9';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
 const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
 const EMPTY_FLOORS=new Set();
@@ -425,31 +425,32 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
         const source=roomCellGeometry(THREE,facadeMask,openingMask,doorMask);
         for(const unit of units){let list=cellSourcesByFloor.get(unit.z);if(!list)cellSourcesByFloor.set(unit.z,list=[]);list.push({source,unit});}
       }
-      const cellMeshes=[];
+      let totalCellVertices=0;for(const parts of cellSourcesByFloor.values())for(const {source}of parts)totalCellVertices+=source.attributes.position.count;
+      const cellPositions=new Float32Array(totalCellVertices*3),cellNormals=new Float32Array(totalCellVertices*3),cellUvs=new Float32Array(totalCellVertices*2),cellColors=new Float32Array(totalCellVertices*3),cellFloorRanges=new Map();let cellVertexOffset=0;
       for(const [floor,parts] of cellSourcesByFloor){
-        let vertexCount=0;for(const part of parts)vertexCount+=part.source.attributes.position.count;
-        const positions=new Float32Array(vertexCount*3),normals=new Float32Array(vertexCount*3),uvs=new Float32Array(vertexCount*2),colors=new Float32Array(vertexCount*3);let vertexOffset=0;
+        const floorStart=cellVertexOffset,floorOffset=floor*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2;
         for(const {source,unit} of parts){
-          const sourcePositions=source.attributes.position.array,sourceNormals=source.attributes.normal.array,sourceUvs=source.attributes.uv.array,sourceColors=source.attributes.color.array,count=source.attributes.position.count,positionOffset=vertexOffset*3,uvOffset=vertexOffset*2;
-          normals.set(sourceNormals,positionOffset);uvs.set(sourceUvs,uvOffset);
+          const sourcePositions=source.attributes.position.array,sourceNormals=source.attributes.normal.array,sourceUvs=source.attributes.uv.array,sourceColors=source.attributes.color.array,count=source.attributes.position.count,positionOffset=cellVertexOffset*3,uvOffset=cellVertexOffset*2;
+          cellNormals.set(sourceNormals,positionOffset);cellUvs.set(sourceUvs,uvOffset);
           for(let i=0;i<count;i++){
             const at=i*3,out=positionOffset+at;
-            positions[out]=sourcePositions[at]+unit.x+.5;positions[out+1]=sourcePositions[at+1];positions[out+2]=sourcePositions[at+2]+unit.y+.5;
-            colors[out]=sourceColors[at]*color.r;colors[out+1]=sourceColors[at+1]*color.g;colors[out+2]=sourceColors[at+2]*color.b;
+            cellPositions[out]=sourcePositions[at]+unit.x+.5;cellPositions[out+1]=sourcePositions[at+1]+floorOffset;cellPositions[out+2]=sourcePositions[at+2]+unit.y+.5;
+            cellColors[out]=sourceColors[at]*color.r;cellColors[out+1]=sourceColors[at+1]*color.g;cellColors[out+2]=sourceColors[at+2]*color.b;
           }
-          vertexOffset+=count;
+          cellVertexOffset+=count;
         }
-        const geometry=new THREE.BufferGeometry();
-        geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3));
-        geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));geometry.computeBoundingSphere();
-        const cells=new THREE.Mesh(geometry,material);cells.position.y=floor*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2;cells.castShadow=true;cells.receiveShadow=true;cells.userData.interiorFloors=[floor];cells.userData.combinedCellFloor=floor;
-        group.add(cells);cellMeshes.push(cells);
+        cellFloorRanges.set(floor,{start:floorStart,count:cellVertexOffset-floorStart});
       }
+      const cellGeometry=new THREE.BufferGeometry();
+      cellGeometry.setAttribute('position',new THREE.BufferAttribute(cellPositions,3));cellGeometry.setAttribute('normal',new THREE.BufferAttribute(cellNormals,3));
+      cellGeometry.setAttribute('uv',new THREE.BufferAttribute(cellUvs,2));cellGeometry.setAttribute('color',new THREE.BufferAttribute(cellColors,3));cellGeometry.computeBoundingSphere();
+      const cells=new THREE.Mesh(cellGeometry,material);cells.castShadow=true;cells.receiveShadow=true;cells.userData.interiorFloors=[...cellFloorRanges.keys()];cells.userData.combinedCellFloors=cellFloorRanges;cells.userData.cellVertexCount=cellVertexOffset;
+      group.add(cells);const cellMeshes=[cells];
       for(const parts of cellSourcesByFloor.values())for(const {source} of parts)source.dispose();
       group.userData.cellMeshes=cellMeshes;
-      const floorCells=[...b.units,...(b.circulation||[])],floorGeometry=new THREE.BoxGeometry(1,.06,1),floorMaterial=new THREE.MeshLambertMaterial({color:0x928571}),floors=new THREE.InstancedMesh(floorGeometry,floorMaterial,floorCells.length),ceilings=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.06,1),floorMaterial,floorCells.length),floorLevels=[],floorMatrices=[];
-      for(let i=0;i<floorCells.length;i++){const u=floorCells[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT-.03,u.y+.5);floors.setMatrixAt(i,matrix);floorMatrices.push(matrix.clone());floorLevels.push(u.z);matrix.makeTranslation(u.x+.5,(u.z+1)*CITY_FLOOR_HEIGHT-.03,u.y+.5);ceilings.setMatrixAt(i,matrix);}
-      floors.receiveShadow=true;ceilings.receiveShadow=true;group.add(floors,ceilings);floors.userData.interiorFloors=floorLevels;floors.userData.interiorBaseMatrices=floorMatrices;group.userData.interiorFloors=floors;group.userData.interiorCeilings=ceilings;
+      const floorCells=[...b.units,...(b.circulation||[])],floorGeometry=new THREE.BoxGeometry(1,.06,1),floorMaterial=new THREE.MeshLambertMaterial({color:0x928571}),floors=new THREE.InstancedMesh(floorGeometry,floorMaterial,floorCells.length*2),floorLevels=[],floorMatrices=[];
+      for(let i=0;i<floorCells.length;i++){const u=floorCells[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT-.03,u.y+.5);floors.setMatrixAt(i,matrix);floorMatrices.push(matrix.clone());floorLevels.push(u.z);matrix.makeTranslation(u.x+.5,(u.z+1)*CITY_FLOOR_HEIGHT-.03,u.y+.5);floors.setMatrixAt(floorCells.length+i,matrix);floorMatrices.push(matrix.clone());floorLevels.push(u.z);}
+      floors.receiveShadow=true;group.add(floors);floors.userData.interiorFloors=floorLevels;floors.userData.interiorBaseMatrices=floorMatrices;floors.userData.floorInstanceCount=floorCells.length;group.userData.interiorFloors=floors;group.userData.interiorCeilings=floors;
       const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',mine?0x454b49:style.roof));
       roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);group.userData.roof=roof;
       const facade=new THREE.Group(),origin=buildingPoint(b,0,0);facade.rotation.y=(b.rotation||0)*Math.PI/2;facade.position.set(origin.x,0,origin.y);group.add(facade);group.userData.facade=facade;
@@ -527,9 +528,9 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       awning.material.color.setHex(awningColors[b.type] ?? 0xc9d9a1);
       if(!mine&&!style.motif){awning.position.set(entranceX, 1.55, b.depth + .25); awning.castShadow = true; facade.add(awning);}
       }
-      mergeStaticMeshes(THREE,facade,{mergeShadowFlags:true,filter:mesh=>{
+      mergeStaticMeshes(THREE,facade,{mergeShadowFlags:true,recursive:true,filter:mesh=>{
         const material=mesh.material;
-        return material?.isMeshLambertMaterial&&!material.map&&!material.alphaMap&&!material.vertexColors&&!material.transparent&&material.opacity===1&&material.alphaTest===0&&material.side===THREE.FrontSide&&!material.flatShading&&material.emissive?.getHex()===0;
+        return material?.isMeshLambertMaterial&&!material.map&&!material.alphaMap&&!material.transparent&&material.opacity===1&&material.alphaTest===0&&material.side===THREE.FrontSide&&material.emissive?.getHex()===0;
       }});
       const highlight = new THREE.Mesh(new THREE.BoxGeometry(1.02, CITY_FLOOR_HEIGHT+.02, 1.02), new THREE.MeshBasicMaterial({ color: 0xf0e6a1, wireframe: true }));
       highlight.visible = false; group.add(highlight); group.userData.highlight = highlight;
@@ -555,7 +556,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       if (roomProps.children.length) { roomProps.visible = false; group.add(roomProps); group.userData.roomProps = roomProps; }
       const stairs = new THREE.InstancedMesh(new THREE.BoxGeometry(.8, 1, .22), new THREE.MeshLambertMaterial({ color: 0x9f9076 }), 4);
       stairs.receiveShadow = true; group.add(stairs); group.userData.stairs = stairs;
-      group.userData.cells = cellMeshes[0]||null;
+      group.userData.cells = group.userData.cellMeshes?.[0] || null;
       renderer.decorateCityMaterials?.(group);
       renderer.scene.add(group);
       renderer.cityMeshes.set(entity.id, group);
@@ -601,7 +602,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       for(let i=animating.length-1;i>=0;i--){const shutter=animating[i],delta=shutter.targetAngle-shutter.angle;if(Math.abs(delta)<=.001){shutter.angle=shutter.targetAngle;animating.splice(i,1);}else shutter.angle+=delta*alpha;shutter.writeMatrices();for(const mesh of Object.values(shutter.dirtyMeshes))dirty.add(mesh);}
       for(const mesh of dirty)mesh.instanceMatrix.needsUpdate=true;
     }
-    for(const cells of group.userData.cellMeshes||[group.userData.cells]){const material=cells.material;material.emissive.setHex(renderer.selectedEntityId===entity.id?0x26351a:0x000000);}
+    for(const cells of group.userData.cellMeshes || (group.userData.cells ? [group.userData.cells] : [])){const material=cells.material;material.emissive.setHex(renderer.selectedEntityId===entity.id?0x26351a:0x000000);}
     const unit = renderer.selectedEntityId === entity.id ? b.units.find(u => u.id === renderer.selectedCityUnitId) : null;
     group.userData.highlight.visible = !interior&&renderer.selectedEntityId === entity.id && !!unit;
     if (unit) group.userData.highlight.position.set(unit.x + .5, unit.z*CITY_FLOOR_HEIGHT + CITY_FLOOR_HEIGHT/2, unit.y + .5);

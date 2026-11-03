@@ -3,7 +3,7 @@ import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=production-plan-profile-19";
 import { CityDesktop } from "./js/city_desktop.js?v=election-support-map-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=exterior-doorframe-cull-4";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=city-512-loop-10";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -117,6 +117,7 @@ function profileCityMeshes(groups){
     for(const mesh of group.userData.cellMeshes||[]){cellTriangles+=meshTriangles(mesh);cellDraws++;}
     for(const key of Object.keys(components)){
       const target=key==='floors'?group.userData.interiorFloors:key==='ceilings'?group.userData.interiorCeilings:group.userData[key];
+      if(key==='ceilings'&&target===group.userData.interiorFloors)continue;
       const stats=componentStats(target);components[key].draws+=stats.draws;components[key].triangles+=stats.triangles;
       if(key==='facade'&&target)target.traverse(object=>{if(!object.isMesh||!object.visible)return;const material=object.material,kind=[material?.type||'unknown',material?.map?'map':'plain',material?.vertexColors?'vertex':'solid',material?.side===2?'double':'front',object.isInstancedMesh?'instanced':'mesh'].join(':');components.facade.materialKinds[kind]=(components.facade.materialKinds[kind]||0)+1;});
     }
