@@ -76,16 +76,12 @@ export class CityFurniture{
   for(const {point}of candidates.slice(0,12)){
    const path=city.findPath(origin,point);if(path===null)continue;const end=path.at(-1)||origin;if(Math.hypot(end.x-point.x,end.y-point.y)>.04)path.push({...point});
    const seed=Math.imul((Number(c.id)||0)+city.minute+31,2654435761)>>>0,options=[
-    {kind:'beach_chair',towel:false,umbrella:true},
-    {kind:'beach_chair',towel:false,umbrella:false},
-    {kind:'beach_chair',towel:true,umbrella:true},
-    {kind:'beach_chair',towel:true,umbrella:false},
-    {kind:'beach_ground',towel:true,umbrella:true},
-    {kind:'beach_ground',towel:true,umbrella:false},
-    {kind:'beach_ground',towel:false,umbrella:true},
-    {kind:'beach_ground',towel:true,umbrella:true}
+    {kind:'beach_chair',umbrella:true},
+    {kind:'beach_chair',umbrella:false},
+    {kind:'beach_ground',umbrella:true},
+    {kind:'beach_ground',umbrella:false}
    ],setup=options[seed%options.length],variant=(seed>>>4)%8;
-   c.beachLeisure={x:point.x,y:point.y,angle:furnitureFacingAngle(city,{...point,kind:setup.kind}),kind:setup.kind,towel:setup.towel,variant,umbrellaStyle:setup.umbrella?(seed>>>9)%8:null,until:city.minute+45};
+   c.beachLeisure={x:point.x,y:point.y,angle:furnitureFacingAngle(city,{...point,kind:setup.kind}),kind:setup.kind,variant,umbrellaStyle:setup.umbrella?(seed>>>9)%8:null,until:city.minute+45};
    c.task='beach_leisure';c.targetId=null;c.path=path;c.action='Indo descansar na praia';return true;
   }
   return false;

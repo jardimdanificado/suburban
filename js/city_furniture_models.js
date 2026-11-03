@@ -3,13 +3,8 @@ export function furnitureModel(THREE,item){
  const box=(w,h,d,x,y,z,color=wood)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const cylinder=(r,h,x,y,z,color=metal)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),new THREE.MeshLambertMaterial({color}));m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m;};
  const type=item.type;
- const addBeachTowel=()=>{const fabrics=[[0xc95548,0xf0dfbd],[0x347d91,0xe9d6ae],[0x71894c,0xf1d49b],[0x765b91,0xe9d8c0],[0xd18b3e,0xf3e3bd],[0x397264,0xd6c8a7],[0xb84d68,0xf0d9c8],[0x476c9a,0xe3d5b9]],fabric=fabrics[Math.abs(item.variant||0)%fabrics.length],accent=fabric[(item.variant||0)%2?0:1];
-  box(.94,.025,1.18,0,.024,0,fabric[1]);box(.84,.018,1.08,0,.046,0,fabric[0]);for(let stripe=-2;stripe<=2;stripe++)box(.075,.009,1.02,stripe*.15,.057,0,stripe%2?fabric[1]:accent);for(const x of [-.48,.48])for(const z of [-.53,.53])box(.035,.018,.035,x,.039,z,fabric[0]);
-  if((item.variant||0)%3===0){const bag=[0x855d3d,0x55717a,0x9d7048,0x6b596f][Math.abs(item.variant||0)%4];box(.28,.14,.19,.48,.09,-.37,bag);box(.24,.025,.17,.48,.172,-.37,fabric[1]);const handle=box(.16,.1,.018,.48,.21,-.27,bag);handle.rotation.x=.45;}
- };
  if(type==='beach_chair'){
   const fabrics=[[0xc95548,0xf0dfbd],[0x347d91,0xe9d6ae],[0x71894c,0xf1d49b],[0x765b91,0xe9d8c0],[0xd18b3e,0xf3e3bd],[0x397264,0xd6c8a7],[0xb84d68,0xf0d9c8],[0x476c9a,0xe3d5b9]],fabric=fabrics[Math.abs(item.variant||0)%fabrics.length],frame=[0x8a6444,0x6b7775,0x9b7751,0x515e61][Math.abs(item.variant||0)%4],pattern=Math.abs(item.variant||0)%4;
-  if(item.towel)addBeachTowel();
   box(.44,.035,.29,0,.3,.035,0xe9dfc7);
   const back=box(.44,.39,.035,0,.56,-.12,0xe9dfc7);back.rotation.x=-.3;
   for(let i=0;i<5;i++){const x=(i-2)*.086,color=pattern===1?(i%2?fabric[0]:fabric[1]):pattern===2?(i<2?fabric[0]:fabric[1]):pattern===3?(i===2?fabric[1]:fabric[0]):(i%2?fabric[1]:fabric[0]);box(.064,.012,.28,x,.323,.035,color);const backStripe=box(.064,.37,.012,x,.56,-.143,color);backStripe.rotation.x=-.3;}
@@ -20,7 +15,6 @@ export function furnitureModel(THREE,item){
   if(item.umbrellaStyle!=null)addBeachUmbrella(THREE,g,item.umbrellaStyle,-.02,-.46);
  }
  else if(type==='beach_ground'){
-  if(item.towel)addBeachTowel();
   if(item.umbrellaStyle!=null)addBeachUmbrella(THREE,g,item.umbrellaStyle,0,-.12);
  }
  else if(type==='chair'||type==='meeting_chair'||type==='council_chair'||type==='bench'){
