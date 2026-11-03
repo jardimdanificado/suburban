@@ -46,7 +46,7 @@ import { CityLife } from './city_life.js?v=body-weight-2';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=plot-overlap-spatial-1';
 import { CityLogistics } from './city_logistics.js?v=wardrobe-expansion-1';
-import { CityGigs } from './city_gigs.js?v=vocabulary-pos-composition-2';
+import { CityGigs } from './city_gigs.js?v=banner-placement-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=wardrobe-expansion-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';

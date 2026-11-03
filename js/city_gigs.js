@@ -1,7 +1,8 @@
 import {artworkNarrative} from './city_art_narratives.js';
 import {activityRoomReady} from './city_interiors.js?v=substances-sleep-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
-import {CITY_FLOOR_HEIGHT,buildingFacadeBannerSupport} from './city_building_geometry.js';
+import {CITY_FLOOR_HEIGHT,buildingFacadeBannerSupport} from './city_building_geometry.js?v=banner-placement-2';
+import {isRoadAt} from './city_terrain.js?v=quarry-outskirts-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-dialogue-1';
 
@@ -26,10 +27,11 @@ export class CityGigs{
   if(supportKind==='skybridge'&&(!link||![link.aId,link.bId].includes(b.id)||endpointBuildingId!==b.id||!room)||supportUnitId!=null&&supportKind!=='skybridge'&&!room||supportKind==='roof-terrace'&&!roof)return false;
   const bridgePoint=link?{x:(link.start.x+link.end.x)/2,y:(link.start.y+link.end.y)/2,z:link.height}:null,point=supportKind==='skybridge'?bridgePoint:roof?roof.position:room?interiorUsePoint(b,room,room.roomType,0,'informal-service'):this.frontagePoint(b),routePoint=room?{x:b.entity.x+room.x+.5,y:b.entity.y+room.y+.5,z:room.z*CITY_FLOOR_HEIGHT}:null;if(!point||room&&interiorRoute(b,{x:b.door.x,y:b.door.y,z:0},routePoint)===null)return false;
   const material=this.artworkMaterial(kind,materialUsed);if(!city.economy.goods[material.good])return false;const required=['statue','monument'].includes(kind)?42:24,amount=fee??this.artworkQuote(b.id,kind,payerAccountId,materialUsed);if(!amount)return false;
-  const job=this.reserveOrder(payerAccountId,b,{kind:'art-installation',scope:room?'interior-art':'outdoor',unitId:room?.id||null,fee:amount,point,required});if(!job)return false;
+  const facadeSupport=kind==='banner'&&!room&&!roof&&supportKind!=='skybridge'?buildingFacadeBannerSupport(b,{isRoadAt:(x,y)=>isRoadAt(city.world,x,y)}):null;if(kind==='banner'&&!room&&!roof&&supportKind!=='skybridge'&&!facadeSupport)return false;
+  const job=this.reserveOrder(payerAccountId,b,{kind:'art-installation',scope:room?'interior-art':'outdoor',unitId:room?.id||null,fee:amount,point:facadeSupport?.position||point,required});if(!job)return false;
   const side=room&&!roof?room.y===0?'north':room.x===b.width-1?'east':room.y===b.depth-1?'south':'west':null;
   job.artwork={narrative:account,kind,message:String(message).trim().slice(0,180),subjectId,truth,purpose,sponsorId:resolvedSponsorId,sponsorAccountId:payerAccountId,commercial:!!commercial,partyId,color,materialUsed};job.artworkSupport=supportKind==='skybridge'?{kind:'skybridge',buildingId:b.id,unitId:room.id,floor:room.z,linkId:link.id,endpoint,position:bridgePoint}:roof?{kind:'roof-terrace',buildingId:b.id,unitId:room.id,floor:Math.floor(roof.position.z/CITY_FLOOR_HEIGHT),position:{...roof.position}}:room?{kind:supportKind==='window'?'window':'interior-wall',buildingId:b.id,unitId:room.id,floor:room.z,side,rotation:supportKind==='window'?({north:Math.PI,east:Math.PI/2,south:0,west:-Math.PI/2})[side]:({north:0,east:-Math.PI/2,south:Math.PI,west:Math.PI/2})[side]}:null;
-  if(kind==='banner'&&!job.artworkSupport)job.artworkFacadeSupport=buildingFacadeBannerSupport(b);
+  if(kind==='banner'&&!job.artworkSupport)job.artworkFacadeSupport=facadeSupport;
   job.artworkMaterial=material;job.preferredArtistId=Number.isInteger(preferredArtistId)?preferredArtistId:null;job.waitingReason=this.artworkSupplier(kind,materialUsed)?null:`Aguardando ${material.good} em estoque`;
   return job;
  }
@@ -44,9 +46,9 @@ export class CityGigs{
   for(const {citizen,roll} of artists){
    const home=city.units.get(citizen.homeUnitId),homeBuilding=home&&city.building(home.buildingId),sites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&(b===homeBuilding||b.units?.some(u=>u.ownerId===citizen.accountId||u.tenantId===citizen.accountId)||b.municipal&&['townhall','council_chamber','library','theater','sports_center'].includes(b.type))&&!this.jobs.some(j=>j.kind==='art-installation'&&j.buildingId===b.id&&ACTIVE.has(j.status))).sort((a,b)=>(a===homeBuilding?-1:b===homeBuilding?1:a.id-b.id));
    for(const site of sites){
-    const party=city.politics?.party?.(citizen.political?.partyId),partyId=roll%4===0&&party?.active?party.id:null,kind=roll%8===0?'statue':roll%4===0?'flags':roll%3===0?'painting':'banner',side=home?.y===0?'north':home?.x>=site.width-1?'east':home?.y>=site.depth-1?'south':'west',windowSupport=site===homeBuilding&&home&&kind==='flags'?{kind:'window',buildingId:site.id,unitId:home.id,floor:home.z,side,rotation:({north:Math.PI,east:Math.PI/2,south:0,west:-Math.PI/2})[side]}:null,point=windowSupport?{x:site.entity.x+home.x+.5,y:site.entity.y+home.y+.5}:this.frontagePoint(site);
+    const party=city.politics?.party?.(citizen.political?.partyId),partyId=roll%4===0&&party?.active?party.id:null,kind=roll%8===0?'statue':roll%4===0?'flags':roll%3===0?'painting':'banner',side=home?.y===0?'north':home?.x>=site.width-1?'east':home?.y>=site.depth-1?'south':'west',windowSupport=site===homeBuilding&&home&&kind==='flags'?{kind:'window',buildingId:site.id,unitId:home.id,floor:home.z,side,rotation:({north:Math.PI,east:Math.PI/2,south:0,west:-Math.PI/2})[side]}:null,facadeSupport=kind==='banner'?buildingFacadeBannerSupport(site,{isRoadAt:(x,y)=>isRoadAt(city.world,x,y)}):null;if(kind==='banner'&&!facadeSupport)continue;const point=windowSupport?{x:site.entity.x+home.x+.5,y:site.entity.y+home.y+.5}:facadeSupport?.position||this.frontagePoint(site);
     const message=kind==='flags'&&partyId?`Nossa janela, nossa voz · ${party.short}`:kind==='flags'?'Nossa janela, nossa voz':gerarFraseTematica('arte',{random:()=>city.random()});
-    const piece=city.justice.createArtwork({kind,message,creatorId:citizen.id,sponsorId:citizen.id,purpose:'expression',partyId,buildingId:site.id,x:point.x,y:point.y,support:windowSupport|| (kind==='banner'?buildingFacadeBannerSupport(site):null),color:party?.flag?.background?parseInt(party.flag.background.replace('#',''),16):0xc9b979,materialUsed:kind==='statue'?'argila':null});
+    const piece=city.justice.createArtwork({kind,message,creatorId:citizen.id,sponsorId:citizen.id,purpose:'expression',partyId,buildingId:site.id,x:point.x,y:point.y,support:windowSupport||facadeSupport,color:party?.flag?.background?parseInt(party.flag.background.replace('#',''),16):0xc9b979,materialUsed:kind==='statue'?'argila':null});
     if(!piece)continue;citizen.lastSpontaneousArtworkAt=city.minute;this.lastSpontaneousArtworkAt=city.minute;
     city.log(`${citizen.entity.properties.name} criou ${city.justice.labelArt(kind)} sem patrocínio em ${site.entity.properties.name}.`,'justice',[citizen.id,site.id],{kind:'spontaneous-artwork',artId:piece.id,buildingId:site.id,partyId,unsponsored:true});return piece;
    }

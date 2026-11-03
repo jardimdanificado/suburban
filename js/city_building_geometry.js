@@ -20,9 +20,17 @@ export function buildingEntrance(x,y,width,depth,rotation=0){
   const b={width,depth,rotation},size=modelSize(b),p=buildingPoint(b,Math.floor(size.width/2)+.5,size.depth+.5);
   return {x:x+p.x,y:y+p.y};
 }
-export function buildingFacadeBannerSupport(b){
-  if(!b?.entity)return null;const size=modelSize(b),x=b.entity.x,y=b.entity.y,w=size.width,d=size.depth,door=b.door,distances=door?[['north',Math.abs(door.y-y)],['east',Math.abs(door.x-(x+w))],['south',Math.abs(door.y-(y+d))],['west',Math.abs(door.x-x)]]:[],side=distances.length?distances.sort((a,z)=>a[1]-z[1])[0][0]:'south',clamp=(value,min,max)=>min>max?(min+max)/2:Math.max(min,Math.min(max,value)),margin=.72,doorX=door?.x??x+w/2,doorY=door?.y??y+d/2;
-  let point;if(side==='north')point={x:clamp(doorX,x+margin,x+w-margin),y:y-.025};else if(side==='east')point={x:x+w+.025,y:clamp(doorY,y+margin,y+d-margin)};else if(side==='south')point={x:clamp(doorX,x+margin,x+w-margin),y:y+d+.025};else point={x:x-.025,y:clamp(doorY,y+margin,y+d-margin)};
+export function buildingFacadeBannerSupport(b,{isRoadAt=null}={}){
+  if(!b?.entity)return null;const size=modelSize(b),x=b.entity.x,y=b.entity.y,w=size.width,d=size.depth,door=b.door,distances=door?[['north',Math.abs(door.y-y)],['east',Math.abs(door.x-(x+w))],['south',Math.abs(door.y-(y+d))],['west',Math.abs(door.x-x)]]:[],doorSide=distances.length?distances.sort((a,z)=>a[1]-z[1])[0][0]:null,clamp=(value,min,max)=>min>max?(min+max)/2:Math.max(min,Math.min(max,value)),candidates=[];
+  for(const side of ['north','east','south','west']){
+    const horizontal=side==='north'||side==='south',length=horizontal?w:d,margin=Math.min(1.35,Math.max(.35,length/2)),doorAlong=horizontal?(door?.x??x+w/2):(door?.y??y+d/2),start=horizontal?x:y,end=start+length,offsets=[length/2,length*.3,length*.7,margin,length-margin,length/2-1.35,length/2+1.35];
+    for(const offset of offsets){const along=clamp(start+offset,start+margin,end-margin),point=side==='north'?{x:along,y:y-.025}:side==='south'?{x:along,y:y+d+.025}:side==='west'?{x:x-.025,y:along}:{x:x+w+.025,y:along},doorClearance=Math.abs(along-doorAlong);if(side===doorSide&&doorClearance<1.25)continue;
+      let roadHits=0;if(isRoadAt){for(let sample=-5;sample<=5;sample++){const shift=sample*.25,sx=Math.floor(point.x+(horizontal?shift:0)),sy=Math.floor(point.y+(horizontal?0:shift));if(isRoadAt(sx,sy))roadHits++;}}
+      candidates.push({side,point,roadHits,doorClearance,frontPenalty:side===doorSide?1:0});
+    }
+  }
+  candidates.sort((a,z)=>a.roadHits-z.roadHits||a.frontPenalty-z.frontPenalty||z.doorClearance-a.doorClearance);
+  const chosen=candidates.find(candidate=>candidate.roadHits===0);if(!chosen)return null;const {side,point}=chosen;
   return {kind:'facade-banner',buildingId:b.id,side,rotation:({north:Math.PI,east:Math.PI/2,south:0,west:-Math.PI/2})[side],position:point};
 }
 export function buildingEntranceDoor(b){
