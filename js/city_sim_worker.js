@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=party-slogans-pos-composition-2';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=party-flag-palette-migration-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
