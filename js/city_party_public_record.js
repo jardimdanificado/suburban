@@ -1,4 +1,4 @@
-import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
+import {ideologicalProfile,policyAffinity,citizenPolicyInterest,POLITICAL_POSITIONS,politicalPosition} from './city_ideology.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 /** Civilian interests are independent of party discipline and the author's friendships. */
 export function legislativeOpinion(city,c,bill){
@@ -43,7 +43,7 @@ export function recordLegislativeOpinion(standing,bill,override=false){
     party.publicRecords??=[];if(party.publicRecords.some(r=>r.key===key))continue;
     const {votes,yes}=cast,stance=(yes-(votes.length-yes))/votes.length;
     const points=['impeach','convict'].includes(bill.type)?0:clamp(support*stance*1.8,-1.8,1.8);
-    const reactions={},individualOpinions={},segmentStats=[['Esquerda',0,0],['Centro',0,0],['Direita',0,0],['Estatistas',0,0],['Empresários',0,0]];
+    const reactions={},individualOpinions={},segmentStats=[['Esquerda',0,0],['Centro',0,0],['Direita',0,0],['Estatistas',0,0],['Empresários',0,0]],positionStats=new Map(POLITICAL_POSITIONS.map(position=>[position,{count:0,sum:0}]));
     for(let i=0;i<voters.length;i++){
       const c=voters[i],opinion=allOpinions[i],profile=profiles[i],reaction=clamp(opinion*stance*3,-4,4);
       reactions[c.id]=reaction;individualOpinions[c.id]=clamp(opinion*3,-4,4);
@@ -52,12 +52,14 @@ export function recordLegislativeOpinion(standing,bill,override=false){
       if(profile.economy>.2){segmentStats[2][1]++;segmentStats[2][2]+=reaction;}
       if(profile.ownership>.45){segmentStats[3][1]++;segmentStats[3][2]+=reaction;}
       if(c.businessIds?.length){segmentStats[4][1]++;segmentStats[4][2]+=reaction;}
+      const vertical=positionStats.get(politicalPosition(profile.economy));vertical.count++;vertical.sum+=reaction;
     }
     const segments=segmentStats.map(([label,count,sum])=>({label,count,points:sum/Math.max(1,count)}));
-    const record={reactions,individualOpinions,segments,key,kind:'legislative',billId:bill.id,title:bill.title,minute:city.minute,points,sampleSize:size,support:supportCount,rejection:rejectionCount,yes,no:votes.length-yes,votes:votes.map(v=>({...v})),override};
+    const politicalPositions=[...positionStats].map(([position,row])=>({position,count:row.count,points:row.sum/Math.max(1,row.count)}));
+    const record={reactions,individualOpinions,segments,politicalPositions,key,kind:'legislative',billId:bill.id,title:bill.title,minute:city.minute,points,sampleSize:size,support:supportCount,rejection:rejectionCount,yes,no:votes.length-yes,votes:votes.map(v=>({...v})),override};
     record.eventId=city.log(`${party.short}: reação pública ${points>=0?'favorável':'desfavorável'} aos votos em “${bill.title}” (${points>=0?'+':''}${points.toFixed(2)} pontos).`,'government',votes.map(v=>v.citizenId),{kind:'party-legislative-reputation',partyId,billId:bill.id,points,sampleSize:size}).id;
     party.publicRecords.push(record);
-    if(party.publicRecords.length>96){const removed=party.publicRecords.shift();party.archivedLegislativePoints=clamp((party.archivedLegislativePoints||0)+removed.points,-20,20);}
+    if(party.publicRecords.length>96){const removed=party.publicRecords.shift();party.archivedLegislativePoints=clamp((party.archivedLegislativePoints||0)+removed.points,-20,20);party.archivedPoliticalPositionPoints??={};for(const position of POLITICAL_POSITIONS){const points=removed.politicalPositions?.find(row=>row.position===position)?.points??removed.points;party.archivedPoliticalPositionPoints[position]=clamp((party.archivedPoliticalPositionPoints[position]||0)+points,-20,20);}}
   }
   const groups=[...partyVotes].map(([partyId,cast])=>({partyId,votes:cast.votes,yes:cast.yes}));
   for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++){const a=groups[i],b=groups[j],stanceA=a.yes/a.votes.length,stanceB=b.yes/b.votes.length,alignment=1-Math.abs(stanceA-stanceB),key=`bill:${bill.id}:${override?'override':'vote'}:${Math.min(a.partyId,b.partyId)}:${Math.max(a.partyId,b.partyId)}`;p.interactParties?.(a.partyId,b.partyId,{kind:alignment>=.6?'legislative-cooperation':'legislative-disagreement',delta:alignment>=.6?1.5:-1,description:alignment>=.6?`Bancadas votaram de forma parecida em “${bill.title}”.`:`Bancadas divergiram na votação de “${bill.title}”.`,key});}

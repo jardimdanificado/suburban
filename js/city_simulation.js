@@ -27,10 +27,10 @@ import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_cultu
 import { CityRelationships } from './city_relationships.js?v=discrimination-laws-1';
 import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
-import { CityGovernment as CityPolitics } from './city_government.js?v=party-prejudice-standing-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=party-ideology-reputation-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=party-prejudice-standing-1';
+import { CityJustice } from './city_justice.js?v=party-ideology-reputation-1';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=body-mobility-1';
 import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';

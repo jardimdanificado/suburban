@@ -1,3 +1,4 @@
+import {politicalPosition} from './city_ideology.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function hash(a,b){let n=Math.imul(a+101,b+197)^Math.imul(a+17,2654435761);n=Math.imul(n^(n>>>16),2246822507);return (n^(n>>>13))>>>0;}
 export function electoralPriorities(c){
@@ -19,7 +20,7 @@ export function personalGovernmentExperience(city,c,term){
 export function governingStreak(p,partyId){let count=0;for(let i=p.mandates.terms.length-1;i>=0;i--){const term=p.mandates.terms[i];if(term.partyId!==partyId)break;count+=term.provisional?.5:1;}return count;}
 /** Public image is useful evidence, but correlated measures cannot compound without limit. */
 export function standingEvidence(p,voter,candidate,party){
-  const groupPopularity=candidate.political.popularityByElectorate,group=voterElectorates(voter).map(key=>groupPopularity?.[key]).filter(Boolean),segmented=group.length?group.reduce((n,row)=>n+row.score,0)/group.length:(candidate.political.popularity??50),governing=p.mandates.current?.partyId===party.id,record=p.mandates.recordScore(candidate.id,party.id),parts=[['popularidade nos eleitorados deste eleitor', (segmented-50)*.14],['reputação do partido',((party.publicReputation??50)-50)*.1],['balanço dos governos',Math.tanh(record/24)*8]];
+  const groupPopularity=candidate.political.popularityByElectorate,group=voterElectorates(voter).map(key=>groupPopularity?.[key]).filter(Boolean),segmented=group.length?group.reduce((n,row)=>n+row.score,0)/group.length:(candidate.political.popularity??50),politicalReputation=party.reputationByPoliticalPosition?.[politicalPosition(voter.political?.ideology?.economy??0)]??party.publicReputation??50,governing=p.mandates.current?.partyId===party.id,record=p.mandates.recordScore(candidate.id,party.id),parts=[['popularidade nos eleitorados deste eleitor', (segmented-50)*.14],['reputação do partido na sua vertente política', (politicalReputation-50)*.1],['balanço dos governos',Math.tanh(record/24)*8]];
   if(governing)parts.push(['avaliação da gestão do partido',Math.tanh((p.approval-50)/30)*6]);
   const positive=parts.reduce((n,[,v])=>n+Math.max(0,v),0),scale=positive>18?18/positive:1;
   return parts.map(([reason,value])=>({reason,value:value>0?value*scale:value}));

@@ -1,6 +1,7 @@
 import {promiseRelevant} from './city_mandates.js';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-caps-skin-1';
+import {politicalPosition} from './city_ideology.js';
 // Party membership is a minority commitment; electoral support is personal and reversible.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
 export const MEMBERSHIP_RULES=Object.freeze({maxShare:.4,contactInterval:180,cooldownDays:3});
@@ -74,7 +75,7 @@ export function reviewMembership(p){
     const distance=p.distance(s.ideology,party.ideology),memories=s.memories.filter(m=>m.partyId===party.id&&p.city.minute-m.minute<5*1440);
     const criticism=memories.reduce((n,m)=>n+(m.effect||0),0),scandals=p.scandals.filter(r=>r.partyId===party.id&&r.proven&&r.awareIds?.includes(c.id)).reduce((n,r)=>n+(r.severity||40)/100,0);
     const record=p.mandates.recordScore(null,party.id),governing=p.partyOfId(p.city.economy.mayorId)?.id===party.id;
-    const target=clamp(((party.publicReputation??50)-50)/300+.5+(1-distance/2.8)*.25+record/100+clamp(criticism/80,-.4,.15)-scandals*.25+(governing?(p.approval-50)/150:0),.02,.95);
+    const politicalReputation=party.reputationByPoliticalPosition?.[politicalPosition(s.ideology?.economy??0)]??party.publicReputation??50,target=clamp((politicalReputation-50)/300+.5+(1-distance/2.8)*.25+record/100+clamp(criticism/80,-.4,.15)-scandals*.25+(governing?(p.approval-50)/150:0),.02,.95);
     s.loyalty=clamp(s.loyalty+(target-s.loyalty)*.18);
     if(!p.officeHolder(c)&&s.loyalty<.25&&p.city.minute-s.membershipSince>2*1440)leaveParty(p,c,scandals?'Decepção com corrupção conhecida':'Divergências, promessas e balanço do partido');
   }

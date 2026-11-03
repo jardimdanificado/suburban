@@ -1,6 +1,7 @@
-import {canJoin} from './city_party_membership.js?v=party-name-tags-1';
-import {recordLegislativeOpinion,publicPerformance} from './city_party_public_record.js?v=party-opinion-batch-1';
-import {voterElectorates} from './city_electoral_behavior.js';
+import {canJoin} from './city_party_membership.js?v=party-ideology-reputation-1';
+import {recordLegislativeOpinion,publicPerformance} from './city_party_public_record.js?v=party-ideology-reputation-1';
+import {POLITICAL_POSITIONS,politicalPosition} from './city_ideology.js';
+import {voterElectorates} from './city_electoral_behavior.js?v=party-ideology-reputation-1';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 /** Public standing uses bounded opinion panels; secret crimes never enter these scores. */
 export class CityPoliticalStanding {
@@ -21,13 +22,49 @@ export class CityPoliticalStanding {
     this.lastPeriod=null;
   }
   legislativeOpinion(bill,override=false){recordLegislativeOpinion(this,bill,override);}
+  reputationContext(){
+    const city=this.city,adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),byPosition=new Map(POLITICAL_POSITIONS.map(position=>[position,[]])),idsByPosition=new Map(POLITICAL_POSITIONS.map(position=>[position,new Set()]));
+    for(const citizen of adults){city.politics.initializeCitizen(citizen);const position=politicalPosition(citizen.political.ideology.economy);byPosition.get(position).push(citizen);idsByPosition.get(position).add(citizen.id);}
+    const prejudiceById=new Map((city.justice?.prejudiceIncidents||[]).map(incident=>[incident.id,incident])),caseById=new Map(this.cases().map(record=>[record.id,record]));
+    return {adults,byPosition,idsByPosition,prejudiceById,caseById,prejudiceAwareById:new Map([...prejudiceById].map(([id,incident])=>[id,new Set(incident.awareIds||incident.noticedBy||[])])),caseAwareById:new Map([...caseById].map(([id,record])=>[id,new Set(record.awareIds||[])]))};
+  }
+  partyReputationEffects(party,context){
+    const performance=publicPerformance(this.city.politics,party),adultsByPosition=context.byPosition,idsByPosition=context.idsByPosition,incidents=party.reputationIncidents||[],effects={},details={},incidentPenalties=new Map(incidents.map(incident=>[incident,{}]));
+    for(const position of POLITICAL_POSITIONS){
+      const members=adultsByPosition.get(position)||[],memberIds=idsByPosition.get(position),archived=party.archivedPoliticalPositionPoints?.[position]??party.archivedLegislativePoints??0,
+        legislative=clamp(archived+(party.publicRecords||[]).reduce((sum,row)=>sum+(row.politicalPositions?.find(item=>item.position===position)?.points??row.points??0),0),-20,20);
+      let originPenalty=0,hostingPenalty=0,prejudicePenalty=0;
+      for(const incident of incidents){
+        if(incident.role==='prejudice'){
+          const source=context.prejudiceById.get(Number(String(incident.caseId).replace(/^prejudice-/,'')));
+          let penalty=incident.penalty||0;if(source){const aware=context.prejudiceAwareById.get(source.id),reach=members.length?[...memberIds].filter(id=>aware.has(id)).length/members.length:0,strength=Math.max(0,Math.min(1,source.strength??.65));penalty=Math.min(4,(1.5+strength*2)*Math.sqrt(reach));}incidentPenalties.get(incident)[position]=penalty;prejudicePenalty+=penalty;
+          continue;
+        }
+        if(incident.role!=='origin'&&incident.role!=='host')continue;
+        if(incident.role==='origin'&&(!incident.proven||!Number.isFinite(incident.provenAt))){incidentPenalties.get(incident)[position]=0;continue;}
+        if(incident.role==='host'&&(!incident.proven||!Number.isFinite(incident.joinedAt)||!Number.isFinite(incident.provenAt)||incident.joinedAt<=incident.provenAt)){incidentPenalties.get(incident)[position]=0;continue;}
+        const record=context.caseById.get(incident.caseId);
+        if(record){if(!record.proven||record.discoveredAt==null){incidentPenalties.get(incident)[position]=0;continue;}const aware=context.caseAwareById.get(record.id),reach=members.length?[...memberIds].filter(id=>aware.has(id)).length/members.length:0,penalty=(record.severity||40)*.22*reach*(incident.role==='host'?.08:1);incidentPenalties.get(incident)[position]=penalty;if(incident.role==='host')hostingPenalty+=penalty;else originPenalty+=penalty;}
+        else {const penalty=incident.penalty||0;incidentPenalties.get(incident)[position]=penalty;if(incident.role==='host')hostingPenalty+=penalty;else originPenalty+=penalty;}
+      }
+      effects[position]=performance.performance+legislative-originPenalty-hostingPenalty-prejudicePenalty;
+      details[position]={management:performance.management,promises:performance.promises,fiscal:performance.fiscal,legislative,originPenalty,hostingPenalty,prejudicePenalty};
+    }
+    return {effects,details,incidentPenalties};
+  }
+  ensurePartyReputation(party,context=this.reputationContext()){
+    if(!party.reputationPositionOffsets){const starting=party.reputationByPoliticalPosition||{},score=clamp(party.publicReputation??50),effects=this.partyReputationEffects(party,context).effects;party.reputationByPoliticalPosition=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,clamp(starting[position]??score)]));party.reputationPositionOffsets=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,party.reputationByPoliticalPosition[position]-effects[position]]));}
+    party.publicReputation=POLITICAL_POSITIONS.reduce((sum,position)=>sum+(party.reputationByPoliticalPosition[position]??50),0)/POLITICAL_POSITIONS.length;return party.reputationByPoliticalPosition;
+  }
+  rebasePartyReputation(party,targetScores,context=this.reputationContext()){
+    const effects=this.partyReputationEffects(party,context).effects;party.reputationByPoliticalPosition=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,clamp(targetScores[position]??party.publicReputation??50)]));party.reputationPositionOffsets=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,party.reputationByPoliticalPosition[position]-effects[position]]));delete party.mergerPopularityAdjustment;party.publicReputation=POLITICAL_POSITIONS.reduce((sum,position)=>sum+party.reputationByPoliticalPosition[position],0)/POLITICAL_POSITIONS.length;return party.publicReputation;
+  }
   partyReputations(){
-    const city=this.city,p=city.politics,adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),living=new Set(adults.map(c=>c.id));
+    const city=this.city,p=city.politics,context=this.reputationContext(),adults=context.adults,living=new Set(adults.map(c=>c.id));
     const cases=this.cases(),caseById=new Map(cases.map(record=>[record.id,record]));
     for(const record of cases){const provenAt=record.provenAt??record.discoveredAt;if(!record.proven||record.discoveredAt==null||!Number.isFinite(provenAt)){record.hostingParties=[];continue;}record.hostingParties=(record.hostingParties||[]).filter(host=>Number.isFinite(host.joinedAt)&&host.joinedAt>provenAt);}
-    const prejudiceById=new Map((city.justice?.prejudiceIncidents||[]).map(incident=>[incident.id,incident]));
     for(const party of p.parties){party.reputationIncidents??=[];party.publicReputation??=50;for(const incident of party.reputationIncidents)if(incident.role==='prejudice'){
-      const source=prejudiceById.get(Number(String(incident.caseId).replace(/^prejudice-/,''))),known=source?new Set((source.awareIds||source.noticedBy||[]).filter(id=>living.has(id))).size:0,exposure=source?known/Math.max(1,adults.length):Number.isFinite(incident.exposure)?incident.exposure:0;
+      const source=context.prejudiceById.get(Number(String(incident.caseId).replace(/^prejudice-/,''))),known=source?new Set((source.awareIds||source.noticedBy||[]).filter(id=>living.has(id))).size:0,exposure=source?known/Math.max(1,adults.length):Number.isFinite(incident.exposure)?incident.exposure:0;
       incident.exposure=exposure;incident.penalty=Math.min(4,(1.5+Math.max(0,Math.min(1,source?.strength??.65))*2)*Math.sqrt(Math.max(0,Math.min(1,exposure))));
     }party.reputationIncidents=party.reputationIncidents.filter(incident=>{
       const record=caseById.get(incident.caseId);
@@ -39,7 +76,7 @@ export class CityPoliticalStanding {
     for(const record of this.cases()){
       // Opening an investigation is not public proof and must not create a party incident.
       if(record.discoveredAt==null||!record.proven)continue;
-      const origins=this.origins(record),reach=(record.awareIds||[]).filter(id=>living.has(id)).length/Math.max(1,adults.length);
+      const origins=this.origins(record),aware=new Set(record.awareIds||[]),reach=POLITICAL_POSITIONS.reduce((sum,position)=>{const members=context.byPosition.get(position)||[];return sum+(members.length?members.filter(c=>aware.has(c.id)).length/members.length:0);},0)/POLITICAL_POSITIONS.length;
       // Record the receiving party even if the crime was only discovered after a move.
       for(const origin of origins){const c=city.society.citizen(origin.citizenId),party=p.party(c?.political?.partyId),provenAt=record.provenAt??record.discoveredAt;if(party&&!origins.some(a=>a.partyId===party.id)&&Number.isFinite(c?.political?.membershipSince)&&c.political.membershipSince>provenAt){
         record.hostingParties??=[];if(!record.hostingParties.some(a=>a.partyId===party.id&&a.citizenId===c.id))record.hostingParties.push({partyId:party.id,citizenId:c.id,joinedAt:c.political.membershipSince});
@@ -52,7 +89,7 @@ export class CityPoliticalStanding {
         else incident.provenAt??=record.provenAt??record.discoveredAt;
         incident.citizenIds=[...new Set((a.role==='origin'?origins:record.hostingParties||[]).filter(o=>o.partyId===party.id).map(o=>o.citizenId))];
         const before=incident.penalty,wasProven=incident.proven;
-        const penalty=(record.severity||40)*.22*(.3+.7*reach)*(a.role==='host'?.08:1);
+        const penalty=(record.severity||40)*.22*reach*(a.role==='host'?.08:1);
         incident.penalty=Math.max(incident.penalty,penalty);incident.proven=true;
         if(Math.abs(before-incident.penalty)>=.5||wasProven!==incident.proven||!incident.eventId){
           const kind=a.role==='origin'?'party-scandal-reputation':'party-hosting-reputation';
@@ -60,12 +97,14 @@ export class CityPoliticalStanding {
         }
       }
     }
-    for(const party of p.parties){const original=party.reputationIncidents.filter(i=>i.role==='prejudice'||i.role==='origin'&&i.proven&&Number.isFinite(i.provenAt)).reduce((n,i)=>n+i.penalty,0),hosting=party.reputationIncidents.filter(i=>i.role==='host'&&i.proven&&Number.isFinite(i.joinedAt)&&Number.isFinite(i.provenAt)&&i.joinedAt>i.provenAt).reduce((n,i)=>n+i.penalty,0),prejudice=party.reputationIncidents.filter(i=>i.role==='prejudice').reduce((n,i)=>n+i.penalty,0),effects=publicPerformance(p,party);
-      party.publicReputation=clamp(50+effects.performance+effects.legislative-original-hosting+(party.mergerPopularityAdjustment||0));party.reputationReport={minute:city.minute,baseline:50,...effects,originalPenalty:original,prejudicePenalty:prejudice,hostingPenalty:hosting,mergerAdjustment:party.mergerPopularityAdjustment||0,score:party.publicReputation};
+    for(const party of p.parties){const {effects,details,incidentPenalties}=this.partyReputationEffects(party,context);this.ensurePartyReputation(party,context);for(const [incident,penalties] of incidentPenalties)incident.penalty=POLITICAL_POSITIONS.reduce((sum,position)=>sum+(penalties[position]||0),0)/POLITICAL_POSITIONS.length;for(const position of POLITICAL_POSITIONS)party.reputationByPoliticalPosition[position]=clamp(party.reputationPositionOffsets[position]+effects[position]);
+      party.publicReputation=POLITICAL_POSITIONS.reduce((sum,position)=>sum+party.reputationByPoliticalPosition[position],0)/POLITICAL_POSITIONS.length;
+      const mean=key=>POLITICAL_POSITIONS.reduce((sum,position)=>sum+(details[position][key]||0),0)/POLITICAL_POSITIONS.length,positions=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,{...details[position],score:party.reputationByPoliticalPosition[position]}]));
+      party.reputationReport={minute:city.minute,baseline:50,management:mean('management'),promises:mean('promises'),fiscal:mean('fiscal'),legislative:mean('legislative'),performance:mean('management')+mean('promises')+mean('fiscal'),originalPenalty:mean('originPenalty'),prejudicePenalty:mean('prejudicePenalty'),hostingPenalty:mean('hostingPenalty'),mergerAdjustment:0,positions,score:party.publicReputation};
     }
   }
   refresh(force=false){
-    const city=this.city,p=city.politics,period=Math.floor(city.minute/360);if(this.partyReputationRulesVersion!==3){this.partyReputationRulesVersion=3;this.lastPeriod=null;}if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
+    const city=this.city,p=city.politics,period=Math.floor(city.minute/360);if(this.partyReputationRulesVersion!==4){this.partyReputationRulesVersion=4;this.lastPeriod=null;}if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
     const voters=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));for(const c of voters)p.initializeCitizen(c);
     this.partyReputations();const cases=this.cases().filter(r=>r.discoveredAt!=null),casesByCitizen=new Map();
     for(const record of cases){const item={record,aware:new Set(record.awareIds||[])};for(const id of new Set([record.accusedId,...this.origins(record).map(a=>a.citizenId)])){if(!casesByCitizen.has(id))casesByCitizen.set(id,[]);casesByCitizen.get(id).push(item);}}
