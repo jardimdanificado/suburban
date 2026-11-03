@@ -2,6 +2,8 @@
  * Transfers never issue currency. Existing escrows, debts and cash keep their nominal value.
  */
 export const CURRENCY_RULES = { initialSupply: 32000000, citizenGrant: 0, mintPerWorkMinute: 200, mintDailyLimit: 20000, priceAdjustment: .35 };
+export const EXTERNAL_ACCOUNT_BALANCE=Number.MAX_SAFE_INTEGER;
+export function ensureExternalAccount(city,id,name){let account=city.accounts.get(id);if(!account){account={name,balance:EXTERNAL_ACCOUNT_BALANCE};city.accounts.set(id,account);}account.name??=name;account.externalMoney=true;account.balance=EXTERNAL_ACCOUNT_BALANCE;return account;}
 
 export class CityCurrency {
   constructor(city) {
@@ -24,7 +26,7 @@ export class CityCurrency {
     return Math.max(0,Math.floor(Number(this.policy.dailyLimit)||0));
   }
   price(base) { return Math.max(0, Math.round(base * this.priceIndex)); }
-  supply() { return [...this.city.accounts.values()].reduce((n, a) => n + a.balance, 0); }
+  supply() { return [...this.city.accounts.values()].reduce((n, a) => n + (a.externalMoney?0:a.balance), 0); }
   initialize() {
     if (this.issued) return false;
     this.issue(CURRENCY_RULES.initialSupply, true);

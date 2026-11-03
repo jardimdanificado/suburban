@@ -8,7 +8,6 @@ import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
-import {EXTERNAL_TRADE_RULES} from './city_external_trade.js';
 import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-stall-door-clearance-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
@@ -27,10 +26,10 @@ import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_cultu
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
 import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
-import { CityGovernment as CityPolitics } from './city_government.js?v=organic-party-slogans-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=municipal-secretariats-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=custom-artworks-1';
+import { CityJustice } from './city_justice.js?v=secretariat-health-1';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=body-mobility-1';
 import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -39,16 +38,16 @@ import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { quarryDeposits } from './city_terrain.js?v=road-durability-1';
 import { CityLighting } from './city_lighting.js';
-import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
+import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=body-weight-2';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=road-durability-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=secretariat-planning-1';
 import { CityLogistics } from './city_logistics.js?v=wardrobe-expansion-1';
 import { CityGigs } from './city_gigs.js?v=custom-artworks-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=substance-chain-boost-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=secretariat-security-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=road-durability-1';
 
@@ -123,7 +122,7 @@ export class CitySimulation {
     this.structureRevision = 0;
     this.obstacleRevision = 0;
     this.units = new Map();
-    this.accounts = new Map([['treasury', { name: 'Prefeitura', balance: 0, totalRevenue: 0, totalExpenses: 0 }], ['supplier', { name: 'Economia externa', balance: 0 }]]);
+    this.accounts = new Map([['treasury', { name: 'Prefeitura', balance: 0, totalRevenue: 0, totalExpenses: 0 }]]);ensureExternalAccount(this,'supplier','Economia externa');
     this.occupied = new Set();
     this.cardboardShelters = new Map();
     this.cardboardRevision = 0;
@@ -198,11 +197,11 @@ export class CitySimulation {
   }
   transfer(from, to, amount, reason, details = {}) {
     const a = this.accounts.get(from), b = this.accounts.get(to);
-    if (!a || !b || !Number.isSafeInteger(amount) || amount < 0 || a.balance < amount) return false;
+    if (!a || !b || !Number.isSafeInteger(amount) || amount < 0 || !a.externalMoney&&a.balance < amount) return false;
     if (from === to || amount === 0) return true;
     if(from==='treasury'&&this.fiscal&&!this.fiscal.allows(amount,reason,details))return false;
     if(this.justice?.trackStolenMoneyTransfer&&!this.justice.trackStolenMoneyTransfer(from,to,amount,details))return false;
-    a.balance -= amount; b.balance += amount;
+    if(!a.externalMoney)a.balance -= amount;if(!b.externalMoney)b.balance += amount;
     this.fiscal?.record(from,to,amount,reason,details);
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
     else if (b.entity?.properties.cityBuilding && /^(Compra pessoal de substância|Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) this.recordBusinessRevenue(b,amount);
@@ -230,8 +229,8 @@ export class CitySimulation {
     return true;
   }
   initialize() {
-    // The rest of the world starts with a share of the existing monetary base.
-    if(this.currency.initialize())this.transfer('treasury','supplier',Math.floor(this.currency.issued*EXTERNAL_TRADE_RULES.initialReserveFraction),'Reserva inicial do comércio exterior');
+    // Foreign buyers and suppliers operate outside the finite local monetary base.
+    this.currency.initialize();
     generateSettlement(this);
     const arrivalTiles = [],{width,height}=this.world,limit=Math.min(width*height,Math.max(256,this.initialPopulation*2));
     // Place initial residents across reachable land instead of cycling through

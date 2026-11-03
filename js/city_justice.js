@@ -680,7 +680,7 @@ export class CityJustice {
   mobilityFactor(c){return injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1)*bodyMovementSpeedFactor(c);}
   treatInjuries(c,building){
     if(!building?.active||building.entity.destroyed||!['clinic','hospital'].includes(building.type)||c.civicVisit?.buildingId!==building.id||c.civicVisit?.need!=='health')return;
-    for(const wound of c.combatInjuries||[]){if(wound.lastTreatmentAt===this.city.minute)continue;wound.lastTreatmentAt=this.city.minute;wound.recoversAt=Math.max(this.city.minute,wound.recoversAt-2);
+    const healthSkill=this.city.politics?.secretaries?.find(row=>row.officeId==='health')?.skill||0,treatment=Math.min(4,2+Math.floor(healthSkill/50));for(const wound of c.combatInjuries||[]){if(wound.lastTreatmentAt===this.city.minute)continue;wound.lastTreatmentAt=this.city.minute;wound.recoversAt=Math.max(this.city.minute,wound.recoversAt-treatment);
       if(wound.treatedAt==null){wound.treatedAt=this.city.minute;wound.treatmentBuildingId=building.id;if((wound.bleedingRate??this.injuryBleedingRate(wound.region,wound.severity))>0&&!wound.bleedingStoppedAt){wound.bleedingRate=0;wound.bleedingStoppedAt=this.city.minute;this.city.log(`${c.entity.properties.name} teve o sangramento em ${wound.region} estancado no atendimento.`,'justice',[c.id],{kind:'injury-bleeding-stopped',region:wound.region,buildingId:building.id,bloodLoss:wound.bloodLoss||0});}this.city.log(`${c.entity.properties.name} recebeu tratamento para lesão em ${wound.region}.`,'justice',[c.id],{kind:'injury-treated',region:wound.region,buildingId:building.id});}
     }
   }

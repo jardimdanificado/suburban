@@ -16,6 +16,7 @@ import { PROMISE_METRICS,GOVERNMENT_INITIATIVES } from './city_mandates.js';
 import { CRIME_TYPES } from './city_justice.js';
 import {recentBusinessRevenue} from './city_government_performance.js';
 import {PREJUDICE_TYPES} from './city_prejudice.js?v=discrimination-laws-1';
+import {SECRETARIATS,SECRETARY_ELECTION_MODES} from './city_secretariats.js';
 const money=formatMoney;
 const stamp=n=>`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const relationLabel=score=>score>=65?'Boa':score>=45?'Regular':'Tensa';
@@ -48,7 +49,14 @@ export function renderPolitics(ui,p) {
   if(!ui.billId)p.heading(POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'GOVERNO, CÂMARA E ELEIÇÕES');
   if(tab==='directory'&&ui.host){p.meter('Aprovação do governo',gov.approval);p.kv(gov.isProvisionalMayor()?'Prefeito provisório':'Prefeito',city.accountName(`citizen:${city.economy.mayorId}`));p.kv('Vereadores',`${gov.council.members.length}/${gov.council.seats}`);p.kv('Partidos ativos',gov.parties.filter(p=>p.active).length);return;}
   if(tab==='directory'){
-    for(const [label,ids] of [['GESTÃO',['overview','approval','promises']],['INSTITUIÇÕES',['parties','council','substances','institutes','research-services']],['ELEIÇÕES',['campaign','polls','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.windowLink(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
+    for(const [label,ids] of [['GESTÃO',['overview','approval','promises']],['INSTITUIÇÕES',['parties','council','secretariats','substances','institutes','research-services']],['ELEIÇÕES',['campaign','polls','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.windowLink(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
+  }
+  if(tab==='secretariats'){
+    gov.ensureSecretariatState?.();const mayorMode=gov.policy.mayorElectionSystem||'direct',propose=(type,payload)=>{const bill=gov.submitBill(type,payload);ui.notice=bill?.title?`Proposta apresentada à Câmara: ${bill.title}.`:city.lastError||'A proposta não pôde ser apresentada.';};
+    p.heading('ELEIÇÃO PARA PREFEITO');p.kv('Sistema vigente',mayorMode==='direct'?'Direta · cidadãos escolhem o prefeito':'Indireta · vereadores eleitos escolhem o prefeito');p.note(mayorMode==='direct'?'O padrão é o voto direto. A Câmara pode propor que o eleitorado escolha os vereadores e que o novo plenário escolha o prefeito.':'O eleitorado escolhe a Câmara; os vereadores eleitos decidem quem assume a prefeitura.');p.button(`APRESENTAR À CÂMARA · ${mayorMode==='direct'?'TORNAR ELEIÇÃO INDIRETA':'VOLTAR À ELEIÇÃO DIRETA'}`,()=>propose('mayorElectionSystem',{mode:mayorMode==='direct'?'indirect':'direct'}));
+    p.heading('SECRETARIAS MUNICIPAIS');p.note('As secretarias ficam vinculadas à prefeitura. O padrão é o prefeito nomear pessoas por capacidade, credibilidade e confiança pessoal. A Câmara pode propor uma regra diferente para cada pasta; mudanças valem na eleição municipal seguinte.');
+    for(const office of SECRETARIATS){const holder=gov.secretaries?.find(row=>row.officeId===office.id),mode=gov.policy.secretaryElectionModes?.[office.id]||'appointed',person=city.society.citizen(holder?.citizenId);p.kv(office.name,`${person?.entity.properties.name||holder?.citizenName||'Cargo ainda não preenchido'} · ${SECRETARY_ELECTION_MODES[mode]} · capacidade ${Math.round(holder?.skill||0)}`);p.note(office.duty);for(const next of ['appointed','council','direct'])if(next!==mode)p.button(`PROPOR · ${office.short.toUpperCase()} · ${SECRETARY_ELECTION_MODES[next].toUpperCase()}`,()=>propose('secretaryElection',{office:office.id,mode:next}));}
+    return;
   }
   if(tab==='substances'){renderSubstancePolicy(ui,p);return;}
   if(tab==='interventions'){renderInterventions(ui,p);return;}

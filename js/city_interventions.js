@@ -1,6 +1,7 @@
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {VEHICLE_SPECS} from './city_vehicles.js?v=indoor-display-centering-1';
 import {TAX_CATEGORIES,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
+import {ensureExternalAccount} from './city_currency.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const DIRECTIVE_LABELS={publicWork:'Contratação de obra pública',veto:'Veto do prefeito',releasePrisoner:'Libertação de pessoa presa',arrestAuthorization:'Autorização de prisão',worksBudget:'Ajuste da verba de obras',worksTransfer:'Transferência para obras',privatize:'Oferta de participação estatal',nationalize:'Estatização de empresa',policeStaffing:'Ajuste do efetivo policial',parliamentaryImmunity:'Regra de imunidade parlamentar',cleanRecord:'Regra da ficha limpa',penalCode:'Ajuste do código penal',suspend:'Afastamento do prefeito',build:'Obra pública',convict:'Condenação política',impeach:'Cassação de mandato'};
 export const INTERVENTIONS={
@@ -75,7 +76,7 @@ export class CityInterventions {
       const b=city.building(targetId);if(!b?.active||b.entity.destroyed)return city.fail('Selecione uma empresa ativa.');if(!pay(b.accountId,city.currency.price(spec.cost),'Intervenção: capital para empresa'))return false;record.description=`Aporte municipal em ${b.entity.properties.name}; compras e trabalho continuam sendo necessários.`;record.buildingId=b.id;
     }else if(kind==='importVehicle'){
       if(!live)return city.fail('Selecione quem receberá o veículo.');const good=options.good||'bicicleta',system=city.vehicles,building=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(!VEHICLE_SPECS[good]||!building)return city.fail('Veículo ou ponto de entrega indisponível.');
-      if(!city.accounts.has('external-trade'))city.accounts.set('external-trade',{name:'Comércio exterior',balance:0,totalRevenue:0,totalExpenses:0});if(!pay('external-trade',Math.ceil(city.economy.goods[good].price*1.5),'Intervenção: importação de veículo'))return false;
+      ensureExternalAccount(city,'external-trade','Comércio exterior');if(!pay('external-trade',Math.ceil(city.economy.goods[good].price*1.5),'Intervenção: importação de veículo'))return false;
       const signature=`imported:${good}`;let model=system.models.get(signature);if(!model){model={id:system.nextModelId++,signature,kind:good,manufacturerId:null,brand:'Importação',name:VEHICLE_SPECS[good].label,components:[],createdAt:city.minute,imported:true};system.models.set(signature,model);}const id=system.nextId;system.registerUnits(building,good,1,model.id);const v=system.units.get(id);system.activate(v,c.accountId,building);v.imported=true;v.ownershipHistory=[{minute:city.minute,from:'external-trade',to:c.accountId,price:record.cost,reason:'Importação pelo observador'}];city.economy.initialStock[good]=(city.economy.initialStock[good]||0)+1;record.vehicleId=id;record.description=`${VEHICLE_SPECS[good].label} #${id} importado para ${c.entity.properties.name}. Usa força humana para circular nas ruas.`;
     }else if(kind==='divineBlessing'){
       for(const need of Object.keys(c.needs))c.needs[need]=Math.min(100,(c.needs[need]||0)+45);

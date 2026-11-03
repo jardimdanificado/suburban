@@ -40,7 +40,7 @@ export function buildWealthReport(city){
  custody.set('works-budget',{owner:'treasury',label:'Orçamento municipal de obras'});
  for(const party of city.politics.parties)if(party.secretAccountId)custody.set(party.secretAccountId,{owner:party.accountId,label:`Caixa clandestino na sede de ${party.short}`});
  const deposits=new Map([...city.bank.deposits.entries()]);let money=0,externalMoney=0;
- for(const [id,account]of city.accounts){const value=positive(account.balance),deposit=deposits.get(id),escrow=custody.get(id);money+=value;if(['supplier','external-trade'].includes(id))externalMoney+=value;
+ for(const [id,account]of city.accounts){if(account.externalMoney||['supplier','external-trade'].includes(id))continue;const value=positive(account.balance),deposit=deposits.get(id),escrow=custody.get(id);money+=value;
   add(deposit?.clientId||escrow?.owner||id,deposit?'savings':escrow?'reserved':'cash',value,{label:deposit?'Poupança':escrow?.label||'Dinheiro disponível',location:deposit?city.building(deposit.bankId)?.entity.properties.name||'Banco ausente':escrow?.label||city.accountName(id),accountId:id,buildingId:deposit?.bankId??buildings.get(id)?.id??null});
  }
  for(const c of city.citizens)if(!c.entity.destroyed)ensure(c.accountId);

@@ -1,4 +1,5 @@
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest,POLITICAL_POSITIONS,politicalPosition} from './city_ideology.js';
+import {SECRETARY_MODE_RANK} from './city_secretariats.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 /** Civilian interests are independent of party discipline and the author's friendships. */
 export function legislativeOpinion(city,c,bill){
@@ -6,6 +7,8 @@ export function legislativeOpinion(city,c,bill){
   const affinity=policyAffinity(ideologicalProfile(c),city,bill.type,bill.payload);if(affinity!==null)return affinity+citizenPolicyInterest(city,c,bill.type,bill.payload);
   const change=key=>Math.sign(v-(p.policy[key]??0));
   switch(bill.type){
+    case'mayorElectionSystem':return (bill.payload.mode==='direct'?1:-1)*i.liberty;
+    case'secretaryElection':return (SECRETARY_MODE_RANK[bill.payload.mode]-SECRETARY_MODE_RANK[p.policy.secretaryElectionModes?.[bill.payload.office]||'appointed'])*i.liberty;
     case'partyFund':return -Math.sign(v-(bill.previousValue??p.policy.partyFund??80000))*.9;
     case'tax':return Math.sign(v-city.taxRate)*(-e*.6-(c.balance<city.currency.price(10000) ? .45 : .15));
     case'salesTax':return Math.sign(v-(p.policy.salesTaxes?.[bill.payload.category]??.1))*(-.35-e*.4-(bill.payload.category==='food'?.4:0));

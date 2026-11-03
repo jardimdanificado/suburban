@@ -212,7 +212,7 @@ export class CityEconomy {
   }
   hire() {
     this.appointMayor();
-    const stations=this.city.buildings.filter(b=>b.type==='police_station'&&b.active&&!b.entity.destroyed).sort((a,b)=>a.id-b.id),target=Math.max(0,Math.min(1000,Math.floor(this.city.politics?.policy?.policeStaffing??6))),base=stations.length?Math.floor(target/stations.length):0,remainder=stations.length?target%stations.length:0;
+    const stations=this.city.buildings.filter(b=>b.type==='police_station'&&b.active&&!b.entity.destroyed).sort((a,b)=>a.id-b.id),securitySkill=this.city.politics?.secretaries?.find(row=>row.officeId==='security')?.skill||50,target=Math.max(0,Math.min(1000,Math.floor((this.city.politics?.policy?.policeStaffing??6)*(.8+securitySkill/250)))),base=stations.length?Math.floor(target/stations.length):0,remainder=stations.length?target%stations.length:0;
     stations.forEach((station,index)=>{station.jobs=base+(index<remainder?1:0);});
     this.staffEssentials();
     for (const c of this.city.citizens) if (c.jobId && c.id!==this.mayorId) {

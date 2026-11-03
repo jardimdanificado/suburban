@@ -39,7 +39,7 @@ export class CityWelfare {
     this.restockPublicMeals();
     city.water.hourly();
     if (!this.policy.enabled) return;
-    const adults = city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c)).sort((a,b) => Number(b.needs.food<30)-Number(a.needs.food<30)||a.balance-b.balance || a.id-b.id);
+    const socialSkill=city.politics?.secretaries?.find(row=>row.officeId==='social_defense')?.skill||0,adults = city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c)).sort((a,b) => {const urgency=c=>Number(c.needs.food<30)*3+Number(!c.homeUnitId)*(1+socialSkill/100)+Number(c.needs.health<30)*.5;return urgency(b)-urgency(a)||a.balance-b.balance||a.id-b.id;});
     for (const [index,c] of adults.entries()) {
       const target = this.subsistenceFloor(c);
       const savings = city.bank.savings(c.accountId);

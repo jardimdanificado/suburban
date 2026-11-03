@@ -1,8 +1,8 @@
 import {INDUSTRIES} from './city_industries.js';
 import {inventoryFree} from './city_inventory.js';
-// External customers collect excess ordinary merchandise at the producer.
-// The reserve is part of the existing monetary base, so payments are transfers.
-export const EXTERNAL_TRADE_RULES=Object.freeze({initialReserveFraction:.02,minimumFirmStock:24,maximumPerSale:12,maximumSalesPerHour:4,priceFactor:1.1,importPriceFactor:2.25,maximumImportQuantity:24});
+import {ensureExternalAccount} from './city_currency.js';
+// External buyers and suppliers use an unlimited account outside the local money supply.
+export const EXTERNAL_TRADE_RULES=Object.freeze({minimumFirmStock:24,maximumPerSale:12,maximumSalesPerHour:4,priceFactor:1.1,importPriceFactor:2.25,maximumImportQuantity:24});
 const FOREIGN_PART_BRANDS=Object.freeze(['Koyo Motion (Japão)','Senda Norte (Chile)','Meridian Works (Suíça)','Rivermark Mobility (Canadá)','Lumen Components (Portugal)','Vento Austral (Argentina)','Orbe Technik (Alemanha)','Tamarind Roadworks (Índia)']);
 export const fictionalForeignBrand=good=>FOREIGN_PART_BRANDS[[...good].reduce((n,c)=>Math.imul(n^c.charCodeAt(0),16777619)>>>0,2166136261)%FOREIGN_PART_BRANDS.length];
 function importGate(city,buyer){
@@ -19,7 +19,7 @@ function importGate(city,buyer){
 export function orderImport(city,buyer,good,quantity,{reserveBalance=0}={}){
  if(city.substances&&!city.substances.canTrade(good,null,buyer,{quantity}))return false;
  const economy=city.economy,goods=economy.goods[good];if(!goods||!buyer?.active||buyer.entity?.destroyed||quantity<1)return false;
- if(!city.accounts.has('external-trade'))city.accounts.set('external-trade',{name:'Comércio exterior',balance:0,totalRevenue:0,totalExpenses:0});
+ ensureExternalAccount(city,'external-trade','Comércio exterior');
  economy.externalImporters??=new Map();let seller=economy.externalImporters.get(good);
  if(!seller){const door=importGate(city,buyer);if(!door)return false;const brand=fictionalForeignBrand(good),id=`import:${good}`;seller={id,type:'external_import',active:true,externalImport:true,importGood:good,importBrand:brand,accountId:'external-trade',name:brand,entity:{id:null,destroyed:false,properties:{name:brand,render:{style:'external_import'},externalImport:true}},door,inventory:Object.fromEntries(Object.keys(economy.goods).map(key=>[key,0])),incoming:{},inventoryCapacity:10000,balance:0,workers:[],ownerId:null};economy.externalImporters.set(good,seller);}
  if(city.findPath(seller.door,buyer.door)===null){const door=importGate(city,buyer);if(!door)return false;seller.door=door;}
@@ -31,17 +31,17 @@ export function orderImport(city,buyer,good,quantity,{reserveBalance=0}={}){
 }
 const EXPORTABLE=['madeira','tabuas','carvao','minerio','ferro','argila','fibras','tecido','ervas','bauxita','aluminio','aco','resina','borracha','rolamentos','quadro','plataforma','rodas','corrente','selim','pecas'];
 export function externalTradeHourly(city){
- const economy=city.economy,externalAccounts=['supplier','external-trade'].filter(id=>(city.accounts.get(id)?.balance||0)>0);if(!externalAccounts.length)return 0;
+ const economy=city.economy;ensureExternalAccount(city,'supplier','Economia externa');ensureExternalAccount(city,'external-trade','Comércio exterior');const externalAccounts=['supplier','external-trade'],diplomacySkill=city.politics?.secretaries?.find(row=>row.officeId==='foreign_relations')?.skill||0,salesLimit=EXTERNAL_TRADE_RULES.maximumSalesPerHour+Math.min(4,Math.floor(diplomacySkill/25));
  const businesses=economy.businesses.filter(b=>b.active&&!b.entity.destroyed),totals=new Map();
  for(const good of EXPORTABLE)totals.set(good,businesses.reduce((sum,b)=>sum+(b.inventory[good]||0),0));
  economy.externalTrade??={sales:0,units:0,revenue:0};let sales=0;
  const exporter=businesses.find(b=>b.type==='import_exporter');
  // The export firm first buys local surpluses through ordinary inter-firm
  // contracts and freight. International sales are made from its own warehouse.
- if(exporter){let purchases=0;for(const good of EXPORTABLE){if(purchases>=EXTERNAL_TRADE_RULES.maximumSalesPerHour)break;const stock=totals.get(good)||0,demand=economy.market?.[good]?.demand||0,reserve=Math.max(EXTERNAL_TRADE_RULES.minimumFirmStock,Math.ceil(demand*1.25));if(stock<=reserve||inventoryFree(exporter)<=0)continue;const seller=businesses.filter(b=>b!==exporter&&b.inventory[good]>0&&(b.type==='farm'&&b.crop===good||b.type==='bakery'&&good==='pao'||b.type==='mill'&&good==='oleo'||Object.hasOwn(INDUSTRIES[b.type]?.outputs||{},good))).sort((a,b)=>b.inventory[good]-a.inventory[good])[0];if(!seller)continue;let quantity=Math.floor(Math.min(stock-reserve,seller.inventory[good],EXTERNAL_TRADE_RULES.maximumPerSale,inventoryFree(exporter),city.logistics.transportLimit(seller,exporter)));while(quantity>0&&!economy.transferGoods(seller,exporter,good,quantity,economy.goods[good].price))quantity--;if(quantity>0)purchases++;}}
+ if(exporter){let purchases=0;for(const good of EXPORTABLE){if(purchases>=salesLimit)break;const stock=totals.get(good)||0,demand=economy.market?.[good]?.demand||0,reserve=Math.max(EXTERNAL_TRADE_RULES.minimumFirmStock,Math.ceil(demand*1.25));if(stock<=reserve||inventoryFree(exporter)<=0)continue;const seller=businesses.filter(b=>b!==exporter&&b.inventory[good]>0&&(b.type==='farm'&&b.crop===good||b.type==='bakery'&&good==='pao'||b.type==='mill'&&good==='oleo'||Object.hasOwn(INDUSTRIES[b.type]?.outputs||{},good))).sort((a,b)=>b.inventory[good]-a.inventory[good])[0];if(!seller)continue;let quantity=Math.floor(Math.min(stock-reserve,seller.inventory[good],EXTERNAL_TRADE_RULES.maximumPerSale,inventoryFree(exporter),city.logistics.transportLimit(seller,exporter)));while(quantity>0&&!economy.transferGoods(seller,exporter,good,quantity,economy.goods[good].price))quantity--;if(quantity>0)purchases++;}}
  // Rotate the starting business to avoid consistently favoring the first one.
  const offset=Math.floor(city.minute/60)%Math.max(1,businesses.length);
- for(let i=0;i<businesses.length&&sales<EXTERNAL_TRADE_RULES.maximumSalesPerHour;i++){
+ for(let i=0;i<businesses.length&&sales<salesLimit;i++){
   const b=exporter||businesses[(i+offset)%businesses.length];if(exporter&&i>0)break;
   for(const good of EXPORTABLE){
    const stock=b.inventory[good]||0,cityStock=totals.get(good)||0,demand=economy.market?.[good]?.demand||0;
