@@ -20,8 +20,8 @@ import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politi
 import { TAX_CATEGORIES, MINIMUM_WAGE_TAX_RATE, MINIMUM_BUSINESS_TAX_RATE } from './city_sales_tax.js';
 import { makePartyFlag, makeMergedPartyFlag, upgradePartyFlagPalette, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
 import { CityCouncil } from './city_council.js?v=wardrobe-expansion-1';
-import { CityCampaigns } from './city_campaigns.js?v=party-slogans-pos-composition-2';
-import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-pos-composition-2';
+import { CityCampaigns } from './city_campaigns.js?v=campaign-media-dialogue-1';
+import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-dialogue-1';
 import {prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=quarry-outskirts-1';
@@ -169,7 +169,7 @@ export class CityGovernment extends CityPolitics {
     for(const citizen of this.city.citizens){const campaign=citizen.campaign,party=campaign&&this.party(campaign.partyId);if(!party)continue;campaign.partyFlag=party.flag;campaign.speechColor=party.flag.background;if(campaign.flag)campaign.flag=party.flag;}
     for(const citizen of this.city.citizens){const presence=citizen.campaignPresence,party=presence&&this.party(presence.partyId);if(party)presence.partyFlag=party.flag;}
     const elections=[this.active,this.lastResult,...(this.elections||[])].filter(Boolean);
-    for(const election of elections){for(const nomination of election.candidates||[]){const party=this.party(nomination.partyId);if(party)nomination.partySlogan=party.slogan;}for(const nomination of election.councilCandidates||[]){delete nomination.slogan;delete nomination.partySlogan;}this.campaigns.stripGeneratedDebatePhrases(election);}
+    for(const election of elections){for(const nomination of election.candidates||[]){const party=this.party(nomination.partyId);if(party)nomination.partySlogan=party.slogan;}for(const nomination of election.councilCandidates||[]){delete nomination.slogan;delete nomination.partySlogan;}}
     const adults=this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c));for(const c of adults)this.initializeCitizen(c);
     organizeMembership(this,adults);this.liquidateEmptyParties();for(const party of this.parties)if(party.active)ensureHeadquarters(this,party);this.standing.refresh(true);
     for(const party of this.parties.filter(p=>p.active)){party.memberIds=party.memberIds.filter(id=>this.city.society.citizen(id));const leader=this.city.society.citizen(party.leaderId);if(!leader||!this.eligible(leader)||leader.political?.partyId!==party.id||party.leaderElectionTerm!==this.termNumber)electPartyLeader(this,party);}

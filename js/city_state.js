@@ -20,7 +20,7 @@ import { CityOfficialJournal } from './city_official_journal.js';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
 import { CityGovernment } from './city_government.js?v=party-affiliation-history-merge-flag-1';
 import { CityCouncil } from './city_council.js?v=wardrobe-expansion-1';
-import { CityCampaigns } from './city_campaigns.js?v=party-slogans-pos-composition-2';
+import { CityCampaigns } from './city_campaigns.js?v=campaign-media-dialogue-1';
 import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';

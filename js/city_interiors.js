@@ -6,7 +6,7 @@ import {queueService} from './city_service_queue.js?v=service-capacity-8';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interiors-completion-7';
 // Entity coordinates follow the resident through outdoor and indoor tiles.
 // Indoor metadata adds the floor, room and the remaining interior route.
-const INDOOR_TASKS=new Set(['substance-production','substance-deposit','work','manage','work-wait','shopping','supplies','job-interview','justice-report','police-oversight','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','clean','informal-service','leisure','social','outdoor_leisure']);
+const INDOOR_TASKS=new Set(['substance-production','substance-deposit','work','manage','work-wait','shopping','supplies','job-interview','campaign-media','justice-report','police-oversight','food','water','health','energy','hygiene','toilet','care','caregiving','provisions','workmeal','council-session','construction','clean','informal-service','leisure','social','outdoor_leisure']);
 const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
 const citizenKeys=[];
 const citizen=(city,id)=>city.accounts.get(Number.isInteger(id)&&id>=0&&id<65536?(citizenKeys[id]??=`citizen:${id}`):`citizen:${id}`)||city.society.citizen(id);
@@ -199,7 +199,7 @@ export function syncCitizenInterior(city,c){
   const facility=task==='toilet'?city.sanitation.facilities.get(c.toiletTargetId):null,ready=!!room&&activityCellAvailable(city,room,c,kind)&&(!facility||!facility.occupantId||facility.occupantId===c.id||city.minute>=facility.busyUntil);
   if(!queueService(city,c,b,task,task==='toilet'?c.toiletTargetId:'dining',ready,room,kind))return false;
  }
- if(b.constructionKind!=='open-air'&&['work','manage','health','water','hygiene','shopping','job-interview','justice-report','vote','council-session'].includes(task)&&(!room||c.serviceQueue?.buildingId===b.id&&c.serviceQueue.kind===task)){
+ if(b.constructionKind!=='open-air'&&['work','manage','health','water','hygiene','shopping','job-interview','campaign-media','justice-report','vote','council-session'].includes(task)&&(!room||c.serviceQueue?.buildingId===b.id&&c.serviceQueue.kind===task)){
   if(!queueService(city,c,b,task,`room:${kind}`,!!room&&activityCellAvailable(city,room,c,kind),room,kind))return false;
  }
  if(!room){

@@ -385141,8 +385141,18 @@ export function gerarFraseTematica(tema,{random=Math.random,complexidade='variad
   const key=normalizaLexema(tema);if(!tema||(!aliasesTema[key]&&!temasLexicais[key]))throw new RangeError(`Tema desconhecido: ${tema}`);
   return gerarFrase({tema:key,random,complexidade});
 }
+export function gerarDialogoTematico(tema,{random=Math.random,perguntaAnterior=null,interlocutor='a outra candidatura',assunto=null,complexidade='complexa'}={}){
+  if(typeof random!=='function')throw new TypeError('random precisa ser uma função');
+  const seed=(gerarFraseTematica(tema,{random,complexidade})||'').replace(/[.!?]+$/u,''),detail=(gerarFraseTematica(tema,{random,complexidade})||'').replace(/[.!?]+$/u,''),subject=assunto||tema;
+  const lowerSeed=seed.charAt(0).toLocaleLowerCase('pt-BR')+seed.slice(1),lowerDetail=detail.charAt(0).toLocaleLowerCase('pt-BR')+detail.slice(1);
+  const questions=[`Como ${interlocutor} pretende responder por ${subject}, quando ${lowerSeed}?`,`Que proposta concreta ${interlocutor} apresenta para ${subject}, se ${lowerSeed}?`,`${interlocutor}, diante de ${subject}, como explica que ${lowerSeed}?`,`Onde começa e onde termina a responsabilidade de ${interlocutor} por ${subject}, considerando que ${lowerSeed}?`,`Se ${lowerSeed}, que decisão ${interlocutor} tomaria primeiro sobre ${subject}?`,`O que muda para os moradores em ${subject}, caso ${lowerDetail}?`,`${interlocutor}, pode explicar com clareza como ${subject} se relaciona com o fato de que ${lowerSeed}?`,`Que evidência sustentaria a proposta de ${interlocutor} para ${subject}, se ${lowerDetail}?`];
+  const question=perguntaAnterior||questions[Math.floor(random()*questions.length)];
+  const excerpt=question.replace(/[?!.]+$/u,'').slice(-Math.min(112,question.length)).trim();
+  const answers=[`A pergunta sobre “${excerpt}” merece resposta direta: ${seed}.`,`${interlocutor} levantou “${excerpt}”. Minha resposta é esta: ${seed}, e também ${lowerDetail}.`,`Sobre “${excerpt}”, não vou fugir do assunto: ${seed}.`,`Há duas partes nessa pergunta: ${subject} e “${excerpt}”. Para começar, ${lowerSeed}; além disso, ${lowerDetail}.`,`Eu concordo com a preocupação por trás de “${excerpt}”, mas proponho olhar também para isto: ${seed}.`,`Não aceito que “${excerpt}” encerre a conversa. Se ${lowerSeed}, então precisamos reconhecer que ${lowerDetail}.`,`O ponto central de “${excerpt}” é a consequência para a vida comum. ${seed}; ao mesmo tempo, ${lowerDetail}.`,`Minha resposta não cabe num slogan: ${seed}. E, se levarmos a sério “${excerpt}”, também teremos de considerar que ${lowerDetail}.`];
+  return {question,answer:answers[Math.floor(random()*answers.length)],generated:[seed,detail],theme:aliasesTema[normalizaLexema(tema)]||normalizaLexema(tema)};
+}
 export function criarSubstantivoCombinado(palavra1,palavra2,{genero,tags}={}){
   if(!['masculino','feminino'].includes(genero))throw new TypeError('Informe gênero como masculino ou feminino');if(!Array.isArray(tags)||!tags.length)throw new TypeError('Informe etiquetas semânticas');
   const lema=vocabulario.combinar(palavra1,palavra2,'eufonia',genero,'singular'),plural=vocabulario.combinar(palavra1,palavra2,'eufonia',genero,'plural');if(classificarPalavra(lema)!==genero||converterParaSingular(plural)!==lema)throw new RangeError('A combinação não produziu formas coerentes de gênero e número');return {lema,plural,genero,classes:['substantivo'],temas:[...new Set(tags)]};
 }
-Object.assign(vocabulario,{classificarPalavraCompleta,classificarTemas,classificarVertentePolitica,iterarPalavrasClassificadas,conjugarVerbo,gerarFrase,gerarFraseTematica,criarSubstantivoCombinado});
+Object.assign(vocabulario,{classificarPalavraCompleta,classificarTemas,classificarVertentePolitica,iterarPalavrasClassificadas,conjugarVerbo,gerarFrase,gerarFraseTematica,gerarDialogoTematico,criarSubstantivoCombinado});

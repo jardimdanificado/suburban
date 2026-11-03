@@ -3,5 +3,6 @@
 export {
   gerarFrase,
   gerarFraseTematica,
+  gerarDialogoTematico,
   criarSubstantivoCombinado,
-} from './vocabulario.js?v=vocabulary-pos-composition-2';
+} from './vocabulario.js?v=vocabulary-dialogue-1';
