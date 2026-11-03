@@ -35,7 +35,7 @@ import { PREJUDICE_TYPES, initializePrejudices } from './city_prejudice.js?v=dis
 import { describePoliticalOrientation, POLITICAL_POSITIONS } from './city_ideology.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=sertanejo-house-styles-1';
 import { REPUTATION_LABELS } from './city_reputation.js';
-import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tree-sidewalk-1';
+import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-1';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js?v=survival-capacity-1';
@@ -43,7 +43,7 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=substance-chain-boost-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=public-food-reserve-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
 import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=substance-chain-boost-1';
@@ -1097,7 +1097,7 @@ export class CityUI {
     p.heading('VEGETAÇÃO E REPLANTIO');
     p.metrics([['PLANTAS',plants.length,C.green],['SEMENTES',nature.seeds.length,C.gold],['GERMINAÇÕES',nature.germinated,C.cyan],['CORTES',nature.harvested,C.gold]]);
     p.note(`Sementes germinam após ${NATURE_RULES.germinationMinutes/60} horas. Árvores crescem em 3–4 dias; amoreiras em um dia. Limites: ${NATURE_RULES.maxPlants} plantas e ${NATURE_RULES.maxSeeds} sementes. Estradas, lotes e instalações impedem o crescimento.`);
-    for(const [id,spec] of Object.entries(PLANT_SPECIES))p.kv(spec.label,`${plants.filter(t=>t.species===id).length} plantas / ${spec.grow/1440} dias de crescimento`);
+    for(const [id,spec] of Object.entries(PLANT_SPECIES))p.kv(spec.label,`${spec.scientific?`${spec.scientific} · `:''}${plants.filter(t=>t.species===id).length} plantas / ${spec.grow/1440} dias de crescimento`);
     const stage={seedling:'Muda',young:'Jovem',mature:'Madura'};
     const rows=plants.filter(t=>this.matches(`${PLANT_SPECIES[t.species].label} ${stage[t.stage]}`));
     const page=Math.min(this.naturePage||0,Math.max(0,Math.ceil(rows.length/30)-1));

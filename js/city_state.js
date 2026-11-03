@@ -23,7 +23,7 @@ import { CityGovernment } from './city_government.js?v=municipal-identity-flag-1
 import { CityCouncil } from './city_council.js?v=municipal-identity-flag-1';
 import { CityCampaigns } from './city_campaigns.js?v=organic-party-slogans-1';
 import { CityMandates } from './city_mandates.js';
-import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
+import { CityNature } from './city_nature.js?v=tropicalia-flora-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=infinite-external-money-1';
@@ -40,7 +40,7 @@ import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment } from './city_development.js?v=secretariat-planning-1';
 import { CityLogistics } from './city_logistics.js?v=wardrobe-expansion-1';
 import { CityGigs } from './city_gigs.js?v=custom-artworks-1';
-import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=secretariat-security-1';
+import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=public-food-reserve-1';
 import { CitySociety } from './city_society.js?v=conversation-cost-profile-2';
 import { CityServiceInvestment } from './city_service_investment.js?v=service-investment-founder-index-1';
 import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';

@@ -24,7 +24,7 @@ import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=sertanejo-house-styles-1';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
-import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
+import { CityNature } from './city_nature.js?v=tropicalia-flora-1';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
 import { CityGovernment as CityPolitics } from './city_government.js?v=municipal-identity-flag-1';
 import { CityReputation } from './city_reputation.js';
@@ -47,7 +47,7 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=secr
 import { CityLogistics } from './city_logistics.js?v=wardrobe-expansion-1';
 import { CityGigs } from './city_gigs.js?v=custom-artworks-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=secretariat-security-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=public-food-reserve-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=road-durability-1';
 

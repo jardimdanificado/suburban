@@ -822,15 +822,15 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
 }
 
 function syncTownhallFlag(renderer,group,THREE,b,shade=1){
-  const flag=b.governingFlag,flags=b.type==='townhall'?[{flag,size:1.65,height:1.04,y:2.45},{flag:b.governingPartyFlag,size:.55,height:1.04/3,y:1.15}].filter(row=>row.flag):[{flag,size:1.65,height:1.04,y:2.45}].filter(row=>row.flag),key=flags.length?JSON.stringify(flags.map(row=>row.flag))+':'+(b.rotation||0)+':'+b.floors:null;
+  const flag=b.governingFlag,flags=b.type==='townhall'?[{flag,size:2.2,height:1.39,y:2.6},{flag:b.governingPartyFlag,size:.9,height:.57,y:1.35}].filter(row=>row.flag):[{flag,size:1.65,height:1.04,y:1.9}].filter(row=>row.flag),key=flags.length?JSON.stringify(flags.map(row=>row.flag))+':'+(b.rotation||0)+':'+b.floors:null;
   if(group.userData.governingFlagKey===key){for(const material of group.userData.governingFlagMaterials||[])material.color.setScalar(shade);for(const {cloth,phase} of group.userData.governingFlagCloths||[])animateClothFlag(cloth,flagWindTime(renderer),phase);return;}
   const old=group.userData.governingFlagMesh;
   if(old){group.remove(old);old.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.userData.partyFlagTexture?.dispose();});}
   group.userData.governingFlagKey=key;group.userData.governingFlagMesh=null;group.userData.governingFlagMaterials=[];group.userData.governingFlagCloths=[];
   if(!flags.length)return;
   const mast=new THREE.Group(),roof=b.floors*CITY_FLOOR_HEIGHT+.18;
-  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,3.2,6),new THREE.MeshLambertMaterial({color:0xc8c6b4}));
-  pole.position.set(b.width*.5,roof+1.6,b.depth*.5);mast.add(pole);
+  const poleHeight=b.type==='townhall'?3.5:2.5,pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,poleHeight,6),new THREE.MeshLambertMaterial({color:0xc8c6b4}));
+  pole.position.set(b.width*.5,roof+poleHeight*.5,b.depth*.5);mast.add(pole);
   for(const row of flags){let texture;const canvas=partyFlagCanvas(row.flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);const banner=new THREE.Mesh(clothFlagGeometry(THREE,row.size,row.height),material);animateClothFlag(banner,flagWindTime(renderer),0);banner.userData.partyFlagTexture=texture;banner.position.set(b.width*.5+row.size*.5,roof+row.y,b.depth*.5);mast.add(banner);group.userData.governingFlagMaterials.push(material);group.userData.governingFlagCloths.push({cloth:banner,phase:0});}
   group.add(mast);group.userData.governingFlagMesh=mast;
 }

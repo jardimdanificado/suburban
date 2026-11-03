@@ -30,6 +30,44 @@ export const PLANT_SPECIES = {
   maple: { label: 'Bordo', color: 0xc99352, grow: 3 * 1440, wood: 4, terrain: [0,9] },
   cherry_blossom: { label: 'Cerejeira', color: 0xd899b1, grow: 3 * 1440, wood: 4, terrain: [0] },
   berry: { label: 'Amoreira', color: 0x73934c, grow: 1440, wood: 0, terrain: [0,9] },
+  monstera: { label:'Costela-de-adão', scientific:'Monstera deliciosa', color:0x39794c, grow:3*1440, wood:0, tree:true, form:'broad_leaf', renderSize:.78, terrain:[0,9] },
+  guaimbe: { label:'Guaimbê', scientific:'Philodendron bipinnatifidum', color:0x4f8250, grow:3*1440, wood:0, tree:true, form:'broad_leaf', renderSize:.82, terrain:[0,9] },
+  traveller_palm: { label:'Árvore-do-viajante', scientific:'Ravenala madagascariensis', color:0x5b934a, grow:5*1440, wood:0, tree:true, form:'palm', renderSize:1.15, terrain:[0,9] },
+  zebra_maranta: { label:'Maranta-zebrina', scientific:'Goeppertia zebrina', color:0x66834a, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  croton: { label:'Cróton', scientific:'Codiaeum variegatum', color:0x8c7340, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  watermelon_calathea: { label:'Calatéia-melancia', scientific:'Goeppertia roseopicta', color:0x59764a, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  heliconia_rostrata: { label:'Helicônia-papagaio', scientific:'Heliconia rostrata', color:0x53853f, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  red_ginger: { label:'Alpínia-vermelha', scientific:'Alpinia purpurata', color:0x4c8142, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  bird_of_paradise: { label:'Ave-do-paraíso', scientific:'Strelitzia reginae', color:0x507f45, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  licuala_palm: { label:'Palmeira-leque', scientific:'Licuala grandis', color:0x498346, grow:5*1440, wood:0, tree:true, form:'palm', renderSize:.9, terrain:[0,9] },
+  areca_palm: { label:'Areca-bambu', scientific:'Dypsis lutescens', color:0x688e43, grow:4*1440, wood:0, tree:true, form:'palm', renderSize:1.05, terrain:[0,9] },
+  torch_ginger: { label:'Bastão-do-imperador', scientific:'Etlingera elatior', color:0x4d8143, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  imperial_bromeliad: { label:'Bromélia-imperial', scientific:'Alcantarea imperialis', color:0x617f4b, grow:5*1440, wood:0, tree:false, form:'foliage', renderSize:1.12, terrain:[0,9] },
+  silver_vase_bromeliad: { label:'Bromélia-prateada', scientific:'Aechmea fasciata', color:0x718b76, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  anthurium: { label:'Antúrio', scientific:'Anthurium andraeanum', color:0x3f7444, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  caladium: { label:'Tinhorão', scientific:'Caladium bicolor', color:0x6c8053, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  prayer_plant: { label:'Maranta-tricolor', scientific:'Maranta leuconeura', color:0x58764b, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  heliconia_bihai: { label:'Helicônia-pássaro-de-fogo', scientific:'Heliconia bihai', color:0x557e3d, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  heliconia_psittacorum: { label:'Helicônia-papagaio-pequena', scientific:'Heliconia psittacorum', color:0x5e8841, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  pau_brasil: { label:'Pau-brasil', scientific:'Paubrasilia echinata', color:0x527747, grow:6*1440, wood:5, tree:true, form:'tree', terrain:[0,9] },
+  yellow_ipe: { label:'Ipê-amarelo', scientific:'Handroanthus serratifolius', color:0x71834a, grow:5*1440, wood:4, tree:true, form:'tree', terrain:[0,9] },
+  quaresmeira: { label:'Quaresmeira', scientific:'Pleroma granulosum', color:0x657e50, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
+  manaca_serra: { label:'Manacá-da-serra', scientific:'Tibouchina mutabilis', color:0x5e8249, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
+  sibipiruna: { label:'Sibipiruna', scientific:'Cenostigma pluviosum', color:0x68884a, grow:5*1440, wood:4, tree:true, form:'tree', terrain:[0,9] },
+  pau_ferro: { label:'Pau-ferro', scientific:'Libidibia ferrea', color:0x507747, grow:6*1440, wood:5, tree:true, form:'tree', terrain:[0,9] },
+  jeriva_palm: { label:'Jerivá', scientific:'Syagrus romanzoffiana', color:0x638746, grow:5*1440, wood:3, tree:true, form:'palm', terrain:[0,3,9] },
+  buriti_palm: { label:'Buriti', scientific:'Mauritia flexuosa', color:0x6a8a43, grow:6*1440, wood:3, tree:true, form:'palm', terrain:[0,3,9] },
+  pitanga: { label:'Pitangueira', scientific:'Eugenia uniflora', color:0x547c3e, grow:3*1440, wood:2, tree:true, form:'tree', terrain:[0,9] },
+  jabuticaba: { label:'Jabuticabeira', scientific:'Plinia cauliflora', color:0x527b42, grow:5*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
+  frangipani: { label:'Jasmim-manga', scientific:'Plumeria rubra', color:0x6d9149, grow:4*1440, wood:2, tree:true, form:'tree', terrain:[0,9] },
+  ixora: { label:'Ixora', scientific:'Ixora coccinea', color:0x4d7740, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  indian_shot: { label:'Cana-da-índia', scientific:'Canna indica', color:0x638847, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  jade_vine: { label:'Trepadeira-jade', scientific:'Strongylodon macrobotrys', color:0x4e8048, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  passionflower: { label:'Maracujazeiro', scientific:'Passiflora edulis', color:0x528044, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  allamanda: { label:'Alamanda-amarela', scientific:'Allamanda cathartica', color:0x648b43, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  clusia: { label:'Clúsia', scientific:'Clusia rosea', color:0x537c45, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,3,9] },
+  water_lily: { label:'Vitória-régia', scientific:'Victoria amazonica', color:0x4f8c57, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[TILE_WATER] },
+  canela_de_ema: { label:'Cana-do-brejo', scientific:'Costus spiralis', color:0x557f43, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,3,9] },
 };
 export const NATURE_RULES = { maxPlants: 1000, maxSeeds: 240, germinationMinutes: 360, seedAttemptsPerHour: 12 };
 /** Bounded vegetation population. Seeds are records until germination, not extra entities. */
@@ -47,8 +85,8 @@ export class CityNature {
     if (this.plants.size >= NATURE_RULES.maxPlants || !this.available(x,y,species,buildingId)) return null;
     const spec = PLANT_SPECIES[species], city = this.city;
     const scaleSeed=Math.abs(Math.sin(x*12.9898+y*78.233+species.length*0.31)*43758.5453)%1;
-    const entity = city.createEntity({x,y,properties:{name:spec.label,species,tree:spec.tree??(spec.wood>0),render:{color:spec.color,size:mature?1:.3,skin:'feature_tree_full.png'}}});
-    const plant = { id:entity.id,entity,species,x,y,buildingId,visualScale:0.76+scaleSeed*0.52,plantedAt:city.minute-(mature?spec.grow:0),stage:mature?'mature':'seedling' };
+    const entity = city.createEntity({x,y,properties:{name:spec.label,species,tree:spec.tree??(spec.wood>0),render:{color:spec.color,size:mature?(spec.renderSize||1):.3,skin:'feature_tree_full.png'}}});
+    const plant = { id:entity.id,entity,species,x,y,buildingId,form:spec.form||(spec.tree||spec.wood>0?'tree':'flowering'),scientific:spec.scientific||'',visualScale:0.76+scaleSeed*0.52,plantedAt:city.minute-(mature?spec.grow:0),stage:mature?'mature':'seedling' };
     entity.properties.cityPlant = plant;
     this.plants.set(plant.id,plant); this.tiles.set(`${x},${y}`,plant.id); city.structureRevision++;
     return plant;
@@ -64,11 +102,16 @@ export class CityNature {
       if(props){props.species=species;props.tree=PLANT_SPECIES[species].tree??(PLANT_SPECIES[species].wood>0);props.name=PLANT_SPECIES[species].label;props.render??={};props.render.color=PLANT_SPECIES[species].color;props.render.skin??='feature_tree_full.png';}
     }
     plant.species=species;
-    return PLANT_SPECIES[species];
+    const spec=PLANT_SPECIES[species];
+    plant.form??=spec.form||(spec.tree||spec.wood>0?'tree':'flowering');plant.scientific??=spec.scientific||'';
+    const props=plant.entity?.properties;
+    if(props){props.cityPlant=plant;props.species=species;props.tree=spec.tree??(spec.wood>0);props.name=spec.label;props.render??={};props.render.color=spec.color;props.render.skin??='feature_tree_full.png';}
+    return spec;
   }
   initialize() {
     const hall=this.city.buildings.find(b=>b.type==='townhall'); if(!hall)return;
-    const species=['coconut_palm','royal_palm','banana','mango','guava','jackfruit','breadfruit','papaya','avocado','tamarind','cacao','soursop','ackee','lime','allspice','flamboyant','sea_grape','tropical_almond','mangrove','hibiscus','bougainvillea','berry'];
+    const species=['coconut_palm','royal_palm','banana','mango','guava','jackfruit','breadfruit','papaya','avocado','tamarind','cacao','soursop','ackee','lime','allspice','flamboyant','sea_grape','tropical_almond','mangrove','hibiscus','bougainvillea','berry',
+      'monstera','guaimbe','traveller_palm','zebra_maranta','croton','watermelon_calathea','heliconia_rostrata','red_ginger','bird_of_paradise','licuala_palm','areca_palm','torch_ginger','imperial_bromeliad','silver_vase_bromeliad','anthurium','caladium','prayer_plant','heliconia_bihai','heliconia_psittacorum','pau_brasil','yellow_ipe','quaresmeira','manaca_serra','sibipiruna','pau_ferro','jeriva_palm','buriti_palm','pitanga','jabuticaba','frangipani','ixora','indian_shot','jade_vine','passionflower','allamanda','clusia','canela_de_ema'];
     for(let attempt=0;attempt<2600 && this.plants.size<320;attempt++) {
       const angle=this.city.random()*Math.PI*2,distance=22+this.city.random()*95;
       const x=Math.floor(hall.door.x+Math.cos(angle)*distance),y=Math.floor(hall.door.y+Math.sin(angle)*distance);
@@ -79,7 +122,7 @@ export class CityNature {
     const waterSide=(x,y)=>[[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,-1],[-1,1],[1,1]].some(([dx,dy])=>tileAt(this.city.world,x+dx,y+dy)===TILE_WATER);
     for(let attempt=0;attempt<9000&&this.plants.size<460;attempt++){
       const x=Math.floor(this.city.random()*this.city.world.width),y=Math.floor(this.city.random()*this.city.world.height);
-      if(waterSide(x,y))this.spawn(x,y,this.city.random()<.84?'coconut_palm':'royal_palm',{mature:true});
+      if(waterSide(x,y)){const shoreline=['coconut_palm','royal_palm','traveller_palm','licuala_palm','jeriva_palm','buriti_palm','mangrove','sea_grape'];this.spawn(x,y,shoreline[Math.floor(this.city.random()*shoreline.length)],{mature:true});}
     }
     this.city.log(`${this.plants.size} árvores e arbustos compõem a vegetação inicial.`, 'nature', [], {kind:'vegetation-founded',quantity:this.plants.size});
   }
@@ -103,7 +146,7 @@ export class CityNature {
       const progress=(city.minute-plant.plantedAt)/PLANT_SPECIES[plant.species].grow;
       const stage=progress>=1?'mature':progress>=.5?'young':'seedling';
       if(stage!==plant.stage) {
-        plant.stage=stage;plant.entity.properties.render.size=stage==='mature'?1:stage==='young'?.65:.3;city.structureRevision++;
+        plant.stage=stage;plant.entity.properties.render.size=stage==='mature'?(PLANT_SPECIES[plant.species].renderSize||1):stage==='young'?.65:.3;city.structureRevision++;
         if(stage==='mature')city.log(`${PLANT_SPECIES[plant.species].label} chegou à maturidade.`,'nature',[],{kind:'plant-mature',plantId:plant.id,buildingId:plant.buildingId});
       }
     }
@@ -149,7 +192,7 @@ export class CityNature {
         const planted=[...this.plants.values()].filter(p=>p.buildingId===b.id).length+this.seeds.filter(p=>p.buildingId===b.id).length;
         if(planted>=16)return false;
         for(let i=0;i<24&&!job;i++){
-          const x=Math.floor(b.door.x+city.random()*24-12),y=Math.floor(b.door.y+city.random()*24-12),options=tileAt(city.world,x,y)===0?['banana','mango','guava','jackfruit','breadfruit','papaya','cacao','soursop','ackee','lime','allspice','coconut_palm','sea_grape']:['mango','guava','avocado','tamarind','lime','coconut_palm','royal_palm','tropical_almond'],species=options[Math.floor(city.random()*options.length)];
+          const x=Math.floor(b.door.x+city.random()*24-12),y=Math.floor(b.door.y+city.random()*24-12),options=tileAt(city.world,x,y)===0?['banana','mango','guava','jackfruit','breadfruit','papaya','cacao','soursop','ackee','lime','allspice','coconut_palm','sea_grape','pau_brasil','yellow_ipe','quaresmeira','pitanga','jabuticaba','frangipani','clusia']:['mango','guava','avocado','tamarind','lime','coconut_palm','royal_palm','tropical_almond','jeriva_palm','buriti_palm'],species=options[Math.floor(city.random()*options.length)];
           if(this.available(x,y,species,b.id)&&!this.seeds.some(s=>s.x===x&&s.y===y)&&!city.citizens.some(v=>v.forestryJob?.x===x+.5&&v.forestryJob?.y===y+.5))job={buildingId:b.id,x:x+.5,y:y+.5,species,stage:'plant',labor:0,load:0};
         }
       }

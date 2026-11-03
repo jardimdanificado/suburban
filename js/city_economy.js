@@ -19,7 +19,8 @@ import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kit
 import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=service-investment-founder-index-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=quarry-outskirts-1';
-import { inventoryFree, initializeInventory } from './city_inventory.js';
+import { inventoryFree, inventoryUsed, initializeInventory } from './city_inventory.js';
+import { ensureExternalAccount } from './city_currency.js';
 import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=quarry-outskirts-1';
 
 export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados',artistic:'Arte',combat:'Combate',investigation:'Investigação',forensics:'Perícia',law:'Direito',construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
@@ -365,6 +366,7 @@ export class CityEconomy {
   accepts(b, good) {
     if(b.type==='composting'&&['fezes','lixo'].includes(good))return true;
     if(b.type==='bar')return ALCOHOL_DRINKS.includes(good);
+    if(b.type==='townhall')return edible.includes(good)||INDUSTRIAL_FOODS.includes(good)||good==='pao';
     if(b.type==='popular_refectory')return edible.includes(good)||INDUSTRIAL_FOODS.includes(good)||good==='pao';
     if(civicSpec(b)||justiceServiceSpec(b))return good in (b.type==='library'?{livros:1}:(civicSpec(b)||justiceServiceSpec(b)).inputs);
     if(b.type==='kitchen')return KITCHEN_RECIPES.some(r=>good in r.inputs);
@@ -613,7 +615,7 @@ export class CityEconomy {
   transferGoods(seller, buyer, good, quantity, unitPrice) {
     if (!GOODS[good]) return false;
     const pendingBodies=this.city.justice?.bodies||[],funeralPriority=buyer?.type==='iml'&&pendingBodies.some(body=>['waiting','transporting','autopsy'].includes(body.status))||buyer?.type==='crematorium'&&pendingBodies.some(body=>['cremation-wait','cremation-transporting','cremating'].includes(body.status));
-    const options=good==='girassol'&&buyer.type==='mill'?{purpose:'lighting-input'}:funeralPriority?{purpose:'funeral-procedure'}:{};
+    const options=['townhall','popular_refectory'].includes(buyer.type)?{purpose:'public-meals'}:good==='girassol'&&buyer.type==='mill'?{purpose:'lighting-input'}:funeralPriority?{purpose:'funeral-procedure'}:{};
     const broker=this.businesses.find(b=>b.type==='domestic_trader'&&b.active&&!b.entity.destroyed&&b.accountId!==seller.accountId&&b.accountId!==buyer.accountId);
     if(broker&&PRIVATE_TYPES.has(seller.type)&&PRIVATE_TYPES.has(buyer.type)){const amount=Math.ceil(quantity*unitPrice*.01);if(amount>0)options.serviceFees=[{amount,accountId:broker.accountId}];}
     return this.city.logistics.order(seller, buyer, good, quantity, unitPrice,options);
@@ -665,44 +667,49 @@ export class CityEconomy {
     }
   }
   refillPopularRefectory() {
-    const city=this.city,refectories=city.buildings.filter(b=>b.type==='popular_refectory'&&b.active&&!b.entity.destroyed);
+    const city=this.city,refectories=city.buildings.filter(b=>b.type==='popular_refectory'&&b.active&&!b.entity.destroyed),townhall=city.buildings.find(b=>b.type==='townhall'&&b.active&&!b.entity.destroyed),publicStores=refectories.length?refectories:townhall?[townhall]:[];
     const foodGoods=[...new Set([...edible,...INDUSTRIAL_FOODS,'pao'])];
     if(this.publicFoodReserveRevision!==1){
       const expected=Math.max(city.initialPopulation||0,city.citizens.length)*ECONOMY_RULES.mealUnits*ECONOMY_RULES.initialMealsPerCitizen,recorded=this.initialStock.pao||0,holder=refectories[0]||city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
       if(holder&&expected>recorded){holder.inventory.pao=(holder.inventory.pao||0)+expected-recorded;this.initialStock.pao=expected;city.log('Reserva municipal de alimentos restaurada após atualização da economia.','economy',[],{kind:'public-food-reserve-migrated',buildingId:holder.id,quantity:expected-recorded});}
       if(holder)this.publicFoodReserveRevision=1;
     }
-    for(const refectory of refectories){
+    for(const store of publicStores){
+      // Older saves could put the full multi-week reserve in a small refectory,
+      // leaving inventoryFree() at zero and permanently disabling replenishment.
+      if(inventoryUsed(store)>store.inventoryCapacity)store.inventoryCapacity=inventoryUsed(store)+256;
       let orders=0;
       while(orders<64){
-        const incoming=Object.values(refectory.incoming||{}).reduce((n,q)=>n+q,0),stored=Object.entries(refectory.inventory).reduce((n,[g,q])=>n+(foodGoods.includes(g)?q:0),0),missing=Math.floor(refectory.inventoryCapacity-stored-incoming);
-        if(missing<1||inventoryFree(refectory)<1)break;
+        const incoming=Object.values(store.incoming||{}).reduce((n,q)=>n+q,0),stored=Object.entries(store.inventory).reduce((n,[g,q])=>n+(foodGoods.includes(g)?q:0),0),missing=Math.floor(store.inventoryCapacity-stored-incoming);
+        if(missing<1||inventoryFree(store)<1)break;
         const local=[];
         for(const good of foodGoods){
-          if(!this.accepts(refectory,good))continue;
+          if(!this.accepts(store,good))continue;
           for(const seller of this.businesses){
             const makes=seller.type==='farm'&&seller.crop===good||seller.type==='bakery'&&good==='pao'||seller.type==='kitchen'&&Object.hasOwn(INDUSTRIES.kitchen.outputs,good)||Object.hasOwn(INDUSTRIES[seller.type]?.outputs||{},good);
-            if(!makes||seller.inventory[good]<1||city.findPath(seller.door,refectory.door)===null||city.logistics.transportLimit(seller,refectory)<1)continue;
-            const agreement=this.supplyAgreements.find(a=>a.sellerId===seller.id&&a.buyerId===refectory.id&&a.good===good&&a.until>city.minute),price=agreement?.unitPrice??this.goods[good].price;
+            if(!makes||seller.inventory[good]<1||city.findPath(seller.door,store.door)===null||city.logistics.transportLimit(seller,store)<1)continue;
+            const agreement=this.supplyAgreements.find(a=>a.sellerId===seller.id&&a.buyerId===store.id&&a.good===good&&a.until>city.minute),price=agreement?.unitPrice??this.goods[good].price;
             local.push({seller,good,price,available:seller.inventory[good]});
           }
         }
         local.sort((a,b)=>a.price-b.price||b.available-a.available||a.seller.id-b.seller.id);
         let purchase=local[0]||null,quantity=0;
-        if(purchase)quantity=Math.min(missing,24,purchase.available,inventoryFree(refectory),city.logistics.transportLimit(purchase.seller,refectory));
+        if(purchase)quantity=Math.min(missing,24,purchase.available,inventoryFree(store),city.logistics.transportLimit(purchase.seller,store));
         else {
           const importCost=good=>this.goods[good].price*2.25+Math.ceil(this.goods[good].price*(city.politics?.policy?.importTaxes?.[good]||0));
-          const good=foodGoods.filter(g=>this.accepts(refectory,g)).sort((a,b)=>importCost(a)-importCost(b))[0];if(!good)break;
-          purchase={good,price:Math.ceil(this.goods[good].price*2.25)};quantity=Math.min(missing,24,inventoryFree(refectory));
+          const good=foodGoods.filter(g=>this.accepts(store,g)).sort((a,b)=>importCost(a)-importCost(b))[0];if(!good)break;
+          purchase={good,price:Math.ceil(this.goods[good].price*2.25)};quantity=Math.min(missing,24,inventoryFree(store));
         }
         if(quantity<1)break;
         let fee=city.currency.price(Math.max(120,(city.world.width+city.world.height+quantity*4)*12)*1.5);
-        if(purchase.seller){const route=city.findPath(purchase.seller.door,refectory.door);if(route===null)break;fee=Math.ceil(city.currency.price(Math.max(120,(route.length+quantity*4)*12))*1.5);}
+        if(purchase.seller){const route=city.findPath(purchase.seller.door,store.door);if(route===null)break;fee=Math.ceil(city.currency.price(Math.max(120,(route.length+quantity*4)*12))*1.5);}
         else fee+=Math.ceil(this.goods[purchase.good].price*quantity*((city.politics?.policy?.importTaxes?.[purchase.good]||0)+.03));
-        const cost=quantity*purchase.price+fee,treasury=city.accounts.get('treasury')?.balance||0;
-        if(treasury<cost||!city.transfer('treasury',refectory.accountId,cost,'Verba para abastecimento do refeitório popular',{buildingId:refectory.id,good:purchase.good,quantity,essential:true}))break;
-        const shipment=purchase.seller?this.transferGoods(purchase.seller,refectory,purchase.good,quantity,purchase.price):orderImport(city,refectory,purchase.good,quantity);
-        if(!shipment){city.transfer(refectory.accountId,'treasury',cost,'Estorno de compra de alimentos não contratada',{buildingId:refectory.id,good:purchase.good,quantity});break;}
+        const cost=quantity*purchase.price+fee;let treasury=city.accounts.get('treasury')?.balance||0;
+        if(treasury<cost){ensureExternalAccount(city,'supplier','Economia externa');city.transfer('supplier','treasury',cost-treasury,'Crédito internacional para abastecimento alimentar',{essential:true,good:purchase.good,quantity,buildingId:store.id});treasury=city.accounts.get('treasury')?.balance||0;}
+        if(treasury<cost)break;
+        if(store.type!=='townhall'&&!city.transfer('treasury',store.accountId,cost,'Verba para abastecimento do refeitório popular',{buildingId:store.id,good:purchase.good,quantity,essential:true}))break;
+        const shipment=purchase.seller?this.transferGoods(purchase.seller,store,purchase.good,quantity,purchase.price):orderImport(city,store,purchase.good,quantity,{purpose:'public-meals'});
+        if(!shipment){if(store.type!=='townhall')city.transfer(store.accountId,'treasury',cost,'Estorno de compra de alimentos não contratada',{buildingId:store.id,good:purchase.good,quantity});break;}
         orders++;
       }
     }
