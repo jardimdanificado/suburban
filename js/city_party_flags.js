@@ -39,14 +39,46 @@ const ICON_LAYOUTS=Object.freeze({
 });
 const TEXT_LAYOUTS=Object.freeze([
   {id:'sem-texto',boxes:[],area:{x:.035,y:.035,w:.93,h:.93}},
-  {id:'frase-em-cima',boxes:[{x:.04,y:.025,w:.92,h:.17,kind:'phrase'}],area:{x:.035,y:.23,w:.93,h:.73}},
-  {id:'frase-embaixo',boxes:[{x:.04,y:.805,w:.92,h:.17,kind:'phrase'}],area:{x:.035,y:.04,w:.93,h:.73}},
+  {id:'frase-em-cima',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'phrase'}],area:{x:.035,y:.15,w:.93,h:.78}},
+  {id:'frase-embaixo',boxes:[{x:.04,y:.895,w:.92,h:.09,kind:'phrase'}],area:{x:.035,y:.04,w:.93,h:.8}},
   {id:'frase-na-lateral-esquerda',boxes:[{x:.015,y:.08,w:.16,h:.84,rotation:-Math.PI/2,kind:'word'}],area:{x:.22,y:.035,w:.74,h:.93}},
   {id:'frase-na-lateral-direita',boxes:[{x:.825,y:.08,w:.16,h:.84,rotation:Math.PI/2,kind:'word'}],area:{x:.04,y:.035,w:.74,h:.93}},
-  {id:'frase-em-cima-numero-embaixo',boxes:[{x:.04,y:.015,w:.92,h:.15,kind:'phrase'},{x:.04,y:.835,w:.92,h:.15,kind:'number'}],area:{x:.04,y:.205,w:.92,h:.59}},
+  {id:'frase-em-cima-numero-embaixo',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'phrase'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}},
   {id:'texto-nas-duas-laterais',boxes:[{x:.01,y:.12,w:.15,h:.76,rotation:-Math.PI/2,kind:'word'},{x:.84,y:.12,w:.15,h:.76,rotation:Math.PI/2,kind:'number'}],area:{x:.2,y:.04,w:.6,h:.92}},
-  {id:'nome-e-numero-em-faixas',boxes:[{x:.04,y:.02,w:.92,h:.14,kind:'name'},{x:.04,y:.84,w:.92,h:.14,kind:'number'}],area:{x:.04,y:.2,w:.92,h:.6}}
+  {id:'nome-e-numero-em-faixas',boxes:[{x:.04,y:.015,w:.92,h:.09,kind:'name'},{x:.04,y:.895,w:.92,h:.09,kind:'number'}],area:{x:.04,y:.15,w:.92,h:.7}}
 ]);
+const inside=(a,b)=>a.x>=b.x-1e-6&&a.y>=b.y-1e-6&&a.x+a.w<=b.x+b.w+1e-6&&a.y+a.h<=b.y+b.h+1e-6;
+function patternContainsRect(style,rect,aspect){
+ const bands=[{x:0,y:0,w:1,h:.2},{x:0,y:.4,w:1,h:.2},{x:0,y:.8,w:1,h:.2}];
+ if(style==='solid')return false;
+ if(style==='stripes-horizontal')return bands.some(band=>inside(rect,band));
+ if(style==='stripes-vertical')return bands.some(band=>inside(rect,{x:band.y,y:0,w:band.h,h:1}));
+ if(style==='quartered')return [{x:0,y:0,w:.5,h:.5},{x:.5,y:.5,w:.5,h:.5}].some(box=>inside(rect,box));
+ if(!['circle','double-circle','diamond','cross'].includes(style))return false;
+ const points=[[rect.x,rect.y],[rect.x+rect.w,rect.y],[rect.x,rect.y+rect.h],[rect.x+rect.w,rect.y+rect.h]];
+ if(style==='cross')return inside(rect,{x:.44,y:.16,w:.12,h:.68})||inside(rect,{x:.08,y:.45,w:.84,h:.1});
+ if(style==='diamond')return points.every(([x,y])=>Math.abs(x-.5)/.32+Math.abs(y-.5)/.34<=1+1e-6);
+ const fx=aspect>1?aspect:1,fy=aspect>1?1:1/aspect,r=style==='circle'?.31:.36;
+ const insideCircle=points.every(([x,y])=>((x-.5)*fx)**2+((y-.5)*fy)**2<=r*r+1e-6);
+ if(!insideCircle)return false;
+ if(style==='double-circle'){
+  const nearestX=clamp(.5,rect.x,rect.x+rect.w),nearestY=clamp(.5,rect.y,rect.y+rect.h);
+  if(((nearestX-.5)*fx)**2+((nearestY-.5)*fy)**2<.19**2-1e-6)return false;
+ }
+ return true;
+}
+function textLayoutCompatible(layout,style,aspect){
+ if(!layout.boxes.length)return true;
+ return layout.boxes.every(box=>{
+  if(patternContainsRect(style,box,aspect))return true;
+  if(style==='solid')return true;
+  if(style==='stripes-horizontal')return false;
+  if(style==='stripes-vertical')return false;
+  if(style==='quartered'||style==='stripes-diagonal'||style==='chevron'||style==='border')return false;
+  if(box.rotation)return ['circle','double-circle','diamond','star'].includes(style)&&(box.x+box.w<=.175||box.x>=.825);
+  return ['circle','double-circle','diamond','star','cross','solid'].includes(style)&&(box.y+box.h<=.105||box.y>=.895);
+ });
+}
 export const PARTY_FLAG_LAYOUTS=Object.freeze(Object.entries(ICON_LAYOUTS).flatMap(([count,arrangements])=>arrangements.flatMap(arrangement=>TEXT_LAYOUTS.map(textLayout=>Object.freeze({id:`${count}-${arrangement.name}-${textLayout.id}`,count:Number(count),arrangement:arrangement.name,textLayout:textLayout.id,slots:Object.freeze(arrangement.slots.map(slot=>Object.freeze({...slot}))),iconArea:Object.freeze({...textLayout.area}),textBoxes:Object.freeze(textLayout.boxes.map(box=>Object.freeze({...box})))})))));
 
 export function flagContrast(a,b){
@@ -101,7 +133,7 @@ function flagPalette(city,hue,background,foreground){
 export function makePartyFlag(city,index,founders=[],party=null){
  const hue=city.random()*360,background=randomColor(hue,.19,.78);let foreground=randomColor((hue+180)%360,.88,.58);
  if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';
- const colors=flagPalette(city,hue,background,foreground),count=1+Math.floor(city.random()*4),arrangements=ICON_LAYOUTS[count],arrangement=arrangements[Math.floor(city.random()*arrangements.length)],textLayout=TEXT_LAYOUTS[Math.floor(city.random()*TEXT_LAYOUTS.length)],layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors),backgroundChoices=['solid','solid','solid','solid','stripes-horizontal','stripes-horizontal','stripes-vertical','stripes-diagonal','quartered','circle','double-circle','diamond','star','cross','chevron','border'],backgroundStyle=backgroundChoices[Math.floor(city.random()*backgroundChoices.length)];
+ const colors=flagPalette(city,hue,background,foreground),count=1+Math.floor(city.random()*4),arrangements=ICON_LAYOUTS[count],arrangement=arrangements[Math.floor(city.random()*arrangements.length)],aspect=120/76,backgroundChoices=['solid','solid','solid','solid','stripes-horizontal','stripes-horizontal','stripes-vertical','stripes-diagonal','quartered','circle','double-circle','diamond','star','cross','chevron','border'],backgroundStyle=backgroundChoices[Math.floor(city.random()*backgroundChoices.length)],compatibleLayouts=TEXT_LAYOUTS.filter(item=>textLayoutCompatible(item,backgroundStyle,aspect)),textLayout=compatibleLayouts[Math.floor(city.random()*compatibleLayouts.length)]||TEXT_LAYOUTS[0],layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors);
  return Object.freeze({foreground,background,colors,paletteVersion:2,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:'random',emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
 export function upgradePartyFlagPalette(city,flag){
@@ -157,16 +189,41 @@ function drawFlagBackground(ctx,flag,x,y,w,h){
  else if(style==='circle'||style==='double-circle'){ctx.beginPath();ctx.arc(x+w/2,y+h/2,Math.min(w,h)*(style==='circle'?.31:.36),0,Math.PI*2);ctx.fill();if(style==='double-circle'){ctx.fillStyle=flag.background;ctx.beginPath();ctx.arc(x+w/2,y+h/2,Math.min(w,h)*.19,0,Math.PI*2);ctx.fill();}}
  else if(style==='diamond'){ctx.beginPath();ctx.moveTo(x+w/2,y+h*.16);ctx.lineTo(x+w*.82,y+h/2);ctx.lineTo(x+w/2,y+h*.84);ctx.lineTo(x+w*.18,y+h/2);ctx.closePath();ctx.fill();}
  else if(style==='star'){starPath(ctx,x+w/2,y+h/2,Math.min(w,h)*.34,Math.min(w,h)*.15);ctx.fill();}
- else if(style==='cross'){ctx.fillRect(x+w*.44,y+h*.08,w*.12,h*.84);ctx.fillRect(x+w*.08,y+h*.43,w*.84,h*.14);}
+ else if(style==='cross'){ctx.fillRect(x+w*.44,y+h*.16,w*.12,h*.68);ctx.fillRect(x+w*.08,y+h*.45,w*.84,h*.1);}
  else if(style==='chevron'){ctx.beginPath();ctx.moveTo(x+w*.08,y+h*.08);ctx.lineTo(x+w*.4,y+h/2);ctx.lineTo(x+w*.08,y+h*.92);ctx.lineTo(x+w*.2,y+h*.92);ctx.lineTo(x+w*.52,y+h/2);ctx.lineTo(x+w*.2,y+h*.08);ctx.closePath();ctx.fill();}
  else if(style==='border'){ctx.lineWidth=Math.max(2,Math.min(w,h)*.1);ctx.strokeStyle=accent;ctx.strokeRect(x+w*.06,y+h*.07,w*.88,h*.86);}
  else if(!style){if(flag.pattern===1)ctx.fillRect(x,y+h*.42,w,h*.16);else if(flag.pattern===2){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+w*.5,y+h*.5);ctx.lineTo(x,y+h);ctx.fill();}}
 }
+function currentTextBox(flag,text){
+ const top=flag.textLayout;
+ if(top==='frase-em-cima'&&text.kind==='phrase')return{x:.04,y:.015,w:.92,h:.09};
+ if(top==='frase-embaixo'&&text.kind==='phrase')return{x:.04,y:.895,w:.92,h:.09};
+ if(top==='frase-em-cima-numero-embaixo'||top==='nome-e-numero-em-faixas')return text.kind==='number'?{x:.04,y:.895,w:.92,h:.09}:{x:.04,y:.015,w:.92,h:.09};
+ return text;
+}
 export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
  if(!flag)return;ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();drawFlagBackground(ctx,flag,x,y,w,h);
  const emblems=flag.emblems?.length?flag.emblems:flag.skin?[{skin:flag.skin,x:.3,y:.12,w:.4,h:.76}]:[];
- for(const emblem of emblems){const textInk=flag.colors?.[2],preferredInk=flag.colors?.[3]||flag.foreground,ink=emblem.color===textInk?(preferredInk!==textInk?preferredInk:flag.colors?.[1]||flag.foreground):(emblem.color||preferredInk),shade=ink,transparent=emblem.backgroundMode!=='tile',image=tintedSprite(emblem.skin,ink,shade,flag.background,transparent,onReady)||tintedSprite(emblem.skin,ink,shade,flag.background,false,onReady);if(!image)continue;ctx.save();ctx.imageSmoothingEnabled=false;const dx=x+emblem.x*w,dy=y+emblem.y*h,dw=emblem.w*w,dh=emblem.h*h,crop=emblem.crop,sx=crop?crop.x*image.width:0,sy=crop?crop.y*image.height:0,sw=crop?crop.w*image.width:image.width,sh=crop?crop.h*image.height:image.height,scale=Math.min(dw/sw,dh/sh),drawW=sw*scale,drawH=sh*scale,drawX=dx+(dw-drawW)/2,drawY=dy+(dh-drawH)/2;ctx.drawImage(image,sx,sy,sw,sh,drawX,drawY,drawW,drawH);ctx.restore();}
- for(const text of flag.texts||[])drawText(ctx,text,flag,x+text.x*w,y+text.y*h,text.w*w,text.h*h);
+ for(const emblem of emblems){
+  const contained=patternContainsRect(flag.backgroundStyle,{x:emblem.x,y:emblem.y,w:emblem.w,h:emblem.h},w/h);
+  let knockout=contained&&flag.colors?.[1]&&flagContrast(flag.background,flag.colors[1])>=3;
+  const textInk=flag.colors?.[2],preferredInk=flag.colors?.[3]||flag.foreground,transparent=emblem.backgroundMode!=='tile';
+  let ink,image;
+  if(knockout){ink=flag.background;image=tintedSprite(emblem.skin,ink,ink,flag.background,true,onReady);if(!image)knockout=false;}
+  if(!knockout){ink=emblem.color===textInk?(preferredInk!==textInk?preferredInk:flag.colors?.[1]||flag.foreground):(emblem.color||preferredInk);image=tintedSprite(emblem.skin,ink,ink,flag.background,transparent,onReady)||tintedSprite(emblem.skin,ink,ink,flag.background,false,onReady);}
+  if(!image)continue;
+  ctx.save();ctx.imageSmoothingEnabled=false;const dx=x+emblem.x*w,dy=y+emblem.y*h,dw=emblem.w*w,dh=emblem.h*h,crop=emblem.crop,sx=crop?crop.x*image.width:0,sy=crop?crop.y*image.height:0,sw=crop?crop.w*image.width:image.width,sh=crop?crop.h*image.height:image.height,scale=Math.min(dw/sw,dh/sh),drawW=sw*scale,drawH=sh*scale,drawX=dx+(dw-drawW)/2,drawY=dy+(dh-drawH)/2;ctx.drawImage(image,sx,sy,sw,sh,drawX,drawY,drawW,drawH);ctx.restore();
+ }
+ for(const original of flag.texts||[]){
+  let box=currentTextBox(flag,original),text=original;
+  if(!textLayoutCompatible({boxes:[box]},flag.backgroundStyle,w/h)){
+   box={x:.04,y:original.y<.5?.015:.895,w:.92,h:.09};
+   const ink=flagContrast(flag.background,flag.foreground)>=3?flag.foreground:(flagContrast(flag.background,'#ffffff')>=flagContrast(flag.background,'#111111')?'#ffffff':'#111111');
+   ctx.fillStyle=flag.background;ctx.fillRect(x+box.x*w,y+box.y*h,box.w*w,box.h*h);
+   text={...original,color:ink};
+  }else if(patternContainsRect(flag.backgroundStyle,box,w/h)&&flag.colors?.[1]&&flagContrast(flag.background,flag.colors[1])>=3){text={...original,color:flag.background};}
+  drawText(ctx,text,flag,x+box.x*w,y+box.y*h,box.w*w,box.h*h);
+ }
  ctx.strokeStyle=flag.foreground;ctx.strokeRect(x,y,w,h);ctx.restore();
 }
 export function partyFlagCanvas(flag,onReady){
