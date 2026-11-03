@@ -384962,7 +384962,7 @@ registrarVertente('Direita',['liberal','capitalista','mercantil','conservador','
 registrarVertente('Extrema direita',['fascista','bolsonarista','integralista','ultranacionalista','supremacista','ultradireitista']);
 registrarVertente('Ultradireita',['ultralibertário','ultralibertária','ultraliberal','ultradireita','neofascista','nazista','anarcocapitalista']);
 const temasLexicais=Object.freeze({
-  politica:/polit|govern|prefeit|vereador|elei[cç]|partid|campanh|debat|democr|rep[uú]blic|impost|tribut|legis|soberan|liberdad|autoridad|corrup|cidadan|protest|sindicat|social|comunist|capitalist|liberal|conservador|marx|anarqu|fasc|naz|monarqu|federal|libert|esquerd|direit|burgues|proletar|centrismo|ideolog|nacional|ultranacional|democrata-crist|lulist|bolsonar|stalin|maoist|nazist|neofasc|ultralibert|ultraliberal/,
+  politica:/politic|politiz|govern(?:o|ar|ado|ador|amental|anca|ista|ismo)|prefeit|vereador|elei(?:cao|coes|tor|tora|tivo|tiva|toral|torado)|partid(?:o|os|ar|aria|ario|ismo|ista|ocracia|ocrata)|campanh|debat|democr|rep[uú]blic|impost(?:o|os|a|ar|ado|acao)|tribut(?:o|os|ar|ario|aria|acao|ismo)|legisl|soberan|liberdad|autoridad|corrup(?:cao|to|tor|tela|tivel|cion)|cidadan|protest(?:o|ar|ac)|sindicat|social|comunist|capitalist|liberal|conservador|marx|anarqu|fasc(?:ist|ism|iz)|naz(?:ist|ism|ific)|monarqu|federal|libert|esquerd(?:a|o|ismo|ista|ar|ear|izar)|direit(?:a|o|ismo|ista)|(?:^|-)burgues(?:ia|ismo|ista|ocrac|ocrata|ada|es)?(?:$|-)|proletar|centrismo|ideolog|nacional(?:ismo|ista|izar|izacao|idade)|ultranacional|democrata-crist|lulist|bolsonar|stalin|maoist|neofasc|ultralibert|ultraliberal/,
   cidade:/cidade|bairro|rua|avenida|pra[cç]a|cal[cç]ad|estrada|ilumina|infraestrutur|obra|munic[ií]pi|urbano|rural|comunidade|vizinhan/,
   trabalho:/trabalh|empreg|sal[aá]ri|renda|profiss|of[ií]cio|ocup|carreir|oper[aá]ri|patr[aã]o|funcion[aá]ri|sindicat|aposent|produ[cç][aã]o|empresa/,
   economia:/econom|com[eé]rci|neg[oó]ci|mercad|pre[cç]o|dinheir|moeda|infla|banc|cr[eé]dit|finan[cç]|impost|tribut|capital|lucro|d[ií]vida|invest|or[cç]ament|empresa/,
@@ -385084,86 +385084,56 @@ export function classificarPalavraCompleta(word){
   const info=Object.freeze({palavra:raw,lema:lemmas.find(item=>item!==key)||key,classes:Object.freeze(classes),classePrincipal:classes[0],genero:gender,temas:Object.freeze(temas),vertentePolitica,confianca:confidence});if(cacheAnaliseLexical.size>50000)cacheAnaliseLexical.clear();cacheAnaliseLexical.set(cacheKey,info);return info;
 }
 export function* iterarPalavrasClassificadas(){for(const word of vocabulario.palavras)yield classificarPalavraCompleta(word);}
-const substantivosDeFrase={
-  politica:[['partido','m','partidos'],['governo','m','governos'],['morador','m','moradores'],['vereador','m','vereadores'],['proposta','f','propostas'],['eleição','f','eleições'],['direito','m','direitos'],['liberdade','f','liberdades'],['política','f','políticas'],['voto','m','votos'],['serviço','m','serviços']],
-  cidade:[['cidade','f','cidades'],['bairro','m','bairros'],['rua','f','ruas'],['praça','f','praças'],['morador','m','moradores'],['comunidade','f','comunidades'],['serviço','m','serviços'],['obra','f','obras']],
-  trabalho:[['trabalhador','m','trabalhadores'],['empresa','f','empresas'],['emprego','m','empregos'],['salário','m','salários'],['renda','f','rendas'],['equipe','f','equipes'],['serviço','m','serviços'],['negócio','m','negócios']],
-  economia:[['empresa','f','empresas'],['mercado','m','mercados'],['negócio','m','negócios'],['preço','m','preços'],['renda','f','rendas'],['trabalhador','m','trabalhadores'],['imposto','m','impostos'],['cooperativa','f','cooperativas']],
-  moradia:[['família','f','famílias'],['moradia','f','moradias'],['casa','f','casas'],['bairro','m','bairros'],['aluguel','m','aluguéis'],['imóvel','m','imóveis'],['morador','m','moradores']],
-  familia:[['família','f','famílias'],['criança','f','crianças'],['morador','m','moradores'],['amizade','f','amizades'],['bairro','m','bairros'],['casa','f','casas']],
-  alimentacao:[['alimento','m','alimentos'],['comida','f','comidas'],['cozinha','f','cozinhas'],['horta','f','hortas'],['feira','f','feiras'],['família','f','famílias'],['trabalhador','m','trabalhadores']],
-  saude:[['saúde','f','saúdes'],['clínica','f','clínicas'],['médico','m','médicos'],['morador','m','moradores'],['família','f','famílias'],['serviço','m','serviços']],
-  mobilidade:[['rua','f','ruas'],['bicicleta','f','bicicletas'],['transporte','m','transportes'],['bairro','m','bairros'],['morador','m','moradores'],['entrega','f','entregas']],
-  educacao_cultura:[['escola','f','escolas'],['professor','m','professores'],['livro','m','livros'],['cultura','f','culturas'],['artista','m','artistas'],['morador','m','moradores'],['biblioteca','f','bibliotecas']],
-  seguranca_justica:[['direito','m','direitos'],['justiça','f','justiças'],['morador','m','moradores'],['polícia','f','polícias'],['bairro','m','bairros'],['liberdade','f','liberdades']],
-  meio_ambiente:[['árvore','f','árvores'],['rio','m','rios'],['floresta','f','florestas'],['horta','f','hortas'],['bairro','m','bairros'],['resíduo','m','resíduos'],['água','f','águas']],
-  substancias:[['bebida','f','bebidas'],['cannabis','f','cannabis'],['tabaco','m','tabacos'],['café','m','cafés'],['morador','m','moradores'],['bairro','m','bairros']],
-  moda:[['roupa','f','roupas'],['tecido','m','tecidos'],['costureiro','m','costureiros'],['loja','f','lojas'],['morador','m','moradores'],['trabalhador','m','trabalhadores']],
-  esportes_lazer:[['praia','f','praias'],['esporte','m','esportes'],['jogo','m','jogos'],['parque','m','parques'],['morador','m','moradores'],['família','f','famílias']],
-  cotidiano:[['morador','m','moradores'],['bairro','m','bairros'],['família','f','famílias'],['cidade','f','cidades'],['trabalho','m','trabalhos'],['comida','f','comidas']],
-};
-const predicadosDeFrase={
-  politica:[['debater','sobre'],['propor',''],['defender',''],['ampliar',''],['planejar','']],
-  cidade:[['melhorar',''],['construir',''],['iluminar',''],['conectar','a'],['cuidar','de']],
-  trabalho:[['buscar',''],['oferecer',''],['valorizar',''],['criar',''],['garantir','']],
-  economia:[['fortalecer',''],['organizar',''],['apoiar',''],['reduzir',''],['ampliar','']],
-  moradia:[['construir',''],['reformar',''],['oferecer',''],['proteger',''],['planejar','']],
-  familia:[['cuidar','de'],['apoiar',''],['acompanhar',''],['proteger',''],['visitar','']],
-  alimentacao:[['preparar',''],['produzir',''],['distribuir',''],['cultivar',''],['compartilhar','']],
-  saude:[['cuidar','de'],['ampliar',''],['oferecer',''],['proteger',''],['atender','']],
-  mobilidade:[['conectar',''],['melhorar',''],['organizar',''],['ampliar',''],['planejar','']],
-  educacao_cultura:[['ensinar',''],['publicar',''],['criar',''],['ampliar',''],['valorizar','']],
-  seguranca_justica:[['proteger',''],['garantir',''],['defender',''],['investigar',''],['debater','']],
-  meio_ambiente:[['preservar',''],['cultivar',''],['recuperar',''],['proteger',''],['reduzir','']],
-  substancias:[['debater','sobre'],['regular',''],['fiscalizar',''],['produzir',''],['informar','sobre']],
-  moda:[['produzir',''],['costurar',''],['vender',''],['reparar',''],['escolher','']],
-  esportes_lazer:[['organizar',''],['praticar',''],['visitar',''],['ampliar',''],['apoiar','']],
-  cotidiano:[['cuidar','de'],['melhorar',''],['compartilhar',''],['organizar',''],['visitar','']],
-};
-const relacoesDeFrase={
-  politica:[['partido','defender','proposta'],['governo','ampliar','serviço'],['vereador','propor','política'],['eleição','mobilizar','morador']],
-  cidade:[['prefeitura','iluminar','rua'],['morador','cuidar','bairro','de'],['obra','melhorar','praça'],['serviço','atender','comunidade']],
-  trabalho:[['trabalhador','buscar','emprego'],['empresa','oferecer','emprego'],['salário','sustentar','família'],['equipe','realizar','serviço']],
-  economia:[['cooperativa','fortalecer','mercado'],['mercado','oferecer','emprego'],['imposto','financiar','serviço'],['empresa','criar','negócio']],
-  moradia:[['governo','oferecer','casa'],['família','procurar','moradia'],['morador','reformar','casa'],['bairro','abrigar','família']],
-  familia:[['família','apoiar','criança'],['morador','visitar','família'],['amizade','aproximar','morador'],['criança','alegrar','família']],
-  alimentacao:[['feira','vender','alimento'],['cozinha','preparar','comida'],['família','compartilhar','comida'],['horta','produzir','alimento']],
-  saude:[['clínica','atender','morador'],['médico','cuidar','família','de'],['serviço','proteger','saúde'],['saúde','fortalecer','comunidade']],
-  mobilidade:[['bicicleta','conectar','bairro'],['transporte','ligar','cidade'],['morador','percorrer','rua'],['entrega','abastecer','mercado']],
-  educacao_cultura:[['professor','ensinar','morador'],['biblioteca','oferecer','livro'],['artista','criar','cultura'],['escola','valorizar','educação']],
-  seguranca_justica:[['polícia','proteger','morador'],['direito','garantir','liberdade'],['justiça','defender','morador'],['bairro','acolher','comunidade']],
-  meio_ambiente:[['árvore','proteger','bairro'],['morador','preservar','rio'],['horta','cultivar','árvore'],['floresta','abrigar','animal']],
-  substancias:[['morador','consumir','bebida'],['bairro','debater','cannabis'],['tabaco','prejudicar','saúde'],['morador','produzir','café']],
-  moda:[['costureiro','produzir','roupa'],['loja','vender','tecido'],['roupa','proteger','morador'],['trabalhador','costurar','roupa']],
-  esportes_lazer:[['morador','praticar','esporte'],['família','visitar','praia'],['parque','acolher','família'],['jogo','juntar','morador']],
-  cotidiano:[['família','compartilhar','comida'],['morador','visitar','bairro'],['morador','melhorar','casa'],['amizade','aproximar','família']],
-};
-const adjectivosDeFrase=[['justo','justa','justos','justas'],['digno','digna','dignos','dignas'],['seguro','segura','seguros','seguras'],['público','pública','públicos','públicas'],['local','local','locais','locais'],['livre','livre','livres','livres'],['acessível','acessível','acessíveis','acessíveis'],['saudável','saudável','saudáveis','saudáveis'],['sustentável','sustentável','sustentáveis','sustentáveis'],['forte','forte','fortes','fortes']];
-const adjetivosPorSubstantivo={partido:['democrático'],governo:['democrático'],vereador:['local'],proposta:['justo'],morador:['local'],serviço:['público','acessível'],cidade:['seguro'],bairro:['seguro'],rua:['seguro'],praça:['público'],trabalhador:['digno'],empresa:['local'],emprego:['digno'],salário:['justo'],mercado:['local'],negócio:['local'],preço:['justo'],cooperativa:['local'],família:['unido'],moradia:['acessível'],casa:['seguro'],alimento:['saudável'],comida:['saudável'],clínica:['público'],médico:['local'],bicicleta:['seguro'],transporte:['público'],escola:['público'],professor:['local'],livro:['acessível'],cultura:['livre'],direito:['justo'],liberdade:['livre'],árvore:['saudável'],floresta:['saudável'],roupa:['digno'],tecido:['local'],praia:['seguro'],esporte:['saudável'],parque:['público'],biblioteca:['público'],feira:['local'],horta:['local']};
 const aliasesTema={arte:'educacao_cultura',cultura:'educacao_cultura',educacao:'educacao_cultura',educação:'educacao_cultura',politica:'politica',política:'politica',emprego:'trabalho',habitacao:'moradia',habitação:'moradia',aluguel:'moradia',saúde:'saude',health:'saude',alimentação:'alimentacao',transporte:'mobilidade',justica:'seguranca_justica',justiça:'seguranca_justica',segurança:'seguranca_justica',ambiente:'meio_ambiente',natureza:'meio_ambiente',substância:'substancias',substâncias:'substancias',esporte:'esportes_lazer',esportes:'esportes_lazer',lazer:'esportes_lazer',família:'familia',cotidiano:'cotidiano',moda:'moda',cidade:'cidade',economia:'economia'};
 const escolhe=(list,random)=>list[Math.floor(Math.max(0,Math.min(.999999999,random()))*list.length)];
-const numerosArtigo={m:['o','um','os','uns'],f:['a','uma','as','umas']};
-const concordanciaAdjetivo=(adjective,gender,plural)=>{const row=adjectivosDeFrase.find(item=>item[0]===adjective);return row?row[(gender==='f'?1:0)+(plural?2:0)]:adjective;};
-function montarSintagma(noun,random,{determinado=false,adjective=false}={}){
-  const fixedSingular=['saúde','cannabis','tabaco','café','comida','polícia','justiça','política'],plural=random()<.27&&!fixedSingular.includes(noun[0]),gender=noun[1],definite=determinado||fixedSingular.includes(noun[0])||random()<.62,article=numerosArtigo[gender][definite?(plural?2:0):(plural?3:1)],form=plural?noun[2]:noun[0];
-  let result=`${article} ${form}`;if(adjective&&random()<.42){const choices=(adjetivosPorSubstantivo[noun[0]]||[]).map(word=>adjectivosDeFrase.find(item=>item[0]===word)).filter(Boolean);if(choices.length){const adj=escolhe(choices,random)[0];result+=` ${concordanciaAdjetivo(adj,gender,plural)}`;}}
-  return {text:result,plural,gender};
+function escolheLexema(list,random){
+  if(list.length<2)return list[0];const weights=list.map(item=>{const word=typeof item==='string'?item:item.word,quality=typeof item==='string'?1:item.weight||1;return quality*Math.pow(.67,Math.max(0,word.length-6));}),total=weights.reduce((sum,value)=>sum+value,0);let roll=random()*total;for(let i=0;i<list.length;i++){roll-=weights[i];if(roll<=0)return list[i];}return list.at(-1);
 }
-function unirPreposicao(preposition,phrase){
-  if(!preposition)return phrase;const [article,...rest]=phrase.split(' '),forms={de:{o:'do',a:'da',os:'dos',as:'das',um:'de um',uma:'de uma',uns:'de uns',umas:'de umas'},em:{o:'no',a:'na',os:'nos',as:'nas',um:'em um',uma:'em uma',uns:'em uns',umas:'em umas'},a:{o:'ao',a:'à',os:'aos',as:'às',um:'a um',uma:'a uma'},por:{o:'pelo',a:'pela',os:'pelos',as:'pelas',um:'por um',uma:'por uma'}};
-  const first=forms[preposition]?.[article]||`${preposition} ${article}`;return `${first}${rest.length?` ${rest.join(' ')}`:''}`;
+const artigosFrase={m:['o','um','os','uns'],f:['a','uma','as','umas']};
+const indicePalavrasPorTema=new Map();
+const bancosGramaticais=new Map();
+function palavrasDoTema(theme){
+  if(!indicePalavrasPorTema.has(theme)){const pattern=temasLexicais[theme],words=[];if(pattern)for(const word of vocabulario.palavras)if(pattern.test(semAcento(word)))words.push(word);indicePalavrasPorTema.set(theme,words);}
+  return indicePalavrasPorTema.get(theme);
 }
-function frasesBanco(tema){
-  const aliases=aliasesTema[normalizaLexema(tema)]||normalizaLexema(tema),selected=substantivosDeFrase[aliases]||substantivosDeFrase.cotidiano;
-  return {key:substantivosDeFrase[aliases]?aliases:'cotidiano',nouns:selected.filter(([word])=>palavraPertenceAoCatalogo(word)),predicates:predicadosDeFrase[aliases]||predicadosDeFrase.cotidiano};
+function bancoGramatical(theme){
+  if(bancosGramaticais.has(theme))return bancosGramaticais.get(theme);
+  const nouns=new Map(),verbs=new Set(),adjectives=new Set(),validWord=/^[\p{L}]+(?:[-'][\p{L}]+)*$/u;
+  for(const source of palavrasDoTema(theme)){
+    if(!validWord.test(source)||source.includes('-'))continue;const info=classificarPalavraCompleta(source),rawLemma=normalizaLexema(info.lema||source),singular=normalizaLexema(converterParaSingular(rawLemma)),knownSingular=catalogoSet().has(singular),pluralForm=/(?:ões|ães|ãos|ns|ais|eis|ois|uis|as|os|es|res|zes)$/u.test(rawLemma),word=knownSingular||pluralForm?singular:rawLemma;if(word.length<3||word.length>18)continue;
+    const proper=info.classes.includes('substantivo próprio provável');
+    if(!proper&&(info.classes.includes('substantivo')||info.classes.includes('substantivo provável'))){
+      const gender=info.genero==='feminino'||info.genero==='masculino'?info.genero:(/a$/.test(word)?'feminino':'masculino'),weight=(info.classes.includes('substantivo')?1:.42)*(info.vertentePolitica?1.2:1);
+      const current=nouns.get(word);if(!current||weight>current.weight)nouns.set(word,{word,gender,weight});
+    }
+    const verb=normalizaLexema(source);if(info.classes.includes('verbo')&&!verb.includes('-')&&conjugarVerbo(verb,{tempo:'presente',pessoa:3}))verbs.add(verb);
+    if(info.classes.includes('adjetivo')&&!proper)adjectives.add(word);
+  }
+  const bank={nouns:[...nouns.values()],verbs:[...verbs],adjectives:[...adjectives]};bancosGramaticais.set(theme,bank);return bank;
+}
+function pluralizarFrase(word){
+  if(/ção$/u.test(word))return word.slice(0,-3)+'ções';if(/são$/u.test(word))return word.slice(0,-3)+'sões';
+  if(word.endsWith('s'))return word;
+  if(/ão$/u.test(word)){for(const ending of ['ões','ãos','ães']){const candidate=word.slice(0,-2)+ending;if(catalogoSet().has(normalizaLexema(candidate)))return candidate;}return word;}
+  return pluralRegular(word);
+}
+function sintagmaNominal(item,bank,random){
+  const wantsPlural=random()<.2,pluralForm=pluralizarFrase(item.word),plural=wantsPlural&&pluralForm!==item.word,gender=item.gender==='feminino'?'f':'m',definite=random()<.68,article=artigosFrase[gender][definite?(plural?2:0):(plural?3:1)],noun=plural?pluralForm:item.word;
+  let phrase=`${article} ${noun}`;
+  if(bank.adjectives.length&&random()<.16){const adjective=escolheLexema(bank.adjectives,random);let form=adjective;if(gender==='f'&&/o$/u.test(form))form=form.slice(0,-1)+'a';else if(gender==='m'&&/a$/u.test(form)&&!/(?:ista|eza)$/u.test(form))form=form.slice(0,-1)+'o';if(plural)form=pluralizarFrase(form);phrase+=` ${form}`;}
+  return {phrase,plural};
+}
+function montarProposicao(bank,random){
+  const subjectItem=escolheLexema(bank.nouns,random),otherNouns=bank.nouns.filter(item=>item.word!==subjectItem.word),objectItem=otherNouns.length?escolheLexema(otherNouns,random):subjectItem,subject=sintagmaNominal(subjectItem,bank,random),verb=bank.verbs.length?escolheLexema(bank.verbs,random):'ser',time=random()<.88?'presente':'pretérito-perfeito',conjugated=conjugarVerbo(verb,{tempo:time,pessoa:subject.plural?6:3});
+  if(!bank.verbs.length&&bank.adjectives.length)return `${subject.phrase} ${conjugated} ${escolhe(bank.adjectives,random)}`;
+  const object=sintagmaNominal(objectItem,bank,random);return `${subject.phrase} ${conjugated} ${object.phrase}`;
 }
 export function gerarFrase({tema=null,random=Math.random,complexidade='variada'}={}){
   if(typeof random!=='function')throw new TypeError('random precisa ser uma função');
-  const bank=frasesBanco(tema||'cotidiano');if(!bank.nouns.length)throw new RangeError('O catálogo não tem substantivos disponíveis para esse tema');
-  const nounMap=new Map(bank.nouns.map(item=>[item[0],item])),frames=(relacoesDeFrase[bank.key]||relacoesDeFrase.cotidiano).filter(([subject,,object])=>nounMap.has(subject)&&nounMap.has(object));if(!frames.length)throw new RangeError(`O tema ${bank.key} não tem relações lexicais suficientes para formar uma frase`);
-  const build=frame=>{const [subjectWord,verbWord,objectWord,preposition='']=frame,subjectNoun=nounMap.get(subjectWord),subject=montarSintagma(subjectNoun,random,{adjective:random()<.2}),object=montarSintagma(nounMap.get(objectWord),random),verb=conjugarVerbo(verbWord,{tempo:random()<.85?'presente':'pretérito-perfeito',pessoa:subject.plural?6:3});return `${subject.text} ${verb} ${unirPreposicao(preposition,object.text)}`;};
-  const capitalize=text=>text.charAt(0).toLocaleUpperCase('pt-BR')+text.slice(1),selected=escolhe(frames,random);let sentence=build(selected);
-  if((complexidade==='complexa'||complexidade==='variada')&&frames.length>1&&random()<(complexidade==='complexa'?.55:.24)){const second=escolhe(frames.filter(frame=>frame!==selected),random);sentence+=`, enquanto ${build(second)}`;}
+  const requested=normalizaLexema(tema||'cotidiano'),theme=aliasesTema[requested]||requested;if(!temasLexicais[theme])throw new RangeError(`Tema desconhecido: ${tema}`);
+  const bank=bancoGramatical(theme);if(!bank.nouns.length)throw new RangeError(`O tema ${theme} não tem substantivos classificados suficientes para formar uma frase`);
+  const capitalize=text=>text.charAt(0).toLocaleUpperCase('pt-BR')+text.slice(1);let sentence=montarProposicao(bank,random);
+  if(complexidade==='complexa'&&random()<.4||complexidade==='variada'&&random()<.12)sentence+=`, enquanto ${montarProposicao(bank,random)}`;
   return `${capitalize(sentence)}.`;
 }
 export function gerarFraseTematica(tema,{random=Math.random,complexidade='variada'}={}){

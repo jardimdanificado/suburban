@@ -4,4 +4,4 @@ export {
   gerarFrase,
   gerarFraseTematica,
   criarSubstantivoCombinado,
-} from './vocabulario.js?v=vocabulary-language-1';
+} from './vocabulario.js?v=vocabulary-pos-composition-2';

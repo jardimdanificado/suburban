@@ -20,8 +20,8 @@ import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politi
 import { TAX_CATEGORIES, MINIMUM_WAGE_TAX_RATE, MINIMUM_BUSINESS_TAX_RATE } from './city_sales_tax.js';
 import { makePartyFlag, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
 import { CityCouncil } from './city_council.js?v=wardrobe-expansion-1';
-import { CityCampaigns } from './city_campaigns.js?v=party-slogans-1';
-import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-language-1';
+import { CityCampaigns } from './city_campaigns.js?v=party-slogans-pos-composition-2';
+import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-pos-composition-2';
 import {prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=quarry-outskirts-1';
@@ -159,8 +159,8 @@ export class CityGovernment extends CityPolitics {
     this.fillParties();
     for(const party of this.parties){
       if(!party.slogan)party.slogan=gerarFraseTematica('politica',{random:()=>this.city.random()});
-      if(!party.flag?.emblems)party.flag=makePartyFlag(this.city,party.id-1,party.founderIds?.map(id=>this.city.society.citizen(id))||[],party);
-      if(party.flag?.texts?.length){const texts=party.flag.texts.map(text=>Object.freeze({...text,value:text.kind==='number'?String(party.number??''):text.kind==='name-number'?`${party.short||party.name} ${party.number??''}`.trim():text.kind==='name'?party.short||party.name:text.kind==='slogan'?party.slogan:text.value}));party.flag=Object.freeze({...party.flag,texts:Object.freeze(texts)});}
+      if(!party.flag?.layoutId)party.flag=makePartyFlag(this.city,party.id-1,party.founderIds?.map(id=>this.city.society.citizen(id))||[],party);
+      if(party.flag?.texts?.length){const texts=party.flag.texts.map(text=>Object.freeze({...text,value:text.kind==='number'?String(party.number??''):text.kind==='name-number'?`${party.short||party.name} ${party.number??''}`.trim():text.kind==='name'?party.short||party.name:text.kind==='phrase'?party.slogan:text.value}));party.flag=Object.freeze({...party.flag,texts:Object.freeze(texts)});}
     }
     for(const citizen of this.city.citizens){const campaign=citizen.campaign,party=campaign&&this.party(campaign.partyId);if(!party)continue;campaign.partyFlag=party.flag;campaign.speechColor=party.flag.background;if(campaign.flag)campaign.flag=party.flag;}
     for(const citizen of this.city.citizens){const presence=citizen.campaignPresence,party=presence&&this.party(presence.partyId);if(party)presence.partyFlag=party.flag;}
