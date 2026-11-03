@@ -5,8 +5,9 @@ import {bodyFatAmount} from './city_body_metrics.js?v=body-morph-4';
 import {TROPICAL_PRINTS} from './city_clothing.js?v=tropical-caribbean-prints-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
+const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
 export function citizenIsSleeping(c){
- if(c?.task!=='energy'||!c.sleep?.active||c.path?.length||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
+ if(c?.task!=='energy'||!c.sleep?.active||citizenHasPath(c)||c.mobilityTrip||c.ridingVehicleId||c.deliveryId)return false;
  const s=c.indoorLocation;
  if(s)return s.roomType==='bedroom'&&!s.exiting&&!s.path?.length;
  return !!c.homelessSleepSpot&&!!c.entity&&Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)<=.3;
@@ -39,8 +40,8 @@ export function citizenAnimation(c,moving=false){
   const activelyUsingFurniture=!!c.furnitureUse&&!c.furnitureUse.seated;
   const activelyWorkingOutside=!!c.workCell||!!c.forestryJob||!!c.paintWorkId;
   const activelyInsideWork=!!c.indoorLocation?.unitId&&WORK_TASKS.has(c.task);
-  const activelyOnGig=!!c.informalJobId&&!c.path?.length;
-  const activelyWorking=WORK_TASKS.has(c.task)&&!c.path?.length&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
+  const activelyOnGig=!!c.informalJobId&&!citizenHasPath(c);
+  const activelyWorking=WORK_TASKS.has(c.task)&&!citizenHasPath(c)&&(activelyUsingFurniture||activelyWorkingOutside||activelyInsideWork||activelyOnGig||c.task==='construction'&&c.workProjectId!=null);
   if(!activelyWorking)return 'idle';
   return ALT_USE_TASKS.has(c.task)?'use_alt':'use';
 }
@@ -377,7 +378,7 @@ export class CityCitizenModels {
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
-    const inside=c.ridingVehicleId?null:c._renderIndoorPosition||c.indoorLocation?.position,posePoint=!c.path?.length&&!c.indoorLocation?.path?.length&&(c.furnitureUse?.pose==='lying'||c.furnitureUse?.seated)?c.furnitureUse.posePoint:null,x=posePoint?.x??inside?.x??entity.x,y=posePoint?.y??inside?.y??entity.y;
+    const inside=c.ridingVehicleId?null:c._renderIndoorPosition||c.indoorLocation?.position,posePoint=!citizenHasPath(c)&&!c.indoorLocation?.path?.length&&(c.furnitureUse?.pose==='lying'||c.furnitureUse?.seated)?c.furnitureUse.posePoint:null,x=posePoint?.x??inside?.x??entity.x,y=posePoint?.y??inside?.y??entity.y;
     let motion=this.motion.get(entity);
      if(!motion){motion={x,y,renderX:x,renderY:y,angle:0,renderAngle:0,walkDistance:0,walkFrame:0,lastStepAt:-Infinity};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
@@ -398,7 +399,7 @@ export class CityCitizenModels {
     if(moved&&!this.animationPaused&&motion.walkDistance+1e-8>=.25&&this.clock-motion.lastStepAt>=.1-1e-8){motion.walkFrame++;motion.walkDistance=Math.max(0,motion.walkDistance%.25);motion.lastStepAt=this.clock;}
     // A pending path is not movement. Hold the travel pose between footsteps;
     // work animations still use the simulation's presentation clock.
-    const traveling=moved||!!c.path?.length||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
+    const traveling=moved||citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
     const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
     else motion.actionToken=null;

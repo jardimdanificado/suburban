@@ -1,6 +1,6 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=production-plan-profile-9';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=production-plan-profile-19';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=production-plan-profile-9";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=production-plan-profile-19";
 import { CityDesktop } from "./js/city_desktop.js?v=election-support-map-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=exterior-doorframe-cull-3";
@@ -110,7 +110,7 @@ function profileCityMeshes(groups){
   let visibleBuildings=0,meshObjects=0,triangles=0,cellTriangles=0,cellDraws=0;
   const meshTriangles=mesh=>Math.floor((mesh.geometry?.index?.count??mesh.geometry?.attributes?.position?.count??0)/3)*(mesh.isInstancedMesh?mesh.count:1);
   const componentStats=root=>{let draws=0,faces=0;if(root?.visible)root.traverse(object=>{if(!object.isMesh||!object.visible)return;for(let parent=object.parent;parent&&parent!==root;parent=parent.parent)if(!parent.visible)return;draws++;faces+=meshTriangles(object);});return {draws,triangles:faces};};
-  const components={doorFrames:{draws:0,triangles:0},exteriorDoorFrames:{draws:0,triangles:0},facade:{draws:0,triangles:0},floors:{draws:0,triangles:0},ceilings:{draws:0,triangles:0},roof:{draws:0,triangles:0},supports:{draws:0,triangles:0},slab:{draws:0,triangles:0},stairs:{draws:0,triangles:0}};
+  const components={doorFrames:{draws:0,triangles:0},exteriorDoorFrames:{draws:0,triangles:0},facade:{draws:0,triangles:0,materialKinds:{}},floors:{draws:0,triangles:0},ceilings:{draws:0,triangles:0},roof:{draws:0,triangles:0},supports:{draws:0,triangles:0},slab:{draws:0,triangles:0},stairs:{draws:0,triangles:0}};
   for(const group of groups?.values?.()||[]){
     if(!group.visible)continue;
     visibleBuildings++;
@@ -118,6 +118,7 @@ function profileCityMeshes(groups){
     for(const key of Object.keys(components)){
       const target=key==='floors'?group.userData.interiorFloors:key==='ceilings'?group.userData.interiorCeilings:group.userData[key];
       const stats=componentStats(target);components[key].draws+=stats.draws;components[key].triangles+=stats.triangles;
+      if(key==='facade'&&target)target.traverse(object=>{if(!object.isMesh||!object.visible)return;const material=object.material,kind=[material?.type||'unknown',material?.map?'map':'plain',material?.vertexColors?'vertex':'solid',material?.side===2?'double':'front',object.isInstancedMesh?'instanced':'mesh'].join(':');components.facade.materialKinds[kind]=(components.facade.materialKinds[kind]||0)+1;});
     }
     group.traverse(object=>{
       if(!object.isMesh||!object.visible) return;

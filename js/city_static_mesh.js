@@ -1,8 +1,8 @@
 // Static facade details have no individual animation or picking. Baking their
 // transforms and colors into one mesh preserves the model while avoiding a
 // draw call (and shadow draw) for every rail, planter and roof accessory.
-export function mergeStaticMeshes(THREE,root){
- const parts=root.children.filter(m=>m.isMesh&&!m.userData.skipStaticMerge&&m.geometry?.attributes?.position&&m.geometry?.attributes?.normal&&!Array.isArray(m.material));
+export function mergeStaticMeshes(THREE,root,{filter=null}={}){
+ const parts=root.children.filter(m=>m.isMesh&&!m.isInstancedMesh&&!m.userData.skipStaticMerge&&m.geometry?.attributes?.position&&m.geometry?.attributes?.normal&&!Array.isArray(m.material)&&(!filter||filter(m)));
  const batches=new Map();for(const mesh of parts){const key=`${mesh.castShadow?1:0}:${mesh.receiveShadow?1:0}`,batch=batches.get(key)||[];batch.push(mesh);batches.set(key,batch);}
  const materials=new Set();
  for(const batch of batches.values()){

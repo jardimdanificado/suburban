@@ -11,7 +11,7 @@ import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=gr
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=lively-street-market-stalls-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=building-doorway-opening-2';
 import { partyFlagCanvas } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=tropical-caribbean-prints-1';
+import {citizenIsSleeping} from './city_citizen_models.js?v=citizen-active-batches-3';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-neoclassical-1';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
@@ -19,7 +19,7 @@ import {quarryDeposits} from './city_terrain.js?v=quarry-outskirts-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=courthouse-neoclassical-1';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-4';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
 const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
 const EMPTY_FLOORS=new Set();
@@ -509,6 +509,10 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       awning.material.color.setHex(awningColors[b.type] ?? 0xc9d9a1);
       if(!mine&&!style.motif){awning.position.set(entranceX, 1.55, b.depth + .25); awning.castShadow = true; facade.add(awning);}
       }
+      mergeStaticMeshes(THREE,facade,{filter:mesh=>{
+        const material=mesh.material;
+        return material?.isMeshLambertMaterial&&!material.map&&!material.alphaMap&&!material.vertexColors&&!material.transparent&&material.opacity===1&&material.alphaTest===0&&material.side===THREE.FrontSide&&!material.flatShading&&material.emissive?.getHex()===0;
+      }});
       const highlight = new THREE.Mesh(new THREE.BoxGeometry(1.02, CITY_FLOOR_HEIGHT+.02, 1.02), new THREE.MeshBasicMaterial({ color: 0xf0e6a1, wireframe: true }));
       highlight.visible = false; group.add(highlight); group.userData.highlight = highlight;
       const supports = new THREE.InstancedMesh(new THREE.BoxGeometry(.2, 1, .2), new THREE.MeshLambertMaterial({ color: 0x68756a }), b.width * b.depth);

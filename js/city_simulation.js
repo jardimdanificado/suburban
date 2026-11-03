@@ -44,11 +44,11 @@ import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-investme
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=body-weight-2';
 import { CityWorkMeals } from './city_work_meals.js?v=substances-sleep-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=favela-tree-roads-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=plot-overlap-spatial-1';
 import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=production-plan-profile-9';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=production-plan-profile-19';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=favela-tree-roads-1';
 
@@ -575,10 +575,10 @@ export class CitySimulation {
     // an early health warning must not lock someone out of food or water when
     // either is already critically low; restore the immediate survival need
     // first, then resume medical care on the next decision pass.
-    const basics=Math.min(c.needs.food,c.needs.water);
-    if(c.needs.health<20&&basics>12)return 'health';
-    let need,score=Infinity;
-    for(const [key,threshold,penalty] of URGENT_NEEDS){const value=c.needs[key];if(value<threshold && (need===undefined || value-penalty<score)){need=key;score=value-penalty;}}
+    const profile=this._citizenLoopProfile,started=profile?performance.now():0,basics=Math.min(c.needs.food,c.needs.water);let need;
+    if(c.needs.health<20&&basics>12)need='health';
+    else{let score=Infinity;for(const [key,threshold,penalty] of URGENT_NEEDS){const value=c.needs[key];if(value<threshold&&(need===undefined||value-penalty<score)){need=key;score=value-penalty;}}}
+    if(profile)profile.urgentNeedMs=(profile.urgentNeedMs||0)+performance.now()-started;
     return need;
   }
   routeHomelessToSleep(c) {
@@ -642,7 +642,7 @@ export class CitySimulation {
   }
 
   chooseTask(c) {
-    const n = c.needs;
+    const n = c.needs,profile=this._citizenLoopProfile,measure=profile&&((name,work)=>{const started=performance.now(),result=work();profile[`${name}Ms`]=(profile[`${name}Ms`]||0)+performance.now()-started;return result;});
     const home = this.building(this.units.get(c.homeUnitId)?.buildingId);
     const job = this.building(c.jobId);
     const companies=c.role==='councilor'||!c.businessIds.length?NO_CHILDREN:c.businessIds.map(id=>this.building(id)).filter(b=>b?.active).sort((a,b)=>Number(b.type==='farm')-Number(a.type==='farm'));
@@ -650,8 +650,8 @@ export class CitySimulation {
     const child = this.childrenOf(c.id).find(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
     let task = 'leisure', type = 'leisure';
     const urgent = this.urgentNeed(c);
-    if((!urgent||['food','water'].includes(urgent))&&this.supplies.route(c))return;
-    const streetStall=streetMarketFor(this.economy,c);
+    if(!urgent||['food','water'].includes(urgent)){const routed=measure?measure('taskSuppliesRoute',()=>this.supplies.route(c)):this.supplies.route(c);if(routed)return;}
+    const streetStall=measure?measure('taskMarketCheck',()=>streetMarketFor(this.economy,c)):streetMarketFor(this.economy,c);
     if(!urgent&&!wantsSleep(this,c)&&streetStall&&this.society.isAdult(c)&&Math.min(n.food,n.water,n.energy,n.health,n.toilet)>25&&!c.conversation&&!c.deliveryId&&!c.workMeal){
       const path=this.findPath(c.entity,streetStall.position);
       if(path!==null){c.path=path;if(!path.length||Math.hypot(path.at(-1).x-streetStall.position.x,path.at(-1).y-streetStall.position.y)>.05)c.path.push({...streetStall.position});c.targetId=null;c.task='market-vending';c.action='Indo anunciar produtos na feira';return;}
@@ -687,13 +687,13 @@ export class CitySimulation {
        }
       }
     }
-    if(task==='leisure'&&!urgent&&joblessDuringShift&&searchEmployment(this,c))return;
-    if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&this.paint.route(c))return;
-    if (task === 'social' && this.relationships.seekContact(c)) return;
-    if(task==='leisure'&&!urgent&&this.furniture.routeLeisure(c))return;
-    if(task==='hygiene'&&this.sanitation.choose(c,'hygiene'))return;
+    if(task==='leisure'&&!urgent&&joblessDuringShift&&(measure?measure('taskEmploymentSearch',()=>searchEmployment(this,c)):searchEmployment(this,c)))return;
+    if(!urgent&&Math.min(n.food,n.water,n.energy,n.toilet,n.health)>=45&&this.hour>=6&&this.hour<22&&(measure?measure('taskPaintingRoute',()=>this.paint.route(c)):this.paint.route(c)))return;
+    if(task==='social'&&(measure?measure('taskSocialSearch',()=>this.relationships.seekContact(c)):this.relationships.seekContact(c)))return;
+    if(task==='leisure'&&!urgent&&(measure?measure('taskFurnitureRoute',()=>this.furniture.routeLeisure(c)):this.furniture.routeLeisure(c)))return;
+    if(task==='hygiene'&&(measure?measure('taskHygieneSearch',()=>this.sanitation.choose(c,'hygiene')):this.sanitation.choose(c,'hygiene')))return;
     if (task === 'toilet') {
-      if (this.sanitation.choose(c)) { c.toiletWaitingSince=null; return; }
+      if (measure?measure('taskToiletSearch',()=>this.sanitation.choose(c)):this.sanitation.choose(c)) { c.toiletWaitingSince=null; return; }
       c.toiletWaitingSince??=this.minute;
       // A full or inaccessible bathroom must not trap a person indefinitely.
       // Emergency relief has real hygiene and mood costs; it is not a service.
@@ -703,14 +703,14 @@ export class CitySimulation {
       return;
     }
     c.toiletWaitingSince=null;
-    if (task === 'food' && this.workMeals.routeToMeal(c)) return;
+    if (task === 'food' && (measure?measure('taskMealSearch',()=>this.workMeals.routeToMeal(c)):this.workMeals.routeToMeal(c))) return;
     if (task === 'food' && c.provisions > 0) {
       if(!home || n.food<25){c.task='provisions';c.path=[];c.targetId=null;return;}
       task = 'provisions'; type = 'home';
     }
     if(!urgent && this.society.isAdult(c) && !['work','manage','care','caregiving','food','provisions','toilet'].includes(task) && this.hour>=6 && this.hour<22 && this.minute-(c.lastShoppingAt||0)>180 && this.minute-(c.lastShoppingSearchAt??-Infinity)>=30) {
       c.lastShoppingSearchAt=this.minute;
-      const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).map((b,index)=>({b,index,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)})).sort((a,b)=>a.score-b.score||a.index-b.index);
+      const shops=(measure?measure('taskShoppingSearch',()=>this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).map((b,index)=>({b,index,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)})).sort((a,b)=>a.score-b.score||a.index-b.index)):this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).map((b,index)=>({b,index,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)})).sort((a,b)=>a.score-b.score||a.index-b.index));
       for(const {b:shop} of shops) {const path=this.findPath(c.entity,shop.door);if(path!==null){c.path=path;c.targetId=shop.id;c.task='shopping';return;}}
     }
     // Citizens with no pressing need or appointment should not flood the town
@@ -733,7 +733,7 @@ export class CitySimulation {
     const hall = this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
     const candidates = type === 'company' ? [company] : task === 'food' ? this.buildings.filter(b=>b.type!=='townhall') : type === 'child' ? (childHome ? [childHome] : home ? [home] : []) : type === 'home' ? (home ? [home] : []) : type === 'job' ? [job] : this.buildings.filter(b => !b.entity.destroyed && (b.type === type||['clinic','leisure'].includes(type)&&civicSpec(b)?.need===(type==='clinic'?'health':'leisure')));
     if (hall && ((type === 'home' && !home) || ['utility', 'clinic', 'leisure'].includes(type))) { const serviceCost = this.currency.price({ utility: 35, clinic: 240, leisure: 25 }[type] || 0); const cash = this.accounts.get(this.payerFor(c))?.balance || 0; if (!candidates.includes(hall)) candidates.push(hall); if(cash<serviceCost&&!candidates.some(b=>civicSpec(b)&&!b.ownerId&&civicStatus(this,b,c)?.ready))candidates.splice(0,candidates.length,hall); }
-    const foodScores=task==='food'?new Map(candidates.map(b=>[b,this.economy.mealScore(c,b)])):null;
+    const foodScores=task==='food'?(measure?measure('taskMealScoring',()=>new Map(candidates.map(b=>[b,this.economy.mealScore(c,b)]))):new Map(candidates.map(b=>[b,this.economy.mealScore(c,b)]))):null;
     candidates.sort((a, b) => foodScores ? foodScores.get(a)-foodScores.get(b) : Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y));
     for (const b of candidates) {
       if (foodScores && !Number.isFinite(foodScores.get(b))) continue;
@@ -996,20 +996,23 @@ export class CitySimulation {
     for (const c of this.citizens)if(c.workMeal||(c.jobId||c.businessIds.length)&&c.needs.food<45)this.workMeals.tryStart(c);
     this.logistics.updateMinute();
     const servicesMs=performance.now()-profileMark;profileMark=performance.now();
-    this.politics.voting.updateMinute();
-    this.justice.updateMinute();
-    this.politics.getResearch().updateMinute();
-    this.politics.council.getChamber().minute();
-    this.politics.campaigns.getMaterials().minute();
-    this.vehicles.minute();
+    const civicDetail=this.profileDiagnostics?{}:null,measureCivic=(name,work)=>{if(!civicDetail){work();return;}const started=performance.now();work();civicDetail[`${name}Ms`]=performance.now()-started;};
+    measureCivic('voting',()=>this.politics.voting.updateMinute());
+    measureCivic('justice',()=>{this.justice.updateMinute();if(civicDetail)civicDetail.justiceParts=this.justice.lastMinuteProfile;});
+    measureCivic('research',()=>this.politics.getResearch().updateMinute());
+    measureCivic('council',()=>this.politics.council.getChamber().minute());
+    measureCivic('campaignMaterials',()=>this.politics.campaigns.getMaterials().minute());
+    measureCivic('vehicles',()=>this.vehicles.minute());
     const civicMs=performance.now()-profileMark;profileMark=performance.now();
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
     if (this.minute % 60 === 0) this.flushPayroll();
     const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
     for(const [key,shelter] of this.cardboardShelters){const owner=this.society.citizen(shelter.citizenId);if(!owner||owner.entity.destroyed||owner.homeUnitId){this.cardboardShelters.delete(key);this.cardboardRevision++;if(owner){owner.cardboardShelterKey=null;owner.homelessSleepSpot=null;if(!owner.entity.destroyed){owner.inventory??={};owner.inventory.papelao=1;}}}}
     const setupMs=performance.now()-profileMark;profileMark=performance.now();
+    const citizenDetail=this.profileDiagnostics?{}:null,measureCitizen=(name,work)=>{if(!citizenDetail){work();return;}const started=performance.now();work();citizenDetail[`${name}Ms`]=(citizenDetail[`${name}Ms`]||0)+performance.now()-started;};
+    this._citizenLoopProfile=citizenDetail;
     for (const c of this.citizens) {
-      this.life.recoverBlockedPosition(c);
+      if(citizenDetail)measureCitizen('blockedPositionRecovery',()=>this.life.recoverBlockedPosition(c));else this.life.recoverBlockedPosition(c);
       const n = c.needs;
       // Idle adults cannot choose another activity until their short retry
       // window expires. Accumulate their passive need changes in one pass;
@@ -1039,7 +1042,7 @@ export class CitySimulation {
       // and transport, where updateDetainee intentionally does not run the
       // in-cell care cycle yet.
       if(c.custody){const jail=this.building(c.custody.jailId);if(jail?.active&&!jail.entity.destroyed){this.justice.servePrisoner(c,jail);this.supplies.useCarried(c);}}
-      if (this.life.minute(c,elapsed)) continue;
+      let died=false;if(citizenDetail)measureCitizen('lifeMinute',()=>{died=this.life.minute(c,elapsed);});else died=this.life.minute(c,elapsed);if(died)continue;
       this.justice.updateInjuries(c);
       if(c.custodyWaterDelivery){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyWaterDelivery(c);continue;}
       if(c.funeralBodyId){if(c.skybridgeTransit)this.finishSkybridgeTransit(c);if(c.skybridgeTransit){this.justice.updateFuneralWorker(c);continue;}if(c.indoorLocation&&!c.funeralInterior&&!syncCitizenInterior(this,c))continue;this.justice.updateFuneralWorker(c);continue;}
@@ -1064,9 +1067,9 @@ export class CitySimulation {
       if(c.policeInvestigation){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePoliceInvestigation(c);continue;}
       if(c.policePatrol){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePolicePatrol(c);continue;}
       if(c.skybridgeTransit){this.finishSkybridgeTransit(c);if(c.skybridgeTransit)continue;}
-      if(age>=18&&!c.indoorLocation&&!c.businessIds.length&&!this.politics.officeHolder(c)&&this.minute>=(c.career?.nextDiscoveryAt??c.id%RECRUITMENT_RULES.discoveryInterval))discoverVacancies(this,c);
+      if(age>=18&&!c.indoorLocation&&!c.businessIds.length&&!this.politics.officeHolder(c)&&this.minute>=(c.career?.nextDiscoveryAt??c.id%RECRUITMENT_RULES.discoveryInterval)){if(citizenDetail)measureCitizen('vacancyDiscovery',()=>discoverVacancies(this,c));else discoverVacancies(this,c);}
       if(c.mobilityTrip||c.ridingVehicleId)continue;
-      if (c.workMeal&&this.workMeals.advance(c)) continue;
+      let mealAdvanced=false;if(c.workMeal){if(citizenDetail)measureCitizen('workMealAdvance',()=>{mealAdvanced=this.workMeals.advance(c);});else mealAdvanced=this.workMeals.advance(c);}if(mealAdvanced)continue;
       if(c.task!=='energy'&&wantsSleep(this,c)&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!['food','water','health','toilet','hygiene','care','caregiving','provisions','workmeal','supplies'].includes(c.task)){c.task=null;c.path=[];}
       if(c.task==='energy'&&c.sleep?.active&&!c.path.length&&Math.min(n.food,n.water,n.health,n.toilet)>5){this.performTask(c);continue;}
       const urgent = this.urgentNeed(c);
@@ -1090,16 +1093,16 @@ export class CitySimulation {
         // Retry on a changed urgent need, at shift boundaries, or after a short
         // delay. At 32× this is only a fraction of a real second.
         if(this.minute<(c._nextTaskAt||0)&&c._retryUrgent===urgent)continue;
-        c.servicePaid = null; this.chooseTask(c);
+        c.servicePaid = null;if(citizenDetail)measureCitizen('taskChoice',()=>this.chooseTask(c));else this.chooseTask(c);
       }
-      if (!c.path.length && c.task) this.performTask(c);
+      if (!c.path.length && c.task){if(citizenDetail)measureCitizen('taskExecution',()=>this.performTask(c));else this.performTask(c);}
       if(!c.task){
         const stable=c.homeUnitId&&n.food>35&&n.water>35&&n.energy>35&&n.health>35&&n.toilet>35;
         const interval=stable?SIMULATION_LOD.stableDecisionMinutes:SIMULATION_LOD.unstableDecisionMinutes;
         c._nextTaskAt=this.minute+interval+c.id%interval;c._retryUrgent=urgent;
       }
     }
-    const citizenMs=performance.now()-profileMark;profileMark=performance.now();
+    this._citizenLoopProfile=null;const citizenMs=performance.now()-profileMark;profileMark=performance.now();
     for(const c of this.citizens)if(!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
     for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait)this.furniture.syncCitizen(c);
     if(this.minute%60===0){this.furniture.reconcile();this.substances?.hourly();}
@@ -1119,7 +1122,7 @@ export class CitySimulation {
       if(this.profileDiagnostics){const started=performance.now(),parts=this.economy.hourly(phase);economyHourly={phase,ms:performance.now()-started,...(parts||{})};}
       else this.economy.hourly(phase);
     }
-    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(this.profileDiagnostics?{societyDetail:this.society.lastUpdateProfile}:{}),...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchWork:Object.fromEntries(['groundCalls','groundCacheHits','aStarCalls','sharedCalls','destinationFields','sourceFields','fieldResets','bridgeChecks'].map(key=>[key,this._pathSearchProfile[key]||0])),pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
+    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(civicDetail?{civicDetail}:{}),...(citizenDetail?{citizenDetail}:{}),...(this.profileDiagnostics?{societyDetail:this.society.lastUpdateProfile}:{}),...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchWork:Object.fromEntries(['groundCalls','groundCacheHits','aStarCalls','sharedCalls','destinationFields','sourceFields','fieldResets','bridgeChecks'].map(key=>[key,this._pathSearchProfile[key]||0])),pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
     this.syncClock();
   }
   syncClock() {

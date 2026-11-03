@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=production-plan-profile-9';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=production-plan-profile-19';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
@@ -24,10 +24,10 @@ const MOTION_INTERVAL = 100;
 const allowed = new Set(['paint.setPalette','paint.requestPurchase','paint.requestVehicle','paint.requestBuilding','vehicles.mountFlag','vehicles.removeFlag','politics.leaseHeadquarters','economy.rentOffice','economy.configureEmployment','economy.offerShares','economy.buyShares','economy.cancelShareOffer','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.executePlayerAction','politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'bank.fileRecoveryPlan', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
 function positions() {
-  const people = state.city.citizens, result = new Float64Array(people.length * 3);
+  const people = state.city.citizens, result = new Float64Array(people.length * 4);
   for (let i = 0; i < people.length; i++) {
-    const c = people[i], at = i * 3;
-    result[at] = c.id; result[at + 1] = c.entity.x; result[at + 2] = c.entity.y;
+    const c = people[i], at = i * 4;
+    result[at] = c.id; result[at + 1] = c.entity.x; result[at + 2] = c.entity.y; result[at + 3] = c.path?.length ? 1 : 0;
   }
   return result;
 }
@@ -54,7 +54,7 @@ function vitals(){
 function recordProfile(profile,prefix=''){
   if(!profile)return;
   for(const [key,value]of Object.entries(profile)){
-    if(key==='step'||key==='societyDetail'||key==='conversationParts'||key==='businessSearch'){recordProfile(value,`${prefix}${key==='step'?'step.':key==='societyDetail'?'societyDetail.':key==='conversationParts'?'conversationParts.':'businessSearch.'}`);continue;}
+    if(key==='step'||key==='societyDetail'||key==='conversationParts'||key==='businessSearch'||key==='civicDetail'||key==='justiceParts'||key==='siteSearch'||key==='citizenDetail'){recordProfile(value,`${prefix}${key==='step'?'step.':key==='societyDetail'?'societyDetail.':key==='conversationParts'?'conversationParts.':key==='civicDetail'?'civicDetail.':key==='justiceParts'?'justiceParts.':key==='siteSearch'?'siteSearch.':key==='citizenDetail'?'citizenDetail.':'businessSearch.'}`);continue;}
     if(key==='pathSearchPeak'&&value){
       const current=phasePeaks[`${prefix}pathSearchPeak`];
       if(!current||profile.pathSearchMaxMs>current.ms)phasePeaks[`${prefix}pathSearchPeak`]={ms:profile.pathSearchMaxMs,minute:profile.minute,...value};
@@ -76,7 +76,7 @@ function recordProfile(profile,prefix=''){
       if(!current||value>current.count)phasePeaks[name]={count:value,minute:profile.minute};
       continue;
     }
-    if((key==='completedCount'||key==='prejudiceActCount'||key.endsWith('CandidateCount'))&&Number.isFinite(value)){
+    if((key==='completedCount'||key==='prejudiceActCount'||key==='calls'||key==='inspections'||key==='orientationHits'||key.endsWith('CandidateCount'))&&Number.isFinite(value)){
       const name=prefix+key,peak=phasePeaks[name];if(!peak||value>peak.count)phasePeaks[name]={count:value,minute:profile.minute};
       continue;
     }
@@ -94,7 +94,7 @@ function snapshot(force = false) {
   if (awaitingAck) { if (force) forceSnapshotPending = true; return false; }
   if (!force && performance.now() - lastSnapshot < stateInterval()) return false;
   const started = performance.now();
-  const packet = graph.encode(state,{packNeeds:true,packPositions:true}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions();
+  const packet = graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:true}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions();
   lastSnapshotCost=performance.now()-started;
   if(lastSnapshotCost>maxSnapshotMs){maxSnapshotMs=lastSnapshotCost;maxSnapshotMinute=state.city.minute;}
   postMessage({ type: 'state', packet, positions: motion, inside, vehicles, tick, elapsed, workMs: lastSnapshotCost, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, packet.packedNeeds.buffer]);

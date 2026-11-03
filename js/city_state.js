@@ -25,7 +25,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=production-plan-profile-9';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=production-plan-profile-19';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=conversation-witness-grid-6';
 import { CityWelfare } from './city_welfare.js';
@@ -36,10 +36,10 @@ import { CityHousing } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=body-weight-2';
 import { CityWorkMeals } from './city_work_meals.js?v=substances-sleep-1';
-import { CityDevelopment } from './city_development.js?v=favela-tree-roads-1';
+import { CityDevelopment } from './city_development.js?v=plot-overlap-spatial-1';
 import { CityLogistics } from './city_logistics.js?v=substances-sleep-1';
 import { CityGigs } from './city_gigs.js?v=art-phrase-generation-1';
-import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=production-plan-profile-9';
+import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=production-plan-profile-19';
 import { CitySociety } from './city_society.js?v=conversation-cost-profile-2';
 import { CityServiceInvestment } from './city_service_investment.js?v=service-investment-founder-index-1';
 import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';
@@ -49,7 +49,7 @@ const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,
   CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, CityJustice, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
-const localFields = new Set(['activity','_uiRevision','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy', 'routeCache', 'routeRevision','familyIndexDirty',
+const localFields = new Set(['activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
   'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_initialTaskStaggerUntil', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at
@@ -73,7 +73,7 @@ export class CityStateGraph {
     return { ref: id };
   }
   value(value) { return value && typeof value === 'object' && 'ref' in value ? this.objects.get(value.ref) : value; }
-  encode(root,{packNeeds=false,packPositions=false}={}) {
+  encode(root,{packNeeds=false,packPositions=false,omitCitizenPaths=false}={}) {
     const nodes=[],removed=[],histories=[];
     let packedNeeds=null,needsSet=null,citizenSet=null,entitySet=null;
     if(packPositions){entitySet=new WeakSet();for(const citizen of root.city.citizens)entitySet.add(citizen.entity);}
@@ -145,10 +145,14 @@ export class CityStateGraph {
       else if (Array.isArray(object)) { kind = 'Array'; data = object.map(reference); }
       else {
         kind = object.constructor?.name || 'Object';fields=true;
-        const oldFields=previous?.kind===kind?previous.data:null;
+        let oldFields=previous?.kind===kind?previous.data:null;
+        if(omitCitizenPaths&&citizenSet?.has(object)&&oldFields){
+          const pathIndex=oldFields.indexOf('path');
+          if(pathIndex>=0){const compact=[];for(let i=0;i<oldFields.length;i+=2)if(oldFields[i]!=='path')compact.push(oldFields[i],oldFields[i+1]);oldFields=compact;this.previous.set(id,{kind,data:compact});}
+        }
         let index=0,delta=null,full=oldFields?null:[];
         for (const key of Object.keys(object)) {
-          if (localFields.has(key)) continue;
+          if (localFields.has(key)||(omitCitizenPaths&&citizenSet?.has(object)&&key==='path')) continue;
           if(accessorFields.has(key)&&Object.getOwnPropertyDescriptor(object,key)?.get)continue;
           const value=object[key];
           if(typeof value === 'function')continue;
@@ -197,13 +201,19 @@ export class CityStateGraph {
     // at 10+ Hz in large cities.
     this.encodeCount=(this.encodeCount||0)+1;
     if(this.encodeCount%4===0)for(const [id,object] of this.objects)if(!wasVisited(id,object)) { removed.push(id); this.objects.delete(id); this.previous.delete(id); this.relationNodes.delete(id); this.ledgerCursors.delete(id); }
-    return { rootId, nodes, removed, histories, nextId: this.nextId, ...(packedNeeds?{packedNeeds}:{}) };
+    return { rootId, nodes, removed, histories, nextId: this.nextId, ...(packedNeeds?{packedNeeds}:{}),...(omitCitizenPaths?{omittedCitizenPaths:true}:{}) };
   }
   apply(packet) {
     for (const { id, kind, data } of packet.nodes) if (!this.objects.has(id)) {
       const object = kind === 'Array' || kind === 'FrozenArray' || kind === 'CityFeed' || kind === 'CityLedger' ? [] : kind === 'CityHistory' ? new CityHistory(null) : kind === 'Map' ? new Map() : kind === 'Set' ? new Set() :
         kind === 'Uint8Array' ? new Uint8Array(data.length) : Object.create(prototypes.get(kind) || Object.prototype);
       this.objects.set(id, object); this.ids.set(object, id);
+    }
+    let omittedPathCitizens=null;
+    if(packet.omittedCitizenPaths){
+      const root=this.objects.get(packet.rootId);
+      omittedPathCitizens=new WeakSet();
+      for(const citizen of root?.city?.citizens||[]){omittedPathCitizens.add(citizen);const id=this.ids.get(citizen),previous=this.previous.get(id);if(!previous)continue;const data=previous.data,compact=[];let changed=false;for(let i=0;i<data.length;i+=2){if(data[i]==='path'){changed=true;continue;}compact.push(data[i],data[i+1]);}if(changed)this.previous.set(id,{kind:previous.kind,data:compact});}
     }
     const resolve = value => typeof value === 'string' && value.startsWith('@') ?
       value.startsWith('@s') ? value.slice(2) : this.objects.get(Number(value.slice(1))) : value;
@@ -224,7 +234,7 @@ export class CityStateGraph {
         if(sameShape)for(let i=0;i<data.length;i+=2)if(baseline[i]!==data[i]){sameShape=false;break;}
         const keys=patch||sameShape?null:new Set();
         for(let i=0;i<data.length;i+=2){const key=patch?baseline[data[i]]:data[i];keys?.add(key);object[key]=resolve(data[i+1]);}
-        if(keys)for (const key of Object.keys(object)) if (!keys.has(key) && !localFields.has(key)) {
+        if(keys)for (const key of Object.keys(object)) if (!keys.has(key) && !localFields.has(key) && !(key==='path'&&omittedPathCitizens?.has(object))) {
           const descriptor=Object.getOwnPropertyDescriptor(object,key);
           if (!descriptor.get && typeof descriptor.value !== 'function') delete object[key];
         }
@@ -275,6 +285,7 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
   city.fiscal??=new CityFiscal(city);
   if(city.substanceSchemaVersion!==1){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={label:spec.label};for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=1;}
   city.housing.invalidateResidents();
+  if(city.development)city.development.plotOverlapBuckets=null;
   city.buildingsById ??= new Map();
   city.childrenByGuardian ??= new Map();
   city.economy.routeCache ??= new Map();

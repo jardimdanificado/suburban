@@ -13,6 +13,7 @@ import {CITY_FLOOR_HEIGHT,buildingPoint} from './city_building_geometry.js';
 import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=body-mobility-1';
 import {civicStatus,civicVisit} from './city_public_services.js';
 import {inventoryFree} from './city_inventory.js';
+import {beginBuildingSiteSearch} from './city_terrain.js?v=quarry-outskirts-1';
 import {PREJUDICE_TYPES,PREJUDICE_CRIME_TYPES,prejudicesInCommon} from './city_prejudice.js?v=discrimination-laws-1';
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const buildingContainsPoint=(building,x,y)=>{const px=x-building.entity.x,py=y-building.entity.y;let localX,localY;switch((building.rotation||0)%4){case 1:localX=building.depth-py;localY=px;break;case 2:localX=building.width-px;localY=building.depth-py;break;case 3:localX=py;localY=building.width-px;break;default:localX=px;localY=py;}return localX>=0&&localX<building.width&&localY>=0&&localY<building.depth;};
@@ -86,12 +87,16 @@ export class CityJustice {
   planFacilities(){
     const city=this.city,hour=Math.floor(city.minute/60);if(this.lastWorksPlanHour===hour)return;this.lastWorksPlanHour=hour;this.lastWorksDay=city.day;
     if(city.treasury<city.welfare.conditions().reserve+50000)return;
-    city.politics.fundInitialWorksBudget();
-    const baseline=new Set(['police_station','iml','jail','courthouse','crematorium','council_oversight_office']);
-    for(const [type,needed]of [['police_station',baseline.has('police_station')||this.cases.some(c=>!['closed','dismissed','convicted','acquitted','decriminalized'].includes(c.status))],['council_oversight_office',baseline.has('council_oversight_office')||this.cases.some(c=>c.type==='investigationFraud'&&!['completed','inconclusive'].includes(c.externalReview?.status))],['iml',baseline.has('iml')||this.bodies.some(b=>['waiting','transporting','autopsy'].includes(b.status))],['jail',baseline.has('jail')||this.cases.some(c=>(['arrested','arrest-requested'].includes(c.status)||c.status==='convicted'&&c.sentence?.completedAt==null&&c.sentence?.suspendedAt==null)&&!c.rule.fineOnly)],['courthouse',baseline.has('courthouse')||this.cases.some(c=>['charged','trial','arrested'].includes(c.status))],['crematorium',baseline.has('crematorium')||this.bodies.some(b=>['cremation-wait','cremation-transporting','cremating'].includes(b.status))]]){
-      if(!needed||(type==='jail'?this.activeBuildings(type).some(b=>this.jailOccupancy(b)<this.jailCapacity(b)):funeralSpec({type})?this.activeBuildings(type).some(b=>this.funeralOccupancy(b)<this.funeralCapacity(b)):this.activeBuildings(type).length)||city.development.projects.some(p=>p.type===type&&!p.cancelled&&p.status!=='completed'))continue;
-      city.politics.startPublicWork(type);
-    }
+    const profile=this.city.profileDiagnostics?{}:null,endSiteSearch=beginBuildingSiteSearch(city,profile?(profile.siteSearch={}):null);
+    try{
+      city.politics.fundInitialWorksBudget();
+      const baseline=new Set(['police_station','iml','jail','courthouse','crematorium','council_oversight_office']);
+      for(const [type,needed]of [['police_station',baseline.has('police_station')||this.cases.some(c=>!['closed','dismissed','convicted','acquitted','decriminalized'].includes(c.status))],['council_oversight_office',baseline.has('council_oversight_office')||this.cases.some(c=>c.type==='investigationFraud'&&!['completed','inconclusive'].includes(c.externalReview?.status))],['iml',baseline.has('iml')||this.bodies.some(b=>['waiting','transporting','autopsy'].includes(b.status))],['jail',baseline.has('jail')||this.cases.some(c=>(['arrested','arrest-requested'].includes(c.status)||c.status==='convicted'&&c.sentence?.completedAt==null&&c.sentence?.suspendedAt==null)&&!c.rule.fineOnly)],['courthouse',baseline.has('courthouse')||this.cases.some(c=>['charged','trial','arrested'].includes(c.status))],['crematorium',baseline.has('crematorium')||this.bodies.some(b=>['cremation-wait','cremation-transporting','cremating'].includes(b.status))]]){
+        if(!needed||(type==='jail'?this.activeBuildings(type).some(b=>this.jailOccupancy(b)<this.jailCapacity(b)):funeralSpec({type})?this.activeBuildings(type).some(b=>this.funeralOccupancy(b)<this.funeralCapacity(b)):this.activeBuildings(type).length)||city.development.projects.some(p=>p.type===type&&!p.cancelled&&p.status!=='completed'))continue;
+        city.politics.startPublicWork(type);
+      }
+    }finally{endSiteSearch();}
+    if(profile)this.lastMinuteProfile={...(this.lastMinuteProfile||{}),siteSearch:profile.siteSearch};
   }
   funeralCapacity(b){return Math.max(2,Math.floor((b.width||3)*(b.depth||3)*(b.floors||1)/3));}
   funeralOccupancy(b){return this.bodies.filter(body=>body.status!=='cremated'&&(body.locationBuildingId===b.id||(['transporting','cremation-transporting'].includes(body.status)&&body.destinationId===b.id)||(b.type==='iml'&&body.imlBuildingId===b.id&&['autopsy','cremation-wait'].includes(body.status))||(b.type==='crematorium'&&body.crematoriumId===b.id&&body.status==='cremating'))).length;}
@@ -276,7 +281,27 @@ export class CityJustice {
     else{body.status='waiting';body.action='Aguardando transporte de retorno ao IML para segunda perícia';review.physicalReviewStatus='awaiting-return-to-iml';review.returnRequestedAt=city.minute;body.nextCollectionAttemptAt=city.minute;}
     city.log(`A cremação do corpo de ${body.name} foi suspensa para uma segunda perícia independente após a condenação do perito.`,'justice',[body.citizenId].filter(Number.isInteger),{kind:'forensic-second-opinion-requested',bodyId:body.id,caseId:body.criminalCaseId??null,briberyCaseId});this.corpseRevision++;return true;
   }
-  updateMinute(){if(this.lastMinute===this.city.minute)return;this.lastMinute=this.city.minute;this.planFacilities();this.updateProtests();this.updatePolicePatrols();for(const body of this.bodies)if(body.status!=='cremated')this.updateBody(body);this.updateCorpseExposure();this.dispatchReports();this.updateInvestigations();this.dispatchExternalPoliceReviews();this.updateCourtCases();dispatchPoliceAudits(this);this.updateRestitutionMissions();this.updateVehicleRecognition();this.updatePropertyFencing();this.updateSkybridgeArtSupport();for(const citizen of this.city.citizens)if(citizen.inventoryProvenance?.length)reconcileStolenInventory(citizen);if(this.city.minute%30===0){this.considerFecesGraffiti();this.reactToArt();}}
+  updateMinute(){
+    if(this.lastMinute===this.city.minute)return;this.lastMinute=this.city.minute;
+    const profile=this.city.profileDiagnostics?{}:null,measure=(name,work)=>{if(!profile){work();return;}const started=performance.now();work();profile[`${name}Ms`]=performance.now()-started;};if(profile)this.lastMinuteProfile=null;
+    measure('planFacilities',()=>this.planFacilities());
+    measure('protests',()=>this.updateProtests());
+    measure('policePatrols',()=>this.updatePolicePatrols());
+    measure('bodies',()=>{for(const body of this.bodies)if(body.status!=='cremated')this.updateBody(body);});
+    measure('corpseExposure',()=>this.updateCorpseExposure());
+    measure('reports',()=>this.dispatchReports());
+    measure('investigations',()=>this.updateInvestigations());
+    measure('externalPoliceReviews',()=>this.dispatchExternalPoliceReviews());
+    measure('courtCases',()=>this.updateCourtCases());
+    measure('policeAudits',()=>dispatchPoliceAudits(this));
+    measure('restitution',()=>this.updateRestitutionMissions());
+    measure('vehicleRecognition',()=>this.updateVehicleRecognition());
+    measure('propertyFencing',()=>this.updatePropertyFencing());
+    measure('skybridgeArt',()=>this.updateSkybridgeArtSupport());
+    measure('stolenInventory',()=>{for(const citizen of this.city.citizens)if(citizen.inventoryProvenance?.length)reconcileStolenInventory(citizen);});
+    if(this.city.minute%30===0){measure('fecesGraffiti',()=>this.considerFecesGraffiti());measure('artReaction',()=>this.reactToArt());}
+    if(profile)this.lastMinuteProfile={...profile,...(this.lastMinuteProfile?.siteSearch?{siteSearch:this.lastMinuteProfile.siteSearch}:{})};
+  }
   updateSkybridgeArtSupport(){
     const pieces=this.art.filter(piece=>!piece.entity.destroyed&&piece.support?.kind==='skybridge');if(!pieces.length)return;const links=new Set((this.city.skybridgeLinksForRevision?.()||[]).map(link=>link.id));
     for(const piece of pieces)if(!links.has(piece.support.linkId)){piece.entity.destroyed=true;piece.destroyedAt=this.city.minute;piece.destroyedBy=null;piece.debris={artId:piece.id,x:piece.entity.x,y:piece.entity.y,createdAt:this.city.minute,reason:'support-removed'};piece.damageHistory??=[];piece.damageHistory.push({minute:this.city.minute,actorId:null,damage:100-(piece.damaged||0),kind:'support-removed',caseId:null});this.city.log(`${this.labelArt(piece.kind)} #${piece.id} caiu quando a passarela que a sustentava foi removida.`,'justice',[piece.creatorId].filter(Number.isInteger),{kind:'art-destroyed-with-support',artId:piece.id,linkId:piece.support.linkId});this.artRevision++;}

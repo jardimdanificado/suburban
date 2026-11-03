@@ -1,5 +1,5 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=production-plan-profile-9';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=production-plan-profile-19';
 import {canStep,terrainWalkable} from './city_terrain.js?v=quarry-outskirts-1';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
@@ -75,7 +75,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=production-plan-profile-9', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=production-plan-profile-19', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling });
@@ -113,6 +113,7 @@ export class CitySimulationBridge {
     }
     if (data.type === 'motion') { this.receiveMotion(data); return; }
     if (data.type !== 'state') return;
+    const nodeKinds=this.city.profileDiagnostics?Object.fromEntries(data.packet.nodes.reduce((counts,node)=>counts.set(node.kind,(counts.get(node.kind)||0)+1),new Map())):null;
     const receiveStarted=performance.now();
     const world=this.city.world,revision=world.revision,count=this.entities.length,structure=this.city.structureRevision,map=world.map;
     const mapId=this.graph.ids.get(map),mapChanged=data.packet.nodes.some(node=>node.id===mapId&&node.kind==='Uint8Array'),previousMap=mapChanged?map.slice():null;
@@ -153,12 +154,13 @@ export class CitySimulationBridge {
     this.lastPositionUpdate = now;
     this.motion.clear();
     for(let i=0;i<this.city.citizens.length;i++){
-      const c=this.city.citizens[i], at=i*3;
+      const c=this.city.citizens[i], at=i*4;
       let sample=this.motionSamples.get(c.id);const existing=!!sample;
       if(!sample){sample={id:c.id,from:{x:c.entity.x,y:c.entity.y},to:{}};this.motionSamples.set(c.id,sample);}
       sample.entity=c.entity;sample.citizen=c;sample.seen=this.city._uiRevision;
       sample.to.x=data.positions?.[at]===c.id?data.positions[at+1]:c.entity.x;
       sample.to.y=data.positions?.[at]===c.id?data.positions[at+2]:c.entity.y;
+      if(Array.isArray(c.path))c.path.length=0;else c.path=[];c._renderPathActive=data.positions?.[at]===c.id&&data.positions[at+3]===1;
       c.entity.x=sample.to.x;c.entity.y=sample.to.y;
       const dx=sample.to.x-sample.from.x,dy=sample.to.y-sample.from.y;
       const reset=!existing||this.time.paused||Math.hypot(dx,dy)>=8;
@@ -168,7 +170,7 @@ export class CitySimulationBridge {
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
     this.applyVehiclePositions(data.vehicles);
     this.changed({ terrain: terrainChanged, terrainTiles, entities: structureChanged });
-    this.metrics={...this.metrics,...data.workerMetrics,encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
+    this.metrics={...this.metrics,...data.workerMetrics,encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,...(nodeKinds?{nodeKinds}:{}),newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
     this.worker.postMessage({ type: 'ack' });
   }
   receiveMotion(data) {
@@ -178,10 +180,11 @@ export class CitySimulationBridge {
     const positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
     this.lastPositionUpdate=now;
     this.time.tick=data.tick;this.time.elapsed=data.elapsed;
-    for(let i=0;i<positions.length;i+=3){
+    for(let i=0;i<positions.length;i+=4){
       const sample=this.motionSamples.get(positions[i]);
       if(!sample||sample.entity.destroyed)continue;
-      if(needs){const c=sample.citizen,at=i/3*needsStride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)c.needs[CITY_NEED_FIELDS[j]]=needs[at+j];c.happiness=needs[at+CITY_NEED_FIELDS.length];c.mood=needs[at+CITY_NEED_FIELDS.length+1];}
+      if(needs){const c=sample.citizen,at=i/4*needsStride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)c.needs[CITY_NEED_FIELDS[j]]=needs[at+j];c.happiness=needs[at+CITY_NEED_FIELDS.length];c.mood=needs[at+CITY_NEED_FIELDS.length+1];}
+      if(Array.isArray(sample.citizen.path))sample.citizen.path.length=0;else sample.citizen.path=[];sample.citizen._renderPathActive=positions[i+3]===1;
       const x=positions[i+1],y=positions[i+2],fromX=sample.to.x,fromY=sample.to.y;
       sample.from.x=fromX;sample.from.y=fromY;sample.to.x=x;sample.to.y=y;
       const dx=x-fromX,dy=y-fromY;
@@ -193,7 +196,7 @@ export class CitySimulationBridge {
       // Older/diagnostic motion packets carried a compact inside bit beside
       // ground coordinates. Keep it readable while current packets use the
       // richer four-float interior position stream below.
-      if(data.indoors)renderIndoorPosition(sample.citizen,data.indoors[i/3]?{x,y,z:0}:null);
+      if(data.indoors)renderIndoorPosition(sample.citizen,data.indoors[i/4]?{x,y,z:0}:null);
     }
     receiveInteriorMotion(this,data.inside,now,this.time.paused);
     this.applyVehiclePositions(data.vehicles);

@@ -16,7 +16,7 @@ const FOUNDING_ESSENTIAL_WORKS = Object.freeze([
 ]);
 export const DEVELOPMENT_RULES = { landPerCell: 4000, stonePerCell: 2, laborPerCell: 3, constructionFeePerCell: 12000, roadStonePerTile: 1, roadLaborPerTile: 2, roadFeePerTile: 8000, bridgeStonePerTile:4,bridgeLaborPerTile:6,bridgeFeePerTile:40000,bridgeHeight:.8,municipalMultiplier: 1.5, wearInterval: 30 * 1440, repairThreshold: 60 };
 export class CityDevelopment {
-  constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; }
+  constructor(city) { this.city = city; this.plots = []; this.projects = []; this.nextPlotId = 1; this.nextProjectId = 1; this.plotOverlapBuckets = null; }
   publicBuildingSite(type,options={}){return findPublicBuildingSite(this,type,options);}
   acquirePublicSite(site){return acquirePublicBuildingSite(this,site);}
   clientCitizen(accountId) { return accountId === 'treasury' ? this.city.economy.citizen(this.city.economy.mayorId) : this.ownerCitizen(accountId); }
@@ -308,10 +308,29 @@ export class CityDevelopment {
   }
   attachBuilding(b, ownerId = 'treasury') {
     const lot = { id: this.nextPlotId++, x: b.entity.x, y: b.entity.y, width: b.width, depth: b.depth, door: { ...b.door }, ownerId, price: b.width * b.depth * this.city.currency.price(DEVELOPMENT_RULES.landPerCell), forSale: false, forRent: false, rent: 0, buildingId: b.id, projectId: null };
-    this.plots.push(lot); b.plotId = lot.id; return lot;
+    this.plots.push(lot); this.indexPlotForOverlap(lot); b.plotId = lot.id; return lot;
   }
   overlaps(x, y, width, depth, exceptId = null) {
-    return this.plots.some(p => p.id !== exceptId && x - 1 < p.x + p.width && x + width + 1 > p.x && y - 1 < p.y + p.depth && y + depth + 1 > p.y);
+    const bucketSize=8,buckets=this.ensurePlotOverlapBuckets(),minX=Math.floor((x-1)/bucketSize),maxX=Math.floor((x+width)/bucketSize),minY=Math.floor((y-1)/bucketSize),maxY=Math.floor((y+depth)/bucketSize),checked=new Set();
+    for(let by=minY;by<=maxY;by++)for(let bx=minX;bx<=maxX;bx++)for(const p of buckets.get(`${bx},${by}`)||[]){
+      if(checked.has(p))continue;checked.add(p);
+      if(p.id!==exceptId&&x-1<p.x+p.width&&x+width+1>p.x&&y-1<p.y+p.depth&&y+depth+1>p.y)return true;
+    }
+    return false;
+  }
+  ensurePlotOverlapBuckets(){
+    if(this.plotOverlapBuckets)return this.plotOverlapBuckets;
+    this.plotOverlapBuckets=new Map();for(const plot of this.plots)this.addPlotOverlapBuckets(plot);return this.plotOverlapBuckets;
+  }
+  addPlotOverlapBuckets(plot){
+    if(!this.plotOverlapBuckets)return;const size=8,minX=Math.floor((plot.x-1)/size),maxX=Math.floor((plot.x+plot.width)/size),minY=Math.floor((plot.y-1)/size),maxY=Math.floor((plot.y+plot.depth)/size);
+    for(let by=minY;by<=maxY;by++)for(let bx=minX;bx<=maxX;bx++){const key=`${bx},${by}`;let bucket=this.plotOverlapBuckets.get(key);if(!bucket)this.plotOverlapBuckets.set(key,bucket=new Set());bucket.add(plot);}
+  }
+  indexPlotForOverlap(plot){this.addPlotOverlapBuckets(plot);}
+  removePlot(plot){
+    const index=this.plots.indexOf(plot);if(index<0)return false;
+    if(this.plotOverlapBuckets){const size=8,minX=Math.floor((plot.x-1)/size),maxX=Math.floor((plot.x+plot.width)/size),minY=Math.floor((plot.y-1)/size),maxY=Math.floor((plot.y+plot.depth)/size);for(let by=minY;by<=maxY;by++)for(let bx=minX;bx<=maxX;bx++){const key=`${bx},${by}`,bucket=this.plotOverlapBuckets.get(key);bucket?.delete(plot);if(bucket&&!bucket.size)this.plotOverlapBuckets.delete(key);}}
+    this.plots.splice(index,1);return true;
   }
   isFarmPlot(plot) {
     if (plot.type === 'quarry' || plot.width < 8 || plot.depth < 8) return false;
@@ -336,7 +355,7 @@ export class CityDevelopment {
       if(findTerrainPath(this.city.world,terrain.door,hall.door,blocked,{limit:4096})===null)return null;
     }
     const p = { id: this.nextPlotId++, x, y, width, depth, type, door: terrain.door, level, ownerId: 'treasury', price: width * depth * this.city.currency.price(DEVELOPMENT_RULES.landPerCell), forSale: true, forRent: false, rent: 0, buildingId: null, projectId: null };
-    this.plots.push(p); return p;
+    this.plots.push(p); this.indexPlotForOverlap(p); return p;
   }
   ensureQuarryPlot(){
     if(this.plots.some(p=>p.ownerId==='treasury'&&p.type==='quarry'&&!p.buildingId&&!p.projectId))return;

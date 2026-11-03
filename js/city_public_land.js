@@ -34,7 +34,7 @@ export function findPublicBuildingSite(dev,type,{allowPurchase=true}={}){
   const attempt=(x,y)=>{
     if(x<1||y<1||x>=city.world.width-2||y>=city.world.height-2)return null;
     for(const [width,depth]of sizes){if(x+width>=city.world.width-1||y+depth>=city.world.height-1||dev.overlaps(x,y,width,depth))continue;
-      const lot=dev.createPlot(x,y,width,depth,{type:category==='urban'?null:category});if(!lot)continue;const site=fit(dev,lot,type);if(site){report.created=true;report.reason='Novo terreno público cadastrado com acesso validado.';city.log(`Novo terreno ${lot.id} cadastrado para ${city.buildingTypes[type].label}.`,'land',[],{kind:'public-land-planned',plotId:lot.id,buildingType:type,x,y});return site;}dev.plots.splice(dev.plots.indexOf(lot),1);
+      const lot=dev.createPlot(x,y,width,depth,{type:category==='urban'?null:category});if(!lot)continue;const site=fit(dev,lot,type);if(site){report.created=true;report.reason='Novo terreno público cadastrado com acesso validado.';city.log(`Novo terreno ${lot.id} cadastrado para ${city.buildingTypes[type].label}.`,'land',[],{kind:'public-land-planned',plotId:lot.id,buildingType:type,x,y});return site;}dev.removePlot(lot);
     }return null;
   };
   const anchors=dev.plots.filter(lot=>lot.buildingId||lot.projectId).sort((a,b)=>Math.hypot(b.x-center.x,b.y-center.y)-Math.hypot(a.x-center.x,a.y-center.y)).slice(0,24),frontiers=[];
