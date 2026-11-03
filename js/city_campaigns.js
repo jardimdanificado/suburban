@@ -1,7 +1,7 @@
 import {CityCampaignMaterials} from './city_campaign_materials.js?v=banner-placement-1';
 import {describePromise} from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=quarry-outskirts-1';
-import {issuePartyCap} from './city_party_caps.js?v=wardrobe-expansion-1';
+import {issuePartyCap} from './city_party_caps.js?v=party-apparel-1';
 import {gerarSloganPartidario,gerarFraseTematica,gerarDialogoTematico} from './gerador_frases.js?v=vocabulary-organic-slogans-1';
 import {SUBSTANCES} from './city_substance_catalog.js';
 import {substanceStance} from './city_substances.js';

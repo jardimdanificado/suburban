@@ -1,4 +1,4 @@
-import {appearance,companyPreference} from './city_clothing.js?v=wardrobe-expansion-1';
+import {appearance,companyPreference} from './city_clothing.js?v=party-apparel-1';
 import {initializePrejudices,prejudiceAgainstTypes,prejudicesInCommon} from './city_prejudice.js?v=discrimination-laws-1';
 // Personal relationships react to encounters and known facts, not to a scan of all pairs.
 export const RELATIONSHIP_RULES = { memories: 24, beliefs: 24, grief: 8, facts: 768, gossipHops: 6, proposalCooldown: 1440, visitCooldown: 60, visitDistance: 32, visitPathBudget: 3 };

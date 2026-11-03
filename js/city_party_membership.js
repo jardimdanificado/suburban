@@ -1,6 +1,6 @@
 import {promiseRelevant} from './city_mandates.js';
 import {ensureSkinColor} from './city_skin.js';
-import {returnPartyCap} from './city_party_caps.js?v=wardrobe-expansion-1';
+import {returnPartyCap} from './city_party_caps.js?v=party-apparel-1';
 import {politicalPosition} from './city_ideology.js';
 // Party membership is a minority commitment; electoral support is personal and reversible.
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));

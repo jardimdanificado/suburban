@@ -2,6 +2,7 @@ import {ASSET_DATA} from './assets_data.js';
 import {SPRITE_CLASSIFICATIONS} from './sprite_classification.js';
 import {ideologicalProfile,politicalPosition} from './city_ideology.js';
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
+import {gerarPaletaDeBandeira} from './paletas_bandeiras.js';
 
 export const COUNCIL_INSTITUTIONAL_FLAG=Object.freeze({foreground:'#f5e9bf',background:'#4c655c',skin:'Feature_Flower.png',pattern:1});
 const PARTY_EMBLEMS=Object.freeze(ASSET_DATA.filter(asset=>/\.png$/i.test(asset.filename)).map(asset=>asset.filename));
@@ -182,6 +183,11 @@ function flagPalette(city,hue,background,foreground){
  addAccent();addAccent();
  return Object.freeze(colors);
 }
+function choosePartyPalette(city,legacyPalette){
+ if(city.random()<.02){const palette=legacyPalette();return {...palette,colorSource:palette.colorSource||'legacy'};}
+ const palette=gerarPaletaDeBandeira({random:()=>city.random()}),colors=Object.freeze([...palette.cores]);
+ return {background:colors[0],foreground:colors[1],colors,colorSource:'palette-generator'};
+}
 function arrangementPreferences(style,count){
  if(!count)return [];
  if(/canton|sunburst-canton/.test(style))return count===1?['canto-superior-esquerdo','alto-central','centro-esquerda']:count===2?['horizontal','cantos-opostos','duas-colunas']:count===3?['duas-em-cima-uma-embaixo','tres-cantos']:['quatro-cantos','quadrantes','grade-aberta'];
@@ -202,13 +208,11 @@ function chooseFlagArrangement(city,arrangements,style,count){
  return pool[Math.floor(city.random()*pool.length)];
 }
 export function makePartyFlag(city,index,founders=[],party=null){
- const hue=city.random()*360,background=randomColor(hue,.19,.78);let foreground=randomColor((hue+180)%360,.88,.58);
- if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';
- const colors=flagPalette(city,hue,background,foreground),count=city.random()<.15?0:1+Math.floor(city.random()*4),arrangements=ICON_LAYOUTS[count],aspect=120/76,backgroundChoices=[...Array(51).fill('solid'),...PARTY_FLAG_BACKGROUNDS.filter(style=>style!=='solid')];let backgroundStyle=backgroundChoices[Math.floor(city.random()*backgroundChoices.length)];const arrangement=chooseFlagArrangement(city,arrangements,backgroundStyle,count);
+ const palette=choosePartyPalette(city,()=>{const hue=city.random()*360,background=randomColor(hue,.19,.78);let foreground=randomColor((hue+180)%360,.88,.58);if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';return {background,foreground,colors:flagPalette(city,hue,background,foreground),colorSource:'legacy'};}),{background,foreground,colors}=palette,count=city.random()<.15?0:1+Math.floor(city.random()*4),arrangements=ICON_LAYOUTS[count],aspect=120/76,backgroundChoices=[...Array(51).fill('solid'),...PARTY_FLAG_BACKGROUNDS.filter(style=>style!=='solid')];let backgroundStyle=backgroundChoices[Math.floor(city.random()*backgroundChoices.length)];const arrangement=chooseFlagArrangement(city,arrangements,backgroundStyle,count);
  const textChoices=count===0?TEXT_LAYOUTS.filter(item=>TEXT_ONLY_LAYOUT_IDS.has(item.id)):TEXT_LAYOUTS.filter(item=>!TEXT_ONLY_LAYOUT_IDS.has(item.id)),compatibleLayouts=textChoices.filter(item=>textLayoutCompatible(item,backgroundStyle,aspect)),textLayout=compatibleLayouts[Math.floor(city.random()*compatibleLayouts.length)]||textChoices[0];
  if(count===0&&textLayout.id.endsWith('-com-fundo')&&backgroundStyle==='solid')backgroundStyle=PARTY_FLAG_BACKGROUNDS.filter(style=>style!=='solid')[Math.floor(city.random()*(PARTY_FLAG_BACKGROUNDS.length-1))];
  const layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors);
- return Object.freeze({foreground,background,colors,paletteVersion:2,detailVersion:1,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:'random',emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
+ return Object.freeze({foreground,background,colors,paletteVersion:3,detailVersion:1,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:palette.colorSource,emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
 function strongestFlagColor(candidates,against,excluded=[],fallback){
  const blocked=new Set(excluded),colors=[...new Set(candidates.filter(color=>typeof color==='string'&&/^#[\da-f]{6}$/i.test(color)&&!blocked.has(color)))];let best=null,bestScore=-1;
@@ -217,11 +221,11 @@ function strongestFlagColor(candidates,against,excluded=[],fallback){
 }
 function flagSymbols(flag){return flag?.emblems?.length?flag.emblems:flag?.skin?[{skin:flag.skin}]:[];}
 export function makeMergedPartyFlag(city,index,party,sourceFlag,destinationFlag){
- const parents=[sourceFlag,destinationFlag].filter(Boolean),backgroundOwner=parents[Math.floor(city.random()*parents.length)],fallbackBg=randomColor(city.random()*360,.19,.78),background=/^#[\da-f]{6}$/i.test(backgroundOwner?.background||'')?backgroundOwner.background:fallbackBg;
+ const parents=[sourceFlag,destinationFlag].filter(Boolean),backgroundOwner=parents[Math.floor(city.random()*parents.length)],fallbackBg=randomColor(city.random()*360,.19,.78),inheritedBackground=/^#[\da-f]{6}$/i.test(backgroundOwner?.background||'')?backgroundOwner.background:fallbackBg;
  const parentSwatches=parents.flatMap(flag=>[flag.foreground,flag.background,...(flag.colors||[])]).filter(color=>typeof color==='string'&&/^#[\da-f]{6}$/i.test(color));
- const fallbackForeground=flagContrast(background,'#f5e9bf')>=flagContrast(background,'#17244b')?'#f5e9bf':'#17244b',foreground=strongestFlagColor(parentSwatches,[background],[background],fallbackForeground);
- const inheritedPatterns=parents.map(flag=>flag.colors?.[1]).filter(color=>/^#[\da-f]{6}$/i.test(color||'')&&color!==background&&flagContrast(background,color)>=2.4),pattern=inheritedPatterns.length?inheritedPatterns[Math.floor(city.random()*inheritedPatterns.length)]:strongestFlagColor(parentSwatches,[background],[background],foreground);
- const textColor=strongestFlagColor(parents.map(flag=>flag.colors?.[2]).concat(parentSwatches,[foreground]),[background,pattern],[background,pattern],foreground),iconColor=strongestFlagColor(parents.map(flag=>flag.colors?.[3]).concat(parentSwatches,[foreground]),[background,pattern,textColor],[background,pattern,textColor],foreground),colors=Object.freeze([background,pattern,textColor,iconColor]);
+ const fallbackForeground=flagContrast(inheritedBackground,'#f5e9bf')>=flagContrast(inheritedBackground,'#17244b')?'#f5e9bf':'#17244b',legacyForeground=strongestFlagColor(parentSwatches,[inheritedBackground],[inheritedBackground],fallbackForeground);
+ const inheritedPatterns=parents.map(flag=>flag.colors?.[1]).filter(color=>/^#[\da-f]{6}$/i.test(color||'')&&color!==inheritedBackground&&flagContrast(inheritedBackground,color)>=2.4),legacyPattern=inheritedPatterns.length?inheritedPatterns[Math.floor(city.random()*inheritedPatterns.length)]:strongestFlagColor(parentSwatches,[inheritedBackground],[inheritedBackground],legacyForeground);
+ const legacyTextColor=strongestFlagColor(parents.map(flag=>flag.colors?.[2]).concat(parentSwatches,[legacyForeground]),[inheritedBackground,legacyPattern],[inheritedBackground,legacyPattern],legacyForeground),legacyIconColor=strongestFlagColor(parents.map(flag=>flag.colors?.[3]).concat(parentSwatches,[legacyForeground]),[inheritedBackground,legacyPattern,legacyTextColor],[inheritedBackground,legacyPattern,legacyTextColor],legacyForeground),legacyColors=Object.freeze([inheritedBackground,legacyPattern,legacyTextColor,legacyIconColor]),palette=choosePartyPalette(city,()=>({background:inheritedBackground,foreground:legacyForeground,colors:legacyColors,colorSource:'merged'})),{background,foreground,colors}=palette,pattern=colors[1],textColor=colors[2],iconColor=colors[3];
  const backgroundStyle=backgroundOwner?.backgroundStyle||parents.find(flag=>flag.backgroundStyle)?.backgroundStyle||'solid',preferredLayouts=parents.map(flag=>flag.textLayout).filter(id=>id&&!TEXT_ONLY_LAYOUT_IDS.has(id)),allTextLayouts=TEXT_LAYOUTS.filter(layout=>!TEXT_ONLY_LAYOUT_IDS.has(layout.id)),compatible=allTextLayouts.filter(layout=>textLayoutCompatible(layout,backgroundStyle,120/76)),layoutPool=compatible.length?compatible:allTextLayouts,preferred=layoutPool.filter(layout=>preferredLayouts.includes(layout.id)),textLayout=(preferred.length?preferred:layoutPool)[Math.floor(city.random()*(preferred.length?preferred:layoutPool).length)];
  const sourceSymbols=flagSymbols(sourceFlag),destinationSymbols=flagSymbols(destinationFlag),used=new Set(),chosen=[];
  const takeFrom=pool=>{const available=pool.filter(emblem=>emblem?.skin&&!used.has(emblem.skin));if(!available.length)return;const emblem=available[Math.floor(city.random()*available.length)];chosen.push(emblem);used.add(emblem.skin);};
@@ -233,15 +237,15 @@ export function makeMergedPartyFlag(city,index,party,sourceFlag,destinationFlag)
   const source=chosen[slotIndex],detailGroup=slot.detailGroup??slotIndex;if(!detailModes.has(detailGroup))detailModes.set(detailGroup,source.detailMode||(city.random()<.8?'detailed':'flat'));
   return Object.freeze({skin:source.skin,x:layout.iconArea.x+slot.x*layout.iconArea.w,y:layout.iconArea.y+slot.y*layout.iconArea.h,w:slot.w*layout.iconArea.w,h:slot.h*layout.iconArea.h,...(source.crop?{crop:Object.freeze({...source.crop})}:{}),...(slot.clip?{clip:Object.freeze({x:layout.iconArea.x+slot.clip.x*layout.iconArea.w,y:layout.iconArea.y+slot.clip.y*layout.iconArea.h,w:slot.clip.w*layout.iconArea.w,h:slot.clip.h*layout.iconArea.h})}:{}),color:iconColor,shade:iconColor,detailMode:detailModes.get(detailGroup),backgroundMode:source.backgroundMode||'transparent'});
  })),texts=buildTexts(city,party,layout.textBoxes,colors);
- return Object.freeze({foreground,background,colors,paletteVersion:2,detailVersion:1,pattern:0,backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:'merged',mergedFrom:[sourceFlag?.partyId??null,destinationFlag?.partyId??null].filter(id=>id!=null),emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
+ return Object.freeze({foreground,background,colors,paletteVersion:3,detailVersion:1,pattern:0,backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:palette.colorSource==='merged'?'merged':'merged-palette-generator',mergedFrom:[sourceFlag?.partyId??null,destinationFlag?.partyId??null].filter(id=>id!=null),emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
 export function upgradePartyFlagPalette(city,flag){
- if(!flag)return flag;const updatePalette=flag.paletteVersion<2,updateDetails=(flag.detailVersion||0)<1;if(!updatePalette&&!updateDetails)return flag;
- const colors=updatePalette?flagPalette(city,0,flag.background||'#222222',flag.foreground||'#f5e9bf'):flag.colors;
+ if(!flag)return flag;const updatePalette=flag.paletteVersion<2,updateScheme=flag.paletteVersion<3,updateDetails=(flag.detailVersion||0)<1;if(!updatePalette&&!updateScheme&&!updateDetails)return flag;
+ const legacyColors=updatePalette||!flag.colors?.length?flagPalette(city,0,flag.background||'#222222',flag.foreground||'#f5e9bf'):flag.colors,legacy={background:flag.background||'#222222',foreground:flag.foreground||'#f5e9bf',colors:legacyColors,colorSource:flag.colorSource||'legacy'},palette=updateScheme?choosePartyPalette(city,()=>legacy):null,colors=palette?.colors||legacyColors,background=palette?.background||flag.background,foreground=palette?.foreground||flag.foreground;
  const sourceEmblems=flag.emblems|| (flag.skin?[{skin:flag.skin,x:.3,y:.12,w:.4,h:.76}]:[]);
- const emblems=Object.freeze(sourceEmblems.map(emblem=>Object.freeze({...emblem,...(updatePalette?{color:colors[3],shade:colors[3]}:{}),detailMode:emblem.detailMode||(city.random()<.8?'detailed':'flat')})));
- const texts=Object.freeze((flag.texts||[]).map(text=>Object.freeze({...text,...(updatePalette?{color:colors[2]}:{})})));
- return Object.freeze({...flag,colors,paletteVersion:2,detailVersion:1,emblems,texts});
+ const emblems=Object.freeze(sourceEmblems.map(emblem=>Object.freeze({...emblem,...(updatePalette||updateScheme?{color:colors[3],shade:colors[3]}:{}),detailMode:emblem.detailMode||(city.random()<.8?'detailed':'flat')})));
+ const texts=Object.freeze((flag.texts||[]).map(text=>Object.freeze({...text,...(updatePalette||updateScheme?{color:colors[2]}:{})})));
+ return Object.freeze({...flag,background,foreground,colors,paletteVersion:3,detailVersion:1,colorSource:palette?.colorSource||flag.colorSource||'legacy',emblems,texts});
 }
 function requestImage(filename,onReady){
  let image=imageCache.get(filename);if(image?.complete&&image.naturalWidth)return image;

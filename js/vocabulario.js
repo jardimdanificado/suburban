@@ -385161,3 +385161,5 @@ export function criarSubstantivoCombinado(palavra1,palavra2,{genero,tags}={}){
   const lema=vocabulario.combinar(palavra1,palavra2,'eufonia',genero,'singular'),plural=vocabulario.combinar(palavra1,palavra2,'eufonia',genero,'plural');if(classificarPalavra(lema)!==genero||converterParaSingular(plural)!==lema)throw new RangeError('A combinação não produziu formas coerentes de gênero e número');return {lema,plural,genero,classes:['substantivo'],temas:[...new Set(tags)]};
 }
 Object.assign(vocabulario,{classificarPalavraCompleta,classificarTemas,classificarVertentePolitica,iterarPalavrasClassificadas,conjugarVerbo,gerarFrase,gerarFraseTematica,gerarSloganPartidario,gerarDialogoTematico,criarSubstantivoCombinado});
+
+export { CORES_BANDEIRAS_POR_FAMILIA, contrasteEntreCores, gerarPaletaDeBandeira } from './paletas_bandeiras.js';

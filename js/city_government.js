@@ -6,7 +6,7 @@ import {electoralPriorities,standingEvidence,personalGovernmentExperience,govern
 import {CityInterventions} from './city_interventions.js';
 import {ideologicalProfile,POLITICAL_POSITIONS} from './city_ideology.js';
 import {partyAccount,allocatePartyFunds,changePartyFund,illegalPartyFunding} from './city_party_funds.js';
-import {appearance} from './city_clothing.js?v=wardrobe-expansion-1';
+import {appearance} from './city_clothing.js?v=party-apparel-1';
 import {CityResearch} from './city_research.js';
 import {CityGovernmentAgenda} from './city_government_agenda.js?v=substances-sleep-1';
 import {CityVoting} from './city_voting.js?v=substances-sleep-1';
@@ -14,7 +14,7 @@ import {CityPoliticalStanding} from './city_political_standing.js?v=wardrobe-exp
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
 import {makePartyName,makeMergedPartyName,partyNameAgenda} from './city_party_names.js?v=party-vocabulary-position-names-2';
 import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty,recordPartyMembership} from './city_party_membership.js?v=party-affiliation-history-1';
-import {seedPartyCaps,issuePartyCap,returnPartyCap} from './city_party_caps.js?v=wardrobe-expansion-1';
+import {seedPartyCaps,issuePartyCap,returnPartyCap} from './city_party_caps.js?v=party-apparel-1';
 import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investigateCases } from './city_political_institutions.js';
 import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js?v=needs-recovery-1';
 import { TAX_CATEGORIES, MINIMUM_WAGE_TAX_RATE, MINIMUM_BUSINESS_TAX_RATE } from './city_sales_tax.js';
