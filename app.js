@@ -136,6 +136,22 @@ function profileCityMeshes(groups){
   return {visibleBuildings,meshObjects,triangles,cellDraws,cellTriangles,components};
 }
 
+function profileSceneObjects(scene){
+  const result={};
+  for(const [index,root]of (scene?.children||[]).entries()){
+    const tag=Object.entries(root.userData||{}).filter(([,value])=>['string','number','boolean'].includes(typeof value)).slice(0,4).map(([key,value])=>`${key}=${value}`).join(',');
+    const name=`${index}:${root.name||root.type||'unnamed'}${tag?`(${tag})`:''}`,stats={draws:0,triangles:0,instanced:0};
+    root.traverse(object=>{
+      if(!object.isMesh||!object.visible)return;
+      for(let parent=object.parent;parent&&parent!==root;parent=parent.parent)if(!parent.visible)return;
+      const geometry=object.geometry,count=geometry?.index?.count??geometry?.attributes?.position?.count??0;
+      stats.draws++;stats.triangles+=Math.floor(count/3)*(object.isInstancedMesh?object.count:1);if(object.isInstancedMesh)stats.instanced++;
+    });
+    result[name]=stats;
+  }
+  return result;
+}
+
 
 let selected = null;
 const renderMode = "3d";
@@ -561,7 +577,7 @@ function frame(now) {
     if(ended-frameMetrics.started>=1000){
       const count=frameMetrics.count;
       const citizenModels=renderer3D.cityCitizenModels;
-      const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,cityMeshStats:profileCityMeshes(renderer3D.cityMeshes),citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),citizenModelBatches:citizenModels?.batches.size,citizenModelBatchesActive:citizenModels?.activeBatches.size,citizenAccessoryBatches:citizenModels?.headwearBatches.size,citizenAccessoryBatchesActive:citizenModels?.activeHeadwearBatches.size,drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
+      const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,cityMeshStats:profileCityMeshes(renderer3D.cityMeshes),drawBreakdown:profileSceneObjects(renderer3D.scene),citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),citizenModelBatches:citizenModels?.batches.size,citizenModelBatchesActive:citizenModels?.activeBatches.size,citizenAccessoryBatches:citizenModels?.headwearBatches.size,citizenAccessoryBatchesActive:citizenModels?.activeHeadwearBatches.size,drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
       root.dataset.performance=JSON.stringify(profile);
       performanceOutput.textContent=formatPerformanceLines(profile).join('\n');
       const workerPeak=profile.worker?.maxUpdateMs||0;

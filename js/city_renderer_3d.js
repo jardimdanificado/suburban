@@ -1,8 +1,8 @@
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {furnitureModel} from './city_furniture_models.js?v=beach-parasols-1';
-import {applyInteriorCutaway} from './city_interior_view.js?v=exterior-doorframe-cull-3';
+import {applyInteriorCutaway} from './city_interior_view.js?v=interior-cell-batch-1';
 import {interiorStairAxis} from './city_interior_layout.js?v=interiors-completion-7';
-import {addBuildingDetails} from './city_building_details.js?v=greengrocer-fruit-stalls-1';
+import {addBuildingDetails} from './city_building_details.js?v=static-facade-batch-5';
 import {syncConstructionSites} from './city_construction_renderer.js?v=ground-realism-2';
 import {syncCityMobility} from './city_mobility_renderer.js?v=natural-streets-2';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
@@ -16,10 +16,10 @@ import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-ne
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {quarryDeposits} from './city_terrain.js?v=quarry-outskirts-1';
-import {addArchitectureVariations} from './city_architecture_variations.js?v=courthouse-neoclassical-1';
+import {addArchitectureVariations} from './city_architecture_variations.js?v=static-facade-batch-5';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-4';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-5';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
 const OPEN_PIT_MINES=new Set(['iron_mine','bauxite_mine']);
 const EMPTY_FLOORS=new Set();
@@ -384,12 +384,12 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     let group = renderer.cityMeshes.get(entity.id);
     const interiorContentKey=b.type==='office_tower'?(b.officeLeases||[]).filter(l=>l.status==='active').map(l=>{const tenant=renderer.cityDevelopment?.city?.building(l.buildingId);return `${tenant?.id}:${tenant?.type}:${tenant?.layoutRevision||0}`;}).join('|'):'';
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
-    if (group && (group.userData.buildingStyleVersion!==19 || group.userData.interiorContentKey!==interiorContentKey || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
+    if (group && (group.userData.buildingStyleVersion!==20 || group.userData.interiorContentKey!==interiorContentKey || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
       renderer.parkPalmWindDecorations.delete(entity.id);
       renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose();object.userData.mineSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
-      group = new THREE.Group();group.userData.buildingStyleVersion=19;group.userData.interiorContentKey=interiorContentKey; group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
+      group = new THREE.Group();group.userData.buildingStyleVersion=20;group.userData.interiorContentKey=interiorContentKey; group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
       const material = buildingMaterial(renderer,THREE,'wall',0xffffff,buildingTextureVariant(b.id??entity.id));material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
@@ -420,15 +420,33 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       const addDoorFrame=(root,u,dx,dy)=>{const frame=new THREE.Group(),stone=new THREE.MeshLambertMaterial({color:style.trim});for(const [x,y,w,h]of [[-.27,.78,.09,1.56],[.27,.78,.09,1.56],[0,1.58,.7,.12],[-.32,.08,.13,.16],[.32,.08,.13,.16]]){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,.095),stone);m.position.set(x,y,0);m.castShadow=m.receiveShadow=true;frame.add(m);}const keystone=new THREE.Mesh(new THREE.BoxGeometry(.16,.18,.12),new THREE.MeshLambertMaterial({color:style.accent}));keystone.position.set(0,1.67,0);frame.add(keystone);frame.position.set(u.x+.5+dx*.49,u.z*CITY_FLOOR_HEIGHT,u.y+.5+dy*.49);if(dx)frame.rotation.y=Math.PI/2;root.add(frame);};
       for(const u of b.units)for(const [bit,dx,dy]of [[1,0,-1],[2,0,1],[4,-1,0],[8,1,0]])if((doorByUnit.get(u.id)||0)&bit){addDoorFrame(doorFrames,u,dx,dy);if(entranceDoor?.unitId===u.id&&entranceDoor.bit===bit)addDoorFrame(exteriorDoorFrames,u,dx,dy);}
       for(const frames of [doorFrames,exteriorDoorFrames]){for(const frame of [...frames.children]){frame.updateMatrix();for(const mesh of [...frame.children]){mesh.updateMatrix();mesh.matrix.premultiply(frame.matrix);mesh.matrix.decompose(mesh.position,mesh.quaternion,mesh.scale);frames.add(mesh);}frames.remove(frame);}mergeStaticMeshes(THREE,frames);}
-      const cellMeshes=[];
+      const cellSourcesByFloor=new Map();
       for(const {units,facadeMask,openingMask,doorMask} of cellMasks.values()){
-        const cells=new THREE.InstancedMesh(roomCellGeometry(THREE,facadeMask,openingMask,doorMask),material,units.length);cells.castShadow=true;cells.receiveShadow=true;
-        const floorIndices=[],baseMatrices=[];
-        for(let i=0;i<units.length;i++){const u=units[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2,u.y+.5);cells.setMatrixAt(i,matrix);floorIndices.push(u.z);baseMatrices.push(matrix.clone());cells.setColorAt(i,color);}
-        cells.userData.interiorFloors=floorIndices;cells.userData.interiorBaseMatrices=baseMatrices;
+        const source=roomCellGeometry(THREE,facadeMask,openingMask,doorMask);
+        for(const unit of units){let list=cellSourcesByFloor.get(unit.z);if(!list)cellSourcesByFloor.set(unit.z,list=[]);list.push({source,unit});}
+      }
+      const cellMeshes=[];
+      for(const [floor,parts] of cellSourcesByFloor){
+        let vertexCount=0;for(const part of parts)vertexCount+=part.source.attributes.position.count;
+        const positions=new Float32Array(vertexCount*3),normals=new Float32Array(vertexCount*3),uvs=new Float32Array(vertexCount*2),colors=new Float32Array(vertexCount*3);let vertexOffset=0;
+        for(const {source,unit} of parts){
+          const sourcePositions=source.attributes.position.array,sourceNormals=source.attributes.normal.array,sourceUvs=source.attributes.uv.array,sourceColors=source.attributes.color.array,count=source.attributes.position.count,positionOffset=vertexOffset*3,uvOffset=vertexOffset*2;
+          normals.set(sourceNormals,positionOffset);uvs.set(sourceUvs,uvOffset);
+          for(let i=0;i<count;i++){
+            const at=i*3,out=positionOffset+at;
+            positions[out]=sourcePositions[at]+unit.x+.5;positions[out+1]=sourcePositions[at+1];positions[out+2]=sourcePositions[at+2]+unit.y+.5;
+            colors[out]=sourceColors[at]*color.r;colors[out+1]=sourceColors[at+1]*color.g;colors[out+2]=sourceColors[at+2]*color.b;
+          }
+          vertexOffset+=count;
+        }
+        const geometry=new THREE.BufferGeometry();
+        geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3));
+        geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));geometry.computeBoundingSphere();
+        const cells=new THREE.Mesh(geometry,material);cells.position.y=floor*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2;cells.castShadow=true;cells.receiveShadow=true;cells.userData.interiorFloors=[floor];cells.userData.combinedCellFloor=floor;
         group.add(cells);cellMeshes.push(cells);
       }
-      const cells=cellMeshes[0];group.userData.cellMeshes=cellMeshes;
+      for(const parts of cellSourcesByFloor.values())for(const {source} of parts)source.dispose();
+      group.userData.cellMeshes=cellMeshes;
       const floorCells=[...b.units,...(b.circulation||[])],floorGeometry=new THREE.BoxGeometry(1,.06,1),floorMaterial=new THREE.MeshLambertMaterial({color:0x928571}),floors=new THREE.InstancedMesh(floorGeometry,floorMaterial,floorCells.length),ceilings=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.06,1),floorMaterial,floorCells.length),floorLevels=[],floorMatrices=[];
       for(let i=0;i<floorCells.length;i++){const u=floorCells[i];matrix.makeTranslation(u.x+.5,u.z*CITY_FLOOR_HEIGHT-.03,u.y+.5);floors.setMatrixAt(i,matrix);floorMatrices.push(matrix.clone());floorLevels.push(u.z);matrix.makeTranslation(u.x+.5,(u.z+1)*CITY_FLOOR_HEIGHT-.03,u.y+.5);ceilings.setMatrixAt(i,matrix);}
       floors.receiveShadow=true;ceilings.receiveShadow=true;group.add(floors,ceilings);floors.userData.interiorFloors=floorLevels;floors.userData.interiorBaseMatrices=floorMatrices;group.userData.interiorFloors=floors;group.userData.interiorCeilings=ceilings;
@@ -509,7 +527,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       awning.material.color.setHex(awningColors[b.type] ?? 0xc9d9a1);
       if(!mine&&!style.motif){awning.position.set(entranceX, 1.55, b.depth + .25); awning.castShadow = true; facade.add(awning);}
       }
-      mergeStaticMeshes(THREE,facade,{filter:mesh=>{
+      mergeStaticMeshes(THREE,facade,{mergeShadowFlags:true,filter:mesh=>{
         const material=mesh.material;
         return material?.isMeshLambertMaterial&&!material.map&&!material.alphaMap&&!material.vertexColors&&!material.transparent&&material.opacity===1&&material.alphaTest===0&&material.side===THREE.FrontSide&&!material.flatShading&&material.emissive?.getHex()===0;
       }});
@@ -537,7 +555,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       if (roomProps.children.length) { roomProps.visible = false; group.add(roomProps); group.userData.roomProps = roomProps; }
       const stairs = new THREE.InstancedMesh(new THREE.BoxGeometry(.8, 1, .22), new THREE.MeshLambertMaterial({ color: 0x9f9076 }), 4);
       stairs.receiveShadow = true; group.add(stairs); group.userData.stairs = stairs;
-      group.userData.cells = cells;
+      group.userData.cells = cellMeshes[0]||null;
       renderer.decorateCityMaterials?.(group);
       renderer.scene.add(group);
       renderer.cityMeshes.set(entity.id, group);
