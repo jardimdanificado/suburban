@@ -103,7 +103,7 @@ export class CityFurniture{
  }
  storeAtHome(c,b,home){
   const rooms=this.city.housing.units(home),items=rooms.filter(u=>u.id===c.indoorLocation?.unitId).flatMap(u=>roomFurniture(b,u)),chest=items.find(f=>f.storage==='clothes'),fridge=items.find(f=>f.storage==='food');
-  if(chest)for(const [i,g]of (c.wardrobe||[]).entries()){const worn=[c.wearingIndex,c.lowerWearIndex,c.headwearIndex,c.footwearIndex].includes(i);g.storedAtFurnitureId=worn?null:chest.id;g.storedInBuildingId=worn?null:b.id;}
+  if(chest)for(const [i,g]of (c.wardrobe||[]).entries()){const worn=[c.wearingIndex,c.lowerWearIndex,c.headwearIndex,c.footwearIndex,c.handwearIndex].includes(i);g.storedAtFurnitureId=worn?null:chest.id;g.storedInBuildingId=worn?null:b.id;}
   if(!fridge||!c.pocket)return;b.homeFoodStores??=new Map();let store=b.homeFoodStores.get(c.id);if(!store){store={ownerId:c.id,homeId:home.id,furnitureId:fridge.id,meals:[]};b.homeFoodStores.set(c.id,store);}
   while(c.pocket.food.length>2&&store.meals.length<12)store.meals.push(c.pocket.food.pop());
   while(c.pocket.food.length<2&&store.meals.length)c.pocket.food.push(store.meals.shift());

@@ -1,4 +1,4 @@
-import {canJoin} from './city_party_membership.js?v=party-ideology-reputation-1';
+import {canJoin} from './city_party_membership.js?v=wardrobe-expansion-1';
 import {recordLegislativeOpinion,publicPerformance} from './city_party_public_record.js?v=party-ideology-reputation-1';
 import {POLITICAL_POSITIONS,politicalPosition} from './city_ideology.js';
 import {voterElectorates} from './city_electoral_behavior.js?v=party-ideology-reputation-1';

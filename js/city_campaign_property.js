@@ -1,4 +1,4 @@
-import {headquartersAccount} from './city_party_headquarters.js?v=party-caps-skin-1';
+import {headquartersAccount} from './city_party_headquarters.js?v=wardrobe-expansion-1';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {equityShares} from './city_equity.js?v=daily-mayor-privatization-1';
 

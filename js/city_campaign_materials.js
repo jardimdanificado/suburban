@@ -1,4 +1,4 @@
-import {headquartersAccount} from './city_party_headquarters.js?v=party-caps-skin-1';
+import {headquartersAccount} from './city_party_headquarters.js?v=wardrobe-expansion-1';
 import {ROAD_TILES,tileAt} from './city_terrain.js?v=quarry-outskirts-1';
 import {planPropertyFlags,maintainPropertyFlags} from './city_campaign_property.js';
 const blocked=new Set(['vote','research','interview','council-session','care','caregiving','food','provisions','water','health','energy','toilet','workmeal','construction','work','manage']);
