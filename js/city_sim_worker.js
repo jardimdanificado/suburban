@@ -17,7 +17,10 @@ const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
 // business/political/UI graph updates more aggressively.
 const stateInterval = () => {
   const people=state?.city?.citizens?.length||0;
-  const populationFloor=people>=1024?1600:people>=512?900:400;
+  // Movement and needs have a compact 100 ms stream. Keep the heavier
+  // object-graph sync less frequent once the full city reaches 512 citizens;
+  // this avoids repeatedly walking and applying thousands of UI-facing nodes.
+  const populationFloor=people>=1024?2200:people>=512?1500:400;
   return Math.max(speed>=32?1500:speed>=16?1000:populationFloor,populationFloor,Math.min(3000,lastSnapshotCost*6));
 };
 const MOTION_INTERVAL = 100;
