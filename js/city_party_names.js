@@ -388,6 +388,8 @@ const feminine=word=>({Cidadão:'Cidadã',Camponês:'Camponesa',Guardião:'Guard
 const capitalize=s=>s[0].toLocaleUpperCase('pt-BR')+s.slice(1).toLocaleLowerCase('pt-BR');
 const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+// Keep vocabulary words recognizable but occasional in ordinary party names.
+const VOCABULARY_NAME_CHANCE=.08;
 const wordPatterns=new Map(),agendaCache=new Map();
 const wordMatch=(text,word)=>{let pattern=wordPatterns.get(word);if(!pattern){pattern=new RegExp(`(?:^|[^\\p{L}])${normalize(word).replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}(?:$|[^\\p{L}])`,'u');wordPatterns.set(word,pattern);}return pattern.test(text);};
 /** Political meaning carried by a party name. Negative economy favors redistribution; positive favors markets. */
@@ -410,7 +412,7 @@ export function makePartyName(city,ideology,parties,id,{parentParty=null}={}){
   for(let attempt=0;attempt<64;attempt++){
     const [organization,gender]=pick(city,PARTY_ORGANIZATIONS);let adjective=pick(city,pool);if(gender==='f')adjective=feminine(adjective);
     const core=parentParty?(parentParty.nameCore||parentParty.name.split(/\s+/).slice(0,2).join(' ')):`${organization} ${adjective}`;
-    const unique=parentParty||city.random()<.025?flavor(city):null;
+    const unique=(parentParty||city.random()<VOCABULARY_NAME_CHANCE)?flavor(city):null;
     let parts;
     if(parentParty){const [first,last]=core.split(' ');parts=city.random()<.5?[first,unique,last]:[first,last,unique];}
     else if(unique)parts=[organization,adjective,unique];
