@@ -97,7 +97,7 @@ export function roadRetainingFaces(world,x,y){
   const faces=[];
   for(let side=0;side<EDGES.length;side++){
     const edge=EDGES[side],nx=x+edge.dx,ny=y+edge.dy,neighbor=at(world,nx,ny),neighborIsStreet=ROADS.has(neighbor)||sidewalkAt(world,nx,ny);
-    if(neighbor===TILE_WATER||neighbor===TILE_VOID||world.bridgeTiles?.has(`${nx},${ny}`))continue;
+    if(world.bridgeTiles?.has(`${nx},${ny}`))continue;
     const [ax,ay]=CORNERS[edge.a],[bx,by]=CORNERS[edge.b];
     if(neighborIsStreet){
       if(ny*world.width+nx<y*world.width+x)continue;
@@ -111,7 +111,7 @@ export function roadRetainingFaces(world,x,y){
       }
       continue;
     }
-    const groundA=terrainCornerHeight(world,x+ax,y+ay),groundB=terrainCornerHeight(world,x+bx,y+by),surfaceA=surface[edge.a],surfaceB=surface[edge.b];
+    const waterOrVoid=neighbor===TILE_WATER||neighbor===TILE_VOID,base=waterOrVoid?0.08:null,groundA=base??terrainCornerHeight(world,x+ax,y+ay),groundB=base??terrainCornerHeight(world,x+bx,y+by),surfaceA=surface[edge.a],surfaceB=surface[edge.b];
     const deltaA=groundA-surfaceA,deltaB=groundB-surfaceB;
     if(Math.max(Math.abs(deltaA),Math.abs(deltaB))<.02)continue;
     const cuts=deltaA*deltaB<0?[0,deltaA/(deltaA-deltaB),1]:[0,1];
