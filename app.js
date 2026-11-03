@@ -1,9 +1,9 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=citizen-task-stagger-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=citizen-task-stagger-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=society-phase-profile-1";
 import { CityDesktop } from "./js/city_desktop.js?v=election-support-map-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=citizen-active-batches-2";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=exterior-doorframe-cull-3";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -104,6 +104,35 @@ function formatPerformanceLines(value,prefix=''){
     else lines.push(`${label}: ${typeof item==='number'?Number(item.toFixed(2)):String(item)}`);
   }
   return lines;
+}
+
+function profileCityMeshes(groups){
+  let visibleBuildings=0,meshObjects=0,triangles=0,cellTriangles=0,cellDraws=0;
+  const meshTriangles=mesh=>Math.floor((mesh.geometry?.index?.count??mesh.geometry?.attributes?.position?.count??0)/3)*(mesh.isInstancedMesh?mesh.count:1);
+  const componentStats=root=>{let draws=0,faces=0;if(root?.visible)root.traverse(object=>{if(!object.isMesh||!object.visible)return;for(let parent=object.parent;parent&&parent!==root;parent=parent.parent)if(!parent.visible)return;draws++;faces+=meshTriangles(object);});return {draws,triangles:faces};};
+  const components={doorFrames:{draws:0,triangles:0},exteriorDoorFrames:{draws:0,triangles:0},facade:{draws:0,triangles:0},floors:{draws:0,triangles:0},ceilings:{draws:0,triangles:0},roof:{draws:0,triangles:0},supports:{draws:0,triangles:0},slab:{draws:0,triangles:0},stairs:{draws:0,triangles:0}};
+  for(const group of groups?.values?.()||[]){
+    if(!group.visible)continue;
+    visibleBuildings++;
+    for(const mesh of group.userData.cellMeshes||[]){cellTriangles+=meshTriangles(mesh);cellDraws++;}
+    for(const key of Object.keys(components)){
+      const target=key==='floors'?group.userData.interiorFloors:key==='ceilings'?group.userData.interiorCeilings:group.userData[key];
+      const stats=componentStats(target);components[key].draws+=stats.draws;components[key].triangles+=stats.triangles;
+    }
+    group.traverse(object=>{
+      if(!object.isMesh||!object.visible) return;
+      let parent=object.parent;
+      while(parent&&parent!==group){if(!parent.visible)return;parent=parent.parent;}
+      const geometry=object.geometry,index=geometry?.index,position=geometry?.attributes?.position;
+      let count=index?.count??position?.count??0;
+      const drawRange=geometry?.drawRange;
+      if(drawRange&&Number.isFinite(drawRange.count))count=Math.min(count,drawRange.count);
+      const instances=object.isInstancedMesh?object.count:1;
+      meshObjects++;
+      triangles+=Math.floor(count/3)*instances;
+    });
+  }
+  return {visibleBuildings,meshObjects,triangles,cellDraws,cellTriangles,components};
 }
 
 
@@ -531,7 +560,7 @@ function frame(now) {
     if(ended-frameMetrics.started>=1000){
       const count=frameMetrics.count;
       const citizenModels=renderer3D.cityCitizenModels;
-      const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),citizenModelBatches:citizenModels?.batches.size,citizenModelBatchesActive:citizenModels?.activeBatches.size,citizenAccessoryBatches:citizenModels?.headwearBatches.size,citizenAccessoryBatchesActive:citizenModels?.activeHeadwearBatches.size,drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
+      const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:simulationBridge?.metrics,cityMeshStats:profileCityMeshes(renderer3D.cityMeshes),citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),citizenModelBatches:citizenModels?.batches.size,citizenModelBatchesActive:citizenModels?.activeBatches.size,citizenAccessoryBatches:citizenModels?.headwearBatches.size,citizenAccessoryBatchesActive:citizenModels?.activeHeadwearBatches.size,drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
       root.dataset.performance=JSON.stringify(profile);
       performanceOutput.textContent=formatPerformanceLines(profile).join('\n');
       const workerPeak=profile.worker?.maxUpdateMs||0;

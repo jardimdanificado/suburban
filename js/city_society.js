@@ -100,15 +100,19 @@ export class CitySociety {
   }
   updateBond(a,b,r) {this.city.relationships.updateBond(a,b,r);}
   updateMinute() {
+    const profiling=this.city.profileDiagnostics===true,profile=profiling?{}:null,conversationStart=profiling?performance.now():0;
     for (const c of this.city.citizens) if (!c.entity.destroyed && c.conversation && c.conversation.a === c.id) {
       const other = this.citizen(c.conversation.b), conversation = c.conversation;
       if (!other || Math.hypot(c.entity.x - other.entity.x, c.entity.y - other.entity.y) > 2) { c.conversation = null; if (other) other.conversation = null; }
       else if (this.city.minute >= conversation.until) this.finishConversation(c, other, conversation);
     }
+    if(profile)profile.conversationResolutionMs=performance.now()-conversationStart;
     // Conversation completion remains minute-accurate; discover new encounters
     // every five minutes and scale the contact budget to keep the same average
     // social throughput with fewer full-population scans at high simulation speed.
+    let contactSearchMs=0;
     if(this.city.minute%5===0){
+    const contactStart=profiling?performance.now():0;
     const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4,tileCounts=new Map();
     const residents=this.city.citizens,contactBudget=Math.max(12,Math.ceil(residents.length*.1));
     for(const c of residents)if(!c.entity.destroyed&&!c.indoorLocation){const key=Math.floor(c.entity.x)+Math.floor(c.entity.y)*this.city.world.width;tileCounts.set(key,(tileCounts.get(key)||0)+1);}
@@ -140,8 +144,11 @@ export class CitySociety {
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(c);
     }
+    if(profiling)contactSearchMs=performance.now()-contactStart;
     }
+    const birthStart=profiling?performance.now():0;
     for(let i=this.expecting.length-1;i>=0;i--)if(this.city.minute>=this.expecting[i].dueAt)this.giveBirth(this.expecting[i]);
+    if(profile){profile.contactSearchMs=contactSearchMs;profile.birthResolutionMs=performance.now()-birthStart;this.lastUpdateProfile=profile;}
   }
   planChild(a, b) {
     const r = this.getRelation(a, b);
