@@ -620,13 +620,13 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     applyInteriorCutaway(THREE,group,interior?interiorFloor:null,renderer.cityInteriorView?.hideWalls!==false);
     const windowShutters=group.userData.portugueseWindowShutters||[],sleepingFloors=sleepingFloorsByBuilding.get(b.id)||EMPTY_FLOORS,shutterState=[...sleepingFloors].sort((a,b)=>a-b).join(',');
     if(group.userData.shutterState!==shutterState){
-      group.userData.shutterState=shutterState;const active=[];
-      for(const shutter of windowShutters){shutter.targetAngle=sleepingFloors.has(shutter.floor)?shutter.closedAngle:shutter.openAngle;if(Math.abs(shutter.targetAngle-shutter.angle)>.001)active.push(shutter);}
-      group.userData.animatingShutters=active;
-    }
-    const animating=group.userData.animatingShutters;
-    if(animating?.length){const dirty=new Set(),alpha=Math.min(1,Math.max(0,dt)*7);
-      for(let i=animating.length-1;i>=0;i--){const shutter=animating[i],delta=shutter.targetAngle-shutter.angle;if(Math.abs(delta)<=.001){shutter.angle=shutter.targetAngle;animating.splice(i,1);}else shutter.angle+=delta*alpha;shutter.writeMatrices();for(const mesh of Object.values(shutter.dirtyMeshes))dirty.add(mesh);}
+      group.userData.shutterState=shutterState;const dirty=new Set();
+      for(const shutter of windowShutters){
+        shutter.targetAngle=sleepingFloors.has(shutter.floor)?shutter.closedAngle:shutter.openAngle;
+        if(Math.abs(shutter.targetAngle-shutter.angle)<=.001)continue;
+        shutter.angle=shutter.targetAngle;shutter.writeMatrices();
+        for(const mesh of Object.values(shutter.dirtyMeshes))dirty.add(mesh);
+      }
       for(const mesh of dirty)mesh.instanceMatrix.needsUpdate=true;
     }
     for(const cells of group.userData.cellMeshes || (group.userData.cells ? [group.userData.cells] : [])){const material=cells.material;material.emissive.setHex(renderer.selectedEntityId===entity.id?0x26351a:0x000000);}

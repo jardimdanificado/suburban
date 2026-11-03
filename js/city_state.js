@@ -25,7 +25,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=favela-tree-roads-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=organic-party-slogans-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=substance-chain-boost-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=custom-artworks-1';
 import { CityWelfare } from './city_welfare.js';
@@ -36,10 +36,10 @@ import { CityHousing } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=body-weight-2';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
-import { CityDevelopment } from './city_development.js?v=plot-overlap-spatial-1';
+import { CityDevelopment } from './city_development.js?v=road-durability-1';
 import { CityLogistics } from './city_logistics.js?v=wardrobe-expansion-1';
 import { CityGigs } from './city_gigs.js?v=custom-artworks-1';
-import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=wardrobe-expansion-1';
+import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=substance-chain-boost-1';
 import { CitySociety } from './city_society.js?v=conversation-cost-profile-2';
 import { CityServiceInvestment } from './city_service_investment.js?v=service-investment-founder-index-1';
 import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';
@@ -283,7 +283,7 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
   city.substances??=new CitySubstances(city);city.substances.city=city;city.substances.ensureState();
   city.paint??=new CityPaint(city);
   city.fiscal??=new CityFiscal(city);
-  if(city.substanceSchemaVersion!==3){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=3;}
+  if(city.substanceSchemaVersion!==4){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=4;}
   city.housing.invalidateResidents();
   if(city.development)city.development.plotOverlapBuckets=null;
   city.buildingsById ??= new Map();

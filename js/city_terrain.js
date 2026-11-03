@@ -9,7 +9,7 @@ import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TI
 export const ROAD_TILES = new Set([TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE]);
 export const DIRT_ROAD_TILES = new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL]);
 export const PAVED_ROAD_TILES = new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
-export const ROAD_RULES = Object.freeze({dirtCost:.8,pavedCost:.55,degradeAt:30,wearPerCell:.0025,hygienePerDirtCell:.025,moodPerDirtCell:.006});
+export const ROAD_RULES = Object.freeze({dirtCost:.8,pavedCost:.55,degradeAt:20,wearPerCell:.00065,randomWearChance:.008,randomWearAmount:1.75,hygienePerDirtCell:.025,moodPerDirtCell:.006});
 const land = new Set([TILE_FLOOR, TILE_SAND, TILE_HILL, ...ROAD_TILES]);
 export const tileKey = (x, y) => `${x},${y}`;
 export const tileHeight = terrainTileHeight;
@@ -36,7 +36,7 @@ export function wearRoad(world,x,y,amount){
   const tile=tileAt(world,x,y);if(!PAVED_ROAD_TILES.has(tile)||!(amount>0))return;
   const key=tileKey(x,y),condition=Math.max(0,(world.roadCondition?.get(key)??100)-amount);
   const conditions=world.roadCondition??=new Map();
-  if(condition<=ROAD_RULES.degradeAt){world.setTile(x,y,dirtRoadFor(tile));conditions.delete(key);}
+  if(condition<=ROAD_RULES.degradeAt){world.setTile(x,y,dirtRoadFor(tile));conditions.set(key,0);}
   else conditions.set(key,condition);
 }
 export function layDirtPath(world,path){

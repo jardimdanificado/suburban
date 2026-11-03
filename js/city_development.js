@@ -5,12 +5,12 @@ import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=favela-tree-roads-1';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=road-durability-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
-const contractorForService=service=>service==='road'?'road_paving':service==='road-repair'?'road_maintenance':null;
-const contractorHandles=(type,service)=>type==='builder'||type===contractorForService(service);
+const contractorForService=service=>service==='road'||service==='road-repair'?'road_paving':null;
+const contractorHandles=(type,service)=>type==='builder'||type===contractorForService(service)||service==='road-repair'&&type==='road_maintenance';
 const FOUNDING_ESSENTIAL_WORKS = Object.freeze([
   ['iml', 110], ['police_station', 105], ['crematorium', 100], ['courthouse', 95], ['jail', 90],
 ]);
@@ -183,7 +183,7 @@ export class CityDevelopment {
     const repairable = city.buildings.filter(b => b.repairNeeded && !this.projects.some(p => p.service === 'repair' && p.buildingId === b.id && p.status !== 'completed' && !p.cancelled));
     if (city.treasury > city.currency.price(500000)) for (const b of repairable) if (this.beginRepair('treasury', b.id)) break;
     const damagedRoad = this.cityRoadNeedsRepair();
-    if (damagedRoad.length && (city.random() < .12||city.economy.businesses.some(b=>b.type==='road_maintenance')) && city.treasury > city.currency.price(1000000) && !this.projects.some(p => p.service === 'road-repair' && p.status !== 'completed' && !p.cancelled)) this.beginRoadRepair('treasury', damagedRoad.sort((a,b)=>city.trafficScore([b])-city.trafficScore([a])).slice(0, 12));
+    if (damagedRoad.length && city.treasury > city.currency.price(1000000) && !this.projects.some(p => p.service === 'road-repair' && p.status !== 'completed' && !p.cancelled)) this.beginRoadRepair('treasury', damagedRoad.sort((a,b)=>city.trafficScore([b])-city.trafficScore([a])).slice(0, 12));
   }
   planRoadNetwork(hall,needs){
     const city=this.city,pending=this.projects.filter(p=>['road','bridge'].includes(p.service)&&!p.cancelled&&p.status!=='completed'&&p.status!=='blocked');
@@ -268,12 +268,16 @@ export class CityDevelopment {
     }
   }
   cityRoadNeedsRepair() {
-    const out = [];
+    const city=this.city,out=[],seen=new Set();
     for (const [key, condition] of this.city.world.roadCondition || []) {
       if (condition > DEVELOPMENT_RULES.repairThreshold) continue;
       const [x, y] = key.split(',').map(Number);
-      if (PAVED_ROAD_TILES.has(tileAt(this.city.world, x, y))) out.push({ x: x + .5, y: y + .5 });
+      if (PAVED_ROAD_TILES.has(tileAt(city.world, x, y))||DIRT_ROAD_TILES.has(tileAt(city.world,x,y))&&condition===0){out.push({x:x+.5,y:y+.5});seen.add(key);}
     }
+    // Older saves erased the condition record when pavement turned to dirt.
+    // Traffic lets maintenance recover those busy stretches without scanning
+    // or treating every original dirt lane as damaged.
+    for(const [key,traffic]of city.traffic||[]){if(traffic<4||seen.has(key))continue;const [x,y]=key.split(',').map(Number);if(DIRT_ROAD_TILES.has(tileAt(city.world,x,y)))out.push({x:x+.5,y:y+.5});}
     return out;
   }
   beginRepair(accountId, buildingId, {preventive=false}={}) {
@@ -297,7 +301,7 @@ export class CityDevelopment {
     }
     if (city.world.map) for (let y = 0; y < city.world.height; y++) for (let x = 0; x < city.world.width; x++) {
       const tile = tileAt(city.world, x, y);
-      if (PAVED_ROAD_TILES.has(tile) && city.random() < .015) wearRoad(city.world,x,y,2.5);
+      if (PAVED_ROAD_TILES.has(tile) && city.random() < ROAD_RULES.randomWearChance) wearRoad(city.world,x,y,ROAD_RULES.randomWearAmount);
     }
   }
   ownerCitizen(accountId) {

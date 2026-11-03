@@ -37,20 +37,20 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-style
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
-import { quarryDeposits } from './city_terrain.js?v=favela-tree-roads-1';
+import { quarryDeposits } from './city_terrain.js?v=road-durability-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=survival-capacity-1';
 import { CityLife } from './city_life.js?v=body-weight-2';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=plot-overlap-spatial-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=road-durability-1';
 import { CityLogistics } from './city_logistics.js?v=wardrobe-expansion-1';
 import { CityGigs } from './city_gigs.js?v=custom-artworks-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=wardrobe-expansion-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=substance-chain-boost-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=favela-tree-roads-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=road-durability-1';
 
 const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
 export const INITIAL_POPULATION = 512;
@@ -158,7 +158,7 @@ export class CitySimulation {
     this.officialJournal = new CityOfficialJournal(this);
     this.vehicles = new CityVehicles(this);
     this.paint = new CityPaint(this);
-    this.substances=new CitySubstances(this);this.substanceSchemaVersion=3;
+    this.substances=new CitySubstances(this);this.substanceSchemaVersion=4;
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -667,6 +667,7 @@ export class CitySimulation {
     else if (n.food < 72 && !this.welfare.mealAssistanceEligible(c)) { task = 'food'; type = 'market'; }
     else if (n.food < 45) { task = 'food'; type = 'market'; }
     else if (n.toilet < 45) { task = 'toilet'; type = 'toilet'; }
+    else if (this.substances?.consider(c))return;
     else if (wantsSleep(this,c)) { task = 'energy'; type = 'home'; }
     else if (n.hygiene < 35) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
@@ -675,7 +676,6 @@ export class CitySimulation {
     else if (company && this.hour >= 8 && this.hour < 17) { task = 'manage'; type = 'company'; }
     else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
     else if (this.substances?.routeBar(c))return;
-    else if (this.substances?.consider(c))return;
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
     if(task==='energy'&&!home){this.routeHomelessToSleep(c);return;}
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }

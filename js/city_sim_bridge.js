@@ -1,5 +1,5 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=organic-party-slogans-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=substance-chain-boost-1';
 import {canStep,terrainWalkable} from './city_terrain.js?v=quarry-outskirts-1';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating

@@ -14,7 +14,7 @@ export const SUBSTANCE_CROPS={
  grao_cafe:{label:'Grão de café',grow:280,price:160,nonFood:true,substance:'cafe',yieldFactor:1.5,laborFactor:1.2},
  cana:{label:'Cana para bebidas',grow:180,price:65,nonFood:true,substance:'alcool',yieldFactor:2,laborFactor:.8},
  folha_tabaco:{label:'Folha de tabaco',grow:90,price:55,nonFood:true,substance:'tabaco',yieldFactor:3,laborFactor:.6},
- flor_cannabis:{label:'Cannabis e cânhamo',grow:240,price:220,nonFood:true,substance:'canhamo',yieldFactor:1,laborFactor:1.5},
+ flor_cannabis:{label:'Cannabis e cânhamo',grow:240,price:220,nonFood:true,substance:'cannabis',yieldFactor:1,laborFactor:1.5},
  folha_coca:{label:'Folha de coca',grow:130,price:75,nonFood:true,substance:'folha_coca',yieldFactor:2.5,laborFactor:.8},
 };
 export const BRAND_CROPS={trigo:true,cevada:true,lupulo:true,uva:true,agave:true};
