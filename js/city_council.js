@@ -5,7 +5,7 @@ import {equityShares,offerShares,initializeEquity,nationalizeShares} from './cit
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
 import {CityCouncilChamber} from './city_council_chamber.js';
-import {inviteMembers} from './city_party_membership.js?v=wardrobe-expansion-1';
+import {inviteMembers} from './city_party_membership.js?v=party-affiliation-history-1';
 import { seatBounds, scandalEligible, publicPressure } from './city_political_institutions.js';
 import {partyNameAgenda} from './city_party_names.js?v=party-vocabulary-position-names-2';
 import {PREJUDICE_TYPES,prejudiceLawSupport} from './city_prejudice.js?v=discrimination-laws-1';

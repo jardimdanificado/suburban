@@ -1,6 +1,6 @@
-import {CityGlobalSearch} from './city_global_search.js?v=party-flag-palette-migration-1';
+import {CityGlobalSearch} from './city_global_search.js?v=party-membership-tracking-merge-flags-1';
 import {desktopMenus} from './city_desktop_menus.js?v=freecam-tools-2';
-import {CityUI,money} from './city_ui.js?v=party-flag-palette-migration-1';
+import {CityUI,money} from './city_ui.js?v=party-membership-tracking-merge-flags-1';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js';

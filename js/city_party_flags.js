@@ -152,6 +152,31 @@ export function makePartyFlag(city,index,founders=[],party=null){
  const layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors);
  return Object.freeze({foreground,background,colors,paletteVersion:2,detailVersion:1,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:'random',emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
+function strongestFlagColor(candidates,against,excluded=[],fallback){
+ const blocked=new Set(excluded),colors=[...new Set(candidates.filter(color=>typeof color==='string'&&/^#[\da-f]{6}$/i.test(color)&&!blocked.has(color)))];let best=null,bestScore=-1;
+ for(const color of colors){const score=against.length?Math.min(...against.map(other=>flagContrast(color,other))):1;if(score>bestScore){best=color;bestScore=score;}}
+ return best||fallback;
+}
+function flagSymbols(flag){return flag?.emblems?.length?flag.emblems:flag?.skin?[{skin:flag.skin}]:[];}
+export function makeMergedPartyFlag(city,index,party,sourceFlag,destinationFlag){
+ const parents=[sourceFlag,destinationFlag].filter(Boolean),backgroundOwner=parents[Math.floor(city.random()*parents.length)],fallbackBg=randomColor(city.random()*360,.19,.78),background=/^#[\da-f]{6}$/i.test(backgroundOwner?.background||'')?backgroundOwner.background:fallbackBg;
+ const parentSwatches=parents.flatMap(flag=>[flag.foreground,flag.background,...(flag.colors||[])]).filter(color=>typeof color==='string'&&/^#[\da-f]{6}$/i.test(color));
+ const fallbackForeground=flagContrast(background,'#f5e9bf')>=flagContrast(background,'#17244b')?'#f5e9bf':'#17244b',foreground=strongestFlagColor(parentSwatches,[background],[background],fallbackForeground);
+ const inheritedPatterns=parents.map(flag=>flag.colors?.[1]).filter(color=>/^#[\da-f]{6}$/i.test(color||'')&&color!==background&&flagContrast(background,color)>=2.4),pattern=inheritedPatterns.length?inheritedPatterns[Math.floor(city.random()*inheritedPatterns.length)]:strongestFlagColor(parentSwatches,[background],[background],foreground);
+ const textColor=strongestFlagColor(parents.map(flag=>flag.colors?.[2]).concat(parentSwatches,[foreground]),[background,pattern],[background,pattern],foreground),iconColor=strongestFlagColor(parents.map(flag=>flag.colors?.[3]).concat(parentSwatches,[foreground]),[background,pattern,textColor],[background,pattern,textColor],foreground),colors=Object.freeze([background,pattern,textColor,iconColor]);
+ const backgroundStyle=backgroundOwner?.backgroundStyle||parents.find(flag=>flag.backgroundStyle)?.backgroundStyle||'solid',preferredLayouts=parents.map(flag=>flag.textLayout).filter(id=>id&&!TEXT_ONLY_LAYOUT_IDS.has(id)),allTextLayouts=TEXT_LAYOUTS.filter(layout=>!TEXT_ONLY_LAYOUT_IDS.has(layout.id)),compatible=allTextLayouts.filter(layout=>textLayoutCompatible(layout,backgroundStyle,120/76)),layoutPool=compatible.length?compatible:allTextLayouts,preferred=layoutPool.filter(layout=>preferredLayouts.includes(layout.id)),textLayout=(preferred.length?preferred:layoutPool)[Math.floor(city.random()*(preferred.length?preferred:layoutPool).length)];
+ const sourceSymbols=flagSymbols(sourceFlag),destinationSymbols=flagSymbols(destinationFlag),used=new Set(),chosen=[];
+ const takeFrom=pool=>{const available=pool.filter(emblem=>emblem?.skin&&!used.has(emblem.skin));if(!available.length)return;const emblem=available[Math.floor(city.random()*available.length)];chosen.push(emblem);used.add(emblem.skin);};
+ takeFrom(sourceSymbols);takeFrom(destinationSymbols);
+ const inherited=[...sourceSymbols,...destinationSymbols].filter(emblem=>emblem?.skin&&!used.has(emblem.skin)),targetCount=2+Math.floor(city.random()*3);
+ while(chosen.length<targetCount&&inherited.length){const index=Math.floor(city.random()*inherited.length),[emblem]=inherited.splice(index,1);if(used.has(emblem.skin))continue;chosen.push(emblem);used.add(emblem.skin);}
+ while(chosen.length<targetCount){const skin=weightedSprite(city,party,used);if(!skin)break;used.add(skin);chosen.push({skin});}
+ const count=chosen.length||1,arrangements=ICON_LAYOUTS[count]||ICON_LAYOUTS[1],arrangement=arrangements[Math.floor(city.random()*arrangements.length)],layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),detailModes=new Map(),emblems=Object.freeze(layout.slots.map((slot,slotIndex)=>{
+  const source=chosen[slotIndex],detailGroup=slot.detailGroup??slotIndex;if(!detailModes.has(detailGroup))detailModes.set(detailGroup,source.detailMode||(city.random()<.8?'detailed':'flat'));
+  return Object.freeze({skin:source.skin,x:layout.iconArea.x+slot.x*layout.iconArea.w,y:layout.iconArea.y+slot.y*layout.iconArea.h,w:slot.w*layout.iconArea.w,h:slot.h*layout.iconArea.h,...(source.crop?{crop:Object.freeze({...source.crop})}:{}),...(slot.clip?{clip:Object.freeze({x:layout.iconArea.x+slot.clip.x*layout.iconArea.w,y:layout.iconArea.y+slot.clip.y*layout.iconArea.h,w:slot.clip.w*layout.iconArea.w,h:slot.clip.h*layout.iconArea.h})}:{}),color:iconColor,shade:iconColor,detailMode:detailModes.get(detailGroup),backgroundMode:source.backgroundMode||'transparent'});
+ })),texts=buildTexts(city,party,layout.textBoxes,colors);
+ return Object.freeze({foreground,background,colors,paletteVersion:2,detailVersion:1,pattern:0,backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:'merged',mergedFrom:[sourceFlag?.partyId??null,destinationFlag?.partyId??null].filter(id=>id!=null),emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
+}
 export function upgradePartyFlagPalette(city,flag){
  if(!flag)return flag;const updatePalette=flag.paletteVersion<2,updateDetails=(flag.detailVersion||0)<1;if(!updatePalette&&!updateDetails)return flag;
  const colors=updatePalette?flagPalette(city,0,flag.background||'#222222',flag.foreground||'#f5e9bf'):flag.colors;

@@ -26,8 +26,14 @@ export function syncPartyColor(p,c){
 function updateSympathy(s){const best=Object.entries(s.support).sort((a,b)=>b[1].score-a[1].score)[0];s.sympathyPartyId=best&&best[1].score>4?Number(best[0]):null;}
 const adults=p=>p.city.citizens.filter(c=>!c.entity.destroyed&&p.city.society.isAdult(c));
 export function canJoin(p,c){const people=adults(p);return !!c.political.partyId||people.filter(v=>v.political?.partyId&&p.party(v.political.partyId)?.active).length<Math.floor(people.length*MEMBERSHIP_RULES.maxShare);}
+export function recordPartyMembership(p,party,c,action,reason,otherParty=null){
+  if(!party||!c)return null;const citizenName=c.political?.displayNameBase||c.entity?.properties?.name||`Morador ${c.id}`,fromParty=action==='leave'?party:otherParty,toParty=action==='join'?party:otherParty;
+  party.membershipHistory??=[];const event=Object.freeze({minute:p.city.minute,citizenId:c.id,citizenName,action,reason:String(reason||'Motivo não registrado'),fromPartyId:fromParty?.id??null,fromPartyName:fromParty?.name??null,toPartyId:toParty?.id??null,toPartyName:toParty?.name??null});party.membershipHistory.push(event);
+  if(party.membershipHistory.length>4000)party.membershipHistory.splice(0,party.membershipHistory.length-4000);return event;
+}
 export function leaveParty(p,c,reason){
   const s=membershipProfile(p,c),old=p.party(s.partyId);if(!old)return false;
+  recordPartyMembership(p,old,c,'leave',reason);
   returnPartyCap(p,old,c);old.memberIds=old.memberIds.filter(id=>id!==c.id);s.lastPartyId=old.id;s.lastPartyDepartureAt=p.city.minute;s.partyId=null;syncPartyColor(p,c);s.loyalty=0;s.membershipCooldownUntil=p.city.minute+1440*MEMBERSHIP_RULES.cooldownDays;
   p.remember(c,{kind:'party-departure',partyId:old.id,description:`Desfiliou-se de ${old.short}: ${reason}.`});
   return true;
