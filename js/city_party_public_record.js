@@ -7,6 +7,9 @@ export function legislativeOpinion(city,c,bill){
   const affinity=policyAffinity(ideologicalProfile(c),city,bill.type,bill.payload);if(affinity!==null)return affinity+citizenPolicyInterest(city,c,bill.type,bill.payload);
   const change=key=>Math.sign(v-(p.policy[key]??0));
   switch(bill.type){
+    case'cityName':return clamp((c.homeUnitId ? .12 : 0)+((c.traits?.openness??.5)-.5)*.18,-.2,.3);
+    case'citySlogan':return ((c.traits?.openness??.5)-.5)*.35+(i.liberty||0)*.08;
+    case'cityFlag':return ((c.traits?.openness??.5)-.5)*.3+(['add-symbol','add-text','regenerate'].includes(bill.payload.operation?.type) ? .08 : 0);
     case'mayorElectionSystem':return (bill.payload.mode==='direct'?1:-1)*i.liberty;
     case'secretaryElection':return (SECRETARY_MODE_RANK[bill.payload.mode]-SECRETARY_MODE_RANK[p.policy.secretaryElectionModes?.[bill.payload.office]||'appointed'])*i.liberty;
     case'partyFund':return -Math.sign(v-(bill.previousValue??p.policy.partyFund??80000))*.9;

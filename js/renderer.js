@@ -648,14 +648,11 @@ export class Renderer {
         }
         if(['townhall','council_chamber'].includes(b.type)&&b.governingFlag){
           const f=b.governingFlag,fw=Math.max(10,Math.floor(tileSize*1.65)),fh=Math.max(6,Math.floor(fw*.63));
-          const fx=Math.floor(sx+b.width*tileSize*.5),fy=Math.floor(sy+b.depth*tileSize*.5-tileSize*2.5);
-          const fg=hexToRgba32(parseInt(f.foreground.slice(1),16),255),bg=hexToRgba32(parseInt(f.background.slice(1),16),255);
-          drawBox32(buf32,width,height,fx-1,fy,2,Math.floor(tileSize*2.5),rgba32(200,198,180));
-          drawBox32(buf32,width,height,fx+1,fy,fw,fh,bg);
-          if(f.pattern===1)drawBox32(buf32,width,height,fx+1,fy+Math.floor(fh*.42),fw,Math.max(1,Math.floor(fh*.16)),fg);
-          if(f.pattern===2)for(let row=0;row<fh;row++)drawBox32(buf32,width,height,fx+1,fy+row,Math.max(1,Math.floor(fw*.5*(1-Math.abs(row*2/fh-1)))),1,fg);
-          const emblem=findTexture(f.skin);
-          if(emblem)drawSpriteTinted32(buf32,width,height,emblem,fx+1+Math.floor(fw*.3),fy+Math.floor(fh*.12),Math.floor(fw*.4),Math.floor(fh*.76),fg,bg,globalLight);
+          const fx=Math.floor(sx+b.width*tileSize*.5),fy=Math.floor(sy+b.depth*tileSize*.5-tileSize*3);
+          drawBox32(buf32,width,height,fx-1,fy,2,Math.floor(tileSize*3),rgba32(200,198,180));
+          const drawFlag=(design,flagWidth,flagHeight,flagY)=>{const fg=hexToRgba32(parseInt(design.foreground.slice(1),16),255),bg=hexToRgba32(parseInt(design.background.slice(1),16),255);drawBox32(buf32,width,height,fx+1,flagY,flagWidth,flagHeight,bg);if(design.pattern===1)drawBox32(buf32,width,height,fx+1,flagY+Math.floor(flagHeight*.42),flagWidth,Math.max(1,Math.floor(flagHeight*.16)),fg);if(design.pattern===2)for(let row=0;row<flagHeight;row++)drawBox32(buf32,width,height,fx+1,flagY+row,Math.max(1,Math.floor(flagWidth*.5*(1-Math.abs(row*2/flagHeight-1)))),1,fg);const emblem=findTexture(design.skin);if(emblem)drawSpriteTinted32(buf32,width,height,emblem,fx+1+Math.floor(flagWidth*.3),flagY+Math.floor(flagHeight*.12),Math.max(1,Math.floor(flagWidth*.4)),Math.max(1,Math.floor(flagHeight*.76)),fg,bg,globalLight);};
+          drawFlag(f,fw,fh,fy);
+          if(b.type==='townhall'&&b.governingPartyFlag){const partyWidth=Math.max(3,Math.floor(fw/3)),partyHeight=Math.max(2,Math.floor(fh/3));drawFlag(b.governingPartyFlag,partyWidth,partyHeight,fy+fh+1);}
         }
         if (this.selectedEntityId === e.id) drawBoxOutline32(buf32, width, height, sx, sy, Math.floor(b.width * tileSize), Math.floor(b.depth * tileSize), rgba32(248, 220, 120));
         continue;

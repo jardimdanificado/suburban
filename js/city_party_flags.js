@@ -214,6 +214,39 @@ export function makePartyFlag(city,index,founders=[],party=null){
  const layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),emblems=layoutEmblems(city,party,layout,colors),texts=buildTexts(city,party,layout.textBoxes,colors);
  return Object.freeze({foreground,background,colors,paletteVersion:3,detailVersion:1,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:palette.colorSource,emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
+export function makeMunicipalFlag(city,identity={}){
+ const name=String(identity.name||'Cidade'),subject={name,short:name,slogan:String(identity.slogan||''),number:null};
+ return makePartyFlag(city,-1,[],subject);
+}
+function remapMunicipalFlag(city,flag,emblems,texts,identity){
+ const count=emblems.length,textCount=texts.length,oldTextLayout=flag.textLayout,layouts=PARTY_FLAG_LAYOUTS.filter(layout=>layout.count===count),matching=layouts.filter(layout=>layout.textLayout===oldTextLayout&&layout.textBoxes.length===textCount),pool=matching.length?matching:layouts.filter(layout=>layout.textBoxes.length===textCount),chosen=pool.length?pool[Math.floor(city.random()*pool.length)]:layouts[Math.floor(city.random()*layouts.length)];
+ if(!chosen)return flag;
+ const area=chosen.iconArea,placed=Object.freeze(chosen.slots.map((slot,index)=>Object.freeze({...emblems[index],x:area.x+slot.x*area.w,y:area.y+slot.y*area.h,w:slot.w*area.w,h:slot.h*area.h,...(slot.clip?{clip:Object.freeze({x:area.x+slot.clip.x*area.w,y:area.y+slot.clip.y*area.h,w:slot.clip.w*area.w,h:slot.clip.h*area.h})}:{clip:undefined})}))),placedTexts=Object.freeze(chosen.textBoxes.map((box,index)=>Object.freeze({...texts[index],...box,color:texts[index]?.color||flag.colors?.[2]||flag.foreground})));
+ return Object.freeze({...flag,layoutId:chosen.id,layoutName:chosen.arrangement,textLayout:chosen.textLayout,emblems:placed,texts:placedTexts,municipalName:identity.name,municipalSlogan:identity.slogan});
+}
+export function mutateMunicipalFlag(city,flag,operation,identity={}){
+ if(!flag)return makeMunicipalFlag(city,identity);
+ const emblems=(flag.emblems||[]).map(emblem=>({...emblem})),texts=(flag.texts||[]).map(text=>({...text}));
+ if(operation.type==='background'&&PARTY_FLAG_BACKGROUNDS.includes(operation.value))return Object.freeze({...flag,backgroundStyle:operation.value});
+ if(operation.type==='color'&&Number.isInteger(operation.index)&&operation.index>=0&&operation.index<=3&&/^#[\da-f]{6}$/i.test(operation.value||'')){
+  const colors=[...(flag.colors||[flag.background,flag.foreground,flag.foreground,flag.foreground])];while(colors.length<4)colors.push(colors.at(-1)||flag.foreground);colors[operation.index]=operation.value.toLowerCase();
+  if(operation.index===0){const candidates=[...colors,'#f5e9bf','#17244b'];colors[1]=flagContrast(colors[1],colors[0])>=3?colors[1]:strongestFlagColor(candidates,[colors[0]],[colors[0]],'#f5e9bf');colors[2]=flagContrast(colors[2],colors[0])>=3&&flagContrast(colors[2],colors[1])>=2?colors[2]:strongestFlagColor(candidates,[colors[0],colors[1]],[colors[0],colors[1]],colors[1]==='#17244b'?'#f5e9bf':'#17244b');colors[3]=flagContrast(colors[3],colors[0])>=3&&flagContrast(colors[3],colors[1])>=2&&flagContrast(colors[3],colors[2])>=2?colors[3]:strongestFlagColor(candidates,[colors[0],colors[1],colors[2]],[colors[0],colors[1],colors[2]],'#f5e9bf');return Object.freeze({...flag,background:colors[0],foreground:colors[1],colors:Object.freeze(colors),emblems:Object.freeze(emblems.map(row=>Object.freeze({...row,color:colors[3],shade:colors[3]}))),texts:Object.freeze(texts.map(row=>Object.freeze({...row,color:colors[2]})))});}
+  if(operation.index===1)return Object.freeze({...flag,foreground:colors[1],colors:Object.freeze(colors)});
+  if(operation.index===2)return Object.freeze({...flag,colors:Object.freeze(colors),texts:Object.freeze(texts.map(row=>Object.freeze({...row,color:colors[2]})))});
+  return Object.freeze({...flag,colors:Object.freeze(colors),emblems:Object.freeze(emblems.map(row=>Object.freeze({...row,color:colors[3],shade:colors[3]})))});
+ }
+ if(operation.type==='add-symbol'&&emblems.length<4){const skin=weightedSprite(city,null,new Set(emblems.map(emblem=>emblem.skin))),color=flag.colors?.[3]||flag.foreground;emblems.push({skin,color,shade:color,detailMode:city.random()<.8?'detailed':'flat',backgroundMode:'transparent'});return remapMunicipalFlag(city,flag,emblems,texts,identity);}
+ if(operation.type==='remove-symbol'&&emblems.length){emblems.splice(Number.isInteger(operation.index)?Math.max(0,Math.min(emblems.length-1,operation.index)):emblems.length-1,1);return remapMunicipalFlag(city,flag,emblems,texts,identity);}
+ if(operation.type==='replace-symbol'&&emblems.length){const index=Math.max(0,Math.min(emblems.length-1,Number(operation.index)||0)),skin=weightedSprite(city,null,new Set(emblems.filter((_,i)=>i!==index).map(emblem=>emblem.skin)));emblems[index]={...emblems[index],skin};return Object.freeze({...flag,emblems:Object.freeze(emblems.map(Object.freeze))});}
+ if(operation.type==='add-text'&&texts.length<2&&String(operation.value||'').trim()){
+  const candidates=PARTY_FLAG_LAYOUTS.filter(layout=>layout.count===emblems.length&&layout.textBoxes.length===texts.length+1),layout=candidates[Math.floor(city.random()*candidates.length)];if(!layout)return flag;
+  const value=String(operation.value).trim(),next=[...texts,{value,kind:'phrase',color:flag.colors?.[2]||flag.foreground}];return remapMunicipalFlag(city,flag,layout.slots.map((_,index)=>emblems[index]),next,identity);
+ }
+ if(operation.type==='remove-text'&&texts.length){texts.pop();return remapMunicipalFlag(city,flag,emblems,texts,identity);}
+ if(operation.type==='edit-text'&&texts.length&&String(operation.value||'').trim()){const index=Math.max(0,Math.min(texts.length-1,Number(operation.index)||0));texts[index].value=String(operation.value).trim();return Object.freeze({...flag,texts:Object.freeze(texts.map(Object.freeze))});}
+ if(operation.type==='regenerate')return makeMunicipalFlag(city,identity);
+ return flag;
+}
 function strongestFlagColor(candidates,against,excluded=[],fallback){
  const blocked=new Set(excluded),colors=[...new Set(candidates.filter(color=>typeof color==='string'&&/^#[\da-f]{6}$/i.test(color)&&!blocked.has(color)))];let best=null,bestScore=-1;
  for(const color of colors){const score=against.length?Math.min(...against.map(other=>flagContrast(color,other))):1;if(score>bestScore){best=color;bestScore=score;}}

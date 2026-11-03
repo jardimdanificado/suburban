@@ -822,21 +822,16 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
 }
 
 function syncTownhallFlag(renderer,group,THREE,b,shade=1){
-  const flag=b.governingFlag,key=flag?JSON.stringify(flag)+':'+(b.rotation||0)+':'+b.floors:null;
-  if(group.userData.governingFlagKey===key){group.userData.governingFlagMaterial?.color.setScalar(shade);animateClothFlag(group.userData.governingFlagCloth,flagWindTime(renderer),group.userData.governingFlagPhase||0);return;}
+  const flag=b.governingFlag,flags=b.type==='townhall'?[{flag,size:1.65,height:1.04,y:2.45},{flag:b.governingPartyFlag,size:.55,height:1.04/3,y:1.15}].filter(row=>row.flag):[{flag,size:1.65,height:1.04,y:2.45}].filter(row=>row.flag),key=flags.length?JSON.stringify(flags.map(row=>row.flag))+':'+(b.rotation||0)+':'+b.floors:null;
+  if(group.userData.governingFlagKey===key){for(const material of group.userData.governingFlagMaterials||[])material.color.setScalar(shade);for(const {cloth,phase} of group.userData.governingFlagCloths||[])animateClothFlag(cloth,flagWindTime(renderer),phase);return;}
   const old=group.userData.governingFlagMesh;
   if(old){group.remove(old);old.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.userData.partyFlagTexture?.dispose();});}
-  group.userData.governingFlagKey=key;group.userData.governingFlagMesh=null;group.userData.governingFlagMaterial=null;group.userData.governingFlagCloth=null;
-  if(!flag)return;
+  group.userData.governingFlagKey=key;group.userData.governingFlagMesh=null;group.userData.governingFlagMaterials=[];group.userData.governingFlagCloths=[];
+  if(!flags.length)return;
   const mast=new THREE.Group(),roof=b.floors*CITY_FLOOR_HEIGHT+.18;
-  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,2.5,6),new THREE.MeshLambertMaterial({color:0xc8c6b4}));
-  pole.position.set(b.width*.5,roof+1.25,b.depth*.5);mast.add(pole);
-  let texture;
-  const canvas=partyFlagCanvas(flag,()=>{if(texture)texture.needsUpdate=true;});
-  texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
-  const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);
-  const banner=new THREE.Mesh(clothFlagGeometry(THREE,1.65,1.04),material);group.userData.governingFlagCloth=banner;group.userData.governingFlagPhase=0;animateClothFlag(banner,flagWindTime(renderer),0);
-  banner.userData.partyFlagTexture=texture;banner.position.set(b.width*.5+.85,roof+1.9,b.depth*.5);mast.add(banner);group.userData.governingFlagMaterial=material;
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,3.2,6),new THREE.MeshLambertMaterial({color:0xc8c6b4}));
+  pole.position.set(b.width*.5,roof+1.6,b.depth*.5);mast.add(pole);
+  for(const row of flags){let texture;const canvas=partyFlagCanvas(row.flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);const banner=new THREE.Mesh(clothFlagGeometry(THREE,row.size,row.height),material);animateClothFlag(banner,flagWindTime(renderer),0);banner.userData.partyFlagTexture=texture;banner.position.set(b.width*.5+row.size*.5,roof+row.y,b.depth*.5);mast.add(banner);group.userData.governingFlagMaterials.push(material);group.userData.governingFlagCloths.push({cloth:banner,phase:0});}
   group.add(mast);group.userData.governingFlagMesh=mast;
 }
 
