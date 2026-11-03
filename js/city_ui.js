@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-dialogue-1';
+import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-organic-slogans-1';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -46,7 +46,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=wardrobe-expansion-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=party-membership-tracking-merge-flags-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=organic-party-slogans-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

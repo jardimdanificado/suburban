@@ -3,6 +3,7 @@
 export {
   gerarFrase,
   gerarFraseTematica,
+  gerarSloganPartidario,
   gerarDialogoTematico,
   criarSubstantivoCombinado,
-} from './vocabulario.js?v=vocabulary-dialogue-1';
+} from './vocabulario.js?v=vocabulary-organic-slogans-1';

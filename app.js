@@ -1,9 +1,9 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=party-vocabulary-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=organic-party-slogans-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=party-vocabulary-1";
-import { CityDesktop } from "./js/city_desktop.js?v=party-vocabulary-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=organic-party-slogans-1";
+import { CityDesktop } from "./js/city_desktop.js?v=organic-party-slogans-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=wardrobe-expansion-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=campaign-flag-back-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";

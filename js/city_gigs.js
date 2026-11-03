@@ -4,7 +4,7 @@ import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interi
 import {CITY_FLOOR_HEIGHT,buildingFacadeBannerSupport} from './city_building_geometry.js?v=banner-placement-2';
 import {isRoadAt} from './city_terrain.js?v=quarry-outskirts-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-dialogue-1';
+import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-organic-slogans-1';
 
 const ACTIVE=new Set(['open','working']);
 const INTERRUPTIBLE=new Set(['leisure','walk','social','sit','outdoor_leisure']);
