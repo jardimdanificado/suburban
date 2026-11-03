@@ -11,9 +11,9 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseC
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=static-cell-batch-10";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=porch-door-clearance-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-shadow-draws-3';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=body-surface-continuity-1';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-5';
 import { ASSET_DATA } from "./assets_data.js";
@@ -243,19 +243,18 @@ function createTerrainSurfaceTexture(style, variant) {
       ctx.fillRect(Math.floor(random() * size), Math.floor(random() * size), 3 + Math.floor(random() * 8), 1 + Math.floor(random() * 3));
     }
   } else if (style === "retainingWall") {
-    // Staggered stone courses, like the exposed side of a raised terrain tile.
+    // Seamless staggered courses let adjacent road-wall panels share one
+    // world-space UV layout without revealing tile edges.
     const mortar = "#444b4d";
     ctx.fillStyle = mortar;
     ctx.fillRect(0, 0, size, size);
-    for (let row = -1; row < 6; row++) {
-      const y = row * 7, offset = row % 2 ? -6 : 0;
-      for (let x = offset - 10; x < size + 8;) {
-        const width = 8 + Math.floor(random() * 5), height = 6;
-        ctx.fillStyle = palettes.stones[Math.floor(random() * palettes.stones.length)];
-        ctx.fillRect(x + 1, y + 1, width - 2, height - 1);
-        ctx.fillStyle = "rgba(232,238,236,.22)";
-        ctx.fillRect(x + 1, y + 1, width - 2, 1);
-        x += width;
+    for (let row = 0; row < 4; row++) {
+      const y=row*8,offset=row%2?4:0;
+      for(let column=-1;column<5;column++){
+        const x=column*8-offset,wrapped=((column%4)+4)%4,stoneHash=terrainTextureHash(wrapped,row,variant+211),stone=palettes.stones[stoneHash%palettes.stones.length];
+        ctx.fillStyle=stone;ctx.fillRect(x+1,y+1,6,6);
+        ctx.fillStyle="rgba(232,238,236,.22)";ctx.fillRect(x+1,y+1,6,1);
+        ctx.fillStyle="rgba(20,24,24,.24)";ctx.fillRect(x+1,y+6,6,1);
       }
     }
   } else {
@@ -5161,7 +5160,7 @@ export class RCT3DRenderer {
   syncActiveMaterials(isPersp = this.isPerspectiveActive()) {
     this.applyAnisotropyForMode(isPersp);
 
-    const useNormalMaps = (isPersp || this.graphicOptions.isometricEffects === true) && (this.graphicOptions.normalMaps !== false);
+    const useNormalMaps = this.graphicOptions.normalMaps !== false;
     const activeDict = useNormalMaps ? this.materialsPerspective : this.materialsIso;
 
     for (const [k, mat] of Object.entries(activeDict)) {
@@ -6637,11 +6636,13 @@ export class RCT3DRenderer {
         }
 
         if(streetCorners)for(const face of roadRetainingFaces(world,tx,ty)){
-          const variant=terrainTextureHash(tx,ty,tType+face.side)&3,wall=tileMeshBuckets[`terrainRetainingWall${variant}`],tone=zoneMult*.92;
+          const variant=face.side,wall=tileMeshBuckets[`terrainRetainingWall${variant}`],tone=zoneMult*.92;
           const a=[face.ax,face.lowA,face.ay],b=[face.bx,face.lowB,face.by],c=[face.bx,face.highB,face.by],d=[face.ax,face.highA,face.ay];
-          // World-height UVs keep masonry courses aligned along slopes and
-          // across neighboring tiles instead of stretching an image per panel.
-          for(const [point,u]of [[a,face.from],[b,face.to],[c,face.to],[a,face.from],[c,face.to],[d,face.from]]){
+          // World-space UVs keep both stone blocks and courses aligned across
+          // neighboring panels, including the split faces at slope crossings.
+          const along=face.side===0||face.side===2?point=>point[0]:point=>point[2];
+          for(const point of [a,b,c,a,c,d]){
+            const u=along(point);
             wall.pos.push(...point);wall.uvs.push(u,point[1]);wall.colors.push(tone,tone,tone);
           }
         }

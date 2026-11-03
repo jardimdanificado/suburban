@@ -313,7 +313,7 @@ export class CityEconomy {
       const processingNeed=inputDemandByGood.get(crop)||0;
       const grainConsumers=businesses.filter(b=>b.type==='bakery'||INDUSTRIES[b.type]?.inputs.trigo).length;
       const downstream = crop === 'trigo' ? grainConsumers : buyers.filter(b => this.accepts(b, crop)).length;
-      const substanceNeed=spec.nonFood?(this.city.substances?.law(spec.substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&this.city.substances?.law('cannabis')?.regime!=='prohibited')?0:Math.ceil(population*(SUBSTANCES[spec.substance]?.popularity||.2)*.6)+processingNeed):null;
+      const substanceNeed=spec.nonFood?(this.city.substances?.law(spec.substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&this.city.substances?.law('cannabis')?.regime!=='prohibited')?0:Math.ceil(population*(SUBSTANCES[spec.substance]?.popularity||.2)*.8)+processingNeed):null;
       const dailyNeed = substanceNeed??(crop === 'trigo' ? Math.ceil(Math.max(population*(bakeries?2:.5),processingNeed)) : crop==='girassol'?Math.max(oil.sunflowerRequired,processingNeed):Math.ceil(population*6*(foodWeights[crop]||0)/totalFoodWeight)+processingNeed);
       const capacity = producers.reduce((n,b)=>n+this.farmCapacity(b,true).daily,0);
       // A shop's refill target is not population consumption: treating every
@@ -343,7 +343,7 @@ export class CityEconomy {
       if(type==='domestic_trader'||type==='import_exporter'){const firms=businesses.filter(b=>b.type===type),activeTrade=type==='domestic_trader'?businesses.length>=5:(this.externalTrade?.imports||0)+(this.externalTrade?.sales||0)>0||Object.values(this.market||{}).some(row=>row.demand>0);items.push({type,crop:null,score:firms.length?0:activeTrade?115:0,required:activeTrade?1:0,supply:firms.length,stock:0,reason:spec.impact});continue;}
       if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
       const firms=businesses.filter(b=>b.type===type);
-      const substanceNeed=Object.keys(spec.outputs).reduce((n,g)=>n+(SUBSTANCES[g]&&this.city.substances?.law(g)?.regime!=='prohibited'?population*SUBSTANCES[g].popularity*.4:0),0);
+      const substanceNeed=Object.keys(spec.outputs).reduce((n,g)=>n+(SUBSTANCES[g]&&this.city.substances?.law(g)?.regime!=='prohibited'?population*SUBSTANCES[g].popularity*.65:0),0);
       const needed=substanceNeed+(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?activeCitizens.filter(c=>this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
       const stock=Object.keys(spec.outputs).reduce((n,g)=>n+(stockByGood.get(g)||0),0);
       const supply=firms.reduce((n,b)=>n+Math.max(1,b.workers.length)*240/spec.labor*Object.values(spec.outputs).reduce((a,v)=>a+v,0),0);

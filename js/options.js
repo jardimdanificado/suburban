@@ -7,7 +7,6 @@ const GRAPHICS = [
   { key: "shadowQuality", label: "MAPA SOMBRAS", values: [512, 1024, 2048, 4096].map(v => [v, `${v}`]), default: 512 },
   { key: "wireframe", label: "WIREFRAME", values: [[0, "OFF"], [1, "GRADE"], [2, "TOTAL"]], default: 0 },
   { key: "moonlight", label: "LUZ DA LUA", values: BOOL, default: true, graphic: true },
-  { key: "overheadBillboards", label: "INDICADORES SOBRE PESSOAS", values: BOOL, default: true, graphic: true },
 ];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const EFFECTS = [

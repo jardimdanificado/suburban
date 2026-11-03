@@ -199,7 +199,7 @@ export class CityCitizenModels {
       shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nfloat ringScaleX = 1.0 + instanceFat * weightMorph.x;\nfloat ringScaleZ = 1.0 + instanceFat * weightMorph.y;\nobjectNormal.x /= ringScaleX;\nobjectNormal.z /= ringScaleZ;\nobjectNormal = normalize(objectNormal);');
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.x *= ringScaleX;\ntransformed.z *= ringScaleZ;');
     };
-    material.customProgramCacheKey=()=> 'citizen-weight-morph-13';
+    material.customProgramCacheKey=()=> 'citizen-weight-morph-15';
     return material;
   }
   enableSkirtMorph(material){

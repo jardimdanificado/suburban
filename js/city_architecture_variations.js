@@ -59,6 +59,13 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   }
  };
  const motif=style.motif,accent=style.accent??clay,trim=style.trim??cream,colonialForm=style.colonialForm??style.dutchForm??'sobrado',sertanejoForm=style.sertanejoForm??'taipa';
+ const frontDoorAlong=entryDoorDetails?.side==='front'?entryDoorDetails.unit.x+.5:null,frontDoorGap=(x,half=.48)=>frontDoorAlong!==null&&Math.abs(x-frontDoorAlong)<half;
+ const frontRail=(start,end,height,depth,y,z,color)=>{
+  if(frontDoorAlong===null||frontDoorAlong+.48<=start||frontDoorAlong-.48>=end){box(end-start,height,depth,(start+end)/2,y,z,color);return;}
+  const gapStart=frontDoorAlong-.48,gapEnd=frontDoorAlong+.48;
+  if(gapStart>start)box(gapStart-start,height,depth,(start+gapStart)/2,y,z,color);
+  if(gapEnd<end)box(end-gapEnd,height,depth,(gapEnd+end)/2,y,z,color);
+ };
  if(!residential&&style.motif){
   box(b.width+.12,.11,.16,b.width/2,1.58,front+.08,trim);
   if(motif==='gingerbread')for(let i=0;i<Math.max(3,Math.floor(b.width*1.5));i++){const x=.12+i*(b.width-.24)/Math.max(2,Math.floor(b.width*1.5)-1);box(.07,.2,.07,x,1.8,front+.16,i%2?accent:roofColor);box(.19,.055,.08,x,1.92,front+.16,trim);}
@@ -79,8 +86,8 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    const porch=sertanejoForm==='alpendre'||sertanejoForm==='fazenda'?Math.min(.78,Math.max(.52,b.depth*.25)):.34;
    if(sertanejoForm==='alpendre'||sertanejoForm==='fazenda'){
     box(b.width+.12,.11,porch,b.width/2,1.67,front+porch*.43,roofColor);
-    const postCount=Math.max(2,Math.floor(b.width/1.7));for(let i=0;i<=postCount;i++){const x=.2+i*(b.width-.4)/postCount;box(.1,1.62,.1,x,.81,front+porch*.78,sertanejoForm==='fazenda'?wood:trim);box(.18,.09,.18,x,1.64,front+porch*.78,accent);}
-    if(sertanejoForm==='fazenda'){box(b.width-.32,.075,.07,b.width/2,.72,front+porch*.94,wood);for(let i=0;i<=Math.max(2,Math.floor(b.width/.48));i++)box(.035,.5,.04,.16+i*(b.width-.32)/Math.max(2,Math.floor(b.width/.48)),.39,front+porch*.94,trim);}
+    const postCount=Math.max(2,Math.floor(b.width/1.7));for(let i=0;i<=postCount;i++){const x=.2+i*(b.width-.4)/postCount;if(frontDoorGap(x,.16))continue;box(.1,1.62,.1,x,.81,front+porch*.78,sertanejoForm==='fazenda'?wood:trim);box(.18,.09,.18,x,1.64,front+porch*.78,accent);}
+    if(sertanejoForm==='fazenda'){frontRail(.16,b.width-.16,.075,.07,.72,front+porch*.94,wood);for(let i=0;i<=Math.max(2,Math.floor(b.width/.48));i++){const x=.16+i*(b.width-.32)/Math.max(2,Math.floor(b.width/.48));if(!frontDoorGap(x))box(.035,.5,.04,x,.39,front+porch*.94,trim);}}
    }else if(sertanejoForm==='platibanda'){
     box(b.width+.12,.15,.17,b.width/2,roof+.12,front+.04,trim);for(const x of [.2,b.width-.2])box(.12,.3,.14,x,roof+.33,front+.05,accent);
    }else{
@@ -100,14 +107,14 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    for(let floor=0;floor<b.floors;floor++)for(let x=.45;x<b.width-.2;x+=1.1){box(.11,.42,.09,x-.34,floor*CITY_FLOOR_HEIGHT+.94,front+.14,accent);box(.11,.42,.09,x+.34,floor*CITY_FLOOR_HEIGHT+.94,front+.14,accent);}
   }else if(motif==='shotgun'){
    const porch=Math.max(.62,Math.min(.9,b.depth*.28));box(b.width+.16,.11,porch,b.width/2,1.72,front+porch*.42,roofColor);
-   const count=Math.max(2,Math.floor(b.width/.8));for(let i=0;i<=count;i++){const x=.16+i*(b.width-.32)/count;box(.07,1.68,.08,x,.84,front+porch*.76,wood);box(.15,.1,.15,x,1.7,front+porch*.76,trim);}
-   box(b.width-.3,.07,.07,b.width/2,.72,front+porch*.94,accent);
+   const count=Math.max(2,Math.floor(b.width/.8));for(let i=0;i<=count;i++){const x=.16+i*(b.width-.32)/count;if(frontDoorGap(x,.16))continue;box(.07,1.68,.08,x,.84,front+porch*.76,wood);box(.15,.1,.15,x,1.7,front+porch*.76,trim);}
+   frontRail(.15,b.width-.15,.07,.07,.72,front+porch*.94,accent);
    for(let x=.4;x<b.width-.2;x+=1.05)for(const side of [-1,1])box(.085,.42,.09,x+side*.34,.98,front+.15,accent);
   }else if(motif==='stilt'){
    for(const x of [.24,b.width-.24])for(const z of [.22,b.depth-.22]){box(.12,1.12,.12,x,.55,z,wood);box(.2,.11,.2,x,1.12,z,trim);}
    for(const x of [.32,b.width-.32]){box(.09,1.25,.09,x,.62,front+.1,accent);box(.09,1.25,.09,x,.62,.1,accent);}
    const porch=.68;box(b.width+.12,.1,porch,b.width/2,1.45,front+porch*.42,roofColor);
-   for(let i=0;i<=Math.max(2,Math.floor(b.width/.5));i++){const x=.15+i*(b.width-.3)/Math.max(2,Math.floor(b.width/.5));box(.04,.56,.045,x,1.15,front+porch*.88,trim);}
+   for(let i=0;i<=Math.max(2,Math.floor(b.width/.5));i++){const x=.15+i*(b.width-.3)/Math.max(2,Math.floor(b.width/.5));if(!frontDoorGap(x))box(.04,.56,.045,x,1.15,front+porch*.88,trim);}
   }else if(motif==='coral'){
    for(const x of [.12,b.width-.12])for(let floor=0;floor<b.floors;floor++)for(let row=0;row<4;row++)box(.16,.22,.1,x,floor*CITY_FLOOR_HEIGHT+.32+row*.36,front+.08,row%2?accent:trim);
    for(let x=.3;x<b.width-.15;x+=.9){box(.48,.08,.11,x,1.52,front+.1,accent);box(.34,.055,.13,x,1.62,front+.1,trim);}
@@ -122,7 +129,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   }else if(motif==='colonial'){
    const porch=Math.min(.74,Math.max(.5,b.depth*.24));box(b.width+.16,.12,porch,b.width/2,1.7,front+porch*.4,roofColor);
    const count=Math.max(2,Math.floor(b.width/1.2));for(let i=0;i<=count;i++){const x=.22+i*(b.width-.44)/count;cylinder(.075,1.62,x,.82,front+porch*.78,trim);box(.18,.1,.18,x,1.65,front+porch*.78,accent);}
-   box(b.width-.3,.075,.07,b.width/2,.75,front+porch*.94,accent);
+   frontRail(.15,b.width-.15,.075,.07,.75,front+porch*.94,accent);
    for(let x=.4;x<b.width-.2;x+=1.05){box(.11,.36,.1,x-.34,1.05,front+.13,accent);box(.11,.36,.1,x+.34,1.05,front+.13,accent);box(.82,.07,.16,x,1.27,front+.15,trim);}
   }else if(motif==='art_deco'){
    for(const x of [.2,b.width-.2]){box(.14,b.floors*CITY_FLOOR_HEIGHT,.15,x,b.floors*CITY_FLOOR_HEIGHT/2,front+.06,accent);box(.25,.12,.2,x,b.floors*CITY_FLOOR_HEIGHT-.18,front+.07,trim);}
@@ -150,9 +157,9 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   if(motif!=='portuguese_colonial'&&['gingerbread','island_cottage','shotgun','chattel_house','colonial_veranda','pastel_cottage','veranda_duplex','stilt_house','breezeway_house','coral_gable','wraparound_veranda','st_lucia_villa'].includes(b.architecture)){
    const porchDepth=['shotgun','stilt_house','wraparound_veranda'].includes(b.architecture)?.78:.62,porchY=1.72,postXs=[.28,b.width-.28];
    box(b.width+.16,.12,porchDepth,b.width/2,porchY,front+porchDepth*.42,roofColor);
-   for(const x of postXs){box(.11,1.68,.11,x,.84,front+porchDepth*.75,wood);box(.2,.1,.2,x,1.7,front+porchDepth*.75,cream);}
-   box(b.width-.36,.07,.07,b.width/2,.72,front+porchDepth*.94,wood);
-   const railCount=Math.max(2,Math.floor(b.width/.42));for(let i=0;i<=railCount;i++)box(.045,.62,.045,.18+i*(b.width-.36)/railCount,.39,front+porchDepth*.94,cream);
+   for(const x of postXs)if(!frontDoorGap(x,.16)){box(.11,1.68,.11,x,.84,front+porchDepth*.75,wood);box(.2,.1,.2,x,1.7,front+porchDepth*.75,cream);}
+   const railStart=.18,railEnd=b.width-.18;frontRail(railStart,railEnd,.07,.07,.72,front+porchDepth*.94,wood);
+   const railCount=Math.max(2,Math.floor(b.width/.42));for(let i=0;i<=railCount;i++){const x=railStart+i*(railEnd-railStart)/railCount;if(!frontDoorGap(x))box(.045,.62,.045,x,.39,front+porchDepth*.94,cream);}
    for(let col=0;col<b.width;col++)if((col+variant)%2===0){
     const x=col+.5;for(const side of [-1,1])box(.12,.52,.11,x+side*.34,1.08,front+.14,variant%2?0x4c7573:0x9b5f4e);
     if(b.architecture==='gingerbread')for(const side of [-1,1])box(.25,.07,.12,x+side*.4,1.43,front+.2,cream);

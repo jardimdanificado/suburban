@@ -6,6 +6,14 @@ const TYPE_COLORS={market:0xc35d43,greengrocer:0x4f8547,bakery:0xc58b42,restaura
 const GOODS_COLORS={pao:[0xc68a42,0xe2ba6d,0x9d6333],frutas:[0xc9503d,0x76a348,0xe1b23e],peixe:[0x8eb5b7,0x547982,0xd8c8a4],roupas:[0xc45f57,0x557b9b,0xd4ad53],livros:[0x775744,0x60738b,0x9a5e54],moveis:[0x9a6d4d,0x73503c,0x546b5d],flores:[0xc95676,0xe1b846,0x668d52],default:[0xd18a45,0x63844d,0xb85440]};
 const hashValue=value=>{let hash=2166136261;for(const char of String(value??''))hash=Math.imul(hash^char.charCodeAt(0),16777619);return hash>>>0;};
 
+function produceTexture(THREE,palette,seed){
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=64;const ctx=canvas.getContext('2d');
+ const base=`#${palette[seed%palette.length].toString(16).padStart(6,'0')}`;ctx.fillStyle=base;ctx.fillRect(0,0,64,64);
+ const shade=ctx.createRadialGradient(20,16,2,32,32,46);shade.addColorStop(0,'rgba(255,244,202,.48)');shade.addColorStop(.58,'rgba(255,255,255,0)');shade.addColorStop(1,'rgba(28,30,21,.42)');ctx.fillStyle=shade;ctx.fillRect(0,0,64,64);
+ for(let i=0;i<30;i++){const color=palette[(i+seed)%palette.length],x=(hashValue(`${seed}:x:${i}`)%64),y=(hashValue(`${seed}:y:${i}`)%64),radius=.7+(hashValue(`${seed}:r:${i}`)%22)/10;ctx.fillStyle=`#${color.toString(16).padStart(6,'0')}`;ctx.globalAlpha=.2+(hashValue(`${seed}:a:${i}`)%35)/100;ctx.beginPath();ctx.ellipse(x,y,radius,radius*.72,(i%5)*.3,0,Math.PI*2);ctx.fill();}
+ ctx.globalAlpha=1;const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.magFilter=THREE.LinearFilter;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.generateMipmaps=true;return texture;
+}
+
 function stallGroup(THREE,site,vendor,business){
  const group=new THREE.Group(),seed=hashValue(`${site.id}:${vendor.businessId}`),variant=seed%4,wood=variant===1?0x674c37:variant===2?0x75513a:0x835c3d,trim=variant===3?0xf0d9ad:0xe6d1ad,canopy=TYPE_COLORS[business?.type]||AWNING_COLORS[seed%AWNING_COLORS.length],accent=AWNING_COLORS[(seed>>>5)%AWNING_COLORS.length],products=[];
  const box=(w,h,d,x,y,z,color)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);return mesh;};
@@ -33,9 +41,9 @@ function stallGroup(THREE,site,vendor,business){
   const row=i<6?0:1,col=i%6,x=-.31+col*.124,z=row===0?.01:.25,y=.94+(row===0?0:.02),color=palette[(i+(seed>>>7))%palette.length];
   products.push({x,y,z,color,scale:.72+(i%3)*.12});
  }
- const productGeometry=new THREE.DodecahedronGeometry(.105,0),produce=new THREE.InstancedMesh(productGeometry,new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true}),products.length),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),color=new THREE.Color();
+ const productMap=produceTexture(THREE,palette,seed),productGeometry=new THREE.DodecahedronGeometry(.105,0),produce=new THREE.InstancedMesh(productGeometry,new THREE.MeshLambertMaterial({color:0xffffff,map:productMap,flatShading:true}),products.length),matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),color=new THREE.Color();
  products.forEach((product,index)=>{position.set(product.x,product.y,product.z);scale.setScalar(product.scale);matrix.compose(position,new THREE.Quaternion(),scale);produce.setMatrixAt(index,matrix);produce.setColorAt(index,color.setHex(product.color));});
- produce.instanceMatrix.needsUpdate=true;if(produce.instanceColor)produce.instanceColor.needsUpdate=true;produce.castShadow=true;produce.receiveShadow=true;group.add(produce);
+ produce.instanceMatrix.needsUpdate=true;if(produce.instanceColor)produce.instanceColor.needsUpdate=true;produce.castShadow=true;produce.receiveShadow=true;group.add(produce);group.userData.marketProduceTexture=productMap;
 
  // A painted shop sign makes neighboring vendors read as distinct businesses.
  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=64;const ctx=canvas.getContext('2d');
@@ -55,7 +63,7 @@ export function syncStreetMarketStalls(renderer,THREE,world){
  if(open)for(const site of markets)for(const vendor of site.vendors||[]){
   const id=`${site.id}:${vendor.businessId}`;active.add(id);const x=vendor.position.x,y=vendor.position.y;
   let mesh=renderer.streetMarketStallMeshes.get(id);const business=city.building(vendor.businessId),signature=`${vendor.name}:${business?.type||''}:${city.day}`;
-  if(mesh&&mesh.userData.signature!==signature){renderer.scene.remove(mesh);mesh.traverse(o=>{o.geometry?.dispose();if(o!==mesh&&o.material?.map===mesh.userData.marketSignTexture)o.material.dispose();else o.material?.dispose();o.userData.marketSignTexture?.dispose();});renderer.streetMarketStallMeshes.delete(id);mesh=null;}
+  if(mesh&&mesh.userData.signature!==signature){renderer.scene.remove(mesh);mesh.traverse(o=>{o.geometry?.dispose();if(o!==mesh&&o.material?.map===mesh.userData.marketSignTexture)o.material.dispose();else o.material?.dispose();o.userData.marketSignTexture?.dispose();});mesh.userData.marketProduceTexture?.dispose();renderer.streetMarketStallMeshes.delete(id);mesh=null;}
   if(!mesh){mesh=stallGroup(THREE,site,vendor,business);mesh.userData.signature=signature;renderer.streetMarketStallMeshes.set(id,mesh);renderer.scene.add(mesh);}
   const dx=site.x-x,dy=site.y-y,angle=Math.hypot(dx,dy)>.1?Math.atan2(dx,dy):((hashValue(id)%4)*Math.PI/2);
   // Keep the real vendor at their assigned spot, just behind the counter.
@@ -64,5 +72,5 @@ export function syncStreetMarketStalls(renderer,THREE,world){
   mesh.rotation.y=angle;mesh.position.set(stallX,surfaceElevation(world,stallX,stallY),stallY);
   mesh.visible=!Number.isFinite(renderer.renderedMinTx)||(x>=renderer.renderedMinTx-1&&x<=renderer.renderedMaxTx+1&&y>=renderer.renderedMinTy-1&&y<=renderer.renderedMaxTy+1);
  }
- for(const [id,mesh]of renderer.streetMarketStallMeshes)if(!active.has(id)){renderer.scene.remove(mesh);mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.userData.marketSignTexture?.dispose();});renderer.streetMarketStallMeshes.delete(id);}
+ for(const [id,mesh]of renderer.streetMarketStallMeshes)if(!active.has(id)){renderer.scene.remove(mesh);mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.userData.marketSignTexture?.dispose();});mesh.userData.marketProduceTexture?.dispose();renderer.streetMarketStallMeshes.delete(id);}
 }
