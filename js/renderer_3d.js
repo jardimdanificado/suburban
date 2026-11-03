@@ -16,7 +16,7 @@ import { CityCitizenBatches } from './city_citizen_batches.js';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-back-1';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=party-merger-symbol-reuse-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-6';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=retaining-face-winding-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -6646,7 +6646,11 @@ export class RCT3DRenderer {
           // World-space UVs keep both stone blocks and courses aligned across
           // neighboring panels, including the split faces at slope crossings.
           const along=face.side===0||face.side===2?point=>point[0]:point=>point[2];
-          for(const point of [a,b,c,a,c,d]){
+          // The north and east edge corner order runs opposite their outward
+          // normal. Reverse those triangles so lighting treats every retaining
+          // face consistently, including the split panels where street grades cross.
+          const facePoints=face.side===0||face.side===1?[a,c,b,a,d,c]:[a,b,c,a,c,d];
+          for(const point of facePoints){
             const u=along(point);
             wall.pos.push(...point);wall.uvs.push(u,point[1]);wall.colors.push(tone,tone,tone);
           }
