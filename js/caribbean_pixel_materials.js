@@ -21,29 +21,81 @@ function pixelTexture(THREE, key, draw) {
   return texture;
 }
 
-export function caribbeanBuildingPixelTexture(THREE, kind = 'plaster', variant = 0) {
-  return pixelTexture(THREE, `building:${kind}:${variant}`, ctx => {
-    const random = randomFrom((variant + 1) * 0x45d9f3b ^ kind.length * 0x9e3779b1);
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 16, 16);
-    if (kind === 'wood') {
-      // Quiet board joins and short grain marks, at the same pixel scale as the game's sprites.
-      for (const x of [4, 9, 14]) {
-        ctx.fillStyle = '#d8c9ad'; ctx.fillRect(x, 0, 1, 16);
-        for (let y = 1 + Math.floor(random() * 3); y < 16; y += 5 + Math.floor(random() * 4)) {
-          ctx.fillStyle = '#e7dac2'; ctx.fillRect(x + 1, y, 1 + Math.floor(random() * 2), 1);
-        }
+export function caribbeanBuildingSurfaceTextures(THREE, kind = 'plaster', variant = 0) {
+  const key = `building-surface:${kind}:${variant}`;
+  if (textureCache.has(key)) return textureCache.get(key);
+  const size = 32, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const random = randomFrom((variant + 1) * 0x45d9f3b ^ kind.length * 0x9e3779b1);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+  if (kind === 'wood') {
+    // Painted planks with worn grain and narrow, recessed board joints.
+    for (const x of [0, 8, 16, 24, 31]) {
+      ctx.fillStyle = 'rgba(47,39,30,.2)'; ctx.fillRect(x, 0, 1, size);
+      ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fillRect(x + 1, 0, 1, size);
+    }
+    for (let board = 0; board < 4; board++) {
+      const left = board * 8 + 2;
+      for (let mark = 0; mark < 7; mark++) {
+        const x = left + Math.floor(random() * 5), y = Math.floor(random() * size);
+        ctx.fillStyle = random() < .56 ? 'rgba(61,47,34,.12)' : 'rgba(255,255,255,.18)';
+        ctx.fillRect(x, y, 1 + Math.floor(random() * 3), 1);
       }
-      return;
+      if (random() < .6) {
+        const y = Math.floor(random() * (size - 3));
+        ctx.fillStyle = 'rgba(56,43,31,.16)'; ctx.fillRect(left, y, 2 + Math.floor(random() * 3), 1);
+      }
     }
-    const shades = ['#f1eadb', '#e5e1d3', '#dfe2d8', '#ebdfd2', '#e3dfd2'];
-    for (let i = 0; i < 7; i++) {
-      ctx.fillStyle = shades[Math.floor(random() * shades.length)];
-      const x = Math.floor(random() * 16), y = Math.floor(random() * 16);
-      const width = random() < .88 ? 1 : 2, height = 1;
-      ctx.fillRect(x, y, width, height);
-      if (random() < .1) ctx.fillRect(x + width, y, 1, 1);
+  } else {
+    // Fine plaster grain, faded paint patches, and a few hairline cracks.
+    for (let patch = 0; patch < 12; patch++) {
+      const x = Math.floor(random() * size), y = Math.floor(random() * size);
+      ctx.fillStyle = random() < .55 ? 'rgba(73,62,48,.045)' : 'rgba(255,255,255,.22)';
+      ctx.fillRect(x, y, 2 + Math.floor(random() * 5), 1 + Math.floor(random() * 4));
     }
-  });
+    for (let fleck = 0; fleck < 72; fleck++) {
+      const x = Math.floor(random() * size), y = Math.floor(random() * size);
+      ctx.fillStyle = random() < .67 ? 'rgba(76,65,51,.10)' : 'rgba(255,255,255,.24)';
+      ctx.fillRect(x, y, random() < .9 ? 1 : 2, 1);
+    }
+    for (let crack = 0; crack < 3; crack++) {
+      let x = Math.floor(random() * size), y = Math.floor(random() * size);
+      ctx.fillStyle = 'rgba(63,52,43,.22)';
+      for (let step = 0; step < 3 + Math.floor(random() * 4); step++) {
+        ctx.fillRect(x, y, 1, 1);
+        x = (x + (random() < .5 ? 0 : 1)) % size; y = (y + 1) % size;
+      }
+    }
+  }
+  const map = new THREE.CanvasTexture(canvas);
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+  map.magFilter = map.minFilter = THREE.NearestFilter;
+  map.generateMipmaps = false;
+  map.colorSpace = THREE.SRGBColorSpace;
+
+  // Convert the small luminance changes to shallow relief so the same pixel
+  // marks catch light without making painted walls look carved or glossy.
+  const rgba = ctx.getImageData(0, 0, size, size).data, heights = new Float32Array(size * size);
+  for (let i = 0; i < heights.length; i++) heights[i] = (rgba[i * 4] + rgba[i * 4 + 1] + rgba[i * 4 + 2]) / (3 * 255);
+  const normalCanvas = document.createElement('canvas'); normalCanvas.width = normalCanvas.height = size;
+  const normalCtx = normalCanvas.getContext('2d'), normalImage = normalCtx.createImageData(size, size), normals = normalImage.data;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const i = y * size + x, left = heights[y * size + (x + size - 1) % size], right = heights[y * size + (x + 1) % size];
+    const up = heights[((y + size - 1) % size) * size + x], down = heights[((y + 1) % size) * size + x];
+    const nx = (left - right) * .65, ny = (up - down) * .65, length = Math.hypot(nx, ny, 1), p = i * 4;
+    normals[p] = (nx / length * .5 + .5) * 255; normals[p + 1] = (ny / length * .5 + .5) * 255;
+    normals[p + 2] = (1 / length * .5 + .5) * 255; normals[p + 3] = 255;
+  }
+  normalCtx.putImageData(normalImage, 0, 0);
+  const normalMap = new THREE.CanvasTexture(normalCanvas);
+  normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+  normalMap.magFilter = normalMap.minFilter = THREE.NearestFilter;
+  normalMap.generateMipmaps = false;
+  const surface = { map, normalMap };
+  textureCache.set(key, surface);
+  return surface;
 }
 
 export function portugueseClayTileTexture(THREE, baseColor = 0x9b5740, variant = 0) {
@@ -67,7 +119,11 @@ export function portugueseClayTileTexture(THREE, baseColor = 0x9b5740, variant =
     }
   }
   const texture=new THREE.CanvasTexture(canvas);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
-  texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
+  // Roofs cover many screen pixels at close range but collapse to a fraction
+  // of one tile at distance. Mipmaps prevent the clay rows from aliasing as
+  // the camera moves while keeping crisp pixels when magnified.
+  texture.magFilter=THREE.LinearFilter;texture.minFilter=THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps=true;texture.anisotropy=4;texture.colorSpace=THREE.SRGBColorSpace;
   textureCache.set(key,texture);return texture;
 }
 

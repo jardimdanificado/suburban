@@ -26,7 +26,7 @@ export function citizenAnimation(c,moving=false){
   if(c.mobilityTrip?.stage==='boarding')return 'mount';
   if(c.ridingVehicleId){
     if(c.ridingVehicleKind==='carrinho')return 'run';
-    if(BIKE_KINDS.has(c.ridingVehicleKind))return c.mobilityTrip?.stage==='riding'?'pedal':'passenger';
+    if(BIKE_KINDS.has(c.ridingVehicleKind))return c.ridingAsPassenger?'sentado_no_banco':'seated';
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
   if(moving)return 'run';
@@ -384,9 +384,11 @@ export class CityCitizenModels {
     const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!this.animationPaused)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
-    if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle;
+    if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle+(c.ridingAsPassenger?Math.PI/2:0);
     let renderX=x,renderY=y,renderAngle=motion.angle;
-    if(smoothMovement){
+    // Vehicle entities already receive bridge interpolation; smoothing riders
+    // a second time leaves them visibly trailing their vehicle.
+    if(smoothMovement&&!c.ridingVehicleId){
       const alpha=1-Math.exp(-Math.max(0.001,this.frameDelta||0.016)*14);
       motion.renderX+=(x-motion.renderX)*alpha;motion.renderY+=(y-motion.renderY)*alpha;
       const angleDelta=Math.atan2(Math.sin(motion.angle-motion.renderAngle),Math.cos(motion.angle-motion.renderAngle));
@@ -419,7 +421,8 @@ export class CityCitizenModels {
         this.group.add(clothing);batch.clothingMesh=clothing;
       }batch.capacity=capacity;
     }
-    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,positionY=surfaceH+(posePoint?.z??inside?.z??0)+(c.ridingVehicleId? .18:0),bodyIndex=batch.count;
+    const bikeRider=c.ridingVehicleId&&BIKE_KINDS.has(c.ridingVehicleKind),riderLift=bikeRider?(c.ridingAsPassenger?0.23:0.38):c.ridingVehicleId?0.18:0;
+    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,positionY=surfaceH+(posePoint?.z??inside?.z??0)+riderLift,bodyIndex=batch.count;
     const transformUnchanged=motion.bodyBatch===batch&&motion.bodyMesh===batch.mesh&&motion.clothingMesh===batch.clothingMesh&&motion.bodyIndex===bodyIndex&&motion.bodyFrame===this.frameToken-1&&motion.bodyX===renderX&&motion.bodyY===positionY&&motion.bodyZ===renderY&&motion.bodyAngle===renderAngle&&motion.bodySize===size&&motion.bodyHeightScale===heightScale&&motion.bodyLying===lying;
     this.position.set(renderX,positionY,renderY);
     let matrixReady=transformUnchanged;

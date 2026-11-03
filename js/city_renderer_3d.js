@@ -11,7 +11,7 @@ import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=gr
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=textured-market-produce-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=building-doorway-opening-2';
 import { partyFlagCanvas } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=citizen-active-batches-3';
+import {citizenIsSleeping} from './city_citizen_models.js?v=bike-rider-sync-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-neoclassical-1';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';

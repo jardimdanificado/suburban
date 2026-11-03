@@ -225,8 +225,8 @@ export class CitySimulationBridge {
       for(let i=-1;i<passengers.length;i++){
         const id=i<0?v.driverId:passengers[i];if(id==null)continue;
         const c=this.city.society.citizen(id);if(!c||c.ridingVehicleId!==v.id)continue;
-        const side=i<0?0:(i+1)*.34;
-        c.entity.x=v.entity.x+Math.cos(v.angle||0)*side;c.entity.y=v.entity.y-Math.sin(v.angle||0)*side;
+        const behind=i<0?0:(i+1)*.38,angle=v.angle||0;
+        c.entity.x=v.entity.x-Math.sin(angle)*behind;c.entity.y=v.entity.y-Math.cos(angle)*behind;
       }
     }
   }

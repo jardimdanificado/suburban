@@ -3,7 +3,7 @@ import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {waterPollutionAt,waterTint} from './city_water.js';
-import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=ground-realism-2';
+import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=roof-mip-filter-1';
 // =============================================================================
 // Brutopolis Chronicles - 3D Isometric Tycoon Engine (Volumetric 3D Models)
 // =============================================================================
@@ -11,9 +11,9 @@ import {caribbeanBuildingPixelTexture,caribbeanGroundSurfaceTextures,portugueseC
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=porch-door-clearance-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=bike-rider-sync-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=body-surface-continuity-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=bike-rider-sync-1';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=sidewalk-grade-5';
 import { ASSET_DATA } from "./assets_data.js";
@@ -5337,12 +5337,14 @@ export class RCT3DRenderer {
   getTps() { return this.targetTps; }
   createCityBuildingMaterial(kind,color,variant=0){
     variant=(variant>>>0)%32;
-    let map;
+    let map,normalMap;
     if(kind==='roof'){
       map=portugueseClayTileTexture(THREE,color,variant%8);
-    }else map=caribbeanBuildingPixelTexture(THREE,kind==='wood'?'wood':'plaster',variant%8);
-    const material=new THREE.MeshLambertMaterial({color:kind==='roof'?0xffffff:color,map,side:THREE.DoubleSide});
-    applyRetroDitherToMaterial(material);return material;
+    }else ({map,normalMap}=caribbeanBuildingSurfaceTextures(THREE,kind==='wood'?'wood':'plaster',variant%8));
+    const material=new THREE.MeshLambertMaterial({color:kind==='roof'?0xffffff:color,map,normalMap,side:THREE.DoubleSide});
+    if(kind==='roof')applyRetroDitherToMaterial(material,24,0);
+    else applyRetroDitherToMaterial(material);
+    return material;
   }
   decorateCityMaterials(group){group.traverse(object=>{for(const material of [object.material].flat())if(material?.isMeshLambertMaterial)applyRetroDitherToMaterial(material);});}
   setPaused(p) { this.isPaused = !!p; }
