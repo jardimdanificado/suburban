@@ -385148,6 +385148,16 @@ export function gerarFraseTematica(tema,{random=Math.random,complexidade='variad
   const keys=(Array.isArray(tema)?tema:[tema]).map(value=>normalizaLexema(value));if(!tema||keys.some(key=>!aliasesTema[key]&&!temasLexicais[key]))throw new RangeError(`Tema desconhecido: ${tema}`);
   return gerarFrase({tema:keys,random,complexidade});
 }
+/** Generates a compact artwork name from lexical entries instead of a sentence frame. */
+export function gerarTituloTematico(tema='arte',{random=Math.random}={}){
+  if(typeof random!=='function')throw new TypeError('random precisa ser uma função');
+  const keys=(Array.isArray(tema)?tema:[tema]).map(value=>normalizaLexema(value)),themes=[...new Set(keys.map(key=>aliasesTema[key]||key))];
+  if(!tema||themes.some(theme=>!temasLexicais[theme]))throw new RangeError(`Tema desconhecido: ${tema}`);
+  const bank=bancoGramatical(themes);if(!bank.nouns.length)throw new RangeError(`Os temas ${themes.join(', ')} não têm substantivos classificados suficientes para formar um título`);
+  const first=escolheLexema(bank.nouns,random).word,others=bank.nouns.filter(item=>item.word!==first);let title=first;
+  if(others.length&&random()<.35)title+=` · ${escolheLexema(others,random).word}`;
+  return title.charAt(0).toLocaleUpperCase('pt-BR')+title.slice(1);
+}
 export function gerarSloganPartidario({random=Math.random,complexidade='variada'}={}){
   if(typeof random!=='function')throw new TypeError('random precisa ser uma função');for(let tries=0;tries<TEMAS_DO_JOGO.length;tries++){const theme=TEMAS_DO_JOGO[Math.floor(random()*TEMAS_DO_JOGO.length)];if(bancoGramatical([theme]).nouns.length)return gerarFrase({tema:theme,random,complexidade});}return gerarFrase({tema:'cotidiano',random,complexidade});
 }

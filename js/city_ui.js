@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {gerarFraseTematica} from './gerador_frases.js?v=vocabulary-organic-slogans-1';
+import {gerarTituloTematico} from './gerador_frases.js?v=art-titles-1';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -18,8 +18,8 @@ import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
-import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-membership-history-1';
-import {renderElectionMonitor} from './city_election_ui.js?v=concise-debate-qa-1';
+import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=no-party-slogans-1';
+import {renderElectionMonitor} from './city_election_ui.js?v=no-party-slogans-1';
 import {sectionTitle} from './city_ui_sections.js';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
 import {ROTATION_LABELS,buildingFacadeBannerSupport} from './city_building_geometry.js';
@@ -134,7 +134,7 @@ export class CityUI {
     this.artworkSourceClaimInput=document.createElement('input');this.artworkSourceClaimInput.type='text';this.artworkSourceClaimInput.maxLength=180;this.artworkSourceClaimInput.placeholder='Fonte alegada…';this.artworkSourceClaimInput.setAttribute('aria-label','Fonte alegada da narrativa artística');
     this.artworkRoleInputs=Array.from({length:6},(_,i)=>{const input=document.createElement('select');input.setAttribute('aria-label',`Papel da figura ${i+1} na narrativa artística`);return input;});
     this.artworkDraft=document.createElement('input');this.artworkDraft.type='text';this.artworkDraft.maxLength=180;this.artworkDraft.placeholder='Mensagem da obra…';this.artworkDraft.setAttribute('aria-label','Mensagem da obra urbana');
-    this.artworkDraft.value=gerarFraseTematica('arte');
+    this.artworkDraft.value=gerarTituloTematico('arte');
     this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput);
     for(const input of this.inputs)input.hidden=true;
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
@@ -769,7 +769,7 @@ export class CityUI {
       this.artworkRoleInputs.forEach((input,index)=>{p.note(`Figura ${index+1}`);const y=p.y;this.nativeSelect(input,p,roleOptions,input.value||'',p.x,y,p.w);p.space(24);});
       p.note('A obra guarda sua versão e os papéis que atribui. Eles orientam a cena visual e não alteram o histórico real nem provam a narrativa.');
     }
-    p.note('Nome ou inscrição da obra');p.button('GERAR NOME DE OBRA',()=>{this.artworkDraft.value=gerarFraseTematica('arte');});if(this.artworkMaterialInput.value==='fezes')p.note('Obras com fezes recebem sentido de protesto negativo e o prefixo “PROTESTO”.');const artDraftY=p.y;p.space(24);if(artDraftY>=p.top&&artDraftY+20<=p.bottom)this.inputAt(this.artworkDraft,p.x,artDraftY,p.w);
+    p.note('Nome ou inscrição da obra');p.button('GERAR NOME DE OBRA',()=>{this.artworkDraft.value=gerarTituloTematico('arte');});if(this.artworkMaterialInput.value==='fezes')p.note('Obras com fezes recebem sentido de protesto negativo e o prefixo “PROTESTO”.');const artDraftY=p.y;p.space(24);if(artDraftY>=p.top&&artDraftY+20<=p.bottom)this.inputAt(this.artworkDraft,p.x,artDraftY,p.w);
     const selectedMaterial=this.artworkMaterialInput.value==='tinta'?null:this.artworkMaterialInput.value;
     if(artSites.length)p.button('ENCOMENDAR · '+money(city.gigs.artworkQuote(chosenSite.id,this.artworkKindInput.value||'banner',chosenSite.municipal?'treasury':chosenSite.accountId,selectedMaterial)),()=>{
       const building=city.building(Number(this.artworkBuildingInput.value)||chosenSite.id),payer=building?.municipal?'treasury':building?.accountId,truth=this.artworkTruthInput.value==='opinion'?null:this.artworkTruthInput.value==='false'?false:true,purpose=this.artworkPurposeInput.value||'expression',partyId=this.artworkPartyInput.value?Number(this.artworkPartyInput.value):null,subjectId=this.artworkSubjectInput.value?Number(this.artworkSubjectInput.value):null,commercial=city.economy.businesses.some(company=>company.id===building?.id),placement=this.artworkPlacementInput.value||'outdoor',isRoof=placement.startsWith('roof:'),isBridge=placement.startsWith('bridge:'),isWindow=placement.startsWith('window:'),supportUnitId=placement.startsWith('unit:')||isRoof||isWindow?placement.slice(placement.indexOf(':')+1):null,supportLinkId=isBridge?placement.slice(placement.indexOf(':')+1):null,participants=artworkParticipants(city.history?.get(Number(this.artworkEventInput.value)),subjectId),participantRoles=this.artworkRoleInputs.map(input=>{const [id,role]=String(input.value||'').split(':');return {citizenId:Number(id),role};}).filter(row=>Number.isInteger(row.citizenId)&&row.role),narrative=narrativeMode!=='none'?{mode:narrativeMode,sourceEventId:Number(this.artworkEventInput.value)||null,title:this.artworkDraft.value,description:this.artworkDraft.value,claimedPlace:this.artworkClaimedPlaceInput.value,claimedDate:this.artworkClaimedDateInput.value,sourceClaim:this.artworkSourceClaimInput.value,participantIds:participants,participantRoles}:null;

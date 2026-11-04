@@ -26,6 +26,30 @@ test('initial laws separate coca, leaf and hemp, and regulated leaf carrying can
 test('regulated crop needs a formal permit and a prohibited lab cannot produce',()=>{
  const {city,s,c}=fixture(),b=city.economy.businesses.find(b=>b.type==='farm');b.crop='folha_coca';b.ownerId=c.id;c.traits={...c.traits,honesty:1};assert.equal(s.canFarm(b),false);assert.equal(s.permits.at(-1).status,'pending');city.minute+=360;s.hourly();assert.equal(s.canFarm(b),true);assert.equal(s.permits.at(-1).status,'approved');assert.equal(s.canProduce({type:'coca_laboratory'}),false);assert(s.setLaw('coca','regulated',2));assert.equal(s.canProduce({type:'coca_laboratory'}),true);
 });
+test('all legal substance crops can be harvested and the economy requests their supply',()=>{
+ const {city,s,c}=fixture(),farm=city.economy.businesses.find(b=>b.type==='farm');farm.ownerId=c.id;farm.active=true;
+ for(const [crop,spec] of Object.entries(SUBSTANCE_CROPS)){
+  farm.crop=crop;city.economy.setupFarm(farm);const law=s.law(spec.substance);let permit=null;
+  if(law.regime==='regulated'){permit=s.requestPermit(farm,spec.substance);city.minute+=360;s.hourly();assert.equal(permit.status,'approved');}
+  assert.equal(s.canFarm(farm,{request:false}),true,`${crop} should be cultivable under its initial law`);
+  const field=farm.fields[0];field.plantedAt=city.minute-spec.grow-1;field.labor=field.requiredLabor;assert.equal(city.economy.harvest(farm,field),true,`${crop} should complete a harvest`);assert(farm.inventory[crop]>0,`${crop} should enter farm inventory`);
+ }
+ assert(city.economy.produced.canhamo>0,'cannabis harvest should also produce its separately regulated hemp output');
+ city.economy.updateDemand();
+ for(const crop of Object.keys(SUBSTANCE_CROPS))assert(city.economy.demands.some(row=>row.type==='farm'&&row.crop===crop&&row.required>0),`economy should include demand for ${crop}`);
+ assert.equal(s.setLaw('coca','regulated',2),true);city.economy.updateDemand();assert(city.economy.demands.some(row=>row.type==='coca_laboratory'&&row.score>0),'a legal coca policy should activate laboratory demand');
+});
+test('cannabis farms request the separate hemp permit needed to sell their co-product',()=>{
+ const {city,s,c}=fixture(),farm=city.economy.businesses.find(b=>b.type==='farm');farm.ownerId=c.id;farm.active=true;farm.crop='flor_cannabis';
+ assert.equal(s.canFarm(farm),false);const cannabis=s.permits.find(p=>p.substance==='cannabis'),hemp=s.permits.find(p=>p.substance==='canhamo');assert(cannabis);assert(hemp);assert.equal(s.canTrade('canhamo',farm,{},{}),false);
+ city.minute+=360;s.hourly();assert.equal(cannabis.status,'approved');assert.equal(hemp.status,'approved');assert.equal(s.canTrade('canhamo',farm,{},{}),true);
+});
+test('coffee, alcohol, tobacco, cannabis and legal refined coca recipes produce their separate goods',()=>{
+ const {city,c,s}=fixture(),b=city.economy.businesses.find(b=>b.type==='farm');c.skills.baking=100;
+ const batches=[['coffee_roaster',{grao_cafe:4,carvao:1},'cafe',8],['distillery',{cana:6,carvao:1},'alcool',4],['tobacco_workshop',{folha_tabaco:6,papel:1},'tabaco',12],['tobacco_workshop',{flor_cannabis:2,papel:1},'cannabis',2]];
+ for(const [type,inputs,output,quantity] of batches){b.type=type;b.inventory=Object.fromEntries(Object.keys(city.economy.goods).map(good=>[good,0]));Object.assign(b.inventory,inputs);b.productionLabor=INDUSTRIES[type].labor;assert.equal(city.economy.industrialWork(b,c,INDUSTRIES[type]),true,`${type} should complete its batch`);assert.equal(b.inventory[output],quantity,`${type} should produce ${output}`);}
+ assert.equal(s.setLaw('coca','regulated',2),true);b.type='coca_laboratory';b.inventory=Object.fromEntries(Object.keys(city.economy.goods).map(good=>[good,0]));Object.assign(b.inventory,{folha_coca:12,carvao:2});b.productionLabor=INDUSTRIES.coca_laboratory.labor;assert.equal(city.economy.industrialWork(b,c,INDUSTRIES.coca_laboratory),true);assert.equal(b.inventory.coca,2);
+});
 test('addiction and potential-user coefficients have the requested order; tobacco is a cheaper, faster, larger crop',()=>{
  const addictive=['folha_coca','cannabis','cafe','alcool','tabaco','coca'];for(let i=1;i<addictive.length;i++)assert(SUBSTANCES[addictive[i]].addiction>SUBSTANCES[addictive[i-1]].addiction);
  const popularity=['alcool','cafe','tabaco','folha_coca','cannabis','coca'];for(let i=1;i<popularity.length;i++)assert(SUBSTANCES[popularity[i]].popularity<SUBSTANCES[popularity[i-1]].popularity);

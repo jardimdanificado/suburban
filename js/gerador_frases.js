@@ -3,7 +3,8 @@
 export {
   gerarFrase,
   gerarFraseTematica,
+  gerarTituloTematico,
   gerarSloganPartidario,
   gerarDialogoTematico,
   criarSubstantivoCombinado,
-} from './vocabulario.js?v=vocabulary-topic-index-1';
+} from './vocabulario.js?v=art-titles-1';

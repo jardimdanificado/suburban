@@ -1,4 +1,4 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=organic-party-slogans-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=verified-runtime-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=outdoor-leisure-seat-index-1";
 import { CityDesktop } from "./js/city_desktop.js?v=organic-party-slogans-1";

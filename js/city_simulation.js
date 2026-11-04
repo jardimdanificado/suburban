@@ -27,7 +27,7 @@ import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_cultu
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
 import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
-import { CityGovernment as CityPolitics } from './city_government.js?v=party-flag-slogan-keys-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=no-party-slogans-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=corpse-interior-recovery-1';
@@ -46,7 +46,7 @@ import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=secretariat-portfolios-1';
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
-import { CityGigs } from './city_gigs.js?v=secretariat-portfolios-1';
+import { CityGigs } from './city_gigs.js?v=art-titles-2';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=cleaner-capacity-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';

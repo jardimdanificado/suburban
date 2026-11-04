@@ -200,7 +200,7 @@ export class CityLighting {
       }
     }
 
-    // Only contracted sites reserve land; at most four installations run concurrently.
+    // Only contracted sites reserve land; at most six installations run concurrently.
     for (const post of [...this.sites.values()].sort((a,b)=>Number(b.public)-Number(a.public)||city.trafficScore([b.door])-city.trafficScore([a.door]))) this.reserve(post);
     this.posts = posts; city.world.cityLampPosts = posts;
     city.world.cityLampSites = [...this.sites.values()].filter(p => p.projectId && !p.built && p.status !== 'cancelled');
