@@ -2,6 +2,7 @@ import {moveGarments} from './city_clothing.js?v=party-apparel-1';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
 import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=carpool-spatial-index-1';
+import { ensureImportDepot } from './city_external_trade.js';
 
 const INTERRUPTIBLE_GIG_TASKS=new Set(['leisure','walk','social','sit','outdoor_leisure']);
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
@@ -71,6 +72,7 @@ export class CityLogistics {
   publicOrder(s){return s.payerAccountId==='treasury'||s.buyer.accountId==='treasury'||s.buyer.municipal;}
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, serviceFees = [], requireCarrier = false,garmentIds=null,reserveBalance=0 } = {}) {
     const city = this.city;
+    if(buyer?.importDepot&&!seller?.externalImport)return false;
     if(city.substances&&!city.substances.canTrade(good,seller,buyer,{quantity}))return false;
     if(good==='roupas'&&!garmentIds&&seller?.type==='tailor'&&seller.garments?.some(g=>g.reservedPartyId!=null)){garmentIds=seller.garments.filter(g=>g.reservedPartyId==null).slice(0,quantity).map(g=>g.garmentId);if(garmentIds.length<quantity)return false;}
     if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0 || garmentIds&&(good!=='roupas'||garmentIds.length!==quantity||new Set(garmentIds).size!==quantity||garmentIds.some(id=>!seller.garments?.some(g=>g.garmentId===id)))) return false;
@@ -114,6 +116,8 @@ export class CityLogistics {
   cancel(s) {
     if (['delivered', 'cancelled'].includes(s.status)) return;
     this.releaseDriver(s);
+    if(s.importClaimBuyerId){const claimant=this.city.building(s.importClaimBuyerId);if(claimant?.importIncoming)claimant.importIncoming[s.good]=Math.max(0,(claimant.importIncoming[s.good]||0)-s.quantity);}
+    if(s.importDepotClaim){const {buyerId,good,quantity}=s.importDepotClaim;const claims=s.seller.claims??={},claim=claims[buyerId]??={};claim[good]=(claim[good]||0)+quantity;claims[buyerId]=claim;s.seller.claims=claims;}
     s.buyer.incoming[s.good] = Math.max(0, (s.buyer.incoming[s.good] || 0) - s.quantity);
     const hall = this.city.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
     const destination = !s.seller.entity?.destroyed && inventoryFree(s.seller) >= s.quantity ? s.seller : hall;
@@ -125,6 +129,10 @@ export class CityLogistics {
     this.city.transfer(s.accountId, refund, s.balance, 'Estorno de frete cancelado');
     s.status = 'cancelled'; s.completedAt = this.city.minute;
     this.city.log(`Frete ${s.id} cancelado; reserva financeira devolvida.`, 'transport', [], { kind: 'shipment-cancelled', shipmentId: s.id, buildingIds:[s.seller.entity?.id,s.buyer.entity?.id].filter(id=>id!=null), accounts:[s.seller.accountId,s.buyer.accountId,s.payerAccountId].filter(Boolean) });
+  }
+  reconcileImportDestination(){
+    const depot=ensureImportDepot(this.city);if(!depot)return;
+    for(const shipment of this.shipments)if(shipment.imported&&!['delivered','cancelled'].includes(shipment.status)&&shipment.buyer?.id!==depot.id)this.cancel(shipment);
   }
   candidates(s) {
     const economy = this.city.economy;
@@ -159,6 +167,7 @@ export class CityLogistics {
   }
   updateMinute() {
     const city = this.city;
+    this.reconcileImportDestination();
     const oversized=this.shipments.filter(s=>!s.driverId&&s.status!=='delivered'&&s.status!=='cancelled'&&s.quantity>24);
     if(oversized.length){let maxCarry=24;for(const c of city.citizens)if(!c.entity.destroyed){maxCarry=Math.max(maxCarry,this.capacity(c));if(maxCarry>=MAX_CARGO_CAPACITY)break;}for(const s of oversized)if(s.quantity>maxCarry)this.splitLoad(s);}
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
@@ -216,6 +225,7 @@ export class CityLogistics {
         city.publications.moveStock(s,s.buyer,s.good,s.quantity);city.vehicles.moveStock(s,s.buyer,s.good,s.quantity);city.paint.move(s,s.buyer,s.good,s.quantity);
         city.substances?.moveLots(s,s.buyer,s.good,s.quantity);
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
+        if(s.imported&&s.importClaimBuyerId){const claimant=city.building(s.importClaimBuyerId);if(claimant){claimant.importIncoming??={};claimant.importIncoming[s.good]=Math.max(0,(claimant.importIncoming[s.good]||0)-s.quantity);const claims=s.buyer.claims??{},claim=claims[claimant.id]??={};claim[s.good]=(claim[s.good]||0)+s.quantity;claims[claimant.id]=claim;s.buyer.claims=claims;}}
         if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
         city.transfer(s.accountId, s.seller.accountId, s.cost, `${s.imported?'Importação':'Atacado'}: ${city.economy.goods[s.good].label}`,{good:s.good,quantity:s.quantity,shipmentId:s.id,...(s.imported?{imported:true,brand:s.importBrand}: {})});
         const carrier = city.building(s.carrierId);

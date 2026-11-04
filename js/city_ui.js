@@ -43,10 +43,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=secretariat-portfolios-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=central-import-depot-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=outdoor-leisure-seat-index-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=central-import-depot-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -73,7 +73,7 @@ export const VIEWS = {
   government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
-  transport: [['active', 'FRETES'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
+  transport: [['active', 'FRETES'], ['imports','DEPÓSITO DE IMPORTAÇÃO'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
   'urban-art': [['overview','OBRAS E MENSAGENS'],['orders','ENCOMENDAS'],['damage','DANOS E LIMPEZA']],
   safety: [['overview','OPERAÇÃO'],['calls','CHAMADOS'],['cases','OCORRÊNCIAS']],
   forensics: [['overview','VISÃO GERAL'],['bodies','CORPOS'],['reports','LAUDOS']],
@@ -928,6 +928,10 @@ export class CityUI {
   transport(p) {
     if(['vehicles','parking','rentals','models'].includes(this.view())){renderMobility(this,p);return;}
     const city=this.city,system=city.logistics,pending=system.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
+    if(this.view()==='imports'){
+      const depot=city.economy.importDepot||null,deliveries=pending.filter(s=>s.imported&&s.buyer?.id==='import-depot'),goods=Object.entries(GOODS).filter(([good])=>(depot?.inventory?.[good]||0)>0||(depot?.incoming?.[good]||0)>0||(depot?.claims&&Object.values(depot.claims).some(row=>(row[good]||0)>0)));
+      p.heading('DEPÓSITO CENTRAL DE IMPORTAÇÃO');p.metrics([['NO DEPÓSITO',goods.reduce((n,[good])=>n+(depot?.inventory?.[good]||0),0)],['IMPORTAÇÕES A CAMINHO',deliveries.length,C.gold],['CAPACIDADE','ILIMITADA',C.cyan]]);p.note('Localizado junto à prefeitura. Só cargas de importação entram aqui; não há operação para guardar mercadorias manualmente. Cada carga fica reservada para o estabelecimento que a solicitou e depois segue por frete local.');const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(hall)p.button('LOCALIZAR DEPÓSITO · PREFEITURA',()=>this.camera(hall.entity.x,hall.entity.y));p.table([{label:'Mercadoria',weight:2},{label:'Estoque'},{label:'Reservado'},{label:'Em trânsito'}],goods.map(([good,spec])=>({cells:[spec.label,depot?.inventory?.[good]||0,Object.values(depot?.claims||{}).reduce((n,row)=>n+(row[good]||0),0),depot?.incoming?.[good]||0]})),{empty:'Nenhum produto importado armazenado ou a caminho.'});return;
+    }
     if(this.view()==='informal'){
       const offers=pending.filter(s=>!s.carrierId&&s.fee>0&&!s.driverId).sort((a,b)=>a.createdAt-b.createdAt),active=pending.filter(s=>!s.carrierId&&s.fee>0&&s.driverId&&s.informalDriverId===s.driverId),recent=system.shipments.filter(s=>s.status==='delivered'&&!s.carrierId&&s.fee>0&&s.informalDriverId).slice(-30).reverse();
       p.metrics([['OFERTAS',offers.length,C.gold],['ACEITAS',active.length,C.cyan],['CONCLUÍDAS',recent.length,C.green]]);
@@ -952,7 +956,7 @@ export class CityUI {
       p.note(states[s.status],C.cyan);p.note(`${s.seller.entity?.properties.name||s.seller.name} > ${s.buyer.entity?.properties.name||s.buyer.name}`);
       if(s.imported){p.kv('Origem e marca',`Importação internacional · ${s.importBrand||s.seller.name}`);p.kv('Preço/unidade · importado / local',`${money(Math.ceil(s.cost/s.quantity))} / ${money(city.economy.goods[s.good].price)} · ágio de 125%`);}
       p.columns(q=>{q.kv('Mercadoria',money(s.cost));q.kv('Frete',money(s.fee));if(s.serviceFee)q.kv('Serviço de coleta',money(s.serviceFee));},q=>{q.kv('Operador',city.building(s.carrierId)?.entity.properties.name||(s.informalDriverId?`${name(city.society.citizen(s.informalDriverId)?.entity)} · autônomo`:'Transporte próprio'));q.kv('Trajeto',`${s.routeLength} tiles`);});
-      const driver=city.society.citizen(s.driverId);p.buttons([...(city.building(s.seller.id)?[{label:'ORIGEM',click:()=>this.openBuilding(s.seller.id)}]:[]),...(city.building(s.buyer.id)?[{label:'DESTINO',click:()=>this.openBuilding(s.buyer.id)}]:[]),...(driver?[{label:'TRANSPORTADOR',click:()=>this.openCitizen(driver.id)}]:[])]);
+      const driver=city.society.citizen(s.driverId);p.buttons([...(city.building(s.seller.id)?[{label:'ORIGEM',click:()=>this.openBuilding(s.seller.id)}]:[]),...(s.buyer.importDepot?[{label:'VER DEPÓSITO DE IMPORTAÇÃO',click:()=>this.openPanel({tab:'transport',views:{transport:'imports'},selectedShipmentId:null})}]:[]),...(city.building(s.buyer.id)?[{label:'DESTINO',click:()=>this.openBuilding(s.buyer.id)}]:[]),...(driver?[{label:'TRANSPORTADOR',click:()=>this.openCitizen(driver.id)}]:[])]);
       p.note(`${stamp(s.createdAt)}${s.completedAt?' / conclusão '+stamp(s.completedAt):''}`,C.muted);
       return;
     }
