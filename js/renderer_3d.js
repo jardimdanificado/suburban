@@ -13,6 +13,7 @@ import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_buildin
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
 import { syncCityBuildings } from "./city_renderer_3d.js?v=city-cells-reference-fix-2";
 import { CityCitizenBatches } from './city_citizen_batches.js';
+import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-frame-shape-2';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=party-palette-generator-1';
@@ -41,6 +42,7 @@ import { globalWallCoords, resolveWallSkin, getEntitiesInViewport, getEntityById
 // Optional simulation hooks are deliberately empty in the base framework.
 const getClanBlueprintTiles = () => [];
 const currentZoneSize = 8;
+const compareCrowdCitizenIds=(a,b)=>a.entity.id-b.entity.id;
 const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
 const CITIZEN_ACTION_LABELS={
   'substance-vending':'negociando','substance-use':'consumindo','substance-buy':'comprando','substance-production':'preparando','substance-deposit':'armazenando',
@@ -7341,9 +7343,14 @@ export class RCT3DRenderer {
     const activeElection=this.cityDevelopment?.city?.politics?.active;
     const activeElectionId=activeElection?.id,activeElectionStatus=activeElection?.status;
     const citizenModelOptions={hidden:false,dimmed:false,perspective:perspectiveActive,smoothMovement:thirdPersonActive,vehicleAngle:null,visualOffset:null,activeCampaignElectionId:activeElectionId,activeCampaignStatus:activeElectionStatus};
-    const movingCitizenGroups=new Map(),citizenRenderOffsets=this._citizenRenderOffsets??=new Map();citizenRenderOffsets.clear();
-    for(const entity of visibleEntities){const citizen=entity?.properties?.citizen,path=citizen?.path,motion=this.cityCitizenModels.motion.get(entity);if(!citizen||entity.destroyed||citizen.ridingVehicleId||(!path?.length&&!citizen._renderPathActive))continue;let dx=path?.length?path[0].x-entity.x:entity.x-(motion?.x??entity.x),dy=path?.length?path[0].y-entity.y:entity.y-(motion?.y??entity.y),length=Math.hypot(dx,dy);if(length<1e-5&&motion){dx=entity.x-motion.x;dy=entity.y-motion.y;length=Math.hypot(dx,dy);}if(length<1e-5)continue;const direction=Math.round(Math.atan2(dy,dx)/(Math.PI/4)),key=`${Math.floor(entity.x)},${Math.floor(entity.y)},${direction}`;let group=movingCitizenGroups.get(key);if(!group)movingCitizenGroups.set(key,group=[]);group.push({entity,dx:dx/length,dy:dy/length});}
-    for(const group of movingCitizenGroups.values()){group.sort((a,b)=>a.entity.id-b.entity.id);const columns=Math.ceil(Math.sqrt(group.length)),rows=Math.ceil(group.length/columns),pitch=Math.min(.12,.28/Math.max(.5,Math.hypot((columns-1)/2,(rows-1)/2)));group.forEach(({entity,dx,dy},index)=>{const lateral=index%columns-(columns-1)/2,longitudinal=Math.floor(index/columns)-(rows-1)/2,sideX=dy,sideY=-dx,x=(sideX*lateral+dx*longitudinal)*pitch,y=(sideY*lateral+dy*longitudinal)*pitch;citizenRenderOffsets.set(entity.id,{x,y});});}
+    const movingCitizenGroups=this._movingCitizenGroups??=new Map(),movementGroupPool=this._movementGroupPool??=[],movementItemPool=this._movementItemPool??=[];
+    const citizenRenderOffsets=this._citizenRenderOffsets??=new Map(),citizenRenderOffsetPool=this._citizenRenderOffsetPool??=[];
+    for(const offset of citizenRenderOffsets.values())citizenRenderOffsetPool.push(offset);
+    citizenRenderOffsets.clear();
+    for(const group of movingCitizenGroups.values()){for(const item of group)movementItemPool.push(item);group.length=0;movementGroupPool.push(group);}
+    movingCitizenGroups.clear();
+    for(const entity of visibleEntities){const citizen=entity?.properties?.citizen,path=citizen?.path,motion=this.cityCitizenModels.motion.get(entity);if(!citizen||entity.destroyed||citizen.ridingVehicleId||(!path?.length&&!citizen._renderPathActive))continue;let dx=path?.length?path[0].x-entity.x:entity.x-(motion?.x??entity.x),dy=path?.length?path[0].y-entity.y:entity.y-(motion?.y??entity.y),lengthSquared=dx*dx+dy*dy;if(lengthSquared<1e-10&&motion){dx=entity.x-motion.x;dy=entity.y-motion.y;lengthSquared=dx*dx+dy*dy;}if(lengthSquared<1e-10)continue;const length=Math.sqrt(lengthSquared),direction=crowdDirection(dx,dy),tileX=Math.floor(entity.x),tileY=Math.floor(entity.y),key=crowdGroupKey(tileX,tileY,direction);let group=movingCitizenGroups.get(key);if(!group){group=movementGroupPool.pop()||[];movingCitizenGroups.set(key,group);}const item=movementItemPool.pop()||{};item.entity=entity;item.dx=dx/length;item.dy=dy/length;group.push(item);}
+    for(const group of movingCitizenGroups.values()){if(group.length>1)group.sort(compareCrowdCitizenIds);const columns=Math.ceil(Math.sqrt(group.length)),rows=Math.ceil(group.length/columns),pitch=Math.min(.12,.28/Math.max(.5,Math.hypot((columns-1)/2,(rows-1)/2)));for(let index=0;index<group.length;index++){const item=group[index],{entity,dx,dy}=item,lateral=index%columns-(columns-1)/2,longitudinal=Math.floor(index/columns)-(rows-1)/2,sideX=dy,sideY=-dx,x=(sideX*lateral+dx*longitudinal)*pitch,y=(sideY*lateral+dy*longitudinal)*pitch,offset=citizenRenderOffsetPool.pop()||{};offset.x=x;offset.y=y;citizenRenderOffsets.set(entity.id,offset);}}
     let selectedPos = null;
 
     const curCamTileX = Math.floor(this.camX);
