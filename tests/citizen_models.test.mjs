@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,headwearSurface,citizenAnimation,citizenFrame,citizenIsSleeping,CityCitizenModels} from '../js/city_citizen_models.js';
 class Vector3{constructor(x=0,y=0,z=0){this.set(x,y,z);}set(x,y,z){Object.assign(this,{x,y,z});return this;}}
-class Matrix4{compose(p,q,s){this.data={position:{...p},angle:q.angle,lying:!!q.lying,scale:{...s}};return this;}}
+class Matrix4{constructor(){this.elements=new Float32Array(16);}compose(p,q,s){this.data={position:{...p},angle:q.angle,lying:!!q.lying,scale:{...s}};this.elements.fill(0);this.elements[0]=s.x;this.elements[5]=s.y;this.elements[10]=s.z;this.elements[12]=p.x;this.elements[13]=p.y;this.elements[14]=p.z;this.elements[15]=1;return this;}}
 class Quaternion{setFromAxisAngle(axis,angle){this.angle=angle;this.lying=false;return this;}multiply(){this.lying=true;return this;}}
-class Color{setHex(value){this.value=value;return this;}}
+class Color{setHex(value){this.value=value;this.r=((value>>16)&255)/255;this.g=((value>>8)&255)/255;this.b=(value&255)/255;return this;}}
 class BufferGeometry{constructor(){this.attributes={};}setAttribute(k,v){this.attributes[k]=v;}computeBoundingSphere(){}}
 class Float32BufferAttribute{constructor(array,itemSize){Object.assign(this,{array,itemSize});}}
-class InstancedMesh{constructor(geometry,material,capacity){Object.assign(this,{geometry,material,capacity,matrices:[],colors:[],instanceMatrix:{setUsage(){}}});}setMatrixAt(i,m){this.matrices[i]=structuredClone(m.data);}getMatrixAt(i,m){m.data=structuredClone(this.matrices[i]);}setColorAt(i,c){this.colors[i]=c.value;this.instanceColor??={};}getColorAt(i,c){c.value=this.colors[i];}dispose(){this.disposed=true;}}
+class InstancedMesh{constructor(geometry,material,capacity){Object.assign(this,{geometry,material,capacity,matrices:[],colors:[],userData:{},instanceMatrix:{array:new Float32Array(capacity*16),setUsage(){}},instanceColor:null});}setMatrixAt(i,m){this.matrices[i]=structuredClone(m.data);this.instanceMatrix.array.set(m.elements,i*16);}getMatrixAt(i,m){m.data=structuredClone(this.matrices[i]);m.elements.set(this.instanceMatrix.array.subarray(i*16,(i+1)*16));}setColorAt(i,c){this.colors[i]=c.value;this.instanceColor??={array:new Float32Array(this.capacity*3)};this.instanceColor.array.set([c.r,c.g,c.b],i*3);}getColorAt(i,c){c.setHex(this.colors[i]);}dispose(){this.disposed=true;}}
 const THREE={Vector3,Matrix4,Quaternion,Color,BufferGeometry,Float32BufferAttribute,InstancedMesh,DoubleSide:2,DynamicDrawUsage:1,MeshLambertMaterial:class{constructor(options){this.options=options;}}};
 function person(id,x=0,y=0){return {id,x,y,properties:{render:{color:0xc42b24},citizen:{task:null,path:[]}}};}
 async function models(){const requests=[],group={meshes:new Set(),add(m){this.meshes.add(m);},remove(m){this.meshes.delete(m);}},model=new CityCitizenModels(THREE,group,{fetchAsset:async url=>{requests.push(String(url));return {ok:true,text:()=>fs.readFile(url,'utf8')};}});await model.loading;return{model,requests,group};}
@@ -39,7 +39,7 @@ test('hat meshes share one normalized shape while each animated frame retains it
 });
 test('animation distinguishes actual movement, on-site work, idle and bicycle poses',()=>{
  assert.equal(citizenAnimation({task:null,path:[]}), 'idle');assert.equal(citizenAnimation({task:'work',path:[],workCell:{x:0,y:0}}), 'use');assert.equal(citizenAnimation({task:'work',path:[{}]},true),'run');
- assert.equal(citizenAnimation({task:'work',path:[{}]},false),'idle');assert.equal(citizenAnimation({ridingVehicleId:1,ridingVehicleKind:'bicicleta',mobilityTrip:{stage:'riding'}},true),'pedal');assert.deepEqual(citizenFrame('mount',.3),{clip:'use',frame:0});assert.deepEqual(citizenFrame('passenger',.3),{clip:'use',frame:0});
+ assert.equal(citizenAnimation({task:'work',path:[{}]},false),'idle');assert.equal(citizenAnimation({ridingVehicleId:1,ridingVehicleKind:'bicicleta',mobilityTrip:{stage:'riding'}},true),'seated');assert.deepEqual(citizenFrame('mount',.3),{clip:'use',frame:0});assert.deepEqual(citizenFrame('passenger',.3),{clip:'use',frame:0});
  assert.deepEqual([0,.125,.25].map(time=>citizenFrame('pedal',time).frame),[0,2,4]);
  assert.notEqual(citizenFrame('run',0).frame,citizenFrame('run',.15).frame);assert.equal(citizenFrame('use',.5).frame,0);assert.equal(citizenFrame('seated',.5).frame,2);assert.equal(citizenFrame('use',.75).frame,1);
 });
@@ -95,16 +95,16 @@ test('stationary citizens never cycle through run frames just because their path
  for(let i=0;i<20;i++){model.begin(.1,2);model.add(e,0);model.end();assert.equal(pose(),held);}
 });
 
-test('bicycle riders pedal through run frames and use frame 0 while boarding or riding as passenger',async()=>{
+test('bicycle riders stay seated when stationary and a waiting boarding rider stays idle',async()=>{
  const {model}=await models(),e=person(0);e.properties.citizen.ridingVehicleId=1;e.properties.citizen.ridingVehicleKind='bicicleta';
  const pose=()=>[...model.batches].find(([,b])=>b.count)?.[0];
  e.properties.citizen.mobilityTrip={stage:'riding'};
- model.begin(0,1);model.add(e,0);model.end();assert.equal(pose(),'run:0');
- model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:0');
- e.x=.25;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:2');
- e.x=.5;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'run:4');
- e.properties.citizen.mobilityTrip.stage='boarding';model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:0');
- e.properties.citizen.mobilityTrip=null;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:0');
+ model.begin(0,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
+ model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
+ e.x=.25;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
+ e.x=.5;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
+ e.properties.citizen.mobilityTrip.stage='boarding';model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'idle:0');
+ e.properties.citizen.mobilityTrip=null;model.begin(.1,1);model.add(e,0);model.end();assert.equal(pose(),'use:2');
  e.properties.citizen.ridingVehicleKind='patinete';assert.equal(citizenAnimation(e.properties.citizen,true),'glide');
 });
 
@@ -113,7 +113,8 @@ test('each garment replaces a distinct part of every animated body and follows i
  for(const [key,geometry] of model.frames)for(const piece of ['camisa','calça','vestido','casaco','saia','macacão','trapos']){
   const outfit=model.outfits.get(`${key}:${piece}`),whole=geometry.attributes.position.array;
   assert(outfit);assert(outfit.body.attributes.position.array.length>0);assert(outfit.clothes.attributes.position.array.length>0);
-  assert.equal(outfit.body.attributes.position.array.length+outfit.clothes.attributes.position.array.length,whole.length);
+  if(piece==='saia')assert(outfit.clothes.attributes.position.array.length>0);
+  else assert.equal(outfit.body.attributes.position.array.length+outfit.clothes.attributes.position.array.length,whole.length,piece);
  }
  const personWithClothes=person(12);personWithClothes.properties.citizen.wardrobe=[{piece:'vestido',color:'#329ac1'}];
  model.begin(.1,1);model.add(personWithClothes,0);model.end();let batch=model.batches.get('idle:0:vestido');assert(batch);assert.equal(batch.mesh.colors[0],0xc42b24);assert.equal(batch.clothingMesh.colors[0],0x329ac1);assert.deepEqual(batch.mesh.matrices[0],batch.clothingMesh.matrices[0]);

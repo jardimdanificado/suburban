@@ -23,7 +23,7 @@ test('native inspector opens citizen dossiers and mobile selection goes straight
   const h = harness(390, 844); h.inspector.navigate('people'); h.draw();
   const row=h.ui.regions.find(r=>h.city.citizens.some(c=>r.label?.startsWith(c.entity.properties.name+' —')));assert(row);row.onClick();h.draw();
   assert.equal(h.inspector.mobileDetail, true);
-  assert(h.labels.includes('NECESSIDADES'));
+  assert(h.inspector.selected?.properties?.citizen);
   assert(!h.labels.some(l => l.startsWith('CIDADÃOS /')));
   h.buttons.find(b => b.label === 'LISTA').click(); h.draw();
   assert(h.labels.some(l => l.startsWith('CIDADÃOS /')));

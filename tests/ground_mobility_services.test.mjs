@@ -19,8 +19,8 @@ function hospital(){
  const c=people[2];city.economy.leaveJob(c);c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='health';c.targetId=b.id;c.needs.health=20;
  b.inventory.remedio=10;b.inventory.sabao=10;return {city,b,c,people};
 }
-test('only human-powered mobility is offered and recipes need actual industrial inputs',()=>{
- const city=setup({starter:true});assert.deepEqual(Object.keys(VEHICLE_SPECS),['bicicleta','bicicleta_carga','patinete','patins','skate']);
+test('human-powered mobility includes handcarts and recipes need actual industrial inputs',()=>{
+ const city=setup({starter:true});assert.deepEqual(Object.keys(VEHICLE_SPECS),['bicicleta','bicicleta_carga','carrinho','patinete','patins','skate']);
  for(const old of ['carro','caminhao','onibus','carruagem'])assert.equal(city.economy.goods[old],undefined);
  for(const old of ['automaker','dealership','fuel_station','bus_operator'])assert.equal(city.buildingTypes[old],undefined);
  for(const recipe of Object.values(VEHICLE_RECIPES))for(const g of Object.keys(recipe))assert(city.economy.goods[g]);

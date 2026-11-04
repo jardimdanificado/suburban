@@ -43,7 +43,7 @@ test('public funeral operators participate in purchase of real cargo bicycles',(
 
 test('the IML gets the last available cargo bicycle before larger ordinary businesses',()=>{
  const iml={id:10,type:'iml',active:true,entity:{},accountId:'building:10',workers:[1],inventory:{}},business={id:11,type:'factory',active:true,entity:{},accountId:'business:11',workers:Array.from({length:20},(_,i)=>i+2)},shop={id:20,type:'cycle_shop',active:true,entity:{},accountId:'building:20',inventory:{bicicleta_carga:1}},city={minute:100,day:1,buildings:[iml,business,shop],citizens:[],economy:{businesses:[business],goods:{bicicleta_carga:{price:1000}}},building:id=>id==='building:20'?shop:null};
- const vehicles=new CityVehicles(city),bike={id:1,good:'bicicleta_carga',active:false,holderAccountId:shop.accountId};vehicles.units.set(1,bike);vehicles.parkingReport=()=>({missing:0});vehicles.financeVehicle=(company,unit)=>company===iml&&unit===bike;vehicles.buyVehicle=(account,id)=>{if(account!==iml.accountId||id!==bike.id)return false;bike.active=true;bike.ownerAccountId=account;return true;};vehicles.hourly();assert.equal(bike.ownerAccountId,iml.accountId);
+ city.society={citizen:()=>null};const vehicles=new CityVehicles(city),bike={id:1,good:'bicicleta_carga',active:false,holderAccountId:shop.accountId};vehicles.units.set(1,bike);vehicles.parkingReport=()=>({missing:0});vehicles.financeVehicle=(company,unit)=>company===iml&&unit===bike;vehicles.buyVehicle=(account,id)=>{if(account!==iml.accountId||id!==bike.id)return false;bike.active=true;bike.ownerAccountId=account;return true;};vehicles.hourly();assert.equal(bike.ownerAccountId,iml.accountId);
 });
 
 test('an essential funeral operator receives an emergency imported cargo bicycle when the market has no stock',()=>{

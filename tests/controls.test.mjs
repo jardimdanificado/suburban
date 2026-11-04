@@ -115,7 +115,7 @@ test("options canvas buttons change settings and time, with clipped scrolling", 
   panel.open = true;
   ui.beginFrame(); panel.draw(ui);
   ui.clickAt(190, 138);
-  assert.equal(renderer.scaleFactor, 0.5);
+  assert.equal(renderer.scaleFactor, 0.75);
   ui.clickAt(235, 80);
   assert.equal(panel.tab, "TIME");
   ui.beginFrame(); panel.draw(ui);

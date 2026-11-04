@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {setup,totalMoney,putAtWorkCell,finishActivityRoute} from './helpers/city.mjs';
 import {externalTradeHourly,orderImport,EXTERNAL_TRADE_RULES} from '../js/city_external_trade.js';
 import {shipmentPriority} from '../js/city_logistics.js';
-import {CURRENCY_RULES} from '../js/city_currency.js';
+import {CURRENCY_RULES,EXTERNAL_ACCOUNT_BALANCE} from '../js/city_currency.js';
 import {TILE_STONE} from '../js/world_gen.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 const fixture=()=>{
@@ -26,18 +26,18 @@ test('larger farms advertise enough positions and farmers plant multiple fields 
 test('a rock quarry uses a reachable deposit and opens a depleted rock cell',()=>{
  const city=fixture(),b=city.buildings.find(b=>b.type==='quarry'),c=city.society.citizen(b.workers[0]);healthy(c);city.minute=9*60;
  city.world.map=new Array(city.world.width*city.world.height).fill(0);
- const near=[];for(let y=b.entity.y;y<b.entity.y+b.depth;y++)for(let x=b.entity.x;x<b.entity.x+b.width;x++)if(Math.abs(x+.5-b.door.x)+Math.abs(y+.5-b.door.y)===1)near.push({x,y});assert(near.length);
- const cell=near[0];city.world.setTile(cell.x,cell.y,TILE_STONE);
+ const cell={x:b.entity.x+b.width,y:b.entity.y};
+ city.world.setTile(cell.x,cell.y,TILE_STONE);city.world.map[cell.y*city.world.width+cell.x]=TILE_STONE;
  city.world.quarryReserves=new Map([[`${cell.x},${cell.y}`,1]]);b.depositRevision=-1;b.stoneReserve=100;b.inventory.pedra=0;
  c.task='work';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;
  for(let i=0;i<12&&!b.inventory.pedra;i++){city.economy.productionWork(b,c);if(c.path.length){const p=c.path.at(-1);c.entity.x=p.x;c.entity.y=p.y;c.path=[];}}
  assert.equal(b.inventory.pedra,1);assert.notEqual(city.world.getTile(cell.x,cell.y),TILE_STONE);assert(city.walkable(cell.x,cell.y));
 });
 test('external customers buy only excess goods using existing money, keeping inflation and goods balanced',()=>{
- const city=fixture(),b=city.buildings.find(b=>b.type==='iron_mine'),external=city.accounts.get('supplier'),base=totalMoney(city),index=city.currency.priceIndex;
- assert(external.balance>=CURRENCY_RULES.initialSupply*EXTERNAL_TRADE_RULES.initialReserveFraction);b.inventory.minerio=80;city.economy.produced.minerio+=80;city.economy.market.minerio={demand:0};
- const stock=b.inventory.minerio,money=b.balance,outside=external.balance,broker=city.accounts.get('trade-import-export')?.balance||0,treasury=city.treasury;assert(externalTradeHourly(city)>0);
- const q=stock-b.inventory.minerio;assert(q>0);assert(b.inventory.minerio>=EXTERNAL_TRADE_RULES.minimumFirmStock);assert.equal(b.balance-money+(city.accounts.get('trade-import-export')?.balance||0)-broker+city.treasury-treasury,outside-external.balance);assert.equal(totalMoney(city),base);assert.equal(city.currency.priceIndex,index);city.minute+=1440;city.currency.daily();assert.equal(city.currency.priceIndex,index);assert(city.marketHistory.some(s=>s.reason==='Exportação: Minério de ferro'||s.reason.startsWith('Exportação:')));assert.equal(city.economy.externalTrade.units,q);
+ const city=fixture(),b=city.buildings.find(b=>b.type==='iron_mine'),external=city.accounts.get('supplier'),base=totalMoney(city),index=city.currency.priceIndex;for(const exporter of city.economy.businesses.filter(x=>x.type==='import_exporter'))exporter.active=false;
+ assert(external.externalMoney);assert.equal(external.balance,EXTERNAL_ACCOUNT_BALANCE);b.inventory.minerio=80;city.economy.produced.minerio+=80;city.economy.market.minerio={demand:0};
+ const stock=b.inventory.minerio,money=b.balance,net=city.currency.externalNet,broker=city.accounts.get('trade-import-export')?.balance||0,treasury=city.treasury;assert(externalTradeHourly(city)>0);
+ const q=stock-b.inventory.minerio;assert(q>0);assert(b.inventory.minerio>=EXTERNAL_TRADE_RULES.minimumFirmStock);assert.equal(b.balance-money+(city.accounts.get('trade-import-export')?.balance||0)-broker+city.treasury-treasury,city.currency.externalNet-net);assert.equal(totalMoney(city)-base,city.currency.externalNet-net);assert.equal(city.currency.priceIndex,index);city.minute+=1440;city.currency.daily();assert(city.currency.priceIndex>index);assert(city.marketHistory.some(s=>s.reason==='Exportação: Minério de ferro'||s.reason.startsWith('Exportação:')));assert.equal(city.economy.externalTrade.units,q);
  city.economy.externalTrade.importedGoods={marmita_simples:5};assert(city.economy.goodsLedger.some(r=>r.kind==='export'));const mirror=new CityStateGraph().apply(new CityStateGraph().encode({city})).city;bindCityState(mirror);assert.equal(mirror.economy.externalTrade.units,q);assert.equal(mirror.economy.externalTrade.importedGoods.marmita_simples,5);
 });
 test('foreign food deliveries are recorded by good for exact stock conservation',()=>{
@@ -45,9 +45,9 @@ test('foreign food deliveries are recorded by good for exact stock conservation'
  const shipment=orderImport(city,buyer,'marmita_simples',5);
  assert(shipment);assert.equal(city.economy.externalTrade.importedGoods.marmita_simples,5);
 });
-test('exports preserve local demand and do not create payments when outside cash is exhausted',()=>{
- const city=fixture(),b=city.buildings.find(b=>b.type==='iron_mine');for(const firm of city.economy.businesses)for(const g of Object.keys(firm.inventory))firm.inventory[g]=0;b.inventory.minerio=50;city.economy.market.minerio={demand:100};assert.equal(externalTradeHourly(city),0);assert.equal(b.inventory.minerio,50);
- city.economy.market.minerio.demand=0;city.transfer('supplier','treasury',city.accounts.get('supplier').balance,'Fixture esvaziar reserva');const before=b.balance;assert.equal(externalTradeHourly(city),0);assert.equal(b.balance,before);assert.equal(b.inventory.minerio,50);
+test('exports preserve local demand and use the direct-sale path when no export depot is active',()=>{
+ const city=fixture(),b=city.buildings.find(b=>b.type==='iron_mine');for(const exporter of city.economy.businesses.filter(x=>x.type==='import_exporter'))exporter.active=false;for(const firm of city.economy.businesses)for(const g of Object.keys(firm.inventory))firm.inventory[g]=0;b.inventory.minerio=50;city.economy.market.minerio={demand:100};assert.equal(externalTradeHourly(city),0);assert.equal(b.inventory.minerio,50);
+ city.economy.market.minerio.demand=0;const before=b.balance;assert(externalTradeHourly(city)>0);assert(b.balance>before);assert(b.inventory.minerio<50);assert.equal(totalMoney(city),city.currency.netIssued());
 });
 
 test('workers at their work cell are paid while waiting for inputs',()=>{
@@ -61,8 +61,8 @@ test('housing freight starts ahead of ordinary orders and old shipments eventual
  const housing={purpose:'trade',buyer:{type:'popular_housing'},createdAt:0},ordinary={purpose:'trade',buyer:{type:'factory'},createdAt:0},meal={purpose:'work-meals',buyer:{type:'farm'},createdAt:2160};assert(shipmentPriority(housing,0,12)<shipmentPriority(ordinary,0,12));assert(shipmentPriority(ordinary,2160,12)<shipmentPriority(meal,2160,12));
 });
 
-test('funds from other exterior imports also return through exports',()=>{
- const city=fixture(),b=city.buildings.find(b=>b.type==='iron_mine');for(const firm of city.economy.businesses)for(const g of Object.keys(firm.inventory))firm.inventory[g]=0;b.inventory.minerio=50;city.economy.market.minerio={demand:0};city.transfer('supplier','treasury',city.accounts.get('supplier').balance,'Fixture esvaziar reserva');city.accounts.set('external-trade',{name:'Comércio exterior',balance:0});city.transfer('treasury','external-trade',100000,'Fixture compra externa');const before=city.accounts.get('external-trade').balance,total=totalMoney(city);assert(externalTradeHourly(city));assert(city.accounts.get('external-trade').balance<before);assert.equal(totalMoney(city),total);
+test('export receipts are tracked as foreign money entering the local economy',()=>{
+ const city=fixture(),b=city.buildings.find(b=>b.type==='iron_mine');for(const exporter of city.economy.businesses.filter(x=>x.type==='import_exporter'))exporter.active=false;for(const firm of city.economy.businesses)for(const g of Object.keys(firm.inventory))firm.inventory[g]=0;b.inventory.minerio=50;city.economy.market.minerio={demand:0};const before=city.currency.externalNet,total=totalMoney(city);assert(externalTradeHourly(city));assert(city.currency.externalNet>before);assert.equal(totalMoney(city)-total,city.currency.externalNet-before);
 });
 
 test('cargo bicycles qualify carrier staff for large construction deliveries',()=>{

@@ -214,7 +214,9 @@ export function reviewWages(city,b){
   // Raise offers gradually and keep them tied to the legal wage floor. A 12%
   // daily increase compounded without a ceiling made payroll unaffordable
   // within weeks, even when the firm's vacancy was caused by a skill mismatch.
-  const floor=Math.max(1,city.politics.policy.minimumWage||0),ceiling=Math.max(b.baseWage,floor*1.5),next=Math.min(ceiling,b.baseWage*1.01),payroll=city.currency.price(Math.max(next,floor))*Math.max(1,vacancies)*480;
+  const floor=Math.max(1,city.politics.policy.minimumWage||0);
+  b.wageCompetitionCeiling=Math.max(Number.isFinite(b.wageCompetitionCeiling)?b.wageCompetitionCeiling:0,b.baseWage*1.25,floor*1.5);
+  const next=Math.min(b.wageCompetitionCeiling,b.baseWage*1.01),payroll=city.currency.price(Math.max(next,floor))*Math.max(1,vacancies)*480;
   if(next<=b.baseWage)return;
   if(b.balance<Math.max(city.currency.price(5000),payroll))return;
   b.baseWage=next;

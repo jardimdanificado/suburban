@@ -33,7 +33,7 @@ import {listDailyPrivatization} from './city_equity.js?v=daily-mayor-privatizati
 // The coordinates deliberately cover democratic, revolutionary, authoritarian,
 // nationalist, statist and market-libertarian currents without a religious axis.
 export const PARTY_FAMILIES=[[-1,.2,.35],[-.65,.3,.2],[-.4,.65,1],[-.2,.3,.45],[.05,.05,.25],[.7,.7,.15],[.6,-.75,.1],[1,1,.25],[-1,1,.1],[-1,-1,.2],[-.95,-.8,.3],[-.85,-.55,.35],[-.9,.15,.25],[-.8,-.25,.2],[.95,.9,.1],[.95,-.9,.1],[.9,-.7,.15],[.82,-.35,.2],[.75,.2,.3],[.55,.45,.45],[.45,-.65,.2],[.35,.8,.7]];
-const PARTY_FAMILY_ORDER=[2,20,4,3,19,0,7,8,14,9,21,11,17,1,18,12,16,6,15,10,5,13];
+const PARTY_FAMILY_ORDER=[2,20,4,21,19,0,7,8,14,9,3,11,17,1,18,12,16,6,15,10,5,13];
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 const partyRelationIndexes=new WeakMap();
 export class CityGovernment extends CityPolitics {

@@ -64,6 +64,6 @@ test('career records and company requirements survive worker serialization',()=>
 test('persistent vacancies raise company offers only with sustainable payroll cash',()=>{
  const {city,b}=fixture();b.jobs=b.workers.length+1;reviewWages(city,b);const base=b.baseWage;
  city.minute+=1440;b.balance=0;reviewWages(city,b);assert.equal(b.baseWage,base);
- city.minute+=1440;assert(city.transfer('treasury',b.accountId,1000000,'Fixture wage competition'));
+ city.minute+=1440;const payroll=Math.ceil(city.currency.price(Math.max(b.baseWage*1.01,city.politics.policy.minimumWage||0))*Math.max(1,b.jobs-b.workers.length)*480);assert(city.transfer('treasury',b.accountId,Math.max(1000000,payroll+city.currency.price(5000)),'Fixture wage competition',{essential:true}));
  reviewWages(city,b);assert(b.baseWage>base);const revised=b.baseWage;reviewWages(city,b);assert.equal(b.baseWage,revised);
 });

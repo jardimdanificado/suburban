@@ -8,7 +8,7 @@ function drainMunicipalSurplus(city){for(const b of city.buildings)if(b.accountI
 
 test('the social reserve is usable by benefits, even when no cash remains above it',()=>{
   const city=setup({starter:true,population:48});reduceTreasury(city,5000);drainMunicipalSurplus(city);city.bank.policy.creditEnabled=false;city.welfare.policy.dailyBudget=5000;
-  const needy=city.citizens.find(c=>!city.politics.officeHolder(c));needy.needs.food=15;const money=totalMoney(city);city.welfare.hourly();assert(needy.benefitsReceived>0);assert(city.welfare.spentToday>0);assert(city.treasury<5000);assert.equal(totalMoney(city),money);
+  const needy=city.citizens.find(c=>!city.politics.officeHolder(c));needy.needs.food=15;city.welfare.hourly();assert(needy.benefitsReceived>0);assert(city.welfare.spentToday>0);assert(city.treasury<5000);assert.equal(totalMoney(city),city.currency.netIssued());
 });
 
 test('optional investments cannot spend the food reserve, while physical public meal purchases can',()=>{

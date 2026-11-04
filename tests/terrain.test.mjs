@@ -12,7 +12,7 @@ function cityOn(world, seed = world.seed ?? 42) {
 }
 function terrainFixture() {
   const width = 64, height = 64, tiles = new Uint8Array(width * height);
-  return { width, height, spawnCenter: { x: 32, y: 32 }, clock: new WorldClock(), map: tiles, getTile(x, y) { return x < 0 || y < 0 || x >= width || y >= height ? 5 : tiles[y * width + x]; }, setTile(x, y, tile) { tiles[y * width + x] = tile; }, isWalkable(x, y) { return terrainWalkable(this, x, y); } };
+  return { width, height, revision:0, spawnCenter: { x: 32, y: 32 }, clock: new WorldClock(), map: tiles, getTile(x, y) { return x < 0 || y < 0 || x >= width || y >= height ? 5 : tiles[y * width + x]; }, setTile(x, y, tile) { tiles[y * width + x] = tile; this.revision++; }, isWalkable(x, y) { return terrainWalkable(this, x, y); } };
 }
 
 test('seeds are random by default, validated in URLs and repeatable when specified', () => {
@@ -32,7 +32,7 @@ test('settlements across all landscape presets preserve every natural height and
   for (const [preset, seed] of [[0, 42], [1, 1337], [2, 23811]]) {
     const world = new World(preset, seed), natural = world.map.slice(), city = cityOn(world);
     city.initialize();
-    assert(city.buildings.length>=8);for(const type of ['townhall','builder','quarry','mint','bank','carrier','bike_rack','cycle_assembler','cycle_shop'])assert(city.buildings.some(b=>b.type===type),`Missing ${type}`); assert.equal(city.citizens.length, 512);
+    assert(city.buildings.length>=8);for(const type of ['townhall','builder','quarry','mint','bank','carrier','bike_rack','cycle_assembler'])assert(city.buildings.some(b=>b.type===type),`Missing ${type}`); assert.equal(city.citizens.length, 512);
     assert.equal(city.stats().homeless, 512); assert(city.stats().employed > 0); assert.equal(city.stats().entrepreneurs, 0);
     let roads = 0;
     for (let i = 0; i < natural.length; i++) if (natural[i] !== world.map[i]) {

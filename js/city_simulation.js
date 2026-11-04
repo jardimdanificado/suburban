@@ -17,6 +17,7 @@ import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
+import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-apparel-1';
 import {MIN_PLOT_CELLS,CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geometry.js?v=visual-flow-4';
@@ -214,6 +215,7 @@ export class CitySimulation {
     if(from==='treasury'&&this.fiscal&&!this.fiscal.allows(amount,reason,details))return false;
     if(this.justice?.trackStolenMoneyTransfer&&!this.justice.trackStolenMoneyTransfer(from,to,amount,details))return false;
     if(!a.externalMoney)a.balance -= amount;if(!b.externalMoney)b.balance += amount;
+    if(a.externalMoney!==b.externalMoney)this.currency.externalNet=(this.currency.externalNet||0)+(a.externalMoney?amount:-amount);
     this.fiscal?.record(from,to,amount,reason,details);
     if(to==='treasury') b.totalRevenue=(b.totalRevenue||0)+amount;
     else if (b.entity?.properties.cityBuilding && /^(Compra pessoal de substância|Serviço:|Atacado:|Exportação:|Água para cuidados infantis|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)) this.recordBusinessRevenue(b,amount);
@@ -431,7 +433,7 @@ export class CitySimulation {
     if (u.ownerId !== c.accountId && !this.transfer(payer, u.ownerId, u.rent, 'Primeiro aluguel')) return null;
     this.releaseHome(c);
     u.tenantId = c.accountId; u.rentPayerId = payer === c.accountId ? null : payer; u.arrears = 0; u.missedDays = 0;
-    c.homeUnitId = u.id; c.homeId = null;this.housing.invalidateResidents();
+    c.homeUnitId = u.id; c.homeId = u.homeId || null;this.housing.invalidateResidents();
     c.path = []; c.task = null;
     this.log(`${c.entity.properties.name} ${u.ownerId === c.accountId ? 'ocupou seu próprio' : 'alugou o'} espaço ${u.id}.`, 'housing', [c.id], { kind: u.ownerId === c.accountId ? 'owner-occupancy' : 'lease', unitId: u.id });
     return u;
@@ -837,7 +839,7 @@ export class CitySimulation {
       const present=!!(c.indoorLocation?.buildingId===b.id&&c.indoorLocation.unitId&&!c.indoorLocation.path?.length)||
         !!(c.workCell?.buildingId===b.id&&c.workCell.target&&!c.path.length&&Math.hypot(c.entity.x-c.workCell.target.x,c.entity.y-c.workCell.target.y)<.2);
       // Waiting for ingredients or a customer is still paid time at the assigned workplace.
-      if(productive||present){if(!isOwner)this.payWage(c,b,wage);if(productive)this.economy.practice(c,JOB_SKILL[b.type]);}
+      if(productive||present){if(!isOwner)this.payWage(c,b,wage);if(productive||present&&c.id===this.economy.mayorId&&b.type==='townhall')this.economy.practice(c,JOB_SKILL[b.type]);}
       if (isOwner) this.economy.practice(c, 'management');
       if(!productive&&b.type!=='farm'&&b.type!=='forestry'&&Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)>30){this.furniture.waitForInputs(c,b,'Aguardando matéria-prima ou serviço');return;}
       if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
@@ -1183,7 +1185,7 @@ export class CitySimulation {
       if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>this.vehicles.cargoCapacity(c)){c.action='Aguardando veículo para transportar a carga';continue;}
       if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId&&!bridgeAt(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y))){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
-      let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * this.justice.mobilityFactor(c);
+      let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * this.justice.mobilityFactor(c) * bodyMovementSpeedFactor(c);
       while (distance > 0 && c.path.length) {
         const p = c.path[0];
         if(p.skybridgeEntry||p.skybridgeExit){

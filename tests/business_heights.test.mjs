@@ -9,9 +9,9 @@ test('business heights vary by plot while extraction and agriculture remain on t
 });
 test('initial whole-building businesses have working floors, storage and extra jobs',()=>{
  const city=setup({starter:true,population:128});
- const mill=city.buildings.find(b=>b.type==='mill');assert(mill.floors>1);
- assert(mill.units.some(u=>u.z===mill.floors-1&&u.roomType==='workspace'));
- assert(mill.jobs>2);assert(mill.inventoryCapacity>=mill.width*mill.depth*mill.floors*16);
+ const tower=city.buildings.find(b=>b.type==='office_tower');assert(tower.floors>1);
+ assert(tower.units.some(u=>u.z===tower.floors-1&&u.roomType==='workspace'));
+ assert.equal(tower.jobs,0);assert(tower.inventoryCapacity>=tower.width*tower.depth*tower.floors*16);
  const quarry=city.buildings.find(b=>b.type==='quarry');assert.equal(quarry.floors,1);
 });
 test('service construction budgets scale with the planned number of floors',()=>{

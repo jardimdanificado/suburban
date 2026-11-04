@@ -185,8 +185,10 @@ function flagPalette(city,hue,background,foreground){
 }
 function choosePartyPalette(city,legacyPalette){
  if(city.random()<.02){const palette=legacyPalette();return {...palette,colorSource:palette.colorSource||'legacy'};}
- const palette=gerarPaletaDeBandeira({random:()=>city.random()}),colors=Object.freeze([...palette.cores]);
- return {background:colors[0],foreground:colors[1],colors,colorSource:'palette-generator'};
+ const generated=gerarPaletaDeBandeira({random:()=>city.random()}),background=generated.cores[0];let foreground=generated.cores[1];
+ if(flagContrast(foreground,background)<4.5)foreground=flagContrast('#ffffff',background)>=flagContrast('#111111',background)?'#ffffff':'#111111';
+ const colors=Object.freeze([background,foreground,...generated.cores.slice(2)]);
+ return {background,foreground,colors,colorSource:'palette-generator'};
 }
 function arrangementPreferences(style,count){
  if(!count)return [];

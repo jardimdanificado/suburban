@@ -63,7 +63,7 @@ export class CityVehicles {
     }
     if(!assembler.initialHandcartStockCreated){
       const quantity=Math.max(2,Math.round(4*population/512));
-      if(inventoryFree(assembler)>=quantity){assembler.initialHandcartStockCreated=true;assembler.inventory.carrinho=(assembler.inventory.carrinho||0)+quantity;this.registerUnits(assembler,'carrinho',quantity);city.economy.initialStock.carrinho=(city.economy.initialStock.carrinho||0)+quantity;city.economy.produced.carrinho=(city.economy.produced.carrinho||0)+quantity;city.economy.recordGoods('initial-vehicle-stock','carrinho',quantity,null,assembler.id);}
+      if(inventoryFree(assembler)>=quantity){assembler.initialHandcartStockCreated=true;assembler.inventory.carrinho=(assembler.inventory.carrinho||0)+quantity;this.registerUnits(assembler,'carrinho',quantity);city.economy.initialStock.carrinho=(city.economy.initialStock.carrinho||0)+quantity;city.economy.recordGoods('initial-vehicle-stock','carrinho',quantity,null,assembler.id);}
     }
   }
   parkingSites(){
@@ -150,7 +150,7 @@ export class CityVehicles {
     const bill=[];b.componentLots??={};
     for(const [good,count]of Object.entries(recipe)){
       let remaining=count*quantity;const lots=b.componentLots[good]??=[],supplier=this.coherentLots(b,good).find(l=>l.quantity>=remaining);
-      for(let i=0;i<lots.length&&remaining>0;){const lot=lots[i];if(supplier&&(lot.producerId!==supplier.producerId||lot.design!==supplier.design||lot.brand!==supplier.brand)){i++;continue;}const take=Math.min(remaining,lot.quantity);bill.push({good,producerId:lot.producerId,producerName:lot.producerName||this.city.building(lot.producerId)?.entity.properties.name,brand:lot.brand||null,origin:lot.origin||'Produção local',design:lot.design,quantity:take});lot.quantity-=take;remaining-=take;if(!lot.quantity)lots.splice(i,1);else i++;}
+      for(let i=0;i<lots.length&&remaining>0;){const lot=lots[i];if(supplier&&(lot.producerId!==supplier.producerId||lot.design!==supplier.design||(lot.brand||null)!==supplier.brand)){i++;continue;}const take=Math.min(remaining,lot.quantity);bill.push({good,producerId:lot.producerId,producerName:lot.producerName||this.city.building(lot.producerId)?.entity.properties.name,brand:lot.brand||null,origin:lot.origin||'Produção local',design:lot.design,quantity:take});lot.quantity-=take;remaining-=take;if(!lot.quantity)lots.splice(i,1);else i++;}
       if(remaining)bill.push({good,producerId:'origem não identificada',design:1,quantity:remaining});
       b.inventory[good]-=count*quantity;this.city.economy.consumed[good]+=count*quantity;this.city.economy.recordGoods('vehicle-assembly-input',good,count*quantity,b.id,null);
     }const grouped=new Map();for(const p of bill){const id=JSON.stringify([p.good,p.producerId,p.design,p.brand]),old=grouped.get(id);if(old)old.quantity+=p.quantity;else grouped.set(id,{...p});}return [...grouped.values()];

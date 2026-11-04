@@ -5,6 +5,7 @@ import {queueService} from '../js/city_service_queue.js';
 
 function vacantBuilding(city,type,options={}){for(const site of city.economy.locateBuilding(type)){const b=city.addBuilding(type,site.x,site.y,{...site,width:3,depth:3,floors:2,free:true,...options});if(b)return b;}throw Error('No suitable site');}
 function makeFree(city,c){c.jobId=null;c.businessIds=[];c.task=null;c.path=[];c.indoorLocation=null;c.deliveryId=null;c.cleaningJobId=null;c.informalJobId=null;c.workMeal=null;c.conversation=null;c.mobilityTrip=null;c.ridingVehicleId=null;for(const key of Object.keys(c.needs))c.needs[key]=90;}
+function occupyOtherSocialHomes(city,exceptBuildingId){for(const home of city.housing.homes.values())if(home.buildingId!==exceptBuildingId&&city.housing.isSocial(home))for(const unit of city.housing.units(home))unit.tenantId='fixture:occupied';city.housing.invalidateResidents();}
 
 test('municipal residential homes become rentable and rent goes to the treasury',()=>{
  const city=setup({starter:true,funded:true,population:24}),b=vacantBuilding(city,'residential'),tenant=city.citizens.find(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)),home=[...city.housing.homes.values()].find(h=>h.buildingId===b.id&&city.housing.hasBathroom(h));
@@ -49,7 +50,7 @@ test('different services reserve distinct positions and use independent availabl
 
 test('social housing allocates empty homes to residents and keeps public ownership',()=>{
  const city=setup({starter:true,funded:true,population:24}),b=vacantBuilding(city,'super_popular_housing',{floors:3});
- const rooms=b.units.filter(u=>u.roomType==='bedroom'),homes=[...city.housing.homes.values()].filter(h=>h.buildingId===b.id);assert.equal(homes.length,rooms.length);const before=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.homeUnitId).length;city.housing.assign();
+ const rooms=b.units.filter(u=>u.roomType==='bedroom'),homes=[...city.housing.homes.values()].filter(h=>h.buildingId===b.id);assert.equal(homes.length,rooms.length);occupyOtherSocialHomes(city,b.id);for(const c of city.citizens)if(city.society.isAdult(c))city.housing.release(c);const before=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.homeUnitId).length;city.housing.assign();
  const housed=city.citizens.filter(c=>city.housing.home(c)?.buildingId===b.id);assert(before>0);assert(housed.length>0);assert(b.units.every(u=>u.ownerId==='treasury'));assert(housed.every(c=>city.housing.hasBathroom(city.housing.home(c))));
 });
 
@@ -95,7 +96,7 @@ test('receiving social housing preserves an active informal job and its route',(
 });
 
 test('housing assignment actually places residents into vacant municipal rentals',()=>{
- const city=setup({starter:true,funded:true,population:24}),b=vacantBuilding(city,'residential');city.housing.assign();
+ const city=setup({starter:true,funded:true,population:24}),b=vacantBuilding(city,'residential');occupyOtherSocialHomes(city,-1);for(const c of city.citizens)if(city.society.isAdult(c))city.housing.release(c);city.housing.assign();
  const tenants=city.citizens.filter(c=>city.housing.home(c)?.buildingId===b.id),municipalTenants=tenants.filter(c=>city.housing.units(city.housing.home(c)).every(u=>u.ownerId==='treasury'));
  assert(municipalTenants.length>0);assert(municipalTenants.every(c=>city.housing.units(city.housing.home(c)).every(u=>u.tenantId===c.accountId)));
 });

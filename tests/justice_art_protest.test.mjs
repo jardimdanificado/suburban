@@ -5,7 +5,7 @@ import {CityRelationships} from '../js/city_relationships.js';
 
 function fixture(){
   const people=[1,2,3].map(id=>({id,entity:{x:.1*id,y:0,properties:{name:`Pessoa ${id}`}},needs:{health:90,energy:90},traits:{empathy:.5,riskTolerance:.8},socialProfile:{temper:.9},social:{memories:[],beliefs:[]}}));let id=0;
-  const city={minute:100,hour:12,world:{},buildings:[],citizens:people,society:{citizen:id=>people.find(c=>c.id===id),isAdult:()=>true},building:()=>null,random:()=>0,log:()=>({id:++id}),createEntity:data=>({...data,id:++id})};city.relationships=new CityRelationships(city);const justice=new CityJustice(city);city.justice=justice;
+  const city={minute:100,hour:12,world:{},buildings:[],citizens:people,society:{citizen:id=>people.find(c=>c.id===id),isAdult:()=>true},building:()=>null,random:()=>0,log:()=>({id:++id}),createEntity:data=>({...data,id:++id}),currency:{price:n=>n}};city.relationships=new CityRelationships(city);const justice=new CityJustice(city);city.justice=justice;
   const art=justice.createArtwork({kind:'statue',message:'Homenagem',creatorId:1,subjectId:3,x:0,y:0});return {justice,city,art,person:people[1]};
 }
 

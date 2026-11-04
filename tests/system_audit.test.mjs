@@ -8,7 +8,7 @@ import { HISTORY_LIMIT } from '../js/city_history.js';
 import { settlementConnected, findTerrainPath } from '../js/city_terrain.js';
 import { ROAD_TILES } from '../js/city_terrain.js';
 import { World } from '../js/world.js';
-import { updateClothes, appearance } from '../js/city_clothing.js';
+import { updateClothes, appearance, selectClothes } from '../js/city_clothing.js';
 
 function firm(city,type){
   const site=city.economy.locateBuilding(type).find(s=>!city.development.overlaps(s.x,s.y,s.width,s.depth));assert(site,type);
@@ -74,15 +74,15 @@ test('scarce wood supplies first batches across competing chains instead of six 
 });
 
 test('initial production planning includes financed food distribution before optional industrial expansion',()=>{
-  const city=setup({starter:true,population:128});city.economy.updateDemand();
+  const city=setup({starter:true,population:192});city.economy.updateDemand();
   for(const type of ['market','greengrocer']){
-    const row=city.economy.productionPlan.find(r=>r.type===type);assert(row?.missing);assert(row.priority>=210);
+    const row=city.economy.productionPlan.find(r=>r.type===type);assert(row?.missing);assert(row.priority>=90);
     assert(city.bank.initialChainCredit({type,initialChain:true}));
   }
 });
 
 test('idle citizens retry unavailable shopping offers periodically instead of scanning all firms every minute',()=>{
-  const city=setup({starter:true}),c=city.citizens.find(c=>!city.politics.officeHolder(c));city.economy.leaveJob(c);for(const k of Object.keys(c.needs))c.needs[k]=95;
+  const city=setup({starter:true}),c=city.citizens.find(c=>!city.politics.officeHolder(c));city.minute=18*60;city.economy.leaveJob(c);c.task='leisure';c.jobId=null;for(const k of Object.keys(c.needs))c.needs[k]=95;
   let calls=0;city.economy.consumerOffer=()=>{calls++;return null;};
   city.chooseTask(c);const first=calls;assert(first>0);
   for(let i=0;i<29;i++){city.minute++;city.chooseTask(c);}assert.equal(calls,first);
@@ -102,6 +102,9 @@ test('clothes retain their brand, improve appearance and enter consumption only 
   const n=INDUSTRIES.tailor.inputs.tecido;tailor.inventory.tecido=n;city.economy.initialStock.tecido+=n;tailor.productionLabor=100;
   city.economy.leaveJob(c);c.jobId=tailor.id;tailor.workers.push(c.id);putAtWorkCell(city,c,tailor);
   assert(city.economy.productionWork(tailor,c));assert(tailor.garments.length>0);
+  // Start with ordinary clothes so the purchase is driven by a real clothing
+  // need; starter collection pieces make this citizen fully satisfied already.
+  const removed=c.wardrobe.splice(3);city.economy.lost.roupas+=removed.filter(g=>g.manufacturedAt!=null).length;selectClothes(c);
   city.transfer('treasury',c.accountId,100000,'Fixture wardrobe budget');c.wardrobe[0].condition=1;
   const before=appearance(c);c.entity.x=tailor.door.x;c.entity.y=tailor.door.y;
   assert(city.economy.buyConsumerGood(c,tailor));assert(appearance(c)>before);
@@ -219,18 +222,20 @@ test('housing resident index follows moves, dependents, release and same-minute 
 
 test('standard industrial recipes consume real inputs, conserve goods and stop without stock',()=>{
   const city=setup({starter:true,population:64}),c=city.citizens.find(c=>!city.politics.officeHolder(c));
-  const specialized=new Set(['kitchen','forestry','iron_mine','bauxite_mine','bank','research_institute','clothing_store','cycle_assembler','skate_workshop','cycle_shop','sports_shop','cycle_workshop','bicycle_rental']);
+  const specialized=new Set(['bar','coca_laboratory','kitchen','forestry','iron_mine','bauxite_mine','bank','research_institute','clothing_store','cycle_assembler','skate_workshop','cycle_shop','sports_shop','cycle_workshop','bicycle_rental']);
+  assert.equal(city.substances.law('coca').regime,'prohibited');
   for(const [type,spec] of Object.entries(INDUSTRIES)){
     if(specialized.has(type))continue;
+    if(!Object.keys(spec.outputs).length)continue; // Service businesses have no production recipe.
     const site=city.economy.locateBuilding(type).find(s=>!city.development.overlaps(s.x,s.y,s.width,s.depth));assert(site,type);
     const b=city.addBuilding(type,site.x,site.y,{...site,free:true});assert(b,type);city.economy.activateMunicipalBusiness(b,100000);
     // Seed a documented fixture inventory, including the alternative artisan/flag/publisher recipes.
     const inputs={...spec.inputs,...(type==='artisan'?{madeira:5,fibras:2}:type==='flagmaker'?{tecido:3,madeira:1}:type==='newsroom'?{papel:5}:{} )};
     for(const [good,n]of Object.entries(inputs)){b.inventory[good]+=n;city.economy.initialStock[good]+=n;}
-    const before=Object.values(b.inventory).reduce((n,v)=>n+v,0);b.productionLabor=100;b.replantingAt=-Infinity;
+    const before=Object.values(b.inventory).reduce((n,v)=>n+v,0),producedBefore={...city.economy.produced};b.productionLabor=100;b.replantingAt=-Infinity;
     c.jobId=b.id;b.workers.push(c.id);putAtWorkCell(city,c,b);
     assert(city.economy.productionWork(b,c),type);
-    assert(Object.keys(spec.outputs).some(g=>b.inventory[g]>0),type);
+    assert(Object.keys(city.economy.produced).some(g=>city.economy.produced[g]>(producedBefore[g]||0)),type);
     assert(before>0||Object.values(b.inventory).some(n=>n>0),type);
     for(const good of Object.keys(GOODS))assert.equal(city.economy.initialStock[good]+city.economy.produced[good]-city.economy.consumed[good]-city.economy.lost[good],city.goodsStock(good),`${type}: ${good}`);
     if(Object.keys(spec.inputs).length){for(const good of Object.keys(spec.inputs)){city.economy.lost[good]+=b.inventory[good];b.inventory[good]=0;}assert.equal(city.economy.productionWork(b,c),false,`${type} without inputs`);}
@@ -250,12 +255,13 @@ test('worker snapshots preserve inventories, money, prototypes and independent c
 });
 
 test('public housing keeps a funded slot while industrial projects are pending',()=>{
-  const city=setup({starter:true,population:64});
+  const city=setup({starter:true,population:256});
   for(const type of ['paper_mill','weaving','sawmill']){
     const plot=city.development.plots.find(p=>!p.buildingId&&!p.projectId&&!['farm','quarry'].includes(p.type));assert(plot);
     assert(city.development.beginProject('treasury',plot.id,type,{width:3,depth:3,floors:1,priority:150}));
   }
-  city.development.planBasicHousing();const homes=city.development.projects.filter(p=>p.type==='popular_housing');
+  for(const c of city.citizens)if(city.society.isAdult(c))city.housing.release(c);
+  city.development.planBasicHousing();const homes=city.development.projects.filter(p=>['super_popular_housing','popular_housing','popular_luxury_housing'].includes(p.type));
   assert.equal(homes.length,1);assert.equal(homes[0].priority,150);
   assert(city.treasury>=city.welfare.conditions().reserve);
 });

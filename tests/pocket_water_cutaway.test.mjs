@@ -35,9 +35,9 @@ class Matrix{constructor(y=0){this.elements=[1,0,0,0,0,1,0,0,0,0,1,0,0,y,0,1];}c
 class Vector{constructor(x,y,z){Object.assign(this,{x,y,z});}}
 const instanced=levels=>({userData:{interiorFloors:levels,interiorBaseMatrices:levels.map(z=>new Matrix(z*CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT/2))},instanceMatrix:{},values:[],setMatrixAt(i,m){this.values[i]=[...m.elements];}});
 test('cutaway lowers selected walls, completely hides other floors and restores the full facade',()=>{
- const walls=instanced([0,1,2]),floors=instanced([0,1,2]),group={userData:{cellMeshes:[walls],interiorFloors:floors,roof:{visible:true},facade:{visible:true},interiorCeilings:{visible:true},roomProps:{children:[0,1,2].map(z=>({userData:{interiorFloor:z}}))}}},THREE={Matrix4:Matrix,Vector3:Vector};
+ const walls=instanced([0,1,2]),floors=instanced([0,1,2]),ceilings=instanced([0,1,2]),group={userData:{cellMeshes:[walls],interiorFloors:floors,roof:{visible:true},facade:{visible:true},interiorCeilings:ceilings,roomProps:{children:[0,1,2].map(z=>({userData:{interiorFloor:z}}))}}},THREE={Matrix4:Matrix,Vector3:Vector};
  applyInteriorCutaway(THREE,group,1);assert.equal(walls.values[1][5],.16);assert.equal(walls.values[1][13],CITY_FLOOR_HEIGHT+CITY_FLOOR_HEIGHT*.08);assert.equal(walls.values[2][0],0);assert.equal(floors.values[2][0],0);assert.equal(group.userData.roof.visible,false);assert.deepEqual(group.userData.roomProps.children.map(p=>p.visible),[false,true,false]);
- applyInteriorCutaway(THREE,group,null);assert.equal(walls.values[1][5],1);assert.equal(floors.values[2][0],1);assert.equal(group.userData.roof.visible,true);assert.equal(group.userData.interiorCeilings.visible,true);
+ applyInteriorCutaway(THREE,group,null);assert.equal(walls.values[1][5],1);assert.equal(floors.values[2][0],1);assert.equal(ceilings.values[2][0],1);assert.equal(group.userData.roof.visible,true);
 });
 
 test('clearing a desktop selection also clears the inspecting dossier cutaway state',async()=>{

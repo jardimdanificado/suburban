@@ -31,11 +31,11 @@ test('opinion interventions change voter assessment, can be corrected, and prese
 
 test('vehicle imports conserve money and produce a visible bicycle that can make a real trip',()=>{
   const city=setup({starter:true,funded:true,population:48}),p=city.politics;available(city);const citizen=city.citizens.find(c=>!p.officeHolder(c)&&!c.businessIds.length),money=totalMoney(city),stock=city.economy.initialStock.bicicleta;
-  const result=p.intervene('importVehicle',citizen.id,{good:'bicicleta'});assert(result,city.lastError);const v=city.vehicles.units.get(result.vehicleId);assert(v.entity&&!v.entity.destroyed);assert(v.active);assert.equal(v.ownerAccountId,citizen.accountId);assert.equal(v.entity.properties.cityVehicle,v);assert.equal(city.economy.initialStock.bicicleta,stock+1);assert.equal(totalMoney(city),money);
+  const result=p.intervene('importVehicle',citizen.id,{good:'bicicleta'});assert(result,city.lastError);const v=city.vehicles.units.get(result.vehicleId);assert(v.entity&&!v.entity.destroyed);assert(v.active);assert.equal(v.ownerAccountId,citizen.accountId);assert.equal(v.entity.properties.cityVehicle,v);assert.equal(city.economy.initialStock.bicicleta,stock+1);assert.equal(totalMoney(city),city.currency.netIssued());assert(totalMoney(city)<money);
   assert.equal(v.fuelStore,undefined);
   const ride=p.intervene('ride',v.id);assert(ride,city.lastError);assert.equal(citizen.mobilityTrip.vehicleId,v.id);
   for(let frame=0;frame<2400&&v.distance===0;frame++)city.update(1/16);
-  assert(v.distance>0,'the vehicle must move along a real ground path');assert.equal(totalMoney(city),money);
+  assert(v.distance>0,'the vehicle must move along a real ground path');assert.equal(totalMoney(city),city.currency.netIssued());
 });
 
 test('intervention records retain their prototype across worker state transfer',()=>{

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,finishActivityRoute} from './helpers/city.mjs';
+import {setup,finishActivityRoute,ensureBusiness} from './helpers/city.mjs';
 import {activityRoomReady,workCellReady} from '../js/city_interiors.js';
 
 function fixture(){
@@ -33,7 +33,7 @@ test('an upper floor has a real accessible seat where food can be consumed',()=>
 });
 
 test('a stocked market serves food at its counter without demanding an nonexistent dining room',()=>{
- const {city,c}=fixture(),shop=city.buildings.find(b=>b.type==='cycle_shop');assert(shop);shop.type='market';shop.inventory.maca=30;shop.inventory.pao=0;shop.active=true;
+ const {city,c}=fixture(),shop=ensureBusiness(city,'market');assert(shop);shop.inventory.maca=30;shop.inventory.pao=0;shop.active=true;
  assert(!shop.units.some(u=>u.roomType==='dining'));city.transfer('treasury',c.accountId,100000,'Fixture food budget');
  c.task='food';c.targetId=shop.id;c.path=[];c.entity.x=shop.door.x;c.entity.y=shop.door.y;c.needs.food=5;
  finishActivityRoute(city,c);assert.equal(c.indoorLocation.targetRoomType,'service');const before=shop.inventory.maca;city.performTask(c);assert(c.needs.food>5);assert(shop.inventory.maca<before);

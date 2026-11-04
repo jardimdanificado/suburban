@@ -36,9 +36,7 @@ export class CityWelfare {
     // Credit goes to people with income; assistance reaches households without sufficient means.
     city.fiscal?.hourly();
     city.bank.householdFinance();
-    this.restockPublicMeals();
-    city.water.hourly();
-    if (!this.policy.enabled) return;
+    if (!this.policy.enabled) { this.restockPublicMeals(); city.water.hourly(); return; }
     const socialSkill=city.politics?.secretaries?.find(row=>row.officeId==='social_defense')?.skill||0,adults = city.citizens.filter(c => !c.entity.destroyed && city.society.isAdult(c)).sort((a,b) => {const urgency=c=>Number(c.needs.food<30)*3+Number(!c.homeUnitId)*(1+socialSkill/100)+Number(c.needs.health<30)*.5;return urgency(b)-urgency(a)||a.balance-b.balance||a.id-b.id;});
     for (const [index,c] of adults.entries()) {
       const target = this.subsistenceFloor(c);
@@ -50,5 +48,10 @@ export class CityWelfare {
       this.spentToday += amount; this.totalPaid += amount; this.paid.set(c.id,already+amount);
       c.benefitsReceived = (c.benefitsReceived || 0) + amount;
     }
+    // Subsistence transfers take priority over optional replenishment. Both
+    // meal and water purchases may be marked essential, but must not consume
+    // the cash needed for residents' benefits before this pass can run.
+    this.restockPublicMeals();
+    city.water.hourly();
   }
 }

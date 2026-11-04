@@ -31,9 +31,9 @@ test('each skybridge has openings on the second floor of both buildings',()=>{
  syncSkybridges(renderer,THREE,entities,world);
  assert.equal(renderer.skybridgeDoors.get(1).get('a'),8);assert.equal(renderer.skybridgeDoors.get(2).get('b'),4);
  assert.equal(renderer.skybridgeGroup.children.length,1);
- const bridge=renderer.skybridgeGroup.children[0],deck=bridge.children.find(o=>o.geometry.args[1]===.14),rails=bridge.children.filter(o=>o.geometry.args[1]===.07),posts=bridge.children.find(o=>o instanceof InstancedMesh);
+ const bridge=renderer.skybridgeGroup.children[0],parts=[];bridge.traverse(o=>parts.push(o));const deck=parts.find(o=>o.geometry?.args?.[1]===.14),rails=parts.filter(o=>o.geometry?.args?.[1]===.075),posts=parts.find(o=>o instanceof InstancedMesh);
  assert(deck,'the link has a visible elevated deck');assert.equal(deck.xyz[1],1.8-.07);assert.equal(rails.length,2,'both exposed sides receive a guardrail');
- assert.equal(posts.count,4,'each end of both guardrails receives a support post');assert.equal(posts.transforms.length,4);assert(posts.transforms.every(([,y])=>y===1.8-.07+.33));
+ assert(posts.count>=4,'both guardrails receive supports along their span');assert.equal(posts.transforms.length,posts.count);assert(posts.transforms.every(([,y])=>y===1.8-.07+.33));
 });
 
 test('pedestrian pathfinding keeps the shorter street route when a skybridge is unnecessary',()=>{

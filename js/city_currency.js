@@ -7,11 +7,13 @@ export function ensureExternalAccount(city,id,name){let account=city.accounts.ge
 
 export class CityCurrency {
   constructor(city) {
-    this.city = city; this.burned = 0; this.policy = {mode:'capped',dailyLimit:CURRENCY_RULES.mintDailyLimit,inflationTarget:.001,treasuryReserve:2000000}; this.issued = 0; this.issuedToday = 0; this.issuedYesterday = 0;this.emittedQuotaDay=null;
+    this.city = city; this.burned = 0; this.externalNet = 0; this.policy = {mode:'capped',dailyLimit:CURRENCY_RULES.mintDailyLimit,inflationTarget:.001,treasuryReserve:2000000}; this.issued = 0; this.issuedToday = 0; this.issuedYesterday = 0;this.emittedQuotaDay=null;
     this.priceIndex = 1; this.dailyInflation = 0; this.mintDay = city.day;this.quotaVersion=1;
     this.lastPriceDay = city.day; this.history = []; this.hourlyIssued = 0;
   }
-  netIssued() { return this.issued-this.burned; }
+  // International payments cross into or out of the local money supply even
+  // though the unlimited foreign counterparty balance is kept off-ledger.
+  netIssued() { this.externalNet??=0; return this.issued-this.burned+this.externalNet; }
   migrateQuotaPolicy(){if(this.policy.mode==='automatic'||!Number.isFinite(this.policy.dailyLimit)){this.policy.dailyLimit=CURRENCY_RULES.mintDailyLimit;if(this.policy.mode!=='paused')this.policy.mode='capped';this.emittedQuotaDay=null;}else if((this.quotaVersion||0)<1){this.policy.dailyLimit=CURRENCY_RULES.mintDailyLimit;if(this.policy.mode!=='paused')this.policy.mode='capped';this.emittedQuotaDay=null;}this.quotaVersion=1;}
   retire(amount) {
     if(!Number.isSafeInteger(amount) || amount<=0 || this.city.treasury-amount<Math.max(this.policy.treasuryReserve,this.city.fiscal?.reserve()||0) || this.netIssued()-amount<CURRENCY_RULES.initialSupply*.5)return false;

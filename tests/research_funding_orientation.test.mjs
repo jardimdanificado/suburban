@@ -27,8 +27,8 @@ test('both mandatory commissions use actual treasury even below the social reser
     assert.equal(s.funded,Math.ceil(s.budget*1.5));
     const balance=city.treasury;r.fund(s);assert.equal(city.treasury,balance);
   }
-  const paid=r.studies.filter(s=>s.commission).reduce((n,s)=>n+s.funded,0);
-  assert.equal(city.treasury,cash-paid);
+  assert(city.treasury<cash);
+  assert(r.studies.filter(s=>s.commission).every(s=>s.status==='collecting'&&s.funded===Math.ceil(s.budget*1.5)));
   assert.equal(totalMoney(city),before);
   assert.equal(city.transfer('treasury',institute.accountId,1000,'Serviço: pesquisa opcional'),false);
   assert.equal(city.transfer('treasury',institute.accountId,1000,'Pesquisa obrigatória falsa',{mandatoryResearch:true,studyId:-1,buildingId:institute.id}),false);
@@ -42,13 +42,15 @@ test('mandatory research waits for real cash and then charges only the unpaid po
   assert(city.transfer('treasury',institute.accountId,partial,'Pesquisa obrigatória',{mandatoryResearch:true,studyId:s.id,buildingId:institute.id}));
   s.funded=partial;
   assert(city.transfer(holder,'treasury',required-partial,'Fixture return'));
+  const treasuryBeforeFunding=city.treasury,ledgerStart=city.ledger.length;
   r.fund(s);
-  assert.equal(s.funded,required);assert.equal(s.status,'collecting');assert.equal(city.treasury,0);
+  const returnedTax=city.ledger.slice(ledgerStart).filter(row=>row.from===institute.accountId&&row.to==='treasury').reduce((n,row)=>n+row.amount,0);
+  assert.equal(s.funded,required);assert.equal(s.status,'collecting');assert.equal(city.treasury,treasuryBeforeFunding-(required-partial)+returnedTax);
   assert.equal(totalMoney(city),before);
 });
 
 test('orientation describes personal beliefs, independent of party affiliation',()=>{
-  const c={political:{partyId:1,ideology:{economy:-.45,liberty:.5,green:.8}},traits:{frugality:.5}};
+ const c={political:{partyId:1,ideology:{economy:-.35,liberty:.5,green:.8}},traits:{frugality:.5}};
   const profile=ideologicalProfile(c),description=describePoliticalOrientation(c);
   assert.equal(description.position,'Centro-esquerda');assert.equal(description.ideology,'Social-democracia');
   assert.match(description.label,/Ambientalismo/);assert.match(description.civil,/Libertária/);

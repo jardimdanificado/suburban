@@ -49,6 +49,10 @@ export class CitySanitation {
       if(bathroom.roomType!=='bathroom'){bathroom.roomType='bathroom';b.layoutRevision=(b.layoutRevision||0)+1;}
       this.addFacility(b, { unitId: bathroom.id, access: ['public_toilet', 'popular_refectory'].includes(b.type) ? 'public' : b.type === 'paid_toilet' ? 'paid' : 'employees' });
     }
+    if(b.type==='quarry'){
+      const dining=b.units.find(u=>u.roomType==='dining')||b.units.find(u=>u!==bathroom&&u.roomType==='workspace');
+      if(dining&&dining.roomType!=='dining'){dining.roomType='dining';b.layoutRevision=(b.layoutRevision||0)+1;}
+    }
   }
 
   allowed(c, f) {

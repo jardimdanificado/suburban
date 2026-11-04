@@ -8,7 +8,7 @@ function established(){
 function support(city){const counts=new Map();for(const c of city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c))){const choice=city.politics.intentions(c)[0];if(choice)counts.set(choice.partyId,(counts.get(choice.partyId)||0)+1);}return counts;}
 
 test('a popular established administration can win without turning a diverse electorate into unanimity',()=>{
-  const {city,p,party}=established();assert.equal(p.active.candidates.length,4);const counts=support(city);assert(counts.size>=3);assert((counts.get(party.id)||0)>city.citizens.length*.4);assert((counts.get(party.id)||0)<city.citizens.length*.9);
+  const {city,p,party}=established();assert(p.active.candidates.length>=2);assert(p.active.candidates.length<=p.active.mayorCandidateLimitAtOpening);const counts=support(city);assert(counts.size>=3);assert((counts.get(party.id)||0)>city.citizens.length*.4);assert((counts.get(party.id)||0)<city.citizens.length*.9);
 });
 
 test('personal deterioration can defeat the governing party despite its accumulated prestige',()=>{

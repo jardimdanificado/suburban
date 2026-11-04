@@ -4,6 +4,8 @@ import {setup} from './helpers/city.mjs';
 import {activityRoomReady,advanceCitizenInterior,syncCitizenInterior} from '../js/city_interiors.js';
 import {queueService} from '../js/city_service_queue.js';
 import {buildingEntrance,buildingEntranceDoor} from '../js/city_building_geometry.js';
+import {bodyMovementSpeedFactor} from '../js/city_body_metrics.js?v=body-morph-4';
+import {injuryMovementFactor} from '../js/city_injury_effects.js';
 
 function followEntry(city,c,b,start){
  const s=c.indoorLocation,door=buildingEntranceDoor(b),entry=b.units.find(u=>u.id===door.unitId);
@@ -15,7 +17,7 @@ function followEntry(city,c,b,start){
   const before={...s.position};advanceCitizenInterior(city,c,.05);
   assert.equal(c.entity.x,s.position.x,'the real entity crosses the tiles, not just its indoor drawing');
   assert.equal(c.entity.y,s.position.y);
-  assert(Math.hypot(s.position.x-before.x,s.position.y-before.y,s.position.z-before.z)<=.050001,'every displayed step respects walking distance');
+  assert(Math.hypot(s.position.x-before.x,s.position.y-before.y,s.position.z-before.z)<=.05*injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1)*bodyMovementSpeedFactor(c)+1e-6,'every displayed step respects walking distance');
   if(!crossed&&inside(s.position)){
    assert.equal(Math.floor(s.position.x-b.entity.x),entry.x,'cross the entrance cell rather than another wall');
    assert.equal(Math.floor(s.position.y-b.entity.y),entry.y);crossed=true;
@@ -44,15 +46,15 @@ test('entry to a free service and to an indoor queue walks through every door or
 test('simulation frames move the real entity onto the indoor tile and back through the exit',()=>{
  const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='townhall'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
  city.economy.leaveJob(c);c.businessIds=[];c.path=[];c.indoorLocation=null;c.conversation=null;c.deliveryId=null;c.cleaningJobId=null;c.workMeal=null;c.mobilityTrip=null;c.ridingVehicleId=null;
- for(const key in c.needs)c.needs[key]=95;c.needs.water=30;c.task='water';c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;
+ for(const key in c.needs)c.needs[key]=95;c.needs.water=30;c.task='work';c.jobId=b.id;b.workers.push(c.id);b.jobs=Math.max(b.jobs,b.workers.length);c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;
  const room=b.units.find(u=>u.z===1&&u.roomType==='workspace');assert(room);
- activityRoomReady(city,c,b,room,'service');city.stepMinute();
+ activityRoomReady(city,c,b,room,'workspace');city.stepMinute();
  const start={x:c.entity.x,y:c.entity.y};city.update(1/60);
  assert(Math.hypot(c.entity.x-start.x,c.entity.y-start.y)>0,'the entity moves on subminute frames');
  let steps=0;
- while(!c.indoorLocation?.unitId&&steps++<1000){
+  while(!c.indoorLocation?.unitId&&steps++<1000){
   const before={x:c.entity.x,y:c.entity.y,z:c.indoorLocation.position.z};city.update(1/60);
-  assert(Math.hypot(c.entity.x-before.x,c.entity.y-before.y,c.indoorLocation.position.z-before.z)<=4/60+1e-6,'physical movement is bounded each frame');
+  assert(Math.hypot(c.entity.x-before.x,c.entity.y-before.y,c.indoorLocation.position.z-before.z)<=4/60*city.justice.mobilityFactor(c)*bodyMovementSpeedFactor(c)+1e-6,'physical movement is bounded each frame');
  }
  assert.equal(c.indoorLocation.unitId,room.id);assert.equal(c.indoorLocation.floor,1);
  assert.equal(Math.floor(c.entity.x-b.entity.x),room.x);assert.equal(Math.floor(c.entity.y-b.entity.y),room.y);

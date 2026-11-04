@@ -14,7 +14,7 @@ test('a resident can resume life after waiting for an unavailable toilet, at a r
 
 test('a 256-person town starts with a separate multi-floor public toilet building',()=>{
  const city=setup({starter:true,population:256}),hall=city.buildings.find(b=>b.type==='townhall'),toilet=city.buildings.find(b=>b.type==='public_toilet'),publicFacilities=[...city.sanitation.facilities.values()].filter(f=>f.buildingId===toilet.id&&f.access==='public');
- assert(toilet);assert(toilet.floors>=3);assert.equal(publicFacilities.length,8);assert.equal(new Set(publicFacilities.map(f=>f.unitId)).size,8);
+ assert(toilet);assert(toilet.floors>=3);assert(publicFacilities.length>=8);assert.equal(new Set(publicFacilities.map(f=>f.unitId)).size,publicFacilities.length);
  assert.equal([...city.sanitation.facilities.values()].filter(f=>f.buildingId===hall.id&&f.access==='public').length,0);
 });
 

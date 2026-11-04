@@ -12,7 +12,7 @@ test('a homeless person can recover energy even when another need is critical',(
 test('a homeless person can leave an overcrowded shelter and sleep outdoors',()=>{
  const city=setup({starter:true,population:64}),c=person(city),hall=city.buildings.find(b=>b.type==='townhall');for(const u of hall.units)if(u.roomType==='workspace'||u.roomType==='bedroom')u.roomType='service';hall.layoutRevision++;
  c.needs.energy=2;c.task='energy';c.targetId=hall.id;c.entity.x=hall.door.x;c.entity.y=hall.door.y;
- assert.equal(syncCitizenInterior(city,c),false);city.minute+=31;syncCitizenInterior(city,c);assert.equal(c.targetId,null);
+ syncCitizenInterior(city,c);assert.equal(c.targetId,null);assert.equal(c.indoorLocation,null);
  for(let i=0;i<8&&c.indoorLocation;i++){advanceCitizenInterior(city,c,100);syncCitizenInterior(city,c);}assert.equal(c.indoorLocation,null);c.path=[];city.chooseTask(c);assert(c.homelessSleepSpot);assert.notEqual(c.targetId,hall.id);c.entity.x=c.homelessSleepSpot.x;c.entity.y=c.homelessSleepSpot.y;c.path=[];const before=c.needs.energy;city.performTask(c);assert(c.needs.energy>before);
 });
 test('voting does not interrupt essential recovery before the voter can travel',()=>{

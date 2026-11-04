@@ -8,7 +8,7 @@ class Geometry{constructor(...args){this.args=args;}dispose(){}}
 class Material{constructor(options={}){this.options=options;}dispose(){}}
 class Texture{constructor(canvas){this.canvas=canvas;}}
 const THREE={Group,Mesh,BoxGeometry:Geometry,PlaneGeometry:Geometry,CylinderGeometry:Geometry,SphereGeometry:Geometry,MeshLambertMaterial:Material,CanvasTexture:Texture,DoubleSide:2,SRGBColorSpace:'srgb'};
-function fakeCanvas(){const ctx={fillRect(){},fillText(){},measureText(text){return {width:String(text).length*10};},beginPath(){},moveTo(){},lineTo(){},quadraticCurveTo(){},bezierCurveTo(){},arc(){},closePath(){},stroke(){},fill(){},save(){},restore(){},translate(){},rotate(){}};return {width:0,height:0,getContext(){return ctx;}};}
+function fakeCanvas(){const canvas={width:0,height:0},ctx={canvas,font:'12px sans-serif',textAlign:'center',textBaseline:'middle',direction:'ltr',fillStyle:'#fff',fillRect(){},strokeRect(){},fillText(){},measureText(text){return {width:String(text).length*10};},getImageData(x,y,width,height){return{data:new Uint8ClampedArray(width*height*4)};},putImageData(){},drawImage(){},beginPath(){},moveTo(){},lineTo(){},quadraticCurveTo(){},bezierCurveTo(){},arc(){},closePath(){},stroke(){},fill(){},save(){},restore(){},translate(){},rotate(){}};canvas.getContext=()=>ctx;return canvas;}
 function artwork(id,support){return {id,kind:'banner',message:`Obra ${id}`,color:0x445566,entity:{x:8+id,y:10,destroyed:false},x:8+id,y:10,buildingId:support.buildingId,rotation:0,layers:[{id:1,message:`Obra ${id}`,color:0x445566}],support};}
 
 test('urban artworks render at their physical interior and skybridge supports',()=>{

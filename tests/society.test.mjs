@@ -1,20 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, totalMoney } from './helpers/city.mjs';
+import { setup, totalMoney, finishActivityRoute, putAtWorkCell } from './helpers/city.mjs';
 import { SOCIAL_RULES } from '../js/city_society.js';
+import { qualification } from '../js/city_employment.js';
+import { advanceCitizenInterior } from '../js/city_interiors.js';
 
 function pair(city) {
   const [a, b] = city.citizens;
-  a.entity.x = b.entity.x = 64.5; a.entity.y = b.entity.y = 64.5;
-  for (const c of [a, b]) { c.path = []; c.task = 'social'; c.personality=Object.freeze({...c.personality,wantsRomance:true,wantsChildren:true,interest:0});c.socialProfile=Object.freeze({...c.socialProfile,orientation:'bi'}); }
-  const r=city.society.getRelation(a,b,true);r.views[a.id].attraction=r.views[b.id].attraction=90;
+  a.entity.x = 64.5; b.entity.x = 65.5; a.entity.y = b.entity.y = 64.5;
+  for (const c of [a, b]) { c.path = []; c.task = 'social'; c.personality=Object.freeze({...c.personality,wantsRomance:true,wantsChildren:true,interest:0});c.socialProfile=Object.freeze({...c.socialProfile,orientation:'bi',temper:.1});c.prejudices={}; }
+  const r=city.society.getRelation(a,b,true);for(const view of Object.values(r.views)){view.attraction=90;view.affection=50;view.trust=45;}
   return [a, b];
 }
 function bond(city, a, b) {
   const random = city.random;
-  city.random = () => .1;
+  city.random = () => .2;
   for (let i = 0; i < 36; i++) {
     city.minute += 40;
+    a.lastConversationAt = b.lastConversationAt = city.minute - SOCIAL_RULES.conversationCooldown - 1;
+    for (const c of [a, b]) { c.task = 'social'; c.path = []; c.needs.food = c.needs.water = c.needs.energy = 80; }
     assert(city.society.startConversation(a, b));
     city.minute = a.conversation.until;
     city.society.finishConversation(a, b, a.conversation);
@@ -27,7 +31,7 @@ test('conversations need proximity, availability and cooldown; each person talks
   const city = setup(), [a, b] = pair(city), third = city.citizens[2];
   b.entity.x += 20;
   assert.equal(city.society.startConversation(a, b), false);
-  b.entity.x = a.entity.x;
+  b.entity.x = a.entity.x + 1;
   assert(city.society.startConversation(a, b));
   assert.equal(a.conversation, b.conversation);
   assert.equal(city.society.startConversation(a, third), false);
@@ -103,31 +107,32 @@ test('families require stability, preferences and resources and create a child o
   assert(city.events.some(e => e.data.kind === 'birth' && e.data.childId === child.id));
 });
 
-test('guardians pay children\'s services and rents and provide care at home', () => {
+test('guardians provide care at home and children receive public health services', () => {
   const city = setup(), [a, b] = pair(city), r = bond(city, a, b);
   city.minute = r.partnerSince + 2 * 1440;
   const pregnancy = city.society.planChild(a, b); city.minute = pregnancy.dueAt;
   const child = city.society.giveBirth(pregnancy), home = city.building(city.units.get(child.homeUnitId).buildingId);
   a.entity.x = child.entity.x = home.door.x; a.entity.y = child.entity.y = home.door.y;
   child.path = a.path = []; a.task = 'caregiving'; a.careChildId = child.id; a.targetId = home.id;
-  child.needs.food = 20;
+  child.needs.food = 20;a.provisions=1;
   const cash = a.balance, money = totalMoney(city);
-  city.performTask(a);
+  city.performTask(a);for(let i=0;i<1000&&a.indoorLocation?.path?.length;i++)advanceCitizenInterior(city,a,1);child.entity.x=a.entity.x;child.entity.y=a.entity.y;city.performTask(a);
   assert.equal(a.balance, cash); assert.equal(child.balance, 0); assert(child.needs.food > 20);
   assert(city.events.some(e => e.data.kind === 'childcare'));
-  child.initialAge = 8; const clinic = city.buildings.find(b => b.type === 'clinic'); child.task = 'health'; child.targetId = clinic.id; child.servicePaid = null;
-  const payer=city.accounts.get(city.payerFor(child)),parentCash = payer.balance; city.performTask(child); assert.equal(payer.balance, parentCash - 240);
+  child.initialAge = 8; child.needs.health=20;const clinic = city.buildings.find(b => b.type === 'clinic'); child.task = 'health'; child.targetId = clinic.id; child.servicePaid = null;
+  const clinician=city.citizens.find(c=>city.society.isAdult(c)&&c!==a&&c!==b&&!c.jobId&&!city.politics.officeHolder(c));assert(clinician);clinician.jobId=clinic.id;clinic.workers.push(clinician.id);clinic.inventory.remedio=10;clinic.inventory.sabao=10;putAtWorkCell(city,clinician,clinic);
+  const payer=city.accounts.get(city.payerFor(child)),parentCash = payer.balance; city.performTask(child);if(child.path.length)finishActivityRoute(city,child);city.performTask(child);for(let i=0;i<1000&&child.indoorLocation?.path?.length;i++)advanceCitizenInterior(city,child,1);city.performTask(child);assert.equal(payer.balance,parentCash);assert(child.needs.health>20);
   assert.equal(totalMoney(city), money);
 });
 
-test('adulthood ends financial dependency and allows employment', () => {
+test('adulthood ends financial dependency and makes a citizen eligible for employment', () => {
   const city = setup(), [parent] = pair(city);
   const child = city.addCitizen(64.5, 64.5, 26, { age: 0, parentIds: [parent.id], grant: false });
   city.society.houseChild(child);
   city.minute = child.bornAt + 18 * SOCIAL_RULES.daysPerYear * 1440;
   child.skills.commerce = 100; city.buildings.find(b => b.type === 'market').jobs++;
   city.society.daily(); city.assignHousingAndJobs();
-  assert.equal(child.guardianId, null); assert(child.jobId);
+  assert.equal(child.guardianId, null); assert.equal(child.jobId,null);assert(city.society.isAdult(child));assert(qualification(city,child,city.buildings.find(b=>b.type==='market')).eligible);
   assert.equal(city.units.get(child.homeUnitId).rentPayerId, null);
 });
 
@@ -159,14 +164,15 @@ test('departures clear partners and conversations and assign the surviving paren
 
 test('urgent needs finish paid essential services without repeatedly charging or resetting them', () => {
   const city = setup(), c = city.citizens[0], water = city.buildings.find(b => b.type === 'utility');
+  for(const building of city.buildings)if(['townhall','popular_refectory'].includes(building.type))building.active=false;
   c.entity.x = water.door.x; c.entity.y = water.door.y;
   c.path = []; c.task = 'water'; c.targetId = water.id; c.servicePaid = null;
-  c.needs.water = 30; c.needs.energy = 0; c.needs.food = c.needs.health = c.needs.toilet = 90;
-  const cash = c.balance;
-  for (let i = 0; i < 5; i++) city.stepMinute();
-  assert.equal(c.balance, cash - 35);
+  c.needs.water = 30; c.needs.energy = 90; c.needs.food = c.needs.health = c.needs.toilet = 90;
+  c.pocket.water=0;c.pocket.food=[{inputs:{},quality:1},{inputs:{},quality:1},{inputs:{},quality:1},{inputs:{},quality:1}];
+  assert(city.supplies.route(c));assert.equal(c.task,'supplies');city.supplies.arrive(c);
+  assert.equal(city.ledger.filter(row=>row.from===c.accountId&&row.to===water.accountId&&row.reason==='Enchimento de garrafas de água').reduce((n,row)=>n+row.amount,0),city.currency.price(35)*6);
   assert(c.needs.water > 60);
-  c.task = null; c.needs.water = 80; city.chooseTask(c);
+  c.task = null; c.needs.water = 80;c.needs.energy=0;c.pocket.water=6; city.chooseTask(c);
   assert.equal(c.task, 'energy');
 });
 

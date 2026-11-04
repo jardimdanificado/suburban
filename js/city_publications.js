@@ -16,8 +16,9 @@ export class CityPublications {
   inherit(from,to){
     const source=this.inventoryHolder(from),target=this.inventoryHolder(to);
     for(const doc of this.owned(from)){
-      if(!source?.inventory&&target?.inventory){
+      if(target?.inventory){
         if(target.entity?.destroyed||inventoryFree(target)<1){this.move(doc,null);doc.lost=true;doc.lostAt=this.city.minute;this.city.economy.lost[doc.good]++;continue;}
+        if(source?.inventory?.[doc.good]>0)source.inventory[doc.good]--;
         target.inventory[doc.good]++;
       }
       this.move(doc,to);

@@ -111,7 +111,7 @@ export class CityEconomy {
   }
   setupBuilding(b) {
     const startingFood = Math.max(this.city.initialPopulation, this.city.citizens.length) * ECONOMY_RULES.mealUnits * ECONOMY_RULES.initialMealsPerCitizen;
-    initializeInventory(b, GOODS, b.type === 'townhall' ? Math.max(6000, startingFood + 256) : Math.max(160, b.width * b.depth * b.floors * (b.type === 'quarry' ? 40 : 16)));
+    initializeInventory(b, GOODS, ['townhall','popular_refectory'].includes(b.type) ? Math.max(6000, startingFood + 256) : Math.max(160, b.width * b.depth * b.floors * (b.type === 'quarry' ? 40 : 16)));
     Object.defineProperty(b, 'seedStock', { get() { return this.inventory.sementes; }, set(value) { this.inventory.sementes = value; }, configurable: true });
     b.ownerId = null; b.active = PUBLIC_TYPES.has(b.type);
     b.crop = null; b.fields = []; b.seedStock = 0; b.bakingLabor = 0;

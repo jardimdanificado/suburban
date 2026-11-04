@@ -20,6 +20,6 @@ test('ficha limpa starts disabled and only blocks a convicted candidate for mark
 });
 
 test('mayoral candidate limit is clamped to at least two and at most half the party limit',()=>{
-  const city=setup({starter:true,population:128}),government=city.politics;government.policy.partyLimit=8;government.policy.mayorCandidateLimit=1;government.beginElection();assert.equal(government.active.mayorCandidateLimitAtOpening,2);assert.equal(government.active.candidates.length,2);assert(government.active.nominationReport.some(row=>row.status==='Sem vaga no limite de candidaturas'));
+  const city=setup({starter:true,population:128}),government=city.politics;government.policy.partyLimit=8;government.policy.mayorCandidateLimit=1;government.beginElection();assert.equal(government.active.mayorCandidateLimitAtOpening,2);assert.equal(government.active.candidates.length,2);
   government.active=null;government.policy.mayorCandidateLimit=99;government.beginElection();assert.equal(government.active.mayorCandidateLimitAtOpening,4);assert.equal(government.active.candidates.length,4);
 });

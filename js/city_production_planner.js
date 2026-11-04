@@ -46,7 +46,10 @@ export function productionPlan(economy){
     // Both established and planned consumers create demand for the earlier stages.
     for(const good of Object.keys(inputs(type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,score+12,`${city.buildingTypes[type]?.label||type} precisa de ${economy.goods[good]?.label||good}`,path);}
   }
-  for(const d of economy.demands)if(d.score>=30&&(INDUSTRIES[d.type]||['bakery','mill'].includes(d.type)||d.type==='farm'&&d.crop==='trigo'))visit(d.type,d.crop,d.type==='farm'&&d.crop==='trigo'?240:Math.min(190,d.score),d.reason);
+  // Retail food distribution is a production-chain endpoint even though it
+  // does not have an INDUSTRIES recipe. Keep its demand visible to the same
+  // investment queue so food shops can be financed before optional industry.
+  for(const d of economy.demands)if(d.score>=30&&(INDUSTRIES[d.type]||['bakery','mill','market','greengrocer','restaurant'].includes(d.type)||d.type==='farm'&&d.crop==='trigo'))visit(d.type,d.crop,d.type==='farm'&&d.crop==='trigo'?240:Math.min(190,d.score),d.reason);
   // Seed production only where the measured demand above needs another firm.
   // Opening every industry and crop at once created unsupported companies,
   // stranded inventory, and a construction queue sized for a much larger city.

@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,totalMoney,finishShipment,putAtWorkCell,finishActivityRoute} from './helpers/city.mjs';
+import {setup,totalMoney,finishShipment,putAtWorkCell,finishActivityRoute,ensureBusiness} from './helpers/city.mjs';
 import {COLOR_PALETTE,initializeColors,colorAffinity,favoriteColors,factoryColors} from '../js/city_colors.js';
 import {garmentScore,selectClothes} from '../js/city_clothing.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint,renderVehiclePaint} from '../js/city_paint_ui.js';
-const fixture=()=>setup({starter:true,funded:true,population:128});
-function equipment(city){const v=[...city.vehicles.units.values()].find(v=>v.active&&v.good==='bicicleta_carga'),owner=city.accounts.get(v.ownerAccountId),garage=city.buildings.find(b=>b.type==='cycle_workshop'),worker=city.society.citizen(garage.workers[0]);city.transfer('treasury',owner.accountId,100000,'Fixture painting budget');return {v,owner,garage,worker};}
+const fixture=()=>{const city=setup({starter:true,funded:true,population:128});ensureBusiness(city,'paintworks');ensureBusiness(city,'cycle_workshop');ensureBusiness(city,'cycle_shop');return city;};
+function equipment(city){const garage=city.buildings.find(b=>b.type==='cycle_workshop'),v=[...city.vehicles.units.values()].find(v=>!v.active&&!v.scrapped&&v.good==='bicicleta_carga'),owner=city.citizens.find(c=>c.fixtureInvestor);assert(v&&owner);city.vehicles.activate(v,owner.accountId,garage);const worker=city.society.citizen(garage.workers[0]);city.transfer('treasury',owner.accountId,100000,'Fixture painting budget');return {v,owner,garage,worker};}
 function paintStock(holder,color,n=1,premium=false){holder.inventory.tinta=n;holder.paintLots=[{color,quantity:n,producerId:123,producerName:'Tintas da cidade',premium}];}
 const paintTotal=city=>city.goodsStock('tinta')+city.economy.consumed.tinta+city.economy.lost.tinta;
 function panel(){const text=[],actions=[];return{text,actions,heading:s=>text.push(s),note:s=>text.push(s),kv:(...s)=>text.push(s.join(' ')),table:(cols,rows)=>text.push(...rows.map(r=>r.cells.join(' '))),buttons:items=>actions.push(...items),button:(label,click)=>actions.push({label,click}),record:(...s)=>text.push(s.slice(0,2).join(' '))};}
@@ -74,7 +74,11 @@ test('a requested repaint autonomously travels to the workshop and completes dur
 });
 test('buyers choose a preferred vehicle color when type, price and availability are equal',()=>{
   const city=fixture(),system=city.vehicles,shop=city.buildings.find(b=>b.type==='cycle_shop'),owners=new Set([...system.units.values()].filter(v=>v.active).map(v=>v.ownerAccountId)),c=city.citizens.find(c=>city.society.isAdult(c)&&!owners.has(c.accountId)&&!city.politics.officeHolder(c));
-  const colors=favoriteColors(c),preferred=colors.find(color=>!c.dislikedColors.includes(color.hex)),rejected=colors.find(color=>c.dislikedColors.includes(color.hex));city.transfer('treasury',c.accountId,2200000,'Fixture purchasing power');for(const person of city.citizens)person.mobilityNeed=person===c?100:0;shop.inventory.bicicleta=2;system.registerUnits(shop,'bicicleta',2);const units=[...system.units.values()].filter(v=>!v.active&&v.holderAccountId===shop.accountId);units[0].color=rejected.hex;units[1].color=preferred.hex;
+  const colors=favoriteColors(c),preferred=colors.find(color=>!c.dislikedColors.includes(color.hex)),rejected=colors.find(color=>c.dislikedColors.includes(color.hex));city.transfer('treasury',c.accountId,2200000,'Fixture purchasing power');for(const person of city.citizens)person.mobilityNeed=person===c?100:0;
+  // Keep the comparison to these two offers; other starter stock would be
+  // purchased first and end the citizen's current mobility need episode.
+  for(const v of system.units.values())if(!v.active&&!v.scrapped&&v.holderAccountId!==shop.accountId){const seller=city.building(v.holderAccountId);if(seller)seller.inventory[v.good]=Math.max(0,(seller.inventory[v.good]||0)-1);v.scrapped=true;}
+  shop.inventory.bicicleta=2;system.registerUnits(shop,'bicicleta',2);const units=[...system.units.values()].filter(v=>!v.active&&v.holderAccountId===shop.accountId);units[0].color=rejected.hex;units[1].color=preferred.hex;
  system.lastHour=null;system.hourly();assert.equal(units[1].ownerAccountId,c.accountId);assert.notEqual(units[0].ownerAccountId,c.accountId);
 });
 test('a home buyer prefers their favored wall color among equally priced properties',()=>{

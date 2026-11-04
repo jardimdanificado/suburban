@@ -31,7 +31,7 @@ export function streetSurfacePixels(style,variant=0,size=style.startsWith('sidew
           if(d<nearest){second=nearest;nearest=d;nearestStone=stone;}else if(d<second)second=d;
         }
         const seam=second-nearest,boundaryNoise=(hash(Math.floor(x/2),Math.floor(y/2),variant+701)-.5)*.72,joint=seam<.82+boundaryNoise;
-        const stoneTone=nearestStone<.14?[103,111,124]:nearestStone<.43?[117,125,138]:nearestStone<.76?[133,142,153]:[151,154,148];
+        const stoneTone=nearestStone<.14?[103,111,124]:nearestStone<.43?[117,125,138]:nearestStone<.76?[133,142,153]:[177,180,174];
         const base=joint?[100,108,120]:stoneTone,grain=(fine-.5)*7+(hash(gx,gy,variant+503)-.5)*5;
         const fleck=fine>.992?9:fine<.012?-7:0,bevel=clamp(seam/2.4),light=joint?1:.92+bevel*.08;
         data[p]=base[0]*light+grain+fleck;data[p+1]=base[1]*light+grain*.88+fleck*.84;data[p+2]=base[2]*light+grain*.7+fleck*.62;

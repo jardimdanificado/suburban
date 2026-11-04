@@ -25,15 +25,15 @@ test('bridges reject endpoints outside the map and accept a valid bank-to-bank s
  assert.equal(dev.beginBridge('treasury',{x:29,y:30},{x:64,y:30}),null);
  assert(dev.beginBridge('treasury',{x:29,y:30},{x:32,y:30}));
 });
-class Group{constructor(){this.children=[];}add(m){this.children.push(m);}traverse(fn){for(const c of this.children)fn(c);}}
-class Mesh{constructor(geometry,material){Object.assign(this,{geometry,material,position:{set:(...p)=>this.xyz=p}});}}
+class Group{constructor(){this.children=[];this.userData={};this.visible=true;}add(m){this.children.push(m);}traverse(fn){fn(this);for(const c of this.children)c.traverse?c.traverse(fn):fn(c);}}
+class Mesh{constructor(geometry,material){Object.assign(this,{geometry,material,userData:{},visible:true,position:{set:(...p)=>this.xyz=p}});}}
 class Geometry{constructor(...args){this.args=args;}dispose(){}}
 class Material{dispose(){}}
-const THREE={Group,Mesh,BoxGeometry:Geometry,MeshLambertMaterial:Material};
+const THREE={Group,Mesh,BoxGeometry:Geometry,SphereGeometry:Geometry,MeshLambertMaterial:Material};
 test('bridge decks use the absolute walkable height and never draw out-of-map tiles',()=>{
  const {world}=fixture();world.roadBridges=[{axis:'x',height:.8,tiles:[{x:30,y:30},{x:31,y:30},{x:-1,y:30}]}];
  const renderer={scene:{add(){},remove(){}}};syncRoadBridges(renderer,THREE,world);
- const decks=renderer.roadBridgeGroup.children.filter(m=>m.geometry.args[1]===.2);assert.equal(decks.length,2);
+ const decks=[];renderer.roadBridgeGroup.traverse(m=>{if(m.geometry?.args?.[1]===.2)decks.push(m);});assert.equal(decks.length,2);
  for(const deck of decks)assert(Math.abs(deck.xyz[1]+.1-.8)<1e-9);
- assert(renderer.roadBridgeGroup.children.every(m=>m.xyz[0]>=0&&m.xyz[0]<world.width));
+ const positioned=[];renderer.roadBridgeGroup.traverse(m=>{if(m.xyz)positioned.push(m);});assert(positioned.every(m=>m.xyz[0]>=0&&m.xyz[0]<world.width));
 });

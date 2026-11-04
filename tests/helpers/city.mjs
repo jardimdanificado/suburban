@@ -64,7 +64,25 @@ export function finishShipment(city, shipment) {
   }
   if (shipment.status !== 'delivered') throw Error(`Shipment ${shipment.id} did not arrive: ${shipment.status}, carrier ${shipment.carrierId}, driver ${shipment.driverId}, candidates ${city.logistics.candidates(shipment).map(c=>c.id).join(',')}, minute ${city.minute}`);
 }
-export const totalMoney = city => [...city.accounts.values()].reduce((sum, a) => sum + a.balance, 0);
+/** Add an explicit business to a test city when the live starter layout does not include that industry. */
+export function ensureBusiness(city,type,{crop=type==='farm'?'trigo':null,budget=500000,worker=true,buildingOptions={}}={}){
+  let building=city.economy.businesses.find(b=>b.type===type&&!b.entity.destroyed);
+  if(!building){
+    const site=city.economy.locateBuilding(type).find(s=>!city.development.overlaps(s.x,s.y,s.width,s.depth));
+    if(!site)throw Error(`No valid fixture site for ${type}`);
+    building=city.addBuilding(type,site.x,site.y,{...site,...buildingOptions,free:true});
+    if(!building)throw Error(`Could not create fixture business ${type}: ${city.lastError||'unknown error'}`);
+    city.economy.activateMunicipalBusiness(building,budget,crop);
+  }
+  if(worker&&!building.workers.length){
+    const citizen=city.citizens.find(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.jobId&&!c.businessIds.length);
+    if(citizen){citizen.jobId=building.id;citizen.profession=city.economy.jobSkill(building);building.workers.push(citizen.id);}
+  }
+  return building;
+}
+// External accounts are counterparties, not part of the local money supply.
+// Their balances may be represented by an effectively unlimited sentinel.
+export const totalMoney = city => [...city.accounts.values()].reduce((sum, a) => sum + (a.externalMoney ? 0 : a.balance), 0);
 
 /** Complete an explicitly requested indoor/outdoor route without running unrelated systems. */
 export function finishActivityRoute(city,c){

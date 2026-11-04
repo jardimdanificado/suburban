@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup} from './helpers/city.mjs';
+import {setup,ensureBusiness} from './helpers/city.mjs';
 import {electPartyLeader} from '../js/city_party_leadership.js';
 import {syncCorruptionVotes} from '../js/city_corruption_votes.js';
 import {workCellReady,advanceCitizenInterior} from '../js/city_interiors.js';
@@ -19,7 +19,7 @@ test('only informed voters remember the votes on a proven corruption case, inclu
 });
 
 test('work moves between available indoor work cells and does not produce while in transit',()=>{
- const city=setup({starter:true,population:128}),b=city.buildings.find(b=>b.type==='paintworks'),c=city.society.citizen(b.workers[0]);c.path=[];c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='work';c.targetId=b.id;c.indoorLocation=null;c.workCell=null;
+ const city=setup({starter:true,population:128}),b=ensureBusiness(city,'paintworks',{buildingOptions:{floors:1}}),c=city.society.citizen(b.workers[0]);c.path=[];c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='work';c.targetId=b.id;c.indoorLocation=null;c.workCell=null;
  workCellReady(city,c,b);advanceCitizenInterior(city,c,100);assert(workCellReady(city,c,b));const first=c.indoorLocation.unitId;c.nextWorkRotationAt=city.minute;assert.equal(workCellReady(city,c,b),false);assert.notEqual(c.indoorLocation.targetUnitId,first);assert(c.indoorLocation.path.length);
 });
 

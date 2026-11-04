@@ -34,7 +34,7 @@ test('savings and contract reserves belong to the client; loan claims cancel deb
  assert.equal(r.totals.money,before);near([...r.direct.values()].reduce((n,a)=>n+a.net,0),r.totals.gross);
 });
 test('incoming reservations do not create stock; cargo stays owned by seller until settlement',()=>{
- const c=fixture(),seller=c.buildings.find(b=>b.type==='farm'),buyer=c.buildings.find(b=>b.type==='mill'),good='trigo';
+ const c=fixture(),seller=c.buildings.find(b=>b.type==='quarry'),buyer=c.buildings.find(b=>b.type==='cycle_assembler'),good='pedra';
  seller.inventory[good]=10;buyer.inventory[good]=0;buyer.incoming[good]=0;
  const base=buildWealthReport(c),total=base.goods.find(g=>g.good===good).quantity;
  seller.inventory[good]-=3;buyer.incoming[good]=3;
@@ -49,7 +49,7 @@ test('active cycles are valued separately, displayed stock models are not counte
  assert.equal(r.assets.filter(a=>a.kind==='vehicles').length,[...c.vehicles.units.values()].filter(v=>v.active&&!v.scrapped).length);
 });
 test('commercial journal records only successful trades with true buyers and survives payroll churn',()=>{
- const c=fixture(),a=c.citizens[0],b=c.buildings.find(b=>b.type==='mill');c.marketHistory=[];
+ const c=fixture(),a=c.citizens[0],b=c.buildings.find(b=>b.type==='cycle_assembler');c.marketHistory=[];
  assert.equal(marketKind('Compra negociada de terreno para obra pública'),'property');assert.equal(marketKind('Reserva de compra e frete'),null);assert.equal(marketKind('Compra de voto'),null);
  assert(c.transfer(a.accountId,b.accountId,100,'Serviço: Venda de trigo',{good:'trigo',quantity:2}));
  assert.equal(c.marketHistory.length,1);assert.equal(c.marketHistory[0].good,'trigo');assert.equal(c.marketHistory[0].quantity,2);
@@ -69,7 +69,7 @@ test('construction and sanitation settlements identify the real contracting part
  c.accounts.set('clean:test',{balance:1000});c.sanitation.jobs.push({accountId:'clean:test',payerId:a.accountId});c.transfer('clean:test',b.accountId,100,'Serviço de limpeza');assert.equal(c.marketHistory.at(-1).buyer,a.accountId);
 });
 test('journal and wealth remain accessible after worker graph synchronization',()=>{
- const c=fixture(),a=c.citizens[0],b=c.buildings.find(b=>b.type==='mill');c.transfer(a.accountId,b.accountId,100,'Serviço: Venda',{good:'trigo',quantity:1});
+ const c=fixture(),a=c.citizens[0],b=c.buildings.find(b=>b.type==='cycle_assembler');c.transfer(a.accountId,b.accountId,100,'Serviço: Venda',{good:'trigo',quantity:1});
  const source=new CityStateGraph(),target=new CityStateGraph(),copy=target.apply(source.encode({city:c})).city;bindCityState(copy);const r=buildWealthReport(copy);assert.equal(r.sales[0].buyer,a.accountId);assert.equal(r.sales[0].good,'trigo');assert.equal(r.totals.money,totalMoney(c));
  c.transfer(a.accountId,b.accountId,120,'Serviço: Venda',{good:'feijao',quantity:2});const updated=target.apply(source.encode({city:c})).city;bindCityState(updated);assert.equal(buildWealthReport(updated).sales[0].good,'feijao');
 });
@@ -78,7 +78,7 @@ test('inequality handles empty cities, zero and negative wealth; report caching 
  const c=fixture(),a=wealthReport(c,0);assert.equal(wealthReport(c,100),a);assert.notEqual(wealthReport(c,751),a);
 });
 test('all market tabs and details render and expose working navigation without simulation mutations',()=>{
- const c=fixture(),a=c.citizens[0],b=c.buildings.find(b=>b.type==='mill');c.transfer(a.accountId,b.accountId,100,'Serviço: Venda',{good:'trigo',quantity:1});const before=totalMoney(c),report=buildWealthReport(c),actions=[],text=[];
+ const c=fixture(),a=c.citizens[0],b=c.buildings.find(b=>b.type==='cycle_assembler');c.transfer(a.accountId,b.accountId,100,'Serviço: Venda',{good:'trigo',quantity:1});const before=totalMoney(c),report=buildWealthReport(c),actions=[],text=[];
  const ui={city:c,query:'',current:'overview',view(){return this.current;},matches:()=>true,remember(){},resetScroll(){},camera(){},openCitizen(){},openBuilding(){},openEvent(){},openPanel(){},section(p,k,t,fn){fn(p);}};
  const p={heading:s=>text.push(s),note:s=>text.push(s),kv(){},metrics(){},meters(){},button:(label,click)=>actions.push({label,click}),buttons:items=>actions.push(...items),record:(title,subtitle,click)=>actions.push({label:title,click})};
  for(const view of ['overview','people','companies','locations','goods','sales']){ui.current=view;renderMarket(ui,p);}

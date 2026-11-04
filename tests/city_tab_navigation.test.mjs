@@ -12,7 +12,7 @@ function harness(width=1440) {
   const ui=new ManagementCanvasUI({style:{},clientWidth:width,clientHeight:900,getContext:()=>ctx});
   const desktop=new CityDesktop({city,root:{append(){}},select:entity=>desktop.setSelection(entity),camera(){}});
   const draw=()=>{ui.beginFrame();desktop.drawChrome(ui);desktop.draw(ui);};
-  const click=label=>{draw();const tab=ui.regions.findLast(r=>r.label===label);assert(tab,`Visible control: ${label}`);assert.equal(ui.hitTest(tab.x+tab.w/2,tab.y+tab.h/2),tab);ui.clickAt(tab.x+tab.w/2,tab.y+tab.h/2);};
+  const click=label=>{draw();const tab=ui.regions.findLast(r=>r.label?.toLocaleLowerCase('pt-BR')===label.toLocaleLowerCase('pt-BR'));assert(tab,`Visible control: ${label}`);assert.equal(ui.hitTest(tab.x+tab.w/2,tab.y+tab.h/2),tab);ui.clickAt(tab.x+tab.w/2,tab.y+tab.h/2);};
   return {city,desktop,ui,draw,click};
 }
 
@@ -27,7 +27,8 @@ test('visible tabs switch content in the same module window',()=>{
 test('government sections and their subviews reuse the government window',()=>{
   const h=harness(),state=h.desktop.openDestination('government','elections',{politicsTab:'approval'}),count=h.desktop.manager.windows.length;
   h.click('DESDE A POSSE');assert.equal(state.approvalView,'changes');
-  h.click('Câmara');assert.equal(state.politicsTab,'council');
+  h.click('POLÍTICA');
+  state.openPanel({politicsTab:'council'});assert.equal(state.politicsTab,'council');
   state.openPanel({councilView:'members'});assert.equal(state.councilView,'members');
   h.click('TESOURO');assert.equal(state.view(),'finance');
   assert.equal(h.desktop.openDestination('government','contracts'),state);

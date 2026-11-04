@@ -45,15 +45,18 @@ export class CityWorkMeals {
     }
     return false;
   }
+  constructionSite(holder) { return !!holder&&this.city.development.projects.includes(holder)&&!holder.cancelled&&holder.status!=='completed'; }
+  mealSiteReady(holder) { return this.constructionSite(holder)||this.hasFullDiningFloor(holder); }
   site(c, employer) {
     if (c.task === 'workmeal' && c.mealTargetId) return this.city.development.projects.find(p => p.id === c.mealTargetId && !p.cancelled && p.status !== 'completed') || employer;
+    if (!employer) return null;
     const project = this.city.development.projects.find(p => p.id === c.workProjectId && !p.cancelled && p.status !== 'completed' && p.builderId === employer.id);
     return c.task === 'construction' && project ? project : employer;
   }
   routeToMeal(c) {
     if(this.city.minute<(c.mealRetryAt||0))return false;
-    const b = this.employer(c); if (!b || !this.hasFullDiningFloor(b)) return false;
-    const sites = [b, ...this.city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed')].filter(s => { if(!this.hasFullDiningFloor(s))return false;const offer = this.offer(s, c); return offer && (c.needs.food < 18 || !this.city.buildings.some(shop => this.city.economy.mealScore(c, shop) < Math.hypot(s.door.x - c.entity.x, s.door.y - c.entity.y) - this.city.economy.mealTaste(c, offer) * 45)); }).sort((a, d) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(d.door.x - c.entity.x, d.door.y - c.entity.y));
+    const b = this.employer(c); if (!b) return false;
+    const sites = [b, ...this.city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed')].filter(s => { if(!this.mealSiteReady(s))return false;const offer = this.offer(s, c); return offer && (c.needs.food < 18 || !this.city.buildings.some(shop => this.city.economy.mealScore(c, shop) < Math.hypot(s.door.x - c.entity.x, s.door.y - c.entity.y) - this.city.economy.mealTaste(c, offer) * 45)); }).sort((a, d) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(d.door.x - c.entity.x, d.door.y - c.entity.y));
     for (const site of sites) {
       const path = this.city.findPath(c.entity, site.door); if (path === null) continue;
       c.task = 'workmeal'; c.targetId = b.id; c.mealTargetId = site.id; c.path = path; return true;
@@ -61,7 +64,7 @@ export class CityWorkMeals {
     return false;
   }
   tryStart(c) {
-    if(c.task==='workmeal'&&!c.workMeal&&!this.hasFullDiningFloor(this.employer(c))){c.task=null;c.targetId=null;c.path=[];c.mealResume=null;c.mealTargetId=null;c.mealWaitSince=null;return false;}
+    if(c.task==='workmeal'&&!c.workMeal&&!this.mealSiteReady(this.site(c,this.employer(c)))){c.task=null;c.targetId=null;c.path=[];c.mealResume=null;c.mealTargetId=null;c.mealWaitSince=null;return false;}
     if(c.mobilityTrip||c.ridingVehicleId)return false;
     if (c.workMeal) return true;
     // An optional meal must not interrupt drinking, treatment or other urgent travel.
@@ -70,23 +73,24 @@ export class CityWorkMeals {
     if(this.city.minute<(c.mealRetryAt||0))return false;
     if(c.needs.food>=WORK_MEAL_RULES.foodThreshold||c.conversation)return false;
     const b = this.employer(c);
-    if (!b || !this.hasFullDiningFloor(b)) {
+    if (!b || !this.mealSiteReady(this.site(c,b))) {
       if(c.task==='workmeal'){c.task=null;c.targetId=null;c.path=[];c.mealResume=null;c.mealTargetId=null;c.mealWaitSince=null;}
       return false;
     }
     const holder = this.site(c, b);
-    if(!this.hasFullDiningFloor(holder))return false;
+    const outdoorSite=this.constructionSite(holder);
+    if(!this.mealSiteReady(holder))return false;
     const atFarm=holder.type==='farm'&&c.entity.x>=holder.entity.x-1&&c.entity.x<=holder.entity.x+holder.width+1&&c.entity.y>=holder.entity.y-1&&c.entity.y<=holder.entity.y+holder.depth+1;
     if(!atFarm&&Math.hypot(c.entity.x-holder.door.x,c.entity.y-holder.door.y)>2&&!c.indoorLocation)return false;
     const offer = this.offer(holder, c); if (!offer) return false;
     if(c.task!=='workmeal'){c.mealResume={task:c.task,targetId:c.targetId,workProjectId:c.workProjectId};c.task='workmeal';c.path=[];c.targetId=b.id;c.mealTargetId=holder.id;}
     if(c.path.length)return true;
-    if(!syncCitizenInterior(this.city,c)){
+    if(!outdoorSite&&!syncCitizenInterior(this.city,c)){
       c.mealWaitSince??=this.city.minute;
       if(this.city.minute-c.mealWaitSince>=30&&!c.indoorLocation?.targetUnitId){c.mealWaitSince=null;c.mealRetryAt=this.city.minute+90;c.task=null;c.targetId=null;c.path=[];c.mealResume=null;return false;}
       return true;
     }
-    if(c.indoorLocation?.buildingId!==holder.id||c.indoorLocation?.roomType!=='dining'||c.indoorLocation?.path?.length)return true;
+    if(!outdoorSite&&(c.indoorLocation?.buildingId!==holder.id||c.indoorLocation?.roomType!=='dining'||c.indoorLocation?.path?.length))return true;
     c.mealWaitSince=null;
     this.city.economy.enjoyMeal(c, offer, false);
     for (const [good, amount] of Object.entries(offer.inputs)) { holder.inventory[good] -= amount; this.city.economy.consumed[good] += amount; this.city.economy.recordGoods('workplace-meal', good, amount, holder.id, c.id); }
@@ -122,8 +126,8 @@ export class CityWorkMeals {
     const employers = city.buildings.filter(b => b.active && !b.entity.destroyed && b.workers.length);
     const suppliers = city.buildings.filter(b => b.active && !b.entity.destroyed && ['market', 'greengrocer', 'bakery', 'popular_refectory', 'townhall'].includes(b.type));
     for (const b of employers) {
-      if (b.type && !this.hasFullDiningFloor(b)) continue;
       const projects = city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed' && p.requiredLabor - p.labor >= 30);
+      if (b.type && !this.hasFullDiningFloor(b) && !projects.length) continue;
       const sites = [b, ...projects];
       for (const holder of sites) {
         const target = holder === b && projects.length ? 6 : Math.max(9, Math.ceil(b.workers.length / Math.max(1, projects.length)) * WORK_MEAL_RULES.stockPerWorker);
