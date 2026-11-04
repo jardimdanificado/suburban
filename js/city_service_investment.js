@@ -1,5 +1,6 @@
 import {businessFloors} from './city_business_heights.js';
 import { inspectBuildingSite } from './city_terrain.js?v=quarry-outskirts-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=cleaner-capacity-1';
 
 export const ESSENTIAL_SERVICES = new Set(['quarry','builder', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'composting']);
 
@@ -32,7 +33,7 @@ export class CityServiceInvestment {
       const dirty = [...city.sanitation.facilities.values()].filter(f => f.cleanliness < 65);
       const feces=[...city.sanitation.streetFeces.values(),...city.buildings.flatMap(b=>[...(b.feces?.values()||[])])];
       count = dirty.length+feces.length;
-      work = dirty.reduce((n,f) => n+20+(f.cleanliness < 25 ? 30 : 15),0)+feces.reduce((n,p)=>n+12+Math.max(0,p.amount-1)*8,0);
+      work = dirty.length*SANITATION_RULES.bathroomCleaningLabor+feces.reduce((n,p)=>n+SANITATION_RULES.fecesCleaningBaseLabor+Math.max(0,p.amount-1)*SANITATION_RULES.fecesCleaningExtraLabor,0);
       oldest = Math.max(dirty.reduce((n,f) => Math.max(n,city.minute-f.lastCleanedAt),0),city.sanitation.jobs.filter(j=>j.kind==='feces'&&!['completed','cancelled'].includes(j.status)).reduce((n,j)=>Math.max(n,city.minute-j.createdAt),0));
     } else {
       const projects = city.development.projects.filter(p => !p.cancelled && p.status !== 'completed');

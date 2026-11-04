@@ -28,21 +28,21 @@ import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=central-import-depot-1';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=injury-idle-fast-path-1';
+import { CityJustice } from './city_justice.js?v=corpse-interior-recovery-1';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency } from './city_currency.js';
 import { CityHousing } from './city_housing.js?v=housing-investment-index-1';
-import { CitySanitation } from './city_sanitation.js?v=secretariat-portfolios-1';
+import { CitySanitation } from './city_sanitation.js?v=cleaner-capacity-1';
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment } from './city_development.js?v=secretariat-portfolios-1';
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
 import { CityGigs } from './city_gigs.js?v=secretariat-portfolios-1';
-import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=central-import-depot-1';
+import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=cleaner-capacity-1';
 import { CitySociety } from './city_society.js?v=conversation-cost-profile-2';
-import { CityServiceInvestment } from './city_service_investment.js?v=service-investment-founder-index-1';
+import { CityServiceInvestment } from './city_service_investment.js?v=cleaner-capacity-1';
 import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';
 
 const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,

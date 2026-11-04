@@ -38,12 +38,12 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-3';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js?v=secretariat-portfolios-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=cleaner-capacity-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=central-import-depot-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=cleaner-capacity-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
 import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=central-import-depot-1';
@@ -980,7 +980,7 @@ export class CityUI {
       p.table([{label:'Pessoa',weight:2},{label:'Etapa',weight:1.5},{label:'Causa',weight:1.5},{label:'Deterioração'},{label:'Local atual',weight:2}],bodies.filter(b=>this.matches(`${b.name} ${b.cause} ${bodyStage[b.status]||b.status}`)).map(b=>({cells:[b.name,b.action||bodyStage[b.status]||b.status,b.autopsy?.cause||'Aguardando autópsia',`${Math.round(b.decomposition||0)}%`,`${Math.floor(b.entity.x)}, ${Math.floor(b.entity.y)}${b.currentInterior?` · ${b.currentInterior.floor+1}º andar`:''}`],click:()=>this.camera(b.entity.x,b.entity.y),color:b.status==='waiting'?C.red:C.gold})),{empty:'Não há corpos aguardando atendimento.'});
       const reports=justice?.bodies.filter(b=>b.autopsy).slice(-50).reverse()||[];
       if(reports.length){p.heading('LAUDOS DO IML');p.table([{label:'Pessoa',weight:1.5},{label:'Conclusão',weight:2},{label:'Óbito estimado',weight:2},{label:'Processo'}],reports.map(b=>({cells:[b.name,b.autopsy.cause,b.autopsy.deathWindow?`${stamp(b.autopsy.deathWindow.from)} a ${stamp(b.autopsy.deathWindow.to)}`:stamp(b.autopsy.estimatedDeathMinute),b.criminalCaseId?`Caso #${b.criminalCaseId}`:'Sem indício criminal'],color:b.autopsy.suspicious?C.red:C.gray,click:b.criminalCaseId?()=>this.openPanel({tab:'city',views:{city:'arts'},selected:null}):()=>{}})));}
-      const pendingCases=justice?.cases.filter(c=>!['closed','dismissed','acquitted','decriminalized'].includes(c.status))||[];if(pendingCases.length){p.heading('OCORRÊNCIAS E INVESTIGAÇÕES');for(const record of pendingCases)p.record(`#${record.id} · ${record.type}`,`${record.status} · severidade ${record.severity}`,()=>{});}
+      const deceasedIds=new Set(city.life.deaths.map(death=>death.citizenId)),deathCases=justice?.cases.filter(record=>deceasedIds.has(record.victimId)&&!['closed','dismissed','acquitted','decriminalized'].includes(record.status))||[];if(deathCases.length){p.heading('PROCESSOS RELACIONADOS ÀS MORTES');for(const record of deathCases)p.record(`#${record.id} · ${record.type}`,`${record.status} · severidade ${record.severity}`,()=>{});}
       return;
     }
     if(view==='queues'){
@@ -1038,7 +1038,7 @@ export class CityUI {
     const selected=system.facilities.get(this.selectedFacilityId);
     if(selected){
       const f=selected,b=city.building(f.buildingId),interval=f.access==='public'?SANITATION_RULES.freeCleaningInterval:f.access==='paid'?SANITATION_RULES.paidCleaningInterval:SANITATION_RULES.privateCleaningInterval;
-      p.heading('BANHEIRO SELECIONADO',C.cyan);p.kv('Prédio',name(b?.entity));if(f.homeId)p.kv('Moradia',this.homeLabel(f.homeId));p.kv('Acesso',access[f.access]);p.meter('Limpeza',f.cleanliness);p.kv('Utilizações',f.uses);p.kv('Última limpeza',stamp(f.lastCleanedAt));p.kv('Próxima limpeza permitida',stamp(f.lastCleanedAt+interval));p.kv('Serviço',f.cleaningJobId?`Faxina ${f.cleaningJobId}`:'Sem solicitação');
+      p.heading('BANHEIRO SELECIONADO',C.cyan);p.kv('Prédio',name(b?.entity));if(f.homeId)p.kv('Moradia',this.homeLabel(f.homeId));p.kv('Acesso',access[f.access]);p.meter('Limpeza',f.cleanliness);p.kv('Utilizações',f.uses);p.kv('Última limpeza',stamp(f.lastCleanedAt));p.kv('Próxima limpeza permitida',f.access==='public'?'Quando cair abaixo de 60% (vistoria horária)':stamp(f.lastCleanedAt+interval));p.kv('Serviço',f.cleaningJobId?`Faxina ${f.cleaningJobId}`:'Sem solicitação');
       if(b)p.button('ABRIR INSTALAÇÃO',()=>{this.select(b.entity);this.unitId=f.unitId;this.detailTab='units';});
     }
     p.heading('CONDIÇÃO DOS BANHEIROS');

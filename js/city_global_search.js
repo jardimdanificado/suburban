@@ -2,7 +2,7 @@ import {MANAGEMENT_THEME} from './management_ui.js';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {PLANT_SPECIES} from './city_nature.js?v=tropicalia-flora-3';
 import {POLITICS_SECTIONS} from './city_ui_sections.js';
-import {CityUI,TABS, VIEWS, FILTERS} from './city_ui.js?v=central-import-depot-1';
+import {CityUI,TABS, VIEWS, FILTERS} from './city_ui.js?v=sanitation-death-classification-1';
 import {BUILDING_TYPES} from './city_simulation.js?v=central-import-depot-1';
 
 export const normalizeSearch = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();

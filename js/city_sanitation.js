@@ -1,7 +1,7 @@
 import {activityRoomReady,activityCellAvailable} from './city_interiors.js?v=substances-sleep-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js?v=housing-investment-index-1';
-export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 7 * 1440, paidCleaningInterval: 180, privateCleaningInterval: 1440, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
+export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 0, paidCleaningInterval: 180, privateCleaningInterval: 1440, bathroomCleaningLabor:12, fecesCleaningBaseLabor:8, fecesCleaningExtraLabor:4, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 export class CitySanitation {
   constructor(city) { this.city = city; this.facilities = new Map(); this.jobs = []; this.streetFeces = new Map(); this.fecesRevision=0; this.nextJobId = 1; this.cleaned = 0; this.cleanedFeces=0; this.collected = 0; }
@@ -256,7 +256,7 @@ export class CitySanitation {
         this.city.payWage(c, employer);
       }
       job.labor += 1 + (c.skills.cleaning || 0) / 50; c.action = 'Limpando banheiro'; this.city.economy.practice(c, 'cleaning');
-      if (job.labor >= 20) {
+      if (job.labor >= SANITATION_RULES.bathroomCleaningLabor) {
         f.cleanliness = 100; f.lastCleanedAt = this.city.minute; f.cleaningJobId = null; this.cleaned++;
         this.city.transfer(job.accountId, employer?.accountId || 'treasury', job.fee, 'Serviço de limpeza', {jobId:job.id});
         if (this.city.accounts.get(job.payerId)?.entity?.properties.cityBuilding) this.city.accounts.get(job.payerId).totalExpenses += job.fee;
@@ -302,7 +302,7 @@ export class CitySanitation {
       const environmentalSkill=city.politics?.secretaries?.find(row=>row.officeId==='environment')?.skill||0;job.labor+=1+(worker.skills.cleaning||0)/50+(job.scope==='street'?environmentalSkill/200:0);worker.action=job.scope==='street'?'Limpando fezes da via pública':'Limpando fezes do prédio';city.economy.practice(worker,'cleaning');
       // New deposits must not keep moving the finish line of an existing job.
       const quantity=Math.min(pile.amount,job.quantity??=Math.min(20,pile.amount));
-      if(job.labor<12+Math.max(0,quantity-1)*8)continue;
+      if(job.labor<SANITATION_RULES.fecesCleaningBaseLabor+Math.max(0,quantity-1)*SANITATION_RULES.fecesCleaningExtraLabor)continue;
       if(inventoryFree(company)<quantity)continue;company.inventory.fezes+=quantity;city.economy.produced.fezes+=quantity;city.economy.recordGoods('feces-collected','fezes',quantity,site?.id,company.id);
       pile.amount-=quantity;pile.jobId=null;
       if(job.scope==='building'){if(pile.amount<=0)site.feces.delete(job.cellKey);site.fecesRevision=(site.fecesRevision||0)+1;}else if(pile.amount<=0)this.streetFeces.delete(job.cellKey);this.fecesRevision++;this.cleanedFeces+=quantity;

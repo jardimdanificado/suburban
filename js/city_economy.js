@@ -16,7 +16,7 @@ import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClot
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
-import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=service-investment-founder-index-1';
+import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=cleaner-capacity-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=quarry-outskirts-1';
 import { inventoryFree, inventoryUsed, initializeInventory } from './city_inventory.js';
@@ -119,7 +119,7 @@ export class CityEconomy {
     b.mealQuality = b.type === 'popular_refectory' ? 2 : b.type === 'restaurant' ? 3 : 1;
     b.totalRevenue = 0; b.totalExpenses = 0; b.dividends = 0;
     b.foundedAt = null; b.lastSaleAt = this.city.minute; b.stockouts = 0;
-    b.jobs = ({ mill: 2, mint: 1, residential: 0, super_popular_housing: 0, popular_housing: 0, popular_luxury_housing: 0, luxury_housing: 0, popular_refectory: 4, restaurant: 6, townhall: 2, iml:3, crematorium:2,police_station:6,council_oversight_office:3,jail:5,courthouse:5, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2, lamp_service: 2, cleaner: 2, waste_collector: 2, recycler: 2, paid_toilet: 1, public_toilet: 0 })[b.type] ?? CIVIC_SERVICES[b.type]?.jobs ?? INDUSTRIES[b.type]?.jobs ?? 0;
+    b.jobs = ({ mill: 2, mint: 1, residential: 0, super_popular_housing: 0, popular_housing: 0, popular_luxury_housing: 0, luxury_housing: 0, popular_refectory: 4, restaurant: 6, townhall: 2, iml:3, crematorium:2,police_station:6,council_oversight_office:3,jail:5,courthouse:5, clinic: 2, utility: 2, leisure: 1, farm: 1, bakery: 2, market: 2, greengrocer: 2, builder: 3, quarry: 2, carrier: 2, lamp_service: 2, cleaner: 3, waste_collector: 2, recycler: 2, paid_toilet: 1, public_toilet: 0 })[b.type] ?? CIVIC_SERVICES[b.type]?.jobs ?? INDUSTRIES[b.type]?.jobs ?? 0;
     b.jobs=businessJobCapacity(b.type,b.jobs,b.floors);
     b.baseWage = b.type === 'farm' || b.type === 'quarry' ? 8 : b.type === 'bakery' || b.type === 'builder' || b.type === 'carrier' ? 6 : 5;
     if (b.type === 'townhall') b.baseWage = 7;
@@ -267,6 +267,7 @@ export class CityEconomy {
     const activeCitizens = this.city.citizens.filter(c => !c.entity.destroyed);
     const population = activeCitizens.length;
     const businesses = this.businesses;
+    for(const b of businesses)if(b.type==='cleaner')b.jobs=Math.max(b.jobs||0,businessJobCapacity('cleaner',3,b.floors));
     const farms = businesses.filter(b => b.type === 'farm');
     const buyers = businesses.filter(b => retailTypes.has(b.type));
     const industrialBusinesses = businesses.filter(b => INDUSTRIES[b.type]);
