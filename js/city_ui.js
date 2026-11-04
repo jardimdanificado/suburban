@@ -35,7 +35,7 @@ import { PREJUDICE_TYPES, initializePrejudices } from './city_prejudice.js?v=dis
 import { describePoliticalOrientation, POLITICAL_POSITIONS } from './city_ideology.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=sertanejo-house-styles-1';
 import { REPUTATION_LABELS } from './city_reputation.js';
-import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-1';
+import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-3';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js?v=survival-capacity-1';

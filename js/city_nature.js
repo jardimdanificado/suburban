@@ -32,14 +32,14 @@ export const PLANT_SPECIES = {
   berry: { label: 'Amoreira', color: 0x73934c, grow: 1440, wood: 0, terrain: [0,9] },
   monstera: { label:'Costela-de-adão', scientific:'Monstera deliciosa', color:0x39794c, grow:3*1440, wood:0, tree:true, form:'broad_leaf', renderSize:.78, terrain:[0,9] },
   guaimbe: { label:'Guaimbê', scientific:'Philodendron bipinnatifidum', color:0x4f8250, grow:3*1440, wood:0, tree:true, form:'broad_leaf', renderSize:.82, terrain:[0,9] },
-  traveller_palm: { label:'Árvore-do-viajante', scientific:'Ravenala madagascariensis', color:0x5b934a, grow:5*1440, wood:0, tree:true, form:'palm', renderSize:1.15, terrain:[0,9] },
+  traveller_palm: { label:'Árvore-do-viajante', scientific:'Ravenala madagascariensis', color:0x5b934a, grow:5*1440, wood:0, tree:true, form:'fan_palm', renderSize:1.15, terrain:[0,9] },
   zebra_maranta: { label:'Maranta-zebrina', scientific:'Goeppertia zebrina', color:0x66834a, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
   croton: { label:'Cróton', scientific:'Codiaeum variegatum', color:0x8c7340, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
   watermelon_calathea: { label:'Calatéia-melancia', scientific:'Goeppertia roseopicta', color:0x59764a, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
   heliconia_rostrata: { label:'Helicônia-papagaio', scientific:'Heliconia rostrata', color:0x53853f, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
   red_ginger: { label:'Alpínia-vermelha', scientific:'Alpinia purpurata', color:0x4c8142, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
   bird_of_paradise: { label:'Ave-do-paraíso', scientific:'Strelitzia reginae', color:0x507f45, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  licuala_palm: { label:'Palmeira-leque', scientific:'Licuala grandis', color:0x498346, grow:5*1440, wood:0, tree:true, form:'palm', renderSize:.9, terrain:[0,9] },
+  licuala_palm: { label:'Palmeira-leque', scientific:'Licuala grandis', color:0x498346, grow:5*1440, wood:0, tree:true, form:'fan_palm', renderSize:.9, terrain:[0,9] },
   areca_palm: { label:'Areca-bambu', scientific:'Dypsis lutescens', color:0x688e43, grow:4*1440, wood:0, tree:true, form:'palm', renderSize:1.05, terrain:[0,9] },
   torch_ginger: { label:'Bastão-do-imperador', scientific:'Etlingera elatior', color:0x4d8143, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
   imperial_bromeliad: { label:'Bromélia-imperial', scientific:'Alcantarea imperialis', color:0x617f4b, grow:5*1440, wood:0, tree:false, form:'foliage', renderSize:1.12, terrain:[0,9] },
@@ -126,6 +126,21 @@ export class CityNature {
     }
     this.city.log(`${this.plants.size} árvores e arbustos compõem a vegetação inicial.`, 'nature', [], {kind:'vegetation-founded',quantity:this.plants.size});
   }
+  seedNewFloraForExistingCities() {
+    if(this.tropicaliaVarietyIndex==null)this.tropicaliaVarietyIndex=0;
+    const additions=Object.keys(PLANT_SPECIES).filter(id=>PLANT_SPECIES[id].scientific);
+    if(this.plants.size>=NATURE_RULES.maxPlants)return;
+    let placed=0,checked=0;
+    while(this.tropicaliaVarietyIndex<additions.length&&placed<4&&checked<8){
+      const species=additions[this.tropicaliaVarietyIndex++];checked++;
+      if([...this.plants.values()].some(plant=>plant.species===species))continue;
+      for(let attempt=0;attempt<48;attempt++){
+        const x=Math.floor(this.city.random()*this.city.world.width),y=Math.floor(this.city.random()*this.city.world.height);
+        if(this.spawn(x,y,species,{mature:true})){placed++;break;}
+      }
+    }
+    if(this.tropicaliaVarietyIndex>=additions.length)this.tropicaliaVarietyIndex=additions.length;
+  }
   sow(x,y,species,buildingId=null,parentEventId=null) {
     if(this.seeds.length>=NATURE_RULES.maxSeeds || !this.available(x,y,species,buildingId) || this.seeds.some(s=>s.x===x && s.y===y))return false;
     this.seeds.push({x,y,species,buildingId,parentEventId,dueAt:this.city.minute+NATURE_RULES.germinationMinutes}); return true;
@@ -138,6 +153,7 @@ export class CityNature {
   }
   hourly() {
     const city=this.city;
+    this.seedNewFloraForExistingCities();
     for(const plant of this.plants.values())this.normalizePlantSpecies(plant);
     for(const c of city.citizens){const job=c.forestryJob;if(!job)continue;const b=city.building(job.buildingId);if(c.entity.destroyed||!b||city.politics.officeHolder(c)||c.jobId!==b.id&&b.ownerId!==c.id){if(job.load){city.economy.lost.madeira+=job.load;city.log('Madeira em transporte perdida após interrupção da atividade florestal.','nature',[c.id],{kind:'forestry-cargo-lost',quantity:job.load,buildingId:job.buildingId});}c.forestryJob=null;}}
     for(const plant of [...this.plants.values()]) {

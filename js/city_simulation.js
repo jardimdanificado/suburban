@@ -24,7 +24,7 @@ import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=sertanejo-house-styles-1';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
-import { CityNature } from './city_nature.js?v=tropicalia-flora-1';
+import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
 import { CityGovernment as CityPolitics } from './city_government.js?v=municipal-identity-flag-1';
 import { CityReputation } from './city_reputation.js';

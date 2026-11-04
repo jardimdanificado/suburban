@@ -117,6 +117,8 @@ const TROPICAL_FRUIT_COLORS = {banana:0xe5c13b,mango:0xe6a43b,guava:0xc3b85e,jac
 const TROPICAL_FRUIT_OFFSETS = [[-.48,1.83,.06],[.43,1.91,.1],[.06,2.1,-.46]];
 const BANANA_FRUIT_OFFSETS = [[.18,1.28,.1],[.28,1.2,.02],[.12,1.13,-.08]];
 const TROPICAL_FLOWER_COLORS = {hibiscus:0xf24852,bougainvillea:0xbd3f9f,rose_bush:0xff4f72,heliconia_rostrata:0xe74632,red_ginger:0xd94c44,bird_of_paradise:0xf1a52d,torch_ginger:0xd94c59,silver_vase_bromeliad:0xe35b7a,anthurium:0xd94142,heliconia_bihai:0xe35e31,heliconia_psittacorum:0xe9a33c,ixora:0xd83d45,indian_shot:0xc24b38,jade_vine:0x4ba785,passionflower:0x73539a,allamanda:0xf0c337,canela_de_ema:0xe45c45,zebra_maranta:0x71945b,croton:0xc78539,watermelon_calathea:0x729453,imperial_bromeliad:0x9a684d,caladium:0xc1788a,prayer_plant:0x789053};
+const TROPICAL_FOLIAGE_COLORS = {zebra_maranta:0x738c51,croton:0xd18b32,watermelon_calathea:0x687d4c,imperial_bromeliad:0x8e7252,caladium:0xc88192,prayer_plant:0x6b8254,water_lily:0x548a58};
+const TROPICAL_TREE_BLOOM_COLORS = {flamboyant:0xe75036,pau_brasil:0xd84735,yellow_ipe:0xf1c544,quaresmeira:0x9a60b7,manaca_serra:0xd9a5ce,frangipani:0xf0d59a};
 
 export const MIN_CAMERA_ZOOM = 0.25;
 const MAX_CAMERA_ZOOM = 5.0;
@@ -862,6 +864,73 @@ function createBananaBunchGeometry(){
   return mergeBufferGeometries(pieces);
 }
 
+function createTropicalFoliageGeometry(){
+  const leaves=[];
+  for(let i=0;i<9;i++){
+    const angle=i*Math.PI*2/9,leaf=new THREE.SphereGeometry(.5,6,4);
+    leaf.scale(.19,.62,.075);leaf.rotateZ(-.24);leaf.rotateY(angle);leaf.translate(Math.cos(angle)*.2,.43+(i%3)*.035,Math.sin(angle)*.2);leaves.push(leaf);
+  }
+  const crown=new THREE.DodecahedronGeometry(.22,0);crown.scale(1,.48,1);crown.translate(0,.29,0);leaves.push(crown);
+  return mergeBufferGeometries(leaves);
+}
+
+function createTropicalFlowerStemsGeometry(){
+  const pieces=[];
+  for(let i=0;i<4;i++){
+    const angle=i*Math.PI*.5,dx=Math.cos(angle),dz=Math.sin(angle),curve=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0,.04,0),new THREE.Vector3(dx*.16,.48,dz*.16),new THREE.Vector3(dx*.2,1.15,dz*.2),new THREE.Vector3(dx*.28,1.72+(i%2)*.13,dz*.28)
+    ]);
+    pieces.push(new THREE.TubeGeometry(curve,7,.035,5,false));
+    for(const side of [-1,1]){
+      const leaf=new THREE.SphereGeometry(.5,7,4);leaf.scale(.19,.48,.045);leaf.rotateZ(side*.92);leaf.rotateY(angle);leaf.translate(dx*.18,.48+(i%2)*.08,dz*.18);pieces.push(leaf);
+    }
+  }
+  return mergeBufferGeometries(pieces);
+}
+
+function createTropicalFlowerHeadsGeometry(){
+  const blooms=[];
+  for(let i=0;i<4;i++){
+    const angle=i*Math.PI*.5,dx=Math.cos(angle),dz=Math.sin(angle);
+    // Each stalk carries a short, staggered spray of pointed bracts instead
+    // of a ball of tiny flowers. The silhouette reads as heliconia/ginger.
+    for(let bract=0;bract<3;bract++){
+      const shape=new THREE.Shape();
+      shape.moveTo(0,0);shape.quadraticCurveTo(.1,.16,.07,.42);shape.lineTo(.015,.33);shape.lineTo(-.045,.44);shape.quadraticCurveTo(-.16,.21,0,0);
+      const leaf=new THREE.ShapeGeometry(shape,1),side=(bract%2?1:-1),offset=bract*.13;
+      leaf.rotateZ(side*.18);leaf.rotateY(angle+side*.22);leaf.translate(dx*(.24+offset*.38),1.08+offset,dz*(.24+offset*.38));blooms.push(leaf);
+    }
+  }
+  return mergeBufferGeometries(blooms);
+}
+
+function createFanPalmFrondsGeometry(){
+  const fronds=[];
+  for(const angle of [-.62,0,.62]){
+    const shape=new THREE.Shape();
+    shape.moveTo(0,3.05);shape.quadraticCurveTo(-.16,3.42,-.47,3.64);shape.lineTo(-.66,4.02);shape.lineTo(-.43,3.94);shape.lineTo(-.48,4.33);shape.lineTo(-.25,4.18);shape.lineTo(0,4.56);shape.lineTo(.22,4.18);shape.lineTo(.48,4.32);shape.lineTo(.43,3.94);shape.lineTo(.66,4.01);shape.lineTo(.45,3.63);shape.quadraticCurveTo(.15,3.4,0,3.05);
+    const leaf=new THREE.ShapeGeometry(shape,1);leaf.rotateY(angle);fronds.push(leaf);
+    const vein=new THREE.CatmullRomCurve3([new THREE.Vector3(0,3.06,0),new THREE.Vector3(0,3.7,0),new THREE.Vector3(0,4.55,0)]);const rib=new THREE.TubeGeometry(vein,7,.026,4,false);rib.rotateY(angle);fronds.push(rib);
+  }
+  const geometry=mergeBufferGeometries(fronds);geometry.translate(.48,0,0);return geometry;
+}
+
+function createMonsteraLeavesGeometry(){
+  const pieces=[];
+  for(let i=0;i<6;i++){
+    const angle=i*Math.PI/3,shape=new THREE.Shape();
+    shape.moveTo(0,0);shape.quadraticCurveTo(-.12,.32,-.36,.48);
+    shape.lineTo(-.22,.49);shape.lineTo(-.43,.68);shape.lineTo(-.2,.66);
+    shape.lineTo(-.31,.91);shape.lineTo(-.08,.83);shape.lineTo(0,1.18);
+    shape.lineTo(.09,.84);shape.lineTo(.32,.93);shape.lineTo(.22,.66);
+    shape.lineTo(.43,.69);shape.lineTo(.23,.48);shape.quadraticCurveTo(.1,.3,0,0);
+    const leaf=new THREE.ShapeGeometry(shape,1);leaf.rotateY(angle);leaf.translate(Math.cos(angle)*.12,.48,Math.sin(angle)*.12);pieces.push(leaf);
+    const vein=new THREE.CatmullRomCurve3([new THREE.Vector3(0,.49,0),new THREE.Vector3(Math.cos(angle)*.16,.85,Math.sin(angle)*.16),new THREE.Vector3(Math.cos(angle)*.12,1.62,Math.sin(angle)*.12)]);
+    pieces.push(new THREE.TubeGeometry(vein,6,.025,4,false));
+  }
+  return mergeBufferGeometries(pieces);
+}
+
 function createTropicalCanopyGeometry() {
   const lobes = [];
   const addLobe = (x, y, z, radius, sx, sy, sz, detail = 8) => {
@@ -877,6 +946,15 @@ function createTropicalCanopyGeometry() {
   addLobe(-0.06, 1.82, -0.52, 0.51, 1.00, 0.70, 1.0);
   addLobe(0.02, 2.22, 0.02, 0.48, 1.02, 0.74, 1.0);
   return mergeBufferGeometries(lobes);
+}
+
+function createTropicalTreeBloomGeometry(){
+  const flowers=[];
+  for(let i=0;i<14;i++){
+    const angle=i*2.399963,ring=.24+(i%4)*.13,x=Math.cos(angle)*ring,z=Math.sin(angle)*ring,y=1.76+(i%3)*.19;
+    const flower=new THREE.DodecahedronGeometry(.105,0);flower.scale(1,.72,1);flower.translate(x,y,z);flowers.push(flower);
+  }
+  return mergeBufferGeometries(flowers);
 }
 
 function createTropicalTrunkGeometry() {
@@ -4035,6 +4113,8 @@ export class RCT3DRenderer {
     this.instOakLeaves = new THREE.InstancedMesh(oakLeafGeo, this.materials.oakLeaves, this.maxInstances);
     this.instOakLeaves.castShadow = true;
     this.instOakLeaves.receiveShadow = true;
+    this.instTropicalTreeBlooms=new THREE.InstancedMesh(createTropicalTreeBloomGeometry(),new THREE.MeshLambertMaterial({color:0xffffff}),this.maxInstances);
+    this.instTropicalTreeBlooms.castShadow=true;this.instTropicalTreeBlooms.receiveShadow=true;this.instTropicalTreeBlooms.frustumCulled=false;
 
     // Caribbean palms: a tall narrow trunk and a crown of long, drooping fronds.
     const palmTrunkGeo = new THREE.CylinderGeometry(0.075, 0.17, 4.05, 7);
@@ -4053,6 +4133,8 @@ export class RCT3DRenderer {
     this.instPalmFronds = new THREE.InstancedMesh(palmFrondsGeo, this.materials.palmLeaves, this.maxInstances);
     this.instPalmFronds.castShadow = true;
     this.instPalmFronds.receiveShadow = true;
+    this.instFanPalmFronds = new THREE.InstancedMesh(createFanPalmFrondsGeometry(),this.materials.palmLeaves,this.maxInstances);
+    this.instFanPalmFronds.castShadow=true;this.instFanPalmFronds.receiveShadow=true;this.instFanPalmFronds.frustumCulled=false;
 
     const tropicalFruitGeo = new THREE.SphereGeometry(0.11, 7, 5);
     tropicalFruitGeo.scale(0.82, 1.28, 0.82);
@@ -4065,6 +4147,13 @@ export class RCT3DRenderer {
     this.instBananaLeaves=new THREE.InstancedMesh(createBananaLeavesGeometry(),this.materials.oakLeaves,this.maxInstances);
     this.instBananaFruits=new THREE.InstancedMesh(createBananaBunchGeometry(),new THREE.MeshLambertMaterial({color:0xffffff}),this.maxInstances);
     for(const mesh of [this.instBananaStems,this.instBananaLeaves,this.instBananaFruits]){mesh.castShadow=true;mesh.receiveShadow=true;}
+
+    const floraMaterial=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});
+    this.instBroadLeafPlants=new THREE.InstancedMesh(createMonsteraLeavesGeometry(),floraMaterial,this.maxInstances);
+    this.instTropicalFoliage=new THREE.InstancedMesh(createTropicalFoliageGeometry(),floraMaterial,this.maxInstances);
+    this.instTropicalFlowerStems=new THREE.InstancedMesh(createTropicalFlowerStemsGeometry(),this.materials.oakLeaves,this.maxInstances);
+    this.instTropicalFlowerHeads=new THREE.InstancedMesh(createTropicalFlowerHeadsGeometry(),floraMaterial,this.maxInstances);
+    for(const mesh of [this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads]){mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;}
 
     // Pine Trees
     const pineTrunkGeo = new THREE.CylinderGeometry(0.12, 0.20, 1.25, 5);
@@ -4550,10 +4639,11 @@ export class RCT3DRenderer {
 
     this.instancedGroup = new THREE.Group();
     this.instancedGroup.add(
-      this.instOakTrunks, this.instOakLeaves,
-      this.instPalmTrunks, this.instPalmFronds,
+      this.instOakTrunks, this.instOakLeaves,this.instTropicalTreeBlooms,
+      this.instPalmTrunks, this.instPalmFronds,this.instFanPalmFronds,
       this.instTropicalFruits,
       this.instBananaStems,this.instBananaLeaves,this.instBananaFruits,
+      this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads,
       this.instPineTrunks, this.instPineLeaves,
       this.instCherryTrunks, this.instCherryLeaves,
       this.instBirchTrunks, this.instBirchLeaves,
@@ -5775,12 +5865,15 @@ export class RCT3DRenderer {
       const isBirch = isPlantOrFlora && (e.properties.species === "birch" || e.properties.name?.toLowerCase().includes("bétula") || e.properties.name?.toLowerCase().includes("betula"));
       const isMaple = isPlantOrFlora && (e.properties.species === "maple" || e.properties.name?.toLowerCase().includes("bordo") || e.properties.name?.toLowerCase().includes("maple"));
       const isBerryBush = isPlantOrFlora && (e.properties.species === "berry" || e.properties.name?.toLowerCase().includes("amora") || (e.properties.species === "bush" && !e.properties.name?.toLowerCase().includes("florido")));
-      const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || ['flowering','foliage'].includes(e.properties.cityPlant?.form) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
+      const isTropicalFoliage = isPlantOrFlora && e.properties.cityPlant?.form === 'foliage';
+      const isTropicalFlowering = isPlantOrFlora && e.properties.cityPlant?.form === 'flowering';
+      const isBroadLeafPlant = isPlantOrFlora && e.properties.cityPlant?.form === 'broad_leaf';
+      const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
       const isShrub = isPlantOrFlora && (e.properties.species === "shrub" || e.properties.name?.toLowerCase().includes("shrub") || e.properties.name?.toLowerCase().includes("arbusto"));
       const isWaterLily = isPlantOrFlora && (e.properties.species === "waterlily" || e.properties.species === "water_lily" || e.properties.name?.toLowerCase().includes("lily") || e.properties.name?.toLowerCase().includes("vitória-régia") || e.properties.name?.toLowerCase().includes("vitoria"));
       const isSeaweed = isPlantOrFlora && (e.properties.species === "seaweed" || e.properties.name?.toLowerCase().includes("seaweed") || e.properties.name?.toLowerCase().includes("alga"));
-      const isTree = !isCactus && !isBerryBush && !isRoseBush && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")) || (e.properties.photosynthesis && !e.properties.life?.isDead));
-      const isFlora = isTree || isCactus || isBerryBush || isRoseBush || isShrub || isWaterLily || isSeaweed;
+      const isTree = !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && !isShrub && !isWaterLily && !isSeaweed && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")) || (e.properties.photosynthesis && !e.properties.life?.isDead));
+      const isFlora = isTree || isCactus || isBerryBush || isRoseBush || isTropicalFoliage || isTropicalFlowering || isBroadLeafPlant || isShrub || isWaterLily || isSeaweed;
 
       const isWoodLog = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "wood" || e.properties.name?.includes("Wood Log") || e.properties.name?.includes("Madeira") || r.skin === "Item_Wood.png");
       const isStoneItem = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "stone" || e.properties.name?.includes("Stone Block") || e.properties.name?.includes("Pedra"));
@@ -7258,9 +7351,10 @@ export class RCT3DRenderer {
     const shouldUpdateStaticInstances = distInstCamX >= 2 || distInstCamY >= 2 || zoomDelta > 0.04 || entityCountChanged || this._forceInstUpdate;
 
     let oakCount = 0;
-    let palmCount = 0;
+    let tropicalTreeBloomCount=0;
+    let palmCount = 0,palmFrondCount=0,fanPalmCount=0;
     let tropicalFruitCount = 0;
-    let bananaCount=0,bananaFruitCount=0;
+    let bananaCount=0,bananaFruitCount=0,broadLeafCount=0,tropicalFoliageCount=0,tropicalFlowerCount=0;
     let pineCount = 0;
     let cherryCount = 0;
     let birchCount = 0;
@@ -7381,22 +7475,25 @@ export class RCT3DRenderer {
         const isBirch = isPlantOrFlora && (e.properties.species === "birch" || e.properties.name?.toLowerCase().includes("bétula") || e.properties.name?.toLowerCase().includes("betula"));
         const isMaple = isPlantOrFlora && (e.properties.species === "maple" || e.properties.name?.toLowerCase().includes("bordo") || e.properties.name?.toLowerCase().includes("maple"));
         const isBerryBush = isPlantOrFlora && (e.properties.species === "berry" || e.properties.name?.toLowerCase().includes("amora") || (e.properties.species === "bush" && !e.properties.name?.toLowerCase().includes("florido")));
-        const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || ['flowering','foliage'].includes(e.properties.cityPlant?.form) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
-        const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
+        const isTropicalFoliage = isPlantOrFlora && e.properties.cityPlant?.form === 'foliage';
+      const isTropicalFlowering = isPlantOrFlora && e.properties.cityPlant?.form === 'flowering';
+      const isBroadLeafPlant = isPlantOrFlora && e.properties.cityPlant?.form === 'broad_leaf';
+      const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
+        const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
         const isPine = isTree && (e.properties.species === "pine" || (r.skin && r.skin.toLowerCase().includes("pine")));
-        const isPalm = isTree && (e.properties.species === "coconut_palm" || e.properties.species === "royal_palm" || e.properties.cityPlant?.form === 'palm');
+        const isPalm = isTree && (e.properties.species === "coconut_palm" || e.properties.species === "royal_palm" || ['palm','fan_palm'].includes(e.properties.cityPlant?.form));
         const isWoodLog = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "wood" || e.properties.name?.includes("Wood Log") || e.properties.name?.includes("Madeira") || r.skin === "Item_Wood.png");
         const isStoneItem = !e.properties.brain && !isDoor && !isWarehouse && !isSlaughterhouse && !isKitchen && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (e.properties.resourceType === "stone" || e.properties.name?.includes("Stone Block") || e.properties.name?.includes("Pedra"));
-        const isHouse = !e.properties.brain && !isWoodLog && !isStoneItem && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (!!e.properties.house || !!e.properties.leaderHouse || (e.properties.species === "structure" && (r.skin === "Overworld_House.png" || e.properties.name?.includes("Casa") || e.properties.name?.includes("Manor") || e.properties.name?.includes("Villa") || e.properties.name?.includes("Chalet") || e.properties.name?.includes("Cottage") || e.properties.name?.includes("Cabin") || e.properties.name?.includes("Hut") || e.properties.name?.includes("Lodge") || e.properties.name?.includes("Ranch") || e.properties.name?.includes("Hacienda") || e.properties.name?.includes("Hall") || e.properties.name?.includes("Grange") || e.properties.name?.includes("Hermitage") || e.properties.name?.includes("Palácio") || e.properties.name?.includes("Ossuário") || e.properties.name?.includes("Castelo"))));
+        const isHouse = !e.properties.brain && !isWoodLog && !isStoneItem && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && (!!e.properties.house || !!e.properties.leaderHouse || (e.properties.species === "structure" && (r.skin === "Overworld_House.png" || e.properties.name?.includes("Casa") || e.properties.name?.includes("Manor") || e.properties.name?.includes("Villa") || e.properties.name?.includes("Chalet") || e.properties.name?.includes("Cottage") || e.properties.name?.includes("Cabin") || e.properties.name?.includes("Hut") || e.properties.name?.includes("Lodge") || e.properties.name?.includes("Ranch") || e.properties.name?.includes("Hacienda") || e.properties.name?.includes("Hall") || e.properties.name?.includes("Grange") || e.properties.name?.includes("Hermitage") || e.properties.name?.includes("Palácio") || e.properties.name?.includes("Ossuário") || e.properties.name?.includes("Castelo"))));
         const isLeaderHouse = isHouse && (!!e.properties.leaderHouse || !!e.properties.house?.isLeaderHouse || e.properties.name?.includes("Palácio") || e.properties.name?.includes("Citadel"));
-        const isWall = !e.properties.brain && !isDoor && !isHouse && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && !isWoodLog && !isStoneItem && !isTree && !isCactus && !isBerryBush && !isRoseBush && (r.skin?.startsWith("Wall_") || e.properties.name?.includes("Muralha") || e.properties.name?.includes("Paliçada") || e.properties.name?.includes("Muro") || (e.properties.structure && !e.properties.edible && !e.properties.resourceType));
+        const isWall = !e.properties.brain && !isDoor && !isHouse && !isWarehouse && !isSlaughterhouse && !isKitchen && !isWell && !isArtisanHut && !isTorch && !isCampfire && !isRoad && !isWoodLog && !isStoneItem && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && (r.skin?.startsWith("Wall_") || e.properties.name?.includes("Muralha") || e.properties.name?.includes("Paliçada") || e.properties.name?.includes("Muro") || (e.properties.structure && !e.properties.edible && !e.properties.resourceType));
         const isBuilding = isHouse || isWall || isDoor || isWarehouse || isSlaughterhouse || isKitchen || isWell || isArtisanHut;
-        const isPlantOrItem = isTree || isCactus || isBerryBush || isRoseBush || isWoodLog || isStoneItem || isTorch || isCampfire || isRoad;
-        const isItem = !e.properties.brain && !isBuilding && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isWoodLog && !isStoneItem && !isTorch && !isCampfire && !isRoad;
-        classification={properties:e.properties,render:r,isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem,static:(isBuilding||isPlantOrItem)&&!isDoor};
+        const isPlantOrItem = isTree || isCactus || isBerryBush || isRoseBush || isTropicalFoliage || isTropicalFlowering || isBroadLeafPlant || isWoodLog || isStoneItem || isTorch || isCampfire || isRoad;
+        const isItem = !e.properties.brain && !isBuilding && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && !isWoodLog && !isStoneItem && !isTorch && !isCampfire && !isRoad;
+        classification={properties:e.properties,render:r,isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTropicalFoliage,isTropicalFlowering,isBroadLeafPlant,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem,static:(isBuilding||isPlantOrItem)&&!isDoor};
         entityRenderClasses.set(e,classification);
       }
-      const {isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem}=classification;
+      const {isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTropicalFoliage,isTropicalFlowering,isBroadLeafPlant,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem}=classification;
       const profileAfterClass = profileCitizenStart ? performance.now() : 0;
 
       const isStaticEntity = isBuilding || isPlantOrItem;
@@ -7502,6 +7599,21 @@ export class RCT3DRenderer {
         this.instRoseFlowers.setColorAt(roseBushCount,this.tempColor1.setHex(TROPICAL_FLOWER_COLORS[e.properties.species]||0xff3366));
         roseBushCount++;
       }
+      else if(isBroadLeafPlant&&broadLeafCount<this.maxInstances){
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),5371),982451653)>>>0)%628)/100),size=(r.size||1)*1.08;
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        this.instBroadLeafPlants.setMatrixAt(broadLeafCount,mMatrix);this.instBroadLeafPlants.setColorAt(broadLeafCount,this.tempColor1.setHex(e.properties.species==='monstera'?0x3f8049:0x568b4d));broadLeafCount++;
+      }
+      else if(isTropicalFoliage&&tropicalFoliageCount<this.maxInstances){
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),2243),982451653)>>>0)%628)/100),size=(r.size||1)*(e.properties.species==='imperial_bromeliad'?1.22:1);
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        this.instTropicalFoliage.setMatrixAt(tropicalFoliageCount,mMatrix);this.instTropicalFoliage.setColorAt(tropicalFoliageCount,this.tempColor1.setHex(TROPICAL_FOLIAGE_COLORS[e.properties.species]||0x68894e));tropicalFoliageCount++;
+      }
+      else if(isTropicalFlowering&&tropicalFlowerCount<this.maxInstances){
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9157),982451653)>>>0)%628)/100),size=(r.size||1)*(e.properties.species==='heliconia_psittacorum'?.8:1);
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        this.instTropicalFlowerStems.setMatrixAt(tropicalFlowerCount,mMatrix);this.instTropicalFlowerHeads.setMatrixAt(tropicalFlowerCount,mMatrix);this.instTropicalFlowerHeads.setColorAt(tropicalFlowerCount,this.tempColor1.setHex(TROPICAL_FLOWER_COLORS[e.properties.species]||0xe95042));tropicalFlowerCount++;
+      }
       // Broad paddle leaves give giant tropical foliage plants a stronger
       // silhouette than the generic rounded tree canopy.
       else if(isTree&&(e.properties.species==='banana'||e.properties.cityPlant?.form==='broad_leaf')&&bananaCount<this.maxInstances){
@@ -7519,7 +7631,8 @@ export class RCT3DRenderer {
         mMatrix.multiply(scaleMatrix);
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instPalmTrunks.setMatrixAt(palmCount, mMatrix);
-        this.instPalmFronds.setMatrixAt(palmCount, mMatrix);
+        if(e.properties.cityPlant?.form==='fan_palm')this.instFanPalmFronds.setMatrixAt(fanPalmCount++,mMatrix);
+        else this.instPalmFronds.setMatrixAt(palmFrondCount++,mMatrix);
         palmCount++;
       }
       else if (isTree && !isPine && !isPalm && oakCount < this.maxInstances) {
@@ -7541,6 +7654,11 @@ export class RCT3DRenderer {
             mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(treeSize,treeSize,treeSize);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(wx,surfaceH+fy*treeSize,wz);
             this.instTropicalFruits.setMatrixAt(tropicalFruitCount,mMatrix);this.instTropicalFruits.setColorAt(tropicalFruitCount,this.tempColor1.setHex(fruitColor));tropicalFruitCount++;
           }
+        }
+        const bloomColor=TROPICAL_TREE_BLOOM_COLORS[e.properties.species];
+        if(bloomColor&&r.size>=.65){
+          mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(treeSize,treeSize,treeSize);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+          this.instTropicalTreeBlooms.setMatrixAt(tropicalTreeBloomCount,mMatrix);this.instTropicalTreeBlooms.setColorAt(tropicalTreeBloomCount,this.tempColor1.setHex(bloomColor));tropicalTreeBloomCount++;
         }
         oakCount++;
       }
@@ -8484,15 +8602,18 @@ export class RCT3DRenderer {
     this.instOakLeaves.count = oakCount;
     this.instOakLeaves.instanceMatrix.needsUpdate = true;
     if (this.instOakLeaves.instanceColor) this.instOakLeaves.instanceColor.needsUpdate = true;
+    this.instTropicalTreeBlooms.count=tropicalTreeBloomCount;this.instTropicalTreeBlooms.instanceMatrix.needsUpdate=true;if(this.instTropicalTreeBlooms.instanceColor)this.instTropicalTreeBlooms.instanceColor.needsUpdate=true;
 
     this.instPalmTrunks.count = palmCount;
     this.instPalmTrunks.instanceMatrix.needsUpdate = true;
-    this.instPalmFronds.count = palmCount;
+    this.instPalmFronds.count = palmFrondCount;
     this.instPalmFronds.instanceMatrix.needsUpdate = true;
+    this.instFanPalmFronds.count=fanPalmCount;this.instFanPalmFronds.instanceMatrix.needsUpdate=true;
     this.instTropicalFruits.count=tropicalFruitCount;
     this.instTropicalFruits.instanceMatrix.needsUpdate=true;
     if(this.instTropicalFruits.instanceColor)this.instTropicalFruits.instanceColor.needsUpdate=true;
     for(const [mesh,count]of [[this.instBananaStems,bananaCount],[this.instBananaLeaves,bananaCount],[this.instBananaFruits,bananaFruitCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
+    for(const [mesh,count]of [[this.instBroadLeafPlants,broadLeafCount],[this.instTropicalFoliage,tropicalFoliageCount],[this.instTropicalFlowerStems,tropicalFlowerCount],[this.instTropicalFlowerHeads,tropicalFlowerCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
 
     this.instPineTrunks.count = pineCount;
     this.instPineTrunks.instanceMatrix.needsUpdate = true;

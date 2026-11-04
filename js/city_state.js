@@ -23,7 +23,7 @@ import { CityGovernment } from './city_government.js?v=municipal-identity-flag-1
 import { CityCouncil } from './city_council.js?v=municipal-identity-flag-1';
 import { CityCampaigns } from './city_campaigns.js?v=organic-party-slogans-1';
 import { CityMandates } from './city_mandates.js';
-import { CityNature } from './city_nature.js?v=tropicalia-flora-1';
+import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=infinite-external-money-1';
