@@ -14,7 +14,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=perf-employment-stagger-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=secretariat-portfolios-1';
+import {CityVehicles} from './city_vehicles.js?v=carpool-candidates-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {ensureSkinColor} from './city_skin.js';
@@ -640,7 +640,7 @@ export class CitySimulation {
     blocked.add(ownKey);c.path=[];c.action='Dormindo na rua';return true;
   }
 
-  chooseTask(c) {
+  chooseTask(c, urgent=this.urgentNeed(c)) {
     const n = c.needs,profile=this._citizenLoopProfile,measure=profile&&((name,work)=>{const started=performance.now(),result=work();profile[`${name}Ms`]=(profile[`${name}Ms`]||0)+performance.now()-started;return result;});
     const home = this.building(this.units.get(c.homeUnitId)?.buildingId);
     const job = this.building(c.jobId);
@@ -648,7 +648,6 @@ export class CitySimulation {
     const company=companies[Math.floor(this.minute/120)%Math.max(1,c.businessIds.length)]||companies[0]||null;
     const child = this.childrenOf(c.id).find(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
     let task = 'leisure', type = 'leisure';
-    const urgent = this.urgentNeed(c);
     if(!urgent||['food','water'].includes(urgent)){const routed=measure?measure('taskSuppliesRoute',()=>this.supplies.route(c)):this.supplies.route(c);if(routed)return;}
     const streetStall=measure?measure('taskMarketCheck',()=>streetMarketFor(this.economy,c)):streetMarketFor(this.economy,c);
     if(!urgent&&!wantsSleep(this,c)&&streetStall&&this.society.isAdult(c)&&Math.min(n.food,n.water,n.energy,n.health,n.toilet)>25&&!c.conversation&&!c.deliveryId&&!c.workMeal){
@@ -1100,7 +1099,7 @@ export class CitySimulation {
         // Retry on a changed urgent need, at shift boundaries, or after a short
         // delay. At 32× this is only a fraction of a real second.
         if(this.minute<(c._nextTaskAt||0)&&c._retryUrgent===urgent)continue;
-        c.servicePaid = null;if(citizenDetail)measureCitizen('taskChoice',()=>this.chooseTask(c));else this.chooseTask(c);
+        c.servicePaid = null;if(citizenDetail)measureCitizen('taskChoice',()=>this.chooseTask(c,urgent));else this.chooseTask(c,urgent);
       }
       if (!c.path.length && c.task){if(citizenDetail)measureCitizen('taskExecution',()=>this.performTask(c));else this.performTask(c);}
       if(!c.task){

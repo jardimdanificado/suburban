@@ -1,5 +1,5 @@
 import {syncCorruptionVotes} from './city_corruption_votes.js';
-import {VEHICLE_SPECS} from './city_vehicles.js?v=secretariat-portfolios-1';
+import {VEHICLE_SPECS} from './city_vehicles.js?v=carpool-candidates-1';
 import {TAX_CATEGORIES,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 import {ensureExternalAccount} from './city_currency.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));

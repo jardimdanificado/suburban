@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,citizenAnimation,citizenFrame,citizenIsSleeping,CityCitizenModels} from '../js/city_citizen_models.js';
+import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,headwearSurface,citizenAnimation,citizenFrame,citizenIsSleeping,CityCitizenModels} from '../js/city_citizen_models.js';
 class Vector3{constructor(x=0,y=0,z=0){this.set(x,y,z);}set(x,y,z){Object.assign(this,{x,y,z});return this;}}
 class Matrix4{compose(p,q,s){this.data={position:{...p},angle:q.angle,lying:!!q.lying,scale:{...s}};return this;}}
 class Quaternion{setFromAxisAngle(axis,angle){this.angle=angle;this.lying=false;return this;}multiply(){this.lying=true;return this;}}
@@ -23,6 +23,19 @@ test('OBJ parser triangulates quads, resolves negative indices and rejects inval
  assert.throws(()=>parseCitizenOBJ('v 0 0 0\nf 0 1 1'));
  assert.throws(()=>parseCitizenOBJ('v 0 0 0\nf 2 1 1'));
  assert.throws(()=>parseCitizenOBJ('v 0 0 0'));
+});
+test('hat meshes share one normalized shape while each animated frame retains its own head anchor',async()=>{
+ const pieces=['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta'];
+ for(const piece of pieces){let reference=null;const anchors=[];for(let frame=0;frame<5;frame++){
+  const text=await fs.readFile(new URL(`../data/model/run/${frame}.obj`,import.meta.url),'utf8'),surface=headwearSurface(parseCitizenOBJ(text),piece);anchors.push(surface.anchor);
+  if(!reference)reference=surface;else{
+   assert.equal(surface.positions.length,reference.positions.length,piece);assert.equal(surface.normals.length,reference.normals.length,piece);
+   for(let i=0;i<surface.positions.length;i++)assert.ok(Math.abs(surface.positions[i]-reference.positions[i])<1e-6,`${piece} vertex ${i}`);
+   for(let i=0;i<surface.normals.length;i++)assert.ok(Math.abs(surface.normals[i]-reference.normals[i])<1e-6,`${piece} normal ${i}`);
+  }
+ }
+ assert(anchors.every(anchor=>Number.isFinite(anchor.x)&&Number.isFinite(anchor.y)&&Number.isFinite(anchor.z)),piece);
+ }
 });
 test('animation distinguishes actual movement, on-site work, idle and bicycle poses',()=>{
  assert.equal(citizenAnimation({task:null,path:[]}), 'idle');assert.equal(citizenAnimation({task:'work',path:[],workCell:{x:0,y:0}}), 'use');assert.equal(citizenAnimation({task:'work',path:[{}]},true),'run');

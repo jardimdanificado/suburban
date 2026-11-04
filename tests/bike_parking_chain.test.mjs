@@ -29,6 +29,7 @@ test('bicycles offer a nearby passenger a ride toward a shared destination and c
  const city=setup({starter:true,population:64}),system=city.vehicles,v=firstBike(city),[driver,passenger]=city.citizens.filter(c=>city.society.isAdult(c)&&!city.politics.officeHolder(c)).slice(0,2),goal={x:91,y:91};
  driver.entity.x=v.x;driver.entity.y=v.y;driver.mobilityTrip={vehicleId:v.id,goal,stage:'riding'};v.driverId=driver.id;v.passengerIds=[];
  passenger.entity.x=v.x+.8;passenger.entity.y=v.y;passenger.path=[{x:goal.x+.5,y:goal.y}];passenger.task='walk';
+ city._movingCitizens=[driver,passenger];
  const hostile=city.society.getRelation(driver,passenger,true);hostile.views[driver.id].affection=-10;hostile.views[passenger.id].affection=10;
  assert.equal(system.tryCarpool(v,driver),false,'the rider refuses someone they dislike');
  hostile.views[driver.id].affection=10;hostile.views[passenger.id].affection=-10;

@@ -71,11 +71,12 @@ if(mode==='builder-selection'){
   const city=new CitySimulation({world,population,seed:1337,createEntity:data=>{const entity={id:++id,destroyed:false,...data};entities.push(entity);return entity;}});city.initialize();
   if(mode==='throughput'){
     const {CityStateGraph}=await moduleAt('city_state.js'),graph=new CityStateGraph(),state={city,entities,nextId:id+1};graph.encode(state);
-    const stateInterval=Math.max(100,Number(process.env.SUBURBAN_BENCH_STATE_INTERVAL)||400);
+    const defaultStateInterval=population>=1024?2200:population>=512?1500:400;
+    const stateInterval=Math.max(100,Number(process.env.SUBURBAN_BENCH_STATE_INTERVAL)||defaultStateInterval);
     let snapshots=0,encodeMs=0,lastSnapshot=performance.now(),started=lastSnapshot,lastSnapshotCost=0;const snapshotCosts=[];
     for(let i=0;i<240;i++){
       city.update(.25);
-      if(performance.now()-lastSnapshot>=Math.max(stateInterval,Math.min(2000,lastSnapshotCost*5))){const at=performance.now(),packet=graph.encode(state,{packNeeds:true,packPositions:true}),encodedAt=performance.now();lastSnapshotCost=encodedAt-at;structuredClone(packet);const cost=performance.now()-at;encodeMs+=cost;snapshots++;const kinds={};for(const node of packet.nodes)kinds[node.kind]=(kinds[node.kind]||0)+1;snapshotCosts.push({minute:city.minute,ms:cost,encodeMs:encodedAt-at,cloneMs:cost-(encodedAt-at),nodes:packet.nodes.length,objects:graph.objects.size,kinds});lastSnapshot=performance.now();}
+      if(performance.now()-lastSnapshot>=Math.max(stateInterval,Math.min(3000,lastSnapshotCost*6))){const at=performance.now(),packet=graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:true}),encodedAt=performance.now();lastSnapshotCost=encodedAt-at;structuredClone(packet);const cost=performance.now()-at;encodeMs+=cost;snapshots++;const kinds={};for(const node of packet.nodes)kinds[node.kind]=(kinds[node.kind]||0)+1;snapshotCosts.push({minute:city.minute,ms:cost,encodeMs:encodedAt-at,cloneMs:cost-(encodedAt-at),nodes:packet.nodes.length,objects:graph.objects.size,kinds});lastSnapshot=performance.now();}
     }
     const ms=performance.now()-started;
     console.log(JSON.stringify({mode,root,population:city.citizens.length,cityMinutes:240,ms,stateInterval,snapshots,encodeMs,snapshotCosts,speed:60/(ms/1000),targetMs:1875}));

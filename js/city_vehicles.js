@@ -322,10 +322,13 @@ export class CityVehicles {
     v.passengerIds??=[];
     if(!['bicicleta','bicicleta_carga'].includes(v.good)||v.passengerIds.length>=VEHICLE_SPECS[v.good].seats-1||driver.mobilityTrip?.stage!=='riding')return false;
     const goal=driver.mobilityTrip.goal;if(!goal)return false;const city=this.city;
-    for(const passenger of city.citizens){
+    // Only citizens with a path can accept a ride. The simulation refreshes
+    // this ordered list after task assignment each minute, so avoid scanning
+    // every resident for every 0.75 units of bicycle travel.
+    for(const passenger of city._movingCitizens||city.citizens){
       if(passenger===driver||passenger.entity.destroyed||passenger.indoorLocation||passenger.skybridgeTransit||passenger.skybridgeZ||passenger.mobilityTrip||passenger.ridingVehicleId||passenger.conversation||passenger.workMeal||passenger.deliveryId||passenger.path.length===0||city.minute-(passenger.lastCarpoolAt??-Infinity)<240||['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving'].includes(passenger.task))continue;
-      const passengerGoal=passenger.path.at(-1);if(!passengerGoal||Math.hypot(passengerGoal.x-goal.x,passengerGoal.y-goal.y)>3)continue;
       if(Math.hypot(passenger.entity.x-v.x,passenger.entity.y-v.y)>2)continue;
+      const passengerGoal=passenger.path.at(-1);if(!passengerGoal||Math.hypot(passengerGoal.x-goal.x,passengerGoal.y-goal.y)>3)continue;
       const relation=city.relationships.view(driver,passenger),reverse=city.relationships.view(passenger,driver);
       if(relation&&(relation.affection<0||relation.resentment>=30)||reverse&&(reverse.affection<0||reverse.resentment>=30))continue;
       const trip={kind:'cycle',vehicleId:v.id,goal:{...passengerGoal},stage:'passenger'};
