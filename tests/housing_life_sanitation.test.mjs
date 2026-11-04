@@ -107,10 +107,10 @@ test('each toilet visit produces waste once, charges once and applies cleanlines
   c.needs.toilet = 95; city.sanitation.use(c); c.toiletTargetId = f.id; c.needs.toilet = 0; f.cleanliness = 0; c.mood = 0; city.sanitation.use(c); assert(c.mood < 0);
 });
 
-test('cleaning contracts obey weekly public and frequent paid intervals and require physical work', () => {
+test('cleaning contracts obey access-specific intervals and require physical work', () => {
   const city = setup({ starter: true, funded: true }), cleaner = business(city, 'cleaner'), paid = build(city, 'paid_toilet');
   const free = [...city.sanitation.facilities.values()].find(f => f.access === 'public'), f = [...city.sanitation.facilities.values()].find(f => f.buildingId === paid.id);
-  free.cleanliness=40;f.cleanliness=10;
+  free.cleanliness=100;f.cleanliness=10;
   city.transfer('treasury', paid.accountId, 1000, 'Test cleaning budget'); city.minute = f.lastCleanedAt + SANITATION_RULES.paidCleaningInterval; assert.equal(city.sanitation.requestCleaning(free.id), null);
   const job = city.sanitation.requestCleaning(f.id, paid.accountId, cleaner.id); assert(job); assert.equal(f.cleanliness, 10);
   const worker = city.society.citizen(cleaner.ownerId); freshNeeds(worker); worker.conversation = null; worker.workMeal = null; worker.deliveryId = null;
@@ -118,7 +118,7 @@ test('cleaning contracts obey weekly public and frequent paid intervals and requ
   const before = cleaner.balance, expenses=cleaner.totalExpenses; for (let i = 0; i < 25; i++) { city.minute++;city.sanitation.updateMinute();finishActivityRoute(city,worker);city.sanitation.updateMinute(); }
   assert.equal(job.status, 'completed'); assert.equal(f.cleanliness, 100); assert.equal(cleaner.balance - before+(cleaner.totalExpenses-expenses), job.fee);
   f.cleanliness = 40; assert.equal(city.sanitation.requestCleaning(f.id), null);
-  city.minute = free.lastCleanedAt + SANITATION_RULES.freeCleaningInterval; assert(city.sanitation.requestCleaning(free.id, 'treasury', cleaner.id));
+  free.cleanliness=40;assert(city.sanitation.requestCleaning(free.id, 'treasury', cleaner.id));
   assert.equal(totalMoney(city), city.currency.netIssued());
 });
 
