@@ -99,7 +99,7 @@ export function interiorLayout(building){
     const lower=`${gridStairX},${gridStairY},${z}`,upper=`${gridStairX},${gridStairY},${z+1}`;
     if(walkNodes.has(lower)&&walkNodes.has(upper)){walkNeighbors.get(lower).push(upper);walkNeighbors.get(upper).push(lower);}
   }
-  const layout={nodes,neighbors,byFloor,stairKeys,routes:new Map(),walkNodes,walkNeighbors,scale};layouts.set(building,{revision:building.layoutRevision||0,units,circulation,width:building.width,depth:building.depth,floors:building.floors,rotation:building.rotation||0,layout});return layout;
+  const layout={nodes,neighbors,byFloor,stairKeys,routes:new Map(),walkRoutes:new Map(),walkNodes,walkNeighbors,scale};layouts.set(building,{revision:building.layoutRevision||0,units,circulation,width:building.width,depth:building.depth,floors:building.floors,rotation:building.rotation||0,layout});return layout;
 }
 
 const worldPoint=(building,node)=>{const offset=(node.stair||node.kind!=='room')?0.5:0.18;return {x:building.entity.x+node.x+offset,y:building.entity.y+node.y+offset,z:node.z*CITY_FLOOR_HEIGHT};};
@@ -132,21 +132,26 @@ export function interiorRoute(building,from,to){
   const targetFloor=roofTarget?floors-1:to.z!=null?Math.round(to.z/CITY_FLOOR_HEIGHT):null,start=nearest(from),wantedGoal=roofTarget?nearest({x:building.entity.x+(Math.floor(building.width/2)+.5),y:building.entity.y+(Math.floor(building.depth/2)+.5),z:(floors-1)*CITY_FLOOR_HEIGHT},floors-1):nearest(to,targetFloor);
   if(!start||!wantedGoal)return null;
   const requestedKey=`${start}>${wantedGoal}`;let keys=layout.routes.get(requestedKey),goal=wantedGoal;
-  if(!keys){const previous=new Map([[start,null]]),queue=[start];for(let head=0;head<queue.length;head++){const key=queue[head];for(const next of layout.walkNeighbors.get(key)||[])if(!previous.has(next)){previous.set(next,key);queue.push(next);}}
+  if(!keys){const previous=new Map([[start,null]]),queue=[start];let reached=start===goal;for(let head=0;head<queue.length&&!reached;head++){const key=queue[head];for(const next of layout.walkNeighbors.get(key)||[])if(!previous.has(next)){previous.set(next,key);queue.push(next);if(next===goal){reached=true;break;}}}
     if(!previous.has(goal)){let best=null,distance=Infinity;for(const key of previous.keys()){const node=layout.walkNodes.get(key);if(targetFloor!=null&&node.floor!==targetFloor)continue;const d=(node.x-to.x)**2+(node.y-to.y)**2+((node.z-(to.z||0))*1.3)**2;if(d<distance){best=key;distance=d;}}goal=best;}
     if(!goal||!previous.has(goal))return null;keys=[];for(let key=goal;key!==null;key=previous.get(key))keys.push(key);keys.reverse();const routeKey=`${start}>${goal}`;layout.routes.set(routeKey,keys);if(layout.routes.size>256)layout.routes.delete(layout.routes.keys().next().value);
   }
   const inside=p=>p.x>=building.entity.x&&p.x<building.entity.x+building.width&&p.y>=building.entity.y&&p.y<building.entity.y+building.depth;
-  const route=keys.map(key=>{const p=layout.walkNodes.get(key);return {x:p.x,y:p.y,z:p.z};});
-  // Remove collinear intermediate nodes to keep paths compact on worker packets.
-  const compressed=[];for(let i=0;i<route.length;i++){const prev=route[i-1],cur=route[i],next=route[i+1];if(!prev||!next||prev.z!==cur.z||next.z!==cur.z||((cur.x-prev.x)*(next.y-cur.y)!==(cur.y-prev.y)*(next.x-cur.x)))compressed.push(cur);}
-  const stairPath=[];for(let i=0;i<compressed.length;i++){
-    const a=compressed[i],b=compressed[i+1];stairPath.push(a);
-    if(b&&a.z!==b.z){const low=Math.min(a.z,b.z),direction=b.z>a.z?1:-1,baseFloor=Math.round(low/CITY_FLOOR_HEIGHT),axis=interiorStairAxis(building),centerX=building.entity.x+Math.floor(building.width/2)+.5,centerY=building.entity.y+Math.floor(building.depth/2)+.5;
-      const steps=Array.from({length:10},(_,step)=>({x:axis==='x'?centerX-.32+step*.075:centerX,y:axis==='y'?centerY-.32+step*.075:centerY,z:baseFloor*CITY_FLOOR_HEIGHT+step*.18+.09}));if(direction<0)steps.reverse();stairPath.push(...steps);
+  const routeKey=`${start}>${goal}`;let stairPath=layout.walkRoutes.get(routeKey);
+  if(!stairPath){
+    const route=keys.map(key=>{const p=layout.walkNodes.get(key);return {x:p.x,y:p.y,z:p.z};});
+    // Cache the compressed, stair-expanded path. Callers receive their own
+    // array below, so shifting waypoints never mutates this shared geometry.
+    const compressed=[];for(let i=0;i<route.length;i++){const prev=route[i-1],cur=route[i],next=route[i+1];if(!prev||!next||prev.z!==cur.z||next.z!==cur.z||((cur.x-prev.x)*(next.y-cur.y)!==(cur.y-prev.y)*(next.x-cur.x)))compressed.push(cur);}
+    stairPath=[];for(let i=0;i<compressed.length;i++){
+      const a=compressed[i],b=compressed[i+1];stairPath.push(a);
+      if(b&&a.z!==b.z){const low=Math.min(a.z,b.z),direction=b.z>a.z?1:-1,baseFloor=Math.round(low/CITY_FLOOR_HEIGHT),axis=interiorStairAxis(building),centerX=building.entity.x+Math.floor(building.width/2)+.5,centerY=building.entity.y+Math.floor(building.depth/2)+.5;
+        const steps=Array.from({length:10},(_,step)=>({x:axis==='x'?centerX-.32+step*.075:centerX,y:axis==='y'?centerY-.32+step*.075:centerY,z:baseFloor*CITY_FLOOR_HEIGHT+step*.18+.09}));if(direction<0)steps.reverse();stairPath.push(...steps);
+      }
     }
+    if(compressed.length)stairPath.push(compressed.at(-1));
+    layout.walkRoutes.set(routeKey,stairPath);if(layout.walkRoutes.size>256)layout.walkRoutes.delete(layout.walkRoutes.keys().next().value);
   }
-  if(compressed.length)stairPath.push(compressed.at(-1));
   const path=stairPath.slice(inside(from)?1:0);
   if(roofTarget){const stair={x:building.entity.x+Math.floor(building.width/2)+.5,y:building.entity.y+Math.floor(building.depth/2)+.5,z:(floors-1)*CITY_FLOOR_HEIGHT},landing={...stair,z:to.z};if(!path.length||Math.hypot(path.at(-1).x-stair.x,path.at(-1).y-stair.y)>.01)path.push(stair);path.push(landing);if(Math.hypot(to.x-landing.x,to.y-landing.y)>.01)path.push({...to});}
   if(path.length){if(inside(to)&&!roofTarget)path[path.length-1]={...to};else if(!roofTarget)path.push({...to});}

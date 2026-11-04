@@ -608,7 +608,7 @@ Medições locais contra a versão anterior desta revisão, excluindo inicializa
 
 Os hashes dos resultados observados na simulação (necessidades, atividades, posições, saldos, eventos e relações) coincidiram; as consultas espaciais também produziram o mesmo hash após movimento, redimensionamento, substituição e remoção. Essas medições de CPU e tráfego não representam FPS garantido nem equilíbrio de uma partida prolongada. A conferência visual desta revisão usou renderizações do Canvas fora do navegador.
 
-Para repetir as cargas, use `npm run benchmark`, `npm run benchmark -- scene` e `npm run benchmark -- snapshots`. Um caminho de checkout pode ser passado após o nome da carga para comparação, por exemplo `node scripts/benchmark.mjs simulation /caminho/da/versao/anterior`. O cenário usa um mapa continental de 128×128, semente 1337 e 256 moradores; `SUBURBAN_BENCH_POPULATION` altera a população. Os números variam conforme a máquina e processos em execução.
+Para repetir as cargas, use `npm run benchmark`, `npm run benchmark -- initialize`, `npm run benchmark -- scene` e `npm run benchmark -- snapshots`. `initialize` mede a criação do mapa e da cidade, incluindo os 512 ou mais moradores. Um caminho de checkout pode ser passado após o nome da carga para comparação, por exemplo `node scripts/benchmark.mjs simulation /caminho/da/versao/anterior`. Os cenários usam semente 1337 e `SUBURBAN_BENCH_POPULATION` define a população; os números variam conforme a máquina e processos em execução.
 
 ### Segunda rodada de otimização — 24/10/2026
 

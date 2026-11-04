@@ -6,7 +6,7 @@ import {offerForensicBribe,considerForensicBribe,preserveReportedForensicEvidenc
 import {dispatchVehicleRestitution,updateVehicleRestitution,pauseVehicleRestitution} from './city_vehicle_restitution.js';
 import {artworkNarrative,artworkReception,narrativeReception} from './city_art_narratives.js';
 import {funeralSpec} from './city_funeral_services.js';
-import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
+import {interiorRoute} from './city_interior_layout.js?v=interior-route-output-cache-2';
 import {injuryMovementFactor,injuredCarryCapacity} from './city_injury_effects.js';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {CITY_FLOOR_HEIGHT,buildingPoint} from './city_building_geometry.js';

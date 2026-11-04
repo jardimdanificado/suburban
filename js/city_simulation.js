@@ -31,7 +31,7 @@ import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=injury-idle-fast-path-1';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=body-mobility-1';
-import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
+import {interiorRoute} from './city_interior_layout.js?v=interior-route-output-cache-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';

@@ -6,4 +6,4 @@ export {
   gerarSloganPartidario,
   gerarDialogoTematico,
   criarSubstantivoCombinado,
-} from './vocabulario.js?v=vocabulary-organic-slogans-1';
+} from './vocabulario.js?v=vocabulary-topic-index-1';

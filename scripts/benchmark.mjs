@@ -63,6 +63,13 @@ if(mode==='builder-selection'){
   for(let i=0;i<10;i++)city.update(0);
   const started=performance.now();for(let i=0;i<100;i++)city.update(0);
   console.log(JSON.stringify({mode,root,drivers:movers.length,shipments:shipments.length,updates:100,ms:performance.now()-started,checksum:hash(movers.map(c=>[c.deliveryId,c.action,c.entity.x,c.entity.y,c.path]))}));
+}else if(mode==='initialize'){
+  const {CitySimulation}=await moduleAt('city_simulation.js'),{World}=await moduleAt('world.js');
+  const entities=[];let id=0,started=performance.now();
+  const world=new World(1,1337,mapSize),city=new CitySimulation({world,population,seed:1337,createEntity:data=>{const entity={id:++id,destroyed:false,...data};entities.push(entity);return entity;}});
+  city.initialize();const ms=performance.now()-started;
+  const signature={seed:city.seed,citizens:city.citizens.map(c=>[c.id,c.entity.properties.name,c.initialAge,c.bodyHeightCm,c.bodyWeightKg]),parties:city.politics.parties.map(p=>[p.id,p.name,p.slogan,p.ideology]),identity:city.municipalIdentity,entities:entities.length};
+  console.log(JSON.stringify({mode,root,population:city.citizens.length,mapSize,ms,entities:entities.length,parties:city.politics.parties.length,checksum:hash(signature)}));
 }else if(mode==='simulation'||mode==='snapshots'||mode==='bridge'||mode==='throughput'){
   const {CitySimulation}=await moduleAt('city_simulation.js'),{World}=await moduleAt('world.js');
   const entities=[];let id=0;
@@ -95,6 +102,6 @@ if(mode==='builder-selection'){
     const state={minute:city.minute,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,activity:c.activity,task:c.task,path:c.path,happiness:c.happiness,x:c.entity.x,y:c.entity.y,balance:c.balance,home:c.homeUnitId,job:c.jobId,interior:c.indoorLocation,career:c.career})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),buildings:city.buildings.map(b=>({id:b.id,inventory:b.inventory,workers:b.workers})),shipments:city.logistics.shipments.map(s=>({id:s.id,status:s.status,driverId:s.driverId,quantity:s.quantity,position:s.position})),terrain:Array.from(city.world.map),accounts:[...city.accounts].map(([k,a])=>[k,a.balance]),history:city.history.nextId,events:city.events,relations:[...city.society.relations]};
     console.log(JSON.stringify({mode,root,population:city.citizens.length,dt,updates:times.length,ms,p50:times[Math.floor(times.length*.5)],p95:times[Math.floor(times.length*.95)],max:times.at(-1),checksum:hash(state)}));
   }
-}else throw Error('Use simulation, snapshots, bridge, throughput, freight, scene, building-sites, builder-selection or city-render.');
+}else throw Error('Use initialize, simulation, snapshots, bridge, throughput, freight, scene, building-sites, builder-selection or city-render.');
 
 function observed(city){return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:c.entity.x,y:c.entity.y,home:c.homeUnitId,job:c.jobId,career:c.career,interior:c.indoorLocation})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),ledger:city.ledger,events:city.events.map(e=>e.id),relations:[...city.society.relations]};}

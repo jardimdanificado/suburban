@@ -1,4 +1,4 @@
-import {vocabulario,palavrasPorVertentePolitica} from './vocabulario.js?v=party-name-political-vocabulary-1';
+import {vocabulario,palavrasPorVertentePolitica} from './vocabulario.js?v=vocabulary-topic-index-1';
 export const PARTY_ORGANIZATIONS=Object.freeze(
   [
     ["Partido", "m"], 

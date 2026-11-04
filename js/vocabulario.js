@@ -385091,11 +385091,16 @@ function escolheLexema(list,random){
   if(list.length<2)return list[0];const weights=list.map(item=>{const word=typeof item==='string'?item:item.word,quality=typeof item==='string'?1:item.weight||1;return quality*Math.pow(.67,Math.max(0,word.length-6));}),total=weights.reduce((sum,value)=>sum+value,0);let roll=random()*total;for(let i=0;i<list.length;i++){roll-=weights[i];if(roll<=0)return list[i];}return list.at(-1);
 }
 const artigosFrase={m:['o','um','os','uns'],f:['a','uma','as','umas']};
-const indicePalavrasPorTema=new Map();
+let indicePalavrasPorTema=null;
 const bancosGramaticais=new Map();
+function indexarPalavrasPorTema(){
+  const patterns=Object.entries(temasLexicais),index=new Map(patterns.map(([theme])=>[theme,[]]));
+  for(const word of vocabulario.palavras){const normalized=semAcento(word);for(const [theme,pattern]of patterns)if(pattern.test(normalized))index.get(theme).push(word);}
+  return index;
+}
 function palavrasDoTema(theme){
-  if(!indicePalavrasPorTema.has(theme)){const pattern=temasLexicais[theme],words=[];if(pattern)for(const word of vocabulario.palavras)if(pattern.test(semAcento(word)))words.push(word);indicePalavrasPorTema.set(theme,words);}
-  return indicePalavrasPorTema.get(theme);
+  indicePalavrasPorTema??=indexarPalavrasPorTema();
+  return indicePalavrasPorTema.get(theme)||[];
 }
 function bancoGramatical(theme){
   const themes=[...new Set(Array.isArray(theme)?theme:[theme])],cacheKey=themes.join('|');if(bancosGramaticais.has(cacheKey))return bancosGramaticais.get(cacheKey);
