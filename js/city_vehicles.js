@@ -15,6 +15,12 @@ export const VEHICLE_SPECS=Object.freeze({
 });
 export const MAX_CARGO_CAPACITY=Math.max(72,...Object.values(VEHICLE_SPECS).map(spec=>spec.cargo));
 const PERSONAL_MOBILITY=new Set(['bicicleta','bicicleta_carga','patinete','patins','skate']);
+const CARPOOL_CANDIDATE_INDEX=new WeakMap();
+const carpoolCell=(x,y)=>`${Math.floor(x/2)},${Math.floor(y/2)}`;
+function indexCarpoolCandidate(index,citizen,order){const cell=carpoolCell(citizen.entity.x,citizen.entity.y),entry={citizen,order,cell};let group=index.cells.get(cell);if(!group)index.cells.set(cell,group=[]);group.push(entry);index.entries.set(citizen,entry);}
+function refreshCarpoolCandidate(index,citizen){const previous=index.entries.get(citizen);if(!previous)return;const group=index.cells.get(previous.cell),at=group?.indexOf(previous)??-1;if(at>=0)group.splice(at,1);if(group&&!group.length)index.cells.delete(previous.cell);indexCarpoolCandidate(index,citizen,previous.order);}
+function nearbyCarpoolCandidates(index,x,y){const bx=Math.floor(x/2),by=Math.floor(y/2),nearby=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)for(const entry of index.cells.get(`${bx+dx},${by+dy}`)||[])nearby.push(entry);nearby.sort((a,b)=>a.order-b.order);return nearby;}
+function buildCarpoolCandidateIndex(city){const index={cells:new Map(),entries:new WeakMap()},people=city._movingCitizens||city.citizens;for(let i=0;i<people.length;i++)indexCarpoolCandidate(index,people[i],i);return index;}
 export const VEHICLE_RECIPES=Object.freeze({
   bicicleta:{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},
   bicicleta_carga:{quadro:2,rodas:3,corrente:1,selim:1,plataforma:1,rolamentos:3},
@@ -325,7 +331,8 @@ export class CityVehicles {
     // Only citizens with a path can accept a ride. The simulation refreshes
     // this ordered list after task assignment each minute, so avoid scanning
     // every resident for every 0.75 units of bicycle travel.
-    for(const passenger of city._movingCitizens||city.citizens){
+    let index=null,passengers=city._movingCitizens||city.citizens;if(CARPOOL_CANDIDATE_INDEX.has(this)){index=CARPOOL_CANDIDATE_INDEX.get(this);if(!index){index=buildCarpoolCandidateIndex(city);CARPOOL_CANDIDATE_INDEX.set(this,index);}passengers=nearbyCarpoolCandidates(index,v.x,v.y).map(entry=>entry.citizen);}
+    for(const passenger of passengers){
       if(passenger===driver||passenger.entity.destroyed||passenger.indoorLocation||passenger.skybridgeTransit||passenger.skybridgeZ||passenger.mobilityTrip||passenger.ridingVehicleId||passenger.conversation||passenger.workMeal||passenger.deliveryId||passenger.path.length===0||city.minute-(passenger.lastCarpoolAt??-Infinity)<240||['council-session','research','interview','vote','campaign','construction','clean','transport','caregiving'].includes(passenger.task))continue;
       if(Math.hypot(passenger.entity.x-v.x,passenger.entity.y-v.y)>2)continue;
       const passengerGoal=passenger.path.at(-1);if(!passengerGoal||Math.hypot(passengerGoal.x-goal.x,passengerGoal.y-goal.y)>3)continue;
@@ -350,6 +357,7 @@ export class CityVehicles {
     c.ridingVehicleId=null;c.ridingVehicleKind=null;c.ridingAsPassenger=false;c.mobilityTrip=null;c.carpoolResume=null;
     c.task=resume.task??c.task;c.targetId=resume.targetId??c.targetId;
     if(continueOnFoot&&goal){c.path=this.groundPath(c.entity,goal)||[];c.mobilityWalkGoal=c.path.length?{...goal}:null;}
+    const index=CARPOOL_CANDIDATE_INDEX.get(this);if(index)refreshCarpoolCandidate(index,c);
   }
   releaseTrip(c,arrived=false){
     if(c.ridingAsPassenger){this.detachPassenger(c,this.units.get(c.ridingVehicleId),true);return;}
@@ -375,7 +383,7 @@ export class CityVehicles {
     }
   }
   update(dt){
-    if(!this.activeCount)return;const city=this.city;
+    if(!this.activeCount)return;const city=this.city;CARPOOL_CANDIDATE_INDEX.set(this,null);
     for(const v of this.units.values()){
       if(v.policeRecoveryOfficerId){
         const officer=city.society.citizen(v.policeRecoveryOfficerId),mission=officer?.policeRestitution;
@@ -412,6 +420,7 @@ export class CityVehicles {
       }
       if(!c.path.length)this.releaseTrip(c,!blocked);
     }
+    CARPOOL_CANDIDATE_INDEX.delete(this);
   }
   removeCitizen(c,heir){
     this.releaseTrip(c);

@@ -2,6 +2,15 @@ import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {ROAD_TILES,tileAt} from './city_terrain.js?v=quarry-outskirts-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
+const BEACH_LEISURE_OCCUPANCY=new WeakMap();
+function beachLeisureOccupancy(furniture){
+ const city=furniture.city;let cache=BEACH_LEISURE_OCCUPANCY.get(furniture);if(cache?.minute===city.minute)return cache.byCell;
+ const byCell=new Map();for(const citizen of city.citizens)if(citizen.task==='beach_leisure'&&citizen.beachLeisure){const point=citizen.beachLeisure,key=`${Math.floor(point.x/2)},${Math.floor(point.y/2)}`;let group=byCell.get(key);if(!group)byCell.set(key,group=[]);group.push(citizen);}
+ BEACH_LEISURE_OCCUPANCY.set(furniture,cache={minute:city.minute,byCell});return byCell;
+}
+function reserveBeachLeisure(furniture,citizen){
+ const point=citizen.beachLeisure,byCell=beachLeisureOccupancy(furniture),key=`${Math.floor(point.x/2)},${Math.floor(point.y/2)}`;let group=byCell.get(key);if(!group)byCell.set(key,group=[]);group.push(citizen);
+}
 function furnitureFacingAngle(city,furniture){
  const tx=Math.floor(furniture.x),ty=Math.floor(furniture.y),beach=furniture.kind==='beach_chair'||furniture.kind==='beach_ground';
  if(beach){
@@ -69,9 +78,9 @@ export class CityFurniture{
    if(tileAt(city.world,x,y)!==TILE_SAND||!city.walkable(x,y)||city.nature?.tiles?.has(`${x},${y}`))continue;
    let shore=false;for(let dy=-2;dy<=2&&!shore;dy++)for(let dx=-2;dx<=2;dx++)if(Math.abs(dx)+Math.abs(dy)<=2&&tileAt(city.world,x+dx,y+dy)===TILE_WATER){shore=true;break;}
    if(!shore)continue;const point={x:x+.5,y:y+.5},distance=Math.hypot(point.x-origin.x,point.y-origin.y);if(distance>14)continue;
-   if(city.citizens.some(other=>other!==c&&other.task==='beach_leisure'&&other.beachLeisure&&Math.hypot(other.beachLeisure.x-point.x,other.beachLeisure.y-point.y)<1.15))continue;
    candidates.push({point,distance});
   }
+  if(candidates.length){const beachOccupants=beachLeisureOccupancy(this);for(let i=candidates.length-1;i>=0;i--){const {point}=candidates[i],bx=Math.floor(point.x/2),by=Math.floor(point.y/2);let occupied=false;for(let dy=-1;dy<=1&&!occupied;dy++)for(let dx=-1;dx<=1&&!occupied;dx++)for(const other of beachOccupants.get(`${bx+dx},${by+dy}`)||[])if(other!==c&&other.task==='beach_leisure'&&other.beachLeisure&&Math.hypot(other.beachLeisure.x-point.x,other.beachLeisure.y-point.y)<1.15){occupied=true;break;}if(occupied)candidates.splice(i,1);}}
   candidates.sort((a,b)=>a.distance-b.distance);
   for(const {point}of candidates.slice(0,12)){
    const path=city.findPath(origin,point);if(path===null)continue;const end=path.at(-1)||origin;if(Math.hypot(end.x-point.x,end.y-point.y)>.04)path.push({...point});
@@ -82,7 +91,7 @@ export class CityFurniture{
     {kind:'beach_ground',umbrella:false}
    ],setup=options[seed%options.length],variant=(seed>>>4)%8;
    c.beachLeisure={x:point.x,y:point.y,angle:furnitureFacingAngle(city,{...point,kind:setup.kind}),kind:setup.kind,variant,umbrellaStyle:setup.umbrella?(seed>>>9)%8:null,until:city.minute+45};
-   c.task='beach_leisure';c.targetId=null;c.path=path;c.action='Indo descansar na praia';return true;
+   c.task='beach_leisure';reserveBeachLeisure(this,c);c.targetId=null;c.path=path;c.action='Indo descansar na praia';return true;
   }
   return false;
  }

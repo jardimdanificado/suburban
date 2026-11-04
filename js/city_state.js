@@ -1,14 +1,14 @@
 import {CitySubstances} from './city_substances.js';
 import {ensureExternalAccount} from './city_currency.js';
 import {ensureJusticeSkills} from './city_justice_skills.js';
-import {CityFurniture} from './city_furniture.js?v=wardrobe-expansion-1';
+import {CityFurniture} from './city_furniture.js?v=beach-occupancy-index-1';
 import {CitySupplies} from './city_supplies.js?v=survival-capacity-1';
 import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CityFiscal} from './city_fiscal.js';
 import {CityInterventions} from './city_interventions.js?v=infinite-external-money-1';
-import {CityVehicles} from './city_vehicles.js?v=carpool-candidates-1';
+import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {CityCampaignMaterials} from './city_campaign_materials.js?v=banner-placement-1';
 import {CityCouncilChamber} from './city_council_chamber.js';
 import {CityResearch} from './city_research.js';
@@ -26,16 +26,16 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=infinite-external-money-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=outdoor-leisure-seat-index-1';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=secretariat-health-1';
+import { CityJustice } from './city_justice.js?v=injury-idle-fast-path-1';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency } from './city_currency.js';
 import { CityHousing } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=secretariat-portfolios-1';
-import { CityLife } from './city_life.js?v=body-weight-2';
+import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment } from './city_development.js?v=secretariat-portfolios-1';
 import { CityLogistics } from './city_logistics.js?v=secretariat-portfolios-1';
@@ -50,7 +50,7 @@ const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,
   CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, CityJustice, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
-const localFields = new Set(['activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
+const localFields = new Set(['activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','positionChecks','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
   'childrenByGuardian', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_initialTaskStaggerUntil', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at
@@ -279,6 +279,7 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
   city.justice??=new CityJustice(city);
   if(Object.getPrototypeOf(city.justice)!==CityJustice.prototype)Object.setPrototypeOf(city.justice,CityJustice.prototype);
   city.justice.city=city;city.justice.ensureState();
+  city.life??=new CityLife(city);if(Object.getPrototypeOf(city.life)!==CityLife.prototype)Object.setPrototypeOf(city.life,CityLife.prototype);city.life.city=city;if(!(city.life.positionChecks instanceof WeakMap))city.life.positionChecks=new WeakMap();
   if(rebuildIndexes)for(const [index,c]of city.citizens.entries())ensureJusticeSkills(c,index,city.initialSeed,{newborn:c.initialAge===0});
   city.furniture??=new CityFurniture(city);
   city.supplies??=new CitySupplies(city);city.water??=new CityWater(city);

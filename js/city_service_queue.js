@@ -4,6 +4,12 @@ const queueKind=kind=>['workmeal','supplies'].includes(kind)?'food':kind;
 // Service queues are shared by everyone waiting at the same entrance. Tickets
 // retain arrival order; outdoor places are reserved across all service types.
 const slotCaches=new WeakMap();
+function pruneQueue(city,entrance){
+ const queue=entrance.serviceQueue;let write=0;
+ for(let read=0;read<queue.length;read++){const q=queue[read],person=city.society.citizen(q.citizenId),valid=person&&!person.entity.destroyed&&queueKind(person.task)===queueKind(q.kind)&&person.targetId===q.buildingId&&(q.kind!=='toilet'||person.toiletTargetId===q.resource);if(valid)queue[write++]=q;else if(person?.serviceQueue?.buildingId===q.buildingId){person.serviceQueue=null;person.facingTarget=null;}}
+ queue.length=write;
+}
+function removeTicket(entrance,ticket){const queue=entrance.serviceQueue,index=queue.indexOf(ticket);if(index>=0)queue.splice(index,1);}
 function slots(city,b){
  const key=`${city.world.revision||0}:${city.obstacleRevision||0}:${b.door.x}:${b.door.y}`,cached=slotCaches.get(b);if(cached?.key===key)return cached.points;
  const x=Math.floor(b.door.x),y=Math.floor(b.door.y),points=[];
@@ -20,7 +26,7 @@ export function reserveService(city,c,b,kind,resource){
 }
 export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=null){
  const entrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;entrance.serviceQueue??=[];
- entrance.serviceQueue=entrance.serviceQueue.filter(q=>{const p=city.society.citizen(q.citizenId),valid=p&&!p.entity.destroyed&&queueKind(p.task)===queueKind(q.kind)&&p.targetId===q.buildingId&&(q.kind!=='toilet'||p.toiletTargetId===q.resource);if(!valid&&p?.serviceQueue?.buildingId===q.buildingId){p.serviceQueue=null;p.facingTarget=null;}return valid;});
+ pruneQueue(city,entrance);
  const ticket=reserveService(city,c,b,kind,resource);
  const older=entrance.serviceQueue.some(q=>q.buildingId===b.id&&queueKind(q.kind)===queueKind(kind)&&q.resource===resource&&!q.admittedUnitId&&q.sequence<ticket.sequence);
  let inside=c.indoorLocation?.buildingId===b.id&&!c.indoorLocation.exiting;
@@ -34,11 +40,11 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
   city.furniture?.release(c);
   const approach=entrance.door||b.door;
   if(!inside&&Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.75){if(!wasAdmitted||!c.path.length){const route=city.findPath(c.entity,approach);if(route!==null)c.path=route;}c.action='Indo ao atendimento';return false;}
-  entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;return true;
+  removeTicket(entrance,ticket);c.serviceQueue=null;c.facingTarget=null;return true;
  }
  // A queue can outlast its service capacity; a critically urgent person must
  // eventually leave it instead of waiting forever at zero need.
- if(kind==='toilet'&&c.needs.toilet<10&&city.minute-ticket.joinedAt>=90){entrance.serviceQueue=entrance.serviceQueue.filter(q=>q!==ticket);c.serviceQueue=null;c.facingTarget=null;city.sanitation.emergencyRelief(c);return false;}
+ if(kind==='toilet'&&c.needs.toilet<10&&city.minute-ticket.joinedAt>=90){removeTicket(entrance,ticket);c.serviceQueue=null;c.facingTarget=null;city.sanitation.emergencyRelief(c);return false;}
  // The outdoor route ends at the door. From there, use the interior graph
  // to reach a waiting place without trying to path through exterior walls.
  if(c.path.length)return false;

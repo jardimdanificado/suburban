@@ -242,12 +242,15 @@ export class CityCitizenModels {
     geometry.setAttribute('weightMorph',new this.THREE.BufferAttribute(morphFactors,2));
     geometry.setAttribute('instanceFat',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));geometry.setAttribute('instancePattern',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));return geometry;
   }
-  setInstanceFat(mesh,index,citizen){
-    const attribute=mesh.geometry.attributes.instanceFat;if(!attribute)return;
-    // Body shape changes with height/weight, not with the render frame. Reuse
-    // the per-citizen value and upload the instanced buffer only when needed.
+  bodyShapeFor(citizen){
     let shape=this.bodyShapeCache.get(citizen);
     if(!shape||shape.weight!==citizen.bodyWeightKg||shape.height!==citizen.bodyHeightCm){shape={weight:citizen.bodyWeightKg,height:citizen.bodyHeightCm,fat:bodyFatAmount(citizen)};this.bodyShapeCache.set(citizen,shape);}
+    return shape;
+  }
+  setInstanceFat(mesh,index,shape){
+    const attribute=mesh.geometry.attributes.instanceFat;if(!attribute)return;
+    // The per-citizen shape is looked up once and shared by body, clothing,
+    // and fitted accessories for this render frame.
     if(attribute.array[index]!==shape.fat){attribute.array[index]=shape.fat;mesh.userData.instanceFatDirty=true;}
   }
   setInstancePattern(mesh,index,patternId){
@@ -269,7 +272,8 @@ export class CityCitizenModels {
     const piece=RENDERED_GARMENTS.includes(garment?.piece)?garment.piece:null,printed=PRINTED_GARMENTS.has(piece),patterned=PATTERNED_GARMENTS.has(piece),garmentHex=typeof garment?.color==='number'?`#${garment.color.toString(16).padStart(6,'0')}`:typeof garment?.color==='string'&&/^#[0-9a-f]{6}$/i.test(garment.color)?garment.color:'#8d806e',printId=garment?.printId||TROPICAL_PRINTS[entity.id%TROPICAL_PRINTS.length],garmentMaterial=printed?this.printedMaterial(piece,garmentHex,printId,garment?.artPrint):null,lowerSkirt=SKIRT_PIECES.has(lower?.piece)?lower.piece:null;
     let partyCap=currentPartyCap||null,partyCapIndex=partyCap?wardrobe.indexOf(partyCap):-1;
     const hat=cesta?{piece:'cesta',color:0xb8874f}:partyCap||headwear,items=[hat,footwear,lower,handwear];if(partyCap?.partyNumber!=null)items.push({piece:`party-number-${partyCap.partyNumber}`,color:partyCap.partyFlag?.foreground||'#f7f0dc'});
-    appearance={wardrobe,wearingIndex,garment,garmentPiece:garment?.piece,garmentColor:garment?.color,printIdValue:garment?.printId,artworkIdValue:garment?.artworkId,lowerIndex,lower,lowerPiece:lower?.piece,lowerColor:lower?.color,headwearIndex,headwear,headwearPiece:headwear?.piece,headwearColor:headwear?.color,footwearIndex,footwear,footwearPiece:footwear?.piece,footwearColor:footwear?.color,handwearIndex,handwear,handwearPiece:handwear?.piece,handwearColor:handwear?.color,capId,cesta,partyCap,partyCapIndex,partyCapPiece:partyCap?.piece,partyCapColor:partyCap?.color,partyCapNumber:partyCap?.partyNumber,partyCapFlag:partyCap?.partyFlag,piece,printed,patterned,garmentHex,printId,garmentMaterial,lowerSkirt,items};
+    const colorHex=raw=>typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;
+    appearance={wardrobe,wearingIndex,garment,garmentPiece:garment?.piece,garmentColor:garment?.color,garmentColorHex:colorHex(garmentHex),printIdValue:garment?.printId,artworkIdValue:garment?.artworkId,lowerIndex,lower,lowerPiece:lower?.piece,lowerColor:lower?.color,headwearIndex,headwear,headwearPiece:headwear?.piece,headwearColor:headwear?.color,footwearIndex,footwear,footwearPiece:footwear?.piece,footwearColor:footwear?.color,handwearIndex,handwear,handwearPiece:handwear?.piece,handwearColor:handwear?.color,capId,cesta,partyCap,partyCapIndex,partyCapPiece:partyCap?.piece,partyCapColor:partyCap?.color,partyCapNumber:partyCap?.partyNumber,partyCapFlag:partyCap?.partyFlag,piece,printed,patterned,garmentHex,printId,garmentMaterial,lowerSkirt,items,itemColorHexes:items.map(item=>colorHex(item?.color))};
     this.appearanceCache.set(c,appearance);return appearance;
   }
   setInstanceMatrix(mesh,index,matrix){
@@ -427,7 +431,7 @@ export class CityCitizenModels {
     else motion.actionToken=null;
     const animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
-    const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,printId,garmentMaterial,lower,lowerSkirt}=appearance,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}${printed&&!patterned?`:${garmentHex}:${printId}:${garment?.artworkId||''}`:''}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key);
+    const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}${printed&&!patterned?`:${garmentHex}:${printId}:${garment?.artworkId||''}`:''}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key);
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}this.activeBatches.add(batch);
     if(batch.count===batch.capacity){
       // Citizen bodies are already rendered in shared animation/outfit batches.
@@ -442,13 +446,13 @@ export class CityCitizenModels {
       }batch.capacity=capacity;
     }
     const bikeRider=c.ridingVehicleId&&BIKE_KINDS.has(c.ridingVehicleKind),riderLift=bikeRider?(c.ridingAsPassenger?0.23:0.38):c.ridingVehicleId?0.18:0;
-    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,positionY=surfaceH+(posePoint?.z??inside?.z??0)+riderLift,bodyIndex=batch.count;
+    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,positionY=surfaceH+(posePoint?.z??inside?.z??0)+riderLift,bodyIndex=batch.count,bodyShape=this.bodyShapeFor(c);
     const transformUnchanged=motion.bodyBatch===batch&&motion.bodyMesh===batch.mesh&&motion.clothingMesh===batch.clothingMesh&&motion.bodyIndex===bodyIndex&&motion.bodyFrame===this.frameToken-1&&motion.bodyX===renderX&&motion.bodyY===positionY&&motion.bodyZ===renderY&&motion.bodyAngle===renderAngle&&motion.bodySize===size&&motion.bodyHeightScale===heightScale&&motion.bodyLying===lying;
     this.position.set(renderX,positionY,renderY);
     let matrixReady=transformUnchanged;
     if(!transformUnchanged){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);this.setInstanceMatrix(batch.mesh,bodyIndex,this.matrix);motion.bodyBatch=batch;motion.bodyMesh=batch.mesh;motion.clothingMesh=batch.clothingMesh;motion.bodyIndex=bodyIndex;motion.bodyX=renderX;motion.bodyY=positionY;motion.bodyZ=renderY;motion.bodyAngle=renderAngle;motion.bodySize=size;motion.bodyHeightScale=heightScale;motion.bodyLying=lying;matrixReady=true;}
     motion.bodyFrame=this.frameToken;
-    this.setInstanceFat(batch.mesh,bodyIndex,c);
+    this.setInstanceFat(batch.mesh,bodyIndex,bodyShape);
     const presence=c.campaignPresence?.electionId===activeCampaignElectionId&&activeCampaignStatus==='campaign'?c.campaignPresence:null;
     const flag=c.campaign?.partyFlag||c.campaign?.flag||presence?.partyFlag;
     if(flag&&!c.ridingVehicleId&&!c.mobilityTrip&&!c.deliveryId){
@@ -457,7 +461,7 @@ export class CityCitizenModels {
       carrier.group.position.copy(this.position);carrier.group.scale.setScalar(size);carrier.group.rotation.y=renderAngle;animateClothFlag(carrier.group.userData.cloth,Math.floor(this.clock*10)/10,(entity.id%19)*.31);this.activeCampaignFlags.add(entity.id);
     }
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);this.setInstanceColor(batch.mesh,batch.count,this.color);
-    if(batch.clothingMesh){if(!transformUnchanged)this.setInstanceMatrix(batch.clothingMesh,bodyIndex,this.matrix);this.setInstanceFat(batch.clothingMesh,bodyIndex,c);if(patterned)this.setInstancePattern(batch.clothingMesh,bodyIndex,printId);const raw=garment?.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:patterned?hex:printed?0xffffff:presence?.color?Number.parseInt(String(presence.color).replace('#',''),16):hex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(this.dirtColor,Math.min(.72,garment.dirt/140));this.setInstanceColor(batch.clothingMesh,bodyIndex,this.color);}batch.count++;
+    if(batch.clothingMesh){if(!transformUnchanged)this.setInstanceMatrix(batch.clothingMesh,bodyIndex,this.matrix);this.setInstanceFat(batch.clothingMesh,bodyIndex,bodyShape);if(patterned)this.setInstancePattern(batch.clothingMesh,bodyIndex,printId);this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:patterned?garmentColorHex:printed?0xffffff:presence?.color?Number.parseInt(String(presence.color).replace('#',''),16):garmentColorHex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(this.dirtColor,Math.min(.72,garment.dirt/140));this.setInstanceColor(batch.clothingMesh,bodyIndex,this.color);}batch.count++;
     const items=appearance.items;
     motion.accessoryTransforms??=[{},{},{},{},{}];
     for(let itemIndex=0;itemIndex<5;itemIndex++){const item=items[itemIndex];if(!item||!RENDERED_ACCESSORIES.has(item.piece)&&!item.piece.startsWith('party-number-')){motion.accessoryTransforms[itemIndex].key=null;continue;}
@@ -470,8 +474,8 @@ export class CityCitizenModels {
       }
       const accessoryIndex=head.count,accessoryTransform=motion.accessoryTransforms[itemIndex],accessoryUnchanged=transformUnchanged&&accessoryTransform.key===itemKey&&accessoryTransform.batch===head&&accessoryTransform.mesh===head.mesh&&accessoryTransform.index===accessoryIndex;
       if(!accessoryUnchanged){if(!matrixReady){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);matrixReady=true;}if(isStaticHeadwear){const anchor=this.headwearAnchors.get(itemKey);this.accessoryOffset.set(anchor?.x||0,anchor?.y||0,anchor?.z||0).applyMatrix4(this.matrix);this.accessoryMatrix.copy(this.matrix).setPosition(this.accessoryOffset);this.setInstanceMatrix(head.mesh,accessoryIndex,this.accessoryMatrix);}else this.setInstanceMatrix(head.mesh,accessoryIndex,this.matrix);}
-      accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isFittedClothing)this.setInstanceFat(head.mesh,accessoryIndex,c);
-      const raw=item.color,hex=typeof raw==='number'?raw:typeof raw==='string'&&/^#[0-9a-f]{6}$/i.test(raw)?parseInt(raw.slice(1),16):0x8d806e;this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(item.dirt||0)>0)this.color.lerp(this.dirtColor,Math.min(.72,item.dirt/140));this.setInstanceColor(head.mesh,head.count,this.color);head.count++;
+      accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isFittedClothing)this.setInstanceFat(head.mesh,accessoryIndex,bodyShape);
+      const hex=itemColorHexes[itemIndex];this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:hex);if(!dimmed&&entity.combatFlash<=0&&(item.dirt||0)>0)this.color.lerp(this.dirtColor,Math.min(.72,item.dirt/140));this.setInstanceColor(head.mesh,head.count,this.color);head.count++;
     }
     return true;
   }

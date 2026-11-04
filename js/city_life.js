@@ -3,7 +3,7 @@ import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-3';
 export const LIFE_RULES = { starvationMinutes: 720, dehydrationMinutes: 360, terminalHealthMinutes: 120, stalledMinutes: 120 };
 const NEED_KEYS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
 export class CityLife {
-  constructor(city) { this.city = city; this.deaths = []; this.deathCount = 0; this.usedNames = new Set(); this.usedBuildingNames = new Set(); this.stallRecoveries = 0; }
+  constructor(city) { this.city = city; this.deaths = []; this.deathCount = 0; this.usedNames = new Set(); this.usedBuildingNames = new Set(); this.stallRecoveries = 0; this.positionChecks=new WeakMap(); }
   identity(index, options = {}) { return makeIdentity(this.city, this.usedNames, index, options); }
   name(index, options = {}) { return this.identity(index, options).name; }
   buildingName(label) { return makeBuildingName(this.city, this.usedBuildingNames, label); }
@@ -57,7 +57,11 @@ export class CityLife {
   }
   recoverBlockedPosition(c) {
     const city=this.city;
-    if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ||city.walkable(Math.floor(c.entity.x),Math.floor(c.entity.y)))return false;
+    if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ)return false;
+    const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y),worldRevision=city.world.revision||0,obstacleRevision=city.obstacleRevision||0,occupiedCount=city.occupied.size,checked=this.positionChecks.get(c);
+    if(checked?.x===x&&checked.y===y&&checked.worldRevision===worldRevision&&checked.obstacleRevision===obstacleRevision&&checked.occupiedCount===occupiedCount)return false;
+    this.positionChecks.set(c,{x,y,worldRevision,obstacleRevision,occupiedCount});
+    if(city.walkable(x,y))return false;
     // Repair invalid ground positions, including walls and water after a route interruption.
     const building=city.buildings.find(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&c.entity.x>=b.entity.x&&c.entity.x<b.entity.x+b.width&&c.entity.y>=b.entity.y&&c.entity.y<b.entity.y+b.depth);
     let destination=building?.door;

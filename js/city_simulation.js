@@ -1,7 +1,7 @@
 import {CitySubstances} from './city_substances.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=wardrobe-expansion-1';
+import {CityFurniture} from './city_furniture.js?v=beach-occupancy-index-1';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=overhead-billboards-1';
 import {CityWater} from './city_water.js';
@@ -14,7 +14,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=perf-employment-stagger-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=carpool-candidates-1';
+import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {ensureSkinColor} from './city_skin.js';
@@ -29,7 +29,7 @@ import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
 import { CityGovernment as CityPolitics } from './city_government.js?v=secretariat-portfolios-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=secretariat-health-1';
+import { CityJustice } from './city_justice.js?v=injury-idle-fast-path-1';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=body-mobility-1';
 import {interiorRoute} from './city_interior_layout.js?v=interiors-completion-7';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -41,7 +41,7 @@ import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-investment-index-1';
 import { CitySanitation } from './city_sanitation.js?v=secretariat-portfolios-1';
-import { CityLife } from './city_life.js?v=body-weight-2';
+import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=secretariat-portfolios-1';
 import { CityLogistics } from './city_logistics.js?v=secretariat-portfolios-1';
@@ -51,6 +51,18 @@ import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_econ
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=road-durability-1';
 
+const OUTDOOR_LEISURE_SEATS=new WeakMap();
+function outdoorLeisureSeats(city){
+  let index=OUTDOOR_LEISURE_SEATS.get(city);if(index?.minute===city.minute)return index.seats;
+  const seats=new Map();
+  for(const person of city.citizens)if(person.task==='outdoor_leisure'&&person.outdoorLeisure){
+    const visit=person.outdoorLeisure,key=`${visit.buildingId}:${visit.spaceId}`;let bySlot=seats.get(key);if(!bySlot)seats.set(key,bySlot=new Map());let occupants=bySlot.get(visit.slot);if(!occupants)bySlot.set(visit.slot,occupants=new Set());occupants.add(person);
+  }
+  OUTDOOR_LEISURE_SEATS.set(city,{minute:city.minute,seats});return seats;
+}
+function reserveOutdoorLeisureSeat(seats,visit,citizen){
+  const key=`${visit.buildingId}:${visit.spaceId}`;let bySlot=seats.get(key);if(!bySlot)seats.set(key,bySlot=new Map());let occupants=bySlot.get(visit.slot);if(!occupants)bySlot.set(visit.slot,occupants=new Set());occupants.add(citizen);
+}
 const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
@@ -680,9 +692,10 @@ export class CitySimulation {
     const joblessDuringShift=this.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&this.hour>=8&&this.hour<17;
     if(!urgent&&!joblessDuringShift&&(task==='leisure'||task==='social'&&n.social>=35)&&n.leisure<95&&this.hour>=6&&this.hour<22){
       const employer=job||company,workplace=employer?.officeTenantOf?this.building(employer.officeTenantOf):employer,dwelling=this.housing.home(c),sites=[...(home?[{site:home,access:'home'}]:[]),...(workplace&&workplace!==home?[{site:workplace,access:'work'}]:[])];
+      const seatIndex=outdoorLeisureSeats(this);
       for(const {site,access} of sites){const spaces=buildingLeisureSpaces(site).filter(s=>s.kind==='roof_terrace'||(access==='home'?dwelling?.unitIds.includes(s.unitId):!employer?.officeTenantOf||s.floor===employer.officeFloor));
-       for(const space of spaces){const occupied=this.citizens.filter(other=>other!==c&&other.task==='outdoor_leisure'&&other.outdoorLeisure?.buildingId===site.id&&other.outdoorLeisure.spaceId===space.id).map(other=>other.outdoorLeisure.slot),slot=Array.from({length:space.capacity},(_,i)=>i).find(i=>!occupied.includes(i));if(slot==null)continue;const path=this.findPath(c.entity,site.door);if(path===null)continue;
-        const offsets=space.kind==='roof_terrace'?[[0,0],[.35,0],[-.35,0],[0,.35]]:[[0,0]],offset=offsets[slot]||offsets[0];c.outdoorLeisure={buildingId:site.id,jobId:access==='work'?employer.id:null,access,unitId:space.unitId,spaceId:space.id,kind:space.kind,slot,position:{...space.position,x:space.position.x+offset[0],y:space.position.y+offset[1]},until:null};c.task='outdoor_leisure';c.targetId=site.id;c.path=path;c.action=space.kind==='balcony'?'Indo descansar na varanda':'Indo descansar na cobertura';return;
+       for(const space of spaces){const bySlot=seatIndex.get(`${site.id}:${space.id}`);let slot=null;for(let i=0;i<space.capacity;i++){let occupied=false;for(const other of bySlot?.get(i)||[])if(other!==c&&other.task==='outdoor_leisure'&&other.outdoorLeisure?.buildingId===site.id&&other.outdoorLeisure?.spaceId===space.id&&other.outdoorLeisure?.slot===i){occupied=true;break;}if(!occupied){slot=i;break;}}if(slot==null)continue;const path=this.findPath(c.entity,site.door);if(path===null)continue;
+        const offsets=space.kind==='roof_terrace'?[[0,0],[.35,0],[-.35,0],[0,.35]]:[[0,0]],offset=offsets[slot]||offsets[0];c.outdoorLeisure={buildingId:site.id,jobId:access==='work'?employer.id:null,access,unitId:space.unitId,spaceId:space.id,kind:space.kind,slot,position:{...space.position,x:space.position.x+offset[0],y:space.position.y+offset[1]},until:null};c.task='outdoor_leisure';reserveOutdoorLeisureSeat(seatIndex,c.outdoorLeisure,c);c.targetId=site.id;c.path=path;c.action=space.kind==='balcony'?'Indo descansar na varanda':'Indo descansar na cobertura';return;
        }
       }
     }
