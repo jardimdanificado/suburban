@@ -19,7 +19,7 @@ import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFo
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
 import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=party-membership-history-1';
-import {renderElectionMonitor} from './city_election_ui.js?v=election-support-map-1';
+import {renderElectionMonitor} from './city_election_ui.js?v=concise-debate-qa-1';
 import {sectionTitle} from './city_ui_sections.js';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
 import {ROTATION_LABELS,buildingFacadeBannerSupport} from './city_building_geometry.js';

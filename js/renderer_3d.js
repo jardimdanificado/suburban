@@ -16,7 +16,7 @@ import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-frame-shape-2';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
-import {partyFlagCanvas} from './city_party_flags.js?v=party-palette-generator-1';
+import {partyFlagCanvas} from './city_party_flags.js?v=party-flag-slogan-keys-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=retaining-face-winding-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {

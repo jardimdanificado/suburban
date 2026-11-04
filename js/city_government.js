@@ -18,9 +18,9 @@ import {seedPartyCaps,issuePartyCap,returnPartyCap} from './city_party_caps.js?v
 import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investigateCases } from './city_political_institutions.js';
 import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js?v=needs-recovery-1';
 import { TAX_CATEGORIES, MINIMUM_WAGE_TAX_RATE, MINIMUM_BUSINESS_TAX_RATE } from './city_sales_tax.js';
-import { makePartyFlag, makeMergedPartyFlag, upgradePartyFlagPalette, makeMunicipalFlag, mutateMunicipalFlag, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
+import { makePartyFlag, makeMergedPartyFlag, upgradePartyFlagPalette, makeMunicipalFlag, mutateMunicipalFlag, compactPartySlogan, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
 import { CityCouncil } from './city_council.js?v=secretariat-portfolios-1';
-import { CityCampaigns } from './city_campaigns.js?v=organic-party-slogans-1';
+import { CityCampaigns } from './city_campaigns.js?v=concise-debate-qa-1';
 import {gerarSloganPartidario} from './gerador_frases.js?v=vocabulary-organic-slogans-1';
 import {SECRETARIATS,SECRETARY_ELECTION_MODES,SECRETARY_MODE_RANK,TRANSPORT_POLICIES,secretarySkillScore} from './city_secretariats.js';
 import {prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
@@ -177,7 +177,7 @@ export class CityGovernment extends CityPolitics {
     for(const party of this.parties){
       if((party.sloganVersion||0)<1||!party.slogan){party.slogan=gerarSloganPartidario({random:()=>this.city.random()});party.sloganVersion=1;}
       if(!party.flag?.layoutId)party.flag=makePartyFlag(this.city,party.id-1,party.founderIds?.map(id=>this.city.society.citizen(id))||[],party);else party.flag=upgradePartyFlagPalette(this.city,party.flag);
-      if(party.flag?.texts?.length){const texts=party.flag.texts.map(text=>Object.freeze({...text,value:text.kind==='number'?String(party.number??''):text.kind==='name-number'?`${party.short||party.name} ${party.number??''}`.trim():text.kind==='name'?party.short||party.name:text.kind==='phrase'?party.slogan:text.value}));party.flag=Object.freeze({...party.flag,texts:Object.freeze(texts)});}
+      if(party.flag?.texts?.length){const texts=party.flag.texts.map(text=>Object.freeze({...text,value:text.kind==='number'?String(party.number??''):text.kind==='name-number'?`${party.short||party.name} ${party.number??''}`.trim():text.kind==='name'?party.short||party.name:text.kind==='phrase'?compactPartySlogan(party.slogan):text.value}));party.flag=Object.freeze({...party.flag,texts:Object.freeze(texts)});}
     }
     for(const citizen of this.city.citizens){const campaign=citizen.campaign,party=campaign&&this.party(campaign.partyId);if(!party)continue;campaign.partyFlag=party.flag;campaign.speechColor=party.flag.background;if(campaign.flag)campaign.flag=party.flag;}
     for(const citizen of this.city.citizens){const presence=citizen.campaignPresence,party=presence&&this.party(presence.partyId);if(party)presence.partyFlag=party.flag;}

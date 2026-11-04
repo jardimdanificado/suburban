@@ -152,13 +152,19 @@ function weightedSprite(city,party,used){
  });
  let pick=city.random()*total;for(let i=0;i<candidates.length;i++){pick-=weights[i];if(pick<=0)return candidates[i];}return candidates.at(-1)||'Feature_Flower.png';
 }
+const SLOGAN_STOP_WORDS=new Set(['a','as','o','os','um','uma','uns','umas','de','da','do','das','dos','em','no','na','nos','nas','por','para','com','sem','e','ou','mas','que','se','ao','aos','à','às','como','mais','menos','todo','toda','todos','todas','seu','sua','seus','suas','nosso','nossa','nossos','nossas']);
+export function compactPartySlogan(slogan){
+ const words=String(slogan||'').match(/[A-Za-zÀ-ÿ0-9]+(?:['’-][A-Za-zÀ-ÿ0-9]+)*/g)||[];if(words.length<=6)return String(slogan||'');
+ const keywords=words.filter(word=>word.length>=4&&!SLOGAN_STOP_WORDS.has(word.toLocaleLowerCase('pt-BR'))),selected=keywords.slice(0,3);for(const word of words)if(selected.length<3&&!selected.includes(word))selected.push(word);
+ return selected.slice(0,3).join(' ');
+}
 function chooseText(city,party,kind){
  const source=String(party?.slogan||party?.short||party?.name||'');
  if(kind==='number')return party?.number==null?String(party?.short||''):String(party.number);
  if(kind==='name')return String(party?.short||party?.name||'');
  if(kind==='word'){const words=source.split(/\s+/).filter(word=>word.length>2);return words.length?words[Math.floor(city.random()*words.length)]:String(party?.short||party?.name||'');}
  if(kind==='name-number')return `${party?.short||party?.name||''} ${party?.number??''}`.trim();
- if(kind==='phrase')return source;
+ if(kind==='phrase')return party?.id!=null?compactPartySlogan(source):source;
  const kinds=['word','phrase','name','number','name-number'];return chooseText(city,party,kinds[Math.floor(city.random()*kinds.length)]);
 }
 function buildTexts(city,party,boxes,palette){return Object.freeze(boxes.map(box=>Object.freeze({...box,value:chooseText(city,party,box.kind),color:palette[2]||palette[1]})).filter(text=>text.value));}
