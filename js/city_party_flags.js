@@ -164,7 +164,7 @@ function chooseText(city,party,kind){
  if(kind==='name')return String(party?.short||party?.name||'');
  if(kind==='word'){const words=source.split(/\s+/).filter(word=>word.length>2);return words.length?words[Math.floor(city.random()*words.length)]:String(party?.short||party?.name||'');}
  if(kind==='name-number')return `${party?.short||party?.name||''} ${party?.number??''}`.trim();
- if(kind==='phrase')return party?.id!=null?compactPartySlogan(source):source;
+ if(kind==='phrase')return party?.id!=null||party?.municipal?compactPartySlogan(source):source;
  const kinds=['word','phrase','name','number','name-number'];return chooseText(city,party,kinds[Math.floor(city.random()*kinds.length)]);
 }
 function buildTexts(city,party,boxes,palette){return Object.freeze(boxes.map(box=>Object.freeze({...box,value:chooseText(city,party,box.kind),color:palette[2]||palette[1]})).filter(text=>text.value));}
@@ -223,8 +223,11 @@ export function makePartyFlag(city,index,founders=[],party=null){
  return Object.freeze({foreground,background,colors,paletteVersion:3,detailVersion:1,pattern:Math.floor(city.random()*3),backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:palette.colorSource,emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
 export function makeMunicipalFlag(city,identity={}){
- const name=String(identity.name||'Cidade'),subject={name,short:name,slogan:String(identity.slogan||''),number:null};
- return makePartyFlag(city,-1,[],subject);
+ const name=String(identity.name||'Cidade'),subject={name,short:name,slogan:String(identity.slogan||''),number:null,municipal:true};let flag;
+ // Give the city's flag the same palette and layout generator as party flags,
+ // while avoiding the rare text-only, plain-field combination for its default.
+ for(let attempt=0;attempt<48;attempt++){flag=makePartyFlag(city,-1,[],subject);if(flag.emblems.length&&flag.backgroundStyle!=='solid')return flag;}
+ return flag;
 }
 function remapMunicipalFlag(city,flag,emblems,texts,identity){
  const count=emblems.length,textCount=texts.length,oldTextLayout=flag.textLayout,layouts=PARTY_FLAG_LAYOUTS.filter(layout=>layout.count===count),matching=layouts.filter(layout=>layout.textLayout===oldTextLayout&&layout.textBoxes.length===textCount),pool=matching.length?matching:layouts.filter(layout=>layout.textBoxes.length===textCount),chosen=pool.length?pool[Math.floor(city.random()*pool.length)]:layouts[Math.floor(city.random()*layouts.length)];
