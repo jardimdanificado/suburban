@@ -52,9 +52,10 @@ export class CityFiscal {
     if(amount&&this.city.transfer(b.accountId,'treasury',amount,emergency?'Resultado de empresa municipal para reserva social':'Lucro de empresa municipal',{buildingId:b.id,fiscalRecovery:emergency})){if(emergency)this.recovered+=amount;b.fiscalDistributedProfit=(b.fiscalDistributedProfit||0)+Math.min(amount,profit);return amount;}return 0;
   }
   hourly(){
-    const city=this.city,hour=Math.floor(city.minute/60);if(this.lastRecoveryHour===hour)return;this.lastRecoveryHour=hour;const reserve=this.reserve();
+    const city=this.city,hour=Math.floor(city.minute/60);if(this.lastRecoveryHour===hour)return;this.lastRecoveryHour=hour;const reserve=this.reserve(),financeSkill=city.politics?.secretaries?.find(row=>row.officeId==='finance')?.skill||0,buffer=reserve*Math.min(.15,financeSkill*.0015),targetReserve=reserve+buffer;
     if(this.worksAdvance>0&&city.treasury>reserve*1.25){const amount=Math.min(this.worksAdvance,Math.max(0,city.treasury-reserve*1.25));if(amount&&city.transfer('treasury','works-budget',amount,'Recomposição do adiantamento da verba de obras',{fiscalRecovery:true})){this.worksAdvance-=amount;city.politics.policy.worksBudget=city.accounts.get('works-budget').balance;}}
     this.fundServices();
+    if(city.treasury<targetReserve){for(const b of city.buildings){this.distribute(b,false);if(city.treasury>=targetReserve)break;}}
     if(city.treasury<reserve){this.requestRevenueReview();for(const b of city.buildings){this.distribute(b,true);if(city.treasury>=reserve)break;}
       const works=city.accounts.get('works-budget'),amount=Math.min(works?.balance||0,Math.max(0,reserve-city.treasury));if(amount&&city.transfer('works-budget','treasury',amount,'Adiantamento do orçamento de obras para subsistência',{fiscalRecovery:true})){this.worksAdvance+=amount;this.recovered+=amount;city.politics.policy.worksBudget=works.balance;city.log('Verba de obras ainda não contratada adiantada para proteger alimentação e benefícios.','economy',[],{kind:'fiscal-emergency-liquidity',amount,worksAdvance:this.worksAdvance});}
       this.fundServices();

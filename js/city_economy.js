@@ -813,7 +813,7 @@ export class CityEconomy {
   }
 
   harvest(b,field,cellIndex=null){
-    const total=field.yield||ECONOMY_RULES.farmBatch,perCell=cellIndex==null?total:Math.floor(total*(cellIndex+1)/field.cellLabor.length)-Math.floor(total*cellIndex/field.cellLabor.length);
+    const baseYield=field.yield||ECONOMY_RULES.farmBatch,agricultureSkill=this.city.politics?.secretaries?.find(row=>row.officeId==='environment')?.skill||0,total=baseYield+Math.floor(baseYield*Math.min(.2,agricultureSkill*.002)),perCell=cellIndex==null?total:Math.floor(total*(cellIndex+1)/field.cellLabor.length)-Math.floor(total*cellIndex/field.cellLabor.length);
     if(inventoryFree(b)<perCell||field.plantedAt===null||field.labor<(field.requiredLabor||ECONOMY_RULES.farmLabor)||(this.city.minute-field.plantedAt)*(field.growthMultiplier||1)<CROPS[b.crop].grow||cellIndex!=null&&field.harvestedCells[cellIndex])return false;
     b.inventory[b.crop]+=perCell;this.produced[b.crop]+=perCell;this.recordGoods('harvest',b.crop,perCell,null,b.id);
     this.city.substances?.harvest(b,b.crop,perCell);

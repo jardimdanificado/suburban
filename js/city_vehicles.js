@@ -313,8 +313,8 @@ export class CityVehicles {
     for(const v of candidates){
       const path=this.groundPath(c.entity,v);if(path===null||path.length>Math.max(4,c.path.length/2))continue;
       const parking=this.destinationParking(v,goal);
-      const rental=!owners.has(this.accessAccount(v));if(rental&&!city.transfer(c.accountId,v.ownerAccountId,city.currency.price(50),'Serviço: aluguel de bicicleta',{vehicleId:v.id})){v.reservedParking=parking;this.freeParking(v,true);continue;}
-      if(rental)this.stats.fares+=city.currency.price(50);
+      const rental=!owners.has(this.accessAccount(v)),transportSkill=city.politics?.secretaries?.find(row=>row.officeId==='transport')?.skill||0,discount=city.politics?.policy?.transportPolicy==='cycling'?Math.min(.5,.1+transportSkill*.004):0,rentalFare=city.currency.price(Math.max(1,Math.ceil(50*(1-discount))));if(rental&&!city.transfer(c.accountId,v.ownerAccountId,rentalFare,'Serviço: aluguel de bicicleta',{vehicleId:v.id,municipalTransportPolicy:city.politics?.policy?.transportPolicy||'balanced'})){v.reservedParking=parking;this.freeParking(v,true);continue;}
+      if(rental)this.stats.fares+=rentalFare;
       v.reservedParking=parking;v.driverId=c.id;c.mobilityTrip={kind:'cycle',vehicleId:v.id,goal,stage:'boarding'};c.path=path;c.indoorLocation=null;v.status='Usuário a caminho';return true;
     }
   }
@@ -395,9 +395,9 @@ export class CityVehicles {
       while(elapsed>0&&c.path.length){
         const p=c.path[0],tx=Math.floor(p.x),ty=Math.floor(p.y),sx=Math.floor(c.entity.x),sy=Math.floor(c.entity.y);
         if(!city.walkable(tx,ty)||!canStep(city.world,sx,sy,tx,ty)){c.path=[];c.task=null;blocked=true;break;}
-        const tile=tileAt(city.world,tx,ty),road=ROAD_TILES.has(tile),speed=(road?VEHICLE_SPECS[v.good].speed:4)*injuryMovementFactor(c)*injuryWorkFactor(c)/roadTravelCost(tile),dx=p.x-c.entity.x,dy=p.y-c.entity.y,len=Math.hypot(dx,dy),travel=Math.min(len,elapsed*speed);
+        const tile=tileAt(city.world,tx,ty),road=ROAD_TILES.has(tile),transportSkill=city.politics?.secretaries?.find(row=>row.officeId==='transport')?.skill||0,cyclingBonus=city.politics?.policy?.transportPolicy==='cycling'?Math.min(.15,.05+transportSkill*.001):0,safetyBonus=city.politics?.policy?.transportPolicy==='safety'?Math.min(.4,.1+transportSkill*.003):0,speed=(road?VEHICLE_SPECS[v.good].speed:4)*(PERSONAL_MOBILITY.has(v.good)?1+cyclingBonus:1)*injuryMovementFactor(c)*injuryWorkFactor(c)/roadTravelCost(tile),dx=p.x-c.entity.x,dy=p.y-c.entity.y,len=Math.hypot(dx,dy),travel=Math.min(len,elapsed*speed);
         if(len>0){c.entity.x+=dx/len*travel;c.entity.y+=dy/len*travel;v.angle=Math.atan2(dx,dy);}
-        elapsed-=travel/speed;v.distance+=travel;this.stats.distance+=travel;v.condition=Math.max(0,v.condition-travel*(road?.012:.004));
+        elapsed-=travel/speed;v.distance+=travel;this.stats.distance+=travel;v.condition=Math.max(0,v.condition-travel*(road?.012:.004)*(1-safetyBonus));
         wearRoad(city.world,tx,ty,travel*ROAD_RULES.wearPerCell);
         if(len<=travel+.0001){c.entity.x=p.x;c.entity.y=p.y;c.path.shift();city.recordTraffic(p);}
         v.x=c.entity.x;v.y=c.entity.y;v.altitude=surfaceElevation(city.world,v.x,v.y);v.entity.x=v.x;v.entity.y=v.y;

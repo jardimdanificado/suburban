@@ -1,7 +1,7 @@
 import {moveGarments} from './city_clothing.js?v=party-apparel-1';
 import { carryCapacity } from './city_markets.js';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=indoor-display-centering-1';
+import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=secretariat-portfolios-1';
 
 const INTERRUPTIBLE_GIG_TASKS=new Set(['leisure','walk','social','sit','outdoor_leisure']);
 /** Cargo is reserved in escrow and follows a citizen over actual walkable paths. */
@@ -18,7 +18,9 @@ export class CityLogistics {
     const city=this.city,ids=new Set([seller?.ownerId,buyer?.ownerId]);
     for(const b of city.economy.businesses.filter(b=>b.type==='carrier'))for(const id of [...b.workers,b.ownerId])ids.add(id);
     if(buyer?.accountId==='treasury'||buyer?.municipal)for(const c of city.citizens)if(!c.jobId&&!c.businessIds.length)ids.add(c.id);
-    let capacity=24;for(const id of ids){const c=city.society.citizen(id);if(c)capacity=Math.max(capacity,this.capacity(c));if(capacity>=MAX_CARGO_CAPACITY)break;}return capacity;
+    let capacity=24;for(const id of ids){const c=city.society.citizen(id);if(c)capacity=Math.max(capacity,this.capacity(c));if(capacity>=MAX_CARGO_CAPACITY)break;}
+    if(city.politics?.policy?.transportPolicy==='freight'){const skill=city.politics.secretaries?.find(row=>row.officeId==='transport')?.skill||0;capacity=Math.ceil(capacity*(1.05+Math.min(.2,skill*.002)));}
+    return Math.min(MAX_CARGO_CAPACITY,capacity);
   }
   demandMetrics() {
     const city=this.city, shipments=this.shipments.filter(s=>!['delivered','cancelled'].includes(s.status) && city.building(s.carrierId)?.type!=='waste_collector');

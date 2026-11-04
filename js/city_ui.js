@@ -38,12 +38,12 @@ import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-3';
 import { HISTORY_LIMIT } from './city_history.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js?v=survival-capacity-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=secretariat-portfolios-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=public-food-reserve-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=secretariat-portfolios-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
 import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=substance-chain-boost-1';
@@ -1028,7 +1028,7 @@ export class CityUI {
       }
       return;
     }
-    const cleanliness=system.cleanliness();p.metrics([['LIMPEZA DA CIDADE',`${cleanliness.score.toFixed(1)}%`,cleanliness.score<60?C.red:C.green],['BANHEIROS',facilities.length,C.cyan],['SUJOS',dirty.length,dirty.length?C.red:C.green]]);this.filterButtons(p);
+    const cleanliness=system.cleanliness(),environment=system.environmentalReport();p.metrics([['LIMPEZA DA CIDADE',`${cleanliness.score.toFixed(1)}%`,cleanliness.score<60?C.red:C.green],['PRESSÃO AMBIENTAL',`${environment.pressure.toFixed(1)} / 100`,environment.pressure>60?C.red:C.green],['BANHEIROS',facilities.length,C.cyan],['SUJOS',dirty.length,dirty.length?C.red:C.green]]);p.note(`Fontes industriais ${environment.emitters.toFixed(1)} · lixo aguardando coleta ${environment.waste} · absorção por vegetação ${environment.trees} plantas · controle regulatório ${environment.regulation}/100.`);this.filterButtons(p);
     const access={home:'Moradia privada',employees:'Funcionários',public:'Público gratuito',paid:'Público pago'},filter=this.filter();
     const rows=facilities.filter(f=>this.matches(`${city.building(f.buildingId)?.entity.properties.name} ${access[f.access]} ${f.homeId||''}`)).filter(f=>filter==='all'||filter==='public'&&f.access==='public'||filter==='paid'&&f.access==='paid'||filter==='private'&&['home','employees'].includes(f.access)||filter==='dirty'&&f.cleanliness<25).sort((a,b)=>a.cleanliness-b.cleanliness);
     const selected=system.facilities.get(this.selectedFacilityId);

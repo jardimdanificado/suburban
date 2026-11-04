@@ -146,6 +146,10 @@ export class CitySanitation {
     const population=Math.max(1,this.city.citizens.filter(c=>!c.entity.destroyed).length),fecesScore=100/(1+(street+indoors)/(population*.04)),bathroomScore=facilities.length?facilities.reduce((n,f)=>n+f.cleanliness,0)/facilities.length:100,litterScore=100/(1+spilled/(population*.1));
     return {score:Math.round((fecesScore*.65+bathroomScore*.25+litterScore*.1)*10)/10,streetFeces:street,indoorFeces:indoors,spilled,dirtyStreetTiles:this.streetFeces.size,dirtyBuildings:this.city.buildings.filter(b=>b.feces?.size).length};
   }
+  environmentalReport(){
+    const city=this.city,population=Math.max(1,city.citizens.filter(c=>!c.entity.destroyed).length),weights={steel_mill:5,aluminum_smelter:5,foundry:4,charcoal:3,brickworks:2,pottery:2,paintworks:2,rubberworks:2},emitters=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&weights[b.type]).reduce((n,b)=>n+weights[b.type]*(.45+Math.min(4,b.workers?.length||0)*.14),0),waste=city.buildings.filter(b=>!['waste_collector','recycler','composting'].includes(b.type)).reduce((n,b)=>n+(b.inventory.lixo||0)+(b.litter||0),0),trees=city.nature?.plants?.size||0,agricultureEnvironmentSkill=city.politics?.secretaries?.find(row=>row.officeId==='environment')?.skill||0,load=Math.max(0,emitters*7+waste/population*8-Math.sqrt(trees)*1.4),pressure=Math.round(Math.max(0,Math.min(100,load))*(1-Math.min(.2,agricultureEnvironmentSkill*.002))*10)/10;
+    return {pressure,emitters:Math.round(emitters*10)/10,waste,trees,regulation:agricultureEnvironmentSkill};
+  }
   use(c) {
     const f = this.facilities.get(c.toiletTargetId), b = f && this.city.building(f.buildingId);
     const trespass=!!f&&c.trespassToiletFacilityId===f.id&&!this.allowed(c,f);
@@ -291,7 +295,7 @@ export class CitySanitation {
         if(!worker.indoorLocation||worker.indoorLocation.buildingId!==site.id||worker.indoorLocation.targetUnitId!==room.id||worker.indoorLocation.path?.length)continue;
       }
       if(worker.id!==company.ownerId){if(company.balance<company.wage){this.releaseCitizen(worker);continue;}city.payWage(worker,company);}
-      job.labor+=1+(worker.skills.cleaning||0)/50;worker.action=job.scope==='street'?'Limpando fezes da via pública':'Limpando fezes do prédio';city.economy.practice(worker,'cleaning');
+      const environmentalSkill=city.politics?.secretaries?.find(row=>row.officeId==='environment')?.skill||0;job.labor+=1+(worker.skills.cleaning||0)/50+(job.scope==='street'?environmentalSkill/200:0);worker.action=job.scope==='street'?'Limpando fezes da via pública':'Limpando fezes do prédio';city.economy.practice(worker,'cleaning');
       // New deposits must not keep moving the finish line of an existing job.
       const quantity=Math.min(pile.amount,job.quantity??=Math.min(20,pile.amount));
       if(job.labor<12+Math.max(0,quantity-1)*8)continue;
@@ -318,8 +322,9 @@ export class CitySanitation {
   }
   hourly() {
     this.rebalanceWaiting();
-    for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : 60)) this.requestCleaning(f.id);
-    const city=this.city,hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(hall)this.setupBusinessRooms(hall);
+    const city=this.city,environmentSkill=city.politics?.secretaries?.find(row=>row.officeId==='environment')?.skill||0;
+    for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : f.access==='public'?60+environmentSkill*.2:60)) this.requestCleaning(f.id);
+    const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(hall)this.setupBusinessRooms(hall);
     for(const building of city.buildings)if(!building.entity.destroyed&&['public_toilet','popular_refectory'].includes(building.type))this.setupBusinessRooms(building);
     // Fertilizer firms buy physical feedstock; payment and transport follow
     // the same escrow/delivery flow as every other industrial input.
@@ -360,6 +365,7 @@ export class CitySanitation {
         if(quantity>0 && city.logistics.order(seller,processor,'lixo',quantity,city.economy.goods.lixo.price,{purpose:'waste-processing'}))need-=quantity;
       }
     }
+    const pressure=this.environmentalReport().pressure;if(pressure>65){const healthLoss=(pressure-65)*.001;for(const citizen of city.citizens)if(!citizen.entity.destroyed)citizen.needs.health=Math.max(0,citizen.needs.health-healthLoss);}
   }
 
   recycle(b, c) {

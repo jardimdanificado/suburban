@@ -11,7 +11,7 @@ export function civicStaff(city,b){return b.workers.map(id=>city.society.citizen
 const occupancy=new WeakMap();
 export function civicStatus(city,b,c=null){
  const spec=civicSpec(b);if(!spec)return null;
- const team=civicStaff(city,b),capacity=team.length>=spec.minStaff?team.length*spec.slots:0;
+ const team=civicStaff(city,b),cultureSkill=city.politics?.secretaries?.find(row=>row.officeId==='education_culture')?.skill||0,cultureVenue=['library','theater'].includes(b.type),capacity=team.length>=spec.minStaff?Math.floor(team.length*spec.slots*(cultureVenue?1+cultureSkill/200:1)):0;
  let cache=occupancy.get(city);if(cache?.minute!==city.minute){cache={minute:city.minute,counts:new Map()};for(const person of city.citizens)if(!person.entity.destroyed&&person.civicVisit&&['health','leisure','social'].includes(person.task)){const site=city.building(person.civicVisit.buildingId);if(site&&(person.indoorLocation?.buildingId===site.id||Math.hypot(person.entity.x-site.door.x,person.entity.y-site.door.y)<=2))cache.counts.set(site.id,(cache.counts.get(site.id)||0)+1);}occupancy.set(city,cache);}
   const count=cache.counts.get(b.id)||0,already=c?.civicVisit?.buildingId===b.id&&(c.indoorLocation?.buildingId===b.id||Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)<=2);
  const inputs=Object.entries(spec.inputs).filter(([g,n])=>(b.inventory[g]||0)<n).map(([g])=>city.economy.goods[g].label),hasTicket=c?.civicVisit?.buildingId===b.id;
@@ -34,7 +34,7 @@ export function civicVisit(city,c,b){
  const need=c.task==='social'?'social':spec.need;c.needs[need]=clamp(c.needs[need]+spec.rate);
  if(b.type==='park')c.needs.health=clamp(c.needs.health+.15);
  if(b.type==='sports_center'){c.needs.health=clamp(c.needs.health+.25);c.needs.energy=clamp(c.needs.energy-.1);}
- if(b.type==='library'){city.economy.practice(c,'social',2);c.needs.social=clamp(c.needs.social+.2);}
+ if(b.type==='library'){const cultureSkill=city.politics?.secretaries?.find(row=>row.officeId==='education_culture')?.skill||0;city.economy.practice(c,'social',2+Math.floor(cultureSkill/34));c.needs.social=clamp(c.needs.social+.2);}
  c.action=`${spec.need==='health'?'Recebendo cuidados':'Usando'}: ${b.entity.properties.name}`;
  if(c.needs[need]>=95){b.completedVisits=(b.completedVisits||0)+1;const cache=occupancy.get(city);cache.counts.set(b.id,Math.max(0,(cache.counts.get(b.id)||0)-1));c.civicVisit=null;c.task=null;c.servicePaid=null;}
  return true;

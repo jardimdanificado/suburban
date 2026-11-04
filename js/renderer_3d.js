@@ -4154,6 +4154,10 @@ export class RCT3DRenderer {
     this.instTropicalFlowerStems=new THREE.InstancedMesh(createTropicalFlowerStemsGeometry(),this.materials.oakLeaves,this.maxInstances);
     this.instTropicalFlowerHeads=new THREE.InstancedMesh(createTropicalFlowerHeadsGeometry(),floraMaterial,this.maxInstances);
     for(const mesh of [this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads]){mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;}
+    // Leaf, bloom and fruit silhouettes add a second shadow draw for every
+    // vegetation batch. Keep them lit by nearby shadows without making each
+    // batch render into the shadow map; trunks and buildings still cast them.
+    for(const mesh of [this.instOakLeaves,this.instTropicalTreeBlooms,this.instPalmFronds,this.instFanPalmFronds,this.instTropicalFruits,this.instBananaLeaves,this.instBananaFruits,this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads])mesh.castShadow=false;
 
     // Pine Trees
     const pineTrunkGeo = new THREE.CylinderGeometry(0.12, 0.20, 1.25, 5);

@@ -1,5 +1,5 @@
 import {qualification,wageFor,openPositions,occupiedPositions,ownerSelfHire} from './city_employment.js?v=perf-employment-stagger-1';
-import {SKILLS} from './city_economy.js?v=public-food-reserve-1';
+import {SKILLS} from './city_economy.js?v=secretariat-portfolios-1';
 import {formatMoney as money} from './city_ui_format.js';
 const stamp=n=>n==null?'—':`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const label=c=>c?.entity.properties.name||'Pessoa ausente';

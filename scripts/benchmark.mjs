@@ -29,14 +29,14 @@ if(mode==='builder-selection'){
   const renderer={scene:{add(){},remove(){}},cityLampLights:Array.from({length:8},()=>({intensity:0})),cityMeshes:new Map()};
   const rendererSource=readFileSync(resolve(root,'js/city_renderer_3d.js'),'utf8'),oldSignature=rendererSource.includes('b.units.filter');
   const entities=Array.from({length:500},(_,id)=>{const units=Array.from({length:100},(_,n)=>({id:`${id}:${n}`,roomType:n===0?'bathroom':n===1?'dining':'workspace',x:n%10,y:Math.floor(n/10),z:0}));const b={type:'farm',crop:'milho',constructionKind:'open-air',width:10,depth:10,units,layoutRevision:1,rotation:0};
-    const signature=rendererSource.includes('retail-v2:')?`retail-v2:farm:10:10:milho:1:100:0:0`:oldSignature?`${b.crop}:${units.filter(u=>['bathroom','dining'].includes(u.roomType)).map(u=>u.id+u.roomType).join(',')}`:`${b.crop}:1:100`;
+    const signature=rendererSource.includes('retail-v8-fruit-stalls:')?`retail-v8-fruit-stalls:farm:10:10:milho:1:100:0:0:`:rendererSource.includes('retail-v2:')?`retail-v2:farm:10:10:milho:1:100:0:0`:oldSignature?`${b.crop}:${units.filter(u=>['bathroom','dining'].includes(u.roomType)).map(u=>u.id+u.roomType).join(',')}`:`${b.crop}:1:100`;
     renderer.cityMeshes.set(id,{visible:true,position:{set(){}},userData:{signature,terrainRevision:0,highlight:{visible:false},patches:{material:{emissive:{setHex(){}}}}}});
     return {id,x:id%20*12,y:Math.floor(id/20)*12,properties:{cityBuilding:b}};
   });
   const world={revision:0,map:[],cityLampPosts:[],cityLampSites:[]};
   // Keep static bridge geometry out of this CPU synchronization workload. The
   // benchmark renderer intentionally has no Three.js constructors or GPU.
-  renderer.skybridgeRevision=`${entities.length}:${world.revision}`;renderer.roadBridgeRevision=world.bridgeRevision||0;
+  renderer.skybridgeRevision=`${entities.length}:${world.topologyRevision??world.revision??0}:${world.bridgeRevision??0}:colonial-3`;renderer.roadBridgeRevision=world.bridgeRevision||0;renderer.roadBridgeStyleVersion=3;
   for(let i=0;i<20;i++)syncCityBuildings(renderer,{},entities,world);
   const start=performance.now();for(let i=0;i<300;i++)syncCityBuildings(renderer,{},entities,world);
   console.log(JSON.stringify({mode,root,buildings:500,spaces:50000,frames:300,ms:performance.now()-start,checksum:hash([...renderer.cityMeshes].map(([id,g])=>[id,g.visible,g.userData.highlight.visible]))}));

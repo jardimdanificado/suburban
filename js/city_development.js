@@ -44,6 +44,7 @@ export class CityDevelopment {
     const priority=city.politics?.policy?.infrastructurePriority;
     if(accountId==='treasury' && (priority==='lamps' && project.service==='lamp'||priority==='roads' && ['road','bridge','road-repair'].includes(project.service))){project.politicalPriority=project.priority||0;project.priority=project.politicalPriority+50;}
     if(accountId==='treasury'&&['road','bridge','road-repair'].includes(project.service)){const planningSkill=city.politics?.secretaries?.find(row=>row.officeId==='urban_development')?.skill||0;if(planningSkill)project.priority=(project.priority||0)+Math.round(planningSkill*.2);}
+    if(accountId==='treasury'&&['road','bridge','road-repair'].includes(project.service)){const transportSkill=city.politics?.secretaries?.find(row=>row.officeId==='transport')?.skill||0;if(transportSkill)project.priority=(project.priority||0)+Math.round(transportSkill*.15);if(city.politics?.policy?.transportPolicy==='safety')project.priority=(project.priority||0)+20;}
     initializeInventory(project, city.economy.goods, project.stone + 48);
     project.feeAccountId = `construction-fee:${project.id}`;
     city.accounts.set(project.feeAccountId, { name: `Contrato ${project.id}`, balance: 0 });
