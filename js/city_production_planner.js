@@ -5,7 +5,14 @@ import {chooseBuildingSite} from './city_terrain.js?v=quarry-outskirts-1';
 import {OFFICE_ONLY_TYPES,officeSpaceDemand,officeFloors,createMunicipalOffice} from './city_offices.js?v=office-demand-rollout-1';
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
-const inputs=(type)=>type==='bakery'?{trigo:2}:type==='mill'?{girassol:3}:INDUSTRIES[type]?.inputs||{};
+const inputs=(type,economy)=>{
+  if(type==='tobacco_workshop'){
+    const cannabisAllowed=economy.city.substances?.law('cannabis')?.regime!=='prohibited',tobaccoAllowed=economy.city.substances?.law('tabaco')?.regime!=='prohibited';
+    const flowerReady=economy.businesses.some(b=>(b.inventory.flor_cannabis||0)>=2),tobaccoReady=economy.businesses.some(b=>(b.inventory.folha_tabaco||0)>=6);
+    return cannabisAllowed&&(!tobaccoAllowed||flowerReady&&!tobaccoReady)?{flor_cannabis:2,papel:1}:{folha_tabaco:6,papel:1};
+  }
+  return type==='bakery'?{trigo:2}:type==='mill'?{girassol:3}:INDUSTRIES[type]?.inputs||{};
+};
 const vehicleFactories=new Set(['bearing_factory','frame_factory','deck_factory','tire_factory','chain_factory','safety_equipment','saddle_factory','cycle_assembler']);
 const productionPlanCache=new WeakMap();
 const startupCapital=(city,economy,type)=>type==='cycle_shop'
@@ -18,8 +25,12 @@ export function productionPlan(economy){
   const firmSignature=firms.map(b=>`${b.id}:${b.type}:${b.crop||''}`).join('|'),projectSignature=projects.map(p=>`${p.id}:${p.type}:${p.crop||''}:${p.status}:${p.cancelled?1:0}:${p.productionChain?1:0}:${p.materialAccountId||''}:${p.inventory?.pedra||0}:${p.incoming?.pedra||0}`).join('|'),demandSignature=economy.demands.map(d=>`${d.type}:${d.crop||''}:${d.score}:${d.required||0}:${d.supply||0}:${d.reason||''}`).join('|'),cached=productionPlanCache.get(economy);
   if(cached&&cached.demands===economy.demands&&cached.minute===city.minute&&cached.structureRevision===city.structureRevision&&cached.firmSignature===firmSignature&&cached.projectSignature===projectSignature&&cached.demandSignature===demandSignature){if(city.profileDiagnostics&&economy.lastInvestmentSearchProfile)economy.lastInvestmentSearchProfile.productionPlanCacheHits=(economy.lastInvestmentSearchProfile.productionPlanCacheHits||0)+1;return cached.plan;}
   const producers=new Map();
-  for(const [type,spec]of Object.entries(INDUSTRIES))for(const good of Object.keys(spec.outputs))if(!producers.has(good))producers.set(good,{type,crop:null});
+  const hempAllowed=city.substances?.law('canhamo')?.regime!=='prohibited';
+  for(const [type,spec]of Object.entries(INDUSTRIES))if(type!=='hemp_weaver'||hempAllowed)for(const good of Object.keys(spec.outputs))if(!producers.has(good))producers.set(good,{type,crop:null});
   for(const good of Object.keys(economy.crops))producers.set(good,{type:'farm',crop:good});
+  producers.set('canhamo',{type:'farm',crop:'flor_cannabis'});
+  // Prefer an installed supplier over the first recipe listed in the catalog.
+  for(const b of firms)if(b.type!=='hemp_weaver'||hempAllowed)for(const good of Object.keys(INDUSTRIES[b.type]?.outputs||{}))producers.set(good,{type:b.type,crop:null});
   producers.set('pao',{type:'bakery',crop:null});producers.set('oleo',{type:'mill',crop:null});producers.set('pedra',{type:'quarry',crop:null});
   const existingByType=new Map(),plannedByType=new Map();
   for(const b of firms){const id=key(b.type,b.type==='farm'?b.crop:null);let sites=existingByType.get(id);if(!sites)existingByType.set(id,sites=[]);sites.push(b);}
@@ -29,12 +40,12 @@ export function productionPlan(economy){
   // The recipe graph is normally acyclic. Keep the original trail-sensitive
   // traversal for cyclic recipes; score dominance is safe only in a DAG.
   const states=new Map();let acyclic=true;
-  function inspect(type){if(states.get(type)===1){acyclic=false;return;}if(states.get(type)===2)return;states.set(type,1);for(const good of Object.keys(inputs(type))){const provider=producers.get(good);if(provider)inspect(provider.type);}states.set(type,2);}
+  function inspect(type){if(states.get(type)===1){acyclic=false;return;}if(states.get(type)===2)return;states.set(type,1);for(const good of Object.keys(inputs(type,economy))){const provider=producers.get(good);if(provider)inspect(provider.type);}states.set(type,2);}
   for(const type of [...Object.keys(INDUSTRIES),'bakery','mill'])inspect(type);
   const expandedScores=new Map();let officeMissing;
   function visit(type,crop,score,origin,trail=new Set()){
-    if(type==='coca_laboratory'&&city.substances?.law('coca')?.regime==='prohibited')return;
-    const substance=type==='farm'?economy.crops[crop]?.substance:['distillery','brewery','winery','tequila_distillery'].includes(type)?'alcool':type==='coffee_roaster'?'cafe':null;if(substance&&city.substances?.law(substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&city.substances?.law('cannabis')?.regime!=='prohibited'))return;
+    if(type==='coca_laboratory'&&city.substances?.law('coca')?.regime==='prohibited'||type==='hemp_weaver'&&city.substances?.law('canhamo')?.regime==='prohibited')return;
+    const substance=type==='farm'?economy.crops[crop]?.substance:['distillery','brewery','winery','tequila_distillery'].includes(type)?'alcool':type==='coffee_roaster'?'cafe':null;if(substance&&city.substances?.law(substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&city.substances?.law('canhamo')?.regime!=='prohibited'))return;
     const id=key(type,crop);if(!acyclic&&trail.has(id))return;
     const current=exists(type,crop),building=planned(type,crop),target=type==='research_institute'?city.politics.getResearch().demand().required:1;
     const absent=type==='office_tower'?(officeMissing??=officeSpaceDemand(city).missing>0):current+building.length<target;
@@ -44,12 +55,12 @@ export function productionPlan(economy){
     expandedScores.set(id,score);
     const path=acyclic?trail:new Set(trail);if(!acyclic)path.add(id);
     // Both established and planned consumers create demand for the earlier stages.
-    for(const good of Object.keys(inputs(type))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,score+12,`${city.buildingTypes[type]?.label||type} precisa de ${economy.goods[good]?.label||good}`,path);}
+    for(const good of Object.keys(inputs(type,economy))){const provider=producers.get(good);if(provider)visit(provider.type,provider.crop,score+12,`${city.buildingTypes[type]?.label||type} precisa de ${economy.goods[good]?.label||good}`,path);}
   }
   // Retail food distribution is a production-chain endpoint even though it
   // does not have an INDUSTRIES recipe. Keep its demand visible to the same
   // investment queue so food shops can be financed before optional industry.
-  for(const d of economy.demands)if(d.score>=30&&(INDUSTRIES[d.type]||['bakery','mill','market','greengrocer','restaurant'].includes(d.type)||d.type==='farm'&&d.crop==='trigo'))visit(d.type,d.crop,d.type==='farm'&&d.crop==='trigo'?240:Math.min(190,d.score),d.reason);
+  for(const d of economy.demands)if(d.score>=30&&(INDUSTRIES[d.type]||['bakery','mill','market','greengrocer','restaurant'].includes(d.type)||d.type==='farm'))visit(d.type,d.crop,d.type==='farm'&&d.crop==='trigo'?240:Math.min(190,d.score),d.reason);
   // Seed production only where the measured demand above needs another firm.
   // Opening every industry and crop at once created unsupported companies,
   // stranded inventory, and a construction queue sized for a much larger city.
@@ -62,14 +73,14 @@ export function productionPlan(economy){
   for(const [id,row]of rows){
     if(row.missing){since[id]??=city.minute;row.waitMinutes=city.minute-since[id];row.priority=row.score+Math.min(180,row.waitMinutes/60*3);}
     else{delete since[id];row.waitMinutes=0;row.priority=0;}
-    row.blockedInputs=Object.keys(inputs(row.type)).filter(g=>{const p=producers.get(g);return p&&!exists(p.type,p.crop);});
+    row.blockedInputs=Object.keys(inputs(row.type,economy)).filter(g=>{const p=producers.get(g);return p&&!exists(p.type,p.crop);});
     row.reason=row.origins.join(' · ');row.state=row.planned?'Materiais e construção em andamento':!row.missing?'Etapa já instalada':responses[id]?.state||'Aguardando investimento';
     if(row.planned){const project=projects.find(p=>p.id===row.projectId);row.response={state:responses[id]?.projectId===row.projectId?responses[id].state:row.state,projectId:row.projectId};if(project?.materialAccountId)row.response.state=project.inventory.pedra>=project.stone?'Materiais entregues; aguardando trabalho na obra.':'Materiais financiados; aguardando compra e transporte.';}
     else if(!row.missing){
       const sites=existingByType.get(key(row.type,row.type==='farm'?row.crop:null))||[];
       const hasCrew=sites.some(b=>b.workers.length||city.society.citizen(b.ownerId));
       const hasCapital=sites.some(b=>b.balance>=b.wage*60);
-      const shortages=Object.keys(inputs(row.type)).filter(g=>!sites.some(b=>(b.inventory[g]||0)>=(inputs(row.type)[g]||1)));
+      const shortages=Object.keys(inputs(row.type,economy)).filter(g=>!sites.some(b=>(b.inventory[g]||0)>=(inputs(row.type,economy)[g]||1)));
       row.state=!hasCrew?'Etapa instalada; aguardando trabalhadores.':!hasCapital?'Etapa instalada; caixa insuficiente para salários e insumos.':shortages.length?`Etapa instalada; aguardando ${shortages.map(g=>economy.goods[g]?.label||g).join(', ')}.`:'Etapa instalada e com recursos para operar.';row.response={state:row.state};
     }else row.response=responses[id]||{state:row.state};result.push(row);
     const d=economy.demands.find(d=>key(d.type,d.crop)===id);
@@ -100,7 +111,6 @@ export function investProductionPlan(economy){
   // Reserve one extra slot for the first shared office building when a backed-up
   // production queue would otherwise prevent the service from ever starting.
   const officeException=pipelineFull&&plan.some(r=>r.type==='office_tower'&&r.missing&&!r.planned&&r.waitMinutes>=720);
-  if(pipelineFull&&!officeException){for(const row of plan.filter(r=>r.missing&&!r.planned))recordResponse(economy,row,`Aguardando execução das ${pipelineLimit} obras de cadeias já financiadas.`);return false;}
   // Existing unfunded sites must progress before commissioning replacement factories.
   for(const row of plan.filter(r=>r.planned)){
     const project=active.find(p=>p.id===row.projectId);if(!project||project.materialAccountId||!['building'].includes(project.service))continue;
@@ -111,9 +121,18 @@ export function investProductionPlan(economy){
     if(loan)city.bank.cancelBusinessLoan(loan);recordResponse(economy,row,'Obra pendente aguardando crédito ou capital para materiais.',{projectId:project.id});
   }
 
-  const rows=plan.filter(r=>r.missing&&!r.planned&&r.type!=='quarry'&&(!officeException||r.type==='office_tower'));
+
+  const rows=plan.filter(r=>r.missing&&!r.planned&&r.type!=='quarry'&&(!officeException||r.type==='office_tower'||r.type==='farm'));
   const missingUpstreamGoods=new Set();
-  for(const candidate of plan)if(candidate.missing&&candidate.planned===0){if(candidate.type==='farm')missingUpstreamGoods.add(candidate.crop);else if(candidate.type==='bakery')missingUpstreamGoods.add('pao');else if(candidate.type==='mill')missingUpstreamGoods.add('oleo');else for(const good of Object.keys(INDUSTRIES[candidate.type]?.outputs||{}))missingUpstreamGoods.add(good);}
+  for(const candidate of plan)if(candidate.missing&&candidate.planned===0){if(candidate.type==='farm'){missingUpstreamGoods.add(candidate.crop);if(candidate.crop==='flor_cannabis')missingUpstreamGoods.add('canhamo');}else if(candidate.type==='bakery')missingUpstreamGoods.add('pao');else if(candidate.type==='mill')missingUpstreamGoods.add('oleo');else for(const good of Object.keys(INDUSTRIES[candidate.type]?.outputs||{}))missingUpstreamGoods.add(good);}
+  // Finish chains with crops already harvested before opening unrelated
+  // upstream industries. Carry this priority through their missing suppliers.
+  const suppliers=new Map(),harvestChains=new Set();
+  for(const row of plan){const outputs=row.type==='farm'?[row.crop,...(row.crop==='flor_cannabis'?['canhamo']:[])]:Object.keys(INDUSTRIES[row.type]?.outputs||{});for(const good of outputs)if(!suppliers.has(good))suppliers.set(good,row);}
+  const markHarvestChain=row=>{if(!row||harvestChains.has(row))return;harvestChains.add(row);for(const good of row.blockedInputs)markHarvestChain(suppliers.get(good));};
+  const harvested=new Map();for(const farm of economy.businesses.filter(b=>b.type==='farm'))harvested.set(farm.crop,(harvested.get(farm.crop)||0)+(farm.inventory[farm.crop]||0));
+  for(const row of plan)if(row.missing&&Object.entries(inputs(row.type,economy)).some(([good,q])=>(harvested.get(good)||0)>=q))markHarvestChain(row);
+  rows.sort((a,b)=>Number(harvestChains.has(b))-Number(harvestChains.has(a))||b.priority-a.priority);
   city.development.ensurePlots();
   const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));
   // The government assigns initial ventures to capable residents, spreading ownership and keeping managers within a small portfolio.
@@ -131,7 +150,9 @@ export function investProductionPlan(economy){
   };
   // Commission several distinct initial firms each investment cycle; later expansion remains demand driven.
   for(const row of rows){
-    if(opened>=batchLimit||productionProjects.length>=pipelineLimit+(officeException?1:0))break;
+    if(opened>=batchLimit)break;
+    // Open-air fields finish immediately and use no masonry construction slot.
+    if(row.type!=='farm'&&productionProjects.length>=pipelineLimit+(officeException?1:0)){recordResponse(economy,row,`Aguardando execução das ${pipelineLimit} obras de cadeias já financiadas.`);continue;}
     if(OFFICE_ONLY_TYPES.has(row.type)){
       const towers=city.economy.businesses.filter(b=>b.type==='office_tower'&&b.municipal),vacant=towers.flatMap(tower=>officeFloors(city,tower).filter(f=>!f.tenantId&&f.units.length&&f.units.every(u=>u.forRent)).map(f=>({tower,floor:f})));
       const partyReserve=city.politics.parties.filter(p=>p.active&&p.headquarters?.kind!=='office').length,slot=vacant.length>partyReserve?vacant[0]:null,budget=city.currency.price(row.type==='bank'?2000000:100000),reserve=city.welfare.conditions().reserve;

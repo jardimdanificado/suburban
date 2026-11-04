@@ -10,8 +10,8 @@ import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=substances-sleep-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=perf-employment-stagger-1';
-import {productionPlan,investProductionPlan} from './city_production_planner.js?v=substance-brands-1';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=economic-flow-7';
+import {productionPlan,investProductionPlan} from './city_production_planner.js?v=economic-flow-7';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=party-apparel-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
@@ -188,7 +188,13 @@ export class CityEconomy {
     const builderLoad=new Map(),quarryRemaining=new Map();let usableQuarries=0,carriers=0;
     for(const p of projects){let load=builderLoad.get(p.builderId);if(!load)builderLoad.set(p.builderId,load={sites:0,labor:0});load.sites++;load.labor+=Math.max(0,p.requiredLabor-p.labor);}
     for(const b of firms){if(b.type==='carrier')carriers++;else if(b.type==='quarry'){const remaining=this.quarryStatus(b).remaining;quarryRemaining.set(b,remaining);if(remaining>0)usableQuarries++;}}
+    const cropNeeds=new Map((this.demands||[]).filter(d=>d.type==='farm').map(d=>[d.crop,d.required])),farmCounts=new Map();for(const b of firms)if(b.type==='farm')farmCounts.set(b.crop,(farmCounts.get(b.crop)||0)+1);
     for(const b of firms){
+      if(b.type==='farm'&&Number.isFinite(cropNeeds.get(b.crop))){
+        const required=cropNeeds.get(b.crop)/farmCounts.get(b.crop),limit=Math.min(32,Math.max(1,Math.ceil(b.fields.reduce((n,f)=>n+(f.area||12),0)/18)));let crew=1;
+        while(crew<limit&&this.farmCapacity(b,false,crew).daily<required)crew++;
+        b.jobs=crew;
+      }
       if(b.type==='builder'){const load=builderLoad.get(b.id);b.jobs=Math.min(48,Math.max(3,(load?.sites||0)*2+Math.ceil((load?.labor||0)/180)));}
       if(b.type==='quarry')b.jobs=quarryRemaining.get(b)>0?Math.min(32,Math.max(2,Math.ceil(stone/60/Math.max(1,usableQuarries)))):0;
       if(b.type==='carrier')b.jobs=Math.min(32,Math.max(2,Math.ceil(freight.work/120/Math.max(1,carriers))));
@@ -318,7 +324,7 @@ export class CityEconomy {
       const processingNeed=inputDemandByGood.get(crop)||0;
       const grainConsumers=businesses.filter(b=>b.type==='bakery'||INDUSTRIES[b.type]?.inputs.trigo).length;
       const downstream = crop === 'trigo' ? grainConsumers : buyers.filter(b => this.accepts(b, crop)).length;
-      const substanceNeed=spec.nonFood&&spec.substance?(this.city.substances?.law(spec.substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&this.city.substances?.law('cannabis')?.regime!=='prohibited')?0:Math.ceil(population*(SUBSTANCES[spec.substance]?.popularity||.2)*.8)+processingNeed):null;
+      const substanceNeed=spec.nonFood&&spec.substance?(this.city.substances?.law(spec.substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&this.city.substances?.law('canhamo')?.regime!=='prohibited')?0:Math.ceil(population*(SUBSTANCES[spec.substance]?.popularity||.2)*.8)+processingNeed):null;
       const dailyNeed = substanceNeed??(crop === 'trigo' ? Math.ceil(Math.max(population*(bakeries?2:.5),processingNeed)) : crop==='girassol'?Math.max(oil.sunflowerRequired,processingNeed):Math.ceil(population*6*(foodWeights[crop]||0)/totalFoodWeight)+processingNeed);
       const capacity = producers.reduce((n,b)=>n+this.farmCapacity(b,true).daily,0);
       // A shop's refill target is not population consumption: treating every
@@ -421,9 +427,9 @@ export class CityEconomy {
     });
     b.jobs = Math.min(32,Math.max(1,Math.ceil(area/18)));
   }
-  farmCapacity(b,planned=false) {
+  farmCapacity(b,planned=false,crew=null) {
     const area=b.fields.reduce((n,f)=>n+(f.area||12),0);
-    const staff=(planned?Math.max(b.jobs,b.workers.length):b.workers.length)+(this.workingOwner(b)?1:0);
+    const employed=b.workers.length+(this.workingOwner(b)?1:0),staff=crew??(planned?Math.max(b.jobs,employed):employed);
     const labor=b.fields.reduce((n,f)=>n+(f.requiredLabor||ECONOMY_RULES.farmLabor),0);
     const cycle=Math.max(CROPS[b.crop]?.grow||120,labor/Math.max(1,staff));
     const harvest=b.fields.reduce((n,f)=>n+(f.yield||12),0);
@@ -544,8 +550,8 @@ export class CityEconomy {
       nextStage('initialServicesMs');const firstServices=this.serviceInvestment.invest({initialOnly:true})||extractionStarted;
       // Initial chains have their own funded rollout before expanding established sectors.
       nextStage('civicInvestmentMs');if(planCivicServices(this.city))return true;
-      nextStage('productionInvestmentMs');if(investProductionPlan(this)||firstServices)return true;
       nextStage('oilInvestmentMs');if(investOilChain(this))return true;
+      nextStage('productionInvestmentMs');if(investProductionPlan(this)||firstServices)return true;
       nextStage('bootstrapMs');if(bootstrapEnterprise(this))return true;
       nextStage('essentialServicesMs');const essentialStarted=this.serviceInvestment.invest();
       nextStage('refreshDemandMs');this.updateDemand();nextStage('privateFoundingMs');
@@ -574,7 +580,7 @@ export class CityEconomy {
       const pendingStaples=this.city.development.projects.filter(p=>p.type==='farm'&&!['girassol','trigo'].includes(p.crop)&&!p.cancelled&&p.status!=='completed');
       const stapleCapacity=stapleFarms.reduce((n,b)=>n+this.farmCapacity(b).daily,0)+pendingStaples.reduce((n,p)=>n+Math.max(0,(p.width||10)*(p.depth||10)-2)*240/Math.max(120,CROPS[p.crop]?.grow||120),0);
       const foodFarmMissing=stapleCapacity<needs.population*1.5;
-      const foodPriority=o=>foodFarmMissing&&o.type==='farm'&&!['girassol','trigo'].includes(o.crop);
+      const foodPriority=o=>foodFarmMissing&&o.type==='farm'&&!['girassol','trigo'].includes(o.crop)&&!CROPS[o.crop]?.nonFood;
       const publicOpportunities = [...opportunities].sort((a, b) => Number(foodPriority(b))-Number(foodPriority(a)) || b.priority - a.priority);
       this.city.development.ensurePlots();
       for (const opportunity of publicOpportunities) {

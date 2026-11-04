@@ -1,5 +1,5 @@
 import {SUBSTANCES,SUBSTANCE_REGIMES,HEMP,REFINING_LEAVES} from './city_substance_catalog.js';
-import {substanceStance} from './city_substances.js';
+import {substanceStance} from './city_substances.js?v=economic-flow-7';
 const labels={pending:'Em análise',approved:'Aprovado',rejected:'Recusado',revoked:'Revogado'};
 const percent=n=>`${(100*(n||0)).toFixed(1)}%`;
 export function renderCitizenSubstances(ui,p,c){

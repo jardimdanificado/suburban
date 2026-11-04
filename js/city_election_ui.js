@@ -1,5 +1,5 @@
 import {SUBSTANCES} from './city_substance_catalog.js';
-import {substanceStance} from './city_substances.js';
+import {substanceStance} from './city_substances.js?v=economic-flow-7';
 import {contextActions} from './city_context_actions.js';
 import {renderResearchProgress,renderPollMethod} from './city_research_ui.js';
 const stamp=n=>n==null?'—':`Dia ${Math.floor(n/1440)+1}, ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;

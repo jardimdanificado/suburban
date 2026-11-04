@@ -116,10 +116,18 @@ function considerKnownVacancies(city,c,offers=null){
   for(const b of choices)if(apply(city,c,b)?.status==='análise')return;
 }
 export function reviewMarket(city,offers){
+  const posted=offers.filter(b=>openPositions(city,b)>0&&b.balance>=b.wage*60).sort((a,b)=>Number(occupiedPositions(city,a)>0)-Number(occupiedPositions(city,b)>0)||b.wage-a.wage||a.id-b.id).slice(0,64);
+  const postedIds=new Set(posted.map(b=>b.id));
   for(const c of city.citizens){
     if(c.entity.destroyed||!city.society.isAdult(c)||city.politics.officeHolder(c)||c.businessIds.length)continue;
     discoverVacancies(city,c);
-    const cv=career(c);if(city.minute<(cv.nextSearchAt||0))continue;cv.nextSearchAt=city.minute+(c.jobId?240:30);
+    const cv=career(c);cv.knownVacancies??=[];
+    // Rural employers need the public jobs board: facade signs alone left
+    // remote farms permanently invisible to residents working in the centre.
+    const known=new Map(cv.knownVacancies.map(v=>[v.buildingId,v]));
+    const listings=posted.map(b=>{const entry=known.get(b.id)||{buildingId:b.id,discoveredAt:city.minute,source:'Quadro municipal de empregos'};entry.seenAt=city.minute;entry.wage=b.wage;entry.positions=openPositions(city,b);return entry;});
+    cv.knownVacancies=[...listings,...cv.knownVacancies.filter(v=>!postedIds.has(v.buildingId))].slice(0,64);
+    if(city.minute<(cv.nextSearchAt||0))continue;cv.nextSearchAt=city.minute+(c.jobId?240:30);
     considerKnownVacancies(city,c,offers);
   }
 }
@@ -208,18 +216,19 @@ export function workEfficiency(c,b){return (c.jobId===b.id?.85+career(c).motivat
 
 export function reviewWages(city,b){
   const vacancies=openPositions(city,b);if(vacancies<=0){b.vacancySince=null;return;}
-  b.vacancySince??=city.minute;
-  if(city.minute-b.vacancySince<1440||b.lastWageReviewDay===city.day)return;
-  b.lastWageReviewDay=city.day;
-  // Raise offers gradually and keep them tied to the legal wage floor. A 12%
-  // daily increase compounded without a ceiling made payroll unaffordable
-  // within weeks, even when the firm's vacancy was caused by a skill mismatch.
+  if(b.wagePolicyVersion!==3){b.wagePolicyVersion=3;b.lastWageReviewDay=null;}
+  b.vacancySince??=city.minute;b.wageReference??=b.baseWage;
+  const understaffed=occupiedPositions(city,b)<b.jobs*.5;
+  if(city.minute-b.vacancySince<(understaffed?360:1440)||b.lastWageReviewDay===city.day)return;
   const floor=Math.max(1,city.politics.policy.minimumWage||0);
-  b.wageCompetitionCeiling=Math.max(Number.isFinite(b.wageCompetitionCeiling)?b.wageCompetitionCeiling:0,b.baseWage*1.25,floor*1.5);
-  const next=Math.min(b.wageCompetitionCeiling,b.baseWage*1.01),payroll=city.currency.price(Math.max(next,floor))*Math.max(1,vacancies)*480;
-  if(next<=b.baseWage)return;
-  if(b.balance<Math.max(city.currency.price(5000),payroll))return;
-  b.baseWage=next;
+  // Keep the ceiling tied to a stable reference, rather than increasing it
+  // again every time the current offer rises.
+  b.wageCompetitionCeiling=Math.max(b.wageCompetitionCeiling||0,b.wageReference*2,floor*1.5);
+  const competitors=understaffed?city.buildings.filter(firm=>firm.active&&!firm.entity.destroyed&&firm.id!==b.id&&occupiedPositions(city,firm)>0&&firm.jobs>0&&firm.balance>=firm.wage*60).map(firm=>firm.baseWage).filter(Number.isFinite).sort((a,b)=>a-b):[];
+  const marketOffer=competitors.length?competitors[Math.floor(competitors.length/2)]*1.2:0;
+  const next=Math.min(b.wageCompetitionCeiling,Math.max(b.baseWage*1.01,marketOffer)),payroll=city.currency.price(Math.max(next,floor))*Math.max(1,b.jobs)*480;
+  if(next<=b.baseWage||b.balance<Math.max(city.currency.price(5000),payroll))return;
+  b.lastWageReviewDay=city.day;b.baseWage=next;
   city.history.record('employment',`${b.entity.properties.name} elevou sua base salarial para disputar funcionários.`,[b.accountId],{buildingId:b.id,wage:b.wage,action:'revisão salarial'});
 }
 

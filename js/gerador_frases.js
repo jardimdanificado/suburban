@@ -7,4 +7,4 @@ export {
   gerarSloganPartidario,
   gerarDialogoTematico,
   criarSubstantivoCombinado,
-} from './vocabulario.js?v=art-titles-1';
+} from './vocabulario.js?v=economic-flow-7';

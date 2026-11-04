@@ -385093,14 +385093,10 @@ function escolheLexema(list,random){
 const artigosFrase={m:['o','um','os','uns'],f:['a','uma','as','umas']};
 let indicePalavrasPorTema=null;
 const bancosGramaticais=new Map();
-function indexarPalavrasPorTema(){
-  const patterns=Object.entries(temasLexicais),index=new Map(patterns.map(([theme])=>[theme,[]]));
-  for(const word of vocabulario.palavras){const normalized=semAcento(word);for(const [theme,pattern]of patterns)if(pattern.test(normalized))index.get(theme).push(word);}
-  return index;
-}
 function palavrasDoTema(theme){
-  indicePalavrasPorTema??=indexarPalavrasPorTema();
-  return indicePalavrasPorTema.get(theme)||[];
+  indicePalavrasPorTema??=new Map();if(indicePalavrasPorTema.has(theme))return indicePalavrasPorTema.get(theme);
+  const pattern=temasLexicais[theme],words=pattern?vocabulario.palavras.filter(word=>pattern.test(semAcento(word))):[];
+  indicePalavrasPorTema.set(theme,words);return words;
 }
 function bancoGramatical(theme){
   const themes=[...new Set(Array.isArray(theme)?theme:[theme])],cacheKey=themes.join('|');if(bancosGramaticais.has(cacheKey))return bancosGramaticais.get(cacheKey);

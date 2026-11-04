@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {gerarTituloTematico} from './gerador_frases.js?v=art-titles-1';
+import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -12,7 +12,7 @@ import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './c
 import {colorName} from './city_colors.js';
 import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.js';
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
-import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=perf-employment-stagger-1';
+import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=economic-flow-7';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
@@ -43,10 +43,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=cleaner-capacity-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=economic-flow-7';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=central-import-depot-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=economic-flow-7';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

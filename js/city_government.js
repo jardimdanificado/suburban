@@ -1,4 +1,4 @@
-import {substanceStance} from './city_substances.js';
+import {substanceStance} from './city_substances.js?v=economic-flow-7';
 import {SUBSTANCES} from './city_substance_catalog.js';
 import {ensureHeadquarters,headquartersHourly,stockHeadquarters,leaseHeadquarters,closeHeadquarters} from './city_party_headquarters.js?v=wardrobe-expansion-1';
 import {electPartyLeader} from './city_party_leadership.js';
@@ -21,7 +21,7 @@ import { TAX_CATEGORIES, MINIMUM_WAGE_TAX_RATE, MINIMUM_BUSINESS_TAX_RATE } from
 import { makePartyFlag, makeMergedPartyFlag, upgradePartyFlagPalette, makeMunicipalFlag, mutateMunicipalFlag, compactPartySlogan, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
 import { CityCouncil } from './city_council.js?v=secretariat-portfolios-1';
 import { CityCampaigns } from './city_campaigns.js?v=campaign-media-fix-1';
-import {gerarSloganPartidario} from './gerador_frases.js?v=vocabulary-organic-slogans-1';
+import {gerarSloganPartidario} from './gerador_frases.js?v=economic-flow-7';
 import {SECRETARIATS,SECRETARY_ELECTION_MODES,SECRETARY_MODE_RANK,TRANSPORT_POLICIES,secretarySkillScore} from './city_secretariats.js';
 import {prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';

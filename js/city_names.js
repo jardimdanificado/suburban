@@ -1,4 +1,4 @@
-import { vocabulario, classificarPalavra, converterParaSingular } from './vocabulario.js?v=vocabulary-topic-index-1';
+import { vocabulario, classificarPalavra, converterParaSingular } from './vocabulario.js?v=economic-flow-7';
 
 // The catalogue is module data: it never enters the city's worker snapshots.
 // Sampling is bounded; no filtering/sorting of the full dictionary during simulation.

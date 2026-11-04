@@ -13,6 +13,8 @@ export class CitySupplies{
  low(c){const p=pocket(c);return {food:p.food.length+(c.provisions||0)<=POCKET_RULES.foodLow,water:p.water<=POCKET_RULES.waterLow};}
  route(c){const city=this.city,p=pocket(c),low=this.low(c);if(!low.food&&!low.water||!city.society.isAdult(c)||city.minute<(p.retryAt||0))return false;
   const urgent=city.urgentNeed(c);if(urgent&&!['food','water'].includes(urgent)||!urgent&&(city.hour<6||city.hour>=22))return false;
+  const onShift=city.hour>=8&&city.hour<17&&(city.building(c.jobId)?.active||c.businessIds?.some(id=>city.building(id)?.active));
+  if(!urgent&&onShift&&c.needs.food>=POCKET_RULES.eatAt&&c.needs.water>=POCKET_RULES.drinkAt)return false;
   if(c.deliveryId||c.cleaningJobId||c.informalJobId||c.mobilityTrip||c.ridingVehicleId||c.workMeal)return false;
   const needWater=low.water,needFood=low.food;
   const options=[];for(const b of city.buildings){if(!b.active||b.entity.destroyed)continue;const water=needWater&&['townhall','utility','popular_refectory'].includes(b.type),offer=needFood&&city.economy.mealOffer(b,c),meal=offer&&offer.price<=(city.accounts.get(city.payerFor(c))?.balance||0)&&offer;if(!water&&!meal||urgent==='food'&&!meal||urgent==='water'&&!water)continue;const price=water&&b.type==='utility'?city.currency.price(35):0;if(price>(city.accounts.get(city.payerFor(c))?.balance||0))continue;const dist=Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y),score=needFood&&meal?city.economy.mealScore(c,b)+(needWater&&!water?30:0):dist+(needWater&&!water?30:0);options.push({b,score,need:urgent||(meal?'food':'water')});}

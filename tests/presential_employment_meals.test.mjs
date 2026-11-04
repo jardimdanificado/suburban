@@ -25,9 +25,9 @@ function attend(city,c,b,a){
 test('initial offices initialize the real cycle supply chain without a missing constant',()=>{
  const {city}=fixture();assert(city.buildings.some(b=>b.initialCycleChain));assert(city.buildings.some(b=>b.officeTenantOf&&b.active));
 });
-test('vacancies are discovered locally; waiting candidates keep a normal routine',()=>{
+test('vacancy signs are local, public listings reach distant candidates, and appointments preserve their routine',()=>{
  const {city,b,c}=fixture();c.entity.x=1.5;c.entity.y=1.5;discoverVacancies(city,c,true);
- assert(!(career(c).knownVacancies||[]).some(v=>v.buildingId===b.id));reviewMarket(city,[b]);assert.equal(career(c).applications.length,0);
+ assert(!(career(c).knownVacancies||[]).some(v=>v.buildingId===b.id));reviewMarket(city,[b]);assert.equal(career(c).applications.length,1);assert(career(c).knownVacancies.some(v=>v.buildingId===b.id&&v.source==='Quadro municipal de empregos'));
  c.entity.x=b.door.x;c.entity.y=b.door.y;discoverVacancies(city,c,true);assert(career(c).knownVacancies.some(v=>v.buildingId===b.id));career(c).nextSearchAt=0;reviewMarket(city,[b]);
  const a=career(c).pendingInterview;assert(a);assert(a.interviewAt>=city.minute+60);assert.equal(c.jobId,null);
  city.chooseTask(c);assert.equal(c.task,'walk');assert(c.path.length>0);assert.equal(a.status,'análise');

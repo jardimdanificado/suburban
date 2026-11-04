@@ -1,9 +1,9 @@
-import {CitySubstances} from './city_substances.js';
+import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
 import {CityFurniture} from './city_furniture.js?v=beach-occupancy-index-1';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
-import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=overhead-billboards-1';
+import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=economic-flow-7';
 import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
@@ -12,7 +12,7 @@ import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-stall-door-clearance-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=perf-employment-stagger-1';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=economic-flow-7';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
@@ -48,7 +48,7 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=secr
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
 import { CityGigs } from './city_gigs.js?v=art-titles-2';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=cleaner-capacity-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=economic-flow-7';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=road-durability-1';
 
@@ -841,6 +841,9 @@ export class CitySimulation {
       // Waiting for ingredients or a customer is still paid time at the assigned workplace.
       if(productive||present){if(!isOwner)this.payWage(c,b,wage);if(productive||present&&c.id===this.economy.mayorId&&b.type==='townhall')this.economy.practice(c,JOB_SKILL[b.type]);}
       if (isOwner) this.economy.practice(c, 'management');
+      // Moving to another workspace is not a material shortage. Preserve the
+      // route instead of replacing it with a trip to the waiting area.
+      if(!productive&&(c.path.length||c.indoorLocation?.path?.length||c.indoorLocation?.exiting))return;
       if(!productive&&b.type!=='farm'&&b.type!=='forestry'&&Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)>30){this.furniture.waitForInputs(c,b,'Aguardando matéria-prima ou serviço');return;}
       if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
       c.action = b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Trabalhando na própria empresa sem salário · ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';

@@ -1,4 +1,4 @@
-import {substanceStance} from './city_substances.js';
+import {substanceStance} from './city_substances.js?v=economic-flow-7';
 import {SUBSTANCES,SUBSTANCE_REGIMES} from './city_substance_catalog.js';
 import {TAX_CATEGORIES,taxRate,MINIMUM_WAGE_TAX_RATE,MINIMUM_BUSINESS_TAX_RATE} from './city_sales_tax.js';
 import {equityShares,offerShares,initializeEquity,nationalizeShares} from './city_equity.js?v=daily-mayor-privatization-1';

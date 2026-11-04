@@ -3,7 +3,7 @@ import {describePromise} from './city_mandates.js';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=quarry-outskirts-1';
 import {issuePartyCap} from './city_party_caps.js?v=party-apparel-1';
 import {SUBSTANCES} from './city_substance_catalog.js';
-import {substanceStance} from './city_substances.js';
+import {substanceStance} from './city_substances.js?v=economic-flow-7';
 const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
 const DEBATE_METRICS=[
   [/emprego|renda/,['employed','wage','publicJobs','companyProductivity','smallFirms']],
