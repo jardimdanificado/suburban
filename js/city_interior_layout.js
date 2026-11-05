@@ -6,6 +6,7 @@ import {CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geomet
 const layouts=new WeakMap();
 const keyOf=(x,y,z)=>`${x},${y},${z}`;
 const directions=[[1,0],[-1,0],[0,1],[0,-1]];
+const ROUTE_CACHE_LIMIT=512;
 export const INTERIOR_ROOM_PROFILES=Object.freeze({
   bedroom:{interaction:'rest',furniture:'bed'},bathroom:{interaction:'toilet',furniture:'toilet-sink',capacity:1},
   dining:{interaction:'eat',furniture:'table-seats',capacity:4},laundry:{interaction:'wash',furniture:'washer'},
@@ -134,7 +135,7 @@ export function interiorRoute(building,from,to){
   const requestedKey=`${start}>${wantedGoal}`;let keys=layout.routes.get(requestedKey),goal=wantedGoal;
   if(!keys){const previous=new Map([[start,null]]),queue=[start];let reached=start===goal;for(let head=0;head<queue.length&&!reached;head++){const key=queue[head];for(const next of layout.walkNeighbors.get(key)||[])if(!previous.has(next)){previous.set(next,key);queue.push(next);if(next===goal){reached=true;break;}}}
     if(!previous.has(goal)){let best=null,distance=Infinity;for(const key of previous.keys()){const node=layout.walkNodes.get(key);if(targetFloor!=null&&node.floor!==targetFloor)continue;const d=(node.x-to.x)**2+(node.y-to.y)**2+((node.z-(to.z||0))*1.3)**2;if(d<distance){best=key;distance=d;}}goal=best;}
-    if(!goal||!previous.has(goal))return null;keys=[];for(let key=goal;key!==null;key=previous.get(key))keys.push(key);keys.reverse();const routeKey=`${start}>${goal}`;layout.routes.set(routeKey,keys);if(layout.routes.size>256)layout.routes.delete(layout.routes.keys().next().value);
+    if(!goal||!previous.has(goal))return null;keys=[];for(let key=goal;key!==null;key=previous.get(key))keys.push(key);keys.reverse();const routeKey=`${start}>${goal}`;layout.routes.set(routeKey,keys);if(layout.routes.size>ROUTE_CACHE_LIMIT)layout.routes.delete(layout.routes.keys().next().value);
   }
   const inside=p=>p.x>=building.entity.x&&p.x<building.entity.x+building.width&&p.y>=building.entity.y&&p.y<building.entity.y+building.depth;
   const routeKey=`${start}>${goal}`;let stairPath=layout.walkRoutes.get(routeKey);
@@ -150,7 +151,7 @@ export function interiorRoute(building,from,to){
       }
     }
     if(compressed.length)stairPath.push(compressed.at(-1));
-    layout.walkRoutes.set(routeKey,stairPath);if(layout.walkRoutes.size>256)layout.walkRoutes.delete(layout.walkRoutes.keys().next().value);
+    layout.walkRoutes.set(routeKey,stairPath);if(layout.walkRoutes.size>ROUTE_CACHE_LIMIT)layout.walkRoutes.delete(layout.walkRoutes.keys().next().value);
   }
   const path=stairPath.slice(inside(from)?1:0);
   if(roofTarget){const stair={x:building.entity.x+Math.floor(building.width/2)+.5,y:building.entity.y+Math.floor(building.depth/2)+.5,z:(floors-1)*CITY_FLOOR_HEIGHT},landing={...stair,z:to.z};if(!path.length||Math.hypot(path.at(-1).x-stair.x,path.at(-1).y-stair.y)>.01)path.push(stair);path.push(landing);if(Math.hypot(to.x-landing.x,to.y-landing.y)>.01)path.push({...to});}
