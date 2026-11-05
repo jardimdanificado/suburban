@@ -100,7 +100,11 @@ function fundProject(economy,project,capital,freight){
   project.materialAccountId=id;project.startupCapital=capital;project.productionChain=true;return true;
 }
 export function investProductionPlan(economy){
-  const city=economy.city,plan=productionPlan(economy),needs=city.welfare.conditions(),active=city.development.projects.filter(pending),productionProjects=active.filter(p=>p.productionChain);
+  const city=economy.city,detail=city.profileDiagnostics?{}:null;let stage='productionPlan',stageAt=detail?performance.now():0;
+  const markStage=name=>{if(!detail)return;const now=performance.now();detail[`${stage}Ms`]=now-stageAt;stage=name;stageAt=now;};
+  if(detail&&economy.lastInvestmentSearchProfile)economy.lastInvestmentSearchProfile.productionDetail=detail;
+  const plan=productionPlan(economy);markStage('needsAndProjects');
+  const needs=city.welfare.conditions(),active=city.development.projects.filter(pending),productionProjects=active.filter(p=>p.productionChain);
   const adultCount=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)).length;
   // Keep construction exposure proportional to the available workforce. A
   // six-project minimum let a 48-person town borrow and fund more new firms
@@ -111,6 +115,7 @@ export function investProductionPlan(economy){
   // Reserve one extra slot for the first shared office building when a backed-up
   // production queue would otherwise prevent the service from ever starting.
   const officeException=pipelineFull&&plan.some(r=>r.type==='office_tower'&&r.missing&&!r.planned&&r.waitMinutes>=720);
+  markStage('pendingProjects');
   // Existing unfunded sites must progress before commissioning replacement factories.
   for(const row of plan.filter(r=>r.planned)){
     const project=active.find(p=>p.id===row.projectId);if(!project||project.materialAccountId||!['building'].includes(project.service))continue;
@@ -122,6 +127,7 @@ export function investProductionPlan(economy){
   }
 
 
+  markStage('chainPriority');
   const rows=plan.filter(r=>r.missing&&!r.planned&&r.type!=='quarry'&&(!officeException||r.type==='office_tower'||r.type==='farm'));
   const missingUpstreamGoods=new Set();
   for(const candidate of plan)if(candidate.missing&&candidate.planned===0){if(candidate.type==='farm'){missingUpstreamGoods.add(candidate.crop);if(candidate.crop==='flor_cannabis')missingUpstreamGoods.add('canhamo');}else if(candidate.type==='bakery')missingUpstreamGoods.add('pao');else if(candidate.type==='mill')missingUpstreamGoods.add('oleo');else for(const good of Object.keys(INDUSTRIES[candidate.type]?.outputs||{}))missingUpstreamGoods.add(good);}
@@ -134,13 +140,15 @@ export function investProductionPlan(economy){
   for(const row of plan)if(row.missing&&Object.entries(inputs(row.type,economy)).some(([good,q])=>(harvested.get(good)||0)>=q))markHarvestChain(row);
   rows.sort((a,b)=>Number(harvestChains.has(b))-Number(harvestChains.has(a))||b.priority-a.priority);
   city.development.ensurePlots();
+  markStage('founderPool');
   const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));
   // The government assigns initial ventures to capable residents, spreading ownership and keeping managers within a small portfolio.
-  const projectsByOwner=new Map(),businessLoanClients=new Set();
-  for(const project of active)if(project.ownerId!=null)projectsByOwner.set(project.ownerId,(projectsByOwner.get(project.ownerId)||0)+1);
+  const projectsByOwner=new Map(),projectOwners=new Set(),businessLoanClients=new Set();
+  for(const project of active)if(project.ownerId!=null){projectsByOwner.set(project.ownerId,(projectsByOwner.get(project.ownerId)||0)+1);projectOwners.add(project.ownerId);}
   for(const loan of city.bank.loans)if(loan.purpose==='business'&&!['paid','written-off'].includes(loan.status))businessLoanClients.add(loan.clientId);
   const managerLoad=c=>c.businessIds.length+(projectsByOwner.get(c.id)||0);
-  const founderPool=adults.filter(c=>!city.politics.officeHolder(c)&&managerLoad(c)<3&&c.creditAllowed!==false&&!businessLoanClients.has(c.accountId));
+  const founderPool=adults.filter(c=>!city.politics.officeHolder(c)&&managerLoad(c)<3&&c.creditAllowed!==false&&!businessLoanClients.has(c.accountId)&&!projectOwners.has(c.id)).map(c=>({citizen:c,load:managerLoad(c)}));
+  markStage('siteAndFounders');
   const batchLimit=1,assignedManagers=new Set();let opened=0;
   const lotPools=new Map(),lotsFor=row=>{
     const kind=row.type==='farm'?'farm':['iron_mine','bauxite_mine'].includes(row.type)?'quarry':'urban';
@@ -176,7 +184,7 @@ export function investProductionPlan(economy){
     if(!selected){recordResponse(economy,row,accessPending?'Planejando acesso ao terreno.':'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
     const {lot,width,depth,site,builder}=selected,floors=row.type==='office_tower'?3:businessFloors(row.type,lot.id),stone=row.type==='farm'?0:width*depth*floors*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*floors*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=startupCapital(city,economy,row.type),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
     const managementSkill=({farm:'agriculture',...Object.fromEntries(Object.entries(INDUSTRIES).map(([type,spec])=>[type,spec.skill]))})[row.type]||'management';
-    const founders=founderPool.filter(c=>!assignedManagers.has(c.id)&&managerLoad(c)<3&&!city.development.projects.some(p=>pending(p)&&p.ownerId===c.id)).sort((a,b)=>managerLoad(a)-managerLoad(b)||((b.skills.management||0)*.45+(b.skills[managementSkill]||0)*.55+(b.skills.governance||0)*.15)-((a.skills.management||0)*.45+(a.skills[managementSkill]||0)*.55+(a.skills.governance||0)*.15)||Number(!!a.jobId)-Number(!!b.jobId)||b.balance-a.balance||a.id-b.id).slice(0,16);
+    const founders=founderPool.filter(row=>!assignedManagers.has(row.citizen.id)).map(row=>({...row,aptitude:(row.citizen.skills.management||0)*.45+(row.citizen.skills[managementSkill]||0)*.55+(row.citizen.skills.governance||0)*.15})).sort((a,b)=>a.load-b.load||b.aptitude-a.aptitude||Number(!!a.citizen.jobId)-Number(!!b.citizen.jobId)||b.citizen.balance-a.citizen.balance||a.citizen.id-b.citizen.id).slice(0,16).map(row=>row.citizen);
     let project=null;
     for(const founder of founders){
       let loan=null;const deficit=Math.max(0,privateBudget-founder.balance);
@@ -199,5 +207,6 @@ export function investProductionPlan(economy){
     if(project){project.productionChain=true;project.chainReason=row.reason;project.priority=Math.max(105,Math.min(250,row.priority));if(project.accountId!=='treasury')assignedManagers.add(project.ownerId);recordResponse(economy,row,'Governo destinou a abertura a um gestor com afinidade e capacidade: materiais, construção e capital financiados.',{projectId:project.id});city.log(`Demanda iniciou ${city.buildingTypes[row.type].label}${row.crop?' de '+economy.crops[row.crop].label:''}: ${row.reason}`,'business',[],{kind:'production-chain-funded',projectId:project.id,type:row.type,crop:row.crop,accounts:[project.accountId]});opened++;continue;}
     recordResponse(economy,row,'A contratação ainda não encontrou condições de execução.');
   }
+  markStage('complete');
   return opened>0;
 }

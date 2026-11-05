@@ -12,7 +12,7 @@ import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=roadside-ad-placards-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=employment-search-cooldown-5';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=employment-search-phase-6';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
@@ -279,7 +279,10 @@ export class CitySimulation {
     this.staggerInitialTaskDecisions();
   }
   staggerInitialTaskDecisions(){
-    for(const c of this.citizens)if(c._initialTaskStaggerUntil==null&&!c.task&&!c.path?.length)c._initialTaskStaggerUntil=this.minute+c.id%SIMULATION_LOD.unstableDecisionMinutes;
+    // Spread first-day route searches over half an hour of simulation. Eight
+    // minute buckets still released over a hundred citizens per worker tick
+    // in 1k-population cities, producing a visible startup hitch.
+    for(const c of this.citizens)if(c._initialTaskStaggerUntil==null&&!c.task&&!c.path?.length)c._initialTaskStaggerUntil=this.minute+c.id%32;
   }
   clearCardboardSheltersForArea(x,y,width,depth) {
     let removed=0;
@@ -365,7 +368,7 @@ export class CitySimulation {
     const identity = this.life.identity(index, options);
     const entity = this.createEntity({ x, y, properties: { name: identity.name, species: 'citizen', brain: {}, render: { skin: 'Human_Knight_M.png', color: 0xe8e8e8 } } });
     const mobilityPriority=.75+((((Math.imul(index+1,2654435761)^this.initialSeed)>>>0)/4294967295)*.5);
-    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, inventory:{papelao:1}, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, mobilityPriority, mobilityNeed: 8, mobilityTimeLostToday: 0, bodyMetricsSeed:this.initialSeed, lastProgressAt: this.minute,_initialTaskStaggerUntil:this.minute+entity.id%SIMULATION_LOD.unstableDecisionMinutes };
+    const c = { id: entity.id, entity, balance: 0, homeUnitId: null, jobId: null, inventory:{papelao:1}, needs: Object.fromEntries(Object.keys(NEED_LABELS).map(n => [n, 60 + this.random() * 35])), action: 'Chegando à cidade', targetId: null, path: [], task: null, happiness: 80, salaryToday: 0, taxRemainder: 0, homeId: null, mood: 0, mobilityPriority, mobilityNeed: 8, mobilityTimeLostToday: 0, bodyMetricsSeed:this.initialSeed, lastProgressAt: this.minute,_initialTaskStaggerUntil:this.minute+entity.id%32 };
     initializeBodyMetrics(c,this.initialSeed);
     c.parentIds=options.parentIds||[];ensureSkinColor(this,c);
     c.givenNames = identity.givenNames; c.surnames = Object.freeze(identity.surnames);
@@ -708,6 +711,10 @@ export class CitySimulation {
     if(task==='leisure'&&!urgent&&(measure?measure('taskFurnitureRoute',()=>this.furniture.routeLeisure(c)):this.furniture.routeLeisure(c)))return;
     if(task==='hygiene'&&(measure?measure('taskHygieneSearch',()=>this.sanitation.choose(c,'hygiene')):this.sanitation.choose(c,'hygiene')))return;
     if (task === 'toilet') {
+      // Optional toilet visits used to route nearly everyone who crossed the
+      // same need threshold during one hourly decision pass. Phase those
+      // searches over the existing short retry window; urgent needs bypass it.
+      if(!urgent){c._toiletRouteAfter??=this.minute+c.id%SIMULATION_LOD.unstableDecisionMinutes;if(this.minute<c._toiletRouteAfter)return;}
       if (measure?measure('taskToiletSearch',()=>this.sanitation.choose(c)):this.sanitation.choose(c)) { c.toiletWaitingSince=null; return; }
       c.toiletWaitingSince??=this.minute;
       // A full or inaccessible bathroom must not trap a person indefinitely.
@@ -793,7 +800,7 @@ export class CitySimulation {
     if(c.task==='vote'){this.politics.voting.arrive(c);return;}
     if(c.task==='campaign'){this.politics.campaigns.arrive(c);return;}
     if(c.task==='visit'){this.relationships.arrive(c);return;}
-    if (c.task === 'toilet') { this.sanitation.use(c); return; }
+    if (c.task === 'toilet') { this.sanitation.use(c); c._toiletRouteAfter=null; return; }
     if (c.task === 'workmeal') { if (!this.workMeals.tryStart(c)) {c.task = null;c.mealResume=null;} return; }
     if(c.task==='outdoor_leisure'){
       const visit=c.outdoorLeisure,location=c.indoorLocation;visit.until??=this.minute+45;

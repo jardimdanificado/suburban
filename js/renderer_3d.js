@@ -3587,6 +3587,9 @@ export class RCT3DRenderer {
     // shadow-pass work on slower GPUs.
     this.renderer.shadowMap.autoUpdate = false;
     this._lastShadowRefreshAt = -Infinity;
+    this._shadowFramesSinceRefresh = 0;
+    this._lastShadowRefreshCamX = NaN;
+    this._lastShadowRefreshCamY = NaN;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // High quality smooth shadows
     this.renderer.setClearColor(0xdde8f5, 1.0);
 
@@ -5206,7 +5209,7 @@ export class RCT3DRenderer {
     this.shadowsEnabled = !this.shadowsEnabled;
     this.renderer.shadowMap.enabled = this.shadowsEnabled;
     this.sunLight.castShadow = this.shadowsEnabled;
-    if(this.shadowsEnabled){this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=performance.now();}
+    if(this.shadowsEnabled){this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=performance.now();this._shadowFramesSinceRefresh=0;this._lastShadowRefreshCamX=this.camX;this._lastShadowRefreshCamY=this.camY;}
     this.scene.traverse((obj) => {
       if (obj.material) {
         if (Array.isArray(obj.material)) obj.material.forEach(m => m.needsUpdate = true);
@@ -9043,12 +9046,16 @@ export class RCT3DRenderer {
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
-    const shadowNow=performance.now();
-    // Refresh the directional shadow less often on large scenes. Citizen
-    // instances do not cast shadows, so a 400 ms cadence keeps shadows
-    // responsive to the day/night cycle while avoiding a shadow pass every
-    // few rendered frames on slower GPUs.
-    if(this.shadowsEnabled&&shadowNow-this._lastShadowRefreshAt>=400){this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=shadowNow;}
+    const shadowNow=performance.now(),shadowCameraDx=this.camX-this._lastShadowRefreshCamX,shadowCameraDy=this.camY-this._lastShadowRefreshCamY;
+    this._shadowFramesSinceRefresh++;
+    // A time-only cadence can refresh every single frame when rendering itself
+    // takes longer than the interval. Keep normal one-second updates, but
+    // require a dozen frames between passes on a slow device; a substantial
+    // camera move still refreshes the map immediately.
+    const shadowCameraMoved=!Number.isFinite(this._lastShadowRefreshCamX)||shadowCameraDx*shadowCameraDx+shadowCameraDy*shadowCameraDy>=9;
+    if(this.shadowsEnabled&&(shadowCameraMoved||shadowNow-this._lastShadowRefreshAt>=1000&&this._shadowFramesSinceRefresh>=12)){
+      this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=shadowNow;this._shadowFramesSinceRefresh=0;this._lastShadowRefreshCamX=this.camX;this._lastShadowRefreshCamY=this.camY;
+    }
     const useIsometricPostEffects = this.graphicOptions?.isometricEffects === true;
     const dofOpt=this.graphicOptions?.dofStrength||"HIGH";
     const dofRequested=['LOW','MED','HIGH'].includes(dofOpt);

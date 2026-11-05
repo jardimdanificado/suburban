@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=leisure-route-stagger-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=graph-apply-single-pass-2';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;

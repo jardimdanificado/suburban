@@ -26,7 +26,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=task-retry-cadence-2';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=initial-decision-spread-32-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
 import { CityWelfare } from './city_welfare.js';
@@ -243,6 +243,14 @@ export class CityStateGraph {
           if (!descriptor.get && typeof descriptor.value !== 'function') delete object[key];
         }
       }
+      if(kind!=='CityFeed'){
+        if(kind==='FrozenObject'||kind==='FrozenArray'||kind==='SocialMemory'||kind==='SocialFact')Object.freeze(object);
+        if(patch){
+          const complete=this.previous.get(id)?.data;
+          if(!complete)throw new Error(`Atualização parcial sem estado inicial: ${id}`);
+          for(let i=0;i<data.length;i+=2)complete[data[i]+1]=data[i+1];
+        }else this.previous.set(id,{kind,data});
+      }
     }
     for (const payload of packet.histories || []) {
       const history = this.objects.get(payload.id);
@@ -259,13 +267,12 @@ export class CityStateGraph {
         const feed = this.objects.get(id), previous = new Map(feed.map(e=>[e.id,e]));
         feed.length=0;
         for (const eventId of data) {const entry=root.city.history.get(eventId)||previous.get(eventId);if(entry)feed.push(entry);}
+        if(patch){
+          const complete=this.previous.get(id)?.data;
+          if(!complete)throw new Error(`Atualização parcial sem estado inicial: ${id}`);
+          for(let i=0;i<data.length;i+=2)complete[data[i]+1]=data[i+1];
+        }else this.previous.set(id,{kind,data});
       }
-      if(kind==='FrozenObject'||kind==='FrozenArray'||kind==='SocialMemory'||kind==='SocialFact')Object.freeze(this.objects.get(id));
-      if(patch){
-        const complete=this.previous.get(id)?.data;
-        if(!complete)throw new Error(`Atualização parcial sem estado inicial: ${id}`);
-        for(let i=0;i<data.length;i+=2)complete[data[i]+1]=data[i+1];
-      }else this.previous.set(id,{kind,data});
     }
     for (const id of packet.removed) {this.objects.delete(id);this.previous.delete(id);this.historyCursors.delete(id);this.relationNodes.delete(id);}
     if(packet.packedNeeds){const people=root.city.citizens,data=packet.packedNeeds,stride=needFields.length+2;for(let i=0;i<people.length;i++){const citizen=people[i],needs=citizen.needs;if(!needs)continue;for(let j=0;j<needFields.length;j++)needs[needFields[j]]=data[i*stride+j];citizen.happiness=data[i*stride+needFields.length];citizen.mood=data[i*stride+needFields.length+1];}}

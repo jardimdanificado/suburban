@@ -17,7 +17,7 @@ import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-ne
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {quarryDeposits} from './city_terrain.js?v=entrance-retaining-clearance-1';
-import {addArchitectureVariations} from './city_architecture_variations.js?v=porch-door-clearance-1';
+import {addArchitectureVariations} from './city_architecture_variations.js?v=shutter-opaque-combine-1';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-9';

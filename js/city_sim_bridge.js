@@ -1,5 +1,5 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=leisure-route-stagger-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=graph-apply-single-pass-2';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
@@ -75,7 +75,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=leisure-route-stagger-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=graph-apply-single-pass-2', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling });
@@ -129,7 +129,7 @@ export class CitySimulationBridge {
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
     this.graph.apply(data.packet);
     const structureChanged=count!==this.entities.length||structure!==this.city.structureRevision;
-    bindCityState(this.city,{rebuildIndexes:structureChanged});
+    if(structureChanged)bindCityState(this.city,{rebuildIndexes:true});
     const terrainChanged=revision!==world.revision;
     let terrainTiles;
     if(terrainChanged){

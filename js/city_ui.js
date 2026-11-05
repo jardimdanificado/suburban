@@ -12,7 +12,7 @@ import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './c
 import {colorName} from './city_colors.js';
 import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.js';
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
-import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=employment-search-cooldown-5';
+import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=employment-search-phase-6';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
@@ -47,7 +47,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=publisher-demand-scan-2';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=task-retry-cadence-2';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=initial-decision-spread-32-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

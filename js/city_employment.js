@@ -148,7 +148,8 @@ export function reviewMarket(city,offers){
     const listings=posted.map(b=>{const entry=known.get(b.id)||{buildingId:b.id,discoveredAt:city.minute,source:'Quadro municipal de empregos'};entry.seenAt=city.minute;entry.wage=b.wage;entry.positions=openPositions(city,b);return entry;});
     cv.knownVacancies=[...listings,...cv.knownVacancies.filter(v=>!postedIds.has(v.buildingId))].slice(0,64);
     if(profile){profile.indexMs+=performance.now()-started;started=performance.now();}
-    if(city.minute<(cv.nextSearchAt||0))continue;cv.nextSearchAt=city.minute+(c.jobId?240:30);
+    if(cv.nextSearchAt==null)cv.nextSearchAt=city.minute+(c.jobId?240:30)+(c.id%60);
+    if(city.minute<cv.nextSearchAt)continue;cv.nextSearchAt=city.minute+(c.jobId?240:30)+(c.id%60);
     considerKnownVacancies(city,c,offers,indexes);
     if(profile)profile.considerMs+=performance.now()-started;
   }
@@ -162,8 +163,13 @@ export function searchEmployment(city,c){
   if(c.career?.pendingInterview?.status==='análise')return false;
   const tileX=Math.floor(c.entity.x),tileY=Math.floor(c.entity.y),searchWindow=Math.floor(city.minute/30),obstacleRevision=city.obstacleRevision||0,structureRevision=city.structureRevision||0;
   const sameSearchState=cv.employmentSearchTileX===tileX&&cv.employmentSearchTileY===tileY&&cv.employmentSearchWindow===searchWindow&&cv.employmentSearchObstacleRevision===obstacleRevision&&cv.employmentSearchStructureRevision===structureRevision;
-  if(!sameSearchState&&cv.employmentSearchTileX!==undefined)cv.nextEmploymentSearchAt=city.minute;
-  else if(cv.nextEmploymentSearchAt==null)cv.nextEmploymentSearchAt=city.minute+((Number(c.id)||0)%4);
+  if(!sameSearchState&&cv.employmentSearchTileX!==undefined){
+    // The half-hour window used to make every unemployed resident launch a
+    // job-search route on the same minute. Keep the new window now and phase
+    // its first search across the following 30 simulation minutes.
+    cv.employmentSearchTileX=tileX;cv.employmentSearchTileY=tileY;cv.employmentSearchWindow=searchWindow;cv.employmentSearchObstacleRevision=obstacleRevision;cv.employmentSearchStructureRevision=structureRevision;
+    cv.nextEmploymentSearchAt=city.minute+((Number(c.id)||0)%30);
+  }else if(cv.nextEmploymentSearchAt==null)cv.nextEmploymentSearchAt=city.minute+((Number(c.id)||0)%30);
   if(city.minute<(cv.nextEmploymentSearchAt||0))return false;
   // Explore one nearby block per pass and rotate through the neighborhood.
   // Known vacancies are checked above; this lower-priority walk should not

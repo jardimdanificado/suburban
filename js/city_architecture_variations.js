@@ -265,25 +265,39 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   const shutterPanelMaterial=new THREE.MeshLambertMaterial({color:style.accent}),shutterSlatMaterial=new THREE.MeshLambertMaterial({color:style.trim});
   const shutterGlassMaterial=new THREE.MeshLambertMaterial({color:0x91bac3,transparent:true,opacity:.2,depthWrite:false,side:THREE.DoubleSide});
   const shutterGeometry={front:{glass:new THREE.BoxGeometry(.135,.66,.012),panel:new THREE.BoxGeometry(.2,.76,.045),slat:new THREE.BoxGeometry(.2,.035,.07)},side:{glass:new THREE.BoxGeometry(.012,.66,.135),panel:new THREE.BoxGeometry(.045,.76,.2),slat:new THREE.BoxGeometry(.07,.035,.2)}};
-  const shutterParts={front:{glass:[],panel:[],slats:[]},side:{glass:[],panel:[],slats:[]}},shutterMatrix=new THREE.Matrix4(),shutterPosition=new THREE.Vector3(),shutterQuaternion=new THREE.Quaternion(),shutterScale=new THREE.Vector3(1,1,1),shutterAxis=new THREE.Vector3(0,1,0),shutterOffset=new THREE.Vector3();
+  const shutterParts={front:[],side:[]},shutterMatrix=new THREE.Matrix4(),shutterPosition=new THREE.Vector3(),shutterQuaternion=new THREE.Quaternion(),shutterScale=new THREE.Vector3(1,1,1),shutterAxis=new THREE.Vector3(0,1,0);
   const addShutter=(pivotX,pivotY,pivotZ,shutterSide,normal,axis,closed,floor)=>{
    const openAngle=axis==='front'?shutterSide*normal*Math.PI*.44:-shutterSide*normal*Math.PI*.44,parts=shutterParts[axis];
-   const record={floor,axis,pivotX,pivotY,pivotZ,shutterSide,normal,closedAngle:0,openAngle,angle:closed?0:openAngle,targetAngle:closed?0:openAngle,partIndex:parts.panel.length};
-   parts.glass.push(record);parts.panel.push(record);parts.slats.push(record);windowShutters.push(record);
+   const record={floor,axis,pivotX,pivotY,pivotZ,shutterSide,normal,closedAngle:0,openAngle,angle:closed?0:openAngle,targetAngle:closed?0:openAngle,partIndex:parts.length};
+   parts.push(record);windowShutters.push(record);
+  };
+  const opaqueShutterGeometry=(axis)=>{
+   const template=shutterGeometry[axis],positions=[],normals=[],colors=[],append=(source,offset,color)=>{
+    const p=source.attributes.position,n=source.attributes.normal,tint=new THREE.Color(color);
+    for(let i=0;i<p.count;i++){
+     positions.push(p.getX(i)+offset[0],p.getY(i)+offset[1],p.getZ(i)+offset[2]);
+     normals.push(n.getX(i),n.getY(i),n.getZ(i));colors.push(tint.r,tint.g,tint.b);
+    }
+   };
+   const front=axis==='front',panelCenter=front?[.1,0,.035]:[.035,0,.1],slatCenter=front?[.1,0,.065]:[.065,0,.1];
+   append(template.panel,panelCenter,style.accent);
+   for(let slat=0;slat<4;slat++)append(template.slat,[slatCenter[0],-.24+slat*.16,slatCenter[2]],style.trim);
+   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeBoundingSphere();
+   template.panel.dispose();template.slat.dispose();return geometry;
   };
   const buildShutterBatches=()=>{
    for(const axis of ['front','side']){
-    const parts=shutterParts[axis];if(!parts.panel.length)continue;
-    const makeBatch=(kind,capacity,geometry,material)=>{const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;windowControls.add(mesh);return mesh;};
-    const meshes={glass:makeBatch('glass',parts.glass.length,shutterGeometry[axis].glass,shutterGlassMaterial),panel:makeBatch('panel',parts.panel.length,shutterGeometry[axis].panel,shutterPanelMaterial),slats:makeBatch('slats',parts.slats.length*4,shutterGeometry[axis].slat,shutterSlatMaterial)};
+    const parts=shutterParts[axis];if(!parts.length){shutterGeometry[axis].glass.dispose();shutterGeometry[axis].panel.dispose();shutterGeometry[axis].slat.dispose();continue;}
+    const makeBatch=(geometry,material)=>{const mesh=new THREE.InstancedMesh(geometry,material,parts.length);mesh.count=parts.length;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;windowControls.add(mesh);return mesh;};
+    const meshes={glass:makeBatch(shutterGeometry[axis].glass,shutterGlassMaterial),opaque:makeBatch(opaqueShutterGeometry(axis),new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true}))};
     const write=record=>{
      shutterQuaternion.setFromAxisAngle(shutterAxis,record.angle);
-     const place=(mesh,index,offset)=>{shutterOffset.set(offset[0],offset[1],offset[2]).applyQuaternion(shutterQuaternion);shutterPosition.set(record.pivotX,record.pivotY,record.pivotZ).add(shutterOffset);shutterMatrix.compose(shutterPosition,shutterQuaternion,shutterScale);mesh.setMatrixAt(index,shutterMatrix);};
-     const x=axis==='front'?-record.shutterSide*.1:record.normal*.014,z=axis==='front'?record.normal*.014:-record.shutterSide*.1;
-     place(meshes.glass,record.partIndex,[x,0,z]);place(meshes.panel,record.partIndex,[axis==='front'?-record.shutterSide*.1:record.normal*.035,0,axis==='front'?record.normal*.035:-record.shutterSide*.1]);
-     for(let slat=0;slat<4;slat++)place(meshes.slats,record.partIndex*4+slat,[axis==='front'?-record.shutterSide*.1:record.normal*.065,-.24+slat*.16,axis==='front'?record.normal*.065:-record.shutterSide*.1]);
+     shutterPosition.set(record.pivotX,record.pivotY,record.pivotZ);
+     shutterScale.set(axis==='front'?-record.shutterSide:record.normal,1,axis==='front'?record.normal:-record.shutterSide);
+     shutterMatrix.compose(shutterPosition,shutterQuaternion,shutterScale);
+     meshes.glass.setMatrixAt(record.partIndex,shutterMatrix);meshes.opaque.setMatrixAt(record.partIndex,shutterMatrix);
     };
-    for(const record of parts.panel){record.writeMatrices=()=>write(record);record.dirtyMeshes=meshes;write(record);}
+    for(const record of parts){record.writeMatrices=()=>write(record);record.dirtyMeshes=meshes;write(record);}
     for(const mesh of Object.values(meshes))mesh.instanceMatrix.needsUpdate=true;
    }
   };
@@ -467,6 +481,6 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    }
   }
  }
- parent.userData.portugueseWindowShutters=windowShutters;
+  parent.userData.portugueseWindowShutters=windowShutters;
  mergeStaticMeshes(THREE,root,{mergeShadowFlags:true});
 }
