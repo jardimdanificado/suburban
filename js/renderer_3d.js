@@ -13,7 +13,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=perspective-culling-apron-2";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=perspective-culling-apron-bench-terrain-follow-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=walking-shirt-mask-1';
@@ -46,6 +46,7 @@ const getClanBlueprintTiles = () => [];
 const currentZoneSize = 8;
 const compareCrowdCitizenIds=(a,b)=>a.entity.id-b.entity.id;
 const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
+const ROAD_SURFACE_TILES=new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,...PAVED_ROAD_TILES]);
 // Cache for raw asset images
 const textureCache = new Map();
 const billboardMatCache = new Map();
@@ -3874,6 +3875,7 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'Sidewalk','sidewalk',normBrickA,.25,.95,0),
       ...terrainSurfaceMaterials(isPersp,'SidewalkTree','sidewalkTree',normBrickA,.3,.94,0),
       ...terrainSurfaceMaterials(isPersp,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
+      roadRailing:makeMat(isPersp,{color:0x4d5553,dithering:true},null,0,.82,.12),
       farmSoil:makeMat(isPersp,{map:farmGround.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},farmGround.normalMap,.38,.91,.005),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
       sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.42, 0.90, 0.01),
@@ -6605,6 +6607,13 @@ export class RCT3DRenderer {
       [TILE_ROAD_SAND_STONE]: { pos: [], uvs: [], colors: [] },
       [TILE_ROAD_HILL_STONE]: { pos: [], uvs: [], colors: [] },
     };
+    const roadRailingBucket={pos:[],posts:new Set()};
+    const addRailingBeam=(a,b,size)=>{
+      const axis=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],length=Math.hypot(...axis)||1;for(let i=0;i<3;i++)axis[i]/=length;
+      const ref=Math.abs(axis[1])>.92?[1,0,0]:[0,1,0],cross=(u,v)=>[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],normalize=v=>{const n=Math.hypot(...v)||1;return v.map(x=>x/n);},side=normalize(cross(axis,ref)),normal=normalize(cross(axis,side)),corners=[];
+      for(const p of [a,b])for(const s of [-1,1])for(const n of [-1,1])corners.push([p[0]+side[0]*s*size/2+normal[0]*n*size/2,p[1]+side[1]*s*size/2+normal[1]*n*size/2,p[2]+side[2]*s*size/2+normal[2]*n*size/2]);
+      for(const face of [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]])for(const i of [0,1,2,0,2,3])roadRailingBucket.pos.push(...corners[face[i]]);
+    };
     const waterFoamBucket = { pos: [], uvs: [], colors: [] };
     for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','SidewalkTree','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
@@ -6788,6 +6797,28 @@ export class RCT3DRenderer {
           }
           return ny*this.mapWidth+nx>=ty*this.mapWidth+tx;
         };
+        if(streetCorners&&ROAD_SURFACE_TILES.has(tType)){
+          const edgeRows=[
+            {side:0,dx:0,dy:-1,a:0,b:1,otherA:3,otherB:2,inward:[0,0,.035]},
+            {side:1,dx:1,dy:0,a:1,b:2,otherA:0,otherB:3,inward:[-.035,0,0]},
+            {side:2,dx:0,dy:1,a:3,b:2,otherA:0,otherB:1,inward:[0,0,-.035]},
+            {side:3,dx:-1,dy:0,a:0,b:3,otherA:1,otherB:2,inward:[.035,0,0]},
+          ];
+          for(const edge of edgeRows){
+            const nx=tx+edge.dx,ny=ty+edge.dy;if(world.bridgeTiles?.has(`${nx},${ny}`))continue;
+            const other=streetSurfaceCorners(world,nx,ny),waterOrVoid=nx<0||ny<0||nx>=world.width||ny>=world.height||map[ny*this.mapWidth+nx]===TILE_WATER||map[ny*this.mapWidth+nx]===TILE_VOID;
+            const ground=other?[other[edge.otherA],other[edge.otherB]]:waterOrVoid?[.08,.08]:[terrainCornerHeight(world,tx+([0,1,1,0][edge.a]),ty+([0,0,1,1][edge.a])),terrainCornerHeight(world,tx+([0,1,1,0][edge.b]),ty+([0,0,1,1][edge.b]))];
+            const top=[streetCorners[edge.a],streetCorners[edge.b]],delta=[top[0]-ground[0],top[1]-ground[1]],threshold=.68;
+            if(Math.max(...delta)<threshold)continue;
+            let start=0,end=1;if(delta[0]<threshold)start=(threshold-delta[0])/(delta[1]-delta[0]);if(delta[1]<threshold)end=(threshold-delta[0])/(delta[1]-delta[0]);start=Math.max(0,Math.min(1,start));end=Math.max(start,Math.min(1,end));if(end-start<.025)continue;
+            const point=(t,heightOffset=0)=>{
+              const along=t,x=edge.side===0||edge.side===2?tx+along:tx+(edge.side===1?1:0),z=edge.side===1||edge.side===3?ty+along:ty+(edge.side===2?1:0),height=top[0]+(top[1]-top[0])*along+heightOffset;
+              return [x+edge.inward[0],height,z+edge.inward[2]];
+            };
+            for(const t of [start,(start+end)/2,end]){const base=point(t,.035),key=`${base[0].toFixed(3)},${base[2].toFixed(3)}`;if(!roadRailingBucket.posts.has(key)){roadRailingBucket.posts.add(key);addRailingBeam(base,point(t,.99),.065);}}
+            for(const height of [.48,.94])addRailingBeam(point(start,height),point(end,height),.055);
+          }
+        }
         if(streetCorners)for(const face of roadRetainingFaces(world,tx,ty,ownsRetainingBoundary)){
           const variant=face.side,wall=tileMeshBuckets[`terrainRetainingWall${variant}`],tone=zoneMult*.92;
           const a=[face.ax,face.lowA,face.ay],b=[face.bx,face.lowB,face.by],c=[face.bx,face.highB,face.by],d=[face.ax,face.highA,face.ay];
@@ -7101,6 +7132,10 @@ export class RCT3DRenderer {
       } else {
         chunk.terrain.add(mesh);
       }
+    }
+    if(roadRailingBucket.pos.length){
+      const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(roadRailingBucket.pos,3));geometry.computeVertexNormals();
+      const railing=new THREE.Mesh(geometry,this.materials.roadRailing);railing.userData.terrainMaterialKey='roadRailing';railing.castShadow=false;railing.receiveShadow=true;railing.frustumCulled=false;chunk.terrain.add(railing);
     }
     smoothTerrainTopNormals(THREE,terrainSurfaceGeometries);
     const groundNormalField=new Map();
