@@ -1,5 +1,5 @@
 import {baseTerrainTile} from './world_gen.js?v=deep-perf-3';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation} from './road_terrain_geometry.js?v=terrain-shared-stone-mesh-4';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,roadRetainingFaces} from './road_terrain_geometry.js?v=road-retaining-bridge-side-seam-1';
 import {businessFloors} from './city_business_heights.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js?v=initial-cycle-ref-1';
 import {buildingEntrance} from './city_building_geometry.js';
@@ -14,6 +14,17 @@ const land = new Set([TILE_FLOOR, TILE_SAND, TILE_HILL, ...ROAD_TILES]);
 export const tileKey = (x, y) => `${x},${y}`;
 export const tileHeight = terrainTileHeight;
 export function tileAt(world, x, y) { return x < 0 || y < 0 || x >= world.width || y >= world.height ? TILE_VOID : world.getTile(x, y); }
+function entranceExitDirection(x,y,width,depth,door){
+  const px=Math.floor(door.x),py=Math.floor(door.y),dx=px<x?-1:px>=x+width?1:0,dy=dx?0:py<y?-1:1;
+  return [dx,dy];
+}
+function entranceApproachIsClear(world,door,dx,dy,occupied){
+  const x=Math.floor(door.x),y=Math.floor(door.y),nx=x+dx,ny=y+dy;
+  if(!terrainWalkable(world,nx,ny)||occupied.has(tileKey(nx,ny))||!canStep(world,x,y,nx,ny))return false;
+  const side=dy<0?0:dx>0?1:dy>0?2:3,opposite=(side+2)%4;
+  const wallOn=(tx,ty,edge)=>roadRetainingFaces(world,tx,ty).some(face=>face.side===edge&&Math.max(face.highA-face.lowA,face.highB-face.lowB)>.02);
+  return !wallOn(x,y,side)&&!wallOn(nx,ny,opposite);
+}
 export function bridgeAt(world,x,y){return world.bridgeTiles?.get(tileKey(x,y))||null;}
 export function isRoadAt(world,x,y){return ROAD_TILES.has(tileAt(world,x,y))||!!bridgeAt(world,x,y);}
 export function flagNightFactor(world){const hour=(world?.clock?.hour??12)+(world?.clock?.minute??0)/60;let glow=0;if(hour<5.5||hour>=19)glow=1;else if(hour<7)glow=1-(hour-5.5)/1.5;else if(hour>17.5)glow=(hour-17.5)/1.5;return 1-.82*Math.max(0,Math.min(1,glow));}
@@ -127,10 +138,17 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
     const doors = [door];
     for (let dx = 0; dx < width; dx++) { doors.push({ x: x + dx + .5, y: y + depth + .5 }, { x: x + dx + .5, y: y - .5 }); }
     for (let dy = 0; dy < depth; dy++) { doors.push({ x: x - .5, y: y + dy + .5 }, { x: x + width + .5, y: y + dy + .5 }); }
-    door = doors.find(p => terrainWalkable(world, Math.floor(p.x), Math.floor(p.y)) && !occupied.has(tileKey(Math.floor(p.x), Math.floor(p.y))));
+    door = doors.find(p => {
+      const px=Math.floor(p.x),py=Math.floor(p.y),[dx,dy]=entranceExitDirection(x,y,width,depth,p);
+      return terrainWalkable(world,px,py)&&!occupied.has(tileKey(px,py))&&entranceApproachIsClear(world,p,dx,dy,occupied);
+    });
     if (!door) return { error: quarry ? 'A pedreira precisa de uma entrada acessível junto às rochas.' : 'A fazenda precisa de uma entrada acessível em terra firme.' };
   }
   if (!terrainWalkable(world, Math.floor(door.x), Math.floor(door.y))) return { error: 'A entrada precisa ter acesso por terra firme.' };
+  if(type==='townhall'){
+    const [dx,dy]=entranceExitDirection(x,y,width,depth,door);
+    if(!entranceApproachIsClear(world,door,dx,dy,occupied))return {error:'A saída da prefeitura precisa ter acesso livre, sem pedra ou arrimo à frente.'};
+  }
   const terrain = buildingGround(world, x, y, width, depth,door);
   if (!quarry && type !== 'farm' && (terrain.variation > 1.3 || terrain.base - tileHeight(tileAt(world, Math.floor(door.x), Math.floor(door.y))) > 1.65)) return { error: 'Encosta muito íngreme. Escolha um lote menor ou outro trecho do terreno.' };
   return { ...terrain, door, rotation };
@@ -372,15 +390,18 @@ export function generateSettlement(city) {
       const center = hub || origin;
       for (let y = Math.max(1, Math.floor(center.y - searchRadius)); y < Math.min(world.height - d - 1, center.y + searchRadius); y++) for (let x = Math.max(1, Math.floor(center.x - searchRadius)); x < Math.min(world.width - w - 1, center.x + searchRadius); x++) {
         if(type==='quarry'&&world.map&&!quarryDeposits(world,x,y,w,d).length)continue;
-        const site = inspectBuildingSite(city, x, y, w, d, { type });
-        if (site.error) continue;
-        const fromCenter=Math.hypot(x-center.x,y-center.y),centerPenalty=type==='quarry'?Math.max(0,38-fromCenter)*9+Math.max(0,fromCenter-58)*2:0;
-        const score = (type==='quarry'?centerPenalty+Math.hypot(x-preferred.x,y-preferred.y)*.2:Math.hypot(x-preferred.x,y-preferred.y)) + site.variation * 8 + city.random() * 3 + (flatSiteLevel(world, x, y, w, d) === null ? 10000 : 0);
-        candidates.push({ x, y, score });
+        const rotations=type==='townhall'?[0,1,2,3]:[0];
+        for(const rotation of rotations){
+          const site = inspectBuildingSite(city, x, y, w, d, { type,rotation });
+          if (site.error) continue;
+          const fromCenter=Math.hypot(x-center.x,y-center.y),centerPenalty=type==='quarry'?Math.max(0,38-fromCenter)*9+Math.max(0,fromCenter-58)*2:0;
+          const score = (type==='quarry'?centerPenalty+Math.hypot(x-preferred.x,y-preferred.y)*.2:Math.hypot(x-preferred.x,y-preferred.y)) + site.variation * 8 + city.random() * 3 + (flatSiteLevel(world, x, y, w, d) === null ? 10000 : 0);
+          candidates.push({ x, y, rotation, score });
+        }
       }
       candidates.sort((a, b) => a.score - b.score);
       for (const candidate of candidates.slice(0, 100)) {
-        placed = city.addBuilding(type, candidate.x, candidate.y, { width: w, depth: d, floors: h, free: true });
+        placed = city.addBuilding(type, candidate.x, candidate.y, { width: w, depth: d, floors: h, free: true,rotation:type==='townhall'?candidate.rotation:null });
         if (placed) break;
       }
       if (placed) break;

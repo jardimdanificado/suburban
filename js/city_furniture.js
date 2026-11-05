@@ -1,6 +1,7 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=labor-secretariat-1';
-import {ROAD_TILES,tileAt} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import {ROAD_TILES,tileAt,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {roadRetainingFaces} from './road_terrain_geometry.js?v=road-retaining-bridge-side-seam-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
 const BEACH_LEISURE_OCCUPANCY=new WeakMap();
 function beachLeisureOccupancy(furniture){
@@ -25,7 +26,11 @@ function furnitureFacingAngle(city,furniture){
  }
  let nearestRoad=null,nearestRoadDistance=Infinity;
  for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(ROAD_TILES.has(tileAt(city.world,tx+dx,ty+dy))){const distance=dx*dx+dy*dy;if(distance<nearestRoadDistance){nearestRoadDistance=distance;nearestRoad={x:dx,y:dy};}}
- if(nearestRoad)return Math.atan2(nearestRoad.x,nearestRoad.y);
+ if(nearestRoad){
+  const roadX=tx+nearestRoad.x,roadY=ty+nearestRoad.y,wallSide=nearestRoad.x>0?3:nearestRoad.x<0?1:nearestRoad.y>0?0:2;
+  const benchGround=surfaceElevation(city.world,furniture.x,furniture.y),faces=roadRetainingFaces(city.world,roadX,roadY),wallAhead=faces.some(face=>face.side===wallSide&&Math.max(face.highA,face.highB)>benchGround+.24);
+  return Math.atan2(nearestRoad.x,nearestRoad.y)+(wallAhead?Math.PI:0);
+ }
  return Number.isFinite(furniture.angle)?furniture.angle:0;
 }
 export class CityFurniture{
@@ -48,7 +53,7 @@ export class CityFurniture{
     if(tile===TILE_SAND||!city.walkable(x,y)||ROAD_TILES.has(tile)||city.occupied.has(`${x},${y}`)||occupiedByBuilding||this.benches.some(b=>Math.hypot(b.x-x-.5,b.y-y-.5)<5)||city.buildings.some(b=>Math.hypot(b.door.x-x-.5,b.door.y-y-.5)<1.5))continue;
     // Keep the complete bench footprint inside this single non-road tile.
     // Fixed benches face the street; beach gear belongs to each visitor.
-    const bench={id:this.nextId++,x:x+.5,y:y+.5,angle:Math.atan2(-dx,-dy),kind:'bench',seats:[null,null],builtAt:city.minute};this.benches.push(bench);break;
+    const bench={id:this.nextId++,x:x+.5,y:y+.5,angle:Math.atan2(-dx,-dy),kind:'bench',seats:[null,null],builtAt:city.minute};bench.angle=furnitureFacingAngle(city,bench);this.benches.push(bench);break;
    }if(this.benches.length>=limit)break;
   }
  }

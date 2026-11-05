@@ -5,7 +5,7 @@ import {outdoorCellReady,activityRoomReady,finishBuildingOccupants} from './city
 import {findPublicBuildingSite,acquirePublicBuildingSite} from './city_public_land.js';
 import {INDUSTRIES} from './city_industries.js';
 import {MIN_PLOT_CELLS} from './city_building_geometry.js';
-import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel, tileAt, tileHeight, canStep, ROAD_TILES, PAVED_ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, pavePath, roadFor, wearRoad, isRoadAt } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
@@ -450,7 +450,7 @@ export class CityDevelopment {
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
     const autoFloors=floors===null;
     floors ??= ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing','office_tower'].includes(type)?3:businessFloors(type,plotId);
-    if ((kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'market', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
+    if ((kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
     width ??= p.width; depth ??= p.depth;
     if(width*depth<MIN_PLOT_CELLS||p.width*p.depth<MIN_PLOT_CELLS)return city.fail('Terrenos e prédios precisam de pelo menos 4 células de área.');
     if ((p.type === 'quarry' && !['quarry','iron_mine','bauxite_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;

@@ -128,7 +128,14 @@ export function roadRetainingFaces(world,x,y,ownsSharedBoundary=null){
   const faces=[];
   for(let side=0;side<EDGES.length;side++){
     const edge=EDGES[side],nx=x+edge.dx,ny=y+edge.dy,neighbor=at(world,nx,ny),neighborIsStreet=ROADS.has(neighbor)||sidewalkAt(world,nx,ny);
-    if(world.bridgeTiles?.has(`${nx},${ny}`))continue;
+    const bridgeTile=world.bridgeTiles?.get(`${nx},${ny}`);
+    if(bridgeTile){
+      const axis=bridgeTile.axis||world.roadBridges?.find(bridge=>bridge.id===bridgeTile.id)?.axis;
+      const bridgeEnd=axis==='x'?(side===1||side===3):axis==='y'?(side===0||side===2):true;
+      // Leave the bridge entrance open, but close the exposed retaining-wall
+      // seam along its sides where the bridge deck does not cover the gap.
+      if(bridgeEnd)continue;
+    }
     const [ax,ay]=CORNERS[edge.a],[bx,by]=CORNERS[edge.b];
     if(neighborIsStreet){
       if(ownsSharedBoundary?!ownsSharedBoundary(nx,ny):ny*world.width+nx<y*world.width+x)continue;

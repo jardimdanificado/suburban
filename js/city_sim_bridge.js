@@ -1,6 +1,6 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-ref-token-cache-1';
-import {canStep,terrainWalkable} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=bench-wall-height-aware-1';
+import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
 // directly between those snapshots would draw a straight chord through water

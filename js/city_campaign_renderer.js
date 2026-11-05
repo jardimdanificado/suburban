@@ -1,7 +1,7 @@
 import {drawPartyFlag} from './city_party_flags.js';
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
-import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=entrance-retaining-clearance-1';
 function drawCandidateModel(ctx,candidate,x,y,w,h,accent){
   const skin=`#${(candidate?.skinColor||candidate?.entity?.properties?.render?.color||0xc78f70).toString(16).padStart(6,'0')}`,garment=candidate?.wardrobe?.[candidate.wearingIndex]||candidate?.wardrobe?.[0],shirt=typeof garment?.color==='number'?`#${garment.color.toString(16).padStart(6,'0')}`:typeof garment?.color==='string'&&/^#[0-9a-f]{6}$/i.test(garment.color)?garment.color:'#345c64',ink='#332d2a',cx=x+w/2;
   ctx.save();ctx.fillStyle=accent;ctx.fillRect(x,y,w,h);ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(x+4,y+4,w-8,h-8);

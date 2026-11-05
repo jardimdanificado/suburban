@@ -1,4 +1,4 @@
-import {cornerHeight,surfaceElevation} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import {cornerHeight,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {caribbeanGroundSurfaceTextures} from './caribbean_pixel_materials.js?v=ground-realism-2';
 
 // Construction visuals cover the terrain without changing its navigation tiles.

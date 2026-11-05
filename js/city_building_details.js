@@ -87,7 +87,16 @@ case'mine':{const pit=['clay_pit','sand_pit'].includes(b.type),timber=b.type==='
  case'home':box(.24,.5,.24,-.35,.25,0,0x8c7967);break;
  case'housing':for(const x of [-.35,.35])box(.35,.16,.25,x,.18,0,0x868f80);break;
  case'luxury':cyl(.38,.38,.1,0,.08,0,0xe1c67b);ball(.25,0,.36,0,0x6a9e85);break;
- case'market':box(1,.15,.65,0,.4,0,0xd7a24d);for(const x of [-.4,.4])box(.07,.4,.07,x,.2,0,wood);break;
+ case'market':{
+  // Give the permanent market a storefront identity above its building shell.
+  box(1.85,.44,.12,0,.38,.42,0x254b3d);
+  const canvas=document.createElement('canvas');canvas.width=320;canvas.height=80;const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#254b3d';ctx.fillRect(0,0,320,80);ctx.fillStyle='#f2e4bc';drawPixelText(ctx,'MERCADO',160,40);
+  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
+  const face=new THREE.Mesh(new THREE.PlaneGeometry(1.68,.32),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));
+  face.position.set(0,.38,.49);face.userData.skipStaticMerge=true;face.userData.marketSignTexture=texture;root.add(face);
+  break;
+ }
  case'quarry':for(const x of [-.3,.2])ball(.32,x,.22,0,0x949a96).scale.y=.65;break;
  case'farm':case'mill':break;
  }

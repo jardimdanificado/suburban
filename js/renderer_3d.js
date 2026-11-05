@@ -13,13 +13,13 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=street-market-fairs-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=import-depot-visual-removed-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=walking-shirt-mask-1';
-import { flagNightFactor } from './city_terrain.js?v=terrain-shared-stone-mesh-4';
+import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=road-retaining-chunk-ownership-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=road-retaining-bridge-side-seam-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -47,6 +47,67 @@ const currentZoneSize = 8;
 const compareCrowdCitizenIds=(a,b)=>a.entity.id-b.entity.id;
 const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
 const ROAD_SURFACE_TILES=new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,...PAVED_ROAD_TILES]);
+const roadRailingLayouts=new WeakMap();
+const roadRailingFaceKey=(x,y,face)=>`${x},${y},${face.side},${face.from.toFixed(5)},${face.to.toFixed(5)}`;
+const roadRailingNodeKey=(x,z)=>`${x.toFixed(5)},${z.toFixed(5)}`;
+function roadRailingDoorApproaches(city){
+  const byCell=new Map();
+  for(const building of city?.buildings||[]){
+    if(building.entity?.destroyed||!building.door||!building.entity||!building.units?.length)continue;
+    const localX=Math.floor(building.door.x-building.entity.x),localY=Math.floor(building.door.y-building.entity.y),unit=building.units.find(candidate=>candidate.z===0&&Math.abs(localX-candidate.x)+Math.abs(localY-candidate.y)===1);if(!unit)continue;
+    const dx=Math.sign(localX-unit.x),dy=Math.sign(localY-unit.y),approach={ax:building.door.x,ay:building.door.y,bx:building.door.x+dx*1.8,by:building.door.y+dy*1.8};
+    for(let y=Math.floor(Math.min(approach.ay,approach.by)-.5);y<=Math.floor(Math.max(approach.ay,approach.by)+.5);y++)for(let x=Math.floor(Math.min(approach.ax,approach.bx)-.5);x<=Math.floor(Math.max(approach.ax,approach.bx)+.5);x++){const key=`${x},${y}`;let list=byCell.get(key);if(!list)byCell.set(key,list=[]);list.push(approach);}
+  }
+  return byCell;
+}
+function railingFaceBlocksDoor(face,doorApproaches){
+  const mx=(face.ax+face.bx)/2,my=(face.ay+face.by)/2;
+  for(let y=Math.floor(my)-1;y<=Math.floor(my)+1;y++)for(let x=Math.floor(mx)-1;x<=Math.floor(mx)+1;x++)for(const door of doorApproaches.get(`${x},${y}`)||[]){
+    const cross=(ax,ay,bx,by,cx,cy)=>(bx-ax)*(cy-ay)-(by-ay)*(cx-ax),on=(ax,ay,bx,by,cx,cy)=>Math.abs(cross(ax,ay,bx,by,cx,cy))<1e-6&&cx>=Math.min(ax,bx)-1e-6&&cx<=Math.max(ax,bx)+1e-6&&cy>=Math.min(ay,by)-1e-6&&cy<=Math.max(ay,by)+1e-6;
+    const a=cross(face.ax,face.ay,face.bx,face.by,door.ax,door.ay),b=cross(face.ax,face.ay,face.bx,face.by,door.bx,door.by),c=cross(door.ax,door.ay,door.bx,door.by,face.ax,face.ay),d=cross(door.ax,door.ay,door.bx,door.by,face.bx,face.by);
+    if(a*b<0&&c*d<0||on(face.ax,face.ay,face.bx,face.by,door.ax,door.ay)||on(face.ax,face.ay,face.bx,face.by,door.bx,door.by)||on(door.ax,door.ay,door.bx,door.by,face.ax,face.ay)||on(door.ax,door.ay,door.bx,door.by,face.bx,face.by))return true;
+  }
+  return false;
+}
+function roadRailingLayout(world,city){
+  const cached=roadRailingLayouts.get(world);if(cached?.map===world.map&&cached.revision===world.revision&&cached.city===city&&cached.structureRevision===city?.structureRevision)return cached;
+  const faces=[],segments=new Map(),nodes=new Map(),doorApproaches=roadRailingDoorApproaches(city);
+  for(let y=0;y<world.height;y++)for(let x=0;x<world.width;x++){
+    const tile=world.map[y*world.width+x],isSidewalk=world.hasSidewalk?.(x,y);if(!ROAD_SURFACE_TILES.has(tile)&&!isSidewalk)continue;
+    const corners=streetSurfaceCorners(world,x,y);if(!corners)continue;
+    for(const face of roadRetainingFaces(world,x,y,()=>true)){
+      if(railingFaceBlocksDoor(face,doorApproaches))continue;
+      const edgeCorners=[[0,1],[1,2],[3,2],[0,3]][face.side],heightAt=t=>corners[edgeCorners[0]]+(corners[edgeCorners[1]]-corners[edgeCorners[0]])*t;
+      const dropA=heightAt(face.from)-face.lowA,dropB=heightAt(face.to)-face.lowB;if(Math.max(dropA,dropB)<.02)continue;
+      const key=roadRailingFaceKey(x,y,face),startNode=roadRailingNodeKey(face.ax,face.ay),endNode=roadRailingNodeKey(face.bx,face.by),segmentKey=[startNode,endNode].sort().join('|');
+      let row=segments.get(segmentKey);
+      if(row){row.faceKeys.push(key);continue;}
+      row={key,faceKeys:[key],segmentKey,startNode,endNode,length:Math.hypot(face.bx-face.ax,face.by-face.ay),startHeight:heightAt(face.from),endHeight:heightAt(face.to)};segments.set(segmentKey,row);faces.push(row);
+      for(const node of [startNode,endNode]){let incident=nodes.get(node);if(!incident)nodes.set(node,incident=[]);incident.push(row);}
+    }
+  }
+  const styles=new Map(),terminalNodes=new Set(),postNodes=new Set(),cornerNodes=new Set(),seen=new Set();
+  for(const row of faces){if(seen.has(row.key))continue;const component=[],queue=[row];seen.add(row.key);
+    while(queue.length){const current=queue.pop();component.push(current);for(const node of [current.startNode,current.endNode])for(const neighbor of nodes.get(node)||[])if(!seen.has(neighbor.key)){seen.add(neighbor.key);queue.push(neighbor);}}
+    const componentNodes=new Set(component.flatMap(item=>[item.startNode,item.endNode])),mandatory=new Set();
+    const coords=node=>node.split(',').map(Number),otherNode=(row,node)=>row.startNode===node?row.endNode:row.startNode,heightAtNode=(row,node)=>row.startNode===node?row.startHeight:row.endHeight;
+    for(const node of componentNodes){const incident=nodes.get(node)||[];if(incident.length!==2){mandatory.add(node);if(incident.length===1)terminalNodes.add(node);else cornerNodes.add(node);continue;}
+      const [a,b]=incident,point=coords(node),pa=coords(otherNode(a,node)),pb=coords(otherNode(b,node)),va=[pa[0]-point[0],pa[1]-point[1]],vb=[pb[0]-point[0],pb[1]-point[1]],cross=va[0]*vb[1]-va[1]*vb[0];
+      const slopeA=(heightAtNode(a,otherNode(a,node))-heightAtNode(a,node))/a.length,slopeB=(heightAtNode(b,otherNode(b,node))-heightAtNode(b,node))/b.length;
+      if(Math.abs(cross)>1e-4){mandatory.add(node);cornerNodes.add(node);}else if(Math.abs(slopeA+slopeB)>.05)mandatory.add(node);
+    }
+    const first=component.map(item=>item.segmentKey).sort()[0],seed=Number(world.seed)||0;let hash=(2166136261^seed)>>>0;for(const char of first)hash=Math.imul(hash^char.charCodeAt(0),16777619)>>>0;const style=hash%3;
+    for(const item of component)for(const key of item.faceKeys)styles.set(key,style);
+    for(const node of mandatory)postNodes.add(node);
+    const walked=new Set();
+    for(const startNode of mandatory)for(const firstEdge of nodes.get(startNode)||[]){if(walked.has(firstEdge.segmentKey))continue;let node=startNode,edge=firstEdge,distance=0;
+      while(edge&&!walked.has(edge.segmentKey)){walked.add(edge.segmentKey);const next=otherNode(edge,node);distance+=edge.length;if(mandatory.has(next))break;if(distance>=3){postNodes.add(next);distance=0;}
+        const nextEdge=(nodes.get(next)||[]).find(candidate=>candidate.segmentKey!==edge.segmentKey&&!walked.has(candidate.segmentKey));node=next;edge=nextEdge;
+      }
+    }
+  }
+  const result={map:world.map,revision:world.revision,city,structureRevision:city?.structureRevision,styles,terminalNodes,postNodes,cornerNodes,doorApproaches};roadRailingLayouts.set(world,result);return result;
+}
 // Cache for raw asset images
 const textureCache = new Map();
 const billboardMatCache = new Map();
@@ -6615,6 +6676,16 @@ export class RCT3DRenderer {
       const rgb=[(color>>16&255)/255,(color>>8&255)/255,(color&255)/255];
       for(const face of [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]])for(const i of [0,1,2,0,2,3]){roadRailingBucket.pos.push(...corners[face[i]]);roadRailingBucket.colors.push(...rgb);}
     };
+    const addRailingRoundPost=(a,b,radius,color)=>{
+      const rgb=[(color>>16&255)/255,(color>>8&255)/255,(color&255)/255],sides=6,lower=[],upper=[];
+      for(let i=0;i<sides;i++){const angle=Math.PI*2*i/sides;lower.push([a[0]+Math.cos(angle)*radius,a[1],a[2]+Math.sin(angle)*radius]);upper.push([b[0]+Math.cos(angle)*radius,b[1],b[2]+Math.sin(angle)*radius]);}
+      const triangle=(p1,p2,p3)=>{for(const p of [p1,p2,p3]){roadRailingBucket.pos.push(...p);roadRailingBucket.colors.push(...rgb);}};
+      for(let i=0;i<sides;i++){const next=(i+1)%sides;triangle(lower[i],lower[next],upper[next]);triangle(lower[i],upper[next],upper[i]);triangle(a,lower[next],lower[i]);triangle(b,upper[i],upper[next]);}
+    };
+    const addRailingPointCap=(center,color)=>{
+      const rgb=[(color>>16&255)/255,(color>>8&255)/255,(color&255)/255],half=.055,baseY=center[1]-.045,apex=[center[0],center[1]+.055,center[2]],corners=[[center[0]-half,baseY,center[2]-half],[center[0]+half,baseY,center[2]-half],[center[0]+half,baseY,center[2]+half],[center[0]-half,baseY,center[2]+half]];
+      for(let i=0;i<4;i++)for(const p of [corners[i],corners[(i+1)%4],apex]){roadRailingBucket.pos.push(...p);roadRailingBucket.colors.push(...rgb);}
+    };
     const waterFoamBucket = { pos: [], uvs: [], colors: [] };
     for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','SidewalkTree','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
@@ -6644,6 +6715,7 @@ export class RCT3DRenderer {
     const lineElevOffset = 0.006;
     const chunkMinTx = clampedMinTx, chunkMaxTx = clampedMaxTx;
     const chunkMinTy = clampedMinTy, chunkMaxTy = clampedMaxTy;
+    const railingLayout=roadRailingLayout(world,this.cityDevelopment?.city);
 
     const isWaterAt = (tx, ty) => {
       if (tx < 0 || tx >= this.mapWidth || ty < 0 || ty >= this.mapHeight) return true;
@@ -6813,22 +6885,27 @@ export class RCT3DRenderer {
             wall.pos.push(...point);wall.uvs.push(u,point[1]);wall.colors.push(tone,tone,tone);
           }
         }
-        if(streetCorners&&ROAD_SURFACE_TILES.has(tType))for(const face of roadRetainingFaces(world,tx,ty,()=>true)){
+        if(streetCorners&&(ROAD_SURFACE_TILES.has(tType)||isSidewalk))for(const face of roadRetainingFaces(world,tx,ty,()=>true)){
+          if(railingFaceBlocksDoor(face,railingLayout.doorApproaches))continue;
           const edgeCorners=[[0,1],[1,2],[3,2],[0,3]][face.side],roadHeight=t=>streetCorners[edgeCorners[0]]+(streetCorners[edgeCorners[1]]-streetCorners[edgeCorners[0]])*t;
-          // Match each rail to the full retaining face. Clipping the endpoints
-          // by wall height left visible gaps where the bank tapers at corners.
           const drops=[roadHeight(face.from)-face.lowA,roadHeight(face.to)-face.lowB];
           if(Math.max(...drops)<.02)continue;
-          const start=face.from,end=face.to;
+          const start=face.from,end=face.to,startNode=roadRailingNodeKey(face.ax,face.ay),endNode=roadRailingNodeKey(face.bx,face.by),startTangent=railingLayout.cornerNodes.has(startNode)||railingLayout.terminalNodes.has(startNode),endTangent=railingLayout.cornerNodes.has(endNode)||railingLayout.terminalNodes.has(endNode),faceKey=roadRailingFaceKey(tx,ty,face),style=railingLayout.styles.get(faceKey)??0;
           const inward=[[0,.035],[-.035,0],[0,-.035],[.035,0]][face.side],point=(t,heightOffset=0,post=false)=>{
             const fraction=(t-face.from)/(face.to-face.from||1),tangent=post?(Math.abs(t)<1e-5?.035:Math.abs(t-1)<1e-5?-.035:0):0,x=face.ax+(face.bx-face.ax)*fraction,z=face.ay+(face.by-face.ay)*fraction;
             return [x+inward[0]+(face.side===0||face.side===2?tangent:0),roadHeight(t)+heightOffset,z+inward[1]+(face.side===1||face.side===3?tangent:0)];
           };
-          const railColor=0x9b7950,postColor=0x82583d,capColor=0xe3d5b8;
-          for(const t of [start,end]){const base=point(t,0,true),key=`${base[0].toFixed(3)},${base[2].toFixed(3)}`;if(!roadRailingBucket.posts.has(key)){roadRailingBucket.posts.add(key);addRailingBeam(base,point(t,.7,true),.075,.075,postColor);addRailingBeam(point(t,.71,true),point(t,.79,true),.12,.12,capColor);}}
-          // End rails at the shared post centers so perpendicular sides meet
-          // cleanly at road corners instead of stopping short of one another.
-          for(const height of [.25,.55])addRailingBeam(point(start,height,true),point(end,height,true),.055,.055,railColor);
+          const palette=[
+            {rail:0x9b7950,post:0x82583d,cap:0xe3d5b8,railWidth:.055,railDepth:.055},
+            {rail:0xbdb092,post:0xbdb092,cap:0xf0e5c8,railWidth:.05,railDepth:.05},
+            {rail:0x5e7960,post:0x82583d,cap:0xe3d5b8,railWidth:.055,railDepth:.055,stone:0x777d78},
+          ][style];
+          for(const [index,t] of [start,end].entries()){
+            const node=index===0?startNode:endNode,tangent=index===0?startTangent:endTangent,base=point(t,0,tangent),terminal=railingLayout.terminalNodes.has(node),drop=index===0?drops[0]:drops[1],buriedBase=terminal?point(t,-drop-.3,tangent):base,key=`${base[0].toFixed(3)},${base[2].toFixed(3)}`;
+            if(railingLayout.postNodes.has(node)&&!roadRailingBucket.posts.has(key)){roadRailingBucket.posts.add(key);if(style===1)addRailingRoundPost(buriedBase,point(t,.7,tangent),.055,palette.post);else addRailingBeam(buriedBase,point(t,.7,tangent),style===2?.085:.075,style===2?.085:.075,palette.post);const cap=point(t,style===1?.755:.75,tangent);if(style===1)addRailingPointCap(cap,palette.cap);else addRailingBeam(point(t,.71,tangent),point(t,.79,tangent),.12,.12,palette.cap);}
+          }
+          if(style===2)addRailingBeam(point(start,.13,startTangent),point(end,.13,endTangent),.18,.15,palette.stone);
+          for(const height of [.25,.55])addRailingBeam(point(start,height,startTangent),point(end,height,endTangent),palette.railWidth,palette.railDepth,palette.rail);
         }
 
         // Bridge stone boundaries to lower terrain. Stone vertices are shared

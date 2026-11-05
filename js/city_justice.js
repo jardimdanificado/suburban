@@ -13,7 +13,7 @@ import {CITY_FLOOR_HEIGHT,buildingPoint} from './city_building_geometry.js';
 import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=activity-cell-early-reservation-3';
 import {civicStatus,civicVisit} from './city_public_services.js';
 import {inventoryFree} from './city_inventory.js';
-import {beginBuildingSiteSearch} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import {beginBuildingSiteSearch} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {PREJUDICE_TYPES,PREJUDICE_CRIME_TYPES,prejudicesInCommon} from './city_prejudice.js?v=discrimination-laws-1';
 import {selectClothes} from './city_clothing.js';
 import {favoriteColors} from './city_colors.js';

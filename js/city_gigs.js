@@ -2,7 +2,7 @@ import {artworkNarrative} from './city_art_narratives.js';
 import {activityRoomReady} from './city_interiors.js?v=activity-cell-early-reservation-3';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {CITY_FLOOR_HEIGHT,buildingFacadeBannerSupport} from './city_building_geometry.js?v=banner-placement-2';
-import {isRoadAt} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import {isRoadAt} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 
 const ACTIVE=new Set(['open','working']);
@@ -63,7 +63,7 @@ export class CityGigs{
    for(const site of sites){
     if(profile)siteTimings.sitesVisited++;
     const party=city.politics?.party?.(citizen.political?.partyId),partyId=roll%4===0&&party?.active?party.id:null,kind=roll%8===0?'statue':roll%3===0?'flags':roll%4===0?'painting':'banner',side=home?.y===0?'north':home?.x>=site.width-1?'east':home?.y>=site.depth-1?'south':'west',windowSupport=site===homeBuilding&&home&&['flags','painting'].includes(kind)?{kind:'window',buildingId:site.id,unitId:home.id,floor:home.z,side,rotation:({north:Math.PI,east:Math.PI/2,south:0,west:-Math.PI/2})[side]}:null,facadeStarted=profile?performance.now():0,facadeSupport=kind==='banner'?buildingFacadeBannerSupport(site,{isRoadAt:(x,y)=>isRoadAt(city.world,x,y)}):null;if(profile)profile.facadeSupportMs=(profile.facadeSupportMs||0)+performance.now()-facadeStarted;if(kind==='banner'&&!facadeSupport)continue;const pointStarted=profile?performance.now():0,point=windowSupport?{x:site.entity.x+home.x+.5,y:site.entity.y+home.y+.5}:facadeSupport?.position||this.frontagePoint(site);if(profile)profile.pointMs=(profile.pointMs||0)+performance.now()-pointStarted;
-    const titleStarted=profile?performance.now():0,message=spontaneousArtworkTitle(city);if(profile)profile.titleMs=(profile.titleMs||0)+performance.now()-titleStarted;
+    if(!point)continue;const titleStarted=profile?performance.now():0,message=spontaneousArtworkTitle(city);if(profile)profile.titleMs=(profile.titleMs||0)+performance.now()-titleStarted;
     const artworkStarted=profile?performance.now():0,piece=city.justice.createArtwork({kind,message,creatorId:citizen.id,sponsorId:citizen.id,purpose:'expression',partyId,buildingId:site.id,x:point.x,y:point.y,support:windowSupport||facadeSupport,color:party?.flag?.background?parseInt(party.flag.background.replace('#',''),16):0xc9b979,materialUsed:kind==='statue'?'argila':null});if(profile)profile.createArtworkMs=(profile.createArtworkMs||0)+performance.now()-artworkStarted;
     if(!piece)continue;citizen.lastSpontaneousArtworkAt=city.minute;this.lastSpontaneousArtworkAt=city.minute;
     const logStarted=profile?performance.now():0;city.log(`${citizen.entity.properties.name} criou ${city.justice.labelArt(kind)} sem patrocínio em ${site.entity.properties.name}.`,'justice',[citizen.id,site.id],{kind:'spontaneous-artwork',artId:piece.id,buildingId:site.id,partyId,unsponsored:true});if(profile)profile.logMs=(profile.logMs||0)+performance.now()-logStarted;if(profile){siteTimings.visitMs+=performance.now()-loopStart;this.lastSpontaneousArtworkProfile={...profile,...siteTimings,artistsVisited:siteTimings.artistsVisited,sitesVisited:siteTimings.sitesVisited,totalMs:performance.now()-profile.startedAt};}return piece;
@@ -100,7 +100,7 @@ export class CityGigs{
   const city=this.city,b=city.building(job.buildingId);if(!b)return [];
   if(job.kind==='art-installation'&&!this.artworkSupplier(job.artwork?.kind,job.artwork?.materialUsed)){job.waitingReason=`Aguardando ${job.artworkMaterial?.good||'material'} em estoque`;return [];}
   if(job.kind==='art-installation')job.waitingReason=null;
-  const point=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;
+  const point=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;if(!point)return [];
   const eligible=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&(!job.preferredArtistId||c.id===job.preferredArtistId)&&(!job.artworkSupport||!c.indoorLocation||c.indoorLocation.buildingId===b.id)&&!c.role?.includes('councilor')&&(job.preferredArtistId===c.id||!c.jobId)&&(job.preferredArtistId===c.id||!(c.businessIds?.length))&&(!c.task||INTERRUPTIBLE.has(c.task))&&!c.path?.length&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!city.urgentNeed(c)&&c.needs.energy>25&&(job.kind!=='art-installation'||(c.skills?.artistic||0)>0))
    .sort((a,z)=>job.kind==='art-installation'?((z.skills?.artistic||0)-(a.skills?.artistic||0)||Math.hypot(a.entity.x-point.x,a.entity.y-point.y)-Math.hypot(z.entity.x-point.x,z.entity.y-point.y)||a.id-z.id):Math.hypot(a.entity.x-point.x,a.entity.y-point.y)-Math.hypot(z.entity.x-point.x,z.entity.y-point.y)||a.id-z.id);
   job.availableCandidatePool=eligible.length;if(!eligible.length)return [];
@@ -112,15 +112,16 @@ export class CityGigs{
   for(let i=0;i<count;i++){const candidate=eligible[(start+i)%eligible.length],inside=candidate.indoorLocation?.buildingId===b.id;if((inside||city.findPath(candidate.entity,point)!==null)&&(!support||interiorTarget&&interiorRoute(b,{x:b.door.x,y:b.door.y,z:0},interiorTarget)!==null)){reachable.push(candidate);break;}}
   job.candidateCursor=(start+count)%eligible.length;return reachable;
  }
- frontagePoint(b){
+ frontagePoint(b,{excludeArtId=null}={}){
   const d=b.door,city=this.city,points=[];
   for(let radius=1;radius<=5;radius++)for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
    if(Math.max(Math.abs(dx),Math.abs(dy))!==radius)continue;
    points.push({x:Math.floor(d.x)+dx+.5,y:Math.floor(d.y)+dy+.5});
   }
   const outsideBuilding=p=>!city.buildings.some(other=>!other.entity.destroyed&&p.x>=other.entity.x&&p.x<other.entity.x+other.width&&p.y>=other.entity.y&&p.y<other.entity.y+other.depth);
-  const options=points.filter(p=>outsideBuilding(p)&&city.walkable(Math.floor(p.x),Math.floor(p.y))&&city.findPath(d,p)!==null).sort((a,z)=>Math.hypot(a.x-d.x,a.y-d.y)-Math.hypot(z.x-d.x,z.y-d.y)||a.y-z.y||a.x-z.x);
-  return options[0]||{x:d.x,y:d.y};
+  const clearOfArtwork=p=>!(city.justice?.art||[]).some(piece=>piece.id!==excludeArtId&&!piece.entity.destroyed&&!piece.support&&Math.hypot(piece.entity.x-p.x,piece.entity.y-p.y)<.9);
+  const options=points.filter(p=>{const x=Math.floor(p.x),y=Math.floor(p.y);return outsideBuilding(p)&&city.walkable(x,y)&&!isRoadAt(city.world,x,y)&&clearOfArtwork(p)&&city.findPath(d,p)!==null;}).sort((a,z)=>Math.hypot(a.x-d.x,a.y-d.y)-Math.hypot(z.x-d.x,z.y-d.y)||a.y-z.y||a.x-z.x);
+  return options[0]||null;
  }
  release(job,c,{reopen=true}={}){
   if(c){if(c.informalJobId===job.id){c.task=null;c.targetId=null;c.action='';}this.city.furniture?.release(c);c.informalJobId=null;c.workCell=null;c.path=[];if(job.artworkSupport?.kind==='skybridge'&&(c.skybridgeZ>0||c.skybridgeTransit?.phase==='crossing'))this.city.justice.routeWorkerOffSkybridge(c);}
@@ -163,7 +164,7 @@ export class CityGigs{
    let worker=city.society.citizen(job.workerId);
    if(worker&&(worker.entity.destroyed||city.urgentNeed(worker)&&!(job.artworkSupport?.kind==='skybridge'&&job.artworkSupport.phase==='returning'))){this.release(job,worker);worker=null;}
    if(!worker){if(city.hour<7||city.hour>=20||city.minute%3!==job.id%3)continue;const candidates=this.candidates(job);job.availableCandidates=job.availableCandidatePool??candidates.length;worker=candidates[0];if(!worker)continue;
-    const goal=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door,path=job.artworkSupport&&worker.indoorLocation?.buildingId===b.id?[]:city.findPath(worker.entity,goal);if(path===null)continue;
+    const goal=job.artworkSupport?b.door:['gardening','art-cleaning','art-installation'].includes(job.kind)?job.point:job.scope==='frontage'?this.frontagePoint(b):b.door;if(!goal)continue;const path=job.artworkSupport&&worker.indoorLocation?.buildingId===b.id?[]:city.findPath(worker.entity,goal);if(path===null)continue;
     job.workerId=worker.id;job.status='working';job.startedAt=city.minute;worker.informalJobId=job.id;city.furniture?.release(worker);worker.task=job.kind==='gardening'?'informal-gardening':job.artworkSupport?'informal-service':job.kind==='art-installation'?'informal-art-installation':job.scope==='interior'?'informal-service':'informal-frontage';worker.targetId=job.artworkSupport||job.scope==='interior'?b.id:null;worker.path=path;worker.servicePaid=null;const label=job.kind==='repair'?'um reparo':job.kind==='gardening'?'um serviço de jardinagem':job.kind==='art-installation'?'uma instalação artística':job.kind==='art-cleaning'?'uma limpeza de arte':'uma faxina';city.history.record('service',`${worker.entity.properties.name} aceitou ${label} em ${b.entity.properties.name}.`,[job.payerAccountId,worker.accountId,b.accountId],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,citizenIds:[worker.id],scope:job.scope,service:job.kind,amount:job.fee,minute:city.minute});city.log(`${worker.entity.properties.name} aceitou o bico #${job.id}.`,'work',[worker.id],{kind:'gig-accepted',gigId:job.id,buildingId:b.id,service:job.kind,amount:job.fee});
    }
    if(job.artworkSupport?.kind==='skybridge'){
@@ -180,7 +181,7 @@ export class CityGigs{
     const room=city.units.get(job.unitId);if(!room){this.cancel(job,'cômodo removido');continue;}
     if(!activityRoomReady(city,worker,b,room,room.roomType))continue;
    }else{
-    const goal=this.frontagePoint(b);if(Math.hypot(worker.entity.x-goal.x,worker.entity.y-goal.y)>.4||worker.path.length)continue;
+    const goal=this.frontagePoint(b);if(!goal||Math.hypot(worker.entity.x-goal.x,worker.entity.y-goal.y)>.4||worker.path.length)continue;
    }
    if(job.artworkSupport?.phase!=='returning')job.progress+=job.kind==='art-installation'?Math.max(.5,1+(worker.skills?.artistic||0)/80):1;worker.action=job.artworkSupport?.phase==='returning'?'Voltando pela passarela após o serviço':job.kind==='repair'?'Fazendo pequeno reparo':job.kind==='gardening'?'Plantando no jardim':job.kind==='art-installation'?'Criando arte urbana':job.kind==='art-cleaning'?'Limpando obra urbana':job.scope==='frontage'?'Limpando a frente do imóvel':'Fazendo faxina informal';city.economy.practice(worker,job.kind==='repair'?'construction':job.kind==='gardening'?'agriculture':job.kind==='art-installation'?'artistic':'cleaning');
    if(job.progress<job.required)continue;

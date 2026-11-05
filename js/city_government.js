@@ -25,7 +25,7 @@ import {gerarSloganPartidario} from './gerador_frases.js?v=economic-flow-7';
 import {SECRETARIATS,SECRETARY_ELECTION_MODES,SECRETARY_MODE_RANK,TRANSPORT_POLICIES,secretarySkillScore} from './city_secretariats.js';
 import {prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
 import { CityMandates, promiseRelevant } from './city_mandates.js';
-import { ROAD_TILES, tileAt } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import { ROAD_TILES, tileAt } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {formatMoney} from './city_ui_format.js';
 import {listDailyPrivatization} from './city_equity.js?v=daily-mayor-privatization-1';
 
