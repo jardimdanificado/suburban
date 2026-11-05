@@ -1,4 +1,4 @@
-import {qualification,wageFor,openPositions,occupiedPositions,ownerSelfHire} from './city_employment.js?v=economic-flow-7';
+import {qualification,wageFor,openPositions,occupiedPositions,ownerSelfHire} from './city_employment.js?v=labor-secretariat-1';
 import {SKILLS} from './city_economy.js?v=economic-flow-7';
 import {formatMoney as money} from './city_ui_format.js';
 const stamp=n=>n==null?'—':`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
@@ -48,7 +48,7 @@ function applicationRows(ui,p,rows,key='employmentPage'){
   pages(ui,p,ordered,key,row=>{
     const {citizen:c,application:a}=row;
     p.record(label(c),`${a.status} · ${a.company} · ${stamp(a.appliedAt)}`,()=>openApplication(ui,row),false,{value:`${money(a.offeredWage*60)}/h`});
-    p.kv('Seleção',`${Number(a.score||0).toFixed(1)} pontos${a.trainee?' · candidato em formação':''}`);p.note(a.reason);if(a.interviewAt!=null)p.kv('Seleção presencial',`${stamp(a.interviewAt)} · resultado ${stamp(a.decideAt)}`);
+    p.kv('Seleção',`${Number(a.score||0).toFixed(1)} pontos${a.trainee?' · candidato em formação':''}`);p.note(a.reason);if(a.interviewAt!=null){p.kv('Entrevista na Secretaria do Trabalho',stamp(a.interviewAt));if(a.submittedAt!=null)p.kv('Currículo entregue',stamp(a.submittedAt));if(a.resultDueAt!=null)p.kv('Resultado previsto',stamp(a.resultReceivedAt??a.resultDueAt));}
   });
   if(!rows.length)p.note('Nenhuma candidatura registrada com estes filtros.');
 }

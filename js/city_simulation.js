@@ -1,7 +1,7 @@
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=beach-occupancy-index-1';
+import {CityFurniture} from './city_furniture.js?v=seat-queue-animation-1';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=economic-flow-7';
 import {CityWater} from './city_water.js';
@@ -12,7 +12,7 @@ import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-stall-door-clearance-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=economic-flow-7';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=labor-secretariat-1';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
@@ -682,6 +682,7 @@ export class CitySimulation {
     else if (this.substances?.consider(c))return;
     else if (wantsSleep(this,c)) { task = 'energy'; type = 'home'; }
     else if (n.hygiene < 35) { task = 'hygiene'; type = home ? 'home' : 'utility'; }
+    else if(c.secretaryOffice==='labor'&&this.hour>=8&&this.hour<17){task='work';type='job';}
     else if (this.society.age(c) < 6) { task = 'care'; type = 'home'; }
     else if (child && this.society.isAdult(c)) { task = 'caregiving'; type = 'child'; c.careChildId = child.id; }
     else if (c.role!=='councilor' && c.startupProjectId && this.hour >= 8 && this.hour < 17 && this.development.projects.some(p=>p.id===c.startupProjectId && !p.builderId && !p.cancelled && p.status!=='completed' && p.inventory.pedra>=p.stone)) { task='work';type='startup'; }
@@ -781,7 +782,7 @@ export class CitySimulation {
     if(c.task==='research'){this.politics.getResearch().fieldWork(c);return;}
     if(c.task==='interview'){this.politics.getResearch().respondentWait(c);return;}
     if(c.task==='campaign-media'){c.action='Participando presencialmente de debate ou entrevista no jornal';return;}
-    if(c.task==='job-interview'){c.action='No local da seleção, aguardando o horário e o resultado';return;}
+    if(c.task==='job-interview'){c.action='Na entrevista da Secretaria do Trabalho';return;}
     if(c.task==='vote'){this.politics.voting.arrive(c);return;}
     if(c.task==='campaign'){this.politics.campaigns.arrive(c);return;}
     if(c.task==='visit'){this.relationships.arrive(c);return;}
@@ -1215,7 +1216,7 @@ export class CitySimulation {
           if(!elevated){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
-        c.action = c.skybridgeZ>0?(bridgeAt(this.world,tx,ty)?'Atravessando uma ponte':'Atravessando a passarela elevada'):c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à seleção de emprego':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? (c.workProjectId&&this.development.projects.find(p=>p.id===c.workProjectId)?.service==='bridge'?'Construindo uma ponte':'Indo para a obra') : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.skybridgeZ>0?(bridgeAt(this.world,tx,ty)?'Atravessando uma ponte':'Atravessando a passarela elevada'):c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? (c.workProjectId&&this.development.projects.find(p=>p.id===c.workProjectId)?.service==='bridge'?'Construindo uma ponte':'Indo para a obra') : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }

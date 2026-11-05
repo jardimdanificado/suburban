@@ -1,6 +1,6 @@
 import {injuryMovementFactor} from './city_injury_effects.js';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
-import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=labor-secretariat-1';
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
 import {queueService} from './city_service_queue.js?v=queue-wait-index-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-cache-512-index-1';

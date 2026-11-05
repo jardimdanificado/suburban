@@ -14,7 +14,7 @@ import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_inte
 import { syncCityBuildings } from "./city_renderer_3d.js?v=city-cells-reference-fix-2";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-frame-shape-2';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=clothing-accessory-transform-1';
 import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=retaining-face-winding-1';
@@ -8072,6 +8072,7 @@ export class RCT3DRenderer {
         const inCurZone = !knownZones || (Math.floor(e.x / zoneSz) === curVisionZx && Math.floor(e.y / zoneSz) === curVisionZy);
         const vehicleAngle=cityCitizen?.ridingVehicleId?this.cityDevelopment?.city?.vehicles?.units.get(cityCitizen.ridingVehicleId)?.angle:null;
         citizenModelOptions.hidden=isPossessed;citizenModelOptions.dimmed=!inCurZone;citizenModelOptions.vehicleAngle=vehicleAngle;citizenModelOptions.visualOffset=citizenRenderOffsets.get(e.id)||null;
+        citizenModelOptions.indoorBounds=interiorBuilding&&interiorBuilding.constructionKind!=='open-air'?{minX:interiorBuilding.entity.x,maxX:interiorBuilding.entity.x+interiorBuilding.width,minY:interiorBuilding.entity.y,maxY:interiorBuilding.entity.y+interiorBuilding.depth}:null;
         const modelRendered=cityCitizen&&this.cityCitizenModels.add(e,surfaceH,citizenModelOptions);
         if(modelRendered){
           activeIds.add(e.id);const previous=this.entitySprites.get(e.id);if(previous)previous.visible=false;

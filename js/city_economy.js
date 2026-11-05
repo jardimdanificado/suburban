@@ -10,7 +10,7 @@ import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=activity-cell-early-reservation-3';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=economic-flow-7';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=labor-secretariat-1';
 import {productionPlan,investProductionPlan} from './city_production_planner.js?v=economic-flow-7';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=party-apparel-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';

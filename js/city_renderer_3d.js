@@ -1,4 +1,4 @@
-import {roomFurnitureForCity} from './city_furniture_catalog.js?v=wall-clearance-3';
+import {roomFurnitureForCity} from './city_furniture_catalog.js?v=labor-secretariat-1';
 import {furnitureModel} from './city_furniture_models.js?v=no-beach-towels-1';
 import {applyInteriorCutaway} from './city_interior_view.js?v=interior-cell-batch-1';
 import {interiorStairAxis} from './city_interior_layout.js?v=route-cache-512-index-1';
@@ -12,7 +12,7 @@ import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=gr
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=pixel-text-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,buildingFacadeBannerSupport,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import { partyFlagCanvas,drawPartyFlag } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=citizen-frame-shape-2';
+import {citizenIsSleeping} from './city_citizen_models.js?v=clothing-accessory-transform-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-neoclassical-1';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=quarry-outskirts-1';

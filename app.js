@@ -1,6 +1,6 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=perf-spontaneous-art-title-3';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=perf-spontaneous-art-title-3";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=labor-secretariat-1";
 import { CityDesktop } from "./js/city_desktop.js?v=organic-party-slogans-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=citizen-render-pools-2";

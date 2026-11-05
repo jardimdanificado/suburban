@@ -5,6 +5,7 @@ export const SECRETARIATS=Object.freeze([
  {id:'health',name:'Secretaria da Saúde',short:'Saúde',skill:'medicine',duty:'Acompanha hospitais, clínicas, IML, saúde preventiva e necessidades médicas.'},
  {id:'urban_development',name:'Secretaria de Desenvolvimento Urbano',short:'Desenvolvimento Urbano',skill:'construction',duty:'Planeja bairros, pavimentação, terrenos, acessos e expansão urbana.'},
  {id:'social_defense',name:'Secretaria de Defesa Social',short:'Defesa Social',skill:'care',duty:'Coordena benefícios, assistência, moradia e proteção de pessoas vulneráveis.'},
+ {id:'labor',name:'Secretaria do Trabalho',short:'Trabalho',skill:'social',duty:'Recebe currículos e entrevista candidatos; comunica a decisão da empresa depois, sem exigir que o candidato espere no local.'},
  {id:'education_culture',name:'Secretaria de Educação e Cultura',short:'Educação e Cultura',skill:'social',duty:'Amplia a capacidade das bibliotecas e teatros e incentiva leitura, produção jornalística e criação artística.'},
  {id:'environment',name:'Secretaria da Agricultura e Meio Ambiente',short:'Agricultura e Meio Ambiente',skill:'agriculture',duty:'Apoia a produtividade agrícola, a limpeza urbana, os banheiros públicos, a coleta de resíduos e o controle da poluição.'},
  {id:'transport',name:'Secretaria dos Transportes',short:'Transportes',skill:'logistics',duty:'Propõe regras e incentivos para mobilidade por bicicleta, transporte de cargas e segurança viária.'},

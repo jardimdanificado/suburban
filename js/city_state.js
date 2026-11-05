@@ -1,7 +1,7 @@
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {ensureExternalAccount} from './city_currency.js';
 import {ensureJusticeSkills} from './city_justice_skills.js';
-import {CityFurniture} from './city_furniture.js?v=beach-occupancy-index-1';
+import {CityFurniture} from './city_furniture.js?v=seat-queue-animation-1';
 import {CitySupplies} from './city_supplies.js?v=economic-flow-7';
 import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';
@@ -26,7 +26,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=perf-spontaneous-art-title-3';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=labor-secretariat-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=corpse-interior-recovery-1';
 import { CityWelfare } from './city_welfare.js';

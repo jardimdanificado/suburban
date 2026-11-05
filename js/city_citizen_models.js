@@ -397,11 +397,19 @@ export class CityCitizenModels {
     this.ready=true;return true;
   }
   begin(dt=0,speed=1){this.frameToken++;this.animationPaused=speed<=0;this.frameDelta=Math.max(0,Math.min(.1,dt));this.clock+=this.frameDelta*Math.max(0,Math.min(2,speed));this.activeCampaignFlags.clear();for(const batch of this.activeBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;if(batch.clothingMesh)batch.clothingMesh.count=0;}this.activeBatches.clear();for(const batch of this.activeHeadwearBatches){batch.count=0;if(batch.mesh)batch.mesh.count=0;}this.activeHeadwearBatches.clear();}
-  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,activeCampaignElectionId=null,activeCampaignStatus=null}={}){
+  add(entity,surfaceH,{hidden=false,dimmed=false,perspective=false,smoothMovement=false,vehicleAngle=null,visualOffset=null,indoorBounds=null,activeCampaignElectionId=null,activeCampaignStatus=null}={}){
     if(!this.ready)return false;
     const c=entity.properties.citizen;if(!c)return false;
     if(hidden)return true;
-    const inside=c.ridingVehicleId?null:c._renderIndoorPosition||c.indoorLocation?.position,posePoint=!citizenHasPath(c)&&!c.indoorLocation?.path?.length&&(c.furnitureUse?.pose==='lying'||c.furnitureUse?.seated)?c.furnitureUse.posePoint:null,x=posePoint?.x??inside?.x??entity.x,y=posePoint?.y??inside?.y??entity.y;
+    const inside=c.ridingVehicleId?null:c._renderIndoorPosition||c.indoorLocation?.position,posePoint=!citizenHasPath(c)&&!c.indoorLocation?.path?.length&&(c.furnitureUse?.pose==='lying'||c.furnitureUse?.seated)?c.furnitureUse.posePoint:null;
+    let x=posePoint?.x??inside?.x??entity.x,y=posePoint?.y??inside?.y??entity.y;const bodyShape=this.bodyShapeFor(c);
+    // Large body morphs can cross the exterior wall when an indoor activity
+    // point is close to a window. Keep the visual model inside the shell while
+    // stationary; simulation coordinates and indoor pathfinding stay intact.
+    if(inside&&indoorBounds&&!c.indoorLocation?.exiting&&!c.indoorLocation?.path?.length){
+      const margin=Math.min(.47,.28+Math.max(0,bodyShape.fat)*.105);
+      if(bodyShape.fat>.35){const minX=indoorBounds.minX+margin,maxX=indoorBounds.maxX-margin,minY=indoorBounds.minY+margin,maxY=indoorBounds.maxY-margin;x=Math.max(minX,Math.min(maxX,x));y=Math.max(minY,Math.min(maxY,y));}
+    }
     let motion=this.motion.get(entity);
      if(!motion){motion={x,y,renderX:x,renderY:y,angle:0,renderAngle:0,walkDistance:0,walkFrame:0,lastStepAt:-Infinity};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
@@ -425,7 +433,8 @@ export class CityCitizenModels {
     if(moved&&!this.animationPaused&&motion.walkDistance+1e-8>=.25&&this.clock-motion.lastStepAt>=.1-1e-8){motion.walkFrame++;motion.walkDistance=Math.max(0,motion.walkDistance%.25);motion.lastStepAt=this.clock;}
     // A pending path is not movement. Hold the travel pose between footsteps;
     // work animations still use the simulation's presentation clock.
-    const traveling=moved||citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
+    const settledOnSeat=!moved&&(c.seated||c.furnitureUse?.seated||c.task==='sit');
+    const traveling=moved||(!settledOnSeat&&(citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding'));
     const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
     if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
     else motion.actionToken=null;
@@ -446,10 +455,14 @@ export class CityCitizenModels {
       }batch.capacity=capacity;
     }
     const bikeRider=c.ridingVehicleId&&BIKE_KINDS.has(c.ridingVehicleKind),riderLift=bikeRider?(c.ridingAsPassenger?0.23:0.38):c.ridingVehicleId?0.18:0;
-    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,positionY=surfaceH+(posePoint?.z??inside?.z??0)+riderLift,bodyIndex=batch.count,bodyShape=this.bodyShapeFor(c);
+    const size=(entity.properties.render.size||1)*(perspective?1.05:1),heightScale=(c.bodyHeightCm||170)/170,positionY=surfaceH+(posePoint?.z??inside?.z??0)+riderLift,bodyIndex=batch.count;
     const transformUnchanged=motion.bodyBatch===batch&&motion.bodyMesh===batch.mesh&&motion.clothingMesh===batch.clothingMesh&&motion.bodyIndex===bodyIndex&&motion.bodyFrame===this.frameToken-1&&motion.bodyX===renderX&&motion.bodyY===positionY&&motion.bodyZ===renderY&&motion.bodyAngle===renderAngle&&motion.bodySize===size&&motion.bodyHeightScale===heightScale&&motion.bodyLying===lying;
     this.position.set(renderX,positionY,renderY);
-    let matrixReady=transformUnchanged;
+    // Accessory meshes can change batch/index even while the body keeps its
+    // previous instance transform. Rebuild this citizen's matrix before an
+    // accessory uses it; otherwise it inherits the matrix left by the prior
+    // citizen added to the batch.
+    let matrixReady=false;
     if(!transformUnchanged){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);this.setInstanceMatrix(batch.mesh,bodyIndex,this.matrix);motion.bodyBatch=batch;motion.bodyMesh=batch.mesh;motion.clothingMesh=batch.clothingMesh;motion.bodyIndex=bodyIndex;motion.bodyX=renderX;motion.bodyY=positionY;motion.bodyZ=renderY;motion.bodyAngle=renderAngle;motion.bodySize=size;motion.bodyHeightScale=heightScale;motion.bodyLying=lying;matrixReady=true;}
     motion.bodyFrame=this.frameToken;
     this.setInstanceFat(batch.mesh,bodyIndex,bodyShape);
