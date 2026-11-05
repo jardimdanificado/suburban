@@ -2,7 +2,7 @@ import {injuryMovementFactor} from './city_injury_effects.js';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
-import {queueService} from './city_service_queue.js?v=queue-group-index-1';
+import {queueService} from './city_service_queue.js?v=queue-wait-index-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-cache-512-index-1';
 // Entity coordinates follow the resident through outdoor and indoor tiles.
 // Indoor metadata adds the floor, room and the remaining interior route.
@@ -11,14 +11,17 @@ const OUTDOOR_WORK=new Set(['farm','quarry','forestry']);
 const citizenKeys=[];
 const citizen=(city,id)=>city.accounts.get(Number.isInteger(id)&&id>=0&&id<65536?(citizenKeys[id]??=`citizen:${id}`):`citizen:${id}`)||city.society.citizen(id);
 const indoorCitizenCaches=new WeakMap();
+const earlyReservationChecks=new WeakMap();
 const roomsByBuilding=new WeakMap(),noRooms=Object.freeze([]);
 function roomGroups(b){let cache=roomsByBuilding.get(b);if(!cache||cache.revision!==(b.layoutRevision||0)||cache.units!==b.units||cache.length!==b.units.length){const rooms=new Map();for(const u of b.units){let group=rooms.get(u.roomType);if(!group)rooms.set(u.roomType,group=[]);group.push(u);}cache={revision:b.layoutRevision||0,units:b.units,length:b.units.length,rooms};roomsByBuilding.set(b,cache);}return cache.rooms;}
 function indoorCitizenCache(city){let cache=indoorCitizenCaches.get(city);if(!cache||cache.revision!==city.structureRevision||cache.accounts!==city.accounts){cache={revision:city.structureRevision,accounts:city.accounts,people:[]};indoorCitizenCaches.set(city,cache);}return cache.people;}
 const point=(b,u)=>({x:b.entity.x+u.x+.5,y:b.entity.y+u.y+.5,z:u.z*CITY_FLOOR_HEIGHT});
 function release(city,c){const id=c.indoorLocation?.targetUnitId||c.indoorLocation?.unitId,u=city.units.get(id);if(u?.activityReservedIds)u.activityReservedIds=u.activityReservedIds.filter(id=>id!==c.id);if(c.workCell?.unitId===id)c.workCell=null;}
+function hasActiveReservation(u,c){const location=c.indoorLocation,pending=c.serviceQueue,pendingHere=pending?.unitId===u.id&&pending.buildingId===c.targetId&&pending.kind===c.task;return !c.entity.destroyed&&(pendingHere||location&&!location.exiting&&(location.targetUnitId===u.id||location.unitId===u.id));}
+function cleanActivityReservations(city,u){const ids=u.activityReservedIds;if(!ids?.length)return;const people=indoorCitizenCache(city);let reserved=null;for(let i=0;i<ids.length;i++){const id=ids[i],cacheable=Number.isInteger(id)&&id>=0&&id<65536;let other=cacheable?people[id]:undefined;if(!other){other=citizen(city,id);if(other&&cacheable)people[id]=other;}const location=other?.indoorLocation,pending=other?.serviceQueue,pendingHere=pending?.unitId===u.id&&pending.buildingId===other.targetId&&pending.kind===other.task;if(!other||other.entity.destroyed||!pendingHere&&(location?.exiting||(location?.targetUnitId!==u.id&&location?.unitId!==u.id))){reserved??=ids.slice(0,i);continue;}if(reserved)reserved.push(id);}if(reserved)u.activityReservedIds=reserved;}
 export function activityCellAvailable(city,u,c,kind){
  if(!u.activityReservedIds?.length){u.activityReservedIds??=[];return true;}
- const ids=u.activityReservedIds;if(ids.length===1&&ids[0]===c.id){const location=c.indoorLocation,pending=c.serviceQueue,pendingHere=pending?.unitId===u.id&&pending.buildingId===c.targetId&&pending.kind===c.task;if(!c.entity.destroyed&&(pendingHere||location&&!location.exiting&&(location.targetUnitId===u.id||location.unitId===u.id)))return true;}
+ const ids=u.activityReservedIds;if(ids.includes(c.id)&&hasActiveReservation(u,c)){if(ids.length>1)earlyReservationChecks.set(c,u);return true;}
  const visitor=kind==='service'||kind==='treatment',workers=kind==='workspace'||kind==='office',people=indoorCitizenCache(city);let reserved=null,occupants=0,alreadyReserved=false;
  for(let i=0;i<ids.length;i++){const id=ids[i],cacheable=Number.isInteger(id)&&id>=0&&id<65536;let other=cacheable?people[id]:undefined;if(!other){other=citizen(city,id);if(other&&cacheable)people[id]=other;}const location=other?.indoorLocation,pending=other?.serviceQueue,pendingHere=pending?.unitId===u.id&&pending.buildingId===other.targetId&&pending.kind===other.task;if(!other||other.entity.destroyed||!pendingHere&&(location?.exiting||(location?.targetUnitId!==u.id&&location?.unitId!==u.id))){reserved??=ids.slice(0,i);continue;}if(reserved)reserved.push(id);if(id===c.id)alreadyReserved=true;const type=pendingHere?pending.roomKind:location?.targetRoomType;if(visitor?type!=='workspace'&&type!=='office'&&type!=='dining':workers?type!=='service'&&type!=='treatment':true)occupants++;}
  if(reserved)u.activityReservedIds=reserved;
@@ -73,13 +76,14 @@ export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'
  if(previous?.buildingId!==b.id&&previous&&!exit(city,c))return false;
  if(!activityCellAvailable(city,room,c,kind)){if(['toilet','hygiene'].includes(c.task)){c.task=null;c.toiletTargetId=null;c.hygieneTargetId=null;}c.action=`Aguardando célula de ${kind==='bathroom'?'banheiro':kind==='dining'?'refeitório':'trabalho'} livre`;return false;}
  if(b.constructionKind==='open-air'&&b.type!=='quarry'){
+  if(earlyReservationChecks.get(c)===room){cleanActivityReservations(city,room);earlyReservationChecks.delete(c);}
   const target=point(b,room);
   if(!outdoorCellReady(city,c,b,room)){return false;}
   release(city,c);c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:room.id,targetRoomType:kind,roomType:kind,floor:room.z,position:target,path:[],phase:'using',task:c.workMeal?'workmeal':c.task,layoutRevision:b.layoutRevision||0,enteredAt:city.minute,arrivedAt:city.minute,toiletTargetId:c.toiletTargetId};
  }else{
   if(c.path.length)return false;
   if(!previous&&Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>.75){const path=city.findPath(c.entity,b.door);if(path!==null)c.path=path;return false;}
-  const from=previous?.buildingId===b.id?previous.position:{x:c.entity.x,y:c.entity.y,z:0};release(city,c);
+  const from=previous?.buildingId===b.id?previous.position:{x:c.entity.x,y:c.entity.y,z:0};release(city,c);if(earlyReservationChecks.get(c)===room){cleanActivityReservations(city,room);earlyReservationChecks.delete(c);}
   const usedSlots=new Set();for(const [index,id]of (room.activityReservedIds||[]).entries()){if(id===c.id)continue;const other=city.society.citizen(id),assigned=other?.indoorLocation?.furnitureSlot;if(Number.isInteger(assigned))usedSlots.add(assigned);else usedSlots.add(index);}
   let slot=0;while(usedSlots.has(slot)&&slot<8)slot++;const interaction=furnitureInteraction(b,room,kind,slot,c.workMeal?'workmeal':c.task),target=interaction?.point||interiorUsePoint(b,room,kind,slot,c.task),path=interiorRoute(city.building(b.officeTenantOf)||b,from,target);
   if(path===null){c.action=`Sem rota interna acessível até ${kind}`;return false;}
