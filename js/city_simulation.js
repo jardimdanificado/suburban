@@ -32,7 +32,7 @@ import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=corpse-interior-recovery-1';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=body-mobility-1';
-import {interiorRoute} from './city_interior_layout.js?v=interior-route-output-cache-2';
+import {interiorRoute} from './city_interior_layout.js?v=interior-route-floor-index-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
@@ -49,7 +49,7 @@ import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
 import { CityGigs } from './city_gigs.js?v=spontaneous-artwork-fast-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=economic-flow-7';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=citizen-id-index-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=road-durability-1';
 
 const OUTDOOR_LEISURE_SEATS=new WeakMap();

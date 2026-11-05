@@ -1,12 +1,14 @@
-import {interiorRoute} from './city_interior_layout.js?v=interior-route-output-cache-2';
+import {interiorRoute} from './city_interior_layout.js?v=interior-route-floor-index-1';
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
-const queueKind=kind=>['workmeal','supplies'].includes(kind)?'food':kind;
+const foodQueueKinds=new Set(['workmeal','supplies']);
+const queueKind=kind=>foodQueueKinds.has(kind)?'food':kind;
+const queuePeople=new WeakMap();
 // Service queues are shared by everyone waiting at the same entrance. Tickets
 // retain arrival order; outdoor places are reserved across all service types.
 const slotCaches=new WeakMap();
 function pruneQueue(city,entrance){
  const queue=entrance.serviceQueue;let write=0;
- for(let read=0;read<queue.length;read++){const q=queue[read],person=city.society.citizen(q.citizenId),valid=person&&!person.entity.destroyed&&queueKind(person.task)===queueKind(q.kind)&&person.targetId===q.buildingId&&(q.kind!=='toilet'||person.toiletTargetId===q.resource);if(valid)queue[write++]=q;else if(person?.serviceQueue?.buildingId===q.buildingId){person.serviceQueue=null;person.facingTarget=null;}}
+ for(let read=0;read<queue.length;read++){const q=queue[read];let person=queuePeople.get(q);if(!person){person=city.society.citizen(q.citizenId);if(person)queuePeople.set(q,person);}const valid=person&&!person.entity.destroyed&&queueKind(person.task)===queueKind(q.kind)&&person.targetId===q.buildingId&&(q.kind!=='toilet'||person.toiletTargetId===q.resource);if(valid)queue[write++]=q;else if(person?.serviceQueue?.buildingId===q.buildingId){person.serviceQueue=null;person.facingTarget=null;}}
  queue.length=write;
 }
 function removeTicket(entrance,ticket){const queue=entrance.serviceQueue,index=queue.indexOf(ticket);if(index>=0)queue.splice(index,1);}
@@ -21,7 +23,7 @@ function slots(city,b){
 export function reserveService(city,c,b,kind,resource){
  const entrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;entrance.serviceQueue??=[];
  let ticket=entrance.serviceQueue.find(q=>q.citizenId===c.id&&q.buildingId===b.id&&q.kind===kind&&q.resource===resource);
- if(!ticket){ticket={citizenId:c.id,buildingId:b.id,kind,resource,joinedAt:city.minute,sequence:entrance.nextServiceTicket=(entrance.nextServiceTicket||0)+1,slot:null};entrance.serviceQueue.push(ticket);c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence};}
+ if(!ticket){ticket={citizenId:c.id,buildingId:b.id,kind,resource,joinedAt:city.minute,sequence:entrance.nextServiceTicket=(entrance.nextServiceTicket||0)+1,slot:null};queuePeople.set(ticket,c);entrance.serviceQueue.push(ticket);c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence};}
  return ticket;
 }
 export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=null){

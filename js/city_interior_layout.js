@@ -56,7 +56,7 @@ export function interiorLayout(building){
   // Refined quarter-tile navigation adds real furniture footprints to the
   // room graph. The coarse graph above remains useful for floor/room lookup;
   // paths use only walk nodes and never cut through a declared prop volume.
-  const walkNodes=new Map(),walkNeighbors=new Map(),walkBlocked=new Set(),scale=4;
+  const walkNodes=new Map(),walkNodesByFloor=Array.from({length:building.floors||1},()=>[]),walkNeighbors=new Map(),walkBlocked=new Set(),scale=4;
   for(let z=0;z<(building.floors||1);z++)for(let y=0;y<building.depth;y++)for(let x=0;x<building.width;x++){
     const unit=unitsByCell.get(keyOf(x,y,z));
     if(unit)for(const item of roomFurniture(building,unit)){
@@ -90,7 +90,7 @@ export function interiorLayout(building){
   }
   for(let z=0;z<(building.floors||1);z++)for(let y=0;y<building.depth*scale;y++)for(let x=0;x<building.width*scale;x++){
     const tileX=Math.floor(x/scale),tileY=Math.floor(y/scale),key=`${x},${y},${z}`;if(walkBlocked.has(key))continue;
-    const node={key,x:building.entity.x+(x+.5)/scale,y:building.entity.y+(y+.5)/scale,z:z*CITY_FLOOR_HEIGHT,localX:x,localY:y,floor:z};walkNodes.set(key,node);
+    const node={key,x:building.entity.x+(x+.5)/scale,y:building.entity.y+(y+.5)/scale,z:z*CITY_FLOOR_HEIGHT,localX:x,localY:y,floor:z};walkNodes.set(key,node);walkNodesByFloor[z].push(node);
   }
   for(const node of walkNodes.values()){
     const adjacent=[];for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]]){const key=`${node.localX+dx},${node.localY+dy},${node.floor}`;if(walkNodes.has(key))adjacent.push(key);}walkNeighbors.set(node.key,adjacent);
@@ -99,7 +99,7 @@ export function interiorLayout(building){
     const lower=`${gridStairX},${gridStairY},${z}`,upper=`${gridStairX},${gridStairY},${z+1}`;
     if(walkNodes.has(lower)&&walkNodes.has(upper)){walkNeighbors.get(lower).push(upper);walkNeighbors.get(upper).push(lower);}
   }
-  const layout={nodes,neighbors,byFloor,stairKeys,routes:new Map(),walkRoutes:new Map(),walkNodes,walkNeighbors,scale};layouts.set(building,{revision:building.layoutRevision||0,units,circulation,width:building.width,depth:building.depth,floors:building.floors,rotation:building.rotation||0,layout});return layout;
+  const layout={nodes,neighbors,byFloor,stairKeys,routes:new Map(),walkRoutes:new Map(),walkNodes,walkNodesByFloor,walkNeighbors,scale};layouts.set(building,{revision:building.layoutRevision||0,units,circulation,width:building.width,depth:building.depth,floors:building.floors,rotation:building.rotation||0,layout});return layout;
 }
 
 const worldPoint=(building,node)=>{const offset=(node.stair||node.kind!=='room')?0.5:0.18;return {x:building.entity.x+node.x+offset,y:building.entity.y+node.y+offset,z:node.z*CITY_FLOOR_HEIGHT};};
@@ -128,7 +128,7 @@ export function interiorRoute(building,from,to){
   }
   const layout=interiorLayout(building),floors=building.floors||1,scale=layout.scale,roofTarget=to.z!=null&&Math.floor(to.z/CITY_FLOOR_HEIGHT)>=floors;
   const keyAt=p=>{const floor=Math.max(0,Math.min(floors-1,Math.round((p.z||0)/CITY_FLOOR_HEIGHT))),x=Math.max(0,Math.min(building.width*scale-1,Math.floor((p.x-building.entity.x)*scale))),y=Math.max(0,Math.min(building.depth*scale-1,Math.floor((p.y-building.entity.y)*scale)));return `${x},${y},${floor}`;};
-  const nearest=(p,floor=null)=>{let key=keyAt(p);if((floor==null||layout.walkNodes.get(key)?.floor===floor)&&layout.walkNodes.has(key))return key;let best=null,distance=Infinity;for(const node of layout.walkNodes.values()){if(floor!=null&&node.floor!==floor)continue;const d=(node.x-p.x)**2+(node.y-p.y)**2+((node.z-(p.z||0))*1.3)**2;if(d<distance){best=node.key;distance=d;}}return best;};
+  const nearest=(p,floor=null)=>{let key=keyAt(p);if((floor==null||layout.walkNodes.get(key)?.floor===floor)&&layout.walkNodes.has(key))return key;let best=null,distance=Infinity;const candidates=floor==null?layout.walkNodes.values():layout.walkNodesByFloor[floor]||[];for(const node of candidates){const d=(node.x-p.x)**2+(node.y-p.y)**2+((node.z-(p.z||0))*1.3)**2;if(d<distance){best=node.key;distance=d;}}return best;};
   const targetFloor=roofTarget?floors-1:to.z!=null?Math.round(to.z/CITY_FLOOR_HEIGHT):null,start=nearest(from),wantedGoal=roofTarget?nearest({x:building.entity.x+(Math.floor(building.width/2)+.5),y:building.entity.y+(Math.floor(building.depth/2)+.5),z:(floors-1)*CITY_FLOOR_HEIGHT},floors-1):nearest(to,targetFloor);
   if(!start||!wantedGoal)return null;
   const requestedKey=`${start}>${wantedGoal}`;let keys=layout.routes.get(requestedKey),goal=wantedGoal;

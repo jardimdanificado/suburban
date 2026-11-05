@@ -9,6 +9,7 @@ const ageCache=new WeakMap();
 export class CitySociety {
   constructor(city) {
     this.city = city;
+    this.citizensById = new Map();
     this.relations = new Map();
     this.contactIndex = new Map();
     this.expecting = [];
@@ -17,7 +18,7 @@ export class CitySociety {
   }
   citizen(id) {
     if (id == null) return undefined;
-    const c = this.city.accounts.get(`citizen:${id}`);
+    const c = this.citizensById?.get(id) || this.city.accounts.get(`citizen:${id}`);
     return c && c.id === id && c.entity && !c.entity.destroyed ? c : undefined;
   }
   age(c) {
@@ -39,6 +40,7 @@ export class CitySociety {
     const { age = 20 + Math.floor(this.city.random() * 24), parentIds = [] } = options;
     Object.assign(c, { initialAge: age, bornAt: this.city.minute, parentIds: [...parentIds], childIds: [], partnerId: null, expectingId: null, lastBirthAt: null, guardianId: parentIds[0] ?? null, personality: { sociability: 0.3 + this.city.random() * 0.7, kindness: 0.4 + this.city.random() * 0.6, interest: Math.floor(this.city.random() * topics.length), wantsRomance: this.city.random() < 0.9, wantsChildren: this.city.random() < 0.8 }, conversation: null, lastConversationAt: -Infinity });
     Object.freeze(c.personality);
+    this.citizensById?.set(c.id,c);
     this.city.relationships.initialize(c, options);initializePrejudices(c,this.city.initialSeed);
   }
   getRelation(a, b, create = false) {
@@ -218,6 +220,7 @@ export class CitySociety {
     for (const r of this.relationsFor(c.id)) {const other=r.a===c.id?r.b:r.a,view=r.views[other];if(view.kinship || view.affection>=35 || view.resentment>=35 || ['partner','widowed','ex'].includes(view.romance)){r.active=false;this.city.relationships.sync(r);}else this.forgetRelation(r);}
     // Keep parent IDs on children for genealogy even after a parent's departure.
     for (const p of [...this.expecting]) if (p.parentIds.includes(c.id) && !p.parentIds.some(id => this.citizen(id))) this.expecting.splice(this.expecting.indexOf(p), 1);
+    this.citizensById?.delete(c.id);
   }
 }
 
