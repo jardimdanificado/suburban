@@ -9,7 +9,7 @@ import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_office
 import {applySalesTax,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
 import {recordMarketTransaction} from './city_wealth.js';
-import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=fixed-market-building-1';
+import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=roadside-ad-placards-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=labor-secretariat-1';
@@ -46,9 +46,9 @@ import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=fixed-market-building-1';
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
-import { CityGigs } from './city_gigs.js?v=art-off-road-1';
+import { CityGigs } from './city_gigs.js?v=sidewalk-public-art-sculptures-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=fixed-market-building-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=roadside-ad-placards-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=citizen-id-index-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
 

@@ -58,19 +58,27 @@ export class CityGigs{
   if(profile)profile.rankMs=performance.now()-phaseStart;
   const siteTimings=profile?{filterMs:0,visitMs:0,artistsVisited:0,sitesVisited:0}:null;
   for(const {citizen,roll} of artists){
-   const loopStart=profile?performance.now():0,home=city.units.get(citizen.homeUnitId),homeBuilding=home&&city.building(home.buildingId),filterStart=profile?performance.now():0,sites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&(b===homeBuilding||b.units?.some(u=>u.ownerId===citizen.accountId||u.tenantId===citizen.accountId)||b.municipal&&['townhall','council_chamber','library','theater','sports_center'].includes(b.type))&&!this.jobs.some(j=>j.kind==='art-installation'&&j.buildingId===b.id&&ACTIVE.has(j.status))).sort((a,b)=>(a===homeBuilding?-1:b===homeBuilding?1:a.id-b.id));
-   if(profile){siteTimings.filterMs+=performance.now()-filterStart;siteTimings.artistsVisited++;}
-   for(const site of sites){
-    if(profile)siteTimings.sitesVisited++;
-    const party=city.politics?.party?.(citizen.political?.partyId),partyId=roll%4===0&&party?.active?party.id:null,kind=roll%8===0?'statue':roll%3===0?'flags':roll%4===0?'painting':'banner',side=home?.y===0?'north':home?.x>=site.width-1?'east':home?.y>=site.depth-1?'south':'west',windowSupport=site===homeBuilding&&home&&['flags','painting'].includes(kind)?{kind:'window',buildingId:site.id,unitId:home.id,floor:home.z,side,rotation:({north:Math.PI,east:Math.PI/2,south:0,west:-Math.PI/2})[side]}:null,facadeStarted=profile?performance.now():0,facadeSupport=kind==='banner'?buildingFacadeBannerSupport(site,{isRoadAt:(x,y)=>isRoadAt(city.world,x,y)}):null;if(profile)profile.facadeSupportMs=(profile.facadeSupportMs||0)+performance.now()-facadeStarted;if(kind==='banner'&&!facadeSupport)continue;const pointStarted=profile?performance.now():0,point=windowSupport?{x:site.entity.x+home.x+.5,y:site.entity.y+home.y+.5}:facadeSupport?.position||this.frontagePoint(site);if(profile)profile.pointMs=(profile.pointMs||0)+performance.now()-pointStarted;
-    if(!point)continue;const titleStarted=profile?performance.now():0,message=spontaneousArtworkTitle(city);if(profile)profile.titleMs=(profile.titleMs||0)+performance.now()-titleStarted;
-    const artworkStarted=profile?performance.now():0,piece=city.justice.createArtwork({kind,message,creatorId:citizen.id,sponsorId:citizen.id,purpose:'expression',partyId,buildingId:site.id,x:point.x,y:point.y,support:windowSupport||facadeSupport,color:party?.flag?.background?parseInt(party.flag.background.replace('#',''),16):0xc9b979,materialUsed:kind==='statue'?'argila':null});if(profile)profile.createArtworkMs=(profile.createArtworkMs||0)+performance.now()-artworkStarted;
-    if(!piece)continue;citizen.lastSpontaneousArtworkAt=city.minute;this.lastSpontaneousArtworkAt=city.minute;
-    const logStarted=profile?performance.now():0;city.log(`${citizen.entity.properties.name} criou ${city.justice.labelArt(kind)} sem patrocínio em ${site.entity.properties.name}.`,'justice',[citizen.id,site.id],{kind:'spontaneous-artwork',artId:piece.id,buildingId:site.id,partyId,unsponsored:true});if(profile)profile.logMs=(profile.logMs||0)+performance.now()-logStarted;if(profile){siteTimings.visitMs+=performance.now()-loopStart;this.lastSpontaneousArtworkProfile={...profile,...siteTimings,artistsVisited:siteTimings.artistsVisited,sitesVisited:siteTimings.sitesVisited,totalMs:performance.now()-profile.startedAt};}return piece;
-   }
-   if(profile)siteTimings.visitMs+=performance.now()-loopStart;
+   const loopStart=profile?performance.now():0,filterStart=profile?performance.now():0;
+   if(profile){siteTimings.filterMs+=performance.now()-filterStart;siteTimings.artistsVisited++;siteTimings.sitesVisited++;}
+   const party=city.politics?.party?.(citizen.political?.partyId),partyId=roll%4===0&&party?.active?party.id:null,kind=roll%8===0?'statue':roll%3===0?'flags':roll%4===0?'painting':'banner',pointStarted=profile?performance.now():0,point=this.sidewalkArtworkPoint(citizen);
+   if(profile)profile.pointMs=(profile.pointMs||0)+performance.now()-pointStarted;
+   if(!point){if(profile)siteTimings.visitMs+=performance.now()-loopStart;continue;}
+   const titleStarted=profile?performance.now():0,message=spontaneousArtworkTitle(city);if(profile)profile.titleMs=(profile.titleMs||0)+performance.now()-titleStarted;
+   const artworkStarted=profile?performance.now():0,piece=city.justice.createArtwork({kind,message,creatorId:citizen.id,sponsorId:citizen.id,purpose:'expression',partyId,buildingId:null,x:point.x,y:point.y,color:party?.flag?.background?parseInt(party.flag.background.replace('#',''),16):0xc9b979,materialUsed:kind==='statue'?'argila':null});if(profile)profile.createArtworkMs=(profile.createArtworkMs||0)+performance.now()-artworkStarted;
+   if(!piece){if(profile)siteTimings.visitMs+=performance.now()-loopStart;continue;}citizen.lastSpontaneousArtworkAt=city.minute;this.lastSpontaneousArtworkAt=city.minute;
+   const logStarted=profile?performance.now():0;city.log(`${citizen.entity.properties.name} criou ${city.justice.labelArt(kind)} sem patrocínio em uma calçada.`,'justice',[citizen.id],{kind:'spontaneous-artwork',artId:piece.id,partyId,unsponsored:true});if(profile)profile.logMs=(profile.logMs||0)+performance.now()-logStarted;if(profile){siteTimings.visitMs+=performance.now()-loopStart;this.lastSpontaneousArtworkProfile={...profile,...siteTimings,artistsVisited:siteTimings.artistsVisited,sitesVisited:siteTimings.sitesVisited,totalMs:performance.now()-profile.startedAt};}return piece;
   }
   if(profile)this.lastSpontaneousArtworkProfile={...profile,...siteTimings};
+  return null;
+ }
+ sidewalkArtworkPoint(citizen){
+  const city=this.city,world=city.world,tiles=world?.sidewalkTiles;if(!tiles?.size)return null;
+  const occupied=city.justice.art.filter(piece=>!piece.entity.destroyed).map(piece=>({x:piece.entity.x,y:piece.entity.y})),doors=city.buildings.filter(building=>!building.entity.destroyed&&building.door).map(building=>({x:building.door.x,y:building.door.y}));
+  const busy=(x,y)=>occupied.some(point=>Math.hypot(point.x-(x+.5),point.y-(y+.5))<1.35),nearDoor=(x,y)=>doors.some(point=>Math.hypot(point.x-(x+.5),point.y-(y+.5))<1.2);
+  const options=[];
+  for(const key of tiles){const x=key%world.width,y=Math.floor(key/world.width),distance=Math.hypot(citizen.entity.x-(x+.5),citizen.entity.y-(y+.5));if(distance>18||world.sidewalkTreeTiles?.has(key)||!world.hasSidewalk(x,y)||!city.walkable(x,y)||busy(x,y)||nearDoor(x,y))continue;options.push({x:x+.5,y:y+.5,distance,tie:city.random()});}
+  options.sort((a,b)=>a.distance-b.distance||a.tie-b.tie);
+  for(const point of options.slice(0,48))if(city.findPath(citizen.entity,point)!==null)return {x:point.x,y:point.y};
   return null;
  }
  consumeArtworkMaterial(job){

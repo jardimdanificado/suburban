@@ -1,11 +1,18 @@
 import {injuredCarryCapacity,injuryWorkFactor} from './city_injury_effects.js';
 import { INDUSTRIES, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
+import {isRoadAt} from './city_terrain.js?v=entrance-retaining-clearance-1';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export function carryCapacity(c){return injuredCarryCapacity(c,c?.equipment?.carrinho?72:c?.equipment?.cesta?36:24);}
 const STREET_MERCHANT_TYPES=new Set(['market','greengrocer','bakery','restaurant','cycle_shop','clothing_store','sports_shop','thrift_store','pharmacy','artisan','publisher']);
 const live=c=>!!c?.entity&&!c.entity.destroyed;
 function hasStreetProducts(b){return STREET_MERCHANT_TYPES.has(b.type)||INDUSTRIES[b.type]?.category==='services';}
+function nearRoad(city,x,y){return [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>isRoadAt(city.world,x+dx,y+dy));}
+function stallFootprintClear(city,site,position){
+ const dx=site.x-position.x,dy=site.y-position.y,angle=Math.hypot(dx,dy)>.1?Math.atan2(dx,dy):0,cx=position.x+Math.sin(angle)*.1,cy=position.y+Math.cos(angle)*.1;
+ for(const lx of [-.48,0,.48])for(const lz of [-.36,0,.36]){const x=cx+Math.cos(angle)*lx+Math.sin(angle)*lz,y=cy-Math.sin(angle)*lx+Math.cos(angle)*lz;if(isRoadAt(city.world,Math.floor(x),Math.floor(y)))return false;}
+ return true;
+}
 function fairStock(economy,business){
  const stock={},available=Object.keys(business.inventory||{}).filter(good=>(business.inventory[good]||0)>0);
  let offered=available;
@@ -31,9 +38,13 @@ function prepareStreetMarkets(economy){
   if(!sites.length)return;
   const entrances=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&b.door).map(b=>b.door),nearEntrance=(x,y)=>entrances.some(door=>Math.hypot(x-door.x,y-door.y)<2.25);
   vendors.sort((a,b)=>Number(a.business.type!=='market')-Number(b.business.type!=='market')||a.business.id-b.business.id);
-  for(const {business,owner} of vendors){const site=sites.slice().sort((a,b)=>a.vendors.length-b.vendors.length||b.flow-a.flow)[0],slot=site.vendors.length,occupied=new Set(site.vendors.map(v=>`${Math.floor(v.position.x)},${Math.floor(v.position.y)}`));let position=null;
-    for(let radius=2;radius<=6&&!position;radius++)for(let step=0;step<24&&!position;step++){const angle=(slot*2.399963229728653+step*Math.PI/12),x=site.x+Math.cos(angle)*radius,y=site.y+Math.sin(angle)*radius,cx=Math.floor(x)+.5,cy=Math.floor(y)+.5,key=`${Math.floor(x)},${Math.floor(y)}`;if(occupied.has(key)||nearEntrance(cx,cy)||!city.walkable(Math.floor(x),Math.floor(y))||city.buildings.some(b=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth))continue;position={x:cx,y:cy};}
+  const occupied=new Set();
+  for(const {business,owner} of vendors){const site=sites.slice().sort((a,b)=>a.vendors.length-b.vendors.length||b.flow-a.flow)[0],slot=site.vendors.length,candidates=[];
+    for(let radius=2;radius<=6;radius++)for(let step=0;step<24;step++){const angle=(slot*2.399963229728653+step*Math.PI/12),x=site.x+Math.cos(angle)*radius,y=site.y+Math.sin(angle)*radius,cx=Math.floor(x)+.5,cy=Math.floor(y)+.5,key=`${Math.floor(x)},${Math.floor(y)}`,position={x:cx,y:cy},road=isRoadAt(city.world,Math.floor(x),Math.floor(y));if(occupied.has(key)||[...occupied].some(other=>{const [ox,oy]=other.split(',').map(Number);return Math.hypot(cx-(ox+.5),cy-(oy+.5))<1.35;})||nearEntrance(cx,cy)||road||!city.walkable(Math.floor(x),Math.floor(y))||city.buildings.some(b=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth))continue;
+      const roadside=nearRoad(city,Math.floor(x),Math.floor(y)),hasStall=STREET_MERCHANT_TYPES.has(business.type);if(hasStall&&!stallFootprintClear(city,site,position))continue;candidates.push({position,roadside,radius,step});}
+    candidates.sort((a,b)=>Number(!a.roadside)-Number(!b.roadside)||a.radius-b.radius||a.step-b.step);const position=candidates[0]?.position||null;
     if(!position)continue;
+    occupied.add(`${Math.floor(position.x)},${Math.floor(position.y)}`);
     const vendor={marketId:site.id,businessId:business.id,ownerId:owner.id,name:business.entity.properties.name,position,stock:fairStock(economy,business),stockRevision:0};
     site.vendors.push(vendor);owner.marketStall={marketId:site.id,businessId:business.id,position,until:city.minute+(17-city.hour)*60};if(['work','manage','work-wait'].includes(owner.task)){city.furniture.release(owner);owner.workWait=null;owner.task=null;owner.targetId=null;owner.path=[];owner.serviceQueue=null;}}
   economy.streetMarkets=sites;
@@ -66,8 +77,8 @@ export function updateMarket(economy){
     const multiplier=Math.round(clamp(previous.multiplier+clamp(target-previous.multiplier,-.035,.035),.55,2.5)*1000)/1000;
     economy.market[good]={multiplier,demand,stock,likes,updatedAt:city.minute};
   }
-  const doors=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&b.door).map(b=>b.door),blocksEntrance=(economy.streetMarkets||[]).some(site=>(site.vendors||[]).some(vendor=>doors.some(door=>Math.hypot(vendor.position.x-door.x,vendor.position.y-door.y)<2.25)));
-  if(city.hour>=8&&(economy.streetMarketsDay!==city.day||blocksEntrance))prepareStreetMarkets(economy);
+  const doors=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&b.door).map(b=>b.door),blocksEntrance=(economy.streetMarkets||[]).some(site=>(site.vendors||[]).some(vendor=>doors.some(door=>Math.hypot(vendor.position.x-door.x,vendor.position.y-door.y)<2.25))),blocksRoad=(economy.streetMarkets||[]).some(site=>(site.vendors||[]).some(vendor=>isRoadAt(city.world,Math.floor(vendor.position.x),Math.floor(vendor.position.y))||(STREET_MERCHANT_TYPES.has(city.building(vendor.businessId)?.type)&&!stallFootprintClear(city,site,vendor.position))));
+  if(city.hour>=8&&(economy.streetMarketsDay!==city.day||blocksEntrance||blocksRoad))prepareStreetMarkets(economy);
 }
 export function planSupplyChains(economy){
   const city=economy.city,firms=economy.businesses;

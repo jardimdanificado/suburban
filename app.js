@@ -1,9 +1,9 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=perf-spontaneous-art-title-3';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=bench-wall-height-aware-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=roadside-ad-placards-1";
 import { CityDesktop } from "./js/city_desktop.js?v=secretariat-identity-return-2";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=import-depot-visual-removed-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=party-railing-style-farm-overlap-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";

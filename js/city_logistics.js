@@ -1,5 +1,5 @@
 import {moveGarments} from './city_clothing.js?v=party-apparel-1';
-import { carryCapacity } from './city_markets.js';
+import { carryCapacity } from './city_markets.js?v=roadside-ad-placards-1';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
 import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=carpool-spatial-index-1';
 import { ensureImportDepot } from './city_external_trade.js';

@@ -3,6 +3,7 @@ import {surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
 const AWNING_COLORS=[0xb64f42,0x3e7778,0xd3a849,0x55734b,0x496b89,0xa45e83,0xb56c42,0x6e6553];
+const RETAIL_TYPES=new Set(['market','greengrocer','bakery','restaurant','cycle_shop','clothing_store','sports_shop','thrift_store','pharmacy','artisan','publisher']);
 const TYPE_COLORS={market:0xc35d43,greengrocer:0x4f8547,bakery:0xc58b42,restaurant:0x9a5b46,clothing_store:0x6e7b99,sports_shop:0x527e83,thrift_store:0x8b6d8c,pharmacy:0x5e8b82,artisan:0x9a6349,publisher:0x6f6e9b,cycle_shop:0x62766e};
 const GOODS_COLORS={pao:[0xc68a42,0xe2ba6d,0x9d6333],frutas:[0xc9503d,0x76a348,0xe1b23e],peixe:[0x8eb5b7,0x547982,0xd8c8a4],roupas:[0xc45f57,0x557b9b,0xd4ad53],livros:[0x775744,0x60738b,0x9a5e54],moveis:[0x9a6d4d,0x73503c,0x546b5d],flores:[0xc95676,0xe1b846,0x668d52],default:[0xd18a45,0x63844d,0xb85440]};
 const hashValue=value=>{let hash=2166136261;for(const char of String(value??''))hash=Math.imul(hash^char.charCodeAt(0),16777619);return hash>>>0;};
@@ -54,13 +55,20 @@ function stallGroup(THREE,site,vendor,business){
  const label=String(vendor.name||'FEIRA').toLocaleUpperCase('pt-BR');drawPixelText(ctx,label.length>20?`${label.slice(0,18)}…`:label,128,32,232);
  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
  const sign=new THREE.Mesh(new THREE.PlaneGeometry(.86,.22),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));sign.position.set(0,1.58,.405);sign.userData.marketSignTexture=texture;sign.userData.skipStaticMerge=true;group.add(sign);
- // A separate A-frame makes the merchant's announcement read differently from the selling counter.
- const adCanvas=document.createElement('canvas');adCanvas.width=192;adCanvas.height=128;const adCtx=adCanvas.getContext('2d');adCtx.fillStyle='#f2e5c9';adCtx.fillRect(0,0,192,128);adCtx.strokeStyle='#573d2e';adCtx.lineWidth=8;adCtx.strokeRect(5,5,182,118);adCtx.fillStyle=`#${canopy.toString(16).padStart(6,'0')}`;adCtx.textAlign='center';adCtx.textBaseline='middle';drawPixelText(adCtx,'ANÚNCIO',96,38,166);adCtx.font='bold 17px monospace';drawPixelText(adCtx,label.length>15?`${label.slice(0,13)}…`:label,96,84,166);
- const adTexture=new THREE.CanvasTexture(adCanvas);adTexture.magFilter=THREE.NearestFilter;adTexture.minFilter=THREE.NearestFilter;adTexture.generateMipmaps=false;adTexture.colorSpace=THREE.SRGBColorSpace;
- const adBoard=new THREE.Group(),adLegMat=new THREE.MeshLambertMaterial({color:wood}),adLegA=new THREE.Mesh(new THREE.BoxGeometry(.035,.58,.035),adLegMat),adLegB=new THREE.Mesh(new THREE.BoxGeometry(.035,.58,.035),adLegMat);adLegA.position.set(-.17,.29,-.04);adLegA.rotation.x=-.12;adLegB.position.set(.17,.29,-.04);adLegB.rotation.x=-.12;adBoard.add(adLegA,adLegB);
- const adPanel=new THREE.Mesh(new THREE.PlaneGeometry(.38,.26),new THREE.MeshBasicMaterial({map:adTexture,side:THREE.DoubleSide}));adPanel.position.set(0,.47,.005);adPanel.userData.marketAdTexture=adTexture;adPanel.userData.skipStaticMerge=true;adBoard.add(adPanel);adBoard.position.set(.60,.01,.22);group.add(adBoard);
  for(const x of [-.48,.48]){box(.07,.12,.07,x,1.59,.4,wood);box(.06,.06,.06,x,1.68,.4,accent);}
- mergeStaticMeshes(THREE,group);group.userData.marketSignTexture=texture;group.userData.marketAdTexture=adTexture;group.userData.marketStockCount=stock.length;group.userData.marketSeed=seed;return group;
+ mergeStaticMeshes(THREE,group);group.userData.marketSignTexture=texture;group.userData.marketStockCount=stock.length;group.userData.marketSeed=seed;return group;
+}
+
+function advertiserGroup(THREE,vendor,business){
+ const group=new THREE.Group(),color=TYPE_COLORS[business?.type]||0x527e83,label=String(vendor.name||'ANÚNCIO').toLocaleUpperCase('pt-BR');
+ const canvas=document.createElement('canvas');canvas.width=320;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#f1e2bd';ctx.fillRect(0,0,320,192);ctx.fillStyle=`#${color.toString(16).padStart(6,'0')}`;ctx.fillRect(9,9,302,174);ctx.fillStyle='#f6edda';ctx.textAlign='center';ctx.textBaseline='middle';drawPixelText(ctx,'ANÚNCIO',160,58,260);ctx.fillStyle='#fff8e9';ctx.font='bold 25px monospace';drawPixelText(ctx,label.length>22?`${label.slice(0,20)}…`:label,160,126,268);
+ const texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
+ const frame=new THREE.MeshLambertMaterial({color:0x564536}),skin=new THREE.MeshLambertMaterial({color:0xb98a68});
+ const back=new THREE.Mesh(new THREE.BoxGeometry(.72,.48,.045),frame);back.position.set(0,1.08,.22);group.add(back);
+ const sign=new THREE.Mesh(new THREE.PlaneGeometry(.66,.42),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));sign.position.set(0,1.08,.247);sign.userData.skipStaticMerge=true;sign.userData.marketAdTexture=texture;group.add(sign);
+ const holdArm=(from,to)=>{const direction=new THREE.Vector3().subVectors(to,from),mesh=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,direction.length(),6),skin);mesh.position.copy(from).add(to).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.normalize());group.add(mesh);};
+ holdArm(new THREE.Vector3(-.17,.9,.04),new THREE.Vector3(-.23,.94,.19));holdArm(new THREE.Vector3(.17,.9,.04),new THREE.Vector3(.23,.94,.19));
+ mergeStaticMeshes(THREE,group);group.userData.marketAdTexture=texture;return group;
 }
 
 export function syncStreetMarketStalls(renderer,THREE,world){
@@ -69,13 +77,13 @@ export function syncStreetMarketStalls(renderer,THREE,world){
  const open=city&&city.hour>=8&&city.hour<17&&city.economy.streetMarketsDay===city.day;
  if(open)for(const site of markets)for(const vendor of site.vendors||[]){
   const id=`${site.id}:${vendor.businessId}`;active.add(id);const x=vendor.position.x,y=vendor.position.y;
-  let mesh=renderer.streetMarketStallMeshes.get(id);const business=city.building(vendor.businessId),signature=`${vendor.name}:${business?.type||''}:${city.day}:${vendor.stockRevision||0}`;
+  let mesh=renderer.streetMarketStallMeshes.get(id);const business=city.building(vendor.businessId),retail=RETAIL_TYPES.has(business?.type),signature=`${vendor.name}:${business?.type||''}:${retail}:${city.day}:${vendor.stockRevision||0}`;
   if(mesh&&mesh.userData.signature!==signature){renderer.scene.remove(mesh);mesh.traverse(o=>{o.geometry?.dispose();if(o!==mesh&&o.material?.map===mesh.userData.marketSignTexture)o.material.dispose();else o.material?.dispose();o.userData.marketSignTexture?.dispose();o.userData.marketAdTexture?.dispose();});mesh.userData.marketProduceTexture?.dispose();mesh.userData.marketAdTexture?.dispose();renderer.streetMarketStallMeshes.delete(id);mesh=null;}
-  if(!mesh){mesh=stallGroup(THREE,site,vendor,business);mesh.userData.signature=signature;renderer.streetMarketStallMeshes.set(id,mesh);renderer.scene.add(mesh);}
+  if(!mesh){mesh=retail?stallGroup(THREE,site,vendor,business):advertiserGroup(THREE,vendor,business);mesh.userData.signature=signature;renderer.streetMarketStallMeshes.set(id,mesh);renderer.scene.add(mesh);}
   const dx=site.x-x,dy=site.y-y,angle=Math.hypot(dx,dy)>.1?Math.atan2(dx,dy):((hashValue(id)%4)*Math.PI/2);
   // Keep the real vendor at their assigned spot, just behind the counter.
   // The stall faces inward toward the market gathering point.
-  const stallX=x+Math.sin(angle)*.55,stallY=y+Math.cos(angle)*.55;
+  const stallX=x+Math.sin(angle)*.1,stallY=y+Math.cos(angle)*.1;
   mesh.rotation.y=angle;mesh.position.set(stallX,surfaceElevation(world,stallX,stallY),stallY);
   mesh.visible=!Number.isFinite(renderer.renderedMinTx)||(x>=renderer.renderedMinTx-1&&x<=renderer.renderedMaxTx+1&&y>=renderer.renderedMinTy-1&&y<=renderer.renderedMaxTy+1);
  }

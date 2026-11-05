@@ -15,7 +15,7 @@ import {productionPlan,investProductionPlan} from './city_production_planner.js?
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=party-apparel-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
-import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js';
+import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js?v=roadside-ad-placards-1';
 import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=cleaner-capacity-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance-1';

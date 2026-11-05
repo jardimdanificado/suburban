@@ -13,7 +13,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=import-depot-visual-removed-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=varied-sidewalk-art-sculptures-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=walking-shirt-mask-1';
@@ -69,14 +69,37 @@ function railingFaceBlocksDoor(face,doorApproaches){
   }
   return false;
 }
+function roadRailingFarmFenceCells(city){
+  const byCell=new Map(),add=(building,x1,y1,x2,y2)=>{
+    const mx=(x1+x2)/2,my=(y1+y2)/2;if(Math.hypot(mx-building.door.x,my-building.door.y)<1.35)return;
+    const segment={ax:x1,ay:y1,bx:x2,by:y2};
+    for(let y=Math.floor(Math.min(y1,y2)-.15);y<=Math.floor(Math.max(y1,y2)+.15);y++)for(let x=Math.floor(Math.min(x1,x2)-.15);x<=Math.floor(Math.max(x1,x2)+.15);x++){const key=`${x},${y}`;let list=byCell.get(key);if(!list)byCell.set(key,list=[]);list.push(segment);}
+  };
+  for(const building of city?.buildings||[]){if(building.type!=='farm'||building.entity?.destroyed||!building.door||!building.entity)continue;const {x,y}=building.entity;
+    for(let along=0;along<building.width;along++){add(building,x+along+.04,y+.04,x+Math.min(building.width-.04,along+1+.04),y+.04);add(building,x+along+.04,y+building.depth-.04,x+Math.min(building.width-.04,along+1+.04),y+building.depth-.04);}
+    for(let along=0;along<building.depth;along++){add(building,x+.04,y+along+.04,x+.04,y+Math.min(building.depth-.04,along+1+.04));add(building,x+building.width-.04,y+along+.04,x+building.width-.04,y+Math.min(building.depth-.04,along+1+.04));}
+  }
+  return byCell;
+}
+function railingFaceOverlapsFarmFence(face,fenceCells){
+  const mx=(face.ax+face.bx)/2,my=(face.ay+face.by)/2;
+  for(let y=Math.floor(my)-1;y<=Math.floor(my)+1;y++)for(let x=Math.floor(mx)-1;x<=Math.floor(mx)+1;x++)for(const fence of fenceCells.get(`${x},${y}`)||[]){
+    const faceHorizontal=Math.abs(face.ay-face.by)<1e-5,fenceHorizontal=Math.abs(fence.ay-fence.by)<1e-5;
+    if(faceHorizontal&&fenceHorizontal&&Math.abs(face.ay-fence.ay)<.1&&Math.min(Math.max(face.ax,face.bx),Math.max(fence.ax,fence.bx))-Math.max(Math.min(face.ax,face.bx),Math.min(fence.ax,fence.bx))>.08)return true;
+    if(!faceHorizontal&&!fenceHorizontal&&Math.abs(face.ax-fence.ax)<.1&&Math.min(Math.max(face.ay,face.by),Math.max(fence.ay,fence.by))-Math.max(Math.min(face.ay,face.by),Math.min(fence.ay,fence.by))>.08)return true;
+  }
+  return false;
+}
+function cityGoverningParty(city){const mayor=city?.society?.citizen?.(city.economy?.mayorId),party=city?.politics?.party?.(mayor?.political?.partyId);return party?.active?party:null;}
+function partyRailingStyle(party){if(!party)return null;const id=Number(party.id);return Number.isFinite(id)?((Math.max(1,Math.abs(id))-1)%3):[...String(party.id)].reduce((hash,char)=>(Math.imul(hash^char.charCodeAt(0),16777619)>>>0),2166136261)%3;}
 function roadRailingLayout(world,city){
-  const cached=roadRailingLayouts.get(world);if(cached?.map===world.map&&cached.revision===world.revision&&cached.city===city&&cached.structureRevision===city?.structureRevision)return cached;
-  const faces=[],segments=new Map(),nodes=new Map(),doorApproaches=roadRailingDoorApproaches(city);
+  const party=cityGoverningParty(city),partyId=party?.id??null,cached=roadRailingLayouts.get(world);if(cached?.map===world.map&&cached.revision===world.revision&&cached.city===city&&cached.structureRevision===city?.structureRevision&&cached.partyId===partyId)return cached;
+  const faces=[],segments=new Map(),nodes=new Map(),doorApproaches=roadRailingDoorApproaches(city),farmFenceCells=roadRailingFarmFenceCells(city);
   for(let y=0;y<world.height;y++)for(let x=0;x<world.width;x++){
     const tile=world.map[y*world.width+x],isSidewalk=world.hasSidewalk?.(x,y);if(!ROAD_SURFACE_TILES.has(tile)&&!isSidewalk)continue;
     const corners=streetSurfaceCorners(world,x,y);if(!corners)continue;
     for(const face of roadRetainingFaces(world,x,y,()=>true)){
-      if(railingFaceBlocksDoor(face,doorApproaches))continue;
+      if(railingFaceBlocksDoor(face,doorApproaches)||railingFaceOverlapsFarmFence(face,farmFenceCells))continue;
       const edgeCorners=[[0,1],[1,2],[3,2],[0,3]][face.side],heightAt=t=>corners[edgeCorners[0]]+(corners[edgeCorners[1]]-corners[edgeCorners[0]])*t;
       const dropA=heightAt(face.from)-face.lowA,dropB=heightAt(face.to)-face.lowB;if(Math.max(dropA,dropB)<.02)continue;
       const key=roadRailingFaceKey(x,y,face),startNode=roadRailingNodeKey(face.ax,face.ay),endNode=roadRailingNodeKey(face.bx,face.by),segmentKey=[startNode,endNode].sort().join('|');
@@ -96,7 +119,7 @@ function roadRailingLayout(world,city){
       const slopeA=(heightAtNode(a,otherNode(a,node))-heightAtNode(a,node))/a.length,slopeB=(heightAtNode(b,otherNode(b,node))-heightAtNode(b,node))/b.length;
       if(Math.abs(cross)>1e-4){mandatory.add(node);cornerNodes.add(node);}else if(Math.abs(slopeA+slopeB)>.05)mandatory.add(node);
     }
-    const first=component.map(item=>item.segmentKey).sort()[0],seed=Number(world.seed)||0;let hash=(2166136261^seed)>>>0;for(const char of first)hash=Math.imul(hash^char.charCodeAt(0),16777619)>>>0;const style=hash%3;
+    const first=component.map(item=>item.segmentKey).sort()[0],seed=Number(world.seed)||0;let hash=(2166136261^seed)>>>0;for(const char of first)hash=Math.imul(hash^char.charCodeAt(0),16777619)>>>0;const style=partyRailingStyle(party)??hash%3;
     for(const item of component)for(const key of item.faceKeys)styles.set(key,style);
     for(const node of mandatory)postNodes.add(node);
     const walked=new Set();
@@ -106,7 +129,7 @@ function roadRailingLayout(world,city){
       }
     }
   }
-  const result={map:world.map,revision:world.revision,city,structureRevision:city?.structureRevision,styles,terminalNodes,postNodes,cornerNodes,doorApproaches};roadRailingLayouts.set(world,result);return result;
+  const result={map:world.map,revision:world.revision,city,structureRevision:city?.structureRevision,partyId,styles,terminalNodes,postNodes,cornerNodes,doorApproaches,farmFenceCells};roadRailingLayouts.set(world,result);return result;
 }
 // Cache for raw asset images
 const textureCache = new Map();
@@ -6550,7 +6573,9 @@ export class RCT3DRenderer {
     const gridEnabled = this.wireframeMode === 1 && this.zoom >= 0.45;
     const detailTier = this.terrainDetailTier ?? 2;
     const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
-    const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}`;
+    const city=this.cityDevelopment?.city,party=cityGoverningParty(city),farmSignature=(city?.buildings||[]).filter(building=>building.type==='farm'&&!building.entity.destroyed).map(building=>`${building.id}:${building.entity.x},${building.entity.y},${building.width},${building.depth}`).sort().join(';');
+    const railingSignature=`party:${party?.id??'none'}|farms:${farmSignature}`;
+    const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}|${railingSignature}`;
     const visible = new Set();
     const x0 = Math.max(0, Math.floor(minTx / chunkSize)), x1 = Math.floor(Math.min(this.mapWidth - 1, maxTx) / chunkSize);
     const y0 = Math.max(0, Math.floor(minTy / chunkSize)), y1 = Math.floor(Math.min(this.mapHeight - 1, maxTy) / chunkSize);
@@ -6886,7 +6911,7 @@ export class RCT3DRenderer {
           }
         }
         if(streetCorners&&(ROAD_SURFACE_TILES.has(tType)||isSidewalk))for(const face of roadRetainingFaces(world,tx,ty,()=>true)){
-          if(railingFaceBlocksDoor(face,railingLayout.doorApproaches))continue;
+          if(railingFaceBlocksDoor(face,railingLayout.doorApproaches)||railingFaceOverlapsFarmFence(face,railingLayout.farmFenceCells))continue;
           const edgeCorners=[[0,1],[1,2],[3,2],[0,3]][face.side],roadHeight=t=>streetCorners[edgeCorners[0]]+(streetCorners[edgeCorners[1]]-streetCorners[edgeCorners[0]])*t;
           const drops=[roadHeight(face.from)-face.lowA,roadHeight(face.to)-face.lowB];
           if(Math.max(...drops)<.02)continue;

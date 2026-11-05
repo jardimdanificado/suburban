@@ -27,7 +27,7 @@ import { renderPublications } from './city_publications_ui.js';
 import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases } from './city_corruption_ui.js';
 import {renderEventInspector} from './city_event_inspector.js?v=landlord-stock-market-1';
 import { formatMoney } from './city_ui_format.js';
-import { carryCapacity } from './city_markets.js';
+import { carryCapacity } from './city_markets.js?v=roadside-ad-placards-1';
 import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js';
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js?v=institutions-cleanup-2';
 import {renderMunicipalIdentity} from './city_municipal_identity_ui.js';
@@ -44,10 +44,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=fixed-market-building-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=roadside-ad-placards-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=bench-wall-height-aware-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=roadside-ad-placards-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
