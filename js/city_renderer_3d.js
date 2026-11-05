@@ -12,7 +12,7 @@ import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=gr
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=roadside-ad-placards-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,buildingFacadeBannerSupport,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import { partyFlagCanvas,drawPartyFlag } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=anatomical-fitted-skirts-1';
+import {citizenIsSleeping} from './city_citizen_models.js?v=anatomical-dress-skirt-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-neoclassical-1';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=entrance-retaining-clearance-1';

@@ -47,7 +47,7 @@ const SHORT_SKIRT=Object.freeze([
 // A dress is a fitted blouse over a skirt. Its visible skirt surface is built
 // from the same pose-following garment as a separate skirt; these face IDs
 // describe the body lining to hide beneath that surface.
-const DRESS=Object.freeze([...new Set([...LONG_SLEEVES,...SHORT_SKIRT])].sort((a,b)=>a-b));
+const DRESS=Object.freeze([...new Set([...LONG_SLEEVES,...SHORT_SKIRT.filter(face=>![44,45,46,47,167,168,169,170].includes(face))])].sort((a,b)=>a-b));
 
 const LONG_SKIRT=Object.freeze([
   1,2,3,4,5,6,7,8,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,

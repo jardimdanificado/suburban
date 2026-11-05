@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,headwearSurface,citizenAnimation,citizenFrame,citizenIsSleeping,CityCitizenModels} from '../js/city_citizen_models.js';
+import {CITIZEN_MODEL_FRAMES,parseCitizenOBJ,garmentSurface,headwearSurface,citizenAnimation,citizenFrame,citizenIsSleeping,CityCitizenModels} from '../js/city_citizen_models.js';
 class Vector3{constructor(x=0,y=0,z=0){this.set(x,y,z);}set(x,y,z){Object.assign(this,{x,y,z});return this;}}
 class Matrix4{constructor(){this.elements=new Float32Array(16);}compose(p,q,s){this.data={position:{...p},angle:q.angle,lying:!!q.lying,scale:{...s}};this.elements.fill(0);this.elements[0]=s.x;this.elements[5]=s.y;this.elements[10]=s.z;this.elements[12]=p.x;this.elements[13]=p.y;this.elements[14]=p.z;this.elements[15]=1;return this;}}
 class Quaternion{setFromAxisAngle(axis,angle){this.angle=angle;this.lying=false;return this;}multiply(){this.lying=true;return this;}}
@@ -59,6 +59,18 @@ test('clothes stay on the chest, thighs, hands and feet in every supplied pose',
   for(const piece of ['calça','sapatos','botas','luvas']){
    assert.deepEqual(model.headwear.get(`${key}:${piece}`).attributes.position.array,model.outfits.get(`${key}:${piece}`).clothes.attributes.position.array,`${key}: fitted ${piece} faces must not separate at flat-normal seams`);
   }
+ }
+});
+test('dresses combine a blouse with the fitted skirt surface instead of trouser faces',async()=>{
+ const {model}=await models();assert(model.ready);
+ const containsFace=(geometry,face)=>{const data=geometry.attributes.position.array;for(let i=0;i<data.length;i+=9)if(face.every((n,j)=>data[i+j]===n))return true;return false;};
+ const containsTriangle=(geometry,face)=>{const data=geometry.attributes.position.array,key=face.join(',');for(let i=0;i<data.length;i+=9)if([0,1,2].map(c=>Array.from(data.subarray(i+c*3,i+c*3+3)).join(',')).sort().join('|')===Array.from({length:3},(_,c)=>Array.from(face.subarray(c*3,c*3+3)).join(',')).sort().join('|'))return true;return false;};
+ for(const [key,body]of model.frames){const p=body.attributes.position.array,dress=model.outfits.get(`${key}:vestido`),cloth=dress.clothes;
+  assert(containsFace(cloth,p.subarray(9*9,10*9)),`${key}: dress keeps its blouse at the torso`);
+  assert(containsTriangle(cloth,p.subarray(9,18)),`${key}: dress includes the skirt's fitted inner lining`);
+  assert(!containsFace(cloth,p.subarray(54*9,55*9)),`${key}: dress does not continue down the shins like trousers`);
+  assert(!containsFace(cloth,p.subarray(13*9,14*9)),`${key}: dress leaves the head uncovered`);
+  for(const name of ['weightMorph','skirtMorph','skirtNormalLinear','skirtNormalQuadratic'])assert.equal(cloth.attributes[name].array.length,cloth.attributes.position.array.length*(name==='weightMorph'?2/3:1),`${key}: ${name} covers the combined blouse and skirt`);
  }
 });
 test('skirt instances retain their bound morph attributes and tops are tucked above the pelvis',async()=>{
@@ -174,7 +186,8 @@ test('each garment replaces a distinct part of every animated body and follows i
  for(const [key,geometry] of model.frames)for(const piece of ['camisa','calça','vestido','casaco','saia','macacão','trapos']){
   const outfit=model.outfits.get(`${key}:${piece}`),whole=geometry.attributes.position.array;
   assert(outfit);assert(outfit.body.attributes.position.array.length>0);assert(outfit.clothes.attributes.position.array.length>0);
-  if(piece==='saia')assert(outfit.clothes.attributes.position.array.length>0);
+  if(piece==='vestido')assert.equal(outfit.body.attributes.position.array.length+garmentSurface(246,piece).reduce((sum,face)=>sum+face*9,0),whole.length,piece);
+  else if(piece==='saia')assert(outfit.clothes.attributes.position.array.length>0);
   else assert.equal(outfit.body.attributes.position.array.length+outfit.clothes.attributes.position.array.length,whole.length,piece);
  }
  const personWithClothes=person(12);personWithClothes.properties.citizen.wardrobe=[{piece:'vestido',color:'#329ac1'}];
