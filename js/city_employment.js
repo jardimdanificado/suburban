@@ -60,6 +60,7 @@ const vacancyIndexes=new WeakMap();
 const vacancyChoiceScratch=[];
 const vacancyChoiceScores=new Map();
 const vacancySearchDemandCache=new WeakMap();
+const vacancyKnownScratch=new Map(),vacancyListingScratch=[],vacancyRetainedScratch=[];
 function nearbyFirms(city,c){
   let index=vacancyIndexes.get(city);
   if(!index||index.revision!==city.structureRevision||index.length!==city.buildings.length){
@@ -146,9 +147,11 @@ export function reviewMarket(city,offers){
     const cv=career(c);cv.knownVacancies??=[];
     // Rural employers need the public jobs board: facade signs alone left
     // remote farms permanently invisible to residents working in the centre.
-    const known=new Map(cv.knownVacancies.map(v=>[v.buildingId,v]));
-    const listings=posted.map(b=>{const entry=known.get(b.id)||{buildingId:b.id,discoveredAt:city.minute,source:'Quadro municipal de empregos'};entry.seenAt=city.minute;entry.wage=b.wage;entry.positions=openPositions(city,b);return entry;});
-    cv.knownVacancies=[...listings,...cv.knownVacancies.filter(v=>!postedIds.has(v.buildingId))].slice(0,64);
+    const knownRows=cv.knownVacancies,known=vacancyKnownScratch,listings=vacancyListingScratch,retained=vacancyRetainedScratch;
+    known.clear();listings.length=0;retained.length=0;for(const vacancy of knownRows)known.set(vacancy.buildingId,vacancy);
+    for(const b of posted){const entry=known.get(b.id)||{buildingId:b.id,discoveredAt:city.minute,source:'Quadro municipal de empregos'};entry.seenAt=city.minute;entry.wage=b.wage;entry.positions=openPositions(city,b);listings.push(entry);}
+    for(const vacancy of knownRows)if(!postedIds.has(vacancy.buildingId))retained.push(vacancy);
+    let write=0;for(const entry of listings)knownRows[write++]=entry;for(const vacancy of retained)if(write<64)knownRows[write++]=vacancy;knownRows.length=write;
     if(profile){profile.indexMs+=performance.now()-started;started=performance.now();}
     if(cv.nextSearchAt==null)cv.nextSearchAt=city.minute+(c.jobId?240:30)+(c.id%60);
     if(city.minute<cv.nextSearchAt)continue;cv.nextSearchAt=city.minute+(c.jobId?240:30)+(c.id%60);

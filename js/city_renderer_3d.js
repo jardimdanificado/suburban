@@ -264,6 +264,24 @@ function addPartyArtFlag(THREE,group,city,piece){
 function drawArtworkComposition(ctx,face,x,y,w,h,{caption=true}={}){
   const design=face.design;if(!design)return false;const artH=caption?h*.76:h,flagW=Math.min(w*.89,(artH-h*.1)*120/76),flagH=flagW*76/120,flagX=x+(w-flagW)/2,flagY=y+h*.05+(artH-h*.1-flagH)/2;ctx.save();ctx.fillStyle='#eadfc9';ctx.fillRect(x,y,w,h);ctx.strokeStyle='#493d32';ctx.lineWidth=Math.max(3,w*.018);ctx.strokeRect(x+2,y+2,w-4,h-4);drawPartyFlag(ctx,design,flagX,flagY,flagW,flagH,()=>drawArtworkComposition(ctx,face,x,y,w,h,{caption}));if(caption){ctx.fillStyle='#493d32';ctx.fillRect(x+w*.04,y+h*.81,w*.92,h*.15);ctx.fillStyle='#f5eddf';ctx.textAlign='center';ctx.textBaseline='middle';drawPixelText(ctx,String(face.message||''),x+w/2,y+h*.885,w*.86);}ctx.restore();return true;
 }
+export function drawArtworkPreview(ctx,piece){
+  const face=piece.layers?.at(-1)||piece;ctx.clearRect(0,0,512,256);
+  if(piece.kind==='painting'){
+    if(face.design)drawArtworkComposition(ctx,face,0,0,512,256,{caption:false});
+    else if(face.narrative){ctx.fillStyle='#665b4b';ctx.fillRect(0,0,512,256);drawArtNarrative(ctx,face.narrative);}
+    else drawUntitledPainting(ctx,piece);
+    return;
+  }
+  if(face.design){drawArtworkComposition(ctx,face,0,0,512,256);return;}
+  if(['statue','monument'].includes(piece.kind)){
+    const stone=`#${(piece.color??0x8a857a).toString(16).padStart(6,'0')}`;ctx.fillStyle='#d8cfbc';ctx.fillRect(0,0,512,256);ctx.fillStyle='#594b3c';ctx.fillRect(158,207,196,18);ctx.fillStyle=stone;
+    if(piece.kind==='monument'){ctx.fillRect(204,100,104,107);ctx.fillRect(174,83,164,20);ctx.fillRect(220,61,72,22);}
+    else{ctx.fillRect(218,121,76,86);ctx.beginPath();ctx.arc(256,91,38,0,Math.PI*2);ctx.fill();ctx.fillRect(198,194,116,13);}
+    return;
+  }
+  if(piece.kind==='vase'){ctx.fillStyle='#d8cfbc';ctx.fillRect(0,0,512,256);ctx.fillStyle=`#${(piece.color??0xa65c43).toString(16).padStart(6,'0')}`;ctx.fillRect(196,85,120,22);ctx.beginPath();ctx.moveTo(207,105);ctx.lineTo(305,105);ctx.lineTo(289,184);ctx.lineTo(223,184);ctx.closePath();ctx.fill();ctx.fillRect(211,184,82,17);return;}
+  ctx.fillStyle=piece.materialUsed==='fezes'?'#67432f':'#e8ddc7';ctx.fillRect(0,0,512,256);ctx.fillStyle=piece.materialUsed==='fezes'?'#f0ddbe':'#493d32';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 38px sans-serif';const words=String(face.message||piece.message||'').split(/\s+/);let lines=[],line='';for(const word of words){if(line&&ctx.measureText(`${line} ${word}`).width>448){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}if(line)lines.push(line);for(let i=0;i<Math.min(4,lines.length);i++)drawPixelText(ctx,lines[i],256,128+(i-(Math.min(4,lines.length)-1)/2)*44,448);
+}
 function addVariedStatue(THREE,group,piece,stone){
   const seed=(piece.id*2654435761)>>>0,variant=seed%6,base=new THREE.Mesh(new THREE.BoxGeometry(.62,.12,.62),new THREE.MeshLambertMaterial({color:0x665d51}));base.position.y=.06;group.add(base);
   const add=(geometry,material,x,y,z,sx=1,sy=1,sz=1,rz=0)=>{const mesh=new THREE.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);mesh.rotation.z=rz;group.add(mesh);return mesh;};
