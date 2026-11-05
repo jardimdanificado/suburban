@@ -29,7 +29,7 @@ import {renderEventInspector} from './city_event_inspector.js?v=landlord-stock-m
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
 import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js';
-import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js?v=institutions-cleanup-1';
+import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js?v=institutions-cleanup-2';
 import {renderMunicipalIdentity} from './city_municipal_identity_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js?v=wardrobe-expansion-1';
 import { PREJUDICE_TYPES, initializePrejudices } from './city_prejudice.js?v=discrimination-laws-1';
@@ -851,11 +851,11 @@ export class CityUI {
   government(p) {
     const city=this.city,view=this.view(),mayor=city.economy.citizen(city.economy.mayorId),hall=city.buildings.find(b=>b.type==='townhall');
     if(view==='elections'){this.electionsPanel(p);return;}
-    if(view==='identity'){p.button('VOLTAR À PREFEITURA',()=>this.showView('overview'));renderMunicipalIdentity(this,p);return;}
-    if(view==='overview'){
+    if(view==='identity')this.helpOpen.municipalVisualIdentity=true;
+    if(view==='overview'||view==='identity'){
       renderGovernmentDashboard(this,p);
+      this.section(p,'municipalVisualIdentity','IDENTIDADE VISUAL MUNICIPAL',()=>renderMunicipalIdentity(this,p),false);
       if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council'],['Institutos de pesquisa','institutes']]],['REGULAÇÃO',[['Substâncias e licenças','substances']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas eleitorais','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
-      if(!this.host)p.button('IDENTIDADE MUNICIPAL',()=>this.showView('identity'));
       if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,this.cachedList(`municipal-contracts:${this.contractPlotId||'all'}`,()=>city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice().sort((a,b)=>Number(a.cancelled||a.status==='completed')-Number(b.cancelled||b.status==='completed')||Number(b.status==='blocked')-Number(a.status==='blocked')||b.startedAt-a.startedAt)));}

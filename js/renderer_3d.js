@@ -128,6 +128,39 @@ function terrainTextureCategory(tileType) {
   return null;
 }
 
+function smoothTerrainTopNormals(THREE, geometry) {
+  const geometries = Array.isArray(geometry) ? geometry : [geometry];
+  const sums = new Map();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), face = new THREE.Vector3();
+  const keyAt = (positions,index) => `${Math.round(positions.getX(index) * 10000)},${Math.round(positions.getY(index) * 10000)},${Math.round(positions.getZ(index) * 10000)}`;
+  for(const current of geometries){
+    const positions=current?.getAttribute('position');
+    if(!positions)continue;
+    for (let i = 0; i < positions.count; i += 3) {
+      a.fromBufferAttribute(positions, i); b.fromBufferAttribute(positions, i + 1); c.fromBufferAttribute(positions, i + 2);
+      ab.subVectors(b, a); ac.subVectors(c, a); face.crossVectors(ab, ac).normalize();
+      if (Math.abs(face.y) < .35) continue;
+      for (let j = 0; j < 3; j++) {
+        const key = keyAt(positions,i + j), sum = sums.get(key) || [0, 0, 0];
+        sum[0] += face.x; sum[1] += face.y; sum[2] += face.z; sums.set(key, sum);
+      }
+    }
+  }
+  for(const current of geometries){
+    const positions=current?.getAttribute('position'),normals=current?.getAttribute('normal');
+    if(!positions||!normals)continue;
+    for (let i = 0; i < positions.count; i++) {
+      if (Math.abs(normals.getY(i)) < .35) continue;
+      const sum = sums.get(keyAt(positions,i));
+      if (!sum) continue;
+      const length = Math.hypot(sum[0], sum[1], sum[2]) || 1;
+      normals.setXYZ(i, sum[0] / length, sum[1] / length, sum[2] / length);
+    }
+    normals.needsUpdate = true;
+  }
+}
+
 function pushTerrainTileUvs(bucket, x, y, tileType, categoryOverride = null) {
   if (tileType === TILE_WATER) {
     const u0 = x / 8, u1 = (x + 1) / 8, v0 = y / 8, v1 = (y + 1) / 8;
@@ -5668,9 +5701,9 @@ export class RCT3DRenderer {
     if (t11 === TILE_MOUNTAIN || t11 === TILE_PEAK || t11 === TILE_STONE || t11 === TILE_HILL) higherNeighbors++;
 
     // Inward crevice / base of cliff receives natural ambient occlusion shading
-    if (higherNeighbors >= 3) return 0.70;
-    if (higherNeighbors === 2) return 0.80;
-    if (higherNeighbors === 1) return 0.90;
+    if (higherNeighbors >= 3) return 0.82;
+    if (higherNeighbors === 2) return 0.89;
+    if (higherNeighbors === 1) return 0.95;
     return 1.0;
   }
 
@@ -6976,6 +7009,7 @@ export class RCT3DRenderer {
     if (chunkGrassTufts.instanceColor) chunkGrassTufts.instanceColor.needsUpdate = true;
     if (foliageCount) chunk.terrain.add(chunkGrassTufts);
 
+    const terrainSurfaceGeometries=[];
     for (const [matKey, bucket] of Object.entries(tileMeshBuckets)) {
       if (bucket.pos.length === 0) continue;
       const geom = new THREE.BufferGeometry();
@@ -6983,6 +7017,7 @@ export class RCT3DRenderer {
       geom.setAttribute("uv", new THREE.Float32BufferAttribute(bucket.uvs, 2));
       geom.setAttribute("color", new THREE.Float32BufferAttribute(bucket.colors, 3));
       geom.computeVertexNormals();
+      terrainSurfaceGeometries.push(geom);
 
       const mat = this.materials[matKey] || this.materials[TILE_FLOOR];
       const mesh = new THREE.Mesh(geom, mat);
@@ -6996,6 +7031,7 @@ export class RCT3DRenderer {
         chunk.terrain.add(mesh);
       }
     }
+    smoothTerrainTopNormals(THREE,terrainSurfaceGeometries);
 
     if (waterFoamBucket.pos.length) {
       const foamGeometry = new THREE.BufferGeometry();
@@ -7603,8 +7639,8 @@ export class RCT3DRenderer {
         papayaCount++;
       }
       else if(isBroadLeafPlant&&broadLeafCount<this.maxInstances){
-        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),5371),982451653)>>>0)%628)/100),size=(r.size||1)*1.08;
-        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        const isGuaimbe=e.properties.species==='guaimbe',rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),5371),982451653)>>>0)%628)/100),size=(r.size||1)*(isGuaimbe?.92:1.08)*(isGuaimbe?(e.properties.cityPlant?.visualScale||1):1);
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH-(isGuaimbe?.46*size:0),e.y+.5);
         this.instBroadLeafPlants.setMatrixAt(broadLeafCount,mMatrix);this.instBroadLeafPlants.setColorAt(broadLeafCount,this.tempColor1.setHex(e.properties.species==='monstera'?0x3f8049:0x568b4d));broadLeafCount++;
       }
       else if(isTropicalFoliage&&tropicalFoliageCount<this.maxInstances){
