@@ -61,6 +61,30 @@ test('clothes stay on the chest, thighs, hands and feet in every supplied pose',
   }
  }
 });
+test('skirt instances retain their bound morph attributes and tops are tucked above the pelvis',async()=>{
+ const {model}=await models();assert(model.ready);
+ const containsFace=(geometry,face)=>{
+  const data=geometry.attributes.position.array;
+  for(let i=0;i<data.length;i+=9)if(face.every((n,j)=>data[i+j]===n))return true;
+  return false;
+ };
+ for(const [key,geometry] of model.frames)for(const piece of ['saia','saia longa']){
+  const skirt=model.outfits.get(`${key}:${piece}`).clothes;
+  assert.equal(model.headwear.get(`${key}:${piece}`),skirt);
+  for(const name of ['skirtMorph','skirtNormalLinear','skirtNormalQuadratic'])assert.equal(skirt.attributes[name].array.length,skirt.attributes.position.array.length,`${key}: fitted skirt shader data`);
+  const top=model.outfits.get(`${key}:camiseta`),tucked=top[piece==='saia'?'clothesWithSaia':'clothesWithSaiaLonga'],p=geometry.attributes.position.array;
+  assert(containsFace(tucked,p.subarray(9*9,10*9)),`${key}: torso must keep its top`);
+  assert(!containsFace(tucked,p.subarray(48*9,49*9)),`${key}: top must not protrude through the skirt at the pelvis`);
+ }
+ const e=person(0),c=e.properties.citizen;
+ c.wardrobe=[{piece:'camiseta',color:'#e6bd43'},{piece:'saia',color:'#3c9793'}];c.wearingIndex=0;c.lowerWearIndex=1;
+ for(const piece of ['saia','saia longa']){
+  c.wardrobe[1].piece=piece;model.begin(0,0);model.add(e,0);model.end();
+  const top=model.outfits.get('idle:0:camiseta'),batch=model.batches.get(`idle:0:camiseta:shared+${piece}`);
+  assert.equal(batch.clothingMesh.geometry,top[piece==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']);
+  assert.equal(model.headwearBatches.get(`idle:0:${piece}`).mesh.material,model.skirtMaterial);
+ }
+});
 test('hat meshes share one normalized shape while each animated frame retains its own head anchor',async()=>{
  const pieces=['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta'];
  for(const piece of pieces){let reference=null;const anchors=[];for(let frame=0;frame<5;frame++){

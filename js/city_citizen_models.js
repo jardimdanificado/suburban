@@ -4,6 +4,7 @@ import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=fla
 import {bodyFatAmount} from './city_body_metrics.js?v=body-morph-4';
 import {TROPICAL_PRINTS} from './city_clothing.js?v=party-apparel-1';
 import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_faces.js?v=shared-anatomical-faces-2';
+import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-fitted-skirts-1';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
@@ -16,8 +17,8 @@ export function citizenIsSleeping(c){
 const WORK_TASKS=new Set(['work','manage','construction','clean','cleaning','research','campaign','care','caregiving','food','provisions','water','hygiene','supplies','shopping','health','vote','council-session','informal-service','informal-frontage','informal-gardening']);
 const BIKE_KINDS=new Set(['bicicleta','bicicleta_carga']),GLIDE_KINDS=new Set(['patinete','patins','skate']);
 const ALT_USE_TASKS=new Set(['food','workmeal','provisions','toilet','hygiene','water','health','shopping','supplies','care','caregiving','leisure','social','vote']);
-const ACTION_CLIPS=new Set(['run','pedal','murro','chute','derrotado']),POSED_SKIRT_FRAMES=new Set(['dormindo:0','morto:0','derrotado:0','derrotado:1']);
-const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
+const ACTION_CLIPS=new Set(['run','pedal','murro','chute','derrotado']);
+const PRINTED_GARMENTS=new Set(['camisa social','camisa estampada','vestido estampado']),PATTERNED_GARMENTS=new Set(['camisa estampada','vestido estampado']),DRESS_PIECES=new Set(['vestido','vestido estampado']),SKIRT_PIECES=new Set(['saia','saia longa']),HAND_PIECES=new Set(['luvas']);
 const HEADWEAR_PIECES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta']);
 const LOWER_PIECES=new Set(['sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa']);
 const RENDERED_ACCESSORIES=new Set(['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta','sapatos','botas','calça','calça social','shorts','bermuda','sunga','saia','saia longa','luvas']);
@@ -91,6 +92,18 @@ export function garmentSurface(faceCount,piece){
   for(const face of CITIZEN_GARMENT_FACES[piece]||[])mask[face]=1;
   return mask;
 }
+const smoothWeight=(low,high,value)=>{const t=Math.max(0,Math.min(1,(value-low)/(high-low)));return t*t*(3-2*t);};
+export function citizenVertexWeightMorph(x,y){
+  const smooth=smoothWeight,ax=Math.abs(x);
+  const torso=smooth(.40,.53,y)*(1-smooth(.78,.89,y))*(1-smooth(.12,.19,ax));
+  const arm=smooth(.48,.57,y)*(1-smooth(.78,.86,y))*smooth(.09,.16,ax);
+  const leg=smooth(.12,.22,y)*(1-smooth(.42,.52,y))*smooth(.05,.12,ax);
+  const head=smooth(.83,.91,y)*(1-smooth(1.02,1.10,y))*(1-smooth(.06,.12,ax));
+  return [torso*.60+leg*.22,torso*.60+arm*.40+leg*.46+head*.22];
+}
+export function citizenVertexWeightDelta(point){
+  const [x,z]=citizenVertexWeightMorph(point[0],point[1]);return [point[0]*x,0,point[2]*z];
+}
 // Headwear uses a separate mesh so a hat and the main garment can be worn together.
 // Its anchor is computed independently for each animated OBJ frame.
 export function headwearSurface(data,piece){
@@ -139,58 +152,15 @@ export function splitGarmentSurface(data,mask,piece=null){
   for(let t=0;t<data.positions.length/9;t++){
     const selected=mask[t],p=selected?clothes:body,n=selected?clothesNormals:bodyNormals;
     for(let j=0;j<9;j+=3){let x=data.positions[t*9+j],y=data.positions[t*9+j+1],z=data.positions[t*9+j+2];
-      if(selected&&['vestido','vestido estampado'].includes(piece)&&y<.99){const fall=Math.max(0,Math.min(1,(.99-y)/.48)),factor=1+.18*fall*fall;x*=factor;z*=factor;}
       p.push(x,y,z);n.push(data.normals[t*9+j],data.normals[t*9+j+1],data.normals[t*9+j+2]);}
   }
   return {body:new Float32Array(body),bodyNormals:new Float32Array(bodyNormals),clothes:new Float32Array(clothes),clothesNormals:new Float32Array(clothesNormals)};
-}
-export function posedSkirtMask(data,key){
-  const p=data.positions,mask=new Uint8Array(p.length/9);let min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
-  for(let i=0;i<p.length;i+=3)for(let axis=0;axis<3;axis++){min[axis]=Math.min(min[axis],p[i+axis]);max[axis]=Math.max(max[axis],p[i+axis]);}
-  const seated=key==='use:2'||key.startsWith('sentado_no_'),lying=['dormindo:0','morto:0','derrotado:0','derrotado:1'].includes(key),span=max.map((v,i)=>v-min[i]),center=min.map((v,i)=>(v+max[i])/2),longAxis=span[0]>span[2]?0:2;
-  for(let t=0;t<mask.length;t++){
-    const i=t*9,cx=(p[i]+p[i+3]+p[i+6])/3,cy=(p[i+1]+p[i+4]+p[i+7])/3,cz=(p[i+2]+p[i+5]+p[i+8])/3;
-    if(seated){const low=min[1]+span[1]*.08,high=min[1]+span[1]*.68;mask[t]=Number(cy>=low&&cy<=high&&Math.abs(cx-center[0])<=span[0]*.48&&Math.abs(cz-center[2])<=span[2]*.49);}
-    else if(lying){const along=longAxis===0?cx:cz;mask[t]=Number(Math.abs(along-center[longAxis])<=span[longAxis]*.22);}
-  }
-  return mask;
-}
-export function hipKneeSkirtSurface(data,piece){
-  const p=data.positions,positions=[],normals=[],values=(items,fraction)=>{items.sort((a,b)=>a-b);return items[Math.floor((items.length-1)*fraction)]||0;},median=items=>values(items,.5),clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
-  const waist=[];for(let i=0;i<p.length;i+=3)if(p[i+1]>=.46&&p[i+1]<=.60&&Math.abs(p[i])<.18)waist.push([p[i],p[i+1],p[i+2]]);
-  // OBJ walk poses have uneven vertex density on each side of the waist; keep
-  // the waistband on the shared body centerline instead of following that bias.
-  const centerX=0,centerZ=median(waist.map(q=>q[2])),topY=(median(waist.map(q=>q[1]))||.52)+.035;
-  const sideKnees=[[],[]],long=piece==='saia longa',kneeLow=long?.12:.24,kneeHigh=long?.36:.46;
-  for(let i=0;i<p.length;i+=3)if(p[i+1]>=kneeLow&&p[i+1]<=kneeHigh&&Math.abs(p[i]-centerX)<.24&&Math.abs(p[i+2]-centerZ)<.48)sideKnees[p[i]<centerX?0:1].push([p[i],p[i+1],p[i+2]]);
-  const topWidth=clamp(values(waist.map(q=>Math.abs(q[0]-centerX)),.92)*1.02,.085,.125),topDepth=clamp(values(waist.map(q=>Math.abs(q[2]-centerZ)),.92)*1.02,.06,.095),hemWidth=Math.min(.17,topWidth*(long?1.32:1.28)+.008),hemDepth=Math.min(.125,topDepth*1.22+.006);
-  const knee=sideKnees.map((points,side)=>points.length?[median(points.map(q=>q[0])),median(points.map(q=>q[1])),median(points.map(q=>q[2]))]:[centerX+(side?hemWidth:-hemWidth),long?.18:.30,centerZ]);
-  knee[0][0]=centerX-hemWidth;knee[1][0]=centerX+hemWidth;
-  knee[0][2]=centerZ+clamp(knee[0][2]-centerZ,-.10,.10);knee[1][2]=centerZ+clamp(knee[1][2]-centerZ,-.10,.10);
-  const groinPoints=[];for(let i=0;i<p.length;i+=3)if(p[i+1]>=.36&&p[i+1]<=.52&&Math.abs(p[i]-centerX)<.06&&Math.abs(p[i+2]-centerZ)<.22)groinPoints.push([p[i],p[i+1],p[i+2]]);
-  const groin=[median(groinPoints.map(q=>q[0])),median(groinPoints.map(q=>q[1]))||topY-.04,median(groinPoints.map(q=>q[2]))],depth=topDepth+.012,kneeDepth=Math.max(.035,topDepth*.62);
-  const topFrontLeft=[centerX-topWidth,topY,centerZ+depth],topFrontRight=[centerX+topWidth,topY,centerZ+depth],topBackLeft=[centerX-topWidth,topY,centerZ-depth],topBackRight=[centerX+topWidth,topY,centerZ-depth];
-  const groinFront=[groin[0],groin[1],groin[2]+depth],groinBack=[groin[0],groin[1],groin[2]-depth];
-  const kneeFrontLeft=[knee[0][0]-.01,knee[0][1],knee[0][2]+kneeDepth],kneeFrontRight=[knee[1][0]+.01,knee[1][1],knee[1][2]+kneeDepth],kneeBackLeft=[knee[0][0]-.01,knee[0][1],knee[0][2]-kneeDepth],kneeBackRight=[knee[1][0]+.01,knee[1][1],knee[1][2]-kneeDepth];
-  const tri=(a,b,c)=>{const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2],nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,len=Math.hypot(nx,ny,nz)||1;for(const q of [a,b,c]){positions.push(...q);normals.push(nx/len,ny/len,nz/len);}};
-  const fan=(a,b,g,kl,kr)=>{tri(a,b,g);tri(b,kr,g);tri(kr,kl,g);tri(kl,a,g);};
-  fan(topFrontLeft,topFrontRight,groinFront,kneeFrontLeft,kneeFrontRight);fan(topBackRight,topBackLeft,groinBack,kneeBackRight,kneeBackLeft);
-  tri(topBackLeft,topFrontLeft,kneeFrontLeft);tri(topBackLeft,kneeFrontLeft,kneeBackLeft);tri(topFrontRight,topBackRight,kneeBackRight);tri(topFrontRight,kneeBackRight,kneeFrontRight);
-  return {positions:new Float32Array(positions),normals:new Float32Array(normals),topY,centerX,centerZ,topWidth,topDepth,hemWidth,hemDepth,knee,groin};
-}
-export function hipKneeSkirtBodyMask(data,skirt){
-  const p=data.positions,mask=new Uint8Array(p.length/9),{topY,centerX,topWidth,hemWidth,knee}=skirt,hemY=(knee[0][1]+knee[1][1])/2;
-  const {centerZ,topDepth,hemDepth}=skirt;
-  // Cut only body faces inside the front/back panels, ending at the skirt hem.
-  const inside=(x,y,z)=>{if(y<hemY-.018||y>topY+.018)return false;const t=Math.max(0,Math.min(1,(topY-y)/(topY-hemY))),left=centerX-topWidth+(knee[0][0]-(centerX-hemWidth))*t,right=centerX+topWidth+(knee[1][0]-(centerX+hemWidth))*t,front=centerZ+topDepth+(Math.max(knee[0][2],knee[1][2])+hemDepth-centerZ-topDepth)*t,back=centerZ-topDepth+(Math.min(knee[0][2],knee[1][2])-hemDepth-centerZ+topDepth)*t;return x>=left-.018&&x<=right+.018&&z>=back-.018&&z<=front+.018;};
-  for(let t=0;t<mask.length;t++){const i=t*9,cx=(p[i]+p[i+3]+p[i+6])/3,cy=(p[i+1]+p[i+4]+p[i+7])/3,cz=(p[i+2]+p[i+5]+p[i+8])/3;mask[t]=Number(inside(cx,cy,cz));}
-  return mask;
 }
 export class CityCitizenModels {
   constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/model/',import.meta.url)}={}){
     this.THREE=THREE;this.group=group;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearAnchors=new Map();this.headwearBatches=new Map();this.batches=new Map();this.activeBatches=new Set();this.activeHeadwearBatches=new Set();this.motion=new WeakMap();this.bodyShapeCache=new WeakMap();this.appearanceCache=new WeakMap();this.printMaterials=new Map();this.clock=0;this.frameToken=0;this.ready=false;this.error=null;
     this.matrix=new THREE.Matrix4();this.accessoryMatrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.accessoryOffset=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.lyingRotation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/2);this.color=new THREE.Color();this.dirtColor=new THREE.Color(0x62584b);
-    this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});this.enableWeightMorph(this.material);this.skirtMaterial=this.enableSkirtMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.campaignFlags=new Map();this.campaignFlagMaterials=new Map();this.activeCampaignFlags=new Set();
+    this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});this.enableWeightMorph(this.material);this.dressMaterial=this.enableDressMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.skirtMaterial=this.enableSkirtMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.campaignFlags=new Map();this.campaignFlagMaterials=new Map();this.activeCampaignFlags=new Set();
     // Bias fitted face materials in depth instead of moving each triangle
     // along its flat normal, which tears open seams around knees and ankles.
     this.fittedMaterial=this.enableWeightMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));
@@ -210,28 +180,29 @@ export class CityCitizenModels {
   enableSkirtMorph(material){
     if(!this.THREE.InstancedBufferAttribute)return material;
     material.onBeforeCompile=shader=>{
-      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;');
-      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nfloat skirtHipNormal = smoothstep(0.30, 0.45, position.y) * (1.0 - smoothstep(0.52, 0.61, position.y));\nfloat skirtNormalFit = 1.0 + instanceFat * (0.28 + skirtHipNormal * 0.16);\nobjectNormal.x /= skirtNormalFit;\nobjectNormal.z /= skirtNormalFit;\nobjectNormal = normalize(objectNormal);');
-      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nfloat skirtHipFit = smoothstep(0.30, 0.45, transformed.y) * (1.0 - smoothstep(0.52, 0.61, transformed.y));\nfloat skirtVertexFit = 1.0 + instanceFat * (0.28 + skirtHipFit * 0.16);\ntransformed.x *= skirtVertexFit;\ntransformed.z *= skirtVertexFit;');
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec3 skirtMorph;\nattribute vec3 skirtNormalLinear;\nattribute vec3 skirtNormalQuadratic;');
+      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nobjectNormal = normalize(objectNormal + instanceFat * skirtNormalLinear + instanceFat * instanceFat * skirtNormalQuadratic);');
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed += instanceFat * skirtMorph;');
     };
-    material.customProgramCacheKey=()=> 'citizen-skirt-weight-fit-2';
+    material.customProgramCacheKey=()=> 'citizen-skirt-anatomical-fit-3';
+    return material;
+  }
+  enableDressMorph(material){
+    if(!this.THREE.InstancedBufferAttribute)return material;
+    material.onBeforeCompile=shader=>{
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instanceFat;\nattribute vec2 weightMorph;\nattribute vec3 skirtMorph;\nattribute vec3 skirtNormalLinear;\nattribute vec3 skirtNormalQuadratic;');
+      shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nfloat ringScaleX = 1.0 + instanceFat * weightMorph.x;\nfloat ringScaleZ = 1.0 + instanceFat * weightMorph.y;\nobjectNormal.x /= ringScaleX;\nobjectNormal.z /= ringScaleZ;\nobjectNormal = normalize(objectNormal + instanceFat * skirtNormalLinear + instanceFat * instanceFat * skirtNormalQuadratic);');
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.x *= ringScaleX;\ntransformed.z *= ringScaleZ;\ntransformed += instanceFat * skirtMorph;');
+    };
+    material.customProgramCacheKey=()=> 'citizen-dress-blouse-fitted-skirt-1';
     return material;
   }
   instancedGeometry(source,capacity){
     if(!this.THREE.InstancedBufferAttribute)return source;
     const geometry=source.clone(),positions=geometry.attributes.position;
-    const morphFactors=new Float32Array(positions.count*2);
-    const smooth=(edge0,edge1,value)=>{const t=Math.max(0,Math.min(1,(value-edge0)/(edge1-edge0)));return t*t*(3-2*t);};
-    for(let i=0;i<positions.count;i++){
-      const x=positions.getX(i),y=positions.getY(i),ax=Math.abs(x);
-      const torso=smooth(.40,.53,y)*(1-smooth(.78,.89,y))*(1-smooth(.12,.19,ax));
-      const arm=smooth(.48,.57,y)*(1-smooth(.78,.86,y))*smooth(.09,.16,ax);
-      const leg=smooth(.12,.22,y)*(1-smooth(.42,.52,y))*smooth(.05,.12,ax);
-      const head=smooth(.83,.91,y)*(1-smooth(1.02,1.10,y))*(1-smooth(.06,.12,ax));
-      morphFactors[i*2]=torso*.60+leg*.22;
-      morphFactors[i*2+1]=torso*.60+arm*.40+leg*.46+head*.22;
-    }
-    geometry.setAttribute('weightMorph',new this.THREE.BufferAttribute(morphFactors,2));
+    if(!geometry.attributes.weightMorph){const morphFactors=new Float32Array(positions.count*2);
+      for(let i=0;i<positions.count;i++)morphFactors.set(citizenVertexWeightMorph(positions.getX(i),positions.getY(i)),i*2);
+      geometry.setAttribute('weightMorph',new this.THREE.BufferAttribute(morphFactors,2));}
     geometry.setAttribute('instanceFat',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));geometry.setAttribute('instancePattern',new this.THREE.InstancedBufferAttribute(new Float32Array(capacity),1));return geometry;
   }
   bodyShapeFor(citizen){
@@ -284,18 +255,19 @@ export class CityCitizenModels {
     attribute.needsUpdate=true;mesh.userData.instanceMatrixDirty=false;mesh.userData.matrixDirtyMin=null;mesh.userData.matrixDirtyMax=null;
   }
   printedMaterial(piece,baseColor='#ffffff',printId='hibisco',artPrint=null){
-    if(artPrint)return this.artworkPrintMaterial(artPrint);
-    if(piece==='camisa estampada'||piece==='vestido estampado')return this.tropicalPrintMaterial();
+    const dress=DRESS_PIECES.has(piece);
+    if(artPrint)return this.artworkPrintMaterial(artPrint,dress);
+    if(piece==='camisa estampada'||piece==='vestido estampado')return this.tropicalPrintMaterial(dress);
     return this.legacyPrintedMaterial(piece,baseColor,printId);
   }
-  artworkPrintMaterial(artPrint){
+  artworkPrintMaterial(artPrint,dress=false){
     const key=`artwork-print:${artPrint.cacheKey||artPrint.artId}`;if(this.printMaterials.has(key))return this.printMaterials.get(key);if(typeof document==='undefined'||!this.THREE.CanvasTexture)return this.material;const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const ctx=canvas.getContext('2d'),ink='#352c27',color=/^#[0-9a-f]{6}$/i.test(artPrint.color)?artPrint.color:'#9b5944';ctx.fillStyle='#eee2cc';ctx.fillRect(0,0,128,128);ctx.strokeStyle=ink;ctx.lineWidth=5;ctx.strokeRect(5,5,118,118);
     let texture;if(artPrint.partyFlag){const repaint=()=>{drawPartyFlag(ctx,artPrint.partyFlag,13,13,102,67,()=>{repaint();if(texture)texture.needsUpdate=true;});};repaint();ctx.fillStyle='#f7f0dc';ctx.fillRect(12,84,104,30);ctx.fillStyle=ink;ctx.font='bold 22px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(artPrint.partyNumber??''),64,99,96);}
     else{ctx.fillStyle=color;ctx.fillRect(21,15,86,65);ctx.fillStyle='rgba(255,255,255,.62)';ctx.beginPath();ctx.arc(64,47,22,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.beginPath();if(artPrint.kind==='flags'){ctx.moveTo(38,31);ctx.lineTo(52,31);ctx.lineTo(45,52);ctx.closePath();ctx.moveTo(58,31);ctx.lineTo(72,31);ctx.lineTo(65,52);ctx.closePath();ctx.moveTo(78,31);ctx.lineTo(92,31);ctx.lineTo(85,52);ctx.closePath();}else if(['statue','monument'].includes(artPrint.kind)){ctx.rect(45,35,38,26);ctx.arc(64,28,10,0,Math.PI*2);}else{ctx.moveTo(39,57);ctx.lineTo(47,39);ctx.lineTo(56,54);ctx.lineTo(67,29);ctx.lineTo(79,55);ctx.lineTo(89,43);ctx.lineTo(96,59);ctx.closePath();}ctx.fill();ctx.fillStyle=ink;ctx.font='bold 11px sans-serif';ctx.textAlign='center';const words=String(artPrint.message||'ARTE').split(/\s+/);let lines=[],line='';for(const word of words){if(line&&ctx.measureText(`${line} ${word}`).width>112){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}if(line)lines.push(line);for(let i=0;i<Math.min(3,lines.length);i++)ctx.fillText(lines[i],64,91+i*12,112);}
-    texture??=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;const material=this.enableWeightMorph(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.printMaterials.set(key,material);return material;
+    texture??=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;const material=(dress?this.enableDressMorph.bind(this):this.enableWeightMorph.bind(this))(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.printMaterials.set(key,material);return material;
   }
-  tropicalPrintMaterial(){
-    if(this.printAtlasMaterial)return this.printAtlasMaterial;
+  tropicalPrintMaterial(dress=false){
+    const cacheKey=dress?'dressPrintAtlasMaterial':'printAtlasMaterial';if(this[cacheKey])return this[cacheKey];
     if(typeof document==='undefined'||!this.THREE.CanvasTexture)return this.material;
     const tileSize=128,canvas=document.createElement('canvas');canvas.width=tileSize*TROPICAL_PRINTS.length;canvas.height=tileSize;
     const ctx=canvas.getContext('2d');
@@ -308,7 +280,7 @@ export class CityCitizenModels {
     }
     for(const id of TROPICAL_PRINTS){const key=`camisa estampada:#ffffff:${id}`,temporary=this.printMaterials.get(key);if(temporary){temporary.map?.dispose();temporary.dispose();this.printMaterials.delete(key);}}
     const texture=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;
-    const material=this.enableWeightMorph(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide})),baseCompile=material.onBeforeCompile,baseCacheKey=material.customProgramCacheKey;
+    const material=(dress?this.enableDressMorph.bind(this):this.enableWeightMorph.bind(this))(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide})),baseCompile=material.onBeforeCompile,baseCacheKey=material.customProgramCacheKey;
     material.onBeforeCompile=shader=>{
       shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute float instancePattern;\nvarying float vCitizenPattern;');
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvCitizenPattern = instancePattern;');
@@ -317,7 +289,7 @@ export class CityCitizenModels {
       shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>','#ifdef USE_MAP\n  vec2 patternUv = vec2((mod(floor(vCitizenPattern + 0.5), 6.0) + fract(vMapUv.x * 2.0)) / 6.0, fract(vMapUv.y * 2.0));\n  vec4 tropicalPattern = texture2D(map, patternUv);\n  diffuseColor.rgb = mix(diffuseColor.rgb, tropicalPattern.rgb * vColor, tropicalPattern.a);\n#endif');
     };
     material.customProgramCacheKey=()=>`${baseCacheKey()}:citizen-print-atlas-1`;
-    this.printAtlasMaterial=material;return material;
+    this[cacheKey]=material;return material;
   }
   legacyPrintedMaterial(piece,baseColor='#ffffff',printId='hibisco'){
     const baseHex=typeof baseColor==='number'?`#${baseColor.toString(16).padStart(6,'0')}`:typeof baseColor==='string'&&/^#[0-9a-f]{6}$/i.test(baseColor)?baseColor:'#ffffff',patternId=TROPICAL_PRINTS.includes(printId)?printId:'hibisco',key=`${piece}:${baseHex}:${patternId}`;
@@ -364,26 +336,39 @@ export class CityCitizenModels {
       const geometry=new this.THREE.BufferGeometry();geometry.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new this.THREE.Float32BufferAttribute(data.normals,3));geometry.computeBoundingSphere();this.frames.set(key,geometry);
       const skirtCuts={};
       for(const piece of ['saia','saia longa']){
-        if(key==='use:2'||key.startsWith('sentado_no_')||POSED_SKIRT_FRAMES.has(key)){
-          const mask=posedSkirtMask(data,key);skirtCuts[piece]={mask,parts:splitGarmentSurface(data,mask,piece)};
-        }else{
-          const surface=hipKneeSkirtSurface(data,piece),mask=hipKneeSkirtBodyMask(data,surface),parts=splitGarmentSurface(data,mask,piece);parts.clothes=surface.positions;parts.clothesNormals=surface.normals;skirtCuts[piece]={mask,parts};
-        }
+        const surface=fittedSkirtSurface(data,piece,citizenVertexWeightDelta),mask=surface.bodyMask,parts=splitGarmentSurface(data,mask,piece);
+        parts.clothes=surface.positions;parts.clothesNormals=surface.normals;skirtCuts[piece]={mask,parts,surface};
       }
+      const dressSkirt=skirtCuts.saia.surface,dressMask=new Uint8Array(CITIZEN_BODY_FACE_COUNT),dressTopMask=new Uint8Array(CITIZEN_BODY_FACE_COUNT);
+      for(let i=0;i<dressMask.length;i++){dressMask[i]=Number(Boolean(masks.camisa[i]||dressSkirt.bodyMask[i]));dressTopMask[i]=Number(Boolean(masks.camisa[i]&&!dressSkirt.bodyMask[i]));}
+      const dressBody=splitGarmentSurface(data,dressMask),dressTop=splitGarmentSurface(data,dressTopMask),dressPositions=new Float32Array(dressTop.clothes.length+dressSkirt.positions.length),dressNormals=new Float32Array(dressPositions.length),dressWeightMorph=new Float32Array(dressPositions.length/3*2),dressMorph=new Float32Array(dressPositions.length),dressNormalLinear=new Float32Array(dressPositions.length),dressNormalQuadratic=new Float32Array(dressPositions.length),dressTopVerts=dressTop.clothes.length/3;
+      dressPositions.set(dressTop.clothes);dressPositions.set(dressSkirt.positions,dressTop.clothes.length);dressNormals.set(dressTop.clothesNormals);dressNormals.set(dressSkirt.normals,dressTop.clothesNormals.length);
+      for(let i=0;i<dressTopVerts;i++){const at=i*3;dressWeightMorph.set(citizenVertexWeightMorph(dressPositions[at],dressPositions[at+1]),i*2);}
+      dressMorph.set(dressSkirt.morphDeltas,dressTop.clothes.length);dressNormalLinear.set(dressSkirt.normalLinear,dressTop.clothes.length);dressNormalQuadratic.set(dressSkirt.normalQuadratic,dressTop.clothes.length);
+      const dressAttrs={weightMorph:dressWeightMorph,skirtMorph:dressMorph,skirtNormalLinear:dressNormalLinear,skirtNormalQuadratic:dressNormalQuadratic};
       for(const piece of RENDERED_GARMENTS){
         let parts;
         if(piece==='saia'||piece==='saia longa')parts=skirtCuts[piece].parts;
+        else if(DRESS_PIECES.has(piece))parts={body:dressBody.body,bodyNormals:dressBody.bodyNormals,clothes:dressPositions,clothesNormals:dressNormals};
         else parts=splitGarmentSurface(data,masks[piece],piece);
-        const make=(positions,normals,withUV=false,hideBack=false)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));if(withUV){let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(let v=0;v<positions.length;v+=3){minX=Math.min(minX,positions[v]);maxX=Math.max(maxX,positions[v]);minY=Math.min(minY,positions[v+1]);maxY=Math.max(maxY,positions[v+1]);}const width=Math.max(.001,maxX-minX),height=Math.max(.001,maxY-minY),uv=new Float32Array(positions.length/3*2);for(let v=0,j=0;v<positions.length;v+=3){uv[j++]=hideBack&&normals[v+2]<-.25?2:(positions[v]-minX)/width;uv[j++]=(positions[v+1]-minY)/height;}g.setAttribute('uv',new this.THREE.Float32BufferAttribute(uv,2));}g.computeBoundingSphere();return g;};
+        const make=(positions,normals,withUV=false,hideBack=false,attributes=null)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));if(withUV){let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(let v=0;v<positions.length;v+=3){minX=Math.min(minX,positions[v]);maxX=Math.max(maxX,positions[v]);minY=Math.min(minY,positions[v+1]);maxY=Math.max(maxY,positions[v+1]);}const width=Math.max(.001,maxX-minX),height=Math.max(.001,maxY-minY),uv=new Float32Array(positions.length/3*2);for(let v=0,j=0;v<positions.length;v+=3){uv[j++]=hideBack&&normals[v+2]<-.25?2:(positions[v]-minX)/width;uv[j++]=(positions[v+1]-minY)/height;}g.setAttribute('uv',new this.THREE.Float32BufferAttribute(uv,2));}if(attributes)for(const [name,array]of Object.entries(attributes))g.setAttribute(name,new this.THREE.Float32BufferAttribute(array,name==='weightMorph'?2:3));g.computeBoundingSphere();return g;};
         const printed=PRINTED_GARMENTS.has(piece);
-        const garmentMaterial=printed?this.printedMaterial(piece):SKIRT_PIECES.has(piece)?this.skirtMaterial:this.material;
-        const outfit={body:make(parts.body,parts.bodyNormals),clothes:make(parts.clothes,parts.clothesNormals,printed,piece==='camisa social'),material:garmentMaterial};
+        const garmentMaterial=printed?this.printedMaterial(piece):DRESS_PIECES.has(piece)?this.dressMaterial:SKIRT_PIECES.has(piece)?this.skirtMaterial:this.material;
+        const outfit={body:make(parts.body,parts.bodyNormals),clothes:make(parts.clothes,parts.clothesNormals,printed,piece==='camisa social',DRESS_PIECES.has(piece)?dressAttrs:null),material:garmentMaterial};
+        if(SKIRT_PIECES.has(piece)){
+          const surface=skirtCuts[piece].surface;
+          outfit.clothes.setAttribute('skirtMorph',new this.THREE.Float32BufferAttribute(surface.morphDeltas,3));
+          outfit.clothes.setAttribute('skirtNormalLinear',new this.THREE.Float32BufferAttribute(surface.normalLinear,3));
+          outfit.clothes.setAttribute('skirtNormalQuadratic',new this.THREE.Float32BufferAttribute(surface.normalQuadratic,3));
+        }
         if(['camisa','camisa social','camisa estampada','camiseta','regata','terno','casaco','trapos'].includes(piece))for(const skirtPiece of SKIRT_PIECES){
-          const union=new Uint8Array(skirtCuts[skirtPiece].mask.length),upperMask=masks[piece];for(let i=0;i<union.length;i++)union[i]=Number(skirtCuts[skirtPiece].mask[i]||upperMask[i]);
+          const union=new Uint8Array(skirtCuts[skirtPiece].mask.length),tucked=new Uint8Array(union.length),upperMask=masks[piece];
+          for(let i=0;i<union.length;i++){union[i]=Number(skirtCuts[skirtPiece].mask[i]||upperMask[i]);tucked[i]=Number(upperMask[i]&&!skirtCuts[skirtPiece].mask[i]);}
           const combined=splitGarmentSurface(data,union,piece);outfit[skirtPiece==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']=make(combined.body,combined.bodyNormals);
+          const top=splitGarmentSurface(data,tucked,piece);outfit[skirtPiece==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']=make(top.clothes,top.clothesNormals,printed,piece==='camisa social');
         }
         this.outfits.set(`${key}:${piece}`,outfit);
-        if(LOWER_PIECES.has(piece)||HAND_PIECES.has(piece))this.headwear.set(`${key}:${piece}`,make(parts.clothes,parts.clothesNormals));
+        if(LOWER_PIECES.has(piece)||HAND_PIECES.has(piece))this.headwear.set(`${key}:${piece}`,outfit.clothes);
       }
       for(const piece of HEADWEAR_PIECES){const part=headwearSurface(data,piece),anchorKey=`${key}:${piece}`;this.headwearAnchors.set(anchorKey,part.anchor);if(!this.headwear.has(`static:${piece}`)){const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(part.positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(part.normals,3));g.computeBoundingSphere();this.headwear.set(`static:${piece}`,g);}}
     }
@@ -433,7 +418,7 @@ export class CityCitizenModels {
     else motion.actionToken=null;
     const animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
-    const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}:${garmentMaterial?.uuid||'shared'}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key);
+    const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}:${garmentMaterial?.uuid||'shared'}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key),clothingSource=(lowerSkirt?outfit?.[lowerSkirt==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']:null)||outfit?.clothes;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}this.activeBatches.add(batch);
     if(batch.count===batch.capacity){
       // Citizen bodies are already rendered in shared animation/outfit batches.
@@ -442,7 +427,7 @@ export class CityCitizenModels {
       const capacity=Math.max(32,batch.capacity*2),mesh=new this.THREE.InstancedMesh(this.instancedGeometry(bodySource,capacity),this.material,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;
       if(batch.mesh){for(let i=0;i<batch.count;i++){batch.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);batch.mesh.getColorAt(i,this.color);this.setInstanceColor(mesh,i,this.color);const oldFat=batch.mesh.geometry.attributes.instanceFat,newFat=mesh.geometry.attributes.instanceFat;if(oldFat&&newFat){newFat.array[i]=oldFat.array[i];mesh.userData.instanceFatDirty=true;}const oldPattern=batch.mesh.geometry.attributes.instancePattern,newPattern=mesh.geometry.attributes.instancePattern;if(oldPattern&&newPattern){newPattern.array[i]=oldPattern.array[i];mesh.userData.instancePatternDirty=true;}}if(batch.count){mesh.userData.instanceMatrixDirty=true;mesh.userData.matrixDirtyMin=0;mesh.userData.matrixDirtyMax=batch.count-1;}this.group.remove(batch.mesh);batch.mesh.dispose();}
       this.group.add(mesh);batch.mesh=mesh;
-      if(outfit){const clothing=new this.THREE.InstancedMesh(this.instancedGeometry(outfit.clothes,capacity),garmentMaterial||outfit.material||this.material,capacity);clothing.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);clothing.frustumCulled=false;clothing.castShadow=false;clothing.receiveShadow=false;
+      if(outfit){const clothing=new this.THREE.InstancedMesh(this.instancedGeometry(clothingSource,capacity),garmentMaterial||outfit.material||this.material,capacity);clothing.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);clothing.frustumCulled=false;clothing.castShadow=false;clothing.receiveShadow=false;
         if(batch.clothingMesh){for(let i=0;i<batch.count;i++){batch.clothingMesh.getMatrixAt(i,this.matrix);clothing.setMatrixAt(i,this.matrix);batch.clothingMesh.getColorAt(i,this.color);this.setInstanceColor(clothing,i,this.color);const oldFat=batch.clothingMesh.geometry.attributes.instanceFat,newFat=clothing.geometry.attributes.instanceFat;if(oldFat&&newFat){newFat.array[i]=oldFat.array[i];clothing.userData.instanceFatDirty=true;}const oldPattern=batch.clothingMesh.geometry.attributes.instancePattern,newPattern=clothing.geometry.attributes.instancePattern;if(oldPattern&&newPattern){newPattern.array[i]=oldPattern.array[i];clothing.userData.instancePatternDirty=true;}}if(batch.count){clothing.userData.instanceMatrixDirty=true;clothing.userData.matrixDirtyMin=0;clothing.userData.matrixDirtyMax=batch.count-1;}this.group.remove(batch.clothingMesh);batch.clothingMesh.dispose();}
         this.group.add(clothing);batch.clothingMesh=clothing;
       }batch.capacity=capacity;
