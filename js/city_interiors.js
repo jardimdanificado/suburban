@@ -112,6 +112,9 @@ export function syncCitizenInterior(city,c){
  // An outdoor citizen with no indoor activity has nothing to release or route.
  // Avoid resolving buildings and construction projects on every movement tick.
  if(!s&&(c.entity.destroyed||c.mobilityTrip||c.ridingVehicleId||c.path.length&&!queued||c.deliveryId||!INDOOR_TASKS.has(task)))return true;
+ // Outdoor interview sites have no interior state to synchronize; skip the
+ // normalization and room lookup repeated by both task and shared sync passes.
+ if(!s&&task==='job-interview'&&city.building(c.targetId)?.constructionKind==='open-air')return true;
  normalizeInterior(city,c);
  if(task==='police-investigation')return true;
  if(task==='custody-water'&&c.custodyWaterDelivery&&s?.buildingId===c.custodyWaterDelivery.jailId)return !s.exiting&&!s.path.length;

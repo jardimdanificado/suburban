@@ -9,6 +9,11 @@ function fixture(){
  city.economy.leaveJob(c);career(c).applications=[];city.economy.configureEmployment(b.id,{minSkill:0,minExperienceMinutes:0,minRating:0});
  return {city,b,c};
 }
+function staffLaborAgency(city){
+ city.politics.ensureSecretaries();const office=city.politics.secretaries.find(row=>row.officeId==='labor'),secretary=city.society.citizen(office?.citizenId);
+ assert(secretary&&office?.buildingId,'career application tests need an appointed labor secretary');
+ secretary.task='work';secretary.indoorLocation={buildingId:office.buildingId,unitId:city.building(office.buildingId)?.units[0]?.id||1,path:[],exiting:false};
+}
 test('companies have individual salary bases, respect the minimum and accept employment policy changes',()=>{
  const {city,b}=fixture(),other=city.buildings.find(f=>f.type==='builder');
  assert.notEqual(b.baseWage,other.baseWage);
@@ -31,6 +36,7 @@ test('higher pay improves motivation and efficiency; lack of payment never grant
 });
 test('strict recruitment rejects unproven experience and entry-level jobs allow training',()=>{
  const {city,b,c}=fixture();city.minute=600;
+ staffLaborAgency(city);
  city.economy.configureEmployment(b.id,{minSkill:90,minExperienceMinutes:480,minRating:60,allowTraining:false});
  const a=apply(city,c,b);assert.equal(a.status,'reprovado');assert.match(a.reason,/experiência comprovada/);
  city.economy.configureEmployment(b.id,{minExperienceMinutes:0,minRating:0,allowTraining:true});assert(qualification(city,c,b).trainee);
@@ -41,14 +47,14 @@ test('employed candidates wait for selection and switch only after a better offe
  for(const f of city.buildings){f.workers=f.workers.filter(id=>id===city.economy.mayorId);f.jobs=f.workers.length;}
  c.jobId=old.id;old.workers.push(c.id);old.jobs=old.workers.length;b.jobs=1;
  city.economy.configureEmployment(old.id,{baseWage:5});city.economy.configureEmployment(b.id,{baseWage:20});
- city.economy.staffEssentials=()=>{};career(c).nextSearchAt=0;
+ staffLaborAgency(city);city.economy.staffEssentials=()=>{};career(c).nextSearchAt=0;
  c.entity.x=b.door.x;c.entity.y=b.door.y;discoverVacancies(city,c,true);
  reviewMarket(city,[b]);const application=career(c).applications.at(-1);assert.equal(application.status,'análise');
  city.economy.hire();assert.equal(c.jobId,old.id);
  assert(routeToInterview(city,c)===false);
  city.minute=application.interviewAt-20;assert(routeToInterview(city,c));finishActivityRoute(city,c);
  city.minute=application.interviewAt;advanceRecruitment(city);assert.equal(c.jobId,old.id);
- city.minute=application.decideAt;city.economy.hire();assert.equal(c.jobId,b.id);assert.equal(application.status,'aprovado');assert(!old.workers.includes(c.id));assert.equal(b.workers.filter(id=>id===c.id).length,1);
+ city.minute=application.decideAt;advanceRecruitment(city);city.minute=application.resultDueAt;advanceRecruitment(city);city.economy.hire();assert.equal(c.jobId,b.id);assert.equal(application.status,'aprovado');assert(!old.workers.includes(c.id));assert.equal(b.workers.filter(id=>id===c.id).length,1);
 });
 test('resume renders career and selection records without relying on old events',()=>{
  const {city,b,c}=fixture();contract(city,c,b);apply(city,c,b);const labels=[];

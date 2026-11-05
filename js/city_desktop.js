@@ -1,6 +1,6 @@
 import {CityGlobalSearch} from './city_global_search.js?v=organic-party-slogans-1';
 import {desktopMenus} from './city_desktop_menus.js?v=freecam-tools-2';
-import {CityUI,money} from './city_ui.js?v=perf-employment-ui-2';
+import {CityUI,money} from './city_ui.js?v=artwork-object-inspector-1';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js';
@@ -142,8 +142,9 @@ export class CityDesktop {
     for(const window of this.manager.windows){window.state.selectedProjectId=null;if(window.state.interiorView&&window.state.interiorView.buildingId!==entity?.id)window.state.setInteriorView(null);}
     if(!entity)this.lastSelected=null;
     if(entity?.properties?.cityPlant){const state=this.create(`plant:${entity.id}`,'city',{title:entity.properties.name,entity,kind:'dossier'});state.detailTab='botany';state.resetScroll();this.lastSelected=entity;return;}
-    if(!entity)return;const citizen=entity.properties?.citizen,building=entity.properties?.cityBuilding;if(!citizen&&!building&&!entity.properties?.cityVehicle)return;
+    if(!entity)return;const citizen=entity.properties?.citizen,building=entity.properties?.cityBuilding,artwork=entity.properties?.cityUrbanArt;if(!citizen&&!building&&!entity.properties?.cityVehicle&&!artwork)return;
     if(entity.properties.cityVehicle){const state=this.create(`vehicle:${entity.id}`,'transport',{title:entity.properties.name,entity,kind:'dossier'});this.lastSelected=entity;return;}
+    if(artwork){this.create(`artwork:${artwork.id}`,'urban-art',{title:entity.properties.name,entity,kind:'dossier'});this.lastSelected=entity;return;}
     const state=this.create(`${citizen?'person':'building'}:${entity.id}`,citizen?'people':'buildings',{title:entity.properties.name,entity,unitId,kind:'dossier'});
     if(unitId){state.unitId=unitId;state.detailTab='units';}this.lastSelected=entity;
   }

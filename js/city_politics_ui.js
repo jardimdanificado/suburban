@@ -12,7 +12,7 @@ import {approvalReport} from './city_political_institutions.js';
 import { formatMoney } from './city_ui_format.js';
 import { drawPartyFlag } from './city_party_flags.js';
 import { fitText } from './city_ui_widgets.js';
-import { PROMISE_METRICS,GOVERNMENT_INITIATIVES } from './city_mandates.js';
+import { PROMISE_METRICS,GOVERNMENT_INITIATIVES } from './city_mandates.js?v=mandate-one-pass-1';
 import { CRIME_TYPES } from './city_justice.js';
 import {recentBusinessRevenue} from './city_government_performance.js';
 import {PREJUDICE_TYPES} from './city_prejudice.js?v=discrimination-laws-1';

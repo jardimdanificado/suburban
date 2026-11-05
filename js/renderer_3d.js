@@ -13,7 +13,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=street-facing-public-art-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=artwork-paintings-no-title-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-combined-surface-6';
@@ -5885,13 +5885,18 @@ export class RCT3DRenderer {
 
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
-      if (!e || e.destroyed || !e.properties || !e.properties.render || e.properties.species === "effect") continue;
+      if (!e || e.destroyed || !e.properties || (!e.properties.render&&!e.properties.cityUrbanArt) || e.properties.species === "effect") continue;
 
       if(e.properties.cityBuilding?.officeTenantOf)continue;
       if(e.properties.cityVehicle){
         const v=e.properties.cityVehicle,h=v.altitude??1,length=v.good==='carrinho'?.95:v.good==='bicicleta_carga'?1:v.good==='patins'?.3:v.good==='bicicleta'?.72:.55,halfWidth=v.good==='carrinho'||v.good==='bicicleta_carga'?.4:.24,sin=Math.abs(Math.sin(v.angle||0)),cos=Math.abs(Math.cos(v.angle||0)),ex=sin*length+cos*halfWidth,ez=cos*length+sin*halfWidth;
         const box=new THREE.Box3(new THREE.Vector3(e.x-ex,h,e.y-ez),new THREE.Vector3(e.x+ex,h+.95,e.y+ez)),hit=ray.intersectBox(box,new THREE.Vector3());
         if(hit){const d=ray.origin.distanceTo(hit);if(d<closestDist){closestDist=d;bestEntId=e.id;this.selectedCityUnitId=null;}}continue;
+      }
+      if(e.properties.cityUrbanArt){
+        const group=this.urbanArtMeshes?.get(e.properties.cityUrbanArt.id);
+        if(group?.visible){group.updateWorldMatrix(true,true);const hit=this.raycaster.intersectObject(group,true)[0];if(hit&&hit.distance<closestDist){closestDist=hit.distance;bestEntId=e.id;this.selectedCityUnitId=null;}}
+        continue;
       }
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;

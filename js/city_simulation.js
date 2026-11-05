@@ -9,10 +9,10 @@ import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_office
 import {applySalesTax,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
 import {recordMarketTransaction} from './city_wealth.js';
-import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=roadside-ad-placards-1';
+import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-one-pass-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=employment-search-phase-6';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=vacancy-score-precompute-1';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
@@ -27,11 +27,11 @@ import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_cultu
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
 import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
-import { CityGovernment as CityPolitics } from './city_government.js?v=no-party-slogans-1';
+import { CityGovernment as CityPolitics } from './city_government.js?v=secretary-pool-one-pass-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=activity-cell-early-reservation-3';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=outdoor-interview-sync-shortcut-1';
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';
@@ -48,7 +48,7 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=fixe
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
 import { CityGigs } from './city_gigs.js?v=artwork-solid-wall-support-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=publisher-demand-scan-2';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=update-demand-index-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=citizen-id-index-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
 
@@ -789,6 +789,7 @@ export class CitySimulation {
     if(c.task==='lake-water'){this.supplies.collectLake(c);return;}
     if(!syncCitizenInterior(this,c))return;
     if(this.substances?.perform(c))return;
+    if(c.task==='job-interview'){c.action='Na entrevista da Secretaria do Trabalho';return;}
     if(c.task==='justice-report'){this.justice.arriveToReport(c);return;}
     if(c.task==='supplies'){this.supplies.arrive(c);return;}
     if(c.task==='council-session'){this.politics.council.getChamber().arrive(c);return;}
@@ -796,7 +797,6 @@ export class CitySimulation {
     if(c.task==='research'){this.politics.getResearch().fieldWork(c);return;}
     if(c.task==='interview'){this.politics.getResearch().respondentWait(c);return;}
     if(c.task==='campaign-media'){c.action='Participando presencialmente de debate ou entrevista no jornal';return;}
-    if(c.task==='job-interview'){c.action='Na entrevista da Secretaria do Trabalho';return;}
     if(c.task==='vote'){this.politics.voting.arrive(c);return;}
     if(c.task==='campaign'){this.politics.campaigns.arrive(c);return;}
     if(c.task==='visit'){this.relationships.arrive(c);return;}

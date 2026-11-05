@@ -7,15 +7,15 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=daily-mayor-privatization-1';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=deep-perf-3';
 import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
-import {outdoorCellReady,workCellReady} from './city_interiors.js?v=activity-cell-early-reservation-3';
+import {outdoorCellReady,workCellReady} from './city_interiors.js?v=outdoor-interview-sync-shortcut-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=employment-search-phase-6';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=vacancy-score-precompute-1';
 import {productionPlan,investProductionPlan} from './city_production_planner.js?v=investment-founder-precompute-1';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=party-apparel-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
-import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js?v=roadside-ad-placards-1';
+import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js?v=market-one-pass-1';
 import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=cleaner-capacity-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -282,9 +282,18 @@ export class CityEconomy {
     const population = activeCitizens.length;
     const businesses = this.businesses;
     for(const b of businesses)if(b.type==='cleaner')b.jobs=Math.max(b.jobs||0,businessJobCapacity('cleaner',3,b.floors));
-    const farms = businesses.filter(b => b.type === 'farm');
     const buyers = businesses.filter(b => retailTypes.has(b.type));
-    const industrialBusinesses = businesses.filter(b => INDUSTRIES[b.type]);
+    const businessCounts=new Map(),businessesByType=new Map(),farmsByCrop=new Map(),buyersByCrop=new Map(),activeBuildingCounts=new Map();
+    for(const b of businesses){businessCounts.set(b.type,(businessCounts.get(b.type)||0)+1);let group=businessesByType.get(b.type);if(!group)businessesByType.set(b.type,group=[]);group.push(b);if(b.type==='farm'){let cropGroup=farmsByCrop.get(b.crop);if(!cropGroup)farmsByCrop.set(b.crop,cropGroup=[]);cropGroup.push(b);}}
+    for(const b of buyers)for(const crop of Object.keys(CROPS))if(this.accepts(b,crop))buyersByCrop.set(crop,(buyersByCrop.get(crop)||0)+1);
+    for(const b of this.city.buildings)if(b.active&&!b.entity.destroyed)activeBuildingCounts.set(b.type,(activeBuildingCounts.get(b.type)||0)+1);
+    let wealthy=0,activeAdults=0;for(const c of activeCitizens){if((c.balance||0)>=this.city.currency.price(12000))wealthy++;if(this.city.society.isAdult(c))activeAdults++;}
+    const grainConsumers=businesses.filter(b=>b.type==='bakery'||INDUSTRIES[b.type]?.inputs.trigo).length;
+    const pendingFarmCapacityByCrop=new Map();
+    for(const p of this.city.development.projects)if(p.type==='farm'&&CROPS[p.crop]&&!p.cancelled&&p.status!=='completed'){
+      const area=Math.max(1,(p.width||10)*(p.depth||10)-2),staff=Math.ceil(area/18)+(p.accountId==='treasury'?0:1),labor=Math.ceil(area*ECONOMY_RULES.farmLabor/12),cycle=Math.max(CROPS[p.crop].grow,labor/staff),capacity=Math.floor(area*540/(cycle+CROPS[p.crop].grow));
+      pendingFarmCapacityByCrop.set(p.crop,(pendingFarmCapacityByCrop.get(p.crop)||0)+capacity);
+    }
     for (const b of businesses) b.inputDemand = b.type==='kitchen'?Object.fromEntries([...new Set(KITCHEN_RECIPES.flatMap(r=>Object.keys(r.inputs)))].map(g=>[g,Math.max(0,18-(b.inventory[g]||0)-(b.incoming[g]||0))])):b.type==='mill'?{girassol:Math.max(0,36-b.inventory.girassol-(b.incoming.girassol||0))}:INDUSTRIES[b.type] ? Object.fromEntries(Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs).map(([g,n])=>[g,Math.max(0,(b.type==='cycle_assembler'?n*Math.max(6,b.vehicleBatchSize||3):b.type==='publisher'&&g==='papel'?Math.max(12,(b.bookPages||5)*3):n*6)-b.inventory[g]-(b.incoming[g]||0))])) : b.type === 'bakery' ? { trigo: Math.max(0, 24 - b.inventory.trigo) } : b.type==='restaurant' ? Object.fromEntries(restaurantGoods.map(g=>[g,Math.max(0,6-b.inventory[g]-(b.incoming[g]||0))])) : ['market','greengrocer'].includes(b.type) ? Object.fromEntries(this.retailAssortment(b).map(g=>[g,Math.max(0,12-(b.inventory[g]||0)-(b.incoming[g]||0))])) : !retailTypes.has(b.type) ? {} : Object.fromEntries(edible.filter(g => this.accepts(b, g)).map(g => [g, Math.max(0, 12 - b.inventory[g])]));
     for(const b of businesses)if(b.type==='bar')b.inputDemand=Object.fromEntries(ALCOHOL_DRINKS.map(g=>[g,Math.max(0,6-(b.inventory[g]||0)-(b.incoming[g]||0))]));
     for(const b of this.city.buildings)if(b.active&&!b.entity.destroyed&&(civicSpec(b)||justiceServiceSpec(b)))b.inputDemand=Object.fromEntries(Object.entries(b.type==='library'?{livros:1}:(civicSpec(b)||justiceServiceSpec(b)).inputs).map(([g,n])=>[g,Math.max(0,n*6-(b.inventory[g]||0)-(b.incoming[g]||0))]));
@@ -314,7 +323,7 @@ export class CityEconomy {
     };
     const items=[{type:'mill',crop:null,score:oilGap?Math.min(300,200+oilGap*2):0,required:oil.oilRequired,supply:oil.millDaily,stock:oil.oilStock,reason:`Postes precisam de ${oil.daily} óleos/dia; ${oil.empty} vazios. ${oil.bottleneck}`}];
     const facilities = [...this.city.sanitation.facilities.values()], waste = this.city.buildings.reduce((n, b) => n + (b.inventory.lixo || 0) + (b.litter || 0), 0);
-    for (const [type, needed, reason] of [ ['paid_toilet', facilities.length >= 3, 'Demanda por banheiros limpos e acessíveis']]) items.push({ type, crop: null, score: !needed ? 0 : !businesses.some(b=>b.type===type)?95:Math.max(0,(type==='cleaner'?facilities.filter(f=>f.cleanliness<65).length:type==='paid_toilet'?facilities.length:waste/4)*18-businesses.filter(b=>b.type===type).reduce((n,b)=>n+Math.max(1,b.workers.length)*40,0)), reason });
+    for (const [type, needed, reason] of [ ['paid_toilet', facilities.length >= 3, 'Demanda por banheiros limpos e acessíveis']]) items.push({ type, crop: null, score: !needed ? 0 : !(businessCounts.get(type)||0)?95:Math.max(0,(type==='cleaner'?facilities.filter(f=>f.cleanliness<65).length:type==='paid_toilet'?facilities.length:waste/4)*18-(businessesByType.get(type)||[]).reduce((n,b)=>n+Math.max(1,b.workers.length)*40,0)), reason });
     const lampDemand=this.serviceInvestment.demand('lamp_service');items.push({type:'lamp_service',crop:null,score:lampDemand.score,required:lampDemand.work,supply:lampDemand.capacity,stock:0,reason:`${lampDemand.count} postes aguardam óleo; ${lampDemand.staff} abastecedores`});
     const offices=officeSpaceDemand(this.city),officeDemand=this.city.citizens.length>=64&&offices.missing>0;items.push({type:'office_tower',crop:null,score:officeDemand?Math.min(300,100+offices.missing*35):0,required:offices.needed,supply:offices.vacant,stock:offices.planned,reason:`${offices.needed} andares necessários (${offices.missingFirms} empresas e ${offices.headquarters} sedes), ${offices.vacant} livres e ${offices.planned} em obras.`});
     const transport = this.city.logistics.demandMetrics();
@@ -325,8 +334,7 @@ export class CityEconomy {
       items.push({type,crop:null,score:service.score,required:service.work,supply:service.capacity,stock:0,reason:`${service.count} ${type==='cleaner'?'banheiros sujos ou focos de fezes':type==='builder'?'obras pendentes':'unidades de lixo para atender'}; ${service.staff} profissionais; ${service.work} minutos de trabalho pendente`});
     }
     for (const type of ['market', 'greengrocer', 'bakery', 'restaurant']) {
-      const count = businesses.filter(b => b.type === type).length;
-      const wealthy=activeCitizens.filter(c=>(c.balance||0)>=this.city.currency.price(12000)).length;
+      const count = businessCounts.get(type)||0;
       // Retail capacity should grow only after its service area exists. A
       // forced minimum of one opened markets and groceries in tiny towns
       // already fully served by the public refectory, leaving them with wages
@@ -339,26 +347,18 @@ export class CityEconomy {
     const foodWeights=Object.fromEntries(stapleCrops.map(g=>[g,population*.35+(foodPreferenceByGood.get(g)||0)]));
     const totalFoodWeight=Object.values(foodWeights).reduce((n,v)=>n+v,0)||1;
     for (const [crop, spec] of Object.entries(CROPS)) {
-      const producers = farms.filter(b => b.crop === crop);
+      const producers = farmsByCrop.get(crop)||[];
       const stock = stockByGood.get(crop) || 0;
-      const bakeries = crop === 'trigo' ? businesses.filter(b => b.type === 'bakery').length : 0;
+      const bakeries = crop === 'trigo' ? businessCounts.get('bakery')||0 : 0;
       const processingNeed=inputDemandByGood.get(crop)||0;
-      const grainConsumers=businesses.filter(b=>b.type==='bakery'||INDUSTRIES[b.type]?.inputs.trigo).length;
-      const downstream = crop === 'trigo' ? grainConsumers : buyers.filter(b => this.accepts(b, crop)).length;
+      const downstream = crop === 'trigo' ? grainConsumers : buyersByCrop.get(crop)||0;
       const substanceNeed=spec.nonFood&&spec.substance?(this.city.substances?.law(spec.substance)?.regime==='prohibited'&&!(crop==='flor_cannabis'&&this.city.substances?.law('canhamo')?.regime!=='prohibited')?0:Math.ceil(population*(SUBSTANCES[spec.substance]?.popularity||.2)*.8)+processingNeed):null;
       const dailyNeed = substanceNeed??(crop === 'trigo' ? Math.ceil(Math.max(population*(bakeries?2:.5),processingNeed)) : crop==='girassol'?Math.max(oil.sunflowerRequired,processingNeed):Math.ceil(population*6*(foodWeights[crop]||0)/totalFoodWeight)+processingNeed);
       const capacity = producers.reduce((n,b)=>n+this.farmCapacity(b,true).daily,0);
       // A shop's refill target is not population consumption: treating every
       // empty shelf as new demand made one small town open farms for every crop.
       // Count active fields and projects against the crop's per-capita need.
-      const pendingCropCapacity = this.city.development.projects
-        .filter(p => p.type === 'farm' && p.crop === crop && !p.cancelled && p.status !== 'completed')
-        .reduce((n,p) => {
-          const area=Math.max(1,(p.width||10)*(p.depth||10)-2),staff=Math.ceil(area/18)+(p.accountId==='treasury'?0:1);
-          const labor=Math.ceil(area*ECONOMY_RULES.farmLabor/12);
-          const cycle=Math.max(CROPS[crop].grow,labor/staff);
-          return n+Math.floor(area*540/(cycle+CROPS[crop].grow));
-        },0);
+      const pendingCropCapacity = pendingFarmCapacityByCrop.get(crop)||0;
       const effectiveSupply = capacity + pendingCropCapacity;
       const coverage=dailyNeed>0?(effectiveSupply+stock)/dailyNeed:1;
       const score = crop==='girassol'&&dailyNeed>effectiveSupply+stock?Math.min(310,210+(dailyNeed-effectiveSupply-stock)*.5):dailyNeed === 0 ? 0 : effectiveSupply >= dailyNeed ? 0
@@ -366,16 +366,16 @@ export class CityEconomy {
         : coverage<.9 ? Math.min(125,100+Math.max(0,1-coverage)*20) : 0;
       items.push({ type: 'farm', crop, score, required: dailyNeed, supply: capacity, stock, reason: crop === 'trigo' && downstream ? 'Padarias precisam de trigo' : downstream ? `Lojas precisam de ${spec.label.toLowerCase()}` : 'Diversidade da alimentação local' });
     }
-    for(const [type,spec]of Object.entries(CIVIC_SERVICES)){const count=this.city.buildings.filter(b=>b.type===type&&b.active&&!b.entity.destroyed).length,target=Math.max(1,Math.ceil(population/spec.population));items.push({type,crop:null,score:Math.max(0,target-count)*120,required:target,supply:count,stock:0,reason:spec.need==='health'?'Capacidade hospitalar e cuidados com recursos reais':'Acesso a lazer, esporte e cultura'});}
-    for(const [type,needed,reason]of [['iml',this.city.justice?.bodies.some(b=>b.status==='waiting'||b.status==='transporting'||b.status==='autopsy'),'Remoção e autópsia de corpos pendentes'],['crematorium',this.city.justice?.bodies.some(b=>b.status==='cremation-wait'||b.status==='cremation-transporting'||b.status==='cremating'),'Cremação de corpos após a autópsia']])if(needed){const count=this.city.buildings.filter(b=>b.type===type&&b.active&&!b.entity.destroyed).length;items.push({type,crop:null,score:count?0:220,required:1,supply:count,stock:0,reason});}
-    for(const [type,needed,reason]of [['police_station',this.city.justice?.cases.some(c=>['unreported','reporting','reported','investigating','arrest-requested'].includes(c.status)),'Atendimento e investigação de ocorrências'],['jail',this.city.justice?.cases.some(c=>(['arrested','arrest-requested'].includes(c.status)||c.status==='convicted'&&c.sentence?.completedAt==null&&c.sentence?.suspendedAt==null)&&!c.rule.fineOnly),'Custódia de pessoas presas'],['courthouse',this.city.justice?.cases.some(c=>['charged','trial'].includes(c.status)),'Julgamento de processos criminais']])if(needed){const count=this.city.buildings.filter(b=>b.type===type&&b.active&&!b.entity.destroyed).length;items.push({type,crop:null,score:count?0:240,required:1,supply:count,stock:0,reason});}
+    for(const [type,spec]of Object.entries(CIVIC_SERVICES)){const count=activeBuildingCounts.get(type)||0,target=Math.max(1,Math.ceil(population/spec.population));items.push({type,crop:null,score:Math.max(0,target-count)*120,required:target,supply:count,stock:0,reason:spec.need==='health'?'Capacidade hospitalar e cuidados com recursos reais':'Acesso a lazer, esporte e cultura'});}
+    for(const [type,needed,reason]of [['iml',this.city.justice?.bodies.some(b=>b.status==='waiting'||b.status==='transporting'||b.status==='autopsy'),'Remoção e autópsia de corpos pendentes'],['crematorium',this.city.justice?.bodies.some(b=>b.status==='cremation-wait'||b.status==='cremation-transporting'||b.status==='cremating'),'Cremação de corpos após a autópsia']])if(needed){const count=activeBuildingCounts.get(type)||0;items.push({type,crop:null,score:count?0:220,required:1,supply:count,stock:0,reason});}
+    for(const [type,needed,reason]of [['police_station',this.city.justice?.cases.some(c=>['unreported','reporting','reported','investigating','arrest-requested'].includes(c.status)),'Atendimento e investigação de ocorrências'],['jail',this.city.justice?.cases.some(c=>(['arrested','arrest-requested'].includes(c.status)||c.status==='convicted'&&c.sentence?.completedAt==null&&c.sentence?.suspendedAt==null)&&!c.rule.fineOnly),'Custódia de pessoas presas'],['courthouse',this.city.justice?.cases.some(c=>['charged','trial'].includes(c.status)),'Julgamento de processos criminais']])if(needed){const count=activeBuildingCounts.get(type)||0;items.push({type,crop:null,score:count?0:240,required:1,supply:count,stock:0,reason});}
     for (const [type,spec] of Object.entries(INDUSTRIES)) {
       if(type==='composting')continue;
-      if(type==='bar'){const count=businesses.filter(b=>b.type==='bar').length,activeAdults=activeCitizens.filter(c=>this.city.society.isAdult(c)).length;items.push({type,crop:null,score:count?0:activeAdults>=24?Math.min(150,90+activeAdults*.2):0,required:activeAdults>=24?1:0,supply:count,stock:stockByGood.get('cerveja')||0,reason:'Ponto de encontro para conversar, relaxar e consumir bebidas de marcas locais.'});continue;}
-      if(['cycle_shop','sports_shop','cycle_workshop','bicycle_rental'].includes(type)){const count=businesses.filter(b=>b.type===type).length,target=type==='bicycle_rental'?Math.max(1,Math.ceil(population/400)):Math.max(1,Math.ceil(population/300));items.push({type,crop:null,score:count<target?110:0,required:target,supply:count,stock:0,reason:'Mobilidade individual: bicicletas, patins, lojas, aluguel e reparos.'});continue;}
-      if(type==='domestic_trader'||type==='import_exporter'){const firms=businesses.filter(b=>b.type===type),activeTrade=type==='domestic_trader'?businesses.length>=5:(this.externalTrade?.imports||0)+(this.externalTrade?.sales||0)>0||Object.values(this.market||{}).some(row=>row.demand>0);items.push({type,crop:null,score:firms.length?0:activeTrade?115:0,required:activeTrade?1:0,supply:firms.length,stock:0,reason:spec.impact});continue;}
+      if(type==='bar'){const count=businessCounts.get(type)||0;items.push({type,crop:null,score:count?0:activeAdults>=24?Math.min(150,90+activeAdults*.2):0,required:activeAdults>=24?1:0,supply:count,stock:stockByGood.get('cerveja')||0,reason:'Ponto de encontro para conversar, relaxar e consumir bebidas de marcas locais.'});continue;}
+      if(['cycle_shop','sports_shop','cycle_workshop','bicycle_rental'].includes(type)){const count=businessCounts.get(type)||0,target=type==='bicycle_rental'?Math.max(1,Math.ceil(population/400)):Math.max(1,Math.ceil(population/300));items.push({type,crop:null,score:count<target?110:0,required:target,supply:count,stock:0,reason:'Mobilidade individual: bicicletas, patins, lojas, aluguel e reparos.'});continue;}
+      if(type==='domestic_trader'||type==='import_exporter'){const firms=businessesByType.get(type)||[],activeTrade=type==='domestic_trader'?businesses.length>=5:(this.externalTrade?.imports||0)+(this.externalTrade?.sales||0)>0||Object.values(this.market||{}).some(row=>row.demand>0);items.push({type,crop:null,score:firms.length?0:activeTrade?115:0,required:activeTrade?1:0,supply:firms.length,stock:0,reason:spec.impact});continue;}
       if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
-      const firms=businesses.filter(b=>b.type===type);
+      const firms=businessesByType.get(type)||[];
       const alcoholShares={alcool:.36,cerveja:.36,vinho:.18,tequila:.10};
       const substanceNeed=Object.keys(spec.outputs).reduce((n,g)=>{const id=SUBSTANCE_CONTROLLED_GOODS[g]||g,substance=SUBSTANCES[id];return n+(substance&&this.city.substances?.law(id)?.regime!=='prohibited'?population*substance.popularity*.65*(id==='alcool'?(alcoholShares[g]||0):1):0);},0);
       const needed=substanceNeed+(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?publisherNeed(g):population*.3):INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);

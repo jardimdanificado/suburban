@@ -1,4 +1,4 @@
-import {PROMISE_METRICS,describePromise} from './city_mandates.js';
+import {PROMISE_METRICS,describePromise} from './city_mandates.js?v=mandate-one-pass-1';
 import {renderEventTimeline,renderEventSummary,eventTypeLabel} from './city_event_timeline_ui.js?v=carpool-color-aversion-16';
 import {formatMoney} from './city_ui_format.js';
 import {EVENT_CATEGORIES} from './city_society.js?v=perf-adult-check-1';

@@ -1,5 +1,5 @@
 import {CityCampaignMaterials} from './city_campaign_materials.js?v=no-party-slogans-1';
-import {describePromise} from './city_mandates.js';
+import {describePromise} from './city_mandates.js?v=mandate-one-pass-1';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {issuePartyCap} from './city_party_caps.js?v=party-apparel-1';
 import {SUBSTANCES} from './city_substance_catalog.js';

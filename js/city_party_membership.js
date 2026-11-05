@@ -1,4 +1,4 @@
-import {promiseRelevant} from './city_mandates.js';
+import {promiseRelevant} from './city_mandates.js?v=mandate-one-pass-1';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-apparel-1';
 import {politicalPosition} from './city_ideology.js';

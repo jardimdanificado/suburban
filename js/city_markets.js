@@ -66,13 +66,26 @@ export function discoverStreetMarket(economy,c,point){
 export function updateMarket(economy){
   const city=economy.city,people=city.citizens.filter(c=>!c.entity.destroyed),firms=economy.businesses;
   economy.market??={};
+  // Gather values shared by every good once. The old per-good reductions
+  // walked all businesses, projects, and building inventories repeatedly.
+  const foodGoods=new Set(city.workMeals.foodGoods()),likesByGood=Object.create(null),inputDemandByGood=Object.create(null),stockByGood=Object.create(null);
+  const consumerByGood=Object.create(null);
+  for(const spec of Object.values(INDUSTRIES))if(spec.use&&spec.outputs)for(const good of Object.keys(spec.outputs))if(!consumerByGood[good])consumerByGood[good]=spec;
+  const specialGoods=new Set(['livros','panfletos','cesta','carrinho']),needsUsed=new Set(Object.entries(consumerByGood).filter(([good])=>!specialGoods.has(good)).map(([,spec])=>spec.use.need)),wantsByNeed=new Map();
+  for(const need of needsUsed)wantsByNeed.set(need,people.reduce((count,c)=>count+(c.needs[need]<80?1:0),0));
+  let wantsCestas=0,wantsCarrinhos=0;
+  if(consumerByGood.cesta||consumerByGood.carrinho)for(const c of people){const capacity=city.vehicles?.cargoCapacity(c)??carryCapacity(c);if(capacity<36)wantsCestas++;if(capacity<72)wantsCarrinhos++;}
+  for(const c of people)for(const [good,value]of Object.entries(c.foodPreferences||{}))if(value>0)likesByGood[good]=(likesByGood[good]||0)+value;
+  for(const business of firms)for(const [good,value]of Object.entries(business.inputDemand||{}))inputDemandByGood[good]=(inputDemandByGood[good]||0)+value;
+  for(const building of city.buildings)if(building.active&&!building.entity.destroyed)for(const [good,value]of Object.entries(building.inventory||{}))stockByGood[good]=(stockByGood[good]||0)+value;
+  const projectStoneDemand=city.development.projects.reduce((total,project)=>total+(!project.cancelled&&project.status!=='completed'?Math.max(0,project.stone-(project.inventory.pedra||0)-(project.incoming.pedra||0)):0),0);
   for(const good of Object.keys(economy.goods)){
-    const previous=economy.market[good]||{multiplier:1},food=city.workMeals.foodGoods().includes(good),likes=people.reduce((n,c)=>n+Math.max(0,c.foodPreferences?.[good]||0),0);
-    const consumer=Object.values(INDUSTRIES).find(spec=>spec.use&&spec.outputs[good]);
-    const wants=consumer?people.filter(c=>['livros','panfletos'].includes(good)?!city.publications.owned(c.accountId).some(d=>d.good===good&&d.entries.length<city.publications.capacity(d)):good==='cesta'||good==='carrinho'?(city.vehicles?.cargoCapacity(c)??carryCapacity(c))<(good==='carrinho'?72:36):c.needs[consumer.use.need]<80).length:0;
+    const previous=economy.market[good]||{multiplier:1},food=foodGoods.has(good),likes=likesByGood[good]||0;
+    const consumer=consumerByGood[good];
+    const wants=!consumer?0:['livros','panfletos'].includes(good)?people.filter(c=>!city.publications.owned(c.accountId).some(d=>d.good===good&&d.entries.length<city.publications.capacity(d))).length:good==='cesta'?wantsCestas:good==='carrinho'?wantsCarrinhos:wantsByNeed.get(consumer.use.need)||0;
     const retail=food?people.length*.3+likes*.8:wants*.35;
-    const demand=retail+(good==='oleo'?(economy.lightingSupplyReport?.oilRequired||0):0)+firms.reduce((n,b)=>n+(b.inputDemand?.[good]||0),0)+city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').reduce((n,p)=>n+(good==='pedra'?Math.max(0,p.stone-(p.inventory.pedra||0)-(p.incoming.pedra||0)):0),0);
-    const stock=city.buildings.filter(b=>b.active&&!b.entity.destroyed).reduce((n,b)=>n+(b.inventory[good]||0),0);
+    const demand=retail+(good==='oleo'?(economy.lightingSupplyReport?.oilRequired||0):0)+(inputDemandByGood[good]||0)+(good==='pedra'?projectStoneDemand:0);
+    const stock=stockByGood[good]||0;
     const target=demand>0?clamp((demand+12)/(stock+12),.55,2.5):stock>24?.65:1;
     const multiplier=Math.round(clamp(previous.multiplier+clamp(target-previous.multiplier,-.035,.035),.55,2.5)*1000)/1000;
     economy.market[good]={multiplier,demand,stock,likes,updatedAt:city.minute};

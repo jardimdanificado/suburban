@@ -12,7 +12,7 @@ import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './c
 import {colorName} from './city_colors.js';
 import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.js';
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
-import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=employment-search-phase-6';
+import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=vacancy-score-precompute-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
@@ -27,7 +27,7 @@ import { renderPublications } from './city_publications_ui.js';
 import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases } from './city_corruption_ui.js';
 import {renderEventInspector} from './city_event_inspector.js?v=landlord-stock-market-1';
 import { formatMoney } from './city_ui_format.js';
-import { carryCapacity } from './city_markets.js?v=roadside-ad-placards-1';
+import { carryCapacity } from './city_markets.js?v=market-one-pass-1';
 import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js';
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js?v=institutions-cleanup-2';
 import {renderMunicipalIdentity} from './city_municipal_identity_ui.js';
@@ -44,10 +44,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=publisher-demand-scan-2';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=update-demand-index-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=initial-decision-spread-32-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=citizen-static-task-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -182,7 +182,7 @@ export class CityUI {
   setSelection(entity, unitId = null) {
     if(this.interiorView&&entity?.id!==this.interiorView.buildingId)this.setInteriorView(null);
     if (entity !== this.selected || unitId !== this.unitId) this.remember();
-    const target = entity?.properties.cityVehicle?'transport':entity?.properties.citizen ? 'people' : entity?.properties.cityBuilding ? (this.tab === 'economy' && this.city.economy.businesses.some(b=>b.id===entity.id) ? 'economy' : 'buildings') : this.tab;
+    const target = entity?.properties.cityUrbanArt?'urban-art':entity?.properties.cityVehicle?'transport':entity?.properties.citizen ? 'people' : entity?.properties.cityBuilding ? (this.tab === 'economy' && this.city.economy.businesses.some(b=>b.id===entity.id) ? 'economy' : 'buildings') : this.tab;
     const sameDirectory = this.tab === target, listScroll = this.scrolls.list || 0;
     this.tab = target; if(target==='economy')this.views.economy='overview'; this.selected = entity; this.unitId = unitId; this.detailTab = unitId ? 'units' : 'profile'; this.visible = true;
     this.mobileDetail = !!entity; if (!sameDirectory) { this.query = ''; this.search.value = ''; } this.menuOpen = false; this.resetScroll(); if (sameDirectory) this.scrolls.list=listScroll;
@@ -309,6 +309,7 @@ export class CityUI {
     }
   }
   detail(p) {
+    if(this.selected?.properties?.cityUrbanArt)return this.artworkInspector(p,this.selected.properties.cityUrbanArt);
     if(this.selected?.properties?.cityPlant)return this.plantInspector(p,this.selected.properties.cityPlant);
     if(this.selected?.properties.cityVehicle)return renderVehicle(this,p,this.selected.properties.cityVehicle);
     const c = this.selected?.properties.citizen, b = this.selected?.properties.cityBuilding;
@@ -316,6 +317,18 @@ export class CityUI {
     if (this.tab !== 'people' && b && !b.entity.destroyed) return this.building(p, b);
     p.heading('FICHA DE OBSERVAÇÃO'); p.note('Selecione alguém na lista para acompanhar sua rotina, seus vínculos e suas finanças. A seleção no mapa também abre a ficha.');
     if (this.tab === 'economy') this.demands(p);
+  }
+  artworkInspector(p,piece) {
+    const city=this.city,justice=city.justice,artist=city.society.citizen(piece.creatorId),latest=piece.layers?.at(-1),support=piece.support;
+    const type=justice.labelArt(piece.kind),material={pedra:'Pedra',argila:'Argila',ferro:'Ferro',aco:'Aço',ceramica:'Cerâmica',fezes:'Material orgânico'}[piece.materialUsed]||'Tinta';
+    const location=support?.kind==='facade-banner'?'Fachada':support?.kind==='interior-wall'?'Parede interna':support?.kind==='interior-floor'?'Interior do prédio':support?.kind==='window'?'Janela':support?.kind==='roof-terrace'?'Cobertura':support?.kind==='skybridge'?'Passarela elevada':piece.buildingId?`Prédio · ${city.building(piece.buildingId)?.entity.properties.name||'desconhecido'}`:'Espaço público';
+    const locate=()=>{if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);this.setInteriorView(building.id,unit.z);return;}}this.camera(piece.entity.x,piece.entity.y);};
+    p.heading(`FICHA DA OBRA · ${type.toUpperCase()}`);p.kv('Obra / mensagem',`#${piece.id} · “${latest?.message||piece.message}”`);p.kv('Artista',artist?.entity.properties.name||'Desconhecido');p.kv('Material',material);p.kv('Local',location);p.kv('Coordenadas',`${piece.entity.x.toFixed(1)}, ${piece.entity.y.toFixed(1)}`);
+    p.kv('Conservação',piece.entity.destroyed?'Destruída':piece.damaged>0?`Danificada · ${piece.damaged}`:'Inteira');p.kv('Visualizações / aprovação / interesse',`${piece.viewCount||0} / ${piece.positiveOpinions||0} / ${piece.demand||0}`);p.kv('Valor estimado',money(justice.artworkValue(piece)));p.kv('Proprietário',city.accountName(piece.ownerAccountId)||'Não registrado');
+    if(piece.subjectId!=null)p.kv('Pessoa retratada ou mencionada',city.society.citizen(piece.subjectId)?.entity.properties.name||'Desconhecida');
+    if(piece.partyId!=null)p.kv('Partido associado',city.politics.party(piece.partyId)?.name||`Partido #${piece.partyId}`);
+    p.heading('HISTÓRICO DE PROPRIEDADE');for(const owner of piece.ownershipHistory||[])p.record(city.accountName(owner.accountId)||'Proprietário anterior',`${owner.reason}${owner.price?` · ${money(owner.price)}`:''} · dia ${Math.floor(owner.minute/1440)+1}`);
+    p.buttons([{label:'LOCALIZAR NO MAPA',click:locate},{label:'ABRIR CATÁLOGO DE ARTE',click:()=>this.openPanel({tab:'urban-art',views:{'urban-art':'overview'},selectedArtworkId:piece.id})}]);
   }
   dossierTabs(p, tabs) {
     p.links(tabs.map(([id, label]) => ({ label, selected: this.detailTab === id, click:()=>this.openPanel({detailTab:id}) })));

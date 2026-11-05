@@ -27,11 +27,16 @@ if(mode==='builder-selection'){
   // CPU synchronization only: existing farm meshes, no GPU driver or shader work.
   const {syncCityBuildings}=await moduleAt('city_renderer_3d.js');
   const {setActiveEntities}=await moduleAt('engine.js');
+  // Static detail batching now creates shared InstancedMeshes even in this
+  // CPU-only workload. Supply the small Three.js surface it exercises.
+  class BenchmarkInstancedMesh{constructor(geometry,material,count){this.geometry=geometry;this.material=material;this.count=0;this.instanceMatrix={count,needsUpdate:false};this.userData={};}setMatrixAt(){}}
+  const THREE={BoxGeometry:class{},MeshLambertMaterial:class{},InstancedMesh:BenchmarkInstancedMesh,Matrix4:class{constructor(){this.elements=new Array(16).fill(0);}makeScale(){return this;}setPosition(){return this;}}};
   const renderer={scene:{add(){},remove(){}},cityLampLights:Array.from({length:8},()=>({intensity:0})),cityMeshes:new Map(),renderedMinTx:30,renderedMaxTx:90,renderedMinTy:10,renderedMaxTy:55,cardboardVisualSignature:'0',cardboardVisuals:{children:[]}};
   const rendererSource=readFileSync(resolve(root,'js/city_renderer_3d.js'),'utf8'),oldSignature=rendererSource.includes('b.units.filter');
   const buildings=[],entities=Array.from({length:500},(_,id)=>{const units=Array.from({length:100},(_,n)=>({id:`${id}:${n}`,roomType:n===0?'bathroom':n===1?'dining':'workspace',x:n%10,y:Math.floor(n/10),z:0}));const b={id,type:'farm',crop:'milho',constructionKind:'open-air',width:10,depth:10,units,layoutRevision:1,rotation:0};
     const signature=rendererSource.includes('retail-v8-fruit-stalls:')?`retail-v8-fruit-stalls:farm:10:10:milho:1:100:0:0:`:rendererSource.includes('retail-v2:')?`retail-v2:farm:10:10:milho:1:100:0:0`:oldSignature?`${b.crop}:${units.filter(u=>['bathroom','dining'].includes(u.roomType)).map(u=>u.id+u.roomType).join(',')}`:`${b.crop}:1:100`;
-    renderer.cityMeshes.set(id,{visible:true,position:{set(){}},userData:{signature,terrainRevision:0,highlight:{visible:false},patches:{material:{emissive:{setHex(){}}}}}});
+    const detail=(kind,count)=>({id:`${kind}:${id}`,count,getMatrixAt(){}});
+    renderer.cityMeshes.set(id,{visible:true,position:{x:0,y:0,z:0,set(x,y,z){this.x=x;this.y=y;this.z=z;}},userData:{signature,terrainRevision:0,cityBuilding:b,slab:{},supports:detail('supports',8),stairs:detail('stairs',6),interiorFloors:detail('interiorFloors',4),highlight:{visible:false},patches:{material:{emissive:{setHex(){}}}}}});
     const entity={id,x:id%20*12,y:Math.floor(id/20)*12,destroyed:false,properties:{cityBuilding:b}};b.entity=entity;buildings.push(b);return entity;
   });
   const citizens=Array.from({length:population},(_,id)=>({id:id+5000,entity:{x:id%128,y:id%64,destroyed:false},task:'idle'}));
@@ -41,9 +46,16 @@ if(mode==='builder-selection'){
   // Keep static bridge geometry out of this CPU synchronization workload. The
   // benchmark renderer intentionally has no Three.js constructors or GPU.
   renderer.skybridgeRevision=`${entities.length}:${world.topologyRevision??world.revision??0}:${world.bridgeRevision??0}:colonial-3`;renderer.roadBridgeRevision=world.bridgeRevision||0;renderer.roadBridgeStyleVersion=3;
-  for(let i=0;i<20;i++)syncCityBuildings(renderer,{},entities,world);
-  const start=performance.now();for(let i=0;i<300;i++)syncCityBuildings(renderer,{},entities,world);
-  console.log(JSON.stringify({mode,root,buildings:500,citizens:citizens.length,entities:entities.length,spaces:50000,frames:300,ms:performance.now()-start,checksum:hash([...renderer.cityMeshes].map(([id,g])=>[id,g.visible,g.userData.highlight.visible]))}));
+  // Warm a small viewport first, then grow it past the initial instance-buffer
+  // capacity to exercise replacement without invalidating the Three.js test.
+  Object.assign(renderer,{renderedMinTx:30,renderedMaxTx:42,renderedMinTy:10,renderedMaxTy:22});
+  for(let i=0;i<5;i++)syncCityBuildings(renderer,THREE,entities,world);
+  const initialSupportCapacity=renderer.supportsBatch?.instanceMatrix.count||0;
+  Object.assign(renderer,{renderedMinTx:30,renderedMaxTx:90,renderedMinTy:10,renderedMaxTy:55});
+  for(let i=0;i<20;i++)syncCityBuildings(renderer,THREE,entities,world);
+  if(!(renderer.supportsBatch.instanceMatrix.count>initialSupportCapacity&&renderer.supportsBatch.count>initialSupportCapacity))throw Error('The city-render benchmark did not grow the support instance batch.');
+  const start=performance.now();for(let i=0;i<300;i++)syncCityBuildings(renderer,THREE,entities,world);
+  console.log(JSON.stringify({mode,root,buildings:500,citizens:citizens.length,entities:entities.length,spaces:50000,frames:300,ms:performance.now()-start,batchInstances:{supports:renderer.supportsBatch?.count||0,stairs:renderer.stairsBatch?.count||0,interiorFloors:renderer.interiorFloorsBatch?.count||0,slabs:renderer.buildingSlabBatch?.count||0,supportCapacity:renderer.supportsBatch?.instanceMatrix.count||0},checksum:hash([...renderer.cityMeshes].map(([id,g])=>[id,g.visible,g.userData.highlight.visible]))}));
 }else if(mode==='scene'){
   const {setActiveEntities,getEntitiesInViewport,getEntityById}=await moduleAt('engine.js');
   const entities=Array.from({length:10000},(_,id)=>({id,x:id%256,y:Math.floor(id/256),properties:{}}));
