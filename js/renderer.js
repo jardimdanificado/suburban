@@ -1,4 +1,3 @@
-import {activityBadge,activityBadgeCanvas,activityBadgeKey} from './city_activity_badges.js';
 // =============================================================================
 // Brutopolis - Ultra Fast Direct Buffer Canvas 2D Visual Renderer
 // =============================================================================
@@ -26,30 +25,6 @@ import { globalWallCoords, resolveWallSkin, getEntitiesInViewport } from "./engi
 // Framework scenes can opt into blueprints through their own tools. The base
 // renderer has no simulation-specific blueprint provider.
 const getClanBlueprintTiles = () => [];
-
-// Cached emote textures
-let cachedEmoteTextures = null;
-function getEmoteTextures() {
-  if (!cachedEmoteTextures) {
-    cachedEmoteTextures = [
-      findTexture("Emote_Angry.png"),
-      findTexture("Emote_Excited.png"),
-      findTexture("Emote_Happy.png"),
-      findTexture("Emote_Hurt.png"),
-      findTexture("Emote_Nerd.png"),
-      findTexture("Emote_Sad.png"),
-      findTexture("Emote_Serious.png"),
-      findTexture("Emote_Sick.png"),
-      findTexture("Emote_Sleeping.png"),
-      findTexture("Emote_Smug.png"),
-      findTexture("Emote_Upset.png"),
-      findTexture("Emote_Yarr.png"),
-      findTexture("Other_Heart.png"),
-      findTexture("Item_Skull.png")
-    ];
-  }
-  return cachedEmoteTextures;
-}
 
 // ---------------------------------------------------------------------------
 // 32-bit Little-Endian RGBA Color Utilities
@@ -605,7 +580,7 @@ export class Renderer {
     }
 
     // 4. Render Dropped Items & Entities (Fast Viewport Culling)
-    const emoteTextures = getEmoteTextures(),campaignPosters=[],activityMarkers=[];
+    const campaignPosters=[];
 
     for (let i = 0; i < visibleEntities.length; i++) {
       const e = visibleEntities[i];
@@ -665,9 +640,7 @@ export class Renderer {
         if(this.selectedEntityId===e.id)drawBoxOutline32(buf32,width,height,sx,sy,Math.floor(tileSize),Math.floor(tileSize),rgba32(248,220,120));
         continue;
       }
-      const badge=activityBadge(e.properties?.citizen);if(badge)activityMarkers.push({badge,x:sx+tileSize*.5,y:sy-4});
       const campaign=e.properties?.citizen?.campaign;
-      if(campaign?.type==='canvass'&&!campaign.flag&&e.properties.citizen.task==='campaign'&&!e.properties.citizen.path.length){const size=Math.max(5,Math.floor(tileSize*.65)),color=hexToRgba32(parseInt((campaign.speechColor||'#eeeeee').slice(1),16),255);drawBox32(buf32,width,height,Math.floor(sx),Math.floor(sy-size),size,size,color);drawBox32(buf32,width,height,Math.floor(sx+size*.2),Math.floor(sy),2,2,color);}
       if(campaign?.flag && e.properties.citizen.task==='campaign') {
         const f=campaign.flag,fg=hexToRgba32(parseInt(f.foreground.slice(1),16),255),bg=hexToRgba32(parseInt(f.background.slice(1),16),255);
         const fw=Math.max(6,Math.floor(tileSize*.8)),fh=Math.max(5,Math.floor(tileSize*.55)),fx=sx+Math.floor(tileSize*.5),fy=sy-fh;
@@ -851,17 +824,6 @@ export class Renderer {
           drawBox32(buf32, width, height, sx, cBarY, cFillW, cBarH, rgba32(50, 210, 240));
         }
 
-        // Emote bubble & Held Items per hand
-        let emoteTex = null;
-        if (e.properties?.life?.isSleeping) {
-          emoteTex = emoteTextures[8]; // Sleeping Zzz
-        } else if (e.emote >= 0 && e.emote < emoteTextures.length) {
-          emoteTex = emoteTextures[e.emote];
-        } else if (e.motor === 5) emoteTex = emoteTextures[0]; // Attack -> Angry
-        else if (e.motor === 4) emoteTex = emoteTextures[8]; // Sleep -> Sleeping
-        else if (e.motor === 6) emoteTex = emoteTextures[10]; // Flee -> Upset
-        else if (e.motor === 7) emoteTex = emoteTextures[2]; // Socialize -> Happy
-
         // Detect items held in all hands/arms
         const heldItems = [];
         for (const [k, p] of Object.entries(e.properties || {})) {
@@ -874,17 +836,10 @@ export class Renderer {
         if (e.properties?.equipment?.offHand) heldItems.push(e.properties.equipment.offHand);
         const weapon=e.properties?.citizen?.equipment?.weapon;if(weapon)heldItems.push({name:weapon.name,skin:weapon.good==='porrete'?'Item_Wood.png':'Item_Nugget.png',resourceType:'weapon',tint:weapon.good==='porrete'?0xffffff:weapon.kind==='firearm'?0x4a4f57:0x9aa4ab});
 
-        if (tileSize >= 12 && (emoteTex || heldItems.length > 0)) {
+        if (tileSize >= 12 && heldItems.length > 0) {
           const iconSize = Math.floor(tileSize * 0.48);
           let iconX = sx + tileSize - iconSize;
           const iconY = sy - iconSize - 1;
-
-          if (emoteTex) {
-            const isSleeping = !!e.properties?.life?.isSleeping;
-            const tintFg = isSleeping ? rgba32(100, 200, 255) : ((e.emote === 12) ? rgba32(255, 60, 120) : (e.emote === 13) ? rgba32(255, 40, 40) : rgba32(255, 240, 100));
-            drawSpriteTinted32(buf32, width, height, emoteTex, iconX, iconY, iconSize, iconSize, tintFg, rgba32(0, 0, 0, 0), 1.0);
-            iconX -= (iconSize + 2);
-          }
 
           for (let h = 0; h < heldItems.length; h++) {
             const it = heldItems[h];
@@ -940,7 +895,6 @@ export class Renderer {
 
     // 6. Blit final 32-bit buffer straight to Canvas in 1 call (60 FPS even on Zoomout)
     this.ctx.putImageData(this.imageData, 0, 0);
-    this.cityActivityCanvases??=new Map();for(const marker of activityMarkers){const key=activityBadgeKey(marker.badge);let canvas=this.cityActivityCanvases.get(key);if(!canvas){canvas=activityBadgeCanvas(marker.badge);this.cityActivityCanvases.set(key,canvas);}const size=Math.max(13,Math.min(26,tileSize*1.1));this.ctx.drawImage(canvas,marker.x-size/2,marker.y-size,size,size);}if(this.cityActivityCanvases.size>64){const used=new Set(activityMarkers.map(m=>activityBadgeKey(m.badge)));for(const key of this.cityActivityCanvases.keys())if(!used.has(key))this.cityActivityCanvases.delete(key);}
     if(campaignPosters.length){const ctx=this.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='top';for(const poster of campaignPosters){const {d,x,y,w,h}=poster;ctx.fillStyle=d.flag.foreground;ctx.font=`bold ${Math.max(7,Math.min(14,h*.55))}px sans-serif`;ctx.fillText(String(d.partyNumber),x+w/2,y+1,w-2);if(d.kind==='banner'&&h>=12){ctx.font=`${Math.max(6,Math.min(10,h*.35))}px sans-serif`;ctx.fillText(d.candidateName,x+w/2,y+h*.6,w-2);}}ctx.restore();}
   }
 

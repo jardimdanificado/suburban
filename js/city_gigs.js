@@ -2,7 +2,7 @@ import {artworkNarrative} from './city_art_narratives.js';
 import {activityRoomReady} from './city_interiors.js?v=activity-cell-early-reservation-3';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {CITY_FLOOR_HEIGHT,buildingFacadeBannerSupport} from './city_building_geometry.js?v=banner-placement-2';
-import {isRoadAt} from './city_terrain.js?v=quarry-outskirts-1';
+import {isRoadAt} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 
 const ACTIVE=new Set(['open','working']);

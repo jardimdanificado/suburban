@@ -11,13 +11,13 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=city-cells-reference-fix-2";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=terrain-stone-edge-jitter-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=clothing-accessory-transform-1';
-import { flagNightFactor } from './city_terrain.js?v=quarry-outskirts-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-facing-1';
+import { flagNightFactor } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=retaining-face-winding-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=terrain-stone-edge-jitter-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -44,17 +44,6 @@ const getClanBlueprintTiles = () => [];
 const currentZoneSize = 8;
 const compareCrowdCitizenIds=(a,b)=>a.entity.id-b.entity.id;
 const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
-const CITIZEN_ACTION_LABELS={
-  'substance-vending':'negociando','substance-use':'consumindo','substance-buy':'comprando','substance-production':'preparando','substance-deposit':'armazenando',
-  work:'trabalho','work-wait':'aguardando',manage:'empresa',construction:'obra',clean:'limpeza',food:'comida',shopping:'compras','market-vending':'venda',
-  workmeal:'refeição',provisions:'lanche',water:'água','lake-water':'água',energy:'descanso',health:'saúde',toilet:'banheiro',hygiene:'higiene',social:'convívio',
-  visit:'visita',care:'cuidado',caregiving:'família',vote:'votação','council-session':'Câmara',research:'pesquisa',interview:'entrevista','job-interview':'emprego',
-  transport:'entrega','paint-delivery':'tinta','paint-purchase':'compras',supplies:'abastecimento','combat-flee':'perigo',custody:'custódia','custody-escort':'escolta',
-  'custody-water':'água',funeral:'luto','justice-report':'justiça','police-arrest-escort':'escolta','police-investigation':'investigação',
-  'police-oversight':'fiscalização','police-patrol':'patrulha','police-response':'ocorrência','police-restitution':'restituição','urban-graffiti':'grafite',
-  leisure:'lazer',outdoor_leisure:'praia',sit:'descanso',walk:'passeio'
-};
-
 // Cache for raw asset images
 const textureCache = new Map();
 const billboardMatCache = new Map();
@@ -92,23 +81,6 @@ const DAY_NIGHT_KEYFRAMES = [
   { t: 24.0, sun: 0x060a12, amb: 0x060a12, bg: 0x060a12, sunI: 0.015, ambI: 0.015 }  // Wrap to midnight
 ];
 
-const EMOTE_SKINS = [
-  "Emote_Angry.png",      // 0
-  "Emote_Excited.png",    // 1
-  "Emote_Happy.png",      // 2
-  "Emote_Hurt.png",       // 3
-  "Emote_Nerd.png",       // 4
-  "Emote_Sad.png",        // 5
-  "Emote_Serious.png",    // 6
-  "Emote_Sick.png",       // 7
-  "Emote_Sleeping.png",   // 8
-  "Emote_Surprised.png",  // 9
-  "Emote_Upset.png",      // 10
-  "Emote_Question.png",   // 11
-  "Emote_Heart.png",      // 12
-  "Emote_Exclamation.png" // 13
-];
-
 const STATIC_FOLIAGE_KEYS = [
   'oakLeaves', 'pineLeaves', 'cherryLeaves', 'birchLeaves',
   'mapleLeaves', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseFlowers', 'grassFoliage'
@@ -120,25 +92,29 @@ const TROPICAL_FRUIT_OFFSETS = [[-.48,1.83,.06],[.43,1.91,.1],[.06,2.1,-.46]];
 const BANANA_FRUIT_OFFSETS = [[.18,1.28,.1],[.28,1.2,.02],[.12,1.13,-.08]];
 const TROPICAL_FLOWER_COLORS = {hibiscus:0xf24852,bougainvillea:0xbd3f9f,rose_bush:0xff4f72,heliconia_rostrata:0xe74632,red_ginger:0xd94c44,bird_of_paradise:0xf1a52d,torch_ginger:0xd94c59,silver_vase_bromeliad:0xe35b7a,anthurium:0xd94142,heliconia_bihai:0xe35e31,heliconia_psittacorum:0xe9a33c,ixora:0xd83d45,indian_shot:0xc24b38,jade_vine:0x4ba785,passionflower:0x73539a,allamanda:0xf0c337,canela_de_ema:0xe45c45,zebra_maranta:0x71945b,croton:0xc78539,watermelon_calathea:0x729453,imperial_bromeliad:0x9a684d,caladium:0xc1788a,prayer_plant:0x789053};
 const TROPICAL_FOLIAGE_COLORS = {zebra_maranta:0x738c51,croton:0xd18b32,watermelon_calathea:0x687d4c,imperial_bromeliad:0x8e7252,caladium:0xc88192,prayer_plant:0x6b8254,water_lily:0x548a58};
+const TROPICAL_FOLIAGE_ASPECT = {
+  zebra_maranta:[1.2,.72,1.2],croton:[.82,1.24,.82],
+  watermelon_calathea:[1.12,.78,1.12],imperial_bromeliad:[1.08,1.28,1.08],
+  caladium:[1.18,.72,1.18],prayer_plant:[1.1,.76,1.1]
+};
+const BROAD_LEAF_ASPECT = {monstera:[1.08,1.05,1.08],guaimbe:[1.22,.9,1.08]};
+// Keep the shared botanical meshes, but give each species the proportions of
+// its real growth habit: upright heliconias, compact ixora/anthurium, and
+// wide, low growing passionflower and bougainvillea.
+const TROPICAL_FLOWER_ASPECT = {
+  hibiscus:[1.15,1.08,1.15],bougainvillea:[1.34,.82,1.22],
+  heliconia_rostrata:[.78,1.26,.78],red_ginger:[.84,1.18,.84],
+  bird_of_paradise:[.86,1.2,.86],torch_ginger:[.9,1.38,.9],
+  silver_vase_bromeliad:[.88,1.16,.88],anthurium:[.9,.78,.9],
+  heliconia_bihai:[.82,1.28,.82],heliconia_psittacorum:[.76,.88,.76],
+  ixora:[1.28,.76,1.28],indian_shot:[.92,1.06,.92],
+  jade_vine:[1.28,1.06,.9],passionflower:[1.3,.78,1.16],
+  allamanda:[1.18,.94,1.18],canela_de_ema:[.86,1.12,.86]
+};
 const TROPICAL_TREE_BLOOM_COLORS = {flamboyant:0xe75036,pau_brasil:0xd84735,yellow_ipe:0xf1c544,quaresmeira:0x9a60b7,manaca_serra:0xd9a5ce,frangipani:0xf0d59a};
 
 export const MIN_CAMERA_ZOOM = 0.25;
 const MAX_CAMERA_ZOOM = 5.0;
-
-function getCreatureEmoteSkin(e) {
-  if (!e || !e.properties) return null;
-  // Items, plants, structures and inanimate objects must NEVER display creature emotes
-  if (!e.properties.life || !e.properties.brain) return null;
-  if (e.properties.life?.isSleeping) return "Emote_Sleeping.png";
-  if (e.emote !== undefined && e.emote >= 0 && e.emote < EMOTE_SKINS.length) {
-    return EMOTE_SKINS[e.emote];
-  }
-  if (e.motor === 5) return "Emote_Angry.png";    // Attack
-  if (e.motor === 4) return "Emote_Sleeping.png"; // Sleep
-  if (e.motor === 6) return "Emote_Upset.png";    // Flee
-  if (e.motor === 7) return "Emote_Happy.png";    // Socialize
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 // Hash Functions for Procedural Terrain Variation
@@ -384,7 +360,7 @@ function getEntityBounds(e) {
   const isBirch = isPlantOrFlora && (e.properties?.species === "birch" || e.properties?.name?.toLowerCase().includes("bétula") || e.properties?.name?.toLowerCase().includes("betula"));
   const isMaple = isPlantOrFlora && (e.properties?.species === "maple" || e.properties?.name?.toLowerCase().includes("bordo") || e.properties?.name?.toLowerCase().includes("maple"));
   const isBerryBush = isPlantOrFlora && (e.properties?.species === "berry" || e.properties?.name?.toLowerCase().includes("amora") || (e.properties?.species === "bush" && !e.properties?.name?.toLowerCase().includes("florido")));
-  const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties?.species) || ['flowering','foliage'].includes(e.properties?.cityPlant?.form) || e.properties?.name?.toLowerCase().includes("florido") || e.properties?.name?.toLowerCase().includes("rose"));
+  const isRoseBush = isPlantOrFlora && (e.properties?.species === 'rose_bush' || e.properties?.name?.toLowerCase().includes("florido") || e.properties?.name?.toLowerCase().includes("rose"));
   const isShrub = isPlantOrFlora && (e.properties?.species === "shrub" || e.properties?.name?.toLowerCase().includes("shrub") || e.properties?.name?.toLowerCase().includes("arbusto"));
   const isWaterLily = isPlantOrFlora && (e.properties?.species === "waterlily" || e.properties?.species === "water_lily" || e.properties?.name?.toLowerCase().includes("lily") || e.properties?.name?.toLowerCase().includes("vitória-régia") || e.properties?.name?.toLowerCase().includes("vitoria"));
   const isSeaweed = isPlantOrFlora && (e.properties?.species === "seaweed" || e.properties?.name?.toLowerCase().includes("seaweed") || e.properties?.name?.toLowerCase().includes("alga"));
@@ -3661,13 +3637,6 @@ export class RCT3DRenderer {
     canvasDom.style.width = "100%";
     canvasDom.style.height = "100%";
     this.container.appendChild(canvasDom);
-    this.overheadBillboardCanvas=document.createElement("canvas");
-    this.overheadBillboardCanvas.setAttribute("aria-hidden","true");
-    Object.assign(this.overheadBillboardCanvas.style,{position:"absolute",inset:"0",width:"100%",height:"100%",zIndex:"4",pointerEvents:"none"});
-    this.container.appendChild(this.overheadBillboardCanvas);
-    this.overheadBillboardContext=this.overheadBillboardCanvas.getContext("2d");
-    this.overheadProjection=new THREE.Vector3();
-    this.speechBubblesVisible=false;
 
     // 4. Directional Sun & Ambient Lighting
     this.ambientLight = new THREE.AmbientLight(0xdde8f5, 0.90);
@@ -3752,7 +3721,6 @@ export class RCT3DRenderer {
       fog: "LIGHT",
       godRays: true,
       lensFlare: true,
-      overheadBillboards: true,
       anisotropy: 4,
       brightness: 1.0,
       contrast: 1.0,
@@ -5106,84 +5074,6 @@ export class RCT3DRenderer {
     }
   }
 
-  setOverheadBadgesVisible(visible = true) {
-    this.speechBubblesVisible=!!visible;
-    for(const [key,sprite] of this.floatingUiSprites||[])if(key.endsWith('_emote'))sprite.visible=this.speechBubblesVisible;
-    if(this.overheadBillboardContext)this.overheadBillboardContext.clearRect(0,0,this.overheadBillboardCanvas.width,this.overheadBillboardCanvas.height);
-  }
-
-  isOverheadBillboardOccluded(camera, projected, item) {
-    const city=this.cityDevelopment?.city;
-    if(!city||!camera||!item)return false;
-    const buildings=this.thirdPersonBuildingIndex(city);
-    if(!buildings?.size)return false;
-
-    // Start at the near plane for this screen position. This also works with
-    // the orthographic/isometric camera, where a ray from camera.position
-    // would not match the pixel occupied by the character.
-    this._overheadOcclusionStart??=new THREE.Vector3();
-    this._overheadOcclusionEnd??=new THREE.Vector3();
-    this._overheadOcclusionStart.set(projected.x,projected.y,-1).unproject(camera);
-    this._overheadOcclusionEnd.set(item.x,item.y,item.z);
-    const start=this._overheadOcclusionStart,end=this._overheadOcclusionEnd;
-    const dx=end.x-start.x,dy=end.y-start.y,dz=end.z-start.z,distance=Math.hypot(dx,dy,dz);
-    if(distance<.5)return false;
-    const steps=Math.ceil((distance-.3)/.45);
-    for(let i=1;i<=steps;i++){
-      const along=Math.min(distance-.2,i*.45),x=start.x+dx*along/distance,y=start.y+dy*along/distance,z=start.z+dz*along/distance;
-      const building=buildings.get(`${Math.floor(x)},${Math.floor(z)}`);
-      if(!building)continue;
-      const base=building.terrain?.base??(this.currentMap?this.getSurfaceElevation(this.currentMap,x,z):0);
-      const roof=base+Math.max(1,building.floors||1)*CITY_FLOOR_HEIGHT;
-      if(y>base+.12&&y<roof)return true;
-    }
-    return false;
-  }
-
-  drawOverheadBillboards(camera) {
-    const canvas=this.overheadBillboardCanvas,ctx=this.overheadBillboardContext;
-    if(!canvas||!ctx)return;
-    const width=canvas.clientWidth||this.width,height=canvas.clientHeight||this.height,dpr=Math.min(2,window.devicePixelRatio||1);
-    const pixelWidth=Math.round(width*dpr),pixelHeight=Math.round(height*dpr);
-    if(canvas.width!==pixelWidth||canvas.height!==pixelHeight){canvas.width=pixelWidth;canvas.height=pixelHeight;}
-    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
-    if(!this.speechBubblesVisible||!this.graphicOptions.overheadBillboards||!camera)return;
-    ctx.imageSmoothingEnabled=true;
-    for(const item of this.overheadBillboardQueue||[]){
-      this.overheadProjection.set(item.x,item.y,item.z).project(camera);
-      const p=this.overheadProjection;if(p.z < -1||p.z > 1)continue;
-      if(this.isOverheadBillboardOccluded(camera,p,item))continue;
-      const x=(p.x*.5+.5)*width,y=(-p.y*.5+.5)*height;
-      if(x < -60||x > width+60||y < -80||y > height+50)continue;
-      ctx.save();ctx.textAlign="center";ctx.textBaseline="middle";
-      if(item.kind==="speech"||item.kind==="action"){
-        const label=String(item.label||"conversa").slice(0,22),isCampaign=item.variant==="campaign";
-        ctx.font="6px 'Press Start 2P', monospace";
-        const bw=Math.max(30,Math.ceil(ctx.measureText(label).width)+10),bh=17,bx=Math.round(x-bw/2+(item.offsetX||0)),by=Math.round(y-35);
-        const shape=(ox=0,oy=0)=>{ctx.beginPath();ctx.moveTo(bx+2+ox,by+oy);ctx.lineTo(bx+bw-2+ox,by+oy);ctx.lineTo(bx+bw-2+ox,by+2+oy);ctx.lineTo(bx+bw+ox,by+2+oy);ctx.lineTo(bx+bw+ox,by+bh-3+oy);ctx.lineTo(bx+bw-2+ox,by+bh-3+oy);ctx.lineTo(bx+bw-2+ox,by+bh-1+oy);ctx.lineTo(bx+bw*.58+ox,by+bh-1+oy);ctx.lineTo(bx+bw*.47+ox,by+bh+4+oy);ctx.lineTo(bx+bw*.49+ox,by+bh-1+oy);ctx.lineTo(bx+2+ox,by+bh-1+oy);ctx.lineTo(bx+2+ox,by+bh-3+oy);ctx.lineTo(bx+ox,by+bh-3+oy);ctx.lineTo(bx+ox,by+2+oy);ctx.lineTo(bx+2+ox,by+2+oy);ctx.closePath();};
-        ctx.fillStyle="rgba(20,27,23,.45)";shape(1,2);ctx.fill();
-        ctx.fillStyle=isCampaign?"#594638":"#34433b";shape();ctx.fill();
-        ctx.fillStyle=isCampaign?"#ead2a5":"#d8c9a4";ctx.fillRect(bx+3,by+3,bw-6,bh-7);
-        ctx.fillStyle="#403d32";ctx.fillText(label,Math.round(bx+bw/2),by+8.5);
-      }else if(item.kind==='substance'){ctx.font='15px sans-serif';ctx.fillStyle='#e6ddc5';ctx.fillText(item.label,Math.round(x+(item.offsetX||0)),Math.round(y-12));
-      }else if(item.kind==="meal"){
-        const cx=Math.round(x+(item.offsetX||0)),cy=Math.round(y-29);
-        ctx.fillStyle="rgba(20,27,23,.45)";ctx.fillRect(cx-7,cy-5,15,13);
-        ctx.fillStyle="#34433b";ctx.fillRect(cx-8,cy-6,15,13);
-        ctx.fillStyle="#d8c9a4";ctx.fillRect(cx-7,cy-5,13,11);
-        ctx.fillStyle="#876a42";ctx.fillRect(cx-4,cy-2,1,4);ctx.fillRect(cx-3,cy-3,6,1);ctx.fillRect(cx+3,cy-2,2,4);ctx.fillRect(cx-2,cy+2,5,1);
-        ctx.fillStyle="#c28c54";ctx.fillRect(cx-3,cy-2,6,3);ctx.fillRect(cx-1,cy-3,3,1);
-        ctx.fillStyle="#e1b978";ctx.fillRect(cx-2,cy-1,3,1);
-      }else{
-        const progress=Math.max(0,Math.min(1,(performance.now()-item.startedAt)/1450));
-        ctx.globalAlpha=1-progress;ctx.font="8px 'Press Start 2P', monospace";ctx.lineJoin="miter";ctx.lineWidth=2.5;
-        ctx.strokeStyle="#e2d4b2";ctx.fillStyle="#b74435";
-        const label=`-${item.amount}`;ctx.strokeText(label,Math.round(x),Math.round(y-40-progress*20));ctx.fillText(label,Math.round(x),Math.round(y-40-progress*20));
-      }
-      ctx.restore();
-    }
-  }
-
   isShadowsActive() {
     return this.shadowsEnabled;
   }
@@ -5874,7 +5764,7 @@ export class RCT3DRenderer {
       const isTropicalFoliage = isPlantOrFlora && e.properties.cityPlant?.form === 'foliage';
       const isTropicalFlowering = isPlantOrFlora && e.properties.cityPlant?.form === 'flowering';
       const isBroadLeafPlant = isPlantOrFlora && e.properties.cityPlant?.form === 'broad_leaf';
-      const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
+      const isRoseBush = isPlantOrFlora && (e.properties.species === 'rose_bush' || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
       const isShrub = isPlantOrFlora && (e.properties.species === "shrub" || e.properties.name?.toLowerCase().includes("shrub") || e.properties.name?.toLowerCase().includes("arbusto"));
       const isWaterLily = isPlantOrFlora && (e.properties.species === "waterlily" || e.properties.species === "water_lily" || e.properties.name?.toLowerCase().includes("lily") || e.properties.name?.toLowerCase().includes("vitória-régia") || e.properties.name?.toLowerCase().includes("vitoria"));
       const isSeaweed = isPlantOrFlora && (e.properties.species === "seaweed" || e.properties.name?.toLowerCase().includes("seaweed") || e.properties.name?.toLowerCase().includes("alga"));
@@ -6648,6 +6538,10 @@ export class RCT3DRenderer {
       if (tx < 0 || tx >= this.mapWidth || ty < 0 || ty >= this.mapHeight) return true;
       return map[ty * this.mapWidth + tx] === TILE_WATER;
     };
+    const isDropAt = (tx,ty) => {
+      if(tx<0||tx>=this.mapWidth||ty<0||ty>=this.mapHeight)return true;
+      const tile=map[ty*this.mapWidth+tx];return tile===TILE_WATER||tile===TILE_VOID;
+    };
     const waterCornerMix = (cx, cy) => {
       let landTouches = 0;
       for (let dy = -1; dy <= 0; dy++) for (let dx = -1; dx <= 0; dx++) {
@@ -6724,10 +6618,25 @@ export class RCT3DRenderer {
         if (!bucket) continue;
 
         const streetCorners=streetSurfaceCorners(world,tx,ty);
-        let h00 = streetCorners?streetCorners[0]:this.getCornerHeight(map, tx, ty);
-        let h10 = streetCorners?streetCorners[1]:this.getCornerHeight(map, tx + 1, ty);
-        let h11 = streetCorners?streetCorners[2]:this.getCornerHeight(map, tx + 1, ty + 1);
-        let h01 = streetCorners?streetCorners[3]:this.getCornerHeight(map, tx, ty + 1);
+        const stoneShelf=terrainTileSurfaceCorners(world,tx,ty),stoneVertices=stoneShelf?terrainTileSurfaceVertices(world,tx,ty):null;
+        let terrainVertices=stoneVertices;
+        if(!terrainVertices&&!streetCorners&&!isSidewalk&&tType!==TILE_WATER){
+          let touchesStone=false;
+          for(let oy=-1;oy<=1&&!touchesStone;oy++)for(let ox=-1;ox<=1;ox++)if((ox||oy)&&baseTerrainTile(this.getTileTypeAt(map,tx+ox,ty+oy))===TILE_STONE){touchesStone=true;break;}
+          if(touchesStone){
+            const positions=[[tx,ty],[tx+1,ty],[tx+1,ty+1],[tx,ty+1]],heights=[this.getCornerHeight(map,tx,ty),this.getCornerHeight(map,tx+1,ty),this.getCornerHeight(map,tx+1,ty+1),this.getCornerHeight(map,tx,ty+1)];
+            terrainVertices=positions.map(([vx,vz],index)=>{
+              let bordersStone=false;
+              for(let oy=-1;oy<=0&&!bordersStone;oy++)for(let ox=-1;ox<=0;ox++)if(baseTerrainTile(this.getTileTypeAt(map,vx+ox,vz+oy))===TILE_STONE){bordersStone=true;break;}
+              const offset=bordersStone?terrainVertexOffset(world,vx,vz):{x:0,z:0};
+              return [vx+offset.x,heights[index],vz+offset.z];
+            });
+          }
+        }
+        let h00 = streetCorners?streetCorners[0]:stoneShelf?.[0]??this.getCornerHeight(map, tx, ty);
+        let h10 = streetCorners?streetCorners[1]:stoneShelf?.[1]??this.getCornerHeight(map, tx + 1, ty);
+        let h11 = streetCorners?streetCorners[2]:stoneShelf?.[2]??this.getCornerHeight(map, tx + 1, ty + 1);
+        let h01 = streetCorners?streetCorners[3]:stoneShelf?.[3]??this.getCornerHeight(map, tx, ty + 1);
 
         // Procedural Contact Ambient Occlusion for each corner
         const ao00 = this.getCornerAO(map, tx, ty);
@@ -6752,6 +6661,25 @@ export class RCT3DRenderer {
           for(const point of facePoints){
             const u=along(point);
             wall.pos.push(...point);wall.uvs.push(u,point[1]);wall.colors.push(tone,tone,tone);
+          }
+        }
+
+        // Stone terrain is drawn as a level shelf. Give its exposed lower
+        // edges a vertical rock face so the change reads as a step, not a ramp.
+        if(stoneShelf&&!streetCorners){
+          const edges=[
+            {side:0,a:[tx,ty],b:[tx+1,ty],highA:h00,highB:h10,pointA:stoneVertices[0],pointB:stoneVertices[1]},
+            {side:1,a:[tx+1,ty],b:[tx+1,ty+1],highA:h10,highB:h11,pointA:stoneVertices[1],pointB:stoneVertices[2]},
+            {side:2,a:[tx,ty+1],b:[tx+1,ty+1],highA:h01,highB:h11,pointA:stoneVertices[3],pointB:stoneVertices[2]},
+            {side:3,a:[tx,ty],b:[tx,ty+1],highA:h00,highB:h01,pointA:stoneVertices[0],pointB:stoneVertices[3]},
+          ];
+          for(const edge of edges){
+            const nx=tx+([0,1,0,-1][edge.side]),ny=ty+([-1,0,1,0][edge.side]),neighbor=this.getTileTypeAt(map,nx,ny);
+            if(neighbor===TILE_VOID||neighbor===TILE_WATER||baseTerrainTile(neighbor)===TILE_STONE||PAVED_ROAD_TILES.has(neighbor))continue;
+            const neighborSurface=streetSurfaceCorners(world,nx,ny)||terrainTileSurfaceCorners(world,nx,ny),neighborEdge=[[3,2],[0,3],[0,1],[1,2]][edge.side],lowA=neighborSurface?neighborSurface[neighborEdge[0]]:this.getCornerHeight(map,...edge.a),lowB=neighborSurface?neighborSurface[neighborEdge[1]]:this.getCornerHeight(map,...edge.b);
+            if(Math.max(edge.highA-lowA,edge.highB-lowB)<.03)continue;
+            const wall=tileMeshBuckets[`terrainRock${terrainTextureHash(tx,ty,TILE_STONE+edge.side)&3}`],a=[edge.pointA[0],Math.min(lowA,edge.highA),edge.pointA[2]],b=[edge.pointB[0],Math.min(lowB,edge.highB),edge.pointB[2]],c=edge.pointB,d=edge.pointA,points=edge.side===0||edge.side===1?[a,c,b,a,d,c]:[a,b,c,a,c,d],along=point=>edge.side===0||edge.side===2?point[0]:point[2];
+            for(const point of points){wall.pos.push(...point);wall.uvs.push(along(point),point[1]);wall.colors.push(zoneMult*.88,zoneMult*.88,zoneMult*.88);}
           }
         }
 
@@ -6787,14 +6715,15 @@ export class RCT3DRenderer {
             else addRegion(bucket,u0,v0,u1,v1,1);
           }
         } else {
+          const p00=terrainVertices?.[0]||[tx,h00,ty],p10=terrainVertices?.[1]||[tx+1,h10,ty],p11=terrainVertices?.[2]||[tx+1,h11,ty+1],p01=terrainVertices?.[3]||[tx,h01,ty+1];
           bucket.pos.push(
-            tx, h00, ty,
-            tx, h01, ty + 1,
-            tx + 1, h11, ty + 1,
+            ...p00,
+            ...p01,
+            ...p11,
 
-            tx, h00, ty,
-            tx + 1, h11, ty + 1,
-            tx + 1, h10, ty
+            ...p00,
+            ...p11,
+            ...p10
           );
           pushTerrainTileUvs(bucket, tx, ty, tType,isSidewalk?'sidewalk':null);
           const toneHash=terrainTextureHash(tx,ty,tType)>>>8;
@@ -6809,24 +6738,25 @@ export class RCT3DRenderer {
         }
 
         if (tType !== TILE_WATER && gridEnabled) {
+          const g00=terrainVertices?.[0]||[tx,h00,ty],g10=terrainVertices?.[1]||[tx+1,h10,ty],g11=terrainVertices?.[2]||[tx+1,h11,ty+1],g01=terrainVertices?.[3]||[tx,h01,ty+1];
           gridLinePositions.push(
-            tx, h00 + lineElevOffset, ty,
-            tx + 1, h10 + lineElevOffset, ty
+            g00[0], g00[1] + lineElevOffset, g00[2],
+            g10[0], g10[1] + lineElevOffset, g10[2]
           );
           gridLinePositions.push(
-            tx, h00 + lineElevOffset, ty,
-            tx, h01 + lineElevOffset, ty + 1
+            g00[0], g00[1] + lineElevOffset, g00[2],
+            g01[0], g01[1] + lineElevOffset, g01[2]
           );
           if (ty === this.mapHeight - 1) {
             gridLinePositions.push(
-              tx, h01 + lineElevOffset, ty + 1,
-              tx + 1, h11 + lineElevOffset, ty + 1
+              g01[0], g01[1] + lineElevOffset, g01[2],
+              g11[0], g11[1] + lineElevOffset, g11[2]
             );
           }
           if (tx === this.mapWidth - 1) {
             gridLinePositions.push(
-              tx + 1, h10 + lineElevOffset, ty,
-              tx + 1, h11 + lineElevOffset, ty + 1
+              g10[0], g10[1] + lineElevOffset, g10[2],
+              g11[0], g11[1] + lineElevOffset, g11[2]
             );
           }
         }
@@ -6892,16 +6822,16 @@ export class RCT3DRenderer {
           const cliffTopAO = 0.95 * zoneMult;
           const cliffBucket=side=>streetCorners?tileMeshBuckets[`terrainRetainingWall${terrainTextureHash(tx,ty,tType+side)&3}`]:bucket;
           // 1. South Face (+Y, at ty + 1, facing +Z)
-          if (ty === this.mapHeight - 1 || isWaterAt(tx, ty + 1)) {
+          if (ty === this.mapHeight - 1 || isDropAt(tx, ty + 1)) {
             const wallBucket=cliffBucket(2);
             wallBucket.pos.push(
               tx, baseH, ty + 1,
               tx + 1, baseH, ty + 1,
-              tx + 1, h11, ty + 1,
+              ...(terrainVertices?.[2]||[tx+1,h11,ty+1]),
 
               tx, baseH, ty + 1,
-              tx + 1, h11, ty + 1,
-              tx, h01, ty + 1
+              ...(terrainVertices?.[2]||[tx+1,h11,ty+1]),
+              ...(terrainVertices?.[3]||[tx,h01,ty+1])
             );
             wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
             wallBucket.colors.push(
@@ -6915,16 +6845,16 @@ export class RCT3DRenderer {
           }
 
           // 2. East Face (+X, at tx + 1, facing +X)
-          if (tx === this.mapWidth - 1 || isWaterAt(tx + 1, ty)) {
+          if (tx === this.mapWidth - 1 || isDropAt(tx + 1, ty)) {
             const wallBucket=cliffBucket(1);
             wallBucket.pos.push(
               tx + 1, baseH, ty + 1,
               tx + 1, baseH, ty,
-              tx + 1, h10, ty,
+              ...(terrainVertices?.[1]||[tx+1,h10,ty]),
 
               tx + 1, baseH, ty + 1,
-              tx + 1, h10, ty,
-              tx + 1, h11, ty + 1
+              ...(terrainVertices?.[1]||[tx+1,h10,ty]),
+              ...(terrainVertices?.[2]||[tx+1,h11,ty+1])
             );
             wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
             wallBucket.colors.push(
@@ -6938,16 +6868,16 @@ export class RCT3DRenderer {
           }
 
           // 3. North Face (-Y, at ty, facing -Z)
-          if (ty === 0 || isWaterAt(tx, ty - 1)) {
+          if (ty === 0 || isDropAt(tx, ty - 1)) {
             const wallBucket=cliffBucket(0);
             wallBucket.pos.push(
               tx + 1, baseH, ty,
               tx, baseH, ty,
-              tx, h00, ty,
+              ...(terrainVertices?.[0]||[tx,h00,ty]),
 
               tx + 1, baseH, ty,
-              tx, h00, ty,
-              tx + 1, h10, ty
+              ...(terrainVertices?.[0]||[tx,h00,ty]),
+              ...(terrainVertices?.[1]||[tx+1,h10,ty])
             );
             wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
             wallBucket.colors.push(
@@ -6961,16 +6891,16 @@ export class RCT3DRenderer {
           }
 
           // 4. West Face (-X, at tx, facing -X)
-          if (tx === 0 || isWaterAt(tx - 1, ty)) {
+          if (tx === 0 || isDropAt(tx - 1, ty)) {
             const wallBucket=cliffBucket(3);
             wallBucket.pos.push(
               tx, baseH, ty,
               tx, baseH, ty + 1,
-              tx, h01, ty + 1,
+              ...(terrainVertices?.[3]||[tx,h01,ty+1]),
 
               tx, baseH, ty,
-              tx, h01, ty + 1,
-              tx, h00, ty
+              ...(terrainVertices?.[3]||[tx,h01,ty+1]),
+              ...(terrainVertices?.[0]||[tx,h00,ty])
             );
             wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
             wallBucket.colors.push(
@@ -7336,7 +7266,6 @@ export class RCT3DRenderer {
     this._activeUiIds.clear();
     const activeIds = this._activeIds;
     const activeUiIds = this._activeUiIds;
-    this.overheadBillboardQueue??=[];this.overheadBillboardQueue.length=0;
     this.cityCitizenBatches.begin();
     this.cityCitizenModels.begin(dt,effectiveSpeed);
     const perspectiveActive=this.isPerspectiveActive(),firstPersonActive=this.isFirstPersonActive(),thirdPersonActive=this.isThirdPersonActive();
@@ -7489,7 +7418,7 @@ export class RCT3DRenderer {
         const isTropicalFoliage = isPlantOrFlora && e.properties.cityPlant?.form === 'foliage';
       const isTropicalFlowering = isPlantOrFlora && e.properties.cityPlant?.form === 'flowering';
       const isBroadLeafPlant = isPlantOrFlora && e.properties.cityPlant?.form === 'broad_leaf';
-      const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
+        const isRoseBush = isPlantOrFlora && (e.properties.species === 'rose_bush' || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
         const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
         const isPine = isTree && (e.properties.species === "pine" || (r.skin && r.skin.toLowerCase().includes("pine")));
         const isPalm = isTree && (e.properties.species === "coconut_palm" || e.properties.species === "royal_palm" || ['palm','fan_palm'].includes(e.properties.cityPlant?.form));
@@ -7611,18 +7540,18 @@ export class RCT3DRenderer {
         roseBushCount++;
       }
       else if(isBroadLeafPlant&&broadLeafCount<this.maxInstances){
-        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),5371),982451653)>>>0)%628)/100),size=(r.size||1)*1.08;
-        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),5371),982451653)>>>0)%628)/100),aspect=BROAD_LEAF_ASPECT[e.properties.species]||[1,1,1],size=(r.size||1)*1.08;
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size*aspect[0],size*aspect[1],size*aspect[2]);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
         this.instBroadLeafPlants.setMatrixAt(broadLeafCount,mMatrix);this.instBroadLeafPlants.setColorAt(broadLeafCount,this.tempColor1.setHex(e.properties.species==='monstera'?0x3f8049:0x568b4d));broadLeafCount++;
       }
       else if(isTropicalFoliage&&tropicalFoliageCount<this.maxInstances){
-        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),2243),982451653)>>>0)%628)/100),size=(r.size||1)*(e.properties.species==='imperial_bromeliad'?1.22:1);
-        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),2243),982451653)>>>0)%628)/100),aspect=TROPICAL_FOLIAGE_ASPECT[e.properties.species]||[1,1,1],size=r.size||1;
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size*aspect[0],size*aspect[1],size*aspect[2]);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
         this.instTropicalFoliage.setMatrixAt(tropicalFoliageCount,mMatrix);this.instTropicalFoliage.setColorAt(tropicalFoliageCount,this.tempColor1.setHex(TROPICAL_FOLIAGE_COLORS[e.properties.species]||0x68894e));tropicalFoliageCount++;
       }
       else if(isTropicalFlowering&&tropicalFlowerCount<this.maxInstances){
-        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9157),982451653)>>>0)%628)/100),size=(r.size||1)*(e.properties.species==='heliconia_psittacorum'?.8:1);
-        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9157),982451653)>>>0)%628)/100),aspect=TROPICAL_FLOWER_ASPECT[e.properties.species]||[1,1,1],size=r.size||1;
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size*aspect[0],size*aspect[1],size*aspect[2]);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
         this.instTropicalFlowerStems.setMatrixAt(tropicalFlowerCount,mMatrix);this.instTropicalFlowerHeads.setMatrixAt(tropicalFlowerCount,mMatrix);this.instTropicalFlowerHeads.setColorAt(tropicalFlowerCount,this.tempColor1.setHex(TROPICAL_FLOWER_COLORS[e.properties.species]||0xe95042));tropicalFlowerCount++;
       }
       // Broad paddle leaves give giant tropical foliage plants a stronger
@@ -8209,31 +8138,6 @@ export class RCT3DRenderer {
 
         // --- 3D FLOATING EMOTES & HELD ITEMS / BACKPACKS PER HAND (STRICTLY CONSCIOUS CREATURES) ---
         if (isConsciousCreature && !e.properties?.citizen?.indoorLocation) {
-          const citizen=e.properties?.citizen;
-          if(this.graphicOptions.overheadBillboards&&citizen){
-            const now=frameStart;
-            this.overheadEvents??=new Map();
-            let events=this.overheadEvents.get(e.id);
-            if(!events){events={damageSeq:null,mealSeq:null,damageUntil:0,mealUntil:0,damageAmount:0};this.overheadEvents.set(e.id,events);}
-            const damage=citizen.lastDamageEvent,meal=citizen.lastMealEvent;
-            if(damage?.sequence!=null){if(events.damageSeq===null)events.damageSeq=damage.sequence;else if(events.damageSeq!==damage.sequence){events.damageSeq=damage.sequence;events.damageAmount=damage.amount||1;events.damageStarted=now;events.damageUntil=now+1450;}}
-            if(meal?.sequence!=null){if(events.mealSeq===null)events.mealSeq=meal.sequence;else if(events.mealSeq!==meal.sequence){events.mealSeq=meal.sequence;events.mealUntil=now+1550;}}
-            const headY=surfaceH+(modelRendered?1.25:.90)+floatBob+.38;
-            const addOverhead=(kind,extra={})=>this.overheadBillboardQueue.push({kind,x:e.x,y:headY,z:e.y,...extra});
-            const substanceUse=citizen.lastSubstanceUse,substanceNow=this.cityDevelopment?.city?.minute??0;if(this.speechBubblesVisible&&substanceUse?.usingUntil>substanceNow){addOverhead('speech',{label:`${substanceUse.icon} ${substanceUse.label}`,variant:'substance'});addOverhead('substance',{label:substanceUse.icon,offsetX:24});}
-            if(this.speechBubblesVisible&&!(substanceUse?.usingUntil>substanceNow)&&citizen.conversation?.a===citizen.id)addOverhead("speech",{label:citizen.conversation.topic||"conversa"});
-            const campaign=citizen.campaign;
-            if(this.speechBubblesVisible&&citizen.task==='campaign'&&campaign&&!citizen.path.length&&!citizen.ridingVehicleId&&['canvass','rally','membership'].includes(campaign.type)){
-              const city=this.cityDevelopment?.city,election=city?.politics?.active,nomination=election?.candidates?.find(candidate=>candidate.citizenId===campaign.candidateId),theme=nomination?.promises?.[0]?.title||nomination?.slogan||city?.politics?.party(campaign.partyId)?.short||"propostas";
-              addOverhead("speech",{label:`${campaign.type==='membership'?'partido':theme}`,variant:"campaign"});
-            }
-            if(this.speechBubblesVisible&&!(substanceUse?.usingUntil>substanceNow)&&!citizen.conversation&&!campaign&&!citizen.path?.length&&!citizen.ridingVehicleId){
-              const actionLabel=CITIZEN_ACTION_LABELS[citizen.task];
-              if(actionLabel)addOverhead("action",{label:actionLabel});
-            }
-            if(events.mealUntil>now)addOverhead("meal",{offsetX:18});
-            if(events.damageUntil>now)addOverhead("damage",{amount:events.damageAmount,startedAt:events.damageStarted});
-          }
           const campaign=e.properties?.citizen?.campaign;
           if(campaign?.flag && e.properties.citizen.task==='campaign'&&!e.properties.citizen.ridingVehicleId) {
             const flag=campaign.flag,uiKey=`${e.id}_campaign_flag`;
@@ -8246,7 +8150,6 @@ export class RCT3DRenderer {
             if(!mesh){mesh=new THREE.Mesh(this.flagGeo,mat);mesh.renderOrder=25;this.floatingUiGroup.add(mesh);this.floatingUiSprites.set(uiKey,mesh);}
             mesh.material=mat;mesh.position.set(e.x+.18,surfaceH+1.2,e.y);mesh.rotation.y=billboardRotY;
           }
-          const emoteSkin = getCreatureEmoteSkin(e);
           const heldItems = [];
 
           if (e.properties?.backpack) {
@@ -8270,7 +8173,7 @@ export class RCT3DRenderer {
           if (e.properties?.equipment?.offHand) heldItems.push(e.properties.equipment.offHand);
           const weapon=e.properties?.citizen?.equipment?.weapon;if(weapon)heldItems.push({name:weapon.name,skin:weapon.good==='porrete'?'Item_Wood.png':'Item_Nugget.png',resourceType:'weapon',tint:weapon.good==='porrete'?0xffffff:weapon.kind==='firearm'?0x4a4f57:0x9aa4ab});
 
-          const totalIcons = (emoteSkin ? 1 : 0) + heldItems.length;
+          const totalIcons = heldItems.length;
           if (totalIcons > 0) {
             const headY = surfaceH + (modelRendered?1.25:.90) + floatBob;
             const iconSpacing = 0.32;
@@ -8280,53 +8183,6 @@ export class RCT3DRenderer {
             const rx = 0.70710678;
             const rz = -0.70710678;
 
-            let iconIdx = 0;
-
-            if (emoteSkin) {
-              const uiKey = `${e.id}_emote`;
-              activeUiIds.add(uiKey);
-              const tintFg = (e.emote === 12) ? 0xff3c78 : (e.emote === 13) ? 0xff2828 : 0xfff064;
-              const emTex = createTintedTexture(emoteSkin, tintFg, 0x000000, 0.0);
-              const emMatKey = emTex.uuid;
-
-              let emMesh = this.floatingUiSprites.get(uiKey);
-              if (!emMesh) {
-                let emMat = uiMatCache.get(emMatKey);
-                if (!emMat) {
-                  emMat = new THREE.MeshBasicMaterial({
-                    map: emTex,
-                    transparent: true,
-                    alphaTest: 0.1,
-                    depthTest: true,
-                    side: THREE.DoubleSide
-                  });
-                  uiMatCache.set(emMatKey, emMat);
-                }
-                emMesh = new THREE.Mesh(this.uiIconGeo, emMat);
-                emMesh.renderOrder = 25;
-                this.floatingUiGroup.add(emMesh);
-                this.floatingUiSprites.set(uiKey, emMesh);
-              } else if (emMesh.material !== uiMatCache.get(emMatKey) || emMesh.material.map !== emTex) {
-                let emMat = uiMatCache.get(emMatKey);
-                if (!emMat) {
-                  emMat = new THREE.MeshBasicMaterial({
-                    map: emTex,
-                    transparent: true,
-                    alphaTest: 0.1,
-                    depthTest: true,
-                    side: THREE.DoubleSide
-                  });
-                  uiMatCache.set(emMatKey, emMat);
-                }
-                emMesh.material = emMat;
-              }
-              emMesh.visible=this.speechBubblesVisible;
-
-              const offset = startOffset + iconIdx * iconSpacing;
-              emMesh.position.set(e.x + offset * rx, headY, e.y + offset * rz);
-              emMesh.rotation.y = this.fixedRotationY;
-              iconIdx++;
-            }
 
             for (let h = 0; h < heldItems.length; h++) {
               const it = heldItems[h];
@@ -8379,10 +8235,9 @@ export class RCT3DRenderer {
                 itMesh.material = itMat;
               }
 
-              const offset = startOffset + iconIdx * iconSpacing;
+              const offset = startOffset + h * iconSpacing;
               itMesh.position.set(e.x + offset * rx, headY, e.y + offset * rz);
               itMesh.rotation.y = this.fixedRotationY;
-              iconIdx++;
             }
           }
         }
@@ -8878,7 +8733,6 @@ export class RCT3DRenderer {
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.scene, activeCam);
     }
-    this.drawOverheadBillboards(activeCam);
     const frameCpuMs = performance.now() - frameStart;
     this.terrainFrameAverageMs = (this.terrainFrameAverageMs || frameCpuMs) * 0.92 + frameCpuMs * 0.08;
     this.terrainAdaptFrame = (this.terrainAdaptFrame || 0) + 1;

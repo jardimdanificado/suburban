@@ -37,7 +37,7 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-style
 import { CityWelfare } from './city_welfare.js';
 import { INDUSTRIES } from './city_industries.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
-import { quarryDeposits } from './city_terrain.js?v=road-durability-1';
+import { quarryDeposits } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-investment-index-1';
@@ -50,7 +50,7 @@ import { CityGigs } from './city_gigs.js?v=spontaneous-artwork-fast-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=economic-flow-7';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=citizen-id-index-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=road-durability-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 
 const OUTDOOR_LEISURE_SEATS=new WeakMap();
 function outdoorLeisureSeats(city){

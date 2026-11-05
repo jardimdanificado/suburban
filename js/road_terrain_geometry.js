@@ -1,4 +1,4 @@
-import {baseTerrainTile,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE} from './world_gen.js?v=deep-perf-3';
+import {baseTerrainTile,TILE_STONE,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE} from './world_gen.js?v=deep-perf-3';
 
 const HEIGHTS=[1.1,5.5,0,.4,3.8,0,1.1,.4,1.1,2.3,7.5,.4,2.3,2.3];
 const ROADS=new Set([TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE]);
@@ -8,6 +8,16 @@ const caches=new WeakMap();
 
 export const terrainTileHeight=tile=>HEIGHTS[baseTerrainTile(tile)]??0;
 const at=(world,x,y)=>x<0||y<0||x>=world.width||y>=world.height?TILE_VOID:world.map?world.map[y*world.width+x]:world.getTile(x,y);
+function stoneVertexSeed(world,x,y,salt=0){
+  let hash=Math.imul((x|0)^((world.seed||0)>>>0)^salt,0x45d9f3b);hash=Math.imul(hash^(hash>>>16)^Math.imul(y|0,0x27d4eb2d),0x45d9f3b);return(hash^(hash>>>16))>>>0;
+}
+function stoneVertexHeight(world,x,y){
+  return terrainTileHeight(TILE_STONE)+(((stoneVertexSeed(world,x,y)/4294967295)*2)-1)*.18;
+}
+function stoneVertexOffset(world,x,y){
+  return {x:(((stoneVertexSeed(world,x,y,0x6d2b79f5)/4294967295)*2)-1)*.045,z:(((stoneVertexSeed(world,x,y,0x1b873593)/4294967295)*2)-1)*.045};
+}
+export function terrainVertexOffset(world,x,y){return stoneVertexOffset(world,x,y);}
 function cacheFor(world){
   let cache=caches.get(world);
   if(!cache||cache.map!==world.map||cache.width!==world.width||cache.height!==world.height){
@@ -20,7 +30,7 @@ function cacheFor(world){
 }
 function naturalCorner(world,x,y){
   let sum=0,count=0;
-  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tile=at(world,x+dx,y+dy);if(tile!==TILE_WATER&&tile!==TILE_VOID){sum+=terrainTileHeight(tile);count++;}}
+  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tile=at(world,x+dx,y+dy);if(tile!==TILE_WATER&&tile!==TILE_VOID){sum+=baseTerrainTile(tile)===TILE_STONE?stoneVertexHeight(world,x,y):terrainTileHeight(tile);count++;}}
   return count?sum/count:0;
 }
 export function terrainCornerHeight(world,x,y){
@@ -28,6 +38,17 @@ export function terrainCornerHeight(world,x,y){
   const cache=cacheFor(world),index=y*(world.width+1)+x;
   if(cache.marks[index]!==cache.generation){cache.values[index]=naturalCorner(world,x,y);cache.marks[index]=cache.generation;}
   return cache.values[index];
+}
+// Rocky foothill tiles read better as flat shelves. Keep the surrounding
+// grass interpolation intact and let the renderer close the height break with
+// a visible stone face.
+export function terrainTileSurfaceCorners(world,x,y){
+  if(baseTerrainTile(at(world,x,y))!==TILE_STONE)return null;
+  return [stoneVertexHeight(world,x,y),stoneVertexHeight(world,x+1,y),stoneVertexHeight(world,x+1,y+1),stoneVertexHeight(world,x,y+1)];
+}
+export function terrainTileSurfaceVertices(world,x,y){
+  const heights=terrainTileSurfaceCorners(world,x,y);if(!heights)return null;
+  return [[x,y,0],[x+1,y,1],[x+1,y+1,2],[x,y+1,3]].map(([vx,vy,index])=>{const offset=stoneVertexOffset(world,vx,vy);return [vx+offset.x,heights[index],vy+offset.z];});
 }
 
 // Only connected streets determine the road grade. An uphill bank beside a
@@ -125,7 +146,7 @@ export function roadRetainingFaces(world,x,y){
 
 export function terrainSurfaceElevation(world,x,y){
   const tx=Math.floor(x),ty=Math.floor(y);if(at(world,tx,ty)===TILE_WATER)return .08;
-  const surface=streetSurfaceCorners(world,tx,ty),u=x-tx,v=y-ty;
+  const surface=streetSurfaceCorners(world,tx,ty)||terrainTileSurfaceCorners(world,tx,ty),u=x-tx,v=y-ty;
   const h00=surface?surface[0]:terrainCornerHeight(world,tx,ty),h10=surface?surface[1]:terrainCornerHeight(world,tx+1,ty),h11=surface?surface[2]:terrainCornerHeight(world,tx+1,ty+1),h01=surface?surface[3]:terrainCornerHeight(world,tx,ty+1);
   // Use the same diagonal as the rendered triangles, including non-planar turns.
   return u<=v?h00*(1-v)+h01*(v-u)+h11*u:h00*(1-u)+h10*(u-v)+h11*v;

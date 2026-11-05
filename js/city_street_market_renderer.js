@@ -1,5 +1,5 @@
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
-import {surfaceElevation} from './city_terrain.js?v=quarry-outskirts-1';
+import {surfaceElevation} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
 const AWNING_COLORS=[0xb64f42,0x3e7778,0xd3a849,0x55734b,0x496b89,0xa45e83,0xb56c42,0x6e6553];

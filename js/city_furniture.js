@@ -1,6 +1,6 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=labor-secretariat-1';
-import {ROAD_TILES,tileAt} from './city_terrain.js?v=quarry-outskirts-1';
+import {ROAD_TILES,tileAt} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
 const BEACH_LEISURE_OCCUPANCY=new WeakMap();
 function beachLeisureOccupancy(furniture){

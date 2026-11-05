@@ -12,11 +12,11 @@ import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=gr
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=pixel-text-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,buildingFacadeBannerSupport,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import { partyFlagCanvas,drawPartyFlag } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=clothing-accessory-transform-1';
+import {citizenIsSleeping} from './city_citizen_models.js?v=campaign-flag-facing-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-neoclassical-1';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=quarry-outskirts-1';
-import {quarryDeposits} from './city_terrain.js?v=quarry-outskirts-1';
+import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import {quarryDeposits} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=porch-door-clearance-1';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -831,7 +831,7 @@ function syncTownhallFlag(renderer,group,THREE,b,shade=1){
   const mast=new THREE.Group(),roof=b.floors*CITY_FLOOR_HEIGHT+.18;
   const poleHeight=b.type==='townhall'?3.5:2.5,pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,poleHeight,6),new THREE.MeshLambertMaterial({color:0xc8c6b4}));
   pole.position.set(b.width*.5,roof+poleHeight*.5,b.depth*.5);mast.add(pole);
-  for(const row of flags){let texture;const canvas=partyFlagCanvas(row.flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);const banner=new THREE.Mesh(clothFlagGeometry(THREE,row.size,row.height),material);animateClothFlag(banner,flagWindTime(renderer),0);banner.userData.partyFlagTexture=texture;banner.position.set(b.width*.5+row.size*.5,roof+row.y,b.depth*.5);mast.add(banner);group.userData.governingFlagMaterials.push(material);group.userData.governingFlagCloths.push({cloth:banner,phase:0});}
+  for(const row of flags){let texture;const canvas=partyFlagCanvas(row.flag,()=>{if(texture)texture.needsUpdate=true;});texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;const material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,emissive:0x000000});material.color.setScalar(shade);const banner=new THREE.Mesh(clothFlagGeometry(THREE,row.size,row.height),material);banner.rotation.y=Math.PI;animateClothFlag(banner,flagWindTime(renderer),0);banner.userData.partyFlagTexture=texture;banner.position.set(b.width*.5-row.size*.5,roof+row.y,b.depth*.5);mast.add(banner);group.userData.governingFlagMaterials.push(material);group.userData.governingFlagCloths.push({cloth:banner,phase:0});}
   group.add(mast);group.userData.governingFlagMesh=mast;
 }
 

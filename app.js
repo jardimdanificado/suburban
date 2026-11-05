@@ -1,9 +1,9 @@
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=perf-spontaneous-art-title-3';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=labor-secretariat-1";
-import { CityDesktop } from "./js/city_desktop.js?v=organic-party-slogans-1";
+import { CityDesktop } from "./js/city_desktop.js?v=no-overhead-balloons-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=citizen-render-pools-2";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=no-overhead-balloons-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -545,7 +545,7 @@ function frame(now) {
   lastUiDrawnAt=now;lastUiPointerX=pointerX;lastUiPointerY=pointerY;
   legacyUI.beginFrame(pointerX, pointerY);
   const clockText = `D${String(world.clock.day).padStart(2, "0")} ${String(world.clock.hour).padStart(2, "0")}:${String(world.clock.minute).padStart(2, "0")}`;
-  cityUI.drawChrome(legacyUI,{clockText,paused,speed:time.speed,renderMode,speechBubblesVisible:renderer3D.speechBubblesVisible});
+  cityUI.drawChrome(legacyUI,{clockText,paused,speed:time.speed,renderMode});
   const hoverTile = editor.open && mousePosition.x >= 0 ? mapTileAt(mousePosition.x, mousePosition.y) : null;
 
   if (!legacyUI.hitTest(mousePosition.x, mousePosition.y)) {
@@ -613,7 +613,7 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   mainMenu: openMainMenu,
   hasActiveGame: () => mainMenu.hasActiveGame,
   startNewCity: (params) => startNewCity(params),
-  pause:togglePause, speed:()=>time.setSpeed(time.speed===32?0.5:time.speed*2), speechBubbles:()=>renderer3D.setOverheadBadgesVisible(!renderer3D.speechBubblesVisible), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
+  pause:togglePause, speed:()=>time.setSpeed(time.speed===32?0.5:time.speed*2), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
   center:()=>{renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
   observe:(mode,id)=>{if(mode==='third')renderer3D.setThirdPersonMode(true,id);else if(mode==='follow')renderer3D.setFollowCharacter(id);else if(mode==='free')renderer3D.setFreeCameraMode(true);else {renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);}},
   freeCameraActive:()=>renderer3D.isFirstPersonActive()&&(renderer3D.fpEntityId===null||renderer3D.fpEntityId===undefined),

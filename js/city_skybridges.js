@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {terrainWalkable} from './city_terrain.js?v=quarry-outskirts-1';
+import {terrainWalkable} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=sertanejo-house-styles-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
