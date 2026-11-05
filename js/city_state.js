@@ -26,7 +26,7 @@ import { CityMandates } from './city_mandates.js';
 import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=roadside-ad-placards-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=city-task-candidate-doors-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
 import { CityWelfare } from './city_welfare.js';
