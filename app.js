@@ -1,6 +1,6 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=sanitation-routing-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=perf-spontaneous-art-title-3';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=sanitation-routing-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=perf-spontaneous-art-title-3";
 import { CityDesktop } from "./js/city_desktop.js?v=organic-party-slogans-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=citizen-render-pools-2";
@@ -139,8 +139,8 @@ function profileCityMeshes(groups){
 
 function profileWorkerMetrics(metrics){
   if(!metrics)return null;
-  const {lastUpdateMs,maxUpdateMs,maxUpdateMinute,averageUpdateMs,maxSnapshotMs,maxSnapshotMinute,encodeMs,applyMs,changedNodes,newEvents}=metrics;
-  return {lastUpdateMs,maxUpdateMs,maxUpdateMinute,averageUpdateMs,maxSnapshotMs,maxSnapshotMinute,encodeMs,applyMs,changedNodes,newEvents};
+  const {lastUpdateMs,maxUpdateMs,maxUpdateMinute,maxUpdateProfile,averageUpdateMs,maxSnapshotMs,maxSnapshotMinute,encodeMs,applyMs,changedNodes,newEvents}=metrics;
+  return {lastUpdateMs,maxUpdateMs,maxUpdateMinute,maxUpdateProfile,averageUpdateMs,maxSnapshotMs,maxSnapshotMinute,encodeMs,applyMs,changedNodes,newEvents};
 }
 
 
@@ -569,7 +569,7 @@ function frame(now) {
       const count=frameMetrics.count;
       const citizenModels=renderer3D.cityCitizenModels;
       const projectedCitizens=city.citizens.reduce((visible,c)=>visible+Number(renderer3D.projectWorldToScreen(c.entity.x,c.entity.y,renderer3D.getSurfaceElevation(world.map,c.entity.x,c.entity.y)+(c.bodyHeightCm||170)/200).visible),0);
-      const profile={fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:profileWorkerMetrics(simulationBridge?.metrics),cityMeshStats:profileCityMeshes(renderer3D.cityMeshes),visibleEntities:renderer3D.lastInstVisibleCount,projectedCitizens,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),citizenModelBatches:citizenModels?.batches.size,citizenModelBatchesActive:citizenModels?.activeBatches.size,citizenModelInstances:[...(citizenModels?.activeBatches||[])].reduce((sum,b)=>sum+b.count,0),citizenAccessoryBatches:citizenModels?.headwearBatches.size,citizenAccessoryBatchesActive:citizenModels?.activeHeadwearBatches.size,citizenAccessoryInstances:[...(citizenModels?.activeHeadwearBatches||[])].reduce((sum,b)=>sum+b.count,0),drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
+      const profile={seed:worldSettings.seed,preset:worldSettings.preset,fps:count*1000/(ended-frameMetrics.started),cpuMs:frameMetrics.cpu/count,maxCpuMs:frameMetrics.max,simulationMs:frameMetrics.simulation/count,indexMs:frameMetrics.index/count,sceneMs:frameMetrics.scene/count,uiMs:frameMetrics.ui/count,sceneParts:{terrainMs:frameMetrics.terrain/count,cityMs:frameMetrics.city/count,entitiesMs:frameMetrics.renderEntities/count,entityLoopMs:frameMetrics.entityLoop/count,entityRestMs:frameMetrics.entityRest/count,citizenClassMs:frameMetrics.citizenClass/count,citizenSurfaceMs:frameMetrics.citizenSurface/count,citizenBodyMs:frameMetrics.citizenBody/count,webglMs:frameMetrics.webgl/count},worker:profileWorkerMetrics(simulationBridge?.metrics),cityMeshStats:profileCityMeshes(renderer3D.cityMeshes),visibleEntities:renderer3D.lastInstVisibleCount,projectedCitizens,citizenBatches:renderer3D.cityCitizenBatches?.batches.size,batchedCitizens:[...(renderer3D.cityCitizenBatches?.batches.values()||[])].reduce((sum,b)=>sum+b.count,0),citizenModelBatches:citizenModels?.batches.size,citizenModelBatchesActive:citizenModels?.activeBatches.size,citizenModelInstances:[...(citizenModels?.activeBatches||[])].reduce((sum,b)=>sum+b.count,0),citizenAccessoryBatches:citizenModels?.headwearBatches.size,citizenAccessoryBatchesActive:citizenModels?.activeHeadwearBatches.size,citizenAccessoryInstances:[...(citizenModels?.activeHeadwearBatches||[])].reduce((sum,b)=>sum+b.count,0),drawCalls:renderer3D.renderer.info.render.calls,triangles:renderer3D.renderer.info.render.triangles,geometries:renderer3D.renderer.info.memory.geometries,entities:entities.length,minute:city.minute};
       root.dataset.performance=JSON.stringify(profile);
       performanceOutput.textContent=formatPerformanceLines(profile).join('\n');
       const workerPeak=profile.worker?.maxUpdateMs||0;

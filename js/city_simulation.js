@@ -46,7 +46,7 @@ import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=secretariat-portfolios-1';
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
-import { CityGigs } from './city_gigs.js?v=art-titles-2';
+import { CityGigs } from './city_gigs.js?v=spontaneous-artwork-fast-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=economic-flow-7';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=conversation-cost-profile-2';
@@ -1131,9 +1131,15 @@ export class CitySimulation {
     for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait||c.task==='beach_leisure'||c.beachLeisure)this.furniture.syncCitizen(c);
     if(this.minute%60===0){this.furniture.reconcile();this.substances?.hourly();}
     const interiorMs=performance.now()-profileMark;profileMark=performance.now();
+    const societyParts=this.profileDiagnostics?{}:null;let societyPartStart=this.profileDiagnostics?performance.now():0;
     advanceRecruitment(this);
+    if(societyParts){societyParts.recruitmentMs=performance.now()-societyPartStart;societyPartStart=performance.now();}
     this.gigs.updateMinute();
-    disperseCrowds(this);this.society.updateMinute();
+    if(societyParts){societyParts.gigsMs=performance.now()-societyPartStart;societyPartStart=performance.now();}
+    disperseCrowds(this);
+    if(societyParts){societyParts.crowdDispersionMs=performance.now()-societyPartStart;societyPartStart=performance.now();}
+    this.society.updateMinute();
+    if(societyParts)societyParts.socialUpdateMs=performance.now()-societyPartStart;
     const societyMs=performance.now()-profileMark;profileMark=performance.now();
     const movers=this._movingCitizens??=[];movers.length=0;
     for(const c of this.citizens)if(c.path.length||c.indoorLocation?.path?.length||c.deliveryId||c.ridingVehicleId)movers.push(c);
@@ -1146,7 +1152,7 @@ export class CitySimulation {
       if(this.profileDiagnostics){const started=performance.now(),parts=this.economy.hourly(phase);economyHourly={phase,ms:performance.now()-started,...(parts||{})};}
       else this.economy.hourly(phase);
     }
-    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(civicDetail?{civicDetail}:{}),...(citizenDetail?{citizenDetail}:{}),...(this.profileDiagnostics?{societyDetail:this.society.lastUpdateProfile}:{}),...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchWork:Object.fromEntries(['groundCalls','groundCacheHits','aStarCalls','sharedCalls','destinationFields','sourceFields','fieldResets','bridgeChecks'].map(key=>[key,this._pathSearchProfile[key]||0])),pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
+    this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(civicDetail?{civicDetail}:{}),...(citizenDetail?{citizenDetail}:{}),...(this.profileDiagnostics?{societyDetail:this.society.lastUpdateProfile,societyParts,...(this.gigs.lastSpontaneousArtworkProfile?{spontaneousArtwork:this.gigs.lastSpontaneousArtworkProfile}:{})}:{}),...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchWork:Object.fromEntries(['groundCalls','groundCacheHits','aStarCalls','sharedCalls','destinationFields','sourceFields','fieldResets','bridgeChecks'].map(key=>[key,this._pathSearchProfile[key]||0])),pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
     this.syncClock();
   }
   syncClock() {

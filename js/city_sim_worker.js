@@ -1,9 +1,9 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=sanitation-routing-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=perf-spontaneous-art-title-3';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
 let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0, lastSnapshotCost = 0, dirty = false, forceSnapshotPending = false;
-let lastUpdateMs=0,maxUpdateMs=0,maxUpdateMinute=0,updateTotalMs=0,updateCount=0,maxSnapshotMs=0,maxSnapshotMinute=0;
+let lastUpdateMs=0,maxUpdateMs=0,maxUpdateMinute=0,maxUpdateProfile=null,updateTotalMs=0,updateCount=0,maxSnapshotMs=0,maxSnapshotMinute=0;
 const phasePeaks={};
 const MIN_STEP = 1 / 60;
 // One city minute is 0.25 simulation seconds. At high speed, advancing it
@@ -91,7 +91,7 @@ function recordProfile(profile,prefix=''){
     const name=prefix+key,peak=phasePeaks[name];if(!peak||value>peak.ms)phasePeaks[name]={ms:value,minute:profile.minute};
   }
 }
-function workerMetrics(){return{lastUpdateMs,maxUpdateMs,maxUpdateMinute,averageUpdateMs:updateCount?updateTotalMs/updateCount:0,maxSnapshotMs,maxSnapshotMinute,phasePeaks};}
+function workerMetrics(includeProfile=false){return{lastUpdateMs,maxUpdateMs,maxUpdateMinute,...(includeProfile?{maxUpdateProfile}:{}),averageUpdateMs:updateCount?updateTotalMs/updateCount:0,maxSnapshotMs,maxSnapshotMinute,phasePeaks};}
 function snapshot(force = false) {
   if (!state) return false;
   if (awaitingAck) { if (force) forceSnapshotPending = true; return false; }
@@ -100,7 +100,7 @@ function snapshot(force = false) {
   const packet = graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:true}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions();
   lastSnapshotCost=performance.now()-started;
   if(lastSnapshotCost>maxSnapshotMs){maxSnapshotMs=lastSnapshotCost;maxSnapshotMinute=state.city.minute;}
-  postMessage({ type: 'state', packet, positions: motion, inside, vehicles, tick, elapsed, workMs: lastSnapshotCost, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, packet.packedNeeds.buffer]);
+  postMessage({ type: 'state', packet, positions: motion, inside, vehicles, tick, elapsed, workMs: lastSnapshotCost, workerMetrics:workerMetrics(true) }, [motion.buffer, inside.buffer, vehicles.buffer, packet.packedNeeds.buffer]);
   awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
   return true;
 }
@@ -173,7 +173,7 @@ setInterval(() => {
       let steps = 0;
       while (accumulator >= step && steps < 240 && performance.now() < deadline) {
         const started=performance.now();state.city.update(step);lastUpdateMs=performance.now()-started;recordProfile(state.city.lastUpdateProfile);updateTotalMs+=lastUpdateMs;updateCount++;
-        if(lastUpdateMs>maxUpdateMs){maxUpdateMs=lastUpdateMs;maxUpdateMinute=state.city.minute;}
+        if(lastUpdateMs>maxUpdateMs){maxUpdateMs=lastUpdateMs;maxUpdateMinute=state.city.minute;maxUpdateProfile=state.city.profileDiagnostics?state.city.lastUpdateProfile:null;}
         accumulator -= step; tick++; elapsed += step; steps++;
       }
       if (steps) dirty = true;

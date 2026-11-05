@@ -4,24 +4,31 @@ import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interi
 import {CITY_FLOOR_HEIGHT,buildingFacadeBannerSupport} from './city_building_geometry.js?v=banner-placement-2';
 import {isRoadAt} from './city_terrain.js?v=quarry-outskirts-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 
 const ACTIVE=new Set(['open','working']);
 const INTERRUPTIBLE=new Set(['leisure','walk','social','sit','outdoor_leisure']);
+const SPONTANEOUS_ART_TITLES=Object.freeze(['Maré','Mangue','Girassol','Cajueiro','Caribe','Caju','Aroeira','Dendê','Jangada','Canoa','Azulejo','Coqueiral','Pitanga','Bromélia','Coroa-de-frade','Mandacaru','Calango','Sereia','Boiúna','Farol','Aratu','Cocada','Renda','Fandango','Batuque','Chuva-de-verão','Pôr-do-sol','Mormaço','Cais','Vento sul','Palmeiral','Caminho das águas']);
+function spontaneousArtworkTitle(city){
+ const first=SPONTANEOUS_ART_TITLES[Math.floor(city.random()*SPONTANEOUS_ART_TITLES.length)];
+ if(city.random()>=.35)return first;
+ let second=SPONTANEOUS_ART_TITLES[Math.floor(city.random()*SPONTANEOUS_ART_TITLES.length)];
+ if(second===first)second=SPONTANEOUS_ART_TITLES[(SPONTANEOUS_ART_TITLES.indexOf(first)+1)%SPONTANEOUS_ART_TITLES.length];
+ return `${first} · ${second}`;
+}
 const cleanFee=(city,building,scope,payerId=null)=>{
  const feces=[...(building.feces?.values()||[])].reduce((n,p)=>n+(p.amount||0),0),base=city.currency.price(900+Math.min(30,feces)*100+(building.litter||0)*120),factor=scope==='frontage'?1:.8;
  return Math.ceil(base*factor*(payerId==='treasury'?1.5:1));
 };
 export class CityGigs{
  constructor(city){this.city=city;this.jobs=[];this.nextId=1;this.completed=0;this.lastSpontaneousArtworkDay=null;this.lastSpontaneousArtworkAt=-Infinity;this.artworkTitleMigrationVersion=0;}
- migrateLegacyArtworkTitles(){if(this.artworkTitleMigrationVersion>=1)return;const city=this.city,spontaneous=new Set((city.history?.entries||[]).filter(entry=>entry.artId!=null&&entry.data?.kind==='spontaneous-artwork').map(entry=>entry.artId));for(const piece of city.justice?.art||[]){const legacyFixed=piece.kind==='flags'&&piece.creatorId!=null&&piece.sponsorId===piece.creatorId&&/^Nossa janela, nossa voz(?: · .+)?$/u.test(piece.message||''),loggedSpontaneous=spontaneous.has(piece.id);if(!loggedSpontaneous&&!legacyFixed)continue;piece.message=gerarTituloTematico('arte',{random:()=>city.random()});if(piece.entity?.properties)piece.entity.properties.name=`${city.justice.labelArt(piece.kind)}: ${piece.message.slice(0,42)}`;}this.artworkTitleMigrationVersion=1;}
+ migrateLegacyArtworkTitles(){if(this.artworkTitleMigrationVersion>=1)return;const city=this.city,spontaneous=new Set((city.history?.entries||[]).filter(entry=>entry.artId!=null&&entry.data?.kind==='spontaneous-artwork').map(entry=>entry.artId));for(const piece of city.justice?.art||[]){const legacyFixed=piece.kind==='flags'&&piece.creatorId!=null&&piece.sponsorId===piece.creatorId&&/^Nossa janela, nossa voz(?: · .+)?$/u.test(piece.message||''),loggedSpontaneous=spontaneous.has(piece.id);if(!loggedSpontaneous&&!legacyFixed)continue;piece.message=spontaneousArtworkTitle(city);if(piece.entity?.properties)piece.entity.properties.name=`${city.justice.labelArt(piece.kind)}: ${piece.message.slice(0,42)}`;}this.artworkTitleMigrationVersion=1;}
  get(id){return this.jobs.find(j=>j.id===id);}
  quote(buildingId,scope='interior',payerAccountId=null){const b=this.city.building(buildingId);if(!b)return 0;const city=this.city;if(scope==='repair')return Math.ceil(city.currency.price(1400+Math.max(0,75-(b.condition||100))*45)*(payerAccountId==='treasury'?1.5:1));if(scope==='garden')return Math.ceil(city.currency.price(1800)*(payerAccountId==='treasury'?1.5:1));return cleanFee(city,b,scope,payerAccountId);}
  artworkMaterial(kind,materialUsed=null){const statue=['statue','monument'].includes(kind);if(materialUsed==='fezes')return {good:'fezes',quantity:statue?2:1};if(statue&&['pedra','argila','ferro','aco','ceramica'].includes(materialUsed))return {good:materialUsed,quantity:materialUsed==='ferro'||materialUsed==='aco'?1:2};return statue?{good:'pedra',quantity:2}:{good:'tinta',quantity:1};}
  artworkSupplier(kind,materialUsed=null){const city=this.city,{good,quantity}=this.artworkMaterial(kind,materialUsed);return city.buildings.filter(b=>b.active&&!b.entity.destroyed&&(good==='tinta'?b.type==='paintworks'&&city.paint.available(b)>=quantity:(b.inventory?.[good]||0)>=quantity)).sort((a,z)=>a.id-z.id)[0]||null;}
  artworkQuote(buildingId,kind,payerAccountId,materialUsed=null){const city=this.city,b=city.building(buildingId),supplier=this.artworkSupplier(kind,materialUsed);if(!b)return 0;const required=['statue','monument'].includes(kind)?42:24,material=this.artworkMaterial(kind,materialUsed),supply=material.good==='tinta'?(supplier?city.paint.quote(supplier,city.paint.stock(supplier)[0]?.color,material.quantity):city.economy.goods.tinta.price*material.quantity):city.economy.goods[material.good].price*material.quantity,labor=required*(city.politics.policy.minimumWage||1),base=city.currency.price(900+supply+labor);return Math.ceil(base*(payerAccountId==='treasury'?1.5:1));}
  createArtworkOrder(payerAccountId,buildingId,{kind='banner',message='',subjectId=null,sponsorId=null,truth=null,purpose='expression',commercial=false,partyId=null,color=null,materialUsed=null,fee=null,narrative=null,preferredArtistId=null,supportUnitId=null,supportKind='interior-wall',supportLinkId=null,supportEndpoint=null}={}){
-  const city=this.city,b=city.building(buildingId),allowed=['banner','painting','graffiti','flags','statue','monument','vase'];if(!b||b.entity.destroyed||b.constructionKind==='open-air'||!allowed.includes(kind)||!city.accounts.has(payerAccountId))return false;message=String(message||'').trim()||gerarTituloTematico('arte',{random:()=>city.random()});
+  const city=this.city,b=city.building(buildingId),allowed=['banner','painting','graffiti','flags','statue','monument','vase'];if(!b||b.entity.destroyed||b.constructionKind==='open-air'||!allowed.includes(kind)||!city.accounts.has(payerAccountId))return false;message=String(message||'').trim()||spontaneousArtworkTitle(city);
   const owner=b.ownerId!=null?city.society.citizen(b.ownerId)?.accountId:b.municipal?'treasury':b.accountId,unitSponsor=b.units?.some(u=>u.ownerId===payerAccountId||u.tenantId===payerAccountId);if(payerAccountId!==owner&&payerAccountId!==b.accountId&&!unitSponsor&&!b.municipal)return false;
   const account=artworkNarrative(city,narrative),resolvedSponsorId=sponsorId??city.citizens.find(c=>c.accountId===payerAccountId)?.id??(b.municipal?city.economy.mayorId:city.society.citizen(b.ownerId)?.id??null);if(narrative&&!account)return false;if(purpose==='defamation'&&(!Number.isInteger(subjectId)||!city.society.citizen(subjectId)||resolvedSponsorId==null||!(!account&&truth===false||account?.mode==='distorted'||account?.mode==='invented')))return false;
   const link=supportKind==='skybridge'?(city.skybridgeLinksForRevision?.()||[]).find(item=>item.id===supportLinkId):null,endpoint=supportKind==='skybridge'?(supportEndpoint==='end'||supportEndpoint==='start'?supportEndpoint:b.id===link?.bId?'end':'start'):null,endpointBuildingId=endpoint==='end'?link?.bId:link?.aId,roomId=supportKind==='skybridge'?(endpoint==='end'?link?.buId:link?.auId):supportUnitId==null?null:Number(supportUnitId),room=roomId==null?null:b.units.find(u=>u.id===roomId),roof=supportKind==='roof-terrace'&&room?buildingLeisureSpaces(b).find(s=>s.kind==='roof_terrace'&&s.unitId===room.id):null;
@@ -37,24 +44,33 @@ export class CityGigs{
   return job;
  }
  postSpontaneousArtwork(){
-  const city=this.city;
+  const city=this.city,profile=city.profileDiagnostics?{startedAt:performance.now()}:null;
   this.migrateLegacyArtworkTitles();
   // Unsponsored art is an ordinary act of expression: it costs little, can
   // come from a resident with modest skill, and does not wait for a patron.
   if(city.minute%180!==120||city.hour<8||city.hour>=19||this.lastSpontaneousArtworkAt===city.minute||city.minute-this.lastSpontaneousArtworkAt<360)return null;
   this.lastSpontaneousArtworkDay=Math.floor(city.minute/1440)+1;
-  const artists=city.citizens.filter(c=>!c.entity.destroyed&&!c.dead&&city.society.isAdult(c)&&(c.skills?.artistic||0)>=1&&!c.custody&&!c.informalJobId&&!c.deliveryId&&!c.workMeal&&!c.paintWorkId&&!c.mechanicJob&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.path?.length&&(!c.task||INTERRUPTIBLE.has(c.task))&&!city.urgentNeed(c)&&(c.needs?.energy??0)>30&&(c.needs?.health??0)>40&&city.minute-(c.lastSpontaneousArtworkAt??-Infinity)>=2*1440)
-   .map(c=>({citizen:c,roll:Math.floor(city.random()*100)})).filter(row=>row.roll<58+(city.politics?.secretaries?.find(office=>office.officeId==='education_culture')?.skill||0)*.2).sort((a,b)=>(b.citizen.skills.artistic-a.citizen.skills.artistic)||a.roll-b.roll||a.citizen.id-b.citizen.id);
+  let phaseStart=profile?performance.now():0;
+  const eligible=city.citizens.filter(c=>!c.entity.destroyed&&!c.dead&&city.society.isAdult(c)&&(c.skills?.artistic||0)>=1&&!c.custody&&!c.informalJobId&&!c.deliveryId&&!c.workMeal&&!c.paintWorkId&&!c.mechanicJob&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.path?.length&&(!c.task||INTERRUPTIBLE.has(c.task))&&!city.urgentNeed(c)&&(c.needs?.energy??0)>30&&(c.needs?.health??0)>40&&city.minute-(c.lastSpontaneousArtworkAt??-Infinity)>=2*1440);
+  if(profile)profile.eligibleMs=performance.now()-phaseStart;
+  phaseStart=profile?performance.now():0;
+  const artists=eligible.map(c=>({citizen:c,roll:Math.floor(city.random()*100)})).filter(row=>row.roll<58+(city.politics?.secretaries?.find(office=>office.officeId==='education_culture')?.skill||0)*.2).sort((a,b)=>(b.citizen.skills.artistic-a.citizen.skills.artistic)||a.roll-b.roll||a.citizen.id-b.citizen.id);
+  if(profile)profile.rankMs=performance.now()-phaseStart;
+  const siteTimings=profile?{filterMs:0,visitMs:0,artistsVisited:0,sitesVisited:0}:null;
   for(const {citizen,roll} of artists){
-   const home=city.units.get(citizen.homeUnitId),homeBuilding=home&&city.building(home.buildingId),sites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&(b===homeBuilding||b.units?.some(u=>u.ownerId===citizen.accountId||u.tenantId===citizen.accountId)||b.municipal&&['townhall','council_chamber','library','theater','sports_center'].includes(b.type))&&!this.jobs.some(j=>j.kind==='art-installation'&&j.buildingId===b.id&&ACTIVE.has(j.status))).sort((a,b)=>(a===homeBuilding?-1:b===homeBuilding?1:a.id-b.id));
+   const loopStart=profile?performance.now():0,home=city.units.get(citizen.homeUnitId),homeBuilding=home&&city.building(home.buildingId),filterStart=profile?performance.now():0,sites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&(b===homeBuilding||b.units?.some(u=>u.ownerId===citizen.accountId||u.tenantId===citizen.accountId)||b.municipal&&['townhall','council_chamber','library','theater','sports_center'].includes(b.type))&&!this.jobs.some(j=>j.kind==='art-installation'&&j.buildingId===b.id&&ACTIVE.has(j.status))).sort((a,b)=>(a===homeBuilding?-1:b===homeBuilding?1:a.id-b.id));
+   if(profile){siteTimings.filterMs+=performance.now()-filterStart;siteTimings.artistsVisited++;}
    for(const site of sites){
-    const party=city.politics?.party?.(citizen.political?.partyId),partyId=roll%4===0&&party?.active?party.id:null,kind=roll%8===0?'statue':roll%3===0?'flags':roll%4===0?'painting':'banner',side=home?.y===0?'north':home?.x>=site.width-1?'east':home?.y>=site.depth-1?'south':'west',windowSupport=site===homeBuilding&&home&&['flags','painting'].includes(kind)?{kind:'window',buildingId:site.id,unitId:home.id,floor:home.z,side,rotation:({north:Math.PI,east:Math.PI/2,south:0,west:-Math.PI/2})[side]}:null,facadeSupport=kind==='banner'?buildingFacadeBannerSupport(site,{isRoadAt:(x,y)=>isRoadAt(city.world,x,y)}):null;if(kind==='banner'&&!facadeSupport)continue;const point=windowSupport?{x:site.entity.x+home.x+.5,y:site.entity.y+home.y+.5}:facadeSupport?.position||this.frontagePoint(site);
-    const message=gerarTituloTematico('arte',{random:()=>city.random()});
-    const piece=city.justice.createArtwork({kind,message,creatorId:citizen.id,sponsorId:citizen.id,purpose:'expression',partyId,buildingId:site.id,x:point.x,y:point.y,support:windowSupport||facadeSupport,color:party?.flag?.background?parseInt(party.flag.background.replace('#',''),16):0xc9b979,materialUsed:kind==='statue'?'argila':null});
+    if(profile)siteTimings.sitesVisited++;
+    const party=city.politics?.party?.(citizen.political?.partyId),partyId=roll%4===0&&party?.active?party.id:null,kind=roll%8===0?'statue':roll%3===0?'flags':roll%4===0?'painting':'banner',side=home?.y===0?'north':home?.x>=site.width-1?'east':home?.y>=site.depth-1?'south':'west',windowSupport=site===homeBuilding&&home&&['flags','painting'].includes(kind)?{kind:'window',buildingId:site.id,unitId:home.id,floor:home.z,side,rotation:({north:Math.PI,east:Math.PI/2,south:0,west:-Math.PI/2})[side]}:null,facadeStarted=profile?performance.now():0,facadeSupport=kind==='banner'?buildingFacadeBannerSupport(site,{isRoadAt:(x,y)=>isRoadAt(city.world,x,y)}):null;if(profile)profile.facadeSupportMs=(profile.facadeSupportMs||0)+performance.now()-facadeStarted;if(kind==='banner'&&!facadeSupport)continue;const pointStarted=profile?performance.now():0,point=windowSupport?{x:site.entity.x+home.x+.5,y:site.entity.y+home.y+.5}:facadeSupport?.position||this.frontagePoint(site);if(profile)profile.pointMs=(profile.pointMs||0)+performance.now()-pointStarted;
+    const titleStarted=profile?performance.now():0,message=spontaneousArtworkTitle(city);if(profile)profile.titleMs=(profile.titleMs||0)+performance.now()-titleStarted;
+    const artworkStarted=profile?performance.now():0,piece=city.justice.createArtwork({kind,message,creatorId:citizen.id,sponsorId:citizen.id,purpose:'expression',partyId,buildingId:site.id,x:point.x,y:point.y,support:windowSupport||facadeSupport,color:party?.flag?.background?parseInt(party.flag.background.replace('#',''),16):0xc9b979,materialUsed:kind==='statue'?'argila':null});if(profile)profile.createArtworkMs=(profile.createArtworkMs||0)+performance.now()-artworkStarted;
     if(!piece)continue;citizen.lastSpontaneousArtworkAt=city.minute;this.lastSpontaneousArtworkAt=city.minute;
-    city.log(`${citizen.entity.properties.name} criou ${city.justice.labelArt(kind)} sem patrocínio em ${site.entity.properties.name}.`,'justice',[citizen.id,site.id],{kind:'spontaneous-artwork',artId:piece.id,buildingId:site.id,partyId,unsponsored:true});return piece;
+    const logStarted=profile?performance.now():0;city.log(`${citizen.entity.properties.name} criou ${city.justice.labelArt(kind)} sem patrocínio em ${site.entity.properties.name}.`,'justice',[citizen.id,site.id],{kind:'spontaneous-artwork',artId:piece.id,buildingId:site.id,partyId,unsponsored:true});if(profile)profile.logMs=(profile.logMs||0)+performance.now()-logStarted;if(profile){siteTimings.visitMs+=performance.now()-loopStart;this.lastSpontaneousArtworkProfile={...profile,...siteTimings,artistsVisited:siteTimings.artistsVisited,sitesVisited:siteTimings.sitesVisited,totalMs:performance.now()-profile.startedAt};}return piece;
    }
+   if(profile)siteTimings.visitMs+=performance.now()-loopStart;
   }
+  if(profile)this.lastSpontaneousArtworkProfile={...profile,...siteTimings};
   return null;
  }
  consumeArtworkMaterial(job){
@@ -140,7 +156,7 @@ export class CityGigs{
   for(const piece of city.justice?.art||[]){if(posted>=4)break;if(piece.entity.destroyed||!piece.layers.length||city.minute-(piece.lastDefacedAt??city.minute)<60)continue;if(city.justice.requestArtworkCleaning(piece.id))posted++;}
  }
  updateMinute(){
-  const city=this.city;
+  const city=this.city;if(city.profileDiagnostics)this.lastSpontaneousArtworkProfile=null;
   this.postSpontaneousArtwork();
   if(city.minute%60===0&&city.hour>=7&&city.hour<20)this.postNeededWork();
   for(const job of this.jobs){if(!ACTIVE.has(job.status))continue;const b=city.building(job.buildingId);if(!b){this.cancel(job,'imóvel removido');continue;}if(job.artworkSupport?.kind==='skybridge'&&(!(city.skybridgeLinksForRevision?.()||[]).some(link=>link.id===job.artworkSupport.linkId)||!b.units.some(unit=>unit.id===job.artworkSupport.unitId))){this.cancel(job,'passarela ou acesso ao prédio removido');continue;}
