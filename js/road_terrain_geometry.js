@@ -123,7 +123,7 @@ export function sidewalkSurfaceCorners(world,x,y){
 }
 export function streetSurfaceCorners(world,x,y){return roadSurfaceCorners(world,x,y)||sidewalkSurfaceCorners(world,x,y);}
 
-export function roadRetainingFaces(world,x,y){
+export function roadRetainingFaces(world,x,y,ownsSharedBoundary=null){
   const surface=streetSurfaceCorners(world,x,y);if(!surface)return [];
   const faces=[];
   for(let side=0;side<EDGES.length;side++){
@@ -131,7 +131,7 @@ export function roadRetainingFaces(world,x,y){
     if(world.bridgeTiles?.has(`${nx},${ny}`))continue;
     const [ax,ay]=CORNERS[edge.a],[bx,by]=CORNERS[edge.b];
     if(neighborIsStreet){
-      if(ny*world.width+nx<y*world.width+x)continue;
+      if(ownsSharedBoundary?!ownsSharedBoundary(nx,ny):ny*world.width+nx<y*world.width+x)continue;
       const other=streetSurfaceCorners(world,nx,ny);if(!other)continue;
       const opposite=side===0?[3,2]:side===1?[0,3]:side===2?[0,1]:[1,2],surfaceA=surface[edge.a],surfaceB=surface[edge.b],otherA=other[opposite[0]],otherB=other[opposite[1]],deltaA=otherA-surfaceA,deltaB=otherB-surfaceB;
       if(Math.max(Math.abs(deltaA),Math.abs(deltaB))<.015)continue;

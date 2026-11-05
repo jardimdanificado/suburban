@@ -2,6 +2,8 @@ import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-e
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
+import {terrainTransitionTriangles,sampleTerrainQuad} from './terrain_transition_geometry.js';
+import {addTerrainDitherToMaterial} from './terrain_transition_material.js';
 import {waterPollutionAt,waterTint} from './city_water.js';
 import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugueseClayTileTexture,weatherPixelTexture} from './caribbean_pixel_materials.js?v=roof-mip-filter-1';
 // =============================================================================
@@ -11,13 +13,13 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=terrain-shared-stone-mesh-4";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=perspective-culling-apron-2";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=walking-shirt-mask-1';
 import { flagNightFactor } from './city_terrain.js?v=terrain-shared-stone-mesh-4';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=terrain-shared-stone-mesh-4';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=road-retaining-chunk-ownership-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -140,7 +142,7 @@ function smoothTerrainTopNormals(THREE, geometry) {
     for (let i = 0; i < positions.count; i += 3) {
       a.fromBufferAttribute(positions, i); b.fromBufferAttribute(positions, i + 1); c.fromBufferAttribute(positions, i + 2);
       ab.subVectors(b, a); ac.subVectors(c, a); face.crossVectors(ab, ac).normalize();
-      if (Math.abs(face.y) < .35) continue;
+      if (face.y < .35) continue;
       for (let j = 0; j < 3; j++) {
         const key = keyAt(positions,i + j), sum = sums.get(key) || [0, 0, 0];
         sum[0] += face.x; sum[1] += face.y; sum[2] += face.z; sums.set(key, sum);
@@ -151,7 +153,7 @@ function smoothTerrainTopNormals(THREE, geometry) {
     const positions=current?.getAttribute('position'),normals=current?.getAttribute('normal');
     if(!positions||!normals)continue;
     for (let i = 0; i < positions.count; i++) {
-      if (Math.abs(normals.getY(i)) < .35) continue;
+      if (normals.getY(i) < .35) continue;
       const sum = sums.get(keyAt(positions,i));
       if (!sum) continue;
       const length = Math.hypot(sum[0], sum[1], sum[2]) || 1;
@@ -3476,6 +3478,7 @@ export class RCT3DRenderer {
     this.lastBuiltFullWorld = false;
     this.terrainChunkSize = 32;
     this.terrainChunks = new Map();
+    this._terrainTransitionMaterials=new WeakMap();
     this.visibleTerrainChunkKeys = new Set();
     this._terrainHasLocalInvalidation = false;
 
@@ -5206,6 +5209,13 @@ export class RCT3DRenderer {
     this.syncActiveMaterials(this.isPerspectiveActive());
   }
 
+  terrainTransitionMaterial(baseMaterial,side){
+    if(!baseMaterial)return null;
+    let variants=this._terrainTransitionMaterials.get(baseMaterial);
+    if(!variants){variants=[];this._terrainTransitionMaterials.set(baseMaterial,variants);}
+    return variants[side]||=addTerrainDitherToMaterial(baseMaterial,side);
+  }
+
   syncActiveMaterials(isPersp = this.isPerspectiveActive()) {
     this.applyAnisotropyForMode(isPersp);
 
@@ -5219,7 +5229,8 @@ export class RCT3DRenderer {
       for (const mesh of chunk.terrain.children) {
         if (!mesh.isMesh || mesh === this.instGrassTufts) continue;
         const key = mesh.userData.terrainMaterialKey;
-        if (key && activeDict[key]) mesh.material = activeDict[key];
+        if(key?.startsWith('terrainBlend:')){const[,baseKey,side]=key.split(':');if(activeDict[baseKey])mesh.material=this.terrainTransitionMaterial(activeDict[baseKey],Number(side));}
+        else if (key && activeDict[key]) mesh.material = activeDict[key];
       }
     }
 
@@ -5385,7 +5396,10 @@ export class RCT3DRenderer {
       else if (Number.isFinite(reach)) points.push(raycaster.ray.at(reach, point));
     }
     if (!points.length) return { minTx: 0, maxTx: this.mapWidth - 1, minTy: 0, maxTy: this.mapHeight - 1 };
-    const margin = this.isPerspectiveActive() ? 3 : 4;
+    // Perspective views can show elevated parts of buildings and people whose
+    // ground point is outside the corner-ray footprint. Keep a generous
+    // loading/rendering apron for third-person and free-camera views.
+    const margin = this.isPerspectiveActive() ? 8 : 4;
     const clampX = value => Math.max(0, Math.min(this.mapWidth - 1, value));
     const clampY = value => Math.max(0, Math.min(this.mapHeight - 1, value));
     return {
@@ -6497,7 +6511,7 @@ export class RCT3DRenderer {
         chunk = null;
       }
       if (!chunk) {
-        chunk = this.buildTerrainChunk(world, cx * chunkSize, Math.min(this.mapWidth - 1, (cx + 1) * chunkSize - 1), cy * chunkSize, Math.min(this.mapHeight - 1, (cy + 1) * chunkSize - 1), visionTarget, chunkSignature, chunkDetailBand);
+        chunk = this.buildTerrainChunk(world, cx * chunkSize, Math.min(this.mapWidth - 1, (cx + 1) * chunkSize - 1), cy * chunkSize, Math.min(this.mapHeight - 1, (cy + 1) * chunkSize - 1), visionTarget, chunkSignature, chunkDetailBand, visible);
         this.terrainChunks.set(key, chunk);
       }
       chunk.lastUsed = performance.now();
@@ -6529,7 +6543,7 @@ export class RCT3DRenderer {
     this.renderedMinTy = Math.max(0, minTy); this.renderedMaxTy = Math.min(this.mapHeight - 1, maxTy);
   }
 
-  buildTerrainChunk(world, minTx, maxTx, minTy, maxTy, visionTarget, signature, detailBand = 2) {
+  buildTerrainChunk(world, minTx, maxTx, minTy, maxTy, visionTarget, signature, detailBand = 2, visibleChunkKeys = null) {
     const gridEnabled = this.wireframeMode === 1 && this.zoom >= 0.45;
     const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
     const curTileX = Math.floor(this.camX);
@@ -6537,6 +6551,7 @@ export class RCT3DRenderer {
     const curZoom = Math.round(this.zoom * 8);
 
     const zoneSz = 8;
+    const chunkSize=this.terrainChunkSize||32,currentChunkX=Math.floor(minTx/chunkSize),currentChunkY=Math.floor(minTy/chunkSize),currentChunkKey=`${currentChunkX},${currentChunkY}`;
     let curVisionZx = -9999;
     let curVisionZy = -9999;
     let knownZones = null;
@@ -6594,6 +6609,13 @@ export class RCT3DRenderer {
     for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','SidewalkTree','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
     }
+    const terrainBlendBuckets=new Map();
+    const terrainTransitionMaterialKeys=new Set([String(TILE_FLOOR),String(TILE_HILL),String(TILE_SAND),'sandClean']);
+    const getTerrainBlendBucket=(materialKey,side)=>{
+      const key=`${materialKey}:${side}`;let bucket=terrainBlendBuckets.get(key);
+      if(!bucket){bucket={materialKey,side,pos:[],uvs:[],colors:[],surfaceTiles:[],blendRatio:[]};terrainBlendBuckets.set(key,bucket);}
+      return bucket;
+    };
     const gridLinePositions = [];
     const matHelper = new THREE.Matrix4();
     let foliageCount = 0;
@@ -6714,11 +6736,59 @@ export class RCT3DRenderer {
         const ao11 = this.getCornerAO(map, tx + 1, ty + 1);
         const ao01 = this.getCornerAO(map, tx, ty + 1);
 
+        // Cut each half-band out of the original two ground triangles.
+        // No raised quad: the diagonal, height and winding stay identical.
+        if(!streetCorners&&!stoneShelf&&!isSidewalk&&!terrainTileTouchesStone(world,tx,ty)){
+          const currentKey=String(bucketKey);
+          if(terrainTransitionMaterialKeys.has(currentKey))for(const edge of [
+            {dx:1,dy:0,axis:0,boundary:tx+1},
+            {dx:0,dy:1,axis:2,boundary:ty+1},
+          ]){
+            const nx=tx+edge.dx,ny=ty+edge.dy,neighborType=this.getTileTypeAt(map,nx,ny);
+            if(neighborType===tType||world.hasSidewalk?.(nx,ny)||streetSurfaceCorners(world,nx,ny)||terrainTileTouchesStone(world,nx,ny))continue;
+            const neighborHasSprite=detailBand===2&&shouldRenderTerrainSprite(nx,ny,neighborType);
+            const neighborKey=neighborType===TILE_SAND&&!neighborHasSprite?'sandClean':String(neighborType);
+            if(!terrainTransitionMaterialKeys.has(neighborKey))continue;
+            // Fade across a quarter tile on each side, with a rounded profile.
+            const width=.25;
+            const currentCorners=[[tx,h00,ty],[tx+1,h10,ty],[tx+1,h11,ty+1],[tx,h01,ty+1]];
+            const neighborCorners=[[nx,terrainCornerHeight(world,nx,ny),ny],[nx+1,terrainCornerHeight(world,nx+1,ny),ny],[nx+1,terrainCornerHeight(world,nx+1,ny+1),ny+1],[nx,terrainCornerHeight(world,nx,ny+1),ny+1]];
+            const halves=[
+              {x:tx,y:ty,corners:currentCorners,ao:[ao00,ao10,ao11,ao01],min:edge.boundary-width,max:edge.boundary},
+              {x:nx,y:ny,corners:neighborCorners,ao:[this.getCornerAO(map,nx,ny),this.getCornerAO(map,nx+1,ny),this.getCornerAO(map,nx+1,ny+1),this.getCornerAO(map,nx,ny+1)],min:edge.boundary,max:edge.boundary+width},
+            ];
+            for(const half of halves)for(const triangle of terrainTransitionTriangles(half.corners,edge.axis,half.min,half.max)){
+              for(const [materialKey,side,tileX,tileY,tileType]of [[currentKey,0,tx,ty,tType],[neighborKey,1,nx,ny,neighborType]]){
+                const out=getTerrainBlendBucket(materialKey,side),grass=tileType===TILE_FLOOR||tileType===TILE_HILL;
+                for(const point of triangle){
+                  const shade=zoneMult*sampleTerrainQuad(half.ao,point[0]-half.x,point[2]-half.y);
+                  out.pos.push(...point);
+                  out.uvs.push(grass?point[0]/8:point[0]-tileX,grass?point[2]/8:point[2]-tileY);
+                  out.colors.push(shade,shade,shade);
+                  out.surfaceTiles.push(half.x,half.y);
+                  out.blendRatio.push(Math.max(0,Math.min(1,(point[edge.axis]-edge.boundary+width)/(width*2))));
+                }
+              }
+            }
+          }
+        }
+
         if (tType === TILE_WATER) {
           h00 = h10 = h11 = h01 = 0.08;
         }
 
-        if(streetCorners)for(const face of roadRetainingFaces(world,tx,ty)){
+        const ownsRetainingBoundary=(nx,ny)=>{
+          const neighborZone=`${Math.floor(nx/zoneSz)}_${Math.floor(ny/zoneSz)}`;
+          if(knownZones&&!knownZones.has(neighborZone))return true;
+          const neighborChunkKey=`${Math.floor(nx/chunkSize)},${Math.floor(ny/chunkSize)}`;
+          if(neighborChunkKey!==currentChunkKey&&visibleChunkKeys){
+            const currentVisible=visibleChunkKeys.has(currentChunkKey),neighborVisible=visibleChunkKeys.has(neighborChunkKey);
+            if(currentVisible!==neighborVisible)return currentVisible;
+            if(currentChunkKey!==neighborChunkKey)return currentChunkKey<neighborChunkKey;
+          }
+          return ny*this.mapWidth+nx>=ty*this.mapWidth+tx;
+        };
+        if(streetCorners)for(const face of roadRetainingFaces(world,tx,ty,ownsRetainingBoundary)){
           const variant=face.side,wall=tileMeshBuckets[`terrainRetainingWall${variant}`],tone=zoneMult*.92;
           const a=[face.ax,face.lowA,face.ay],b=[face.bx,face.lowB,face.by],c=[face.bx,face.highB,face.by],d=[face.ax,face.highA,face.ay];
           // World-space UVs keep both stone blocks and courses aligned across
@@ -7009,7 +7079,7 @@ export class RCT3DRenderer {
     if (chunkGrassTufts.instanceColor) chunkGrassTufts.instanceColor.needsUpdate = true;
     if (foliageCount) chunk.terrain.add(chunkGrassTufts);
 
-    const terrainSurfaceGeometries=[];
+    const terrainSurfaceGeometries=[],naturalGroundGeometries=[];
     for (const [matKey, bucket] of Object.entries(tileMeshBuckets)) {
       if (bucket.pos.length === 0) continue;
       const geom = new THREE.BufferGeometry();
@@ -7018,6 +7088,7 @@ export class RCT3DRenderer {
       geom.setAttribute("color", new THREE.Float32BufferAttribute(bucket.colors, 3));
       geom.computeVertexNormals();
       terrainSurfaceGeometries.push(geom);
+      if(terrainTransitionMaterialKeys.has(matKey))naturalGroundGeometries.push(geom);
 
       const mat = this.materials[matKey] || this.materials[TILE_FLOOR];
       const mesh = new THREE.Mesh(geom, mat);
@@ -7032,6 +7103,40 @@ export class RCT3DRenderer {
       }
     }
     smoothTerrainTopNormals(THREE,terrainSurfaceGeometries);
+    const groundNormalField=new Map();
+    for(const geometry of naturalGroundGeometries){
+      const positions=geometry.getAttribute('position'),normals=geometry.getAttribute('normal');
+      for(let i=0;i<positions.count;i++){
+        const x=positions.getX(i),z=positions.getZ(i);
+        if(normals.getY(i)<.35||Math.abs(x-Math.round(x))>1e-5||Math.abs(z-Math.round(z))>1e-5)continue;
+        groundNormalField.set(`${Math.round(x)},${Math.round(z)}`,[normals.getX(i),normals.getY(i),normals.getZ(i)]);
+      }
+    }
+    const groundNormalAt=(x,z)=>{
+      const key=`${x},${z}`;let normal=groundNormalField.get(key);
+      if(!normal){const dx=(terrainCornerHeight(world,x+1,z)-terrainCornerHeight(world,x-1,z))*.5,dz=(terrainCornerHeight(world,x,z+1)-terrainCornerHeight(world,x,z-1))*.5,length=Math.hypot(dx,1,dz);normal=[-dx/length,1/length,-dz/length];groundNormalField.set(key,normal);}
+      return normal;
+    };
+    for(const bucket of terrainBlendBuckets.values()){
+      if(!bucket.pos.length)continue;
+      const geometry=new THREE.BufferGeometry();
+      geometry.setAttribute('position',new THREE.Float32BufferAttribute(bucket.pos,3));
+      geometry.setAttribute('uv',new THREE.Float32BufferAttribute(bucket.uvs,2));
+      geometry.setAttribute('color',new THREE.Float32BufferAttribute(bucket.colors,3));
+      geometry.setAttribute('blendRatio',new THREE.Float32BufferAttribute(bucket.blendRatio,1));
+      const normalValues=[];
+      for(let i=0;i<bucket.pos.length/3;i++){
+        const x=bucket.surfaceTiles[i*2],z=bucket.surfaceTiles[i*2+1],u=bucket.pos[i*3]-x,v=bucket.pos[i*3+2]-z;
+        const corners=[groundNormalAt(x,z),groundNormalAt(x+1,z),groundNormalAt(x+1,z+1),groundNormalAt(x,z+1)];
+        const normal=[0,1,2].map(component=>sampleTerrainQuad(corners.map(value=>value[component]),u,v)),length=Math.hypot(...normal)||1;
+        normalValues.push(normal[0]/length,normal[1]/length,normal[2]/length);
+      }
+      geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normalValues,3));
+      const mesh=new THREE.Mesh(geometry,this.terrainTransitionMaterial(this.materials[bucket.materialKey],bucket.side));
+      mesh.userData.terrainMaterialKey=`terrainBlend:${bucket.materialKey}:${bucket.side}`;
+      mesh.receiveShadow=true;mesh.castShadow=false;
+      chunk.terrain.add(mesh);
+    }
 
     if (waterFoamBucket.pos.length) {
       const foamGeometry = new THREE.BufferGeometry();
@@ -7444,6 +7549,7 @@ export class RCT3DRenderer {
     const occupiedHouseTiles = this._occupiedHouseTiles;
     const clanGroups = this._clanGroups;
     const entityRenderClasses=this._entityRenderClasses??=new WeakMap();
+    const entityCullMargin=perspectiveActive?4:0;
 
     if (world?.groups && Array.isArray(world.groups)) {
       for (let i = 0; i < world.groups.length; i++) {
@@ -7458,7 +7564,7 @@ export class RCT3DRenderer {
       if (!e || e.destroyed || !e.properties?.render || e.properties.cityBuilding||e.properties.cityVehicle||e.properties.campaignDecoration) continue;
       const cachedClass=entityRenderClasses.get(e);
       if(!shouldUpdateStaticInstances&&cachedClass?.static&&cachedClass.properties===e.properties&&cachedClass.render===e.properties.render){
-        if(e.x<this.renderedMinTx||e.x>this.renderedMaxTx+.99||e.y<this.renderedMinTy||e.y>this.renderedMaxTy+.99)continue;
+        if(e.x<this.renderedMinTx-entityCullMargin||e.x>this.renderedMaxTx+.99+entityCullMargin||e.y<this.renderedMinTy-entityCullMargin||e.y>this.renderedMaxTy+.99+entityCullMargin)continue;
         if(knownZones&&!knownZones.has(`${Math.floor(e.x/zoneSz)}_${Math.floor(e.y/zoneSz)}`))continue;
         if(this.selectedEntityId&&e.id===this.selectedEntityId){
           const h=e.properties.house,fpW=cachedClass.isHouse?(h?.footprintW||1):1,fpH=cachedClass.isHouse?(h?.footprintH||1):1;
@@ -7475,8 +7581,8 @@ export class RCT3DRenderer {
       const showInspectedInterior=!!(indoorLocation&&this.cityInteriorView?.buildingId===physicalInteriorId&&!indoorLocation.exiting&&renderedFloor===this.cityInteriorView.floor);
       const renderElevated=!!(cityCitizen&&!indoorLocation&&(interiorPosition?.z>0||cityCitizen.skybridgeZ>0)),renderAtInterior=!!(cityCitizen&&indoorLocation&&interiorPosition),renderX=showInspectedInterior||renderElevated||renderAtInterior?(interiorPosition?.x??e.x):e.x,renderY=showInspectedInterior||renderElevated||renderAtInterior?(interiorPosition?.y??e.y):e.y;
 
-      if (renderX < this.renderedMinTx || renderX > this.renderedMaxTx + 0.99 ||
-          renderY < this.renderedMinTy || renderY > this.renderedMaxTy + 0.99) {
+      if (renderX < this.renderedMinTx-entityCullMargin || renderX > this.renderedMaxTx + 0.99+entityCullMargin ||
+          renderY < this.renderedMinTy-entityCullMargin || renderY > this.renderedMaxTy + 0.99+entityCullMargin) {
         continue;
       }
 

@@ -204,7 +204,7 @@ function syncImportDepotVisual(renderer,THREE,city,world){
     const label=new THREE.Mesh(new THREE.PlaneGeometry(1.4,.47),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));label.position.set(.55,1.08,.051);group.add(label);
     group.userData.importDepotTexture=texture;renderer.scene.add(group);renderer.importDepotVisual=group;
   }
-  const door=depot.door;group.position.set(door.x,surfaceElevation(world,door.x,door.y)+.04,door.y);
+  const door=depot.door,direction=depot.markerDirection||{x:1,y:0};group.position.set(door.x,surfaceElevation(world,door.x,door.y)+.04,door.y);group.rotation.y=Math.atan2(-direction.y,direction.x);
   group.visible=!Number.isFinite(renderer.renderedMinTx)||door.x>=renderer.renderedMinTx-2&&door.x<=renderer.renderedMaxTx+2&&door.y>=renderer.renderedMinTy-2&&door.y<=renderer.renderedMaxTy+2;
 }
 function drawArtNarrative(ctx,narrative){
@@ -360,8 +360,10 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
   syncBeachLeisureProps(renderer,THREE,world);
   syncStreetMarketStalls(renderer,THREE,world);
   const map = world.map;
-  const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) ||
-    x>=renderer.renderedMinTx && x+width<=renderer.renderedMaxTx+1 && y>=renderer.renderedMinTy && y+depth<=renderer.renderedMaxTy+1;
+  const perspectiveView=!!renderer.isPerspectiveActive?.(),viewMargin=perspectiveView?3:0;
+  const inView=(x,y,width=0,depth=0)=>!Number.isFinite(renderer.renderedMinTx) || (perspectiveView
+    ?x+width>=renderer.renderedMinTx-viewMargin&&x<=renderer.renderedMaxTx+1+viewMargin&&y+depth>=renderer.renderedMinTy-viewMargin&&y<=renderer.renderedMaxTy+1+viewMargin
+    :x>=renderer.renderedMinTx&&x+width<=renderer.renderedMaxTx+1&&y>=renderer.renderedMinTy&&y+depth<=renderer.renderedMaxTy+1);
   renderer.lampMeshes ??= new Map();
   const cityNightLights=renderer.cityNightLights??=[];cityNightLights.length=0;
   const liveBuildings = new Set(entities.filter(e => e.properties?.cityBuilding && !e.destroyed).map(e => e.id));

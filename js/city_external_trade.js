@@ -5,10 +5,29 @@ import {ensureExternalAccount} from './city_currency.js';
 export const EXTERNAL_TRADE_RULES=Object.freeze({minimumFirmStock:24,maximumPerSale:12,maximumSalesPerHour:4,priceFactor:1.1,importPriceFactor:2.25,maximumImportQuantity:24});
 const FOREIGN_PART_BRANDS=Object.freeze(['Koyo Motion (Japão)','Senda Norte (Chile)','Meridian Works (Suíça)','Rivermark Mobility (Canadá)','Lumen Components (Portugal)','Vento Austral (Argentina)','Orbe Technik (Alemanha)','Tamarind Roadworks (Índia)']);
 export const fictionalForeignBrand=good=>FOREIGN_PART_BRANDS[[...good].reduce((n,c)=>Math.imul(n^c.charCodeAt(0),16777619)>>>0,2166136261)%FOREIGN_PART_BRANDS.length];
+function importDepotArrival(city,anchor,current=null){
+ if(!anchor?.door)return {door:current?{...current}:null,direction:{x:1,y:0}};
+ const horizontal=(anchor.rotation||0)%2===0,valid=point=>{
+  if(!point||!Number.isFinite(point.x)||!Number.isFinite(point.y))return false;
+  if(Math.hypot(point.x-anchor.door.x,point.y-anchor.door.y)<.75)return false;
+  return (!city.walkable||city.walkable(Math.floor(point.x),Math.floor(point.y)))&&(!city.findPath||city.findPath(point,anchor.door)!==null);
+ };
+ if(valid(current)){
+  const dx=current.x-anchor.door.x,dy=current.y-anchor.door.y;
+  return {door:{...current},direction:Math.abs(dx)>Math.abs(dy)?{x:Math.sign(dx),y:0}:{x:0,y:Math.sign(dy)}};
+ }
+ for(const sign of [1,-1])for(const distance of [1,2,3]){
+  const direction=horizontal?{x:sign,y:0}:{x:0,y:sign},door={x:anchor.door.x+direction.x*distance,y:anchor.door.y+direction.y*distance};
+  if(valid(door))return {door,direction};
+ }
+ return {door:{...anchor.door},direction:horizontal?{x:1,y:0}:{x:0,y:1}};
+}
 export function ensureImportDepot(city){
- const economy=city.economy;if(economy.importDepot){const depot=economy.importDepot;depot.inventory??={};for(const good of Object.keys(economy.goods))depot.inventory[good]??=0;depot.incoming??={};depot.claims??={};depot.importedUnitPrice??={};depot.inventoryCapacity=Number.MAX_SAFE_INTEGER;city.accounts.set(depot.accountId||'import-depot',depot);return depot;}
- const anchor=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed)||city.buildings.find(b=>!b.entity.destroyed);if(!anchor)return null;
- const depot={id:'import-depot',type:'import_depot',name:'Depósito de importação municipal',active:true,importDepot:true,entity:{id:null,destroyed:false,properties:{name:'Depósito de importação municipal',externalImportDepot:true}},door:{...anchor.door},inventory:Object.fromEntries(Object.keys(economy.goods).map(g=>[g,0])),incoming:{},inventoryCapacity:Number.MAX_SAFE_INTEGER,balance:0,totalRevenue:0,totalExpenses:0,workers:[],ownerId:null,accountId:'import-depot',claims:{},importedUnitPrice:{}};
+ const economy=city.economy,anchor=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed)||city.buildings.find(b=>!b.entity.destroyed);
+ if(economy.importDepot){const depot=economy.importDepot;depot.inventory??={};for(const good of Object.keys(economy.goods))depot.inventory[good]??=0;depot.incoming??={};depot.claims??={};depot.importedUnitPrice??={};depot.inventoryCapacity=Number.MAX_SAFE_INTEGER;if(anchor){const arrival=importDepotArrival(city,anchor,depot.door);depot.door=arrival.door||{...anchor.door};depot.markerDirection=arrival.direction;}for(const seller of economy.externalImporters?.values?.()||[])seller.door={...depot.door};for(const pending of city.logistics?.shipments||[])if(pending.imported&&pending.buyer===depot&&pending.status==='waiting'&&!pending.pickedUp)pending.position={...depot.door};city.accounts.set(depot.accountId||'import-depot',depot);return depot;}
+ if(!anchor)return null;
+ const arrival=importDepotArrival(city,anchor);
+ const depot={id:'import-depot',type:'import_depot',name:'Depósito de importação municipal',active:true,importDepot:true,entity:{id:null,destroyed:false,properties:{name:'Depósito de importação municipal',externalImportDepot:true}},door:arrival.door||{...anchor.door},markerDirection:arrival.direction,inventory:Object.fromEntries(Object.keys(economy.goods).map(g=>[g,0])),incoming:{},inventoryCapacity:Number.MAX_SAFE_INTEGER,balance:0,totalRevenue:0,totalExpenses:0,workers:[],ownerId:null,accountId:'import-depot',claims:{},importedUnitPrice:{}};
  economy.importDepot=depot;city.accounts.set(depot.accountId,depot);return depot;
 }
 export function importDepotClaim(depot,buyer,good){return Math.max(0,depot?.claims?.[buyer?.id]?.[good]||0);}
