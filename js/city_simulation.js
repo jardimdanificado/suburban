@@ -12,7 +12,7 @@ import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=roadside-ad-placards-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=employment-search-cooldown-4';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=employment-search-cooldown-5';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
@@ -41,7 +41,7 @@ import { quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-resident-index-1';
-import { CitySanitation } from './city_sanitation.js?v=sanitation-routing-1';
+import { CitySanitation } from './city_sanitation.js?v=sanitation-routing-3';
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=fixed-market-building-1';
@@ -64,7 +64,7 @@ function outdoorLeisureSeats(city){
 function reserveOutdoorLeisureSeat(seats,visit,citizen){
   const key=`${visit.buildingId}:${visit.spaceId}`;let bySlot=seats.get(key);if(!bySlot)seats.set(key,bySlot=new Map());let occupants=bySlot.get(visit.slot);if(!occupants)bySlot.set(visit.slot,occupants=new Set());occupants.add(citizen);
 }
-const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:5});
+const SIMULATION_LOD=Object.freeze({stableDecisionMinutes:10,unstableDecisionMinutes:8});
 export const INITIAL_POPULATION = 512;
 export const BUILDING_TYPES = {
   ...CIVIC_SERVICES,

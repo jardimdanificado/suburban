@@ -81,32 +81,33 @@ export class CitySanitation {
     const need=task==='hygiene'?'hygiene':'toilet',waitingSince=task==='hygiene'?(c.hygieneWaitingSince??this.city.minute):(c.toiletWaitingSince??this.city.minute);
     const illegal=['toilet','hygiene'].includes(task)&&!c.custody&&(c.needs?.[need]??100)<20&&this.city.minute-waitingSince>=90;
     const rows=this._facilityChoiceRows??=[],pool=this._facilityChoicePool??=[];this._facilityChoiceRows=rows;this._facilityChoicePool=pool;rows.length=0;let rowCount=0;
-    const addChoice=(facility,trespass)=>{let row=pool[rowCount];if(!row)pool[rowCount]=row=[null,0,false];row[0]=facility;row[1]=this.score(c,facility);row[2]=trespass;rows.push(row);rowCount++;};
+    const addChoice=(facility,trespass)=>{let row=pool[rowCount];if(!row)pool[rowCount]=row=[null,0,false,0];row[0]=facility;row[1]=this.score(c,facility);row[2]=trespass;row[3]=rowCount;rows.push(row);rowCount++;};
     for(const f of this.facilities.values())if(this.allowed(c,f)&&this.city.units.get(f.unitId)?.roomType==='bathroom')addChoice(f,false);
-    rows.sort((a,b)=>a[1]-b[1]);
-    for(let index=0;index<rows.length;index++){
-      const [f,,trespass]=rows[index],b=this.city.building(f.buildingId),path=this.city.findPath(c.entity,b.door);if(path===null)continue;
-      const previous=c.task==='toilet'?c.toiletTargetId:c.task==='hygiene'?c.hygieneTargetId:null;if(previous)this.inboundFacilities.set(previous,Math.max(0,(this.inboundFacilities.get(previous)||0)-1));this.inboundFacilities.set(f.id,(this.inboundFacilities.get(f.id)||0)+1);
-      if(task==='toilet'){c.toiletTargetId=f.id;if(trespass)c.trespassToiletFacilityId=f.id;}else{c.hygieneTargetId=f.id;if(trespass)c.trespassHygieneFacilityId=f.id;else c.hygieneWaitingSince=null;}c.task=task;c.targetId=b.id;c.path=path;rows.length=0;
-      if(trespass)c.action=task==='hygiene'?'Indo usar sem autorização a pia de uma propriedade privada':'Indo usar sem autorização o banheiro de uma propriedade privada';
-      return true;
-    }
-    rows.length=0;
+    const routeChoices=()=>{
+      if(!rows.length)return false;
+      // Build a stable min-heap instead of sorting every eligible facility for
+      // every citizen. Path failures pop the next-best candidate lazily.
+      const before=(a,b)=>a[1]===b[1]?a[3]<b[3]:a[1]<b[1];
+      const siftDown=(index,size)=>{for(;;){let child=index*2+1;if(child>=size)return;const right=child+1;if(right<size&&before(rows[right],rows[child]))child=right;if(!before(rows[child],rows[index]))return;const hold=rows[index];rows[index]=rows[child];rows[child]=hold;index=child;}};
+      for(let i=(rows.length>>1)-1;i>=0;i--)siftDown(i,rows.length);
+      const tryChoice=row=>{
+        const [f,,trespass]=row,b=this.city.building(f.buildingId),path=this.city.findPath(c.entity,b.door);if(path===null)return false;
+        const previous=c.task==='toilet'?c.toiletTargetId:c.task==='hygiene'?c.hygieneTargetId:null;if(previous)this.inboundFacilities.set(previous,Math.max(0,(this.inboundFacilities.get(previous)||0)-1));this.inboundFacilities.set(f.id,(this.inboundFacilities.get(f.id)||0)+1);
+        if(task==='toilet'){c.toiletTargetId=f.id;if(trespass)c.trespassToiletFacilityId=f.id;}else{c.hygieneTargetId=f.id;if(trespass)c.trespassHygieneFacilityId=f.id;else c.hygieneWaitingSince=null;}c.task=task;c.targetId=b.id;c.path=path;
+        if(trespass)c.action=task==='hygiene'?'Indo usar sem autorização a pia de uma propriedade privada':'Indo usar sem autorização o banheiro de uma propriedade privada';
+        return true;
+      };
+      while(rows.length){const best=rows[0],last=rows.pop();if(rows.length){rows[0]=last;siftDown(0,rows.length);}if(tryChoice(best)){rows.length=0;return true;}}
+      return false;
+    };
+    if(routeChoices())return true;
     if(illegal){
       rowCount=0;const businesses=this.city.economy.businesses,businessIds=this._businessIdsScratch??=new Set();businessIds.clear();for(const business of businesses)businessIds.add(business.id);
       for(const f of this.facilities.values())if(f.access==='employees'&&this.city.units.get(f.unitId)?.roomType==='bathroom'&&!this.allowed(c,f)){
         const b=this.city.building(f.buildingId);if(b?.active&&!b.entity.destroyed&&!['jail','townhall','hospital','clinic','public_toilet','paid_toilet','popular_refectory'].includes(b.type)&&(b.ownerId!=null||businessIds.has(b.id)))addChoice(f,true);
       }
-      rows.sort((a,b)=>a[1]-b[1]);
-      for(let index=0;index<rows.length;index++){
-        const [f,,trespass]=rows[index],b=this.city.building(f.buildingId),path=this.city.findPath(c.entity,b.door);if(path===null)continue;
-        const previous=c.task==='toilet'?c.toiletTargetId:c.task==='hygiene'?c.hygieneTargetId:null;if(previous)this.inboundFacilities.set(previous,Math.max(0,(this.inboundFacilities.get(previous)||0)-1));this.inboundFacilities.set(f.id,(this.inboundFacilities.get(f.id)||0)+1);
-        if(task==='toilet'){c.toiletTargetId=f.id;if(trespass)c.trespassToiletFacilityId=f.id;}else{c.hygieneTargetId=f.id;if(trespass)c.trespassHygieneFacilityId=f.id;else c.hygieneWaitingSince=null;}c.task=task;c.targetId=b.id;c.path=path;rows.length=0;
-        if(trespass)c.action=task==='hygiene'?'Indo usar sem autorização a pia de uma propriedade privada':'Indo usar sem autorização o banheiro de uma propriedade privada';
-        return true;
-      }
+      if(routeChoices())return true;
     }
-    rows.length=0;
     return false;
   }
   score(c, f) {

@@ -1,6 +1,6 @@
 import {businessFloors} from './city_business_heights.js';
 import { inspectBuildingSite } from './city_terrain.js?v=entrance-retaining-clearance-1';
-import { SANITATION_RULES } from './city_sanitation.js?v=sanitation-routing-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=sanitation-routing-3';
 
 export const ESSENTIAL_SERVICES = new Set(['quarry','builder', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'composting']);
 

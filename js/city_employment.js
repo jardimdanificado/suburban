@@ -165,12 +165,12 @@ export function searchEmployment(city,c){
   if(!sameSearchState&&cv.employmentSearchTileX!==undefined)cv.nextEmploymentSearchAt=city.minute;
   else if(cv.nextEmploymentSearchAt==null)cv.nextEmploymentSearchAt=city.minute+((Number(c.id)||0)%4);
   if(city.minute<(cv.nextEmploymentSearchAt||0))return false;
-  // Explore two nearby blocks per pass and rotate through the neighborhood.
-  // This spreads eight route checks over several minutes instead of running
-  // the same full sweep for many residents in a single minute.
+  // Explore one nearby block per pass and rotate through the neighborhood.
+  // Known vacancies are checked above; this lower-priority walk should not
+  // launch two A* searches for every resident in the same exploration turn.
   const offsets=EMPLOYMENT_SEARCH_OFFSETS,start=cv.employmentSearchCursor??(c.id+searchWindow)%offsets.length;
-  for(let i=0;i<2;i++){const [dx,dy]=offsets[(start+i)%offsets.length],target={x:tileX+dx+.5,y:tileY+dy+.5};if(!city.walkable(Math.floor(target.x),Math.floor(target.y)))continue;const path=city.findPath(c.entity,target);if(path?.length){c.task='walk';c.targetId=null;c.path=path;c.action='Procurando anúncios de emprego pelo bairro';return true;}}
-  cv.employmentSearchCursor=(start+2)%offsets.length;cv.employmentSearchTileX=tileX;cv.employmentSearchTileY=tileY;cv.employmentSearchWindow=searchWindow;cv.employmentSearchObstacleRevision=obstacleRevision;cv.employmentSearchStructureRevision=structureRevision;cv.nextEmploymentSearchAt=city.minute+4;
+  {const [dx,dy]=offsets[start%offsets.length],target={x:tileX+dx+.5,y:tileY+dy+.5};if(city.walkable(Math.floor(target.x),Math.floor(target.y))){const path=city.findPath(c.entity,target);if(path?.length){c.task='walk';c.targetId=null;c.path=path;c.action='Procurando anúncios de emprego pelo bairro';return true;}}}
+  cv.employmentSearchCursor=(start+1)%offsets.length;cv.employmentSearchTileX=tileX;cv.employmentSearchTileY=tileY;cv.employmentSearchWindow=searchWindow;cv.employmentSearchObstacleRevision=obstacleRevision;cv.employmentSearchStructureRevision=structureRevision;cv.nextEmploymentSearchAt=city.minute+4;
   return false;
 }
 export function routeToInterview(city,c){

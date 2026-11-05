@@ -16,7 +16,7 @@ import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_inte
 import { syncCityBuildings } from "./city_renderer_3d.js?v=street-facing-public-art-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-appearance-cache-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-render-cache-3';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
@@ -3583,8 +3583,7 @@ export class RCT3DRenderer {
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
     this.renderer.shadowMap.enabled = this.shadowsEnabled;
     // Static city geometry and citizen meshes do not need a new shadow map on
-    // every display frame. Refresh it at 10 Hz so moving sunlight/camera and
-    // construction changes stay visually current while avoiding repeated
+    // every display frame. Refresh it at a low cadence to reduce repeated
     // shadow-pass work on slower GPUs.
     this.renderer.shadowMap.autoUpdate = false;
     this._lastShadowRefreshAt = -Infinity;
@@ -9044,7 +9043,11 @@ export class RCT3DRenderer {
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     const shadowNow=performance.now();
-    if(this.shadowsEnabled&&shadowNow-this._lastShadowRefreshAt>=100){this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=shadowNow;}
+    // Refresh the directional shadow less often on large scenes. Citizen
+    // instances do not cast shadows, so a 400 ms cadence keeps shadows
+    // responsive to the day/night cycle while avoiding a shadow pass every
+    // few rendered frames on slower GPUs.
+    if(this.shadowsEnabled&&shadowNow-this._lastShadowRefreshAt>=400){this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=shadowNow;}
     const useIsometricPostEffects = this.graphicOptions?.isometricEffects === true;
     const dofOpt=this.graphicOptions?.dofStrength||"HIGH";
     const dofRequested=['LOW','MED','HIGH'].includes(dofOpt);

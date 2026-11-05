@@ -49,12 +49,15 @@ export function citizenAnimation(c,moving=false){
   return ALT_USE_TASKS.has(c.task)?'use_alt':'use';
 }
 export function citizenFrame(clip,time,phase=0,oneShot=false){
-  if(clip==='mount'||clip==='passenger')return {clip:'use',frame:0};
-  if(clip==='seated')return {clip:'use',frame:2};
-  if(clip==='glide')return {clip:'use',frame:1};
-  const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||[0],fps=ACTION_CLIPS.has(clip)?8:4,index=Math.floor(Math.max(0,time)*fps+phase);
-  return {clip:clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle',frame:sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length]};
+  if(clip==='mount'||clip==='passenger')return FRAME_POSES.use[0];
+  if(clip==='seated')return FRAME_POSES.use[2];
+  if(clip==='glide')return FRAME_POSES.use[1];
+  const sequence=clip==='pedal'?[0,2,4]:clip==='use'?[0,1]:CITIZEN_MODEL_FRAMES[clip]||CITIZEN_MODEL_FRAMES.idle,poseClip=clip==='pedal'?'run':clip in CITIZEN_MODEL_FRAMES?clip:'idle';
+  if(sequence.length===1)return FRAME_POSES[poseClip][sequence[0]];
+  const fps=ACTION_CLIPS.has(clip)?8:4,index=Math.floor(Math.max(0,time)*fps+phase),frame=sequence[oneShot?Math.min(index,sequence.length-1):index%sequence.length];
+  return FRAME_POSES[poseClip][frame]||{clip:poseClip,frame};
 }
+const FRAME_POSES=Object.fromEntries(Object.entries(CITIZEN_MODEL_FRAMES).map(([clip,frames])=>[clip,Object.fromEntries(frames.map(frame=>[frame,Object.freeze({clip,frame})]))]));
 export function parseCitizenOBJ(text){
   const vertices=[],normals=[],triangles=[];
   const index=(raw,length)=>{const n=Number(raw);if(!Number.isInteger(n)||n===0)throw Error('OBJ: índice inválido');const i=n<0?length+n:n-1;if(i<0||i>=length)throw Error('OBJ: índice fora da geometria');return i;};
@@ -422,7 +425,10 @@ export class CityCitizenModels {
     else motion.actionToken=null;
     const animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
     if(!traveling&&!sleeping&&c.facingTarget)motion.angle=Math.atan2(c.facingTarget.x-x,c.facingTarget.y-y);
-    const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance,outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}:${garmentMaterial?.uuid||'shared'}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null,bodySource=bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key),clothingSource=(lowerSkirt?outfit?.[lowerSkirt==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']:null)||outfit?.clothes;
+    const appearance=this.appearanceFor(c,entity),{piece,printed,patterned,garment,garmentHex,garmentColorHex,printId,garmentMaterial,lower,lowerSkirt,itemColorHexes}=appearance;
+    let poseBatch=motion.poseBatches?.get(key);if(!poseBatch){poseBatch=new Map();motion.poseBatches??=new Map();motion.poseBatches.set(key,poseBatch);}
+    let resolved=poseBatch.get(appearance);if(!resolved){const outfitKey=piece?`${key}:${piece}`:null,outfit=outfitKey?this.outfits.get(outfitKey):null,skirtOutfit=lowerSkirt?this.outfits.get(`${key}:${lowerSkirt}`):null,batchKey=piece?`${key}:${piece}:${garmentMaterial?.uuid||'shared'}${lowerSkirt?`+${lowerSkirt}`:''}`:lowerSkirt?`${key}:lower:${lowerSkirt}`:key,bodyWithSkirt=lowerSkirt?outfit?.[lowerSkirt==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']:null;resolved={batchKey,outfit,bodySource:bodyWithSkirt||skirtOutfit?.body||outfit?.body||this.frames.get(key),clothingSource:(lowerSkirt?outfit?.[lowerSkirt==='saia'?'clothesWithSaia':'clothesWithSaiaLonga']:null)||outfit?.clothes};poseBatch.set(appearance,resolved);}
+    const {batchKey,outfit,bodySource,clothingSource}=resolved;
     let batch=this.batches.get(batchKey);if(!batch){batch={count:0,capacity:0,mesh:null,clothingMesh:null};this.batches.set(batchKey,batch);}this.activeBatches.add(batch);
     if(batch.count===batch.capacity){
       // Citizen bodies are already rendered in shared animation/outfit batches.
@@ -458,8 +464,8 @@ export class CityCitizenModels {
     this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8);this.setInstanceColor(batch.mesh,batch.count,this.color);
     if(batch.clothingMesh){if(!transformUnchanged)this.setInstanceMatrix(batch.clothingMesh,bodyIndex,this.matrix);this.setInstanceFat(batch.clothingMesh,bodyIndex,bodyShape);if(patterned)this.setInstancePattern(batch.clothingMesh,bodyIndex,printId);this.color.setHex(entity.combatFlash>0?0xff3333:dimmed?0x555555:patterned?garmentColorHex:printed?0xffffff:presence?.color?Number.parseInt(String(presence.color).replace('#',''),16):garmentColorHex);if(!dimmed&&entity.combatFlash<=0&&(garment?.dirt||0)>0)this.color.lerp(this.dirtColor,Math.min(.72,garment.dirt/140));this.setInstanceColor(batch.clothingMesh,bodyIndex,this.color);}batch.count++;
     const items=appearance.items;
-    motion.accessoryTransforms??=[{},{},{},{},{}];
-    for(let itemIndex=0;itemIndex<5;itemIndex++){const item=items[itemIndex];if(!item||!RENDERED_ACCESSORIES.has(item.piece)&&!item.piece.startsWith('party-number-')){motion.accessoryTransforms[itemIndex].key=null;continue;}
+    motion.accessoryTransforms??=[];
+    for(let itemIndex=0;itemIndex<items.length;itemIndex++){const item=items[itemIndex];motion.accessoryTransforms[itemIndex]??={};if(!item||!RENDERED_ACCESSORIES.has(item.piece)&&!item.piece.startsWith('party-number-')){motion.accessoryTransforms[itemIndex].key=null;continue;}
       const itemKey=`${key}:${item.piece}`,isPartyNumber=item.piece.startsWith('party-number-'),isStaticHeadwear=HEADWEAR_PIECES.has(item.piece),isFittedClothing=LOWER_PIECES.has(item.piece)||HAND_PIECES.has(item.piece);let source=this.headwear.get(isStaticHeadwear?`static:${item.piece}`:itemKey);if(!source&&isPartyNumber){source=partyNumberSurface(this.THREE,this.frames.get(key),item.piece.slice('party-number-'.length));this.headwear.set(itemKey,source);}const batchKey=isStaticHeadwear?item.piece:itemKey;let head=this.headwearBatches.get(batchKey);
       if(!head){head={count:0,capacity:0,mesh:null};this.headwearBatches.set(batchKey,head);}this.activeHeadwearBatches.add(head);
       if(head.count===head.capacity){
