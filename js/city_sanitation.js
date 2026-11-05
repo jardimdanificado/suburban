@@ -1,4 +1,4 @@
-import {activityRoomReady} from './city_interiors.js?v=substances-sleep-1';
+import {activityRoomReady} from './city_interiors.js?v=queue-dirty-tracking-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js?v=housing-investment-index-1';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 0, paidCleaningInterval: 180, privateCleaningInterval: 1440, bathroomCleaningLabor:12, fecesCleaningBaseLabor:8, fecesCleaningExtraLabor:4, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };

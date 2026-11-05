@@ -31,7 +31,7 @@ import { CityGovernment as CityPolitics } from './city_government.js?v=no-party-
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=corpse-interior-recovery-1';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=body-mobility-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=queue-dirty-tracking-1';
 import {interiorRoute} from './city_interior_layout.js?v=interior-route-floor-index-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';

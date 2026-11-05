@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=perf-spontaneous-art-title-3';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-ref-token-cache-1';
 
 const graph = new CityStateGraph();
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;

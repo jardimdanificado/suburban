@@ -2,7 +2,7 @@ import {injuryMovementFactor} from './city_injury_effects.js';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=wall-clearance-3';
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
-import {queueService} from './city_service_queue.js?v=queue-ticket-lookup-1';
+import {queueService} from './city_service_queue.js?v=queue-dirty-watch-lifecycle-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=interior-route-floor-index-1';
 // Entity coordinates follow the resident through outdoor and indoor tiles.
 // Indoor metadata adds the floor, room and the remaining interior route.
@@ -18,7 +18,8 @@ const point=(b,u)=>({x:b.entity.x+u.x+.5,y:b.entity.y+u.y+.5,z:u.z*CITY_FLOOR_HE
 function release(city,c){const id=c.indoorLocation?.targetUnitId||c.indoorLocation?.unitId,u=city.units.get(id);if(u?.activityReservedIds)u.activityReservedIds=u.activityReservedIds.filter(id=>id!==c.id);if(c.workCell?.unitId===id)c.workCell=null;}
 export function activityCellAvailable(city,u,c,kind){
  if(!u.activityReservedIds?.length){u.activityReservedIds??=[];return true;}
- const visitor=kind==='service'||kind==='treatment',workers=kind==='workspace'||kind==='office',ids=u.activityReservedIds,people=indoorCitizenCache(city);let reserved=null,occupants=0,alreadyReserved=false;
+ const ids=u.activityReservedIds;if(ids.length===1&&ids[0]===c.id){const location=c.indoorLocation,pending=c.serviceQueue,pendingHere=pending?.unitId===u.id&&pending.buildingId===c.targetId&&pending.kind===c.task;if(!c.entity.destroyed&&(pendingHere||location&&!location.exiting&&(location.targetUnitId===u.id||location.unitId===u.id)))return true;}
+ const visitor=kind==='service'||kind==='treatment',workers=kind==='workspace'||kind==='office',people=indoorCitizenCache(city);let reserved=null,occupants=0,alreadyReserved=false;
  for(let i=0;i<ids.length;i++){const id=ids[i],cacheable=Number.isInteger(id)&&id>=0&&id<65536;let other=cacheable?people[id]:undefined;if(!other){other=citizen(city,id);if(other&&cacheable)people[id]=other;}const location=other?.indoorLocation,pending=other?.serviceQueue,pendingHere=pending?.unitId===u.id&&pending.buildingId===other.targetId&&pending.kind===other.task;if(!other||other.entity.destroyed||!pendingHere&&(location?.exiting||(location?.targetUnitId!==u.id&&location?.unitId!==u.id))){reserved??=ids.slice(0,i);continue;}if(reserved)reserved.push(id);if(id===c.id)alreadyReserved=true;const type=pendingHere?pending.roomKind:location?.targetRoomType;if(visitor?type!=='workspace'&&type!=='office'&&type!=='dining':workers?type!=='service'&&type!=='treatment':true)occupants++;}
  if(reserved)u.activityReservedIds=reserved;
  const capacity=visitor?4:kind==='bathroom'||kind==='office'?1:kind==='dining'||kind==='plenary'?4:kind==='bedroom'?4:1;

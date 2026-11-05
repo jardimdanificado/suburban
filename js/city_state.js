@@ -66,7 +66,7 @@ const same = (a,b) => {if(!a||a.length!==b.length)return false;for(let i=0;i<a.l
 /** Incremental object graph transport. References (including cycles) retain their identity.
  * Only changed nodes cross the worker boundary; journals are not recopied every frame. */
 export class CityStateGraph {
-  constructor() { this.ids = new WeakMap(); this.objects = new Map(); this.previous = new Map(); this.nextId = 1; this.historyCursors = new Map(); this.mapChildren = []; this.relationNodes = new Map(); this.ledgerCursors=new Map(); }
+  constructor() { this.ids = new WeakMap(); this.objects = new Map(); this.previous = new Map(); this.nextId = 1; this.historyCursors = new Map(); this.mapChildren = []; this.relationNodes = new Map(); this.ledgerCursors=new Map(); this.referenceTokens=[]; }
   ref(value) {
     if (value === null || typeof value !== 'object') return value;
     const id = this.ids.get(value);
@@ -152,7 +152,8 @@ export class CityStateGraph {
           if(pathIndex>=0){const compact=[];for(let i=0;i<oldFields.length;i+=2)if(oldFields[i]!=='path')compact.push(oldFields[i],oldFields[i+1]);oldFields=compact;this.previous.set(id,{kind,data:compact});}
         }
         let index=0,delta=null,full=oldFields?null:[];
-        for (const key of Object.keys(object)) {
+        for (const key in object) {
+          if(!Object.prototype.hasOwnProperty.call(object,key))continue;
           if (localFields.has(key)||(omitCitizenPaths&&citizenSet?.has(object)&&key==='path')) continue;
           if(accessorFields.has(key)&&Object.getOwnPropertyDescriptor(object,key)?.get)continue;
           const value=object[key];
@@ -191,8 +192,10 @@ export class CityStateGraph {
       return id;
     };
     // Reference tokens are stable strings internally, avoiding one object allocation per edge.
-    const reference = value => value !== null && typeof value === 'object' ? `@${visit(value)}` :
-      typeof value === 'string' && value.startsWith('@') ? `@s${value}` : value;
+    const reference = value => {
+      if(value!==null&&typeof value==='object'){const id=visit(value);return id<262144?(this.referenceTokens[id]??=`@${id}`):`@${id}`;}
+      return typeof value==='string'&&value.startsWith('@')?`@s${value}`:value;
+    };
     const rootId = visit(root);
     this.mapRevision = mapRevision;
     this.mapChildren = Array.isArray(map) ? map.map(row => this.ids.get(row)) : [];
