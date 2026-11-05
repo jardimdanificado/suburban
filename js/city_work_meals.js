@@ -1,6 +1,6 @@
 import {syncCitizenInterior} from './city_interiors.js?v=activity-cell-early-reservation-3';
 import { preparedOffer } from './city_markets.js?v=roadside-ad-placards-1';
-import { CROPS } from './city_economy.js?v=roadside-ad-placards-1';
+import { CROPS } from './city_economy.js?v=publisher-demand-scan-2';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 

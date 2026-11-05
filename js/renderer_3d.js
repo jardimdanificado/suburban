@@ -16,7 +16,7 @@ import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_inte
 import { syncCityBuildings } from "./city_renderer_3d.js?v=street-facing-public-art-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=anatomical-dress-skirt-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-appearance-cache-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
@@ -3582,6 +3582,12 @@ export class RCT3DRenderer {
     // 3. WebGL Renderer with Optional Downscaling
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
     this.renderer.shadowMap.enabled = this.shadowsEnabled;
+    // Static city geometry and citizen meshes do not need a new shadow map on
+    // every display frame. Refresh it at 10 Hz so moving sunlight/camera and
+    // construction changes stay visually current while avoiding repeated
+    // shadow-pass work on slower GPUs.
+    this.renderer.shadowMap.autoUpdate = false;
+    this._lastShadowRefreshAt = -Infinity;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // High quality smooth shadows
     this.renderer.setClearColor(0xdde8f5, 1.0);
 
@@ -5201,6 +5207,7 @@ export class RCT3DRenderer {
     this.shadowsEnabled = !this.shadowsEnabled;
     this.renderer.shadowMap.enabled = this.shadowsEnabled;
     this.sunLight.castShadow = this.shadowsEnabled;
+    if(this.shadowsEnabled){this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=performance.now();}
     this.scene.traverse((obj) => {
       if (obj.material) {
         if (Array.isArray(obj.material)) obj.material.forEach(m => m.needsUpdate = true);
@@ -9036,6 +9043,8 @@ export class RCT3DRenderer {
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
+    const shadowNow=performance.now();
+    if(this.shadowsEnabled&&shadowNow-this._lastShadowRefreshAt>=100){this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=shadowNow;}
     const useIsometricPostEffects = this.graphicOptions?.isometricEffects === true;
     const dofOpt=this.graphicOptions?.dofStrength||"HIGH";
     const dofRequested=['LOW','MED','HIGH'].includes(dofOpt);

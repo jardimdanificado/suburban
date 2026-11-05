@@ -4,6 +4,23 @@ import {ROAD_TILES,tileAt,surfaceElevation} from './city_terrain.js?v=entrance-r
 import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
 const BEACH_LEISURE_OCCUPANCY=new WeakMap();
+const BEACH_TILE_INDEX=new WeakMap();
+const FAILED_LEISURE_ROUTES=new WeakMap();
+function beachTileChunks(city,cx,cy){
+ const world=city.world,width=world.width,height=world.height,revision=world.revision||0;
+ let cache=BEACH_TILE_INDEX.get(city);
+ if(!cache||cache.world!==world||cache.revision!==revision||cache.width!==width||cache.height!==height)BEACH_TILE_INDEX.set(city,cache={world,revision,width,height,chunks:new Map()});
+ const minX=Math.max(0,cx-14),maxX=Math.min(width-1,cx+14),minY=Math.max(0,cy-14),maxY=Math.min(height-1,cy+14),result=[];
+ for(let by=Math.floor(minY/32);by<=Math.floor(maxY/32);by++)for(let bx=Math.floor(minX/32);bx<=Math.floor(maxX/32);bx++){
+  const key=`${bx},${by}`;let points=cache.chunks.get(key);
+  if(!points){points=[];const x0=bx*32,y0=by*32,x1=Math.min(width,x0+32),y1=Math.min(height,y0+32);
+   for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++)if(tileAt(world,x,y)===TILE_SAND){let shore=false;for(let dy=-2;dy<=2&&!shore;dy++)for(let dx=-2;dx<=2;dx++)if(Math.abs(dx)+Math.abs(dy)<=2&&tileAt(world,x+dx,y+dy)===TILE_WATER){shore=true;break;}if(shore)points.push({x,y});}
+   cache.chunks.set(key,points);
+  }
+  for(const point of points)if(point.x>=minX&&point.x<=maxX&&point.y>=minY&&point.y<=maxY)result.push(point);
+ }
+ return result;
+}
 function beachLeisureOccupancy(furniture){
  const city=furniture.city;let cache=BEACH_LEISURE_OCCUPANCY.get(furniture);if(cache?.minute===city.minute)return cache.byCell;
  const byCell=new Map();for(const citizen of city.citizens)if(citizen.task==='beach_leisure'&&citizen.beachLeisure){const point=citizen.beachLeisure,key=`${Math.floor(point.x/2)},${Math.floor(point.y/2)}`;let group=byCell.get(key);if(!group)byCell.set(key,group=[]);group.push(citizen);}
@@ -78,17 +95,20 @@ export class CityFurniture{
   if(b.constructionKind!=='open-air'){const path=city.findPath(c.entity,b.door);if(path!==null){c.path=path;c.action='Indo aguardar dentro da empresa';return true;}}
   c.task=null;c.workWait=null;return false;
  }
- routeLeisure(c){if(c.needs.leisure>=85)return false;if(this.routeBeach(c))return true;const seat=this.claimBench(c,c.entity,10);if(!seat)return false;c.task='sit';c.targetId=null;c.path=seat.path||[];c.sitUntil=this.city.minute+30;c.action='Indo descansar no banco';return true;}
+ routeLeisure(c){if(c.needs.leisure>=85)return false;const city=this.city;
+  // Leisure is low priority. Stagger the first route searches by citizen ID
+  // so a fresh city does not send the whole population through A* at once.
+  if(Math.abs(city.minute%5)!==Math.abs(c.id%5))return false;
+  const signature=`${Math.floor(c.entity.x)},${Math.floor(c.entity.y)}:${city.world.revision||0}:${city.obstacleRevision||0}:${city.structureRevision||0}:${this.benches.length}`;let failures=FAILED_LEISURE_ROUTES.get(this);if(!failures)FAILED_LEISURE_ROUTES.set(this,failures=new WeakMap());const failed=failures.get(c);if(failed?.signature===signature&&city.minute<failed.retryAt)return false;if(this.routeBeach(c)){failures.delete(c);return true;}const seat=this.claimBench(c,c.entity,10);if(!seat){failures.set(c,{signature,retryAt:city.minute+5});return false;}failures.delete(c);c.task='sit';c.targetId=null;c.path=seat.path||[];c.sitUntil=city.minute+30;c.action='Indo descansar no banco';return true;}
  routeBeach(c){
   const city=this.city,origin=c.entity,cx=Math.floor(origin.x),cy=Math.floor(origin.y),candidates=[];
-  for(let y=Math.max(0,cy-14);y<=Math.min(city.world.height-1,cy+14);y++)for(let x=Math.max(0,cx-14);x<=Math.min(city.world.width-1,cx+14);x++){
-   if(tileAt(city.world,x,y)!==TILE_SAND||!city.walkable(x,y)||city.nature?.tiles?.has(`${x},${y}`))continue;
-   let shore=false;for(let dy=-2;dy<=2&&!shore;dy++)for(let dx=-2;dx<=2;dx++)if(Math.abs(dx)+Math.abs(dy)<=2&&tileAt(city.world,x+dx,y+dy)===TILE_WATER){shore=true;break;}
-   if(!shore)continue;const point={x:x+.5,y:y+.5},distance=Math.hypot(point.x-origin.x,point.y-origin.y);if(distance>14)continue;
+  for(const tile of beachTileChunks(city,cx,cy)){
+   const {x,y}=tile;if(!city.walkable(x,y)||city.nature?.tiles?.has(`${x},${y}`))continue;
+   const point={x:x+.5,y:y+.5},distance=Math.hypot(point.x-origin.x,point.y-origin.y);if(distance>14)continue;
    candidates.push({point,distance});
   }
   if(candidates.length){const beachOccupants=beachLeisureOccupancy(this);for(let i=candidates.length-1;i>=0;i--){const {point}=candidates[i],bx=Math.floor(point.x/2),by=Math.floor(point.y/2);let occupied=false;for(let dy=-1;dy<=1&&!occupied;dy++)for(let dx=-1;dx<=1&&!occupied;dx++)for(const other of beachOccupants.get(`${bx+dx},${by+dy}`)||[])if(other!==c&&other.task==='beach_leisure'&&other.beachLeisure&&Math.hypot(other.beachLeisure.x-point.x,other.beachLeisure.y-point.y)<1.15){occupied=true;break;}if(occupied)candidates.splice(i,1);}}
-  candidates.sort((a,b)=>a.distance-b.distance);
+  candidates.sort((a,b)=>a.distance-b.distance||a.point.y-b.point.y||a.point.x-b.point.x);
   for(const {point}of candidates.slice(0,12)){
    const path=city.findPath(origin,point);if(path===null)continue;const end=path.at(-1)||origin;if(Math.hypot(end.x-point.x,end.y-point.y)>.04)path.push({...point});
    const seed=Math.imul((Number(c.id)||0)+city.minute+31,2654435761)>>>0,options=[

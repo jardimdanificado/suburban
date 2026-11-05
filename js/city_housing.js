@@ -67,13 +67,23 @@ export class CityHousing {
   home(c) { return this.homes.get(c.homeId); }
   hasDining(home) { return this.units(home).some(u => u.roomType === 'dining'); }
   invalidateResidents(){this.residentsByHome=null;}
-  residents(home) {
+  indexResidents() {
     const city=this.city;
     if(!this.residentsByHome||this.residentsMinute!==city.minute||this.residentsPopulation!==city.citizens.length){
       const index=new Map();for(const c of city.citizens)if(!c.entity.destroyed&&c.homeId){let people=index.get(c.homeId);if(!people)index.set(c.homeId,people=[]);people.push(c);}
       this.residentsByHome=index;this.residentsMinute=city.minute;this.residentsPopulation=city.citizens.length;
     }
+    return this.residentsByHome;
+  }
+  residents(home) {
+    this.indexResidents();
     return this.residentsByHome.get(home.id)?.slice()||NO_RESIDENTS;
+  }
+  residentAccessStatus(home,citizen) {
+    const residents=this.indexResidents().get(home.id);if(!residents?.length)return 0;
+    for(const resident of residents)if(resident.id===citizen.id)return 2;
+    for(const resident of residents){const relation=this.city.relationships.view(resident,citizen);if(relation&&relation.affection>=65&&relation.trust>=50&&relation.resentment<30)return 2;}
+    return 1;
   }
   hasBathroom(home) { return !!home?.bathroomUnitId&&this.city.units.get(home.bathroomUnitId)?.roomType==='bathroom'||this.units(home).some(u => u.roomType === 'bathroom'); }
   price(home) { return this.units(home).reduce((n, u) => n + u.price, 0); }

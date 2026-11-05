@@ -12,7 +12,7 @@ import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './c
 import {colorName} from './city_colors.js';
 import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.js';
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
-import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=labor-secretariat-1';
+import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=employment-search-cooldown-4';
 import {renderFiscalReport} from './city_fiscal_ui.js';
 import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
@@ -44,10 +44,10 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=roadside-ad-placards-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=publisher-demand-scan-2';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=city-task-candidate-doors-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=perf-leisure-stagger-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

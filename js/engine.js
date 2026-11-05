@@ -1,6 +1,7 @@
 // Scene registry shared by both renderers. Large queries use region buckets.
 export const globalWallCoords = new Set();
 const entitiesById = new Map(), regions = new Map(), memberships = new Map();
+let viewportQueryToken = 0, viewportSeen = new WeakMap();
 const REGION = 16;
 let activeEntities = [], indexGeneration = 0;
 const regionKey = (x, y) => `${x},${y}`;
@@ -49,8 +50,14 @@ export function getEntitiesInViewport(minX,maxX,minY,maxY,_padding=0,out=[]) {
   // Whole-map queries need neither a candidate set nor intermediate arrays.
   let source=activeEntities;
   if((x1-x0+1)*(y1-y0+1)<=regions.size*2){
-    source=new Set();
-    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)for(const entity of regions.get(regionKey(x,y))||[])source.add(entity);
+    if(++viewportQueryToken>=Number.MAX_SAFE_INTEGER){viewportSeen=new WeakMap();viewportQueryToken=1;}
+    const token=viewportQueryToken;
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)for(const entity of regions.get(regionKey(x,y))||[]){
+      if(viewportSeen.get(entity)===token)continue;
+      viewportSeen.set(entity,token);
+      if(entity&&!entity.destroyed&&entity.x+(entity.properties?.cityBuilding?.width||0)>=minX&&entity.x<=maxX&&entity.y+(entity.properties?.cityBuilding?.depth||0)>=minY&&entity.y<=maxY)out.push(entity);
+    }
+    return out;
   }
   for(const entity of source)if(entity&&!entity.destroyed&&entity.x+(entity.properties?.cityBuilding?.width||0)>=minX&&entity.x<=maxX&&entity.y+(entity.properties?.cityBuilding?.depth||0)>=minY&&entity.y<=maxY)out.push(entity);
   return out;

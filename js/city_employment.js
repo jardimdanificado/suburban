@@ -1,6 +1,7 @@
 import {injuryWorkFactor} from './city_injury_effects.js';
 /** Career records are independent of the bounded event journal and survive snapshots. */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const EMPLOYMENT_SEARCH_OFFSETS=Object.freeze([[12,0],[0,12],[-12,0],[0,-12],[8,8],[-8,8],[-8,-8],[8,-8]]);
 export function career(c){const cv=c.career??={jobs:[],applications:[],worked:{},motivation:50};if(cv.pendingInterview&&(cv.pendingInterview.status!=='análise'||!cv.applications.includes(cv.pendingInterview)))cv.pendingInterview=null;return cv;}
 export function finishApplication(application,status,reason,decidedAt){
   application.status=status;application.reason=reason;
@@ -56,6 +57,8 @@ export function ownerSelfHire(city,b){const owner=city.economy.workingOwner(b);r
 export function occupiedPositions(city,b){return b.workers.length+ownerSelfHire(city,b);}
 export function openPositions(city,b){return Math.max(0,b.jobs-occupiedPositions(city,b));}
 const vacancyIndexes=new WeakMap();
+const vacancyChoiceScratch=[];
+const vacancySearchDemandCache=new WeakMap();
 function nearbyFirms(city,c){
   let index=vacancyIndexes.get(city);
   if(!index||index.revision!==city.structureRevision||index.length!==city.buildings.length){
@@ -97,6 +100,11 @@ function agencyAppointmentTime(city,c,agency){const b=agency.building,travel=Mat
 function queueApplications(city){
   return city.economy.recruitmentQueue??=city.citizens.flatMap(c=>(c.career?.applications||[]).filter(a=>a.status==='análise').map(application=>({citizenId:c.id,application})));
 }
+function vacancySearchIndexes(city){
+  let index=vacancySearchDemandCache.get(city);if(index?.minute===city.minute)return index;
+  const demand=new Map();for(const {application} of queueApplications(city))if(application.status==='análise')demand.set(application.buildingId,(demand.get(application.buildingId)||0)+1);
+  index={minute:city.minute,demand};vacancySearchDemandCache.set(city,index);return index;
+}
 export function apply(city,c,b){
   const cv=career(c),last=cv.applications.findLast(a=>a.buildingId===b.id);
   if(cv.pendingInterview&&!cv.applications.includes(cv.pendingInterview))cv.pendingInterview=null;
@@ -111,36 +119,58 @@ export function apply(city,c,b){
   if(cv.applications.length>48)cv.applications=cv.applications.filter((a,index)=>a.status==='análise'||index>=cv.applications.length-24);
   return row;
 }
-function considerKnownVacancies(city,c,offers=null){
+function considerKnownVacancies(city,c,offers=null,indexes=null){
   const cv=career(c);if(cv.pendingInterview?.status==='análise')return;
-  const old=city.building(c.jobId),allowed=offers&&new Set(offers.map(b=>b.id));
-  const demand=new Map();for(const {application:a} of queueApplications(city))if(a.status==='análise')demand.set(a.buildingId,(demand.get(a.buildingId)||0)+1);
-  const value=b=>wageFor(city,c,b)/Math.max(1,city.currency.price(1))*2+city.economy.hiringScore(c,b)*.2-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)*.05-(demand.get(b.id)||0)/Math.max(1,openPositions(city,b))*8;
-  const choices=(cv.knownVacancies||[]).map(v=>city.building(v.buildingId)).filter(b=>b&&(!allowed||allowed.has(b.id))&&b.active&&!b.entity.destroyed&&openPositions(city,b)>0&&b.balance>=b.wage*60&&b.id!==c.jobId&&(!old||wageFor(city,c,b)>wageFor(city,c,old)*1.15)&&qualification(city,c,b).eligible&&city.relationships.willingToWork(c,b)).sort((a,b)=>value(b)-value(a)||a.id-b.id);
-  for(const b of choices)if(apply(city,c,b)?.status==='análise')return;
+  const context=indexes||(!offers?vacancySearchIndexes(city):null);
+  const old=city.building(c.jobId),allowed=indexes?.allowed||(offers instanceof Set?offers:offers&&new Set(offers.map(b=>b.id)));
+  const demand=context?.demand||new Map();if(!context)for(const {application:a} of queueApplications(city))if(a.status==='análise')demand.set(a.buildingId,(demand.get(a.buildingId)||0)+1);
+  const value=b=>wageFor(city,c,b)/Math.max(1,city.currency.price(1))*2+city.economy.hiringScore(c,b)*.2-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)*.05-(demand.get(b.id)||0)/Math.max(1,openPositions(city,b))*8,choices=vacancyChoiceScratch;choices.length=0;
+  for(const vacancy of cv.knownVacancies||[]){const b=city.building(vacancy.buildingId);if(b&&(!allowed||allowed.has(b.id))&&b.active&&!b.entity.destroyed&&openPositions(city,b)>0&&b.balance>=b.wage*60&&b.id!==c.jobId&&(!old||wageFor(city,c,b)>wageFor(city,c,old)*1.15)&&qualification(city,c,b).eligible&&city.relationships.willingToWork(c,b))choices.push(b);}
+  choices.sort((a,b)=>value(b)-value(a)||a.id-b.id);
+  for(const b of choices){const queue=queueApplications(city),before=queue.length,application=apply(city,c,b);if(application?.status==='análise'){if(context&&queue.length>before)demand.set(b.id,(demand.get(b.id)||0)+1);return;}}
 }
 export function reviewMarket(city,offers){
+  const profile=city.profileDiagnostics?{eligible:0,discoverMs:0,indexMs:0,listingsMs:0,considerMs:0}:null;
   const posted=offers.filter(b=>openPositions(city,b)>0&&b.balance>=b.wage*60).sort((a,b)=>Number(occupiedPositions(city,a)>0)-Number(occupiedPositions(city,b)>0)||b.wage-a.wage||a.id-b.id).slice(0,64);
   const postedIds=new Set(posted.map(b=>b.id));
+  const indexes={allowed:new Set(offers.map(b=>b.id)),demand:new Map()};
+  for(const {application} of queueApplications(city))if(application.status==='análise')indexes.demand.set(application.buildingId,(indexes.demand.get(application.buildingId)||0)+1);
   for(const c of city.citizens){
     if(c.entity.destroyed||!city.society.isAdult(c)||city.politics.officeHolder(c)||c.businessIds.length)continue;
+    if(profile)profile.eligible++;
+    let started=profile?performance.now():0;
     discoverVacancies(city,c);
+    if(profile){profile.discoverMs+=performance.now()-started;started=performance.now();}
     const cv=career(c);cv.knownVacancies??=[];
     // Rural employers need the public jobs board: facade signs alone left
     // remote farms permanently invisible to residents working in the centre.
     const known=new Map(cv.knownVacancies.map(v=>[v.buildingId,v]));
     const listings=posted.map(b=>{const entry=known.get(b.id)||{buildingId:b.id,discoveredAt:city.minute,source:'Quadro municipal de empregos'};entry.seenAt=city.minute;entry.wage=b.wage;entry.positions=openPositions(city,b);return entry;});
     cv.knownVacancies=[...listings,...cv.knownVacancies.filter(v=>!postedIds.has(v.buildingId))].slice(0,64);
+    if(profile){profile.indexMs+=performance.now()-started;started=performance.now();}
     if(city.minute<(cv.nextSearchAt||0))continue;cv.nextSearchAt=city.minute+(c.jobId?240:30);
-    considerKnownVacancies(city,c,offers);
+    considerKnownVacancies(city,c,offers,indexes);
+    if(profile)profile.considerMs+=performance.now()-started;
   }
+  if(profile)city.lastReviewMarketProfile={posted:posted.length,...profile};
 }
 export function searchEmployment(city,c){
-  discoverVacancies(city,c);considerKnownVacancies(city,c);
+  discoverVacancies(city,c);
+  const cv=career(c);
+  if(cv.nextPersonalVacancyCheckAt==null)cv.nextPersonalVacancyCheckAt=city.minute+((Number(c.id)||0)%5);
+  if(city.minute>=cv.nextPersonalVacancyCheckAt){considerKnownVacancies(city,c);cv.nextPersonalVacancyCheckAt=city.minute+5;}
   if(c.career?.pendingInterview?.status==='análise')return false;
-  // Explore a few nearby blocks; distant vacancy signs are learned along the route.
-  const offsets=[[12,0],[0,12],[-12,0],[0,-12],[8,8],[-8,8],[-8,-8],[8,-8]],start=(c.id+Math.floor(city.minute/30))%offsets.length;
-  for(let i=0;i<offsets.length;i++){const [dx,dy]=offsets[(start+i)%offsets.length],target={x:Math.floor(c.entity.x)+dx+.5,y:Math.floor(c.entity.y)+dy+.5};if(!city.walkable(Math.floor(target.x),Math.floor(target.y)))continue;const path=city.findPath(c.entity,target);if(path?.length){c.task='walk';c.targetId=null;c.path=path;c.action='Procurando anúncios de emprego pelo bairro';return true;}}
+  const tileX=Math.floor(c.entity.x),tileY=Math.floor(c.entity.y),searchWindow=Math.floor(city.minute/30),obstacleRevision=city.obstacleRevision||0,structureRevision=city.structureRevision||0;
+  const sameSearchState=cv.employmentSearchTileX===tileX&&cv.employmentSearchTileY===tileY&&cv.employmentSearchWindow===searchWindow&&cv.employmentSearchObstacleRevision===obstacleRevision&&cv.employmentSearchStructureRevision===structureRevision;
+  if(!sameSearchState&&cv.employmentSearchTileX!==undefined)cv.nextEmploymentSearchAt=city.minute;
+  else if(cv.nextEmploymentSearchAt==null)cv.nextEmploymentSearchAt=city.minute+((Number(c.id)||0)%4);
+  if(city.minute<(cv.nextEmploymentSearchAt||0))return false;
+  // Explore two nearby blocks per pass and rotate through the neighborhood.
+  // This spreads eight route checks over several minutes instead of running
+  // the same full sweep for many residents in a single minute.
+  const offsets=EMPLOYMENT_SEARCH_OFFSETS,start=cv.employmentSearchCursor??(c.id+searchWindow)%offsets.length;
+  for(let i=0;i<2;i++){const [dx,dy]=offsets[(start+i)%offsets.length],target={x:tileX+dx+.5,y:tileY+dy+.5};if(!city.walkable(Math.floor(target.x),Math.floor(target.y)))continue;const path=city.findPath(c.entity,target);if(path?.length){c.task='walk';c.targetId=null;c.path=path;c.action='Procurando anúncios de emprego pelo bairro';return true;}}
+  cv.employmentSearchCursor=(start+2)%offsets.length;cv.employmentSearchTileX=tileX;cv.employmentSearchTileY=tileY;cv.employmentSearchWindow=searchWindow;cv.employmentSearchObstacleRevision=obstacleRevision;cv.employmentSearchStructureRevision=structureRevision;cv.nextEmploymentSearchAt=city.minute+4;
   return false;
 }
 export function routeToInterview(city,c){

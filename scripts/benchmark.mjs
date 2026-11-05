@@ -26,20 +26,24 @@ if(mode==='builder-selection'){
 }else if(mode==='city-render'){
   // CPU synchronization only: existing farm meshes, no GPU driver or shader work.
   const {syncCityBuildings}=await moduleAt('city_renderer_3d.js');
-  const renderer={scene:{add(){},remove(){}},cityLampLights:Array.from({length:8},()=>({intensity:0})),cityMeshes:new Map()};
+  const {setActiveEntities}=await moduleAt('engine.js');
+  const renderer={scene:{add(){},remove(){}},cityLampLights:Array.from({length:8},()=>({intensity:0})),cityMeshes:new Map(),renderedMinTx:30,renderedMaxTx:90,renderedMinTy:10,renderedMaxTy:55,cardboardVisualSignature:'0',cardboardVisuals:{children:[]}};
   const rendererSource=readFileSync(resolve(root,'js/city_renderer_3d.js'),'utf8'),oldSignature=rendererSource.includes('b.units.filter');
-  const entities=Array.from({length:500},(_,id)=>{const units=Array.from({length:100},(_,n)=>({id:`${id}:${n}`,roomType:n===0?'bathroom':n===1?'dining':'workspace',x:n%10,y:Math.floor(n/10),z:0}));const b={type:'farm',crop:'milho',constructionKind:'open-air',width:10,depth:10,units,layoutRevision:1,rotation:0};
+  const buildings=[],entities=Array.from({length:500},(_,id)=>{const units=Array.from({length:100},(_,n)=>({id:`${id}:${n}`,roomType:n===0?'bathroom':n===1?'dining':'workspace',x:n%10,y:Math.floor(n/10),z:0}));const b={id,type:'farm',crop:'milho',constructionKind:'open-air',width:10,depth:10,units,layoutRevision:1,rotation:0};
     const signature=rendererSource.includes('retail-v8-fruit-stalls:')?`retail-v8-fruit-stalls:farm:10:10:milho:1:100:0:0:`:rendererSource.includes('retail-v2:')?`retail-v2:farm:10:10:milho:1:100:0:0`:oldSignature?`${b.crop}:${units.filter(u=>['bathroom','dining'].includes(u.roomType)).map(u=>u.id+u.roomType).join(',')}`:`${b.crop}:1:100`;
     renderer.cityMeshes.set(id,{visible:true,position:{set(){}},userData:{signature,terrainRevision:0,highlight:{visible:false},patches:{material:{emissive:{setHex(){}}}}}});
-    return {id,x:id%20*12,y:Math.floor(id/20)*12,properties:{cityBuilding:b}};
+    const entity={id,x:id%20*12,y:Math.floor(id/20)*12,destroyed:false,properties:{cityBuilding:b}};b.entity=entity;buildings.push(b);return entity;
   });
+  const citizens=Array.from({length:population},(_,id)=>({id:id+5000,entity:{x:id%128,y:id%64,destroyed:false},task:'idle'}));
+  for(let id=0;id<3000;id++)entities.push({id:10000+id,x:id%256,y:Math.floor(id/256),destroyed:false,properties:{}});
+  setActiveEntities(entities);renderer.cityDevelopment={plots:[],projects:[],city:{minute:0,cardboardShelters:new Map(),buildings,citizens}};
   const world={revision:0,map:[],cityLampPosts:[],cityLampSites:[]};
   // Keep static bridge geometry out of this CPU synchronization workload. The
   // benchmark renderer intentionally has no Three.js constructors or GPU.
   renderer.skybridgeRevision=`${entities.length}:${world.topologyRevision??world.revision??0}:${world.bridgeRevision??0}:colonial-3`;renderer.roadBridgeRevision=world.bridgeRevision||0;renderer.roadBridgeStyleVersion=3;
   for(let i=0;i<20;i++)syncCityBuildings(renderer,{},entities,world);
   const start=performance.now();for(let i=0;i<300;i++)syncCityBuildings(renderer,{},entities,world);
-  console.log(JSON.stringify({mode,root,buildings:500,spaces:50000,frames:300,ms:performance.now()-start,checksum:hash([...renderer.cityMeshes].map(([id,g])=>[id,g.visible,g.userData.highlight.visible]))}));
+  console.log(JSON.stringify({mode,root,buildings:500,citizens:citizens.length,entities:entities.length,spaces:50000,frames:300,ms:performance.now()-start,checksum:hash([...renderer.cityMeshes].map(([id,g])=>[id,g.visible,g.userData.highlight.visible]))}));
 }else if(mode==='scene'){
   const {setActiveEntities,getEntitiesInViewport,getEntityById}=await moduleAt('engine.js');
   const entities=Array.from({length:10000},(_,id)=>({id,x:id%256,y:Math.floor(id/256),properties:{}}));
@@ -52,7 +56,9 @@ if(mode==='builder-selection'){
   // Include resizing, replacement and removal in the observed scene signature.
   entities[300]={id:300,x:300,y:300,properties:{cityBuilding:{width:40,depth:30}}};entities[301].destroyed=true;entities.splice(302,1);setActiveEntities(entities);
   views.push(getEntitiesInViewport(320,340,320,340).map(e=>e.id),[getEntityById(301),getEntityById(302)]);
-  console.log(JSON.stringify({mode,root,entities:entities.length,staticMs,movingMs,checksum:hash(views)}));
+  const visible=[];let viewportCount=0;for(let i=0;i<100;i++)getEntitiesInViewport(40,80,24,64,0,visible);
+  const viewportStarted=performance.now();for(let i=0;i<10000;i++)viewportCount+=getEntitiesInViewport(40,80,24,64,0,visible).length;const viewportMs=performance.now()-viewportStarted;
+  console.log(JSON.stringify({mode,root,entities:entities.length,staticMs,movingMs,viewportMs,viewportQueries:10000,viewportCount,viewportChecksum:hash(visible.map(e=>e.id)),checksum:hash(views)}));
 }else if(mode==='freight'){
   // Movement updates with a large shipment history and active drivers. No time
   // advances, so this isolates lookup cost without changing delivery behavior.
@@ -97,10 +103,10 @@ if(mode==='builder-selection'){
     const mean=key=>samples.reduce((n,s)=>n+s[key],0)/samples.length;
     console.log(JSON.stringify({mode,root,samples:samples.length,encodeMs:mean('ms'),changedNodes:mean('nodes'),bytes:mean('bytes'),applyMs:mean('applyMs'),checksum:hash(observed(city)),mirrorChecksum:hash(observed(reflected.city))}));
   }else{
-    const dt=Math.max(1/60,Math.min(.25,Number(process.env.SUBURBAN_BENCH_DT)||1/6)),updates=Math.round(60/dt);
+    const dt=Math.max(1/60,Math.min(.25,Number(process.env.SUBURBAN_BENCH_DT)||1/6)),minutes=Math.max(1,Number(process.env.SUBURBAN_BENCH_MINUTES)||60),updates=Math.round(minutes/dt);
     const times=[],start=performance.now();for(let i=0;i<updates;i++){const at=performance.now();city.update(dt);times.push(performance.now()-at);}const ms=performance.now()-start;times.sort((a,b)=>a-b);
     const state={minute:city.minute,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,activity:c.activity,task:c.task,path:c.path,happiness:c.happiness,x:c.entity.x,y:c.entity.y,balance:c.balance,home:c.homeUnitId,job:c.jobId,interior:c.indoorLocation,career:c.career})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),buildings:city.buildings.map(b=>({id:b.id,inventory:b.inventory,workers:b.workers})),shipments:city.logistics.shipments.map(s=>({id:s.id,status:s.status,driverId:s.driverId,quantity:s.quantity,position:s.position})),terrain:Array.from(city.world.map),accounts:[...city.accounts].map(([k,a])=>[k,a.balance]),history:city.history.nextId,events:city.events,relations:[...city.society.relations]};
-    console.log(JSON.stringify({mode,root,population:city.citizens.length,dt,updates:times.length,ms,p50:times[Math.floor(times.length*.5)],p95:times[Math.floor(times.length*.95)],max:times.at(-1),checksum:hash(state)}));
+    console.log(JSON.stringify({mode,root,population:city.citizens.length,dt,minutes,updates:times.length,ms,p50:times[Math.floor(times.length*.5)],p95:times[Math.floor(times.length*.95)],max:times.at(-1),checksum:hash(state)}));
   }
 }else throw Error('Use initialize, simulation, snapshots, bridge, throughput, freight, scene, building-sites, builder-selection or city-render.');
 

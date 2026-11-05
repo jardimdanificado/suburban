@@ -10,7 +10,7 @@ import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=activity-cell-early-reservation-3';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
-import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=labor-secretariat-1';
+import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=employment-search-cooldown-4';
 import {productionPlan,investProductionPlan} from './city_production_planner.js?v=economic-flow-7';
 import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClothes,washWardrobe,washGarment} from './city_clothing.js?v=party-apparel-1';
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
@@ -219,20 +219,28 @@ export class CityEconomy {
     city._statsCache=null;
   }
   hire() {
-    this.appointMayor();
-    const stations=this.city.buildings.filter(b=>b.type==='police_station'&&b.active&&!b.entity.destroyed).sort((a,b)=>a.id-b.id),securitySkill=this.city.politics?.secretaries?.find(row=>row.officeId==='security')?.skill||50,target=Math.max(0,Math.min(1000,Math.floor((this.city.politics?.policy?.policeStaffing??6)*(.8+securitySkill/250)))),base=stations.length?Math.floor(target/stations.length):0,remainder=stations.length?target%stations.length:0;
-    stations.forEach((station,index)=>{station.jobs=base+(index<remainder?1:0);});
-    this.staffEssentials();
-    for (const c of this.city.citizens) if (c.jobId && c.id!==this.mayorId) {
-      const b = this.city.building(c.jobId);
-      if (!b || !b.active || (b.balance < b.wage && this.city.minute - c.lastPaidAt > 1440)) this.leaveJob(c);
-      else if (!c.deliveryId && !c.cleaningJobId && !this.city.relationships.willingToWork(c,b)) this.leaveJob(c,'Conflito pessoal com o gestor');
-    }
-    this.reconcileStaff();
-    const offers=this.city.buildings.filter(b=>b.active&&b.jobs>0&&!b.entity.destroyed);
-    for(const b of offers)reviewWages(this.city,b);
-    reviewMarket(this.city,offers);
-    advanceRecruitment(this.city);
+    const city=this.city,profile=city.profileDiagnostics?{}:null,measure=(name,work)=>{if(!profile){work();return;}const started=performance.now();work();profile[name]=performance.now()-started;};
+    measure('mayorAndStations',()=>{
+      this.appointMayor();
+      const stations=city.buildings.filter(b=>b.type==='police_station'&&b.active&&!b.entity.destroyed).sort((a,b)=>a.id-b.id),securitySkill=city.politics?.secretaries?.find(row=>row.officeId==='security')?.skill||50,target=Math.max(0,Math.min(1000,Math.floor((city.politics?.policy?.policeStaffing??6)*(.8+securitySkill/250)))),base=stations.length?Math.floor(target/stations.length):0,remainder=stations.length?target%stations.length:0;
+      stations.forEach((station,index)=>{station.jobs=base+(index<remainder?1:0);});
+    });
+    measure('essentialStaffing',()=>this.staffEssentials());
+    measure('workforceValidation',()=>{
+      for(const c of city.citizens)if(c.jobId&&c.id!==this.mayorId){
+        const b=city.building(c.jobId);
+        if(!b||!b.active||(b.balance<b.wage&&city.minute-c.lastPaidAt>1440))this.leaveJob(c);
+        else if(!c.deliveryId&&!c.cleaningJobId&&!city.relationships.willingToWork(c,b))this.leaveJob(c,'Conflito pessoal com o gestor');
+      }
+    });
+    measure('staffReconciliation',()=>this.reconcileStaff());
+    let offers;
+    measure('activeOfferCollection',()=>{offers=city.buildings.filter(b=>b.active&&b.jobs>0&&!b.entity.destroyed);});
+    measure('wageReview',()=>{for(const b of offers)reviewWages(city,b);});
+    measure('marketReview',()=>reviewMarket(city,offers));
+    if(profile)profile.marketReviewDetail=city.lastReviewMarketProfile;
+    measure('recruitment',()=>advanceRecruitment(city));
+    if(profile)this.lastHiringProfile=profile;
   }
 
   connected(a, b) {
@@ -291,6 +299,19 @@ export class CityEconomy {
     for(const b of this.city.buildings)if(b.active&&!b.entity.destroyed&&(civicSpec(b)||justiceServiceSpec(b)))for(const [g,n]of Object.entries(b.inputDemand||{})){totalInputDemandByGood.set(g,(totalInputDemandByGood.get(g)||0)+n);inputDemandByGood.set(g,(inputDemandByGood.get(g)||0)+n);}
     for (const c of activeCitizens) for (const [good, preference] of Object.entries(c.foodPreferences || {})) if (preference > 0) foodPreferenceByGood.set(good, (foodPreferenceByGood.get(good) || 0) + preference);
     const oil=this.lightingSupplyReport=oilSupply(this),oilGap=Math.max(0,oil.oilRequired-oil.millPotential-oil.millPlanned);
+    let publisherAudienceByGood;
+    const publisherNeed=good=>{
+      if(!publisherAudienceByGood){
+        publisherAudienceByGood=new Map();let adults=0;
+        for(const c of activeCitizens)if(this.city.society.isAdult(c)){
+          adults++;const available=new Set();
+          for(const doc of this.city.publications.owned(c.accountId))if(doc.entries.length<this.city.publications.capacity(doc))available.add(doc.good);
+          for(const availableGood of available)publisherAudienceByGood.set(availableGood,(publisherAudienceByGood.get(availableGood)||0)+1);
+        }
+        publisherAudienceByGood.adults=adults;
+      }
+      return Math.max(0,publisherAudienceByGood.adults-(publisherAudienceByGood.get(good)||0))*.3;
+    };
     const items=[{type:'mill',crop:null,score:oilGap?Math.min(300,200+oilGap*2):0,required:oil.oilRequired,supply:oil.millDaily,stock:oil.oilStock,reason:`Postes precisam de ${oil.daily} óleos/dia; ${oil.empty} vazios. ${oil.bottleneck}`}];
     const facilities = [...this.city.sanitation.facilities.values()], waste = this.city.buildings.reduce((n, b) => n + (b.inventory.lixo || 0) + (b.litter || 0), 0);
     for (const [type, needed, reason] of [ ['paid_toilet', facilities.length >= 3, 'Demanda por banheiros limpos e acessíveis']]) items.push({ type, crop: null, score: !needed ? 0 : !businesses.some(b=>b.type===type)?95:Math.max(0,(type==='cleaner'?facilities.filter(f=>f.cleanliness<65).length:type==='paid_toilet'?facilities.length:waste/4)*18-businesses.filter(b=>b.type===type).reduce((n,b)=>n+Math.max(1,b.workers.length)*40,0)), reason });
@@ -357,7 +378,7 @@ export class CityEconomy {
       const firms=businesses.filter(b=>b.type===type);
       const alcoholShares={alcool:.36,cerveja:.36,vinho:.18,tequila:.10};
       const substanceNeed=Object.keys(spec.outputs).reduce((n,g)=>{const id=SUBSTANCE_CONTROLLED_GOODS[g]||g,substance=SUBSTANCES[id];return n+(substance&&this.city.substances?.law(id)?.regime!=='prohibited'?population*substance.popularity*.65*(id==='alcool'?(alcoholShares[g]||0):1):0);},0);
-      const needed=substanceNeed+(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?activeCitizens.filter(c=>this.city.society.isAdult(c)&&!this.city.publications.owned(c.accountId).some(d=>d.good===g&&d.entries.length<this.city.publications.capacity(d))).length:population)*.3:INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
+      const needed=substanceNeed+(type==='clothing_store'?population*.15:0)+Object.keys(spec.outputs).reduce((n,g)=>n+(this.city.politics.campaigns.getMaterials().demand(g)||0)+(totalInputDemandByGood.get(g)||0)+(spec.use?(type==='publisher'?publisherNeed(g):population*.3):INDUSTRIAL_FOODS.includes(g)?population*.7+(foodPreferenceByGood.get(g)||0)*.8:0),0);
       const stock=Object.keys(spec.outputs).reduce((n,g)=>n+(stockByGood.get(g)||0),0);
       const supply=firms.reduce((n,b)=>n+Math.max(1,b.workers.length)*240/spec.labor*Object.values(spec.outputs).reduce((a,v)=>a+v,0),0);
       const inputAvailability=Object.entries(spec.inputs).length?Object.entries(spec.inputs).reduce((n,[g,q])=>n+Math.min(2,(stockByGood.get(g)||0)/Math.max(1,q*6)),0)/Object.keys(spec.inputs).length:1;
@@ -1019,16 +1040,24 @@ export class CityEconomy {
     switch (phase) {
       case 0: this.city.currency.hourly(); this.city.welfare.hourly(); break;
       case 1: this.city.lighting.hourly(); break;
-      case 2: this.city.politics.hourly(); this.municipalPolicy(); break;
+      case 2:
+        if(!this.city.profileDiagnostics){this.city.politics.hourly();this.municipalPolicy();break;}
+        {const started=performance.now();this.city.politics.hourly();const politicsMs=performance.now()-started;const policyStarted=performance.now();this.municipalPolicy();return {politicsMs,municipalPolicyMs:performance.now()-policyStarted};}
       case 3: this.assignHomes(); break;
-      case 4: this.hire(); break;
-      case 5: this.city.development.updateHourly(); break;
+      case 4:
+        if(!this.city.profileDiagnostics){this.hire();break;}
+        {const started=performance.now();this.hire();return {hireMs:performance.now()-started,hiring:this.lastHiringProfile};}
+      case 5:
+        if(!this.city.profileDiagnostics){this.city.development.updateHourly();break;}
+        {const started=performance.now();this.city.development.updateHourly();return {developmentMs:performance.now()-started};}
       case 6: this.city.development.balanceContracts(); this.city.nature.hourly(); break;
       case 7: this.city.logistics.rebalanceWaiting(); break;
       case 8: this.trade(); externalTradeHourly(this.city); break;
       case 9: this.city.paint.hourly();updateClothes(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
       case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
-      case 11: this.updateDemand(); updateMarket(this);planSupplyChains(this);tradeSharesHourly(this.city);break;
+      case 11:
+        if(!this.city.profileDiagnostics){this.updateDemand();updateMarket(this);planSupplyChains(this);tradeSharesHourly(this.city);break;}
+        {const parts={};let started=performance.now();this.updateDemand();parts.demandMs=performance.now()-started;started=performance.now();updateMarket(this);parts.marketMs=performance.now()-started;started=performance.now();planSupplyChains(this);parts.supplyPlanMs=performance.now()-started;started=performance.now();tradeSharesHourly(this.city);parts.shareTradingMs=performance.now()-started;return parts;}
       case 12: {
         if(!this.city.profileDiagnostics){this.city.vehicles.hourly();if(this.city.hour%2===0){this.investInHousing();this.invest();}break;}
         const parts={};let started=performance.now();this.city.vehicles.hourly();parts.vehiclesMs=performance.now()-started;
