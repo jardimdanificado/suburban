@@ -24,6 +24,43 @@ test('OBJ parser triangulates quads, resolves negative indices and rejects inval
  assert.throws(()=>parseCitizenOBJ('v 0 0 0\nf 2 1 1'));
  assert.throws(()=>parseCitizenOBJ('v 0 0 0'));
 });
+test('OBJ padding is removed without changing the order of real anatomical faces',()=>{
+ const data=parseCitizenOBJ('v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\nf 1 2 3\nf 1 2 2\nf 1 3 4');
+ assert.equal(data.triangles,2);
+ assert.deepEqual([...data.positions],[0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,1]);
+ assert.throws(()=>parseCitizenOBJ('v 0 0 0\nv 1 0 0\nf 1 2 2'),/modelo sem faces/);
+});
+test('clothes stay on the chest, thighs, hands and feet in every supplied pose',async()=>{
+ const {model}=await models();assert(model.ready);
+ const containsFace=(geometry,face)=>{
+  const data=geometry.attributes.position.array;
+  for(let i=0;i<data.length;i+=9)if(face.every((n,j)=>data[i+j]===n))return true;
+  return false;
+ };
+ // IDs refer to the anatomical source surface: 0 foot, 1 thigh, 9 torso,
+ // 13 head, 54 shin, 82 hand. Export padding must not shift these IDs.
+ const checks=[
+  ['camisa',9,true],['camisa',13,false],['camisa',82,false],
+  ['camiseta',9,true],['camiseta',13,false],
+  ['vestido',13,false],['vestido',82,false],
+  ['maiô',13,false],['maiô',82,false],
+  ['calça',1,true],['calça',9,false],['calça',13,false],['calça',82,false],
+  ['shorts',1,true],['shorts',54,false],['shorts',9,false],
+  ['sapatos',0,true],['sapatos',82,false],
+  ['luvas',82,true],['luvas',0,false],['luvas',13,false],
+ ];
+ for(const [key,geometry] of model.frames){
+  const positions=geometry.attributes.position.array;assert.equal(positions.length/9,246,key);
+  for(const [piece,id,covered] of checks){
+   const face=positions.subarray(id*9,id*9+9),outfit=model.outfits.get(`${key}:${piece}`);
+   assert.equal(containsFace(outfit.clothes,face),covered,`${key}: ${piece}, anatomical face ${id}`);
+   assert.equal(containsFace(outfit.body,face),!covered,`${key}: exposed skin, ${piece}, anatomical face ${id}`);
+  }
+  for(const piece of ['calça','sapatos','botas','luvas']){
+   assert.deepEqual(model.headwear.get(`${key}:${piece}`).attributes.position.array,model.outfits.get(`${key}:${piece}`).clothes.attributes.position.array,`${key}: fitted ${piece} faces must not separate at flat-normal seams`);
+  }
+ }
+});
 test('hat meshes share one normalized shape while each animated frame retains its own head anchor',async()=>{
  const pieces=['boné','cartola','chapéu','chapéu nordestino','chapéu de cangaceiro','chapéu de couro','chapéu de vaqueiro','chapéu de palha pequeno','chapéu de palha médio','chapéu de palha grande','cesta'];
  for(const piece of pieces){let reference=null;const anchors=[];for(let frame=0;frame<5;frame++){
@@ -117,15 +154,15 @@ test('each garment replaces a distinct part of every animated body and follows i
   else assert.equal(outfit.body.attributes.position.array.length+outfit.clothes.attributes.position.array.length,whole.length,piece);
  }
  const personWithClothes=person(12);personWithClothes.properties.citizen.wardrobe=[{piece:'vestido',color:'#329ac1'}];
- model.begin(.1,1);model.add(personWithClothes,0);model.end();let batch=model.batches.get('idle:0:vestido');assert(batch);assert.equal(batch.mesh.colors[0],0xc42b24);assert.equal(batch.clothingMesh.colors[0],0x329ac1);assert.deepEqual(batch.mesh.matrices[0],batch.clothingMesh.matrices[0]);
+ model.begin(.1,1);model.add(personWithClothes,0);model.end();let batch=model.batches.get('idle:0:vestido:shared');assert(batch);assert.equal(batch.mesh.colors[0],0xc42b24);assert.equal(batch.clothingMesh.colors[0],0x329ac1);assert.deepEqual(batch.mesh.matrices[0],batch.clothingMesh.matrices[0]);
  personWithClothes.x=1;model.begin(.1,1);model.add(personWithClothes,0);model.end();batch=[...model.batches.entries()].find(([key,b])=>key.startsWith('run:')&&b.count)?.[1];assert(batch);assert.deepEqual(batch.mesh.matrices[0],batch.clothingMesh.matrices[0]);assert.equal(batch.clothingMesh.colors[0],0x329ac1);
- personWithClothes.properties.citizen.wardrobe[0]={piece:'calça',color:'#ddbb11'};model.begin(.1,1);model.add(personWithClothes,0);model.end();batch=[...model.batches.entries()].find(([key,b])=>key.endsWith(':calça')&&b.count)?.[1];assert.equal(batch.clothingMesh.colors[0],0xddbb11);
+ personWithClothes.properties.citizen.wardrobe[0]={piece:'calça',color:'#ddbb11'};model.begin(.1,1);model.add(personWithClothes,0);model.end();batch=[...model.batches.entries()].find(([key,b])=>key.endsWith(':calça:shared')&&b.count)?.[1];assert.equal(batch.clothingMesh.colors[0],0xddbb11);
 });
 
 test('citizens wearing different colored clothes share an instance batch without losing colors',async()=>{
  const {model}=await models();model.begin(.01,1);
  for(let i=0;i<100;i++){const e=person(i);e.properties.citizen.wardrobe=[{piece:'camisa',color:i%2?'#ff0000':'#0000ff'}];model.add(e,0);}
- model.end();const batch=model.batches.get('idle:0:camisa');assert.equal(batch.count,100);assert.equal(batch.clothingMesh.colors[0],0x0000ff);assert.equal(batch.clothingMesh.colors[99],0xff0000);assert.deepEqual(batch.mesh.matrices[99],batch.clothingMesh.matrices[99]);
+ model.end();const batch=model.batches.get('idle:0:camisa:shared');assert.equal(batch.count,100);assert.equal(batch.clothingMesh.colors[0],0x0000ff);assert.equal(batch.clothingMesh.colors[99],0xff0000);assert.deepEqual(batch.mesh.matrices[99],batch.clothingMesh.matrices[99]);
 });
 
  test('distance cadence accumulates diagonal substeps and accounts for multi-tile updates',async()=>{

@@ -3,6 +3,7 @@ import {partyFlagCanvas,drawPartyFlag} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {bodyFatAmount} from './city_body_metrics.js?v=body-morph-4';
 import {TROPICAL_PRINTS} from './city_clothing.js?v=party-apparel-1';
+import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_faces.js?v=shared-anatomical-faces-2';
 /** OBJ snapshots share one geometry per frame and one instanced draw per visible frame. */
 export const CITIZEN_MODEL_FRAMES=Object.freeze({idle:[0],run:[0,1,2,3,4],use:[0,1,2],use_alt:[0,1,2],a_postos:[0,1],chute:[0,1],derrotado:[0,1],dormindo:[0],morto:[0],murro:[0,1],sentado_no_banco:[0],sentado_no_chao:[0]});
 const citizenHasPath=c=>c?._renderPathActive??!!c?.path?.length;
@@ -65,6 +66,15 @@ export function parseCitizenOBJ(text){
       for(let i=1;i<face.length-1;i++)triangles.push([face[0],face[i],face[i+1]]);
     }
   }
+  // Several exports pad each real triangle with a zero-area triangle whose
+  // vertices repeat. Remove that padding to recover the shared anatomical
+  // face order (246 useful faces in every supplied pose).
+  for(let i=triangles.length-1;i>=0;i--){
+    const [a,b,c]=triangles[i].map(point=>vertices[point.vertex]);
+    const u=b.map((n,axis)=>n-a[axis]),v=c.map((n,axis)=>n-a[axis]);
+    const area=Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]);
+    if(area<1e-12)triangles.splice(i,1);
+  }
   if(!triangles.length)throw Error('OBJ: modelo sem faces');
   const positions=new Float32Array(triangles.length*9),normalData=new Float32Array(positions.length),min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];let offset=0;
   for(const face of triangles){
@@ -75,32 +85,10 @@ export function parseCitizenOBJ(text){
 }
 // Partition the animated surface itself: covered body faces are replaced, never layered.
 export const RENDERED_GARMENTS=Object.freeze(['camisa','camisa social','camisa estampada','camiseta','regata','terno','calça','calça social','vestido','vestido estampado','casaco','saia','saia longa','macacão','shorts','bermuda','sunga','biquíni','maiô','sapatos','botas','luvas','trapos']);
-export function garmentSurface(reference,piece){
-  const mask=new Uint8Array(reference.positions.length/9);
-  for(let t=0;t<mask.length;t++){
-    const i=t*9,p=reference.positions,y=(p[i+1]+p[i+4]+p[i+7])/3;
-    const centerX=(p[i]+p[i+3]+p[i+6])/3;
-    const upper=y>=1.00&&y<1.78,legs=y>=.12&&y<1.00,arm=Math.abs(centerX)>.18,hand=arm&&((y<1.18&&Math.abs(centerX)>.36)||y>1.74),longSleeve=upper&&!hand,shortSleeve=upper&&(!arm||y>=1.38),torso=upper&&!arm;
-    const swimTop=upper&&(y>1.28||Math.abs(centerX)<.20),swimBottom=y>=.52&&y<.88&&Math.abs(centerX)<.24;
-    mask[t]=Number(
-      ['camisa','camisa social','camisa estampada','trapos'].includes(piece)?longSleeve:
-      piece==='casaco'?longSleeve:
-      piece==='camiseta'?shortSleeve:
-      piece==='regata'?torso:
-      piece==='luvas'?hand:
-      piece==='terno'?legs||longSleeve:
-      ['calça','calça social'].includes(piece)?legs:
-      ['shorts','bermuda'].includes(piece)?y>=.52&&y<1.00:
-      piece==='sunga'?y>=.48&&y<.92:
-      piece==='biquíni'?swimTop||swimBottom:
-      piece==='maiô'?y>=.20&&y<1.78:
-      piece==='sapatos'?y<.16:
-      piece==='botas'?y<.38:
-      piece==='saia'?y>=.52&&y<1.18:
-      piece==='saia longa'?y>=.18&&y<1.18:
-      ['vestido','vestido estampado'].includes(piece)?y>=.42&&y<1.78:
-      piece==='macacão'?legs||longSleeve:false);
-  }
+export function garmentSurface(faceCount,piece){
+  if(faceCount!==CITIZEN_BODY_FACE_COUNT)throw Error(`Topologia de roupa incompatível: ${faceCount} faces`);
+  const mask=new Uint8Array(faceCount);
+  for(const face of CITIZEN_GARMENT_FACES[piece]||[])mask[face]=1;
   return mask;
 }
 // Headwear uses a separate mesh so a hat and the main garment can be worn together.
@@ -203,6 +191,10 @@ export class CityCitizenModels {
     this.THREE=THREE;this.group=group;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearAnchors=new Map();this.headwearBatches=new Map();this.batches=new Map();this.activeBatches=new Set();this.activeHeadwearBatches=new Set();this.motion=new WeakMap();this.bodyShapeCache=new WeakMap();this.appearanceCache=new WeakMap();this.printMaterials=new Map();this.clock=0;this.frameToken=0;this.ready=false;this.error=null;
     this.matrix=new THREE.Matrix4();this.accessoryMatrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.accessoryOffset=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.lyingRotation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/2);this.color=new THREE.Color();this.dirtColor=new THREE.Color(0x62584b);
     this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});this.enableWeightMorph(this.material);this.skirtMaterial=this.enableSkirtMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.campaignFlags=new Map();this.campaignFlagMaterials=new Map();this.activeCampaignFlags=new Set();
+    // Bias fitted face materials in depth instead of moving each triangle
+    // along its flat normal, which tears open seams around knees and ankles.
+    this.fittedMaterial=this.enableWeightMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));
+    this.footwearMaterial=this.enableWeightMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
     this.loading=this.load().catch(error=>{this.error=error.message;console.warn('Modelos dos cidadãos indisponíveis; usando sprites.',error.message);return false;});
   }
   enableWeightMorph(material){
@@ -362,10 +354,10 @@ export class CityCitizenModels {
       const response=await this.fetchAsset(new URL(`${clip}/${frame}.obj`,this.baseURL));if(!response.ok)throw Error(`Falha em ${clip}/${frame}.obj (${response.status})`);
       return {key:`${clip}:${frame}`,data:parseCitizenOBJ(await response.text())};
     })));
-    // Each exported pose can have a different vertex/face order. Reusing the
-    // run:0 garment mask on the other walking frames makes the torso flash
-    // through the shirt as the animation changes frames.
-    const masks=Object.fromEntries(entries.map(({key,data})=>[key,Object.fromEntries(RENDERED_GARMENTS.map(piece=>[piece,garmentSurface(data,piece)]))]));
+    // All cleaned exports preserve the anatomical face order. One face set per
+    // garment follows the chest, thighs, hands and feet through every pose.
+    for(const {key,data} of entries)if(data.triangles!==CITIZEN_BODY_FACE_COUNT)throw Error(`Topologia de roupa incompatível em ${key}: ${data.triangles} faces`);
+    const masks=Object.fromEntries(RENDERED_GARMENTS.map(piece=>[piece,garmentSurface(CITIZEN_BODY_FACE_COUNT,piece)]));
     const idle=entries.find(e=>e.key==='idle:0').data.bounds,height=idle.max[1]-idle.min[1];if(!(height>0))throw Error('Modelo sem altura');
     const origin=[(idle.min[0]+idle.max[0])/2,Math.min(...entries.map(e=>e.data.bounds.min[1])),(idle.min[2]+idle.max[2])/2],factor=1.05/height;
     for(const {key,data}of entries){const positions=data.positions;for(let i=0;i<positions.length;i++)positions[i]=(positions[i]-origin[i%3])*factor;
@@ -381,17 +373,17 @@ export class CityCitizenModels {
       for(const piece of RENDERED_GARMENTS){
         let parts;
         if(piece==='saia'||piece==='saia longa')parts=skirtCuts[piece].parts;
-        else parts=splitGarmentSurface(data,masks[key][piece],piece);
+        else parts=splitGarmentSurface(data,masks[piece],piece);
         const make=(positions,normals,withUV=false,hideBack=false)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));if(withUV){let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(let v=0;v<positions.length;v+=3){minX=Math.min(minX,positions[v]);maxX=Math.max(maxX,positions[v]);minY=Math.min(minY,positions[v+1]);maxY=Math.max(maxY,positions[v+1]);}const width=Math.max(.001,maxX-minX),height=Math.max(.001,maxY-minY),uv=new Float32Array(positions.length/3*2);for(let v=0,j=0;v<positions.length;v+=3){uv[j++]=hideBack&&normals[v+2]<-.25?2:(positions[v]-minX)/width;uv[j++]=(positions[v+1]-minY)/height;}g.setAttribute('uv',new this.THREE.Float32BufferAttribute(uv,2));}g.computeBoundingSphere();return g;};
         const printed=PRINTED_GARMENTS.has(piece);
         const garmentMaterial=printed?this.printedMaterial(piece):SKIRT_PIECES.has(piece)?this.skirtMaterial:this.material;
         const outfit={body:make(parts.body,parts.bodyNormals),clothes:make(parts.clothes,parts.clothesNormals,printed,piece==='camisa social'),material:garmentMaterial};
         if(['camisa','camisa social','camisa estampada','camiseta','regata','terno','casaco','trapos'].includes(piece))for(const skirtPiece of SKIRT_PIECES){
-          const union=new Uint8Array(skirtCuts[skirtPiece].mask.length),upperMask=masks[key][piece];for(let i=0;i<union.length;i++)union[i]=Number(skirtCuts[skirtPiece].mask[i]||upperMask[i]);
+          const union=new Uint8Array(skirtCuts[skirtPiece].mask.length),upperMask=masks[piece];for(let i=0;i<union.length;i++)union[i]=Number(skirtCuts[skirtPiece].mask[i]||upperMask[i]);
           const combined=splitGarmentSurface(data,union,piece);outfit[skirtPiece==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']=make(combined.body,combined.bodyNormals);
         }
         this.outfits.set(`${key}:${piece}`,outfit);
-        if(LOWER_PIECES.has(piece)||HAND_PIECES.has(piece)){const surface=parts.clothes.slice();for(let i=0;i<surface.length;i++)surface[i]+=parts.clothesNormals[i]*.002;this.headwear.set(`${key}:${piece}`,make(surface,parts.clothesNormals));}
+        if(LOWER_PIECES.has(piece)||HAND_PIECES.has(piece))this.headwear.set(`${key}:${piece}`,make(parts.clothes,parts.clothesNormals));
       }
       for(const piece of HEADWEAR_PIECES){const part=headwearSurface(data,piece),anchorKey=`${key}:${piece}`;this.headwearAnchors.set(anchorKey,part.anchor);if(!this.headwear.has(`static:${piece}`)){const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(part.positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(part.normals,3));g.computeBoundingSphere();this.headwear.set(`static:${piece}`,g);}}
     }
@@ -482,7 +474,7 @@ export class CityCitizenModels {
       const itemKey=`${key}:${item.piece}`,isPartyNumber=item.piece.startsWith('party-number-'),isStaticHeadwear=HEADWEAR_PIECES.has(item.piece),isFittedClothing=LOWER_PIECES.has(item.piece)||HAND_PIECES.has(item.piece);let source=this.headwear.get(isStaticHeadwear?`static:${item.piece}`:itemKey);if(!source&&isPartyNumber){source=partyNumberSurface(this.THREE,this.frames.get(key),item.piece.slice('party-number-'.length));this.headwear.set(itemKey,source);}const batchKey=isStaticHeadwear?item.piece:itemKey;let head=this.headwearBatches.get(batchKey);
       if(!head){head={count:0,capacity:0,mesh:null};this.headwearBatches.set(batchKey,head);}this.activeHeadwearBatches.add(head);
       if(head.count===head.capacity){
-        const capacity=Math.max(32,head.capacity*2),itemMaterial=SKIRT_PIECES.has(item.piece)?this.skirtMaterial:this.material,mesh=new this.THREE.InstancedMesh(isFittedClothing?this.instancedGeometry(source,capacity):source,itemMaterial,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;
+        const capacity=Math.max(32,head.capacity*2),itemMaterial=SKIRT_PIECES.has(item.piece)?this.skirtMaterial:['sapatos','botas'].includes(item.piece)?this.footwearMaterial:isFittedClothing?this.fittedMaterial:this.material,mesh=new this.THREE.InstancedMesh(isFittedClothing?this.instancedGeometry(source,capacity):source,itemMaterial,capacity);mesh.instanceMatrix.setUsage(this.THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;
         if(head.mesh){for(let i=0;i<head.count;i++){head.mesh.getMatrixAt(i,this.matrix);mesh.setMatrixAt(i,this.matrix);head.mesh.getColorAt(i,this.color);this.setInstanceColor(mesh,i,this.color);const oldFat=head.mesh.geometry.attributes.instanceFat,newFat=mesh.geometry.attributes.instanceFat;if(oldFat&&newFat){newFat.array[i]=oldFat.array[i];mesh.userData.instanceFatDirty=true;}}if(head.count){mesh.userData.instanceMatrixDirty=true;mesh.userData.matrixDirtyMin=0;mesh.userData.matrixDirtyMax=head.count-1;}this.group.remove(head.mesh);head.mesh.dispose();}
         this.group.add(mesh);head.mesh=mesh;head.capacity=capacity;this.matrix.compose(this.position,this.quaternion,this.scale);
       }
