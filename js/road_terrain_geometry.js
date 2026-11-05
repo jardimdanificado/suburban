@@ -63,7 +63,10 @@ export function terrainTileSurfaceCorners(world,x,y){
 }
 export function terrainTileSurfaceVertices(world,x,y){
   const heights=terrainTileSurfaceCorners(world,x,y);if(!heights)return null;
-  return [[x,y,0],[x+1,y,1],[x+1,y+1,2],[x,y+1,3]].map(([vx,vy,index])=>{const offset=stoneVertexOffset(world,vx,vy);return [vx+offset.x,heights[index],vy+offset.z];});
+  // Match the road and sidewalk edge exactly. Retaining panels are built on
+  // the grid line, so keeping the rocky silhouette offset here opens a wedge
+  // between the two meshes at the shared boundary.
+  return [[x,y,0],[x+1,y,1],[x+1,y+1,2],[x,y+1,3]].map(([vx,vy,index])=>{const offset=terrainVertexOffset(world,vx,vy);return [vx+offset.x,heights[index],vy+offset.z];});
 }
 
 // Only connected streets determine the road grade. An uphill bank beside a

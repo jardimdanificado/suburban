@@ -1,7 +1,7 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=labor-secretariat-1';
 import {ROAD_TILES,tileAt,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
-import {roadRetainingFaces} from './road_terrain_geometry.js?v=street-wall-vertex-seam-1';
+import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
 const BEACH_LEISURE_OCCUPANCY=new WeakMap();
 function beachLeisureOccupancy(furniture){
