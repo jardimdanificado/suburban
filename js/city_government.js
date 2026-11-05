@@ -10,7 +10,7 @@ import {appearance} from './city_clothing.js?v=party-apparel-1';
 import {CityResearch} from './city_research.js';
 import {CityGovernmentAgenda} from './city_government_agenda.js?v=substances-sleep-1';
 import {CityVoting} from './city_voting.js?v=municipal-secretariats-1';
-import {CityPoliticalStanding} from './city_political_standing.js?v=secretariat-vote-1';
+import {CityPoliticalStanding} from './city_political_standing.js?v=standing-panel-cache-2';
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
 import {makePartyName,makeMergedPartyName,partyNameAgenda} from './city_party_names.js?v=party-vocabulary-position-names-2';
 import {syncPartyColor,membershipProfile,organizeMembership,reviewMembership,campaignContact,canJoin,leaveParty,recordPartyMembership} from './city_party_membership.js?v=party-affiliation-history-1';
@@ -19,7 +19,7 @@ import { seatBounds, scandalEligible, criticalApproval, organizeScheme, investig
 import { CityPolitics, POLITICAL_PLATFORMS, POLITICS_RULES } from './city_politics.js?v=needs-recovery-1';
 import { TAX_CATEGORIES, MINIMUM_WAGE_TAX_RATE, MINIMUM_BUSINESS_TAX_RATE } from './city_sales_tax.js';
 import { makePartyFlag, makeMergedPartyFlag, upgradePartyFlagPalette, makeMunicipalFlag, mutateMunicipalFlag, compactPartySlogan, COUNCIL_INSTITUTIONAL_FLAG } from './city_party_flags.js';
-import { CityCouncil } from './city_council.js?v=secretariat-portfolios-1';
+import { CityCouncil } from './city_council.js?v=council-mandate-snapshot-2';
 import { CityCampaigns } from './city_campaigns.js?v=planted-rally-flags-1';
 import {gerarSloganPartidario} from './gerador_frases.js?v=economic-flow-7';
 import {SECRETARIATS,SECRETARY_ELECTION_MODES,SECRETARY_MODE_RANK,TRANSPORT_POLICIES,secretarySkillScore} from './city_secretariats.js';

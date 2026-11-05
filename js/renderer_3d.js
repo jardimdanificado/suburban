@@ -16,7 +16,7 @@ import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_inte
 import { syncCityBuildings } from "./city_renderer_3d.js?v=street-facing-public-art-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-render-cache-3';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-combined-surface-6';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
@@ -3710,16 +3710,18 @@ export class RCT3DRenderer {
 
           // Chromatic aberration (RGB fringe towards screen edge)
           float chromaOffset = dist * (uChroma * 0.014);
+          vec4 centerColor = texture2D(tDiffuse, uv);
           float r = texture2D(tDiffuse, uv + center * chromaOffset).r;
-          float g = texture2D(tDiffuse, uv).g;
+          float g = centerColor.g;
           float b = texture2D(tDiffuse, uv - center * chromaOffset).b;
-          float a = texture2D(tDiffuse, uv).a;
+          float a = centerColor.a;
           vec3 baseColor = vec3(r, g, b);
 
           // Ambient Occlusion Shading
+          float ao = 1.0;
           if (uAoEnabled > 0.5 && uAoIntensity > 0.01) {
             float centerLinearZ = readLinearDepth(uv);
-            float ao = calculateAO(uv, centerLinearZ);
+            ao = calculateAO(uv, centerLinearZ);
             baseColor *= ao;
           }
 
@@ -3738,12 +3740,9 @@ export class RCT3DRenderer {
             blurCol += texture2D(tDiffuse, uv + vec2( 1.0,     0.0)   * blur);
             blurCol *= 0.125;
 
-            // Apply AO to blurred background as well if active
-            if (uAoEnabled > 0.5 && uAoIntensity > 0.01) {
-              float centerLinearZ = readLinearDepth(uv);
-              float ao = calculateAO(uv, centerLinearZ);
-              blurCol.rgb *= ao;
-            }
+            // AO depends on the center pixel, so the same value also applies
+            // to the blurred sample without repeating its depth taps.
+            blurCol.rgb *= ao;
 
             float blend = smoothstep(0.04, 0.38, dist);
             vec3 finalCol = mix(baseColor, blurCol.rgb, blend * 0.65);
@@ -4809,6 +4808,7 @@ export class RCT3DRenderer {
     this.entitySprites = new Map();
     this.cityCitizenBatches=new CityCitizenBatches(THREE,this.entityGroup,this.billboardGeo);
     this.cityCitizenModels=new CityCitizenModels(THREE,this.entityGroup);
+    this.citizenViewProjection=new THREE.Vector3();
 
     // Floating UI Group (Emotes, Held Items & Clan House Flags)
     this.uiIconGeo = new THREE.PlaneGeometry(0.40, 0.40);
@@ -7813,6 +7813,7 @@ export class RCT3DRenderer {
       }
       const renderSurfaceH=surfaceH+((renderAtInterior||showInspectedInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0);
       const profileAfterSurface = profileCitizenStart ? performance.now() : 0;
+      if(cityCitizen&&e.id!==this.selectedEntityId&&!this.citizenVisibleInView(renderX,renderY,renderSurfaceH+(cityCitizen.bodyHeightCm||170)/200))continue;
 
       // --- 3D WOOD LOGS (Volumetric Stacked Timber Logs) ---
       if (isWoodLog && woodLogCount < this.maxInstances) {
@@ -9115,6 +9116,13 @@ export class RCT3DRenderer {
       y: sy,
       visible: v.z < 1.0 && sx >= -100 && sx <= sw + 100 && sy >= -100 && sy <= sh + 100
     };
+  }
+
+  citizenVisibleInView(worldX,worldY,elevation=0){
+    const camera=this.isPerspectiveActive()?this.fpCamera:this.camera;
+    if(!camera)return true;
+    const point=this.citizenViewProjection.set(worldX,elevation,worldY).project(camera),sw=(typeof CANVAS_WIDTH!=="undefined"&&CANVAS_WIDTH>0)?CANVAS_WIDTH:(this.width||800),sh=(typeof CANVAS_HEIGHT!=="undefined"&&CANVAS_HEIGHT>0)?CANVAS_HEIGHT:(this.height||600),sx=(point.x*.5+.5)*sw,sy=(-point.y*.5+.5)*sh;
+    return point.z>=-1&&point.z<=1&&sx>=-100&&sx<=sw+100&&sy>=-100&&sy<=sh+100;
   }
 
   resize(w, h) {

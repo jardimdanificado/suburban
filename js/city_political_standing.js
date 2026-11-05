@@ -109,11 +109,11 @@ export class CityPoliticalStanding {
     this.partyReputations();const cases=this.cases().filter(r=>r.discoveredAt!=null),casesByCitizen=new Map();
     for(const record of cases){const item={record,aware:new Set(record.awareIds||[])};for(const id of new Set([record.accusedId,...this.origins(record).map(a=>a.citizenId)])){if(!casesByCitizen.has(id))casesByCitizen.set(id,[]);casesByCitizen.get(id).push(item);}}
     const candidates=voters.filter(c=>c.political.partyId||p.officeHolder(c)||c.political.tenure.mayor||p.active?.candidates.some(n=>n.citizenId===c.id));
-    const size=Math.min(64,voters.length),offset=city.day*13%Math.max(1,voters.length),panel=Array.from({length:size},(_,i)=>voters[(offset+Math.floor(i*voters.length/Math.max(1,size)))%voters.length]);
+    const size=Math.min(64,voters.length),offset=city.day*13%Math.max(1,voters.length),panel=Array.from({length:size},(_,i)=>voters[(offset+Math.floor(i*voters.length/Math.max(1,size)))%voters.length]),panelElectorates=new Map(panel.map(v=>[v.id,voterElectorates(v)]));
     for(const c of candidates){const s=c.political,components=[{label:'Reputação pública pessoal',points:(city.reputation.score(c,'civic')-50)*.25},{label:'Comunicação e capacidade',points:((c.skills.social||0)-50)*.04+((c.skills.governance||0)-50)*.05},{label:'Balanço dos seus governos',points:p.mandates.recordScore(c.id,null)*.5},{label:'Avaliação como prefeito',points:c.id===city.economy.mayorId?(p.approval-50)*.35:0}];
-      let relations=0,ideology=0,memories=0,scandals=0,votes=0;
+      let relations=0,ideology=0,memories=0,scandals=0,votes=0;const voterViews=new Map();
       const ownVotes=p.parties.flatMap(party=>(party.publicRecords||[]).slice(-24).filter(r=>r.votes?.some(v=>v.citizenId===c.id)));
-      for(const voter of panel){const view=city.relationships.view(voter,c);if(view)relations+=(view.trust-50)*.16+(view.affection-20)*.1-(view.resentment||0)*.2;if(voter.id===c.id)relations+=15;else if(city.society.related(voter,c))relations+=5;
+      for(const voter of panel){const view=city.relationships.view(voter,c);voterViews.set(voter.id,view);if(view)relations+=(view.trust-50)*.16+(view.affection-20)*.1-(view.resentment||0)*.2;if(voter.id===c.id)relations+=15;else if(city.society.related(voter,c))relations+=5;
         ideology+=(.5-p.distance(voter.political.ideology,s.ideology)/2.8)*8;
         memories+=clamp(voter.political.memories.filter(m=>m.candidateId===c.id&&['campaign-rally','defamation','campaign-accountability','campaign-correction','policy-reaction','prejudice-act'].includes(m.kind)).reduce((n,m)=>n+(m.effect||0),0),-30,15);
         for(const r of ownVotes){const vote=r.votes.find(v=>v.citizenId===c.id);votes+=(r.individualOpinions?.[voter.id]||0)*(vote.yes?1:-1)*.5;}
@@ -122,7 +122,7 @@ export class CityPoliticalStanding {
       for(const [label,value] of [['Relações e família',relations],['Afinidade das ideias',ideology],['Memória das campanhas',memories],['Votos na Câmara',votes],['Escândalos conhecidos',scandals]])components.push({label,points:value/Math.max(1,panel.length)});
       const raw=50+components.reduce((n,a)=>n+a.points,0);s.popularity=clamp(raw);
       const groups=['todos','trabalhadores','empreendedores','sem-moradia','baixa-renda','servidores','ambientalistas','reformistas'],segmented={};
-      for(const group of groups){const subset=panel.filter(v=>voterElectorates(v).includes(group));if(!subset.length)continue;let support=0;for(const v of subset){const affinity=1-p.distance(v.political.ideology,s.ideology)/2.8,mem=v.political.memories.filter(m=>m.candidateId===c.id||m.partyId===s.partyId).reduce((sum,m)=>sum+(m.effect||0),0);support+=clamp(50+(affinity-.5)*32+Math.max(-15,Math.min(15,mem*.4))+(city.relationships.view(v,c)?.trust-50||0)*.08);}segmented[group]={score:support/subset.length,size:subset.length};}
+      for(const group of groups){const subset=panel.filter(v=>panelElectorates.get(v.id).includes(group));if(!subset.length)continue;let support=0;for(const v of subset){const affinity=1-p.distance(v.political.ideology,s.ideology)/2.8,mem=v.political.memories.filter(m=>m.candidateId===c.id||m.partyId===s.partyId).reduce((sum,m)=>sum+(m.effect||0),0);support+=clamp(50+(affinity-.5)*32+Math.max(-15,Math.min(15,mem*.4))+((voterViews.get(v.id)?.trust??50)-50)*.08);}segmented[group]={score:support/subset.length,size:subset.length};}
       s.popularityByElectorate=segmented;s.popularityReport={minute:city.minute,score:s.popularity,raw,sampleSize:panel.length,electorate:voters.length,components,electorates:segmented};
     }
     for(const party of p.parties.filter(a=>a.active)){const {candidate,reason}=this.nomination(party);party.preferredCandidateId=candidate?.id??null;party.nominationReason=reason;}
