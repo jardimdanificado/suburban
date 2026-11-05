@@ -30,7 +30,7 @@ import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
 import { CityGovernment as CityPolitics } from './city_government.js?v=no-party-slogans-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=corpse-interior-recovery-1';
+import { CityJustice } from './city_justice.js?v=art-placement-support-sidewalk-1';
 import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=activity-cell-early-reservation-3';
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';

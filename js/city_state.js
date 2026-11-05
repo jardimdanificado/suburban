@@ -28,7 +28,7 @@ import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
 import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=roadside-ad-placards-1';
 import { CityHistory } from './city_history.js';
-import { CityJustice } from './city_justice.js?v=corpse-interior-recovery-1';
+import { CityJustice } from './city_justice.js?v=art-placement-support-sidewalk-1';
 import { CityWelfare } from './city_welfare.js';
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { CityLighting } from './city_lighting.js';
