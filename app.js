@@ -3,7 +3,7 @@ import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=labor-secretariat-1";
 import { CityDesktop } from "./js/city_desktop.js?v=no-overhead-balloons-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=no-overhead-balloons-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=terrain-shared-stone-mesh-4";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";

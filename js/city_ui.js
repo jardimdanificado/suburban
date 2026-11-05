@@ -20,7 +20,7 @@ import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
 import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=no-party-slogans-1';
 import {renderElectionMonitor} from './city_election_ui.js?v=no-party-slogans-1';
-import {sectionTitle} from './city_ui_sections.js';
+import {sectionTitle} from './city_ui_sections.js?v=municipal-identity-in-prefeitura-1';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
 import {ROTATION_LABELS,buildingFacadeBannerSupport} from './city_building_geometry.js';
 import { renderPublications } from './city_publications_ui.js';
@@ -29,7 +29,8 @@ import {renderEventInspector} from './city_event_inspector.js?v=landlord-stock-m
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js';
 import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js';
-import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js';
+import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js?v=institutions-cleanup-1';
+import {renderMunicipalIdentity} from './city_municipal_identity_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js?v=wardrobe-expansion-1';
 import { PREJUDICE_TYPES, initializePrejudices } from './city_prejudice.js?v=discrimination-laws-1';
 import { describePoliticalOrientation, POLITICAL_POSITIONS } from './city_ideology.js';
@@ -308,6 +309,7 @@ export class CityUI {
     }
   }
   detail(p) {
+    if(this.selected?.properties?.cityPlant)return this.plantInspector(p,this.selected.properties.cityPlant);
     if(this.selected?.properties.cityVehicle)return renderVehicle(this,p,this.selected.properties.cityVehicle);
     const c = this.selected?.properties.citizen, b = this.selected?.properties.cityBuilding;
     if (this.tab === 'people' && c && this.city.society.citizen(c.id)) return this.citizen(p, c);
@@ -481,7 +483,7 @@ export class CityUI {
         p.windowLink('COLETAS, FINANCIADORES E ENTREVISTADORES',()=>this.openPanel({tab:'government',views:{government:'elections'},politicsTab:'institutes',studyId:null}));
         for(const s of studies.slice(-3).reverse())p.record(`Coleta #${s.id}`,`${s.responses.length}/${s.target} entrevistas · ${money(s.funded)} recebidos`,()=>this.openPanel({tab:'government',views:{government:'elections'},politicsTab:'institutes',studyId:s.id}));
       }
-      if(b.ownerId&&b.type!=='research_institute'&&INDUSTRIES[b.type]){p.button('CONTRATAR PESQUISA DE DEMANDA',()=>city.politics.getResearch().commissionService(b.accountId,'market-demand',b.id));const reports=city.politics.getResearch().studies.filter(s=>s.serviceType==='market-demand'&&s.subjectId===b.id&&s.status==='published').slice(-1);for(const report of reports)p.record(`Pesquisa de mercado #${report.id}`,`${report.report?.rows?.[0]?.label||'Relatório disponível'} · amostra ${report.report?.sampleSize||report.target}`,()=>this.openPanel({tab:'government',views:{government:'elections'},politicsTab:'research-services',studyId:report.id}));}
+      if(b.ownerId&&b.type!=='research_institute'&&INDUSTRIES[b.type]){p.button('CONTRATAR PESQUISA DE DEMANDA',()=>city.politics.getResearch().commissionService(b.accountId,'market-demand',b.id));const reports=city.politics.getResearch().studies.filter(s=>s.serviceType==='market-demand'&&s.subjectId===b.id&&s.status==='published').slice(-1);for(const report of reports)p.record(`Pesquisa de mercado #${report.id}`,`${report.report?.rows?.[0]?.label||'Relatório disponível'} · amostra ${report.report?.sampleSize||report.target}`,()=>this.openPanel({tab:'government',views:{government:'elections'},politicsTab:'institutes',researchDirectoryView:'services',studyId:report.id}));}
       if(b.type==='publisher'){p.kv('Páginas por novo livro',b.bookPages||5);p.note('Cada livro consome uma folha por página; panfletos consomem uma folha. Dois registros por página.');p.buttons([2,5,10,20,32].map(pages=>({label:`${pages} PÁGINAS`,selected:(b.bookPages||5)===pages,click:()=>city.publications.configure(b.id,pages)})));}
       if(industry){p.heading('CADEIA PRODUTIVA');p.note(industry.impact);p.note('Insumos: '+(Object.entries(industry.inputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Trabalho e recursos locais'));p.note('Produtos: '+(Object.entries(industry.outputs).map(([g,n])=>`${n} ${GOODS[g].label}`).join(', ')||'Crédito e guarda de depósitos'));if(b.type==='bank'){const line=city.bank.developmentLines?.find(l=>l.bankId===b.id);if(line){p.kv('Refinanciamento municipal recebido',money(line.principal));p.kv('Dívida do banco com o município',money(line.remaining));p.kv('Devolvido ao município',money(line.repaid));}p.kv('Depósitos protegidos',money([...city.bank.deposits.values()].filter(d=>d.bankId===b.id).reduce((n,d)=>n+d.balance,0)));p.kv('Crédito a receber',money(city.bank.loans.filter(l=>l.bankId===b.id && !['paid','written-off'].includes(l.status)).reduce((n,l)=>n+l.remaining+l.interest,0)));p.note(`Novos empréstimos: ${(city.bank.policy.loanRate*100).toFixed(2)}% ao dia; poupança: ${(city.bank.policy.savingsRate*100).toFixed(2)}% ao dia. Prazos: 30 parcelas para subsistência; 180 para empresas; 240 para iniciar cadeias, com carência durante a obra e 14 dias após a abertura. Depósitos são protegidos; rendimentos dependem do caixa do banco.`);}}
       const queueEntrance=b.officeTenantOf?city.building(b.officeTenantOf)||b:b;
@@ -849,9 +851,11 @@ export class CityUI {
   government(p) {
     const city=this.city,view=this.view(),mayor=city.economy.citizen(city.economy.mayorId),hall=city.buildings.find(b=>b.type==='townhall');
     if(view==='elections'){this.electionsPanel(p);return;}
+    if(view==='identity'){p.button('VOLTAR À PREFEITURA',()=>this.showView('overview'));renderMunicipalIdentity(this,p);return;}
     if(view==='overview'){
       renderGovernmentDashboard(this,p);
-      if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council'],['Institutos de pesquisa','institutes'],['Pesquisas não eleitorais','research-services']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas eleitorais','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
+      if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council'],['Institutos de pesquisa','institutes']]],['REGULAÇÃO',[['Substâncias e licenças','substances']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas eleitorais','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
+      if(!this.host)p.button('IDENTIDADE MUNICIPAL',()=>this.showView('identity'));
       if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
     } else if(view==='contracts'){p.heading('CONTRATOS MUNICIPAIS');this.contracts(p,this.cachedList(`municipal-contracts:${this.contractPlotId||'all'}`,()=>city.development.projects.filter(o=>this.contractPlotId?o.plotId===this.contractPlotId:o.accountId==='treasury').slice().sort((a,b)=>Number(a.cancelled||a.status==='completed')-Number(b.cancelled||b.status==='completed')||Number(b.status==='blocked')-Number(a.status==='blocked')||b.startedAt-a.startedAt)));}
@@ -1103,13 +1107,19 @@ export class CityUI {
     p.note(`Sementes germinam após ${NATURE_RULES.germinationMinutes/60} horas. Árvores crescem em 3–4 dias; amoreiras em um dia. Limites: ${NATURE_RULES.maxPlants} plantas e ${NATURE_RULES.maxSeeds} sementes. Estradas, lotes e instalações impedem o crescimento.`);
     for(const [id,spec] of Object.entries(PLANT_SPECIES))p.kv(spec.label,`${spec.scientific?`${spec.scientific} · `:''}${plants.filter(t=>t.species===id).length} plantas / ${spec.grow/1440} dias de crescimento`);
     const stage={seedling:'Muda',young:'Jovem',mature:'Madura'};
-    const rows=plants.filter(t=>this.matches(`${PLANT_SPECIES[t.species].label} ${stage[t.stage]}`));
+    const rows=plants.filter(t=>this.matches(`${PLANT_SPECIES[t.species]?.label||t.species} ${PLANT_SPECIES[t.species]?.scientific||t.scientific||''} ${stage[t.stage]||t.stage||''} ${t.x} ${t.y}`));
     const page=Math.min(this.naturePage||0,Math.max(0,Math.ceil(rows.length/30)-1));
-    p.table([{label:'Espécie'},{label:'Estágio'},{label:'Posição'},{label:'Cultivo'}],rows.slice(page*30,page*30+30).map(t=>({cells:[PLANT_SPECIES[t.species].label,stage[t.stage],`${t.x}, ${t.y}`,t.buildingId?name(this.city.building(t.buildingId)?.entity):'Natural'],click:()=>{this.camera(t.x,t.y);this.selectedPlantId=t.id;}})));
+    p.table([{label:'Espécie',weight:2},{label:'Estágio'},{label:'Posição'},{label:'Cultivo',weight:1.5}],rows.slice(page*30,page*30+30).map(t=>({cells:[PLANT_SPECIES[t.species]?.label||t.species,stage[t.stage]||t.stage,`${t.x}, ${t.y}`,t.buildingId?name(this.city.building(t.buildingId)?.entity):'Natural'],selected:t.id===this.selectedPlantId,click:()=>{this.camera(t.x,t.y);this.selectedPlantId=t.id;if(this.host){const state=this.host.create(`plant:${t.id}`,'city',{title:PLANT_SPECIES[t.species]?.label||'Planta',entity:t.entity,kind:'dossier'});state.detailTab='botany';state.resetScroll();}}})));
     p.buttons([{label:'ANTERIOR',click:()=>{this.naturePage=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.naturePage=page+1;}}]);
     const selected=nature.plants.get(this.selectedPlantId);
-    if(selected){p.heading(PLANT_SPECIES[selected.species].label);p.kv('Plantio',stamp(selected.plantedAt));p.kv('Maturidade',stamp(selected.plantedAt+PLANT_SPECIES[selected.species].grow));if(selected.buildingId)p.button('ABRIR CULTIVADOR',()=>this.openBuilding(selected.buildingId));}
+    if(selected&&!this.host)this.plantInspector(p,selected);
+    else p.note('Selecione uma planta para abrir sua ficha em uma janela própria.');
     p.button('HISTÓRICO DA VEGETAÇÃO',()=>{this.go('log').logCategory='nature';});
+  }
+  plantInspector(p,plant) {
+    const spec=PLANT_SPECIES[plant.species]||{},stage={seedling:'Muda',young:'Jovem',mature:'Madura'},formLabels={tree:'Árvore',palm:'Palmeira',fan_palm:'Palmeira-leque',broad_leaf:'Folhagem tropical de folhas largas',foliage:'Planta ornamental de folhagem',flowering:'Planta ornamental florida'},age=Math.max(0,this.city.minute-(plant.plantedAt||0)),growth=Math.max(1,spec.grow||1),percent=Math.min(100,Math.round(age/growth*100));
+    p.heading(`FICHA BOTÂNICA · ${spec.label||plant.species}`);p.kv('Nome científico',spec.scientific||plant.scientific||'Não registrado');p.kv('Forma',formLabels[plant.form||spec.form]||'Planta');p.kv('Estágio atual',stage[plant.stage]||plant.stage||'Não registrado');p.kv('Tempo desde o plantio',`${(age/1440).toFixed(1)} dias`);p.kv('Crescimento estimado',`${percent}% · ${spec.grow?`${(spec.grow/1440).toFixed(1)} dias até a maturidade`:'sem prazo registrado'}`);p.kv('Plantio / maturidade estimada',`${stamp(plant.plantedAt)} / ${stamp((plant.plantedAt||0)+growth)}`);p.kv('Coordenadas',`${plant.x}, ${plant.y}`);p.kv('Origem',plant.buildingId?`Cultivada por ${name(this.city.building(plant.buildingId)?.entity)}`:'Vegetação natural');p.kv('Madeira ao corte',spec.wood?`${spec.wood} unidades · corte gera replantio`:'Não é espécie madeireira');
+    p.buttons([{label:'LOCALIZAR NO MAPA',click:()=>this.camera(plant.x,plant.y)},...(plant.buildingId?[{label:'ABRIR CULTIVADOR',click:()=>this.openBuilding(plant.buildingId)}]:[])]);
   }
   electionsPanel(p) { renderPolitics(this,p); }
   openEvent(id){const snapshot=this.city.history.get(id)||this.frozenEvents?.find(e=>e.id===id)||this.city.publications.eventSnapshot(id);if(this.host)return this.host.openEvent(id,snapshot);this.remember();this.tab='event';this.selectedEventId=id;this.eventSnapshot=snapshot;this.resetScroll();}

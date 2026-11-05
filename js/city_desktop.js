@@ -1,6 +1,6 @@
 import {CityGlobalSearch} from './city_global_search.js?v=organic-party-slogans-1';
 import {desktopMenus} from './city_desktop_menus.js?v=freecam-tools-2';
-import {CityUI,money} from './city_ui.js?v=art-titles-1';
+import {CityUI,money} from './city_ui.js?v=plant-inspector-identity-prefeitura-1';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js';
@@ -141,7 +141,7 @@ export class CityDesktop {
   setSelection(entity,unitId=null){
     for(const window of this.manager.windows){window.state.selectedProjectId=null;if(window.state.interiorView&&window.state.interiorView.buildingId!==entity?.id)window.state.setInteriorView(null);}
     if(!entity)this.lastSelected=null;
-    if(entity?.properties?.cityPlant){const state=this.openModule('city');state.setView('nature');state.selectedPlantId=entity.id;this.lastSelected=entity;return;}
+    if(entity?.properties?.cityPlant){const state=this.create(`plant:${entity.id}`,'city',{title:entity.properties.name,entity,kind:'dossier'});state.detailTab='botany';state.resetScroll();this.lastSelected=entity;return;}
     if(!entity)return;const citizen=entity.properties?.citizen,building=entity.properties?.cityBuilding;if(!citizen&&!building&&!entity.properties?.cityVehicle)return;
     if(entity.properties.cityVehicle){const state=this.create(`vehicle:${entity.id}`,'transport',{title:entity.properties.name,entity,kind:'dossier'});this.lastSelected=entity;return;}
     const state=this.create(`${citizen?'person':'building'}:${entity.id}`,citizen?'people':'buildings',{title:entity.properties.name,entity,unitId,kind:'dossier'});

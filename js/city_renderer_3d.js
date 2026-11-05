@@ -12,11 +12,11 @@ import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=gr
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=pixel-text-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,buildingFacadeBannerSupport,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import { partyFlagCanvas,drawPartyFlag } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=campaign-flag-facing-1';
+import {citizenIsSleeping} from './city_citizen_models.js?v=walking-shirt-mask-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-neoclassical-1';
 import { INDUSTRIES } from './city_industries.js';
-import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
-import {quarryDeposits} from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=terrain-shared-stone-mesh-4';
+import {quarryDeposits} from './city_terrain.js?v=terrain-shared-stone-mesh-4';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=porch-door-clearance-1';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
@@ -187,6 +187,26 @@ function syncCorpseVisuals(renderer,THREE,city,world){
     const vehicle=body.currentVehicleId?city.vehicles?.units.get(body.currentVehicleId):null,x=vehicle?.x??body.entity.x,y=vehicle?.y??body.entity.y,base=vehicle?(vehicle.altitude??surfaceElevation(world,x,y))+.42:surfaceElevation(world,x,y)+(body.currentInterior?.position.z||body.skybridgeZ||0);group.position.set(x,base+.025,y);group.visible=x>=minX-1&&x<=maxX+1&&y>=minY-1&&y<=maxY+1;
   }
 }
+function syncImportDepotVisual(renderer,THREE,city,world){
+  const depot=city?.economy?.importDepot;
+  if(!depot){if(renderer.importDepotVisual){renderer.scene.remove(renderer.importDepotVisual);renderer.importDepotVisual=null;}return;}
+  let group=renderer.importDepotVisual;
+  if(!group){
+    group=new THREE.Group();
+    const wood=new THREE.MeshLambertMaterial({color:0x8b633d}),dark=new THREE.MeshLambertMaterial({color:0x29363b}),metal=new THREE.MeshLambertMaterial({color:0x586a6d});
+    const box=(w,h,d,x,y,z,material)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);};
+    // Crates and a permanent sign mark the handoff beside the town hall door.
+    box(.52,.42,.48,-.37,.21,0,wood);box(.46,.36,.42,-.15,.62,0,wood);
+    box(.065,.9,.065,.55,.45,0,metal);box(1.55,.62,.09,.55,1.08,0,dark);
+    const canvas=document.createElement('canvas');canvas.width=384;canvas.height=128;const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#d4ad50';ctx.fillRect(0,0,384,128);ctx.fillStyle='#29363b';ctx.fillRect(7,7,370,114);ctx.fillStyle='#f2e5c4';ctx.font='bold 38px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('IMPORTAÇÃO',192,67);
+    const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
+    const label=new THREE.Mesh(new THREE.PlaneGeometry(1.4,.47),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));label.position.set(.55,1.08,.051);group.add(label);
+    group.userData.importDepotTexture=texture;renderer.scene.add(group);renderer.importDepotVisual=group;
+  }
+  const door=depot.door;group.position.set(door.x,surfaceElevation(world,door.x,door.y)+.04,door.y);
+  group.visible=!Number.isFinite(renderer.renderedMinTx)||door.x>=renderer.renderedMinTx-2&&door.x<=renderer.renderedMaxTx+2&&door.y>=renderer.renderedMinTy-2&&door.y<=renderer.renderedMaxTy+2;
+}
 function drawArtNarrative(ctx,narrative){
   const ids=narrative.participantIds.length?narrative.participantIds:[0],count=Math.min(6,ids.length),scene=narrativeSceneType(narrative);
   ctx.strokeStyle='#e9dfc4';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(32,232);ctx.lineTo(480,232);ctx.stroke();
@@ -333,6 +353,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
   syncRoadBridges(renderer,THREE,world);
   syncCardboardShelters(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncCorpseVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
+  syncImportDepotVisual(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncUrbanArt(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncFecesVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncStreetBenches(renderer,THREE,world);

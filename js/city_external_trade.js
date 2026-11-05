@@ -13,15 +13,10 @@ export function ensureImportDepot(city){
 }
 export function importDepotClaim(depot,buyer,good){return Math.max(0,depot?.claims?.[buyer?.id]?.[good]||0);}
 function importGate(city,buyer){
- const {width,height}=city.world,points=[],step=Math.max(1,Math.floor(Math.max(width,height)/32)),target=buyer.door;
- const add=(x,y)=>{x=Math.max(0,Math.min(width-1,x));y=Math.max(0,Math.min(height-1,y));if(city.walkable(x,y)&&!points.some(p=>p.x===x&&p.y===y))points.push({x,y});};
- for(let d=0;d<=32;d++){
-  const candidates=[[0,Math.round(target.y)],[width-1,Math.round(target.y)],[Math.round(target.x),0],[Math.round(target.x),height-1]];
-  for(const [x,y]of candidates){add(x+(x===0?d:x===width-1?-d:0),y+(y===0?d:y===height-1?-d:0));}
- }
- for(let y=0;y<height;y+=step){add(0,y);add(width-1,y);}for(let x=0;x<width;x+=step){add(x,0);add(x,height-1);}
- points.sort((a,b)=>Math.hypot(a.x-target.x,a.y-target.y)-Math.hypot(b.x-target.x,b.y-target.y));
- for(const p of points){const door={x:p.x+.5,y:p.y+.5};if(city.findPath(door,buyer.door)!==null)return door;}return null;
+ // International cargo is registered at the municipal depot. The foreign
+ // supplier is virtual, so placing its door at the map edge only made imports
+ // look like they were arriving in empty terrain before the local delivery.
+ return city.findPath(buyer.door,buyer.door)!==null?{...buyer.door}:null;
 }
 export function orderImport(city,buyer,good,quantity,{reserveBalance=0,purpose='import'}={}){
  if(city.substances&&!city.substances.canTrade(good,null,buyer,{quantity}))return false;
@@ -30,7 +25,8 @@ export function orderImport(city,buyer,good,quantity,{reserveBalance=0,purpose='
  ensureExternalAccount(city,'external-trade','Comércio exterior');
  economy.externalImporters??=new Map();let seller=economy.externalImporters.get(good);
  if(!seller){const door=importGate(city,depot);if(!door)return false;const brand=fictionalForeignBrand(good),id=`import:${good}`;seller={id,type:'external_import',active:true,externalImport:true,importGood:good,importBrand:brand,accountId:'external-trade',name:brand,entity:{id:null,destroyed:false,properties:{name:brand,render:{style:'external_import'},externalImport:true}},door,inventory:Object.fromEntries(Object.keys(economy.goods).map(key=>[key,0])),incoming:{},inventoryCapacity:10000,balance:0,workers:[],ownerId:null};economy.externalImporters.set(good,seller);}
- if(city.findPath(seller.door,depot.door)===null){const door=importGate(city,depot);if(!door)return false;seller.door=door;}
+ else seller.door={...depot.door};
+ for(const pending of city.logistics.shipments)if(pending.seller===seller&&pending.buyer===depot&&pending.status==='waiting'&&!pending.pickedUp)pending.position={...depot.door};
  seller.inventory[good]=(seller.inventory[good]||0)+Math.min(EXTERNAL_TRADE_RULES.maximumImportQuantity,quantity);
  const amount=Math.min(EXTERNAL_TRADE_RULES.maximumImportQuantity,quantity),unitPrice=Math.ceil(goods.price*EXTERNAL_TRADE_RULES.importPriceFactor),policy=city.politics?.policy||{},tax=Math.ceil(goods.price*(policy.importTaxes?.[good]??0))*amount,importer=city.economy.businesses.find(b=>b.type==='import_exporter'&&b.active&&!b.entity.destroyed&&b.id!==buyer.id),brokerId=importer?.accountId||'trade-import-export';if(!city.accounts.has(brokerId))city.accounts.set(brokerId,{name:'Comércio exterior · intermediação',balance:0,totalRevenue:0,totalExpenses:0});const brokerFee=Math.ceil(goods.price*amount*.03),serviceFees=[{amount:tax,accountId:'treasury'},{amount:brokerFee,accountId:brokerId}].filter(f=>f.amount>0),shipment=city.logistics.order(seller,depot,good,amount,unitPrice,{purpose,serviceFees,reserveBalance,payerAccountId:buyer.accountId});
  if(!shipment){seller.inventory[good]-=amount;return false;}

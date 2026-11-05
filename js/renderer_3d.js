@@ -11,13 +11,13 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=terrain-stone-edge-jitter-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=terrain-shared-stone-mesh-4";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-facing-1';
-import { flagNightFactor } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=walking-shirt-mask-1';
+import { flagNightFactor } from './city_terrain.js?v=terrain-shared-stone-mesh-4';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=terrain-stone-edge-jitter-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=terrain-shared-stone-mesh-4';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -86,31 +86,12 @@ const STATIC_FOLIAGE_KEYS = [
   'mapleLeaves', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseFlowers', 'grassFoliage'
 ];
 const TROPICAL_CANOPY_COLORS = {flamboyant:0xd46b38,sea_grape:0x557b3c,tropical_almond:0x71934c,mangrove:0x416f45,banana:0x4b8e3a,mango:0x6c9a43,guava:0x7b9d50,jackfruit:0x39764b,breadfruit:0x54864b,papaya:0x82a44d,avocado:0x466f3d,tamarind:0x8a9e5a,cacao:0x376e49,soursop:0x498153,ackee:0x71994a,lime:0x8ca442,allspice:0x527848,monstera:0x326c44,guaimbe:0x4b8150,pau_brasil:0x658348,yellow_ipe:0x78964a,quaresmeira:0x61804a,manaca_serra:0x69894d,sibipiruna:0x718b46,pau_ferro:0x527846,pitanga:0x4b7c3e,jabuticaba:0x486f3e,frangipani:0x76954b,clusia:0x4b7844};
-const TROPICAL_CANOPY_ASPECT = {banana:[.82,1.18,.82],papaya:[.7,1.28,.7],cacao:[.82,1.1,.82],guava:[.9,1.05,.9],mango:[1.16,.92,1.12],jackfruit:[1.13,1.02,1.13],breadfruit:[1.12,.94,1.12],soursop:[1.05,1,1.05],ackee:[.94,1.06,.94],lime:[.96,1,.96],tamarind:[1.2,.9,1.08],allspice:[.92,1.08,.92],monstera:[1.22,.78,1.22],guaimbe:[1.32,.88,1.15],pau_brasil:[1.12,1.03,1.12],yellow_ipe:[1.18,1,1.18],quaresmeira:[1.1,1.04,1.1],manaca_serra:[1.08,1,1.08],sibipiruna:[1.2,.96,1.2],pau_ferro:[1.06,1.08,1.06],pitanga:[.92,1.08,.92],jabuticaba:[1.04,1.08,1.04],frangipani:[1.04,.94,1.04],clusia:[1.12,.95,1.12]};
+const TROPICAL_CANOPY_ASPECT = {banana:[.82,1.18,.82],papaya:[.7,.82,.7],cacao:[.82,1.1,.82],guava:[.9,1.05,.9],mango:[1.16,.92,1.12],jackfruit:[1.13,1.02,1.13],breadfruit:[1.12,.94,1.12],soursop:[1.05,1,1.05],ackee:[.94,1.06,.94],lime:[.96,1,.96],tamarind:[1.2,.9,1.08],allspice:[.92,1.08,.92],monstera:[1.22,.78,1.22],guaimbe:[1.32,.88,1.15],pau_brasil:[1.12,1.03,1.12],yellow_ipe:[1.18,1,1.18],quaresmeira:[1.1,1.04,1.1],manaca_serra:[1.08,1,1.08],sibipiruna:[1.2,.96,1.2],pau_ferro:[1.06,1.08,1.06],pitanga:[.92,1.08,.92],jabuticaba:[1.04,1.08,1.04],frangipani:[1.04,.94,1.04],clusia:[1.12,.95,1.12]};
 const TROPICAL_FRUIT_COLORS = {banana:0xe5c13b,mango:0xe6a43b,guava:0xc3b85e,jackfruit:0x83a72f,breadfruit:0x86a54b,papaya:0xe77c35,avocado:0x47713b,tamarind:0x85563d,cacao:0xa95f43,soursop:0x6d9d50,ackee:0xcf4e37,lime:0x9cab35,allspice:0x8e6042,pitanga:0xc63e39,jabuticaba:0x58385e,passionflower:0x7b704d};
 const TROPICAL_FRUIT_OFFSETS = [[-.48,1.83,.06],[.43,1.91,.1],[.06,2.1,-.46]];
 const BANANA_FRUIT_OFFSETS = [[.18,1.28,.1],[.28,1.2,.02],[.12,1.13,-.08]];
 const TROPICAL_FLOWER_COLORS = {hibiscus:0xf24852,bougainvillea:0xbd3f9f,rose_bush:0xff4f72,heliconia_rostrata:0xe74632,red_ginger:0xd94c44,bird_of_paradise:0xf1a52d,torch_ginger:0xd94c59,silver_vase_bromeliad:0xe35b7a,anthurium:0xd94142,heliconia_bihai:0xe35e31,heliconia_psittacorum:0xe9a33c,ixora:0xd83d45,indian_shot:0xc24b38,jade_vine:0x4ba785,passionflower:0x73539a,allamanda:0xf0c337,canela_de_ema:0xe45c45,zebra_maranta:0x71945b,croton:0xc78539,watermelon_calathea:0x729453,imperial_bromeliad:0x9a684d,caladium:0xc1788a,prayer_plant:0x789053};
 const TROPICAL_FOLIAGE_COLORS = {zebra_maranta:0x738c51,croton:0xd18b32,watermelon_calathea:0x687d4c,imperial_bromeliad:0x8e7252,caladium:0xc88192,prayer_plant:0x6b8254,water_lily:0x548a58};
-const TROPICAL_FOLIAGE_ASPECT = {
-  zebra_maranta:[1.2,.72,1.2],croton:[.82,1.24,.82],
-  watermelon_calathea:[1.12,.78,1.12],imperial_bromeliad:[1.08,1.28,1.08],
-  caladium:[1.18,.72,1.18],prayer_plant:[1.1,.76,1.1]
-};
-const BROAD_LEAF_ASPECT = {monstera:[1.08,1.05,1.08],guaimbe:[1.22,.9,1.08]};
-// Keep the shared botanical meshes, but give each species the proportions of
-// its real growth habit: upright heliconias, compact ixora/anthurium, and
-// wide, low growing passionflower and bougainvillea.
-const TROPICAL_FLOWER_ASPECT = {
-  hibiscus:[1.15,1.08,1.15],bougainvillea:[1.34,.82,1.22],
-  heliconia_rostrata:[.78,1.26,.78],red_ginger:[.84,1.18,.84],
-  bird_of_paradise:[.86,1.2,.86],torch_ginger:[.9,1.38,.9],
-  silver_vase_bromeliad:[.88,1.16,.88],anthurium:[.9,.78,.9],
-  heliconia_bihai:[.82,1.28,.82],heliconia_psittacorum:[.76,.88,.76],
-  ixora:[1.28,.76,1.28],indian_shot:[.92,1.06,.92],
-  jade_vine:[1.28,1.06,.9],passionflower:[1.3,.78,1.16],
-  allamanda:[1.18,.94,1.18],canela_de_ema:[.86,1.12,.86]
-};
 const TROPICAL_TREE_BLOOM_COLORS = {flamboyant:0xe75036,pau_brasil:0xd84735,yellow_ipe:0xf1c544,quaresmeira:0x9a60b7,manaca_serra:0xd9a5ce,frangipani:0xf0d59a};
 
 export const MIN_CAMERA_ZOOM = 0.25;
@@ -360,7 +341,7 @@ function getEntityBounds(e) {
   const isBirch = isPlantOrFlora && (e.properties?.species === "birch" || e.properties?.name?.toLowerCase().includes("bétula") || e.properties?.name?.toLowerCase().includes("betula"));
   const isMaple = isPlantOrFlora && (e.properties?.species === "maple" || e.properties?.name?.toLowerCase().includes("bordo") || e.properties?.name?.toLowerCase().includes("maple"));
   const isBerryBush = isPlantOrFlora && (e.properties?.species === "berry" || e.properties?.name?.toLowerCase().includes("amora") || (e.properties?.species === "bush" && !e.properties?.name?.toLowerCase().includes("florido")));
-  const isRoseBush = isPlantOrFlora && (e.properties?.species === 'rose_bush' || e.properties?.name?.toLowerCase().includes("florido") || e.properties?.name?.toLowerCase().includes("rose"));
+  const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties?.species) || ['flowering','foliage'].includes(e.properties?.cityPlant?.form) || e.properties?.name?.toLowerCase().includes("florido") || e.properties?.name?.toLowerCase().includes("rose"));
   const isShrub = isPlantOrFlora && (e.properties?.species === "shrub" || e.properties?.name?.toLowerCase().includes("shrub") || e.properties?.name?.toLowerCase().includes("arbusto"));
   const isWaterLily = isPlantOrFlora && (e.properties?.species === "waterlily" || e.properties?.species === "water_lily" || e.properties?.name?.toLowerCase().includes("lily") || e.properties?.name?.toLowerCase().includes("vitória-régia") || e.properties?.name?.toLowerCase().includes("vitoria"));
   const isSeaweed = isPlantOrFlora && (e.properties?.species === "seaweed" || e.properties?.name?.toLowerCase().includes("seaweed") || e.properties?.name?.toLowerCase().includes("alga"));
@@ -840,6 +821,30 @@ function createBananaBunchGeometry(){
     pieces.push(new THREE.TubeGeometry(curve,6,.045,5,false));
   }
   return mergeBufferGeometries(pieces);
+}
+
+function createPapayaLeavesGeometry(){
+  const leaves=[];
+  for(let frond=0;frond<7;frond++){
+    const angle=frond*Math.PI*2/7,shape=new THREE.Shape(),cx=.62,cy=-.10;
+    for(let point=0;point<=32;point++){
+      const theta=point/32*Math.PI*2,lobe=.29*(1+.24*Math.cos(5*theta)),x=cx+Math.cos(theta)*lobe,y=cy+Math.sin(theta)*.34*(1+.12*Math.cos(5*theta));
+      if(point===0)shape.moveTo(x,y);else shape.lineTo(x,y);
+    }
+    shape.closePath();
+    const blade=new THREE.ShapeGeometry(shape,1);blade.rotateY(angle);leaves.push(blade);
+    const petiole=new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0),new THREE.Vector3(.2,-.025,0),new THREE.Vector3(.46,-.08,0)]);
+    const stem=new THREE.TubeGeometry(petiole,4,.018,4,false);stem.rotateY(angle);leaves.push(stem);
+  }
+  const geometry=mergeBufferGeometries(leaves);geometry.translate(0,2.04,0);return geometry;
+}
+
+function createPapayaFruitGeometry(){
+  const fruits=[];
+  for(let fruit=0;fruit<5;fruit++){
+    const angle=fruit*2.399963,fruitGeo=new THREE.SphereGeometry(.16,7,5);fruitGeo.scale(.78,1.32,.78);fruitGeo.translate(Math.cos(angle)*.13,1.28+(fruit%3)*.25,Math.sin(angle)*.13);fruits.push(fruitGeo);
+  }
+  return mergeBufferGeometries(fruits);
 }
 
 function createTropicalFoliageGeometry(){
@@ -2627,7 +2632,7 @@ export function createNormalMapFromTexture(skinName, intensity = 1.6) {
     }
   }
 
-  const size = 16;
+  const size = 64;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -2691,9 +2696,9 @@ export function createNormalMapFromTexture(skinName, intensity = 1.6) {
       ny /= len;
       nz /= len;
 
-      const r = Math.round(((nx * 0.5 + 0.5) * 255) / 32) * 32;
-      const g = Math.round(((ny * 0.5 + 0.5) * 255) / 32) * 32;
-      const b = Math.round(((nz * 0.5 + 0.5) * 255) / 32) * 32;
+      const r = Math.round((nx * 0.5 + 0.5) * 255);
+      const g = Math.round((ny * 0.5 + 0.5) * 255);
+      const b = Math.round((nz * 0.5 + 0.5) * 255);
 
       const idx = (y * size + x) * 4;
       data[idx + 0] = Math.min(255, r);
@@ -2708,9 +2713,9 @@ export function createNormalMapFromTexture(skinName, intensity = 1.6) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
   applyTextureAnisotropy(tex);
   normalMapCache.set(cacheKey, tex);
   return tex;
@@ -2800,7 +2805,7 @@ function generateWaterNormalMap(intensity = 1.6) {
 // Procedural Pixelated Terrain Normal Map Generator (Grass & Sand)
 // ---------------------------------------------------------------------------
 function generateProceduralTerrainNormalMap(type, intensity = 0.45) {
-  const size = 32;
+  const size = type === "grass" || type === "sand" ? 128 : 32;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -2810,17 +2815,21 @@ function generateProceduralTerrainNormalMap(type, intensity = 0.45) {
 
   const heightMap = new Float32Array(size * size);
 
+  const hash=(px,py)=>{let h=Math.imul(px^Math.imul(py,374761393),668265263);h=Math.imul(h^(h>>>13),1274126177)>>>0;return h/0xffffffff;};
+  const noise=(x,y,cells)=>{
+    const gx=x/size*cells,gy=y/size*cells,ix=Math.floor(gx),iy=Math.floor(gy),fx=gx-ix,fy=gy-iy;
+    const smooth=t=>t*t*(3-2*t),sx=smooth(fx),sy=smooth(fy),wrap=n=>(n%cells+cells)%cells;
+    const a=hash(wrap(ix),wrap(iy)),b=hash(wrap(ix+1),wrap(iy)),c=hash(wrap(ix),wrap(iy+1)),d=hash(wrap(ix+1),wrap(iy+1));
+    return (a+(b-a)*sx)*(1-sy)+(c+(d-c)*sx)*sy;
+  };
+
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       let h = 0.5;
       if (type === "grass") {
-        const f1 = Math.sin(x * 1.8 + Math.sin(y * 0.8) * 2.0);
-        const f2 = Math.sin((x + y) * 1.2);
-        h = 0.5 + 0.15 * f1 + 0.10 * f2;
+        h = 0.5 +(noise(x,y,4)-.5)*.20+(noise(x,y,11)-.5)*.13+(noise(x,y,23)-.5)*.08+(noise(x,y,37)-.5)*.04;
       } else if (type === "sand") {
-        const r1 = Math.sin(x * 0.4 + y * 0.2);
-        const r2 = Math.cos(x * 0.8 - y * 0.3);
-        h = 0.5 + 0.15 * r1 + 0.08 * r2;
+        h = 0.5 +(noise(x,y,3)-.5)*.17+(noise(x,y,9)-.5)*.11+(noise(x,y,21)-.5)*.06+(noise(x,y,37)-.5)*.03;
       }
       heightMap[y * size + x] = h;
     }
@@ -2861,9 +2870,16 @@ function generateProceduralTerrainNormalMap(type, intensity = 0.45) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
+  if(type==="grass"||type==="sand"){
+    tex.repeat.set(.125,.125);
+    tex.magFilter=THREE.LinearFilter;
+    tex.minFilter=THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps=true;
+  }else{
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+  }
   applyTextureAnisotropy(tex);
   return tex;
 }
@@ -2919,7 +2935,7 @@ function createCaribbeanGrassTexture() {
 // Foliage & Plant Pixelated Normal Map Generator (Oak, Pine, Cactus)
 // ---------------------------------------------------------------------------
 function generateProceduralFoliageNormalMap(type, intensity = 1.6) {
-  const size = 32;
+  const size = 96;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -2942,11 +2958,11 @@ function generateProceduralFoliageNormalMap(type, intensity = 1.6) {
         const n2 = Math.cos(x * 3.2);
         h = 0.5 + 0.35 * n1 + 0.15 * n2;
       } else if (type === "cactus") {
-        const rib = Math.sin((x / 32) * Math.PI * 8);
-        const spine = ((x % 4 === 0) && (y % 6 === 0)) ? 0.9 : 0.0;
+        const rib = Math.sin((x / size) * Math.PI * 8);
+        const spine = ((x % 12 === 0) && (y % 18 === 0)) ? 0.9 : 0.0;
         h = 0.5 + 0.4 * rib + spine;
       }
-      heightMap[y * size + x] = Math.round(h * 5) / 5;
+      heightMap[y * size + x] = h;
     }
   }
 
@@ -2968,9 +2984,9 @@ function generateProceduralFoliageNormalMap(type, intensity = 1.6) {
       ny /= len;
       nz /= len;
 
-      const r = Math.round(((nx * 0.5 + 0.5) * 255) / 32) * 32;
-      const g = Math.round(((ny * 0.5 + 0.5) * 255) / 32) * 32;
-      const b = Math.round(((nz * 0.5 + 0.5) * 255) / 32) * 32;
+      const r = Math.round((nx * 0.5 + 0.5) * 255);
+      const g = Math.round((ny * 0.5 + 0.5) * 255);
+      const b = Math.round((nz * 0.5 + 0.5) * 255);
 
       const idx = (y * size + x) * 4;
       data[idx + 0] = Math.min(255, r);
@@ -2985,9 +3001,9 @@ function generateProceduralFoliageNormalMap(type, intensity = 1.6) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
   applyTextureAnisotropy(tex);
   return tex;
 }
@@ -3742,7 +3758,7 @@ export class RCT3DRenderer {
     this.infiniteSea.renderOrder = -1;
     this.infiniteSea.receiveShadow = true;
     this.scene.add(this.infiniteSea);
-    const normSand = generateProceduralTerrainNormalMap("sand", 0.40);
+    const normSand = generateProceduralTerrainNormalMap("sand", 0.72);
     const normOak = generateProceduralFoliageNormalMap("oak", 1.0);
     const normPine = generateProceduralFoliageNormalMap("pine", 1.0);
     const normCactus = generateProceduralFoliageNormalMap("cactus", 1.0);
@@ -3751,6 +3767,9 @@ export class RCT3DRenderer {
     const normBrickA = createNormalMapFromTexture("Feature_Brick_A.png", 1.2);
     const normBrickB = createNormalMapFromTexture("Feature_Brick_B.png", 1.0);
     const normBrickC = createNormalMapFromTexture("Feature_Brick_C.png", 1.2);
+    const normWood = createNormalMapFromTexture("Feature_Wood.png", 0.85);
+    const normPebbles = createNormalMapFromTexture("Feature_Pebbles.png", 1.15);
+    const normThatch = createNormalMapFromTexture("Feature_Grass.png", 0.8);
 
     const makeMat = (isPersp, baseParams, normalMap = null, normalScale = 1.0, roughness = 0.65, metalness = 0.05) => {
       // Normals/depth strictly active in 1P and 3P perspective mode!
@@ -3821,8 +3840,8 @@ export class RCT3DRenderer {
       ...terrainSurfaceMaterials(isPersp,'RetainingWall','retainingWall',normStoneB,1.1,.72,.06),
       farmSoil:makeMat(isPersp,{map:farmGround.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},farmGround.normalMap,.38,.91,.005),
       [TILE_FLOOR]: makeMat(isPersp, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
-      sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.22, 0.90, 0.01),
-      [TILE_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.25, 0.88, 0.02),
+      sandClean: makeMat(isPersp, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.42, 0.90, 0.01),
+      [TILE_SAND]: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.46, 0.88, 0.02),
       [TILE_HILL]: makeMat(isPersp, { map: caribbeanGrass, color: 0xc2d0a0, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.82, 0.02),
       [TILE_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xa5a5af, 0x3a3a44, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneB, 1.1, 0.70, 0.08),
       [TILE_MOUNTAIN]: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0xb4afaa, 0x484242, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.25, 0.65, 0.10),
@@ -3837,16 +3856,18 @@ export class RCT3DRenderer {
       [TILE_ROAD_HILL_STONE]: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x909098, 0x383842, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normBrickA, 1.1, 0.65, 0.08),
       cliff: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_C.png", 0x887a6a, 0x2b2218, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normStoneC, 1.1, 0.72, 0.05),
       grassFoliage: makeMat(isPersp, { color: 0xffffff, vertexColors: true, dithering: true, transparent: false, depthWrite: true, depthTest: true, side: THREE.DoubleSide }, null, 0, 1, 0),
-      treeTrunk: makeMat(isPersp, { color: 0x583c1e, dithering: true }, null),
+      treeTrunk: makeMat(isPersp, { color: 0x583c1e, dithering: true }, normWood, 0.42, 0.92, 0),
+      bananaStem: makeMat(isPersp, { color: 0xffffff, dithering: true }, normWood, 0.24, 0.92, 0),
       oakLeaves: makeMat(isPersp, { color: 0x3e8226, dithering: true }, normOak, 1.2, 0.65, 0.02),
+      tropicalFlora: makeMat(isPersp, { color: 0xffffff, side: THREE.DoubleSide, dithering: true }, normOak, 0.72, 0.76, 0),
       palmLeaves: makeMat(isPersp, { color: 0x478d32, dithering: true, side: THREE.DoubleSide }, normOak, 0.9, 0.72, 0.01),
       pineLeaves: makeMat(isPersp, { color: 0x205222, dithering: true }, normPine, 1.2, 0.65, 0.02),
       cactus: makeMat(isPersp, { color: 0x3c7c2c, dithering: true }, normCactus, 1.2, 0.75, 0.02),
-      cherryTrunk: makeMat(isPersp, { color: 0x3e2418, dithering: true }, null),
+      cherryTrunk: makeMat(isPersp, { color: 0x3e2418, dithering: true }, normWood, 0.42, 0.92, 0),
       cherryLeaves: makeMat(isPersp, { color: 0xffb7c5, dithering: true }, normOak, 1.2, 0.60, 0.01),
-      birchTrunk: makeMat(isPersp, { color: 0xeae6dc, dithering: true }, null),
+      birchTrunk: makeMat(isPersp, { color: 0xeae6dc, dithering: true }, normWood, 0.28, 0.92, 0),
       birchLeaves: makeMat(isPersp, { color: 0xb5dc42, dithering: true }, normOak, 1.2, 0.65, 0.02),
-      mapleTrunk: makeMat(isPersp, { color: 0x482c16, dithering: true }, null),
+      mapleTrunk: makeMat(isPersp, { color: 0x482c16, dithering: true }, normWood, 0.42, 0.92, 0),
       mapleLeaves: makeMat(isPersp, { color: 0xdc4820, dithering: true }, normOak, 1.2, 0.65, 0.02),
       bushLeaves: makeMat(isPersp, { color: 0x2e6c26, dithering: true }, normOak, 1.2, 0.65, 0.02),
       bushBerries: makeMat(isPersp, { color: 0xd62246, dithering: true }, normOak, 1.0, 0.50, 0.02),
@@ -3854,7 +3875,7 @@ export class RCT3DRenderer {
       houseWall: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xfffaea, 0x8a6242, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
       houseRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xff6238, 0x941e0a, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
       woodHouseWall: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xc89858, 0x482c18, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
-      woodHouseRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xa67c52, 0x3b271a, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+      woodHouseRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xa67c52, 0x3b271a, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
       stoneHouseWall: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xd8d7de, 0x3a3842, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.60, 0.06),
       stoneHouseRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x9098a8, 0x2d3748, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.50, 0.08),
       houseBlueprint: new THREE.MeshLambertMaterial({ map: createTintedTexture("Feature_Brick_B.png", 0xdfa052, 0x5a3418, 1.0), dithering: true, side: THREE.DoubleSide }),
@@ -3862,12 +3883,12 @@ export class RCT3DRenderer {
       woodWall: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xc89858, 0x482c18, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
       mixedWall: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xdfd0b0, 0x3d3024, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
       wallBlueprint: new THREE.MeshLambertMaterial({ map: createTintedTexture("Feature_Brick_A.png", 0x9a8f82, 0x3d3024, 1.0), dithering: true, side: THREE.DoubleSide }),
-      woodLog: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xc89858, 0x3d2210, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+      woodLog: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xc89858, 0x3d2210, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
       stoneItem: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xd8d8e6, 0x3c3c46, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.65, 0.05),
-      gate: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xad7842, 0x3a2214, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+      gate: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xad7842, 0x3a2214, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
       gateBlueprint: new THREE.MeshLambertMaterial({ map: createTintedTexture("Feature_Wood.png", 0xc89858, 0x482c18, 1.0), dithering: true, side: THREE.DoubleSide }),
       torchFlames: createRealisticFlameMaterial(),
-      campfireLogs: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0x8a5228, 0x2e1a0a, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+      campfireLogs: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0x8a5228, 0x2e1a0a, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
       campfireFlames: createRealisticFlameMaterial(),
       warehouse: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xd4a373, 0x4a3525, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
       stoneWarehouse: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xd8d7de, 0x3a3842, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.60, 0.05),
@@ -3884,7 +3905,7 @@ export class RCT3DRenderer {
         new THREE.MeshLambertMaterial({ color: 0x64c8ff, dithering: true, side: THREE.DoubleSide }),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xb44a2c, 0x4a180c, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.50, 0.08),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xdb5832, 0x6a1c0c, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.50, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Grass.png", 0xd4a044, 0x583e10, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Grass.png", 0xd4a044, 0x583e10, 1.0), dithering: true, side: THREE.DoubleSide }, normThatch, 0.45, 0.9, 0),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0x4a5568, 0x1a202c, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.55, 0.08),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xd49b6a, 0x4a2e1a, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xd4a040, 0x44260a, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
@@ -3950,24 +3971,24 @@ export class RCT3DRenderer {
       houseRoofVariants: [
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.55, 0.08),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.55, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.55, 0.05),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         // Variants 20 - 29 (Roof Materials)
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
@@ -3991,7 +4012,7 @@ export class RCT3DRenderer {
       ],
       leaderRoofVariants: [
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+        makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_B.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.55, 0.05),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
         makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
@@ -4002,13 +4023,13 @@ export class RCT3DRenderer {
       boneHouseRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xe6e2d3, 0x3d3830, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.65, 0.05),
       boneWall: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xf5f3ea, 0x5a554a, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.65, 0.05),
       road: makeMat(isPersp, { map: createTintedTexture("Feature_Stone_B.png", 0xb4a88b, 0x5c5141, 1.0), dithering: true, side: THREE.DoubleSide }, normStoneB, 1.0, 0.72, 0.05),
-      roadSnap: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0xd7c497, 0x79684d, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+      roadSnap: makeMat(isPersp, { map: createTintedTexture("Feature_Pebbles.png", 0xd7c497, 0x79684d, 1.0), dithering: true, side: THREE.DoubleSide }, normPebbles, 0.38, 0.9, 0),
       waterWellBase: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xd8d7de, 0x3a3842, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.60, 0.05),
-      waterWellWood: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xd4a373, 0x4a3525, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+      waterWellWood: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xd4a373, 0x4a3525, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
       waterWellRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-      woodBridge: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0x8b5a2b, 0x3a2214, 1.0), dithering: true, side: THREE.DoubleSide }, null),
+      woodBridge: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0x8b5a2b, 0x3a2214, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
       stoneBridge: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xc8c8c8, 0x4a4a4a, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.60, 0.05),
-      waterPlatform: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0x7c4c24, 0x2e1a0e, 1.0), dithering: true, side: THREE.DoubleSide }, null)
+      waterPlatform: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0x7c4c24, 0x2e1a0e, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01)
     });
 
     this.materialsIso = buildDict(false);
@@ -4113,12 +4134,17 @@ export class RCT3DRenderer {
     this.instTropicalFruits.receiveShadow = true;
 
     const bananaStemGeo=new THREE.CylinderGeometry(.18,.27,1.52,7);bananaStemGeo.translate(0,.76,0);
-    this.instBananaStems=new THREE.InstancedMesh(bananaStemGeo,new THREE.MeshLambertMaterial({color:0xffffff}),this.maxInstances);
+    this.instBananaStems=new THREE.InstancedMesh(bananaStemGeo,this.materials.bananaStem,this.maxInstances);
     this.instBananaLeaves=new THREE.InstancedMesh(createBananaLeavesGeometry(),this.materials.oakLeaves,this.maxInstances);
     this.instBananaFruits=new THREE.InstancedMesh(createBananaBunchGeometry(),new THREE.MeshLambertMaterial({color:0xffffff}),this.maxInstances);
     for(const mesh of [this.instBananaStems,this.instBananaLeaves,this.instBananaFruits]){mesh.castShadow=true;mesh.receiveShadow=true;}
+    const papayaTrunkGeo=new THREE.CylinderGeometry(.11,.17,2.25,7);papayaTrunkGeo.translate(0,1.125,0);
+    this.instPapayaTrunks=new THREE.InstancedMesh(papayaTrunkGeo,this.materials.treeTrunk,this.maxInstances);
+    this.instPapayaLeaves=new THREE.InstancedMesh(createPapayaLeavesGeometry(),this.materials.oakLeaves,this.maxInstances);
+    this.instPapayaFruits=new THREE.InstancedMesh(createPapayaFruitGeometry(),new THREE.MeshLambertMaterial({color:0xffffff}),this.maxInstances);
+    for(const mesh of [this.instPapayaTrunks,this.instPapayaLeaves,this.instPapayaFruits]){mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;}
 
-    const floraMaterial=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});
+    const floraMaterial=this.materials.tropicalFlora;
     this.instBroadLeafPlants=new THREE.InstancedMesh(createMonsteraLeavesGeometry(),floraMaterial,this.maxInstances);
     this.instTropicalFoliage=new THREE.InstancedMesh(createTropicalFoliageGeometry(),floraMaterial,this.maxInstances);
     this.instTropicalFlowerStems=new THREE.InstancedMesh(createTropicalFlowerStemsGeometry(),this.materials.oakLeaves,this.maxInstances);
@@ -4127,7 +4153,7 @@ export class RCT3DRenderer {
     // Leaf, bloom and fruit silhouettes add a second shadow draw for every
     // vegetation batch. Keep them lit by nearby shadows without making each
     // batch render into the shadow map; trunks and buildings still cast them.
-    for(const mesh of [this.instOakLeaves,this.instTropicalTreeBlooms,this.instPalmFronds,this.instFanPalmFronds,this.instTropicalFruits,this.instBananaLeaves,this.instBananaFruits,this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads])mesh.castShadow=false;
+    for(const mesh of [this.instOakLeaves,this.instTropicalTreeBlooms,this.instPalmFronds,this.instFanPalmFronds,this.instTropicalFruits,this.instBananaLeaves,this.instBananaFruits,this.instPapayaLeaves,this.instPapayaFruits,this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads])mesh.castShadow=false;
 
     // Pine Trees
     const pineTrunkGeo = new THREE.CylinderGeometry(0.12, 0.20, 1.25, 5);
@@ -4532,6 +4558,7 @@ export class RCT3DRenderer {
     this.instPalmFronds.frustumCulled = false;
     this.instTropicalFruits.frustumCulled = false;
     this.instBananaStems.frustumCulled=false;this.instBananaLeaves.frustumCulled=false;this.instBananaFruits.frustumCulled=false;
+    this.instPapayaTrunks.frustumCulled=false;this.instPapayaLeaves.frustumCulled=false;this.instPapayaFruits.frustumCulled=false;
     this.instPineTrunks.frustumCulled = false;
     this.instPineLeaves.frustumCulled = false;
     this.instCacti.frustumCulled = false;
@@ -4617,6 +4644,7 @@ export class RCT3DRenderer {
       this.instPalmTrunks, this.instPalmFronds,this.instFanPalmFronds,
       this.instTropicalFruits,
       this.instBananaStems,this.instBananaLeaves,this.instBananaFruits,
+      this.instPapayaTrunks,this.instPapayaLeaves,this.instPapayaFruits,
       this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads,
       this.instPineTrunks, this.instPineLeaves,
       this.instCherryTrunks, this.instCherryLeaves,
@@ -5221,9 +5249,27 @@ export class RCT3DRenderer {
       }
     }
     if (this.instBoneWalls && activeDict.boneWall) this.instBoneWalls.material = activeDict.boneWall;
+    if (this.instOakTrunks && activeDict.treeTrunk) this.instOakTrunks.material = activeDict.treeTrunk;
     if (this.instOakLeaves && activeDict.oakLeaves) this.instOakLeaves.material = activeDict.oakLeaves;
+    if (this.instPalmTrunks && activeDict.treeTrunk) this.instPalmTrunks.material = activeDict.treeTrunk;
     if (this.instPalmFronds && activeDict.palmLeaves) this.instPalmFronds.material = activeDict.palmLeaves;
+    if (this.instFanPalmFronds && activeDict.palmLeaves) this.instFanPalmFronds.material = activeDict.palmLeaves;
+    if (this.instPapayaTrunks && activeDict.treeTrunk) this.instPapayaTrunks.material = activeDict.treeTrunk;
+    if (this.instPapayaLeaves && activeDict.oakLeaves) this.instPapayaLeaves.material = activeDict.oakLeaves;
+    if (this.instBananaStems && activeDict.bananaStem) this.instBananaStems.material = activeDict.bananaStem;
+    if (this.instBananaLeaves && activeDict.oakLeaves) this.instBananaLeaves.material = activeDict.oakLeaves;
+    if (this.instBroadLeafPlants && activeDict.tropicalFlora) this.instBroadLeafPlants.material = activeDict.tropicalFlora;
+    if (this.instTropicalFoliage && activeDict.tropicalFlora) this.instTropicalFoliage.material = activeDict.tropicalFlora;
+    if (this.instTropicalFlowerStems && activeDict.oakLeaves) this.instTropicalFlowerStems.material = activeDict.oakLeaves;
+    if (this.instTropicalFlowerHeads && activeDict.tropicalFlora) this.instTropicalFlowerHeads.material = activeDict.tropicalFlora;
+    if (this.instPineTrunks && activeDict.treeTrunk) this.instPineTrunks.material = activeDict.treeTrunk;
     if (this.instPineLeaves && activeDict.pineLeaves) this.instPineLeaves.material = activeDict.pineLeaves;
+    if (this.instCherryTrunks && activeDict.cherryTrunk) this.instCherryTrunks.material = activeDict.cherryTrunk;
+    if (this.instCherryLeaves && activeDict.cherryLeaves) this.instCherryLeaves.material = activeDict.cherryLeaves;
+    if (this.instBirchTrunks && activeDict.birchTrunk) this.instBirchTrunks.material = activeDict.birchTrunk;
+    if (this.instBirchLeaves && activeDict.birchLeaves) this.instBirchLeaves.material = activeDict.birchLeaves;
+    if (this.instMapleTrunks && activeDict.mapleTrunk) this.instMapleTrunks.material = activeDict.mapleTrunk;
+    if (this.instMapleLeaves && activeDict.mapleLeaves) this.instMapleLeaves.material = activeDict.mapleLeaves;
     if (this.instCacti && activeDict.cactus) this.instCacti.material = activeDict.cactus;
     if (this.instCampfireFlames && activeDict.campfireFlames) this.instCampfireFlames.material = activeDict.campfireFlames;
     if (this.instTorchFlames && activeDict.torchFlames) this.instTorchFlames.material = activeDict.torchFlames;
@@ -5764,7 +5810,7 @@ export class RCT3DRenderer {
       const isTropicalFoliage = isPlantOrFlora && e.properties.cityPlant?.form === 'foliage';
       const isTropicalFlowering = isPlantOrFlora && e.properties.cityPlant?.form === 'flowering';
       const isBroadLeafPlant = isPlantOrFlora && e.properties.cityPlant?.form === 'broad_leaf';
-      const isRoseBush = isPlantOrFlora && (e.properties.species === 'rose_bush' || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
+      const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
       const isShrub = isPlantOrFlora && (e.properties.species === "shrub" || e.properties.name?.toLowerCase().includes("shrub") || e.properties.name?.toLowerCase().includes("arbusto"));
       const isWaterLily = isPlantOrFlora && (e.properties.species === "waterlily" || e.properties.species === "water_lily" || e.properties.name?.toLowerCase().includes("lily") || e.properties.name?.toLowerCase().includes("vitória-régia") || e.properties.name?.toLowerCase().includes("vitoria"));
       const isSeaweed = isPlantOrFlora && (e.properties.species === "seaweed" || e.properties.name?.toLowerCase().includes("seaweed") || e.properties.name?.toLowerCase().includes("alga"));
@@ -6620,23 +6666,14 @@ export class RCT3DRenderer {
         const streetCorners=streetSurfaceCorners(world,tx,ty);
         const stoneShelf=terrainTileSurfaceCorners(world,tx,ty),stoneVertices=stoneShelf?terrainTileSurfaceVertices(world,tx,ty):null;
         let terrainVertices=stoneVertices;
-        if(!terrainVertices&&!streetCorners&&!isSidewalk&&tType!==TILE_WATER){
-          let touchesStone=false;
-          for(let oy=-1;oy<=1&&!touchesStone;oy++)for(let ox=-1;ox<=1;ox++)if((ox||oy)&&baseTerrainTile(this.getTileTypeAt(map,tx+ox,ty+oy))===TILE_STONE){touchesStone=true;break;}
-          if(touchesStone){
-            const positions=[[tx,ty],[tx+1,ty],[tx+1,ty+1],[tx,ty+1]],heights=[this.getCornerHeight(map,tx,ty),this.getCornerHeight(map,tx+1,ty),this.getCornerHeight(map,tx+1,ty+1),this.getCornerHeight(map,tx,ty+1)];
-            terrainVertices=positions.map(([vx,vz],index)=>{
-              let bordersStone=false;
-              for(let oy=-1;oy<=0&&!bordersStone;oy++)for(let ox=-1;ox<=0;ox++)if(baseTerrainTile(this.getTileTypeAt(map,vx+ox,vz+oy))===TILE_STONE){bordersStone=true;break;}
-              const offset=bordersStone?terrainVertexOffset(world,vx,vz):{x:0,z:0};
-              return [vx+offset.x,heights[index],vz+offset.z];
-            });
-          }
+        if(!terrainVertices&&!streetCorners&&!isSidewalk&&tType!==TILE_WATER&&terrainTileTouchesStone(world,tx,ty)){
+          const positions=[[tx,ty],[tx+1,ty],[tx+1,ty+1],[tx,ty+1]],heights=[terrainCornerHeight(world,tx,ty),terrainCornerHeight(world,tx+1,ty),terrainCornerHeight(world,tx+1,ty+1),terrainCornerHeight(world,tx,ty+1)];
+          terrainVertices=positions.map(([vx,vz],index)=>{const offset=terrainVertexOffset(world,vx,vz);return [vx+offset.x,heights[index],vz+offset.z];});
         }
-        let h00 = streetCorners?streetCorners[0]:stoneShelf?.[0]??this.getCornerHeight(map, tx, ty);
-        let h10 = streetCorners?streetCorners[1]:stoneShelf?.[1]??this.getCornerHeight(map, tx + 1, ty);
-        let h11 = streetCorners?streetCorners[2]:stoneShelf?.[2]??this.getCornerHeight(map, tx + 1, ty + 1);
-        let h01 = streetCorners?streetCorners[3]:stoneShelf?.[3]??this.getCornerHeight(map, tx, ty + 1);
+        let h00 = streetCorners?streetCorners[0]:stoneShelf?.[0]??terrainCornerHeight(world,tx,ty);
+        let h10 = streetCorners?streetCorners[1]:stoneShelf?.[1]??terrainCornerHeight(world,tx+1,ty);
+        let h11 = streetCorners?streetCorners[2]:stoneShelf?.[2]??terrainCornerHeight(world,tx+1,ty+1);
+        let h01 = streetCorners?streetCorners[3]:stoneShelf?.[3]??terrainCornerHeight(world,tx,ty+1);
 
         // Procedural Contact Ambient Occlusion for each corner
         const ao00 = this.getCornerAO(map, tx, ty);
@@ -6664,8 +6701,8 @@ export class RCT3DRenderer {
           }
         }
 
-        // Stone terrain is drawn as a level shelf. Give its exposed lower
-        // edges a vertical rock face so the change reads as a step, not a ramp.
+        // Bridge stone boundaries to lower terrain. Stone vertices are shared
+        // by world-grid coordinate, so neighboring stone tops remain one surface.
         if(stoneShelf&&!streetCorners){
           const edges=[
             {side:0,a:[tx,ty],b:[tx+1,ty],highA:h00,highB:h10,pointA:stoneVertices[0],pointB:stoneVertices[1]},
@@ -6673,13 +6710,30 @@ export class RCT3DRenderer {
             {side:2,a:[tx,ty+1],b:[tx+1,ty+1],highA:h01,highB:h11,pointA:stoneVertices[3],pointB:stoneVertices[2]},
             {side:3,a:[tx,ty],b:[tx,ty+1],highA:h00,highB:h01,pointA:stoneVertices[0],pointB:stoneVertices[3]},
           ];
+          const neighborEdgeIndices=[[3,2],[0,3],[0,1],[1,2]];
+          const lerpPoint=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
           for(const edge of edges){
             const nx=tx+([0,1,0,-1][edge.side]),ny=ty+([-1,0,1,0][edge.side]),neighbor=this.getTileTypeAt(map,nx,ny);
-            if(neighbor===TILE_VOID||neighbor===TILE_WATER||baseTerrainTile(neighbor)===TILE_STONE||PAVED_ROAD_TILES.has(neighbor))continue;
-            const neighborSurface=streetSurfaceCorners(world,nx,ny)||terrainTileSurfaceCorners(world,nx,ny),neighborEdge=[[3,2],[0,3],[0,1],[1,2]][edge.side],lowA=neighborSurface?neighborSurface[neighborEdge[0]]:this.getCornerHeight(map,...edge.a),lowB=neighborSurface?neighborSurface[neighborEdge[1]]:this.getCornerHeight(map,...edge.b);
-            if(Math.max(edge.highA-lowA,edge.highB-lowB)<.03)continue;
-            const wall=tileMeshBuckets[`terrainRock${terrainTextureHash(tx,ty,TILE_STONE+edge.side)&3}`],a=[edge.pointA[0],Math.min(lowA,edge.highA),edge.pointA[2]],b=[edge.pointB[0],Math.min(lowB,edge.highB),edge.pointB[2]],c=edge.pointB,d=edge.pointA,points=edge.side===0||edge.side===1?[a,c,b,a,d,c]:[a,b,c,a,c,d],along=point=>edge.side===0||edge.side===2?point[0]:point[2];
-            for(const point of points){wall.pos.push(...point);wall.uvs.push(along(point),point[1]);wall.colors.push(zoneMult*.88,zoneMult*.88,zoneMult*.88);}
+            if(neighbor===TILE_VOID||neighbor===TILE_WATER)continue;
+            const neighborIsStone=baseTerrainTile(neighbor)===TILE_STONE;
+            if(neighborIsStone&&ny*this.mapWidth+nx<ty*this.mapWidth+tx)continue;
+            const otherStone=neighborIsStone?terrainTileSurfaceVertices(world,nx,ny):null;
+            const otherSurface=otherStone?null:streetSurfaceCorners(world,nx,ny);
+            const [otherIndexA,otherIndexB]=neighborEdgeIndices[edge.side];
+            const offsetA=otherSurface?{x:0,z:0}:terrainVertexOffset(world,...edge.a),offsetB=otherSurface?{x:0,z:0}:terrainVertexOffset(world,...edge.b);
+            const lowA=otherStone?.[otherIndexA]||[edge.a[0]+offsetA.x,otherSurface?otherSurface[otherIndexA]:terrainCornerHeight(world,...edge.a),edge.a[1]+offsetA.z];
+            const lowB=otherStone?.[otherIndexB]||[edge.b[0]+offsetB.x,otherSurface?otherSurface[otherIndexB]:terrainCornerHeight(world,...edge.b),edge.b[1]+offsetB.z];
+            const highA=edge.pointA,highB=edge.pointB,diffA=highA[1]-lowA[1],diffB=highB[1]-lowB[1];
+            const cuts=diffA*diffB<0?[0,diffA/(diffA-diffB),1]:[0,1];
+            const wall=tileMeshBuckets[`terrainRock${terrainTextureHash(tx,ty,TILE_STONE+edge.side)&3}`];
+            const along=point=>edge.side===0||edge.side===2?point[0]:point[2];
+            for(let i=1;i<cuts.length;i++){
+              const from=cuts[i-1],to=cuts[i],upperA0=lerpPoint(highA,highB,from),upperA1=lerpPoint(highA,highB,to),lowerA0=lerpPoint(lowA,lowB,from),lowerA1=lerpPoint(lowA,lowB,to);
+              const currentIsHigher=diffA+(diffB-diffA)*(from+to)*.5>=0;
+              const upper0=currentIsHigher?upperA0:lowerA0,upper1=currentIsHigher?upperA1:lowerA1,lower0=currentIsHigher?lowerA0:upperA0,lower1=currentIsHigher?lowerA1:upperA1;
+              if(Math.max(Math.hypot(upper0[0]-lower0[0],upper0[1]-lower0[1],upper0[2]-lower0[2]),Math.hypot(upper1[0]-lower1[0],upper1[1]-lower1[1],upper1[2]-lower1[2]))<.005)continue;
+              for(const point of [lower0,upper0,upper1,lower0,upper1,lower1]){wall.pos.push(...point);wall.uvs.push(along(point),point[1]);wall.colors.push(zoneMult*.88,zoneMult*.88,zoneMult*.88);}
+            }
           }
         }
 
@@ -6820,18 +6874,19 @@ export class RCT3DRenderer {
           const baseH = 0.0;
           const cliffBaseAO = 0.65 * zoneMult;
           const cliffTopAO = 0.95 * zoneMult;
+          const cliffVertices=terrainVertices||[[tx,h00,ty],[tx+1,h10,ty],[tx+1,h11,ty+1],[tx,h01,ty+1]];
           const cliffBucket=side=>streetCorners?tileMeshBuckets[`terrainRetainingWall${terrainTextureHash(tx,ty,tType+side)&3}`]:bucket;
           // 1. South Face (+Y, at ty + 1, facing +Z)
           if (ty === this.mapHeight - 1 || isDropAt(tx, ty + 1)) {
             const wallBucket=cliffBucket(2);
             wallBucket.pos.push(
-              tx, baseH, ty + 1,
-              tx + 1, baseH, ty + 1,
-              ...(terrainVertices?.[2]||[tx+1,h11,ty+1]),
+              cliffVertices[3][0], baseH, cliffVertices[3][2],
+              cliffVertices[2][0], baseH, cliffVertices[2][2],
+              ...cliffVertices[2],
 
-              tx, baseH, ty + 1,
-              ...(terrainVertices?.[2]||[tx+1,h11,ty+1]),
-              ...(terrainVertices?.[3]||[tx,h01,ty+1])
+              cliffVertices[3][0], baseH, cliffVertices[3][2],
+              ...cliffVertices[2],
+              ...cliffVertices[3]
             );
             wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
             wallBucket.colors.push(
@@ -6848,13 +6903,13 @@ export class RCT3DRenderer {
           if (tx === this.mapWidth - 1 || isDropAt(tx + 1, ty)) {
             const wallBucket=cliffBucket(1);
             wallBucket.pos.push(
-              tx + 1, baseH, ty + 1,
-              tx + 1, baseH, ty,
-              ...(terrainVertices?.[1]||[tx+1,h10,ty]),
+              cliffVertices[2][0], baseH, cliffVertices[2][2],
+              cliffVertices[1][0], baseH, cliffVertices[1][2],
+              ...cliffVertices[1],
 
-              tx + 1, baseH, ty + 1,
-              ...(terrainVertices?.[1]||[tx+1,h10,ty]),
-              ...(terrainVertices?.[2]||[tx+1,h11,ty+1])
+              cliffVertices[2][0], baseH, cliffVertices[2][2],
+              ...cliffVertices[1],
+              ...cliffVertices[2]
             );
             wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
             wallBucket.colors.push(
@@ -6871,13 +6926,13 @@ export class RCT3DRenderer {
           if (ty === 0 || isDropAt(tx, ty - 1)) {
             const wallBucket=cliffBucket(0);
             wallBucket.pos.push(
-              tx + 1, baseH, ty,
-              tx, baseH, ty,
-              ...(terrainVertices?.[0]||[tx,h00,ty]),
+              cliffVertices[1][0], baseH, cliffVertices[1][2],
+              cliffVertices[0][0], baseH, cliffVertices[0][2],
+              ...cliffVertices[0],
 
-              tx + 1, baseH, ty,
-              ...(terrainVertices?.[0]||[tx,h00,ty]),
-              ...(terrainVertices?.[1]||[tx+1,h10,ty])
+              cliffVertices[1][0], baseH, cliffVertices[1][2],
+              ...cliffVertices[0],
+              ...cliffVertices[1]
             );
             wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
             wallBucket.colors.push(
@@ -6894,13 +6949,13 @@ export class RCT3DRenderer {
           if (tx === 0 || isDropAt(tx - 1, ty)) {
             const wallBucket=cliffBucket(3);
             wallBucket.pos.push(
-              tx, baseH, ty,
-              tx, baseH, ty + 1,
-              ...(terrainVertices?.[3]||[tx,h01,ty+1]),
+              cliffVertices[0][0], baseH, cliffVertices[0][2],
+              cliffVertices[3][0], baseH, cliffVertices[3][2],
+              ...cliffVertices[3],
 
-              tx, baseH, ty,
-              ...(terrainVertices?.[3]||[tx,h01,ty+1]),
-              ...(terrainVertices?.[0]||[tx,h00,ty])
+              cliffVertices[0][0], baseH, cliffVertices[0][2],
+              ...cliffVertices[3],
+              ...cliffVertices[0]
             );
             wallBucket.uvs.push(0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1);
             wallBucket.colors.push(
@@ -7294,7 +7349,7 @@ export class RCT3DRenderer {
     let tropicalTreeBloomCount=0;
     let palmCount = 0,palmFrondCount=0,fanPalmCount=0;
     let tropicalFruitCount = 0;
-    let bananaCount=0,bananaFruitCount=0,broadLeafCount=0,tropicalFoliageCount=0,tropicalFlowerCount=0;
+    let bananaCount=0,bananaFruitCount=0,papayaCount=0,papayaFruitCount=0,broadLeafCount=0,tropicalFoliageCount=0,tropicalFlowerCount=0;
     let pineCount = 0;
     let cherryCount = 0;
     let birchCount = 0;
@@ -7418,7 +7473,7 @@ export class RCT3DRenderer {
         const isTropicalFoliage = isPlantOrFlora && e.properties.cityPlant?.form === 'foliage';
       const isTropicalFlowering = isPlantOrFlora && e.properties.cityPlant?.form === 'flowering';
       const isBroadLeafPlant = isPlantOrFlora && e.properties.cityPlant?.form === 'broad_leaf';
-        const isRoseBush = isPlantOrFlora && (e.properties.species === 'rose_bush' || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
+        const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
         const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
         const isPine = isTree && (e.properties.species === "pine" || (r.skin && r.skin.toLowerCase().includes("pine")));
         const isPalm = isTree && (e.properties.species === "coconut_palm" || e.properties.species === "royal_palm" || ['palm','fan_palm'].includes(e.properties.cityPlant?.form));
@@ -7539,19 +7594,27 @@ export class RCT3DRenderer {
         this.instRoseFlowers.setColorAt(roseBushCount,this.tempColor1.setHex(TROPICAL_FLOWER_COLORS[e.properties.species]||0xff3366));
         roseBushCount++;
       }
+      else if(e.properties.species==='papaya'&&papayaCount<this.maxInstances){
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),4871),982451653)>>>0)%628)/100),size=(r.size||1)*getTreeVisualScale(e);
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        this.instPapayaTrunks.setMatrixAt(papayaCount,mMatrix);this.instPapayaLeaves.setMatrixAt(papayaCount,mMatrix);
+        this.instPapayaTrunks.setColorAt(papayaCount,this.tempColor1.setHex(0x7c6948));this.instPapayaLeaves.setColorAt(papayaCount,this.tempColor1.setHex(0x6f9848));
+        if(r.size>=.8){this.instPapayaFruits.setMatrixAt(papayaFruitCount,mMatrix);this.instPapayaFruits.setColorAt(papayaFruitCount,this.tempColor1.setHex(0xd98938));papayaFruitCount++;}
+        papayaCount++;
+      }
       else if(isBroadLeafPlant&&broadLeafCount<this.maxInstances){
-        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),5371),982451653)>>>0)%628)/100),aspect=BROAD_LEAF_ASPECT[e.properties.species]||[1,1,1],size=(r.size||1)*1.08;
-        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size*aspect[0],size*aspect[1],size*aspect[2]);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),5371),982451653)>>>0)%628)/100),size=(r.size||1)*1.08;
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
         this.instBroadLeafPlants.setMatrixAt(broadLeafCount,mMatrix);this.instBroadLeafPlants.setColorAt(broadLeafCount,this.tempColor1.setHex(e.properties.species==='monstera'?0x3f8049:0x568b4d));broadLeafCount++;
       }
       else if(isTropicalFoliage&&tropicalFoliageCount<this.maxInstances){
-        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),2243),982451653)>>>0)%628)/100),aspect=TROPICAL_FOLIAGE_ASPECT[e.properties.species]||[1,1,1],size=r.size||1;
-        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size*aspect[0],size*aspect[1],size*aspect[2]);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),2243),982451653)>>>0)%628)/100),size=(r.size||1)*(e.properties.species==='imperial_bromeliad'?1.22:1);
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
         this.instTropicalFoliage.setMatrixAt(tropicalFoliageCount,mMatrix);this.instTropicalFoliage.setColorAt(tropicalFoliageCount,this.tempColor1.setHex(TROPICAL_FOLIAGE_COLORS[e.properties.species]||0x68894e));tropicalFoliageCount++;
       }
       else if(isTropicalFlowering&&tropicalFlowerCount<this.maxInstances){
-        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9157),982451653)>>>0)%628)/100),aspect=TROPICAL_FLOWER_ASPECT[e.properties.species]||[1,1,1],size=r.size||1;
-        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size*aspect[0],size*aspect[1],size*aspect[2]);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9157),982451653)>>>0)%628)/100),size=(r.size||1)*(e.properties.species==='heliconia_psittacorum'?.8:1);
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
         this.instTropicalFlowerStems.setMatrixAt(tropicalFlowerCount,mMatrix);this.instTropicalFlowerHeads.setMatrixAt(tropicalFlowerCount,mMatrix);this.instTropicalFlowerHeads.setColorAt(tropicalFlowerCount,this.tempColor1.setHex(TROPICAL_FLOWER_COLORS[e.properties.species]||0xe95042));tropicalFlowerCount++;
       }
       // Broad paddle leaves give giant tropical foliage plants a stronger
@@ -8480,6 +8543,7 @@ export class RCT3DRenderer {
     this.instTropicalFruits.instanceMatrix.needsUpdate=true;
     if(this.instTropicalFruits.instanceColor)this.instTropicalFruits.instanceColor.needsUpdate=true;
     for(const [mesh,count]of [[this.instBananaStems,bananaCount],[this.instBananaLeaves,bananaCount],[this.instBananaFruits,bananaFruitCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
+    for(const [mesh,count]of [[this.instPapayaTrunks,papayaCount],[this.instPapayaLeaves,papayaCount],[this.instPapayaFruits,papayaFruitCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
     for(const [mesh,count]of [[this.instBroadLeafPlants,broadLeafCount],[this.instTropicalFoliage,tropicalFoliageCount],[this.instTropicalFlowerStems,tropicalFlowerCount],[this.instTropicalFlowerHeads,tropicalFlowerCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
 
     this.instPineTrunks.count = pineCount;

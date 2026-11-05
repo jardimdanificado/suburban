@@ -2,11 +2,11 @@ import {formatMoney as money} from './city_ui_format.js';
 const stamp=n=>n==null?'—':`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const statuses={funding:'Buscando financiamento',collecting:'Coleta presencial',published:'Publicada',insufficient:'Amostra insuficiente',cancelled:'Cancelada'};
 const serviceLabels={'candidate-potential':'Aprovação de candidato','party-candidates':'Avaliação de filiados','public-priorities':'Prioridades da população','market-demand':'Demanda de mercado'};
-const openStudy=(ui,id)=>{const study=ui.city.politics.getResearch().studies.find(s=>s.id===id);return ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:study?.mode==='service'?'research-services':'institutes',studyId:id});};
+const openStudy=(ui,id)=>{const study=ui.city.politics.getResearch().studies.find(s=>s.id===id);return ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'institutes',researchDirectoryView:study?.mode==='service'?'services':'institutes',studyId:id});};
 export function renderResearchServices(ui,p){
   const city=ui.city,research=city.politics.getResearch(),all=research.studies.filter(s=>s.mode==='service'),type=ui.researchServiceType||'all';
   p.metrics([['CONTRATOS',all.length],['RELATÓRIOS PUBLICADOS',all.filter(s=>s.status==='published'&&s.report).length],['EM COLETA',all.filter(s=>s.status==='collecting').length]]);
-  p.links([['all','TODAS'],...Object.entries(serviceLabels)].map(([id,label])=>({label,selected:type===id,click:()=>{ui.researchPage=0;ui.openPanel({politicsTab:'research-services',studyId:null,researchServiceType:id});}})));
+  p.links([['all','TODAS'],...Object.entries(serviceLabels)].map(([id,label])=>({label,selected:type===id,click:()=>{ui.researchPage=0;ui.openPanel({politicsTab:'institutes',researchDirectoryView:'services',studyId:null,researchServiceType:id});}})));
   const rows=all.filter(s=>(type==='all'||s.serviceType===type)&&ui.matches(`${s.id} ${s.instituteName} ${s.requesterName} ${serviceLabels[s.serviceType]} ${s.report?.title||''} ${statuses[s.status]}`));
   p.heading('RESULTADOS PUBLICADOS');const published=rows.filter(s=>s.status==='published'&&s.report).sort((a,b)=>(b.completedAt||0)-(a.completedAt||0)),page=Math.min(ui.researchPage||0,Math.max(0,Math.ceil(published.length/8)-1));
   if(published.length>8)p.buttons([{label:'ANTERIORES',click:()=>{ui.researchPage=Math.max(0,page-1);}},{label:'PRÓXIMOS',click:()=>{ui.researchPage=page+1;}}]);
@@ -15,13 +15,13 @@ export function renderResearchServices(ui,p){
   p.heading('COLETAS E CONTRATOS PENDENTES');const pending=rows.filter(s=>s.status!=='published').reverse(),pendingPage=Math.min(ui.researchPendingPage||0,Math.max(0,Math.ceil(pending.length/8)-1));if(pending.length>8)p.buttons([{label:'PENDENTES ANTERIORES',click:()=>{ui.researchPendingPage=Math.max(0,pendingPage-1);}},{label:'PRÓXIMAS PENDENTES',click:()=>{ui.researchPendingPage=pendingPage+1;}}]);
   for(const s of pending.slice(pendingPage*8,pendingPage*8+8))p.record(`#${s.id} · ${serviceLabels[s.serviceType]||s.serviceType}`,`${s.requesterName} · ${s.responses.length}/${s.target} entrevistas · ${s.reason||statuses[s.status]}`,()=>openStudy(ui,s.id),false,{value:statuses[s.status]||s.status});if(!pending.length)p.note('Nenhuma coleta pendente neste filtro.');
   p.note('Durante campanhas, pesquisas eleitorais têm prioridade sobre contratos comuns. Um relatório só aparece nos resultados depois de concluir sua coleta.');
-  p.windowLink('VER INSTITUTOS E TODAS AS COLETAS',()=>ui.openPanel({politicsTab:'institutes',studyId:null}));
+  p.windowLink('VER INSTITUTOS E TODAS AS COLETAS',()=>ui.openPanel({politicsTab:'institutes',researchDirectoryView:'institutes',studyId:null}));
   p.buttons([{label:'CONTRATAR PELO PARTIDO',click:()=>ui.openPanel({politicsTab:'parties',studyId:null})},{label:'CONTRATAR PELA EMPRESA',click:()=>ui.openPanel({tab:'economy'})},{label:'ESCOLHER PESSOA',click:()=>ui.openPanel({tab:'people'})}]);
 }
 export function renderResearchProgress(ui,p,e){
   const research=ui.city.politics.getResearch(),studies=research.studies.filter(s=>s.electionId===e.id&&s.status!=='published');
   if(e.requiredPolls?.length){p.heading('PESQUISAS OBRIGATÓRIAS');for(const row of e.requiredPolls)p.record(row.label,`${row.organizerId?ui.city.accountName(`citizen:${row.organizerId}`):'Aguardando dirigente'} · ${statuses[row.status]||'Solicitada'}${row.reason?' · '+row.reason:''}`,()=>row.studyId?openStudy(ui,row.studyId):null);}
-  p.windowLink('INSTITUTOS E COLETAS PRESENCIAIS',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'institutes',studyId:null}));
+  p.windowLink('INSTITUTOS E COLETAS PRESENCIAIS',()=>ui.openPanel({tab:'government',views:{government:'elections'},politicsTab:'institutes',researchDirectoryView:'institutes',studyId:null}));
   if(!research.institutes().length)p.note('Aguardando um instituto construído e em funcionamento. A demanda pode gerar empresas privadas; a Câmara pode aprovar uma instalação pública.');
   for(const s of studies.slice(-3))p.record(s.instituteName,`${statuses[s.status]} · ${s.responses.length}/${s.target} entrevistas · mínimo ${s.minimum}`,()=>openStudy(ui,s.id));
 }
@@ -43,11 +43,11 @@ export function renderPollMethod(ui,p,poll){
 }
 export function renderResearchDirectory(ui,p){
   const city=ui.city,gov=city.politics,research=gov.getResearch(),s=research.studies.find(r=>r.id===ui.studyId),min=gov.policy.pollMinRate??5,max=gov.policy.pollMaxRate??20;
-  if(!s&&ui.politicsTab==='research-services'){renderResearchServices(ui,p);return;}
-  if(s)p.button(s.mode==='service'?'VOLTAR ÀS PESQUISAS NÃO ELEITORAIS':'VOLTAR AOS INSTITUTOS',()=>ui.openPanel({politicsTab:s.mode==='service'?'research-services':'institutes',studyId:null}));
+  if(!s&&(ui.politicsTab==='research-services'||ui.researchDirectoryView==='services')){p.links([{label:'INSTITUTOS',selected:false,click:()=>ui.openPanel({politicsTab:'institutes',researchDirectoryView:'institutes',studyId:null})},{label:'PESQUISAS NÃO ELEITORAIS',selected:true,click:()=>ui.openPanel({politicsTab:'institutes',researchDirectoryView:'services',studyId:null})}]);renderResearchServices(ui,p);return;}
+  if(s)p.button('VOLTAR A INSTITUTOS E PESQUISAS',()=>ui.openPanel({politicsTab:'institutes',researchDirectoryView:s.mode==='service'?'services':'institutes',studyId:null}));
   p.heading(s?`COLETA #${s.id} · ${s.instituteName}`:'INSTITUTOS DE PESQUISA');
   if(!s){
-    p.button('RESULTADOS DE PESQUISAS NÃO ELEITORAIS',()=>ui.openPanel({politicsTab:'research-services',studyId:null}));
+    p.links([{label:'INSTITUTOS',selected:true,click:()=>ui.openPanel({politicsTab:'institutes',researchDirectoryView:'institutes',studyId:null})},{label:'PESQUISAS NÃO ELEITORAIS',selected:false,click:()=>ui.openPanel({politicsTab:'institutes',researchDirectoryView:'services',studyId:null})}]);
     const institutes=research.institutes(),all=[...research.studies],collecting=all.filter(r=>r.status==='collecting').length,published=all.filter(r=>r.status==='published').length;
     p.metrics([['INSTITUTOS ATIVOS',institutes.length],['COLETAS EM CAMPO',collecting],['PESQUISAS PUBLICADAS',published]]);
     p.kv('Amostra mínima / máxima em vigor',`${min}% / ${max}% do eleitorado adulto`);

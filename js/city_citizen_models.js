@@ -362,13 +362,14 @@ export class CityCitizenModels {
       const response=await this.fetchAsset(new URL(`${clip}/${frame}.obj`,this.baseURL));if(!response.ok)throw Error(`Falha em ${clip}/${frame}.obj (${response.status})`);
       return {key:`${clip}:${frame}`,data:parseCitizenOBJ(await response.text())};
     })));
-    const references={idle:entries.find(e=>e.key==='idle:0').data,animated:entries.find(e=>e.key==='run:0').data};
-    const masks=Object.fromEntries(Object.entries(references).map(([key,data])=>[key,Object.fromEntries(RENDERED_GARMENTS.map(piece=>[piece,garmentSurface(data,piece)]))]));
-    const idle=references.idle.bounds,height=idle.max[1]-idle.min[1];if(!(height>0))throw Error('Modelo sem altura');
+    // Each exported pose can have a different vertex/face order. Reusing the
+    // run:0 garment mask on the other walking frames makes the torso flash
+    // through the shirt as the animation changes frames.
+    const masks=Object.fromEntries(entries.map(({key,data})=>[key,Object.fromEntries(RENDERED_GARMENTS.map(piece=>[piece,garmentSurface(data,piece)]))]));
+    const idle=entries.find(e=>e.key==='idle:0').data.bounds,height=idle.max[1]-idle.min[1];if(!(height>0))throw Error('Modelo sem altura');
     const origin=[(idle.min[0]+idle.max[0])/2,Math.min(...entries.map(e=>e.data.bounds.min[1])),(idle.min[2]+idle.max[2])/2],factor=1.05/height;
     for(const {key,data}of entries){const positions=data.positions;for(let i=0;i<positions.length;i++)positions[i]=(positions[i]-origin[i%3])*factor;
       const geometry=new this.THREE.BufferGeometry();geometry.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new this.THREE.Float32BufferAttribute(data.normals,3));geometry.computeBoundingSphere();this.frames.set(key,geometry);
-      const source=/^(run|use):/.test(key)?'animated':'idle';
       const skirtCuts={};
       for(const piece of ['saia','saia longa']){
         if(key==='use:2'||key.startsWith('sentado_no_')||POSED_SKIRT_FRAMES.has(key)){
@@ -380,13 +381,13 @@ export class CityCitizenModels {
       for(const piece of RENDERED_GARMENTS){
         let parts;
         if(piece==='saia'||piece==='saia longa')parts=skirtCuts[piece].parts;
-        else parts=splitGarmentSurface(data,masks[source][piece],piece);
+        else parts=splitGarmentSurface(data,masks[key][piece],piece);
         const make=(positions,normals,withUV=false,hideBack=false)=>{const g=new this.THREE.BufferGeometry();g.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));g.setAttribute('normal',new this.THREE.Float32BufferAttribute(normals,3));if(withUV){let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(let v=0;v<positions.length;v+=3){minX=Math.min(minX,positions[v]);maxX=Math.max(maxX,positions[v]);minY=Math.min(minY,positions[v+1]);maxY=Math.max(maxY,positions[v+1]);}const width=Math.max(.001,maxX-minX),height=Math.max(.001,maxY-minY),uv=new Float32Array(positions.length/3*2);for(let v=0,j=0;v<positions.length;v+=3){uv[j++]=hideBack&&normals[v+2]<-.25?2:(positions[v]-minX)/width;uv[j++]=(positions[v+1]-minY)/height;}g.setAttribute('uv',new this.THREE.Float32BufferAttribute(uv,2));}g.computeBoundingSphere();return g;};
         const printed=PRINTED_GARMENTS.has(piece);
         const garmentMaterial=printed?this.printedMaterial(piece):SKIRT_PIECES.has(piece)?this.skirtMaterial:this.material;
         const outfit={body:make(parts.body,parts.bodyNormals),clothes:make(parts.clothes,parts.clothesNormals,printed,piece==='camisa social'),material:garmentMaterial};
         if(['camisa','camisa social','camisa estampada','camiseta','regata','terno','casaco','trapos'].includes(piece))for(const skirtPiece of SKIRT_PIECES){
-          const union=new Uint8Array(skirtCuts[skirtPiece].mask.length),upperMask=masks[source][piece];for(let i=0;i<union.length;i++)union[i]=Number(skirtCuts[skirtPiece].mask[i]||upperMask[i]);
+          const union=new Uint8Array(skirtCuts[skirtPiece].mask.length),upperMask=masks[key][piece];for(let i=0;i<union.length;i++)union[i]=Number(skirtCuts[skirtPiece].mask[i]||upperMask[i]);
           const combined=splitGarmentSurface(data,union,piece);outfit[skirtPiece==='saia'?'bodyWithSaia':'bodyWithSaiaLonga']=make(combined.body,combined.bodyNormals);
         }
         this.outfits.set(`${key}:${piece}`,outfit);

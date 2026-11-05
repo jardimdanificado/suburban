@@ -1,4 +1,4 @@
-import {baseTerrainTile,TILE_STONE,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE} from './world_gen.js?v=deep-perf-3';
+import {baseTerrainTile,TILE_SAND,TILE_STONE,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE} from './world_gen.js?v=deep-perf-3';
 
 const HEIGHTS=[1.1,5.5,0,.4,3.8,0,1.1,.4,1.1,2.3,7.5,.4,2.3,2.3];
 const ROADS=new Set([TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE]);
@@ -17,7 +17,17 @@ function stoneVertexHeight(world,x,y){
 function stoneVertexOffset(world,x,y){
   return {x:(((stoneVertexSeed(world,x,y,0x6d2b79f5)/4294967295)*2)-1)*.045,z:(((stoneVertexSeed(world,x,y,0x1b873593)/4294967295)*2)-1)*.045};
 }
-export function terrainVertexOffset(world,x,y){return stoneVertexOffset(world,x,y);}
+export function terrainVertexOffset(world,x,y){
+  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE)return stoneVertexOffset(world,x,y);
+  return {x:0,z:0};
+}
+export function terrainTileTouchesStone(world,x,y){
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE)return true;
+  return false;
+}
+const SAND_MIN_HEIGHT=.34; // Water peaks at about .317 including the global bob.
+function sandTouchesWater(world,x,y){return baseTerrainTile(at(world,x,y))===TILE_SAND&&EDGES.some(edge=>at(world,x+edge.dx,y+edge.dy)===TILE_WATER);}
+function sandVertexHeight(world,x,y){return Math.max(SAND_MIN_HEIGHT,terrainTileHeight(TILE_SAND)+(((stoneVertexSeed(world,x,y,0x3c6ef372)/4294967295)*2)-1)*.055);}
 function cacheFor(world){
   let cache=caches.get(world);
   if(!cache||cache.map!==world.map||cache.width!==world.width||cache.height!==world.height){
@@ -30,7 +40,7 @@ function cacheFor(world){
 }
 function naturalCorner(world,x,y){
   let sum=0,count=0;
-  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tile=at(world,x+dx,y+dy);if(tile!==TILE_WATER&&tile!==TILE_VOID){sum+=baseTerrainTile(tile)===TILE_STONE?stoneVertexHeight(world,x,y):terrainTileHeight(tile);count++;}}
+  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tx=x+dx,ty=y+dy,tile=at(world,tx,ty);if(tile!==TILE_WATER&&tile!==TILE_VOID){const base=baseTerrainTile(tile);sum+=base===TILE_STONE?stoneVertexHeight(world,x,y):sandTouchesWater(world,tx,ty)?sandVertexHeight(world,x,y):terrainTileHeight(tile);count++;}}
   return count?sum/count:0;
 }
 export function terrainCornerHeight(world,x,y){

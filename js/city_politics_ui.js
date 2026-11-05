@@ -5,12 +5,12 @@ import {contextActions} from './city_context_actions.js';
 import {describePoliticalOrientation} from './city_ideology.js';
 import {electoralPriorities} from './city_electoral_behavior.js';
 import {renderInterventions} from './city_interventions_ui.js';
-import {renderResearchDirectory,renderResearchProgress,renderPollMethod} from './city_research_ui.js';
-import {POLITICS_SECTIONS,POLITICS_GROUPS} from './city_ui_sections.js';
+import {renderResearchDirectory,renderResearchProgress,renderPollMethod} from './city_research_ui.js?v=research-inside-institutes-1';
+import {POLITICS_SECTIONS,POLITICS_GROUPS} from './city_ui_sections.js?v=municipal-identity-in-prefeitura-1';
 import {renderPartyOrganization} from './city_party_organization_ui.js';
 import {approvalReport} from './city_political_institutions.js';
 import { formatMoney } from './city_ui_format.js';
-import { PARTY_FLAG_BACKGROUNDS,drawPartyFlag } from './city_party_flags.js';
+import { drawPartyFlag } from './city_party_flags.js';
 import { fitText } from './city_ui_widgets.js';
 import { PROMISE_METRICS,GOVERNMENT_INITIATIVES } from './city_mandates.js';
 import { CRIME_TYPES } from './city_justice.js';
@@ -49,7 +49,7 @@ export function renderPolitics(ui,p) {
   if(!ui.billId)p.heading(POLITICS_SECTIONS.find(([id])=>id===tab)?.[1]||'GOVERNO, CÂMARA E ELEIÇÕES');
   if(tab==='directory'&&ui.host){p.meter('Aprovação do governo',gov.approval);p.kv(gov.isProvisionalMayor()?'Prefeito provisório':'Prefeito',city.accountName(`citizen:${city.economy.mayorId}`));p.kv('Vereadores',`${gov.council.members.length}/${gov.council.seats}`);p.kv('Partidos ativos',gov.parties.filter(p=>p.active).length);return;}
   if(tab==='directory'){
-    for(const [label,ids] of [['GESTÃO',['overview','approval','promises']],['INSTITUIÇÕES',['parties','council','secretariats','municipal-identity','substances','institutes','research-services']],['ELEIÇÕES',['campaign','polls','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.windowLink(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
+    for(const [label,ids] of [['GESTÃO',['overview','approval','promises']],['INSTITUIÇÕES',['parties','council','secretariats','institutes']],['REGULAÇÃO',['substances']],['ELEIÇÕES',['campaign','polls','results']],['CONTROLE PÚBLICO',['scandals']]]){p.heading(label);for(const id of ids){const title=POLITICS_SECTIONS.find(([key])=>key===id)[1];p.windowLink(title,()=>ui.openPanel({politicsTab:id,billId:null,termId:null,councilView:'bills',approvalView:'summary'}));}}return;
   }
   if(tab==='secretariats'){
     gov.ensureSecretariatState?.();const mayorMode=gov.policy.mayorElectionSystem||'direct',propose=(type,payload)=>{const bill=gov.submitBill(type,payload);ui.notice=bill?.title?`Proposta apresentada à Câmara: ${bill.title}.`:city.lastError||'A proposta não pôde ser apresentada.';};
@@ -57,20 +57,6 @@ export function renderPolitics(ui,p) {
     p.heading('SECRETARIAS MUNICIPAIS');p.note('As secretarias ficam vinculadas à prefeitura. O padrão é o prefeito nomear pessoas por capacidade, credibilidade e confiança pessoal. A Câmara pode propor uma regra diferente para cada pasta; mudanças valem na eleição municipal seguinte.');
     for(const office of SECRETARIATS){const holder=gov.secretaries?.find(row=>row.officeId===office.id),mode=gov.policy.secretaryElectionModes?.[office.id]||'appointed',person=city.society.citizen(holder?.citizenId);p.kv(office.name,`${person?.entity.properties.name||holder?.citizenName||'Cargo ainda não preenchido'} · ${SECRETARY_ELECTION_MODES[mode]} · capacidade ${Math.round(holder?.skill||0)}`);p.note(office.duty);for(const next of ['appointed','council','direct'])if(next!==mode)p.button(`PROPOR · ${office.short.toUpperCase()} · ${SECRETARY_ELECTION_MODES[next].toUpperCase()}`,()=>propose('secretaryElection',{office:office.id,mode:next}));}
     p.heading('REGULAÇÃO E INCENTIVOS DE TRANSPORTE');p.kv('Prioridade vigente',TRANSPORT_POLICIES[gov.policy.transportPolicy||'balanced']);p.note('Bicicleta reduz o preço do aluguel e aumenta a velocidade de mobilidade leve; cargas elevam a capacidade dos fretes; segurança reduz o desgaste dos veículos e prioriza obras viárias. A capacidade do secretário reforça cada efeito. As mudanças dependem de aprovação da Câmara.');for(const [policy,label]of Object.entries(TRANSPORT_POLICIES))if(policy!==(gov.policy.transportPolicy||'balanced'))p.button(`PROPOR · ${label.toUpperCase()}`,()=>propose('transportPolicy',{policy}));
-    return;
-  }
-  if(tab==='municipal-identity'){
-    const identity=gov.ensureMunicipalIdentity(),propose=(type,payload)=>{const bill=gov.submitBill(type,payload);ui.notice=bill?.title?`Proposta apresentada à Câmara: ${bill.title}.`:city.lastError||'A proposta não pôde ser apresentada.';return bill;},flagProposal=operation=>propose('cityFlag',{operation});
-    p.heading('IDENTIDADE DA CIDADE');p.kv('Nome oficial',identity.name);p.kv('Slogan da prefeitura',identity.slogan);p.kv('Fundação',stamp(identity.foundedAt??0));p.note('A bandeira começa aleatória. Nome, slogan, símbolos, textos, cores e fundo só mudam depois que a Câmara aprova uma proposta.');
-    const flag=identity.flag,previewHeight=Math.min(82,p.w*76/120),previewWidth=previewHeight*120/76,previewX=p.x+(p.w-previewWidth)/2;if(flag&&p.visible(previewHeight+8)){drawPartyFlag(p.ui.ctx,flag,previewX,p.y,previewWidth,previewHeight);p.y+=previewHeight+8;}p.kv('Composição',`${flag?.emblems?.length||0} símbolos · ${flag?.texts?.length||0} textos · fundo ${flag?.backgroundStyle||'chapado'}`);
-    p.heading('NOME');p.note('Digite o novo nome completo da cidade para encaminhá-lo como projeto de lei.');let inputY=p.y;p.space(24);if(inputY>=p.top&&inputY+20<=p.bottom)ui.inputAt(ui.municipalNameInput,p.x,inputY,p.w);p.space(3);p.button('APRESENTAR NOVO NOME À CÂMARA',()=>propose('cityName',{value:ui.municipalNameInput?.value||''}));
-    p.heading('SLOGAN DA PREFEITURA');p.note('É possível substituir o slogan inteiro ou trocar um trecho específico.');inputY=p.y;p.space(24);if(inputY>=p.top&&inputY+20<=p.bottom)ui.inputAt(ui.municipalSloganInput,p.x,inputY,p.w);p.space(3);p.button('APRESENTAR NOVO SLOGAN',()=>propose('citySlogan',{value:ui.municipalSloganInput?.value||''}));
-    inputY=p.y;p.space(24);if(inputY>=p.top&&inputY+20<=p.bottom)ui.inputAt(ui.municipalSloganFromInput,p.x,inputY,p.w);p.space(3);inputY=p.y;p.space(24);if(inputY>=p.top&&inputY+20<=p.bottom)ui.inputAt(ui.municipalSloganToInput,p.x,inputY,p.w);p.space(3);p.button('PROPOR TROCA DO TRECHO NO SLOGAN',()=>propose('citySlogan',{action:'replace',from:ui.municipalSloganFromInput?.value||'',to:ui.municipalSloganToInput?.value||''}));
-    p.heading('BANDEIRA MUNICIPAL');const colorInputY=p.y;p.space(24);if(colorInputY>=p.top&&colorInputY+20<=p.bottom)ui.inputAt(ui.municipalFlagColorInput,p.x,colorInputY,p.w);p.space(3);for(let index=0;index<4;index++)p.button(`PROPOR COR ${index+1} · ${flag?.colors?.[index]||flag?.foreground||'#ffffff'}`,()=>flagProposal({type:'color',index,value:ui.municipalFlagColorInput?.value||''}));
-    p.buttons(['solid','stripes-horizontal','stripes-vertical','quartered','circle','triangle-hoist','saltire','cross'].map(style=>({label:`PROPOR FUNDO · ${style.toUpperCase()}`,click:()=>flagProposal({type:'background',value:style})})));p.button('SORTEAR OUTRO FUNDO PARA VOTAÇÃO',()=>flagProposal({type:'background',value:PARTY_FLAG_BACKGROUNDS[Math.floor(city.random()*PARTY_FLAG_BACKGROUNDS.length)]}));
-    p.buttons([{label:'ADICIONAR SÍMBOLO',click:()=>flagProposal({type:'add-symbol'})},{label:'REMOVER ÚLTIMO SÍMBOLO',click:()=>flagProposal({type:'remove-symbol'})},{label:'TROCAR UM SÍMBOLO',click:()=>flagProposal({type:'replace-symbol',index:Math.floor(city.random()*Math.max(1,flag?.emblems?.length||1))})},{label:'REFORMULAR BANDEIRA',click:()=>flagProposal({type:'regenerate'})}]);
-    p.note('Textos extras na bandeira podem ser propostos pelo campo de texto abaixo; a bandeira e o slogan municipal permanecem ligados quando incluem o nome ou o slogan oficial.');inputY=p.y;p.space(24);if(inputY>=p.top&&inputY+20<=p.bottom)ui.inputAt(ui.municipalFlagTextInput,p.x,inputY,p.w);p.space(3);p.buttons([{label:'ADICIONAR TEXTO À BANDEIRA',click:()=>flagProposal({type:'add-text',value:ui.municipalFlagTextInput?.value||''})},{label:'REMOVER TEXTO DA BANDEIRA',click:()=>flagProposal({type:'remove-text'})},{label:'ATUALIZAR TEXTO DA BANDEIRA',click:()=>flagProposal({type:'edit-text',index:Math.max(0,(flag?.texts?.length||1)-1),value:ui.municipalFlagTextInput?.value||''})}]);
-    if(identity.history?.length){p.heading('HISTÓRICO DE MUDANÇAS');for(const row of identity.history.slice(-8).reverse())p.record(stamp(row.minute),`${row.title||`${row.type==='cityName'?'Nome':row.type==='citySlogan'?'Slogan':'Bandeira'} · ${row.value}`}${row.type==='cityName'||row.type==='citySlogan'?` (antes: ${row.previousValue})`:''}`,null);}
     return;
   }
   if(tab==='substances'){renderSubstancePolicy(ui,p);return;}
