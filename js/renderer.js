@@ -895,7 +895,11 @@ export class Renderer {
 
     // 6. Blit final 32-bit buffer straight to Canvas in 1 call (60 FPS even on Zoomout)
     this.ctx.putImageData(this.imageData, 0, 0);
-    if(campaignPosters.length){const ctx=this.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='top';for(const poster of campaignPosters){const {d,x,y,w,h}=poster;ctx.fillStyle=d.flag.foreground;ctx.font=`bold ${Math.max(7,Math.min(14,h*.55))}px sans-serif`;ctx.fillText(String(d.partyNumber),x+w/2,y+1,w-2);if(d.kind==='banner'&&h>=12){ctx.font=`${Math.max(6,Math.min(10,h*.35))}px sans-serif`;ctx.fillText(d.candidateName,x+w/2,y+h*.6,w-2);}}ctx.restore();}
+    if(campaignPosters.length){const ctx=this.ctx;ctx.save();ctx.textAlign='center';ctx.textBaseline='top';for(const poster of campaignPosters){const {d,x,y,w,h}=poster;ctx.fillStyle=d.flag.foreground;ctx.font=`bold ${Math.max(7,Math.min(14,h*.55))}px sans-serif`;ctx.fillText(String(d.partyNumber),x+w/2,y+1,w-2);if(['banner','flag'].includes(d.kind)&&h>=12){
+      const skin=typeof d.candidateSkinColor==='number'?`#${d.candidateSkinColor.toString(16).padStart(6,'0')}`:'#c58c70',clothes=typeof d.candidateClothingColor==='number'?`#${d.candidateClothingColor.toString(16).padStart(6,'0')}`:typeof d.candidateClothingColor==='string'&&/^#[0-9a-f]{6}$/i.test(d.candidateClothingColor)?d.candidateClothingColor:'#344e59',pw=Math.max(5,Math.floor(Math.min(w*.32,h*.82))),ph=Math.max(8,Math.floor(h*.78)),px=x+w-pw-2,py=y+Math.max(1,Math.floor(h*.08)),head=Math.max(3,Math.floor(pw*.43));
+      ctx.fillStyle=clothes;ctx.fillRect(px+Math.floor(pw*.12),py+Math.floor(ph*.58),Math.floor(pw*.76),Math.floor(ph*.40));ctx.fillStyle=skin;ctx.fillRect(px+Math.floor((pw-head)/2),py+Math.floor(ph*.16),head,Math.floor(ph*.42));ctx.fillStyle='#302923';ctx.fillRect(px+Math.floor((pw-head)/2)-1,py+Math.floor(ph*.12),head+2,Math.max(2,Math.floor(ph*.14)));
+      if(d.kind==='banner'){ctx.font=`${Math.max(6,Math.min(10,h*.30))}px sans-serif`;ctx.fillText(d.candidateName,x+w*.38,y+h*.62,w*.70);}
+    }}ctx.restore();}
   }
 
   projectWorldToScreen(worldX, worldY, elevation = 0) {

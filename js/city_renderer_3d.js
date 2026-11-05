@@ -9,7 +9,7 @@ import {syncCityMobility} from './city_mobility_renderer.js?v=natural-streets-2'
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=greengrocer-fruit-stalls-1';
-import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=pixel-text-1';
+import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=fair-ad-signs-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,buildingFacadeBannerSupport,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import { partyFlagCanvas,drawPartyFlag } from './city_party_flags.js';
 import {citizenIsSleeping} from './city_citizen_models.js?v=walking-shirt-mask-1';

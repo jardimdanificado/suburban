@@ -914,9 +914,39 @@ export class CityEconomy {
     const good=Object.keys(spec.outputs).find(g=>b.inventory[g]>0 && c.balance>=this.goods[g].price && (!domestic || (c.homeComfort?.[g]||0)<this.city.minute));
     return good ? {good,spec,price:this.goods[good].price} : null;
   }
-  buyConsumerGood(c,b) {
-    const offer=this.consumerOffer(c,b);
-    if(!offer || (c.indoorLocation?.buildingId!==b.id&&Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)>2)) return false;
+  streetMarketVendors(){
+    const city=this.city;if(city.hour<8||city.hour>=17||city.economy.streetMarketsDay!==city.day)return [];
+    return (city.economy.streetMarkets||[]).flatMap(site=>(site.vendors||[]).map(vendor=>({site,vendor,business:city.building(vendor.businessId)}))).filter(row=>row.business?.active&&!row.business.entity.destroyed&&Object.values(row.vendor.stock||{}).some(quantity=>quantity>0));
+  }
+  streetMarketMealOffer(c,vendor){
+    const b=this.city.building(vendor?.businessId);if(!b?.active||b.entity.destroyed)return null;
+    const fairBusiness={...b,inventory:Object.fromEntries(Object.keys(b.inventory||{}).map(good=>[good,Math.min(b.inventory[good]||0,vendor.stock?.[good]||0)]))},offer=this.mealOffer(fairBusiness,c);if(!offer||offer.price>(this.city.accounts.get(this.city.payerFor(c))?.balance||0))return null;
+    return offer;
+  }
+  streetMarketMealScore(c,row){
+    const {vendor,business:b}=row,offer=this.streetMarketMealOffer(c,vendor);if(!offer)return Infinity;
+    const choice=Math.min(1,Math.max(0,(c.needs.food-10)/30)),cash=this.city.accounts.get(this.city.payerFor(c))?.balance||0,wealth=Math.min(1,cash/Math.max(1,this.city.currency.price(12000))),priceSensitivity=(.65+(c.traits?.frugality??.5)*.7)*(1-wealth*.8),restaurantBonus=b.type==='restaurant'?wealth*10:0;
+    const distance=Math.hypot(vendor.position.x-c.entity.x,vendor.position.y-c.entity.y),paidPublicMeal=['popular_refectory','townhall'].includes(b.type)&&this.city.welfare&&!this.city.welfare.mealAssistanceEligible(c)?24:0;
+    return distance+paidPublicMeal-((c.knownAdvertisements?.[b.id]||0)>this.city.minute?2:0)+choice*(offer.price/Math.max(1,this.city.currency.price(100))*priceSensitivity-this.mealTaste(c,offer)*45-restaurantBonus+this.city.reputation.providerPenalty(b)+this.city.relationships.businessPenalty(c,b));
+  }
+  consumeStreetMarketMeal(c,row){
+    const {site,vendor}=row||{},b=this.city.building(vendor?.businessId),offer=this.streetMarketMealOffer(c,vendor),position=vendor?.position;
+    if(!offer||!b||!position||Math.hypot(position.x-c.entity.x,position.y-c.entity.y)>2)return false;
+    if(!this.city.transfer(this.city.payerFor(c),b.accountId,offer.price,`Serviço: Refeição na feira de rua (${offer.label||offer.good})`,{good:offer.good,quantity:offer.quantity||1,marketId:site.id,buildingId:b.id}))return false;
+    for(const [good,amount]of Object.entries(offer.inputs)){b.inventory[good]-=amount;vendor.stock[good]-=amount;this.consumed[good]+=amount;this.recordGoods('street-market-sale',good,amount,b.id,c.id,{marketId:site.id,vendorBusinessId:b.id});}
+    vendor.stockRevision=(vendor.stockRevision||0)+1;
+    this.city.history.record('sale',`Refeição: ${c.entity.properties.name} comprou ${offer.label||offer.good} na banca de ${b.entity.properties.name}.`,[c.accountId,b.accountId],{amount:offer.price,meal:offer.label||offer.good,ingredients:{...(offer.ingredients||offer.inputs)},consumedProducts:{...offer.inputs},quality:offer.quality,marketId:site.id,buildingId:b.id});
+    this.enjoyMeal(c,offer);c.lastMealQuality=offer.quality;c.needs.food=Math.min(100,c.needs.food+26+offer.quality*4);c.lastMealAt=this.city.minute;b.lastSaleAt=this.city.minute;return true;
+  }
+  streetMarketConsumerOffer(c,vendor){
+    const b=this.city.building(vendor?.businessId);if(!b?.active||b.entity.destroyed)return null;
+    const fairBusiness={...b,inventory:Object.fromEntries(Object.keys(b.inventory||{}).map(good=>[good,Math.min(b.inventory[good]||0,vendor.stock?.[good]||0)]))},offer=this.consumerOffer(c,fairBusiness);if(!offer||offer.service||!offer.good||(vendor.stock?.[offer.good]||0)<1||(b.inventory[offer.good]||0)<1)return null;
+    return offer;
+  }
+  buyConsumerGood(c,b,streetVendor=null) {
+    const offer=streetVendor?this.streetMarketConsumerOffer(c,streetVendor):this.consumerOffer(c,b);
+    const salePoint=streetVendor?.position||b.door;
+    if(!offer || streetVendor&&(!this.streetMarketConsumerOffer(c,streetVendor)||streetVendor.businessId!==b.id||Math.hypot(salePoint.x-c.entity.x,salePoint.y-c.entity.y)>2)||!streetVendor&&c.indoorLocation?.buildingId!==b.id&&Math.hypot(salePoint.x-c.entity.x,salePoint.y-c.entity.y)>2) return false;
     const {good,spec,price}=offer;
     if(offer.service==='laundry'){
       if(!this.city.transfer(c.accountId,b.accountId,price,'Lavagem de roupas',{good:'sabao',quantity:1}))return false;
@@ -925,7 +955,7 @@ export class CityEconomy {
       return washed>0;
     }
     if(!this.city.transfer(c.accountId,b.accountId,price,`Serviço: Venda de ${this.goods[good].label}`,{good,quantity:1}))return false;
-    b.inventory[good]--;const publication=['livros','panfletos','jornais'].includes(good),durable=publication||good==='roupas'||['porrete','barra_ferro','faca','garrucha','cesta','carrinho'].includes(good);if(!durable)this.consumed[good]++;this.recordGoods(durable?'durable-purchase':'household-consumption',good,1,b.id,c.id);
+    b.inventory[good]--;if(streetVendor){streetVendor.stock[good]--;streetVendor.stockRevision=(streetVendor.stockRevision||0)+1;}const publication=['livros','panfletos','jornais'].includes(good),durable=publication||good==='roupas'||['porrete','barra_ferro','faca','garrucha','cesta','carrinho'].includes(good);if(!durable)this.consumed[good]++;this.recordGoods(streetVendor?'street-market-sale':durable?'durable-purchase':'household-consumption',good,1,b.id,c.id,streetVendor?{marketId:streetVendor.marketId,vendorBusinessId:b.id}:{});
     if(good==='roupas'){buyClothes(this.city,c,b,offer.garmentIndex);return true;}
     if(['porrete','barra_ferro','faca','garrucha'].includes(good)){const weapon=good==='porrete'?{name:'Porrete de madeira',damage:2.4,range:1.8,durability:5}:good==='faca'?{name:'Faca de trabalho',damage:3.4,range:1.55,durability:4}:good==='garrucha'?{name:'Garrucha artesanal',damage:4.6,range:5.5,durability:6,kind:'firearm'}:{name:'Bastão de ferro',damage:3.1,range:1.75,durability:7};c.equipment??={};c.inventory??={};c.inventory[good]=(c.inventory[good]||0)+1;c.equipment.weapon={good,...weapon,boughtAt:this.city.minute,buildingId:b.id};return true;}
     if(good==='jornais'){const doc=this.city.publications.documents.get(offer.documentId);this.city.publications.move(doc,c.accountId);c.newspaperEditions??=[];c.newspaperEditions.push(doc.editionKey);c.newspaperEditions=c.newspaperEditions.slice(-32);this.city.publications.read(doc.id,c.id);return true;}

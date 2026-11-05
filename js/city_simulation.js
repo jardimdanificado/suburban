@@ -9,7 +9,7 @@ import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_office
 import {applySalesTax,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
 import {recordMarketTransaction} from './city_wealth.js';
-import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-stall-door-clearance-1';
+import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=street-market-sales-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=labor-secretariat-1';
@@ -48,7 +48,7 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=secr
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
 import { CityGigs } from './city_gigs.js?v=spontaneous-artwork-fast-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=economic-flow-7';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=street-market-sales-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=citizen-id-index-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=terrain-stone-edge-jitter-1';
 
@@ -725,8 +725,10 @@ export class CitySimulation {
     }
     if(!urgent && this.society.isAdult(c) && !['work','manage','care','caregiving','food','provisions','toilet'].includes(task) && this.hour>=6 && this.hour<22 && this.minute-(c.lastShoppingAt||0)>180 && this.minute-(c.lastShoppingSearchAt??-Infinity)>=30) {
       c.lastShoppingSearchAt=this.minute;
-      const shops=(measure?measure('taskShoppingSearch',()=>this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).map((b,index)=>({b,index,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)})).sort((a,b)=>a.score-b.score||a.index-b.index)):this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).map((b,index)=>({b,index,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)})).sort((a,b)=>a.score-b.score||a.index-b.index));
-      for(const {b:shop} of shops) {const path=this.findPath(c.entity,shop.door);if(path!==null){c.path=path;c.targetId=shop.id;c.task='shopping';return;}}
+      const shops=this.economy.businesses.filter(b=>this.economy.consumerOffer(c,b)).map((b,index)=>({b,target:b.door,index,score:Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)+this.relationships.businessPenalty(c,b)-((c.knownAdvertisements?.[b.id]||0)>this.minute?2:0)}));
+      for(const row of this.economy.streetMarketVendors())if(this.economy.streetMarketConsumerOffer(c,row.vendor)){const {business,vendor}=row;shops.push({b:business,target:vendor.position,vendor,index:shops.length,score:Math.hypot(vendor.position.x-c.entity.x,vendor.position.y-c.entity.y)+this.relationships.businessPenalty(c,business)-((c.knownAdvertisements?.[business.id]||0)>this.minute?2:0)});}
+      shops.sort((a,b)=>a.score-b.score||a.index-b.index);
+      for(const option of shops) {const path=this.findPath(c.entity,option.target);if(path!==null){c.path=path;c.targetId=option.b.id;if(option.vendor){c.streetMarketTarget={marketId:option.vendor.marketId,businessId:option.b.id};c.task='street-market-shopping';}else{c.streetMarketTarget=null;c.task='shopping';}return;}}
     }
     // Citizens with no pressing need or appointment should not flood the town
     // hall for leisure they have already satisfied. Take a short walk instead.
@@ -746,6 +748,11 @@ export class CitySimulation {
       if (path !== null) { this.development.reserveConstruction(siteProject); c.path = path; c.task = 'construction'; c.workProjectId = siteProject.id; c.targetId = siteProject.builderId; return; }
     }
     const hall = this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
+    if(task==='food'&&this.hour>=8&&this.hour<17){
+      const vendorRows=this.economy.streetMarketVendors().map(row=>({row,score:this.economy.streetMarketMealScore(c,row)})).filter(row=>Number.isFinite(row.score)).sort((a,b)=>a.score-b.score);
+      const shopScore=Math.min(Infinity,...this.buildings.filter(b=>b.type!=='townhall').map(b=>this.economy.mealScore(c,b)));
+      if(vendorRows.length&&vendorRows[0].score<shopScore){const {site,vendor}=vendorRows[0].row,path=this.findPath(c.entity,vendor.position);if(path!==null){c.path=path;c.targetId=vendor.businessId;c.streetMarketTarget={marketId:site.id,businessId:vendor.businessId};c.task='street-market-food';return;}}
+    }
     const candidates = type === 'company' ? [company] : task === 'food' ? this.buildings.filter(b=>b.type!=='townhall') : type === 'child' ? (childHome ? [childHome] : home ? [home] : []) : type === 'home' ? (home ? [home] : []) : type === 'job' ? [job] : this.buildings.filter(b => !b.entity.destroyed && (b.type === type||['clinic','leisure'].includes(type)&&civicSpec(b)?.need===(type==='clinic'?'health':'leisure')));
     if (hall && ((type === 'home' && !home) || ['utility', 'clinic', 'leisure'].includes(type))) { const serviceCost = this.currency.price({ utility: 35, clinic: 240, leisure: 25 }[type] || 0); const cash = this.accounts.get(this.payerFor(c))?.balance || 0; if (!candidates.includes(hall)) candidates.push(hall); if(cash<serviceCost&&!candidates.some(b=>civicSpec(b)&&!b.ownerId&&civicStatus(this,b,c)?.ready))candidates.splice(0,candidates.length,hall); }
     const foodScores=task==='food'?(measure?measure('taskMealScoring',()=>new Map(candidates.map(b=>[b,this.economy.mealScore(c,b)]))):new Map(candidates.map(b=>[b,this.economy.mealScore(c,b)]))):null;
@@ -764,7 +771,7 @@ export class CitySimulation {
   }
   performTask(c) {
     if(c.task==='work-wait'){if(!c.seatId&&!syncCitizenInterior(this,c))return;this.furniture.advanceWait(c);return;}
-    if(c.task==='market-vending'){const stall=streetMarketFor(this.economy,c);if(!stall){c.marketStall=null;c.task=null;c.targetId=null;c.path=[];c.action='Encerrando o mercado de rua';return;}if(this.urgentNeed(c)){c.task=null;c.targetId=null;c.path=[];return;}c.action=`Anunciando ${this.building(stall.businessId)?.entity.properties.name||'produtos'} na feira`;this.economy.practice(c,'management',1);return;}
+    if(c.task==='market-vending'){const stall=streetMarketFor(this.economy,c);if(!stall){c.marketStall=null;c.task=null;c.targetId=null;c.path=[];c.action='Encerrando o mercado de rua';return;}if(this.urgentNeed(c)){c.task=null;c.targetId=null;c.path=[];return;}c.action=`Vendendo ${this.building(stall.businessId)?.entity.properties.name||'produtos'} na feira`;this.economy.practice(c,'commerce',1);return;}
     if(c.task==='sit'){if(c.path.length)return;c.needs.leisure=clamp(c.needs.leisure+.7);c.action='Descansando sentado no banco';if(this.minute>=c.sitUntil||this.urgentNeed(c)){this.furniture.release(c);c.task=null;}return;}
     if(c.task==='beach_leisure'){
       const setup=c.beachLeisure;if(!setup){c.task=null;return;}
@@ -824,6 +831,11 @@ export class CitySimulation {
       if(c.homelessSleepSpot&&Math.hypot(c.entity.x-c.homelessSleepSpot.x,c.entity.y-c.homelessSleepSpot.y)>.3){this.routeHomelessToSleep(c);return;}
       sleepMinute(this,c,{street:true});
       return;
+    }
+    if(c.task==='street-market-food'||c.task==='street-market-shopping'){
+      const marketId=c.streetMarketTarget?.marketId,businessId=c.streetMarketTarget?.businessId,site=(this.economy.streetMarkets||[]).find(item=>item.id===marketId),vendor=site?.vendors?.find(item=>item.businessId===businessId),business=this.building(businessId);
+      if(site&&vendor&&business){if(c.task==='street-market-food')this.economy.consumeStreetMarketMeal(c,{site,vendor});else this.economy.buyConsumerGood(c,business,vendor);c.lastShoppingAt=this.minute;c.action='Comprando na feira de rua';}
+      c.streetMarketTarget=null;c.task=null;c.targetId=null;return;
     }
     const b = this.building(c.targetId), n = c.needs;
     if (!b) { c.task = null; return; }

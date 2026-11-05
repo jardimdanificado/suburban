@@ -6,6 +6,18 @@ export function carryCapacity(c){return injuredCarryCapacity(c,c?.equipment?.car
 const STREET_MERCHANT_TYPES=new Set(['market','greengrocer','bakery','restaurant','cycle_shop','clothing_store','sports_shop','thrift_store','pharmacy','artisan','publisher']);
 const live=c=>!!c?.entity&&!c.entity.destroyed;
 function hasStreetProducts(b){return STREET_MERCHANT_TYPES.has(b.type)||INDUSTRIES[b.type]?.category==='services';}
+function fairStock(economy,business){
+ const stock={},available=Object.keys(business.inventory||{}).filter(good=>(business.inventory[good]||0)>0);
+ let offered=available;
+ if(['market','greengrocer'].includes(business.type))offered=economy.retailAssortment(business).filter(good=>available.includes(good));
+ else if(business.type==='bakery')offered=available.filter(good=>good==='pao');
+ else if(business.type==='restaurant'){
+  const meal=economy.mealOffer(business);offered=meal?Object.keys(meal.inputs).filter(good=>available.includes(good)):[];
+ }
+ else if(INDUSTRIES[business.type]?.outputs)offered=Object.keys(INDUSTRIES[business.type].outputs).filter(good=>available.includes(good));
+ for(const good of offered.slice(0,6))stock[good]=Math.min(business.inventory[good],['market','greengrocer'].includes(business.type)?6:business.type==='restaurant'?3:4);
+ return stock;
+}
 function prepareStreetMarkets(economy){
   const city=economy.city,owners=new Set(),vendors=[];
   for(const business of economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&hasStreetProducts(b))){const owner=city.society.citizen(business.ownerId)||business.workers.map(id=>city.society.citizen(id)).find(live);if(!live(owner)||owners.has(owner.id))continue;owners.add(owner.id);vendors.push({business,owner});}
@@ -22,10 +34,11 @@ function prepareStreetMarkets(economy){
   for(const {business,owner} of vendors){const site=sites.slice().sort((a,b)=>a.vendors.length-b.vendors.length||b.flow-a.flow)[0],slot=site.vendors.length,occupied=new Set(site.vendors.map(v=>`${Math.floor(v.position.x)},${Math.floor(v.position.y)}`));let position=null;
     for(let radius=2;radius<=6&&!position;radius++)for(let step=0;step<24&&!position;step++){const angle=(slot*2.399963229728653+step*Math.PI/12),x=site.x+Math.cos(angle)*radius,y=site.y+Math.sin(angle)*radius,cx=Math.floor(x)+.5,cy=Math.floor(y)+.5,key=`${Math.floor(x)},${Math.floor(y)}`;if(occupied.has(key)||nearEntrance(cx,cy)||!city.walkable(Math.floor(x),Math.floor(y))||city.buildings.some(b=>!b.entity.destroyed&&x>=b.entity.x&&x<b.entity.x+b.width&&y>=b.entity.y&&y<b.entity.y+b.depth))continue;position={x:cx,y:cy};}
     if(!position)continue;
-    site.vendors.push({businessId:business.id,ownerId:owner.id,name:business.entity.properties.name,position});owner.marketStall={marketId:site.id,businessId:business.id,position,until:city.minute+(17-city.hour)*60};if(['work','manage','work-wait'].includes(owner.task)){city.furniture.release(owner);owner.workWait=null;owner.task=null;owner.targetId=null;owner.path=[];owner.serviceQueue=null;}}
+    const vendor={marketId:site.id,businessId:business.id,ownerId:owner.id,name:business.entity.properties.name,position,stock:fairStock(economy,business),stockRevision:0};
+    site.vendors.push(vendor);owner.marketStall={marketId:site.id,businessId:business.id,position,until:city.minute+(17-city.hour)*60};if(['work','manage','work-wait'].includes(owner.task)){city.furniture.release(owner);owner.workWait=null;owner.task=null;owner.targetId=null;owner.path=[];owner.serviceQueue=null;}}
   economy.streetMarkets=sites;
   const vendorCount=sites.reduce((n,s)=>n+s.vendors.length,0);
-  city.log(`Comerciantes abriram ${sites.length} feiras de rua nos pontos mais movimentados, com ${vendorCount} lojas anunciando seus produtos.`, 'business',sites.flatMap(s=>s.vendors.map(v=>v.ownerId)),{kind:'street-markets-opened',markets:sites.map(s=>({id:s.id,x:s.x,y:s.y,traffic:s.flow,vendorIds:s.vendors.map(v=>v.businessId)}))});
+  city.log(`Comerciantes abriram ${sites.length} feiras de rua nos pontos mais movimentados; ${vendorCount} bancas venderão parte do estoque de lojas locais.`, 'business',sites.flatMap(s=>s.vendors.map(v=>v.ownerId)),{kind:'street-markets-opened',markets:sites.map(s=>({id:s.id,x:s.x,y:s.y,traffic:s.flow,vendorIds:s.vendors.map(v=>v.businessId)}))});
 }
 export function streetMarketFor(economy,c){
   const stall=c?.marketStall;if(!stall||economy.city.minute>=stall.until||economy.city.hour<8||economy.city.hour>=17)return null;
