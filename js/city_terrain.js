@@ -1,5 +1,5 @@
 import {baseTerrainTile} from './world_gen.js?v=deep-perf-3';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,roadRetainingFaces} from './road_terrain_geometry.js?v=road-retaining-bridge-side-seam-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,roadRetainingFaces} from './road_terrain_geometry.js?v=street-wall-vertex-seam-1';
 import {businessFloors} from './city_business_heights.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js?v=initial-cycle-ref-1';
 import {buildingEntrance} from './city_building_geometry.js';

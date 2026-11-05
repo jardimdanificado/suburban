@@ -18,6 +18,11 @@ function stoneVertexOffset(world,x,y){
   return {x:(((stoneVertexSeed(world,x,y,0x6d2b79f5)/4294967295)*2)-1)*.045,z:(((stoneVertexSeed(world,x,y,0x1b873593)/4294967295)*2)-1)*.045};
 }
 export function terrainVertexOffset(world,x,y){
+  // Keep vertices shared with streets and sidewalks on the exact grid line.
+  // Rocky terrain offsets neighboring vertices for a broken-stone silhouette;
+  // carrying that offset through a road edge separates the bank mesh from its
+  // retaining face and exposes triangular gaps at the seam.
+  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(ROADS.has(at(world,x+dx,y+dy))||sidewalkAt(world,x+dx,y+dy))return {x:0,z:0};
   for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE)return stoneVertexOffset(world,x,y);
   return {x:0,z:0};
 }

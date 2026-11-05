@@ -746,13 +746,10 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     if(b.type==='park'){
       const parkDecor=new THREE.Group();
       const palmCrowns=[];
-      const parkStyle=HOUSE_STYLES[architectureFor(b.type,b.id)]||HOUSE_STYLES.modern,parkVariant=(Math.imul((Number(b.id)||0)+11,2654435761)>>>0)%3,wood=new THREE.MeshLambertMaterial({color:parkVariant===1?0x674732:0x79553d}),palmWood=new THREE.MeshLambertMaterial({color:0x8b6847}),palmGreen=new THREE.MeshLambertMaterial({color:0x397b43}),flowerMats=[0xe85d57,0xf0bb48,0xf0e4c1,0xc64b73].map(color=>new THREE.MeshLambertMaterial({color})),stoneMats=[0xd9c69c,0xbda77c,0xe4d3ad].map(color=>new THREE.MeshLambertMaterial({color}));
-      const gardenSpots=[[.62,.72],[b.width-.62,.72],[.62,b.depth-.72],[b.width-.62,b.depth-.72]], flowerGeo=new THREE.SphereGeometry(.095,6,5),leafGeo=new THREE.SphereGeometry(1,6,4),trunkGeo=new THREE.CylinderGeometry(.065,.12,1.75,6),pavingGeo=new THREE.BoxGeometry(.38,.045,.32);
-      // A warm stone walkway and small tiled landing make the park entrance read clearly.
-      const pathLength=Math.min(1.5,Math.max(.7,b.depth*.38)),pathX=b.width/2;
-      for(let row=0;row<3;row++)for(let col=0;col<3;col++){
-        const x=pathX+(col-1)*.39,z=b.depth-pathLength+(row+.5)*pathLength/3,ground=surfaceElevation(world,entity.x+x,entity.y+z),tile=new THREE.Mesh(pavingGeo,stoneMats[(row+col)%stoneMats.length]);tile.position.set(x,ground+.035,z);parkDecor.add(tile);
-      }
+      const parkStyle=HOUSE_STYLES[architectureFor(b.type,b.id)]||HOUSE_STYLES.modern,parkVariant=(Math.imul((Number(b.id)||0)+11,2654435761)>>>0)%3,wood=new THREE.MeshLambertMaterial({color:parkVariant===1?0x674732:0x79553d}),palmWood=new THREE.MeshLambertMaterial({color:0x8b6847}),palmGreen=new THREE.MeshLambertMaterial({color:0x397b43}),flowerMats=[0xe85d57,0xf0bb48,0xf0e4c1,0xc64b73].map(color=>new THREE.MeshLambertMaterial({color}));
+      const gardenSpots=[[.62,.72],[b.width-.62,.72],[.62,b.depth-.72],[b.width-.62,b.depth-.72]], flowerGeo=new THREE.SphereGeometry(.095,6,5),leafGeo=new THREE.SphereGeometry(1,6,4),trunkGeo=new THREE.CylinderGeometry(.065,.12,1.75,6);
+      // Park ground remains natural grass; paths are represented by the shared
+      // sidewalk and road network outside the lot, not loose paving slabs.
       // Tropical planting beds mix palms, broad leaves, and bright island flowers.
       for(let bed=0;bed<gardenSpots.length;bed++){
         const [x,z]=gardenSpots[bed],ground=surfaceElevation(world,entity.x+x,entity.y+z),trunk=new THREE.Mesh(trunkGeo,palmWood);trunk.position.set(x,ground+.83,z);trunk.rotation.z=(bed%2?-.13:.12);parkDecor.add(trunk);

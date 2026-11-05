@@ -13,13 +13,13 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
 import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=varied-sidewalk-art-sculptures-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=park-ground-no-paving-slabs-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=walking-shirt-mask-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=party-shirt-material-batches-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=road-retaining-bridge-side-seam-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=street-wall-vertex-seam-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -7102,7 +7102,11 @@ export class RCT3DRenderer {
         }
 
         // 4-Sided Cliff Drop-walls (South, East, North, West) for full 360-degree visibility
-        if (tType !== TILE_WATER) {
+        // Streets and sidewalks already receive their complete edge walls from
+        // roadRetainingFaces above. Adding the natural cliff sheet here too
+        // overlaps those panels (notably at water and void edges), producing
+        // z-fighting triangles and apparent holes in the retaining texture.
+        if (tType !== TILE_WATER && !streetCorners) {
           const baseH = 0.0;
           const cliffBaseAO = 0.65 * zoneMult;
           const cliffTopAO = 0.95 * zoneMult;

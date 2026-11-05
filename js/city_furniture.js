@@ -1,7 +1,7 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=labor-secretariat-1';
 import {ROAD_TILES,tileAt,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
-import {roadRetainingFaces} from './road_terrain_geometry.js?v=road-retaining-bridge-side-seam-1';
+import {roadRetainingFaces} from './road_terrain_geometry.js?v=street-wall-vertex-seam-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
 const BEACH_LEISURE_OCCUPANCY=new WeakMap();
 function beachLeisureOccupancy(furniture){
@@ -40,7 +40,9 @@ export class CityFurniture{
   // Rebuild that layout once so the new placement rules also fix existing saves.
   if((this.benchLayoutVersion||0)<5){for(const c of city.citizens)if(c.seatId)this.release(c);this.benches=[];this.nextId=1;this.benchLayoutVersion=5;}
   if((this.benchLayoutVersion||0)<6){const beachIds=new Set(this.benches.filter(b=>b.kind==='beach_chair'||b.kind==='beach_ground').map(b=>b.id));for(const c of city.citizens)if(c.seatId&&beachIds.has(Number(c.seatId.split(':')[0]))){this.release(c);if(c.task==='sit'){c.task=null;c.path=[];}}this.benches=this.benches.filter(b=>!beachIds.has(b.id));this.benchLayoutVersion=6;}
-  const removed=new Set(this.benches.filter(b=>!city.walkable(Math.floor(b.x),Math.floor(b.y))).map(b=>b.id));if(removed.size){for(const c of city.citizens)if(c.seatId&&removed.has(Number(c.seatId.split(':')[0]))){this.release(c);c.path=[];if(c.task==='sit')c.task=null;}this.benches=this.benches.filter(b=>!removed.has(b.id));}
+  // Streets can be paved beneath a bench after it was placed. Road tiles remain
+  // walkable, so walkability alone does not detect that stale placement.
+  const removed=new Set(this.benches.filter(b=>{const x=Math.floor(b.x),y=Math.floor(b.y);return !city.walkable(x,y)||ROAD_TILES.has(tileAt(city.world,x,y));}).map(b=>b.id));if(removed.size){for(const c of city.citizens)if(c.seatId&&removed.has(Number(c.seatId.split(':')[0]))){this.release(c);c.path=[];if(c.task==='sit')c.task=null;}this.benches=this.benches.filter(b=>!removed.has(b.id));}
   for(const bench of this.benches)bench.angle=furnitureFacingAngle(city,bench);
   for(const b of city.buildings)if(b.type==='farm'&&!b.farmSoilReady)cultivateFarmTerrain(city,b);
   for(const b of city.buildings)for(const p of [b.door,...(b.accessPath||[])])candidates.set(`${Math.floor(p.x)},${Math.floor(p.y)}`,p);
