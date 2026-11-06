@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {drawArtworkPreview} from './city_renderer_3d.js?v=artwork-preview-shared-1';
+import {drawArtworkPreview} from './city_renderer_3d.js?v=exterior-only-interiors-1';
 import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=labor-secretariat-1';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
@@ -29,7 +29,7 @@ import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases }
 import {renderEventInspector} from './city_event_inspector.js?v=landlord-stock-market-1';
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js?v=market-one-pass-1';
-import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js';
+import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js?v=exterior-only-interiors-1';
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js?v=institutions-cleanup-2';
 import {renderMunicipalIdentity} from './city_municipal_identity_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js?v=wardrobe-expansion-1';
@@ -149,8 +149,6 @@ export class CityUI {
     const old=this.listCache.get(key);if(old?.signature===signature)return old.rows;const rows=build();if(this.listCache.size>=32&&!this.listCache.has(key))this.listCache.delete(this.listCache.keys().next().value);this.listCache.set(key,{signature,rows});return rows;
   }
   section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
-  setInteriorView(buildingId,floor=0,hideWalls=this.interiorView?.hideWalls??true){this.interiorView=buildingId==null?null:{buildingId,floor,hideWalls};if(typeof window!=='undefined'&&window.dispatchEvent&&typeof CustomEvent!=='undefined'){const building=buildingId==null?null:this.city.building(buildingId);window.dispatchEvent(new CustomEvent('suburban-interior-view',{detail:building?{buildingId:building.officeTenantOf||buildingId,floor:building.officeTenantOf?building.officeFloor:floor,hideWalls}:null}));}}
-
   remember() {
     const route={};for(const key of ['wealthAccountId','wealthLocationId','wealthGoodId','marketSaleId','marketKindId','politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','selectedVehicleId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow','employmentCompanyId','employmentCitizenId','employmentApplicationAt','employmentStatus','employmentPage','employmentCandidatesPage'])route[key]=this[key];
     this.history.push({ ...route, tab: this.tab, selected: this.selected, selectedPlotId: this.selectedPlotId, unitId: this.unitId, detailTab: this.detailTab, mobileDetail: this.mobileDetail, query: this.query, views: { ...this.views }, filters: { ...this.filters }, scrolls: { ...this.scrolls } });
@@ -181,17 +179,16 @@ export class CityUI {
   filter() { return this.filters[this.tab] || 'all'; }
   setFilter(id) { this.filters[this.tab] = id; this.resetScroll(); }
   setSelection(entity, unitId = null) {
-    if(this.interiorView&&entity?.id!==this.interiorView.buildingId)this.setInteriorView(null);
     if (entity !== this.selected || unitId !== this.unitId) this.remember();
     const target = entity?.properties.cityUrbanArt?'urban-art':entity?.properties.cityVehicle?'transport':entity?.properties.citizen ? 'people' : entity?.properties.cityBuilding ? (this.tab === 'economy' && this.city.economy.businesses.some(b=>b.id===entity.id) ? 'economy' : 'buildings') : this.tab;
     const sameDirectory = this.tab === target, listScroll = this.scrolls.list || 0;
     this.tab = target; if(target==='economy')this.views.economy='overview'; this.selected = entity; this.unitId = unitId; this.detailTab = unitId ? 'units' : 'profile'; this.visible = true;
     this.mobileDetail = !!entity; if (!sameDirectory) { this.query = ''; this.search.value = ''; } this.menuOpen = false; this.resetScroll(); if (sameDirectory) this.scrolls.list=listScroll;
   }
-  toggle() { this.visible = !this.visible; this.element.hidden = !this.visible;if(!this.visible)this.setInteriorView(null); }
+  toggle() { this.visible = !this.visible; this.element.hidden = !this.visible; }
   setPlotSelection(id) { if(this.host)return this.host.setPlotSelection(id); if(this.tab==='land')this.remember(); this.navigate('land'); this.selectedPlotId = id; this.setView('plots'); this.visible = true; }
-  openCitizen(id) { const c = this.city.society.citizen(id); if (c) {this.setInteriorView(null);this.select(c.entity);} }
-  openBuilding(id) { const b = this.city.building(id); if (b) {if(this.interiorView?.buildingId!==id)this.setInteriorView(null);this.select(b.entity);} }
+  openCitizen(id) { const c = this.city.society.citizen(id); if (c) this.select(c.entity); }
+  openBuilding(id) { const b = this.city.building(id); if (b) this.select(b.entity); }
   personLog(id) { this.openHistory(null,{logCitizenId:id}); }
   matches(value) { if(!this.query)return true;if(this.normalizedQuerySource!==this.query){this.normalizedQuerySource=this.query;this.normalizedQuery=normalize(this.query);}return normalize(value).includes(this.normalizedQuery); }
   scrollAt(x, y, delta) {
@@ -323,7 +320,7 @@ export class CityUI {
     const city=this.city,justice=city.justice,artist=city.society.citizen(piece.creatorId),latest=piece.layers?.at(-1),support=piece.support;
     const type=justice.labelArt(piece.kind),material={pedra:'Pedra',argila:'Argila',ferro:'Ferro',aco:'Aço',ceramica:'Cerâmica',fezes:'Material orgânico'}[piece.materialUsed]||'Tinta';
     const location=support?.kind==='facade-banner'?'Fachada':support?.kind==='interior-wall'?'Parede interna':support?.kind==='interior-floor'?'Interior do prédio':support?.kind==='window'?'Janela':support?.kind==='roof-terrace'?'Cobertura':support?.kind==='skybridge'?'Passarela elevada':piece.buildingId?`Prédio · ${city.building(piece.buildingId)?.entity.properties.name||'desconhecido'}`:'Espaço público';
-    const locate=()=>{if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);this.setInteriorView(building.id,unit.z);return;}}this.camera(piece.entity.x,piece.entity.y);};
+    const locate=()=>{if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.openBuilding(building.id);this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);return;}}this.camera(piece.entity.x,piece.entity.y);};
     p.heading(`FICHA DA OBRA · ${type.toUpperCase()}`);p.heading('PRÉVIA VISUAL');
     const previewKey=`${piece.id}:${piece.kind}:${piece.layers?.length||0}:${latest?.message||piece.message}:${JSON.stringify(latest?.design||null)}:${JSON.stringify(latest?.narrative||null)}:${piece.color??''}:${piece.materialUsed||''}`;this.artworkPreviewCache??=new Map();let preview=this.artworkPreviewCache.get(previewKey);if(!preview){preview=document.createElement('canvas');preview.width=512;preview.height=256;drawArtworkPreview(preview.getContext('2d'),piece);this.artworkPreviewCache.clear();this.artworkPreviewCache.set(previewKey,preview);}
     const previewWidth=Math.min(p.w,360),previewHeight=previewWidth/2,previewX=p.x+(p.w-previewWidth)/2;if(p.visible(previewHeight+8)){const ctx=p.ui.ctx;ctx.fillStyle='#40372e';ctx.fillRect(previewX-4,p.y-4,previewWidth+8,previewHeight+8);ctx.drawImage(preview,previewX,p.y,previewWidth,previewHeight);ctx.strokeStyle='#d4bd8e';ctx.lineWidth=2;ctx.strokeRect(previewX-1,p.y-1,previewWidth+2,previewHeight+2);}p.y+=previewHeight+8;
@@ -444,18 +441,8 @@ export class CityUI {
   }
   building(p, b) {
     const city = this.city;
-    if(this.interiorView&&this.interiorView.buildingId!==b.id)this.setInteriorView(null);
     if(!this.floatingDossier)p.heading(name(b.entity)); p.note(`${BUILDING_TYPES[b.type].label} | ${b.width}x${b.depth}x${b.floors} | ${b.units.length} células`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(b.entity.x, b.entity.y); if(!this.host)this.visible = false; });
-    if(b.constructionKind!=='open-air'){
-      if(this.interiorView?.buildingId===b.id){
-        p.status('VISTA INTERNA',`Andar ${this.interiorView.floor+1} · pessoas e móveis em simulação`,C.cyan);
-        const viewFloors=b.officeTenantOf?[b.officeFloor]:Array.from({length:b.floors},(_,floor)=>floor);
-        p.buttons(viewFloors.map(floor=>({label:`${floor+1}º ANDAR`,selected:this.interiorView.floor===floor,click:()=>this.setInteriorView(b.id,floor)})));
-        p.button(this.interiorView.hideWalls?'MOSTRAR PAREDES BAIXAS':'OCULTAR PAREDES',()=>this.setInteriorView(b.id,this.interiorView.floor,!this.interiorView.hideWalls));
-        p.button('VOLTAR À FACHADA',()=>this.setInteriorView(null));
-      }else p.button('INSPECIONAR INTERIOR',()=>{this.camera(b.entity.x+b.width/2,b.entity.y+b.depth/2);this.setInteriorView(b.id,b.officeTenantOf?b.officeFloor:Math.min(b.floors-1,Math.max(0,this.unitId?city.units.get(this.unitId)?.z||0:0)));});
-    }
     this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['analysis','ANÁLISE'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['finance','FINANÇAS'], ['infrastructure','ESTRUTURA'], ['paint','PINTURA'], ...(['builder','road_paving','road_maintenance'].includes(b.type) ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
     if(this.detailTab==='paint'){renderBuildingPaint(this,p,b);return;}
     if(this.detailTab==='analysis'){this.businessAnalysis(p,b);return;}
@@ -796,7 +783,7 @@ export class CityUI {
       this.notice=job?`Encomenda artística #${job.id} anunciada para ${isRoof?'a cobertura':isBridge?'a passarela':isWindow?'a janela':supportUnitId?'o interior':'a fachada'}; o pagamento ficará reservado até a conclusão.`:'Não foi possível encomendar: confira o texto, o saldo, o local e a disponibilidade de artista ou material.';
     });
     p.note('Pessoa para comprar ou reproduzir uma obra');const buyerOptions=[['','Escolha uma pessoa'],...city.citizens.filter(c=>!c.entity.destroyed&&!c.dead).map(c=>[String(c.id),c.entity.properties.name])];this.nativeSelect(this.artworkBuyerInput,p,buyerOptions,this.artworkBuyerInput.value||'',p.x,p.y,p.w);p.space(24);
-    const locateArtwork=(piece,job=null)=>{const support=piece?.support||job?.artworkSupport||job?.artworkFacadeSupport;if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);this.setInteriorView(building.id,unit.z);}}else if(piece){const facade=piece.kind==='banner'&&piece.buildingId!=null?support?.position||buildingFacadeBannerSupport(city.building(piece.buildingId))?.position:null;this.camera(facade?.x??piece.entity.x,facade?.y??piece.entity.y);}else if(job){const facade=job.artworkFacadeSupport?.position;this.camera(facade?.x??job.point.x,facade?.y??job.point.y);}};
+    const locateArtwork=(piece,job=null)=>{const support=piece?.support||job?.artworkSupport||job?.artworkFacadeSupport;if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);}}else if(piece){const facade=piece.kind==='banner'&&piece.buildingId!=null?support?.position||buildingFacadeBannerSupport(city.building(piece.buildingId))?.position:null;this.camera(facade?.x??piece.entity.x,facade?.y??piece.entity.y);}else if(job){const facade=job.artworkFacadeSupport?.position;this.camera(facade?.x??job.point.x,facade?.y??job.point.y);}};
     const inspectArtwork=piece=>{this.selectedArtworkId=piece.id;this.select?.(piece.entity);};
     const artJobs=city.gigs.jobs.filter(j=>j.kind==='art-installation'&&['open','working'].includes(j.status));if(artJobs.length){p.heading('ENCOMENDAS EM ANDAMENTO');for(const job of artJobs.slice(-10).reverse()){const site=city.building(job.buildingId),support=job.artworkSupport,place=support?.kind==='skybridge'?'passarela elevada':support?.kind==='roof-terrace'?'cobertura':support?`interior · andar ${support.floor+1}`:'fachada';p.record(`#${job.id} · ${justice.labelArt(job.artwork.kind)} · ${job.artwork.message}`,`${place} · ${job.status==='working'?`${Math.floor(job.progress)}/${job.required} · ${city.society.citizen(job.workerId)?.entity.properties.name||'artista'}`:'Aguardando artista'}${job.waitingReason?` · ${job.waitingReason}`:''} · ${money(job.fee)}`,()=>site&&locateArtwork(null,job));}}
     const artSponsor=a=>a.sponsorId!=null?city.society.citizen(a.sponsorId)?.entity.properties.name||'Desconhecido':a.sponsorAccountId==='treasury'?'Tesouro municipal':city.accountName(a.sponsorAccountId)||'não identificado';

@@ -263,11 +263,17 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   // Preserve animated shutters, but replace their many scene nodes with a
   // handful of instanced batches per building facade.
   const shutterPanelMaterial=new THREE.MeshLambertMaterial({color:style.accent}),shutterSlatMaterial=new THREE.MeshLambertMaterial({color:style.trim});
-  // Keep the paired shutter leaves on the same palette under nearby night
-  // lights; directional shading made opposite opening angles read as two colors.
-  const shutterGlassMaterial=new THREE.MeshBasicMaterial({color:0x91bac3,transparent:true,opacity:.2,depthWrite:false});
   const shutterGeometry={front:{glass:new THREE.BoxGeometry(.135,.66,.012),panel:new THREE.BoxGeometry(.2,.76,.045),slat:new THREE.BoxGeometry(.2,.035,.07)},side:{glass:new THREE.BoxGeometry(.012,.66,.135),panel:new THREE.BoxGeometry(.045,.76,.2),slat:new THREE.BoxGeometry(.07,.035,.2)}};
   const shutterParts={front:[],side:[]},shutterMatrix=new THREE.Matrix4(),shutterPosition=new THREE.Vector3(),shutterQuaternion=new THREE.Quaternion(),shutterScale=new THREE.Vector3(1,1,1),shutterAxis=new THREE.Vector3(0,1,0);
+  const makeShutterMaterial=(axis,parameters)=>{
+   const material=new THREE.MeshLambertMaterial(parameters),baseProgramKey=material.customProgramCacheKey();
+   material.customProgramCacheKey=()=>`${baseProgramKey}:shutter-facade-normal:${axis}`;
+   material.onBeforeCompile=shader=>{
+    const facadeNormal=axis==='front'?'vec3(0.0,0.0,sign(instanceMatrix[2][2]))':'vec3(sign(instanceMatrix[0][0]),0.0,0.0)';
+    shader.vertexShader=shader.vertexShader.replace('#include <defaultnormal_vertex>',`#include <defaultnormal_vertex>\n#ifdef USE_INSTANCING\ntransformedNormal = normalMatrix * ${facadeNormal};\n#endif`);
+   };
+   return material;
+  };
   const makeReflectionSafe=(geometry)=>{
    const position=geometry.getAttribute('position'),normal=geometry.getAttribute('normal'),color=geometry.getAttribute('color');
    const vertexCount=position.count,sourceIndex=geometry.getIndex(),indices=[];
@@ -316,7 +322,7 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     // Mirrored instance transforms reverse triangle winding. Include reversed
     // faces with reversed normals so each transform keeps correct lighting.
     const glassGeometry=makeReflectionSafe(shutterGeometry[axis].glass),opaqueGeometry=makeReflectionSafe(opaqueShutterGeometry(axis));
-    const meshes={glass:makeBatch(glassGeometry,shutterGlassMaterial),opaque:makeBatch(opaqueGeometry,new THREE.MeshBasicMaterial({color:0xffffff,vertexColors:true}))};
+    const meshes={glass:makeBatch(glassGeometry,makeShutterMaterial(axis,{color:0x91bac3,transparent:true,opacity:.2,depthWrite:false})),opaque:makeBatch(opaqueGeometry,makeShutterMaterial(axis,{color:0xffffff,vertexColors:true}))};
     const write=record=>{
      shutterQuaternion.setFromAxisAngle(shutterAxis,record.angle);
      shutterPosition.set(record.pivotX,record.pivotY,record.pivotZ);

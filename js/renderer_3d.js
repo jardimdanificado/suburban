@@ -12,11 +12,10 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import {syncThirdPersonInteriorView as syncFollowInteriorView} from './city_interior_view.js?v=interior-cell-batch-3';
-import { syncCityBuildings } from "./city_renderer_3d.js?v=artwork-preview-shared-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=exterior-only-interiors-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=citizen-instance-state-cache-2';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
@@ -47,6 +46,17 @@ const currentZoneSize = 8;
 const compareCrowdCitizenIds=(a,b)=>a.entity.id-b.entity.id;
 const PAVED_ROAD_TILES=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
 const ROAD_SURFACE_TILES=new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,...PAVED_ROAD_TILES]);
+function indoorCitizenVisibleFromOutside(renderer,location){
+  if(!location||location.exiting||location.path?.length)return false;
+  if(location.roomType==='balcony'||location.roomType==='roof_terrace')return true;
+  const city=renderer.cityDevelopment?.city,building=city?.building(location.buildingId),unit=location.unitId?city?.units?.get(location.unitId):null;
+  if(!building||!unit)return false;
+  const shellId=building.officeTenantOf||building.id,facade=renderer.cityMeshes?.get(shellId),cellKey=`${unit.x},${unit.y},${unit.z}`;
+  if(facade?.userData.balconyCellKeys?.has(cellKey))return true;
+  if(!facade?.userData.windowCellKeys?.has(cellKey)||unit.windowStyle==='shuttered')return false;
+  const floor=location.floor??unit.z;
+  return !renderer.sleepingFloorsByBuilding?.get(location.buildingId)?.has(floor);
+}
 const roadRailingLayouts=new WeakMap();
 const roadRailingFaceKey=(x,y,face)=>`${x},${y},${face.side},${face.from.toFixed(5)},${face.to.toFixed(5)}`;
 const roadRailingNodeKey=(x,z)=>`${x.toFixed(5)},${z.toFixed(5)}`;
@@ -3479,17 +3489,6 @@ export function createRealisticFlameMaterial() {
 
 export class RCT3DRenderer {
   constructor(container) {
-    this.cityInteriorView=null;
-    this.thirdPersonInteriorOverride=false;this.thirdPersonSavedInteriorView=null;
-    this._cityInteriorViewHandler=event=>{
-      const view=event.detail?.buildingId==null?null:{buildingId:event.detail.buildingId,floor:event.detail.floor||0,hideWalls:event.detail.hideWalls!==false};
-      if(this.isThirdPersonActive()&&view)return;
-      if(this.thirdPersonInteriorOverride)this.thirdPersonSavedInteriorView=view;
-      if(view){const b=this.cityDevelopment?.city?.building(view.buildingId);if(!this.cityInteriorView)this.interiorPreviousZoom=this.zoom;if(b)this.setCamera(b.entity.x+b.width/2,b.entity.y+b.depth/2,Math.max(this.zoom,Math.min(5,28/(Math.max(b.width,b.depth)*1.6))));}
-      else if(this.interiorPreviousZoom!=null){this.zoom=this.interiorPreviousZoom;this.interiorPreviousZoom=null;}
-      this.cityInteriorView=view;
-    };
-    if(typeof window!=='undefined')window.addEventListener('suburban-interior-view',this._cityInteriorViewHandler);
     this.mapWidth=MAP_WIDTH;this.mapHeight=MAP_HEIGHT;
     this.container = container;
     this.width = container.clientWidth || window.innerWidth;
@@ -5593,19 +5592,15 @@ export class RCT3DRenderer {
     };
   }
 
-  selectEntity(id) { this.selectedEntityId = id;if(id==null||id<0)this.cityInteriorView=null; }
+  selectEntity(id) { this.selectedEntityId = id; }
 
   setThirdPersonMode(enabled, entityId = null) {
-    if(this.isThirdPersonActive()&&(!enabled||Number(entityId)!==this.fpEntityId))this.syncThirdPersonInteriorView(null);
     this.fpCamera.fov=75;this.fpCamera.updateProjectionMatrix();
     this.isThirdPersonMode = !!enabled;
     if (!enabled) this.followCharacterId = null;
     this.isFirstPersonMode = false;
     if (enabled) {
       this.followCharacterId = null;
-      this.cityInteriorView = null;
-      this.thirdPersonInteriorOverride = false;
-      this.thirdPersonSavedInteriorView = null;
     }
     this.fpEntityId = enabled && entityId !== null && entityId !== undefined ? Number(entityId) : null;
     if (enabled && entityId !== null && entityId !== undefined) {
@@ -5628,7 +5623,6 @@ export class RCT3DRenderer {
       this.fpEntityId = null;
       return;
     }
-    this.syncThirdPersonInteriorView(null);
     this.isFirstPersonMode = true;
     this.isThirdPersonMode = false;
     this.fpEntityId = null;
@@ -5642,17 +5636,12 @@ export class RCT3DRenderer {
   }
 
   setFollowCharacter(entityId = null) {
-    this.syncThirdPersonInteriorView(null);
     this.fpCamera.fov=75;this.fpCamera.updateProjectionMatrix();
     this.isFirstPersonMode = false;
     this.isThirdPersonMode = false;
     this.fpEntityId = null;
     this.followCharacterId = entityId == null ? null : Number(entityId);
     if (this.followCharacterId !== null) this.selectedEntityId = this.followCharacterId;
-  }
-
-  syncThirdPersonInteriorView(targetEnt){
-    syncFollowInteriorView(this,targetEnt);
   }
 
   isFirstPersonActive() {
@@ -5900,9 +5889,6 @@ export class RCT3DRenderer {
       }
       if (e.properties.cityBuilding) {
         const b = e.properties.cityBuilding;
-        // In cutaway mode the building shell is hidden, so it must not mask
-        // people and units that are actually inside it when picking.
-        if(this.cityInteriorView?.buildingId===b.id)continue;
         const openAir=b.constructionKind==='open-air',centerX=e.x+b.width/2,centerY=e.y+b.depth/2;
         const terrainBase=b.terrain?.base ?? (map ? this.getTileSurfaceHeight(map,e.x,e.y) : 1),surfaceBase=map?this.getSurfaceElevation(map,centerX,centerY):b.terrain?.base??0;
         const {base,top}=cityBuildingPickVerticalBounds({constructionKind:b.constructionKind,type:b.type,floors:b.floors,base:terrainBase,surfaceBase});
@@ -5925,8 +5911,7 @@ export class RCT3DRenderer {
       const citizen=e.properties.citizen;
       if(citizen){
         const location=citizen.indoorLocation,building=location&&this.cityDevelopment?.city?.building(location.buildingId);
-        const exposed=location&&(location.roomType==='roof_terrace'||location.roomType==='balcony'&&!location.path?.length);
-        if(location&&!exposed&&building&&this.cityInteriorView?.buildingId!==(building.officeTenantOf||building.id))continue;
+        if(location&&!indoorCitizenVisibleFromOutside(this,location))continue;
         const point=location?.position||citizen._renderIndoorPosition;
         const crowdOffset=this._citizenRenderOffsets?.get(e.id),x=(point?.x??e.x)+(crowdOffset?.x||0),y=(point?.y??e.y)+(crowdOffset?.y||0),z=(point?.z||0)+(citizen.ridingVehicleId ? .18 : 0);
         const surface=location&&building?(building.terrain?.base??(map?this.getSurfaceElevation(map,x,y):0)):(map?this.getSurfaceElevation(map,x,y):0);
@@ -6299,7 +6284,6 @@ export class RCT3DRenderer {
         this.camY = this.freeCamZ;
         return;
       } else {
-        this.syncThirdPersonInteriorView(null);
         this.isFirstPersonMode = false;
         this.isThirdPersonMode = false;
         this.fpEntityId = null;
@@ -6328,13 +6312,12 @@ export class RCT3DRenderer {
     const cosX = Math.cos(this.isometricAngleX);
     const sinX = Math.sin(this.isometricAngleX);
 
-    const inspecting=this.cityInteriorView,building=inspecting&&this.cityDevelopment?.city?.building(inspecting.buildingId),focusHeight=building?(building.terrain?.base||0)+inspecting.floor*CITY_FLOOR_HEIGHT+.45:1;
     this.camera.position.set(
       this.camX + distance * sinY * cosX,
-      distance * sinX+(focusHeight-1),
+      distance * sinX,
       this.camY + distance * cosY * cosX
     );
-    this.camera.lookAt(this.camX, focusHeight, this.camY);
+    this.camera.lookAt(this.camX, 1, this.camY);
   }
 
   // ---------------------------------------------------------------------------
@@ -7614,7 +7597,7 @@ export class RCT3DRenderer {
     const activeIds = this._activeIds;
     const activeUiIds = this._activeUiIds;
     this.cityCitizenBatches.begin();
-    this.cityCitizenModels.begin(dt,effectiveSpeed);
+    this.cityCitizenModels.begin(dt,effectiveSpeed,this.simTick);
     const perspectiveActive=this.isPerspectiveActive(),firstPersonActive=this.isFirstPersonActive(),thirdPersonActive=this.isThirdPersonActive();
     const activeElection=this.cityDevelopment?.city?.politics?.active;
     const activeElectionId=activeElection?.id,activeElectionStatus=activeElection?.status;
@@ -7727,10 +7710,8 @@ export class RCT3DRenderer {
       const profileCitizenStart = this.profileFrame && e.properties.citizen ? performance.now() : 0;
       const cityCitizen=e.properties.citizen,indoorLocation=cityCitizen?.indoorLocation;
       const interiorPosition=cityCitizen?._renderIndoorPosition||indoorLocation?.position;
-      const physicalInteriorBuilding=indoorLocation&&this.cityDevelopment?.city?.building(indoorLocation.buildingId),physicalInteriorId=physicalInteriorBuilding?.officeTenantOf||indoorLocation?.buildingId;
-      const renderedFloor=interiorPosition?Math.max(0,Math.floor((interiorPosition.z||0)/CITY_FLOOR_HEIGHT+.001)):indoorLocation?.floor??physicalInteriorBuilding?.officeFloor;
-      const showInspectedInterior=!!(indoorLocation&&this.cityInteriorView?.buildingId===physicalInteriorId&&!indoorLocation.exiting&&renderedFloor===this.cityInteriorView.floor);
-      const renderElevated=!!(cityCitizen&&!indoorLocation&&(interiorPosition?.z>0||cityCitizen.skybridgeZ>0)),renderAtInterior=!!(cityCitizen&&indoorLocation&&interiorPosition),renderX=showInspectedInterior||renderElevated||renderAtInterior?(interiorPosition?.x??e.x):e.x,renderY=showInspectedInterior||renderElevated||renderAtInterior?(interiorPosition?.y??e.y):e.y;
+      if(indoorLocation&&!indoorCitizenVisibleFromOutside(this,indoorLocation))continue;
+      const renderElevated=!!(cityCitizen&&!indoorLocation&&(interiorPosition?.z>0||cityCitizen.skybridgeZ>0)),renderAtInterior=!!(cityCitizen&&indoorLocation&&interiorPosition),renderX=renderElevated||renderAtInterior?(interiorPosition?.x??e.x):e.x,renderY=renderElevated||renderAtInterior?(interiorPosition?.y??e.y):e.y;
 
       if (renderX < this.renderedMinTx-entityCullMargin || renderX > this.renderedMaxTx + 0.99+entityCullMargin ||
           renderY < this.renderedMinTy-entityCullMargin || renderY > this.renderedMaxTy + 0.99+entityCullMargin) {
