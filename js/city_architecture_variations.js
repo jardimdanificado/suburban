@@ -405,7 +405,6 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     const porch=Math.min(.58,b.depth*.18),porchZ=front+porch*.58;
     box(b.width+.08,.1,porch,b.width/2,1.68,front+porch*.42,style.roof);
     for(const x of [.24,b.width-.24]){box(.1,1.58,.1,x,.8,porchZ,style.trim);box(.17,.09,.17,x,1.62,porchZ,style.accent);}
-    box(Math.max(.4,b.width-.42),.055,.06,b.width/2,.72,porchZ+.08,style.accent);
     if(style.dutchForm==='shed_gallery'){
      const awning=box(b.width+.12,.09,porch+.14,b.width/2,1.78,front+porch*.4,style.roof);if(awning)awning.rotation.x=-.12;
      for(let x=.35;x<b.width-.2;x+=.7)box(.045,.12,.045,x,1.68,front+porch*.72,style.accent);

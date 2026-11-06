@@ -9,7 +9,7 @@ const MIN_STEP = 1 / 60;
 // One city minute is 0.25 simulation seconds. At high speed, advancing it
 // in one call avoids rescanning every citizen several times for subminute
 // movement that is already interpolated on the main thread.
-const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
+const stepSize = () => speed>=16?.25:Math.min(.25,Math.max(MIN_STEP,speed/128));
 // Large cities can spend most of the worker's time creating full snapshots.
 // Keep motion/vitals at 100 ms and adjust only the heavier UI state update.
 // Full graph snapshots are the most expensive worker messages. At fast speeds
@@ -107,7 +107,7 @@ function snapshot(force = false) {
 function sendMotion() {
   if (!state || !dirty || paused || performance.now() - lastMotion < MOTION_INTERVAL) return;
   const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),needs=vitals();
-  postMessage({ type: 'motion', positions: motion, inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
+  postMessage({ type: 'motion', minute:state.city.minute, positions: motion, inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
   lastMotion = performance.now();
 }
 function fail(error) {

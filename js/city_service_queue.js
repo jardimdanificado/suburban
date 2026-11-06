@@ -1,4 +1,5 @@
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
+import {invalidateActivitySearch} from './city_activity_search.js';
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
 const foodQueueKinds=new Set(['workmeal','supplies']);
 const queueKind=kind=>foodQueueKinds.has(kind)?'food':kind;
@@ -7,6 +8,15 @@ const queueAuditInterval=60;
 // Service queues are shared by everyone waiting at the same entrance. Tickets
 // retain arrival order; outdoor places are reserved across all service types.
 const slotCaches=new WeakMap();
+const indoorWaitingCells=new WeakMap();
+function waitingCells(b,shell){
+ let cache=indoorWaitingCells.get(b);
+ if(!cache||cache.shell!==shell||cache.layout!==(b.layoutRevision||0)||cache.shellLayout!==(shell.layoutRevision||0)||cache.units!==b.units||cache.halls!==shell.circulation||cache.floor!==b.officeFloor){
+  const floor=b.officeFloor??0,halls=(shell.circulation||[]).filter(u=>!b.officeTenantOf||u.z===floor);
+  cache={shell,layout:b.layoutRevision||0,shellLayout:shell.layoutRevision||0,units:b.units,halls:shell.circulation,floor:b.officeFloor,cells:halls.length?halls:b.units.filter(u=>!['bathroom','dining'].includes(u.roomType))};indoorWaitingCells.set(b,cache);
+ }
+ return cache.cells;
+}
 // Track only tickets invalidated by a citizen field change; a periodic audit
 // handles restored queues and unusual out-of-band mutations.
 const queueStates=new WeakMap(),ticketInfo=new WeakMap(),ticketsByPerson=new WeakMap(),watchedProperties=new WeakMap();
@@ -17,10 +27,10 @@ function queueChanged(entrance){const state=queueStates.get(entrance);if(state)s
 function waitingTickets(entrance,buildingId){const state=queueStates.get(entrance);let cached=state.waitingByBuilding.get(buildingId);if(!cached||cached.revision!==state.revision){const tickets=entrance.serviceQueue.filter(ticket=>ticket.buildingId===buildingId).sort((a,b)=>a.sequence-b.sequence),indexes=new Map();for(let i=0;i<tickets.length;i++)indexes.set(tickets[i],i);cached={revision:state.revision,tickets,indexes};state.waitingByBuilding.set(buildingId,cached);}return cached;}
 function detachGroup(state,ticket,info){const group=info.group;if(!group)return;group.delete(ticket);info.group=null;if(group.size)return;const byKind=state.groups.get(info.buildingId),byResource=byKind?.get(info.kind);byResource?.delete(info.resource);if(!byResource?.size)byKind?.delete(info.kind);if(!byKind?.size)state.groups.delete(info.buildingId);}
 function untrackTicket(ticket){const info=ticketInfo.get(ticket);if(!info)return;ticketInfo.delete(ticket);const state=queueStates.get(info.entrance);state?.dirty.delete(ticket);state?.tickets.delete(ticket);if(state)detachGroup(state,ticket,info);const tickets=ticketsByPerson.get(info.person);tickets?.delete(ticket);if(tickets&&!tickets.size){ticketsByPerson.delete(info.person);stopWatching(info.person);if(info.person.entity)stopWatching(info.person.entity);}}
-function flagPersonTickets(person){for(const ticket of ticketsByPerson.get(person)||[]){if(ticketIsValid(person,ticket))continue;const info=ticketInfo.get(ticket),state=info&&queueStates.get(info.entrance);state?.dirty.add(ticket);}}
+function flagPersonTickets(person){for(const ticket of ticketsByPerson.get(person)||[]){if(ticketIsValid(person,ticket))continue;const info=ticketInfo.get(ticket),state=info&&queueStates.get(info.entrance);state?.dirty.add(ticket);if(state)invalidateActivitySearch(state.city,info.buildingId);}}
 function watchProperty(object,key,person){let watched=watchedProperties.get(object);if(!watched)watchedProperties.set(object,watched=new Map());if(watched.has(key))return;const descriptor=Object.getOwnPropertyDescriptor(object,key);if(!descriptor||!descriptor.configurable||descriptor.get&&!descriptor.set)return;let value=descriptor.value;const getter=descriptor.get,setter=descriptor.set,read=()=>getter?getter.call(object):value;Object.defineProperty(object,key,{configurable:true,enumerable:descriptor.enumerable,get(){return getter?getter.call(this):value;},set(next){const before=getter?getter.call(this):value;if(setter)setter.call(this,next);else value=next;const after=getter?getter.call(this):value;if(!Object.is(before,after))flagPersonTickets(person);}});watched.set(key,{descriptor,read});}
 function trackTicket(city,entrance,ticket){let person=ticket.person;if(!person)person=city.society.citizen(ticket.citizenId);if(!person)return null;if(!ticket.person)Object.defineProperty(ticket,'person',{value:person});if(!ticket.queueKind)Object.defineProperty(ticket,'queueKind',{value:queueKind(ticket.kind)});let tickets=ticketsByPerson.get(person);if(!tickets)ticketsByPerson.set(person,tickets=new Set());tickets.add(ticket);const state=queueStates.get(entrance);state?.tickets.add(ticket);let info=ticketInfo.get(ticket);if(info?.entrance===entrance)return person;info={entrance,person,buildingId:ticket.buildingId,kind:queueKind(ticket.kind),resource:ticket.resource,group:null};ticketInfo.set(ticket,info);if(state&&!ticket.admittedUnitId){info.group=serviceGroup(state,info.buildingId,info.kind,info.resource,true);info.group.add(ticket);}for(const key of ['task','targetId','toiletTargetId'])watchProperty(person,key,person);if(person.entity)watchProperty(person.entity,'destroyed',person);return person;}
-function queueState(city,entrance){const queue=entrance.serviceQueue||[];let state=queueStates.get(entrance);if(state?.queue===queue)return state;if(state)for(const ticket of state.tickets)untrackTicket(ticket);state={queue,tickets:new Set(),dirty:new Set(),groups:new Map(),waitingByBuilding:new Map(),revision:0,initialized:false,lastAudit:city.minute};queueStates.set(entrance,state);return state;}
+function queueState(city,entrance){const queue=entrance.serviceQueue||[];let state=queueStates.get(entrance);if(state?.queue===queue)return state;if(state)for(const ticket of state.tickets)untrackTicket(ticket);state={city,queue,tickets:new Set(),dirty:new Set(),groups:new Map(),waitingByBuilding:new Map(),revision:0,initialized:false,lastAudit:city.minute};queueStates.set(entrance,state);return state;}
 function pruneQueue(city,entrance){
  const queue=entrance.serviceQueue,state=queueState(city,entrance),audit=!state.initialized||city.minute-state.lastAudit>=queueAuditInterval;if(!audit&&!state.dirty.size)return;
  let write=0;
@@ -56,7 +66,7 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
   // Reserve the real room before walking from the queue to the interior entry tile.
   // Admitted people no longer block the next ticket when other rooms are free.
   const wasAdmitted=!!room&&ticket.admittedUnitId===room.id;
-  if(room){ticket.admittedUnitId=room.id;const info=ticketInfo.get(ticket),state=queueStates.get(entrance);if(info&&state)detachGroup(state,ticket,info);c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence,unitId:room.id,roomKind};room.activityReservedIds??=[];if(!room.activityReservedIds.includes(c.id))room.activityReservedIds.push(c.id);}
+  if(room){ticket.admittedUnitId=room.id;const info=ticketInfo.get(ticket),state=queueStates.get(entrance);if(info&&state)detachGroup(state,ticket,info);c.serviceQueue={buildingId:b.id,kind,resource,sequence:ticket.sequence,unitId:room.id,roomKind};room.activityReservedIds??=[];if(!room.activityReservedIds.includes(c.id)){room.activityReservedIds.push(c.id);invalidateActivitySearch(city,b.id);}}
   city.furniture?.release(c);
   const approach=entrance.door||b.door;
   if(!inside&&Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.75){if(!wasAdmitted||!c.path.length){const route=city.findPath(c.entity,approach);if(route!==null)c.path=route;}c.action='Indo ao atendimento';return false;}
@@ -73,22 +83,24 @@ export function queueService(city,c,b,kind,resource,ready,room=null,roomKind=nul
   if(entry&&Math.hypot(c.entity.x-approach.x,c.entity.y-approach.y)>.75){const route=city.findPath(c.entity,approach);if(route!==null)c.path=route;c.action='Indo para a espera dentro do prédio';return false;}
   if(entry){c.indoorLocation={buildingId:b.id,targetUnitId:null,unitId:null,targetRoomType:'waiting',roomType:'circulation',floor:0,position:{x:c.entity.x,y:c.entity.y,z:0},path:[],phase:'waiting',task:kind,layoutRevision:b.layoutRevision||0,enteredAt:city.minute};inside=true;}
  }
- c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':['food','workmeal','supplies'].includes(kind)?'Aguardando na fila de alimentação':'Aguardando na fila de atendimento';c.facingTarget={x:b.door.x,y:b.door.y};
+ c.lastProgressAt=city.minute;c.action=kind==='toilet'?'Aguardando na fila do banheiro':['food','workmeal','supplies'].includes(kind)?'Aguardando na fila de alimentação':'Aguardando na fila de atendimento';
+ if(!c.facingTarget||c.facingTarget.x!==b.door.x||c.facingTarget.y!==b.door.y||Object.keys(c.facingTarget).length!==2)c.facingTarget={x:b.door.x,y:b.door.y};
  // Recompute ordinal positions after every departure: followers advance to
  // the head of the line instead of retaining a stale, empty slot.
- const occupied=new Set();
  if(inside){
-  const location=c.indoorLocation,shell=city.building(b.officeTenantOf)||b,floor=b.officeFloor??0,halls=(shell.circulation||[]).filter(u=>!b.officeTenantOf||u.z===floor),rooms=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cells=halls.length?halls:rooms;
-  const reserved=city.units.get(location.targetUnitId||location.unitId);
-  const release=()=>{if(reserved?.activityReservedIds)reserved.activityReservedIds=reserved.activityReservedIds.filter(id=>id!==c.id);location.unitId=null;location.targetUnitId=null;c.workCell=null;};
+  const location=c.indoorLocation,shell=city.building(b.officeTenantOf)||b,cells=waitingCells(b,shell);
   // Share circulation across service types and floors. Crowded queues use
   // denser waiting spots instead of leaving their overflow at the doorway.
   if(!cells.length)return false;
   const waiting=waitingTickets(entrance,b.id),index=waiting.indexes.get(ticket)??0,perCell=Math.max(4,Math.ceil(waiting.tickets.length/cells.length)),side=Math.ceil(Math.sqrt(perCell)),within=index%perCell;
-  const cell=cells[Math.floor(index/perCell)],slot=`${cell.x},${cell.y},${cell.z}:${within}/${side}`,target={x:shell.entity.x+cell.x+.2+.6*((within%side)+.5)/side,y:shell.entity.y+cell.y+.2+.6*(Math.floor(within/side)+.5)/side,z:cell.z*CITY_FLOOR_HEIGHT};
-  if(location.queueSlot!==slot){const path=interiorRoute(shell,location.position,target);if(path!==null){release();location.path=path;location.targetRoomType='waiting';location.roomType='circulation';location.phase='waiting';location.queueSlot=slot;ticket.slot=`indoor:${slot}`;}}
+  const cell=cells[Math.floor(index/perCell)],slot=`${cell.x},${cell.y},${cell.z}:${within}/${side}`;
+  if(location.queueSlot!==slot){
+   const target={x:shell.entity.x+cell.x+.2+.6*((within%side)+.5)/side,y:shell.entity.y+cell.y+.2+.6*(Math.floor(within/side)+.5)/side,z:cell.z*CITY_FLOOR_HEIGHT},path=interiorRoute(shell,location.position,target);
+   if(path!==null){const reserved=city.units.get(location.targetUnitId||location.unitId);if(reserved?.activityReservedIds?.includes(c.id)){reserved.activityReservedIds=reserved.activityReservedIds.filter(id=>id!==c.id);invalidateActivitySearch(city,reserved.buildingId);}location.unitId=null;location.targetUnitId=null;c.workCell=null;location.path=path;location.targetRoomType='waiting';location.roomType='circulation';location.phase='waiting';location.queueSlot=slot;ticket.slot=`indoor:${slot}`;}
+  }
   return false;
  }
+ const occupied=new Set();
  for(const other of city.citizens)if(other.id!==c.id&&!other.entity.destroyed&&!other.indoorLocation){occupied.add(`${Math.floor(other.entity.x)},${Math.floor(other.entity.y)}`);const goal=other.path?.at(-1);if(goal)occupied.add(`${Math.floor(goal.x)},${Math.floor(goal.y)}`);}
  if(city.furniture?.queueSeat(c,b)){ticket.slot=`bench:${c.seatId}`;return false;}
  const reserved=new Set(entrance.serviceQueue.filter(q=>q!==ticket&&Number.isInteger(q.slot)).map(q=>q.slot));

@@ -97,7 +97,7 @@ function appointmentTime(city,c,b){
   return at;
 }
 function laborAgency(city){const office=city.politics?.secretaries?.find(row=>row.officeId==='labor'),secretary=city.society.citizen(office?.citizenId),building=city.building(office?.buildingId)||city.buildings.find(b=>b.type==='townhall'&&b.active&&!b.entity.destroyed);return secretary&&!secretary.entity.destroyed&&building?.active&&!building.entity.destroyed?{secretary,building}:null;}
-function secretaryPresent(city){const agency=laborAgency(city),c=agency?.secretary;return !!(c&&city.hour>=8&&city.hour<17&&c.jobId===agency.building.id&&c.task==='work'&&c.indoorLocation?.buildingId===agency.building.id&&c.indoorLocation.unitId&&!c.indoorLocation.exiting&&!c.path.length);}
+function secretaryPresent(city,agency=laborAgency(city)){const c=agency?.secretary;return !!(c&&city.hour>=8&&city.hour<17&&c.jobId===agency.building.id&&c.task==='work'&&c.indoorLocation?.buildingId===agency.building.id&&c.indoorLocation.unitId&&!c.indoorLocation.exiting&&!c.path.length);}
 function agencyAppointmentTime(city,c,agency){const b=agency.building,travel=Math.ceil(Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)*2+30);let at=Math.ceil((city.minute+Math.max(RECRUITMENT_RULES.minimumNotice,travel))/30)*30;const day=Math.floor(at/1440),clock=at%1440;if(clock<480)at=day*1440+480;else if(clock>=990)at=(day+1)*1440+480;return at;}
 function queueApplications(city){
   return city.economy.recruitmentQueue??=city.citizens.flatMap(c=>(c.career?.applications||[]).filter(a=>a.status==='análise').map(application=>({citizenId:c.id,application})));
@@ -200,25 +200,25 @@ function releaseInterview(c,a){
   if(c.task==='job-interview'&&c.targetId===a.agencyBuildingId){c.task=null;c.targetId=null;c.path=[];c.action=a.resultReceivedAt!=null?'Resultado do processo seletivo recebido':a.submittedAt!=null?'Currículo entregue; aguardando o resultado':`Entrevista encerrada: ${a.reason}`;}
 }
 export function advanceRecruitment(city){
-  const queue=queueApplications(city),sessions=new Map();
+  const queue=queueApplications(city),sessions=new Map(),agency=laborAgency(city),secretaryAvailable=secretaryPresent(city,agency);
   for(const {citizenId,application:a} of queue){
     if(a.status!=='análise')continue;
     const c=city.society.citizen(citizenId),b=city.building(a.buildingId);
     if(c&&!c.career?.applications.includes(a)){finishApplication(a,'retirado','Inscrição retirada',city.minute);releaseInterview(c,a);continue;}
     if(!c||c.entity.destroyed||!b?.active||b.entity.destroyed||city.politics.officeHolder(c)||c.businessIds.length){finishApplication(a,'retirado','Candidato ou empresa indisponível',city.minute);if(c)releaseInterview(c,a);continue;}
-    const agency=laborAgency(city);if(!agency){a.resultDueAt=city.minute+30;continue;}
+    if(!agency){a.resultDueAt=city.minute+30;continue;}
     if(a.agencyBuildingId!==agency.building.id){a.agencyBuildingId=agency.building.id;a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;}
     if(a.submittedAt==null){
       const present=c.task==='job-interview'&&c.targetId===agency.building.id&&(agency.building.constructionKind==='open-air'?!c.indoorLocation&&!c.path.length&&Math.hypot(c.entity.x-agency.building.door.x,c.entity.y-agency.building.door.y)<=.8:c.indoorLocation?.buildingId===agency.building.id&&!c.indoorLocation.exiting);
       if(city.minute<a.interviewAt)continue;
-      if(city.minute>=a.interviewAt&&!secretaryPresent(city)){a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;continue;}
+      if(city.minute>=a.interviewAt&&!secretaryAvailable){a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;continue;}
       if(!present){if(city.minute>a.interviewAt+60){a.absentAt=city.minute;finishApplication(a,'reprovado','Não compareceu à entrevista na Secretaria do Trabalho',city.minute);releaseInterview(c,a);}continue;}
       a.arrivedAt??=city.minute;a.interviewStartedAt??=city.minute;c.action='Entrevista na Secretaria do Trabalho';
       if(city.minute<a.interviewStartedAt+RECRUITMENT_RULES.interviewDuration)continue;
       a.submittedAt=city.minute;a.resultDueAt=city.minute+RECRUITMENT_RULES.minimumNotice;releaseInterview(c,a);
     }
     if(city.minute<(a.resultDueAt??a.submittedAt+RECRUITMENT_RULES.minimumNotice))continue;
-    if(!secretaryPresent(city)){a.resultDueAt=city.minute+30;continue;}
+    if(!secretaryAvailable){a.resultDueAt=city.minute+30;continue;}
     const key=`${b.id}:${a.resultDueAt}`;let list=sessions.get(key);if(!list)sessions.set(key,list=[]);list.push({c,b,a});
   }
   for(const rows of sessions.values()){

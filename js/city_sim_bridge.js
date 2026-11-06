@@ -175,6 +175,9 @@ export class CitySimulationBridge {
   }
   receiveMotion(data) {
     const now=performance.now();
+    // The clock travels with the compact stream instead of freezing until
+    // the much heavier business/political snapshot arrives.
+    if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();}
     if(data.workerMetrics)this.metrics={...this.metrics,...data.workerMetrics};
     this.interpolate(now);
     const positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;

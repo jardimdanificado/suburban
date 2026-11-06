@@ -1,4 +1,5 @@
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
+import {beginActivitySearch,endActivitySearch,invalidateActivitySearch} from './city_activity_search.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
 import {CityFurniture} from './city_furniture.js?v=leisure-route-stagger-1';
@@ -1055,7 +1056,11 @@ export class CitySimulation {
     const setupMs=performance.now()-profileMark;profileMark=performance.now();
     const citizenDetail=this.profileDiagnostics?{}:null,measureCitizen=(name,work)=>{if(!citizenDetail){work();return;}const started=performance.now();work();citizenDetail[`${name}Ms`]=(citizenDetail[`${name}Ms`]||0)+performance.now()-started;};
     this._citizenLoopProfile=citizenDetail;
+    let citizenMs;
+    beginActivitySearch(this);
+    try{
     for (const c of this.citizens) {
+      if(c.custody||c.custodyEscort||c.custodyWaterDelivery||c.funeralBodyId||c.graffitiMission||c.policePatrol||c.policeResponse||c.policeInvestigation||c.policeOversight||c.policeAudit||c.policeRestitution||c.policeArrestEscort)invalidateActivitySearch(this);
       if(citizenDetail)measureCitizen('blockedPositionRecovery',()=>this.life.recoverBlockedPosition(c));else this.life.recoverBlockedPosition(c);
       const n = c.needs;
       // Idle adults cannot choose another activity until their short retry
@@ -1086,7 +1091,7 @@ export class CitySimulation {
       // and transport, where updateDetainee intentionally does not run the
       // in-cell care cycle yet.
       if(c.custody){const jail=this.building(c.custody.jailId);if(jail?.active&&!jail.entity.destroyed){this.justice.servePrisoner(c,jail);this.supplies.useCarried(c);}}
-      let died=false;if(citizenDetail)measureCitizen('lifeMinute',()=>{died=this.life.minute(c,elapsed);});else died=this.life.minute(c,elapsed);if(died)continue;
+      let died=false;if(citizenDetail)measureCitizen('lifeMinute',()=>{died=this.life.minute(c,elapsed);});else died=this.life.minute(c,elapsed);if(died){invalidateActivitySearch(this);continue;}
       this.justice.updateInjuries(c);
       if(c.custodyWaterDelivery){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updateCustodyWaterDelivery(c);continue;}
       if(c.funeralBodyId){if(c.skybridgeTransit)this.finishSkybridgeTransit(c);if(c.skybridgeTransit){this.justice.updateFuneralWorker(c);continue;}if(c.indoorLocation&&!c.funeralInterior&&!syncCitizenInterior(this,c))continue;this.justice.updateFuneralWorker(c);continue;}
@@ -1146,8 +1151,9 @@ export class CitySimulation {
         c._nextTaskAt=this.minute+interval+c.id%interval;c._retryUrgent=urgent;
       }
     }
-    this._citizenLoopProfile=null;const citizenMs=performance.now()-profileMark;profileMark=performance.now();
+    this._citizenLoopProfile=null;citizenMs=performance.now()-profileMark;profileMark=performance.now();
     for(const c of this.citizens)if(!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
+    }finally{endActivitySearch(this);this._citizenLoopProfile=null;}
     for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait||c.task==='beach_leisure'||c.beachLeisure)this.furniture.syncCitizen(c);
     if(this.minute%60===0){this.furniture.reconcile();this.substances?.hourly();}
     const interiorMs=performance.now()-profileMark;profileMark=performance.now();
