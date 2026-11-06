@@ -265,30 +265,18 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   const shutterParts={front:[],side:[]},shutterMatrix=new THREE.Matrix4(),shutterPosition=new THREE.Vector3(),shutterQuaternion=new THREE.Quaternion(),shutterScale=new THREE.Vector3(1,1,1),shutterAxis=new THREE.Vector3(0,1,0);
   const makeShutterMaterial=(axis,parameters)=>{
    const material=new THREE.MeshLambertMaterial(parameters),baseProgramKey=material.customProgramCacheKey();
-   material.customProgramCacheKey=()=>`${baseProgramKey}:shutter-facade-normal:${axis}`;
+   material.customProgramCacheKey=()=>`${baseProgramKey}:shutter-facade-normal:${axis}:two-sided-shutters-1`;
    material.onBeforeCompile=shader=>{
     const facadeNormal=axis==='front'?'vec3(0.0,0.0,sign(instanceMatrix[2][2]))':'vec3(sign(instanceMatrix[0][0]),0.0,0.0)';
     shader.vertexShader=shader.vertexShader.replace('#include <defaultnormal_vertex>',`#include <defaultnormal_vertex>\n#ifdef USE_INSTANCING\ntransformedNormal = normalMatrix * ${facadeNormal};\n#endif`);
+    if(parameters.side===THREE.DoubleSide){
+     // These facade normals intentionally stay fixed on both sides. Three's
+     // usual back-face normal flip would reintroduce mismatched illumination.
+     const normalChunk=THREE.ShaderChunk.normal_fragment_begin.replace(/\bnormal\s*\*=\s*faceDirection\s*;/g,'');
+     shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_begin>',normalChunk);
+    }
    };
    return material;
-  };
-  const makeReflectionSafe=(geometry)=>{
-   const position=geometry.getAttribute('position'),normal=geometry.getAttribute('normal'),color=geometry.getAttribute('color');
-   const vertexCount=position.count,sourceIndex=geometry.getIndex(),indices=[];
-   const baseIndices=sourceIndex?Array.from({length:sourceIndex.count},(_,i)=>sourceIndex.getX(i)):Array.from({length:vertexCount},(_,i)=>i);
-   const positions=Array.from(position.array),normals=Array.from(normal.array),colors=color?Array.from(color.array):null;
-   for(let i=0;i<vertexCount;i++){
-    positions.push(position.getX(i),position.getY(i),position.getZ(i));
-    normals.push(-normal.getX(i),-normal.getY(i),-normal.getZ(i));
-    if(colors)for(let channel=0;channel<color.itemSize;channel++)colors.push(color.array[i*color.itemSize+channel]);
-   }
-   indices.push(...baseIndices);
-   for(let i=0;i<baseIndices.length;i+=3)indices.push(vertexCount+baseIndices[i],vertexCount+baseIndices[i+2],vertexCount+baseIndices[i+1]);
-   geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
-   geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
-   if(colors)geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,color.itemSize));
-   geometry.setIndex(indices);geometry.computeBoundingSphere();
-   return geometry;
   };
   const addShutter=(pivotX,pivotY,pivotZ,shutterSide,normal,axis,closed,floor)=>{
    const openAngle=axis==='front'?shutterSide*normal*Math.PI*.44:-shutterSide*normal*Math.PI*.44,parts=shutterParts[axis];
@@ -317,10 +305,10 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    for(const axis of ['front','side']){
     const parts=shutterParts[axis];if(!parts.length){shutterGeometry[axis].glass.dispose();shutterGeometry[axis].panel.dispose();shutterGeometry[axis].slat.dispose();continue;}
     const makeBatch=(geometry,material)=>{const mesh=new THREE.InstancedMesh(geometry,material,parts.length);mesh.count=parts.length;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;windowControls.add(mesh);return mesh;};
-    // Mirrored instance transforms reverse triangle winding. Include reversed
-    // faces with reversed normals so each transform keeps correct lighting.
-    const glassGeometry=makeReflectionSafe(shutterGeometry[axis].glass),opaqueGeometry=makeReflectionSafe(opaqueShutterGeometry(axis));
-    const meshes={glass:makeBatch(glassGeometry,makeShutterMaterial(axis,{color:0x91bac3,transparent:true,opacity:.2,depthWrite:false})),opaque:makeBatch(opaqueGeometry,makeShutterMaterial(axis,{color:0xffffff,vertexColors:true}))};
+    // Both sides keep their facade normal. Glass uses one transparent pass,
+    // matching the former single draw without duplicated vertices/faces.
+    const glassGeometry=shutterGeometry[axis].glass,opaqueGeometry=opaqueShutterGeometry(axis);
+    const meshes={glass:makeBatch(glassGeometry,makeShutterMaterial(axis,{color:0x91bac3,transparent:true,opacity:.2,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true})),opaque:makeBatch(opaqueGeometry,makeShutterMaterial(axis,{color:0xffffff,vertexColors:true,side:THREE.DoubleSide}))};
     const write=record=>{
      shutterQuaternion.setFromAxisAngle(shutterAxis,record.angle);
      shutterPosition.set(record.pivotX,record.pivotY,record.pivotZ);

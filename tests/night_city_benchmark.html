@@ -6,12 +6,16 @@ import {RCT3DRenderer} from '../js/renderer_3d.js?v=local-night-lights-1';
 import {CitySimulation} from '../js/city_simulation.js';
 import {World} from '../js/world.js';
 import {setActiveEntities} from '../js/engine.js';
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {shutterReference} from './helpers/shutter_reference.js';
+const geometryTest=new URLSearchParams(location.search).get('geometry')==='shutters';
 const out=document.querySelector('#results'),population=Number(new URLSearchParams(location.search).get('population'))||1024;
 const world=new World(1,1337,256),entities=[];let id=1;
 const city=new CitySimulation({world,population,seed:1337,createEntity:data=>{const e={id:id++,destroyed:false,...data};entities.push(e);return e;}});city.initialize();
 const renderer=new RCT3DRenderer(document.querySelector('#view')),local=renderer.nightLighting,errors=[];
 renderer.renderer.debug.onShaderError=(gl,p,v,f)=>errors.push(gl.getProgramInfoLog(p)+'\n'+gl.getShaderInfoLog(f));
 renderer.setNightLightLimit(Number(new URLSearchParams(location.search).get('limit'))||32);
+if(geometryTest)renderer.setPaused(true);
 renderer.resize(960,640);renderer.setCamera(world.spawnCenter.x,world.spawnCenter.y,1.2);
 renderer.cityDevelopment=city.development;renderer.cityLogistics=city.logistics;renderer.profileFrame=true;
 await renderer.cityCitizenModels.loading;
@@ -22,14 +26,29 @@ for(let i=0;torchStress&&i<city.citizens.length;i++){
  const e=city.citizens[i].entity;e.properties.heldItem={resourceType:'torch',fuel:10};
 }
 setActiveEntities(entities);city.minute=20*60;city.syncClock();
-function frame(){renderer.render(world,entities,0,1/60,1);renderer.renderer.getContext().finish();}
+function frame(){renderer.render(world,entities,0,geometryTest?0:1/60,geometryTest?0:1);renderer.renderer.getContext().finish();}
 function measure(){const samples=[],parts=[];for(let i=0;i<12;i++){const start=performance.now();frame();samples.push(performance.now()-start);parts.push({...renderer.frameProfile});}samples.sort((a,b)=>a-b);return {median:samples[6],p95:samples[11],profile:parts.reduce((s,p)=>{for(const k of Object.keys(p))s[k]=(s[k]||0)+p[k]/parts.length;return s;},{})};}
 let running=false;
 document.querySelector('#run').onclick=async()=>{
- if(running)return;running=true;out.textContent='Running native lights…';await new Promise(requestAnimationFrame);
+ if(running)return;running=true;out.textContent=geometryTest?'Comparing shutter geometry…':'Running native lights…';await new Promise(resolve=>setTimeout(resolve,0));
  try{
+  if(geometryTest){
+   frame();const records=[...renderer.cityMeshes.values()].flatMap(g=>g.userData.portugueseWindowShutters||[]),reference=shutterReference(THREE,records);
+   for(const optimized of [false,true]){reference.set(optimized);for(let i=0;i<12;i++){frame();await new Promise(resolve=>setTimeout(resolve,0));}}
+   const pixels=()=>{const gl=renderer.renderer.getContext(),p=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,p);return p;};
+   reference.set(false);frame();const a=pixels();reference.set(true);frame();const b=pixels();let max=0,changed=0;for(let i=0;i<a.length;i++){const d=Math.abs(a[i]-b[i]);max=Math.max(max,d);if(d>1)changed++;}
+   const runs=[];
+   for(const optimized of [false,true,true,false]){
+    reference.set(optimized);frame();const samples=[],draws=[],triangles=[];
+    for(let i=0;i<12;i++){const at=performance.now();frame();samples.push(performance.now()-at);draws.push(renderer.renderer.info.render.calls);triangles.push(renderer.renderer.info.render.triangles);await new Promise(resolve=>setTimeout(resolve,0));}
+    samples.sort((a,b)=>a-b);draws.sort((a,b)=>a-b);triangles.sort((a,b)=>a-b);runs.push({optimized,median:samples[6],p95:samples[11],drawCalls:draws[6],triangles:triangles[6]});
+   }
+   reference.set(true);frame();
+   out.textContent=JSON.stringify({population,shutterInstances:reference.instances,modelsReady:renderer.cityCitizenModels.ready,bodyInstances:[...renderer.cityCitizenModels.activeBatches].reduce((n,b)=>n+b.count,0),chosenResolution:renderer.resolutionScale,buffer:renderer.renderer.domElement.width+'x'+renderer.renderer.domElement.height,maxChannelDifference:max,channelsDifferingOverOne:changed,runs,errors},null,2);
+   return;
+  }
   renderer.nightLighting=null;for(const p of renderer.nightLightPool)renderer.scene.add(p);frame();frame();const native=measure(),nativeErrors=errors.splice(0);
-  out.textContent='Running local lights…';await new Promise(requestAnimationFrame);
+  out.textContent='Running local lights…';await new Promise(resolve=>setTimeout(resolve,0));
   renderer.nightLighting=local;for(const p of renderer.nightLightPool)renderer.scene.remove(p);frame();frame();const optimized=measure();
   for(const dx of [12,36,-24,0]){renderer.setCamera(world.spawnCenter.x+dx,world.spawnCenter.y,1.2);frame();}
   out.textContent=JSON.stringify({population,cameraMovesChecked:4,source:torchStress?'crowded-torches':'street-lamps',nightLights:local.grid.count,modelsReady:renderer.cityCitizenModels.ready,chosenResolution:renderer.resolutionScale,buffer:renderer.renderer.domElement.width+'x'+renderer.renderer.domElement.height,native,optimized,speedup:native.median/optimized.median,gridMaxLights:local.grid.maxCellLights,nativeErrors,optimizedErrors:errors.splice(0)},null,2);

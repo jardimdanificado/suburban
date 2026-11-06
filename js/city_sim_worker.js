@@ -1,6 +1,7 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=night-crowd-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-tail-1';
 
 const graph = new CityStateGraph();
+let fieldTailPatches=false;
 let state, paused = false, speed = 1, lastTime = performance.now(), accumulator = 0;
 let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0, lastSnapshotCost = 0, dirty = false, forceSnapshotPending = false;
 let lastUpdateMs=0,maxUpdateMs=0,maxUpdateMinute=0,maxUpdateProfile=null,updateTotalMs=0,updateCount=0,maxSnapshotMs=0,maxSnapshotMinute=0;
@@ -97,7 +98,7 @@ function snapshot(force = false) {
   if (awaitingAck) { if (force) forceSnapshotPending = true; return false; }
   if (!force && performance.now() - lastSnapshot < stateInterval()) return false;
   const started = performance.now();
-  const packet = graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:true}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions();
+  const packet = graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:true,fieldTailPatches}), motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions();
   lastSnapshotCost=performance.now()-started;
   if(lastSnapshotCost>maxSnapshotMs){maxSnapshotMs=lastSnapshotCost;maxSnapshotMinute=state.city.minute;}
   postMessage({ type: 'state', packet, positions: motion, inside, vehicles, tick, elapsed, workMs: lastSnapshotCost, workerMetrics:workerMetrics(true) }, [motion.buffer, inside.buffer, vehicles.buffer, packet.packedNeeds.buffer]);
@@ -117,6 +118,7 @@ function fail(error) {
 self.onmessage = ({ data }) => {
   try {
     if (data.type === 'init') {
+      fieldTailPatches=data.stateFeatures?.fieldTailPatches===true&&graph.supportsFieldTailPatches===true;
       state = graph.apply(data.packet); bindCityState(state.city);
       state.city.staggerInitialTaskDecisions();
       state.city.profileDiagnostics=data.profileDiagnostics===true;

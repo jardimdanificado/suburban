@@ -66,7 +66,7 @@ const same = (a,b) => {if(!a||a.length!==b.length)return false;for(let i=0;i<a.l
 /** Incremental object graph transport. References (including cycles) retain their identity.
  * Only changed nodes cross the worker boundary; journals are not recopied every frame. */
 export class CityStateGraph {
-  constructor() { this.ids = new WeakMap(); this.objects = new Map(); this.previous = new Map(); this.nextId = 1; this.historyCursors = new Map(); this.mapChildren = []; this.relationNodes = new Map(); this.ledgerCursors=new Map(); this.referenceTokens=[]; }
+  constructor() { this.supportsFieldTailPatches=true; this.ids = new WeakMap(); this.objects = new Map(); this.previous = new Map(); this.nextId = 1; this.historyCursors = new Map(); this.mapChildren = []; this.relationNodes = new Map(); this.ledgerCursors=new Map(); this.referenceTokens=[]; }
   ref(value) {
     if (value === null || typeof value !== 'object') return value;
     const id = this.ids.get(value);
@@ -74,7 +74,7 @@ export class CityStateGraph {
     return { ref: id };
   }
   value(value) { return value && typeof value === 'object' && 'ref' in value ? this.objects.get(value.ref) : value; }
-  encode(root,{packNeeds=false,packPositions=false,omitCitizenPaths=false}={}) {
+  encode(root,{packNeeds=false,packPositions=false,omitCitizenPaths=false,fieldTailPatches=false}={}) {
     const nodes=[],removed=[],histories=[];
     let packedNeeds=null,needsSet=null,citizenSet=null,entitySet=null;
     if(packPositions){entitySet=new WeakSet();for(const citizen of root.city.citizens)entitySet.add(citizen.entity);}
@@ -152,7 +152,7 @@ export class CityStateGraph {
           const pathIndex=oldFields.indexOf('path');
           if(pathIndex>=0){const compact=[];for(let i=0;i<oldFields.length;i+=2)if(oldFields[i]!=='path')compact.push(oldFields[i],oldFields[i+1]);oldFields=compact;this.previous.set(id,{kind,data:compact});}
         }
-        let index=0,delta=null,full=oldFields?null:[];
+        let index=0,delta=null,full=oldFields?null:[],fullKeep=0;
         for (const key in object) {
           if(!Object.prototype.hasOwnProperty.call(object,key))continue;
           if (localFields.has(key)||(omitCitizenPaths&&packedCitizen&&key==='path')) continue;
@@ -163,14 +163,20 @@ export class CityStateGraph {
           if(full)full.push(key,encoded);
           else if(oldFields[index]===key){if(!Object.is(oldFields[index+1],encoded))(delta??=[]).push(index,encoded);}
           else{
-            full=oldFields.slice(0,index);
+            fullKeep=index;full=oldFields.slice(0,index);
             if(delta)for(let i=0;i<delta.length;i+=2)full[delta[i]+1]=delta[i+1];
             full.push(key,encoded);
           }
           index+=2;
         }
-        if(!full && index!==oldFields.length){full=oldFields.slice(0,index);if(delta)for(let i=0;i<delta.length;i+=2)full[delta[i]+1]=delta[i+1];}
-        if(full){nodes.push({id,kind,data:full});this.previous.set(id,{kind,data:full});}
+        if(!full && index!==oldFields.length){fullKeep=index;full=oldFields.slice(0,index);if(delta)for(let i=0;i<delta.length;i+=2)full[delta[i]+1]=delta[i+1];}
+        if(full){
+          let tail=null;
+          if(fieldTailPatches&&oldFields&&full.length>=12&&(delta?.length||0)+full.length-fullKeep+8<full.length){
+            tail={keep:fullKeep,updates:delta||[],fields:full.slice(fullKeep)};
+          }
+          nodes.push(tail?{id,kind,data:tail,tailPatch:true}:{id,kind,data:full});this.previous.set(id,{kind,data:full});
+        }
         else if(delta){
           if(delta.length+4<oldFields.length){nodes.push({id,kind,data:delta,patch:true});for(let i=0;i<delta.length;i+=2)oldFields[delta[i]+1]=delta[i+1];}
           else{data=oldFields.slice();for(let i=0;i<delta.length;i+=2)data[delta[i]+1]=delta[i+1];nodes.push({id,kind,data});this.previous.set(id,{kind,data});}
@@ -222,7 +228,7 @@ export class CityStateGraph {
     }
     const resolve = value => typeof value === 'string' && value.startsWith('@') ?
       value.startsWith('@s') ? value.slice(2) : this.objects.get(Number(value.slice(1))) : value;
-    for (const { id, kind, data, patch } of packet.nodes) {
+    for (const { id, kind, data, patch, tailPatch } of packet.nodes) {
       const object = this.objects.get(id);
       if (kind === 'CityFeed') { /* Resolved after journal deltas below. */ }
       else if(kind==='SocialMemory'||kind==='SocialFact'){const fields=kind==='SocialMemory'?socialMemoryFields:socialFactFields;for(let i=0;i<fields.length;i++)object[fields[i]]=data[i];}
@@ -232,6 +238,21 @@ export class CityStateGraph {
       else if (kind === 'Set') { object.clear(); for (const value of data) object.add(resolve(value)); }
       else if (kind === 'Array' || kind === 'FrozenArray') { object.length = data.length; for (let i = 0; i < data.length; i++) object[i] = resolve(data[i]); }
       else if (kind === 'Uint8Array') object.set(data);
+      else if(tailPatch){
+        const previous=this.previous.get(id),baseline=previous?.data;
+        if(previous?.kind!==kind||!Array.isArray(baseline)||!Number.isInteger(data.keep)||data.keep<0||data.keep>baseline.length||data.keep%2)throw new Error(`Mudança de estrutura sem estado inicial válido: ${id}`);
+        const complete=baseline.slice(0,data.keep);
+        // Rebuild only the changed suffix. The prefix keeps its identities and
+        // insertion order, including locally installed callback properties.
+        for(let i=data.keep;i<baseline.length;i+=2){
+          const key=baseline[i],descriptor=Object.getOwnPropertyDescriptor(object,key);
+          if(descriptor&&!descriptor.get&&typeof descriptor.value!=='function'&&!localFields.has(key))delete object[key];
+        }
+        for(let i=0;i<data.updates.length;i+=2){const at=data.updates[i];complete[at+1]=data.updates[i+1];object[complete[at]]=resolve(data.updates[i+1]);}
+        for(let i=0;i<data.fields.length;i+=2){const key=data.fields[i],value=data.fields[i+1];complete.push(key,value);object[key]=resolve(value);}
+        this.previous.set(id,{kind,data:complete});
+        continue;
+      }
       else {
         const baseline=this.previous.get(id)?.data;
         if(patch&&!baseline)throw new Error(`Atualização parcial sem estado inicial: ${id}`);

@@ -1,0 +1,59 @@
+<!doctype html><meta charset="utf-8"><title>Shutter geometry comparison</title>
+<style>body{background:#18212c;color:white;font:14px monospace}canvas{width:640px;height:480px;image-rendering:pixelated}pre{white-space:pre-wrap}button{padding:12px}</style>
+<button id="run">Compare shutter geometry</button><pre id="results">Loading…</pre>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {addArchitectureVariations} from '../js/city_architecture_variations.js';
+import {HOUSE_STYLES} from '../js/city_culture.js';
+import {shutterReference} from './helpers/shutter_reference.js';
+const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});renderer.setSize(320,240);document.body.append(renderer.domElement);
+const buildingCount=Math.max(1,Math.min(24,Number(new URLSearchParams(location.search).get('buildings'))||1));
+const scene=new THREE.Scene();scene.background=new THREE.Color('#18212c');
+const ambient=new THREE.AmbientLight(0xdde8f5,.5),sun=new THREE.DirectionalLight(0xffedcc,2),lamp=new THREE.PointLight(0xffaa55,20,60,1.4);sun.position.set(15,30,12);lamp.position.set(14,5,14);scene.add(ambient,sun,lamp);
+const perspectiveCamera=new THREE.PerspectiveCamera(75,4/3,.1,1000),orthographicCamera=new THREE.OrthographicCamera(-40,40,30,-30,-300,600),target=new THREE.WebGLRenderTarget(320,240),errors=[];
+let camera=perspectiveCamera;
+renderer.debug.onShaderError=(gl,p,v,f)=>errors.push(gl.getProgramInfoLog(p)+'\n'+gl.getShaderInfoLog(f));
+const styles=Object.keys(HOUSE_STYLES).filter(k=>['portuguese_colonial','dutch_colonial'].includes(HOUSE_STYLES[k].motif)),records=[],opaque=new Set();
+for(let i=0;i<buildingCount;i++){
+ const group=new THREE.Group(),b={id:100+i,type:'residential',width:4,depth:4,floors:3,architecture:styles[i%styles.length],units:[],entity:{x:0,y:0}},windows=[];
+ for(let z=0;z<3;z++)for(let y=0;y<4;y++)for(let x=0;x<4;x++){
+  const u={id:`${i}:${x}:${y}:${z}`,x,y,z,hasWindow:true,roomType:'bedroom'};b.units.push(u);
+  for(const [edge,side,bit]of [[y===0,'back',1],[y===3,'front',2],[x===0,'left',4],[x===3,'right',8]])if(edge)windows.push({unit:u,side,openingBit:bit});
+ }
+ addArchitectureVariations(THREE,group,b,[],windows);group.position.set((i%6)*6,0,Math.floor(i/6)*6);group.rotation.y=(i%4)*Math.PI/2;scene.add(group);
+ for(const r of group.userData.portugueseWindowShutters||[]){records.push(r);opaque.add(r.dirtyMeshes.opaque);}
+}
+const reference=shutterReference(THREE,records),pairs=[...opaque].map(mesh=>({mesh}));
+const strategy=optimized=>reference.set(optimized);
+function frame(){renderer.setRenderTarget(target);renderer.render(scene,camera);const pixels=new Uint8Array(320*240*4);renderer.readRenderTargetPixels(target,0,0,320,240,pixels);renderer.setRenderTarget(null);return pixels;}
+async function measure(optimized){strategy(optimized);frame();const samples=[];for(let i=0;i<12;i++){const at=performance.now();frame();samples.push(performance.now()-at);await new Promise(resolve=>setTimeout(resolve,0));}samples.sort((a,b)=>a-b);return{median:samples[6],p95:samples[11],drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles};}
+const out=document.querySelector('#results');let running=false;
+document.querySelector('#run').onclick=async()=>{
+ if(running)return;running=true;out.textContent='Comparing open/closed shutters, four facades, day/night and an inside-panel view…';await new Promise(resolve=>setTimeout(resolve,0));
+ try{
+  let max=0,different=0,total=0,cases=0;const caseResults=[];let worst=null;
+  for(const closed of [false,true]){
+   for(const r of records){r.angle=closed?r.closedAngle:r.openAngle;r.writeMatrices();for(const m of Object.values(r.dirtyMeshes))m.instanceMatrix.needsUpdate=true;}
+   for(const night of [false,true]){
+    ambient.intensity=night?.08:.5;sun.intensity=night?.08:2;lamp.visible=night;
+    for(const viewCamera of [perspectiveCamera,orthographicCamera]){camera=viewCamera;
+    for(const [x,y,z]of [[45,24,42],[-20,22,42],[-20,22,-20],[45,24,-20],[5,3,7],[-2,3,7],[-2,3,-2],[7,3,-2]]){
+     camera.position.set(x,y,z);camera.lookAt(buildingCount===1||x<10&&z<10?new THREE.Vector3(2,2,2):new THREE.Vector3(15,2,9));strategy(false);const a=frame();strategy(true);const b=frame();
+     let changed=0,peak=0;for(let i=0;i<a.length;i++){const d=Math.abs(a[i]-b[i]);peak=Math.max(peak,d);max=Math.max(max,d);if(d>1){different++;changed++;}total++;}cases++;out.textContent='Compared '+cases+' cases';await new Promise(resolve=>setTimeout(resolve,0));caseResults.push({closed,night,projection:camera.isOrthographicCamera?'orthographic':'perspective',camera:[x,y,z],changed,peak});if(!worst||changed>worst.changed)worst={a,b,changed};
+    }
+    }
+   }
+  }
+  camera=perspectiveCamera;
+  for(const r of records){r.angle=r.closedAngle;r.writeMatrices();for(const m of Object.values(r.dirtyMeshes))m.instanceMatrix.needsUpdate=true;}
+  scene.updateMatrixWorld(true);const mesh=pairs[0].mesh,matrix=new THREE.Matrix4();mesh.getMatrixAt(0,matrix);matrix.premultiply(mesh.matrixWorld);
+  camera.near=.001;camera.updateProjectionMatrix();
+  const inside=new THREE.Vector3(.1,0,.035).applyMatrix4(matrix);camera.position.copy(inside);camera.lookAt(inside.clone().add(new THREE.Vector3(.01,0,1)));strategy(false);const a=frame();strategy(true);const b=frame();
+  let insideMax=0;for(let i=0;i<a.length;i++)insideMax=Math.max(insideMax,Math.abs(a[i]-b[i]));
+  camera.near=.1;camera.updateProjectionMatrix();camera.position.set(45,24,42);camera.lookAt(15,2,9);const native=await measure(false),optimized=await measure(true);renderer.render(scene,camera);
+  if(worst){for(const [label,buffer]of [['Native',worst.a],['Optimized',worst.b],['Difference',null]]){const title=document.createElement('div');title.textContent=label;document.body.append(title);const c=document.createElement('canvas');c.width=320;c.height=240;const ctx=c.getContext('2d'),pixels=new Uint8ClampedArray(320*240*4);for(let y=0;y<240;y++)for(let x=0;x<320;x++){const from=((239-y)*320+x)*4,to=(y*320+x)*4;for(let k=0;k<3;k++)pixels[to+k]=buffer?buffer[from+k]:Math.min(255,Math.abs(worst.a[from+k]-worst.b[from+k])*8);pixels[to+3]=255;}ctx.putImageData(new ImageData(pixels,320,240),0,0);document.body.append(c);}}
+  out.textContent=JSON.stringify({passed:errors.length===0&&max<=1&&insideMax<=1,caseResults,buildings:buildingCount,shutterInstances:[...opaque].reduce((n,m)=>n+m.count,0),cases,maxChannelDifference:max,channelsDifferingOverOne:different,totalChannels:total,insidePanelMaxDifference:insideMax,native,optimized,errors},null,2);
+ }catch(e){out.textContent=e.stack;}
+};
+out.textContent='Ready';
+</script>

@@ -7,6 +7,7 @@ const mode=process.argv[2]||'simulation';
 const root=process.argv[3]?resolve(process.argv[3]):fileURLToPath(new URL('../',import.meta.url));
 const population=Math.max(1,Number(process.env.SUBURBAN_BENCH_POPULATION)||256);
 const mapSize=Math.max(128,Math.min(1024,Number(process.env.SUBURBAN_BENCH_MAP_SIZE)||128));
+const warmupMinutes=Math.max(0,Math.floor(Number(process.env.SUBURBAN_BENCH_WARMUP_MINUTES)||0));
 const moduleAt=name=>import(pathToFileURL(resolve(root,'js',name)).href);
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -106,14 +107,15 @@ if(mode==='builder-selection'){
     const ms=performance.now()-started;
     console.log(JSON.stringify({mode,root,population:city.citizens.length,cityMinutes:240,ms,stateInterval,snapshots,encodeMs,snapshotCosts,speed:60/(ms/1000),targetMs:1875}));
   }else if(mode==='snapshots'||mode==='bridge'){
+    for(let i=0;i<warmupMinutes;i++)city.update(.25);
     const {CityStateGraph,bindCityState}=await moduleAt('city_state.js'),graph=new CityStateGraph(),mirror=new CityStateGraph(),state={city,entities,nextId:id+1};let reflected=mirror.apply(structuredClone(graph.encode(state)));bindCityState(reflected.city);
     let bridge;
     if(mode==='bridge'){const {CitySimulationBridge}=await moduleAt('city_sim_bridge.js');bridge=new CitySimulationBridge({city:reflected.city,entities:reflected.entities,nextId:state.nextId,time:{paused:false},changed(){},notice(){}});bridge.active=true;bridge.graph=mirror;bridge.worker={postMessage(){}};}
     const samples=[];
-    for(let i=0;i<30;i++){for(let n=0;n<6;n++)city.update(1/6);const start=performance.now(),packet=graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:process.env.SUBURBAN_BENCH_COMPACT_PATHS==='1'});const encodeMs=performance.now()-start,positionStride=bridge?4:3,positions=new Float64Array(city.citizens.length*positionStride);for(let j=0;j<city.citizens.length;j++){const c=city.citizens[j],at=j*positionStride;positions[at]=c.id;positions[at+1]=c.entity.x;positions[at+2]=c.entity.y;if(bridge)positions[at+3]=c.path.length?1:0;}const copy=structuredClone(packet),applyAt=performance.now();if(bridge){bridge.receive({type:'state',packet:copy,positions,tick:i,elapsed:i,workMs:encodeMs});bridge.interpolate(performance.now()+40);}else{reflected=mirror.apply(copy);for(let j=0;j<reflected.city.citizens.length;j++){const c=reflected.city.citizens[j],at=j*3;if(positions[at]===c.id){c.entity.x=positions[at+1];c.entity.y=positions[at+2];}}bindCityState(reflected.city);}samples.push({ms:encodeMs,applyMs:performance.now()-applyAt,nodes:packet.nodes.length,bytes:Buffer.byteLength(JSON.stringify(packet))});}
+    for(let i=0;i<30;i++){for(let n=0;n<6;n++)city.update(1/6);const start=performance.now(),packet=graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:process.env.SUBURBAN_BENCH_COMPACT_PATHS==='1',fieldTailPatches:process.env.SUBURBAN_BENCH_TAIL_PATCHES==='1'});const encodeMs=performance.now()-start,positionStride=bridge?4:3,positions=new Float64Array(city.citizens.length*positionStride);for(let j=0;j<city.citizens.length;j++){const c=city.citizens[j],at=j*positionStride;positions[at]=c.id;positions[at+1]=c.entity.x;positions[at+2]=c.entity.y;if(bridge)positions[at+3]=c.path.length?1:0;}const copy=structuredClone(packet),applyAt=performance.now();if(bridge){bridge.receive({type:'state',packet:copy,positions,tick:i,elapsed:i,workMs:encodeMs});bridge.interpolate(performance.now()+40);}else{reflected=mirror.apply(copy);for(let j=0;j<reflected.city.citizens.length;j++){const c=reflected.city.citizens[j],at=j*3;if(positions[at]===c.id){c.entity.x=positions[at+1];c.entity.y=positions[at+2];}}bindCityState(reflected.city);}samples.push({ms:encodeMs,applyMs:performance.now()-applyAt,nodes:packet.nodes.length,bytes:Buffer.byteLength(JSON.stringify(packet)),tailPatches:packet.nodes.filter(node=>node.tailPatch).length});}
     if(bridge)bridge.interpolate(performance.now()+1000);
     const mean=key=>samples.reduce((n,s)=>n+s[key],0)/samples.length;
-    console.log(JSON.stringify({mode,root,samples:samples.length,encodeMs:mean('ms'),changedNodes:mean('nodes'),bytes:mean('bytes'),applyMs:mean('applyMs'),checksum:hash(observed(city,!!bridge)),mirrorChecksum:hash(observed(reflected.city)),authoritativeChecksum:hash(observed(city))}));
+    console.log(JSON.stringify({mode,root,warmupMinutes,samples:samples.length,tailPatches:mean('tailPatches'),encodeMs:mean('ms'),changedNodes:mean('nodes'),bytes:mean('bytes'),applyMs:mean('applyMs'),checksum:hash(observed(city,!!bridge)),mirrorChecksum:hash(observed(reflected.city)),authoritativeChecksum:hash(observed(city)),visualChecksum:hash(visualState(city)),mirrorVisualChecksum:hash(visualState(reflected.city))}));
   }else{
     const dt=Math.max(1/60,Math.min(.25,Number(process.env.SUBURBAN_BENCH_DT)||1/6)),minutes=Math.max(1,Number(process.env.SUBURBAN_BENCH_MINUTES)||60),updates=Math.round(minutes/dt);
     const times=[],start=performance.now();for(let i=0;i<updates;i++){const at=performance.now();city.update(dt);times.push(performance.now()-at);}const ms=performance.now()-start;times.sort((a,b)=>a-b);
@@ -137,3 +139,10 @@ function observed(city,renderRiders=false){
     }
   }
   return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:riderPositions.get(c.id)?.x??c.entity.x,y:riderPositions.get(c.id)?.y??c.entity.y,home:c.homeUnitId,job:c.jobId,career:c.career,interior:c.indoorLocation})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),ledger:city.ledger,events:city.events.map(e=>e.id),relations:[...city.society.relations]};}
+
+function visualState(city){
+  return city.citizens.map(c=>({id:c.id,height:c.bodyHeightCm,weight:c.bodyWeightKg,dead:c.dead,destroyed:c.entity.destroyed,render:c.entity.properties.render,
+    wearing:[c.wearingIndex,c.lowerWearIndex,c.headwearIndex,c.footwearIndex,c.handwearIndex],basket:!!c.equipment?.cesta,
+    wardrobe:(c.wardrobe||[]).map(g=>({piece:g.piece,color:g.color,printId:g.printId,artworkId:g.artworkId,artPrint:g.artPrint,dirt:g.dirt,garmentId:g.garmentId,partyNumber:g.partyNumber,partyFlag:g.partyFlag})),
+    partyCap:c.political?.partyCapId,capGarment:c.campaign?.capGarmentId,flag:c.campaign?.partyFlag||c.campaign?.flag,presence:c.campaignPresence}));
+}

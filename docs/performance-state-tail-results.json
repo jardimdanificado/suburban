@@ -1,0 +1,92 @@
+{
+  "population": 1024,
+  "mapSize": 256,
+  "seed": 1337,
+  "samplesPerCase": 30,
+  "cases": {
+    "day": {
+      "before": {
+        "mode": "bridge",
+        "root": "/tmp/suburban-tail-patch-before",
+        "samples": 30,
+        "encodeMs": 158.13978680000008,
+        "changedNodes": 5209,
+        "bytes": 1570272.0333333334,
+        "applyMs": 31.617041633333383,
+        "checksum": "4e5f29ea8b0a06c5d033b558991dcfff5e4b2823f10f9f5cf36439c3e1577d0c",
+        "mirrorChecksum": "4e5f29ea8b0a06c5d033b558991dcfff5e4b2823f10f9f5cf36439c3e1577d0c",
+        "authoritativeChecksum": "8904a4ff97de8a36ac6fe78889d9c1145c9c46ce250781f8cd7000617a714193"
+      },
+      "after": {
+        "mode": "bridge",
+        "root": "/home/jardel/repos/suburban/",
+        "samples": 30,
+        "encodeMs": 151.92384659999988,
+        "changedNodes": 5209,
+        "bytes": 1141730.1666666667,
+        "applyMs": 23.30104536666642,
+        "checksum": "4e5f29ea8b0a06c5d033b558991dcfff5e4b2823f10f9f5cf36439c3e1577d0c",
+        "mirrorChecksum": "4e5f29ea8b0a06c5d033b558991dcfff5e4b2823f10f9f5cf36439c3e1577d0c",
+        "authoritativeChecksum": "8904a4ff97de8a36ac6fe78889d9c1145c9c46ce250781f8cd7000617a714193"
+      },
+      "afterRepeat": {
+        "mode": "bridge",
+        "root": "/home/jardel/repos/suburban/",
+        "samples": 30,
+        "encodeMs": 156.80127500000006,
+        "changedNodes": 5209,
+        "bytes": 1141729.0333333334,
+        "applyMs": 25.016117933333316,
+        "checksum": "4e5f29ea8b0a06c5d033b558991dcfff5e4b2823f10f9f5cf36439c3e1577d0c",
+        "mirrorChecksum": "4e5f29ea8b0a06c5d033b558991dcfff5e4b2823f10f9f5cf36439c3e1577d0c",
+        "authoritativeChecksum": "8904a4ff97de8a36ac6fe78889d9c1145c9c46ce250781f8cd7000617a714193"
+      }
+    },
+    "night": {
+      "before": {
+        "mode": "bridge",
+        "root": "/tmp/suburban-tail-patch-before",
+        "warmupMinutes": 660,
+        "samples": 30,
+        "tailPatches": 0,
+        "encodeMs": 257.8449927000004,
+        "changedNodes": 3534.7,
+        "bytes": 1080765.8,
+        "applyMs": 26.608951800000067,
+        "checksum": "d7d804fbd0ce61dfdcc2ff85dd3421eeac8432037bc832241f4b29b117abd2a2",
+        "mirrorChecksum": "d7d804fbd0ce61dfdcc2ff85dd3421eeac8432037bc832241f4b29b117abd2a2",
+        "authoritativeChecksum": "105bd31403a4b69c5171e2b597650eeb60a7c647cb00e73a1d9418d9d7ff92ed"
+      },
+      "after": {
+        "mode": "bridge",
+        "root": "/home/jardel/repos/suburban/",
+        "warmupMinutes": 660,
+        "samples": 30,
+        "tailPatches": 97.43333333333334,
+        "encodeMs": 229.05026643333355,
+        "changedNodes": 3534.7,
+        "bytes": 1003629.3,
+        "applyMs": 21.18385713333361,
+        "checksum": "d7d804fbd0ce61dfdcc2ff85dd3421eeac8432037bc832241f4b29b117abd2a2",
+        "mirrorChecksum": "d7d804fbd0ce61dfdcc2ff85dd3421eeac8432037bc832241f4b29b117abd2a2",
+        "authoritativeChecksum": "105bd31403a4b69c5171e2b597650eeb60a7c647cb00e73a1d9418d9d7ff92ed"
+      },
+      "afterRepeatVisualValidation": {
+        "mode": "bridge",
+        "root": "/home/jardel/repos/suburban/",
+        "warmupMinutes": 660,
+        "samples": 30,
+        "tailPatches": 97.43333333333334,
+        "encodeMs": 255.7602887666663,
+        "changedNodes": 3534.7,
+        "bytes": 1003627.5666666667,
+        "applyMs": 24.97203689999927,
+        "checksum": "d7d804fbd0ce61dfdcc2ff85dd3421eeac8432037bc832241f4b29b117abd2a2",
+        "mirrorChecksum": "d7d804fbd0ce61dfdcc2ff85dd3421eeac8432037bc832241f4b29b117abd2a2",
+        "authoritativeChecksum": "105bd31403a4b69c5171e2b597650eeb60a7c647cb00e73a1d9418d9d7ff92ed",
+        "visualChecksum": "431b830912899c0f374ff06c16873e1b237fe57b05ba41491f19f1d56983b744",
+        "mirrorVisualChecksum": "431b830912899c0f374ff06c16873e1b237fe57b05ba41491f19f1d56983b744"
+      }
+    }
+  }
+}
