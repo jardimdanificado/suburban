@@ -123,8 +123,8 @@ export function interiorRoute(building,from,to){
     const entry=buildingInteriorEntrance(building);
     if(entry){
       const remaining=interiorRoute(building,entry,to);if(remaining===null)return null;
-      const door={x:building.door.x,y:building.door.y,z:0},approach=Math.hypot(from.x-door.x,from.y-door.y)>1e-6?[door]:[];
-      return [...approach,entry,...remaining];
+      const door=Object.freeze({x:building.door.x,y:building.door.y,z:0}),approach=Math.hypot(from.x-door.x,from.y-door.y)>1e-6?[door]:[];
+      return [...approach,Object.freeze(entry),...remaining];
     }
   }
   const layout=interiorLayout(building),floors=building.floors||1,scale=layout.scale,roofTarget=to.z!=null&&Math.floor(to.z/CITY_FLOOR_HEIGHT)>=floors;
@@ -151,12 +151,15 @@ export function interiorRoute(building,from,to){
       }
     }
     if(compressed.length)stairPath.push(compressed.at(-1));
+    // Shared waypoints are geometry, not moving positions. Freezing them
+    // also lets worker snapshots reuse their already-synchronized records.
+    for(const p of stairPath)Object.freeze(p);
     layout.walkRoutes.set(routeKey,stairPath);if(layout.walkRoutes.size>ROUTE_CACHE_LIMIT)layout.walkRoutes.delete(layout.walkRoutes.keys().next().value);
   }
   const path=stairPath.slice(inside(from)?1:0);
-  if(roofTarget){const stair={x:building.entity.x+Math.floor(building.width/2)+.5,y:building.entity.y+Math.floor(building.depth/2)+.5,z:(floors-1)*CITY_FLOOR_HEIGHT},landing={...stair,z:to.z};if(!path.length||Math.hypot(path.at(-1).x-stair.x,path.at(-1).y-stair.y)>.01)path.push(stair);path.push(landing);if(Math.hypot(to.x-landing.x,to.y-landing.y)>.01)path.push({...to});}
-  if(path.length){if(inside(to)&&!roofTarget)path[path.length-1]={...to};else if(!roofTarget)path.push({...to});}
-  else if(!inside(to)&&!roofTarget)path.push({...to});
+  if(roofTarget){const stair=Object.freeze({x:building.entity.x+Math.floor(building.width/2)+.5,y:building.entity.y+Math.floor(building.depth/2)+.5,z:(floors-1)*CITY_FLOOR_HEIGHT}),landing=Object.freeze({...stair,z:to.z});if(!path.length||Math.hypot(path.at(-1).x-stair.x,path.at(-1).y-stair.y)>.01)path.push(stair);path.push(landing);if(Math.hypot(to.x-landing.x,to.y-landing.y)>.01)path.push(Object.freeze({...to}));}
+  if(path.length){if(inside(to)&&!roofTarget)path[path.length-1]=Object.freeze({...to});else if(!roofTarget)path.push(Object.freeze({...to}));}
+  else if(!inside(to)&&!roofTarget)path.push(Object.freeze({...to}));
   return path;
 }
 

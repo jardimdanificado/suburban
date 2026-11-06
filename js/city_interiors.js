@@ -76,10 +76,10 @@ function normalizeInterior(city,c){
 
 export function advanceCitizenInterior(city,c,minutes=1){
  const s=c.indoorLocation;if(!s?.path?.length)return;
- s.trail??=[{...s.position}];
+ s.trail??=[Object.freeze({...s.position})];
  s.phase=s.exiting?'leaving':'walking';
  let distance=Math.max(0,minutes)*injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1)*bodyMovementSpeedFactor(c);
- while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001){s.path.shift();if(!s.exiting){const visited=s.trail.findIndex(q=>Math.hypot(q.x-target.x,q.y-target.y,(q.z||0)-(target.z||0))<.001);if(visited>=0)s.trail.length=visited+1;else s.trail.push({...target});}}}
+ while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001){s.path.shift();if(!s.exiting){const visited=s.trail.findIndex(q=>Math.hypot(q.x-target.x,q.y-target.y,(q.z||0)-(target.z||0))<.001);if(visited>=0)s.trail.length=visited+1;else s.trail.push(Object.isFrozen(target)?target:Object.freeze({...target}));}}}
  c.entity.x=s.position.x;c.entity.y=s.position.y;
  s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));
  if(!s.path.length){if(s.exiting){c.indoorLocation=null;leaveEntrance(city,c);}else{s.unitId=s.targetUnitId;s.roomType=s.targetRoomType;s.arrivedAt=city.minute;s.phase='using';}}
@@ -103,7 +103,7 @@ export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'
   const usedSlots=new Set();for(const [index,id]of (room.activityReservedIds||[]).entries()){if(id===c.id)continue;const other=city.society.citizen(id),assigned=other?.indoorLocation?.furnitureSlot;if(Number.isInteger(assigned))usedSlots.add(assigned);else usedSlots.add(index);}
   let slot=0;while(usedSlots.has(slot)&&slot<8)slot++;const interaction=furnitureInteraction(b,room,kind,slot,c.workMeal?'workmeal':c.task),target=interaction?.point||interiorUsePoint(b,room,kind,slot,c.task),path=interiorRoute(city.building(b.officeTenantOf)||b,from,target);
   if(path===null){c.action=`Sem rota interna acessível até ${kind}`;return false;}
-  c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,trail:previous?.buildingId===b.id?previous.trail:[{...from}],phase:path.length?'walking':'using',task:c.workMeal?'workmeal':c.task,furnitureId:interaction?.item.id||null,furnitureSlot:slot,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
+  c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,trail:previous?.buildingId===b.id?previous.trail:[Object.freeze({...from})],phase:path.length?'walking':'using',task:c.workMeal?'workmeal':c.task,furnitureId:interaction?.item.id||null,furnitureSlot:slot,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
  }
  c.workCell={buildingId:b.id,unitId:room.id,x:room.x,y:room.y,z:room.z,target:point(b,room)};
  if(!room.activityReservedIds.includes(c.id)){room.activityReservedIds.push(c.id);invalidateActivitySearch(city,b.id);}

@@ -110,10 +110,10 @@ if(mode==='builder-selection'){
     let bridge;
     if(mode==='bridge'){const {CitySimulationBridge}=await moduleAt('city_sim_bridge.js');bridge=new CitySimulationBridge({city:reflected.city,entities:reflected.entities,nextId:state.nextId,time:{paused:false},changed(){},notice(){}});bridge.active=true;bridge.graph=mirror;bridge.worker={postMessage(){}};}
     const samples=[];
-    for(let i=0;i<30;i++){for(let n=0;n<6;n++)city.update(1/6);const start=performance.now(),packet=graph.encode(state,{packNeeds:true,packPositions:true});const encodeMs=performance.now()-start,positions=new Float64Array(city.citizens.length*3);for(let j=0;j<city.citizens.length;j++){const c=city.citizens[j],at=j*3;positions[at]=c.id;positions[at+1]=c.entity.x;positions[at+2]=c.entity.y;}const copy=structuredClone(packet),applyAt=performance.now();if(bridge){bridge.receive({type:'state',packet:copy,positions,tick:i,elapsed:i,workMs:encodeMs});bridge.interpolate(performance.now()+40);}else{reflected=mirror.apply(copy);for(let j=0;j<reflected.city.citizens.length;j++){const c=reflected.city.citizens[j],at=j*3;if(positions[at]===c.id){c.entity.x=positions[at+1];c.entity.y=positions[at+2];}}bindCityState(reflected.city);}samples.push({ms:encodeMs,applyMs:performance.now()-applyAt,nodes:packet.nodes.length,bytes:Buffer.byteLength(JSON.stringify(packet))});}
+    for(let i=0;i<30;i++){for(let n=0;n<6;n++)city.update(1/6);const start=performance.now(),packet=graph.encode(state,{packNeeds:true,packPositions:true,omitCitizenPaths:process.env.SUBURBAN_BENCH_COMPACT_PATHS==='1'});const encodeMs=performance.now()-start,positionStride=bridge?4:3,positions=new Float64Array(city.citizens.length*positionStride);for(let j=0;j<city.citizens.length;j++){const c=city.citizens[j],at=j*positionStride;positions[at]=c.id;positions[at+1]=c.entity.x;positions[at+2]=c.entity.y;if(bridge)positions[at+3]=c.path.length?1:0;}const copy=structuredClone(packet),applyAt=performance.now();if(bridge){bridge.receive({type:'state',packet:copy,positions,tick:i,elapsed:i,workMs:encodeMs});bridge.interpolate(performance.now()+40);}else{reflected=mirror.apply(copy);for(let j=0;j<reflected.city.citizens.length;j++){const c=reflected.city.citizens[j],at=j*3;if(positions[at]===c.id){c.entity.x=positions[at+1];c.entity.y=positions[at+2];}}bindCityState(reflected.city);}samples.push({ms:encodeMs,applyMs:performance.now()-applyAt,nodes:packet.nodes.length,bytes:Buffer.byteLength(JSON.stringify(packet))});}
     if(bridge)bridge.interpolate(performance.now()+1000);
     const mean=key=>samples.reduce((n,s)=>n+s[key],0)/samples.length;
-    console.log(JSON.stringify({mode,root,samples:samples.length,encodeMs:mean('ms'),changedNodes:mean('nodes'),bytes:mean('bytes'),applyMs:mean('applyMs'),checksum:hash(observed(city)),mirrorChecksum:hash(observed(reflected.city))}));
+    console.log(JSON.stringify({mode,root,samples:samples.length,encodeMs:mean('ms'),changedNodes:mean('nodes'),bytes:mean('bytes'),applyMs:mean('applyMs'),checksum:hash(observed(city,!!bridge)),mirrorChecksum:hash(observed(reflected.city)),authoritativeChecksum:hash(observed(city))}));
   }else{
     const dt=Math.max(1/60,Math.min(.25,Number(process.env.SUBURBAN_BENCH_DT)||1/6)),minutes=Math.max(1,Number(process.env.SUBURBAN_BENCH_MINUTES)||60),updates=Math.round(minutes/dt);
     const times=[],start=performance.now();for(let i=0;i<updates;i++){const at=performance.now();city.update(dt);times.push(performance.now()-at);}const ms=performance.now()-start;times.sort((a,b)=>a-b);
@@ -122,4 +122,18 @@ if(mode==='builder-selection'){
   }
 }else throw Error('Use initialize, simulation, snapshots, bridge, throughput, freight, scene, building-sites, builder-selection or city-render.');
 
-function observed(city){return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:c.entity.x,y:c.entity.y,home:c.homeUnitId,job:c.jobId,career:c.career,interior:c.indoorLocation})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),ledger:city.ledger,events:city.events.map(e=>e.id),relations:[...city.society.relations]};}
+function observed(city,renderRiders=false){
+  // The UI deliberately places passengers behind the vehicle center. Compare
+  // its actual positions with that display contract; retain a separate hash
+  // of the simulation's authoritative coordinates as well.
+  const riderPositions=new Map();
+  if(renderRiders)for(const v of city.vehicles?.units?.values()||[]){
+    if(!v.entity)continue;const passengers=v.passengerIds||[],angle=v.angle||0;
+    for(let i=-1;i<passengers.length;i++){
+      const id=i<0?v.driverId:passengers[i],c=id!=null?city.society.citizen(id):null;
+      if(!c||c.ridingVehicleId!==v.id)continue;
+      const behind=i<0?0:(i+1)*.38;
+      riderPositions.set(id,{x:v.entity.x-Math.sin(angle)*behind,y:v.entity.y-Math.cos(angle)*behind});
+    }
+  }
+  return {minute:city.minute,seed:city.seed,citizens:city.citizens.map(c=>({id:c.id,needs:c.needs,task:c.task,action:c.action,balance:c.balance,x:riderPositions.get(c.id)?.x??c.entity.x,y:riderPositions.get(c.id)?.y??c.entity.y,home:c.homeUnitId,job:c.jobId,career:c.career,interior:c.indoorLocation})),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),buildings:city.buildings.map(b=>({id:b.id,type:b.type,stock:b.inventory,workers:b.workers})),ledger:city.ledger,events:city.events.map(e=>e.id),relations:[...city.society.relations]};}

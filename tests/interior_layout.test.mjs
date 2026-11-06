@@ -77,3 +77,13 @@ test('third-person follow opens the resident floor and restores the prior inspec
  syncThirdPersonInteriorView(renderer,resident);
  assert.deepEqual(renderer.cityInteriorView,{buildingId:5,floor:0,hideWalls:false});assert.equal(renderer.thirdPersonInteriorOverride,false);assert.equal(renderer.thirdPersonSavedInteriorView,null);
 });
+
+test('shared route waypoints stay immutable while each traveler owns a mutable queue',()=>{
+ const b=building({width:1,depth:4,floors:3});for(const u of b.units)u.roomType='circulation';
+ const from={x:10.5,y:20.5,z:0},to={x:10.5,y:23.5,z:3.6};
+ const first=interiorRoute(b,from,to),second=interiorRoute(b,from,to);
+ assert.notEqual(first,second);assert.deepEqual(first,second);
+ assert.ok(first.every(Object.isFrozen));assert.ok(first.some(p=>second.includes(p)));
+ const saved=second.map(p=>({...p}));first.shift();assert.deepEqual(second,saved);
+ assert.ok(!Object.isFrozen(to));to.x+=.1;assert.notEqual(second.at(-1).x,to.x);
+});

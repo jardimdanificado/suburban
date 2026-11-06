@@ -226,11 +226,9 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
     const pedimentShape=new THREE.Shape();pedimentShape.moveTo(0,0);pedimentShape.lineTo(b.width/2,.48);pedimentShape.lineTo(b.width,0);pedimentShape.closePath();
     const pediment=new THREE.Mesh(new THREE.ExtrudeGeometry(pedimentShape,{depth:.12,bevelEnabled:false}),mat(light));pediment.position.set(0,1.98,porticoZ+.06);pediment.castShadow=true;root.add(pediment);
     const seal=new THREE.Mesh(new THREE.TorusGeometry(.19,.035,6,16),mat(accent));seal.rotation.x=Math.PI/2;seal.position.set(b.width/2,2.18,porticoZ+.195);root.add(seal);
-    for(let i=0;i<3;i++)box(b.width+.46-i*.12,.09,.2,b.width/2,.055+i*.075,porticoZ+porch*.45+.18+i*.2,0xb8ad98);
    }else{
     box(b.width+.12,.13,porch,b.width/2,1.72,frontZ,variant%2?accent:style.roof);
     for(const x of [.3,b.width-.3]){cylinder(.08,1.65,x,.82,frontZ+porch*.34,light);box(.18,.1,.18,x,1.68,frontZ+porch*.34,accent);}
-    box(b.width-.35,.07,.07,b.width/2,.76,frontZ+porch*.72,accent);
    }
    if(b.type==='police_station'){
     box(b.width*.36,.68,b.depth*.36,b.width*.76,roof+.33,b.depth*.25,light);box(b.width*.42,.15,b.depth*.42,b.width*.76,roof+.76,b.depth*.25,accent);

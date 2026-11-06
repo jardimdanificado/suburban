@@ -146,19 +146,20 @@ export class CityStateGraph {
       else if (Array.isArray(object)) { kind = 'Array'; data = object.map(reference); }
       else {
         kind = object.constructor?.name || 'Object';fields=true;
+        const packedCitizen=!!citizenSet?.has(object),packedEntity=!!entitySet?.has(object);
         let oldFields=previous?.kind===kind?previous.data:null;
-        if(omitCitizenPaths&&citizenSet?.has(object)&&oldFields){
+        if(omitCitizenPaths&&packedCitizen&&oldFields){
           const pathIndex=oldFields.indexOf('path');
           if(pathIndex>=0){const compact=[];for(let i=0;i<oldFields.length;i+=2)if(oldFields[i]!=='path')compact.push(oldFields[i],oldFields[i+1]);oldFields=compact;this.previous.set(id,{kind,data:compact});}
         }
         let index=0,delta=null,full=oldFields?null:[];
         for (const key in object) {
           if(!Object.prototype.hasOwnProperty.call(object,key))continue;
-          if (localFields.has(key)||(omitCitizenPaths&&citizenSet?.has(object)&&key==='path')) continue;
+          if (localFields.has(key)||(omitCitizenPaths&&packedCitizen&&key==='path')) continue;
           if(accessorFields.has(key)&&Object.getOwnPropertyDescriptor(object,key)?.get)continue;
           const value=object[key];
           if(typeof value === 'function')continue;
-          const encoded=oldFields?.[index]===key&&(((key==='happiness'||key==='mood')&&citizenSet?.has(object))||((key==='x'||key==='y')&&entitySet?.has(object)))?oldFields[index+1]:reference(value);
+          const encoded=oldFields?.[index]===key&&(((key==='happiness'||key==='mood')&&packedCitizen)||((key==='x'||key==='y')&&packedEntity))?oldFields[index+1]:reference(value);
           if(full)full.push(key,encoded);
           else if(oldFields[index]===key){if(!Object.is(oldFields[index+1],encoded))(delta??=[]).push(index,encoded);}
           else{
