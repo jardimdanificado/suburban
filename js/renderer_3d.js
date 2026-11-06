@@ -1,5 +1,5 @@
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
-import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=deep-perf-3';
+import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=beach-band-2-3-waterfix-1';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {terrainTransitionTriangles,sampleTerrainQuad} from './terrain_transition_geometry.js';
@@ -37,7 +37,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE
-} from "./world_gen.js?v=deep-perf-3";
+} from "./world_gen.js?v=beach-band-2-3-waterfix-1";
 import { globalWallCoords, resolveWallSkin, getEntitiesInViewport, getEntityById, getTileKey } from "./engine.js";
 
 // Optional simulation hooks are deliberately empty in the base framework.
@@ -191,7 +191,7 @@ const TROPICAL_FLOWER_COLORS = {hibiscus:0xf24852,bougainvillea:0xbd3f9f,rose_bu
 const TROPICAL_FOLIAGE_COLORS = {zebra_maranta:0x738c51,croton:0xd18b32,watermelon_calathea:0x687d4c,imperial_bromeliad:0x8e7252,caladium:0xc88192,prayer_plant:0x6b8254,water_lily:0x548a58};
 const TROPICAL_TREE_BLOOM_COLORS = {flamboyant:0xe75036,pau_brasil:0xd84735,yellow_ipe:0xf1c544,quaresmeira:0x9a60b7,manaca_serra:0xd9a5ce,frangipani:0xf0d59a};
 
-export const MIN_CAMERA_ZOOM = 0.25;
+export const MIN_CAMERA_ZOOM = 0.30;
 const MAX_CAMERA_ZOOM = 5.0;
 
 // ---------------------------------------------------------------------------

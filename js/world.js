@@ -1,4 +1,4 @@
-import {FARM_TILES} from './world_gen.js?v=deep-perf-3';
+import {FARM_TILES} from './world_gen.js?v=beach-band-2-3-waterfix-1';
 import { randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { roadFor, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
 // =============================================================================
@@ -27,7 +27,7 @@ import {
   MAP_PRESET_HIGHLANDS,
   world_gen_generate,
   world_gen_is_walkable
-} from "./world_gen.js?v=deep-perf-3";
+} from "./world_gen.js?v=beach-band-2-3-waterfix-1";
 
 const SIDEWALK_TERRAIN=new Set([TILE_FLOOR,TILE_HILL,TILE_SAND]);
 

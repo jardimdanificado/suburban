@@ -263,30 +263,29 @@ export function world_gen_generate(map, config, outCenter = { x: MAP_WIDTH / 2, 
     ca_smooth(map, cfg.ca_smooth_iterations, MAP_WIDTH, MAP_HEIGHT);
   }
 
-  // 2. Post-process Biome Borders: water edges receive natural beach sand
+  // 2. Post-process Biome Borders: beaches extend two tiles inland, with
+  // a softly varying third tile so the shoreline does not form a hard ring.
   tmp_ca.set(map);
-
-  for (let y = 1; y < MAP_HEIGHT - 1; y++) {
-    const yOffset = y * MAP_WIDTH;
-    for (let x = 1; x < MAP_WIDTH - 1; x++) {
-      const cur = tmp_ca[yOffset + x];
-      const idx = yOffset + x;
-      if (cur === TILE_FLOOR || cur === TILE_HILL) {
-        let near_water = false;
-        for (let dy = -1; dy <= 1 && !near_water; dy++) {
-          const nyOffset = (y + dy) * MAP_WIDTH;
-          for (let dx = -1; dx <= 1; dx++) {
-            if (tmp_ca[nyOffset + x + dx] === TILE_WATER) {
-              near_water = true;
-              break;
-            }
-          }
-        }
-        if (near_water) {
-          map[idx] = TILE_SAND;
-        }
+  const shore_distance=new Uint8Array(map.length);shore_distance.fill(255);
+  for(let idx=0;idx<map.length;idx++)if(tmp_ca[idx]===TILE_WATER)shore_distance[idx]=0;
+  for(let distance=1;distance<=3;distance++){
+    const previous=shore_distance.slice();
+    for(let y=0;y<MAP_HEIGHT;y++)for(let x=0;x<MAP_WIDTH;x++){
+      const idx=y*MAP_WIDTH+x,tile=tmp_ca[idx];
+      if(previous[idx]!==255||(tile!==TILE_FLOOR&&tile!==TILE_HILL))continue;
+      let touchesPreviousLayer=false;
+      for(let dy=-1;dy<=1&&!touchesPreviousLayer;dy++)for(let dx=-1;dx<=1;dx++){
+        if(!dx&&!dy)continue;const nx=x+dx,ny=y+dy;
+        if(nx<0||ny<0||nx>=MAP_WIDTH||ny>=MAP_HEIGHT)continue;
+        if(previous[ny*MAP_WIDTH+nx]===distance-1){touchesPreviousLayer=true;break;}
       }
+      if(touchesPreviousLayer)shore_distance[idx]=distance;
     }
+  }
+  const coastNoiseScale=Math.max(.008,cfg.noise_scale*.35);
+  for(let y=0;y<MAP_HEIGHT;y++)for(let x=0;x<MAP_WIDTH;x++){
+    const idx=y*MAP_WIDTH+x,distance=shore_distance[idx],tile=tmp_ca[idx];
+    if((tile===TILE_FLOOR||tile===TILE_HILL)&&(distance<=2||(distance===3&&fbm(x*coastNoiseScale,y*coastNoiseScale,2)>.48)))map[idx]=TILE_SAND;
   }
 
   // Find center walkable spawn
