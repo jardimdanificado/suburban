@@ -40,9 +40,9 @@ export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'iml','crema
 const retailTypes = new Set(['bakery', 'greengrocer', 'market', 'restaurant']);
 const edible = [...Object.keys(CROPS).filter(g => !['trigo', 'girassol'].includes(g)&&!CROPS[g].nonFood), ...INDUSTRIAL_FOODS];
 export const JOB_SKILL = { ...Object.fromEntries(Object.entries(CIVIC_SERVICES).map(([type,s])=>[type,s.skill])), ...Object.fromEntries(Object.entries(INDUSTRIES).map(([id,s])=>[id,s.skill])), mill: 'maintenance', farm: 'agriculture', bakery: 'baking', restaurant:'baking', market: 'commerce', greengrocer: 'commerce', popular_refectory: 'care', townhall: 'governance', council_chamber:'governance', iml:'forensics', crematorium:'care',police_station:'investigation',council_oversight_office:'law',jail:'care',courthouse:'law',legal_office:'law', clinic: 'medicine', utility: 'maintenance', leisure: 'social', builder: 'construction', quarry: 'mining', carrier: 'logistics', lamp_service: 'logistics', office_tower:'management', cleaner: 'cleaning', waste_collector: 'logistics', recycler: 'recycling', paid_toilet: 'cleaning', public_toilet: 'maintenance', mint: 'minting' };
-// Keep a multi-week public food reserve so farms can be founded, staffed,
-// planted and harvested before the town hall's opening stock runs out.
-export const ECONOMY_RULES = { workingCapital: 20000, mealUnits: 3, initialMealsPerCitizen: 96, farmBatch: 12, farmLabor: 120 };
+// Keep only two days of meals in the initial public reserve so replenishment
+// problems appear quickly and the city does not hide them behind a huge stock.
+export const ECONOMY_RULES = { workingCapital: 20000, mealUnits: 3, initialMealsPerCitizen: 6, farmBatch: 12, farmLabor: 120 };
 const RETAIL_STARTUP_CAPITAL=Object.freeze({market:200000,greengrocer:75000,bakery:60000,restaurant:75000});
 function startupCash(city,type){
   const base=type==='bank'?200000:type==='research_institute'?100000:ECONOMY_RULES.workingCapital;
@@ -700,10 +700,11 @@ export class CityEconomy {
   refillPopularRefectory() {
     const city=this.city,refectories=city.buildings.filter(b=>b.type==='popular_refectory'&&b.active&&!b.entity.destroyed),townhall=city.buildings.find(b=>b.type==='townhall'&&b.active&&!b.entity.destroyed),publicStores=refectories.length?refectories:townhall?[townhall]:[];
     const foodGoods=[...new Set([...edible,...INDUSTRIAL_FOODS,'pao'])];
-    if(this.publicFoodReserveRevision!==1){
+    if(this.publicFoodReserveRevision!==2){
       const expected=Math.max(city.initialPopulation||0,city.citizens.length)*ECONOMY_RULES.mealUnits*ECONOMY_RULES.initialMealsPerCitizen,recorded=this.initialStock.pao||0,holder=refectories[0]||city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
       if(holder&&expected>recorded){holder.inventory.pao=(holder.inventory.pao||0)+expected-recorded;this.initialStock.pao=expected;city.log('Reserva municipal de alimentos restaurada após atualização da economia.','economy',[],{kind:'public-food-reserve-migrated',buildingId:holder.id,quantity:expected-recorded});}
-      if(holder)this.publicFoodReserveRevision=1;
+      else if(holder&&expected<recorded){const excess=Math.min(holder.inventory.pao||0,Math.max(0,(holder.inventory.pao||0)-expected));if(excess){holder.inventory.pao-=excess;this.initialStock.pao=Math.max(0,recorded-excess);city.log('Estoque inicial de pão reduzido para dois dias de refeições.','economy',[],{kind:'public-food-reserve-reduced',buildingId:holder.id,quantity:excess});}}
+      if(holder)this.publicFoodReserveRevision=2;
     }
     for(const store of publicStores){
       // Older saves could put the full multi-week reserve in a small refectory,
@@ -711,7 +712,7 @@ export class CityEconomy {
       if(inventoryUsed(store)>store.inventoryCapacity)store.inventoryCapacity=inventoryUsed(store)+256;
       let orders=0;
       while(orders<64){
-        const incoming=Object.values(store.incoming||{}).reduce((n,q)=>n+q,0),stored=Object.entries(store.inventory).reduce((n,[g,q])=>n+(foodGoods.includes(g)?q:0),0),missing=Math.floor(store.inventoryCapacity-stored-incoming);
+        const incoming=Object.values(store.incoming||{}).reduce((n,q)=>n+q,0),stored=Object.entries(store.inventory).reduce((n,[g,q])=>n+(foodGoods.includes(g)?q:0),0),target=Math.max(city.initialPopulation||0,city.citizens.length)*ECONOMY_RULES.mealUnits*ECONOMY_RULES.initialMealsPerCitizen,missing=Math.floor(Math.min(store.inventoryCapacity-stored-incoming,target-stored-incoming));
         if(missing<1||inventoryFree(store)<1)break;
         const local=[],depot=city.economy.importDepot;
         for(const good of foodGoods){
@@ -726,20 +727,25 @@ export class CityEconomy {
         }
         local.sort((a,b)=>a.price-b.price||b.available-a.available||a.seller.id-b.seller.id);
         let purchase=local[0]||null,quantity=0;
-        if(purchase)quantity=Math.min(missing,24,purchase.available,inventoryFree(store),city.logistics.transportLimit(purchase.seller,store));
+        if(purchase)quantity=Math.min(missing,purchase.available,inventoryFree(store),purchase.seller===depot?purchase.available:Math.min(24,city.logistics.transportLimit(purchase.seller,store)));
         else {
           const importCost=good=>this.goods[good].price*2.25+Math.ceil(this.goods[good].price*(city.politics?.policy?.importTaxes?.[good]||0));
           const good=foodGoods.filter(g=>this.accepts(store,g)).sort((a,b)=>importCost(a)-importCost(b))[0];if(!good)break;
-          purchase={good,price:Math.ceil(this.goods[good].price*2.25)};quantity=Math.min(missing,24,inventoryFree(store));
+          purchase={good,price:Math.ceil(this.goods[good].price*2.25)};quantity=Math.min(missing,10000,inventoryFree(store));
         }
         if(quantity<1)break;
         let fee=city.currency.price(Math.max(120,(city.world.width+city.world.height+quantity*4)*12)*1.5);
-        if(purchase.seller){const route=city.findPath(purchase.seller.door,store.door);if(route===null)break;fee=Math.ceil(city.currency.price(Math.max(120,(route.length+quantity*4)*12))*1.5);}
+        if(purchase.seller===depot)fee=0;
+        else if(purchase.seller){const route=city.findPath(purchase.seller.door,store.door);if(route===null)break;fee=Math.ceil(city.currency.price(Math.max(120,(route.length+quantity*4)*12))*1.5);}
         else fee+=Math.ceil(this.goods[purchase.good].price*quantity*((city.politics?.policy?.importTaxes?.[purchase.good]||0)+.03));
         const cost=quantity*purchase.price+fee;let treasury=city.accounts.get('treasury')?.balance||0;
         if(treasury<cost){ensureExternalAccount(city,'supplier','Economia externa');city.transfer('supplier','treasury',cost-treasury,'Crédito internacional para abastecimento alimentar',{essential:true,good:purchase.good,quantity,buildingId:store.id});treasury=city.accounts.get('treasury')?.balance||0;}
         if(treasury<cost)break;
         if(store.type!=='townhall'&&!city.transfer('treasury',store.accountId,cost,'Verba para abastecimento do refeitório popular',{buildingId:store.id,good:purchase.good,quantity,essential:true}))break;
+        if(purchase.seller===depot){
+          if(!city.transfer(depot.accountId,store.accountId,0,'Abastecimento municipal do refeitório',{buildingId:store.id,good:purchase.good,quantity,essential:true}))break;
+          depot.inventory[purchase.good]-=quantity;store.inventory[purchase.good]=(store.inventory[purchase.good]||0)+quantity;depot.claims[store.id][purchase.good]-=quantity;this.recordGoods('public-food-distribution',purchase.good,quantity,depot.id,store.id);orders++;continue;
+        }
         const shipment=purchase.seller?this.transferGoods(purchase.seller,store,purchase.good,quantity,purchase.price):orderImport(city,store,purchase.good,quantity,{purpose:'public-meals'});
         if(!shipment){if(store.type!=='townhall')city.transfer(store.accountId,'treasury',cost,'Estorno de compra de alimentos não contratada',{buildingId:store.id,good:purchase.good,quantity});break;}
         if(purchase.seller===depot){depot.claims[store.id][purchase.good]-=quantity;shipment.importDepotClaim={buyerId:store.id,good:purchase.good,quantity};}

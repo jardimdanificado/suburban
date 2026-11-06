@@ -72,10 +72,11 @@ export class CityLogistics {
   publicOrder(s){return s.payerAccountId==='treasury'||s.buyer.accountId==='treasury'||s.buyer.municipal;}
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, serviceFees = [], requireCarrier = false,garmentIds=null,reserveBalance=0 } = {}) {
     const city = this.city;
+    const directDepotArrival=!!seller?.externalImport&&!!seller?.door&&!!buyer?.importDepot&&!!buyer?.door&&Math.hypot(seller.door.x-buyer.door.x,seller.door.y-buyer.door.y)<.01;
     if(buyer?.importDepot&&!seller?.externalImport)return false;
     if(city.substances&&!city.substances.canTrade(good,seller,buyer,{quantity}))return false;
     if(good==='roupas'&&!garmentIds&&seller?.type==='tailor'&&seller.garments?.some(g=>g.reservedPartyId!=null)){garmentIds=seller.garments.filter(g=>g.reservedPartyId==null).slice(0,quantity).map(g=>g.garmentId);if(garmentIds.length<quantity)return false;}
-    if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0 || garmentIds&&(good!=='roupas'||garmentIds.length!==quantity||new Set(garmentIds).size!==quantity||garmentIds.some(id=>!seller.garments?.some(g=>g.garmentId===id)))) return false;
+    if (!seller || !buyer || seller === buyer || (!seller.active && seller.type !== 'residential' && !(good==='lixo' && purpose==='waste-collection')) || (!buyer.active && buyer.type !== 'residential') || seller.entity?.destroyed || buyer.entity?.destroyed || !(good in seller.inventory) || !(good in buyer.inventory) || !Number.isSafeInteger(quantity) || quantity < 1 || !directDepotArrival&&quantity > this.transportLimit(seller,buyer) || seller.inventory[good] < quantity || inventoryFree(buyer) < quantity || !Number.isSafeInteger(unitPrice) || unitPrice < 0 || garmentIds&&(good!=='roupas'||garmentIds.length!==quantity||new Set(garmentIds).size!==quantity||garmentIds.some(id=>!seller.garments?.some(g=>g.garmentId===id)))) return false;
     const route = city.findPath(seller.door, buyer.door); if (route === null) return false;
     const carriers = city.economy.businesses.filter(b => (b.type === 'carrier'||purpose==='lamp-refill'&&b.type==='lamp_service') && (city.economy.workingOwner(b) || b.workers.length && b.balance >= b.wage) && city.economy.connected(b, seller));
     const eligibleCarriers=carriers.filter(b=>[...b.workers,b.ownerId].some(id=>this.capacity(city.society.citizen(id))>=quantity));
@@ -86,7 +87,7 @@ export class CityLogistics {
     if(requireCarrier && !carrier)return false;
     // Freight remains a paid offer when no carrier can take it; an idle
     // resident can claim the reserved service fee as an independent hauler.
-    let fee = city.currency.price(Math.max(120, (route.length + (carrier?Math.abs(carrier.door.x-seller.door.x)+Math.abs(carrier.door.y-seller.door.y):0)) * 12 + quantity * 4));
+    let fee = directDepotArrival?0:city.currency.price(Math.max(120, (route.length + (carrier?Math.abs(carrier.door.x-seller.door.x)+Math.abs(carrier.door.y-seller.door.y):0)) * 12 + quantity * 4));
     fee = Math.ceil(fee*(payerAccountId==='treasury'?1.5:1)) + (requireCarrier?city.currency.price(payerAccountId==='treasury'?180:120):0);
     const fees=[...(serviceFee?[{amount:serviceFee,accountId:serviceAccountId}]:[]),...serviceFees].filter(f=>f?.amount>0);if(fees.some(f=>!Number.isSafeInteger(f.amount)||!city.accounts.has(f.accountId)))return false;serviceFee=fees.reduce((n,f)=>n+f.amount,0);
     const cost = quantity * unitPrice;
@@ -169,7 +170,7 @@ export class CityLogistics {
     const city = this.city;
     this.reconcileImportDestination();
     const oversized=this.shipments.filter(s=>!s.driverId&&s.status!=='delivered'&&s.status!=='cancelled'&&s.quantity>24);
-    if(oversized.length){let maxCarry=24;for(const c of city.citizens)if(!c.entity.destroyed){maxCarry=Math.max(maxCarry,this.capacity(c));if(maxCarry>=MAX_CARGO_CAPACITY)break;}for(const s of oversized)if(s.quantity>maxCarry)this.splitLoad(s);}
+    if(oversized.length){let maxCarry=24;for(const c of city.citizens)if(!c.entity.destroyed){maxCarry=Math.max(maxCarry,this.capacity(c));if(maxCarry>=MAX_CARGO_CAPACITY)break;}for(const s of oversized)if(!(s.imported&&s.buyer?.importDepot&&Math.hypot(s.seller.door.x-s.buyer.door.x,s.seller.door.y-s.buyer.door.y)<.01)&&s.quantity>maxCarry)this.splitLoad(s);}
     const pending = this.shipments.filter(s => !['delivered', 'cancelled'].includes(s.status));
     // Give fresh food/works priority, but promote old orders so fuel cannot wait forever.
     const priority = s => shipmentPriority(s,city.minute,city.hour);
@@ -178,6 +179,20 @@ export class CityLogistics {
     for (const s of pending) {
       if (s.seller.entity?.destroyed || s.buyer.entity?.destroyed || s.buyer.cancelled || (!s.seller.active && s.seller.type !== 'residential' && !(s.good==='lixo' && s.purpose==='waste-collection')) || (!s.buyer.active && s.buyer.type !== 'residential')) { this.cancel(s); continue; }
       if(city.substances&&!city.substances.canTrade(s.good,s.seller,s.buyer,{quantity:s.quantity})){this.cancel(s);continue;}
+      if(s.imported&&s.buyer?.importDepot&&Math.hypot(s.seller.door.x-s.buyer.door.x,s.seller.door.y-s.buyer.door.y)<.01){
+        s.buyer.incoming[s.good]=Math.max(0,(s.buyer.incoming[s.good]||0)-s.quantity);
+        if(inventoryFree(s.buyer)<s.quantity){s.buyer.incoming[s.good]+=s.quantity;s.status='waiting-space';continue;}
+        s.buyer.inventory[s.good]+=s.quantity;s.inventory[s.good]=0;
+        if(s.importClaimBuyerId){const claimant=city.building(s.importClaimBuyerId);if(claimant){claimant.importIncoming??={};claimant.importIncoming[s.good]=Math.max(0,(claimant.importIncoming[s.good]||0)-s.quantity);const claims=s.buyer.claims??{},claim=claims[claimant.id]??={};claim[s.good]=(claim[s.good]||0)+s.quantity;claims[claimant.id]=claim;s.buyer.claims=claims;}}
+        city.transfer(s.accountId,s.seller.accountId,s.cost,`Importação: ${city.economy.goods[s.good].label}`,{good:s.good,quantity:s.quantity,shipmentId:s.id,imported:true,brand:s.importBrand});
+        if(s.serviceFees?.length)for(const service of s.serviceFees)city.transfer(s.accountId,service.accountId,service.amount,'Comissão ou tarifa comercial',{shipmentId:s.id,good:s.good,quantity:s.quantity});
+        const payer=city.accounts.get(s.payerAccountId);if(payer?.entity?.properties.cityBuilding){payer.totalExpenses+=s.cost;if(s.purpose==='work-meals')payer.mealPurchaseCost+=s.cost;}
+        city.economy.recordGoods('delivery',s.good,s.quantity,s.seller.id,s.buyer.id,{shipmentId:s.id,imported:true});
+        city.history.record('sale',`${s.quantity} ${city.economy.goods[s.good].label}: ${city.accountName(s.seller.accountId)} → ${city.accountName(s.payerAccountId)}.`,[s.seller.accountId,s.payerAccountId,s.buyer.accountId],{amount:s.cost,good:s.good,quantity:s.quantity,shipmentId:s.id});
+        this.releaseDriver(s);s.status='delivered';s.completedAt=city.minute;this.delivered++;
+        city.log(`Importação recebida no depósito municipal: ${s.quantity} ${city.economy.goods[s.good].label}.`,'transport',[],{kind:'import-delivered',shipmentId:s.id,good:s.good,quantity:s.quantity,imported:true,brand:s.importBrand||null});
+        continue;
+      }
       let c = city.society.citizen(s.driverId);
       if (c?.workMeal) continue;
       if (c && (city.urgentNeed(c) || this.capacity(c)<s.quantity || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }

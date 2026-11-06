@@ -101,6 +101,20 @@ test('public service contracts survive a change of mayor', () => {
   assert(!p.cancelled); assert.equal(p.ownerId, city.economy.mayorId); audit(city);
 });
 
+test('bulk public food imports arrive at the depot and replenish the refectory without a courier round trip', () => {
+  const city=setup({starter:true,population:24}),store=city.buildings.find(b=>b.type==='popular_refectory');
+  city.economy.publicFoodReserveRevision=2;store.inventory.pao=0;city.economy.initialStock.pao=0;
+  city.welfare.restockPublicMeals();
+  const shipment=city.logistics.shipments.find(s=>s.purpose==='public-meals'&&s.status==='waiting');
+  assert.equal(shipment.quantity,24*3*6);
+  city.logistics.updateMinute();
+  assert.equal(shipment.status,'delivered');assert.equal(city.economy.importDepot.inventory[shipment.good],24*3*6);
+  assert.equal(city.economy.importDepot.claims[store.id][shipment.good],24*3*6);
+  city.welfare.restockPublicMeals();
+  assert.equal(store.inventory[shipment.good],24*3*6);assert.equal(city.economy.importDepot.inventory[shipment.good],0);
+  audit(city);
+});
+
 test('onsite meals consume real food, preserve the work position and resume work without charging the employee', () => {
   const city = serviceCity(), b = city.economy.businesses.find(b => b.type === 'quarry'), c = city.society.citizen(b.workers[0]);city.minute=9*60;
   b.inventory.pao = 6; city.economy.produced.pao += 6; c.needs.food = 30; c.needs.water = c.needs.energy = c.needs.toilet = c.needs.health = 90;

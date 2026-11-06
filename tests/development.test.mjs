@@ -27,7 +27,7 @@ test('a new city starts with separate public food and toilet buildings, funded c
   for(const type of ['townhall','builder','quarry','mint','bank','public_toilet','popular_refectory','cleaner'])assert(city.buildings.some(b=>b.type===type),type);
   assert.equal(city.citizens.length, 24); assert.equal(city.stats().entrepreneurs, 0);
   const hall=city.buildings.find(b=>b.type==='townhall'),refectory=city.buildings.find(b=>b.type==='popular_refectory'),toilet=city.buildings.find(b=>b.type==='public_toilet'),cleaner=city.buildings.find(b=>b.type==='cleaner');
-  assert(refectory.floors>=3&&toilet.floors>=3);assert(refectory.units.filter(u=>u.roomType==='dining').length>=refectory.floors);assert(toilet.units.filter(u=>u.roomType==='bathroom').length>=toilet.floors);assert(refectory.inventory.pao>=24*3*20);assert.equal(refectory.inventory.pao,city.economy.initialStock.pao);assert(cleaner.active&&cleaner.municipal);
+  assert(refectory.floors>=3&&toilet.floors>=3);assert(refectory.units.filter(u=>u.roomType==='dining').length>=refectory.floors);assert(toilet.units.filter(u=>u.roomType==='bathroom').length>=toilet.floors);assert.equal(refectory.inventory.pao,24*3*6);assert.equal(refectory.inventory.pao,city.economy.initialStock.pao);assert(cleaner.active&&cleaner.municipal);
   assert.equal([...city.sanitation.facilities.values()].filter(f=>f.buildingId===hall.id&&f.access==='public').length,0);
   const c = city.citizens[10], balance = c.balance, stock = refectory.inventory.pao;
   assert(city.economy.consumeMeal(c, refectory)); assert.equal(c.balance, balance); assert.equal(refectory.inventory.pao, stock - 3);
