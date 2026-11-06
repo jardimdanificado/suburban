@@ -7,6 +7,7 @@ const GRAPHICS = [
   { key: "shadowQuality", label: "MAPA SOMBRAS", values: [512, 1024, 2048, 4096].map(v => [v, `${v}`]), default: 512 },
   { key: "wireframe", label: "WIREFRAME", values: [[0, "OFF"], [1, "GRADE"], [2, "TOTAL"]], default: 0 },
   { key: "moonlight", label: "LUZ DA LUA", values: BOOL, default: true, graphic: true },
+  { key: "nightLightLimit", label: "LUZES NOTURNAS", values: [32, 64, 128, 256].map(v => [v, `${v}`]), default: 32, graphic: true },
 ];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const EFFECTS = [
@@ -35,9 +36,13 @@ export class OptionsPanel {
     this.maxScroll = 0;
     this.bounds = null;
     this.values = {};
+    this.items = [...GRAPHICS, ...EFFECTS].map(item => item.key === "nightLightLimit" && Number.isFinite(renderer.nightLightLimitCeiling)
+      ? { ...item, values: item.values.filter(([value]) => value <= renderer.nightLightLimitCeiling) }
+      : item);
+    for (const item of this.items) if (!item.values.length) item.values = [[32, "32"]];
     let saved = {};
     try { saved = JSON.parse(storage?.getItem("experience-framework.options") || "{}") || {}; } catch {}
-    for (const item of [...GRAPHICS, ...EFFECTS]) {
+    for (const item of this.items) {
       const previous=saved[item.key];
       const value = item.values.some(([v]) => v === previous) ? previous : item.key==='resolution'&&Number.isFinite(previous) ? item.values.reduce((best,[v])=>Math.abs(v-previous)<=Math.abs(best-previous)?v:best,item.default) : item.default;
       this.apply(item.key, value, false);
@@ -47,7 +52,7 @@ export class OptionsPanel {
   toggle() { this.open = !this.open; }
 
   apply(key, value, persist = true) {
-    const item = [...GRAPHICS, ...EFFECTS].find(row => row.key === key);
+    const item = this.items.find(row => row.key === key);
     if (!item || !item.values.some(([v]) => v === value)) return false;
     const r = this.renderer;
     if (item.graphic) r.setGraphicOptions({ [key]: value });
@@ -82,14 +87,14 @@ export class OptionsPanel {
       ui.ctx.save();ui.ctx.fillStyle='rgba(0,0,0,.75)';ui.ctx.fillRect(0,34,ui.width,ui.height-34);ui.ctx.restore();ui.panel(x,y,w,h,'OPCOES','');
     }
     ui.button(floating ? x+8 : x+w-126, floating ? y+h-32 : y+4, 88, 20, "PADROES", () => {
-      for (const item of [...GRAPHICS, ...EFFECTS]) this.apply(item.key, item.default);
+      for (const item of this.items) this.apply(item.key, item.default);
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
     [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS VISUAIS"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
       const bw = Math.floor((w - 24) / 3);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
-    const rows = this.tab === "GRAPHICS" ? GRAPHICS : EFFECTS;
+    const rows = this.tab === "GRAPHICS" ? this.items.filter(item => GRAPHICS.some(graphic => graphic.key === item.key)) : this.items.filter(item => EFFECTS.some(effect => effect.key === item.key));
     const contentY = y + 62, bottom = y + h - (floating?40:6);
     const first = ui.regions.length;
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();
