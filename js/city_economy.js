@@ -16,7 +16,7 @@ import {manufactureClothes,clothingOffer,buyClothes,updateClothes,initializeClot
 import {newspaperOffer,printNewspaper} from './city_newspapers.js';
 import {oilSupply,investOilChain} from './city_oil_supply.js';
 import { updateMarket, planSupplyChains, bootstrapEnterprise, carryCapacity, kitchenWork, preparedOffer } from './city_markets.js?v=market-one-pass-1';
-import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=cleaner-capacity-1';
+import { CityServiceInvestment, ESSENTIAL_SERVICES } from './city_service_investment.js?v=service-demand-shared-waste-1';
 import { INDUSTRIES, INDUSTRIAL_GOODS, INDUSTRIAL_FOODS, MEAL_COMPONENTS, KITCHEN_RECIPES } from './city_industries.js';
 import { beginBuildingSiteSearch, quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { inventoryFree, inventoryUsed, initializeInventory } from './city_inventory.js';
@@ -329,8 +329,9 @@ export class CityEconomy {
     const transport = this.city.logistics.demandMetrics();
     items.push({ type:'carrier',crop:null,score:transport.score,required:transport.work,supply:transport.capacity,stock:0,reason:`${transport.waiting} cargas aguardando; ${transport.ownHauls} transportes próprios; ${transport.drivers} transportadores; espera máxima ${Math.round(transport.oldest)} min; ${transport.lampRequests} lamparinas pendentes` });
     const extraction=this.serviceInvestment.demand('quarry');items.push({type:'quarry',crop:null,...extraction,required:extraction.work,supply:extraction.capacity,reason:`Obras: ${extraction.work} pedras pendentes; ${extraction.remaining} em depósitos ainda disponíveis; ${extraction.staff} trabalhadores na extração.`});
+    const wasteServiceDemand=this.city.sanitation.wasteMetrics();
     for (const type of ['cleaner','builder','waste_collector','recycler','composting']) {
-      const service = this.serviceInvestment.demand(type);
+      const service = this.serviceInvestment.demand(type,wasteServiceDemand);
       items.push({type,crop:null,score:service.score,required:service.work,supply:service.capacity,stock:0,reason:`${service.count} ${type==='cleaner'?'banheiros sujos ou focos de fezes':type==='builder'?'obras pendentes':'unidades de lixo para atender'}; ${service.staff} profissionais; ${service.work} minutos de trabalho pendente`});
     }
     for (const type of ['market', 'greengrocer', 'bakery', 'restaurant']) {

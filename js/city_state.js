@@ -37,12 +37,12 @@ import { CityHousing } from './city_housing.js?v=housing-resident-index-1';
 import { CitySanitation } from './city_sanitation.js?v=sanitation-routing-3';
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
-import { CityDevelopment } from './city_development.js?v=fixed-market-building-1';
+import { CityDevelopment } from './city_development.js?v=road-network-cache-1';
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
 import { CityGigs } from './city_gigs.js?v=artwork-solid-wall-support-1';
 import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=update-demand-index-1';
 import { CitySociety } from './city_society.js?v=citizen-id-index-1';
-import { CityServiceInvestment } from './city_service_investment.js?v=cleaner-capacity-1';
+import { CityServiceInvestment } from './city_service_investment.js?v=service-demand-shared-waste-1';
 import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';
 
 const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,

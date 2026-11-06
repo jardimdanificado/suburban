@@ -1,5 +1,5 @@
 import {colorAffinity,buildingColor} from './city_colors.js';
-import {DEVELOPMENT_RULES} from './city_development.js?v=sidewalk-grade-2';
+import {DEVELOPMENT_RULES} from './city_development.js?v=road-network-cache-1';
 import {settlementConnected} from './city_terrain.js?v=entrance-retaining-clearance-1';
 export const HOUSING_RULES = { roomPrice: 120000, roomRent: 120, livingReserve: 3000, defaultDays: 3, unsoldRentalAfter: 1440 };
 export const SOCIAL_HOUSING_TYPES = Object.freeze(['super_popular_housing','popular_housing','popular_luxury_housing']);

@@ -9,6 +9,8 @@ import { chooseBuildingSite, inspectBuildingSite, findTerrainPath, flatSiteLevel
 import { initializeInventory, inventoryFree } from './city_inventory.js';
 
 const constructionDispatch = new WeakMap();
+const roadAccessCache = new WeakMap();
+const roadNetworkCache = new WeakMap();
 const contractorForService=service=>service==='road'||service==='road-repair'?'road_paving':null;
 const contractorHandles=(type,service)=>type==='builder'||type===contractorForService(service)||service==='road-repair'&&type==='road_maintenance';
 const FOUNDING_ESSENTIAL_WORKS = Object.freeze([
@@ -60,10 +62,13 @@ export class CityDevelopment {
     return project;
   }
   roadAccessTiles(){
+    const city=this.city,plotShape=this.plots.map(p=>`${p.id}:${p.x},${p.y},${p.width},${p.depth}`).join('|'),revision=`${city.world.revision||0}:${city.obstacleRevision||0}:${city.structureRevision||0}:${city.occupied.size}:${plotShape}`;
+    let cached=roadAccessCache.get(this);if(cached?.revision===revision)return cached.allowed;
     const allowed=new Set();
-    for(const b of this.city.buildings)if(!b.entity.destroyed)for(const p of b.accessPath||[]){const x=Math.floor(p.x),y=Math.floor(p.y);if(!this.city.occupied.has(`${x},${y}`))allowed.add(`${x},${y}`);}
+    for(const b of city.buildings)if(!b.entity.destroyed)for(const p of b.accessPath||[]){const x=Math.floor(p.x),y=Math.floor(p.y);if(!city.occupied.has(`${x},${y}`))allowed.add(`${x},${y}`);}
     const blocked=allowed.blockedPlots=new Set();
     for(const p of this.plots)for(let y=p.y;y<p.y+p.depth;y++)for(let x=p.x;x<p.x+p.width;x++){const k=`${x},${y}`;if(!allowed.has(k))blocked.add(k);}
+    roadAccessCache.set(this,{revision,allowed});
     return allowed;
   }
   roadPlotBlocked(x,y,access){return access.blockedPlots?access.blockedPlots.has(`${x},${y}`):this.plots.some(p=>x>=p.x&&y>=p.y&&x<p.x+p.width&&y<p.y+p.depth)&&!access.has(`${x},${y}`);}
@@ -195,12 +200,17 @@ export class CityDevelopment {
     // avoid spending an entire planning cycle on a short paved segment.
     const tiles=Math.min(12,Math.floor((city.treasury-needs.reserve-margin)/perTile));
     if(tiles<1){this.roadPlanning={reason:'Caixa aguardando orçamento para trecho de rua, após reserva social.',required:perTile+margin};return;}
-    const network=new Map(),queue=[];
-    const addRoad=(x,y,origin=false)=>{x=Math.floor(x);y=Math.floor(y);const k=`${x},${y}`;if((!isRoadAt(city.world,x,y)&&!origin)||network.has(k)||!city.walkable(x,y))return;network.set(k,{x:x+.5,y:y+.5});queue.push({x,y});};
-    addRoad(hall.door.x,hall.door.y,true);
-    for(let head=0;head<queue.length;head++){const {x,y}=queue[head];for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(canStep(city.world,x,y,x+dx,y+dy))addRoad(x+dx,y+dy);}
-    const targets=[...network.values()];
-    const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!network.has(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`)).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])}));
+    const networkRevision=`${city.world.revision||0}:${city.obstacleRevision||0}:${city.structureRevision||0}:${city.occupied.size}:${hall.id}:${hall.door.x}:${hall.door.y}`;
+    let network=roadNetworkCache.get(this);
+    if(network?.revision!==networkRevision){
+      const cells=new Map(),queue=[];
+      const addRoad=(x,y,origin=false)=>{x=Math.floor(x);y=Math.floor(y);const k=`${x},${y}`;if((!isRoadAt(city.world,x,y)&&!origin)||cells.has(k)||!city.walkable(x,y))return;cells.set(k,{x:x+.5,y:y+.5});queue.push({x,y});};
+      addRoad(hall.door.x,hall.door.y,true);
+      for(let head=0;head<queue.length;head++){const {x,y}=queue[head];for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(canStep(city.world,x,y,x+dx,y+dy))addRoad(x+dx,y+dy);}
+      network={revision:networkRevision,cells,targets:[...cells.values()]};roadNetworkCache.set(this,network);
+    }
+    const {cells:connectedRoads,targets}=network;
+    const buildings=city.buildings.filter(b=>!b.entity.destroyed&&b.id!==hall.id&&!connectedRoads.has(`${Math.floor(b.door.x)},${Math.floor(b.door.y)}`)).map(b=>({b,traffic:city.trafficScore(b.accessPath||[])}));
     // Connected dirt roads must remain paving candidates too. Building access
     // paths are laid as dirt when buildings are placed, so checking only for
     // disconnected doors would otherwise make the whole initial network ineligible.

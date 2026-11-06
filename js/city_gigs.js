@@ -7,6 +7,7 @@ import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-style
 
 const ACTIVE=new Set(['open','working']);
 const INTERRUPTIBLE=new Set(['leisure','walk','social','sit','outdoor_leisure']);
+const SPONTANEOUS_ART_INTERVAL=2*1440,MAX_SPONTANEOUS_ARTWORKS=24,ARTWORK_SPACING=5.5;
 const SPONTANEOUS_ART_TITLES=Object.freeze(['Maré','Mangue','Girassol','Cajueiro','Caribe','Caju','Aroeira','Dendê','Jangada','Canoa','Azulejo','Coqueiral','Pitanga','Bromélia','Coroa-de-frade','Mandacaru','Calango','Sereia','Boiúna','Farol','Aratu','Cocada','Renda','Fandango','Batuque','Chuva-de-verão','Pôr-do-sol','Mormaço','Cais','Vento sul','Palmeiral','Caminho das águas']);
 function spontaneousArtworkTitle(city){
  const first=SPONTANEOUS_ART_TITLES[Math.floor(city.random()*SPONTANEOUS_ART_TITLES.length)];
@@ -58,10 +59,12 @@ export class CityGigs{
   this.migrateLegacyArtworkTitles();
   // Unsponsored art is an ordinary act of expression: it costs little, can
   // come from a resident with modest skill, and does not wait for a patron.
-  if(city.minute%180!==120||city.hour<8||city.hour>=19||this.lastSpontaneousArtworkAt===city.minute||city.minute-this.lastSpontaneousArtworkAt<360)return null;
+  if(city.minute%180!==120||city.hour<8||city.hour>=19||this.lastSpontaneousArtworkAt===city.minute||city.minute-this.lastSpontaneousArtworkAt<SPONTANEOUS_ART_INTERVAL)return null;
+  const activeSpontaneousArt=city.justice.art.filter(piece=>!piece.entity.destroyed&&piece.buildingId==null&&!piece.support&&!piece.campaignDecorationId&&Number.isInteger(piece.creatorId)&&piece.sponsorId===piece.creatorId).length;
+  if(activeSpontaneousArt>=MAX_SPONTANEOUS_ARTWORKS)return null;
   this.lastSpontaneousArtworkDay=Math.floor(city.minute/1440)+1;
   let phaseStart=profile?performance.now():0;
-  const eligible=city.citizens.filter(c=>!c.entity.destroyed&&!c.dead&&city.society.isAdult(c)&&(c.skills?.artistic||0)>=1&&!c.custody&&!c.informalJobId&&!c.deliveryId&&!c.workMeal&&!c.paintWorkId&&!c.mechanicJob&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.path?.length&&(!c.task||INTERRUPTIBLE.has(c.task))&&!city.urgentNeed(c)&&(c.needs?.energy??0)>30&&(c.needs?.health??0)>40&&city.minute-(c.lastSpontaneousArtworkAt??-Infinity)>=2*1440);
+  const eligible=city.citizens.filter(c=>!c.entity.destroyed&&!c.dead&&city.society.isAdult(c)&&(c.skills?.artistic||0)>=1&&!c.custody&&!c.informalJobId&&!c.deliveryId&&!c.workMeal&&!c.paintWorkId&&!c.mechanicJob&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.path?.length&&(!c.task||INTERRUPTIBLE.has(c.task))&&!city.urgentNeed(c)&&(c.needs?.energy??0)>30&&(c.needs?.health??0)>40&&city.minute-(c.lastSpontaneousArtworkAt??-Infinity)>=SPONTANEOUS_ART_INTERVAL);
   if(profile)profile.eligibleMs=performance.now()-phaseStart;
   phaseStart=profile?performance.now():0;
   const artists=eligible.map(c=>({citizen:c,roll:Math.floor(city.random()*100)})).filter(row=>row.roll<58+(city.politics?.secretaries?.find(office=>office.officeId==='education_culture')?.skill||0)*.2).sort((a,b)=>(b.citizen.skills.artistic-a.citizen.skills.artistic)||a.roll-b.roll||a.citizen.id-b.citizen.id);
@@ -84,7 +87,7 @@ export class CityGigs{
  sidewalkArtworkPoint(citizen){
   const city=this.city,world=city.world,tiles=world?.sidewalkTiles;if(!tiles?.size)return null;
   const occupied=city.justice.art.filter(piece=>!piece.entity.destroyed).map(piece=>({x:piece.entity.x,y:piece.entity.y})),doors=city.buildings.filter(building=>!building.entity.destroyed&&building.door).map(building=>({x:building.door.x,y:building.door.y}));
-  const busy=(x,y)=>occupied.some(point=>Math.hypot(point.x-(x+.5),point.y-(y+.5))<1.35),nearDoor=(x,y)=>doors.some(point=>Math.hypot(point.x-(x+.5),point.y-(y+.5))<1.2);
+  const busy=(x,y)=>occupied.some(point=>Math.hypot(point.x-(x+.5),point.y-(y+.5))<ARTWORK_SPACING),nearDoor=(x,y)=>doors.some(point=>Math.hypot(point.x-(x+.5),point.y-(y+.5))<1.2);
   const options=[];
   for(const key of tiles){const x=key%world.width,y=Math.floor(key/world.width),distance=Math.hypot(citizen.entity.x-(x+.5),citizen.entity.y-(y+.5));if(distance>18||world.sidewalkTreeTiles?.has(key)||!world.hasSidewalk(x,y)||!city.walkable(x,y)||busy(x,y)||nearDoor(x,y))continue;options.push({x:x+.5,y:y+.5,distance,tie:city.random()});}
   options.sort((a,b)=>a.distance-b.distance||a.tie-b.tie);

@@ -3,11 +3,12 @@ import { inspectBuildingSite } from './city_terrain.js?v=entrance-retaining-clea
 import { SANITATION_RULES } from './city_sanitation.js?v=sanitation-routing-3';
 
 export const ESSENTIAL_SERVICES = new Set(['quarry','builder', 'carrier', 'lamp_service', 'cleaner', 'waste_collector', 'recycler', 'composting']);
+const WASTE_SERVICES=new Set(['waste_collector','recycler','composting']);
 
 /** Turns service backlogs into financed, physically constructed premises. */
 export class CityServiceInvestment {
   constructor(city) { this.city = city; this.decisions = new Map(); }
-  demand(type) {
+  demand(type,wasteSnapshot=null) {
     const city = this.city;
     if(type==='quarry'){
       const firms=city.economy.businesses.filter(b=>b.type==='quarry'),reports=firms.map(b=>city.economy.quarryStatus(b)),remaining=reports.reduce((n,r)=>n+r.remaining,0),staff=reports.reduce((n,r)=>n+(r.remaining?r.staff:0),0),stock=firms.reduce((n,b)=>n+b.inventory.pedra,0),work=city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').reduce((n,p)=>n+Math.max(0,p.stone-p.inventory.pedra-(p.incoming.pedra||0)),0),capacity=reports.reduce((n,r)=>n+r.potential,0);
@@ -19,7 +20,7 @@ export class CityServiceInvestment {
 
     const firms = city.economy.businesses.filter(b => b.type === type);
     if(['waste_collector','recycler','composting'].includes(type)) {
-      const waste=city.sanitation.wasteMetrics();
+      const waste=wasteSnapshot||city.sanitation.wasteMetrics();
       const staff=firms.reduce((n,b)=>n+(b.balance>=b.wage?b.workers.length:0)+(city.economy.citizen(b.ownerId)?1:0),0);
       const units=type==='waste_collector'?waste.awaiting+waste.collecting:waste.total;
       const feces=type==='composting'?city.buildings.reduce((n,b)=>n+(b.inventory.fezes||0),0):0;
@@ -96,7 +97,11 @@ export class CityServiceInvestment {
   invest({initialOnly=false,types=null}={}) {
     const city = this.city;
     city.development.ensurePlots();
-    const demands = [...ESSENTIAL_SERVICES].map(type => ({type,...this.demand(type)})).filter(d => d.score >= 60&&(!types||types.includes(d.type))&&(!initialOnly||!city.economy.businesses.some(b=>b.type===d.type))).sort((a,b) => (a.type === 'builder' ? -1 : b.type === 'builder' ? 1 : b.score-a.score));
+    const existingTypes=initialOnly?new Set(city.economy.businesses.map(b=>b.type)):null;
+    const selectedTypes=[...ESSENTIAL_SERVICES].filter(type=>(!types||types.includes(type))&&(!existingTypes||!existingTypes.has(type)));
+    const wasteSnapshot=selectedTypes.some(type=>WASTE_SERVICES.has(type))?city.sanitation.wasteMetrics():null;
+    const demands=selectedTypes.map(type=>({type,...this.demand(type,wasteSnapshot)})).filter(d=>d.score>=60).sort((a,b)=>(a.type==='builder'?-1:b.type==='builder'?1:b.score-a.score));
+    if(!demands.length)return false;
     // Candidate eligibility is shared by every service demand. Build it once
     // per investment pass instead of rescanning all citizens and all projects
     // for every service type.

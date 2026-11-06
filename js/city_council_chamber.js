@@ -1,4 +1,4 @@
-import {DEVELOPMENT_RULES} from './city_development.js?v=sidewalk-grade-2';
+import {DEVELOPMENT_RULES} from './city_development.js?v=road-network-cache-1';
 import {chooseBuildingSite} from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 /** The legislature needs real premises, offices and in-person plenary sessions. */

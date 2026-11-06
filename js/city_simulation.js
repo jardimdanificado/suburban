@@ -44,9 +44,9 @@ import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-resident
 import { CitySanitation } from './city_sanitation.js?v=sanitation-routing-3';
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=fixed-market-building-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=road-network-cache-1';
 import { CityLogistics } from './city_logistics.js?v=central-import-depot-1';
-import { CityGigs } from './city_gigs.js?v=artwork-solid-wall-support-1';
+import { CityGigs } from './city_gigs.js?v=spaced-limited-spontaneous-art-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=update-demand-index-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=citizen-id-index-1';
