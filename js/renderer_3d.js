@@ -12,7 +12,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=exterior-only-interiors-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=room-floors-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1';
@@ -6570,7 +6570,11 @@ export class RCT3DRenderer {
     const gridEnabled = this.wireframeMode === 1 && this.zoom >= 0.45;
     const detailTier = this.terrainDetailTier ?? 2;
     const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
-    const city=this.cityDevelopment?.city,party=cityGoverningParty(city),farmSignature=(city?.buildings||[]).filter(building=>building.type==='farm'&&!building.entity.destroyed).map(building=>`${building.id}:${building.entity.x},${building.entity.y},${building.width},${building.depth}`).sort().join(';');
+    const city=this.cityDevelopment?.city,party=cityGoverningParty(city),farmSignatureCache=this._terrainFarmSignatureCache;
+    if(!farmSignatureCache||farmSignatureCache.city!==city||farmSignatureCache.structureRevision!==(city?.structureRevision||0)){
+      this._terrainFarmSignatureCache={city,structureRevision:city?.structureRevision||0,value:(city?.buildings||[]).filter(building=>building.type==='farm'&&!building.entity.destroyed).map(building=>`${building.id}:${building.entity.x},${building.entity.y},${building.width},${building.depth}`).sort().join(';')};
+    }
+    const farmSignature=this._terrainFarmSignatureCache.value;
     const railingSignature=`party:${party?.id??'none'}|farms:${farmSignature}`;
     const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}|${railingSignature}`;
     const visible = new Set();
@@ -7793,14 +7797,13 @@ export class RCT3DRenderer {
           // the raised foundation only applies to positions inside the shell.
           surfaceH=inside?(interiorBuilding.terrain?.base??this.getSurfaceElevation(map,renderX,renderY)):this.getSurfaceElevation(map,renderX,renderY);
         }
-        else if(showInspectedInterior&&interiorBuilding)surfaceH=interiorBuilding.terrain?.base??this.getSurfaceElevation(map,renderX,renderY);
         else if(cityCitizen){
           const cache=this._entitySurfaceCache??=new WeakMap(),cached=cache.get(e);
           if(cached&&cached.x===e.x&&cached.y===e.y&&cached.revision===world.revision)surfaceH=cached.height;
           else{surfaceH=this.getSurfaceElevation(map,e.x,e.y);cache.set(e,{x:e.x,y:e.y,revision:world.revision,height:surfaceH});}
         }else surfaceH = this.getSurfaceElevation(map, isPlantOrItem ? e.x + 0.5 : e.x, isPlantOrItem ? e.y + 0.5 : e.y);
       }
-      const renderSurfaceH=surfaceH+((renderAtInterior||showInspectedInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0);
+      const renderSurfaceH=surfaceH+((renderAtInterior||renderElevated)?(interiorPosition?.z??cityCitizen?.skybridgeZ??0):0);
       const profileAfterSurface = profileCitizenStart ? performance.now() : 0;
       if(cityCitizen&&e.id!==this.selectedEntityId&&!this.citizenVisibleInView(renderX,renderY,renderSurfaceH+(cityCitizen.bodyHeightCm||170)/200))continue;
 

@@ -512,14 +512,14 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     if ((b.constructionKind === 'open-air' && b.type !== 'market') || b.type === 'greengrocer') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
-    if (group && (group.userData.buildingStyleVersion!==24 || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
+    if (group && (group.userData.buildingStyleVersion!==25 || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
       renderer.parkPalmWindDecorations.delete(entity.id);
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
       renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose();object.userData.mineSignTexture?.dispose();object.userData.marketSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
-      group = new THREE.Group();group.userData.buildingStyleVersion=24;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
+      group = new THREE.Group();group.userData.buildingStyleVersion=25;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
       const material = buildingMaterial(renderer,THREE,'wall',0xffffff,buildingTextureVariant(b.id??entity.id));material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
@@ -580,6 +580,9 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       group.add(cells);const cellMeshes=[cells];
       for(const parts of cellSourcesByFloor.values())for(const {source} of parts)source.dispose();
       group.userData.cellMeshes=cellMeshes;
+      const floorCells=[...b.units,...(b.circulation||[])],roomFloors=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.06,1),new THREE.MeshLambertMaterial({color:0x928571}),floorCells.length);
+      for(let i=0;i<floorCells.length;i++){const unit=floorCells[i];matrix.makeTranslation(unit.x+.5,unit.z*CITY_FLOOR_HEIGHT-.03,unit.y+.5);roomFloors.setMatrixAt(i,matrix);}
+      roomFloors.receiveShadow=true;roomFloors.castShadow=false;group.add(roomFloors);group.userData.roomFloors=roomFloors;
       const roof = new THREE.Mesh(new THREE.BoxGeometry(b.width + .15, .14, b.depth + .15), buildingMaterial(renderer,THREE,'roof',mine?0x454b49:style.roof));
       roof.position.set(b.width / 2, b.floors*CITY_FLOOR_HEIGHT + .03, b.depth / 2); roof.castShadow = true; group.add(roof);group.userData.roof=roof;
       const facade=new THREE.Group(),origin=buildingPoint(b,0,0);facade.rotation.y=(b.rotation||0)*Math.PI/2;facade.position.set(origin.x,0,origin.y);group.add(facade);group.userData.facade=facade;
@@ -769,7 +772,7 @@ function createFarmPlants(THREE,b){
   const leafGeometry=visual.leaf==='blade'?new THREE.ConeGeometry(.07,.34,4):visual.leaf==='corn'?new THREE.ConeGeometry(.1,.55,4):visual.leaf==='fine'?new THREE.ConeGeometry(.045,.24,5):new THREE.SphereGeometry(1,6,4);
   const foliage=new THREE.InstancedMesh(leafGeometry,new THREE.MeshLambertMaterial({color:visual.foliage}),capacity);
   const productGeometry=visual.produce==='grain'?new THREE.ConeGeometry(.5,1,5):visual.produce==='ear'?new THREE.CylinderGeometry(.42,.5,1,6):visual.produce==='flower'?new THREE.CylinderGeometry(.5,.5,.14,10):new THREE.SphereGeometry(1,6,4);
-  const product=new THREE.InstancedMesh(productGeometry,new THREE.MeshLambertMaterial({color:visual.head}),capacity);for(const mesh of [stem,foliage,product]){mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;mesh.count=0;group.add(mesh);}
+  const product=new THREE.InstancedMesh(productGeometry,new THREE.MeshLambertMaterial({color:visual.head}),capacity);for(const mesh of [stem,foliage,product]){mesh.castShadow=false;mesh.receiveShadow=false;mesh.count=0;group.add(mesh);}
   return {group,stem,foliage,product,capacity,visual};
 }
 function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
@@ -785,7 +788,7 @@ function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
     }
   }
   plantSet.stem.count=plantSet.foliage.count=n;plantSet.product.count=produceCount;
-  for(const mesh of [plantSet.stem,plantSet.foliage,plantSet.product])mesh.instanceMatrix.needsUpdate=true;
+  for(const mesh of [plantSet.stem,plantSet.foliage,plantSet.product]){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();}
 }
 
 // Open-air premises follow every patch of the natural surface; no slab, walls or roof.
