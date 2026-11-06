@@ -33,7 +33,7 @@ test('settlements across all landscape presets preserve every natural height and
     const world = new World(preset, seed), natural = world.map.slice(), city = cityOn(world);
     city.initialize();
     assert(city.buildings.length>=8);for(const type of ['townhall','builder','quarry','mint','bank','carrier','bike_rack','cycle_assembler'])assert(city.buildings.some(b=>b.type===type),`Missing ${type}`); assert.equal(city.citizens.length, 512);
-    assert.equal(city.stats().homeless, 512); assert(city.stats().employed > 0); assert.equal(city.stats().entrepreneurs, 0);
+    assert.equal(city.stats().homeless, 512); assert(city.stats().employed > 0); assert.equal(city.stats().entrepreneurs, 2);
     let roads = 0;
     for (let i = 0; i < natural.length; i++) if (natural[i] !== world.map[i]) {
       if(FARM_TILES.has(world.map[i]))assert.equal(baseTerrainTile(world.map[i]),natural[i]);

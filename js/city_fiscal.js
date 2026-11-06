@@ -1,3 +1,4 @@
+import {economicPolicy,ensureEconomicReform} from './city_economic_policies.js';
 const essentialTypes=new Set(['farm','bakery','kitchen','market','greengrocer','popular_refectory','clinic','hospital','utility','cleaner','waste_collector','recycler','carrier','mint','police_station','jail','courthouse','iml','crematorium']);
 const protectedPublicPayrollTypes=new Set(['police_station','jail','courthouse','legal_office','iml','crematorium']);
 export class CityFiscal {
@@ -6,10 +7,14 @@ export class CityFiscal {
   reserve(){
     const city=this.city,protectedServices=city.buildings.filter(b=>protectedPublicPayrollTypes.has(b.type)&&b.active&&!b.entity.destroyed&&this.municipal(b)),publicJobs=protectedServices.map(b=>`${b.id}:${b.workers?.length||0}:${b.wage}:${b.fiscalDailyExpenses||0}:${b.balance}`).join(','),key=`${city.minute}:${city.citizens.length}:${city.currency.priceIndex}:${city.welfare.policy.reserve}:${city.welfare.policy.dailyBudget}:${publicJobs}`;if(this.reserveKey===key)return this.reserveValue;
     const population=city.citizens.filter(c=>!c.entity.destroyed).length,food=this.foodCost(),social=city.welfare.policy.enabled?Math.max(0,city.welfare.policy.dailyBudget||0):0;
-    const publicPayroll=protectedServices.reduce((n,b)=>n+Math.max(0,(b.workers?.length||0)*b.wage*480*7+Math.max(0,b.fiscalDailyExpenses||0)*7-b.balance),0);
+    const publicPayroll=protectedServices.reduce((n,b)=>n+Math.max(0,Math.max((b.workers?.length||0)*b.wage*480,Math.max(0,b.fiscalDailyExpenses||0))*7-b.balance),0);
     this.reserveKey=key;return this.reserveValue=Math.ceil(Math.max(city.currency.price(Math.max(city.welfare.policy.reserve,population*3000)),population*food*7+social*2+publicPayroll));
   }
   category(reason,details={}){
+    if(reason==='Emissão monetária inicial')return 'initialCapital';
+    if(/Repartição nacional/.test(reason))return 'nationalTransfers';
+    if(/^Exportação/.test(reason))return 'exports';
+    if(/aluguel|Aluguel/.test(reason))return 'rent';
     if(/Benefício|subsistência/.test(reason))return 'benefits';
     if(details.purpose==='public-meals'||details.costCenter==='food'||/Alimentação/.test(reason))return 'food';
     if(/Imposto/.test(reason))return 'tax';
@@ -29,6 +34,11 @@ export class CityFiscal {
       const election=this.city.politics.active,study=this.city.politics.getResearch().studies.find(s=>s.id===details.studyId),due=study?Math.max(0,Math.ceil(study.budget*1.5)-(study.funded||0)):0;
       if(study?.commission&&['mayor','council'].includes(study.commission.key)&&study.electionId===election?.id&&['campaign','scheduled'].includes(election?.status)&&study.instituteId===details.buildingId&&amount<=due)return true;
     }
+    const projectForBill=details.projectId&&this.city.development.projects.find(p=>p.id===details.projectId),approvedInvestment=this.city.politics.council.bills.some(b=>['approved','executing','executed'].includes(b.status)&&(b.id===details.billId||b.type==='build'&&b.payload.buildingType===(details.businessType||projectForBill?.type)));
+    if(category==='investment'&&this.city.day>3&&!approvedInvestment){
+      const report=this.report(),today=this.days.find(d=>d.day===this.city.day),spent=today?.payments?.investment||0,limit=Math.floor(Math.max(this.city.currency.price(100000),report.operatingIncome/Math.max(1,report.days)*.35+(this.city.day<=14?this.city.currency.issued*.02:0)));
+      if(spent+amount>limit||this.city.treasury-amount<this.reserve()*1.25){this.lastDeferred={minute:this.city.minute,reason,amount,category,limit,spent};return false;}
+    }
     if(this.city.treasury-amount>=this.reserve())return true;
     const project=details.projectId&&this.city.development.projects.find(p=>p.id===details.projectId),type=details.businessType||project?.type;if(['farm','bakery','kitchen','popular_refectory'].includes(type)&&this.city.welfare.conditions().foodDays<3&&this.city.treasury-amount>=this.foodCost()*this.city.citizens.length)return true;
     this.lastDeferred={minute:this.city.minute,reason,amount,category};return false;
@@ -38,35 +48,36 @@ export class CityFiscal {
     let day=this.days.at(-1);if(day?.day!==this.city.day){day={day:this.city.day,income:0,expenses:0,receipts:{},payments:{}};this.days.push(day);if(this.days.length>60)this.days.shift();}
     const incoming=to==='treasury',category=details.fiscalRecovery?'liquidity':this.category(reason,details),table=incoming?day.receipts:day.payments;table[category]=(table[category]||0)+amount;day[incoming?'income':'expenses']+=amount;
   }
-  municipal(b){return (!b.equityShares?.length||b.equityShares.length===1&&b.equityShares[0].accountId==='treasury')&&b.accountId!=='treasury'&&!b.entity.destroyed&&b.active&&!b.ownerId&&(b.municipal||b.units?.length&&b.units.every(u=>u.ownerId==='treasury'));}
+  municipal(b){return (!b.equityShares?.length||(b.equityShares.find(s=>s.accountId==='treasury')?.points||0)>5000)&&b.accountId!=='treasury'&&!b.entity.destroyed&&b.active&&!b.ownerId&&(b.municipal||b.units?.length&&b.units.every(u=>u.ownerId==='treasury'));}
   businessReserve(b){
     const city=this.city,plan=city.vehicles?.recipeFor(b),inputs=plan?.inputs||city.buildingTypes[b.type]?.inputs||{},materials=Object.entries(inputs).reduce((n,[g,q])=>n+q*(city.economy.goods[g]?.price||0),0)*(plan?.size||1);
-    const payroll=b.workers.length*b.wage*480*7;
+    const payroll=b.workers.length*b.wage*480*economicPolicy(city,'businessReserveDays');
     // Reserve one production batch, one week of real payroll, and three days
     // of operating costs. Three batches of inputs exceeded the seed capital of
     // most small firms and made healthy stock look like chronic distress.
-    return Math.ceil(Math.max(city.currency.price(['bank','builder'].includes(b.type)?200000:20000),payroll,materials,(b.fiscalDailyExpenses||0)*3));
+    return Math.ceil(Math.max(city.currency.price(['bank','builder'].includes(b.type)?200000:20000),payroll,materials,(b.fiscalDailyExpenses||0)*3,b.type==='bank'?city.bank.liquidityReserve(b):0));
   }
   distribute(b,emergency=false){
-    if(!this.municipal(b))return 0;const surplus=Math.max(0,b.balance-this.businessReserve(b)),profit=Math.max(0,b.totalRevenue-b.totalExpenses-(b.fiscalDistributedProfit||0)),amount=Math.floor(emergency?surplus:Math.min(surplus,profit*.5));
+    if(!this.municipal(b)||b.equityShares?.some(s=>s.accountId!=='treasury'))return 0;const surplus=Math.max(0,b.balance-this.businessReserve(b)),profit=Math.max(0,b.totalRevenue-b.totalExpenses-(b.fiscalDistributedProfit||0)),amount=Math.floor(emergency?surplus:Math.min(surplus,profit*.5));
     if(amount&&this.city.transfer(b.accountId,'treasury',amount,emergency?'Resultado de empresa municipal para reserva social':'Lucro de empresa municipal',{buildingId:b.id,fiscalRecovery:emergency})){if(emergency)this.recovered+=amount;b.fiscalDistributedProfit=(b.fiscalDistributedProfit||0)+Math.min(amount,profit);return amount;}return 0;
   }
   hourly(){
-    const city=this.city,hour=Math.floor(city.minute/60);if(this.lastRecoveryHour===hour)return;this.lastRecoveryHour=hour;const reserve=this.reserve(),financeSkill=city.politics?.secretaries?.find(row=>row.officeId==='finance')?.skill||0,buffer=reserve*Math.min(.15,financeSkill*.0015),targetReserve=reserve+buffer;
+    const city=this.city;ensureEconomicReform(city);const hour=Math.floor(city.minute/60);if(this.lastRecoveryHour===hour)return;this.lastRecoveryHour=hour;const reserve=this.reserve(),financeSkill=city.politics?.secretaries?.find(row=>row.officeId==='finance')?.skill||0,buffer=reserve*Math.min(.15,financeSkill*.0015),targetReserve=reserve+buffer;
     if(this.worksAdvance>0&&city.treasury>reserve*1.25){const amount=Math.min(this.worksAdvance,Math.max(0,city.treasury-reserve*1.25));if(amount&&city.transfer('treasury','works-budget',amount,'Recomposição do adiantamento da verba de obras',{fiscalRecovery:true})){this.worksAdvance-=amount;city.politics.policy.worksBudget=city.accounts.get('works-budget').balance;}}
     this.fundServices();
+    this.requestRevenueReview();
     if(city.treasury<targetReserve){for(const b of city.buildings){this.distribute(b,false);if(city.treasury>=targetReserve)break;}}
-    if(city.treasury<reserve){this.requestRevenueReview();for(const b of city.buildings){this.distribute(b,true);if(city.treasury>=reserve)break;}
+    if(city.treasury<reserve){for(const b of city.buildings){this.distribute(b,true);if(city.treasury>=reserve)break;}
       const works=city.accounts.get('works-budget'),amount=Math.min(works?.balance||0,Math.max(0,reserve-city.treasury));if(amount&&city.transfer('works-budget','treasury',amount,'Adiantamento do orçamento de obras para subsistência',{fiscalRecovery:true})){this.worksAdvance+=amount;this.recovered+=amount;city.politics.policy.worksBudget=works.balance;city.log('Verba de obras ainda não contratada adiantada para proteger alimentação e benefícios.','economy',[],{kind:'fiscal-emergency-liquidity',amount,worksAdvance:this.worksAdvance});}
       this.fundServices();
     }
   }
   requestRevenueReview(){
-    const city=this.city,p=city.politics;if(this.lastRevenueReviewDay===city.day||this.days.length<3)return;this.lastRevenueReviewDay=city.day;
-    if(this.report().operatingBalance>=0)return;
+    const city=this.city,p=city.politics;if(!economicPolicy(city,'automaticStabilizer')||this.lastRevenueReviewDay===city.day||this.days.length<3)return;this.lastRevenueReviewDay=city.day;
+    const finance=this.report();if(finance.operatingBalance>=0||finance.runwayDays==null||finance.runwayDays>economicPolicy(city,'fiscalGuardDays'))return;
     const pending=p.council.bills.find(b=>b.type==='businessTax'&&b.payload.value>p.policy.businessTax&&['awaiting-session','proposed','awaiting-sanction','executing','vetoed'].includes(b.status));if(pending){this.revenueReviewBillId=pending.id;return;}
     const author=p.council.people().find(c=>c.political.partyId===p.partyOfId(city.economy.mayorId)?.id)||p.council.people()[0];if(!author)return;
-    const value=Math.min(.3,Math.max(.02,(p.policy.businessTax||0)+.02));if(value<=p.policy.businessTax)return;
+    const value=Math.min(.5,Math.max(.02,(p.policy.businessTax||0)+.02));if(value<=p.policy.businessTax)return;
     const bill=p.council.propose(author,'businessTax',{value},'Revisão fiscal: financiar alimentação e subsistência com resultado empresarial');if(bill&&typeof bill==='object'){bill.fiscalReview=true;this.revenueReviewBillId=bill.id;city.log('Déficit de custeio encaminhado à Câmara: proposta de receita para sustentar alimentação e benefícios.','government',[author.id],{kind:'fiscal-stabilization-proposed',billId:bill.id});}
   }
   daily(){for(const b of this.city.buildings){const expenses=Math.max(0,b.totalExpenses-(b.fiscalLastExpenses||0));b.fiscalLastExpenses=b.totalExpenses;b.fiscalDailyExpenses=b.fiscalDailyExpenses==null?expenses:b.fiscalDailyExpenses*.7+expenses*.3;}}
@@ -75,11 +86,22 @@ export class CityFiscal {
       // Keep two days of actual payroll and operating costs available. Vacant jobs
       // are not liabilities, and even a small per-building allowance trapped
       // public cash in idle services without workers or operating costs.
-      const payroll=b.workers.length*b.wage*480,target=Math.ceil((payroll+Math.max(0,b.fiscalDailyExpenses||0))*2),missing=Math.max(0,target-b.balance),available=Math.max(0,city.treasury-this.reserve()),amount=Math.min(missing,available);if(amount>0)city.transfer('treasury',b.accountId,amount,'Orçamento autorizado pelo prefeito',{buildingId:b.id,essential:true});
+      const payroll=b.workers.length*b.wage*480,target=Math.ceil(Math.max(payroll,Math.max(0,b.fiscalDailyExpenses||0))*economicPolicy(city,'serviceBufferDays')),missing=Math.max(0,target-b.balance),available=Math.max(0,city.treasury-this.reserve()),amount=Math.min(missing,available);if(amount>0)city.transfer('treasury',b.accountId,amount,'Orçamento autorizado pelo prefeito',{buildingId:b.id,essential:true});
     }
+  }
+  coverMunicipalPayroll(b,amount){
+    if(!this.municipal(b)||b.balance>=amount)return b.balance>=amount;
+    const missing=amount-b.balance,available=Math.max(0,this.city.treasury-this.reserve());
+    return available>=missing&&this.city.transfer('treasury',b.accountId,missing,'Complemento urgente de folha municipal',{buildingId:b.id,essential:true});
   }
   report(){
     const since=this.city.day-6,days=this.days.filter(d=>d.day>=since),receipts={},payments={};for(const d of days){for(const [k,v]of Object.entries(d.receipts))receipts[k]=(receipts[k]||0)+v;for(const [k,v]of Object.entries(d.payments))payments[k]=(payments[k]||0)+v;}
-    const income=days.reduce((n,d)=>n+d.income,0),expenses=days.reduce((n,d)=>n+d.expenses,0),financing=new Set(['investment','liquidity','monetary']),operatingIncome=Object.entries(receipts).reduce((n,[k,v])=>n+(financing.has(k)?0:v),0),operatingExpenses=Object.entries(payments).reduce((n,[k,v])=>n+(financing.has(k)?0:v),0);return{income,expenses,balance:income-expenses,operatingIncome,operatingExpenses,operatingBalance:operatingIncome-operatingExpenses,taxArrears:this.city.economy.businesses.reduce((n,b)=>n+(b.businessTaxDue||0),0),reserve:this.reserve(),cash:this.city.treasury,worksAdvance:this.worksAdvance,revenueReviewBillId:this.revenueReviewBillId,receipts,payments,days:days.length,recovered:this.recovered,lastDeferred:this.lastDeferred};
+    const income=days.reduce((n,d)=>n+d.income,0),expenses=days.reduce((n,d)=>n+d.expenses,0),financing=new Set(['investment','liquidity','monetary','initialCapital']),operatingIncome=Object.entries(receipts).reduce((n,[k,v])=>n+(financing.has(k)?0:v),0),operatingExpenses=Object.entries(payments).reduce((n,[k,v])=>n+(financing.has(k)?0:v),0),operatingBalance=operatingIncome-operatingExpenses,reserve=this.reserve(),dailyDeficit=days.length?Math.max(0,-operatingBalance/days.length):0,runwayDays=dailyDeficit?Math.max(0,(this.city.treasury-reserve)/dailyDeficit):null,service=this.serviceContinuity(),cashBurnPerDay=Math.max(0,(expenses-income+(receipts.initialCapital||0))/Math.max(1,days.length)),cashRunwayDays=cashBurnPerDay?Math.max(0,(this.city.treasury-reserve)/cashBurnPerDay):null;return{cashBurnPerDay,cashRunwayDays,income,expenses,balance:income-expenses,operatingIncome,operatingExpenses,operatingBalance,reserve,cash:this.city.treasury,runwayDays,serviceHealth:service.health,servicesAtRisk:service.atRisk,servicesTracked:service.tracked,taxArrears:this.city.economy.businesses.reduce((n,b)=>n+(b.businessTaxDue||0),0),worksAdvance:this.worksAdvance,revenueReviewBillId:this.revenueReviewBillId,receipts,payments,days:days.length,recovered:this.recovered,lastDeferred:this.lastDeferred};
+  }
+  serviceContinuity(){
+    if(this.serviceContinuityMinute===this.city.minute)return this.serviceContinuityValue;
+    const city=this.city,services=city.buildings.filter(b=>essentialTypes.has(b.type)&&this.municipal(b));let weight=0,covered=0,atRisk=0;
+    for(const b of services){const daily=Math.max((b.workers?.length||0)*b.wage*480,Math.max(0,b.fiscalDailyExpenses||0)),target=Math.max(1,daily*economicPolicy(city,'serviceBufferDays')),coverage=Math.max(0,Math.min(1,(b.balance||0)/target)),w=Math.max(1,daily);weight+=w;covered+=w*coverage;if(coverage<.5)atRisk++;}
+    this.serviceContinuityMinute=city.minute;return this.serviceContinuityValue={health:weight?covered/weight*100:100,atRisk,tracked:services.length};
   }
 }

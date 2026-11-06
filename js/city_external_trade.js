@@ -1,3 +1,4 @@
+import {economicPolicy} from './city_economic_policies.js';
 import {INDUSTRIES} from './city_industries.js';
 import {inventoryFree} from './city_inventory.js';
 import {ensureExternalAccount} from './city_currency.js';
@@ -55,6 +56,7 @@ export function orderImport(city,buyer,good,quantity,{reserveBalance=0,purpose='
 }
 const EXPORTABLE=['madeira','tabuas','carvao','minerio','ferro','argila','fibras','tecido','ervas','bauxita','aluminio','aco','resina','borracha','rolamentos','quadro','plataforma','rodas','corrente','selim','pecas'];
 export function externalTradeHourly(city){
+ const municipalSales=municipalSurplusExportsHourly(city);
  const economy=city.economy;ensureExternalAccount(city,'supplier','Economia externa');ensureExternalAccount(city,'external-trade','Comércio exterior');const externalAccounts=['supplier','external-trade'],diplomacySkill=city.politics?.secretaries?.find(row=>row.officeId==='foreign_relations')?.skill||0,salesLimit=EXTERNAL_TRADE_RULES.maximumSalesPerHour+Math.min(4,Math.floor(diplomacySkill/25));
  const businesses=economy.businesses.filter(b=>b.active&&!b.entity.destroyed),totals=new Map();
  for(const good of EXPORTABLE)totals.set(good,businesses.reduce((sum,b)=>sum+(b.inventory[good]||0),0));
@@ -72,7 +74,7 @@ export function externalTradeHourly(city){
    // Keep enough in the firm and city for local customers and production.
    const localReserve=Math.max(EXTERNAL_TRADE_RULES.minimumFirmStock,Math.ceil(demand*1.25));
    const price=Math.max(1,Math.round(economy.goods[good].price*(exporter?1.35:EXTERNAL_TRADE_RULES.priceFactor)));
-   const payer=externalAccounts.find(id=>city.accounts.get(id).balance>=price);if(!payer)return sales;
+   const payer=externalAccounts.find(id=>city.accounts.get(id).balance>=price);if(!payer)return sales+municipalSales;
    const quantity=Math.floor(Math.min(stock-EXTERNAL_TRADE_RULES.minimumFirmStock,cityStock-localReserve,EXTERNAL_TRADE_RULES.maximumPerSale,city.accounts.get(payer).balance/price));
    if(quantity<1)continue;
    const gross=quantity*price,tariff=Math.min(gross,Math.ceil(economy.goods[good].price*(city.politics?.policy?.exportTaxes?.[good]??0))*quantity),commission=exporter?.id===b.id?0:Math.min(Math.max(0,gross-tariff),Math.ceil(gross*.03)),brokerId=exporter?.accountId||'trade-import-export';if(commission&&!city.accounts.has(brokerId))city.accounts.set(brokerId,{name:'Comércio exterior · intermediação',balance:0,totalRevenue:0,totalExpenses:0});const amount=gross-tariff-commission;
@@ -80,6 +82,28 @@ export function externalTradeHourly(city){
    city.vehicles.discardComponents(b,good,quantity);b.inventory[good]-=quantity;economy.consumed[good]+=quantity;totals.set(good,cityStock-quantity);
    economy.recordGoods('export',good,quantity,b.id,null,{gross,exportTariff:tariff,brokerage:commission});economy.externalTrade.sales++;economy.externalTrade.units+=quantity;economy.externalTrade.revenue+=gross;economy.externalTrade.exportTariffs=(economy.externalTrade.exportTariffs||0)+tariff;b.lastSaleAt=city.minute;sales++;break;
   }
+ }
+ return sales+municipalSales;
+}
+
+/** Municipal exports sell actual uncommitted inventory, never emergency food or contract materials. */
+export function municipalSurplusExportsHourly(city){
+ if(!economicPolicy(city,'exportMunicipal'))return 0;
+ const economy=city.economy,population=city.citizens.filter(c=>!c.entity.destroyed).length,days=economicPolicy(city,'exportReserveDays'),foods=new Set(city.workMeals.foodGoods()),goods=new Set([...EXPORTABLE,'pedra',...foods]),totals=new Map();
+ ensureExternalAccount(city,'municipal-export-buyers','Compradores externos de excedentes municipais');
+ for(const good of goods)totals.set(good,city.goodsStock(good));
+ let sales=0;economy.municipalExports??={revenue:0,remitted:0,units:0};
+ const firms=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&(b.accountId==='treasury'||b.municipal)&&!b.officeTenantOf);
+ for(const b of firms)for(const good of goods){
+  if(sales>=4)return sales;const stock=b.inventory?.[good]||0;if(!stock||b.importedUnitPrice?.[good])continue;
+  const demand=economy.market?.[good]?.demand||0,contracts=city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed').reduce((n,p)=>n+Math.max(0,(good==='pedra'?p.stone||0:0)-(p.inventory?.[good]||0)-(p.incoming?.[good]||0)),0),reserve=Math.max(foods.has(good)?population*6*days:24,demand*days,contracts),surplus=Math.max(0,(totals.get(good)||0)-reserve),quantity=Math.floor(Math.min(stock-12,surplus,economicPolicy(city,'exportLotLimit')));
+  if(quantity<=0)continue;const amount=Math.max(1,Math.floor(economy.goods[good].price*quantity*1.1));
+  if(!city.transfer('municipal-export-buyers',b.accountId,amount,`Exportação: excedente municipal de ${economy.goods[good].label}`,{buildingId:b.id,good,quantity,municipalExport:true}))continue;
+  b.inventory[good]-=quantity;totals.set(good,(totals.get(good)||0)-quantity);economy.consumed[good]=(economy.consumed[good]||0)+quantity;economy.recordGoods('export',good,quantity,b.id,null,{municipalExport:true,amount});
+  let remitted=b.accountId==='treasury'?amount:0;
+  if(b.accountId!=='treasury'&&!(b.equityShares||[]).some(s=>s.accountId!=='treasury')){const transfer=Math.min(Math.floor(amount*economicPolicy(city,'municipalRevenueShare')),Math.max(0,b.balance-city.fiscal.businessReserve(b)));if(transfer&&city.transfer(b.accountId,'treasury',transfer,'Resultado de empresa municipal: exportação de excedentes',{buildingId:b.id,good,quantity})){remitted=transfer;b.fiscalDistributedProfit=(b.fiscalDistributedProfit||0)+transfer;}}
+  economy.externalTrade??={sales:0,units:0,revenue:0};economy.externalTrade.sales++;economy.externalTrade.units+=quantity;economy.externalTrade.revenue+=amount;economy.municipalExports.revenue+=amount;economy.municipalExports.remitted+=remitted;economy.municipalExports.units+=quantity;sales++;
+  city.log(`Excedente municipal exportado: ${quantity} ${economy.goods[good].label}; reserva local e materiais de obras preservados.`,'economy',[],{kind:'municipal-surplus-export',buildingId:b.id,good,quantity,amount,remitted});
  }
  return sales;
 }

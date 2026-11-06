@@ -1,3 +1,4 @@
+import {economicPolicy} from './city_economic_policies.js';
 import {colorAffinity,buildingColor} from './city_colors.js';
 import {DEVELOPMENT_RULES} from './city_development.js?v=road-network-cache-1';
 import {settlementConnected} from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -187,7 +188,7 @@ export class CityHousing {
       const units = this.units(home), b = this.city.building(home.buildingId); if (!b || !units.length) continue;
       // Municipal residential properties can be rented while still being
       // offered for sale. Social homes remain free and use their own queue.
-      if(b.type==='residential'&&units.every(u=>u.ownerId==='treasury'))for(const u of units)u.forRent=true;
+      if(['residential','luxury_housing'].includes(b.type)&&units.every(u=>u.ownerId==='treasury'))for(const u of units){u.forRent=economicPolicy(this.city,'municipalRentals');if(!u.tenantId){const discount=economicPolicy(this.city,'municipalRentDiscount'),previous=u.municipalRentDiscountApplied||0;if(discount!==previous){u.rent=Math.round(u.rent*(1-discount)/(1-previous));u.municipalRentDiscountApplied=discount;}}}
       const builder = this.city.accounts.get(units[0].ownerId);
       if (builder?.type === 'builder' && units.every(u => u.ownerId === builder.accountId) && this.city.minute - home.createdAt >= HOUSING_RULES.unsoldRentalAfter) for (const u of units) { u.forSale = true; u.forRent = true; }
     }
@@ -317,9 +318,10 @@ export class CityHousing {
   collectRent() {
     const handled = new Set();
     for (const u of this.city.units.values()) {
-      if (!u.tenantId || u.ownerId === 'treasury' || u.ownerId === u.tenantId || u.ownerId === u.rentPayerId) continue;
+      if (!u.tenantId || u.ownerId === u.tenantId || u.ownerId === u.rentPayerId) continue;
       const c = this.city.accounts.get(u.tenantId), home = this.home(c || {});
-      if (!home) { this.collectSingle(u); continue; }
+      if (!home) { if(u.rent>0)this.collectSingle(u); continue; }
+      if(this.isSocial(home))continue;
       if (handled.has(home.id)) continue; handled.add(home.id);
       const units = this.units(home).filter(r => r.tenantId === c.accountId && r.ownerId !== c.accountId && r.ownerId !== (r.rentPayerId || c.accountId));
       const payer = units[0]?.rentPayerId || c.accountId, due = units.reduce((n, r) => n + r.rent + r.arrears, 0);

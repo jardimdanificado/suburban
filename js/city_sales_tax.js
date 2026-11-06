@@ -1,10 +1,12 @@
+import {economicPolicy} from './city_economic_policies.js';
 export const MINIMUM_WAGE_TAX_RATE=.20;
 export const MINIMUM_BUSINESS_TAX_RATE=.16;
 export const TAX_CATEGORIES={food:{label:'Alimentos e refeições',rate:.16},materials:{label:'Materiais e construção',rate:.20},clothing:{label:'Roupas e tecidos',rate:.24},mobility:{label:'Mobilidade e equipamentos',rate:.24},publications:{label:'Papel e publicações',rate:.16},energy:{label:'Óleo e iluminação',rate:.20},services:{label:'Serviços',rate:.20}};
 const groups={food:'arroz alface tomate maca goiaba trigo milho mandioca cebola feijao coentro pao leite queijo ovos farinha massa conserva marmita marmita_simples marmita_rustica alcool cerveja vinho tequila cevada lupulo uva agave',materials:'pedra madeira tabuas carvao minerio ferro barra_ferro faca garrucha ferramentas argila tijolos areia vidro moveis fibras ceramica adubo fezes bauxita aluminio aco resina borracha',clothing:'tecido roupas bandeiras faixas',mobility:'rolamentos quadro plataforma rodas corrente capacete selim pecas botas bicicleta bicicleta_carga patinete patins skate cesta carrinho',publications:'papel jornais livros panfletos',energy:'oleo girassol'};
 const byGood=new Map(Object.entries(groups).flatMap(([category,goods])=>goods.split(' ').map(g=>[g,category])));
 export function taxCategory(good,reason=''){if(/^Serviço: Alimentação/.test(reason))return 'food';return byGood.get(good)||'services';}
-export function taxRate(city,category){const minimum=TAX_CATEGORIES[category]?.rate??.2,value=city.politics?.policy?.salesTaxes?.[category];return Math.max(minimum,Math.min(.5,Number.isFinite(value)?value:minimum));}
+export function baseTaxRate(city,category){const minimum=TAX_CATEGORIES[category]?.rate??.2,value=city.politics?.policy?.salesTaxes?.[category];return Math.max(minimum,Math.min(.5,Number.isFinite(value)?value:minimum));}
+export function taxRate(city,category){const rate=baseTaxRate(city,category)*economicPolicy(city,'consumptionMultiplier')*(category==='food'?1-economicPolicy(city,'essentialConsumptionRelief'):1)+( ['clothing','mobility'].includes(category)?economicPolicy(city,'luxuryConsumptionRate'):0);return Math.max(0,Math.min(.5,rate));}
 export function applySalesTax(city,from,to,amount,reason,details){
  if(to==='treasury'||from===to||amount<=0||!city.accounts.get(to)?.entity?.properties?.cityBuilding||!(/^(Compra pessoal de substância|Serviço:|Frete entregue|Serviço de construção|Serviço de limpeza|Serviço de coleta)/.test(reason)))return 0;
  const category=taxCategory(details.good,reason),rate=Math.max(0,Math.min(.5,taxRate(city,category))),tax=Math.floor(amount*rate/(1+rate));

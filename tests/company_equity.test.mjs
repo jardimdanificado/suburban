@@ -6,13 +6,13 @@ import {wealthReport} from '../js/city_wealth.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 
 test('partial municipal sale transfers real money and ownership while preserving public control',()=>{
- const city=setup({starter:true,funded:true,population:64}),b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000);assert(b&&buyer);const total=totalMoney(city),valuation=equityValue(city,b),treasury=city.treasury;const offer=offerShares(city,b,'treasury',2500);assert(offer,city.lastError);const sale=buyShares(city,b,offer.id,buyer.accountId,1000);assert(sale,city.lastError);assert.equal(sale.points,100);assert.equal(sale.price,Math.ceil(valuation*.01));assert.equal(city.treasury,treasury+sale.price);assert.equal(totalMoney(city),total);assert.equal(b.equityShares.reduce((n,s)=>n+s.points,0),10000);assert.equal(b.municipal,true);assert.equal(b.ownerId,null);assert.equal(b.units[0].ownerId,b.accountId);assert.equal(offer.remaining,2400);
- const report=wealthReport(city);assert.equal(report.control.get(b.accountId).find(x=>x.id===buyer.accountId).share,.01);
+ const city=setup({starter:true,funded:true,population:64}),b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000);assert(b&&buyer);const total=totalMoney(city),valuation=equityValue(city,b),treasury=city.treasury;const offer=offerShares(city,b,'treasury',2500);assert(offer,city.lastError);const sale=buyShares(city,b,offer.id,buyer.accountId,1000);assert(sale,city.lastError);assert.equal(sale.points,700);assert.equal(sale.price,Math.ceil(valuation*700/10000));assert.equal(city.treasury,treasury+sale.price);assert.equal(totalMoney(city),total);assert.equal(b.equityShares.reduce((n,s)=>n+s.points,0),10000);assert.equal(b.municipal,true);assert.equal(b.ownerId,null);assert.equal(b.units[0].ownerId,b.accountId);assert.equal(offer.remaining,1800);
+ const report=wealthReport(city);assert.equal(report.control.get(b.accountId).find(x=>x.id===buyer.accountId).share,.07);
 });
 
 test('shares cannot be oversold and distributions go to each owner proportionally',()=>{
- const city=setup({starter:true,funded:true,population:64}),b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000),offer=offerShares(city,b,'treasury',2500);assert.equal(buyShares(city,b,offer.id,buyer.accountId,2500).points,100);assert.equal(offerShares(city,b,'treasury',8000),null);assert.equal(buyShares(city,b,offer.id,buyer.accountId,1),null);
- city.transfer('treasury',b.accountId,city.currency.price(1000000),'Test capital');b.totalRevenue+=city.currency.price(1000000);const beforeTreasury=city.treasury,beforeBuyer=buyer.balance,paid=distributeShareDividends(city,b);assert(paid>0);assert(Math.abs((city.treasury-beforeTreasury)/paid-.99)<.01);assert(Math.abs((buyer.balance-beforeBuyer)/paid-.01)<.01);
+ const city=setup({starter:true,funded:true,population:64}),b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000),offer=offerShares(city,b,'treasury',2500);assert.equal(buyShares(city,b,offer.id,buyer.accountId,2500).points,700);assert.equal(offerShares(city,b,'treasury',8000),null);assert.equal(buyShares(city,b,offer.id,buyer.accountId,1),null);
+ city.transfer('treasury',b.accountId,city.currency.price(1000000),'Test capital');b.totalRevenue+=city.currency.price(1000000);const beforeTreasury=city.treasury,beforeBuyer=buyer.balance,paid=distributeShareDividends(city,b);assert(paid>0);assert(Math.abs((city.treasury-beforeTreasury)/paid-.93)<.01);assert(Math.abs((buyer.balance-beforeBuyer)/paid-.07)<.01);
 });
 
 test('private investors buy open shares over time and shares survive worker snapshots',()=>{
@@ -20,20 +20,20 @@ test('private investors buy open shares over time and shares survive worker snap
 });
 
 test('a shareholder death transfers shares and preserves the operating business',()=>{
- const city=setup({starter:true,funded:true,population:64}),b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),[buyer,heir]=city.citizens.filter(c=>!city.politics.officeHolder(c)&&c.balance>1000),offer=offerShares(city,b,'treasury',1000);assert(buyShares(city,b,offer.id,buyer.accountId,1000));inheritShares(city,buyer,heir);assert(!b.equityShares.some(s=>s.accountId===buyer.accountId));assert.equal(b.equityShares.find(s=>s.accountId===heir.accountId).points,100);assert(b.active);
+ const city=setup({starter:true,funded:true,population:64}),b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),[buyer,heir]=city.citizens.filter(c=>!city.politics.officeHolder(c)&&c.balance>1000),offer=offerShares(city,b,'treasury',1000);assert(buyShares(city,b,offer.id,buyer.accountId,1000));inheritShares(city,buyer,heir);assert(!b.equityShares.some(s=>s.accountId===buyer.accountId));assert.equal(b.equityShares.find(s=>s.accountId===heir.accountId).points,700);assert(b.active);
 });
 
 test('council partial privatization creates an offer, not imaginary revenue',()=>{
  const city=setup({starter:true,funded:true,population:64}),p=city.politics,b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),bill={id:900,payload:{buildingId:b.id,percent:25},attempts:1},before=city.treasury;assert.equal(p.council.transferFirm(bill,false),null);assert.equal(city.treasury,before);assert.equal(b.shareOffers[0].remaining,2500);assert.equal(bill.shareOfferId,b.shareOffers[0].id);
 });
 
-test('the default daily privatization quota is one percent shared across public firms and resets each day',()=>{
+test('the default daily privatization quota is seven percent shared across public firms and resets each day',()=>{
  const city=setup({starter:true,funded:true,population:64}),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000),[quarry,assembler]=city.economy.businesses.filter(b=>b.municipal&&['quarry','cycle_assembler'].includes(b.type));
- assert.equal(city.politics.policy.dailyPrivatizationLimit,1);assert.equal(privatizationQuota(city).remaining,100);
- const quarryOffer=offerShares(city,quarry,'treasury',500),assemblerOffer=offerShares(city,assembler,'treasury',500);assert(quarryOffer&&assemblerOffer);
- const first=buyShares(city,quarry,quarryOffer.id,buyer.accountId,250);assert.equal(first.points,100);assert.equal(privatizationQuota(city).sold,100);assert.equal(privatizationQuota(city).remaining,0);
+ assert.equal(city.politics.policy.dailyPrivatizationLimit,7);assert.equal(privatizationQuota(city).remaining,700);
+ const quarryOffer=offerShares(city,quarry,'treasury',800),assemblerOffer=offerShares(city,assembler,'treasury',800);assert(quarryOffer&&assemblerOffer);
+ const first=buyShares(city,quarry,quarryOffer.id,buyer.accountId,800);assert.equal(first.points,700);assert.equal(privatizationQuota(city).sold,700);assert.equal(privatizationQuota(city).remaining,0);
  assert.equal(buyShares(city,assembler,assemblerOffer.id,buyer.accountId,100),null);
- city.minute=1440;assert.equal(privatizationQuota(city).remaining,100);assert.equal(buyShares(city,assembler,assemblerOffer.id,buyer.accountId,100).points,100);
+ city.minute=1440;assert.equal(privatizationQuota(city).remaining,700);assert.equal(buyShares(city,assembler,assemblerOffer.id,buyer.accountId,100).points,100);
 });
 
 test('privatization reactions affect voters by ideology and ease during a fiscal emergency',()=>{
@@ -47,5 +47,5 @@ test('privatization reactions affect voters by ideology and ease during a fiscal
 });
 
 test('majority acquisition changes management and nationalization buys all shareholders',()=>{
- const city=setup({starter:true,funded:true,population:64}),b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000);city.politics.policy.dailyPrivatizationLimit=10;city.transfer('treasury',buyer.accountId,city.currency.price(10000000),'Capital de teste');const offer=offerShares(city,b,'treasury',6000);assert(offer);for(let day=0;day<6;day++){city.minute=day*1440;const sale=buyShares(city,b,offer.id,buyer.accountId,1000);assert.equal(sale.points,1000);}assert.equal(b.ownerId,buyer.id);assert.equal(b.municipal,false);assert(buyer.businessIds.includes(b.id));const total=totalMoney(city),before=buyer.balance;city.welfare.policy.reserve=0;const result=city.politics.council.transferFirm({id:901,payload:{buildingId:b.id},attempts:1},true);assert.equal(result,null);assert.equal(b.ownerId,null);assert.equal(b.municipal,true);assert.equal(b.equityShares[0].points,10000);assert(buyer.balance>before);assert.equal(totalMoney(city),total);assert(!buyer.businessIds.includes(b.id));
+ const city=setup({starter:true,funded:true,population:64}),b=city.economy.businesses.find(b=>b.municipal&&b.type==='quarry'),buyer=city.citizens.find(c=>!city.politics.officeHolder(c)&&c.balance>1000);city.politics.policy.dailyPrivatizationLimit=10;city.transfer('treasury',buyer.accountId,city.currency.price(10000000),'Capital de teste');const offer=offerShares(city,b,'treasury',6000);assert(offer);for(let day=0;day<6;day++){city.minute=day*1440;const sale=buyShares(city,b,offer.id,buyer.accountId,1000);assert.equal(sale.points,1000);}assert.equal(b.ownerId,buyer.id);assert.equal(b.municipal,false);assert(buyer.businessIds.includes(b.id));const total=totalMoney(city),before=buyer.balance;city.welfare.policy.reserve=0;city.politics.council.bills.push({id:901,type:'nationalize',status:'approved',payload:{buildingId:b.id}});const result=city.politics.council.transferFirm({id:901,payload:{buildingId:b.id},attempts:1},true);assert.equal(result,null);assert.equal(b.ownerId,null);assert.equal(b.municipal,true);assert.equal(b.equityShares[0].points,10000);assert(buyer.balance>before);assert.equal(totalMoney(city),total);assert(!buyer.businessIds.includes(b.id));
 });

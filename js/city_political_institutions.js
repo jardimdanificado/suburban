@@ -17,8 +17,12 @@ export function approvalReport(p){
   const scandals=p.scandals.filter(s=>s.proven&&s.accusedId===city.economy.mayorId).reduce((n,s)=>n+publicPressure(p,s)/100*(s.severity||20)*.2,0);
   const vetoPenalty=(p.vetoes||[]).filter(v=>v.mayorId===city.economy.mayorId).reduce((n,v)=>n+Math.max(0,28-(city.minute-v.minute)/1440*2),0);
   const expectations=governmentExpectations(p);
-  const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),economicConcern=adults.reduce((sum,c)=>{const ideology=ideologicalProfile(c);return sum+(ideology.economy<-.9&&ideology.liberty<-.45?.25:.45+Math.max(0,ideology.fiscal)*.55);},0)/Math.max(1,adults.length),deficitRatio=finance.expenses?Math.max(0,-finance.operatingBalance)/finance.expenses:0,deficitPenalty=-Math.min(8,deficitRatio*12)*economicConcern;
+  const adults=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)),economicConcern=adults.reduce((sum,c)=>{const ideology=ideologicalProfile(c);return sum+(.75+Math.max(0,ideology.fiscal)*.25);},0)/Math.max(1,adults.length),deficitRatio=finance.expenses?Math.max(0,-finance.operatingBalance)/finance.expenses:0,deficitPenalty=-Math.min(8,deficitRatio*12)*economicConcern;
   const rows=[
+    {label:'Emprego e renda do trabalho',points:(finance.employmentHealth-85)*.3,detail:`Desemprego real entre adultos disponíveis: ${finance.unemploymentRate.toFixed(1)}%. Empresários e agentes públicos são ocupados.`},
+    {label:'Solvência das estatais',points:(finance.municipalSolvency-90)*.22,detail:`${finance.insolventCompanies} empresas municipais sem caixa para uma hora de folha.`},
+    {label:'Iluminação e avanço do calçamento',points:(finance.lightingHealth-70)*.1+(finance.roadHealth-60)*.1,detail:`Iluminação ${finance.lightingHealth.toFixed(0)}%; calçamento e obras ${finance.roadHealth.toFixed(0)}%; ${finance.overdueWorks} obras com mais de sete dias sem conclusão.`},
+    {label:'Corpos e resposta judicial',points:(finance.funeralHealth-95)*.12+(finance.justiceHealth-80)*.12,detail:`${finance.overdueBodies} corpos aguardando há mais de dois dias; ${finance.unresolvedCases} processos antigos sem decisão. Absolvição fundamentada também conta como resposta judicial.`},
     {label:'Fundo partidário',points:(p.partyFundChanges||[]).filter(r=>r.mayorId===city.economy.mayorId).reduce((n,r)=>n+r.points*Math.exp(-(city.minute-r.minute)/(12*1440)),0),detail:'Aumentar o fundo eleitoral gera desaprovação; reduzir gera aprovação. Efeito decai ao longo de 12 dias.'},
     {label:'Condições atuais: felicidade',points:(now.happiness-50)*.06,detail:`${now.happiness.toFixed(1)}/100; peso menor que o avanço desde a posse`},
     {label:'Condições atuais: moradia',points:(.5-now.homeless)*6,detail:`${((1-now.homeless)*100).toFixed(1)}% abrigados`},
@@ -26,10 +30,12 @@ export function approvalReport(p){
     {label:'Condições atuais: ocupação',points:(now.employment-.5)*4,detail:`${(now.employment*100).toFixed(1)}% com ocupação`},
     {label:'Caixa municipal e reserva',points:(finance.cashHealth-50)*.16,detail:`Caixa ${Math.round(finance.cash)}; reserva social ${Math.round(finance.reserve)}. Indicador ${finance.cashHealth.toFixed(1)}/100; caixa zerado recebe avaliação mínima.`},
     {label:'Equilíbrio do custeio público',points:(finance.operatingHealth-50)*.16,detail:`Saldo de custeio nos últimos dias: ${Math.round(finance.operatingBalance)}. Indicador ${finance.operatingHealth.toFixed(1)}/100, calculado em relação às despesas correntes.`},
+    {label:'Continuidade dos serviços essenciais',points:(finance.serviceHealth-75)*.12,detail:`${finance.servicesAtRisk}/${finance.servicesTracked} serviços municipais sem caixa para dois dias de operação; continuidade financeira em ${finance.serviceHealth.toFixed(1)}/100.`},
     {label:'Déficit recente de receita municipal',points:deficitPenalty,detail:`Saldo recente ${Math.round(finance.operatingBalance)} para despesas de ${Math.round(finance.expenses)}; penalidade ampliada quando a receita não cobre serviços e reduzida entre eleitorados explicitamente antieconômicos (sensibilidade média ${economicConcern.toFixed(2)}).`},
     {label:'Produtividade das empresas ativas',points:(finance.companyProductivity-50)*.1,detail:`${finance.productiveCompanies}/${finance.activeCompanies} empresas ativas têm equipe e receita ${finance.revenueWindowReady?'nos últimos 30 dias':'registrada desde o início do acompanhamento'}; indicador ${finance.companyProductivity.toFixed(1)}/100.`},
     {label:'Mudança da saúde do caixa desde a posse',points:((financialLatest.treasuryHealth??finance.cashHealth)-(financialBaseline.treasuryHealth??finance.cashHealth))*.1,detail:`${(financialBaseline.treasuryHealth??finance.cashHealth).toFixed(1)} → ${(financialLatest.treasuryHealth??finance.cashHealth).toFixed(1)}/100 desde a posse.`},
     {label:'Mudança do equilíbrio de custeio desde a posse',points:((financialLatest.operatingHealth??finance.operatingHealth)-(financialBaseline.operatingHealth??finance.operatingHealth))*.1,detail:`${(financialBaseline.operatingHealth??finance.operatingHealth).toFixed(1)} → ${(financialLatest.operatingHealth??finance.operatingHealth).toFixed(1)}/100 desde a posse.`},
+    {label:'Mudança da continuidade dos serviços desde a posse',points:((financialLatest.serviceHealth??finance.serviceHealth)-(financialBaseline.serviceHealth??finance.serviceHealth))*.12,detail:`${(financialBaseline.serviceHealth??finance.serviceHealth).toFixed(1)} → ${(financialLatest.serviceHealth??finance.serviceHealth).toFixed(1)}/100 desde a posse.`},
     {label:'Mudança da produtividade empresarial desde a posse',points:((financialLatest.companyProductivity??finance.companyProductivity)-(financialBaseline.companyProductivity??finance.companyProductivity))*.08,detail:`${(financialBaseline.companyProductivity??finance.companyProductivity).toFixed(1)} → ${(financialLatest.companyProductivity??finance.companyProductivity).toFixed(1)}/100 desde a posse.`},
     ...(outcomes?.rows||[]).map(row=>({label:`Mudança desde a posse: ${row.label.toLowerCase()}`,points:row.points*(row.points<0?1.8:.6),detail:`Início ${row.baseline.toFixed(1)}% → agora ${row.current.toFixed(1)}%; variação ${row.change>0?'+':''}${row.change.toFixed(1)} pontos percentuais. Ganhos têm peso moderado; retrocessos descontam com mais força.`})),
     {label:'Avanço da promessa',points:mean('partial')*.4,detail:'Até 4,8 pontos pelo avanço real, antes do ajuste às expectativas'},
@@ -51,9 +57,15 @@ export function approvalReport(p){
   rows.push({label:'Expectativa em relação à gestão anterior',points:(expectations.factor-1)*(boundedPositiveChanges+positivePromises),detail:expectations.detail});
   const raw=50+rows.reduce((n,r)=>n+r.points,0),delta=raw-50;
   // Diminishing returns preserve room for disagreement instead of clamping at unanimity.
-  const score=50+49.5*Math.tanh(delta/50);
+  const maturity=Math.min(1,Math.max(0,(city.minute-3*1440)/(4*1440))),performanceCeiling=100-maturity*(100-(15+finance.governanceHealth*.85)),bankruptcyCeiling=finance.cashHealth<10||finance.municipalSolvency<30?100-maturity*(100-(20+finance.economicHealth*.5)):100;
+  const infrastructureFailure=finance.lightingHealth<25&&finance.roadHealth<25;
+  city.infrastructureFailureSince=infrastructureFailure?(city.infrastructureFailureSince??city.minute):null;
+  const infrastructureCeiling=infrastructureFailure&&city.minute-city.infrastructureFailureSince>2*1440?100-maturity*40:100,publicOrderCeiling=finance.funeralHealth<50||finance.justiceHealth<30?100-maturity*55:100;
+  const score=Math.min(50+49.5*Math.tanh(delta/50),performanceCeiling,bankruptcyCeiling,infrastructureCeiling,publicOrderCeiling);
+  rows.push({label:'Limite por resultados econômicos e serviços',points:score-(50+49.5*Math.tanh(delta/50)),detail:`Após a fase inicial, caixa vazio, estatais insolventes, escuridão e calçamento parados por dois dias, corpos abandonados e justiça sem resposta limitam a aprovação mesmo com promessas cumpridas. Saúde econômica ${finance.economicHealth.toFixed(1)}/100; resultados gerais ${finance.governanceHealth.toFixed(1)}/100.`});
   rows.forEach(Object.freeze);
-  return {version:5,expectations,minute:city.minute,startingScore:50,score,raw,adjustment:score-raw,rows,finance,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment,outcomePoints:outcomes?.points||0,promisePoints};
+  const reportedRaw=50+rows.reduce((sum,row)=>sum+row.points,0);
+  return {version:6,expectations,minute:city.minute,startingScore:50,score,raw:reportedRaw,adjustment:score-reportedRaw,rows,finance,fulfilled,promises:total,housed:1-now.homeless,fed:1-now.hunger,employment:now.employment,outcomePoints:outcomes?.points||0,promisePoints};
 }
 export function criticalApproval(p){
   p.approvalReport=approvalReport(p);p.approval=p.approvalReport.score;

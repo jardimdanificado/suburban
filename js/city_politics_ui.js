@@ -1,5 +1,5 @@
 import {renderSubstancePolicy} from './city_substances_ui.js';
-import {TAX_CATEGORIES,taxRate,MINIMUM_WAGE_TAX_RATE,MINIMUM_BUSINESS_TAX_RATE} from './city_sales_tax.js';
+import {TAX_CATEGORIES,taxRate,baseTaxRate,MINIMUM_WAGE_TAX_RATE,MINIMUM_BUSINESS_TAX_RATE} from './city_sales_tax.js';
 import {equityShares,privatizationQuota} from './city_equity.js?v=daily-mayor-privatization-1';
 import {contextActions} from './city_context_actions.js';
 import {describePoliticalOrientation} from './city_ideology.js';
@@ -206,7 +206,7 @@ p.kv('Sede e plenário',hall?hall.entity.properties.name:'Sede em planejamento /
       });
       fold(ui,p,'petitionSeats','Cadeiras e remuneração',()=>{
       p.heading('IMPOSTOS POR RAMO');p.note('Alíquotas incluídas no preço, recolhidas pelo vendedor em cada venda. Ajuste cada ramo aqui e a mudança entra em vigor imediatamente; vereadores continuam apresentando e votando seus próprios projetos.');
-      for(const [category,spec] of Object.entries(TAX_CATEGORIES)){const rate=taxRate(city,category);p.kv(spec.label,`${(rate*100).toFixed(1)}%`);p.buttons([-1,1].filter(direction=>rate+direction*.02>=spec.rate).map(direction=>({label:`${spec.label.toUpperCase()} ${direction>0?'+':'−'}2 P.P.`,click:()=>submit('salesTax',{category,value:Math.max(spec.rate,Math.min(.5,Math.round((rate+direction*.02)*100)/100))})})));}
+      for(const [category,spec] of Object.entries(TAX_CATEGORIES)){const rate=baseTaxRate(city,category);p.kv(spec.label,`${(taxRate(city,category)*100).toFixed(1)}% efetiva · ${(rate*100).toFixed(1)}% de base`);p.buttons([-1,1].filter(direction=>rate+direction*.02>=spec.rate).map(direction=>({label:`${spec.label.toUpperCase()} ${direction>0?'+':'−'}2 P.P.`,click:()=>submit('salesTax',{category,value:Math.max(spec.rate,Math.min(.5,Math.round((rate+direction*.02)*100)/100))})})));}
       p.heading('FUNDO ELEITORAL');p.kv('Orçamento total por eleição',money(gov.policy.partyFund??80000));p.note('Distribuído igualmente entre todos os partidos. Aumentar prejudica a imagem pública; reduzir melhora.');p.buttons([-1,1].map(direction=>({label:`FUNDO PARTIDÁRIO ${direction>0?'+':'−'}10%`,click:()=>submit('partyFund',{value:Math.max(0,Math.round((gov.policy.partyFund??80000)*(1+direction*.1)))})})));
       p.heading('CADEIRAS E REMUNERAÇÃO');p.note(`Orçamento global: ${money(gov.policy.councilBudget)}/dia, dividido por ${gov.council.members.length} vereadores. Prefeito: ${money(gov.policy.mayorBudget)}/dia.`);p.buttons([{label:'REPRESENTAÇÃO +0,5 P.P.',click:()=>submit('councilRate',{value:Math.min(12.5,(gov.policy.councilRate??5)+.5)})},{label:'REPRESENTAÇÃO -0,5 P.P.',click:()=>submit('councilRate',{value:Math.max(5,(gov.policy.councilRate??5)-.5)})},...['councilBudget','mayorBudget'].flatMap(type=>[-1,1].map(direction=>({label:`${type==='councilBudget'?'ORÇAMENTO CÂMARA':'SALÁRIO PREFEITO'} ${direction>0?'+':'-'}10%`,click:()=>submit(type,{value:Math.max(0,Math.round(gov.policy[type]*(1+direction*.1)))})}))) ]);
 

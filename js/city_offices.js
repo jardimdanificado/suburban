@@ -1,3 +1,4 @@
+import {economicPolicy} from './city_economic_policies.js';
 export const OFFICE_BUSINESSES=new Set(['newsroom','research_institute','publisher','bank','builder','carrier','lamp_service','cleaner','clinic','library','clothing_store','thrift_store','pharmacy','sports_shop']);
 export const OFFICE_ONLY_TYPES=new Set(['newsroom','research_institute','publisher','bank']);
 export function officeSpaceDemand(city){
@@ -45,7 +46,7 @@ export function rentOffice(city,towerId,floor,type,founderId){
  const tower=city.building(towerId),founder=city.society.citizen(founderId),spec=city.buildingTypes[type];
  if(!tower?.active||tower.entity.destroyed||tower.type!=='office_tower'||!OFFICE_BUSINESSES.has(type)||!founder||!city.politics.canOwnBusiness(founder)||!spec)return city.fail('Empresarial, atividade ou responsável indisponível.');
  const row=officeFloors(city,tower).find(f=>f.floor===floor);if(!row||row.tenantId||!row.units.length||!row.units.every(u=>u.forRent))return city.fail('Andar indisponível para locação.');
- const own=ownsOfficeTower(tower,founder),rent=own?0:Math.max(city.currency.price(100),row.rent),capital=city.currency.price(20000);if(founder.balance<rent+capital)return city.fail('Saldo insuficiente para primeiro aluguel e capital de operação.');
+ const own=ownsOfficeTower(tower,founder),rent=own?0:Math.max(city.currency.price(100),Math.round(row.rent*(tower.municipal?1-economicPolicy(city,'municipalRentDiscount'):1))),capital=city.currency.price(20000);if(founder.balance<rent+capital)return city.fail('Saldo insuficiente para primeiro aluguel e capital de operação.');
  const entity=city.createEntity({x:tower.entity.x,y:tower.entity.y,properties:{name:city.life.buildingName(spec.label),species:'city-building',render:{color:spec.color,style:type}}});
  const b={id:entity.id,entity,type,constructionKind:'building',rotation:tower.rotation,width:tower.width,depth:tower.depth,floors:tower.floors,color:spec.color,condition:100,units:[],balance:0,jobs:spec.jobs||2,wage:5,stock:0,workers:[],terrain:tower.terrain,door:{...tower.door},accessPath:tower.accessPath,officeTenantOf:tower.id,officeFloor:floor};
  city.reputation.setup(b);city.economy.setupBuilding(b);b.accountId=`business:${b.id}`;entity.properties.cityBuilding=b;city.accounts.set(b.accountId,b);city.buildings.push(b);city.buildingsById.set(b.id,b);

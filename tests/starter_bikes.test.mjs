@@ -12,7 +12,7 @@ test('initial government staff have normal bikes and builders and carriers have 
  }
  const expected=['bicicleta','bicicleta_carga','patinete','patins','carrinho'].reduce((n,g)=>n+city.economy.initialStock[g]+city.economy.produced[g]-city.economy.consumed[g]-city.economy.lost[g],0);
  assert.equal(units.length,expected);
- assert.equal(totalMoney(city),32000000);
+ assert.equal(totalMoney(city),city.currency.netIssued());
  for(const good of ['bicicleta','bicicleta_carga']){const stock=city.economy.initialStock[good]+city.economy.produced[good]-city.economy.consumed[good]-city.economy.lost[good];assert.equal(stock,units.filter(v=>v.good===good).length);assert.equal(city.goodsStock(good),stock);}
 });
 test('the initial equipment grant is idempotent and does not keep issuing new bicycles',()=>{

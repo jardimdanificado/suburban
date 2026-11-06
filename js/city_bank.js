@@ -1,9 +1,29 @@
+import {economicPolicy} from './city_economic_policies.js';
+import {ensureExternalAccount} from './city_currency.js';
+import {officeFloors,rentOffice} from './city_offices.js';
 /** Deposits have full reserves; business credit uses bank capital and recorded development refinancing. */
 export class CityBank {
   constructor(city) {
     this.city = city; this.deposits = new Map(); this.loans = []; this.nextId = 1;
-    this.policy = { creditEnabled: true, loanRate: .002, savingsRate: .0005, cashReserve: 10000 };
+    this.policy = { creditEnabled: true, loanRate: .001, savingsRate: .0005, cashReserve: 10000 };
   }
+  initializePrivateBanks(){
+    const city=this.city;if(city.foundingPrivateBanks===false||this.privateBanksInitialized)return;this.privateBanksInitialized=true;
+    const tower=city.buildings.find(b=>b.type==='office_tower'&&b.active&&!b.entity.destroyed);if(!tower)return;
+    const founders=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.businessIds.length).sort((a,b)=>(b.skills.management||0)-(a.skills.management||0)||a.id-b.id);
+    for(let i=0;i<2;i++){
+      const founder=founders[i],floor=officeFloors(city,tower).find(f=>!f.tenantId&&f.units.length&&f.units.every(u=>u.forRent));if(!founder||!floor)break;
+      ensureExternalAccount(city,'founding-bank-investors','Investidores privados fundadores');
+      const capital=city.currency.price(1500000),before=founder.balance;
+      if(!city.transfer('founding-bank-investors',founder.accountId,capital,'Aporte privado externo de fundação bancária',{bankIndex:i}))continue;
+      const bank=rentOffice(city,tower.id,floor.floor,'bank',founder.id);
+      if(!bank){city.transfer(founder.accountId,'founding-bank-investors',capital,'Estorno de aporte bancário');continue;}
+      city.transfer(founder.accountId,bank.accountId,Math.max(0,founder.balance-before),'Integralização de capital bancário privado',{buildingId:bank.id});
+      bank.foundingPrivateBank=true;bank.entity.properties.name=`Banco ${i===0?'Horizonte':'Pioneiro'}`;
+      city.log(`${bank.entity.properties.name} iniciou operações com capital privado externo, sem consumir o tesouro.`,'business',[founder.id],{kind:'private-bank-founded',buildingId:bank.id,amount:capital});
+    }
+  }
+  liquidityReserve(bank){const daily=Math.max((bank.workers?.length||0)*bank.wage*480+(bank.officeLease?.rent||0),bank.fiscalDailyExpenses||0);return Math.ceil(Math.max(this.city.currency.price(20000),daily*economicPolicy(this.city,'creditReserveDays')));}
   available() { const city=this.city;return city.economy.businesses.filter(b => {if(b.type!=='bank'||!b.active||b.entity.destroyed||b.balance<b.wage)return false;const staffed=b.workers.length||city.economy.citizen(b.ownerId),selfService=city.fiscal?.municipal(b)&&b.balance>=city.currency.price(20000);return staffed||selfService;}); }
   developmentBanks(){
     const city=this.city,banks=city.economy.businesses.filter(b=>b.type==='bank');
@@ -38,10 +58,10 @@ export class CityBank {
     const city = this.city, client = city.accounts.get(clientId);
     if (!this.policy.creditEnabled || !this.available().includes(bank) || !client || client.entity?.destroyed || !city.society.isAdult(client) || !Number.isSafeInteger(amount) || amount <= 0 || this.loans.some(l => l.clientId === clientId && l.status !== 'paid')) return false;
     const income = client.jobId ? (city.building(client.jobId)?.wage || 0)*240 : client.businessIds?.length ? 20000 : 0;
-    const reserve = bank.workers.length*bank.wage*480;
+    const reserve = this.liquidityReserve(bank);
     const socialFactor=1+city.relationships.personalOpinion(city.relationships.businessPerson(bank),client)/100;
-    if (amount > income*12*city.reputation.creditFactor(client)*socialFactor || amount > Math.max(0,bank.balance-reserve)*.6 || !city.transfer(bank.accountId,clientId,amount,'Empréstimo bancário',{loanId:this.nextId})) return false;
-    const loan = { id: this.nextId++, bankId: bank.id, clientId, principal: amount, remaining: amount, interest: 0, rate: this.policy.loanRate * (1.5 - city.reputation.score(client, 'credit') / 100), dailyPayment: Math.ceil(amount/30), dueDay: city.day+1, missed: 0, status: 'active', startedAt: city.minute, paid: 0 };
+    if (amount > income*economicPolicy(city,'householdDebtLimit')*city.reputation.creditFactor(client)*socialFactor || amount > Math.max(0,bank.balance-reserve)*.6 || !city.transfer(bank.accountId,clientId,amount,'Empréstimo bancário',{loanId:this.nextId})) return false;
+    const loan = { id: this.nextId++, bankId: bank.id, clientId, principal: amount, remaining: amount, interest: 0, rate: economicPolicy(city,'creditLoanRate') * (1.5 - city.reputation.score(client, 'credit') / 100), dailyPayment: Math.ceil(amount/30), dueDay: city.day+1, missed: 0, status: 'active', startedAt: city.minute, paid: 0 };
     this.loans.push(loan);
     city.history.record('credit', `Crédito aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount, rate:loan.rate, loanId:loan.id });
     return loan;
@@ -50,7 +70,7 @@ export class CityBank {
     const city=this.city,home=city.housing.homes.get(homeId),units=home&&city.housing.units(home),value=home&&city.housing.price(home);
     if(!this.policy.creditEnabled||!this.available().includes(bank)||!buyer||buyer.entity.destroyed||buyer.creditAllowed===false||!city.society.isAdult(buyer)||!home||city.housing.isSocial(home)||!units?.length||units.some(u=>!u.forSale||u.tenantId)||!Number.isSafeInteger(amount)||amount<=0||amount>Math.floor(value*.75))return null;
     if(this.loans.some(l=>l.clientId===buyer.accountId&&l.collateralHomeId===homeId&&!['paid','written-off'].includes(l.status))||this.loans.filter(l=>l.clientId===buyer.accountId&&l.purpose==='mortgage'&&!['paid','written-off','foreclosed'].includes(l.status)).length>=3)return null;
-    const reserve=Math.max(city.currency.price(20000),bank.workers.length*bank.wage*480),cash=Math.max(0,bank.balance-reserve);
+    const reserve=this.liquidityReserve(bank),cash=Math.max(0,bank.balance-reserve);
     if(amount>cash||!city.transfer(bank.accountId,buyer.accountId,amount,'Financiamento imobiliário para aquisição de imóvel',{homeId,loanId:this.nextId}))return null;
     const loan={id:this.nextId++,bankId:bank.id,clientId:buyer.accountId,purpose:'mortgage',collateralHomeId:homeId,collateralHomeIds:[homeId],principal:amount,remaining:amount,interest:0,rate:.00015,installments:1440,dailyPayment:Math.ceil(amount/1440),dueDay:city.day+1,missed:0,status:'active',startedAt:city.minute,paid:0};
     this.loans.push(loan);city.history.record('credit','Financiamento imobiliário aprovado com o imóvel como garantia.',[buyer.accountId,bank.accountId],{loanId:loan.id,homeId,amount,collateralValue:value,downPayment:Math.max(0,value-amount)});return loan;
@@ -113,6 +133,7 @@ export class CityBank {
   }
   refinanceDevelopment(bank,amount,proposal){
     if(amount<=0)return 0;
+    if(!bank.municipal)return this.businessRefusal('Bancos privados financiam com capital próprio; refinanciamento do tesouro é reservado ao banco público.',proposal);
     const city=this.city,reserve=city.welfare.conditions().reserve;
     if(city.treasury<reserve+amount)return this.businessRefusal('Tesouro sem caixa para refinanciar o banco após preservar a reserva social.',proposal);
     if(!city.transfer('treasury',bank.accountId,amount,'Refinanciamento bancário de cadeias iniciais',{buildingId:bank.id,businessType:proposal.type,crop:proposal.crop}))return false;
@@ -139,7 +160,7 @@ export class CityBank {
     const topUp=initial&&existing&&proposal.projectId===existing.projectId&&(completion||!existing.startupTopUpUsed)&&city.development.projects.some(p=>p.id===proposal.projectId&&!p.cancelled&&p.status!=='completed'&&(completion||!p.materialAccountId));
     if(topUp&&existing.bankId!==bank.id)return reject('Complemento precisa ser contratado no banco do empréstimo original.');
     if(existing&&!topUp)return reject('Empreendedor já possui financiamento empresarial em andamento.');
-    const operatingReserve=Math.max(city.currency.price(20000),bank.workers.length*bank.wage*480);
+    const operatingReserve=this.liquidityReserve(bank);
     const firstFoodShopPending=!['market','greengrocer'].includes(proposal.type)&&!city.economy.businesses.some(b=>['market','greengrocer'].includes(b.type)&&b.active&&!b.entity.destroyed)&&city.economy.demands?.some(d=>['market','greengrocer'].includes(d.type)&&d.score>=30);
     const reserve=operatingReserve+(firstFoodShopPending?city.currency.price(230000):0),cash=Math.max(0,bank.balance-reserve);
     let refinance=0;

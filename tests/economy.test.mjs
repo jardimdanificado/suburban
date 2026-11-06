@@ -40,15 +40,10 @@ test('the mayor is a citizen with a separate bank account and is replaced after 
   assert(city.events.some(e => e.data.kind === 'mayor-appointed'));
 });
 
-test('public rentals and public removal from sale remain forbidden after policy and listing changes', () => {
-  const city = setup(), c = city.citizens.find(c => !c.fixtureInvestor);
-  const u = [...city.units.values()].find(u => u.ownerId === 'treasury' && city.building(u.buildingId).type === 'residential');
-  assert(city.listUnit(u.id, { rent: 1, price: 18000, forRent: true, forSale: false }));
-  assert.equal(u.forRent, false); assert.equal(u.forSale, true);
-  const home = c.homeUnitId, balance = c.balance, treasury = city.treasury;
-  assert.equal(city.rentUnit(c.id, u.id), null); city.collectRent();
-  assert.equal(c.homeUnitId, home); assert.equal(city.treasury, treasury); assert.equal(c.balance, balance - city.housing.rent(city.housing.home(c), c));
-  assert.equal(u.tenantId, null); assert.equal(u.forRent, false);
+test('public residential listings support rentals and can be removed from sale', () => {
+  const city=setup(),u=[...city.units.values()].find(u=>u.ownerId==='treasury'&&city.building(u.buildingId).type==='residential');
+  assert(city.listUnit(u.id,{rent:1,price:18000,forRent:true,forSale:false}));assert.equal(u.forRent,true);assert.equal(u.forSale,false);
+  city.economy.municipalPolicy();assert.equal(u.forRent,true);assert.equal(u.forSale,false);
 });
 
 test('skills and social ties both influence the hiring decision; business owners prefer their firms', () => {

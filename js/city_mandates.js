@@ -4,7 +4,7 @@ import {ideologicalProfile,ideologicalPromiseWeight} from './city_ideology.js';
 import {outcomeAssessment,promiseAssessment,promiseDifficulty} from './city_promise_evaluation.js';
 import {governmentPerformance} from './city_government_performance.js';
 export const PROMISE_METRICS={
-  treasuryHealth:{label:'Saúde do caixa da prefeitura',unit:'%',higher:true},operatingHealth:{label:'Equilíbrio de custeio municipal',unit:'%',higher:true},companyProductivity:{label:'Empresas ativas com equipe e receita nos últimos 30 dias',unit:'%',higher:true},
+  treasuryHealth:{label:'Saúde do caixa da prefeitura',unit:'%',higher:true},operatingHealth:{label:'Equilíbrio de custeio municipal',unit:'%',higher:true},serviceHealth:{label:'Continuidade financeira dos serviços essenciais',unit:'%',higher:true},companyProductivity:{label:'Empresas ativas com equipe e receita nos últimos 30 dias',unit:'%',higher:true},
   ...Object.fromEntries(Object.entries(TAX_CATEGORIES).map(([key,spec])=>[`salesTax_${key}`,{label:`Imposto: ${spec.label}`,unit:'%',higher:false}])),
   health:{label:'Moradores com saúde acima de 60',unit:'%',higher:true},water:{label:'Moradores com água acima de 45',unit:'%',higher:true},rest:{label:'Moradores descansados',unit:'%',higher:true},hygiene:{label:'Moradores com higiene acima de 50',unit:'%',higher:true},
   clinics:{label:'Clínicas ativas',unit:'',higher:true},waterWorks:{label:'Serviços de água ativos',unit:'',higher:true},parks:{label:'Centros de lazer ativos',unit:'',higher:true},carriers:{label:'Transportadoras ativas',unit:'',higher:true},cleaners:{label:'Empresas de limpeza ativas',unit:'',higher:true},builders:{label:'Construtoras ativas',unit:'',higher:true},
@@ -52,6 +52,7 @@ export const GOVERNMENT_INITIATIVES=[
   {id:'waste-recycling',title:'Incentivo à reciclagem e compra de material recuperado',metric:'recycling',axis:'green'},
   {id:'municipal-audit',title:'Auditoria de contratos e equilíbrio do caixa público',metric:'treasuryHealth',axis:'fiscal'},
   {id:'business-tax-review',title:'Revisão progressiva do imposto empresarial',metric:'operatingHealth',axis:'fiscal'},
+  {id:'essential-services',title:'Garantir caixa para manter os serviços essenciais',metric:'serviceHealth',axis:'public'},
 ];
 export function describePromise(pr){
   const spec=PROMISE_METRICS[pr.metric],unit=spec.unit||'',format=n=>`${Number(n).toFixed(['%','dias'].includes(unit)?1:0)}${unit==='%'?'%':unit?' '+unit:''}`;
@@ -62,6 +63,7 @@ export function promiseRelevant(city,c,metric){
   const n=c.needs;
   if(metric==='treasuryHealth')return (city.politics?.approvalReport?.finance?.cashHealth??100)<75||(c.traits?.frugality??.5)>.65;
   if(metric==='operatingHealth')return (city.politics?.approvalReport?.finance?.operatingHealth??100)<70||(c.traits?.frugality??.5)>.65;
+  if(metric==='serviceHealth')return c.needs.food<75||c.needs.health<75||c.needs.water<75||c.needs.hygiene<70||(c.traits?.empathy??.5)>.65;
   if(metric==='companyProductivity')return c.businessIds?.length>0||!c.jobId;
   if(metric==='marketRecoveries')return c.businessIds?.some(id=>city.building(id)?.type==='market')||!!(c.jobId&&city.building(c.jobId)?.type==='market');
   if(metric==='rentVouchers')return !c.homeUnitId&&c.balance<city.currency.price(20000);
@@ -111,7 +113,7 @@ export class CityMandates {
     const active=type=>activeBuildings.get(type)||0;
     const people=population.people,adults=population.adults;
     const publicFinance=governmentPerformance(city);
-    return {...Object.fromEntries(Object.keys(TAX_CATEGORIES).map(key=>[`salesTax_${key}`,taxRate(city,key)*100])),treasuryHealth:publicFinance.cashHealth,operatingHealth:publicFinance.operatingHealth,companyProductivity:publicFinance.companyProductivity,marketRecoveries:city.economy.businesses.reduce((n,b)=>n+(b.governmentRecovery?.length||0),0),rentVouchers:city.politics.rentVouchers?.length||0,stateEquityLoans:city.politics.stateEquityLoans?.length||0,health:pct(population.health,people),water:pct(population.water,people),rest:pct(population.rest,people),hygiene:pct(population.hygiene,people),
+    return {...Object.fromEntries(Object.keys(TAX_CATEGORIES).map(key=>[`salesTax_${key}`,taxRate(city,key)*100])),treasuryHealth:publicFinance.cashHealth,operatingHealth:publicFinance.operatingHealth,serviceHealth:publicFinance.serviceHealth,companyProductivity:publicFinance.companyProductivity,marketRecoveries:city.economy.businesses.reduce((n,b)=>n+(b.governmentRecovery?.length||0),0),rentVouchers:city.politics.rentVouchers?.length||0,stateEquityLoans:city.politics.stateEquityLoans?.length||0,health:pct(population.health,people),water:pct(population.water,people),rest:pct(population.rest,people),hygiene:pct(population.hygiene,people),
       clinics:active('clinic')+active('hospital'),waterWorks:active('utility'),parks:active('leisure')+active('park')+active('sports_center')+active('library')+active('theater'),carriers:active('carrier'),cleaners:active('cleaner'),builders:active('builder'),preservation:buildingCount?conditionTotal/buildingCount:100,
       waste:city.sanitation.wasteMetrics().awaiting,cultivatedTrees:[...city.nature.plants.values()].filter(p=>p.buildingId).length+city.nature.seeds.filter(p=>p.buildingId).length,oilReserve:city.goodsStock('oleo'),oilMills:active('mill'),sunflowerFarms,
       woodStock:city.goodsStock('madeira'),paperStock:city.goodsStock('papel'),publishedTexts:city.publications.nextEntryId-1,readers:pct(population.readers,people),banks:active('bank'),paidLoans:city.bank.loans.filter(l=>l.status==='paid').length,publicJobs,foodVariety:farmCrops.size,kitchens,artisans,equipped:pct(population.equipped,people),savers:pct(population.savers,people),smallFirms,foodReserve:city.welfare.conditions().foodDays,literacy:population.readingTotal,recycling,fed:pct(population.fed,people),housed:pct(population.housed,people),employed:pct(population.employed,adults),lamps:posts.length?pct(fundedPosts,posts.length):0,

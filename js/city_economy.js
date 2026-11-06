@@ -1,3 +1,4 @@
+import {economicPolicy} from './city_economic_policies.js';
 import {SUBSTANCE_CROPS,SUBSTANCES,SUBSTANCE_CONTROLLED_GOODS,ALCOHOL_DRINKS} from './city_substance_catalog.js';
 import {justiceServiceSpec} from './city_justice_services.js';
 import {JUSTICE_SKILLS,ensureJusticeSkills} from './city_justice_skills.js';
@@ -142,6 +143,7 @@ export class CityEconomy {
       const b = this.city.buildings.find(b => b.type === type);
       if (b&&!b.active) this.activateMunicipalBusiness(b, budget);
     }
+    this.city.bank.initializePrivateBanks();
     fundInitialCycleChain(this.city);
     this.city.vehicles?.initializeStarterStock();
     this.city.development.ensurePlots();
@@ -1089,7 +1091,7 @@ export class CityEconomy {
       if(b.balance<reserve&&owner&&owner.balance>this.city.welfare.subsistenceFloor(owner)+this.city.currency.price(2500))this.city.transfer(owner.accountId,b.accountId,Math.min(this.city.currency.price(10000),owner.balance-this.city.welfare.subsistenceFloor(owner)-this.city.currency.price(1500)),'Aporte emergencial do proprietário');
       if(b.equityShares?.length){if(b.balance>=reserve)distributeShareDividends(this.city,b);}
       else if(owner){
-        const profit = Math.max(0, b.totalRevenue - b.totalExpenses - b.dividends),dividend = Math.min(Math.floor(profit * .35), Math.max(0, b.balance - reserve));
+        const profit = Math.max(0, b.totalRevenue - b.totalExpenses - b.dividends),dividend = Math.min(Math.floor(profit * economicPolicy(this.city,'dividendPayout')), Math.max(0, b.balance - reserve));
         if(dividend>0){const shares=(b.equityPartners||[{citizenId:owner.id,amount:1}]).filter(a=>this.citizen(a.citizenId)),total=shares.reduce((n,a)=>n+a.amount,0);for(const share of shares){const amount=Math.floor(dividend*share.amount/Math.max(1,total));if(amount&&this.city.transfer(b.accountId,`citizen:${share.citizenId}`,amount,'Distribuição de lucros por quota de capital'))b.dividends+=amount;}}
       }
       if(b.balance<reserve){

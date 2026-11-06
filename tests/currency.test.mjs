@@ -14,11 +14,11 @@ function printer(city) {
   return {b,c};
 }
 
-test('new citizens start equal and no household can buy the initial firms or a complete home',()=>{
+test('founding bankers have explicit private institutions while households cannot buy initial firms or a complete home',()=>{
   const city=setup({starter:true});
   assert.deepEqual([...new Set(city.citizens.map(c=>c.balance))],[CURRENCY_RULES.citizenGrant]);
-  assert(city.citizens.every(c=>!('wealthTier' in c)&&!c.businessIds.length));
-  assert.equal(totalMoney(city),CURRENCY_RULES.initialSupply);
+  assert(city.citizens.every(c=>!('wealthTier' in c)));assert.equal(city.citizens.filter(c=>c.businessIds.length).length,2);assert(city.citizens.filter(c=>c.businessIds.length).every(c=>c.businessIds.every(id=>city.building(id).foundingPrivateBank)));
+  assert.equal(totalMoney(city),CURRENCY_RULES.initialSupply+city.currency.externalNet);
   assert.equal(city.currency.issued,CURRENCY_RULES.initialSupply);
   for(const type of ['builder','quarry']){
     const b=city.buildings.find(b=>b.type===type);assert(b.municipal&&b.active&&b.workers.length);
@@ -46,7 +46,7 @@ test('the mint respects its daily limit and transfers never create money or infl
   const city=setup({starter:true}),{b,c}=printer(city);
   for(let i=0;i<1000;i++)city.currency.work(b,c);
   assert.equal(city.currency.issuedToday,CURRENCY_RULES.mintDailyLimit);
-  assert.equal(totalMoney(city),CURRENCY_RULES.initialSupply+CURRENCY_RULES.mintDailyLimit);
+  assert.equal(totalMoney(city),CURRENCY_RULES.initialSupply+CURRENCY_RULES.mintDailyLimit+city.currency.externalNet);
   assert.equal(city.currency.work(b,c),false);
   const supply=totalMoney(city),index=city.currency.priceIndex;
   city.transfer(c.accountId,'treasury',100,'Test tax');city.transfer('treasury',c.accountId,100,'Test refund');

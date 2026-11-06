@@ -564,7 +564,7 @@ export class CityUI {
       this.unitMap(p,b,u);
       if (u) { p.heading(`ESPAÇO ${u.x+1}, ${u.y+1} / ${u.z+1}º ANDAR`); p.kv('Cômodo', { bedroom: 'Quarto', bathroom: 'Banheiro', dining: 'Refeitório', workspace: 'Área da empresa' }[u.roomType]); if (u.homeId) p.kv('Casa', this.homeLabel(u.homeId)); p.kv('Proprietário', city.accountName(u.ownerId)); this.accountLink(p, u.ownerId);
         p.kv('Ocupante', u.tenantId || u.occupantId ? city.accountName(u.tenantId || u.occupantId) : 'Livre'); this.accountLink(p, u.tenantId || u.occupantId);
-        const social=city.housing.isSocial(city.housing.homes.get(u.homeId));p.kv('Venda',social?'Patrimônio público / sem venda':money(u.price)); p.kv('Aluguel/dia',social?'Gratuito':u.ownerId === 'treasury' ? 'Prefeitura não aluga' : money(u.rent)); p.kv('Em atraso', money(u.arrears)); p.kv('Anúncio',social?(u.tenantId?'Ocupação social':'Vaga social'):u.forSale ? 'À venda' : u.forRent ? 'Para alugar' : 'Uso próprio / ocupado'); }
+        const social=city.housing.isSocial(city.housing.homes.get(u.homeId));p.kv('Venda',social?'Patrimônio público / sem venda':money(u.price)); p.kv('Aluguel/dia',social?'Gratuito':money(u.rent)); p.kv('Em atraso', money(u.arrears)); p.kv('Anúncio',social?(u.tenantId?'Ocupação social':'Vaga social'):u.forSale ? 'À venda' : u.forRent ? 'Para alugar' : 'Uso próprio / ocupado'); }
 
     }
   }

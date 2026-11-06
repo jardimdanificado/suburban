@@ -77,6 +77,7 @@ export class CityGovernmentAgenda {
     if(!pr.fulfilled){
       if(['marketRecoveries','rentVouchers','stateEquityLoans'].includes(metric)){if(!execution.initiativeApplied)execution.blocked='Aguardando mercado em crise, família elegível ou estatal disponível e caixa preservando a reserva municipal.';}
       else if(metric.startsWith('salesTax_'))this.proposal(term,execution,'salesTax',{category:metric.slice(9),value:pr.target/100},`reduzir imposto do ramo para ${pr.target.toFixed(1)}%`);
+      else if(['treasuryHealth','operatingHealth','serviceHealth','companyProductivity'].includes(metric)){city.fiscal.hourly();city.fiscal.fundServices();city.economy.hire();if(metric!=='companyProductivity')city.fiscal.requestRevenueReview();execution.blocked='Revisão de receitas, custeio dos serviços e contratação em andamento; resultado depende das contas e da produção reais.';}
       else if(metric==='tax')this.proposal(term,execution,'tax',{value:pr.target/100},`reduzir imposto para ${pr.target.toFixed(1)}%`);
       else if(metric==='wage')this.proposal(term,execution,'minimumWage',{value:Math.ceil(pr.target/60)},'aumentar o piso salarial prometido');
       else if(metric==='inflation'){if(city.currency.policy.inflationTarget>pr.target/100||!execution.actions.some(a=>a.action==='propose'))this.proposal(term,execution,'inflation',{value:Math.max(0,Math.floor(city.currency.policy.dailyLimit*.8)),target:pr.target/100},'controle de inflação e emissão');else execution.blocked='Aguardando os efeitos das medidas monetárias aprovadas.';}

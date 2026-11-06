@@ -15,9 +15,10 @@ export function employmentReport(city){
     }
     if(c.entity.destroyed)continue;
     if(c.jobId&&!city.politics.officeHolder(c)){const b=city.building(c.jobId);if(b)workers.push({citizen:c,building:b,contract:c.career?.jobs.findLast(r=>r.buildingId===b.id&&r.endedAt==null)});}
-    else if(!c.jobId&&!c.businessIds.length&&city.society.isAdult(c)&&!city.politics.officeHolder(c))unemployed++;
+    else if(!c.custody&&!c.jobId&&!c.businessIds.length&&city.society.isAdult(c)&&!city.politics.officeHolder(c))unemployed++;
   }
-  return {firms,byCompany,applications,workers,unemployed,vacancies:firms.reduce((n,b)=>n+openPositions(city,b),0)};
+  const laborForce=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!c.custody).length,fundedVacancies=firms.reduce((n,b)=>n+Math.min(openPositions(city,b),Math.max(0,Math.floor((b.balance-b.workers.length*b.wage*480)/Math.max(1,b.wage*480)))),0);
+  return {firms,byCompany,applications,workers,unemployed,laborForce,fundedVacancies,unemploymentRate:laborForce?unemployed/laborForce*100:0,vacancies:firms.reduce((n,b)=>n+openPositions(city,b),0)};
 }
 const reportFor=ui=>ui.cachedList?ui.cachedList('employment-report',()=>employmentReport(ui.city)):employmentReport(ui.city);
 const matches=(ui,text)=>!ui.matches||ui.matches(text);
@@ -86,7 +87,8 @@ function companyDetail(ui,p,b,report){
 }
 export function renderEmployment(ui,p){
   const report=reportFor(ui),city=ui.city,view=ui.view();
-  p.heading('MERCADO DE TRABALHO');p.metrics([['VAGAS ABERTAS',report.vacancies],['SEM EMPREGO',report.unemployed],['ASSALARIADOS',report.workers.length],['EM ANÁLISE',report.applications.filter(r=>r.application.status==='análise').length]]);
+  p.heading('MERCADO DE TRABALHO');p.metrics([['VAGAS ABERTAS',report.vacancies],['COM UM DIA DE FOLHA',report.fundedVacancies],['DESEMPREGO',`${report.unemploymentRate.toFixed(1)}%`],['SEM EMPREGO',report.unemployed],['ASSALARIADOS',report.workers.length],['EM ANÁLISE',report.applications.filter(r=>r.application.status==='análise').length]]);
+  p.note('Vagas anunciadas podem estar sem financiamento. O desemprego considera adultos disponíveis; empresários e agentes públicos têm ocupação. A contratação direta evita depender indefinidamente do balcão municipal.');
   if(ui.employmentCompanyId!=null){
     p.button('VOLTAR À LISTA',()=>route(ui,view,{employmentStatus:ui.employmentStatus||'all'}));
     const row=report.applications.find(r=>r.citizen.id===ui.employmentCitizenId&&r.application.buildingId===ui.employmentCompanyId&&r.application.appliedAt===ui.employmentApplicationAt);

@@ -1,3 +1,4 @@
+import {economicPolicy} from './city_economic_policies.js';
 import {injuryWorkFactor} from './city_injury_effects.js';
 /** Career records are independent of the bounded event journal and survive snapshots. */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -113,8 +114,8 @@ export function apply(city,c,b){
   if(last&&last.status==='análise')return last;
   if(last&&city.minute-last.appliedAt<360)return null;
   if(cv.pendingInterview?.status==='análise'||cv.applications.some(a=>a.status==='análise'))return null;
-  const agency=laborAgency(city);if(!agency)return null;
-  const q=qualification(city,c,b),interviewAt=agencyAppointmentTime(city,c,agency),row={buildingId:b.id,company:b.entity.properties.name,agencyBuildingId:agency.building.id,interviewAt,decideAt:interviewAt+RECRUITMENT_RULES.interviewDuration,resultDueAt:interviewAt+RECRUITMENT_RULES.interviewDuration+RECRUITMENT_RULES.minimumNotice,status:q.eligible?'análise':'reprovado',reason:q.eligible?'Currículo recebido; entrevista na Secretaria do Trabalho agendada.':q.reason,trainee:q.trainee,score:city.economy.hiringScore(c,b),offeredWage:wageFor(city,c,b)};
+  const publicAgency=laborAgency(city),direct=economicPolicy(city,'directHiring')&&!secretaryPresent(city,publicAgency),agency=direct?{building:b}:publicAgency;if(!agency)return null;
+  const q=qualification(city,c,b),interviewAt=agencyAppointmentTime(city,c,agency),row={appliedAt:city.minute,recruitmentChannel:direct?'employer':'agency',buildingId:b.id,company:b.entity.properties.name,agencyBuildingId:agency.building.id,interviewAt,decideAt:interviewAt+RECRUITMENT_RULES.interviewDuration,resultDueAt:interviewAt+RECRUITMENT_RULES.interviewDuration+RECRUITMENT_RULES.minimumNotice,status:q.eligible?'análise':'reprovado',reason:q.eligible?'Currículo recebido; entrevista na Secretaria do Trabalho agendada.':q.reason,trainee:q.trainee,score:city.economy.hiringScore(c,b),offeredWage:wageFor(city,c,b)};
   const queue=queueApplications(city);cv.applications.push(row);
   if(row.status==='análise'){cv.pendingInterview=row;queue.push({citizenId:c.id,application:row});}
   else {row.decidedAt=city.minute;Object.freeze(row);}
@@ -134,7 +135,7 @@ function considerKnownVacancies(city,c,offers=null,indexes=null){
 }
 export function reviewMarket(city,offers){
   const profile=city.profileDiagnostics?{eligible:0,discoverMs:0,indexMs:0,listingsMs:0,considerMs:0}:null;
-  const posted=offers.filter(b=>openPositions(city,b)>0&&b.balance>=b.wage*60).sort((a,b)=>Number(occupiedPositions(city,a)>0)-Number(occupiedPositions(city,b)>0)||b.wage-a.wage||a.id-b.id).slice(0,64);
+  const posted=offers.filter(b=>openPositions(city,b)>0&&b.balance>=b.wage*60).sort((a,b)=>Number(occupiedPositions(city,a)>0)-Number(occupiedPositions(city,b)>0)||b.wage-a.wage||a.id-b.id).slice(0,economicPolicy(city,'jobBoardLimit'));
   const postedIds=new Set(posted.map(b=>b.id));
   const indexes={allowed:new Set(offers.map(b=>b.id)),demand:new Map()};
   for(const {application} of queueApplications(city))if(application.status==='análise')indexes.demand.set(application.buildingId,(indexes.demand.get(application.buildingId)||0)+1);
@@ -151,7 +152,7 @@ export function reviewMarket(city,offers){
     known.clear();listings.length=0;retained.length=0;for(const vacancy of knownRows)known.set(vacancy.buildingId,vacancy);
     for(const b of posted){const entry=known.get(b.id)||{buildingId:b.id,discoveredAt:city.minute,source:'Quadro municipal de empregos'};entry.seenAt=city.minute;entry.wage=b.wage;entry.positions=openPositions(city,b);listings.push(entry);}
     for(const vacancy of knownRows)if(!postedIds.has(vacancy.buildingId))retained.push(vacancy);
-    let write=0;for(const entry of listings)knownRows[write++]=entry;for(const vacancy of retained)if(write<64)knownRows[write++]=vacancy;knownRows.length=write;
+    let write=0;for(const entry of listings)knownRows[write++]=entry;for(const vacancy of retained)if(write<economicPolicy(city,'jobBoardLimit'))knownRows[write++]=vacancy;knownRows.length=write;
     if(profile){profile.indexMs+=performance.now()-started;started=performance.now();}
     if(cv.nextSearchAt==null)cv.nextSearchAt=city.minute+(c.jobId?240:30)+(c.id%60);
     if(city.minute<cv.nextSearchAt)continue;cv.nextSearchAt=city.minute+(c.jobId?240:30)+(c.id%60);
@@ -193,32 +194,34 @@ export function routeToInterview(city,c){
   if(c.task==='job-interview'&&c.targetId===b.id)return true;
   if(c.deliveryId||c.cleaningJobId||c.informalJobId||c.mobilityTrip||c.ridingVehicleId||c.workMeal||c.conversation||['caregiving','care','vote','council-session','interview'].includes(c.task))return false;
   const path=city.findPath(c.entity,b.door);if(path===null)return false;
-  c.task='job-interview';c.targetId=b.id;c.path=path;c.action='Indo à entrevista na Secretaria do Trabalho';return true;
+  c.task='job-interview';c.targetId=b.id;c.path=path;c.action=a.recruitmentChannel==='employer'?'Indo à entrevista no empregador':'Indo à entrevista na Secretaria do Trabalho';return true;
 }
 function releaseInterview(c,a){
   if(c.career?.pendingInterview===a)c.career.pendingInterview=null;
   if(c.task==='job-interview'&&c.targetId===a.agencyBuildingId){c.task=null;c.targetId=null;c.path=[];c.action=a.resultReceivedAt!=null?'Resultado do processo seletivo recebido':a.submittedAt!=null?'Currículo entregue; aguardando o resultado':`Entrevista encerrada: ${a.reason}`;}
 }
 export function advanceRecruitment(city){
-  const queue=queueApplications(city),sessions=new Map(),agency=laborAgency(city),secretaryAvailable=secretaryPresent(city,agency);
+  const queue=queueApplications(city),sessions=new Map(),publicAgency=laborAgency(city);
   for(const {citizenId,application:a} of queue){
     if(a.status!=='análise')continue;
     const c=city.society.citizen(citizenId),b=city.building(a.buildingId);
     if(c&&!c.career?.applications.includes(a)){finishApplication(a,'retirado','Inscrição retirada',city.minute);releaseInterview(c,a);continue;}
     if(!c||c.entity.destroyed||!b?.active||b.entity.destroyed||city.politics.officeHolder(c)||c.businessIds.length){finishApplication(a,'retirado','Candidato ou empresa indisponível',city.minute);if(c)releaseInterview(c,a);continue;}
+    if(economicPolicy(city,'directHiring')&&a.recruitmentChannel!=='employer'&&(!publicAgency||(a.agencyDeferrals||0)>=2||city.minute-(a.appliedAt??a.interviewAt??city.minute)>1440)){a.recruitmentChannel='employer';a.agencyBuildingId=b.id;a.interviewAt=agencyAppointmentTime(city,c,{building:b});a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;}
+    const direct=a.recruitmentChannel==='employer',agency=direct?{building:b}:publicAgency,secretaryAvailable=direct?city.hour>=8&&city.hour<17:secretaryPresent(city,agency);
     if(!agency){a.resultDueAt=city.minute+30;continue;}
     if(a.agencyBuildingId!==agency.building.id){a.agencyBuildingId=agency.building.id;a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;}
     if(a.submittedAt==null){
       const present=c.task==='job-interview'&&c.targetId===agency.building.id&&(agency.building.constructionKind==='open-air'?!c.indoorLocation&&!c.path.length&&Math.hypot(c.entity.x-agency.building.door.x,c.entity.y-agency.building.door.y)<=.8:c.indoorLocation?.buildingId===agency.building.id&&!c.indoorLocation.exiting);
       if(city.minute<a.interviewAt)continue;
-      if(city.minute>=a.interviewAt&&!secretaryAvailable){a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;continue;}
-      if(!present){if(city.minute>a.interviewAt+60){a.absentAt=city.minute;finishApplication(a,'reprovado','Não compareceu à entrevista na Secretaria do Trabalho',city.minute);releaseInterview(c,a);}continue;}
-      a.arrivedAt??=city.minute;a.interviewStartedAt??=city.minute;c.action='Entrevista na Secretaria do Trabalho';
+      if(city.minute>=a.interviewAt&&!secretaryAvailable){a.agencyDeferrals=(a.agencyDeferrals||0)+1;a.interviewAt=agencyAppointmentTime(city,c,agency);a.decideAt=a.interviewAt+RECRUITMENT_RULES.interviewDuration;continue;}
+      if(!present){if(city.minute>a.interviewAt+economicPolicy(city,'interviewGraceMinutes')){a.absentAt=city.minute;finishApplication(a,'reprovado','Não compareceu à entrevista na Secretaria do Trabalho',city.minute);releaseInterview(c,a);}continue;}
+      a.arrivedAt??=city.minute;a.interviewStartedAt??=city.minute;c.action=direct?'Entrevista presencial no empregador':'Entrevista na Secretaria do Trabalho';
       if(city.minute<a.interviewStartedAt+RECRUITMENT_RULES.interviewDuration)continue;
       a.submittedAt=city.minute;a.resultDueAt=city.minute+RECRUITMENT_RULES.minimumNotice;releaseInterview(c,a);
     }
     if(city.minute<(a.resultDueAt??a.submittedAt+RECRUITMENT_RULES.minimumNotice))continue;
-    if(!secretaryAvailable){a.resultDueAt=city.minute+30;continue;}
+    if(!secretaryAvailable){a.agencyDeferrals=(a.agencyDeferrals||0)+1;a.resultDueAt=city.minute+30;continue;}
     const key=`${b.id}:${a.resultDueAt}`;let list=sessions.get(key);if(!list)sessions.set(key,list=[]);list.push({c,b,a});
   }
   for(const rows of sessions.values()){
@@ -228,7 +231,7 @@ export function advanceRecruitment(city){
       const q=qualification(city,c,b),old=city.building(c.jobId),better=!old||wageFor(city,c,b)>wageFor(city,c,old)*1.15;
       a.resultReceivedAt=city.minute;a.resultBuildingId=b.id;
       if(hired<slots&&b.balance>=b.wage*60&&q.eligible&&better&&c.jobId!==b.id){
-        finishApplication(a,'aprovado',a.trainee?'Currículo aprovado pela Secretaria do Trabalho; selecionado para formação no trabalho':'Currículo aprovado pela Secretaria do Trabalho por habilidade, experiência e referências',city.minute);
+        finishApplication(a,'aprovado',a.recruitmentChannel==='employer'?(a.trainee?'Contratação direta com formação no trabalho':'Contratação direta após entrevista presencial'):a.trainee?'Currículo aprovado pela Secretaria do Trabalho; selecionado para formação no trabalho':'Currículo aprovado pela Secretaria do Trabalho por habilidade, experiência e referências',city.minute);
         if(c.jobId)city.economy.leaveJob(c,'Aceitou proposta salarial melhor');
         c.jobId=b.id;c.profession=city.economy.jobSkill(b);b.workers.push(c.id);hired++;
         city.history.employment(c,b,'contratação');city.log(`${c.entity.properties.name} recebeu da Secretaria do Trabalho a aprovação para trabalhar em ${b.entity.properties.name}.`,'work',[c.id],{kind:'employment',buildingId:b.id,interviewAt:a.interviewAt,agencyBuildingId:a.agencyBuildingId});

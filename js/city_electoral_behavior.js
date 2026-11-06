@@ -10,12 +10,13 @@ export function voterElectorates(c){
   const groups=['todos'];if(c.jobId||c.role==='worker')groups.push('trabalhadores');if(c.businessIds?.length)groups.push('empreendedores');if(!c.homeUnitId)groups.push('sem-moradia');if(c.needs.food<55||c.balance<10000)groups.push('baixa-renda');if(c.role==='councilor'||c.role==='mayor')groups.push('servidores');if((c.political?.ideology?.green||0)>.6)groups.push('ambientalistas');if((c.traits?.openness||.5)>.7)groups.push('reformistas');return groups;
 }
 export function captureGovernmentExperience(city,c,termId){
-  return c.political.governmentExperience={termId,happiness:c.happiness,food:c.needs.food,health:c.needs.health,housed:!!c.homeUnitId,employed:!!(c.jobId||c.businessIds.length||c.role==='councilor')};
+  return c.political.governmentExperience={termId,happiness:c.happiness,food:c.needs.food,health:c.needs.health,serviceHealth:city.fiscal?.serviceContinuity?.().health??100,housed:!!c.homeUnitId,employed:!!(c.jobId||c.businessIds.length||c.role==='councilor')};
 }
 export function personalGovernmentExperience(city,c,term){
   if(!term)return 0;const baseline=c.political.governmentExperience;if(!baseline||baseline.termId!==term.id){captureGovernmentExperience(city,c,term.id);return 0;}
   const employed=!!(c.jobId||c.businessIds.length||c.role==='councilor');
-  return clamp((c.happiness-baseline.happiness)*.16+(c.needs.health-baseline.health)*.05+(Number(!!c.homeUnitId)-Number(baseline.housed))*6+(Number(employed)-Number(baseline.employed))*4,-12,12);
+  const currentServiceHealth=city.fiscal?.serviceContinuity?.().health??100,material=electoralPriorities(c).material;
+  return clamp((c.happiness-baseline.happiness)*.16+(c.needs.health-baseline.health)*.05+(currentServiceHealth-(baseline.serviceHealth??100))*.1*material+(Number(!!c.homeUnitId)-Number(baseline.housed))*6+(Number(employed)-Number(baseline.employed))*4,-16,16);
 }
 export function governingStreak(p,partyId){let count=0;for(let i=p.mandates.terms.length-1;i>=0;i--){const term=p.mandates.terms[i];if(term.partyId!==partyId)break;count+=term.provisional?.5:1;}return count;}
 /** Public image is useful evidence, but correlated measures cannot compound without limit. */

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setup,totalMoney} from './helpers/city.mjs';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
+import {taxRate} from '../js/city_sales_tax.js';
 import {reviewWages} from '../js/city_employment.js';
 function reduceTreasury(city,cash){if(!city.accounts.has('test-reserves'))city.accounts.set('test-reserves',{balance:0,name:'Test reserves'});assert(city.transfer('treasury','test-reserves',city.treasury-cash,'Test protected balances'));}
 function drainMunicipalSurplus(city){for(const b of city.buildings)if(b.accountId!=='treasury'&&b.balance)city.transfer(b.accountId,'test-reserves',b.balance,'Test no operating surplus');}
@@ -26,7 +27,7 @@ test('municipal liquidity recovery does not touch private savings or contracted 
 });
 
 test('vulnerable residents keep free public meals while wealthy residents pay a retail-equivalent price',()=>{
-  const city=setup({starter:true,funded:true,population:48}),hall=city.buildings.find(b=>b.type==='popular_refectory'),poor=city.citizens.find(c=>!c.fixtureInvestor),rich=city.citizens.find(c=>c.fixtureInvestor);city.transfer(poor.accountId,'treasury',poor.balance,'Test poverty');assert.equal(city.economy.mealOffer(hall,poor).price,0);const quote=city.economy.mealOffer(hall,rich),cash=rich.balance,provider=hall.balance,treasury=city.treasury,tax=Math.floor(quote.price*16/116);assert(quote.price>0);assert(city.economy.consumeMeal(rich,hall));assert.equal(rich.balance,cash-quote.price);assert.equal(hall.balance,provider+quote.price-tax);assert.equal(city.treasury,treasury+tax);
+  const city=setup({starter:true,funded:true,population:48}),hall=city.buildings.find(b=>b.type==='popular_refectory'),poor=city.citizens.find(c=>!c.fixtureInvestor),rich=city.citizens.find(c=>c.fixtureInvestor);city.transfer(poor.accountId,'treasury',poor.balance,'Test poverty');assert.equal(city.economy.mealOffer(hall,poor).price,0);const quote=city.economy.mealOffer(hall,rich),cash=rich.balance,provider=hall.balance,treasury=city.treasury,tax=Math.floor(quote.price*taxRate(city,'food')/(1+taxRate(city,'food')));assert(quote.price>0);assert(city.economy.consumeMeal(rich,hall));assert.equal(rich.balance,cash-quote.price);assert.equal(hall.balance,provider+quote.price-tax);assert.equal(city.treasury,treasury+tax);
 });
 
 test('small towns do not seed retail shops without enough customers to support them',()=>{

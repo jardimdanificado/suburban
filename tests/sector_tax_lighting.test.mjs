@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {setup,totalMoney,finishShipment} from './helpers/city.mjs';
+import {setup as setupCity,totalMoney,finishShipment} from './helpers/city.mjs';
+import {setEconomicPolicy} from '../js/city_economic_policies.js';
+function setup(options){const city=setupCity(options);setEconomicPolicy(city,'essentialConsumptionRelief',0);setEconomicPolicy(city,'luxuryConsumptionRate',0);return city;}
 import {taxCategory,taxRate} from '../js/city_sales_tax.js';
 
 test('sector taxes are included in the price, paid to the treasury and conserve money',()=>{

@@ -1,9 +1,10 @@
+import {economicPolicy} from './city_economic_policies.js';
 import {ideologicalProfile} from './city_ideology.js';
 const TOTAL=10000;
 const living=(city,id)=>{const a=city.accounts.get(id);return id==='treasury'||!!a?.entity?.properties?.citizen&&!a.entity.destroyed;};
 export function privatizationQuota(city){
  const p=city.politics,day=Math.floor(city.minute/1440);
- p.policy.dailyPrivatizationLimit??=1;
+ p.policy.dailyPrivatizationLimit??=7;
  if(p.privatizationQuotaDay!==day){p.privatizationQuotaDay=day;p.privatizationListedTodayPoints=0;p.privatizationSoldTodayPoints=0;}
  const limit=Math.max(0,Math.min(10,p.policy.dailyPrivatizationLimit)),allowed=Math.round(limit*100);
  const offered=Math.max(0,p.privatizationListedTodayPoints||0),sold=Math.max(0,p.privatizationSoldTodayPoints||0);
@@ -41,10 +42,10 @@ function control(city,b){
 export function initializeEquity(city,b){
  if(b.equityShares?.length)return true;
  const original=b.municipal||!b.ownerId?'treasury':`citizen:${b.ownerId}`;
- if(b.units.some(u=>u.ownerId!==original&&u.ownerId!==b.accountId))return city.fail('O imóvel possui espaços de outros proprietários; não é possível incorporá-lo ao capital da empresa.');
+ if(!b.officeTenantOf&&b.units.some(u=>u.ownerId!==original&&u.ownerId!==b.accountId))return city.fail('O imóvel possui espaços de outros proprietários; não é possível incorporá-lo ao capital da empresa.');
  const lot=city.development.plots.find(p=>p.id===b.plotId);if(lot&&lot.ownerId!==original&&lot.ownerId!==b.accountId)return city.fail('O terreno pertence a outra conta e não pode ser incorporado à empresa.');
  b.equityShares=equityShares(city,b).map(s=>({...s}));b.equityPartners=null;b.shareOffers??=[];b.shareHistory??=[];
- for(const u of b.units){u.ownerId=b.accountId;u.forSale=false;u.forRent=false;}
+ for(const u of b.units){if(!b.officeTenantOf)u.ownerId=b.accountId;u.forSale=false;u.forRent=false;}
  if(lot){lot.ownerId=b.accountId;lot.forSale=false;lot.forRent=false;}
  control(city,b);return true;
 }
@@ -65,7 +66,7 @@ export function buyShares(city,b,offerId,buyerId,points){
  if(!offer||!b.active||b.entity.destroyed||!buyer||!living(city,buyerId)||buyerId===offer.sellerId)return city.fail('Oferta ou comprador indisponível.');
  if(!Number.isSafeInteger(points)||points<1||points>offer.remaining)return city.fail('Quantidade fora do saldo da oferta.');
  const publicPrivatization=offer.sellerId==='treasury'&&!offer.capitalRaise;
- if(publicPrivatization&&!offer.billId&&!offer.dailyPrivatization){const quota=privatizationQuota(city),saleCapacity=Math.max(0,quota.allowed-quota.sold);points=Math.min(points,saleCapacity);if(points<1)return city.fail('A cota diária de privatização já foi usada.');}
+ if(publicPrivatization&&!offer.billId){const quota=privatizationQuota(city),saleCapacity=Math.max(0,quota.allowed-quota.sold);points=Math.min(points,saleCapacity);if(points<1)return city.fail('A cota diária de privatização já foi usada.');}
  const seller=b.equityShares.find(s=>s.accountId===offer.sellerId);if(!seller||seller.points<points)return city.fail('O vendedor não possui mais essa participação.');
  const treasuryBefore=city.treasury,price=Math.max(1,Math.ceil(offer.valuation*points/TOTAL)),recipient=offer.capitalRaise?b.accountId:offer.sellerId;if(!Number.isSafeInteger(price)||!city.transfer(buyerId,recipient,price,offer.capitalRaise?'Aporte de capital por venda de participação':'Compra de participação empresarial',{buildingId:b.id,offerId,points}))return city.fail('Saldo insuficiente para comprar a participação.');
  seller.points-=points;let acquired=b.equityShares.find(s=>s.accountId===buyerId);if(!acquired){acquired={accountId:buyerId,points:0};b.equityShares.push(acquired);}acquired.points+=points;b.equityShares=b.equityShares.filter(s=>s.points>0);offer.remaining-=points;if(!offer.remaining)offer.status='sold';
@@ -109,7 +110,7 @@ export function tradeSharesHourly(city){
  }
 }
 export function distributeShareDividends(city,b){
- if(!b.equityShares?.length)return 0;const profit=Math.max(0,b.totalRevenue-b.totalExpenses-(b.dividends||0)-(b.fiscalDistributedProfit||0)),dividend=Math.min(Math.floor(profit*.35),Math.max(0,b.balance-city.fiscal.businessReserve(b)));let paid=0;
+ if(!b.equityShares?.length)return 0;const profit=Math.max(0,b.totalRevenue-b.totalExpenses-(b.dividends||0)-(b.fiscalDistributedProfit||0)),dividend=Math.min(Math.floor(profit*economicPolicy(city,'dividendPayout')),Math.max(0,b.balance-city.fiscal.businessReserve(b)));let paid=0;
  for(const share of b.equityShares){const amount=Math.floor(dividend*share.points/TOTAL);if(amount&&city.transfer(b.accountId,share.accountId,amount,'Distribuição de lucros por participação',{buildingId:b.id,points:share.points})){paid+=amount;b.dividends=(b.dividends||0)+amount;}}
  return paid;
 }
