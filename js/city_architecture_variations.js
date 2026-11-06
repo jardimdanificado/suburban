@@ -272,24 +272,31 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
    parts.push(record);windowShutters.push(record);
   };
   const opaqueShutterGeometry=(axis)=>{
-   const template=shutterGeometry[axis],positions=[],normals=[],colors=[],append=(source,offset,color)=>{
+   const template=shutterGeometry[axis],positions=[],normals=[],colors=[],indices=[],append=(source,offset,color)=>{
     const p=source.attributes.position,n=source.attributes.normal,tint=new THREE.Color(color);
+    const vertexOffset=positions.length/3;
     for(let i=0;i<p.count;i++){
      positions.push(p.getX(i)+offset[0],p.getY(i)+offset[1],p.getZ(i)+offset[2]);
      normals.push(n.getX(i),n.getY(i),n.getZ(i));colors.push(tint.r,tint.g,tint.b);
     }
+    const sourceIndex=source.getIndex();
+    if(sourceIndex){for(let i=0;i<sourceIndex.count;i++)indices.push(vertexOffset+sourceIndex.getX(i));}
+    else{for(let i=0;i<p.count;i++)indices.push(vertexOffset+i);}
    };
    const front=axis==='front',panelCenter=front?[.1,0,.035]:[.035,0,.1],slatCenter=front?[.1,0,.065]:[.065,0,.1];
    append(template.panel,panelCenter,style.accent);
    for(let slat=0;slat<4;slat++)append(template.slat,[slatCenter[0],-.24+slat*.16,slatCenter[2]],style.trim);
-   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeBoundingSphere();
+   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeBoundingSphere();
    template.panel.dispose();template.slat.dispose();return geometry;
   };
   const buildShutterBatches=()=>{
    for(const axis of ['front','side']){
     const parts=shutterParts[axis];if(!parts.length){shutterGeometry[axis].glass.dispose();shutterGeometry[axis].panel.dispose();shutterGeometry[axis].slat.dispose();continue;}
     const makeBatch=(geometry,material)=>{const mesh=new THREE.InstancedMesh(geometry,material,parts.length);mesh.count=parts.length;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;windowControls.add(mesh);return mesh;};
-    const meshes={glass:makeBatch(shutterGeometry[axis].glass,shutterGlassMaterial),opaque:makeBatch(opaqueShutterGeometry(axis),new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true}))};
+    // Mirrored instance transforms have a negative determinant for alternating
+    // shutters. Render both face orientations so those instances keep all
+    // panel and slat faces visible after instancing.
+    const meshes={glass:makeBatch(shutterGeometry[axis].glass,shutterGlassMaterial),opaque:makeBatch(opaqueShutterGeometry(axis),new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide}))};
     const write=record=>{
      shutterQuaternion.setFromAxisAngle(shutterAxis,record.angle);
      shutterPosition.set(record.pivotX,record.pivotY,record.pivotZ);
