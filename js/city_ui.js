@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {drawArtworkPreview} from './city_renderer_3d.js?v=room-floors-1';
+import {drawArtworkPreview} from './city_renderer_3d.js?v=colonial-colored-trim-1';
 import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
@@ -35,7 +35,7 @@ import {renderMunicipalIdentity} from './city_municipal_identity_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js?v=wardrobe-expansion-1';
 import { PREJUDICE_TYPES, initializePrejudices } from './city_prejudice.js?v=discrimination-laws-1';
 import { describePoliticalOrientation, POLITICAL_POSITIONS } from './city_ideology.js';
-import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=sertanejo-house-styles-1';
+import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=colonial-colored-trim-1';
 import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-3';
 import { HISTORY_LIMIT } from './city_history.js';
@@ -48,7 +48,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=two-day-public-food-reserve-1';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=fast-speeds-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=night-crowd-1';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],

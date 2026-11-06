@@ -8,7 +8,7 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=daily-mayor-privatization-1';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=beach-band-2-3-waterfix-1';
 import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
-import {outdoorCellReady,workCellReady} from './city_interiors.js?v=fast-speeds-1';
+import {outdoorCellReady,workCellReady} from './city_interiors.js?v=night-crowd-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=fast-speeds-1';

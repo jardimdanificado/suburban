@@ -58,7 +58,27 @@ export class CityGovernment extends CityPolitics {
       }else if(mode==='direct'){const tallies=Object.entries(election?.secretaryCounts?.[office.id]||{}).map(([id,count])=>({id:Number(id),votes:count})).filter(row=>{const candidate=city.society.citizen(row.id);return candidate&&!candidate.entity.destroyed&&!this.council.members.some(m=>m.citizenId===candidate.id)&&candidate.id!==city.economy.mayorId&&candidate.id!==this.viceMayorId&&!selectedIds.has(candidate.id)&&!this.secretaries.some(s=>s.officeId!==office.id&&s.citizenId===candidate.id);}).sort((a,b)=>b.votes-a.votes||a.id-b.id);winnerId=tallies[0]?.id??null;votes=tallies[0]?.votes||0;}
       const person=city.society.citizen(winnerId);if(person){selectedIds.add(person.id);person.role='secretary';person.secretaryOffice=office.id;person.action=`Secretário(a) · ${office.short}`;}return {officeId:office.id,name:office.name,citizenId:person?.id??null,citizenName:person?.entity.properties.name??'Cargo vago',partyId:person?.political.partyId??null,mode,appointedByMayorId:chosenBy,buildingId:city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed)?.id??null,termNumber:this.termNumber,minute:city.minute,votes,skill:person?secretarySkillScore(person,office):0};});this.syncLaborSecretaryWorkplace();return this.secretaries;}
   syncLaborSecretaryWorkplace(){const city=this.city,hall=city.buildings.find(b=>b.type==='townhall'&&b.active&&!b.entity.destroyed),row=this.secretaries?.find(item=>item.officeId==='labor'),person=city.society.citizen(row?.citizenId),previous=city.society.citizen(this.laborSecretaryId);if(previous&&previous.id!==person?.id&&previous.id!==city.economy.mayorId&&previous.jobId===hall?.id)city.economy.leaveJob(previous,'Fim da designação na Secretaria do Trabalho');this.laborSecretaryId=person?.id??null;if(!person||!hall||person.entity.destroyed||person.id===city.economy.mayorId)return false;if(person.jobId!==hall.id){if(person.jobId)city.economy.leaveJob(person,'Designação na Secretaria do Trabalho');person.jobId=hall.id;}hall.jobs=Math.max(2,hall.jobs||0);if(!hall.workers.includes(person.id))hall.workers.push(person.id);row.buildingId=hall.id;return true;}
-  assignPartyNumbers(){for(const party of this.parties.filter(p=>!p.active)){if(!Number.isInteger(party.number)||party.number<10||party.number>99)party.number=10+party.id*17%90;party.ballotLabel=`${party.number} · ${party.short}`;}const used=new Set();for(const party of this.parties.filter(p=>p.active)){const previous=party.number;if(!Number.isInteger(party.number)||party.number<10||party.number>99||used.has(party.number)){const free=Array.from({length:90},(_,i)=>10+(i+party.id*17)%90).find(n=>!used.has(n));party.number=free??null;}if(party.number!=null)used.add(party.number);party.ballotLabel=`${party.number??'—'} · ${party.short}`;if(previous!==party.number&&party.flag?.texts?.length){const texts=party.flag.texts.map(text=>Object.freeze({...text,value:text.kind==='number'?String(party.number??''):text.kind==='name-number'?`${party.short||party.name} ${party.number??''}`.trim():text.value}));party.flag=Object.freeze({...party.flag,texts:Object.freeze(texts)});}}}
+  randomAvailablePartyNumber(used=new Set()){
+    const available=[];for(let number=10;number<=99;number++)if(!used.has(number))available.push(number);
+    return available.length?available[Math.floor(this.city.random()*available.length)]:null;
+  }
+  assignPartyNumbers(){
+    for(const party of this.parties.filter(p=>!p.active)){
+      if(!Number.isInteger(party.number)||party.number<10||party.number>99)party.number=this.randomAvailablePartyNumber();
+      party.ballotLabel=`${party.number} · ${party.short}`;
+    }
+    const used=new Set();
+    for(const party of this.parties.filter(p=>p.active)){
+      const previous=party.number;
+      if(!Number.isInteger(party.number)||party.number<10||party.number>99||used.has(party.number))party.number=this.randomAvailablePartyNumber(used);
+      if(party.number!=null)used.add(party.number);
+      party.ballotLabel=`${party.number??'—'} · ${party.short}`;
+      if(previous!==party.number&&party.flag?.texts?.length){
+        const texts=party.flag.texts.map(text=>Object.freeze({...text,value:text.kind==='number'?String(party.number??''):text.kind==='name-number'?`${party.short||party.name} ${party.number??''}`.trim():text.value}));
+        party.flag=Object.freeze({...party.flag,texts:Object.freeze(texts)});
+      }
+    }
+  }
   party(id){return this.parties.find(p=>p.id===id);}
   partyOfId(id){return this.party(this.city.society.citizen(id)?.political?.partyId);}
   partyRelation(a,b){this.partyRelations??=[];this.partyRelationInteractions??=[];const first=Number(a?.id??a),second=Number(b?.id??b);if(!Number.isInteger(first)||!Number.isInteger(second)||first===second)return null;const [partyAId,partyBId]=first<second?[first,second]:[second,first],rows=this.partyRelations;let index=partyRelationIndexes.get(this);if(!index||index.rows!==rows){index={rows,byKey:new Map(rows.map(row=>[`${row.partyAId}:${row.partyBId}`,row]))};partyRelationIndexes.set(this,index);}const key=`${partyAId}:${partyBId}`;let relation=index.byKey.get(key);if(!relation){const left=this.party(partyAId),right=this.party(partyBId),distance=left&&right?this.distance(left.ideology,right.ideology):1;relation={partyAId,partyBId,score:clamp(70-distance*14,0,100),interactionCount:0,agreements:0,disagreements:0,lastInteractionAt:null,lastInteraction:'Relação inicial baseada na proximidade das ideias.',history:[]};rows.push(relation);index.byKey.set(key,relation);}return relation;}

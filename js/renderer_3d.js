@@ -11,8 +11,9 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 // =============================================================================
 
 import * as THREE from "https://esm.sh/three@0.160.0";
+import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=room-floors-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=colonial-colored-trim-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1';
@@ -3802,14 +3803,15 @@ export class RCT3DRenderer {
     this.scene.add(this.sunLight);
     this.scene.add(this.sunLight.target);
 
-    // Dynamic Night Point Light Pool (Optimized pool for realistic 1P/3P light propagation)
-    // Keep the shader's point-light uniform budget safely below WebGL limits.
+    // Local night lights use texture-backed spatial bins. Retain the native
+    // point-light path only on WebGL 1 devices without float textures.
     this.maxNightLights = 32;
+    this.nightLighting=(this.renderer.capabilities.isWebGL2||this.renderer.extensions.has('OES_texture_float'))?new NightLighting(THREE):null;
     const gl=this.renderer.getContext(),uniformVectors=gl?Math.min(
       gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS)||1024,
       gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS)||1024
     ):1024;
-    this.nightLightLimitCeiling=Math.max(32,Math.min(256,Math.floor((uniformVectors-96)/4)));
+    this.nightLightLimitCeiling=this.nightLighting?256:Math.max(32,Math.min(256,Math.floor((uniformVectors-96)/4)));
     this.maxShadowPointLights = 0; // Point lights do direct local shading; sun/moon provides directional shadows
     this.cursorLightAxis = new THREE.Vector3();
     this.cursorSpotlight = new THREE.SpotLight(0xffbc63,0,28,.4,.8,1.4);
@@ -3820,7 +3822,7 @@ export class RCT3DRenderer {
       const pl = new THREE.PointLight(0xffaa44, 0, 24, 1.2);
       pl.castShadow = false;
       pl.visible = false;
-      this.scene.add(pl);
+      if(!this.nightLighting)this.scene.add(pl);
       this.nightLightPool.push(pl);
     }
     this.followMarker = new THREE.Mesh(
@@ -5314,7 +5316,7 @@ export class RCT3DRenderer {
     const next=Math.max(32,Math.min(this.nightLightLimitCeiling,Math.floor(Number(value)||32)));
     if(next===this.maxNightLights)return;
     while(this.nightLightPool.length<next){
-      const light=new THREE.PointLight(0xffaa44,0,24,1.2);light.castShadow=false;light.visible=false;this.scene.add(light);this.nightLightPool.push(light);
+      const light=new THREE.PointLight(0xffaa44,0,24,1.2);light.castShadow=false;light.visible=false;if(!this.nightLighting)this.scene.add(light);this.nightLightPool.push(light);
     }
     while(this.nightLightPool.length>next){const light=this.nightLightPool.pop();light.visible=false;this.scene.remove(light);}
     this.maxNightLights=next;
@@ -9053,6 +9055,7 @@ export class RCT3DRenderer {
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
+    this.nightLighting?.update(this.nightLightPool,activeCam,this.scene);
     const shadowNow=performance.now(),shadowCameraDx=this.camX-this._lastShadowRefreshCamX,shadowCameraDy=this.camY-this._lastShadowRefreshCamY;
     this._shadowFramesSinceRefresh++;
     // A time-only cadence can refresh every single frame when rendering itself

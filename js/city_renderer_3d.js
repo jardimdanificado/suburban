@@ -10,11 +10,11 @@ import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=roadsid
 import {modelSize,buildingPoint,buildingEntranceDoor,buildingFacadeBannerSupport,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import { partyFlagCanvas,drawPartyFlag } from './city_party_flags.js';
 import {citizenIsSleeping} from './city_citizen_models.js?v=campaign-flag-simclock-1';
-import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=courthouse-neoclassical-1';
+import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=colonial-colored-trim-1';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {quarryDeposits} from './city_terrain.js?v=entrance-retaining-clearance-1';
-import {addArchitectureVariations} from './city_architecture_variations.js?v=porch-crossbar-removed-2';
+import {addArchitectureVariations} from './city_architecture_variations.js?v=colonial-colored-trim-1';
 import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-9';
@@ -512,14 +512,14 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     if ((b.constructionKind === 'open-air' && b.type !== 'market') || b.type === 'greengrocer') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
-    if (group && (group.userData.buildingStyleVersion!==27 || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
+    if (group && (group.userData.buildingStyleVersion!==29 || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
       renderer.parkPalmWindDecorations.delete(entity.id);
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
       renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose();object.userData.mineSignTexture?.dispose();object.userData.marketSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
-      group = new THREE.Group();group.userData.buildingStyleVersion=27;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
+      group = new THREE.Group();group.userData.buildingStyleVersion=29;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
       const material = buildingMaterial(renderer,THREE,'wall',0xffffff,buildingTextureVariant(b.id??entity.id));material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);

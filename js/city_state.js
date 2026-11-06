@@ -19,14 +19,14 @@ import {CityPartyOrganization} from './city_party_organization.js';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
-import { CityGovernment } from './city_government.js?v=secretary-pool-one-pass-1';
+import { CityGovernment } from './city_government.js?v=party-number-random-1';
 import { CityCouncil } from './city_council.js?v=council-mandate-snapshot-2';
 import { CityCampaigns } from './city_campaigns.js?v=planted-rally-flags-1';
 import { CityMandates } from './city_mandates.js?v=mandate-one-pass-1';
 import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=fast-speeds-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=night-crowd-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
 import { CityWelfare } from './city_welfare.js';
@@ -217,7 +217,7 @@ export class CityStateGraph {
     if(packet.omittedCitizenPaths){
       const root=this.objects.get(packet.rootId);
       omittedPathCitizens=new WeakSet();
-      for(const citizen of root?.city?.citizens||[]){omittedPathCitizens.add(citizen);const id=this.ids.get(citizen),previous=this.previous.get(id);if(!previous)continue;const data=previous.data,compact=[];let changed=false;for(let i=0;i<data.length;i+=2){if(data[i]==='path'){changed=true;continue;}compact.push(data[i],data[i+1]);}if(changed)this.previous.set(id,{kind:previous.kind,data:compact});}
+      for(const citizen of root?.city?.citizens||[]){omittedPathCitizens.add(citizen);const id=this.ids.get(citizen),previous=this.previous.get(id);if(!previous)continue;const data=previous.data;for(let i=0;i<data.length;i+=2)if(data[i]==='path'){const compact=data.slice();compact.splice(i,2);this.previous.set(id,{kind:previous.kind,data:compact});break;}}
     }
     const resolve = value => typeof value === 'string' && value.startsWith('@') ?
       value.startsWith('@s') ? value.slice(2) : this.objects.get(Number(value.slice(1))) : value;

@@ -1,0 +1,58 @@
+<!doctype html><meta charset="utf-8"><title>Night lighting comparison</title>
+<style>body{background:#19202c;color:#eee;font:16px monospace}button{padding:12px;margin:5px}canvas{image-rendering:pixelated;width:512px;height:384px}pre{white-space:pre-wrap}</style>
+<button id="run32">Compare 32 lights</button><button id="run128">Compare 128 lights</button><button id="run256">Compare 256 lights</button>
+<pre id="results">Loading…</pre>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {NightLighting} from '../js/night_lighting.js';
+let hasRun=false;
+const out=document.querySelector('#results'),renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});
+renderer.setSize(512,384);document.body.append(renderer.domElement);
+const errors=[];renderer.debug.onShaderError=(gl,program,vs,fs)=>{errors.push(gl.getProgramInfoLog(program)+'\n'+gl.getShaderInfoLog(fs));};
+const scene=new THREE.Scene();scene.background=new THREE.Color('#102030');
+const ambient=new THREE.AmbientLight(0xcadfff,.12);scene.add(ambient);
+const camera=new THREE.PerspectiveCamera(48,256/192,.1,200);camera.position.set(32,31,38);camera.lookAt(0,0,0);
+const mats=[new THREE.MeshLambertMaterial({color:0xe3b269}),new THREE.MeshStandardMaterial({color:0x9bafaa,roughness:.7}),new THREE.MeshPhongMaterial({color:0x87627d})];
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(160,160),mats[0]);floor.rotation.x=-Math.PI/2;scene.add(floor);
+const geo=new THREE.BoxGeometry(3,5,3);
+for(let i=0;i<36;i++){const m=new THREE.Mesh(geo,mats[i%3]);m.position.set((i%6-2.5)*6,2.5,(Math.floor(i/6)-2.5)*6);scene.add(m);}
+const instance=new THREE.InstancedMesh(new THREE.BoxGeometry(.5,1.5,.5),mats[1],1024),matrix=new THREE.Matrix4();
+for(let i=0;i<1024;i++){matrix.makeTranslation((i%32-16)*1.3,.75,(Math.floor(i/32)-8)*2.5);instance.setMatrixAt(i,matrix);}scene.add(instance);
+const target=new THREE.WebGLRenderTarget(512,384),pixels=()=>new Uint8Array(512*384*4);
+const local=new NightLighting(THREE),lights=[];
+function setup(n){for(const p of lights)scene.remove(p);lights.length=0;for(let i=0;i<n;i++){const p=new THREE.PointLight(i%2?0xffbc63:0x88bbff,3,10,1.6);p.position.set((i%16-7.5)*5,2+(i%3)*2,(Math.floor(i/16)-n/32)*5);scene.add(p);lights.push(p);}}
+function frame(){renderer.setRenderTarget(target);renderer.render(scene,camera);const p=pixels();renderer.readRenderTargetPixels(target,0,0,512,384,p);renderer.setRenderTarget(null);return p;}
+function timed(){const samples=[];for(let i=0;i<5;i++){const start=performance.now();frame();samples.push(performance.now()-start);}samples.sort((a,b)=>a-b);return samples[2];}
+async function run(n){
+ if(hasRun){location.search='?lights='+n;return;}hasRun=true;
+ out.textContent='Running '+n+' lights…';await new Promise(requestAnimationFrame);
+ // Separate materials are essential: do not carry the local shader into baseline.
+ for(let i=0;i<mats.length;i++){const m=mats[i];m.onBeforeCompile=()=>{};m.customProgramCacheKey=()=>'';m.needsUpdate=true;}
+ setup(n);const start=performance.now(),before=frame(),baselineFirst=performance.now()-start,baselineMs=timed(),baselinePrograms=renderer.info.programs.length,baselineErrors=errors.splice(0);
+ const nativeTransitions=[];
+ for(const nActive of [0,1,8,n,3,0,n]){
+  for(let i=0;i<lights.length;i++)lights[i].visible=i<nActive;
+  const at=performance.now();frame();nativeTransitions.push({active:nActive,ms:performance.now()-at,programs:renderer.info.programs.length});
+ }
+ for(const p of lights){p.visible=true;scene.remove(p);}
+ local.materials=new WeakSet();local.update(lights,camera,scene);
+ const afterStart=performance.now(),after=frame(),optimizedFirst=performance.now()-afterStart,optimizedMs=timed(),programs=renderer.info.programs.length;
+ let sum=0,max=0,differing=0;for(let i=0;i<before.length;i++){const d=Math.abs(before[i]-after[i]);sum+=d;max=Math.max(max,d);if(d>1)differing++;}
+ const transitionMs=[],transitions=[];for(const nActive of [0,1,8,n,3,0,n]){for(let i=0;i<lights.length;i++)lights[i].visible=i<nActive;const at=performance.now();local.update(lights,camera,scene);frame();transitionMs.push(performance.now()-at);transitions.push(renderer.info.programs.length);}
+ for(const p of lights)p.visible=true;local.update(lights,camera,scene);
+ let motionMaxDifference=null;
+ if(!baselineErrors.length){
+  camera.position.set(-24,27,31);camera.lookAt(3,1,2);
+  for(const p of lights){p.position.x+=1.25;p.position.z-=.75;p.intensity*=.9;}
+  local.update(lights,camera,scene);const movedLocal=frame();
+  local.uniforms.nightLightCount.value=0;for(const p of lights)scene.add(p);const movedNative=frame();
+  motionMaxDifference=0;for(let i=0;i<movedLocal.length;i++)motionMaxDifference=Math.max(motionMaxDifference,Math.abs(movedLocal[i]-movedNative[i]));
+  for(const p of lights)scene.remove(p);local.update(lights,camera,scene);
+ }
+ renderer.render(scene,camera);
+ out.textContent=JSON.stringify({lights:n,baselineFirst,optimizedFirst,baselineMs,optimizedMs,speedup:baselineErrors.length?null:baselineMs/optimizedMs,baselineErrors,meanChannelDifference:baselineErrors.length?null:sum/before.length,maxChannelDifference:baselineErrors.length?null:max,channelsDifferingOverOne:baselineErrors.length?null:differing,nativeTransitions,transitionMs,motionMaxDifference,baselinePrograms,programs,transitionPrograms:transitions,grid:{width:local.grid.width,height:local.grid.height,maxCellLights:local.grid.maxCellLights,references:local.grid.references},errors},null,2);
+}
+for(const n of [32,128,256])document.querySelector('#run'+n).onclick=()=>run(n).catch(e=>{out.textContent=e.stack;});
+out.textContent='Ready';
+const requested=Number(new URLSearchParams(location.search).get('lights'));if([32,128,256].includes(requested))run(requested).catch(e=>{out.textContent=e.stack;});
+</script>

@@ -1,5 +1,5 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
-import {HOUSE_STYLES} from './city_culture.js?v=courthouse-neoclassical-1';
+import {HOUSE_STYLES} from './city_culture.js?v=colonial-colored-trim-1';
 import {INDUSTRIES} from './city_industries.js';
 
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-5';
@@ -491,8 +491,8 @@ export function addArchitectureVariations(THREE,parent,b,spaces=[],windowDetails
   if(validEntry){
    const entryAlongLength=entrySide==='front'||entrySide==='back'?b.width:b.depth,doorAlong=entrySide==='front'||entrySide==='back'?entryUnit.x+.5:entryUnit.y+.5,plaqueAlong=Math.max(.2,Math.min(entryAlongLength-.2,doorAlong+(doorAlong<entryAlongLength/2?.42:-.42))),entryNormal=entrySide==='front'?1:entrySide==='back'?-1:entrySide==='left'?-1:1;
    if(!dutch){
-    if(entrySide==='front'||entrySide==='back')box(.28,.36,.07,plaqueAlong,.28,(entrySide==='front'?b.depth:0)+entryNormal*.11,0xfff8e8);
-    else box(.07,.36,.28,(entrySide==='right'?b.width:0)+entryNormal*.11,.28,plaqueAlong,0xfff8e8);
+    if(entrySide==='front'||entrySide==='back')box(.28,.36,.07,plaqueAlong,.28,(entrySide==='front'?b.depth:0)+entryNormal*.11,style.trim);
+    else box(.07,.36,.28,(entrySide==='right'?b.width:0)+entryNormal*.11,.28,plaqueAlong,style.trim);
     for(let row=0;row<3;row++)for(let col=0;col<2;col++){
      const u=plaqueAlong-.075+col*.15,y=.18+row*.1;
      if(entrySide==='front'||entrySide==='back'){const z=(entrySide==='front'?b.depth:0)+entryNormal*.155;box(.04,.035,.085,u,y,z,style.accent);box(.085,.018,.085,u,y+.03,z+entryNormal*.002,style.accent);}

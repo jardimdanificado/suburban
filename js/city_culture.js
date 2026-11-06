@@ -31,6 +31,8 @@ const PORTUGUESE_COLONIAL_PALETTES=[
   {id:'azul',label:'Azul caiado',wall:0x7798a5,roof:0x514e4b,accent:0x344d67,trim:0xd7d1bc},
   {id:'terracota',label:'Terracota',wall:0xb8644d,roof:0x493c37,accent:0xd6b66d,trim:0xe1bf9c},
   {id:'violeta',label:'Violeta mineral',wall:0x8b718a,roof:0x51434a,accent:0xd0a35f,trim:0xd8c6ad},
+  {id:'cal_cobalto',label:'Cal branca e azul-cobalto',wall:0xf5f1e6,roof:0x874a38,accent:0x245887,trim:0x4b83ae},
+  {id:'cal_terracota',label:'Cal branca e terracota',wall:0xf4efe3,roof:0x754336,accent:0xb64f3b,trim:0x934536},
 ];
 const PORTUGUESE_COLONIAL_FORMS=[
   {id:'sobrado',label:'Sobrado de sacadas',roofKind:'hip'},
