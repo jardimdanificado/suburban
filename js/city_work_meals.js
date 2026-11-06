@@ -1,4 +1,4 @@
-import {syncCitizenInterior} from './city_interiors.js?v=outdoor-interview-sync-shortcut-1';
+import {syncCitizenInterior} from './city_interiors.js?v=fast-speeds-1';
 import { preparedOffer } from './city_markets.js?v=market-one-pass-1';
 import { CROPS } from './city_economy.js?v=two-day-public-food-reserve-1';
 import { INDUSTRIAL_FOODS } from './city_industries.js';

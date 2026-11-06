@@ -2,7 +2,7 @@ import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {beginActivitySearch,endActivitySearch,invalidateActivitySearch} from './city_activity_search.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
 import {injuredCarryCapacity} from './city_injury_effects.js';
-import {CityFurniture} from './city_furniture.js?v=leisure-route-stagger-1';
+import {CityFurniture} from './city_furniture.js?v=fast-speeds-1';
 import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=economic-flow-7';
 import {CityWater} from './city_water.js';
@@ -13,7 +13,7 @@ import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-one-pass-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=vacancy-score-precompute-1';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=fast-speeds-1';
 import {CityFiscal} from './city_fiscal.js';
 import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
@@ -32,7 +32,7 @@ import { CityGovernment as CityPolitics } from './city_government.js?v=secretary
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=outdoor-interview-sync-shortcut-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=fast-speeds-1';
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';
@@ -1057,10 +1057,10 @@ export class CitySimulation {
     const citizenDetail=this.profileDiagnostics?{}:null,measureCitizen=(name,work)=>{if(!citizenDetail){work();return;}const started=performance.now();work();citizenDetail[`${name}Ms`]=(citizenDetail[`${name}Ms`]||0)+performance.now()-started;};
     this._citizenLoopProfile=citizenDetail;
     let citizenMs;
-    beginActivitySearch(this);
+    const activitySearchPass=beginActivitySearch(this);
     try{
     for (const c of this.citizens) {
-      if(c.custody||c.custodyEscort||c.custodyWaterDelivery||c.funeralBodyId||c.graffitiMission||c.policePatrol||c.policeResponse||c.policeInvestigation||c.policeOversight||c.policeAudit||c.policeRestitution||c.policeArrestEscort)invalidateActivitySearch(this);
+      if(activitySearchPass.hasFull&&(c.custody||c.custodyEscort||c.custodyWaterDelivery||c.funeralBodyId||c.graffitiMission||c.policePatrol||c.policeResponse||c.policeInvestigation||c.policeOversight||c.policeAudit||c.policeRestitution||c.policeArrestEscort))invalidateActivitySearch(this);
       if(citizenDetail)measureCitizen('blockedPositionRecovery',()=>this.life.recoverBlockedPosition(c));else this.life.recoverBlockedPosition(c);
       const n = c.needs;
       // Idle adults cannot choose another activity until their short retry

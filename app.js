@@ -1,6 +1,6 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=bridge-state-v2-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=fast-speeds-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=initial-decision-spread-32-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=fast-speeds-1";
 import { CityDesktop } from "./js/city_desktop.js?v=perf-employment-ui-2";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=campaign-flag-simclock-1";
@@ -521,7 +521,6 @@ function frame(now) {
   else time.advance(dt, advanceSimulation);
   const rapidMode=simulationBridge?.active&&time.speed>=16&&city.citizens.length>=512;
   renderer3D.rapidCityMode=rapidMode;
-  if(rapidMode&&now-lastRenderedAt<40){requestAnimationFrame(frame);return;}
   if(renderer3D.renderer.shadowMap.enabled===rapidMode&&renderer3D.shadowsEnabled){
     renderer3D.renderer.shadowMap.enabled=!rapidMode;
     renderer3D.renderer.shadowMap.needsUpdate=true;

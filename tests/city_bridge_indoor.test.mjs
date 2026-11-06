@@ -3,8 +3,15 @@ import assert from 'node:assert/strict';
 import {CitySimulationBridge,sampleCitizenMotion} from '../js/city_sim_bridge.js?v=map-default-256-1';
 import {queueMotion} from '../js/city_motion.js';
 import {TILE_FLOOR,TILE_WATER} from '../js/world_gen.js';
+import {setup} from './helpers/city.mjs';
 
 const world={width:5,height:3,getTile(x){return x===1?TILE_WATER:TILE_FLOOR;}};
+test('the compact motion stream advances the city clock without a full state snapshot',()=>{
+ const city=setup({starter:true,population:1}),bridge=Object.create(CitySimulationBridge.prototype);
+ Object.assign(bridge,{city,time:{paused:false},motionSamples:new Map(),motion:new Map(),interpolate(){},applyVehiclePositions(){}});
+ bridge.receiveMotion({minute:1507,positions:new Float64Array(),tick:44,elapsed:11});
+ assert.equal(city.minute,1507);assert.equal(city.world.clock.day,2);assert.equal(city.world.clock.hour,1);assert.equal(city.world.clock.minute,7);assert.equal(bridge.time.elapsed,11);
+});
 test('motion packets immediately synchronize visibility when a person enters and exits',()=>{
  const citizen={needs:{},entity:{x:.5,y:.5}},sample={id:4,citizen,entity:citizen.entity,from:{x:.5,y:.5},to:{x:.5,y:.5}},bridge=Object.create(CitySimulationBridge.prototype);
  Object.assign(bridge,{city:{world},time:{paused:false},motionSamples:new Map([[4,sample]]),motion:new Map(),interpolate(){},applyVehiclePositions(){}});

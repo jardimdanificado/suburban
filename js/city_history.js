@@ -1,4 +1,4 @@
-import {employmentEvent} from './city_employment.js?v=vacancy-score-precompute-1';
+import {employmentEvent} from './city_employment.js?v=fast-speeds-1';
 /** Structured event journal, inspired by Brutopolis/event_log.js.
  * Stable IDs, subject/type indices and bounded retention; no entity references in exports. */
 export const HISTORY_LIMIT = 16000;

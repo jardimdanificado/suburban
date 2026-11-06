@@ -1,4 +1,4 @@
-import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=labor-secretariat-1';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geometry.js';
 
 // Logical, renderer-independent walk graph. Nodes are reconstructed from a
@@ -161,7 +161,7 @@ export function interiorRoute(building,from,to){
 }
 
 export function interiorUsePoint(building,unit,kind='generic',slot=0,task=null){
-  const furniture=furnitureInteraction(building,unit,kind,slot,task);if(furniture)return furniture.point;
+  const furniture=furnitureInteraction(building,unit,kind,slot,task);if(furniture)return {...furniture.point};
   const center=worldPoint(building,{x:unit.x,y:unit.y,z:unit.z});
   const offsets={bathroom:[[-.22,0]],bedroom:[[0,-.22]],dining:[[-.24,.24],[.24,.24],[-.24,-.24],[.24,-.24]],office:[[0,-.23]],plenary:[[0,-.23]],workspace:[[0,-.23]],laundry:[[0,-.23]],service:[[0,-.23]],treatment:[[0,-.23]]};
   const [dx,dy]=(offsets[kind]||[[0,-.23]])[slot%(offsets[kind]||[[0,-.23]]).length];

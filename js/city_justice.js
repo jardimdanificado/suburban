@@ -10,7 +10,7 @@ import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-
 import {injuryMovementFactor,injuredCarryCapacity} from './city_injury_effects.js';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {CITY_FLOOR_HEIGHT,buildingPoint} from './city_building_geometry.js';
-import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=outdoor-interview-sync-shortcut-1';
+import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=fast-speeds-1';
 import {civicStatus,civicVisit} from './city_public_services.js';
 import {inventoryFree} from './city_inventory.js';
 import {beginBuildingSiteSearch} from './city_terrain.js?v=entrance-retaining-clearance-1';

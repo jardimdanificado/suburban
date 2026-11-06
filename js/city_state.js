@@ -1,7 +1,7 @@
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {ensureExternalAccount} from './city_currency.js';
 import {ensureJusticeSkills} from './city_justice_skills.js';
-import {CityFurniture} from './city_furniture.js?v=leisure-route-stagger-1';
+import {CityFurniture} from './city_furniture.js?v=fast-speeds-1';
 import {CitySupplies} from './city_supplies.js?v=economic-flow-7';
 import {CityWater} from './city_water.js';
 import {taxCategory,taxRate} from './city_sales_tax.js';
@@ -26,7 +26,7 @@ import { CityMandates } from './city_mandates.js?v=mandate-one-pass-1';
 import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=initial-decision-spread-32-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=fast-speeds-1';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
 import { CityWelfare } from './city_welfare.js';

@@ -4,11 +4,29 @@ import {setup} from './helpers/city.mjs';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 import {reserveService,queueService} from '../js/city_service_queue.js';
 import {syncCitizenInterior,activityCellAvailable,advanceCitizenInterior} from '../js/city_interiors.js';
+import {beginActivitySearch,endActivitySearch} from '../js/city_activity_search.js';
 
 function prepare(city,c,b){
  city.economy.leaveJob(c);c.businessIds=[];c.path=[];c.indoorLocation=null;c.deliveryId=null;c.cleaningJobId=null;c.informalJobId=null;c.conversation=null;c.workMeal=null;c.mobilityTrip=null;c.ridingVehicleId=null;
  for(const key in c.needs)c.needs[key]=95;c.needs.water=0;c.provisions=4;c.pocket={water:0,food:[],receivedWater:0};c.entity.x=b.door.x;c.entity.y=b.door.y;c.task='supplies';c.supplyNeed='water';c.targetId=b.id;
 }
+
+test('a room freed during a shared search admits the next waiting customer immediately',()=>{
+ const city=setup({starter:true,population:24}),b=city.buildings.find(b=>b.type==='popular_refectory'),people=city.citizens.slice(0,5),room=b.units.find(u=>u.z===0);
+ for(const u of b.units)u.roomType=u===room?'service':'laundry';b.layoutRevision=(b.layoutRevision||0)+1;
+ for(const c of people)prepare(city,c,b);
+ beginActivitySearch(city);
+ try{
+  for(const c of people)syncCitizenInterior(city,c);
+  assert.equal(room.activityReservedIds.length,4);
+  assert.equal(people[4].indoorLocation.targetRoomType,'waiting');
+  people[0].task=null;people[0].targetId=null;syncCitizenInterior(city,people[0]);
+  syncCitizenInterior(city,people[4]);
+  assert.equal(people[4].indoorLocation.targetUnitId,room.id);
+  assert.equal(room.activityReservedIds.length,4);
+  assert(!room.activityReservedIds.includes(people[0].id));
+ }finally{endActivitySearch(city);}
+});
 
 test('waiting customers enter circulation and leave the indoor queue when a counter opens',()=>{
  const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='popular_refectory'),people=city.citizens.slice(0,24);

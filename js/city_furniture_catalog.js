@@ -1,5 +1,6 @@
 import {INDUSTRIES} from './city_industries.js';
 const roomCaches=new WeakMap();
+const interactionCaches=new WeakMap();
 const HOUSING_FURNITURE_TYPES=new Set(['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing']);
 // Task semantics live beside the equipment catalogue so simulation and
 // renderer can agree about what a person is trying to use. `none` is an
@@ -76,8 +77,17 @@ export function roomFurniture(b,u){
  roomCaches.set(u,{key,items});return items;
 }
 export function furnitureInteraction(b,u,kind,slot=0,task=null){
- const items=roomFurniture(b,u);let item;
- const profile=taskFurnitureProfile(task),types=profile?.item||[];
+ const items=roomFurniture(b,u);let cache=interactionCaches.get(u);
+ if(!cache||cache.items!==items||cache.x!==b.entity.x||cache.y!==b.entity.y||cache.width!==b.width||cache.depth!==b.depth||cache.ux!==u.x||cache.uy!==u.y||cache.uz!==u.z){cache={items,x:b.entity.x,y:b.entity.y,width:b.width,depth:b.depth,ux:u.x,uy:u.y,uz:u.z,variants:new Map()};interactionCaches.set(u,cache);}
+ const key=`${kind}:${slot}:${task}`,known=cache.variants.get(key);if(known!==undefined)return known;
+ const result=buildFurnitureInteraction(b,u,kind,slot,task,items);
+ if(cache.variants.size>=256)cache.variants.clear();cache.variants.set(key,result);return result;
+}
+// Static room geometry is shared by every person using the same task/slot.
+// Callers read these points and copy them before moving an entity.
+function buildFurnitureInteraction(b,u,kind,slot,task,items){
+ let item;
+ const profile=TASK_FURNITURE_PROFILES[task],types=profile?.item||[];
  const pick=type=>items.find(f=>f.type===type),workstation=items.find(f=>f.workstation);
  if(task==='energy'){const beds=items.filter(f=>['bed','cot'].includes(f.type));item=beds[Math.floor(slot/2)%Math.max(1,beds.length)]||null;}
  else if(task==='toilet')item=pick('toilet');

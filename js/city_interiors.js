@@ -1,9 +1,9 @@
 import {injuryMovementFactor} from './city_injury_effects.js';
 import {findActivityRoom,invalidateActivitySearch} from './city_activity_search.js';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
-import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=labor-secretariat-1';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
-import {queueService} from './city_service_queue.js?v=queue-wait-index-1';
+import {queueService} from './city_service_queue.js?v=fast-speeds-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-cache-512-index-1';
 // Entity coordinates follow the resident through outdoor and indoor tiles.
 // Indoor metadata adds the floor, room and the remaining interior route.
@@ -128,9 +128,9 @@ export function syncCitizenInterior(city,c){
  if(!s&&task==='job-interview'&&city.building(c.targetId)?.constructionKind==='open-air')return true;
  // A resident already assigned to the same ordinary indoor activity needs
  // only destination/layout validation, not another room and service search.
- if(s?.path&&!s.exiting&&s.task===task&&s.buildingId===c.targetId&&!c.path.length&&!c.entity.destroyed&&!c.deliveryId&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.mechanicJob&&!c.forestryJob&&!c.paintWorkId){
-  const kind=task==='work'||task==='manage'?(c.role==='councilor'?'office':'workspace'):STABLE_ROOM_KINDS[task];
-  if(kind&&s.targetRoomType===kind&&s.toiletTargetId===c.toiletTargetId){const site=city.building(s.buildingId);if(site&&site.constructionKind!=='open-air'&&s.layoutRevision===(site.layoutRevision||0)&&city.units.has(s.targetUnitId))return !s.path.length;}
+ const stableKind=s&&(task==='work'||task==='manage'?(c.role==='councilor'?'office':'workspace'):STABLE_ROOM_KINDS[task]);
+ if(stableKind&&s.targetRoomType===stableKind&&s.path&&!s.exiting&&s.task===task&&s.buildingId===c.targetId&&!c.path.length&&!c.entity.destroyed&&!c.deliveryId&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.mechanicJob&&!c.forestryJob&&!c.paintWorkId&&s.toiletTargetId===c.toiletTargetId){
+  const site=city.building(s.buildingId);if(site&&site.constructionKind!=='open-air'&&s.layoutRevision===(site.layoutRevision||0)&&city.units.has(s.targetUnitId))return !s.path.length;
  }
  normalizeInterior(city,c);
  if(task==='police-investigation')return true;
@@ -183,7 +183,7 @@ export function syncCitizenInterior(city,c){
    c.indoorLocation={buildingId:site.id,targetUnitId:null,unitId:null,targetRoomType:visit.kind,roomType:path.length?'circulation':visit.kind,floor:visit.floor??site.floors-1,position:{...from},path,phase:path.length?'walking':'using',task,layoutRevision:site.layoutRevision||0,enteredAt:city.minute};return !path.length;
   }
   if(!activityRoomReady(city,c,site,room,'workspace'))return false;
-  const location=c.indoorLocation;location.targetRoomType=visit.kind;location.roomType='circulation';location.path=interiorRoute(site,location.position,visit.position);location.unitId=null;
+  const location=c.indoorLocation;invalidateActivitySearch(city,site.id);location.targetRoomType=visit.kind;location.roomType='circulation';location.path=interiorRoute(site,location.position,visit.position);location.unitId=null;
   if(location.path===null){c.action='Sem rota interna acessível até o local de lazer';return false;}location.phase=location.path.length?'walking':'using';
   if(!location.path.length){location.unitId=location.targetUnitId;location.roomType=visit.kind;}return !location.path.length;
  }

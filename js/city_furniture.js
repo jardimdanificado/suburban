@@ -1,5 +1,5 @@
 import {cultivateFarmTerrain} from './city_farm_ground.js';
-import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=labor-secretariat-1';
+import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {ROAD_TILES,tileAt,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 import {TILE_SAND,TILE_WATER} from './world_gen.js?v=deep-perf-3';
@@ -131,10 +131,15 @@ export class CityFurniture{
   if(c.task==='beach_leisure'&&c.beachLeisure){const beach=c.beachLeisure,arrived=!c.path.length&&Math.hypot(c.entity.x-beach.x,c.entity.y-beach.y)<.2,chair=beach.kind==='beach_chair';c.seated=arrived&&chair;c.furnitureUse=arrived?{id:`beach:${c.id}`,type:beach.kind,label:chair?'Cadeira de praia pessoal':'Descanso na areia',seated:c.seated,pose:chair?'seated':'ground_sit'}:null;c.action=arrived?'Descansando na praia':'Indo montar as coisas na praia';c.facingTarget={x:c.entity.x+Math.sin(beach.angle),y:c.entity.y+Math.cos(beach.angle)};return;}
   if(!c.seatId&&!c.indoorLocation){if(c.seated||c.furnitureUse){c.seated=false;c.furnitureUse=null;}return;}
   if(c.seatId){const allowedTask=['sit','work-wait','food','workmeal','supplies','toilet'].includes(c.task),waitingForService=!!c.serviceQueue?.buildingId;if((!allowedTask&&!waitingForService)||c.entity.destroyed){this.release(c);return;}const [id,slot]=c.seatId.split(':').map(Number),b=this.benches.find(b=>b.id===id),point=b&&this.seatPoint(b,slot);c.seated=!!point&&!c.path.length&&Math.hypot(c.entity.x-point.x,c.entity.y-point.y)<.14;if(c.seated){const beach=['beach_chair','beach_ground'].includes(b.kind),groundPose=b.kind==='beach_ground'?(b.id%2?'ground_sit':'lying'):null;c.furnitureUse={id:`bench:${c.seatId}`,type:'bench',label:b.kind==='beach_chair'?'Cadeira de praia':b.kind==='beach_ground'?'Descanso na praia':'Banco',seated:true,...(groundPose?{pose:groundPose}:{})};c.facingTarget={x:c.entity.x+Math.sin(b.angle),y:c.entity.y+Math.cos(b.angle)};c.action=c.task==='work-wait'?'Aguardando sentado':b.kind==='beach_chair'?'Descansando na cadeira de praia':b.kind==='beach_ground'?(groundPose==='lying'?'Deitado na areia':'Sentado na areia'):'Descansando sentado no banco';}return;}
-  const s=c.indoorLocation,u=this.city.units.get(s?.unitId),b=this.city.building(s?.buildingId);c.seated=false;c.furnitureUse=null;
+  const s=c.indoorLocation,u=this.city.units.get(s?.unitId),b=this.city.building(s?.buildingId),previousUse=c.furnitureUse;c.seated=false;c.furnitureUse=null;
   if(c.task==='outdoor_leisure'&&c.outdoorLeisure&&b?.id===c.outdoorLeisure.buildingId&&!s.exiting&&!s.path?.length){const visit=c.outdoorLeisure,position=visit.position||s.position,center={x:b.entity.x+b.width/2,y:b.entity.y+b.depth/2};c.seated=true;c.furnitureUse={id:`${visit.spaceId}:seat:${visit.slot}`,type:'chair',label:visit.kind==='balcony'?'Cadeira da varanda':'Cadeira da cobertura',seated:true,pose:'seated',slot:visit.slot,posePoint:{x:position.x,y:position.y,z:position.z??s.position?.z??0}};c.facingTarget=center;return;}
   if(!s||s.exiting||s.path?.length||!u||!b)return;
-  const useTask=c.workMeal?'workmeal':c.task,use=furnitureInteraction(b,u,s.targetRoomType,s.furnitureSlot??Math.max(0,(u.activityReservedIds||[]).indexOf(c.id)),useTask);if(use&&(!s.furnitureId||s.furnitureId===use.item.id)){c.furnitureUse={id:use.item.id,type:use.item.type,label:use.item.label,stationId:use.taskStation?.id||use.item.id,stationType:use.taskStation?.type||use.item.type,stationLabel:use.taskStation?.label||use.item.label,seated:!!use.item.seated,pose:use.pose,slot:use.slot,posePoint:use.posePoint};c.seated=!!use.item.seated;c.facingTarget=use.facing;}else {c.seated=false;c.furnitureUse=null;}
+  const useTask=c.workMeal?'workmeal':c.task,use=furnitureInteraction(b,u,s.targetRoomType,s.furnitureSlot??Math.max(0,(u.activityReservedIds||[]).indexOf(c.id)),useTask);
+  if(use&&(!s.furnitureId||s.furnitureId===use.item.id)){
+   const station=use.taskStation||use.item,seated=!!use.item.seated;
+   const unchanged=previousUse&&previousUse.id===use.item.id&&previousUse.type===use.item.type&&previousUse.label===use.item.label&&previousUse.stationId===station.id&&previousUse.stationType===station.type&&previousUse.stationLabel===station.label&&previousUse.seated===seated&&previousUse.pose===use.pose&&previousUse.slot===use.slot&&previousUse.posePoint===use.posePoint;
+   c.furnitureUse=unchanged?previousUse:{id:use.item.id,type:use.item.type,label:use.item.label,stationId:station.id,stationType:station.type,stationLabel:station.label,seated,pose:use.pose,slot:use.slot,posePoint:use.posePoint};c.seated=seated;c.facingTarget=use.facing;
+  }else {c.seated=false;c.furnitureUse=null;}
   const home=this.city.housing.home(c);if(home?.buildingId===b.id)this.storeAtHome(c,b,home);
  }
  storeAtHome(c,b,home){

@@ -1,5 +1,5 @@
 import {artworkNarrative} from './city_art_narratives.js';
-import {activityRoomReady} from './city_interiors.js?v=outdoor-interview-sync-shortcut-1';
+import {activityRoomReady} from './city_interiors.js?v=fast-speeds-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {CITY_FLOOR_HEIGHT,buildingFacadeBannerSupport,buildingEntranceDoor} from './city_building_geometry.js?v=banner-placement-2';
 import {isRoadAt} from './city_terrain.js?v=entrance-retaining-clearance-1';
