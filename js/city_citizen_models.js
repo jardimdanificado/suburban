@@ -401,12 +401,17 @@ export class CityCitizenModels {
     if(hidden)return true;
     const inside=c.ridingVehicleId?null:c._renderIndoorPosition||c.indoorLocation?.position,posePoint=!citizenHasPath(c)&&!c.indoorLocation?.path?.length&&(c.furnitureUse?.pose==='lying'||c.furnitureUse?.seated)?c.furnitureUse.posePoint:null;
     let x=posePoint?.x??inside?.x??entity.x,y=posePoint?.y??inside?.y??entity.y;const bodyShape=this.bodyShapeFor(c);
-    // Large body morphs can cross the exterior wall when an indoor activity
-    // point is close to a window. Keep the visual model inside the shell while
-    // stationary; simulation coordinates and indoor pathfinding stay intact.
-    if(inside&&indoorBounds&&!c.indoorLocation?.exiting&&!c.indoorLocation?.path?.length){
-      const margin=Math.min(.47,.28+Math.max(0,bodyShape.fat)*.105);
-      if(bodyShape.fat>.35){const minX=indoorBounds.minX+margin,maxX=indoorBounds.maxX-margin,minY=indoorBounds.minY+margin,maxY=indoorBounds.maxY-margin;x=Math.max(minX,Math.min(maxX,x));y=Math.max(minY,Math.min(maxY,y));}
+    // Large body morphs can cross the exterior wall when an indoor route
+    // passes close to a window. Keep the rendered body inside the shell while
+    // moving as well as while stationary; simulation coordinates stay intact.
+    if(inside&&indoorBounds&&!c.indoorLocation?.exiting){
+      const desiredMargin=Math.min(.47,.28+Math.max(0,bodyShape.fat)*.105);
+      if(bodyShape.fat>.35){
+        const marginX=Math.min(desiredMargin,Math.max(0,(indoorBounds.maxX-indoorBounds.minX)/2-.02));
+        const marginY=Math.min(desiredMargin,Math.max(0,(indoorBounds.maxY-indoorBounds.minY)/2-.02));
+        const minX=indoorBounds.minX+marginX,maxX=indoorBounds.maxX-marginX,minY=indoorBounds.minY+marginY,maxY=indoorBounds.maxY-marginY;
+        x=Math.max(minX,Math.min(maxX,x));y=Math.max(minY,Math.min(maxY,y));
+      }
     }
     let motion=this.motion.get(entity);
      if(!motion){motion={x,y,renderX:x,renderY:y,angle:0,renderAngle:0,walkDistance:0,walkFrame:0,lastStepAt:-Infinity};this.motion.set(entity,motion);}
@@ -429,11 +434,14 @@ export class CityCitizenModels {
     // Keep quarter-tile footsteps, but present adjacent poses instead of skipping
     // a full animation cycle when a worker snapshot jumps several tiles.
     if(moved&&!this.animationPaused&&motion.walkDistance+1e-8>=.25&&this.clock-motion.lastStepAt>=.1-1e-8){motion.walkFrame++;motion.walkDistance=Math.max(0,motion.walkDistance%.25);motion.lastStepAt=this.clock;}
-    // A pending path is not movement. Hold the travel pose between footsteps;
-    // work animations still use the simulation's presentation clock.
-    const settledOnSeat=!moved&&(c.seated||c.furnitureUse?.seated||c.task==='sit');
-    const traveling=moved||(!settledOnSeat&&(citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding'));
+    // Keep the travel pose for the full route, including frames between
+    // simulation movement updates. A sit task can be assigned before arrival.
+    const traveling=moved||citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';
     const sleeping=citizenIsSleeping(c),lying=!sleeping&&!traveling&&c.furnitureUse?.pose==='lying',clip=citizenAnimation(c,traveling),actionState=clip==='murro'||clip==='chute'||clip==='derrotado',actionToken=c.combatAnimation?.sequence??c.combatReaction?.sequence??c.unconsciousUntil??null;
+    // The seated OBJ pose puts the legs in the same vertical bands used by
+    // the standing-body fat mask. Cap its morph so those vertices do not
+    // balloon sideways while sitting; standing citizens retain the full shape.
+    const poseBodyShape=clip==='sentado_no_banco'&&bodyShape.fat>.9?{...bodyShape,fat:.9}:bodyShape;
     if(actionState){const token=`${clip}:${actionToken??''}`;if(motion.actionToken!==token){motion.actionToken=token;motion.actionStartedAt=this.clock;}}
     else motion.actionToken=null;
     const animationTime=clip==='run'||clip==='pedal'?motion.walkFrame/8:actionState?this.clock-(motion.actionStartedAt??this.clock):this.clock,pose=citizenFrame(clip,animationTime,actionState?0:(entity.id*13)%17,actionState),key=`${pose.clip}:${pose.frame}`;
@@ -466,7 +474,7 @@ export class CityCitizenModels {
     let matrixReady=false;
     if(!transformUnchanged){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);this.setInstanceMatrix(batch.mesh,bodyIndex,this.matrix);motion.bodyBatch=batch;motion.bodyMesh=batch.mesh;motion.clothingMesh=batch.clothingMesh;motion.bodyIndex=bodyIndex;motion.bodyX=renderX;motion.bodyY=positionY;motion.bodyZ=renderY;motion.bodyAngle=renderAngle;motion.bodySize=size;motion.bodyHeightScale=heightScale;motion.bodyLying=lying;matrixReady=true;}
     motion.bodyFrame=this.frameToken;
-    if(!transformUnchanged||motion.bodyFatToken!==bodyShape.fat){this.setInstanceFat(batch.mesh,bodyIndex,bodyShape);motion.bodyFatToken=bodyShape.fat;}
+    if(!transformUnchanged||motion.bodyFatToken!==poseBodyShape.fat){this.setInstanceFat(batch.mesh,bodyIndex,poseBodyShape);motion.bodyFatToken=poseBodyShape.fat;}
     const presence=c.campaignPresence?.electionId===activeCampaignElectionId&&activeCampaignStatus==='campaign'?c.campaignPresence:null;
     const flag=c.campaign?.partyFlag||c.campaign?.flag||presence?.partyFlag;
     if(flag&&!c.ridingVehicleId&&!c.mobilityTrip&&!c.deliveryId){
@@ -476,7 +484,7 @@ export class CityCitizenModels {
     }
     const bodyColorToken=entity.combatFlash>0?0xff3333:dimmed?0x555555:entity.properties.render.color??0xe8e8e8;if(!transformUnchanged||motion.bodyColorToken!==bodyColorToken){this.color.setHex(bodyColorToken);this.setInstanceColor(batch.mesh,batch.count,this.color);motion.bodyColorToken=bodyColorToken;}
     const combatFlash=entity.combatFlash>0,garmentDirt=garment?.dirt||0,presenceColor=presence?.color,clothingColorUnchanged=transformUnchanged&&motion.clothingColorAppearance===appearance&&motion.clothingColorDirt===garmentDirt&&motion.clothingColorCombat===combatFlash&&motion.clothingColorDimmed===dimmed&&motion.clothingColorPresence===presenceColor;
-    if(batch.clothingMesh){if(!transformUnchanged)this.setInstanceMatrix(batch.clothingMesh,bodyIndex,this.matrix);if(!transformUnchanged||motion.clothingFatToken!==bodyShape.fat){this.setInstanceFat(batch.clothingMesh,bodyIndex,bodyShape);motion.clothingFatToken=bodyShape.fat;}if(patterned&&(!transformUnchanged||motion.bodyPatternToken!==printId)){this.setInstancePattern(batch.clothingMesh,bodyIndex,printId);motion.bodyPatternToken=printId;}if(!clothingColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:patterned?garmentColorHex:printed?0xffffff:presenceColor?Number.parseInt(String(presenceColor).replace('#',''),16):garmentColorHex);if(!dimmed&&!combatFlash&&garmentDirt>0)this.color.lerp(this.dirtColor,Math.min(.72,garmentDirt/140));this.setInstanceColor(batch.clothingMesh,bodyIndex,this.color);}}
+    if(batch.clothingMesh){if(!transformUnchanged)this.setInstanceMatrix(batch.clothingMesh,bodyIndex,this.matrix);if(!transformUnchanged||motion.clothingFatToken!==poseBodyShape.fat){this.setInstanceFat(batch.clothingMesh,bodyIndex,poseBodyShape);motion.clothingFatToken=poseBodyShape.fat;}if(patterned&&(!transformUnchanged||motion.bodyPatternToken!==printId)){this.setInstancePattern(batch.clothingMesh,bodyIndex,printId);motion.bodyPatternToken=printId;}if(!clothingColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:patterned?garmentColorHex:printed?0xffffff:presenceColor?Number.parseInt(String(presenceColor).replace('#',''),16):garmentColorHex);if(!dimmed&&!combatFlash&&garmentDirt>0)this.color.lerp(this.dirtColor,Math.min(.72,garmentDirt/140));this.setInstanceColor(batch.clothingMesh,bodyIndex,this.color);}}
     else if(batch.combined&&!clothingColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:presenceColor?Number.parseInt(String(presenceColor).replace('#',''),16):garmentColorHex);if(!dimmed&&!combatFlash&&garmentDirt>0)this.color.lerp(this.dirtColor,Math.min(.72,garmentDirt/140));this.setInstanceGarmentColor(batch.mesh,bodyIndex,this.color);}
     if(batch.clothingMesh||batch.combined){motion.clothingColorAppearance=appearance;motion.clothingColorDirt=garmentDirt;motion.clothingColorCombat=combatFlash;motion.clothingColorDimmed=dimmed;motion.clothingColorPresence=presenceColor;}
     batch.count++;
@@ -492,7 +500,7 @@ export class CityCitizenModels {
       }
       const accessoryIndex=head.count,accessoryTransform=motion.accessoryTransforms[itemIndex],accessoryUnchanged=transformUnchanged&&accessoryTransform.key===itemKey&&accessoryTransform.batch===head&&accessoryTransform.mesh===head.mesh&&accessoryTransform.index===accessoryIndex,accessoryColorSlotUnchanged=accessoryTransform.batch===head&&accessoryTransform.mesh===head.mesh&&accessoryTransform.index===accessoryIndex;
       if(!accessoryUnchanged){if(!matrixReady){this.quaternion.setFromAxisAngle(this.axis,renderAngle);if(lying)this.quaternion.multiply(this.lyingRotation);this.scale.set(size,size*heightScale,size);this.matrix.compose(this.position,this.quaternion,this.scale);matrixReady=true;}if(isStaticHeadwear){const anchor=this.headwearAnchors.get(itemKey);this.accessoryOffset.set(anchor?.x||0,anchor?.y||0,anchor?.z||0).applyMatrix4(this.matrix);this.accessoryMatrix.copy(this.matrix).setPosition(this.accessoryOffset);this.setInstanceMatrix(head.mesh,accessoryIndex,this.accessoryMatrix);}else this.setInstanceMatrix(head.mesh,accessoryIndex,this.matrix);}
-      accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isFittedClothing&&(!accessoryUnchanged||accessoryTransform.fatToken!==bodyShape.fat)){this.setInstanceFat(head.mesh,accessoryIndex,bodyShape);accessoryTransform.fatToken=bodyShape.fat;}
+      accessoryTransform.key=itemKey;accessoryTransform.batch=head;accessoryTransform.mesh=head.mesh;accessoryTransform.index=accessoryIndex;if(isFittedClothing&&(!accessoryUnchanged||accessoryTransform.fatToken!==poseBodyShape.fat)){this.setInstanceFat(head.mesh,accessoryIndex,poseBodyShape);accessoryTransform.fatToken=poseBodyShape.fat;}
       const hex=itemColorHexes[itemIndex],itemDirt=item.dirt||0,accessoryColorUnchanged=accessoryColorSlotUnchanged&&accessoryTransform.colorItem===item&&accessoryTransform.colorHex===hex&&accessoryTransform.colorDirt===itemDirt&&accessoryTransform.colorCombat===combatFlash&&accessoryTransform.colorDimmed===dimmed;if(!accessoryColorUnchanged){this.color.setHex(combatFlash?0xff3333:dimmed?0x555555:hex);if(!dimmed&&!combatFlash&&itemDirt>0)this.color.lerp(this.dirtColor,Math.min(.72,itemDirt/140));this.setInstanceColor(head.mesh,head.count,this.color);accessoryTransform.colorItem=item;accessoryTransform.colorHex=hex;accessoryTransform.colorDirt=itemDirt;accessoryTransform.colorCombat=combatFlash;accessoryTransform.colorDimmed=dimmed;}head.count++;
     }
     return true;
