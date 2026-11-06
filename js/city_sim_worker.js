@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-tail-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-tail-night-services-1';
 
 const graph = new CityStateGraph();
 let fieldTailPatches=false;

@@ -43,7 +43,7 @@ import { quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-resident-index-1';
-import { CitySanitation } from './city_sanitation.js?v=sanitation-routing-3';
+import { CitySanitation } from './city_sanitation.js?v=sanitation-visitor-search-1';
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=road-network-cache-1';

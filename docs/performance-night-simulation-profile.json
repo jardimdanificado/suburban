@@ -1,0 +1,541 @@
+{
+  "root": "/home/jardel/repos/suburban",
+  "population": 1024,
+  "speed": 1,
+  "dt": 0.016666666666666666,
+  "cityMinutes": 120,
+  "peaks": {
+    "totalMs": {
+      "ms": 161.9817189999958,
+      "minute": 1146
+    },
+    "minuteStepsMs": {
+      "ms": 156.75564799999847,
+      "minute": 1146
+    },
+    "mobilityMs": {
+      "ms": 9.648829000005207,
+      "minute": 1212
+    },
+    "movementSetupMs": {
+      "ms": 0.32126900000002934,
+      "minute": 1141
+    },
+    "movementMs": {
+      "ms": 114.86613800000487,
+      "minute": 1171
+    },
+    "vehicleMs": {
+      "ms": 5.568640999998024,
+      "minute": 1145
+    },
+    "step.totalMs": {
+      "ms": 156.6640170000028,
+      "minute": 1146
+    },
+    "step.reconcileMs": {
+      "ms": 3.421795000002021,
+      "minute": 1155
+    },
+    "step.servicesMs": {
+      "ms": 1.7956149999954505,
+      "minute": 1150
+    },
+    "step.civicMs": {
+      "ms": 13.098838999998407,
+      "minute": 1200
+    },
+    "step.setupMs": {
+      "ms": 0.32462200000009034,
+      "minute": 1200
+    },
+    "step.citizenMs": {
+      "ms": 117.23640499999601,
+      "minute": 1230
+    },
+    "step.interiorMs": {
+      "ms": 10.716071000002557,
+      "minute": 1156
+    },
+    "step.societyMs": {
+      "ms": 95.06590299999516,
+      "minute": 1146
+    },
+    "step.moverSetupMs": {
+      "ms": 1.2597939999977825,
+      "minute": 1146
+    },
+    "step.civicDetail.votingMs": {
+      "ms": 0.005169000003661495,
+      "minute": 1221
+    },
+    "step.civicDetail.justiceParts.planFacilitiesMs": {
+      "ms": 3.2161140000025625,
+      "minute": 1200
+    },
+    "step.civicDetail.justiceParts.protestsMs": {
+      "ms": 0.023327000002609566,
+      "minute": 1157
+    },
+    "step.civicDetail.justiceParts.policePatrolsMs": {
+      "ms": 0.10329500000079861,
+      "minute": 1158
+    },
+    "step.civicDetail.justiceParts.bodiesMs": {
+      "ms": 0.002932999996119179,
+      "minute": 1173
+    },
+    "step.civicDetail.justiceParts.corpseExposureMs": {
+      "ms": 2.5210539999970933,
+      "minute": 1230
+    },
+    "step.civicDetail.justiceParts.reportsMs": {
+      "ms": 0.02437400000053458,
+      "minute": 1256
+    },
+    "step.civicDetail.justiceParts.investigationsMs": {
+      "ms": 0.07612599999993108,
+      "minute": 1157
+    },
+    "step.civicDetail.justiceParts.externalPoliceReviewsMs": {
+      "ms": 0.012501999997766688,
+      "minute": 1167
+    },
+    "step.civicDetail.justiceParts.courtCasesMs": {
+      "ms": 0.17746700000134297,
+      "minute": 1143
+    },
+    "step.civicDetail.justiceParts.policeAuditsMs": {
+      "ms": 0.026959000002534594,
+      "minute": 1158
+    },
+    "step.civicDetail.justiceParts.restitutionMs": {
+      "ms": 0.008171000001311768,
+      "minute": 1180
+    },
+    "step.civicDetail.justiceParts.vehicleRecognitionMs": {
+      "ms": 0.02290799999900628,
+      "minute": 1230
+    },
+    "step.civicDetail.justiceParts.propertyFencingMs": {
+      "ms": 0.012013000006845687,
+      "minute": 1230
+    },
+    "step.civicDetail.justiceParts.skybridgeArtMs": {
+      "ms": 0.008031000004848465,
+      "minute": 1204
+    },
+    "step.civicDetail.justiceParts.stolenInventoryMs": {
+      "ms": 0.8255219999991823,
+      "minute": 1147
+    },
+    "step.civicDetail.justiceMs": {
+      "ms": 9.242771999997785,
+      "minute": 1200
+    },
+    "step.civicDetail.researchMs": {
+      "ms": 0.21538999999756925,
+      "minute": 1158
+    },
+    "step.civicDetail.councilMs": {
+      "ms": 0.3725330000015674,
+      "minute": 1254
+    },
+    "step.civicDetail.campaignMaterialsMs": {
+      "ms": 0.4591350000046077,
+      "minute": 1143
+    },
+    "step.civicDetail.vehiclesMs": {
+      "ms": 3.463630000005651,
+      "minute": 1200
+    },
+    "step.citizenDetail.blockedPositionRecoveryMs": {
+      "ms": 4.7218289998636465,
+      "minute": 1146
+    },
+    "step.citizenDetail.lifeMinuteMs": {
+      "ms": 75.5904359999331,
+      "minute": 1230
+    },
+    "step.citizenDetail.urgentNeedMs": {
+      "ms": 2.233836000064912,
+      "minute": 1143
+    },
+    "step.citizenDetail.vacancyDiscoveryMs": {
+      "ms": 2.520704999973532,
+      "minute": 1155
+    },
+    "step.citizenDetail.taskExecutionMs": {
+      "ms": 7.836583000003884,
+      "minute": 1196
+    },
+    "step.citizenDetail.taskSuppliesRouteMs": {
+      "ms": 2.8697709999760264,
+      "minute": 1215
+    },
+    "step.citizenDetail.taskMarketCheckMs": {
+      "ms": 0.2735010000033071,
+      "minute": 1152
+    },
+    "step.citizenDetail.taskPaintingRouteMs": {
+      "ms": 0.12522100000205683,
+      "minute": 1182
+    },
+    "step.citizenDetail.taskHygieneSearchMs": {
+      "ms": 11.934659999991709,
+      "minute": 1143
+    },
+    "step.citizenDetail.taskChoiceMs": {
+      "ms": 36.22015500000998,
+      "minute": 1143
+    },
+    "step.citizenDetail.taskFurnitureRouteMs": {
+      "ms": 1.2136300000056508,
+      "minute": 1167
+    },
+    "step.citizenDetail.taskMealSearchMs": {
+      "ms": 0.0958219999956782,
+      "minute": 1141
+    },
+    "step.societyDetail.conversationResolutionMs": {
+      "ms": 16.446812999995018,
+      "minute": 1173
+    },
+    "step.societyDetail.conversationParts.practiceMs": {
+      "ms": 0.1754389999914565,
+      "minute": 1146
+    },
+    "step.societyDetail.conversationParts.greetMs": {
+      "ms": 13.697587999980897,
+      "minute": 1173
+    },
+    "step.societyDetail.conversationParts.interactMs": {
+      "ms": 6.0047300000005635,
+      "minute": 1202
+    },
+    "step.societyDetail.conversationParts.campaignMs": {
+      "ms": 0.04560700000001816,
+      "minute": 1194
+    },
+    "step.societyDetail.conversationParts.updateBondMs": {
+      "ms": 0.10923199999524513,
+      "minute": 1146
+    },
+    "step.societyDetail.conversationParts.prejudiceScanMs": {
+      "ms": 0.27831499998865183,
+      "minute": 1171
+    },
+    "step.societyDetail.conversationParts.prejudiceActMs": {
+      "ms": 13.030395999994653,
+      "minute": 1173
+    },
+    "step.societyDetail.conversationParts.compatibilityMs": {
+      "ms": 13.139066000003368,
+      "minute": 1173
+    },
+    "step.societyDetail.conversationParts.otherGreetMs": {
+      "ms": 0.07940600002621068,
+      "minute": 1156
+    },
+    "step.societyDetail.contactSearchMs": {
+      "ms": 10.693303000000014,
+      "minute": 1215
+    },
+    "step.societyDetail.birthResolutionMs": {
+      "ms": 0.08192399999825284,
+      "minute": 1145
+    },
+    "step.societyParts.recruitmentMs": {
+      "ms": 81.02288199999748,
+      "minute": 1146
+    },
+    "step.societyParts.gigsMs": {
+      "ms": 3.041650999999547,
+      "minute": 1142
+    },
+    "step.societyParts.crowdDispersionMs": {
+      "ms": 74.61146700000245,
+      "minute": 1188
+    },
+    "step.societyParts.socialUpdateMs": {
+      "ms": 16.455402999999933,
+      "minute": 1173
+    },
+    "step.pathSearchTotalMs": {
+      "ms": 81.04962700002216,
+      "minute": 1188
+    },
+    "step.pathSearchMaxMs": {
+      "ms": 72.67547200000263,
+      "minute": 1188
+    },
+    "step.economyHourly.politicsMs": {
+      "ms": 29.194492000002356,
+      "minute": 1142
+    },
+    "step.economyHourly.municipalPolicyMs": {
+      "ms": 0.6185130000012578,
+      "minute": 1142
+    },
+    "step.citizenDetail.taskToiletSearchMs": {
+      "ms": 2.7163999999975204,
+      "minute": 1149
+    },
+    "step.economyHourly.hireMs": {
+      "ms": 34.22221400000126,
+      "minute": 1144
+    },
+    "step.economyHourly.hiring.marketReviewDetail.discoverMs": {
+      "ms": 4.7930759999508155,
+      "minute": 1144
+    },
+    "step.economyHourly.hiring.marketReviewDetail.indexMs": {
+      "ms": 12.949878999999783,
+      "minute": 1204
+    },
+    "step.economyHourly.hiring.marketReviewDetail.listingsMs": {
+      "ms": 0,
+      "minute": 1144
+    },
+    "step.economyHourly.hiring.marketReviewDetail.considerMs": {
+      "ms": 3.8397940000795643,
+      "minute": 1204
+    },
+    "step.societyDetail.conversationParts.prejudiceExteriorSightMs": {
+      "ms": 0.8079909999723895,
+      "minute": 1173
+    },
+    "step.societyDetail.conversationParts.prejudiceCanObserveMs": {
+      "ms": 1.7532850000425242,
+      "minute": 1173
+    },
+    "step.societyDetail.conversationParts.prejudiceWitnessResolveMs": {
+      "ms": 0.2687479999876814,
+      "minute": 1173
+    },
+    "step.economyHourly.developmentMs": {
+      "ms": 35.08579900000041,
+      "minute": 1145
+    },
+    "step.economyHourly.demandMs": {
+      "ms": 26.02405500000168,
+      "minute": 1151
+    },
+    "step.economyHourly.marketMs": {
+      "ms": 11.575465000001714,
+      "minute": 1211
+    },
+    "step.economyHourly.supplyPlanMs": {
+      "ms": 0.10266699999920093,
+      "minute": 1211
+    },
+    "step.economyHourly.shareTradingMs": {
+      "ms": 1.279768000000331,
+      "minute": 1211
+    },
+    "step.economyHourly.vehiclesMs": {
+      "ms": 0.014247999999497551,
+      "minute": 1152
+    },
+    "step.citizenDetail.taskSocialSearchMs": {
+      "ms": 0.9853179999990971,
+      "minute": 1164
+    },
+    "step.civicDetail.justiceParts.fecesGraffitiMs": {
+      "ms": 2.3809540000002016,
+      "minute": 1200
+    },
+    "step.civicDetail.justiceParts.artReactionMs": {
+      "ms": 2.748316999997769,
+      "minute": 1170
+    },
+    "step.societyDetail.conversationParts.prejudiceWindowSightMs": {
+      "ms": 0.07892199999332661,
+      "minute": 1176
+    },
+    "step.economyHourly.housingInvestmentMs": {
+      "ms": 2.896451000000525,
+      "minute": 1212
+    },
+    "step.economyHourly.businessInvestmentMs": {
+      "ms": 43.35938699999679,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.demandMs": {
+      "ms": 13.691301999999268,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.officeSearchMs": {
+      "ms": 15.029667000002519,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.developmentBanksMs": {
+      "ms": 0.06397399999696063,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.extractionInvestmentMs": {
+      "ms": 0.20065400000021327,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.initialServicesMs": {
+      "ms": 0.07500900000013644,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.civicInvestmentMs": {
+      "ms": 0.15448900000046706,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.oilInvestmentMs": {
+      "ms": 4.572636999997485,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.productionDetail.productionPlanMs": {
+      "ms": 0.30157400000462076,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.productionDetail.needsAndProjectsMs": {
+      "ms": 0.45375699999567587,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.productionDetail.pendingProjectsMs": {
+      "ms": 0.03240699999878416,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.productionDetail.chainPriorityMs": {
+      "ms": 0.2573640000045998,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.productionDetail.founderPoolMs": {
+      "ms": 1.8736969999954454,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.productionDetail.siteAndFoundersMs": {
+      "ms": 6.192672000004677,
+      "minute": 1212
+    },
+    "step.economyHourly.businessSearch.productionInvestmentMs": {
+      "ms": 9.165458000003127,
+      "minute": 1212
+    },
+    "step.societyDetail.conversationParts.prejudiceInteriorSightMs": {
+      "ms": 0.08513500002300134,
+      "minute": 1235
+    }
+  },
+  "totals": {
+    "totalMs": 10693.758708999761,
+    "minuteStepsMs": 6134.61704200018,
+    "mobilityMs": 132.81075899982534,
+    "movementSetupMs": 109.37388299998565,
+    "movementMs": 4057.1232939998154,
+    "vehicleMs": 251.47877399958816,
+    "step.totalMs": 6126.131214999987,
+    "step.reconcileMs": 102.22517699996388,
+    "step.servicesMs": 84.25736000002507,
+    "step.civicMs": 133.6117729999678,
+    "step.setupMs": 3.2191929999971762,
+    "step.citizenMs": 3761.9329529999886,
+    "step.interiorMs": 430.33158499995625,
+    "step.societyMs": 1093.7380470000353,
+    "step.moverSetupMs": 71.09649799999897,
+    "step.civicDetail.votingMs": 0.3868520000760327,
+    "step.civicDetail.justiceParts.planFacilitiesMs": 3.6605929999495856,
+    "step.civicDetail.justiceParts.protestsMs": 0.34012900010566227,
+    "step.civicDetail.justiceParts.policePatrolsMs": 2.3230599999878905,
+    "step.civicDetail.justiceParts.bodiesMs": 0.226498999974865,
+    "step.civicDetail.justiceParts.corpseExposureMs": 5.503884999998263,
+    "step.civicDetail.justiceParts.reportsMs": 0.6535019999428187,
+    "step.civicDetail.justiceParts.investigationsMs": 4.264216999945347,
+    "step.civicDetail.justiceParts.externalPoliceReviewsMs": 0.7368289999940316,
+    "step.civicDetail.justiceParts.courtCasesMs": 5.316444000010961,
+    "step.civicDetail.justiceParts.policeAuditsMs": 0.8557589999909396,
+    "step.civicDetail.justiceParts.restitutionMs": 0.6781499999779044,
+    "step.civicDetail.justiceParts.vehicleRecognitionMs": 0.3373999999676016,
+    "step.civicDetail.justiceParts.propertyFencingMs": 0.24597700004960643,
+    "step.civicDetail.justiceParts.skybridgeArtMs": 0.5574719999931403,
+    "step.civicDetail.justiceParts.stolenInventoryMs": 22.5954179999826,
+    "step.civicDetail.justiceMs": 66.90323500001978,
+    "step.civicDetail.researchMs": 1.0022860000826768,
+    "step.civicDetail.councilMs": 19.2982109999939,
+    "step.civicDetail.campaignMaterialsMs": 14.388250999996671,
+    "step.civicDetail.vehiclesMs": 28.818748999961826,
+    "step.citizenDetail.blockedPositionRecoveryMs": 397.036276999228,
+    "step.citizenDetail.lifeMinuteMs": 311.6963850002139,
+    "step.citizenDetail.urgentNeedMs": 162.8624840003249,
+    "step.citizenDetail.vacancyDiscoveryMs": 102.88778000001184,
+    "step.citizenDetail.taskExecutionMs": 201.41374900018855,
+    "step.citizenDetail.taskSuppliesRouteMs": 57.69306899975345,
+    "step.citizenDetail.taskMarketCheckMs": 10.247853999426297,
+    "step.citizenDetail.taskPaintingRouteMs": 5.323591000022134,
+    "step.citizenDetail.taskHygieneSearchMs": 472.68973099991126,
+    "step.citizenDetail.taskChoiceMs": 1280.1836009999606,
+    "step.citizenDetail.taskFurnitureRouteMs": 12.908329000143567,
+    "step.citizenDetail.taskMealSearchMs": 0.13639999999577412,
+    "step.societyDetail.conversationResolutionMs": 330.3763889999973,
+    "step.societyDetail.conversationParts.practiceMs": 6.725756000058027,
+    "step.societyDetail.conversationParts.greetMs": 125.29390599995531,
+    "step.societyDetail.conversationParts.interactMs": 92.34948400002031,
+    "step.societyDetail.conversationParts.campaignMs": 1.970260999922175,
+    "step.societyDetail.conversationParts.updateBondMs": 3.165752999993856,
+    "step.societyDetail.conversationParts.prejudiceScanMs": 10.936415000018314,
+    "step.societyDetail.conversationParts.prejudiceActMs": 78.97045999998227,
+    "step.societyDetail.conversationParts.compatibilityMs": 85.36455400014529,
+    "step.societyDetail.conversationParts.otherGreetMs": 3.856015000019397,
+    "step.societyDetail.contactSearchMs": 116.2083430000057,
+    "step.societyDetail.birthResolutionMs": 0.29927000001771376,
+    "step.societyParts.recruitmentMs": 344.76023800003895,
+    "step.societyParts.gigsMs": 6.8193609999652836,
+    "step.societyParts.crowdDispersionMs": 292.8184929999843,
+    "step.societyParts.socialUpdateMs": 448.17298600000504,
+    "step.pathSearchTotalMs": 436.1908029997139,
+    "step.pathSearchMaxMs": 145.5599039999288,
+    "step.economyHourly.politicsMs": 51.17104500000278,
+    "step.economyHourly.municipalPolicyMs": 1.078696000004129,
+    "step.citizenDetail.taskToiletSearchMs": 18.930502999988676,
+    "step.economyHourly.hireMs": 66.85547299999598,
+    "step.economyHourly.hiring.marketReviewDetail.discoverMs": 8.305863999950816,
+    "step.economyHourly.hiring.marketReviewDetail.indexMs": 22.695772000028228,
+    "step.economyHourly.hiring.marketReviewDetail.listingsMs": 0,
+    "step.economyHourly.hiring.marketReviewDetail.considerMs": 7.523765999991156,
+    "step.societyDetail.conversationParts.prejudiceExteriorSightMs": 7.979960000018764,
+    "step.societyDetail.conversationParts.prejudiceCanObserveMs": 17.84407500008092,
+    "step.societyDetail.conversationParts.prejudiceWitnessResolveMs": 2.268082000016875,
+    "step.economyHourly.developmentMs": 52.956043999998656,
+    "step.economyHourly.demandMs": 46.63842700000532,
+    "step.economyHourly.marketMs": 22.882740000000922,
+    "step.economyHourly.supplyPlanMs": 0.17697799999587005,
+    "step.economyHourly.shareTradingMs": 2.472723999999289,
+    "step.economyHourly.vehiclesMs": 0.019974999995611142,
+    "step.citizenDetail.taskSocialSearchMs": 1.1241620000000694,
+    "step.civicDetail.justiceParts.fecesGraffitiMs": 6.60606099999859,
+    "step.civicDetail.justiceParts.artReactionMs": 6.335636000003433,
+    "step.societyDetail.conversationParts.prejudiceWindowSightMs": 0.1817920000103186,
+    "step.economyHourly.housingInvestmentMs": 2.896451000000525,
+    "step.economyHourly.businessInvestmentMs": 43.35938699999679,
+    "step.economyHourly.businessSearch.demandMs": 13.691301999999268,
+    "step.economyHourly.businessSearch.officeSearchMs": 15.029667000002519,
+    "step.economyHourly.businessSearch.developmentBanksMs": 0.06397399999696063,
+    "step.economyHourly.businessSearch.extractionInvestmentMs": 0.20065400000021327,
+    "step.economyHourly.businessSearch.initialServicesMs": 0.07500900000013644,
+    "step.economyHourly.businessSearch.civicInvestmentMs": 0.15448900000046706,
+    "step.economyHourly.businessSearch.oilInvestmentMs": 4.572636999997485,
+    "step.economyHourly.businessSearch.productionDetail.productionPlanMs": 0.30157400000462076,
+    "step.economyHourly.businessSearch.productionDetail.needsAndProjectsMs": 0.45375699999567587,
+    "step.economyHourly.businessSearch.productionDetail.pendingProjectsMs": 0.03240699999878416,
+    "step.economyHourly.businessSearch.productionDetail.chainPriorityMs": 0.2573640000045998,
+    "step.economyHourly.businessSearch.productionDetail.founderPoolMs": 1.8736969999954454,
+    "step.economyHourly.businessSearch.productionDetail.siteAndFoundersMs": 6.192672000004677,
+    "step.economyHourly.businessSearch.productionInvestmentMs": 9.165458000003127,
+    "step.societyDetail.conversationParts.prejudiceInteriorSightMs": 0.1271090000300319
+  },
+  "updates": 1800,
+  "ms": 10747.818844999994,
+  "cpuMs": 16332.594,
+  "threadCpuMs": 10458.956,
+  "effectiveSpeed": 2.7912640166945444,
+  "p50": 2.1555069999958505,
+  "p95": 43.168510999996215,
+  "max": 161.98800400000619,
+  "checksum": "6e646c169d7dd1052890df7d7fbe17fa4ca9bce01b0932198189eabacfe2ff3f",
+  "instrumentation": "V8 CPU profiler and profileDiagnostics enabled; timings include instrumentation overhead. CPU profile also includes initialization and warm-up."
+}

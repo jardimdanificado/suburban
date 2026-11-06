@@ -1,6 +1,6 @@
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=state-tail-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=night-services-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=night-crowd-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=night-service-search-1";
 import { CityDesktop } from "./js/city_desktop.js?v=perf-employment-ui-2";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=shutter-two-sided-1";

@@ -3,6 +3,25 @@ import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js?v=housing-resident-index-1';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 0, paidCleaningInterval: 180, privateCleaningInterval: 1440, bathroomCleaningLabor:12, fecesCleaningBaseLabor:8, fecesCleaningExtraLabor:4, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
+// A synchronous facility search may inspect hundreds of homes. Only existing
+// contacts can grant visitor access; enumerate them once for this search.
+function visitorAccess(city,c){
+  const society=city.society,housing=city.housing;
+  if(!(society?.contactIndex instanceof Map)||!(society.relations instanceof Map)||!housing.indexResidents)return null;
+  const hostIds=new Set();
+  for(const key of society.contactIndex.get(c.id)||[]){
+    const relation=society.relations.get(key);if(!relation)continue;
+    const id=relation.a===c.id?relation.b:relation.a,view=relation.views?.[id];
+    if(view&&view.affection>=65&&view.trust>=50&&view.resentment<30)hostIds.add(id);
+  }
+  return {residents:housing.indexResidents(),hostIds};
+}
+function residentStatus(housing,home,c,access){
+  if(!access)return housing.residentAccessStatus(home,c);
+  const residents=access.residents.get(home.id);if(!residents?.length)return 0;
+  for(const resident of residents)if(resident.id===c.id||access.hostIds.has(resident.id))return 2;
+  return 1;
+}
 export class CitySanitation {
   constructor(city) { this.city = city; this.facilities = new Map(); this.jobs = []; this.streetFeces = new Map(); this.fecesRevision=0; this.nextJobId = 1; this.cleaned = 0; this.cleanedFeces=0; this.collected = 0; }
   addFacility(b, { unitId = null, homeId = null, homeIds = null, access = 'employees' } = {}) {
@@ -55,7 +74,7 @@ export class CitySanitation {
     }
   }
 
-  allowed(c, f) {
+  allowed(c, f, search=null) {
     const b = this.city.building(f.buildingId); if (!b) return false;
     // Older persistent saves may still mark the town hall toilet as public.
     // Enforce its staff-only rule here as well as migrating its facility data.
@@ -65,8 +84,10 @@ export class CitySanitation {
     if (f.access === 'employees') return b.active && (c.jobId === b.id || c.id === b.ownerId);
     if(c.homeId&&(f.homeId===c.homeId||f.homeIds?.includes(c.homeId)))return true;
     const housing=this.city.housing,homeIds=f.homeIds||[];let hasHome=false,hasResidents=false;
-    for(const id of homeIds){const home=housing.homes.get(id);if(!home)continue;hasHome=true;const status=housing.residentAccessStatus(home,c);if(status===2)return true;if(status===1)hasResidents=true;}
-    if(f.homeId&&!homeIds.includes(f.homeId)){const home=housing.homes.get(f.homeId);if(home){hasHome=true;const status=housing.residentAccessStatus(home,c);if(status===2)return true;if(status===1)hasResidents=true;}}
+    if(search&&search.access===undefined)search.access=visitorAccess(this.city,c);
+    const access=search?.access;
+    for(const id of homeIds){const home=housing.homes.get(id);if(!home)continue;hasHome=true;const status=residentStatus(housing,home,c,access);if(status===2)return true;if(status===1)hasResidents=true;}
+    if(f.homeId&&!homeIds.includes(f.homeId)){const home=housing.homes.get(f.homeId);if(home){hasHome=true;const status=residentStatus(housing,home,c,access);if(status===2)return true;if(status===1)hasResidents=true;}}
     if(!hasHome)return false;
     if(!hasResidents&&this.city.units.get(f.unitId)?.ownerId===c.accountId)return true;
     return false;
@@ -80,9 +101,10 @@ export class CitySanitation {
     if(task==='hygiene')c.hygieneWaitingSince??=this.city.minute;
     const need=task==='hygiene'?'hygiene':'toilet',waitingSince=task==='hygiene'?(c.hygieneWaitingSince??this.city.minute):(c.toiletWaitingSince??this.city.minute);
     const illegal=['toilet','hygiene'].includes(task)&&!c.custody&&(c.needs?.[need]??100)<20&&this.city.minute-waitingSince>=90;
+    const search={};
     const rows=this._facilityChoiceRows??=[],pool=this._facilityChoicePool??=[];this._facilityChoiceRows=rows;this._facilityChoicePool=pool;rows.length=0;let rowCount=0;
     const addChoice=(facility,trespass)=>{let row=pool[rowCount];if(!row)pool[rowCount]=row=[null,0,false,0];row[0]=facility;row[1]=this.score(c,facility);row[2]=trespass;row[3]=rowCount;rows.push(row);rowCount++;};
-    for(const f of this.facilities.values())if(this.allowed(c,f)&&this.city.units.get(f.unitId)?.roomType==='bathroom')addChoice(f,false);
+    for(const f of this.facilities.values())if(this.allowed(c,f,search)&&this.city.units.get(f.unitId)?.roomType==='bathroom')addChoice(f,false);
     const routeChoices=()=>{
       if(!rows.length)return false;
       // Build a stable min-heap instead of sorting every eligible facility for

@@ -7,6 +7,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 const root=process.argv[2]?resolve(process.argv[2]):fileURLToPath(new URL('../',import.meta.url));
 const population=Number(process.env.SUBURBAN_BENCH_POPULATION)||512,speed=Number(process.env.SUBURBAN_BENCH_SPEED)||32;
 const dt=Number(process.env.SUBURBAN_BENCH_STEP)||Math.min(.25,Math.max(1/60,speed/128)),cityMinutes=Number(process.env.SUBURBAN_BENCH_CITY_MINUTES)||240;
+const warmupMinutes=Math.max(0,Math.floor(Number(process.env.SUBURBAN_BENCH_WARMUP_MINUTES)||0)),diagnostics=process.env.SUBURBAN_BENCH_PROFILE==='1';
 const load=name=>import(pathToFileURL(resolve(root,'js',name)).href);
 const {CitySimulation}=await load('city_simulation.js'),{World}=await load('world.js'),{CityStateGraph,bindCityState}=await load('city_state.js');
 let nextId=1;const entities=[],world=new World(1,1337,256);
@@ -15,9 +16,25 @@ initial.initialize();
 const graph=new CityStateGraph(),state=graph.apply(structuredClone(new CityStateGraph().encode({city:initial,entities,nextId}))),city=state.city;
 bindCityState(city);city.staggerInitialTaskDecisions();
 city.createEntity=data=>{const entity={id:state.nextId++,destroyed:false,...data};state.entities.push(entity);return entity;};
+// Warm-up is outside the measured region; retain its state and random stream.
+for(let i=0;i<warmupMinutes;i++)city.update(.25);
+city.profileDiagnostics=diagnostics;
+const phaseTotals={},phasePeaks={};
+function captureProfile(profile,prefix=''){
+  if(!profile||typeof profile!=='object')return;
+  for(const [key,value] of Object.entries(profile)){
+    if(key==='step')continue; // lastStepProfile persists on subminute updates.
+    if(value&&typeof value==='object'){captureProfile(value,prefix+key+'.');continue;}
+    if(!key.endsWith('Ms')||!Number.isFinite(value))continue;
+    const name=prefix+key;phaseTotals[name]=(phaseTotals[name]||0)+value;
+    if(!phasePeaks[name]||value>phasePeaks[name].ms)phasePeaks[name]={ms:value,minute:city.minute};
+  }
+}
+const startMinute=city.minute;
+let previousMinute=startMinute;
 const times=[],cpuStarted=process.cpuUsage(),threadCpuStarted=process.threadCpuUsage?.(),started=performance.now();
-for(let i=0;i<Math.round(cityMinutes/(dt*4));i++){const at=performance.now();city.update(dt);times.push(performance.now()-at);}
+for(let i=0;i<Math.round(cityMinutes/(dt*4));i++){const at=performance.now();city.update(dt);times.push(performance.now()-at);if(diagnostics){captureProfile(city.lastUpdateProfile);if(city.minute!==previousMinute){captureProfile(city.lastStepProfile,'step.');previousMinute=city.minute;}}}
 const ms=performance.now()-started,cpu=process.cpuUsage(cpuStarted),threadCpu=threadCpuStarted?process.threadCpuUsage(threadCpuStarted):null,cpuMs=(cpu.user+cpu.system)/1000,threadCpuMs=threadCpu?(threadCpu.user+threadCpu.system)/1000:null;times.sort((a,b)=>a-b);
 const observed={minute:city.minute,seed:city.seed,people:city.citizens.map(c=>[c.id,c.task,c.needs,c.entity.x,c.entity.y,c.balance,c.indoorLocation,c.career,c.sleep]),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),history:city.history.nextId,events:city.events,relations:[...city.society.relations]};
 const checksum=createHash('sha256').update(JSON.stringify(observed)).digest('hex');
-console.log(JSON.stringify({root,population,speed,dt,cityMinutes,updates:times.length,ms,cpuMs,threadCpuMs,effectiveSpeed:cityMinutes/4/(ms/1000),p50:times[Math.floor(times.length*.5)],p95:times[Math.floor(times.length*.95)],max:times.at(-1),checksum}));
+console.log(JSON.stringify({root,population,speed,dt,cityMinutes,warmupMinutes,startMinute,endMinute:city.minute,...(diagnostics?{phaseTotals,phasePeaks}:{}),updates:times.length,ms,cpuMs,threadCpuMs,effectiveSpeed:cityMinutes/4/(ms/1000),p50:times[Math.floor(times.length*.5)],p95:times[Math.floor(times.length*.95)],max:times.at(-1),checksum}));
