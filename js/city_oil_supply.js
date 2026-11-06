@@ -1,17 +1,17 @@
 import {LIGHTING_RULES} from './city_lighting.js';
-/** Daily lighting consumption: one oil unit supplies twelve lamp-hours. */
+/** Oil planning uses one refill per public/private post per four nights. */
 export function oilSupply(economy){
   const city=economy.city,firms=economy.businesses,sites=[...city.lighting.sites.values()].filter(p=>p.status!=='cancelled');
   const built=sites.filter(p=>p.built),forecast=Math.min(sites.length-built.length,LIGHTING_RULES.maxActiveSites*2),daily=built.length+forecast;
   const empty=built.filter(p=>p.fuel<=0).length,oilStock=city.goodsStock('oleo'),sunflowerStock=city.goodsStock('girassol');
-  const oilRequired=Math.max(0,daily+Math.ceil(Math.max(0,daily+empty-oilStock)/2)),sunflowerRequired=oilRequired*3;
+  const oilRequired=Math.max(0,Math.ceil(daily/4)+Math.ceil(Math.max(0,empty-oilStock)/4)),sunflowerRequired=oilRequired;
   const farms=firms.filter(b=>b.type==='farm'&&b.crop==='girassol'),mills=firms.filter(b=>b.type==='mill');
   const pending=city.development.projects.filter(p=>!p.cancelled&&p.status!=='completed');
   const farmDaily=farms.reduce((n,b)=>n+economy.farmCapacity(b).daily,0),farmPotential=farms.reduce((n,b)=>n+economy.farmCapacity(b,true).daily,0);
-  const farmPlanned=pending.filter(p=>p.type==='farm'&&p.crop==='girassol').reduce((n,p)=>{const area=Math.max(1,p.width*p.depth-2),staff=Math.max(1,Math.ceil(area/36)),labor=area*120/12;return n+Math.floor(area*540/(Math.max(180,labor/staff)+180));},0);
-  const millDaily=mills.reduce((n,b)=>n+(b.workers.length+(economy.citizen(b.ownerId)?1:0))*240/8,0);
-  const millPotential=mills.reduce((n,b)=>n+(b.jobs+(economy.citizen(b.ownerId)?1:0))*240/8,0),millPlanned=pending.filter(p=>p.type==='mill').length*60;
-  const bottleneck=daily===0?'Sem consumo de iluminação previsto':farmPotential+farmPlanned<sunflowerRequired?'Faltam lavouras de girassol':farmDaily<sunflowerRequired&&farmPotential>=sunflowerRequired?'Lavouras precisam de trabalhadores ou tempo para crescer':millPotential+millPlanned<oilRequired?'Falta capacidade de prensagem':millDaily<oilRequired?'Moinhos precisam de trabalhadores':sunflowerStock<3&&oilStock<daily?'Girassol ainda não chegou aos moinhos':oilStock<daily?'Moagem ou transporte de óleo em andamento':'Reserva de óleo suficiente';
+  const farmPlanned=pending.filter(p=>p.type==='farm'&&p.crop==='girassol').reduce((n,p)=>{const area=Math.max(1,p.width*p.depth-2),staff=Math.max(1,Math.ceil(area/36)),labor=area*120/12*.65;return n+Math.floor(area*4*540/(Math.max(100,labor/staff)+100));},0);
+  const millDaily=mills.reduce((n,b)=>n+(b.workers.length+(economy.citizen(b.ownerId)?1:0))*240/3,0);
+  const millPotential=mills.reduce((n,b)=>n+(b.jobs+(economy.citizen(b.ownerId)?1:0))*240/3,0),millPlanned=pending.filter(p=>p.type==='mill').length*160;
+  const bottleneck=daily===0?'Sem consumo de iluminação previsto':farmPotential+farmPlanned<sunflowerRequired?'Faltam lavouras de girassol':farmDaily<sunflowerRequired&&farmPotential>=sunflowerRequired?'Lavouras precisam de trabalhadores ou tempo para crescer':millPotential+millPlanned<oilRequired?'Falta capacidade de prensagem':millDaily<oilRequired?'Moinhos precisam de trabalhadores':sunflowerStock<1&&oilStock<oilRequired?'Girassol ainda não chegou aos moinhos':oilStock<oilRequired?'Moagem ou transporte de óleo em andamento':'Reserva de óleo suficiente';
   return {minute:city.minute,built:built.length,forecast,empty,daily,oilRequired,sunflowerRequired,oilStock,sunflowerStock,farmDaily,farmPotential,farmPlanned,millDaily,millPotential,millPlanned,bottleneck};
 }
 export function investOilChain(economy){

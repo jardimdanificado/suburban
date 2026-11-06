@@ -8744,7 +8744,7 @@ export class RCT3DRenderer {
         }
 
         // 3. Torches Carried by Intelligent Creatures
-        const isIntelligent = !!e.properties?.brain || !!e.properties?.group_member;
+        const isIntelligent = !!e.properties?.brain || !!e.properties?.group_member || !!e.properties?.citizen;
         if (isIntelligent) {
           const leftTorch = e.properties.arm_left?.heldItem?.resourceType === "torch" && (e.properties.arm_left?.heldItem?.fuel || 0) > 0;
           const rightTorch = e.properties.arm_right?.heldItem?.resourceType === "torch" && (e.properties.arm_right?.heldItem?.fuel || 0) > 0;

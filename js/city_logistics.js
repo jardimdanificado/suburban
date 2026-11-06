@@ -29,7 +29,7 @@ export class CityLogistics {
     const drivers=carriers.reduce((n,b)=>n+(b.balance>=b.wage?b.workers.filter(id=>city.society.citizen(id)).length:0)+(city.economy.workingOwner(b)?1:0),0);
     const waiting=shipments.filter(s=>s.status!=='waiting-space' && (!s.driverId || !s.carrierId));
     const oldest=waiting.reduce((n,s)=>Math.max(n,city.minute-s.createdAt),0);
-    const lampRequests=city.lighting.posts.filter(p=>p.fuel<=3 && !shipments.some(s=>s.buyer.lampPost===p)).length;
+ const lampRequests=city.lighting.posts.filter(p=>p.fuel<=12 && !shipments.some(s=>s.buyer.lampPost===p)).length;
     const work=shipments.reduce((n,s)=>{if(s.status==='waiting-space')return n;const driver=city.society.citizen(s.driverId);const remaining=driver?.deliveryLeg==='delivery'?driver.path.length+4:s.routeLength+(s.pickedUp?0:s.routeLength*.5)+4;return n+Math.max(4,remaining);},0)+lampRequests*30;
     // Only part of a shift is available after pickup, food, rest and personal needs.
     const capacity=drivers*240;
@@ -241,7 +241,7 @@ export class CityLogistics {
         city.substances?.moveLots(s,s.buyer,s.good,s.quantity);
         s.buyer.inventory[s.good] += s.quantity; s.inventory[s.good] = 0;
         if(s.imported&&s.importClaimBuyerId){const claimant=city.building(s.importClaimBuyerId);if(claimant){claimant.importIncoming??={};claimant.importIncoming[s.good]=Math.max(0,(claimant.importIncoming[s.good]||0)-s.quantity);const claims=s.buyer.claims??{},claim=claims[claimant.id]??={};claim[s.good]=(claim[s.good]||0)+s.quantity;claims[claimant.id]=claim;s.buyer.claims=claims;}}
-        if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=12;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
+        if(s.buyer.lampPost) {s.buyer.inventory.oleo--;s.buyer.lampPost.fuel+=48;s.buyer.lampPost.lit=(city.hour<6||city.hour>=18);s.buyer.lampPost.supplyStatus='Abastecido';city.economy.consumed.oleo++;city.economy.recordGoods('lamp-refill','oleo',1,s.seller.id,s.buyer.lampPost.id);}
         city.transfer(s.accountId, s.seller.accountId, s.cost, `${s.imported?'Importação':'Atacado'}: ${city.economy.goods[s.good].label}`,{good:s.good,quantity:s.quantity,shipmentId:s.id,...(s.imported?{imported:true,brand:s.importBrand}: {})});
         const carrier = city.building(s.carrierId);
         const informal=c.informalHaulId===s.id&&s.fee>0;

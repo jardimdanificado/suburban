@@ -122,6 +122,15 @@ export class CityLighting {
     if (!utility) return;
     this.reconcile();
     const night = city.hour < 6 || city.hour >= 18, groups = new Map(), posts = [],occupancy=this.siteOccupancy();
+    // A bottle of cheap oil powers a citizen's portable torch for four nights.
+    for(const c of city.citizens){
+      if(c.entity.destroyed||c.indoorLocation||c.ridingVehicleId)continue;
+      let torch=c.entity.properties.heldItem;
+      if(night&&(!torch||torch.resourceType!=='torch'||torch.fuel<=0)&&(c.inventory?.oleo||0)>0){
+        c.inventory.oleo--;city.economy.consumed.oleo++;city.economy.recordGoods('personal-lighting','oleo',1,c.id,null);torch=c.entity.properties.heldItem={name:'Tocha portátil',skin:'Item_Wood.png',resourceType:'torch',tint:0xffc24f,fuel:48};
+      }
+      if(night&&torch?.resourceType==='torch'&&torch.fuel>0){torch.fuel--;if(torch.fuel<=0)delete c.entity.properties.heldItem;}
+    }
     const register = (holder, payer, post) => {
       if (!post.built) return;
       const key = `${holder.id}:${payer}`;
@@ -188,7 +197,7 @@ export class CityLighting {
       for (const post of lamps) {
         // A carrier takes a real unit from the depot and fills the lamp on site.
         const pending=city.logistics.shipments.find(s=>s.buyer.lampPost===post&&!['delivered','cancelled'].includes(s.status));
-        if(post.fuel<=6&&!pending){
+        if(post.fuel<=12&&!pending){
           const depot=this.refillDepot(post,payer);let ordered=false;
           if(holder.inventory.oleo>0)ordered=city.logistics.order(holder,depot,'oleo',1,0,{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true});
           if(!ordered)for(const mill of mills.filter(m=>m!==holder).sort((a,b)=>Math.hypot(a.door.x-post.x,a.door.y-post.y)-Math.hypot(b.door.x-post.x,b.door.y-post.y)))if(city.logistics.order(mill,depot,'oleo',1,Math.ceil(city.economy.goods.oleo.price*(payer==='treasury'?1.5:1)),{payerAccountId:payer,purpose:'lamp-refill',requireCarrier:true})){ordered=true;break;}

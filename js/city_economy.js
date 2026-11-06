@@ -27,14 +27,14 @@ export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', com
 export const CROPS = {
   ...SUBSTANCE_CROPS,
   arroz:{label:'Arroz',grow:150,price:95},alface:{label:'Alface',grow:75,price:80},tomate:{label:'Tomate',grow:100,price:110},
-  girassol: { label: 'Girassol', grow: 180, price: 140 },
+  girassol: { label: 'Girassol', grow: 100, price: 12, yieldFactor: 4, laborFactor: .65 },
   maca: { label: 'Maçã', grow: 180, price: 100 }, goiaba: { label: 'Goiaba', grow: 160, price: 100 },
   trigo: { label: 'Trigo', grow: 120, price: 90 }, milho: { label: 'Milho', grow: 100, price: 95 },
   mandioca: { label: 'Mandioca', grow: 200, price: 105 }, cebola: { label: 'Cebola', grow: 140, price: 95 },
   feijao: { label: 'Feijão', grow: 150, price: 100 }, coentro: { label: 'Coentro', grow: 80, price: 90 },
   cevada:{label:'Cevada',grow:125,price:105,nonFood:true},lupulo:{label:'Lúpulo',grow:150,price:190,nonFood:true},uva:{label:'Uva',grow:170,price:150,nonFood:true},agave:{label:'Agave',grow:190,price:180,nonFood:true},
 };
-export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 450 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
+export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 10 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
 export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'restaurant', 'builder', 'quarry', 'carrier', 'lamp_service', 'office_tower', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill','clinic','library']);
 export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'iml','crematorium','police_station','council_oversight_office','jail','courthouse','townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing', 'popular_refectory']);
 const retailTypes = new Set(['bakery', 'greengrocer', 'market', 'restaurant']);
@@ -257,7 +257,7 @@ export class CityEconomy {
   }
   retailAssortment(b) {
     if(!['market','greengrocer'].includes(b?.type))return [];
-    if(Array.isArray(b.retailAssortment)&&b.retailAssortment.length)return b.retailAssortment;
+    if(Array.isArray(b.retailAssortment)&&b.retailAssortment.length){if(b.type==='market'&&!b.retailAssortment.includes('oleo'))b.retailAssortment.push('oleo');return b.retailAssortment;}
     const candidates=edible.filter(g=>this.accepts(b,g));
     if(b.type==='market')candidates.push('pao');
     const preference=new Map();
@@ -275,6 +275,7 @@ export class CityEconomy {
     // off a new shop's shelves.
     const staples=candidates.filter(g=>['pao','feijao','milho','mandioca','arroz','alface','tomate','cebola'].includes(g)).sort(rank).slice(0,2);
     b.retailAssortment=[...staples,...candidates.filter(g=>!staples.includes(g)).sort(rank)].slice(0,4);
+    if(b.type==='market')b.retailAssortment=[...new Set([...b.retailAssortment,'oleo'])];
     return b.retailAssortment;
   }
   updateDemand() {
@@ -445,11 +446,12 @@ export class CityEconomy {
     const area = Math.max(1,b.width*b.depth-2);
     b.fields = Array.from({length:Math.ceil(area/12)},(_,i) => {
       const cells = Math.min(12,area-i*12);
-      return {area:cells,yield:Math.max(1,Math.floor(cells*(CROPS[b.crop]?.yieldFactor||1))),requiredLabor:Math.ceil(ECONOMY_RULES.farmLabor*cells/12*(CROPS[b.crop]?.laborFactor||1)),labor:0,plantedAt:null};
+      return {area:cells,yield:Math.max(1,Math.floor(cells*(CROPS[b.crop]?.yieldFactor||1))),requiredLabor:Math.ceil(ECONOMY_RULES.farmLabor*cells/12*(CROPS[b.crop]?.laborFactor||1)),labor:0,plantedAt:null,...(b.crop==='girassol'?{sunflowerBoostVersion:1}:{})};
     });
     b.jobs = Math.min(32,Math.max(1,Math.ceil(area/18)));
   }
   farmCapacity(b,planned=false,crew=null) {
+    if(b.crop==='girassol')for(const field of b.fields)if(field.sunflowerBoostVersion!==1){field.yield=Math.max(1,Math.floor((field.yield||field.area||12)*4));field.requiredLabor=Math.max(1,Math.ceil((field.requiredLabor||ECONOMY_RULES.farmLabor)*.65));field.sunflowerBoostVersion=1;}
     const area=b.fields.reduce((n,f)=>n+(f.area||12),0);
     const employed=b.workers.length+(this.workingOwner(b)?1:0),staff=crew??(planned?Math.max(b.jobs,employed):employed);
     const labor=b.fields.reduce((n,f)=>n+(f.requiredLabor||ECONOMY_RULES.farmLabor),0);
@@ -821,6 +823,7 @@ export class CityEconomy {
     this.buySeeds(b);
     const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType));let offset=0,best=null;
     search: for(const field of b.fields){
+      if(b.crop==='girassol'&&field.sunflowerBoostVersion!==1){field.yield=Math.max(1,Math.floor((field.yield||field.area||12)*4));field.requiredLabor=Math.max(1,Math.ceil((field.requiredLabor||ECONOMY_RULES.farmLabor)*.65));field.sunflowerBoostVersion=1;}
       const area=field.area||12,units=cells.slice(offset,offset+area);offset+=area;if(!units.length)continue;
       const required=field.requiredLabor||ECONOMY_RULES.farmLabor,quota=required/units.length;
       if(field.plantedAt===null&&(b.seedStock<Math.ceil(area/3)||b.inventory[b.crop]>=Math.max(36,b.fields.length*18)))continue;
@@ -926,6 +929,7 @@ export class CityEconomy {
     return true;
   }
   consumerOffer(c, b) {
+    if(b?.type==='market'&&b.active&&!b.entity.destroyed&&(b.inventory.oleo||0)>0&&(c.inventory?.oleo||0)<1&&c.balance>=this.goods.oleo.price)return {good:'oleo',price:this.goods.oleo.price};
     if(b?.type==='laundromat'&&b.active&&!b.entity.destroyed&&(b.workers.length>0||b.ownerId)&&b.inventory.sabao>0&&(c.wardrobe||[]).some(g=>(g.dirt||0)>=12)&&c.balance>=this.city.currency.price(700))return {service:'laundry',good:'sabao',price:this.city.currency.price(700)};
     if(b?.active&&!b.entity.destroyed&&['tailor','clothing_store','thrift_store'].includes(b.type))return clothingOffer(this.city,c,b);
     if(b?.active&&!b.entity.destroyed&&b.type==='newsroom')return newspaperOffer(this.city,c,b);
@@ -983,7 +987,8 @@ export class CityEconomy {
       return washed>0;
     }
     if(!this.city.transfer(c.accountId,b.accountId,price,`Serviço: Venda de ${this.goods[good].label}`,{good,quantity:1}))return false;
-    b.inventory[good]--;if(streetVendor){streetVendor.stock[good]--;streetVendor.stockRevision=(streetVendor.stockRevision||0)+1;}const publication=['livros','panfletos','jornais'].includes(good),durable=publication||good==='roupas'||['porrete','barra_ferro','faca','garrucha','cesta','carrinho'].includes(good);if(!durable)this.consumed[good]++;this.recordGoods(streetVendor?'street-market-sale':durable?'durable-purchase':'household-consumption',good,1,b.id,c.id,streetVendor?{marketId:streetVendor.marketId,vendorBusinessId:b.id}:{});
+    b.inventory[good]--;if(streetVendor){streetVendor.stock[good]--;streetVendor.stockRevision=(streetVendor.stockRevision||0)+1;}const publication=['livros','panfletos','jornais'].includes(good),durable=publication||good==='roupas'||good==='oleo'||['porrete','barra_ferro','faca','garrucha','cesta','carrinho'].includes(good);if(!durable)this.consumed[good]++;this.recordGoods(streetVendor?'street-market-sale':durable?'durable-purchase':'household-consumption',good,1,b.id,c.id,streetVendor?{marketId:streetVendor.marketId,vendorBusinessId:b.id}:{});
+    if(good==='oleo'){c.inventory??={};c.inventory.oleo=(c.inventory.oleo||0)+1;return true;}
     if(good==='roupas'){buyClothes(this.city,c,b,offer.garmentIndex);return true;}
     if(['porrete','barra_ferro','faca','garrucha'].includes(good)){const weapon=good==='porrete'?{name:'Porrete de madeira',damage:2.4,range:1.8,durability:5}:good==='faca'?{name:'Faca de trabalho',damage:3.4,range:1.55,durability:4}:good==='garrucha'?{name:'Garrucha artesanal',damage:4.6,range:5.5,durability:6,kind:'firearm'}:{name:'Bastão de ferro',damage:3.1,range:1.75,durability:7};c.equipment??={};c.inventory??={};c.inventory[good]=(c.inventory[good]||0)+1;c.equipment.weapon={good,...weapon,boughtAt:this.city.minute,buildingId:b.id};return true;}
     if(good==='jornais'){const doc=this.city.publications.documents.get(offer.documentId);this.city.publications.move(doc,c.accountId);c.newspaperEditions??=[];c.newspaperEditions.push(doc.editionKey);c.newspaperEditions=c.newspaperEditions.slice(-32);this.city.publications.read(doc.id,c.id);return true;}
@@ -1007,9 +1012,9 @@ export class CityEconomy {
     if(b.type==='kitchen')return kitchenWork(this,b,c);
     if (INDUSTRIES[b.type]) return this.industrialWork(b,c,INDUSTRIES[b.type]);
     if (b.type === 'mill') {
-      if (b.inventory.girassol < 3 || inventoryFree(b) < 1) return false;
+      if (b.inventory.girassol < 1 || inventoryFree(b) < 1) return false;
       b.millingLabor = (b.millingLabor || 0) + workEfficiency(c,b);
-      if (b.millingLabor >= 8) { b.millingLabor -= 8; b.inventory.girassol -= 3; b.inventory.oleo++; this.consumed.girassol += 3; this.produced.oleo++; this.recordGoods('milling', 'oleo', 1, null, b.id); }
+      if (b.millingLabor >= 3) { b.millingLabor -= 3; b.inventory.girassol--; b.inventory.oleo++; this.consumed.girassol++; this.produced.oleo++; this.recordGoods('milling', 'oleo', 1, null, b.id); }
       return true;
     }
     if (b.type === 'mint') return this.city.currency.work(b, c);

@@ -170,7 +170,7 @@ export class CitySimulation {
     this.officialJournal = new CityOfficialJournal(this);
     this.vehicles = new CityVehicles(this);
     this.paint = new CityPaint(this);
-    this.substances=new CitySubstances(this);this.substanceSchemaVersion=4;
+    this.substances=new CitySubstances(this);this.substanceSchemaVersion=5;
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;

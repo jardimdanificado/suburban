@@ -11,7 +11,7 @@ const inputs=(type,economy)=>{
     const flowerReady=economy.businesses.some(b=>(b.inventory.flor_cannabis||0)>=2),tobaccoReady=economy.businesses.some(b=>(b.inventory.folha_tabaco||0)>=6);
     return cannabisAllowed&&(!tobaccoAllowed||flowerReady&&!tobaccoReady)?{flor_cannabis:2,papel:1}:{folha_tabaco:6,papel:1};
   }
-  return type==='bakery'?{trigo:2}:type==='mill'?{girassol:3}:INDUSTRIES[type]?.inputs||{};
+  return type==='bakery'?{trigo:2}:type==='mill'?{girassol:1}:INDUSTRIES[type]?.inputs||{};
 };
 const vehicleFactories=new Set(['bearing_factory','frame_factory','deck_factory','tire_factory','chain_factory','safety_equipment','saddle_factory','cycle_assembler']);
 const productionPlanCache=new WeakMap();

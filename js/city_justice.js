@@ -1206,10 +1206,10 @@ export class CityJustice {
     return !location&&dist(position,piece.entity)<=radius;
   }
   sceneIllumination(scene,position,daylight){
-    const city=this.city;if(scene.buildingId==null){const lit=position&&(city.world.cityLampPosts||[]).some(post=>post.lit&&Math.hypot(post.x-position.x,post.y-position.y)<=7);return daylight?1:(lit?0.72:0.12);}
+    const city=this.city;if(scene.buildingId==null){const lit=position&&(city.world.cityLampPosts||[]).some(post=>post.lit&&Math.hypot(post.x-position.x,post.y-position.y)<=10);return daylight?1:(lit?0.72:0.12);}
     const building=city.building(scene.buildingId),unit=city.units?.get(scene.unitId),window=!!unit?.hasWindow&&unit.windowStyle!=='shuttered';if(!building||!unit)return daylight?0.35:0.06;if(!position)return daylight?0.35:0.05;
     if(daylight)return window?0.9:0.35;if(!window)return 0.05;
-    const lamp=(city.world.cityLampPosts||[]).find(post=>post.lit&&Math.hypot(post.x-position.x,post.y-position.y)<=8&&(()=>{const steps=Math.max(1,Math.ceil(Math.hypot(post.x-position.x,post.y-position.y)/.25));for(let i=1;i<steps;i++){const x=post.x+(position.x-post.x)*i/steps,y=post.y+(position.y-post.y)*i/steps;if(buildingContainsPoint(building,x,y))continue;if(city.buildings.some(other=>other.id!==building.id&&!other.entity.destroyed&&other.constructionKind!=='open-air'&&buildingContainsPoint(other,x,y)))return false;}return true;})());return lamp?0.42:0.08;
+    const lamp=(city.world.cityLampPosts||[]).find(post=>post.lit&&Math.hypot(post.x-position.x,post.y-position.y)<=10&&(()=>{const steps=Math.max(1,Math.ceil(Math.hypot(post.x-position.x,post.y-position.y)/.25));for(let i=1;i<steps;i++){const x=post.x+(position.x-post.x)*i/steps,y=post.y+(position.y-post.y)*i/steps;if(buildingContainsPoint(building,x,y))continue;if(city.buildings.some(other=>other.id!==building.id&&!other.entity.destroyed&&other.constructionKind!=='open-air'&&buildingContainsPoint(other,x,y)))return false;}return true;})());return lamp?0.42:0.08;
   }
   recordPrejudiceAct(actor,target,type,strength=.65,witnessIds=[]){
     if(!actor||!target||!PREJUDICE_TYPES[type])return null;this.prejudiceIncidents??=[];this.nextPrejudiceIncidentId??=1;this.policies??={};this.policies.prejudiceLaws??={};this.policies.prejudiceLaws[type]??=true;this.policies.penalCode??={};this.policies.penalCode[type]??={...BASE_PENAL_CODE[type],fineOnly:false,politicalDisqualification:false,cleanRecordDisqualifying:false,recidivismSeverityBonus:0,cassation:true,cassationTrigger:'arrest'};
