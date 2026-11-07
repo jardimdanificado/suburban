@@ -4,7 +4,7 @@ import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=ff-routines-1";
 import { CityDesktop } from "./js/city_desktop.js?v=perf-employment-ui-2";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=terrain-stable-cache-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=terrain-stable-cache-1-canvas-readback-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";

@@ -592,7 +592,7 @@ export function drawNESProgressBar(x, y, w, h, val, max, label, color = "#58d854
 export class LegacyCanvasUI {
   constructor(canvas) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext("2d");
+    this.ctx = canvas.getContext("2d", { willReadFrequently: true });
     this.width = 800;
     this.height = 600;
     this.dpr = 1;

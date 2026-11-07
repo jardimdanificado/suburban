@@ -16,7 +16,7 @@ export function activityBadge(c){
 }
 export function activityBadgeKey(b){return b.kind==='campaign'?`${b.kind}:${b.number}:${b.color}:${JSON.stringify(b.flag||null)}`:b.kind;}
 export function activityBadgeCanvas(b,onReady=null){
-  const canvas=document.createElement('canvas');canvas.width=96;canvas.height=96;const ctx=canvas.getContext('2d');ctx.fillStyle='#18232ddd';ctx.beginPath();ctx.arc(48,46,43,0,Math.PI*2);ctx.fill();ctx.strokeStyle=b.color;ctx.lineWidth=5;ctx.stroke();ctx.strokeStyle='#ffffff';ctx.fillStyle='#ffffff';ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';
+  const canvas=document.createElement('canvas');canvas.width=96;canvas.height=96;const ctx=canvas.getContext('2d',{willReadFrequently:b.kind==='campaign'});ctx.fillStyle='#18232ddd';ctx.beginPath();ctx.arc(48,46,43,0,Math.PI*2);ctx.fill();ctx.strokeStyle=b.color;ctx.lineWidth=5;ctx.stroke();ctx.strokeStyle='#ffffff';ctx.fillStyle='#ffffff';ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';
   if(b.kind==='campaign'){
     if(b.flag)drawPartyFlag(ctx,b.flag,23,22,52,35,()=>{drawPartyFlag(ctx,b.flag,23,22,52,35);onReady?.();});else{ctx.fillStyle=b.color;ctx.fillRect(28,24,45,28);ctx.strokeStyle='#fff';ctx.strokeRect(28,24,45,28);}
     ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(26,22);ctx.lineTo(26,75);ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 23px sans-serif';ctx.textAlign='center';ctx.fillText(String(b.number).padStart(2,'0'),57,79);

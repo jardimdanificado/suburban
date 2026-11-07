@@ -14,7 +14,7 @@ function drawCandidateModel(ctx,candidate,x,y,w,h,accent){
   ctx.restore();
 }
 function poster(d,candidate,onReady=null){
-  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.fillStyle=d.flag.background;ctx.fillRect(0,0,512,256);ctx.fillStyle=d.flag.foreground;ctx.fillRect(12,12,488,8);ctx.fillRect(12,236,488,8);
+  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=false;ctx.fillStyle=d.flag.background;ctx.fillRect(0,0,512,256);ctx.fillStyle=d.flag.foreground;ctx.fillRect(12,12,488,8);ctx.fillRect(12,236,488,8);
   const isFlag=['flag','window_flag','roof_flag'].includes(d.kind);ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 96px sans-serif';if(isFlag){drawPartyFlag(ctx,d.flag,18,38,172,160,onReady);drawCandidateModel(ctx,candidate,206,34,118,174,d.flag.background);ctx.fillStyle=d.flag.foreground;drawPixelText(ctx,String(d.partyNumber).padStart(2,'0'),408,108);ctx.font='bold 18px monospace';drawPixelText(ctx,String(d.candidateName||'').slice(0,20),392,202,188);}else{drawPartyFlag(ctx,d.flag,22,30,118,72,onReady);drawCandidateModel(ctx,candidate,352,31,132,174,d.flag.background);drawPixelText(ctx,String(d.partyNumber).padStart(2,'0'),245,100);ctx.font='bold 28px sans-serif';const words=String(d.candidateName||'').split(' '),line=[];let y=166;for(const word of words){if(ctx.measureText([...line,word].join(' ')).width>275){drawPixelText(ctx,line.join(' '),224,y);line.length=0;y+=32;}line.push(word);}if(line.length&&y<226)drawPixelText(ctx,line.join(' '),224,y);}
   return canvas;
 }

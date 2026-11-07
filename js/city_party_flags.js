@@ -299,7 +299,7 @@ function requestImage(filename,onReady){
 }
 function tintedSprite(filename,foreground,background,transparent,detailed,onReady){
  const raw=requestImage(filename,onReady);if(!raw)return null;const key=`${filename}:${foreground}:${detailed}:${background}:${transparent?'cutout':'tile'}`;if(tintedCache.has(key))return tintedCache.get(key);
- const canvas=document.createElement('canvas');canvas.width=raw.naturalWidth;canvas.height=raw.naturalHeight;const context=canvas.getContext('2d');context.drawImage(raw,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height),data=pixels.data,fg=foreground.match(/\w\w/g).map(v=>parseInt(v,16)),bg=background.match(/\w\w/g).map(v=>parseInt(v,16));
+ const canvas=document.createElement('canvas');canvas.width=raw.naturalWidth;canvas.height=raw.naturalHeight;const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(raw,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height),data=pixels.data,fg=foreground.match(/\w\w/g).map(v=>parseInt(v,16)),bg=background.match(/\w\w/g).map(v=>parseInt(v,16));
  if(transparent){
   const width=canvas.width,height=canvas.height,counts=new Map();
   for(let x=0;x<width;x++)for(const y of [0,height-1]){const i=(y*width+x)*4;if(data[i+3]){const key=[data[i]>>3,data[i+1]>>3,data[i+2]>>3].join(',');counts.set(key,(counts.get(key)||0)+1);}}
@@ -474,5 +474,5 @@ export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
  ctx.strokeStyle=flag.foreground;ctx.strokeRect(x,y,w,h);ctx.restore();
 }
 export function partyFlagCanvas(flag,onReady){
- const canvas=document.createElement('canvas');canvas.width=120;canvas.height=76;const redraw=()=>{drawPartyFlag(canvas.getContext('2d'),flag,0,0,120,76);onReady?.();};drawPartyFlag(canvas.getContext('2d'),flag,0,0,120,76,redraw);return canvas;
+ const canvas=document.createElement('canvas');canvas.width=120;canvas.height=76;const redraw=()=>{drawPartyFlag(canvas.getContext('2d',{willReadFrequently:true}),flag,0,0,120,76);onReady?.();};drawPartyFlag(canvas.getContext('2d',{willReadFrequently:true}),flag,0,0,120,76,redraw);return canvas;
 }
