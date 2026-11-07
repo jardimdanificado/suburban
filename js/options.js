@@ -1,4 +1,4 @@
-import { SPEED_TIERS } from "./simulation_time.js";
+import { SPEED_TIERS, speedLabel } from "./simulation_time.js";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
 const GRAPHICS = [
@@ -100,16 +100,16 @@ export class OptionsPanel {
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();
     if (this.tab === "TIME") {
       const columns = Math.max(1, Math.floor((w - 24) / 64));
-      this.maxScroll = Math.max(0, 130 + Math.ceil(SPEED_TIERS.length / columns) * 28 - (bottom - contentY));
+      this.maxScroll = Math.max(0, 160 + Math.ceil(SPEED_TIERS.length / columns) * 28 - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
       const base = contentY - this.scroll;
       ui.text("VELOCIDADE", x + 12, base + 8, "#f8b800");
       SPEED_TIERS.forEach((value, i) => ui.button(x + 12 + i % columns * 64, base + 24 + Math.floor(i / columns) * 28, 60, 24,
-        `${value}X`, () => this.time.setSpeed(value), { selected: this.time.speed === value }));
+        speedLabel(value), () => this.time.setSpeed(value), { selected: this.time.speed === value }));
       const after = base + 30 + Math.ceil(SPEED_TIERS.length / columns) * 28;
       ui.button(x + 12, after, 118, 24, this.time.paused ? "CONTINUAR" : "PAUSAR", () => this.time.setPaused(!this.time.paused));
       ui.button(x + 138, after, 90, 24, "PASSO", () => this.step());
-      ui.text("ESPACO: PAUSA\n-/+: VELOCIDADE\n.: UM PASSO QUANDO PAUSADO", x + 12, after + 42);
+      ui.text("ESPACO: PAUSA\n-/+: VELOCIDADE\n.: UM PASSO QUANDO PAUSADO\nff: AVANÇO COM DETALHE REDUZIDO", x + 12, after + 42);
     } else {
       const headingHeight = this.tab === "VISUAL" ? 0 : 22;
       this.maxScroll = Math.max(0, rows.length * 30 + headingHeight - (bottom - contentY));

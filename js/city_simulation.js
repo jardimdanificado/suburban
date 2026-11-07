@@ -1,3 +1,4 @@
+import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview} from './city_fast_forward.js';
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {beginActivitySearch,endActivitySearch,invalidateActivitySearch} from './city_activity_search.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
@@ -15,7 +16,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=fast-speeds-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=carpool-spatial-index-1';
+import {CityVehicles} from './city_vehicles.js?v=ff-cargo-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
@@ -32,7 +33,7 @@ import { CityGovernment as CityPolitics } from './city_government.js?v=party-num
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=night-crowd-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=ff-interiors-1';
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';
@@ -47,11 +48,11 @@ import { CitySanitation } from './city_sanitation.js?v=sanitation-visitor-search
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=road-network-cache-1';
-import { CityLogistics } from './city_logistics.js?v=bulk-public-food-depot-arrival-1';
+import { CityLogistics } from './city_logistics.js?v=ff-freight-1';
 import { CityGigs } from './city_gigs.js?v=spaced-limited-spontaneous-art-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=two-day-public-food-reserve-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=citizen-id-index-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff-social-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 const OUTDOOR_LEISURE_SEATS=new WeakMap();
@@ -760,6 +761,14 @@ export class CitySimulation {
       if (path !== null) { this.development.reserveConstruction(siteProject); c.path = path; c.task = 'construction'; c.workProjectId = siteProject.id; c.targetId = siteProject.builderId; return; }
     }
     const hall = this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
+    // Familiar services remain the default while viable; compare the wider
+    // market again after six hours, or immediately when the usual place fails.
+    const habit=c.routineServices?.[task],usual=habit&&this.building(habit.buildingId);
+    if(!urgent&&habit&&this.minute<habit.reviewAt&&usual&&!usual.entity.destroyed&&usual.active&&['food','water','health','leisure','social'].includes(task)){
+      const available=task==='food'?Number.isFinite(this.economy.mealScore(c,usual)):!civicSpec(usual)||civicStatus(this,usual,c)?.ready;
+      if(available){const path=this.findPath(c.entity,usual.door);if(path!==null){c.path=path;c.targetId=usual.id;c.task=task;if(task==='food')this.workMeals.issueVoucher(c,usual);return;}}
+      delete c.routineServices[task];
+    }
     if(task==='food'&&this.hour>=8&&this.hour<17){
       const vendorRows=this.economy.streetMarketVendors().map(row=>({row,score:this.economy.streetMarketMealScore(c,row)})).filter(row=>Number.isFinite(row.score)).sort((a,b)=>a.score-b.score);
       const shopScore=Math.min(Infinity,...this.buildings.filter(b=>b.type!=='townhall').map(b=>this.economy.mealScore(c,b)));
@@ -774,7 +783,7 @@ export class CitySimulation {
       if(['health','leisure','social'].includes(task)&&civicSpec(b)&&!civicStatus(this,b,c)?.ready)continue;
       const path = this.findPath(c.entity, b.door);
       if (path !== null) {
-        c.path = path; c.targetId = b.id; c.task = task; if (task === 'food') this.workMeals.issueVoucher(c, b); return;
+        c.path = path; c.targetId = b.id; c.task = task; if(['food','water','health','leisure','social'].includes(task)){c.routineServices??={};c.routineServices[task]={buildingId:b.id,reviewAt:this.minute+360+c.id%60};} if (task === 'food') this.workMeals.issueVoucher(c, b); return;
       }
     }
     c.task = task==='energy'&&!home?'energy':null; c.targetId = null; c.action = task==='energy'&&!home?'Dormindo na rua':task === 'food' ? 'Alimentos indisponíveis nas lojas locais' : home ? 'Sem acesso ao serviço' : 'Sem moradia';
@@ -905,7 +914,7 @@ export class CitySimulation {
     if(['health','leisure','social'].includes(task)&&civicVisit(this,c,b))return;
     const price = this.currency.price(SERVICE_PRICES[task]);
     if (c.servicePaid !== `${b.id}:${task}`) {
-      if (task === 'food' ? !this.economy.consumeMeal(c, b) : !this.transfer(this.payerFor(c), b.accountId, b.type === 'townhall' ? 0 : price, `Serviço: ${NEED_LABELS[task] || task}`)) { c.action = 'Sem dinheiro para o serviço'; c.task = null; return; }
+      if (task === 'food' ? !this.economy.consumeMeal(c, b) : !this.transfer(this.payerFor(c), b.accountId, b.type === 'townhall' ? 0 : price, `Serviço: ${NEED_LABELS[task] || task}`)) { c.action = 'Sem dinheiro para o serviço'; if(c.routineServices)delete c.routineServices[task]; c.task = null; return; }
       c.servicePaid = `${b.id}:${task}`;
     }
     if(task==='energy'){sleepMinute(this,c,{street:!c.homeUnitId});return;}
@@ -1015,6 +1024,21 @@ export class CitySimulation {
       for (const u of this.units.values()) if (u.ownerId === c.accountId) { const resident = this.accounts.get(u.tenantId); if (!heir && resident?.homeUnitId === u.id) this.releaseHome(resident); this.history.ownership(this.building(u.buildingId),c.accountId,heir?.accountId||'treasury',{unitId:u.id,action:'inheritance'}); u.ownerId = heir?.accountId || 'treasury'; u.forSale = true; u.forRent = !!heir; }
       this.economy.leaveJob(c, c.dead ? 'Falecimento' : 'Saída da cidade');
       this.bank.closeClient(c, heir);
+      // Remaining personal/home inventories must leave an explicit estate.
+      // Removing the citizen used to silently remove these goods from stock.
+      for(const source of [c,c.substanceHomeStock].filter(Boolean))for(const [good,quantity]of Object.entries(source.inventory||{})){
+        if(!(quantity>0)||!this.economy.goods[good])continue;
+        const target=heir?(source===c?heir:this.substances.homeStock(heir)):this.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
+        if(target){
+          target.inventory??={};const moved=heir?quantity:Math.min(quantity,inventoryFree(target));
+          if(moved>0){
+            this.substances.moveLots(source,target,good,moved);this.paint.move(source,target,good,moved);this.vehicles.moveStock(source,target,good,moved);this.publications.moveStock(source,target,good,moved);if(good==='roupas')moveGarments(source,target,moved);
+            target.inventory[good]=(target.inventory[good]||0)+moved;source.inventory[good]-=moved;
+            this.economy.recordGoods('estate-stock',good,moved,c.id,heir?.id||target.id);
+          }
+        }
+        const lost=source.inventory[good]||0;if(lost){this.economy.lost[good]+=lost;this.substances.takeLots(source,good,lost);this.vehicles.loseStock(source,good,lost);this.publications.loseStock(source,good,lost);source.inventory[good]=0;}
+      }
       this.publications.inherit(c.accountId,heir?.accountId||'treasury');
       if(c.forestryJob?.load){this.economy.lost.madeira+=c.forestryJob.load;this.log('Madeira perdida com a interrupção do transporte florestal.','nature',[c.id],{quantity:c.forestryJob.load,buildingId:c.forestryJob.buildingId});}
       if(c.forestrySeeds)this.economy.lost.sementes+=c.forestrySeeds;
@@ -1035,6 +1059,7 @@ export class CitySimulation {
     const profileStart=performance.now();let profileMark=profileStart;
     this._pathSearchProfile=this.profileDiagnostics?{minute:this.minute,searches:0,totalMs:0,maxMs:0,start:null,goal:null}:null;
     this.minute++;
+    beginFastForwardMinute(this);
     this.indexFamilies();
     this.reconcile();
     const reconcileRevision = `${this.structureRevision}:${this.world.revision}:${this.development.projects.length}`;
@@ -1067,14 +1092,15 @@ export class CitySimulation {
     const activitySearchPass=beginActivitySearch(this);
     try{
     for (const c of this.citizens) {
+      if(deferFastForwardCitizen(this,c))continue;
       if(activitySearchPass.hasFull&&(c.custody||c.custodyEscort||c.custodyWaterDelivery||c.funeralBodyId||c.graffitiMission||c.policePatrol||c.policeResponse||c.policeInvestigation||c.policeOversight||c.policeAudit||c.policeRestitution||c.policeArrestEscort))invalidateActivitySearch(this);
       if(citizenDetail)measureCitizen('blockedPositionRecovery',()=>this.life.recoverBlockedPosition(c));else this.life.recoverBlockedPosition(c);
       const n = c.needs;
       // Idle adults cannot choose another activity until their short retry
       // window expires. Accumulate their passive need changes in one pass;
       // active workers, travelers, conversations and children still run each
-      // minute. The window is at most five city minutes.
-      if(!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==0)continue;
+      // minute. Reviews wake at hourly boundaries and on changed conditions.
+      if(!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==0&&c._routineRevision===routineRevision(this,c)&&!this.urgentNeed(c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>35)continue;
       const elapsed=Math.max(1,this.minute-(c._lastNeedsAt??this.minute-1));c._lastNeedsAt=this.minute;c._idleHomeId=c.homeUnitId;
       const age=this.society.age(c);
       if(c._renderAge!==age){c._renderAge=age;c.entity.properties.render.size=age<6?.55:age>=18?1:.8;}
@@ -1148,14 +1174,13 @@ export class CitySimulation {
         // minute, even after finishing leisure at 95% or finding no service.
         // Retry on a changed urgent need, at shift boundaries, or after a short
         // delay. At 32× this is only a fraction of a real second.
-        if(this.minute<(c._nextTaskAt||0)&&c._retryUrgent===urgent)continue;
+        if(this.minute<(c._nextTaskAt||0)&&c._retryUrgent===urgent&&c._routineRevision===routineRevision(this,c))continue;
         c.servicePaid = null;if(citizenDetail)measureCitizen('taskChoice',()=>this.chooseTask(c,urgent));else this.chooseTask(c,urgent);
       }
       if (!c.path.length && c.task){if(citizenDetail)measureCitizen('taskExecution',()=>this.performTask(c));else this.performTask(c);}
       if(!c.task){
         const stable=c.homeUnitId&&n.food>35&&n.water>35&&n.energy>35&&n.health>35&&n.toilet>35;
-        const interval=stable?SIMULATION_LOD.stableDecisionMinutes:SIMULATION_LOD.unstableDecisionMinutes;
-        c._nextTaskAt=this.minute+interval+c.id%interval;c._retryUrgent=urgent;
+        c._nextTaskAt=nextRoutineReview(this,c,stable,urgent);c._retryUrgent=urgent;c._routineRevision=routineRevision(this,c);
       }
     }
     this._citizenLoopProfile=null;citizenMs=performance.now()-profileMark;profileMark=performance.now();
@@ -1169,7 +1194,7 @@ export class CitySimulation {
     if(societyParts){societyParts.recruitmentMs=performance.now()-societyPartStart;societyPartStart=performance.now();}
     this.gigs.updateMinute();
     if(societyParts){societyParts.gigsMs=performance.now()-societyPartStart;societyPartStart=performance.now();}
-    disperseCrowds(this);
+    if(!this.fastForward||this.minute%4===0)disperseCrowds(this);
     if(societyParts){societyParts.crowdDispersionMs=performance.now()-societyPartStart;societyPartStart=performance.now();}
     this.society.updateMinute();
     if(societyParts)societyParts.socialUpdateMs=performance.now()-societyPartStart;
@@ -1224,7 +1249,7 @@ export class CitySimulation {
       // cooldown); polling it on every animation frame repeats the same scans
       // up to 60 times before any relevant state can change.
       const load=c.deliveryId?(shipmentIndex?shipmentIndex.get(c.deliveryId):this.logistics.shipments.find(s=>s.id===c.deliveryId)):null;
-      if(load?.pickedUp&&!c.mobilityTrip&&load.quantity>this.vehicles.cargoCapacity(c)){c.action='Aguardando veículo para transportar a carga';continue;}
+      if(load?.pickedUp&&!c.mobilityTrip&&(c.deliveryLoad||load.quantity)>this.vehicles.cargoCapacity(c)){c.action='Aguardando veículo para transportar a carga';continue;}
       if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId&&!bridgeAt(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y))){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * this.justice.mobilityFactor(c) * bodyMovementSpeedFactor(c);

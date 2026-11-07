@@ -1,5 +1,5 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-tail-night-services-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff-state-1';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
@@ -75,7 +75,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=night-services-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=ff-routines-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
@@ -97,9 +97,9 @@ export class CitySimulationBridge {
   }
   control() {
     if (!this.active) return;
-    const { paused, speed } = this.time, signature = `${paused}:${speed}`;
+    const { paused, speed } = this.time, detailBuildingId=this.city.detailedInteriorBuildingId??null, signature = `${paused}:${speed}:${detailBuildingId}`;
     if (signature !== this.controlSignature) {
-      this.controlSignature = signature; this.worker.postMessage({ type: 'control', paused, speed });
+      this.controlSignature = signature; this.worker.postMessage({ type: 'control', paused, speed, detailBuildingId });
     }
   }
   step() { if (this.active && this.time.paused) { this.control(); this.worker.postMessage({ type: 'step' }); return true; } return false; }
@@ -148,7 +148,7 @@ export class CitySimulationBridge {
       }
     }
     this.interiorMotion.clear();for(const c of this.city.citizens)renderIndoorPosition(c,c.indoorLocation?.position?{...c.indoorLocation.position}:null);receiveInteriorMotion(this,data.inside,performance.now(),true);
-    this.time.tick = data.tick; this.time.elapsed = data.elapsed;
+    this.time.observeProgress?.(data.elapsed);this.time.tick = data.tick; this.time.elapsed = data.elapsed;
     this.city._statsCache = null;this.city._uiRevision=(this.city._uiRevision||0)+1;
     const now = performance.now();
     this.lastPositionUpdate = now;
@@ -182,7 +182,7 @@ export class CitySimulationBridge {
     this.interpolate(now);
     const positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
     this.lastPositionUpdate=now;
-    this.time.tick=data.tick;this.time.elapsed=data.elapsed;
+    this.time.observeProgress?.(data.elapsed);this.time.tick=data.tick;this.time.elapsed=data.elapsed;
     for(let i=0;i<positions.length;i+=4){
       const sample=this.motionSamples.get(positions[i]);
       if(!sample||sample.entity.destroyed)continue;

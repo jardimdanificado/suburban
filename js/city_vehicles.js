@@ -314,7 +314,7 @@ export class CityVehicles {
     c.lastVehicleSearchAt=this.city.minute;const city=this.city,goal=c.path.at(-1);
     if(!c.path.some(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))))return;
     const owners=new Set([c.accountId,city.building(c.jobId)?.accountId,...c.businessIds.map(id=>city.building(id)?.accountId)]),load=c.deliveryId?city.logistics.shipments.find(s=>s.id===c.deliveryId):null;
-    const candidates=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&!v.driverId&&!v.mechanicId&&!v.paintJobId&&!v.serviceBodyId&&!v.policeRecoveryOfficerId&&v.condition>15&&(owners.has(this.accessAccount(v))||!v.possessorAccountId&&city.buildings.some(b=>b.type==='bicycle_rental'&&b.active&&b.workers.length&&b.accountId===v.ownerAccountId&&Math.hypot(v.x-c.entity.x,v.y-c.entity.y)<4))&&(!load||VEHICLE_SPECS[v.good].cargo>=load.quantity));
+    const candidates=[...this.units.values()].filter(v=>v.active&&!v.scrapped&&!v.driverId&&!v.mechanicId&&!v.paintJobId&&!v.serviceBodyId&&!v.policeRecoveryOfficerId&&v.condition>15&&(owners.has(this.accessAccount(v))||!v.possessorAccountId&&city.buildings.some(b=>b.type==='bicycle_rental'&&b.active&&b.workers.length&&b.accountId===v.ownerAccountId&&Math.hypot(v.x-c.entity.x,v.y-c.entity.y)<4))&&(!load||VEHICLE_SPECS[v.good].cargo>=(c.deliveryLoad||load.quantity)));
     candidates.sort((a,b)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(b.x-c.entity.x,b.y-c.entity.y));
     for(const v of candidates){
       const path=this.groundPath(c.entity,v);if(path===null||path.length>Math.max(4,c.path.length/2))continue;

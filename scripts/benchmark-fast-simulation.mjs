@@ -18,7 +18,7 @@ bindCityState(city);city.staggerInitialTaskDecisions();
 city.createEntity=data=>{const entity={id:state.nextId++,destroyed:false,...data};state.entities.push(entity);return entity;};
 // Warm-up is outside the measured region; retain its state and random stream.
 for(let i=0;i<warmupMinutes;i++)city.update(.25);
-city.profileDiagnostics=diagnostics;
+city.profileDiagnostics=diagnostics;city.fastForward=speed===64&&process.env.SUBURBAN_BENCH_FF!=='0';
 const phaseTotals={},phasePeaks={};
 function captureProfile(profile,prefix=''){
   if(!profile||typeof profile!=='object')return;

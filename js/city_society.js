@@ -120,10 +120,11 @@ export class CitySociety {
     if(profile){profile.conversationResolutionMs=performance.now()-conversationStart;profile.conversationParts=this._conversationProfile;}
     this._conversationProfile=null;
     // Conversation completion remains minute-accurate; discover new encounters
-    // every five minutes and scale the contact budget to keep the same average
-    // social throughput with fewer full-population scans at high simulation speed.
+    // every five minutes normally. ff samples new incidental encounters every
+    // fifteen minutes; established conversations and relationships remain individual.
     let contactSearchMs=0;
-    if(this.city.minute%5===0){
+    const contactInterval=this.city.fastForward?15:5;
+    if(this.city.minute%contactInterval===0){
     const contactStart=profiling?performance.now():0;
     const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4,tileCounts=new Map();
     const residents=this.city.citizens,contactBudget=Math.max(12,Math.ceil(residents.length*.1));

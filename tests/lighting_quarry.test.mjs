@@ -192,7 +192,9 @@ test('a generated city builds, supplies and lights a public lamp without injecte
     hourly();
     if (city.lighting.posts.some(p => p.public && p.lit)) firstNight ??= { day: city.day, hour: city.hour };
   };
-  for (let i = 0; i < 8 * 1440 * 4 && !firstNight; i++) city.update(1 / 16);
+  // Imported oil can light the first lamp before local production starts.
+  // Validate both milestones within the horizon instead of stopping at the first.
+  for (let i = 0; i < 8 * 1440 * 4 && (!firstNight || city.economy.produced.girassol<=0 || city.economy.produced.oleo<=0); i++) city.update(1 / 16);
   assert(firstNight, 'public illumination must receive oil through real deliveries within the first eight days');
   assert(firstNight.hour >= 18 || firstNight.hour < 6);
   assert(city.economy.produced.girassol > 0); assert(city.economy.produced.oleo > 0);

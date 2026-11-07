@@ -109,8 +109,45 @@ export class CityLogistics {
     city.log(`Frete ${id}: ${quantity} ${city.economy.goods[good].label}, de ${seller.entity?.properties.name || seller.name} para ${buyer.entity?.properties.name || buyer.name}.`, 'transport', [], { kind: 'shipment-ordered', shipmentId: id, projectId:typeof buyer.id==='string' && buyer.id.startsWith('project:')?buyer.id:undefined, buildingIds:[seller.entity?.id,buyer.entity?.id,carrier?.id].filter(id=>id!=null), accounts:[seller.accountId,buyer.accountId,payerAccountId].filter(Boolean), good, quantity, amount:cost, fee });
     return s;
   }
+  // Each order retains its inventory, provenance and escrow. Compatible loads
+  // share only the journey, so settlement and cancellation remain individual.
+  readyForDispatch(s){
+    if(s.purpose!=='trade'||s.pickedUp||s.quantity>=8||this.city.minute-s.createdAt>=10||!(s.buyer.inventory[s.good]>0))return true;
+    let quantity=0;for(const other of this.shipments)if(!other.driverId&&!other.pickedUp&&other.status==='waiting'&&other.seller===s.seller&&other.buyer===s.buyer&&other.carrierId===s.carrierId&&other.purpose==='trade')quantity+=other.quantity;
+    return quantity>=8;
+  }
+  groupJourney(lead,c){
+    if(!lead.carrierId||lead.purpose!=='trade'||lead.pickedUp)return;
+    const ids=[lead.id];let quantity=lead.quantity;
+    for(const other of this.shipments){
+      if(ids.length>=8)break;
+      if(other===lead||other.driverId||other.pickedUp||other.status!=='waiting'||other.purpose!=='trade'||other.seller!==lead.seller||other.buyer!==lead.buyer&&Math.abs(other.buyer.door.x-lead.buyer.door.x)+Math.abs(other.buyer.door.y-lead.buyer.door.y)>8||other.carrierId!==lead.carrierId||quantity+other.quantity>this.capacity(c))continue;
+      if(this.city.substances&&!this.city.substances.canTrade(other.good,other.seller,other.buyer,{quantity:other.quantity}))continue;
+      other.driverId=c.id;other.status='in-transit';ids.push(other.id);quantity+=other.quantity;
+    }
+    if(ids.length>1){c.deliveryBatchIds=ids;c.deliveryLoad=quantity;for(const s of this.shipments)if(ids.includes(s.id))s.journeyId=lead.id;}
+  }
+  completeDriver(s){
+    const c=this.city.society.citizen(s.driverId),ids=c?.deliveryBatchIds;
+    if(!ids?.length){this.releaseDriver(s);return;}
+    c.deliveryBatchIds=ids.filter(id=>id!==s.id);c.deliveryLoad=Math.max(0,(c.deliveryLoad||0)-s.quantity);s.driverId=null;
+    const remaining=this.shipments.filter(other=>c.deliveryBatchIds.includes(other.id));
+    remaining.sort((a,b)=>Math.hypot(a.buyer.door?.x-c.entity.x,a.buyer.door?.y-c.entity.y)-Math.hypot(b.buyer.door?.x-c.entity.x,b.buyer.door?.y-c.entity.y)||a.id-b.id);
+    const next=remaining[0];
+    if(next){
+      const path=next.buyer===s.buyer?[]:this.city.findPath(c.entity,next.buyer.door);
+      if(path===null){this.releaseDriver(next);return;}
+      c.deliveryId=next.id;c.deliveryLeg='delivery';next.batchReadyAt=this.city.minute+1;c.task='transport';c.path=path;
+    }
+    else {c.deliveryBatchIds=null;c.deliveryLoad=0;c.deliveryId=null;c.informalHaulId=null;c.task=null;c.path=[];}
+  }
   releaseDriver(s) {
     const c = this.city.society.citizen(s.driverId);
+    if(c?.deliveryBatchIds?.length){
+      const ids=new Set(c.deliveryBatchIds);
+      for(const other of this.shipments)if(ids.has(other.id)){if(other.pickedUp)other.position={x:c.entity.x,y:c.entity.y};other.driverId=null;other.status='waiting';}
+      c.deliveryBatchIds=null;c.deliveryLoad=0;
+    }
     if (c) { if(c.mobilityTrip)this.city.vehicles.releaseTrip(c);this.city.furniture?.release(c);c.deliveryId = null;c.informalHaulId=null; c.task = null; c.path = []; }
     s.driverId = null;
   }
@@ -194,16 +231,19 @@ export class CityLogistics {
         continue;
       }
       let c = city.society.citizen(s.driverId);
+      if(c&&c.deliveryId!==s.id)continue;
+      if(s.batchReadyAt>city.minute)continue;
       if (c?.workMeal) continue;
-      if (c && (city.urgentNeed(c) || this.capacity(c)<s.quantity || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }
+      if (c && (city.urgentNeed(c) || this.capacity(c)<(c.deliveryLoad||s.quantity) || city.hour < 7 || city.hour >= 20)) { if (s.pickedUp) s.position = { x: c.entity.x, y: c.entity.y }; this.releaseDriver(s); c = null; s.status = 'waiting'; }
       if (!c) {
         s.driverId = null;
+        if(!this.readyForDispatch(s))continue;
         if (city.hour < 7 || city.hour >= 20 || s.lastDispatchAttempt!=null&&city.minute-s.lastDispatchAttempt<5 || dispatchBudget <= 0) continue;
         s.lastDispatchAttempt = city.minute;
         for (const candidate of this.candidates(s)) {
           if (dispatchBudget-- <= 0) break;
           const path = city.findPath(candidate.entity, s.position); if (path === null) continue;
-          c = candidate;c.informalHaulId=!s.carrierId&&!c.jobId&&!(c.businessIds?.length)&&s.fee>0?s.id:null;if(c.informalHaulId){s.informalDriverId=c.id;city.history.record('service',`${c.entity.properties.name} aceitou o frete informal #${s.id}.`,[s.payerAccountId,c.accountId,s.buyer.accountId],{kind:'haul-gig-accepted',shipmentId:s.id,citizenIds:[c.id],good:s.good,quantity:s.quantity,amount:s.fee,minute:city.minute});city.log(`${c.entity.properties.name} aceitou o frete informal #${s.id}.`,'transport',[c.id],{kind:'haul-gig-accepted',shipmentId:s.id,amount:s.fee});}this.city.furniture?.release(c);c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; break;
+          c = candidate;c.informalHaulId=!s.carrierId&&!c.jobId&&!(c.businessIds?.length)&&s.fee>0?s.id:null;if(c.informalHaulId){s.informalDriverId=c.id;city.history.record('service',`${c.entity.properties.name} aceitou o frete informal #${s.id}.`,[s.payerAccountId,c.accountId,s.buyer.accountId],{kind:'haul-gig-accepted',shipmentId:s.id,citizenIds:[c.id],good:s.good,quantity:s.quantity,amount:s.fee,minute:city.minute});city.log(`${c.entity.properties.name} aceitou o frete informal #${s.id}.`,'transport',[c.id],{kind:'haul-gig-accepted',shipmentId:s.id,amount:s.fee});}this.city.furniture?.release(c);c.deliveryLeg = 'pickup'; c.task = 'transport'; c.servicePaid = null; c.deliveryId = s.id; c.path = path; s.driverId = c.id; s.status = 'in-transit'; this.groupJourney(s,c); break;
         }
         if (!c) {if(s.carrierId&&!s.requireCarrier&&s.fee>0&&city.minute-s.createdAt>=30){s.carrierId=null;s.allowFreelanceUntil=city.minute+30;}if(s.quantity>24&&city.minute-s.createdAt>=60)this.splitLoad(s,24);continue;}
       }
@@ -232,6 +272,7 @@ export class CityLogistics {
         const path = city.findPath(c.entity, s.buyer.door);
         if (path === null) { s.pickedUp = false; this.releaseDriver(s); continue; }
         c.path = path; c.deliveryLeg = 'delivery';
+        if(c.deliveryBatchIds)for(const other of this.shipments)if(c.deliveryBatchIds.includes(other.id))other.pickedUp=true;
       } else {
         if(s.buyer.lampPost && (s.refillLabor=(s.refillLabor||0)+1)<4) {c.action='Abastecendo lamparina';continue;}
         s.buyer.incoming[s.good] -= s.quantity;
@@ -256,7 +297,7 @@ export class CityLogistics {
         city.history.record('sale', `${s.quantity} ${city.economy.goods[s.good].label}: ${city.accountName(s.seller.accountId)} → ${city.accountName(s.payerAccountId)}.`,[s.seller.accountId,s.payerAccountId,s.buyer.accountId],{amount:s.cost,good:s.good,quantity:s.quantity,shipmentId:s.id});
         city.history.record('service',s.buyer.lampPost?'Abastecimento de lamparina concluído.':'Frete entregue.',[carrier?.accountId,s.payerAccountId,c.accountId,s.buyer.accountId],{amount:s.fee+s.serviceFee,shipmentId:s.id,provider:carrier?.entity.properties.name||(informal?'Trabalhador autônomo':'Transporte próprio'),quantity:s.quantity,informal});
         city.reputation.completed(carrier, c, 'entrega concluída', {shipmentId:s.id});
-        city.economy.practice(c, 'logistics', 10); this.releaseDriver(s);
+        city.economy.practice(c, 'logistics', 10); this.completeDriver(s);
         s.status = 'delivered'; s.completedAt = city.minute; this.delivered++;
         city.log(`Frete ${s.id} entregue: ${s.quantity} ${city.economy.goods[s.good].label}${s.imported?` importados de ${s.importBrand||s.seller.name}`:''}${carrier?' por transportadora':informal?' por trabalhador autônomo':' por transporte próprio'}.`, 'transport', [c.id], { kind: s.imported?'import-delivered':'shipment-delivered', shipmentId: s.id, buildingIds:[s.seller.entity?.id,s.buyer.entity?.id,carrier?.id].filter(id=>id!=null), accounts:[s.seller.accountId,s.buyer.accountId,s.payerAccountId].filter(Boolean), good:s.good, quantity:s.quantity,informal,imported:!!s.imported,brand:s.importBrand||null });
       }

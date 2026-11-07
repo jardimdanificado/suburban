@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=state-tail-night-services-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff-state-1';
 
 const graph = new CityStateGraph();
 let fieldTailPatches=false;
@@ -128,8 +128,10 @@ self.onmessage = ({ data }) => {
       };
       lastTime = performance.now(); snapshot(true);
     } else if (data.type === 'control') {
+      const timeChanged=paused!==data.paused||speed!==data.speed;
       paused = data.paused; speed = data.speed;
-      accumulator = 0; lastTime = performance.now();
+      if(state){state.city.fastForward = speed === 64;state.city.detailedInteriorBuildingId=data.detailBuildingId??null;}
+      if(timeChanged){accumulator = 0; lastTime = performance.now();}
     } else if (data.type === 'ack') {
       awaitingAck = false;
       if (dirty) snapshot(forceSnapshotPending);

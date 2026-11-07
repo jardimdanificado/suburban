@@ -1,4 +1,6 @@
-export const SPEED_TIERS = [0.5, 1, 2, 4, 8, 16, 32];
+export const FF_SPEED = 64;
+export const SPEED_TIERS = [0.5, 1, 2, 4, 8, 16, 32, FF_SPEED];
+export const speedLabel = speed => speed === FF_SPEED ? 'ff' : `${speed}×`;
 
 /** Fixed simulation steps keep experience rules independent of rendering FPS. */
 export class SimulationTime {
@@ -10,16 +12,29 @@ export class SimulationTime {
     this.elapsed = 0;
     this.stepSeconds = 1 / 60;
     this.accumulator = 0;
+    this.effectiveSpeed = null;
+    this.progressSample = null;
   }
 
   setPaused(value) {
     this.paused = !!value;
+    this.effectiveSpeed = null;
+    this.progressSample = null;
     this.accumulator = 0;
   }
 
   setSpeed(value) {
     if (!SPEED_TIERS.includes(value)) throw new RangeError("Velocidade de simulacao invalida.");
     this.speed = value;
+    this.effectiveSpeed = null;
+    this.progressSample = null;
+  }
+
+  observeProgress(elapsed) {
+    const now=this.now(),sample=this.progressSample;
+    if(!Number.isFinite(elapsed))return;
+    if(!sample||elapsed<sample.elapsed){this.progressSample={now,elapsed};return;}
+    if(now-sample.now>=1000){this.effectiveSpeed=(elapsed-sample.elapsed)/((now-sample.now)/1000);this.progressSample={now,elapsed};}
   }
 
   changeSpeed(direction) {
@@ -27,10 +42,11 @@ export class SimulationTime {
     this.setSpeed(SPEED_TIERS[Math.max(0, Math.min(SPEED_TIERS.length - 1, index + Math.sign(direction)))]);
   }
 
-  runStep(update) {
+  runStep(update, dt = this.stepSeconds) {
     this.tick++;
-    this.elapsed += this.stepSeconds;
-    update(this.stepSeconds);
+    this.elapsed += dt;
+    update(dt);
+    this.observeProgress(this.elapsed);
   }
 
   step(update) {
@@ -43,16 +59,17 @@ export class SimulationTime {
     if (this.paused || !Number.isFinite(realDt) || realDt <= 0) return 0;
     // A suspended browser tab does not generate minutes of catch-up work.
     this.accumulator += Math.min(realDt, 0.25) * this.speed;
+    const step = this.speed === FF_SPEED ? .25 : this.stepSeconds;
     let count = 0;
     const deadline = this.now() + 6;
-    while (this.accumulator + 1e-10 >= this.stepSeconds && count < 120 && this.now() < deadline) {
-      this.accumulator = Math.max(0, this.accumulator - this.stepSeconds);
-      this.runStep(update);
+    while (this.accumulator + 1e-10 >= step && count < 120 && this.now() < deadline) {
+      this.accumulator = Math.max(0, this.accumulator - step);
+      this.runStep(update, step);
       count++;
       if (this.paused) break;
     }
     // The local fallback also yields to rendering instead of compounding a slow frame.
-    this.accumulator = Math.min(this.accumulator, this.stepSeconds * 2);
+    this.accumulator = Math.min(this.accumulator, step * 2);
     return count;
   }
 }

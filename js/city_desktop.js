@@ -1,3 +1,4 @@
+import {speedLabel} from './simulation_time.js';
 import {CityGlobalSearch} from './city_global_search.js?v=organic-party-slogans-1';
 import {desktopMenus} from './city_desktop_menus.js?v=freecam-tools-2';
 import {CityUI,money} from './city_ui.js?v=room-floors-1';
@@ -185,9 +186,9 @@ export class CityDesktop {
     if(event.code==='Slash'){this.active?.search?.focus?.();return true;}
     if(['PageDown','PageUp','Home','End','Backspace'].includes(event.code))return this.active?.key(event)||false;return false;
   }
-  drawChrome(ui,{clockText='',paused=false,speed=1,renderMode='3d'}={}){
+  drawChrome(ui,{clockText='',paused=false,speed=1,effectiveSpeed=null,renderMode='3d'}={}){
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
-    let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speed}×`,this.controls.speed,false]];
+    let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speedLabel(speed)}${speed===64?' · avanço com detalhe reduzido':''}`,this.controls.speed,false]];
     const entries=[
       {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),
@@ -208,7 +209,7 @@ export class CityDesktop {
     const y=ui.height-27;bevel(ui.ctx,0,y,ui.width,27,{fill:T.face});const s=this.city.stats(),cash=money(this.city.treasury),cashW=Math.min(190,ui.width*.42,Math.max(120,ui.textWidth(cash)+26)),dateW=Math.min(225,ui.width-cashW-12,Math.max(120,ui.textWidth(clockText)+24));
     bevel(ui.ctx,3,y+3,dateW,21,{inset:true,fill:T.paper});ui.text(ui.fitText(clockText,dateW-14),10,y+7,T.ink);
     const right=ui.width-cashW-3;bevel(ui.ctx,right,y+3,cashW,21,{inset:true,fill:T.paper});const shownCash=ui.fitText(cash,cashW-16);ui.text(shownCash,right+cashW-ui.textWidth(shownCash)-8,y+7,T.ink);
-    const middle=right-dateW-12;if(middle>80){bevel(ui.ctx,dateW+6,y+3,middle,21,{inset:true,fill:T.paper});const status=paused?'Pausado':`${s.population} habitantes · ${speed}× · ${this.manager.windows.length} janelas`;ui.text(ui.fitText(status,middle-12),dateW+12,y+7,paused?T.red:T.ink);}
+    const middle=right-dateW-12;if(middle>80){bevel(ui.ctx,dateW+6,y+3,middle,21,{inset:true,fill:T.paper});const status=paused?'Pausado':`${s.population} habitantes · ${speedLabel(speed)}${speed===64&&Number.isFinite(effectiveSpeed)?` (${effectiveSpeed.toFixed(1)}× efetivos)`:''} · ${this.manager.windows.length} janelas`;ui.text(ui.fitText(status,middle-12),dateW+12,y+7,paused?T.red:T.ink);}
 
   }
   frame(ui,w){

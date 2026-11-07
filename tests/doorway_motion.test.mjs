@@ -28,8 +28,9 @@ function followEntry(city,c,b,start){
  assert(inside(c.entity),'the real entity reaches the tile inside the building');
 }
 
-test('entry to a free service and to an indoor queue walks through every door orientation without teleporting',()=>{
+test('observed entry to a free service and to an indoor queue walks through every door orientation without teleporting',()=>{
  const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='popular_refectory');
+ city.detailedInteriorBuildingId=b.id;
  let person=0;
  for(let rotation=0;rotation<4;rotation++)for(const waiting of [false,true]){
   b.rotation=rotation;b.door=buildingEntrance(b.entity.x,b.entity.y,b.width,b.depth,rotation);b.layoutRevision++;
@@ -43,8 +44,9 @@ test('entry to a free service and to an indoor queue walks through every door or
  }
 });
 
-test('simulation frames move the real entity onto the indoor tile and back through the exit',()=>{
+test('observed simulation frames move the real entity onto the indoor tile and back through the exit',()=>{
  const city=setup({starter:true,population:64}),b=city.buildings.find(b=>b.type==='townhall'),c=city.citizens.find(c=>!city.politics.officeHolder(c));
+ city.detailedInteriorBuildingId=b.id;
  city.economy.leaveJob(c);c.businessIds=[];c.path=[];c.indoorLocation=null;c.conversation=null;c.deliveryId=null;c.cleaningJobId=null;c.workMeal=null;c.mobilityTrip=null;c.ridingVehicleId=null;
  for(const key in c.needs)c.needs[key]=95;c.needs.water=30;c.task='work';c.jobId=b.id;b.workers.push(c.id);b.jobs=Math.max(b.jobs,b.workers.length);c.targetId=b.id;c.entity.x=b.door.x;c.entity.y=b.door.y;
  const room=b.units.find(u=>u.z===1&&u.roomType==='workspace');assert(room);

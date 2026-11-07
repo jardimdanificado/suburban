@@ -12,14 +12,14 @@ test("all speed tiers advance the world clock and experience with fixed steps", 
     time.setSpeed(speed);
     let calls = 0;
     for (let frame = 0; frame < 60; frame++) time.advance(1 / 60, dt => {
-      assert.equal(dt, 1 / 60);
+      assert.equal(dt, speed===64?.25:1 / 60);
       calls++;
       clock.tick(dt);
     });
-    assert.equal(calls, 60 * speed);
+    assert.equal(calls, speed===64?256:60 * speed);
     assert.equal(time.tick, calls);
     assert(Math.abs(time.elapsed - speed) < 1e-8);
-    assert(Math.abs(clock.minute + clock.minuteTimer - speed) < 1e-8);
+    assert(Math.abs(clock.hour*60 + clock.minute + clock.minuteTimer - speed) < 1e-8);
   }
 });
 
@@ -61,7 +61,7 @@ test("single-step requires pause and is independent of the selected speed", () =
   assert.equal(dt, 1 / 60);
   assert.equal(time.paused, true);
   time.changeSpeed(1);
-  assert.equal(time.speed, 32);
+  assert.equal(time.speed, 64);
   for (let i = 0; i < 20; i++) time.changeSpeed(-1);
   assert.equal(time.speed, 0.5);
   assert.throws(() => time.setSpeed(Infinity), RangeError);
@@ -140,4 +140,10 @@ test("small-screen toolbar retains every time control on a second row", () => {
   assert(last.x + last.w <= 312);
   ui.clickAt(last.x + 4, last.y + 4);
   assert.equal(clicked, 1);
+});
+
+test('effective speed reports elapsed simulation per real second and resets on mode change',()=>{
+ let now=0;const time=new SimulationTime({now:()=>now});time.setSpeed(64);
+ time.observeProgress(10);now=2000;time.observeProgress(34);assert.equal(time.effectiveSpeed,12);
+ time.setSpeed(32);assert.equal(time.effectiveSpeed,null);time.setPaused(true);assert.equal(time.progressSample,null);
 });
