@@ -1,0 +1,1384 @@
+{
+  "date": "2026-11-07",
+  "rows": [
+    {
+      "id": "city",
+      "group": "Cidade",
+      "title": "Cidade · janela",
+      "path": "Barra superior → Cidade",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "city/overview",
+      "group": "Cidade",
+      "title": "PANORAMA",
+      "path": "Barra superior → Cidade → PANORAMA",
+      "note": ""
+    },
+    {
+      "id": "city/needs",
+      "group": "Cidade",
+      "title": "NECESSIDADES",
+      "path": "Barra superior → Cidade → NECESSIDADES",
+      "note": ""
+    },
+    {
+      "id": "city/activity",
+      "group": "Cidade",
+      "title": "ATIVIDADE",
+      "path": "Barra superior → Cidade → ATIVIDADE",
+      "note": ""
+    },
+    {
+      "id": "city/services",
+      "group": "Cidade",
+      "title": "SAÚDE E LAZER",
+      "path": "Barra superior → Cidade → SAÚDE E LAZER",
+      "note": ""
+    },
+    {
+      "id": "city/arts",
+      "group": "Cidade",
+      "title": "ARTE E JUSTIÇA",
+      "path": "Barra superior → Cidade → ARTE E JUSTIÇA",
+      "note": ""
+    },
+    {
+      "id": "city/analysis",
+      "group": "Cidade",
+      "title": "ANÁLISES",
+      "path": "Barra superior → Cidade → ANÁLISES",
+      "note": ""
+    },
+    {
+      "id": "city/nature",
+      "group": "Cidade",
+      "title": "VEGETAÇÃO",
+      "path": "Barra superior → Cidade → VEGETAÇÃO",
+      "note": ""
+    },
+    {
+      "id": "government",
+      "group": "Governo",
+      "title": "Governo · janela",
+      "path": "Barra superior → Governo",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "government/overview",
+      "group": "Governo",
+      "title": "PREFEITURA",
+      "path": "Barra superior → Governo → PREFEITURA",
+      "note": ""
+    },
+    {
+      "id": "government/elections",
+      "group": "Governo",
+      "title": "POLÍTICA",
+      "path": "Barra superior → Governo → POLÍTICA",
+      "note": ""
+    },
+    {
+      "id": "government/contracts",
+      "group": "Governo",
+      "title": "CONTRATOS",
+      "path": "Barra superior → Governo → CONTRATOS",
+      "note": ""
+    },
+    {
+      "id": "government/finance",
+      "group": "Governo",
+      "title": "TESOURO",
+      "path": "Barra superior → Governo → TESOURO",
+      "note": ""
+    },
+    {
+      "id": "government/world",
+      "group": "Governo",
+      "title": "TERRENO",
+      "path": "Barra superior → Governo → TERRENO",
+      "note": ""
+    },
+    {
+      "id": "people",
+      "group": "Cidadãos",
+      "title": "Cidadãos · janela",
+      "path": "Barra superior → Cidadãos",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "land",
+      "group": "Terrenos e obras",
+      "title": "Terrenos e obras · janela",
+      "path": "Barra superior → Terrenos e obras",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "land/plots",
+      "group": "Terrenos e obras",
+      "title": "TERRENOS",
+      "path": "Barra superior → Terrenos e obras → TERRENOS",
+      "note": ""
+    },
+    {
+      "id": "land/projects",
+      "group": "Terrenos e obras",
+      "title": "OBRAS",
+      "path": "Barra superior → Terrenos e obras → OBRAS",
+      "note": ""
+    },
+    {
+      "id": "buildings",
+      "group": "Imóveis",
+      "title": "Imóveis · janela",
+      "path": "Barra superior → Imóveis",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "economy",
+      "group": "Empresas",
+      "title": "Empresas · janela",
+      "path": "Barra superior → Empresas",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "economy/overview",
+      "group": "Empresas",
+      "title": "EMPRESAS",
+      "path": "Barra superior → Empresas → EMPRESAS",
+      "note": ""
+    },
+    {
+      "id": "economy/vacancies",
+      "group": "Empresas",
+      "title": "VAGAS",
+      "path": "Barra superior → Empresas → VAGAS",
+      "note": ""
+    },
+    {
+      "id": "economy/applications",
+      "group": "Empresas",
+      "title": "SELEÇÕES",
+      "path": "Barra superior → Empresas → SELEÇÕES",
+      "note": ""
+    },
+    {
+      "id": "economy/workers",
+      "group": "Empresas",
+      "title": "FUNCIONÁRIOS",
+      "path": "Barra superior → Empresas → FUNCIONÁRIOS",
+      "note": ""
+    },
+    {
+      "id": "market",
+      "group": "Mercado e riquezas",
+      "title": "Mercado e riquezas · janela",
+      "path": "Barra superior → Mercado e riquezas",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "market/overview",
+      "group": "Mercado e riquezas",
+      "title": "PANORAMA",
+      "path": "Barra superior → Mercado e riquezas → PANORAMA",
+      "note": ""
+    },
+    {
+      "id": "market/shares",
+      "group": "Mercado e riquezas",
+      "title": "AÇÕES",
+      "path": "Barra superior → Mercado e riquezas → AÇÕES",
+      "note": ""
+    },
+    {
+      "id": "market/people",
+      "group": "Mercado e riquezas",
+      "title": "PESSOAS",
+      "path": "Barra superior → Mercado e riquezas → PESSOAS",
+      "note": ""
+    },
+    {
+      "id": "market/companies",
+      "group": "Mercado e riquezas",
+      "title": "EMPRESAS",
+      "path": "Barra superior → Mercado e riquezas → EMPRESAS",
+      "note": ""
+    },
+    {
+      "id": "market/locations",
+      "group": "Mercado e riquezas",
+      "title": "LOCALIZAÇÕES",
+      "path": "Barra superior → Mercado e riquezas → LOCALIZAÇÕES",
+      "note": ""
+    },
+    {
+      "id": "market/goods",
+      "group": "Mercado e riquezas",
+      "title": "MERCADO",
+      "path": "Barra superior → Mercado e riquezas → MERCADO",
+      "note": ""
+    },
+    {
+      "id": "market/sales",
+      "group": "Mercado e riquezas",
+      "title": "VENDAS",
+      "path": "Barra superior → Mercado e riquezas → VENDAS",
+      "note": ""
+    },
+    {
+      "id": "production",
+      "group": "Produção",
+      "title": "Produção · janela",
+      "path": "Barra superior → Produção",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "production/stocks",
+      "group": "Produção",
+      "title": "ESTOQUES",
+      "path": "Barra superior → Produção → ESTOQUES",
+      "note": ""
+    },
+    {
+      "id": "production/demand",
+      "group": "Produção",
+      "title": "DEMANDAS",
+      "path": "Barra superior → Produção → DEMANDAS",
+      "note": ""
+    },
+    {
+      "id": "production/flow",
+      "group": "Produção",
+      "title": "MOVIMENTAÇÕES",
+      "path": "Barra superior → Produção → MOVIMENTAÇÕES",
+      "note": ""
+    },
+    {
+      "id": "production/lighting",
+      "group": "Produção",
+      "title": "ILUMINAÇÃO",
+      "path": "Barra superior → Produção → ILUMINAÇÃO",
+      "note": ""
+    },
+    {
+      "id": "transport",
+      "group": "Transportes",
+      "title": "Transportes · janela",
+      "path": "Barra superior → Transportes",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "transport/active",
+      "group": "Transportes",
+      "title": "FRETES",
+      "path": "Barra superior → Transportes → FRETES",
+      "note": ""
+    },
+    {
+      "id": "transport/imports",
+      "group": "Transportes",
+      "title": "DEPÓSITO DE IMPORTAÇÃO",
+      "path": "Barra superior → Transportes → DEPÓSITO DE IMPORTAÇÃO",
+      "note": ""
+    },
+    {
+      "id": "transport/informal",
+      "group": "Transportes",
+      "title": "BICOS",
+      "path": "Barra superior → Transportes → BICOS",
+      "note": ""
+    },
+    {
+      "id": "transport/finished",
+      "group": "Transportes",
+      "title": "ENCERRADOS",
+      "path": "Barra superior → Transportes → ENCERRADOS",
+      "note": ""
+    },
+    {
+      "id": "transport/vehicles",
+      "group": "Transportes",
+      "title": "FROTA",
+      "path": "Barra superior → Transportes → FROTA",
+      "note": ""
+    },
+    {
+      "id": "transport/parking",
+      "group": "Transportes",
+      "title": "BICICLETÁRIOS",
+      "path": "Barra superior → Transportes → BICICLETÁRIOS",
+      "note": ""
+    },
+    {
+      "id": "transport/rentals",
+      "group": "Transportes",
+      "title": "ALUGUEL",
+      "path": "Barra superior → Transportes → ALUGUEL",
+      "note": ""
+    },
+    {
+      "id": "transport/models",
+      "group": "Transportes",
+      "title": "MODELOS",
+      "path": "Barra superior → Transportes → MODELOS",
+      "note": ""
+    },
+    {
+      "id": "urban-art",
+      "group": "Arte urbana",
+      "title": "Arte urbana · janela",
+      "path": "Barra superior → Arte urbana",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "urban-art/overview",
+      "group": "Arte urbana",
+      "title": "OBRAS E MENSAGENS",
+      "path": "Barra superior → Arte urbana → OBRAS E MENSAGENS",
+      "note": ""
+    },
+    {
+      "id": "urban-art/orders",
+      "group": "Arte urbana",
+      "title": "ENCOMENDAS",
+      "path": "Barra superior → Arte urbana → ENCOMENDAS",
+      "note": ""
+    },
+    {
+      "id": "urban-art/damage",
+      "group": "Arte urbana",
+      "title": "DANOS E LIMPEZA",
+      "path": "Barra superior → Arte urbana → DANOS E LIMPEZA",
+      "note": ""
+    },
+    {
+      "id": "safety",
+      "group": "Segurança",
+      "title": "Segurança · janela",
+      "path": "Barra superior → Segurança",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "safety/overview",
+      "group": "Segurança",
+      "title": "OPERAÇÃO",
+      "path": "Barra superior → Segurança → OPERAÇÃO",
+      "note": ""
+    },
+    {
+      "id": "safety/calls",
+      "group": "Segurança",
+      "title": "CHAMADOS",
+      "path": "Barra superior → Segurança → CHAMADOS",
+      "note": ""
+    },
+    {
+      "id": "safety/cases",
+      "group": "Segurança",
+      "title": "OCORRÊNCIAS",
+      "path": "Barra superior → Segurança → OCORRÊNCIAS",
+      "note": ""
+    },
+    {
+      "id": "forensics",
+      "group": "IML e corpos",
+      "title": "IML e corpos · janela",
+      "path": "Barra superior → IML e corpos",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "forensics/overview",
+      "group": "IML e corpos",
+      "title": "VISÃO GERAL",
+      "path": "Barra superior → IML e corpos → VISÃO GERAL",
+      "note": ""
+    },
+    {
+      "id": "forensics/bodies",
+      "group": "IML e corpos",
+      "title": "CORPOS",
+      "path": "Barra superior → IML e corpos → CORPOS",
+      "note": ""
+    },
+    {
+      "id": "forensics/reports",
+      "group": "IML e corpos",
+      "title": "LAUDOS",
+      "path": "Barra superior → IML e corpos → LAUDOS",
+      "note": ""
+    },
+    {
+      "id": "justice",
+      "group": "Justiça",
+      "title": "Justiça · janela",
+      "path": "Barra superior → Justiça",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "justice/overview",
+      "group": "Justiça",
+      "title": "VISÃO GERAL",
+      "path": "Barra superior → Justiça → VISÃO GERAL",
+      "note": ""
+    },
+    {
+      "id": "justice/cases",
+      "group": "Justiça",
+      "title": "PROCESSOS",
+      "path": "Barra superior → Justiça → PROCESSOS",
+      "note": ""
+    },
+    {
+      "id": "justice/recovery",
+      "group": "Justiça",
+      "title": "RECUPERAÇÃO",
+      "path": "Barra superior → Justiça → RECUPERAÇÃO",
+      "note": ""
+    },
+    {
+      "id": "justice/laws",
+      "group": "Justiça",
+      "title": "CÓDIGO PENAL",
+      "path": "Barra superior → Justiça → CÓDIGO PENAL",
+      "note": ""
+    },
+    {
+      "id": "justice/services",
+      "group": "Justiça",
+      "title": "TRIBUNAIS E DEFESA",
+      "path": "Barra superior → Justiça → TRIBUNAIS E DEFESA",
+      "note": ""
+    },
+    {
+      "id": "custody",
+      "group": "Prisões",
+      "title": "Prisões · janela",
+      "path": "Barra superior → Prisões",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "custody/overview",
+      "group": "Prisões",
+      "title": "VISÃO GERAL",
+      "path": "Barra superior → Prisões → VISÃO GERAL",
+      "note": ""
+    },
+    {
+      "id": "custody/people",
+      "group": "Prisões",
+      "title": "CUSTODIADOS",
+      "path": "Barra superior → Prisões → CUSTODIADOS",
+      "note": ""
+    },
+    {
+      "id": "custody/orders",
+      "group": "Prisões",
+      "title": "VAGAS E MANDADOS",
+      "path": "Barra superior → Prisões → VAGAS E MANDADOS",
+      "note": ""
+    },
+    {
+      "id": "sanitation",
+      "group": "Saneamento",
+      "title": "Saneamento · janela",
+      "path": "Barra superior → Saneamento",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "sanitation/facilities",
+      "group": "Saneamento",
+      "title": "BANHEIROS",
+      "path": "Barra superior → Saneamento → BANHEIROS",
+      "note": ""
+    },
+    {
+      "id": "sanitation/queues",
+      "group": "Saneamento",
+      "title": "FILAS",
+      "path": "Barra superior → Saneamento → FILAS",
+      "note": ""
+    },
+    {
+      "id": "sanitation/cleaning",
+      "group": "Saneamento",
+      "title": "FAXINA",
+      "path": "Barra superior → Saneamento → FAXINA",
+      "note": ""
+    },
+    {
+      "id": "sanitation/gigs",
+      "group": "Saneamento",
+      "title": "BICOS DE FAXINA",
+      "path": "Barra superior → Saneamento → BICOS DE FAXINA",
+      "note": ""
+    },
+    {
+      "id": "sanitation/cleanliness",
+      "group": "Saneamento",
+      "title": "CIDADE LIMPA",
+      "path": "Barra superior → Saneamento → CIDADE LIMPA",
+      "note": ""
+    },
+    {
+      "id": "sanitation/waste",
+      "group": "Saneamento",
+      "title": "RESÍDUOS",
+      "path": "Barra superior → Saneamento → RESÍDUOS",
+      "note": ""
+    },
+    {
+      "id": "sanitation/deaths",
+      "group": "Saneamento",
+      "title": "MORTES",
+      "path": "Barra superior → Saneamento → MORTES",
+      "note": ""
+    },
+    {
+      "id": "publications",
+      "group": "Jornais e livros",
+      "title": "Jornais e livros · janela",
+      "path": "Barra superior → Jornais e livros",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "corruption",
+      "group": "Corrupção",
+      "title": "Corrupção · janela",
+      "path": "Barra superior → Corrupção",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "log",
+      "group": "Histórico",
+      "title": "Histórico · janela",
+      "path": "Barra superior → Histórico",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "map",
+      "group": "Mapa da cidade",
+      "title": "Mapa da cidade · janela",
+      "path": "Barra superior → Mapa da cidade",
+      "note": "Em telas estreitas, use a lista completa de ferramentas."
+    },
+    {
+      "id": "politics/overview",
+      "group": "Política",
+      "title": "Governo",
+      "path": "Barra superior → Governo → Política → Governo",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/approval",
+      "group": "Política",
+      "title": "Avaliação",
+      "path": "Barra superior → Governo → Política → Avaliação",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/parties",
+      "group": "Política",
+      "title": "Partidos",
+      "path": "Barra superior → Governo → Política → Partidos",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/council",
+      "group": "Política",
+      "title": "Câmara",
+      "path": "Barra superior → Governo → Política → Câmara",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/secretariats",
+      "group": "Política",
+      "title": "Secretarias",
+      "path": "Barra superior → Governo → Política → Secretarias",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/substances",
+      "group": "Política",
+      "title": "Substâncias e licenças",
+      "path": "Barra superior → Governo → Política → Substâncias e licenças",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/campaign",
+      "group": "Política",
+      "title": "Campanha",
+      "path": "Barra superior → Governo → Política → Campanha",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/polls",
+      "group": "Política",
+      "title": "Pesquisas",
+      "path": "Barra superior → Governo → Política → Pesquisas",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/institutes",
+      "group": "Política",
+      "title": "Institutos de pesquisa",
+      "path": "Barra superior → Governo → Política → Institutos de pesquisa",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/promises",
+      "group": "Política",
+      "title": "Promessas",
+      "path": "Barra superior → Governo → Política → Promessas",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/scandals",
+      "group": "Política",
+      "title": "Fiscalização",
+      "path": "Barra superior → Governo → Política → Fiscalização",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "politics/results",
+      "group": "Política",
+      "title": "Resultados",
+      "path": "Barra superior → Governo → Política → Resultados",
+      "note": "Use o grupo correspondente: Gestão, Instituições, Regulação, Eleições ou Fiscalização."
+    },
+    {
+      "id": "approval/0",
+      "group": "Política",
+      "title": "Resumo",
+      "path": "Barra superior → Governo → Política → Gestão → Avaliação → Resumo",
+      "note": ""
+    },
+    {
+      "id": "approval/1",
+      "group": "Política",
+      "title": "Desde a posse",
+      "path": "Barra superior → Governo → Política → Gestão → Avaliação → Desde a posse",
+      "note": ""
+    },
+    {
+      "id": "approval/2",
+      "group": "Política",
+      "title": "Promessa",
+      "path": "Barra superior → Governo → Política → Gestão → Avaliação → Promessa",
+      "note": ""
+    },
+    {
+      "id": "approval/3",
+      "group": "Política",
+      "title": "Condições e penalidades",
+      "path": "Barra superior → Governo → Política → Gestão → Avaliação → Condições e penalidades",
+      "note": ""
+    },
+    {
+      "id": "mandate/0",
+      "group": "Política",
+      "title": "Meta e resultado",
+      "path": "Barra superior → Governo → Política → Gestão → Promessas → selecionar gestão → Meta e resultado",
+      "note": ""
+    },
+    {
+      "id": "mandate/1",
+      "group": "Política",
+      "title": "Indicadores",
+      "path": "Barra superior → Governo → Política → Gestão → Promessas → selecionar gestão → Indicadores",
+      "note": ""
+    },
+    {
+      "id": "mandate/2",
+      "group": "Política",
+      "title": "Medições",
+      "path": "Barra superior → Governo → Política → Gestão → Promessas → selecionar gestão → Medições",
+      "note": ""
+    },
+    {
+      "id": "mandate/3",
+      "group": "Política",
+      "title": "Acontecimentos",
+      "path": "Barra superior → Governo → Política → Gestão → Promessas → selecionar gestão → Acontecimentos",
+      "note": ""
+    },
+    {
+      "id": "council/0",
+      "group": "Política",
+      "title": "Projetos",
+      "path": "Barra superior → Governo → Política → Instituições → Câmara → Projetos",
+      "note": ""
+    },
+    {
+      "id": "council/1",
+      "group": "Política",
+      "title": "Vereadores",
+      "path": "Barra superior → Governo → Política → Instituições → Câmara → Vereadores",
+      "note": ""
+    },
+    {
+      "id": "council/2",
+      "group": "Política",
+      "title": "Ordens diretas",
+      "path": "Barra superior → Governo → Política → Instituições → Câmara → Ordens diretas",
+      "note": ""
+    },
+    {
+      "id": "research/0",
+      "group": "Política",
+      "title": "Institutos",
+      "path": "Barra superior → Governo → Política → Instituições → Institutos de pesquisa → Institutos",
+      "note": ""
+    },
+    {
+      "id": "research/1",
+      "group": "Política",
+      "title": "Pesquisas não eleitorais",
+      "path": "Barra superior → Governo → Política → Instituições → Institutos de pesquisa → Pesquisas não eleitorais",
+      "note": ""
+    },
+    {
+      "id": "person",
+      "group": "Ficha de cidadão",
+      "title": "Ficha de cidadão · janela",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral)",
+      "note": ""
+    },
+    {
+      "id": "person/0",
+      "group": "Ficha de cidadão",
+      "title": "Perfil",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Perfil",
+      "note": ""
+    },
+    {
+      "id": "person/1",
+      "group": "Ficha de cidadão",
+      "title": "Roupas",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Roupas",
+      "note": ""
+    },
+    {
+      "id": "person/2",
+      "group": "Ficha de cidadão",
+      "title": "Identidade",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Identidade",
+      "note": ""
+    },
+    {
+      "id": "person/3",
+      "group": "Ficha de cidadão",
+      "title": "Alimentação",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Alimentação",
+      "note": ""
+    },
+    {
+      "id": "person/4",
+      "group": "Ficha de cidadão",
+      "title": "Veículos",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Veículos",
+      "note": ""
+    },
+    {
+      "id": "person/5",
+      "group": "Ficha de cidadão",
+      "title": "Cores",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Cores",
+      "note": ""
+    },
+    {
+      "id": "person/6",
+      "group": "Ficha de cidadão",
+      "title": "Trabalho",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Trabalho",
+      "note": ""
+    },
+    {
+      "id": "person/7",
+      "group": "Ficha de cidadão",
+      "title": "Currículo",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Currículo",
+      "note": ""
+    },
+    {
+      "id": "person/8",
+      "group": "Ficha de cidadão",
+      "title": "Vínculos",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Vínculos",
+      "note": ""
+    },
+    {
+      "id": "person/9",
+      "group": "Ficha de cidadão",
+      "title": "Memórias",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Memórias",
+      "note": ""
+    },
+    {
+      "id": "person/10",
+      "group": "Ficha de cidadão",
+      "title": "Política",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Política",
+      "note": ""
+    },
+    {
+      "id": "person/11",
+      "group": "Ficha de cidadão",
+      "title": "Conta",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Conta",
+      "note": ""
+    },
+    {
+      "id": "person/12",
+      "group": "Ficha de cidadão",
+      "title": "Histórico",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Histórico",
+      "note": ""
+    },
+    {
+      "id": "memories/0",
+      "group": "Ficha de cidadão",
+      "title": "Recordações",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Memórias → Recordações",
+      "note": ""
+    },
+    {
+      "id": "memories/1",
+      "group": "Ficha de cidadão",
+      "title": "Histórias ouvidas",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Memórias → Histórias ouvidas",
+      "note": ""
+    },
+    {
+      "id": "memories/2",
+      "group": "Ficha de cidadão",
+      "title": "Luto",
+      "path": "Cidadãos → clicar em uma pessoa (ou selecionar no mapa / Busca geral) → Memórias → Luto",
+      "note": ""
+    },
+    {
+      "id": "building",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Ficha de imóvel / empresa · janela",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa)",
+      "note": ""
+    },
+    {
+      "id": "building/0",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Operação",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Operação",
+      "note": ""
+    },
+    {
+      "id": "building/1",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Análise",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Análise",
+      "note": ""
+    },
+    {
+      "id": "building/2",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Estoque",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Estoque",
+      "note": ""
+    },
+    {
+      "id": "building/3",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Equipe",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Equipe",
+      "note": ""
+    },
+    {
+      "id": "building/4",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Finanças",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Finanças",
+      "note": ""
+    },
+    {
+      "id": "building/5",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Estrutura",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Estrutura",
+      "note": ""
+    },
+    {
+      "id": "building/6",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Pintura",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Pintura",
+      "note": ""
+    },
+    {
+      "id": "building/7",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Células",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Células",
+      "note": ""
+    },
+    {
+      "id": "building/8",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Histórico",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Histórico",
+      "note": ""
+    },
+    {
+      "id": "building/services",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Serviços",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Serviços",
+      "note": "Disponível para construtoras e serviços de pavimentação/manutenção viária."
+    },
+    {
+      "id": "building/unit",
+      "group": "Ficha de imóvel / empresa",
+      "title": "Ficha de célula / cômodo",
+      "path": "Imóveis ou Empresas → clicar em um registro (ou selecionar prédio no mapa) → Células → selecionar célula",
+      "note": ""
+    },
+    {
+      "id": "detail/plot",
+      "group": "Terrenos e obras",
+      "title": "Ficha do terreno",
+      "path": "Terrenos e obras → Terrenos → clicar em um lote",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/party",
+      "group": "Política",
+      "title": "Ficha de partido",
+      "path": "Barra superior → Governo → Política → Instituições → Partidos → clicar no partido",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/contract",
+      "group": "Política",
+      "title": "Ficha de contrato",
+      "path": "Governo → Contratos → clicar no contrato",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/bill",
+      "group": "Política",
+      "title": "Projeto de lei e votação",
+      "path": "Barra superior → Governo → Política → Instituições → Câmara → Projetos → clicar no projeto",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/study",
+      "group": "Política",
+      "title": "Coleta / relatório de pesquisa",
+      "path": "Barra superior → Governo → Política → Instituições → Institutos de pesquisa → selecionar coleta",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/response",
+      "group": "Política",
+      "title": "Resposta individual à pesquisa",
+      "path": "Barra superior → Governo → Política → Eleições → Pesquisas → selecionar pesquisa → entrevistado",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/foundation",
+      "group": "Política",
+      "title": "Proposta de fundação partidária",
+      "path": "Barra superior → Governo → Política → Instituições → Partidos → Registros e fundações → selecionar proposta",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/vehicle",
+      "group": "Transportes",
+      "title": "Ficha de veículo",
+      "path": "Transportes → Frota → clicar no veículo",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/shipment",
+      "group": "Transportes",
+      "title": "Ficha de frete",
+      "path": "Transportes → Fretes ou Encerrados → clicar no frete",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/plant",
+      "group": "Cidade",
+      "title": "Ficha botânica",
+      "path": "Cidade → Vegetação → clicar na planta",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/artwork",
+      "group": "Arte urbana",
+      "title": "Ficha da obra de arte",
+      "path": "Arte urbana → Obras e mensagens → selecionar obra ou selecionar no mapa",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/case",
+      "group": "Justiça",
+      "title": "Detalhe do processo",
+      "path": "Justiça → Processos → clicar no processo",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/account",
+      "group": "Mercado e riquezas",
+      "title": "Detalhe de patrimônio / conta",
+      "path": "Mercado e riquezas → Pessoas ou Empresas → clicar em um titular",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/location",
+      "group": "Mercado e riquezas",
+      "title": "Detalhe de localização",
+      "path": "Mercado e riquezas → Localizações → clicar em um local",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/good",
+      "group": "Mercado e riquezas",
+      "title": "Detalhe de produto",
+      "path": "Mercado e riquezas → Mercado → clicar em um produto",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/sale",
+      "group": "Mercado e riquezas",
+      "title": "Detalhe de venda",
+      "path": "Mercado e riquezas → Vendas → clicar em uma venda",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "detail/employment",
+      "group": "Empresas",
+      "title": "Seleção / candidatura",
+      "path": "Empresas → Vagas ou Seleções → selecionar empresa e candidato",
+      "note": "Exige um registro correspondente na cidade; avalie um exemplar representativo."
+    },
+    {
+      "id": "organization/0",
+      "group": "Política",
+      "title": "Registros e fundações",
+      "path": "Barra superior → Governo → Política → Instituições → Partidos → Registros e fundações",
+      "note": ""
+    },
+    {
+      "id": "organization/1",
+      "group": "Política",
+      "title": "Campanhas de filiação",
+      "path": "Barra superior → Governo → Política → Instituições → Partidos → Campanhas de filiação",
+      "note": ""
+    },
+    {
+      "id": "election/0",
+      "group": "Eleições",
+      "title": "Campanhas",
+      "path": "Governo → Política → Eleições → Resultados → abrir eleição → Campanhas",
+      "note": "Também pode abrir automaticamente durante o ciclo eleitoral. É preciso haver eleição registrada."
+    },
+    {
+      "id": "election/1",
+      "group": "Eleições",
+      "title": "Apoios / coligações",
+      "path": "Governo → Política → Eleições → Resultados → abrir eleição → Apoios / coligações",
+      "note": "Também pode abrir automaticamente durante o ciclo eleitoral. É preciso haver eleição registrada."
+    },
+    {
+      "id": "election/2",
+      "group": "Eleições",
+      "title": "Todas as pesquisas",
+      "path": "Governo → Política → Eleições → Resultados → abrir eleição → Todas as pesquisas",
+      "note": "Também pode abrir automaticamente durante o ciclo eleitoral. É preciso haver eleição registrada."
+    },
+    {
+      "id": "election/3",
+      "group": "Eleições",
+      "title": "Apuração",
+      "path": "Governo → Política → Eleições → Resultados → abrir eleição → Apuração",
+      "note": "Também pode abrir automaticamente durante o ciclo eleitoral. É preciso haver eleição registrada."
+    },
+    {
+      "id": "election/4",
+      "group": "Eleições",
+      "title": "Resultado",
+      "path": "Governo → Política → Eleições → Resultados → abrir eleição → Resultado",
+      "note": "Também pode abrir automaticamente durante o ciclo eleitoral. É preciso haver eleição registrada."
+    },
+    {
+      "id": "election-detail/0",
+      "group": "Eleições",
+      "title": "Contagem",
+      "path": "Janela da eleição → Apuração ou Resultado → Contagem",
+      "note": ""
+    },
+    {
+      "id": "election-detail/1",
+      "group": "Eleições",
+      "title": "Vereadores",
+      "path": "Janela da eleição → Apuração ou Resultado → Vereadores",
+      "note": ""
+    },
+    {
+      "id": "election-detail/2",
+      "group": "Eleições",
+      "title": "Votos individuais",
+      "path": "Janela da eleição → Apuração ou Resultado → Votos individuais",
+      "note": ""
+    },
+    {
+      "id": "election-detail/3",
+      "group": "Eleições",
+      "title": "Comparecimento",
+      "path": "Janela da eleição → Apuração ou Resultado → Comparecimento",
+      "note": ""
+    },
+    {
+      "id": "event/0",
+      "group": "Histórico",
+      "title": "Resumo",
+      "path": "Histórico → clicar em um evento → Resumo",
+      "note": ""
+    },
+    {
+      "id": "event/1",
+      "group": "Histórico",
+      "title": "Detalhes",
+      "path": "Histórico → clicar em um evento → Detalhes",
+      "note": ""
+    },
+    {
+      "id": "event/2",
+      "group": "Histórico",
+      "title": "Linha do tempo",
+      "path": "Histórico → clicar em um evento → Linha do tempo",
+      "note": ""
+    },
+    {
+      "id": "corruption-case/0",
+      "group": "Corrupção",
+      "title": "Esquema",
+      "path": "Corrupção → clicar em um caso → Esquema",
+      "note": "Exige caso registrado."
+    },
+    {
+      "id": "corruption-case/1",
+      "group": "Corrupção",
+      "title": "Dinheiro",
+      "path": "Corrupção → clicar em um caso → Dinheiro",
+      "note": "Exige caso registrado."
+    },
+    {
+      "id": "corruption-case/2",
+      "group": "Corrupção",
+      "title": "Investigação",
+      "path": "Corrupção → clicar em um caso → Investigação",
+      "note": "Exige caso registrado."
+    },
+    {
+      "id": "publications/0",
+      "group": "Jornais e livros",
+      "title": "Acervo",
+      "path": "Jornais e livros → Acervo",
+      "note": ""
+    },
+    {
+      "id": "publications/1",
+      "group": "Jornais e livros",
+      "title": "Jornal oficial",
+      "path": "Jornais e livros → Jornal oficial",
+      "note": ""
+    },
+    {
+      "id": "document/0",
+      "group": "Jornais e livros",
+      "title": "Conteúdo",
+      "path": "Jornais e livros → Acervo → selecionar exemplar → Conteúdo",
+      "note": "Exige publicação disponível."
+    },
+    {
+      "id": "document/1",
+      "group": "Jornais e livros",
+      "title": "Escrever",
+      "path": "Jornais e livros → Acervo → selecionar exemplar → Escrever",
+      "note": "Exige publicação disponível."
+    },
+    {
+      "id": "demand/0",
+      "group": "Produção",
+      "title": "Oportunidades",
+      "path": "Produção → Demandas → Oportunidades",
+      "note": ""
+    },
+    {
+      "id": "demand/1",
+      "group": "Produção",
+      "title": "Preços",
+      "path": "Produção → Demandas → Preços",
+      "note": ""
+    },
+    {
+      "id": "demand/2",
+      "group": "Produção",
+      "title": "Acordos",
+      "path": "Produção → Demandas → Acordos",
+      "note": ""
+    },
+    {
+      "id": "demand/3",
+      "group": "Produção",
+      "title": "Cadeias produtivas",
+      "path": "Produção → Demandas → Cadeias produtivas",
+      "note": ""
+    },
+    {
+      "id": "stock/0",
+      "group": "Produção",
+      "title": "Todos",
+      "path": "Produção → Estoques → Todos",
+      "note": ""
+    },
+    {
+      "id": "stock/1",
+      "group": "Produção",
+      "title": "Com estoque",
+      "path": "Produção → Estoques → Com estoque",
+      "note": ""
+    },
+    {
+      "id": "stock/2",
+      "group": "Produção",
+      "title": "Sem estoque",
+      "path": "Produção → Estoques → Sem estoque",
+      "note": ""
+    },
+    {
+      "id": "project/0",
+      "group": "Terrenos e obras",
+      "title": "Em andamento",
+      "path": "Terrenos e obras → Obras → Em andamento",
+      "note": ""
+    },
+    {
+      "id": "project/1",
+      "group": "Terrenos e obras",
+      "title": "Bloqueadas",
+      "path": "Terrenos e obras → Obras → Bloqueadas",
+      "note": ""
+    },
+    {
+      "id": "project/2",
+      "group": "Terrenos e obras",
+      "title": "Encerradas",
+      "path": "Terrenos e obras → Obras → Encerradas",
+      "note": ""
+    },
+    {
+      "id": "identity",
+      "group": "Governo",
+      "title": "Identidade visual municipal",
+      "path": "Governo → Prefeitura → expandir Identidade visual municipal",
+      "note": ""
+    },
+    {
+      "id": "options/0",
+      "group": "Ferramentas e estrutura",
+      "title": "Gráficos",
+      "path": "Ferramentas → Opções → Gráficos",
+      "note": ""
+    },
+    {
+      "id": "options/1",
+      "group": "Ferramentas e estrutura",
+      "title": "Efeitos visuais",
+      "path": "Ferramentas → Opções → Efeitos visuais",
+      "note": ""
+    },
+    {
+      "id": "options/2",
+      "group": "Ferramentas e estrutura",
+      "title": "Tempo",
+      "path": "Ferramentas → Opções → Tempo",
+      "note": ""
+    },
+    {
+      "id": "editor/0",
+      "group": "Ferramentas e estrutura",
+      "title": "Terreno",
+      "path": "Ferramentas → Editor de mapa → Terreno",
+      "note": ""
+    },
+    {
+      "id": "editor/1",
+      "group": "Ferramentas e estrutura",
+      "title": "Objetos",
+      "path": "Ferramentas → Editor de mapa → Objetos",
+      "note": ""
+    },
+    {
+      "id": "shell/menu",
+      "group": "Ferramentas e estrutura",
+      "title": "Menu principal",
+      "path": "Esc ou Ferramentas → Menu principal",
+      "note": ""
+    },
+    {
+      "id": "shell/newgame",
+      "group": "Ferramentas e estrutura",
+      "title": "Novo Jogo",
+      "path": "Menu principal → Novo Jogo",
+      "note": ""
+    },
+    {
+      "id": "shell/search",
+      "group": "Ferramentas e estrutura",
+      "title": "Busca geral",
+      "path": "Lupa da barra superior ou Ctrl+K (⌘K no macOS)",
+      "note": ""
+    },
+    {
+      "id": "shell/toolbar",
+      "group": "Ferramentas e estrutura",
+      "title": "Barra superior e lista de ferramentas",
+      "path": "Durante a partida → barra superior; reduzir largura para ver a lista completa",
+      "note": ""
+    },
+    {
+      "id": "shell/status",
+      "group": "Ferramentas e estrutura",
+      "title": "Barra inferior",
+      "path": "Durante a partida → rodapé",
+      "note": ""
+    },
+    {
+      "id": "shell/windows",
+      "group": "Ferramentas e estrutura",
+      "title": "Controles e organização de janelas",
+      "path": "Abrir uma janela → mover, redimensionar, fixar, recolher, maximizar; menu Janelas",
+      "note": ""
+    },
+    {
+      "id": "shell/map",
+      "group": "Ferramentas e estrutura",
+      "title": "Mapa, navegação e seleção",
+      "path": "Durante a partida → área do mapa → selecionar entidades; testar 2D / 3D (F3)",
+      "note": ""
+    },
+    {
+      "id": "shell/tools-menu",
+      "group": "Ferramentas e estrutura",
+      "title": "Menu Ferramentas",
+      "path": "Barra superior → Ferramentas",
+      "note": ""
+    },
+    {
+      "id": "shell/windows-menu",
+      "group": "Ferramentas e estrutura",
+      "title": "Menu Janelas",
+      "path": "Barra superior → Janelas",
+      "note": ""
+    }
+  ]
+}

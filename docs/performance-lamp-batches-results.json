@@ -1,0 +1,39 @@
+{
+  "posts": 64,
+  "cases": 12,
+  "maxChannelDifference": 1,
+  "channelsDifferingOverOne": 0,
+  "chosenResolution": 0.5,
+  "buffer": "480x320",
+  "runs": [
+    {
+      "optimized": false,
+      "median": 1.9000000022351742,
+      "p95": 2.699999999254942,
+      "calls": 192,
+      "triangles": 17672
+    },
+    {
+      "optimized": true,
+      "median": 0.9000000022351742,
+      "p95": 1.199999999254942,
+      "calls": 12,
+      "triangles": 17672
+    },
+    {
+      "optimized": true,
+      "median": 0.6000000014901161,
+      "p95": 1,
+      "calls": 12,
+      "triangles": 17672
+    },
+    {
+      "optimized": false,
+      "median": 1.8999999985098839,
+      "p95": 2.900000002235174,
+      "calls": 192,
+      "triangles": 17672
+    }
+  ],
+  "errors": []
+}

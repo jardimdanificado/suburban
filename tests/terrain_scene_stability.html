@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><title>Terrain cache stability</title>
+<style>body{min-width:640px;background:#19202c;color:white;font:14px monospace}pre{white-space:pre-wrap}#view{width:960px;height:640px}</style>
+<button id="run">Check terrain cache under slow frame history</button><pre id="results">Loading models…</pre><div id="view"></div>
+<script type="module">
+import {CitySimulation} from '../js/city_simulation.js';
+import {World} from '../js/world.js';
+import {setActiveEntities} from '../js/engine.js';
+const reference=new URLSearchParams(location.search).has('reference');
+const {RCT3DRenderer}=await import(reference?'../js/renderer_3d_terrain_reference.js':'../js/renderer_3d.js');
+const out=document.querySelector('#results'),world=new World(1,1337,256),entities=[];let id=1;
+const city=new CitySimulation({world,population:16,seed:1337,createEntity:d=>{const e={id:id++,destroyed:false,...d};entities.push(e);return e;}});city.initialize();city.minute=1200;city.syncClock();
+const renderer=new RCT3DRenderer(document.querySelector('#view'));renderer.resize(960,640);renderer.setCamera(world.spawnCenter.x,world.spawnCenter.y,1.2);renderer.setPaused(true);renderer.cityDevelopment=city.development;renderer.cityLogistics=city.logistics;
+await renderer.cityCitizenModels.loading;setActiveEntities(entities);
+// This invariant concerns cache invalidation, not GPU throughput. Skip draws
+// while exercising the real scene builder, camera and chunk lifecycle.
+renderer.renderer.render=()=>{};
+const frame=()=>renderer.render(world,entities,0,0,0);
+const snapshot=()=>new Map([...renderer.terrainChunks].map(([key,c])=>[key,`${c.signature}:${c.terrain.id}:${c.water.id}`]));
+document.querySelector('#run').onclick=()=>{
+ try{
+  renderer.terrainDetailTier=2;renderer.terrainAdaptFrame=0;
+  for(let i=0;i<8;i++)frame();const before=snapshot(),initialTier=renderer.terrainDetailTier??2;
+  const started=performance.now();
+  for(let i=0;i<8;i++){renderer.terrainFrameAverageMs=40;renderer.terrainAdaptFrame=119;frame();}
+  const after=snapshot(),changed=[...before].filter(([key,value])=>after.get(key)!==value).length;
+  out.textContent=JSON.stringify({reference,initialTier,finalTier:renderer.terrainDetailTier??2,frames:8,chunksBefore:before.size,chunksAfter:after.size,changedChunks:changed,stableChunks:changed===0&&before.size===after.size,ms:performance.now()-started,gpuDrawsSkipped:true,modelsReady:renderer.cityCitizenModels.ready},null,2);
+ }catch(e){out.textContent=e.stack;}
+};out.textContent='Ready: deterministic scene cache test';
+</script>

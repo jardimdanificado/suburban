@@ -1,3 +1,4 @@
+import {syncLampBatches} from './city_lamp_batches.js?v=lamp-batches-1';
 import {furnitureModel} from './city_furniture_models.js?v=no-beach-towels-1';
 import {addBuildingDetails} from './city_building_details.js?v=mine-sign-removed-1';
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
@@ -486,6 +487,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     if(post.lit&&lamp.visible)cityNightLights.push({x:lamp.position.x,y:lamp.position.y+2.1,z:lamp.position.z,color:0xffbc63,distance:10,decay:2,intensity:2.6,priority:-2,distSq:(post.x-(renderer.camX||0))**2+(post.y-(renderer.camY||0))**2});
   }
   for (const [id, mesh] of renderer.lampMeshes) if (!liveLamps.has(id)) { renderer.scene.remove(mesh); mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose();o.userData.partyFlagTexture?.dispose(); }); renderer.lampMeshes.delete(id); }
+  syncLampBatches(renderer,THREE);
   renderer.lampSiteMeshes ??= new Map();
   const sites = new Set();
   for (const site of world.cityLampSites || []) {

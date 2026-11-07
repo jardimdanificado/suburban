@@ -1,0 +1,784 @@
+{
+  "decodeOnly": {
+    "checkout": "/home/jardel/repos/suburban/",
+    "baseline": "/tmp/suburban-sync-control-xp2sfgn6",
+    "population": 1024,
+    "warmupMinutes": 660,
+    "rounds": 30,
+    "results": [
+      {
+        "name": "before",
+        "meanMs": 317.06035179999964,
+        "meanThreadCpuMs": 316.2763333333333,
+        "p95": 531.096838999998,
+        "max": 552.1546359999993,
+        "checksum": "5941fb26abb0604317b8088d1de139efabb5e405c02543aad02967f0fc78a881",
+        "samples": [
+          {
+            "ms": 552.1546359999993,
+            "threadCpuMs": 544.014,
+            "nodes": 3466
+          },
+          {
+            "ms": 385.39439599999605,
+            "threadCpuMs": 384.828,
+            "nodes": 7936
+          },
+          {
+            "ms": 377.1127650000053,
+            "threadCpuMs": 376.061,
+            "nodes": 3958
+          },
+          {
+            "ms": 253.50389300000097,
+            "threadCpuMs": 252.858,
+            "nodes": 3097
+          },
+          {
+            "ms": 244.29160400000546,
+            "threadCpuMs": 243.963,
+            "nodes": 3416
+          },
+          {
+            "ms": 531.096838999998,
+            "threadCpuMs": 530.923,
+            "nodes": 3546
+          },
+          {
+            "ms": 269.47013799999695,
+            "threadCpuMs": 268.187,
+            "nodes": 3044
+          },
+          {
+            "ms": 471.22974099999556,
+            "threadCpuMs": 469.224,
+            "nodes": 3802
+          },
+          {
+            "ms": 273.6366199999975,
+            "threadCpuMs": 273.94,
+            "nodes": 3249
+          },
+          {
+            "ms": 258.91805100000056,
+            "threadCpuMs": 258.882,
+            "nodes": 2885
+          },
+          {
+            "ms": 272.2476530000058,
+            "threadCpuMs": 271.966,
+            "nodes": 3343
+          },
+          {
+            "ms": 306.60914200000116,
+            "threadCpuMs": 303.847,
+            "nodes": 3283
+          },
+          {
+            "ms": 470.925436000005,
+            "threadCpuMs": 468.781,
+            "nodes": 2714
+          },
+          {
+            "ms": 425.6245809999964,
+            "threadCpuMs": 423.326,
+            "nodes": 3167
+          },
+          {
+            "ms": 282.4534580000036,
+            "threadCpuMs": 281.826,
+            "nodes": 3023
+          },
+          {
+            "ms": 311.46532400000433,
+            "threadCpuMs": 311.736,
+            "nodes": 3492
+          },
+          {
+            "ms": 421.08087600000727,
+            "threadCpuMs": 420.767,
+            "nodes": 7675
+          },
+          {
+            "ms": 230.64204999999492,
+            "threadCpuMs": 230.977,
+            "nodes": 4006
+          },
+          {
+            "ms": 264.83829099999275,
+            "threadCpuMs": 264.961,
+            "nodes": 3919
+          },
+          {
+            "ms": 274.71087499998976,
+            "threadCpuMs": 274.262,
+            "nodes": 2906
+          },
+          {
+            "ms": 242.69953300000634,
+            "threadCpuMs": 242.066,
+            "nodes": 3355
+          },
+          {
+            "ms": 358.2967179999978,
+            "threadCpuMs": 358.558,
+            "nodes": 3082
+          },
+          {
+            "ms": 243.35794299999543,
+            "threadCpuMs": 243.926,
+            "nodes": 3300
+          },
+          {
+            "ms": 263.9087500000023,
+            "threadCpuMs": 263.997,
+            "nodes": 2918
+          },
+          {
+            "ms": 250.47934199999145,
+            "threadCpuMs": 250.656,
+            "nodes": 3061
+          },
+          {
+            "ms": 233.36997800000245,
+            "threadCpuMs": 232.999,
+            "nodes": 3299
+          },
+          {
+            "ms": 249.65994499999215,
+            "threadCpuMs": 249.246,
+            "nodes": 2861
+          },
+          {
+            "ms": 269.00023400000646,
+            "threadCpuMs": 268.998,
+            "nodes": 3037
+          },
+          {
+            "ms": 258.64475500000117,
+            "threadCpuMs": 257.97,
+            "nodes": 2998
+          },
+          {
+            "ms": 264.9869869999966,
+            "threadCpuMs": 264.545,
+            "nodes": 2883
+          }
+        ]
+      },
+      {
+        "name": "after",
+        "meanMs": 286.7355196999997,
+        "meanThreadCpuMs": 283.2116333333332,
+        "p95": 400.66123399999924,
+        "max": 410.1873270000069,
+        "checksum": "5941fb26abb0604317b8088d1de139efabb5e405c02543aad02967f0fc78a881",
+        "samples": [
+          {
+            "ms": 360.92700499999773,
+            "threadCpuMs": 360.755,
+            "nodes": 3466
+          },
+          {
+            "ms": 400.66123399999924,
+            "threadCpuMs": 400.975,
+            "nodes": 7936
+          },
+          {
+            "ms": 300.58448599999974,
+            "threadCpuMs": 300.937,
+            "nodes": 3958
+          },
+          {
+            "ms": 294.01645299999655,
+            "threadCpuMs": 292.491,
+            "nodes": 3097
+          },
+          {
+            "ms": 238.38791599999968,
+            "threadCpuMs": 237.969,
+            "nodes": 3416
+          },
+          {
+            "ms": 214.64053499999864,
+            "threadCpuMs": 213.96,
+            "nodes": 3546
+          },
+          {
+            "ms": 256.86473699999624,
+            "threadCpuMs": 256.698,
+            "nodes": 3044
+          },
+          {
+            "ms": 328.760540999996,
+            "threadCpuMs": 327.828,
+            "nodes": 3802
+          },
+          {
+            "ms": 364.0661670000045,
+            "threadCpuMs": 362.902,
+            "nodes": 3249
+          },
+          {
+            "ms": 293.0454249999966,
+            "threadCpuMs": 292.594,
+            "nodes": 2885
+          },
+          {
+            "ms": 302.3814060000004,
+            "threadCpuMs": 301.372,
+            "nodes": 3343
+          },
+          {
+            "ms": 352.21695600000385,
+            "threadCpuMs": 352.642,
+            "nodes": 3283
+          },
+          {
+            "ms": 263.2568359999859,
+            "threadCpuMs": 262.96,
+            "nodes": 2714
+          },
+          {
+            "ms": 232.2094669999933,
+            "threadCpuMs": 231.669,
+            "nodes": 3167
+          },
+          {
+            "ms": 379.9481109999906,
+            "threadCpuMs": 376.766,
+            "nodes": 3023
+          },
+          {
+            "ms": 243.98548200000369,
+            "threadCpuMs": 243.754,
+            "nodes": 3492
+          },
+          {
+            "ms": 300.27403400000185,
+            "threadCpuMs": 298.73,
+            "nodes": 7675
+          },
+          {
+            "ms": 242.93574200000148,
+            "threadCpuMs": 242.998,
+            "nodes": 4006
+          },
+          {
+            "ms": 253.31119600000966,
+            "threadCpuMs": 253.768,
+            "nodes": 3919
+          },
+          {
+            "ms": 273.37037899999996,
+            "threadCpuMs": 272.959,
+            "nodes": 2906
+          },
+          {
+            "ms": 240.94158500000776,
+            "threadCpuMs": 241.003,
+            "nodes": 3355
+          },
+          {
+            "ms": 232.59667600000103,
+            "threadCpuMs": 232.217,
+            "nodes": 3082
+          },
+          {
+            "ms": 292.05121099999815,
+            "threadCpuMs": 291.343,
+            "nodes": 3300
+          },
+          {
+            "ms": 289.939578000005,
+            "threadCpuMs": 289.306,
+            "nodes": 2918
+          },
+          {
+            "ms": 241.9457870000042,
+            "threadCpuMs": 241.989,
+            "nodes": 3061
+          },
+          {
+            "ms": 410.1873270000069,
+            "threadCpuMs": 319.202,
+            "nodes": 3299
+          },
+          {
+            "ms": 259.64008700000704,
+            "threadCpuMs": 258.975,
+            "nodes": 2861
+          },
+          {
+            "ms": 231.54630799998995,
+            "threadCpuMs": 230.606,
+            "nodes": 3037
+          },
+          {
+            "ms": 261.2901270000002,
+            "threadCpuMs": 260.981,
+            "nodes": 2998
+          },
+          {
+            "ms": 246.08279699999548,
+            "threadCpuMs": 246,
+            "nodes": 2883
+          }
+        ]
+      }
+    ]
+  },
+  "perMinute": {
+    "checkout": "/home/jardel/repos/suburban/",
+    "baseline": "/tmp/suburban-sync-control-xp2sfgn6",
+    "population": 1024,
+    "warmupMinutes": 660,
+    "rounds": 30,
+    "results": [
+      {
+        "name": "before",
+        "meanUpdateMs": 229.8521089000009,
+        "meanUpdateThreadCpuMs": 222.29523333333336,
+        "meanMs": 250.57517513333343,
+        "meanThreadCpuMs": 247.8777,
+        "p95": 381.20914400000765,
+        "max": 399.0418069999869,
+        "checksum": "5941fb26abb0604317b8088d1de139efabb5e405c02543aad02967f0fc78a881",
+        "samples": [
+          {
+            "ms": 282.05395499999577,
+            "updateMs": 841.9124200000006,
+            "updateThreadCpuMs": 632.492,
+            "threadCpuMs": 281.204,
+            "nodes": 3466
+          },
+          {
+            "ms": 247.61815300000308,
+            "updateMs": 312.53304299998854,
+            "updateThreadCpuMs": 311.018,
+            "threadCpuMs": 247.004,
+            "nodes": 7936
+          },
+          {
+            "ms": 234.22268399999302,
+            "updateMs": 289.3879989999987,
+            "updateThreadCpuMs": 289.73,
+            "threadCpuMs": 233.942,
+            "nodes": 3958
+          },
+          {
+            "ms": 248.64637600000424,
+            "updateMs": 188.8587710000138,
+            "updateThreadCpuMs": 188.991,
+            "threadCpuMs": 248.873,
+            "nodes": 3097
+          },
+          {
+            "ms": 399.0418069999869,
+            "updateMs": 221.4649919999938,
+            "updateThreadCpuMs": 220.985,
+            "threadCpuMs": 398.825,
+            "nodes": 3416
+          },
+          {
+            "ms": 226.7732529999921,
+            "updateMs": 181.9133589999983,
+            "updateThreadCpuMs": 181.993,
+            "threadCpuMs": 226.993,
+            "nodes": 3546
+          },
+          {
+            "ms": 245.99000999999407,
+            "updateMs": 546.0902219999989,
+            "updateThreadCpuMs": 545.791,
+            "threadCpuMs": 245.998,
+            "nodes": 3044
+          },
+          {
+            "ms": 255.2609919999959,
+            "updateMs": 178.71462900000915,
+            "updateThreadCpuMs": 178.985,
+            "threadCpuMs": 254.647,
+            "nodes": 3802
+          },
+          {
+            "ms": 330.3119230000011,
+            "updateMs": 207.88889799999015,
+            "updateThreadCpuMs": 205.253,
+            "threadCpuMs": 330.693,
+            "nodes": 3249
+          },
+          {
+            "ms": 221.8527150000009,
+            "updateMs": 166.52221100000315,
+            "updateThreadCpuMs": 165.821,
+            "threadCpuMs": 221.988,
+            "nodes": 2885
+          },
+          {
+            "ms": 226.05647900000622,
+            "updateMs": 155.17278199999419,
+            "updateThreadCpuMs": 154.174,
+            "threadCpuMs": 225.235,
+            "nodes": 3343
+          },
+          {
+            "ms": 222.60930199999711,
+            "updateMs": 152.87599000000046,
+            "updateThreadCpuMs": 152.865,
+            "threadCpuMs": 221.983,
+            "nodes": 3283
+          },
+          {
+            "ms": 207.01762099999178,
+            "updateMs": 153.1869510000106,
+            "updateThreadCpuMs": 152.741,
+            "threadCpuMs": 206.993,
+            "nodes": 2714
+          },
+          {
+            "ms": 248.8448129999888,
+            "updateMs": 190.7213219999976,
+            "updateThreadCpuMs": 190.924,
+            "threadCpuMs": 248.811,
+            "nodes": 3167
+          },
+          {
+            "ms": 381.20914400000765,
+            "updateMs": 174.14318800000183,
+            "updateThreadCpuMs": 173.972,
+            "threadCpuMs": 306.181,
+            "nodes": 3023
+          },
+          {
+            "ms": 219.55320000000938,
+            "updateMs": 264.11994399999094,
+            "updateThreadCpuMs": 263.575,
+            "threadCpuMs": 219.99,
+            "nodes": 3492
+          },
+          {
+            "ms": 222.61921999999322,
+            "updateMs": 219.6684469999891,
+            "updateThreadCpuMs": 219.743,
+            "threadCpuMs": 221.948,
+            "nodes": 7675
+          },
+          {
+            "ms": 234.97480100000394,
+            "updateMs": 238.62935400000424,
+            "updateThreadCpuMs": 238.434,
+            "threadCpuMs": 234.963,
+            "nodes": 4006
+          },
+          {
+            "ms": 240.32916000000841,
+            "updateMs": 235.40589900000487,
+            "updateThreadCpuMs": 234.868,
+            "threadCpuMs": 240.924,
+            "nodes": 3919
+          },
+          {
+            "ms": 242.20169899999746,
+            "updateMs": 174.98743300000206,
+            "updateThreadCpuMs": 174.96,
+            "threadCpuMs": 242.851,
+            "nodes": 2906
+          },
+          {
+            "ms": 211.88779900000372,
+            "updateMs": 154.21230999998807,
+            "updateThreadCpuMs": 153.987,
+            "threadCpuMs": 211.973,
+            "nodes": 3355
+          },
+          {
+            "ms": 256.6115080000018,
+            "updateMs": 138.53485800001363,
+            "updateThreadCpuMs": 138.934,
+            "threadCpuMs": 255.928,
+            "nodes": 3082
+          },
+          {
+            "ms": 228.68201699999918,
+            "updateMs": 147.04905499999586,
+            "updateThreadCpuMs": 146.989,
+            "threadCpuMs": 228.064,
+            "nodes": 3300
+          },
+          {
+            "ms": 238.98045200000342,
+            "updateMs": 165.36820100000477,
+            "updateThreadCpuMs": 165.656,
+            "threadCpuMs": 238.093,
+            "nodes": 2918
+          },
+          {
+            "ms": 219.75292600000103,
+            "updateMs": 166.21721400000388,
+            "updateThreadCpuMs": 165.81,
+            "threadCpuMs": 219.522,
+            "nodes": 3061
+          },
+          {
+            "ms": 251.39247800000885,
+            "updateMs": 211.3041460000095,
+            "updateThreadCpuMs": 202.911,
+            "threadCpuMs": 250.082,
+            "nodes": 3299
+          },
+          {
+            "ms": 258.3045700000075,
+            "updateMs": 161.41389399999753,
+            "updateThreadCpuMs": 161.795,
+            "threadCpuMs": 257.751,
+            "nodes": 2861
+          },
+          {
+            "ms": 252.37139900001057,
+            "updateMs": 382.7074200000061,
+            "updateThreadCpuMs": 381.482,
+            "threadCpuMs": 252.994,
+            "nodes": 3037
+          },
+          {
+            "ms": 232.62221499999578,
+            "updateMs": 143.87761900000623,
+            "updateThreadCpuMs": 144,
+            "threadCpuMs": 231.986,
+            "nodes": 2998
+          },
+          {
+            "ms": 229.46258300000045,
+            "updateMs": 130.68069600001036,
+            "updateThreadCpuMs": 129.978,
+            "threadCpuMs": 229.892,
+            "nodes": 2883
+          }
+        ]
+      },
+      {
+        "name": "after",
+        "meanUpdateMs": 456.95623556666544,
+        "meanUpdateThreadCpuMs": 456.6929666666666,
+        "meanMs": 256.97245279999964,
+        "meanThreadCpuMs": 256.72860000000003,
+        "p95": 368.5976470000023,
+        "max": 441.3904279999988,
+        "checksum": "5941fb26abb0604317b8088d1de139efabb5e405c02543aad02967f0fc78a881",
+        "samples": [
+          {
+            "ms": 259.2049939999997,
+            "updateMs": 679.3701829999918,
+            "updateThreadCpuMs": 678.28,
+            "threadCpuMs": 259.979,
+            "nodes": 3466
+          },
+          {
+            "ms": 260.2811320000037,
+            "updateMs": 556.0484310000029,
+            "updateThreadCpuMs": 555.314,
+            "threadCpuMs": 259.982,
+            "nodes": 7936
+          },
+          {
+            "ms": 259.9152710000053,
+            "updateMs": 816.7182639999955,
+            "updateThreadCpuMs": 816.159,
+            "threadCpuMs": 259.787,
+            "nodes": 3958
+          },
+          {
+            "ms": 229.2910409999895,
+            "updateMs": 371.3413169999985,
+            "updateThreadCpuMs": 370.962,
+            "threadCpuMs": 228.734,
+            "nodes": 3097
+          },
+          {
+            "ms": 266.4599709999893,
+            "updateMs": 390.6671070000011,
+            "updateThreadCpuMs": 390.988,
+            "threadCpuMs": 265.777,
+            "nodes": 3416
+          },
+          {
+            "ms": 224.78232299999218,
+            "updateMs": 404.65341400000034,
+            "updateThreadCpuMs": 404.982,
+            "threadCpuMs": 224.849,
+            "nodes": 3546
+          },
+          {
+            "ms": 247.81295700000192,
+            "updateMs": 390.2923759999976,
+            "updateThreadCpuMs": 389.598,
+            "threadCpuMs": 247.48,
+            "nodes": 3044
+          },
+          {
+            "ms": 216.0765459999966,
+            "updateMs": 365.42803899999126,
+            "updateThreadCpuMs": 364.99,
+            "threadCpuMs": 215.986,
+            "nodes": 3802
+          },
+          {
+            "ms": 279.06434699999227,
+            "updateMs": 405.40532099999837,
+            "updateThreadCpuMs": 405.001,
+            "threadCpuMs": 278.992,
+            "nodes": 3249
+          },
+          {
+            "ms": 228.80629999999655,
+            "updateMs": 352.38879100000486,
+            "updateThreadCpuMs": 353,
+            "threadCpuMs": 228.821,
+            "nodes": 2885
+          },
+          {
+            "ms": 243.703416999997,
+            "updateMs": 501.8455430000031,
+            "updateThreadCpuMs": 501.008,
+            "threadCpuMs": 243.862,
+            "nodes": 3343
+          },
+          {
+            "ms": 224.10256800000207,
+            "updateMs": 334.75170100000105,
+            "updateThreadCpuMs": 334.971,
+            "threadCpuMs": 223.999,
+            "nodes": 3283
+          },
+          {
+            "ms": 232.43556899999385,
+            "updateMs": 575.4253489999974,
+            "updateThreadCpuMs": 575.33,
+            "threadCpuMs": 231.973,
+            "nodes": 2714
+          },
+          {
+            "ms": 227.04202500000247,
+            "updateMs": 368.070504000003,
+            "updateThreadCpuMs": 367.927,
+            "threadCpuMs": 226.99,
+            "nodes": 3167
+          },
+          {
+            "ms": 249.08278199999768,
+            "updateMs": 340.50593699999445,
+            "updateThreadCpuMs": 340.884,
+            "threadCpuMs": 248.964,
+            "nodes": 3023
+          },
+          {
+            "ms": 231.96717299999727,
+            "updateMs": 533.1849420000071,
+            "updateThreadCpuMs": 532.845,
+            "threadCpuMs": 231.982,
+            "nodes": 3492
+          },
+          {
+            "ms": 261.6020850000059,
+            "updateMs": 801.7084820000018,
+            "updateThreadCpuMs": 801.102,
+            "threadCpuMs": 261.946,
+            "nodes": 7675
+          },
+          {
+            "ms": 213.32246500000474,
+            "updateMs": 598.386903999999,
+            "updateThreadCpuMs": 597.617,
+            "threadCpuMs": 212.95,
+            "nodes": 4006
+          },
+          {
+            "ms": 255.84065500000725,
+            "updateMs": 475.4203969999944,
+            "updateThreadCpuMs": 474.675,
+            "threadCpuMs": 255.95,
+            "nodes": 3919
+          },
+          {
+            "ms": 365.45220600000175,
+            "updateMs": 407.77510299999267,
+            "updateThreadCpuMs": 407.938,
+            "threadCpuMs": 364.426,
+            "nodes": 2906
+          },
+          {
+            "ms": 221.78559100000712,
+            "updateMs": 361.9691970000131,
+            "updateThreadCpuMs": 360.958,
+            "threadCpuMs": 220.975,
+            "nodes": 3355
+          },
+          {
+            "ms": 247.82636700000148,
+            "updateMs": 514.933474999998,
+            "updateThreadCpuMs": 514.577,
+            "threadCpuMs": 247.969,
+            "nodes": 3082
+          },
+          {
+            "ms": 441.3904279999988,
+            "updateMs": 393.7375999999931,
+            "updateThreadCpuMs": 394.006,
+            "threadCpuMs": 440.286,
+            "nodes": 3300
+          },
+          {
+            "ms": 237.17849900000147,
+            "updateMs": 528.8812009999965,
+            "updateThreadCpuMs": 528.883,
+            "threadCpuMs": 236.931,
+            "nodes": 2918
+          },
+          {
+            "ms": 227.70980100000452,
+            "updateMs": 418.4499039999937,
+            "updateThreadCpuMs": 417.929,
+            "threadCpuMs": 227.993,
+            "nodes": 3061
+          },
+          {
+            "ms": 368.5976470000023,
+            "updateMs": 441.8736019999924,
+            "updateThreadCpuMs": 441.844,
+            "threadCpuMs": 365.603,
+            "nodes": 3299
+          },
+          {
+            "ms": 260.2012289999984,
+            "updateMs": 365.8255050000007,
+            "updateThreadCpuMs": 365.963,
+            "threadCpuMs": 259.804,
+            "nodes": 2861
+          },
+          {
+            "ms": 242.23821300000418,
+            "updateMs": 358.28796799998963,
+            "updateThreadCpuMs": 357.913,
+            "threadCpuMs": 242.88,
+            "nodes": 3037
+          },
+          {
+            "ms": 257.0392920000013,
+            "updateMs": 342.6753810000082,
+            "updateThreadCpuMs": 342.904,
+            "threadCpuMs": 256.99,
+            "nodes": 2998
+          },
+          {
+            "ms": 228.9606899999926,
+            "updateMs": 312.6651290000009,
+            "updateThreadCpuMs": 312.241,
+            "threadCpuMs": 228.998,
+            "nodes": 2883
+          }
+        ]
+      }
+    ]
+  }
+}

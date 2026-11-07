@@ -1,0 +1,13 @@
+{
+  "reference": true,
+  "initialTier": 2,
+  "finalTier": 0,
+  "frames": 8,
+  "chunksBefore": 36,
+  "chunksAfter": 36,
+  "changedChunks": 36,
+  "stableChunks": false,
+  "ms": 2040.699999999255,
+  "gpuDrawsSkipped": true,
+  "modelsReady": true
+}

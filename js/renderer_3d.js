@@ -13,7 +13,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=shutter-two-sided-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=lamp-batches-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1';
@@ -6588,6 +6588,8 @@ export class RCT3DRenderer {
     }
     const visionSignature = visionTarget && !visionTarget.destroyed ? [...known].sort().join(';') : 'all';
     const gridEnabled = this.wireframeMode === 1 && this.zoom >= 0.45;
+    // Frame duration must not invalidate all cached chunks. Detail remains
+    // stable for the same view/zoom and explicit terrain setting.
     const detailTier = this.terrainDetailTier ?? 2;
     const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
     const city=this.cityDevelopment?.city,party=cityGoverningParty(city),farmSignatureCache=this._terrainFarmSignatureCache;
@@ -7490,7 +7492,6 @@ export class RCT3DRenderer {
 
   render(world, entities, time, dt, simSpeed = 1.0, visionCreature = null, visualizedGroupId = null) {
     if (!this.width || !this.height || !world) return;
-    const frameStart = performance.now();
     const profileStart = this.profileFrame ? performance.now() : 0;
     this.mapWidth=world.width;this.mapHeight=world.height;
     this.currentWorld = world;
@@ -9105,16 +9106,6 @@ export class RCT3DRenderer {
     } else {
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.scene, activeCam);
-    }
-    const frameCpuMs = performance.now() - frameStart;
-    this.terrainFrameAverageMs = (this.terrainFrameAverageMs || frameCpuMs) * 0.92 + frameCpuMs * 0.08;
-    this.terrainAdaptFrame = (this.terrainAdaptFrame || 0) + 1;
-    if (this.terrainAdaptFrame >= 120) {
-      this.terrainAdaptFrame = 0;
-      const average = this.terrainFrameAverageMs;
-      const current = this.terrainDetailTier ?? 2;
-      const next = average > 24 ? Math.max(0, current - 1) : average < 13 ? Math.min(2, current + 1) : current;
-      if (next !== current) { this.terrainDetailTier = next; }
     }
     if (this.profileFrame) this.frameProfile = {terrain:profileTerrain-profileStart,city:profileCity-profileTerrain,entities:profilePrepared-profileCity,entityLoop:profileEntityLoop-profileCity,entityRest:profilePrepared-profileEntityLoop,citizenClass:profileCitizenClass,citizenSurface:profileCitizenSurface,citizenBody:profileCitizenBody,webgl:performance.now()-profilePrepared};
   }

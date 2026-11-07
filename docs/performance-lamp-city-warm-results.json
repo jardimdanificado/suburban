@@ -1,0 +1,42 @@
+{
+  "population": 1024,
+  "geometryKind": "lamps",
+  "sourceInstances": 64,
+  "modelsReady": true,
+  "bodyInstances": 1024,
+  "chosenResolution": 0.5,
+  "buffer": "480x320",
+  "maxChannelDifference": 0,
+  "channelsDifferingOverOne": 0,
+  "runs": [
+    {
+      "optimized": false,
+      "median": 31.5,
+      "p95": 41.900000002235174,
+      "drawCalls": 923,
+      "triangles": 1455776
+    },
+    {
+      "optimized": true,
+      "median": 25.699999999254942,
+      "p95": 45.600000001490116,
+      "drawCalls": 740,
+      "triangles": 1455776
+    },
+    {
+      "optimized": true,
+      "median": 21.300000000745058,
+      "p95": 28.099999997764826,
+      "drawCalls": 740,
+      "triangles": 1455776
+    },
+    {
+      "optimized": false,
+      "median": 24.700000002980232,
+      "p95": 38.19999999925494,
+      "drawCalls": 923,
+      "triangles": 1455776
+    }
+  ],
+  "errors": []
+}

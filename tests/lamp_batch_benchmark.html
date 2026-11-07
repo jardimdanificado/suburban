@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>Lamp batch comparison</title>
+<style>body{background:#19202c;color:white;font:14px monospace}pre{white-space:pre-wrap}#view{width:960px;height:640px}</style>
+<button id="run">Compare lamp batches</button><pre id="results">Loading models…</pre><div id="view"></div>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {RCT3DRenderer} from '../js/renderer_3d.js';
+import {CitySimulation} from '../js/city_simulation.js';
+import {World} from '../js/world.js';
+import {setActiveEntities} from '../js/engine.js';
+import {syncLampBatches} from '../js/city_lamp_batches.js';
+const out=document.querySelector('#results'),world=new World(1,1337,256),entities=[];let id=1;
+const city=new CitySimulation({world,population:16,seed:1337,createEntity:d=>{const e={id:id++,destroyed:false,...d};entities.push(e);return e;}});city.initialize();city.minute=1200;city.syncClock();
+const renderer=new RCT3DRenderer(document.querySelector('#view'));renderer.resize(960,640);renderer.setCamera(world.spawnCenter.x,world.spawnCenter.y,1.2);renderer.setPaused(true);renderer.setNightLightLimit(32);renderer.cityDevelopment=city.development;renderer.cityLogistics=city.logistics;
+await renderer.cityCitizenModels.loading;setActiveEntities(entities);
+world.cityLampPosts=Array.from({length:64},(_,i)=>({id:'benchmark-lamp-'+i,built:true,lit:true,x:world.spawnCenter.x+(i%8-3.5)*6,y:world.spawnCenter.y+(Math.floor(i/8)-3.5)*6}));
+const draw=renderer.renderer.render;renderer.renderer.render=()=>{};try{renderer.render(world,entities,0,0,0);}finally{renderer.renderer.render=draw;}
+const fullScene=renderer.scene,scene=new THREE.Scene();scene.background=new THREE.Color(0x19202c);
+for(const child of fullScene.children)if(child.isLight)scene.add(child.clone());
+for(const lamp of renderer.lampMeshes.values())scene.add(lamp);for(const mesh of renderer.lampBatches.values())scene.add(mesh);renderer.scene=scene;
+renderer.renderer.shadowMap.enabled=false;
+const camera=new THREE.OrthographicCamera(-36*1.5,36*1.5,36,-36,.1,1000),center=world.spawnCenter;
+const errors=[];renderer.renderer.debug.onShaderError=(gl,p,v,f)=>errors.push(gl.getProgramInfoLog(p)+'\n'+gl.getShaderInfoLog(f));
+function frame(optimized){renderer.lampBatchReference=!optimized;syncLampBatches(renderer,THREE);renderer.nightLighting?.update(renderer.nightLightPool,camera,scene);renderer.renderer.setRenderTarget(null);renderer.renderer.clear();renderer.renderer.render(scene,camera);renderer.renderer.getContext().finish();}
+function pixels(){const gl=renderer.renderer.getContext(),p=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,p);return p;}
+let running=false;document.querySelector('#run').onclick=async()=>{
+ if(running)return;running=true;out.textContent='Comparing lamp geometry, colors and lighting…';await new Promise(r=>setTimeout(r,0));
+ try{
+  let max=0,changed=0,cases=0;
+  for(const mode of ['lit','unlit','mixed']){
+   let i=0;for(const lamp of renderer.lampMeshes.values())lamp.userData.lantern.material.emissive.setHex(mode==='lit'||mode==='mixed'&&i++%2?0xffa52f:0);
+   for(const light of renderer.nightLightPool)light.visible=mode!=='unlit';
+   for(const [x,z]of [[32,32],[-32,32],[-32,-32],[32,-32]]){
+    camera.position.set(center.x+x,28,center.y+z);camera.lookAt(center.x,1,center.y);camera.updateMatrixWorld(true);
+    for(const optimized of [false,true])frame(optimized);
+    frame(false);const a=pixels();frame(true);const b=pixels();
+    for(let j=0;j<a.length;j++){const d=Math.abs(a[j]-b[j]);max=Math.max(max,d);if(d>1)changed++;}cases++;out.textContent='Compared '+cases+' cases';await new Promise(r=>setTimeout(r,0));
+   }
+  }
+  const runs=[];
+  for(const optimized of [false,true,true,false]){frame(optimized);const samples=[];for(let i=0;i<12;i++){const at=performance.now();frame(optimized);samples.push(performance.now()-at);await new Promise(r=>setTimeout(r,0));}samples.sort((a,b)=>a-b);runs.push({optimized,median:samples[6],p95:samples[11],calls:renderer.renderer.info.render.calls,triangles:renderer.renderer.info.render.triangles});}
+  frame(true);out.textContent=JSON.stringify({posts:renderer.lampMeshes.size,cases,maxChannelDifference:max,channelsDifferingOverOne:changed,chosenResolution:renderer.resolutionScale,buffer:renderer.renderer.domElement.width+'x'+renderer.renderer.domElement.height,runs,errors},null,2);
+ }catch(e){out.textContent=e.stack;}finally{running=false;}
+};out.textContent='Ready: 64 complete lamp models';
+</script>

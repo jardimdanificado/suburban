@@ -1,6 +1,6 @@
 <!doctype html><meta charset="utf-8"><title>City night benchmark</title>
 <style>body{margin:0;background:#19202c;color:white;font:14px monospace}#view{width:960px;height:640px}pre{white-space:pre-wrap}</style>
-<button id="run">Run city comparison</button><pre id="results">Loading city and 3D characters…</pre><div id="view"></div>
+<button id="run">Run city comparison</button><button id="inventory">Inspect draw sources</button><pre id="results">Loading city and 3D characters…</pre><div id="view"></div>
 <script type="module">
 import {RCT3DRenderer} from '../js/renderer_3d.js?v=local-night-lights-1';
 import {CitySimulation} from '../js/city_simulation.js';
@@ -8,7 +8,7 @@ import {World} from '../js/world.js';
 import {setActiveEntities} from '../js/engine.js';
 import * as THREE from 'https://esm.sh/three@0.160.0';
 import {shutterReference} from './helpers/shutter_reference.js';
-const geometryTest=new URLSearchParams(location.search).get('geometry')==='shutters';
+const geometryKind=new URLSearchParams(location.search).get('geometry'),geometryTest=['shutters','lamps'].includes(geometryKind);
 const out=document.querySelector('#results'),population=Number(new URLSearchParams(location.search).get('population'))||1024;
 const world=new World(1,1337,256),entities=[];let id=1;
 const city=new CitySimulation({world,population,seed:1337,createEntity:data=>{const e={id:id++,destroyed:false,...data};entities.push(e);return e;}});city.initialize();
@@ -26,25 +26,45 @@ for(let i=0;torchStress&&i<city.citizens.length;i++){
  const e=city.citizens[i].entity;e.properties.heldItem={resourceType:'torch',fuel:10};
 }
 setActiveEntities(entities);city.minute=20*60;city.syncClock();
-function frame(){renderer.render(world,entities,0,geometryTest?0:1/60,geometryTest?0:1);renderer.renderer.getContext().finish();}
+let lastFinishMs=0;
+function frame(){renderer.render(world,entities,0,geometryTest?0:1/60,geometryTest?0:1);const at=performance.now();renderer.renderer.getContext().finish();lastFinishMs=performance.now()-at;}
 function measure(){const samples=[],parts=[];for(let i=0;i<12;i++){const start=performance.now();frame();samples.push(performance.now()-start);parts.push({...renderer.frameProfile});}samples.sort((a,b)=>a-b);return {median:samples[6],p95:samples[11],profile:parts.reduce((s,p)=>{for(const k of Object.keys(p))s[k]=(s[k]||0)+p[k]/parts.length;return s;},{})};}
+document.querySelector('#inventory').onclick=()=>{
+ const draw=renderer.renderer.render;renderer.renderer.render=()=>{};
+ try{renderer.render(world,entities,0,0,0);}finally{renderer.renderer.render=draw;}
+ renderer.scene.updateMatrixWorld(true);const camera=renderer.isPerspectiveActive()?renderer.fpCamera:renderer.camera;camera.updateMatrixWorld(true);
+ const frustum=new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse)),items=[],rows=new Map();
+ renderer.scene.traverseVisible(mesh=>{if(!mesh.isMesh||mesh.isInstancedMesh&&mesh.count===0||mesh.frustumCulled&&!frustum.intersectsObject(mesh))return;for(const material of Array.isArray(mesh.material)?mesh.material:[mesh.material])if(material?.visible)items.push({object:mesh,material});});
+ const cityRoots=new Map([...renderer.cityMeshes.values()].map(group=>[group,group])),rootNames=new Map();
+ for(const [key,value]of Object.entries(renderer))if(value instanceof Map)for(const node of value.values())if(node?.isObject3D)rootNames.set(node,key);
+ for(const item of items){
+  const mesh=item.object;let ancestor=mesh,building=null;
+  while(ancestor){if(cityRoots.has(ancestor)){building=ancestor;break;}ancestor=ancestor.parent;}
+  let kind='other';
+  if(building){const data=building.userData;kind=Object.entries(data).find(([key,value])=>value===mesh||Array.isArray(value)&&value.includes(mesh))?.[0]||'facade-detail';}
+  else{ancestor=mesh;while(ancestor.parent&&ancestor.parent!==renderer.scene)ancestor=ancestor.parent;kind=ancestor.name||rootNames.get(ancestor)||Object.entries(renderer).find(([key,value])=>value===ancestor)?.[0]||'scene-object';}
+  const key=(building?'building.':'scene.')+kind+':'+item.material.type+':'+(mesh.isInstancedMesh?'instanced':'mesh')+':'+mesh.geometry.type+':side'+item.material.side+':transparent'+item.material.transparent+':emit'+(item.material.emissive?.getHex()||0),row=rows.get(key)||{kind:key,calls:0,triangles:0};
+  row.calls++;row.triangles+=(mesh.geometry.index?.count||mesh.geometry.attributes.position.count)/3*(mesh.isInstancedMesh?mesh.count:1);rows.set(key,row);
+ }
+ out.textContent=JSON.stringify({inventoryOnly:true,estimatedDrawCalls:items.length,rows:[...rows.values()].sort((a,b)=>b.calls-a.calls)},null,2);
+};
 let running=false;
 document.querySelector('#run').onclick=async()=>{
- if(running)return;running=true;out.textContent=geometryTest?'Comparing shutter geometry…':'Running native lights…';await new Promise(resolve=>setTimeout(resolve,0));
+ if(running)return;running=true;out.textContent=geometryTest?(geometryKind==='lamps'?'Comparing lamp batches…':'Comparing shutter geometry…'):'Running native lights…';await new Promise(resolve=>setTimeout(resolve,0));
  try{
   if(geometryTest){
-   frame();const records=[...renderer.cityMeshes.values()].flatMap(g=>g.userData.portugueseWindowShutters||[]),reference=shutterReference(THREE,records);
-   for(const optimized of [false,true]){reference.set(optimized);for(let i=0;i<12;i++){frame();await new Promise(resolve=>setTimeout(resolve,0));}}
+   frame();const records=[...renderer.cityMeshes.values()].flatMap(g=>g.userData.portugueseWindowShutters||[]),reference=geometryKind==='lamps'?{set(optimized){renderer.lampBatchReference=!optimized;},instances:renderer.lampMeshes.size}:shutterReference(THREE,records);
+   for(const optimized of [false,true]){reference.set(optimized);for(let i=0;i<24;i++){frame();out.textContent='Warming '+(optimized?'batched':'original')+' frame '+(i+1)+'/24';await new Promise(resolve=>setTimeout(resolve,0));}}
    const pixels=()=>{const gl=renderer.renderer.getContext(),p=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,p);return p;};
    reference.set(false);frame();const a=pixels();reference.set(true);frame();const b=pixels();let max=0,changed=0;for(let i=0;i<a.length;i++){const d=Math.abs(a[i]-b[i]);max=Math.max(max,d);if(d>1)changed++;}
    const runs=[];
-   for(const optimized of [false,true,true,false]){
-    reference.set(optimized);frame();const samples=[],draws=[],triangles=[];
-    for(let i=0;i<12;i++){const at=performance.now();frame();samples.push(performance.now()-at);draws.push(renderer.renderer.info.render.calls);triangles.push(renderer.renderer.info.render.triangles);await new Promise(resolve=>setTimeout(resolve,0));}
-    samples.sort((a,b)=>a-b);draws.sort((a,b)=>a-b);triangles.sort((a,b)=>a-b);runs.push({optimized,median:samples[6],p95:samples[11],drawCalls:draws[6],triangles:triangles[6]});
+   for(const [pass,optimized]of [false,true,true,false].entries()){
+    reference.set(optimized);frame();const samples=[],draws=[],triangles=[],phases=[];
+    for(let i=0;i<24;i++){const at=performance.now();frame();const elapsed=performance.now()-at;samples.push(elapsed);phases.push({...renderer.frameProfile,finish:lastFinishMs,total:elapsed});draws.push(renderer.renderer.info.render.calls);triangles.push(renderer.renderer.info.render.triangles);out.textContent='Measuring pass '+(pass+1)+'/4, '+(optimized?'batched':'original')+' frame '+(i+1)+'/24';await new Promise(resolve=>setTimeout(resolve,0));}
+    samples.sort((a,b)=>a-b);draws.sort((a,b)=>a-b);triangles.sort((a,b)=>a-b);const phaseStats=Object.fromEntries(Object.keys(phases[0]).map(key=>{const values=phases.map(row=>row[key]).sort((a,b)=>a-b);return[key,{median:values[12],p95:values[22],max:values[23]}];}));runs.push({optimized,median:samples[12],p95:samples[22],drawCalls:draws[12],triangles:triangles[12],terrainTier:renderer.terrainDetailTier??2,phaseStats});
    }
    reference.set(true);frame();
-   out.textContent=JSON.stringify({population,shutterInstances:reference.instances,modelsReady:renderer.cityCitizenModels.ready,bodyInstances:[...renderer.cityCitizenModels.activeBatches].reduce((n,b)=>n+b.count,0),chosenResolution:renderer.resolutionScale,buffer:renderer.renderer.domElement.width+'x'+renderer.renderer.domElement.height,maxChannelDifference:max,channelsDifferingOverOne:changed,runs,errors},null,2);
+   out.textContent=JSON.stringify({population,geometryKind,sourceInstances:reference.instances,modelsReady:renderer.cityCitizenModels.ready,bodyInstances:[...renderer.cityCitizenModels.activeBatches].reduce((n,b)=>n+b.count,0),chosenResolution:renderer.resolutionScale,buffer:renderer.renderer.domElement.width+'x'+renderer.renderer.domElement.height,maxChannelDifference:max,channelsDifferingOverOne:changed,runs,errors},null,2);
    return;
   }
   renderer.nightLighting=null;for(const p of renderer.nightLightPool)renderer.scene.add(p);frame();frame();const native=measure(),nativeErrors=errors.splice(0);
@@ -52,7 +72,7 @@ document.querySelector('#run').onclick=async()=>{
   renderer.nightLighting=local;for(const p of renderer.nightLightPool)renderer.scene.remove(p);frame();frame();const optimized=measure();
   for(const dx of [12,36,-24,0]){renderer.setCamera(world.spawnCenter.x+dx,world.spawnCenter.y,1.2);frame();}
   out.textContent=JSON.stringify({population,cameraMovesChecked:4,source:torchStress?'crowded-torches':'street-lamps',nightLights:local.grid.count,modelsReady:renderer.cityCitizenModels.ready,chosenResolution:renderer.resolutionScale,buffer:renderer.renderer.domElement.width+'x'+renderer.renderer.domElement.height,native,optimized,speedup:native.median/optimized.median,gridMaxLights:local.grid.maxCellLights,nativeErrors,optimizedErrors:errors.splice(0)},null,2);
- }catch(e){out.textContent=e.stack;}
+ }catch(e){out.textContent=e.stack;}finally{running=false;}
 };
 out.textContent='Ready: '+population+' citizens with 3D models';
 </script>
