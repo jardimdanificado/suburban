@@ -103,7 +103,7 @@ export function renderElectionMonitor(ui,p){
   contextActions(ui,p,{election:e});
   const mode=ui.electionView||(['campaign','scheduled'].includes(e.status)?'campaign':'polls');p.heading(`ELEIÇÃO ${e.id} · ${e.round||1}º TURNO · ${phases[e.status]||e.status}`);
   const elections=[city.politics.active,city.politics.lastResult,...city.politics.elections].filter((item,index,all)=>item&&all.findIndex(row=>row?.id===item.id)===index).sort((a,b)=>b.id-a.id);
-  if(elections.length>1)p.links(elections.map(item=>({label:`ELEIÇÃO ${item.id} · ${item.round||1}º TURNO`,selected:item.id===e.id,click:()=>ui.openPanel({electionId:item.id,electionView:item.status==='completed'?'results':'campaign'})})));
+  if(elections.length>1)ui.selectControl(p,'Escolher eleição',elections.map(item=>[item.id,`Eleição ${item.id} · ${item.round||1}º turno`]),e.id,value=>{ui.electionId=Number(value);ui.electionView='polls';});
   if(e.firstRoundId)p.button('VER PRIMEIRO TURNO',()=>ui.openPanel({electionId:e.firstRoundId,electionView:'results'}));
   if(e.runoffId)p.button('VER SEGUNDO TURNO',()=>ui.openPanel({electionId:e.runoffId,electionView:'campaign'}));
   if(e.status==='runoff-required')p.note('Nenhuma chapa obteve mais de 50% dos votos válidos. As duas primeiras disputarão o segundo turno. A Câmara será empossada com o resultado final, usando somente os votos do primeiro turno.');

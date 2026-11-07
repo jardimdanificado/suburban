@@ -38,8 +38,10 @@ export class CityDesktop {
     return state;
   }
   openPanel(source,overrides={},{separate=false}={}){
+    if(overrides.justiceCaseId!=null&&(overrides.tab||source.tab)==='justice'){const state=this.create(`justice-case:${overrides.justiceCaseId}`,'justice-case',{title:`Processo #${overrides.justiceCaseId}`,kind:'section'});state.justiceCaseId=overrides.justiceCaseId;return state;}
     const tab=overrides.tab||source.tab,properties={};
     for(const [key,value] of Object.entries(source))if(key!=='windowId'&&(/(?:Id|Tab|View)$/.test(key)||['logCategory','logReference','logLive','logKind','publicCrop','recordWindow','employmentStatus','employmentPage','employmentCandidatesPage','employmentApplicationAt'].includes(key)))if(value===null||['string','number','boolean'].includes(typeof value))properties[key]=value;
+    properties.sectionTabs={...source.sectionTabs};
     properties.filters={...source.filters,...overrides.filters};properties.sorts={...source.sorts};properties.views={...source.views,...overrides.views};Object.assign(properties,overrides);properties.tab=tab;
     if(!separate){
       const sameWindow=source.windowId&&tab===source.tab;
@@ -94,7 +96,7 @@ export class CityDesktop {
     const gov=this.city.politics;
     if(this.lastElectionNoticeMinute!=null&&this.city.minute<this.lastElectionNoticeMinute){this.electionNotices.clear();this.lastElectionResultId=gov.lastResult?.id??null;}this.lastElectionNoticeMinute=this.city.minute;
     const active=gov.active;
-    if(active){const view=['campaign','scheduled'].includes(active.status)?'campaign':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);}}
+    if(active){const view=['campaign','scheduled'].includes(active.status)?'polls':['voting','counting'].includes(active.status)?'count':null,key=`${active.id}:${view}`;if(view&&!this.electionNotices.has(key)){this.electionNotices.add(key);this.openElection(active.id,view);}}
     if(gov.lastResult&&gov.lastResult.id!==this.lastElectionResultId){this.lastElectionResultId=gov.lastResult.id;this.openElection(gov.lastResult.id,'results');}
   }
   openEvent(id,snapshot=null){const state=this.create(`event:${id}`,'event',{title:`Inspetor do evento #${id}`,kind:'inspector'});state.selectedEventId=id;state.eventSnapshot??=snapshot||this.city.history.get(id);return state;}
@@ -103,7 +105,13 @@ export class CityDesktop {
   openTool(id,tool){
     const existing=this.manager.find(`tool:${id}`);if(existing){this.manager.raise(existing.id);return existing.state;}
     const title=id==='options'?'Opções':'Editor de mapa',element=document.createElement('div');this.element.append(element);
-    const state={tab:id,element,zones:[],drawFloating:(ui,w)=>{tool.floatingBounds={x:w.x,y:w.y,w:w.w,h:w.h-18};clipCanvasRegion(ui,w.x+3,w.y+26,w.w-6,w.h-44,()=>tool.draw(ui));},scrollAt:(x,y,d)=>tool.scrollAt(x,y,d),key:()=>false,onClose:()=>{tool.open=false;tool.floatingBounds=null;tool.bounds=null;tool.endStroke?.();if(id==='options'&&this.controls.hasActiveGame&&!this.controls.hasActiveGame())this.controls.mainMenu?.();}};
+    const toolInputs=[];element.className='city-inputs';
+    if(id==='editor'){
+      const select=document.createElement('select');select.hidden=true;select.setAttribute('aria-label','Objeto do editor');element.append(select);toolInputs.push(select);
+      select.addEventListener('change',()=>{tool.prefabId=select.value;tool.tool='SPAWN';});select.addEventListener('pointerdown',()=>this.manager.raise('tool:editor'));
+      tool.drawObjectSelector=(x,y,width)=>{const signature=[...tool.prefabs].map(([id,p])=>id+':'+p.label).join('|');if(select.optionSignature!==signature){select.innerHTML='<option value="">Escolha um objeto</option>'+[...tool.prefabs].map(([id,p])=>`<option value="${String(id).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}">${String(p.label).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</option>`).join('');select.optionSignature=signature;}select.value=tool.prefabId||'';if(y>=tool.floatingBounds.y+26&&y+20<=tool.floatingBounds.y+tool.floatingBounds.h-22){Object.assign(select.style,{left:x+'px',top:y+'px',width:width+'px'});select.hidden=false;}};
+    }
+    const state={tab:id,element,inputs:toolInputs,zones:[],drawFloating:(ui,w)=>{for(const input of toolInputs)input.hidden=true;tool.floatingBounds={x:w.x,y:w.y,w:w.w,h:w.h-18};clipCanvasRegion(ui,w.x+3,w.y+26,w.w-6,w.h-44,()=>tool.draw(ui));},scrollAt:(x,y,d)=>tool.scrollAt(x,y,d),key:()=>false,onClose:()=>{tool.drawObjectSelector=null;for(const input of toolInputs)input.hidden=true;tool.open=false;tool.floatingBounds=null;tool.bounds=null;tool.endStroke?.();if(id==='options'&&this.controls.hasActiveGame&&!this.controls.hasActiveGame())this.controls.mainMenu?.();}};
     const w=this.manager.open({id:`tool:${id}`,title,width:id==='options'?460:330,height:id==='options'?390:380,minWidth:300,minHeight:210,state});
     if(!this.manager.saved.has(`tool:${id}`)){
       w.x=Math.max(4,Math.floor((this.manager.width-w.w)/2));

@@ -53,9 +53,11 @@ export function planCivicServices(city){
 }
 export function renderCivicServices(ui,p){
  const city=ui.city,sites=city.buildings.filter(b=>!b.entity.destroyed&&civicSpec(b)),rows=sites.map(b=>({b,status:civicStatus(city,b)}));
- p.heading('SAÚDE, LAZER E CULTURA');p.metrics([['INSTALAÇÕES',sites.length],['VAGAS EM ATENDIMENTO',rows.reduce((n,r)=>n+r.status.capacity,0)],['VISITAS CONCLUÍDAS',sites.reduce((n,b)=>n+(b.completedVisits||0),0)]]);
+ const view=ui.civicView||'services';p.links([['services','ATENDIMENTO'],['construction','NOVOS ESPAÇOS']].map(([id,label])=>({label,selected:view===id,click:()=>{ui.civicView=id;ui.resetScroll();}})));
+ if(view==='services'){p.heading('SAÚDE, LAZER E CULTURA');p.metrics([['INSTALAÇÕES',sites.length],['VAGAS EM ATENDIMENTO',rows.reduce((n,r)=>n+r.status.capacity,0)],['VISITAS CONCLUÍDAS',sites.reduce((n,b)=>n+(b.completedVisits||0),0)]]);
  p.note('Atendimento depende de equipe presente e capacidade disponível. Clínicas e hospitais consomem remédios; bibliotecas precisam de livros reais no acervo. Serviços públicos são gratuitos.');
  p.table([{label:'Instalação',weight:2},{label:'Equipe'},{label:'Ocupação'},{label:'Condição',weight:3}],rows.filter(({b})=>ui.matches(b.entity.properties.name+' '+civicSpec(b).label)).map(({b,status:s})=>({cells:[b.entity.properties.name,s.team,`${s.visitors}/${s.capacity}`,s.reason],click:()=>ui.openBuilding(b.id)})));
+ return;}
  p.heading('NOVOS ESPAÇOS');for(const [type,spec]of Object.entries(CIVIC_SERVICES)){
    p.kv(spec.label,`${sites.filter(b=>b.type===type).length} em operação · ${city.development.projects.filter(o=>o.type===type&&!o.cancelled&&o.status!=='completed').length} em construção`);
    p.button(`CONTRATAR AGORA: ${spec.label}`,()=>{const result=city.politics.executePlayerAction('divineGovernment',null,{type:'publicWork',payload:{buildingType:type}});ui.notice=result?.description||city.lastError||'A contratação não pôde ser aplicada.';});

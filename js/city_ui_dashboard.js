@@ -1,3 +1,4 @@
+import {drawPartyFlag} from './city_party_flags.js';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const stamp=n=>n==null?'Sem data':`Dia ${Math.floor(n/1440)+1} · ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
@@ -10,7 +11,8 @@ export function renderGovernmentDashboard(ui,p){
     return [{works,bills,blocked:works.filter(o=>o.status==='blocked'),unlit:[...city.lighting.sites.values()].filter(l=>l.public&&l.built&&!l.fuel).length}];
   })[0];
   const policy=(politicsTab,extra={})=>ui.openPanel({views:{government:'elections'},politicsTab,billId:null,termId:null,...extra});
-  p.heading('RESUMO MUNICIPAL');
+  const identity=gov.ensureMunicipalIdentity();p.heading(identity.name);if(identity.flag&&p.visible(40)){drawPartyFlag(p.ui.ctx,identity.flag,p.x,p.y,60,38);p.ui.text(p.ui.fitText?p.ui.fitText(identity.slogan,p.w-72):identity.slogan.slice(0,45),p.x+70,p.y+10,C.ink);}p.space(42);
+  p.button('IDENTIDADE MUNICIPAL',()=>ui.showView('identity'));
   if(mayor)p.record(mayor.entity.properties.name,`${gov.isProvisionalMayor()?'Prefeito provisório':'Prefeito'} · ${gov.partyOfId(mayor.id)?.name||'Sem partido'}`,()=>ui.openCitizen(mayor.id));
   p.metrics([
     ['TESOURO',money(city.treasury),C.cyan,'saldo disponível',()=>ui.showView('finance')],
@@ -43,6 +45,6 @@ export function renderGovernmentDashboard(ui,p){
     q.button('SAÚDE DO CAIXA E RESERVA SOCIAL',()=>ui.showView('finance'));
     q.heading('TRANSPARÊNCIA');q.kv('Atos no jornal oficial',city.officialJournal?.records.length||0);q.kv('Aguardando impressão',city.officialJournal?.pending||0);
     q.button('JORNAL OFICIAL',()=>ui.openPanel({tab:'publications',selectedPublicationId:null,publicationTab:'official',publicationSourceEventId:null}));
-    q.button('FISCALIZAÇÃO E CORRUPÇÃO',()=>policy('scandals'));
+    q.button('FISCALIZAÇÃO E CORRUPÇÃO',()=>ui.go('corruption'));
   });
 }

@@ -33,7 +33,7 @@ export function renderPublications(ui,p){
     p.rows(docs,d=>p.record(`#${d.id} ${d.title}`,`${city.accountName(d.ownerAccountId)} · ${d.pages} página${d.pages>1?'s':''}`,()=>ui.openPanel({selectedPublicationId:d.id,publicationTab:'read'}),false,{value:`${d.entries.length}/${library.capacity(d)}`}));
     if(!docs.length)p.note('Ainda não há exemplares. A prensa transforma madeira em papel; a papelaria encaderna livros e prepara panfletos para venda.');return;
   }
-  p.button('VOLTAR AO ACERVO',()=>ui.go('publications'));
+  p.button('VOLTAR AO ACERVO',()=>ui.openPanel({selectedPublicationId:null,publicationSourceEventId:null,publicationTab:'read'}));
   p.heading(`#${doc.id} ${doc.title}`);p.kv('Dono',city.accountName(doc.ownerAccountId));p.kv('Formato',doc.good==='jornais'?`Jornal de ${doc.pages} folhas · ${doc.genre}`:doc.pages===1?'Panfleto (uma página)':`Livro de ${doc.pages} páginas`);p.kv('Registros / capacidade',`${doc.entries.length}/${library.capacity(doc)}`);
   p.links([{label:'CONTEÚDO',selected:ui.publicationTab!=='write',click:()=>ui.openPanel({publicationTab:'read'})},{label:'ESCREVER',selected:ui.publicationTab==='write',click:()=>ui.openPanel({publicationTab:'write'})}]);
   const owner=city.citizens.find(c=>c.accountId===doc.ownerAccountId&&!c.entity.destroyed);

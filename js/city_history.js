@@ -5,14 +5,42 @@ export const HISTORY_LIMIT = 16000;
 export const FINANCE_HISTORY_LIMIT = 100000;
 const categories = { employment: 'work', ownership: 'housing', sale: 'economy', service: 'economy', finance: 'finance', credit: 'credit', reputation: 'reputation' };
 const unique = values => [...new Set(values.filter(value => value !== null && value !== undefined && value !== ''))];
+const lowerBound=(rows,id)=>{let lo=0,hi=rows.length;while(lo<hi){const mid=(lo+hi)>>>1;if(rows[mid].id<id)lo=mid+1;else hi=mid;}return lo;};
 export class CityHistory {
   constructor(city) {
+    this.favoriteActions = new Map(); this.favoriteIds = []; this.favoriteLimit = 20000; this.favoriteArchive = new Map(); this.favoriteRevision = 0;
     this.city = city; this.journals = new Map(); this.nextId = 1;
     this.entries = []; this.byId = new Map(); this.byKind = new Map(); this.byCategory = new Map();
     this.byCitizen = new Map(); this.byBuilding = new Map(); this.byReference = new Map();
     this.financeArchive=[];this.financeArchiveById=new Map();this.financeDropped=0;this.financeDroppedThroughId=0;this.financeDroppedThroughMinute=null;this.financeDroppedLegacyUnknown=false;
     this.total = 0; this.dropped = 0; this.lastGoodsEvent = new Map();
     this.pendingFinance = new Map(); this.pendingFinanceRevision = 0;
+  }
+  configureFavorites(ids = [], limit = 20000) {
+    this.favoriteIds = [...new Set(ids.filter(Number.isInteger))];
+    this.favoriteLimit = limit === 0 ? 0 : Math.max(1000, Math.min(1000000, Number(limit) || 20000));
+    for (const id of this.favoriteArchive.keys()) if (!this.favoriteIds.includes(id)) this.favoriteArchive.delete(id);
+    for (const id of this.favoriteIds) {
+      const rows = new Map((this.favoriteArchive.get(id) || []).map(e => [e.id,e]));
+      for (const e of this.byCitizen.get(id) || []) rows.set(e.id,e);
+      const sorted = [...rows.values()].sort((a,b)=>a.id-b.id);
+      this.favoriteArchive.set(id, this.favoriteLimit ? sorted.slice(-this.favoriteLimit) : sorted);
+    }
+    for(const id of this.favoriteActions.keys())if(!this.favoriteIds.includes(id))this.favoriteActions.delete(id);
+    for(const id of this.favoriteIds)if(!this.favoriteActions.has(id))this.favoriteActions.set(id,this.city.society?.citizen(id)?.action||'');
+    this.favoriteRevision++;
+    return true;
+  }
+  captureFavoriteActivities(){
+    for(const id of this.favoriteIds){const c=this.city.society?.citizen(id);if(!c||c.entity.destroyed)continue;const action=String(c.action||'');if(action&&this.favoriteActions.get(id)!==action){this.favoriteActions.set(id,action);this.record('activity',`${c.entity.properties.name}: ${action}.`,[c.accountId],{citizenIds:[id],action:'favorite-activity',activity:action});}}
+  }
+  captureFavorite(entry) {
+    for (const id of entry.citizenIds) if (this.favoriteArchive.has(id)) {
+      const rows = this.favoriteArchive.get(id) || []; this.favoriteArchive.set(id, rows);
+      if (rows.at(-1)?.id === entry.id) continue;
+      rows.push(entry); if (this.favoriteLimit && rows.length > this.favoriteLimit) rows.splice(0, rows.length-this.favoriteLimit);
+      this.favoriteRevision++;
+    }
   }
   index(map, key, entry) {
     let rows = map.get(key); if (!rows) map.set(key, rows = []); rows.push(entry);
@@ -47,6 +75,7 @@ export class CityHistory {
     return entry;
   }
   appendEntry(entry) {
+    this.captureFavorite(entry);
     this.total++; this.entries.push(entry); this.byId.set(entry.id, entry);
     if(entry.kind==='finance'&&!this.financeArchiveById.has(entry.id)){this.financeArchive.push(entry);this.financeArchiveById.set(entry.id,entry);if(this.financeArchive.length>FINANCE_HISTORY_LIMIT){const removed=this.financeArchive.shift();this.financeArchiveById.delete(removed.id);this.financeDropped++;this.financeDroppedThroughId=Math.max(this.financeDroppedThroughId,removed.id);this.financeDroppedThroughMinute=removed.minute;}}
     this.index(this.byKind, entry.kind, entry); this.index(this.byCategory, entry.category, entry);
@@ -91,12 +120,13 @@ export class CityHistory {
     for (const [account,journal] of this.journals) if (versions.get(account) !== journal.total) {
       totals.push([account,journal.total,{...journal.totals}]); versions.set(account,journal.total);
     }
-    return { payload: { reset: !cursor, entries, financeEntries,financeLastId:this.financeArchive.at(-1)?.id??0,financeFloor:this.financeArchive[0]?.id??this.nextId,financeDropped:this.financeDropped,financeDroppedThroughId:this.financeDroppedThroughId,financeDroppedThroughMinute:this.financeDroppedThroughMinute,financeDroppedLegacyUnknown:this.financeDroppedLegacyUnknown,totals, nextId: this.nextId, total: this.total,
+    const favoriteConfig=JSON.stringify([this.favoriteIds,this.favoriteLimit]),resetFavorites=!cursor||cursor.favoriteConfig!==favoriteConfig;
+    return { payload: { favorites: !cursor || cursor.favoriteRevision !== this.favoriteRevision ? {reset:resetFavorites,ids:this.favoriteIds,limit:this.favoriteLimit,archive:[...this.favoriteArchive].map(([id,rows])=>[id,resetFavorites?rows:rows.slice(lowerBound(rows,after+1)),rows[0]?.id??this.nextId])} : null, reset: !cursor, entries, financeEntries,financeLastId:this.financeArchive.at(-1)?.id??0,financeFloor:this.financeArchive[0]?.id??this.nextId,financeDropped:this.financeDropped,financeDroppedThroughId:this.financeDroppedThroughId,financeDroppedThroughMinute:this.financeDroppedThroughMinute,financeDroppedLegacyUnknown:this.financeDroppedLegacyUnknown,totals, nextId: this.nextId, total: this.total,
       dropped: this.dropped, floor: this.entries[0]?.id ?? this.nextId,
       goods: count || !cursor ? [...this.lastGoodsEvent] : null,
       pendingFinance: !cursor || cursor.pendingRevision !== this.pendingFinanceRevision ? [...this.pendingFinance].map(([key,value])=>[key,{...value}]) : null,
       pendingRevision: this.pendingFinanceRevision },
-      cursor: {lastId:this.nextId-1,financeLastId:this.financeArchive.at(-1)?.id??0,versions,pendingRevision:this.pendingFinanceRevision} };
+      cursor: {favoriteConfig,favoriteRevision:this.favoriteRevision,lastId:this.nextId-1,financeLastId:this.financeArchive.at(-1)?.id??0,versions,pendingRevision:this.pendingFinanceRevision} };
   }
   applySnapshot(payload) {
     if (payload.reset) {
@@ -108,6 +138,7 @@ export class CityHistory {
     }
     for (const entry of payload.entries) if (!this.byId.has(entry.id)) this.appendEntry(entry);
     this.pruneBefore(payload.floor);
+    if(payload.favorites){const f=payload.favorites;this.favoriteIds=f.ids;this.favoriteLimit=f.limit;if(f.reset)this.favoriteArchive.clear();for(const id of this.favoriteArchive.keys())if(!f.ids.includes(id))this.favoriteArchive.delete(id);for(const [id,entries,floor]of f.archive){let rows=this.favoriteArchive.get(id)||[];const cut=lowerBound(rows,floor);if(cut)rows.splice(0,cut);const missing=entries.filter(e=>rows[lowerBound(rows,e.id)]?.id!==e.id);if(missing.length)rows=rows.concat(missing).sort((a,b)=>a.id-b.id);this.favoriteArchive.set(id,rows);}this.favoriteRevision++;}
     for(const entry of payload.financeEntries||[])if(!this.financeArchiveById.has(entry.id)){this.financeArchive.push(entry);this.financeArchiveById.set(entry.id,entry);}
     if(payload.reset)this.financeArchive.sort((a,b)=>a.id-b.id);if(payload.financeFloor!=null){let cut=0;while(cut<this.financeArchive.length&&this.financeArchive[cut].id<payload.financeFloor){this.financeArchiveById.delete(this.financeArchive[cut].id);cut++;}if(cut)this.financeArchive.splice(0,cut);}
     if(payload.financeDropped!=null)this.financeDropped=payload.financeDropped;else if(payload.reset&&payload.dropped>0){this.financeDroppedThroughId=Math.max(this.financeDroppedThroughId,(payload.floor||1)-1);this.financeDroppedLegacyUnknown=true;}
@@ -124,8 +155,13 @@ export class CityHistory {
     this.pendingFinanceRevision=payload.pendingRevision??0;
     this.nextId=payload.nextId;this.total=payload.total;this.dropped=payload.dropped;
   }
-  get(id) { id=Number(id);return this.byId.get(id)||this.financeArchiveById.get(id); }
+  get(id) {id=Number(id);const retained=this.byId.get(id)||this.financeArchiveById.get(id);if(retained)return retained;for(const rows of this.favoriteArchive.values()){const found=rows.find(e=>e.id===id);if(found)return found;}return undefined;}
   query({ category = 'all', kind = 'all', citizenId = null, buildingId = null, accountId = null, reference = null, query = '', beforeId = Infinity, limit = 100 } = {}) {
+    if (citizenId != null && this.favoriteArchive.has(Number(citizenId)) || accountId && /^citizen:/.test(accountId) && this.favoriteArchive.has(Number(accountId.slice(8)))) {
+      const id = citizenId != null ? Number(citizenId) : Number(accountId.slice(8));
+      const search = query.trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+      return (this.favoriteArchive.get(id)||[]).filter(e=>e.id<beforeId&&(category==='all'||e.category===category)&&(kind==='all'||e.kind===kind)&&(buildingId==null||e.buildingIds.includes(Number(buildingId)))&&(!reference||this.references(e).includes(reference))&&(!search||e.message.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(search))).slice().reverse().slice(0,limit);
+    }
     const sources = [this.entries];
     if (category !== 'all') sources.push(this.byCategory.get(category) || []);
     if (kind !== 'all') sources.push(this.byKind.get(kind) || []);
@@ -144,6 +180,8 @@ export class CityHistory {
     return result;
   }
   rows(account, kind = 'all') {
+    const favorite = /^citizen:/.test(account) && this.favoriteArchive.get(Number(account.slice(8)));
+    if(favorite)return kind==='all'?favorite:favorite.filter(e=>e.kind===kind);
     const journal = this.journals.get(account); if (!journal) return [];
     if (kind !== 'all') return journal.byKind[kind] || [];
     if (journal.cacheVersion !== journal.total || journal.cacheDropped !== this.dropped) {

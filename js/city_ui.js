@@ -29,7 +29,7 @@ import { renderCorruptionDirectory, renderCorruptionInspector, corruptionCases }
 import {renderEventInspector} from './city_event_inspector.js?v=landlord-stock-market-1';
 import { formatMoney } from './city_ui_format.js';
 import { carryCapacity } from './city_markets.js?v=market-one-pass-1';
-import {renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js?v=exterior-only-interiors-1';
+import {renderCaseDossier,renderUrbanArt,renderSafety,renderForensics,renderJustice,renderCustody} from './city_justice_ui.js?v=exterior-only-interiors-1';
 import { renderPolitics, renderCitizenPolitics, renderPoliticsNavigation } from './city_politics_ui.js?v=institutions-cleanup-2';
 import {renderMunicipalIdentity} from './city_municipal_identity_ui.js';
 import { BOND_LABELS, ROMANCE_LABELS, ORIENTATION_LABELS, GENDER_LABELS, RELATIONSHIP_RULES } from './city_relationships.js?v=wardrobe-expansion-1';
@@ -69,14 +69,14 @@ export const TABS = [
   ['log', 'HISTÓRICO', 'VIDA URBANA', 'Os acontecimentos e as decisões de cada pessoa.'],
 ];
 export const VIEWS = {
-  market: [['overview','PANORAMA'],['shares','AÇÕES'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS']],
-  economy: [['overview','EMPRESAS'],['vacancies','VAGAS'],['applications','SELEÇÕES'],['workers','FUNCIONÁRIOS']],
-  city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['arts','ARTE E JUSTIÇA'], ['analysis','ANÁLISES'], ['nature','VEGETAÇÃO']],
-  government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
+  market: [['overview','PANORAMA'],['shares','AÇÕES'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS'],['analysis','ANÁLISE DE DEMANDA']],
+  economy: [['overview','EMPRESAS'],['vacancies','VAGAS'],['applications','SELEÇÕES'],['workers','FUNCIONÁRIOS'],['analysis','ANÁLISE']],
+  city: [['overview', 'PANORAMA'], ['needs', 'NECESSIDADES'], ['activity', 'ATIVIDADE'], ['services','SAÚDE E LAZER'], ['analysis','ANÁLISE DE NECESSIDADES'], ['nature','VEGETAÇÃO']],
+  government: [['overview', 'PREFEITURA'], ['elections','POLÍTICA'], ['identity','IDENTIDADE'], ['contracts', 'CONTRATOS'], ['finance', 'TESOURO'], ['world', 'TERRENO']],
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
-  production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO']],
+  production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO'],['analysis','ANÁLISE DAS CADEIAS']],
   transport: [['active', 'FRETES'], ['imports','DEPÓSITO DE IMPORTAÇÃO'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
-  'urban-art': [['overview','OBRAS E MENSAGENS'],['orders','ENCOMENDAS'],['damage','DANOS E LIMPEZA']],
+  'urban-art': [['overview','OBRAS E MENSAGENS'],['orders','ENCOMENDAS'],['damage','DANOS E LIMPEZA'],['create','CRIAR / NEGOCIAR']],
   safety: [['overview','OPERAÇÃO'],['calls','CHAMADOS'],['cases','OCORRÊNCIAS']],
   forensics: [['overview','VISÃO GERAL'],['bodies','CORPOS'],['reports','LAUDOS']],
   justice: [['overview','VISÃO GERAL'],['cases','PROCESSOS'],['recovery','RECUPERAÇÃO'],['laws','CÓDIGO PENAL'],['services','TRIBUNAIS E DEFESA']],
@@ -142,13 +142,13 @@ export class CityUI {
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
     this.profileNextWorld=new URLSearchParams(window.location?.search||'').has('profile');
   }
-  get inputs(){return [this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput];}
+  get inputs(){return [...Object.values(this.dynamicSelects||{}),this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput];}
   resetScroll() { this.scrolls = {}; }
   cachedList(key,build){
     this.listCache??=new Map();const signature=`${this.city.minute}:${this.city.structureRevision}:${this.city._uiRevision||0}:${this.query}:${this.filter()}:${this.sorts[this.tab]}:${Math.floor(performance.now()/250)}`;
     const old=this.listCache.get(key);if(old?.signature===signature)return old.rows;const rows=build();if(this.listCache.size>=32&&!this.listCache.has(key))this.listCache.delete(this.listCache.keys().next().value);this.listCache.set(key,{signature,rows});return rows;
   }
-  section(p,key,title,render,initial=false){const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
+  section(p,key,title,render,initial=false){if(!/journalFilters|historyRetention/.test(key)){p.deferSection(key,title,()=>render(p));return;}const open=this.helpOpen[key]??initial;p.disclosure(title,open,()=>{this.helpOpen[key]=!open;});if(open)render(p);}
   remember() {
     const route={};for(const key of ['wealthAccountId','wealthLocationId','wealthGoodId','marketSaleId','marketKindId','politicsTab','approvalView','councilView','mandateView','memoryView','demandTab','stockView','projectView','selectedShipmentId','selectedVehicleId','publicationSourceEventId','eventTab','corruptionTab','publicationTab','partyOrganizationView','electionDetailView','billId','termId','pollId','electionId','studyId','partyProposalId','selectedPublicationId','recordWindow','employmentCompanyId','employmentCitizenId','employmentApplicationAt','employmentStatus','employmentPage','employmentCandidatesPage'])route[key]=this[key];
     this.history.push({ ...route, tab: this.tab, selected: this.selected, selectedPlotId: this.selectedPlotId, unitId: this.unitId, detailTab: this.detailTab, mobileDetail: this.mobileDetail, query: this.query, views: { ...this.views }, filters: { ...this.filters }, scrolls: { ...this.scrolls } });
@@ -216,7 +216,7 @@ export class CityUI {
     this.floating=true;this.politicsNavigationPinned=false;this.floatingDossier=window.kind==='dossier';if(this.element.hidden)this.element.hidden=false;this.visible=true;this.zones=[];this.beginInputs();
     this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded){this.finishInputs();return;}
     const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+25;
-    if(!this.floatingDossier){
+    if(!this.floatingDossier&&!this.recordWindow){
       const search=!['event','corruption-case','newgame'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
@@ -261,8 +261,13 @@ export class CityUI {
     }
     return p.y;
   }
+  selectControl(p,key,options,value,change) {
+    this.dynamicSelects??={};let input=this.dynamicSelects[key];
+    if(!input){input=document.createElement('select');input.setAttribute('aria-label',key);this.dynamicSelects[key]=input;this.element.append(input);input.addEventListener('pointerdown',()=>this.host?.manager.raise(this.windowId));}
+    input.onchange=()=>{change(input.value);this.resetScroll();};this.nativeSelect(input,p,options,String(value??''));p.space(24);
+  }
   nativeSelect(input,p,options,value,x=p.x,y=p.y,w=p.w) {
-    const signature=JSON.stringify(options);if(input.optionSignature!==signature){input.innerHTML=options.map(([id,label])=>`<option value="${id}">${readableLabel(label)}</option>`).join('');input.optionSignature=signature;}
+    const signature=JSON.stringify(options);if(input.optionSignature!==signature){input.innerHTML=options.map(([id,label])=>{const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));return `<option value="${escape(id)}">${escape(readableLabel(label))}</option>`;}).join('');input.optionSignature=signature;}
     if(document.activeElement!==input&&input.value!==value)input.value=value;if(y>=p.top&&y+20<=p.bottom)this.inputAt(input,x,y,w);
   }
   filterButtons(p) {
@@ -272,7 +277,7 @@ export class CityUI {
     const scroll = this.scrolls[key] || 0;
     bevel(ui.ctx,x,y,w,h,{inset:true,fill:key==='navigation'?T.face:T.paper});
     const p = new Page(ui, x+8, y+4 - scroll, w - 22, y+4, y + h-4);
-    clipCanvasRegion(ui, x+3, y+3, w-6, h-6, () => draw(p));
+    clipCanvasRegion(ui, x+3, y+3, w-6, h-6, () => {draw(p);p.flushSections(this,key);});
     const height = p.y - (y+4 - scroll), max = Math.max(0, height - h+8);
     this.scrolls[key] = Math.min(scroll, max); this.zones.push({ key, x, y, w, h, max });
     if (max > 0) {
@@ -346,6 +351,7 @@ export class CityUI {
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     if(this.host?.controls.observe){const active=this.host.controls.observation?.();p.buttons([{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',c.id)},{label:'SEGUIR NO MAPA',click:()=>this.host.controls.observe('follow',c.id)},...(active? [{label:'SAIR DA CÂMERA',click:()=>this.host.controls.observe('off')}]:[])]);}
     if(this.host?.controls.observation?.())p.note('Arraste para olhar ao redor. Na 3ª pessoa, use a roda ou pinça para aproximar. Câmera livre em Ferramentas: WASD move, Espaço sobe, Control desce e Shift acelera. Esc sai da câmera.');
+    if(this.host?.favorites)p.buttons([{label:this.host.favorites.has(c.id)?'★ REMOVER FAVORITO':'☆ FAVORITAR',click:()=>this.host.favorites.togglePerson(c.id)},{label:'PESSOAS FAVORITAS',click:()=>this.host.favorites.open()}]);
     this.dossierTabs(p, [['profile', 'PERFIL'], ['wardrobe','ROUPAS'], ['personality','IDENTIDADE'], ['foodPreferences','ALIMENTAÇÃO'], ['personalVehicles','VEÍCULOS'], ['colors','CORES'], ['skills', 'TRABALHO'], ['resume','CURRÍCULO'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'CONTA'], ['history', 'HISTÓRICO']]);
     if(this.detailTab==='colors'){renderColorPreferences(this,p,c);return;}
     if (this.detailTab === 'profile') {
@@ -373,7 +379,11 @@ export class CityUI {
       else p.note('Sem moradia', C.red);
       if(home&&society.isAdult(c)){const b=city.building(home.buildingId);if(b){const price=city.gigs.quote(b.id,'interior',c.accountId);p.button(`CONTRATAR FAXINA · ${money(price)}`,()=>{const order=city.gigs.createCleaningOrder(c.accountId,b.id,{scope:'interior'});this.notice=order?`Faxina #${order.id} anunciada; pagamento reservado.`:'Não foi possível contratar. Confira o saldo e se já há outra faxina ativa.';});const garden=city.gigs.gardenPoint(b);if(garden){const fee=city.gigs.quote(b.id,'garden',c.accountId);p.button(`CONTRATAR JARDINAGEM · ${money(fee)}`,()=>{const order=city.gigs.createGardenOrder(c.accountId,b.id);this.notice=order?`Jardinagem #${order.id} anunciada.`:'Não foi possível contratar a jardinagem.';});}if(b.repairNeeded||b.condition<85){const fee=city.gigs.quote(b.id,'repair',c.accountId);p.button(`CONTRATAR PEQUENO REPARO · ${money(fee)}`,()=>{const order=city.gigs.createRepairOrder(c.accountId,b.id);this.notice=order?`Reparo #${order.id} anunciado.`:'Não foi possível contratar o reparo.';});}}}
     } else if(this.detailTab==='wardrobe') {
-      p.heading('ROUPAS, APARÊNCIA E MARCAS');p.meter('Apresentação',appearance(c));p.meter('Sujeira e odor',clothingOdor(c),C.red);p.note('Moradores alternam para uma peça limpa quando têm outra. Lavanderias domésticas e comerciais lavam as roupas; roupas sujas prejudicam apresentação e convivência.');p.kv('Preferências por peças',GARMENT_TYPES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));p.kv('Preferências por estilos',CLOTHING_STYLES.map(g=>`${g}: ${Math.round(clothingPreference(c.id,g)*100)}`).join(' · '));for(const g of c.wardrobe||[]){const owners=(g.ownerHistory||[]).map(h=>`${h.ownerName} · ${stamp(h.minute)}`).join(' → ')||g.brandName,washes=(g.washingHistory||[]).slice(-2).map(w=>`${stamp(w.minute)} ${w.method}`).join(' / ')||'nenhuma';p.record(`${g===wornGarment(c)||g===wornLowerGarment(c)||g===wornHeadwear(c)||g===wornFootwear(c)||g===wornHandwear(c)||c.political?.partyCapId===g.garmentId||c.campaign?.capGarmentId===g.garmentId?'Vestindo: ':''}${g.piece} · ${g.style}`,`${g.brandName} · ${colorName(g.color)} · conservação ${g.condition.toFixed(0)}% · sujeira ${(g.dirt||0).toFixed(0)}% · donos: ${owners} · lavagens: ${washes}`,g.brandId?()=>this.openBuilding(g.brandId):()=>{});}for(const store of city.economy.businesses.filter(b=>['tailor','clothing_store','thrift_store','laundromat'].includes(b.type)).slice(0,12))p.kv(`Afinidade: ${store.entity.properties.name}`,`${brandPreference(c,store.id)>0?'Gosta':'Não gosta'} (${Math.round(brandPreference(c,store.id)*100)})`);
+      const mode=this.wardrobeView||'pieces';p.links([['pieces','PEÇAS'],['preferences','PREFERÊNCIAS'],['history','PROCEDÊNCIA E LAVAGENS'],['brands','MARCAS']].map(([id,label])=>({label,selected:mode===id,click:()=>{this.wardrobeView=id;this.resetScroll();}})));
+      if(mode==='pieces'){p.metrics([['APRESENTAÇÃO',`${Math.round(appearance(c))}%`],['SUJEIRA / ODOR',`${Math.round(clothingOdor(c))}%`]]);p.table([{label:'Peça',weight:2},{label:'Estilo'},{label:'Cor'},{label:'Estado'},{label:'Sujeira'}],(c.wardrobe||[]).map(g=>({cells:[`${[wornGarment(c),wornLowerGarment(c),wornHeadwear(c),wornFootwear(c),wornHandwear(c)].includes(g)?'Em uso · ':''}${g.piece}`,g.style,colorName(g.color),`${Math.round(g.condition)}%`,`${Math.round(g.dirt||0)}%`],click:g.brandId?()=>this.openBuilding(g.brandId):null})),{empty:'Nenhuma peça registrada.'});}
+      if(mode==='preferences')p.columns(q=>{q.heading('PEÇAS');q.table([{label:'Peça',weight:2},{label:'Afinidade'}],GARMENT_TYPES.map(g=>({cells:[g,Math.round(clothingPreference(c.id,g)*100)]})));},q=>{q.heading('ESTILOS');q.table([{label:'Estilo',weight:2},{label:'Afinidade'}],CLOTHING_STYLES.map(g=>({cells:[g,Math.round(clothingPreference(c.id,g)*100)]})));});
+      if(mode==='history')for(const g of c.wardrobe||[]){p.heading(`${g.piece} · ${g.brandName}`);p.table([{label:'Dono',weight:2},{label:'Desde',weight:2}],(g.ownerHistory||[]).map(h=>({cells:[h.ownerName,stamp(h.minute)]})));p.table([{label:'Lavagem',weight:2},{label:'Método'}],(g.washingHistory||[]).map(w=>({cells:[stamp(w.minute),w.method]})),{empty:'Nenhuma lavagem registrada.'});}
+      if(mode==='brands')p.table([{label:'Estabelecimento',weight:2},{label:'Afinidade'}],city.economy.businesses.filter(b=>['tailor','clothing_store','thrift_store','laundromat'].includes(b.type)).map(b=>({cells:[b.entity.properties.name,Math.round(brandPreference(c,b.id)*100)],click:()=>this.openBuilding(b.id)})));
     } else if(this.detailTab==='personality') {
       p.heading('IDENTIDADE E PERSONALIDADE');p.kv('Gênero',GENDER_LABELS[c.socialProfile.gender]);p.kv('Interesse romântico',ORIENTATION_LABELS[c.socialProfile.orientation]);
       initializePrejudices(c,city.initialSeed);p.heading('PRECONCEITOS');const prejudiceTargets={'pele-escura':'pessoas de pele escura','pele-clara':'pessoas de pele clara','nao-hetero':'pessoas não heterossexuais','nao-binario':'pessoas não binárias','mulher':'mulheres','baixa':'pessoas baixas','alta':'pessoas altas','gorda':'pessoas gordas','magra':'pessoas magras'},prejudices=Object.entries(c.prejudices||{});if(prejudices.length){for(const [type,bias]of prejudices){const strength=bias.strength>=.75?'forte':bias.strength>=.5?'moderado':'leve';p.kv(PREJUDICE_TYPES[type]?.label||type,`${prejudiceTargets[bias.target]||bias.target} · intensidade ${strength} (${Math.round(bias.strength*100)}%)`);}}else p.note('Esta pessoa não tem preconceitos registrados.');
@@ -589,12 +599,12 @@ export class CityUI {
     p.heading('HISTÓRICO DETALHADO');
     const pending=[...this.city.history.pendingFinance.values()].filter(row=>row.from===account || row.to===account);
     if(pending.length)p.note(`Folha da hora atual: ${pending.reduce((n,row)=>n+row.transactions,0)} pagamentos em consolidação. Valores já movimentaram as contas.`,C.muted);
-    this.section(p,`journalFilters:${account}`,`Filtrar histórico: ${options.find(([id])=>id===kind)?.[1]||kind}`,()=>p.buttons(options.map(([id,label])=>({label,selected:kind===id,click:()=>{this.journalFilters[account]=id;this.journalPages[account]=0;this.helpOpen[`journalFilters:${account}`]=false;this.resetScroll();}}))));
+    this.selectControl(p,'Filtrar histórico',options,kind,value=>{this.journalFilters[account]=value;this.journalPages[account]=0;});
     const rows=this.cachedList(`journal:${account}:${kind}`,()=>this.city.history.rows(account,kind).filter(e=>this.matches(e.message)).reverse());
     const pages=Math.max(1,Math.ceil(rows.length/20)),page=Math.min(this.journalPages[account]||0,pages-1);
     p.note(`${rows.length} registros disponíveis / página ${page+1} de ${pages}`);
     p.kv('Ocorrências desde a fundação',this.city.history.journals.get(account)?.total||0);
-    this.section(p,'historyRetention','Sobre a retenção dos registros',()=>p.note(`Até 2.000 por categoria e pessoa/empresa dentro dos ${HISTORY_LIMIT.toLocaleString('pt-BR')} eventos recentes da cidade. Contadores totais são preservados.`));
+    if(this.city.history.favoriteArchive.has(Number(String(account).replace('citizen:',''))))p.note(`Favorito: ${this.city.history.favoriteLimit?this.city.history.favoriteLimit.toLocaleString('pt-BR')+' registros por pessoa':'histórico sem limite'}.`);
     p.button('ABRIR REGISTROS VINCULADOS',()=>{const target=this.go('log');target.logCitizenId=null;target.logBuildingId=null;target.logAccountId=account;target.logReference=null;target.selectedEventId=null;});
     p.rows(rows.slice(page*20,page*20+20),entry=>p.record(entry.message,`${stamp(entry.minute)} · ${options.find(([id])=>id===entry.kind)?.[1]||entry.kind}`,()=>this.openEvent(entry.id),false,{value:entry.amount!==undefined?money(entry.amount):'',color:C.cyan}));
     p.buttons([{label:'ANTERIOR',click:()=>{this.journalPages[account]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.journalPages[account]=Math.min(pages-1,page+1);}}]);
@@ -648,11 +658,17 @@ export class CityUI {
     const waitingToilet=people.filter(c=>c.task==='toilet'||c.serviceQueue?.kind==='toilet').length,waitingFood=people.filter(c=>['food','workmeal'].includes(c.task)||c.serviceQueue?.kind==='food').length;
     const cleanliness=city.sanitation.cleanliness();p.heading('SERVIÇOS E FILAS');p.metrics([['ESPERANDO BANHEIRO',waitingToilet,C.gold],['ESPERANDO COMIDA',waitingFood,C.gold],['FEZES NA CIDADE',cleanliness.streetFeces+cleanliness.indoorFeces,C.red]]);
     p.buttons([{label:'VER FILAS E INSTALAÇÕES',click:()=>this.go('sanitation',{view:'queues'})},{label:'VER BANHEIROS',click:()=>this.go('sanitation',{view:'facilities'})}]);
+  }
+  marketAnalytics(p){const city=this.city;
     p.heading('DEMANDA DE MERCADO');const goods=Object.entries(city.economy.market||{}).map(([good,row])=>({good,label:GOODS[good]?.label||good,demand:row.demand||0,stock:row.stock||0,price:city.economy.goods[good]?.price||0})).filter(g=>g.demand||g.stock).sort((a,b)=>b.demand-a.demand).slice(0,12);
     p.chart('Procura atual pelos produtos mais demandados',goods.map(g=>g.demand),C.cyan,{height:72});
     p.table([{label:'Produto',weight:2},{label:'Procura'},{label:'Estoque'},{label:'Preço'}],goods.map(g=>({cells:[g.label,Math.round(g.demand),Math.round(g.stock),money(g.price)]})));
+  }
+  productionAnalytics(p){const city=this.city;
     p.heading('CADEIAS PRODUTIVAS');const plans=(city.economy.productionPlan||[]).filter(r=>r.score>0||r.current||r.planned).sort((a,b)=>b.priority-a.priority).slice(0,18);
     p.table([{label:'Etapa',weight:2},{label:'Instaladas'},{label:'Planejadas'},{label:'Prioridade'}],plans.map(r=>({cells:[`${BUILDING_TYPES[r.type]?.label||r.type}${r.crop?' · '+(CROPS[r.crop]?.label||r.crop):''}`,r.current||0,r.planned||0,Math.round(r.priority||0)],click:()=>this.openPanel({tab:'production',views:{production:'demand'},selectedDemandKey:`${r.type}:${r.crop||''}`})})));
+  }
+  companyAnalytics(p){const city=this.city;
     p.heading('NEGÓCIOS');const types=[...new Set(city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed).map(b=>b.type))],filter=this.analyticsBusinessType||'all';p.note('Filtrar por ramo');this.nativeSelect(this.analyticsTypeInput,p,[['all','Todos os ramos'],...types.map(t=>[t,BUILDING_TYPES[t]?.label||t])],filter,p.x,p.y,Math.min(p.w,360));p.space(24);
     const businesses=city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&(filter==='all'||b.type===filter)).sort((a,b)=>((b.totalRevenue||0)-(b.totalExpenses||0))-((a.totalRevenue||0)-(a.totalExpenses||0)));
     p.table([{label:'Empresa',weight:2},{label:'Equipe'},{label:'Vendas'},{label:'Resultado'}],businesses.slice(0,80).map(b=>({cells:[name(b.entity),`${occupiedPositions(city,b)}/${b.jobs}`,money(b.totalRevenue||0),money((b.totalRevenue||0)-(b.totalExpenses||0))],click:()=>this.openBuilding(b.id)})));
@@ -695,14 +711,17 @@ export class CityUI {
   }
   content(p) {
     if(this.tab==='newgame')return this.worldGeneration(p);
+    if(this.view()==='analysis'){if(this.tab==='market')return this.marketAnalytics(p);if(this.tab==='production')return this.productionAnalytics(p);if(this.tab==='economy')return this.companyAnalytics(p);}
     if(this.tab==='market')return renderMarket(this,p);
     if(this.tab==='economy')return renderEmployment(this,p);
     if(this.tab==='city'&&this.view()==='services')return renderCivicServices(this,p);
     if(this.tab==='city'&&this.view()==='analysis')return this.analytics(p);
     if(this.tab==='city'&&this.view()==='arts')return this.urbanArt(p);
+    if(this.tab==='urban-art'&&this.view()==='create')return this.urbanArt(p);
     if(this.tab==='urban-art')return renderUrbanArt(this,p);
     if(this.tab==='safety')return renderSafety(this,p);
     if(this.tab==='forensics')return renderForensics(this,p);
+    if(this.tab==='justice-case'){const row=this.city.justice.cases.find(c=>c.id===this.justiceCaseId);if(row)return renderCaseDossier(this,p,row);p.note('Processo indisponível.');return;}
     if(this.tab==='justice')return renderJustice(this,p);
     if(this.tab==='custody')return renderCustody(this,p);
     if(this.tab==='party-organization'){renderPartyOrganizationWindow(this,p);return;}
@@ -751,7 +770,8 @@ export class CityUI {
     const city=this.city,justice=city.justice,art=justice.art.filter(a=>!a.entity.destroyed),cases=justice.cases.filter(c=>!['closed','dismissed'].includes(c.status));
     p.metrics([['OBRAS ATIVAS',art.length,C.cyan],['ESCULTURAS',art.filter(a=>['statue','monument'].includes(a.kind)).length,C.gold],['ARTISTAS',new Set(art.map(a=>a.creatorId).filter(Number.isInteger)).size,C.green],['OCORRÊNCIAS',cases.length,cases.length?C.red:C.green]]);
     p.heading('ARTISTAS E ARTE URBANA');p.note('A arte também nasce sem patrocínio: moradores podem pendurar bandeiras, pintar mensagens e montar esculturas com materiais simples. Cada pessoa forma sua própria opinião ao ver uma obra pela primeira vez; visualizações, aprovação e procura constroem renome, valor e legado.');
-    p.heading('ENCOMENDAR UMA OBRA');p.note('O caixa do prédio patrocina a obra. Escolha fachada, cômodo, cobertura ou passarela conectada; o artista percorre o acesso físico, compra o material escolhido e recebe pelo trabalho concluído. Estátuas podem retratar uma pessoa ou uma versão fiel, distorcida ou inventada de um acontecimento.');
+    const workspace=this.artWorkspace||'create';p.links([['create','ENCOMENDAR'],['collection','ARTISTAS E ACERVO']].map(([id,label])=>({label,selected:workspace===id,click:()=>{this.artWorkspace=id;this.resetScroll();}})));
+    if(workspace==='create'){p.heading('ENCOMENDAR UMA OBRA');p.note('O caixa do prédio patrocina a obra. Escolha fachada, cômodo, cobertura ou passarela conectada; o artista percorre o acesso físico, compra o material escolhido e recebe pelo trabalho concluído. Estátuas podem retratar uma pessoa ou uma versão fiel, distorcida ou inventada de um acontecimento.');
     const artSites=city.buildings.filter(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&(b.active||b.units?.length)&&city.accounts.has(b.municipal?'treasury':b.accountId)).slice().sort((a,b)=>String(a.entity.properties.name).localeCompare(String(b.entity.properties.name)));
     const siteOptions=artSites.map(b=>[String(b.id),`${b.entity.properties.name} · ${money(city.accounts.get(b.municipal?'treasury':b.accountId)?.balance||0)}`]);
     const chosenSite=artSites.find(b=>b.id===Number(this.artworkBuildingInput.value))||artSites[0];
@@ -782,6 +802,7 @@ export class CityUI {
       const job=building&&city.gigs.createArtworkOrder(payer,building.id,{kind:this.artworkKindInput.value||'banner',message:this.artworkDraft.value,subjectId,truth,purpose,commercial,partyId,materialUsed:selectedMaterial,supportUnitId,supportKind:isRoof?'roof-terrace':isBridge?'skybridge':isWindow?'window':'interior-wall',supportLinkId,narrative});
       this.notice=job?`Encomenda artística #${job.id} anunciada para ${isRoof?'a cobertura':isBridge?'a passarela':isWindow?'a janela':supportUnitId?'o interior':'a fachada'}; o pagamento ficará reservado até a conclusão.`:'Não foi possível encomendar: confira o texto, o saldo, o local e a disponibilidade de artista ou material.';
     });
+    return;}
     p.note('Pessoa para comprar ou reproduzir uma obra');const buyerOptions=[['','Escolha uma pessoa'],...city.citizens.filter(c=>!c.entity.destroyed&&!c.dead).map(c=>[String(c.id),c.entity.properties.name])];this.nativeSelect(this.artworkBuyerInput,p,buyerOptions,this.artworkBuyerInput.value||'',p.x,p.y,p.w);p.space(24);
     const locateArtwork=(piece,job=null)=>{const support=piece?.support||job?.artworkSupport||job?.artworkFacadeSupport;if(support?.kind==='interior-wall'){const building=city.building(support.buildingId),unit=city.units.get(support.unitId);if(building&&unit){this.camera(building.entity.x+unit.x+.5,building.entity.y+unit.y+.5);}}else if(piece){const facade=piece.kind==='banner'&&piece.buildingId!=null?support?.position||buildingFacadeBannerSupport(city.building(piece.buildingId))?.position:null;this.camera(facade?.x??piece.entity.x,facade?.y??piece.entity.y);}else if(job){const facade=job.artworkFacadeSupport?.position;this.camera(facade?.x??job.point.x,facade?.y??job.point.y);}};
     const inspectArtwork=piece=>{this.selectedArtworkId=piece.id;this.select?.(piece.entity);};
@@ -800,24 +821,6 @@ export class CityUI {
       const cleaning=city.gigs.jobs.find(j=>j.artId===piece.id&&['open','working'].includes(j.status));
       if(cleaning)p.note(`Limpeza da obra #${piece.id}: ${cleaning.status==='working'?'em execução':'aguardando trabalhador'} · custo ${money(cleaning.fee)}.`);
       else p.button(`LIMPAR ÚLTIMA PICHAÇÃO · OBRA #${piece.id} · ${money(city.currency.price(500))}`,()=>{const job=justice.requestArtworkCleaning(piece.id);this.notice=job?'Limpeza contratada com pagamento reservado pelo proprietário.':'Não foi possível contratar: confira saldo, proprietário e acesso à obra.';});
-    }
-    p.heading('OCORRÊNCIAS');p.table([{label:'Caso',weight:2},{label:'Situação'},{label:'Severidade'},{label:'Quando',weight:1.5}],cases.filter(c=>this.matches(`${c.type} ${c.status} ${c.trial?.status||''}`)).slice(-100).reverse().map(c=>({cells:[`#${c.id} · ${justice.labelCrime(c.type)}`,({unreported:'sem denúncia',reporting:'indo à delegacia',reported:'BO registrado',investigating:'em investigação','arrest-requested':'aguardando prisão',arrested:'preso',charged:'denunciado','hearing-scheduled':'audiência marcada',convicted:'condenado',acquitted:'absolvido',decriminalized:'descriminalizado','no-suspect':'sem suspeito',closed:'encerrado'})[c.trial?.status]||({unreported:'sem denúncia',reporting:'indo à delegacia',reported:'BO registrado',investigating:'em investigação','arrest-requested':'aguardando prisão',arrested:'preso',charged:'denunciado',convicted:'condenado',acquitted:'absolvido',decriminalized:'descriminalizado','no-suspect':'sem suspeito',closed:'encerrado'})[c.status]||c.status,c.severity,stamp(c.occurredAt)],color:c.status==='convicted'?C.red:C.gold})),{empty:'Não há ocorrências registradas.'});
-    for(const record of cases.slice(-20).reverse()){
-      const suspect=city.society.citizen(record.chargedCitizenId??record.investigation?.suspectId);
-      if((record.status==='arrest-requested'||record.sentence?.executionStatus==='awaiting-immunity-authorization')&&justice.policies.parliamentaryImmunity&&suspect&&city.politics.council.members.some(m=>m.citizenId===suspect.id))p.button(`AUTORIZAR PRISÃO AGORA · ${suspect.entity.properties.name.toUpperCase()} · CASO #${record.id}`,()=>{const result=city.politics.executePlayerAction('divineGovernment',null,{type:'arrestAuthorization',payload:{caseId:record.id,targetId:suspect.id}});this.notice=result?.description||city.lastError||'A ordem não pôde ser aplicada.';});
-      if(suspect?.custody?.caseId===record.id)p.button(`LIBERTAR AGORA · ${suspect.entity.properties.name.toUpperCase()} · CASO #${record.id}`,()=>{const result=city.politics.executePlayerAction('divineGovernment',null,{type:'releasePrisoner',payload:{caseId:record.id,targetId:suspect.id}});this.notice=result?.description||city.lastError||'A ordem não pôde ser aplicada.';});
-      if(record.trial?.status==='hearing-scheduled'){
-        const office=city.buildings.find(b=>b.type==='legal_office'&&b.active&&!b.entity.destroyed&&(b.workers||[]).some(id=>{const lawyer=city.society.citizen(id);return lawyer&&!lawyer.entity.destroyed&&lawyer.jobId===b.id&&lawyer.skills?.law>0;}));
-        p.note(`Tribunal: audiência no ${city.building(record.trial.courtId)?.entity.properties.name||'fórum'}; juiz ${city.accountName(`citizen:${record.trial.judgeId}`)}, defesa ${city.accountName(`citizen:${record.trial.defenderId}`)}${record.trial.defense.private?' (advogado particular)':' (defesa pública)'}.`);
-        if(!record.trial.privateDefense&&office)p.button(`CONTRATAR ADVOGADO · CASO #${record.id}`,()=>{const hired=justice.hireDefense(record.id);this.notice=hired?'Advogado contratado e honorários pagos.':'Não foi possível contratar a defesa privada.';});
-      }
-      if(record.trial?.reason)p.note(`Fundamento judicial do caso #${record.id}: ${record.trial.reason}`);
-      if(record.trial?.appeal?.status==='pending')p.note(`Recurso aguardando revisão até ${stamp(record.trial.appeal.reviewAt)}.`);
-      else if(record.status==='convicted'&&record.sentence&&city.minute<=record.sentence.appealUntil)p.button(`PROTOCOLAR RECURSO · CASO #${record.id}`,()=>{const filed=justice.appeal(record.id,suspect?.id);this.notice=filed?'Recurso protocolado para revisão judicial.':'Não foi possível protocolar o recurso.';});
-      if(record.arrestWaitingReason==='awaiting-jail-space'||record.sentence?.executionStatus==='awaiting-jail-space')p.note(`Caso #${record.id}: aguardando vaga em cadeia com equipe disponível.`);
-      if(record.stolenAsset){const asset=record.stolenAsset,total=asset.kind==='money'?money(asset.amount):asset.kind==='meal'?'1 refeição':`${asset.quantity} ${asset.good}`,returned=asset.kind==='money'?money(asset.recovered):String(asset.recovered),recovery=asset.recoveryMission,carried=asset.kind==='money'?money(recovery?.quantity||0):asset.kind==='meal'?'a refeição':`${recovery?.quantity||0} ${asset.good}`;p.note(`Bens subtraídos: ${total} · devolvido: ${returned}${asset.recoveryStatus==='awaiting-physical-return'?' · aguardando restituição policial':asset.recoveryStatus==='in-transit'?` · policial ${city.society.citizen(recovery?.officerId)?.entity.properties.name||'designado'} leva ${carried} à vítima${recovery?.waitingReason?`: ${recovery.waitingReason}`:''}`:asset.recoveryStatus==='partially-returned'?' · devolução parcial, saldo não localizado':asset.recoveryStatus==='unavailable'?' · bem não localizado pela polícia':asset.recoveryStatus==='spent'?' · dinheiro rastreável gasto antes da apreensão':asset.recoveryStatus==='returned'?' · devolução concluída':''}${asset.recoveryWaitingReason?` · ${asset.recoveryWaitingReason}`:''}.`);}
-      if(record.response)p.note(`Resposta policial: ${record.response.status==='dispatched'?'agente em deslocamento para a ocorrência':record.response.status==='completed'?'patrulha chegou e registrou a cena':'resposta interrompida'}${record.response.reason?` · ${record.response.reason}`:''}${record.response.arrivedAt!=null?` · chegou ${stamp(record.response.arrivedAt)}`:''}.`);
-      if(record.investigation){const inv=record.investigation,phase=({exit:'saindo da delegacia',scene:'inspecionando a cena', 'approach-interior':'indo ao prédio da cena',witnesses:`entrevistando testemunhas ${Math.min(inv.witnessIndex+1,record.witnesses.length)}/${record.witnesses.length}`, 'exit-scene':'saindo do prédio',return:'retornando à delegacia',analysis:'analisando provas'})[inv.phase];p.note(`Caso #${record.id}: ${inv.status==='suspect-identified'?`suspeito ${city.accountName(`citizen:${inv.suspectId}`)}`:inv.status==='active'?'investigação em andamento':'investigação inconclusiva'}${phase?` · ${phase}`:''}${inv.blockedReason?` · impedimento: ${inv.blockedReason}`:''}${inv.irregularityDetectedAt!=null?' · defesa apontou divergências nas provas':''} · ${record.witnesses.length} testemunha(s), ${inv.interviewEvidence?.length||0} depoimento(s) presencial(is).`);}
     }
   }
   monetaryPolicy(p) {
@@ -856,10 +859,10 @@ export class CityUI {
   government(p) {
     const city=this.city,view=this.view(),mayor=city.economy.citizen(city.economy.mayorId),hall=city.buildings.find(b=>b.type==='townhall');
     if(view==='elections'){this.electionsPanel(p);return;}
-    if(view==='identity')this.helpOpen.municipalVisualIdentity=true;
+    if(view==='identity'){renderMunicipalIdentity(this,p);return;}
     if(view==='overview'||view==='identity'){
       renderGovernmentDashboard(this,p);
-      this.section(p,'municipalVisualIdentity','IDENTIDADE VISUAL MUNICIPAL',()=>renderMunicipalIdentity(this,p),false);
+
       if(!this.host)for(const [title,items] of [['GESTÃO',[['Avaliação do governo','approval'],['Promessa e plano de governo','promises'],['Governo e regras','overview']]],['INSTITUIÇÕES',[['Partidos','parties'],['Câmara e projetos','council'],['Institutos de pesquisa','institutes']]],['REGULAÇÃO',[['Substâncias e licenças','substances']]],['ELEIÇÕES',[['Campanha','campaign'],['Pesquisas eleitorais','polls'],['Resultados','results']]],['FISCALIZAÇÃO',[['Escândalos e investigações','scandals']]]]){p.heading(title);p.links(items.map(([label,politicsTab])=>({label,click:()=>this.openPanel({views:{government:'elections'},politicsTab})})));}
       if(!this.host){p.heading('ADMINISTRAÇÃO');p.links([['Contratos','contracts'],['Tesouro e política monetária','finance'],['Terreno e geração','world']].map(([label,view])=>({label,click:()=>this.showView(view)})));}
       if(hall)p.button('DOSSIÊ DA PREFEITURA',()=>this.openBuilding(hall.id));
@@ -1157,7 +1160,7 @@ export class CityUI {
   }
   log(p) {
     p.buttons([{label:this.logLive?'CONGELAR HISTÓRICO':'RETOMAR AO VIVO',selected:!this.logLive,click:()=>{this.logLive=!this.logLive;this.frozenEvents=this.logLive?null:this.city.history.query({limit:Infinity});}},{label:'EXPORTAR JSON',click:()=>this.exportLog()}]);
-    p.heading('FILTRAR POR ASSUNTO');p.buttons([['all','TODOS'],...Object.entries(EVENT_CATEGORIES)].map(([id,label])=>({label:String(label).toUpperCase(),selected:this.logCategory===id,click:()=>{this.logCategory=id;this.resetScroll();}})));
+    this.selectControl(p,'Assunto do histórico',[['all','Todos os assuntos'],...Object.entries(EVENT_CATEGORIES)],this.logCategory,value=>{this.logCategory=value;});
     for(const [key,label] of [['logCitizenId','PESSOA'],['logBuildingId','PRÉDIO'],['logAccountId','CONTA'],['logReference','OPERAÇÃO']])if(this[key]!=null)p.button(`${label}: ${this[key]} / LIMPAR`,()=>{this[key]=null;this.resetScroll();});
     const rows=this.eventRows(this.logLimit+1);
     p.heading(`${Math.min(rows.length,this.logLimit)} REGISTROS / ${this.logLive?'AO VIVO':'CONGELADO'}`);

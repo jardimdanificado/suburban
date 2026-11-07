@@ -46,11 +46,8 @@ function openCompanyStaff(ui,b){
 function openApplication(ui,row){route(ui,'applications',{employmentCompanyId:row.application.buildingId,employmentCitizenId:row.citizen.id,employmentApplicationAt:row.application.appliedAt,employmentStatus:'all'});}
 function applicationRows(ui,p,rows,key='employmentPage'){
   const sort=()=>[...rows].sort((a,b)=>Number(b.application.status==='análise')-Number(a.application.status==='análise')||b.application.appliedAt-a.application.appliedAt||b.application.score-a.application.score),ordered=ui.cachedList?ui.cachedList(`employment-applications:${ui.employmentCompanyId??'all'}:${ui.employmentStatus||'all'}`,sort):sort();
-  pages(ui,p,ordered,key,row=>{
-    const {citizen:c,application:a}=row;
-    p.record(label(c),`${a.status} · ${a.company} · ${stamp(a.appliedAt)}`,()=>openApplication(ui,row),false,{value:`${money(a.offeredWage*60)}/h`});
-    p.kv('Seleção',`${Number(a.score||0).toFixed(1)} pontos${a.trainee?' · candidato em formação':''}`);p.note(a.reason);if(a.interviewAt!=null){p.kv('Entrevista na Secretaria do Trabalho',stamp(a.interviewAt));if(a.submittedAt!=null)p.kv('Currículo entregue',stamp(a.submittedAt));if(a.resultDueAt!=null)p.kv('Resultado previsto',stamp(a.resultReceivedAt??a.resultDueAt));}
-  });
+  const visible=[];pages(ui,p,ordered,key,row=>visible.push(row));
+  p.table([{label:'Pessoa',weight:1.5},{label:'Empresa',weight:1.5},{label:'Situação'},{label:'Classificação'},{label:'Oferta / hora'}],visible.map(row=>{const {citizen:c,application:a}=row;return {cells:[label(c),a.company,a.status,`${Number(a.score||0).toFixed(1)} pontos${a.trainee?' · formação':''}`,money(a.offeredWage*60)],click:()=>openApplication(ui,row)};}));
   if(!rows.length)p.note('Nenhuma candidatura registrada com estes filtros.');
 }
 function candidateDetail(ui,p,row){
@@ -101,10 +98,9 @@ export function renderEmployment(ui,p){
     filters(ui,p,[['all','TODAS'],['entry','PRIMEIRO EMPREGO'],['experienced','EXIGE EXPERIÊNCIA'],['unfunded','SEM CAIXA']]);
     const rows=report.firms.filter(b=>openPositions(city,b)>0&&matches(ui,`${b.entity.properties.name} ${SKILLS[city.economy.jobSkill(b)]||b.type}`)).filter(b=>status==='all'||status==='entry'&&policyFor(b).minExperienceMinutes===0&&policyFor(b).minRating===0||status==='experienced'&&policyFor(b).minExperienceMinutes>0||status==='unfunded'&&b.balance<b.wage*Math.max(1,b.workers.length+1)).sort((a,b)=>b.wage-a.wage||a.id-b.id);
     p.note('Ordenadas por salário base. Selecione uma vaga para ver os requisitos completos e todos os candidatos.');
-    pages(ui,p,rows,'employmentPage',b=>{const policy=policyFor(b),waiting=(report.byCompany.get(b.id)||[]).filter(r=>r.application.status==='análise').length;
-      p.record(b.entity.properties.name,`${openPositions(city,b)} vagas · ${SKILLS[city.economy.jobSkill(b)]||b.type} · ${waiting} candidatos em análise`,()=>route(ui,'vacancies',{employmentCompanyId:b.id,employmentCandidatesPage:0}),false,{value:`${money(b.wage*60)}/h`});
-      p.kv('Requisitos',`Habilidade ${policy.minSkill}/100 · experiência ${hours(policy.minExperienceMinutes)} · referências ${policy.minRating}/100`);
-    });if(!rows.length)p.note('Nenhuma vaga aberta com estes filtros.');
+    const visible=[];pages(ui,p,rows,'employmentPage',b=>visible.push(b));
+    p.table([{label:'Empresa',weight:2},{label:'Vagas / candidatos'},{label:'Salário / hora'},{label:'Hab. / exp. / ref.',weight:2}],visible.map(b=>{const policy=policyFor(b),waiting=(report.byCompany.get(b.id)||[]).filter(r=>r.application.status==='análise').length;return {cells:[b.entity.properties.name,`${openPositions(city,b)} / ${waiting}`,money(b.wage*60),`${policy.minSkill}/100 · ${hours(policy.minExperienceMinutes)} · ${policy.minRating}/100`],click:()=>route(ui,'vacancies',{employmentCompanyId:b.id,employmentCandidatesPage:0})};}));
+    if(!rows.length)p.note('Nenhuma vaga aberta com estes filtros.');
   }else if(view==='applications'){
     filters(ui,p,[['all','TODOS'],['análise','EM ANÁLISE'],['aprovado','APROVADOS'],['reprovado','REPROVADOS'],['retirado','RETIRADOS']]);
     p.note('Inclui candidaturas recentes preservadas no currículo de cada pessoa. Clique para comparar requisitos, experiência e referências.');
@@ -112,10 +108,9 @@ export function renderEmployment(ui,p){
   }else{
     filters(ui,p,[['all','TODOS'],['motivated','MOTIVADOS'],['low','BAIXA MOTIVAÇÃO'],['unpaid','ATRASOS REGISTRADOS']]);
     const rows=report.workers.filter(r=>matches(ui,`${label(r.citizen)} ${r.building.entity.properties.name}`)).filter(r=>status==='all'||status==='motivated'&&(r.citizen.career?.motivation??50)>=65||status==='low'&&(r.citizen.career?.motivation??50)<40||status==='unpaid'&&(r.contract?.unpaidMinutes||0)>0).sort((a,b)=>wageFor(city,b.citizen,b.building)-wageFor(city,a.citizen,a.building));
-    pages(ui,p,rows,'employmentPage',({citizen:c,building:b,contract:r})=>{
-      p.record(label(c),`${b.entity.properties.name} · motivação ${Math.round(c.career?.motivation??50)}%`,()=>openPersonResume(ui,c),false,{value:`${money(wageFor(city,c,b)*60)}/h`});
-      p.kv('Experiência / avaliação no emprego',`${hours(r?.workedMinutes)} · ${r?.workedMinutes?`${r.rating.toFixed(1)}/100`:'Ainda sem avaliação'}`);
-    });if(!rows.length)p.note('Nenhum funcionário com estes filtros.');
+    const visible=[];pages(ui,p,rows,'employmentPage',r=>visible.push(r));
+    p.table([{label:'Pessoa',weight:1.5},{label:'Empresa',weight:1.5},{label:'Salário / hora'},{label:'Experiência / nota',weight:1.5},{label:'Motivação'}],visible.map(({citizen:c,building:b,contract:r})=>({cells:[label(c),b.entity.properties.name,money(wageFor(city,c,b)*60),`${hours(r?.workedMinutes)} · ${r?.workedMinutes?r.rating.toFixed(1)+'/100':'Sem avaliação'}`,`${Math.round(c.career?.motivation??50)}%`],click:()=>openPersonResume(ui,c)})));
+    if(!rows.length)p.note('Nenhum funcionário com estes filtros.');
   }
 }
 export function renderCompanyRecruitment(ui,p,b){

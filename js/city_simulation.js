@@ -1210,6 +1210,7 @@ export class CitySimulation {
       if(this.profileDiagnostics){const started=performance.now(),parts=this.economy.hourly(phase);economyHourly={phase,ms:performance.now()-started,...(parts||{})};}
       else this.economy.hourly(phase);
     }
+    this.history.captureFavoriteActivities();
     this.lastStepProfile={minute:this.minute,totalMs:performance.now()-profileStart,reconcileMs,servicesMs,civicMs,setupMs,citizenMs,interiorMs,societyMs,moverSetupMs,...(civicDetail?{civicDetail}:{}),...(citizenDetail?{citizenDetail}:{}),...(this.profileDiagnostics?{societyDetail:this.society.lastUpdateProfile,societyParts,...(this.gigs.lastSpontaneousArtworkProfile?{spontaneousArtwork:this.gigs.lastSpontaneousArtworkProfile}:{})}:{}),...(economyHourly?{economyHourly}:{}),...(this._pathSearchProfile?{pathSearches:this._pathSearchProfile.searches,pathSearchTotalMs:this._pathSearchProfile.totalMs,pathSearchWork:Object.fromEntries(['groundCalls','groundCacheHits','aStarCalls','sharedCalls','destinationFields','sourceFields','fieldResets','bridgeChecks'].map(key=>[key,this._pathSearchProfile[key]||0])),pathSearchMaxMs:this._pathSearchProfile.maxMs,pathSearchPeak:this._pathSearchProfile.maxMs?{start:this._pathSearchProfile.start,goal:this._pathSearchProfile.goal}:null}:{})};
     this.syncClock();
   }

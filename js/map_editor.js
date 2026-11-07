@@ -151,6 +151,7 @@ export class MapEditor {
       const pages = Math.max(1, Math.ceil(prefabs.length / perPage));
       this.page = Math.min(this.page, pages - 1);
       if (!prefabs.length) ui.text("REGISTRE OBJETOS VIA\neditor.registerPrefab()", x + 10, y + 65);
+      if(this.drawObjectSelector){ui.text('OBJETO',x+8,y+59);this.drawObjectSelector(x+8,y+78,w-16);const selected=this.prefabs.get(this.prefabId);if(selected)ui.text(selected.label,x+8,y+108);}else{
       prefabs.slice(this.page * perPage, (this.page + 1) * perPage).forEach(([id, prefab], i) => {
         ui.button(x + 8, y + 58 + i * 26, w - 16, 22, prefab.label.slice(0, Math.floor((w - 40) / 8)),
           () => { this.prefabId = id; this.tool = "SPAWN"; }, { selected: this.tool === "SPAWN" && this.prefabId === id });
@@ -158,6 +159,7 @@ export class MapEditor {
       ui.button(x + 8, y + 162, 38, 22, "<", () => { this.page = (this.page + pages - 1) % pages; });
       ui.text(`${this.page + 1}/${pages}`, x + 54, y + 169);
       ui.button(x + w - 46, y + 162, 38, 22, ">", () => { this.page = (this.page + 1) % pages; });
+      }
     }
     [["PAINT", "PINTAR"], ["SAMPLE", "PIPETA"], ["REMOVE", "REMOVER"]].forEach(([tool, label], i) => {
       ui.button(x + 8 + i * (colW + 4), y + 194, colW, 22, label, () => { this.tool = tool; }, { selected: this.tool === tool });

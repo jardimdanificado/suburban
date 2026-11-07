@@ -1,3 +1,4 @@
+import {CityFavorites} from './js/city_favorites.js?v=favorites-opening-2';
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=ff-routines-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=ff-routines-1";
@@ -181,6 +182,7 @@ export function update(dt, _api) { city.update(dt); }
 /** Draw additional experience-specific UI after the framework HUD. */
 export function renderUI(ui, _api) {
   cityUI.draw(ui);
+  favorites.root.hidden=false;favorites.markers.hidden=false;favorites.refresh();
 }
 
 const api = {
@@ -486,6 +488,7 @@ function frame(now) {
   updateFreeCameraMovement(dt);
 
   if (mainMenu.isActive()) {
+    favorites.root.hidden=true;favorites.markers.hidden=true;
     mainMenu.update(dt);
     if (!mainMenu.hasActiveGame) {
       const cam = mainMenu.getCameraDrift(world.spawnCenter.x, world.spawnCenter.y);
@@ -631,6 +634,10 @@ if (cityGenerationError) cityUI.notice = cityGenerationError;
 for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
   editor.registerPrefab(type, { label: spec.label, create: (x, y) => city.addBuilding(type, x, y, { free: true }) });
 }
+
+export const favorites = new CityFavorites({city,desktop:cityUI,root,storage:optionStorage,project:c=>renderer3D.projectWorldToScreen(c.entity.x,c.entity.y,renderer3D.getSurfaceElevation(world.map,c.entity.x,c.entity.y)+(c.bodyHeightCm||170)/100+.3)});
+cityUI.favorites=favorites;
+options.openFavorites=()=>favorites.open('settings');
 
 // Background simulation starts after UI/editor bindings exist. Commands are serialized by the worker.
 function initSimulationBridge() {

@@ -33,6 +33,13 @@ function readableInk(color){
 /** Compact layouts with bounded text caches and viewport-only row rendering. */
 export class UIPage {
   constructor(ui,x,y,w,top,bottom){Object.assign(this,{ui,x,y,w,top,bottom});}
+  deferSection(id,label,draw){this.sections??=[];this.sections.push({id,label,draw});}
+  flushSections(state,scope){
+    const sections=this.sections;if(!sections?.length)return;this.sections=[];
+    state.sectionTabs??={};const selected=sections.find(s=>s.id===state.sectionTabs[scope])||sections[0];
+    this.links(sections.map(s=>({label:s.label,selected:s.id===selected.id,click:()=>{state.sectionTabs[scope]=s.id;state.resetScroll();}})));
+    selected.draw();if(this.sections.length)this.flushSections(state,scope+':'+selected.id);
+  }
   touch(){return (this.ui.width||0)<700;}
   space(h=4){this.y+=h;}
   visible(h){return this.y+h>this.top&&this.y<this.bottom;}
@@ -42,10 +49,10 @@ export class UIPage {
   block(title,subtitle,draw){
     const start=this.y,ctx=this.ui.ctx;
     if(this.visible(25)){ctx.fillStyle=T.face;ctx.fillRect(this.x,start,this.w,24);this.ui.text(fit(this.ui,title,this.w-20),this.x+10,start+5,T.ink);}
-    const body=new UIPage(this.ui,this.x+10,start+30,this.w-20,this.top,this.bottom);
-    if(subtitle)body.note(subtitle);if(typeof draw==='function')draw(body);const end=body.y+8;
+    const body=new UIPage(this.ui,this.x+10,start+25,this.w-20,this.top,this.bottom);
+    if(subtitle)body.note(subtitle);if(typeof draw==='function')draw(body);const end=body.y+5;
     if(end>this.top&&start<this.bottom){ctx.strokeStyle=T.line;ctx.strokeRect(this.x+.5,start+.5,this.w-1,end-start-1);}
-    this.y=end+12;
+    this.y=end+6;
   }
   kv(label,value){
     const text=String(value??''),wide=widthOf(this.ui,text)>this.w*.64,lines=wide?wrapped(this.ui,text,this.w-4):null,h=wide?20+lines.length*14:20;

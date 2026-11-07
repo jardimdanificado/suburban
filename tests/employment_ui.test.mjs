@@ -15,11 +15,11 @@ function screen(f,view,extra={}){
  for(const k of ['heading','note','kv','metrics'])p[k]=(...args)=>output.push(args.flat(3).join(' '));
  p.links=p.buttons=rows=>buttons.push(...rows);p.button=(label,click)=>buttons.push({label,click});
  p.record=(title,detail,click)=>{output.push(`${title} ${detail}`);buttons.push({label:title,click});};
- p.table=(columns,rows)=>output.push(...rows.map(r=>r.cells.join(' ')));
+ p.table=(columns,rows)=>{output.push(...rows.map(r=>r.cells.join(' ')));for(const row of rows)if(row.click)buttons.push({label:row.cells[0],click:row.click});};
  renderEmployment(ui,p);return {ui,p,output:output.join('\n'),buttons,opened,created};
 }
 test('vacancy directory exposes salary, requirements and a link to company candidates',()=>{
- const f=fixture(),s=screen(f,'vacancies');assert.match(s.output,/VAGAS ABERTAS/);assert.match(s.output,/Habilidade 35\/100/);assert.match(s.output,/8.0 h/);
+ const f=fixture(),s=screen(f,'vacancies');assert.match(s.output,/VAGAS ABERTAS/);assert.match(s.output,/35\/100/);assert.match(s.output,/8.0 h/);
  s.buttons.find(b=>b.label===f.b.entity.properties.name).click();assert.equal(s.opened[0].employmentCompanyId,f.b.id);assert.equal(s.opened[0].views.economy,'vacancies');
 });
 test('company vacancy dossier keeps candidates grouped with that employer and links to staff settings',()=>{
@@ -43,9 +43,9 @@ test('selection status and search filters exclude unrelated applicants',()=>{
 });
 test('worker directory opens resumes and has motivation and payment filters',()=>{
  const f=fixture();f.c.jobId=f.b.id;
- const s=screen(f,'workers',{query:f.c.entity.properties.name,employmentStatus:'motivated'});assert.match(s.output,/motivação 70%/);
+ const s=screen(f,'workers',{query:f.c.entity.properties.name,employmentStatus:'motivated'});assert.match(s.output,/70%/);
  s.buttons.find(b=>b.label===f.c.entity.properties.name).click();assert.equal(s.opened[0].detailTab,'resume');
- assert(!screen(f,'workers',{query:f.c.entity.properties.name,employmentStatus:'low'}).output.includes('motivação 70%'));
+ assert(!screen(f,'workers',{query:f.c.entity.properties.name,employmentStatus:'low'}).output.includes('70%'));
 });
 test('company staff has direct selection navigation; reports do not mutate missing careers',()=>{
  const f=fixture(),s=screen(f,'vacancies');const before=f.city.citizens.filter(c=>!c.career).length;employmentReport(f.city);assert.equal(f.city.citizens.filter(c=>!c.career).length,before);

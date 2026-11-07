@@ -2,13 +2,15 @@ import {COLOR_PALETTE,colorName,colorAffinity,dislikesColor,favoriteColors,facto
 import {formatMoney as money} from './city_ui_format.js';
 function chooser(ui,p,initial){
  const color=ui.paintColor||initial||COLOR_PALETTE[0].hex;p.kv('Cor selecionada',colorName(color));
- p.buttons(COLOR_PALETTE.map(c=>({label:c.name,selected:c.hex===color,click:()=>{ui.paintColor=c.hex;}})));
+ ui.selectControl(p,'Cor da pintura',COLOR_PALETTE.map(c=>[c.hex,c.name]),color,value=>{ui.paintColor=value;});
  p.button('ESCOLHER COR PERSONALIZADA (#RRGGBB)',()=>{const value=globalThis.prompt?.('Cor hexadecimal (#RRGGBB)',color),hex=normalizeColor(value);if(hex)ui.paintColor=hex;});return color;
 }
 function jobs(ui,p,list){for(const j of list.slice(-12).reverse())p.record(`Pintura #${j.id} · ${colorName(j.color)}`,`${({delivery:'Levar veículo à oficina',ready:'Aguarda tinta / pagamento / equipe',painting:'Em pintura',completed:'Concluída',cancelled:'Cancelada'})[j.status]} · ${j.labor.toFixed(0)}/${j.requiredLabor} · ${j.quantity} latas${j.price?' · '+money(j.price):''}`,()=>{});}
 export function renderColorPreferences(ui,p,c){
-  p.heading('CORES E GOSTOS PESSOAIS');p.note('A cor influencia roupas, a escolha de imóveis e veículos. Afinidades negativas indicam aversão; cores muito rejeitadas não são escolhidas para roupas. Alimentos, abrigo, preço e utilidade continuam tendo prioridade.');
+  const tab=ui.colorView||'preferences';p.links([['preferences','PREFERÊNCIAS'],['paint','TINTA E COMPRAS']].map(([id,label])=>({label,selected:tab===id,click:()=>{ui.colorView=id;ui.resetScroll();}})));
+  if(tab==='preferences'){p.heading('CORES E GOSTOS PESSOAIS');p.note('A cor influencia roupas, a escolha de imóveis e veículos. Afinidades negativas indicam aversão; cores muito rejeitadas não são escolhidas para roupas. Alimentos, abrigo, preço e utilidade continuam tendo prioridade.');
   p.table([{label:'Cor'},{label:'Afinidade'}],favoriteColors(c).map(color=>({cells:[color.name,`${dislikesColor(c,color.hex)?'Rejeita · ':''}${Math.round(colorAffinity(c,color.hex)*100)}%`]})));
+ return;}
  const color=chooser(ui,p,favoriteColors(c)[0].hex);p.heading('TINTA PRÓPRIA');
  for(const l of c.paintBag?.paintLots||[])p.kv(`${colorName(l.color)} · ${l.producerName}`,`${l.quantity} lata(s)`);
  if(c.paintPurchase)p.note(`Compra pendente: ${colorName(c.paintPurchase.color)}. Aguarda estoque e deslocamento à fábrica.`);
@@ -28,7 +30,7 @@ export function renderFactoryPaint(ui,p,b){
 export function renderBuildingPaint(ui,p,b){
  const city=ui.city,color=chooser(ui,p,normalizeColor(buildingColor(b)));p.heading('PINTAR PAREDES');
  const owners=[...new Set(b.units.map(u=>u.ownerId))];ui.paintPayer=owners.includes(ui.paintPayer)?ui.paintPayer:owners[0];
- p.buttons(owners.map(id=>({label:city.accountName(id),selected:id===ui.paintPayer,click:()=>{ui.paintPayer=id;}})));
+ ui.selectControl(p,'Responsável pela pintura',owners.map(id=>[id,city.accountName(id)]),ui.paintPayer,value=>{ui.paintPayer=value;});
  p.note('Cada dono pode pintar seus próprios cômodos. A construtora usa tinta real, cobra materiais e mão de obra e desloca um funcionário para o serviço.');
  p.button('CONTRATAR PINTURA COM TINTA DA CONSTRUTORA',()=>city.paint.requestBuilding(b.id,ui.paintPayer,color));
  p.button('CONTRATAR PINTURA LEVANDO TINTA PRÓPRIA',()=>city.paint.requestBuilding(b.id,ui.paintPayer,color,true));

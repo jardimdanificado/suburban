@@ -90,15 +90,17 @@ export class OptionsPanel {
       for (const item of this.items) this.apply(item.key, item.default);
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
-    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS VISUAIS"], ["TIME", "TEMPO"]].forEach(([id, label], i) => {
-      const bw = Math.floor((w - 24) / 3);
+    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS"], ["TIME", "TEMPO"], ["HISTORY", "HISTORICO"]].forEach(([id, label], i) => {
+      const bw = Math.floor((w - 28) / 4);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
     const rows = this.tab === "GRAPHICS" ? this.items.filter(item => GRAPHICS.some(graphic => graphic.key === item.key)) : this.items.filter(item => EFFECTS.some(effect => effect.key === item.key));
     const contentY = y + 62, bottom = y + h - (floating?40:6);
     const first = ui.regions.length;
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();
-    if (this.tab === "TIME") {
+    if(this.tab === "HISTORY") {
+      this.maxScroll=0;ui.button(x+12,contentY+8,w-24,26,"FAVORITOS, FILTROS E LIMITE DE REGISTROS",()=>this.openFavorites?.());
+    } else if (this.tab === "TIME") {
       const columns = Math.max(1, Math.floor((w - 24) / 64));
       this.maxScroll = Math.max(0, 160 + Math.ceil(SPEED_TIERS.length / columns) * 28 - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
@@ -129,6 +131,7 @@ export class OptionsPanel {
       });
     }
     ui.ctx.restore();
+    if(this.maxScroll>0){const height=bottom-contentY,thumb=Math.max(16,height*height/(height+this.maxScroll)),top=contentY+(height-thumb)*this.scroll/this.maxScroll;ui.ctx.fillStyle='#817d6b';ui.ctx.fillRect(x+w-7,contentY,5,height);ui.ctx.fillStyle='#e5dfcb';ui.ctx.fillRect(x+w-7,top,5,thumb);ui.regions.push({x:x+w-12,y:contentY,w:12,h:height,onClick:()=>{this.scroll=this.scroll>=this.maxScroll?0:Math.min(this.maxScroll,this.scroll+height*.7);}});}
     const regions = ui.regions.splice(first);
     for (const region of regions) {
       const top = Math.max(contentY, region.y), end = Math.min(bottom, region.y + region.h);

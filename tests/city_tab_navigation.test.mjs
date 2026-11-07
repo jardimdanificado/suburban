@@ -5,7 +5,7 @@ import { ManagementCanvasUI } from '../js/management_ui.js';
 import { setup } from './helpers/city.mjs';
 
 function harness(width=1440) {
-  const ctx=new Proxy({}, {get:(target,key)=>key in target?target[key]:key==='measureText'?s=>({width:String(s).length*7}):()=>{}});
+  const ctx=new Proxy({canvas:{width:0,height:0},getImageData:()=>({data:new Uint8ClampedArray(0)}),getTransform:()=>({transformPoint:point=>point})}, {get:(target,key)=>key in target?target[key]:key==='measureText'?s=>({width:String(s).length*7}):()=>{}});
   globalThis.window={innerWidth:width,innerHeight:900,devicePixelRatio:1,location:{search:''}};
   globalThis.document={createElement:()=>({style:{},value:'',setAttribute(){},addEventListener(){},append(){},remove(){},getContext:()=>ctx})};
   const city=setup({starter:true});
@@ -109,4 +109,22 @@ test('remaining dropdowns still switch with keyboard navigation',()=>{
   assert(h.desktop.menuKey({code:'ArrowRight'}));assert.equal(h.desktop.menuId,'windows');
   assert(h.desktop.menuKey({code:'ArrowRight'}));assert.equal(h.desktop.menuId,'tools');
   assert(h.desktop.menuKey({code:'Escape'}));assert.equal(h.desktop.menuOpen,false);
+});
+
+test('reformed nested dossiers keep their independent forms and render every subject tab',()=>{
+  const h=harness();
+  const gov=h.desktop.openDestination('government','elections',{politicsTab:'approval'});
+  for(const approvalView of ['summary','changes','promise','conditions','finance','method']){gov.approvalView=approvalView;assert.doesNotThrow(h.draw);}
+  gov.showView('identity');for(const identityView of ['name','slogan','flag','history']){gov.identityView=identityView;assert.doesNotThrow(h.draw);}
+  const party=h.desktop.openParty(h.city.politics.parties[0].id);
+  for(const partyDossierView of ['identity','office','relations','finance','record','members']){party.partyDossierView=partyDossierView;assert.doesNotThrow(h.draw);}
+  const c=h.city.citizens[0];h.desktop.setSelection(c.entity);const person=h.desktop.active;person.detailTab='wardrobe';
+  for(const wardrobeView of ['pieces','preferences','history','brands']){person.wardrobeView=wardrobeView;assert.doesNotThrow(h.draw);}
+  for(const [tab,view]of [['city','analysis'],['economy','analysis'],['market','analysis'],['production','analysis']]){h.desktop.openDestination(tab,view);assert.doesNotThrow(h.draw);}
+});
+
+test('justice records open in their own dossier and leave the directory selection intact',()=>{
+  const h=harness(),state=h.desktop.openDestination('justice','cases');
+  const dossier=state.openPanel({justiceCaseId:123});assert.equal(dossier.tab,'justice-case');assert.equal(dossier.justiceCaseId,123);assert.equal(state.tab,'justice');assert.equal(state.justiceCaseId,undefined);
+  assert.equal(state.openPanel({justiceCaseId:123}),dossier);
 });
