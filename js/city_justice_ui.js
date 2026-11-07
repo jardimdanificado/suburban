@@ -1,16 +1,16 @@
-import {CRIME_TYPES} from './city_justice.js';
+import {CRIME_TYPES,isOpenJusticeCase} from './city_justice.js';
 import {funeralSpec} from './city_funeral_services.js';
 
 const stamp=minute=>minute==null?'—':`D${Math.floor(minute/1440)+1} ${String(Math.floor(minute%1440/60)).padStart(2,'0')}:${String(Math.floor(minute%60)).padStart(2,'0')}`;
 const person=(city,id)=>city.society.citizen(id);
 const personName=(city,id)=>person(city,id)?.entity.properties.name||'Não identificado';
 const buildingName=(city,id)=>city.building(id)?.entity.properties.name||'Unidade removida';
-const statusLabel={unreported:'Sem BO',reporting:'Vítima a caminho da delegacia',reported:'BO registrado',investigating:'Investigação em andamento','arrest-requested':'Aguardando prisão',arrested:'Preso',charged:'Denunciado','hearing-scheduled':'Audiência marcada',convicted:'Condenado',acquitted:'Absolvido',decriminalized:'Descriminalizado','no-suspect':'Sem suspeito identificado',closed:'Encerrado',dismissed:'Arquivado'};
+const statusLabel={unreported:'Sem BO',reporting:'Vítima a caminho da delegacia',reported:'BO registrado',investigating:'Investigação em andamento','arrest-requested':'Aguardando prisão',arrested:'Preso',charged:'Denunciado','hearing-scheduled':'Audiência marcada',convicted:'Condenado',acquitted:'Absolvido',decriminalized:'Descriminalizado','no-suspect':'Sem suspeito identificado',closed:'Encerrado',dismissed:'Arquivado',settled:'Acordo cumprido','settlement-pending':'Acordo em cumprimento'};
 const bodyLabel={waiting:'Aguardando coleta',transporting:'Em transporte',autopsy:'Em autópsia','cremation-wait':'Aguardando crematório','cremation-transporting':'Em transporte ao crematório',cremating:'Em cremação',cremated:'Cremação concluída'};
 const autopsyReviewLabel={'awaiting-return-to-iml':'Aguardando retorno físico ao IML',underway:'Em segunda perícia independente',completed:'Concluída por outro perito','impossible-cremated':'Impossível: corpo já cremado'};
 const missionLabel={exit:'Saindo da unidade',scene:'A caminho da cena', 'approach-interior':'Entrando no prédio','approach-witness-interior':'Indo ao prédio da testemunha','witness-interior':'Ouvindo testemunha no prédio','exit-witness-interior':'Saindo do prédio da testemunha','exit-scene-to-witnesses':'Saindo da cena para visitar testemunhas',witnesses:'Ouvindo testemunhas','exit-scene':'Saindo da cena','vehicle-approach':'Verificando o veículo',return:'Retornando à delegacia',analysis:'Analisando provas','to-suspect':'Indo ao suspeito',collect:'Recolhendo bens','to-owner':'Levando bens à vítima',intercept:'A caminho do destino do ciclista',deliver:'Entregando bens',patrol:'Em ronda',respond:'Respondendo a chamado'};
 const billStatus={draft:'Rascunho','awaiting-session':'Aguardando sessão',proposed:'Em tramitação',approved:'Aprovado',rejected:'Rejeitado','awaiting-sanction':'Aguardando sanção',executing:'Em execução',executed:'Executado',vetoed:'Vetado','veto-maintained':'Veto mantido',dismissed:'Arquivado'};
-const openCase=c=>!['closed','dismissed','acquitted','decriminalized'].includes(c.status);
+const openCase=isOpenJusticeCase;
 
 export function renderCaseDossier(ui,p,record){caseCard(ui,p,record);}
 function caseCard(ui,p,record,{showActions=true}={}){
@@ -72,7 +72,10 @@ function caseCard(ui,p,record,{showActions=true}={}){
   if(record.position)p.button('LOCALIZAR CENA',()=>ui.camera(record.position.x,record.position.y));
   if(victim)p.button('ABRIR VÍTIMA',()=>ui.openCitizen(victim.id));
   if(suspect&&!suspect.entity.destroyed)p.button('ABRIR PESSOA APONTADA',()=>ui.openCitizen(suspect.id));
+  if(record.closureReason)p.note(record.closureReason);
+  if(record.settlement)p.kv('Acordo',`Pagamento ${record.settlement.paid}/${record.settlement.amount} · ${record.settlement.status==='completed'?'Cumprido':'Aguardando cumprimento e ressarcimento'}`);
   if(showActions){
+    if(j.canSettle(record))p.button('FIRMAR ACORDO',()=>{ui.notice=j.agreeSettlement(record.id)?'Acordo firmado; encerramento após cumprimento das condições.':'Não foi possível firmar o acordo.';});
     if((record.status==='arrest-requested'||record.sentence?.executionStatus==='awaiting-immunity-authorization')&&j.policies.parliamentaryImmunity&&suspect&&(record.immunityAuthorization==='required'||record.parliamentaryImmunityProtectionAt!=null||city.politics.council.members.some(m=>m.citizenId===suspect.id)))p.button(`AUTORIZAR PRISÃO AGORA · ${suspect.entity.properties.name}`,()=>{const result=city.politics.executePlayerAction('divineGovernment',null,{type:'arrestAuthorization',payload:{caseId:record.id,targetId:suspect.id}});ui.notice=result?.description||city.lastError||'A ordem não pôde ser aplicada.';});
     if(suspect?.custody?.caseId===record.id)p.button(`LIBERTAR AGORA · ${suspect.entity.properties.name}`,()=>{const result=city.politics.executePlayerAction('divineGovernment',null,{type:'releasePrisoner',payload:{caseId:record.id,targetId:suspect.id}});ui.notice=result?.description||city.lastError||'A ordem não pôde ser aplicada.';});
     if(record.trial?.status==='hearing-scheduled'&&!record.trial.privateDefense){const office=city.buildings.find(b=>b.type==='legal_office'&&b.active&&!b.entity.destroyed&&(b.workers||[]).length);if(office)p.button('CONTRATAR DEFESA PARTICULAR',()=>{ui.notice=j.hireDefense(record.id)?'Advogado contratado e honorários pagos.':'Não foi possível contratar a defesa privada.';});}

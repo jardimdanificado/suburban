@@ -23,17 +23,17 @@ const phaseTotals={},phasePeaks={};
 function captureProfile(profile,prefix=''){
   if(!profile||typeof profile!=='object')return;
   for(const [key,value] of Object.entries(profile)){
-    if(key==='step')continue; // lastStepProfile persists on subminute updates.
+    if(key==='step')continue; // Per-minute step phases are captured below.
     if(value&&typeof value==='object'){captureProfile(value,prefix+key+'.');continue;}
     if(!key.endsWith('Ms')||!Number.isFinite(value))continue;
     const name=prefix+key;phaseTotals[name]=(phaseTotals[name]||0)+value;
     if(!phasePeaks[name]||value>phasePeaks[name].ms)phasePeaks[name]={ms:value,minute:city.minute};
   }
 }
+if(diagnostics){const stepMinute=city.stepMinute.bind(city);city.stepMinute=()=>{stepMinute();captureProfile(city.lastStepProfile,'step.');};}
 const startMinute=city.minute;
-let previousMinute=startMinute;
 const times=[],cpuStarted=process.cpuUsage(),threadCpuStarted=process.threadCpuUsage?.(),started=performance.now();
-for(let i=0;i<Math.round(cityMinutes/(dt*4));i++){const at=performance.now();city.update(dt);times.push(performance.now()-at);if(diagnostics){captureProfile(city.lastUpdateProfile);if(city.minute!==previousMinute){captureProfile(city.lastStepProfile,'step.');previousMinute=city.minute;}}}
+for(let i=0;i<Math.round(cityMinutes/(dt*4));i++){const at=performance.now();city.update(dt);times.push(performance.now()-at);if(diagnostics)captureProfile(city.lastUpdateProfile);}
 const ms=performance.now()-started,cpu=process.cpuUsage(cpuStarted),threadCpu=threadCpuStarted?process.threadCpuUsage(threadCpuStarted):null,cpuMs=(cpu.user+cpu.system)/1000,threadCpuMs=threadCpu?(threadCpu.user+threadCpu.system)/1000:null;times.sort((a,b)=>a-b);
 const observed={minute:city.minute,seed:city.seed,people:city.citizens.map(c=>[c.id,c.task,c.needs,c.entity.x,c.entity.y,c.balance,c.indoorLocation,c.career,c.sleep]),rooms:[...city.units.values()].map(u=>[u.id,u.activityReservedIds]),accounts:[...city.accounts].map(([id,a])=>[id,a.balance]),history:city.history.nextId,events:city.events,relations:[...city.society.relations]};
 const checksum=createHash('sha256').update(JSON.stringify(observed)).digest('hex');
