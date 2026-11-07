@@ -1,4 +1,4 @@
-import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js';
+import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js?v=ff2-speed-1';
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {beginActivitySearch,endActivitySearch,invalidateActivitySearch} from './city_activity_search.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
@@ -14,9 +14,9 @@ import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-one-pass-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=fast-speeds-1';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=ff2-speed-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=ff-cargo-1';
+import {CityVehicles} from './city_vehicles.js?v=ff2-speed-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
@@ -43,17 +43,20 @@ import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { CityLighting } from './city_lighting.js';
 import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
+
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=housing-resident-index-1';
-import { CitySanitation } from './city_sanitation.js?v=sanitation-visitor-search-1';
+import { CitySanitation } from './city_sanitation.js?v=ff2-speed-1';
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=road-network-cache-1';
-import { CityLogistics } from './city_logistics.js?v=ff-freight-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=ff2-speed-1';
+import { CityLogistics } from './city_logistics.js?v=ff2-speed-1';
 import { CityGigs } from './city_gigs.js?v=spaced-limited-spontaneous-art-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=two-day-public-food-reserve-1';
-import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff-social-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=ff2-speed-1';
+import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
+
+const ff2ProductionWaits = new WeakMap();
 
 const OUTDOOR_LEISURE_SEATS=new WeakMap();
 function outdoorLeisureSeats(city){
@@ -783,7 +786,7 @@ export class CitySimulation {
       if(['health','leisure','social'].includes(task)&&civicSpec(b)&&!civicStatus(this,b,c)?.ready)continue;
       const path = this.findPath(c.entity, b.door);
       if (path !== null) {
-        c.path = path; c.targetId = b.id; c.task = task; if(['food','water','health','leisure','social'].includes(task)){c.routineServices??={};c.routineServices[task]={buildingId:b.id,reviewAt:this.minute+(this.fastForward?480+c.id%241:360+c.id%60)};} if (task === 'food') this.workMeals.issueVoucher(c, b); return;
+        c.path = path; c.targetId = b.id; c.task = task; if(['food','water','health','leisure','social'].includes(task)){c.routineServices??={};c.routineServices[task]={buildingId:b.id,reviewAt:this.minute+(this.fastForward?(this.fastForward2?960+c.id%481:480+c.id%241):360+c.id%60)};} if (task === 'food') this.workMeals.issueVoucher(c, b); return;
       }
     }
     c.task = task==='energy'&&!home?'energy':null; c.targetId = null; c.action = task==='energy'&&!home?'Dormindo na rua':task === 'food' ? 'Alimentos indisponíveis nas lojas locais' : home ? 'Sem acesso ao serviço' : 'Sem moradia';
@@ -869,7 +872,17 @@ export class CitySimulation {
       const wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30));
       if (!isOwner && b.balance < wage) { this.payWage(c,b,wage); c.action = 'Empregador sem caixa'; c.task = null; return; }
       if(b.constructionKind==='open-air'&&!['farm','quarry','iron_mine','bauxite_mine','forestry'].includes(b.type)){const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cell=cells[c.id%Math.max(1,cells.length)];if(cell&&!outdoorCellReady(this,c,b,cell))return;}
-      const productive = this.economy.productionWork(b, c);
+      const recipe=INDUSTRIES[b.type],dynamicRecipe=['artisan','composting','flagmaker','newsroom','publisher','tobacco_workshop','toolmaker'].includes(b.type)?null:recipe;
+      const recipeGoods=dynamicRecipe?[...Object.keys(dynamicRecipe.inputs||{}),...Object.keys(dynamicRecipe.outputs||{})]:[];
+      const productionSignature=dynamicRecipe?`${b.id}:${b.active}:${b.inventoryCapacity}:${inventoryFree(b)}:${recipeGoods.sort().map(g=>`${g}:${b.inventory[g]||0}:${b.incoming[g]||0}`).join('|')}`:null;
+      const productionBlocked=!!dynamicRecipe&&(
+        Object.entries(dynamicRecipe.inputs||{}).some(([good,amount])=>(b.inventory[good]||0)<amount)||
+        inventoryFree(b)<Math.max(0,Object.values(dynamicRecipe.outputs||{}).reduce((sum,n)=>sum+n,0)-Object.values(dynamicRecipe.inputs||{}).reduce((sum,n)=>sum+n,0))||
+        Object.keys(dynamicRecipe.outputs||{}).some(g=>(b.inventory[g]||0)>=48)
+      );
+      const wait=ff2ProductionWaits.get(c),canSkip=this.fastForward2&&productionBlocked&&wait?.buildingId===b.id&&wait.signature===productionSignature&&this.minute<wait.until;
+      const productive=canSkip?false:this.economy.productionWork(b,c);
+      if(!canSkip&&this.fastForward2&&!productive&&productionBlocked)ff2ProductionWaits.set(c,{buildingId:b.id,signature:productionSignature,until:this.minute+8});else if(!canSkip)ff2ProductionWaits.delete(c);
       const present=!!(c.indoorLocation?.buildingId===b.id&&c.indoorLocation.unitId&&!c.indoorLocation.path?.length)||
         !!(c.workCell?.buildingId===b.id&&c.workCell.target&&!c.path.length&&Math.hypot(c.entity.x-c.workCell.target.x,c.entity.y-c.workCell.target.y)<.2);
       // Waiting for ingredients or a customer is still paid time at the assigned workplace.

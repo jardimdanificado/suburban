@@ -292,7 +292,7 @@ export class CitySanitation {
       if (c && (c.entity.destroyed||c.sleep?.active||c.custody||this.city.urgentNeed(c)||provider&&c.id!==provider.ownerId&&c.jobId!==provider.id)) { this.releaseCitizen(c); c.task = null; c.path = []; c = null; }
       job.nextWorkerSearchAt??=this.city.minute;
       if (!c && (this.city.fastForward?this.city.minute>=job.nextWorkerSearchAt:this.city.minute%5===0) && this.city.hour >= 7 && this.city.hour < 19) {
-        job.nextWorkerSearchAt=this.city.minute+(this.city.fastForward?10+(job.id%6):5);
+        job.nextWorkerSearchAt=this.city.minute+(this.city.fastForward?(this.city.fastForward2?20+(job.id%11):10+(job.id%6)):5);
         c = this.worker(job); const path = c && (c.indoorLocation?[]:this.city.findPath(c.entity, site.door));
         if (!c || path === null) continue;
         c.cleaningJobId = job.id; c.task = 'clean'; c.servicePaid = null; c.targetId = site.id; c.path = path; job.workerId = c.id; job.status = 'working';

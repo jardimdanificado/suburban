@@ -12,11 +12,11 @@ test("all speed tiers advance the world clock and experience with fixed steps", 
     time.setSpeed(speed);
     let calls = 0;
     for (let frame = 0; frame < 60; frame++) time.advance(1 / 60, dt => {
-      assert.equal(dt, speed===64?.25:1 / 60);
+      assert.equal(dt, speed >= 128 ? .5 : speed === 64 ? .25 : 1 / 60);
       calls++;
       clock.tick(dt);
     });
-    assert.equal(calls, speed===64?256:60 * speed);
+    assert.equal(calls, speed >= 64 ? 256 : 60 * speed);
     assert.equal(time.tick, calls);
     assert(Math.abs(time.elapsed - speed) < 1e-8);
     assert(Math.abs(clock.hour*60 + clock.minute + clock.minuteTimer - speed) < 1e-8);

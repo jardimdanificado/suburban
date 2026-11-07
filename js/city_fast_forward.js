@@ -11,6 +11,7 @@ function cadenceHash(value){
 
 export function reducedCadence(city,owner,key,minMinutes,maxMinutes=minMinutes,signature=''){
   if(!city?.fastForward){reducedCadences.get(owner)?.delete(key);return true;}
+  const factor=city.fastForward2?2:1;minMinutes*=factor;maxMinutes*=factor;
   let timers=reducedCadences.get(owner);if(!timers)reducedCadences.set(owner,timers=new Map());
   const now=city.minute||0,old=timers.get(key),sig=String(signature);
   if(old&&old.signature!==sig){timers.set(key,{signature:sig,nextAt:now+Math.max(1,minMinutes)});return true;}
@@ -36,21 +37,21 @@ export function beginFastForwardMinute(city){
   for(const entry of state.queue.takeUntil(city.minute))if(state.people.get(entry.value)===entry)state.people.delete(entry.value);
 }
 
-// Only safe adult journeys and sleep defer their personal decision pass, at most
-// four city minutes. Production, transactions, justice and social events still
-// execute each minute. Needs are integrated by the existing elapsed-time path.
+// ff skips safe personal passes for four minutes; ff2 widens that event window
+// and also time-slices stable idle adults. Needs are integrated on wake.
 export function deferFastForwardCitizen(city,c){
   const state=schedules.get(city);if(!city.fastForward||!state)return false;
   const path=c.indoorLocation?.path?.length?c.indoorLocation.path:c.path,n=c.needs,sleeping=c.task==='energy'&&c.sleep?.active&&!path?.length;
-  const safe=!c.entity.destroyed&&c.initialAge>=18&&(city.society?.age?.(c)??c.initialAge)<85&&TRAVEL_TASKS.has(c.task)&&(path?.length||sleeping)&&!SPECIAL.some(key=>c[key])&&!c.substanceState?.effects?.length&&!c.combatInjuries?.length&&!c.career?.pendingInterview&&!city.childrenOf(c.id).length&&Number.isFinite(n.food+n.water+n.energy+n.hygiene+n.toilet+n.health)&&(!sleeping||n.energy>1)&&n.food>(sleeping?6:19)&&n.water>(sleeping?6:19)&&(sleeping||n.energy>13)&&n.hygiene>11&&n.toilet>(sleeping?6:11)&&n.health>21;
+  const idle=city.fastForward2&&c.task==null&&!path?.length&&c.homeUnitId&&city.minute<(c._nextTaskAt||0)&&c._routineRevision===routineRevision(city,c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>45&&!city.urgentNeed(c);
+  const safe=!c.entity.destroyed&&c.initialAge>=18&&(city.society?.age?.(c)??c.initialAge)<85&&(TRAVEL_TASKS.has(c.task)&&(path?.length||sleeping)||idle)&&!SPECIAL.some(key=>c[key])&&!c.substanceState?.effects?.length&&!c.combatInjuries?.length&&!c.career?.pendingInterview&&!city.childrenOf(c.id).length&&Number.isFinite(n.food+n.water+n.energy+n.hygiene+n.toilet+n.health)&&(!sleeping||n.energy>1)&&n.food>(sleeping?6:city.fastForward2?35:19)&&n.water>(sleeping?6:city.fastForward2?35:19)&&(sleeping||n.energy>(city.fastForward2?30:13))&&n.hygiene>11&&n.toilet>(sleeping?6:city.fastForward2?30:11)&&n.health>21;
   if(!safe||city.minute%60===0||city.detailedInteriorBuildingId!=null&&c.indoorLocation?.buildingId===city.detailedInteriorBuildingId){state.people.delete(c);return false;}
-  const signature=[c.task,path,c.homeUnitId,c.jobId,city.world.revision,city.structureRevision,sleeping];
+  const signature=[c.task,path,c.homeUnitId,c.jobId,c._nextTaskAt,c._routineRevision,city.world.revision,city.structureRevision,sleeping];
   const previous=state.people.get(c);
   if(previous&&signature.every((value,i)=>value===previous.signature[i]))return true;
   // Invalidation wakes immediately. The next scheduled check never crosses an
   // hour boundary, where shifts, payroll and many civic rules can change.
   const sleepEnd=sleeping?c.sleep.lastMinute+480-c.sleep.minutes:Infinity;
-  const at=Math.min(city.minute+4,Math.floor(city.minute/60+1)*60,sleepEnd);
+  const at=Math.min(city.minute+(city.fastForward2?12:4),Math.floor(city.minute/60+1)*60,sleepEnd,idle?c._nextTaskAt:Infinity);
   const entry=state.queue.schedule(at,c);entry.signature=signature;state.people.set(c,entry);return false;
 }
 
@@ -58,6 +59,6 @@ export function deferFastForwardCitizen(city,c){
 // immediate invalidation on a changed job, home, city structure or urgent need.
 export function routineRevision(city,c){return `${c.jobId}:${c.homeUnitId}:${c.businessIds.join(',')}:${city.structureRevision}:${city.world.revision}:${Math.floor(city.minute/60)}`;}
 export function nextRoutineReview(city,c,stable,urgent=false){
-  const interval=city.fastForward&&!urgent?(stable?60:20):(stable?30:10);
+  const interval=city.fastForward&&!urgent?(city.fastForward2?(stable?120:40):(stable?60:20)):(stable?30:10);
   return Math.min(city.minute+interval+c.id%interval,Math.floor(city.minute/60+1)*60);
 }

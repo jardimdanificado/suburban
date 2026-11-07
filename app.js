@@ -1,15 +1,15 @@
 import {CityFavorites} from './js/city_favorites.js?v=favorite-glyph-sprites-4';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=ff-growth-events-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=ff2-speed-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=ff-growth-events-1";
-import { CityDesktop } from "./js/city_desktop.js?v=effective-speed-counter-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=ff2-speed-1";
+import { CityDesktop } from "./js/city_desktop.js?v=ff2-speed-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=favorite-glyph-sprites-4";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, SPEED_TIERS } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js?v=night-light-limit-1";
+import { OptionsPanel } from "./js/options.js?v=ff2-speed-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 
 const root = document.querySelector("#experience");
@@ -208,7 +208,8 @@ function togglePause() {
 }
 
 function advanceSimulation(dt) {
-  city.fastForward = time.speed === 64;
+  city.fastForward = time.speed >= 64;
+  city.fastForward2 = time.speed >= 128;
   city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;
   update(dt, api);
 }

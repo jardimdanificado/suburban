@@ -123,7 +123,7 @@ export class CitySociety {
     // every five minutes normally. ff samples new incidental encounters every
     // fifteen minutes; established conversations and relationships remain individual.
     let contactSearchMs=0;
-    const contactInterval=this.city.fastForward?15:5;
+    const contactInterval=this.city.fastForward?(this.city.fastForward2?30:15):5;
     if(this.city.minute%contactInterval===0){
     const contactStart=profiling?performance.now():0;
     const buckets = new Map(),stride=Math.ceil(this.city.world.width/2)+4,tileCounts=new Map();

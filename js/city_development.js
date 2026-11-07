@@ -375,7 +375,7 @@ export class CityDevelopment {
   }
   ensureQuarryPlot(){
     if(this.plots.some(p=>p.ownerId==='treasury'&&p.type==='quarry'&&!p.buildingId&&!p.projectId))return;
-    const city=this.city;if(this.nextQuarrySearchAt>city.minute)return;this.nextQuarrySearchAt=city.minute+(city.fastForward?120+(city.day%61):60);
+    const city=this.city;if(this.nextQuarrySearchAt>city.minute)return;this.nextQuarrySearchAt=city.minute+(city.fastForward?(city.fastForward2?240+(city.day%121):120+(city.day%61)):60);
     const center=city.world.spawnCenter||city.spawn,total=Math.max(32,Math.ceil(Math.max(city.world.width||64,city.world.height||64)/6)*32);
     for(let i=0;i<48;i++){const index=(this.quarryPlotCursor||0)%total;this.quarryPlotCursor=index+1;const radius=8+Math.floor(index/32)*6,angle=index%32*Math.PI/16,x=Math.floor(center.x+Math.cos(angle)*radius),y=Math.floor(center.y+Math.sin(angle)*radius);if(tileAt(city.world,x,y)!==4)continue;for(const [px,py]of [[x+1,y-1],[x-3,y-1],[x-1,y+1],[x-1,y-3]])if(this.createPlot(px,py,3,3,{type:'quarry'}))return;}
   }
@@ -390,7 +390,7 @@ export class CityDevelopment {
     // A full urban catalogue must never stop the search for agricultural land.
     if (stock.urban >= count && stock.rural >= ruralTarget) return;
     if (this.nextPlotSearchAt > this.city.minute) return;
-    this.nextPlotSearchAt = this.city.minute + (this.city.fastForward?180+(this.city.day%181):60);
+    this.nextPlotSearchAt = this.city.minute + (this.city.fastForward?(this.city.fastForward2?360+(this.city.day%361):180+(this.city.day%181)):60);
     const budget = this.hasSearchedPlots ? 24 : 96;
     this.hasSearchedPlots = true;
     const ruralSizes = [[10, 10], [8, 12], [12, 12], [16, 12], [8, 8]];

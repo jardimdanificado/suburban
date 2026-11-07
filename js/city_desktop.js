@@ -196,7 +196,7 @@ export class CityDesktop {
   }
   drawChrome(ui,{clockText='',paused=false,speed=1,effectiveSpeed=null,renderMode='3d'}={}){
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
-    let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speedLabel(speed)}${speed===64?' · avanço com detalhe reduzido':''}`,this.controls.speed,false]];
+    let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speedLabel(speed)}${speed>=128?' · simulação muito reduzida':speed>=64?' · avanço com detalhe reduzido':''}`,this.controls.speed,false]];
     const entries=[
       {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),

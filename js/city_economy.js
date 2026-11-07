@@ -1006,7 +1006,7 @@ export class CityEconomy {
   }
   householdPurchases() {
     for(const c of this.city.citizens.filter(c=>!c.entity.destroyed && this.city.society.isAdult(c) && c.id%24===this.city.hour)) {
-      if(this.city.fastForward){c.nextOptionalPurchaseAt??=this.city.minute+(c.id%121);if(this.city.minute<c.nextOptionalPurchaseAt)continue;c.nextOptionalPurchaseAt=this.city.minute+60+(c.id%61);}
+      if(this.city.fastForward){const interval=this.city.fastForward2?120:60,spread=this.city.fastForward2?121:61;c.nextOptionalPurchaseAt??=this.city.minute+(c.id%spread);if(this.city.minute<c.nextOptionalPurchaseAt)continue;c.nextOptionalPurchaseAt=this.city.minute+interval+(c.id%spread);}
       const shop=this.businesses.find(b=>this.consumerOffer(c,b) && Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)<2);
       if(shop)this.buyConsumerGood(c,shop);
     }

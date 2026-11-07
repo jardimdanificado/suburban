@@ -312,7 +312,7 @@ export class CityVehicles {
   tryTrip(c){
     if(c.mobilityWalkGoal){const last=c.path.at(-1);if(last&&Math.floor(last.x)===Math.floor(c.mobilityWalkGoal.x)&&Math.floor(last.y)===Math.floor(c.mobilityWalkGoal.y))return;c.mobilityWalkGoal=null;}
     if(c.funeralBodyId||c.policeRestitution?.kind==='vehicle')return;
-    const vehicleSearchInterval=this.city.fastForward?40+(c.id%21):20;
+    const vehicleSearchInterval=this.city.fastForward?(this.city.fastForward2?80+(c.id%41):40+(c.id%21)):20;
     if(!this.activeCount||c.skybridgeTransit||c.skybridgeZ||c.mobilityTrip||c.ridingVehicleId||c.path.length<3||!this.city.society.isAdult(c)||c.conversation||c.workMeal||this.city.minute-(c.lastVehicleSearchAt??-Infinity)<vehicleSearchInterval)return;
     c.lastVehicleSearchAt=this.city.minute;const city=this.city,goal=c.path.at(-1);
     if(!c.path.some(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))))return;

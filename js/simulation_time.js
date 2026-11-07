@@ -1,6 +1,7 @@
 export const FF_SPEED = 64;
-export const SPEED_TIERS = [0.5, 1, 2, 4, 8, 16, 32, FF_SPEED];
-export const speedLabel = speed => speed === FF_SPEED ? 'ff' : `${speed}×`;
+export const FF2_SPEED = 128;
+export const SPEED_TIERS = [0.5, 1, 2, 4, 8, 16, 32, FF_SPEED, FF2_SPEED];
+export const speedLabel = speed => speed === FF2_SPEED ? 'ff2' : speed === FF_SPEED ? 'ff' : `${speed}×`;
 
 /** Fixed simulation steps keep experience rules independent of rendering FPS. */
 export class SimulationTime {
@@ -59,7 +60,7 @@ export class SimulationTime {
     if (this.paused || !Number.isFinite(realDt) || realDt <= 0) return 0;
     // A suspended browser tab does not generate minutes of catch-up work.
     this.accumulator += Math.min(realDt, 0.25) * this.speed;
-    const step = this.speed === FF_SPEED ? .25 : this.stepSeconds;
+    const step = this.speed >= FF2_SPEED ? .5 : this.speed === FF_SPEED ? .25 : this.stepSeconds;
     let count = 0;
     const deadline = this.now() + 6;
     while (this.accumulator + 1e-10 >= step && count < 120 && this.now() < deadline) {

@@ -76,7 +76,7 @@ function nearbyFirms(city,c){
 }
 export function discoverVacancies(city,c,force=false){
   if(c.entity.destroyed||c.indoorLocation||!city.society.isAdult(c)||city.politics.officeHolder(c)||c.businessIds.length)return;
-  const cv=career(c),interval=city.fastForward?(c.jobId?30+(c.id%31):15+(c.id%16)):RECRUITMENT_RULES.discoveryInterval;
+  const cv=career(c),interval=city.fastForward?(city.fastForward2?(c.jobId?60+(c.id%61):30+(c.id%31)):(c.jobId?30+(c.id%31):15+(c.id%16))):RECRUITMENT_RULES.discoveryInterval;
   if(city.fastForward){const revision=`${city.buildings.length}:${city.vacancyRevision||0}`;if(cv.discoveryRevision!==revision){cv.discoveryRevision=revision;cv.nextDiscoveryAt=city.minute;}}
   // Give each resident a stable place in the discovery cycle. Without an
   // existing career record, the first eligible minute used to trigger a full
@@ -156,7 +156,7 @@ export function reviewMarket(city,offers){
     for(const vacancy of knownRows)if(!postedIds.has(vacancy.buildingId))retained.push(vacancy);
     let write=0;for(const entry of listings)knownRows[write++]=entry;for(const vacancy of retained)if(write<economicPolicy(city,'jobBoardLimit'))knownRows[write++]=vacancy;knownRows.length=write;
     if(profile){profile.indexMs+=performance.now()-started;started=performance.now();}
-    const reviewInterval=city.fastForward?(c.jobId?360+(c.id%121):15+(c.id%16)):c.jobId?240+(c.id%60):30+(c.id%60);
+    const reviewInterval=city.fastForward?(city.fastForward2?(c.jobId?720+(c.id%241):30+(c.id%31)):(c.jobId?360+(c.id%121):15+(c.id%16))):c.jobId?240+(c.id%60):30+(c.id%60);
     if(cv.nextSearchAt==null)cv.nextSearchAt=city.minute+reviewInterval;
     if(city.minute<cv.nextSearchAt)continue;cv.nextSearchAt=city.minute+reviewInterval;
     considerKnownVacancies(city,c,offers,indexes);
@@ -168,7 +168,7 @@ export function searchEmployment(city,c){
   discoverVacancies(city,c);
   const cv=career(c);
   if(cv.nextPersonalVacancyCheckAt==null)cv.nextPersonalVacancyCheckAt=city.minute+((Number(c.id)||0)%5);
-  if(city.minute>=cv.nextPersonalVacancyCheckAt){considerKnownVacancies(city,c);cv.nextPersonalVacancyCheckAt=city.minute+(city.fastForward?15+(c.id%16):5);}
+  if(city.minute>=cv.nextPersonalVacancyCheckAt){considerKnownVacancies(city,c);cv.nextPersonalVacancyCheckAt=city.minute+(city.fastForward?(city.fastForward2?30+(c.id%31):15+(c.id%16)):5);}
   if(c.career?.pendingInterview?.status==='análise')return false;
   const tileX=Math.floor(c.entity.x),tileY=Math.floor(c.entity.y),searchWindow=Math.floor(city.minute/30),obstacleRevision=city.obstacleRevision||0,structureRevision=city.structureRevision||0;
   const sameSearchState=cv.employmentSearchTileX===tileX&&cv.employmentSearchTileY===tileY&&cv.employmentSearchWindow===searchWindow&&cv.employmentSearchObstacleRevision===obstacleRevision&&cv.employmentSearchStructureRevision===structureRevision;
@@ -185,7 +185,7 @@ export function searchEmployment(city,c){
   // launch two A* searches for every resident in the same exploration turn.
   const offsets=EMPLOYMENT_SEARCH_OFFSETS,start=cv.employmentSearchCursor??(c.id+searchWindow)%offsets.length;
   {const [dx,dy]=offsets[start%offsets.length],target={x:tileX+dx+.5,y:tileY+dy+.5};if(city.walkable(Math.floor(target.x),Math.floor(target.y))){const path=city.findPath(c.entity,target);if(path?.length){c.task='walk';c.targetId=null;c.path=path;c.action='Procurando anúncios de emprego pelo bairro';return true;}}}
-  cv.employmentSearchCursor=(start+1)%offsets.length;cv.employmentSearchTileX=tileX;cv.employmentSearchTileY=tileY;cv.employmentSearchWindow=searchWindow;cv.employmentSearchObstacleRevision=obstacleRevision;cv.employmentSearchStructureRevision=structureRevision;cv.nextEmploymentSearchAt=city.minute+(city.fastForward?15+(c.id%16):4);
+  cv.employmentSearchCursor=(start+1)%offsets.length;cv.employmentSearchTileX=tileX;cv.employmentSearchTileY=tileY;cv.employmentSearchWindow=searchWindow;cv.employmentSearchObstacleRevision=obstacleRevision;cv.employmentSearchStructureRevision=structureRevision;cv.nextEmploymentSearchAt=city.minute+(city.fastForward?(city.fastForward2?30+(c.id%31):15+(c.id%16)):4);
   return false;
 }
 export function routeToInterview(city,c){

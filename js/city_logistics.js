@@ -239,7 +239,7 @@ export class CityLogistics {
       if (!c) {
         s.driverId = null;
         if(!this.readyForDispatch(s))continue;
-        const dispatchRetry=city.fastForward?10+(s.id%6):5;
+        const dispatchRetry=city.fastForward?(city.fastForward2?20+(s.id%11):10+(s.id%6)):5;
         if (city.hour < 7 || city.hour >= 20 || s.lastDispatchAttempt!=null&&city.minute-s.lastDispatchAttempt<dispatchRetry || dispatchBudget <= 0) continue;
         s.lastDispatchAttempt = city.minute;
         for (const candidate of this.candidates(s)) {

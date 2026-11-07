@@ -111,7 +111,7 @@ export class OptionsPanel {
       const after = base + 30 + Math.ceil(SPEED_TIERS.length / columns) * 28;
       ui.button(x + 12, after, 118, 24, this.time.paused ? "CONTINUAR" : "PAUSAR", () => this.time.setPaused(!this.time.paused));
       ui.button(x + 138, after, 90, 24, "PASSO", () => this.step());
-      ui.text("ESPACO: PAUSA\n-/+: VELOCIDADE\n.: UM PASSO QUANDO PAUSADO\nff: AVANÇO COM DETALHE REDUZIDO", x + 12, after + 42);
+      ui.text("ESPACO: PAUSA\n-/+: VELOCIDADE\n.: UM PASSO QUANDO PAUSADO\nff: AVANÇO COM DETALHE REDUZIDO\nff2: DETALHES PESSOAIS EM MENOR FREQUÊNCIA", x + 12, after + 42);
     } else {
       const headingHeight = this.tab === "VISUAL" ? 0 : 22;
       this.maxScroll = Math.max(0, rows.length * 30 + headingHeight - (bottom - contentY));

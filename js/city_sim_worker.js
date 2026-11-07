@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff-growth-events-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff2-speed-1';
 
 const graph = new CityStateGraph();
 let fieldTailPatches=false;
@@ -10,7 +10,7 @@ const MIN_STEP = 1 / 60;
 // One city minute is 0.25 simulation seconds. At high speed, advancing it
 // in one call avoids rescanning every citizen several times for subminute
 // movement that is already interpolated on the main thread.
-const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
+const stepSize = () => speed >= 128 ? .5 : Math.min(.25,Math.max(MIN_STEP,speed/128));
 // Large cities can spend most of the worker's time creating full snapshots.
 // Keep motion/vitals at 100 ms and adjust only the heavier UI state update.
 // Full graph snapshots are the most expensive worker messages. At fast speeds
@@ -22,9 +22,10 @@ const stateInterval = () => {
   // object-graph sync less frequent once the full city reaches 512 citizens;
   // this avoids repeatedly walking and applying thousands of UI-facing nodes.
   const populationFloor=people>=1024?2200:people>=512?1500:400;
+  if(speed>=128)return Math.max(4000,populationFloor,Math.min(5000,lastSnapshotCost*8));
   return Math.max(speed>=32?1500:speed>=16?1000:populationFloor,populationFloor,Math.min(3000,lastSnapshotCost*6));
 };
-const MOTION_INTERVAL = 100;
+const motionInterval=()=>speed>=128?320:100;
 const allowed = new Set(['history.configureFavorites','paint.setPalette','paint.requestPurchase','paint.requestVehicle','paint.requestBuilding','vehicles.mountFlag','vehicles.removeFlag','politics.leaseHeadquarters','economy.rentOffice','economy.configureEmployment','economy.offerShares','economy.buyShares','economy.cancelShareOffer','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.executePlayerAction','politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'bank.fileRecoveryPlan', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance']);
 
 function positions() {
@@ -106,7 +107,7 @@ function snapshot(force = false) {
   return true;
 }
 function sendMotion() {
-  if (!state || !dirty || paused || performance.now() - lastMotion < MOTION_INTERVAL) return;
+  if (!state || !dirty || paused || performance.now() - lastMotion < motionInterval()) return;
   const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),needs=vitals();
   postMessage({ type: 'motion', minute:state.city.minute, positions: motion, inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
   lastMotion = performance.now();
@@ -130,7 +131,7 @@ self.onmessage = ({ data }) => {
     } else if (data.type === 'control') {
       const timeChanged=paused!==data.paused||speed!==data.speed;
       paused = data.paused; speed = data.speed;
-      if(state){state.city.fastForward = speed === 64;state.city.detailedInteriorBuildingId=data.detailBuildingId??null;}
+      if(state){state.city.fastForward = speed >= 64;state.city.fastForward2 = speed >= 128;state.city.detailedInteriorBuildingId=data.detailBuildingId??null;}
       if(timeChanged){accumulator = 0; lastTime = performance.now();}
     } else if (data.type === 'ack') {
       awaitingAck = false;
