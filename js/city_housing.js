@@ -1,4 +1,5 @@
 import {economicPolicy} from './city_economic_policies.js';
+import {reducedCadence} from './city_fast_forward.js';
 import {colorAffinity,buildingColor} from './city_colors.js';
 import {DEVELOPMENT_RULES} from './city_development.js?v=road-network-cache-1';
 import {settlementConnected} from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -194,6 +195,7 @@ export class CityHousing {
     }
   }
   assign() {
+    if(!reducedCadence(this.city,this,'housing-assignment',120,180,`${this.city.buildings.length}:${this.city.housing?.homes?.size??this.homes.size}:${this.city.units.size}:${this.city.citizens.length}`))return;
     this.market();
     this.assignSocialHomes();
     const candidateHousingOptions=[],optionsByHome=new Map();

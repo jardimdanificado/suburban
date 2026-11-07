@@ -1,6 +1,7 @@
 import {activityRoomReady} from './city_interiors.js?v=night-crowd-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js?v=housing-resident-index-1';
+import {reducedCadence} from './city_fast_forward.js';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 0, paidCleaningInterval: 180, privateCleaningInterval: 1440, bathroomCleaningLabor:12, fecesCleaningBaseLabor:8, fecesCleaningExtraLabor:4, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
 // A synchronous facility search may inspect hundreds of homes. Only existing
@@ -289,7 +290,9 @@ export class CitySanitation {
       }
       let c = this.city.society.citizen(job.workerId);
       if (c && (c.entity.destroyed||c.sleep?.active||c.custody||this.city.urgentNeed(c)||provider&&c.id!==provider.ownerId&&c.jobId!==provider.id)) { this.releaseCitizen(c); c.task = null; c.path = []; c = null; }
-      if (!c && this.city.minute % 5 === 0 && this.city.hour >= 7 && this.city.hour < 19) {
+      job.nextWorkerSearchAt??=this.city.minute;
+      if (!c && (this.city.fastForward?this.city.minute>=job.nextWorkerSearchAt:this.city.minute%5===0) && this.city.hour >= 7 && this.city.hour < 19) {
+        job.nextWorkerSearchAt=this.city.minute+(this.city.fastForward?10+(job.id%6):5);
         c = this.worker(job); const path = c && (c.indoorLocation?[]:this.city.findPath(c.entity, site.door));
         if (!c || path === null) continue;
         c.cleaningJobId = job.id; c.task = 'clean'; c.servicePaid = null; c.targetId = site.id; c.path = path; job.workerId = c.id; job.status = 'working';
@@ -378,14 +381,14 @@ export class CitySanitation {
     };
   }
   hourly() {
-    this.rebalanceWaiting();
-    const city=this.city,environmentSkill=city.politics?.secretaries?.find(row=>row.officeId==='environment')?.skill||0;
-    for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : f.access==='public'?60+environmentSkill*.2:60)) this.requestCleaning(f.id);
+    const city=this.city,environmentSkill=city.politics?.secretaries?.find(row=>row.officeId==='environment')?.skill||0,planContracts=reducedCadence(city,this,'sanitation-contract-planning',120,180,`${this.facilities.size}:${city.buildings.length}`);
+    if(planContracts)this.rebalanceWaiting();
+    if(planContracts)for (const f of this.facilities.values()) if (f.cleanliness < (f.access === 'paid' ? 85 : f.access==='public'?60+environmentSkill*.2:60)) this.requestCleaning(f.id);
     const hall=city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);if(hall)this.setupBusinessRooms(hall);
     for(const building of city.buildings)if(!building.entity.destroyed&&['public_toilet','popular_refectory'].includes(building.type))this.setupBusinessRooms(building);
     // Fertilizer firms buy physical feedstock; payment and transport follow
     // the same escrow/delivery flow as every other industrial input.
-    for(const buyer of city.economy.businesses.filter(b=>b.type==='composting')){
+    if(planContracts)for(const buyer of city.economy.businesses.filter(b=>b.type==='composting')){
       let missing=Math.min(24,Math.max(0,24-(buyer.inventory.fezes||0)-(buyer.incoming.fezes||0)),inventoryFree(buyer));
       for(const seller of city.buildings.filter(b=>b!==buyer&&b.active&&!b.entity.destroyed&&(b.inventory.fezes||0)>0).sort((a,b)=>Math.hypot(a.door.x-buyer.door.x,a.door.y-buyer.door.y)-Math.hypot(b.door.x-buyer.door.x,b.door.y-buyer.door.y))){
         const amount=Math.min(missing,seller.inventory.fezes,city.logistics.transportLimit(seller,buyer));if(amount<1)continue;
@@ -395,7 +398,7 @@ export class CitySanitation {
     const collectors=city.economy.businesses.filter(b=>b.type==='waste_collector');
     const processors=city.economy.businesses.filter(b=>['recycler','composting'].includes(b.type));
     const activeLoads=()=>city.logistics.shipments.filter(s=>!['delivered','cancelled'].includes(s.status));
-    for (const b of city.buildings.filter(b=>!b.entity.destroyed)) {
+    if(planContracts)for (const b of city.buildings.filter(b=>!b.entity.destroyed)) {
       // Keep spilled and stored waste conserved while deliveries clear bin space.
       if (b.litter>0) {const n=Math.min(b.litter,inventoryFree(b));b.inventory.lixo+=n;b.litter-=n;}
       if(b.inventory.lixo<2 || ['waste_collector','recycler','composting'].includes(b.type))continue;
@@ -414,8 +417,8 @@ export class CitySanitation {
     }
     // Alternate destinations so recycling and composting both receive physical inputs.
     const offset=(this.processorCursor||0)%Math.max(1,processors.length);
-    const ordered=[...processors.slice(offset),...processors.slice(0,offset)];this.processorCursor=offset+1;
-    for(const processor of ordered) {
+    const ordered=[...processors.slice(offset),...processors.slice(0,offset)];if(planContracts)this.processorCursor=offset+1;
+    if(planContracts)for(const processor of ordered) {
       let need=Math.max(0,12-processor.inventory.lixo-(processor.incoming.lixo||0));
       for(const seller of collectors) {
         const quantity=Math.min(24,seller.inventory.lixo,inventoryFree(processor),need);

@@ -3,7 +3,11 @@ export function tycoonIcon(ctx,key,x,y,scale=2){
   ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
   const rect=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);},line=(points,c)=>{ctx.strokeStyle=c;ctx.lineWidth=1;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x+.5,y+.5):ctx.moveTo(x+.5,y+.5));ctx.stroke();};
   const ink='#293438',light='#f4ebc5',blue='#527cb3',dark='#714f30',brick='#b57448',green='#659453';
-  if(key==='search'){line([[3,2],[9,2],[11,4],[11,9],[9,11],[3,11],[1,9],[1,4],[3,2]],ink);line([[10,10],[15,15]],ink);line([[4,4],[8,4]],light);}
+  if(key==='favorites'){
+    rect(7,1,2,3,'#e6bd42');rect(3,4,10,2,'#e6bd42');rect(5,6,6,2,'#e6bd42');rect(6,8,4,2,'#e6bd42');rect(7,10,2,3,'#d8893d');rect(3,13,3,2,'#d8893d');rect(10,13,3,2,'#d8893d');rect(7,4,2,4,'#fff0a1');
+  }else if(key==='custom-history'){
+    rect(2,2,12,12,'#714f30');rect(3,3,10,10,'#f4ebc5');rect(4,5,5,1,blue);rect(4,8,7,1,blue);rect(4,11,4,1,blue);rect(10,5,4,4,'#d6b169');rect(11,4,2,1,ink);rect(11,6,1,2,ink);rect(12,7,2,1,ink);
+  }else if(key==='search'){line([[3,2],[9,2],[11,4],[11,9],[9,11],[3,11],[1,9],[1,4],[3,2]],ink);line([[10,10],[15,15]],ink);line([[4,4],[8,4]],light);}
   else if(key==='elections'){rect(2,7,12,7,blue);rect(5,8,6,1,ink);rect(5,1,7,5,light);line([[6,2],[9,5],[11,2]],dark);rect(7,5,2,3,light);}
   else if(key==='politics'){rect(2,8,12,6,dark);rect(3,9,10,4,light);for(let i=0;i<3;i++)rect(3+i*4,4,2,3,blue);rect(7,0,2,3,'#d6b169');}
   else if(key==='current'){rect(1,1,14,13,blue);rect(2,4,12,9,light);rect(3,2,7,1,'#e7bd59');rect(4,6,7,1,dark);rect(4,9,5,1,dark);}

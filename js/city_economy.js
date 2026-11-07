@@ -1,4 +1,5 @@
 import {economicPolicy} from './city_economic_policies.js';
+import {reducedCadence} from './city_fast_forward.js';
 import {SUBSTANCE_CROPS,SUBSTANCES,SUBSTANCE_CONTROLLED_GOODS,ALCOHOL_DRINKS} from './city_substance_catalog.js';
 import {justiceServiceSpec} from './city_justice_services.js';
 import {JUSTICE_SKILLS,ensureJusticeSkills} from './city_justice_skills.js';
@@ -170,7 +171,7 @@ export class CityEconomy {
       u.tenantId = null; u.forSale = !this.city.building(u.buildingId)?.municipal; u.forRent = false; u.arrears = 0; u.missedDays = 0;
     }
   }
-  investInHousing(initial = false) { this.city.housing.invest(initial); }
+  investInHousing(initial = false) { if(!initial&&!reducedCadence(this.city,this,'housing-investment',240,360,`${this.city.buildings.length}:${this.city.housing.homes.size}:${this.city.citizens.length}`))return false;return this.city.housing.invest(initial); }
   assignHomes() { this.city.housing.assign(); }
   hiringScore(c, b) {
     const skill = c.skills[JOB_SKILL[b.type]] || 0, owner = this.city.relationships.businessPerson(b);
@@ -280,7 +281,8 @@ export class CityEconomy {
     if(b.type==='market')b.retailAssortment=[...new Set([...b.retailAssortment,'oleo'])];
     return b.retailAssortment;
   }
-  updateDemand() {
+  updateDemand(force=false) {
+    if(!force&&!reducedCadence(this.city,this,'economic-demand',120,180,`${this.city.buildings.length}:${this.businesses.length}:${this.city.citizens.length}:${this.city.development.projects.length}`))return false;
     const activeCitizens = this.city.citizens.filter(c => !c.entity.destroyed);
     const population = activeCitizens.length;
     const businesses = this.businesses;
@@ -559,6 +561,7 @@ export class CityEconomy {
     return false;
   }
   invest() {
+    if(!reducedCadence(this.city,this,'business-investment',240,360,`${this.city.buildings.length}:${this.businesses.length}:${this.city.citizens.length}:${this.city.development.projects.length}`))return false;
     const profile=this.city.profileDiagnostics?{}:null;this.lastInvestmentSearchProfile=profile;
     let stage='demandMs',mark=profile?performance.now():0;
     const nextStage=name=>{if(profile){const now=performance.now();if(stage)profile[stage]=(profile[stage]||0)+now-mark;stage=name;mark=now;}};
@@ -572,7 +575,7 @@ export class CityEconomy {
       if(officeStarted)return true;
       // Construction and transport must be staffed before the first factories can receive their materials.
       nextStage('developmentBanksMs');this.city.bank.developmentBanks();
-      nextStage('extractionInvestmentMs');const extractionStarted=this.serviceInvestment.invest({types:['quarry']});
+      nextStage('extractionInvestmentMs');const extractionStarted=!this.city.fastForward||reducedCadence(this.city,this,'quarry-expansion',120,180,`${this.city.buildings.length}:${this.city.development.projects.length}:${this.city.quarryRevision||0}`)?this.serviceInvestment.invest({types:['quarry']}):false;
       nextStage('initialServicesMs');const firstServices=this.serviceInvestment.invest({initialOnly:true})||extractionStarted;
       // Initial chains have their own funded rollout before expanding established sectors.
       nextStage('civicInvestmentMs');if(planCivicServices(this.city))return true;
@@ -1003,6 +1006,7 @@ export class CityEconomy {
   }
   householdPurchases() {
     for(const c of this.city.citizens.filter(c=>!c.entity.destroyed && this.city.society.isAdult(c) && c.id%24===this.city.hour)) {
+      if(this.city.fastForward){c.nextOptionalPurchaseAt??=this.city.minute+(c.id%121);if(this.city.minute<c.nextOptionalPurchaseAt)continue;c.nextOptionalPurchaseAt=this.city.minute+60+(c.id%61);}
       const shop=this.businesses.find(b=>this.consumerOffer(c,b) && Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)<2);
       if(shop)this.buyConsumerGood(c,shop);
     }
@@ -1027,10 +1031,11 @@ export class CityEconomy {
       if (b.stoneReserve <= 0 || inventoryFree(b) < 1) return false;
       const deposit=b.activeDeposit,cell=deposit?{id:`${b.id}:deposit:${deposit.x}:${deposit.y}`,x:deposit.x-b.entity.x,y:deposit.y-b.entity.y,z:0}:b.units.find(u=>!['bathroom','dining'].includes(u.roomType));if(cell&&!outdoorCellReady(this.city,c,b,cell,true))return true;
       b.miningLabor = (b.miningLabor || 0) + (1 + c.skills.mining / 60)*workEfficiency(c,b);
-      if (b.miningLabor >= 3) { b.miningLabor -= 3; b.inventory.pedra++; b.stoneReserve--; if (b.activeDeposit) { const key = `${b.activeDeposit.x},${b.activeDeposit.y}`; const reserves = this.city.world.quarryReserves; const remaining=(reserves.get(key) ?? 250)-1;reserves.set(key,remaining);
+      if (b.miningLabor >= 3) { b.miningLabor -= 3; b.inventory.pedra++; b.stoneReserve--; if (b.activeDeposit) { const key = `${b.activeDeposit.x},${b.activeDeposit.y}`; const reserves = this.city.world.quarryReserves; const remaining=(reserves.get(key) ?? 250)-1;reserves.set(key,remaining);if(remaining<=0)this.city.quarryRevision=(this.city.quarryRevision||0)+1;
         // A fully excavated rock cell becomes walkable ground, opening access to the next deposit.
         if(remaining<=0){const h=tileHeight(tileAt(this.city.world,Math.floor(c.entity.x),Math.floor(c.entity.y)));this.city.world.setTile(b.activeDeposit.x,b.activeDeposit.y,h<.7?TILE_SAND:h>1.7?TILE_HILL:TILE_FLOOR);}
       } this.produced.pedra++; this.recordGoods('mining', 'pedra', 1, null, b.id); }
+      if(b.stoneReserve<=0){this.city.quarryRevision=(this.city.quarryRevision||0)+1;this.city.development.nextQuarrySearchAt=0;}
       return true;
     }
     if (b.type === 'paid_toilet') return this.city.minute - (b.lastToiletUseAt ?? -Infinity) < 3;
@@ -1065,17 +1070,19 @@ export class CityEconomy {
         if(!this.city.profileDiagnostics){this.city.development.updateHourly();break;}
         {const started=performance.now();this.city.development.updateHourly();return {developmentMs:performance.now()-started};}
       case 6: this.city.development.balanceContracts(); this.city.nature.hourly(); break;
-      case 7: this.city.logistics.rebalanceWaiting(); break;
+      case 7: if(reducedCadence(this.city,this,'freight-rebalance',120,120,this.city.buildings.length))this.city.logistics.rebalanceWaiting(); break;
       case 8: this.trade(); externalTradeHourly(this.city); break;
       case 9: this.city.paint.hourly();updateClothes(this.city); this.householdPurchases(); this.city.publications.hourly(); break;
       case 10: this.city.sanitation.hourly(); this.city.workMeals.purchase(); break;
       case 11:
-        if(!this.city.profileDiagnostics){this.updateDemand();updateMarket(this);planSupplyChains(this);tradeSharesHourly(this.city);break;}
-        {const parts={};let started=performance.now();this.updateDemand();parts.demandMs=performance.now()-started;started=performance.now();updateMarket(this);parts.marketMs=performance.now()-started;started=performance.now();planSupplyChains(this);parts.supplyPlanMs=performance.now()-started;started=performance.now();tradeSharesHourly(this.city);parts.shareTradingMs=performance.now()-started;return parts;}
+        {const city=this.city,marketScarce=Object.values(this.market||{}).some(row=>row.demand>10&&row.stock<2),economySignature=`${city.buildings.length}:${this.businesses.length}:${city.citizens.length}:${city.development.projects.length}`,demandDue=reducedCadence(city,this,'economic-demand',120,180,economySignature),marketDue=reducedCadence(city,this,'market-prices',marketScarce?30:120,120,`${city.buildings.length}:${marketScarce}`),supplyDue=reducedCadence(city,this,'supply-chain-planning',120,240,`${city.buildings.length}:${city.development.projects.length}`);
+        if(!city.profileDiagnostics){if(demandDue)this.updateDemand(true);if(marketDue)updateMarket(this);if(supplyDue)planSupplyChains(this);tradeSharesHourly(city);break;}
+        const parts={};let started=performance.now();if(demandDue)this.updateDemand(true);parts.demandMs=performance.now()-started;started=performance.now();if(marketDue)updateMarket(this);parts.marketMs=performance.now()-started;started=performance.now();if(supplyDue)planSupplyChains(this);parts.supplyPlanMs=performance.now()-started;started=performance.now();tradeSharesHourly(city);parts.shareTradingMs=performance.now()-started;return parts;}
       case 12: {
-        if(!this.city.profileDiagnostics){this.city.vehicles.hourly();if(this.city.hour%2===0){this.investInHousing();this.invest();}break;}
+        if(this.city.fastForward&&reducedCadence(this.city,this,'quarry-expansion',120,180,`${this.city.buildings.length}:${this.city.development.projects.length}:${this.city.quarryRevision||0}`))this.serviceInvestment.invest({types:['quarry']});
+        if(!this.city.profileDiagnostics){this.city.vehicles.hourly();if(this.city.fastForward||this.city.hour%2===0){this.investInHousing();this.invest();}break;}
         const parts={};let started=performance.now();this.city.vehicles.hourly();parts.vehiclesMs=performance.now()-started;
-        if(this.city.hour%2===0){started=performance.now();this.investInHousing();parts.housingInvestmentMs=performance.now()-started;started=performance.now();this.invest();parts.businessInvestmentMs=performance.now()-started;parts.businessSearch=this.lastInvestmentSearchProfile;}
+        if(this.city.fastForward||this.city.hour%2===0){started=performance.now();this.investInHousing();parts.housingInvestmentMs=performance.now()-started;started=performance.now();this.invest();parts.businessInvestmentMs=performance.now()-started;parts.businessSearch=this.lastInvestmentSearchProfile;}
         return parts;
       }
     }

@@ -1,6 +1,24 @@
 // Runtime scheduling stays out of snapshots. Entries are invalidated by changes
 // to the itinerary, job, home, map, or physical condition, and at every hour.
 const schedules = new WeakMap();
+const reducedCadences = new WeakMap();
+
+function cadenceHash(value){
+  let hash=2166136261;
+  for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}
+  return hash>>>0;
+}
+
+export function reducedCadence(city,owner,key,minMinutes,maxMinutes=minMinutes,signature=''){
+  if(!city?.fastForward){reducedCadences.get(owner)?.delete(key);return true;}
+  let timers=reducedCadences.get(owner);if(!timers)reducedCadences.set(owner,timers=new Map());
+  const now=city.minute||0,old=timers.get(key),sig=String(signature);
+  if(old&&old.signature!==sig){timers.set(key,{signature:sig,nextAt:now+Math.max(1,minMinutes)});return true;}
+  if(!old){const span=Math.max(0,maxMinutes-minMinutes),offset=span?cadenceHash(`${key}:${owner.id??owner.constructor?.name??''}`)%(span+1):0;timers.set(key,{signature:sig,nextAt:now+minMinutes+offset});return true;}
+  if(now<old.nextAt)return false;
+  const span=Math.max(0,maxMinutes-minMinutes),offset=span?cadenceHash(`${key}:${now}`)%(span+1):0;
+  old.nextAt=now+minMinutes+offset;return true;
+}
 const TRAVEL_TASKS = new Set(['work','manage','leisure','social','walk','energy','food','water','health','hygiene','toilet']);
 const SPECIAL = ['deliveryId','cleaningJobId','informalJobId','conversation','workMeal','mobilityTrip','ridingVehicleId','skybridgeTransit','custody','custodyEscort','custodyWaterDelivery','funeralBodyId','graffitiMission','policePatrol','policeResponse','policeInvestigation','policeOversight','policeAudit','policeRestitution','policeArrestEscort','combatFlee','forestryJob','mechanicJob','paintWorkId','workProjectId','pregnancy'];
 

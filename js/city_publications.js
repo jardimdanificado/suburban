@@ -1,5 +1,6 @@
 import {appearance,brandPreference} from './city_clothing.js?v=party-apparel-1';
 import {inventoryFree} from './city_inventory.js';
+import {reducedCadence} from './city_fast_forward.js';
 /** Physical paper media. Written entries are independent of journal retention. */
 export const PUBLICATION_RULES=Object.freeze({bookPages:5,maxPages:32,entriesPerPage:2,writersPerHour:4});
 const printedGoods=new Set(['livros','panfletos','jornais']);
@@ -101,6 +102,7 @@ export class CityPublications {
       if(known&&this.preserveEvent(c,known))budget--;
     }
     // Public exchange happens only between people who are actually nearby.
+    if(!reducedCadence(city,this,'publication-reader-search',120,180,`${city.structureRevision}:${this.documents.size}`))return;
     let readers=8;
     for(let scan=0;scan<Math.min(24,this.documents.size)&&readers>0;scan++){
       if(this.readerCursor>=this.nextId)this.readerCursor=1;const doc=this.documents.get(this.readerCursor++);if(!doc)continue;if(!doc.entries.length)continue;

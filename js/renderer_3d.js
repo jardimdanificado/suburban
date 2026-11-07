@@ -1,4 +1,5 @@
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
+import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=beach-band-2-3-waterfix-1';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
@@ -9052,6 +9053,8 @@ export class RCT3DRenderer {
       }
     }
 
+
+    syncCityFavoriteMarkers(this,THREE,this.cityDevelopment?.city,world);
 
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;

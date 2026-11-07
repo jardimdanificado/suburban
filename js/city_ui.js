@@ -39,6 +39,8 @@ import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=colonial-colored
 import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-3';
 import { HISTORY_LIMIT } from './city_history.js';
+import { FAVORITE_GLYPH_COUNT, GOVERNMENT_TOPICS } from './city_favorites.js';
+import {drawGlyph8x8} from './legacy_ui.js';
 import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js?v=sanitation-visitor-search-1';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
@@ -67,6 +69,8 @@ export const TABS = [
   ['custody', 'PRISÕES', 'CIDADANIA E JUSTIÇA', 'Vagas, custódia, saúde, alimentação e cumprimento de pena.'],
   ['sanitation', 'SANEAMENTO', 'VIDA URBANA', 'Banheiros, serviços de limpeza e ciclo dos resíduos.'],
   ['log', 'HISTÓRICO', 'VIDA URBANA', 'Os acontecimentos e as decisões de cada pessoa.'],
+  ['favorites', 'PESSOAS FAVORITAS', 'VIDA URBANA', 'Pessoas acompanhadas, marcadores e retenção de atividade.'],
+  ['custom-history', 'HISTÓRICO PERSONALIZADO', 'VIDA URBANA', 'Acontecimentos importantes do governo e das pessoas favoritas.'],
 ];
 export const VIEWS = {
   market: [['overview','PANORAMA'],['shares','AÇÕES'],['people','PESSOAS'],['companies','EMPRESAS'],['locations','LOCALIZAÇÕES'],['goods','MERCADO'],['sales','VENDAS'],['analysis','ANÁLISE DE DEMANDA']],
@@ -83,6 +87,8 @@ export const VIEWS = {
   custody: [['overview','VISÃO GERAL'],['people','CUSTODIADOS'],['orders','VAGAS E MANDADOS']],
   sanitation: [['facilities', 'BANHEIROS'], ['queues','FILAS'], ['cleaning', 'FAXINA'], ['gigs','BICOS DE FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
+VIEWS.favorites=[['people','PESSOAS'],['settings','MARCADOR E RETENÇÃO']];
+VIEWS['custom-history']=[['overview','ACONTECIMENTOS'],['settings','FILTROS']];
 export const FILTERS = {
   people: [['all','TODOS'], ['homeless','SEM CASA'], ['unemployed','SEM TRABALHO'], ['critical','EM RISCO'], ['food','COM FOME'], ['children','CRIANÇAS']],
       buildings: [['all','TODOS'], ['residential','MORADIAS'], ['public','PÚBLICOS'], ['private','PRIVADOS']],
@@ -142,7 +148,7 @@ export class CityUI {
     this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
     this.profileNextWorld=new URLSearchParams(window.location?.search||'').has('profile');
   }
-  get inputs(){return [...Object.values(this.dynamicSelects||{}),this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput];}
+  get inputs(){return [...Object.values(this.dynamicSelects||{}),...Object.values(this.favoriteColorInputs||{}),this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput];}
   resetScroll() { this.scrolls = {}; }
   cachedList(key,build){
     this.listCache??=new Map();const signature=`${this.city.minute}:${this.city.structureRevision}:${this.city._uiRevision||0}:${this.query}:${this.filter()}:${this.sorts[this.tab]}:${Math.floor(performance.now()/250)}`;
@@ -217,7 +223,7 @@ export class CityUI {
     this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded){this.finishInputs();return;}
     const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+25;
     if(!this.floatingDossier&&!this.recordWindow){
-      const search=!['event','corruption-case','newgame'].includes(this.tab)&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
+      const search=!['event','corruption-case','newgame','custom-history'].includes(this.tab)&&(this.tab!=='favorites'||this.view()==='people')&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
       if(this.tab==='government'&&this.view()==='elections'){const nav=new Page(ui,x+4,y,w-8,y,bottom);renderPoliticsNavigation(this,nav);y=nav.y;this.politicsNavigationPinned=true;}
@@ -351,7 +357,7 @@ export class CityUI {
     p.button('LOCALIZAR NO MAPA', () => { this.camera(c.entity.x, c.entity.y); if(!this.host)this.visible = false; });
     if(this.host?.controls.observe){const active=this.host.controls.observation?.();p.buttons([{label:'SEGUIR EM 3ª PESSOA',click:()=>this.host.controls.observe('third',c.id)},{label:'SEGUIR NO MAPA',click:()=>this.host.controls.observe('follow',c.id)},...(active? [{label:'SAIR DA CÂMERA',click:()=>this.host.controls.observe('off')}]:[])]);}
     if(this.host?.controls.observation?.())p.note('Arraste para olhar ao redor. Na 3ª pessoa, use a roda ou pinça para aproximar. Câmera livre em Ferramentas: WASD move, Espaço sobe, Control desce e Shift acelera. Esc sai da câmera.');
-    if(this.host?.favorites)p.buttons([{label:this.host.favorites.has(c.id)?'★ REMOVER FAVORITO':'☆ FAVORITAR',click:()=>this.host.favorites.togglePerson(c.id)},{label:'PESSOAS FAVORITAS',click:()=>this.host.favorites.open()}]);
+    if(this.host?.favorites)p.buttons([{label:this.host.favorites.has(c.id)?'REMOVER FAVORITO':'FAVORITAR',click:()=>this.host.favorites.togglePerson(c.id)},{label:'PESSOAS FAVORITAS',click:()=>this.host.favorites.open()}]);
     this.dossierTabs(p, [['profile', 'PERFIL'], ['wardrobe','ROUPAS'], ['personality','IDENTIDADE'], ['foodPreferences','ALIMENTAÇÃO'], ['personalVehicles','VEÍCULOS'], ['colors','CORES'], ['skills', 'TRABALHO'], ['resume','CURRÍCULO'], ['family', 'VÍNCULOS'], ['memories','MEMÓRIAS'], ['politics','POLÍTICA'], ['assets', 'CONTA'], ['history', 'HISTÓRICO']]);
     if(this.detailTab==='colors'){renderColorPreferences(this,p,c);return;}
     if (this.detailTab === 'profile') {
@@ -709,8 +715,63 @@ export class CityUI {
     p.heading('FINANÇAS E ESTOQUE');p.kv('Caixa',money(b.balance));p.kv('Despesas acumuladas',money(b.totalExpenses||0));p.kv('Salário-base',money(b.wage||0));p.kv('Estoque ocupado',`${inventoryUsed(b)}/${b.inventoryCapacity}`);p.kv('Produtos e insumos',Object.entries(b.inventory||{}).filter(([,n])=>n>0).map(([g,n])=>`${GOODS[g]?.label||g}: ${n}`).join(' · ')||'Sem estoque');
     p.buttons([{label:'ABRIR OPERAÇÃO',click:()=>{this.detailTab='profile';this.resetScroll();}},{label:'ABRIR ESTOQUE',click:()=>{this.detailTab='stock';this.resetScroll();}},{label:'ABRIR HISTÓRICO',click:()=>{this.detailTab='history';this.resetScroll();}}]);
   }
+  favoriteDirectory(p){
+    const favorites=this.favorites||this.host?.favorites;if(!favorites){p.note('Lista de favoritos indisponível.');return;}
+    const people=Object.entries(favorites.people).map(([id,pref])=>({id:Number(id),pref,citizen:this.city.society.citizen(Number(id))})).filter(row=>row.citizen&&!row.citizen.entity.destroyed);
+    if(this.view()==='settings'){
+      p.heading('MARCADOR NO MAPA');p.note('O marcador acompanha a pessoa e fica visível acima da cabeça quando ela está na câmera.');
+      p.heading('RETENÇÃO DE ATIVIDADE');p.note('Aumenta o histórico guardado para cada favorito. Registros antigos já removidos não podem ser recuperados.');
+      const options=[[20000,'20.000 registros por pessoa (padrão)'],[50000,'50.000 registros por pessoa'],[100000,'100.000 registros por pessoa'],[250000,'250.000 registros por pessoa'],[0,'Sem limite']];
+      this.selectControl(p,'favoriteHistoryLimit',options,favorites.limit,value=>{favorites.limit=Number(value);favorites.persist(true);});return;
+    }
+    p.heading(`PESSOAS FAVORITAS / ${people.length}`);
+    const query=normalize(this.query.trim());
+    const candidates=this.city.citizens.filter(c=>!c.entity.destroyed&&this.matches(`${name(c.entity)} ${c.action} ${c.profession}`)).filter(c=>!favorites.has(c.id)).slice(0,12);
+    if(query){p.note('ADICIONAR PESSOA',C.muted);if(!candidates.length)p.note('Nenhuma pessoa disponível para essa busca.');for(const c of candidates)p.record(name(c.entity),`${c.profession||c.action||'Cidadão'} · ${this.city.society.age(c)} anos`,()=>favorites.togglePerson(c.id),false,{value:'＋',color:C.gold});}
+    if(!people.length){p.note('Use a busca acima para adicionar uma pessoa. Também é possível marcar alguém pela ficha do cidadão.');return;}
+    if(!people.some(person=>person.id===this.favoriteEditorId))this.favoriteEditorId=people[0].id;
+    p.heading('ACOMPANHAMENTO');
+    for(const {id,pref,citizen}of people){
+      const personName=name(citizen.entity),selected=this.favoriteEditorId===id,rowY=p.y;
+      p.record(personName,`${this.city.society.age(citizen)} anos · ${citizen.profession||citizen.action||'Rotina'}`,()=>{this.favoriteEditorId=id;this.resetScroll();},selected,{color:C.gold});
+      drawGlyph8x8(p.ui.ctx,pref.icon,p.x+p.w-21,rowY+8,pref.color,2);
+      p.buttons([{label:'SÍMBOLO E COR',selected,click:()=>{this.favoriteEditorId=id;this.resetScroll();}},{label:'HISTÓRICO',click:()=>this.openPanel({tab:'log',logCitizenId:id,logLimit:200})},{label:'REMOVER',click:()=>favorites.togglePerson(id)}]);
+    }
+    const active=people.find(person=>person.id===this.favoriteEditorId);if(!active)return;
+    const personName=name(active.citizen.entity);p.heading(`MARCADOR · ${personName.toLocaleUpperCase('pt-BR')}`);p.checkbox('Incluir as atividades no histórico de canto',active.pref.feed,value=>{active.pref.feed=value;favorites.persist();});
+    p.ui.text('COR DO MARCADOR',p.x,p.y+4,C.muted);const color=this.favoriteColorInput(active.id,active.pref);this.inputAt(color,p.x+112,p.y,42);p.space(25);
+    p.heading('ESCOLHA ENTRE OS 256 SÍMBOLOS DO JOGO');p.note('Clique em um glifo para usar acima da cabeça. O símbolo amarelo é o padrão.');
+    const cell=22,gap=3,columns=16,gridWidth=columns*(cell+gap)-gap,startX=p.x+Math.max(0,(p.w-gridWidth)/2),startY=p.y,ctx=p.ui.ctx;
+    for(let glyph=0;glyph<FAVORITE_GLYPH_COUNT;glyph++){
+      const col=glyph%columns,row=Math.floor(glyph/columns),x=startX+col*(cell+gap),y=startY+row*(cell+gap),selected=glyph===active.pref.icon;
+      if(y+cell>=p.top&&y<=p.bottom){bevel(ctx,x,y,cell,cell,{inset:selected,fill:selected?T.selected:T.paper});drawGlyph8x8(ctx,glyph,x+3,y+3,selected?active.pref.color:T.ink,2);p.ui.regions.push({x,y,w:cell,h:cell,label:`Símbolo ${glyph}${selected?' · selecionado':''}`,onClick:()=>{active.pref.icon=glyph;favorites.persist();}});}
+    }
+    p.y=startY+Math.ceil(FAVORITE_GLYPH_COUNT/columns)*(cell+gap)+3;
+  }
+  favoriteColorInput(id,pref){
+    const favorites=this.favorites||this.host?.favorites;this.favoriteColorInputs??={};let input=this.favoriteColorInputs[id];if(!input){input=document.createElement('input');input.type='color';input.setAttribute('aria-label',`Cor do marcador de ${name(this.city.society.citizen(id)?.entity)}`);input.addEventListener('pointerdown',()=>this.host?.manager.raise(this.windowId));this.element.append(input);this.favoriteColorInputs[id]=input;}input.oninput=()=>{pref.color=input.value;favorites.persist();};input.value=pref.color;return input;
+  }
+  customHistory(p){
+    const favorites=this.favorites||this.host?.favorites;if(!favorites){p.note('Histórico personalizado indisponível.');return;}
+    if(this.view()==='settings'){
+      p.heading('FONTES DO HISTÓRICO');p.note('Escolha quais acontecimentos aparecem nesta janela.');
+      p.checkbox('Acontecimentos importantes do governo',favorites.government,value=>{favorites.government=value;favorites.persist();});
+      for(const [id,label]of Object.entries(GOVERNMENT_TOPICS)){
+        p.checkbox(label,favorites.topics.includes(id),value=>{favorites.topics=value?[...new Set([...favorites.topics,id])]:favorites.topics.filter(topic=>topic!==id);favorites.persist();});
+      }
+      p.heading('PESSOAS');const people=Object.entries(favorites.people);if(!people.length)p.note('Adicione pessoas em Pessoas favoritas para receber as atividades delas.');
+      for(const [id,pref]of people){const citizen=this.city.society.citizen(Number(id));p.checkbox(`${name(citizen?.entity)} · incluir atividades`,pref.feed,value=>{pref.feed=value;favorites.persist();});}
+      return;
+    }
+    const events=favorites.events();p.heading(`ACONTECIMENTOS / ${events.length}`);
+    if(!events.length){p.note('Nenhum acontecimento nos filtros escolhidos.');return;}
+    const limit=this.tab==='custom-history'?Math.min(events.length,250):events.length;
+    p.rows(events.slice(0,limit),event=>p.record(event.message,`${stamp(event.minute)} · ${EVENT_CATEGORIES[event.category]||event.kind}`,()=>this.openEvent(event.id),false,{value:event.amount!==undefined?money(event.amount):'',color:C.cyan}));
+  }
   content(p) {
     if(this.tab==='newgame')return this.worldGeneration(p);
+    if(this.tab==='favorites')return this.favoriteDirectory(p);
+    if(this.tab==='custom-history')return this.customHistory(p);
     if(this.view()==='analysis'){if(this.tab==='market')return this.marketAnalytics(p);if(this.tab==='production')return this.productionAnalytics(p);if(this.tab==='economy')return this.companyAnalytics(p);}
     if(this.tab==='market')return renderMarket(this,p);
     if(this.tab==='economy')return renderEmployment(this,p);

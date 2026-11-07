@@ -1,5 +1,6 @@
 import {formatMoney} from './city_ui_format.js';
 import {ROAD_TILES,tileAt} from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {reducedCadence} from './city_fast_forward.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const live=c=>c&&!c.entity.destroyed;
 const essential=new Set(['council-session','vote','care','caregiving','food','provisions','workmeal','water','health','energy','toilet','construction','campaign','research','interview']);
@@ -278,7 +279,7 @@ export class CityResearch {
       if(this.electionPriority(s.instituteId)){for(const session of s.sessions.filter(r=>r.status==='active'))this.releaseAgent(s,session,'Pausa para concluir pesquisa eleitoral antes da votação');s.reason='Contrato preservado; equipe priorizando pesquisa eleitoral';continue;}
       if(!s.sites.length){s.status='cancelled';s.reason='Pesquisa cancelada: não há pontos acessíveis para entrevistas.';continue;}
       for(const session of s.sessions.filter(r=>r.status==='active')){const c=city.society.citizen(session.agentId);if(!live(c)||c.task!=='research'||c.researchAssignment?.studyId!==s.id||city.minute>=session.until)this.releaseAgent(s,session,'Agente indisponível ou turno encerrado');}
-      if(city.minute%10===0)this.dispatchService(s);
+      const serviceDispatchDue=reducedCadence(city,this,`service-dispatch:${s.id}`,20,30,s.status);if(city.fastForward?serviceDispatchDue:city.minute%10===0)this.dispatchService(s);
     }
     for(const s of this.studies.filter(s=>s.mode!=='service'&&['funding','collecting'].includes(s.status)).sort((a,b)=>Number(!!b.commission)-Number(!!a.commission))){
       const b=city.building(s.instituteId);
@@ -289,7 +290,7 @@ export class CityResearch {
       if(s.responses.length>=s.target||s.responses.length>=s.minimum&&(s.commission||!e.polls.length&&city.minute-s.requestedAt>=60||s.deadline-city.minute<=180)){this.publish(s,e);continue;}
       for(const session of s.sessions.filter(r=>r.status==='active')){const c=city.society.citizen(session.agentId);if(!live(c)||c.task!=='research'||c.researchAssignment?.studyId!==s.id||city.minute>=session.until)this.releaseAgent(s,session,'Agente indisponível ou turno encerrado');}
       if((s.status==='funding'||s.funded<s.budget)&&city.minute-(s.lastFundingAt??-Infinity)>=60)this.fund(s);
-      if(s.status==='collecting'&&city.minute%10===0)this.dispatch(s);
+      const electionDispatchDue=reducedCadence(city,this,`election-dispatch:${s.id}`,20,30,s.status);if(s.status==='collecting'&&(city.fastForward?electionDispatchDue:city.minute%10===0))this.dispatch(s);
     }
     if(city.minute%60===0)this.reviewCases();
   }

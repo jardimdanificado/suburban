@@ -1,4 +1,4 @@
-import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview} from './city_fast_forward.js';
+import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js';
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {beginActivitySearch,endActivitySearch,invalidateActivitySearch} from './city_activity_search.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
@@ -27,7 +27,7 @@ import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
 import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=colonial-colored-trim-1';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
-import { CityNature } from './city_nature.js?v=tropicalia-flora-3';
+import { CityNature } from './city_nature.js?v=ff-growth-events-1';
 import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-number-random-1';
 import { CityReputation } from './city_reputation.js';
@@ -783,7 +783,7 @@ export class CitySimulation {
       if(['health','leisure','social'].includes(task)&&civicSpec(b)&&!civicStatus(this,b,c)?.ready)continue;
       const path = this.findPath(c.entity, b.door);
       if (path !== null) {
-        c.path = path; c.targetId = b.id; c.task = task; if(['food','water','health','leisure','social'].includes(task)){c.routineServices??={};c.routineServices[task]={buildingId:b.id,reviewAt:this.minute+360+c.id%60};} if (task === 'food') this.workMeals.issueVoucher(c, b); return;
+        c.path = path; c.targetId = b.id; c.task = task; if(['food','water','health','leisure','social'].includes(task)){c.routineServices??={};c.routineServices[task]={buildingId:b.id,reviewAt:this.minute+(this.fastForward?480+c.id%241:360+c.id%60)};} if (task === 'food') this.workMeals.issueVoucher(c, b); return;
       }
     }
     c.task = task==='energy'&&!home?'energy':null; c.targetId = null; c.action = task==='energy'&&!home?'Dormindo na rua':task === 'food' ? 'Alimentos indisponíveis nas lojas locais' : home ? 'Sem acesso ao serviço' : 'Sem moradia';
@@ -1060,10 +1060,12 @@ export class CitySimulation {
     this._pathSearchProfile=this.profileDiagnostics?{minute:this.minute,searches:0,totalMs:0,maxMs:0,start:null,goal:null}:null;
     this.minute++;
     beginFastForwardMinute(this);
+    if(this.fastForward)this.nature.updateGrowthMinute();
     this.indexFamilies();
     this.reconcile();
     const reconcileRevision = `${this.structureRevision}:${this.world.revision}:${this.development.projects.length}`;
-    if (this.reconciledRevision !== reconcileRevision || this.minute % 5 === 0) {
+    const reducedReconciliationDue=reducedCadence(this,this,'structure-reconciliation',15,30,reconcileRevision),reconciliationDue=this.fastForward?reducedReconciliationDue:this.minute%5===0;
+    if (this.reconciledRevision !== reconcileRevision || reconciliationDue) {
       this.development.reconcile(); this.lighting.reconcile();
       this.housing.reconcile(); this.sanitation.reconcile();
       this.reconciledRevision = reconcileRevision;

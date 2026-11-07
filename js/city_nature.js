@@ -1,6 +1,7 @@
 import { inventoryFree } from './city_inventory.js';
 import { tileAt, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { TILE_WATER } from './world_gen.js?v=beach-band-2-3-waterfix-1';
+import {reducedCadence} from './city_fast_forward.js';
 export const PLANT_SPECIES = {
   coconut_palm: { label: 'Coqueiro', color: 0x548d38, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
   royal_palm: { label: 'Palmeira-real', color: 0x6a9b46, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
@@ -72,7 +73,17 @@ export const PLANT_SPECIES = {
 export const NATURE_RULES = { maxPlants: 1000, maxSeeds: 240, germinationMinutes: 360, seedAttemptsPerHour: 12 };
 /** Bounded vegetation population. Seeds are records until germination, not extra entities. */
 export class CityNature {
-  constructor(city) { this.city = city; this.plants = new Map(); this.tiles = new Map(); this.seeds = []; this.germinated = 0; this.harvested = 0; this.lost = 0; }
+  constructor(city) { this.city = city; this.plants = new Map(); this.tiles = new Map(); this.seeds = []; this.growthEvents=new Map();this.growthEventsInitialized=false;this.germinated = 0; this.harvested = 0; this.lost = 0; }
+  scheduleGrowth(plant){
+    const grow=PLANT_SPECIES[plant.species]?.grow;if(!grow)return;
+    const dueAt=plant.stage==='seedling'?plant.plantedAt+Math.ceil(grow/2):plant.stage==='young'?plant.plantedAt+grow:Infinity;
+    if(!Number.isFinite(dueAt))return;const minute=Math.max(this.city.minute,dueAt),ids=this.growthEvents.get(minute)||[];ids.push(plant.id);this.growthEvents.set(minute,ids);
+  }
+  updateGrowthMinute(){
+    if(!this.growthEventsInitialized){this.growthEvents=new Map();for(const plant of this.plants.values())this.scheduleGrowth(plant);this.growthEventsInitialized=true;}
+    const due=this.growthEvents.get(this.city.minute);if(!due)return;this.growthEvents.delete(this.city.minute);
+    for(const id of due){const plant=this.plants.get(id);if(!plant||plant.entity.destroyed)continue;const spec=this.normalizePlantSpecies(plant),stage=(this.city.minute-plant.plantedAt)/spec.grow>=1?'mature':'young';if(stage===plant.stage)continue;plant.stage=stage;plant.entity.properties.render.size=stage==='mature'?(spec.renderSize||1):.65;this.city.structureRevision++;if(stage==='mature')this.city.log(`${spec.label} chegou à maturidade.`,'nature',[],{kind:'plant-mature',plantId:plant.id,buildingId:plant.buildingId});this.scheduleGrowth(plant);}
+  }
   available(x, y, species, buildingId = null, ignorePlantId = null) {
     const city = this.city, key = `${x},${y}`, spec = PLANT_SPECIES[species];
     if (!spec || !spec.terrain.includes(tileAt(city.world,x,y)) || ROAD_TILES.has(tileAt(city.world,x,y)) || city.world.hasSidewalk?.(x,y) || city.cardboardShelters?.has(key) || city.occupied.has(key) || this.tiles.has(key) && this.tiles.get(key) !== ignorePlantId) return false;
@@ -88,7 +99,7 @@ export class CityNature {
     const entity = city.createEntity({x,y,properties:{name:spec.label,species,tree:spec.tree??(spec.wood>0),render:{color:spec.color,size:mature?(spec.renderSize||1):.3,skin:'feature_tree_full.png'}}});
     const plant = { id:entity.id,entity,species,x,y,buildingId,form:spec.form||(spec.tree||spec.wood>0?'tree':'flowering'),scientific:spec.scientific||'',visualScale:0.76+scaleSeed*0.52,plantedAt:city.minute-(mature?spec.grow:0),stage:mature?'mature':'seedling' };
     entity.properties.cityPlant = plant;
-    this.plants.set(plant.id,plant); this.tiles.set(`${x},${y}`,plant.id); city.structureRevision++;
+    this.plants.set(plant.id,plant); this.tiles.set(`${x},${y}`,plant.id);this.scheduleGrowth(plant); city.structureRevision++;
     return plant;
   }
   normalizePlantSpecies(plant) {
@@ -153,18 +164,14 @@ export class CityNature {
   }
   hourly() {
     const city=this.city;
+    const reconcilePlants=reducedCadence(city,this,'plant-reconciliation',360,360,`${city.world.revision}:${city.buildings.length}:${this.plants.size}`);
     this.seedNewFloraForExistingCities();
-    for(const plant of this.plants.values())this.normalizePlantSpecies(plant);
+    if(reconcilePlants)for(const plant of this.plants.values())this.normalizePlantSpecies(plant);
     for(const c of city.citizens){const job=c.forestryJob;if(!job)continue;const b=city.building(job.buildingId);if(c.entity.destroyed||!b||city.politics.officeHolder(c)||c.jobId!==b.id&&b.ownerId!==c.id){if(job.load){city.economy.lost.madeira+=job.load;city.log('Madeira em transporte perdida após interrupção da atividade florestal.','nature',[c.id],{kind:'forestry-cargo-lost',quantity:job.load,buildingId:job.buildingId});}c.forestryJob=null;}}
-    for(const plant of [...this.plants.values()]) {
+    if(reconcilePlants)for(const plant of [...this.plants.values()]) {
       if(plant.buildingId && !city.building(plant.buildingId))plant.buildingId=null;
       if(plant.entity.destroyed || !this.validExisting(plant)) {this.remove(plant,'vegetação removida por ocupação ou alteração do terreno');this.lost++;continue;}
-      const progress=(city.minute-plant.plantedAt)/PLANT_SPECIES[plant.species].grow;
-      const stage=progress>=1?'mature':progress>=.5?'young':'seedling';
-      if(stage!==plant.stage) {
-        plant.stage=stage;plant.entity.properties.render.size=stage==='mature'?(PLANT_SPECIES[plant.species].renderSize||1):stage==='young'?.65:.3;city.structureRevision++;
-        if(stage==='mature')city.log(`${PLANT_SPECIES[plant.species].label} chegou à maturidade.`,'nature',[],{kind:'plant-mature',plantId:plant.id,buildingId:plant.buildingId});
-      }
+      if(!city.fastForward){const progress=(city.minute-plant.plantedAt)/PLANT_SPECIES[plant.species].grow,stage=progress>=1?'mature':progress>=.5?'young':'seedling';if(stage!==plant.stage){plant.stage=stage;plant.entity.properties.render.size=stage==='mature'?(PLANT_SPECIES[plant.species].renderSize||1):stage==='young'?.65:.3;city.structureRevision++;if(stage==='mature')city.log(`${PLANT_SPECIES[plant.species].label} chegou à maturidade.`,'nature',[],{kind:'plant-mature',plantId:plant.id,buildingId:plant.buildingId});}}
     }
     let budget=NATURE_RULES.seedAttemptsPerHour;
     for(const seed of [...this.seeds]) {

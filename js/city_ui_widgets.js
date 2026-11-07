@@ -66,6 +66,13 @@ export class UIPage {
     }this.y+=h;
   }
   button(label,click,selected=false){const h=this.touch()?27:20,gap=this.touch()?5:3;if(this.visible(h))this.ui.button(this.x,this.y,this.w,h,fit(this.ui,label,this.w-12),click,{selected});this.y+=h+gap;}
+  checkbox(label,checked,change){
+    const h=19;if(this.visible(h)){
+      const size=14,x=this.x,y=this.y+1,ctx=this.ui.ctx;bevel(ctx,x,y,size,size,{inset:checked,fill:T.paper});
+      if(checked){ctx.save();ctx.strokeStyle=T.green;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+3,y+7);ctx.lineTo(x+6,y+10);ctx.lineTo(x+12,y+3);ctx.stroke();ctx.restore();}
+      this.ui.text(fit(this.ui,label,this.w-size-9),x+size+7,this.y+2,T.ink);this.ui.regions.push({x:this.x,y:this.y,w:this.w,h,label,onClick:()=>change(!checked)});
+    }this.y+=h+2;
+  }
   buttons(items){const h=this.touch()?27:20,gap=this.touch()?5:3,row=h+gap;let dx=0;for(const item of items){const w=Math.min(this.w,Math.ceil(widthOf(this.ui,item.label))+14);if(dx&&dx+w>this.w){dx=0;this.y+=row;}if(this.visible(h))this.ui.button(this.x+dx,this.y,w,h,fit(this.ui,item.label,w-10),item.click,{selected:item.selected});dx+=w+3;}this.y+=row;}
   // Related views stay visible as compact tabs inside their current window.
   links(items){

@@ -1,14 +1,14 @@
 import {speedLabel} from './simulation_time.js';
 import {CityGlobalSearch} from './city_global_search.js?v=organic-party-slogans-1';
-import {desktopMenus} from './city_desktop_menus.js?v=freecam-tools-2';
-import {CityUI,money} from './city_ui.js?v=room-floors-1-canvas-readback-1';
+import {desktopMenus} from './city_desktop_menus.js?v=integrated-favorites-windows-1';
+import {CityUI,money} from './city_ui.js?v=favorite-glyph-sprites-3';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
-import {tycoonIcon} from './tycoon_icons.js';
+import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
-export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['map','Mapa da cidade']];
-const sizes={market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],newgame:[400,470]};
+export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Pessoas favoritas'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
+const sizes={market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop with tabbed modules and optional detached views. */
@@ -225,7 +225,9 @@ export class CityDesktop {
     ui.regions.push({...r,onClick:()=>this.manager.raise(w.id)});
     bevel(ctx,w.x+1,w.y+1,w.w-2,20,{fill:active?T.header:T.inactiveHeader});
     if(w.state.sectionWindow)w.title=w.state.sectionTitle();
-    const title=w.title;ctx.save();ctx.beginPath();ctx.rect(w.x+5,w.y+3,w.w-92,16);ctx.clip();ctx.font=ui.font(1,true);ctx.textBaseline='middle';ctx.textAlign='center';ctx.fillStyle=T.captionInk;ctx.fillText(title,w.x+5+(w.w-92)/2,w.y+11);ctx.restore();
+    const title=w.title,titleIcon=w.kind==='module'&&['favorites','custom-history'].includes(w.state.tab),titleX=w.x+(titleIcon?23:5),titleW=w.w-(titleIcon?110:92);
+    if(titleIcon)tycoonIcon(ctx,w.state.tab,w.x+5,w.y+3,1);
+    ctx.save();ctx.beginPath();ctx.rect(titleX,w.y+3,titleW,16);ctx.clip();ctx.font=ui.font(1,true);ctx.textBaseline='middle';ctx.textAlign='center';ctx.fillStyle=T.captionInk;ctx.fillText(title,titleX+titleW/2,w.y+11);ctx.restore();
     ui.regions.push({x:w.x+4,y:w.y+2,w:w.w-88,h:18,onClick:()=>this.manager.raise(w.id),label:`Mover: ${title}`});
     ui.button(w.x+w.w-83,w.y+2,20,18,w.pinned?'●':'○',()=>this.manager.pin(w.id),{selected:w.pinned});ui.regions.at(-1).label=`Fixar: ${title}`;
     ui.button(w.x+w.w-62,w.y+2,20,18,w.shaded?'▣':'−',()=>this.manager.shade(w.id));ui.regions.at(-1).label=`Recolher: ${title}`;

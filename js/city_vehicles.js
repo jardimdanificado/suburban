@@ -3,6 +3,7 @@ import {COLOR_PALETTE,colorAffinity,dislikesColor} from './city_colors.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {fictionalForeignBrand} from './city_external_trade.js';
 import {inventoryFree} from './city_inventory.js';
+import {reducedCadence} from './city_fast_forward.js';
 import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 export const VEHICLE_SPECS=Object.freeze({
@@ -279,7 +280,7 @@ export class CityVehicles {
     const city=this.city,hour=Math.floor(city.minute/60);if(this.lastHour===hour)return;this.lastHour=hour;this.initializeStarterStock();
     const parking=this.parkingReport();if(parking.missing>0&&this.lastParkingPlanDay!==city.day&&!city.development.projects.some(p=>p.type==='bike_rack'&&!p.cancelled&&p.status!=='completed')){this.lastParkingPlanDay=city.day;if(city.welfare.conditions().foodDays>=1){city.politics.fundInitialWorksBudget();city.politics.startPublicWork('bike_rack');}}
     const units=[...this.units.values()],unsold=units.filter(v=>!v.active&&!v.scrapped&&city.buildings.some(b=>['cycle_shop','cycle_assembler'].includes(b.type)&&b.active&&b.accountId===v.holderAccountId&&b.inventory[v.good]>0)),ownedBy=account=>units.filter(v=>v.active&&!v.scrapped&&v.ownerAccountId===account),owners=new Set(units.filter(v=>v.active&&!v.scrapped).map(v=>v.ownerAccountId));
-    for(const company of [...city.economy.businesses,...city.buildings.filter(b=>['iml','crematorium'].includes(b.type)&&b.active&&!b.entity.destroyed)].filter(b=>b.active&&!b.entity.destroyed).sort((a,b)=>Number(['iml','crematorium'].includes(b.type))-Number(['iml','crematorium'].includes(a.type))||b.workers.length-a.workers.length||a.id-b.id)){
+    if(reducedCadence(city,this,'company-fleet-purchases',180,360,`${city.buildings.length}:${city.economy.businesses.length}`))for(const company of [...city.economy.businesses,...city.buildings.filter(b=>['iml','crematorium'].includes(b.type)&&b.active&&!b.entity.destroyed)].filter(b=>b.active&&!b.entity.destroyed).sort((a,b)=>Number(['iml','crematorium'].includes(b.type))-Number(['iml','crematorium'].includes(a.type))||b.workers.length-a.workers.length||a.id-b.id)){
       const target=Math.max(1,Math.ceil(Math.max(1,company.workers.length)/4));let fleet=ownedBy(company.accountId).filter(v=>['bicicleta_carga','carrinho'].includes(v.good)&&v.condition>15).length;
       while(fleet<target){const funeralOperator=['iml','crematorium'].includes(company.type),v=unsold.find(v=>!v.active&&v.good==='bicicleta_carga'&&(funeralOperator||!v.funeralFleetReserve));let acquired=false;
         if(v){const dealer=city.building(v.holderAccountId);
@@ -296,6 +297,7 @@ export class CityVehicles {
         while(rentals<targetRental){const v=unsold.find(v=>!v.active&&v.good==='bicicleta');if(!v||!this.financeVehicle(company,v)||!this.buyVehicle(company.accountId,v.id))break;rentals++;}
       }
     }
+    if(!reducedCadence(city,this,'personal-vehicle-purchases',180,360,`${city.buildings.length}:${city.citizens.length}`))return;
     const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&!owners.has(c.accountId)&&c.mobilityNeed>=12).sort((a,b)=>(b.mobilityNeed*(b.mobilityPriority||1)-a.mobilityNeed*(a.mobilityPriority||1))||b.balance-a.balance||a.id-b.id).slice(0,6);
     for(const c of buyers){
       const offered=unsold.filter(v=>!v.active&&!['bicicleta_carga','carrinho'].includes(v.good)&&!dislikesColor(c,v.color)&&this.vehiclePrice(v)+city.currency.price(2500)<c.balance).sort((a,b)=>Number(b.good===['bicicleta','patins','skate','patinete'][c.id%4])-Number(a.good===['bicicleta','patins','skate','patinete'][c.id%4])||this.vehiclePrice(a)*(1-.3*colorAffinity(c,a.color))-this.vehiclePrice(b)*(1-.3*colorAffinity(c,b.color)));
@@ -310,7 +312,8 @@ export class CityVehicles {
   tryTrip(c){
     if(c.mobilityWalkGoal){const last=c.path.at(-1);if(last&&Math.floor(last.x)===Math.floor(c.mobilityWalkGoal.x)&&Math.floor(last.y)===Math.floor(c.mobilityWalkGoal.y))return;c.mobilityWalkGoal=null;}
     if(c.funeralBodyId||c.policeRestitution?.kind==='vehicle')return;
-    if(!this.activeCount||c.skybridgeTransit||c.skybridgeZ||c.mobilityTrip||c.ridingVehicleId||c.path.length<3||!this.city.society.isAdult(c)||c.conversation||c.workMeal||this.city.minute-(c.lastVehicleSearchAt??-Infinity)<20)return;
+    const vehicleSearchInterval=this.city.fastForward?40+(c.id%21):20;
+    if(!this.activeCount||c.skybridgeTransit||c.skybridgeZ||c.mobilityTrip||c.ridingVehicleId||c.path.length<3||!this.city.society.isAdult(c)||c.conversation||c.workMeal||this.city.minute-(c.lastVehicleSearchAt??-Infinity)<vehicleSearchInterval)return;
     c.lastVehicleSearchAt=this.city.minute;const city=this.city,goal=c.path.at(-1);
     if(!c.path.some(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))))return;
     const owners=new Set([c.accountId,city.building(c.jobId)?.accountId,...c.businessIds.map(id=>city.building(id)?.accountId)]),load=c.deliveryId?city.logistics.shipments.find(s=>s.id===c.deliveryId):null;

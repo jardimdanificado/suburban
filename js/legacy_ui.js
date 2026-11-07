@@ -464,6 +464,13 @@ function getGlyphAtlas(color) {
   return atlas;
 }
 
+/** Draw one bitmap-font glyph by its in-game 0–255 index. */
+export function drawGlyph8x8(targetCtx, index, x, y, color = '#ffffff', scale = 1) {
+  const glyph = Math.max(0, Math.min(255, Math.floor(Number(index) || 0)));
+  const atlas = getGlyphAtlas(color);
+  targetCtx.drawImage(atlas, (glyph % 16) * 8, Math.floor(glyph / 16) * 8, 8, 8, x, y, 8 * scale, 8 * scale);
+}
+
 /**
  * Draws crisp text using high-performance GPU-accelerated glyph atlas.
  */
