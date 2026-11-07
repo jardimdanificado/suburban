@@ -172,7 +172,7 @@ function layoutEmblems(city,party,layout,palette){
  const used=new Set(),detailModes=new Map(),repeatSkins=new Map();return Object.freeze(layout.slots.map((slot,index)=>{
   let skin;if(slot.repeatGroup&&repeatSkins.has(slot.repeatGroup))skin=repeatSkins.get(slot.repeatGroup);else{skin=weightedSprite(city,party,used);used.add(skin);if(slot.repeatGroup)repeatSkins.set(slot.repeatGroup,skin);}const area=layout.iconArea;
   const color=palette[3]||palette[1],shade=color,detailGroup=slot.detailGroup??index;if(!detailModes.has(detailGroup))detailModes.set(detailGroup,city.random()<.8?'detailed':'flat');
-  return Object.freeze({skin,x:area.x+slot.x*area.w,y:area.y+slot.y*area.h,w:slot.w*area.w,h:slot.h*area.h,...(slot.crop?{crop:Object.freeze({...slot.crop})}:{}),...(slot.clip?{clip:Object.freeze({x:area.x+slot.clip.x*area.w,y:area.y+slot.clip.y*area.h,w:slot.clip.w*area.w,h:slot.clip.h*area.h})}:{}),color,shade,detailMode:detailModes.get(detailGroup),backgroundMode:city.random()<.07?'tile':'transparent'});
+  return Object.freeze({skin,x:area.x+slot.x*area.w,y:area.y+slot.y*area.h,w:slot.w*area.w,h:slot.h*area.h,...(slot.crop?{crop:Object.freeze({...slot.crop})}:{}),...(slot.clip?{clip:Object.freeze({x:area.x+slot.clip.x*area.w,y:area.y+slot.clip.y*area.h,w:slot.clip.w*area.w,h:slot.clip.h*area.h})}:{}),color,shade,detailMode:detailModes.get(detailGroup),backgroundMode:'transparent'});
  }));
 }
 function flagPalette(city,hue,background,foreground){
@@ -279,7 +279,7 @@ export function makeMergedPartyFlag(city,index,party,sourceFlag,destinationFlag)
  while(chosen.length<targetCount){const skin=weightedSprite(city,party,used);if(!skin)break;used.add(skin);chosen.push({skin});}
  const count=chosen.length||1,arrangements=ICON_LAYOUTS[count]||ICON_LAYOUTS[1],arrangement=arrangements[Math.floor(city.random()*arrangements.length)],layout=PARTY_FLAG_LAYOUTS.find(item=>item.id===`${count}-${arrangement.name}-${textLayout.id}`),detailModes=new Map(),emblems=Object.freeze(layout.slots.map((slot,slotIndex)=>{
   const source=chosen[slotIndex],detailGroup=slot.detailGroup??slotIndex;if(!detailModes.has(detailGroup))detailModes.set(detailGroup,source.detailMode||(city.random()<.8?'detailed':'flat'));
-  return Object.freeze({skin:source.skin,x:layout.iconArea.x+slot.x*layout.iconArea.w,y:layout.iconArea.y+slot.y*layout.iconArea.h,w:slot.w*layout.iconArea.w,h:slot.h*layout.iconArea.h,...(source.crop?{crop:Object.freeze({...source.crop})}:{}),...(slot.clip?{clip:Object.freeze({x:layout.iconArea.x+slot.clip.x*layout.iconArea.w,y:layout.iconArea.y+slot.clip.y*layout.iconArea.h,w:slot.clip.w*layout.iconArea.w,h:slot.clip.h*layout.iconArea.h})}:{}),color:iconColor,shade:iconColor,detailMode:detailModes.get(detailGroup),backgroundMode:source.backgroundMode||'transparent'});
+  return Object.freeze({skin:source.skin,x:layout.iconArea.x+slot.x*layout.iconArea.w,y:layout.iconArea.y+slot.y*layout.iconArea.h,w:slot.w*layout.iconArea.w,h:slot.h*layout.iconArea.h,...(source.crop?{crop:Object.freeze({...source.crop})}:{}),...(slot.clip?{clip:Object.freeze({x:layout.iconArea.x+slot.clip.x*layout.iconArea.w,y:layout.iconArea.y+slot.clip.y*layout.iconArea.h,w:slot.clip.w*layout.iconArea.w,h:slot.clip.h*layout.iconArea.h})}:{}),color:iconColor,shade:iconColor,detailMode:detailModes.get(detailGroup),backgroundMode:'transparent'});
  })),texts=buildTexts(city,party,layout.textBoxes,colors);
  return Object.freeze({foreground,background,colors,paletteVersion:3,detailVersion:1,pattern:0,backgroundStyle,layoutId:layout.id,layoutName:arrangement.name,textLayout:layout.textLayout,colorSource:palette.colorSource==='merged'?'merged':'merged-palette-generator',mergedFrom:[sourceFlag?.partyId??null,destinationFlag?.partyId??null].filter(id=>id!=null),emblems,texts,politicalPosition:party?.ideology?politicalPosition(ideologicalProfile(party).economy):null});
 }
@@ -297,9 +297,9 @@ function requestImage(filename,onReady){
  if(!image){const asset=ASSET_DATA.find(row=>row.filename===filename);if(!asset)return null;image=new Image();imageCache.set(filename,image);image.onload=()=>{for(const callback of pendingImages.get(filename)||[])callback();pendingImages.delete(filename);};image.src=`data:image/png;base64,${asset.base64}`;}
  if(onReady){let callbacks=pendingImages.get(filename);if(!callbacks)pendingImages.set(filename,callbacks=new Set());callbacks.add(onReady);}return null;
 }
-function tintedSprite(filename,foreground,shade,background,transparent,onReady){
- const raw=requestImage(filename,onReady);if(!raw)return null;const key=`${filename}:${foreground}:${shade}:${background}:${transparent?'cutout':'tile'}`;if(tintedCache.has(key))return tintedCache.get(key);
- const canvas=document.createElement('canvas');canvas.width=raw.naturalWidth;canvas.height=raw.naturalHeight;const context=canvas.getContext('2d');context.drawImage(raw,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height),data=pixels.data,fg=foreground.match(/\w\w/g).map(v=>parseInt(v,16)),sh=shade.match(/\w\w/g).map(v=>parseInt(v,16)),bg=background.match(/\w\w/g).map(v=>parseInt(v,16));
+function tintedSprite(filename,foreground,background,transparent,detailed,onReady){
+ const raw=requestImage(filename,onReady);if(!raw)return null;const key=`${filename}:${foreground}:${detailed}:${background}:${transparent?'cutout':'tile'}`;if(tintedCache.has(key))return tintedCache.get(key);
+ const canvas=document.createElement('canvas');canvas.width=raw.naturalWidth;canvas.height=raw.naturalHeight;const context=canvas.getContext('2d');context.drawImage(raw,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height),data=pixels.data,fg=foreground.match(/\w\w/g).map(v=>parseInt(v,16)),bg=background.match(/\w\w/g).map(v=>parseInt(v,16));
  if(transparent){
   const width=canvas.width,height=canvas.height,counts=new Map();
   for(let x=0;x<width;x++)for(const y of [0,height-1]){const i=(y*width+x)*4;if(data[i+3]){const key=[data[i]>>3,data[i+1]>>3,data[i+2]>>3].join(',');counts.set(key,(counts.get(key)||0)+1);}}
@@ -318,20 +318,24 @@ function tintedSprite(filename,foreground,shade,background,transparent,onReady){
    if(removed>width*height*.94){tintedCache.set(key,null);return null;}
   }
  }
- for(let i=0;i<data.length;i+=4){if(!data[i+3])continue;const color=data[i]+data[i+1]+data[i+2]>380?fg:(transparent?sh:bg);data[i]=color[0];data[i+1]=color[1];data[i+2]=color[2];}
+ // Internal dark marks are holes in detailed cutouts, including enclosed eyes
+ // and mouths. Alpha reveals the actual pattern beneath, not a palette color.
+ for(let i=0;i<data.length;i+=4){if(!data[i+3])continue;const light=data[i]+data[i+1]+data[i+2]>380;if(!light&&transparent&&detailed){data[i+3]=0;continue;}const color=light||transparent?fg:bg;data[i]=color[0];data[i+1]=color[1];data[i+2]=color[2];}
  context.putImageData(pixels,0,0);tintedCache.set(key,canvas);return canvas;
 }
 function drawText(ctx,text,flag,x,y,w,h){
  const rotation=text.rotation||0,axisLength=rotation? h:w,boxHeight=rotation?w:h,centerX=x+w/2,centerY=y+h/2;ctx.save();ctx.translate(centerX,centerY);if(rotation)ctx.rotate(rotation);ctx.textAlign='center';ctx.textBaseline='middle';ctx.imageSmoothingEnabled=false;
  let size=Math.max(5,boxHeight*.74);ctx.font=`bold ${size}px monospace`;while(ctx.measureText(text.value).width>axisLength*.96&&size>4){size--;ctx.font=`bold ${size}px monospace`;}
- ctx.fillStyle=text.color||flag.colors?.[2]||flag.foreground;drawPixelText(ctx,text.value,0,0,axisLength*.96);ctx.restore();
-}
-function internalDetailColor(primary,flag){
- const background=flag.background,candidates=[flag.colors?.[2],flag.foreground,flag.colors?.[1],'#f5e9bf','#17244b'].filter((color,index,all)=>color&&color!==primary&&all.indexOf(color)===index);
- let best=null,score=-1;
- for(const color of candidates){const detailContrast=flagContrast(primary,color),fieldContrast=flagContrast(background,color);if(detailContrast<1.7||fieldContrast<1.7)continue;const value=detailContrast+Math.min(fieldContrast,5)*.3;if(value>score){best=color;score=value;}}
- if(best)return best;
- return flagContrast(primary,'#ffffff')+flagContrast(background,'#ffffff')>=flagContrast(primary,'#111111')+flagContrast(background,'#111111')?'#ffffff':'#111111';
+ ctx.fillStyle=text.color||flag.colors?.[2]||flag.foreground;
+ // Read the existing field, including stripes and emblems, without painting a text panel.
+ const transform=ctx.getTransform(),extent= Math.ceil(size*1.8+6),corners=[[-axisLength/2,-extent/2],[axisLength/2,-extent/2],[-axisLength/2,extent/2],[axisLength/2,extent/2]].map(([px,py])=>transform.transformPoint({x:px,y:py})),left=Math.max(0,Math.floor(Math.min(...corners.map(p=>p.x)))),top=Math.max(0,Math.floor(Math.min(...corners.map(p=>p.y)))),right=Math.min(ctx.canvas.width,Math.ceil(Math.max(...corners.map(p=>p.x)))),bottom=Math.min(ctx.canvas.height,Math.ceil(Math.max(...corners.map(p=>p.y))));
+ const field=right>left&&bottom>top?ctx.getImageData(left,top,right-left,bottom-top):null,candidates=[ctx.fillStyle,...(flag.colors||[]),flag.foreground,'#ffffff','#111111'].filter((color,index,all)=>/^#[a-f\d]{6}$/i.test(color)&&all.indexOf(color)===index),cache=new Map();
+ drawPixelText(ctx,text.value,0,0,axisLength*.96,(px,py)=>{
+  const point=transform.transformPoint({x:px,y:py}),sx=Math.floor(point.x)-left,sy=Math.floor(point.y)-top,index=(sy*(right-left)+sx)*4;
+  const rgb=field&&sx>=0&&sy>=0&&sx<right-left&&sy<bottom-top?Array.from(field.data.slice(index,index+3)):flag.background.match(/\w\w/g).map(v=>parseInt(v,16)),background='#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('');
+  if(!cache.has(background)){const preferred=candidates[0],ink=flagContrast(preferred,background)>=4.5?preferred:candidates.reduce((best,color)=>flagContrast(color,background)>flagContrast(best,background)?color:best,preferred);cache.set(background,ink.match(/\w\w/g).map(v=>parseInt(v,16)));}
+  return cache.get(background);
+ });ctx.restore();
 }
 function starPath(ctx,cx,cy,outer,inner,points=5){ctx.beginPath();for(let i=0;i<points*2;i++){const angle=-Math.PI/2+i*Math.PI/points,r=i%2?inner:outer,x=cx+Math.cos(angle)*r,y=cy+Math.sin(angle)*r;if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);}ctx.closePath();}
 function fillStripes(ctx,x,y,w,h,orientation,count,reverse=false){
@@ -456,20 +460,15 @@ export function drawPartyFlag(ctx,flag,x,y,w=60,h=38,onReady=null){
  for(const emblem of emblems){
   const contained=patternContainsRect(flag.backgroundStyle,{x:emblem.x,y:emblem.y,w:emblem.w,h:emblem.h},w/h);
   let knockout=contained&&flag.colors?.[1]&&flagContrast(flag.background,flag.colors[1])>=3;
-  const textInk=flag.colors?.[2],preferredInk=flag.colors?.[3]||flag.foreground,transparent=emblem.backgroundMode!=='tile',detailed=emblem.detailMode!=='flat';
-  let ink,shade,image;
-  if(knockout){ink=flag.background;shade=detailed?flag.colors[1]:ink;image=tintedSprite(emblem.skin,ink,shade,flag.background,true,onReady);if(!image)knockout=false;}
-  if(!knockout){ink=emblem.color===textInk?(preferredInk!==textInk?preferredInk:flag.colors?.[1]||flag.foreground):(emblem.color||preferredInk);shade=detailed?internalDetailColor(ink,flag):ink;image=tintedSprite(emblem.skin,ink,shade,flag.background,transparent,onReady)||tintedSprite(emblem.skin,ink,shade,flag.background,false,onReady);}
+  const textInk=flag.colors?.[2],preferredInk=flag.colors?.[3]||flag.foreground,detailed=emblem.detailMode!=='flat';
+  let ink,image;
+  if(knockout){ink=flag.background;image=tintedSprite(emblem.skin,ink,flag.background,true,detailed,onReady);if(!image)knockout=false;}
+  if(!knockout){ink=emblem.color===textInk?(preferredInk!==textInk?preferredInk:flag.colors?.[1]||flag.foreground):(emblem.color||preferredInk);image=tintedSprite(emblem.skin,ink,flag.background,true,detailed,onReady);}
   if(!image)continue;
   ctx.save();ctx.imageSmoothingEnabled=false;const dx=x+emblem.x*w,dy=y+emblem.y*h,dw=emblem.w*w,dh=emblem.h*h,crop=emblem.crop,sx=crop?crop.x*image.width:0,sy=crop?crop.y*image.height:0,sw=crop?crop.w*image.width:image.width,sh=crop?crop.h*image.height:image.height,scale=Math.min(dw/sw,dh/sh),drawW=sw*scale,drawH=sh*scale,drawX=dx+(dw-drawW)/2,drawY=dy+(dh-drawH)/2;if(emblem.clip){ctx.beginPath();ctx.rect(x+emblem.clip.x*w,y+emblem.clip.y*h,emblem.clip.w*w,emblem.clip.h*h);ctx.clip();}ctx.drawImage(image,sx,sy,sw,sh,drawX,drawY,drawW,drawH);ctx.restore();
  }
  for(const original of flag.texts||[]){
-  const box=currentTextBox(flag,original),contained=patternContainsRect(flag.backgroundStyle,box,w/h);let text=original;
-  if(contained&&flag.colors?.[1]&&flagContrast(flag.background,flag.colors[1])>=3){text={...original,color:flag.background};}
-  else if(flag.backgroundStyle&&flag.backgroundStyle!=='solid'){
-   const ink=flagContrast(flag.background,flag.foreground)>=3?flag.foreground:(flagContrast(flag.background,'#ffffff')>=flagContrast(flag.background,'#111111')?'#ffffff':'#111111');
-   ctx.fillStyle=flag.background;ctx.fillRect(x+box.x*w,y+box.y*h,box.w*w,box.h*h);text={...original,color:ink};
-  }
+  const box=currentTextBox(flag,original),text=original;
   drawText(ctx,text,flag,x+box.x*w,y+box.y*h,box.w*w,box.h*h);
  }
  ctx.strokeStyle=flag.foreground;ctx.strokeRect(x,y,w,h);ctx.restore();
