@@ -1060,7 +1060,7 @@ export class CitySimulation {
     this._pathSearchProfile=this.profileDiagnostics?{minute:this.minute,searches:0,totalMs:0,maxMs:0,start:null,goal:null}:null;
     this.minute++;
     beginFastForwardMinute(this);
-    if(this.fastForward)this.nature.updateGrowthMinute();
+    if(this.fastForward)this.nature.updateGrowthMinute?.();
     this.indexFamilies();
     this.reconcile();
     const reconcileRevision = `${this.structureRevision}:${this.world.revision}:${this.development.projects.length}`;

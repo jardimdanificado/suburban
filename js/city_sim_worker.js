@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff-state-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff-growth-events-1';
 
 const graph = new CityStateGraph();
 let fieldTailPatches=false;
