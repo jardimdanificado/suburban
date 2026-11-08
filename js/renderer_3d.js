@@ -636,6 +636,7 @@ export function createTintedTexture(skinName, fgHex = 0xffffff, bgHex = 0x000000
 const retroDitherMaterials=new WeakSet();
 const regionalPaletteUniform={value:0};
 const regionalPaletteIntensityUniform={value:1};
+const retroDitherPostUniform={value:0};
 export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) {
   if (!mat || retroDitherMaterials.has(mat)) return;
   retroDitherMaterials.add(mat);
@@ -645,7 +646,9 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
     if (prevCompile) prevCompile(shader);
     shader.uniforms.uMaterialPalette=regionalPaletteUniform;
     shader.uniforms.uPaletteIntensity=regionalPaletteIntensityUniform;
+    shader.uniforms.uPostDitherActive=retroDitherPostUniform;
     shader.fragmentShader = COLOR_PALETTE_GLSL + `
+      uniform float uPostDitherActive;
       float getBayer4x4(vec2 p) {
         vec2 m = mod(floor(p), 4.0);
         int x = int(m.x);
@@ -686,11 +689,12 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
     }
 
     const ditherCode = `
-      #include <dithering_fragment>
-      // Controlled retro Bayer dithering on colors, 3D lighting gradients and shadow falloffs
-      float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)};
-      float dSteps = ${steps.toFixed(1)};
-      gl_FragColor.rgb = floor(gl_FragColor.rgb * dSteps + bayer + 0.5) / dSteps;
+      if (uPostDitherActive < 0.5) {
+        #include <dithering_fragment>
+        float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)};
+        float dSteps = ${steps.toFixed(1)};
+        gl_FragColor.rgb = floor(gl_FragColor.rgb * dSteps + bayer + 0.5) / dSteps;
+      }
     `;
 
     if (shader.fragmentShader.includes('#include <dithering_fragment>')) {
@@ -702,9 +706,11 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
       shader.fragmentShader = shader.fragmentShader.replace(
         'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
         `gl_FragColor = vec4( outgoingLight, diffuseColor.a );
-        float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)};
-        float dSteps = ${steps.toFixed(1)};
-        gl_FragColor.rgb = floor(gl_FragColor.rgb * dSteps + bayer + 0.5) / dSteps;`
+        if (uPostDitherActive < 0.5) {
+          float bayer = (getBayer4x4(gl_FragCoord.xy) - 0.5) * ${intensity.toFixed(2)};
+          float dSteps = ${steps.toFixed(1)};
+          gl_FragColor.rgb = floor(gl_FragColor.rgb * dSteps + bayer + 0.5) / dSteps;
+        }`
       );
     }
   };
@@ -3588,6 +3594,7 @@ export class RCT3DRenderer {
         uBrightness: { value: 1.0 },
         uContrast: { value: 1.0 },
         uSaturation: { value: 1.0 },
+        uBayerEnabled: { value: 0.0 },
         uAlpha: { value: 1.0 },
         uCameraNear: { value: 0.1 },
         uCameraFar: { value: 1000.0 },
@@ -3612,6 +3619,7 @@ export class RCT3DRenderer {
         uniform float uBrightness;
         uniform float uContrast;
         uniform float uSaturation;
+        uniform float uBayerEnabled;
         uniform float uAlpha;
         uniform float uCameraNear;
         uniform float uCameraFar;
@@ -3628,6 +3636,15 @@ export class RCT3DRenderer {
         // Non-repeating screen-space noise avoids Bayer's visible 4x4 bands in SSAO.
         float interleavedGradientNoise(vec2 p) {
           return fract(52.9829189 * fract(0.06711056 * p.x + 0.00583715 * p.y));
+        }
+
+        float getPostBayer4x4(vec2 p) {
+          vec2 m = mod(floor(p), 4.0);
+          int x = int(m.x), y = int(m.y);
+          if (y == 0) { if (x == 0) return 0.0/16.0; if (x == 1) return 8.0/16.0; if (x == 2) return 2.0/16.0; return 10.0/16.0; }
+          if (y == 1) { if (x == 0) return 12.0/16.0; if (x == 1) return 4.0/16.0; if (x == 2) return 14.0/16.0; return 6.0/16.0; }
+          if (y == 2) { if (x == 0) return 3.0/16.0; if (x == 1) return 11.0/16.0; if (x == 2) return 1.0/16.0; return 9.0/16.0; }
+          if (x == 0) return 15.0/16.0; if (x == 1) return 7.0/16.0; if (x == 2) return 13.0/16.0; return 5.0/16.0;
         }
 
         float calculateAO(vec2 uv, float centerDepth) {
@@ -3728,6 +3745,15 @@ export class RCT3DRenderer {
             float luminance = dot(finalCol, vec3(0.2126, 0.7152, 0.0722));
             finalCol = mix(vec3(luminance), finalCol, uSaturation);
             gl_FragColor = vec4(finalCol, a * uAlpha);
+          }
+          // In 3P and freecam, apply a single restrained Bayer pass after
+          // scaling the render target so the pattern stays at display-pixel size.
+          if (uBayerEnabled > 0.5) {
+            float luma = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+            float bayer = (getPostBayer4x4(gl_FragCoord.xy) - 0.5) * 0.32;
+            float steppedLuma = floor(luma * 32.0 + bayer + 0.5) / 32.0;
+            float lumaShift = (steppedLuma - luma) * 0.55;
+            gl_FragColor.rgb = max(gl_FragColor.rgb + vec3(lumaShift), 0.0);
           }
           // The render target is linear. Convert it once to display color,
           // matching the direct render output.
@@ -9028,10 +9054,14 @@ export class RCT3DRenderer {
     regionalPaletteIntensityUniform.value=Math.max(0,Math.min(3,Number(this.graphicOptions?.paletteIntensity ?? 3)));
     const postProcessingRequested=dofRequested||chromaRequested||colorAdjustmentRequested;
     if ((this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget && postProcessingRequested)) {
+      const postBayerActive=!!(this.isThirdPersonActive?.() ||
+        (this.isFirstPersonActive?.() && this.fpEntityId == null));
+      retroDitherPostUniform.value=postBayerActive?1:0;
       this.renderer.setRenderTarget(this.renderTarget);
       this.renderer.render(this.scene, activeCam);
       this.renderer.setRenderTarget(null);
       this.postMaterial.uniforms.tDiffuse.value = this.renderTarget.texture;
+      this.postMaterial.uniforms.uBayerEnabled.value=postBayerActive?1:0;
 
       let dofVal = 0.0;
       const dofEnabledForView=this.isPerspectiveActive()&&this.postEffectsEnabled;
@@ -9058,6 +9088,8 @@ export class RCT3DRenderer {
 
       this.renderer.render(this.postScene, this.postCamera);
     } else {
+      retroDitherPostUniform.value=0;
+      this.postMaterial.uniforms.uBayerEnabled.value=0;
       this.renderer.setRenderTarget(null);
       this.renderer.render(this.scene, activeCam);
     }

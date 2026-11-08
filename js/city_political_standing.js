@@ -53,7 +53,15 @@ export class CityPoliticalStanding {
     return {effects,details,incidentPenalties};
   }
   ensurePartyReputation(party,context=this.reputationContext()){
-    if(!party.reputationPositionOffsets){const starting=party.reputationByPoliticalPosition||{},score=clamp(party.publicReputation??50),effects=this.partyReputationEffects(party,context).effects;party.reputationByPoliticalPosition=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,clamp(starting[position]??score)]));party.reputationPositionOffsets=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,party.reputationByPoliticalPosition[position]-effects[position]]));}
+    const starting=party.reputationByPoliticalPosition||{},offsets=party.reputationPositionOffsets||{},legacy=['Ultraesquerda','Ultradireita'].some(position=>position in starting||position in offsets);
+    if(legacy){
+      const names={'Ultraesquerda':'Extrema esquerda','Extrema esquerda':'Esquerda radical','Extrema direita':'Direita radical','Ultradireita':'Extrema direita'};
+      for(const key of ['reputationByPoliticalPosition','reputationPositionOffsets','archivedPoliticalPositionPoints'])if(party[key])party[key]=Object.fromEntries(Object.entries(party[key]).map(([position,value])=>[names[position]||position,value]));
+      for(const record of party.publicRecords||[])for(const item of record.politicalPositions||[])item.position=names[item.position]||item.position;
+    }
+    const scores=party.reputationByPoliticalPosition||{},savedOffsets=party.reputationPositionOffsets||{},score=Number.isFinite(party.publicReputation)?clamp(party.publicReputation):50,effects=this.partyReputationEffects(party,context).effects;
+    party.reputationByPoliticalPosition=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,Number.isFinite(scores[position])?clamp(scores[position]):Number.isFinite(savedOffsets[position])?clamp(savedOffsets[position]+effects[position]):score]));
+    party.reputationPositionOffsets=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,Number.isFinite(savedOffsets[position])?savedOffsets[position]:party.reputationByPoliticalPosition[position]-effects[position]]));
     party.publicReputation=POLITICAL_POSITIONS.reduce((sum,position)=>sum+(party.reputationByPoliticalPosition[position]??50),0)/POLITICAL_POSITIONS.length;return party.reputationByPoliticalPosition;
   }
   rebasePartyReputation(party,targetScores,context=this.reputationContext()){
@@ -97,14 +105,14 @@ export class CityPoliticalStanding {
         }
       }
     }
-    for(const party of p.parties){const {effects,details,incidentPenalties}=this.partyReputationEffects(party,context);this.ensurePartyReputation(party,context);for(const [incident,penalties] of incidentPenalties)incident.penalty=POLITICAL_POSITIONS.reduce((sum,position)=>sum+(penalties[position]||0),0)/POLITICAL_POSITIONS.length;for(const position of POLITICAL_POSITIONS)party.reputationByPoliticalPosition[position]=clamp(party.reputationPositionOffsets[position]+effects[position]);
+    for(const party of p.parties){this.ensurePartyReputation(party,context);const {effects,details,incidentPenalties}=this.partyReputationEffects(party,context);for(const [incident,penalties] of incidentPenalties)incident.penalty=POLITICAL_POSITIONS.reduce((sum,position)=>sum+(penalties[position]||0),0)/POLITICAL_POSITIONS.length;for(const position of POLITICAL_POSITIONS)party.reputationByPoliticalPosition[position]=clamp(party.reputationPositionOffsets[position]+effects[position]);
       party.publicReputation=POLITICAL_POSITIONS.reduce((sum,position)=>sum+party.reputationByPoliticalPosition[position],0)/POLITICAL_POSITIONS.length;
       const mean=key=>POLITICAL_POSITIONS.reduce((sum,position)=>sum+(details[position][key]||0),0)/POLITICAL_POSITIONS.length,positions=Object.fromEntries(POLITICAL_POSITIONS.map(position=>[position,{...details[position],score:party.reputationByPoliticalPosition[position]}]));
       party.reputationReport={minute:city.minute,baseline:50,management:mean('management'),promises:mean('promises'),fiscal:mean('fiscal'),legislative:mean('legislative'),performance:mean('management')+mean('promises')+mean('fiscal'),originalPenalty:mean('originPenalty'),prejudicePenalty:mean('prejudicePenalty'),hostingPenalty:mean('hostingPenalty'),mergerAdjustment:0,positions,score:party.publicReputation};
     }
   }
   refresh(force=false){
-    const city=this.city,p=city.politics,period=Math.floor(city.minute/360);if(this.partyReputationRulesVersion!==4){this.partyReputationRulesVersion=4;this.lastPeriod=null;}if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
+    const city=this.city,p=city.politics,period=Math.floor(city.minute/360);if(this.partyReputationRulesVersion!==5){this.partyReputationRulesVersion=5;this.lastPeriod=null;}if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
     const voters=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c));for(const c of voters)p.initializeCitizen(c);
     this.partyReputations();const cases=this.cases().filter(r=>r.discoveredAt!=null),casesByCitizen=new Map();
     for(const record of cases){const item={record,aware:new Set(record.awareIds||[])};for(const id of new Set([record.accusedId,...this.origins(record).map(a=>a.citizenId)])){if(!casesByCitizen.has(id))casesByCitizen.set(id,[]);casesByCitizen.get(id).push(item);}}

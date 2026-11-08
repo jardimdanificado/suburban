@@ -248,7 +248,7 @@ function moveCameraByPointer(dx,dy,zoom){
 }
 function updateFreeCameraMovement(dt){
   const active=!mainMenu.isActive()&&renderer3D.isFirstPersonActive()&&renderer3D.fpEntityId==null;
-  freeCameraTouch.update(active);
+  freeCameraTouch.update(active, cityUI);
   if(!active){freeCameraKeys.clear();return;}
   const held=code=>freeCameraKeys.has(code)||freeCameraTouch.has(code);
   let x=Number(held('KeyD'))-Number(held('KeyA'));
@@ -301,6 +301,12 @@ function onPointerDown(event) {
   const y = event.clientY - rect.top;
   pointerOnUI = !!legacyUI.hitTest(x, y);
   root.setPointerCapture?.(event.pointerId);
+  if (freeCameraTouch.pointerDown(x, y, event.pointerId, cityUI)) {
+    pointerOnUI = true;
+    pointerDown = lastPointer = {x:event.clientX,y:event.clientY};
+    event.preventDefault();
+    return;
+  }
   if(event.pointerType==='touch'&&!pointerOnUI){
     touchPointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
     if(touchPointers.size>=2){
@@ -366,6 +372,13 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if (freeCameraTouch.pointers.has(event.pointerId)) {
+    freeCameraTouch.pointerUp(event.pointerId);
+    pointerOnUI = false;
+    pointerDown = lastPointer = null;
+    event.preventDefault();
+    return;
+  }
   if (mainMenu.isActive()) {
     const rect = root.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -426,7 +439,8 @@ root.addEventListener("pointermove", onPointerMove);
 root.addEventListener("pointerleave",()=>renderer3D.setMousePos(undefined,undefined));
 root.addEventListener("pointerup", onPointerUp);
 root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if(cityUI.doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
-root.addEventListener("pointercancel", () => {
+root.addEventListener("pointercancel", (event) => {
+  freeCameraTouch.pointerUp(event.pointerId);
   rightClickConsumed=false;
   cityUI.pointerUp();
   editor.endStroke();
