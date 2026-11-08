@@ -2,6 +2,38 @@ import {vocabulario,palavrasPorVertentePolitica} from './vocabulario.js?v=econom
 export const PARTY_ORGANIZATIONS=Object.freeze(
   [
     ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Partido", "m"], 
+    ["Movimento", "m"], 
+    ["Movimento", "m"], 
+    ["Movimento", "m"], 
+    ["Movimento", "m"], 
+    ["Movimento", "m"], 
+    ["Movimento", "m"], 
+    ["Movimento", "m"], 
     ["Movimento", "m"], 
     ["Sindicato", "m"], 
     ["Pacto", "m"], 
@@ -302,7 +334,7 @@ export const POLITICAL_WORDS=Object.freeze({
     "Restaurador",
     "Uniformizador",
     "Normativo",
-    "Fascista","Stalinista","Maoista","Getulista","Fundamentalista cívico","Patriota"
+    "Fascista","Stalinista","Maoista","Getulista","Fundamentalista cívico","Patriota", "Opressor"
   ],
   "liberty": [
     "Libertário",
@@ -396,7 +428,8 @@ export const POLITICAL_WORDS=Object.freeze({
     "dos Maconheiros",
     "dos Pinguços",
     "do Raio",
-    "do Tabaco"
+    "do Tabaco",
+    "do Trabalhador"
   ]
 });
 const pick=(city,items)=>items[Math.floor(city.random()*items.length)];
