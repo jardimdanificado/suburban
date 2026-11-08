@@ -2,8 +2,8 @@ import {partyNameAgenda} from './city_party_names.js?v=party-vocabulary-position
 const clamp=(n,a=-1,b=1)=>Math.max(a,Math.min(b,n));
 const profiles=new WeakMap();
 const normalize=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-export const POLITICAL_POSITIONS=['Ultraesquerda','Extrema esquerda','Esquerda','Centro-esquerda','Centro','Centro-direita','Direita','Extrema direita','Ultradireita'];
-export function politicalPosition(economy){return economy<-.88?'Ultraesquerda':economy<-.65?'Extrema esquerda':economy<-.4?'Esquerda':economy<-.2?'Centro-esquerda':economy<=.2?'Centro':economy<=.4?'Centro-direita':economy<=.65?'Direita':economy<=.88?'Extrema direita':'Ultradireita';}
+export const POLITICAL_POSITIONS=['Extrema esquerda','Esquerda radical','Esquerda','Centro-esquerda','Centro','Centro-direita','Direita','Direita radical','Extrema direita'];
+export function politicalPosition(economy){return economy<-.88?'Extrema esquerda':economy<-.65?'Esquerda radical':economy<-.4?'Esquerda':economy<-.2?'Centro-esquerda':economy<=.2?'Centro':economy<=.4?'Centro-direita':economy<=.65?'Direita':economy<=.88?'Direita radical':'Extrema direita';}
 /** Distinct policy preferences. Economic side does not determine civil liberties. */
 export function ideologicalProfile(subject){
   const citizen=!!subject?.political,i=citizen?subject.political.ideology:subject?.ideology,name=citizen?'':subject?.name||'',frugality=citizen?subject.traits?.frugality:null,cached=subject&&profiles.get(subject);

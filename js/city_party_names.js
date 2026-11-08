@@ -456,10 +456,10 @@ export function partyNameAgenda(name=''){
 let vocabularyNamesByPosition=null;
 function politicalVocabularyNames(){
   if(vocabularyNamesByPosition)return vocabularyNamesByPosition;
-  const positions=['Ultraesquerda','Extrema esquerda','Esquerda','Centro-esquerda','Centro','Centro-direita','Direita','Extrema direita','Ultradireita'],grouped=new Map(positions.map(position=>[position,palavrasPorVertentePolitica(position).filter(word=>/^[\p{L}]{4,14}$/u.test(word))]));
+  const positions=['Extrema esquerda','Esquerda radical','Esquerda','Centro-esquerda','Centro','Centro-direita','Direita','Direita radical','Extrema direita'],grouped=new Map(positions.map(position=>[position,palavrasPorVertentePolitica(position).filter(word=>/^[\p{L}]{4,14}$/u.test(word))]));
   vocabularyNamesByPosition=grouped;return grouped;
 }
-function ideologyPosition(economy){return economy<-.88?'Ultraesquerda':economy<-.65?'Extrema esquerda':economy<-.4?'Esquerda':economy<-.2?'Centro-esquerda':economy<=.2?'Centro':economy<=.4?'Centro-direita':economy<=.65?'Direita':economy<=.88?'Extrema direita':'Ultradireita';}
+function ideologyPosition(economy){return economy<-.88?'Extrema esquerda':economy<-.65?'Esquerda radical':economy<-.4?'Esquerda':economy<-.2?'Centro-esquerda':economy<=.2?'Centro':economy<=.4?'Centro-direita':economy<=.65?'Direita':economy<=.88?'Direita radical':'Extrema direita';}
 function flavor(city,position=null){
   const words=position?politicalVocabularyNames().get(position)||[]:vocabulario.palavras;
   for(let i=0;i<48;i++){const word=pick(city,words);if(typeof word==='string'&&/^[\p{L}]{4,14}$/u.test(word))return capitalize(word);}
