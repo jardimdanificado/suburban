@@ -116,7 +116,7 @@ test("options canvas buttons change settings and time, with clipped scrolling", 
   ui.beginFrame(); panel.draw(ui);
   ui.clickAt(190, 138);
   assert.equal(renderer.scaleFactor, 0.75);
-  const tabWidth=Math.floor((panel.bounds.w-28)/4);
+  const tabWidth=Math.floor((panel.bounds.w-32)/5);
   ui.clickAt(panel.bounds.x+8+2*(tabWidth+4)+tabWidth/2,panel.bounds.y+42);
   assert.equal(panel.tab, "TIME");
   ui.beginFrame(); panel.draw(ui);
@@ -125,7 +125,9 @@ test("options canvas buttons change settings and time, with clipped scrolling", 
   const bottom = panel.bounds.y + panel.bounds.h - 6;
   for (const region of ui.regions.slice(6)) assert(region.y + region.h <= bottom);
   ui.beginFrame(); panel.draw(ui);
-  ui.clickAt(230, 138);
+  panel.scroll=0;ui.beginFrame();panel.draw(ui);
+  const columns=Math.max(1,Math.floor((panel.bounds.w-24)/64)),index=SPEED_TIERS.indexOf(4);
+  ui.clickAt(panel.bounds.x+12+(index%columns)*64+30,panel.bounds.y+62+24+Math.floor(index/columns)*28+12);
   assert.equal(time.speed, 4);
 });
 

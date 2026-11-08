@@ -51,3 +51,12 @@ test('paid poll manipulation preserves original interviews and can be corrected 
   const result=p.intervene('rigPoll',nominee.citizenId);assert(result,city.lastError);assert(poll.manipulated);assert.equal(poll.rawResults,raw);assert.equal(poll.results.reduce((n,r)=>n+r.intentions,0)+poll.undecided,20);assert(poll.results.find(r=>r.candidateId===nominee.citizenId).intentions>0);assert.equal(totalMoney(city),money);assert.equal(e.ballots.length,0);
   const crime=p.corruption.find(c=>c.id===poll.corruptionCaseId);crime.proven=true;p.scandals.push(crime);p.getResearch().reviewCases();assert.equal(poll.results,raw);assert.equal(poll.undecided,0);assert(poll.correctedAt);
 });
+
+ test('poll manipulation remains available without party funds and records external money',()=>{
+  const city=setup({starter:true,funded:true,population:48}),p=city.politics;available(city);p.beginElection();const e=p.active;let institute;
+  for(const site of city.economy.locateBuilding('research_institute')){institute=city.addBuilding('research_institute',site.x,site.y,{...site,free:true});if(institute)break;}
+  city.economy.activateMunicipalBusiness(institute,100000);const worker=city.citizens.find(c=>!p.officeHolder(c)&&!c.businessIds.length);city.economy.leaveJob(worker,'Research fixture');worker.jobId=institute.id;institute.workers.push(worker.id);
+  const raw=e.candidates.map((n,i)=>Object.freeze({candidateId:n.citizenId,name:n.name,partyId:n.partyId,intentions:i===0?20:0,rejections:0}));e.polls.push({id:1,studyId:987,instituteId:institute.id,sampleSize:20,results:raw,rawResults:raw,undecided:0,responses:[]});
+  const nominee=e.candidates.at(-1),fund=p.partyAccount(p.party(nominee.partyId));if(fund.balance)city.transfer(fund.accountId,'treasury',fund.balance,'Empty party fixture');const before=city.currency.externalNet;
+  assert(p.intervene('rigPoll',nominee.citizenId),city.lastError);assert(e.polls[0].manipulated);assert.equal(fund.balance,0);assert(city.currency.externalNet>before);assert.equal(totalMoney(city),city.currency.netIssued());assert.equal(e.polls[0].rawResults,raw);
+ });

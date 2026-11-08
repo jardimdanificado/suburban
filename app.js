@@ -9,7 +9,7 @@ import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, SPEED_TIERS } from "./js/simulation_time.js";
-import { OptionsPanel } from "./js/options.js?v=ff2-speed-1";
+import { OptionsPanel } from "./js/options.js?v=natural-interventions-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 
 const root = document.querySelector("#experience");
@@ -619,6 +619,7 @@ try { city.initialize(); } catch (error) {
   city.syncClock();
 }
 export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
+  interventionsVisible:()=>options.values.showInterventions!==false,
   mainMenu: openMainMenu,
   hasActiveGame: () => mainMenu.hasActiveGame,
   startNewCity: (params) => startNewCity(params),

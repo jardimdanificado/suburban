@@ -10,6 +10,7 @@ const GRAPHICS = [
   { key: "nightLightLimit", label: "LUZES NOTURNAS", values: [32, 64, 128, 256].map(v => [v, `${v}`]), default: 32, graphic: true },
 ];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
+const INTERFACE = [{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
 const EFFECTS = [
   effect("isometricEffects", "EFEITOS NO ISOMETRICO", BOOL, false),
   { key: "postEffects", label: "POS EFEITOS", values: BOOL, default: true },
@@ -36,7 +37,7 @@ export class OptionsPanel {
     this.maxScroll = 0;
     this.bounds = null;
     this.values = {};
-    this.items = [...GRAPHICS, ...EFFECTS].map(item => item.key === "nightLightLimit" && Number.isFinite(renderer.nightLightLimitCeiling)
+    this.items = [...GRAPHICS, ...EFFECTS, ...INTERFACE].map(item => item.key === "nightLightLimit" && Number.isFinite(renderer.nightLightLimitCeiling)
       ? { ...item, values: item.values.filter(([value]) => value <= renderer.nightLightLimitCeiling) }
       : item);
     for (const item of this.items) if (!item.values.length) item.values = [[32, "32"]];
@@ -90,11 +91,11 @@ export class OptionsPanel {
       for (const item of this.items) this.apply(item.key, item.default);
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
-    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS"], ["TIME", "TEMPO"], ["HISTORY", "HISTORICO"]].forEach(([id, label], i) => {
-      const bw = Math.floor((w - 28) / 4);
+    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS"], ["TIME", "TEMPO"], ["HISTORY", "HISTORICO"], ["INTERFACE", "INTERFACE"]].forEach(([id, label], i) => {
+      const bw = Math.floor((w - 32) / 5);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
-    const rows = this.tab === "GRAPHICS" ? this.items.filter(item => GRAPHICS.some(graphic => graphic.key === item.key)) : this.items.filter(item => EFFECTS.some(effect => effect.key === item.key));
+    const rows = this.tab === "INTERFACE" ? INTERFACE : this.tab === "GRAPHICS" ? this.items.filter(item => GRAPHICS.some(graphic => graphic.key === item.key)) : this.items.filter(item => EFFECTS.some(effect => effect.key === item.key));
     const contentY = y + 62, bottom = y + h - (floating?40:6);
     const first = ui.regions.length;
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();

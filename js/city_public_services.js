@@ -1,3 +1,4 @@
+import {interventionButton,interventionButtons} from './city_context_actions.js';
 const clamp=n=>Math.max(0,Math.min(100,n));
 export const CIVIC_SERVICES={
  hospital:{label:'Hospital',color:0xe6eee8,rent:0,price:160000,jobs:8,skill:'medicine',need:'health',rate:4,slots:4,minStaff:2,inputs:{remedio:1,sabao:1},population:256},
@@ -60,6 +61,6 @@ export function renderCivicServices(ui,p){
  return;}
  p.heading('NOVOS ESPAÇOS');for(const [type,spec]of Object.entries(CIVIC_SERVICES)){
    p.kv(spec.label,`${sites.filter(b=>b.type===type).length} em operação · ${city.development.projects.filter(o=>o.type===type&&!o.cancelled&&o.status!=='completed').length} em construção`);
-   p.button(`CONTRATAR AGORA: ${spec.label}`,()=>{const result=city.politics.executePlayerAction('divineGovernment',null,{type:'publicWork',payload:{buildingType:type}});ui.notice=result?.description||city.lastError||'A contratação não pôde ser aplicada.';});
+   interventionButton(ui,p,`CONTRATAR AGORA: ${spec.label}`,()=>{const result=city.politics.executePlayerAction('divineGovernment',null,{type:'publicWork',payload:{buildingType:type}});ui.notice=result?.description||city.lastError||'A contratação não pôde ser aplicada.';});
  }
 }

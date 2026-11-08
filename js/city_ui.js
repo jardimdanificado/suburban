@@ -328,6 +328,7 @@ export class CityUI {
     if (this.tab === 'economy') this.demands(p);
   }
   artworkInspector(p,piece) {
+    contextActions(this,p,{artwork:piece});
     const city=this.city,justice=city.justice,artist=city.society.citizen(piece.creatorId),latest=piece.layers?.at(-1),support=piece.support;
     const type=justice.labelArt(piece.kind),material={pedra:'Pedra',argila:'Argila',ferro:'Ferro',aco:'Aço',ceramica:'Cerâmica',fezes:'Material orgânico'}[piece.materialUsed]||'Tinta';
     const location=support?.kind==='facade-banner'?'Fachada':support?.kind==='interior-wall'?'Parede interna':support?.kind==='interior-floor'?'Interior do prédio':support?.kind==='window'?'Janela':support?.kind==='roof-terrace'?'Cobertura':support?.kind==='skybridge'?'Passarela elevada':piece.buildingId?`Prédio · ${city.building(piece.buildingId)?.entity.properties.name||'desconhecido'}`:'Espaço público';

@@ -4,6 +4,7 @@ import {SUBSTANCES} from './city_substance_catalog.js';
 import {ensureHeadquarters,headquartersHourly,stockHeadquarters,leaseHeadquarters,closeHeadquarters} from './city_party_headquarters.js?v=wardrobe-expansion-1';
 import {electPartyLeader} from './city_party_leadership.js';
 import {electoralPriorities,standingEvidence,personalGovernmentExperience,governingStreak,campaignMemory,personalAffinity} from './city_electoral_behavior.js?v=party-ideology-reputation-1';
+import {ensureExternalAccount} from './city_currency.js';
 import {CityInterventions} from './city_interventions.js';
 import {ideologicalProfile,POLITICAL_POSITIONS,politicalPosition} from './city_ideology.js';
 import {partyAccount,allocatePartyFunds,changePartyFund,illegalPartyFunding} from './city_party_funds.js';
@@ -126,12 +127,13 @@ export class CityGovernment extends CityPolitics {
   applyPlayerDirective(type,payload={}){return this.executePlayerAction('divineGovernment',null,{type,payload});}
   requestWorksBudget(value){return this.applyPlayerDirective('worksBudget',{value});}
   requestWorksTransfer(value){return this.applyPlayerDirective('worksTransfer',{value});}
-  startPublicWork(type,crop='milho'){
+  startPublicWork(type,crop='milho',{observer=false}={}){
     const city=this.city,mayor=city.society.citizen(city.economy.mayorId);if(!mayor||mayor.entity.destroyed)return city.fail('Não há prefeito em exercício.');if(!city.buildingTypes[type]||['townhall','mint','council_chamber'].includes(type))return city.fail('Tipo de obra indisponível para contratação direta.');
     const farm=type==='farm',mine=['quarry','iron_mine'].includes(type),site=city.development.publicBuildingSite(type);
     if(!site)return city.fail(city.development.publicLandReport?.reason||'Procurando terreno público acessível e compatível.');
     const lot=site.lot,{width,depth}=site,floors=['super_popular_housing','popular_housing','popular_luxury_housing'].includes(type)?4:1,builder=city.development.selectBuilder('treasury',site.door);if(!builder&&!farm&&!mine)return city.fail('Aguardando construtora disponível.');
     const cells=width*depth*floors,stone=farm||mine?0:['park','bike_rack'].includes(type)?Math.ceil(cells/4):cells*2,fee=builder&&stone?Math.ceil(cells*city.currency.price(12000)*1.5):0,charge=site.purchasePrice+Math.max(city.currency.price(farm||mine?100000:0),Math.ceil((stone*city.economy.goods.pedra.price+fee)*1.15));
+    if(observer){ensureExternalAccount(city,'observer-funding','Patrocínio externo de intervenções');const extra=Math.max(0,charge-this.ensureWorksBudget());if(extra&&!city.transfer('observer-funding','works-budget',extra,'Patrocínio externo de obra pública'))return false;const needed=stone*city.economy.goods.pedra.price+fee+city.currency.price(20000)+city.welfare.conditions().reserve;const gap=Math.max(0,needed-city.treasury);if(gap&&!city.transfer('observer-funding','treasury',gap,'Custeio externo de obra pública'))return false;}
     const budget=this.ensureWorksBudget(),reserve=city.welfare.conditions().reserve,projectCash=stone*city.economy.goods.pedra.price+fee+city.currency.price(20000);if(charge>budget)return city.fail(`Orçamento de obras insuficiente: ${formatMoney(budget)} disponível, ${formatMoney(charge)} estimados.`);if(city.treasury+budget-charge<projectCash+reserve)return city.fail('Tesouro e verba de obras não cobrem a contratação sem consumir a reserva social.');
     if(!city.transfer('works-budget','treasury',charge,'Liberação de verba para obra executiva',{buildingType:type,amount:charge}))return city.fail('Não foi possível liberar a verba aprovada para obras.');
     if(!city.development.acquirePublicSite(site)){city.transfer('treasury','works-budget',charge,'Devolução de verba: aquisição de terreno não concluída');return city.fail('Não foi possível concluir a compra negociada do terreno.');}
