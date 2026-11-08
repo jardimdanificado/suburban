@@ -1,3 +1,4 @@
+import { COLOR_PALETTES } from "./color_palettes.js?v=normal-maps-iso-v1";
 import { SPEED_TIERS, speedLabel } from "./simulation_time.js";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
@@ -8,11 +9,11 @@ const GRAPHICS = [
   { key: "wireframe", label: "WIREFRAME", values: [[0, "OFF"], [1, "GRADE"], [2, "TOTAL"]], default: 0 },
   { key: "moonlight", label: "LUZ DA LUA", values: BOOL, default: true, graphic: true },
   { key: "nightLightLimit", label: "LUZES NOTURNAS", values: [32, 64, 128, 256].map(v => [v, `${v}`]), default: 32, graphic: true },
+  { key: "colorPalette", label: "PALETA DE CORES", values: COLOR_PALETTES, default: "ORIGINAL", graphic: true },
 ];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const INTERFACE = [{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
 const EFFECTS = [
-  effect("isometricEffects", "EFEITOS NO ISOMETRICO", BOOL, false),
   { key: "postEffects", label: "POS EFEITOS", values: BOOL, default: true },
   effect("normalMaps", "NORMAL MAPS", BOOL, true),
   effect("dofStrength", "PROFUNDIDADE", ["OFF", "LOW", "MED", "HIGH"].map(v => [v, v]), "HIGH"),
@@ -91,17 +92,16 @@ export class OptionsPanel {
       for (const item of this.items) this.apply(item.key, item.default);
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
-    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS"], ["TIME", "TEMPO"], ["HISTORY", "HISTORICO"], ["INTERFACE", "INTERFACE"]].forEach(([id, label], i) => {
-      const bw = Math.floor((w - 32) / 5);
+    if (this.tab === "HISTORY") this.tab = "GRAPHICS";
+    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS"], ["TIME", "TEMPO"], ["INTERFACE", "INTERFACE"]].forEach(([id, label], i) => {
+      const bw = Math.floor((w - 32) / 4);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
     const rows = this.tab === "INTERFACE" ? INTERFACE : this.tab === "GRAPHICS" ? this.items.filter(item => GRAPHICS.some(graphic => graphic.key === item.key)) : this.items.filter(item => EFFECTS.some(effect => effect.key === item.key));
     const contentY = y + 62, bottom = y + h - (floating?40:6);
     const first = ui.regions.length;
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();
-    if(this.tab === "HISTORY") {
-      this.maxScroll=0;ui.button(x+12,contentY+8,w-24,26,"FAVORITOS, FILTROS E LIMITE DE REGISTROS",()=>this.openFavorites?.());
-    } else if (this.tab === "TIME") {
+    if (this.tab === "TIME") {
       const columns = Math.max(1, Math.floor((w - 24) / 64));
       this.maxScroll = Math.max(0, 160 + Math.ceil(SPEED_TIERS.length / columns) * 28 - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
