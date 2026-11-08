@@ -765,6 +765,19 @@ export class CityUI {
   customHistory(p){
     const favorites=this.favorites||this.host?.favorites;if(!favorites){p.note('Histórico personalizado indisponível.');return;}
     if(this.view()==='settings'){
+      p.heading('LIMITE DE EVENTOS');
+      const eventLimits=[[50,'50 eventos'],[100,'100 eventos'],[250,'250 eventos (padrão)'],[500,'500 eventos'],[1000,'1.000 eventos'],[5000,'5.000 eventos'],[10000,'10.000 eventos'],[0,'Sem limite']];
+      if(!eventLimits.some(([value])=>value===favorites.eventLimit))eventLimits.push([favorites.eventLimit,`${favorites.eventLimit} eventos`]);
+      this.selectControl(p,'custom-history:eventLimit',eventLimits,favorites.eventLimit,value=>favorites.setEventLimit(value));
+      this.dynamicSelects??={};let limitInput=this.dynamicSelects['custom-history:eventLimitValue'];
+      if(!limitInput){limitInput=document.createElement('input');limitInput.type='number';limitInput.min='0';limitInput.max='1000000';limitInput.step='1';limitInput.value=String(favorites.eventLimit);limitInput.setAttribute('aria-label','Limite personalizado de eventos; zero para sem limite');this.element.append(limitInput);this.dynamicSelects['custom-history:eventLimitValue']=limitInput;}
+      if(document.activeElement!==limitInput)limitInput.value=String(favorites.eventLimit);
+      limitInput.onchange=()=>{if(!favorites.setEventLimit(limitInput.value))limitInput.value=String(favorites.eventLimit);};
+      p.note('Ou digite um limite inteiro (0 = sem limite):');const limitY=p.y;p.space(24);if(limitY>=p.top&&limitY+20<=p.bottom)this.inputAt(limitInput,p.x,limitY,p.w);
+      p.note('Limite total de acontecimentos no histórico personalizado, após os filtros. Sem limite mostra todos os registros ainda disponíveis nas fontes.');
+      p.heading('REGISTROS GUARDADOS POR FAVORITO');
+      this.selectControl(p,'custom-history:retention',[[20000,'20.000 por favorito (padrão)'],[50000,'50.000 por favorito'],[100000,'100.000 por favorito'],[250000,'250.000 por favorito'],[0,'Sem limite']],favorites.limit,value=>{favorites.limit=Number(value);favorites.persist(true);});
+      p.note('Retenção de pessoas, empresas e partidos acompanhados. Aumentar o limite não recupera registros já descartados.');
       p.heading('FONTES DO HISTÓRICO');p.note('Escolha quais acontecimentos aparecem nesta janela.');
       p.checkbox('Acontecimentos importantes do governo',favorites.government,value=>{favorites.government=value;favorites.persist();});
       for(const [id,label]of Object.entries(GOVERNMENT_TOPICS)){
@@ -795,7 +808,7 @@ export class CityUI {
     }
     const events=favorites.events();p.heading(`ACONTECIMENTOS / ${events.length}`);
     if(!events.length){p.note('Nenhum acontecimento nos filtros escolhidos.');return;}
-    const limit=this.tab==='custom-history'?Math.min(events.length,250):events.length;
+    const limit=events.length;
     p.rows(events.slice(0,limit),event=>p.record(event.message,`${stamp(event.minute)} · ${EVENT_CATEGORIES[event.category]||event.kind}`,()=>this.openEvent(event.id),false,{value:event.amount!==undefined?money(event.amount):'',color:C.cyan}));
   }
   content(p) {

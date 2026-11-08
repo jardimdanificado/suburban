@@ -56,8 +56,8 @@ export function governmentTopic(e){
 const validCollection=value=>value&&typeof value==='object'&&!Array.isArray(value)?value:{};
 export class CityFavorites{
  constructor({city,desktop,storage}){
-  Object.assign(this,{city,desktop,storage});this.people={};this.businesses={};this.parties={};this.limit=20000;this.government=true;this.topics=Object.keys(GOVERNMENT_TOPICS);this.types=ALL_TYPES.filter(type=>!QUIET_TYPES.includes(type));this.filters={politicianId:null,partyId:null,billId:null,interventionId:null,days:0};this.hidden=false;this.lastSignature='';
-  try{const saved=JSON.parse(storage?.getItem('suburban.favorite-preferences')||'{}');this.limit=[0,20000,50000,100000,250000].includes(saved.limit)?saved.limit:20000;this.hidden=!!saved.hidden;this.government=saved.government!==false;this.topics=Array.isArray(saved.topics)?saved.topics.filter(t=>t in GOVERNMENT_TOPICS):this.topics;if(Array.isArray(saved.types))this.types=saved.types.filter(type=>ALL_TYPES.includes(type));this.pendingWorld=saved;}catch{}
+  Object.assign(this,{city,desktop,storage});this.people={};this.businesses={};this.parties={};this.limit=20000;this.eventLimit=250;this.government=true;this.topics=Object.keys(GOVERNMENT_TOPICS);this.types=ALL_TYPES.filter(type=>!QUIET_TYPES.includes(type));this.filters={politicianId:null,partyId:null,billId:null,interventionId:null,days:0};this.hidden=false;this.lastSignature='';
+  try{const saved=JSON.parse(storage?.getItem('suburban.favorite-preferences')||'{}');this.limit=[0,20000,50000,100000,250000].includes(saved.limit)?saved.limit:20000;this.eventLimit=Number.isSafeInteger(saved.eventLimit)&&saved.eventLimit>=0&&saved.eventLimit<=1000000?saved.eventLimit:250;this.hidden=!!saved.hidden;this.government=saved.government!==false;this.topics=Array.isArray(saved.topics)?saved.topics.filter(t=>t in GOVERNMENT_TOPICS):this.topics;if(Array.isArray(saved.types))this.types=saved.types.filter(type=>ALL_TYPES.includes(type));this.pendingWorld=saved;}catch{}
   this.worldKey=this.identity();if(this.pendingWorld?.world===this.worldKey)for(const key of ['people','businesses','parties'])this[key]=validCollection(this.pendingWorld[key]);if(this.pendingWorld?.world===this.worldKey)for(const key of Object.keys(this.filters)){const value=this.pendingWorld.filters?.[key];if(Number.isSafeInteger(value)&&value>=0)this.filters[key]=value;}this.sanitize();this.sync();
  }
  identity(){return String(this.city.world?.seed??this.city.seed??'city')+':'+String(this.city.world?.width??'');}
@@ -66,7 +66,7 @@ export class CityFavorites{
   for(const key of ['businesses','parties'])for(const [id,p]of Object.entries(this[key])){if(!/^\d+$/.test(id)||!p||typeof p!=='object'){delete this[key][id];continue;}this[key][id]={feed:p.feed!==false};}
  }
  sync(){this.city.history.configureFavorites(Object.keys(this.people).map(Number),this.limit,[...Object.keys(this.businesses).map(id=>`business:${id}`),...Object.keys(this.parties).map(id=>`party:${id}`)]);}
- persist(sync=false){try{this.storage?.setItem('suburban.favorite-preferences',JSON.stringify({world:this.worldKey,people:this.people,businesses:this.businesses,parties:this.parties,limit:this.limit,hidden:this.hidden,government:this.government,topics:this.topics,types:this.types,filters:this.filters}));}catch{}if(sync)this.sync();this.lastSignature='';}
+ persist(sync=false){try{this.storage?.setItem('suburban.favorite-preferences',JSON.stringify({world:this.worldKey,people:this.people,businesses:this.businesses,parties:this.parties,limit:this.limit,eventLimit:this.eventLimit,hidden:this.hidden,government:this.government,topics:this.topics,types:this.types,filters:this.filters}));}catch{}if(sync)this.sync();this.lastSignature='';}
  has(id){return !!this.people[id];}
  togglePerson(id){if(this.has(id))delete this.people[id];else this.people[id]={icon:42,color:'#ffd84d',feed:true};this.persist(true);}
  hasBusiness(id){return !!this.businesses[id];}
@@ -75,6 +75,11 @@ export class CityFavorites{
  toggleParty(id){this.toggleTracked('parties',id);}
  toggleTracked(key,id){if(!Number.isInteger(id))return;if(this[key][id])delete this[key][id];else this[key][id]={feed:true};this.persist(true);}
  setType(type,enabled){if(!ALL_TYPES.includes(type))return;this.types=enabled?[...new Set([...this.types,type])]:this.types.filter(t=>t!==type);this.persist();}
+ setEventLimit(value){
+  if(!['number','string'].includes(typeof value)||typeof value==='string'&&!value.trim())return false;
+  value=Number(value);if(!Number.isSafeInteger(value)||value<0||value>1000000)return false;
+  this.eventLimit=value;this.feedCursor=0;this.persist();return true;
+ }
  open(tab='people'){const state=this.desktop.openModule('favorites');state.showView(['settings','businesses','parties'].includes(tab)?tab:'people');return state;}
  matchesScope(e){
   const f=this.filters,partyIds=[...(e.partyIds||[]),e.partyId,...(e.accounts||[]).filter(id=>/^party:\d+$/.test(id)).map(id=>Number(id.slice(6)))];
@@ -85,16 +90,20 @@ export class CityFavorites{
   const history=this.city.history,events=new Map(),accept=e=>this.matchesScope(e)&&this.types.includes(historyEventType(e))&&(!interventionEventType(e)||this.types.includes(interventionEventType(e)));
   if(history.nextId<(this.feedCursor||0)){this.governmentEvents?.clear();this.feedCursor=0;}
   this.governmentEvents??=new Map();
-  if(history.nextId!==this.feedCursor){for(const e of history.entries)if(e.id>=(this.feedCursor||0)&&governmentTopic(e)){const type=historyEventType(e);let rows=this.governmentEvents.get(type);if(!rows)this.governmentEvents.set(type,rows=[]);rows.push(e);if(rows.length>100)rows.shift();}this.feedCursor=history.nextId;}
+  if(history.nextId!==this.feedCursor){
+   const incoming=new Map();for(const e of history.entries)if(e.id>=(this.feedCursor||0)&&governmentTopic(e)){const type=historyEventType(e);let rows=incoming.get(type);if(!rows)incoming.set(type,rows=[]);rows.push(e);}
+   for(const [type,rows]of incoming){const merged=new Map((this.governmentEvents.get(type)||[]).map(e=>[e.id,e]));for(const e of rows)merged.set(e.id,e);this.governmentEvents.set(type,[...merged.values()].sort((a,b)=>a.id-b.id));}
+   for(const [type,rows]of this.governmentEvents)if(this.eventLimit&&rows.length>this.eventLimit)this.governmentEvents.set(type,rows.slice(-this.eventLimit));this.feedCursor=history.nextId;
+  }
   for(const rows of this.governmentEvents.values())for(const e of rows){if(this.government&&this.topics.includes(governmentTopic(e))&&accept(e))events.set(e.id,e);}
-  const add=(key,pref,fallback)=>{if(!pref.feed)return;const rows=history.favoriteArchive.get(key)||fallback||[];let count=0;for(let i=rows.length-1;i>=0&&count<30;i--)if(accept(rows[i])){events.set(rows[i].id,rows[i]);count++;}};
+  const add=(key,pref,fallback)=>{if(!pref.feed)return;const rows=history.favoriteArchive.get(key)||fallback||[];let count=0;for(let i=rows.length-1;i>=0&&(!this.eventLimit||count<this.eventLimit);i--)if(accept(rows[i])){events.set(rows[i].id,rows[i]);count++;}};
   for(const [id,pref]of Object.entries(this.people))add(Number(id),pref,history.byCitizen.get(Number(id)));
   for(const [id,pref]of Object.entries(this.businesses))add(`business:${id}`,pref,history.byBuilding.get(Number(id)));
   for(const [id,pref]of Object.entries(this.parties))add(`party:${id}`,pref,history.byReference.get(`partyId:${id}`));
-  this.eventCacheSignature=this.lastSignature;return this.eventCache=[...events.values()].sort((a,b)=>b.id-a.id);
+  this.eventCacheSignature=this.lastSignature;const sorted=[...events.values()].sort((a,b)=>b.id-a.id);return this.eventCache=this.eventLimit?sorted.slice(0,this.eventLimit):sorted;
  }
  refresh(force=false){
   const identity=this.identity();if(identity!==this.worldKey){this.worldKey=identity;this.people={};this.businesses={};this.parties={};this.filters={politicianId:null,partyId:null,billId:null,interventionId:null,days:0};this.governmentEvents=new Map();this.feedCursor=0;this.persist(true);}
-  const history=this.city.history,signature=[this.worldKey,this.filters.days?this.city.minute:0,history.nextId,history.favoriteRevision,JSON.stringify([this.people,this.businesses,this.parties]),this.government,this.topics.join(),this.types.join(),JSON.stringify(this.filters)].join(':');if(force||signature!==this.lastSignature)this.lastSignature=signature;
+  const history=this.city.history,signature=[this.worldKey,this.eventLimit,this.filters.days?this.city.minute:0,history.nextId,history.favoriteRevision,JSON.stringify([this.people,this.businesses,this.parties]),this.government,this.topics.join(),this.types.join(),JSON.stringify(this.filters)].join(':');if(force||signature!==this.lastSignature)this.lastSignature=signature;
  }
 }

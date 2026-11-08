@@ -58,3 +58,19 @@ test('favorite sources deduplicate events and all scope filters combine without 
  const event=city.history.record('government','Votação',['citizen:1','business:7'],{partyId:3,billId:5,kind:'bill-voted'});assert.deepEqual(f.events().map(e=>e.id),[event.id]);
  f.filters={politicianId:1,partyId:3,billId:5,interventionId:null,days:1};assert.equal(f.events().length,1);f.filters.billId=6;assert.equal(f.events().length,0);assert.equal(city.history.favoriteArchive.get('business:7').length,1);f.filters.billId=5;city.minute=1441;assert.equal(f.events().length,0);
 });
+
+test('personalized event limit is configurable, persisted and applied after filtering and deduplication',()=>{
+ const city=fixture(),{favorites:f,storage}=preferences(city);f.togglePerson(1);
+ for(let i=0;i<360;i++)city.history.record('government',`Decisão ${i}`,['citizen:1'],{kind:'bill-voted',billId:i+1});
+ assert.equal(f.events().length,250);assert.equal(f.setEventLimit('315'),true);assert.equal(f.events().length,315);
+ assert.equal(new CityFavorites({city,storage}).eventLimit,315);
+ f.setEventLimit(40);assert.equal(f.events().length,40);assert.equal(f.events()[0].id,city.history.nextId-1);
+ f.setEventLimit(0);assert.equal(f.events().length,360);assert.equal(new CityFavorites({city,storage}).eventLimit,0);
+ for(const value of [-1,1.5,NaN,Infinity,1000001,'',null,false,'texto'])assert.equal(f.setEventLimit(value),false);assert.equal(f.eventLimit,0);
+ f.setType('politics.votes',false);assert.equal(f.events().length,0);assert.equal(city.history.favoriteArchive.get(1).length,360);
+});
+test('favorite sources no longer impose a hidden thirty-event cap',()=>{
+ const city=fixture(),{favorites:f}=preferences(city);f.government=false;f.toggleBusiness(7);f.setEventLimit(75);
+ for(let i=0;i<120;i++)city.history.record('sale',`Venda ${i}`,['business:7']);assert.equal(f.events().length,75);
+ f.setEventLimit(0);assert.equal(f.events().length,120);
+});
