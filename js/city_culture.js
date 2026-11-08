@@ -132,16 +132,18 @@ export function initializeCharacter(city, citizen) {
   citizen.traits = Object.freeze(Object.fromEntries(Object.keys(TRAIT_LABELS).map(id => [id, .1 + city.random() * .8])));
   citizen.savingsRate = Math.round((.05 + citizen.traits.frugality * .4) * 100) / 100;
 }
-export function architectureFor(type, id) {
+export function architectureFor(type, id, citySeed = 0) {
   if(type==='courthouse')return 'courthouse_neoclassical';
-  const numericId=Number(id)||0,seed=(Math.imul(numericId+29,2246822519)>>>0);
+  const numericId=Number(id)||0,seedValue=Number(citySeed)>>>0;
+  const seed=(Math.imul(numericId+29,2246822519)^(seedValue?Math.imul(seedValue+1,3266489917):0))>>>0;
+  const paletteSeed=(Math.imul(numericId+19,2654435761)^(seedValue?Math.imul(seedValue+37,1597334677):0))>>>0;
   const familyRoll=seed%20;
-  if(familyRoll<11){const form=DUTCH_COLONIAL_FORMS[seed%DUTCH_COLONIAL_FORMS.length],palette=DUTCH_COLONIAL_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%DUTCH_COLONIAL_PALETTES.length];return `dutch_colonial_${form.id}_${palette.id}`;}
-  if(familyRoll>=18){const form=SERTANEJO_FORMS[(seed>>>4)%SERTANEJO_FORMS.length],palette=SERTANEJO_PALETTES[(Math.imul(numericId+19,2654435761)>>>0)%SERTANEJO_PALETTES.length];return `sertanejo_${form.id}_${palette.id}`;}
+  if(familyRoll<11){const form=DUTCH_COLONIAL_FORMS[seed%DUTCH_COLONIAL_FORMS.length],palette=DUTCH_COLONIAL_PALETTES[paletteSeed%DUTCH_COLONIAL_PALETTES.length];return `dutch_colonial_${form.id}_${palette.id}`;}
+  if(familyRoll>=18){const form=SERTANEJO_FORMS[(seed>>>4)%SERTANEJO_FORMS.length],palette=SERTANEJO_PALETTES[paletteSeed%SERTANEJO_PALETTES.length];return `sertanejo_${form.id}_${palette.id}`;}
   const forms=type==='luxury_housing'||type==='popular_luxury_housing'?['quinta','barroco','sobrado','azulejo']:
     ['townhall','council_chamber','courthouse','bank'].includes(type)?['pombalino','barroco','sobrado','mercantil']:
     ['residential','popular_housing','super_popular_housing'].includes(type)?['sobrado','terrea','azulejo','acores','pombalino','quinta']:
     ['sobrado','mercantil','azulejo','acores','pombalino','rural'];
-  const form=forms[seed%forms.length],palette=PORTUGUESE_COLONIAL_PALETTE_IDS[(Math.imul(numericId+19,2654435761)>>>0)%PORTUGUESE_COLONIAL_PALETTE_IDS.length];
+  const form=forms[seed%forms.length],palette=PORTUGUESE_COLONIAL_PALETTE_IDS[paletteSeed%PORTUGUESE_COLONIAL_PALETTE_IDS.length];
   return `portuguese_colonial_${form}_${palette}`;
 }

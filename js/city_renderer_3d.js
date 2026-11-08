@@ -11,12 +11,12 @@ import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=roadsid
 import {modelSize,buildingPoint,buildingEntranceDoor,buildingFacadeBannerSupport,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import { partyFlagCanvas,drawPartyFlag } from './city_party_flags.js';
 import {citizenIsSleeping} from './city_citizen_models.js?v=campaign-flag-simclock-1-canvas-readback-1';
-import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=colonial-colored-trim-1';
+import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=seeded-business-visual-v1';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {quarryDeposits} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {addArchitectureVariations} from './city_architecture_variations.js?v=shutter-two-sided-1';
-import {syncSkybridges} from './city_skybridges.js?v=colonial-street-2';
+import {syncSkybridges} from './city_skybridges.js?v=seeded-business-visual-v1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-9';
 import {narrativeSceneType,narrativeRoleForParticipant} from './city_art_narratives.js';
@@ -480,19 +480,19 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     const b = entity.properties?.cityBuilding;
     if (!b || entity.destroyed || b.officeTenantOf) continue;
     active.add(entity.id);
-    if(b.constructionKind!=='open-air'||b.type==='market')b.architecture=architectureFor(b.type,b.id);
+    if(b.constructionKind!=='open-air'||b.type==='market')b.architecture=architectureFor(b.type,b.id,world.seed??0);
     if(!inView(entity.x,entity.y,b.width,b.depth)){const existing=renderer.cityMeshes.get(entity.id);if(existing)existing.visible=false;continue;}
     if ((b.constructionKind === 'open-air' && b.type !== 'market') || b.type === 'greengrocer') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
-    if (group && (group.userData.buildingStyleVersion!==31 || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
+    if (group && (group.userData.buildingStyleVersion!==32 || group.userData.architecture!==b.architecture || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
       renderer.parkPalmWindDecorations.delete(entity.id);
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
       renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose();object.userData.mineSignTexture?.dispose();object.userData.marketSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
-      group = new THREE.Group();group.userData.buildingStyleVersion=31;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
+      group = new THREE.Group();group.userData.buildingStyleVersion=32;group.userData.architecture=b.architecture;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
       const material = buildingMaterial(renderer,THREE,'wall',0xffffff,buildingTextureVariant(b.id??entity.id));material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
@@ -784,7 +784,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
         position.set(x-entity.x,ground+.2*size*.62,z-entity.y);quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),(rock.x*11+rock.y*7+chip)%6);scale.set(size*1.18,size*.58,size);matrix.compose(position,quaternion,scale);rubble.setMatrixAt(count,matrix);rubble.setColorAt(count,new THREE.Color(colors[(rock.x+rock.y+chip)%colors.length]));count++;
       }
       rubble.count=count;rubble.instanceMatrix.needsUpdate=true;if(rubble.instanceColor)rubble.instanceColor.needsUpdate=true;rubble.castShadow=true;rubble.receiveShadow=true;group.add(rubble);group.userData.quarryRubble=rubble;
-      const quarryStyle=HOUSE_STYLES[architectureFor(b.type,b.id)]||HOUSE_STYLES.modern,wood=new THREE.MeshLambertMaterial({color:0x604b36}),paint=new THREE.MeshLambertMaterial({color:quarryStyle.accent??0x9a714b}),iron=new THREE.MeshLambertMaterial({color:0x343a38}),x=Math.max(.7,b.width-1.15),z=.72,ground=surfaceElevation(world,entity.x+x,entity.y+z),hoist=new THREE.Group();
+      const quarryStyle=HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern,wood=new THREE.MeshLambertMaterial({color:0x604b36}),paint=new THREE.MeshLambertMaterial({color:quarryStyle.accent??0x9a714b}),iron=new THREE.MeshLambertMaterial({color:0x343a38}),x=Math.max(.7,b.width-1.15),z=.72,ground=surfaceElevation(world,entity.x+x,entity.y+z),hoist=new THREE.Group();
       for(const side of [-.42,.42]){const post=new THREE.Mesh(new THREE.BoxGeometry(.12,1.75,.12),wood);post.position.set(x+side,ground+.87,z);post.castShadow=true;hoist.add(post);const brace=new THREE.Mesh(new THREE.BoxGeometry(.08,1.08,.08),wood);brace.position.set(x+side*.56,ground+.47,z);brace.rotation.z=side>0?-.58:.58;hoist.add(brace);}
       const beam=new THREE.Mesh(new THREE.BoxGeometry(1.08,.15,.16),wood);beam.position.set(x,ground+1.75,z);hoist.add(beam);
       const cap=new THREE.Mesh(new THREE.BoxGeometry(1.22,.11,.22),paint);cap.position.set(x,ground+1.87,z);hoist.add(cap);
@@ -793,7 +793,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
       const rope=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.86,5),iron);rope.position.set(x,ground+.9,z);hoist.add(rope);
       for(const object of hoist.children){object.castShadow=true;object.receiveShadow=true;}group.add(hoist);
     }
-    if(['farm','park'].includes(b.type))addFarmFence(THREE,group,b,world,HOUSE_STYLES[architectureFor(b.type,b.id)]||HOUSE_STYLES.modern);
+    if(['farm','park'].includes(b.type))addFarmFence(THREE,group,b,world,HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern);
     if(['market','greengrocer'].includes(b.type)){const fixtures=marketFixtures(THREE,b);group.add(fixtures);group.userData.retailFixtures=fixtures;}
     if(b.type==='bike_rack'){
       const metal=new THREE.MeshLambertMaterial({color:0x89999e});
@@ -806,7 +806,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     if(b.type==='park'){
       const parkDecor=new THREE.Group();
       const palmCrowns=[];
-      const parkStyle=HOUSE_STYLES[architectureFor(b.type,b.id)]||HOUSE_STYLES.modern,parkVariant=(Math.imul((Number(b.id)||0)+11,2654435761)>>>0)%3,wood=new THREE.MeshLambertMaterial({color:parkVariant===1?0x674732:0x79553d}),palmWood=new THREE.MeshLambertMaterial({color:0x8b6847}),palmGreen=new THREE.MeshLambertMaterial({color:0x397b43}),flowerMats=[0xe85d57,0xf0bb48,0xf0e4c1,0xc64b73].map(color=>new THREE.MeshLambertMaterial({color}));
+      const parkStyle=HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern,parkVariant=(Math.imul((Number(b.id)||0)+11,2654435761)>>>0)%3,wood=new THREE.MeshLambertMaterial({color:parkVariant===1?0x674732:0x79553d}),palmWood=new THREE.MeshLambertMaterial({color:0x8b6847}),palmGreen=new THREE.MeshLambertMaterial({color:0x397b43}),flowerMats=[0xe85d57,0xf0bb48,0xf0e4c1,0xc64b73].map(color=>new THREE.MeshLambertMaterial({color}));
       const gardenSpots=[[.62,.72],[b.width-.62,.72],[.62,b.depth-.72],[b.width-.62,b.depth-.72]], flowerGeo=new THREE.SphereGeometry(.095,6,5),leafGeo=new THREE.SphereGeometry(1,6,4),trunkGeo=new THREE.CylinderGeometry(.065,.12,1.75,6);
       // Park ground remains natural grass; paths are represented by the shared
       // sidewalk and road network outside the lot, not loose paving slabs.
@@ -845,7 +845,7 @@ function syncOpenAir(renderer, THREE, entity, b, world) {
     if (['quarry', 'farm'].includes(b.type)) {
       const addShed = (unit, kind) => {
         if (!unit) return;
-        const style=HOUSE_STYLES[architectureFor(b.type,b.id)]||HOUSE_STYLES.modern,seed=(Math.imul((Number(b.id)||0)+unit.id*13,2654435761)>>>0);
+        const style=HOUSE_STYLES[architectureFor(b.type,b.id,world.seed??0)]||HOUSE_STYLES.modern,seed=(Math.imul((Number(b.id)||0)+unit.id*13,2654435761)>>>0);
         const shed = new THREE.Group();shed.rotation.y=(b.rotation||0)*Math.PI/2;
         const wallColor=b.wallColors?.[unit.id]||b.wallColor||(kind==='bathroom'?0xd8d5c8:style.wall),trimColor=style.trim??0xe3d5b8;
         const walls = new THREE.Mesh(new THREE.BoxGeometry(.86, CITY_FLOOR_HEIGHT-.12, .86), buildingMaterial(renderer,THREE,kind==='bathroom'?'wall':'wood',wallColor));

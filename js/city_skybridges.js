@@ -1,6 +1,6 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
-import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=colonial-colored-trim-1';
+import {HOUSE_STYLES,architectureFor} from './city_culture.js?v=seeded-business-visual-v1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
 // One deterministic source of truth feeds both pedestrian routing and the renderer.
@@ -50,7 +50,7 @@ export function syncSkybridges(renderer,THREE,entities,world){
  // the bridge does not depend on which area was rendered first.
  const buildings=city?.buildings||entities.map(e=>e.properties?.cityBuilding).filter(Boolean),byId=new Map(buildings.map(b=>[b.id,b]));
  for(const link of skybridgeLinks(buildings,world)){
-   const a=byId.get(link.aId),b=byId.get(link.bId),bridge=new THREE.Group(),midX=(link.start.x+link.end.x)/2,midY=(link.start.y+link.end.y)/2,height=a.terrain.base+link.height-.07,horizontal=link.axis==='x',style=HOUSE_STYLES[architectureFor(a.type,a.id)]||HOUSE_STYLES.modern,dutch=style.motif==='dutch_colonial';
+   const a=byId.get(link.aId),b=byId.get(link.bId),bridge=new THREE.Group(),midX=(link.start.x+link.end.x)/2,midY=(link.start.y+link.end.y)/2,height=a.terrain.base+link.height-.07,horizontal=link.axis==='x',style=HOUSE_STYLES[architectureFor(a.type,a.id,world.seed??0)]||HOUSE_STYLES.modern,dutch=style.motif==='dutch_colonial';
    bridge.userData={id:link.id,bounds:{x0:Math.min(link.start.x,link.end.x),x1:Math.max(link.start.x,link.end.x),y0:Math.min(link.start.y,link.end.y),y1:Math.max(link.start.y,link.end.y)}};group.add(bridge);const deckParts=new THREE.Group(),railParts=new THREE.Group(),trimParts=new THREE.Group();
    const deckColor=dutch?0x80583d:0xb7a98d,railColor=dutch?style.accent:0x343a3a,trimColor=dutch?style.trim:style.accent,deckMaterial=new THREE.MeshLambertMaterial({color:deckColor}),railMaterial=new THREE.MeshLambertMaterial({color:railColor}),trimMaterial=new THREE.MeshLambertMaterial({color:trimColor}),length=link.gap+.12,width=.72;
    const deck=new THREE.Mesh(new THREE.BoxGeometry(horizontal?length:width,.14,horizontal?width:length),deckMaterial);deck.position.set(midX,height,midY);deck.castShadow=true;deck.receiveShadow=true;deckParts.add(deck);

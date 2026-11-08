@@ -25,10 +25,10 @@ import {returnPartyCap} from './city_party_caps.js?v=party-apparel-1';
 import {MIN_PLOT_CELLS,CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geometry.js?v=visual-flow-4';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
-import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=colonial-colored-trim-1';
+import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=seeded-business-visual-v1';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
-import {skybridgeLinks} from './city_skybridges.js?v=colonial-street-2';
+import {skybridgeLinks} from './city_skybridges.js?v=seeded-business-visual-v1';
 import { CityGovernment as CityPolitics } from './city_government.js?v=party-number-random-1';
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
@@ -333,7 +333,7 @@ export class CitySimulation {
     this.clearCardboardSheltersForArea(x,y,width,depth);
     const entity = this.createEntity({ x, y, properties: { name: this.life.buildingName(spec.label), species: 'city-building', render: { color: spec.color, style: type === 'super_popular_housing' ? 'popular' : type === 'popular_luxury_housing' ? 'luxury' : type === 'popular_housing' ? 'popular' : type === 'luxury_housing' ? 'luxury' : type === 'popular_refectory' ? 'refectory' : type } } });
     const b = { id: entity.id, entity, type, constructionKind: kind, rotation:terrain.rotation, width, depth, floors, color: spec.color, condition: 100, units: [], balance: 0, jobs: Math.min(spec.jobs ? Math.max(spec.jobs, Math.floor(count / 6)) : 0, 32), wage: 4 + Math.floor(this.random() * 3), stock: 0, workers: [], terrain, door: terrain.door };
-    b.architecture = architectureFor(type, entity.id);
+    b.architecture = architectureFor(type, entity.id, this.initialSeed);
     if (['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(type)) {
       b.architectureColor = HOUSE_STYLES[b.architecture].wall;
     }
