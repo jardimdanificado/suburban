@@ -7,10 +7,10 @@ let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0
 let lastUpdateMs=0,maxUpdateMs=0,maxUpdateMinute=0,maxUpdateProfile=null,updateTotalMs=0,updateCount=0,maxSnapshotMs=0,maxSnapshotMinute=0;
 const phasePeaks={};
 const MIN_STEP = 1 / 60;
-// Keep each worker update to at most one city minute. The main thread can
-// interpolate motion between updates without batching multiple city minutes
-// into one indivisible simulation call.
-const stepSize = () => Math.min(.25,Math.max(MIN_STEP,speed/128));
+// Keep ordinary worker updates to at most one city minute. FF2 uses a half-
+// second step (two city minutes) to avoid doubling movement-loop overhead just
+// because it advances simulation time twice as fast.
+const stepSize = () => speed >= 128 ? .5 : Math.min(.25,Math.max(MIN_STEP,speed/128));
 // Large cities can spend most of the worker's time creating full snapshots.
 // Keep motion/vitals at 100 ms and adjust only the heavier UI state update.
 // Full graph snapshots are the most expensive worker messages. At fast speeds
