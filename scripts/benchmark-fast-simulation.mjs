@@ -6,7 +6,7 @@ import {resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 const root=process.argv[2]?resolve(process.argv[2]):fileURLToPath(new URL('../',import.meta.url));
 const population=Number(process.env.SUBURBAN_BENCH_POPULATION)||512,speed=Number(process.env.SUBURBAN_BENCH_SPEED)||32;
-const dt=Number(process.env.SUBURBAN_BENCH_STEP)||(speed >= 128 ? .5 : Math.min(.25,Math.max(1/60,speed/128))),cityMinutes=Number(process.env.SUBURBAN_BENCH_CITY_MINUTES)||240;
+const dt=Number(process.env.SUBURBAN_BENCH_STEP)||Math.min(.25,Math.max(1/60,speed/128)),cityMinutes=Number(process.env.SUBURBAN_BENCH_CITY_MINUTES)||240;
 const warmupMinutes=Math.max(0,Math.floor(Number(process.env.SUBURBAN_BENCH_WARMUP_MINUTES)||0)),diagnostics=process.env.SUBURBAN_BENCH_PROFILE==='1';
 const load=name=>import(pathToFileURL(resolve(root,'js',name)).href);
 const {CitySimulation}=await load('city_simulation.js'),{World}=await load('world.js'),{CityStateGraph,bindCityState}=await load('city_state.js');

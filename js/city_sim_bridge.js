@@ -75,7 +75,7 @@ export class CitySimulationBridge {
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=ff2-speed-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=ff2-speed-2', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
