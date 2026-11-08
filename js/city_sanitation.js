@@ -1,9 +1,44 @@
 import {activityRoomReady} from './city_interiors.js?v=night-crowd-1';
 import { inventoryFree } from './city_inventory.js';
-import { HOUSING_TYPES } from './city_housing.js?v=housing-resident-index-1';
+import { HOUSING_TYPES } from './city_housing.js?v=ff2-speed-2';
 import {reducedCadence} from './city_fast_forward.js';
 export const SANITATION_RULES = { dirtPerUse: 6, freeCleaningInterval: 0, paidCleaningInterval: 180, privateCleaningInterval: 1440, bathroomCleaningLabor:12, fecesCleaningBaseLabor:8, fecesCleaningExtraLabor:4, cleaningPrice: 400, usePrice: 300, wastePerUse: 1, wasteToStone: 2 };
 const clamp = n => Math.max(0, Math.min(100, n));
+const facilityChoiceIndexes=new WeakMap();
+const sameIds=(a,b)=>a===b||Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((id,index)=>id===b[index]);
+function facilityChoiceIndex(sanitation){
+  const city=sanitation.city,signature=`${city.minute}:${city.structureRevision}:${city.housing.homes.size}:${sanitation.facilities.size}`;
+  let index=facilityChoiceIndexes.get(sanitation);if(index?.signature===signature)return index;
+  const byAccess=new Map(),byBuilding=new Map(),byOwner=new Map(),byHome=new Map(),byUnitOwner=new Map(),order=new Map();let position=0;
+  for(const facility of sanitation.facilities.values()){
+    let rows=byAccess.get(facility.access);if(!rows)byAccess.set(facility.access,rows=[]);rows.push(facility);
+    rows=byBuilding.get(facility.buildingId);if(!rows)byBuilding.set(facility.buildingId,rows=[]);rows.push(facility);
+    const building=city.building(facility.buildingId);if(building?.ownerId!=null){rows=byOwner.get(building.ownerId);if(!rows)byOwner.set(building.ownerId,rows=[]);rows.push(facility);}
+    const ownerId=city.units.get(facility.unitId)?.ownerId;if(ownerId){rows=byUnitOwner.get(ownerId);if(!rows)byUnitOwner.set(ownerId,rows=[]);rows.push(facility);}
+    if(facility.homeId){rows=byHome.get(facility.homeId);if(!rows)byHome.set(facility.homeId,rows=[]);rows.push(facility);}
+    for(const homeId of facility.homeIds||[]){rows=byHome.get(homeId);if(!rows)byHome.set(homeId,rows=[]);rows.push(facility);}
+    order.set(facility,position++);
+  }
+  index={signature,byAccess,byBuilding,byOwner,byHome,byUnitOwner,order,candidates:new Set(),ordered:[],residentHomesMinute:-1,residentHomes:null};facilityChoiceIndexes.set(sanitation,index);return index;
+}
+function facilityChoices(sanitation,c,search,index){
+  const candidates=index.candidates;candidates.clear();
+  const add=rows=>{for(const facility of rows||[])candidates.add(facility);};
+  add(index.byAccess.get('public'));add(index.byAccess.get('paid'));
+  if(!search.access)add(index.byAccess.get('home'));
+  add(index.byBuilding.get(c.jobId));add(index.byBuilding.get(c.custody?.jailId));
+  add(index.byOwner.get(c.id));add(index.byUnitOwner.get(c.accountId));
+  if(c.homeId)add(index.byHome.get(c.homeId));
+  const access=search.access;
+  if(access?.hostIds?.size){
+    if(index.residentHomesMinute!==sanitation.city.minute){
+      const homes=new Map();for(const [homeId,residents] of access.residents){for(const resident of residents){let ids=homes.get(resident.id);if(!ids)homes.set(resident.id,ids=[]);ids.push(homeId);}}
+      index.residentHomes=homes;index.residentHomesMinute=sanitation.city.minute;
+    }
+    for(const hostId of access.hostIds)for(const homeId of index.residentHomes.get(hostId)||[])add(index.byHome.get(homeId));
+  }
+  const ordered=index.ordered;ordered.length=0;for(const facility of candidates)ordered.push(facility);ordered.sort((a,b)=>index.order.get(a)-index.order.get(b));return ordered;
+}
 // A synchronous facility search may inspect hundreds of homes. Only existing
 // contacts can grant visitor access; enumerate them once for this search.
 function visitorAccess(city,c){
@@ -25,11 +60,14 @@ function residentStatus(housing,home,c,access){
 }
 export class CitySanitation {
   constructor(city) { this.city = city; this.facilities = new Map(); this.jobs = []; this.streetFeces = new Map(); this.fecesRevision=0; this.nextJobId = 1; this.cleaned = 0; this.cleanedFeces=0; this.collected = 0; }
+  invalidateFacilityChoiceIndex(){facilityChoiceIndexes.delete(this);}
+  updateFacilityHomeIds(facility,homeIds){if(!facility||sameIds(facility.homeIds,homeIds))return false;facility.homeIds=homeIds;this.invalidateFacilityChoiceIndex();return true;}
+  removeFacility(id){const removed=this.facilities.delete(id);if(removed)this.invalidateFacilityChoiceIndex();return removed;}
   addFacility(b, { unitId = null, homeId = null, homeIds = null, access = 'employees' } = {}) {
     const id = `toilet:${unitId || b.id}`;
-    if (this.facilities.has(id)) {const existing=this.facilities.get(id);existing.access=access;existing.price=access==='paid'?this.city.currency.price(SANITATION_RULES.usePrice):0;if(homeIds)existing.homeIds=homeIds;return existing;}
+    if (this.facilities.has(id)) {const existing=this.facilities.get(id),price=access==='paid'?this.city.currency.price(SANITATION_RULES.usePrice):0,changed=existing.buildingId!==b.id||existing.unitId!==unitId||existing.homeId!==homeId||existing.access!==access||existing.price!==price||homeIds&&!sameIds(existing.homeIds,homeIds);existing.buildingId=b.id;existing.unitId=unitId;existing.homeId=homeId;existing.access=access;existing.price=price;if(homeIds)existing.homeIds=homeIds;if(changed)this.invalidateFacilityChoiceIndex();return existing;}
     const f = { id, buildingId: b.id, unitId, homeId, homeIds:homeIds||null, access, price: access === 'paid' ? this.city.currency.price(SANITATION_RULES.usePrice) : 0, cleanliness: 100, uses: 0, occupantId: null, busyUntil: 0, createdAt: this.city.minute, lastCleanedAt: this.city.minute, cleaningJobId: null };
-    this.facilities.set(id, f); return f;
+    this.facilities.set(id, f);this.invalidateFacilityChoiceIndex();return f;
   }
   setupBuilding(b) {
     b.litter ??= 0;
@@ -102,10 +140,11 @@ export class CitySanitation {
     if(task==='hygiene')c.hygieneWaitingSince??=this.city.minute;
     const need=task==='hygiene'?'hygiene':'toilet',waitingSince=task==='hygiene'?(c.hygieneWaitingSince??this.city.minute):(c.toiletWaitingSince??this.city.minute);
     const illegal=['toilet','hygiene'].includes(task)&&!c.custody&&(c.needs?.[need]??100)<20&&this.city.minute-waitingSince>=90;
-    const search={};
+    const search={access:visitorAccess(this.city,c)},index=facilityChoiceIndex(this);
+    const choices=facilityChoices(this,c,search,index);
     const rows=this._facilityChoiceRows??=[],pool=this._facilityChoicePool??=[];this._facilityChoiceRows=rows;this._facilityChoicePool=pool;rows.length=0;let rowCount=0;
     const addChoice=(facility,trespass)=>{let row=pool[rowCount];if(!row)pool[rowCount]=row=[null,0,false,0];row[0]=facility;row[1]=this.score(c,facility);row[2]=trespass;row[3]=rowCount;rows.push(row);rowCount++;};
-    for(const f of this.facilities.values())if(this.allowed(c,f,search)&&this.city.units.get(f.unitId)?.roomType==='bathroom')addChoice(f,false);
+    for(const f of choices)if(this.allowed(c,f,search)&&this.city.units.get(f.unitId)?.roomType==='bathroom')addChoice(f,false);
     const routeChoices=()=>{
       if(!rows.length)return false;
       // Build a stable min-heap instead of sorting every eligible facility for
@@ -126,7 +165,7 @@ export class CitySanitation {
     if(routeChoices())return true;
     if(illegal){
       rowCount=0;const businesses=this.city.economy.businesses,businessIds=this._businessIdsScratch??=new Set();businessIds.clear();for(const business of businesses)businessIds.add(business.id);
-      for(const f of this.facilities.values())if(f.access==='employees'&&this.city.units.get(f.unitId)?.roomType==='bathroom'&&!this.allowed(c,f)){
+      for(const f of index.byAccess.get('employees')||[])if(this.city.units.get(f.unitId)?.roomType==='bathroom'&&!this.allowed(c,f)){
         const b=this.city.building(f.buildingId);if(b?.active&&!b.entity.destroyed&&!['jail','townhall','hospital','clinic','public_toilet','paid_toilet','popular_refectory'].includes(b.type)&&(b.ownerId!=null||businessIds.has(b.id)))addChoice(f,true);
       }
       if(routeChoices())return true;
@@ -451,7 +490,7 @@ export class CitySanitation {
     for(const b of this.city.buildings)if(!b.entity.destroyed&&['public_toilet','popular_refectory'].includes(b.type))this.setupBusinessRooms(b);
     const activeJobs=new Map(this.jobs.filter(j=>!['completed','cancelled'].includes(j.status)).map(j=>[j.id,j]));
     for (const [id, f] of this.facilities){
-      if (!this.city.building(f.buildingId) || (f.unitId && this.city.units.get(f.unitId)?.roomType!=='bathroom')){this.facilities.delete(id);continue;}
+      if (!this.city.building(f.buildingId) || (f.unitId && this.city.units.get(f.unitId)?.roomType!=='bathroom')){this.removeFacility(id);continue;}
       if(f.cleaningJobId&&activeJobs.get(f.cleaningJobId)?.facilityId!==id)f.cleaningJobId=null;
     }
   }

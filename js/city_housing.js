@@ -375,9 +375,9 @@ export class CityHousing {
     for(const b of this.city.buildings)if(b.type==='super_popular_housing'&&b.units.length){
       const bathroom=b.units.find(u=>u.id===b.sharedBathroomUnitId&&u.roomType==='bathroom')||b.units.filter(u=>u.roomType==='bathroom').sort((a,b)=>a.z-b.z)[0];
       if(!bathroom)continue;b.sharedBathroomUnitId=bathroom.id;
-      for(const u of b.units)if(u.roomType==='bathroom'&&u!==bathroom){u.roomType='bedroom';configureRoomWindow(b,u);b.layoutRevision=(b.layoutRevision||0)+1;this.city.sanitation.facilities.delete(`toilet:${u.id}`);}
+      for(const u of b.units)if(u.roomType==='bathroom'&&u!==bathroom){u.roomType='bedroom';configureRoomWindow(b,u);b.layoutRevision=(b.layoutRevision||0)+1;this.city.sanitation.removeFacility(`toilet:${u.id}`);}
       const homes=[...this.homes.values()].filter(h=>h.buildingId===b.id);for(const h of homes)h.bathroomUnitId=bathroom.id;
-      const facility=this.city.sanitation.facilities.get(`toilet:${bathroom.id}`);if(facility)facility.homeIds=homes.map(h=>h.id);
+      const facility=this.city.sanitation.facilities.get(`toilet:${bathroom.id}`);if(facility)this.city.sanitation.updateFacilityHomeIds(facility,homes.map(h=>h.id));
     }
     if(this.sharedRoomHousingVersion!==1)this.migrateSharedRooms();
   }
