@@ -46,7 +46,7 @@ if(mode==='builder-selection'){
   const world={revision:0,map:[],cityLampPosts:[],cityLampSites:[]};
   // Keep static bridge geometry out of this CPU synchronization workload. The
   // benchmark renderer intentionally has no Three.js constructors or GPU.
-  renderer.skybridgeRevision=`${entities.length}:${world.topologyRevision??world.revision??0}:${world.bridgeRevision??0}:colonial-3`;renderer.roadBridgeRevision=world.bridgeRevision||0;renderer.roadBridgeStyleVersion=3;
+  renderer.skybridgeRevision=`${entities.length}:${world.topologyRevision??world.revision??0}:colonial-3`;
   // Warm a small viewport first, then grow it past the initial instance-buffer
   // capacity to exercise replacement without invalidating the Three.js test.
   Object.assign(renderer,{renderedMinTx:30,renderedMaxTx:42,renderedMinTy:10,renderedMaxTy:22});

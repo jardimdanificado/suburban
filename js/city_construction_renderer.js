@@ -80,10 +80,10 @@ export function syncConstructionSites(renderer,THREE,world,development){
   const plot=plots.get(project.plotId),route=project.path||project.route;
   let cells=[];
   if(project.service==='building'&&plot){for(let y=plot.y;y<plot.y+Math.min(plot.depth,project.depth||plot.depth);y++)for(let x=plot.x;x<plot.x+Math.min(plot.width,project.width||plot.width);x++)cells.push({x:x+.5,y:y+.5});}
-  else if((project.service==='road'||project.service==='bridge'||project.service==='road-repair')&&route)cells=route.map(p=>({x:Math.floor(p.x)+.5,y:Math.floor(p.y)+.5}));
+  else if((project.service==='road'||project.service==='road-repair')&&route)cells=route.map(p=>({x:Math.floor(p.x)+.5,y:Math.floor(p.y)+.5}));
   else if(project.door)cells=[{x:project.door.x,y:project.door.y}];
   if(!cells.length)continue;
-  const terrainRevision=world.topologyRevision??world.revision??0,signature=`${terrainRevision}:${world.bridgeRevision??0}:${project.service}:${cells.map(c=>`${c.x},${c.y}`).join(';')}`;
+  const terrainRevision=world.topologyRevision??world.revision??0,signature=`${terrainRevision}:${project.service}:${cells.map(c=>`${c.x},${c.y}`).join(';')}`;
   live.add(project.id);let site=renderer.constructionMeshes.get(project.id);
   const visible=!Number.isFinite(renderer.renderedMinTx)||cells.every(c=>c.x>=renderer.renderedMinTx&&c.x<=renderer.renderedMaxTx+1&&c.y>=renderer.renderedMinTy&&c.y<=renderer.renderedMaxTy+1);
   if(!visible){if(site)site.visible=false;continue;}if(site)site.visible=true;

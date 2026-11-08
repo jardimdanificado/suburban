@@ -25,11 +25,10 @@ function entranceApproachIsClear(world,door,dx,dy,occupied){
   const wallOn=(tx,ty,edge)=>roadRetainingFaces(world,tx,ty).some(face=>face.side===edge&&Math.max(face.highA-face.lowA,face.highB-face.lowB)>.02);
   return !wallOn(x,y,side)&&!wallOn(nx,ny,opposite);
 }
-export function bridgeAt(world,x,y){return world.bridgeTiles?.get(tileKey(x,y))||null;}
-export function isRoadAt(world,x,y){return ROAD_TILES.has(tileAt(world,x,y))||!!bridgeAt(world,x,y);}
+export function isRoadAt(world,x,y){return ROAD_TILES.has(tileAt(world,x,y));}
 export function flagNightFactor(world){const hour=(world?.clock?.hour??12)+(world?.clock?.minute??0)/60;let glow=0;if(hour<5.5||hour>=19)glow=1;else if(hour<7)glow=1-(hour-5.5)/1.5;else if(hour>17.5)glow=(hour-17.5)/1.5;return 1-.82*Math.max(0,Math.min(1,glow));}
-export function terrainWalkable(world, x, y) { return land.has(baseTerrainTile(tileAt(world, x, y)))||!!bridgeAt(world,x,y); }
-export function canStep(world, x, y, nx, ny) { const a=bridgeAt(world,x,y)?.height??tileHeight(tileAt(world,x,y)),b=bridgeAt(world,nx,ny)?.height??tileHeight(tileAt(world,nx,ny));return terrainWalkable(world, nx, ny) && Math.abs(a-b) <= 1.25; }
+export function terrainWalkable(world, x, y) { return land.has(baseTerrainTile(tileAt(world, x, y))); }
+export function canStep(world, x, y, nx, ny) { const a=tileHeight(tileAt(world,x,y)),b=tileHeight(tileAt(world,nx,ny));return terrainWalkable(world, nx, ny) && Math.abs(a-b) <= 1.25; }
 export function roadFor(tile) {
   if ([TILE_FLOOR, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE].includes(tile)) return TILE_ROAD_GRASS_STONE;
   if ([TILE_SAND, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE].includes(tile)) return TILE_ROAD_SAND_STONE;
@@ -93,7 +92,7 @@ export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,r
   const search=buildingSiteSearches.get(city);
   if(search?.stats)search.stats.calls=(search.stats.calls||0)+1;
   if(search){
-    const signature=`${city.world.revision||0}:${city.world.bridgeRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}:${city.world.parkingTiles?.size||0}:${city.world.width}:${city.world.height}:${hub?.x}:${hub?.y}:`+city.development.plots.map(p=>`${p.id},${p.x},${p.y},${p.width},${p.depth}`).join(';');
+    const signature=`${city.world.revision||0}:${city.obstacleRevision||0}:${city.occupied.size}:${city.world.parkingTiles?.size||0}:${city.world.width}:${city.world.height}:${hub?.x}:${hub?.y}:`+city.development.plots.map(p=>`${p.id},${p.x},${p.y},${p.width},${p.depth}`).join(';');
     if(signature!==search.signature){search.signature=signature;search.orientations.clear();search.blocked.clear();}
   }
   const footprint=`${x},${y},${width},${depth},${plotId}`,category=['quarry','iron_mine','bauxite_mine'].includes(type)?'quarry':type==='farm'?'farm':'building';
@@ -162,7 +161,6 @@ function terrainPathGrid(world){
   let grid=pathTerrainGrids.get(world);if(grid&&grid.revision===(world.revision||0)&&grid.width===world.width&&grid.height===world.height)return grid;
   const size=world.width*world.height,tiles=new Uint8Array(size),walkable=new Uint8Array(size),roads=new Uint8Array(size),elevations=new Float32Array(size),source=world.map;
   for(let i=0;i<size;i++){const tile=baseTerrainTile(source?source[i]:world.getTile(i%world.width,Math.floor(i/world.width)));tiles[i]=tile;walkable[i]=land.has(tile)?1:0;roads[i]=ROAD_TILES.has(tile)?1:0;elevations[i]=tileHeight(tile);}
-  for(const [key,bridge]of world.bridgeTiles||[]){const comma=key.indexOf(','),x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1)),index=y*world.width+x;if(x>=0&&y>=0&&x<world.width&&y<world.height){walkable[index]=1;roads[index]=1;elevations[index]=bridge.height;}}
   grid={revision:world.revision||0,width:world.width,height:world.height,tiles,walkable,roads,elevations};pathTerrainGrids.set(world,grid);return grid;
 }
 function heapPush(w,node,cost,score){

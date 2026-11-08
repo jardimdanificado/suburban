@@ -102,8 +102,6 @@ export class World {
     this.height = size;
     this.clock = new WorldClock();
     this.map = new Uint8Array(this.width * this.height);
-    this.roadBridges=[];
-    this.bridgeTiles=new Map();
     // Sidewalk surface is independent of the road tile, so road wear cannot erase it.
     this.sidewalkTiles=new Set();
     this.sidewalkTreeTiles=new Set();
@@ -124,7 +122,6 @@ export class World {
     world_gen_generate(this.map, { ...cfg, seed, width:this.width, height:this.height }, outCenter);
     this.spawnCenter = outCenter;
     this.groups = []; // Clear groups
-    this.roadBridges=[];this.bridgeTiles.clear();this.bridgeRevision=(this.bridgeRevision||0)+1;
     this.sidewalkTiles?.clear();
     this.sidewalkTreeTiles?.clear();
     this.clock.reset();

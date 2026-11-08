@@ -39,7 +39,7 @@ export function skybridgeLinks(buildings,world){
 
 // Elevated links use separate pedestrian waypoints and leave the road tiles open.
 export function syncSkybridges(renderer,THREE,entities,world){
- const city=renderer.cityDevelopment?.city,revision=city?.structureRevision??entities.length,terrainRevision=world.topologyRevision??world.revision??0,key=`${revision}:${terrainRevision}:${world.bridgeRevision??0}`;
+ const city=renderer.cityDevelopment?.city,revision=city?.structureRevision??entities.length,terrainRevision=world.topologyRevision??world.revision??0,key=`${revision}:${terrainRevision}`;
  const updateVisibility=()=>{for(const bridge of renderer.skybridgeGroup?.children||[]){const p=bridge.userData.bounds;bridge.visible=!Number.isFinite(renderer.renderedMinTx)||p.x1>=renderer.renderedMinTx&&p.x0<=renderer.renderedMaxTx+1&&p.y1>=renderer.renderedMinTy&&p.y0<=renderer.renderedMaxTy+1;}};
  const styleKey=`${key}:colonial-3`;if(renderer.skybridgeRevision===styleKey){updateVisibility();return;}renderer.skybridgeRevision=styleKey;
  if(renderer.skybridgeGroup){renderer.scene.remove(renderer.skybridgeGroup);renderer.skybridgeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}

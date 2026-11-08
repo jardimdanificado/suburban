@@ -118,7 +118,6 @@ export class CitySimulationBridge {
     const world=this.city.world,revision=world.revision,count=this.entities.length,structure=this.city.structureRevision,map=world.map;
     const mapId=this.graph.ids.get(map),mapChanged=data.packet.nodes.some(node=>node.id===mapId&&node.kind==='Uint8Array'),previousMap=mapChanged?map.slice():null;
     const sidewalks=world.sidewalkTiles,sidewalkId=sidewalks&&this.graph.ids.get(sidewalks),sidewalksChanged=sidewalkId!=null&&data.packet.nodes.some(node=>node.id===sidewalkId&&node.kind==='Set'),previousSidewalks=sidewalksChanged?new Set(sidewalks):null;
-    const bridges=world.bridgeTiles,bridgeId=bridges&&this.graph.ids.get(bridges),bridgesChanged=bridgeId!=null&&data.packet.nodes.some(node=>node.id===bridgeId&&node.kind==='Map'),previousBridges=bridgesChanged?new Map([...bridges].map(([key,value])=>[key,`${value?.id??''}:${value?.height??''}`])):null;
     for(const c of this.city.citizens){
       let sample=this.motionSamples.get(c.id);
       if(!sample){sample={id:c.id,from:{},to:{},entity:c.entity};this.motionSamples.set(c.id,sample);}
@@ -133,8 +132,8 @@ export class CitySimulationBridge {
     const terrainChanged=revision!==world.revision;
     let terrainTiles;
     if(terrainChanged){
-      const currentMap=world.map,currentSidewalks=world.sidewalkTiles,currentBridges=world.bridgeTiles;
-      const unknown=mapChanged&&(map!==currentMap||previousMap?.length!==currentMap.length)||!sidewalks&&currentSidewalks||!bridges&&currentBridges;
+      const currentMap=world.map,currentSidewalks=world.sidewalkTiles;
+      const unknown=mapChanged&&(map!==currentMap||previousMap?.length!==currentMap.length)||!sidewalks&&currentSidewalks;
       if(!unknown){
         const dirty=new Set(),addIndex=index=>{if(Number.isInteger(index)&&index>=0&&index<world.width*world.height)dirty.add(index);},addPointKey=key=>{
           if(Number.isInteger(key)){addIndex(key);return;}
@@ -143,7 +142,6 @@ export class CitySimulationBridge {
         };
         if(previousMap)for(let i=0;i<previousMap.length;i++)if(previousMap[i]!==currentMap[i])addIndex(i);
         if(previousSidewalks){for(const key of previousSidewalks)if(!currentSidewalks?.has(key))addPointKey(key);for(const key of currentSidewalks||[])if(!previousSidewalks.has(key))addPointKey(key);}
-        if(previousBridges){const current=new Map([...(currentBridges||[])].map(([key,value])=>[key,`${value?.id??''}:${value?.height??''}`]));for(const [key,value]of previousBridges)if(current.get(key)!==value)addPointKey(key);for(const key of current.keys())if(!previousBridges.has(key))addPointKey(key);}
         terrainTiles=[...dirty].map(index=>({x:index%world.width,y:Math.floor(index/world.width)}));
       }
     }

@@ -54,7 +54,7 @@ import { CityGigs } from './city_gigs.js?v=spaced-limited-spontaneous-art-1';
 import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=ff2-speed-1';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
-import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, bridgeAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
+import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 const ff2ProductionWaits = new WeakMap();
 
@@ -478,7 +478,7 @@ export class CitySimulation {
     if(this.buildings?.length&&settlementConnected(this,start,goal)===false){if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);return null;}
     const shared=findSharedTerrainPath(this,start,goal,this._pathBlockedGrid);
     if(profile){const counter=shared===undefined?'aStarCalls':'sharedCalls';profile[counter]=(profile[counter]||0)+1;}
-    const route=shared===undefined?findTerrainPath(this.world,start,goal,this.occupied,{blockedGrid:this._pathBlockedGrid}):shared,mapped=route?.map(p=>{const bridge=bridgeAt(this.world,Math.floor(p.x),Math.floor(p.y));return bridge?{...p,z:bridge.height,roadBridgeId:bridge.id}:p})??null;
+    const route=shared===undefined?findTerrainPath(this.world,start,goal,this.occupied,{blockedGrid:this._pathBlockedGrid}):shared,mapped=route??null;
     if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
     this.pathCache.set(key,mapped);return mapped;
   }
@@ -615,7 +615,7 @@ export class CitySimulation {
     let spot=c.homelessSleepSpot;
     const abandonSpot=()=>{const shelter=this.cardboardShelters.get(c.cardboardShelterKey);if(shelter?.citizenId===c.id){this.cardboardShelters.delete(c.cardboardShelterKey);this.cardboardRevision++;}c.cardboardShelterKey=null;c.homelessSleepSpot=null;c.inventory.papelao=Math.max(1,c.inventory.papelao);c.path=[];spot=null;};
     const hasTreeAt=(x,y)=>{const id=this.nature?.tiles?.get(`${x},${y}`);return !!this.nature?.plants.get(id)?.entity.properties.tree;};
-    if(spot&&(!this.walkable(Math.floor(spot.x),Math.floor(spot.y))||ROAD_TILES.has(tileAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))||bridgeAt(this.world,Math.floor(spot.x),Math.floor(spot.y))||hasTreeAt(Math.floor(spot.x),Math.floor(spot.y))))abandonSpot();
+    if(spot&&(!this.walkable(Math.floor(spot.x),Math.floor(spot.y))||ROAD_TILES.has(tileAt(this.world,Math.floor(spot.x),Math.floor(spot.y)))||hasTreeAt(Math.floor(spot.x),Math.floor(spot.y))))abandonSpot();
     if(spot){
       const shelter=this.cardboardShelters.get(c.cardboardShelterKey);
       if(!shelter||shelter.citizenId!==c.id){const x=Math.floor(spot.x),y=Math.floor(spot.y),shelterKey=`${x},${y}`;this.cardboardShelters.set(shelterKey,{citizenId:c.id,x:x+.5,y:y+.5,placedAt:this.minute});c.cardboardShelterKey=shelterKey;c.homelessSleepSpot={x:x+.5,y:y+.5};c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
@@ -650,7 +650,7 @@ export class CitySimulation {
     for(let radius=3;radius<=12;radius++){
       const candidates=[];
       for(let dx=-radius;dx<=radius;dx++){const dy=radius-Math.abs(dx);for(const sy of (dy?[1,-1]:[1])){
-        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if((key!==ownKey&&blocked.has(key))||x<0||y<0||x>=width||y>=height||safety.clear[y*width+x]||safety.blocked[y*width+x]||this.cardboardShelters.has(key)||hasTreeAt(x,y)||ROAD_TILES.has(tileAt(this.world,x,y))||bridgeAt(this.world,x,y)||!this.walkable(x,y))continue;
+        const x=startX+dx,y=startY+dy*sy,key=`${x},${y}`;if((key!==ownKey&&blocked.has(key))||x<0||y<0||x>=width||y>=height||safety.clear[y*width+x]||safety.blocked[y*width+x]||this.cardboardShelters.has(key)||hasTreeAt(x,y)||ROAD_TILES.has(tileAt(this.world,x,y))||!this.walkable(x,y))continue;
         const px=x+.5,py=y+.5;candidates.push({x:px,y:py,key,score:Math.hypot(px-c.entity.x,py-c.entity.y)+(Math.imul(c.id+17,1103515245)>>>0)%997/10000});
       }}
       candidates.sort((a,b)=>a.score-b.score);
@@ -662,7 +662,7 @@ export class CitySimulation {
     }
     // The safe fallback is to rest where the person is, never to send them to
     // the town hall and turn its entrance into a makeshift dormitory.
-    if(!safety.blocked[startY*width+startX]&&!safety.clear[startY*width+startX]&&!this.cardboardShelters.has(ownKey)&&!hasTreeAt(startX,startY)&&!ROAD_TILES.has(tileAt(this.world,startX,startY))&&!bridgeAt(this.world,startX,startY)&&this.walkable(startX,startY)){c.homelessSleepSpot={x:startX+.5,y:startY+.5};c.cardboardShelterKey=ownKey;this.cardboardShelters.set(ownKey,{citizenId:c.id,x:startX+.5,y:startY+.5,placedAt:this.minute});c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
+    if(!safety.blocked[startY*width+startX]&&!safety.clear[startY*width+startX]&&!this.cardboardShelters.has(ownKey)&&!hasTreeAt(startX,startY)&&!ROAD_TILES.has(tileAt(this.world,startX,startY))&&this.walkable(startX,startY)){c.homelessSleepSpot={x:startX+.5,y:startY+.5};c.cardboardShelterKey=ownKey;this.cardboardShelters.set(ownKey,{citizenId:c.id,x:startX+.5,y:startY+.5,placedAt:this.minute});c.inventory.papelao=Math.max(0,c.inventory.papelao-1);this.cardboardRevision++;}
     blocked.add(ownKey);c.path=[];c.action='Dormindo na rua';return true;
   }
 
@@ -1266,7 +1266,7 @@ export class CitySimulation {
       // up to 60 times before any relevant state can change.
       const load=c.deliveryId?(shipmentIndex?shipmentIndex.get(c.deliveryId):this.logistics.shipments.find(s=>s.id===c.deliveryId)):null;
       if(load?.pickedUp&&!c.mobilityTrip&&(c.deliveryLoad||load.quantity)>this.vehicles.cargoCapacity(c)){c.action='Aguardando veículo para transportar a carga';continue;}
-      if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId&&!bridgeAt(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y))){c.skybridgeZ=0;c.skybridgeId=null;}
+      if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
       let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * this.justice.mobilityFactor(c) * bodyMovementSpeedFactor(c);
       while (distance > 0 && c.path.length) {
@@ -1276,11 +1276,11 @@ export class CitySimulation {
           if(!this.beginSkybridgeTransit(c,leg)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;c.skybridgeTransit=null;}
           break;
         }
-        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),roadBridge=p.roadBridgeId,elevated=!!(pBridge||roadBridge),tx=Math.floor(p.x),ty=Math.floor(p.y);
-        if(pBridge&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)||roadBridge&&!this.world.roadBridges?.some(link=>link.id===roadBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
+        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,tx=Math.floor(p.x),ty=Math.floor(p.y);
+        if(pBridge&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         if(!elevated&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         const dx=p.x-c.entity.x,dy=p.y-c.entity.y,dz=(p.z||0)-(c.skybridgeZ||0),len=Math.hypot(dx,dy,dz);
-        const tile=tileAt(this.world,tx,ty),cost=elevated?(roadBridge?0.55:1.05):(bridgeAt(this.world,tx,ty)?0.55:roadTravelCost(tile)),available=distance/cost,travelled=Math.min(len,available);
+        const tile=tileAt(this.world,tx,ty),cost=elevated?1.05:roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
         if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;if(!elevated){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
         else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;distance=0;}
         if(travelled>0){
@@ -1289,7 +1289,7 @@ export class CitySimulation {
           if(!elevated){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
-        c.action = c.skybridgeZ>0?(bridgeAt(this.world,tx,ty)?'Atravessando uma ponte':'Atravessando a passarela elevada'):c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? (c.workProjectId&&this.development.projects.find(p=>p.id===c.workProjectId)?.service==='bridge'?'Construindo uma ponte':'Indo para a obra') : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }

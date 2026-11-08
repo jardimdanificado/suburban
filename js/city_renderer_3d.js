@@ -360,39 +360,11 @@ export function syncUrbanArt(renderer,THREE,city,world){
     else{group.position.set(x,surfaceElevation(world,x,y)+.04,y);group.rotation.y=streetFacing??piece.rotation??0;group.visible=!Number.isFinite(renderer.renderedMinTx)||x>=renderer.renderedMinTx-2&&x<=renderer.renderedMaxTx+2&&y>=renderer.renderedMinTy-2&&y<=renderer.renderedMaxTy+2;}
   }
 }
-export function syncRoadBridges(renderer,THREE,world){
-  const bridges=world.roadBridges||[],revision=world.bridgeRevision||0;
-  if(renderer.roadBridgeRevision===revision&&renderer.roadBridgeStyleVersion===3)return;
-  if(renderer.roadBridgeGroup){renderer.scene.remove(renderer.roadBridgeGroup);renderer.roadBridgeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
-  const group=new THREE.Group();
-  for(let bridgeIndex=0;bridgeIndex<bridges.length;bridgeIndex++){
-    const bridge=bridges[bridgeIndex],variant=((bridgeIndex*7+(bridge.tiles?.length||0))%3),timber=variant===1,painted=variant===2,
-      deckColor=timber?0x806047:painted?0xb8a27d:0xb2aa95,railColor=timber?0x493b31:painted?0x426c68:0x343a38,capColor=timber?0xc39a67:painted?0xe1ce9c:0xddd0b4,
-      deckMaterial=new THREE.MeshLambertMaterial({color:deckColor}),railMaterial=new THREE.MeshLambertMaterial({color:railColor}),capMaterial=new THREE.MeshLambertMaterial({color:capColor});
-    const model=new THREE.Group(),deckParts=new THREE.Group(),decorParts=new THREE.Group();
-    const horizontal=bridge.axis==='x',tiles=bridge.tiles||[];
-    for(let i=0;i<tiles.length;i++){const tile=tiles[i];
-      if(!Number.isInteger(tile.x)||!Number.isInteger(tile.y)||tile.x<0||tile.y<0||tile.x>=world.width||tile.y>=world.height)continue;
-      const height=bridge.height??.8,deck=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.98:.86,.2,horizontal?.86:.98),deckMaterial);
-      deck.position.set(tile.x+.5,height-.1,tile.y+.5);deck.receiveShadow=true;deck.castShadow=true;deckParts.add(deck);
-      if(timber){
-        const boardCount=3;for(let board=0;board<boardCount;board++){const offset=(board-(boardCount-1)/2)*.25,plank=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.86:.055,.025,horizontal?.055:.86),capMaterial);plank.position.set(tile.x+.5+(horizontal?0:offset),height+.012,tile.y+.5+(horizontal?offset:0));decorParts.add(plank);}
-      }
-      for(const side of [-.38,.38]){
-        const rail=timber?new THREE.Mesh(new THREE.BoxGeometry(horizontal?.98:.07,.07,horizontal?.07:.98),railMaterial):new THREE.Mesh(new THREE.BoxGeometry(horizontal?.98:.12,.48,horizontal?.12:.98),railMaterial);
-        rail.position.set(tile.x+.5+(horizontal?0:side),height+(timber?.28:.14),tile.y+.5+(horizontal?side:0));decorParts.add(rail);
-        const cap=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.98:.15,.055,horizontal?.15:.98),capMaterial);cap.position.set(tile.x+.5+(horizontal?0:side),height+(timber?.34:.4),tile.y+.5+(horizontal?side:0));decorParts.add(cap);
-        if(timber||i===0||i===tiles.length-1||i%2===0){
-          const post=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.09:.12,.62,horizontal?.12:.09),railMaterial);post.position.set(tile.x+.5+(horizontal?0:side),height+.25,tile.y+.5+(horizontal?side:0));decorParts.add(post);
-          if(!timber&&i%2===0){const finial=new THREE.Mesh(new THREE.SphereGeometry(.075,6,5),capMaterial);finial.position.set(tile.x+.5+(horizontal?0:side),height+.62,tile.y+.5+(horizontal?side:0));decorParts.add(finial);}
-        }
-      }
-    }
-    if(tiles.length){for(const end of [tiles[0],tiles.at(-1)]){const height=bridge.height??.8,abutment=new THREE.Mesh(new THREE.BoxGeometry(horizontal?.24:.95,.42,horizontal?.95:.24),new THREE.MeshLambertMaterial({color:0xc5b99e}));abutment.position.set(end.x+.5,height-.28,end.y+.5);decorParts.add(abutment);}}
-    mergeStaticMeshes(THREE,deckParts);mergeStaticMeshes(THREE,decorParts);model.add(deckParts,decorParts);group.add(model);
-  }
-  renderer.roadBridgeGroup=group;renderer.roadBridgeRevision=revision;renderer.roadBridgeStyleVersion=3;renderer.scene.add(group);
+export function buildingStairMaterial(renderer,THREE){
+  const sidewalk=renderer.materials?.terrainSidewalk0;
+  return new THREE.MeshLambertMaterial({map:sidewalk?.map||null,color:sidewalk?.map?0xffffff:0xc7bea5,dithering:true});
 }
+
 // Room coordinates count floors; render their physical height consistently with picking.
 
 function syncBuildingDetailBatch(renderer,THREE,key,active){
@@ -406,7 +378,7 @@ function syncBuildingDetailBatch(renderer,THREE,key,active){
   let batch=renderer[key+'Batch'];
   if(!batch){
     const geometry=renderer[key+'BatchGeometry']??=(key==='supports'?new THREE.BoxGeometry(.2,1,.2):key==='stairs'?new THREE.BoxGeometry(.8,1,.22):new THREE.BoxGeometry(1,.06,1));
-    const material=renderer[key+'BatchMaterial']??=(key==='supports'?new THREE.MeshLambertMaterial({color:0x68756a}):key==='stairs'?new THREE.MeshLambertMaterial({color:0x9f9076}):new THREE.MeshLambertMaterial({color:0x928571}));
+    const material=renderer[key+'BatchMaterial']??=(key==='supports'?new THREE.MeshLambertMaterial({color:0x68756a}):key==='stairs'?buildingStairMaterial(renderer,THREE):new THREE.MeshLambertMaterial({color:0x928571}));
     batch=new THREE.InstancedMesh(geometry,material,Math.max(64,count));batch.count=0;batch.castShadow=key==='supports';batch.receiveShadow=true;batch.frustumCulled=false;renderer.scene.add(batch);renderer[key+'Batch']=batch;
   }
   if(signature===batch.userData.signature)return;
@@ -429,7 +401,6 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
   syncCampaignDecorations(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
   syncSkybridges(renderer,THREE,entities,world);
-  syncRoadBridges(renderer,THREE,world);
   syncCardboardShelters(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncCorpseVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncImportDepotVisual(renderer,THREE,renderer.cityDevelopment?.city,world);
@@ -514,14 +485,14 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     if ((b.constructionKind === 'open-air' && b.type !== 'market') || b.type === 'greengrocer') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
-    if (group && (group.userData.buildingStyleVersion!==30 || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
+    if (group && (group.userData.buildingStyleVersion!==31 || group.userData.bridgeDoorKey!==bridgeDoorKey || group.userData.floorCount !== b.floors || group.userData.layoutRevision !== (b.layoutRevision||0) || group.userData.rotation !== (b.rotation||0)||group.userData.paintRevision!==(b.paintRevision||0)||group.userData.campaignPaintId!==(b.campaignPaint?.id??null))) {
       renderer.parkPalmWindDecorations.delete(entity.id);
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
       renderer.scene.remove(group); group.traverse(object => { object.geometry?.dispose(); object.material?.dispose();object.userData.partyFlagTexture?.dispose();object.userData.mineSignTexture?.dispose();object.userData.marketSignTexture?.dispose(); }); renderer.cityMeshes.delete(entity.id); group = null;
     }
     if (!group) {
       renderer.cityMeshVisualRevision=(renderer.cityMeshVisualRevision||0)+1;
-      group = new THREE.Group();group.userData.buildingStyleVersion=30;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
+      group = new THREE.Group();group.userData.buildingStyleVersion=31;group.userData.cityBuilding=b;group.userData.bridgeDoorKey=bridgeDoorKey;group.userData.floorCount = b.floors;group.userData.paintRevision=b.paintRevision||0;group.userData.layoutRevision=b.layoutRevision||0;group.userData.rotation=b.rotation||0;group.userData.campaignPaintId=b.campaignPaint?.id??null;
       const material = buildingMaterial(renderer,THREE,'wall',0xffffff,buildingTextureVariant(b.id??entity.id));material.side=THREE.DoubleSide;material.vertexColors=true;material.needsUpdate=true;
       const style = HOUSE_STYLES[b.architecture] || HOUSE_STYLES.modern;
       const residential = ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing'].includes(b.type),mine=['iron_mine','bauxite_mine','clay_pit','sand_pit'].includes(b.type);
@@ -676,7 +647,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
         offsets.forEach(([dx,dy])=>{const worldX=space.position.x+dx,worldY=space.position.y+dy,item={type:'chair',x:worldX-b.entity.x,y:worldY-b.entity.y,z:space.floor,visualScale:.62,facing:{x:center.x,y:center.y}},model=furnitureModel(THREE,item),floorY=space.kind==='roof_terrace'?b.floors*CITY_FLOOR_HEIGHT:space.floor*CITY_FLOOR_HEIGHT;model.position.set(item.x,floorY,item.y);leisureProps.add(model);});
       }
       if(leisureProps.children.length){mergeStaticMeshes(THREE,leisureProps,{recursive:true});group.add(leisureProps);}
-      const stairs = new THREE.InstancedMesh(new THREE.BoxGeometry(.8, 1, .22), new THREE.MeshLambertMaterial({ color: 0x9f9076 }), 4);
+      const stairs = new THREE.InstancedMesh(new THREE.BoxGeometry(.8, 1, .22), buildingStairMaterial(renderer,THREE), 4);
       stairs.receiveShadow = true; group.add(stairs); group.userData.stairs = stairs;
       group.userData.cells = group.userData.cellMeshes?.[0] || null;
       renderer.decorateCityMaterials?.(group);

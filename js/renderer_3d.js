@@ -20,7 +20,7 @@ import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-k
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1-canvas-readback-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -108,7 +108,7 @@ function roadRailingLayout(world,city){
   const party=cityGoverningParty(city),partyId=party?.id??null,cached=roadRailingLayouts.get(world);if(cached?.map===world.map&&cached.revision===world.revision&&cached.city===city&&cached.structureRevision===city?.structureRevision&&cached.partyId===partyId)return cached;
   const faces=[],segments=new Map(),nodes=new Map(),doorApproaches=roadRailingDoorApproaches(city),farmFenceCells=roadRailingFarmFenceCells(city);
   for(let y=0;y<world.height;y++)for(let x=0;x<world.width;x++){
-    const tile=world.map[y*world.width+x],isSidewalk=world.hasSidewalk?.(x,y);if(!ROAD_SURFACE_TILES.has(tile)&&!isSidewalk)continue;
+    if(!roadRailingAllowed(world,x,y))continue;
     const corners=streetSurfaceCorners(world,x,y);if(!corners)continue;
     for(const face of roadRetainingFaces(world,x,y,()=>true)){
       if(railingFaceBlocksDoor(face,doorApproaches)||railingFaceOverlapsFarmFence(face,farmFenceCells))continue;
@@ -2396,56 +2396,6 @@ function createBoneWallGeometry() {
   return mergeBufferGeometries(parts);
 }
 
-// 3D Wooden Bridge Geometry (Elevated timber deck with side railings & vertical support pilings)
-function createWoodBridgeGeometry() {
-  const parts = [];
-  const deck = new THREE.BoxGeometry(0.98, 0.08, 0.98);
-  deck.translate(0, 0.04, 0);
-  parts.push(deck);
-
-  const railL = new THREE.BoxGeometry(0.06, 0.22, 0.98);
-  railL.translate(-0.46, 0.15, 0);
-  parts.push(railL);
-
-  const railR = new THREE.BoxGeometry(0.06, 0.22, 0.98);
-  railR.translate(0.46, 0.15, 0);
-  parts.push(railR);
-
-  const stilt = new THREE.CylinderGeometry(0.06, 0.06, 1.30, 6);
-  const s1 = stilt.clone(); s1.translate(-0.40, -0.60, -0.40); parts.push(s1);
-  const s2 = stilt.clone(); s2.translate( 0.40, -0.60, -0.40); parts.push(s2);
-  const s3 = stilt.clone(); s3.translate(-0.40, -0.60,  0.40); parts.push(s3);
-  const s4 = stilt.clone(); s4.translate( 0.40, -0.60,  0.40); parts.push(s4);
-
-  return mergeBufferGeometries(parts);
-}
-
-// 3D Stone Arch Bridge Geometry (Chiseled stone deck with parapets & heavy masonry piers)
-function createStoneBridgeGeometry() {
-  const parts = [];
-  const deck = new THREE.BoxGeometry(0.98, 0.10, 0.98);
-  deck.translate(0, 0.05, 0);
-  parts.push(deck);
-
-  const parapetL = new THREE.BoxGeometry(0.12, 0.28, 0.98);
-  parapetL.translate(-0.43, 0.18, 0);
-  parts.push(parapetL);
-
-  const parapetR = new THREE.BoxGeometry(0.12, 0.28, 0.98);
-  parapetR.translate(0.43, 0.18, 0);
-  parts.push(parapetR);
-
-  const pier1 = new THREE.BoxGeometry(0.24, 1.40, 0.96);
-  pier1.translate(-0.25, -0.65, 0);
-  parts.push(pier1);
-
-  const pier2 = new THREE.BoxGeometry(0.24, 1.40, 0.96);
-  pier2.translate(0.25, -0.65, 0);
-  parts.push(pier2);
-
-  return mergeBufferGeometries(parts);
-}
-
 // 3D Water Platform / Stilt Foundation Geometry for Houses & Buildings over water
 function createWaterPlatformGeometry() {
   const parts = [];
@@ -4164,8 +4114,6 @@ export class RCT3DRenderer {
       waterWellBase: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xd8d7de, 0x3a3842, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.60, 0.05),
       waterWellWood: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0xd4a373, 0x4a3525, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
       waterWellRoof: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_C.png", 0xffffff, 0x888888, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
-      woodBridge: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0x8b5a2b, 0x3a2214, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01),
-      stoneBridge: makeMat(isPersp, { map: createTintedTexture("Feature_Brick_A.png", 0xc8c8c8, 0x4a4a4a, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickA, 0.4, 0.60, 0.05),
       waterPlatform: makeMat(isPersp, { map: createTintedTexture("Feature_Wood.png", 0x7c4c24, 0x2e1a0e, 1.0), dithering: true, side: THREE.DoubleSide }, normWood, 0.42, 0.88, 0.01)
     });
 
@@ -4668,19 +4616,6 @@ export class RCT3DRenderer {
     this.instRoadSnaps = new THREE.InstancedMesh(roadSnapGeo, this.materials.roadSnap, 1600);
     this.instRoadSnaps.receiveShadow = true;
 
-    // 3D Elevated Bridges over Water (Wood & Stone Pillars)
-    const woodBridgeGeo = createWoodBridgeGeometry();
-    this.instWoodBridges = new THREE.InstancedMesh(woodBridgeGeo, this.materials.woodBridge, 1600);
-    this.instWoodBridges.count = 0;
-    this.instWoodBridges.receiveShadow = true;
-    this.instWoodBridges.castShadow = true;
-
-    const stoneBridgeGeo = createStoneBridgeGeometry();
-    this.instStoneBridges = new THREE.InstancedMesh(stoneBridgeGeo, this.materials.stoneBridge, 1600);
-    this.instStoneBridges.count = 0;
-    this.instStoneBridges.receiveShadow = true;
-    this.instStoneBridges.castShadow = true;
-
     // 3D Water Stilt Platform Foundation for Houses & Buildings over water
     const waterPlatformGeo = createWaterPlatformGeometry();
     this.instWaterPlatforms = new THREE.InstancedMesh(waterPlatformGeo, this.materials.waterPlatform, 800);
@@ -4771,8 +4706,6 @@ export class RCT3DRenderer {
     this.instCampfireFlames.frustumCulled = false;
     this.instRoads.frustumCulled = false;
     this.instRoadSnaps.frustumCulled = false;
-    this.instWoodBridges.frustumCulled = false;
-    this.instStoneBridges.frustumCulled = false;
     this.instWaterPlatforms.frustumCulled = false;
 
     this.instancedGroup = new THREE.Group();
@@ -4807,7 +4740,7 @@ export class RCT3DRenderer {
       this.instTorches, this.instTorchesUnlit, this.instTorchFlames,
       this.instWoodCampfires, this.instCampfireFlames,
       this.instRoads, this.instRoadSnaps,
-      this.instWoodBridges, this.instStoneBridges, this.instWaterPlatforms
+      this.instWaterPlatforms
     );
     this.scene.add(this.instancedGroup);
 
@@ -6934,7 +6867,7 @@ export class RCT3DRenderer {
             wall.pos.push(...point);wall.uvs.push(u,point[1]);wall.colors.push(tone,tone,tone);
           }
         }
-        if(streetCorners&&(ROAD_SURFACE_TILES.has(tType)||isSidewalk))for(const face of roadRetainingFaces(world,tx,ty,()=>true)){
+        if(streetCorners&&roadRailingAllowed(world,tx,ty))for(const face of roadRetainingFaces(world,tx,ty,()=>true)){
           if(railingFaceBlocksDoor(face,railingLayout.doorApproaches)||railingFaceOverlapsFarmFence(face,railingLayout.farmFenceCells))continue;
           const edgeCorners=[[0,1],[1,2],[3,2],[0,3]][face.side],roadHeight=t=>streetCorners[edgeCorners[0]]+(streetCorners[edgeCorners[1]]-streetCorners[edgeCorners[0]])*t;
           const drops=[roadHeight(face.from)-face.lowA,roadHeight(face.to)-face.lowB];
@@ -7695,8 +7628,6 @@ export class RCT3DRenderer {
     let campfireFlameCount = 0;
     let roadCount = 0;
     let roadSnapCount = 0;
-    let woodBridgeCount = 0;
-    let stoneBridgeCount = 0;
     let waterPlatformCount = 0;
 
     const mMatrix = this._mMatrix;
@@ -8015,7 +7946,7 @@ export class RCT3DRenderer {
           this.instCampfireFlames.setMatrixAt(campfireFlameCount++, mMatrix);
         }
       }
-      // --- 3D PAVED ROADS, BRIDGES & SNAP POINTS (Adaptive Slopes, Ramps & Water Bridges) ---
+      // --- 3D PAVED ROADS & SNAP POINTS (Adaptive Slopes & Ramps) ---
       // --- 3D PAVED ROADS & SNAP POINTS (Adaptive Slopes & Natural Ramps across Land) ---
       else if (isRoad) {
         const tx = Math.floor(e.x);
@@ -8989,10 +8920,6 @@ export class RCT3DRenderer {
     this.instRoadSnaps.count = roadSnapCount;
     this.instRoadSnaps.instanceMatrix.needsUpdate = true;
 
-    this.instWoodBridges.count = woodBridgeCount;
-    this.instWoodBridges.instanceMatrix.needsUpdate = true;
-    this.instStoneBridges.count = stoneBridgeCount;
-    this.instStoneBridges.instanceMatrix.needsUpdate = true;
     this.instWaterPlatforms.count = waterPlatformCount;
     this.instWaterPlatforms.instanceMatrix.needsUpdate = true;
 
