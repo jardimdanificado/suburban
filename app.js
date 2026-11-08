@@ -1,8 +1,8 @@
-import {CityFavorites} from './js/city_favorites.js?v=favorite-glyph-sprites-4';
+import {CityFavorites} from './js/city_favorites.js?v=custom-history-filters-1';
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=ff2-speed-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=ff2-speed-1";
-import { CityDesktop } from "./js/city_desktop.js?v=ff2-speed-1";
+import { CityDesktop } from "./js/city_desktop.js?v=custom-history-filters-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=favorite-glyph-sprites-4";
 import { setActiveEntities } from "./js/engine.js";

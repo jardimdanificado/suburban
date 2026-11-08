@@ -278,7 +278,7 @@ export class CityStateGraph {
       const history = this.objects.get(payload.id);
       history.applySnapshot(payload);
       const cursor=!payload.reset && this.historyCursors.get(payload.id) || {versions:new Map()};
-      cursor.favoriteRevision=history.favoriteRevision;cursor.favoriteConfig=JSON.stringify([history.favoriteIds,history.favoriteLimit]);cursor.lastId=history.nextId-1;cursor.pendingRevision=history.pendingFinanceRevision;
+      cursor.favoriteRevision=history.favoriteRevision;cursor.favoriteConfig=JSON.stringify([history.favoriteIds,history.favoriteLimit,history.favoriteTargets]);cursor.lastId=history.nextId-1;cursor.pendingRevision=history.pendingFinanceRevision;
       cursor.financeLastId=payload.financeLastId??history.financeArchive.at(-1)?.id??0;
       for(const [account,total] of payload.totals)cursor.versions.set(account,total);
       this.historyCursors.set(payload.id,cursor);

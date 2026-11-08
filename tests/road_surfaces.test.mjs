@@ -14,3 +14,14 @@ test('building steps reuse the sidewalk texture without tinting its colors',()=>
  const material=buildingStairMaterial({materials:{terrainSidewalk0:{map}}},THREE);
  assert.equal(material.map,map);assert.equal(material.color,0xffffff);assert(material.dithering);
 });
+
+test('outer sidewalk edges inherit railings from the paved street beside them',()=>{
+ const world={width:5,height:3,map:new Uint8Array(15).fill(TILE_FLOOR),sidewalkTiles:new Set([2,12])};
+ world.map[7]=TILE_ROAD_GRASS_STONE;
+ assert(roadRailingAllowed(world,2,0));assert(roadRailingAllowed(world,2,2));
+ assert.equal(roadRailingAllowed(world,1,1),false,'ordinary ground beside pavement is not a sidewalk');
+ world.map[7]=TILE_ROAD_GRASS;
+ assert.equal(roadRailingAllowed(world,2,0),false);assert.equal(roadRailingAllowed(world,2,2),false);
+ world.map[7]=TILE_FLOOR;
+ assert.equal(roadRailingAllowed(world,2,0),false,'an isolated sidewalk marker has no street connection');
+});

@@ -9,6 +9,7 @@ function paginate(ui,p,rows,key,size=8){const page=Math.min(ui[key]||0,Math.max(
 function flag(p,party){const width=p.w*.88,height=width*76/120,x=p.x+(p.w-width)/2;if(p.visible(height+8))drawPartyFlag(p.ui.ctx,party.flag,x,p.y,width,height);p.y+=height+8;}
 export function renderPartyDossier(ui,p){
   const city=ui.city,gov=city.politics,selected=gov.party(ui.partyId);if(!selected){p.note('Partido indisponível.');return;}
+  if(ui.host?.favorites)p.buttons([{label:ui.host.favorites.hasParty(selected.id)?'DEIXAR DE ACOMPANHAR PARTIDO':'ACOMPANHAR PARTIDO NO HISTÓRICO',click:()=>ui.host.favorites.toggleParty(selected.id)},{label:'HISTÓRICO DO PARTIDO',click:()=>ui.openHistory(`partyId:${selected.id}`)}]);
   const mode=ui.partyDossierView||'identity';p.heading(selected.name);p.links([['identity','IDENTIDADE'],['office','SEDE'],['relations','RELAÇÕES'],['finance','FINANÇAS'],['record','ATUAÇÃO E REPUTAÇÃO'],['members','FILIADOS']].map(([id,label])=>({label,selected:mode===id,click:()=>{ui.partyDossierView=id;ui.resetScroll();}})));
   if(mode==='identity'){
   flag(p,selected);p.heading(selected.name);p.kv('Sigla e número eleitoral',`${selected.short} · ${selected.number??'—'}`);

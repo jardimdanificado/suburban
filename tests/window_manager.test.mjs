@@ -127,3 +127,13 @@ test('toolbar buttons toggle their dialogs while internal navigation keeps exist
   h.desktop.openModule('people');assert.equal(h.desktop.manager.find('module:people').state,state);
   click();assert.equal(h.desktop.manager.find('module:people'),undefined);
 });
+
+test('company and party favorites and personalized subfilters render without creating map-marker controls',async()=>{
+ const {CityFavorites}=await import('../js/city_favorites.js');
+ const h=harness(390,844),favorites=new CityFavorites({city:h.city,desktop:h.desktop});h.desktop.favorites=favorites;
+ const company=h.city.economy.businesses[0],party=h.city.politics.parties[0];assert(company);assert(party);favorites.toggleBusiness(company.id);favorites.toggleParty(party.id);
+ const state=h.desktop.openModule('favorites');
+ for(const view of ['businesses','parties','settings']){state.showView(view);assert.doesNotThrow(h.draw);assert.equal(Object.keys(state.favoriteColorInputs||{}).length,0);for(const r of h.ui.regions)assert(r.x>=0&&r.x+r.w<=390,`${view}: ${r.label}`);}
+ const history=h.desktop.openModule('custom-history');history.showView('settings');for(const group of ['politics','interventions','economy','city'])history.helpOpen[`history-filter:${group}`]=true;
+ assert.doesNotThrow(h.draw);assert(history.dynamicSelects['custom-history:politicianId']);assert(history.dynamicSelects['custom-history:interventionId']);assert.deepEqual(favorites.people,{});
+});

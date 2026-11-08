@@ -3,7 +3,11 @@ import {baseTerrainTile,TILE_SAND,TILE_STONE,TILE_WATER,TILE_VOID,TILE_ROAD_GRAS
 const HEIGHTS=[1.1,5.5,0,.4,3.8,0,1.1,.4,1.1,2.3,7.5,.4,2.3,2.3];
 const ROADS=new Set([TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE]);
 const PAVED_ROADS=new Set([TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE]);
-export function roadRailingAllowed(world,x,y){return PAVED_ROADS.has(at(world,x,y));}
+export function roadRailingAllowed(world,x,y){
+  const tile=at(world,x,y);
+  if(ROADS.has(tile))return PAVED_ROADS.has(tile);
+  return sidewalkAt(world,x,y)&&[[0,-1],[1,0],[0,1],[-1,0]].some(([dx,dy])=>PAVED_ROADS.has(at(world,x+dx,y+dy)));
+}
 const CORNERS=[[0,0],[1,0],[1,1],[0,1]];
 const EDGES=[{dx:0,dy:-1,a:0,b:1},{dx:1,dy:0,a:1,b:2},{dx:0,dy:1,a:3,b:2},{dx:-1,dy:0,a:0,b:3}];
 const caches=new WeakMap();

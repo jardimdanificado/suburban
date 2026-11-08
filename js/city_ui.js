@@ -39,7 +39,7 @@ import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=colonial-colored
 import { REPUTATION_LABELS } from './city_reputation.js';
 import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-3';
 import { HISTORY_LIMIT } from './city_history.js';
-import { FAVORITE_GLYPH_COUNT, GOVERNMENT_TOPICS } from './city_favorites.js';
+import { FAVORITE_GLYPH_COUNT, GOVERNMENT_TOPICS, HISTORY_FILTER_GROUPS } from './city_favorites.js';
 import {drawGlyph8x8} from './legacy_ui.js';
 import { INDUSTRIES } from './city_industries.js';
 import { SANITATION_RULES } from './city_sanitation.js?v=sanitation-visitor-search-1';
@@ -69,7 +69,7 @@ export const TABS = [
   ['custody', 'PRISÕES', 'CIDADANIA E JUSTIÇA', 'Vagas, custódia, saúde, alimentação e cumprimento de pena.'],
   ['sanitation', 'SANEAMENTO', 'VIDA URBANA', 'Banheiros, serviços de limpeza e ciclo dos resíduos.'],
   ['log', 'HISTÓRICO', 'VIDA URBANA', 'Os acontecimentos e as decisões de cada pessoa.'],
-  ['favorites', 'PESSOAS FAVORITAS', 'VIDA URBANA', 'Pessoas acompanhadas, marcadores e retenção de atividade.'],
+  ['favorites', 'FAVORITOS', 'VIDA URBANA', 'Pessoas, empresas e partidos acompanhados no histórico.'],
   ['custom-history', 'HISTÓRICO PERSONALIZADO', 'VIDA URBANA', 'Acontecimentos importantes do governo e das pessoas favoritas.'],
 ];
 export const VIEWS = {
@@ -87,7 +87,7 @@ export const VIEWS = {
   custody: [['overview','VISÃO GERAL'],['people','CUSTODIADOS'],['orders','VAGAS E MANDADOS']],
   sanitation: [['facilities', 'BANHEIROS'], ['queues','FILAS'], ['cleaning', 'FAXINA'], ['gigs','BICOS DE FAXINA'], ['cleanliness','CIDADE LIMPA'], ['waste', 'RESÍDUOS'], ['deaths', 'MORTES']],
 };
-VIEWS.favorites=[['people','PESSOAS'],['settings','MARCADOR E RETENÇÃO']];
+VIEWS.favorites=[['people','PESSOAS'],['businesses','EMPRESAS'],['parties','PARTIDOS'],['settings','RETENÇÃO']];
 VIEWS['custom-history']=[['overview','ACONTECIMENTOS'],['settings','FILTROS']];
 export const FILTERS = {
   people: [['all','TODOS'], ['homeless','SEM CASA'], ['unemployed','SEM TRABALHO'], ['critical','EM RISCO'], ['food','COM FOME'], ['children','CRIANÇAS']],
@@ -223,7 +223,7 @@ export class CityUI {
     this.bounds={x:window.x,y:window.y,w:window.w,h:window.h};if(window.shaded){this.finishInputs();return;}
     const x=window.x+5,w=window.w-10,bottom=window.y+window.h-21;let y=window.y+25;
     if(!this.floatingDossier&&!this.recordWindow){
-      const search=!['event','corruption-case','newgame','custom-history'].includes(this.tab)&&(this.tab!=='favorites'||this.view()==='people')&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
+      const search=!['event','corruption-case','newgame','custom-history'].includes(this.tab)&&(this.tab!=='favorites'||['people','businesses','parties'].includes(this.view()))&&(this.tab!=='city'||this.view()!=='overview')&&(this.tab!=='government'||this.view()!=='overview');
       if(search){this.search.placeholder=this.tab==='people'?'Buscar pessoa…':'Pesquisar…';this.inputAt(this.search,x+5,y,w-10);y+=23;}
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
       if(this.tab==='government'&&this.view()==='elections'){const nav=new Page(ui,x+4,y,w-8,y,bottom);renderPoliticsNavigation(this,nav);y=nav.y;this.politicsNavigationPinned=true;}
@@ -458,6 +458,7 @@ export class CityUI {
   }
   building(p, b) {
     const city = this.city;
+    if(this.host?.favorites&&city.economy.businesses.includes(b))p.button(this.host.favorites.hasBusiness(b.id)?'DEIXAR DE ACOMPANHAR EMPRESA':'ACOMPANHAR EMPRESA NO HISTÓRICO',()=>this.host.favorites.toggleBusiness(b.id));
     if(!this.floatingDossier)p.heading(name(b.entity)); p.note(`${BUILDING_TYPES[b.type].label} | ${b.width}x${b.depth}x${b.floors} | ${b.units.length} células`);
     p.button('LOCALIZAR NO MAPA', () => { this.camera(b.entity.x, b.entity.y); if(!this.host)this.visible = false; });
     this.dossierTabs(p, [['profile', 'OPERAÇÃO'], ['analysis','ANÁLISE'], ['stock', 'ESTOQUE'], ['staff', 'EQUIPE'], ['finance','FINANÇAS'], ['infrastructure','ESTRUTURA'], ['paint','PINTURA'], ...(['builder','road_paving','road_maintenance'].includes(b.type) ? [['services', 'SERVIÇOS']] : []), ['units', 'CÉLULAS'], ['history','HISTÓRICO']]);
@@ -611,7 +612,7 @@ export class CityUI {
     const pages=Math.max(1,Math.ceil(rows.length/20)),page=Math.min(this.journalPages[account]||0,pages-1);
     p.note(`${rows.length} registros disponíveis / página ${page+1} de ${pages}`);
     p.kv('Ocorrências desde a fundação',this.city.history.journals.get(account)?.total||0);
-    if(this.city.history.favoriteArchive.has(Number(String(account).replace('citizen:',''))))p.note(`Favorito: ${this.city.history.favoriteLimit?this.city.history.favoriteLimit.toLocaleString('pt-BR')+' registros por pessoa':'histórico sem limite'}.`);
+    if(this.city.history.favoriteArchive.has(String(account).startsWith('citizen:')?Number(String(account).slice(8)):account))p.note(`Favorito: ${this.city.history.favoriteLimit?this.city.history.favoriteLimit.toLocaleString('pt-BR')+' registros por favorito':'histórico sem limite'}.`);
     p.button('ABRIR REGISTROS VINCULADOS',()=>{const target=this.go('log');target.logCitizenId=null;target.logBuildingId=null;target.logAccountId=account;target.logReference=null;target.selectedEventId=null;});
     p.rows(rows.slice(page*20,page*20+20),entry=>p.record(entry.message,`${stamp(entry.minute)} · ${options.find(([id])=>id===entry.kind)?.[1]||entry.kind}`,()=>this.openEvent(entry.id),false,{value:entry.amount!==undefined?money(entry.amount):'',color:C.cyan}));
     p.buttons([{label:'ANTERIOR',click:()=>{this.journalPages[account]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.journalPages[account]=Math.min(pages-1,page+1);}}]);
@@ -721,9 +722,18 @@ export class CityUI {
     const people=Object.entries(favorites.people).map(([id,pref])=>({id:Number(id),pref,citizen:this.city.society.citizen(Number(id))})).filter(row=>row.citizen&&!row.citizen.entity.destroyed);
     if(this.view()==='settings'){
       p.heading('MARCADOR NO MAPA');p.note('O marcador acompanha a pessoa e fica visível acima da cabeça quando ela está na câmera.');
-      p.heading('RETENÇÃO DE ATIVIDADE');p.note('Aumenta o histórico guardado para cada favorito. Registros antigos já removidos não podem ser recuperados.');
-      const options=[[20000,'20.000 registros por pessoa (padrão)'],[50000,'50.000 registros por pessoa'],[100000,'100.000 registros por pessoa'],[250000,'250.000 registros por pessoa'],[0,'Sem limite']];
+      p.heading('RETENÇÃO DE ATIVIDADE');p.note('Aumenta o histórico guardado para cada pessoa, empresa ou partido favorito. Registros antigos já removidos não podem ser recuperados.');
+      const options=[[20000,'20.000 registros por favorito (padrão)'],[50000,'50.000 registros por favorito'],[100000,'100.000 registros por favorito'],[250000,'250.000 registros por favorito'],[0,'Sem limite']];
       this.selectControl(p,'favoriteHistoryLimit',options,favorites.limit,value=>{favorites.limit=Number(value);favorites.persist(true);});return;
+    }
+    if(['businesses','parties'].includes(this.view())){
+      const isParty=this.view()==='parties',collection=isParty?favorites.parties:favorites.businesses,entities=isParty?this.city.politics.parties:this.city.economy.businesses,label=isParty?'PARTIDOS':'EMPRESAS',toggle=id=>isParty?favorites.toggleParty(id):favorites.toggleBusiness(id),display=entity=>isParty?entity.name:name(entity.entity);
+      p.heading(`${label} ACOMPANHADOS / ${Object.keys(collection).length}`);p.note('Acompanhamento exclusivo de registros, sem símbolo ou cor no mapa. Use a busca para adicionar.');
+      if(this.query.trim())for(const entity of entities.filter(e=>!collection[e.id]&&this.matches(display(e))).slice(0,12))p.record(display(entity),'Adicionar aos registros acompanhados',()=>toggle(entity.id),false,{value:'ACOMPANHAR'});
+      const rows=Object.entries(collection),page=Math.min(this.favoriteTrackedPage||0,Math.max(0,Math.ceil(rows.length/12)-1));
+      if(rows.length>12)p.buttons([{label:'ANTERIOR',click:()=>{this.favoriteTrackedPage=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.favoriteTrackedPage=page+1;}}]);
+      for(const [id,pref]of rows.slice(page*12,page*12+12)){const entity=entities.find(e=>e.id===Number(id));p.record(entity?display(entity):`${isParty?'Partido':'Empresa'} #${id}`,'Registros preservados enquanto estiver nos favoritos',()=>isParty?this.openParty(Number(id)):this.openBuilding(Number(id)));p.checkbox('Incluir no histórico personalizado',pref.feed,value=>{pref.feed=value;favorites.persist();});p.buttons([{label:'HISTÓRICO',click:()=>this.openHistory(isParty?`partyId:${id}`:null,isParty?{}:{logBuildingId:Number(id)})},{label:'REMOVER',click:()=>toggle(Number(id))}]);}
+      return;
     }
     p.heading(`PESSOAS FAVORITAS / ${people.length}`);
     const query=normalize(this.query.trim());
@@ -760,7 +770,26 @@ export class CityUI {
       for(const [id,label]of Object.entries(GOVERNMENT_TOPICS)){
         p.checkbox(label,favorites.topics.includes(id),value=>{favorites.topics=value?[...new Set([...favorites.topics,id])]:favorites.topics.filter(topic=>topic!==id);favorites.persist();});
       }
-      p.heading('PESSOAS');const people=Object.entries(favorites.people);if(!people.length)p.note('Adicione pessoas em Pessoas favoritas para receber as atividades delas.');
+      p.heading('RECORTE DOS REGISTROS');p.note('Os recortes abaixo se combinam. A pessoa filtra registros vinculados a ela, incluindo reações aos votos da sua bancada.');
+      const scope=(key,label,rows)=>this.selectControl(p,`custom-history:${key}`,[[0,label],...rows],favorites.filters[key]||0,value=>{favorites.filters[key]=Number(value)||null;favorites.persist();});
+      scope('politicianId','Todas as pessoas e políticos',this.city.citizens.map(c=>[c.id,name(c.entity)]));
+      scope('partyId','Todos os partidos',this.city.politics.parties.map(party=>[party.id,party.name]));
+      scope('billId','Todos os projetos e votações',this.city.politics.council.bills.map(bill=>[bill.id,`#${bill.id} · ${bill.title}`]));
+      scope('interventionId','Todas as intervenções',(this.city.politics.interventions?.records||[]).map(row=>[row.id,`#${row.id} · ${row.title}`]));
+      scope('days','Todo o período retido',[[1,'Último dia'],[3,'Últimos 3 dias'],[7,'Últimos 7 dias'],[30,'Últimos 30 dias']]);
+      p.button('LIMPAR RECORTES',()=>{favorites.filters={politicianId:null,partyId:null,billId:null,interventionId:null,days:0};favorites.persist();});
+      p.heading('TIPOS E SUBFILTROS');p.note('Estes filtros também valem para pessoas, empresas e partidos favoritos. Reações a votos ficam desligadas por padrão; votações e decisões continuam disponíveis.');
+      for(const [key,group]of Object.entries(HISTORY_FILTER_GROUPS)){
+        const types=Object.keys(group.types),enabled=types.filter(type=>favorites.types.includes(type)).length,open=!!this.helpOpen[`history-filter:${key}`];
+        p.disclosure(`${group.label} · ${enabled}/${types.length}`,open,()=>{this.helpOpen[`history-filter:${key}`]=!open;});if(!open)continue;
+        p.buttons([{label:'INCLUIR GRUPO',click:()=>{favorites.types=[...new Set([...favorites.types,...types])];favorites.persist();}},{label:'OCULTAR GRUPO',click:()=>{favorites.types=favorites.types.filter(type=>!types.includes(type));favorites.persist();}}]);
+        for(const [type,label]of Object.entries(group.types))p.checkbox(label,favorites.types.includes(type),value=>favorites.setType(type,value));
+      }
+      for(const [key,label,entities,display]of [['businesses','EMPRESAS',this.city.economy.businesses,e=>name(e.entity)],['parties','PARTIDOS',this.city.politics.parties,e=>e.name]]){
+        p.heading(label);if(!Object.keys(favorites[key]).length)p.note(`Adicione ${label.toLowerCase()} em Favoritos para acompanhar seus registros.`);
+        for(const [id,pref]of Object.entries(favorites[key])){const entity=entities.find(e=>e.id===Number(id));p.checkbox(entity?display(entity):`#${id}`,pref.feed,value=>{pref.feed=value;favorites.persist();});}
+      }
+      p.heading('PESSOAS');const people=Object.entries(favorites.people);if(!people.length)p.note('Adicione pessoas na aba Pessoas de Favoritos para receber suas atividades.');
       for(const [id,pref]of people){const citizen=this.city.society.citizen(Number(id));p.checkbox(`${name(citizen?.entity)} · incluir atividades`,pref.feed,value=>{pref.feed=value;favorites.persist();});}
       return;
     }

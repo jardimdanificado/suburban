@@ -5,7 +5,7 @@ export function desktopMenus(d){
     {id:'tools',label:'Ferramentas',items:[
       item('Menu principal (Esc)',()=>d.controls.mainMenu?.()),
       separator,
-      item('Pessoas favoritas',()=>d.openModule('favorites')),
+      item('Favoritos',()=>d.openModule('favorites')),
       item('Histórico personalizado',()=>d.openModule('custom-history')),
       item('Opções',()=>d.controls.options?.()),
       item('Editor de mapa',()=>d.controls.editor?.()),
