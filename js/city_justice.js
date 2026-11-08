@@ -1253,24 +1253,33 @@ export class CityJustice {
     return record;
   }
   report(caseId,reporterId){
-    const city=this.city,record=this.cases.find(c=>c.id===caseId),reporter=city.society.citizen(reporterId);if(!record||!reporter||reporter.entity.destroyed||record.status==='reported'||record.status==='investigating')return false;
+    const city=this.city,record=this.cases.find(c=>c.id===caseId),reporter=city.society.citizen(reporterId);if(!record||!reporter||reporter.entity.destroyed||record.status!=='unreported'||reporter.justiceReportCaseId!=null||reporter.custody)return false;
     const station=this.activeBuildings('police_station').filter(b=>this.staffed(b)>0).sort((a,b)=>dist(a.door,reporter.entity)-dist(b.door,reporter.entity))[0];if(!station){reporter.action='Não há uma delegacia com atendimento disponível';return false;}
+    const path=city.findPath(reporter.entity,station.door);if(path===null){reporter.action='Sem rota para registrar o BO na delegacia';return false;}
+    reporter.path=path;reporter.targetId=station.id;
     record.status='reporting';record.reporterId=reporterId;record.reportingStationId=station.id;record.reportStartedAt=city.minute;reporter.justiceReportCaseId=record.id;reporter.task='justice-report';reporter.action=`Indo registrar o BO na delegacia`;return true;
   }
   arriveToReport(c){const city=this.city,record=this.cases.find(r=>r.id===c.justiceReportCaseId),station=city.building(record?.reportingStationId);if(!record||record.status!=='reporting'||!station){c.justiceReportCaseId=null;c.task=null;c.targetId=null;return false;}if(Math.hypot(c.entity.x-station.door.x,c.entity.y-station.door.y)>1.5){const path=city.findPath(c.entity,station.door);if(path===null){record.status='unreported';c.justiceReportCaseId=null;c.task=null;c.targetId=null;return false;}c.targetId=station.id;c.path=path;if(!path.length)c.path=[{x:station.door.x,y:station.door.y}];return false;}c.targetId=station.id;const room=station.units.find(u=>u.roomType==='service')||station.units.find(u=>['office','workspace'].includes(u.roomType));if(!room){record.status='unreported';c.justiceReportCaseId=null;c.task=null;c.targetId=null;c.action='Delegacia sem balcão de atendimento acessível';return false;}if(!activityRoomReady(city,c,station,room,'service'))return false;record.reportedAt=city.minute;record.status='reported';record.statement={reporterId:c.id,description:`${c.entity.properties.name} compareceu pessoalmente ao balcão da delegacia.`,confidence:record.witnesses.find(w=>w.citizenId===c.id)?.confidence??.35};c.justiceReportCaseId=null;c.task=null;c.targetId=null;c.action='Registrou um boletim de ocorrência';city.log(`BO #${record.id} registrado por ${c.entity.properties.name} no balcão da delegacia.`,'justice',[c.id,record.victimId].filter(Number.isInteger),{kind:'crime-reported',caseId:record.id,buildingId:station.id,unitId:room.id});return true;}
   dispatchReports(){
-    const city=this.city;if(!this.activeBuildings('police_station').some(b=>this.staffed(b)>0))return;
+    const city=this.city;
+    // Reconcile every trip before assigning new ones, including old saved trips.
     for(const record of this.cases){
-      if(record.status==='reporting'){
-        const reporter=city.society.citizen(record.reporterId);if(!reporter||reporter.entity.destroyed||reporter.task!=='justice-report'){record.status='unreported';if(reporter?.justiceReportCaseId===record.id)reporter.justiceReportCaseId=null;record.reporterId=null;}
+      if(record.status!=='reporting')continue;
+      const reporter=city.society.citizen(record.reporterId),station=city.building(record.reportingStationId);
+      if(!reporter||reporter.entity.destroyed||reporter.task!=='justice-report'||reporter.justiceReportCaseId!==record.id||!station?.active||station.entity.destroyed){
+        record.status='unreported';record.reporterId=null;
+        if(reporter?.justiceReportCaseId===record.id){reporter.justiceReportCaseId=null;if(reporter.task==='justice-report'){reporter.task=null;reporter.targetId=null;reporter.path=[];}}
       }
+    }
+    if(!this.activeBuildings('police_station').some(b=>this.staffed(b)>0))return;
+    for(const record of this.cases){
       if(record.status!=='unreported')continue;
       const victim=city.society.citizen(record.victimId),available=c=>c&&!c.entity.destroyed&&c.needs.health>20&&!c.custody&&!c.justiceReportCaseId&&!city.urgentNeed?.(c);
       if(record.type==='defamation'&&!record.discovery){const work=this.art.find(piece=>piece.id===record.details?.artId);if(work?.seenBy?.[victim?.id]!=null)record.discovery={citizenId:victim.id,noticedAt:work.seenBy[victim.id],basis:'public-art-accusation'};}
       if(record.stolenAsset&&victim&&!victim.entity.destroyed&&city.minute-record.occurredAt>=30&&!record.discovery)record.discovery={citizenId:victim.id,noticedAt:city.minute,basis:'missing-property'};
       const victimAware=record.witnesses.some(w=>w.citizenId===victim?.id)||record.discovery?.citizenId===victim?.id;
       const reporter=available(victim)&&victimAware?victim:record.witnesses.map(w=>city.society.citizen(w.citizenId)).find(available);
-      if(reporter&&this.report(record.id,reporter.id))break;
+      if(reporter)this.report(record.id,reporter.id);
     }
   }
   referCorruption(source){
