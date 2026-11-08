@@ -1,3 +1,4 @@
+import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=ff2-speed-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
@@ -154,6 +155,7 @@ let rightClickConsumed = false;
 let lastPointer = null;
 const touchPointers = new Map();
 const freeCameraKeys = new Set();
+const freeCameraTouch = new FreeCameraTouchControls(root);
 let pinchGesture = null;
 let mousePosition = { x: -1, y: -1 };
 let pointerOnUI = false;
@@ -245,13 +247,17 @@ function moveCameraByPointer(dx,dy,zoom){
   renderer3D.setCamera(renderer3D.getCameraX()-(dx*.70710678+dy*1.22474487)*factor,renderer3D.getCameraY()-(-dx*.70710678+dy*1.22474487)*factor,zoom);
 }
 function updateFreeCameraMovement(dt){
-  if(!renderer3D.isFirstPersonActive()||renderer3D.fpEntityId!=null){freeCameraKeys.clear();return;}
-  let x=Number(freeCameraKeys.has('KeyD'))-Number(freeCameraKeys.has('KeyA'));
-  let y=Number(freeCameraKeys.has('Space')||freeCameraKeys.has('KeyE'))-Number(freeCameraKeys.has('ControlLeft')||freeCameraKeys.has('ControlRight')||freeCameraKeys.has('KeyQ'));
-  let z=Number(freeCameraKeys.has('KeyW'))-Number(freeCameraKeys.has('KeyS'));
+  const active=!mainMenu.isActive()&&renderer3D.isFirstPersonActive()&&renderer3D.fpEntityId==null;
+  freeCameraTouch.update(active);
+  if(!active){freeCameraKeys.clear();return;}
+  const held=code=>freeCameraKeys.has(code)||freeCameraTouch.has(code);
+  let x=Number(held('KeyD'))-Number(held('KeyA'));
+  let y=Number(held('KeyE'))-Number(held('KeyQ'));
+  let z=Number(held('KeyW'))-Number(held('KeyS'));
   const length=Math.hypot(x,y,z);if(!length)return;
-  const fast=freeCameraKeys.has('ShiftLeft')||freeCameraKeys.has('ShiftRight');
-  renderer3D.moveFreeCamera(x/length,y/length,z/length,12*Math.min(dt,.05)*(fast?3:1));
+  const fast=held('ShiftLeft')||held('ShiftRight');
+  const slow=freeCameraTouch.slow;
+  renderer3D.moveFreeCamera(x/length,y/length,z/length,12*Math.min(dt,.05)*(fast ? 3 : slow ? .25 : 1));
 }
 
 function onPointerDown(event) {
@@ -306,7 +312,7 @@ function onPointerDown(event) {
   }
   pointerDown = { x: event.clientX, y: event.clientY };
   lastPointer = pointerDown;
-  cameraLookDrag=event.button===2&&renderer3D.isPerspectiveActive();
+  cameraLookDrag=renderer3D.isPerspectiveActive()&&(event.button===2||(event.button===0&&renderer3D.isFirstPersonActive()&&renderer3D.fpEntityId==null));
   if (cityUI.pointerDown(x,y)) { pointerOnUI=true; return; }
   if (pointerOnUI) return;
   if (event.button === 0 && editor.open && !renderer3D.isPerspectiveActive()) {
@@ -456,7 +462,12 @@ window.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'KeyK') { event.preventDefault(); if(!event.repeat)cityUI.openGlobalSearch(); return; }
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName) || event.target?.isContentEditable) return;
   const freeCameraActive=renderer3D.isFirstPersonActive()&&(renderer3D.fpEntityId===null||renderer3D.fpEntityId===undefined);
-  if(freeCameraActive&&['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','Space','ControlLeft','ControlRight','ShiftLeft','ShiftRight'].includes(event.code)){
+  if(freeCameraActive&&event.code==='CapsLock'){
+    event.preventDefault();
+    if(!event.repeat)freeCameraTouch.toggleSlow();
+    return;
+  }
+  if(freeCameraActive&&['KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','ShiftLeft','ShiftRight'].includes(event.code)){
     event.preventDefault();freeCameraKeys.add(event.code);return;
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -482,7 +493,7 @@ window.addEventListener("keydown", (event) => {
   if (event.code === "Period" && !event.repeat) stepSimulation();
 });
 window.addEventListener('keyup',event=>freeCameraKeys.delete(event.code));
-window.addEventListener('blur',()=>{freeCameraKeys.clear();cameraLookDrag=false;});
+window.addEventListener('blur',()=>{freeCameraKeys.clear();freeCameraTouch.clear();cameraLookDrag=false;});
 window.addEventListener("resize", resize);
 
 function frame(now) {
