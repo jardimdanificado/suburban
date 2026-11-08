@@ -54,14 +54,21 @@ vec3 applyRegionalPalette(vec3 color, vec3 materialColor) {
   float originalLuma=max(luma,0.0);
   float pigmentLuma=max(dot(pigment,vec3(0.2126,0.7152,0.0722)),0.001);
   vec3 targetPigment=pigment*(originalLuma/pigmentLuma);
-  float targetPeak=max(max(targetPigment.r,targetPigment.g),targetPigment.b);
-  float highlightHeadroom=(1.0-originalLuma)/max(targetPeak-originalLuma,0.001);
-  // Make each regional palette clearly readable while keeping the source
-  // luminance and detail. The headroom cap prevents bright materials clipping.
-  float tintStrength=min(uPaletteIntensity,clamp(highlightHeadroom,0.0,1.0));
   vec3 colorAtOriginalLuma=color;
   float sourceLuma=max(dot(colorAtOriginalLuma,vec3(0.2126,0.7152,0.0722)),0.001);
   colorAtOriginalLuma*=originalLuma/sourceLuma;
-  return mix(colorAtOriginalLuma,targetPigment,tintStrength);
+  vec3 paletteDelta=targetPigment-colorAtOriginalLuma;
+  // Allow up to 3x palette strength while stopping each channel at the gamut
+  // boundary. Both ends have the same luminance, so this boosts hue without
+  // lifting the image or clipping its texture detail.
+  float safeStrength=3.0;
+  if(paletteDelta.r>0.00001)safeStrength=min(safeStrength,(1.0-colorAtOriginalLuma.r)/paletteDelta.r);
+  else if(paletteDelta.r< -0.00001)safeStrength=min(safeStrength,colorAtOriginalLuma.r/(-paletteDelta.r));
+  if(paletteDelta.g>0.00001)safeStrength=min(safeStrength,(1.0-colorAtOriginalLuma.g)/paletteDelta.g);
+  else if(paletteDelta.g< -0.00001)safeStrength=min(safeStrength,colorAtOriginalLuma.g/(-paletteDelta.g));
+  if(paletteDelta.b>0.00001)safeStrength=min(safeStrength,(1.0-colorAtOriginalLuma.b)/paletteDelta.b);
+  else if(paletteDelta.b< -0.00001)safeStrength=min(safeStrength,colorAtOriginalLuma.b/(-paletteDelta.b));
+  float tintStrength=min(uPaletteIntensity,max(safeStrength,0.0));
+  return colorAtOriginalLuma+paletteDelta*tintStrength;
 }
 `;

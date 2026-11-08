@@ -1,4 +1,4 @@
-import { COLOR_PALETTES } from "./color_palettes.js?v=graphics-settings-v2";
+import { COLOR_PALETTES } from "./color_palettes.js?v=palette-intensity-3x";
 import { SPEED_TIERS, speedLabel } from "./simulation_time.js";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
@@ -12,7 +12,7 @@ const GRAPHICS = [
   { key: "nightLightLimit", label: "LUZES NOTURNAS", values: [32, 64, 128, 256].map(v => [v, `${v}`]), default: 32, graphic: true },
   effect("normalMaps", "NORMAL MAPS", BOOL, true),
   { key: "colorPalette", label: "PALETA DE CORES", values: COLOR_PALETTES, default: "ORIGINAL", graphic: true },
-  effect("paletteIntensity", "INTENSIDADE DA PALETA", [[0.5, "50%"], [0.75, "75%"], [1, "100%"]], 1),
+  effect("paletteIntensity", "INTENSIDADE DA PALETA", [[0.5, "50%"], [1, "100%"], [1.5, "150%"], [2, "200%"], [3, "300%"]], 3),
 ];
 const INTERFACE = [{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
 const EFFECTS = [
@@ -47,7 +47,7 @@ export class OptionsPanel {
     try { saved = JSON.parse(storage?.getItem("experience-framework.options") || "{}") || {}; } catch {}
     for (const item of this.items) {
       const previous=saved[item.key];
-      const value = item.values.some(([v]) => v === previous) ? previous : item.key==='resolution'&&Number.isFinite(previous) ? item.values.reduce((best,[v])=>Math.abs(v-previous)<=Math.abs(best-previous)?v:best,item.default) : item.default;
+      const value = item.key === "paletteIntensity" && previous === 1 ? item.default : item.values.some(([v]) => v === previous) ? previous : item.key==='resolution'&&Number.isFinite(previous) ? item.values.reduce((best,[v])=>Math.abs(v-previous)<=Math.abs(best-previous)?v:best,item.default) : item.default;
       this.apply(item.key, value, false);
     }
   }

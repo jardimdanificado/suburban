@@ -1,4 +1,4 @@
-import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=graphics-settings-v2";
+import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=palette-intensity-3x";
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=beach-band-2-3-waterfix-1';
@@ -3842,7 +3842,7 @@ export class RCT3DRenderer {
       contrast: 1.0,
       alpha: 1.0,
       nightLightLimit: 32,
-      paletteIntensity: 1
+      paletteIntensity: 3
     };
     this._lastPerspState = null;
     // 4.6 Texture-Derived & Procedural Normal Maps
@@ -5260,7 +5260,7 @@ export class RCT3DRenderer {
       regionalPaletteUniform.value = colorPaletteIndex(opts.colorPalette);
     }
     if (Object.prototype.hasOwnProperty.call(opts, 'paletteIntensity')) {
-      regionalPaletteIntensityUniform.value = Math.max(0, Math.min(1, Number(opts.paletteIntensity) || 0));
+      regionalPaletteIntensityUniform.value = Math.max(0, Math.min(3, Number(opts.paletteIntensity) || 0));
     }
     if(opts.nightLightLimit!==undefined)this.setNightLightLimit(opts.nightLightLimit);
     if (opts.anisotropy !== undefined) {
@@ -9025,7 +9025,7 @@ export class RCT3DRenderer {
     const chromaRequested=this.graphicOptions?.chroma!==false;
     const colorAdjustmentRequested=(this.graphicOptions?.brightness??1)!==1||(this.graphicOptions?.contrast??1)!==1;
     regionalPaletteUniform.value=colorPaletteIndex(this.graphicOptions?.colorPalette);
-    regionalPaletteIntensityUniform.value=Math.max(0,Math.min(1,Number(this.graphicOptions?.paletteIntensity ?? 1)));
+    regionalPaletteIntensityUniform.value=Math.max(0,Math.min(3,Number(this.graphicOptions?.paletteIntensity ?? 3)));
     const postProcessingRequested=dofRequested||chromaRequested||colorAdjustmentRequested;
     if ((this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget && postProcessingRequested)) {
       this.renderer.setRenderTarget(this.renderTarget);
