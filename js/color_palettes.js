@@ -12,6 +12,7 @@ export const COLOR_PALETTES = [
 export const colorPaletteIndex = id => Math.max(0, COLOR_PALETTES.findIndex(([key]) => key === id));
 export const COLOR_PALETTE_GLSL = `
 uniform int uMaterialPalette;
+uniform float uPaletteIntensity;
 vec3 applyRegionalPalette(vec3 color, vec3 materialColor) {
   if(uMaterialPalette == 0) return color;
   float luma=dot(color,vec3(0.2126,0.7152,0.0722));
@@ -57,7 +58,7 @@ vec3 applyRegionalPalette(vec3 color, vec3 materialColor) {
   float highlightHeadroom=(1.0-originalLuma)/max(targetPeak-originalLuma,0.001);
   // Make each regional palette clearly readable while keeping the source
   // luminance and detail. The headroom cap prevents bright materials clipping.
-  float tintStrength=min(0.84,clamp(highlightHeadroom,0.0,1.0));
+  float tintStrength=min(uPaletteIntensity,clamp(highlightHeadroom,0.0,1.0));
   vec3 colorAtOriginalLuma=color;
   float sourceLuma=max(dot(colorAtOriginalLuma,vec3(0.2126,0.7152,0.0722)),0.001);
   colorAtOriginalLuma*=originalLuma/sourceLuma;

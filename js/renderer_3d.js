@@ -1,4 +1,4 @@
-import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=normal-maps-iso-v1";
+import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=graphics-settings-v2";
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=beach-band-2-3-waterfix-1';
@@ -635,6 +635,7 @@ export function createTintedTexture(skinName, fgHex = 0xffffff, bgHex = 0x000000
 
 const retroDitherMaterials=new WeakSet();
 const regionalPaletteUniform={value:0};
+const regionalPaletteIntensityUniform={value:1};
 export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) {
   if (!mat || retroDitherMaterials.has(mat)) return;
   retroDitherMaterials.add(mat);
@@ -643,6 +644,7 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
   mat.onBeforeCompile = (shader) => {
     if (prevCompile) prevCompile(shader);
     shader.uniforms.uMaterialPalette=regionalPaletteUniform;
+    shader.uniforms.uPaletteIntensity=regionalPaletteIntensityUniform;
     shader.fragmentShader = COLOR_PALETTE_GLSL + `
       float getBayer4x4(vec2 p) {
         vec2 m = mod(floor(p), 4.0);
@@ -3839,7 +3841,8 @@ export class RCT3DRenderer {
       brightness: 1.0,
       contrast: 1.0,
       alpha: 1.0,
-      nightLightLimit: 32
+      nightLightLimit: 32,
+      paletteIntensity: 1
     };
     this._lastPerspState = null;
     // 4.6 Texture-Derived & Procedural Normal Maps
@@ -5255,6 +5258,9 @@ export class RCT3DRenderer {
     Object.assign(this.graphicOptions, opts);
     if (Object.prototype.hasOwnProperty.call(opts, 'colorPalette')) {
       regionalPaletteUniform.value = colorPaletteIndex(opts.colorPalette);
+    }
+    if (Object.prototype.hasOwnProperty.call(opts, 'paletteIntensity')) {
+      regionalPaletteIntensityUniform.value = Math.max(0, Math.min(1, Number(opts.paletteIntensity) || 0));
     }
     if(opts.nightLightLimit!==undefined)this.setNightLightLimit(opts.nightLightLimit);
     if (opts.anisotropy !== undefined) {
@@ -9019,6 +9025,7 @@ export class RCT3DRenderer {
     const chromaRequested=this.graphicOptions?.chroma!==false;
     const colorAdjustmentRequested=(this.graphicOptions?.brightness??1)!==1||(this.graphicOptions?.contrast??1)!==1;
     regionalPaletteUniform.value=colorPaletteIndex(this.graphicOptions?.colorPalette);
+    regionalPaletteIntensityUniform.value=Math.max(0,Math.min(1,Number(this.graphicOptions?.paletteIntensity ?? 1)));
     const postProcessingRequested=dofRequested||chromaRequested||colorAdjustmentRequested;
     if ((this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget && postProcessingRequested)) {
       this.renderer.setRenderTarget(this.renderTarget);

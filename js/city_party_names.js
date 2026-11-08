@@ -372,6 +372,7 @@ export const POLITICAL_WORDS=Object.freeze({
     "dos Transportadores",
     "dos Professores",
     "dos Empreendedores",
+    "dos Autônomos",
     "da Ciência",
     "da Transparência",
     "da Segurança",
@@ -380,7 +381,22 @@ export const POLITICAL_WORDS=Object.freeze({
     "da Floresta",
     "da Energia Limpa",
     "da Inclusão",
-    "da Dignidade"
+    "da Dignidade",
+    "da Resenha",
+    "do Progresso",
+    "da Limpeza",
+    "dos Amigos",
+    "da Maconha",
+    "do Pó",
+    "da Coca",
+    "da Fumaça",
+    "da Folha",
+    "da Pinga",
+    "do Álcool",
+    "dos Maconheiros",
+    "dos Pinguços",
+    "do Raio",
+    "do Tabaco"
   ]
 });
 const pick=(city,items)=>items[Math.floor(city.random()*items.length)];

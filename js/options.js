@@ -1,7 +1,8 @@
-import { COLOR_PALETTES } from "./color_palettes.js?v=normal-maps-iso-v1";
+import { COLOR_PALETTES } from "./color_palettes.js?v=graphics-settings-v2";
 import { SPEED_TIERS, speedLabel } from "./simulation_time.js";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
+const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const GRAPHICS = [
   { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.5 },
   { key: "shadows", label: "SOMBRAS", values: BOOL, default: true },
@@ -9,13 +10,13 @@ const GRAPHICS = [
   { key: "wireframe", label: "WIREFRAME", values: [[0, "OFF"], [1, "GRADE"], [2, "TOTAL"]], default: 0 },
   { key: "moonlight", label: "LUZ DA LUA", values: BOOL, default: true, graphic: true },
   { key: "nightLightLimit", label: "LUZES NOTURNAS", values: [32, 64, 128, 256].map(v => [v, `${v}`]), default: 32, graphic: true },
+  effect("normalMaps", "NORMAL MAPS", BOOL, true),
   { key: "colorPalette", label: "PALETA DE CORES", values: COLOR_PALETTES, default: "ORIGINAL", graphic: true },
+  effect("paletteIntensity", "INTENSIDADE DA PALETA", [[0.5, "50%"], [0.75, "75%"], [1, "100%"]], 1),
 ];
-const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const INTERFACE = [{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
 const EFFECTS = [
   { key: "postEffects", label: "POS EFEITOS", values: BOOL, default: true },
-  effect("normalMaps", "NORMAL MAPS", BOOL, true),
   effect("dofStrength", "PROFUNDIDADE", ["OFF", "LOW", "MED", "HIGH"].map(v => [v, v]), "HIGH"),
   effect("chroma", "ABERRACAO COR", BOOL, true),
   effect("fog", "NEBLINA", ["OFF", "LIGHT", "DENSE", "MIST", "SILENT HILL"].map(v => [v, v]), "LIGHT"),
@@ -93,8 +94,14 @@ export class OptionsPanel {
     });
     if(!floating)ui.button(x+w-32,y+4,26,20,"X",()=>this.toggle());
     if (this.tab === "HISTORY") this.tab = "GRAPHICS";
-    [["GRAPHICS", "GRAFICOS"], ["VISUAL", "EFEITOS"], ["TIME", "TEMPO"], ["INTERFACE", "INTERFACE"]].forEach(([id, label], i) => {
-      const bw = Math.floor((w - 32) / 4);
+    const effectsAvailable = !!(this.renderer.isThirdPersonActive?.() ||
+      (this.renderer.isFirstPersonActive?.() && this.renderer.fpEntityId == null));
+    if (!effectsAvailable && this.tab === "VISUAL") this.tab = "GRAPHICS";
+    const tabs = [["GRAPHICS", "GRAFICOS"]];
+    if (effectsAvailable) tabs.push(["VISUAL", "EFEITOS"]);
+    tabs.push(["TIME", "TEMPO"], ["INTERFACE", "INTERFACE"]);
+    tabs.forEach(([id, label], i) => {
+      const bw = Math.floor((w - 32) / tabs.length);
       ui.button(x + 8 + i * (bw + 4), y + 30, bw, 24, label, () => { this.tab = id; this.scroll = 0; }, { selected: this.tab === id });
     });
     const rows = this.tab === "INTERFACE" ? INTERFACE : this.tab === "GRAPHICS" ? this.items.filter(item => GRAPHICS.some(graphic => graphic.key === item.key)) : this.items.filter(item => EFFECTS.some(effect => effect.key === item.key));

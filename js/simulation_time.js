@@ -1,6 +1,6 @@
 export const FF_SPEED = 64;
 export const FF2_SPEED = 128;
-export const SPEED_TIERS = [0.5, 1, 2, 4, 8, 16, 32, FF_SPEED, FF2_SPEED];
+export const SPEED_TIERS = [0.25, 0.5, 1, 2, 4, 8, 16, 32, FF_SPEED, FF2_SPEED];
 export const speedLabel = speed => speed === FF2_SPEED ? 'ff2' : speed === FF_SPEED ? 'ff' : `${speed}×`;
 
 /** Fixed simulation steps keep experience rules independent of rendering FPS. */
