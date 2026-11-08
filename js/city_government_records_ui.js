@@ -6,7 +6,7 @@ import {formatMoney as money} from './city_ui_format.js';
 const stamp=n=>`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const fold=(ui,p,key,title,render)=>ui.section(p,key,title,render);
 function paginate(ui,p,rows,key,size=8){const page=Math.min(ui[key]||0,Math.max(0,Math.ceil(rows.length/size)-1));if(rows.length>size)p.buttons([{label:'ANTERIOR',click:()=>{ui[key]=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{ui[key]=page+1;}}]);return rows.slice(page*size,page*size+size);}
-function flag(p,party){const width=Math.min(120,p.w),height=width*76/120,x=p.x+(p.w-width)/2;if(p.visible(height+8))drawPartyFlag(p.ui.ctx,party.flag,x,p.y,width,height);p.y+=height+8;}
+function flag(p,party){const width=p.w*.88,height=width*76/120,x=p.x+(p.w-width)/2;if(p.visible(height+8))drawPartyFlag(p.ui.ctx,party.flag,x,p.y,width,height);p.y+=height+8;}
 export function renderPartyDossier(ui,p){
   const city=ui.city,gov=city.politics,selected=gov.party(ui.partyId);if(!selected){p.note('Partido indisponível.');return;}
   const mode=ui.partyDossierView||'identity';p.heading(selected.name);p.links([['identity','IDENTIDADE'],['office','SEDE'],['relations','RELAÇÕES'],['finance','FINANÇAS'],['record','ATUAÇÃO E REPUTAÇÃO'],['members','FILIADOS']].map(([id,label])=>({label,selected:mode===id,click:()=>{ui.partyDossierView=id;ui.resetScroll();}})));

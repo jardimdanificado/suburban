@@ -7,7 +7,7 @@ export function renderMunicipalIdentity(ui,p){
   const propose=(type,payload)=>{const bill=gov.submitBill(type,payload);ui.notice=bill?.title?`Proposta apresentada à Câmara: ${bill.title}.`:city.lastError||'A proposta não pôde ser apresentada.';return bill;};
   const flagProposal=operation=>propose('cityFlag',{operation});
   p.heading('IDENTIDADE DA CIDADE');p.kv('Nome oficial',identity.name);p.kv('Slogan da prefeitura',identity.slogan);p.kv('Fundação',stamp(identity.foundedAt??0));p.note('Nome, slogan, símbolos, textos, cores e fundo da bandeira mudam após aprovação da Câmara.');
-  const flag=identity.flag,previewHeight=Math.min(82,p.w*76/120),previewWidth=previewHeight*120/76,previewX=p.x+(p.w-previewWidth)/2;
+  const flag=identity.flag,previewWidth=p.w*.88,previewHeight=previewWidth*76/120,previewX=p.x+(p.w-previewWidth)/2;
   if(flag&&p.visible(previewHeight+8)){drawPartyFlag(p.ui.ctx,flag,previewX,p.y,previewWidth,previewHeight);p.y+=previewHeight+8;}
   p.kv('Composição',`${flag?.emblems?.length||0} símbolos · ${flag?.texts?.length||0} textos · fundo ${flag?.backgroundStyle||'chapado'}`);
   const mode=ui.identityView||'name';p.links([['name','NOME'],['slogan','SLOGAN'],['flag','BANDEIRA'],['history','HISTÓRICO']].map(([id,label])=>({label,selected:mode===id,click:()=>{ui.identityView=id;ui.resetScroll();}})));

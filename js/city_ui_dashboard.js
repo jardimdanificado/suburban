@@ -11,7 +11,7 @@ export function renderGovernmentDashboard(ui,p){
     return [{works,bills,blocked:works.filter(o=>o.status==='blocked'),unlit:[...city.lighting.sites.values()].filter(l=>l.public&&l.built&&!l.fuel).length}];
   })[0];
   const policy=(politicsTab,extra={})=>ui.openPanel({views:{government:'elections'},politicsTab,billId:null,termId:null,...extra});
-  const identity=gov.ensureMunicipalIdentity();p.heading(identity.name);if(identity.flag&&p.visible(40)){drawPartyFlag(p.ui.ctx,identity.flag,p.x,p.y,60,38);p.ui.text(p.ui.fitText?p.ui.fitText(identity.slogan,p.w-72):identity.slogan.slice(0,45),p.x+70,p.y+10,C.ink);}p.space(42);
+  const identity=gov.ensureMunicipalIdentity();p.heading(identity.name);if(identity.flag){const flagWidth=p.w*.58,flagHeight=flagWidth*76/120,sloganX=p.x+flagWidth+10,sloganWidth=p.w-flagWidth-10;if(p.visible(flagHeight)&&flagWidth>0){drawPartyFlag(p.ui.ctx,identity.flag,p.x,p.y,flagWidth,flagHeight);if(identity.slogan&&sloganWidth>32)p.ui.text(p.ui.fitText?p.ui.fitText(identity.slogan,sloganWidth):identity.slogan,sloganX,p.y+flagHeight/2-7,C.ink);}p.space(flagHeight+8);}else p.space(4);
   p.button('IDENTIDADE MUNICIPAL',()=>ui.showView('identity'));
   if(mayor)p.record(mayor.entity.properties.name,`${gov.isProvisionalMayor()?'Prefeito provisório':'Prefeito'} · ${gov.partyOfId(mayor.id)?.name||'Sem partido'}`,()=>ui.openCitizen(mayor.id));
   p.metrics([
