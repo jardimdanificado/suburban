@@ -1,5 +1,5 @@
 import { COLOR_PALETTES } from "./color_palettes.js?v=palette-intensity-3x";
-import { SPEED_TIERS, speedLabel } from "./simulation_time.js";
+import { SPEED_TIERS, speedLabel } from "./simulation_time.js?v=ff3-ff4-steps-1";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });

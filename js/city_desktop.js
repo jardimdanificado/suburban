@@ -1,4 +1,4 @@
-import {speedLabel} from './simulation_time.js';
+import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
 import {CityGlobalSearch} from './city_global_search.js?v=organic-party-slogans-1';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
 import {CityUI,money} from './city_ui.js?v=custom-history-limit-1';

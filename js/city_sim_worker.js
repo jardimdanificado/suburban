@@ -1,4 +1,5 @@
 import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff2-speed-1';
+import { FF_SPEED, FF2_SPEED, FF3_SPEED, FF4_SPEED } from './simulation_time.js?v=ff3-ff4-steps-1';
 
 const graph = new CityStateGraph();
 let fieldTailPatches=false;
@@ -7,10 +8,9 @@ let tick = 0, elapsed = 0, awaitingAck = false, lastSnapshot = 0, lastMotion = 0
 let lastUpdateMs=0,maxUpdateMs=0,maxUpdateMinute=0,maxUpdateProfile=null,updateTotalMs=0,updateCount=0,maxSnapshotMs=0,maxSnapshotMinute=0;
 const phasePeaks={};
 const MIN_STEP = 1 / 60;
-// Keep ordinary worker updates to at most one city minute. FF2 uses a half-
-// second step (two city minutes) to avoid doubling movement-loop overhead just
-// because it advances simulation time twice as fast.
-const stepSize = () => speed >= 128 ? .5 : Math.min(.25,Math.max(MIN_STEP,speed/128));
+// Keep ordinary worker updates to at most one city minute. Higher fast-forward
+// modes batch more city minutes into each movement pass to reduce overhead.
+const stepSize = () => speed >= FF4_SPEED ? 1 : speed >= FF3_SPEED ? .75 : speed >= FF2_SPEED ? .5 : Math.min(.25,Math.max(MIN_STEP,speed/128));
 // Large cities can spend most of the worker's time creating full snapshots.
 // Keep motion/vitals at 100 ms and adjust only the heavier UI state update.
 // Full graph snapshots are the most expensive worker messages. At fast speeds
@@ -131,7 +131,7 @@ self.onmessage = ({ data }) => {
     } else if (data.type === 'control') {
       const timeChanged=paused!==data.paused||speed!==data.speed;
       paused = data.paused; speed = data.speed;
-      if(state){state.city.fastForward = speed >= 64;state.city.fastForward2 = speed >= 128;state.city.detailedInteriorBuildingId=data.detailBuildingId??null;}
+      if(state){state.city.fastForward = speed >= FF_SPEED;state.city.fastForward2 = speed >= FF2_SPEED;state.city.detailedInteriorBuildingId=data.detailBuildingId??null;}
       if(timeChanged){accumulator = 0; lastTime = performance.now();}
     } else if (data.type === 'ack') {
       awaitingAck = false;
