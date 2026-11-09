@@ -19,7 +19,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE
-} from "./world_gen.js?v=beach-band-2-3-waterfix-1";
+} from "./world_gen.js?v=terrain-generation-reset-1";
 import { globalWallCoords, resolveWallSkin, getEntitiesInViewport } from "./engine.js";
 
 // Framework scenes can opt into blueprints through their own tools. The base
@@ -462,8 +462,8 @@ export class Renderer {
     const colSandBg = rgba32(235, 205, 115);
     const colStoneFg = rgba32(165, 165, 175);
     const colStoneBg = rgba32(55, 55, 62);
-    const colWaterFg = rgba32(80, 150, 240);
-    const colWaterBg = rgba32(20, 45, 90);
+    const colWaterFg = rgba32(80, 240, 120);
+    const colWaterBg = rgba32(20, 90, 60);
 
     const map = world.map;
 
@@ -488,7 +488,7 @@ export class Renderer {
           const wave = Math.sin(this.waterTime * 2.0 + tx * spatialFreq + ty * (spatialFreq * 0.6)) * 0.1;
           const waveScale = Math.max(0.5, Math.min(1.5, 1.0 + wave));
 
-          fg = rgba32(Math.round(80 * waveScale), Math.round(150 * waveScale), Math.round(240 * waveScale));
+          fg = rgba32(Math.round(80 * waveScale), Math.round(240 * waveScale), Math.round(120 * waveScale));
           bg = colWaterBg;
         } else if (t === TILE_FLOOR) {
           tex = texFloor;

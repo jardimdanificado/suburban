@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {drawArtworkPreview} from './city_renderer_3d.js?v=park-fence-ground-1-canvas-readback-1';
+import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-4';
 import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
@@ -47,10 +47,11 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=two-day-public-food-reserve-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-3';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=night-service-search-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-3';
+import { renderWorldManagement } from './city_world_ui.js';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -62,6 +63,7 @@ export const TABS = [
   ['market', 'MERCADO E RIQUEZAS', 'ECONOMIA', 'Patrimônio, distribuição de riqueza, preços e vendas.'],
   ['production', 'PRODUÇÃO', 'ECONOMIA', 'Estoques, consumo e oportunidades na cadeia produtiva.'],
   ['transport', 'TRANSPORTES', 'ECONOMIA', 'Cargas reais: da reserva à entrega.'],
+  ['world', 'MUNDO E ROTAS', 'MUNDO', 'Cidades, portos, comércio regional e migração entre cidades.'],
   ['urban-art', 'ARTE URBANA', 'CIDADANIA E JUSTIÇA', 'Obras, mensagens, patrocínio, depredação e limpeza.'],
   ['safety', 'SEGURANÇA', 'CIDADANIA E JUSTIÇA', 'Delegacias, patrulhas, denúncias e investigações.'],
   ['forensics', 'IML E CORPOS', 'CIDADANIA E JUSTIÇA', 'Coleta, transporte funerário, laudos e cremação.'],
@@ -80,6 +82,7 @@ export const VIEWS = {
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO'],['analysis','ANÁLISE DAS CADEIAS']],
   transport: [['active', 'FRETES'], ['imports','DEPÓSITO DE IMPORTAÇÃO'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
+  world: [['routes','PORTOS E ROTAS'],['trade','COMÉRCIO'],['migration','MIGRAÇÃO']],
   'urban-art': [['overview','OBRAS E MENSAGENS'],['orders','ENCOMENDAS'],['damage','DANOS E LIMPEZA'],['create','CRIAR / NEGOCIAR']],
   safety: [['overview','OPERAÇÃO'],['calls','CHAMADOS'],['cases','OCORRÊNCIAS']],
   forensics: [['overview','VISÃO GERAL'],['bodies','CORPOS'],['reports','LAUDOS']],
@@ -145,7 +148,7 @@ export class CityUI {
     this.artworkDraft.value=gerarTituloTematico('arte');
     this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput);
     for(const input of this.inputs)input.hidden=true;
-    this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
+    this.terrain = 'archipelago';
     this.profileNextWorld=new URLSearchParams(window.location?.search||'').has('profile');
   }
   get inputs(){return [...Object.values(this.dynamicSelects||{}),...Object.values(this.favoriteColorInputs||{}),this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput];}
@@ -815,6 +818,7 @@ export class CityUI {
     p.rows(events.slice(0,limit),event=>p.record(event.message,`${stamp(event.minute)} · ${EVENT_CATEGORIES[event.category]||event.kind}`,()=>this.openEvent(event.id),false,{value:event.amount!==undefined?money(event.amount):'',color:C.cyan}));
   }
   content(p) {
+    if(this.tab==='world')return renderWorldManagement(this,p);
     if(this.tab==='newgame')return this.worldGeneration(p);
     if(this.tab==='favorites')return this.favoriteDirectory(p);
     if(this.tab==='custom-history')return this.customHistory(p);
@@ -981,15 +985,15 @@ export class CityUI {
   }
   worldGeneration(p) {
     const city=this.city;
-    p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
+    p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Arquipélago'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
     p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');let iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);
     p.note('Cidadãos iniciais (1 a 2.000)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.populationInput,p.x,iy,p.w);
     p.note('Tamanho do mapa (128 a 1024 células por lado)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.mapSizeInput,p.x,iy,p.w);
-    p.button(`PAISAGEM: ${WORLD_PRESETS[this.terrain].label}`,()=>{const keys=Object.keys(WORLD_PRESETS);this.terrain=keys[(keys.indexOf(this.terrain)+1)%keys.length];});
+    p.note('Todas as novas cidades são geradas como arquipélagos.');
     p.button(`PROFILER NO PRÓXIMO MUNDO: ${this.profileNextWorld?'ATIVADO':'DESATIVADO'}`,()=>{this.profileNextWorld=!this.profileNextWorld;});
     p.note('Quando ativo, mostra métricas na tela e registra engasgos acima de 500 ms no console.');
     p.note('Gerar terreno reinicia a simulação e descarta a cidade atual.',C.red);
-    p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity()&&this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(Number(this.seed.value),this.terrain,Number(this.populationInput.value),Number(this.mapSizeInput.value));});p.button('GERAR TERRENO ALEATÓRIO',()=>{if(this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(randomWorldSeed(),this.terrain,Number(this.populationInput.value),Number(this.mapSizeInput.value));});
+    p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity()&&this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(Number(this.seed.value),'archipelago',Number(this.populationInput.value),Number(this.mapSizeInput.value));});p.button('GERAR TERRENO ALEATÓRIO',()=>{if(this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(randomWorldSeed(),'archipelago',Number(this.populationInput.value),Number(this.mapSizeInput.value));});
   }
   production(p) {
     if(this.view()==='lighting'){

@@ -1,22 +1,24 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff-growth-events-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-3';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-1';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
 // directly between those snapshots would draw a straight chord through water
 // or rock even though the simulated route itself never crossed it.
-function renderSegmentWalkable(world,ax,ay,bx,by){
+function renderSegmentWalkable(world,ax,ay,bx,by,allowWater=false){
   if(!Number.isFinite(ax)||!Number.isFinite(ay)||!Number.isFinite(bx)||!Number.isFinite(by))return false;
   const distance=Math.hypot(bx-ax,by-ay),steps=Math.max(1,Math.ceil(distance/.2));let px,py;
   for(let i=0;i<=steps;i++){
     const t=i/steps,x=ax+(bx-ax)*t,y=ay+(by-ay)*t,tx=Math.floor(x),ty=Math.floor(y);
     if(tx===px&&ty===py)continue;
-    if(!terrainWalkable(world,tx,ty))return false;
+    const water=world.getTile(tx,ty)===TILE_WATER;if(!terrainWalkable(world,tx,ty)&&!(allowWater&&water))return false;
     if(px!==undefined){
-      if(tx!==px&&ty!==py){
+      const previousWater=world.getTile(px,py)===TILE_WATER;
+      if(!water&&!previousWater&&tx!==px&&ty!==py){
         if(!terrainWalkable(world,tx,py)||!terrainWalkable(world,px,ty))return false;
       }
-      if(!canStep(world,px,py,tx,ty))return false;
+      if(!water&&!previousWater&&!canStep(world,px,py,tx,ty))return false;
     }
     px=tx;py=ty;
   }
@@ -32,7 +34,7 @@ export function sampleCitizenMotion(world,sample,now){
   if(Math.floor(x)===Math.floor(tx)&&Math.floor(y)===Math.floor(ty)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
-  if(renderSegmentWalkable(world,x,y,tx,ty)){
+  if(renderSegmentWalkable(world,x,y,tx,ty,!!sample.citizen?.boatClass)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
   sample.blockedSince??=now;
@@ -79,12 +81,12 @@ export class CitySimulationBridge {
     this.checkpointWaiters=new Map();this.checkpointId=0;
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=ff3-ff4-steps-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=regional-supply-3', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
       this.active = true;
-      for (const [target, path, method] of [[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],...['reserveWorldExport','departWorldExport','completeWorldExport','returnWorldExport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration'].map(method=>[city,'',method]),
+      for (const [target, path, method] of [[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],...['reserveWorldExport','departWorldExport','completeWorldExport','returnWorldExport','reserveWorldImport','cancelWorldImport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration'].map(method=>[city,'',method]),
         ...['setPalette','requestPurchase','requestVehicle','requestBuilding'].map(method=>[city.paint,'paint.',method]),[city.vehicles,'vehicles.','mountFlag'],[city.vehicles,'vehicles.','removeFlag'],[city.economy,'economy.','rentOffice'],[city.economy,'economy.','configureEmployment'],[city.economy,'economy.','offerShares'],[city.economy,'economy.','buyShares'],[city.economy,'economy.','cancelShareOffer'],[city.vehicles,'vehicles.','configureAssembly'],[city.vehicles,'vehicles.','buyVehicle'],[city.vehicles,'vehicles.','transferVehicle'],[city.vehicles,'vehicles.','revisePart'],[city.politics.research,'politics.research.','commissionService'],[city.publications, 'publications.', 'write'], [city.publications, 'publications.', 'read'], [city.publications, 'publications.', 'configure'], [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'], [city.bank, 'bank.', 'fileRecoveryPlan'],
         [city.politics, 'politics.', 'leaseHeadquarters'],[city.politics, 'politics.', 'executePlayerAction'],[city.politics, 'politics.', 'intervene'],[city.politics, 'politics.', 'startPublicWork'],[city.politics, 'politics.', 'submitBill'], [city.politics, 'politics.', 'vetoBill'], [city.currency, 'currency.', 'retire'], [city.world, 'world.', 'setTile']]) {
         const original = target[method];

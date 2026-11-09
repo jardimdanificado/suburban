@@ -1,3 +1,6 @@
+import { INDUSTRIES } from './city_industries.js';
+import { GOODS } from './city_economy.js?v=regional-supply-3';
+
 export class WorldTradeService {
   constructor(coordinator){
     this.world=coordinator;
@@ -25,31 +28,85 @@ export class WorldTradeService {
     const seller=origin.city.building(sellerBuildingId),buyer=destination.city.building(destinationBuildingId),route=this.world.routes.get(`route:${originCityId}>${destinationCityId}`),goodsAmount=quantity*unitPrice,freightAmount=quantity*(route?.freightPerUnit||0),amount=goodsAmount+freightAmount;
     if(!seller||!buyer||!route||!origin.city.economy.goods[good]||!Number.isSafeInteger(goodsAmount)||!Number.isSafeInteger(freightAmount)||!Number.isSafeInteger(amount))throw new Error('Produto, vendedor, comprador ou rota indisponível.');
     await this.request(destination,'reserveWorldPayment',[id,buyer.accountId,amount]);
-    try{await this.request(origin,'reserveWorldExport',[id,sellerBuildingId,good,quantity]);}
+    try{await this.request(destination,'reserveWorldImport',[id,destinationBuildingId,good,quantity]);}
     catch(error){await destination.bridge.request('refundWorldPayment',[id]);throw error;}
+    try{await this.request(origin,'reserveWorldExport',[id,sellerBuildingId,good,quantity]);}
+    catch(error){await destination.bridge.request('cancelWorldImport',[id]);await destination.bridge.request('refundWorldPayment',[id]);throw error;}
     try{
       return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,manifest:{kind:'goods',good,quantity,unitPrice,goodsAmount,freightAmount,amount,sellerBuildingId,sellerAccountId:seller.accountId,destinationBuildingId,payerAccountId:buyer.accountId,...(contractId?{contractId}:{})}});
-    }catch(error){await origin.bridge.request('returnWorldExport',[id]);await destination.bridge.request('refundWorldPayment',[id]);throw error;}
+    }catch(error){await origin.bridge.request('returnWorldExport',[id]);await destination.bridge.request('cancelWorldImport',[id]);await destination.bridge.request('refundWorldPayment',[id]);throw error;}
   }
 
   scheduleMigration(options){if(this.quiesced)return Promise.reject(new Error('O mundo está preparando um salvamento.'));return this.track(this.scheduleMigrationNow(options));}
-  async scheduleMigrationNow({id,originCityId,destinationCityId,citizenId,departureMinute=this.world.minute+1}){
+  async scheduleMigrationNow({id,originCityId,destinationCityId,citizenId,departureMinute=this.world.minute+1,reason=null}){
     const origin=this.world.cities.get(originCityId),destination=this.world.cities.get(destinationCityId),route=this.world.routes.get(`route:${originCityId}>${destinationCityId}`);
     if(!origin||!destination||originCityId===destinationCityId||!route)throw new Error('Escolha duas cidades diferentes com uma rota disponível.');
     const result=await origin.bridge.request('reserveWorldCitizenMigration',[id,citizenId]);
     if(!result?.ok||!result.value||typeof result.value!=='object')throw new Error(result?.message||'Este cidadão não está elegível para migração marítima.');
-    try{return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,manifest:{kind:'citizen',globalId:result.value.globalId,citizenId,package:result.value}});}
+    try{return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,manifest:{kind:'citizen',globalId:result.value.globalId,citizenId,package:result.value,...(reason?{reason}:{})}});}
     catch(error){await origin.bridge.request('cancelWorldCitizenMigration',[id]);throw error;}
   }
 
   scheduleHouseholdMigration(options){if(this.quiesced)return Promise.reject(new Error('O mundo está preparando um salvamento.'));return this.track(this.scheduleHouseholdMigrationNow(options));}
-  async scheduleHouseholdMigrationNow({id,originCityId,destinationCityId,citizenId,departureMinute=this.world.minute+1}){
+  async scheduleHouseholdMigrationNow({id,originCityId,destinationCityId,citizenId,departureMinute=this.world.minute+1,reason=null}){
     const origin=this.world.cities.get(originCityId),destination=this.world.cities.get(destinationCityId),route=this.world.routes.get(`route:${originCityId}>${destinationCityId}`);
     if(!origin||!destination||originCityId===destinationCityId||!route)throw new Error('Escolha duas cidades diferentes com uma rota disponível.');
     const result=await origin.bridge.request('reserveWorldHouseholdMigration',[id,citizenId]);
     if(!result?.ok||!result.value||result.value.version!==2||!Array.isArray(result.value.members))throw new Error(result?.message||'Este núcleo familiar não está elegível para migração marítima.');
-    try{return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,manifest:{kind:'citizen',globalId:result.value.globalId,package:result.value}});}
+    try{return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,manifest:{kind:'citizen',globalId:result.value.globalId,package:result.value,...(reason?{reason}:{})}});}
     catch(error){await origin.bridge.request('cancelWorldHouseholdMigration',[id]);throw error;}
+  }
+
+  processAutonomousMigrations(minute=this.world.minute){if(this.quiesced)return Promise.resolve(0);return this.track(this.processAutonomousMigrationsNow(minute));}
+  async processAutonomousMigrationsNow(minute=this.world.minute){
+    const day=Math.floor(minute/1440);
+    if(this.world.autonomousMigrationDay===day||this.world.cities.size<2)return 0;
+    this.world.autonomousMigrationDay=day;
+    let departures=0;
+    for(const origin of this.world.cities.values()){
+      const from=origin.city,fromStats=from.stats(),fromVacant=Math.max(0,fromStats.units-fromStats.occupied),fromJobRate=fromStats.vacancies/Math.max(1,fromStats.population),fromHomeRate=fromVacant/Math.max(1,fromStats.population);
+      const destinations=[...this.world.cities.values()].filter(destination=>destination.id!==origin.id&&this.world.routes.has(`route:${origin.id}>${destination.id}`)).map(destination=>{
+        const stats=destination.city.stats(),vacant=Math.max(0,stats.units-stats.occupied);
+        return {session:destination,stats,vacant,jobRate:stats.vacancies/Math.max(1,stats.population),homeRate:vacant/Math.max(1,stats.population)};
+      });
+      if(!destinations.length)continue;
+      const eligible=[],seen=new Set();
+      for(const citizen of from.citizens){
+        if(!from.society.isAdult(citizen)||citizen.dead||citizen.entity.destroyed||seen.has(citizen.id))continue;
+        const memberIds=from.worldMigrationHousehold(citizen.id);
+        if(!memberIds?.length)continue;
+        for(const id of memberIds)seen.add(id);
+        const family=memberIds.map(id=>from.society.citizen(id)).filter(Boolean),adults=family.filter(person=>from.society.isAdult(person));
+        const jobSeekers=adults.filter(person=>!person.jobId&&!person.businessIds?.length&&!from.politics.officeHolder(person)).length,workingAdults=adults.filter(person=>person.jobId||from.politics.officeHolder(person)).length,unemployed=jobSeekers>0;
+        const homeless=family.some(person=>!person.homeUnitId);
+        const happiness=family.reduce((sum,person)=>sum+(person.happiness||0),0)/Math.max(1,family.length);
+        const minimumNeed=Math.min(...family.flatMap(person=>Object.values(person.needs||{})));
+        if(!unemployed&&!homeless&&happiness>=48&&minimumNeed>=35)continue;
+        const pressure=(unemployed?18:0)+(homeless?18:0)+Math.max(0,48-happiness)*.7+Math.max(0,35-minimumNeed)*.35;
+        const options=destinations.map(destination=>{
+          const hasJobs=destination.stats.vacancies>=Math.max(jobSeekers,workingAdults);
+          const hasHousing=destination.vacant>=Math.max(1,Math.ceil(family.length/2));
+          if(!hasJobs||!hasHousing)return null;
+          const wellbeing=(destination.stats.happiness-fromStats.happiness)*.65;
+          const jobAdvantage=(destination.jobRate-fromJobRate)*100;
+          const homeAdvantage=(destination.homeRate-fromHomeRate)*100;
+          const opportunity=pressure+wellbeing+Math.max(-8,jobAdvantage*24)+Math.max(-8,homeAdvantage*28);
+          const temperament=.8+(citizen.traits?.ambition??.5)*.25+(citizen.traits?.riskTolerance??.5)*.2;
+          return {...destination,score:opportunity*temperament,unemployed,homeless,happiness,minimumNeed};
+        }).filter(Boolean).sort((a,b)=>b.score-a.score);
+        if(options[0]?.score>=28)eligible.push({citizenId:citizen.id,memberIds,score:options[0].score,reason:unemployed?'work':homeless?'housing':'wellbeing',destinationId:options[0].session.id});
+      }
+      eligible.sort((a,b)=>b.score-a.score||a.citizenId-b.citizenId);
+      for(const choice of eligible){
+        const id=`resident-migration:${origin.id}:${choice.citizenId}:${day}`;
+        try{
+          const options={id,originCityId:origin.id,destinationCityId:choice.destinationId,citizenId:choice.citizenId,departureMinute:minute+1,reason:choice.reason};
+          if(choice.memberIds.length>1)await this.scheduleHouseholdMigrationNow(options);else await this.scheduleMigrationNow(options);
+          departures++;break;
+        }catch{}
+      }
+    }
+    return departures;
   }
 
   createContract({id,routeId,sellerBuildingId,destinationBuildingId,good,quantity,unitPrice,intervalMinutes=1440,nextDepartureMinute=this.world.minute+1}){
@@ -73,6 +130,49 @@ export class WorldTradeService {
       catch(error){contract.lastError=error.message;contract.nextDepartureMinute=minute+1;}
     }
     return due.length;
+  }
+
+  processRegionalTrade(minute=this.world.minute){if(this.quiesced)return Promise.resolve(0);return this.track(this.processRegionalTradeNow(minute));}
+  async processRegionalTradeNow(minute=this.world.minute){
+    const day=Math.floor(minute/1440);
+    if(this.world.regionalTradeDay===day||this.world.cities.size<2)return 0;
+    this.world.regionalTradeDay=day;
+    let scheduled=0;
+    for(const route of this.world.routes.values()){
+      const origin=this.world.cities.get(route.originCityId),destination=this.world.cities.get(route.destinationCityId);
+      if(!origin||!destination)continue;
+      const city=origin.city,other=destination.city,economy=city.economy,targetEconomy=other.economy;
+      const inTransit=new Set([...this.world.transfers.values()].filter(transfer=>transfer.destinationCityId===destination.id&&transfer.kind==='goods'&&['scheduled','in-transit'].includes(transfer.status)).map(transfer=>transfer.payload.good));
+      const suppliers=[];
+      for(const seller of city.buildings){
+        if(!seller.active||seller.entity.destroyed)continue;
+        const outputs=seller.type==='farm'?[seller.crop]:seller.type==='bakery'?['pao']:seller.type==='mill'?['oleo']:Object.keys(INDUSTRIES[seller.type]?.outputs||{});
+        for(const good of outputs){
+          const stock=seller.inventory?.[good]||0;
+          const market=economy.market?.[good];
+          if(stock<12||!targetEconomy.goods[good]||market&&market.stock<=market.demand)continue;
+          suppliers.push({seller,good,stock,score:stock-(market?.demand||0)});
+        }
+      }
+      suppliers.sort((a,b)=>b.score-a.score||a.good.localeCompare(b.good));
+      let match=null;
+      for(const offer of suppliers){
+        if(inTransit.has(offer.good))continue;
+        const buyers=other.buildings.filter(buyer=>buyer.active&&!buyer.entity.destroyed&&targetEconomy.accepts(buyer,offer.good)&&(buyer.inventory?.[offer.good]||0)+(buyer.incoming?.[offer.good]||0)+(buyer.worldIncoming?.[offer.good]||0)+(buyer.importIncoming?.[offer.good]||0)<6);
+        buyers.sort((a,b)=>(a.inventory?.[offer.good]||0)+(a.incoming?.[offer.good]||0)+(a.worldIncoming?.[offer.good]||0)+(a.importIncoming?.[offer.good]||0)-(b.inventory?.[offer.good]||0)-(b.incoming?.[offer.good]||0)-(b.worldIncoming?.[offer.good]||0)-(b.importIncoming?.[offer.good]||0)||a.id-b.id);
+        const buyer=buyers[0];
+        if(buyer){match={...offer,buyer};break;}
+      }
+      if(!match)continue;
+      const quantity=Math.min(route.capacity,24,match.stock-6);
+      const unitPrice=Math.max(1,Math.ceil(city.currency.price(GOODS[match.good].price*1.15)));
+      if(quantity<1)continue;
+      try{
+        await this.scheduleNow({id:`regional:${route.id}:${day}`,originCityId:origin.id,destinationCityId:destination.id,sellerBuildingId:match.seller.id,destinationBuildingId:match.buyer.id,good:match.good,quantity,unitPrice,departureMinute:minute+1});
+        scheduled++;
+      }catch{}
+    }
+    return scheduled;
   }
 
   createMigrationPolicy({id,routeId,intervalMinutes=1440,maxTransfers=5,nextDepartureMinute=this.world.minute+1}){
@@ -114,7 +214,7 @@ export class WorldTradeService {
   async rollback(transfer){
     const origin=this.world.cities.get(transfer.originCityId),destination=this.world.cities.get(transfer.destinationCityId);
     if(transfer.kind==='citizen')await this.request(origin,transfer.payload.package.version===2?'cancelWorldHouseholdMigration':'cancelWorldCitizenMigration',[transfer.id]);
-    else{await this.request(origin,'returnWorldExport',[transfer.id]);await this.request(destination,'refundWorldPayment',[transfer.id]);}
+    else{await this.request(origin,'returnWorldExport',[transfer.id]);await this.request(destination,'cancelWorldImport',[transfer.id]);await this.request(destination,'refundWorldPayment',[transfer.id]);}
   }
 
   async depart(transfer){

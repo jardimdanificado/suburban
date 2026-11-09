@@ -1,6 +1,6 @@
 import { inventoryFree } from './city_inventory.js';
 import { tileAt, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
-import { TILE_WATER } from './world_gen.js?v=beach-band-2-3-waterfix-1';
+import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-1';
 import {reducedCadence} from './city_fast_forward.js';
 export const PLANT_SPECIES = {
   coconut_palm: { label: 'Coqueiro', color: 0x548d38, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },

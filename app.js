@@ -1,15 +1,15 @@
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=ff3-ff4-steps-1';
-import { WorldCoordinator } from './js/world_coordinator.js';
-import { WorldTradeService } from './js/world_trade_service.js';
-import { CityStateGraph, bindCityState } from './js/city_state.js?v=ff2-speed-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=regional-supply-3';
+import { WorldCoordinator } from './js/world_coordinator.js?v=world-day-persistence-2';
+import { WorldTradeService } from './js/world_trade_service.js?v=regional-supply-3';
+import { CityStateGraph, bindCityState } from './js/city_state.js?v=regional-supply-3';
 import { loadWorldRecord, saveWorldRecord } from './js/world_save_store.js';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=seeded-business-visual-v1";
-import { CityDesktop } from "./js/city_desktop.js?v=custom-history-limit-1";
-import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=seeded-business-visual-v1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=regional-supply-3";
+import { CityDesktop } from "./js/city_desktop.js?v=regional-supply-3";
+import { World } from "./js/world.js?v=terrain-generation-reset-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=boats-transport-4";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -29,6 +29,7 @@ export let entities = [];
 const legacyUI = new ManagementCanvasUI(canvasUI);
 export const time = new SimulationTime();
 export const worldCoordinator = new WorldCoordinator({ paused: time.paused, speed: time.speed });
+renderer3D.worldCoordinator=worldCoordinator;
 export const worldTradeService = new WorldTradeService(worldCoordinator);
 let optionStorage = null;
 try { optionStorage = window.localStorage; } catch {}
@@ -666,6 +667,7 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   renderer3D.setCamera(x, y);
 } });
 cityUI.worldCoordinator=worldCoordinator;
+cityUI.worldTradeService=worldTradeService;
 cityUI.openWorldCitizen=(globalId)=>{const person=worldCoordinator.resolveCitizen(globalId);if(!person)return false;setActiveCity(person.cityId);const state=cityUI.create(`world-citizen:${globalId}`,'people',{title:`${person.name} · ${worldCoordinator.cities.get(person.cityId)?.metadata.name||person.cityId}`,entity:person.citizen.entity,kind:'dossier'});state.detailTab='family';return true;};
 if (mainMenu.isActive()) {
   cityUI.manager.closeAll(true);
@@ -690,21 +692,7 @@ function setActiveCity(cityId) {
   renderer3D.clear();renderer3D.mapWidth=world.width;renderer3D.mapHeight=world.height;renderer3D.currentMap=world.map;renderer3D.currentWorldRevision=world.revision;
   renderer3D.cityDevelopment=city.development;renderer3D.cityLogistics=city.logistics;renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y,1.2);
   setActiveEntities(entities);cityUI.manager.closeAll(true);cityUI.element.replaceChildren();cityUI.openModule('city');
-  updateCityPicker();if(session.bridge?.active)session.bridge.checkpoint().catch(error=>{cityUI.notice=`Falha ao atualizar ${session.metadata.name||session.id}: ${error.message}`;});
-}
-
-function cityOptionLabel(session){const summary=worldCoordinator.summaries.get(session.id),name=session.metadata.name||session.id;return summary?`${name} · ${summary.population} hab · ${summary.averageHappiness}% felicidade`:name;}
-function refreshCitySummaryLabels(){if(!cityPicker)return;for(const option of cityPicker.options){const session=worldCoordinator.cities.get(option.value);if(session)option.textContent=cityOptionLabel(session);}}
-
-function updateCityPicker() {
-  if(!cityPicker)return;
-  const selectedId=worldCoordinator.activeCityId;
-  cityPicker.replaceChildren();
-  for(const session of worldCoordinator.cities.values()){
-    const option=document.createElement('option');option.value=session.id;option.textContent=cityOptionLabel(session);option.selected=session.id===selectedId;cityPicker.append(option);
-  }
-  cityPicker.disabled=worldCoordinator.cities.size<2;
-  refreshTradeForm();refreshTradeHistory();
+  if(session.bridge?.active)session.bridge.checkpoint().catch(error=>{cityUI.notice=`Falha ao atualizar ${session.metadata.name||session.id}: ${error.message}`;});
 }
 
 // Each city owns its own entity array, clock mirror and worker.
@@ -731,10 +719,9 @@ function attachCitySession(session) {
     const forward=`route:${session.id}>${other.id}`,backward=`route:${other.id}>${session.id}`;
     if(!worldCoordinator.routes.has(forward))worldCoordinator.connectPorts({id:forward,originPortId:`${session.id}:port`,destinationPortId:`${other.id}:port`,travelMinutes:180,capacity:100,freightPerUnit:10});
     if(!worldCoordinator.routes.has(backward))worldCoordinator.connectPorts({id:backward,originPortId:`${other.id}:port`,destinationPortId:`${session.id}:port`,travelMinutes:180,capacity:100,freightPerUnit:10});
-    if(!worldCoordinator.vessels.has(`ferry:${forward}`))worldCoordinator.addVessel({id:`ferry:${forward}`,capacity:100});
-    if(!worldCoordinator.vessels.has(`ferry:${backward}`))worldCoordinator.addVessel({id:`ferry:${backward}`,capacity:100});
+    worldCoordinator.ensureRouteFleet(forward);worldCoordinator.ensureRouteFleet(backward);
   }
-  updateCityPicker();return bridge;
+  return bridge;
 }
 
 function initSimulationBridge() {
@@ -744,90 +731,12 @@ function initSimulationBridge() {
   const session={id:'city-1',city,world,entities,nextId,time:simTime,metadata:{name:'Cidade 1',preset:worldSettings.preset,seed:worldSettings.seed}};
   simulationBridge=attachCitySession(session);
 }
-let cityPicker=null;
-const cityControls=document.createElement('div');
-Object.assign(cityControls.style,{position:'absolute',right:'12px',top:'12px',zIndex:'10001',display:'flex',flexWrap:'wrap',justifyContent:'flex-end',gap:'6px',padding:'5px',maxWidth:'calc(100vw - 24px)',background:'#20241fe8',border:'1px solid #948b72'});
-cityPicker=document.createElement('select');cityPicker.setAttribute('aria-label','Cidade observada');cityPicker.addEventListener('change',()=>setActiveCity(cityPicker.value));
-const addCityButton=document.createElement('button');addCityButton.type='button';addCityButton.textContent='Nova cidade';addCityButton.addEventListener('click',()=>foundCity());
-const saveWorldButton=document.createElement('button');saveWorldButton.type='button';saveWorldButton.textContent='Salvar mundo';
-const loadWorldButton=document.createElement('button');loadWorldButton.type='button';loadWorldButton.textContent='Carregar mundo';
-const tradeToggle=document.createElement('button');tradeToggle.type='button';tradeToggle.textContent='Comércio marítimo';
-const migrationToggle=document.createElement('button');migrationToggle.type='button';migrationToggle.textContent='Migrar cidadão';
-for(const control of [cityPicker,addCityButton,saveWorldButton,loadWorldButton,tradeToggle,migrationToggle])Object.assign(control.style,{font:'12px Tahoma, sans-serif',padding:'5px',color:'#f4edda',background:'#34392f',border:'1px solid #9c9278'});
-cityControls.append(cityPicker,addCityButton,saveWorldButton,loadWorldButton,tradeToggle,migrationToggle);root.append(cityControls);
-const tradePanel=document.createElement('form');tradePanel.hidden=true;
-Object.assign(tradePanel.style,{position:'absolute',right:'12px',top:'54px',zIndex:'10001',width:'min(310px,calc(100vw - 24px))',boxSizing:'border-box',padding:'10px',display:'none',gap:'7px',background:'#20241ff2',border:'1px solid #948b72',color:'#f4edda',font:'12px Tahoma, sans-serif'});
-const tradeFields={};
-function field(label,type='select'){
-  const wrap=document.createElement('label');wrap.textContent=label;wrap.style.display='grid';wrap.style.gap='3px';
-  const input=type==='select'?document.createElement('select'):document.createElement('input');if(type!=='select')input.type=type;
-  Object.assign(input.style,{font:'12px Tahoma, sans-serif',padding:'5px',color:'#f4edda',background:'#34392f',border:'1px solid #9c9278'});wrap.append(input);tradePanel.append(wrap);return input;
-}
-tradeFields.origin=field('Cidade exportadora');tradeFields.destination=field('Cidade importadora');tradeFields.seller=field('Vendedor');tradeFields.buyer=field('Comprador');tradeFields.good=field('Produto');tradeFields.quantity=field('Quantidade','number');tradeFields.quantity.min='1';tradeFields.quantity.value='1';tradeFields.price=field('Preço unitário (centavos)','number');tradeFields.price.min='1';
-const tradeSubmit=document.createElement('button');tradeSubmit.type='submit';tradeSubmit.textContent='Reservar carga e zarpar';Object.assign(tradeSubmit.style,{font:'bold 12px Tahoma, sans-serif',padding:'7px',color:'#f4edda',background:'#536948',border:'1px solid #b0a27e'});tradePanel.append(tradeSubmit);
-const autoTradeSubmit=document.createElement('button');autoTradeSubmit.type='button';autoTradeSubmit.textContent='Ativar compra diária';Object.assign(autoTradeSubmit.style,{font:'12px Tahoma, sans-serif',padding:'6px',color:'#f4edda',background:'#34392f',border:'1px solid #9c9278'});tradePanel.append(autoTradeSubmit);
-const tradeNotice=document.createElement('div');tradeNotice.setAttribute('role','status');tradeNotice.style.whiteSpace='normal';tradePanel.append(tradeNotice);
-const tradeHistory=document.createElement('div');tradeHistory.style.maxHeight='120px';tradeHistory.style.overflow='auto';tradeHistory.style.borderTop='1px solid #706950';tradeHistory.style.paddingTop='6px';tradePanel.append(tradeHistory);
-root.append(tradePanel);
-const migrationPanel=document.createElement('form');migrationPanel.hidden=true;
-Object.assign(migrationPanel.style,{position:'absolute',right:'12px',top:'54px',zIndex:'10001',width:'min(310px,calc(100vw - 24px))',boxSizing:'border-box',padding:'10px',display:'none',gap:'7px',background:'#20241ff2',border:'1px solid #948b72',color:'#f4edda',font:'12px Tahoma, sans-serif'});
-function migrationField(label){const wrap=document.createElement('label');wrap.textContent=label;wrap.style.display='grid';wrap.style.gap='3px';const input=document.createElement('select');Object.assign(input.style,{font:'12px Tahoma, sans-serif',padding:'5px',color:'#f4edda',background:'#34392f',border:'1px solid #9c9278'});wrap.append(input);migrationPanel.append(wrap);return input;}
-const migrationOrigin=migrationField('Cidade de origem'),migrationDestination=migrationField('Cidade de destino'),migrationCitizen=migrationField('Adulto elegível');
-const migrationSubmit=document.createElement('button');migrationSubmit.type='submit';migrationSubmit.textContent='Embarcar para outra cidade';Object.assign(migrationSubmit.style,{font:'bold 12px Tahoma, sans-serif',padding:'7px',color:'#f4edda',background:'#536948',border:'1px solid #b0a27e'});migrationPanel.append(migrationSubmit);
-const migrationFamilySubmit=document.createElement('button');migrationFamilySubmit.type='button';migrationFamilySubmit.textContent='Migrar núcleo familiar';Object.assign(migrationFamilySubmit.style,{font:'12px Tahoma, sans-serif',padding:'6px',color:'#f4edda',background:'#34392f',border:'1px solid #9c9278'});migrationPanel.append(migrationFamilySubmit);
-const migrationAutoSubmit=document.createElement('button');migrationAutoSubmit.type='button';migrationAutoSubmit.textContent='Ativar migração diária';Object.assign(migrationAutoSubmit.style,{font:'12px Tahoma, sans-serif',padding:'6px',color:'#f4edda',background:'#34392f',border:'1px solid #9c9278'});migrationPanel.append(migrationAutoSubmit);
-const migrationGuidance=document.createElement('div');migrationGuidance.textContent='No embarque, o emprego é encerrado e a moradia alugada é liberada. Imóveis e empresas próprios permanecem na cidade de origem.';migrationGuidance.style.maxWidth='340px';migrationPanel.append(migrationGuidance);
-const migrationNotice=document.createElement('div');migrationNotice.setAttribute('role','status');migrationPanel.append(migrationNotice);const migrationPolicyHistory=document.createElement('div');migrationPolicyHistory.style.maxHeight='100px';migrationPolicyHistory.style.overflow='auto';migrationPanel.append(migrationPolicyHistory);root.append(migrationPanel);
-tradeToggle.addEventListener('click',()=>{tradePanel.hidden=!tradePanel.hidden;tradePanel.style.display=tradePanel.hidden?'none':'grid';migrationPanel.hidden=true;migrationPanel.style.display='none';});
-migrationToggle.addEventListener('click',()=>{migrationPanel.hidden=!migrationPanel.hidden;migrationPanel.style.display=migrationPanel.hidden?'none':'grid';tradePanel.hidden=true;tradePanel.style.display='none';});
-for(const select of [migrationOrigin,migrationDestination])select.addEventListener('change',refreshTradeForm);
-migrationCitizen.addEventListener('change',refreshTradeForm);
-migrationPanel.addEventListener('submit',async event=>{event.preventDefault();migrationSubmit.disabled=true;migrationNotice.textContent='Reservando passagem…';try{const id=`world-migration-${Date.now()}-${++worldTradeSequence}`;await worldTradeService.scheduleMigration({id,originCityId:migrationOrigin.value,destinationCityId:migrationDestination.value,citizenId:Number(migrationCitizen.value),departureMinute:worldCoordinator.minute+1});migrationNotice.textContent='Passagem reservada. O cidadão embarcará no próximo minuto mundial.';refreshTradeHistory();}catch(error){migrationNotice.textContent=error.message;}finally{migrationSubmit.disabled=false;refreshTradeForm();}});
-migrationFamilySubmit.addEventListener('click',async()=>{migrationFamilySubmit.disabled=true;migrationNotice.textContent='Reservando passagem para a família…';try{const id=`world-family-${Date.now()}-${++worldTradeSequence}`;const trip=await worldTradeService.scheduleHouseholdMigration({id,originCityId:migrationOrigin.value,destinationCityId:migrationDestination.value,citizenId:Number(migrationCitizen.value),departureMinute:worldCoordinator.minute+1});migrationNotice.textContent=`Passagem reservada para ${trip.payload.package.members.length} familiares.`;refreshTradeHistory();}catch(error){migrationNotice.textContent=error.message;}finally{migrationFamilySubmit.disabled=false;refreshTradeForm();}});
-migrationAutoSubmit.addEventListener('click',()=>{try{const id=`world-migration-policy-${Date.now()}-${++worldTradeSequence}`,policy=worldTradeService.createMigrationPolicy({id,routeId:`route:${migrationOrigin.value}>${migrationDestination.value}`,intervalMinutes:1440,maxTransfers:5,nextDepartureMinute:worldCoordinator.minute+1});migrationNotice.textContent='Migração automática ativada: até cinco pessoas ou famílias, uma tentativa por dia.';refreshMigrationHistory();}catch(error){migrationNotice.textContent=error.message;}});
-function addOptions(select,items,selectedValue){select.replaceChildren();for(const [value,label]of items){const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=value===selectedValue;select.append(option);}}
-function refreshTradeForm(){
-  if(!tradeFields.origin)return;
-  const cities=[...worldCoordinator.cities.values()];
-  const migrationOriginId=migrationOrigin.value||worldCoordinator.activeCityId;
-  addOptions(migrationOrigin,cities.map(s=>[s.id,s.metadata.name||s.id]),migrationOriginId);
-  const migrationDestinations=cities.filter(s=>s.id!==migrationOrigin.value);
-  addOptions(migrationDestination,migrationDestinations.map(s=>[s.id,s.metadata.name||s.id]),migrationDestination.value||migrationDestinations[0]?.id);
-  const migrationSession=worldCoordinator.cities.get(migrationOrigin.value),people=migrationSession?.city.citizens||[],cityForMigration=migrationSession?.city,ownedAccounts=new Set([...[...(cityForMigration?.units?.values()||[])].map(unit=>unit.ownerId),...[...(cityForMigration?.vehicles?.units?.values()||[])].map(vehicle=>vehicle.ownerAccountId)]),guardianIds=new Set(people.map(person=>person.guardianId).filter(id=>id!=null)),singleEligible=new Set(people.filter(c=>cityForMigration.society.isAdult(c)&&!c.entity.destroyed&&!c.dead&&!c.partnerId&&!c.childIds?.length&&!c.businessIds?.length&&!c.deliveryId&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.custody&&!c.indoorLocation&&!c.expectingId&&!c.worldMigrationPending&&!ownedAccounts.has(c.accountId)).map(c=>c.id)),households=new Map();
-  for(const person of people)if(cityForMigration?.society.isAdult(person)&&(person.partnerId!=null||guardianIds.has(person.id))){const members=cityForMigration.worldMigrationHousehold(person.id);if(members?.length>1)households.set(person.id,members);}
-  const candidates=people.filter(person=>singleEligible.has(person.id)||households.has(person.id));
-  addOptions(migrationCitizen,candidates.map(c=>[String(c.id),`${c.entity.properties.name}${households.has(c.id)?` · família de ${households.get(c.id).length}`:' · individual'} · saldo ${(migrationSession.city.accounts.get(c.accountId)?.balance||0).toLocaleString('pt-BR')}`]),migrationCitizen.value);
-  const selectedCitizenId=Number(migrationCitizen.value),routeReady=!!migrationOrigin.value&&!!migrationDestination.value&&worldCoordinator.routes.has(`route:${migrationOrigin.value}>${migrationDestination.value}`);
-  migrationSubmit.disabled=!routeReady||!singleEligible.has(selectedCitizenId);migrationFamilySubmit.disabled=!routeReady||!households.has(selectedCitizenId);migrationAutoSubmit.disabled=!routeReady;refreshMigrationHistory();
-  addOptions(tradeFields.origin,cities.map(s=>[s.id,s.metadata.name||s.id]),worldCoordinator.activeCityId);
-  const originId=tradeFields.origin.value,destinations=cities.filter(s=>s.id!==originId);
-  addOptions(tradeFields.destination,destinations.map(s=>[s.id,s.metadata.name||s.id]),destinations[0]?.id);
-  const origin=worldCoordinator.cities.get(tradeFields.origin.value),destination=worldCoordinator.cities.get(tradeFields.destination.value);
-  const sellers=(origin?.city.buildings||[]).filter(b=>b.active&&!b.entity.destroyed&&Object.values(b.inventory||{}).some(qty=>qty>0));
-  addOptions(tradeFields.seller,sellers.map(b=>[String(b.id),b.entity.properties.name||`${b.type} #${b.id}`]),tradeFields.seller.value);
-  const seller=sellers.find(b=>String(b.id)===tradeFields.seller.value),goods=Object.keys(origin?.city.economy.goods||{}).filter(good=>(seller?.inventory?.[good]||0)>0);
-  const priorGood=tradeFields.good.value;addOptions(tradeFields.good,goods.map(good=>[good,origin.city.economy.goods[good].label||good]),priorGood);
-  const buyers=(destination?.city.buildings||[]).filter(b=>b.active&&!b.entity.destroyed&&b.accountId&&Object.hasOwn(b.inventory||{},tradeFields.good.value));
-  addOptions(tradeFields.buyer,buyers.map(b=>[String(b.id),b.entity.properties.name||`${b.type} #${b.id}`]),tradeFields.buyer.value);
-  if(!tradeFields.price.value){tradeFields.price.value=String(origin?.city.economy.goods[tradeFields.good.value]?.price||1);}
-  tradeSubmit.disabled=!worldCoordinator.routes.has(`route:${originId}>${tradeFields.destination.value}`)||!seller||!buyers.length||!goods.length;
-  autoTradeSubmit.disabled=tradeSubmit.disabled||!Number.isSafeInteger(Number(tradeFields.quantity.value))||Number(tradeFields.quantity.value)<1||!Number.isSafeInteger(Number(tradeFields.price.value))||Number(tradeFields.price.value)<1;
-}
-tradeFields.origin.addEventListener('change',refreshTradeForm);tradeFields.destination.addEventListener('change',refreshTradeForm);tradeFields.seller.addEventListener('change',()=>{tradeFields.price.value='';refreshTradeForm();});tradeFields.good.addEventListener('change',()=>{tradeFields.price.value='';refreshTradeForm();});for(const input of [tradeFields.quantity,tradeFields.price])input.addEventListener('input',refreshTradeForm);
-tradePanel.addEventListener('submit',async event=>{
-  event.preventDefault();tradeSubmit.disabled=true;tradeNotice.textContent='Reservando produto e pagamento…';
-  try{const id=`world-trade-${Date.now()}-${++worldTradeSequence}`,trip=await scheduleWorldTrade({id,originCityId:tradeFields.origin.value,destinationCityId:tradeFields.destination.value,sellerBuildingId:Number(tradeFields.seller.value),destinationBuildingId:Number(tradeFields.buyer.value),good:tradeFields.good.value,quantity:Number(tradeFields.quantity.value),unitPrice:Number(tradeFields.price.value),departureMinute:worldCoordinator.minute+1});tradeNotice.textContent=`Carga reservada. Frete marítimo: ${((trip.payload.freightAmount||0)/100).toFixed(2)}; total: ${(trip.payload.amount/100).toFixed(2)}. A balsa parte quando o carregamento local chegar ao porto.`;refreshTradeHistory();}
-  catch(error){tradeNotice.textContent=error.message;}
-  finally{refreshTradeForm();}
-});
-let worldTradeSequence=0;
-autoTradeSubmit.addEventListener('click',()=>{
-  try{
-    const routeId=`route:${tradeFields.origin.value}>${tradeFields.destination.value}`;
-    const contract=worldTradeService.createContract({id:`world-contract-${Date.now()}-${++worldTradeSequence}`,routeId,sellerBuildingId:Number(tradeFields.seller.value),destinationBuildingId:Number(tradeFields.buyer.value),good:tradeFields.good.value,quantity:Number(tradeFields.quantity.value),unitPrice:Number(tradeFields.price.value),intervalMinutes:1440,nextDepartureMinute:worldCoordinator.minute+1});
-    tradeNotice.textContent=`Compra diária ativada para ${contract.quantity} ${contract.good}. A primeira tentativa ocorrerá no próximo minuto mundial.`;refreshTradeHistory();
-  }catch(error){tradeNotice.textContent=error.message;}
-});
+cityUI.worldActions={
+  selectCity:id=>{setActiveCity(id);cityUI.openModule('world');},
+  newCity:()=>{foundCity();cityUI.openModule('world');},
+  save:()=>saveCurrentWorld(),
+  load:()=>loadWorldFromStorage(),
+};
 async function captureWorldSave(){
   const sessions=[...worldCoordinator.cities.values()],controls={paused:time.paused,speed:time.speed};
   worldCoordinator.setTime({paused:true,speed:controls.speed});
@@ -840,7 +749,7 @@ async function captureWorldSave(){
     return {version:1,coordinator,cities,activeCityId:worldCoordinator.activeCityId,controls};
   }finally{worldTradeService.resume();worldCoordinator.setTime(controls);}
 }
-async function saveCurrentWorld(){saveWorldButton.disabled=true;try{await saveWorldRecord(await captureWorldSave());cityUI.notice='Mundo salvo com todas as cidades e viagens.';}catch(error){cityUI.notice=`Falha ao salvar mundo: ${error.message}`;}finally{saveWorldButton.disabled=false;}}
+async function saveCurrentWorld(){try{await saveWorldRecord(await captureWorldSave());cityUI.notice='Mundo salvo com todas as cidades e viagens.';}catch(error){cityUI.notice=`Falha ao salvar mundo: ${error.message}`;}}
 async function restoreWorldRecord(record){
   if(record.version!==1||!Array.isArray(record.cities)||!record.cities.length)throw new TypeError('Salvamento vazio ou incompatível.');
   await worldTradeService.quiesce();
@@ -864,11 +773,12 @@ async function restoreWorldRecord(record){
   setActiveCity(worldCoordinator.activeCityId||record.activeCityId||restored[0].id);
   }finally{worldTradeService.resume();}
 }
-saveWorldButton.addEventListener('click',saveCurrentWorld);
-loadWorldButton.addEventListener('click',async()=>{loadWorldButton.disabled=true;try{const record=await loadWorldRecord();if(!record)throw new Error('Nenhum mundo salvo foi encontrado.');await restoreWorldRecord(record);cityUI.notice='Mundo carregado com todas as cidades e viagens.';}catch(error){cityUI.notice=`Falha ao carregar mundo: ${error.message}`;}finally{loadWorldButton.disabled=false;}});
-function refreshTradeHistory(){if(!tradeHistory)return;const contracts=[...worldCoordinator.contracts.values()].sort((a,b)=>b.createdAt-a.createdAt).slice(0,4),rows=[...worldCoordinator.transfers.values()].filter(t=>t.routeId).sort((a,b)=>b.createdAt-a.createdAt).slice(0,6);tradeHistory.replaceChildren();for(const contract of contracts){const row=document.createElement('div');row.style.padding='3px 0';row.textContent=`Compra diária · ${contract.quantity} ${contract.good} · ${contract.active?'ativa':'pausada'}`;tradeHistory.append(row);if(contract.active){const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Pausar';cancel.style.marginLeft='6px';cancel.addEventListener('click',()=>{worldTradeService.cancelContract(contract.id);refreshTradeHistory();});row.append(cancel);}if(contract.lastError){const error=document.createElement('div');error.textContent=`Nova tentativa: ${contract.lastError}`;row.append(error);}}for(const transfer of rows){const row=document.createElement('div');row.style.padding='3px 0';const label=transfer.kind==='citizen'?`Migração · ${transfer.payload.package?.version===2?transfer.payload.package.members.length:1} pessoas`:`${transfer.payload.quantity} ${transfer.payload.good}`;row.textContent=`${transfer.id}: ${label} · ${transfer.status}`;tradeHistory.append(row);if(transfer.status==='scheduled'&&!transfer.payload.contractId){const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancelar';cancel.style.marginLeft='6px';cancel.addEventListener('click',async()=>{tradeNotice.textContent='Devolvendo carga e pagamento…';const ok=await cancelWorldTrade(transfer.id);tradeNotice.textContent=ok?'Viagem cancelada e reservas devolvidas.':'Não foi possível cancelar esta viagem.';refreshTradeHistory();});row.append(cancel);}}}
-function refreshMigrationHistory(){if(!migrationPolicyHistory)return;migrationPolicyHistory.replaceChildren();for(const policy of [...worldCoordinator.migrationPolicies.values()].slice(-5).reverse()){const row=document.createElement('div');row.style.padding='3px 0';row.textContent=`Migração diária · ${policy.transfersCreated}/${policy.maxTransfers} · ${policy.active?'ativa':'concluída'}`;migrationPolicyHistory.append(row);if(policy.active){const stop=document.createElement('button');stop.type='button';stop.textContent='Pausar';stop.style.marginLeft='6px';stop.addEventListener('click',()=>{worldTradeService.cancelMigrationPolicy(policy.id);refreshMigrationHistory();});row.append(stop);}if(policy.lastError){const error=document.createElement('div');error.textContent=`Nova tentativa: ${policy.lastError}`;row.append(error);}}}
-worldCoordinator.onChange=event=>{if(event.type==='city-summary-changed')refreshCitySummaryLabels();else updateCityPicker();if(event.type==='world-minute'){void worldTradeService.processContracts(event.minute).then(count=>{if(count)refreshTradeHistory();}).catch(error=>{cityUI.notice=`Falha ao executar contratos marítimos: ${error.message}`;});void worldTradeService.processMigrationPolicies(event.minute).then(()=>refreshMigrationHistory()).catch(error=>{cityUI.notice=`Falha ao executar políticas de migração: ${error.message}`;});}};
+async function loadWorldFromStorage(){try{const record=await loadWorldRecord();if(!record)throw new Error('Nenhum mundo salvo foi encontrado.');await restoreWorldRecord(record);cityUI.notice='Mundo carregado com todas as cidades e viagens.';cityUI.openModule('world');}catch(error){cityUI.notice=`Falha ao carregar mundo: ${error.message}`;}}
+worldCoordinator.onChange=event=>{if(event.type==='world-minute'){
+  void worldTradeService.processContracts(event.minute).catch(error=>{cityUI.notice=`Falha ao executar contratos marítimos: ${error.message}`;});
+  void worldTradeService.processRegionalTrade(event.minute).catch(error=>{cityUI.notice=`Falha no comércio entre cidades: ${error.message}`;});
+  void worldTradeService.processAutonomousMigrations(event.minute).catch(error=>{cityUI.notice=`Falha nas decisões de migração: ${error.message}`;});
+}};
 initSimulationBridge();
 void loadWorldRecord().then(record=>{if(record)return restoreWorldRecord(record);}).catch(error=>{cityUI.notice=`Salvamento local ignorado: ${error.message}`;});
 
@@ -889,6 +799,7 @@ export const scheduleWorldTrade=options=>worldTradeService.schedule(options);
 export const cancelWorldTrade=transferId=>worldTradeService.cancel(transferId);
 
 export async function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 512 } = {}) {
+  preset='archipelago';
   await worldTradeService.quiesce();
   try{
   const pendingTransfers=worldCoordinator.processingTransfers;
@@ -904,8 +815,7 @@ export async function startNewCity({ preset = 'archipelago', seed = 482910, size
   renderer3D.selectEntity(-1);
   renderer3D.setThirdPersonMode(false);
 
-  const matchedPreset = SUBURBAN_PRESETS.find(p => p.id === preset);
-  const presetId = matchedPreset ? matchedPreset.presetId : (WORLD_PRESETS[preset]?.id ?? 0);
+  const presetId = 0;
   worldSettings.preset = preset;
   worldSettings.presetId = presetId;
   worldSettings.seed = seed;

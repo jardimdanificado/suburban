@@ -1,14 +1,14 @@
 import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
-import {CityGlobalSearch} from './city_global_search.js?v=organic-party-slogans-1';
+import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-3';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
-import {CityUI,money} from './city_ui.js?v=custom-history-limit-1';
+import {CityUI,money} from './city_ui.js?v=regional-supply-3';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
 import {clipCanvasRegion} from './canvas_widgets.js';
 
-export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
-const sizes={market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
+export const CITY_WINDOWS=[['city','Cidade'],['government','Governo'],['people','Cidadãos'],['land','Terrenos e obras'],['buildings','Imóveis'],['economy','Empresas'],['market','Mercado e riquezas'],['production','Produção'],['transport','Transportes'],['world','Mundo e rotas'],['urban-art','Arte urbana'],['safety','Segurança'],['forensics','IML e corpos'],['justice','Justiça'],['custody','Prisões'],['sanitation','Saneamento'],['publications','Jornais e livros'],['corruption','Corrupção'],['log','Histórico'],['favorites','Favoritos'],['custom-history','Histórico personalizado'],['map','Mapa da cidade']];
+const sizes={market:[700,500],party:[560,570],contract:[530,500],'poll-response':[560,560],'party-organization':[560,500],election:[610,510],publications:[580,540],corruption:[570,480],map:[320,330],city:[680,470],government:[640,500],people:[390,480],land:[550,440],buildings:[350,440],economy:[410,480],production:[600,450],transport:[510,440],world:[570,540],'urban-art':[650,500],safety:[670,520],forensics:[650,520],justice:[700,540],custody:[640,520],sanitation:[570,450],log:[530,450],favorites:[460,420],'custom-history':[370,270],newgame:[400,470]};
 const intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
 /** OpenTTD-style desktop with tabbed modules and optional detached views. */
@@ -30,7 +30,7 @@ export class CityDesktop {
   set notice(value){const state=this.active||this.manager.find('module:city')?.state;if(state)state.notice=value;}
   create(id,tab,{title=null,entity=null,unitId=null,kind='module'}={}){
     const existing=this.manager.find(id);if(existing){this.manager.raise(id);if(existing.shaded)this.manager.shade(id);this.hidden=false;return existing.state;}
-    const state=new CityUI({city:this.city,root:this.element,select:this.select,camera:this.camera,host:this});state.worldCoordinator=this.worldCoordinator;state.openWorldCitizen=this.openWorldCitizen;state.tab=tab;
+    const state=new CityUI({city:this.city,root:this.element,select:this.select,camera:this.camera,host:this});state.worldCoordinator=this.worldCoordinator;state.worldTradeService=this.worldTradeService;state.worldActions=this.worldActions;state.openWorldCitizen=this.openWorldCitizen;state.tab=tab;
     const[w,h]=kind==='inspector'?[540,500]:kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
     const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'||kind==='section'?near:null});window.kind=kind;state.windowId=id;
     if(entity)state.setSelection(entity,unitId);this.hidden=false;

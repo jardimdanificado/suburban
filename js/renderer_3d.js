@@ -1,7 +1,7 @@
 import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=palette-intensity-3x";
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
-import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=beach-band-2-3-waterfix-1';
+import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-1';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {terrainTransitionTriangles,sampleTerrainQuad} from './terrain_transition_geometry.js';
@@ -15,7 +15,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=seeded-business-visual-v1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=boats-transport-4";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1-canvas-readback-1';
@@ -40,7 +40,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE
-} from "./world_gen.js?v=beach-band-2-3-waterfix-1";
+} from "./world_gen.js?v=terrain-generation-reset-1";
 import { globalWallCoords, resolveWallSkin, getEntitiesInViewport, getEntityById, getTileKey } from "./engine.js";
 
 // Optional simulation hooks are deliberately empty in the base framework.
@@ -407,7 +407,7 @@ function createCaribbeanWaterTexture() {
     const a = hash(wrap(ix), wrap(iy)), b = hash(wrap(ix + 1), wrap(iy)), c = hash(wrap(ix), wrap(iy + 1)), d = hash(wrap(ix + 1), wrap(iy + 1));
     return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
   };
-  const palette = [[44, 139, 169], [48, 165, 187], [65, 190, 191], [100, 213, 198], [174, 241, 218]];
+  const palette = [[44, 169, 136], [48, 187, 139], [65, 191, 129], [100, 213, 141], [174, 241, 185]];
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const broad = noise(x, y, 4), patch = noise(x, y, 9), fine = noise(x, y, 17);
     const warpX = (noise(x + 37, y - 19, 3) - .5) * 34;

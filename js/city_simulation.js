@@ -42,6 +42,7 @@ import {collectEconomicTaxes,recordEconomicIncome,economicPolicy} from './city_e
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { CityLighting } from './city_lighting.js';
+import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-1';
 import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
 
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=ff2-speed-2';
@@ -52,9 +53,10 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=ff2-
 import { CityLogistics } from './city_logistics.js?v=ff2-speed-1';
 import { CityGigs } from './city_gigs.js?v=spaced-limited-spontaneous-art-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=ff2-speed-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=regional-supply-3';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-3';
 
 const ff2ProductionWaits = new WeakMap();
 
@@ -157,7 +159,7 @@ export class CitySimulation {
     this.life = new CityLife(this);
     this.justice = new CityJustice(this);
     this.economy = new CityEconomy(this);
-    this.worldPort={id:'world-port',cityId:null,name:'Porto municipal',type:'world_port',accountId:'world-port',active:true,ownerId:null,x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0,door:{x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0},entity:{id:'world-port',destroyed:false,properties:{name:'Porto municipal'}},inventory:Object.fromEntries(Object.keys(this.economy.goods).map(good=>[good,0])),inventoryCapacity:100000,incoming:{},reservations:{},receipts:{},payments:{}};
+    this.worldPort={id:'world-port',cityId:null,name:'Porto municipal',type:'world_port',accountId:'world-port',active:true,ownerId:null,x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0,door:{x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0},entity:{id:'world-port',destroyed:false,properties:{name:'Porto municipal'}},inventory:Object.fromEntries(Object.keys(this.economy.goods).map(good=>[good,0])),inventoryCapacity:100000,incoming:{},reservations:{},receipts:{},importReservations:{},payments:{}};
     this.accounts.set(this.worldPort.accountId,{name:'Porto municipal',balance:0,worldPort:true});
     this.buildingTypes = BUILDING_TYPES;
     this.development = new CityDevelopment(this);
@@ -283,11 +285,29 @@ export class CitySimulation {
     if(building&&!building.entity.destroyed){this.worldPort.inventory[reservation.good]-=reservation.quantity;building.inventory[reservation.good]+=reservation.quantity;this.economy.recordGoods('world-export-return',reservation.good,reservation.quantity,this.worldPort.id,building.id,{transferId});}
     reservation.status='returned';reservation.returnedAt=this.minute;return true;
   }
+  reserveWorldImport(transferId,buildingId,good,quantity){
+    if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(quantity)||quantity<1||!Object.hasOwn(this.worldPort.inventory,good))return false;
+    this.worldPort.importReservations??={};const prior=this.worldPort.importReservations[transferId];
+    if(prior)return prior.buildingId===buildingId&&prior.good===good&&prior.quantity===quantity&&['reserved','received','local-delivery','delivered'].includes(prior.status);
+    const building=this.building(buildingId);if(!building||!building.active||building.entity.destroyed||!this.economy.accepts(building,good))return false;
+    building.worldIncoming??={};building.worldIncoming[good]=(building.worldIncoming[good]||0)+quantity;
+    this.worldPort.importReservations[transferId]={transferId,buildingId,good,quantity,status:'reserved',demandReleased:false,createdAt:this.minute};return true;
+  }
+  releaseWorldImportDemand(transferId){
+    const reservation=this.worldPort.importReservations?.[transferId];if(!reservation)return true;if(reservation.demandReleased)return true;
+    const building=this.building(reservation.buildingId);if(building?.worldIncoming){building.worldIncoming[reservation.good]=Math.max(0,(building.worldIncoming[reservation.good]||0)-reservation.quantity);if(!building.worldIncoming[reservation.good])delete building.worldIncoming[reservation.good];}
+    reservation.demandReleased=true;return true;
+  }
+  cancelWorldImport(transferId){
+    const reservation=this.worldPort.importReservations?.[transferId];if(!reservation)return true;if(['received','local-delivery','delivered'].includes(reservation.status))return false;if(reservation.status==='cancelled')return true;
+    this.releaseWorldImportDemand(transferId);reservation.status='cancelled';reservation.cancelledAt=this.minute;return true;
+  }
   receiveWorldImport(transferId,good,quantity){
     if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(quantity)||quantity<1||!Object.hasOwn(this.worldPort.inventory,good))return false;
+    const reservation=this.worldPort.importReservations?.[transferId];if(reservation&&(reservation.good!==good||reservation.quantity!==quantity||reservation.status==='cancelled'))return false;
     const prior=this.worldPort.receipts[transferId];if(prior)return prior.good===good&&prior.quantity===quantity;
     const used=Object.values(this.worldPort.inventory).reduce((sum,value)=>sum+value,0);if(used+quantity>this.worldPort.inventoryCapacity)return false;
-    this.worldPort.inventory[good]+=quantity;this.worldPort.receipts[transferId]={transferId,good,quantity,status:'received',receivedAt:this.minute};
+    this.worldPort.inventory[good]+=quantity;this.worldPort.receipts[transferId]={transferId,good,quantity,status:'received',receivedAt:this.minute};if(reservation)reservation.status='received';
     this.economy.recordGoods('world-import-port',good,quantity,null,this.worldPort.id,{transferId});return true;
   }
   deliverWorldImport(transferId,buildingId){
@@ -295,14 +315,14 @@ export class CitySimulation {
     const building=this.building(buildingId);if(!building||!building.active||building.entity.destroyed)return false;
     if(receipt.status==='local-delivery'){
       const shipment=this.logistics?.shipments.find(item=>item.id===receipt.localShipmentId);if(shipment?.status!=='delivered')return false;
-      receipt.status='delivered';receipt.buildingId=buildingId;receipt.deliveredAt=this.minute;return true;
+      receipt.status='delivered';receipt.buildingId=buildingId;receipt.deliveredAt=this.minute;const reservation=this.worldPort.importReservations?.[transferId];if(reservation)reservation.status='delivered';return this.releaseWorldImportDemand(transferId);
     }
     if(this.logistics?.order&&this.findPath?.(this.worldPort.door,building.door)!==null){
       const shipment=this.logistics.order(this.worldPort,building,receipt.good,receipt.quantity,0,{payerAccountId:building.accountId,purpose:'world-port-import'});if(!shipment)return false;
-      receipt.status='local-delivery';receipt.localShipmentId=shipment.id;receipt.buildingId=buildingId;return false;
+      receipt.status='local-delivery';receipt.localShipmentId=shipment.id;receipt.buildingId=buildingId;const reservation=this.worldPort.importReservations?.[transferId];if(reservation)reservation.status='local-delivery';return false;
     }
     if(this.worldPort.inventory[receipt.good]<receipt.quantity||inventoryFree(building)<receipt.quantity)return false;
-    this.worldPort.inventory[receipt.good]-=receipt.quantity;building.inventory[receipt.good]+=receipt.quantity;receipt.status='delivered';receipt.buildingId=buildingId;receipt.deliveredAt=this.minute;
+    this.worldPort.inventory[receipt.good]-=receipt.quantity;building.inventory[receipt.good]+=receipt.quantity;receipt.status='delivered';receipt.buildingId=buildingId;receipt.deliveredAt=this.minute;const reservation=this.worldPort.importReservations?.[transferId];if(reservation)reservation.status='delivered';this.releaseWorldImportDemand(transferId);
     this.economy.recordGoods('world-import-delivery',receipt.good,receipt.quantity,this.worldPort.id,building.id,{transferId});return true;
   }
   reserveWorldPayment(transferId,payerAccountId,amount){
@@ -435,8 +455,22 @@ export class CitySimulation {
     // Foreign buyers and suppliers operate outside the finite local monetary base.
     this.currency.initialize();
     generateSettlement(this);
-    const portAnchor=this.buildings.find(building=>building.type==='townhall')?.door;
-    if(portAnchor){this.worldPort.x=portAnchor.x;this.worldPort.y=portAnchor.y;this.worldPort.door={...portAnchor};}
+    const hallDoor=this.buildings.find(building=>building.type==='townhall')?.door;
+    if(hallDoor){
+      const shoreCandidates=[];
+      for(let y=0;y<this.world.height;y++)for(let x=0;x<this.world.width;x++){
+        if(!this.walkable(x,y))continue;
+        const water=[{x:x+1,y},{x:x-1,y},{x,y:y+1},{x,y:y-1}].find(point=>this.world.getTile(point.x,point.y)===TILE_WATER);
+        if(!water)continue;
+        const distance=(x-hallDoor.x)**2+(y-hallDoor.y)**2;
+        shoreCandidates.push({door:{x,y},berth:water,distance});
+      }
+      shoreCandidates.sort((a,b)=>a.distance-b.distance);
+      const harbor=shoreCandidates.find(candidate=>this.findPath(hallDoor,candidate.door)!==null);
+      const portAnchor=harbor?.door||hallDoor,berth=harbor?.berth||null;
+      this.worldPort.x=portAnchor.x;this.worldPort.y=portAnchor.y;this.worldPort.door={...portAnchor};
+      this.worldPort.berth=berth?{...berth}:null;
+    }
     const arrivalTiles = [],{width,height}=this.world,limit=Math.min(width*height,Math.max(256,this.initialPopulation*2));
     // Place initial residents across reachable land instead of cycling through
     // a tiny 11×11 patch around the town hall. On crowded or coastal seeds the
@@ -682,7 +716,7 @@ export class CitySimulation {
     }
     return result;
   }
-  _findPath(start, goal, {copy=true,allowSkybridges=true}={}) {
+  _findPath(start, goal, {copy=true,allowSkybridges=true,allowBoats=true}={}) {
     // Plan the outdoor leg from the exit; the resident walks there first.
     const location=start.properties?.citizen?.indoorLocation;
     if(location){const site=this.building(location.buildingId),shell=this.building(site?.officeTenantOf)||site;if(shell)start=shell.door;}
@@ -690,7 +724,7 @@ export class CitySimulation {
     if (this.pathCacheRevision !== revision) { this.pathCache = new Map(); this.pathCacheRevision = revision; }
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
     const links=allowSkybridges&&this.buildings.length>1?this.skybridgeLinksForRevision(revision):NO_CHILDREN;
-    if(links.length){if(!this.skybridgePathCache||this.skybridgePathCacheRevision!==revision){this.skybridgePathCache=new Map();this.skybridgePathCacheRevision=revision;}if(this.skybridgePathCache.has(key)){const route=this.skybridgePathCache.get(key);return route===null?null:copy?route.slice():route;}}
+    if(links.length){if(!this.skybridgePathCache||this.skybridgePathCacheRevision!==revision){this.skybridgePathCache=new Map();this.skybridgePathCacheRevision=revision;}if(this.skybridgePathCache.has(key)){const route=this.skybridgePathCache.get(key);if(route!==null)return copy?route.slice():route;if(!allowBoats)return null;}}
     // Water-separated destinations used to pay for a full A* search before
     // we learned they could not connect. The component map is cached by map
     // topology and obstacles, so reject impossible land routes first.
@@ -698,18 +732,19 @@ export class CitySimulation {
       const canReachBridge=links.some(link=>
         settlementConnected(this,start,link.startAccess)!==false&&settlementConnected(this,link.endAccess,goal)!==false||
         settlementConnected(this,start,link.endAccess)!==false&&settlementConnected(this,link.startAccess,goal)!==false);
-      if(!canReachBridge){
+      if(!canReachBridge&&!allowBoats){
         if(links.length)this.skybridgePathCache.set(key,null);
         else{if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);}
         return null;
       }
     }
     if (!this.pathCache.has(key)) {
-      const route=this.groundPath(start,goal);
+      const route=settlementConnected(this,start,goal)===false?null:this.groundPath(start,goal);
       if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
       this.pathCache.set(key,route);
     }
     let path = this.pathCache.get(key);
+    if(path===null&&allowBoats)path=findBoatPath(this,start,goal);
     if(links.length){
       let bestScore=path===null?Infinity:path.length||0;
       for(const link of links){
@@ -735,7 +770,7 @@ export class CitySimulation {
         }
       }
     }
-    if(links.length){if(this.skybridgePathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.skybridgePathCache.delete(this.skybridgePathCache.keys().next().value);this.skybridgePathCache.set(key,path);}
+    if(links.length&&!path?.some(point=>point.boatClass)){if(this.skybridgePathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.skybridgePathCache.delete(this.skybridgePathCache.keys().next().value);this.skybridgePathCache.set(key,path);}
     // Keep insertion-order eviction: touching every cache hit costs two Map
     // mutations across the hot path, while FIFO gives the same route answers.
     // Consumers shift their own array but never mutate waypoint coordinates.
@@ -1458,20 +1493,21 @@ export class CitySimulation {
           if(!this.beginSkybridgeTransit(c,leg)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;c.skybridgeTransit=null;}
           break;
         }
-        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,tx=Math.floor(p.x),ty=Math.floor(p.y);
+        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,boatWaypoint=!!p.boatClass,tx=Math.floor(p.x),ty=Math.floor(p.y);
         if(pBridge&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
-        if(!elevated&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
+        if(boatWaypoint&&this.world.getTile(tx,ty)!==TILE_WATER){c.path=[];c.task=null;c.boatClass=null;break;}
+        if(!elevated&&!boatWaypoint&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         const dx=p.x-c.entity.x,dy=p.y-c.entity.y,dz=(p.z||0)-(c.skybridgeZ||0),len=Math.hypot(dx,dy,dz);
-        const tile=tileAt(this.world,tx,ty),cost=elevated?1.05:roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
-        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;if(!elevated){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
-        else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;distance=0;}
+        const tile=tileAt(this.world,tx,ty),boatSpec=boatWaypoint?BOAT_CLASSES[p.boatClass]:null,cost=elevated?1.05:boatWaypoint?1/Math.max(.1,boatSpec?.speed||1):roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
+        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;if(!elevated&&!boatWaypoint){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
+        else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;distance=0;}
         if(travelled>0){
           c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;
           c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
-          if(!elevated){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
+          if(!elevated&&!boatWaypoint){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
-        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        c.action = c.boatClass?`Navegando de ${BOAT_CLASSES[c.boatClass]?.label?.toLowerCase()||'barco'}`:c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }

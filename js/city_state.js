@@ -26,7 +26,7 @@ import { CityMandates } from './city_mandates.js?v=mandate-one-pass-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=ff2-speed-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=regional-supply-3';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
 import { CityWelfare } from './city_welfare.js';
@@ -40,17 +40,17 @@ import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment } from './city_development.js?v=ff2-speed-1';
 import { CityLogistics } from './city_logistics.js?v=ff2-speed-1';
 import { CityGigs } from './city_gigs.js?v=artwork-solid-wall-support-1';
-import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=ff2-speed-1';
+import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=regional-supply-3';
 import { CitySociety } from './city_society.js?v=ff2-speed-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=service-demand-shared-waste-1';
-import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';
+import { World, WorldClock } from './world.js?v=terrain-generation-reset-1';
 
 const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, CityJustice, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
-const localFields = new Set(['activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','positionChecks','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
+const localFields = new Set(['activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_boatPathCache','_boatPathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','positionChecks','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
   'childrenByGuardian', 'citizensById', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_initialTaskStaggerUntil', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId', '_routineRevision', 'detailedInteriorBuildingId']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at

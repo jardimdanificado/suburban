@@ -35,7 +35,7 @@ const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),1
 /** Human-powered mobility, component provenance, real trips and repairs. */
 export class CityVehicles {
   constructor(city){this.city=city;this.units=new Map();this.models=new Map();this.batches=[];this.lines=[];this.nextId=1;this.nextModelId=1;this.nextBatchId=1;this.lastHour=null;this.activeCount=0;this.stats={distance:0,passengers:0,fares:0,repairs:0};}
-  groundPath(start,goal){return this.city.findPath(start,goal,{allowSkybridges:false});}
+  groundPath(start,goal){return this.city.findPath(start,goal,{allowSkybridges:false,allowBoats:false});}
   equipInitialWorkers(){
     if(this.initialWorkersEquipped)return;
     this.initialWorkersEquipped=true;const city=this.city,seen=new Set();

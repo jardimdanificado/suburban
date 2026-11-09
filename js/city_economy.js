@@ -7,7 +7,7 @@ import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {rentOffice,rentAvailableOffice,officeStartupCost,prepareOfficeSearch,officeSpaceDemand,setupOfficeTower,officeFloors,OFFICE_BUSINESSES,OFFICE_ONLY_TYPES,createMunicipalOffice} from './city_offices.js?v=office-investment-search-1';
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=daily-mayor-privatization-1';
-import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=beach-band-2-3-waterfix-1';
+import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=terrain-generation-reset-1';
 import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=night-crowd-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
@@ -664,7 +664,7 @@ export class CityEconomy {
     const buyers=[...businesses.filter(b=>retailTypes.has(b.type)||b.type==='mill'||INDUSTRIES[b.type]),...this.city.buildings.filter(b=>b.active&&!b.entity.destroyed&&(civicSpec(b)||justiceServiceSpec(b))&&!businesses.includes(b))];
     const available={},batchDemand={};
     for(const b of businesses){const outputs=b.type==='farm'?[b.crop]:b.type==='mill'?['oleo']:b.type==='bakery'?['pao']:Object.keys(INDUSTRIES[b.type]?.outputs||{});for(const good of outputs)available[good]=(available[good]||0)+(b.inventory[good]||0);}
-    for(const b of buyers)for(const [good,n]of Object.entries(this.city.vehicles.recipeFor(b)?.inputs||(b.type==='library'?{livros:1}:(civicSpec(b)||justiceServiceSpec(b))?.inputs)||INDUSTRIES[b.type]?.inputs||{}))batchDemand[good]=(batchDemand[good]||0)+Math.max(0,n*6-b.inventory[good]-(b.incoming[good]||0));
+    for(const b of buyers)for(const [good,n]of Object.entries(this.city.vehicles.recipeFor(b)?.inputs||(b.type==='library'?{livros:1}:(civicSpec(b)||justiceServiceSpec(b))?.inputs)||INDUSTRIES[b.type]?.inputs||{}))batchDemand[good]=(batchDemand[good]||0)+Math.max(0,n*6-b.inventory[good]-(b.incoming[good]||0)-(b.worldIncoming?.[good]||0)-(b.importIncoming?.[good]||0));
     // Rotate equal bids. A scarce upstream stock serves one batch per factory
     // before any factory can reserve six batches and starve the other chains.
     const offset=(this.tradeCursor||0)%Math.max(1,buyers.length);this.tradeCursor=offset+1;
@@ -674,8 +674,10 @@ export class CityEconomy {
         const batch=(this.city.vehicles.recipeFor(buyer)?.inputs||(buyer.type==='library'?{livros:1}:(civicSpec(buyer)||justiceServiceSpec(buyer))?.inputs)||INDUSTRIES[buyer.type]?.inputs)?.[good];
         const scarce=batch&&(available[good]||0)<(batchDemand[good]||0);
         const target = scarce?batch:buyer.type==='publisher'&&good==='papel'?Math.max(12,(buyer.bookPages||5)*3):buyer.type==='kitchen'?18:buyer.type==='restaurant'?6:['market','greengrocer'].includes(buyer.type)?(this.retailAssortment(buyer).includes(good)?12:0):batch ? batch*6 : buyer.type === 'bakery' ? 24 : 18;
-        if (buyer.inventory[good] + (buyer.incoming[good] || 0) > target / 2) continue;
-        let remaining = Math.max(0, target - buyer.inventory[good] - (buyer.incoming[good] || 0));
+        const worldIncoming=buyer.worldIncoming?.[good]||0;
+        const importIncoming=buyer.importIncoming?.[good]||0;
+        if (buyer.inventory[good] + (buyer.incoming[good] || 0) + worldIncoming + importIncoming > target / 2) continue;
+        let remaining = Math.max(0, target - buyer.inventory[good] - (buyer.incoming[good] || 0) - worldIncoming - importIncoming);
         const sellers = businesses.filter(b => b !== buyer && (b.type === 'farm' || b.type === 'bakery' || b.type === 'mill' || b.type==='kitchen'&&MEAL_COMPONENTS[good] || INDUSTRIES[b.type]?.outputs[good] || b.type==='import_exporter') && b.inventory[good] > 0).sort((a, b) => Math.hypot(a.door.x - buyer.door.x, a.door.y - buyer.door.y) + this.city.reputation.providerPenalty(a) + this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),a) - Math.hypot(b.door.x - buyer.door.x, b.door.y - buyer.door.y) - this.city.reputation.providerPenalty(b) - this.city.relationships.businessPenalty(this.city.relationships.businessPerson(buyer),b));
         if(importDepot?.inventory[good]>0&&importDepotClaim(importDepot,buyer,good)>0)sellers.push(importDepot);
         sellers.sort((a,b)=>Number(this.supplyAgreements.some(r=>r.sellerId===b.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute))-Number(this.supplyAgreements.some(r=>r.sellerId===a.id&&r.buyerId===buyer.id&&r.good===good&&r.until>this.city.minute)));
@@ -694,7 +696,7 @@ export class CityEconomy {
           INDUSTRIES[b.type]?.outputs?.[good]));
         const finishedVehicleStock=buyer.type==='cycle_assembler'?['bicicleta','bicicleta_carga','patinete','patins'].reduce((n,type)=>n+(buyer.inventory[type]||0),0):0;
         const assemblerHasStarterStock=buyer.type==='cycle_assembler'&&finishedVehicleStock>=Math.max(12,Math.ceil((this.city.initialPopulation||this.city.citizens.length)/12));
-        const canImport=(batch||!localMakers||['market','greengrocer','bakery','restaurant'].includes(buyer.type))&&remaining>0&&!assemblerHasStarterStock&&!['lixo','sementes','pedra'].includes(good);
+        const canImport=!worldIncoming&&!importIncoming&&(batch||!localMakers||['market','greengrocer','bakery','restaurant'].includes(buyer.type))&&remaining>0&&!assemblerHasStarterStock&&!['lixo','sementes','pedra'].includes(good);
         if(canImport&&inventoryFree(buyer)>0){
           const target=buyer,retailBuyer=['market','greengrocer','bakery','restaurant'].includes(buyer.type),reserve=retailBuyer?Math.max(this.city.currency.price(5000),this.city.fiscal.businessReserve(target)):target.workers.length*target.wage*90;
           const freightHeadroom=this.city.currency.price((this.city.world.width+this.city.world.height+24*4)*12),unitCost=Math.ceil(this.goods[good].price*2.25)+Math.ceil(this.goods[good].price*(this.city.politics?.policy?.importTaxes?.[good]||0))+Math.ceil(this.goods[good].price*.03),affordable=retailBuyer?Math.floor(Math.max(0,target.balance-reserve-freightHeadroom)/Math.max(1,unitCost)):24;
@@ -719,12 +721,12 @@ export class CityEconomy {
       if(inventoryUsed(store)>store.inventoryCapacity)store.inventoryCapacity=inventoryUsed(store)+256;
       let orders=0;
       while(orders<64){
-        const incoming=Object.values(store.incoming||{}).reduce((n,q)=>n+q,0),stored=Object.entries(store.inventory).reduce((n,[g,q])=>n+(foodGoods.includes(g)?q:0),0),target=Math.max(city.initialPopulation||0,city.citizens.length)*ECONOMY_RULES.mealUnits*ECONOMY_RULES.initialMealsPerCitizen,missing=Math.floor(Math.min(store.inventoryCapacity-stored-incoming,target-stored-incoming));
+        const incoming=Object.values(store.incoming||{}).reduce((n,q)=>n+q,0)+Object.values(store.worldIncoming||{}).reduce((n,q)=>n+q,0)+Object.values(store.importIncoming||{}).reduce((n,q)=>n+q,0),stored=Object.entries(store.inventory).reduce((n,[g,q])=>n+(foodGoods.includes(g)?q:0),0),target=Math.max(city.initialPopulation||0,city.citizens.length)*ECONOMY_RULES.mealUnits*ECONOMY_RULES.initialMealsPerCitizen,missing=Math.floor(Math.min(store.inventoryCapacity-stored-incoming,target-stored-incoming));
         if(missing<1||inventoryFree(store)<1)break;
         const local=[],depot=city.economy.importDepot;
         for(const good of foodGoods){
           if(!this.accepts(store,good))continue;
-          const claim=importDepotClaim(depot,store,good);if(depot?.inventory[good]>0&&claim>0)local.push({seller:depot,good,price:0,available:Math.min(depot.inventory[good],claim)});
+          const claim=importDepotClaim(depot,store,good);if(!(store.worldIncoming?.[good])&&!(store.importIncoming?.[good])&&depot?.inventory[good]>0&&claim>0)local.push({seller:depot,good,price:0,available:Math.min(depot.inventory[good],claim)});
           for(const seller of this.businesses){
             const makes=seller.type==='farm'&&seller.crop===good||seller.type==='bakery'&&good==='pao'||seller.type==='kitchen'&&Object.hasOwn(INDUSTRIES.kitchen.outputs,good)||Object.hasOwn(INDUSTRIES[seller.type]?.outputs||{},good);
             if(!makes||seller.inventory[good]<1||city.findPath(seller.door,store.door)===null||city.logistics.transportLimit(seller,store)<1)continue;
@@ -737,7 +739,7 @@ export class CityEconomy {
         if(purchase)quantity=Math.min(missing,purchase.available,inventoryFree(store),purchase.seller===depot?purchase.available:Math.min(24,city.logistics.transportLimit(purchase.seller,store)));
         else {
           const importCost=good=>this.goods[good].price*2.25+Math.ceil(this.goods[good].price*(city.politics?.policy?.importTaxes?.[good]||0));
-          const good=foodGoods.filter(g=>this.accepts(store,g)).sort((a,b)=>importCost(a)-importCost(b))[0];if(!good)break;
+          const good=foodGoods.filter(g=>this.accepts(store,g)&&!(store.worldIncoming?.[g])&&!(store.importIncoming?.[g])).sort((a,b)=>importCost(a)-importCost(b))[0];if(!good)break;
           purchase={good,price:Math.ceil(this.goods[good].price*2.25)};quantity=Math.min(missing,10000,inventoryFree(store));
         }
         if(quantity<1)break;

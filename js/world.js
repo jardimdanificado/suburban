@@ -1,4 +1,4 @@
-import {FARM_TILES} from './world_gen.js?v=beach-band-2-3-waterfix-1';
+import {FARM_TILES} from './world_gen.js?v=terrain-generation-reset-1';
 import { randomWorldSeed } from './world_settings.js?v=map-default-256-1';
 import { roadFor, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
 // =============================================================================
@@ -23,11 +23,9 @@ import {
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE,
   MAP_PRESET_ARCHIPELAGO,
-  MAP_PRESET_CONTINENT,
-  MAP_PRESET_HIGHLANDS,
   world_gen_generate,
   world_gen_is_walkable
-} from "./world_gen.js?v=beach-band-2-3-waterfix-1";
+} from "./world_gen.js?v=terrain-generation-reset-1";
 
 const SIDEWALK_TERRAIN=new Set([TILE_FLOOR,TILE_HILL,TILE_SAND]);
 
@@ -114,9 +112,10 @@ export class World {
     this.revision = (this.revision || 0) + 1;
     this.topologyRevision = (this.topologyRevision || 0) + 1;
     this.waterTopologyRevision=(this.waterTopologyRevision||0)+1;
-    let cfg = MAP_PRESET_ARCHIPELAGO;
-    if (presetId === 1) cfg = MAP_PRESET_CONTINENT;
-    else if (presetId === 2) cfg = MAP_PRESET_HIGHLANDS;
+    // Multi-city worlds rely on reliable sea connections. Keep legacy preset
+    // IDs readable in saves, but generate every new map as an archipelago.
+    const cfg = MAP_PRESET_ARCHIPELAGO;
+    this.presetId = 0;
 
     const outCenter = { x: this.width / 2, y: this.height / 2 };
     world_gen_generate(this.map, { ...cfg, seed, width:this.width, height:this.height }, outCenter);

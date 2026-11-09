@@ -1,3 +1,5 @@
+import {INTERCITY_BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
+
 /** Coordinates city sessions and world-level transfers. City state stays local to its worker. */
 export class WorldCoordinator {
   constructor({ minute = 0, paused = false, speed = 1, onChange = () => {}, transferHandlers = {} } = {}) {
@@ -10,6 +12,8 @@ export class WorldCoordinator {
     this.transfers = new Map();
     this.contracts = new Map();
     this.migrationPolicies=new Map();
+    this.regionalTradeDay=null;
+    this.autonomousMigrationDay=null;
     this.summaries=new Map();
     this.ports = new Map();
     this.routes = new Map();
@@ -112,6 +116,8 @@ export class WorldCoordinator {
     if(clearTransfers)this.transfers.clear();
     this.contracts.clear();
     this.migrationPolicies.clear();
+    this.regionalTradeDay=null;
+    this.autonomousMigrationDay=null;
     this.summaries.clear();
     this.ports.clear();this.routes.clear();this.vessels.clear();
     this.onChange({type:'world-reset',minute});
@@ -165,10 +171,21 @@ export class WorldCoordinator {
     this.routes.set(id,route);this.onChange({type:'route-added',route:structuredClone(route)});return route;
   }
 
-  addVessel({id,capacity}) {
+  ensureRouteFleet(routeId){
+    const route=this.routes.get(routeId);if(!route)return false;
+    for(const[classId,spec]of Object.entries(INTERCITY_BOAT_CLASSES)){
+      const id=`vessel:${routeId}:${classId}`;if(!this.vessels.has(id))this.addVessel({id,classId,capacity:spec.capacity,routeId,currentPortId:route.originPortId});
+    }
+    const legacy=this.vessels.get(`ferry:${routeId}`);if(legacy){legacy.classId??='cargo';legacy.routeId??=routeId;legacy.currentPortId??=route.originPortId;}
+    return true;
+  }
+
+  addVessel({id,capacity,classId=null,routeId=null,currentPortId=null}) {
     if(typeof id!=='string'||!id||this.vessels.has(id))throw new Error('Identificador de embarcação inválido ou duplicado.');
+    classId=classId&&INTERCITY_BOAT_CLASSES[classId]?classId:Object.entries(INTERCITY_BOAT_CLASSES).sort((a,b)=>a[1].capacity-b[1].capacity).find(([,spec])=>spec.capacity>=capacity)?.[0]||'cargo';
+    capacity??=INTERCITY_BOAT_CLASSES[classId].capacity;
     if(!Number.isSafeInteger(capacity)||capacity<1)throw new RangeError('A capacidade da embarcação precisa ser positiva.');
-    const vessel={id,capacity,status:'idle',transferId:null,routeId:null};this.vessels.set(id,vessel);this.onChange({type:'vessel-added',vessel:structuredClone(vessel)});return vessel;
+    const vessel={id,classId,capacity,status:'idle',transferId:null,routeId,currentPortId};this.vessels.set(id,vessel);this.onChange({type:'vessel-added',vessel:structuredClone(vessel)});return vessel;
   }
 
   scheduleVoyage({id,routeId,manifest,departureMinute=this.minute}) {
@@ -176,17 +193,17 @@ export class WorldCoordinator {
     if(!manifest||typeof manifest!=='object'||Array.isArray(manifest))throw new TypeError('Manifesto marítimo inválido.');
     const quantity=manifest.kind==='citizen'?(manifest.package?.version===2?manifest.package.members?.length:1):manifest.quantity;
     if(!Number.isSafeInteger(quantity)||quantity<1||quantity>route.capacity)throw new RangeError('A carga excede a capacidade da rota.');
-    const vessel=[...this.vessels.values()].find(item=>item.status==='idle'&&item.capacity>=quantity&&item.capacity>=route.capacity);
+    const vessel=[...this.vessels.values()].filter(item=>item.status==='idle'&&item.capacity>=quantity&&(!item.routeId||item.routeId===routeId)&&(!item.currentPortId||item.currentPortId===route.originPortId)).sort((a,b)=>a.capacity-b.capacity)[0];
     if(!vessel)throw new Error('Não há embarcação livre com capacidade suficiente para esta rota.');
     const transfer=this.scheduleTransfer({id,kind:manifest.kind==='citizen'?'citizen':'goods',originCityId:route.originCityId,destinationCityId:route.destinationCityId,payload:manifest,departureMinute,arrivalMinute:departureMinute+route.travelMinutes,routeId,vesselId:vessel.id});
-    transfer.routeId=route.id;transfer.vesselId=vessel.id;vessel.status='reserved';vessel.transferId=id;vessel.routeId=route.id;
+    transfer.routeId=route.id;transfer.vesselId=vessel.id;vessel.status='reserved';vessel.transferId=id;vessel.routeId=route.id;vessel.currentPortId=route.originPortId;
     this.onChange({type:'voyage-scheduled',transfer:structuredClone(transfer),vessel:structuredClone(vessel)});return transfer;
   }
 
   cancelTransfer(id) {
     const transfer=this.transfers.get(id);if(!transfer||!['scheduled','cancelling'].includes(transfer.status))return false;
     transfer.status='cancelled';transfer.cancelledAt=this.minute;
-    const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===id){vessel.status='idle';vessel.transferId=null;vessel.routeId=null;}
+    const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===id){vessel.status='idle';vessel.transferId=null;vessel.currentPortId=this.routes.get(transfer.routeId)?.originPortId||vessel.currentPortId;}
     this.onChange({type:'transfer-cancelled',transfer:structuredClone(transfer)});return true;
   }
 
@@ -203,6 +220,7 @@ export class WorldCoordinator {
   async advanceTo(minute, handlers = this.transferHandlers) {
     if (!Number.isFinite(minute) || minute < this.minute) throw new RangeError('O relógio do mundo não pode voltar no tempo.');
     const {depart,deliver}=handlers||{};
+    for(const vessel of this.vessels.values())if(vessel.status==='returning'&&Number.isFinite(vessel.returnMinute)&&vessel.returnMinute<=minute){const route=this.routes.get(vessel.routeId);vessel.status='idle';vessel.currentPortId=route?.originPortId||vessel.currentPortId;vessel.returnMinute=null;this.onChange({type:'vessel-returned',vessel:structuredClone(vessel)});}
     const due = [...this.transfers.values()].sort((a, b) => a.departureMinute - b.departureMinute || a.arrivalMinute - b.arrivalMinute || a.id.localeCompare(b.id));
     for (const transfer of due) {
       if(transfer.status==='cancelling'&&typeof handlers?.cancel==='function'){
@@ -221,7 +239,7 @@ export class WorldCoordinator {
         try{await deliver(structuredClone(transfer));}catch(error){transfer.status='in-transit';this.onChange({type:'transfer-processing-error',transferId:transfer.id,phase:'deliver',message:error.message});continue;}
         transfer.status = 'delivered';
         transfer.deliveredAt = transfer.arrivalMinute;
-        const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===transfer.id){vessel.status='idle';vessel.transferId=null;vessel.routeId=null;}
+        const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===transfer.id){const route=this.routes.get(transfer.routeId),returnMinute=transfer.arrivalMinute+(route?.travelMinutes||0),alreadyReturned=returnMinute<=minute;vessel.status=alreadyReturned?'idle':'returning';vessel.currentPortId=alreadyReturned?route?.originPortId||vessel.currentPortId:route?.destinationPortId||vessel.currentPortId;vessel.returnMinute=alreadyReturned?null:returnMinute;vessel.transferId=null;vessel.routeId=route?.id||vessel.routeId;}
         this.onChange({ type: 'transfer-delivered', transfer: structuredClone(transfer) });
       }
     }
@@ -233,6 +251,8 @@ export class WorldCoordinator {
     return {
       version: 1,
       minute: this.minute,
+      regionalTradeDay:this.regionalTradeDay,
+      autonomousMigrationDay:this.autonomousMigrationDay,
       paused: this.paused,
       speed: this.speed,
       activeCityId: this.activeCityId,
@@ -249,6 +269,7 @@ export class WorldCoordinator {
 
   restore(snapshot) {
     if (snapshot?.version !== 1 || !Number.isFinite(snapshot.minute) || !Array.isArray(snapshot.transfers) || !Array.isArray(snapshot.cities)) throw new TypeError('Salvamento do mundo incompatível.');
+    for(const day of [snapshot.regionalTradeDay,snapshot.autonomousMigrationDay])if(day!=null&&(!Number.isSafeInteger(day)||day<0))throw new TypeError('Dia de decisão automática inválido no salvamento.');
     const knownCities = new Set(this.cities.keys());
     if (snapshot.cities.some(city => !knownCities.has(city.id))) throw new Error('Registre todas as cidades antes de restaurar o mundo.');
     const transfers = new Map();
@@ -259,8 +280,10 @@ export class WorldCoordinator {
     const contracts=new Map();for(const contract of snapshot.contracts||[]){if(!contract?.id||contracts.has(contract.id)||!snapshot.routes?.some(route=>route.id===contract.routeId)||!Number.isSafeInteger(contract.quantity)||contract.quantity<1||!Number.isSafeInteger(contract.intervalMinutes)||contract.intervalMinutes<1||!Number.isSafeInteger(contract.nextDepartureMinute)||typeof contract.good!=='string'||!contract.good)throw new TypeError('Contrato comercial inválido no salvamento.');contracts.set(contract.id,structuredClone(contract));}
     const migrationPolicies=new Map();for(const policy of snapshot.migrationPolicies||[]){if(!policy?.id||migrationPolicies.has(policy.id)||!snapshot.routes?.some(route=>route.id===policy.routeId)||!Number.isSafeInteger(policy.intervalMinutes)||policy.intervalMinutes<1||!Number.isSafeInteger(policy.nextDepartureMinute)||!Number.isSafeInteger(policy.maxTransfers)||policy.maxTransfers<1||!Number.isSafeInteger(policy.transfersCreated)||policy.transfersCreated<0)throw new TypeError('Política de migração inválida no salvamento.');migrationPolicies.set(policy.id,structuredClone(policy));}
     const ports=new Map((snapshot.ports||[]).map(port=>[port.id,structuredClone(port)])),routes=new Map((snapshot.routes||[]).map(route=>[route.id,structuredClone(route)])),vessels=new Map((snapshot.vessels||[]).map(vessel=>[vessel.id,structuredClone(vessel)]));
-    if(ports.size!==(snapshot.ports||[]).length||routes.size!==(snapshot.routes||[]).length||vessels.size!==(snapshot.vessels||[]).length||[...ports.values()].some(port=>!knownCities.has(port.cityId))||[...routes.values()].some(route=>!ports.has(route.originPortId)||!ports.has(route.destinationPortId))||[...vessels.values()].some(vessel=>!Number.isSafeInteger(vessel.capacity)||vessel.capacity<1))throw new TypeError('Rotas, portos ou embarcações inválidos no salvamento.');
+    if(ports.size!==(snapshot.ports||[]).length||routes.size!==(snapshot.routes||[]).length||vessels.size!==(snapshot.vessels||[]).length||[...ports.values()].some(port=>!knownCities.has(port.cityId))||[...routes.values()].some(route=>!ports.has(route.originPortId)||!ports.has(route.destinationPortId))||[...vessels.values()].some(vessel=>!Number.isSafeInteger(vessel.capacity)||vessel.capacity<1||!['idle','reserved','at-sea','returning'].includes(vessel.status)||vessel.classId&&!INTERCITY_BOAT_CLASSES[vessel.classId]||vessel.routeId&&!routes.has(vessel.routeId)||vessel.currentPortId&&!ports.has(vessel.currentPortId)||vessel.returnMinute!=null&&!Number.isSafeInteger(vessel.returnMinute)))throw new TypeError('Rotas, portos ou embarcações inválidos no salvamento.');
     this.minute = snapshot.minute;
+    this.regionalTradeDay=snapshot.regionalTradeDay??null;
+    this.autonomousMigrationDay=snapshot.autonomousMigrationDay??null;
     this.paused = !!snapshot.paused;
     this.speed = Number.isFinite(snapshot.speed) && snapshot.speed > 0 ? snapshot.speed : 1;
     this.activeCityId = knownCities.has(snapshot.activeCityId) ? snapshot.activeCityId : this.cities.keys().next().value ?? null;
@@ -270,6 +293,7 @@ export class WorldCoordinator {
     this.migrationPolicies=migrationPolicies;
     this.summaries=new Map((snapshot.summaries||[]).filter(item=>knownCities.has(item.cityId)&&item.summary&&Number.isFinite(item.summary.minute)&&Number.isSafeInteger(item.summary.population)).map(item=>[item.cityId,structuredClone(item.summary)]));
     this.ports=ports;this.routes=routes;this.vessels=vessels;
+    for(const route of this.routes.values())this.ensureRouteFleet(route.id);
     for(const city of snapshot.cities)this.cities.get(city.id).reportedMinute=Number.isFinite(city.reportedMinute)?city.reportedMinute:snapshot.minute;
     this.setTime({ paused: this.paused, speed: this.speed });
     this.onChange({ type: 'world-restored', minute: this.minute });
