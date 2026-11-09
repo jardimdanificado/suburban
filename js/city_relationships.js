@@ -1,7 +1,7 @@
 import {appearance,companyPreference} from './city_clothing.js?v=party-apparel-1';
 import {initializePrejudices,prejudiceAgainstTypes,prejudicesInCommon} from './city_prejudice.js?v=discrimination-laws-1';
 // Personal relationships react to encounters and known facts, not to a scan of all pairs.
-export const RELATIONSHIP_RULES = { memories: 24, beliefs: 24, grief: 8, facts: 768, gossipHops: 6, proposalCooldown: 1440, visitCooldown: 60, visitDistance: 32, visitPathBudget: 3 };
+export const RELATIONSHIP_RULES = { memories: 24, beliefs: 24, grief: 8, facts: 768, gossipHops: 6, proposalCooldown: 1440, forgetAfter:3*1440, visitCooldown: 60, visitDistance: 32, visitPathBudget: 3 };
 export const FEELING_LABELS = { affection: 'Afeto', trust: 'Confiança', respect: 'Respeito', attraction: 'Atração', resentment: 'Ressentimento', fear: 'Receio' };
 export const BOND_LABELS = { known:'Conhecido', friend:'Amizade', close:'Grande amizade', confidant:'Confidente', rival:'Rivalidade', enemy:'Inimizade', estranged:'Amizade rompida' };
 export const ROMANCE_LABELS = { none:'Sem interesse romântico', crush:'Interesse romântico', courting:'Aproximação', partner:'Companheiro(a)', affair:'Envolvimento fora do compromisso', rejected:'Interesse rejeitado', ex:'Ex-companheiro(a)', widowed:'Vínculo com companheiro(a) falecido' };

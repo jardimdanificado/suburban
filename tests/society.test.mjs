@@ -46,6 +46,18 @@ test('conversations need proximity, availability and cooldown; each person talks
   assert(city.events.some(e => e.data.kind === 'conversation' && e.citizenIds.includes(a.id)));
 });
 
+test('daily social cleanup forgets stale weak acquaintances and keeps meaningful bonds',()=>{
+  const city=setup({population:24}),[a,b,c,d]=city.citizens;
+  const cold=city.society.getRelation(a,b,true);cold.contexts=[];cold.familiarity=5;cold.lastContact=city.minute-SOCIAL_RULES.forgetAfter-1;
+  const strong=city.society.getRelation(c,d,true);strong.contexts=[];strong.familiarity=20;strong.lastContact=city.minute-SOCIAL_RULES.forgetAfter-1;
+  for(const view of Object.values(strong.views)){view.affection=50;view.trust=45;}
+  city.relationships.sync(strong);city.society.daily();
+  assert.equal(city.society.getRelation(a,b),undefined);
+  assert.equal(city.society.contactIndex.has(a.id),false);assert.equal(city.society.contactIndex.has(b.id),false);
+  assert.equal(city.society.getRelation(c,d),strong);
+  const renewed=city.society.getRelation(a,b,true);assert(renewed);assert.notEqual(renewed,cold);
+});
+
 test('repeated mutual encounters form friendships and adult partnerships', () => {
   const city = setup(), [a, b] = pair(city);
   const r = bond(city, a, b);

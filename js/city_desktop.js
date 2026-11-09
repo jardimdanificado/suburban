@@ -30,7 +30,7 @@ export class CityDesktop {
   set notice(value){const state=this.active||this.manager.find('module:city')?.state;if(state)state.notice=value;}
   create(id,tab,{title=null,entity=null,unitId=null,kind='module'}={}){
     const existing=this.manager.find(id);if(existing){this.manager.raise(id);if(existing.shaded)this.manager.shade(id);this.hidden=false;return existing.state;}
-    const state=new CityUI({city:this.city,root:this.element,select:this.select,camera:this.camera,host:this});state.tab=tab;
+    const state=new CityUI({city:this.city,root:this.element,select:this.select,camera:this.camera,host:this});state.worldCoordinator=this.worldCoordinator;state.openWorldCitizen=this.openWorldCitizen;state.tab=tab;
     const[w,h]=kind==='inspector'?[540,500]:kind==='dossier'?[470,520]:sizes[tab]||[460,420],near=this.manager.active;
     const window=this.manager.open({id,title:title||CITY_WINDOWS.find(t=>t[0]===tab)?.[1]||'Cidade',width:w,height:h,minWidth:kind==='dossier'?340:300,minHeight:200,state,near:kind==='dossier'||kind==='inspector'||kind==='section'?near:null});window.kind=kind;state.windowId=id;
     if(entity)state.setSelection(entity,unitId);this.hidden=false;

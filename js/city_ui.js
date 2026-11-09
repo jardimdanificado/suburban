@@ -420,6 +420,9 @@ export class CityUI {
       for (const id of c.parentIds) link('Filiação', id);
       for (const id of c.childIds) link('Filho(a)', id);
       if (!society.isAdult(c)) link('Responsável', c.guardianId);
+      const knownLocalIds=new Set([c.partnerId,...c.parentIds,...c.childIds,c.guardianId].filter(id=>id!=null).map(id=>society.citizen(id)?.globalId).filter(Boolean));
+      const familyRefs=[...(c.worldLinks?.parentGlobalIds||[]).map(id=>['Filiação',id]),...(c.worldLinks?.guardianGlobalId?[['Responsável',c.worldLinks.guardianGlobalId]]:[]),...(c.worldLinks?.partnerGlobalId?[['Companheiro(a)',c.worldLinks.partnerGlobalId]]:[]),...(c.worldLinks?.childGlobalIds||[]).map(id=>['Filho(a)',id])].filter(([,id])=>!knownLocalIds.has(id));
+      for(const [label,globalId] of familyRefs){const person=this.worldCoordinator?.resolveCitizen(globalId);if(person?.cityId===this.worldCoordinator?.activeCityId)continue;p.note(`${label} · outra cidade`);if(person&&this.openWorldCitizen)p.button(`${person.name} · ${this.worldCoordinator.cities.get(person.cityId)?.metadata.name||person.cityId}`,()=>this.openWorldCitizen(globalId));else p.note(`Referência preservada (${globalId})`);}
       const pregnancy = society.expecting.find(e => e.id === c.expectingId); if (pregnancy) p.note(`Filho esperado: ${stamp(pregnancy.dueAt)}`, C.pink);
       p.note(`${c.personality.wantsRomance ? 'Aberto a relacionamentos' : 'Prefere ficar solteiro'} / ${c.personality.wantsChildren ? 'Deseja ter filhos' : 'Não planeja filhos'}`);
       this.relationshipPanel(p,c);
@@ -1184,6 +1187,8 @@ export class CityUI {
       if(society.citizen(other))p.button('ABRIR FICHA DA OUTRA PESSOA',()=>this.openCitizen(other));
       p.button('MEMÓRIAS DESTE VÍNCULO',()=>{this.memoryPersonId=other;this.detailTab='memories';this.memoryPage=0;this.resetScroll();});
     }
+    const remote=(c.worldLinks?.relationships||[]).filter(link=>link.globalId&&!society.citizens.some(person=>person.globalId===link.globalId));
+    if(remote.length){p.heading('VÍNCULOS EM OUTRAS CIDADES');for(const relation of remote){const person=this.worldCoordinator?.resolveCitizen(relation.globalId),where=person&&this.worldCoordinator?.cities.get(person.cityId)?.metadata.name;if(person&&person.cityId!==this.worldCoordinator?.activeCityId)p.button(`${person.name} · ${where||person.cityId} · ${BOND_LABELS[relation.status]||'vínculo preservado'}`,()=>this.openWorldCitizen?.(relation.globalId));else p.note(`${relation.globalId} · ${BOND_LABELS[relation.status]||'vínculo preservado'}`);}}
     if(!rows.length)p.note('Nenhum vínculo corresponde ao filtro.');
   }
   socialMemories(p,c) {
@@ -1205,6 +1210,8 @@ export class CityUI {
       if(belief){p.kv('Fonte',this.city.accountName(`citizen:${m.sourceId}`));p.kv(m.corrected?'Confiança na correção':'Confiança na narrativa',`${m.confidence}%`);p.kv('Repasses',m.hops);}
       if(m.eventId)p.button(`VER ORIGEM #${m.eventId}`,()=>this.openEvent(m.eventId));
     }
+    const archivedRows=[...(belief?c.worldLinks?.socialHistory?.beliefs:c.worldLinks?.socialHistory?.memories)||[]].reverse();
+    if(archivedRows.length){p.heading('HISTÓRICO SOCIAL DA CIDADE DE ORIGEM');p.note('Estas recordações foram preservadas como arquivo e não participam de novas conversas da cidade atual.');for(const m of archivedRows){p.heading(`${stamp(m.heardAt??m.minute)} / ${m.kind||'registro social'}`,C.cyan);p.note(m.description||'Registro preservado.');for(const globalId of Object.values(m.worldRefs||{})){if(!globalId)continue;const person=this.worldCoordinator?.resolveCitizen(globalId);if(person&&person.cityId!==this.worldCoordinator.activeCityId)p.button(`Abrir ${person.name} · ${this.worldCoordinator.cities.get(person.cityId)?.metadata.name||person.cityId}`,()=>this.openWorldCitizen?.(globalId));}}}
     p.note(`${rows.length} registros / página ${page+1}`);p.buttons([{label:'ANTERIOR',click:()=>{this.memoryPage=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.memoryPage=page+1;}}]);
     if(!rows.length)p.note('Nenhuma memória corresponde ao filtro.');
   }

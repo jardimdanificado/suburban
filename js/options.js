@@ -28,9 +28,10 @@ const EFFECTS = [
   effect("contrast", "CONTRASTE", [0.5, 0.75, 1, 1.25, 1.5].map(v => [v, `${v}`]), 1),
 ];
 export class OptionsPanel {
-  constructor({ renderer, time, step, storage = null }) {
+  constructor({ renderer, time, step, storage = null, onTimeChange = () => {} }) {
     this.renderer = renderer;
     this.time = time;
+    this.onTimeChange = onTimeChange;
     this.step = step;
     this.storage = storage;
     this.open = false;
@@ -115,9 +116,9 @@ export class OptionsPanel {
       const base = contentY - this.scroll;
       ui.text("VELOCIDADE", x + 12, base + 8, "#f8b800");
       SPEED_TIERS.forEach((value, i) => ui.button(x + 12 + i % columns * 64, base + 24 + Math.floor(i / columns) * 28, 60, 24,
-        speedLabel(value), () => this.time.setSpeed(value), { selected: this.time.speed === value }));
+        speedLabel(value), () => { this.time.setSpeed(value); this.onTimeChange(this.time); }, { selected: this.time.speed === value }));
       const after = base + 30 + Math.ceil(SPEED_TIERS.length / columns) * 28;
-      ui.button(x + 12, after, 118, 24, this.time.paused ? "CONTINUAR" : "PAUSAR", () => this.time.setPaused(!this.time.paused));
+      ui.button(x + 12, after, 118, 24, this.time.paused ? "CONTINUAR" : "PAUSAR", () => { this.time.setPaused(!this.time.paused); this.onTimeChange(this.time); });
       ui.button(x + 138, after, 90, 24, "PASSO", () => this.step());
       ui.text("ESPACO: PAUSA\n-/+: VELOCIDADE\n.: UM PASSO QUANDO PAUSADO\nff: AVANÇO COM DETALHE REDUZIDO\nff2: DETALHES PESSOAIS EM MENOR FREQUÊNCIA", x + 12, after + 42);
     } else {

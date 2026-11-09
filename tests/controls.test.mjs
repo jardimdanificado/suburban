@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SimulationTime, SPEED_TIERS } from "../js/simulation_time.js";
+import { SimulationTime, SPEED_TIERS, FF_SPEED, FF2_SPEED, FF3_SPEED, FF4_SPEED } from "../js/simulation_time.js";
 import { OptionsPanel } from "../js/options.js";
 import { LegacyCanvasUI } from "../js/legacy_ui.js";
 import { WorldClock } from "../js/world.js";
@@ -12,7 +12,7 @@ test("all speed tiers advance the world clock and experience with fixed steps", 
     time.setSpeed(speed);
     let calls = 0;
     for (let frame = 0; frame < 60; frame++) time.advance(1 / 60, dt => {
-      assert.equal(dt, speed >= 128 ? .5 : speed === 64 ? .25 : 1 / 60);
+      assert.equal(dt, speed >= FF4_SPEED ? 1 : speed >= FF3_SPEED ? .75 : speed >= FF2_SPEED ? .5 : speed === FF_SPEED ? .25 : 1 / 60);
       calls++;
       clock.tick(dt);
     });
@@ -63,7 +63,7 @@ test("single-step requires pause and is independent of the selected speed", () =
   time.changeSpeed(1);
   assert.equal(time.speed, 64);
   for (let i = 0; i < 20; i++) time.changeSpeed(-1);
-  assert.equal(time.speed, 0.5);
+  assert.equal(time.speed, SPEED_TIERS[0]);
   assert.throws(() => time.setSpeed(Infinity), RangeError);
 });
 

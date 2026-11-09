@@ -68,19 +68,23 @@ function receiveInteriorMotion(bridge,packet,now,resetAll=false){
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
 export class CitySimulationBridge {
-  constructor({ city, entities, nextId, time, changed, notice, noticeTarget, profiling=false }) {
+  constructor({ cityId = 'city-1', city, entities, nextId, time, changed, notice, noticeTarget, onProgress=()=>{}, onSummary=()=>{}, observed=true, profiling=false }) {
+    this.cityId = cityId;
+    for(const person of city.citizens||[])person.globalId??=`${cityId}:${person.id}`;
+    this.onProgress=onProgress;this.onSummary=onSummary;this.observed=!!observed;
     this.city = city; this.city.profileDiagnostics=profiling; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice; this.noticeTarget = noticeTarget;
     this.graph = new CityStateGraph(); this.state = { city, entities, nextId };
     this.active = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
+    this.checkpointWaiters=new Map();this.checkpointId=0;
     if (typeof Worker === 'undefined') return;
     try {
       this.worker = new Worker(new URL('./city_sim_worker.js?v=ff3-ff4-steps-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
-      this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
+      this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
       this.active = true;
-      for (const [target, path, method] of [[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],
+      for (const [target, path, method] of [[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],...['reserveWorldExport','departWorldExport','completeWorldExport','returnWorldExport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration'].map(method=>[city,'',method]),
         ...['setPalette','requestPurchase','requestVehicle','requestBuilding'].map(method=>[city.paint,'paint.',method]),[city.vehicles,'vehicles.','mountFlag'],[city.vehicles,'vehicles.','removeFlag'],[city.economy,'economy.','rentOffice'],[city.economy,'economy.','configureEmployment'],[city.economy,'economy.','offerShares'],[city.economy,'economy.','buyShares'],[city.economy,'economy.','cancelShareOffer'],[city.vehicles,'vehicles.','configureAssembly'],[city.vehicles,'vehicles.','buyVehicle'],[city.vehicles,'vehicles.','transferVehicle'],[city.vehicles,'vehicles.','revisePart'],[city.politics.research,'politics.research.','commissionService'],[city.publications, 'publications.', 'write'], [city.publications, 'publications.', 'read'], [city.publications, 'publications.', 'configure'], [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'], [city.bank, 'bank.', 'fileRecoveryPlan'],
         [city.politics, 'politics.', 'leaseHeadquarters'],[city.politics, 'politics.', 'executePlayerAction'],[city.politics, 'politics.', 'intervene'],[city.politics, 'politics.', 'startPublicWork'],[city.politics, 'politics.', 'submitBill'], [city.politics, 'politics.', 'vetoBill'], [city.currency, 'currency.', 'retire'], [city.world, 'world.', 'setTile']]) {
         const original = target[method];
@@ -89,29 +93,43 @@ export class CitySimulationBridge {
       }
     } catch (error) { this.fail(error.message); }
   }
-  command(path, args) {
+  command(path, args, resolve=null) {
     const id = ++this.commandId;
     // Policies/options are plain data. Bank/building references use graph IDs.
     const encoded = args.map(arg => arg && typeof arg === 'object' && this.graph.ids.has(arg) ? this.graph.ref(arg) : arg);
-    this.pending.set(id, {path,target:this.noticeTarget?.()}); this.worker.postMessage({ type: 'command', id, path, args: encoded });
+    this.pending.set(id, {path,target:this.noticeTarget?.(),resolve}); this.worker.postMessage({ type: 'command', cityId:this.cityId, id, path, args: encoded });
+  }
+  request(path,args){
+    if(!this.active)return Promise.resolve({ok:false,message:'Worker da cidade indisponível.'});
+    return new Promise(resolve=>this.command(path,args,resolve));
+  }
+  checkpoint(){
+    if(!this.active)return Promise.reject(new Error('Worker da cidade indisponível.'));
+    const id=++this.checkpointId;
+    return new Promise((resolve,reject)=>{this.checkpointWaiters.set(id,{resolve,reject});try{this.worker.postMessage({type:'checkpoint',cityId:this.cityId,id});}catch(error){this.checkpointWaiters.delete(id);reject(error);}});
   }
   control() {
     if (!this.active) return;
-    const { paused, speed } = this.time, detailBuildingId=this.city.detailedInteriorBuildingId??null, signature = `${paused}:${speed}:${detailBuildingId}`;
+    const { paused, speed } = this.time, detailBuildingId=this.city.detailedInteriorBuildingId??null, signature = `${paused}:${speed}:${detailBuildingId}:${this.observed}`;
     if (signature !== this.controlSignature) {
-      this.controlSignature = signature; this.worker.postMessage({ type: 'control', paused, speed, detailBuildingId });
+      this.controlSignature = signature; this.worker.postMessage({ type: 'control', cityId:this.cityId, paused, speed, detailBuildingId,observed:this.observed });
     }
   }
-  step() { if (this.active && this.time.paused) { this.control(); this.worker.postMessage({ type: 'step' }); return true; } return false; }
+  setObserved(value){this.observed=!!value;this.control();}
+  step() { if (this.active && this.time.paused) { this.control(); this.worker.postMessage({ type: 'step', cityId:this.cityId }); return true; } return false; }
   receive(data) {
     if (!this.active) return;
+    if (data.cityId && data.cityId !== this.cityId) return;
     if (data.type === 'failure') { this.fail(data.message); return; }
     if (data.type === 'result') {
       const pending = this.pending.get(data.id),path=pending?.path; this.pending.delete(data.id);
+      if(pending?.resolve)pending.resolve({ok:data.ok,value:data.value,message:data.message});
       if (!data.ok || ['politics.leaseHeadquarters','economy.rentOffice','politics.intervene','economy.offerShares','economy.buyShares','economy.cancelShareOffer','politics.submitBill'].includes(path)) this.notice(data.message || `Não foi possível concluir a operação: ${path}.`,pending?.target);
       return;
     }
     if (data.type === 'motion') { this.receiveMotion(data); return; }
+    if(data.type==='heartbeat'){if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();this.onProgress?.(data.minute);}this.time.observeProgress?.(data.elapsed);this.time.tick=data.tick;this.time.elapsed=data.elapsed;if(data.workerMetrics)this.metrics={...this.metrics,...data.workerMetrics};return;}
+    if(data.type==='summary'){this.onSummary?.(data.summary);return;}
     if (data.type !== 'state') return;
     const nodeKinds=this.city.profileDiagnostics?Object.fromEntries(data.packet.nodes.reduce((counts,node)=>counts.set(node.kind,(counts.get(node.kind)||0)+1),new Map())):null;
     const receiveStarted=performance.now();
@@ -127,6 +145,8 @@ export class CitySimulationBridge {
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
     this.graph.apply(data.packet);
+    for(const id of data.checkpointIds||[]){const waiter=this.checkpointWaiters.get(id);if(waiter){this.checkpointWaiters.delete(id);waiter.resolve(this.state);}}
+    this.onProgress(this.city.minute);
     const structureChanged=count!==this.entities.length||structure!==this.city.structureRevision;
     if(structureChanged)bindCityState(this.city,{rebuildIndexes:true});
     const terrainChanged=revision!==world.revision;
@@ -169,13 +189,13 @@ export class CitySimulationBridge {
     this.applyVehiclePositions(data.vehicles);
     this.changed({ terrain: terrainChanged, terrainTiles, entities: structureChanged });
     this.metrics={...this.metrics,...data.workerMetrics,encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,...(nodeKinds?{nodeKinds}:{}),newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
-    this.worker.postMessage({ type: 'ack' });
+    this.worker.postMessage({ type: 'ack', cityId:this.cityId });
   }
   receiveMotion(data) {
     const now=performance.now();
     // The clock travels with the compact stream instead of freezing until
     // the much heavier business/political snapshot arrives.
-    if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();}
+    if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();this.onProgress?.(data.minute);}
     if(data.workerMetrics)this.metrics={...this.metrics,...data.workerMetrics};
     this.interpolate(now);
     const positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
@@ -242,12 +262,14 @@ export class CitySimulationBridge {
   fail(message) {
     const wasRunning=this.active;
     this.worker?.terminate(); this.active = false;
+    for(const waiter of this.checkpointWaiters.values())waiter.reject(new Error(String(message)));this.checkpointWaiters.clear();
     if(wasRunning)this.time.paused=true;
     for (const restore of this.restores) restore(); this.restores = [];
     bindCityState(this.city);
     this.city.lighting.siteBuckets=null;
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
+    for(const pending of this.pending.values())pending.resolve?.({ok:false,message:String(message)});
     this.pending.clear(); this.motion.clear();this.motionSamples.clear();this.interiorMotion.clear();this.vehicleMotion.clear();
     console.error('Simulação em segundo plano indisponível:', message);
     this.notice(wasRunning?`Simulação pausada após erro: ${String(message).split('\n')[0]}`:'Simulação em segundo plano indisponível; execução local ativada.');

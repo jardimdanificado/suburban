@@ -1,7 +1,9 @@
 import {initializePrejudices,prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-laws-1';
+import {RELATIONSHIP_RULES} from './city_relationships.js?v=wardrobe-expansion-1';
 export const EVENT_CATEGORIES = {activity:'Atividade', publication: 'Livros e panfletos', policy: 'Políticas públicas', nature: 'Vegetação', reputation: 'Reputação', finance: 'Finanças', credit: 'Crédito', death: 'Mortes', justice:'Justiça e segurança', sanitation: 'Saneamento', land: 'Terrenos', construction: 'Construção', transport: 'Transportes', city: 'Cidade', economy: 'Economia', housing: 'Moradia', work: 'Trabalho', social: 'Convívio', relationship: 'Relacionamentos', family: 'Famílias', government: 'Governo', business: 'Empresas', production: 'Produção' };
 export const SOCIAL_RULES = { friendAt: 30, closeFriendAt: 65, partnerAt: 68, conversationCooldown: 30, gestationMinutes: 3 * 1440, daysPerYear: 12, maxChildren: 2 };
 const pairKey = (a, b) => a < b ? `${a}:${b}` : `${b}:${a}`;
+const meaningfulRelationView=view=>view&&(view.kinship||view.affection>=30||view.trust>=35||view.respect>=45||view.resentment>=30||view.fear>=30||view.favorsOwed>0||['partner','widowed','ex'].includes(view.romance));
 const topics = ['o bairro', 'o trabalho', 'os planos para o futuro', 'a família', 'a cidade', 'música', 'comida', 'o dia a dia'];
 const NO_NEIGHBORS=Object.freeze([]);
 const ageCache=new WeakMap();
@@ -54,7 +56,15 @@ export class CitySociety {
     return this.relations.get(key);
   }
   relationsFor(id) { return [...(this.contactIndex.get(id)||[])].map(key=>this.relations.get(key)).filter(Boolean).sort((a,b)=>(b.views?.[id]?.affection??b.affection)-(a.views?.[id]?.affection??a.affection)); }
-  forgetRelation(r) {this.relations.delete(r.id);this.contactIndex.get(r.a)?.delete(r.id);this.contactIndex.get(r.b)?.delete(r.id);}
+  forgetRelation(r) {this.relations.delete(r.id);for(const id of [r.a,r.b]){const contacts=this.contactIndex.get(id);contacts?.delete(r.id);if(contacts&&!contacts.size)this.contactIndex.delete(id);}}
+  pruneDormantRelations(now=this.city.minute){
+    for(const relation of this.relations.values()){
+      if(now-(relation.lastContact??relation.since??now)<RELATIONSHIP_RULES.forgetAfter)continue;
+      const a=this.citizen(relation.a),b=this.citizen(relation.b);if(!a||!b)continue;
+      if(relation.familiarity>=10||relation.mentorId!=null||relation.partnerSince!=null||['friend','close','partner','enemy','rival'].includes(relation.status)||relation.contexts?.some(context=>['family','coworkers','household'].includes(context))||meaningfulRelationView(relation.views?.[a.id])||meaningfulRelationView(relation.views?.[b.id]))continue;
+      this.forgetRelation(relation);
+    }
+  }
   ancestors(c, seen = new Set()) {
     for (const id of c.parentIds) if (!seen.has(id)) { seen.add(id); const parent = this.city.accounts.get(`citizen:${id}`); if (parent) this.ancestors(parent, seen); }
     return seen;
@@ -202,6 +212,7 @@ export class CitySociety {
       if (!a || !b) continue;
       if (r.status === 'partner' && this.city.random() < .3) this.planChild(a, b);
     }
+    this.pruneDormantRelations(this.city.minute);
     for (const c of this.city.citizens) {
       if (this.isAdult(c) && c.guardianId !== null) {
         c.guardianId = null;
