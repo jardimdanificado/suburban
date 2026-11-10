@@ -248,6 +248,7 @@ export class CitySimulation {
     }
     return true;
   }
+  setWorldBoatAssigned(vehicleId,reserved){const boat=this.vehicles.units.get(vehicleId);if(!boat?.boatClass||reserved&&boat.driverId)return false;boat.worldFleetReserved=!!reserved;return true;}
   reserveWorldExport(transferId,buildingId,good,quantity,directToPort=false){
     if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(quantity)||quantity<1||!Object.hasOwn(this.worldPort.inventory,good))return false;
     const prior=this.worldPort.reservations[transferId];

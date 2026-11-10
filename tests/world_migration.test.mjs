@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {TILE_WATER} from '../js/world_gen.js';
 import {setup} from './helpers/city.mjs';
 import {WorldCoordinator} from '../js/world_coordinator.js';
 import {WorldTradeService} from '../js/world_trade_service.js';
 import {CityStateGraph,bindCityState} from '../js/city_state.js';
 
 function attach(city,id){
+  city.world.setTile?.(0,0,TILE_WATER);city.worldPort.berth={x:0,y:0};
   city.worldPort.cityId=id;
   const bridge={active:true,time:{paused:false,speed:1},async request(method,args){try{return {ok:true,value:city[method](...args)}}catch(error){return {ok:false,message:error.message}}}};
   return {id,city,world:city.world,entities:[],nextId:1,time:bridge.time,bridge,metadata:{name:id}};
@@ -183,4 +185,22 @@ test('an automatic migration policy retries daily scheduling until an eligible a
   assert.equal(await service.processMigrationPolicies(firstAttempt),1);assert.match(policy.lastError,/elegível/);assert.equal(world.transfers.size,0);
   citizen.jobId=null;citizen.worldMigrationPending=null;assert.equal(await service.processMigrationPolicies(firstAttempt+1),1);assert.equal(world.transfers.get(`auto-migration:policy-daily:${firstAttempt+1}`).kind,'citizen');assert.equal(policy.transfersCreated,1);assert.equal(policy.active,true);
   const saved=world.snapshot(),restored=new WorldCoordinator();restored.registerCity('origin',origin);restored.registerCity('destination',destination);restored.restore(saved);assert.equal(restored.migrationPolicies.get('policy-daily').transfersCreated,1);assert.equal(restored.migrationPolicies.get('policy-daily').active,true);
+});
+
+test('the service boat returns to its original port with its navigator and unchanged ownership',async()=>{
+  const from=setup({starter:true,population:24}),to=setup({starter:true,population:24});
+  const world=new WorldCoordinator({minute:from.minute});world.registerCity('origin',attach(from,'origin'));world.registerCity('destination',attach(to,'destination'));
+  world.addVessel({id:'round-trip',capacity:32,ownerAccountId:'original-owner',homeCityId:'origin',currentPortId:'origin:port'});
+  world.connectPorts({id:'route:origin>destination',originPortId:'origin:port',destinationPortId:'destination:port',travelMinutes:3,capacity:32});
+  const service=new WorldTradeService(world),person=from.citizens.find(c=>from.worldMigrationHousehold(c.id)?.length===1);
+  assert(person);const start=world.minute+1;
+  await service.scheduleMigration({id:'passage-return',originCityId:'origin',destinationCityId:'destination',citizenId:person.id,departureMinute:start});
+  await world.advanceTo(start,world.transferHandlers);
+  const crew=world.transfers.get('passage-return').payload.crew;assert(crew,'a real navigator must board');
+  await world.advanceTo(start+3,world.transferHandlers);
+  assert.equal(world.vessels.get('round-trip').status,'returning');
+  assert(!to.citizens.some(c=>c.globalId===crew.globalId),'the navigator must not migrate to the destination');
+  await world.advanceTo(start+6,world.transferHandlers);
+  assert.equal(world.vessels.get('round-trip').currentPortId,'origin:port');assert.equal(world.vessels.get('round-trip').ownerAccountId,'original-owner');
+  assert(from.citizens.some(c=>c.globalId===crew.globalId),'the same navigator returns home');
 });

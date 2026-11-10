@@ -80,7 +80,8 @@ test('maritime routes reserve a compatible vessel and release it after arrival',
   assert.equal(trip.arrivalMinute,4);
   assert.equal(world.vessels.get('ferry').status,'reserved');
   await world.advanceTo(1);assert.equal(world.vessels.get('ferry').status,'at-sea');assert.deepEqual(sailed,['shipment']);
-  await world.advanceTo(4);assert.equal(world.vessels.get('ferry').status,'idle');assert.deepEqual(arrived,['shipment']);
+  await world.advanceTo(4);assert.equal(world.vessels.get('ferry').status,'returning');assert.deepEqual(arrived,['shipment']);
+  await world.advanceTo(7);assert.equal(world.vessels.get('ferry').status,'idle');assert.equal(world.vessels.get('ferry').currentPortId,'a:port');
 });
 
 test('separate vessels allow parallel voyages across a multi-city route network',()=>{

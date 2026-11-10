@@ -35,3 +35,20 @@ SUBURBAN_MULTI_DURATION_MS=300000 SUBURBAN_MULTI_MAP_SIZE=256 SUBURBAN_MULTI_POP
 SUBURBAN_MULTI_DURATION_MS=600000 SUBURBAN_MULTI_MAP_SIZE=256 SUBURBAN_MULTI_POPULATION=512 node --expose-gc scripts/benchmark-multicity.mjs 2
 SUBURBAN_MULTI_DURATION_MS=1800000 SUBURBAN_MULTI_MAP_SIZE=256 SUBURBAN_MULTI_POPULATION=512 node --expose-gc scripts/benchmark-multicity.mjs 2
 ```
+
+## Cadência de snapshots em 32×
+
+Em 2026-11-10, comparei duas cidades de 512 moradores, mapa 128×128, velocidade 32× e janela-alvo de 15 s. A simulação manteve a transmissão compacta de movimento/necessidades; só a cópia completa do estado para a interface mudou de 1,5 s para 3 s.
+
+| Intervalo do snapshot completo | Snapshots por cidade | Minuto final médio | CPU do processo |
+|---:|---:|---:|---:|
+| 1,5 s | 11 | 952 | 336,8% |
+| 3 s | 6 | 1.210 | 322,3% |
+
+Com a mesma população, as cidades avançaram cerca de 27% mais minutos simulados na janela, com 4,3% menos CPU total. O movimento e as necessidades continuam chegando no canal compacto; os dados gerais de gestão podem aparecer até 1,5 s mais tarde em 32×. O resultado mede workers Node e não inclui renderização WebGL.
+
+Reprodução:
+
+```sh
+SUBURBAN_MULTI_DURATION_MS=15000 SUBURBAN_MULTI_MAP_SIZE=128 SUBURBAN_MULTI_POPULATION=512 SUBURBAN_MULTI_SPEED=32 node scripts/benchmark-multicity.mjs 2
+```

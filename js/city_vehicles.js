@@ -84,20 +84,10 @@ export class CityVehicles {
     return !!port.edgeRoute;
   }
   initializeHarborFleet(port){
-    if(!port)return 0;this.ensureHarborEdgeRoute(port);if(this.harborFleetInitialized)return 0;
-    if(!port.berth){const origin=port.door||port,best={distance:Infinity};for(let y=1;y<this.city.world.height-1;y++)for(let x=1;x<this.city.world.width-1;x++){if(!this.city.walkable(x,y))continue;for(const[dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(this.city.world.getTile(x+dx,y+dy)===TILE_WATER){const distance=(x-origin.x)**2+(y-origin.y)**2;if(distance<best.distance){best.distance=distance;best.door={x,y};best.berth={x:x+dx,y:y+dy};}}}if(best.berth){port.door=best.door;port.berth=best.berth;port.x=best.door.x;port.y=best.door.y;}}
-    if(!port.berth)return 0;
-    const city=this.city,start={x:Math.floor(port.berth.x),y:Math.floor(port.berth.y)},width=city.world.width,total=width*city.world.height,startIndex=start.y*width+start.x;
-    if(city.world.getTile(start.x,start.y)!==TILE_WATER)return 0;
-    this.harborFleetInitialized=true;
-    const previous=new Int32Array(total),distance=new Int16Array(total),queue=new Int32Array(total);previous.fill(-1);distance.fill(-1);let head=0,tail=0;queue[tail++]=startIndex;distance[startIndex]=0;
-    while(head<tail){const current=queue[head++],x=current%width,y=Math.floor(current/width);for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=city.world.width||ny>=city.world.height)continue;const next=ny*width+nx;if(distance[next]>=0||city.world.getTile(nx,ny)!==TILE_WATER)continue;distance[next]=distance[current]+1;previous[next]=current;queue[tail++]=next;}}
-    const fleet=[['canoe',0],['launch',1],['ferry',3],['cargo',5]];
-    for(const[kind,wantedDepth]of fleet){let target=-1,bestScore=Infinity;for(let i=0;i<tail;i++){const at=queue[i],depth=distance[at],score=Math.abs(depth-wantedDepth)*100-depth;if(score<bestScore){bestScore=score;target=at;}}if(target<0)break;
-      const path=[];for(let at=target;at>=0;at=previous[at]){path.push({x:at%width+.5,y:Math.floor(at/width)+.5});if(at===startIndex)break;}path.reverse();
-      const v=this.createBoatVehicle(kind,port.accountId);if(!v)continue;v.x=path.at(-1).x;v.y=path.at(-1).y;v.entity.x=v.x;v.entity.y=v.y;v.altitude=surfaceElevation(city.world,v.x,v.y);v.entity.altitude=v.altitude;v.journey=null;v.status='Disponível no porto';v.harborFleet=true;v.angle=0;this.stats.harborFleet=(this.stats.harborFleet||0)+1;
-    }
-    return this.stats.harborFleet||0;
+    if(!port||!this.ensureHarborEdgeRoute(port))return 0;
+    const existing=[...this.units.values()].filter(boat=>boat.boatClass&&boat.active&&!boat.scrapped&&boat.ownerAccountId===port.accountId);
+    if(!existing.length&&!this.harborServiceProvisioned){const boat=this.createBoatVehicle('ferry',port.accountId);if(boat){boat.harborFleet=true;boat.status='Ferry municipal disponível para serviço';}}
+    this.harborServiceProvisioned=true;this.harborFleetInitialized=true;return existing.length||1;
   }
   groundPath(start,goal){return this.city.findPath(start,goal,{allowSkybridges:false,allowBoats:false});}
   ferryPath(vehicle,goal){
@@ -509,13 +499,12 @@ export class CityVehicles {
       if(!person.boatClass||person.entity.destroyed)continue;
       let vessel=this.units.get(person.boatVehicleId);
       if(!vessel?.active||vessel.boatClass!==person.boatClass){
-        vessel=[...this.units.values()].find(candidate=>candidate.boatClass===person.boatClass&&candidate.active&&!candidate.scrapped&&!candidate.driverId&&!candidate.transportCitizenId&&!candidate.waterRoute);
-        if(!vessel)vessel=this.createBoatVehicle(person.boatClass,city.worldPort.accountId);
+        vessel=[...this.units.values()].find(candidate=>candidate.boatClass===person.boatClass&&candidate.active&&!candidate.scrapped&&!candidate.worldFleetReserved&&!candidate.driverId&&!candidate.transportCitizenId&&!candidate.waterRoute&&Math.hypot(candidate.x-person.entity.x,candidate.y-person.entity.y)<=1.5);
         if(!vessel)continue;person.boatVehicleId=vessel.id;
         if(vessel.ownerAccountId!==city.worldPort.accountId&&vessel.ownerAccountId!==person.accountId){
           const payer=city.payerFor(person),fare=city.currency.price(BOAT_CLASSES[person.boatClass].capacity>=8?45:20);
           if(!city.transfer(payer,vessel.ownerAccountId,fare,'Travessia local de barco',{vehicleId:vessel.id,citizenId:person.id,boatClass:person.boatClass})){
-            vessel=[...this.units.values()].find(candidate=>candidate.boatClass===person.boatClass&&candidate.active&&!candidate.scrapped&&candidate.ownerAccountId===city.worldPort.accountId&&!candidate.driverId&&!candidate.transportCitizenId&&!candidate.waterRoute)||this.createBoatVehicle(person.boatClass,city.worldPort.accountId);
+            vessel=[...this.units.values()].find(candidate=>candidate.boatClass===person.boatClass&&candidate.active&&!candidate.scrapped&&!candidate.worldFleetReserved&&candidate.ownerAccountId===city.worldPort.accountId&&!candidate.driverId&&!candidate.transportCitizenId&&!candidate.waterRoute&&Math.hypot(candidate.x-person.entity.x,candidate.y-person.entity.y)<=1.5);
             if(!vessel)continue;person.boatVehicleId=vessel.id;
           }
         }

@@ -815,7 +815,7 @@ function ensureMinimumWorldCities(minimum=2){
 export const scheduleWorldTrade=options=>worldTradeService.schedule(options);
 export const cancelWorldTrade=transferId=>worldTradeService.cancel(transferId);
 
-export async function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 256 } = {}) {
+export async function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 512 } = {}) {
   preset='archipelago';
   await worldTradeService.quiesce();
   try{

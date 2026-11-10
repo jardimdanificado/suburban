@@ -36,7 +36,8 @@ export function findBoatPath(city,start,goal){
   const revision=`${city.world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
   if(city._boatPathCacheRevision!==revision){city._boatPathCacheRevision=revision;city._boatPathCache=new Map();}
   const citizen=start.properties?.citizen,shipment=citizen?.deliveryId&&city.logistics?.shipments.find(item=>item.id===citizen.deliveryId),required=Math.max(1,citizen?.deliveryLoad||start.properties?.vehicle?.ferryLoad||shipment?.quantity||1);
-  const key=`${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}:${required}`;
+  const fleetKey=[...(city.vehicles?.units?.values?.()||[])].filter(v=>v.boatClass).map(v=>`${v.id},${Math.floor(v.x)},${Math.floor(v.y)},${v.active},${v.worldFleetReserved},${v.driverId},${v.transportCitizenId},${v.scrapped}`).join(';');
+  const key=`${fleetKey}:${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}:${required}`;
   if(city._boatPathCache.has(key)){const route=city._boatPathCache.get(key);return route===null?null:route.slice();}
   const remember=route=>{const limit=Math.max(256,Math.min(2048,(city.citizens?.length||128)*2));if(city._boatPathCache.size>=limit)city._boatPathCache.delete(city._boatPathCache.keys().next().value);city._boatPathCache.set(key,route);return route===null?null:route.slice();};
   const startTileX=Math.floor(start.x),startTileY=Math.floor(start.y),alreadyAfloat=city.world.getTile(startTileX,startTileY)===TILE_WATER;
@@ -44,12 +45,15 @@ export function findBoatPath(city,start,goal){
     ?{shore:[{land:-1,water:idx(startTileX,startTileY,city.world.width)}],previous:null,startIndex:-1}
     :landSearch(city,start),to=landSearch(city,goal);
   if(!from||!to||!from.shore.length||!to.shore.length)return remember(null);
+  const available=[...(city.vehicles?.units?.values?.()||[])].filter(v=>v.boatClass&&v.active&&!v.scrapped&&!v.worldFleetReserved&&!v.driverId&&!v.transportCitizenId&&BOAT_CLASSES[v.boatClass].capacity>=required);
+  if(!alreadyAfloat)from.shore=from.shore.filter(shore=>available.some(v=>{const point=tilePoint(shore.water,city.world.width);return Math.hypot(v.x-point.x,v.y-point.y)<=1.5;}));
+  if(!from.shore.length)return remember(null);
   const destinations=new Set(to.shore.map(entry=>entry.water)),sea=seaPath(city,from.shore,destinations);if(!sea)return remember(null);
   const sourceShore=Number.isInteger(sea.sourceIndex)&&sea.sourceIndex>=0?from.shore[sea.sourceIndex]:null,water=sea.path;
   if(!sourceShore||!water?.length)return remember(null);
   const first=sourceShore.land<0?[]:landPath(from,sourceShore.land),lastTarget=to.shore.find(candidate=>candidate.water===water.at(-1)),last=lastTarget&&landPath(to,lastTarget.land);if(!first||!last)return remember(null);
   const best={first,water,last};
-  const kind=['canoe','launch','ferry','cargo'].find(key=>BOAT_CLASSES[key].capacity>=required&&BOAT_CLASSES[key].maxWaterTiles>=best.water.length);
+  const boardingPoint=tilePoint(best.water[0],city.world.width),kind=alreadyAfloat?citizen?.boatClass:available.find(v=>Math.hypot(v.x-boardingPoint.x,v.y-boardingPoint.y)<=1.5&&BOAT_CLASSES[v.boatClass].maxWaterTiles>=best.water.length)?.boatClass;
   if(!kind)return remember(null);
   const points=[];for(const index of best.first.slice(1))points.push(tilePoint(index,city.world.width));
   for(const index of best.water)points.push({...tilePoint(index,city.world.width),boatClass:kind});

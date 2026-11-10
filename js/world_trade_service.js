@@ -1,3 +1,4 @@
+import {createSeaEdgeNavigation} from './sea_edge_navigation.js?v=sea-edge-routes-1';
 import { INDUSTRIES } from './city_industries.js';
 import { GOODS } from './city_economy.js?v=regional-supply-5';
 
@@ -6,7 +7,7 @@ export class WorldTradeService {
     this.world=coordinator;
     this.inFlight=new Set();
     this.quiesced=false;
-    this.world.transferHandlers={depart:transfer=>this.depart(transfer),deliver:transfer=>this.deliver(transfer),cancel:transfer=>this.rollback(transfer)};
+    this.world.transferHandlers={depart:transfer=>this.depart(transfer),deliver:transfer=>this.deliver(transfer),cancel:transfer=>this.rollback(transfer),returnVessel:vessel=>this.returnVessel(vessel)};
   }
 
   track(operation){let tracked;tracked=Promise.resolve(operation).finally(()=>this.inFlight.delete(tracked));this.inFlight.add(tracked);return tracked;}
@@ -20,27 +21,30 @@ export class WorldTradeService {
     return true;
   }
 
+  requireSeaAccess(...sessions){for(const session of sessions){const city=session?.city;if(city?.world?.getTile&&!createSeaEdgeNavigation(city.world)?.reachable(city.worldPort?.berth))throw new Error('O porto não tem acesso navegável ao mar.');}}
+
   syncOperatorFleet(){
     const live=new Set();
     for(const session of this.world.cities.values()){
       const city=session.city;
       for(const vehicle of city.vehicles?.units?.values?.()||[]){
-        if(!vehicle.boatClass||!vehicle.active||vehicle.scrapped||vehicle.condition<=15)continue;
+        if(!vehicle.boatClass||!vehicle.active||vehicle.scrapped||vehicle.driverId||vehicle.condition<=15)continue;
         const boatPosition=vehicle.entity||vehicle,harbour=city.worldPort?.berth||city.worldPort?.door||city.worldPort;
         if(!Number.isFinite(boatPosition.x)||!Number.isFinite(boatPosition.y)||!harbour||Math.hypot(boatPosition.x-harbour.x,boatPosition.y-harbour.y)>5)continue;
         const account=city.accounts.get(vehicle.ownerAccountId),business=city.economy.businesses.find(item=>item.accountId===vehicle.ownerAccountId&&item.type==='carrier'&&item.active&&!item.entity.destroyed);
         const owner=account?.entity?.properties?.citizen||(typeof account?.accountId==='string'&&account.accountId.startsWith('citizen:')?account:null);
-        const operatorType=business?'carrier':owner?'freelance':null;
+        const operatorType=business?'carrier':owner?'freelance':['treasury',city.worldPort?.accountId].includes(vehicle.ownerAccountId)?'municipal':null;
         if(!operatorType)continue;
         const id=`owned-vessel:${session.id}:${vehicle.id}`,classId=vehicle.boatClass,capacity=vehicle.capacity||vehicle.pickCapacity||({canoe:2,launch:8,ferry:32,cargo:100}[classId]||1);
-        live.add(id);
+        live.add(id);void session.bridge.request('setWorldBoatAssigned',[vehicle.id,true]);
         const existing=this.world.vessels.get(id);
-        if(existing){existing.capacity=capacity;existing.classId=classId;existing.ownerAccountId=vehicle.ownerAccountId;existing.ownerName=business?.entity.properties.name||owner.entity.properties.name;continue;}
-        this.world.addVessel({id,classId,capacity,routeId:null,currentPortId:`${session.id}:port`,operatorType,ownerAccountId:vehicle.ownerAccountId,ownerName:business?.entity.properties.name||owner.entity.properties.name,localVehicleId:vehicle.id,homeCityId:session.id});
+        if(existing){existing.capacity=capacity;existing.classId=classId;existing.ownerAccountId=vehicle.ownerAccountId;existing.ownerName=business?.entity.properties.name||owner?.entity.properties.name||city.accountName(vehicle.ownerAccountId);continue;}
+        this.world.addVessel({id,classId,capacity,routeId:null,currentPortId:`${session.id}:port`,operatorType,ownerAccountId:vehicle.ownerAccountId,ownerName:business?.entity.properties.name||owner?.entity.properties.name||city.accountName(vehicle.ownerAccountId),localVehicleId:vehicle.id,homeCityId:session.id});
       }
     }
     for(const [id,vessel]of this.world.vessels){
       if(!id.startsWith('owned-vessel:')||live.has(id)||vessel.status!=='idle')continue;
+      const home=this.world.cities.get(vessel.homeCityId);if(home)void home.bridge.request('setWorldBoatAssigned',[vessel.localVehicleId,false]);
       this.world.vessels.delete(id);this.world.onChange({type:'vessel-removed',vesselId:id});
     }
   }
@@ -53,6 +57,7 @@ export class WorldTradeService {
     if(!Number.isSafeInteger(unitPrice)||unitPrice<1||!Number.isSafeInteger(quantity)||quantity<1)throw new RangeError('Quantidade e preço precisam ser inteiros positivos.');
     const seller=origin.city.building(sellerBuildingId)||(origin.city.economy.importDepot?.id===sellerBuildingId?origin.city.economy.importDepot:null),buyer=destination.city.building(destinationBuildingId),route=this.world.routes.get(`route:${originCityId}>${destinationCityId}`),goodsAmount=quantity*unitPrice,freightAmount=quantity*(route?.freightPerUnit||0),amount=goodsAmount+freightAmount;
     if(!seller||!buyer||!route||!origin.city.economy.goods[good]||!Number.isSafeInteger(goodsAmount)||!Number.isSafeInteger(freightAmount)||!Number.isSafeInteger(amount))throw new Error('Produto, vendedor, comprador ou rota indisponível.');
+    this.requireSeaAccess(origin,destination);
     await this.request(destination,'reserveWorldPayment',[id,buyer.accountId,amount]);
     try{await this.request(destination,'reserveWorldImport',[id,destinationBuildingId,good,quantity]);}
     catch(error){await destination.bridge.request('refundWorldPayment',[id]);throw error;}
@@ -82,6 +87,7 @@ export class WorldTradeService {
   async scheduleMigrationNow({id,originCityId,destinationCityId,citizenId,departureMinute=this.world.minute+1,reason=null}){
     const origin=this.world.cities.get(originCityId),destination=this.world.cities.get(destinationCityId),route=this.world.routes.get(`route:${originCityId}>${destinationCityId}`);
     if(!origin||!destination||originCityId===destinationCityId||!route)throw new Error('Escolha duas cidades diferentes com uma rota disponível.');
+    this.requireSeaAccess(origin,destination);
     const result=await origin.bridge.request('reserveWorldCitizenMigration',[id,citizenId]);
     if(!result?.ok||!result.value||typeof result.value!=='object')throw new Error(result?.message||'Este cidadão não está elegível para migração marítima.');
     let vessel;
@@ -93,6 +99,7 @@ export class WorldTradeService {
   async scheduleHouseholdMigrationNow({id,originCityId,destinationCityId,citizenId,departureMinute=this.world.minute+1,reason=null}){
     const origin=this.world.cities.get(originCityId),destination=this.world.cities.get(destinationCityId),route=this.world.routes.get(`route:${originCityId}>${destinationCityId}`);
     if(!origin||!destination||originCityId===destinationCityId||!route)throw new Error('Escolha duas cidades diferentes com uma rota disponível.');
+    this.requireSeaAccess(origin,destination);
     const result=await origin.bridge.request('reserveWorldHouseholdMigration',[id,citizenId]);
     if(!result?.ok||!result.value||result.value.version!==2||!Array.isArray(result.value.members))throw new Error(result?.message||'Este núcleo familiar não está elegível para migração marítima.');
     const passengerCount=result.value.members.length,assetCount=result.value.members.reduce((n,member)=>n+(member.vehicleAssets?.length||0),0);let vessel;
@@ -283,13 +290,33 @@ export class WorldTradeService {
 
   async rollback(transfer){
     const origin=this.world.cities.get(transfer.originCityId),destination=this.world.cities.get(transfer.destinationCityId);
+    if(transfer.payload.crew)await this.request(origin,'cancelWorldCitizenMigration',[`${transfer.id}:crew`]);
     if(transfer.kind==='citizen'){if(transfer.payload.passengerFare)await this.request(origin,'refundWorldPassengerFare',[transfer.id]);await this.request(origin,transfer.payload.package.version===2?'cancelWorldHouseholdMigration':'cancelWorldCitizenMigration',[transfer.id]);}
     else{await this.request(origin,'returnWorldExport',[transfer.id]);await this.request(destination,'cancelWorldImport',[transfer.id]);await this.request(destination,'refundWorldPayment',[transfer.id]);}
   }
 
   async depart(transfer){
     const origin=this.world.cities.get(transfer.originCityId);
+    {
+      const stored=this.world.transfers.get(transfer.id).payload;
+      if(!stored.crew){
+        for(const person of origin.city.citizens||[]){
+          if(!origin.city.society.isAdult(person)||person.jobId||person.homeUnitId||origin.city.worldMigrationHousehold(person.id)?.length!==1)continue;
+          const result=await origin.bridge.request('reserveWorldCitizenMigration',[`${transfer.id}:crew`,person.id]);
+          if(result?.ok&&result.value){stored.crew=result.value;break;}
+        }
+        if(!stored.crew)throw new Error('A viagem aguarda um piloto disponível na cidade de origem.');
+      }
+      await this.request(origin,'departWorldCitizenMigration',[`${transfer.id}:crew`]);
+    }
     return this.request(origin,transfer.kind==='citizen'?(transfer.payload.package.version===2?'departWorldHouseholdMigration':'departWorldCitizenMigration'):'departWorldExport',[transfer.id]);
+  }
+
+  async returnVessel(vessel){
+    const trip=this.world.transfers.get(vessel.lastTransferId),crew=trip?.payload.crew;if(!crew)return;
+    const home=this.world.cities.get(trip.originCityId);
+    await this.request(home,'receiveWorldCitizenMigration',[`${trip.id}:crew`,crew]);
+    await this.request(home,'completeWorldCitizenMigration',[`${trip.id}:crew`]);
   }
 
   async deliver(transfer){

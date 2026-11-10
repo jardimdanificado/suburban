@@ -6,8 +6,9 @@ import {WorldTradeService} from '../js/world_trade_service.js';
 
 function fakeCity({minute=0,stock=0,balance=0,buildingId=1,accountId='account'}={}){
   const city=Object.create(CitySimulation.prototype),building={id:buildingId,accountId,type:'business',active:true,entity:{destroyed:false},inventory:{pao:stock},incoming:{},inventoryCapacity:100};
+  city.citizens=[{id:900,globalId:`${accountId}:pilot`,entity:{properties:{name:'Piloto'}}}];city.society={isAdult:()=>true};city.worldMigrationHousehold=()=>[900];city.reserveWorldCitizenMigration=()=>({version:1,citizenId:900,globalId:`${accountId}:pilot`,name:'Piloto'});city.departWorldCitizenMigration=city.receiveWorldCitizenMigration=city.completeWorldCitizenMigration=city.cancelWorldCitizenMigration=()=>true;
   city.minute=minute;city.building=id=>id===building.id?building:null;
-  city.economy={goods:{pao:{label:'Pão',price:100}},recordGoods(){}};
+  city.economy={goods:{pao:{label:'Pão',price:100}},recordGoods(){},accepts:(_building,good)=>good==='pao'};
   city.worldPort={id:'world-port',cityId:null,inventory:{pao:0},inventoryCapacity:1000,reservations:{},receipts:{},payments:{}};
   city.accounts=new Map([[accountId,{balance,externalMoney:false}],[`seller-${buildingId}`,{balance:0,externalMoney:false}],['supplier',{balance:0,externalMoney:true}]]);
   city.transfer=(from,to,amount)=>{const a=city.accounts.get(from),b=city.accounts.get(to);if(!a||!b||!Number.isSafeInteger(amount)||amount<0||(!a.externalMoney&&a.balance<amount))return false;if(!a.externalMoney)a.balance-=amount;if(!b.externalMoney)b.balance+=amount;return true;};
@@ -31,7 +32,7 @@ test('world trade reserves stock and payment, then delivers goods and settles mo
   world.reportCityMinute('origin',1);world.reportCityMinute('destination',1);await world.flushTransfers();
   assert.equal(world.transfers.get('trade-1').status,'in-transit');assert.equal(world.vessels.get('ferry').status,'at-sea');assert.equal(origin.city.worldPort.inventory.pao,0);
   world.reportCityMinute('origin',181);world.reportCityMinute('destination',181);await world.flushTransfers();
-  assert.equal(world.transfers.get('trade-1').status,'delivered');assert.equal(world.vessels.get('ferry').status,'idle');
+  assert.equal(world.transfers.get('trade-1').status,'delivered');assert.equal(world.vessels.get('ferry').status,'returning');
   assert.equal(destination.building.inventory.pao,5);assert.equal(origin.city.accounts.get('exporter').balance,500);assert.equal(origin.city.accounts.get('world-fleet').balance,50);assert.equal(destination.city.accounts.get('buyer').balance,4450);
   assert.equal(origin.city.worldPort.reservations['trade-1'].status,'delivered');assert.equal(destination.city.worldPort.payments['trade-1'].status,'settled');
 });
@@ -85,4 +86,12 @@ test('quiescing the trade service waits for an already-started reservation to fi
   while(!entered)await Promise.resolve();
   let quiesced=false;const waiting=service.quiesce().then(()=>{quiesced=true;});await Promise.resolve();assert.equal(quiesced,false);
   release();const [transfer]=await Promise.all([operation,waiting]);assert.equal(transfer.id,'trade-quiesce');assert.equal(quiesced,true);service.resume();
+});
+
+test('freight cannot depart without an actual available navigator',async()=>{
+  const {world,service,origin}=tradeWorld();origin.city.citizens=[];
+  await service.schedule({id:'no-pilot',originCityId:'origin',destinationCityId:'destination',sellerBuildingId:1,destinationBuildingId:2,good:'pao',quantity:2,unitPrice:100,departureMinute:1});
+  await world.advanceTo(1,world.transferHandlers);
+  assert.equal(world.transfers.get('no-pilot').status,'scheduled');
+  assert.equal(origin.city.worldPort.reservations['no-pilot'].status,'reserved');
 });
