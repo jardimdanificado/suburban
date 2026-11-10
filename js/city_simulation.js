@@ -16,7 +16,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=ff2-speed-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=harbor-boats-2';
+import {CityVehicles} from './city_vehicles.js?v=harbor-boats-3';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
@@ -53,7 +53,7 @@ import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=ff2-
 import { CityLogistics } from './city_logistics.js?v=ff2-speed-1';
 import { CityGigs } from './city_gigs.js?v=spaced-limited-spontaneous-art-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=regional-supply-3';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=regional-supply-5';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-3';
@@ -182,7 +182,7 @@ export class CitySimulation {
     this.officialJournal = new CityOfficialJournal(this);
     this.vehicles = new CityVehicles(this);
     this.paint = new CityPaint(this);
-    this.substances=new CitySubstances(this);this.substanceSchemaVersion=5;
+    this.substances=new CitySubstances(this);this.substanceSchemaVersion=6;
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;

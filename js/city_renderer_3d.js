@@ -4,7 +4,7 @@ import {addBuildingDetails} from './city_building_details.js?v=mine-sign-removed
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
 import {syncConstructionSites} from './city_construction_renderer.js?v=ground-realism-2';
 import {syncCityMobility} from './city_mobility_renderer.js?v=harbor-boats-1';
-import {syncCityWatercraft} from './city_watercraft_renderer.js?v=boats-transport-20';
+import {syncCityWatercraft} from './city_watercraft_renderer.js?v=boats-transport-21';
 import {syncCampaignDecorations} from './city_campaign_renderer.js';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=greengrocer-fruit-stalls-1';

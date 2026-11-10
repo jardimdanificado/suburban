@@ -1,7 +1,7 @@
 import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
-import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-10';
+import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-13';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
-import {CityUI,money} from './city_ui.js?v=regional-supply-10';
+import {CityUI,money} from './city_ui.js?v=regional-supply-13';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
@@ -197,11 +197,13 @@ export class CityDesktop {
   }
   drawChrome(ui,{clockText='',paused=false,speed=1,effectiveSpeed=null,renderMode='3d'}={}){
     this.chromeState={clockText,paused,speed,renderMode};this.menuGroups??=desktopMenus(this);this.tooltip=null;this.menuAnchors=[];
+    const activeWorldCity=this.worldCoordinator?.cities.get(this.worldCoordinator.activeCityId),activeCityName=activeWorldCity?.city?.municipalIdentity?.name||this.city?.municipalIdentity?.name||activeWorldCity?.metadata?.name||'Cidade',worldButtonWidth=Math.min(160,Math.max(82,ui.textWidth(activeCityName)+34));
     let x=4,barY=2;const controls=[[paused?'play':'pause',paused?'Continuar':'Pausar',this.controls.pause,paused],['fast',`Velocidade ${speedLabel(speed)}${speed>=128?' · simulação muito reduzida':speed>=64?' · avanço com detalhe reduzido':''}`,this.controls.speed,false]];
     const entries=[
       {label:'Busca geral · Ctrl+K',icon:'search',w:36,click:()=>this.openGlobalSearch()},
+      {label:`${activeCityName} · Mundo e rotas marítimas`,buttonLabel:activeCityName,icon:'map',w:worldButtonWidth,click:()=>{this.closeMenu();this.openModule('world');},selected:!this.hidden&&!!this.manager.find('module:world')},
       ...controls.map(([icon,label,click,selected])=>({icon,label,click:()=>{this.closeMenu();click?.();},selected,w:29})),
-      ...CITY_WINDOWS.map(([tab,label])=>({label,icon:tab,w:29,click:()=>{this.closeMenu();this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
+      ...CITY_WINDOWS.filter(([tab])=>tab!=='world').map(([tab,label])=>({label,icon:tab,w:29,click:()=>{this.closeMenu();this.toggleModule(tab);},selected:!this.hidden&&!!this.manager.find(`module:${tab}`)})),
       ...this.menuGroups.map(g=>({id:g.id,label:g.label,icon:g.id==='tools'?'settings':'windows',w:36,click:()=>this.toggleMenu(g.id),selected:this.menuOpen&&this.menuId===g.id}))
     ];
     const placed=[];for(const entry of entries){if(x>4&&x+entry.w>ui.width-4){x=4;barY+=30;}placed.push({...entry,x,y:barY});x+=entry.w+2;}
@@ -210,7 +212,7 @@ export class CityDesktop {
     // Registered after window content as well, so the menu bar remains above all panels.
     const barRegion={x:0,y:0,w:ui.width,h:barHeight,onClick:null};this.menuBarRegions=[barRegion];ui.regions.push(barRegion);
     for(const entry of placed){ui.button(entry.x,entry.y,entry.w,28,'',entry.click||(()=>{}),{selected:entry.selected});
-      tycoonIcon(ui.ctx,entry.icon,entry.x+4,entry.y+5,1);
+      tycoonIcon(ui.ctx,entry.icon,entry.x+4,entry.y+5,1);if(entry.buttonLabel)ui.text(ui.fitText(entry.buttonLabel,entry.w-27),entry.x+23,entry.y+10,T.ink);
       if(entry.id){const ax=entry.x+entry.w-10,ay=entry.y+18;ui.ctx.fillStyle=T.ink;for(let i=0;i<3;i++)ui.ctx.fillRect(ax+i,ay+i,5-i*2,1);this.menuAnchors.push({id:entry.id,x:entry.x,y:entry.y,w:entry.w,h:28});}
       if(ui.pointer?.x>=entry.x&&ui.pointer.x<entry.x+entry.w&&ui.pointer.y>=entry.y&&ui.pointer.y<entry.y+28)this.tooltip={text:entry.id?`${entry.label} ▾`:entry.label,x:entry.x,y:barHeight+3};
       ui.regions.at(-1).label=entry.id?`${entry.label} — menu`:entry.label;this.menuBarRegions.push(ui.regions.at(-1));

@@ -1,15 +1,15 @@
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=regional-supply-9';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=regional-supply-10';
 import { WorldCoordinator } from './js/world_coordinator.js?v=world-day-persistence-2';
-import { WorldTradeService } from './js/world_trade_service.js?v=regional-supply-3';
-import { CityStateGraph, bindCityState } from './js/city_state.js?v=regional-supply-9';
+import { WorldTradeService } from './js/world_trade_service.js?v=regional-supply-7';
+import { CityStateGraph, bindCityState } from './js/city_state.js?v=regional-supply-10';
 import { loadWorldRecord, saveWorldRecord } from './js/world_save_store.js';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=regional-supply-9";
-import { CityDesktop } from "./js/city_desktop.js?v=regional-supply-10";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=regional-supply-10";
+import { CityDesktop } from "./js/city_desktop.js?v=regional-supply-15";
 import { World } from "./js/world.js?v=terrain-generation-reset-1";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=boats-transport-20";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=boats-transport-21";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -20,7 +20,7 @@ import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
 const container3D = document.querySelector("#container-3d");
-const renderer3D = new RCT3DRenderer(container3D);
+  const renderer3D = new RCT3DRenderer(container3D);
 const urlParams = new URLSearchParams(window.location.search);
 const worldSettings = resolveWorldSettings(urlParams);
 export let world = new World(worldSettings.presetId, worldSettings.seed, worldSettings.size);
@@ -718,8 +718,11 @@ function attachCitySession(session) {
   session.bridge=bridge;worldCoordinator.registerCity(session.id,session);
   for(const other of worldCoordinator.cities.values())if(other.id!==session.id){
     const forward=`route:${session.id}>${other.id}`,backward=`route:${other.id}>${session.id}`;
-    if(!worldCoordinator.routes.has(forward))worldCoordinator.connectPorts({id:forward,originPortId:`${session.id}:port`,destinationPortId:`${other.id}:port`,travelMinutes:180,capacity:100,freightPerUnit:10});
-    if(!worldCoordinator.routes.has(backward))worldCoordinator.connectPorts({id:backward,originPortId:`${other.id}:port`,destinationPortId:`${session.id}:port`,travelMinutes:180,capacity:100,freightPerUnit:10});
+    if(!worldCoordinator.routes.has(forward))worldCoordinator.connectPorts({id:forward,originPortId:`${session.id}:port`,destinationPortId:`${other.id}:port`,travelMinutes:60,capacity:100,freightPerUnit:10});
+    if(!worldCoordinator.routes.has(backward))worldCoordinator.connectPorts({id:backward,originPortId:`${other.id}:port`,destinationPortId:`${session.id}:port`,travelMinutes:60,capacity:100,freightPerUnit:10});
+    // Bring saved worlds created with the old three-hour route duration onto
+    // the same visible schedule as newly founded cities.
+    for(const routeId of [forward,backward]){const route=worldCoordinator.routes.get(routeId);if(route&&route.travelMinutes>60)route.travelMinutes=60;}
     worldCoordinator.ensureRouteFleet(forward);worldCoordinator.ensureRouteFleet(backward);
   }
   return bridge;
@@ -729,7 +732,7 @@ function initSimulationBridge() {
   if(simulationBridge){worldCoordinator.unregisterCity(simulationBridge.cityId);simulationBridge=null;}
   if(!worldCoordinator.cities.size)worldCoordinator.reset({minute:city.minute});
   const simTime={paused:time.paused,speed:time.speed,tick:time.tick,elapsed:time.elapsed,observeProgress(){}};
-  const session={id:'city-1',city,world,entities,nextId,time:simTime,metadata:{name:'Cidade 1',preset:worldSettings.preset,seed:worldSettings.seed}};
+  const session={id:'city-1',city,world,entities,nextId,time:simTime,metadata:{name:city.municipalIdentity?.name||city.politics.ensureMunicipalIdentity().name,preset:worldSettings.preset,seed:worldSettings.seed}};
   simulationBridge=attachCitySession(session);
 }
 cityUI.worldActions={
@@ -791,7 +794,7 @@ export function foundCity({preset=worldSettings.preset,seed=Math.floor(Math.rand
   const newCity=new CitySimulation({world:map,createEntity:makeEntity,population,startFoundingWorks:true});
   newCity.minute=worldCoordinator.minute;newCity.syncClock();
   try{newCity.initialize();}catch(error){newCity.log(error.message,'city',[],{kind:'generation-failed'});newCity.syncClock();}
-  const session={id,city:newCity,world:map,entities:entityList,nextId:localId,metadata:{name:`Cidade ${ordinal}`,preset,seed,size,population}};
+  const session={id,city:newCity,world:map,entities:entityList,nextId:localId,metadata:{name:newCity.municipalIdentity?.name||newCity.politics.ensureMunicipalIdentity().name,preset,seed,size,population}};
   attachCitySession(session);if(activate)setActiveCity(id);cityUI.notice=`${session.metadata.name} fundada (${size}×${size}, ${population} hab.).`;
   return session;
 }

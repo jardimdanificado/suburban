@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-20';
+import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-21';
 import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
@@ -15,7 +15,7 @@ import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=fast-speeds-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
-import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=harbor-boats-2';
+import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=harbor-boats-3';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
@@ -47,11 +47,11 @@ import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-3';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-5';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-128-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-9';
-import { renderWorldManagement } from './city_world_ui.js';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-10';
+import { renderWorldManagement } from './city_world_ui.js?v=world-management-6';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -82,7 +82,7 @@ export const VIEWS = {
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO'],['analysis','ANÁLISE DAS CADEIAS']],
   transport: [['active', 'FRETES'], ['imports','DEPÓSITO DE IMPORTAÇÃO'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
-  world: [['routes','PORTOS E ROTAS'],['trade','COMÉRCIO'],['migration','MIGRAÇÃO']],
+  world: [['cities','CIDADES E PORTOS'],['fleet','EMBARCAÇÕES'],['routes','ROTAS E VIAGENS'],['trade','COMÉRCIO'],['migration','MIGRAÇÃO']],
   'urban-art': [['overview','OBRAS E MENSAGENS'],['orders','ENCOMENDAS'],['damage','DANOS E LIMPEZA'],['create','CRIAR / NEGOCIAR']],
   safety: [['overview','OPERAÇÃO'],['calls','CHAMADOS'],['cases','OCORRÊNCIAS']],
   forensics: [['overview','VISÃO GERAL'],['bodies','CORPOS'],['reports','LAUDOS']],
@@ -499,11 +499,11 @@ export class CityUI {
       if(b.type==='newsroom'){p.kv('Linha editorial',newsroomGenre(b));p.kv('Última edição',b.newsEditionDay??'Ainda não impressa');p.kv('Exemplares produzidos hoje',b.newsPrintedDay===city.day?b.newsCopies:0);p.note(b.officialJournal?'Jornal obrigatório, custeado pela prefeitura. Cada edição usa quatro folhas e preserva até oito atos públicos; inclui votos individuais.':'Papel chega por transporte. Cada cópia consome 3–5 folhas; anúncios pagos são identificados no acervo.');p.button('ACERVO DO JORNAL',()=>this.openPanel({tab:'publications',publicationOwner:b.accountId,selectedPublicationId:null}));}
 
       const industry=INDUSTRIES[b.type];
-      if(b.type==='cycle_assembler')renderAssembly(this,p,b);
+      if(['cycle_assembler','shipyard'].includes(b.type))renderAssembly(this,p,b);
       if(b.type==='paintworks')renderFactoryPaint(this,p,b);
       if(['builder','cycle_workshop'].includes(b.type))for(const j of city.paint.jobs.filter(j=>j.providerId===b.id&&!['completed','cancelled'].includes(j.status)))p.record(`Pintura #${j.id} · ${colorName(j.color)}`,`${j.status} · ${j.labor.toFixed(0)}/${j.requiredLabor}`,()=>{});
       if(['bearing_factory','frame_factory','deck_factory','tire_factory','chain_factory','safety_equipment','saddle_factory'].includes(b.type)){p.kv('Revisão da peça produzida',b.partDesign||1);p.button('INICIAR NOVA REVISÃO DA PEÇA',()=>city.vehicles.revisePart(b.id));}
-      if(['cycle_shop','cycle_assembler'].includes(b.type))for(const v of [...city.vehicles.units.values()].filter(v=>!v.active&&!v.scrapped&&v.holderAccountId===b.accountId))p.record(`${city.vehicles.model(v)?.brand} · ${city.vehicles.model(v)?.name}`,money(city.vehicles.vehiclePrice(v)),()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));
+      if(['cycle_shop','cycle_assembler','boat_shop','shipyard'].includes(b.type))for(const v of [...city.vehicles.units.values()].filter(v=>!v.active&&!v.scrapped&&v.holderAccountId===b.accountId))p.record(`${city.vehicles.model(v)?.brand} · ${city.vehicles.model(v)?.name}`,money(city.vehicles.vehiclePrice(v)),()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));
       if(b.type==='quarry')p.kv('Pedra restante nos depósitos',city.economy.quarryStatus(b).remaining);
       if(b.type==='forestry'){const trees=[...city.nature.plants.values()].filter(t=>t.buildingId===b.id);p.kv('Árvores cultivadas / maduras',`${trees.length} / ${trees.filter(t=>t.stage==='mature').length}`);p.kv('Sementes disponíveis',b.seedStock);p.note('Os trabalhadores cortam árvores no local, replantam com sementes e carregam a madeira até o depósito.');for(const c of city.citizens.filter(c=>c.forestryJob?.buildingId===b.id))p.card(name(c.entity),`${c.action} · ${c.forestryJob.load||0} madeiras em transporte`,()=>this.openCitizen(c.id));}
       if(b.type==='council_chamber'){const chamber=city.politics.council.getChamber();p.kv('Plenário',`${b.width*b.depth} células no térreo`);p.kv('Gabinetes / vereadores',`${chamber.officeCount||0} / ${city.politics.council.members.length}`);for(const member of city.politics.council.members.filter(m=>city.units.get(m.officeUnitId)?.buildingId===b.id))p.record(member.name,`Gabinete ${member.officeUnitId}`,()=>this.select(b.entity,member.officeUnitId));}

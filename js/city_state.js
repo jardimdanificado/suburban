@@ -8,7 +8,7 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CityFiscal} from './city_fiscal.js';
 import {CityInterventions} from './city_interventions.js?v=infinite-external-money-1';
-import {CityVehicles} from './city_vehicles.js?v=harbor-boats-2';
+import {CityVehicles} from './city_vehicles.js?v=harbor-boats-3';
 import {CityCampaignMaterials} from './city_campaign_materials.js?v=no-party-slogans-1';
 import {CityCouncilChamber} from './city_council_chamber.js';
 import {CityResearch} from './city_research.js';
@@ -26,7 +26,7 @@ import { CityMandates } from './city_mandates.js?v=mandate-one-pass-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=regional-supply-9';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=regional-supply-10';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
 import { CityWelfare } from './city_welfare.js';
@@ -40,7 +40,7 @@ import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment } from './city_development.js?v=ff2-speed-1';
 import { CityLogistics } from './city_logistics.js?v=ff2-speed-1';
 import { CityGigs } from './city_gigs.js?v=artwork-solid-wall-support-1';
-import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=regional-supply-3';
+import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=regional-supply-5';
 import { CitySociety } from './city_society.js?v=ff2-speed-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=service-demand-shared-waste-1';
 import { World, WorldClock } from './world.js?v=terrain-generation-reset-2-map-default-128';
@@ -322,7 +322,7 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
   city.substances??=new CitySubstances(city);city.substances.city=city;city.substances.ensureState();
   city.paint??=new CityPaint(city);
   city.fiscal??=new CityFiscal(city);
-  if(city.substanceSchemaVersion!==5){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=5;}
+  if(city.substanceSchemaVersion!==6||city.goodsCatalogSchemaVersion!==1){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=6;city.goodsCatalogSchemaVersion=1;}
   city.housing.invalidateResidents();
   if(city.development)city.development.plotOverlapBuckets=null;
   city.buildingsById ??= new Map();
@@ -342,8 +342,8 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
       }
     }
   }
-  for (const [id, good] of Object.entries(city.economy.goods)) if (!Object.getOwnPropertyDescriptor(good, 'price')?.get) Object.defineProperty(good, 'price', {
-    enumerable: true, configurable: true, get: () => city.currency.price(GOODS[id].price*(city.economy.market?.[id]?.multiplier||1)*(1+taxRate(city,taxCategory(id)))),
-  });
+  for (const [id, good] of Object.entries(city.economy.goods)) if (!Object.getOwnPropertyDescriptor(good, 'price')?.get) {const basePrice=GOODS[id]?.price??good.price??0;Object.defineProperty(good, 'price', {
+    enumerable: true, configurable: true, get: () => city.currency.price(basePrice*(city.economy.market?.[id]?.multiplier||1)*(1+taxRate(city,taxCategory(id)))),
+  });}
   if(rebuildIndexes){city.familyIndexDirty=true;city.indexFamilies();}
 }

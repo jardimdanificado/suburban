@@ -2,7 +2,7 @@ import {interventionButton,interventionButtons} from './city_context_actions.js'
 import {contextActions} from './city_context_actions.js';
 import {colorName} from './city_colors.js';
 import {renderVehiclePaint} from './city_paint_ui.js';
-import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-2';
+import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-3';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const title=v=>VEHICLE_SPECS[v.good]?.label||v.good;
@@ -15,6 +15,7 @@ export function renderVehicle(ui,p,v){
   p.metrics([['CONSERVAÇÃO',`${v.condition.toFixed(0)}%`,v.condition<30?C.red:C.green],[v.boatClass?'VELOCIDADE NA ÁGUA':'VELOCIDADE NA RUA',`${spec.speed} células/s`]]);
   p.heading('IDENTIDADE E PROPRIEDADE');p.kv('Registro individual',v.id);p.kv('Marca',model?.brand||'Sem registro');p.kv('Modelo / revisão',model?.name||'Sem registro');p.kv('Origem',v.initial?'Equipamento da fundação':v.imported?'Importado':'Produção local');
   p.button(`DONO: ${city.accountName(v.ownerAccountId)}`,()=>ownerLink(ui,v.ownerAccountId));
+  if(v.boatClass&&!v.active){const sellers=city.buildings.filter(b=>['boat_shop','shipyard'].includes(b.type)&&b.accountId===v.holderAccountId&&b.active&&!b.entity.destroyed),buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.balance>=system.vehiclePrice(v)).sort((a,b)=>b.balance-a.balance).slice(0,8);if(sellers.length){p.heading('COMPRAR EMBARCAÇÃO');p.note('Após a compra, o barco fica atracado no porto municipal e pode ser selecionado e usado para viagens.');for(const c of buyers)p.button(`${c.entity.properties.name} · ${money(c.balance)}`,()=>{if(system.buyVehicle(c.accountId,v.id))ui.notice='Embarcação comprada e registrada no porto.';else ui.notice=city.lastError||'A compra não foi concluída.';});if(!buyers.length)p.note('Nenhum adulto tem saldo suficiente para esta embarcação.');}}
   if(v.possessorAccountId&&v.possessorAccountId!==v.ownerAccountId){p.kv('Posse atual',city.accountName(v.possessorAccountId));p.note('O registro de propriedade permanece com o dono legal.');}
   if(v.theft){p.status('VEÍCULO FURTADO',`Furto #${v.theft.caseId??'sem BO'} · titular atual da posse: ${city.accountName(v.possessorAccountId)}`,'#e8757a');if(v.theft.caseId)p.button(`ABRIR FURTO ORIGINAL #${v.theft.caseId}`,()=>ui.openPanel({tab:'justice',views:{justice:'cases'},justiceCaseId:v.theft.caseId}));for(const transfer of v.theft.resaleHistory||[])p.record(`Receptação · ${stamp(transfer.minute)}`,`${city.accountName(transfer.from)} → ${city.accountName(transfer.to)} · ${money(transfer.price||0)}`,()=>ownerLink(ui,transfer.to));}
   if(model?.manufacturerId!=null)p.button(`FABRICANTE: ${city.building(model.manufacturerId)?.entity.properties.name||model.brand}`,()=>ui.openBuilding(model.manufacturerId));
@@ -55,8 +56,9 @@ export function renderAssembly(ui,p,b){
   const system=ui.city.vehicles,plan=system.recipeFor(b);if(!plan)return;
   p.heading('LOTES E MODELOS');p.kv('Marca',b.entity.properties.name);p.kv('Próximo tipo',VEHICLE_SPECS[plan.good].label);p.kv('Pacote por lote',`${b.vehicleBatchSize?'':'Até '}${plan.size} veículos${b.vehicleBatchSize?'':' (automático)'}`);
   p.note('Cada lote usa um fabricante e uma revisão por peça. Trocar uma peça, fornecedor ou revisão registra outro modelo. Os componentes chegam por transporte.');
-  p.button('PLANEJAMENTO AUTOMÁTICO DA PRODUÇÃO',()=>system.configureAssembly(b.id,'auto',3),!b.vehicleKind);
-  p.buttons(['bicicleta','bicicleta_carga','patinete','patins'].map(kind=>({label:VEHICLE_SPECS[kind].label,selected:plan.good===kind,click:()=>system.configureAssembly(b.id,kind,b.vehicleBatchSize||3)})));
+  const kinds=b.type==='shipyard'?['canoe','launch','ferry','cargo']:['bicicleta','bicicleta_carga','patinete','patins'];
+  p.button('PLANEJAMENTO AUTOMÁTICO DA PRODUÇÃO',()=>system.configureAssembly(b.id,'auto',3),!!b.vehicleKind);
+  p.buttons(kinds.map(kind=>({label:VEHICLE_SPECS[kind].label,selected:plan.good===kind,click:()=>system.configureAssembly(b.id,kind,b.vehicleBatchSize||1)})));
   p.buttons([1,3,6,12].map(size=>({label:`LOTE ${size}`,selected:plan.size===size,click:()=>system.configureAssembly(b.id,plan.good,size)})));
   if(b.vehicleAssembly){const batch=b.vehicleAssembly;p.meter(`Montagem do lote ${batch.id}`,100*batch.labor/batch.requiredLabor);p.kv('Unidades no lote',batch.quantity);}
   p.table([{label:'Componente',weight:2},{label:'Por lote'},{label:'No estoque'},{label:'Em frete'}],Object.entries(VEHICLE_RECIPES[plan.good]).map(([g,n])=>({cells:[ui.city.economy.goods[g].label,n*plan.size,b.inventory[g],b.incoming[g]]})));
@@ -73,7 +75,7 @@ export function renderMobility(ui,p){
   }
   if(view==='models'){
     p.heading('MONTADORAS, MODELOS E LOTES');p.metrics([['MODELOS',system.models.size],['LOTES',system.batches.length],['EM MONTAGEM',system.batches.filter(b=>b.status==='assembly').length]]);
-    for(const b of city.economy.businesses.filter(b=>['cycle_assembler','skate_workshop'].includes(b.type)))p.record(b.entity.properties.name,`${b.vehicleAssembly?'Lote '+b.vehicleAssembly.id+' em montagem':'Aguardando peças ou trabalho'} · ${b.workers.length}/${b.jobs} funcionários`,()=>ui.openBuilding(b.id));
+    for(const b of city.economy.businesses.filter(b=>['cycle_assembler','skate_workshop','shipyard'].includes(b.type)))p.record(b.entity.properties.name,`${b.vehicleAssembly?'Lote '+b.vehicleAssembly.id+' em montagem':'Aguardando peças ou trabalho'} · ${b.workers.length}/${b.jobs} funcionários`,()=>ui.openBuilding(b.id));
     p.table([{label:'Marca / modelo',weight:3},{label:'Tipo'},{label:'Unidades'}],[...system.models.values()].filter(m=>ui.matches(`${m.brand} ${m.name}`)).map(m=>({cells:[`${m.brand} · ${m.name}`,VEHICLE_SPECS[m.kind].label,units.filter(v=>v.modelId===m.id).length],click:()=>{const v=units.find(v=>v.modelId===m.id);if(v)ui.openPanel({selectedVehicleId:v.id});}})));
     if(!system.models.size)p.note('O primeiro modelo é registrado quando as peças do primeiro lote chegam à montadora.');return;
   }

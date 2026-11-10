@@ -1,5 +1,5 @@
 import { INDUSTRIES } from './city_industries.js';
-import { GOODS } from './city_economy.js?v=regional-supply-3';
+import { GOODS } from './city_economy.js?v=regional-supply-5';
 
 export class WorldTradeService {
   constructor(coordinator){
@@ -121,6 +121,57 @@ export class WorldTradeService {
 
   cancelContract(id){if(this.quiesced)return false;const contract=this.world.contracts.get(id);if(!contract||!contract.active)return false;contract.active=false;contract.cancelledAt=this.world.minute;this.world.onChange({type:'contract-cancelled',contract:structuredClone(contract)});return true;}
 
+  findRegionalTradeCandidate(route,excludedGoods=new Set()){
+    const origin=this.world.cities.get(route?.originCityId),destination=this.world.cities.get(route?.destinationCityId);if(!origin||!destination)return null;
+    const city=origin.city,other=destination.city,economy=city.economy,targetEconomy=other.economy;
+    const inTransit=new Set([...this.world.transfers.values()].filter(transfer=>transfer.destinationCityId===destination.id&&transfer.kind==='goods'&&['scheduled','departing','in-transit','arriving'].includes(transfer.status)).map(transfer=>transfer.payload.good));
+    const suppliers=[];
+    for(const seller of city.buildings){
+      if(!seller.active||seller.entity.destroyed)continue;
+      const outputs=seller.type==='farm'?[seller.crop]:seller.type==='bakery'?['pao']:seller.type==='mill'?['oleo']:Object.keys(INDUSTRIES[seller.type]?.outputs||{});
+      // Retailers can redistribute genuine stocked goods when their local
+      // shelves are full. This lets trade begin before a city has developed
+      // its own factories, without assigning a preset industry to either city.
+      const stockedGoods=['market','greengrocer','restaurant'].includes(seller.type)
+        ?Object.keys(seller.inventory||{}).filter(good=>(seller.inventory[good]||0)>0)
+        :[];
+      for(const good of new Set([...outputs,...stockedGoods])){
+        const stock=seller.inventory?.[good]||0,market=economy.market?.[good];
+        const reserved=[...this.world.transfers.values()].filter(transfer=>transfer.originCityId===origin.id&&transfer.kind==='goods'&&['scheduled','departing','in-transit','arriving'].includes(transfer.status)&&transfer.payload.good===good&&transfer.payload.sellerBuildingId===seller.id).reduce((n,transfer)=>n+transfer.payload.quantity,0),reserve=Math.min(6,Math.floor(stock*.25)),surplus=stock-reserved-reserve;
+        if(excludedGoods.has(good)||inTransit.has(good)||surplus<1||!targetEconomy.goods[good]||!GOODS[good])continue;
+        suppliers.push({seller,good,surplus,score:surplus-(market?.demand||0)});
+      }
+    }
+    suppliers.sort((a,b)=>b.score-a.score||a.good.localeCompare(b.good));
+    for(const offer of suppliers){
+      const buyers=other.buildings.filter(buyer=>buyer.active&&!buyer.entity.destroyed&&targetEconomy.accepts(buyer,offer.good));
+      const unitPrice=Math.max(1,Math.ceil(city.currency.price(GOODS[offer.good].price)*.9-(route.freightPerUnit||0))),landedPrice=unitPrice+(route.freightPerUnit||0);
+      const needFor=buyer=>{
+        const recipe=targetEconomy.vehicles?.recipeFor(buyer)?.inputs||INDUSTRIES[buyer.type]?.inputs||{},quantity=recipe[offer.good],target=buyer.type==='boat_shop'?1:quantity?quantity*6:['market','greengrocer','restaurant'].includes(buyer.type)?12:6;
+        return Math.max(0,target-(buyer.inventory?.[offer.good]||0)-(buyer.incoming?.[offer.good]||0)-(buyer.worldIncoming?.[offer.good]||0)-(buyer.importIncoming?.[offer.good]||0));
+      };
+      const affordableFor=buyer=>Math.floor(Math.max(0,buyer.balance-Math.max(city.currency.price(500),buyer.workers.length*buyer.wage*12))/landedPrice);
+      buyers.sort((a,b)=>needFor(b)-needFor(a)||a.id-b.id);
+      const buyer=buyers.find(candidate=>needFor(candidate)>0&&affordableFor(candidate)>0),need=buyer?needFor(buyer):0;
+      if(!buyer||need<1)continue;
+      // Let larger factory orders use the cargo vessel instead of splitting
+      // every shipment below the ferry capacity threshold.
+      const quantity=Math.min(route.capacity,offer.surplus,need,affordableFor(buyer));
+      if(quantity<1)continue;
+      return {route,origin,destination,seller:offer.seller,buyer,good:offer.good,surplus:offer.surplus,need,quantity,unitPrice};
+    }
+    return null;
+  }
+
+  regionalTradePreview(){
+    const candidates=[];
+    for(const route of this.world.routes.values()){
+      const excludedGoods=new Set();
+      for(let count=0;count<4;count++){const candidate=this.findRegionalTradeCandidate(route,excludedGoods);if(!candidate)break;candidates.push(candidate);excludedGoods.add(candidate.good);}
+    }
+    return candidates;
+  }
+
   processContracts(minute=this.world.minute){if(this.quiesced)return Promise.resolve(0);return this.track(this.processContractsNow(minute));}
   async processContractsNow(minute=this.world.minute){
     const due=[...this.world.contracts.values()].filter(contract=>contract.active&&contract.nextDepartureMinute<=minute&&contract.lastAttemptMinute!==minute);
@@ -134,43 +185,18 @@ export class WorldTradeService {
 
   processRegionalTrade(minute=this.world.minute){if(this.quiesced)return Promise.resolve(0);return this.track(this.processRegionalTradeNow(minute));}
   async processRegionalTradeNow(minute=this.world.minute){
-    const day=Math.floor(minute/1440);
-    if(this.world.regionalTradeDay===day||this.world.cities.size<2)return 0;
-    this.world.regionalTradeDay=day;
+    // Check often enough that a new surplus turns into a visible voyage soon,
+    // rather than leaving a full warehouse idle for an entire game hour.
+    const window=Math.floor(minute/15);
+    if(this.world.regionalTradeDay===window||this.world.cities.size<2)return 0;
+    this.world.regionalTradeDay=window;
     let scheduled=0;
     for(const route of this.world.routes.values()){
-      const origin=this.world.cities.get(route.originCityId),destination=this.world.cities.get(route.destinationCityId);
-      if(!origin||!destination)continue;
-      const city=origin.city,other=destination.city,economy=city.economy,targetEconomy=other.economy;
-      const inTransit=new Set([...this.world.transfers.values()].filter(transfer=>transfer.destinationCityId===destination.id&&transfer.kind==='goods'&&['scheduled','in-transit'].includes(transfer.status)).map(transfer=>transfer.payload.good));
-      const suppliers=[];
-      for(const seller of city.buildings){
-        if(!seller.active||seller.entity.destroyed)continue;
-        const outputs=seller.type==='farm'?[seller.crop]:seller.type==='bakery'?['pao']:seller.type==='mill'?['oleo']:Object.keys(INDUSTRIES[seller.type]?.outputs||{});
-        for(const good of outputs){
-          const stock=seller.inventory?.[good]||0;
-          const market=economy.market?.[good];
-          if(stock<12||!targetEconomy.goods[good]||market&&market.stock<=market.demand)continue;
-          suppliers.push({seller,good,stock,score:stock-(market?.demand||0)});
-        }
+      const excludedGoods=new Set();let routeLoads=0;
+      while(routeLoads<2){const candidate=this.findRegionalTradeCandidate(route,excludedGoods);if(!candidate)break;excludedGoods.add(candidate.good);
+        try{await this.scheduleNow({id:`regional:${route.id}:${window}:${candidate.good}`,originCityId:candidate.origin.id,destinationCityId:candidate.destination.id,sellerBuildingId:candidate.seller.id,destinationBuildingId:candidate.buyer.id,good:candidate.good,quantity:candidate.quantity,unitPrice:candidate.unitPrice,departureMinute:minute+1});routeLoads++;scheduled++;}
+        catch(error){this.world.onChange({type:'regional-trade-attempt-failed',routeId:route.id,good:candidate.good,message:error.message,minute});}
       }
-      suppliers.sort((a,b)=>b.score-a.score||a.good.localeCompare(b.good));
-      let match=null;
-      for(const offer of suppliers){
-        if(inTransit.has(offer.good))continue;
-        const buyers=other.buildings.filter(buyer=>buyer.active&&!buyer.entity.destroyed&&targetEconomy.accepts(buyer,offer.good)&&(buyer.inventory?.[offer.good]||0)+(buyer.incoming?.[offer.good]||0)+(buyer.worldIncoming?.[offer.good]||0)+(buyer.importIncoming?.[offer.good]||0)<6);
-        buyers.sort((a,b)=>(a.inventory?.[offer.good]||0)+(a.incoming?.[offer.good]||0)+(a.worldIncoming?.[offer.good]||0)+(a.importIncoming?.[offer.good]||0)-(b.inventory?.[offer.good]||0)-(b.incoming?.[offer.good]||0)-(b.worldIncoming?.[offer.good]||0)-(b.importIncoming?.[offer.good]||0)||a.id-b.id);
-        const buyer=buyers[0];
-        if(buyer){match={...offer,buyer};break;}
-      }
-      if(!match)continue;
-      const quantity=Math.min(route.capacity,24,match.stock-6);
-      const unitPrice=Math.max(1,Math.ceil(city.currency.price(GOODS[match.good].price*1.15)));
-      if(quantity<1)continue;
-      try{
-        await this.scheduleNow({id:`regional:${route.id}:${day}`,originCityId:origin.id,destinationCityId:destination.id,sellerBuildingId:match.seller.id,destinationBuildingId:match.buyer.id,good:match.good,quantity,unitPrice,departureMinute:minute+1});
-        scheduled++;
-      }catch{}
     }
     return scheduled;
   }
