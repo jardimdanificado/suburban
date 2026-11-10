@@ -50,6 +50,26 @@ export class CityVehicles {
     const id=this.nextId++,position=city.worldPort.berth||city.worldPort.door,x=position.x+.5,y=position.y+.5,v={id,good:kind,boatClass:kind,modelId:model.id,manufacturerId:null,holderAccountId:null,ownerAccountId:ownerAccountId||city.worldPort.accountId,active:true,initial:true,scrapped:false,condition:100,color:BOAT_CLASSES[kind].color,distance:0,passengerIds:[],driverId:null,journey:null,status:'Atracado',createdAt:city.minute,pickLength:kind==='cargo'?5:kind==='ferry'?3.7:kind==='launch'?2.5:1.7,pickWidth:kind==='cargo'?2.2:kind==='ferry'?1.8:kind==='launch'?1.2:.75,pickHeight:kind==='cargo'?2.8:kind==='ferry'?2.1:kind==='launch'?1.8:1.3,angle:0};
     v.x=x;v.y=y;v.altitude=surfaceElevation(city.world,x,y);v.entity=city.createEntity({x,y,altitude:v.altitude,properties:{name:`${model.brand} · ${model.name}`,cityVehicle:v,render:{color:v.color}}});this.units.set(id,v);this.boatCount++;return v;
   }
+  personalMobilityAssets(accountId){
+    const allowed=new Set(['bicicleta','bicicleta_carga','patinete','patins','skate']);
+    return [...this.units.values()].filter(v=>v.active&&!v.scrapped&&v.ownerAccountId===accountId&&allowed.has(v.good)).map(v=>({vehicleId:v.id,good:v.good,color:v.color,condition:v.condition,distance:v.distance,model:(()=>{const m=this.model(v);return m?{brand:m.brand,name:m.name,components:structuredClone(m.components||[])}:null;})()}));
+  }
+  reserveWorldMigrationAssets(transferId,accountId){
+    const assets=[...this.units.values()].filter(v=>v.ownerAccountId===accountId&&['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(v.good)&&v.active&&!v.scrapped);
+    if(assets.some(v=>v.driverId||v.mechanicId||v.paintJobId||v.serviceBodyId||v.ferrying||v.worldMigrationPending))return false;
+    for(const v of assets)v.worldMigrationPending=transferId;
+    return true;
+  }
+  cancelWorldMigrationAssets(transferId){for(const v of this.units.values())if(v.worldMigrationPending===transferId)delete v.worldMigrationPending;return true;}
+  departWorldMigrationAssets(transferId,accountId){
+    const assets=[];for(const v of [...this.units.values()])if(v.worldMigrationPending===transferId&&v.ownerAccountId===accountId){assets.push({vehicleId:v.id,good:v.good,color:v.color,condition:v.condition,distance:v.distance,model:(()=>{const m=this.model(v);return m?{brand:m.brand,name:m.name,components:structuredClone(m.components||[])}:null;})()});v.scrapped=true;v.active=false;v.worldMigrationPending=null;if(v.entity)v.entity.destroyed=true;this.units.delete(v.id);this.activeCount=Math.max(0,this.activeCount-1);}
+    return assets;
+  }
+  receiveWorldMigrationAssets(accountId,assets,transferId){
+    if(!Array.isArray(assets))return false;const city=this.city,position=city.world.spawnCenter||{x:0,y:0};
+    for(const asset of assets){if(!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(asset.good))return false;const signature=`migrated:${asset.model?.brand||'Mobilidade'}:${asset.model?.name||asset.good}`;let model=this.models.get(signature);if(!model){model={id:this.nextModelId++,signature,kind:asset.good,manufacturerId:null,brand:asset.model?.brand||'Bem pessoal',name:asset.model?.name||VEHICLE_SPECS[asset.good].label,components:structuredClone(asset.model?.components||[]),initial:true,migrated:true,createdAt:city.minute};this.models.set(signature,model);}const id=this.nextId++,v={id,good:asset.good,modelId:model.id,manufacturerId:null,holderAccountId:null,ownerAccountId:accountId,active:true,status:'Estacionado após mudança',scrapped:false,condition:Math.max(20,Math.min(100,asset.condition||100)),color:asset.color,distance:asset.distance||0,passengerIds:[],driverId:null,journey:null,migratedAt:city.minute,migrationTransferId:transferId,pickLength:asset.good==='bicicleta_carga'?2.5:1.7,pickWidth:asset.good==='bicicleta_carga'?1.2:.75,pickHeight:asset.good==='bicicleta_carga'?1.8:1.3};v.x=position.x+.5;v.y=position.y+.5;v.altitude=surfaceElevation(city.world,v.x,v.y);v.entity=city.createEntity({x:v.x,y:v.y,altitude:v.altitude,properties:{name:`${model.brand} · ${model.name}`,cityVehicle:v,render:{color:v.color}}});this.units.set(id,v);this.activeCount++;}
+    return true;
+  }
   ensureHarborEdgeRoute(port){
     if(!port)return false;const city=this.city,world=city.world,navigation=createSeaEdgeNavigation(world);if(!navigation)return false;
     const current=navigation.pathFrom(port.berth);if(current){port.edgeRoute=current;port.edgeRouteRevision=world.revision||0;return true;}
@@ -80,6 +100,10 @@ export class CityVehicles {
     return this.stats.harborFleet||0;
   }
   groundPath(start,goal){return this.city.findPath(start,goal,{allowSkybridges:false,allowBoats:false});}
+  ferryPath(vehicle,goal){
+    const ferryLoad=vehicle.good==='bicicleta_carga'?4:['bicicleta','patinete','patins','skate'].includes(vehicle.good)?2:1;
+    return this.city.findPath({x:vehicle.x,y:vehicle.y,properties:{vehicle:{ferryLoad}}},goal,{allowSkybridges:false,allowBoats:true});
+  }
   equipInitialWorkers(){
     if(this.initialWorkersEquipped)return;
     this.initialWorkersEquipped=true;const city=this.city,seen=new Set();
@@ -278,7 +302,7 @@ export class CityVehicles {
     v.ownershipHistory??=[];v.ownershipHistory.push({minute:this.city.minute,from,to,fromName:this.city.accountName(from),toName:this.city.accountName(to),price,reason});v.ownerAccountId=to;
   }
   transferVehicle(id,to,price=0){
-    const v=this.units.get(id),city=this.city;if(!v?.active||v.scrapped||v.serviceBodyId||v.policeRecoveryOfficerId||v.possessorAccountId&&v.possessorAccountId!==v.ownerAccountId||v.driverId||v.mechanicId||!city.accounts.has(to)||!Number.isSafeInteger(price)||price<0)return city.fail('Equipamento, comprador ou valor indisponível.');
+    const v=this.units.get(id),city=this.city;if(!v?.active||v.scrapped||v.worldMigrationPending||v.serviceBodyId||v.policeRecoveryOfficerId||v.possessorAccountId&&v.possessorAccountId!==v.ownerAccountId||v.driverId||v.mechanicId||!city.accounts.has(to)||!Number.isSafeInteger(price)||price<0)return city.fail('Equipamento, comprador ou valor indisponível.');
     if(to===v.ownerAccountId)return false;if(price&&!city.transfer(to,v.ownerAccountId,price,'Compra de bicicleta ou patinete usado',{vehicleId:id}))return false;
     this.recordOwner(v,to,price,price?'Venda de equipamento usado':'Transferência de equipamento');city.history.record('ownership',`Novo proprietário de ${VEHICLE_SPECS[v.good].label} #${id}: ${city.accountName(to)}.`,[to],{vehicleId:id,amount:price});return true;
   }
@@ -355,7 +379,7 @@ export class CityVehicles {
     }
   }
   startServiceTrip(c,v,goal){
-    if(!v?.active||v.scrapped||v.policeRecoveryOfficerId||v.serviceBodyId&&v.serviceBodyId!==c.funeralBodyId||v.driverId||v.mechanicId||v.paintJobId||v.condition<=15||c.indoorLocation||c.mobilityTrip||c.ridingVehicleId)return false;
+    if(!v?.active||v.scrapped||v.worldMigrationPending||v.policeRecoveryOfficerId||v.serviceBodyId&&v.serviceBodyId!==c.funeralBodyId||v.driverId||v.mechanicId||v.paintJobId||v.condition<=15||c.indoorLocation||c.mobilityTrip||c.ridingVehicleId)return false;
     const path=this.groundPath(c.entity,v);if(path===null||this.groundPath(v,goal)===null)return false;
     v.reservedParking=this.destinationParking(v,goal);v.driverId=c.id;c.mobilityTrip={kind:'cycle',vehicleId:v.id,goal:{...goal},stage:'boarding'};c.path=path;v.status='Funcionário a caminho para serviço';return true;
   }
@@ -367,7 +391,7 @@ export class CityVehicles {
     c.lastVehicleSearchAt=this.city.minute;const city=this.city,goal=c.path.at(-1);
     if(!c.path.some(p=>ROAD_TILES.has(tileAt(city.world,Math.floor(p.x),Math.floor(p.y)))))return;
     const owners=new Set([c.accountId,city.building(c.jobId)?.accountId,...c.businessIds.map(id=>city.building(id)?.accountId)]),load=c.deliveryId?city.logistics.shipments.find(s=>s.id===c.deliveryId):null;
-    const candidates=[...this.units.values()].filter(v=>!v.boatClass&&v.active&&!v.scrapped&&!v.driverId&&!v.mechanicId&&!v.paintJobId&&!v.serviceBodyId&&!v.policeRecoveryOfficerId&&v.condition>15&&(owners.has(this.accessAccount(v))||!v.possessorAccountId&&city.buildings.some(b=>b.type==='bicycle_rental'&&b.active&&b.workers.length&&b.accountId===v.ownerAccountId&&Math.hypot(v.x-c.entity.x,v.y-c.entity.y)<4))&&(!load||VEHICLE_SPECS[v.good].cargo>=(c.deliveryLoad||load.quantity)));
+      const candidates=[...this.units.values()].filter(v=>!v.boatClass&&v.active&&!v.scrapped&&!v.worldMigrationPending&&!v.driverId&&!v.mechanicId&&!v.paintJobId&&!v.serviceBodyId&&!v.policeRecoveryOfficerId&&v.condition>15&&(owners.has(this.accessAccount(v))||!v.possessorAccountId&&city.buildings.some(b=>b.type==='bicycle_rental'&&b.active&&b.workers.length&&b.accountId===v.ownerAccountId&&Math.hypot(v.x-c.entity.x,v.y-c.entity.y)<4))&&(!load||VEHICLE_SPECS[v.good].cargo>=(c.deliveryLoad||load.quantity)));
     candidates.sort((a,b)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(b.x-c.entity.x,b.y-c.entity.y));
     for(const v of candidates){
       const path=this.groundPath(c.entity,v);if(path===null||path.length>Math.max(4,c.path.length/2))continue;
@@ -454,18 +478,19 @@ export class CityVehicles {
         if(c.path.length)continue;
         if(Math.hypot(c.entity.x-v.x,c.entity.y-v.y)>2){this.releaseTrip(c);continue;}
         if(!v.reservedParking)v.reservedParking=this.destinationParking(v,c.mobilityTrip.goal);
-        const path=this.groundPath(v,v.reservedParking||c.mobilityTrip.goal);if(path===null){this.releaseTrip(c);c.task=null;continue;}
+        const path=this.ferryPath(v,v.reservedParking||c.mobilityTrip.goal);if(path===null){this.releaseTrip(c);c.task=null;continue;}
         this.freeParking(v);c.entity.x=v.x;c.entity.y=v.y;c.path=path;c.ridingVehicleId=v.id;c.ridingVehicleKind=v.good;c.mobilityTrip.stage='riding';v.journey={};this.stats.passengers++;
       }
       if(c.ridingVehicleId!==v.id)continue;
       let elapsed=Math.max(0,dt),blocked=false;
       while(elapsed>0&&c.path.length){
         const p=c.path[0],tx=Math.floor(p.x),ty=Math.floor(p.y),sx=Math.floor(c.entity.x),sy=Math.floor(c.entity.y);
-        if(!city.walkable(tx,ty)||!canStep(city.world,sx,sy,tx,ty)){c.path=[];c.task=null;blocked=true;break;}
-        const tile=tileAt(city.world,tx,ty),road=ROAD_TILES.has(tile),transportSkill=city.politics?.secretaries?.find(row=>row.officeId==='transport')?.skill||0,cyclingBonus=city.politics?.policy?.transportPolicy==='cycling'?Math.min(.15,.05+transportSkill*.001):0,safetyBonus=city.politics?.policy?.transportPolicy==='safety'?Math.min(.4,.1+transportSkill*.003):0,speed=(road?VEHICLE_SPECS[v.good].speed:4)*(PERSONAL_MOBILITY.has(v.good)?1+cyclingBonus:1)*injuryMovementFactor(c)*injuryWorkFactor(c)/roadTravelCost(tile),dx=p.x-c.entity.x,dy=p.y-c.entity.y,len=Math.hypot(dx,dy),travel=Math.min(len,elapsed*speed);
+        const tile=tileAt(city.world,tx,ty),water=city.world.getTile(tx,ty)===TILE_WATER,fromWater=city.world.getTile(sx,sy)===TILE_WATER,boatLeg=water&&!!p.boatClass;
+        if(water&&!boatLeg||!water&&!city.walkable(tx,ty)||!water&&!fromWater&&!canStep(city.world,sx,sy,tx,ty)){c.path=[];c.task=null;blocked=true;break;}
+        const road=ROAD_TILES.has(tile),transportSkill=city.politics?.secretaries?.find(row=>row.officeId==='transport')?.skill||0,cyclingBonus=city.politics?.policy?.transportPolicy==='cycling'?Math.min(.15,.05+transportSkill*.001):0,safetyBonus=city.politics?.policy?.transportPolicy==='safety'?Math.min(.4,.1+transportSkill*.003):0,speed=boatLeg?BOAT_CLASSES[p.boatClass].speed:(road?VEHICLE_SPECS[v.good].speed:4)*(PERSONAL_MOBILITY.has(v.good)?1+cyclingBonus:1)*injuryMovementFactor(c)*injuryWorkFactor(c)/roadTravelCost(tile),dx=p.x-c.entity.x,dy=p.y-c.entity.y,len=Math.hypot(dx,dy),travel=Math.min(len,elapsed*speed);
         if(len>0){c.entity.x+=dx/len*travel;c.entity.y+=dy/len*travel;v.angle=Math.atan2(dx,dy);}
-        elapsed-=travel/speed;v.distance+=travel;this.stats.distance+=travel;v.condition=Math.max(0,v.condition-travel*(road?.012:.004)*(1-safetyBonus));
-        wearRoad(city.world,tx,ty,travel*ROAD_RULES.wearPerCell);
+        elapsed-=travel/speed;v.distance+=travel;this.stats.distance+=travel;if(boatLeg)c.boatClass=p.boatClass;else if(!water)c.boatClass=null;v.ferrying=boatLeg;v.ferryBoatClass=boatLeg?p.boatClass:null;v.condition=Math.max(0,v.condition-travel*(road?.012:.004)*(1-safetyBonus));
+        if(!boatLeg)wearRoad(city.world,tx,ty,travel*ROAD_RULES.wearPerCell);
         if(len<=travel+.0001){c.entity.x=p.x;c.entity.y=p.y;c.path.shift();city.recordTraffic(p);}
         v.x=c.entity.x;v.y=c.entity.y;v.altitude=surfaceElevation(city.world,v.x,v.y);v.entity.x=v.x;v.entity.y=v.y;
         v.carpoolScanDistance=(v.carpoolScanDistance||0)+travel;
@@ -474,14 +499,30 @@ export class CityVehicles {
         v.status=road?`Usando ${VEHICLE_SPECS[v.good].label.toLowerCase()}`:'Levando equipamento fora da rua';c.action=v.status;
         if(v.condition<=15){this.releaseTrip(c);break;}
       }
-      if(!c.path.length)this.releaseTrip(c,!blocked);
+      if(!c.path.length){v.ferrying=false;v.ferryBoatClass=null;c.boatClass=null;this.releaseTrip(c,!blocked);}
     }
     this.syncBoatTravelers();CARPOOL_CANDIDATE_INDEX.delete(this);
   }
   syncBoatTravelers(){
     const city=this.city,live=new Set();
-    for(const person of city._movingCitizens||city.citizens){if(!person.boatClass||person.entity.destroyed)continue;let vessel=this.units.get(person.boatVehicleId);if(!vessel?.active||vessel.boatClass!==person.boatClass){vessel=[...this.units.values()].find(candidate=>candidate.boatClass===person.boatClass&&candidate.active&&!candidate.scrapped&&!candidate.driverId&&!candidate.transportCitizenId&&!candidate.waterRoute);if(!vessel)vessel=this.createBoatVehicle(person.boatClass,city.worldPort.accountId);if(!vessel)continue;person.boatVehicleId=vessel.id;}delete vessel.waterRoute;delete vessel.waterRouteIndex;live.add(vessel.id);vessel.transportCitizenId=person.id;vessel.driverId=person.id;vessel.journey={kind:'water-transit',citizenId:person.id};vessel.status=`Transportando ${person.entity.properties.name}`;vessel.x=person.entity.x;vessel.y=person.entity.y;const next=person.path?.[0];if(next){const dx=next.x-vessel.x,dy=next.y-vessel.y;if(dx||dy)vessel.angle=Math.atan2(dx,dy);}vessel.altitude=surfaceElevation(city.world,vessel.x,vessel.y);vessel.entity.x=vessel.x;vessel.entity.y=vessel.y;vessel.entity.altitude=vessel.altitude;}
-    for(const vessel of this.units.values())if(vessel.boatClass&&vessel.transportCitizenId!=null&&!live.has(vessel.id)){vessel.transportCitizenId=null;vessel.driverId=null;vessel.journey=null;vessel.status='Atracado após a viagem';}
+    for(const person of city._movingCitizens||city.citizens){
+      if(!person.boatClass||person.entity.destroyed)continue;
+      let vessel=this.units.get(person.boatVehicleId);
+      if(!vessel?.active||vessel.boatClass!==person.boatClass){
+        vessel=[...this.units.values()].find(candidate=>candidate.boatClass===person.boatClass&&candidate.active&&!candidate.scrapped&&!candidate.driverId&&!candidate.transportCitizenId&&!candidate.waterRoute);
+        if(!vessel)vessel=this.createBoatVehicle(person.boatClass,city.worldPort.accountId);
+        if(!vessel)continue;person.boatVehicleId=vessel.id;
+        if(vessel.ownerAccountId!==city.worldPort.accountId&&vessel.ownerAccountId!==person.accountId){
+          const payer=city.payerFor(person),fare=city.currency.price(BOAT_CLASSES[person.boatClass].capacity>=8?45:20);
+          if(!city.transfer(payer,vessel.ownerAccountId,fare,'Travessia local de barco',{vehicleId:vessel.id,citizenId:person.id,boatClass:person.boatClass})){
+            vessel=[...this.units.values()].find(candidate=>candidate.boatClass===person.boatClass&&candidate.active&&!candidate.scrapped&&candidate.ownerAccountId===city.worldPort.accountId&&!candidate.driverId&&!candidate.transportCitizenId&&!candidate.waterRoute)||this.createBoatVehicle(person.boatClass,city.worldPort.accountId);
+            if(!vessel)continue;person.boatVehicleId=vessel.id;
+          }
+        }
+      }
+      delete vessel.waterRoute;delete vessel.waterRouteIndex;live.add(vessel.id);vessel.transportCitizenId=person.id;vessel.driverId=person.id;vessel.journey={kind:'water-transit',citizenId:person.id};vessel.status=`Transportando ${person.entity.properties.name}`;vessel.x=person.entity.x;vessel.y=person.entity.y;const next=person.path?.[0];if(next){const dx=next.x-vessel.x,dy=next.y-vessel.y;if(dx||dy)vessel.angle=Math.atan2(dx,dy);}vessel.altitude=surfaceElevation(city.world,vessel.x,vessel.y);vessel.entity.x=vessel.x;vessel.entity.y=vessel.y;vessel.entity.altitude=vessel.altitude;
+    }
+    for(const vessel of this.units.values())if(vessel.boatClass&&vessel.transportCitizenId!=null&&!live.has(vessel.id)){const person=city.society.citizen(vessel.transportCitizenId);if(person)person.boatVehicleId=null;vessel.transportCitizenId=null;vessel.driverId=null;vessel.journey=null;vessel.status='Atracado após a viagem';}
   }
   removeCitizen(c,heir){
     this.releaseTrip(c);

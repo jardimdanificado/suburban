@@ -79,7 +79,7 @@ export class MainMenu {
     // World generation parameters
     this.selectedPreset = worldSettings.preset || 'archipelago';
     this.selectedSize = worldSettings.size || 128;
-    this.selectedPopulation = worldSettings.population || 512;
+    this.selectedPopulation = worldSettings.population || 256;
     this.selectedSeed = worldSettings.seed || 482910;
 
     // Draggable window coordinates

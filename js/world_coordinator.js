@@ -180,23 +180,34 @@ export class WorldCoordinator {
     return true;
   }
 
-  addVessel({id,capacity,classId=null,routeId=null,currentPortId=null}) {
+  addVessel({id,capacity,classId=null,routeId=null,currentPortId=null,operatorType='municipal',ownerAccountId=null,ownerName=null,localVehicleId=null,homeCityId=null}) {
     if(typeof id!=='string'||!id||this.vessels.has(id))throw new Error('Identificador de embarcação inválido ou duplicado.');
     classId=classId&&INTERCITY_BOAT_CLASSES[classId]?classId:Object.entries(INTERCITY_BOAT_CLASSES).sort((a,b)=>a[1].capacity-b[1].capacity).find(([,spec])=>spec.capacity>=capacity)?.[0]||'cargo';
     capacity??=INTERCITY_BOAT_CLASSES[classId].capacity;
     if(!Number.isSafeInteger(capacity)||capacity<1)throw new RangeError('A capacidade da embarcação precisa ser positiva.');
-    const vessel={id,classId,capacity,status:'idle',transferId:null,routeId,currentPortId};this.vessels.set(id,vessel);this.onChange({type:'vessel-added',vessel:structuredClone(vessel)});return vessel;
+    const vessel={id,classId,capacity,status:'idle',transferId:null,routeId,currentPortId,operatorType,ownerAccountId,ownerName,localVehicleId,homeCityId};this.vessels.set(id,vessel);this.onChange({type:'vessel-added',vessel:structuredClone(vessel)});return vessel;
   }
 
-  scheduleVoyage({id,routeId,manifest,departureMinute=this.minute}) {
+  availableVessel(routeId,quantity,{municipalOnly=false}={}){
+    const route=this.routes.get(routeId);if(!route)return null;
+    const priority={carrier:0,freelance:1,municipal:2};
+    return [...this.vessels.values()].filter(item=>{
+      const returningForLoad=item.operatorType!=='municipal'&&item.status==='returning'&&item.returnMinute>this.minute+1&&item.currentPortId===route.originPortId&&item.homeCityId===route.destinationCityId&&this.routes.get(item.routeId)?.destinationPortId===route.originPortId;
+      const idleAtOrigin=item.status==='idle'&&(!item.routeId||item.routeId===routeId)&&(!item.currentPortId||item.currentPortId===route.originPortId);
+      return (idleAtOrigin||returningForLoad)&&item.capacity>=quantity&&(!municipalOnly||item.operatorType==='municipal');
+    }).sort((a,b)=>(priority[a.operatorType]??2)-(priority[b.operatorType]??2)||a.capacity-b.capacity)[0]||null;
+  }
+
+  scheduleVoyage({id,routeId,manifest,departureMinute=this.minute,vesselId=null}) {
     const route=this.routes.get(routeId);if(!route)throw new Error('Rota marítima desconhecida.');
     if(!manifest||typeof manifest!=='object'||Array.isArray(manifest))throw new TypeError('Manifesto marítimo inválido.');
-    const quantity=manifest.kind==='citizen'?(manifest.package?.version===2?manifest.package.members?.length:1):manifest.quantity;
+    const quantity=manifest.kind==='citizen'?(manifest.package?.version===2?manifest.package.members?.reduce((n,member)=>n+1+(member.vehicleAssets?.length||0),0):1+(manifest.package?.vehicleAssets?.length||0)):manifest.quantity;
     if(!Number.isSafeInteger(quantity)||quantity<1||quantity>route.capacity)throw new RangeError('A carga excede a capacidade da rota.');
-    const vessel=[...this.vessels.values()].filter(item=>item.status==='idle'&&item.capacity>=quantity&&(!item.routeId||item.routeId===routeId)&&(!item.currentPortId||item.currentPortId===route.originPortId)).sort((a,b)=>a.capacity-b.capacity)[0];
+    const vessel=vesselId?this.vessels.get(vesselId):this.availableVessel(routeId,quantity);
+    if(vessel&&(vessel.capacity<quantity||vessel.status!=='idle'&&vessel.status!=='returning'||vessel.currentPortId&&vessel.currentPortId!==route.originPortId))throw new Error('A embarcação escolhida não está disponível neste porto.');
     if(!vessel)throw new Error('Não há embarcação livre com capacidade suficiente para esta rota.');
     const transfer=this.scheduleTransfer({id,kind:manifest.kind==='citizen'?'citizen':'goods',originCityId:route.originCityId,destinationCityId:route.destinationCityId,payload:manifest,departureMinute,arrivalMinute:departureMinute+route.travelMinutes,routeId,vesselId:vessel.id});
-    transfer.routeId=route.id;transfer.vesselId=vessel.id;vessel.status='reserved';vessel.transferId=id;vessel.routeId=route.id;vessel.currentPortId=route.originPortId;
+    transfer.routeId=route.id;transfer.vesselId=vessel.id;vessel.status='reserved';vessel.transferId=id;vessel.routeId=route.id;vessel.currentPortId=route.originPortId;vessel.returnMinute=null;
     this.onChange({type:'voyage-scheduled',transfer:structuredClone(transfer),vessel:structuredClone(vessel)});return transfer;
   }
 
@@ -220,7 +231,7 @@ export class WorldCoordinator {
   async advanceTo(minute, handlers = this.transferHandlers) {
     if (!Number.isFinite(minute) || minute < this.minute) throw new RangeError('O relógio do mundo não pode voltar no tempo.');
     const {depart,deliver}=handlers||{};
-    for(const vessel of this.vessels.values())if(vessel.status==='returning'&&Number.isFinite(vessel.returnMinute)&&vessel.returnMinute<=minute){const route=this.routes.get(vessel.routeId);vessel.status='idle';vessel.currentPortId=route?.originPortId||vessel.currentPortId;vessel.returnMinute=null;this.onChange({type:'vessel-returned',vessel:structuredClone(vessel)});}
+    for(const vessel of this.vessels.values())if(vessel.status==='returning'&&Number.isFinite(vessel.returnMinute)&&vessel.returnMinute<=minute){const route=this.routes.get(vessel.routeId);vessel.status='idle';vessel.currentPortId=route?.originPortId||vessel.currentPortId;vessel.returnMinute=null;if(vessel.operatorType!=='municipal')vessel.routeId=null;this.onChange({type:'vessel-returned',vessel:structuredClone(vessel)});}
     const due = [...this.transfers.values()].sort((a, b) => a.departureMinute - b.departureMinute || a.arrivalMinute - b.arrivalMinute || a.id.localeCompare(b.id));
     for (const transfer of due) {
       if(transfer.status==='cancelling'&&typeof handlers?.cancel==='function'){
@@ -239,7 +250,7 @@ export class WorldCoordinator {
         try{await deliver(structuredClone(transfer));}catch(error){transfer.status='in-transit';this.onChange({type:'transfer-processing-error',transferId:transfer.id,phase:'deliver',message:error.message});continue;}
         transfer.status = 'delivered';
         transfer.deliveredAt = transfer.arrivalMinute;
-        const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===transfer.id){const route=this.routes.get(transfer.routeId),returnMinute=transfer.arrivalMinute+(route?.travelMinutes||0),alreadyReturned=returnMinute<=minute;vessel.status=alreadyReturned?'idle':'returning';vessel.currentPortId=alreadyReturned?route?.originPortId||vessel.currentPortId:route?.destinationPortId||vessel.currentPortId;vessel.returnMinute=alreadyReturned?null:returnMinute;vessel.transferId=null;vessel.routeId=route?.id||vessel.routeId;}
+        const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===transfer.id){const route=this.routes.get(transfer.routeId),homecoming=vessel.operatorType!=='municipal'&&vessel.homeCityId===route?.destinationCityId,returnMinute=transfer.arrivalMinute+(route?.travelMinutes||0),alreadyReturned=returnMinute<=minute||homecoming;vessel.status=alreadyReturned?'idle':'returning';vessel.currentPortId=alreadyReturned?route?.destinationPortId||vessel.currentPortId:route?.destinationPortId||vessel.currentPortId;vessel.returnMinute=alreadyReturned?null:returnMinute;vessel.transferId=null;vessel.routeId=alreadyReturned&&vessel.operatorType!=='municipal'?null:route?.id||vessel.routeId;}
         this.onChange({ type: 'transfer-delivered', transfer: structuredClone(transfer) });
       }
     }

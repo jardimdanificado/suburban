@@ -1,6 +1,6 @@
 import { formatMoney } from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
-import {BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-3';
+import {BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-4';
 import {INTERCITY_BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
 
 const labelCity=session=>{
@@ -42,9 +42,9 @@ function fleetView(p,world){
   p.heading('FROTA ENTRE CIDADES');
   if(!world.vessels.size)p.note('Nenhuma embarcação intermunicipal registrada.');
   for(const route of world.routes.values()){
-    const ships=[...world.vessels.values()].filter(vessel=>vessel.routeId===route.id||vessel.id.startsWith(`vessel:${route.id}:`));
+    const ships=[...world.vessels.values()].filter(vessel=>vessel.routeId===route.id||vessel.id.startsWith(`vessel:${route.id}:`)||vessel.homeCityId===route.originCityId&&!vessel.routeId);
     p.heading(`${labelCity(world.cities.get(route.originCityId))} ↔ ${labelCity(world.cities.get(route.destinationCityId))}`);
-    for(const vessel of ships){const port=world.ports.get(vessel.currentPortId),status={idle:'atracada',reserved:'reservada para embarque','at-sea':'em viagem',returning:'retornando'}[vessel.status]||vessel.status;p.record(INTERCITY_BOAT_CLASSES[vessel.classId]?.label||'Embarcação',`${vessel.capacity} lugares/unidades · ${status} · ${port?labelCity(world.cities.get(port.cityId)):'em rota'}`,null,false,{value:vessel.id});}
+    for(const vessel of ships){const port=world.ports.get(vessel.currentPortId),status={idle:'atracada',reserved:'reservada para embarque','at-sea':'em viagem',returning:'retornando'}[vessel.status]||vessel.status,operator=vessel.operatorType==='carrier'?`Transportadora: ${vessel.ownerName}`:vessel.operatorType==='freelance'?`Frete autônomo: ${vessel.ownerName}`:'Frota municipal';p.record(INTERCITY_BOAT_CLASSES[vessel.classId]?.label||'Embarcação',`${operator} · ${vessel.capacity} lugares/unidades · ${status} · ${port?labelCity(world.cities.get(port.cityId)):'em rota'}`,null,false,{value:vessel.id});}
   }
   p.heading('EMBARCAÇÕES LOCAIS');
   for(const session of world.cities.values()){
@@ -59,11 +59,11 @@ function routesView(p,world){
   p.heading('ROTAS MARÍTIMAS E VIAGENS');
   if(!world.routes.size)p.note('As rotas aparecem quando houver pelo menos duas cidades.');
   for(const route of world.routes.values()){
-    const ships=[...world.vessels.values()].filter(vessel=>vessel.routeId===route.id||vessel.id.startsWith(`vessel:${route.id}:`)),fleet=Object.keys(INTERCITY_BOAT_CLASSES).map(kind=>`${ships.filter(vessel=>vessel.classId===kind).length} ${INTERCITY_BOAT_CLASSES[kind].label.toLowerCase()}`).join(' · ');
+    const ships=[...world.vessels.values()].filter(vessel=>vessel.routeId===route.id||vessel.id.startsWith(`vessel:${route.id}:`)||vessel.homeCityId===route.originCityId&&!vessel.routeId),fleet=Object.keys(INTERCITY_BOAT_CLASSES).map(kind=>`${ships.filter(vessel=>vessel.classId===kind).length} ${INTERCITY_BOAT_CLASSES[kind].label.toLowerCase()}`).join(' · ');
     p.record(`${labelCity(world.cities.get(route.originCityId))} → ${labelCity(world.cities.get(route.destinationCityId))}`,`${route.travelMinutes} min · limite ${route.capacity} unidades · frete ${amount(route.freightPerUnit)}/unidade · ${fleet}`,null,false,{value:route.id});
     for(const transfer of [...world.transfers.values()].filter(item=>item.routeId===route.id&&['scheduled','departing','in-transit','arriving'].includes(item.status))){
-      const vessel=world.vessels.get(transfer.vesselId),kind=INTERCITY_BOAT_CLASSES[vessel?.classId]?.label||'barco',start=transfer.departureMinute,end=transfer.arrivalMinute,progress=transfer.status==='scheduled'?0:Math.max(0,Math.min(100,Math.floor((world.minute-start)/Math.max(1,end-start)*100))),manifest=transfer.kind==='citizen'?`${transfer.payload.package?.version===2?transfer.payload.package.members.length:1} morador(es)`: `${transfer.payload.quantity} × ${transfer.payload.good}`;
-      p.record(`Embarcação · ${kind}`,`${manifest} · ${transfer.status==='scheduled'?'aguardando embarque':transfer.status==='in-transit'?`no mar · ${progress}%`:transfer.status}`,null,false,{value:`${labelCity(world.cities.get(transfer.originCityId))} → ${labelCity(world.cities.get(transfer.destinationCityId))}`});
+      const vessel=world.vessels.get(transfer.vesselId),kind=INTERCITY_BOAT_CLASSES[vessel?.classId]?.label||'barco',start=transfer.departureMinute,end=transfer.arrivalMinute,progress=transfer.status==='scheduled'?0:Math.max(0,Math.min(100,Math.floor((world.minute-start)/Math.max(1,end-start)*100))),manifest=transfer.kind==='citizen'?`${transfer.payload.package?.version===2?transfer.payload.package.members.length:1} morador(es)`: `${transfer.payload.quantity} × ${transfer.payload.good}`,operator=vessel?.operatorType==='carrier'?` · ${vessel.ownerName}`:vessel?.operatorType==='freelance'?` · frete de ${vessel.ownerName}`:'';
+      p.record(`Embarcação · ${kind}`,`${manifest}${operator} · ${transfer.status==='scheduled'?'aguardando embarque':transfer.status==='in-transit'?`no mar · ${progress}%`:transfer.status}`,null,false,{value:`${labelCity(world.cities.get(transfer.originCityId))} → ${labelCity(world.cities.get(transfer.destinationCityId))}`});
     }
     for(const vessel of ships.filter(item=>item.status==='returning')){const progress=Math.max(0,Math.min(100,Math.floor((1-(vessel.returnMinute-world.minute)/Math.max(1,route.travelMinutes))*100)));p.record(`Embarcação retornando · ${INTERCITY_BOAT_CLASSES[vessel.classId]?.label||'barco'}`,`Vazia para ${labelCity(world.cities.get(route.originCityId))} · ${progress}%`,null,false,{value:vessel.id});}
   }
@@ -87,7 +87,7 @@ function tradeView(state,p,world,cities){
   p.metrics([['ROTAS',world.routes.size],['CARGAS EM VIAGEM',activeTransfers.length],['CONTRATOS ATIVOS',[...world.contracts.values()].filter(contract=>contract.active).length]]);
   p.heading('DEMANDAS QUE PODEM GERAR EMBARQUES');
   const opportunities=service?.regionalTradePreview?.()||[];
-  if(!opportunities.length)p.note('Nenhuma rota tem agora, ao mesmo tempo, estoque excedente no fornecedor e demanda válida no destino. Novas combinações são avaliadas automaticamente a cada hora.');
+  if(!opportunities.length)p.note('Nenhuma rota tem agora, ao mesmo tempo, estoque excedente no fornecedor e demanda válida no destino. Novas combinações são avaliadas a cada 15 minutos; excedentes do depósito de importação também podem embarcar.');
   for(const item of opportunities){const good=item.origin.city.economy.goods[item.good]?.label||item.good,freight=amount(item.quantity*item.route.freightPerUnit);p.card(`${item.quantity} × ${good}`,`${labelCity(item.origin)} → ${labelCity(item.destination)}\n${item.seller.entity.properties.name} → ${item.buyer.entity.properties.name}\nEstoque excedente ${item.surplus} · necessidade ${item.need} · frete estimado ${freight}`,null,false,C.cyan);}
   p.heading('CARGAS JÁ RESERVADAS');
   if(!activeTransfers.length)p.note('Ainda não há cargas reservadas ou em viagem.');
@@ -100,9 +100,10 @@ function migrationView(state,p,world){
   p.heading(`VIAGENS DE MORADORES / ${[...world.transfers.values()].filter(item=>item.kind==='citizen').length}`);
   if(!transfers.length)p.note('Nenhuma migração entre cidades aconteceu ainda.');
   for(const transfer of transfers){
-    const count=transfer.payload.package?.version===2?transfer.payload.package.members.length:1;
+    const count=transfer.payload.package?.version===2?transfer.payload.package.members.length:1,vehicles=transfer.payload.package?.version===2?transfer.payload.package.members.reduce((n,member)=>n+(member.vehicleAssets?.length||0),0):(transfer.payload.package?.vehicleAssets?.length||0);
     const reason={work:'busca por trabalho',housing:'busca por moradia',wellbeing:'busca por bem-estar'}[transfer.payload.reason]||'decisão do morador';
-    p.record(`${count} ${count===1?'morador':'moradores'}`,`${labelCity(world.cities.get(transfer.originCityId))} → ${labelCity(world.cities.get(transfer.destinationCityId))} · ${reason} · ${transfer.status}`,null,false,{value:'migração autônoma'});
+    const vessel=world.vessels.get(transfer.vesselId),operator=vessel?.operatorType==='carrier'?` · transporte de ${vessel.ownerName}`:vessel?.operatorType==='freelance'?` · frete de ${vessel.ownerName}`:' · serviço municipal',fare=transfer.payload.passengerFare?.amount?` · passagem ${amount(transfer.payload.passengerFare.amount)}`:'';
+    p.record(`${count} ${count===1?'morador':'moradores'}`,`${labelCity(world.cities.get(transfer.originCityId))} → ${labelCity(world.cities.get(transfer.destinationCityId))} · ${reason}${vehicles?` · ${vehicles} bicicleta(s)/patins`:''}${operator}${fare} · ${transfer.status}`,null,false,{value:INTERCITY_BOAT_CLASSES[vessel?.classId]?.label||'barco'});
   }
 }
 

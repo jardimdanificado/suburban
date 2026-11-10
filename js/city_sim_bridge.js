@@ -1,5 +1,5 @@
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-10';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-12';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
@@ -81,12 +81,12 @@ export class CitySimulationBridge {
     this.checkpointWaiters=new Map();this.checkpointId=0;
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=regional-supply-10', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=regional-supply-12', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
       this.active = true;
-      for (const [target, path, method] of [[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],...['reserveWorldExport','departWorldExport','completeWorldExport','returnWorldExport','reserveWorldImport','cancelWorldImport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration'].map(method=>[city,'',method]),
+      for (const [target, path, method] of [[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],...['reserveWorldExport','departWorldExport','completeWorldExport','returnWorldExport','reserveWorldImport','cancelWorldImport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','receiveWorldFreightIncome','payWorldPassengerFare','refundWorldPassengerFare','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration'].map(method=>[city,'',method]),
         ...['setPalette','requestPurchase','requestVehicle','requestBuilding'].map(method=>[city.paint,'paint.',method]),[city.vehicles,'vehicles.','mountFlag'],[city.vehicles,'vehicles.','removeFlag'],[city.economy,'economy.','rentOffice'],[city.economy,'economy.','configureEmployment'],[city.economy,'economy.','offerShares'],[city.economy,'economy.','buyShares'],[city.economy,'economy.','cancelShareOffer'],[city.vehicles,'vehicles.','configureAssembly'],[city.vehicles,'vehicles.','buyVehicle'],[city.vehicles,'vehicles.','transferVehicle'],[city.vehicles,'vehicles.','revisePart'],[city.politics.research,'politics.research.','commissionService'],[city.publications, 'publications.', 'write'], [city.publications, 'publications.', 'read'], [city.publications, 'publications.', 'configure'], [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'], [city.bank, 'bank.', 'fileRecoveryPlan'],
         [city.politics, 'politics.', 'leaseHeadquarters'],[city.politics, 'politics.', 'executePlayerAction'],[city.politics, 'politics.', 'intervene'],[city.politics, 'politics.', 'startPublicWork'],[city.politics, 'politics.', 'submitBill'], [city.politics, 'politics.', 'vetoBill'], [city.currency, 'currency.', 'retire'], [city.world, 'world.', 'setTile']]) {
         const original = target[method];
@@ -126,7 +126,7 @@ export class CitySimulationBridge {
     if (data.type === 'result') {
       const pending = this.pending.get(data.id),path=pending?.path; this.pending.delete(data.id);
       if(pending?.resolve)pending.resolve({ok:data.ok,value:data.value,message:data.message});
-      if (!data.ok || ['politics.leaseHeadquarters','economy.rentOffice','politics.intervene','economy.offerShares','economy.buyShares','economy.cancelShareOffer','politics.submitBill'].includes(path)) this.notice(data.message || `Não foi possível concluir a operação: ${path}.`,pending?.target);
+      if (pending&&!pending.resolve&&(!data.ok||['politics.leaseHeadquarters','economy.rentOffice','politics.intervene','economy.offerShares','economy.buyShares','economy.cancelShareOffer','politics.submitBill'].includes(path))) this.notice(data.message || `Não foi possível concluir a operação: ${path}.`,pending.target);
       return;
     }
     if (data.type === 'motion') { this.receiveMotion(data); return; }

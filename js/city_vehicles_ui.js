@@ -2,7 +2,7 @@ import {interventionButton,interventionButtons} from './city_context_actions.js'
 import {contextActions} from './city_context_actions.js';
 import {colorName} from './city_colors.js';
 import {renderVehiclePaint} from './city_paint_ui.js';
-import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-3';
+import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-4';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const title=v=>VEHICLE_SPECS[v.good]?.label||v.good;

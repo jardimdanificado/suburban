@@ -1,15 +1,15 @@
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=regional-supply-10';
-import { WorldCoordinator } from './js/world_coordinator.js?v=world-day-persistence-2';
-import { WorldTradeService } from './js/world_trade_service.js?v=regional-supply-7';
-import { CityStateGraph, bindCityState } from './js/city_state.js?v=regional-supply-10';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=regional-supply-13';
+import { WorldCoordinator } from './js/world_coordinator.js?v=world-day-persistence-3';
+import { WorldTradeService } from './js/world_trade_service.js?v=regional-supply-10';
+import { CityStateGraph, bindCityState } from './js/city_state.js?v=regional-supply-12';
 import { loadWorldRecord, saveWorldRecord } from './js/world_save_store.js';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=regional-supply-10";
-import { CityDesktop } from "./js/city_desktop.js?v=regional-supply-15";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=regional-supply-12";
+import { CityDesktop } from "./js/city_desktop.js?v=regional-supply-21";
 import { World } from "./js/world.js?v=terrain-generation-reset-1";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=boats-transport-21";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=boats-transport-23";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
@@ -561,7 +561,7 @@ function frame(now) {
     return;
   }
 
-  if (simulationBridge?.active) { city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;simulationBridge.control(); simulationBridge.interpolate(now);time.tick=simulationBridge.time.tick;time.elapsed=simulationBridge.time.elapsed; }
+  if (simulationBridge?.active) { city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;simulationBridge.control(); simulationBridge.interpolate(now);time.tick=simulationBridge.time.tick;time.elapsed=simulationBridge.time.elapsed;time.observeProgress(time.elapsed); }
   else time.advance(dt, advanceSimulation);
   const rapidMode=simulationBridge?.active&&time.speed>=16&&city.citizens.length>=512;
   renderer3D.rapidCityMode=rapidMode;
@@ -687,6 +687,7 @@ function setActiveCity(cityId) {
   const session=worldCoordinator.selectCity(cityId);
   world=session.world;entities=session.entities;city=session.city;simulationBridge=session.bridge;nextId=session.nextId;
   time.tick=session.time.tick||0;time.elapsed=session.time.elapsed||0;
+  time.effectiveSpeed=null;time.progressSample=null;
   selected=null;renderer3D.selectEntity(-1);renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);
   cityUI.city=city;cityUI.lastSelected=null;cityUI.electionNotices=new Set();cityUI.lastElectionResultId=city.politics.lastResult?.id??null;
   favorites.city=city;editor.world=world;editor.entities=entities;
@@ -778,10 +779,18 @@ async function restoreWorldRecord(record){
   }finally{worldTradeService.resume();}
 }
 async function loadWorldFromStorage(){try{const record=await loadWorldRecord();if(!record)throw new Error('Nenhum mundo salvo foi encontrado.');await restoreWorldRecord(record);cityUI.notice='Mundo carregado com todas as cidades e viagens.';cityUI.openModule('world');}catch(error){cityUI.notice=`Falha ao carregar mundo: ${error.message}`;}}
+const backgroundTaskNotices=new Set();
+function runBackgroundTask(key,label,operation){
+  void Promise.resolve().then(operation).catch(error=>{
+    console.error(`${label}:`,error);
+    if(backgroundTaskNotices.has(key))return;
+    backgroundTaskNotices.add(key);cityUI.notice=`${label}: ${error.message}`;
+  });
+}
 worldCoordinator.onChange=event=>{if(event.type==='world-minute'){
-  void worldTradeService.processContracts(event.minute).catch(error=>{cityUI.notice=`Falha ao executar contratos marítimos: ${error.message}`;});
-  void worldTradeService.processRegionalTrade(event.minute).catch(error=>{cityUI.notice=`Falha no comércio entre cidades: ${error.message}`;});
-  void worldTradeService.processAutonomousMigrations(event.minute).catch(error=>{cityUI.notice=`Falha nas decisões de migração: ${error.message}`;});
+  runBackgroundTask('contracts','Falha ao executar contratos marítimos',()=>worldTradeService.processContracts(event.minute));
+  runBackgroundTask('regional-trade','Falha no comércio entre cidades',()=>worldTradeService.processRegionalTrade(event.minute));
+  runBackgroundTask('migrations','Falha nas decisões de migração',()=>worldTradeService.processAutonomousMigrations(event.minute));
 }};
 initSimulationBridge();
 void loadWorldRecord().then(async record=>{if(record)await restoreWorldRecord(record);ensureMinimumWorldCities(2);}).catch(error=>{cityUI.notice=`Salvamento local ignorado: ${error.message}`;ensureMinimumWorldCities(2);});
@@ -806,7 +815,7 @@ function ensureMinimumWorldCities(minimum=2){
 export const scheduleWorldTrade=options=>worldTradeService.schedule(options);
 export const cancelWorldTrade=transferId=>worldTradeService.cancel(transferId);
 
-export async function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 512 } = {}) {
+export async function startNewCity({ preset = 'archipelago', seed = 482910, size = 256, population = 256 } = {}) {
   preset='archipelago';
   await worldTradeService.quiesce();
   try{

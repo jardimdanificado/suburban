@@ -35,7 +35,7 @@ function seaPath(city,sourceShores,targetShores){
 export function findBoatPath(city,start,goal){
   const revision=`${city.world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
   if(city._boatPathCacheRevision!==revision){city._boatPathCacheRevision=revision;city._boatPathCache=new Map();}
-  const citizen=start.properties?.citizen,shipment=citizen?.deliveryId&&city.logistics?.shipments.find(item=>item.id===citizen.deliveryId),required=Math.max(1,citizen?.deliveryLoad||shipment?.quantity||1);
+  const citizen=start.properties?.citizen,shipment=citizen?.deliveryId&&city.logistics?.shipments.find(item=>item.id===citizen.deliveryId),required=Math.max(1,citizen?.deliveryLoad||start.properties?.vehicle?.ferryLoad||shipment?.quantity||1);
   const key=`${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}:${required}`;
   if(city._boatPathCache.has(key)){const route=city._boatPathCache.get(key);return route===null?null:route.slice();}
   const remember=route=>{const limit=Math.max(256,Math.min(2048,(city.citizens?.length||128)*2));if(city._boatPathCache.size>=limit)city._boatPathCache.delete(city._boatPathCache.keys().next().value);city._boatPathCache.set(key,route);return route===null?null:route.slice();};

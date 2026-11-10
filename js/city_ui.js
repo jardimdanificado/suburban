@@ -1,12 +1,12 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-21';
+import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-23';
 import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {equityShares,equityValue} from './city_equity.js?v=daily-mayor-privatization-1';
+import {equityShares,equityValue} from './city_equity.js?v=daily-mayor-privatization-2';
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js?v=landlord-stock-market-1';
 import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './city_paint_ui.js';
@@ -15,7 +15,7 @@ import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=fast-speeds-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
-import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=harbor-boats-3';
+import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=harbor-boats-4';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
@@ -50,8 +50,8 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-5';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-128-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-10';
-import { renderWorldManagement } from './city_world_ui.js?v=world-management-6';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-12';
+import { renderWorldManagement } from './city_world_ui.js?v=world-management-9';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -231,7 +231,7 @@ export class CityUI {
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
       if(this.tab==='government'&&this.view()==='elections'){const nav=new Page(ui,x+4,y,w-8,y,bottom);renderPoliticsNavigation(this,nav);y=nav.y;this.politicsNavigationPinned=true;}
     }
-    if(this.notice){const alert=new Page(ui,x+4,y,w-8,y,bottom);alert.status('INTERVENÇÃO',this.notice);y=alert.y;}
+    if(this.notice){const alert=new Page(ui,x+4,y,w-8,y,bottom);alert.status('AVISO',this.notice);y=alert.y;}
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings'].includes(this.tab)||this.tab==='economy'&&this.view()==='overview'?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings'].includes(this.tab)||this.tab==='economy'&&this.view()==='overview')this.directory(p);else this.content(p);
     });this.finishInputs();

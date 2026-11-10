@@ -61,14 +61,15 @@ export function offerShares(city,b,sellerId,points,{billId=null,capitalRaise=fal
  if(publicOffer&&!billId&&dailyPrivatization){const p=city.politics;p.privatizationListedTodayPoints=(p.privatizationListedTodayPoints||0)+points;}
  city.log(capitalRaise?`${city.accountName(sellerId)} abriu captação para ${b.entity.properties.name} em troca de ${(points/100).toFixed(2)}% de participação.`:`${city.accountName(sellerId)} colocou ${(points/100).toFixed(2)}% de ${b.entity.properties.name} à venda.`,'business',[],{kind:capitalRaise?'share-capital-raise':'share-offer',buildingId:b.id,offerId:offer.id,billId,points,valuation,capitalRaise:!!capitalRaise});return offer;
 }
-export function buyShares(city,b,offerId,buyerId,points){
+export function buyShares(city,b,offerId,buyerId,points,{silent=false}={}){
+ const fail=message=>silent?null:city.fail(message);
  const offer=b?.shareOffers?.find(o=>o.id===offerId&&o.status==='open'),buyer=city.accounts.get(buyerId);
- if(!offer||!b.active||b.entity.destroyed||!buyer||!living(city,buyerId)||buyerId===offer.sellerId)return city.fail('Oferta ou comprador indisponível.');
- if(!Number.isSafeInteger(points)||points<1||points>offer.remaining)return city.fail('Quantidade fora do saldo da oferta.');
+ if(!offer||!b.active||b.entity.destroyed||!buyer||!living(city,buyerId)||buyerId===offer.sellerId)return fail('Oferta ou comprador indisponível.');
+ if(!Number.isSafeInteger(points)||points<1||points>offer.remaining)return fail('Quantidade fora do saldo da oferta.');
  const publicPrivatization=offer.sellerId==='treasury'&&!offer.capitalRaise;
- if(publicPrivatization&&!offer.billId){const quota=privatizationQuota(city),saleCapacity=Math.max(0,quota.allowed-quota.sold);points=Math.min(points,saleCapacity);if(points<1)return city.fail('A cota diária de privatização já foi usada.');}
- const seller=b.equityShares.find(s=>s.accountId===offer.sellerId);if(!seller||seller.points<points)return city.fail('O vendedor não possui mais essa participação.');
- const treasuryBefore=city.treasury,price=Math.max(1,Math.ceil(offer.valuation*points/TOTAL)),recipient=offer.capitalRaise?b.accountId:offer.sellerId;if(!Number.isSafeInteger(price)||!city.transfer(buyerId,recipient,price,offer.capitalRaise?'Aporte de capital por venda de participação':'Compra de participação empresarial',{buildingId:b.id,offerId,points}))return city.fail('Saldo insuficiente para comprar a participação.');
+ if(publicPrivatization&&!offer.billId){const quota=privatizationQuota(city),saleCapacity=Math.max(0,quota.allowed-quota.sold);points=Math.min(points,saleCapacity);if(points<1)return fail('A cota diária de privatização já foi usada.');}
+ const seller=b.equityShares.find(s=>s.accountId===offer.sellerId);if(!seller||seller.points<points)return fail('O vendedor não possui mais essa participação.');
+ const treasuryBefore=city.treasury,price=Math.max(1,Math.ceil(offer.valuation*points/TOTAL)),recipient=offer.capitalRaise?b.accountId:offer.sellerId;if(!Number.isSafeInteger(price)||!city.transfer(buyerId,recipient,price,offer.capitalRaise?'Aporte de capital por venda de participação':'Compra de participação empresarial',{buildingId:b.id,offerId,points}))return fail('Saldo insuficiente para comprar a participação.');
  seller.points-=points;let acquired=b.equityShares.find(s=>s.accountId===buyerId);if(!acquired){acquired={accountId:buyerId,points:0};b.equityShares.push(acquired);}acquired.points+=points;b.equityShares=b.equityShares.filter(s=>s.points>0);offer.remaining-=points;if(!offer.remaining)offer.status='sold';
  const event={minute:city.minute,from:offer.sellerId,to:buyerId,points,price,offerId,billId:offer.billId,capitalRaise:!!offer.capitalRaise};b.shareHistory.push(event);if(b.shareHistory.length>160)b.shareHistory.shift();city.history.ownership(b,offer.sellerId,buyerId,{action:offer.capitalRaise?'capital-raise':'share-purchase',amount:price,points,offerId,billId:offer.billId});if(publicPrivatization){const quota=privatizationQuota(city);city.politics.privatizationSoldTodayPoints=quota.sold+points;privatizationReaction(city,b,points,treasuryBefore);}control(city,b);return event;
 }
@@ -106,7 +107,12 @@ export function tradeSharesHourly(city){
   const offers=(b.shareOffers||[]).filter(o=>o.status==='open');for(const open of offers)if(open.capitalRaise&&city.minute-(open.lastRepricedAt??open.createdAt)>=1440){open.valuation=Math.max(Math.floor(open.valuation*.88),Math.floor(equityValue(city,b)*.5));open.lastRepricedAt=city.minute;}
   const offer=offers[0];if(!offer)continue;
   const buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.accountId!==offer.sellerId&&c.balance>city.currency.price(20000)).sort((a,d)=>d.balance-a.balance||a.id-d.id);
-  for(const c of buyers.slice(0,8)){const budget=Math.max(0,Math.floor((c.balance-city.currency.price(20000))*.2)),points=Math.min(offer.remaining,500,Math.floor(budget*TOTAL/offer.valuation));if(points>0)buyShares(city,b,offer.id,c.accountId,points);if(offer.status!=='open')break;}
+  for(const c of buyers.slice(0,8)){
+   if(offer.sellerId==='treasury'&&!offer.billId&&!offer.capitalRaise){const quota=privatizationQuota(city);if(quota.sold>=quota.allowed)break;}
+   const budget=Math.max(0,Math.floor((c.balance-city.currency.price(20000))*.2)),points=Math.min(offer.remaining,500,Math.floor(budget*TOTAL/offer.valuation));
+   if(points>0)buyShares(city,b,offer.id,c.accountId,points,{silent:true});
+   if(offer.status!=='open')break;
+  }
  }
 }
 export function distributeShareDividends(city,b){

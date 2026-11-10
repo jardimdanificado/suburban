@@ -9,14 +9,14 @@ import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=economic-fl
 import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
-import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
+import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-2';
 import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-one-pass-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=ff2-speed-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=harbor-boats-3';
+import {CityVehicles} from './city_vehicles.js?v=harbor-boats-4';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
@@ -56,7 +56,7 @@ import { inventoryFree } from './city_inventory.js';
 import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=regional-supply-5';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
-import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-3';
+import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-4';
 import {createSeaEdgeNavigation} from './sea_edge_navigation.js?v=sea-edge-routes-1';
 
 const ff2ProductionWaits = new WeakMap();
@@ -160,7 +160,7 @@ export class CitySimulation {
     this.life = new CityLife(this);
     this.justice = new CityJustice(this);
     this.economy = new CityEconomy(this);
-    this.worldPort={id:'world-port',cityId:null,name:'Porto municipal',type:'world_port',accountId:'world-port',active:true,ownerId:null,x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0,door:{x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0},entity:{id:'world-port',destroyed:false,properties:{name:'Porto municipal'}},inventory:Object.fromEntries(Object.keys(this.economy.goods).map(good=>[good,0])),inventoryCapacity:100000,incoming:{},reservations:{},receipts:{},importReservations:{},payments:{}};
+    this.worldPort={id:'world-port',cityId:null,name:'Porto municipal',type:'world_port',accountId:'world-port',active:true,ownerId:null,x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0,door:{x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0},entity:{id:'world-port',destroyed:false,properties:{name:'Porto municipal'}},inventory:Object.fromEntries(Object.keys(this.economy.goods).map(good=>[good,0])),inventoryCapacity:100000,incoming:{},reservations:{},receipts:{},importReservations:{},payments:{},freightReceipts:{},passengerPayments:{}};
     this.accounts.set(this.worldPort.accountId,{name:'Porto municipal',balance:0,worldPort:true});
     this.buildingTypes = BUILDING_TYPES;
     this.development = new CityDevelopment(this);
@@ -248,13 +248,13 @@ export class CitySimulation {
     }
     return true;
   }
-  reserveWorldExport(transferId,buildingId,good,quantity){
+  reserveWorldExport(transferId,buildingId,good,quantity,directToPort=false){
     if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(quantity)||quantity<1||!Object.hasOwn(this.worldPort.inventory,good))return false;
     const prior=this.worldPort.reservations[transferId];
     if(prior)return prior.buildingId===buildingId&&prior.good===good&&prior.quantity===quantity&&['reserved','in-transit','delivered'].includes(prior.status);
-    this.worldPort.incoming??={};const building=this.building(buildingId),used=Object.values(this.worldPort.inventory).reduce((sum,value)=>sum+value,0)+Object.values(this.worldPort.incoming).reduce((sum,value)=>sum+value,0);
+    this.worldPort.incoming??={};const building=this.building(buildingId)||(this.economy.importDepot?.id===buildingId?this.economy.importDepot:null),used=Object.values(this.worldPort.inventory).reduce((sum,value)=>sum+value,0)+Object.values(this.worldPort.incoming).reduce((sum,value)=>sum+value,0);
     if(!building||!building.active||building.entity.destroyed||building.inventory[good]<quantity||used+quantity>this.worldPort.inventoryCapacity)return false;
-    if(this.logistics?.order&&this.findPath?.(building.door,this.worldPort.door)!==null){
+    if(!directToPort&&this.logistics?.order&&this.findPath?.(building.door,this.worldPort.door)!==null){
       const shipment=this.logistics.order(building,this.worldPort,good,quantity,0,{payerAccountId:building.accountId,purpose:'world-port-export'});if(!shipment)return false;
       this.worldPort.reservations[transferId]={transferId,buildingId,good,quantity,status:'loading',localShipmentId:shipment.id,createdAt:this.minute};return true;
     }
@@ -282,7 +282,7 @@ export class CitySimulation {
       else{this.logistics.cancel(shipment);reservation.status='returned';reservation.returnedAt=this.minute;return true;}
     }
     if(reservation.status!=='reserved'||this.worldPort.inventory[reservation.good]<reservation.quantity)return false;
-    const building=this.building(reservation.buildingId);
+    const building=this.building(reservation.buildingId)||(this.economy.importDepot?.id===reservation.buildingId?this.economy.importDepot:null);
     if(building&&!building.entity.destroyed){this.worldPort.inventory[reservation.good]-=reservation.quantity;building.inventory[reservation.good]+=reservation.quantity;this.economy.recordGoods('world-export-return',reservation.good,reservation.quantity,this.worldPort.id,building.id,{transferId});}
     reservation.status='returned';reservation.returnedAt=this.minute;return true;
   }
@@ -337,15 +337,33 @@ export class CitySimulation {
     const prior=this.worldPort.payments[transferId];if(prior)return prior.payerAccountId===payerAccountId&&prior.amount===amount&&['reserved','settled'].includes(prior.status);
     this.worldPort.payments[transferId]={transferId,payerAccountId,amount,status:'reserved',receivedAt:this.minute};return true;
   }
-  settleWorldPayment(transferId,sellerAccountId,goodsAmount=null,freightAmount=0){
+  settleWorldPayment(transferId,sellerAccountId,goodsAmount=null,freightAmount=0,freightReceiverAccountId=null){
     const payment=this.worldPort.payments[transferId];if(!payment)return false;
     goodsAmount??=payment.amount-freightAmount;
     if(payment.status==='settled')return payment.sellerAccountId===sellerAccountId&&payment.goodsAmount===goodsAmount&&payment.freightAmount===freightAmount;
     if(payment.status!=='reserved'||!this.accounts.has(sellerAccountId))return false;
     if(!Number.isSafeInteger(goodsAmount)||goodsAmount<0||!Number.isSafeInteger(freightAmount)||freightAmount<0||goodsAmount+freightAmount!==payment.amount)return false;
     if(!this.transfer('supplier',sellerAccountId,goodsAmount,'Pagamento marítimo recebido',{transferId,worldTrade:true}))return false;
-    if(freightAmount){const fleet=this.accounts.get('world-fleet')||{name:'Frota marítima',balance:0,worldFleet:true};this.accounts.set('world-fleet',fleet);if(!this.transfer('supplier','world-fleet',freightAmount,'Frete marítimo recebido',{transferId,worldTrade:true}))return false;}
-    payment.status='settled';payment.sellerAccountId=sellerAccountId;payment.goodsAmount=goodsAmount;payment.freightAmount=freightAmount;payment.settledAt=this.minute;return true;
+    let freightPayee=freightReceiverAccountId&&this.accounts.has(freightReceiverAccountId)?freightReceiverAccountId:'world-fleet';
+    if(freightAmount){const fleet=this.accounts.get(freightPayee)||{name:'Frota marítima',balance:0,worldFleet:true};this.accounts.set(freightPayee,fleet);if(!this.transfer('supplier',freightPayee,freightAmount,freightPayee==='world-fleet'?'Frete marítimo recebido':'Frete intermunicipal pago ao operador',{transferId,worldTrade:true,freightReceiverAccountId:freightReceiverAccountId||null}))return false;}
+    payment.status='settled';payment.sellerAccountId=sellerAccountId;payment.goodsAmount=goodsAmount;payment.freightAmount=freightAmount;payment.freightReceiverAccountId=freightPayee;payment.settledAt=this.minute;return true;
+  }
+  receiveWorldFreightIncome(transferId,accountId,amount,vesselId){
+    if(typeof transferId!=='string'||!this.accounts.has(accountId)||!Number.isSafeInteger(amount)||amount<0)return false;
+    this.worldPort.freightReceipts??={};const prior=this.worldPort.freightReceipts[transferId];if(prior)return prior.accountId===accountId&&prior.amount===amount;
+    if(amount&&!this.transfer('supplier',accountId,amount,'Frete intermunicipal recebido',{transferId,vesselId,worldTrade:true}))return false;
+    this.worldPort.freightReceipts[transferId]={accountId,amount,vesselId,receivedAt:this.minute};return true;
+  }
+  payWorldPassengerFare(transferId,payerAccountId,operatorAccountId,amount,vesselId){
+    if(typeof transferId!=='string'||!transferId||!this.accounts.has(payerAccountId)||!this.accounts.has(operatorAccountId)||!Number.isSafeInteger(amount)||amount<1)return false;
+    const prior=this.worldPort.passengerPayments[transferId];if(prior)return prior.payerAccountId===payerAccountId&&prior.operatorAccountId===operatorAccountId&&prior.amount===amount&&prior.status==='paid';
+    if(!this.transfer(payerAccountId,operatorAccountId,amount,'Passagem marítima intermunicipal',{transferId,vesselId,worldPassengerFare:true}))return false;
+    this.worldPort.passengerPayments[transferId]={transferId,payerAccountId,operatorAccountId,amount,vesselId,status:'paid',paidAt:this.minute};return true;
+  }
+  refundWorldPassengerFare(transferId){
+    const payment=this.worldPort.passengerPayments?.[transferId];if(!payment)return true;if(payment.status==='refunded')return true;if(payment.status!=='paid')return false;
+    if(!this.transfer(payment.operatorAccountId,payment.payerAccountId,payment.amount,'Estorno de passagem marítima',{transferId,vesselId:payment.vesselId,worldPassengerFare:true}))return false;
+    payment.status='refunded';payment.refundedAt=this.minute;return true;
   }
   refundWorldPayment(transferId){
     const payment=this.worldPort.payments[transferId];if(!payment)return false;
@@ -364,7 +382,7 @@ export class CitySimulation {
     }}
     const ids=new Set(members.keys());
     for(const person of members.values()){
-      if(person.partnerId!=null&&!ids.has(person.partnerId)||person.dead||person.worldMigrationPending||person.businessIds?.length||person.deliveryId||person.mobilityTrip||person.ridingVehicleId||person.custody||person.indoorLocation||person.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===person.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===person.accountId))return null;
+      if(person.partnerId!=null&&!ids.has(person.partnerId)||person.dead||person.worldMigrationPending||person.businessIds?.length||person.deliveryId||person.mobilityTrip||person.ridingVehicleId||person.custody||person.indoorLocation||person.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===person.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===person.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return null;
       if(!this.society.isAdult(person)&&(!person.guardianId||!ids.has(person.guardianId)))return null;
     }
     return [...members.keys()];
@@ -379,13 +397,13 @@ export class CitySimulation {
     social.grief=(social.grief||[]).map(loss=>{const person=loss.personId==null?null:this.society.citizen(loss.personId);return {...loss,personId:null,...(person?{globalId:globalPersonId(person.id)}:{})};});
     const relationships=new Map((previousLinks.relationships||[]).map(link=>[link.globalId,structuredClone(link)]));for(const relation of this.society.relationsFor(citizen.id)){const otherId=relation.a===citizen.id?relation.b:relation.a,link={globalId:globalPersonId(otherId),view:structuredClone(relation.views?.[citizen.id]||{}),status:relation.status};relationships.set(link.globalId,link);}
     const parentGlobalIds=[...new Set([...(previousLinks.parentGlobalIds||[]),...(citizen.parentIds||[]).map(globalPersonId)])],childGlobalIds=[...new Set([...(previousLinks.childGlobalIds||[]),...(citizen.childIds||[]).map(globalPersonId)])];
-    return {version:1,transferId,globalId,citizenId,accountBalance:this.accounts.get(citizen.accountId)?.balance||0,minute:this.minute,initialAge:citizen.initialAge,bornAt:citizen.bornAt,name:citizen.entity.properties.name,givenNames:structuredClone(citizen.givenNames||[]),surnames:structuredClone(citizen.surnames||[]),skills:structuredClone(citizen.skills||{}),traits:structuredClone(citizen.traits||{}),personality:structuredClone(citizen.personality||{}),socialProfile:structuredClone(citizen.socialProfile||{}),social,socialHistory,prejudices:structuredClone(citizen.prejudices||{}),prejudiceProfileVersion:citizen.prejudiceProfileVersion,political:structuredClone(citizen.political||{}),reputation:structuredClone(citizen.reputation||{}),profession:citizen.profession,needs:structuredClone(citizen.needs||{}),happiness:citizen.happiness,mood:citizen.mood,savingsRate:citizen.savingsRate,rentalPreference:citizen.rentalPreference,foodPreferences:structuredClone(citizen.foodPreferences||{}),inventory:structuredClone(citizen.inventory||{}),pocket:structuredClone(citizen.pocket||{}),equipment:structuredClone(citizen.equipment||{}),appearance:structuredClone(citizen.appearance||{}),render:structuredClone(citizen.entity.properties.render||{}),wardrobe:structuredClone(citizen.wardrobe||[]),career:structuredClone(citizen.career||{}),body:{...Object.fromEntries(['bodyHeightCm','bodyWeightKg','bodyFoodNeedTotal','bodyFoodNeedMinutes','bodyWeightUpdatedAt','bodyMetricsSeed'].filter(key=>citizen[key]!==undefined).map(key=>[key,citizen[key]]))},parentGlobalIds,familyLinks:{partnerGlobalId:citizen.partnerId!=null?globalPersonId(citizen.partnerId):previousLinks.partnerGlobalId||null,guardianGlobalId:citizen.guardianId!=null?globalPersonId(citizen.guardianId):previousLinks.guardianGlobalId||null,childGlobalIds,householdMemberGlobalIds:householdIds.filter(id=>id!==citizen.id).map(globalPersonId)},relationships:[...relationships.values()]};
+    return {version:1,transferId,globalId,citizenId,accountBalance:this.accounts.get(citizen.accountId)?.balance||0,vehicleAssets:this.vehicles.personalMobilityAssets(citizen.accountId),minute:this.minute,initialAge:citizen.initialAge,bornAt:citizen.bornAt,name:citizen.entity.properties.name,givenNames:structuredClone(citizen.givenNames||[]),surnames:structuredClone(citizen.surnames||[]),skills:structuredClone(citizen.skills||{}),traits:structuredClone(citizen.traits||{}),personality:structuredClone(citizen.personality||{}),socialProfile:structuredClone(citizen.socialProfile||{}),social,socialHistory,prejudices:structuredClone(citizen.prejudices||{}),prejudiceProfileVersion:citizen.prejudiceProfileVersion,political:structuredClone(citizen.political||{}),reputation:structuredClone(citizen.reputation||{}),profession:citizen.profession,needs:structuredClone(citizen.needs||{}),happiness:citizen.happiness,mood:citizen.mood,savingsRate:citizen.savingsRate,rentalPreference:citizen.rentalPreference,foodPreferences:structuredClone(citizen.foodPreferences||{}),inventory:structuredClone(citizen.inventory||{}),pocket:structuredClone(citizen.pocket||{}),equipment:structuredClone(citizen.equipment||{}),appearance:structuredClone(citizen.appearance||{}),render:structuredClone(citizen.entity.properties.render||{}),wardrobe:structuredClone(citizen.wardrobe||[]),career:structuredClone(citizen.career||{}),body:{...Object.fromEntries(['bodyHeightCm','bodyWeightKg','bodyFoodNeedTotal','bodyFoodNeedMinutes','bodyWeightUpdatedAt','bodyMetricsSeed'].filter(key=>citizen[key]!==undefined).map(key=>[key,citizen[key]]))},parentGlobalIds,familyLinks:{partnerGlobalId:citizen.partnerId!=null?globalPersonId(citizen.partnerId):previousLinks.partnerGlobalId||null,guardianGlobalId:citizen.guardianId!=null?globalPersonId(citizen.guardianId):previousLinks.guardianGlobalId||null,childGlobalIds,householdMemberGlobalIds:householdIds.filter(id=>id!==citizen.id).map(globalPersonId)},relationships:[...relationships.values()]};
   }
   reserveWorldCitizenMigration(transferId,citizenId,{householdIds=[]}={}){
     if(typeof transferId!=='string'||!transferId)return false;
     this.worldPort.migrations??={};const previous=this.worldPort.migrations[transferId];if(previous)return previous.status==='reserved'&&previous.package.citizenId===citizenId?structuredClone(previous.package):false;
-    const citizen=this.society.citizen(citizenId),included=new Set(householdIds);if(!citizen||citizen.entity.destroyed||citizen.dead||citizen.worldMigrationPending||(!householdIds.length&&!this.society.isAdult(citizen))||(!householdIds.length&&(citizen.partnerId!=null||citizen.childIds?.length))||(citizen.partnerId!=null&&!included.has(citizen.partnerId))||(citizen.childIds||[]).some(id=>{const child=this.society.citizen(id);return child?.guardianId===citizen.id&&!included.has(id);})||citizen.businessIds?.length||citizen.deliveryId||citizen.mobilityTrip||citizen.ridingVehicleId||citizen.custody||citizen.indoorLocation||citizen.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===citizen.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===citizen.accountId))return false;
-    const packageData=this.worldCitizenMigrationPackage(transferId,citizenId,householdIds);if(!packageData)return false;const globalId=packageData.globalId;
+    const citizen=this.society.citizen(citizenId),included=new Set(householdIds);if(!citizen||citizen.entity.destroyed||citizen.dead||citizen.worldMigrationPending||(!householdIds.length&&!this.society.isAdult(citizen))||(!householdIds.length&&(citizen.partnerId!=null||citizen.childIds?.length))||(citizen.partnerId!=null&&!included.has(citizen.partnerId))||(citizen.childIds||[]).some(id=>{const child=this.society.citizen(id);return child?.guardianId===citizen.id&&!included.has(id);})||citizen.businessIds?.length||citizen.deliveryId||citizen.mobilityTrip||citizen.ridingVehicleId||citizen.custody||citizen.indoorLocation||citizen.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===citizen.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===citizen.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return false;
+    const packageData=this.worldCitizenMigrationPackage(transferId,citizenId,householdIds);if(!packageData||!this.vehicles.reserveWorldMigrationAssets(transferId,citizen.accountId))return false;const globalId=packageData.globalId;
     citizen.worldMigrationPending=transferId;this.worldPort.migrations[transferId]={transferId,status:'reserved',citizenId,globalId,package:packageData,createdAt:this.minute};return structuredClone(packageData);
   }
   reserveWorldHouseholdMigration(transferId,citizenId){
@@ -424,11 +442,11 @@ export class CitySimulation {
     this.familyIndexDirty=true;this.worldPort.migrantArrivals[transferId]={transferId,globalIds:packageData.members.map(member=>member.globalId),citizenIds:packageData.members.map(member=>localByGlobalId.get(member.globalId).id),status:'delivered',arrivedAt:this.minute};return true;
   }
   completeWorldHouseholdMigration(transferId){const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='delivered')return true;if(migration.status!=='in-transit'||migration.package?.version!==2)return false;for(const memberTransferId of migration.memberTransferIds||[])if(!this.completeWorldCitizenMigration(memberTransferId))return false;migration.status='delivered';migration.deliveredAt=this.minute;return true;}
-  cancelWorldCitizenMigration(transferId){const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='cancelled')return true;if(migration.status!=='reserved')return false;const citizen=this.society.citizen(migration.citizenId);if(citizen?.worldMigrationPending===transferId)delete citizen.worldMigrationPending;migration.status='cancelled';migration.cancelledAt=this.minute;return true;}
+  cancelWorldCitizenMigration(transferId){const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='cancelled')return true;if(migration.status!=='reserved')return false;const citizen=this.society.citizen(migration.citizenId);if(citizen?.worldMigrationPending===transferId)delete citizen.worldMigrationPending;this.vehicles.cancelWorldMigrationAssets(transferId);migration.status='cancelled';migration.cancelledAt=this.minute;return true;}
   departWorldCitizenMigration(transferId){
     const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='in-transit'||migration.status==='delivered')return true;if(migration.status!=='reserved')return false;
     const citizen=this.society.citizen(migration.citizenId);if(!citizen||citizen.globalId&&citizen.globalId!==migration.globalId)return false;
-    if(citizen.jobId!=null)this.economy.leaveJob(citizen,'Migração marítima');if(citizen.homeUnitId!=null)this.housing.release(citizen);
+    if(citizen.jobId!=null)this.economy.leaveJob(citizen,'Migração marítima');if(citizen.homeUnitId!=null)this.housing.release(citizen);migration.package.vehicleAssets=this.vehicles.departWorldMigrationAssets(transferId,citizen.accountId);
     this.society.removeCitizen(citizen);for(const parentId of citizen.parentIds||[]){const parent=this.society.citizen(parentId);if(parent?.childIds)parent.childIds=parent.childIds.filter(id=>id!==citizen.id);}
     citizen.entity.destroyed=true;this.citizens.splice(this.citizens.indexOf(citizen),1);this.accounts.delete(citizen.accountId);this.economy.citizensById?.delete(citizen.id);this.familyIndexDirty=true;this.buildingsById??=new Map();
     migration.status='in-transit';migration.departedAt=this.minute;this.structureRevision++;this.log(`${migration.package.name} partiu para outra cidade por via marítima.`,'city',[citizen.id],{kind:'citizen-migration-departed',transferId,globalId:migration.globalId});return true;
@@ -440,7 +458,7 @@ export class CitySimulation {
     const position=this.world.spawnCenter||{x:0,y:0},citizen=this.addCitizen(position.x,position.y,this.citizens.length,{age:packageData.initialAge,grant:false});
     citizen.globalId=packageData.globalId;citizen.initialAge=packageData.initialAge;citizen.bornAt=packageData.bornAt;citizen.parentIds=[];citizen.guardianId=null;citizen.childIds=[];citizen.entity.properties.name=packageData.name;citizen.givenNames=structuredClone(packageData.givenNames);citizen.surnames=Object.freeze(structuredClone(packageData.surnames));
     Object.assign(citizen,{skills:structuredClone(packageData.skills),traits:structuredClone(packageData.traits),personality:structuredClone(packageData.personality),socialProfile:Object.freeze(structuredClone(packageData.socialProfile)),social:structuredClone(packageData.social||citizen.social),prejudices:structuredClone(packageData.prejudices||citizen.prejudices),prejudiceProfileVersion:packageData.prejudiceProfileVersion??citizen.prejudiceProfileVersion,political:structuredClone(packageData.political||citizen.political),reputation:structuredClone(packageData.reputation||citizen.reputation),profession:packageData.profession??citizen.profession,needs:structuredClone(packageData.needs),happiness:packageData.happiness,mood:packageData.mood,savingsRate:packageData.savingsRate??citizen.savingsRate,rentalPreference:packageData.rentalPreference??citizen.rentalPreference,foodPreferences:structuredClone(packageData.foodPreferences||citizen.foodPreferences||{}),inventory:structuredClone(packageData.inventory),pocket:structuredClone(packageData.pocket),equipment:structuredClone(packageData.equipment),appearance:structuredClone(packageData.appearance),wardrobe:structuredClone(packageData.wardrobe||[]),career:structuredClone(packageData.career||{}),action:'Chegando de outra cidade',task:null,targetId:null,path:[],homeUnitId:null,jobId:null});
-    citizen.entity.properties.render=structuredClone(packageData.render||citizen.entity.properties.render);citizen.entity.properties.citizen=citizen;const account=this.accounts.get(citizen.accountId);if(!account)return false;account.balance=packageData.accountBalance;
+    citizen.entity.properties.render=structuredClone(packageData.render||citizen.entity.properties.render);citizen.entity.properties.citizen=citizen;const account=this.accounts.get(citizen.accountId);if(!account)return false;account.balance=packageData.accountBalance;if(!this.vehicles.receiveWorldMigrationAssets(citizen.accountId,packageData.vehicleAssets||[],transferId))return false;
     citizen.worldLinks={parentGlobalIds:structuredClone(packageData.parentGlobalIds||[]),relationships:structuredClone(packageData.relationships||[]),socialHistory:structuredClone(packageData.socialHistory||{memories:[],beliefs:[]}),...(packageData.familyLinks?structuredClone(packageData.familyLinks):{})};Object.assign(citizen,structuredClone(packageData.body||{}));this.relationships.register(citizen);this.worldPort.migrantArrivals[transferId]={transferId,globalId:packageData.globalId,citizenId:citizen.id,status:'delivered',arrivedAt:this.minute};this.log(`${citizen.entity.properties.name} chegou de outra cidade por via marítima.`,'city',[citizen.id],{kind:'citizen-migration-arrived',transferId,globalId:packageData.globalId});return true;
   }
   completeWorldCitizenMigration(transferId){const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='delivered')return true;if(migration.status!=='in-transit')return false;migration.status='delivered';migration.deliveredAt=this.minute;return true;}

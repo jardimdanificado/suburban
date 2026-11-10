@@ -1,7 +1,7 @@
 import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
-import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-13';
+import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-17';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
-import {CityUI,money} from './city_ui.js?v=regional-supply-13';
+import {CityUI,money} from './city_ui.js?v=regional-supply-17';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
@@ -220,7 +220,7 @@ export class CityDesktop {
     const y=ui.height-27;bevel(ui.ctx,0,y,ui.width,27,{fill:T.face});const s=this.city.stats(),cash=money(this.city.treasury),cashW=Math.min(190,ui.width*.42,Math.max(120,ui.textWidth(cash)+26)),dateW=Math.min(225,ui.width-cashW-12,Math.max(120,ui.textWidth(clockText)+24));
     bevel(ui.ctx,3,y+3,dateW,21,{inset:true,fill:T.paper});ui.text(ui.fitText(clockText,dateW-14),10,y+7,T.ink);
     const right=ui.width-cashW-3;bevel(ui.ctx,right,y+3,cashW,21,{inset:true,fill:T.paper});const shownCash=ui.fitText(cash,cashW-16);ui.text(shownCash,right+cashW-ui.textWidth(shownCash)-8,y+7,T.ink);
-    const middle=right-dateW-12;if(middle>80){bevel(ui.ctx,dateW+6,y+3,middle,21,{inset:true,fill:T.paper});const status=paused?'Pausado':`${s.population} habitantes · ${speedLabel(speed)}${Number.isFinite(effectiveSpeed)?` (${effectiveSpeed.toFixed(1)}× efetivos)`:''} · ${this.manager.windows.length} janelas`;ui.text(ui.fitText(status,middle-12),dateW+12,y+7,paused?T.red:T.ink);}
+    const middle=right-dateW-12;if(middle>80){bevel(ui.ctx,dateW+6,y+3,middle,21,{inset:true,fill:T.paper});const effective=paused?'0.0× efetiva':Number.isFinite(effectiveSpeed)?`${effectiveSpeed.toFixed(1)}× efetiva`:'medindo…',status=middle<230?effective:`${s.population} habitantes · ${speedLabel(speed)} · ${effective} · ${this.manager.windows.length} janelas`;ui.text(ui.fitText(status,middle-12),dateW+12,y+7,paused?T.red:T.ink);}
 
   }
   frame(ui,w){
