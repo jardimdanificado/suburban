@@ -12,7 +12,7 @@ function batch(renderer,THREE,key,makeGeometry,makeMaterial,capacity){
 }
 export function syncCityMobility(renderer,THREE,entities,world){
   renderer.mobilityBatches??=new Map();
-  const vehicles=entities.filter(e=>!e.destroyed&&e.properties?.cityVehicle&&inView(renderer,e.x,e.y,1));
+  const vehicles=entities.filter(e=>!e.destroyed&&e.properties?.cityVehicle&&!e.properties.cityVehicle.boatClass&&inView(renderer,e.x,e.y,1));
   if(!vehicles.length){
     for(const b of renderer.mobilityBatches?.values()||[])b.mesh.count=0;
     for(const [id,g] of renderer.cycleFlags||[]){renderer.scene.remove(g);g.traverse(o=>{o.geometry?.dispose();if(o.material&&!o.material.map)o.material.dispose();});renderer.cycleFlags.delete(id);}

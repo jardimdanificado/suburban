@@ -19,7 +19,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE
-} from "./world_gen.js?v=terrain-generation-reset-1";
+} from "./world_gen.js?v=terrain-generation-reset-2-map-default-128";
 import { globalWallCoords, resolveWallSkin, getEntitiesInViewport } from "./engine.js";
 
 // Framework scenes can opt into blueprints through their own tools. The base

@@ -2,7 +2,7 @@ import {interventionButton,interventionButtons} from './city_context_actions.js'
 import {contextActions} from './city_context_actions.js';
 import {colorName} from './city_colors.js';
 import {renderVehiclePaint} from './city_paint_ui.js';
-import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=carpool-spatial-index-1';
+import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-1';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const title=v=>VEHICLE_SPECS[v.good]?.label||v.good;
@@ -10,9 +10,9 @@ const stamp=n=>`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStar
 function ownerLink(ui,account){const actor=ui.city.accounts.get(account);if(actor?.entity?.properties.citizen)ui.openCitizen(actor.id);else if(actor?.entity?.properties.cityBuilding)ui.openBuilding(actor.id);else if(account==='treasury')ui.openPanel({tab:'government',views:{government:'finance'}});}
 export function renderVehicle(ui,p,v){
   const city=ui.city,system=city.vehicles,model=system.model(v),spec=VEHICLE_SPECS[v.good];
-  contextActions(ui,p,{vehicle:v});
+  if(!v.boatClass)contextActions(ui,p,{vehicle:v});
   p.heading(`${title(v)} #${v.id}`);p.status(model?.brand||'Fabricante desconhecido',model?.name||'Modelo sem identificação');
-  p.metrics([['CONSERVAÇÃO',`${v.condition.toFixed(0)}%`,v.condition<30?C.red:C.green],['VELOCIDADE NA RUA',`${spec.speed} células/s`]]);
+  p.metrics([['CONSERVAÇÃO',`${v.condition.toFixed(0)}%`,v.condition<30?C.red:C.green],[v.boatClass?'VELOCIDADE NA ÁGUA':'VELOCIDADE NA RUA',`${spec.speed} células/s`]]);
   p.heading('IDENTIDADE E PROPRIEDADE');p.kv('Registro individual',v.id);p.kv('Marca',model?.brand||'Sem registro');p.kv('Modelo / revisão',model?.name||'Sem registro');p.kv('Origem',v.initial?'Equipamento da fundação':v.imported?'Importado':'Produção local');
   p.button(`DONO: ${city.accountName(v.ownerAccountId)}`,()=>ownerLink(ui,v.ownerAccountId));
   if(v.possessorAccountId&&v.possessorAccountId!==v.ownerAccountId){p.kv('Posse atual',city.accountName(v.possessorAccountId));p.note('O registro de propriedade permanece com o dono legal.');}
@@ -20,10 +20,10 @@ export function renderVehicle(ui,p,v){
   if(model?.manufacturerId!=null)p.button(`FABRICANTE: ${city.building(model.manufacturerId)?.entity.properties.name||model.brand}`,()=>ui.openBuilding(model.manufacturerId));
   p.kv('Fabricação / registro',stamp(v.createdAt??model?.createdAt??0));p.kv('Lote',v.batchId??(v.initial?'Patrimônio inicial':'Sem lote registrado'));
   if(!v.active)p.kv('Preço de venda',money(system.vehiclePrice(v)));p.kv('Situação',v.status||(!v.active?'No estoque':v.driverId?'Em viagem':'Estacionado'));
-  p.kv('Distância percorrida',`${v.distance.toFixed(1)} células`);p.kv('Capacidade de carga',`${spec.cargo} itens`);
+  p.kv('Distância percorrida',`${v.distance.toFixed(1)} células`);p.kv(v.boatClass?'Capacidade de transporte':'Capacidade de carga',v.boatClass?spec.cargo:`${spec.cargo} itens`);
   if(v.entity)p.button('LOCALIZAR NO MAPA',()=>ui.camera(v.entity.x,v.entity.y));
   if(v.driverId)p.button(`USUÁRIO ATUAL: ${city.accountName(`citizen:${v.driverId}`)}`,()=>ui.openCitizen(v.driverId));
-  const rack=v.parking&&city.building(v.parking.rackId);p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':v.parking?.kind==='roadside'?'Ao lado da rua':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));
+  const rack=v.parking&&city.building(v.parking.rackId);if(v.boatClass)p.kv('Atracação',v.driverId?'Em travessia com passageiro':v.waterRoute?.length?'Rota costeira do porto':'À disposição no porto');else{p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':v.parking?.kind==='roadside'?'Ao lado da rua':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));}
   if(v.reservedParking)p.kv('Vaga reservada no destino',v.reservedParking.kind==='roadside'?'Ao lado da rua':`${city.building(v.reservedParking.rackId)?.entity.properties.name||v.reservedParking.rackId} · ${v.reservedParking.index+1}`);
   p.kv('Cor',colorName(v.color));
   if(ui.section)ui.section(p,'vehicleCustomization','Pintura e bandeiras',()=>renderVehiclePaint(ui,p,v));else renderVehiclePaint(ui,p,v);

@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-4';
+import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-18';
 import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
@@ -48,9 +48,9 @@ import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js'
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-3';
-import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
+import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-128-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-3';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-8';
 import { renderWorldManagement } from './city_world_ui.js';
 export const money = formatMoney;
 export const TABS = [
@@ -123,7 +123,7 @@ export class CityUI {
     this.municipalSloganToInput=document.createElement('input');this.municipalSloganToInput.type='text';this.municipalSloganToInput.maxLength=120;this.municipalSloganToInput.placeholder='Substituir por…';this.municipalSloganToInput.setAttribute('aria-label','Novo trecho do slogan');
     this.municipalFlagColorInput=document.createElement('input');this.municipalFlagColorInput.type='text';this.municipalFlagColorInput.maxLength=7;this.municipalFlagColorInput.placeholder='#RRGGBB';this.municipalFlagColorInput.setAttribute('aria-label','Cor hexadecimal para a bandeira municipal');
     this.municipalFlagTextInput=document.createElement('input');this.municipalFlagTextInput.type='text';this.municipalFlagTextInput.maxLength=48;this.municipalFlagTextInput.placeholder='Palavra ou frase curta…';this.municipalFlagTextInput.setAttribute('aria-label','Texto para a bandeira municipal');
-    this.mapSizeInput=document.createElement('input');this.mapSizeInput.type='number';this.mapSizeInput.min='128';this.mapSizeInput.max='1024';this.mapSizeInput.step='1';this.mapSizeInput.value=String(city.world.width||256);this.mapSizeInput.setAttribute('aria-label','Tamanho do próximo mapa');
+    this.mapSizeInput=document.createElement('input');this.mapSizeInput.type='number';this.mapSizeInput.min='128';this.mapSizeInput.max='1024';this.mapSizeInput.step='1';this.mapSizeInput.value=String(city.world.width||128);this.mapSizeInput.setAttribute('aria-label','Tamanho do próximo mapa');
     this.populationInput = document.createElement('input'); this.populationInput.type = 'number'; this.populationInput.min = '1'; this.populationInput.max = '2000'; this.populationInput.step = '1'; this.populationInput.value = String(city.initialPopulation ?? 512); this.populationInput.setAttribute('aria-label', 'Número de cidadãos da próxima cidade');
     this.filterInput=document.createElement('select');this.filterInput.setAttribute('aria-label','Filtrar registros');this.filterInput.addEventListener('change',()=>this.setFilter(this.filterInput.value));
     this.analyticsTypeInput=document.createElement('select');this.analyticsTypeInput.setAttribute('aria-label','Filtrar empresas por ramo');this.analyticsTypeInput.addEventListener('change',()=>{this.analyticsBusinessType=this.analyticsTypeInput.value;this.resetScroll();});

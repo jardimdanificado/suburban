@@ -1,7 +1,7 @@
 import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=palette-intensity-3x";
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
-import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-1';
+import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {streetSurfaceTextures} from './street_surface_textures.js?v=ground-realism-2';
 import {groundGrassSurface} from './ground_grass_geometry.js?v=natural-streets-2';
 import {terrainTransitionTriangles,sampleTerrainQuad} from './terrain_transition_geometry.js';
@@ -15,7 +15,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=boats-transport-4";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=boats-transport-18";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1-canvas-readback-1';
@@ -40,7 +40,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE
-} from "./world_gen.js?v=terrain-generation-reset-1";
+} from "./world_gen.js?v=terrain-generation-reset-2-map-default-128";
 import { globalWallCoords, resolveWallSkin, getEntitiesInViewport, getEntityById, getTileKey } from "./engine.js";
 
 // Optional simulation hooks are deliberately empty in the base framework.
@@ -5881,8 +5881,8 @@ export class RCT3DRenderer {
 
       if(e.properties.cityBuilding?.officeTenantOf)continue;
       if(e.properties.cityVehicle){
-        const v=e.properties.cityVehicle,h=v.altitude??1,length=v.good==='carrinho'?.95:v.good==='bicicleta_carga'?1:v.good==='patins'?.3:v.good==='bicicleta'?.72:.55,halfWidth=v.good==='carrinho'||v.good==='bicicleta_carga'?.4:.24,sin=Math.abs(Math.sin(v.angle||0)),cos=Math.abs(Math.cos(v.angle||0)),ex=sin*length+cos*halfWidth,ez=cos*length+sin*halfWidth;
-        const box=new THREE.Box3(new THREE.Vector3(e.x-ex,h,e.y-ez),new THREE.Vector3(e.x+ex,h+.95,e.y+ez)),hit=ray.intersectBox(box,new THREE.Vector3());
+        const v=e.properties.cityVehicle,h=v.altitude??1,length=v.boatClass?(v.pickLength||2)/2:(v.good==='carrinho'?.95:v.good==='bicicleta_carga'?1:v.good==='patins'?.3:v.good==='bicicleta'?.72:.55),halfWidth=v.boatClass?(v.pickWidth||.8)/2:(v.good==='carrinho'||v.good==='bicicleta_carga'?.4:.24),sin=Math.abs(Math.sin(v.angle||0)),cos=Math.abs(Math.cos(v.angle||0)),ex=sin*length+cos*halfWidth,ez=cos*length+sin*halfWidth;
+        const box=new THREE.Box3(new THREE.Vector3(e.x-ex,h,e.y-ez),new THREE.Vector3(e.x+ex,h+(v.pickHeight||.95),e.y+ez)),hit=ray.intersectBox(box,new THREE.Vector3());
         if(hit){const d=ray.origin.distanceTo(hit);if(d<closestDist){closestDist=d;bestEntId=e.id;this.selectedCityUnitId=null;}}continue;
       }
       if(e.properties.cityUrbanArt){

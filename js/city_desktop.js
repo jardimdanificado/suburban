@@ -1,7 +1,7 @@
 import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
-import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-3';
+import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-8';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
-import {CityUI,money} from './city_ui.js?v=regional-supply-3';
+import {CityUI,money} from './city_ui.js?v=regional-supply-8';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';

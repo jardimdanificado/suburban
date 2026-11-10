@@ -1,5 +1,5 @@
-import {FARM_TILES} from './world_gen.js?v=terrain-generation-reset-1';
-import { randomWorldSeed } from './world_settings.js?v=map-default-256-1';
+import {FARM_TILES} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
+import { randomWorldSeed } from './world_settings.js?v=map-default-128-1';
 import { roadFor, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
 // =============================================================================
 // Brutopolis - World & Environment System (Pure JS Engine)
@@ -25,7 +25,7 @@ import {
   MAP_PRESET_ARCHIPELAGO,
   world_gen_generate,
   world_gen_is_walkable
-} from "./world_gen.js?v=terrain-generation-reset-1";
+} from "./world_gen.js?v=terrain-generation-reset-2-map-default-128";
 
 const SIDEWALK_TERRAIN=new Set([TILE_FLOOR,TILE_HILL,TILE_SAND]);
 

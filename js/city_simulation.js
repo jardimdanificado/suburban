@@ -16,7 +16,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=ff2-speed-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=ff2-speed-1';
+import {CityVehicles} from './city_vehicles.js?v=harbor-boats-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
@@ -42,7 +42,7 @@ import {collectEconomicTaxes,recordEconomicIncome,economicPolicy} from './city_e
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { CityLighting } from './city_lighting.js';
-import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-1';
+import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
 
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=ff2-speed-2';
@@ -466,11 +466,22 @@ export class CitySimulation {
         shoreCandidates.push({door:{x,y},berth:water,distance});
       }
       shoreCandidates.sort((a,b)=>a.distance-b.distance);
-      const harbor=shoreCandidates.find(candidate=>this.findPath(hallDoor,candidate.door)!==null);
+      const {width,height}=this.world,total=width*height,shoreDistance=new Int32Array(total);shoreDistance.fill(-1);const shoreQueue=new Int32Array(total);let shoreHead=0,shoreTail=0;
+      const seedShoreSearch=(x,y,distance)=>{if(x<0||y<0||x>=width||y>=height||shoreDistance[y*width+x]>=0||!this.walkable(x,y))return;if(distance>0&&!canStep(this.world,hallX,hallY,x,y))return;shoreDistance[y*width+x]=distance;shoreQueue[shoreTail++]=y*width+x;};
+      const hallX=Math.floor(hallDoor.x),hallY=Math.floor(hallDoor.y);seedShoreSearch(hallX,hallY,0);
+      if(shoreTail===0)for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]])seedShoreSearch(hallX+dx,hallY+dy,1);
+      while(shoreHead<shoreTail){const index=shoreQueue[shoreHead++],x=index%width,y=Math.floor(index/width),nextDistance=shoreDistance[index]+1;for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;const next=ny*width+nx;if(shoreDistance[next]>=0||!this.walkable(nx,ny)||!canStep(this.world,x,y,nx,ny))continue;shoreDistance[next]=nextDistance;shoreQueue[shoreTail++]=next;}}
+      const reachable=candidate=>shoreDistance[candidate.door.y*width+candidate.door.x]>=0;
+      const nearestHarbor=shoreCandidates.find(reachable)||shoreCandidates.find(candidate=>this.findPath(hallDoor,candidate.door)!==null);
+      // Keep the waterfront beyond the dense town-hall block so its quay and
+      // moored fleet are not buried under the default city buildings.
+      const clearHarbor=shoreCandidates.find(candidate=>reachable(candidate)&&shoreDistance[candidate.door.y*width+candidate.door.x]>=20);
+      const harbor=clearHarbor||nearestHarbor;
       const portAnchor=harbor?.door||hallDoor,berth=harbor?.berth||null;
       this.worldPort.x=portAnchor.x;this.worldPort.y=portAnchor.y;this.worldPort.door={...portAnchor};
       this.worldPort.berth=berth?{...berth}:null;
     }
+    this.vehicles.initializeHarborFleet(this.worldPort);
     const arrivalTiles = [],{width,height}=this.world,limit=Math.min(width*height,Math.max(256,this.initialPopulation*2));
     // Place initial residents across reachable land instead of cycling through
     // a tiny 11×11 patch around the town hall. On crowded or coastal seeds the

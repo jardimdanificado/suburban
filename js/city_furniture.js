@@ -2,7 +2,7 @@ import {cultivateFarmTerrain} from './city_farm_ground.js';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {ROAD_TILES,tileAt,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
-import {TILE_SAND,TILE_WATER} from './world_gen.js?v=terrain-generation-reset-1';
+import {TILE_SAND,TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 const BEACH_LEISURE_OCCUPANCY=new WeakMap();
 const BEACH_TILE_INDEX=new WeakMap();
 const FAILED_LEISURE_ROUTES=new WeakMap();

@@ -7,7 +7,7 @@ import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {rentOffice,rentAvailableOffice,officeStartupCost,prepareOfficeSearch,officeSpaceDemand,setupOfficeTower,officeFloors,OFFICE_BUSINESSES,OFFICE_ONLY_TYPES,createMunicipalOffice} from './city_offices.js?v=office-investment-search-1';
 import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=daily-mayor-privatization-1';
-import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=terrain-generation-reset-1';
+import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
 import {outdoorCellReady,workCellReady} from './city_interiors.js?v=night-crowd-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
