@@ -7,6 +7,7 @@ import {reducedCadence} from './city_fast_forward.js';
 import {surfaceElevation,tileAt,ROAD_TILES,roadTravelCost,canStep,wearRoad,ROAD_RULES} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
+import {createSeaEdgeNavigation} from './sea_edge_navigation.js?v=sea-edge-routes-1';
 
 const GROUND_VEHICLE_SPECS={
   bicicleta:{label:'Bicicleta',speed:8,seats:2,cargo:36},
@@ -45,8 +46,21 @@ export class CityVehicles {
     const id=this.nextId++,position=city.worldPort.berth||city.worldPort.door,x=position.x+.5,y=position.y+.5,v={id,good:kind,boatClass:kind,modelId:model.id,manufacturerId:null,holderAccountId:null,ownerAccountId:ownerAccountId||city.worldPort.accountId,active:true,initial:true,scrapped:false,condition:100,color:BOAT_CLASSES[kind].color,distance:0,passengerIds:[],driverId:null,journey:null,status:'Atracado',createdAt:city.minute,pickLength:kind==='cargo'?5:kind==='ferry'?3.7:kind==='launch'?2.5:1.7,pickWidth:kind==='cargo'?2.2:kind==='ferry'?1.8:kind==='launch'?1.2:.75,pickHeight:kind==='cargo'?2.8:kind==='ferry'?2.1:kind==='launch'?1.8:1.3,angle:0};
     v.x=x;v.y=y;v.altitude=surfaceElevation(city.world,x,y);v.entity=city.createEntity({x,y,altitude:v.altitude,properties:{name:`${model.brand} · ${model.name}`,cityVehicle:v,render:{color:v.color}}});this.units.set(id,v);this.boatCount++;return v;
   }
+  ensureHarborEdgeRoute(port){
+    if(!port)return false;const city=this.city,world=city.world,navigation=createSeaEdgeNavigation(world);if(!navigation)return false;
+    const current=navigation.pathFrom(port.berth);if(current){port.edgeRoute=current;port.edgeRouteRevision=world.revision||0;return true;}
+    const origin=port.door||port,width=world.width,height=world.height,total=width*height,distance=new Int32Array(total),queue=new Int32Array(total);distance.fill(-1);let head=0,tail=0;
+    const seed=(x,y)=>{if(x<0||y<0||x>=width||y>=height||distance[y*width+x]>=0||!city.walkable(x,y))return;distance[y*width+x]=0;queue[tail++]=y*width+x;};
+    const sx=Math.floor(origin.x),sy=Math.floor(origin.y);seed(sx,sy);if(!tail)for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]])seed(sx+dx,sy+dy);
+    let harbor=null;
+    while(head<tail&&!harbor){const index=queue[head++],x=index%width,y=Math.floor(index/width);for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;if(world.getTile(nx,ny)===TILE_WATER&&navigation.reachable({x:nx,y:ny})){harbor={door:{x,y},berth:{x:nx,y:ny}};break;}}if(harbor)break;for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;const next=ny*width+nx;if(distance[next]>=0||!city.walkable(nx,ny)||!canStep(world,x,y,nx,ny))continue;distance[next]=distance[index]+1;queue[tail++]=next;}}
+    if(!harbor){port.edgeRoute=null;port.edgeRouteRevision=world.revision||0;return false;}
+    const changed=port.berth?.x!==harbor.berth.x||port.berth?.y!==harbor.berth.y;port.door=harbor.door;port.berth=harbor.berth;port.x=harbor.door.x;port.y=harbor.door.y;port.edgeRoute=navigation.pathFrom(harbor.berth);port.edgeRouteRevision=world.revision||0;
+    if(changed){const route=port.edgeRoute||[],offsets={canoe:0,launch:1,ferry:3,cargo:5};for(const vessel of this.units.values())if(vessel.boatClass&&(vessel.harborFleet||vessel.journey?.kind==='harbor-patrol')&&!vessel.driverId){delete vessel.waterRoute;delete vessel.waterRouteIndex;vessel.journey=null;vessel.harborFleet=true;vessel.status='Disponível no porto';const point=route[Math.min(offsets[vessel.boatClass]||0,route.length-1)];if(point){vessel.x=point.x;vessel.y=point.y;vessel.entity.x=point.x;vessel.entity.y=point.y;vessel.altitude=surfaceElevation(world,point.x,point.y);vessel.entity.altitude=vessel.altitude;}}}
+    return !!port.edgeRoute;
+  }
   initializeHarborFleet(port){
-    if(this.harborFleetInitialized||!port)return 0;
+    if(!port)return 0;this.ensureHarborEdgeRoute(port);if(this.harborFleetInitialized)return 0;
     if(!port.berth){const origin=port.door||port,best={distance:Infinity};for(let y=1;y<this.city.world.height-1;y++)for(let x=1;x<this.city.world.width-1;x++){if(!this.city.walkable(x,y))continue;for(const[dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(this.city.world.getTile(x+dx,y+dy)===TILE_WATER){const distance=(x-origin.x)**2+(y-origin.y)**2;if(distance<best.distance){best.distance=distance;best.door={x,y};best.berth={x:x+dx,y:y+dy};}}}if(best.berth){port.door=best.door;port.berth=best.berth;port.x=best.door.x;port.y=best.door.y;}}
     if(!port.berth)return 0;
     const city=this.city,start={x:Math.floor(port.berth.x),y:Math.floor(port.berth.y)},width=city.world.width,total=width*city.world.height,startIndex=start.y*width+start.x;
@@ -54,10 +68,10 @@ export class CityVehicles {
     this.harborFleetInitialized=true;
     const previous=new Int32Array(total),distance=new Int16Array(total),queue=new Int32Array(total);previous.fill(-1);distance.fill(-1);let head=0,tail=0;queue[tail++]=startIndex;distance[startIndex]=0;
     while(head<tail){const current=queue[head++],x=current%width,y=Math.floor(current/width);for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=city.world.width||ny>=city.world.height)continue;const next=ny*width+nx;if(distance[next]>=0||city.world.getTile(nx,ny)!==TILE_WATER)continue;distance[next]=distance[current]+1;previous[next]=current;queue[tail++]=next;}}
-    const fleet=[['canoe',1],['launch',2],['ferry',4],['cargo',6]];
-    for(const[kind,wantedDepth]of fleet){let target=-1,bestScore=Infinity;for(let i=1;i<tail;i++){const at=queue[i],depth=distance[at],score=Math.abs(depth-wantedDepth)*100-depth;if(score<bestScore){bestScore=score;target=at;}}if(target<0)break;
+    const fleet=[['canoe',0],['launch',1],['ferry',3],['cargo',5]];
+    for(const[kind,wantedDepth]of fleet){let target=-1,bestScore=Infinity;for(let i=0;i<tail;i++){const at=queue[i],depth=distance[at],score=Math.abs(depth-wantedDepth)*100-depth;if(score<bestScore){bestScore=score;target=at;}}if(target<0)break;
       const path=[];for(let at=target;at>=0;at=previous[at]){path.push({x:at%width+.5,y:Math.floor(at/width)+.5});if(at===startIndex)break;}path.reverse();
-      const v=this.createBoatVehicle(kind,port.accountId);if(!v)continue;v.x=path[0].x;v.y=path[0].y;v.entity.x=v.x;v.entity.y=v.y;v.altitude=surfaceElevation(city.world,v.x,v.y);v.entity.altitude=v.altitude;v.journey={kind:'harbor-patrol'};v.status='Navegando no porto';v.waterRoute=path;v.waterRouteIndex=Math.min(kind==='canoe'?0:1,path.length-1);v.waterRouteDirection=1;v.angle=Math.atan2(path[1]?.x-v.x||0,path[1]?.y-v.y||1);this.stats.harborFleet=(this.stats.harborFleet||0)+1;
+      const v=this.createBoatVehicle(kind,port.accountId);if(!v)continue;v.x=path.at(-1).x;v.y=path.at(-1).y;v.entity.x=v.x;v.entity.y=v.y;v.altitude=surfaceElevation(city.world,v.x,v.y);v.entity.altitude=v.altitude;v.journey=null;v.status='Disponível no porto';v.harborFleet=true;v.angle=0;this.stats.harborFleet=(this.stats.harborFleet||0)+1;
     }
     return this.stats.harborFleet||0;
   }
@@ -412,10 +426,11 @@ export class CityVehicles {
     }
   }
   update(dt){
+    const port=this.city.worldPort;if(port&&(port.edgeRouteRevision??-1)!==(this.city.world.revision||0))this.ensureHarborEdgeRoute(port);
     if(!this.harborFleetInitialized)this.initializeHarborFleet(this.city.worldPort);
     if(!this.activeCount&&!this.boatCount)return;const city=this.city;CARPOOL_CANDIDATE_INDEX.set(this,null);
     for(const v of this.units.values()){
-      if(v.boatClass&&v.active&&!v.scrapped){const route=v.waterRoute;if(route?.length>1){let remaining=Math.max(0,Math.min(120,dt))*BOAT_CLASSES[v.boatClass].speed,guard=0;while(remaining>0&&guard++<64){let next=v.waterRouteIndex+v.waterRouteDirection;if(next<0||next>=route.length){v.waterRouteDirection*=-1;next=v.waterRouteIndex+v.waterRouteDirection;}const point=route[next],dx=point.x-v.x,dy=point.y-v.y,len=Math.hypot(dx,dy);if(len<1e-5){v.waterRouteIndex=next;continue;}const travel=Math.min(len,remaining);v.x+=dx/len*travel;v.y+=dy/len*travel;v.angle=Math.atan2(dx,dy);v.distance+=travel;remaining-=travel;if(travel>=len-1e-5){v.x=point.x;v.y=point.y;v.waterRouteIndex=next;if(next===route.length-1||next===0)v.waterRouteDirection*=-1;}}v.altitude=surfaceElevation(city.world,v.x,v.y);if(v.entity){v.entity.x=v.x;v.entity.y=v.y;}v.status='Navegando no porto';}continue;}
+      if(v.boatClass&&v.active&&!v.scrapped){if(v.journey?.kind==='harbor-patrol'){delete v.waterRoute;delete v.waterRouteIndex;v.journey=null;v.status='Disponível no porto';}const route=v.waterRoute;if(route?.length>1){let remaining=Math.max(0,Math.min(120,dt))*BOAT_CLASSES[v.boatClass].speed,guard=0;while(remaining>0&&guard++<64){let next=v.waterRouteIndex+v.waterRouteDirection;if(next<0||next>=route.length){v.waterRouteDirection*=-1;next=v.waterRouteIndex+v.waterRouteDirection;}const point=route[next],dx=point.x-v.x,dy=point.y-v.y,len=Math.hypot(dx,dy);if(len<1e-5){v.waterRouteIndex=next;continue;}const travel=Math.min(len,remaining);v.x+=dx/len*travel;v.y+=dy/len*travel;v.angle=Math.atan2(dx,dy);v.distance+=travel;remaining-=travel;if(travel>=len-1e-5){v.x=point.x;v.y=point.y;v.waterRouteIndex=next;if(next===route.length-1||next===0)v.waterRouteDirection*=-1;}}v.altitude=surfaceElevation(city.world,v.x,v.y);if(v.entity){v.entity.x=v.x;v.entity.y=v.y;}v.status='Navegando no porto';}continue;}
       if(v.policeRecoveryOfficerId){
         const officer=city.society.citizen(v.policeRecoveryOfficerId),mission=officer?.policeRestitution;
         if(!officer||officer.entity.destroyed||officer.custody||officer.task!=='police-restitution'||mission?.vehicleId!==v.id||mission.phase!=='to-owner'){
@@ -455,7 +470,7 @@ export class CityVehicles {
   }
   syncBoatTravelers(){
     const city=this.city,live=new Set();
-    for(const person of city._movingCitizens||city.citizens){if(!person.boatClass||person.entity.destroyed)continue;let vessel=this.units.get(person.boatVehicleId);if(!vessel?.active||vessel.boatClass!==person.boatClass){vessel=this.createBoatVehicle(person.boatClass,city.worldPort.accountId);if(!vessel)continue;person.boatVehicleId=vessel.id;}live.add(vessel.id);vessel.transportCitizenId=person.id;vessel.driverId=person.id;vessel.journey={kind:'water-transit',citizenId:person.id};vessel.status=`Transportando ${person.entity.properties.name}`;vessel.x=person.entity.x;vessel.y=person.entity.y;const next=person.path?.[0];if(next){const dx=next.x-vessel.x,dy=next.y-vessel.y;if(dx||dy)vessel.angle=Math.atan2(dx,dy);}vessel.altitude=surfaceElevation(city.world,vessel.x,vessel.y);vessel.entity.x=vessel.x;vessel.entity.y=vessel.y;vessel.entity.altitude=vessel.altitude;}
+    for(const person of city._movingCitizens||city.citizens){if(!person.boatClass||person.entity.destroyed)continue;let vessel=this.units.get(person.boatVehicleId);if(!vessel?.active||vessel.boatClass!==person.boatClass){vessel=[...this.units.values()].find(candidate=>candidate.boatClass===person.boatClass&&candidate.active&&!candidate.scrapped&&!candidate.driverId&&!candidate.transportCitizenId&&!candidate.waterRoute);if(!vessel)vessel=this.createBoatVehicle(person.boatClass,city.worldPort.accountId);if(!vessel)continue;person.boatVehicleId=vessel.id;}delete vessel.waterRoute;delete vessel.waterRouteIndex;live.add(vessel.id);vessel.transportCitizenId=person.id;vessel.driverId=person.id;vessel.journey={kind:'water-transit',citizenId:person.id};vessel.status=`Transportando ${person.entity.properties.name}`;vessel.x=person.entity.x;vessel.y=person.entity.y;const next=person.path?.[0];if(next){const dx=next.x-vessel.x,dy=next.y-vessel.y;if(dx||dy)vessel.angle=Math.atan2(dx,dy);}vessel.altitude=surfaceElevation(city.world,vessel.x,vessel.y);vessel.entity.x=vessel.x;vessel.entity.y=vessel.y;vessel.entity.altitude=vessel.altitude;}
     for(const vessel of this.units.values())if(vessel.boatClass&&vessel.transportCitizenId!=null&&!live.has(vessel.id)){vessel.transportCitizenId=null;vessel.driverId=null;vessel.journey=null;vessel.status='Atracado após a viagem';}
   }
   removeCitizen(c,heir){

@@ -1,4 +1,4 @@
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-8';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-9';
 import { FF_SPEED, FF2_SPEED, FF3_SPEED, FF4_SPEED } from './simulation_time.js?v=ff3-ff4-steps-1';
 
 const graph = new CityStateGraph();

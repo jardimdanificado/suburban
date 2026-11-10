@@ -15,7 +15,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=boats-transport-18";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=boats-transport-20";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1-canvas-readback-1';
@@ -5869,6 +5869,7 @@ export class RCT3DRenderer {
     this.raycaster.setFromCamera({ x: ndcX, y: ndcY }, this.camera);
     const ray = this.raycaster.ray;
     this.selectedCityUnitId = null;
+    this.selectedWorldVessel = null;
 
     const map = (world && world.map) ? world.map : this.currentMap;
 
@@ -6011,6 +6012,9 @@ export class RCT3DRenderer {
       }
     }
 
+    let vesselHit=null,vesselDistance=Infinity;
+    for(const group of this.portVesselVisuals?.values?.()||[]){const selection=group.userData.worldVesselSelection;if(!group.visible||!selection)continue;group.updateWorldMatrix(true,true);const hit=this.raycaster.intersectObject(group,true).find(item=>!item.object.userData.worldVesselSelectionRing);if(hit&&hit.distance<vesselDistance){vesselDistance=hit.distance;vesselHit=selection;}}
+    if(vesselHit&&vesselDistance<closestDist){this.selectedWorldVessel=vesselHit;return -1;}
     if (bestEntId !== -1) return bestEntId;
     return -1;
   }

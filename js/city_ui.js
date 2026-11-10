@@ -1,7 +1,7 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-18';
+import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-20';
 import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
@@ -15,7 +15,7 @@ import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=fast-speeds-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
-import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
+import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=harbor-boats-2';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
@@ -50,7 +50,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-3';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-128-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-8';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-9';
 import { renderWorldManagement } from './city_world_ui.js';
 export const money = formatMoney;
 export const TABS = [
@@ -323,6 +323,7 @@ export class CityUI {
   detail(p) {
     if(this.selected?.properties?.cityUrbanArt)return this.artworkInspector(p,this.selected.properties.cityUrbanArt);
     if(this.selected?.properties?.cityPlant)return this.plantInspector(p,this.selected.properties.cityPlant);
+    if(this.selected?.properties?.worldVessel)return renderWorldVessel(this,p,this.selected.properties.worldVessel);
     if(this.selected?.properties.cityVehicle)return renderVehicle(this,p,this.selected.properties.cityVehicle);
     const c = this.selected?.properties.citizen, b = this.selected?.properties.cityBuilding;
     if (this.tab === 'people' && c && this.city.society.citizen(c.id)) return this.citizen(p, c);

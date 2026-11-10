@@ -1,7 +1,7 @@
 import {speedLabel} from './simulation_time.js?v=ff3-ff4-steps-1';
-import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-8';
+import {CityGlobalSearch} from './city_global_search.js?v=regional-supply-10';
 import {desktopMenus} from './city_desktop_menus.js?v=custom-history-filters-1';
-import {CityUI,money} from './city_ui.js?v=regional-supply-8';
+import {CityUI,money} from './city_ui.js?v=regional-supply-10';
 import {WindowManager} from './window_manager.js';
 import {MANAGEMENT_THEME as T,bevel} from './management_ui.js';
 import {tycoonIcon} from './tycoon_icons.js?v=favorite-window-icons-3';
@@ -150,6 +150,7 @@ export class CityDesktop {
   setSelection(entity,unitId=null){
     for(const window of this.manager.windows)window.state.selectedProjectId=null;
     if(!entity)this.lastSelected=null;
+    if(entity?.properties?.worldVessel){const selection=entity.properties.worldVessel,spec=selection.vessel?.classId||'barco',state=this.create(`world-vessel:${selection.key}`,'transport',{title:`Embarcação ${spec} · em trânsito`,entity,kind:'dossier'});state.worldVesselSelection=selection;this.lastSelected=entity;return;}
     if(entity?.properties?.cityPlant){const state=this.create(`plant:${entity.id}`,'city',{title:entity.properties.name,entity,kind:'dossier'});state.detailTab='botany';state.resetScroll();this.lastSelected=entity;return;}
     if(!entity)return;const citizen=entity.properties?.citizen,building=entity.properties?.cityBuilding,artwork=entity.properties?.cityUrbanArt;if(!citizen&&!building&&!entity.properties?.cityVehicle&&!artwork)return;
     if(entity.properties.cityVehicle){const state=this.create(`vehicle:${entity.id}`,'transport',{title:entity.properties.name,entity,kind:'dossier'});this.lastSelected=entity;return;}

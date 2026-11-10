@@ -16,7 +16,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=ff2-speed-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=harbor-boats-1';
+import {CityVehicles} from './city_vehicles.js?v=harbor-boats-2';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
@@ -57,6 +57,7 @@ import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_econ
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-3';
+import {createSeaEdgeNavigation} from './sea_edge_navigation.js?v=sea-edge-routes-1';
 
 const ff2ProductionWaits = new WeakMap();
 
@@ -457,14 +458,13 @@ export class CitySimulation {
     generateSettlement(this);
     const hallDoor=this.buildings.find(building=>building.type==='townhall')?.door;
     if(hallDoor){
-      const shoreCandidates=[];
+      const shoreCandidates=[],seaNavigation=createSeaEdgeNavigation(this.world);
       for(let y=0;y<this.world.height;y++)for(let x=0;x<this.world.width;x++){
         if(!this.walkable(x,y))continue;
-        const water=[{x:x+1,y},{x:x-1,y},{x,y:y+1},{x,y:y-1}].find(point=>this.world.getTile(point.x,point.y)===TILE_WATER);
-        if(!water)continue;
         const distance=(x-hallDoor.x)**2+(y-hallDoor.y)**2;
-        shoreCandidates.push({door:{x,y},berth:water,distance});
+        for(const water of [{x:x+1,y},{x:x-1,y},{x,y:y+1},{x,y:y-1}])if(this.world.getTile(water.x,water.y)===TILE_WATER&&seaNavigation?.reachable(water))shoreCandidates.push({door:{x,y},berth:water,distance});
       }
+      if(!shoreCandidates.length)for(let y=0;y<this.world.height;y++)for(let x=0;x<this.world.width;x++){if(!this.walkable(x,y))continue;const water=[{x:x+1,y},{x:x-1,y},{x,y:y+1},{x,y:y-1}].find(point=>this.world.getTile(point.x,point.y)===TILE_WATER);if(water)shoreCandidates.push({door:{x,y},berth:water,distance:(x-hallDoor.x)**2+(y-hallDoor.y)**2});}
       shoreCandidates.sort((a,b)=>a.distance-b.distance);
       const {width,height}=this.world,total=width*height,shoreDistance=new Int32Array(total);shoreDistance.fill(-1);const shoreQueue=new Int32Array(total);let shoreHead=0,shoreTail=0;
       const seedShoreSearch=(x,y,distance)=>{if(x<0||y<0||x>=width||y>=height||shoreDistance[y*width+x]>=0||!this.walkable(x,y))return;if(distance>0&&!canStep(this.world,hallX,hallY,x,y))return;shoreDistance[y*width+x]=distance;shoreQueue[shoreTail++]=y*width+x;};
@@ -480,6 +480,8 @@ export class CitySimulation {
       const portAnchor=harbor?.door||hallDoor,berth=harbor?.berth||null;
       this.worldPort.x=portAnchor.x;this.worldPort.y=portAnchor.y;this.worldPort.door={...portAnchor};
       this.worldPort.berth=berth?{...berth}:null;
+      this.worldPort.edgeRoute=berth?seaNavigation?.pathFrom(berth)||null:null;
+      this.worldPort.edgeRouteRevision=this.world.revision||0;
     }
     this.vehicles.initializeHarborFleet(this.worldPort);
     const arrivalTiles = [],{width,height}=this.world,limit=Math.min(width*height,Math.max(256,this.initialPopulation*2));

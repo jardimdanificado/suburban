@@ -2,7 +2,7 @@ import {interventionButton,interventionButtons} from './city_context_actions.js'
 import {contextActions} from './city_context_actions.js';
 import {colorName} from './city_colors.js';
 import {renderVehiclePaint} from './city_paint_ui.js';
-import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-1';
+import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-2';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const title=v=>VEHICLE_SPECS[v.good]?.label||v.good;
@@ -37,6 +37,13 @@ export function renderVehicle(ui,p,v){
   if(!v.maintenanceHistory?.length)p.note('Nenhum reparo registrado.');
   if(v.parkingHistory?.length){p.heading('ESTACIONAMENTOS RECENTES');p.table([{label:'Quando'},{label:'Local',weight:2},{label:'Usuário',weight:2}],v.parkingHistory.slice().reverse().map(row=>({cells:[stamp(row.minute),row.rackName||'Fora de bicicletário',city.accountName(`citizen:${row.citizenId}`)],click:()=>ui.camera(row.x,row.y)})));}
   p.button('EVENTOS DESTE EQUIPAMENTO',()=>ui.openHistory(`vehicleId:${v.id}`));
+}
+export function renderWorldVessel(ui,p,selection){
+ const {vessel,transfer,route,phase}=selection,world=ui.worldCoordinator||ui.host?.worldCoordinator,cities=world?.cities,originId=route?.originCityId||transfer?.originCityId,destinationId=route?.destinationCityId||transfer?.destinationCityId,origin=cities?.get(originId)?.metadata.name||originId||'—',destination=cities?.get(destinationId)?.metadata.name||destinationId||'—',manifest=transfer?.payload,spec=VEHICLE_SPECS[vessel.classId];
+ p.heading(`${spec?.label||'Embarcação'} · ${vessel.id}`);p.status('EM TRÂNSITO',phase||vessel.status||'Navegando',C.cyan);
+ p.metrics([['CAPACIDADE',spec?.seats??vessel.capacity],['ESTADO',vessel.status||'Navegando']]);p.heading('ROTA MARÍTIMA');p.record(origin,`Origem · ${originId||'—'}`,()=>ui.worldActions?.selectCity?.(originId));p.record(destination,`Destino · ${destinationId||'—'}`,()=>ui.worldActions?.selectCity?.(destinationId));
+ if(manifest?.kind==='goods')p.kv('Carga',`${manifest.quantity} × ${manifest.good}`);else if(manifest?.kind==='citizen'){const count=manifest.package?.version===2?manifest.package.members?.length||0:1;p.kv('Passageiros',`${count} ${count===1?'cidadão':'cidadãos'}`);if(manifest.reason)p.kv('Motivo',manifest.reason);}else p.kv('Carga','Retorno sem carga registrada');
+ if(transfer)p.kv('Viagem',transfer.id);p.note('A embarcação acompanha a travessia entre o porto e a borda de cada mapa.');
 }
 export function renderParking(ui,p){
  const city=ui.city,system=city.vehicles,report=system.parkingReport();p.heading('BICICLETÁRIOS · BIKES E PATINETES');p.metrics([['VAGAS',report.capacity],['OCUPADAS',report.occupied],['RESERVADAS',report.reserved],['FORA DOS BICICLETÁRIOS',report.outside]]);
