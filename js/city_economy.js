@@ -1,3 +1,4 @@
+import {WATERFRONT_BUSINESSES} from './waterfront_businesses.js';
 import {economicPolicy} from './city_economic_policies.js';
 import {reducedCadence} from './city_fast_forward.js';
 import {SUBSTANCE_CROPS,SUBSTANCES,SUBSTANCE_CONTROLLED_GOODS,ALCOHOL_DRINKS} from './city_substance_catalog.js';
@@ -379,6 +380,7 @@ export class CityEconomy {
       if(type==='composting')continue;
       if(type==='bar'){const count=businessCounts.get(type)||0;items.push({type,crop:null,score:count?0:activeAdults>=24?Math.min(150,90+activeAdults*.2):0,required:activeAdults>=24?1:0,supply:count,stock:stockByGood.get('cerveja')||0,reason:'Ponto de encontro para conversar, relaxar e consumir bebidas de marcas locais.'});continue;}
       if(['cycle_shop','sports_shop','cycle_workshop','bicycle_rental'].includes(type)){const count=businessCounts.get(type)||0,target=type==='bicycle_rental'?Math.max(1,Math.ceil(population/400)):Math.max(1,Math.ceil(population/300));items.push({type,crop:null,score:count<target?110:0,required:target,supply:count,stock:0,reason:'Mobilidade individual: bicicletas, patins, lojas, aluguel e reparos.'});continue;}
+      if(type==='boat_workshop'){const damaged=[...this.city.vehicles.units.values()].filter(v=>v.boatClass&&v.active&&!v.scrapped&&v.condition<85).length,count=businessCounts.get(type)||0;items.push({type,crop:null,score:damaged&&!count?120:0,required:damaged?1:0,supply:count,stock:0,reason:'Manutenção das embarcações avariadas da cidade.'});continue;}
       if(type==='boat_shop'){const count=businessCounts.get(type)||0;items.push({type,crop:null,score:count?0:125,required:1,supply:count,stock:['canoe','launch','ferry','cargo'].reduce((n,g)=>n+(stockByGood.get(g)||0),0),reason:'Venda de embarcações produzidas nos estaleiros locais.'});continue;}
       if(type==='domestic_trader'||type==='import_exporter'){const firms=businessesByType.get(type)||[],activeTrade=type==='domestic_trader'?businesses.length>=5:(this.externalTrade?.imports||0)+(this.externalTrade?.sales||0)>0||Object.values(this.market||{}).some(row=>row.demand>0);items.push({type,crop:null,score:firms.length?0:activeTrade?115:0,required:activeTrade?1:0,supply:firms.length,stock:0,reason:spec.impact});continue;}
       if(type==='research_institute'){const demand=this.city.politics.getResearch().demand();items.push({type,crop:null,...demand,stock:0,reason:spec.impact});continue;}
@@ -417,6 +419,7 @@ export class CityEconomy {
     const city = this.city, center = city.world.spawnCenter;
     const width = type === 'farm' ? 10 : 3, depth = type === 'farm' ? 10 : 3, floors = type === 'farm' ? 1 : 2;
     const candidates = [];
+    if(WATERFRONT_BUSINESSES.has(type)){for(let y=1;y<city.world.height-depth;y++)for(let x=1;x<city.world.width-width;x++){if(!inspectBuildingSite(city,x,y,width,depth,{type}).error)candidates.push({x,y,width,depth,floors});}candidates.sort((a,b)=>Math.hypot(a.x-center.x,a.y-center.y)-Math.hypot(b.x-center.x,b.y-center.y));return candidates.slice(0,120);}
     for (let radius = 8; radius <= 48; radius += 3) {
       for (let i = 0; i < 24; i++) {
         const angle = i * Math.PI / 12 + (city.initialSeed % 7) * .1;
@@ -876,6 +879,7 @@ export class CityEconomy {
     if(this.city.substances&&!this.city.substances.canProduce(b))return false;
     if(b.type==='tobacco_workshop'){const cannabis=this.city.substances?.law('cannabis')?.regime!=='prohibited'&&(b.inventory.flor_cannabis||0)>=2&&((b.inventory.cannabis||0)<(b.inventory.tabaco||0)||b.inventory.folha_tabaco<6);spec={...spec,inputs:cannabis?{flor_cannabis:2,papel:1}:{folha_tabaco:6,papel:1},outputs:cannabis?{cannabis:2}:{tabaco:12}};if(this.city.substances?.law(cannabis?'cannabis':'tabaco')?.regime==='prohibited')return false;}
     if(['cycle_assembler','skate_workshop','shipyard'].includes(b.type))return this.city.vehicles.assemblyWork(b,c);
+    if(b.type==='boat_workshop')return this.city.vehicles.boatWorkshopWork(b,c);
     if(b.type==='cycle_workshop')return this.city.vehicles.garageWork(b,c);
     if(b.type==='cycle_shop')return ['bicicleta','bicicleta_carga','patins','skate'].some(g=>b.inventory[g]>0);
     if(b.type==='boat_shop')return ['canoe','launch','ferry','cargo'].some(g=>b.inventory[g]>0);

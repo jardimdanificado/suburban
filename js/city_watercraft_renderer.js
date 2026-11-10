@@ -1,3 +1,4 @@
+import {trackShadowTransform} from './dynamic_shadow_updates.js';
 import {mooringPosition} from './harbor_berths.js';
 import {BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-4';
 import {surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -13,7 +14,7 @@ function nearestShore(world,origin){
   }
   return best;
 }
-function disposeGroup(renderer,group){renderer.scene.remove(group);group.traverse(object=>{object.geometry?.dispose();if(Array.isArray(object.material))object.material.forEach(material=>material.dispose());else object.material?.dispose();});}
+function disposeGroup(renderer,group){renderer.watercraftShadowDirty=true;renderer.scene.remove(group);group.traverse(object=>{object.geometry?.dispose();if(Array.isArray(object.material))object.material.forEach(material=>material.dispose());else object.material?.dispose();});}
 function makeDock(THREE,port){
   const group=new THREE.Group(),wood=new THREE.MeshLambertMaterial({color:dockWood}),dark=new THREE.MeshLambertMaterial({color:0x493a2b}),rope=new THREE.MeshLambertMaterial({color:ropeColor});
   const door=port.door||{x:port.x,y:port.y},berth=port.berth||{x:door.x,y:door.y+1},dx=berth.x-door.x,dy=berth.y-door.y;
@@ -95,6 +96,7 @@ export function syncCityWatercraft(renderer,THREE,city,world){
   if(!city)return;
   renderer.worldPortVisuals??=new Map();const livePorts=new Set();
   const port=city.worldPort,origin=port?.door||{x:port?.x??world.spawnCenter?.x??0,y:port?.y??world.spawnCenter?.y??0},shore=port?.berth?{door:origin,berth:port.berth}:nearestShore(world,origin),effectivePort=port&&shore?{...port,door:shore.door,berth:shore.berth}:port,portKey=port?`${port.cityId||city.id||''}:${port.id}`:null;if(port?.active&&effectivePort){livePorts.add(portKey);let dock=renderer.worldPortVisuals.get(portKey);if(!dock){dock=makeDock(THREE,{...effectivePort,world});renderer.worldPortVisuals.set(portKey,dock);renderer.scene.add(dock);}dock.visible=true;}
+  for(const business of city.buildings||[]){if(!business.active||business.entity.destroyed||!business.waterfront)continue;const key=`${port?.cityId}:business:${business.id}`;livePorts.add(key);let dock=renderer.worldPortVisuals.get(key);if(!dock){dock=makeDock(THREE,{door:business.waterfront.land,berth:business.waterfront.berth,world});renderer.worldPortVisuals.set(key,dock);renderer.scene.add(dock);}dock.visible=true;}
   for(const[id,group]of renderer.worldPortVisuals)if(!livePorts.has(id)){disposeGroup(renderer,group);renderer.worldPortVisuals.delete(id);}
   renderer.portVesselVisuals??=new Map();const coordinator=renderer.worldCoordinator,portId=port?.cityId?`${port.cityId}:port`:null,portPosition=effectivePort?.berth||effectivePort?.door,moored=portId?[...(coordinator?.vessels?.values?.()||[])].filter(vessel=>vessel.currentPortId===portId&&['idle','reserved'].includes(vessel.status)&&!(vessel.homeCityId===port?.cityId&&city.vehicles?.units?.get(vessel.localVehicleId)?.driverId)):[],docked=moored,liveVessels=new Set();
   const door=effectivePort?.door||port||{x:0,y:0},berth=effectivePort?.berth||{x:door.x,y:door.y+1},dx=berth.x-door.x,dy=berth.y-door.y,length=Math.hypot(dx,dy)||1,awayX=dx/length,awayY=dy/length,sideX=-awayY,sideY=awayX;
@@ -140,4 +142,7 @@ export function syncCityWatercraft(renderer,THREE,city,world){
     seatedPeople(group,THREE,[person]);const next=person.path?.[0],dx=next?next.x-person.entity.x:0,dy=next?next.y-person.entity.y:0;group.position.set(person.entity.x,boatSurfaceY(renderer,world,person.entity.x,person.entity.y,group),person.entity.y);group.visible=!Number.isFinite(renderer.renderedMinTx)||person.entity.x>=renderer.renderedMinTx-3&&person.entity.x<=renderer.renderedMaxTx+4&&person.entity.y>=renderer.renderedMinTy-3&&person.entity.y<=renderer.renderedMaxTy+4;if(dx||dy)group.rotation.y=Math.atan2(dx,dy);
   }
   for(const[id,group]of renderer.boatCitizenVisuals)if(!live.has(id)){disposeGroup(renderer,group);renderer.boatCitizenVisuals.delete(id);}
+  for(const group of renderer.portVesselVisuals.values())trackShadowTransform(renderer,group);
+  for(const group of renderer.boatCitizenVisuals.values())trackShadowTransform(renderer,group);
+
 }

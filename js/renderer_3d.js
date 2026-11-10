@@ -9047,8 +9047,8 @@ export class RCT3DRenderer {
     // require a dozen frames between passes on a slow device; a substantial
     // camera move still refreshes the map immediately.
     const shadowCameraMoved=!Number.isFinite(this._lastShadowRefreshCamX)||shadowCameraDx*shadowCameraDx+shadowCameraDy*shadowCameraDy>=9;
-    if(this.shadowsEnabled&&(shadowCameraMoved||shadowNow-this._lastShadowRefreshAt>=1000&&this._shadowFramesSinceRefresh>=12)){
-      this.renderer.shadowMap.needsUpdate=true;this._lastShadowRefreshAt=shadowNow;this._shadowFramesSinceRefresh=0;this._lastShadowRefreshCamX=this.camX;this._lastShadowRefreshCamY=this.camY;
+    if(this.shadowsEnabled&&(this.watercraftShadowDirty||shadowCameraMoved||shadowNow-this._lastShadowRefreshAt>=1000&&this._shadowFramesSinceRefresh>=12)){
+      this.renderer.shadowMap.needsUpdate=true;this.watercraftShadowDirty=false;this._lastShadowRefreshAt=shadowNow;this._shadowFramesSinceRefresh=0;this._lastShadowRefreshCamX=this.camX;this._lastShadowRefreshCamY=this.camY;
     }
     const dofOpt=this.graphicOptions?.dofStrength||"HIGH";
     const dofRequested=['LOW','MED','HIGH'].includes(dofOpt);

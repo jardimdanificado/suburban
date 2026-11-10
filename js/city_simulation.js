@@ -1,3 +1,4 @@
+import {WATERFRONT_BUSINESSES,waterfrontBerth} from './waterfront_businesses.js';
 import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js?v=ff2-speed-1';
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {beginActivitySearch,endActivitySearch,invalidateActivitySearch} from './city_activity_search.js';
@@ -614,6 +615,7 @@ export class CitySimulation {
       for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) if(xx!==entryX||yy!==entryY)this.occupied.add(key(xx, yy));
       this.obstacleRevision=(this.obstacleRevision||0)+1;
     }
+    if(WATERFRONT_BUSINESSES.has(type))b.waterfront=waterfrontBerth(this.world,x,y,width,depth);
     this.buildings.push(b);
     this.buildingsById.set(b.id, b);
     this.structureRevision++;
@@ -1150,7 +1152,7 @@ export class CitySimulation {
       if(!productive&&(c.path.length||c.indoorLocation?.path?.length||c.indoorLocation?.exiting))return;
       if(!productive&&b.type!=='farm'&&b.type!=='forestry'&&Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)>30){this.furniture.waitForInputs(c,b,'Aguardando matéria-prima ou serviço');return;}
       if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
-      c.action = b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Trabalhando na própria empresa sem salário · ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
+      c.action = b.type==='boat_workshop'&&c.mechanicJob?'Reparando embarcação atracada na oficina':b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Trabalhando na própria empresa sem salário · ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
       if (Math.min(n.food, n.water, n.energy, n.toilet, n.hygiene, n.health) < 22) c.task = null;
       return;
     }

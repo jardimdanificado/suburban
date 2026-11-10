@@ -28,7 +28,7 @@ export class WorldTradeService {
     for(const session of this.world.cities.values()){
       const city=session.city;
       for(const vehicle of city.vehicles?.units?.values?.()||[]){
-        if(!vehicle.boatClass||!vehicle.active||vehicle.scrapped||vehicle.driverId||vehicle.condition<=15)continue;
+        if(!vehicle.boatClass||!vehicle.active||vehicle.scrapped||vehicle.driverId||vehicle.mechanicId||vehicle.condition<=15)continue;
         const boatPosition=vehicle.entity||vehicle,harbour=city.worldPort?.berth||city.worldPort?.door||city.worldPort;
         if(!Number.isFinite(boatPosition.x)||!Number.isFinite(boatPosition.y)||!harbour||Math.hypot(boatPosition.x-harbour.x,boatPosition.y-harbour.y)>24)continue;
         const account=city.accounts.get(vehicle.ownerAccountId),business=city.economy.businesses.find(item=>item.accountId===vehicle.ownerAccountId&&item.type==='carrier'&&item.active&&!item.entity.destroyed);

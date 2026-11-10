@@ -1,3 +1,4 @@
+import {WATERFRONT_BUSINESSES,waterfrontBerth} from './waterfront_businesses.js';
 import {baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 import {businessFloors} from './city_business_heights.js';
@@ -121,6 +122,7 @@ export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,r
 }
 
 export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, type = null, rotation = 0 } = {}) {
+  if(WATERFRONT_BUSINESSES.has(type)&&!waterfrontBerth(city.world,x,y,width,depth))return {error:'A loja ou oficina de barcos precisa ficar na borda da água, com acesso direto para atracação.'};
   if (city.development?.overlaps(x, y, width, depth, plotId)) return { error: 'Este espaço já pertence a um terreno cadastrado.' };
   const { world, occupied } = city;
   const quarry = type === 'quarry' || type === 'iron_mine' || type === 'bauxite_mine';
