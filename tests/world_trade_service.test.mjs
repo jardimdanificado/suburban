@@ -28,12 +28,12 @@ function tradeWorld(){
 test('world trade reserves stock and payment, then delivers goods and settles money at arrival',async()=>{
   const {world,service,origin,destination}=tradeWorld();
   const trip=await service.schedule({id:'trade-1',originCityId:'origin',destinationCityId:'destination',sellerBuildingId:1,destinationBuildingId:2,good:'pao',quantity:5,unitPrice:100,departureMinute:1});
-  assert.equal(trip.status,'scheduled');assert.equal(trip.payload.freightAmount,50);assert.equal(trip.payload.amount,550);assert.equal(origin.building.inventory.pao,15);assert.equal(origin.city.worldPort.inventory.pao,5);assert.equal(destination.city.accounts.get('buyer').balance,4450);
+  assert.equal(trip.status,'scheduled');assert.equal(trip.payload.freightAmount,173);assert.equal(trip.payload.amount,673);assert.equal(origin.building.inventory.pao,15);assert.equal(origin.city.worldPort.inventory.pao,5);assert.equal(destination.city.accounts.get('buyer').balance,4327);
   world.reportCityMinute('origin',1);world.reportCityMinute('destination',1);await world.flushTransfers();
   assert.equal(world.transfers.get('trade-1').status,'in-transit');assert.equal(world.vessels.get('ferry').status,'at-sea');assert.equal(origin.city.worldPort.inventory.pao,0);
   world.reportCityMinute('origin',181);world.reportCityMinute('destination',181);await world.flushTransfers();
   assert.equal(world.transfers.get('trade-1').status,'delivered');assert.equal(world.vessels.get('ferry').status,'returning');
-  assert.equal(destination.building.inventory.pao,5);assert.equal(origin.city.accounts.get('exporter').balance,500);assert.equal(origin.city.accounts.get('world-fleet').balance,50);assert.equal(destination.city.accounts.get('buyer').balance,4450);
+  assert.equal(destination.building.inventory.pao,5);assert.equal(origin.city.accounts.get('exporter').balance,500);assert.equal(origin.city.accounts.get('world-fleet').balance,173);assert.equal(destination.city.accounts.get('buyer').balance,4327);
   assert.equal(origin.city.worldPort.reservations['trade-1'].status,'delivered');assert.equal(destination.city.worldPort.payments['trade-1'].status,'settled');
 });
 
@@ -94,4 +94,36 @@ test('freight cannot depart without an actual available navigator',async()=>{
   await world.advanceTo(1,world.transferHandlers);
   assert.equal(world.transfers.get('no-pilot').status,'scheduled');
   assert.equal(origin.city.worldPort.reservations['no-pilot'].status,'reserved');
+});
+
+test('consolidated shipments share one boat and a single trip cost',async()=>{
+ const {world,service,origin,destination}=tradeWorld(),route=world.routes.get('route:origin>destination'),vessel=world.vessels.get('ferry');
+ const offer={seller:origin.building,buyer:destination.building,good:'pao',quantity:5,unitPrice:100};
+ const trip=await service.scheduleBatch({id:'batch',route,vessel,offers:[offer,{...offer}],minute:0});
+ assert.equal(trip.payload.quantity,10);assert.equal(trip.payload.shipments.length,2);
+ assert(trip.payload.freightAmount<2*service.freightQuote(route,vessel,5));
+ await world.advanceTo(trip.departureMinute,world.transferHandlers);await world.advanceTo(trip.arrivalMinute,world.transferHandlers);
+ assert.equal(destination.building.inventory.pao,10);assert.equal(origin.building.inventory.pao,10);assert.equal(trip.status,'delivered');
+});
+test('municipal freight waits for its consolidation deadline before sending a partial load',async()=>{
+ const {world,service,origin,destination}=tradeWorld(),route=world.routes.get('route:origin>destination');
+ service.findRegionalTradeCandidate=(_route,excluded=new Set(),offers=new Set())=>excluded.has('pao')||offers.size?null:{route,origin,destination,seller:origin.building,buyer:destination.building,good:'pao',quantity:5,unitPrice:100};
+ assert.equal(await service.processRegionalTradeNow(0),0);assert.equal(world.transfers.size,0);
+ assert.equal(await service.processRegionalTradeNow(45),0);
+ assert.equal(await service.processRegionalTradeNow(60),1);assert.equal(world.transfers.size,1);
+});
+test('a fuller boat has a lower freight price per unit',()=>{
+ const {service,world}=tradeWorld(),route=world.routes.get('route:origin>destination'),boat=world.vessels.get('ferry');
+ assert(service.freightQuote(route,boat,40)/40<service.freightQuote(route,boat,5)/5);
+});
+
+test('a full municipal load leaves without waiting for the deadline',async()=>{
+ const {world,service,origin,destination}=tradeWorld(),route=world.routes.get('route:origin>destination');origin.building.inventory.pao=40;
+ service.findRegionalTradeCandidate=(_route,excluded=new Set(),offers=new Set())=>excluded.has('pao')||offers.size?null:{route,origin,destination,seller:origin.building,buyer:destination.building,good:'pao',quantity:40,unitPrice:100};
+ assert.equal(await service.processRegionalTradeNow(0),1);assert.equal([...world.transfers.values()][0].payload.quantity,40);
+});
+test('cancelling a consolidated voyage refunds every buyer and restores every shipment',async()=>{
+ const {world,service,origin,destination}=tradeWorld(),route=world.routes.get('route:origin>destination'),vessel=world.vessels.get('ferry'),offer={seller:origin.building,buyer:destination.building,good:'pao',quantity:5,unitPrice:100};
+ await service.scheduleBatch({id:'cancel-batch',route,vessel,offers:[offer,{...offer}],minute:0});
+ assert(await service.cancel('cancel-batch'));assert.equal(origin.building.inventory.pao,20);assert.equal(destination.city.accounts.get('buyer').balance,5000);
 });

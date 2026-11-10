@@ -143,3 +143,21 @@ test('only the selected session receives detailed observation and summaries pers
   assert.equal(restored.summaries.get('a').population,12);assert.equal(restored.summaries.get('a').averageHappiness,78);
   assert.equal(restored.updateCitySummary('a',{minute:.25,population:0}),false);
 });
+
+test('two boats cannot reserve the same berth at the same minute',()=>{
+ const world=new WorldCoordinator();world.registerCity('a',session());world.registerCity('b',session());
+ world.connectPorts({id:'dock-route',originPortId:'a:port',destinationPortId:'b:port',travelMinutes:10,capacity:10});
+ world.addVessel({id:'one',capacity:10});world.addVessel({id:'two',capacity:10});
+ const first=world.scheduleVoyage({id:'dock-one',routeId:'dock-route',departureMinute:1,manifest:{kind:'goods',quantity:2}});
+ const second=world.scheduleVoyage({id:'dock-two',routeId:'dock-route',departureMinute:1,manifest:{kind:'goods',quantity:2}});
+ assert(second.departureMinute>first.departureMinute);assert(second.arrivalMinute>first.arrivalMinute);
+});
+
+test('a failed unloading keeps the berth occupied until that boat finishes',async()=>{
+ let blocked=true;const delivered=[],world=new WorldCoordinator({transferHandlers:{depart:()=>{},deliver:trip=>{if(trip.id==='blocked'&&blocked)throw Error('storage full');delivered.push(trip.id);}}});
+ world.registerCity('a',session());world.registerCity('b',session());world.connectPorts({id:'queue',originPortId:'a:port',destinationPortId:'b:port',travelMinutes:10,capacity:10});world.addVessel({id:'first',capacity:10});world.addVessel({id:'second',capacity:10});
+ world.scheduleVoyage({id:'blocked',routeId:'queue',departureMinute:1,manifest:{kind:'goods',quantity:1}});world.scheduleVoyage({id:'waiting',routeId:'queue',departureMinute:1,manifest:{kind:'goods',quantity:1}});
+ await world.advanceTo(1);await world.advanceTo(2);await world.advanceTo(12);
+ assert.equal(world.ports.get('b:port').dockedVesselId,'first');assert.deepEqual(delivered,[]);
+ blocked=false;await world.advanceTo(13);assert.deepEqual(delivered,['blocked','waiting']);assert.equal(world.ports.get('b:port').dockedVesselId,null);
+});

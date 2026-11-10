@@ -248,6 +248,14 @@ export class CitySimulation {
     }
     return true;
   }
+  approachWorldBoat(boatId,citizenId){
+    const boat=this.vehicles.units.get(boatId),person=this.society.citizen(citizenId);if(!boat||!person)return false;
+    if(Math.hypot(person.entity.x-boat.x,person.entity.y-boat.y)<=2)return true;
+    const targets=[];for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const x=Math.floor(boat.x)+dx,y=Math.floor(boat.y)+dy;if(this.walkable(x,y)&&Math.hypot(x+.5-boat.x,y+.5-boat.y)<=2)targets.push({x:x+.5,y:y+.5});}
+    targets.sort((a,b)=>Math.hypot(a.x-person.entity.x,a.y-person.entity.y)-Math.hypot(b.x-person.entity.x,b.y-person.entity.y));
+    for(const target of targets){const path=this.findPath(person.entity,target,{allowBoats:false});if(path){person.path=path;person.task='boat-pilot-boarding';person.action='Indo embarcar como piloto';break;}}
+    return false;
+  }
   setWorldBoatAssigned(vehicleId,reserved){const boat=this.vehicles.units.get(vehicleId);if(!boat?.boatClass||reserved&&boat.driverId)return false;boat.worldFleetReserved=!!reserved;return true;}
   reserveWorldExport(transferId,buildingId,good,quantity,directToPort=false){
     if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(quantity)||quantity<1||!Object.hasOwn(this.worldPort.inventory,good))return false;

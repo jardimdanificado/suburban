@@ -1,3 +1,4 @@
+import {mooringPosition} from './harbor_berths.js';
 import {BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-4';
 import {surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -95,23 +96,29 @@ export function syncCityWatercraft(renderer,THREE,city,world){
   renderer.worldPortVisuals??=new Map();const livePorts=new Set();
   const port=city.worldPort,origin=port?.door||{x:port?.x??world.spawnCenter?.x??0,y:port?.y??world.spawnCenter?.y??0},shore=port?.berth?{door:origin,berth:port.berth}:nearestShore(world,origin),effectivePort=port&&shore?{...port,door:shore.door,berth:shore.berth}:port,portKey=port?`${port.cityId||city.id||''}:${port.id}`:null;if(port?.active&&effectivePort){livePorts.add(portKey);let dock=renderer.worldPortVisuals.get(portKey);if(!dock){dock=makeDock(THREE,{...effectivePort,world});renderer.worldPortVisuals.set(portKey,dock);renderer.scene.add(dock);}dock.visible=true;}
   for(const[id,group]of renderer.worldPortVisuals)if(!livePorts.has(id)){disposeGroup(renderer,group);renderer.worldPortVisuals.delete(id);}
-  renderer.portVesselVisuals??=new Map();const coordinator=renderer.worldCoordinator,portId=port?.cityId?`${port.cityId}:port`:null,portPosition=effectivePort?.berth||effectivePort?.door,moored=portId?[...(coordinator?.vessels?.values?.()||[])].filter(vessel=>vessel.currentPortId===portId&&['idle','reserved'].includes(vessel.status)):[],docked=moored,liveVessels=new Set();
+  renderer.portVesselVisuals??=new Map();const coordinator=renderer.worldCoordinator,portId=port?.cityId?`${port.cityId}:port`:null,portPosition=effectivePort?.berth||effectivePort?.door,moored=portId?[...(coordinator?.vessels?.values?.()||[])].filter(vessel=>vessel.currentPortId===portId&&['idle','reserved'].includes(vessel.status)&&!(vessel.homeCityId===port?.cityId&&city.vehicles?.units?.get(vessel.localVehicleId)?.driverId)):[],docked=moored,liveVessels=new Set();
   const door=effectivePort?.door||port||{x:0,y:0},berth=effectivePort?.berth||{x:door.x,y:door.y+1},dx=berth.x-door.x,dy=berth.y-door.y,length=Math.hypot(dx,dy)||1,awayX=dx/length,awayY=dy/length,sideX=-awayY,sideY=awayX;
-  docked.forEach((vessel,index)=>{const id=vessel.id,kind=BOAT_CLASSES[vessel.classId]?vessel.classId:'cargo';liveVessels.add(id);const group=boatVisual(renderer,THREE,id,kind),spread=(index-(docked.length-1)/2)*.62,x=(portPosition?.x??port.x)+.5+awayX*1.05+sideX*spread,y=(portPosition?.y??port.y)+.5+awayY*1.05+sideY*spread;
-    group.position.set(x,boatSurfaceY(renderer,world,x,y,group),y);group.rotation.y=Math.atan2(awayX,awayY);group.visible=true;});
+  const occupied=[...(city.vehicles?.units?.values?.()||[])].filter(v=>v.boatClass&&!v.scrapped&&!docked.some(ship=>ship.localVehicleId===v.id&&ship.homeCityId===port.cityId)).map(v=>({x:v.x,y:v.y,radius:(v.pickLength||2)/2}));
+  renderer.vesselMoorings??=new Map();
+  docked.forEach(vessel=>{const id=vessel.id,kind=BOAT_CLASSES[vessel.classId]?vessel.classId:'cargo',group=boatVisual(renderer,THREE,id,kind),radius=kind==='cargo'?3:kind==='ferry'?2:1.5,transfer=coordinator.transfers.get(vessel.transferId),docking=transfer&&coordinator.minute>=transfer.departureMinute-1&&(!coordinator.ports.get(portId)?.dockedVesselId||coordinator.ports.get(portId).dockedVesselId===id);
+    const local=vessel.homeCityId===port.cityId?city.vehicles?.units?.get(vessel.localVehicleId):null;let point=docking?{x:berth.x+.5,y:berth.y+.5}:local?{x:local.x,y:local.y}:renderer.vesselMoorings.get(`${portId}:${id}`);
+    if(!point){point=mooringPosition(world,berth,occupied,radius);if(point)renderer.vesselMoorings.set(`${portId}:${id}`,point);}
+    if(!point)return;seatedPeople(group,THREE,transfer?.payload.crew?[transfer.payload.crew]:[]);occupied.push({...point,radius});liveVessels.add(id);group.position.set(point.x,boatSurfaceY(renderer,world,point.x,point.y,group),point.y);group.rotation.y=Math.atan2(awayX,awayY);group.visible=true;
+    group.userData.worldVesselSelection={key:id,vessel,transfer,route:coordinator.routes.get(vessel.routeId),phase:docking?'Atracado para embarque':'Aguardando em vaga de fundeio',x:point.x,y:point.y};
+  });
   for(const vessel of city.vehicles?.units?.values?.()||[]){if(vessel.scrapped||!vessel.boatClass||vessel.entity?.destroyed)continue;
     // A privately owned boat has one world-coordinator representation. Drawing
     // its stale city-vehicle transform as well created a second hull at its old
     // position, making the ship appear to jump between that point and the port.
     const hasWorldRepresentation=[...(coordinator?.vessels?.values?.()||[])].some(item=>item.homeCityId===(port?.cityId||city.id)&&item.localVehicleId===vessel.id);
-    if(hasWorldRepresentation)continue;
+    if(hasWorldRepresentation&&!vessel.driverId)continue;
     const id=`city-vehicle:${vessel.id}`,group=boatVisual(renderer,THREE,id,vessel.boatClass),passenger=Number.isSafeInteger(vessel.transportCitizenId)?city.society?.citizen(vessel.transportCitizenId):null,carried=passenger?.ridingVehicleId?city.vehicles?.units?.get(passenger.ridingVehicleId):null;if(carried?.ferrying){group.userData.carriedCycle??=makeCarriedCycle(THREE,carried.good);group.userData.carriedCycle.visible=true;}else if(group.userData.carriedCycle)group.userData.carriedCycle.visible=false;seatedPeople(group,THREE,passenger?[passenger]:[]);const x=vessel.entity?.x??vessel.x,y=vessel.entity?.y??vessel.y;liveVessels.add(id);group.position.set(x,boatSurfaceY(renderer,world,x,y,group),y);group.rotation.y=vessel.angle||0;group.visible=!Number.isFinite(renderer.renderedMinTx)||x>=renderer.renderedMinTx-4&&x<=renderer.renderedMaxTx+5&&y>=renderer.renderedMinTy-4&&y<=renderer.renderedMaxTy+5;}
   const worldMinute=Number.isFinite(coordinator?.minute)?coordinator.minute:0;
   for(const transfer of coordinator?.transfers?.values?.()||[]){
     if(!['departing','in-transit','arriving'].includes(transfer.status))continue;
     const progress=clamp01((worldMinute-transfer.departureMinute)/Math.max(1,transfer.arrivalMinute-transfer.departureMinute)),atOrigin=progress<.5,cityId=atOrigin?transfer.originCityId:transfer.destinationCityId;
     if(cityId!==port?.cityId)continue;
-    const route=edgeRoute(renderer,coordinator,city,world,cityId);if(!route)continue;const localProgress=atOrigin?progress*2:(progress-.5)*2,points=atOrigin?route:route.slice().reverse(),position=routePoint(points,localProgress);if(!position)continue;
+    const route=edgeRoute(renderer,coordinator,city,world,cityId);if(!route)continue;const berthBusy=!atOrigin&&coordinator.ports.get(portId)?.dockedVesselId&&coordinator.ports.get(portId).dockedVesselId!==transfer.vesselId;const localProgress=atOrigin?progress*2:(progress-.5)*2,points=atOrigin?route:route.slice().reverse(),position=berthBusy&&progress>=.95?mooringPosition(world,berth,occupied,2):routePoint(points,localProgress);if(!position)continue;position.angle??=0;if(berthBusy)occupied.push({...position,radius:2});
     const vessel=coordinator.vessels.get(transfer.vesselId),kind=BOAT_CLASSES[vessel?.classId]?vessel.classId:'cargo',id=`voyage:${transfer.id}`,group=boatVisual(renderer,THREE,id,kind);group.userData.worldVesselSelection={key:id,vessel,transfer,route,phase:atOrigin?'saindo da cidade':'chegando à cidade',x:position.x,y:position.y};
     const manifest=transfer.payload,people=manifest.kind==='citizen'?(manifest.package?.version===2?manifest.package.members:[manifest.package]):manifest.crew?[manifest.crew]:[];seatedPeople(group,THREE,[...(manifest.kind==='citizen'&&manifest.crew?[manifest.crew]:[]),...people].filter(Boolean));
     liveVessels.add(id);group.position.set(position.x,boatSurfaceY(renderer,world,position.x,position.y,group),position.y);group.rotation.y=position.angle;group.visible=true;

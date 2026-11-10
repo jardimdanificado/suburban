@@ -7,7 +7,7 @@ export class WorldTradeService {
     this.world=coordinator;
     this.inFlight=new Set();
     this.quiesced=false;
-    this.world.transferHandlers={depart:transfer=>this.depart(transfer),deliver:transfer=>this.deliver(transfer),cancel:transfer=>this.rollback(transfer),returnVessel:vessel=>this.returnVessel(vessel)};
+    this.world.transferHandlers={prepareDeparture:transfer=>this.prepareDeparture(transfer),depart:transfer=>this.depart(transfer),deliver:transfer=>this.deliver(transfer),cancel:transfer=>this.rollback(transfer),returnVessel:vessel=>this.returnVessel(vessel)};
   }
 
   track(operation){let tracked;tracked=Promise.resolve(operation).finally(()=>this.inFlight.delete(tracked));this.inFlight.add(tracked);return tracked;}
@@ -30,13 +30,13 @@ export class WorldTradeService {
       for(const vehicle of city.vehicles?.units?.values?.()||[]){
         if(!vehicle.boatClass||!vehicle.active||vehicle.scrapped||vehicle.driverId||vehicle.condition<=15)continue;
         const boatPosition=vehicle.entity||vehicle,harbour=city.worldPort?.berth||city.worldPort?.door||city.worldPort;
-        if(!Number.isFinite(boatPosition.x)||!Number.isFinite(boatPosition.y)||!harbour||Math.hypot(boatPosition.x-harbour.x,boatPosition.y-harbour.y)>5)continue;
+        if(!Number.isFinite(boatPosition.x)||!Number.isFinite(boatPosition.y)||!harbour||Math.hypot(boatPosition.x-harbour.x,boatPosition.y-harbour.y)>24)continue;
         const account=city.accounts.get(vehicle.ownerAccountId),business=city.economy.businesses.find(item=>item.accountId===vehicle.ownerAccountId&&item.type==='carrier'&&item.active&&!item.entity.destroyed);
         const owner=account?.entity?.properties?.citizen||(typeof account?.accountId==='string'&&account.accountId.startsWith('citizen:')?account:null);
         const operatorType=business?'carrier':owner?'freelance':['treasury',city.worldPort?.accountId].includes(vehicle.ownerAccountId)?'municipal':null;
         if(!operatorType)continue;
         const id=`owned-vessel:${session.id}:${vehicle.id}`,classId=vehicle.boatClass,capacity=vehicle.capacity||vehicle.pickCapacity||({canoe:2,launch:8,ferry:32,cargo:100}[classId]||1);
-        live.add(id);void session.bridge.request('setWorldBoatAssigned',[vehicle.id,true]);
+        live.add(id);
         const existing=this.world.vessels.get(id);
         if(existing){existing.capacity=capacity;existing.classId=classId;existing.ownerAccountId=vehicle.ownerAccountId;existing.ownerName=business?.entity.properties.name||owner?.entity.properties.name||city.accountName(vehicle.ownerAccountId);continue;}
         this.world.addVessel({id,classId,capacity,routeId:null,currentPortId:`${session.id}:port`,operatorType,ownerAccountId:vehicle.ownerAccountId,ownerName:business?.entity.properties.name||owner?.entity.properties.name||city.accountName(vehicle.ownerAccountId),localVehicleId:vehicle.id,homeCityId:session.id});
@@ -49,13 +49,25 @@ export class WorldTradeService {
     }
   }
 
+  reserveBoatVehicle(vessel){const home=this.world.cities.get(vessel.homeCityId);if(home&&vessel.localVehicleId!=null)void home.bridge.request('setWorldBoatAssigned',[vessel.localVehicleId,true]);}
+  freightQuote(route,vessel,quantity){return Math.ceil((route.freightPerUnit||0)*(vessel.capacity*.35+quantity*.65));}
+  async scheduleBatch({id,route,vessel,offers,minute}){
+    const quantity=offers.reduce((n,offer)=>n+offer.quantity,0),totalFreight=this.freightQuote(route,vessel,quantity),shipments=[];let allocated=0;
+    try{
+      for(const [index,offer]of offers.entries()){
+        const freight=index===offers.length-1?totalFreight-allocated:Math.floor(totalFreight*offer.quantity/quantity);allocated+=freight;
+        shipments.push(await this.scheduleNow({id:`${id}:${index}`,originCityId:route.originCityId,destinationCityId:route.destinationCityId,sellerBuildingId:offer.seller.id,destinationBuildingId:offer.buyer.id,good:offer.good,quantity:offer.quantity,unitPrice:offer.unitPrice,prepareOnly:true,freightOverride:freight,vesselOverride:vessel}));
+      }
+      this.reserveBoatVehicle(vessel);return this.world.scheduleVoyage({id,routeId:route.id,vesselId:vessel.id,departureMinute:minute+1,manifest:{kind:'goods',quantity,shipments,freightAmount:totalFreight}});
+    }catch(error){for(const shipment of shipments)await this.rollback({id:shipment.id,kind:'goods',originCityId:route.originCityId,destinationCityId:route.destinationCityId,payload:shipment.manifest});throw error;}
+  }
   schedule(options){if(this.quiesced)return Promise.reject(new Error('O mundo está preparando um salvamento.'));return this.track(this.scheduleNow(options));}
-  async scheduleNow({id,originCityId,destinationCityId,sellerBuildingId,destinationBuildingId,good,quantity,unitPrice,departureMinute=this.world.minute+1,contractId=null}){
+  async scheduleNow({id,originCityId,destinationCityId,sellerBuildingId,destinationBuildingId,good,quantity,unitPrice,departureMinute=this.world.minute+1,contractId=null,prepareOnly=false,freightOverride=null,vesselOverride=null}){
     this.syncOperatorFleet();
     const origin=this.world.cities.get(originCityId),destination=this.world.cities.get(destinationCityId);
     if(!origin||!destination||originCityId===destinationCityId)throw new Error('Escolha duas cidades diferentes já fundadas.');
     if(!Number.isSafeInteger(unitPrice)||unitPrice<1||!Number.isSafeInteger(quantity)||quantity<1)throw new RangeError('Quantidade e preço precisam ser inteiros positivos.');
-    const seller=origin.city.building(sellerBuildingId)||(origin.city.economy.importDepot?.id===sellerBuildingId?origin.city.economy.importDepot:null),buyer=destination.city.building(destinationBuildingId),route=this.world.routes.get(`route:${originCityId}>${destinationCityId}`),goodsAmount=quantity*unitPrice,freightAmount=quantity*(route?.freightPerUnit||0),amount=goodsAmount+freightAmount;
+    const seller=origin.city.building(sellerBuildingId)||(origin.city.economy.importDepot?.id===sellerBuildingId?origin.city.economy.importDepot:null),buyer=destination.city.building(destinationBuildingId),route=this.world.routes.get(`route:${originCityId}>${destinationCityId}`),goodsAmount=quantity*unitPrice,freightAmount=freightOverride??(route?this.freightQuote(route,this.world.availableVessel(route.id,quantity)||{capacity:quantity},quantity):0),amount=goodsAmount+freightAmount;
     if(!seller||!buyer||!route||!origin.city.economy.goods[good]||!Number.isSafeInteger(goodsAmount)||!Number.isSafeInteger(freightAmount)||!Number.isSafeInteger(amount))throw new Error('Produto, vendedor, comprador ou rota indisponível.');
     this.requireSeaAccess(origin,destination);
     await this.request(destination,'reserveWorldPayment',[id,buyer.accountId,amount]);
@@ -64,9 +76,11 @@ export class WorldTradeService {
     try{await this.request(origin,'reserveWorldExport',[id,sellerBuildingId,good,quantity,true]);}
     catch(error){await destination.bridge.request('cancelWorldImport',[id]);await destination.bridge.request('refundWorldPayment',[id]);throw error;}
     try{
-      const vessel=this.world.availableVessel(route.id,quantity);
+      const vessel=vesselOverride||this.world.availableVessel(route.id,quantity);
       if(!vessel)throw new Error('Não há embarcação livre com capacidade para esta carga.');
-      return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,manifest:{kind:'goods',good,quantity,unitPrice,goodsAmount,freightAmount,amount,sellerBuildingId,sellerAccountId:seller.accountId,destinationBuildingId,payerAccountId:buyer.accountId,...(vessel.operatorType!=='municipal'&&vessel.ownerAccountId?{freightReceiverAccountId:vessel.ownerAccountId,freightReceiverCityId:vessel.homeCityId,freightOperatorName:vessel.ownerName}:{}),...(contractId?{contractId}:{})}});
+      const manifest={kind:'goods',good,quantity,unitPrice,goodsAmount,freightAmount,amount,sellerBuildingId,sellerAccountId:seller.accountId,destinationBuildingId,payerAccountId:buyer.accountId,...(vessel.operatorType!=='municipal'&&vessel.ownerAccountId?{freightReceiverAccountId:vessel.ownerAccountId,freightReceiverCityId:vessel.homeCityId,freightOperatorName:vessel.ownerName}:{}),...(contractId?{contractId}:{})};
+      if(prepareOnly)return {id,manifest};
+      this.reserveBoatVehicle(vessel);return this.world.scheduleVoyage({id,routeId:route.id,vesselId:vessel.id,departureMinute,manifest});
     }catch(error){await origin.bridge.request('returnWorldExport',[id]);await destination.bridge.request('cancelWorldImport',[id]);await destination.bridge.request('refundWorldPayment',[id]);throw error;}
   }
 
@@ -91,7 +105,7 @@ export class WorldTradeService {
     const result=await origin.bridge.request('reserveWorldCitizenMigration',[id,citizenId]);
     if(!result?.ok||!result.value||typeof result.value!=='object')throw new Error(result?.message||'Este cidadão não está elegível para migração marítima.');
     let vessel;
-    try{vessel=await this.choosePassengerVessel({id,origin,route,citizenId,passengerCount:1,assetCount:result.value.vehicleAssets?.length||0});if(!vessel)throw new Error('Não há embarcação disponível para transportar este morador.');return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,vesselId:vessel.id,manifest:{kind:'citizen',globalId:result.value.globalId,citizenId,package:result.value,...(vessel.passengerFare?{passengerFare:vessel.passengerFare}:{}),...(reason?{reason}:{})}});}
+    try{vessel=await this.choosePassengerVessel({id,origin,route,citizenId,passengerCount:1,assetCount:result.value.vehicleAssets?.length||0});if(!vessel)throw new Error('Não há embarcação disponível para transportar este morador.');this.reserveBoatVehicle(vessel);return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,vesselId:vessel.id,manifest:{kind:'citizen',globalId:result.value.globalId,citizenId,package:result.value,...(vessel.passengerFare?{passengerFare:vessel.passengerFare}:{}),...(reason?{reason}:{})}});}
     catch(error){if(vessel?.passengerFare)await origin.bridge.request('refundWorldPassengerFare',[id]);await origin.bridge.request('cancelWorldCitizenMigration',[id]);throw error;}
   }
 
@@ -103,7 +117,7 @@ export class WorldTradeService {
     const result=await origin.bridge.request('reserveWorldHouseholdMigration',[id,citizenId]);
     if(!result?.ok||!result.value||result.value.version!==2||!Array.isArray(result.value.members))throw new Error(result?.message||'Este núcleo familiar não está elegível para migração marítima.');
     const passengerCount=result.value.members.length,assetCount=result.value.members.reduce((n,member)=>n+(member.vehicleAssets?.length||0),0);let vessel;
-    try{vessel=await this.choosePassengerVessel({id,origin,route,citizenId,passengerCount,assetCount});if(!vessel)throw new Error('Não há embarcação disponível para transportar esta família.');return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,vesselId:vessel.id,manifest:{kind:'citizen',globalId:result.value.globalId,package:result.value,...(vessel.passengerFare?{passengerFare:vessel.passengerFare}:{}),...(reason?{reason}:{})}});}
+    try{vessel=await this.choosePassengerVessel({id,origin,route,citizenId,passengerCount,assetCount});if(!vessel)throw new Error('Não há embarcação disponível para transportar esta família.');this.reserveBoatVehicle(vessel);return this.world.scheduleVoyage({id,routeId:route.id,departureMinute,vesselId:vessel.id,manifest:{kind:'citizen',globalId:result.value.globalId,package:result.value,...(vessel.passengerFare?{passengerFare:vessel.passengerFare}:{}),...(reason?{reason}:{})}});}
     catch(error){if(vessel?.passengerFare)await origin.bridge.request('refundWorldPassengerFare',[id]);await origin.bridge.request('cancelWorldHouseholdMigration',[id]);throw error;}
   }
 
@@ -171,7 +185,7 @@ export class WorldTradeService {
 
   cancelContract(id){if(this.quiesced)return false;const contract=this.world.contracts.get(id);if(!contract||!contract.active)return false;contract.active=false;contract.cancelledAt=this.world.minute;this.world.onChange({type:'contract-cancelled',contract:structuredClone(contract)});return true;}
 
-  findRegionalTradeCandidate(route,excludedGoods=new Set()){
+  findRegionalTradeCandidate(route,excludedGoods=new Set(),excludedOffers=new Set()){
     const origin=this.world.cities.get(route?.originCityId),destination=this.world.cities.get(route?.destinationCityId);if(!origin||!destination)return null;
     const city=origin.city,other=destination.city,economy=city.economy,targetEconomy=other.economy;
     const inTransit=new Set([...this.world.transfers.values()].filter(transfer=>transfer.destinationCityId===destination.id&&transfer.kind==='goods'&&['scheduled','departing','in-transit','arriving'].includes(transfer.status)).map(transfer=>transfer.payload.good));
@@ -201,7 +215,7 @@ export class WorldTradeService {
       };
       const affordableFor=buyer=>Math.floor(Math.max(0,buyer.balance-Math.max(city.currency.price(500),buyer.workers.length*buyer.wage*12))/landedPrice);
       buyers.sort((a,b)=>needFor(b)-needFor(a)||a.id-b.id);
-      const buyer=buyers.find(candidate=>needFor(candidate)>0&&affordableFor(candidate)>0),need=buyer?needFor(buyer):0;
+      const buyer=buyers.find(candidate=>!excludedOffers.has(`${offer.seller.id}:${candidate.id}:${offer.good}`)&&needFor(candidate)>0&&affordableFor(candidate)>0),need=buyer?needFor(buyer):0;
       if(!buyer||need<1)continue;
       // Let larger factory orders use the cargo vessel instead of splitting
       // every shipment below the ferry capacity threshold.
@@ -243,11 +257,18 @@ export class WorldTradeService {
     this.world.regionalTradeDay=window;
     let scheduled=0;
     for(const route of this.world.routes.values()){
-      const excludedGoods=new Set();let routeLoads=0;
-      while(routeLoads<2){const candidate=this.findRegionalTradeCandidate(route,excludedGoods);if(!candidate)break;excludedGoods.add(candidate.good);
-        try{await this.scheduleNow({id:`regional:${route.id}:${window}:${candidate.good}`,originCityId:candidate.origin.id,destinationCityId:candidate.destination.id,sellerBuildingId:candidate.seller.id,destinationBuildingId:candidate.buyer.id,good:candidate.good,quantity:candidate.quantity,unitPrice:candidate.unitPrice,departureMinute:minute+1});routeLoads++;scheduled++;}
-        catch(error){this.world.onChange({type:'regional-trade-attempt-failed',routeId:route.id,good:candidate.good,message:error.message,minute});}
+      const first=this.findRegionalTradeCandidate(route);if(!first){route.freightWaitingSince=null;continue;}
+      const vessel=this.world.availableVessel(route.id,first.quantity);if(!vessel)continue;
+      const offers=[],excluded=new Set(),excludedOffers=new Set();let quantity=0;
+      for(let index=0;index<16;index++){
+        const offer=this.findRegionalTradeCandidate(route,excluded,excludedOffers);if(!offer)break;excludedOffers.add(`${offer.seller.id}:${offer.buyer.id}:${offer.good}`);
+        const committed=offers.filter(item=>item.seller.id===offer.seller.id&&item.good===offer.good).reduce((sum,item)=>sum+item.quantity,0);offer.quantity=Math.min(offer.quantity,vessel.capacity-quantity,(offer.surplus??Infinity)-committed);if(offer.quantity<1)continue;
+        offers.push(offer);quantity+=offer.quantity;if(quantity===vessel.capacity)break;
       }
+      route.municipalWaitMinutes??=60;route.freightWaitingSince??=minute;
+      if(vessel.operatorType==='municipal'&&quantity<vessel.capacity&&minute-route.freightWaitingSince<route.municipalWaitMinutes)continue;
+      try{await this.scheduleBatch({id:`regional:${route.id}:${window}`,route,vessel,offers,minute});scheduled++;route.freightWaitingSince=null;}
+      catch(error){this.world.onChange({type:'regional-trade-attempt-failed',routeId:route.id,message:error.message,minute});}
     }
     return scheduled;
   }
@@ -290,18 +311,21 @@ export class WorldTradeService {
 
   async rollback(transfer){
     const origin=this.world.cities.get(transfer.originCityId),destination=this.world.cities.get(transfer.destinationCityId);
+    const cancelledBoat=this.world.vessels.get(transfer.vesselId);if(cancelledBoat?.localVehicleId!=null){const home=this.world.cities.get(cancelledBoat.homeCityId);if(home)await this.request(home,'setWorldBoatAssigned',[cancelledBoat.localVehicleId,false]);}
+    if(transfer.payload.shipments){if(transfer.payload.crew)await this.request(origin,'cancelWorldCitizenMigration',[`${transfer.id}:crew`]);for(const shipment of transfer.payload.shipments)await this.rollback({...transfer,id:shipment.id,payload:shipment.manifest});return;}
     if(transfer.payload.crew)await this.request(origin,'cancelWorldCitizenMigration',[`${transfer.id}:crew`]);
     if(transfer.kind==='citizen'){if(transfer.payload.passengerFare)await this.request(origin,'refundWorldPassengerFare',[transfer.id]);await this.request(origin,transfer.payload.package.version===2?'cancelWorldHouseholdMigration':'cancelWorldCitizenMigration',[transfer.id]);}
     else{await this.request(origin,'returnWorldExport',[transfer.id]);await this.request(destination,'cancelWorldImport',[transfer.id]);await this.request(destination,'refundWorldPayment',[transfer.id]);}
   }
 
-  async depart(transfer){
+  async prepareDeparture(transfer){
     const origin=this.world.cities.get(transfer.originCityId);
     {
       const stored=this.world.transfers.get(transfer.id).payload;
       if(!stored.crew){
         for(const person of origin.city.citizens||[]){
           if(!origin.city.society.isAdult(person)||person.jobId||person.homeUnitId||origin.city.worldMigrationHousehold(person.id)?.length!==1)continue;
+          const ship=this.world.vessels.get(transfer.vesselId);if(ship?.localVehicleId!=null){const boarding=await origin.bridge.request('approachWorldBoat',[ship.localVehicleId,person.id]);if(!boarding?.ok||boarding.value!==true)break;}
           const result=await origin.bridge.request('reserveWorldCitizenMigration',[`${transfer.id}:crew`,person.id]);
           if(result?.ok&&result.value){stored.crew=result.value;break;}
         }
@@ -309,6 +333,12 @@ export class WorldTradeService {
       }
       await this.request(origin,'departWorldCitizenMigration',[`${transfer.id}:crew`]);
     }
+    return true;
+  }
+
+  async depart(transfer){
+    const origin=this.world.cities.get(transfer.originCityId);
+    if(transfer.payload.shipments){for(const shipment of transfer.payload.shipments)await this.request(origin,'departWorldExport',[shipment.id]);return true;}
     return this.request(origin,transfer.kind==='citizen'?(transfer.payload.package.version===2?'departWorldHouseholdMigration':'departWorldCitizenMigration'):'departWorldExport',[transfer.id]);
   }
 
@@ -316,11 +346,12 @@ export class WorldTradeService {
     const trip=this.world.transfers.get(vessel.lastTransferId),crew=trip?.payload.crew;if(!crew)return;
     const home=this.world.cities.get(trip.originCityId);
     await this.request(home,'receiveWorldCitizenMigration',[`${trip.id}:crew`,crew]);
-    await this.request(home,'completeWorldCitizenMigration',[`${trip.id}:crew`]);
+    await this.request(home,'completeWorldCitizenMigration',[`${trip.id}:crew`]);if(vessel.localVehicleId!=null)await this.request(home,'setWorldBoatAssigned',[vessel.localVehicleId,false]);
   }
 
   async deliver(transfer){
     const destination=this.world.cities.get(transfer.destinationCityId),origin=this.world.cities.get(transfer.originCityId),manifest=transfer.payload;
+    if(manifest.shipments){for(const shipment of manifest.shipments)await this.deliver({...transfer,id:shipment.id,payload:shipment.manifest});return;}
     if(transfer.kind==='citizen'){
       const household=manifest.package.version===2;
       await this.request(destination,household?'receiveWorldHouseholdMigration':'receiveWorldCitizenMigration',[transfer.id,manifest.package]);

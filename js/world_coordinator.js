@@ -195,7 +195,14 @@ export class WorldCoordinator {
     }).sort((a,b)=>(priority[a.operatorType]??2)-(priority[b.operatorType]??2)||a.capacity-b.capacity)[0]||null;
   }
 
+  reserveBerth(portId,minute,transferId){
+    const port=this.ports.get(portId);port.berthBookings??=[];
+    port.berthBookings=port.berthBookings.filter(slot=>slot.minute>=this.minute-1);
+    while(port.berthBookings.some(slot=>slot.minute===minute&&slot.transferId!==transferId))minute++;
+    port.berthBookings.push({minute,transferId});return minute;
+  }
   scheduleVoyage({id,routeId,manifest,departureMinute=this.minute,vesselId=null}) {
+    if(this.transfers.has(id))throw new Error('Transferência já registrada.');
     const route=this.routes.get(routeId);if(!route)throw new Error('Rota marítima desconhecida.');
     if(!manifest||typeof manifest!=='object'||Array.isArray(manifest))throw new TypeError('Manifesto marítimo inválido.');
     const quantity=manifest.kind==='citizen'?(manifest.package?.version===2?manifest.package.members?.reduce((n,member)=>n+1+(member.vehicleAssets?.length||0),0):1+(manifest.package?.vehicleAssets?.length||0)):manifest.quantity;
@@ -203,14 +210,15 @@ export class WorldCoordinator {
     const vessel=vesselId?this.vessels.get(vesselId):this.availableVessel(routeId,quantity);
     if(vessel&&(vessel.capacity<quantity||vessel.status!=='idle'&&vessel.status!=='returning'||vessel.currentPortId&&vessel.currentPortId!==route.originPortId))throw new Error('A embarcação escolhida não está disponível neste porto.');
     if(!vessel)throw new Error('Não há embarcação livre com capacidade suficiente para esta rota.');
-    const transfer=this.scheduleTransfer({id,kind:manifest.kind==='citizen'?'citizen':'goods',originCityId:route.originCityId,destinationCityId:route.destinationCityId,payload:manifest,departureMinute,arrivalMinute:departureMinute+route.travelMinutes,routeId,vesselId:vessel.id});
+    departureMinute=this.reserveBerth(route.originPortId,departureMinute,id);const arrivalMinute=this.reserveBerth(route.destinationPortId,departureMinute+route.travelMinutes,id);
+    const transfer=this.scheduleTransfer({id,kind:manifest.kind==='citizen'?'citizen':'goods',originCityId:route.originCityId,destinationCityId:route.destinationCityId,payload:manifest,departureMinute,arrivalMinute,routeId,vesselId:vessel.id});
     transfer.routeId=route.id;transfer.vesselId=vessel.id;vessel.status='reserved';vessel.transferId=id;vessel.routeId=route.id;vessel.currentPortId=route.originPortId;vessel.returnMinute=null;
     this.onChange({type:'voyage-scheduled',transfer:structuredClone(transfer),vessel:structuredClone(vessel)});return transfer;
   }
 
   cancelTransfer(id) {
     const transfer=this.transfers.get(id);if(!transfer||!['scheduled','cancelling'].includes(transfer.status))return false;
-    transfer.status='cancelled';transfer.cancelledAt=this.minute;
+    transfer.status='cancelled';transfer.cancelledAt=this.minute;for(const port of this.ports.values())if(port.dockedVesselId===transfer.vesselId)port.dockedVesselId=null;for(const port of this.ports.values())if(port.berthBookings)port.berthBookings=port.berthBookings.filter(slot=>slot.transferId!==id);
     const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===id){vessel.status='idle';vessel.transferId=null;vessel.currentPortId=this.routes.get(transfer.routeId)?.originPortId||vessel.currentPortId;}
     this.onChange({type:'transfer-cancelled',transfer:structuredClone(transfer)});return true;
   }
@@ -228,7 +236,7 @@ export class WorldCoordinator {
   async advanceTo(minute, handlers = this.transferHandlers) {
     if (!Number.isFinite(minute) || minute < this.minute) throw new RangeError('O relógio do mundo não pode voltar no tempo.');
     const {depart,deliver}=handlers||{};
-    for(const vessel of this.vessels.values())if(vessel.status==='returning'&&Number.isFinite(vessel.returnMinute)&&vessel.returnMinute<=minute){try{await handlers?.returnVessel?.(structuredClone(vessel));}catch(error){this.onChange({type:'transfer-processing-error',phase:'return',message:error.message});continue;}const route=this.routes.get(vessel.routeId);vessel.status='idle';vessel.currentPortId=route?.originPortId||vessel.currentPortId;vessel.returnMinute=null;if(vessel.operatorType!=='municipal')vessel.routeId=null;this.onChange({type:'vessel-returned',vessel:structuredClone(vessel)});}
+    for(const vessel of this.vessels.values())if(vessel.status==='returning'&&Number.isFinite(vessel.returnMinute)&&vessel.returnMinute<=minute){const homePort=this.ports.get(this.routes.get(vessel.routeId)?.originPortId);if(homePort?.dockedVesselId&&homePort.dockedVesselId!==vessel.id)continue;if(homePort)homePort.dockedVesselId=vessel.id;try{await handlers?.returnVessel?.(structuredClone(vessel));}catch(error){this.onChange({type:'transfer-processing-error',phase:'return',message:error.message});continue;}if(homePort)homePort.dockedVesselId=null;const route=this.routes.get(vessel.routeId);vessel.status='idle';vessel.currentPortId=route?.originPortId||vessel.currentPortId;vessel.returnMinute=null;if(vessel.operatorType!=='municipal')vessel.routeId=null;this.onChange({type:'vessel-returned',vessel:structuredClone(vessel)});}
     const due = [...this.transfers.values()].sort((a, b) => a.departureMinute - b.departureMinute || a.arrivalMinute - b.arrivalMinute || a.id.localeCompare(b.id));
     for (const transfer of due) {
       if(transfer.status==='cancelling'&&typeof handlers?.cancel==='function'){
@@ -236,18 +244,23 @@ export class WorldCoordinator {
         continue;
       }
       if (transfer.status === 'scheduled' && transfer.departureMinute <= minute && typeof depart==='function') {
+        try{await handlers?.prepareDeparture?.(structuredClone(transfer));}catch(error){this.onChange({type:'transfer-processing-error',transferId:transfer.id,phase:'boarding',message:error.message});continue;}
+        const departurePort=this.ports.get(this.routes.get(transfer.routeId)?.originPortId);if(departurePort?.dockedVesselId&&departurePort.dockedVesselId!==transfer.vesselId)continue;if(departurePort)departurePort.dockedVesselId=transfer.vesselId;
         transfer.status='departing';this.onChange({type:'transfer-departing',transfer:structuredClone(transfer)});
         try{await depart(structuredClone(transfer));}catch(error){transfer.status='scheduled';this.onChange({type:'transfer-processing-error',transferId:transfer.id,phase:'depart',message:error.message});continue;}
+        if(departurePort)departurePort.dockedVesselId=null;
         transfer.status = 'in-transit';transfer.departedAt = transfer.departureMinute;
         const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===transfer.id)vessel.status='at-sea';
         this.onChange({ type: 'transfer-departed', transfer: structuredClone(transfer) });
       }
       if (transfer.status === 'in-transit' && transfer.arrivalMinute <= minute && typeof deliver==='function') {
+        const arrivalPort=this.ports.get(this.routes.get(transfer.routeId)?.destinationPortId);if(arrivalPort?.dockedVesselId&&arrivalPort.dockedVesselId!==transfer.vesselId)continue;if(arrivalPort)arrivalPort.dockedVesselId=transfer.vesselId;
         transfer.status='arriving';this.onChange({type:'transfer-arriving',transfer:structuredClone(transfer)});
         try{await deliver(structuredClone(transfer));}catch(error){transfer.status='in-transit';this.onChange({type:'transfer-processing-error',transferId:transfer.id,phase:'deliver',message:error.message});continue;}
+        if(arrivalPort)arrivalPort.dockedVesselId=null;
         transfer.status = 'delivered';
         transfer.deliveredAt = transfer.arrivalMinute;
-        const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===transfer.id){vessel.status='returning';vessel.currentPortId=this.routes.get(transfer.routeId)?.destinationPortId;vessel.transferId=null;vessel.lastTransferId=transfer.id;vessel.returnMinute=transfer.arrivalMinute+(this.routes.get(transfer.routeId)?.travelMinutes||1);}
+        const vessel=this.vessels.get(transfer.vesselId);if(vessel?.transferId===transfer.id){vessel.status='returning';vessel.currentPortId=this.routes.get(transfer.routeId)?.destinationPortId;vessel.transferId=null;vessel.lastTransferId=transfer.id;vessel.returnMinute=this.reserveBerth(this.routes.get(transfer.routeId).originPortId,transfer.arrivalMinute+(this.routes.get(transfer.routeId)?.travelMinutes||1),`${transfer.id}:return`);}
         this.onChange({ type: 'transfer-delivered', transfer: structuredClone(transfer) });
       }
     }
