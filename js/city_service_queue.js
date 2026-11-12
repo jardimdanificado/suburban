@@ -1,6 +1,6 @@
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {invalidateActivitySearch} from './city_activity_search.js';
-import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
+import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 const foodQueueKinds=new Set(['workmeal','supplies']);
 const queueKind=kind=>foodQueueKinds.has(kind)?'food':kind;
 const taskQueueKind=task=>task==='workmeal'||task==='supplies'?'food':task;

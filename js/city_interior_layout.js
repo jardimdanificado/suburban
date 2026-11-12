@@ -128,9 +128,27 @@ export function interiorRoute(building,from,to){
     }
   }
   const layout=interiorLayout(building),floors=building.floors||1,scale=layout.scale,roofTarget=to.z!=null&&Math.floor(to.z/CITY_FLOOR_HEIGHT)>=floors;
-  const keyAt=p=>{const floor=Math.max(0,Math.min(floors-1,Math.round((p.z||0)/CITY_FLOOR_HEIGHT))),x=Math.max(0,Math.min(building.width*scale-1,Math.floor((p.x-building.entity.x)*scale))),y=Math.max(0,Math.min(building.depth*scale-1,Math.floor((p.y-building.entity.y)*scale)));return `${x},${y},${floor}`;};
-  const nearest=(p,floor=null)=>{let key=keyAt(p);if((floor==null||layout.walkNodes.get(key)?.floor===floor)&&layout.walkNodes.has(key))return key;let best=null,distance=Infinity;const candidates=floor==null?layout.walkNodes.values():layout.walkNodesByFloor[floor]||[];for(const node of candidates){const d=(node.x-p.x)**2+(node.y-p.y)**2+((node.z-(p.z||0))*1.3)**2;if(d<distance){best=node.key;distance=d;}}return best;};
-  const targetFloor=roofTarget?floors-1:to.z!=null?Math.round(to.z/CITY_FLOOR_HEIGHT):null,start=nearest(from),wantedGoal=roofTarget?nearest({x:building.entity.x+(Math.floor(building.width/2)+.5),y:building.entity.y+(Math.floor(building.depth/2)+.5),z:(floors-1)*CITY_FLOOR_HEIGHT},floors-1):nearest(to,targetFloor);
+  // keyAt/nearest candidates must reach the lookup through the same keyAt;
+  // nearest then picks the first strictly smallest distance squared. The
+  // all-floor fallback uses walkNodesByFloor.flat(): per-floor arrays are
+  // already in floor-major walk-node order, so the selected winner and the
+  // tie rule are the same as the previous values() scan. The BFS neighbor
+  // order below is untouched.
+  const keyAt=p=>{
+    const floor=Math.max(0,Math.min(floors-1,Math.round((p.z||0)/CITY_FLOOR_HEIGHT)));
+    const x=Math.max(0,Math.min(building.width*scale-1,Math.floor((p.x-building.entity.x)*scale)));
+    const y=Math.max(0,Math.min(building.depth*scale-1,Math.floor((p.y-building.entity.y)*scale)));
+    return `${x},${y},${floor}`;};
+  const nearest=(p,floor=null)=>{
+    let key=keyAt(p);if((floor==null||layout.walkNodes.get(key)?.floor===floor)&&layout.walkNodes.has(key))return key;
+    let best=null,distance=Infinity;
+    const candidates=floor==null?layout.walkNodesByFloor.flat():layout.walkNodesByFloor[floor]||[];
+    for(const node of candidates){const d=(node.x-p.x)**2+(node.y-p.y)**2+((node.z-(p.z||0))*1.3)**2;if(d<distance){best=node.key;distance=d;}}
+    return best;
+  };
+  const targetFloor=roofTarget?floors-1:to.z!=null?Math.round(to.z/CITY_FLOOR_HEIGHT):null;
+  const start=nearest(from);
+  const wantedGoal=roofTarget?nearest({x:building.entity.x+(Math.floor(building.width/2)+.5),y:building.entity.y+(Math.floor(building.depth/2)+.5),z:(floors-1)*CITY_FLOOR_HEIGHT},floors-1):nearest(to,targetFloor);
   if(!start||!wantedGoal)return null;
   const requestedKey=`${start}>${wantedGoal}`;let keys=layout.routes.get(requestedKey),goal=wantedGoal;
   if(!keys){const previous=new Map([[start,null]]),queue=[start];let reached=start===goal;for(let head=0;head<queue.length&&!reached;head++){const key=queue[head];for(const next of layout.walkNeighbors.get(key)||[])if(!previous.has(next)){previous.set(next,key);queue.push(next);if(next===goal){reached=true;break;}}}

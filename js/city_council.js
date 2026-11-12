@@ -2,7 +2,7 @@ import {ECONOMIC_POLICIES,economicPolicy,validateEconomicPolicy,setEconomicPolic
 import {substanceStance} from './city_substances.js?v=economic-flow-7';
 import {SUBSTANCES,SUBSTANCE_REGIMES} from './city_substance_catalog.js';
 import {TAX_CATEGORIES,baseTaxRate as taxRate,MINIMUM_WAGE_TAX_RATE,MINIMUM_BUSINESS_TAX_RATE} from './city_sales_tax.js';
-import {equityShares,offerShares,initializeEquity,nationalizeShares} from './city_equity.js?v=daily-mayor-privatization-1';
+import {equityShares,offerShares,initializeEquity,nationalizeShares} from './city_equity.js?v=daily-mayor-privatization-2';
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
 import {CityCouncilChamber} from './city_council_chamber.js';

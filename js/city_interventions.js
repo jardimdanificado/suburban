@@ -1,6 +1,6 @@
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import {syncCorruptionVotes} from './city_corruption_votes.js';
-import {VEHICLE_SPECS} from './city_vehicles.js?v=carpool-spatial-index-1';
+import {VEHICLE_SPECS} from './city_vehicles.js?v=harbor-boats-4';
 import {TAX_CATEGORIES,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
 import {ensureExternalAccount} from './city_currency.js';
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));

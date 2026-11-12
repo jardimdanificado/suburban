@@ -1,12 +1,12 @@
 import {renderCitizenSubstances} from './city_substances_ui.js';
 import {funeralSpec} from './city_funeral_services.js';
 import {artworkParticipants} from './city_art_narratives.js';
-import {drawArtworkPreview} from './city_renderer_3d.js?v=park-fence-ground-1-canvas-readback-1';
+import {drawArtworkPreview} from './city_renderer_3d.js?v=boats-transport-23';
 import {gerarTituloTematico} from './gerador_frases.js?v=economic-flow-7';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {officeFloors,OFFICE_BUSINESSES,ownsOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
-import {equityShares,equityValue} from './city_equity.js?v=daily-mayor-privatization-1';
+import {equityShares,equityValue} from './city_equity.js?v=daily-mayor-privatization-2';
 import {contextActions} from './city_context_actions.js';
 import {renderMarket} from './city_wealth_ui.js?v=landlord-stock-market-1';
 import {renderColorPreferences,renderFactoryPaint,renderBuildingPaint} from './city_paint_ui.js';
@@ -15,11 +15,11 @@ import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=fast-speeds-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
-import {renderMobility,renderVehicle,renderAssembly,renderParking} from './city_vehicles_ui.js';
+import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=harbor-boats-4';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
-import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=no-party-slogans-1';
+import {renderPartyDossier,renderContractDossier,renderPollResponseDossier} from './city_government_records_ui.js?v=custom-history-filters-1';
 import {renderElectionMonitor} from './city_election_ui.js?v=no-party-slogans-1';
 import {sectionTitle} from './city_ui_sections.js?v=municipal-identity-in-prefeitura-1';
 import {renderGovernmentDashboard} from './city_ui_dashboard.js';
@@ -37,20 +37,21 @@ import { PREJUDICE_TYPES, initializePrejudices } from './city_prejudice.js?v=dis
 import { describePoliticalOrientation, POLITICAL_POSITIONS } from './city_ideology.js';
 import { TRAIT_LABELS, HOUSE_STYLES } from './city_culture.js?v=colonial-colored-trim-1';
 import { REPUTATION_LABELS } from './city_reputation.js';
-import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=tropicalia-flora-3';
+import { PLANT_SPECIES, NATURE_RULES } from './city_nature.js?v=ff-growth-events-1';
 import { HISTORY_LIMIT } from './city_history.js';
 import { FAVORITE_GLYPH_COUNT, GOVERNMENT_TOPICS, HISTORY_FILTER_GROUPS } from './city_favorites.js';
 import {drawGlyph8x8} from './legacy_ui.js';
 import { INDUSTRIES } from './city_industries.js';
-import { SANITATION_RULES } from './city_sanitation.js?v=sanitation-visitor-search-1';
+import { SANITATION_RULES } from './city_sanitation.js?v=ff2-speed-2';
 import { inventoryUsed, inventoryFree, incomingItems } from './city_inventory.js';
 import { MANAGEMENT_THEME as T, readableLabel, bevel } from './management_ui.js';
 import { clipCanvasRegion } from './canvas_widgets.js';
 import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widgets.js';
-import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=two-day-public-food-reserve-1';
-import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-256-1';
-import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=perf-adult-check-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=night-service-search-1';
+import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-5';
+import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-128-1';
+import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=ff2-speed-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-12';
+import { renderWorldManagement } from './city_world_ui.js?v=world-management-9';
 export const money = formatMoney;
 export const TABS = [
   ['city', 'PANORAMA', 'CIDADE', 'A cidade em um olhar: habitantes, sustento e atividade.'],
@@ -62,6 +63,7 @@ export const TABS = [
   ['market', 'MERCADO E RIQUEZAS', 'ECONOMIA', 'Patrimônio, distribuição de riqueza, preços e vendas.'],
   ['production', 'PRODUÇÃO', 'ECONOMIA', 'Estoques, consumo e oportunidades na cadeia produtiva.'],
   ['transport', 'TRANSPORTES', 'ECONOMIA', 'Cargas reais: da reserva à entrega.'],
+  ['world', 'MUNDO E ROTAS', 'MUNDO', 'Cidades, portos, comércio regional e migração entre cidades.'],
   ['urban-art', 'ARTE URBANA', 'CIDADANIA E JUSTIÇA', 'Obras, mensagens, patrocínio, depredação e limpeza.'],
   ['safety', 'SEGURANÇA', 'CIDADANIA E JUSTIÇA', 'Delegacias, patrulhas, denúncias e investigações.'],
   ['forensics', 'IML E CORPOS', 'CIDADANIA E JUSTIÇA', 'Coleta, transporte funerário, laudos e cremação.'],
@@ -80,6 +82,7 @@ export const VIEWS = {
   land: [['plots', 'TERRENOS'], ['projects', 'OBRAS']],
   production: [['stocks', 'ESTOQUES'], ['demand', 'DEMANDAS'], ['flow', 'MOVIMENTAÇÕES'], ['lighting','ILUMINAÇÃO'],['analysis','ANÁLISE DAS CADEIAS']],
   transport: [['active', 'FRETES'], ['imports','DEPÓSITO DE IMPORTAÇÃO'], ['informal','BICOS'], ['finished', 'ENCERRADOS'], ['vehicles','FROTA'], ['parking','BICICLETÁRIOS'], ['rentals','ALUGUEL'], ['models','MODELOS']],
+  world: [['cities','CIDADES E PORTOS'],['fleet','EMBARCAÇÕES'],['routes','ROTAS E VIAGENS'],['trade','COMÉRCIO'],['migration','MIGRAÇÃO']],
   'urban-art': [['overview','OBRAS E MENSAGENS'],['orders','ENCOMENDAS'],['damage','DANOS E LIMPEZA'],['create','CRIAR / NEGOCIAR']],
   safety: [['overview','OPERAÇÃO'],['calls','CHAMADOS'],['cases','OCORRÊNCIAS']],
   forensics: [['overview','VISÃO GERAL'],['bodies','CORPOS'],['reports','LAUDOS']],
@@ -120,7 +123,7 @@ export class CityUI {
     this.municipalSloganToInput=document.createElement('input');this.municipalSloganToInput.type='text';this.municipalSloganToInput.maxLength=120;this.municipalSloganToInput.placeholder='Substituir por…';this.municipalSloganToInput.setAttribute('aria-label','Novo trecho do slogan');
     this.municipalFlagColorInput=document.createElement('input');this.municipalFlagColorInput.type='text';this.municipalFlagColorInput.maxLength=7;this.municipalFlagColorInput.placeholder='#RRGGBB';this.municipalFlagColorInput.setAttribute('aria-label','Cor hexadecimal para a bandeira municipal');
     this.municipalFlagTextInput=document.createElement('input');this.municipalFlagTextInput.type='text';this.municipalFlagTextInput.maxLength=48;this.municipalFlagTextInput.placeholder='Palavra ou frase curta…';this.municipalFlagTextInput.setAttribute('aria-label','Texto para a bandeira municipal');
-    this.mapSizeInput=document.createElement('input');this.mapSizeInput.type='number';this.mapSizeInput.min='128';this.mapSizeInput.max='1024';this.mapSizeInput.step='1';this.mapSizeInput.value=String(city.world.width||256);this.mapSizeInput.setAttribute('aria-label','Tamanho do próximo mapa');
+    this.mapSizeInput=document.createElement('input');this.mapSizeInput.type='number';this.mapSizeInput.min='128';this.mapSizeInput.max='1024';this.mapSizeInput.step='1';this.mapSizeInput.value=String(city.world.width||128);this.mapSizeInput.setAttribute('aria-label','Tamanho do próximo mapa');
     this.populationInput = document.createElement('input'); this.populationInput.type = 'number'; this.populationInput.min = '1'; this.populationInput.max = '2000'; this.populationInput.step = '1'; this.populationInput.value = String(city.initialPopulation ?? 512); this.populationInput.setAttribute('aria-label', 'Número de cidadãos da próxima cidade');
     this.filterInput=document.createElement('select');this.filterInput.setAttribute('aria-label','Filtrar registros');this.filterInput.addEventListener('change',()=>this.setFilter(this.filterInput.value));
     this.analyticsTypeInput=document.createElement('select');this.analyticsTypeInput.setAttribute('aria-label','Filtrar empresas por ramo');this.analyticsTypeInput.addEventListener('change',()=>{this.analyticsBusinessType=this.analyticsTypeInput.value;this.resetScroll();});
@@ -145,7 +148,7 @@ export class CityUI {
     this.artworkDraft.value=gerarTituloTematico('arte');
     this.element.append(this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput);
     for(const input of this.inputs)input.hidden=true;
-    this.terrain = city.world.preset || Object.keys(WORLD_PRESETS)[0];
+    this.terrain = 'archipelago';
     this.profileNextWorld=new URLSearchParams(window.location?.search||'').has('profile');
   }
   get inputs(){return [...Object.values(this.dynamicSelects||{}),...Object.values(this.favoriteColorInputs||{}),this.search,this.seed,this.populationInput,this.mapSizeInput,this.filterInput,this.analyticsTypeInput,this.sortInput,this.publicationDraft,this.artworkBuildingInput,this.artworkBuyerInput,this.artworkPlacementInput,this.artworkKindInput,this.artworkMaterialInput,this.artworkSubjectInput,this.artworkPartyInput,this.artworkTruthInput,this.artworkPurposeInput,this.artworkNarrativeInput,this.artworkEventInput,this.artworkClaimedPlaceInput,this.artworkClaimedDateInput,this.artworkSourceClaimInput,...this.artworkRoleInputs,this.artworkDraft,this.worksBudgetInput,this.worksTransferInput,this.municipalNameInput,this.municipalSloganInput,this.municipalSloganFromInput,this.municipalSloganToInput,this.municipalFlagColorInput,this.municipalFlagTextInput];}
@@ -228,7 +231,7 @@ export class CityUI {
       const views=VIEWS[this.tab];if(views){const p=new Page(ui,x+4,y,w-8,y,bottom);p.links(views.map(([id,label])=>({label,selected:this.view()===id,click:()=>this.showView(id)})));y=p.y;}
       if(this.tab==='government'&&this.view()==='elections'){const nav=new Page(ui,x+4,y,w-8,y,bottom);renderPoliticsNavigation(this,nav);y=nav.y;this.politicsNavigationPinned=true;}
     }
-    if(this.notice){const alert=new Page(ui,x+4,y,w-8,y,bottom);alert.status('INTERVENÇÃO',this.notice);y=alert.y;}
+    if(this.notice){const alert=new Page(ui,x+4,y,w-8,y,bottom);alert.status('AVISO',this.notice);y=alert.y;}
     this.pane(ui,this.floatingDossier?`detail:${this.selected?.id}:${this.detailTab}`:['people','buildings'].includes(this.tab)||this.tab==='economy'&&this.view()==='overview'?'list':this.tab+':'+this.view(),x,y,w,Math.max(24,bottom-y),p=>{
       if(this.floatingDossier)this.detail(p);else if(['people','buildings'].includes(this.tab)||this.tab==='economy'&&this.view()==='overview')this.directory(p);else this.content(p);
     });this.finishInputs();
@@ -320,6 +323,7 @@ export class CityUI {
   detail(p) {
     if(this.selected?.properties?.cityUrbanArt)return this.artworkInspector(p,this.selected.properties.cityUrbanArt);
     if(this.selected?.properties?.cityPlant)return this.plantInspector(p,this.selected.properties.cityPlant);
+    if(this.selected?.properties?.worldVessel)return renderWorldVessel(this,p,this.selected.properties.worldVessel);
     if(this.selected?.properties.cityVehicle)return renderVehicle(this,p,this.selected.properties.cityVehicle);
     const c = this.selected?.properties.citizen, b = this.selected?.properties.cityBuilding;
     if (this.tab === 'people' && c && this.city.society.citizen(c.id)) return this.citizen(p, c);
@@ -420,6 +424,9 @@ export class CityUI {
       for (const id of c.parentIds) link('Filiação', id);
       for (const id of c.childIds) link('Filho(a)', id);
       if (!society.isAdult(c)) link('Responsável', c.guardianId);
+      const knownLocalIds=new Set([c.partnerId,...c.parentIds,...c.childIds,c.guardianId].filter(id=>id!=null).map(id=>society.citizen(id)?.globalId).filter(Boolean));
+      const familyRefs=[...(c.worldLinks?.parentGlobalIds||[]).map(id=>['Filiação',id]),...(c.worldLinks?.guardianGlobalId?[['Responsável',c.worldLinks.guardianGlobalId]]:[]),...(c.worldLinks?.partnerGlobalId?[['Companheiro(a)',c.worldLinks.partnerGlobalId]]:[]),...(c.worldLinks?.childGlobalIds||[]).map(id=>['Filho(a)',id])].filter(([,id])=>!knownLocalIds.has(id));
+      for(const [label,globalId] of familyRefs){const person=this.worldCoordinator?.resolveCitizen(globalId);if(person?.cityId===this.worldCoordinator?.activeCityId)continue;p.note(`${label} · outra cidade`);if(person&&this.openWorldCitizen)p.button(`${person.name} · ${this.worldCoordinator.cities.get(person.cityId)?.metadata.name||person.cityId}`,()=>this.openWorldCitizen(globalId));else p.note(`Referência preservada (${globalId})`);}
       const pregnancy = society.expecting.find(e => e.id === c.expectingId); if (pregnancy) p.note(`Filho esperado: ${stamp(pregnancy.dueAt)}`, C.pink);
       p.note(`${c.personality.wantsRomance ? 'Aberto a relacionamentos' : 'Prefere ficar solteiro'} / ${c.personality.wantsChildren ? 'Deseja ter filhos' : 'Não planeja filhos'}`);
       this.relationshipPanel(p,c);
@@ -492,11 +499,11 @@ export class CityUI {
       if(b.type==='newsroom'){p.kv('Linha editorial',newsroomGenre(b));p.kv('Última edição',b.newsEditionDay??'Ainda não impressa');p.kv('Exemplares produzidos hoje',b.newsPrintedDay===city.day?b.newsCopies:0);p.note(b.officialJournal?'Jornal obrigatório, custeado pela prefeitura. Cada edição usa quatro folhas e preserva até oito atos públicos; inclui votos individuais.':'Papel chega por transporte. Cada cópia consome 3–5 folhas; anúncios pagos são identificados no acervo.');p.button('ACERVO DO JORNAL',()=>this.openPanel({tab:'publications',publicationOwner:b.accountId,selectedPublicationId:null}));}
 
       const industry=INDUSTRIES[b.type];
-      if(b.type==='cycle_assembler')renderAssembly(this,p,b);
+      if(['cycle_assembler','shipyard'].includes(b.type))renderAssembly(this,p,b);
       if(b.type==='paintworks')renderFactoryPaint(this,p,b);
       if(['builder','cycle_workshop'].includes(b.type))for(const j of city.paint.jobs.filter(j=>j.providerId===b.id&&!['completed','cancelled'].includes(j.status)))p.record(`Pintura #${j.id} · ${colorName(j.color)}`,`${j.status} · ${j.labor.toFixed(0)}/${j.requiredLabor}`,()=>{});
       if(['bearing_factory','frame_factory','deck_factory','tire_factory','chain_factory','safety_equipment','saddle_factory'].includes(b.type)){p.kv('Revisão da peça produzida',b.partDesign||1);p.button('INICIAR NOVA REVISÃO DA PEÇA',()=>city.vehicles.revisePart(b.id));}
-      if(['cycle_shop','cycle_assembler'].includes(b.type))for(const v of [...city.vehicles.units.values()].filter(v=>!v.active&&!v.scrapped&&v.holderAccountId===b.accountId))p.record(`${city.vehicles.model(v)?.brand} · ${city.vehicles.model(v)?.name}`,money(city.vehicles.vehiclePrice(v)),()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));
+      if(['cycle_shop','cycle_assembler','boat_shop','shipyard'].includes(b.type))for(const v of [...city.vehicles.units.values()].filter(v=>!v.active&&!v.scrapped&&v.holderAccountId===b.accountId))p.record(`${city.vehicles.model(v)?.brand} · ${city.vehicles.model(v)?.name}`,money(city.vehicles.vehiclePrice(v)),()=>this.openPanel({tab:'transport',views:{transport:'vehicles'},selectedVehicleId:v.id,selected:null}));
       if(b.type==='quarry')p.kv('Pedra restante nos depósitos',city.economy.quarryStatus(b).remaining);
       if(b.type==='forestry'){const trees=[...city.nature.plants.values()].filter(t=>t.buildingId===b.id);p.kv('Árvores cultivadas / maduras',`${trees.length} / ${trees.filter(t=>t.stage==='mature').length}`);p.kv('Sementes disponíveis',b.seedStock);p.note('Os trabalhadores cortam árvores no local, replantam com sementes e carregam a madeira até o depósito.');for(const c of city.citizens.filter(c=>c.forestryJob?.buildingId===b.id))p.card(name(c.entity),`${c.action} · ${c.forestryJob.load||0} madeiras em transporte`,()=>this.openCitizen(c.id));}
       if(b.type==='council_chamber'){const chamber=city.politics.council.getChamber();p.kv('Plenário',`${b.width*b.depth} células no térreo`);p.kv('Gabinetes / vereadores',`${chamber.officeCount||0} / ${city.politics.council.members.length}`);for(const member of city.politics.council.members.filter(m=>city.units.get(m.officeUnitId)?.buildingId===b.id))p.record(member.name,`Gabinete ${member.officeUnitId}`,()=>this.select(b.entity,member.officeUnitId));}
@@ -812,6 +819,7 @@ export class CityUI {
     p.rows(events.slice(0,limit),event=>p.record(event.message,`${stamp(event.minute)} · ${EVENT_CATEGORIES[event.category]||event.kind}`,()=>this.openEvent(event.id),false,{value:event.amount!==undefined?money(event.amount):'',color:C.cyan}));
   }
   content(p) {
+    if(this.tab==='world')return renderWorldManagement(this,p);
     if(this.tab==='newgame')return this.worldGeneration(p);
     if(this.tab==='favorites')return this.favoriteDirectory(p);
     if(this.tab==='custom-history')return this.customHistory(p);
@@ -978,15 +986,15 @@ export class CityUI {
   }
   worldGeneration(p) {
     const city=this.city;
-    p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Natural'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
+    p.heading('GERAÇÃO DE TERRENO');p.note(`Mapa atual: ${WORLD_PRESETS[city.world.preset]?.label||'Arquipélago'}`);p.kv('Semente atual',city.world.seed??city.initialSeed);
     p.heading('PRÓXIMA CIDADE');p.note('Semente do próximo mapa');let iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.seed,p.x,iy,p.w);
     p.note('Cidadãos iniciais (1 a 2.000)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.populationInput,p.x,iy,p.w);
     p.note('Tamanho do mapa (128 a 1024 células por lado)');iy=p.y;p.space(24);if(iy>=p.top&&iy+20<=p.bottom)this.inputAt(this.mapSizeInput,p.x,iy,p.w);
-    p.button(`PAISAGEM: ${WORLD_PRESETS[this.terrain].label}`,()=>{const keys=Object.keys(WORLD_PRESETS);this.terrain=keys[(keys.indexOf(this.terrain)+1)%keys.length];});
+    p.note('Todas as novas cidades são geradas como arquipélagos.');
     p.button(`PROFILER NO PRÓXIMO MUNDO: ${this.profileNextWorld?'ATIVADO':'DESATIVADO'}`,()=>{this.profileNextWorld=!this.profileNextWorld;});
     p.note('Quando ativo, mostra métricas na tela e registra engasgos acima de 500 ms no console.');
     p.note('Gerar terreno reinicia a simulação e descarta a cidade atual.',C.red);
-    p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity()&&this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(Number(this.seed.value),this.terrain,Number(this.populationInput.value),Number(this.mapSizeInput.value));});p.button('GERAR TERRENO ALEATÓRIO',()=>{if(this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(randomWorldSeed(),this.terrain,Number(this.populationInput.value),Number(this.mapSizeInput.value));});
+    p.button('GERAR COM ESTA SEMENTE',()=>{if(this.seed.reportValidity()&&this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(Number(this.seed.value),'archipelago',Number(this.populationInput.value),Number(this.mapSizeInput.value));});p.button('GERAR TERRENO ALEATÓRIO',()=>{if(this.populationInput.reportValidity()&&this.mapSizeInput.reportValidity())this.startWorld(randomWorldSeed(),'archipelago',Number(this.populationInput.value),Number(this.mapSizeInput.value));});
   }
   production(p) {
     if(this.view()==='lighting'){
@@ -1184,6 +1192,8 @@ export class CityUI {
       if(society.citizen(other))p.button('ABRIR FICHA DA OUTRA PESSOA',()=>this.openCitizen(other));
       p.button('MEMÓRIAS DESTE VÍNCULO',()=>{this.memoryPersonId=other;this.detailTab='memories';this.memoryPage=0;this.resetScroll();});
     }
+    const remote=(c.worldLinks?.relationships||[]).filter(link=>link.globalId&&!society.citizens.some(person=>person.globalId===link.globalId));
+    if(remote.length){p.heading('VÍNCULOS EM OUTRAS CIDADES');for(const relation of remote){const person=this.worldCoordinator?.resolveCitizen(relation.globalId),where=person&&this.worldCoordinator?.cities.get(person.cityId)?.metadata.name;if(person&&person.cityId!==this.worldCoordinator?.activeCityId)p.button(`${person.name} · ${where||person.cityId} · ${BOND_LABELS[relation.status]||'vínculo preservado'}`,()=>this.openWorldCitizen?.(relation.globalId));else p.note(`${relation.globalId} · ${BOND_LABELS[relation.status]||'vínculo preservado'}`);}}
     if(!rows.length)p.note('Nenhum vínculo corresponde ao filtro.');
   }
   socialMemories(p,c) {
@@ -1205,6 +1215,8 @@ export class CityUI {
       if(belief){p.kv('Fonte',this.city.accountName(`citizen:${m.sourceId}`));p.kv(m.corrected?'Confiança na correção':'Confiança na narrativa',`${m.confidence}%`);p.kv('Repasses',m.hops);}
       if(m.eventId)p.button(`VER ORIGEM #${m.eventId}`,()=>this.openEvent(m.eventId));
     }
+    const archivedRows=[...(belief?c.worldLinks?.socialHistory?.beliefs:c.worldLinks?.socialHistory?.memories)||[]].reverse();
+    if(archivedRows.length){p.heading('HISTÓRICO SOCIAL DA CIDADE DE ORIGEM');p.note('Estas recordações foram preservadas como arquivo e não participam de novas conversas da cidade atual.');for(const m of archivedRows){p.heading(`${stamp(m.heardAt??m.minute)} / ${m.kind||'registro social'}`,C.cyan);p.note(m.description||'Registro preservado.');for(const globalId of Object.values(m.worldRefs||{})){if(!globalId)continue;const person=this.worldCoordinator?.resolveCitizen(globalId);if(person&&person.cityId!==this.worldCoordinator.activeCityId)p.button(`Abrir ${person.name} · ${this.worldCoordinator.cities.get(person.cityId)?.metadata.name||person.cityId}`,()=>this.openWorldCitizen?.(globalId));}}}
     p.note(`${rows.length} registros / página ${page+1}`);p.buttons([{label:'ANTERIOR',click:()=>{this.memoryPage=Math.max(0,page-1);}},{label:'PRÓXIMA',click:()=>{this.memoryPage=page+1;}}]);
     if(!rows.length)p.note('Nenhuma memória corresponde ao filtro.');
   }

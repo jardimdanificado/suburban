@@ -8,6 +8,8 @@ export const INDUSTRIAL_GOODS = {...SUBSTANCE_GOODS,...Object.fromEntries([
   ['bauxita','Bauxita',700],['aluminio','Alumínio',1900],['aco','Aço',2400],['resina','Látex vegetal',280],['borracha','Borracha',950],
   ['rolamentos','Rolamentos',450],['quadro','Quadro de bicicleta',3500],['plataforma','Plataforma de madeira e metal',1200],['rodas','Rodas de mobilidade',500],['corrente','Corrente de bicicleta',900],['capacete','Capacete de proteção',1200],['selim','Selim',650],['pecas','Peças de reposição',700],['botas','Botas para patins',1700],
   ['bicicleta','Bicicleta',14000],['bicicleta_carga','Bicicleta de carga',28000],['patinete','Patinete',9500],['patins','Patins',10500],['skate','Skate',6500],
+  ['cordas','Cordas navais',420],['casco_naval','Casco naval',2600],['mastros','Mastros',900],['velas','Velas de navegação',1600],['ferragens_navais','Ferragens navais',1250],
+  ['canoe','Canoa',22000],['launch','Lancha',56000],['ferry','Balsa',145000],['cargo','Navio cargueiro',280000],
 ].map(([id,label,price])=>[id,{label,price}]))};
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
@@ -30,10 +32,18 @@ export const INDUSTRIES = {
   sports_shoes:industry('Fábrica de botas esportivas',{tecido:3,borracha:2},{botas:2},32,'construction','Botas reforçadas usadas na montagem de patins.'),
   skate_workshop:industry('Oficina de skates',{plataforma:1,rodas:4,rolamentos:2},{skate:1},45,'construction','Monta skates com fornecedores e modelos identificados.'),
   cycle_assembler:industry('Montadora de bicicletas e patinetes',{quadro:1,rodas:2,corrente:1,selim:1,rolamentos:2},{bicicleta:1,bicicleta_carga:1,patinete:1,patins:1},65,'maintenance','Monta lotes com peças reais; cada alteração de fornecedor ou revisão define outro modelo.'),
+  ropeworks:industry('Cordaria naval',{fibras:3},{cordas:4},22,'construction','Torce fibras cultivadas em cordas para amarração e aparelhamento de embarcações.'),
+  sailmaker:industry('Veleria',{tecido:2,cordas:1},{velas:2},28,'construction','Costura velas com tecido da tecelagem e cordas da cordaria.'),
+  marine_fittings:industry('Fundição de ferragens navais',{aco:2,ferro:1},{ferragens_navais:4},30,'maintenance','Produz ferragens, reforços e fixadores para cascos e embarcações.'),
+  marine_lumberyard:industry('Carpintaria naval',{tabuas:4,ferragens_navais:1},{casco_naval:2},42,'construction','Monta cascos com tábuas da serraria e ferragens de produção local.'),
+  mast_factory:industry('Oficina de mastros',{tabuas:2},{mastros:3},20,'construction','Seleciona e prepara mastros de madeira para barcos à vela.'),
+  shipyard:industry('Estaleiro',{casco_naval:1,cordas:1},{canoe:1,launch:1,ferry:1,cargo:1},80,'maintenance','Monta canoas, lanchas, balsas e navios cargueiros com cascos, velas, mastros, cordas e ferragens rastreáveis.'),
+  boat_shop:industry('Loja de barcos',{canoe:1,launch:1,ferry:1,cargo:1},{},1,'commerce','Recebe embarcações dos estaleiros e vende barcos fabricados na cadeia local.','services'),
   cycle_shop:industry('Loja de mobilidade',{bicicleta:1,bicicleta_carga:1,patinete:1,patins:1,skate:1},{},1,'commerce','Vende equipamentos reais, com proprietário, fabricante, modelo e histórico.','services'),
   domestic_trader:industry('Empresa de comércio interno',{},{},2,'commerce','Intermedeia compras entre empresas locais e organiza os fretes e pagamentos da cadeia municipal.','services'),
   import_exporter:industry('Empresa de comércio exterior',{},{},2,'commerce','Intermedeia importações e exportações, cobra comissão e recolhe tarifas comerciais aprovadas pela Câmara.','services'),
   sports_shop:industry('Loja de artigos esportivos',{capacete:1},{},1,'commerce','Fornece proteção para praticantes de esportes.','services',{need:'safety',boost:12}),
+  boat_workshop:industry('Oficina de barcos',{tabuas:2,cordas:1,ferragens_navais:1},{},32,'maintenance','Repara embarcações atracadas com madeira, cordas e ferragens de procedência registrada. Precisa ocupar a margem da água.','services'),
   cycle_workshop:industry('Oficina de mobilidade',{pecas:1,tinta:1},{},24,'maintenance','Mecânicos levam peças até equipamentos avariados e cobram pelo reparo.','services'),
   bicycle_rental:industry('Locadora de bicicletas',{},{},1,'commerce','Compra bicicletas e aluga o uso por viagem a moradores próximos.','services'),
   kitchen: industry('Cozinha e marmitaria',{feijao:2,arroz:2,alface:1,tomate:1},{marmita:3},18,'baking','Prepara marmitas com ingredientes reais e preserva suas preferências.','food'),

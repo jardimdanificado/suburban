@@ -441,7 +441,23 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const VOCABULARY_NAME_CHANCE=.15;
 const POSITIONAL_VOCABULARY_NAME_CHANCE=.9;
 const wordPatterns=new Map(),agendaCache=new Map();
-const wordMatch=(text,word)=>{let pattern=wordPatterns.get(word);if(!pattern){pattern=new RegExp(`(?:^|[^\\p{L}])${normalize(word).replace(/[.*+?^${}()|[\\]\\\\]/g,'\\$&')}(?:$|[^\\p{L}])`,'u');wordPatterns.set(word,pattern);}return pattern.test(text);};
+// Boundary test must stay exactly the former RegExp semantics
+// ((?:^|[^\p{L}])word(?:$|[^\p{L}]) with the 'u' flag): an occurrence of the
+// normalized word counts when neither neighbour is a letter. Scanning with
+// indexOf instead of compiling one RegExp per vocabulary word (336 of them,
+// all built at the first naming pass) keeps the results identical while
+// removing the compile spikes in every fresh session.
+const wordMatch=(text,word)=>{
+  let needle=wordPatterns.get(word);
+  if(!needle){needle=normalize(word);wordPatterns.set(word,needle);}
+  let index=text.indexOf(needle);
+  while(index!==-1){
+    const before=index===0?' ':text[index-1],after=index+needle.length>=text.length?' ':text[index+needle.length];
+    if(!/\p{L}/u.test(before)&&!/\p{L}/u.test(after))return true;
+    index=text.indexOf(needle,index+1);
+  }
+  return false;
+};
 /** Political meaning carried by a party name. Negative economy favors redistribution; positive favors markets. */
 export function partyNameAgenda(name=''){
   const text=normalize(name);const cached=agendaCache.get(text);if(cached)return cached;let left=0,right=0,state=0,liberty=0,green=0,social=0;

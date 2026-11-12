@@ -24,7 +24,15 @@ export class CityBank {
     }
   }
   liquidityReserve(bank){const daily=Math.max((bank.workers?.length||0)*bank.wage*480+(bank.officeLease?.rent||0),bank.fiscalDailyExpenses||0);return Math.ceil(Math.max(this.city.currency.price(20000),daily*economicPolicy(this.city,'creditReserveDays')));}
-  available() { const city=this.city;return city.economy.businesses.filter(b => {if(b.type!=='bank'||!b.active||b.entity.destroyed||b.balance<b.wage)return false;const staffed=b.workers.length||city.economy.citizen(b.ownerId),selfService=city.fiscal?.municipal(b)&&b.balance>=city.currency.price(20000);return staffed||selfService;}); }
+  // One-service-at-a-time eligibility: same conjunction as available(), so
+  // callers that only test membership (deposit, lend, lending for business)
+  // skip rebuilding the whole businesses list per attempt.
+  canServe(bank) {
+    if(!bank||bank.type!=='bank'||!bank.active||bank.entity.destroyed||bank.balance<bank.wage)return false;
+    const staffed=bank.workers.length||this.city.economy.citizen(bank.ownerId),selfService=this.city.fiscal?.municipal(bank)&&bank.balance>=this.city.currency.price(20000);
+    return staffed||selfService;
+  }
+  available() { return this.city.economy.businesses.filter(b => this.canServe(b)); }
   developmentBanks(){
     const city=this.city,banks=city.economy.businesses.filter(b=>b.type==='bank');
     if(this.lastDevelopmentPreparation!==city.minute){
@@ -41,7 +49,7 @@ export class CityBank {
   savings(clientId) { return [...this.deposits.values()].filter(d => d.clientId === clientId).reduce((n,d) => n+d.balance,0); }
   deposit(bank, clientId, amount) {
     const city = this.city, client = city.accounts.get(clientId);
-    if (!this.available().includes(bank) || !client || !Number.isSafeInteger(amount) || amount <= 0) return false;
+    if (!this.canServe(bank) || !client || !Number.isSafeInteger(amount) || amount <= 0) return false;
     const key = `deposit:${bank.id}:${clientId}`;
     let account = this.deposits.get(key);
     if (!account) {
@@ -56,7 +64,7 @@ export class CityBank {
   }
   lend(bank, clientId, amount) {
     const city = this.city, client = city.accounts.get(clientId);
-    if (!this.policy.creditEnabled || !this.available().includes(bank) || !client || client.entity?.destroyed || !city.society.isAdult(client) || !Number.isSafeInteger(amount) || amount <= 0 || this.loans.some(l => l.clientId === clientId && l.status !== 'paid')) return false;
+    if (!this.policy.creditEnabled || !this.canServe(bank) || !client || client.entity?.destroyed || !city.society.isAdult(client) || !Number.isSafeInteger(amount) || amount <= 0 || this.loans.some(l => l.clientId === clientId && l.status !== 'paid')) return false;
     const income = client.jobId ? (city.building(client.jobId)?.wage || 0)*240 : client.businessIds?.length ? 20000 : 0;
     const reserve = this.liquidityReserve(bank);
     const socialFactor=1+city.relationships.personalOpinion(city.relationships.businessPerson(bank),client)/100;
@@ -68,7 +76,7 @@ export class CityBank {
   }
   mortgage(bank,buyer,amount,{homeId}={}){
     const city=this.city,home=city.housing.homes.get(homeId),units=home&&city.housing.units(home),value=home&&city.housing.price(home);
-    if(!this.policy.creditEnabled||!this.available().includes(bank)||!buyer||buyer.entity.destroyed||buyer.creditAllowed===false||!city.society.isAdult(buyer)||!home||city.housing.isSocial(home)||!units?.length||units.some(u=>!u.forSale||u.tenantId)||!Number.isSafeInteger(amount)||amount<=0||amount>Math.floor(value*.75))return null;
+    if(!this.policy.creditEnabled||!this.canServe(bank)||!buyer||buyer.entity.destroyed||buyer.creditAllowed===false||!city.society.isAdult(buyer)||!home||city.housing.isSocial(home)||!units?.length||units.some(u=>!u.forSale||u.tenantId)||!Number.isSafeInteger(amount)||amount<=0||amount>Math.floor(value*.75))return null;
     if(this.loans.some(l=>l.clientId===buyer.accountId&&l.collateralHomeId===homeId&&!['paid','written-off'].includes(l.status))||this.loans.filter(l=>l.clientId===buyer.accountId&&l.purpose==='mortgage'&&!['paid','written-off','foreclosed'].includes(l.status)).length>=3)return null;
     const reserve=this.liquidityReserve(bank),cash=Math.max(0,bank.balance-reserve);
     if(amount>cash||!city.transfer(bank.accountId,buyer.accountId,amount,'Financiamento imobiliário para aquisição de imóvel',{homeId,loanId:this.nextId}))return null;
@@ -149,7 +157,7 @@ export class CityBank {
   lendForBusiness(bank, founder, amount, proposal) {
     const city=this.city,reject=reason=>this.businessRefusal(reason,proposal);
     if(!this.policy.creditEnabled)return reject('Crédito desativado na política bancária.');
-    if(!this.available().includes(bank))return reject('Banco sem atendimento ou sem caixa operacional.');
+    if(!this.canServe(bank))return reject('Banco sem atendimento ou sem caixa operacional.');
     if(!founder||founder.entity?.destroyed||!city.society.isAdult(founder)||founder.creditAllowed===false)return reject('Empreendedor indisponível ou sem autorização para crédito.');
     if(!Number.isSafeInteger(amount)||amount<=0||!Number.isSafeInteger(proposal?.budget)||amount>proposal.budget)return reject('Orçamento empresarial inválido.');
     if(!city.buildingTypes[proposal.type])return reject('Tipo de empreendimento não disponível para crédito empresarial.');

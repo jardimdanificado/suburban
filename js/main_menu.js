@@ -1,5 +1,5 @@
 import { MANAGEMENT_THEME, bevel, readableLabel } from './management_ui.js';
-import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js';
+import { randomWorldSeed } from './world_settings.js';
 
 const T = MANAGEMENT_THEME;
 
@@ -78,7 +78,7 @@ export class MainMenu {
 
     // World generation parameters
     this.selectedPreset = worldSettings.preset || 'archipelago';
-    this.selectedSize = worldSettings.size || 256;
+    this.selectedSize = worldSettings.size || 128;
     this.selectedPopulation = worldSettings.population || 512;
     this.selectedSeed = worldSettings.seed || 482910;
 
@@ -395,12 +395,9 @@ export class MainMenu {
     const contentW = mw - 24;
     const contentX = mx + 12;
 
-    // 1. Paisagem Button (matches Governo > Terreno: PAISAGEM: <nome>)
-    const presetLabel = WORLD_PRESETS[this.selectedPreset]?.label || 'Arquipélago';
-    ui.button(contentX, curY, contentW, 26, `PAISAGEM: ${presetLabel.toUpperCase()}`, () => {
-      const keys = Object.keys(WORLD_PRESETS);
-      this.selectedPreset = keys[(keys.indexOf(this.selectedPreset) + 1) % keys.length];
-    });
+    // Every new city is an island map so maritime trade can connect it to the world.
+    const presetLabel = 'Arquipélago';
+    ui.text(`PAISAGEM: ${presetLabel.toUpperCase()}`, contentX + 6, curY + 7, T.ink);
     curY += 32;
 
     // 2. Semente do próximo mapa (matches Governo > Terreno)

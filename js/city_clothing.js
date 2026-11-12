@@ -40,6 +40,14 @@ export function initializeClothes(city,c){
   selectClothes(c);
 }
 const appearanceCache=new WeakMap();
+// clothingMood runs on the per-minute happiness pass for every active
+// citizen, but the worn garment only changes on the daily wardrobe update
+// (updateClothes, c.id%24===city.hour). The fast path therefore reuses the
+// derived mood when every input of garmentScore/appearance is unchanged:
+// garment identity, piece/style/color/brand/condition/dirt/quality, the
+// frozen color-preferences object, the resolved brand preference and the
+// party-issue inputs (g.partyOwnerId vs c.political.partyId).
+const moodCache=new WeakMap();
 export function appearance(c){
   const g=wornGarment(c);if(!g)return 30;
   const old=appearanceCache.get(c),brand=g.brandId==null?0:c.brandPreferences?.[g.brandId];
@@ -49,7 +57,19 @@ export function appearance(c){
   return score;
 }
 export const clothingOdor=c=>Math.max(0,Math.min(100,(wornGarment(c)?.dirt||0)-20));
-export function clothingMood(c){return (appearance(c)-50)/12-clothingOdor(c)*.035;}
+export function clothingMood(c){
+  const g=wornGarment(c);
+  const cached=moodCache.get(c);
+  if(cached&&cached.g===g&&cached.dirt===(g?.dirt||0)&&cached.brand===(g?.brandId==null?0:c.brandPreferences?.[g?.brandId])&&cached.colors===c.colorPreferences&&Object.isFrozen(c.colorPreferences)&&cached.partyOwner===g?.partyOwnerId&&cached.party===c.political?.partyId){
+    // The score also reads condition/quality/piece/style/color through the
+    // garment identity: identity change invalidates the brand/piece/state
+    // guard above even when dirt is identical.
+    if(cached.piece===g?.piece&&cached.quality===g?.quality&&cached.condition===g?.condition)return cached.mood;
+  }
+  const mood=(appearance(c)-50)/12-clothingOdor(c)*.035;
+  moodCache.set(c,{g,dirt:g?.dirt||0,piece:g?.piece,quality:g?.quality,condition:g?.condition,brand:g?.brandId==null?0:c.brandPreferences?.[g?.brandId],colors:c.colorPreferences,partyOwner:g?.partyOwnerId,party:c.political?.partyId,mood});
+  return mood;
+}
 export function manufactureClothes(city,b,n){b.garments??=[];for(let i=0;i<n;i++){const serial=b.garmentSerial=(b.garmentSerial||0)+1,orders=[...(b.partyCapOrders||[]).map(source=>({source,...source})),...(b.partyShirtOrders||[]).map(source=>({source,...source}))],order=b.type==='tailor'&&orders.find(o=>o.remaining>0&&city.politics.party(o.partyId)?.active),party=order&&city.politics.party(order.partyId),piece=party?(order.piece||'boné'):GARMENT_TYPES[(b.id+serial)%GARMENT_TYPES.length],g={piece,style:piece==='camisa estampada'?'estampado':CLOTHING_STYLES[(b.id*3+serial)%5],color:party?party.flag.background:COLOR_PALETTE[(b.id+serial*7)%COLOR_PALETTE.length].hex,brandId:b.id,brandName:b.entity.properties.name,quality:Math.min(100,40+(b.productionQuality||0)+Math.min(40,(b.workers||[]).length*5)),condition:100,dirt:0,manufacturedAt:city.minute,...(['camisa estampada','vestido estampado'].includes(piece)?{printId:tropicalPrintFor(b.id+serial,city.initialSeed)}:{}),...(party?{reservedPartyId:party.id,partyNumber:party.number,partyFlag:party.flag,...(piece==='camisa estampada'?{artPrint:{artId:`tailor-${b.id}-${serial}`,cacheKey:`party-${party.id}-${party.number}`,kind:'flags',partyNumber:party.number,partyFlag:party.flag,message:party.short,color:party.flag.foreground}}:{})}: {})};if(order)order.source.remaining--;identifyGarment(city,g);changeOwner(city,g,b.accountId,b.entity.properties.name,party?'encomenda partidária':'produção');b.garments.push(g);}}
 export function clothingOffer(city,c,b){
   initializeClothes(city,c);

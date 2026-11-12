@@ -1,22 +1,25 @@
+import {applyBoatRiders} from './boat_rider_motion.js';
 import {queueMotion} from './city_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=ff-growth-events-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-12';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
 // directly between those snapshots would draw a straight chord through water
 // or rock even though the simulated route itself never crossed it.
-function renderSegmentWalkable(world,ax,ay,bx,by){
+function renderSegmentWalkable(world,ax,ay,bx,by,allowWater=false){
   if(!Number.isFinite(ax)||!Number.isFinite(ay)||!Number.isFinite(bx)||!Number.isFinite(by))return false;
   const distance=Math.hypot(bx-ax,by-ay),steps=Math.max(1,Math.ceil(distance/.2));let px,py;
   for(let i=0;i<=steps;i++){
     const t=i/steps,x=ax+(bx-ax)*t,y=ay+(by-ay)*t,tx=Math.floor(x),ty=Math.floor(y);
     if(tx===px&&ty===py)continue;
-    if(!terrainWalkable(world,tx,ty))return false;
+    const water=world.getTile(tx,ty)===TILE_WATER;if(!terrainWalkable(world,tx,ty)&&!(allowWater&&water))return false;
     if(px!==undefined){
-      if(tx!==px&&ty!==py){
+      const previousWater=world.getTile(px,py)===TILE_WATER;
+      if(!water&&!previousWater&&tx!==px&&ty!==py){
         if(!terrainWalkable(world,tx,py)||!terrainWalkable(world,px,ty))return false;
       }
-      if(!canStep(world,px,py,tx,ty))return false;
+      if(!water&&!previousWater&&!canStep(world,px,py,tx,ty))return false;
     }
     px=tx;py=ty;
   }
@@ -32,7 +35,7 @@ export function sampleCitizenMotion(world,sample,now){
   if(Math.floor(x)===Math.floor(tx)&&Math.floor(y)===Math.floor(ty)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
-  if(renderSegmentWalkable(world,x,y,tx,ty)){
+  if(renderSegmentWalkable(world,x,y,tx,ty,!!sample.citizen?.boatClass)){
     sample.entity.x=tx;sample.entity.y=ty;sample.blockedSince=null;sample.points.length=0;return true;
   }
   sample.blockedSince??=now;
@@ -68,19 +71,23 @@ function receiveInteriorMotion(bridge,packet,now,resetAll=false){
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
 export class CitySimulationBridge {
-  constructor({ city, entities, nextId, time, changed, notice, noticeTarget, profiling=false }) {
+  constructor({ cityId = 'city-1', city, entities, nextId, time, changed, notice, noticeTarget, onProgress=()=>{}, onSummary=()=>{}, observed=true, profiling=false }) {
+    this.cityId = cityId;
+    for(const person of city.citizens||[])person.globalId??=`${cityId}:${person.id}`;
+    this.onProgress=onProgress;this.onSummary=onSummary;this.observed=!!observed;
     this.city = city; this.city.profileDiagnostics=profiling; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice; this.noticeTarget = noticeTarget;
     this.graph = new CityStateGraph(); this.state = { city, entities, nextId };
-    this.active = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
+    this.active = false; this.baselineReady = false; this.commandId = 0; this.pending = new Map(); this.restores = [];
     this.motion = new Map();this.motionSamples=new Map();this.interiorMotion=new Map();this.vehicleMotion=new Map(); this.lastPositionUpdate = performance.now();
+    this.checkpointWaiters=new Map();this.checkpointId=0;this.exportWaiters=new Map();this.exportId=0;
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=ff3-ff4-steps-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=worker-state-export-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
-      this.worker.postMessage({ type: 'init', packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
+      this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
       this.active = true;
-      for (const [target, path, method] of [[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],
+      for (const [target, path, method] of [[city.history, 'history.', 'configureFavorites'],[city, '', 'addBuilding'], [city, '', 'setPolicies'], [city, '', 'setCitizenFinance'],...['reserveWorldExport','worldExportReservationInfo','departWorldExport','completeWorldExport','returnWorldExport','reserveWorldImport','cancelWorldImport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','receiveWorldFreightIncome','setWorldBoatAssigned','approachWorldBoat','reserveWorldBoatCrew','departWorldBoatCrew','returnWorldBoatCrew','payWorldPassengerFare','refundWorldPassengerFare','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration'].map(method=>[city,'',method]),
         ...['setPalette','requestPurchase','requestVehicle','requestBuilding'].map(method=>[city.paint,'paint.',method]),[city.vehicles,'vehicles.','mountFlag'],[city.vehicles,'vehicles.','removeFlag'],[city.economy,'economy.','rentOffice'],[city.economy,'economy.','configureEmployment'],[city.economy,'economy.','offerShares'],[city.economy,'economy.','buyShares'],[city.economy,'economy.','cancelShareOffer'],[city.vehicles,'vehicles.','configureAssembly'],[city.vehicles,'vehicles.','buyVehicle'],[city.vehicles,'vehicles.','transferVehicle'],[city.vehicles,'vehicles.','revisePart'],[city.politics.research,'politics.research.','commissionService'],[city.publications, 'publications.', 'write'], [city.publications, 'publications.', 'read'], [city.publications, 'publications.', 'configure'], [city.bank, 'bank.', 'deposit'], [city.bank, 'bank.', 'withdraw'], [city.bank, 'bank.', 'lend'], [city.bank, 'bank.', 'fileRecoveryPlan'],
         [city.politics, 'politics.', 'leaseHeadquarters'],[city.politics, 'politics.', 'executePlayerAction'],[city.politics, 'politics.', 'intervene'],[city.politics, 'politics.', 'startPublicWork'],[city.politics, 'politics.', 'submitBill'], [city.politics, 'politics.', 'vetoBill'], [city.currency, 'currency.', 'retire'], [city.world, 'world.', 'setTile']]) {
         const original = target[method];
@@ -89,30 +96,66 @@ export class CitySimulationBridge {
       }
     } catch (error) { this.fail(error.message); }
   }
-  command(path, args) {
+  command(path, args, resolve=null) {
     const id = ++this.commandId;
     // Policies/options are plain data. Bank/building references use graph IDs.
     const encoded = args.map(arg => arg && typeof arg === 'object' && this.graph.ids.has(arg) ? this.graph.ref(arg) : arg);
-    this.pending.set(id, {path,target:this.noticeTarget?.()}); this.worker.postMessage({ type: 'command', id, path, args: encoded });
+    this.pending.set(id, {path,target:this.noticeTarget?.(),resolve}); this.worker.postMessage({ type: 'command', cityId:this.cityId, id, path, args: encoded });
+  }
+  request(path,args){
+    if(!this.active)return Promise.resolve({ok:false,message:'Worker da cidade indisponível.'});
+    return new Promise(resolve=>this.command(path,args,resolve));
+  }
+  checkpoint(){
+    if(!this.active)return Promise.reject(new Error('Worker da cidade indisponível.'));
+    const id=++this.checkpointId;
+    return new Promise((resolve,reject)=>{this.checkpointWaiters.set(id,{resolve,reject});try{this.worker.postMessage({type:'checkpoint',cityId:this.cityId,id});}catch(error){this.checkpointWaiters.delete(id);reject(error);}});
+  }
+  exportState(){
+    if(!this.active)return Promise.reject(new Error('Worker da cidade indisponível.'));
+    const id=++this.exportId;
+    return new Promise((resolve,reject)=>{this.exportWaiters.set(id,{resolve,reject});try{this.worker.postMessage({type:'export-state',cityId:this.cityId,id});}catch(error){this.exportWaiters.delete(id);reject(error);}});
   }
   control() {
     if (!this.active) return;
-    const { paused, speed } = this.time, detailBuildingId=this.city.detailedInteriorBuildingId??null, signature = `${paused}:${speed}:${detailBuildingId}`;
+    const { paused, speed } = this.time, detailBuildingId=this.city.detailedInteriorBuildingId??null, signature = `${paused}:${speed}:${detailBuildingId}:${this.observed}`;
     if (signature !== this.controlSignature) {
-      this.controlSignature = signature; this.worker.postMessage({ type: 'control', paused, speed, detailBuildingId });
+      this.controlSignature = signature; this.worker.postMessage({ type: 'control', cityId:this.cityId, paused, speed, detailBuildingId,observed:this.observed });
     }
   }
-  step() { if (this.active && this.time.paused) { this.control(); this.worker.postMessage({ type: 'step' }); return true; } return false; }
+  setObserved(value){this.observed=!!value;this.control();}
+  step() { if (this.active && this.time.paused) { this.control(); this.worker.postMessage({ type: 'step', cityId:this.cityId }); return true; } return false; }
   receive(data) {
     if (!this.active) return;
+    if (data.cityId && data.cityId !== this.cityId) return;
     if (data.type === 'failure') { this.fail(data.message); return; }
+    if (data.type === 'export-state') {
+      const waiter=this.exportWaiters.get(data.id);
+      if(waiter){this.exportWaiters.delete(data.id);waiter.resolve(data.packet);}
+      return;
+    }
     if (data.type === 'result') {
       const pending = this.pending.get(data.id),path=pending?.path; this.pending.delete(data.id);
-      if (!data.ok || ['politics.leaseHeadquarters','economy.rentOffice','politics.intervene','economy.offerShares','economy.buyShares','economy.cancelShareOffer','politics.submitBill'].includes(path)) this.notice(data.message || `Não foi possível concluir a operação: ${path}.`,pending?.target);
+      if(pending?.resolve)pending.resolve({ok:data.ok,value:data.value,message:data.message});
+      if (pending&&!pending.resolve&&(!data.ok||['politics.leaseHeadquarters','economy.rentOffice','politics.intervene','economy.offerShares','economy.buyShares','economy.cancelShareOffer','politics.submitBill'].includes(path))) this.notice(data.message || `Não foi possível concluir a operação: ${path}.`,pending.target);
       return;
     }
     if (data.type === 'motion') { this.receiveMotion(data); return; }
+    if(data.type==='heartbeat'){if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();this.onProgress?.(data.minute);}this.time.observeProgress?.(data.elapsed);this.time.tick=data.tick;this.time.elapsed=data.elapsed;if(data.workerMetrics)this.metrics={...this.metrics,...data.workerMetrics};return;}
+    if(data.type==='summary'){this.onSummary?.(data.summary);return;}
     if (data.type !== 'state') return;
+    // A background city keeps its mirror frozen: the worker stops emitting
+    // periodic graphs and the UI thread must not pay to apply them. The first
+    // packet still establishes the baseline, and an explicit checkpoint (city
+    // selection or save) brings the mirror up to date on demand. A packet that
+    // was encoded while the city was still observed also applies, so flipping
+    // observation cannot desynchronise the incremental encoder.
+    const explicitSync = data.sync === true || (data.checkpointIds?.length || 0) > 0;
+    if (!this.observed && !explicitSync && data.encodedWhileObserved !== true && this.baselineReady) {
+      this.worker?.postMessage({ type: 'ack', cityId: this.cityId });
+      return;
+    }
+    this.baselineReady = true;
     const nodeKinds=this.city.profileDiagnostics?Object.fromEntries(data.packet.nodes.reduce((counts,node)=>counts.set(node.kind,(counts.get(node.kind)||0)+1),new Map())):null;
     const receiveStarted=performance.now();
     const world=this.city.world,revision=world.revision,count=this.entities.length,structure=this.city.structureRevision,map=world.map;
@@ -127,6 +170,8 @@ export class CitySimulationBridge {
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
     this.graph.apply(data.packet);
+    for(const id of data.checkpointIds||[]){const waiter=this.checkpointWaiters.get(id);if(waiter){this.checkpointWaiters.delete(id);waiter.resolve(this.state);}}
+    this.onProgress(this.city.minute);
     const structureChanged=count!==this.entities.length||structure!==this.city.structureRevision;
     if(structureChanged)bindCityState(this.city,{rebuildIndexes:true});
     const terrainChanged=revision!==world.revision;
@@ -166,17 +211,19 @@ export class CitySimulationBridge {
       if(!reset){this.motion.set(c.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
     }
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
+    applyBoatRiders(this.city,data.boatRiders);
     this.applyVehiclePositions(data.vehicles);
     this.changed({ terrain: terrainChanged, terrainTiles, entities: structureChanged });
     this.metrics={...this.metrics,...data.workerMetrics,encodeMs:data.workMs,applyMs:performance.now()-receiveStarted,changedNodes:data.packet.nodes.length,...(nodeKinds?{nodeKinds}:{}),newEvents:(data.packet.histories||[]).reduce((n,h)=>n+h.entries.length,0)};
-    this.worker.postMessage({ type: 'ack' });
+    this.worker.postMessage({ type: 'ack', cityId:this.cityId });
   }
   receiveMotion(data) {
     const now=performance.now();
     // The clock travels with the compact stream instead of freezing until
     // the much heavier business/political snapshot arrives.
-    if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();}
+    if(Number.isFinite(data.minute)){this.city.minute=data.minute;this.city.syncClock?.();this.onProgress?.(data.minute);}
     if(data.workerMetrics)this.metrics={...this.metrics,...data.workerMetrics};
+    applyBoatRiders(this.city,data.boatRiders);
     this.interpolate(now);
     const positions=data.positions,needs=data.needs,needsStride=CITY_NEED_FIELDS.length+2;
     this.lastPositionUpdate=now;
@@ -200,6 +247,7 @@ export class CitySimulationBridge {
       if(data.indoors)renderIndoorPosition(sample.citizen,data.indoors[i/4]?{x,y,z:0}:null);
     }
     receiveInteriorMotion(this,data.inside,now,this.time.paused);
+    applyBoatRiders(this.city,data.boatRiders);
     this.applyVehiclePositions(data.vehicles);
   }
   applyVehiclePositions(positions) {
@@ -225,7 +273,7 @@ export class CitySimulationBridge {
       const passengers=v.passengerIds||[];
       for(let i=-1;i<passengers.length;i++){
         const id=i<0?v.driverId:passengers[i];if(id==null)continue;
-        const c=this.city.society.citizen(id);if(!c||c.ridingVehicleId!==v.id)continue;
+        const c=this.city.society.citizen(id);if(!c||(v.boatClass?c.boatVehicleId!==v.id:c.ridingVehicleId!==v.id))continue;
         const behind=i<0?0:(i+1)*.38,angle=v.angle||0;
         c.entity.x=v.entity.x-Math.sin(angle)*behind;c.entity.y=v.entity.y-Math.cos(angle)*behind;
       }
@@ -242,12 +290,15 @@ export class CitySimulationBridge {
   fail(message) {
     const wasRunning=this.active;
     this.worker?.terminate(); this.active = false;
+    for(const waiter of this.checkpointWaiters.values())waiter.reject(new Error(String(message)));this.checkpointWaiters.clear();
+    for(const waiter of this.exportWaiters.values())waiter.reject(new Error(String(message)));this.exportWaiters.clear();
     if(wasRunning)this.time.paused=true;
     for (const restore of this.restores) restore(); this.restores = [];
     bindCityState(this.city);
     this.city.lighting.siteBuckets=null;
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
     for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
+    for(const pending of this.pending.values())pending.resolve?.({ok:false,message:String(message)});
     this.pending.clear(); this.motion.clear();this.motionSamples.clear();this.interiorMotion.clear();this.vehicleMotion.clear();
     console.error('Simulação em segundo plano indisponível:', message);
     this.notice(wasRunning?`Simulação pausada após erro: ${String(message).split('\n')[0]}`:'Simulação em segundo plano indisponível; execução local ativada.');

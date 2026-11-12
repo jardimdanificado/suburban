@@ -2,7 +2,7 @@ import {injuryMovementFactor} from './city_injury_effects.js';
 import {findActivityRoom,invalidateActivitySearch} from './city_activity_search.js';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=fast-speeds-1';
-import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=visual-flow-4';
+import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import {queueService} from './city_service_queue.js?v=fast-speeds-1';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-cache-512-index-1';
 // Entity coordinates follow the resident through outdoor and indoor tiles.

@@ -175,7 +175,9 @@ export class CitySanitation {
   score(c, f) {
     const b = this.city.building(f.buildingId);
     const entrance=b.officeTenantOf?this.city.building(b.officeTenantOf)||b:b;
-    const queued=(entrance.serviceQueue||[]).filter(q=>q.buildingId===b.id&&q.kind==='toilet'&&q.resource===f.id).length,busy=f.occupantId&&f.occupantId!==c.id&&this.city.minute<f.busyUntil;
+    let queued=0;const queue=entrance.serviceQueue;
+    if(queue)for(let i=0;i<queue.length;i++){const e=queue[i];if(e.buildingId===b.id&&e.kind==='toilet'&&e.resource===f.id)queued++;}
+    const busy=f.occupantId&&f.occupantId!==c.id&&this.city.minute<f.busyUntil;
     return Math.hypot(c.entity.x - b.door.x, c.entity.y - b.door.y) + (100 - f.cleanliness) * .12 + f.price / 50 + Math.max(queued,this.inboundFacilities?.get(f.id)||0)*24+(busy?8:0) - ((f.homeId === c.homeId || f.homeIds?.includes(c.homeId)) ? 24 : 0) - (c.jobId === b.id ? 4 : 0);
   }
   addWaste(b, amount = 1) {
@@ -481,7 +483,12 @@ export class CitySanitation {
   reconcile() {
     const hall=this.city.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed);
     if(hall){
-      for(const f of this.facilities.values())if(f.buildingId===hall.id){f.access='employees';f.price=0;}
+      let hallFacilitiesChanged=false;
+      for(const f of this.facilities.values())if(f.buildingId===hall.id){f.access='employees';f.price=0;hallFacilitiesChanged=true;}
+      // access/price feed the facility-choice index grouping; every other
+      // mutation site goes through registerFacility/updateFacilityHomeIds/
+      // removeFacility, so this direct write invalidates explicitly too.
+      if(hallFacilitiesChanged)this.invalidateFacilityChoiceIndex();
       for(const c of this.city.citizens){const f=this.facilities.get(c.toiletTargetId);if(c.task!=='toilet'||f?.buildingId!==hall.id||this.allowed(c,f))continue;
         hall.serviceQueue=(hall.serviceQueue||[]).filter(q=>q.citizenId!==c.id||q.kind!=='toilet');
         c.task=null;c.targetId=null;c.toiletTargetId=null;c.toiletWaitingSince=null;c.path=[];c.serviceQueue=null;c.facingTarget=null;this.city.furniture?.release(c);

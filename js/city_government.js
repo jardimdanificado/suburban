@@ -29,7 +29,7 @@ import {prejudiceCandidateAffinity} from './city_prejudice.js?v=discrimination-l
 import { CityMandates, promiseRelevant } from './city_mandates.js?v=mandate-one-pass-1';
 import { ROAD_TILES, tileAt } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {formatMoney} from './city_ui_format.js';
-import {listDailyPrivatization} from './city_equity.js?v=daily-mayor-privatization-1';
+import {listDailyPrivatization} from './city_equity.js?v=daily-mayor-privatization-2';
 
 // Ideological starting points; names are generated separately from word pools.
 // The coordinates deliberately cover democratic, revolutionary, authoritarian,

@@ -1,7 +1,7 @@
 import {moveGarments} from './city_clothing.js?v=party-apparel-1';
 import { carryCapacity } from './city_markets.js?v=market-one-pass-1';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=carpool-spatial-index-1';
+import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=harbor-boats-4';
 import { ensureImportDepot } from './city_external_trade.js';
 import {reducedCadence} from './city_fast_forward.js';
 
@@ -140,7 +140,7 @@ export class CityLogistics {
       if(path===null){this.releaseDriver(next);return;}
       c.deliveryId=next.id;c.deliveryLeg='delivery';next.batchReadyAt=this.city.minute+1;c.task='transport';c.path=path;
     }
-    else {c.deliveryBatchIds=null;c.deliveryLoad=0;c.deliveryId=null;c.informalHaulId=null;c.task=null;c.path=[];}
+    else {if(c.boatVehicleId!=null&&this.city.walkable?.(Math.floor(c.entity.x),Math.floor(c.entity.y)))this.city.vehicles.releaseBoatRider?.(c);c.deliveryBatchIds=null;c.deliveryLoad=0;c.deliveryId=null;c.informalHaulId=null;c.task=null;c.path=[];}
   }
   releaseDriver(s) {
     const c = this.city.society.citizen(s.driverId);
@@ -149,7 +149,7 @@ export class CityLogistics {
       for(const other of this.shipments)if(ids.has(other.id)){if(other.pickedUp)other.position={x:c.entity.x,y:c.entity.y};other.driverId=null;other.status='waiting';}
       c.deliveryBatchIds=null;c.deliveryLoad=0;
     }
-    if (c) { if(c.mobilityTrip)this.city.vehicles.releaseTrip(c);this.city.furniture?.release(c);c.deliveryId = null;c.informalHaulId=null; c.task = null; c.path = []; }
+    if (c) { if(c.mobilityTrip)this.city.vehicles.releaseTrip(c);if(c.boatVehicleId!=null&&this.city.walkable?.(Math.floor(c.entity.x),Math.floor(c.entity.y)))this.city.vehicles.releaseBoatRider?.(c);this.city.furniture?.release(c);c.deliveryId = null;c.informalHaulId=null; c.task = null; c.path = []; }
     s.driverId = null;
   }
   cancel(s) {

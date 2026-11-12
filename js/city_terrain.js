@@ -1,10 +1,11 @@
-import {baseTerrainTile} from './world_gen.js?v=beach-band-2-3-waterfix-1';
+import {WATERFRONT_BUSINESSES,waterfrontBerth} from './waterfront_businesses.js';
+import {baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,roadRetainingFaces} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
 import {businessFloors} from './city_business_heights.js';
 import {INITIAL_CYCLE_STAGES} from './city_cycle_startup.js?v=initial-cycle-ref-1';
 import {buildingEntrance} from './city_building_geometry.js';
 import {OFFICE_BUSINESSES} from './city_offices.js?v=office-demand-rollout-1';
-import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js?v=beach-band-2-3-waterfix-1';
+import { TILE_FLOOR, TILE_SAND, TILE_HILL, TILE_STONE, TILE_WATER, TILE_VOID, TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
 export const ROAD_TILES = new Set([TILE_ROAD_GRASS, TILE_ROAD_GRASS_STONE, TILE_ROAD_SAND, TILE_ROAD_SAND_STONE, TILE_ROAD_HILL, TILE_ROAD_HILL_STONE]);
 export const DIRT_ROAD_TILES = new Set([TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL]);
@@ -41,7 +42,9 @@ export function dirtRoadFor(tile){
   if([TILE_HILL,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE].includes(tile))return TILE_ROAD_HILL;
   return null;
 }
-export function roadTravelCost(tile){return PAVED_ROAD_TILES.has(tile)?ROAD_RULES.pavedCost:DIRT_ROAD_TILES.has(tile)?ROAD_RULES.dirtCost:baseTerrainTile(tile)===TILE_HILL?1.6:baseTerrainTile(tile)===TILE_SAND?1.2:1;}
+const computeRoadTravelCost = tile => PAVED_ROAD_TILES.has(tile)?ROAD_RULES.pavedCost:DIRT_ROAD_TILES.has(tile)?ROAD_RULES.dirtCost:baseTerrainTile(tile)===TILE_HILL?1.6:baseTerrainTile(tile)===TILE_SAND?1.2:1;
+const tileCosts=(()=>{const values=new Float64Array(256);for(let tile=0;tile<values.length;tile++)values[tile]=computeRoadTravelCost(tile);return values;})();
+export const roadTravelCost = tile => tileCosts[tile] || 1;
 export function wearRoad(world,x,y,amount){
   const tile=tileAt(world,x,y);if(!PAVED_ROAD_TILES.has(tile)||!(amount>0))return;
   const key=tileKey(x,y),condition=Math.max(0,(world.roadCondition?.get(key)??100)-amount);
@@ -121,6 +124,7 @@ export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,r
 }
 
 export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, type = null, rotation = 0 } = {}) {
+  if(WATERFRONT_BUSINESSES.has(type)&&!waterfrontBerth(city.world,x,y,width,depth))return {error:'A loja ou oficina de barcos precisa ficar na borda da água, com acesso direto para atracação.'};
   if (city.development?.overlaps(x, y, width, depth, plotId)) return { error: 'Este espaço já pertence a um terreno cadastrado.' };
   const { world, occupied } = city;
   const quarry = type === 'quarry' || type === 'iron_mine' || type === 'bauxite_mine';
@@ -156,7 +160,6 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
 const pathWorkspaces = new WeakMap();
 const pathTerrainGrids = new WeakMap();
 const pathDx = [1, 0, -1, 0], pathDy = [0, 1, 0, -1];
-const tileCosts=(()=>{const values=new Float64Array(256);for(let tile=0;tile<values.length;tile++)values[tile]=roadTravelCost(tile);return values;})();
 function terrainPathGrid(world){
   let grid=pathTerrainGrids.get(world);if(grid&&grid.revision===(world.revision||0)&&grid.width===world.width&&grid.height===world.height)return grid;
   const size=world.width*world.height,tiles=new Uint8Array(size),walkable=new Uint8Array(size),roads=new Uint8Array(size),elevations=new Float32Array(size),source=world.map;
@@ -181,7 +184,7 @@ function heapPop(w){
 // One-off requests keep A*. Destination and origin caches have separate cell budgets.
 const sharedDestinations=new WeakMap();
 function makeSharedField(size,root,requests=0){
-  const field={requests,costs:new Float64Array(size),next:new Int32Array(size),closed:new Uint8Array(size),heapNodes:new Int32Array(0),heapCosts:new Float64Array(0),heapScores:new Float64Array(0),heapLength:0};
+  const field={requests,costs:new Float64Array(size),next:new Int32Array(size),closed:new Uint8Array(size),heapNodes:new Int32Array(512),heapCosts:new Float64Array(512),heapScores:new Float64Array(512),heapLength:0};
   field.costs.fill(Infinity);field.next.fill(-1);field.costs[root]=0;heapPush(field,root,0,0);return field;
 }
 function countRouteRequest(requests,key){
@@ -305,7 +308,7 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
   const width = world.width, size = width * world.height;
   let workspace = pathWorkspaces.get(world);
   if (!workspace || workspace.costs.length !== size) {
-    workspace = { costs: new Float64Array(size), parents: new Int32Array(size), marks: new Uint32Array(size), generation: 0,heapNodes:new Int32Array(0),heapCosts:new Float64Array(0),heapScores:new Float64Array(0),heapLength:0 };
+    workspace = { costs: new Float64Array(size), parents: new Int32Array(size), marks: new Uint32Array(size), generation: 0,heapNodes:new Int32Array(512),heapCosts:new Float64Array(512),heapScores:new Float64Array(512),heapLength:0 };
     pathWorkspaces.set(world, workspace);
   }
   workspace.generation = (workspace.generation + 1) >>> 0;

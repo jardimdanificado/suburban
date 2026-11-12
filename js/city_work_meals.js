@@ -1,6 +1,6 @@
 import {syncCitizenInterior} from './city_interiors.js?v=night-crowd-1';
 import { preparedOffer } from './city_markets.js?v=market-one-pass-1';
-import { CROPS } from './city_economy.js?v=two-day-public-food-reserve-1';
+import { CROPS } from './city_economy.js?v=regional-supply-5';
 import { INDUSTRIAL_FOODS } from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 
@@ -56,7 +56,12 @@ export class CityWorkMeals {
   routeToMeal(c) {
     if(this.city.minute<(c.mealRetryAt||0))return false;
     const b = this.employer(c); if (!b) return false;
-    const sites = [b, ...this.city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed')].filter(s => { if(!this.mealSiteReady(s))return false;const offer = this.offer(s, c); return offer && (c.needs.food < 18 || !this.city.buildings.some(shop => this.city.economy.mealScore(c, shop) < Math.hypot(s.door.x - c.entity.x, s.door.y - c.entity.y) - this.city.economy.mealTaste(c, offer) * 45)); }).sort((a, d) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(d.door.x - c.entity.x, d.door.y - c.entity.y));
+    // mealScore(c, shop) is site-independent (pure read of shop/c state), so
+    // cache one score per shop for the whole call instead of re-scoring every
+    // building for every candidate site.
+    const shopScores=new Map();
+    const shopScore=shop=>{let v=shopScores.get(shop.id);if(v===undefined){v=this.city.economy.mealScore(c,shop);shopScores.set(shop.id,v);}return v;};
+    const sites = [b, ...this.city.development.projects.filter(p => p.builderId === b.id && !p.cancelled && p.status !== 'completed')].filter(s => { if(!this.mealSiteReady(s))return false;const offer = this.offer(s, c); return offer && (c.needs.food < 18 || !this.city.buildings.some(shop => shopScore(shop) < Math.hypot(s.door.x - c.entity.x, s.door.y - c.entity.y) - this.city.economy.mealTaste(c, offer) * 45)); }).sort((a, d) => Math.hypot(a.door.x - c.entity.x, a.door.y - c.entity.y) - Math.hypot(d.door.x - c.entity.x, d.door.y - c.entity.y));
     for (const site of sites) {
       const path = this.city.findPath(c.entity, site.door); if (path === null) continue;
       c.task = 'workmeal'; c.targetId = b.id; c.mealTargetId = site.id; c.path = path; return true;

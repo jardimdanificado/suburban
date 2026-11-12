@@ -1,9 +1,9 @@
 import {MANAGEMENT_THEME} from './management_ui.js';
 import {roomFurnitureForCity} from './city_furniture_catalog.js?v=fast-speeds-1';
-import {PLANT_SPECIES} from './city_nature.js?v=tropicalia-flora-3';
+import {PLANT_SPECIES} from './city_nature.js?v=ff-growth-events-1';
 import {POLITICS_SECTIONS} from './city_ui_sections.js';
-import {CityUI,TABS, VIEWS, FILTERS} from './city_ui.js?v=room-floors-1-canvas-readback-1';
-import {BUILDING_TYPES} from './city_simulation.js?v=night-service-search-1';
+import {CityUI,TABS, VIEWS, FILTERS} from './city_ui.js?v=regional-supply-17';
+import {BUILDING_TYPES} from './city_simulation.js?v=regional-supply-12';
 
 export const normalizeSearch = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const values = collection => collection instanceof Map ? [...collection.values()] : collection || [];

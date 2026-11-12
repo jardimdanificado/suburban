@@ -2,7 +2,7 @@ import {interventionButton,interventionButtons} from './city_context_actions.js'
 import {contextActions} from './city_context_actions.js';
 import {colorName} from './city_colors.js';
 import {renderVehiclePaint} from './city_paint_ui.js';
-import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=carpool-spatial-index-1';
+import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-4';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const title=v=>VEHICLE_SPECS[v.good]?.label||v.good;
@@ -10,26 +10,27 @@ const stamp=n=>`D${Math.floor(n/1440)+1} ${String(Math.floor(n%1440/60)).padStar
 function ownerLink(ui,account){const actor=ui.city.accounts.get(account);if(actor?.entity?.properties.citizen)ui.openCitizen(actor.id);else if(actor?.entity?.properties.cityBuilding)ui.openBuilding(actor.id);else if(account==='treasury')ui.openPanel({tab:'government',views:{government:'finance'}});}
 export function renderVehicle(ui,p,v){
   const city=ui.city,system=city.vehicles,model=system.model(v),spec=VEHICLE_SPECS[v.good];
-  contextActions(ui,p,{vehicle:v});
+  if(!v.boatClass)contextActions(ui,p,{vehicle:v});
   p.heading(`${title(v)} #${v.id}`);p.status(model?.brand||'Fabricante desconhecido',model?.name||'Modelo sem identificação');
-  p.metrics([['CONSERVAÇÃO',`${v.condition.toFixed(0)}%`,v.condition<30?C.red:C.green],['VELOCIDADE NA RUA',`${spec.speed} células/s`]]);
+  p.metrics([['CONSERVAÇÃO',`${v.condition.toFixed(0)}%`,v.condition<30?C.red:C.green],[v.boatClass?'VELOCIDADE NA ÁGUA':'VELOCIDADE NA RUA',`${spec.speed} células/s`]]);
   p.heading('IDENTIDADE E PROPRIEDADE');p.kv('Registro individual',v.id);p.kv('Marca',model?.brand||'Sem registro');p.kv('Modelo / revisão',model?.name||'Sem registro');p.kv('Origem',v.initial?'Equipamento da fundação':v.imported?'Importado':'Produção local');
   p.button(`DONO: ${city.accountName(v.ownerAccountId)}`,()=>ownerLink(ui,v.ownerAccountId));
+  if(v.boatClass&&!v.active){const sellers=[...city.buildings.filter(b=>['boat_shop','shipyard'].includes(b.type)&&b.accountId===v.holderAccountId&&b.active&&!b.entity.destroyed),...(v.holderAccountId===city.worldPort.accountId?[city.worldPort]:[])],buyers=city.citizens.filter(c=>!c.entity.destroyed&&city.society.isAdult(c)&&c.balance>=system.vehiclePrice(v)).sort((a,b)=>b.balance-a.balance).slice(0,8);if(sellers.length){p.heading('COMPRAR EMBARCAÇÃO');p.note('Após a compra, o barco permanece na atracação onde está à venda, com o novo proprietário registrado.');for(const c of buyers)p.button(`${c.entity.properties.name} · ${money(c.balance)}`,()=>{if(system.buyVehicle(c.accountId,v.id))ui.notice='Embarcação comprada e registrada no porto.';else ui.notice=city.lastError||'A compra não foi concluída.';});for(const company of city.economy.businesses.filter(b=>b.active&&!b.entity.destroyed&&b.balance>=system.vehiclePrice(v)).slice(0,8))p.button(`EMPRESA: ${company.entity.properties.name}`,()=>system.buyVehicle(company.accountId,v.id));if(!buyers.length)p.note('Nenhum adulto tem saldo suficiente para esta embarcação.');}}
   if(v.possessorAccountId&&v.possessorAccountId!==v.ownerAccountId){p.kv('Posse atual',city.accountName(v.possessorAccountId));p.note('O registro de propriedade permanece com o dono legal.');}
   if(v.theft){p.status('VEÍCULO FURTADO',`Furto #${v.theft.caseId??'sem BO'} · titular atual da posse: ${city.accountName(v.possessorAccountId)}`,'#e8757a');if(v.theft.caseId)p.button(`ABRIR FURTO ORIGINAL #${v.theft.caseId}`,()=>ui.openPanel({tab:'justice',views:{justice:'cases'},justiceCaseId:v.theft.caseId}));for(const transfer of v.theft.resaleHistory||[])p.record(`Receptação · ${stamp(transfer.minute)}`,`${city.accountName(transfer.from)} → ${city.accountName(transfer.to)} · ${money(transfer.price||0)}`,()=>ownerLink(ui,transfer.to));}
   if(model?.manufacturerId!=null)p.button(`FABRICANTE: ${city.building(model.manufacturerId)?.entity.properties.name||model.brand}`,()=>ui.openBuilding(model.manufacturerId));
   p.kv('Fabricação / registro',stamp(v.createdAt??model?.createdAt??0));p.kv('Lote',v.batchId??(v.initial?'Patrimônio inicial':'Sem lote registrado'));
   if(!v.active)p.kv('Preço de venda',money(system.vehiclePrice(v)));p.kv('Situação',v.status||(!v.active?'No estoque':v.driverId?'Em viagem':'Estacionado'));
-  p.kv('Distância percorrida',`${v.distance.toFixed(1)} células`);p.kv('Capacidade de carga',`${spec.cargo} itens`);
+  p.kv('Distância percorrida',`${v.distance.toFixed(1)} células`);p.kv(v.boatClass?'Capacidade de transporte':'Capacidade de carga',v.boatClass?spec.cargo:`${spec.cargo} itens`);
   if(v.entity)p.button('LOCALIZAR NO MAPA',()=>ui.camera(v.entity.x,v.entity.y));
   if(v.driverId)p.button(`USUÁRIO ATUAL: ${city.accountName(`citizen:${v.driverId}`)}`,()=>ui.openCitizen(v.driverId));
-  const rack=v.parking&&city.building(v.parking.rackId);p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':v.parking?.kind==='roadside'?'Ao lado da rua':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));
+  const rack=v.parking&&city.building(v.parking.rackId);if(v.boatClass)p.kv('Atracação',v.driverId?'Em travessia com passageiro':v.waterRoute?.length?'Rota costeira do porto':'À disposição no porto');else{p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':v.parking?.kind==='roadside'?'Ao lado da rua':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));}
   if(v.reservedParking)p.kv('Vaga reservada no destino',v.reservedParking.kind==='roadside'?'Ao lado da rua':`${city.building(v.reservedParking.rackId)?.entity.properties.name||v.reservedParking.rackId} · ${v.reservedParking.index+1}`);
   p.kv('Cor',colorName(v.color));
   if(ui.section)ui.section(p,'vehicleCustomization','Pintura e bandeiras',()=>renderVehiclePaint(ui,p,v));else renderVehiclePaint(ui,p,v);
   p.heading('PEÇAS ORIGINAIS E FORNECEDORES');
   const components=model?.components?.length?model.components:Object.entries(VEHICLE_RECIPES[v.good]||{}).map(([good,quantity])=>({good,quantity,producerName:'Não registrado',design:'—'}));
-  p.table([{label:'Peça',weight:2},{label:'Quantidade'},{label:'Marca / origem',weight:2},{label:'Revisão'}],components.map(part=>({cells:[city.economy.goods[part.good]?.label||part.good,part.quantity,part.brand?`${part.brand} · importação`:part.producerName||city.building(part.producerId)?.entity.properties.name||String(part.producerId),part.design],click:Number.isInteger(part.producerId)?()=>ui.openBuilding(part.producerId):null})));
+  p.table([{label:'Peça',weight:2},{label:'Quantidade'},{label:'Marca / origem',weight:2},{label:'Revisão'}],components.map(part=>({cells:[city.economy.goods[part.good]?.label||part.good,part.quantity,`${part.brand||part.producerName||city.building(part.producerId)?.entity.properties.name||'Não registrado'} · ${part.origin||'Origem não registrada'}`,part.design],click:Number.isInteger(part.producerId)?()=>ui.openBuilding(part.producerId):null})));
   if(!model?.components?.length)p.note('A tabela mostra a composição padrão deste equipamento inicial/importado. Os fornecedores das peças não foram registrados; não são atribuídos a uma fábrica local.');
   p.heading('TODOS OS PROPRIETÁRIOS');p.table([{label:'Quando'},{label:'Origem',weight:2},{label:'Novo proprietário',weight:2},{label:'Valor'},{label:'Motivo',weight:2}],(v.ownershipHistory||[]).map(row=>({cells:[stamp(row.minute),row.fromName||(row.from?city.accountName(row.from):'Fabricação'),row.toName||city.accountName(row.to),money(row.price||0),row.reason||'Transferência'],click:()=>ownerLink(ui,row.to)})));
   p.heading('MANUTENÇÃO E PEÇAS APLICADAS');
@@ -37,6 +38,20 @@ export function renderVehicle(ui,p,v){
   if(!v.maintenanceHistory?.length)p.note('Nenhum reparo registrado.');
   if(v.parkingHistory?.length){p.heading('ESTACIONAMENTOS RECENTES');p.table([{label:'Quando'},{label:'Local',weight:2},{label:'Usuário',weight:2}],v.parkingHistory.slice().reverse().map(row=>({cells:[stamp(row.minute),row.rackName||'Fora de bicicletário',city.accountName(`citizen:${row.citizenId}`)],click:()=>ui.camera(row.x,row.y)})));}
   p.button('EVENTOS DESTE EQUIPAMENTO',()=>ui.openHistory(`vehicleId:${v.id}`));
+}
+export function renderWorldVessel(ui,p,selection){
+ const {vessel,transfer,route,phase}=selection,world=ui.worldCoordinator||ui.host?.worldCoordinator,cities=world?.cities,originId=route?.originCityId||transfer?.originCityId,destinationId=route?.destinationCityId||transfer?.destinationCityId,origin=cities?.get(originId)?.metadata.name||originId||'—',destination=cities?.get(destinationId)?.metadata.name||destinationId||'—',manifest=transfer?.payload,spec=VEHICLE_SPECS[vessel.classId];
+ const registryCity=cities?.get(vessel.homeCityId)?.city,registered=registryCity?.vehicles?.units?.get(vessel.localVehicleId),model=registered&&registryCity.vehicles.model(registered);
+ p.heading('PROPRIEDADE E FABRICAÇÃO');p.kv('Dono',registered?registryCity.accountName(registered.ownerAccountId):vessel.ownerName||'Frota municipal');p.kv('Cidade de registro',cities?.get(vessel.homeCityId)?.metadata?.name||origin);
+ p.kv('Fabricante',model?.brand||'Sem fabricante registrado');p.kv('Modelo',model?.name||'Sem modelo registrado');p.kv('Registro do veículo',registered?.id??'Embarcação antiga sem vínculo ao cadastro de veículos');
+ p.heading('PEÇAS E PROCEDÊNCIA');
+ p.table([{label:'Peça'},{label:'Marca / fabricante',weight:2},{label:'Origem',weight:2},{label:'Revisão'}],(model?.components||[]).map(part=>({cells:[registryCity.economy.goods[part.good]?.label||part.good,part.brand||part.producerName||registryCity.building(part.producerId)?.entity.properties.name||'Não registrado',part.origin||'Não registrada',part.design??'—']})));
+ if(!model?.components?.length)p.note('Esta embarcação não possui procedência de peças registrada.');
+ p.heading(`${spec?.label||'Embarcação'} · ${vessel.id}`);p.status(vessel.status==='idle'?'NO FUNDEIO':vessel.status==='reserved'?'AGUARDANDO EMBARQUE':'EM TRÂNSITO',phase||vessel.status||'Navegando',C.cyan);
+ p.metrics([['CAPACIDADE',spec?.seats??vessel.capacity],['ESTADO',vessel.status||'Navegando']]);p.heading('ROTA MARÍTIMA');p.record(origin,`Origem · ${originId||'—'}`,()=>ui.worldActions?.selectCity?.(originId));p.record(destination,`Destino · ${destinationId||'—'}`,()=>ui.worldActions?.selectCity?.(destinationId));
+ if(manifest?.shipments){p.kv('Ocupação',`${manifest.quantity}/${vessel.capacity}`);p.kv('Frete total',money(manifest.freightAmount));for(const shipment of manifest.shipments)p.record(`${shipment.manifest.quantity} × ${shipment.manifest.good}`,`Frete ${money(shipment.manifest.freightAmount)}`);}else if(manifest?.kind==='goods')p.kv('Carga',`${manifest.quantity} × ${manifest.good}`);else if(manifest?.kind==='citizen'){const count=manifest.package?.version===2?manifest.package.members?.length||0:1;p.kv('Passageiros',`${count} ${count===1?'cidadão':'cidadãos'}`);if(manifest.reason)p.kv('Motivo',manifest.reason);}else p.kv('Carga','Retorno sem carga registrada');
+ const aboard=vessel.status==='returning'?[]:manifest?.kind==='citizen'?(manifest.package?.version===2?manifest.package.members:[manifest.package]):[];p.heading('PESSOAS A BORDO');if(manifest?.crew)p.record(manifest.crew.name||manifest.crew.globalId,'Piloto · permanece a bordo na ida e na volta');for(const [index,person]of aboard.filter(Boolean).entries())p.record(person.name||person.globalId,manifest?.kind==='citizen'?'Passageiro':'Piloto',null,false,{value:person.globalId});if(!aboard.length)p.note('Nenhuma pessoa embarcada.');
+ if(transfer)p.kv('Viagem',transfer.id);p.note('A embarcação acompanha a travessia entre o porto e a borda de cada mapa.');
 }
 export function renderParking(ui,p){
  const city=ui.city,system=city.vehicles,report=system.parkingReport();p.heading('BICICLETÁRIOS · BIKES E PATINETES');p.metrics([['VAGAS',report.capacity],['OCUPADAS',report.occupied],['RESERVADAS',report.reserved],['FORA DOS BICICLETÁRIOS',report.outside]]);
@@ -48,8 +63,9 @@ export function renderAssembly(ui,p,b){
   const system=ui.city.vehicles,plan=system.recipeFor(b);if(!plan)return;
   p.heading('LOTES E MODELOS');p.kv('Marca',b.entity.properties.name);p.kv('Próximo tipo',VEHICLE_SPECS[plan.good].label);p.kv('Pacote por lote',`${b.vehicleBatchSize?'':'Até '}${plan.size} veículos${b.vehicleBatchSize?'':' (automático)'}`);
   p.note('Cada lote usa um fabricante e uma revisão por peça. Trocar uma peça, fornecedor ou revisão registra outro modelo. Os componentes chegam por transporte.');
-  p.button('PLANEJAMENTO AUTOMÁTICO DA PRODUÇÃO',()=>system.configureAssembly(b.id,'auto',3),!b.vehicleKind);
-  p.buttons(['bicicleta','bicicleta_carga','patinete','patins'].map(kind=>({label:VEHICLE_SPECS[kind].label,selected:plan.good===kind,click:()=>system.configureAssembly(b.id,kind,b.vehicleBatchSize||3)})));
+  const kinds=b.type==='shipyard'?['canoe','launch','ferry','cargo']:['bicicleta','bicicleta_carga','patinete','patins'];
+  p.button('PLANEJAMENTO AUTOMÁTICO DA PRODUÇÃO',()=>system.configureAssembly(b.id,'auto',3),!!b.vehicleKind);
+  p.buttons(kinds.map(kind=>({label:VEHICLE_SPECS[kind].label,selected:plan.good===kind,click:()=>system.configureAssembly(b.id,kind,b.vehicleBatchSize||1)})));
   p.buttons([1,3,6,12].map(size=>({label:`LOTE ${size}`,selected:plan.size===size,click:()=>system.configureAssembly(b.id,plan.good,size)})));
   if(b.vehicleAssembly){const batch=b.vehicleAssembly;p.meter(`Montagem do lote ${batch.id}`,100*batch.labor/batch.requiredLabor);p.kv('Unidades no lote',batch.quantity);}
   p.table([{label:'Componente',weight:2},{label:'Por lote'},{label:'No estoque'},{label:'Em frete'}],Object.entries(VEHICLE_RECIPES[plan.good]).map(([g,n])=>({cells:[ui.city.economy.goods[g].label,n*plan.size,b.inventory[g],b.incoming[g]]})));
@@ -66,7 +82,7 @@ export function renderMobility(ui,p){
   }
   if(view==='models'){
     p.heading('MONTADORAS, MODELOS E LOTES');p.metrics([['MODELOS',system.models.size],['LOTES',system.batches.length],['EM MONTAGEM',system.batches.filter(b=>b.status==='assembly').length]]);
-    for(const b of city.economy.businesses.filter(b=>['cycle_assembler','skate_workshop'].includes(b.type)))p.record(b.entity.properties.name,`${b.vehicleAssembly?'Lote '+b.vehicleAssembly.id+' em montagem':'Aguardando peças ou trabalho'} · ${b.workers.length}/${b.jobs} funcionários`,()=>ui.openBuilding(b.id));
+    for(const b of city.economy.businesses.filter(b=>['cycle_assembler','skate_workshop','shipyard'].includes(b.type)))p.record(b.entity.properties.name,`${b.vehicleAssembly?'Lote '+b.vehicleAssembly.id+' em montagem':'Aguardando peças ou trabalho'} · ${b.workers.length}/${b.jobs} funcionários`,()=>ui.openBuilding(b.id));
     p.table([{label:'Marca / modelo',weight:3},{label:'Tipo'},{label:'Unidades'}],[...system.models.values()].filter(m=>ui.matches(`${m.brand} ${m.name}`)).map(m=>({cells:[`${m.brand} · ${m.name}`,VEHICLE_SPECS[m.kind].label,units.filter(v=>v.modelId===m.id).length],click:()=>{const v=units.find(v=>v.modelId===m.id);if(v)ui.openPanel({selectedVehicleId:v.id});}})));
     if(!system.models.size)p.note('O primeiro modelo é registrado quando as peças do primeiro lote chegam à montadora.');return;
   }

@@ -1,4 +1,4 @@
-import {equityShares} from './city_equity.js?v=daily-mayor-privatization-1';
+import {equityShares} from './city_equity.js?v=daily-mayor-privatization-2';
 /** Read-only valuation of existing assets; commercial records exclude cash transfers and escrow reservations. */
 export const MARKET_HISTORY_LIMIT=600;
 const positive=n=>Number.isFinite(n)?Math.max(0,n):0;

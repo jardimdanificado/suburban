@@ -2,7 +2,7 @@ import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {HOUSE_STYLES} from './city_culture.js?v=colonial-colored-trim-1';
 import {INDUSTRIES} from './city_industries.js';
 
-import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-5';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 
 // These additions are architectural meshes, not extra simulated rooms. They
 // sit on the roof or above head height and never reserve street tiles.

@@ -21,7 +21,10 @@ export function reducedCadence(city,owner,key,minMinutes,maxMinutes=minMinutes,s
   old.nextAt=now+minMinutes+offset;return true;
 }
 const TRAVEL_TASKS = new Set(['work','manage','leisure','social','walk','energy','food','water','health','hygiene','toilet']);
-const SPECIAL = ['deliveryId','cleaningJobId','informalJobId','conversation','workMeal','mobilityTrip','ridingVehicleId','skybridgeTransit','custody','custodyEscort','custodyWaterDelivery','funeralBodyId','graffitiMission','policePatrol','policeResponse','policeInvestigation','policeOversight','policeAudit','policeRestitution','policeArrestEscort','combatFlee','forestryJob','mechanicJob','paintWorkId','workProjectId','pregnancy'];
+// SPECIAL keys split by frequency: the common personal states are checked by
+// direct property read before the array scan, so the recurring fast-forward
+// pass pays the small list only for citizens in rare missions.
+const COMMON_SPECIAL=['deliveryId','cleaningJobId','informalJobId','conversation','workMeal','mobilityTrip','ridingVehicleId','pregnancy'];
 
 /** A small deterministic min-heap; equal times retain insertion order. */
 export class OccurrenceQueue {
@@ -43,22 +46,53 @@ export function deferFastForwardCitizen(city,c){
   const state=schedules.get(city);if(!city.fastForward||!state)return false;
   const path=c.indoorLocation?.path?.length?c.indoorLocation.path:c.path,n=c.needs,sleeping=c.task==='energy'&&c.sleep?.active&&!path?.length;
   const idle=city.fastForward2&&c.task==null&&!path?.length&&c.homeUnitId&&city.minute<(c._nextTaskAt||0)&&c._routineRevision===routineRevision(city,c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>45&&!city.urgentNeed(c);
-  const safe=!c.entity.destroyed&&c.initialAge>=18&&(city.society?.age?.(c)??c.initialAge)<85&&(TRAVEL_TASKS.has(c.task)&&(path?.length||sleeping)||idle)&&!SPECIAL.some(key=>c[key])&&!c.substanceState?.effects?.length&&!c.combatInjuries?.length&&!c.career?.pendingInterview&&!city.childrenOf(c.id).length&&Number.isFinite(n.food+n.water+n.energy+n.hygiene+n.toilet+n.health)&&(!sleeping||n.energy>1)&&n.food>(sleeping?6:city.fastForward2?35:19)&&n.water>(sleeping?6:city.fastForward2?35:19)&&(sleeping||n.energy>(city.fastForward2?30:13))&&n.hygiene>11&&n.toilet>(sleeping?6:city.fastForward2?30:11)&&n.health>21;
-  if(!safe||city.minute%60===0||city.detailedInteriorBuildingId!=null&&c.indoorLocation?.buildingId===city.detailedInteriorBuildingId){state.people.delete(c);return false;}
-  const signature=[c.task,path,c.homeUnitId,c.jobId,c._nextTaskAt,c._routineRevision,city.world.revision,city.structureRevision,sleeping];
+  // The safe predicate is all pure reads (age() only refreshes deterministic
+  // derived caches), so the terms keep the same result in any order. The
+  // activity gate comes first: most residents in fast-forward fail here and
+  // used to pay the society.age() call before failing. The rare-mission scan
+  // (formerly SPECIAL.some with a closure per candidate) is unrolled to
+  // direct property reads with identical truthiness and short-circuit slot.
+  const traveling=TRAVEL_TASKS.has(c.task)&&(path?.length||sleeping);
+  const safe=!c.entity.destroyed&&c.initialAge>=18&&(traveling||idle)&&!(c.deliveryId||c.cleaningJobId||c.informalJobId||c.conversation||c.workMeal||c.mobilityTrip||c.ridingVehicleId||c.pregnancy||c.skybridgeTransit||c.custody||c.custodyEscort||c.custodyWaterDelivery||c.funeralBodyId||c.graffitiMission||c.policePatrol||c.policeResponse||c.policeInvestigation||c.policeOversight||c.policeAudit||c.policeRestitution||c.policeArrestEscort||c.combatFlee||c.forestryJob||c.mechanicJob||c.paintWorkId||c.workProjectId)&&!c.substanceState?.effects?.length&&!c.combatInjuries?.length&&!c.career?.pendingInterview&&!city.childrenOf(c.id).length&&(city.society?.age?.(c)??c.initialAge)<85&&Number.isFinite(n.food+n.water+n.energy+n.hygiene+n.toilet+n.health)&&(!sleeping||n.energy>1)&&n.food>(sleeping?6:city.fastForward2?35:19)&&n.water>(sleeping?6:city.fastForward2?35:19)&&(sleeping||n.energy>(city.fastForward2?30:13))&&n.hygiene>11&&n.toilet>(sleeping?6:city.fastForward2?30:11)&&n.health>21;
+  // Hour-boundary wakes used to trip every citizen in the same minute and
+  // turn the hour's first worker interval into a 100-300 ms spike. Each
+  // citizen now wakes within the first 8 minutes of the hour on its own line
+  // (id mod 8); shift boundaries, payroll and civic rules are hour-based, so
+  // the couple of minutes of jitter stay inside the same hourly window.
+  if(!safe||(city.minute-(c.id%8))%60===0||city.detailedInteriorBuildingId!=null&&c.indoorLocation?.buildingId===city.detailedInteriorBuildingId){state.people.delete(c);return false;}
+  // The signature used to be rebuilt as an array for every citizen every
+  // minute; compare tokens directly on the stored entry instead.
   const previous=state.people.get(c);
-  if(previous&&signature.every((value,i)=>value===previous.signature[i]))return true;
+  const nextTaskAt=c._nextTaskAt,routineRevisionValue=c._routineRevision,worldRevision=city.world.revision,structureRevision=city.structureRevision;
+  if(previous&&previous.task===c.task&&previous.path===path&&previous.homeUnitId===c.homeUnitId&&previous.jobId===c.jobId&&previous.nextTaskAt===nextTaskAt&&previous.routineRevision===routineRevisionValue&&previous.worldRevision===worldRevision&&previous.structureRevision===structureRevision&&previous.sleeping===sleeping)return true;
   // Invalidation wakes immediately. The next scheduled check never crosses an
   // hour boundary, where shifts, payroll and many civic rules can change.
   const sleepEnd=sleeping?c.sleep.lastMinute+480-c.sleep.minutes:Infinity;
   const at=Math.min(city.minute+(city.fastForward2?12:4),Math.floor(city.minute/60+1)*60,sleepEnd,idle?c._nextTaskAt:Infinity);
-  const entry=state.queue.schedule(at,c);entry.signature=signature;state.people.set(c,entry);return false;
+  const entry=state.queue.schedule(at,c);entry.value=c;entry.at=at;entry.sleeping=sleeping;entry.path=path;entry.homeUnitId=c.homeUnitId;entry.jobId=c.jobId;entry.nextTaskAt=nextTaskAt;entry.routineRevision=routineRevisionValue;entry.worldRevision=worldRevision;entry.structureRevision=structureRevision;
+  state.people.set(c,entry);return false;
 }
 
 // Repeated low-priority searches become a routine, with an hourly wake and
 // immediate invalidation on a changed job, home, city structure or urgent need.
-export function routineRevision(city,c){return `${c.jobId}:${c.homeUnitId}:${c.businessIds.join(',')}:${city.structureRevision}:${city.world.revision}:${Math.floor(city.minute/60)}`;}
+// The revision string was rebuilt for every citizen every minute and then
+// discarded; the cache keeps only the last inputs and the resulting string.
+// A citizen's business list mutates in place by appending, and any removal
+// reassigns a fresh array, so identity plus length detects every change.
+const routineRevisions=new WeakMap();
+// Hourly reviews keep the same wake spread documented at deferFastForwardCitizen.
+export function routineRevision(city,c){
+  const hour=Math.floor((city.minute-(c.id%8))/60);
+  const jobId=c.jobId??null,homeUnitId=c.homeUnitId??null,businessIds=c.businessIds,structureRevision=city.structureRevision,worldRevision=city.world.revision;
+  const cached=routineRevisions.get(c);
+  if(cached&&cached.hour===hour&&cached.jobId===jobId&&cached.homeUnitId===homeUnitId&&cached.businessIds===businessIds&&cached.structureRevision===structureRevision&&cached.worldRevision===worldRevision)return cached.value;
+  const value=`${c.jobId}:${c.homeUnitId}:${businessIds.join(',')}:${structureRevision}:${worldRevision}:${hour}`;
+  routineRevisions.set(c,{value,hour,jobId,homeUnitId,businessIds,structureRevision,worldRevision});
+  return value;
+}
 export function nextRoutineReview(city,c,stable,urgent=false){
   const interval=city.fastForward&&!urgent?(city.fastForward2?(stable?120:40):(stable?60:20)):(stable?30:10);
-  return Math.min(city.minute+interval+c.id%interval,Math.floor(city.minute/60+1)*60);
+  // The next review lands on the citizen's own staggered hourly wake instead
+  // of stacking every resident on the same minute.
+  return Math.min(city.minute+interval+c.id%interval,Math.floor((city.minute-(c.id%8))/60+1)*60+(c.id%8));
 }

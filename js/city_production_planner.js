@@ -6,6 +6,10 @@ import {OFFICE_ONLY_TYPES,officeSpaceDemand,officeFloors,createMunicipalOffice} 
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
 const inputs=(type,economy)=>{
+  if(type==='shipyard'){
+    const firm=economy.businesses.find(b=>b.type==='shipyard'&&b.active&&!b.entity.destroyed);
+    return (firm&&economy.city.vehicles?.recipeFor(firm)?.inputs)||INDUSTRIES.shipyard.inputs;
+  }
   if(type==='tobacco_workshop'){
     const cannabisAllowed=economy.city.substances?.law('cannabis')?.regime!=='prohibited',tobaccoAllowed=economy.city.substances?.law('tabaco')?.regime!=='prohibited';
     const flowerReady=economy.businesses.some(b=>(b.inventory.flor_cannabis||0)>=2),tobaccoReady=economy.businesses.some(b=>(b.inventory.folha_tabaco||0)>=6);
@@ -13,12 +17,13 @@ const inputs=(type,economy)=>{
   }
   return type==='bakery'?{trigo:2}:type==='mill'?{girassol:1}:INDUSTRIES[type]?.inputs||{};
 };
-const vehicleFactories=new Set(['bearing_factory','frame_factory','deck_factory','tire_factory','chain_factory','safety_equipment','saddle_factory','cycle_assembler']);
+const vehicleFactories=new Set(['bearing_factory','frame_factory','deck_factory','tire_factory','chain_factory','safety_equipment','saddle_factory','cycle_assembler','ropeworks','sailmaker','marine_fittings','marine_lumberyard','mast_factory','shipyard']);
 const productionPlanCache=new WeakMap();
 const startupCapital=(city,economy,type)=>type==='cycle_shop'
   ? Math.ceil(['bicicleta','bicicleta_carga','patins','skate'].reduce((n,g)=>n+economy.goods[g].price,0)*3)+city.currency.price(100000)
+  : type==='boat_shop'?Math.ceil(['canoe','launch','ferry','cargo'].reduce((n,g)=>n+economy.goods[g].price,0))+city.currency.price(100000)
   : type==='bicycle_rental'?Math.ceil(economy.goods.bicicleta.price*3)+city.currency.price(100000)
-  : city.currency.price(type==='bank'?2000000:type==='research_institute'?100000:type==='cycle_assembler'?600000:vehicleFactories.has(type)?180000:({market:200000,greengrocer:75000,bakery:60000,restaurant:75000}[type]||60000));
+  : city.currency.price(type==='bank'?2000000:type==='research_institute'?100000:['cycle_assembler','shipyard'].includes(type)?600000:vehicleFactories.has(type)?180000:({market:200000,greengrocer:75000,bakery:60000,restaurant:75000}[type]||60000));
 /** Demand follows recipes before factories exist, preventing empty chains from remaining invisible. */
 export function productionPlan(economy){
   const city=economy.city,firms=economy.businesses,projects=city.development.projects.filter(pending),rows=new Map(),since=economy.productionWaitSince??={},responses=economy.productionResponses??={};

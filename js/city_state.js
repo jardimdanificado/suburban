@@ -8,7 +8,7 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CityFiscal} from './city_fiscal.js';
 import {CityInterventions} from './city_interventions.js?v=infinite-external-money-1';
-import {CityVehicles} from './city_vehicles.js?v=ff2-speed-1';
+import {CityVehicles} from './city_vehicles.js?v=harbor-boats-4';
 import {CityCampaignMaterials} from './city_campaign_materials.js?v=no-party-slogans-1';
 import {CityCouncilChamber} from './city_council_chamber.js';
 import {CityResearch} from './city_research.js';
@@ -26,7 +26,7 @@ import { CityMandates } from './city_mandates.js?v=mandate-one-pass-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
 import { CityPolitics } from './city_politics.js?v=needs-recovery-1';
 import { CityReputation } from './city_reputation.js';
-import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=ff2-speed-1';
+import { CitySimulation,BUILDING_TYPES } from './city_simulation.js?v=regional-supply-12';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
 import { CityWelfare } from './city_welfare.js';
@@ -37,21 +37,21 @@ import { CityHousing } from './city_housing.js?v=ff2-speed-2';
 import { CitySanitation } from './city_sanitation.js?v=ff2-speed-2';
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
-import { CityDevelopment } from './city_development.js?v=ff2-speed-1';
+import { CityDevelopment } from './city_development.js?v=road-network-cache-1';
 import { CityLogistics } from './city_logistics.js?v=ff2-speed-1';
 import { CityGigs } from './city_gigs.js?v=artwork-solid-wall-support-1';
-import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=ff2-speed-1';
+import { CityEconomy, GOODS,CROPS } from './city_economy.js?v=regional-supply-5';
 import { CitySociety } from './city_society.js?v=ff2-speed-1';
 import { CityServiceInvestment } from './city_service_investment.js?v=service-demand-shared-waste-1';
-import { World, WorldClock } from './world.js?v=sidewalk-road-guard-1';
+import { World, WorldClock } from './world.js?v=terrain-generation-reset-1';
 
 const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,CityPaint,CityFiscal,CityInterventions,CityVehicles,CityOfficialJournal,CityCampaignMaterials,CityCouncilChamber,CityResearch,CityGovernmentAgenda,CityVoting,CityPoliticalStanding,CityPartyOrganization,CityPublications,CityGovernment, CityCouncil, CityCampaigns, CityMandates, CityRelationships, CityNature, CityPolitics, CityReputation, CitySimulation, CityHistory, CityWelfare, CityBank, CityLighting,
   CityCurrency, CityHousing, CitySanitation, CityLife, CityWorkMeals, CityDevelopment,
   CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, CityJustice, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
-const localFields = new Set(['activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','positionChecks','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
-  'childrenByGuardian', 'citizensById', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_initialTaskStaggerUntil', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId', '_routineRevision', 'detailedInteriorBuildingId']);
+const localFields = new Set(['activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_boatPathCache','_boatPathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','positionChecks','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
+  'childrenByGuardian', 'citizensById', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_initialTaskStaggerUntil', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId', '_routineRevision', 'detailedInteriorBuildingId', '_townhall']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at
 // large populations; normal fields can be read directly.
@@ -61,6 +61,12 @@ const needFields=CITY_NEED_FIELDS;
 const socialMemoryFields=['salience','factId','eventId','kind','actorId','targetId','otherId','minute','description','firsthand','truth','impact'];
 const socialFactFields=['id','kind','actorId','targetId','aboutId','creatorId','truth','minute','eventId','description','parentEventId'];
 const hasShape=(object,keys)=>{const own=Object.keys(object);if(own.length!==keys.length)return false;for(let i=0;i<own.length;i++)if(own[i]!==keys[i])return false;return true;};
+const emptyPlainObject=(object)=>{for(const key in object)if(Object.prototype.hasOwnProperty.call(object,key)&&!localFields.has(key))return false;return true;};
+const hasOnlyPrimitiveValues=(object)=>{
+  if(Array.isArray(object)){for(let i=0;i<object.length;i++){const v=object[i];if(v!==null&&(typeof v==='object'||typeof v==='function'))return false;}return true;}
+  for(const key in object){if(!Object.prototype.hasOwnProperty.call(object,key))continue;const v=object[key];if(v!==null&&(typeof v==='object'||typeof v==='function'))return false;}
+  return true;
+};
 const same = (a,b) => {if(!a||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(!Object.is(a[i],b[i]))return false;return true;};
 
 /** Incremental object graph transport. References (including cycles) retain their identity.
@@ -74,8 +80,9 @@ export class CityStateGraph {
     return { ref: id };
   }
   value(value) { return value && typeof value === 'object' && 'ref' in value ? this.objects.get(value.ref) : value; }
-  encode(root,{packNeeds=false,packPositions=false,omitCitizenPaths=false,fieldTailPatches=false}={}) {
+  encode(root,{packNeeds=false,packPositions=false,omitCitizenPaths=false,fieldTailPatches=false,historyEvery=1}={}) {
     const nodes=[],removed=[],histories=[];
+    this.sendSequence=(this.sendSequence||0)+1;
     let packedNeeds=null,needsSet=null,citizenSet=null,entitySet=null;
     if(packPositions){entitySet=new WeakSet();for(const citizen of root.city.citizens)entitySet.add(citizen.entity);}
     if(packNeeds){
@@ -108,7 +115,7 @@ export class CityStateGraph {
       if (previous?.kind === 'FrozenObject' || previous?.kind === 'FrozenArray' || previous?.kind === 'SocialMemory' || previous?.kind === 'SocialFact') return id;
       // Empty collections have no children to visit and cannot have changed
       // while both their previous and current lengths remain zero.
-      if(previous?.data.length===0 && ((previous.kind==='Array'&&object.length===0)||(previous.kind==='Map'&&object.size===0)||(previous.kind==='Set'&&object.size===0)))return id;
+      if(previous?.data.length===0 && ((previous.kind==='Array'&&object.length===0)||(previous.kind==='Map'&&object.size===0)||(previous.kind==='Set'&&object.size===0)||(previous.kind==='Object'&&emptyPlainObject(object))))return id;
       // The initial graph establishes the needs objects. Subsequent worker
       // snapshots carry their numeric values in one compact typed array.
       if(needsSet?.has(object)&&previous)return id;
@@ -121,13 +128,19 @@ export class CityStateGraph {
         kind = 'CityHistory'; data = ['city', reference(object.city)];
         const cursor = this.historyCursors.get(id);
         if (!cursor || cursor.lastId !== object.nextId - 1 || cursor.pendingRevision !== object.pendingFinanceRevision || cursor.favoriteRevision !== object.favoriteRevision) {
-          const snapshot = object.snapshotSince(cursor);
-          histories.push({id,...snapshot.payload}); this.historyCursors.set(id,snapshot.cursor);
+          // Journal payloads are the heaviest part of a large snapshot. With
+          // historyEvery > 1 the cursor is deliberately left behind, so the
+          // next sending snapshot carries the accumulated window at once
+          // (and a fresh graph or a sync snapshot always sends everything).
+          if (!(historyEvery > 1 && cursor && this.sendSequence % historyEvery !== 0)) {
+            const snapshot = object.snapshotSince(cursor);
+            histories.push({id,...snapshot.payload}); this.historyCursors.set(id,snapshot.cursor);
+          }
         }
       }
       // A previously encoded mutable node can stay on the normal path even if
       // it is frozen later. Avoid probing every object in the graph on each send.
-      else if ((!previous || object.appliedAt!=null && object.status!=='análise') && (Array.isArray(object) || Object.getPrototypeOf(object)===Object.prototype) && Object.isFrozen(object) && Object.values(object).every(value=>value===null || typeof value!=='object' && typeof value!=='function')) {
+      else if ((!previous || object.appliedAt!=null && object.status!=='análise') && (Array.isArray(object) || Object.getPrototypeOf(object)===Object.prototype) && Object.isFrozen(object) && hasOnlyPrimitiveValues(object)) {
         if(!Array.isArray(object)&&object.salience!=null&&hasShape(object,socialMemoryFields)){kind='SocialMemory';data=socialMemoryFields.map(key=>object[key]);}
         else if(!Array.isArray(object)&&object.parentEventId!=null&&hasShape(object,socialFactFields)){kind='SocialFact';data=socialFactFields.map(key=>object[key]);}
         else{kind=Array.isArray(object)?'FrozenArray':'FrozenObject';data=Array.isArray(object)?object.map(reference):Object.entries(object).flatMap(([key,value])=>[key,reference(value)]);}
@@ -322,7 +335,7 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
   city.substances??=new CitySubstances(city);city.substances.city=city;city.substances.ensureState();
   city.paint??=new CityPaint(city);
   city.fiscal??=new CityFiscal(city);
-  if(city.substanceSchemaVersion!==5){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=5;}
+  if(city.substanceSchemaVersion!==6||city.goodsCatalogSchemaVersion!==1){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=6;city.goodsCatalogSchemaVersion=1;}
   city.housing.invalidateResidents();
   if(city.development)city.development.plotOverlapBuckets=null;
   city.buildingsById ??= new Map();
@@ -342,8 +355,8 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
       }
     }
   }
-  for (const [id, good] of Object.entries(city.economy.goods)) if (!Object.getOwnPropertyDescriptor(good, 'price')?.get) Object.defineProperty(good, 'price', {
-    enumerable: true, configurable: true, get: () => city.currency.price(GOODS[id].price*(city.economy.market?.[id]?.multiplier||1)*(1+taxRate(city,taxCategory(id)))),
-  });
+  for (const [id, good] of Object.entries(city.economy.goods)) if (!Object.getOwnPropertyDescriptor(good, 'price')?.get) {const basePrice=GOODS[id]?.price??good.price??0;Object.defineProperty(good, 'price', {
+    enumerable: true, configurable: true, get: () => city.currency.price(basePrice*(city.economy.market?.[id]?.multiplier||1)*(1+taxRate(city,taxCategory(id)))),
+  });}
   if(rebuildIndexes){city.familyIndexDirty=true;city.indexFamilies();}
 }

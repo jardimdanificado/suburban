@@ -2,16 +2,17 @@ import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
 import { CitySimulationBridge } from './js/city_sim_bridge.js?v=ff3-ff4-steps-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=seeded-business-visual-v1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=regional-supply-12";
 import { CityDesktop } from "./js/city_desktop.js?v=custom-history-limit-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=seeded-business-visual-v1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=boats-transport-23";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, SPEED_TIERS, FF_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
 import { OptionsPanel } from "./js/options.js?v=seeded-business-visual-v1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
+import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 
 const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
@@ -24,6 +25,19 @@ world.preset = worldSettings.preset;
 const entities = [];
 const legacyUI = new ManagementCanvasUI(canvasUI);
 export const time = new SimulationTime();
+// Mundo online: cada cliente conecta seu mundo single-player a um servidor e
+// as cidades conectadas abrem rotas de comércio e migração entre si.
+export const worldNetCoordinator = new WorldNetCoordinator({
+  cityId: 'city-1',
+  cityGetter: () => ({ city, world }),
+  notice: message => { if (message) cityUI.notice = message; },
+});
+export const worldNet = new WorldNetClient({
+  url: 'ws://localhost:8787', cityId: 'city-1', name: null, coordinator: worldNetCoordinator,
+  notice: message => { if (message) cityUI.notice = message; },
+});
+worldNetCoordinator.client = worldNet;
+renderer3D.worldCoordinator = worldNetCoordinator;
 let optionStorage = null;
 try { optionStorage = window.localStorage; } catch {}
 export const options = new OptionsPanel({ renderer: renderer3D, time, step: stepSimulation, storage: optionStorage });
@@ -517,6 +531,8 @@ function frame(now) {
   previousFrame = now;
   updateFreeCameraMovement(dt);
   renderer3D.showFavoriteBadges=!mainMenu.isActive();
+  // As viagens intermunicipais são desenhadas no relógio da cidade observada.
+  worldNetCoordinator.prepareForRender(worldNetCoordinator.cityId);
 
   if (mainMenu.isActive()) {
     mainMenu.update(dt);
@@ -661,6 +677,19 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
 if (mainMenu.isActive()) {
   cityUI.manager.closeAll(true);
 }
+cityUI.worldCoordinator = worldNetCoordinator;
+cityUI.worldNet = worldNet;
+cityUI.worldActions = {
+  connect: url => { if (url) worldNet.url = url; worldNet.connect(); },
+  disconnect: () => worldNet.disconnect(),
+};
+cityUI.openWorldCitizen = globalId => {
+  const person = worldNetCoordinator.resolveCitizen(globalId);
+  if (!person) return false;
+  const state = cityUI.create(`world-citizen:${globalId}`, 'people', { title: `${person.name} · ${worldNetCoordinator.ownName()}`, entity: person.citizen.entity, kind: 'dossier' });
+  state.detailTab = 'family';
+  return true;
+};
 if (cityGenerationError) cityUI.notice = cityGenerationError;
 for (const [type, spec] of Object.entries(BUILDING_TYPES)) {
   editor.registerPrefab(type, { label: spec.label, create: (x, y) => city.addBuilding(type, x, y, { free: true }) });
@@ -679,6 +708,8 @@ function initSimulationBridge() {
     simulationBridge = null;
   }
   simulationBridge = new CitySimulationBridge({ city, entities, nextId, time, profiling,
+    onProgress: minute => { city.minute = minute; },
+    onSummary: summary => { worldNetCoordinator.own && (worldNetCoordinator.own.summary = summary); worldNet.publishSummary(summary); },
     noticeTarget: () => cityUI.active,
     notice: (message,target) => { if(target)target.notice=message;else cityUI.notice=message; },
     changed: ({ terrain, terrainTiles, entities: changedEntities }) => {
@@ -691,6 +722,20 @@ function initSimulationBridge() {
       if (selected?.destroyed) selectEntity(null);
     },
   });
+  // O espelho do mundo online conhece esta cidade e responde aos pedidos do
+  // servidor encaminhando-os ao worker da simulação (todos idempotentes).
+  worldNetCoordinator.attachCity(city, world, { preset: worldSettings.preset, seed: worldSettings.seed, size: world.width, population: city.initialPopulation });
+  const workerRequest = (method) => async args => {
+    const result = await simulationBridge.request(method, args);
+    if (!result?.ok) throw new Error(result?.message || `A operação ${method} falhou.`);
+    return result.value;
+  };
+  for (const method of ['reserveWorldExport','worldExportReservationInfo','departWorldExport','completeWorldExport','returnWorldExport','reserveWorldImport','cancelWorldImport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','receiveWorldFreightIncome','reserveWorldBoatCrew','departWorldBoatCrew','returnWorldBoatCrew','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration','payWorldPassengerFare','refundWorldPassengerFare','setWorldBoatAssigned']) {
+    worldNet.on(method, workerRequest(method));
+  }
+  worldNet.on('worldOffers', () => worldNetCoordinator.computeOffers());
+  worldNet.on('worldDemand', () => worldNetCoordinator.computeDemand());
+  worldNet.on('worldMigrationCandidates', args => worldNetCoordinator.migrationCandidates(args[0]));
 }
 initSimulationBridge();
 

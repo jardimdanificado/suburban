@@ -1,5 +1,10 @@
 export const FF_SPEED = 64;
 export const FF2_SPEED = 128;
+// Simulation LOD enters below the classic ff tier: at these speeds the
+// per-city-minute budget of the worker (16 ms cadence / 14 ms deadline) is
+// already thinner than the measured ~25 ms of a full-detail minute (512
+// residents), yet the label/tier stays numeric so saves and UI stay stable.
+export const FF_LOD_SPEED = 32;
 export const FF3_SPEED = 192;
 export const FF4_SPEED = 256;
 export const SPEED_TIERS = [0.25, 0.5, 1, 2, 4, 8, 16, 32, FF_SPEED, FF2_SPEED, FF3_SPEED, FF4_SPEED];

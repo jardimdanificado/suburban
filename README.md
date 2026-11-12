@@ -793,3 +793,13 @@ Na rodada seguinte, a rede de ruas conectadas e as áreas de acesso dos lotes pa
 Depois de 32x, a barra de velocidade e o atalho **+** oferecem **ff**, com meta de 64x e indicação da velocidade efetivamente alcançada. O modo reduz a frequência de revisões de viagens e sono previsíveis, encontros novos e dispersão de aglomerações; preserva os cidadãos individuais e o processamento por minuto de produção, pagamentos e ocorrências críticas. **−** retorna a 32x.
 
 Serviços conhecidos passam a fazer parte da rotina dos moradores. Transportadoras agrupam pedidos comerciais compatíveis respeitando a capacidade total, mantendo cada estoque e pagamento separado. O acesso comum a cômodos usa reserva e tempo de percurso; observar o interior restaura a circulação detalhada. Veja o [planejamento e os compromissos de detalhe](docs/plano-mecanicas-ff.md).
+
+### Mundo online (multi-cidades entre jogadores)
+
+Cada cliente pode conectar seu mundo single-player a um servidor e abrir rotas de comércio e migração com as outras cidades conectadas. Veja o [plano e o estado](docs/plano-multicity-online.md).
+
+```bash
+node server/world_server.mjs --port 8787 --data server/data   # servidor do mundo
+```
+
+No jogo, abra **Mundo, comércio e migração** e clique em **CONECTAR AO SERVIDOR** (`ws://localhost:8787` por padrão). Cada cidade mantém seu relógio local; o servidor coordena embarques, entregas e migração e persiste um ledger que retoma transferências quando uma cidade se reconecta. Sem dependências externas: o servidor Node implementa o WebSocket (RFC 6455) internamente.

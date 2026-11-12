@@ -15,8 +15,11 @@ export function bodyFatAmount(c){
   return Math.max(-.42,Math.min(1.8,(bmi-21)/11));
 }
 export function bodyMovementSpeedFactor(c){
-  initializeBodyMetrics(c,c.bodyMetricsSeed||0);
+  if(c?._bodySpeedWeight===c?.bodyWeightKg&&c?._bodySpeedHeight===c?.bodyHeightCm)return c._bodySpeedFactor;
+  initializeBodyMetrics(c,c?.bodyMetricsSeed||0);
   const heightFactor=Math.max(.86,Math.min(1.14,1+(c.bodyHeightCm-170)*.0025));
   const height=c.bodyHeightCm/100,bmi=c.bodyWeightKg/(height*height),fitnessFactor=Math.max(.72,Math.min(1.1,1.06-(bmi-22)*.02));
-  return heightFactor*fitnessFactor;
+  const factor = heightFactor*fitnessFactor;
+  if(c){c._bodySpeedWeight=c.bodyWeightKg;c._bodySpeedHeight=c.bodyHeightCm;c._bodySpeedFactor=factor;}
+  return factor;
 }

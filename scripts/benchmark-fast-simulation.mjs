@@ -9,7 +9,7 @@ const population=Number(process.env.SUBURBAN_BENCH_POPULATION)||512,speed=Number
 const dt=Number(process.env.SUBURBAN_BENCH_STEP)||Math.min(.25,Math.max(1/60,speed/128)),cityMinutes=Number(process.env.SUBURBAN_BENCH_CITY_MINUTES)||240;
 const warmupMinutes=Math.max(0,Math.floor(Number(process.env.SUBURBAN_BENCH_WARMUP_MINUTES)||0)),diagnostics=process.env.SUBURBAN_BENCH_PROFILE==='1';
 const load=name=>import(pathToFileURL(resolve(root,'js',name)).href);
-const {CitySimulation}=await load('city_simulation.js'),{World}=await load('world.js'),{CityStateGraph,bindCityState}=await load('city_state.js');
+const {CitySimulation}=await load('city_simulation.js'),{World}=await load('world.js'),{CityStateGraph,bindCityState}=await load('city_state.js'),{FF_LOD_SPEED}=await load('simulation_time.js');
 let nextId=1;const entities=[],world=new World(1,1337,256);
 const initial=new CitySimulation({world,population,seed:1337,createEntity:data=>{const entity={id:nextId++,destroyed:false,...data};entities.push(entity);return entity;}});
 initial.initialize();
@@ -18,7 +18,7 @@ bindCityState(city);city.staggerInitialTaskDecisions();
 city.createEntity=data=>{const entity={id:state.nextId++,destroyed:false,...data};state.entities.push(entity);return entity;};
 // Warm-up is outside the measured region; retain its state and random stream.
 for(let i=0;i<warmupMinutes;i++)city.update(.25);
-city.profileDiagnostics=diagnostics;city.fastForward=speed>=64&&process.env.SUBURBAN_BENCH_FF!=='0';city.fastForward2=speed>=128;
+city.profileDiagnostics=diagnostics;city.fastForward=(speed>=FF_LOD_SPEED||process.env.SUBURBAN_BENCH_FF==='1')&&process.env.SUBURBAN_BENCH_FF!=='0';city.fastForward2=speed>=128;
 const startMinute=city.minute,dailyEnabled=process.env.SUBURBAN_BENCH_DAILY==='1',daily=Array.from({length:Math.ceil(cityMinutes/1440)},(_,day)=>({day:day+1,minutes:0,updates:0,ms:0,samples:[],population:null,buildings:null,relations:null,phaseTotals:{}}));
 const phaseTotals={},phasePeaks={};
 function captureProfile(profile,prefix=''){

@@ -1,4 +1,12 @@
+import {WATERFRONT_BUSINESSES,waterfrontBerth} from './waterfront_businesses.js';
 import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js?v=ff2-speed-1';
+
+// The movement loop used to compose the same long status string for a moving
+// citizen on every waypoint of every animation frame. The memo compares only
+// the fields that can change the string; when they match and nothing else
+// wrote to c.action meanwhile, the previous string is kept. Kept outside the
+// city graph so the mirror and snapshot encoders stay untouched.
+const movementActionCache=new WeakMap();
 import {CitySubstances} from './city_substances.js?v=economic-flow-7';
 import {beginActivitySearch,endActivitySearch,invalidateActivitySearch} from './city_activity_search.js';
 import {sleepState,wantsSleep,sleepMinute,interruptSleep} from './city_sleep.js';
@@ -9,23 +17,23 @@ import {CitySupplies,pocket,POCKET_RULES} from './city_supplies.js?v=economic-fl
 import {CityWater} from './city_water.js';
 import {collectOfficeRents,endOfficeLease,OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
 import {applySalesTax,MINIMUM_WAGE_TAX_RATE} from './city_sales_tax.js';
-import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-1';
+import {inheritShares,liquidateShareCash} from './city_equity.js?v=daily-mayor-privatization-2';
 import {recordMarketTransaction} from './city_wealth.js';
 import {streetMarketFor,discoverStreetMarket} from './city_markets.js?v=market-one-pass-1';
 import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
-import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=ff2-speed-1';
+import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=fast-speeds-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=ff2-speed-1';
+import {CityVehicles} from './city_vehicles.js?v=harbor-boats-4';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
 import {ensureSkinColor} from './city_skin.js';
 import {returnPartyCap} from './city_party_caps.js?v=party-apparel-1';
-import {MIN_PLOT_CELLS,CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geometry.js?v=visual-flow-4';
+import {MIN_PLOT_CELLS,CITY_FLOOR_HEIGHT,buildingInteriorEntrance} from './city_building_geometry.js?v=banner-placement-2';
 import { CityPublications } from './city_publications.js';
 import { CityOfficialJournal } from './city_official_journal.js';
-import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=seeded-business-visual-v1';
+import { architectureFor, initializeCharacter, HOUSE_STYLES } from './city_culture.js?v=colonial-colored-trim-1';
 import { CityRelationships } from './city_relationships.js?v=wardrobe-expansion-1';
 import { CityNature } from './city_nature.js?v=ff-growth-events-1';
 import {skybridgeLinks} from './city_skybridges.js?v=seeded-business-visual-v1';
@@ -33,7 +41,7 @@ import { CityGovernment as CityPolitics } from './city_government.js?v=party-num
 import { CityReputation } from './city_reputation.js';
 import { CityHistory } from './city_history.js';
 import { CityJustice } from './city_justice.js?v=artwork-no-flag-default-1';
-import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=ff-interiors-1';
+import { syncCitizenInterior,advanceCitizenInterior,outdoorCellReady,disperseCrowds } from './city_interiors.js?v=night-crowd-1';
 import {interiorRoute} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {buildingLeisureSpaces} from './city_balconies.js?v=sertanejo-house-styles-1';
 import { CityWelfare } from './city_welfare.js';
@@ -42,19 +50,22 @@ import {collectEconomicTaxes,recordEconomicIncome,economicPolicy} from './city_e
 import { CityBank } from './city_bank.js?v=business-recovery-1';
 import { quarryDeposits } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { CityLighting } from './city_lighting.js';
+import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_currency.js';
 
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=ff2-speed-2';
 import { CitySanitation } from './city_sanitation.js?v=ff2-speed-2';
 import { CityLife } from './city_life.js?v=position-validation-cache-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
-import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=ff2-speed-1';
+import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=road-network-cache-1';
 import { CityLogistics } from './city_logistics.js?v=ff2-speed-1';
-import { CityGigs } from './city_gigs.js?v=spaced-limited-spontaneous-art-1';
+import { CityGigs } from './city_gigs.js?v=artwork-solid-wall-support-1';
 import { inventoryFree } from './city_inventory.js';
-import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=ff2-speed-1';
+import { CityEconomy, PUBLIC_TYPES, JOB_SKILL, ECONOMY_RULES } from './city_economy.js?v=regional-supply-5';
 import { CitySociety, EVENT_CATEGORIES } from './city_society.js?v=ff2-speed-1';
 import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, findTerrainPath, findSharedTerrainPath, layDirtPath, generateSettlement, hasSettlementAccess, settlementConnected, tileAt, roadTravelCost, ROAD_TILES, DIRT_ROAD_TILES, ROAD_RULES, wearRoad } from './city_terrain.js?v=entrance-retaining-clearance-1';
+import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-4';
+import {createSeaEdgeNavigation} from './sea_edge_navigation.js?v=sea-edge-routes-1';
 
 const ff2ProductionWaits = new WeakMap();
 
@@ -157,6 +168,8 @@ export class CitySimulation {
     this.life = new CityLife(this);
     this.justice = new CityJustice(this);
     this.economy = new CityEconomy(this);
+    this.worldPort={id:'world-port',cityId:null,name:'Porto municipal',type:'world_port',accountId:'world-port',active:true,ownerId:null,x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0,door:{x:world.spawnCenter?.x??0,y:world.spawnCenter?.y??0},entity:{id:'world-port',destroyed:false,properties:{name:'Porto municipal'}},inventory:Object.fromEntries(Object.keys(this.economy.goods).map(good=>[good,0])),inventoryCapacity:100000,incoming:{},reservations:{},receipts:{},importReservations:{},payments:{},freightReceipts:{},passengerPayments:{}};
+    this.accounts.set(this.worldPort.accountId,{name:'Porto municipal',balance:0,worldPort:true});
     this.buildingTypes = BUILDING_TYPES;
     this.development = new CityDevelopment(this);
     this.logistics = new CityLogistics(this);
@@ -177,7 +190,7 @@ export class CitySimulation {
     this.officialJournal = new CityOfficialJournal(this);
     this.vehicles = new CityVehicles(this);
     this.paint = new CityPaint(this);
-    this.substances=new CitySubstances(this);this.substanceSchemaVersion=5;
+    this.substances=new CitySubstances(this);this.substanceSchemaVersion=6;
     this.hourlyPayroll = new Map();
     this.ledger = [];
     this.accumulator = 0;
@@ -243,6 +256,338 @@ export class CitySimulation {
     }
     return true;
   }
+  worldBoatCrewEligible(person,transferId=null){
+    return !!person&&!person.dead&&!person.entity.destroyed&&this.society.isAdult(person)&&!person.worldMigrationPending&&(!person.worldBoatCrew||person.worldBoatCrew===transferId)&&!person.deliveryId&&!person.ridingVehicleId&&!person.custody&&!person.indoorLocation&&!person.mechanicJob&&!person.cleaningJobId&&!person.informalJobId&&!person.serviceQueue&&!person.workMeal&&!person.conversation&&!['food','water','energy','health','toilet','hygiene'].some(key=>(person.needs?.[key]??100)<20);
+  }
+  boardWorldBoatCrew(mission,boatId){
+    const person=this.society.citizen(mission.citizenId),boat=boatId==null?null:this.vehicles.units.get(boatId);
+    if(!person)return null;
+    if(boat&&Math.hypot(person.entity.x-boat.x,person.entity.y-boat.y)>2){
+      if(person.path.length)return {...mission.person,ready:false};
+      const targets=[];for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const x=Math.floor(boat.x)+dx,y=Math.floor(boat.y)+dy;if(this.walkable(x,y)&&Math.hypot(x+.5-boat.x,y+.5-boat.y)<=2)targets.push({x:x+.5,y:y+.5});}
+      for(const target of targets){const path=this.findPath(person.entity,target,{allowBoats:false});if(path){person.path=path;return {...mission.person,ready:false};}}
+      return null;
+    }
+    return {...mission.person,ready:true};
+  }
+  releaseWorldBoatCrew(mission){
+    const person=mission?this.society.citizen(mission.citizenId):null;
+    if(person){person.worldBoatCrew=null;person.task=null;person.path=[];}
+    if(mission)delete this.worldPort.crewMissions[mission.transferId];
+  }
+  reserveWorldBoatCrew(transferId,boatId,citizenId){
+    this.worldPort.crewMissions??={};
+    let mission=this.worldPort.crewMissions[transferId];
+    if(mission){
+      const person=this.society.citizen(mission.citizenId);
+      if(!person){delete this.worldPort.crewMissions[transferId];mission=null;}
+      else if(mission.phase==='aboard')return {...mission.person,ready:true};
+      else if(mission.phase==='returned')return false;
+    }
+    if(mission){
+      const result=this.boardWorldBoatCrew(mission,boatId);
+      if(result)return result;
+      this.releaseWorldBoatCrew(mission);return false;
+    }
+    const requested=citizenId==null?null:this.society.citizen(citizenId);
+    // A background city keeps only a frozen mirror on the UI thread, so the
+    // caller may not know any current resident. Choose from the worker's own
+    // authoritative population and fall back to the next candidate when one
+    // cannot reach the boat.
+    const candidates=requested?[requested]:(this.citizens||[]).filter(person=>this.worldBoatCrewEligible(person,transferId));
+    for(const person of candidates){
+      if(!person||!this.worldBoatCrewEligible(person,transferId))continue;
+      mission={transferId,citizenId:person.id,boatId,phase:'boarding',position:{x:person.entity.x,y:person.entity.y},person:{crewMission:true,citizenId:person.id,globalId:person.globalId,name:person.entity.properties.name}};
+      this.worldPort.crewMissions[transferId]=mission;this.furniture.release(person);person.workWait=null;person.worldBoatCrew=transferId;person.task='boat-pilot-boarding';person.path=[];
+      const result=this.boardWorldBoatCrew(mission,boatId);
+      if(result)return result;
+      this.releaseWorldBoatCrew(mission);
+      if(requested)return false;
+    }
+    return false;
+  }
+  departWorldBoatCrew(transferId){
+    const mission=this.worldPort.crewMissions?.[transferId];if(!mission)return false;if(mission.phase==='aboard')return true;
+    const person=this.society.citizen(mission.citizenId);if(!person)return false;
+    mission.phase='aboard';person.entity.x=-10;person.entity.y=-10;person.path=[];person.task='boat-crew';person.action='Pilotando embarcação intermunicipal';return true;
+  }
+  returnWorldBoatCrew(transferId){
+    const mission=this.worldPort.crewMissions?.[transferId];if(!mission)return true;if(mission.phase==='returned')return true;
+    const person=this.society.citizen(mission.citizenId);if(!person){delete this.worldPort.crewMissions[transferId];return true;}
+    const point=this.worldPort.door||mission.position;if(mission.phase==='aboard'){person.entity.x=point.x+.5;person.entity.y=point.y+.5;}person.worldBoatCrew=null;person.task=null;person.path=[];person.action='Retornou da viagem marítima';mission.phase='returned';return true;
+  }
+  approachWorldBoat(boatId,citizenId){
+    const boat=this.vehicles.units.get(boatId),person=this.society.citizen(citizenId);if(!boat||!person)return false;
+    if(Math.hypot(person.entity.x-boat.x,person.entity.y-boat.y)<=2)return true;
+    const targets=[];for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const x=Math.floor(boat.x)+dx,y=Math.floor(boat.y)+dy;if(this.walkable(x,y)&&Math.hypot(x+.5-boat.x,y+.5-boat.y)<=2)targets.push({x:x+.5,y:y+.5});}
+    targets.sort((a,b)=>Math.hypot(a.x-person.entity.x,a.y-person.entity.y)-Math.hypot(b.x-person.entity.x,b.y-person.entity.y));
+    for(const target of targets){const path=this.findPath(person.entity,target,{allowBoats:false});if(path){person.path=path;person.task='boat-pilot-boarding';person.action='Indo embarcar como piloto';break;}}
+    return false;
+  }
+  setWorldBoatAssigned(vehicleId,reserved){const boat=this.vehicles.units.get(vehicleId);if(!boat?.boatClass||reserved&&boat.driverId)return false;boat.worldFleetReserved=!!reserved;return true;}
+  // Remote trade orders arrive without building identifiers (those are local
+  // to each world). The exporter picks its own best supplier: enough surplus
+  // above the local 25% reserve and a real path to the municipal port.
+  pickWorldExportBuilding(good,quantity){
+    const depot=this.economy.importDepot,candidates=[];
+    for(const building of [...this.buildings,...(depot?[depot]:[])]){
+      if(!building.active||building.entity.destroyed)continue;
+      const stock=building.inventory?.[good]||0,reserve=Math.min(6,Math.floor(stock*.25));
+      const claims=building.type==='import_depot'?Object.values(building.claims||{}).reduce((n,claim)=>n+(claim?.[good]||0),0):0;
+      if(stock-reserve-claims<quantity)continue;
+      if(this.findPath?.(building.door,this.worldPort.door)==null)continue;
+      candidates.push(building);
+    }
+    return candidates.sort((a,b)=>(b.inventory?.[good]||0)-(a.inventory?.[good]||0))[0]||null;
+  }
+  worldExportReservationInfo(transferId){
+    const reservation=this.worldPort.reservations?.[transferId];if(!reservation)return null;
+    const building=this.building(reservation.buildingId)||(this.economy.importDepot?.id===reservation.buildingId?this.economy.importDepot:null);
+    return {buildingId:reservation.buildingId,accountId:building?.accountId||this.worldPort.accountId};
+  }
+  // The importer city picks its own best destination: real need, affordability
+  // and space, mirroring the regional supply rules of the local coordinator.
+  pickWorldImportBuilding(good,quantity){
+    let best=null,bestNeed=0;
+    for(const building of this.buildings){
+      if(!building.active||building.entity.destroyed||!this.economy.accepts(building,good))continue;
+      const recipe=this.vehicles?.recipeFor?.(building)?.inputs||INDUSTRIES[building.type]?.inputs||{},batch=recipe[good];
+      const target=batch?batch*6:['market','greengrocer','restaurant'].includes(building.type)?12:0;
+      if(!target)continue;
+      const need=Math.max(0,target-(building.inventory?.[good]||0)-(building.incoming?.[good]||0)-(building.worldIncoming?.[good]||0)-(building.importIncoming?.[good]||0));
+      if(need<1)continue;
+      const account=this.accounts.get(building.accountId),landed=Math.max(1,this.goods[good]?.price||1);
+      const reserve=Math.max(this.currency.price(500),building.workers.length*(building.wage||0)*12);
+      const affordable=Number.isFinite(account?.balance)?Math.floor(Math.max(0,(account.balance-reserve))/landed):10000;
+      const shippable=Math.min(need,affordable,inventoryFree(building));
+      if(shippable<quantity)continue;
+      if(this.findPath?.(building.door,this.worldPort.door)==null)continue;
+      if(shippable>bestNeed){bestNeed=shippable;best=building;}
+    }
+    return best;
+  }
+  reserveWorldExport(transferId,buildingId,good,quantity,directToPort=false){
+    if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(quantity)||quantity<1||!Object.hasOwn(this.worldPort.inventory,good))return false;
+    const prior=this.worldPort.reservations[transferId];
+    if(prior)return (buildingId==null||prior.buildingId===buildingId)&&prior.good===good&&prior.quantity===quantity&&['reserved','in-transit','delivered'].includes(prior.status);
+    const resolvedExport=buildingId==null?this.pickWorldExportBuilding(good,quantity):null;
+    buildingId=resolvedExport?resolvedExport.id:buildingId;
+    this.worldPort.incoming??={};const building=this.building(buildingId)||(this.economy.importDepot?.id===buildingId?this.economy.importDepot:null),used=Object.values(this.worldPort.inventory).reduce((sum,value)=>sum+value,0)+Object.values(this.worldPort.incoming).reduce((sum,value)=>sum+value,0);
+    if(!building||!building.active||building.entity.destroyed||building.inventory[good]<quantity||used+quantity>this.worldPort.inventoryCapacity)return false;
+    if(!directToPort&&this.logistics?.order&&this.findPath?.(building.door,this.worldPort.door)!==null){
+      const shipment=this.logistics.order(building,this.worldPort,good,quantity,0,{payerAccountId:building.accountId,purpose:'world-port-export'});if(!shipment)return false;
+      this.worldPort.reservations[transferId]={transferId,buildingId,good,quantity,status:'loading',localShipmentId:shipment.id,createdAt:this.minute};return true;
+    }
+    building.inventory[good]-=quantity;this.worldPort.inventory[good]+=quantity;this.worldPort.reservations[transferId]={transferId,buildingId,good,quantity,status:'reserved',createdAt:this.minute};
+    this.economy.recordGoods('world-export-port',good,quantity,building.id,this.worldPort.id,{transferId});
+    return true;
+  }
+  departWorldExport(transferId){
+    const reservation=this.worldPort.reservations[transferId];if(!reservation)return false;
+    if(['in-transit','delivered'].includes(reservation.status))return true;
+    if(reservation.status==='loading'){
+      const shipment=this.logistics?.shipments.find(item=>item.id===reservation.localShipmentId);if(shipment?.status!=='delivered')return false;
+      reservation.status='reserved';reservation.loadedAt=this.minute;
+    }
+    if(reservation.status!=='reserved'||this.worldPort.inventory[reservation.good]<reservation.quantity)return false;
+    this.worldPort.inventory[reservation.good]-=reservation.quantity;reservation.status='in-transit';reservation.departedAt=this.minute;return true;
+  }
+  completeWorldExport(transferId){const reservation=this.worldPort.reservations[transferId];if(!reservation)return false;if(reservation.status==='delivered')return true;if(reservation.status!=='in-transit')return false;reservation.status='delivered';reservation.deliveredAt=this.minute;return true;}
+  returnWorldExport(transferId){
+    const reservation=this.worldPort.reservations[transferId];if(!reservation)return false;
+    if(reservation.status==='returned')return true;
+    if(reservation.status==='loading'){
+      const shipment=this.logistics?.shipments.find(item=>item.id===reservation.localShipmentId);
+      if(!shipment||shipment.status==='delivered'){reservation.status='reserved';}
+      else{this.logistics.cancel(shipment);reservation.status='returned';reservation.returnedAt=this.minute;return true;}
+    }
+    if(reservation.status!=='reserved'||this.worldPort.inventory[reservation.good]<reservation.quantity)return false;
+    const building=this.building(reservation.buildingId)||(this.economy.importDepot?.id===reservation.buildingId?this.economy.importDepot:null);
+    if(building&&!building.entity.destroyed){this.worldPort.inventory[reservation.good]-=reservation.quantity;building.inventory[reservation.good]+=reservation.quantity;this.economy.recordGoods('world-export-return',reservation.good,reservation.quantity,this.worldPort.id,building.id,{transferId});}
+    reservation.status='returned';reservation.returnedAt=this.minute;return true;
+  }
+  reserveWorldImport(transferId,buildingId,good,quantity){
+    if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(quantity)||quantity<1||!Object.hasOwn(this.worldPort.inventory,good))return false;
+    this.worldPort.importReservations??={};const prior=this.worldPort.importReservations[transferId];
+    if(prior)return (buildingId==null||prior.buildingId===buildingId)&&prior.good===good&&prior.quantity===quantity&&['reserved','received','local-delivery','delivered'].includes(prior.status);
+    const resolvedImport=buildingId==null?this.pickWorldImportBuilding(good,quantity):null;
+    buildingId=resolvedImport?resolvedImport.id:buildingId;
+    const building=this.building(buildingId);if(!building||!building.active||building.entity.destroyed||!this.economy.accepts(building,good))return false;
+    building.worldIncoming??={};building.worldIncoming[good]=(building.worldIncoming[good]||0)+quantity;
+    this.worldPort.importReservations[transferId]={transferId,buildingId,good,quantity,status:'reserved',demandReleased:false,createdAt:this.minute};return true;
+  }
+  releaseWorldImportDemand(transferId){
+    const reservation=this.worldPort.importReservations?.[transferId];if(!reservation)return true;if(reservation.demandReleased)return true;
+    const building=this.building(reservation.buildingId);if(building?.worldIncoming){building.worldIncoming[reservation.good]=Math.max(0,(building.worldIncoming[reservation.good]||0)-reservation.quantity);if(!building.worldIncoming[reservation.good])delete building.worldIncoming[reservation.good];}
+    reservation.demandReleased=true;return true;
+  }
+  cancelWorldImport(transferId){
+    const reservation=this.worldPort.importReservations?.[transferId];if(!reservation)return true;if(['received','local-delivery','delivered'].includes(reservation.status))return false;if(reservation.status==='cancelled')return true;
+    this.releaseWorldImportDemand(transferId);reservation.status='cancelled';reservation.cancelledAt=this.minute;return true;
+  }
+  receiveWorldImport(transferId,good,quantity){
+    if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(quantity)||quantity<1||!Object.hasOwn(this.worldPort.inventory,good))return false;
+    const reservation=this.worldPort.importReservations?.[transferId];if(reservation&&(reservation.good!==good||reservation.quantity!==quantity||reservation.status==='cancelled'))return false;
+    const prior=this.worldPort.receipts[transferId];if(prior)return prior.good===good&&prior.quantity===quantity;
+    const used=Object.values(this.worldPort.inventory).reduce((sum,value)=>sum+value,0);if(used+quantity>this.worldPort.inventoryCapacity)return false;
+    this.worldPort.inventory[good]+=quantity;this.worldPort.receipts[transferId]={transferId,good,quantity,status:'received',receivedAt:this.minute};if(reservation)reservation.status='received';
+    this.economy.recordGoods('world-import-port',good,quantity,null,this.worldPort.id,{transferId});return true;
+  }
+  deliverWorldImport(transferId,buildingId){
+    const receipt=this.worldPort.receipts[transferId];if(!receipt)return false;
+    const priorReservation=this.worldPort.importReservations?.[transferId];
+    if(receipt.status==='delivered')return receipt.buildingId===(buildingId||priorReservation?.buildingId);
+    const reservation=priorReservation;
+    const resolvedBuilding=buildingId||reservation?.buildingId;
+    const building=this.building(resolvedBuilding);if(!building||!building.active||building.entity.destroyed)return false;
+    if(receipt.status==='local-delivery'){
+      const shipment=this.logistics?.shipments.find(item=>item.id===receipt.localShipmentId);if(shipment?.status!=='delivered')return false;
+      receipt.status='delivered';receipt.buildingId=resolvedBuilding;receipt.deliveredAt=this.minute;if(reservation)reservation.status='delivered';return this.releaseWorldImportDemand(transferId);
+    }
+    if(this.logistics?.order&&this.findPath?.(this.worldPort.door,building.door)!==null){
+      const shipment=this.logistics.order(this.worldPort,building,receipt.good,receipt.quantity,0,{payerAccountId:building.accountId,purpose:'world-port-import'});if(!shipment)return false;
+      receipt.status='local-delivery';receipt.localShipmentId=shipment.id;receipt.buildingId=resolvedBuilding;if(reservation)reservation.status='local-delivery';return false;
+    }
+    if(this.worldPort.inventory[receipt.good]<receipt.quantity||inventoryFree(building)<receipt.quantity)return false;
+    this.worldPort.inventory[receipt.good]-=receipt.quantity;building.inventory[receipt.good]+=receipt.quantity;receipt.status='delivered';receipt.buildingId=resolvedBuilding;receipt.deliveredAt=this.minute;if(reservation)reservation.status='delivered';this.releaseWorldImportDemand(transferId);
+    this.economy.recordGoods('world-import-delivery',receipt.good,receipt.quantity,this.worldPort.id,building.id,{transferId});return true;
+  }
+  reserveWorldPayment(transferId,payerAccountId,amount){
+    if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(amount)||amount<1||!this.accounts.has(payerAccountId))return false;
+    const prior=this.worldPort.payments[transferId];if(prior)return prior.payerAccountId===payerAccountId&&prior.amount===amount&&['reserved','settled'].includes(prior.status);
+    if(!this.transfer(payerAccountId,'supplier',amount,'Pagamento marítimo enviado',{transferId,worldTrade:true}))return false;
+    this.worldPort.payments[transferId]={transferId,payerAccountId,amount,status:'reserved',reservedAt:this.minute};return true;
+  }
+  receiveWorldPayment(transferId,payerAccountId,amount){
+    if(typeof transferId!=='string'||!transferId||!Number.isSafeInteger(amount)||amount<1)return false;
+    const prior=this.worldPort.payments[transferId];if(prior)return prior.payerAccountId===payerAccountId&&prior.amount===amount&&['reserved','settled'].includes(prior.status);
+    this.worldPort.payments[transferId]={transferId,payerAccountId,amount,status:'reserved',receivedAt:this.minute};return true;
+  }
+  settleWorldPayment(transferId,sellerAccountId,goodsAmount=null,freightAmount=0,freightReceiverAccountId=null){
+    const payment=this.worldPort.payments[transferId];if(!payment)return false;
+    goodsAmount??=payment.amount-freightAmount;
+    if(payment.status==='settled')return payment.sellerAccountId===sellerAccountId&&payment.goodsAmount===goodsAmount&&payment.freightAmount===freightAmount;
+    if(payment.status!=='reserved'||!this.accounts.has(sellerAccountId))return false;
+    if(!Number.isSafeInteger(goodsAmount)||goodsAmount<0||!Number.isSafeInteger(freightAmount)||freightAmount<0||goodsAmount+freightAmount!==payment.amount)return false;
+    if(!this.transfer('supplier',sellerAccountId,goodsAmount,'Pagamento marítimo recebido',{transferId,worldTrade:true}))return false;
+    let freightPayee=freightReceiverAccountId&&this.accounts.has(freightReceiverAccountId)?freightReceiverAccountId:'world-fleet';
+    if(freightAmount){const fleet=this.accounts.get(freightPayee)||{name:'Frota marítima',balance:0,worldFleet:true};this.accounts.set(freightPayee,fleet);if(!this.transfer('supplier',freightPayee,freightAmount,freightPayee==='world-fleet'?'Frete marítimo recebido':'Frete intermunicipal pago ao operador',{transferId,worldTrade:true,freightReceiverAccountId:freightReceiverAccountId||null}))return false;}
+    payment.status='settled';payment.sellerAccountId=sellerAccountId;payment.goodsAmount=goodsAmount;payment.freightAmount=freightAmount;payment.freightReceiverAccountId=freightPayee;payment.settledAt=this.minute;return true;
+  }
+  receiveWorldFreightIncome(transferId,accountId,amount,vesselId){
+    if(typeof transferId!=='string'||!this.accounts.has(accountId)||!Number.isSafeInteger(amount)||amount<0)return false;
+    this.worldPort.freightReceipts??={};const prior=this.worldPort.freightReceipts[transferId];if(prior)return prior.accountId===accountId&&prior.amount===amount;
+    if(amount&&!this.transfer('supplier',accountId,amount,'Frete intermunicipal recebido',{transferId,vesselId,worldTrade:true}))return false;
+    this.worldPort.freightReceipts[transferId]={accountId,amount,vesselId,receivedAt:this.minute};return true;
+  }
+  payWorldPassengerFare(transferId,payerAccountId,operatorAccountId,amount,vesselId){
+    if(typeof transferId!=='string'||!transferId||!this.accounts.has(payerAccountId)||!this.accounts.has(operatorAccountId)||!Number.isSafeInteger(amount)||amount<1)return false;
+    const prior=this.worldPort.passengerPayments[transferId];if(prior)return prior.payerAccountId===payerAccountId&&prior.operatorAccountId===operatorAccountId&&prior.amount===amount&&prior.status==='paid';
+    if(!this.transfer(payerAccountId,operatorAccountId,amount,'Passagem marítima intermunicipal',{transferId,vesselId,worldPassengerFare:true}))return false;
+    this.worldPort.passengerPayments[transferId]={transferId,payerAccountId,operatorAccountId,amount,vesselId,status:'paid',paidAt:this.minute};return true;
+  }
+  refundWorldPassengerFare(transferId){
+    const payment=this.worldPort.passengerPayments?.[transferId];if(!payment)return true;if(payment.status==='refunded')return true;if(payment.status!=='paid')return false;
+    if(!this.transfer(payment.operatorAccountId,payment.payerAccountId,payment.amount,'Estorno de passagem marítima',{transferId,vesselId:payment.vesselId,worldPassengerFare:true}))return false;
+    payment.status='refunded';payment.refundedAt=this.minute;return true;
+  }
+  refundWorldPayment(transferId){
+    const payment=this.worldPort.payments[transferId];if(!payment)return false;
+    if(payment.status==='refunded')return true;
+    if(payment.status!=='reserved')return false;
+    if(!this.transfer('supplier',payment.payerAccountId,payment.amount,'Estorno de compra marítima',{transferId,worldTrade:true}))return false;
+    payment.status='refunded';payment.refundedAt=this.minute;return true;
+  }
+  finalizeWorldPayment(transferId){const payment=this.worldPort.payments[transferId];if(!payment)return false;if(payment.status==='settled')return true;if(payment.status!=='reserved')return false;payment.status='settled';payment.settledAt=this.minute;return true;}
+  worldMigrationHousehold(citizenId){
+    const head=this.society.citizen(citizenId);if(!head||head.dead||!this.society.isAdult(head))return null;
+    const members=new Map([[head.id,head]]),add=person=>{if(person&&!person.dead&&!person.entity.destroyed)members.set(person.id,person);};
+    let changed=true;while(changed){changed=false;for(const person of [...members.values()]){
+      if(person.partnerId!=null&&!members.has(person.partnerId)){const partner=this.society.citizen(person.partnerId);if(!partner)return null;members.set(partner.id,partner);changed=true;}
+      for(const child of this.citizens)if(child.guardianId===person.id&&!members.has(child.id)){add(child);changed=true;}
+    }}
+    const ids=new Set(members.keys());
+    for(const person of members.values()){
+      if(person.partnerId!=null&&!ids.has(person.partnerId)||person.dead||person.worldBoatCrew||person.worldMigrationPending||person.businessIds?.length||person.deliveryId||person.mobilityTrip||person.ridingVehicleId||person.custody||person.indoorLocation||person.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===person.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===person.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return null;
+      if(!this.society.isAdult(person)&&(!person.guardianId||!ids.has(person.guardianId)))return null;
+    }
+    return [...members.keys()];
+  }
+  worldCitizenMigrationPackage(transferId,citizenId,householdIds=[]){
+    const citizen=this.society.citizen(citizenId);if(!citizen)return null;
+    const globalId=citizen.globalId||`${this.worldPort.cityId||'city'}:${citizen.id}`;citizen.globalId=globalId;
+    const globalPersonId=id=>{const person=this.society.citizen(id);if(!person)return `${this.worldPort.cityId||'city'}:${id}`;person.globalId??=`${this.worldPort.cityId||'city'}:${person.id}`;return person.globalId;};
+    const previousLinks=citizen.worldLinks||{},social=structuredClone(citizen.social||{}),archive=(rows,keys)=>rows.map(row=>{const item=structuredClone(row),worldRefs={};for(const key of keys)if(Number.isSafeInteger(item[key])){worldRefs[`${key}GlobalId`]=globalPersonId(item[key]);delete item[key];}delete item.factId;delete item.eventId;return {...item,worldRefs,archivedWorld:true};});
+    const socialHistory={memories:[...(previousLinks.socialHistory?.memories||[]),...archive(social.memories||[],['actorId','targetId','otherId'])],beliefs:[...(previousLinks.socialHistory?.beliefs||[]),...archive(social.beliefs||[],['aboutId','sourceId','rivalId'])]};
+    social.memories=[];social.beliefs=[];social.heardFacts=[];
+    social.grief=(social.grief||[]).map(loss=>{const person=loss.personId==null?null:this.society.citizen(loss.personId);return {...loss,personId:null,...(person?{globalId:globalPersonId(person.id)}:{})};});
+    const relationships=new Map((previousLinks.relationships||[]).map(link=>[link.globalId,structuredClone(link)]));for(const relation of this.society.relationsFor(citizen.id)){const otherId=relation.a===citizen.id?relation.b:relation.a,link={globalId:globalPersonId(otherId),view:structuredClone(relation.views?.[citizen.id]||{}),status:relation.status};relationships.set(link.globalId,link);}
+    const parentGlobalIds=[...new Set([...(previousLinks.parentGlobalIds||[]),...(citizen.parentIds||[]).map(globalPersonId)])],childGlobalIds=[...new Set([...(previousLinks.childGlobalIds||[]),...(citizen.childIds||[]).map(globalPersonId)])];
+    return {version:1,transferId,globalId,citizenId,accountBalance:this.accounts.get(citizen.accountId)?.balance||0,vehicleAssets:this.vehicles.personalMobilityAssets(citizen.accountId),minute:this.minute,initialAge:citizen.initialAge,bornAt:citizen.bornAt,name:citizen.entity.properties.name,givenNames:structuredClone(citizen.givenNames||[]),surnames:structuredClone(citizen.surnames||[]),skills:structuredClone(citizen.skills||{}),traits:structuredClone(citizen.traits||{}),personality:structuredClone(citizen.personality||{}),socialProfile:structuredClone(citizen.socialProfile||{}),social,socialHistory,prejudices:structuredClone(citizen.prejudices||{}),prejudiceProfileVersion:citizen.prejudiceProfileVersion,political:structuredClone(citizen.political||{}),reputation:structuredClone(citizen.reputation||{}),profession:citizen.profession,needs:structuredClone(citizen.needs||{}),happiness:citizen.happiness,mood:citizen.mood,savingsRate:citizen.savingsRate,rentalPreference:citizen.rentalPreference,foodPreferences:structuredClone(citizen.foodPreferences||{}),inventory:structuredClone(citizen.inventory||{}),pocket:structuredClone(citizen.pocket||{}),equipment:structuredClone(citizen.equipment||{}),appearance:structuredClone(citizen.appearance||{}),render:structuredClone(citizen.entity.properties.render||{}),wardrobe:structuredClone(citizen.wardrobe||[]),career:structuredClone(citizen.career||{}),body:{...Object.fromEntries(['bodyHeightCm','bodyWeightKg','bodyFoodNeedTotal','bodyFoodNeedMinutes','bodyWeightUpdatedAt','bodyMetricsSeed'].filter(key=>citizen[key]!==undefined).map(key=>[key,citizen[key]]))},parentGlobalIds,familyLinks:{partnerGlobalId:citizen.partnerId!=null?globalPersonId(citizen.partnerId):previousLinks.partnerGlobalId||null,guardianGlobalId:citizen.guardianId!=null?globalPersonId(citizen.guardianId):previousLinks.guardianGlobalId||null,childGlobalIds,householdMemberGlobalIds:householdIds.filter(id=>id!==citizen.id).map(globalPersonId)},relationships:[...relationships.values()]};
+  }
+  reserveWorldCitizenMigration(transferId,citizenId,{householdIds=[]}={}){
+    if(typeof transferId!=='string'||!transferId)return false;
+    this.worldPort.migrations??={};const previous=this.worldPort.migrations[transferId];if(previous)return previous.status==='reserved'&&previous.package.citizenId===citizenId?structuredClone(previous.package):false;
+    const citizen=this.society.citizen(citizenId),included=new Set(householdIds);if(!citizen||citizen.entity.destroyed||citizen.dead||citizen.worldBoatCrew||citizen.worldMigrationPending||(!householdIds.length&&!this.society.isAdult(citizen))||(!householdIds.length&&(citizen.partnerId!=null||citizen.childIds?.length))||(citizen.partnerId!=null&&!included.has(citizen.partnerId))||(citizen.childIds||[]).some(id=>{const child=this.society.citizen(id);return child?.guardianId===citizen.id&&!included.has(id);})||citizen.businessIds?.length||citizen.deliveryId||citizen.mobilityTrip||citizen.ridingVehicleId||citizen.custody||citizen.indoorLocation||citizen.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===citizen.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===citizen.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return false;
+    const packageData=this.worldCitizenMigrationPackage(transferId,citizenId,householdIds);if(!packageData||!this.vehicles.reserveWorldMigrationAssets(transferId,citizen.accountId))return false;const globalId=packageData.globalId;
+    citizen.worldMigrationPending=transferId;this.worldPort.migrations[transferId]={transferId,status:'reserved',citizenId,globalId,package:packageData,createdAt:this.minute};return structuredClone(packageData);
+  }
+  reserveWorldHouseholdMigration(transferId,citizenId){
+    if(typeof transferId!=='string'||!transferId)return false;
+    this.worldPort.migrations??={};const prior=this.worldPort.migrations[transferId];if(prior)return prior.status==='reserved'&&prior.package.version===2?structuredClone(prior.package):false;
+    const citizenIds=this.worldMigrationHousehold(citizenId);if(!citizenIds||citizenIds.length<2)return false;
+    const packages=[];for(const memberId of citizenIds){const memberTransferId=`${transferId}:member:${memberId}`,packageData=this.reserveWorldCitizenMigration(memberTransferId,memberId,{householdIds:citizenIds});if(!packageData){for(const packageEntry of packages)this.cancelWorldCitizenMigration(packageEntry.transferId);return false;}packages.push(packageData);}
+    const packageData={version:2,transferId,globalId:`household:${this.worldPort.cityId||'city'}:${citizenId}:${this.minute}`,citizenIds:citizenIds.slice(),members:packages};
+    this.worldPort.migrations[transferId]={transferId,status:'reserved',citizenId,globalId:packageData.globalId,package:packageData,memberTransferIds:packages.map(item=>item.transferId),createdAt:this.minute};return structuredClone(packageData);
+  }
+  cancelWorldHouseholdMigration(transferId){
+    const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='cancelled')return true;if(migration.status!=='reserved'||migration.package?.version!==2)return false;
+    for(const memberTransferId of migration.memberTransferIds||[])if(!this.cancelWorldCitizenMigration(memberTransferId))return false;
+    migration.status='cancelled';migration.cancelledAt=this.minute;return true;
+  }
+  departWorldHouseholdMigration(transferId){
+    const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(['in-transit','delivered'].includes(migration.status))return true;if(migration.status!=='reserved'||migration.package?.version!==2)return false;
+    for(const member of migration.package.members){const memberMigration=this.worldPort.migrations[member.transferId];if(!memberMigration||!['reserved','in-transit','delivered'].includes(memberMigration.status))return false;if(memberMigration.status==='reserved'){const citizen=this.society.citizen(member.citizenId);if(!citizen||citizen.worldMigrationPending!==member.transferId)return false;}}
+    for(const member of migration.package.members){const memberMigration=this.worldPort.migrations[member.transferId];if(memberMigration.status!=='reserved')continue;const citizen=this.society.citizen(member.citizenId);if(citizen.homeUnitId!=null)this.housing.release(citizen);if(!this.departWorldCitizenMigration(member.transferId))return false;}
+    migration.status='in-transit';migration.departedAt=this.minute;this.log(`${migration.package.members.length} familiares partiram para outra cidade por via marítima.`,'city',migration.package.citizenIds,{kind:'household-migration-departed',transferId});return true;
+  }
+  receiveWorldHouseholdMigration(transferId,packageData){
+    if(!packageData||packageData.version!==2||packageData.transferId!==transferId||!Array.isArray(packageData.members)||packageData.members.length<2)return false;
+    this.worldPort.migrantArrivals??={};const prior=this.worldPort.migrantArrivals[transferId];if(prior?.status==='delivered')return packageData.members.every(member=>this.citizens.some(citizen=>citizen.globalId===member.globalId));
+    for(const member of packageData.members)if(!this.receiveWorldCitizenMigration(member.transferId,member))return false;
+    const localByGlobalId=new Map(this.citizens.filter(citizen=>citizen.globalId).map(citizen=>[citizen.globalId,citizen]));
+    for(const member of packageData.members){
+      const citizen=localByGlobalId.get(member.globalId);if(!citizen)return false;const family=member.familyLinks||{};
+      citizen.parentIds=(member.parentGlobalIds||[]).map(id=>localByGlobalId.get(id)?.id).filter(id=>id!=null);
+      citizen.guardianId=localByGlobalId.get(family.guardianGlobalId)?.id??null;
+      citizen.partnerId=localByGlobalId.get(family.partnerGlobalId)?.id??null;
+      citizen.childIds=(family.childGlobalIds||[]).map(id=>localByGlobalId.get(id)?.id).filter(id=>id!=null);
+      citizen.worldLinks={...(citizen.worldLinks||{}),...structuredClone(family),parentGlobalIds:structuredClone(member.parentGlobalIds||[]),relationships:structuredClone(member.relationships||[])};
+      for(const link of member.relationships||[]){const other=localByGlobalId.get(link.globalId);if(!other||other===citizen)continue;const relation=this.society.getRelation(citizen,other,true);if(link.view)Object.assign(relation.views[citizen.id],structuredClone(link.view));this.relationships.sync(relation);}
+    }
+    this.familyIndexDirty=true;this.worldPort.migrantArrivals[transferId]={transferId,globalIds:packageData.members.map(member=>member.globalId),citizenIds:packageData.members.map(member=>localByGlobalId.get(member.globalId).id),status:'delivered',arrivedAt:this.minute};return true;
+  }
+  completeWorldHouseholdMigration(transferId){const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='delivered')return true;if(migration.status!=='in-transit'||migration.package?.version!==2)return false;for(const memberTransferId of migration.memberTransferIds||[])if(!this.completeWorldCitizenMigration(memberTransferId))return false;migration.status='delivered';migration.deliveredAt=this.minute;return true;}
+  cancelWorldCitizenMigration(transferId){const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='cancelled')return true;if(migration.status!=='reserved')return false;const citizen=this.society.citizen(migration.citizenId);if(citizen?.worldMigrationPending===transferId)delete citizen.worldMigrationPending;this.vehicles.cancelWorldMigrationAssets(transferId);migration.status='cancelled';migration.cancelledAt=this.minute;return true;}
+  departWorldCitizenMigration(transferId){
+    const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='in-transit'||migration.status==='delivered')return true;if(migration.status!=='reserved')return false;
+    const citizen=this.society.citizen(migration.citizenId);if(!citizen||citizen.globalId&&citizen.globalId!==migration.globalId)return false;
+    if(citizen.jobId!=null)this.economy.leaveJob(citizen,'Migração marítima');if(citizen.homeUnitId!=null)this.housing.release(citizen);migration.package.vehicleAssets=this.vehicles.departWorldMigrationAssets(transferId,citizen.accountId);
+    this.society.removeCitizen(citizen);for(const parentId of citizen.parentIds||[]){const parent=this.society.citizen(parentId);if(parent?.childIds)parent.childIds=parent.childIds.filter(id=>id!==citizen.id);}
+    citizen.entity.destroyed=true;this.citizens.splice(this.citizens.indexOf(citizen),1);this.accounts.delete(citizen.accountId);this.economy.citizensById?.delete(citizen.id);this.familyIndexDirty=true;this.buildingsById??=new Map();
+    migration.status='in-transit';migration.departedAt=this.minute;this.structureRevision++;this.log(`${migration.package.name} partiu para outra cidade por via marítima.`,'city',[citizen.id],{kind:'citizen-migration-departed',transferId,globalId:migration.globalId});return true;
+  }
+  receiveWorldCitizenMigration(transferId,packageData){
+    if(!packageData||packageData.version!==1||packageData.transferId!==transferId||typeof packageData.globalId!=='string'||!packageData.globalId)return false;
+    this.worldPort.migrantArrivals??={};const prior=this.worldPort.migrantArrivals[transferId];if(prior)return prior.globalId===packageData.globalId&&prior.status==='delivered';
+    if(this.citizens.some(citizen=>citizen.globalId===packageData.globalId))return false;
+    const position=this.world.spawnCenter||{x:0,y:0},citizen=this.addCitizen(position.x,position.y,this.citizens.length,{age:packageData.initialAge,grant:false});
+    citizen.globalId=packageData.globalId;citizen.initialAge=packageData.initialAge;citizen.bornAt=packageData.bornAt;citizen.parentIds=[];citizen.guardianId=null;citizen.childIds=[];citizen.entity.properties.name=packageData.name;citizen.givenNames=structuredClone(packageData.givenNames);citizen.surnames=Object.freeze(structuredClone(packageData.surnames));
+    Object.assign(citizen,{skills:structuredClone(packageData.skills),traits:structuredClone(packageData.traits),personality:structuredClone(packageData.personality),socialProfile:Object.freeze(structuredClone(packageData.socialProfile)),social:structuredClone(packageData.social||citizen.social),prejudices:structuredClone(packageData.prejudices||citizen.prejudices),prejudiceProfileVersion:packageData.prejudiceProfileVersion??citizen.prejudiceProfileVersion,political:structuredClone(packageData.political||citizen.political),reputation:structuredClone(packageData.reputation||citizen.reputation),profession:packageData.profession??citizen.profession,needs:structuredClone(packageData.needs),happiness:packageData.happiness,mood:packageData.mood,savingsRate:packageData.savingsRate??citizen.savingsRate,rentalPreference:packageData.rentalPreference??citizen.rentalPreference,foodPreferences:structuredClone(packageData.foodPreferences||citizen.foodPreferences||{}),inventory:structuredClone(packageData.inventory),pocket:structuredClone(packageData.pocket),equipment:structuredClone(packageData.equipment),appearance:structuredClone(packageData.appearance),wardrobe:structuredClone(packageData.wardrobe||[]),career:structuredClone(packageData.career||{}),action:'Chegando de outra cidade',task:null,targetId:null,path:[],homeUnitId:null,jobId:null});
+    citizen.entity.properties.render=structuredClone(packageData.render||citizen.entity.properties.render);citizen.entity.properties.citizen=citizen;const account=this.accounts.get(citizen.accountId);if(!account)return false;account.balance=packageData.accountBalance;if(!this.vehicles.receiveWorldMigrationAssets(citizen.accountId,packageData.vehicleAssets||[],transferId))return false;
+    citizen.worldLinks={parentGlobalIds:structuredClone(packageData.parentGlobalIds||[]),relationships:structuredClone(packageData.relationships||[]),socialHistory:structuredClone(packageData.socialHistory||{memories:[],beliefs:[]}),...(packageData.familyLinks?structuredClone(packageData.familyLinks):{})};Object.assign(citizen,structuredClone(packageData.body||{}));this.relationships.register(citizen);this.worldPort.migrantArrivals[transferId]={transferId,globalId:packageData.globalId,citizenId:citizen.id,status:'delivered',arrivedAt:this.minute};this.log(`${citizen.entity.properties.name} chegou de outra cidade por via marítima.`,'city',[citizen.id],{kind:'citizen-migration-arrived',transferId,globalId:packageData.globalId});return true;
+  }
+  completeWorldCitizenMigration(transferId){const migration=this.worldPort.migrations?.[transferId];if(!migration)return false;if(migration.status==='delivered')return true;if(migration.status!=='in-transit')return false;migration.status='delivered';migration.deliveredAt=this.minute;return true;}
   recordBusinessRevenue(building,amount){
     if(!building||!Number.isSafeInteger(amount)||amount<=0)return false;
     building.totalRevenue=(building.totalRevenue||0)+amount;
@@ -255,6 +600,34 @@ export class CitySimulation {
     // Foreign buyers and suppliers operate outside the finite local monetary base.
     this.currency.initialize();
     generateSettlement(this);
+    const hallDoor=this.buildings.find(building=>building.type==='townhall')?.door;
+    if(hallDoor){
+      const shoreCandidates=[],seaNavigation=createSeaEdgeNavigation(this.world);
+      for(let y=0;y<this.world.height;y++)for(let x=0;x<this.world.width;x++){
+        if(!this.walkable(x,y))continue;
+        const distance=(x-hallDoor.x)**2+(y-hallDoor.y)**2;
+        for(const water of [{x:x+1,y},{x:x-1,y},{x,y:y+1},{x,y:y-1}])if(this.world.getTile(water.x,water.y)===TILE_WATER&&seaNavigation?.reachable(water))shoreCandidates.push({door:{x,y},berth:water,distance});
+      }
+      if(!shoreCandidates.length)for(let y=0;y<this.world.height;y++)for(let x=0;x<this.world.width;x++){if(!this.walkable(x,y))continue;const water=[{x:x+1,y},{x:x-1,y},{x,y:y+1},{x,y:y-1}].find(point=>this.world.getTile(point.x,point.y)===TILE_WATER);if(water)shoreCandidates.push({door:{x,y},berth:water,distance:(x-hallDoor.x)**2+(y-hallDoor.y)**2});}
+      shoreCandidates.sort((a,b)=>a.distance-b.distance);
+      const {width,height}=this.world,total=width*height,shoreDistance=new Int32Array(total);shoreDistance.fill(-1);const shoreQueue=new Int32Array(total);let shoreHead=0,shoreTail=0;
+      const seedShoreSearch=(x,y,distance)=>{if(x<0||y<0||x>=width||y>=height||shoreDistance[y*width+x]>=0||!this.walkable(x,y))return;if(distance>0&&!canStep(this.world,hallX,hallY,x,y))return;shoreDistance[y*width+x]=distance;shoreQueue[shoreTail++]=y*width+x;};
+      const hallX=Math.floor(hallDoor.x),hallY=Math.floor(hallDoor.y);seedShoreSearch(hallX,hallY,0);
+      if(shoreTail===0)for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]])seedShoreSearch(hallX+dx,hallY+dy,1);
+      while(shoreHead<shoreTail){const index=shoreQueue[shoreHead++],x=index%width,y=Math.floor(index/width),nextDistance=shoreDistance[index]+1;for(const[dx,dy]of [[1,0],[0,1],[-1,0],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=width||ny>=height)continue;const next=ny*width+nx;if(shoreDistance[next]>=0||!this.walkable(nx,ny)||!canStep(this.world,x,y,nx,ny))continue;shoreDistance[next]=nextDistance;shoreQueue[shoreTail++]=next;}}
+      const reachable=candidate=>shoreDistance[candidate.door.y*width+candidate.door.x]>=0;
+      const nearestHarbor=shoreCandidates.find(reachable)||shoreCandidates.find(candidate=>this.findPath(hallDoor,candidate.door)!==null);
+      // Keep the waterfront beyond the dense town-hall block so its quay and
+      // moored fleet are not buried under the default city buildings.
+      const clearHarbor=shoreCandidates.find(candidate=>reachable(candidate)&&shoreDistance[candidate.door.y*width+candidate.door.x]>=20);
+      const harbor=clearHarbor||nearestHarbor;
+      const portAnchor=harbor?.door||hallDoor,berth=harbor?.berth||null;
+      this.worldPort.x=portAnchor.x;this.worldPort.y=portAnchor.y;this.worldPort.door={...portAnchor};
+      this.worldPort.berth=berth?{...berth}:null;
+      this.worldPort.edgeRoute=berth?seaNavigation?.pathFrom(berth)||null:null;
+      this.worldPort.edgeRouteRevision=this.world.revision||0;
+    }
+    this.vehicles.initializeHarborFleet(this.worldPort);
     const arrivalTiles = [],{width,height}=this.world,limit=Math.min(width*height,Math.max(256,this.initialPopulation*2));
     // Place initial residents across reachable land instead of cycling through
     // a tiny 11×11 patch around the town hall. On crowded or coastal seeds the
@@ -358,6 +731,7 @@ export class CitySimulation {
       for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) if(xx!==entryX||yy!==entryY)this.occupied.add(key(xx, yy));
       this.obstacleRevision=(this.obstacleRevision||0)+1;
     }
+    if(WATERFRONT_BUSINESSES.has(type))b.waterfront=waterfrontBerth(this.world,x,y,width,depth);
     this.buildings.push(b);
     this.buildingsById.set(b.id, b);
     this.structureRevision++;
@@ -400,6 +774,19 @@ export class CitySimulation {
   }
   building(id) { const b = this.buildingsById.get(id); return b && !b.entity.destroyed ? b : undefined; }
   childrenOf(id) { return this.childrenByGuardian.get(id) || NO_CHILDREN; }
+  townhall() {
+    // Scanning every building per minute just for a townhall flag was a
+    // constant per-minute cost at any population. Validates the cached hall
+    // against destruction; new buildings always bump structureRevision.
+    const cached=this._townhall;
+    if(cached&&cached.revision===this.structureRevision){
+      if(cached.hall&&!cached.hall.entity.destroyed)return cached.hall;
+      if(!cached.hall)return null;
+    }
+    const hall=this.buildings.find(b=>b.type==='townhall'&&!b.entity.destroyed)||null;
+    this._townhall={revision:this.structureRevision,hall};
+    return hall;
+  }
   indexFamilies() {
     if (!this.familyIndexDirty) return;
     this.childrenByGuardian.clear();
@@ -468,30 +855,49 @@ export class CitySimulation {
     return u;
   }
   assignHousingAndJobs() { this.economy.assignHomes(); this.economy.hire(); }
-  walkable(x, y) { return !this.occupied.has(key(x, y)) && terrainWalkable(this.world, x, y); }
-  groundPath(start,goal){
+  _ensureBlockedGrid() {
+    const width = this.world.width, height = this.world.height, obsRev = this.obstacleRevision || 0, occSize = this.occupied.size;
+    const blockedRevision = `${width}:${height}:${obsRev}:${occSize}`;
+    if (!this._pathBlockedGrid || this._pathBlockedRevision !== blockedRevision) {
+      const grid = new Uint8Array(width * height);
+      for (const cell of this.occupied) {
+        const comma = cell.indexOf(','), cx = Number(cell.slice(0, comma)), cy = Number(cell.slice(comma + 1));
+        if (cx >= 0 && cy >= 0 && cx < width && cy < height) grid[cy * width + cx] = 1;
+      }
+      this._pathBlockedGrid = grid;
+      this._pathBlockedRevision = blockedRevision;
+    }
+    return this._pathBlockedGrid;
+  }
+  walkable(x, y) {
+    const width = this.world.width, height = this.world.height;
+    if (x < 0 || y < 0 || x >= width || y >= height) return false;
+    if (!terrainWalkable(this.world, x, y)) return false;
+    const grid = this._ensureBlockedGrid();
+    return grid[y * width + x] === 0;
+  }
+  groundPath(start,goal,{connected=null}={}){
     const profile=this._pathSearchProfile;if(profile)profile.groundCalls=(profile.groundCalls||0)+1;
-    const width=this.world.width,height=this.world.height,blockedRevision=`${width}:${height}:${this.obstacleRevision||0}:${this.occupied.size}`;
-    if(this._pathBlockedRevision!==blockedRevision){const grid=new Uint8Array(width*height);for(const cell of this.occupied){const comma=cell.indexOf(','),x=Number(cell.slice(0,comma)),y=Number(cell.slice(comma+1));if(x>=0&&y>=0&&x<width&&y<height)grid[y*width+x]=1;}this._pathBlockedGrid=grid;this._pathBlockedRevision=blockedRevision;}
+    const grid=this._ensureBlockedGrid();
     const key=`ground:${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
     if(this.pathCache.has(key)){if(profile)profile.groundCacheHits=(profile.groundCacheHits||0)+1;return this.pathCache.get(key);}
-    if(this.buildings?.length&&settlementConnected(this,start,goal)===false){if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);return null;}
-    const shared=findSharedTerrainPath(this,start,goal,this._pathBlockedGrid);
+    if(this.buildings?.length&&(connected!==null?connected===false:settlementConnected(this,start,goal)===false)){if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);return null;}
+    const shared=findSharedTerrainPath(this,start,goal,grid);
     if(profile){const counter=shared===undefined?'aStarCalls':'sharedCalls';profile[counter]=(profile[counter]||0)+1;}
-    const route=shared===undefined?findTerrainPath(this.world,start,goal,this.occupied,{blockedGrid:this._pathBlockedGrid}):shared,mapped=route??null;
+    const route=shared===undefined?findTerrainPath(this.world,start,goal,this.occupied,{blockedGrid:grid}):shared,mapped=route??null;
     if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
     this.pathCache.set(key,mapped);return mapped;
   }
-  skybridgeLinksForRevision(revision=`${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`) {
+  skybridgeLinksForRevision(revision) {
+    revision ??= this.pathCacheRevision ?? `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
     if(this._skybridgeCache?.revision!==revision)this._skybridgeCache={revision,links:skybridgeLinks(this.buildings,this.world)};
     return this._skybridgeCache.links;
   }
   findPath(start, goal, options={}) {
     const profile=this._pathSearchProfile;
     if(!profile)return this._findPath(start,goal,options);
-    const revision = `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
-    const measure=this.pathCacheRevision!==revision||!this.pathCache?.has(key);
+    const measure=!this.pathCache?.has(key);
     const started=measure?performance.now():0;
     const result=this._findPath(start,goal,options);
     if(measure){
@@ -500,34 +906,45 @@ export class CitySimulation {
     }
     return result;
   }
-  _findPath(start, goal, {copy=true,allowSkybridges=true}={}) {
+  _findPath(start, goal, {copy=true,allowSkybridges=true,allowBoats=true}={}) {
     // Plan the outdoor leg from the exit; the resident walks there first.
     const location=start.properties?.citizen?.indoorLocation;
     if(location){const site=this.building(location.buildingId),shell=this.building(site?.officeTenantOf)||site;if(shell)start=shell.door;}
-    const revision = `${this.world.revision || 0}:${this.structureRevision||0}:${this.obstacleRevision||0}:${this.occupied.size}`;
-    if (this.pathCacheRevision !== revision) { this.pathCache = new Map(); this.pathCacheRevision = revision; }
+    const wRev = this.world.revision || 0, sRev = this.structureRevision || 0, oRev = this.obstacleRevision || 0, occSize = this.occupied.size;
+    if (this._lastPathWRev !== wRev || this._lastPathSRev !== sRev || this._lastPathORev !== oRev || this._lastPathOccSize !== occSize) {
+      this._lastPathWRev = wRev; this._lastPathSRev = sRev; this._lastPathORev = oRev; this._lastPathOccSize = occSize;
+      const revision = `${wRev}:${sRev}:${oRev}:${occSize}`;
+      this.pathCacheRevision = revision;
+      this.pathCache = new Map();
+      if (this.skybridgePathCache) { this.skybridgePathCache = new Map(); this.skybridgePathCacheRevision = revision; }
+    }
     const key = `${Math.floor(start.x)},${Math.floor(start.y)}:${Math.floor(goal.x)},${Math.floor(goal.y)}`;
-    const links=allowSkybridges&&this.buildings.length>1?this.skybridgeLinksForRevision(revision):NO_CHILDREN;
-    if(links.length){if(!this.skybridgePathCache||this.skybridgePathCacheRevision!==revision){this.skybridgePathCache=new Map();this.skybridgePathCacheRevision=revision;}if(this.skybridgePathCache.has(key)){const route=this.skybridgePathCache.get(key);return route===null?null:copy?route.slice():route;}}
+    const links=allowSkybridges&&this.buildings.length>1?this.skybridgeLinksForRevision(this.pathCacheRevision):NO_CHILDREN;
+    if(links.length){if(!this.skybridgePathCache||this.skybridgePathCacheRevision!==this.pathCacheRevision){this.skybridgePathCache=new Map();this.skybridgePathCacheRevision=this.pathCacheRevision;}if(this.skybridgePathCache.has(key)){const route=this.skybridgePathCache.get(key);if(route!==null)return copy?route.slice():route;if(!allowBoats)return null;}}
     // Water-separated destinations used to pay for a full A* search before
     // we learned they could not connect. The component map is cached by map
     // topology and obstacles, so reject impossible land routes first.
-    if(!this.pathCache.has(key)&&settlementConnected(this,start,goal)===false){
-      const canReachBridge=links.some(link=>
-        settlementConnected(this,start,link.startAccess)!==false&&settlementConnected(this,link.endAccess,goal)!==false||
-        settlementConnected(this,start,link.endAccess)!==false&&settlementConnected(this,link.startAccess,goal)!==false);
-      if(!canReachBridge){
-        if(links.length)this.skybridgePathCache.set(key,null);
-        else{if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);}
-        return null;
+    let connected = null;
+    if(!this.pathCache.has(key)){
+      connected = settlementConnected(this,start,goal);
+      if(connected===false){
+        const canReachBridge=links.some(link=>
+          settlementConnected(this,start,link.startAccess)!==false&&settlementConnected(this,link.endAccess,goal)!==false||
+          settlementConnected(this,start,link.endAccess)!==false&&settlementConnected(this,link.startAccess,goal)!==false);
+        if(!canReachBridge&&!allowBoats){
+          if(links.length)this.skybridgePathCache.set(key,null);
+          else{if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);this.pathCache.set(key,null);}
+          return null;
+        }
       }
     }
     if (!this.pathCache.has(key)) {
-      const route=this.groundPath(start,goal);
+      const route=connected===false?null:this.groundPath(start,goal,{connected});
       if(this.pathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.pathCache.delete(this.pathCache.keys().next().value);
       this.pathCache.set(key,route);
     }
     let path = this.pathCache.get(key);
+    if(path===null&&allowBoats)path=findBoatPath(this,start,goal);
     if(links.length){
       let bestScore=path===null?Infinity:path.length||0;
       for(const link of links){
@@ -553,7 +970,7 @@ export class CitySimulation {
         }
       }
     }
-    if(links.length){if(this.skybridgePathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.skybridgePathCache.delete(this.skybridgePathCache.keys().next().value);this.skybridgePathCache.set(key,path);}
+    if(links.length&&!path?.some(point=>point.boatClass)){if(this.skybridgePathCache.size>=Math.max(2048,Math.min(16384,this.citizens.length*16)))this.skybridgePathCache.delete(this.skybridgePathCache.keys().next().value);this.skybridgePathCache.set(key,path);}
     // Keep insertion-order eviction: touching every cache hit costs two Map
     // mutations across the hot path, while FIFO gives the same route answers.
     // Consumers shift their own array but never mutate waypoint coordinates.
@@ -667,6 +1084,7 @@ export class CitySimulation {
   }
 
   chooseTask(c, urgent=this.urgentNeed(c)) {
+    if(c.worldBoatCrew)return;
     const n = c.needs,profile=this._citizenLoopProfile,measure=profile&&((name,work)=>{const started=performance.now(),result=work();profile[`${name}Ms`]=(profile[`${name}Ms`]||0)+performance.now()-started;return result;});
     const home = this.building(this.units.get(c.homeUnitId)?.buildingId);
     const job = this.building(c.jobId);
@@ -763,7 +1181,7 @@ export class CitySimulation {
       const path = this.findPath(c.entity, siteProject.door);
       if (path !== null) { this.development.reserveConstruction(siteProject); c.path = path; c.task = 'construction'; c.workProjectId = siteProject.id; c.targetId = siteProject.builderId; return; }
     }
-    const hall = this.buildings.find(b => b.type === 'townhall' && !b.entity.destroyed);
+    const hall = this.townhall();
     // Familiar services remain the default while viable; compare the wider
     // market again after six hours, or immediately when the usual place fails.
     const habit=c.routineServices?.[task],usual=habit&&this.building(habit.buildingId);
@@ -893,7 +1311,7 @@ export class CitySimulation {
       if(!productive&&(c.path.length||c.indoorLocation?.path?.length||c.indoorLocation?.exiting))return;
       if(!productive&&b.type!=='farm'&&b.type!=='forestry'&&Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)>30){this.furniture.waitForInputs(c,b,'Aguardando matéria-prima ou serviço');return;}
       if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
-      c.action = b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Trabalhando na própria empresa sem salário · ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
+      c.action = b.type==='boat_workshop'&&c.mechanicJob?'Reparando embarcação atracada na oficina':b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Trabalhando na própria empresa sem salário · ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
       if (Math.min(n.food, n.water, n.energy, n.toilet, n.hygiene, n.health) < 22) c.task = null;
       return;
     }
@@ -1085,7 +1503,7 @@ export class CitySimulation {
     }
     const reconcileMs=performance.now()-profileMark;profileMark=performance.now();
     this.sanitation.updateMinute();
-    for (const c of this.citizens)if(c.workMeal||(c.jobId||c.businessIds.length)&&c.needs.food<45)this.workMeals.tryStart(c);
+    for (const c of this.citizens)if(!c.worldBoatCrew&&(c.workMeal||(c.jobId||c.businessIds.length)&&c.needs.food<45))this.workMeals.tryStart(c);
     this.logistics.updateMinute();
     const servicesMs=performance.now()-profileMark;profileMark=performance.now();
     const civicDetail=this.profileDiagnostics?{}:null,measureCivic=(name,work)=>{if(!civicDetail){work();return;}const started=performance.now();work();civicDetail[`${name}Ms`]=performance.now()-started;};
@@ -1098,7 +1516,7 @@ export class CitySimulation {
     const civicMs=performance.now()-profileMark;profileMark=performance.now();
     if (this.minute % 1440 === 0) { this.society.daily(); this.dailyEconomy(); }
     if (this.minute % 60 === 0) this.flushPayroll();
-    const hasTownhall = this.buildings.some(b => b.type === 'townhall' && !b.entity.destroyed);
+    const hasTownhall = !!this.townhall();
     for(const [key,shelter] of this.cardboardShelters){const owner=this.society.citizen(shelter.citizenId);if(!owner||owner.entity.destroyed||owner.homeUnitId){this.cardboardShelters.delete(key);this.cardboardRevision++;if(owner){owner.cardboardShelterKey=null;owner.homelessSleepSpot=null;if(!owner.entity.destroyed){owner.inventory??={};owner.inventory.papelao=1;}}}}
     const setupMs=performance.now()-profileMark;profileMark=performance.now();
     const citizenDetail=this.profileDiagnostics?{}:null,measureCitizen=(name,work)=>{if(!citizenDetail){work();return;}const started=performance.now();work();citizenDetail[`${name}Ms`]=(citizenDetail[`${name}Ms`]||0)+performance.now()-started;};
@@ -1107,6 +1525,7 @@ export class CitySimulation {
     const activitySearchPass=beginActivitySearch(this);
     try{
     for (const c of this.citizens) {
+      if(c.worldBoatCrew){c._lastNeedsAt=this.minute;continue;}
       if(deferFastForwardCitizen(this,c))continue;
       if(activitySearchPass.hasFull&&(c.custody||c.custodyEscort||c.custodyWaterDelivery||c.funeralBodyId||c.graffitiMission||c.policePatrol||c.policeResponse||c.policeInvestigation||c.policeOversight||c.policeAudit||c.policeRestitution||c.policeArrestEscort))invalidateActivitySearch(this);
       if(citizenDetail)measureCitizen('blockedPositionRecovery',()=>this.life.recoverBlockedPosition(c));else this.life.recoverBlockedPosition(c);
@@ -1115,7 +1534,7 @@ export class CitySimulation {
       // window expires. Accumulate their passive need changes in one pass;
       // active workers, travelers, conversations and children still run each
       // minute. Reviews wake at hourly boundaries and on changed conditions.
-      if(!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==0&&c._routineRevision===routineRevision(this,c)&&!this.urgentNeed(c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>35)continue;
+      if(!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==(c.id%8)&&c._routineRevision===routineRevision(this,c)&&!this.urgentNeed(c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>35)continue;
       const elapsed=Math.max(1,this.minute-(c._lastNeedsAt??this.minute-1));c._lastNeedsAt=this.minute;c._idleHomeId=c.homeUnitId;
       const age=this.society.age(c);
       if(c._renderAge!==age){c._renderAge=age;c.entity.properties.render.size=age<6?.55:age>=18?1:.8;}
@@ -1199,7 +1618,7 @@ export class CitySimulation {
       }
     }
     this._citizenLoopProfile=null;citizenMs=performance.now()-profileMark;profileMark=performance.now();
-    for(const c of this.citizens)if(!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
+    for(const c of this.citizens)if(!c.worldBoatCrew&&!c.skybridgeTransit&&(c._lastNeedsAt===this.minute||c.task||c.path.length||c.indoorLocation))syncCitizenInterior(this,c);
     }finally{endActivitySearch(this);this._citizenLoopProfile=null;}
     for(const c of this.citizens)if(c.seatId||c.seated||c.furnitureUse||c.indoorLocation||c.workWait||c.task==='beach_leisure'||c.beachLeisure)this.furniture.syncCitizen(c);
     if(this.minute%60===0){this.furniture.reconcile();this.substances?.hourly();}
@@ -1245,7 +1664,7 @@ export class CitySimulation {
     const movers=this._movingCitizens||[];
     if(this.vehicles.activeCount&&this._lastVehicleScanMinute!==this.minute){
       this._lastVehicleScanMinute=this.minute;
-      for(const c of movers)if(!c.ridingVehicleId&&!c.indoorLocation)this.vehicles.tryTrip(c);
+      for(const c of movers)if(!c.worldBoatCrew&&!c.ridingVehicleId&&!c.indoorLocation)this.vehicles.tryTrip(c);
     }
     const mobilityMs=performance.now()-profileMark;profileMark=performance.now();
     // Many active drivers used to scan the entire shipment list independently
@@ -1276,20 +1695,26 @@ export class CitySimulation {
           if(!this.beginSkybridgeTransit(c,leg)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;c.skybridgeTransit=null;}
           break;
         }
-        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,tx=Math.floor(p.x),ty=Math.floor(p.y);
+        const pBridge=p.skybridgeId||(c.skybridgeZ>0?c.skybridgeId:null),elevated=!!pBridge,boatWaypoint=!!p.boatClass,tx=Math.floor(p.x),ty=Math.floor(p.y);
         if(pBridge&&!this.skybridgeLinksForRevision().some(link=>link.id===pBridge)){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
-        if(!elevated&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
+        if(boatWaypoint&&this.world.getTile(tx,ty)!==TILE_WATER){c.path=[];c.task=null;c.boatClass=null;break;}
+        if(!elevated&&!boatWaypoint&&(!this.walkable(tx,ty)||!canStep(this.world,Math.floor(c.entity.x),Math.floor(c.entity.y),tx,ty))){c.path=[];c.task=null;c.skybridgeZ=0;c.skybridgeId=null;break;}
         const dx=p.x-c.entity.x,dy=p.y-c.entity.y,dz=(p.z||0)-(c.skybridgeZ||0),len=Math.hypot(dx,dy,dz);
-        const tile=tileAt(this.world,tx,ty),cost=elevated?1.05:roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
-        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;if(!elevated){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
-        else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;distance=0;}
+        const tile=tileAt(this.world,tx,ty),boatSpec=boatWaypoint?BOAT_CLASSES[p.boatClass]:null,cost=elevated?1.05:boatWaypoint?1/Math.max(.1,boatSpec?.speed||1):roadTravelCost(tile),available=distance/cost,travelled=Math.min(len,available);
+        if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;if(!elevated&&!boatWaypoint){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
+        else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;distance=0;}
         if(travelled>0){
           c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;
           c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
-          if(!elevated){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
+          if(!elevated&&!boatWaypoint){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
           if(DIRT_ROAD_TILES.has(tile)){c.needs.hygiene=clamp(c.needs.hygiene-travelled*ROAD_RULES.hygienePerDirtCell);c.mood=Math.max(-25,(c.mood||0)-travelled*ROAD_RULES.moodPerDirtCell);}}
         }
-        c.action = c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+        let actionState=movementActionCache.get(c);if(!actionState){actionState={action:null};movementActionCache.set(c,actionState);}
+        const actionDelivery=c.deliveryId??null,actionBoat=c.boatClass??null,actionSky=c.skybridgeZ>0,actionForestry=c.forestryJob?.stage??null,actionVisit=c.socialVisitId??null;
+        if(actionState.task!==c.task||actionState.delivery!==actionDelivery||actionState.boat!==actionBoat||actionState.sky!==actionSky||actionState.forestry!==actionForestry||actionState.visit!==actionVisit||actionState.action!==c.action){
+          c.action = c.boatClass?`Navegando de ${BOAT_CLASSES[c.boatClass]?.label?.toLowerCase()||'barco'}`:c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+          actionState.task=c.task;actionState.delivery=actionDelivery;actionState.boat=actionBoat;actionState.sky=actionSky;actionState.forestry=actionForestry;actionState.visit=actionVisit;actionState.action=c.action;
+        }
       }
       if(!c.path.length)syncCitizenInterior(this,c);
     }
@@ -1303,7 +1728,7 @@ export class CitySimulation {
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     let printed=0;if(['livros','panfletos','jornais'].includes(good)){const matched=new Map();for(const doc of this.publications.documents.values()){if(doc.lost||doc.good!==good)continue;const holder=this.publications.inventoryHolder(doc.ownerAccountId),count=matched.get(doc.ownerAccountId)||0,represented=holder?.inventory?.[good]||0;if(count>=represented)printed++;matched.set(doc.ownerAccountId,count+1);}}
-    return this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0)+(c.substanceHomeStock?.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),...(this.economy.importDepot?[this.economy.importDepot]:[]),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0)+(c.substanceHomeStock?.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),this.worldPort,...(this.economy.importDepot?[this.economy.importDepot]:[]),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

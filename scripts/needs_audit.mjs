@@ -9,6 +9,9 @@ const terrain=process.argv[6]||resolveWorldSettings(new URLSearchParams({seed:St
 if(!Object.hasOwn(WORLD_PRESETS,terrain))throw Error('Invalid terrain preset');
 let id=0;
 const world=new World(WORLD_PRESETS[terrain].id,seed,size),city=new CitySimulation({world,population,seed,createEntity:data=>({id:++id,destroyed:false,...data})});city.initialize();
+// Optional fast-forward/LOD fidelity check: SUBURBAN_AUDIT_FF=1 runs every
+// minute through the deferred fast-forward path instead of full detail.
+city.fastForward=process.env.SUBURBAN_AUDIT_FF==='1';city.fastForward2=process.env.SUBURBAN_AUDIT_FF2==='1';
 const started=performance.now(),until=days*1440;
 function inspect(final=false){
  const living=city.citizens.filter(c=>!c.entity.destroyed),hungry=living.filter(c=>c.needs.food<20),tasks={};for(const c of living)tasks[c.task]=(tasks[c.task]||0)+1;

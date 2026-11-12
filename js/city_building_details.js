@@ -1,4 +1,4 @@
-import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-5';
+import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
 import {CITY_FLOOR_HEIGHT} from './city_building_geometry.js';
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
 
@@ -10,6 +10,7 @@ const THEMES={
  toolmaker:'tools',artisan:'basket',furniture:'chair',pottery:'pottery',paper_mill:'paper',publisher:'books',newsroom:'newspaper',
  weaving:'fabric',fiber_farm:'fabric',flagmaker:'fabric',tailor:'fabric',clothing_store:'fabric',thrift_store:'fabric',laundromat:'fabric',paintworks:'paint',soapworks:'soap',pharmacy:'medicine',herb_farm:'plant',
  rubber_grove:'rubber',rubberworks:'rubber',bearing_factory:'bearing',frame_factory:'frame',deck_factory:'deck',tire_factory:'wheel',chain_factory:'chain',safety_equipment:'helmet',saddle_factory:'saddle',cycle_parts:'tools',sports_shoes:'boot',skate_workshop:'deck',cycle_assembler:'frame',cycle_shop:'wheel',cycle_workshop:'wheel',bicycle_rental:'wheel',sports_shop:'ball',
+ ropeworks:'fabric',sailmaker:'fabric',marine_fittings:'furnace',marine_lumberyard:'logs',mast_factory:'logs',shipyard:'frame',boat_shop:'logs',boat_workshop:'logs',
  utility:'water',mint:'coins',bank:'bank',townhall:'civic',council_chamber:'civic',research_institute:'research',clinic:'medical',hospital:'medical',library:'books',theater:'theater',sports_center:'ball',leisure:'ball',public_toilet:'water',paid_toilet:'water',
  office_tower:'office',residential:'home',super_popular_housing:'housing',popular_housing:'housing',popular_luxury_housing:'luxury',luxury_housing:'luxury',market:'market',mill:'mill',farm:'farm',quarry:'quarry',park:'plant'
 };

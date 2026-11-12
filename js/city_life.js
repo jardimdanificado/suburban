@@ -1,5 +1,5 @@
 import { makeIdentity, makeBuildingName } from './city_names.js';
-import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-3';
+import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 export const LIFE_RULES = { starvationMinutes: 720, dehydrationMinutes: 360, terminalHealthMinutes: 120, stalledMinutes: 120 };
 const NEED_KEYS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
 export class CityLife {
@@ -58,9 +58,15 @@ export class CityLife {
   recoverBlockedPosition(c) {
     const city=this.city;
     if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ)return false;
-    const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y),worldRevision=city.world.revision||0,obstacleRevision=city.obstacleRevision||0,occupiedCount=city.occupied.size,checked=this.positionChecks.get(c);
+    const worldRevision=city.world.revision||0,obstacleRevision=city.obstacleRevision||0,occupiedCount=city.occupied.size,checked=this.positionChecks.get(c);
+    // A citizen following a route computed against the current terrain and
+    // obstacle revisions cannot become blocked on a later waypoint. Avoid
+    // probing walkability on every tile while the route and map stay valid.
+    if(c.path?.length&&checked?.worldRevision===worldRevision&&checked.obstacleRevision===obstacleRevision&&checked.occupiedCount===occupiedCount)return false;
+    const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y);
     if(checked?.x===x&&checked.y===y&&checked.worldRevision===worldRevision&&checked.obstacleRevision===obstacleRevision&&checked.occupiedCount===occupiedCount)return false;
-    this.positionChecks.set(c,{x,y,worldRevision,obstacleRevision,occupiedCount});
+    if(checked){checked.x=x;checked.y=y;checked.worldRevision=worldRevision;checked.obstacleRevision=obstacleRevision;checked.occupiedCount=occupiedCount;}
+    else this.positionChecks.set(c,{x,y,worldRevision,obstacleRevision,occupiedCount});
     if(city.walkable(x,y))return false;
     // Repair invalid ground positions, including walls and water after a route interruption.
     const building=city.buildings.find(b=>!b.entity.destroyed&&b.constructionKind!=='open-air'&&c.entity.x>=b.entity.x&&c.entity.x<b.entity.x+b.width&&c.entity.y>=b.entity.y&&c.entity.y<b.entity.y+b.depth);

@@ -9,11 +9,11 @@ export function resolveWorldSettings(params = new URLSearchParams()) {
   const raw = params.get('seed');
   const parsed = raw !== null && /^\d+$/.test(raw) ? Number(raw) : NaN;
   const seed = Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 2147483647 ? parsed : randomWorldSeed();
-  const preset = Object.hasOwn(WORLD_PRESETS, params.get('terrain')) ? params.get('terrain') : Object.keys(WORLD_PRESETS)[seed % 3];
+  const preset = 'archipelago';
   const rawPopulation = params.get('population');
   const parsedPopulation = rawPopulation !== null && /^\d+$/.test(rawPopulation) ? Number(rawPopulation) : NaN;
   const population = Number.isSafeInteger(parsedPopulation) && parsedPopulation >= 1 && parsedPopulation <= 2000 ? parsedPopulation : 512;
   const rawSize=params.get('size'),parsedSize=rawSize!==null&&/^\d+$/.test(rawSize)?Number(rawSize):NaN;
-  const size=Number.isSafeInteger(parsedSize)&&parsedSize>=128&&parsedSize<=1024?parsedSize:256;
+  const size=Number.isSafeInteger(parsedSize)&&parsedSize>=128&&parsedSize<=1024?parsedSize:128;
   return { seed, preset, presetId: WORLD_PRESETS[preset].id, population, size };
 }
