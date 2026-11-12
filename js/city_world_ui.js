@@ -6,7 +6,10 @@ import { INTERCITY_BOAT_CLASSES } from './boat_types.js?v=local-sea-travel-2';
 const labelCity = city => city?.metadata?.name || city?.id || 'Cidade';
 const amount = cents => formatMoney(cents || 0);
 const freight = quantity => Math.ceil(10 * (100 * .35 + quantity * .65));
-const statusLabel = { reserving: 'reservando carga', scheduled: 'aguardando embarque', 'in-transit': 'no mar', delivered: 'entregue', cancelled: 'cancelada' };
+const cargoSummary = transfer => transfer.payload.shipments
+  ? transfer.payload.shipments.map(shipment => `${shipment.manifest.quantity} × ${GOODS[shipment.manifest.good]?.label || shipment.manifest.good}`).join(' + ')
+  : `${transfer.payload.quantity} × ${GOODS[transfer.payload.good]?.label || transfer.payload.good}`;
+const cargoValue = transfer => amount((transfer.payload.goodsAmount || 0) + (transfer.payload.freightAmount || 0) || transfer.payload.amount || 0);
 
 function connectionControls(state, p, world) {
   const net = state.worldNet, online = [...world.cities.values()].filter(city => city.online);
@@ -62,6 +65,7 @@ function fleetView(p, world) {
 }
 
 const BOAT_LABELS = { canoe: 'Canoa', launch: 'Lancha', ferry: 'Balsa', cargo: 'Navio cargueiro' };
+const statusLabel = { reserving: 'reservando carga', scheduled: 'aguardando embarque', 'in-transit': 'no mar', delivered: 'entregue', cancelled: 'cancelada' };
 
 function routesView(p, world) {
   p.heading('ROTAS MARÍTIMAS E VIAGENS');
@@ -75,12 +79,12 @@ function routesView(p, world) {
     for (const transfer of ships) {
       const manifest = transfer.kind === 'citizen'
         ? `${transfer.payload.package?.version === 2 ? transfer.payload.package.members.length : 1} morador(es)`
-        : `${transfer.payload.quantity} × ${GOODS[transfer.payload.good]?.label || transfer.payload.good}`;
+        : cargoSummary(transfer);
       const progress = transfer.status === 'in-transit'
         ? Math.max(0, Math.min(100, Math.floor((minute - transfer.departureMinute) / Math.max(1, transfer.arrivalMinute - transfer.departureMinute) * 100)))
         : 0;
-      p.record(`${manifest} · ${amount(transfer.payload.amount)}`,
-        `${statusLabel[transfer.status] || transfer.status}${transfer.status === 'in-transit' ? ` · ${progress}% do trajeto` : ''}${transfer.lastError ? ` · ${transfer.lastError}` : ''}`,
+      p.record(`${manifest} · ${cargoValue(transfer)}`,
+        `${statusLabel[transfer.status] || transfer.status}${transfer.status === 'in-transit' ? ` · ${progress}% do trajeto` : ''}${transfer.payload.shipments?.length > 1 ? ` · ${transfer.payload.shipments.length} cargas consolidadas` : ''}${transfer.lastError ? ` · ${transfer.lastError}` : ''}`,
         null, false, { value: transfer.id });
     }
   }
@@ -88,9 +92,43 @@ function routesView(p, world) {
 
 function tradeView(state, p, world) {
   const net = state.worldNet;
-  state.worldTradeTab ??='manual';
-  p.links([{ label: 'NOVA COMPRA', selected: state.worldTradeTab === 'manual', click: () => { state.worldTradeTab = 'manual'; state.resetScroll(); } }, { label: 'CONTRATOS E ENVIOS', selected: state.worldTradeTab === 'records', click: () => { state.worldTradeTab = 'records'; state.resetScroll(); } }]);
+  state.worldTradeTab ??= 'demand';
+  p.links([
+    { label: 'DEMANDA REGIONAL', selected: state.worldTradeTab === 'demand', click: () => { state.worldTradeTab = 'demand'; state.resetScroll(); } },
+    { label: 'NOVA COMPRA', selected: state.worldTradeTab === 'manual', click: () => { state.worldTradeTab = 'manual'; state.resetScroll(); } },
+    { label: 'CONTRATOS E ENVIOS', selected: state.worldTradeTab === 'records', click: () => { state.worldTradeTab = 'records'; state.resetScroll(); } },
+  ]);
   if (state.worldTradeTab === 'records') return tradeRecordsView(p, world, net);
+  if (state.worldTradeTab === 'manual') return tradeManualView(state, p, world, net);
+  return tradeDemandView(state, p, world, net);
+}
+
+function tradeDemandView(state, p, world, net) {
+  const cities = [...world.cities.values()].filter(city => city.online && city.id !== world.cityId);
+  const activeTransfers = [...world.transfers.values()].filter(item => item.kind === 'goods' && ['reserving', 'scheduled', 'in-transit'].includes(item.status));
+  p.status('ABASTECIMENTO AUTOMÁTICO', 'O servidor compara excedentes e demandas das cidades conectadas, enche o porão com produtos variados e envia o barco quando o lote útil se forma (25% da capacidade) ou expira a paciência de 240 minutos — quanto mais cheio, menor o frete por item.', C.cyan);
+  p.metrics([['ROTAS', world.routes.size], ['CARGAS EM VIAGEM', activeTransfers.length], ['CONTRATOS ATIVOS', [...world.contracts.values()].length]]);
+  if (!cities.length) { p.note('Nenhuma outra cidade conectada: os excedentes esperam uma cidade para abastecer.'); return; }
+  const offers = world.computeOffers?.() || [];
+  const demand = world.computeDemand?.() || [];
+  p.heading('EXCEDENTES QUE PODEM EMBARCAR DESTA CIDADE');
+  if (!offers.length) p.note('Nenhum estoque acima da reserva local agora. Excedentes do depósito de importação também podem embarcar.');
+  for (const offer of offers) p.record(`${offer.quantity} × ${GOODS[offer.good]?.label || offer.good}`, `Preço sugerido ${amount(offer.unitPrice)} / unidade`, null, false, { value: 'excedente' });
+  p.heading('DEMANDAS DESTA CIDADE QUE PUXAM CARGA');
+  if (!demand.length) p.note('Nenhum prédio precisa de produtos importados agora, ou ninguém tem saldo para pagar.');
+  for (const entry of demand) {
+    const buyer = world.ownCity?.building(entry.destinationBuildingId);
+    p.record(`${entry.quantity} × ${GOODS[entry.good]?.label || entry.good}`, buyer?.entity.properties.name || entry.destinationBuildingId || 'comprador', null, false, { value: 'demanda' });
+  }
+  p.heading('CARGAS RESERVADAS E EM VIAGEM');
+  if (!activeTransfers.length) p.note('Ainda não há cargas reservadas ou em viagem.');
+  for (const transfer of activeTransfers) {
+    const status = { reserving: 'reservando carga', scheduled: 'aguardando embarque', 'in-transit': 'no mar' }[transfer.status] || transfer.status;
+    p.record(cargoSummary(transfer), `${labelCity(world.cities.get(transfer.originCityId))} → ${labelCity(world.cities.get(transfer.destinationCityId))} · ${status}${transfer.payload.shipments?.length > 1 ? ` · ${transfer.payload.shipments.length} cargas consolidadas` : ''}`, null, false, { value: cargoValue(transfer) });
+  }
+}
+
+function tradeManualView(state, p, world, net) {
   const sellers = [...world.cities.values()].filter(city => city.online && city.id !== world.cityId);
   if (!sellers.length) { p.note('Nenhuma outra cidade conectada. Compre de outra cidade quando ela entrar no servidor.'); return; }
   state.worldSeller ??= sellers[0].id;
@@ -132,8 +170,7 @@ function tradeRecordsView(p, world, net) {
   const transfers = [...world.rawTransfers.values()].filter(item => item.kind === 'goods').sort((a, b) => (b.createdAt?.wall || 0) - (a.createdAt?.wall || 0)).slice(0, 30);
   if (!transfers.length) p.note('Nenhum produto enviado ou recebido ainda.');
   for (const transfer of transfers) {
-    const good = GOODS[transfer.payload.good]?.label || transfer.payload.good;
-    p.record(`${transfer.payload.quantity} × ${good}`, `${labelCity(world.cities.get(transfer.originCityId))} → ${labelCity(world.cities.get(transfer.destinationCityId))} · ${statusLabel[transfer.status] || transfer.status}`, null, false, { value: amount(transfer.payload.amount) });
+    p.record(cargoSummary(transfer), `${labelCity(world.cities.get(transfer.originCityId))} → ${labelCity(world.cities.get(transfer.destinationCityId))} · ${statusLabel[transfer.status] || transfer.status}`, null, false, { value: cargoValue(transfer) });
     if (transfer.status === 'scheduled' && transfer.originCityId === world.cityId) p.button('CANCELAR ANTES DA PARTIDA', () => net.cancelTransfer(transfer.id));
   }
 }
@@ -166,7 +203,7 @@ function migrationView(state, p, world) {
     ]);
   }
   p.heading('MIGRAÇÃO AUTÔNOMA');
-  p.note('Uma política avalia diariamente os moradores desta cidade e envia quem tiver melhores oportunidades no destino.');
+  p.note('Todos os dias, os moradores desta cidade avaliam as cidades conectadas e o melhor candidato embarca sozinho — sem custo nem decisão sua. As políticas abaixo ajustam destino e ritmo; os botões EMIGRAR continuam disponíveis para escolher alguém específico.');
   p.buttons([{ label: 'CRIAR POLÍTICA DIÁRIA', click: () => net.createMigrationPolicy({ destinationCityId: destination.id, intervalMinutes: 1440, maxTransfers: 5 }) }]);
   const policies = [...world.policies.values()];
   for (const policy of policies) {

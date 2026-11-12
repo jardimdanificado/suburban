@@ -418,7 +418,7 @@ export class WorldNetCoordinator {
       const jobAdvantage = (jobRate - fromJobRate) * 100, homeAdvantage = (homeRate - fromHomeRate) * 100;
       const temperament = .8 + (citizen.traits?.ambition ?? .5) * .25 + (citizen.traits?.riskTolerance ?? .5) * .2;
       const score = (pressure + wellbeing + Math.max(-8, jobAdvantage * 24) + Math.max(-8, homeAdvantage * 28)) * temperament;
-      if (score > bestScore) { bestScore = score; best = { citizenId: citizen.id, household: memberIds.length > 1, reason: unemployed ? 'work' : homeless ? 'housing' : 'wellbeing' }; }
+      if (score > bestScore) { bestScore = score; best = { citizenId: citizen.id, household: memberIds.length > 1, reason: unemployed ? 'work' : homeless ? 'housing' : 'wellbeing', score }; }
     }
     return best || {};
   }

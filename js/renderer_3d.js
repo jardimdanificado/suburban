@@ -407,7 +407,7 @@ function createCaribbeanWaterTexture() {
     const a = hash(wrap(ix), wrap(iy)), b = hash(wrap(ix + 1), wrap(iy)), c = hash(wrap(ix), wrap(iy + 1)), d = hash(wrap(ix + 1), wrap(iy + 1));
     return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
   };
-  const palette = [[26, 158, 198], [36, 184, 196], [64, 199, 182], [102, 214, 166], [176, 242, 188]];
+  const palette = [[44, 169, 136], [48, 187, 139], [65, 191, 129], [100, 213, 141], [174, 241, 185]];
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const broad = noise(x, y, 4), patch = noise(x, y, 9), fine = noise(x, y, 17);
     const warpX = (noise(x + 37, y - 19, 3) - .5) * 34;

@@ -104,8 +104,9 @@ test('mundo online: compra marítima completa com escrow e liquidação', async 
   const scheduled = [...world.transfers.values()][0];
   assert.ok(scheduled);
   assert.equal(scheduled.status, 'scheduled');
-  assert.equal(scheduled.payload.goodsAmount, 50);
-  assert.equal(scheduled.payload.freightAmount, Math.ceil(1 * (100 * .35 + 10 * .65)));
+  const manifest = scheduled.payload.shipments[0].manifest;
+  assert.equal(manifest.goodsAmount, 50);
+  assert.equal(manifest.freightAmount, Math.ceil(1 * (100 * .35 + 10 * .65)));
   assert.ok(scheduled.arrivalMinute >= 200 + 180);
 
   a.sendJson({ type: 'summary', minute: 110 });
@@ -117,8 +118,9 @@ test('mundo online: compra marítima completa com escrow e liquidação', async 
   b.sendJson({ type: 'summary', minute: 200 + 200 });
   await world.tick();
   assert.equal(deliveredTransfers(world).length, 1, 'entrega completa');
-  assert.deepEqual(a.requestsOf('settleWorldPayment')[0], [scheduled.id, 'acc-padaria', 50, scheduled.payload.freightAmount, null]);
-  assert.ok(b.requestsOf('finalizeWorldPayment').length >= 1);
+  const settledId = `${scheduled.id}:s0`;
+  assert.deepEqual(a.requestsOf('settleWorldPayment')[0], [settledId, 'acc-padaria', 50, manifest.freightAmount, null]);
+  assert.ok(b.requestsOf('finalizeWorldPayment').some(args => args[0] === settledId));
   a.close();
   b.close();
 });
@@ -291,7 +293,7 @@ test('mundo online: contrato diário gera compras recorrentes', async () => {
 });
 
 test('mundo online: comércio regional autônomo casa oferta e demanda', async () => {
-  const world = new WorldServer({});
+  const world = new WorldServer({ regionalTradeCooldownMs: 0 });
   const a = fakeClient(world, 'city-a', {
     worldOffers: () => [{ good: 'tabuas', quantity: 30, unitPrice: 4 }],
     reserveWorldExport: () => true,
@@ -315,13 +317,117 @@ test('mundo online: comércio regional autônomo casa oferta e demanda', async (
   a.connect({});
   b.connect({});
   await world.tick();
+  await flush();
+  // Carga abaixo do lote útil (25% da capacidade): o barco espera o acúmulo.
+  assert.equal(world.transfers.size, 0);
+  assert.ok(world.freightWaiting.get('route:city-a>city-b'));
+  // Paciência estoura (240 minutos simulados): navega com o que tem.
+  a.sendJson({ type: 'summary', minute: 260 });
+  await world.tick();
+  await flush();
   const regional = [...world.transfers.values()];
   assert.equal(regional.length, 1);
-  assert.deepEqual(regional[0].payload.destinationBuildingId, 'moveleira-1');
+  assert.equal(regional[0].payload.shipments[0].manifest.destinationBuildingId, 'moveleira-1');
+  assert.equal(regional[0].payload.shipments[0].manifest.quantity, 12);
   assert.equal(regional[0].payload.quantity, 12);
   a.close();
   b.close();
 });
+
+test('mundo online: viagem única leva cargas mistas consolidadas', async () => {
+  const world = new WorldServer({ regionalTradeCooldownMs: 0 });
+  const a = fakeClient(world, 'city-a', {
+    worldOffers: () => [
+      { good: 'pao', quantity: 20, unitPrice: 6 },
+      { good: 'tabuas', quantity: 40, unitPrice: 3 },
+    ],
+    reserveWorldExport: () => true,
+    worldExportReservationInfo: () => ({ buildingId: 'b1', accountId: 'acc1' }),
+    reserveWorldBoatCrew: () => ({ ready: true, citizenId: 3 }),
+    departWorldBoatCrew: () => true,
+    departWorldExport: () => true,
+    receiveWorldPayment: () => true,
+    settleWorldPayment: () => true,
+    completeWorldExport: () => true,
+    returnWorldBoatCrew: () => true,
+  });
+  const b = fakeClient(world, 'city-b', {
+    worldDemand: () => [
+      { good: 'pao', quantity: 20, destinationBuildingId: 'mercadinho-1', payerAccountId: 'acc-mercado' },
+      { good: 'tabuas', quantity: 30, destinationBuildingId: 'moveleira-1', payerAccountId: 'acc-moveleira' },
+    ],
+    reserveWorldPayment: () => true,
+    reserveWorldImport: () => true,
+    receiveWorldImport: () => true,
+    deliverWorldImport: () => true,
+    finalizeWorldPayment: () => true,
+  });
+  a.connect({});
+  b.connect({});
+  await world.tick();
+  await flush();
+  const voyage = [...world.transfers.values()][0];
+  assert.equal(voyage.payload.shipments.length, 2, 'dois produtos no mesmo porão');
+  assert.equal(voyage.payload.quantity, 50);
+  const ids = voyage.payload.shipments.map(shipment => shipment.id);
+  assert.deepEqual(ids, [`${voyage.id}:s0`, `${voyage.id}:s1`]);
+  a.sendJson({ type: 'summary', minute: 2 });
+  await world.tick(); // crew + partida das duas cargas
+  assert.equal(voyage.status, 'in-transit');
+  assert.equal(a.requestsOf('departWorldExport').length, 2, 'as duas cargas embarcam no mesmo barco');
+  b.sendJson({ type: 'summary', minute: 200 });
+  await world.tick();
+  assert.equal(deliveredTransfers(world).length, 1, 'entrega completa das duas cargas');
+  assert.equal(a.requestsOf('settleWorldPayment').length, 2, 'liquidação por carga');
+  a.close();
+  b.close();
+});
+
+test('mundo online: migração autônoma diária sem intervenção do jogador', async () => {
+  const world = new WorldServer({});
+  const packageData = { version: 1, globalId: 'city-a:9', citizenId: 9, name: 'Dona Bia' };
+  let candidateCalls = 0;
+  const a = fakeClient(world, 'city-a', {
+    worldMigrationCandidates: () => {
+      candidateCalls++;
+      return candidateCalls === 1 ? { citizenId: 9, household: false, reason: 'work', score: 55 } : {};
+    },
+    reserveWorldCitizenMigration: () => packageData,
+    reserveWorldBoatCrew: () => ({ ready: true, citizenId: 5 }),
+    departWorldBoatCrew: () => true,
+    departWorldCitizenMigration: () => true,
+    completeWorldCitizenMigration: () => true,
+    returnWorldBoatCrew: () => true,
+  });
+  const b = fakeClient(world, 'city-b', { receiveWorldCitizenMigration: () => true });
+  a.connect({ minute: 100 });
+  b.connect({ minute: 100 });
+  await world.tick();
+  await flush();
+  assert.equal(deliveredTransfers(world).length, 0, 'a migração ainda está programada');
+  const transfer = [...world.transfers.values()][0];
+  assert.ok(transfer?.kind === 'citizen' && transfer.originCityId === 'city-a');
+  assert.equal(transfer.reason, 'work');
+  a.sendJson({ type: 'summary', minute: 110 });
+  await world.tick();
+  await flush();
+  a.sendJson({ type: 'summary', minute: 1500 }); // novo dia: nova rodada, sem candidatos
+  await world.tick();
+  await flush();
+  b.sendJson({ type: 'summary', minute: 100 + 200 });
+  await world.tick();
+  await flush();
+  assert.equal(deliveredTransfers(world).length, 1);
+  // Mesmo dia (para o relógio da origem avançado) não abre outra rodada.
+  a.sendJson({ type: 'summary', minute: 1600 });
+  await world.tick();
+  await flush();
+  assert.equal(candidateCalls, 2, 'uma rodada por dia de origem');
+  assert.equal(world.transfers.size, 0);
+  a.close();
+  b.close();
+});
+
 
 test('mundo online: política de migração pede candidatos à cidade de origem', async () => {
   const world = new WorldServer({});

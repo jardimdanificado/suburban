@@ -10,12 +10,13 @@ const ROUTE_TRAVEL_MINUTES = 180;
 const ROUTE_CAPACITY = 100;
 const ROUTE_FREIGHT_PER_UNIT = 1;
 const REGIONAL_TRADE_COOLDOWN_MS = 45000;
+const ROUTE_MIN_LOAD_WAIT_MINUTES = 240;
 
 const safeInt = value => Number.isSafeInteger(value) ? value : null;
 
 /** Online coordinator: registry of client cities, escrow transfers and a persisted ledger. */
 export class WorldServer extends EventEmitter {
-  constructor({ dataDir = null, now = () => Date.now(), log = () => {} } = {}) {
+  constructor({ dataDir = null, now = () => Date.now(), log = () => {}, regionalTradeCooldownMs = REGIONAL_TRADE_COOLDOWN_MS } = {}) {
     super();
     this.now = now;
     this.log = log;
@@ -29,6 +30,9 @@ export class WorldServer extends EventEmitter {
     this.nextPolicyNumber = 1;
     this.pendingRequests = new Map();
     this.regionalTradeLastAttempt = new Map();
+    this.regionalTradeCooldownMs = regionalTradeCooldownMs;
+    this.freightWaiting = new Map();
+    this.autonomousMigrationDays = new Map();
     this._saveTimer = null;
     this.dataDir = dataDir;
     this.ledgerPath = dataDir ? join(dataDir, 'ledger.json') : null;
@@ -216,10 +220,24 @@ export class WorldServer extends EventEmitter {
   // ── Escrow transfers ─────────────────────────────────────────────────────
   freightQuote(quantity) { return Math.ceil(ROUTE_FREIGHT_PER_UNIT * (ROUTE_CAPACITY * .35 + quantity * .65)); }
 
+  // Uma viagem carrega uma ou várias cargas (payload.shipments, no formato do
+  // master): cada carga tem escrow próprio e ids próprios na simulação, e o
+  // barco sai recheado com produtos variados — quanto mais cheio, menor o
+  // frete por item.
   async createGoodsTransfer({ id, originCityId, destinationCityId, payload, contractId = null, notifyFailure = null }) {
+    const input = Array.isArray(payload?.shipments) ? payload.shipments : [{ ...payload }];
+    const route = this.routeFor(originCityId, destinationCityId);
+    const shipments = input.map((manifest, index) => ({ id: `${id}:s${index}`, manifest: { kind: 'goods', ...structuredClone(manifest) } }));
+    const quantity = shipments.reduce((n, s) => n + s.manifest.quantity, 0);
     const transfer = {
       id, kind: 'goods', originCityId, destinationCityId, contractId,
-      payload: structuredClone(payload), status: 'reserving',
+      payload: {
+        kind: 'goods', quantity, totalQuantity: quantity,
+        goodsAmount: shipments.reduce((n, s) => n + s.manifest.goodsAmount, 0),
+        freightAmount: shipments.reduce((n, s) => n + s.manifest.freightAmount, 0),
+        shipments, crewReserved: false, crewTransferId: `${id}:crew`,
+      },
+      status: 'reserving',
       createdAt: { wall: this.now(), originMinute: this.cities.get(originCityId)?.minute ?? 0 },
       departureMinute: null, arrivalMinute: null, departedAt: null, deliveredAt: null, cancelledAt: null, lastError: null,
     };
@@ -227,31 +245,39 @@ export class WorldServer extends EventEmitter {
     this._publishTransfer(transfer);
     const sellerOnline = !!this.cities.get(originCityId)?.online, buyerOnline = !!this.cities.get(destinationCityId)?.online;
     if (!sellerOnline || !buyerOnline) return this._failTransfer(transfer, sellerOnline ? 'A cidade compradora não está conectada.' : 'A cidade vendedora não está conectada.', notifyFailure);
-    const step = await this.request(originCityId, 'reserveWorldExport', [id, payload.sellerBuildingId ?? null, payload.good, payload.quantity]);
-    if (!step.ok) return this._failTransfer(transfer, `Reserva de exportação recusada: ${step.message}`, notifyFailure);
-    transfer.payload.exportReserved = true;
-    const info = await this.request(originCityId, 'worldExportReservationInfo', [id]);
-    if (info.ok && info.value && typeof info.value === 'object') {
-      transfer.payload.sellerBuildingId = info.value.buildingId ?? transfer.payload.sellerBuildingId;
-      transfer.payload.sellerAccountId = info.value.accountId ?? null;
+    for (const shipment of shipments) {
+      const ok = await this._escrowShipment(transfer, originCityId, destinationCityId, shipment, notifyFailure);
+      if (!ok) return null; // _escrowShipment já desfaz a carga que falhou; _failTransfer desfaz as anteriores
     }
-    const payment = await this.request(destinationCityId, 'reserveWorldPayment', [id, payload.payerAccountId, payload.amount]);
-    if (!payment.ok) return this._failTransfer(transfer, `Reserva de pagamento recusada: ${payment.message}`, notifyFailure);
-    transfer.payload.paymentReserved = true;
-    const importReservation = await this.request(destinationCityId, 'reserveWorldImport', [id, payload.destinationBuildingId ?? null, payload.good, payload.quantity]);
-    if (!importReservation.ok) {
-      await this.request(destinationCityId, 'refundWorldPayment', [id]);
-      return this._failTransfer(transfer, `Reserva de importação recusada: ${importReservation.message}`, notifyFailure);
-    }
-    transfer.payload.importReserved = true;
     transfer.status = 'scheduled';
-    const route = this.routeFor(originCityId, destinationCityId);
     transfer.departureMinute = (this.cities.get(originCityId)?.minute ?? 0) + 1;
     transfer.arrivalMinute = (this.cities.get(destinationCityId)?.minute ?? 0) + (route?.travelMinutes || ROUTE_TRAVEL_MINUTES);
-    transfer.payload.crewTransferId = `${id}:crew`;
     this._publishTransfer(transfer);
     this.saveLedger();
     return transfer;
+  }
+
+  /** Escrow de uma carga: reserva exportação → pagamento → importação, na ordem do master. */
+  async _escrowShipment(transfer, originCityId, destinationCityId, shipment, notifyFailure = null) {
+    const m = shipment.manifest;
+    const step = await this.request(originCityId, 'reserveWorldExport', [shipment.id, m.sellerBuildingId ?? null, m.good, m.quantity]);
+    if (!step.ok) return this._failTransfer(transfer, `Reserva de exportação recusada (${m.good}): ${step.message}`, notifyFailure) && false;
+    m.exportReserved = true;
+    const info = await this.request(originCityId, 'worldExportReservationInfo', [shipment.id]);
+    if (info.ok && info.value && typeof info.value === 'object') {
+      m.sellerBuildingId = info.value.buildingId ?? m.sellerBuildingId;
+      m.sellerAccountId = info.value.accountId ?? null;
+    }
+    const payment = await this.request(destinationCityId, 'reserveWorldPayment', [shipment.id, m.payerAccountId, m.amount]);
+    if (!payment.ok) return this._failTransfer(transfer, `Reserva de pagamento recusada (${m.good}): ${payment.message}`, notifyFailure) && false;
+    m.paymentReserved = true;
+    const importReservation = await this.request(destinationCityId, 'reserveWorldImport', [shipment.id, m.destinationBuildingId ?? null, m.good, m.quantity]);
+    if (!importReservation.ok) {
+      await this.request(destinationCityId, 'refundWorldPayment', [shipment.id]);
+      return this._failTransfer(transfer, `Reserva de importação recusada (${m.good}): ${importReservation.message}`, notifyFailure) && false;
+    }
+    m.importReserved = true;
+    return true;
   }
 
   async _failTransfer(transfer, message, notifyFailure = null) {
@@ -271,14 +297,16 @@ export class WorldServer extends EventEmitter {
   async _rollback(transfer) {
     const { originCityId: origin, destinationCityId: destination, payload, kind } = transfer;
     try {
+      if (payload.crewReserved) await this.request(origin, 'returnWorldBoatCrew', [payload.crewTransferId]);
       if (kind === 'citizen') {
-        if (payload.crewReserved) await this.request(origin, 'returnWorldBoatCrew', [payload.crewTransferId]);
         await this.request(origin, payload.package?.version === 2 ? 'cancelWorldHouseholdMigration' : 'cancelWorldCitizenMigration', [transfer.id]);
       } else {
-        if (payload.crewReserved) await this.request(origin, 'returnWorldBoatCrew', [payload.crewTransferId]);
-        if (payload.exportReserved) await this.request(origin, 'returnWorldExport', [transfer.id]);
-        if (payload.importReserved || payload.paymentReserved) await this.request(destination, 'cancelWorldImport', [transfer.id]);
-        if (payload.paymentReserved) await this.request(destination, 'refundWorldPayment', [transfer.id]);
+        for (const shipment of payload.shipments || []) {
+          const m = shipment.manifest;
+          if (m.exportReserved) await this.request(origin, 'returnWorldExport', [shipment.id]);
+          if (m.importReserved || m.paymentReserved) await this.request(destination, 'cancelWorldImport', [shipment.id]);
+          if (m.paymentReserved) await this.request(destination, 'refundWorldPayment', [shipment.id]);
+        }
       }
     } catch (error) { this.log(`Falha ao desfazer ${transfer.id}: ${error.message}`); }
   }
@@ -312,6 +340,7 @@ export class WorldServer extends EventEmitter {
     await this._processContracts();
     await this._processRegionalTrade();
     await this._processMigrationPolicies();
+    await this._processAutonomousMigrations();
   }
 
   async _departDueTransfers() {
@@ -327,13 +356,24 @@ export class WorldServer extends EventEmitter {
         const departedCrew = await this.request(origin.cityId, 'departWorldBoatCrew', [transfer.payload.crewTransferId]);
         if (!departedCrew.ok) continue;
         transfer.payload.crewReserved = true;
+        transfer.payload.crew = crew.value; // piloto para o renderer desenhar a bordo
         this._publishTransfer(transfer);
       }
-      const departMethod = transfer.kind === 'citizen'
-        ? (transfer.payload.package?.version === 2 ? 'departWorldHouseholdMigration' : 'departWorldCitizenMigration')
-        : 'departWorldExport';
-      const departure = await this.request(origin.cityId, departMethod, [transfer.id]);
-      if (!departure.ok) continue;
+      if (transfer.kind === 'goods' && transfer.payload.shipments) {
+        // Todas as cargas precisam estar no porão antes da partida.
+        let loaded = true;
+        for (const shipment of transfer.payload.shipments) {
+          const departure = await this.request(origin.cityId, 'departWorldExport', [shipment.id]);
+          if (!departure.ok) { loaded = false; break; }
+        }
+        if (!loaded) continue;
+      } else {
+        const departMethod = transfer.kind === 'citizen'
+          ? (transfer.payload.package?.version === 2 ? 'departWorldHouseholdMigration' : 'departWorldCitizenMigration')
+          : 'departWorldExport';
+        const departure = await this.request(origin.cityId, departMethod, [transfer.id]);
+        if (!departure.ok) continue;
+      }
       transfer.status = 'in-transit';
       transfer.departedAt = { wall: this.now(), originMinute: origin.minute };
       this._publishTransfer(transfer);
@@ -357,16 +397,26 @@ export class WorldServer extends EventEmitter {
           if (!completion.ok) continue;
           if (payload.crewReserved) await this.request(origin.cityId, 'returnWorldBoatCrew', [payload.crewTransferId]);
         } else {
-          const received = await this.request(destination.cityId, 'receiveWorldImport', [transfer.id, payload.good, payload.quantity]);
-          if (!received.ok) continue;
-          const delivered = await this.request(destination.cityId, 'deliverWorldImport', [transfer.id, payload.destinationBuildingId ?? null]);
-          if (!delivered.ok) continue;
-          const income = await this.request(origin.cityId, 'receiveWorldPayment', [transfer.id, payload.payerAccountId, payload.amount]);
-          if (!income.ok) continue;
-          const settlement = await this.request(origin.cityId, 'settleWorldPayment', [transfer.id, payload.sellerAccountId, payload.goodsAmount, payload.freightAmount, null]);
-          if (!settlement.ok) continue;
-          await this.request(origin.cityId, 'completeWorldExport', [transfer.id]);
-          await this.request(destination.cityId, 'finalizeWorldPayment', [transfer.id]);
+          let delivered = true;
+          for (const shipment of transfer.payload.shipments || []) {
+            const m = shipment.manifest;
+            const received = await this.request(destination.cityId, 'receiveWorldImport', [shipment.id, m.good, m.quantity]);
+            if (!received.ok) { delivered = false; continue; }
+            const deliveredShipment = await this.request(destination.cityId, 'deliverWorldImport', [shipment.id, m.destinationBuildingId ?? null]);
+            if (!deliveredShipment.ok) { delivered = false; continue; }
+            const income = await this.request(origin.cityId, 'receiveWorldPayment', [shipment.id, m.payerAccountId, m.amount]);
+            if (!income.ok) { delivered = false; continue; }
+            const settlement = await this.request(origin.cityId, 'settleWorldPayment', [shipment.id, m.sellerAccountId, m.goodsAmount, m.freightAmount, null]);
+            if (!settlement.ok) { delivered = false; continue; }
+            await this.request(origin.cityId, 'completeWorldExport', [shipment.id]);
+            await this.request(destination.cityId, 'finalizeWorldPayment', [shipment.id]);
+            m.delivered = true;
+          }
+          if (!delivered) {
+            transfer.payload.deliveredShipments = (transfer.payload.shipments || []).filter(s => s.manifest.delivered).length;
+            this._publishTransfer(transfer); // progresso parcial visível na UI
+            continue;
+          }
           if (payload.crewReserved) await this.request(origin.cityId, 'returnWorldBoatCrew', [payload.crewTransferId]);
         }
       } catch (error) { transfer.lastError = error.message; continue; }
@@ -453,7 +503,7 @@ export class WorldServer extends EventEmitter {
     const now = this.now();
     for (const route of this.routes().values()) {
       const last = this.regionalTradeLastAttempt.get(route.id) || 0;
-      if (now - last < REGIONAL_TRADE_COOLDOWN_MS) continue;
+      if (now - last < this.regionalTradeCooldownMs) continue;
       this.regionalTradeLastAttempt.set(route.id, now);
       const busy = [...this.transfers.values()].some(transfer =>
         (transfer.originCityId === route.originCityId && transfer.destinationCityId === route.destinationCityId) && transfer.status !== 'delivered');
@@ -462,29 +512,47 @@ export class WorldServer extends EventEmitter {
       if (!offers.ok || !Array.isArray(offers.value) || !offers.value.length) continue;
       const demand = await this.request(route.destinationCityId, 'worldDemand', []);
       if (!demand.ok || !Array.isArray(demand.value) || !demand.value.length) continue;
-      const shipped = new Set();
+      // Consolidação (como o master): enche o porão com produtos variados até a
+      // capacidade da rota — o frete por item cai quanto mais cheio o barco.
+      const shipments = [];
+      let total = 0;
+      const usedDemand = new Set();
       for (const offer of offers.value) {
-        const need = demand.value.find(entry => entry.good === offer.good && !shipped.has(offer.good));
+        const need = demand.value.find(entry => entry.good === offer.good && !usedDemand.has(`${offer.good}:${entry.destinationBuildingId}`));
         if (!need) continue;
-        const quantity = Math.min(route.capacity, offer.quantity, need.quantity);
+        const quantity = Math.min(route.capacity - total, offer.quantity, need.quantity);
         if (quantity < 1) continue;
         const unitPrice = safeInt(offer.unitPrice);
         if (!unitPrice || unitPrice < 1) continue;
         const goodsAmount = quantity * unitPrice, freightAmount = this.freightQuote(quantity);
-        shipped.add(offer.good);
-        const transfer = await this.createGoodsTransfer({
-          id: `regional-${route.id}-t${this.nextTransferNumber++}`,
-          originCityId: route.originCityId, destinationCityId: route.destinationCityId,
-          payload: {
-            good: offer.good, quantity, unitPrice, goodsAmount, freightAmount,
-            amount: goodsAmount + freightAmount,
-            destinationBuildingId: need.destinationBuildingId ?? null,
-            payerAccountId: need.payerAccountId ?? null,
-          },
+        usedDemand.add(`${offer.good}:${need.destinationBuildingId}`);
+        shipments.push({
+          good: offer.good, quantity, unitPrice, goodsAmount, freightAmount,
+          amount: goodsAmount + freightAmount,
+          destinationBuildingId: need.destinationBuildingId ?? null,
+          payerAccountId: need.payerAccountId ?? null,
         });
-        if (!transfer) continue;
-        break; // One municipal voyage per route at a time.
+        total += quantity;
+        if (total === route.capacity) break;
       }
+      if (!shipments.length) continue;
+      // Não parte com a embarcação ociosa: espera o lote útil (25% da
+      // capacidade) ou o fim da paciência (240 minutos simulados).
+      const minLoad = Math.max(1, Math.ceil(route.capacity * .25));
+      const originMinute = this.cities.get(route.originCityId)?.minute ?? 0;
+      if (total < minLoad) {
+        const wait = this.freightWaiting.get(route.id);
+        if (!wait) { this.freightWaiting.set(route.id, { sinceOriginMinute: originMinute }); continue; }
+        if (originMinute - wait.sinceOriginMinute < ROUTE_MIN_LOAD_WAIT_MINUTES) continue;
+        this.log(`Rota ${route.id}: paciência de carregamento esgotada; navegando com ${total} unidades.`);
+      }
+      this.freightWaiting.delete(route.id);
+      await this.createGoodsTransfer({
+        id: `regional-${route.id}-t${this.nextTransferNumber++}`,
+        originCityId: route.originCityId, destinationCityId: route.destinationCityId,
+        payload: { shipments },
+      });
+      break; // One municipal voyage per route at a time.
     }
   }
 
@@ -551,13 +619,43 @@ export class WorldServer extends EventEmitter {
     }
   }
 
+  // ── Autonomous migration (rodada diária, sem intervenção do jogador) ─────
+  async _processAutonomousMigrations() {
+    for (const origin of this.cities.values()) {
+      if (!origin?.online) continue;
+      const day = Math.floor((origin.minute ?? 0) / 1440);
+      if (this.autonomousMigrationDays.get(origin.cityId) === day) continue;
+      const destinations = [...this.routes().values()].filter(route => route.originCityId === origin.cityId && this.cities.get(route.destinationCityId)?.online);
+      if (!destinations.length) continue;
+      // Uma rodada por dia de origem, como no master: avalia todos os
+      // destinos, escolhe o morador com a melhor oportunidade e embarca um.
+      this.autonomousMigrationDays.set(origin.cityId, day);
+      let best = null, bestDestination = null;
+      for (const route of destinations) {
+        const destination = this.cities.get(route.destinationCityId);
+        const answer = await this.request(origin.cityId, 'worldMigrationCandidates', [{
+          cityId: destination.cityId, name: destination.name, summary: destination.summary, port: destination.port, goods: destination.goods,
+        }]);
+        const choice = answer.ok ? answer.value : null;
+        if (choice?.citizenId && Number.isFinite(choice.score) && choice.score > (best?.score ?? 0)) { best = choice; bestDestination = destination; }
+      }
+      if (!best) continue;
+      await this.createCitizenTransfer({
+        id: `autonomous-${origin.cityId}-d${day}-t${this.nextTransferNumber++}`,
+        originCityId: origin.cityId, destinationCityId: bestDestination.cityId,
+        citizenId: best.citizenId, household: best.household === true, reason: best.reason || 'autonomous',
+      });
+      this.log(`Migração autônoma: morador de ${origin.cityId} partiu para ${bestDestination.cityId} (${best.reason || 'autônoma'}).`);
+    }
+  }
+
   // ── Citizen migration ────────────────────────────────────────────────────
   async createCitizenTransfer({ id, originCityId, destinationCityId, citizenId, household = false, reason = null, notifyFailure = null }) {
     const origin = this.cities.get(originCityId), destination = this.cities.get(destinationCityId);
     if (!origin?.online || !destination?.online) { notifyFailure?.('As duas cidades precisam estar conectadas.'); return null; }
     const transfer = {
       id, kind: 'citizen', originCityId, destinationCityId, reason,
-      payload: { household }, status: 'reserving',
+      payload: { kind: 'citizen', household }, status: 'reserving',
       createdAt: { wall: this.now(), originMinute: origin.minute ?? 0 },
       departureMinute: null, arrivalMinute: null, departedAt: null, deliveredAt: null, cancelledAt: null, lastError: null,
     };
@@ -617,10 +715,41 @@ export class WorldServer extends EventEmitter {
     const route = this.routeFor(sellerCityId, requesterCityId);
     if (!route) { this.sendTo(requesterCityId, { type: 'trade:failed', message: 'Não há rota marítima entre as cidades.' }); return; }
     if (quantity > route.capacity) { this.sendTo(requesterCityId, { type: 'trade:failed', message: `A carga excede a capacidade da rota (${route.capacity}).` }); return; }
-    const busy = [...this.transfers.values()].some(transfer =>
-      transfer.kind === 'goods' && transfer.originCityId === sellerCityId && transfer.destinationCityId === requesterCityId && transfer.status !== 'delivered');
-    if (busy) { this.sendTo(requesterCityId, { type: 'trade:failed', message: 'A embarcação desta rota já está comprometida em outra viagem.' }); return; }
     const goodsAmount = quantity * unitPrice, freightAmount = this.freightQuote(quantity);
+    // A compra entra no porão de uma viagem já programada para a mesma rota
+    // quando houver espaço: o barco sai recheado com produtos variados.
+    const batch = [...this.transfers.values()]
+      .filter(candidate => candidate.kind === 'goods' && candidate.status === 'scheduled'
+        && candidate.originCityId === sellerCityId && candidate.destinationCityId === requesterCityId
+        && (candidate.payload.totalQuantity ?? 0) + quantity <= route.capacity)
+      .at(-1);
+    if (batch) {
+      const shipment = {
+        id: `${batch.id}:s${batch.payload.shipments.length}`,
+        manifest: {
+          kind: 'goods', good, quantity, unitPrice, goodsAmount, freightAmount, amount: goodsAmount + freightAmount,
+          destinationBuildingId: order.destinationBuildingId ?? null,
+          payerAccountId: order.payerAccountId ?? null,
+          sellerBuildingId: order.sellerBuildingId ?? null,
+        },
+      };
+      const escrowed = await this._escrowShipment(batch, sellerCityId, requesterCityId, shipment,
+        message => this.sendTo(requesterCityId, { type: 'trade:failed', message }));
+      if (escrowed) {
+        batch.payload.shipments.push(shipment);
+        batch.payload.totalQuantity += quantity;
+        batch.payload.quantity += quantity;
+        batch.payload.goodsAmount += goodsAmount;
+        batch.payload.freightAmount += freightAmount;
+        this._publishTransfer(batch);
+        this.saveLedger();
+        this.log(`Compra manual entrou no porão da viagem ${batch.id} (${batch.payload.shipments.length} cargas).`);
+        return;
+      }
+      return; // _escrowShipment já notificou o comprador e cancelou a viagem de destino se preciso
+    }
+    // Sem viagem aberta para entrar: exige embarcação livre antes de criar uma nova.
+    if (!this._assertRouteAvailable(sellerCityId, requesterCityId)) return;
     const transfer = await this.createGoodsTransfer({
       id: `trade-${this.nextTransferNumber++}`,
       originCityId: sellerCityId, destinationCityId: requesterCityId,
@@ -633,6 +762,14 @@ export class WorldServer extends EventEmitter {
       notifyFailure: message => this.sendTo(requesterCityId, { type: 'trade:failed', message }),
     });
     if (!transfer) this.sendTo(requesterCityId, { type: 'trade:failed', message: 'A compra não pôde ser agendada.' });
+  }
+
+  /** Sem viagem aberta para entrar: a compra precisa de embarcação livre na rota. */
+  _assertRouteAvailable(sellerCityId, requesterCityId) {
+    const busy = [...this.transfers.values()].some(transfer =>
+      transfer.kind === 'goods' && transfer.originCityId === sellerCityId && transfer.destinationCityId === requesterCityId && transfer.status !== 'delivered');
+    if (busy) { this.sendTo(requesterCityId, { type: 'trade:failed', message: 'A embarcação desta rota já está comprometida em outra viagem.' }); return false; }
+    return true;
   }
 
   // ── Message dispatch ─────────────────────────────────────────────────────

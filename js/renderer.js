@@ -462,8 +462,8 @@ export class Renderer {
     const colSandBg = rgba32(235, 205, 115);
     const colStoneFg = rgba32(165, 165, 175);
     const colStoneBg = rgba32(55, 55, 62);
-    const colWaterFg = rgba32(64, 224, 178);
-    const colWaterBg = rgba32(16, 104, 92);
+    const colWaterFg = rgba32(80, 240, 120);
+    const colWaterBg = rgba32(20, 90, 60);
 
     const map = world.map;
 
