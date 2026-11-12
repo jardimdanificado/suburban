@@ -25,15 +25,29 @@ world.preset = worldSettings.preset;
 const entities = [];
 const legacyUI = new ManagementCanvasUI(canvasUI);
 export const time = new SimulationTime();
+// Identidade estável deste mundo no servidor: gerada por seed e guardada no
+// navegador, para que reconexões retenham o mesmo cityId (e o ledger do
+// servidor reconcilie transferências). Saves diferentes no mesmo navegador
+// ganham identificadores diferentes; a MESMA cidade aberta em duas abas
+// compartilha o identificador e é rejeitada pelo servidor de propósito
+// (simular o mesmo mundo duas vezes corromperia o estado).
+let worldNetCityId = null;
+const worldIdKey = `suburban-world-id:${worldSettings.seed}`;
+try { worldNetCityId = window.localStorage?.getItem(worldIdKey) || null; } catch {}
+if (!worldNetCityId || !/^world-[0-9a-z]{4,12}$/.test(worldNetCityId)) {
+  worldNetCityId = `world-${Math.random().toString(36).slice(2, 10)}`;
+  try { window.localStorage?.setItem(worldIdKey, worldNetCityId); } catch {}
+}
+export const worldNetId = worldNetCityId;
 // Mundo online: cada cliente conecta seu mundo single-player a um servidor e
 // as cidades conectadas abrem rotas de comércio e migração entre si.
 export const worldNetCoordinator = new WorldNetCoordinator({
-  cityId: 'city-1',
+  cityId: worldNetCityId,
   cityGetter: () => ({ city, world }),
   notice: message => { if (message) cityUI.notice = message; },
 });
 export const worldNet = new WorldNetClient({
-  url: 'ws://localhost:8787', cityId: 'city-1', name: null, coordinator: worldNetCoordinator,
+  url: 'ws://localhost:8787', cityId: worldNetCityId, name: null, coordinator: worldNetCoordinator,
   notice: message => { if (message) cityUI.notice = message; },
 });
 worldNetCoordinator.client = worldNet;
@@ -710,7 +724,7 @@ function initSimulationBridge() {
     simulationBridge.active = false;
     simulationBridge = null;
   }
-  simulationBridge = new CitySimulationBridge({ city, entities, nextId, time, profiling,
+  simulationBridge = new CitySimulationBridge({ cityId: worldNetCityId, city, entities, nextId, time, profiling,
     onProgress: minute => { city.minute = minute; },
     onSummary: summary => { worldNetCoordinator.own && (worldNetCoordinator.own.summary = summary); worldNet.publishSummary(summary); },
     noticeTarget: () => cityUI.active,

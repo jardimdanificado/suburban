@@ -113,6 +113,8 @@ export class WebSocketSession extends EventEmitter {
   close(code = 1000, reason = '') {
     if (!this.open || this._closeSent) return;
     this._closeSent = true;
+    this.open = false; // the WS handshake close is settled; takeover checks must see it immediately
+    this._closeFromSocket(code, reason);
     const body = Buffer.from(String(reason), 'utf8').subarray(0, 123);
     const frame = Buffer.alloc(4 + body.length); // 2 frame bytes + 2 status bytes + body
     frame[0] = 0x88; frame[1] = body.length + 2;
@@ -124,7 +126,8 @@ export class WebSocketSession extends EventEmitter {
   }
 
   _closeFromSocket(code, reason) {
-    if (!this.open) return;
+    if (this._closeEmitted) return;
+    this._closeEmitted = true;
     this.open = false;
     this.emit('close', code, reason);
   }

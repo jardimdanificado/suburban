@@ -7,7 +7,7 @@ import { WorldServer } from '../server/world_server.mjs';
 
 /** Scripted client session: answers server requests from a handler table. */
 function fakeClient(world, cityId, handlers = {}) {
-  const client = { cityId, sent: [], requests: [], handlers, closed: false };
+  const client = { cityId, sent: [], requests: [], handlers, closed: false, open: true };
   client.sendJson = message => {
     client.sent.push(message);
     world.handleMessage(client, JSON.stringify(message));
@@ -31,6 +31,34 @@ function fakeClient(world, cityId, handlers = {}) {
 
 const deliveredTransfers = world => world.history.filter(entry => entry.status === 'delivered');
 const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test('mundo online: mesmo cityId de sessão viva é rejeitado sem derrubar a primeira', async () => {
+  const world = new WorldServer({});
+  const first = fakeClient(world, 'city-a');
+  const second = fakeClient(world, 'city-a');
+  first.connect({ minute: 10 });
+  assert.ok(first.sent.some(m => m.type === 'welcome'), 'primeira cidade registrada');
+  second.connect({ minute: 20 });
+  const rejected = second.sent.filter(m => m.type === 'error');
+  assert.ok(rejected.some(m => /já está conectad/.test(m.message)), 'segunda recebe erro claro');
+  assert.equal(world.cities.get('city-a').session, first, 'a sessão original continua dona do cityId');
+  assert.ok(first.sent.some(m => m.type === 'welcome'), 'primeira não foi derrubada');
+  assert.ok(!first.sent.some(m => m.type === 'city-offline'), 'primeira não aparece como offline');
+  first.close();
+  second.close();
+});
+
+test('mundo online: takeover válido quando a sessão anterior já morreu', async () => {
+  const world = new WorldServer({});
+  const first = fakeClient(world, 'city-a');
+  first.connect({ minute: 10 });
+  first.close(); // navegador fechou/crashou: servidor marca offline
+  const second = fakeClient(world, 'city-a', {});
+  second.connect({ minute: 30 });
+  assert.ok(second.sent.some(m => m.type === 'welcome'), 'segunda assumiu o cityId');
+  assert.equal(world.cities.get('city-a').session, second);
+  second.close();
+});
 
 test('mundo online: registro, diretório e rotas', async () => {
   const world = new WorldServer({});

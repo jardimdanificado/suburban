@@ -407,7 +407,7 @@ function createCaribbeanWaterTexture() {
     const a = hash(wrap(ix), wrap(iy)), b = hash(wrap(ix + 1), wrap(iy)), c = hash(wrap(ix), wrap(iy + 1)), d = hash(wrap(ix + 1), wrap(iy + 1));
     return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
   };
-  const palette = [[44, 169, 136], [48, 187, 139], [65, 191, 129], [100, 213, 141], [174, 241, 185]];
+  const palette = [[26, 158, 198], [36, 184, 196], [64, 199, 182], [102, 214, 166], [176, 242, 188]];
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const broad = noise(x, y, 4), patch = noise(x, y, 9), fine = noise(x, y, 17);
     const warpX = (noise(x + 37, y - 19, 3) - .5) * 34;
@@ -1039,6 +1039,37 @@ function createTropicalFlowerHeadsGeometry(){
     }
   }
   return mergeBufferGeometries(blooms);
+}
+
+// Victoria amazonica: giant floating pad with the classic V-notch cut and an
+// upturned rim hugging the outer edge (the notch opens towards +x)
+function createWaterLilyPadGeometry(){
+  const pieces=[];
+  const shape=new THREE.Shape(),R=.46,notch=.42;
+  shape.moveTo(0,0);shape.absarc(0,0,R,notch,Math.PI*2-notch,false);shape.lineTo(0,0);
+  const pad=new THREE.ExtrudeGeometry(shape,{depth:.035,bevelEnabled:false,curveSegments:12});
+  pad.rotateX(-Math.PI/2);pad.translate(0,.055,0);pieces.push(pad);
+  const arc=Math.PI*2-notch*2;
+  for(let i=0;i<18;i++){
+    const a=notch+arc*(i/17),seg=new THREE.BoxGeometry(.09,.07,.035);
+    seg.rotateZ(-.14);seg.rotateY(-a);seg.translate(Math.cos(a)*R,.075,Math.sin(a)*R);pieces.push(seg);
+  }
+  return mergeBufferGeometries(pieces);
+}
+
+// Layered rose-pink bloom: 6 broad outer petals, 5 upright inner petals and a
+// central bud, sitting on top of the pad
+function createWaterLilyFlowerGeometry(){
+  const pieces=[];
+  const petal=(azimuth,ringRadius,baseY,len,rad,tilt)=>{
+    const p=new THREE.ConeGeometry(rad,len,4);
+    p.translate(0,len/2,0);p.rotateZ(-tilt);p.translate(ringRadius,baseY,0);p.rotateY(-azimuth);pieces.push(p);
+  };
+  for(let i=0;i<6;i++)petal(i*Math.PI*2/6,.055,.075,.17,.055,.95);
+  for(let i=0;i<5;i++)petal(i*Math.PI*2/5+.35,.035,.10,.15,.048,.55);
+  const bud=new THREE.ConeGeometry(.05,.12,5);bud.translate(0,.16,0);pieces.push(bud);
+  const flower=mergeBufferGeometries(pieces);flower.translate(0,.02,0);
+  return flower;
 }
 
 function createFanPalmFrondsGeometry(){
@@ -4277,11 +4308,13 @@ export class RCT3DRenderer {
     this.instTropicalFoliage=new THREE.InstancedMesh(createTropicalFoliageGeometry(),floraMaterial,this.maxInstances);
     this.instTropicalFlowerStems=new THREE.InstancedMesh(createTropicalFlowerStemsGeometry(),this.materials.oakLeaves,this.maxInstances);
     this.instTropicalFlowerHeads=new THREE.InstancedMesh(createTropicalFlowerHeadsGeometry(),floraMaterial,this.maxInstances);
-    for(const mesh of [this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads]){mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;}
+    this.instWaterLilyPads=new THREE.InstancedMesh(createWaterLilyPadGeometry(),floraMaterial,this.maxInstances);
+    this.instWaterLilyFlowers=new THREE.InstancedMesh(createWaterLilyFlowerGeometry(),floraMaterial,this.maxInstances);
+    for(const mesh of [this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads,this.instWaterLilyPads,this.instWaterLilyFlowers]){mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;}
     // Leaf, bloom and fruit silhouettes add a second shadow draw for every
     // vegetation batch. Keep them lit by nearby shadows without making each
     // batch render into the shadow map; trunks and buildings still cast them.
-    for(const mesh of [this.instOakLeaves,this.instTropicalTreeBlooms,this.instPalmFronds,this.instFanPalmFronds,this.instTropicalFruits,this.instBananaLeaves,this.instBananaFruits,this.instPapayaLeaves,this.instPapayaFruits,this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads])mesh.castShadow=false;
+    for(const mesh of [this.instOakLeaves,this.instTropicalTreeBlooms,this.instPalmFronds,this.instFanPalmFronds,this.instTropicalFruits,this.instBananaLeaves,this.instBananaFruits,this.instPapayaLeaves,this.instPapayaFruits,this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads,this.instWaterLilyPads,this.instWaterLilyFlowers])mesh.castShadow=false;
 
     // Pine Trees
     const pineTrunkGeo = new THREE.CylinderGeometry(0.12, 0.20, 1.25, 5);
@@ -4758,7 +4791,7 @@ export class RCT3DRenderer {
       this.instTropicalFruits,
       this.instBananaStems,this.instBananaLeaves,this.instBananaFruits,
       this.instPapayaTrunks,this.instPapayaLeaves,this.instPapayaFruits,
-      this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads,
+      this.instBroadLeafPlants,this.instTropicalFoliage,this.instTropicalFlowerStems,this.instTropicalFlowerHeads,this.instWaterLilyPads,this.instWaterLilyFlowers,
       this.instPineTrunks, this.instPineLeaves,
       this.instCherryTrunks, this.instCherryLeaves,
       this.instBirchTrunks, this.instBirchLeaves,
@@ -5403,6 +5436,8 @@ export class RCT3DRenderer {
     if (this.instTropicalFoliage && activeDict.tropicalFlora) this.instTropicalFoliage.material = activeDict.tropicalFlora;
     if (this.instTropicalFlowerStems && activeDict.oakLeaves) this.instTropicalFlowerStems.material = activeDict.oakLeaves;
     if (this.instTropicalFlowerHeads && activeDict.tropicalFlora) this.instTropicalFlowerHeads.material = activeDict.tropicalFlora;
+    if (this.instWaterLilyPads && activeDict.tropicalFlora) this.instWaterLilyPads.material = activeDict.tropicalFlora;
+    if (this.instWaterLilyFlowers && activeDict.tropicalFlora) this.instWaterLilyFlowers.material = activeDict.tropicalFlora;
     if (this.instPineTrunks && activeDict.treeTrunk) this.instPineTrunks.material = activeDict.treeTrunk;
     if (this.instPineLeaves && activeDict.pineLeaves) this.instPineLeaves.material = activeDict.pineLeaves;
     if (this.instCherryTrunks && activeDict.cherryTrunk) this.instCherryTrunks.material = activeDict.cherryTrunk;
@@ -7643,7 +7678,7 @@ export class RCT3DRenderer {
     let tropicalTreeBloomCount=0;
     let palmCount = 0,palmFrondCount=0,fanPalmCount=0;
     let tropicalFruitCount = 0;
-    let bananaCount=0,bananaFruitCount=0,papayaCount=0,papayaFruitCount=0,broadLeafCount=0,tropicalFoliageCount=0,tropicalFlowerCount=0;
+    let bananaCount=0,bananaFruitCount=0,papayaCount=0,papayaFruitCount=0,broadLeafCount=0,tropicalFoliageCount=0,tropicalFlowerCount=0,waterLilyCount=0;
     let pineCount = 0;
     let cherryCount = 0;
     let birchCount = 0;
@@ -7763,6 +7798,7 @@ export class RCT3DRenderer {
         const isBerryBush = isPlantOrFlora && (e.properties.species === "berry" || e.properties.name?.toLowerCase().includes("amora") || (e.properties.species === "bush" && !e.properties.name?.toLowerCase().includes("florido")));
         const isTropicalFoliage = isPlantOrFlora && e.properties.cityPlant?.form === 'foliage';
       const isTropicalFlowering = isPlantOrFlora && e.properties.cityPlant?.form === 'flowering';
+      const isWaterLily = isPlantOrFlora && (e.properties.species === "waterlily" || e.properties.species === "water_lily" || e.properties.name?.toLowerCase().includes("lily") || e.properties.name?.toLowerCase().includes("vitória-régia") || e.properties.name?.toLowerCase().includes("vitoria"));
       const isBroadLeafPlant = isPlantOrFlora && e.properties.cityPlant?.form === 'broad_leaf';
         const isRoseBush = isPlantOrFlora && (['rose_bush','hibiscus','bougainvillea'].includes(e.properties.species) || e.properties.name?.toLowerCase().includes("florido") || e.properties.name?.toLowerCase().includes("rose"));
         const isTree = !cityCitizen && !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && (isCherry || isBirch || isMaple || e.properties.species === "oak" || e.properties.species === "pine" || e.properties.species === "willow" || e.properties.species === "tree" || !!e.properties.tree || (r.skin && r.skin.toLowerCase().includes("tree")));
@@ -7776,10 +7812,10 @@ export class RCT3DRenderer {
         const isBuilding = isHouse || isWall || isDoor || isWarehouse || isSlaughterhouse || isKitchen || isWell || isArtisanHut;
         const isPlantOrItem = isTree || isCactus || isBerryBush || isRoseBush || isTropicalFoliage || isTropicalFlowering || isBroadLeafPlant || isWoodLog || isStoneItem || isTorch || isCampfire || isRoad;
         const isItem = !e.properties.brain && !isBuilding && !isTree && !isCactus && !isBerryBush && !isRoseBush && !isTropicalFoliage && !isTropicalFlowering && !isBroadLeafPlant && !isWoodLog && !isStoneItem && !isTorch && !isCampfire && !isRoad;
-        classification={properties:e.properties,render:r,isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTropicalFoliage,isTropicalFlowering,isBroadLeafPlant,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem,static:(isBuilding||isPlantOrItem)&&!isDoor};
+        classification={properties:e.properties,render:r,isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTropicalFoliage,isTropicalFlowering,isBroadLeafPlant,isWaterLily,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem,static:(isBuilding||isPlantOrItem)&&!isDoor};
         entityRenderClasses.set(e,classification);
       }
-      const {isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTropicalFoliage,isTropicalFlowering,isBroadLeafPlant,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem}=classification;
+      const {isRoad,isCampfire,isTorch,isWarehouse,isSlaughterhouse,isKitchen,isWell,isArtisanHut,isDoor,isPlantOrFlora,isCactus,isCherry,isBirch,isMaple,isBerryBush,isRoseBush,isTropicalFoliage,isTropicalFlowering,isBroadLeafPlant,isWaterLily,isTree,isPine,isPalm,isWoodLog,isStoneItem,isHouse,isLeaderHouse,isWall,isBuilding,isPlantOrItem,isItem}=classification;
       const profileAfterClass = profileCitizenStart ? performance.now() : 0;
 
       const isStaticEntity = isBuilding || isPlantOrItem;
@@ -7902,6 +7938,15 @@ export class RCT3DRenderer {
         const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),2243),982451653)>>>0)%628)/100),size=(r.size||1)*(e.properties.species==='imperial_bromeliad'?1.22:1);
         mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
         this.instTropicalFoliage.setMatrixAt(tropicalFoliageCount,mMatrix);this.instTropicalFoliage.setColorAt(tropicalFoliageCount,this.tempColor1.setHex(TROPICAL_FOLIAGE_COLORS[e.properties.species]||0x68894e));tropicalFoliageCount++;
+      }
+      // Giant Amazonian water lily: floating pad with V-notch and a layered
+      // pink bloom, sitting directly on the water surface (water plane y=0.08)
+      else if(isWaterLily&&waterLilyCount<this.maxInstances){
+        const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9157),982451653)>>>0)%628)/100),size=(r.size||1);
+        mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        this.instWaterLilyPads.setMatrixAt(waterLilyCount,mMatrix);this.instWaterLilyPads.setColorAt(waterLilyCount,this.tempColor1.setHex(0x46a558));
+        this.instWaterLilyFlowers.setMatrixAt(waterLilyCount,mMatrix);this.instWaterLilyFlowers.setColorAt(waterLilyCount,this.tempColor1.setHex(0xff8fc4));
+        waterLilyCount++;
       }
       else if(isTropicalFlowering&&tropicalFlowerCount<this.maxInstances){
         const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9157),982451653)>>>0)%628)/100),size=(r.size||1)*(e.properties.species==='heliconia_psittacorum'?.8:1);
@@ -8835,7 +8880,7 @@ export class RCT3DRenderer {
     if(this.instTropicalFruits.instanceColor)this.instTropicalFruits.instanceColor.needsUpdate=true;
     for(const [mesh,count]of [[this.instBananaStems,bananaCount],[this.instBananaLeaves,bananaCount],[this.instBananaFruits,bananaFruitCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
     for(const [mesh,count]of [[this.instPapayaTrunks,papayaCount],[this.instPapayaLeaves,papayaCount],[this.instPapayaFruits,papayaFruitCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
-    for(const [mesh,count]of [[this.instBroadLeafPlants,broadLeafCount],[this.instTropicalFoliage,tropicalFoliageCount],[this.instTropicalFlowerStems,tropicalFlowerCount],[this.instTropicalFlowerHeads,tropicalFlowerCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
+    for(const [mesh,count]of [[this.instBroadLeafPlants,broadLeafCount],[this.instTropicalFoliage,tropicalFoliageCount],[this.instTropicalFlowerStems,tropicalFlowerCount],[this.instTropicalFlowerHeads,tropicalFlowerCount],[this.instWaterLilyPads,waterLilyCount],[this.instWaterLilyFlowers,waterLilyCount]]){mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
 
     this.instPineTrunks.count = pineCount;
     this.instPineTrunks.instanceMatrix.needsUpdate = true;

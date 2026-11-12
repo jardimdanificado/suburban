@@ -98,8 +98,17 @@ export class WorldNetClient {
       case 'policy:removed': this.coordinator.policies.delete(message.id); break;
       case 'request': void this.answer(message); break;
       case 'trade:failed': this.notice(message.message); break;
-      case 'error': this.notice(message.message); break;
+      case 'error': this.onServerError(message); break;
       default: break;
+    }
+  }
+
+  /** A rejected hello (identifier already connected) must not turn into a reconnect loop. */
+  onServerError(message) {
+    this.notice(message.message);
+    if (/já está conectad/i.test(message.message || '')) {
+      this.reconnectDisabled = true;
+      this.status = 'rejected';
     }
   }
 

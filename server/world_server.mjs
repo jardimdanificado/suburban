@@ -115,6 +115,13 @@ export class WorldServer extends EventEmitter {
     const cityId = typeof message.cityId === 'string' && message.cityId.trim() ? message.cityId.trim() : null;
     if (!cityId) { session.sendJson({ type: 'error', message: 'A cidade precisa de um identificador estável.' }); return; }
     const existing = this.cities.get(cityId);
+    // Two different worlds must never share an identifier. A takeover is only
+    // valid when the previous session is already dead (crashed browser).
+    if (existing?.session && existing.session !== session && existing.session.open) {
+      session.sendJson({ type: 'error', message: `O identificador ${cityId} já está conectado neste servidor. Feche a outra aba/janela do mundo ou gere um novo identificador.` });
+      session.close(4002, 'identificador em uso');
+      return;
+    }
     const record = existing || { cityId, joinedAt: this.now() };
     if (existing?.session && existing.session !== session) { try { existing.session.close(4001, 'A cidade reconectou em outra conexão.'); } catch {} }
     record.session = session;
