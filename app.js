@@ -9,7 +9,7 @@ import { RCT3DRenderer } from "./js/renderer_3d.js?v=boats-transport-23";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
-import { SimulationTime, SPEED_TIERS, FF_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
+import { SimulationTime, SPEED_TIERS, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
 import { OptionsPanel } from "./js/options.js?v=seeded-business-visual-v1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
@@ -224,7 +224,7 @@ function togglePause() {
 }
 
 function advanceSimulation(dt) {
-  city.fastForward = time.speed >= FF_SPEED;
+  city.fastForward = time.speed >= FF_LOD_SPEED;
   city.fastForward2 = time.speed >= FF2_SPEED;
   city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;
   update(dt, api);
@@ -433,11 +433,14 @@ function onPointerUp(event) {
   } else if (pointerOnUI && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 6) {
     if (event.button === 0) legacyUI.clickAt(x, y);
   } else if (!renderer3D.isPerspectiveActive() && event.button === 0 && pointerDown && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 4) {
-    const id = renderer3D.selectAt(event.clientX, event.clientY, entities, world);
-    selectEntity(entities.find((entity) => entity.id === id) || null, renderer3D.selectedCityUnitId);
-    if (id == null || id === -1) {
-      const tile = mapTileAt(x, y), lot = tile && city.development.plots.find(p => !p.buildingId && tile.x >= p.x && tile.x < p.x + p.width && tile.y >= p.y && tile.y < p.y + p.depth);
-      if (lot) cityUI.setPlotSelection(lot.id);
+    if (renderer3D.selectedWorldVessel) { const selection = renderer3D.selectedWorldVessel, entity = { id: `world-vessel:${selection.key}`, x: selection.x, y: selection.y, destroyed: false, properties: { name: `Embarcação ${selection.vessel.classId} · em trânsito`, worldVessel: selection } }; selectEntity(entity); }
+    else {
+      const id = renderer3D.selectAt(event.clientX, event.clientY, entities, world);
+      selectEntity(entities.find((entity) => entity.id === id) || null, renderer3D.selectedCityUnitId);
+      if (id == null || id === -1) {
+        const tile = mapTileAt(x, y), lot = tile && city.development.plots.find(p => !p.buildingId && tile.x >= p.x && tile.x < p.x + p.width && tile.y >= p.y && tile.y < p.y + p.depth);
+        if (lot) cityUI.setPlotSelection(lot.id);
+      }
     }
   }
   dragging = false;
@@ -547,7 +550,7 @@ function frame(now) {
     renderer3D.cityDevelopment = city.development;
     renderer3D.cityLogistics = city.logistics;
 
-    if (simulationBridge?.active) { city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;simulationBridge.control(); simulationBridge.interpolate(now); }
+    if (simulationBridge?.active) { city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;simulationBridge.control(); simulationBridge.interpolate(now);time.tick=simulationBridge.time.tick;time.elapsed=simulationBridge.time.elapsed;time.observeProgress(time.elapsed); }
     else time.advance(dt, advanceSimulation);
 
     const renderDt = Math.min((now - lastRenderedAt) / 1000, 0.25);
@@ -568,7 +571,7 @@ function frame(now) {
     return;
   }
 
-  if (simulationBridge?.active) { city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;simulationBridge.control(); simulationBridge.interpolate(now); }
+  if (simulationBridge?.active) { city.detailedInteriorBuildingId=renderer3D.cityInteriorView?.buildingId??null;simulationBridge.control(); simulationBridge.interpolate(now);time.tick=simulationBridge.time.tick;time.elapsed=simulationBridge.time.elapsed;time.observeProgress(time.elapsed); }
   else time.advance(dt, advanceSimulation);
   const rapidMode=simulationBridge?.active&&time.speed>=16&&city.citizens.length>=512;
   renderer3D.rapidCityMode=rapidMode;
