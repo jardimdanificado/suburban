@@ -67,6 +67,11 @@ import { chooseBuildingSite, terrainWalkable, canStep, inspectBuildingSite, find
 import {findBoatPath,BOAT_CLASSES} from './city_water_transport.js?v=regional-supply-4';
 import {createSeaEdgeNavigation} from './sea_edge_navigation.js?v=sea-edge-routes-1';
 
+function outdoorRouteDistance(start,path){
+  let total=0,previous=start;
+  for(const point of path){total+=Math.hypot(point.x-previous.x,point.y-previous.y,(point.z||0)-(previous.z||0));previous=point;}
+  return total;
+}
 const ff2ProductionWaits = new WeakMap();
 
 const OUTDOOR_LEISURE_SEATS=new WeakMap();
@@ -946,7 +951,7 @@ export class CitySimulation {
     let path = this.pathCache.get(key);
     if(path===null&&allowBoats)path=findBoatPath(this,start,goal);
     if(links.length){
-      let bestScore=path===null?Infinity:path.length||0;
+      let bestScore=path===null?Infinity:outdoorRouteDistance(start,path);
       for(const link of links){
         for(const reverse of [false,true]){
           const from=reverse?link.end:link.start,to=reverse?link.start:link.end,fromBuilding=this.building(reverse?link.bId:link.aId),toBuilding=this.building(reverse?link.aId:link.bId),fromUnit=fromBuilding?.units.find(u=>u.id===(reverse?link.buId:link.auId)),toUnit=toBuilding?.units.find(u=>u.id===(reverse?link.auId:link.buId));
@@ -965,7 +970,7 @@ export class CitySimulation {
           append({x:to.x,y:to.y,z:link.height,skybridgeId:link.id});
           waypoints.push({x:to.x,y:to.y,z:link.height,skybridgeExit:{buildingId:toBuilding.id,unitId:toUnit.id,linkId:link.id,endpoint:reverse?'start':'end'}});
           for(const point of last)append(point);
-          const score=first.length+last.length+up.length+down.length+Math.hypot(to.x-from.x,to.y-from.y,link.height)*.76+3;
+          const score=outdoorRouteDistance(start,first)+outdoorRouteDistance(toBuilding.door,last)+up.length+down.length+Math.hypot(to.x-from.x,to.y-from.y,link.height)*.76+3;
           if(score<bestScore){bestScore=score;path=waypoints;}
         }
       }

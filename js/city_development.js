@@ -76,7 +76,7 @@ export class CityDevelopment {
     const city=this.city;
     if(!start||!end||![start.x,start.y,end.x,end.y].every(Number.isFinite)||!(maxTiles>0))return null;
     const access=this.roadAccessTiles();
-    const path=findTerrainPath(city.world,start,end,city.occupied,{extraBlocked:(x,y)=>this.roadPlotBlocked(x,y,access)});if(path===null)return null;
+    const path=findTerrainPath(city.world,start,end,city.occupied,{extraBlocked:(x,y)=>this.roadPlotBlocked(x,y,access),allowDiagonal:false});if(path===null)return null;
     const full=[{x:Math.floor(start.x)+.5,y:Math.floor(start.y)+.5},...path];
     // Dirt roads are roads for routing, but they are still eligible for the
     // paving contract. Only paved tiles and non-road surfaces are skipped.

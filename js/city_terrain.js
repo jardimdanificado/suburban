@@ -116,7 +116,7 @@ export function chooseBuildingSite(city,x,y,width,depth,{plotId=null,type=null,r
       search?.blocked.set(footprint,accessBlocked);
     }
     if(hub&&search?.stats)search.stats.pathSearches=(search.stats.pathSearches||0)+1;
-    const access=hub?findTerrainPath(city.world,site.door,hub,city.occupied,{blockedGrid:accessBlocked,preferRoads:false}):[];
+    const access=hub?findTerrainPath(city.world,site.door,hub,city.occupied,{blockedGrid:accessBlocked,preferRoads:false,allowDiagonal:false}):[];
     if(access!==null){const result={...site,access};search?.orientations.set(key,result);return search?copyBuildingSite(result):result;}
     search?.orientations.set(key,{inaccessible:true});
   }
@@ -159,12 +159,23 @@ export function inspectBuildingSite(city, x, y, width, depth, { plotId = null, t
 
 const pathWorkspaces = new WeakMap();
 const pathTerrainGrids = new WeakMap();
-const pathDx = [1, 0, -1, 0], pathDy = [0, 1, 0, -1];
+const pathDx = [1, 0, -1, 0, 1, -1, -1, 1], pathDy = [0, 1, 0, -1, 1, 1, -1, -1];
+const octileDistance=(dx,dy)=>Math.max(dx,dy)+(Math.SQRT2-1)*Math.min(dx,dy);
+// Both side cells must allow both cardinal legs: never clip an obstacle or cliff corner.
+function diagonalClear(terrain,from,to,a,b,isBlocked,roadOnly=false){
+  for(let i=0;i<2;i++){
+    const side=i===0?a:b;
+    if(!terrain.walkable[side]||isBlocked(side)||roadOnly&&!terrain.roads[side])return false;
+    if(Math.abs(terrain.elevations[from]-terrain.elevations[side])>1.25||Math.abs(terrain.elevations[to]-terrain.elevations[side])>1.25)return false;
+  }
+  return true;
+}
 function terrainPathGrid(world){
   let grid=pathTerrainGrids.get(world);if(grid&&grid.revision===(world.revision||0)&&grid.width===world.width&&grid.height===world.height)return grid;
   const size=world.width*world.height,tiles=new Uint8Array(size),walkable=new Uint8Array(size),roads=new Uint8Array(size),elevations=new Float32Array(size),source=world.map;
-  for(let i=0;i<size;i++){const tile=baseTerrainTile(source?source[i]:world.getTile(i%world.width,Math.floor(i/world.width)));tiles[i]=tile;walkable[i]=land.has(tile)?1:0;roads[i]=ROAD_TILES.has(tile)?1:0;elevations[i]=tileHeight(tile);}
-  grid={revision:world.revision||0,width:world.width,height:world.height,tiles,walkable,roads,elevations};pathTerrainGrids.set(world,grid);return grid;
+  let minCost=Infinity;
+  for(let i=0;i<size;i++){const tile=baseTerrainTile(source?source[i]:world.getTile(i%world.width,Math.floor(i/world.width)));tiles[i]=tile;walkable[i]=land.has(tile)?1:0;roads[i]=ROAD_TILES.has(tile)?1:0;elevations[i]=tileHeight(tile);if(walkable[i])minCost=Math.min(minCost,roads[i]?ROAD_RULES.pavedCost:tileCosts[tile]);}
+  grid={revision:world.revision||0,width:world.width,height:world.height,tiles,walkable,roads,elevations,minCost};pathTerrainGrids.set(world,grid);return grid;
 }
 function heapPush(w,node,cost,score){
   let cap=w.heapNodes.length;if(w.heapLength===cap){cap=Math.max(64,cap*2);const nodes=new Int32Array(cap),costs=new Float64Array(cap),scores=new Float64Array(cap);nodes.set(w.heapNodes);costs.set(w.heapCosts);scores.set(w.heapScores);w.heapNodes=nodes;w.heapCosts=costs;w.heapScores=scores;}
@@ -233,18 +244,19 @@ export function findSharedTerrainPath(city,start,goal,blockedGrid){
     }
   }
   if(!field)return undefined;
-  const target=reverse?origin:destination;
+  const target=reverse?origin:destination,isBlocked=index=>blockedGrid[index];
   while(!field.closed[target]&&field.heapLength){
     const current=heapPop(field),cost=field.poppedCost;
     if(field.closed[current]||cost!==field.costs[current])continue;
     field.closed[current]=1;
     const x=current%width,y=Math.floor(current/width),heightHere=terrain.elevations[current];
     const enteringCost=terrain.roads[current]?ROAD_RULES.pavedCost:tileCosts[terrain.tiles[current]];
-    for(let direction=0;direction<4;direction++){
+    for(let direction=0;direction<8;direction++){
       const nx=x+pathDx[direction],ny=y+pathDy[direction];if(nx<0||ny<0||nx>=width||ny>=height)continue;
       const neighbor=ny*width+nx,climb=Math.abs(heightHere-terrain.elevations[neighbor]);
       if(field.closed[neighbor]||!terrain.walkable[neighbor]||blockedGrid[neighbor]||climb>1.25)continue;
-      const edgeCost=reverse?enteringCost:terrain.roads[neighbor]?ROAD_RULES.pavedCost:tileCosts[terrain.tiles[neighbor]],candidate=cost+edgeCost+climb*.7;
+      if(direction>=4&&!diagonalClear(terrain,current,neighbor,y*width+nx,ny*width+x,isBlocked))continue;
+      const edgeCost=reverse?enteringCost:terrain.roads[neighbor]?ROAD_RULES.pavedCost:tileCosts[terrain.tiles[neighbor]],candidate=cost+edgeCost*(direction>=4?Math.SQRT2:1)+climb*.7;
       if(candidate>=field.costs[neighbor])continue;
       field.costs[neighbor]=candidate;field.next[neighbor]=current;heapPush(field,neighbor,candidate,candidate);
     }
@@ -258,6 +270,7 @@ export function findSharedTerrainPath(city,start,goal,blockedGrid){
 
 // Reachability does not need a shortest path for every pair of businesses.
 // Label the settlement's walkable components once per obstacle/terrain change.
+// Cardinal connectivity is equivalent: every allowed diagonal has clear cardinal legs.
 // A component touching the edge may connect outside the window: fall back to A*.
 const settlementComponents = new WeakMap();
 export function settlementConnected(city, a, b) {
@@ -292,7 +305,7 @@ export function settlementConnected(city, a, b) {
   return ac===bc?true:cache.sealed[ac]||cache.sealed[bc]?false:null;
 }
 
-export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false,blockedGrid=null } = {}) {
+export function findTerrainPath(world, start, goal, blocked = new Set(), { limit = 30000, extraBlocked = null,preferRoads=true,roadOnly=false,blockedGrid=null,allowDiagonal=true } = {}) {
   const sx = Math.floor(start.x), sy = Math.floor(start.y), gx = Math.floor(goal.x), gy = Math.floor(goal.y);
   if(sx<0||sy<0||gx<0||gy<0||sx>=world.width||gx>=world.width||sy>=world.height||gy>=world.height)return null;
   const terrain=terrainPathGrid(world),startKey=sy*world.width+sx,goalKey=gy*world.width+gx;
@@ -300,12 +313,13 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
   // Search the much smaller street network first. Keep off-road shortcuts when
   // following the streets would cost more than a near-direct walk on flat land.
   if(preferRoads&&!extraBlocked&&terrain.roads[startKey]&&terrain.roads[goalKey]){
-    const direct=Math.abs(gx-sx)+Math.abs(gy-sy),roadPath=findTerrainPath(world,start,goal,blocked,{limit:Math.min(limit,Math.max(128,direct*24)),preferRoads:false,roadOnly:true,blockedGrid});
-    if(roadPath){let cost=0,previous=startKey;for(const p of roadPath){const x=Math.floor(p.x),y=Math.floor(p.y),key=y*world.width+x,tile=terrain.tiles[key];cost+=(terrain.roads[key]?ROAD_RULES.pavedCost:tileCosts[tile])+Math.abs(terrain.elevations[key]-terrain.elevations[previous])*.7;previous=key;}
+    const direct=allowDiagonal?octileDistance(Math.abs(gx-sx),Math.abs(gy-sy)):Math.abs(gx-sx)+Math.abs(gy-sy),roadPath=findTerrainPath(world,start,goal,blocked,{limit:Math.min(limit,Math.max(128,direct*24)),preferRoads:false,roadOnly:true,blockedGrid,allowDiagonal});
+    if(roadPath){let cost=0,previous=startKey;for(const p of roadPath){const x=Math.floor(p.x),y=Math.floor(p.y),key=y*world.width+x,tile=terrain.tiles[key];cost+=(terrain.roads[key]?ROAD_RULES.pavedCost:tileCosts[tile])*Math.hypot(x-previous%world.width,y-Math.floor(previous/world.width))+Math.abs(terrain.elevations[key]-terrain.elevations[previous])*.7;previous=key;}
       if(cost<=direct*1.05)return roadPath;
     }
   }
   const width = world.width, size = width * world.height;
+  const isBlocked=index=>(blockedGrid?blockedGrid[index]!==0:blocked.has(tileKey(index%width,Math.floor(index/width))))||extraBlocked?.(index%width,Math.floor(index/width));
   let workspace = pathWorkspaces.get(world);
   if (!workspace || workspace.costs.length !== size) {
     workspace = { costs: new Float64Array(size), parents: new Int32Array(size), marks: new Uint32Array(size), generation: 0,heapNodes:new Int32Array(512),heapCosts:new Float64Array(512),heapScores:new Float64Array(512),heapLength:0 };
@@ -326,16 +340,17 @@ export function findTerrainPath(world, start, goal, blocked = new Set(), { limit
       return path.reverse();
     }
     const currentHeight=terrain.elevations[k],cx=k%width,cy=Math.floor(k/width);
-    for (let direction=0;direction<4;direction++) {
+    for (let direction=0;direction<(allowDiagonal?8:4);direction++) {
       const x=cx+pathDx[direction],y=cy+pathDy[direction];if(x<0||y<0||x>=width||y>=world.height)continue;const nextKey=y*width+x,tile=terrain.tiles[nextKey];
       if(!terrain.walkable[nextKey])continue;
       const climb=Math.abs(currentHeight-terrain.elevations[nextKey]);
       if (climb>1.25 || (blockedGrid?blockedGrid[nextKey]!==0:blocked.has(tileKey(x, y))) || extraBlocked?.(x, y)) continue;
       if(roadOnly&&!terrain.roads[nextKey])continue;
-      const cost = currentCost + (terrain.roads[nextKey]?ROAD_RULES.pavedCost:tileCosts[tile]) + climb * .7;
+      if(direction>=4&&!diagonalClear(terrain,k,nextKey,cy*width+x,y*width+cx,isBlocked,roadOnly))continue;
+      const cost = currentCost + (terrain.roads[nextKey]?ROAD_RULES.pavedCost:tileCosts[tile]) * (direction>=4?Math.SQRT2:1) + climb * .7;
       if (marks[nextKey] === generation && cost >= costs[nextKey]) continue;
       marks[nextKey] = generation; costs[nextKey] = cost; parents[nextKey] = k;
-      heapPush(workspace,nextKey,cost,cost+(Math.abs(gx-x)+Math.abs(gy-y))*.55);
+      heapPush(workspace,nextKey,cost,cost+(allowDiagonal?octileDistance(Math.abs(gx-x),Math.abs(gy-y))*terrain.minCost:(Math.abs(gx-x)+Math.abs(gy-y))*.55));
     }
 
   }

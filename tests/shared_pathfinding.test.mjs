@@ -11,10 +11,10 @@ function fixture(size=32){
 function route(city,start,goal){const shared=findSharedTerrainPath(city,start,goal,city.blocked);return shared===undefined?findTerrainPath(city.world,start,goal,city.occupied,{blockedGrid:city.blocked,preferRoads:false}):shared;}
 function validate(city,start,path,goal){
   assert.notEqual(path,null);let previous=start;
-  for(const p of path){assert.equal(Math.abs(Math.floor(p.x)-Math.floor(previous.x))+Math.abs(Math.floor(p.y)-Math.floor(previous.y)),1);assert(canStep(city.world,Math.floor(previous.x),Math.floor(previous.y),Math.floor(p.x),Math.floor(p.y)));assert(!city.blocked[Math.floor(p.y)*city.world.width+Math.floor(p.x)]);previous=p;}
+  for(const p of path){assert.equal(Math.max(Math.abs(Math.floor(p.x)-Math.floor(previous.x)),Math.abs(Math.floor(p.y)-Math.floor(previous.y))),1);assert(canStep(city.world,Math.floor(previous.x),Math.floor(previous.y),Math.floor(p.x),Math.floor(p.y)));assert(!city.blocked[Math.floor(p.y)*city.world.width+Math.floor(p.x)]);previous=p;}
   assert.deepEqual(previous,goal);
 }
-function cost(city,start,path){let last=start,total=0;for(const p of path){const tile=city.world.getTile(Math.floor(p.x),Math.floor(p.y));total+=roadTravelCost(tile)+Math.abs(tileHeight(tile)-tileHeight(city.world.getTile(Math.floor(last.x),Math.floor(last.y))))*.7;last=p;}return total;}
+function cost(city,start,path){let last=start,total=0;for(const p of path){const tile=city.world.getTile(Math.floor(p.x),Math.floor(p.y));total+=roadTravelCost(tile)*Math.hypot(p.x-last.x,p.y-last.y)+Math.abs(tileHeight(tile)-tileHeight(city.world.getTile(Math.floor(last.x),Math.floor(last.y))))*.7;last=p;}return total;}
 
 test('shared destinations preserve weighted shortest paths while expanding to new origins',()=>{
   const city=fixture();for(let x=0;x<32;x++)city.world.map[8*32+x]=TILE_ROAD_GRASS_STONE;

@@ -2,7 +2,6 @@ import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,TerrainTracks} from './terrain_tracks.js?v=contact-atlas-2';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature} from './city_site_footprints.js?v=all-built-footprints-1';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=angular-canopy-ticks-1';
-import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=palette-intensity-3x";
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -638,8 +637,6 @@ export function createTintedTexture(skinName, fgHex = 0xffffff, bgHex = 0x000000
 // ---------------------------------------------------------------------------
 
 const retroDitherMaterials=new WeakSet();
-const regionalPaletteUniform={value:0};
-const regionalPaletteIntensityUniform={value:1};
 const retroDitherPostUniform={value:0};
 export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) {
   if (!mat || retroDitherMaterials.has(mat)) return;
@@ -648,10 +645,8 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
   const prevCompile = mat.onBeforeCompile;
   mat.onBeforeCompile = (shader) => {
     if (prevCompile) prevCompile(shader);
-    shader.uniforms.uMaterialPalette=regionalPaletteUniform;
-    shader.uniforms.uPaletteIntensity=regionalPaletteIntensityUniform;
     shader.uniforms.uPostDitherActive=retroDitherPostUniform;
-    shader.fragmentShader = COLOR_PALETTE_GLSL + `
+    shader.fragmentShader = `
       uniform float uPostDitherActive;
       float getBayer4x4(vec2 p) {
         vec2 m = mod(floor(p), 4.0);
@@ -680,17 +675,6 @@ export function applyRetroDitherToMaterial(mat, steps = 24.0, intensity = 0.50) 
         }
       }
     ` + shader.fragmentShader;
-
-    // Recolor the material albedo before lighting. This keeps the original
-    // lighting, shadows and final Bayer pattern instead of grading the
-    // already-lit screen color (which can clip bright channels).
-    const paletteChunk = '#include <map_fragment>';
-    if (shader.fragmentShader.includes(paletteChunk)) {
-      shader.fragmentShader = shader.fragmentShader.replace(
-        paletteChunk,
-        `${paletteChunk}\n diffuseColor.rgb=applyRegionalPalette(diffuseColor.rgb,diffuseColor.rgb);`
-      );
-    }
 
     const ditherCode = `
       if (uPostDitherActive < 0.5) {
@@ -3902,8 +3886,7 @@ export class RCT3DRenderer {
       brightness: 1.0,
       contrast: 1.0,
       alpha: 1.0,
-      nightLightLimit: 32,
-      paletteIntensity: 3
+      nightLightLimit: 32
     };
     this._lastPerspState = null;
     // 4.6 Texture-Derived & Procedural Normal Maps
@@ -5333,12 +5316,6 @@ export class RCT3DRenderer {
   setGraphicOptions(opts) {
     if (!opts) return;
     Object.assign(this.graphicOptions, opts);
-    if (Object.prototype.hasOwnProperty.call(opts, 'colorPalette')) {
-      regionalPaletteUniform.value = colorPaletteIndex(opts.colorPalette);
-    }
-    if (Object.prototype.hasOwnProperty.call(opts, 'paletteIntensity')) {
-      regionalPaletteIntensityUniform.value = Math.max(0, Math.min(3, Number(opts.paletteIntensity) || 0));
-    }
     if(opts.nightLightLimit!==undefined)this.setNightLightLimit(opts.nightLightLimit);
     if (opts.anisotropy !== undefined) {
       this.setAnisotropy(opts.anisotropy);
@@ -9075,8 +9052,6 @@ export class RCT3DRenderer {
     const dofRequested=['LOW','MED','HIGH'].includes(dofOpt);
     const chromaRequested=this.graphicOptions?.chroma!==false;
     const colorAdjustmentRequested=(this.graphicOptions?.brightness??1)!==1||(this.graphicOptions?.contrast??1)!==1;
-    regionalPaletteUniform.value=colorPaletteIndex(this.graphicOptions?.colorPalette);
-    regionalPaletteIntensityUniform.value=Math.max(0,Math.min(3,Number(this.graphicOptions?.paletteIntensity ?? 3)));
     const postProcessingRequested=dofRequested||chromaRequested||colorAdjustmentRequested;
     if ((this.isPerspectiveActive() && this.postEffectsEnabled && this.renderTarget && postProcessingRequested)) {
       const postBayerActive=!!(this.isThirdPersonActive?.() ||

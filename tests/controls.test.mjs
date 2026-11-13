@@ -160,3 +160,15 @@ test('smooth movement defaults on and the toggle persists across app sessions',(
  const reopened=make();assert.equal(reopened.values.smoothMovement,false);
  reopened.apply('smoothMovement',true);assert.equal(make().values.smoothMovement,true);
 });
+
+test('retired palette preferences are ignored and cannot be activated through options',()=>{
+ let saved=JSON.stringify({colorPalette:'JAPAN',paletteIntensity:3,resolution:.75,smoothMovement:false});
+ const storage={getItem(){return saved;},setItem(_key,value){saved=value;}},renderer=rendererMock();
+ const panel=new OptionsPanel({renderer,time:new SimulationTime({now:()=>0}),step(){},storage});
+ assert.equal(panel.items.some(item=>['colorPalette','paletteIntensity'].includes(item.key)),false);
+ assert.equal(panel.values.colorPalette,undefined);assert.equal(panel.values.paletteIntensity,undefined);
+ assert.equal(panel.apply('colorPalette','JAPAN'),false);assert.equal(panel.apply('paletteIntensity',3),false);
+ assert.equal(panel.values.resolution,.75);assert.equal(panel.values.smoothMovement,false);
+ assert.equal(renderer.graphicOptions.colorPalette,undefined);assert.equal(renderer.graphicOptions.paletteIntensity,undefined);
+ panel.apply('brightness',1.25);assert.equal(JSON.parse(saved).colorPalette,undefined);assert.equal(JSON.parse(saved).paletteIntensity,undefined);
+});
