@@ -1,0 +1,30 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Curvas e chão agrícola</title>
+<style>body{margin:0;background:#202722;color:#eef2e8;font:14px system-ui}header{padding:12px}canvas{display:block}#routes{background:#d9e3d2}#view{width:1024px;height:380px}#status{padding:12px}</style>
+<header>Movimento: cinza = rota original · laranja = curva segura · quadrado escuro = prédio.<br>Fazenda: materiais do jogo, incluindo lotes antigos ainda marcados como prontos.</header><canvas id="routes" width="1024" height="180"></canvas><div id="status">Carregando fazenda…</div><div id="view"></div>
+<script type="module">
+import {queueMotion,sampleRoundedMotion,MOTION_BUFFER_MS} from '../js/city_motion.js?v=rounded-routes-1';
+const ctx=document.querySelector('#routes').getContext('2d'),points=[[.5,1.5,0],[1.5,1.5,100],[1.5,.5,200],[2.5,.5,300],[2.5,1.5,400],[3.5,1.5,500]];
+const draw=(offset,blocked)=>{ctx.save();ctx.translate(offset,0);const px=x=>x*110+20,py=y=>y*75+10;ctx.lineWidth=1;ctx.strokeStyle='#b7c3b0';for(let x=0;x<=4;x++){ctx.beginPath();ctx.moveTo(px(x),0);ctx.lineTo(px(x),180);ctx.stroke();}if(blocked){ctx.fillStyle='#4f574c';ctx.fillRect(px(0),py(0),110,75);}ctx.strokeStyle='#a0a79e';ctx.lineWidth=3;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(px(x),py(y)):ctx.moveTo(px(x),py(y)));ctx.stroke();const sample={entity:{},to:{},cornerClear:(a,b,c)=>!blocked||Math.max(a.x,b.x,c.x)+.28<0||Math.min(a.x,b.x,c.x)-.28>=1||Math.min(a.y,b.y,c.y)-.28>=1};for(const [x,y,at]of points)queueMotion(sample,x,y,at);ctx.strokeStyle='#dc7f24';ctx.lineWidth=2;ctx.beginPath();for(let time=0;time<=500;time+=2){sampleRoundedMotion(sample,time+MOTION_BUFFER_MS);const {x,y}=sample.entity;time?ctx.lineTo(px(x),py(y)):ctx.moveTo(px(x),py(y));}ctx.stroke();ctx.restore();};draw(0,false);draw(500,true);
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {farmSurfaceTile} from '../js/city_farm_ground.js?v=whole-farm-soil-1';
+import {FARM_TILES} from '../js/world_gen.js';
+import {caribbeanGroundSurfaceTextures} from '../js/caribbean_pixel_materials.js?v=ground-realism-2';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=rooted-blades-tracks-4';
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(1024,380);document.querySelector('#view').append(renderer.domElement);
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xb5c5ca);scene.add(new THREE.HemisphereLight(0xe6f1ff,0x56623b,2));const sun=new THREE.DirectionalLight(0xffefce,2);sun.position.set(4,10,5);scene.add(sun);
+ const positions={grass:[],soil:[]},uvs={grass:[],soil:[]};let soilCells=0;
+ // Reproduce an old save: the map still says grass, farmSoilReady is true.
+ const farm={x:3,y:3,width:6,depth:6,farmSoilReady:true};
+ for(let y=0;y<12;y++)for(let x=0;x<12;x++){
+  const inFarm=x>=farm.x&&x<farm.x+farm.width&&y>=farm.y&&y<farm.y+farm.depth;
+  const type=farmSurfaceTile(0,inFarm),kind=FARM_TILES.has(type)?'soil':'grass',scale=kind==='soil'?2:8;if(kind==='soil')soilCells++;
+  for(const [u,v]of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]]){positions[kind].push(x+u,0,y+v);uvs[kind].push((x+u)/scale,(y+v)/scale);}
+ }
+ const soil=caribbeanGroundSurfaceTextures(THREE,'farm'),grassMaterial=new THREE.MeshStandardMaterial({color:0x536d34,roughness:1});
+ for(const kind of ['grass','soil']){const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions[kind],3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs[kind],2));geometry.computeVertexNormals();const material=kind==='soil'?new THREE.MeshStandardMaterial({map:soil.map,normalMap:soil.normalMap,normalScale:new THREE.Vector2(.38,.38),roughness:.91}):grassMaterial;scene.add(new THREE.Mesh(geometry,material));if(kind==='grass')scene.add(createVolumetricGrassMesh(THREE,geometry,createVolumetricGrassMaterial(THREE,grassMaterial,{value:0})));}
+ const camera=new THREE.OrthographicCamera(-12,12,4.45,-4.45,.1,300);camera.position.set(6,18,24);camera.lookAt(6,0,6);
+ let errors=0;renderer.debug.onShaderError=()=>{errors++;};renderer.render(scene,camera);
+ document.querySelector('#status').textContent=`Lote antigo 6×6: ${soilCells} células de terra · ${errors?'ERRO':'shader OK'}`;
+}catch(error){document.querySelector('#status').textContent=error.stack;}
+</script></html>

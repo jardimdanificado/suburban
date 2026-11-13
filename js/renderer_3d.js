@@ -1,3 +1,4 @@
+import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,TerrainTracks} from './terrain_tracks.js?v=contact-atlas-2';
 import {constructionSiteCells,grassExclusionCells} from './city_site_footprints.js';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=rooted-blades-tracks-4';
@@ -6650,6 +6651,7 @@ export class RCT3DRenderer {
     if(this._grassCoverageCity!==city||this._grassCoverageSignature!==grassSignature){
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
       this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
+      this._farmSoilCells=grassExclusionCells(city?.buildings||[],[]);
     }
     const railingSignature=`party:${party?.id??'none'}|farms:${farmSignature}`;
     const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}|${railingSignature}|grass:${grassSignature}`;
@@ -6883,10 +6885,11 @@ export class RCT3DRenderer {
           const rx=tx+edge.dx,ry=ty+edge.dy,roadType=world.getTile?.(rx,ry);
           if(PAVED_ROAD_TILES.has(roadType))adjacentPavedRoads.push({...edge,x:rx,y:ry,type:roadType});
         }
-        const hasSprite = detailBand === 2 && !isSidewalk && !FARM_TILES.has(tType)&&shouldRenderTerrainSprite(tx, ty, tType);
-        const textureCategory=isTreeSidewalk?'sidewalkTree':isSidewalk?'sidewalk':terrainTextureCategory(tType);
-        let bucketKey = isSidewalk?`terrainSidewalk${terrainTextureHash(tx,ty,tType)&3}`:FARM_TILES.has(tType)?"farmSoil":tType;
-        if (tType === TILE_SAND && !hasSprite) bucketKey = "sandClean";
+        const surfaceType=farmSurfaceTile(tType,!!this._farmSoilCells?.has(`${tx},${ty}`)),isFarmSoil=FARM_TILES.has(surfaceType);
+        const hasSprite = detailBand === 2 && !isSidewalk && !isFarmSoil&&shouldRenderTerrainSprite(tx, ty, tType);
+        const textureCategory=isTreeSidewalk?'sidewalkTree':isSidewalk?'sidewalk':isFarmSoil?null:terrainTextureCategory(tType);
+        let bucketKey = isSidewalk?`terrainSidewalk${terrainTextureHash(tx,ty,tType)&3}`:isFarmSoil?"farmSoil":tType;
+        if (surfaceType === TILE_SAND && !hasSprite) bucketKey = "sandClean";
         if (textureCategory) {
           const materialCategory={rock:'Rock',mountain:'Mountain',peak:'Peak',dirtRoad:'DirtRoad',pavedRoad:'PavedRoad',sidewalk:'Sidewalk',sidewalkTree:'SidewalkTree'}[textureCategory];
           bucketKey=`terrain${materialCategory}${terrainTextureHash(tx,ty,tType)&3}`;
@@ -6924,7 +6927,8 @@ export class RCT3DRenderer {
             const nx=tx+edge.dx,ny=ty+edge.dy,neighborType=this.getTileTypeAt(map,nx,ny);
             if(neighborType===tType||world.hasSidewalk?.(nx,ny)||streetSurfaceCorners(world,nx,ny)||terrainTileTouchesStone(world,nx,ny))continue;
             const neighborHasSprite=detailBand===2&&shouldRenderTerrainSprite(nx,ny,neighborType);
-            const neighborKey=neighborType===TILE_SAND&&!neighborHasSprite?'sandClean':String(neighborType);
+            const neighborIsFarm=FARM_TILES.has(farmSurfaceTile(neighborType,!!this._farmSoilCells?.has(`${nx},${ny}`)));
+            const neighborKey=neighborIsFarm?'farmSoil':neighborType===TILE_SAND&&!neighborHasSprite?'sandClean':String(neighborType);
             if(!terrainTransitionMaterialKeys.has(neighborKey))continue;
             // Fade across a quarter tile on each side, with a rounded profile.
             const width=.25;
@@ -7081,7 +7085,7 @@ export class RCT3DRenderer {
             ...p11,
             ...p10
           );
-          pushTerrainTileUvs(bucket, tx, ty, tType,isSidewalk?'sidewalk':null);
+          pushTerrainTileUvs(bucket, tx, ty, surfaceType,isSidewalk?'sidewalk':null);
           const toneHash=terrainTextureHash(tx,ty,tType)>>>8;
           const textureTone=isSidewalk?1:textureCategory==='pavedRoad'?(.96+(toneHash%9)/100):textureCategory?(.82+(toneHash%33)/100):1;
           // Triangle 1: (0,0), (0,1), (1,1)

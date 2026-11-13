@@ -1,5 +1,5 @@
 import {applyBoatRiders} from './boat_rider_motion.js';
-import {queueMotion} from './city_motion.js';
+import {queueMotion,sampleRoundedMotion} from './city_motion.js?v=rounded-routes-1';
 import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-12';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -7,17 +7,18 @@ import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-defaul
 // Worker snapshots can skip several corners of a valid route. Interpolating
 // directly between those snapshots would draw a straight chord through water
 // or rock even though the simulated route itself never crossed it.
-function renderSegmentWalkable(world,ax,ay,bx,by,allowWater=false){
+function renderSegmentWalkable(world,ax,ay,bx,by,allowWater=false,occupied=null){
   if(!Number.isFinite(ax)||!Number.isFinite(ay)||!Number.isFinite(bx)||!Number.isFinite(by))return false;
   const distance=Math.hypot(bx-ax,by-ay),steps=Math.max(1,Math.ceil(distance/.2));let px,py;
   for(let i=0;i<=steps;i++){
     const t=i/steps,x=ax+(bx-ax)*t,y=ay+(by-ay)*t,tx=Math.floor(x),ty=Math.floor(y);
     if(tx===px&&ty===py)continue;
+    if(occupied?.has(`${tx},${ty}`))return false;
     const water=world.getTile(tx,ty)===TILE_WATER;if(!terrainWalkable(world,tx,ty)&&!(allowWater&&water))return false;
     if(px!==undefined){
       const previousWater=world.getTile(px,py)===TILE_WATER;
       if(!water&&!previousWater&&tx!==px&&ty!==py){
-        if(!terrainWalkable(world,tx,py)||!terrainWalkable(world,px,ty))return false;
+        if(occupied?.has(`${tx},${py}`)||occupied?.has(`${px},${ty}`)||!terrainWalkable(world,tx,py)||!terrainWalkable(world,px,ty))return false;
       }
       if(!water&&!previousWater&&!canStep(world,px,py,tx,ty))return false;
     }
@@ -26,8 +27,29 @@ function renderSegmentWalkable(world,ax,ay,bx,by,allowWater=false){
   return true;
 }
 export function sampleCitizenMotion(world,sample,now){
-  // Citizens keep the simulation's discrete, retro step cadence. Interpolate
-  // only when a worker packet skips over a corner along a valid ground path.
+  if(sample.points?.length&&!sample.citizen?.boatClass){
+    const city=sample.city,occupied=city?.occupied;
+    if(sample.clearWorld!==world||sample.clearTerrain!==world.revision||sample.clearObstacles!==city?.obstacleRevision||sample.clearSize!==occupied?.size){
+      sample.clearWorld=world;sample.clearTerrain=world.revision;sample.clearObstacles=city?.obstacleRevision;sample.clearSize=occupied?.size;
+      sample.motionRevision=(sample.motionRevision||0)+1;
+    }
+    sample.segmentClear??=((a,b)=>renderSegmentWalkable(sample.clearWorld,a.x,a.y,b.x,b.y,false,sample.city?.occupied));
+    sample.cornerClear??=((a,b,c)=>{
+      const world=sample.clearWorld,occupied=sample.city?.occupied,margin=.28;
+      const x0=Math.floor(Math.min(a.x,b.x,c.x)-margin),x1=Math.floor(Math.max(a.x,b.x,c.x)+margin);
+      const y0=Math.floor(Math.min(a.y,b.y,c.y)-margin),y1=Math.floor(Math.max(a.y,b.y,c.y)+margin);
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)if(occupied?.has(`${x},${y}`)||!terrainWalkable(world,x,y)||!canStep(world,Math.floor(b.x),Math.floor(b.y),x,y))return false;
+      return true;
+    });
+    const done=sampleRoundedMotion(sample,now);
+    if(!sample.motionBlocked){sample.blockedSince=null;return done;}
+    sample.blockedSince??=now;
+    const tx=Math.floor(sample.to.x),ty=Math.floor(sample.to.y);
+    if(now-sample.blockedSince>=600&&terrainWalkable(world,tx,ty)&&!occupied?.has(`${tx},${ty}`)){
+      sample.entity.x=sample.to.x;sample.entity.y=sample.to.y;sample.points.length=0;sample.blockedSince=null;return true;
+    }
+    return false;
+  }
   const x=sample.entity.x,y=sample.entity.y,tx=sample.to.x,ty=sample.to.y;
   // Most worker updates move a citizen within the same tile. The current tile
   // is already known to be walkable, so avoid sampling its terrain repeatedly
@@ -164,7 +186,7 @@ export class CitySimulationBridge {
     for(const c of this.city.citizens){
       let sample=this.motionSamples.get(c.id);
       if(!sample){sample={id:c.id,from:{},to:{},entity:c.entity};this.motionSamples.set(c.id,sample);}
-      sample.from.x=c.entity.x;sample.from.y=c.entity.y;
+      sample.city=this.city;sample.from.x=c.entity.x;sample.from.y=c.entity.y;
     }
     // Unchanged graph nodes still hold authoritative positions, not an interpolation sample.
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
@@ -200,7 +222,7 @@ export class CitySimulationBridge {
       const c=this.city.citizens[i], at=i*4;
       let sample=this.motionSamples.get(c.id);const existing=!!sample;
       if(!sample){sample={id:c.id,from:{x:c.entity.x,y:c.entity.y},to:{}};this.motionSamples.set(c.id,sample);}
-      sample.entity=c.entity;sample.citizen=c;sample.seen=this.city._uiRevision;
+      sample.entity=c.entity;sample.citizen=c;sample.city=this.city;sample.seen=this.city._uiRevision;
       sample.to.x=data.positions?.[at]===c.id?data.positions[at+1]:c.entity.x;
       sample.to.y=data.positions?.[at]===c.id?data.positions[at+2]:c.entity.y;
       if(Array.isArray(c.path))c.path.length=0;else c.path=[];c._renderPathActive=data.positions?.[at]===c.id&&data.positions[at+3]===1;
@@ -233,6 +255,7 @@ export class CitySimulationBridge {
       if(!sample||sample.entity.destroyed)continue;
       if(needs){const c=sample.citizen,at=i/4*needsStride;for(let j=0;j<CITY_NEED_FIELDS.length;j++)c.needs[CITY_NEED_FIELDS[j]]=needs[at+j];c.happiness=needs[at+CITY_NEED_FIELDS.length];c.mood=needs[at+CITY_NEED_FIELDS.length+1];}
       if(Array.isArray(sample.citizen.path))sample.citizen.path.length=0;else sample.citizen.path=[];sample.citizen._renderPathActive=positions[i+3]===1;
+      sample.city=this.city;
       const x=positions[i+1],y=positions[i+2],fromX=sample.to.x,fromY=sample.to.y;
       sample.from.x=fromX;sample.from.y=fromY;sample.to.x=x;sample.to.y=y;
       const dx=x-fromX,dy=y-fromY;
