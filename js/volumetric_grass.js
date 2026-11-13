@@ -56,12 +56,16 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, 
     map: base?.map ?? null, roughness: 1, metalness: 0,
     side: THREE.DoubleSide, transparent: false, depthWrite: true,
   });
+  material.defaultAttributeValues={...material.defaultAttributeValues,grassShelter:[0,0,0,0]};
   material.onBeforeCompile = shader => {
     shader.uniforms.grassSimTick = time;
     if(tracks)Object.assign(shader.uniforms,tracks);
     shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
       ${tracks ? TERRAIN_TRACK_GLSL : ""}
       attribute vec3 grassRoot;
+      attribute vec4 grassShelter;
+      varying vec4 vGrassShelter;
+      varying vec2 vShelterWorld;
       attribute vec4 grassShape;
       attribute float grassShade;
       attribute vec3 grassTint;
@@ -100,6 +104,8 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, 
       float recovery=1.0-contactStrength;
       transformed = grassRoot + (transformed - grassRoot) * recovery;` : ""}
       ${details ? "vDetailColor = h > .72 ? detailColor : vec3(.23,.38,.10);" : ""}
+      vGrassShelter=grassShelter;
+      vShelterWorld=(modelMatrix*vec4(transformed,1.0)).xz;
       vBladeHeight = h;
       vBladeShade = grassShade;
       vGrassTint = grassTint;
@@ -110,11 +116,14 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, 
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
       ${tracks ? TERRAIN_TRACK_GLSL : ""}
       varying vec3 vGrassTint;
+      varying vec4 vGrassShelter;
+      varying vec2 vShelterWorld;
       varying float vBladeHeight;
       varying float vBladeShade;
       ${details ? "varying vec3 vDetailColor;" : ""}
       ${tracks ? "varying vec2 vBladeWorld;" : ""}
     `).replace('#include <color_fragment>', `#include <color_fragment>
+      if(vGrassShelter.z>vGrassShelter.x && all(greaterThanEqual(vShelterWorld,vGrassShelter.xy)) && all(lessThanEqual(vShelterWorld,vGrassShelter.zw)))discard;
       ${tracks ? `if (terrainTrackStrength(vBladeWorld, ${GRASS_TRACK_HOLD.toFixed(1)}, ${GRASS_TRACK_LIFE.toFixed(1)}) > .98) discard;` : ""}
       ${details ? "diffuseColor.rgb *= vDetailColor * vBladeShade;" : "diffuseColor.rgb *= vGrassTint * vBladeShade * mix(vec3(.59, .68, .45), vec3(1.12, 1.10, .92), vBladeHeight);"}
     `).replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>

@@ -1,3 +1,4 @@
+import {syncCardboardGrass} from './cardboard_grass.js';
 import {setWaterGeometryCacheEnabled} from './water_geometry_cache.js?v=terrain-revision-2';
 import {GrassRootJobs} from './grass_root_jobs.js?v=frame-budget-9';
 import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-4';
@@ -13,7 +14,7 @@ import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=z
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=grass-soil-carry-1';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=grass-soil-carry-1';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=cardboard-cutout-1';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -30,7 +31,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=single-post-head-flag-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=cardboard-cutout-2";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
@@ -7459,7 +7460,7 @@ export class RCT3DRenderer {
       foamGeometry.setAttribute("color", new THREE.Float32BufferAttribute(waterFoamBucket.colors, 3));
       foamGeometry.computeVertexNormals();
       const foamMesh = new THREE.Mesh(foamGeometry, this.materials.waterFoam);
-      foamMesh.visible = flagNightFactor(world) > 0.18;
+      foamMesh.visible = true;
       foamMesh.userData.terrainMaterialKey = "waterFoam";
       foamMesh.receiveShadow = false;
       foamMesh.castShadow = false;
@@ -7673,9 +7674,9 @@ export class RCT3DRenderer {
     const foamMat = this.materials.waterFoam;
     const daylight = flagNightFactor(world);
     const daylightChanged = this._lastWaterDaylight !== daylight;
-    const foamOpacity = THREE.MathUtils.clamp((daylight - 0.18) / 0.82, 0, 1);
+    const foamOpacity = 1;
     if (foamMat && daylightChanged) {
-      foamMat.color.setScalar(daylight);
+      foamMat.color.setScalar(Math.max(.45,daylight));
       foamMat.opacity = foamOpacity;
     }
     const foamVisible = foamOpacity > 0;
@@ -7776,6 +7777,7 @@ export class RCT3DRenderer {
 
     this.cityAnimationTime=(this.cityAnimationTime||0)+dt*effectiveSpeed;
     syncCityBuildings(this, THREE, entities, world, dt);
+    syncCardboardGrass(this,THREE,this.cityDevelopment?.city);
     const profileCity = this.profileFrame ? performance.now() : 0;
 
     // Render 3D Volumetric Instanced Entities

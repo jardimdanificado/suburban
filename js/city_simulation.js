@@ -26,7 +26,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=fast-speeds-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=harbor-boats-4';
+import {CityVehicles} from './city_vehicles.js?v=starter-stock-5';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';

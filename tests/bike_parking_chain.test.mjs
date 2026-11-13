@@ -11,7 +11,7 @@ function firstBike(city){return [...city.vehicles.units.values()].find(v=>v.acti
 function panel(){const text=[],buttons=[];return {text,actions:buttons,buttons:items=>buttons.push(...items),heading:s=>text.push(s),status:(...s)=>text.push(s.join(' ')),note:s=>text.push(s),metrics(){},kv:(...s)=>text.push(s.join(': ')),button:(label,click)=>buttons.push({label,click}),record:(...s)=>text.push(s.slice(0,2).join(' ')),table:(cols,rows)=>text.push(...rows.map(r=>r.cells.join(' ')))};}
 test('foundation funds the final assembler without opening unsupported parts factories',()=>{
  const city=setup({starter:true,population:128});for(const type of INITIAL_CYCLE_STAGES){const b=city.buildings.find(b=>b.type===type&&b.initialCycleChain);assert(b,`Missing ${type}`);assert(b.active&&b.municipal);assert(b.balance>0);assert(b.workers.length>0,`No workers in ${type}`);assert(b.units.every(u=>u.ownerId==='treasury'));}
- const assembler=city.buildings.find(b=>b.type==='cycle_assembler');assert.equal(assembler.inventory.bicicleta,8);assert.equal(assembler.inventory.quadro,0);assert.equal(city.economy.initialStock.aco||0,0);assert.equal(totalMoney(city),city.currency.netIssued());
+ const assembler=city.buildings.find(b=>b.type==='cycle_assembler');assert.equal(assembler.inventory.bicicleta,16);assert.equal(assembler.inventory.quadro,0);assert.equal(city.economy.initialStock.aco||0,0);assert.equal(totalMoney(city),city.currency.netIssued());
 });
 test('initial bicycles occupy unique real rack slots and reservations cannot double-book',()=>{
  const city=setup({starter:true,population:64}),system=city.vehicles,report=system.parkingReport(),units=[...system.units.values()].filter(v=>v.active&&!v.scrapped);assert.equal(report.sites.length,2);assert.equal(report.capacity,32);assert.equal(report.occupied,units.length);
@@ -104,4 +104,14 @@ test('a saved resident stranded inside a shell can reach essential services agai
  assert.equal(city.life.recoverBlockedPosition(c),false);
  c.indoorLocation={buildingId:b.id};c.entity.x=b.entity.x+.2;c.entity.y=b.entity.y+.2;
  assert.equal(city.life.recoverBlockedPosition(c),false);
+});
+
+test('starter sales include larger stocks of every ground vehicle',()=>{
+ const city=setup({starter:true,population:128}),assembler=city.buildings.find(b=>b.type==='cycle_assembler');
+ for(const good of ['bicicleta','bicicleta_carga','patinete','patins','skate','carrinho']){
+   assert(assembler.inventory[good]>=3,`missing starter stock: ${good}`);
+   assert([...city.vehicles.units.values()].filter(v=>v.good===good&&!v.active&&v.holderAccountId===assembler.accountId).length>=3);
+ }
+ const components=[...city.vehicles.models.values()].flatMap(model=>model.components||[]);
+ assert(components.every(part=>!/[()]/.test(part.brand||'')));
 });

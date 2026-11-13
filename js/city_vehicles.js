@@ -60,7 +60,7 @@ export class CityVehicles {
   }
   provisionBoatSales(port){
     if(this.initialBoatSales)return;this.initialBoatSales=true;
-    for(const kind of ['canoe','canoe','launch']){
+    for(const kind of ['canoe','canoe','canoe','canoe','canoe','canoe','launch','launch','launch','ferry','ferry','cargo','cargo']){
       const boat=this.createBoatVehicle(kind,port.accountId);if(!boat)continue;
       const signature=`initial-boat-import:${kind}`;let model=this.models.get(signature);
       if(!model){model={id:this.nextModelId++,signature,kind,brand:fictionalForeignBrand(kind),name:`${BOAT_CLASSES[kind].label} de entrada`,initial:true,createdAt:this.city.minute,components:Object.entries(VEHICLE_RECIPES[kind]).map(([good,quantity])=>({good,quantity,producerId:`import:${good}`,producerName:fictionalForeignBrand(good),brand:fictionalForeignBrand(good),origin:'Importação inicial',design:1}))};this.models.set(signature,model);}
@@ -135,11 +135,11 @@ export class CityVehicles {
     const city=this.city,assembler=city.buildings.find(b=>b.type==='cycle_assembler'&&b.active&&!b.entity.destroyed);if(!assembler)return;
     const population=city.initialPopulation||city.citizens.length;
     if(!assembler.initialVehicleStockCreated){
-      assembler.initialVehicleStockCreated=true;const stock={bicicleta:32,bicicleta_carga:6,patinete:8,patins:6};
-      for(const [good,base]of Object.entries(stock)){const quantity=Math.max(1,Math.round(base*population/512));if(inventoryFree(assembler)<quantity)break;assembler.inventory[good]=(assembler.inventory[good]||0)+quantity;const firstId=this.nextId;this.registerUnits(assembler,good,quantity);const firstVehicle=this.units.get(firstId);if(good==='bicicleta_carga'&&firstVehicle)firstVehicle.funeralFleetReserve=true;const model=this.model(firstVehicle);if(model&&!model.initialPartsSeeded){model.initialPartsSeeded=true;model.components=Object.entries(VEHICLE_RECIPES[good]||{}).map(([part,amount])=>({good,quantity:amount,producerId:`import:${part}`,producerName:fictionalForeignBrand(part),brand:fictionalForeignBrand(part),origin:'Importação internacional',design:1}));}city.economy.produced[good]=(city.economy.produced[good]||0)+quantity;city.economy.recordGoods('initial-vehicle-stock',good,quantity,null,assembler.id);}
+      assembler.initialVehicleStockCreated=true;const stock={bicicleta:64,bicicleta_carga:16,patinete:24,patins:16,skate:16};
+      for(const [good,base]of Object.entries(stock)){const quantity=Math.max(3,Math.round(base*population/512));if(inventoryFree(assembler)<quantity)break;assembler.inventory[good]=(assembler.inventory[good]||0)+quantity;const firstId=this.nextId;this.registerUnits(assembler,good,quantity);const firstVehicle=this.units.get(firstId);if(good==='bicicleta_carga'&&firstVehicle)firstVehicle.funeralFleetReserve=true;const model=this.model(firstVehicle);if(model&&!model.initialPartsSeeded){model.initialPartsSeeded=true;model.components=Object.entries(VEHICLE_RECIPES[good]||{}).map(([part,amount])=>({good,quantity:amount,producerId:`import:${part}`,producerName:fictionalForeignBrand(part),brand:fictionalForeignBrand(part),origin:'Importação internacional',design:1}));}city.economy.produced[good]=(city.economy.produced[good]||0)+quantity;city.economy.recordGoods('initial-vehicle-stock',good,quantity,null,assembler.id);}
     }
     if(!assembler.initialHandcartStockCreated){
-      const quantity=Math.max(2,Math.round(4*population/512));
+      const quantity=Math.max(4,Math.round(8*population/512));
       if(inventoryFree(assembler)>=quantity){assembler.initialHandcartStockCreated=true;assembler.inventory.carrinho=(assembler.inventory.carrinho||0)+quantity;this.registerUnits(assembler,'carrinho',quantity);city.economy.initialStock.carrinho=(city.economy.initialStock.carrinho||0)+quantity;city.economy.recordGoods('initial-vehicle-stock','carrinho',quantity,null,assembler.id);}
     }
   }

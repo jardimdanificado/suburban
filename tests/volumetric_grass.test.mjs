@@ -29,7 +29,8 @@ test('grass shader moves leaf tips, retains roots, and has no shells or random c
   assert.equal(shader.uniforms.grassSimTick, time);
   assert.ok(shader.vertexShader.includes('float bend = h;'));
   assert.ok(shader.vertexShader.includes('transformed = grassRoot'));
-  assert.ok(!shader.fragmentShader.includes('discard'));
+  assert.ok(shader.fragmentShader.includes('vGrassShelter.z>vGrassShelter.x'));
+  assert.ok(!shader.fragmentShader.includes('random'));
   assert.ok(!shader.fragmentShader.includes('cameraPosition'));
   assert.ok(!shader.vertexShader.includes('grassLayer'));
   assert.ok(shader.fragmentShader.includes('normal = normalize(vNormal)'));

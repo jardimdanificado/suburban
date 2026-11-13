@@ -4,7 +4,7 @@ import {inventoryFree} from './city_inventory.js';
 import {ensureExternalAccount} from './city_currency.js';
 // External buyers and suppliers use an unlimited account outside the local money supply.
 export const EXTERNAL_TRADE_RULES=Object.freeze({minimumFirmStock:24,maximumPerSale:12,maximumSalesPerHour:4,priceFactor:1.1,importPriceFactor:2.25,maximumImportQuantity:24});
-const FOREIGN_PART_BRANDS=Object.freeze(['Koyo Motion (Japão)','Senda Norte (Chile)','Meridian Works (Suíça)','Rivermark Mobility (Canadá)','Lumen Components (Portugal)','Vento Austral (Argentina)','Orbe Technik (Alemanha)','Tamarind Roadworks (Índia)']);
+const FOREIGN_PART_BRANDS=Object.freeze(['Koyo Motion','Senda Norte','Meridian Works','Rivermark Mobility','Lumen Components','Vento Austral','Orbe Technik','Tamarind Roadworks']);
 export const fictionalForeignBrand=good=>FOREIGN_PART_BRANDS[[...good].reduce((n,c)=>Math.imul(n^c.charCodeAt(0),16777619)>>>0,2166136261)%FOREIGN_PART_BRANDS.length];
 function importDepotArrival(city,anchor,current=null){
  if(!anchor?.door)return {door:current?{...current}:null,direction:{x:1,y:0}};

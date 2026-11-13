@@ -177,7 +177,7 @@ test('retired palette preferences are ignored and cannot be activated through op
 test('terrain optimizations toggle updates renderer and persists both ways',()=>{
  let saved='{}';const storage={getItem:()=>saved,setItem(_key,value){saved=value;}},renderer=rendererMock();
  const make=()=>new OptionsPanel({renderer,time:new SimulationTime({now:()=>0}),step(){},storage});
- const panel=make();assert.equal(renderer.terrainOptimizationsEnabled,true);
+ const panel=make();assert.equal(renderer.terrainOptimizationsEnabled,false);
  panel.apply('terrainOptimizations',false);assert.equal(renderer.terrainOptimizationsEnabled,false);
  assert.equal(make().values.terrainOptimizations,false);
  panel.apply('terrainOptimizations',true);assert.equal(renderer.terrainOptimizationsEnabled,true);

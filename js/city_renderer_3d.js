@@ -1,3 +1,4 @@
+import {cardboardFootprint} from './cardboard_grass.js';
 import {syncCityFishing} from './city_fishing_renderer.js';
 import {addGroundDisplayPost} from './city_display_supports.js';
 import {syncLampBatches} from './city_lamp_batches.js?v=lamp-batches-1';
@@ -130,7 +131,7 @@ function syncCardboardShelters(renderer,THREE,city,world){
     const group=new THREE.Group();
     for(const site of shelters.values()){
       const x=site.x,y=site.y,z=surfaceElevation(world,x,y)+.035,bed=new THREE.Group(),seed=Math.imul((site.citizenId||0)+31,2654435761)>>>0,style=seed%8,stage=stageOf(site),palette=[0x92704b,0x6d6254,0x665d52,0x75634e,0x80684d,0x665e56,0x897052,0x625b50],wood=[0x8e6943,0x70533b,0x9a744b,0x635643][(seed>>>4)%4],canvas=[0x6c7771,0x837c69,0x6b747d,0x8b745a,0x6d625d][(seed>>>8)%5],ox=((seed>>>12)%3-1)*.12,oz=((seed>>>14)%3-1)*.12;
-      bed.position.set(x+ox,z,y+oz);bed.rotation.y=((seed>>>16)%4)*Math.PI/2;bed.userData.cardboardTile={x,y};
+      const footprint=cardboardFootprint(site);bed.position.set(footprint.x,z,footprint.z);bed.rotation.y=footprint.angle;bed.userData.cardboardTile={x,y};
       const makeMat=(w,d,h,color,px=0,pz=0,py=h/2,rx=0,rz=0)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color}));mesh.position.set(px,py,pz);mesh.rotation.set(rx,0,rz);mesh.castShadow=true;mesh.receiveShadow=true;bed.add(mesh);return mesh;};
       const gableRoof=(left,right,ridge=1.25)=>{makeMat(.40,.68,.045,left,-.19,0,ridge-.10,0,.40);makeMat(.40,.68,.045,right,.19,0,ridge-.10,0,-.40);makeMat(.045,.73,.05,wood,0,0,ridge+.005);};
       const roof=()=>{
