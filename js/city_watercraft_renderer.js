@@ -1,3 +1,4 @@
+import {BOAT_HULL_DIMENSIONS} from './boat_types.js?v=local-sea-travel-2';
 import {boatVisualPosition,hideLocalBoat} from './boat_visual_state.js';
 import {trackShadowTransform} from './dynamic_shadow_updates.js';
 import {mooringPosition} from './harbor_berths.js';
@@ -30,7 +31,7 @@ function makeDock(THREE,port){
 }
 function makeBoatModel(THREE,kind){
   const spec=BOAT_CLASSES[kind],group=new THREE.Group(),hullMaterial=new THREE.MeshLambertMaterial({color:kind==='canoe'?0x795034:kind==='cargo'?0x824c3d:0x9b6448}),deckMaterial=new THREE.MeshLambertMaterial({color:spec.color}),dark=new THREE.MeshLambertMaterial({color:0x343d3a}),sailMaterial=new THREE.MeshLambertMaterial({color:kind==='cargo'?0xe8d2a3:0xf4ead0,side:THREE.DoubleSide});
-  const length=kind==='canoe'?2.6:kind==='cargo'?2.05:kind==='ferry'?1.65:1.38,width=kind==='canoe'?.65:kind==='cargo'?.82:kind==='ferry'?.72:.56;
+  const {length,width}=BOAT_HULL_DIMENSIONS[kind];
   const hull=new THREE.Mesh(new THREE.CapsuleGeometry(width*.34,length*.34,3,8),hullMaterial);hull.rotation.x=Math.PI/2;hull.scale.set(1,.68,1);hull.position.y=.13;hull.castShadow=true;hull.receiveShadow=true;group.add(hull);
   const deck=new THREE.Mesh(new THREE.BoxGeometry(width,.09,length*.8),deckMaterial);deck.position.y=.25;deck.castShadow=true;group.add(deck);
   // A tapered bow and stern make the silhouette read as a boat from the high camera.
@@ -115,7 +116,15 @@ export function syncCityWatercraft(renderer,THREE,city,world){
     // position, making the ship appear to jump between that point and the port.
     const worldRepresentation=[...(coordinator?.vessels?.values?.()||[])].find(item=>item.homeCityId===(port?.cityId||city.id)&&item.localVehicleId===vessel.id);
     if(hideLocalBoat(worldRepresentation,liveVessels,vessel.driverId))continue;
-    const id=`city-vehicle:${vessel.id}`,group=boatVisual(renderer,THREE,id,vessel.boatClass),passenger=Number.isSafeInteger(vessel.transportCitizenId)?city.society?.citizen(vessel.transportCitizenId):null,carried=passenger?.ridingVehicleId?city.vehicles?.units?.get(passenger.ridingVehicleId):null;if(carried?.ferrying){group.userData.carriedCycle??=makeCarriedCycle(THREE,carried.good);group.userData.carriedCycle.visible=true;}else if(group.userData.carriedCycle)group.userData.carriedCycle.visible=false;seatedPeople(group,THREE,passenger?[passenger]:[]);const x=vessel.entity?.x??vessel.x,y=vessel.entity?.y??vessel.y;liveVessels.add(id);group.position.set(x,boatSurfaceY(renderer,world,x,y,group),y);group.rotation.y=vessel.angle||0;group.visible=true;}
+    const id=`city-vehicle:${vessel.id}`,group=boatVisual(renderer,THREE,id,vessel.boatClass),passenger=Number.isSafeInteger(vessel.transportCitizenId)?city.society?.citizen(vessel.transportCitizenId):null,carried=passenger?.ridingVehicleId?city.vehicles?.units?.get(passenger.ridingVehicleId):null;if(carried?.ferrying){group.userData.carriedCycle??=makeCarriedCycle(THREE,carried.good);group.userData.carriedCycle.visible=true;}else if(group.userData.carriedCycle)group.userData.carriedCycle.visible=false;seatedPeople(group,THREE,passenger?[passenger]:[]);const x=vessel.entity?.x??vessel.x,y=vessel.entity?.y??vessel.y;liveVessels.add(id);group.position.set(x,boatSurfaceY(renderer,world,x,y,group),y);group.rotation.y=vessel.angle||0;group.visible=true;
+    const towBike=vessel.towedByVehicleId&&city.vehicles.units.get(vessel.towedByVehicleId);
+    if(towBike){
+      group.userData.towline??=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:ropeColor}));
+      const line=group.userData.towline;if(!line.parent)group.add(line);
+      const dx=(towBike.entity?.x??towBike.x)-x,dz=(towBike.entity?.y??towBike.y)-y,angle=group.rotation.y,scale=group.scale.x||1;
+      const positions=line.geometry.attributes.position;positions.setXYZ(0,0,.18,BOAT_HULL_DIMENSIONS[vessel.boatClass].length*.4);positions.setXYZ(1,(Math.cos(angle)*dx-Math.sin(angle)*dz)/scale,.25,(Math.sin(angle)*dx+Math.cos(angle)*dz)/scale);positions.needsUpdate=true;line.geometry.computeBoundingSphere();line.visible=true;
+    }else if(group.userData.towline)group.userData.towline.visible=false;
+  }
   const worldMinute=Number.isFinite(coordinator?.minute)?coordinator.minute:0;
   for(const transfer of coordinator?.transfers?.values?.()||[]){
     if(!['departing','in-transit','arriving'].includes(transfer.status))continue;

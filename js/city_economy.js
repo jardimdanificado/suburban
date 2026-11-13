@@ -1,4 +1,3 @@
-import {WATERFRONT_BUSINESSES} from './waterfront_businesses.js';
 import {economicPolicy} from './city_economic_policies.js';
 import {reducedCadence} from './city_fast_forward.js';
 import {SUBSTANCE_CROPS,SUBSTANCES,SUBSTANCE_CONTROLLED_GOODS,ALCOHOL_DRINKS} from './city_substance_catalog.js';
@@ -419,7 +418,6 @@ export class CityEconomy {
     const city = this.city, center = city.world.spawnCenter;
     const width = type === 'farm' ? 10 : 3, depth = type === 'farm' ? 10 : 3, floors = type === 'farm' ? 1 : 2;
     const candidates = [];
-    if(WATERFRONT_BUSINESSES.has(type)){for(let y=1;y<city.world.height-depth;y++)for(let x=1;x<city.world.width-width;x++){if(!inspectBuildingSite(city,x,y,width,depth,{type}).error)candidates.push({x,y,width,depth,floors});}candidates.sort((a,b)=>Math.hypot(a.x-center.x,a.y-center.y)-Math.hypot(b.x-center.x,b.y-center.y));return candidates.slice(0,120);}
     for (let radius = 8; radius <= 48; radius += 3) {
       for (let i = 0; i < 24; i++) {
         const angle = i * Math.PI / 12 + (city.initialSeed % 7) * .1;

@@ -1,3 +1,4 @@
+import {planBoatTrip} from './city_boat_towing.js';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
@@ -32,7 +33,8 @@ function seaPath(city,sourceShores,targetShores){
   }return null;
 }
 
-export function findBoatPath(city,start,goal){
+export function findBoatPath(city,start,goal,{maxSeconds=Infinity,groundPath=null}={}){
+  if(start.properties?.citizen)return planBoatTrip(city,start,goal,{maxSeconds,groundPath});
   const revision=`${city.world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
   if(city._boatPathCacheRevision!==revision){city._boatPathCacheRevision=revision;city._boatPathCache=new Map();}
   const citizen=start.properties?.citizen,shipment=citizen?.deliveryId&&city.logistics?.shipments.find(item=>item.id===citizen.deliveryId),required=Math.max(1,citizen?.deliveryLoad||start.properties?.vehicle?.ferryLoad||shipment?.quantity||1);

@@ -1,0 +1,39 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Reboque de canoa e travessia local</title>
+<style>body{margin:0;font:14px system-ui;background:#c5d5dc}header{position:absolute;z-index:2;top:12px;left:12px;background:#ffffffe8;padding:12px;border-radius:8px;max-width:540px}button{padding:8px;margin:4px}#status{display:block;padding-top:8px}</style>
+<header>Canoa real, bicicleta e rastro do casco na grama e na areia.<br>Buscar, engatar, guinchar, atravessar lago sem porto e desembarcar.<br><button id="step">Avançar 2 s</button><button id="finish">Concluir trajeto</button><button id="reset">Reiniciar</button><span id="status">Carregando…</span></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {planBoatTrip,advanceLocalBoatTrip} from '../js/city_boat_towing.js';
+import {syncCityWatercraft} from '../js/city_watercraft_renderer.js';
+import {syncCityMobility} from '../js/city_mobility_renderer.js';
+import {createTerrainTrackUniforms,TerrainTracks,addGrassTracksToMaterial,addSandTracksToMaterial} from '../js/terrain_tracks.js';
+import {surfaceElevation,terrainWalkable} from '../js/city_terrain.js';
+const status=document.querySelector('#status');
+window.addEventListener('error',e=>status.textContent=e.message);window.addEventListener('unhandledrejection',e=>status.textContent=String(e.reason));
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);document.body.append(renderer.domElement);
+ let errors=0;renderer.debug.onShaderError=()=>{errors++;status.textContent='ERRO de shader';};
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xc5d5dc);scene.add(new THREE.HemisphereLight(0xf0f5ff,0x586446,2));const sun=new THREE.DirectionalLight(0xffedc9,2);sun.position.set(2,18,8);scene.add(sun);
+ const width=32,height=20,map=new Uint8Array(width*height),world={width,height,map,revision:1,getTile(x,y){return x<0||y<0||x>=width||y>=height?5:map[y*width+x];}};
+ for(let y=4;y<16;y++)for(let x=11;x<21;x++)map[y*width+x]=3;
+ for(let y=5;y<15;y++)for(let x=12;x<20;x++)map[y*width+x]=2;
+ const uniforms=createTerrainTrackUniforms(THREE),tracks=new TerrainTracks(THREE,uniforms);tracks.ensureWorld(renderer,world);
+ for(const type of [0,3,2]){
+  const vertices=[],uv=[];for(let y=0;y<height;y++)for(let x=0;x<width;x++){if(map[y*width+x]!==type)continue;for(const [a,b]of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]]){const px=x+a,py=y+b;vertices.push(px,type===2?.04:surfaceElevation(world,px,py),py);uv.push(px/8,py/8);}}
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.computeVertexNormals();const material=new THREE.MeshStandardMaterial({color:type===0?0x58783d:type===3?0xd7bd83:0x429eae,roughness:type===2?.3:1});if(type===0)addGrassTracksToMaterial(material,uniforms);if(type===3)addSandTracksToMaterial(material,uniforms);scene.add(new THREE.Mesh(geometry,material));
+ }
+ const person={id:1,accountId:'person:1',task:'walk',targetId:null,businessIds:[],entity:{x:5.5,y:10.5,properties:{name:'Pessoa'}},path:[]};person.entity.properties.citizen=person;
+ const boat={id:2,good:'canoe',boatClass:'canoe',active:true,ownerAccountId:'person:1',condition:100,pickLength:2.6,pickWidth:.65,x:6.5,y:10.5,angle:Math.PI/2,entity:{id:12,x:6.5,y:10.5,properties:{}}};boat.entity.properties.cityVehicle=boat;
+ const bike={id:3,good:'bicicleta',active:true,ownerAccountId:'person:1',condition:100,x:5.5,y:10.5,angle:Math.PI/2,entity:{id:13,x:5.5,y:10.5,properties:{}}};bike.entity.properties.cityVehicle=bike;
+ const city={world,occupied:new Set(),minute:0,buildings:[],citizens:[person],vehicles:{units:new Map([[2,boat],[3,bike]])},building:()=>null,society:{citizen:id=>id===1?person:null},walkable:(x,y)=>terrainWalkable(world,x,y)};
+ const view={scene,renderedMinTx:0,renderedMaxTx:width,renderedMinTy:0,renderedMaxTy:height};
+ const camera=new THREE.OrthographicCamera(-18*innerWidth/innerHeight,18*innerWidth/innerHeight,18,-18,.1,150);camera.position.set(16,35,37);camera.lookAt(16,0,10);
+ const draw=()=>{syncCityMobility(view,THREE,[bike.entity],world);syncCityWatercraft(view,THREE,city,world);renderer.render(scene,camera);};
+ let simulated=0;
+ const report=()=>status.textContent=`${simulated.toFixed(1)} s · ${person.action||'Pronto'} · casco ${boat.x.toFixed(2)}, ${boat.y.toFixed(2)} · ${person.localBoatTrip||person.path.length?'Em trajeto':'Concluído'} · shaders: ${errors===0?'OK':'ERRO'}`;
+ const run=steps=>{for(let i=0;i<steps&&(person.path.length||person.localBoatTrip);i++){advanceLocalBoatTrip(city,person,.05);tracks.update(renderer,world,[boat.entity,bike.entity],.05);simulated+=.05;}draw();report();};
+ person.path=planBoatTrip(city,person.entity,{x:25.5,y:10.5});if(!person.path)throw Error('A rota de travessia não foi encontrada');
+ tracks.update(renderer,world,[boat.entity,bike.entity],.01);draw();report();
+ document.querySelector('#step').onclick=()=>run(40);document.querySelector('#finish').onclick=()=>run(2000);document.querySelector('#reset').onclick=()=>location.reload();
+}catch(error){status.textContent=error.stack;}
+</script></html>

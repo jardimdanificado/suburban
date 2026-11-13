@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {TerrainTrackMotion,VEHICLE_CONTACTS,trackStrength,GRASS_TRACK_HOLD,GRASS_TRACK_LIFE,SAND_TRACK_HOLD,SAND_TRACK_LIFE,addSandTracksToMaterial} from '../js/terrain_tracks.js';
+import {TerrainTrackMotion,SandCarry,VEHICLE_CONTACTS,trackStrength,GRASS_TRACK_HOLD,GRASS_TRACK_LIFE,SAND_TRACK_HOLD,SAND_TRACK_LIFE,addSandTracksToMaterial} from '../js/terrain_tracks.js';
 import {createVolumetricGrassMaterial} from '../js/volumetric_grass.js';
 
 test('footprints alternate left/right at fixed stride without depending on frame rate',()=>{
@@ -50,7 +50,7 @@ test('sand preserves its existing material hook; grass shares the same timestamp
 test('render tracking falls back to entity positions until a body transform exists, and freezes when paused',async()=>{
   const {TerrainTracks}=await import('../js/terrain_tracks.js');
   const tracker=Object.create(TerrainTracks.prototype),entity={id:1,x:3,y:3,properties:{citizen:{}}};
-  let painted=[];Object.assign(tracker,{time:0,motion:new TerrainTrackMotion(),uniforms:{terrainTrackTime:{value:0}},ensureWorld(){},paint(_renderer,stamps){painted.push(...stamps);}});
+  let painted=[];Object.assign(tracker,{time:0,motion:new TerrainTrackMotion(),sandCarry:new SandCarry(),dirtCarry:new SandCarry(),uniforms:{terrainTrackTime:{value:0}},ensureWorld(){},paint(_renderer,stamps){painted.push(...stamps);}});
   const models={motion:new WeakMap([[entity,{renderAngle:Math.PI/2}]])};
   tracker.update({}, {}, [entity],.1,models);entity.x+=.5;tracker.update({}, {}, [entity],.1,models);
   assert.equal(painted.length,2);assert.ok(painted.every(s=>Number.isFinite(s.x)&&Number.isFinite(s.z)));
@@ -72,4 +72,15 @@ test('sand carried per shoe fades over three contacts and water washes it off',a
   assert.deepEqual(carry.contacts(entity,[step(9.1,1)],world),[]);
   carry.contacts(entity,[step(.5)],world);carry.reset(entity);
   assert.deepEqual(carry.contacts(entity,[step(1.1)],world),[]);
+});
+
+test('dragged hulls leave broad pointed contacts matching the canoe and reset when afloat',async()=>{
+ const {TerrainTracks}=await import('../js/terrain_tracks.js');
+ const {BOAT_HULL_DIMENSIONS}=await import('../js/boat_types.js');
+ const tracker=Object.create(TerrainTracks.prototype),boat={id:21,x:5,y:5,properties:{cityVehicle:{good:'canoe',boatClass:'canoe',towedByVehicleId:3}}};
+ const painted=[];Object.assign(tracker,{time:0,motion:new TerrainTrackMotion(),sandCarry:new SandCarry(),dirtCarry:new SandCarry(),uniforms:{terrainTrackTime:{value:0}},ensureWorld(){},paint(_renderer,stamps){painted.push(...stamps);}});
+ tracker.update({}, {}, [boat],.1);boat.y+=.5;tracker.update({}, {}, [boat],.1);
+ assert(painted.length>0);assert(painted.every(s=>s.kind===2&&s.width===BOAT_HULL_DIMENSIONS.canoe.width&&s.length===BOAT_HULL_DIMENSIONS.canoe.length));
+ const count=painted.length;boat.properties.cityVehicle.towedByVehicleId=null;boat.y+=.5;tracker.update({}, {}, [boat],.1);assert.equal(painted.length,count);
+ boat.properties.cityVehicle.towedByVehicleId=3;tracker.update({}, {}, [boat],.1);assert.equal(painted.length,count);
 });

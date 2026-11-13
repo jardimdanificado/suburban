@@ -1,3 +1,4 @@
+import {advanceLocalBoatTrip,boatRouteTime} from './city_boat_towing.js';
 import {WATERFRONT_BUSINESSES,waterfrontBerth} from './waterfront_businesses.js';
 import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js?v=ff2-speed-1';
 
@@ -914,7 +915,7 @@ export class CitySimulation {
   _findPath(start, goal, {copy=true,allowSkybridges=true,allowBoats=true}={}) {
     // Plan the outdoor leg from the exit; the resident walks there first.
     const location=start.properties?.citizen?.indoorLocation;
-    if(location){const site=this.building(location.buildingId),shell=this.building(site?.officeTenantOf)||site;if(shell)start=shell.door;}
+    if(location){const site=this.building(location.buildingId),shell=this.building(site?.officeTenantOf)||site;if(shell)start={...shell.door,properties:start.properties};}
     const wRev = this.world.revision || 0, sRev = this.structureRevision || 0, oRev = this.obstacleRevision || 0, occSize = this.occupied.size;
     if (this._lastPathWRev !== wRev || this._lastPathSRev !== sRev || this._lastPathORev !== oRev || this._lastPathOccSize !== occSize) {
       this._lastPathWRev = wRev; this._lastPathSRev = sRev; this._lastPathORev = oRev; this._lastPathOccSize = occSize;
@@ -949,9 +950,9 @@ export class CitySimulation {
       this.pathCache.set(key,route);
     }
     let path = this.pathCache.get(key);
-    if(path===null&&allowBoats)path=findBoatPath(this,start,goal);
+    if(allowBoats&&(path===null||start.properties?.citizen)){const boatPath=findBoatPath(this,start,goal,{maxSeconds:boatRouteTime(this,start,path),groundPath:path});if(boatPath)path=boatPath;}
     if(links.length){
-      let bestScore=path===null?Infinity:outdoorRouteDistance(start,path);
+      let bestScore=path===null?Infinity:path[0]?.boatPlan?boatRouteTime(this,start,path)*4:outdoorRouteDistance(start,path);
       for(const link of links){
         for(const reverse of [false,true]){
           const from=reverse?link.end:link.start,to=reverse?link.start:link.end,fromBuilding=this.building(reverse?link.bId:link.aId),toBuilding=this.building(reverse?link.aId:link.bId),fromUnit=fromBuilding?.units.find(u=>u.id===(reverse?link.buId:link.auId)),toUnit=toBuilding?.units.find(u=>u.id===(reverse?link.auId:link.buId));
@@ -1683,6 +1684,7 @@ export class CitySimulation {
     }
     const movementSetupMs=performance.now()-profileMark;profileMark=performance.now();
     for (const c of movers) {
+      if(!c.indoorLocation&&advanceLocalBoatTrip(this,c,dt))continue;
       if(c.ridingVehicleId)continue;
       if(c.indoorLocation){advanceCitizenInterior(this,c,dt*(this.society.isAdult(c)?4:2.5));continue;}
       // Vehicle eligibility is minute based (including its 20-minute search

@@ -1,3 +1,4 @@
+import {BOAT_HULL_DIMENSIONS,BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
 import {TILE_SAND,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_HILL} from './world_gen.js';
 import {MOBILITY_GROUND_CONTACTS} from './city_mobility_models.js?v=ground-contacts-1';
 export const VEHICLE_CONTACTS = MOBILITY_GROUND_CONTACTS;
@@ -14,13 +15,17 @@ export function trackStrength(age, hold, life) {
 export class TerrainTrackMotion {
   constructor(){this.history=new WeakMap();}
   reset(entity){this.history.delete(entity);}
-  move(entity,{x,z,angle=0,vehicle=null,scale=1},time){
+  move(entity,{x,z,angle=0,vehicle=null,scale=1,hull=null},time){
     const previous=this.history.get(entity),state={x,z,angle,vehicle,time,remainder:previous?.remainder||0,foot:previous?.foot||0};
     this.history.set(entity,state);
     if(!previous||previous.vehicle!==vehicle||time-previous.time>1)return [];
     const dx=x-previous.x,dz=z-previous.z,distance=Math.hypot(dx,dz),rotation=turn(previous.angle,angle),stamps=[];
     if(distance>3||!Number.isFinite(distance)){state.remainder=0;return stamps;}
-    if(vehicle){
+    if(hull){
+      if(distance<.001&&Math.abs(rotation)<.005)return stamps;
+      const steps=Math.max(1,Math.ceil(Math.max(distance/.08,Math.abs(rotation)/.08)));
+      for(let step=1;step<=steps;step++){const ratio=step/steps;stamps.push({x:previous.x+dx*ratio,z:previous.z+dz*ratio,angle:previous.angle+rotation*ratio,width:hull.width,length:hull.length,kind:2});}
+    }else if(vehicle){
       const wheels=VEHICLE_CONTACTS[vehicle];if(!wheels||distance<.001&&Math.abs(rotation)<.005)return stamps;
       const steps=Math.max(1,Math.ceil(Math.max(distance/.06,Math.abs(rotation)/.08)));
       for(let step=1;step<=steps;step++){
@@ -56,7 +61,7 @@ export class SandCarry {
     const shoes=this.history.get(entity)||[0,0],deposits=[];
     this.history.set(entity,shoes);
     for(const stamp of stamps){
-      if(!stamp.kind)continue;
+      if(Math.abs(stamp.kind)!==1)continue;
       const x=Math.floor(stamp.x),z=Math.floor(stamp.z),foot=stamp.kind<0?0:1;
       const tile=x<0||z<0||x>=world.width||z>=world.height?TILE_VOID:(world.getTile?world.getTile(x,z):world.map?.[z*world.width+x]);
       if(sourceTiles.includes(tile)){shoes[foot]=3;continue;}
@@ -137,7 +142,10 @@ export class TerrainTracks {
         }`,fragmentShader:`
         uniform float terrainTrackTime; varying float vDeposit; varying vec2 vContact; varying float vContactKind;
         void main(){
-          if(abs(vContactKind)>.5){
+          if(abs(vContactKind)>1.5){
+            // Pointed bow and stern follow the dragged hull, not a tire rectangle.
+            if(abs(vContact.x)>sqrt(max(0.0,1.0-vContact.y*vContact.y)))discard;
+          }else if(abs(vContactKind)>.5){
             vec2 p=vContact;
             // Rounded toe, narrower heel, and a small arch cut on the inner side.
             float toe=length(vec2(p.x/.96,(p.y-.30)/.70));
@@ -198,14 +206,15 @@ export class TerrainTracks {
       const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle;
       if(!citizen&&!vehicle)continue;
       const elevated=citizen&&(citizen.skybridgeZ>0||citizen._renderIndoorPosition?.z>0||citizen.furnitureUse?.seated||citizen.furnitureUse?.pose==='lying');
-      if(entity.destroyed||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);continue;}
+      if(entity.destroyed||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass&&!vehicle.towedByVehicleId||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);continue;}
       const motion=citizen&&models?.motion?.get(entity),visible=motion&&Number.isFinite(motion.bodyX)&&Number.isFinite(motion.bodyZ)&&motion.bodyFrame===models.frameToken;
       const offset=offsets?.get(entity.id),x=visible?motion.bodyX:entity.x+(offset?.x||0),z=visible?motion.bodyZ:entity.y+(offset?.y||0);
       if(bounds&&(x<bounds.renderedMinTx-2||x>bounds.renderedMaxTx+2||z<bounds.renderedMinTy-2||z>bounds.renderedMaxTy+2)){this.motion.reset(entity);this.sandCarry.reset(entity);this.dirtCarry.reset(entity);continue;}
       const angle=vehicle?vehicle.angle||0:motion?.renderAngle||0;
       const previous=this.motion.history.get(entity);
       if(!previous||previous.vehicle!==(vehicle?.good||null)||this.time-previous.time>1||Math.hypot(x-previous.x,z-previous.z)>3){this.sandCarry.reset(entity);this.dirtCarry.reset(entity);}
-      const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale:motion?.bodySize||1},this.time);
+      const dimensions=vehicle?.towedByVehicleId&&BOAT_HULL_DIMENSIONS[vehicle.boatClass],hull=dimensions?{width:dimensions.width*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale),length:dimensions.length*(vehicle.boatClass==='canoe'?1:BOAT_CLASSES[vehicle.boatClass].scale)}:null;
+      const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale:motion?.bodySize||1,hull},this.time);
       stamps.push(...contacts);
       if(citizen&&!vehicle){
         stamps.push(...this.sandCarry.contacts(entity,contacts,world));

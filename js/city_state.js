@@ -50,7 +50,7 @@ const prototypes = new Map([CitySubstances,CityFurniture,CitySupplies,CityWater,
   CityLogistics, CityGigs, CityEconomy, CitySociety, CityServiceInvestment, CityJustice, World, WorldClock]
   .map(type => [type.name, type.prototype]));
 // Rebuilt locally. These caches must never enlarge worker messages or overwrite callbacks.
-const localFields = new Set(['activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_boatPathCache','_boatPathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','positionChecks','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
+const localFields = new Set(['_boatTowMotion','_boatTowRideId','activity','_uiRevision','_renderPathActive','pathCache', 'pathCacheRevision','_pathBlockedGrid','_pathBlockedRevision','skybridgePathCache','skybridgePathCacheRevision','_boatPathCache','_boatPathCacheRevision','_sleepRouteSafety','_sleepRouteOccupancy','positionChecks','plotOverlapBuckets', 'routeCache', 'routeRevision','familyIndexDirty',
   'childrenByGuardian', 'citizensById', 'buildingsById', 'residentsByHome', 'residentsMinute', 'residentsPopulation', '_statsCache', '_statsMinute', '_conditions', '_conditionsMinute', 'cache', 'cacheVersion', 'siteBuckets', '_vehicleSearchMinute', '_lastVehicleScanMinute', '_movingCitizens', '_initialTaskStaggerUntil', '_nextTaskAt', '_retryUrgent', '_appearanceCache', '_lastNeedsAt', '_idleHomeId', '_routineRevision', 'detailedInteriorBuildingId', '_townhall']);
 // Only these enumerable fields are installed as accessors by the simulation.
 // Inspecting every property descriptor in the full state graph is expensive at

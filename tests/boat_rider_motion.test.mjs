@@ -23,3 +23,13 @@ test('water motion is accepted immediately when compact boarding state is presen
  const world={getTile:(x,y)=>x>=2?TILE_WATER:TILE_SAND},sample={citizen:person,entity:person.entity,to:{x:4,y:1},points:[]};
  assert.equal(sampleCitizenMotion(world,sample,0),true);assert.equal(person.entity.x,4);
 });
+
+test('compact towing packets attach the correct bike and hull and clear both after arrival',async()=>{
+ const {packBoatTows,applyBoatTows}=await import('../js/boat_rider_motion.js');
+ const {person,boat,bridge}=fixture(),bike={id:8,good:'bicicleta',entity:{x:1,y:1}};
+ bridge.city.citizens=[person];bridge.city.vehicles.units.set(8,bike);
+ applyBoatTows(bridge.city,packBoatTows([{id:1,localBoatTrip:{},towedBoatId:7,towBikeId:8,ridingVehicleId:8}]));
+ assert.equal(boat.towedByVehicleId,8);assert.equal(bike.towedBoatId,7);assert.equal(person.ridingVehicleId,8);
+ bridge.applyVehiclePositions(new Float64Array([7,9,6,0,0,8,11,6,0,0]));assert.deepEqual(person.entity,{x:11,y:6});
+ applyBoatTows(bridge.city,packBoatTows([{id:1}]));assert.equal(boat.towedByVehicleId,null);assert.equal(person.ridingVehicleId,null);assert.equal(bike.driverId,null);
+});

@@ -11,3 +11,9 @@ export const INTERCITY_BOAT_CLASSES=Object.freeze({
   ferry:{label:'Ferry',capacity:32,scale:1.55},
   cargo:{label:'Navio cargueiro',capacity:100,scale:2.25},
 });
+
+// Local model dimensions also define the hull contact left on grass and sand.
+export const BOAT_HULL_DIMENSIONS=Object.freeze({
+  canoe:{length:2.6,width:.65},launch:{length:1.38,width:.56},
+  ferry:{length:1.65,width:.72},cargo:{length:2.05,width:.82},
+});
