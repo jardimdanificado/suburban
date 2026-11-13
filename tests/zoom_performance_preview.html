@@ -2,7 +2,7 @@
 <style>body{margin:0;background:#233841;color:white;font:14px system-ui}#view{width:640px;height:400px}pre{white-space:pre-wrap}</style>
 <div id="view"></div><pre id="status">Carregando renderer…</pre>
 <script type="module">
-import {RCT3DRenderer} from '../js/renderer_3d.js?v=zoom-detail-12';
+import {RCT3DRenderer} from '../js/renderer_3d.js?v=camera-budget-24';
 const status=document.querySelector('#status');window.addEventListener('error',event=>status.textContent='ERRO: '+event.message);
 try{
  const width=64,height=64,map=new Uint8Array(width*height);for(let z=0;z<height;z++)for(let x=0;x<width;x++)map[z*width+x]=z<27?0:z<32?3:2;
@@ -13,7 +13,7 @@ try{
  function step(){try{
   const zoom=zooms[stage];if(frame===0)r.setCamera(32,32,zoom);
   const start=performance.now();r.render(world,[],world.clock,1/60,0);if(frame===0)buildMs=performance.now()-start;
-  if(++frame<6){requestAnimationFrame(step);return;}
+  if(++frame<6||r._terrainBuildJobs?.size||r.grassRootJobs?.running||r.grassRootJobs?.queue.length){requestAnimationFrame(step);return;}
   let blades=0;for(const chunk of r.terrainChunks.values())for(const mesh of chunk.terrain.children)if(mesh.userData.terrainMaterialKey?.startsWith('volumetric'))blades+=mesh.geometry.instanceCount||0;
   results.push({zoom,blades,triangles:r.renderer.info.render.triangles,buildCpuMs:+buildMs.toFixed(1),chunkSize:r.terrainChunkSize});
   if(++stage<zooms.length){frame=0;requestAnimationFrame(step);return;}

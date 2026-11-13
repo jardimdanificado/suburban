@@ -1,7 +1,7 @@
-import {grassRoots} from './volumetric_grass.js?v=meadow-accents-1';
+import {grassRoots} from './volumetric_grass.js?v=camera-budget-5';
 function random(x,z,salt){const n=Math.sin(x*127.1+z*311.7+salt*74.7)*43758.5453;return n-Math.floor(n);}
 export function beachShellInstances(positions,excludedCells){
-  const roots=grassRoots(positions,undefined,excludedCells).roots,shells=[];
+  const roots=grassRoots(positions,undefined,excludedCells,{acceptRoot:(x,z)=>random(x,z,21)<=.00065}).roots,shells=[];
   for(let i=0;i<roots.length;i+=3){
     const x=roots[i],z=roots[i+2];
     if(random(x,z,21)>.00065)continue;

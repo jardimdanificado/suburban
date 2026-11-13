@@ -31,8 +31,12 @@ function createSandNormalField(world){
   };
 }
 export function applySandSurfaceNormals(geometry,normalAt){
+  const steps=sandSurfaceNormalSteps(geometry,normalAt);while(!steps.next().done){}
+}
+export function* sandSurfaceNormalSteps(geometry,normalAt){
   const positions=geometry.getAttribute('position'),normals=geometry.getAttribute('normal');
   for(let i=0;i<positions.count;i++){
+    if(i%256===0)yield;
     if(normals.getY(i)<.35)continue;
     const n=normalAt(positions.getX(i),positions.getZ(i));normals.setXYZ(i,...n);
   }

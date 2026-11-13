@@ -29,24 +29,25 @@ test('warm coast rebuilds reuse identical surfaces and world normals without sca
 });
 test('footprints invalidate nearby chunks and their blend neighbors, not distant water',()=>{
  const a=grassChunkSignatures(new Set(['40,40']),32,128,128),b=grassChunkSignatures(new Set(['40,40','100,100']),32,128,128);
- assert.equal(a.get('1,1'),b.get('1,1'));assert.notEqual(a.get('3,3'),b.get('3,3'));
+ assert.equal(a.get('2,2'),b.get('2,2'));assert.notEqual(a.get('3,3'),b.get('3,3'));
  const border=grassChunkSignatures(new Set(['31,31']),32,128,128);assert.deepEqual([...border.keys()].sort(),['0,0','0,1','1,0','1,1']);
 });
 
 const source=readFileSync(new URL('../js/renderer_3d.js',import.meta.url),'utf8');
 const method=source.slice(source.indexOf('  rebuildTerrainIfNeeded('),source.indexOf('\n  buildTerrainChunk('));
-const Klass=new Function('terrainZoomDetail','cityGoverningParty','grassExclusionSignature','grassExclusionCells','constructionSiteCells','grassChunkSignatures',`return class {${method}}`)(terrainZoomDetail,()=>null,grassExclusionSignature,grassExclusionCells,constructionSiteCells,grassChunkSignatures);
+const Klass=new Function('terrainZoomDetail','cityGoverningParty','grassExclusionSignature','grassExclusionCells','constructionSiteCells','grassChunkSignatures',`return class {${method} ${source.slice(source.indexOf('  invalidateTerrainAt('),source.indexOf('\n  terrainViewportBounds('))}}`)(terrainZoomDetail,()=>null,grassExclusionSignature,grassExclusionCells,constructionSiteCells,grassChunkSignatures);
 test('actual chunk renderer builds visible terrain only and a far building does not rebuild its coast',()=>{
  const r=new Klass(),w=world(),city={structureRevision:0,buildings:[]};let builds=0;
  const group=()=>({add(child){child.parent=this;},remove(child){child.parent=null;}});
  Object.assign(r,{zoom:2,mapWidth:128,mapHeight:128,camX:45,camY:45,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),cityDevelopment:{city},terrainGroup:group(),waterGroup:group(),rctGridLineGroup:group(),isPerspectiveActive(){return false;},disposeTerrainChunk(){},buildTerrainChunk(_world,_a,_b,_c,_d,_vision,signature){builds++;return {signature,terrain:{},water:{},grid:{children:[]}};}});
- r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(builds,1,'eight hidden neighbors must not stall this frame');
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1,'eight hidden neighbors must not stall this frame');
+ r.camX=115;r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1,'moving the camera must not rebuild an existing chunk just because its center distance changed');r.camX=45;
  city.buildings.push({id:1,type:'residential',entity:{x:100,y:100},width:2,depth:2});city.structureRevision++;
- r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(builds,1,'the distant lot must not rebuild the visible chunk');
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1,'the distant lot must not rebuild the visible chunk');
  city.buildings.push({id:2,type:'residential',entity:{x:45,y:45},width:2,depth:2});city.structureRevision++;
- r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(builds,2,'a changed lot inside the visible chunk still rebuilds');
- r.zoom=.4;r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(r.terrainChunkSize,32);assert.equal(builds,3);
- r.zoom=.38;r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(builds,3,'small zoom changes inside one LOD band keep the terrain cache');
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,2,'a changed lot inside the visible chunk still rebuilds');
+ r.zoom=.4;r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(r.terrainChunkSize,16);assert.equal(builds,3);
+ r.zoom=.38;r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,3,'small zoom changes inside one LOD band keep the terrain cache');
 });
 
 test('empty ocean entries do not evict useful coast arrays, and retained geometry stays bounded',()=>{
@@ -56,4 +57,53 @@ test('empty ocean entries do not evict useful coast arrays, and retained geometr
  assert.equal(cachedWaterGeometry(w,'bounded','coast',()=>({id:++builds})),first);
  for(let i=0;i<600;i++)cachedWaterGeometry(w,'bounded',`coast-${i}`,()=>({id:++builds}));
  assert.notEqual(cachedWaterGeometry(w,'bounded','coast',()=>({id:++builds})),first);
+});
+
+test('terrain jobs preserve the visible chunk until complete and cancel stale partial work',()=>{
+ const r=new Klass(),w=world(),city={structureRevision:0,buildings:[]};let cancelled=false;
+ const group=()=>({children:[],add(child){child.parent=this;},remove(child){child.parent=null;}});
+ const make=signature=>({signature,terrain:group(),water:group(),grid:group()});
+ Object.assign(r,{zoom:2,mapWidth:128,mapHeight:128,camX:45,camY:45,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),cityDevelopment:{city},terrainGroup:group(),waterGroup:group(),rctGridLineGroup:group(),isPerspectiveActive(){return false;},disposeTerrainChunk(c){c.disposed=true;},buildTerrainPlaceholder(){return make('pending');},*buildTerrainChunkSteps(...args){const c=make(args[6]);try{yield c;for(let i=0;i<100;i++){const start=performance.now();while(performance.now()-start<.1){}yield;}return c;}finally{cancelled=true;}}});
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);const placeholder=r.terrainChunks.get('2,2');assert.equal(placeholder.signature,'pending');assert.ok(r._terrainBuildJobs.size);
+ r.advanceTerrainBuilds(w,new Set(['2,2']),false,1000);const complete=r.terrainChunks.get('2,2');assert.notEqual(complete,placeholder);assert.ok(placeholder.disposed);assert.equal(r._terrainBuildJobs.size,0);
+ r.zoom=.4;r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(r.terrainChunks.get('2,2'),complete,'zoom changes keep existing ground until replacement is ready');
+ const pending=r._terrainBuildJobs.get('2,2');assert.ok(pending.partial);cancelled=false;w.revision++;
+ r.invalidateTerrainAt(115,115);
+ r.advanceTerrainBuilds(w,new Set(['2,2']),false,1);assert.equal(cancelled,false);assert.equal(pending.partial.disposed,undefined);
+ r.invalidateTerrainAt(45,45);assert.ok(cancelled);assert.ok(pending.partial.disposed);assert.equal(r._terrainBuildJobs.size,0);
+ assert.equal(r.terrainChunks.get('2,2'),complete,'local edits retain the last complete terrain');
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);r.advanceTerrainBuilds(w,new Set(['2,2']),false,1000);
+ assert.notEqual(r.terrainChunks.get('2,2'),complete);assert.ok(complete.disposed);
+});
+
+test('stationary terrain finishes despite remote edits and publishes only after roots are ready',()=>{
+ const r=new Klass(),w=world(),city={structureRevision:0,buildings:[]};let starts=0,rootsReady=false;
+ const group=()=>({children:[],add(child){child.parent=this;},remove(child){child.parent=null;}});
+ const make=signature=>({signature,terrain:group(),water:group(),grid:group()});
+ Object.assign(r,{zoom:2,mapWidth:128,mapHeight:128,camX:45,camY:45,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),cityDevelopment:{city},terrainGroup:group(),waterGroup:group(),rctGridLineGroup:group(),isPerspectiveActive(){return false;},disposeTerrainChunk(c){c.disposed=true;},buildTerrainPlaceholder(){return make('pending');},*buildTerrainChunkSteps(...args){starts++;const c=make(args[6]);yield c;while(!rootsReady)yield {waitingForRoots:true};return c;}});
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);const old=r.terrainChunks.get('2,2');
+ for(let i=0;i<20;i++){
+   w.revision++;r.invalidateTerrainAt(115,115);r.rebuildTerrainIfNeeded(w,40,45,40,45);
+   assert.equal(r.terrainChunks.get('2,2'),old);assert.equal(starts,1);
+ }
+ rootsReady=true;r.advanceTerrainBuilds(w,new Set(['2,2']),false,1000);
+ const ready=r.terrainChunks.get('2,2');assert.notEqual(ready,old);assert.ok(old.disposed);
+ for(let i=0;i<20;i++){w.revision++;r.invalidateTerrainAt(115,115);r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(r.terrainChunks.get('2,2'),ready);}
+ assert.equal(starts,1);assert.equal(r._terrainBuildJobs.size,0);
+ let cleared=0;r.grassRootJobs={clear(){cleared++;}};r.invalidateTerrainAt(NaN,NaN);
+ assert.equal(cleared,1);assert.equal(r.terrainChunks.size,0);assert.ok(ready.disposed);
+});
+
+test('tile edits invalidate dependency radius rather than nine whole blocks',()=>{
+ const r=new Klass(),cancelled=[];Object.assign(r,{terrainChunkSize:32,cancelTerrainBuild(key){cancelled.push(key);}});
+ r.invalidateTerrainAt(48,48);assert.deepEqual(cancelled,['1,1']);
+ cancelled.length=0;r.invalidateTerrainAt(31,31);
+ assert.deepEqual(cancelled,['0,0','1,0','0,1','1,1']);
+});
+test('terrain scheduler finishes the center before peripheral queued blocks',()=>{
+ const r=new Klass(),order=[],group={add(){}};
+ const job=key=>({world:null,steps:(function*(){order.push(key);return {terrain:{},water:{},grid:{children:[]}};})()});
+ const w=world(),far=job('0,0'),near=job('2,2');far.world=near.world=w;
+ Object.assign(r,{camX:40,camY:40,terrainChunkSize:16,_terrainBuildJobs:new Map([['0,0',far],['2,2',near]]),terrainChunks:new Map(),terrainGroup:group,waterGroup:group});
+ r.advanceTerrainBuilds(w,new Set(['0,0','2,2']),false,1000);assert.deepEqual(order,['2,2','0,0']);
 });

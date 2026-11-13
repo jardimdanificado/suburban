@@ -9,29 +9,35 @@ function hash(x, z, salt = 0) {
 
 // A jittered world-space lattice gives every grass tile equal coverage. Roots
 // are sampled on the actual terrain triangles, including slopes and borders.
-export function grassRoots(positions, colors, excludedCells = new Set(), {bladesPerAxis = BLADES_PER_AXIS} = {}) {
+export function grassRoots(positions,colors,excludedCells=new Set(),options={}){
+  const job=grassRootSteps(positions,colors,excludedCells,options);
+  let step=job.next();while(!step.done)step=job.next();return step.value;
+}
+export function* grassRootSteps(positions, colors, excludedCells = new Set(), {bladesPerAxis = BLADES_PER_AXIS,acceptRoot=null} = {}) {
   const axis=Math.max(0,Math.floor(bladesPerAxis));
   if(!axis)return {roots:new Float32Array(),shapes:new Float32Array(),shades:new Float32Array()};
-  const roots = [], shapes = [], shades = [], occupied = new Set();
+  const roots = [], shapes = [], shades = [], occupied = new Map();
   for (let i = 0; i < positions.length; i += 9) {
     const [ax, ay, az, bx, by, bz, cx, cy, cz] = positions.slice(i, i + 9);
     const area = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
-    if (area < 1e-7) continue; // Ignore vertical retaining faces and undersides.
+    if (area < 1e-7) {yield;continue;} // Ignore vertical retaining faces and undersides.
     const minX = Math.floor(Math.min(ax, bx, cx) * axis);
     const maxX = Math.ceil(Math.max(ax, bx, cx) * axis);
     const minZ = Math.floor(Math.min(az, bz, cz) * axis);
     const maxZ = Math.ceil(Math.max(az, bz, cz) * axis);
     for (let z = minZ; z < maxZ; z++) for (let x = minX; x < maxX; x++) {
-      const key = `${x},${z}`;
-      if (occupied.has(key)) continue;
       const px = (x + .15 + hash(x, z, 17) * .7) / axis;
       const pz = (z + .15 + hash(x, z, 31) * .7) / axis;
-      if (excludedCells.has(`${Math.floor(px)},${Math.floor(pz)}`)) continue;
+      if(acceptRoot&&!acceptRoot(Math.fround(px),Math.fround(pz)))continue;
       const wb = ((pz - az) * (cx - ax) - (px - ax) * (cz - az)) / area;
       const wc = ((bz - az) * (px - ax) - (bx - ax) * (pz - az)) / area;
       const wa = 1 - wb - wc;
       if (wa < -1e-7 || wb < -1e-7 || wc < -1e-7) continue;
-      occupied.add(key);
+      let row=occupied.get(z);
+      if(row?.has(x))continue;
+      if(excludedCells.size&&excludedCells.has(`${Math.floor(px)},${Math.floor(pz)}`))continue;
+      if(!row){row=new Set();occupied.set(z,row);}
+      row.add(x);
       const seed = hash(x, z, 71);
       roots.push(px, ay * wa + by * wb + cy * wc - .003, pz);
       shapes.push(hash(x, z, 47) * Math.PI * 2, .16 + seed * .13,
@@ -39,6 +45,7 @@ export function grassRoots(positions, colors, excludedCells = new Set(), {blades
       const ao = colors ? colors[i] * wa + colors[i + 3] * wb + colors[i + 6] * wc : 1;
       shades.push(ao * (.88 + hash(x, z, 83) * .24));
     }
+    yield;
   }
   return {roots: new Float32Array(roots), shapes: new Float32Array(shapes), shades: new Float32Array(shades)};
 }
@@ -108,8 +115,8 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, 
   return material;
 }
 
-export function createVolumetricGrassMesh(THREE, surface, material, {excludedCells, materialKey = 'volumetricGrass',bladesPerAxis=BLADES_PER_AXIS} = {}) {
-  const {roots, shapes, shades} = grassRoots(surface.getAttribute('position').array, surface.getAttribute('color')?.array, excludedCells,{bladesPerAxis});
+export function createVolumetricGrassMesh(THREE, surface, material, {excludedCells, materialKey = 'volumetricGrass',bladesPerAxis=BLADES_PER_AXIS,rootData=null} = {}) {
+  const {roots, shapes, shades} = rootData??grassRoots(surface.getAttribute('position').array, surface.getAttribute('color')?.array, excludedCells,{bladesPerAxis});
   const geometry = new THREE.InstancedBufferGeometry();
   // A rigid triangle has a sharp silhouette without intermediate curved joints.
   const blade=grassBladeSurface();

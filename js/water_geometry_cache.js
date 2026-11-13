@@ -1,4 +1,4 @@
-// Coast geometry depends on terrain, not simulation time, pollution or buildings.
+// Terrain-derived mesh data depends on terrain and its explicit cache key, not time.
 // A weak owner and one revision keep old worlds and old terrain collectible.
 const worlds=new WeakMap();
 export function cachedWaterGeometry(world,kind,key,build){
@@ -17,7 +17,7 @@ export function cachedWaterGeometry(world,kind,key,build){
   }else{
     // Bound retained arrays when exploring a large map. Empty sea tiles use
     // a separate cheap set so they cannot evict useful shoreline meshes.
-    if(entries.values.size>=512)entries.values.delete(entries.values.keys().next().value);
+    if(entries.values.size>=(kind==='grass-roots'?16:512))entries.values.delete(entries.values.keys().next().value);
     entries.values.set(key,result);
   }
   return result;

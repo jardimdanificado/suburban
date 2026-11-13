@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {grassRoots, createVolumetricGrassMaterial} from '../js/volumetric_grass.js';
@@ -65,4 +66,19 @@ test('each angular blade has only one triangle, two fixed roots and a sharp offs
  assert.equal(blade.positions[1],0);assert.equal(blade.positions[4],0);assert.equal(blade.positions[7],1);
  assert.ok(blade.positions[6]>0&&blade.positions[6]<1);assert.equal(blade.normals.length,blade.positions.length);
  assert.ok(blade.positions.every(Number.isFinite));
+});
+
+test('early root selection preserves the exact retained roots, shapes and shading',()=>{
+ const positions=[...tile(),...tile(1)],all=grassRoots(positions),selected=grassRoots(positions,undefined,undefined,{acceptRoot:x=>x>=.5&&x<1.5});
+ const roots=[],shapes=[],shades=[];
+ for(let i=0;i<all.roots.length/3;i++)if(all.roots[i*3]>=.5&&all.roots[i*3]<1.5){roots.push(...all.roots.slice(i*3,i*3+3));shapes.push(...all.shapes.slice(i*4,i*4+4));shades.push(all.shades[i]);}
+ assert.deepEqual(selected.roots,new Float32Array(roots));assert.deepEqual(selected.shapes,new Float32Array(shapes));assert.deepEqual(selected.shades,new Float32Array(shades));
+});
+
+test('faster root occupancy preserves original binary geometry, shades and exclusions',()=>{
+ const positions=new Float32Array([0,0,0,0,.1,1,1,.2,1,0,0,0,1,.2,1,1,.1,0,-1,0,0,-1,0,1,0,0,1,-1,0,0,0,0,1,0,0,0]);
+ const colors=Float32Array.from(positions,(_,i)=>.6+(i%7)*.03);
+ const data=grassRoots(positions,colors,new Set(['-1,0'])),hash=createHash('sha256');
+ for(const key of ['roots','shapes','shades'])hash.update(Buffer.from(data[key].buffer));
+ assert.equal(hash.digest('hex'),'471e788fc64c696741dd0b6d95891bb92a89299c050295e2d25ccf8cea7f65e0');
 });

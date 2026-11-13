@@ -1,0 +1,32 @@
+<!doctype html><meta charset="utf-8"><title>Desempenho ao mover a câmera</title>
+<style>body{margin:0;background:#233841;color:white;font:14px system-ui}#view{width:480px;height:320px}pre{white-space:pre-wrap}</style><div id="view"></div><pre id="status">Medindo movimento…</pre>
+<script type="module">
+import {RCT3DRenderer} from '../js/renderer_3d.js?v=camera-budget-24';
+const cpuOnly=new URLSearchParams(location.search).has('cpu');
+const status=document.querySelector('#status');window.addEventListener('error',event=>status.textContent=event.message);
+try{
+ const width=160,height=96,map=new Uint8Array(width*height);for(let z=0;z<height;z++)for(let x=0;x<width;x++)map[z*width+x]=z<44?0:z<48?3:2;
+ const world={width,height,map,revision:1,clock:{hour:12,minute:0},groups:[],sidewalkTiles:new Set(),getTile(x,z){return x<0||z<0||x>=width||z>=height?5:map[z*width+x];}};
+ const r=new RCT3DRenderer(document.querySelector('#view'));r.mapWidth=width;r.mapHeight=height;r.resize(480,320);r.setResolutionScale(1);r.shadowsEnabled=false;r.profileFrame=true;const draw=r.renderer.render.bind(r.renderer);if(cpuOnly)r.renderer.render=()=>{};
+ const scheduler=new MessageChannel();scheduler.port1.onmessage=()=>step();const schedule=()=>scheduler.port2.postMessage(null);
+ const frames=[],chunks=[];let tick=0,builds=0,shaderErrors=0,warmReady=false,totalFrames=0,warmFrames=0;const started=performance.now();r.renderer.debug.onShaderError=()=>shaderErrors++;
+ if(r.buildTerrainChunkSteps){const original=r.buildTerrainChunkSteps;r.buildTerrainChunkSteps=function*(...args){builds++;const chunk=yield* original.apply(this,args);if(warmReady&&tick>=8)chunks.push({x:args[1],z:args[3]});return chunk;};}
+ else{const original=r.buildTerrainChunk;r.buildTerrainChunk=function(...args){builds++;const chunk=original.apply(this,args);if(warmReady&&tick>=8)chunks.push({x:args[1],z:args[3]});return chunk;};}
+ function step(){try{
+  totalFrames++;if(!warmReady)warmFrames++;
+  if(tick===8&&!warmReady){
+    if(r._terrainBuildJobs?.size||r.grassRootJobs?.running||r.grassRootJobs?.queue.length){status.textContent=JSON.stringify({warming:true,pending:r.grassRootJobs?.queue.length,terrainJobs:r._terrainBuildJobs?.size,running:r.grassRootJobs?.running?.id,blades:[...r.terrainChunks.values()].reduce((n,c)=>n+c.terrain.children.reduce((k,m)=>k+(m.geometry.getAttribute('grassRoot')?m.geometry.instanceCount:0),0),0)} );r.render(world,[],world.clock,1/60,0);schedule();return;}
+    warmReady=true;
+  }
+  if(tick>=38){r.render(world,[],world.clock,1/60,0);if(r._terrainBuildJobs?.size||r.grassRootJobs?.running||r.grassRootJobs?.queue.length){schedule();return;}}
+  r.setCamera(tick<8?40:Math.min(125,40+(tick-8)*3),45,1.2);
+  const before=builds,start=performance.now();r.render(world,[],world.clock,1/60,0);
+  if(tick>=8&&tick<38)frames.push({ms:performance.now()-start,terrain:r.frameProfile.terrain,builds:builds-before});
+  if(++tick<38){schedule();return;}
+  if(r._terrainBuildJobs?.size||r.grassRootJobs?.running||r.grassRootJobs?.queue.length){r.render(world,[],world.clock,1/60,0);schedule();return;}
+  const sorted=frames.map(f=>f.ms).sort((a,b)=>a-b);
+  status.textContent=JSON.stringify({cpuOnly,shaderErrors,totalFrames,warmFrames,elapsedMs:Math.round(performance.now()-started),frames:frames.length,maxCpuMs:+sorted.at(-1).toFixed(1),p95CpuMs:+sorted[Math.floor(sorted.length*.95)].toFixed(1),maxTerrainMs:+Math.max(...frames.map(f=>f.terrain)).toFixed(1),buildsDuringMotion:frames.reduce((n,f)=>n+f.builds,0),progressiveRoots:true,allDetailsLoaded:!r._terrainBuildJobs?.size&&!r.grassRootJobs?.running&&!r.grassRootJobs?.queue.length,chunks},null,2);
+ }catch(error){status.textContent=error.stack||String(error);}}
+ schedule();
+}catch(error){status.textContent=error.stack||String(error);}
+</script>

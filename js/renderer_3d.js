@@ -1,17 +1,18 @@
+import {GrassRootJobs} from './grass_root_jobs.js?v=frame-budget-9';
 import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-2';
-import {sandNormalField,applySandSurfaceNormals,addSandWetnessShader} from './sand_surface_lighting.js?v=zoom-coast-3';
+import {sandNormalField,sandSurfaceNormalSteps,addSandWetnessShader} from './sand_surface_lighting.js?v=camera-budget-4';
 import {WATER_LEVEL,WATER_WAVE_GLSL} from './water_surface.js?v=shore-runup-2';
 import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=zoom-coast-7';
 import {createTravellerPalmGeometry} from './traveller_palm.js?v=ravenala-fan-1';
 import {cursorLightPlacement} from './cursor_light.js?v=above-roofs-1';
-import {createBeachShellMesh} from './beach_shells.js?v=scattered-shells-1';
+import {createBeachShellMesh} from './beach_shells.js?v=filtered-roots-2';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
 import {createGrassDetailsMesh} from './grass_details.js?v=rare-meadow-2';
 import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=zoom-coast-11';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=more-sand-2';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=zoom-density-2';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=camera-budget-6';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -241,7 +242,7 @@ function terrainTextureCategory(tileType) {
   return null;
 }
 
-function smoothTerrainTopNormals(THREE, geometry) {
+function* smoothTerrainTopNormalSteps(THREE, geometry) {
   const geometries = Array.isArray(geometry) ? geometry : [geometry];
   const sums = new Map();
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
@@ -251,6 +252,7 @@ function smoothTerrainTopNormals(THREE, geometry) {
     const positions=current?.getAttribute('position');
     if(!positions)continue;
     for (let i = 0; i < positions.count; i += 3) {
+      if(i%384===0)yield;
       a.fromBufferAttribute(positions, i); b.fromBufferAttribute(positions, i + 1); c.fromBufferAttribute(positions, i + 2);
       ab.subVectors(b, a); ac.subVectors(c, a); face.crossVectors(ab, ac).normalize();
       if (face.y < .35) continue;
@@ -264,6 +266,7 @@ function smoothTerrainTopNormals(THREE, geometry) {
     const positions=current?.getAttribute('position'),normals=current?.getAttribute('normal');
     if(!positions||!normals)continue;
     for (let i = 0; i < positions.count; i++) {
+      if(i%512===0)yield;
       if (normals.getY(i) < .35) continue;
       const sum = sums.get(keyAt(positions,i));
       if (!sum) continue;
@@ -5488,6 +5491,7 @@ export class RCT3DRenderer {
 
   disposeTerrainChunk(chunk) {
     if (!chunk) return;
+    chunk.disposed=true;
     for (const group of [chunk.terrain, chunk.water, chunk.grid]) {
       if (!group) continue;
       for (const object of [...group.children]) {
@@ -5500,6 +5504,8 @@ export class RCT3DRenderer {
 
   invalidateTerrainAt(x, y) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      for(const key of this._terrainBuildJobs?.keys()||[])this.cancelTerrainBuild(key);
+      this._terrainChunkVersions=new Map();this.grassRootJobs?.clear();
       for (const chunk of this.terrainChunks?.values() || []) this.disposeTerrainChunk(chunk);
       this.terrainChunks?.clear();
       this.visibleTerrainChunkKeys?.clear();
@@ -5507,17 +5513,17 @@ export class RCT3DRenderer {
       this.terrainDirty = true;
       return;
     }
-    const size = this.terrainChunkSize || 32;
-    const cx = Math.floor(x / size), cy = Math.floor(y / size);
-    // Corner heights, AO, shore faces and water colors depend on adjacent tiles.
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const key = `${cx + dx},${cy + dy}`;
-      const chunk = this.terrainChunks?.get(key);
-      if (chunk) {
-        this.disposeTerrainChunk(chunk);
-        this.terrainChunks.delete(key);
+    const size = this.terrainChunkSize || 16;
+    // Beach sampling, shared normals and road banks read at most eight tiles
+    // around an edit. Do not restart an entire 3-by-3 block neighborhood.
+    const radius=8;
+    for(let cy=Math.max(0,Math.floor((y-radius)/size));cy<=Math.floor((y+radius)/size);cy++)
+      for(let cx=Math.max(0,Math.floor((x-radius)/size));cx<=Math.floor((x+radius)/size);cx++){
+        const key=`${cx},${cy}`;
+        this.cancelTerrainBuild(key);
+        const versions=this._terrainChunkVersions??=new Map();
+        versions.set(key,(versions.get(key)||0)+1);
       }
-    }
     this._terrainHasLocalInvalidation = true;
     this.terrainDirty = true;
   }
@@ -5577,6 +5583,8 @@ export class RCT3DRenderer {
   isSimPaused() { return this.isPaused; }
 
   clear() {
+    this._terrainChunkVersions=new Map();this.grassRootJobs?.clear();
+    for(const key of this._terrainBuildJobs?.keys()||[])this.cancelTerrainBuild(key);
     this.terrainTracks?.clear();
     for (const chunk of this.terrainChunks?.values() || []) this.disposeTerrainChunk(chunk);
     this.terrainChunks?.clear();
@@ -6608,9 +6616,10 @@ export class RCT3DRenderer {
 
   rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionTarget = null) {
     // Stable, bounded chunks avoid a large synchronous rebuild when zoom crosses a threshold.
-    const nextChunkSize = 32;
+    const nextChunkSize = 16;
     if (this.terrainChunkSize !== nextChunkSize) {
       for (const chunk of this.terrainChunks.values()) this.disposeTerrainChunk(chunk);
+      for(const key of this._terrainBuildJobs?.keys()||[])this.cancelTerrainBuild(key);
       this.terrainChunks.clear();
       this.visibleTerrainChunkKeys.clear();
       this.terrainChunkSize = nextChunkSize;
@@ -6618,6 +6627,7 @@ export class RCT3DRenderer {
     const chunkSize = this.terrainChunkSize;
     if (this.terrainDirty && !this._terrainHasLocalInvalidation) {
       for (const chunk of this.terrainChunks.values()) this.disposeTerrainChunk(chunk);
+      for(const key of this._terrainBuildJobs?.keys()||[])this.cancelTerrainBuild(key);
       this.terrainChunks.clear();
     }
     this.terrainDirty = false;
@@ -6665,24 +6675,23 @@ export class RCT3DRenderer {
       const isVisible = cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
       if (isVisible) visible.add(key);
       build.add(key);
-      const centerX = Math.min(this.mapWidth - 1, cx * chunkSize + chunkSize / 2);
-      const centerY = Math.min(this.mapHeight - 1, cy * chunkSize + chunkSize / 2);
-      const distance = Math.hypot(centerX - this.camX, centerY - this.camY);
-      const detailRadius = detailTier === 0 ? 20 : detailTier === 1 ? 40 : 64;
-      const chunkDetailBand = zoomBand === 0 || distance > detailRadius + chunkSize ? 0 : distance > detailRadius ? 1 : 2;
-      const chunkSignature = `${signature}|c${chunkDetailBand}|grass:${this._grassChunkSignatures.get(key)||''}`;
+      // Camera motion alone must not invalidate an existing terrain mesh.
+      // Fine texture variants follow the zoom band, not the moving chunk center.
+      const chunkDetailBand = zoomBand===0?0:zoomBand===1?1:2;
+      const chunkSignature = `${signature}|c${chunkDetailBand}|grass:${this._grassChunkSignatures.get(key)||''}|r${this._terrainChunkVersions?.get(key)||0}`;
       let chunk = this.terrainChunks.get(key);
-      if (chunk && chunk.signature !== chunkSignature) {
-        this.disposeTerrainChunk(chunk);
-        this.terrainChunks.delete(key);
-        chunk = null;
-      }
-      if (!chunk) {
-        // Hidden neighbors are only cache candidates. Building all of them
-        // synchronously makes a coast entry rebuild several unseen beaches.
+      if(!chunk||chunk.signature!==chunkSignature){
         if(!isVisible)continue;
-        chunk = this.buildTerrainChunk(world, cx * chunkSize, Math.min(this.mapWidth - 1, (cx + 1) * chunkSize - 1), cy * chunkSize, Math.min(this.mapHeight - 1, (cy + 1) * chunkSize - 1), visionTarget, chunkSignature, chunkDetailBand, visible);
-        this.terrainChunks.set(key, chunk);
+        if(typeof this.buildTerrainChunkSteps!=='function'){
+          if(chunk)this.disposeTerrainChunk(chunk);
+          chunk=this.buildTerrainChunk(world,cx*chunkSize,Math.min(this.mapWidth-1,(cx+1)*chunkSize-1),cy*chunkSize,Math.min(this.mapHeight-1,(cy+1)*chunkSize-1),visionTarget,chunkSignature,chunkDetailBand,visible);
+          this.terrainChunks.set(key,chunk);
+        }else{
+          const jobs=this._terrainBuildJobs??=new Map(),pending=jobs.get(key);
+          if(pending&&(pending.signature!==chunkSignature||pending.world!==world))this.cancelTerrainBuild(key);
+          if(!jobs.has(key))jobs.set(key,{key,world,signature:chunkSignature,steps:this.buildTerrainChunkSteps(world,cx*chunkSize,Math.min(this.mapWidth-1,(cx+1)*chunkSize-1),cy*chunkSize,Math.min(this.mapHeight-1,(cy+1)*chunkSize-1),visionTarget,chunkSignature,chunkDetailBand,visible)});
+          if(!chunk){chunk=this.buildTerrainPlaceholder(world,cx*chunkSize,Math.min(this.mapWidth-1,(cx+1)*chunkSize-1),cy*chunkSize,Math.min(this.mapHeight-1,(cy+1)*chunkSize-1));this.terrainChunks.set(key,chunk);}
+        }
       }
       chunk.lastUsed = performance.now();
       if (isVisible) {
@@ -6692,6 +6701,7 @@ export class RCT3DRenderer {
         if (!gridEnabled && chunk.grid.parent) this.rctGridLineGroup.remove(chunk.grid);
       }
     }
+    this.advanceTerrainBuilds?.(world,visible,gridEnabled,4);
     for (const key of this.visibleTerrainChunkKeys) {
       if (visible.has(key)) continue;
       const chunk = this.terrainChunks.get(key);
@@ -6713,7 +6723,64 @@ export class RCT3DRenderer {
     this.renderedMinTy = Math.max(0, minTy); this.renderedMaxTy = Math.min(this.mapHeight - 1, maxTy);
   }
 
-  buildTerrainChunk(world, minTx, maxTx, minTy, maxTy, visionTarget, signature, detailBand = 2, visibleChunkKeys = null) {
+  cancelTerrainBuild(key){
+    const job=this._terrainBuildJobs?.get(key);if(!job)return;
+    if(job.partial)this.disposeTerrainChunk(job.partial);
+    job.steps.return?.();this._terrainBuildJobs.delete(key);
+  }
+
+  advanceTerrainBuilds(world,visible,gridEnabled,budgetMs=4){
+    const jobs=this._terrainBuildJobs;if(!jobs?.size)return;
+    const deadline=performance.now()+budgetMs;
+    for(const [key,job]of jobs)if(job.world!==world||!visible.has(key))this.cancelTerrainBuild(key);
+    const ordered=[...jobs].sort((a,b)=>{
+      const distance=entry=>{const [x,y]=entry[0].split(',').map(Number),size=this.terrainChunkSize||16;return (x*size+size/2-this.camX)**2+(y*size+size/2-this.camY)**2;};
+      return distance(a)-distance(b);
+    });
+    for(const [key,job]of ordered){
+      while(performance.now()<deadline){
+        const step=job.steps.next();
+        if(step.value?.terrain)job.partial=step.value;
+        if(step.value?.waitingForRoots)break;
+        if(!step.done)continue;
+        const chunk=step.value,old=this.terrainChunks.get(key);
+        if(old)this.disposeTerrainChunk(old);
+        this.terrainChunks.set(key,chunk);chunk.lastUsed=performance.now();jobs.delete(key);
+        this.terrainGroup.add(chunk.terrain);this.waterGroup.add(chunk.water);
+        if(gridEnabled&&chunk.grid.children.length)this.rctGridLineGroup.add(chunk.grid);
+        break;
+      }
+      if(performance.now()>=deadline)break;
+    }
+  }
+
+  buildTerrainPlaceholder(world,minX,maxX,minY,maxY){
+    const chunk={signature:'pending',terrain:new THREE.Group(),water:new THREE.Group(),grid:new THREE.Group()},buckets=new Map();
+    for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+      const tile=world.getTile(x,y);if(tile===TILE_VOID)continue;
+      const key=FARM_TILES.has(tile)?'farmSoil':baseTerrainTile(tile);let positions=buckets.get(key);if(!positions)buckets.set(key,positions=[]);
+      const water=tile===TILE_WATER,street=streetSurfaceCorners(world,x,y);
+      const corners=[[x,y],[x,y+1],[x+1,y+1],[x+1,y]];
+      const heights=water?[WATER_LEVEL,WATER_LEVEL,WATER_LEVEL,WATER_LEVEL]:street?[street[0],street[3],street[2],street[1]]:corners.map(([vx,vy])=>terrainCornerHeight(world,vx,vy));
+      for(const i of [0,1,2,0,2,3])positions.push(corners[i][0],heights[i],corners[i][1]);
+    }
+    for(const [key,positions]of buckets){
+      const geometry=new THREE.BufferGeometry(),uv=[],colors=[];
+      for(let i=0;i<positions.length;i+=3){uv.push(positions[i]/8,positions[i+2]/8);colors.push(1,1,1);}
+      geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();
+      const mesh=new THREE.Mesh(geometry,this.materials[key]||this.materials[TILE_FLOOR]);mesh.receiveShadow=true;
+      (key===TILE_WATER?chunk.water:chunk.terrain).add(mesh);
+    }
+    return chunk;
+  }
+
+  buildTerrainChunk(...args) {
+    const steps=this.buildTerrainChunkSteps(...args);let step=steps.next();
+    while(!step.done){if(step.value?.waitingForRoots)this.grassRootJobs?.advance(1000);step=steps.next();}
+    return step.value;
+  }
+
+  *buildTerrainChunkSteps(world, minTx, maxTx, minTy, maxTy, visionTarget, signature, detailBand = 2, visibleChunkKeys = null) {
     const zoomDetail=terrainZoomDetail(this.zoom,this.isPerspectiveActive());
     const gridEnabled = this.wireframeMode === 1 && this.zoom >= 0.45;
     const zoomBand = terrainZoomDetail(this.zoom,this.isPerspectiveActive()).band;
@@ -6758,6 +6825,7 @@ export class RCT3DRenderer {
 
     const chunk = { signature, lastUsed: performance.now(), terrain: new THREE.Group(), water: new THREE.Group(), grid: new THREE.Group() };
 
+    yield chunk;
     const map = world.map;
     const tileMeshBuckets = {
       farmSoil:{pos:[],uvs:[],colors:[]},
@@ -6864,10 +6932,12 @@ export class RCT3DRenderer {
     };
 
     for (let ty = clampedMinTy; ty <= clampedMaxTy; ty++) {
+      yield;
       const yOffset = ty * this.mapWidth;
       const zY = Math.floor(ty / zoneSz);
 
       for (let tx = clampedMinTx; tx <= clampedMaxTx; tx++) {
+        if((tx-clampedMinTx)%4===0)yield;
         const tType = map[yOffset + tx];
         if (tType === undefined || tType === TILE_VOID) continue;
 
@@ -7238,12 +7308,14 @@ export class RCT3DRenderer {
 
     const terrainSurfaceGeometries=[],naturalGroundGeometries=[];
     for (const [matKey, bucket] of Object.entries(tileMeshBuckets)) {
+      yield;
       if (bucket.pos.length === 0) continue;
       const geom = new THREE.BufferGeometry();
       geom.setAttribute("position", new THREE.Float32BufferAttribute(bucket.pos, 3));
       geom.setAttribute("uv", new THREE.Float32BufferAttribute(bucket.uvs, 2));
       geom.setAttribute("color", new THREE.Float32BufferAttribute(bucket.colors, 3));
       geom.computeVertexNormals();
+      geom.userData.shoreApron=matKey==='shoreSand';
       geom.userData.sandSurface=matKey===String(TILE_SAND)||matKey==='sandClean'||matKey==='shoreSand';
       terrainSurfaceGeometries.push(geom);
       if(terrainTransitionMaterialKeys.has(matKey))naturalGroundGeometries.push(geom);
@@ -7264,10 +7336,24 @@ export class RCT3DRenderer {
         }
         if (zoomDetail.grassAxis&&(matKey === String(TILE_FLOOR) || matKey === String(TILE_HILL))) {
           const materialKey=matKey===String(TILE_HILL)?'volumetricHillGrass':'volumetricGrass';
-          const grass=createVolumetricGrassMesh(THREE, geom, this.materials[materialKey], {excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis});
+          const emptyRoots={roots:new Float32Array(),shapes:new Float32Array(),shades:new Float32Array()};
+          const jobs=this.grassRootJobs??=new GrassRootJobs();
+          let grass;
+          const install=data=>{
+            if(chunk.disposed)return;
+            // A new instanced geometry also refreshes Three's cached instance
+            // capacity after the initially empty mesh has reached the GPU.
+            const readyMesh=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{materialKey,rootData:data});
+            grass.geometry.dispose();grass.geometry=readyMesh.geometry;
+            chunk.pendingRoots--;
+            if(zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);if(details)chunk.terrain.add(details);}
+          };
+          const rootKey=`${minTx},${maxTx},${minTy},${maxTy}:${materialKey}:${signature}`;
+          const ready=jobs.request(world,rootKey,geom,this._grassExclusionCells,zoomDetail.grassAxis,()=>!chunk.disposed,install);
+          if(!ready)chunk.pendingRoots=(chunk.pendingRoots||0)+1;
+          grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis,rootData:ready??emptyRoots});
           chunk.terrain.add(grass);
-          const details=zoomDetail.smallDetails?createGrassDetailsMesh(THREE,grass,this.materials.grassDetails):null;
-          if(details)chunk.terrain.add(details);
+          if(ready&&zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);if(details)chunk.terrain.add(details);}
         }
       }
     }
@@ -7275,9 +7361,11 @@ export class RCT3DRenderer {
       const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(roadRailingBucket.pos,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(roadRailingBucket.colors,3));geometry.computeVertexNormals();
       const railing=new THREE.Mesh(geometry,this.materials.roadRailing);railing.userData.terrainMaterialKey='roadRailing';railing.castShadow=false;railing.receiveShadow=true;railing.frustumCulled=false;chunk.terrain.add(railing);
     }
-    smoothTerrainTopNormals(THREE,terrainSurfaceGeometries);
+    // The apron receives analytic world-space sand normals immediately below.
+    // Do not hash and average its dense triangles only to overwrite them.
+    yield* smoothTerrainTopNormalSteps(THREE,terrainSurfaceGeometries.filter(geometry=>!geometry.userData.shoreApron));
     const sandNormalAt=sandNormalField(world);
-    for(const geometry of terrainSurfaceGeometries)if(geometry.userData.sandSurface)applySandSurfaceNormals(geometry,sandNormalAt);
+    for(const geometry of terrainSurfaceGeometries)if(geometry.userData.sandSurface)yield* sandSurfaceNormalSteps(geometry,sandNormalAt);
     const groundNormalField=new Map();
     for(const geometry of naturalGroundGeometries){
       const positions=geometry.getAttribute('position'),normals=geometry.getAttribute('normal');
@@ -7335,6 +7423,9 @@ export class RCT3DRenderer {
       const lineSegments = new THREE.LineSegments(gridGeom, this.rctGridMaterial);
       chunk.grid.add(lineSegments);
     }
+    // Publish once, with the complete lawn. Never swap a finished-looking
+    // terrain mesh in first and add blades several frames later.
+    while(chunk.pendingRoots>0)yield {waitingForRoots:true};
     return chunk;
   }
 
@@ -7599,6 +7690,7 @@ export class RCT3DRenderer {
     const maxTy = this.renderFullWorld ? this.mapHeight - 1 : bounds.maxTy;
 
     this.rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionCreature);
+    this.grassRootJobs?.advance(3);
     this.syncWaterPollution(world);
     const profileTerrain = this.profileFrame ? performance.now() : 0;
 
