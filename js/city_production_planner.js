@@ -1,3 +1,4 @@
+import {fishSupplyInputs} from './city_fishing.js';
 import {businessFloors} from './city_business_heights.js';
 import {INDUSTRIES} from './city_industries.js';
 import {DEVELOPMENT_RULES} from './city_development.js?v=road-network-cache-1';
@@ -6,6 +7,8 @@ import {OFFICE_ONLY_TYPES,officeSpaceDemand,officeFloors,createMunicipalOffice} 
 const key=(type,crop)=>`${type}:${crop||''}`;
 const pending=p=>!p.cancelled&&p.status!=='completed';
 const inputs=(type,economy)=>{
+  if(type==='fishmonger')return fishSupplyInputs(economy);
+  if(type==='fishery')return {vara_pesca:1};
   if(type==='shipyard'){
     const firm=economy.businesses.find(b=>b.type==='shipyard'&&b.active&&!b.entity.destroyed);
     return (firm&&economy.city.vehicles?.recipeFor(firm)?.inputs)||INDUSTRIES.shipyard.inputs;

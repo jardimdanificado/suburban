@@ -57,7 +57,7 @@ export class CityLife {
   }
   recoverBlockedPosition(c) {
     const city=this.city;
-    if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.localBoatTrip||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ)return false;
+    if(c.entity.destroyed||c.indoorLocation||c.mobilityTrip||c.localBoatTrip||c.fishingJob?.boatId&&c.fishingJob.stage!=='tow'||c.ridingVehicleId||c.skybridgeTransit||c.skybridgeZ)return false;
     const worldRevision=city.world.revision||0,obstacleRevision=city.obstacleRevision||0,occupiedCount=city.occupied.size,checked=this.positionChecks.get(c);
     // A citizen following a route computed against the current terrain and
     // obstacle revisions cannot become blocked on a later waypoint. Avoid

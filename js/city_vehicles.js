@@ -475,6 +475,7 @@ export class CityVehicles {
     if(!this.harborFleetInitialized)this.initializeHarborFleet(this.city.worldPort);
     if(!this.activeCount&&!this.boatCount)return;const city=this.city;CARPOOL_CANDIDATE_INDEX.set(this,null);
     for(const v of this.units.values()){
+      if(v.fishingCitizenId!=null){const fisher=city.society.citizen(v.fishingCitizenId);if(fisher?.fishingJob&&!fisher.entity.destroyed)continue;v.fishingCitizenId=null;v.driverId=null;v.transportCitizenId=null;}
       if(v.localTripCitizenId!=null){const person=city.society.citizen(v.localTripCitizenId);if(!person?.localBoatTrip||person.entity.destroyed){if(person)releaseLocalBoatTrip(city,person,true);else{v.localTripCitizenId=null;v.driverId=null;v.transportCitizenId=null;v.towedByVehicleId=null;v.towedBoatId=null;}}else continue;}
       if(v.boatClass&&v.active&&!v.scrapped){if(v.journey?.kind==='harbor-patrol'){delete v.waterRoute;delete v.waterRouteIndex;v.journey=null;v.status='Disponível no porto';}const route=v.waterRoute;if(route?.length>1){let remaining=Math.max(0,Math.min(120,dt))*BOAT_CLASSES[v.boatClass].speed,guard=0;while(remaining>0&&guard++<64){let next=v.waterRouteIndex+v.waterRouteDirection;if(next<0||next>=route.length){v.waterRouteDirection*=-1;next=v.waterRouteIndex+v.waterRouteDirection;}const point=route[next],dx=point.x-v.x,dy=point.y-v.y,len=Math.hypot(dx,dy);if(len<1e-5){v.waterRouteIndex=next;continue;}const travel=Math.min(len,remaining);v.x+=dx/len*travel;v.y+=dy/len*travel;v.angle=Math.atan2(dx,dy);v.distance+=travel;remaining-=travel;if(travel>=len-1e-5){v.x=point.x;v.y=point.y;v.waterRouteIndex=next;if(next===route.length-1||next===0)v.waterRouteDirection*=-1;}}v.altitude=surfaceElevation(city.world,v.x,v.y);if(v.entity){v.entity.x=v.x;v.entity.y=v.y;}v.status='Navegando no porto';}continue;}
       if(v.policeRecoveryOfficerId){
@@ -526,6 +527,7 @@ export class CityVehicles {
   syncBoatTravelers(){
     const city=this.city,live=new Set();
     for(const person of city._movingCitizens||city.citizens){
+      if(person.fishingJob){if(person.boatVehicleId)live.add(person.boatVehicleId);continue;}
       if(person.localBoatTrip||!person.boatClass||person.entity.destroyed)continue;
       // A finished delivery used to keep the hull attached to a rider standing
       // on land, reserving it forever. Only keep it while the route still uses water.

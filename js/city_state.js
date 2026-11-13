@@ -329,13 +329,13 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
   if(Object.getPrototypeOf(city.justice)!==CityJustice.prototype)Object.setPrototypeOf(city.justice,CityJustice.prototype);
   city.justice.city=city;city.justice.ensureState();
   city.life??=new CityLife(city);if(Object.getPrototypeOf(city.life)!==CityLife.prototype)Object.setPrototypeOf(city.life,CityLife.prototype);city.life.city=city;if(!(city.life.positionChecks instanceof WeakMap))city.life.positionChecks=new WeakMap();
-  if(rebuildIndexes)for(const [index,c]of city.citizens.entries())ensureJusticeSkills(c,index,city.initialSeed,{newborn:c.initialAge===0});
+  if(rebuildIndexes)for(const [index,c]of city.citizens.entries()){ensureJusticeSkills(c,index,city.initialSeed,{newborn:c.initialAge===0});c.skills.fishing??=0;}
   city.furniture??=new CityFurniture(city);
   city.supplies??=new CitySupplies(city);city.water??=new CityWater(city);
   city.substances??=new CitySubstances(city);city.substances.city=city;city.substances.ensureState();
   city.paint??=new CityPaint(city);
   city.fiscal??=new CityFiscal(city);
-  if(city.substanceSchemaVersion!==6||city.goodsCatalogSchemaVersion!==1){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of city.buildings){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=6;city.goodsCatalogSchemaVersion=1;}
+  if(city.substanceSchemaVersion!==6||city.goodsCatalogSchemaVersion!==2){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of [...city.buildings,city.worldPort,city.economy.importDepot].filter(holder=>holder?.inventory)){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=6;city.goodsCatalogSchemaVersion=2;}
   city.housing.invalidateResidents();
   if(city.development)city.development.plotOverlapBuckets=null;
   city.buildingsById ??= new Map();

@@ -1,3 +1,5 @@
+import {fishingWork,fishSupplyInputs,fishingSiteNearby} from './city_fishing.js';
+import {FISH_SPECIES} from './fishing_catalog.js';
 import {economicPolicy} from './city_economic_policies.js';
 import {reducedCadence} from './city_fast_forward.js';
 import {SUBSTANCE_CROPS,SUBSTANCES,SUBSTANCE_CONTROLLED_GOODS,ALCOHOL_DRINKS} from './city_substance_catalog.js';
@@ -25,7 +27,7 @@ import { inventoryFree, inventoryUsed, initializeInventory } from './city_invent
 import { ensureExternalAccount } from './city_currency.js';
 import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=entrance-retaining-clearance-1';
 
-export const SKILLS = { agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados',artistic:'Arte',combat:'Combate',investigation:'Investigação',forensics:'Perícia',law:'Direito',construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
+export const SKILLS = { fishing:'Pesca', agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados',artistic:'Arte',combat:'Combate',investigation:'Investigação',forensics:'Perícia',law:'Direito',construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
 export const CROPS = {
   ...SUBSTANCE_CROPS,
   arroz:{label:'Arroz',grow:150,price:95},alface:{label:'Alface',grow:75,price:80},tomate:{label:'Tomate',grow:100,price:110},
@@ -51,6 +53,7 @@ function startupCash(city,type){
   return city.currency.price(Math.max(base,RETAIL_STARTUP_CAPITAL[type]||0));
 }
 export const MEAL_RECIPES = {
+  peixe_grelhado:{label:'Peixe grelhado',inputs:{file_peixe:1,oleo:1,coentro:1},quality:4},
   pao: { label: 'Pão simples', inputs: { pao: 3 }, quality: 1 },
   refogado: { label: 'Refeição de feijão e cebola', inputs: { feijao: 2, cebola: 1 }, quality: 2 },
   prato_completo: { label: 'Prato completo', inputs: { feijao: 1, milho: 1, mandioca: 1 }, quality: 3 },
@@ -97,10 +100,11 @@ export class CityEconomy {
   citizen(id) { return this.city.society.citizen(id); }
   initializeCitizen(c, index, options) {
     // Keep established seeded identities stable when adding new skill domains.
-    const coreSkills=Object.keys(SKILLS).filter(skill=>!JUSTICE_SKILLS.includes(skill));
+    const coreSkills=Object.keys(SKILLS).filter(skill=>skill!=='fishing'&&!JUSTICE_SKILLS.includes(skill));
     c.skills = Object.fromEntries(coreSkills.map(skill => [skill, options.age === 0 ? 0 : 2 + this.city.random() * 16]));
     if (options.age !== 0) c.skills[coreSkills[index % coreSkills.length]] += 15;
     ensureJusticeSkills(c,index,this.city.initialSeed,{newborn:options.age===0});
+    c.skills.fishing=options.age===0?0:2+((Math.imul(c.id+9,2654435761)>>>0)%1600)/100;
     c.foodPreferences = Object.freeze(Object.fromEntries([...edible, ...Object.keys(CROPS), 'pao', 'oleo', ...Object.keys(MEAL_RECIPES)].map(g => [g, (((Math.imul(c.id + 17, 2654435761) ^ Math.imul(g.split('').reduce((n, ch) => n * 31 + ch.charCodeAt(0), 0), 1597334677)) >>> 0) % 201 - 100) / 100])));
     initializeClothes(this.city,c);
     c.businessIds = []; c.provisions = options.grant === false ? 0 : 3;
@@ -109,6 +113,7 @@ export class CityEconomy {
   }
   practice(c, skill, minutes = 1) {
     if (!c || !(skill in SKILLS) || minutes <= 0 || !Number.isFinite(minutes)) return;
+    c.skills[skill]??=0;
     c.skills[skill] = Math.min(100, c.skills[skill] + minutes * (c.jobId?(.8+career(c).motivation/250):1) * .025 * (.8 + (c.traits?.diligence ?? .5) * .4) / (1 + c.skills[skill] / 25));
   }
   setupBuilding(b) {
@@ -300,6 +305,7 @@ export class CityEconomy {
       pendingFarmCapacityByCrop.set(p.crop,(pendingFarmCapacityByCrop.get(p.crop)||0)+capacity);
     }
     for (const b of businesses) b.inputDemand = b.type==='kitchen'?Object.fromEntries([...new Set(KITCHEN_RECIPES.flatMap(r=>Object.keys(r.inputs)))].map(g=>[g,Math.max(0,18-(b.inventory[g]||0)-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))])):b.type==='mill'?{girassol:Math.max(0,36-b.inventory.girassol-(b.incoming.girassol||0)-(b.worldIncoming?.girassol||0)-(b.importIncoming?.girassol||0))}:INDUSTRIES[b.type] ? Object.fromEntries(Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs).map(([g,n])=>[g,Math.max(0,(b.type==='boat_shop'?1:b.type==='cycle_assembler'?n*Math.max(6,b.vehicleBatchSize||3):b.type==='publisher'&&g==='papel'?Math.max(12,(b.bookPages||5)*3):n*6)-b.inventory[g]-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))])) : b.type === 'bakery' ? { trigo: Math.max(0, 24 - b.inventory.trigo-(b.incoming?.trigo||0)-(b.worldIncoming?.trigo||0)-(b.importIncoming?.trigo||0)) } : b.type==='restaurant' ? Object.fromEntries(restaurantGoods.map(g=>[g,Math.max(0,6-b.inventory[g]-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))])) : ['market','greengrocer'].includes(b.type) ? Object.fromEntries(this.retailAssortment(b).map(g=>[g,Math.max(0,12-(b.inventory[g]||0)-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))])) : !retailTypes.has(b.type) ? {} : Object.fromEntries(edible.filter(g => this.accepts(b, g)).map(g => [g, Math.max(0, 12 - b.inventory[g]-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))]));
+    for(const b of businesses)if(b.type==='fishmonger')b.inputDemand=Object.fromEntries(Object.keys(fishSupplyInputs(this)).map(g=>[g,Math.max(0,6-(b.inventory[g]||0)-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))]));
     for(const b of businesses)if(b.type==='bar')b.inputDemand=Object.fromEntries(ALCOHOL_DRINKS.map(g=>[g,Math.max(0,6-(b.inventory[g]||0)-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))]));
     for(const b of this.city.buildings)if(b.active&&!b.entity.destroyed&&(civicSpec(b)||justiceServiceSpec(b)))b.inputDemand=Object.fromEntries(Object.entries(b.type==='library'?{livros:1}:(civicSpec(b)||justiceServiceSpec(b)).inputs).map(([g,n])=>[g,Math.max(0,n*6-(b.inventory[g]||0)-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))]));
     const stockByGood = new Map(), inputDemandByGood = new Map(), totalInputDemandByGood = new Map(), foodPreferenceByGood = new Map();
@@ -430,6 +436,7 @@ export class CityEconomy {
           for (let yy = y; yy < y + depth; yy++) for (let xx = x; xx < x + width; xx++) if ([0, 9].includes(tileAt(city.world, xx, yy))) fertile++;
           if (fertile < width * depth * .75) continue;
         }
+        if(type==='fishery'&&!fishingSiteNearby(city,{x:x+width/2,y:y+depth/2}))continue;
         candidates.push({ x, y, width, depth, floors });
       }
       if (candidates.length >= 120) break;
@@ -901,6 +908,7 @@ export class CityEconomy {
     if(b.type==='flagmaker')spec=b.inventory.bandeiras<b.inventory.faixas*1.5?{...spec,inputs:{tecido:2,madeira:1},outputs:{bandeiras:2}}:{...spec,inputs:{tecido:2},outputs:{faixas:1}};
     if(b.type==='artisan')spec=b.inventory.carrinho<b.inventory.cesta/2?{...spec,inputs:{madeira:5,fibras:1},outputs:{carrinho:1}}:(b.inventory.porrete||0)<1&&((b.inventory.cesta||0)>0||(b.inventory.carrinho||0)>0)?{...spec,inputs:{madeira:3,fibras:2},outputs:{porrete:1}}:{...spec,inputs:{madeira:3,fibras:2},outputs:{cesta:2}};
     if(b.type==='toolmaker'){const armedDemand=this.city.citizens.some(person=>!person.entity.destroyed&&this.city.society.isAdult(person)&&!person.equipment?.weapon&&person.needs?.safety<42&&(person.traits?.riskTolerance??.5)>.94&&(person.skills?.combat||0)>=35),canMakeGarrucha=(b.inventory.ferro||0)>=4&&(b.inventory.tabuas||0)>=3;spec=armedDemand&&canMakeGarrucha&&(b.inventory.garrucha||0)<1?{...spec,inputs:{ferro:4,tabuas:3},outputs:{garrucha:1},labor:42}:(b.inventory.faca||0)<Math.max(1,(b.inventory.ferramentas||0)*.5)?{...spec,inputs:{ferro:1,tabuas:1},outputs:{faca:1},labor:20}:{...spec,inputs:{ferro:2,tabuas:1},outputs:{ferramentas:1}};}
+    if(b.type==='fishmonger'){const good=Object.keys(FISH_SPECIES).filter(g=>(b.inventory[g]||0)>0).sort((a,d)=>b.inventory[d]-b.inventory[a])[0];if(!good)return false;spec={...spec,inputs:{[good]:1}};}
     if(b.type==='forestry')return this.city.nature.forestryWork(b,c);
     if(['fiber_farm','herb_farm'].includes(b.type) && this.city.minute<(b.replantingAt||0)+180) return false;
     if(b.type==='research_institute')return false;
@@ -1020,6 +1028,7 @@ export class CityEconomy {
   productionWork(b, c) {
     if(!c||!['work','manage'].includes(c.task)||c.jobId!==b.id&&c.id!==b.ownerId&&!c.businessIds?.includes(b.id))return false;
     if(['builder','cycle_workshop'].includes(b.type)&&this.city.paint.work(b,c))return true;
+    if(b.type==='fishery')return fishingWork(this.city,b,c);
     if(!['farm','quarry','iron_mine','bauxite_mine','forestry'].includes(b.type)&&!c.mechanicJob&&!workCellReady(this.city,c,b))return false;
     if(b.type==='kitchen')return kitchenWork(this,b,c);
     if (INDUSTRIES[b.type]) return this.industrialWork(b,c,INDUSTRIES[b.type]);

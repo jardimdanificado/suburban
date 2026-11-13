@@ -1,0 +1,31 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Pesca na margem e em canoa</title>
+<style>body{margin:0;background:#c9dcdf;font:14px system-ui}header{position:absolute;z-index:2;top:12px;left:12px;padding:12px;background:#ffffffe8;border-radius:8px}button{padding:8px;margin:6px 4px 0 0}#status{display:block;margin-top:8px}</style>
+<header>Pesca sentada: cadeira, chão e canoa. Vara, linha e boia.<br><button id="catch">Erguer vara</button><button id="chair">Alternar cadeira</button><button id="clear">Recolher equipamento</button><span id="status">Carregando modelos…</span></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {parseCitizenOBJ} from '../js/city_citizen_models.js';
+import {syncCityFishing} from '../js/city_fishing_renderer.js';
+import {syncCityWatercraft} from '../js/city_watercraft_renderer.js';
+import {surfaceElevation} from '../js/city_terrain.js';
+const status=document.querySelector('#status');window.addEventListener('error',e=>status.textContent=e.message);window.addEventListener('unhandledrejection',e=>status.textContent=String(e.reason));
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.append(renderer.domElement);let shaderErrors=0;renderer.debug.onShaderError=()=>shaderErrors++;
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xc9dcdf);scene.add(new THREE.HemisphereLight(0xf1f6ff,0x5f6847,2));const sun=new THREE.DirectionalLight(0xffefd5,2);sun.position.set(5,15,6);scene.add(sun);
+ const width=18,height=12,map=new Uint8Array(width*height),world={width,height,revision:1,map,getTile(x,y){return x<0||y<0||x>=width||y>=height?5:map[y*width+x];}};for(let y=1;y<11;y++)for(let x=7;x<17;x++)map[y*width+x]=2;
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){const water=map[y*width+x]===2,h=water?.04:surfaceElevation(world,x+.5,y+.5),mesh=new THREE.Mesh(new THREE.BoxGeometry(1,.12,1),new THREE.MeshLambertMaterial({color:water?0x419fa6:0x758d48}));mesh.position.set(x+.5,h-.06,y+.5);scene.add(mesh);}
+ const citizens=[{id:1,x:6.5,y:3.5,chair:true},{id:2,x:6.5,y:8.5,chair:false},{id:3,x:11.5,y:6.5,boat:true}].map(p=>{const c={id:p.id,skinColor:0xc18b65,task:'work',path:[],wardrobe:[],bodyHeightCm:170,entity:{id:p.id,x:p.x,y:p.y,properties:{render:{size:1,color:0xc18b65}}},fishingPose:{chair:!!p.chair,boat:!!p.boat,water:{x:p.x+(p.boat?0:1),y:p.y},salinity:'fresh',zone:p.boat?'middle':'shore'}};c.entity.properties.citizen=c;return c;});
+ const boat={id:12,good:'canoe',boatClass:'canoe',active:true,x:11.5,y:6.5,angle:0,transportCitizenId:3,entity:{x:11.5,y:6.5}};citizens[2].boatClass='canoe';citizens[2].boatVehicleId=12;
+ const city={minute:600,citizens,vehicles:{units:new Map([[12,boat]])},society:{citizen:id=>citizens.find(c=>c.id===id)}};
+ const view={scene,renderedMinTx:0,renderedMinTy:0,renderedMaxTx:width,renderedMaxTy:height},actors=new THREE.Group();scene.add(actors);const meshes=[];
+ const [idle,chairPose,groundPose]=await Promise.all(['idle','sentado_no_banco','sentado_no_chao'].map(async clip=>parseCitizenOBJ(await (await fetch(`../data/model/${clip}/0.obj`)).text())));
+ const upright=new THREE.BufferGeometry();upright.setAttribute('position',new THREE.Float32BufferAttribute(idle.positions,3));upright.computeBoundingBox();const bounds=upright.boundingBox,scale=1.7/(bounds.max.y-bounds.min.y),origin=new THREE.Vector3((bounds.min.x+bounds.max.x)/2,bounds.min.y,(bounds.min.z+bounds.max.z)/2);
+ for(const c of citizens.slice(0,2)){const mesh=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshLambertMaterial({color:0xc18b65,side:THREE.DoubleSide}));actors.add(mesh);meshes.push(mesh);}
+ const updateActors=()=>{for(let i=0;i<meshes.length;i++){const c=citizens[i],chair=!!c.fishingPose?.chair,key=`${i}:${chair}`;if(meshes[i].userData.poseKey!==key){meshes[i].geometry.dispose();const pose=chair?chairPose:groundPose,positions=new Float32Array(pose.positions);for(let j=0;j<positions.length;j+=3){positions[j]=(positions[j]-origin.x)*scale;positions[j+1]=(positions[j+1]-origin.y)*scale;positions[j+2]=(positions[j+2]-origin.z)*scale;}const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.computeVertexNormals();meshes[i].geometry=geometry;meshes[i].userData.poseKey=key;}meshes[i].position.set(c.entity.x,surfaceElevation(world,c.entity.x,c.entity.y),c.entity.y);meshes[i].rotation.y=Math.PI/2;}};
+ const camera=new THREE.OrthographicCamera(-7*innerWidth/innerHeight,7*innerWidth/innerHeight,7,-7,.1,100);camera.position.set(18,15,18);camera.lookAt(8.5,0,6);
+ let previous=performance.now(),cleared=false;
+ function draw(){const now=performance.now(),dt=Math.min(.1,(now-previous)/1000);previous=now;updateActors();syncCityWatercraft(view,THREE,city,world);syncCityFishing(view,THREE,city,world);renderer.render(scene,camera);status.textContent=`${view.fishingVisuals.size} varas · ${cleared?'Equipamento recolhido':'Cadeira, chão e canoa'} · shaders: ${shaderErrors?'ERRO':'OK'}`;}function animate(){draw();requestAnimationFrame(animate);}animate();
+ document.querySelector('#catch').onclick=()=>{city.minute++;for(const c of citizens)c.fishingCaughtAt=city.minute;draw();setTimeout(()=>{city.minute++;draw();},5000);};
+ document.querySelector('#chair').onclick=()=>{if(citizens[0].fishingPose)citizens[0].fishingPose.chair=!citizens[0].fishingPose.chair;draw();};
+ document.querySelector('#clear').onclick=()=>{for(const c of citizens)c.fishingPose=null;cleared=true;draw();};
+}catch(error){status.textContent=error.stack;}
+</script></html>

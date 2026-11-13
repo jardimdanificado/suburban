@@ -5,7 +5,7 @@ import {findTerrainPath,canStep,tileHeight,tileAt,roadTravelCost,ROAD_TILES,surf
 export const BOAT_TOW_RULES=Object.freeze({canoe:{bikes:['bicicleta','bicicleta_carga'],speed:2.8},launch:{bikes:['bicicleta_carga'],speed:1.8}});
 const directions=[[1,0],[0,1],[-1,0],[0,-1]];
 const water=(city,x,y)=>city.world.getTile(Math.floor(x),Math.floor(y))===TILE_WATER;
-const free=v=>v.active&&!v.scrapped&&!v.worldFleetReserved&&!v.worldMigrationPending&&!v.driverId&&!v.transportCitizenId&&!v.mechanicId&&!v.paintJobId&&!v.serviceBodyId&&!v.policeRecoveryOfficerId&&!v.localTripCitizenId;
+const free=v=>v.active&&!v.scrapped&&!v.worldFleetReserved&&!v.worldMigrationPending&&!v.driverId&&!v.transportCitizenId&&!v.mechanicId&&!v.paintJobId&&!v.serviceBodyId&&!v.policeRecoveryOfficerId&&!v.localTripCitizenId&&!v.fishingCitizenId;
 export function boatAccessAccounts(city,person){return new Set([person.accountId,city.building?.(person.jobId)?.accountId,...(person.businessIds||[]).map(id=>city.building?.(id)?.accountId)].filter(Boolean));}
 const speed=(city,mode,boat,bike,point)=>mode==='sail'||mode==='pickup'?4*BOAT_CLASSES[boat.boatClass].speed:mode==='tow'?BOAT_TOW_RULES[boat.boatClass].speed/roadTravelCost(tileAt(city.world,Math.floor(point.x),Math.floor(point.y))):mode==='cycle'?(ROAD_TILES.has(tileAt(city.world,Math.floor(point.x),Math.floor(point.y)))?(bike.good==='bicicleta'?8:6.5):4)/roadTravelCost(tileAt(city.world,Math.floor(point.x),Math.floor(point.y))):4/roadTravelCost(tileAt(city.world,Math.floor(point.x),Math.floor(point.y)));
 export function boatRouteTime(city,start,path){

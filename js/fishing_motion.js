@@ -1,0 +1,3 @@
+// Active pose only: physical jobs, catches and equipment stay in graph snapshots.
+export function packFishing(citizens){const active=citizens.filter(c=>c.fishingPose),rows=new Float64Array(active.length*8);active.forEach((c,i)=>{const p=c.fishingPose;rows.set([c.id,+!!p.chair,+!!p.boat,p.water.x,p.water.y,+(p.salinity==='salt'),+(p.zone==='middle'),c.fishingCaughtAt??-1],i*8);});return rows;}
+export function applyFishing(city,rows){if(!rows)return;for(const c of city.citizens)c.fishingPose=null;for(let i=0;i<rows.length;i+=8){const c=city.society.citizen(rows[i]);if(c){c.fishingPose={chair:!!rows[i+1],boat:!!rows[i+2],water:{x:rows[i+3],y:rows[i+4]},salinity:rows[i+5]?'salt':'fresh',zone:rows[i+6]?'middle':'shore'};c.fishingCaughtAt=rows[i+7];}}}

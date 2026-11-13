@@ -1,3 +1,4 @@
+import {syncCityFishing} from './city_fishing_renderer.js';
 import {addGroundDisplayPost} from './city_display_supports.js';
 import {syncLampBatches} from './city_lamp_batches.js?v=lamp-batches-1';
 import {furnitureModel} from './city_furniture_models.js?v=no-beach-towels-1';
@@ -402,6 +403,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
   syncCampaignDecorations(renderer,THREE,entities,world);
   syncCityMobility(renderer,THREE,entities,world);
   syncCityWatercraft(renderer,THREE,renderer.cityDevelopment?.city,world);
+  syncCityFishing(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncSkybridges(renderer,THREE,entities,world);
   syncCardboardShelters(renderer,THREE,renderer.cityDevelopment?.city,world);
   syncCorpseVisuals(renderer,THREE,renderer.cityDevelopment?.city,world);

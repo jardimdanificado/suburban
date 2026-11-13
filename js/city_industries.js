@@ -1,6 +1,7 @@
+import {FISH_GOODS,FISH_SPECIES} from './fishing_catalog.js';
 import {SUBSTANCE_GOODS,SUBSTANCE_INDUSTRIES} from './city_substance_catalog.js';
 // Every batch reserves real inputs and requires paid, on-site work. Prices are cents.
-export const INDUSTRIAL_GOODS = {...SUBSTANCE_GOODS,...Object.fromEntries([
+export const INDUSTRIAL_GOODS = {...FISH_GOODS,...SUBSTANCE_GOODS,...Object.fromEntries([
   ['bandeiras','Bandeiras de tecido',2400],['faixas','Faixas de campanha',3600],['tinta','Tinta de fachada',1200],['cesta','Cesta de carga',1400],['carrinho','Carrinho de carga',4800],['porrete','Porrete de madeira',900],['barra_ferro','Bastão de ferro',2100],['faca','Faca de trabalho',1800],['garrucha','Garrucha artesanal',18000],['marmita','Marmita completa',850],['marmita_simples','Marmita de arroz e feijão',600],['marmita_rustica','Marmita da roça',750],['madeira','Madeira',180],['tabuas','Tábuas',520],['carvao','Carvão vegetal',450],['minerio','Minério de ferro',600],['ferro','Ferro',1600],['ferramentas','Ferramentas',4200],
   ['argila','Argila',120],['tijolos','Tijolos',650],['areia','Areia',180],['vidro','Vidro',1200],['moveis','Móveis',4200],['fibras','Fibras vegetais',150],['tecido','Tecido',650],['roupas','Roupas',1900],
   ['leite','Leite',200],['queijo','Queijo',750],['ovos','Ovos',180],['farinha','Farinha',320],['massa','Macarrão',700],['conserva','Conserva',600],['sabao','Sabão',1000],
@@ -13,6 +14,9 @@ export const INDUSTRIAL_GOODS = {...SUBSTANCE_GOODS,...Object.fromEntries([
 ].map(([id,label,price])=>[id,{label,price}]))};
 const industry = (label, inputs, outputs, labor, skill, impact, category='industry', use=null) => ({ label, inputs, outputs, labor, skill, impact, category, use, color: category==='food'?0xc6a363:category==='services'?0x87b7bc:0xa6a0ba, rent:90, price:80000, jobs:2 });
 export const INDUSTRIES = {
+  fishing_tackle:industry('Oficina de pesca',{madeira:1,fibras:2,ferro:1},{vara_pesca:2},18,'construction','Fabrica varas, linhas e anzóis com madeira, fibras e ferro.'),
+  fishery:industry('Colônia de pescadores',{vara_pesca:1,moveis:1},Object.fromEntries(Object.keys(FISH_SPECIES).map(g=>[g,1])),6,'fishing','Pesca presencial na margem ou em canoas. Espécies dependem da salinidade e da distância da margem.','food'),
+  fishmonger:industry('Peixaria',Object.fromEntries(Object.keys(FISH_SPECIES).map(g=>[g,1])),{file_peixe:2},8,'baking','Limpa e beneficia cada espécie capturada; fornece filés para restaurantes e cozinhas.','food'),
   ...Object.fromEntries(Object.entries(SUBSTANCE_INDUSTRIES).map(([id,args])=>[id,industry(...args)])),
   road_paving:industry('Empresa de asfaltamento',{}, {},1,'construction','Executa contratos municipais e privados de pavimentação com acabamento de asfalto.','services'),
   road_maintenance:industry('Manutenção de estradas',{}, {},1,'maintenance','Executa contratos de conservação e recuperação de vias desgastadas.','services'),
@@ -85,14 +89,16 @@ export const INDUSTRIES = {
   legal_office: industry('Escritório de advocacia',{}, {},1,'law','Atendimento jurídico particular e defesa criminal.','services'),
   bank: industry('Banco',{}, {},1,'commerce','Depósitos mantêm reserva integral; crédito usa somente capital próprio disponível.','services'),
 };
-export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva','marmita','marmita_simples','marmita_rustica'];
+export const INDUSTRIAL_FOODS = ['leite','queijo','ovos','massa','conserva','marmita','marmita_simples','marmita_rustica','marmita_peixe'];
 
 export const MEAL_COMPONENTS={
+  marmita_peixe:{quality:4,ingredients:{file_peixe:1,arroz:1,tomate:1}},
   marmita:{quality:4,ingredients:{feijao:2,arroz:2,alface:1,tomate:1}},
   marmita_simples:{quality:2,ingredients:{arroz:2,feijao:2}},
   marmita_rustica:{quality:3,ingredients:{mandioca:2,milho:2,tomate:1}},
 };
 export const KITCHEN_RECIPES=[
+  {good:'marmita_peixe',quantity:2,labor:16,inputs:MEAL_COMPONENTS.marmita_peixe.ingredients},
   {good:'marmita',quantity:3,labor:18,inputs:MEAL_COMPONENTS.marmita.ingredients},
   {good:'marmita_simples',quantity:2,labor:12,inputs:MEAL_COMPONENTS.marmita_simples.ingredients},
   {good:'marmita_rustica',quantity:2,labor:15,inputs:MEAL_COMPONENTS.marmita_rustica.ingredients},

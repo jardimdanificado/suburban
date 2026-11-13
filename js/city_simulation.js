@@ -1,3 +1,4 @@
+import {advanceFishing} from './city_fishing.js';
 import {advanceLocalBoatTrip,boatRouteTime} from './city_boat_towing.js';
 import {WATERFRONT_BUSINESSES,waterfrontBerth} from './waterfront_businesses.js';
 import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js?v=ff2-speed-1';
@@ -1090,7 +1091,7 @@ export class CitySimulation {
   }
 
   chooseTask(c, urgent=this.urgentNeed(c)) {
-    if(c.worldBoatCrew)return;
+    if(c.worldBoatCrew||c.fishingJob?.cancelled&&c.boatClass)return;
     const n = c.needs,profile=this._citizenLoopProfile,measure=profile&&((name,work)=>{const started=performance.now(),result=work();profile[`${name}Ms`]=(profile[`${name}Ms`]||0)+performance.now()-started;return result;});
     const home = this.building(this.units.get(c.homeUnitId)?.buildingId);
     const job = this.building(c.jobId);
@@ -1295,8 +1296,8 @@ export class CitySimulation {
       const isOwner = task === 'manage' && b.ownerId === c.id;
       const wage = b.wage + this.currency.price(Math.floor((c.skills[JOB_SKILL[b.type]] || 0) / 30));
       if (!isOwner && b.balance < wage) { this.payWage(c,b,wage); c.action = 'Empregador sem caixa'; c.task = null; return; }
-      if(b.constructionKind==='open-air'&&!['farm','quarry','iron_mine','bauxite_mine','forestry'].includes(b.type)){const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cell=cells[c.id%Math.max(1,cells.length)];if(cell&&!outdoorCellReady(this,c,b,cell))return;}
-      const recipe=INDUSTRIES[b.type],dynamicRecipe=['artisan','composting','flagmaker','newsroom','publisher','tobacco_workshop','toolmaker'].includes(b.type)?null:recipe;
+      if(b.constructionKind==='open-air'&&!['farm','quarry','iron_mine','bauxite_mine','forestry','fishery'].includes(b.type)){const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),cell=cells[c.id%Math.max(1,cells.length)];if(cell&&!outdoorCellReady(this,c,b,cell))return;}
+      const recipe=INDUSTRIES[b.type],dynamicRecipe=['artisan','composting','flagmaker','newsroom','publisher','tobacco_workshop','toolmaker','fishery','fishmonger'].includes(b.type)?null:recipe;
       const recipeGoods=dynamicRecipe?[...Object.keys(dynamicRecipe.inputs||{}),...Object.keys(dynamicRecipe.outputs||{})]:[];
       const productionSignature=dynamicRecipe?`${b.id}:${b.active}:${b.inventoryCapacity}:${inventoryFree(b)}:${recipeGoods.sort().map(g=>`${g}:${b.inventory[g]||0}:${b.incoming[g]||0}`).join('|')}`:null;
       const productionBlocked=!!dynamicRecipe&&(
@@ -1316,7 +1317,7 @@ export class CitySimulation {
       // route instead of replacing it with a trip to the waiting area.
       if(!productive&&(c.path.length||c.indoorLocation?.path?.length||c.indoorLocation?.exiting))return;
       if(!productive&&b.type!=='farm'&&b.type!=='forestry'&&Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)>30){this.furniture.waitForInputs(c,b,'Aguardando matéria-prima ou serviço');return;}
-      if(b.type==='forestry'&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
+      if(['forestry','fishery'].includes(b.type)&&productive){if(Math.min(n.food,n.water,n.energy,n.toilet,n.hygiene,n.health)<22){c.task=null;c.path=[];}return;}
       c.action = b.type==='boat_workshop'&&c.mechanicJob?'Reparando embarcação atracada na oficina':b.type==='cycle_workshop'&&c.mechanicJob?'Reparando veículo no local com peças transportadas':c.id === this.economy.mayorId ? 'Administrando a prefeitura' : isOwner ? `Trabalhando na própria empresa sem salário · ${b.entity.properties.name}` : productive ? `Trabalhando: ${JOB_SKILL[b.type]}` : b.type === 'farm' ? 'Aguardando crescimento da plantação' : 'Aguardando matéria-prima';
       if (Math.min(n.food, n.water, n.energy, n.toilet, n.hygiene, n.health) < 22) c.task = null;
       return;
@@ -1640,7 +1641,7 @@ export class CitySimulation {
     if(societyParts)societyParts.socialUpdateMs=performance.now()-societyPartStart;
     const societyMs=performance.now()-profileMark;profileMark=performance.now();
     const movers=this._movingCitizens??=[];movers.length=0;
-    for(const c of this.citizens)if(c.path.length||c.indoorLocation?.path?.length||c.deliveryId||c.ridingVehicleId)movers.push(c);
+    for(const c of this.citizens)if(c.path.length||c.indoorLocation?.path?.length||c.deliveryId||c.ridingVehicleId||c.fishingJob)movers.push(c);
     const moverSetupMs=performance.now()-profileMark;profileMark=performance.now();
     // Spread hourly work across minutes; keep the same order and one run per hour.
     if (this.minute % 60 === 0) this.hourlyPhase = 0;
@@ -1684,6 +1685,7 @@ export class CitySimulation {
     }
     const movementSetupMs=performance.now()-profileMark;profileMark=performance.now();
     for (const c of movers) {
+      if(advanceFishing(this,c,dt))continue;
       if(!c.indoorLocation&&advanceLocalBoatTrip(this,c,dt))continue;
       if(c.ridingVehicleId)continue;
       if(c.indoorLocation){advanceCitizenInterior(this,c,dt*(this.society.isAdult(c)?4:2.5));continue;}
@@ -1732,10 +1734,11 @@ export class CitySimulation {
   goodsStock(good) {
     const campaignCarried=this.citizens.reduce((n,c)=>n+(c.campaignInventory?.[good]||0),0);
     const pocketGoods=this.supplies.carriedGoods(good);
+    const fishingCarried=this.citizens.reduce((n,c)=>n+(c.fishingCatch?.goods?.[good]||0)+(good==='vara_pesca'&&c.fishingRod?1:0)+(good==='moveis'&&c.fishingChair?1:0),0);
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     let printed=0;if(['livros','panfletos','jornais'].includes(good)){const matched=new Map();for(const doc of this.publications.documents.values()){if(doc.lost||doc.good!==good)continue;const holder=this.publications.inventoryHolder(doc.ownerAccountId),count=matched.get(doc.ownerAccountId)||0,represented=holder?.inventory?.[good]||0;if(count>=represented)printed++;matched.set(doc.ownerAccountId,count+1);}}
-    return this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0)+(c.substanceHomeStock?.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),this.worldPort,...(this.economy.importDepot?[this.economy.importDepot]:[]),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0)+(c.substanceHomeStock?.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+fishingCarried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),this.worldPort,...(this.economy.importDepot?[this.economy.importDepot]:[]),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

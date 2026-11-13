@@ -36,6 +36,7 @@ export function citizenAnimation(c,moving=false){
     return GLIDE_KINDS.has(c.ridingVehicleKind)?'glide':'passenger';
   }
   if(moving)return 'run';
+  if(c.fishingPose)return c.fishingPose.chair||c.fishingPose.boat?'sentado_no_banco':'sentado_no_chao';
   if(c.combatReaction)return 'derrotado';
   if(c.combatAnimation?.clip)return c.combatAnimation.clip;
   if(citizenIsSleeping(c))return 'dormindo';
@@ -422,6 +423,7 @@ export class CityCitizenModels {
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!this.animationPaused)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
     if(c.ridingVehicleId&&Number.isFinite(vehicleAngle))motion.angle=vehicleAngle+(c.ridingAsPassenger?Math.PI/2:0);
+    if(c.fishingPose)motion.angle=Math.atan2(c.fishingPose.water.x-x,c.fishingPose.water.y-y);
     let renderX=x,renderY=y,renderAngle=motion.angle;
     // Vehicle entities already receive bridge interpolation; smoothing riders
     // a second time leaves them visibly trailing their vehicle.
