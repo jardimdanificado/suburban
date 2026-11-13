@@ -1,4 +1,4 @@
-import {TERRAIN_TRACK_GLSL,GRASS_TRACK_HOLD,GRASS_TRACK_LIFE} from './terrain_tracks.js?v=contact-atlas-2';
+import {TERRAIN_TRACK_GLSL,GRASS_TRACK_HOLD,GRASS_TRACK_LIFE} from './terrain_tracks.js?v=sand-carry-1';
 // Dense, rooted blade geometry. The terrain stays still; only leaf tips bend.
 const BLADES_PER_AXIS = 10;
 function hash(x, z, salt = 0) {
@@ -41,9 +41,9 @@ export function grassRoots(positions, colors, excludedCells = new Set()) {
   return {roots: new Float32Array(roots), shapes: new Float32Array(shapes), shades: new Float32Array(shades)};
 }
 
-export function createVolumetricGrassMaterial(THREE, base, time, tracks = null) {
+export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, {details = false} = {}) {
   const material = new THREE.MeshStandardMaterial({
-    color: base?.color?.clone().multiplyScalar(.82) ?? 0x4b6832,
+    color: details ? 0xffffff : base?.color?.clone().multiplyScalar(.82) ?? 0x4b6832,
     map: base?.map ?? null, roughness: 1, metalness: 0,
     side: THREE.DoubleSide, transparent: false, depthWrite: true,
   });
@@ -55,9 +55,11 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null) 
       attribute vec3 grassRoot;
       attribute vec4 grassShape;
       attribute float grassShade;
+      ${details ? "attribute vec3 detailColor;" : ""}
       uniform float grassSimTick;
       varying float vBladeHeight;
       varying float vBladeShade;
+      ${details ? "varying vec3 vDetailColor;" : ""}
       ${tracks ? "varying vec2 vBladeWorld;" : ""}
     `).replace('#include <uv_vertex>', `#include <uv_vertex>
       #ifdef USE_MAP
@@ -75,11 +77,12 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null) 
       float bend = h;
       vec2 wind = vec2(.75, .35) * sin(windEpoch * .68 + grassShape.w) * .018;
       transformed = grassRoot + vec3(
-        across.x * position.x * grassShape.z + forward.x * bend * .065 + wind.x * bend,
+        across.x * position.x * grassShape.z + forward.x * (bend * .065 + position.z * grassShape.z) + wind.x * bend,
         h * grassShape.y,
-        across.y * position.x * grassShape.z + forward.y * bend * .065 + wind.y * bend);
+        across.y * position.x * grassShape.z + forward.y * (bend * .065 + position.z * grassShape.z) + wind.y * bend);
       ${tracks ? `float recovery = 1.0 - terrainTrackStrength(grassRoot.xz, ${GRASS_TRACK_HOLD.toFixed(1)}, ${GRASS_TRACK_LIFE.toFixed(1)});
       transformed = grassRoot + (transformed - grassRoot) * recovery;` : ""}
+      ${details ? "vDetailColor = h > .72 ? detailColor : vec3(.23,.38,.10);" : ""}
       vBladeHeight = h;
       vBladeShade = grassShade;
       ${tracks ? "vBladeWorld = (modelMatrix * vec4(transformed, 1.0)).xz;" : ""}
@@ -90,15 +93,16 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null) 
       ${tracks ? TERRAIN_TRACK_GLSL : ""}
       varying float vBladeHeight;
       varying float vBladeShade;
+      ${details ? "varying vec3 vDetailColor;" : ""}
       ${tracks ? "varying vec2 vBladeWorld;" : ""}
     `).replace('#include <color_fragment>', `#include <color_fragment>
       ${tracks ? `if (terrainTrackStrength(vBladeWorld, ${GRASS_TRACK_HOLD.toFixed(1)}, ${GRASS_TRACK_LIFE.toFixed(1)}) > .98) discard;` : ""}
-      diffuseColor.rgb *= vBladeShade * mix(vec3(.59, .68, .45), vec3(1.12, 1.10, .92), vBladeHeight);
+      ${details ? "diffuseColor.rgb *= vDetailColor * vBladeShade;" : "diffuseColor.rgb *= vBladeShade * mix(vec3(.59, .68, .45), vec3(1.12, 1.10, .92), vBladeHeight);"}
     `).replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
       normal = normalize(vNormal);
     `);
   };
-  material.customProgramCacheKey = () => `angular-grass-canopy-ticks-v1-tracks-${!!tracks}`;
+  material.customProgramCacheKey = () => `angular-grass-canopy-ticks-v2-details-${details}-tracks-${!!tracks}`;
   return material;
 }
 

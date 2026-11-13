@@ -1,8 +1,10 @@
-import {addShoreFoamShader} from './water_foam.js?v=shore-surge-1';
+import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
+import {createGrassDetailsMesh} from './grass_details.js?v=meadow-accents-1';
+import {addShoreFoamShader,shoreFoamSurface} from './water_foam.js?v=raised-surge-2';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=sand-carry-1';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature} from './city_site_footprints.js?v=all-built-footprints-1';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=angular-canopy-ticks-1';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=meadow-accents-1';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -187,7 +189,7 @@ const DAY_NIGHT_KEYFRAMES = [
 
 const STATIC_FOLIAGE_KEYS = [
   'oakLeaves', 'pineLeaves', 'cherryLeaves', 'birchLeaves',
-  'mapleLeaves', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseFlowers', 'grassFoliage'
+  'mapleLeaves', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseLeaves', 'roseFlowers', 'grassFoliage'
 ];
 const TROPICAL_CANOPY_COLORS = {flamboyant:0xd46b38,sea_grape:0x557b3c,tropical_almond:0x71934c,mangrove:0x416f45,banana:0x4b8e3a,mango:0x6c9a43,guava:0x7b9d50,jackfruit:0x39764b,breadfruit:0x54864b,papaya:0x82a44d,avocado:0x466f3d,tamarind:0x8a9e5a,cacao:0x376e49,soursop:0x498153,ackee:0x71994a,lime:0x8ca442,allspice:0x527848,monstera:0x326c44,guaimbe:0x4b8150,pau_brasil:0x658348,yellow_ipe:0x78964a,quaresmeira:0x61804a,manaca_serra:0x69894d,sibipiruna:0x718b46,pau_ferro:0x527846,pitanga:0x4b7c3e,jabuticaba:0x486f3e,frangipani:0x76954b,clusia:0x4b7844};
 const TROPICAL_CANOPY_ASPECT = {banana:[.82,1.18,.82],papaya:[.7,.82,.7],cacao:[.82,1.1,.82],guava:[.9,1.05,.9],mango:[1.16,.92,1.12],jackfruit:[1.13,1.02,1.13],breadfruit:[1.12,.94,1.12],soursop:[1.05,1,1.05],ackee:[.94,1.06,.94],lime:[.96,1,.96],tamarind:[1.2,.9,1.08],allspice:[.92,1.08,.92],monstera:[1.22,.78,1.22],guaimbe:[1.32,.88,1.15],pau_brasil:[1.12,1.03,1.12],yellow_ipe:[1.18,1,1.18],quaresmeira:[1.1,1.04,1.1],manaca_serra:[1.08,1,1.08],sibipiruna:[1.2,.96,1.2],pau_ferro:[1.06,1.08,1.06],pitanga:[.92,1.08,.92],jabuticaba:[1.04,1.08,1.04],frangipani:[1.04,.94,1.04],clusia:[1.12,.95,1.12]};
@@ -1264,27 +1266,11 @@ function createBerryBushOrnamentsGeometry() {
 }
 
 function createRoseBushLeavesGeometry() {
-  const d = new THREE.DodecahedronGeometry(0.42);
-  d.scale(1.15, 0.95, 1.15);
-  d.translate(0, 0.32, 0);
-  return d;
+  return floweringShrubLeavesGeometry(THREE);
 }
 
 function createRoseBushFlowersGeometry() {
-  const geos = [];
-  const flowerPositions = [
-    [-0.15, 0.48, 0.12],
-    [0.15, 0.52, -0.08],
-    [0.0, 0.58, 0.10],
-    [-0.22, 0.38, -0.12],
-    [0.20, 0.40, 0.15]
-  ];
-  for (const [fx, fy, fz] of flowerPositions) {
-    const f = new THREE.DodecahedronGeometry(0.08);
-    f.translate(fx, fy, fz);
-    geos.push(f);
-  }
-  return mergeBufferGeometries(geos);
+  return floweringShrubFlowersGeometry(THREE);
 }
 
 function createNaturalGrassGeometry() {
@@ -3907,6 +3893,8 @@ export class RCT3DRenderer {
     this.scene.add(this.infiniteSea);
     const normSand = generateProceduralTerrainNormalMap("sand", 0.72);
     const normOak = generateProceduralFoliageNormalMap("oak", 1.0);
+    const shrubLeaves=floweringShrubSurfaceTextures(THREE);
+    const shrubBracts=floweringShrubSurfaceTextures(THREE,true);
     const normPine = generateProceduralFoliageNormalMap("pine", 1.0);
     const normCactus = generateProceduralFoliageNormalMap("cactus", 1.0);
     const normStoneB = createNormalMapFromTexture("Feature_Stone_B.png", 2.6);
@@ -4024,7 +4012,8 @@ export class RCT3DRenderer {
       mapleLeaves: makeMat(normalMapsEnabled, { color: 0xdc4820, dithering: true }, normOak, 1.2, 0.65, 0.02),
       bushLeaves: makeMat(normalMapsEnabled, { color: 0x2e6c26, dithering: true }, normOak, 1.2, 0.65, 0.02),
       bushBerries: makeMat(normalMapsEnabled, { color: 0xd62246, dithering: true }, normOak, 1.0, 0.50, 0.02),
-      roseFlowers: makeMat(normalMapsEnabled, { color: 0xffffff, dithering: true }, normOak, 1.0, 0.50, 0.02),
+      roseLeaves: makeMat(normalMapsEnabled, { map:shrubLeaves.map,color:0x55923a,dithering:true,side:THREE.DoubleSide },shrubLeaves.normalMap,.85,.88,0),
+      roseFlowers: makeMat(normalMapsEnabled, { map:shrubBracts.map,color:0xffffff,dithering:true,side:THREE.DoubleSide },shrubBracts.normalMap,.65,.90,0),
       houseWall: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Brick_B.png", 0xfffaea, 0x8a6242, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
       houseRoof: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Brick_C.png", 0xff6238, 0x941e0a, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickC, 0.4, 0.45, 0.08),
       woodHouseWall: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Brick_B.png", 0xc89858, 0x482c18, 1.0), dithering: true, side: THREE.DoubleSide }, normBrickB, 0.4, 0.60, 0.05),
@@ -4230,6 +4219,7 @@ export class RCT3DRenderer {
       applyWindFoliageShader(dict.cactus, 0.020);
       applyWindFoliageShader(dict.bushLeaves, 0.035);
       applyWindFoliageShader(dict.bushBerries, 0.035);
+      applyWindFoliageShader(dict.roseLeaves, 0.035);
       applyWindFoliageShader(dict.roseFlowers, 0.035);
       applyWindFoliageShader(dict.grassFoliage, 0.07, 0);
     }
@@ -4245,9 +4235,11 @@ export class RCT3DRenderer {
       for(const [key,material] of Object.entries(dict)){
         if(/terrain(Rock|Mountain|Peak|DirtRoad|PavedRoad|Sidewalk)/.test(key)||key==='farmSoil'||[TILE_STONE,TILE_MOUNTAIN,TILE_PEAK,TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE].includes(Number(key)))addSandDepositsToMaterial(material,this.terrainTrackUniforms);
       }
+      dict.grassDetails = createVolumetricGrassMaterial(THREE,null,this.grassWindTickUniform,this.terrainTrackUniforms,{details:true});
       dict.volumetricGrass = createVolumetricGrassMaterial(THREE, dict[TILE_FLOOR], this.grassWindTickUniform,this.terrainTrackUniforms);
       dict.volumetricHillGrass = createVolumetricGrassMaterial(THREE, dict[TILE_HILL], this.grassWindTickUniform,this.terrainTrackUniforms);
     }
+    this.materials.grassDetails = this.materialsIso.grassDetails;
     this.materials.volumetricGrass = this.materialsIso.volumetricGrass;
     this.materials.volumetricHillGrass = this.materialsIso.volumetricHillGrass;
 
@@ -4384,7 +4376,7 @@ export class RCT3DRenderer {
 
     // Rose Bushes (Arbusto Florido)
     const roseBushGeo = createRoseBushLeavesGeometry();
-    this.instRoseBushes = new THREE.InstancedMesh(roseBushGeo, this.materials.bushLeaves, this.maxInstances);
+    this.instRoseBushes = new THREE.InstancedMesh(roseBushGeo, this.materials.roseLeaves, this.maxInstances);
     this.instRoseBushes.castShadow = true;
     this.instRoseBushes.receiveShadow = true;
 
@@ -5449,6 +5441,8 @@ export class RCT3DRenderer {
     if (this.instBirchLeaves && activeDict.birchLeaves) this.instBirchLeaves.material = activeDict.birchLeaves;
     if (this.instMapleTrunks && activeDict.mapleTrunk) this.instMapleTrunks.material = activeDict.mapleTrunk;
     if (this.instMapleLeaves && activeDict.mapleLeaves) this.instMapleLeaves.material = activeDict.mapleLeaves;
+    if (this.instRoseBushes && activeDict.roseLeaves) this.instRoseBushes.material = activeDict.roseLeaves;
+    if (this.instRoseFlowers && activeDict.roseFlowers) this.instRoseFlowers.material = activeDict.roseFlowers;
     if (this.instCacti && activeDict.cactus) this.instCacti.material = activeDict.cactus;
     if (this.instCampfireFlames && activeDict.campfireFlames) this.instCampfireFlames.material = activeDict.campfireFlames;
     if (this.instTorchFlames && activeDict.torchFlames) this.instTorchFlames.material = activeDict.torchFlames;
@@ -6775,7 +6769,7 @@ export class RCT3DRenderer {
       const rgb=[(color>>16&255)/255,(color>>8&255)/255,(color&255)/255],half=.055,baseY=center[1]-.045,apex=[center[0],center[1]+.055,center[2]],corners=[[center[0]-half,baseY,center[2]-half],[center[0]+half,baseY,center[2]-half],[center[0]+half,baseY,center[2]+half],[center[0]-half,baseY,center[2]+half]];
       for(let i=0;i<4;i++)for(const p of [corners[i],corners[(i+1)%4],apex]){roadRailingBucket.pos.push(...p);roadRailingBucket.colors.push(...rgb);}
     };
-    const waterFoamBucket = { pos: [], uvs: [], colors: [] };
+    const waterFoamBucket = { pos: [], uvs: [], colors: [], inward: [] };
     for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','SidewalkTree','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
     }
@@ -6814,31 +6808,12 @@ export class RCT3DRenderer {
       }
       return landTouches * 0.15;
     };
-    const addWaterFoamEdge = (tx, ty, side, sideIndex) => {
-      let seed = terrainTextureHash(tx, ty, TILE_WATER + sideIndex + 1);
-      const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 0xffffffff; };
-      const point = (along, inward) => {
-        if (side === 0) return [tx + along, ty + inward];
-        if (side === 1) return [tx + along, ty + 1 - inward];
-        if (side === 2) return [tx + inward, ty + along];
-        return [tx + 1 - inward, ty + along];
-      };
-      const samples = Array.from({length:5},(_,i)=>({
-        t:i/4,
-        shoreInset:0.012+random()*0.024,
-        foamWidth:0.36
-      }));
-      for (let segment = 0; segment < 4; segment++) {
-        const start=samples[segment],end=samples[segment+1];
-        const a=point(start.t,start.shoreInset),b=point(end.t,end.shoreInset);
-        const c=point(end.t,end.foamWidth),d=point(start.t,start.foamWidth);
-        for (const [p, color] of [[a,[1,1,0.94]],[d,[0.77,0.99,0.91]],[c,[0.84,1,0.94]],[a,[1,1,0.94]],[c,[0.84,1,0.94]],[b,[1,1,0.94]]]) {
-          waterFoamBucket.pos.push(p[0], 0.085, p[1]);
-          const inward=side===0?p[1]-ty:side===1?ty+1-p[1]:side===2?p[0]-tx:tx+1-p[0];
-          waterFoamBucket.uvs.push(side<2?p[0]:p[1],inward/.36);
-          waterFoamBucket.colors.push(...color);
-        }
-      }
+    const addWaterFoamEdge = (tx, ty, side) => {
+      const foam=shoreFoamSurface(tx,ty,side);
+      waterFoamBucket.pos.push(...foam.positions);
+      waterFoamBucket.uvs.push(...foam.uvs);
+      waterFoamBucket.inward.push(...foam.inward);
+      for(let i=0;i<foam.positions.length/3;i++)waterFoamBucket.colors.push(1,1,.97);
     };
 
     for (let ty = clampedMinTy; ty <= clampedMaxTy; ty++) {
@@ -7236,7 +7211,10 @@ export class RCT3DRenderer {
         chunk.terrain.add(mesh);
         if (matKey === String(TILE_FLOOR) || matKey === String(TILE_HILL)) {
           const materialKey=matKey===String(TILE_HILL)?'volumetricHillGrass':'volumetricGrass';
-          chunk.terrain.add(createVolumetricGrassMesh(THREE, geom, this.materials[materialKey], {excludedCells:this._grassExclusionCells,materialKey}));
+          const grass=createVolumetricGrassMesh(THREE, geom, this.materials[materialKey], {excludedCells:this._grassExclusionCells,materialKey});
+          chunk.terrain.add(grass);
+          const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);
+          if(details)chunk.terrain.add(details);
         }
       }
     }
@@ -7284,6 +7262,7 @@ export class RCT3DRenderer {
       const foamGeometry = new THREE.BufferGeometry();
       foamGeometry.setAttribute("position", new THREE.Float32BufferAttribute(waterFoamBucket.pos, 3));
       foamGeometry.setAttribute("uv", new THREE.Float32BufferAttribute(waterFoamBucket.uvs, 2));
+      foamGeometry.setAttribute("foamInward", new THREE.Float32BufferAttribute(waterFoamBucket.inward, 2));
       foamGeometry.setAttribute("color", new THREE.Float32BufferAttribute(waterFoamBucket.colors, 3));
       foamGeometry.computeVertexNormals();
       const foamMesh = new THREE.Mesh(foamGeometry, this.materials.waterFoam);
