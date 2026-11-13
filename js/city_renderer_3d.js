@@ -1,4 +1,4 @@
-import {cardboardFootprint} from './cardboard_grass.js';
+import {cardboardFootprint} from './cardboard_grass.js?v=local-mask-2';
 import {syncCityFishing} from './city_fishing_renderer.js';
 import {addGroundDisplayPost} from './city_display_supports.js';
 import {syncLampBatches} from './city_lamp_batches.js?v=lamp-batches-1';

@@ -1,4 +1,4 @@
-import {syncCardboardGrass} from './cardboard_grass.js';
+import {syncCardboardGrass} from './cardboard_grass.js?v=local-mask-2';
 import {setWaterGeometryCacheEnabled} from './water_geometry_cache.js?v=terrain-revision-2';
 import {GrassRootJobs} from './grass_root_jobs.js?v=frame-budget-9';
 import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-4';
@@ -31,7 +31,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=cardboard-cutout-2";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=local-cardboard-3";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
@@ -7329,22 +7329,26 @@ export class RCT3DRenderer {
       }
     }
 
-    // Sample colors at tile centers so adjacent chunks share the same blend.
+    // Cache the tile colors once; roots only interpolate four numeric samples.
+    // This keeps blending continuous without allocating arrays per blade.
     const tintGrass=mesh=>{
       const roots=mesh.geometry.getAttribute('grassRoot'),tints=mesh.geometry.getAttribute('grassTint');
-      const base=mesh.material.color;
+      const base=mesh.material.color,width=maxTx-minTx+3,height=maxTy-minTy+3;
+      const colors=new Float64Array(width*height*3);
+      const fallbackR=base.r/.82,fallbackG=base.g/.82,fallbackB=base.b/.82;
+      for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+        const tile=world.getTile(minTx-1+x,minTy-1+y);
+        const tint=(tile===TILE_FLOOR||tile===TILE_HILL)?this.materials[tile].color:null,offset=(y*width+x)*3;
+        colors[offset]=tint?tint.r:fallbackR;colors[offset+1]=tint?tint.g:fallbackG;colors[offset+2]=tint?tint.b:fallbackB;
+      }
       for(let i=0;i<roots.count;i++){
-        const x=roots.getX(i)-.5,z=roots.getZ(i)-.5,tx=Math.floor(x),tz=Math.floor(z);
-        const u=x-tx,v=z-tz,smooth=t=>t*t*(3-2*t),a=smooth(u),b=smooth(v);
-        const color=[0,0,0];
-        for(const [dx,dz,weight]of [[0,0,(1-a)*(1-b)],[1,0,a*(1-b)],[0,1,(1-a)*b],[1,1,a*b]]){
-          const tile=world.getTile(tx+dx,tz+dz);
-          const tint=(tile===TILE_FLOOR||tile===TILE_HILL)?this.materials[tile].color:null;
-          color[0]+=(tint?tint.r:base.r/.82)*weight;
-          color[1]+=(tint?tint.g:base.g/.82)*weight;
-          color[2]+=(tint?tint.b:base.b/.82)*weight;
-        }
-        tints.setXYZ(i,color[0]*.82/base.r,color[1]*.82/base.g,color[2]*.82/base.b);
+        const x=roots.getX(i)-.5,z=roots.getZ(i)-.5,tx=Math.floor(x),tz=Math.floor(z),u=x-tx,v=z-tz;
+        const a=u*u*(3-2*u),b=v*v*(3-2*v),w00=(1-a)*(1-b),w10=a*(1-b),w01=(1-a)*b,w11=a*b;
+        const p00=((tz-minTy+1)*width+tx-minTx+1)*3,p10=p00+3,p01=p00+width*3,p11=p01+3;
+        tints.setXYZ(i,
+          (colors[p00]*w00+colors[p10]*w10+colors[p01]*w01+colors[p11]*w11)*.82/base.r,
+          (colors[p00+1]*w00+colors[p10+1]*w10+colors[p01+1]*w01+colors[p11+1]*w11)*.82/base.g,
+          (colors[p00+2]*w00+colors[p10+2]*w10+colors[p01+2]*w01+colors[p11+2]*w11)*.82/base.b);
       }
       tints.needsUpdate=true;
     };
