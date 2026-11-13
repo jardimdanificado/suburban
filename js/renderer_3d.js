@@ -1,6 +1,7 @@
+import {beginTerrainFade,finishTerrainFade,advanceTerrainFades} from './terrain_quality_fade.js';
 import {syncCardboardGrass} from './cardboard_grass.js?v=local-mask-2';
 import {setWaterGeometryCacheEnabled} from './water_geometry_cache.js?v=terrain-revision-2';
-import {GrassRootJobs} from './grass_root_jobs.js?v=frame-budget-9';
+import {GrassRootJobs} from './grass_root_jobs.js?v=visible-priority-10';
 import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-4';
 import {sandNormalField,sandSurfaceNormalSteps,addSandWetnessShader} from './sand_surface_lighting.js?v=camera-budget-5';
 import {WATER_LEVEL,WATER_WAVE_GLSL} from './water_surface.js?v=shore-runup-2';
@@ -5512,9 +5513,12 @@ export class RCT3DRenderer {
     this.invalidateTerrainAt(NaN, NaN);
   }
 
+  beginTerrainTransition(old,next){return beginTerrainFade(this,old,next);}
+
   disposeTerrainChunk(chunk) {
     if (!chunk) return;
     chunk.disposed=true;
+    finishTerrainFade(this,chunk._terrainFade);
     for (const group of [chunk.terrain, chunk.water, chunk.grid]) {
       if (!group) continue;
       for (const object of [...group.children]) {
@@ -6704,7 +6708,7 @@ export class RCT3DRenderer {
       const chunkSignature = `${signature}|c${chunkDetailBand}|grass:${this._grassChunkSignatures.get(key)||''}|r${this._terrainChunkVersions?.get(key)||0}`;
       let chunk = this.terrainChunks.get(key);
       if(!chunk||chunk.signature!==chunkSignature){
-        if(!isVisible)continue;
+        if(!isVisible&&(this.terrainOptimizationsEnabled===false||typeof this.buildTerrainChunkSteps!=='function'))continue;
         if(this.terrainOptimizationsEnabled===false||typeof this.buildTerrainChunkSteps!=='function'){
           if(chunk)this.disposeTerrainChunk(chunk);
           chunk=this.buildTerrainChunk(world,cx*chunkSize,Math.min(this.mapWidth-1,(cx+1)*chunkSize-1),cy*chunkSize,Math.min(this.mapHeight-1,(cy+1)*chunkSize-1),visionTarget,chunkSignature,chunkDetailBand,visible);
@@ -6713,9 +6717,10 @@ export class RCT3DRenderer {
           const jobs=this._terrainBuildJobs??=new Map(),pending=jobs.get(key);
           if(pending&&(pending.signature!==chunkSignature||pending.world!==world))this.cancelTerrainBuild(key);
           if(!jobs.has(key))jobs.set(key,{key,world,signature:chunkSignature,steps:this.buildTerrainChunkSteps(world,cx*chunkSize,Math.min(this.mapWidth-1,(cx+1)*chunkSize-1),cy*chunkSize,Math.min(this.mapHeight-1,(cy+1)*chunkSize-1),visionTarget,chunkSignature,chunkDetailBand,visible)});
-          if(!chunk){chunk=this.buildTerrainPlaceholder(world,cx*chunkSize,Math.min(this.mapWidth-1,(cx+1)*chunkSize-1),cy*chunkSize,Math.min(this.mapHeight-1,(cy+1)*chunkSize-1));this.terrainChunks.set(key,chunk);}
+          if(!chunk&&isVisible){chunk=this.buildTerrainPlaceholder(world,cx*chunkSize,Math.min(this.mapWidth-1,(cx+1)*chunkSize-1),cy*chunkSize,Math.min(this.mapHeight-1,(cy+1)*chunkSize-1));this.terrainChunks.set(key,chunk);}
         }
       }
+      if(!chunk)continue;
       chunk.lastUsed = performance.now();
       if (isVisible) {
         if (!chunk.terrain.parent) this.terrainGroup.add(chunk.terrain);
@@ -6724,6 +6729,7 @@ export class RCT3DRenderer {
         if (!gridEnabled && chunk.grid.parent) this.rctGridLineGroup.remove(chunk.grid);
       }
     }
+    this._terrainPrefetchKeys=build;
     this.advanceTerrainBuilds?.(world,visible,gridEnabled,4);
     for (const key of this.visibleTerrainChunkKeys) {
       if (visible.has(key)) continue;
@@ -6755,22 +6761,27 @@ export class RCT3DRenderer {
   advanceTerrainBuilds(world,visible,gridEnabled,budgetMs=4){
     const jobs=this._terrainBuildJobs;if(!jobs?.size)return;
     const deadline=performance.now()+budgetMs;
-    for(const [key,job]of jobs)if(job.world!==world||!visible.has(key))this.cancelTerrainBuild(key);
+    for(const [key,job]of jobs)if(job.world!==world||!visible.has(key)&&!this._terrainPrefetchKeys?.has(key))this.cancelTerrainBuild(key);
     const ordered=[...jobs].sort((a,b)=>{
       const distance=entry=>{const [x,y]=entry[0].split(',').map(Number),size=this.terrainChunkSize||16;return (x*size+size/2-this.camX)**2+(y*size+size/2-this.camY)**2;};
-      return distance(a)-distance(b);
+      return Number(visible.has(b[0]))-Number(visible.has(a[0]))||distance(a)-distance(b);
     });
     for(const [key,job]of ordered){
+      // Waiting for visible grass is still foreground work. Do not spend its
+      // frame budget constructing or queuing more off-screen grass.
+      if(!visible.has(key)&&[...jobs.keys()].some(pending=>visible.has(pending)))break;
       while(performance.now()<deadline){
         const step=job.steps.next();
         if(step.value?.terrain)job.partial=step.value;
         if(step.value?.waitingForRoots)break;
         if(!step.done)continue;
         const chunk=step.value,old=this.terrainChunks.get(key);
-        if(old)this.disposeTerrainChunk(old);
+        if(old&&!this.beginTerrainTransition?.(old,chunk))this.disposeTerrainChunk(old);
         this.terrainChunks.set(key,chunk);chunk.lastUsed=performance.now();jobs.delete(key);
-        this.terrainGroup.add(chunk.terrain);this.waterGroup.add(chunk.water);
-        if(gridEnabled&&chunk.grid.children.length)this.rctGridLineGroup.add(chunk.grid);
+        if(visible.has(key)){
+          this.terrainGroup.add(chunk.terrain);this.waterGroup.add(chunk.water);
+          if(gridEnabled&&chunk.grid.children.length)this.rctGridLineGroup.add(chunk.grid);
+        }
         break;
       }
       if(performance.now()>=deadline)break;
@@ -7401,7 +7412,8 @@ export class RCT3DRenderer {
             if(zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);if(details)chunk.terrain.add(details);}
           };
           const rootKey=`${minTx},${maxTx},${minTy},${maxTy}:${materialKey}:${signature}`;
-          const ready=jobs.request(world,rootKey,geom,this._grassExclusionCells,zoomDetail.grassAxis,()=>!chunk.disposed,install);
+          const rootChunkKey=`${Math.floor(minTx/this.terrainChunkSize)},${Math.floor(minTy/this.terrainChunkSize)}`;
+          const ready=jobs.request(world,rootKey,geom,this._grassExclusionCells,zoomDetail.grassAxis,()=>!chunk.disposed,install,()=>this.visibleTerrainChunkKeys.has(rootChunkKey)?1:0);
           if(!ready)chunk.pendingRoots=(chunk.pendingRoots||0)+1;
           grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis,rootData:ready??emptyRoots});
           tintGrass(grass);chunk.terrain.add(grass);
@@ -7748,8 +7760,12 @@ export class RCT3DRenderer {
       setWaterGeometryCacheEnabled(world,optimized);
       this._terrainCacheWorld=world;this._terrainCacheEnabled=optimized;
     }
+    advanceTerrainFades(this);
+    const terrainPreparationStart=performance.now();
     this.rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionCreature);
-    this.grassRootJobs?.advance(3);
+    // Share the existing 4 ms terrain + 3 ms roots allowance. When terrain is
+    // waiting on roots, its unused time helps finish visible lawns sooner.
+    this.grassRootJobs?.advance(Math.max(.5,7-(performance.now()-terrainPreparationStart)));
     this.syncWaterPollution(world);
     const profileTerrain = this.profileFrame ? performance.now() : 0;
 

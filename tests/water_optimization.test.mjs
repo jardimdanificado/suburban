@@ -70,7 +70,7 @@ test('terrain jobs preserve the visible chunk until complete and cancel stale pa
  const pending=r._terrainBuildJobs.get('2,2');assert.ok(pending.partial);cancelled=false;w.revision++;
  r.invalidateTerrainAt(115,115);
  r.advanceTerrainBuilds(w,new Set(['2,2']),false,1);assert.equal(cancelled,false);assert.equal(pending.partial.disposed,undefined);
- r.invalidateTerrainAt(45,45);assert.ok(cancelled);assert.ok(pending.partial.disposed);assert.equal(r._terrainBuildJobs.size,0);
+ r.invalidateTerrainAt(45,45);assert.ok(cancelled);assert.ok(pending.partial.disposed);assert.equal(r._terrainBuildJobs.has('2,2'),false);
  assert.equal(r.terrainChunks.get('2,2'),complete,'local edits retain the last complete terrain');
  r.rebuildTerrainIfNeeded(w,40,45,40,45);r.advanceTerrainBuilds(w,new Set(['2,2']),false,1000);
  assert.notEqual(r.terrainChunks.get('2,2'),complete);assert.ok(complete.disposed);
@@ -80,7 +80,7 @@ test('stationary terrain finishes despite remote edits and publishes only after 
  const r=new Klass(),w=world(),city={structureRevision:0,buildings:[]};let starts=0,rootsReady=false;
  const group=()=>({children:[],add(child){child.parent=this;},remove(child){child.parent=null;}});
  const make=signature=>({signature,terrain:group(),water:group(),grid:group()});
- Object.assign(r,{zoom:2,mapWidth:128,mapHeight:128,camX:45,camY:45,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),cityDevelopment:{city},terrainGroup:group(),waterGroup:group(),rctGridLineGroup:group(),isPerspectiveActive(){return false;},disposeTerrainChunk(c){c.disposed=true;},buildTerrainPlaceholder(){return make('pending');},*buildTerrainChunkSteps(...args){starts++;const c=make(args[6]);yield c;while(!rootsReady)yield {waitingForRoots:true};return c;}});
+ Object.assign(r,{zoom:2,mapWidth:128,mapHeight:128,camX:45,camY:45,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),cityDevelopment:{city},terrainGroup:group(),waterGroup:group(),rctGridLineGroup:group(),isPerspectiveActive(){return false;},disposeTerrainChunk(c){c.disposed=true;},buildTerrainPlaceholder(){return make('pending');},*buildTerrainChunkSteps(...args){if(args[1]===32&&args[3]===32)starts++;const c=make(args[6]);yield c;while(!rootsReady)yield {waitingForRoots:true};return c;}});
  r.rebuildTerrainIfNeeded(w,40,45,40,45);const old=r.terrainChunks.get('2,2');
  for(let i=0;i<20;i++){
    w.revision++;r.invalidateTerrainAt(115,115);r.rebuildTerrainIfNeeded(w,40,45,40,45);
@@ -123,4 +123,26 @@ test('disabled terrain optimizations use full detail and synchronous terrain at 
  Object.assign(r,{terrainOptimizationsEnabled:false,zoom:.2,mapWidth:128,mapHeight:128,camX:45,camY:45,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),terrainGroup:group,waterGroup:group,rctGridLineGroup:group,isPerspectiveActive(){return false;},disposeTerrainChunk(){},*buildTerrainChunkSteps(){throw Error('progressive work must be bypassed');},buildTerrainChunk(...args){builds++;assert.equal(args[7],2);return {signature:args[6],terrain:{},water:{},grid:{children:[]}};}});
  r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1);assert.equal(r.terrainChunkSize,32);assert.equal(r._terrainBuildJobs?.size||0,0);
  r.zoom=.7;r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1);
+});
+
+test('prefetched neighbors stay hidden and are ready before the camera enters them',()=>{
+ const r=new Klass(),w=world(),order=[];
+ const group=()=>({children:[],add(child){child.parent=this;},remove(child){child.parent=null;}});
+ const make=signature=>({signature,terrain:group(),water:group(),grid:group()});
+ Object.assign(r,{zoom:2,mapWidth:128,mapHeight:128,camX:40,camY:40,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),terrainGroup:group(),waterGroup:group(),rctGridLineGroup:group(),isPerspectiveActive(){return false;},disposeTerrainChunk(c){c.disposed=true;},buildTerrainPlaceholder(){return make('pending');},*buildTerrainChunkSteps(...args){order.push(`${args[1]/16},${args[3]/16}`);return make(args[6]);}});
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);r.advanceTerrainBuilds(w,r.visibleTerrainChunkKeys,false,1000);
+ assert.equal(order[0],'2,2');const ready=r.terrainChunks.get('3,2');assert(ready);assert.equal(ready.terrain.parent,undefined);
+ r.camX=56;r.rebuildTerrainIfNeeded(w,56,60,40,45);
+ assert.equal(r.terrainChunks.get('3,2'),ready);assert.equal(ready.terrain.parent,r.terrainGroup);
+ assert.equal(order.filter(key=>key==='3,2').length,1);
+});
+
+test('off-screen preparation waits while a visible chunk is blocked on grass',()=>{
+ const r=new Klass(),w=world(),group={add(){}},visible=new Set(['2,2']);let waiting=true,background=0;
+ const make=()=>({terrain:{},water:{},grid:{children:[]}});
+ const foreground={world:w,steps:(function*(){while(waiting)yield {waitingForRoots:true};return make();})()};
+ const hidden={world:w,steps:(function*(){background++;return make();})()};
+ Object.assign(r,{camX:40,camY:40,terrainChunkSize:16,terrainChunks:new Map(),terrainGroup:group,waterGroup:group,_terrainPrefetchKeys:new Set(['2,2','3,2']),_terrainBuildJobs:new Map([['3,2',hidden],['2,2',foreground]])});
+ r.advanceTerrainBuilds(w,visible,false,1000);assert.equal(background,0);assert.equal(r._terrainBuildJobs.size,2);
+ waiting=false;r.advanceTerrainBuilds(w,visible,false,1000);assert.equal(background,1);assert.equal(r._terrainBuildJobs.size,0);
 });

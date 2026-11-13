@@ -2,7 +2,7 @@
 <style>body{margin:0;background:#233841;color:white;font:14px system-ui}#view{width:640px;height:400px}pre{white-space:pre-wrap}</style>
 <div id="view"></div><pre id="status">Carregando renderer…</pre>
 <script type="module">
-import {RCT3DRenderer} from '../js/renderer_3d.js?v=camera-budget-25';
+import {RCT3DRenderer} from '../js/renderer_3d.js?v=visible-first-36';
 const status=document.querySelector('#status');window.addEventListener('error',event=>status.textContent='ERRO: '+event.message);
 try{
  const width=64,height=64,map=new Uint8Array(width*height);for(let z=0;z<height;z++)for(let x=0;x<width;x++)map[z*width+x]=z<27?0:z<32?3:2;

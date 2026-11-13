@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>Transição de terreno</title>
+<style>body{background:#24352e;color:white;font:16px system-ui}canvas{width:480px;height:240px}</style>
+<div id="view"></div><pre id="status">Verificando shaders…</pre>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {beginTerrainFade,advanceTerrainFades} from '../js/terrain_quality_fade.js';
+const output=document.querySelector('#status');
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(480,240);document.querySelector('#view').append(renderer.domElement);
+ let errors=0;renderer.debug.onShaderError=()=>errors++;
+ const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(-2,2,1,-1,.1,10);camera.position.z=3;
+ const make=color=>{const terrain=new THREE.Group(),water=new THREE.Group();terrain.add(new THREE.Mesh(new THREE.PlaneGeometry(3,1.5),new THREE.MeshBasicMaterial({color})));scene.add(terrain,water);return {terrain,water};};
+ const old=make(0x225533),next=make(0x887744),owner={_terrainFadeClock:{value:0},disposeTerrainChunk(c){c.disposed=true;scene.remove(c.terrain,c.water);c.terrain.children.forEach(m=>m.geometry.dispose());}};
+ beginTerrainFade(owner,old,next);
+ for(const time of [0,.2,.5]){advanceTerrainFades(owner,time);renderer.render(scene,camera);}
+ output.textContent=JSON.stringify({shaderErrors:errors,finished:!!old.disposed,temporaryMaterials:owner._terrainFades.size});
+}catch(error){output.textContent=error.stack;}
+</script>

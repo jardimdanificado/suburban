@@ -35,3 +35,14 @@ test('clearing a world drops pending callbacks and completed cache entries',()=>
  jobs.advance(1000);assert.equal(updates,1);
  jobs.clear();assert.equal(jobs.request(w,'tile',surface,new Set(),10,()=>true,()=>{}),null);
 });
+
+test('visible grass preempts an already running background field without losing its progress',()=>{
+ let clock=0,foreground=false,background=false,visible=false;
+ const jobs=new GrassRootJobs(()=>clock++),w={width:32,height:32},large=Float32Array.from(Array.from({length:200},()=>[...positions]).flat());
+ jobs.request(w,'background',{getAttribute:key=>key==='position'?{array:large}:null},new Set(),10,()=>true,()=>background=true,()=>0);
+ jobs.advance(4);const partial=jobs.running;assert(partial);assert.equal(background,false);
+ jobs.request(w,'foreground',surface,new Set(),10,()=>true,()=>foreground=true,()=>visible?1:0);
+ visible=true;jobs.advance(4);
+ assert.equal(foreground,true);assert.equal(background,false);assert.equal(jobs.running,partial);
+ jobs.advance(2000);assert.equal(background,true);assert.equal(jobs.running,null);
+});
