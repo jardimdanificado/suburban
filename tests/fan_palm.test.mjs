@@ -26,8 +26,8 @@ test('timber palms still produce their configured wood',()=>{
 
 // Execute the renderer's actual palm branch with matrices that capture instance transforms.
 const source=readFileSync(new URL('../js/renderer_3d.js',import.meta.url),'utf8');
-const branch=source.slice(source.indexOf('else if (isPalm && palmCount < this.maxInstances) {'),source.indexOf('else if (isTree && !isPine && !isPalm'));
-const render=new Function('e','r','mMatrix','scaleMatrix','getTreeVisualScale',`let palmCount=0,fanPalmCount=0,palmFrondCount=0;const surfaceH=2,isPalm=true;if(false){} ${branch}`);
+const branch=source.slice(source.indexOf("else if(e.properties.species==='traveller_palm'&&travellerPalmCount<this.maxInstances){"),source.indexOf('else if (isTree && !isPine && !isPalm'));
+const render=new Function('e','r','mMatrix','scaleMatrix','getTreeVisualScale',`let palmCount=0,fanPalmCount=0,palmFrondCount=0,travellerPalmCount=0;const surfaceH=2,isPalm=true;if(false){} ${branch}`);
 class Matrix{
  makeRotationY(){this.scale=[1,1,1];return this;}
  makeScale(...scale){this.scale=scale;return this;}
@@ -36,7 +36,7 @@ class Matrix{
 }
 function transforms(species){
  const captured={},mesh=key=>({setMatrixAt(index,matrix){captured[key]={scale:matrix.scale.slice(),position:matrix.position.slice()};}});
- const renderer={maxInstances:10,instPalmTrunks:mesh('trunk'),instFanPalmFronds:mesh('fan'),instPalmFronds:mesh('fronds')};
+ const renderer={maxInstances:10,instTravellerPalms:mesh('traveller'),instPalmTrunks:mesh('trunk'),instFanPalmFronds:mesh('fan'),instPalmFronds:mesh('fronds')};
  const entity={x:4,y:5,properties:{species,cityPlant:{form:PLANT_SPECIES[species].form}}};
  render.call(renderer,entity,{size:1},new Matrix(),new Matrix(),()=>1);return captured;
 }
@@ -45,5 +45,5 @@ test('fan palms have a short basal stem and broad fans near ground; tall palms r
  assert(low.trunk.scale[1]*4.05<.4);assert(low.fan.position[1]+low.fan.scale[1]*4.56-2<1.1);
  assert(low.fan.position[1]+low.fan.scale[1]*3.05>=2);assert.equal(low.fan.scale[0],1);assert.equal(low.fan.scale[2],1);
  assert(Math.abs(low.fan.position[1]+low.fan.scale[1]*3.05-(2+low.trunk.scale[1]*4.05))<.01);
- assert.deepEqual(coconut.trunk.scale,[1,1,1]);assert.deepEqual(coconut.fronds.scale,[1,1,1]);assert.deepEqual(traveller.trunk.scale,[1,1,1]);assert.deepEqual(traveller.fan.scale,[1,1,1]);
+ assert.deepEqual(coconut.trunk.scale,[1,1,1]);assert.deepEqual(coconut.fronds.scale,[1,1,1]);assert.deepEqual(traveller.traveller.scale,[1,1,1]);assert.equal(traveller.fan,undefined);assert.equal(traveller.trunk,undefined);
 });

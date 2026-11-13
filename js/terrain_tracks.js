@@ -108,10 +108,10 @@ function addGroundTracksToMaterial(material,uniforms,grass){
         vec2 texel = terrainTrackTexel;
         float lip = terrainTrackStrength(vTrackWorld + texel * vec2(.8, .8), ${hold.toFixed(1)}, ${life.toFixed(1)}) - imprint;
         ${grass===null ? '' : grass ? 'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.065, .046, .025), imprint * .72);' : 'diffuseColor.rgb *= 1.0 - imprint * .32 + lip * .12;'}
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.64,.49,.26), sand * 1.7);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.64,.49,.26), sand * 1.85);
       `);
   };
-  material.customProgramCacheKey=()=>`${programKey}|ground-contact-tracks-v3-${grass}`;
+  material.customProgramCacheKey=()=>`${programKey}|ground-contact-tracks-v4-${grass}`;
 }
 
 export function addSandDepositsToMaterial(material,uniforms){addGroundTracksToMaterial(material,uniforms,null);}
@@ -144,7 +144,7 @@ export class TerrainTracks {
           }
           if(vDeposit>0.0){
             float grain=fract(sin(dot(floor(gl_FragCoord.xy),vec2(12.9898,78.233)))*43758.5453);
-            if(grain>.38*vDeposit)discard;
+            if(grain>.50*vDeposit)discard;
           }
           float ticks=floor(terrainTrackTime*10.0);
           vec3 packed=vec3(floor(ticks/65536.0),floor(mod(ticks,65536.0)/256.0),mod(ticks,256.0));

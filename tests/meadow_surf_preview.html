@@ -1,29 +1,39 @@
 <!doctype html><meta charset="utf-8"><title>Espuma, flores e buganvília</title>
 <style>body{margin:0;background:#253d3e;color:#fff;font:15px sans-serif}header{position:absolute;padding:12px;background:#152f38d9}button{padding:7px;margin:3px}</style>
-<header><button id="wide">Costa e flores</button><button id="shrub">Buganvília de perto</button><button id="pause">Pausar</button><div id="status">Carregando…</div></header>
+<header><button id="wide">Costa e flores</button><button id="traveller">Árvore-do-viajante</button><button id="shell">Concha de perto</button><button id="shrub">Buganvília de perto</button><button id="pause">Pausar</button><div id="status">Carregando…</div></header>
 <script type="module">
 import * as THREE from 'https://esm.sh/three@0.160.0';
-import {shoreFoamSurface,addShoreFoamShader} from '../js/water_foam.js?v=raised-surge-2';
+import {shoreFoamTileSurface,addShoreFoamShader} from '../js/water_foam.js?v=near-bank-4';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=meadow-accents-1';
-import {createGrassDetailsMesh} from '../js/grass_details.js?v=meadow-accents-1';
+import {createGrassDetailsMesh} from '../js/grass_details.js?v=rare-meadow-2';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from '../js/flowering_shrub_surface.js?v=leaf-bract-detail-2';
-import {createTerrainTrackUniforms} from '../js/terrain_tracks.js?v=sand-carry-1';
+import {createTravellerPalmGeometry} from '../js/traveller_palm.js?v=ravenala-fan-1';
+import {createBeachShellMesh} from '../js/beach_shells.js?v=scattered-shells-1';
+import {createTerrainTrackUniforms} from '../js/terrain_tracks.js?v=more-sand-2';
 const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(1000,680);document.body.append(renderer.domElement);renderer.setPixelRatio(1);
 let errors=0;renderer.debug.onShaderError=()=>errors++;
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x668a93);scene.add(new THREE.HemisphereLight(0xdcecff,0x535d37,1.5));const sun=new THREE.DirectionalLight(0xfff0cd,2.2);sun.position.set(-3,7,4);scene.add(sun);
 const camera=new THREE.OrthographicCamera(-7.35,7.35,5,-5,.01,100);camera.position.set(7,9,11);camera.lookAt(5,0,3);
 const plane=(w,h,color,x,z)=>{const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshLambertMaterial({color,side:THREE.DoubleSide}));mesh.rotation.x=-Math.PI/2;mesh.position.set(x,0,z);scene.add(mesh);return mesh;};
-plane(12,3,0xc6ad74,6,1.5);plane(12,3,0x1d7583,6,4.5);
+const coast=[3,3,4,3,2,3,3,4,3,3,2,3],isWater=(x,z)=>z>=(coast[x]??3);
+const sandPositions=[],waterPositions=[];
+for(let z=0;z<7;z++)for(let x=0;x<24;x++)for(const [u,v]of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]])(isWater(x,z)?waterPositions:sandPositions).push(x+u,0,z+v);
+const ground=(positions,color)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.computeVertexNormals();scene.add(new THREE.Mesh(g,new THREE.MeshLambertMaterial({color})));return g;};
+const sandGeometry=ground(sandPositions,0xc6ad74);ground(waterPositions,0x1d7583);
+const shells=createBeachShellMesh(THREE,sandGeometry,new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide}));if(shells)scene.add(shells);
 const time={value:0},tick={value:0},foam=new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,side:THREE.DoubleSide,depthWrite:false});foam.onBeforeCompile=shader=>{shader.uniforms.uCaribbeanWaterTime=time;};addShoreFoamShader(foam);
-const positions=[],uvs=[],inward=[];for(let x=0;x<12;x++){const d=shoreFoamSurface(x,3,0);positions.push(...d.positions);uvs.push(...d.uvs);inward.push(...d.inward);}
+const positions=[],uvs=[],inward=[];for(let z=1;z<6;z++)for(let x=0;x<24;x++){const d=shoreFoamTileSurface(x,z,isWater);if(!d)continue;positions.push(...d.positions);uvs.push(...d.uvs);inward.push(...d.inward);}
 const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geometry.setAttribute('foamInward',new THREE.Float32BufferAttribute(inward,2));geometry.computeVertexNormals();scene.add(new THREE.Mesh(geometry,foam));
 const gp=[];for(let z=-3;z<1;z++)for(let x=0;x<12;x++)for(const [u,v]of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]])gp.push(x+u,.01,z+v);
 const groundGeometry=new THREE.BufferGeometry();groundGeometry.setAttribute('position',new THREE.Float32BufferAttribute(gp,3));groundGeometry.computeVertexNormals();const groundMaterial=new THREE.MeshLambertMaterial({color:0x50672e});scene.add(new THREE.Mesh(groundGeometry,groundMaterial));
-const tracks=createTerrainTrackUniforms(THREE),grass=createVolumetricGrassMesh(THREE,groundGeometry,createVolumetricGrassMaterial(THREE,groundMaterial,tick,tracks));scene.add(grass);const details=createGrassDetailsMesh(THREE,grass,createVolumetricGrassMaterial(THREE,null,tick,tracks,{details:true}));scene.add(details);
+const tracks=createTerrainTrackUniforms(THREE),grass=createVolumetricGrassMesh(THREE,groundGeometry,createVolumetricGrassMaterial(THREE,groundMaterial,tick,tracks));scene.add(grass);const details=createGrassDetailsMesh(THREE,grass,createVolumetricGrassMaterial(THREE,null,tick,tracks,{details:true}));if(details)scene.add(details);
+const traveller=new THREE.Mesh(createTravellerPalmGeometry(THREE),new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide}));traveller.position.set(9,0,-1.5);scene.add(traveller);
+document.querySelector('#traveller').onclick=()=>{camera.zoom=1.9;camera.position.set(9.5,2.8,8);camera.lookAt(9,2.3,-1.5);camera.updateProjectionMatrix();};
 const shrub=new THREE.Group();shrub.position.set(5,0,-.5);scene.add(shrub);
 const leaves=floweringShrubSurfaceTextures(THREE),bracts=floweringShrubSurfaceTextures(THREE,true);
 shrub.add(new THREE.Mesh(floweringShrubLeavesGeometry(THREE),new THREE.MeshLambertMaterial({map:leaves.map,normalMap:leaves.normalMap,normalScale:new THREE.Vector2(.85,.85),color:0x55923a,side:THREE.DoubleSide})));
 shrub.add(new THREE.Mesh(floweringShrubFlowersGeometry(THREE),new THREE.MeshLambertMaterial({map:bracts.map,normalMap:bracts.normalMap,normalScale:new THREE.Vector2(.65,.65),color:0xbd3f9f,side:THREE.DoubleSide})));
+document.querySelector('#shell').onclick=()=>{if(!shells)return;const m=new THREE.Matrix4();shells.getMatrixAt(0,m);const p=new THREE.Vector3().setFromMatrixPosition(m);camera.zoom=35;camera.position.set(p.x+.3,p.y+.5,p.z+.7);camera.lookAt(p);camera.updateProjectionMatrix();};
 let paused=false;document.querySelector('#pause').onclick=()=>{paused=!paused;};document.querySelector('#wide').onclick=()=>{camera.zoom=1;camera.position.set(7,9,11);camera.lookAt(5,0,2);camera.updateProjectionMatrix();};document.querySelector('#shrub').onclick=()=>{camera.zoom=9;camera.position.set(6,1.5,1);camera.lookAt(5,.35,-.5);camera.updateProjectionMatrix();};
-let frames=0;function frame(){if(!paused){time.value+=1/60;tick.value++;}renderer.render(scene,camera);if(++frames===5)document.querySelector('#status').textContent=`${errors} erros de shader · ${details.geometry.instanceCount} flores/ervas em 48 tiles · espuma elevada`;requestAnimationFrame(frame);}frame();
+let frames=0;function frame(){if(!paused){time.value+=1/60;tick.value++;}renderer.render(scene,camera);if(++frames===5)document.querySelector('#status').textContent=`${errors} erros de shader · ${details?.geometry.instanceCount||0} flores/ervas em 48 tiles · ${shells?.count||0} conchas · espuma contínua`;requestAnimationFrame(frame);}frame();
 </script>

@@ -7,7 +7,7 @@ export function grassDetailInstances(roots,shades){
   for(let i=0;i<roots.length;i+=3){
     const x=roots[i],z=roots[i+2],patch=random(Math.floor(x/3),Math.floor(z/3),8);
     const seed=random(x,z,1);
-    if(seed>.003+patch*.009)continue;
+    if(seed>.00015+patch*.00045)continue;
     const dry=random(x,z,2)<.32,color=dry?[.57,.46,.24]:palette[Math.floor(random(x,z,3)*palette.length)];
     positions.push(x,roots[i+1],z);
     shapes.push(random(x,z,4)*Math.PI*2,.30+random(x,z,5)*.14,dry?.025:.055,random(x,z,6)*Math.PI*2);

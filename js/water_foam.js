@@ -1,19 +1,45 @@
 // Shore-local distance keeps the moving foam front aligned to every coast orientation.
 export const FOAM_WIDTH = .68;
-export function shoreFoamSurface(tx,ty,side){
+// Every water tile owns one surface, even where several banks meet. Sampling
+// the nearest shoreline merges intersecting wave fronts without layered strips.
+export function shoreFoamTileSurface(tx,ty,isWaterAt){
+  if(!isWaterAt(tx,ty))return null;
+  const segments=[];
+  for(let z=ty-1;z<=ty+1;z++)for(let x=tx-1;x<=tx+1;x++){
+    if(!isWaterAt(x,z))continue;
+    if(!isWaterAt(x,z-1))segments.push([x,z,x+1,z,0,1]);
+    if(!isWaterAt(x,z+1))segments.push([x,z+1,x+1,z+1,0,-1]);
+    if(!isWaterAt(x-1,z))segments.push([x,z,x,z+1,1,0]);
+    if(!isWaterAt(x+1,z))segments.push([x+1,z,x+1,z+1,-1,0]);
+  }
+  if(!segments.length)return null;
+  const grid=[],steps=8;
+  for(let z=0;z<=steps;z++)for(let x=0;x<=steps;x++){
+    const px=tx+x/steps,pz=ty+z/steps;
+    let best=Infinity,nx=0,nz=0;
+    for(const [ax,az,bx,bz,ix,iz]of segments){
+      const dx=bx-ax,dz=bz-az,t=Math.max(0,Math.min(1,((px-ax)*dx+(pz-az)*dz)/(dx*dx+dz*dz)));
+      const vx=px-ax-dx*t,vz=pz-az-dz*t,distance=Math.hypot(vx,vz);
+      const gx=distance>1e-8?vx/distance:ix,gz=distance>1e-8?vz/distance:iz;
+      if(distance<best-1e-8){best=distance;nx=gx;nz=gz;}
+      else if(Math.abs(distance-best)<1e-8){nx+=gx;nz+=gz;}
+    }
+    const length=Math.hypot(nx,nz)||1;
+    grid.push({x:px,z:pz,d:best/FOAM_WIDTH,nx:nx/length,nz:nz/length});
+  }
+  if(grid.every(p=>p.d>1.0))return null;
   const positions=[],uvs=[],inward=[];
-  const direction=side===0?[0,1]:side===1?[0,-1]:side===2?[1,0]:[-1,0];
-  const point=(along,d)=>side===0?[tx+along,ty+d]:side===1?[tx+along,ty+1-d]:side===2?[tx+d,ty+along]:[tx+1-d,ty+along];
-  // Cross-shore subdivisions let raised crests roll instead of lifting a flat strip.
-  for(let a=0;a<8;a++)for(let d=0;d<6;d++){
-    const corners=[[a,d],[a,d+1],[a+1,d+1],[a,d],[a+1,d+1],[a+1,d]];
-    if(side===1||side===2){[corners[1],corners[2]]=[corners[2],corners[1]];[corners[4],corners[5]]=[corners[5],corners[4]];}
-    for(const [u,v]of corners){
-      const p=point(u/8,.008+v/6*(FOAM_WIDTH-.008));
-      positions.push(p[0],.09,p[1]);uvs.push(u/8,v/6);inward.push(...direction);
+  for(let z=0;z<steps;z++)for(let x=0;x<steps;x++){
+    const a=z*(steps+1)+x,b=a+steps+1;
+    for(const index of [a,b,b+1,a,b+1,a+1]){
+      const p=grid[index];positions.push(p.x,.09,p.z);uvs.push(p.x,p.d);inward.push(p.nx,p.nz);
     }
   }
   return {positions,uvs,inward};
+}
+// Straight-bank fixture and standalone callers use the same merged geometry.
+export function shoreFoamSurface(tx,ty,side){
+  return shoreFoamTileSurface(tx,ty,(x,z)=>side===0?z>=ty:side===1?z<=ty:side===2?x>=tx:x<=tx);
 }
 const FOAM_FIELD=`
   float foamHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -21,10 +47,12 @@ const FOAM_FIELD=`
     vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
     return mix(mix(foamHash(i),foamHash(i+vec2(1,0)),f.x),mix(foamHash(i+vec2(0,1)),foamHash(i+vec2(1,1)),f.x),f.y);
   }
-  float foamFront(vec2 p){return .51+.19*sin(uCaribbeanWaterTime*1.15+foamNoise(p*1.7)*2.0)+(foamNoise(p*9.0+vec2(uCaribbeanWaterTime*.18,0.0))-.5)*.18;}
+  float foamFront(vec2 p){float section=foamNoise(p*.83);
+    float reach=.07+section*.22;
+    return reach+.055*sin(uCaribbeanWaterTime*.95+foamNoise(p*.42)*5.0)+(foamNoise(p*6.0)-.5)*.045;}
   float foamLift(vec2 p,float d){
     float crest=1.0-smoothstep(.0,.25,abs(d-foamFront(p)));
-    return crest*crest*.17+sin(d*16.0-uCaribbeanWaterTime*1.6)*.018*sin(d*3.14159);
+    return crest*crest*.10+sin(d*16.0-uCaribbeanWaterTime*1.6)*.010*sin(d*3.14159);
   }
 `;
 export function addShoreFoamShader(material){
@@ -52,14 +80,14 @@ export function addShoreFoamShader(material){
       ${FOAM_FIELD}`)
       .replace('#include <color_fragment>',`#include <color_fragment>
       float d=vFoamUV.y,front=foamFront(vFoamWorld);
-      float crest=1.0-smoothstep(.07,.27,abs(d-front));
-      float wash=(1.0-smoothstep(.0,front+.12,d))*.62;
-      float backwash=(1.0-smoothstep(.02,.10,abs(d-front*.42)))*.35;
+      float crest=1.0-smoothstep(.035,.18,abs(d-front));
+      float wash=(1.0-smoothstep(.0,front+.10,d))*.54;
+      float backwash=(1.0-smoothstep(.02,.10,abs(d-front*.42)))*.22;
       float bubbles=smoothstep(.25,.68,foamNoise(vFoamWorld*38.0));
-      diffuseColor.rgb *= mix(vec3(.70,.87,.86),vec3(1.18,1.18,1.12),crest);
-      diffuseColor.a *= min(1.0,crest*1.45+wash+backwash)*(.65+.35*bubbles)*smoothstep(0.0,.025,d)*(1.0-smoothstep(.86,1.0,d));
+      diffuseColor.rgb *= mix(vec3(.70,.87,.86),vec3(1.07,1.07,1.03),crest);
+      diffuseColor.a *= min(1.0,crest*1.05+wash+backwash)*(.65+.35*bubbles)*smoothstep(0.0,.010,d)*(1.0-smoothstep(.86,1.0,d));
       if(diffuseColor.a<.025)discard;`);
   };
-  material.customProgramCacheKey=()=> 'shore-foam-raised-surge-v3';
+  material.customProgramCacheKey=()=> 'shore-foam-near-bank-v5';
   return material;
 }

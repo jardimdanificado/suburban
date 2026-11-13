@@ -1,9 +1,12 @@
+import {createTravellerPalmGeometry} from './traveller_palm.js?v=ravenala-fan-1';
+import {cursorLightPlacement} from './cursor_light.js?v=above-roofs-1';
+import {createBeachShellMesh} from './beach_shells.js?v=scattered-shells-1';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
-import {createGrassDetailsMesh} from './grass_details.js?v=meadow-accents-1';
-import {addShoreFoamShader,shoreFoamSurface} from './water_foam.js?v=raised-surge-2';
+import {createGrassDetailsMesh} from './grass_details.js?v=rare-meadow-2';
+import {addShoreFoamShader,shoreFoamTileSurface} from './water_foam.js?v=near-bank-4';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
-import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=sand-carry-1';
-import {constructionSiteCells,grassExclusionCells,grassExclusionSignature} from './city_site_footprints.js?v=all-built-footprints-1';
+import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=more-sand-2';
+import {constructionSiteCells,grassExclusionCells,grassExclusionSignature} from './city_site_footprints.js?v=natural-open-lots-2';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=meadow-accents-1';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
@@ -189,7 +192,7 @@ const DAY_NIGHT_KEYFRAMES = [
 
 const STATIC_FOLIAGE_KEYS = [
   'oakLeaves', 'pineLeaves', 'cherryLeaves', 'birchLeaves',
-  'mapleLeaves', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseLeaves', 'roseFlowers', 'grassFoliage'
+  'mapleLeaves', 'travellerPalm', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseLeaves', 'roseFlowers', 'grassFoliage'
 ];
 const TROPICAL_CANOPY_COLORS = {flamboyant:0xd46b38,sea_grape:0x557b3c,tropical_almond:0x71934c,mangrove:0x416f45,banana:0x4b8e3a,mango:0x6c9a43,guava:0x7b9d50,jackfruit:0x39764b,breadfruit:0x54864b,papaya:0x82a44d,avocado:0x466f3d,tamarind:0x8a9e5a,cacao:0x376e49,soursop:0x498153,ackee:0x71994a,lime:0x8ca442,allspice:0x527848,monstera:0x326c44,guaimbe:0x4b8150,pau_brasil:0x658348,yellow_ipe:0x78964a,quaresmeira:0x61804a,manaca_serra:0x69894d,sibipiruna:0x718b46,pau_ferro:0x527846,pitanga:0x4b7c3e,jabuticaba:0x486f3e,frangipani:0x76954b,clusia:0x4b7844};
 const TROPICAL_CANOPY_ASPECT = {banana:[.82,1.18,.82],papaya:[.7,.82,.7],cacao:[.82,1.1,.82],guava:[.9,1.05,.9],mango:[1.16,.92,1.12],jackfruit:[1.13,1.02,1.13],breadfruit:[1.12,.94,1.12],soursop:[1.05,1,1.05],ackee:[.94,1.06,.94],lime:[.96,1,.96],tamarind:[1.2,.9,1.08],allspice:[.92,1.08,.92],monstera:[1.22,.78,1.22],guaimbe:[1.32,.88,1.15],pau_brasil:[1.12,1.03,1.12],yellow_ipe:[1.18,1,1.18],quaresmeira:[1.1,1.04,1.1],manaca_serra:[1.08,1,1.08],sibipiruna:[1.2,.96,1.2],pau_ferro:[1.06,1.08,1.06],pitanga:[.92,1.08,.92],jabuticaba:[1.04,1.08,1.04],frangipani:[1.04,.94,1.04],clusia:[1.12,.95,1.12]};
@@ -201,7 +204,7 @@ const TROPICAL_FOLIAGE_COLORS = {zebra_maranta:0x738c51,croton:0xd18b32,watermel
 const TROPICAL_TREE_BLOOM_COLORS = {flamboyant:0xe75036,pau_brasil:0xd84735,yellow_ipe:0xf1c544,quaresmeira:0x9a60b7,manaca_serra:0xd9a5ce,frangipani:0xf0d59a};
 
 export const MIN_CAMERA_ZOOM = 0.30;
-const MAX_CAMERA_ZOOM = 5.0;
+export const MAX_CAMERA_ZOOM = 12.0;
 
 // ---------------------------------------------------------------------------
 // Hash Functions for Procedural Terrain Variation
@@ -3981,6 +3984,7 @@ export class RCT3DRenderer {
       roadRailing:makeMat(normalMapsEnabled,{color:0xffffff,vertexColors:true,dithering:true,side:THREE.DoubleSide},null,0,.82,.02),
       farmSoil:makeMat(normalMapsEnabled,{map:farmGround.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},farmGround.normalMap,.38,.91,.005),
       [TILE_FLOOR]: makeMat(normalMapsEnabled, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
+      beachShells: new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide,dithering:true}),
       sandClean: makeMat(normalMapsEnabled, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.42, 0.90, 0.01),
       [TILE_SAND]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.46, 0.88, 0.02),
       [TILE_HILL]: makeMat(normalMapsEnabled, { map: caribbeanGrass, color: 0xc2d0a0, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.82, 0.02),
@@ -4001,6 +4005,7 @@ export class RCT3DRenderer {
       bananaStem: makeMat(normalMapsEnabled, { color: 0xffffff, dithering: true }, normWood, 0.24, 0.92, 0),
       oakLeaves: makeMat(normalMapsEnabled, { color: 0x3e8226, dithering: true }, normOak, 1.2, 0.65, 0.02),
       tropicalFlora: makeMat(normalMapsEnabled, { color: 0xffffff, side: THREE.DoubleSide, dithering: true }, normOak, 0.72, 0.76, 0),
+      travellerPalm: makeMat(normalMapsEnabled,{color:0xffffff,vertexColors:true,side:THREE.DoubleSide,dithering:true},normOak,.4,.9,0),
       palmLeaves: makeMat(normalMapsEnabled, { color: 0x478d32, dithering: true, side: THREE.DoubleSide }, normOak, 0.9, 0.72, 0.01),
       pineLeaves: makeMat(normalMapsEnabled, { color: 0x205222, dithering: true }, normPine, 1.2, 0.65, 0.02),
       cactus: makeMat(normalMapsEnabled, { color: 0x3c7c2c, dithering: true }, normCactus, 1.2, 0.75, 0.02),
@@ -4212,6 +4217,7 @@ export class RCT3DRenderer {
       }
       applyWindFoliageShader(dict.oakLeaves, 0.055);
       applyPalmWindShader(dict.palmLeaves, 0.11);
+      applyWindFoliageShader(dict.travellerPalm,.035,1.45);
       applyWindFoliageShader(dict.pineLeaves, 0.038);
       applyWindFoliageShader(dict.cherryLeaves, 0.050);
       applyWindFoliageShader(dict.birchLeaves, 0.052);
@@ -4286,6 +4292,9 @@ export class RCT3DRenderer {
     this.instPalmFronds.receiveShadow = true;
     this.instFanPalmFronds = new THREE.InstancedMesh(createFanPalmFrondsGeometry(),this.materials.palmLeaves,this.maxInstances);
     this.instFanPalmFronds.castShadow=true;this.instFanPalmFronds.receiveShadow=true;this.instFanPalmFronds.frustumCulled=false;
+
+    this.instTravellerPalms=new THREE.InstancedMesh(createTravellerPalmGeometry(THREE),this.materials.travellerPalm,this.maxInstances);
+    this.instTravellerPalms.receiveShadow=true;this.instTravellerPalms.castShadow=false;this.instTravellerPalms.frustumCulled=false;
 
     const tropicalFruitGeo = new THREE.SphereGeometry(0.11, 7, 5);
     tropicalFruitGeo.scale(0.82, 1.28, 0.82);
@@ -4788,7 +4797,7 @@ export class RCT3DRenderer {
     this.instancedGroup = new THREE.Group();
     this.instancedGroup.add(
       this.instOakTrunks, this.instOakLeaves,this.instTropicalTreeBlooms,
-      this.instPalmTrunks, this.instPalmFronds,this.instFanPalmFronds,
+      this.instPalmTrunks, this.instPalmFronds,this.instFanPalmFronds,this.instTravellerPalms,
       this.instTropicalFruits,
       this.instBananaStems,this.instBananaLeaves,this.instBananaFruits,
       this.instPapayaTrunks,this.instPapayaLeaves,this.instPapayaFruits,
@@ -5422,6 +5431,7 @@ export class RCT3DRenderer {
     if (this.instOakLeaves && activeDict.oakLeaves) this.instOakLeaves.material = activeDict.oakLeaves;
     if (this.instPalmTrunks && activeDict.treeTrunk) this.instPalmTrunks.material = activeDict.treeTrunk;
     if (this.instPalmFronds && activeDict.palmLeaves) this.instPalmFronds.material = activeDict.palmLeaves;
+    if(this.instTravellerPalms&&activeDict.travellerPalm)this.instTravellerPalms.material=activeDict.travellerPalm;
     if (this.instFanPalmFronds && activeDict.palmLeaves) this.instFanPalmFronds.material = activeDict.palmLeaves;
     if (this.instPapayaTrunks && activeDict.treeTrunk) this.instPapayaTrunks.material = activeDict.treeTrunk;
     if (this.instPapayaLeaves && activeDict.oakLeaves) this.instPapayaLeaves.material = activeDict.oakLeaves;
@@ -6808,8 +6818,9 @@ export class RCT3DRenderer {
       }
       return landTouches * 0.15;
     };
-    const addWaterFoamEdge = (tx, ty, side) => {
-      const foam=shoreFoamSurface(tx,ty,side);
+    const addWaterFoamTile = (tx, ty) => {
+      const foam=shoreFoamTileSurface(tx,ty,isWaterAt);
+      if(!foam)return;
       waterFoamBucket.pos.push(...foam.positions);
       waterFoamBucket.uvs.push(...foam.uvs);
       waterFoamBucket.inward.push(...foam.inward);
@@ -7018,10 +7029,7 @@ export class RCT3DRenderer {
             const x0=gx/2,x1=(gx+1)/2,y0=gy/2,y1=(gy+1)/2;
             for(const [fx,fy] of [[x0,y0],[x0,y1],[x1,y1],[x0,y0],[x1,y1],[x1,y0]]) waterVertex(tx+fx,ty+fy,fx,fy);
           }
-          if (!isWaterAt(tx,ty-1)) addWaterFoamEdge(tx,ty,0,0);
-          if (!isWaterAt(tx,ty+1)) addWaterFoamEdge(tx,ty,1,1);
-          if (!isWaterAt(tx-1,ty)) addWaterFoamEdge(tx,ty,2,2);
-          if (!isWaterAt(tx+1,ty)) addWaterFoamEdge(tx,ty,3,3);
+          addWaterFoamTile(tx,ty);
         } else if(adjacentPavedRoads.length){
           const regions=[[0,0,.5,.5],[.5,0,1,.5],[0,.5,.5,1],[.5,.5,1,1]],ao=(u,v)=>ao00*(1-u)*(1-v)+ao10*u*(1-v)+ao11*u*v+ao01*(1-u)*v;
           const height=(u,v)=>u<=v?h00*(1-v)+h01*(v-u)+h11*u:h00*(1-u)+h10*(u-v)+h11*v;
@@ -7209,6 +7217,10 @@ export class RCT3DRenderer {
         mesh.userData.waterCells=bucket.waterCells;mesh.userData.waterLights=bucket.waterLights;mesh.userData.waterShoreMix=bucket.waterShoreMix;chunk.water.add(mesh);
       } else {
         chunk.terrain.add(mesh);
+        if(matKey===String(TILE_SAND)||matKey==='sandClean'){
+          const shells=createBeachShellMesh(THREE,geom,this.materials.beachShells,this._grassExclusionCells);
+          if(shells)chunk.terrain.add(shells);
+        }
         if (matKey === String(TILE_FLOOR) || matKey === String(TILE_HILL)) {
           const materialKey=matKey===String(TILE_HILL)?'volumetricHillGrass':'volumetricGrass';
           const grass=createVolumetricGrassMesh(THREE, geom, this.materials[materialKey], {excludedCells:this._grassExclusionCells,materialKey});
@@ -7609,7 +7621,7 @@ export class RCT3DRenderer {
 
     let oakCount = 0;
     let tropicalTreeBloomCount=0;
-    let palmCount = 0,palmFrondCount=0,fanPalmCount=0;
+    let palmCount = 0,palmFrondCount=0,fanPalmCount=0,travellerPalmCount=0;
     let tropicalFruitCount = 0;
     let bananaCount=0,bananaFruitCount=0,papayaCount=0,papayaFruitCount=0,broadLeafCount=0,tropicalFoliageCount=0,tropicalFlowerCount=0,waterLilyCount=0;
     let pineCount = 0;
@@ -7895,6 +7907,11 @@ export class RCT3DRenderer {
         if(e.properties.species==='banana'&&r.size>=.8){this.instBananaFruits.setMatrixAt(bananaFruitCount,mMatrix);this.instBananaFruits.setColorAt(bananaFruitCount,this.tempColor1.setHex(0xf0d246));bananaFruitCount++;}bananaCount++;
       }
       // --- 3D OAK TREES (Natural Random Rotation) ---
+      else if(e.properties.species==='traveller_palm'&&travellerPalmCount<this.maxInstances){
+        const rotation=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9187),982451653)>>>0)%628)/100),size=(r.size||1)*getTreeVisualScale(e);
+        mMatrix.makeRotationY(rotation);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        this.instTravellerPalms.setMatrixAt(travellerPalmCount++,mMatrix);
+      }
       else if (isPalm && palmCount < this.maxInstances) {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 9187), 982451653) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
@@ -8649,8 +8666,19 @@ export class RCT3DRenderer {
     if(cursorLightActive){
       const x=cursorTile.exactX!==undefined?cursorTile.exactX:cursorTile.x+.5,z=cursorTile.exactZ!==undefined?cursorTile.exactZ:cursorTile.y+.5,sH=cursorTile.exactY!==undefined?cursorTile.exactY:this.getSurfaceElevation(map,cursorTile.x,cursorTile.y);
       this.camera.getWorldDirection(this.cursorLightAxis);
-      const sourceDistance=18,sourceX=x-this.cursorLightAxis.x*sourceDistance,sourceY=sH-this.cursorLightAxis.y*sourceDistance,sourceZ=z-this.cursorLightAxis.z*sourceDistance;
-      this.cursorSpotlight.position.set(sourceX,sourceY,sourceZ);this.cursorSpotlightTarget.position.set(x,sH,z);this.cursorSpotlight.distance=28;this.cursorSpotlight.intensity=nightGlow*22;
+      const city=this.cityDevelopment?.city,cache=this._cursorRoofCache;
+      if(!cache||cache.city!==city||cache.revision!==city?.structureRevision||cache.terrainRevision!==this.currentWorldRevision){
+        let top=0;
+        for(const b of city?.buildings||[]){
+          if(!b.entity||b.entity.destroyed||b.officeTenantOf)continue;
+          const base=b.terrain?.base??this.getSurfaceElevation(map,b.entity.x,b.entity.y);
+          top=Math.max(top,base+Math.max(1,b.floors||1)*CITY_FLOOR_HEIGHT+3);
+        }
+        this._cursorRoofCache={city,revision:city?.structureRevision,terrainRevision:this.currentWorldRevision,top};
+      }
+      const light=cursorLightPlacement(x,sH,z,this.cursorLightAxis,this._cursorRoofCache.top);
+      this.cursorSpotlight.position.set(light.x,light.y,light.z);this.cursorSpotlightTarget.position.set(x,sH,z);
+      this.cursorSpotlight.distance=light.distance;this.cursorSpotlight.angle=light.angle;this.cursorSpotlight.intensity=nightGlow*light.intensity;
     }else this.cursorSpotlight.intensity=0;
     if (nightGlow > 0.02) {
       let candidateCount = 0;
@@ -8813,6 +8841,7 @@ export class RCT3DRenderer {
     this.instPalmTrunks.instanceMatrix.needsUpdate = true;
     this.instPalmFronds.count = palmFrondCount;
     this.instPalmFronds.instanceMatrix.needsUpdate = true;
+    this.instTravellerPalms.count=travellerPalmCount;this.instTravellerPalms.instanceMatrix.needsUpdate=true;
     this.instFanPalmFronds.count=fanPalmCount;this.instFanPalmFronds.instanceMatrix.needsUpdate=true;
     this.instTropicalFruits.count=tropicalFruitCount;
     this.instTropicalFruits.instanceMatrix.needsUpdate=true;

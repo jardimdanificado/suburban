@@ -51,3 +51,10 @@ test('building coverage signature changes for construction, demolition and footp
  buildings[0].entity.destroyed=true;assert.equal(grassExclusionSignature(buildings),empty);
  buildings[0].entity.destroyed=false;buildings[0].type='park';assert.equal(grassExclusionSignature(buildings),empty);
 });
+
+test('quarries, iron mines and parks retain grass while farms and buildings exclude it',()=>{
+ const lots=['quarry','iron_mine','park','farm','residential'].map((type,i)=>({id:i,type,entity:{x:i,y:0},width:1,depth:1}));
+ const excluded=grassExclusionCells(lots,[]);assert.deepEqual([...excluded].sort(),['3,0','4,0']);
+ const surface=lots.flatMap((_,i)=>tile(i,0)),roots=grassRoots(surface,null,excluded).roots;
+ assert.equal(roots.length/3,300);
+});
