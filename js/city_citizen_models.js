@@ -1,3 +1,4 @@
+import {advanceCitizenGait} from './city_citizen_gait.js';
 import {wickerBasketSurface} from './city_mobility_models.js?v=cargo-box-rear-1';
 import {partyFlagCanvas,drawPartyFlag} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=flag-wind-tick-13';
@@ -414,7 +415,7 @@ export class CityCitizenModels {
       }
     }
     let motion=this.motion.get(entity);
-     if(!motion){motion={x,y,renderX:x,renderY:y,angle:0,renderAngle:0,walkDistance:0,walkFrame:0,lastStepAt:-Infinity};this.motion.set(entity,motion);}
+     if(!motion){motion={x,y,renderX:x,renderY:y,angle:0,renderAngle:0,walkDistance:0,walkFrame:0};this.motion.set(entity,motion);}
     const dx=x-motion.x,dy=y-motion.y;
     const moved=dx*dx+dy*dy>1e-7;
      if(moved){motion.angle=Math.atan2(dx,dy);if(!this.animationPaused)motion.walkDistance+=Math.hypot(dx,dy);motion.x=x;motion.y=y;}
@@ -431,9 +432,8 @@ export class CityCitizenModels {
     }else{motion.renderX=x;motion.renderY=y;motion.renderAngle=motion.angle;}
     if(visualOffset){renderX+=visualOffset.x;renderY+=visualOffset.y;}
     if((c.furnitureUse?.type==='bench'||c.furnitureUse?.type==='beach_chair')&&c.furnitureUse.seated){renderX+=Math.sin(renderAngle)*.16;renderY+=Math.cos(renderAngle)*.16;}
-    // Keep quarter-tile footsteps, but present adjacent poses instead of skipping
-    // a full animation cycle when a worker snapshot jumps several tiles.
-    if(moved&&!this.animationPaused&&motion.walkDistance+1e-8>=.25&&this.clock-motion.lastStepAt>=.1-1e-8){motion.walkFrame++;motion.walkDistance=Math.max(0,motion.walkDistance%.25);motion.lastStepAt=this.clock;}
+    // Match gait to the distance displayed, including high-speed interpolation.
+    if(moved)advanceCitizenGait(motion,this.animationPaused);
     // Keep the travel pose for the full route, including frames between
     // simulation movement updates. A sit task can be assigned before arrival.
     const traveling=moved||citizenHasPath(c)||!!c.indoorLocation?.path?.length||!!c.deliveryId||!!c.mobilityTrip&&c.mobilityTrip.stage!=='boarding';

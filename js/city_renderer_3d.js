@@ -11,7 +11,7 @@ import {marketFixtures,positionMarketFixtures} from './city_market_model.js?v=gr
 import {syncStreetMarketStalls} from './city_street_market_renderer.js?v=roadside-ad-placards-1';
 import {modelSize,buildingPoint,buildingEntranceDoor,buildingFacadeBannerSupport,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import { partyFlagCanvas,drawPartyFlag } from './city_party_flags.js';
-import {citizenIsSleeping} from './city_citizen_models.js?v=campaign-flag-simclock-1-canvas-readback-1';
+import {citizenIsSleeping} from './city_citizen_models.js?v=distance-gait-1';
 import { HOUSE_STYLES, architectureFor } from './city_culture.js?v=colonial-colored-trim-1';
 import { INDUSTRIES } from './city_industries.js';
 import { buildingGround, surfaceElevation, flagNightFactor, isRoadAt } from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -645,6 +645,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
       supports.castShadow = true; supports.receiveShadow = true; group.add(supports); group.userData.supports = supports;
       const leisureProps=new THREE.Group();
       for(const space of buildingLeisureSpaces(b)){
+        if(space.kind==='balcony')continue;
         const center={x:b.width/2,y:b.depth/2},offsets=space.kind==='roof_terrace'?[[0,0],[.35,0],[-.35,0],[0,.35]]:[[0,0]];
         offsets.forEach(([dx,dy])=>{const worldX=space.position.x+dx,worldY=space.position.y+dy,item={type:'chair',x:worldX-b.entity.x,y:worldY-b.entity.y,z:space.floor,visualScale:.62,facing:{x:center.x,y:center.y}},model=furnitureModel(THREE,item),floorY=space.kind==='roof_terrace'?b.floors*CITY_FLOOR_HEIGHT:space.floor*CITY_FLOOR_HEIGHT;model.position.set(item.x,floorY,item.y);leisureProps.add(model);});
       }

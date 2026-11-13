@@ -13,10 +13,19 @@ export function constructionSiteCells(project, plot) {
   return cells;
 }
 
+// Parks keep their natural lawn. All other built lots clear their footprint;
+// office tenants share the enclosing tower's footprint instead of adding one.
+export function buildingClearsGrass(building) {
+  return !!building.entity&&!building.entity.destroyed&&building.type!=='park'&&!building.officeTenantOf;
+}
+export function grassExclusionSignature(buildings) {
+  return buildings.filter(buildingClearsGrass).map(b=>`${b.id??''}:${b.type}:${b.entity.x},${b.entity.y},${b.width},${b.depth}`).sort().join(';');
+}
+
 export function grassExclusionCells(buildings, siteCells) {
   const cells = new Set(siteCells.map(p => `${Math.floor(p.x)},${Math.floor(p.y)}`));
   for (const building of buildings) {
-    if (building.type !== 'farm' || !building.entity || building.entity.destroyed) continue;
+    if (!buildingClearsGrass(building)) continue;
     const {x, y} = building.entity;
     for (let ty = Math.floor(y); ty < Math.ceil(y + building.depth); ty++) {
       for (let tx = Math.floor(x); tx < Math.ceil(x + building.width); tx++) cells.add(`${tx},${ty}`);

@@ -1,0 +1,31 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Passos e lotes construídos</title>
+<style>body{margin:0;background:#bccdd1;font:14px system-ui}header{position:absolute;top:10px;left:10px;background:#ffffffe8;padding:12px;border-radius:8px}button{padding:7px}#status{display:block;padding-top:5px}</style>
+<header>Modelos do jogo: caminhar em 1× e 4× · Prédio sem cobertura de grama<br><button id="pause">Pausar</button><span id="status">Carregando modelos…</span></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {CityCitizenModels} from '../js/city_citizen_models.js?v=distance-gait-1';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=angular-canopy-ticks-1';
+import {grassExclusionCells} from '../js/city_site_footprints.js?v=all-built-footprints-1';
+import {queueMotion,sampleRoundedMotion} from '../js/city_motion.js?v=rounded-routes-1';
+const out=document.querySelector('#status');
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.append(renderer.domElement);
+ let errors=0;renderer.debug.onShaderError=()=>{errors++;out.textContent='ERRO de shader';};
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xbccdd1);scene.add(new THREE.HemisphereLight(0xeaf4ff,0x5d7044,2));const sun=new THREE.DirectionalLight(0xfff0cc,2);sun.position.set(5,10,4);scene.add(sun);
+ const pos=[],uv=[];for(let y=0;y<8;y++)for(let x=0;x<10;x++)for(const [u,v]of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]]){pos.push(x+u,0,y+v);uv.push((x+u)/8,(y+v)/8);}
+ const surface=new THREE.BufferGeometry();surface.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));surface.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));surface.computeVertexNormals();const ground=new THREE.MeshStandardMaterial({color:0x536d34,roughness:1});scene.add(new THREE.Mesh(surface,ground));
+ const excludedCells=grassExclusionCells([{type:'residential',entity:{x:3,y:3},width:3,depth:3}],[]),grass=createVolumetricGrassMesh(THREE,surface,createVolumetricGrassMaterial(THREE,ground,{value:0}),{excludedCells});scene.add(grass);
+ const floor=new THREE.Mesh(new THREE.BoxGeometry(3,.035,3),new THREE.MeshStandardMaterial({color:0xb9ab91,roughness:1}));floor.position.set(4.5,.02,4.5);scene.add(floor);
+ const wallMat=new THREE.MeshStandardMaterial({color:0xe6dab9,roughness:1});for(const [x,z,w,d]of [[3,4.5,.12,3],[6,4.5,.12,3],[4.5,6,3,.12]]){const wall=new THREE.Mesh(new THREE.BoxGeometry(w,.8,d),wallMat);wall.position.set(x,.4,z);scene.add(wall);}
+ const group=new THREE.Group();scene.add(group);const models=new CityCitizenModels(THREE,group);await models.loading;if(!models.ready)throw Error(models.error);
+ const people=[{id:0,x:.7,y:1},{id:17,x:.7,y:2}],samples=people.map(entity=>({entity,to:{}}));for(const e of people)e.properties={render:{color:e.id?0x476b9b:0xb65b3f},citizen:{task:'walk',path:[{x:9,y:e.y}]}};
+ const roots=grass.geometry.getAttribute('grassRoot');let indoorRoots=0;for(let i=0;i<roots.count;i++)if(roots.getX(i)>=3&&roots.getX(i)<6&&roots.getZ(i)>=3&&roots.getZ(i)<6)indoorRoots++;
+ const camera=new THREE.OrthographicCamera(-7*innerWidth/innerHeight,7*innerWidth/innerHeight,7,-7,.1,300);camera.position.set(5,13,17);camera.lookAt(5,0,4);
+ let paused=false,last=performance.now(),now=0,nextPacket=0,frames=0;document.querySelector('#pause').onclick=()=>{paused=!paused;document.querySelector('#pause').textContent=paused?'Continuar':'Pausar';};
+ renderer.setAnimationLoop(t=>{const dt=Math.min(.05,(t-last)/1000);last=t;if(!paused)now+=dt;
+ if(now>=nextPacket){people.forEach((e,i)=>{const leg=now*(i?8:2),v=leg%17.2;queueMotion(samples[i],.7+(v<=8.6?v:17.2-v),e.y,now*1000);});nextPacket=now+.1;}
+ samples.forEach(sample=>sampleRoundedMotion(sample,now*1000));models.begin(dt,paused?0:1);people.forEach(e=>models.add(e,0));models.end();renderer.render(scene,camera);
+ if(++frames%30===0&&!errors)out.textContent=`Grama dentro do prédio: ${indoorRoots} folhas · quadros de passos: ${people.map(e=>models.motion.get(e)?.walkFrame||0).join(' / ')} · shader OK`;
+ });out.textContent=`Grama dentro do prédio: ${indoorRoots} folhas · modelos carregados · shader OK`;
+}catch(error){out.textContent=error.stack;}
+</script></html>

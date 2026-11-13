@@ -32,3 +32,22 @@ test('site masks use project dimensions and exact repair and lamp cells',()=>{
   assert.deepEqual(constructionSiteCells({service:'road-repair',path:[{x:3.1,y:4.8}]}),[{x:3.5,y:4.5}]);
   assert.deepEqual(constructionSiteCells({service:'lamp',door:{x:2.5,y:3.5}}),[{x:2.5,y:3.5}]);
 });
+test('finished buildings and paved open-air lots clear grass while parks retain their lawn',()=>{
+ const buildings=[
+  {id:1,type:'residential',entity:{x:0,y:0},width:2,depth:2},
+  {id:2,type:'market',constructionKind:'open-air',entity:{x:2,y:0},width:2,depth:2},
+  {id:3,type:'park',constructionKind:'open-air',entity:{x:4,y:0},width:2,depth:2},
+ ];
+ const excluded=grassExclusionCells(buildings,[]);assert.equal(excluded.size,8);
+ const surface=[];for(let y=0;y<2;y++)for(let x=0;x<6;x++)surface.push(...tile(x,y));
+ const {roots}=grassRoots(surface,null,excluded);assert.equal(roots.length/3,400);
+ for(let i=0;i<roots.length;i+=3)assert(roots[i]>=4,'only the park has grass');
+ buildings[0].entity.destroyed=true;assert.equal(grassExclusionCells(buildings,[]).size,4);
+});
+test('building coverage signature changes for construction, demolition and footprint resizing',async()=>{
+ const {grassExclusionSignature}=await import('../js/city_site_footprints.js');
+ const buildings=[{id:1,type:'residential',entity:{x:0,y:0},width:2,depth:2}],empty=grassExclusionSignature([]),initial=grassExclusionSignature(buildings);
+ assert.notEqual(initial,empty);buildings[0].width=3;assert.notEqual(grassExclusionSignature(buildings),initial);
+ buildings[0].entity.destroyed=true;assert.equal(grassExclusionSignature(buildings),empty);
+ buildings[0].entity.destroyed=false;buildings[0].type='park';assert.equal(grassExclusionSignature(buildings),empty);
+});

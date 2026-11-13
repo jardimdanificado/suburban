@@ -213,11 +213,11 @@ test('citizens wearing different colored clothes share an instance batch without
  for(let i=0;i<10;i++)draw();assert.equal(pose(),'run:2');
  });
 
-test('rapid movement cannot flicker poses or skip full cycles between worker snapshots',async()=>{
+test('rapid movement advances adjacent poses without the old slow clock throttle',async()=>{
  const {model}=await models(),e=person(0);e.properties.citizen.path=[{x:100,y:0}];
  const draw=dt=>{model.begin(dt,1);model.add(e,0);model.end();};const pose=()=>[...model.batches].find(([,b])=>b.count)?.[0];
  draw(.01);e.x=1.25;draw(.01);assert.equal(pose(),'run:1');
- for(let i=0;i<5;i++){e.x+=.25;draw(.01);assert.equal(pose(),'run:1');}
+ for(let i=0;i<5;i++){e.x+=.25;draw(.01);assert.equal(pose(),`run:${(i+2)%5}`);}
  e.x+=1.25;draw(.1);assert.equal(pose(),'run:2');
  for(let i=0;i<10;i++)draw(.1);assert.equal(pose(),'run:2');
 });

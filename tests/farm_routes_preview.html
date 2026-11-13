@@ -9,7 +9,7 @@ import * as THREE from 'https://esm.sh/three@0.160.0';
 import {farmSurfaceTile} from '../js/city_farm_ground.js?v=whole-farm-soil-1';
 import {FARM_TILES} from '../js/world_gen.js';
 import {caribbeanGroundSurfaceTextures} from '../js/caribbean_pixel_materials.js?v=ground-realism-2';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=rooted-blades-tracks-4';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=angular-canopy-ticks-1';
 try{
  const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(1024,380);document.querySelector('#view').append(renderer.domElement);
  const scene=new THREE.Scene();scene.background=new THREE.Color(0xb5c5ca);scene.add(new THREE.HemisphereLight(0xe6f1ff,0x56623b,2));const sun=new THREE.DirectionalLight(0xffefce,2);sun.position.set(4,10,5);scene.add(sun);

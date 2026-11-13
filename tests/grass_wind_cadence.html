@@ -1,0 +1,25 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Cadência e lâminas da grama</title>
+<style>body{margin:20px;background:#c0d0d1;font:16px system-ui}canvas{display:block;margin-top:16px}pre{white-space:pre-wrap}</style><h3>Grama angular · vento por poses</h3><pre id="status">Compilando…</pre>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=angular-canopy-ticks-1';
+const out=document.querySelector('#status');
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(640,480);document.body.append(renderer.domElement);let errors=0;renderer.debug.onShaderError=()=>errors++;
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xc0d0d1);scene.add(new THREE.HemisphereLight(0xf0f5ff,0x587542,2));const sun=new THREE.DirectionalLight(0xffefcf,2);sun.position.set(2,4,3);scene.add(sun);
+ const surface=new THREE.BufferGeometry();surface.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,0,0,.4,.4,0,.4,0,0,0,.4,0,.4,.4,0,0],3));surface.computeVertexNormals();
+ const tick={value:0},material=createVolumetricGrassMaterial(THREE,null,tick),grass=createVolumetricGrassMesh(THREE,surface,material);scene.add(grass);
+ const camera=new THREE.OrthographicCamera(-.30,.30,.225,-.225,.01,10);camera.position.set(.2,.32,.9);camera.lookAt(.2,.12,.2);
+ const target=new THREE.WebGLRenderTarget(128,96),pixels=new Uint8Array(128*96*4);
+ const hash=t=>{tick.value=t;renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,128,96,pixels);let value=2166136261;for(const p of pixels)value=Math.imul(value^p,16777619);return value>>>0;};
+ // Small readbacks and event-loop yields keep the browser responsive.
+ const runs=[];let previous=hash(0),length=1;
+ for(let t=1;t<=80;t++){const current=hash(t);if(current===previous)length++;else{runs.push(length);length=1;previous=current;}if(t%10===0)out.textContent=`Verificando tick ${t}/80…`;await new Promise(resolve=>setTimeout(resolve,0));}
+ runs.push(length);
+ const complete=runs.slice(1,-1),interval=complete.join(', '),held=complete.length>=2&&complete.every(n=>n>=15&&n<=24),changed=runs.length>=3;
+ const paused=hash(80)===hash(80);
+ renderer.setRenderTarget(null);renderer.render(scene,camera);
+ out.textContent=`Poses mantidas por 15–24 ticks: ${held?'OK':'FALHOU'}\nTroca discreta de pose: ${changed?'OK':'FALHOU'}\nPausa mantém os mesmos pixels: ${paused?'OK':'FALHOU'}\nDuração das poses completas: ${interval} ticks\nTriângulos por lâmina: ${grass.geometry.index.count/3}\nErros de shader: ${errors}`;
+
+}catch(error){out.textContent=error.stack;}
+</script></html>

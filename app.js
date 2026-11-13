@@ -1,16 +1,16 @@
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=rounded-routes-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=smooth-movement-toggle-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=regional-supply-12";
 import { CityDesktop } from "./js/city_desktop.js?v=custom-history-limit-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=farm-ground-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=angular-grass-wind-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, SPEED_TIERS, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
-import { OptionsPanel } from "./js/options.js?v=seeded-business-visual-v1";
+import { OptionsPanel } from "./js/options.js?v=smooth-movement-toggle-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 
@@ -724,7 +724,7 @@ function initSimulationBridge() {
     simulationBridge.active = false;
     simulationBridge = null;
   }
-  simulationBridge = new CitySimulationBridge({ cityId: worldNetCityId, city, entities, nextId, time, profiling,
+  simulationBridge = new CitySimulationBridge({ cityId: worldNetCityId, city, entities, nextId, time, profiling, motionOptions:options.values,
     onProgress: minute => { city.minute = minute; },
     onSummary: summary => { worldNetCoordinator.own && (worldNetCoordinator.own.summary = summary); worldNet.publishSummary(summary); },
     noticeTarget: () => cityUI.active,

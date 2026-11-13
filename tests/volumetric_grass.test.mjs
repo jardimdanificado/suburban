@@ -25,8 +25,8 @@ test('grass shader moves leaf tips, retains roots, and has no shells or random c
   const material = createVolumetricGrassMaterial({MeshStandardMaterial: Material, DoubleSide: 2}, null, time);
   const shader = {uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>\n#include <normal_fragment_begin>'};
   material.onBeforeCompile(shader);
-  assert.equal(shader.uniforms.grassTime, time);
-  assert.ok(shader.vertexShader.includes('float bend = h * h;'));
+  assert.equal(shader.uniforms.grassSimTick, time);
+  assert.ok(shader.vertexShader.includes('float bend = h;'));
   assert.ok(shader.vertexShader.includes('transformed = grassRoot'));
   assert.ok(!shader.fragmentShader.includes('discard'));
   assert.ok(!shader.fragmentShader.includes('cameraPosition'));
@@ -46,4 +46,23 @@ test('grass inherits the tile texture and tint, with darker shading', () => {
   const shader={uniforms:{},vertexShader:'#include <common>\n#include <uv_vertex>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>\n#include <normal_fragment_begin>'};
   material.onBeforeCompile(shader);
   assert.ok(shader.vertexShader.includes('grassRoot.xz / 8.0'),'sample the same world-space texture coordinates as the ground');
+});
+
+test('grass wind holds seeded canopy poses using simulation ticks, without continuous-time sway',()=>{
+ class Material{constructor(options){Object.assign(this,options);}}
+ const tick={value:12},material=createVolumetricGrassMaterial({MeshStandardMaterial:Material,DoubleSide:2},null,tick);
+ const shader={uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>\n#include <normal_fragment_begin>'};
+ material.onBeforeCompile(shader);
+ assert.equal(shader.uniforms.grassSimTick,tick);
+ assert.ok(shader.vertexShader.includes('15.0 + floor(windSeed * 10.0)'));
+ assert.ok(shader.vertexShader.includes('floor((grassSimTick + windSeed * 100.0) / interval)'));
+ assert.ok(shader.vertexShader.includes('sin(windEpoch *'));
+ assert.ok(!shader.vertexShader.includes('sin(grassSimTick'));
+});
+test('each angular blade has only one triangle, two fixed roots and a sharp offset tip',async()=>{
+ const {grassBladeSurface}=await import('../js/volumetric_grass.js');
+ const blade=grassBladeSurface();assert.equal(blade.positions.length,9);assert.deepEqual(blade.indices,[0,1,2]);
+ assert.equal(blade.positions[1],0);assert.equal(blade.positions[4],0);assert.equal(blade.positions[7],1);
+ assert.ok(blade.positions[6]>0&&blade.positions[6]<1);assert.equal(blade.normals.length,blade.positions.length);
+ assert.ok(blade.positions.every(Number.isFinite));
 });

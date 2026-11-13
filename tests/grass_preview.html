@@ -3,7 +3,7 @@
 <header>Grama: folhas enraizadas, sem camadas horizontais<br><button id="iso">Isométrica</button><button id="close">Perto</button><button id="pause">Pausar vento</button><span id="status">Carregando…</span></header>
 <script type="module">
 import * as THREE from 'https://esm.sh/three@0.160.0';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=rooted-blades-2';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=angular-canopy-ticks-1';
 const status=document.querySelector('#status');
 try {
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.body.append(renderer.domElement);
@@ -28,6 +28,6 @@ const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(1,1),new THREE.MeshStan
 const aspect=innerWidth/innerHeight;const iso=new THREE.OrthographicCamera(-9*aspect,9*aspect,9,-9,.1,300);iso.position.set(70,100,70);iso.lookAt(0,0,0);
 const close=new THREE.PerspectiveCamera(48,aspect,.05,200);close.position.set(3.5,1.8,4);close.lookAt(2,.12,0);let camera=iso,paused=false;
 document.querySelector('#iso').onclick=()=>camera=iso;document.querySelector('#close').onclick=()=>camera=close;document.querySelector('#pause').onclick=()=>paused=!paused;
-let last=performance.now(),frames=0,elapsed=0;renderer.setAnimationLoop(now=>{const dt=Math.min(.05,(now-last)/1000);last=now;if(!paused)time.value+=dt;renderer.render(scene,camera);frames++;elapsed+=dt;if(elapsed>=1){if(!shaderErrors)status.textContent=`${grass.geometry.instanceCount} folhas · ${renderer.info.render.triangles} triângulos · ${Math.round(frames/elapsed)} FPS · shader OK`;frames=0;elapsed=0;}});
+let last=performance.now(),frames=0,elapsed=0;renderer.setAnimationLoop(now=>{const dt=Math.min(.05,(now-last)/1000);last=now;if(!paused)time.value+=dt*60;renderer.render(scene,camera);frames++;elapsed+=dt;if(elapsed>=1){if(!shaderErrors)status.textContent=`${grass.geometry.instanceCount} folhas · ${renderer.info.render.triangles} triângulos · ${Math.round(frames/elapsed)} FPS · shader OK`;frames=0;elapsed=0;}});
 }catch(error){status.textContent=error.stack;}
 </script></html>

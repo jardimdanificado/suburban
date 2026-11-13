@@ -48,14 +48,14 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null) 
     side: THREE.DoubleSide, transparent: false, depthWrite: true,
   });
   material.onBeforeCompile = shader => {
-    shader.uniforms.grassTime = time;
+    shader.uniforms.grassSimTick = time;
     if(tracks)Object.assign(shader.uniforms,tracks);
     shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
       ${tracks ? TERRAIN_TRACK_GLSL : ""}
       attribute vec3 grassRoot;
       attribute vec4 grassShape;
       attribute float grassShade;
-      uniform float grassTime;
+      uniform float grassSimTick;
       varying float vBladeHeight;
       varying float vBladeShade;
       ${tracks ? "varying vec2 vBladeWorld;" : ""}
@@ -68,8 +68,12 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null) 
       float angle = grassShape.x;
       vec2 across = vec2(cos(angle), sin(angle));
       vec2 forward = vec2(-across.y, across.x);
-      float bend = h * h;
-      vec2 wind = vec2(.75, .35) * sin(grassTime * 1.6 + dot(grassRoot.xz, vec2(.8, .6)) + grassShape.w) * .018;
+      // Use the canopy's seeded 15–24 simulation-tick pose interval.
+      float windSeed = fract(sin(dot(floor(grassRoot.xz * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
+      float interval = 15.0 + floor(windSeed * 10.0);
+      float windEpoch = floor((grassSimTick + windSeed * 100.0) / interval);
+      float bend = h;
+      vec2 wind = vec2(.75, .35) * sin(windEpoch * .68 + grassShape.w) * .018;
       transformed = grassRoot + vec3(
         across.x * position.x * grassShape.z + forward.x * bend * .065 + wind.x * bend,
         h * grassShape.y,
@@ -94,22 +98,19 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null) 
       normal = normalize(vNormal);
     `);
   };
-  material.customProgramCacheKey = () => `rooted-grass-blades-v3-tracks-${!!tracks}`;
+  material.customProgramCacheKey = () => `angular-grass-canopy-ticks-v1-tracks-${!!tracks}`;
   return material;
 }
 
 export function createVolumetricGrassMesh(THREE, surface, material, {excludedCells, materialKey = 'volumetricGrass'} = {}) {
   const {roots, shapes, shades} = grassRoots(surface.getAttribute('position').array, surface.getAttribute('color')?.array, excludedCells);
   const geometry = new THREE.InstancedBufferGeometry();
-  // Two tapered segments and a pointed tip, rather than horizontal shells.
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute([
-    -1, 0, 0, 1, 0, 0, -.55, .58, 0, .55, .58, 0, 0, 1, 0,
-  ], 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute([
-    0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
-  ], 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(10), 2));
-  geometry.setIndex([0, 1, 3, 0, 3, 2, 2, 3, 4]);
+  // A rigid triangle has a sharp silhouette without intermediate curved joints.
+  const blade=grassBladeSurface();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(blade.positions,3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(blade.normals,3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(blade.uvs,2));
+  geometry.setIndex(blade.indices);
   geometry.setAttribute('grassRoot', new THREE.InstancedBufferAttribute(roots, 3));
   geometry.setAttribute('grassShape', new THREE.InstancedBufferAttribute(shapes, 4));
   geometry.setAttribute('grassShade', new THREE.InstancedBufferAttribute(shades, 1));
@@ -124,4 +125,13 @@ export function createVolumetricGrassMesh(THREE, surface, material, {excludedCel
   mesh.castShadow = false;
   mesh.userData.terrainMaterialKey = materialKey;
   return mesh;
+}
+
+export function grassBladeSurface(){
+  return {
+    positions:[-1,0,0, 1,0,0, .3,1,0],
+    normals:[0,1,0, 0,1,0, 0,1,0],
+    uvs:[0,0, 1,0, .65,1],
+    indices:[0,1,2],
+  };
 }

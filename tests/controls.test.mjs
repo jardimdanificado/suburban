@@ -150,3 +150,13 @@ test('effective speed reports elapsed simulation per real second and resets on m
  time.observeProgress(10);now=2000;time.observeProgress(34);assert.equal(time.effectiveSpeed,12);
  time.setSpeed(32);assert.equal(time.effectiveSpeed,null);time.setPaused(true);assert.equal(time.progressSample,null);
 });
+
+test('smooth movement defaults on and the toggle persists across app sessions',()=>{
+ let saved='{}';const storage={getItem(){return saved;},setItem(_key,value){saved=value;}};
+ const make=()=>new OptionsPanel({renderer:rendererMock(),time:new SimulationTime({now:()=>0}),step(){},storage});
+ const panel=make();assert.equal(panel.values.smoothMovement,true);
+ assert.equal(panel.items.find(item=>item.key==='smoothMovement').label,'MOVIMENTO SUAVE');
+ assert.equal(panel.apply('smoothMovement',false),true);assert.equal(JSON.parse(saved).smoothMovement,false);
+ const reopened=make();assert.equal(reopened.values.smoothMovement,false);
+ reopened.apply('smoothMovement',true);assert.equal(make().values.smoothMovement,true);
+});

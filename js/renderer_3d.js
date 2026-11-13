@@ -1,7 +1,7 @@
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,TerrainTracks} from './terrain_tracks.js?v=contact-atlas-2';
-import {constructionSiteCells,grassExclusionCells} from './city_site_footprints.js';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=rooted-blades-tracks-4';
+import {constructionSiteCells,grassExclusionCells,grassExclusionSignature} from './city_site_footprints.js?v=all-built-footprints-1';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=angular-canopy-ticks-1';
 import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=palette-intensity-3x";
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
@@ -22,7 +22,7 @@ import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_buildin
 import { syncCityBuildings } from "./city_renderer_3d.js?v=boats-transport-23";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=campaign-flag-simclock-1-canvas-readback-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=distance-gait-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
@@ -4246,7 +4246,7 @@ export class RCT3DRenderer {
       applyWindFoliageShader(dict.grassFoliage, 0.07, 0);
     }
 
-    this.grassTimeUniform = {value: 0};
+    this.grassWindTickUniform = {value: 0};
     this.terrainTrackUniforms = createTerrainTrackUniforms(THREE);
     this.terrainTracks = new TerrainTracks(THREE,this.terrainTrackUniforms);
     for (const dict of [this.materialsIso, this.materialsPerspective]) {
@@ -4254,8 +4254,8 @@ export class RCT3DRenderer {
       addGrassTracksToMaterial(dict[TILE_HILL],this.terrainTrackUniforms);
       addSandTracksToMaterial(dict[TILE_SAND],this.terrainTrackUniforms);
       addSandTracksToMaterial(dict.sandClean,this.terrainTrackUniforms);
-      dict.volumetricGrass = createVolumetricGrassMaterial(THREE, dict[TILE_FLOOR], this.grassTimeUniform,this.terrainTrackUniforms);
-      dict.volumetricHillGrass = createVolumetricGrassMaterial(THREE, dict[TILE_HILL], this.grassTimeUniform,this.terrainTrackUniforms);
+      dict.volumetricGrass = createVolumetricGrassMaterial(THREE, dict[TILE_FLOOR], this.grassWindTickUniform,this.terrainTrackUniforms);
+      dict.volumetricHillGrass = createVolumetricGrassMaterial(THREE, dict[TILE_HILL], this.grassWindTickUniform,this.terrainTrackUniforms);
     }
     this.materials.volumetricGrass = this.materialsIso.volumetricGrass;
     this.materials.volumetricHillGrass = this.materialsIso.volumetricHillGrass;
@@ -6642,16 +6642,16 @@ export class RCT3DRenderer {
     const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
     const city=this.cityDevelopment?.city,party=cityGoverningParty(city),farmSignatureCache=this._terrainFarmSignatureCache;
     if(!farmSignatureCache||farmSignatureCache.city!==city||farmSignatureCache.structureRevision!==(city?.structureRevision||0)){
-      this._terrainFarmSignatureCache={city,structureRevision:city?.structureRevision||0,value:(city?.buildings||[]).filter(building=>building.type==='farm'&&!building.entity.destroyed).map(building=>`${building.id}:${building.entity.x},${building.entity.y},${building.width},${building.depth}`).sort().join(';')};
+      this._terrainFarmSignatureCache={city,structureRevision:city?.structureRevision||0,grassValue:grassExclusionSignature(city?.buildings||[]),value:(city?.buildings||[]).filter(building=>building.type==='farm'&&!building.entity.destroyed).map(building=>`${building.id}:${building.entity.x},${building.entity.y},${building.width},${building.depth}`).sort().join(';')};
     }
     const farmSignature=this._terrainFarmSignatureCache.value;
     const development=this.cityDevelopment,plots=new Map((development?.plots||[]).map(plot=>[plot.id,plot]));
     const siteCells=(development?.projects||[]).flatMap(project=>constructionSiteCells(project,plots.get(project.plotId)));
-    const grassSignature=`${farmSignature}|sites:${[...new Set(siteCells.map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`))].sort().join(';')}`;
+    const grassSignature=`${this._terrainFarmSignatureCache.grassValue}|sites:${[...new Set(siteCells.map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`))].sort().join(';')}`;
     if(this._grassCoverageCity!==city||this._grassCoverageSignature!==grassSignature){
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
       this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
-      this._farmSoilCells=grassExclusionCells(city?.buildings||[],[]);
+      this._farmSoilCells=grassExclusionCells((city?.buildings||[]).filter(b=>b.type==='farm'),[]);
     }
     const railingSignature=`party:${party?.id??'none'}|farms:${farmSignature}`;
     const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}|${railingSignature}|grass:${grassSignature}`;
@@ -7543,11 +7543,11 @@ export class RCT3DRenderer {
     this.waterGroup.position.y = Math.sin(this.waterTime * 2.8) * 0.012;
     if (effectiveSpeed > 0) {
       this.flameTime += dt * effectiveSpeed;
-      if (this.grassTimeUniform) this.grassTimeUniform.value = this.flameTime;
 
       // Update GPU Wind Vertex Sway on all tree species, cacti, bushes, roses and grass
       const currentTickVal = this.simTick || 0;
       this.foliageAnimationTick = currentTickVal;
+      if (this.grassWindTickUniform) this.grassWindTickUniform.value = currentTickVal;
       for (const dict of [this.materials, this.materialsIso, this.materialsPerspective]) {
         if (!dict) continue;
         for (const k of STATIC_FOLIAGE_KEYS) {

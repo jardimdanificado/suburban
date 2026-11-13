@@ -4,7 +4,7 @@
 <button id="move">Percorrer trajeto</button><button id="age">Envelhecer 60 s</button><button id="reset">Reiniciar</button><button id="zoom">Aproximar</button><span id="status">Carregando…</span></header>
 <script type="module">
 import * as THREE from 'https://esm.sh/three@0.160.0';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=rooted-blades-tracks-4';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=angular-canopy-ticks-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,TerrainTracks} from '../js/terrain_tracks.js?v=contact-atlas-2';
 import {mobilityModelGeometry} from '../js/city_mobility_models.js?v=ground-contacts-1';
 const out=document.querySelector('#status');
@@ -29,6 +29,6 @@ document.querySelector('#move').onclick=()=>{tracks.clear();tracks.ensureWorld(r
 document.querySelector('#age').onclick=()=>{moving=false;tracks.time+=60;uniforms.terrainTrackTime.value=tracks.time;pausedTime=true;renderer.render(scene,camera);report();};
 document.querySelector('#reset').onclick=()=>{tracks.clear();tracks.ensureWorld(renderer,world);for(const e of actors)e.x=1;moving=false;pausedTime=false;report();};
 let frames=0;renderer.setAnimationLoop(now=>{const dt=Math.min(.05,(now-last)/1000);last=now;if(moving){for(const e of actors)e.x=Math.min(14,e.x+dt*2);if(walker.x>=14){moving=false;pausedTime=true;}}
-tracks.update(renderer,world,actors,pausedTime&&!moving?0:dt,{motion},null,null);time.value=tracks.time;actors.forEach((e,i)=>visuals[i].position.set(e.x,0,e.y));renderer.render(scene,camera);if(++frames%60===0)report();});report();
+tracks.update(renderer,world,actors,pausedTime&&!moving?0:dt,{motion},null,null);time.value=tracks.time*60;actors.forEach((e,i)=>visuals[i].position.set(e.x,0,e.y));renderer.render(scene,camera);if(++frames%60===0)report();});report();
 }catch(error){out.textContent=error.stack;}
 </script></html>

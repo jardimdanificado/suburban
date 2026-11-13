@@ -37,3 +37,20 @@ test('packet diagonals cannot cut across the corners of occupied building cells'
  queueMotion(s,1.5,1.5,0);queueMotion(s,2.5,2.5,100);
  assert.equal(sampleCitizenMotion(world,s,50+MOTION_BUFFER_MS),false);assert.deepEqual(s.entity,{x:1.5,y:1.5});
 });
+test('turning smoothing off restores discrete movement; turning it on restores rounded corners',()=>{
+ const world={revision:1,getTile:()=>0},smooth=route(),discrete=route();
+ sampleCitizenMotion(world,smooth,100+MOTION_BUFFER_MS,true);
+ assert(smooth.entity.x<2.5&&smooth.entity.y>1.5);
+ assert.equal(sampleCitizenMotion(world,discrete,100+MOTION_BUFFER_MS,false),true);
+ assert.deepEqual(discrete.entity,{x:3.5,y:2.5});assert.equal(discrete.points.length,0);
+ const resumed=route();sampleCitizenMotion(world,resumed,100+MOTION_BUFFER_MS,true);
+ assert(resumed.entity.x<2.5&&resumed.entity.y>1.5);
+});
+test('a running bridge reads preference changes immediately without recreation',async()=>{
+ const {CitySimulationBridge}=await import('../js/city_sim_bridge.js');
+ const bridge=Object.create(CitySimulationBridge.prototype),options={smoothMovement:true},sample=route();sample.id=1;
+ Object.assign(bridge,{motionOptions:options,city:{world:{revision:1,getTile:()=>0}},time:{paused:false},motion:new Map([[1,sample]]),interiorMotion:new Map(),synchronizeRiders(){}});
+ bridge.interpolate(100+MOTION_BUFFER_MS);assert(sample.entity.x<2.5);
+ options.smoothMovement=false;bridge.interpolate(101+MOTION_BUFFER_MS);assert.deepEqual(sample.entity,{x:3.5,y:2.5});assert.equal(bridge.motion.size,0);
+ options.smoothMovement=true;const next=route();next.id=1;bridge.motion.set(1,next);bridge.interpolate(100+MOTION_BUFFER_MS);assert(next.entity.x<2.5&&next.entity.y>1.5);
+});

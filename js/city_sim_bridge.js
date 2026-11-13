@@ -26,8 +26,8 @@ function renderSegmentWalkable(world,ax,ay,bx,by,allowWater=false,occupied=null)
   }
   return true;
 }
-export function sampleCitizenMotion(world,sample,now){
-  if(sample.points?.length&&!sample.citizen?.boatClass){
+export function sampleCitizenMotion(world,sample,now,smoothMovement=true){
+  if(smoothMovement&&sample.points?.length&&!sample.citizen?.boatClass){
     const city=sample.city,occupied=city?.occupied;
     if(sample.clearWorld!==world||sample.clearTerrain!==world.revision||sample.clearObstacles!==city?.obstacleRevision||sample.clearSize!==occupied?.size){
       sample.clearWorld=world;sample.clearTerrain=world.revision;sample.clearObstacles=city?.obstacleRevision;sample.clearSize=occupied?.size;
@@ -93,8 +93,9 @@ function receiveInteriorMotion(bridge,packet,now,resetAll=false){
 
 /** The worker owns simulation state; the UI keeps a read mirror with stable references. */
 export class CitySimulationBridge {
-  constructor({ cityId = 'city-1', city, entities, nextId, time, changed, notice, noticeTarget, onProgress=()=>{}, onSummary=()=>{}, observed=true, profiling=false }) {
+  constructor({ cityId = 'city-1', city, entities, nextId, time, changed, notice, noticeTarget, onProgress=()=>{}, onSummary=()=>{}, observed=true, profiling=false, motionOptions=null }) {
     this.cityId = cityId;
+    this.motionOptions = motionOptions;
     for(const person of city.citizens||[])person.globalId??=`${cityId}:${person.id}`;
     this.onProgress=onProgress;this.onSummary=onSummary;this.observed=!!observed;
     this.city = city; this.city.profileDiagnostics=profiling; this.entities = entities; this.time = time; this.changed = changed; this.notice = notice; this.noticeTarget = noticeTarget;
@@ -230,7 +231,7 @@ export class CitySimulationBridge {
       const dx=sample.to.x-sample.from.x,dy=sample.to.y-sample.from.y;
       const reset=!existing||this.time.paused||Math.hypot(dx,dy)>=8;
       queueMotion(sample,sample.to.x,sample.to.y,now,{reset});
-      if(!reset){this.motion.set(c.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
+      if(!reset){this.motion.set(c.id,sample);sampleCitizenMotion(this.city.world,sample,now,this.motionOptions?.smoothMovement!==false);}
     }
     for(const [id,sample] of this.motionSamples)if(sample.seen!==this.city._uiRevision)this.motionSamples.delete(id);
     applyBoatRiders(this.city,data.boatRiders);
@@ -262,7 +263,7 @@ export class CitySimulationBridge {
       const reset=this.time.paused||Math.hypot(dx,dy)>=8;
       queueMotion(sample,x,y,now,{reset});
       if(sample.citizen.indoorLocation){sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}
-      else if(!reset){this.motion.set(sample.id,sample);sampleCitizenMotion(this.city.world,sample,now);}
+      else if(!reset){this.motion.set(sample.id,sample);sampleCitizenMotion(this.city.world,sample,now,this.motionOptions?.smoothMovement!==false);}
       else {sample.entity.x=x;sample.entity.y=y;this.motion.delete(sample.id);}
       // Older/diagnostic motion packets carried a compact inside bit beside
       // ground coordinates. Keep it readable while current packets use the
@@ -306,7 +307,7 @@ export class CitySimulationBridge {
     for(const motion of this.interiorMotion.values())sampleInterior(this,motion,now);
     for (const motion of this.motion.values()) {
       if(this.time.paused)continue;
-      if(sampleCitizenMotion(this.city.world,motion,now))this.motion.delete(motion.id);
+      if(sampleCitizenMotion(this.city.world,motion,now,this.motionOptions?.smoothMovement!==false))this.motion.delete(motion.id);
     }
     this.synchronizeRiders();
   }
