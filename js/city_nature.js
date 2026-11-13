@@ -234,7 +234,7 @@ export class CityNature {
       c.forestryJob=null;c.action='Descarregando a madeira cortada';return true;
     }
     if(job.stage==='cut'){
-      const tree=this.plants.get(job.treeId);if(!tree||tree.stage!=='mature'){c.forestryJob=null;return false;}this.normalizePlantSpecies(tree);
+      const tree=this.plants.get(job.treeId);if(!tree||tree.stage!=='mature'||!(this.normalizePlantSpecies(tree)?.wood>0)){c.forestryJob=null;return false;}
       job.labor+=1+(c.skills.agriculture||0)/80+(c.toolUntil>city.minute?.3:0);c.action=`Cortando ${PLANT_SPECIES[tree.species].label.toLowerCase()}`;
       if(job.labor<45)return true;
       const event=this.harvest(b,tree,c);if(!event)return false;
@@ -252,6 +252,7 @@ export class CityNature {
   }
   harvest(b,tree,worker){
     if(!worker||!tree||!this.plants.has(tree.id)||tree.stage!=='mature'||Math.hypot(worker.entity.x-tree.x-.5,worker.entity.y-tree.y-.5)>1.6)return false;
+    if(!(this.normalizePlantSpecies(tree)?.wood>0))return false;
     const event=this.remove(tree,`cortada por ${worker.entity.properties.name}`,{citizenIds:[worker.id],buildingId:b.id,quantity:PLANT_SPECIES[tree.species].wood});
     this.harvested++;this.city.economy.produced.madeira+=PLANT_SPECIES[tree.species].wood;return event;
   }

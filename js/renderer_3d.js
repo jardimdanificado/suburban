@@ -7920,10 +7920,16 @@ export class RCT3DRenderer {
         const rotY = (((Math.imul(Math.floor(e.x) ^ Math.imul(Math.floor(e.y), 9187), 982451653) >>> 0) % 628) / 100.0);
         mMatrix.makeRotationY(rotY);
         const size = (r.size || 1) * getTreeVisualScale(e) * (e.properties.species === 'royal_palm' ? 1.08 : 1);
-        scaleMatrix.makeScale(size, size, size);
+        const lowFanPalm=e.properties.species==='licuala_palm';
+        scaleMatrix.makeScale(size, size*(lowFanPalm?.08:1), size);
         mMatrix.multiply(scaleMatrix);
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instPalmTrunks.setMatrixAt(palmCount, mMatrix);
+        if(lowFanPalm){
+          // Keep broad upright fans on a short basal stem, including plants loaded from old saves.
+          mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size*.45,size);mMatrix.multiply(scaleMatrix);
+          mMatrix.setPosition(e.x+.5,surfaceH-size*1.05,e.y+.5);
+        }
         if(e.properties.cityPlant?.form==='fan_palm')this.instFanPalmFronds.setMatrixAt(fanPalmCount++,mMatrix);
         else this.instPalmFronds.setMatrixAt(palmFrondCount++,mMatrix);
         palmCount++;
