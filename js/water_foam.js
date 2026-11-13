@@ -1,4 +1,4 @@
-import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-1';
+import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-2';
 import {WATER_LEVEL} from './water_surface.js?v=shore-runup-2';
 // Shore-local distance keeps the moving foam front aligned to every coast orientation.
 export const FOAM_WIDTH = .68;

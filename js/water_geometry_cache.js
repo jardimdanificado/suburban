@@ -1,8 +1,12 @@
 // Terrain-derived mesh data depends on terrain and its explicit cache key, not time.
 // A weak owner and one revision keep old worlds and old terrain collectible.
-const worlds=new WeakMap();
+const worlds=new WeakMap(),disabled=new WeakSet();
+export function setWaterGeometryCacheEnabled(world,enabled){
+  if(enabled)disabled.delete(world);else disabled.add(world);
+  worlds.delete(world);
+}
 export function cachedWaterGeometry(world,kind,key,build){
-  if(!Number.isFinite(world.revision))return build();
+  if(disabled.has(world)||!Number.isFinite(world.revision))return build();
   let cache=worlds.get(world);
   if(!cache||cache.revision!==world.revision||cache.map!==world.map||cache.width!==world.width||cache.height!==world.height){
     cache={revision:world.revision,map:world.map,width:world.width,height:world.height,kinds:new Map()};worlds.set(world,cache);

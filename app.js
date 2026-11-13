@@ -5,12 +5,12 @@ import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=regional-supply-12";
 import { CityDesktop } from "./js/city_desktop.js?v=custom-history-limit-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=camera-budget-24";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=camera-budget-25";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
 import { SimulationTime, SPEED_TIERS, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
-import { OptionsPanel } from "./js/options.js?v=original-colors-only-1";
+import { OptionsPanel } from "./js/options.js?v=terrain-toggle-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 

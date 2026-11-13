@@ -1,4 +1,4 @@
-import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-1';
+import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-2';
 import {WATER_LEVEL} from './water_surface.js?v=shore-runup-2';
 import {TILE_SAND,TILE_WATER} from './world_gen.js';
 import {terrainCornerHeight,terrainTileTouchesStone,terrainSurfaceElevation} from './road_terrain_geometry.js?v=low-water-shore-4';

@@ -2,7 +2,7 @@ import {terrainZoomDetail} from '../js/terrain_zoom_detail.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {cachedWaterGeometry} from '../js/water_geometry_cache.js';
+import {cachedWaterGeometry,setWaterGeometryCacheEnabled} from '../js/water_geometry_cache.js';
 import {sandShoreTileSurface} from '../js/sand_shore.js';
 import {shoreFoamTileSurface,cachedShoreFoamTileSurface} from '../js/water_foam.js';
 import {sandNormalField} from '../js/sand_surface_lighting.js';
@@ -106,4 +106,21 @@ test('terrain scheduler finishes the center before peripheral queued blocks',()=
  const w=world(),far=job('0,0'),near=job('2,2');far.world=near.world=w;
  Object.assign(r,{camX:40,camY:40,terrainChunkSize:16,_terrainBuildJobs:new Map([['0,0',far],['2,2',near]]),terrainChunks:new Map(),terrainGroup:group,waterGroup:group});
  r.advanceTerrainBuilds(w,new Set(['0,0','2,2']),false,1000);assert.deepEqual(order,['2,2','0,0']);
+});
+
+test('disabling terrain optimizations bypasses water caches until enabled again',()=>{
+ const w=world();let builds=0;const build=()=>++builds;
+ assert.equal(cachedWaterGeometry(w,'toggle','a',build),1);
+ setWaterGeometryCacheEnabled(w,false);
+ assert.equal(cachedWaterGeometry(w,'toggle','a',build),2);
+ assert.equal(cachedWaterGeometry(w,'toggle','a',build),3);
+ setWaterGeometryCacheEnabled(w,true);
+ assert.equal(cachedWaterGeometry(w,'toggle','a',build),4);
+ assert.equal(cachedWaterGeometry(w,'toggle','a',build),4);
+});
+test('disabled terrain optimizations use full detail and synchronous terrain at every zoom',()=>{
+ const r=new Klass(),w=world(),group={add(){},remove(){}};let builds=0;
+ Object.assign(r,{terrainOptimizationsEnabled:false,zoom:.2,mapWidth:128,mapHeight:128,camX:45,camY:45,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),terrainGroup:group,waterGroup:group,rctGridLineGroup:group,isPerspectiveActive(){return false;},disposeTerrainChunk(){},*buildTerrainChunkSteps(){throw Error('progressive work must be bypassed');},buildTerrainChunk(...args){builds++;assert.equal(args[7],2);return {signature:args[6],terrain:{},water:{},grid:{children:[]}};}});
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1);assert.equal(r.terrainChunkSize,32);assert.equal(r._terrainBuildJobs?.size||0,0);
+ r.zoom=.7;r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1);
 });

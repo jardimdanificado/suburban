@@ -1,8 +1,8 @@
-import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-1';
+import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-2';
 import {TILE_WATER} from './world_gen.js';
 import {WATER_LEVEL} from './water_surface.js?v=shore-runup-2';
 import {terrainSurfaceElevation} from './road_terrain_geometry.js?v=low-water-shore-4';
-import {sandShoreTileSurface} from './sand_shore.js?v=zoom-coast-7';
+import {sandShoreTileSurface} from './sand_shore.js?v=zoom-coast-8';
 
 // Derive one normal field from world heights, independent of triangle density,
 // material buckets and chunk boundaries. Dry sand and the apron share it.

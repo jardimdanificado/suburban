@@ -71,6 +71,7 @@ function rendererMock() {
   return {
     shadowsEnabled: true, wireframeMode: 0, graphicOptions: {},
     setResolutionScale(value) { this.scaleFactor = value; },
+    setTerrainOptimizations(value) { this.terrainOptimizationsEnabled = value; },
     toggleShadows() { this.shadowsEnabled = !this.shadowsEnabled; },
     setShadowQuality(value) { this.shadowQuality = value; },
     toggleWireframe() { this.wireframeMode = (this.wireframeMode + 1) % 3; },
@@ -171,4 +172,14 @@ test('retired palette preferences are ignored and cannot be activated through op
  assert.equal(panel.values.resolution,.75);assert.equal(panel.values.smoothMovement,false);
  assert.equal(renderer.graphicOptions.colorPalette,undefined);assert.equal(renderer.graphicOptions.paletteIntensity,undefined);
  panel.apply('brightness',1.25);assert.equal(JSON.parse(saved).colorPalette,undefined);assert.equal(JSON.parse(saved).paletteIntensity,undefined);
+});
+
+test('terrain optimizations toggle updates renderer and persists both ways',()=>{
+ let saved='{}';const storage={getItem:()=>saved,setItem(_key,value){saved=value;}},renderer=rendererMock();
+ const make=()=>new OptionsPanel({renderer,time:new SimulationTime({now:()=>0}),step(){},storage});
+ const panel=make();assert.equal(renderer.terrainOptimizationsEnabled,true);
+ panel.apply('terrainOptimizations',false);assert.equal(renderer.terrainOptimizationsEnabled,false);
+ assert.equal(make().values.terrainOptimizations,false);
+ panel.apply('terrainOptimizations',true);assert.equal(renderer.terrainOptimizationsEnabled,true);
+ assert.equal(make().values.terrainOptimizations,true);
 });
