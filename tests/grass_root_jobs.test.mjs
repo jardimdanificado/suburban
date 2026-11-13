@@ -46,3 +46,35 @@ test('visible grass preempts an already running background field without losing 
  assert.equal(foreground,true);assert.equal(background,false);assert.equal(jobs.running,partial);
  jobs.advance(2000);assert.equal(background,true);assert.equal(jobs.running,null);
 });
+
+test('installation yields across budgets without losing a live field',()=>{
+ let clock=0,installed=0;
+ const jobs=new GrassRootJobs(()=>clock++),world={width:8,height:8};
+ jobs.request(world,'field',surface,new Set(),10,()=>true,function*(data){assert.equal(data.roots.length,300);for(let i=0;i<20;i++){installed++;yield;}});
+ jobs.advance(9);assert.ok(installed>0&&installed<20);assert.ok(jobs.running);
+ jobs.advance(100);assert.equal(installed,20);assert.equal(jobs.running,null);
+});
+
+test('worker replies install the exact transferred roots and clearing rejects stale replies',t=>{
+ const OriginalWorker=globalThis.Worker;let worker;
+ globalThis.Worker=class{constructor(){worker=this;}postMessage(message){this.message=message;}terminate(){this.terminated=true;}};
+ t.after(()=>{if(OriginalWorker)globalThis.Worker=OriginalWorker;else delete globalThis.Worker;});
+ const jobs=new GrassRootJobs(),world={width:8,height:8};let actual;
+ jobs.request(world,'field',surface,new Set(),10,()=>true,data=>actual=data);
+ jobs.advance(100);assert.equal(actual,undefined);assert.deepEqual(worker.message.positions,positions);
+ assert.notEqual(worker.message.positions,positions,'transferring a job must not detach the terrain geometry');
+ const data=grassRoots(positions);worker.onmessage({data:{id:worker.message.id,data}});
+ jobs.advance(100);assert.equal(actual,data);
+ jobs.request(world,'other',surface,new Set(),10,()=>true,()=>assert.fail('stale result installed'));
+ jobs.advance(100);const stale=worker,reply={id:worker.message.id,data};jobs.clear();
+ assert.equal(stale.terminated,true);stale.onmessage({data:reply});jobs.advance(100);assert.equal(jobs.running,null);
+});
+
+test('worker failure resumes the existing incremental generator',t=>{
+ const OriginalWorker=globalThis.Worker;let worker;
+ globalThis.Worker=class{constructor(){worker=this;}postMessage(){}terminate(){}};
+ t.after(()=>{if(OriginalWorker)globalThis.Worker=OriginalWorker;else delete globalThis.Worker;});
+ const jobs=new GrassRootJobs(),world={width:8,height:8};let actual;
+ jobs.request(world,'field',surface,new Set(),10,()=>true,data=>actual=data);
+ jobs.advance(100);worker.onerror();jobs.advance(100);assert.deepEqual(actual,grassRoots(positions));
+});

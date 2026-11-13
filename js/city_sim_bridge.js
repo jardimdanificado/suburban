@@ -1,9 +1,19 @@
 import {applyFishing} from './fishing_motion.js';
 import {applyBoatRiders,applyBoatTows} from './boat_rider_motion.js';
-import {queueMotion,sampleRoundedMotion} from './city_motion.js?v=rounded-routes-1';
+import {queueMotion,sampleRoundedMotion,sampleMotion,MOTION_BUFFER_MS} from './city_motion.js?v=rounded-routes-1';
 import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-12';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
+
+// Ground vehicles use the same delayed position buffer as citizens. Angles
+// follow the shortest arc in that buffer, keeping riders aligned with the bike.
+export function sampleVehicleMotion(motion,now){
+  sampleMotion(motion,now);
+  const a=motion.points[0],b=motion.points[1]||a;
+  const ratio=a===b?1:Math.max(0,Math.min(1,(now-MOTION_BUFFER_MS-a.at)/(b.at-a.at)));
+  const angle=a.angle??motion.targetAngle,next=b.angle??angle;
+  motion.vehicle.angle=angle+Math.atan2(Math.sin(next-angle),Math.cos(next-angle))*ratio;
+}
 
 // Worker snapshots can skip several corners of a valid route. Interpolating
 // directly between those snapshots would draw a straight chord through water
@@ -192,7 +202,7 @@ export class CitySimulationBridge {
     }
     // Unchanged graph nodes still hold authoritative positions, not an interpolation sample.
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
-    for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
+    for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;if(motion.vehicle)motion.vehicle.angle=motion.targetAngle;}
     this.graph.apply(data.packet);
     for(const id of data.checkpointIds||[]){const waiter=this.checkpointWaiters.get(id);if(waiter){this.checkpointWaiters.delete(id);waiter.resolve(this.state);}}
     this.onProgress(this.city.minute);
@@ -275,19 +285,23 @@ export class CitySimulationBridge {
     applyBoatRiders(this.city,data.boatRiders);applyBoatTows(this.city,data.boatTows);applyFishing(this.city,data.fishing);
     this.applyVehiclePositions(data.vehicles);
   }
-  applyVehiclePositions(positions) {
+  applyVehiclePositions(positions,now=performance.now()) {
     if(!positions)return;
-    const now=performance.now(),live=new Set();
+    const live=new Set();
     for(let i=0;i<positions.length;i+=5){
       const v=this.city.vehicles.units.get(positions[i]);
       if(!v?.entity)continue;
       live.add(v.id);let motion=this.vehicleMotion.get(v.id);
       if(!motion){motion={entity:v.entity,to:{}};this.vehicleMotion.set(v.id,motion);}
-      motion.entity=v.entity;
-      const x=positions[i+1],y=positions[i+2];
-      v.x=x;v.y=y;queueMotion(motion,x,y,now,{reset:true});
-      v.entity.x=x;v.entity.y=y;
-      v.altitude=positions[i+3];v.angle=positions[i+4];
+      motion.entity=v.entity;motion.vehicle=v;
+      const x=positions[i+1],y=positions[i+2],angle=positions[i+4];
+      const reset=!motion.points?.length||this.time?.paused||!!v.boatClass||this.motionOptions?.smoothMovement===false||Math.hypot(x-motion.to.x,y-motion.to.y)>=8;
+      motion.snap=!!v.boatClass||this.motionOptions?.smoothMovement===false;
+      v.x=x;v.y=y;queueMotion(motion,x,y,now,{reset});
+      motion.points.at(-1).angle=angle;motion.points[0].angle??=angle;
+      motion.targetAngle=angle;v.altitude=positions[i+3];
+      if(reset){v.entity.x=x;v.entity.y=y;v.angle=angle;}
+      else sampleVehicleMotion(motion,now);
     }
     for(const id of this.vehicleMotion.keys())if(!live.has(id))this.vehicleMotion.delete(id);
     this.synchronizeRiders();
@@ -310,6 +324,7 @@ export class CitySimulationBridge {
       if(this.time.paused)continue;
       if(sampleCitizenMotion(this.city.world,motion,now,this.motionOptions?.smoothMovement!==false))this.motion.delete(motion.id);
     }
+    if(!this.time.paused)for(const motion of this.vehicleMotion.values())if(!motion.snap)sampleVehicleMotion(motion,now);
     this.synchronizeRiders();
   }
   fail(message) {
@@ -322,7 +337,7 @@ export class CitySimulationBridge {
     bindCityState(this.city);
     this.city.lighting.siteBuckets=null;
     for (const motion of this.motion.values()) { motion.entity.x = motion.to.x; motion.entity.y = motion.to.y; }
-    for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;}
+    for(const motion of this.vehicleMotion.values()){motion.entity.x=motion.to.x;motion.entity.y=motion.to.y;if(motion.vehicle)motion.vehicle.angle=motion.targetAngle;}
     for(const pending of this.pending.values())pending.resolve?.({ok:false,message:String(message)});
     this.pending.clear(); this.motion.clear();this.motionSamples.clear();this.interiorMotion.clear();this.vehicleMotion.clear();
     console.error('Simulação em segundo plano indisponível:', message);

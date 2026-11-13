@@ -1,7 +1,7 @@
 <!doctype html><meta charset="utf-8"><title>Desempenho ao mover a câmera</title>
 <style>body{margin:0;background:#233841;color:white;font:14px system-ui}#view{width:480px;height:320px}pre{white-space:pre-wrap}</style><div id="view"></div><pre id="status">Medindo movimento…</pre>
 <script type="module">
-import {RCT3DRenderer} from '../js/renderer_3d.js?v=visible-first-36';
+import {RCT3DRenderer} from '../js/renderer_3d.js?v=worker-roots-38';
 const cpuOnly=new URLSearchParams(location.search).has('cpu');
 const status=document.querySelector('#status');window.addEventListener('error',event=>status.textContent=event.message);
 try{

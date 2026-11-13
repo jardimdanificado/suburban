@@ -16,7 +16,13 @@ export function grassRoots(positions,colors,excludedCells=new Set(),options={}){
 export function* grassRootSteps(positions, colors, excludedCells = new Set(), {bladesPerAxis = BLADES_PER_AXIS,acceptRoot=null} = {}) {
   const axis=Math.max(0,Math.floor(bladesPerAxis));
   if(!axis)return {roots:new Float32Array(),shapes:new Float32Array(),shades:new Float32Array()};
-  const roots = [], shapes = [], shades = [], occupied = new Map();
+  // Allocate numeric buffers once instead of growing three boxed-number arrays
+  // and copying millions of values when a field completes.
+  let areaSum=0;
+  for(let i=0;i<positions.length;i+=9)areaSum+=Math.max(0,(positions[i+5]-positions[i+2])*(positions[i+6]-positions[i])-(positions[i+3]-positions[i])*(positions[i+8]-positions[i+2]))*.5;
+  let capacity=Math.max(16,Math.ceil(areaSum*axis*axis)+32),count=0;
+  let roots=new Float32Array(capacity*3),shapes=new Float32Array(capacity*4),shades=new Float32Array(capacity);
+  const occupied=new Map();
   for (let i = 0; i < positions.length; i += 9) {
     const [ax, ay, az, bx, by, bz, cx, cy, cz] = positions.slice(i, i + 9);
     const area = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
@@ -39,15 +45,21 @@ export function* grassRootSteps(positions, colors, excludedCells = new Set(), {b
       if(!row){row=new Set();occupied.set(z,row);}
       row.add(x);
       const seed = hash(x, z, 71);
-      roots.push(px, ay * wa + by * wb + cy * wc - .003, pz);
-      shapes.push(hash(x, z, 47) * Math.PI * 2, .16 + seed * .13,
-        .018 + hash(x, z, 59) * .012, seed * Math.PI * 2);
+      if(count===capacity){
+        capacity=Math.ceil(capacity*1.5);
+        const nextRoots=new Float32Array(capacity*3),nextShapes=new Float32Array(capacity*4),nextShades=new Float32Array(capacity);
+        nextRoots.set(roots);nextShapes.set(shapes);nextShades.set(shades);
+        roots=nextRoots;shapes=nextShapes;shades=nextShades;
+      }
+      roots[count*3]=px;roots[count*3+1]=ay*wa+by*wb+cy*wc-.003;roots[count*3+2]=pz;
+      shapes[count*4]=hash(x,z,47)*Math.PI*2;shapes[count*4+1]=.16+seed*.13;
+      shapes[count*4+2]=.018+hash(x,z,59)*.012;shapes[count*4+3]=seed*Math.PI*2;
       const ao = colors ? colors[i] * wa + colors[i + 3] * wb + colors[i + 6] * wc : 1;
-      shades.push(ao * (.88 + hash(x, z, 83) * .24));
+      shades[count++]=ao*(.88+hash(x,z,83)*.24);
     }
     yield;
   }
-  return {roots: new Float32Array(roots), shapes: new Float32Array(shapes), shades: new Float32Array(shades)};
+  return {roots:roots.slice(0,count*3),shapes:shapes.slice(0,count*4),shades:shades.slice(0,count)};
 }
 
 export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, {details = false} = {}) {
@@ -146,7 +158,7 @@ export function createVolumetricGrassMesh(THREE, surface, material, {excludedCel
   geometry.setAttribute('grassRoot', new THREE.InstancedBufferAttribute(roots, 3));
   geometry.setAttribute('grassShape', new THREE.InstancedBufferAttribute(shapes, 4));
   geometry.setAttribute('grassShade', new THREE.InstancedBufferAttribute(shades, 1));
-  geometry.setAttribute('grassTint', new THREE.InstancedBufferAttribute(new Float32Array(roots.length).fill(1), 3));
+  geometry.setAttribute('grassTint', new THREE.InstancedBufferAttribute(rootData?.tints??new Float32Array(roots.length).fill(1), 3));
   geometry.instanceCount = roots.length / 3;
   surface.computeBoundingBox();
   geometry.boundingBox = surface.boundingBox.clone();

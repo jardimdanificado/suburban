@@ -44,6 +44,8 @@ test('actual chunk renderer builds visible terrain only and a far building does 
  r.camX=115;r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1,'moving the camera must not rebuild an existing chunk just because its center distance changed');r.camX=45;
  city.buildings.push({id:1,type:'residential',entity:{x:100,y:100},width:2,depth:2});city.structureRevision++;
  r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1,'the distant lot must not rebuild the visible chunk');
+ city.buildings.push({id:3,type:'farm',entity:{x:110,y:110},width:2,depth:2});city.structureRevision++;
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,1,'a distant farm must not restart visible terrain');
  city.buildings.push({id:2,type:'residential',entity:{x:45,y:45},width:2,depth:2});city.structureRevision++;
  r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(builds,2,'a changed lot inside the visible chunk still rebuilds');
  r.zoom=.4;r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(r.terrainChunkSize,16);assert.equal(builds,3);
@@ -70,10 +72,12 @@ test('terrain jobs preserve the visible chunk until complete and cancel stale pa
  const pending=r._terrainBuildJobs.get('2,2');assert.ok(pending.partial);cancelled=false;w.revision++;
  r.invalidateTerrainAt(115,115);
  r.advanceTerrainBuilds(w,new Set(['2,2']),false,1);assert.equal(cancelled,false);assert.equal(pending.partial.disposed,undefined);
- r.invalidateTerrainAt(45,45);assert.ok(cancelled);assert.ok(pending.partial.disposed);assert.equal(r._terrainBuildJobs.has('2,2'),false);
+ r.invalidateTerrainAt(45,45);assert.equal(cancelled,false);assert.equal(pending.partial.disposed,undefined);assert.equal(r._terrainBuildJobs.get('2,2'),pending);
  assert.equal(r.terrainChunks.get('2,2'),complete,'local edits retain the last complete terrain');
  r.rebuildTerrainIfNeeded(w,40,45,40,45);r.advanceTerrainBuilds(w,new Set(['2,2']),false,1000);
  assert.notEqual(r.terrainChunks.get('2,2'),complete);assert.ok(complete.disposed);
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);r.advanceTerrainBuilds(w,new Set(['2,2']),false,1000);
+ assert.match(r.terrainChunks.get('2,2').signature,/\|r1$/,'coalesced edits get a fresh replacement after current work completes');
 });
 
 test('stationary terrain finishes despite remote edits and publishes only after roots are ready',()=>{
@@ -95,10 +99,10 @@ test('stationary terrain finishes despite remote edits and publishes only after 
 });
 
 test('tile edits invalidate dependency radius rather than nine whole blocks',()=>{
- const r=new Klass(),cancelled=[];Object.assign(r,{terrainChunkSize:32,cancelTerrainBuild(key){cancelled.push(key);}});
- r.invalidateTerrainAt(48,48);assert.deepEqual(cancelled,['1,1']);
- cancelled.length=0;r.invalidateTerrainAt(31,31);
- assert.deepEqual(cancelled,['0,0','1,0','0,1','1,1']);
+ const r=new Klass();r.terrainChunkSize=32;
+ r.invalidateTerrainAt(48,48);assert.deepEqual([...r._terrainChunkVersions.keys()],['1,1']);
+ r._terrainChunkVersions.clear();r.invalidateTerrainAt(31,31);
+ assert.deepEqual([...r._terrainChunkVersions.keys()],['0,0','1,0','0,1','1,1']);
 });
 test('terrain scheduler finishes the center before peripheral queued blocks',()=>{
  const r=new Klass(),order=[],group={add(){}};
@@ -145,4 +149,15 @@ test('off-screen preparation waits while a visible chunk is blocked on grass',()
  Object.assign(r,{camX:40,camY:40,terrainChunkSize:16,terrainChunks:new Map(),terrainGroup:group,waterGroup:group,_terrainPrefetchKeys:new Set(['2,2','3,2']),_terrainBuildJobs:new Map([['3,2',hidden],['2,2',foreground]])});
  r.advanceTerrainBuilds(w,visible,false,1000);assert.equal(background,0);assert.equal(r._terrainBuildJobs.size,2);
  waiting=false;r.advanceTerrainBuilds(w,visible,false,1000);assert.equal(background,1);assert.equal(r._terrainBuildJobs.size,0);
+});
+
+test('continuous local edits cannot starve the currently visible terrain build',()=>{
+ const r=new Klass(),w=world(),group=()=>({children:[],add(c){c.parent=this;},remove(){}}),make=signature=>({signature,terrain:group(),water:group(),grid:group()});let ready=false,starts=0;
+ Object.assign(r,{zoom:.4,mapWidth:128,mapHeight:128,camX:40,camY:40,terrainChunks:new Map(),visibleTerrainChunkKeys:new Set(),terrainGroup:group(),waterGroup:group(),rctGridLineGroup:group(),isPerspectiveActive(){return false;},disposeTerrainChunk(c){c.disposed=true;},buildTerrainPlaceholder(){return make('pending');},*buildTerrainChunkSteps(...args){if(args[1]===32&&args[3]===32)starts++;const c=make(args[6]);yield c;while(!ready)yield {waitingForRoots:true};return c;}});
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);const pending=r._terrainBuildJobs.get('2,2');
+ for(let i=0;i<30;i++){w.revision++;r.invalidateTerrainAt(40,40);r.rebuildTerrainIfNeeded(w,40,45,40,45);assert.equal(r._terrainBuildJobs.get('2,2'),pending);}
+ ready=true;r.advanceTerrainBuilds(w,new Set(['2,2']),false,1000);
+ assert.equal(starts,1);assert.notEqual(r.terrainChunks.get('2,2').signature,'pending');
+ r.rebuildTerrainIfNeeded(w,40,45,40,45);r.advanceTerrainBuilds(w,new Set(['2,2']),false,1000);
+ assert.match(r.terrainChunks.get('2,2').signature,/\|r30$/);
 });

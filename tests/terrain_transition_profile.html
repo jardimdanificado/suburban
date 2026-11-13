@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><title>Perfil da transição de terreno</title>
+<div id="view"></div><pre id="status">Medindo…</pre>
+<script type="module">
+import {GrassRootJobs} from '../js/grass_root_jobs.js?v=worker-roots-11';
+import {RCT3DRenderer} from '../js/renderer_3d.js?v=worker-roots-38';
+const params=new URLSearchParams(location.search),status=document.querySelector('#status');
+if(params.has('noidle'))window.requestIdleCallback=undefined;
+const width=128,height=128,map=new Uint8Array(width*height);
+for(let y=0;y<height;y++)for(let x=0;x<width;x++)map[y*width+x]=y<40?2:y<44?3:0;
+const world={width,height,map,revision:1,clock:{hour:12,minute:0},groups:[],sidewalkTiles:new Set(),getTile(x,y){return x<0||y<0||x>=width||y>=height?5:map[y*width+x];}};
+const r=new RCT3DRenderer(document.querySelector('#view'));r.mapWidth=width;r.mapHeight=height;r.resize(960,600);r.shadowsEnabled=false;r.setCamera(64,64,1.2);
+if(!params.has('gpu'))r.renderer.render=()=>{};
+const result={idle:!params.has('noidle'),gpu:params.has('gpu'),firstReadyMs:null,visibleReadyMs:null,allReadyMs:null,frames:0,maxFrameMs:0,terrainCpuMs:0,maxTerrainSliceMs:0,rootsCpuMs:0,maxRootsSliceMs:0};
+const build=r.buildTerrainChunkSteps;r.buildTerrainChunkSteps=function(...args){const steps=build.apply(this,args);return {next(){const start=performance.now(),value=steps.next(),elapsed=performance.now()-start;result.terrainCpuMs+=elapsed;result.maxTerrainSliceMs=Math.max(result.maxTerrainSliceMs,elapsed);return value;},return(){return steps.return();}};};
+r.grassRootJobs=new GrassRootJobs();
+result.rootInstallCpuMs=0;result.maxRootInstallMs=0;result.workerTintedResults=0;
+const request=r.grassRootJobs.request;r.grassRootJobs.request=function(world,key,surface,excluded,axis,alive,ready,priority){return request.call(this,world,key,surface,excluded,axis,alive,data=>{if(data.tints)result.workerTintedResults++;const before=performance.now();const installation=ready(data);const elapsed=performance.now()-before;result.rootInstallCpuMs+=elapsed;result.maxRootInstallMs=Math.max(result.maxRootInstallMs,elapsed);return installation?{next(){const start=performance.now(),step=installation.next(),elapsed=performance.now()-start;result.rootInstallCpuMs+=elapsed;result.maxRootInstallMs=Math.max(result.maxRootInstallMs,elapsed);return step;}}:installation;},priority,arguments[8]);};
+let wrapped=false;const start=performance.now();
+function frame(){try{
+ const before=performance.now();r.render(world,[],world.clock,1/60,0);result.maxFrameMs=Math.max(result.maxFrameMs,performance.now()-before);result.frames++;
+ if(r.grassRootJobs&&!wrapped){wrapped=true;const advance=r.grassRootJobs.advance;r.grassRootJobs.advance=function(...args){const start=performance.now();advance.apply(this,args);const elapsed=performance.now()-start;result.rootsCpuMs+=elapsed;result.maxRootsSliceMs=Math.max(result.maxRootsSliceMs,elapsed);};}
+ const elapsed=performance.now()-start,visible=[...r.visibleTerrainChunkKeys],ready=visible.filter(key=>r.terrainChunks.get(key)?.signature!=='pending');
+ if(ready.length&&result.firstReadyMs===null)result.firstReadyMs=elapsed;
+ if(visible.length===ready.length&&result.visibleReadyMs===null)result.visibleReadyMs=elapsed;
+ if(!r._terrainBuildJobs?.size&&!r.grassRootJobs?.running&&!r.grassRootJobs?.queue.length)result.allReadyMs=elapsed;
+ status.textContent=JSON.stringify({...result,workerFailed:r.grassRootJobs?.workerFailed,workerError:r.grassRootJobs?.workerError,blades:[...r.terrainChunks.values()].reduce((count,chunk)=>count+chunk.terrain.children.reduce((sum,mesh)=>sum+(mesh.geometry?.getAttribute('grassRoot')?mesh.geometry.instanceCount:0),0),0),visible:visible.length,ready:ready.length,pending:r._terrainBuildJobs?.size},null,2);
+ if(result.allReadyMs===null&&elapsed<60000)requestAnimationFrame(frame);
+}catch(error){status.textContent=error.stack;}}
+requestAnimationFrame(frame);
+</script>

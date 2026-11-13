@@ -2,9 +2,14 @@
 // therefore follow exactly the same coverage as the lawn, without another scan.
 function random(x,z,salt){const n=Math.sin(x*127.1+z*311.7+salt*74.7)*43758.5453;return n-Math.floor(n);}
 export function grassDetailInstances(roots,shades){
+  const steps=grassDetailInstanceSteps(roots,shades);let step=steps.next();
+  while(!step.done)step=steps.next();return step.value;
+}
+export function* grassDetailInstanceSteps(roots,shades){
   const positions=[],shapes=[],colors=[],lighting=[];
   const palette=[[.96,.84,.33],[.90,.89,.77],[.63,.42,.73],[.86,.51,.55]];
   for(let i=0;i<roots.length;i+=3){
+    if(i%6144===0)yield;
     const x=roots[i],z=roots[i+2],patch=random(Math.floor(x/3),Math.floor(z/3),8);
     const seed=random(x,z,1);
     if(seed>.00015+patch*.00045)continue;
@@ -29,8 +34,8 @@ export function grassDetailSurface(){
   }
   return positions;
 }
-export function createGrassDetailsMesh(THREE,grass,material){
-  const data=grassDetailInstances(grass.geometry.getAttribute('grassRoot').array,grass.geometry.getAttribute('grassShade').array);
+export function createGrassDetailsMesh(THREE,grass,material,prepared=null){
+  const data=prepared??grassDetailInstances(grass.geometry.getAttribute('grassRoot').array,grass.geometry.getAttribute('grassShade').array);
   if(!data.roots.length)return null;
   const geometry=new THREE.InstancedBufferGeometry(),positions=grassDetailSurface();
   geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
