@@ -3,13 +3,13 @@
 <header><button id="wide">Costa e flores</button><button id="traveller">Árvore-do-viajante</button><button id="shell">Concha de perto</button><button id="shrub">Buganvília de perto</button><button id="phase">Alternar fase das ondas</button><button id="pause">Pausar</button><div id="status">Carregando…</div></header>
 <script type="module">
 import {WATER_LEVEL,WATER_WAVE_GLSL} from '../js/water_surface.js?v=shore-runup-2';
-import {sandNormalField,applySandSurfaceNormals,addSandWetnessShader} from '../js/sand_surface_lighting.js?v=water-cached-2';
+import {sandNormalField,applySandSurfaceNormals,addSandWetnessShader} from '../js/sand_surface_lighting.js?v=zoom-coast-3';
 import * as THREE from 'https://esm.sh/three@0.160.0';
-import {shoreFoamTileSurface,addShoreFoamShader} from '../js/water_foam.js?v=water-cached-10';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=meadow-accents-1';
+import {shoreFoamTileSurface,addShoreFoamShader} from '../js/water_foam.js?v=zoom-coast-11';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=zoom-density-2';
 import {createGrassDetailsMesh} from '../js/grass_details.js?v=rare-meadow-2';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from '../js/flowering_shrub_surface.js?v=leaf-bract-detail-2';
-import {sandShoreTileSurface,isSlopingBeachTile} from '../js/sand_shore.js?v=water-cached-6';
+import {sandShoreTileSurface,isSlopingBeachTile} from '../js/sand_shore.js?v=zoom-coast-7';
 import {terrainCornerHeight} from '../js/road_terrain_geometry.js?v=low-water-shore-4';
 import {createTravellerPalmGeometry} from '../js/traveller_palm.js?v=ravenala-fan-1';
 import {createBeachShellMesh} from '../js/beach_shells.js?v=scattered-shells-1';

@@ -11,10 +11,10 @@ export function isSlopingBeachTile(world,x,z){
 
 // One joined beach apron per water tile. The original dry shore is its upper
 // edge; the far end continues below the water instead of closing with a wall.
-export function sandShoreTileSurface(world,tx,ty,{profileOnly=false}={}){
-  return cachedWaterGeometry(world,'beach',`${tx},${ty}:${profileOnly?1:0}`,()=>buildSandShoreTileSurface(world,tx,ty,profileOnly));
+export function sandShoreTileSurface(world,tx,ty,{profileOnly=false,steps=12}={}){
+  return cachedWaterGeometry(world,'beach',`${tx},${ty}:${profileOnly?1:0}:${profileOnly?0:steps}`,()=>buildSandShoreTileSurface(world,tx,ty,profileOnly,steps));
 }
-function buildSandShoreTileSurface(world,tx,ty,profileOnly){
+function buildSandShoreTileSurface(world,tx,ty,profileOnly,steps){
   const at=(x,z)=>x<0||z<0||x>=world.width||z>=world.height?null:world.getTile(x,z);
   if(at(tx,ty)!==TILE_WATER&&!(profileOnly&&isSlopingBeachTile(world,tx,ty)))return null;
   const segments=[];
@@ -45,7 +45,7 @@ function buildSandShoreTileSurface(world,tx,ty,profileOnly){
     return result;
   };
   if(profileOnly)return {sample};
-  const positions=[],uvs=[],shades=[],steps=12,grid=[];
+  const positions=[],uvs=[],shades=[],grid=[];
   for(let z=0;z<=steps;z++)for(let x=0;x<=steps;x++){
     const px=tx+x/steps,pz=ty+z/steps,s=sample(px,pz);
     grid.push({x:px,z:pz,...s});

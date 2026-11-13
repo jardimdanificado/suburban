@@ -4,11 +4,11 @@ import {WATER_LEVEL} from './water_surface.js?v=shore-runup-2';
 export const FOAM_WIDTH = .68;
 // Every water tile owns one surface, even where several banks meet. Sampling
 // the nearest shoreline merges intersecting wave fronts without layered strips.
-export function cachedShoreFoamTileSurface(world,tx,ty,isWaterAt,beach=null,isBeachAt=null){
+export function cachedShoreFoamTileSurface(world,tx,ty,isWaterAt,beach=null,isBeachAt=null,{steps=8}={}){
   const allowed=!!isBeachAt?.(tx,ty);
-  return cachedWaterGeometry(world,'foam',`${tx},${ty}:${allowed?1:0}:${beach?1:0}`,()=>shoreFoamTileSurface(tx,ty,isWaterAt,beach,isBeachAt));
+  return cachedWaterGeometry(world,'foam',`${tx},${ty}:${allowed?1:0}:${beach?1:0}:${steps}`,()=>shoreFoamTileSurface(tx,ty,isWaterAt,beach,isBeachAt,{steps}));
 }
-export function shoreFoamTileSurface(tx,ty,isWaterAt,beach=null,isBeachAt=null){
+export function shoreFoamTileSurface(tx,ty,isWaterAt,beach=null,isBeachAt=null,{steps=8}={}){
   const water=isWaterAt(tx,ty);
   if(!water&&!isBeachAt?.(tx,ty))return null;
   const segments=[];
@@ -22,7 +22,7 @@ export function shoreFoamTileSurface(tx,ty,isWaterAt,beach=null,isBeachAt=null){
   if(!segments.length)return null;
   // Concentrate the existing vertices near banks, where the narrow raised
   // crest needs support. Symmetric coordinates still match neighboring tiles.
-  const grid=[],coordinates=[0,.04,.10,.22,.5,.78,.90,.96,1],steps=coordinates.length-1;
+  const grid=[],coordinates=steps===8?[0,.04,.10,.22,.5,.78,.90,.96,1]:steps===4?[0,.10,.5,.90,1]:[0,.5,1];
   for(let z=0;z<=steps;z++)for(let x=0;x<=steps;x++){
     const px=tx+coordinates[x],pz=ty+coordinates[z];
     let best=Infinity,nx=0,nz=0;

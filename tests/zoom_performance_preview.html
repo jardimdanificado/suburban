@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><title>Zoom e nível de detalhe</title>
+<style>body{margin:0;background:#233841;color:white;font:14px system-ui}#view{width:640px;height:400px}pre{white-space:pre-wrap}</style>
+<div id="view"></div><pre id="status">Carregando renderer…</pre>
+<script type="module">
+import {RCT3DRenderer} from '../js/renderer_3d.js?v=zoom-detail-12';
+const status=document.querySelector('#status');window.addEventListener('error',event=>status.textContent='ERRO: '+event.message);
+try{
+ const width=64,height=64,map=new Uint8Array(width*height);for(let z=0;z<height;z++)for(let x=0;x<width;x++)map[z*width+x]=z<27?0:z<32?3:2;
+ const world={width,height,map,revision:1,clock:{hour:12,minute:0},groups:[],sidewalkTiles:new Set(),getTile(x,z){return x<0||z<0||x>=width||z>=height?5:map[z*width+x];}};
+ const r=new RCT3DRenderer(document.querySelector('#view'));r.mapWidth=width;r.mapHeight=height;r.resize(640,400);r.setResolutionScale(1);r.shadowsEnabled=false;
+ let errors=0;r.renderer.debug.onShaderError=()=>errors++;
+ const zooms=[2,.7,.4,2],results=[];let stage=0,frame=0,buildMs=0;
+ function step(){try{
+  const zoom=zooms[stage];if(frame===0)r.setCamera(32,32,zoom);
+  const start=performance.now();r.render(world,[],world.clock,1/60,0);if(frame===0)buildMs=performance.now()-start;
+  if(++frame<6){requestAnimationFrame(step);return;}
+  let blades=0;for(const chunk of r.terrainChunks.values())for(const mesh of chunk.terrain.children)if(mesh.userData.terrainMaterialKey?.startsWith('volumetric'))blades+=mesh.geometry.instanceCount||0;
+  results.push({zoom,blades,triangles:r.renderer.info.render.triangles,buildCpuMs:+buildMs.toFixed(1),chunkSize:r.terrainChunkSize});
+  if(++stage<zooms.length){frame=0;requestAnimationFrame(step);return;}
+  status.textContent=JSON.stringify({shaderErrors:errors,restoredCloseDetail:results[0].blades===results[3].blades,results},null,2);
+ }catch(error){status.textContent='ERRO: '+(error.stack||error);}}
+ requestAnimationFrame(step);
+}catch(error){status.textContent='ERRO: '+(error.stack||error);}
+</script>

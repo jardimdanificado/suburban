@@ -1,16 +1,17 @@
-import {sandNormalField,applySandSurfaceNormals,addSandWetnessShader} from './sand_surface_lighting.js?v=water-cached-2';
+import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-2';
+import {sandNormalField,applySandSurfaceNormals,addSandWetnessShader} from './sand_surface_lighting.js?v=zoom-coast-3';
 import {WATER_LEVEL,WATER_WAVE_GLSL} from './water_surface.js?v=shore-runup-2';
-import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=water-cached-6';
+import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=zoom-coast-7';
 import {createTravellerPalmGeometry} from './traveller_palm.js?v=ravenala-fan-1';
 import {cursorLightPlacement} from './cursor_light.js?v=above-roofs-1';
 import {createBeachShellMesh} from './beach_shells.js?v=scattered-shells-1';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
 import {createGrassDetailsMesh} from './grass_details.js?v=rare-meadow-2';
-import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=water-cached-10';
+import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=zoom-coast-11';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=more-sand-2';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=meadow-accents-1';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=zoom-density-2';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -6606,7 +6607,8 @@ export class RCT3DRenderer {
   // ---------------------------------------------------------------------------
 
   rebuildTerrainIfNeeded(world, minTx, maxTx, minTy, maxTy, visionTarget = null) {
-    const nextChunkSize = this.zoom < 0.12 ? 256 : this.zoom < 0.2 ? 128 : this.zoom < 0.55 ? 64 : 32;
+    // Stable, bounded chunks avoid a large synchronous rebuild when zoom crosses a threshold.
+    const nextChunkSize = 32;
     if (this.terrainChunkSize !== nextChunkSize) {
       for (const chunk of this.terrainChunks.values()) this.disposeTerrainChunk(chunk);
       this.terrainChunks.clear();
@@ -6632,7 +6634,7 @@ export class RCT3DRenderer {
     // Frame duration must not invalidate all cached chunks. Detail remains
     // stable for the same view/zoom and explicit terrain setting.
     const detailTier = this.terrainDetailTier ?? 2;
-    const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
+    const zoomBand = terrainZoomDetail(this.zoom,this.isPerspectiveActive()).band;
     const city=this.cityDevelopment?.city,party=cityGoverningParty(city),farmSignatureCache=this._terrainFarmSignatureCache;
     if(!farmSignatureCache||farmSignatureCache.city!==city||farmSignatureCache.structureRevision!==(city?.structureRevision||0)){
       this._terrainFarmSignatureCache={city,structureRevision:city?.structureRevision||0,grassValue:grassExclusionSignature(city?.buildings||[]),value:(city?.buildings||[]).filter(building=>building.type==='farm'&&!building.entity.destroyed).map(building=>`${building.id}:${building.entity.x},${building.entity.y},${building.width},${building.depth}`).sort().join(';')};
@@ -6712,8 +6714,9 @@ export class RCT3DRenderer {
   }
 
   buildTerrainChunk(world, minTx, maxTx, minTy, maxTy, visionTarget, signature, detailBand = 2, visibleChunkKeys = null) {
+    const zoomDetail=terrainZoomDetail(this.zoom,this.isPerspectiveActive());
     const gridEnabled = this.wireframeMode === 1 && this.zoom >= 0.45;
-    const zoomBand = this.zoom < 0.55 ? 0 : this.zoom < 1.3 ? 1 : 2;
+    const zoomBand = terrainZoomDetail(this.zoom,this.isPerspectiveActive()).band;
     const curTileX = Math.floor(this.camX);
     const curTileY = Math.floor(this.camY);
     const curZoom = Math.round(this.zoom * 8);
@@ -6844,14 +6847,14 @@ export class RCT3DRenderer {
             bucket.pos.push(px,WATER_LEVEL,pz);bucket.uvs.push(px/8,pz/8);bucket.colors.push(...color);
             bucket.waterCells.push(ty*this.mapWidth+tx);bucket.waterLights.push(zoneMult);bucket.waterShoreMix.push(mix);
           };
-          const steps=coastal?4:2;
+          const steps=coastal?zoomDetail.coastSteps:zoomDetail.waterSteps;
           for (let gy=0;gy<steps;gy++) for(let gx=0;gx<steps;gx++) {
             const x0=gx/steps,x1=(gx+1)/steps,y0=gy/steps,y1=(gy+1)/steps;
             for(const [fx,fy] of [[x0,y0],[x0,y1],[x1,y1],[x0,y0],[x1,y1],[x1,y0]]) waterVertex(tx+fx,ty+fy,fx,fy);
           }
     };
     const addWaterFoamTile = (tx, ty, beach) => {
-      const foam=cachedShoreFoamTileSurface(world,tx,ty,isWaterAt,beach,(x,z)=>isSlopingBeachTile(world,x,z)&&!this._farmSoilCells?.has(`${x},${z}`));
+      const foam=cachedShoreFoamTileSurface(world,tx,ty,isWaterAt,beach,(x,z)=>isSlopingBeachTile(world,x,z)&&!this._farmSoilCells?.has(`${x},${z}`),{steps:zoomDetail.foamSteps});
       if(!foam)return;
       waterFoamBucket.pos.push(...foam.positions);
       waterFoamBucket.uvs.push(...foam.uvs);
@@ -7049,7 +7052,7 @@ export class RCT3DRenderer {
         }
 
         if (tType === TILE_WATER) {
-          const beach=sandShoreTileSurface(world,tx,ty);
+          const beach=sandShoreTileSurface(world,tx,ty,{steps:zoomDetail.beachSteps});
           addWaterTile(tx,ty,zoneMult,!!beach);
           if(beach){
             const shore=tileMeshBuckets.shoreSand;shore.pos.push(...beach.positions);shore.uvs.push(...beach.uvs);
@@ -7255,15 +7258,15 @@ export class RCT3DRenderer {
         mesh.userData.waterCells=bucket.waterCells;mesh.userData.waterLights=bucket.waterLights;mesh.userData.waterShoreMix=bucket.waterShoreMix;chunk.water.add(mesh);
       } else {
         chunk.terrain.add(mesh);
-        if(matKey===String(TILE_SAND)||matKey==='sandClean'){
+        if(zoomDetail.smallDetails&&(matKey===String(TILE_SAND)||matKey==='sandClean')){
           const shells=createBeachShellMesh(THREE,geom,this.materials.beachShells,this._grassExclusionCells);
           if(shells)chunk.terrain.add(shells);
         }
-        if (matKey === String(TILE_FLOOR) || matKey === String(TILE_HILL)) {
+        if (zoomDetail.grassAxis&&(matKey === String(TILE_FLOOR) || matKey === String(TILE_HILL))) {
           const materialKey=matKey===String(TILE_HILL)?'volumetricHillGrass':'volumetricGrass';
-          const grass=createVolumetricGrassMesh(THREE, geom, this.materials[materialKey], {excludedCells:this._grassExclusionCells,materialKey});
+          const grass=createVolumetricGrassMesh(THREE, geom, this.materials[materialKey], {excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis});
           chunk.terrain.add(grass);
-          const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);
+          const details=zoomDetail.smallDetails?createGrassDetailsMesh(THREE,grass,this.materials.grassDetails):null;
           if(details)chunk.terrain.add(details);
         }
       }

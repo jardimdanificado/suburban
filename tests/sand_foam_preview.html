@@ -2,7 +2,7 @@
 <style>body{margin:0;background:#263c40;color:white;font:16px sans-serif}#status{position:absolute;padding:12px}</style><div id="status">Carregando</div>
 <script type="module">
 import * as THREE from 'https://esm.sh/three@0.160.0';
-import {addShoreFoamShader,shoreFoamSurface} from '../js/water_foam.js?v=water-cached-10';
+import {addShoreFoamShader,shoreFoamSurface} from '../js/water_foam.js?v=zoom-coast-11';
 import {TerrainTracks,createTerrainTrackUniforms,addSandDepositsToMaterial} from '../js/terrain_tracks.js?v=more-sand-2';
 const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(640,360);document.body.append(renderer.domElement);
 let errors=0;renderer.debug.onShaderError=()=>errors++;

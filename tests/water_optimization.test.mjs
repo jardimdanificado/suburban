@@ -1,3 +1,4 @@
+import {terrainZoomDetail} from '../js/terrain_zoom_detail.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -34,7 +35,7 @@ test('footprints invalidate nearby chunks and their blend neighbors, not distant
 
 const source=readFileSync(new URL('../js/renderer_3d.js',import.meta.url),'utf8');
 const method=source.slice(source.indexOf('  rebuildTerrainIfNeeded('),source.indexOf('\n  buildTerrainChunk('));
-const Klass=new Function('cityGoverningParty','grassExclusionSignature','grassExclusionCells','constructionSiteCells','grassChunkSignatures',`return class {${method}}`)(()=>null,grassExclusionSignature,grassExclusionCells,constructionSiteCells,grassChunkSignatures);
+const Klass=new Function('terrainZoomDetail','cityGoverningParty','grassExclusionSignature','grassExclusionCells','constructionSiteCells','grassChunkSignatures',`return class {${method}}`)(terrainZoomDetail,()=>null,grassExclusionSignature,grassExclusionCells,constructionSiteCells,grassChunkSignatures);
 test('actual chunk renderer builds visible terrain only and a far building does not rebuild its coast',()=>{
  const r=new Klass(),w=world(),city={structureRevision:0,buildings:[]};let builds=0;
  const group=()=>({add(child){child.parent=this;},remove(child){child.parent=null;}});
@@ -44,6 +45,8 @@ test('actual chunk renderer builds visible terrain only and a far building does 
  r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(builds,1,'the distant lot must not rebuild the visible chunk');
  city.buildings.push({id:2,type:'residential',entity:{x:45,y:45},width:2,depth:2});city.structureRevision++;
  r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(builds,2,'a changed lot inside the visible chunk still rebuilds');
+ r.zoom=.4;r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(r.terrainChunkSize,32);assert.equal(builds,3);
+ r.zoom=.38;r.rebuildTerrainIfNeeded(w,40,50,40,50);assert.equal(builds,3,'small zoom changes inside one LOD band keep the terrain cache');
 });
 
 test('empty ocean entries do not evict useful coast arrays, and retained geometry stays bounded',()=>{
