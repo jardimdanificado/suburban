@@ -59,3 +59,17 @@ test('render tracking falls back to entity positions until a body transform exis
   entity.properties.citizen.indoorLocation={};tracker.update({}, {}, [entity],.1,models);
   delete entity.properties.citizen.indoorLocation;entity.x+=.5;tracker.update({}, {}, [entity],.1,models);assert.equal(painted.length,0);
 });
+
+test('sand carried per shoe fades over three contacts and water washes it off',async()=>{
+  const {SandCarry}=await import('../js/terrain_tracks.js');
+  const carry=new SandCarry(),entity={},world={width:20,height:4,getTile(x){return x===0?3:x===8?2:8;}};
+  const step=(x,kind=-1)=>({x,z:1,kind,width:.1,length:.22,angle:0});
+  carry.contacts(entity,[step(.5),step(.5,1)],world);
+  const marks=carry.contacts(entity,[step(1.1),step(1.3),step(1.5),step(1.7)],world);
+  assert.ok(marks.length>0);assert.ok(marks.every(s=>s.deposit>0&&s.deposit<=1));
+  assert.deepEqual(carry.contacts(entity,[step(2.1)],world),[]);
+  carry.contacts(entity,[step(8.1,1)],world);
+  assert.deepEqual(carry.contacts(entity,[step(9.1,1)],world),[]);
+  carry.contacts(entity,[step(.5)],world);carry.reset(entity);
+  assert.deepEqual(carry.contacts(entity,[step(1.1)],world),[]);
+});

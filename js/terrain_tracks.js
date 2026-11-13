@@ -1,3 +1,4 @@
+import {TILE_SAND,TILE_WATER,TILE_VOID} from './world_gen.js';
 import {MOBILITY_GROUND_CONTACTS} from './city_mobility_models.js?v=ground-contacts-1';
 export const VEHICLE_CONTACTS = MOBILITY_GROUND_CONTACTS;
 const turn = (a,b) => Math.atan2(Math.sin(b-a),Math.cos(b-a));
@@ -45,6 +46,32 @@ export class TerrainTrackMotion {
   }
 }
 
+
+// Sand stays on each shoe for only three contacts after leaving the beach.
+export class SandCarry {
+  constructor(){this.history=new WeakMap();}
+  reset(entity){this.history.delete(entity);}
+  contacts(entity,stamps,world){
+    if(!stamps.length)return [];
+    const shoes=this.history.get(entity)||[0,0],deposits=[];
+    this.history.set(entity,shoes);
+    for(const stamp of stamps){
+      if(!stamp.kind)continue;
+      const x=Math.floor(stamp.x),z=Math.floor(stamp.z),foot=stamp.kind<0?0:1;
+      const tile=x<0||z<0||x>=world.width||z>=world.height?TILE_VOID:(world.getTile?world.getTile(x,z):world.map?.[z*world.width+x]);
+      if(tile===TILE_SAND){shoes[foot]=3;continue;}
+      if(tile===TILE_WATER||tile===TILE_VOID){shoes[foot]=0;continue;}
+      if(shoes[foot]>0){
+        const amount=shoes[foot]--;
+        // Stable contact hash: probability and grains do not change with FPS.
+        const chance=Math.sin(stamp.x*127.1+stamp.z*311.7+foot*74.7)*43758.5453;
+        if(chance-Math.floor(chance)<.8)deposits.push({...stamp,deposit:amount/3});
+      }
+    }
+    return deposits;
+  }
+}
+
 // A timestamp atlas is painted only where new contacts arrive. Old marks fade
 // in the terrain shaders, without rebuilding chunks or uploading a world mask.
 export function createTerrainTrackUniforms(THREE){
@@ -61,7 +88,7 @@ export const TERRAIN_TRACK_GLSL = `
     if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 0.0;
     vec4 mark = texture2D(terrainTrackMap, uv);
     float born = dot(floor(mark.rgb * 255.0 + .5), vec3(65536.0, 256.0, 1.0)) * .1;
-    return mark.a * (1.0 - smoothstep(hold, life, max(0.0, terrainTrackTime - born)));
+    return step(.001, mark.a) * (1.0 - smoothstep(hold, life, max(0.0, terrainTrackTime - born)));
   }
 `;
 function addGroundTracksToMaterial(material,uniforms,grass){
@@ -74,34 +101,39 @@ function addGroundTracksToMaterial(material,uniforms,grass){
       .replace('#include <begin_vertex>','#include <begin_vertex>\nvTrackWorld = (modelMatrix * vec4(position, 1.0)).xz;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>\nvarying vec2 vTrackWorld;\n${TERRAIN_TRACK_GLSL}`)
       .replace('#include <color_fragment>',`#include <color_fragment>
+        vec4 deposit = texture2D(terrainTrackMap, vTrackWorld / terrainTrackWorldSize);
+        float depositBorn = dot(floor(deposit.rgb * 255.0 + .5), vec3(65536.0,256.0,1.0)) * .1;
+        float sand = deposit.a * (1.0-step(.75,deposit.a)) * (1.0-smoothstep(8.0,28.0,terrainTrackTime-depositBorn));
         float imprint = terrainTrackStrength(vTrackWorld, ${hold.toFixed(1)}, ${life.toFixed(1)});
         vec2 texel = terrainTrackTexel;
         float lip = terrainTrackStrength(vTrackWorld + texel * vec2(.8, .8), ${hold.toFixed(1)}, ${life.toFixed(1)}) - imprint;
-        ${grass ? 'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.065, .046, .025), imprint * .72);' : 'diffuseColor.rgb *= 1.0 - imprint * .32 + lip * .12;'}
+        ${grass===null ? '' : grass ? 'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.065, .046, .025), imprint * .72);' : 'diffuseColor.rgb *= 1.0 - imprint * .32 + lip * .12;'}
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.64,.49,.26), sand * 1.7);
       `);
   };
-  material.customProgramCacheKey=()=>`${programKey}|ground-contact-tracks-v2-${grass}`;
+  material.customProgramCacheKey=()=>`${programKey}|ground-contact-tracks-v3-${grass}`;
 }
 
+export function addSandDepositsToMaterial(material,uniforms){addGroundTracksToMaterial(material,uniforms,null);}
 export function addSandTracksToMaterial(material,uniforms){addGroundTracksToMaterial(material,uniforms,false);}
 export function addGrassTracksToMaterial(material,uniforms){addGroundTracksToMaterial(material,uniforms,true);}
 
 export class TerrainTracks {
   constructor(THREE,uniforms){
-    this.THREE=THREE;this.uniforms=uniforms;this.empty=uniforms.terrainTrackMap.value;this.motion=new TerrainTrackMotion();
+    this.THREE=THREE;this.uniforms=uniforms;this.empty=uniforms.terrainTrackMap.value;this.motion=new TerrainTrackMotion();this.sandCarry=new SandCarry();
     this.scene=new THREE.Scene();this.camera=new THREE.Camera();this.time=0;
     this.material=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,blending:THREE.NoBlending,toneMapped:false,
       uniforms:{...uniforms},vertexShader:`
-        attribute vec4 contactShape; attribute vec2 contactInfo; varying vec2 vContact; varying float vContactKind;
+        attribute vec4 contactShape; attribute vec2 contactInfo; attribute float depositAmount; varying float vDeposit; varying vec2 vContact; varying float vContactKind;
         uniform vec2 terrainTrackWorldSize;
         void main(){
-          vContact=position.xy; vContactKind=contactInfo.y;
+          vDeposit=depositAmount; vContact=position.xy; vContactKind=contactInfo.y;
           vec2 local=position.xy * contactShape.zw * .5;
           float c=cos(contactInfo.x),s=sin(contactInfo.x);
           vec2 world=contactShape.xy + vec2(c*local.x+s*local.y,-s*local.x+c*local.y);
           gl_Position=vec4(world / terrainTrackWorldSize * 2.0 - 1.0,0.0,1.0);
         }`,fragmentShader:`
-        uniform float terrainTrackTime; varying vec2 vContact; varying float vContactKind;
+        uniform float terrainTrackTime; varying float vDeposit; varying vec2 vContact; varying float vContactKind;
         void main(){
           if(abs(vContactKind)>.5){
             vec2 p=vContact;
@@ -110,13 +142,17 @@ export class TerrainTracks {
             float heel=length(vec2(p.x/.73,(p.y+.66)/.34));
             if(min(toe,heel)>1.0 || p.x*vContactKind>.55 && p.y>-.45 && p.y<-.05)discard;
           }
+          if(vDeposit>0.0){
+            float grain=fract(sin(dot(floor(gl_FragCoord.xy),vec2(12.9898,78.233)))*43758.5453);
+            if(grain>.38*vDeposit)discard;
+          }
           float ticks=floor(terrainTrackTime*10.0);
           vec3 packed=vec3(floor(ticks/65536.0),floor(mod(ticks,65536.0)/256.0),mod(ticks,256.0));
-          gl_FragColor=vec4(packed/255.0,1.0);
+          gl_FragColor=vec4(packed/255.0,vDeposit>0.0?.2+.3*vDeposit:1.0);
         }`});
   }
   clear(){
-    this.target?.dispose();this.target=null;this.world=null;this.time=0;this.motion=new TerrainTrackMotion();
+    this.target?.dispose();this.target=null;this.world=null;this.time=0;this.motion=new TerrainTrackMotion();this.sandCarry=new SandCarry();
     this.uniforms.terrainTrackMap.value=this.empty;this.uniforms.terrainTrackTime.value=0;
   }
   ensureWorld(renderer,world){
@@ -139,18 +175,20 @@ export class TerrainTracks {
       const geometry=new T.InstancedBufferGeometry();
       geometry.setAttribute('position',new T.Float32BufferAttribute([-1,-1,0,1,-1,0,1,1,0,-1,1,0],3));geometry.setIndex([0,1,2,0,2,3]);
       geometry.setAttribute('contactShape',new T.InstancedBufferAttribute(new Float32Array(this.capacity*4),4).setUsage(T.DynamicDrawUsage));
+      geometry.setAttribute('depositAmount',new T.InstancedBufferAttribute(new Float32Array(this.capacity),1).setUsage(T.DynamicDrawUsage));
       geometry.setAttribute('contactInfo',new T.InstancedBufferAttribute(new Float32Array(this.capacity*2),2).setUsage(T.DynamicDrawUsage));
       this.mesh=new T.Mesh(geometry,this.material);this.mesh.frustumCulled=false;this.scene.add(this.mesh);
     }
     const shape=this.mesh.geometry.getAttribute('contactShape'),info=this.mesh.geometry.getAttribute('contactInfo');
-    stamps.forEach((s,i)=>{shape.setXYZW(i,s.x,s.z,s.width,s.length);info.setXY(i,s.angle,s.kind);});
-    shape.needsUpdate=info.needsUpdate=true;this.mesh.geometry.instanceCount=stamps.length;
+    stamps.forEach((s,i)=>{shape.setXYZW(i,s.x,s.z,s.width,s.length);info.setXY(i,s.angle,s.kind);this.mesh.geometry.getAttribute('depositAmount').setX(i,s.deposit||0);});
+    this.mesh.geometry.getAttribute('depositAmount').needsUpdate=true;shape.needsUpdate=info.needsUpdate=true;this.mesh.geometry.instanceCount=stamps.length;
     const old=renderer.getRenderTarget(),autoClear=renderer.autoClear,shadowUpdate=renderer.shadowMap.autoUpdate,shadowNeedsUpdate=renderer.shadowMap.needsUpdate;
     renderer.autoClear=false;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=false;
     renderer.setRenderTarget(this.target);renderer.render(this.scene,this.camera);renderer.setRenderTarget(old);
     renderer.autoClear=autoClear;renderer.shadowMap.autoUpdate=shadowUpdate;renderer.shadowMap.needsUpdate=shadowNeedsUpdate;
   }
   update(renderer,world,entities,dt,models,offsets,bounds){
+    this.sandCarry ||= new SandCarry();
     this.ensureWorld(renderer,world);this.time+=Math.max(0,dt);this.uniforms.terrainTrackTime.value=this.time;
     if(dt<=0)return;
     const stamps=[];
@@ -158,12 +196,16 @@ export class TerrainTracks {
       const citizen=entity.properties?.citizen,vehicle=entity.properties?.cityVehicle;
       if(!citizen&&!vehicle)continue;
       const elevated=citizen&&(citizen.skybridgeZ>0||citizen._renderIndoorPosition?.z>0||citizen.furnitureUse?.seated||citizen.furnitureUse?.pose==='lying');
-      if(entity.destroyed||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);continue;}
+      if(entity.destroyed||citizen&&(citizen.ridingVehicleId||citizen.indoorLocation||elevated)||vehicle&&(vehicle.boatClass||vehicle.ferrying||vehicle.scrapped)) {this.motion.reset(entity);this.sandCarry.reset(entity);continue;}
       const motion=citizen&&models?.motion?.get(entity),visible=motion&&Number.isFinite(motion.bodyX)&&Number.isFinite(motion.bodyZ)&&motion.bodyFrame===models.frameToken;
       const offset=offsets?.get(entity.id),x=visible?motion.bodyX:entity.x+(offset?.x||0),z=visible?motion.bodyZ:entity.y+(offset?.y||0);
-      if(bounds&&(x<bounds.renderedMinTx-2||x>bounds.renderedMaxTx+2||z<bounds.renderedMinTy-2||z>bounds.renderedMaxTy+2)){this.motion.reset(entity);continue;}
+      if(bounds&&(x<bounds.renderedMinTx-2||x>bounds.renderedMaxTx+2||z<bounds.renderedMinTy-2||z>bounds.renderedMaxTy+2)){this.motion.reset(entity);this.sandCarry.reset(entity);continue;}
       const angle=vehicle?vehicle.angle||0:motion?.renderAngle||0;
-      stamps.push(...this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale:motion?.bodySize||1},this.time));
+      const previous=this.motion.history.get(entity);
+      if(!previous||previous.vehicle!==(vehicle?.good||null)||this.time-previous.time>1||Math.hypot(x-previous.x,z-previous.z)>3)this.sandCarry.reset(entity);
+      const contacts=this.motion.move(entity,{x,z,angle,vehicle:vehicle?.good||null,scale:motion?.bodySize||1},this.time);
+      stamps.push(...contacts);
+      if(citizen&&!vehicle)stamps.push(...this.sandCarry.contacts(entity,contacts,world));
     }
     this.paint(renderer,stamps);
   }

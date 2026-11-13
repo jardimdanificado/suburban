@@ -1,5 +1,6 @@
+import {addShoreFoamShader} from './water_foam.js?v=shore-surge-1';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
-import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,TerrainTracks} from './terrain_tracks.js?v=contact-atlas-2';
+import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=sand-carry-1';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature} from './city_site_footprints.js?v=all-built-footprints-1';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=angular-canopy-ticks-1';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
@@ -3962,10 +3963,14 @@ export class RCT3DRenderer {
       map: caribbeanWater, color: 0xffffff, vertexColors: true, roughness: 0.34, metalness: 0.03,
       transparent: false, depthWrite: true, side: THREE.DoubleSide, dithering: true
     }));
-    const makeFoamMaterial = () => addWaterMotionShader(new THREE.MeshLambertMaterial({
-      vertexColors: true, transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide,
-      emissive: 0x000000, emissiveIntensity: 0
-    }));
+    const makeFoamMaterial = () => {
+      const material=addWaterMotionShader(new THREE.MeshLambertMaterial({
+        vertexColors: true, transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide,
+        emissive: 0x000000, emissiveIntensity: 0
+      }));
+      addShoreFoamShader(material);
+      return material;
+    };
 
     const terrainSurfaceMaterials = (normalMapsEnabled, category, style, normalMap, normalScale, roughness, metalness) => Object.fromEntries(
       Array.from({length:4},(_,variant)=>{
@@ -4237,6 +4242,9 @@ export class RCT3DRenderer {
       addGrassTracksToMaterial(dict[TILE_HILL],this.terrainTrackUniforms);
       addSandTracksToMaterial(dict[TILE_SAND],this.terrainTrackUniforms);
       addSandTracksToMaterial(dict.sandClean,this.terrainTrackUniforms);
+      for(const [key,material] of Object.entries(dict)){
+        if(/terrain(Rock|Mountain|Peak|DirtRoad|PavedRoad|Sidewalk)/.test(key)||key==='farmSoil'||[TILE_STONE,TILE_MOUNTAIN,TILE_PEAK,TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE].includes(Number(key)))addSandDepositsToMaterial(material,this.terrainTrackUniforms);
+      }
       dict.volumetricGrass = createVolumetricGrassMaterial(THREE, dict[TILE_FLOOR], this.grassWindTickUniform,this.terrainTrackUniforms);
       dict.volumetricHillGrass = createVolumetricGrassMaterial(THREE, dict[TILE_HILL], this.grassWindTickUniform,this.terrainTrackUniforms);
     }
@@ -6818,7 +6826,7 @@ export class RCT3DRenderer {
       const samples = Array.from({length:5},(_,i)=>({
         t:i/4,
         shoreInset:0.012+random()*0.024,
-        foamWidth:0.20+random()*0.12
+        foamWidth:0.36
       }));
       for (let segment = 0; segment < 4; segment++) {
         const start=samples[segment],end=samples[segment+1];
@@ -6826,7 +6834,8 @@ export class RCT3DRenderer {
         const c=point(end.t,end.foamWidth),d=point(start.t,start.foamWidth);
         for (const [p, color] of [[a,[1,1,0.94]],[d,[0.77,0.99,0.91]],[c,[0.84,1,0.94]],[a,[1,1,0.94]],[c,[0.84,1,0.94]],[b,[1,1,0.94]]]) {
           waterFoamBucket.pos.push(p[0], 0.085, p[1]);
-          waterFoamBucket.uvs.push(p[0], p[1]);
+          const inward=side===0?p[1]-ty:side===1?ty+1-p[1]:side===2?p[0]-tx:tx+1-p[0];
+          waterFoamBucket.uvs.push(side<2?p[0]:p[1],inward/.36);
           waterFoamBucket.colors.push(...color);
         }
       }

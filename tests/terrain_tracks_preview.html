@@ -5,14 +5,14 @@
 <script type="module">
 import * as THREE from 'https://esm.sh/three@0.160.0';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=angular-canopy-ticks-1';
-import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,TerrainTracks} from '../js/terrain_tracks.js?v=contact-atlas-2';
+import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,TerrainTracks} from '../js/terrain_tracks.js?v=sand-carry-1';
 import {mobilityModelGeometry} from '../js/city_mobility_models.js?v=ground-contacts-1';
 const out=document.querySelector('#status');
 try{
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.append(renderer.domElement);
 let shaderErrors=0;renderer.debug.onShaderError=()=>{shaderErrors++;out.textContent='ERRO de shader';};
 const scene=new THREE.Scene();scene.background=new THREE.Color(0xc2d2d7);scene.add(new THREE.HemisphereLight(0xe5f1ff,0x68724e,2));const sun=new THREE.DirectionalLight(0xffefcf,2);sun.position.set(5,12,6);scene.add(sun);
-const world={width:16,height:12},uniforms=createTerrainTrackUniforms(THREE),tracks=new TerrainTracks(THREE,uniforms),time={value:0};tracks.ensureWorld(renderer,world);
+const world={width:16,height:12,getTile(x){return x>=8?3:0;}},uniforms=createTerrainTrackUniforms(THREE),tracks=new TerrainTracks(THREE,uniforms),time={value:0};tracks.ensureWorld(renderer,world);
 const surface=(x0,x1)=>{const pos=[],uv=[];for(let z=0;z<12;z++)for(let x=x0;x<x1;x++)for(const [u,v]of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]]){pos.push(x+u,0,z+v);uv.push((x+u)/8,(z+v)/8);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();return g;};
 const grassGround=new THREE.MeshStandardMaterial({color:0x536d34,roughness:1}),grassSurface=surface(0,8);addGrassTracksToMaterial(grassGround,uniforms);scene.add(new THREE.Mesh(grassSurface,grassGround));const grass=createVolumetricGrassMesh(THREE,grassSurface,createVolumetricGrassMaterial(THREE,grassGround,time,uniforms));scene.add(grass);
 const sand=new THREE.MeshStandardMaterial({color:0xd8bf83,roughness:1});addSandTracksToMaterial(sand,uniforms);scene.add(new THREE.Mesh(surface(8,16),sand));
