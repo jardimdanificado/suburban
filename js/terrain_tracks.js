@@ -1,5 +1,5 @@
 import {BOAT_HULL_DIMENSIONS,BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
-import {TILE_SAND,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_HILL} from './world_gen.js';
+import {TILE_SAND,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL} from './world_gen.js';
 import {MOBILITY_GROUND_CONTACTS} from './city_mobility_models.js?v=ground-contacts-1';
 export const VEHICLE_CONTACTS = MOBILITY_GROUND_CONTACTS;
 const turn = (a,b) => Math.atan2(Math.sin(b-a),Math.cos(b-a));
@@ -218,7 +218,7 @@ export class TerrainTracks {
       stamps.push(...contacts);
       if(citizen&&!vehicle){
         stamps.push(...this.sandCarry.contacts(entity,contacts,world));
-        stamps.push(...this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL],'dirt'));
+        stamps.push(...this.dirtCarry.contacts(entity,contacts,world,[TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_FLOOR,TILE_HILL],'dirt'));
       }
     }
     this.paint(renderer,stamps);

@@ -11,9 +11,9 @@ import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShru
 import {createGrassDetailsMesh} from './grass_details.js?v=rare-meadow-2';
 import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=zoom-coast-12';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
-import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=more-sand-2';
+import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=grass-soil-carry-1';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=wider-grass-contact-1';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=grass-soil-carry-1';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';

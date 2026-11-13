@@ -1,4 +1,4 @@
-import {TERRAIN_TRACK_GLSL,GRASS_TRACK_HOLD,GRASS_TRACK_LIFE} from './terrain_tracks.js?v=more-sand-2';
+import {TERRAIN_TRACK_GLSL,GRASS_TRACK_HOLD,GRASS_TRACK_LIFE} from './terrain_tracks.js?v=grass-soil-carry-1';
 // Dense, rooted blade geometry. The terrain stays still; only leaf tips bend.
 const BLADES_PER_AXIS = 10;
 function hash(x, z, salt = 0) {
