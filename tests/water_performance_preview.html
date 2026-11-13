@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Verificação de desempenho da água</title>
+<style>body{margin:0;background:#233841;color:white;font:14px system-ui}#view{width:480px;height:320px}pre{white-space:pre-wrap}</style>
+<div id="view"></div><pre id="status">Carregando renderer…</pre>
+<script type="module">
+import {RCT3DRenderer} from '../js/renderer_3d.js?v=water-cache-local-chunks-10';
+const status=document.querySelector('#status');
+window.addEventListener('error',event=>status.textContent='ERRO: '+event.message);
+try{
+ const width=96,height=96,map=new Uint8Array(width*height);for(let z=0;z<height;z++)for(let x=0;x<width;x++)map[z*width+x]=z<48?3:2;
+ const world={width,height,map,revision:1,clock:{hour:12,minute:0},groups:[],sidewalkTiles:new Set(),getTile(x,z){return x<0||z<0||x>=width||z>=height?5:map[z*width+x];}};
+ const r=new RCT3DRenderer(document.querySelector('#view'));r.mapWidth=width;r.mapHeight=height;r.setResolutionScale(1);r.setCamera(48,48,5);r.shadowsEnabled=false;
+ const city={structureRevision:0,buildings:[]};let builds=0,errors=0;r.renderer.debug.onShaderError=()=>errors++;
+ const original=r.buildTerrainChunk;r.buildTerrainChunk=function(...args){builds++;return original.apply(this,args);};
+ const times=[];let frame=0,initialBuilds=0,farBuilds=0;
+ function step(){
+  try{
+   if(frame===8)initialBuilds=builds;
+   const start=performance.now();r.simTick=frame;r.render(world,[],world.clock,1/60,0);times.push(performance.now()-start);
+   if(frame===9)farBuilds=builds-initialBuilds;
+   if(++frame<24){requestAnimationFrame(step);return;}
+   const warm=times.slice(4).sort((a,b)=>a-b),median=warm[Math.floor(warm.length/2)];
+   status.textContent=JSON.stringify({shaderErrors:errors,visibleChunks:r.visibleTerrainChunkKeys.size,builtChunks:builds,rebuildsDuringStableView:farBuilds,warmRenderMedianMs:+median.toFixed(2),triangles:r.renderer.info.render.triangles},null,2);
+  }catch(error){status.textContent='ERRO: '+(error.stack||error);}
+ }
+ requestAnimationFrame(step);
+}catch(error){status.textContent='ERRO: '+(error.stack||error);}
+</script>

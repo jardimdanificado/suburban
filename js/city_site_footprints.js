@@ -33,3 +33,18 @@ export function grassExclusionCells(buildings, siteCells) {
   }
   return cells;
 }
+
+// A changed lot only invalidates its own terrain chunks and the neighboring
+// blend band, rather than rebuilding every visible coast in the city.
+export function grassChunkSignatures(cells,chunkSize,width,height){
+  const chunks=new Map();
+  for(const key of cells){
+    const [x,y]=key.split(',').map(Number);
+    for(let cy=Math.floor(Math.max(0,y-1)/chunkSize);cy<=Math.floor(Math.min(height-1,y+1)/chunkSize);cy++){
+      for(let cx=Math.floor(Math.max(0,x-1)/chunkSize);cx<=Math.floor(Math.min(width-1,x+1)/chunkSize);cx++){
+        const chunk=`${cx},${cy}`;let entries=chunks.get(chunk);if(!entries)chunks.set(chunk,entries=[]);entries.push(key);
+      }
+    }
+  }
+  return new Map([...chunks].map(([key,entries])=>[key,entries.sort().join(';')]));
+}

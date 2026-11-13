@@ -1,8 +1,13 @@
+import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-1';
 import {WATER_LEVEL} from './water_surface.js?v=shore-runup-2';
 // Shore-local distance keeps the moving foam front aligned to every coast orientation.
 export const FOAM_WIDTH = .68;
 // Every water tile owns one surface, even where several banks meet. Sampling
 // the nearest shoreline merges intersecting wave fronts without layered strips.
+export function cachedShoreFoamTileSurface(world,tx,ty,isWaterAt,beach=null,isBeachAt=null){
+  const allowed=!!isBeachAt?.(tx,ty);
+  return cachedWaterGeometry(world,'foam',`${tx},${ty}:${allowed?1:0}:${beach?1:0}`,()=>shoreFoamTileSurface(tx,ty,isWaterAt,beach,isBeachAt));
+}
 export function shoreFoamTileSurface(tx,ty,isWaterAt,beach=null,isBeachAt=null){
   const water=isWaterAt(tx,ty);
   if(!water&&!isBeachAt?.(tx,ty))return null;

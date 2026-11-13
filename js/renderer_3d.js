@@ -1,15 +1,15 @@
-import {sandNormalField,applySandSurfaceNormals,addSandWetnessShader} from './sand_surface_lighting.js?v=continuous-sand-1';
+import {sandNormalField,applySandSurfaceNormals,addSandWetnessShader} from './sand_surface_lighting.js?v=water-cached-2';
 import {WATER_LEVEL,WATER_WAVE_GLSL} from './water_surface.js?v=shore-runup-2';
-import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=continuous-beach-5';
+import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=water-cached-6';
 import {createTravellerPalmGeometry} from './traveller_palm.js?v=ravenala-fan-1';
 import {cursorLightPlacement} from './cursor_light.js?v=above-roofs-1';
 import {createBeachShellMesh} from './beach_shells.js?v=scattered-shells-1';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
 import {createGrassDetailsMesh} from './grass_details.js?v=rare-meadow-2';
-import {addShoreFoamShader,shoreFoamTileSurface} from './water_foam.js?v=beach-runup-9';
+import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=water-cached-10';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=more-sand-2';
-import {constructionSiteCells,grassExclusionCells,grassExclusionSignature} from './city_site_footprints.js?v=natural-open-lots-2';
+import {constructionSiteCells,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
 import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=meadow-accents-1';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
@@ -6645,9 +6645,14 @@ export class RCT3DRenderer {
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
       this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
       this._farmSoilCells=grassExclusionCells((city?.buildings||[]).filter(b=>b.type==='farm'),[]);
+      this._grassChunkSignatures=null;
+    }
+    if(!this._grassChunkSignatures||this._grassChunkSignatureSize!==chunkSize){
+      this._grassChunkSignatures=grassChunkSignatures(this._grassExclusionCells,chunkSize,this.mapWidth,this.mapHeight);
+      this._grassChunkSignatureSize=chunkSize;
     }
     const railingSignature=`party:${party?.id??'none'}|farms:${farmSignature}`;
-    const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}|${railingSignature}|grass:${grassSignature}`;
+    const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}|${railingSignature}`;
     const visible = new Set();
     const x0 = Math.max(0, Math.floor(minTx / chunkSize)), x1 = Math.floor(Math.min(this.mapWidth - 1, maxTx) / chunkSize);
     const y0 = Math.max(0, Math.floor(minTy / chunkSize)), y1 = Math.floor(Math.min(this.mapHeight - 1, maxTy) / chunkSize);
@@ -6663,7 +6668,7 @@ export class RCT3DRenderer {
       const distance = Math.hypot(centerX - this.camX, centerY - this.camY);
       const detailRadius = detailTier === 0 ? 20 : detailTier === 1 ? 40 : 64;
       const chunkDetailBand = zoomBand === 0 || distance > detailRadius + chunkSize ? 0 : distance > detailRadius ? 1 : 2;
-      const chunkSignature = `${signature}|c${chunkDetailBand}`;
+      const chunkSignature = `${signature}|c${chunkDetailBand}|grass:${this._grassChunkSignatures.get(key)||''}`;
       let chunk = this.terrainChunks.get(key);
       if (chunk && chunk.signature !== chunkSignature) {
         this.disposeTerrainChunk(chunk);
@@ -6671,6 +6676,9 @@ export class RCT3DRenderer {
         chunk = null;
       }
       if (!chunk) {
+        // Hidden neighbors are only cache candidates. Building all of them
+        // synchronously makes a coast entry rebuild several unseen beaches.
+        if(!isVisible)continue;
         chunk = this.buildTerrainChunk(world, cx * chunkSize, Math.min(this.mapWidth - 1, (cx + 1) * chunkSize - 1), cy * chunkSize, Math.min(this.mapHeight - 1, (cy + 1) * chunkSize - 1), visionTarget, chunkSignature, chunkDetailBand, visible);
         this.terrainChunks.set(key, chunk);
       }
@@ -6843,7 +6851,7 @@ export class RCT3DRenderer {
           }
     };
     const addWaterFoamTile = (tx, ty, beach) => {
-      const foam=shoreFoamTileSurface(tx,ty,isWaterAt,beach,(x,z)=>isSlopingBeachTile(world,x,z)&&!this._farmSoilCells?.has(`${x},${z}`));
+      const foam=cachedShoreFoamTileSurface(world,tx,ty,isWaterAt,beach,(x,z)=>isSlopingBeachTile(world,x,z)&&!this._farmSoilCells?.has(`${x},${z}`));
       if(!foam)return;
       waterFoamBucket.pos.push(...foam.positions);
       waterFoamBucket.uvs.push(...foam.uvs);

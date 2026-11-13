@@ -1,3 +1,4 @@
+import {cachedWaterGeometry} from './water_geometry_cache.js?v=terrain-revision-1';
 import {WATER_LEVEL} from './water_surface.js?v=shore-runup-2';
 import {TILE_SAND,TILE_WATER} from './world_gen.js';
 import {terrainCornerHeight,terrainTileTouchesStone,terrainSurfaceElevation} from './road_terrain_geometry.js?v=low-water-shore-4';
@@ -11,6 +12,9 @@ export function isSlopingBeachTile(world,x,z){
 // One joined beach apron per water tile. The original dry shore is its upper
 // edge; the far end continues below the water instead of closing with a wall.
 export function sandShoreTileSurface(world,tx,ty,{profileOnly=false}={}){
+  return cachedWaterGeometry(world,'beach',`${tx},${ty}:${profileOnly?1:0}`,()=>buildSandShoreTileSurface(world,tx,ty,profileOnly));
+}
+function buildSandShoreTileSurface(world,tx,ty,profileOnly){
   const at=(x,z)=>x<0||z<0||x>=world.width||z>=world.height?null:world.getTile(x,z);
   if(at(tx,ty)!==TILE_WATER&&!(profileOnly&&isSlopingBeachTile(world,tx,ty)))return null;
   const segments=[];
@@ -36,8 +40,9 @@ export function sandShoreTileSurface(world,tx,ty,{profileOnly=false}={}){
     const depth=Math.min(1,distance/BEACH_RAMP_WIDTH);
     const height=bankHeight+(BEACH_BED_HEIGHT-bankHeight)*depth;
     const groundHeight=at(Math.floor(px),Math.floor(pz))===TILE_WATER?height:terrainSurfaceElevation(world,px,pz);
-    return {distance,groundHeight,shiftPerHeight:BEACH_RAMP_WIDTH/(bankHeight-BEACH_BED_HEIGHT),height,
+    const result={distance,groundHeight,shiftPerHeight:BEACH_RAMP_WIDTH/(bankHeight-BEACH_BED_HEIGHT),height,
       waterline:BEACH_RAMP_WIDTH*Math.max(0,(bankHeight-WATER_LEVEL)/(bankHeight-BEACH_BED_HEIGHT))};
+    return result;
   };
   if(profileOnly)return {sample};
   const positions=[],uvs=[],shades=[],steps=12,grid=[];
