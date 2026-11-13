@@ -1,3 +1,4 @@
+import {addGroundDisplayPost} from './city_display_supports.js';
 import {drawPixelText} from './pixel_text.js?v=pixel-text-1';
 import {surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {mergeStaticMeshes} from './city_static_mesh.js?v=static-batch-3';
@@ -59,15 +60,14 @@ function stallGroup(THREE,site,vendor,business){
  mergeStaticMeshes(THREE,group);group.userData.marketSignTexture=texture;group.userData.marketStockCount=stock.length;group.userData.marketSeed=seed;return group;
 }
 
-function advertiserGroup(THREE,vendor,business){
+export function advertiserGroup(THREE,vendor,business){
  const group=new THREE.Group(),color=TYPE_COLORS[business?.type]||0x527e83,label=String(vendor.name||'ANÚNCIO').toLocaleUpperCase('pt-BR');
  const canvas=document.createElement('canvas');canvas.width=320;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#f1e2bd';ctx.fillRect(0,0,320,192);ctx.fillStyle=`#${color.toString(16).padStart(6,'0')}`;ctx.fillRect(9,9,302,174);ctx.fillStyle='#f6edda';ctx.textAlign='center';ctx.textBaseline='middle';drawPixelText(ctx,'ANÚNCIO',160,58,260);ctx.fillStyle='#fff8e9';ctx.font='bold 25px monospace';drawPixelText(ctx,label.length>22?`${label.slice(0,20)}…`:label,160,126,268);
  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=THREE.SRGBColorSpace;
- const frame=new THREE.MeshLambertMaterial({color:0x564536}),skin=new THREE.MeshLambertMaterial({color:0xb98a68});
+ const frame=new THREE.MeshLambertMaterial({color:0x564536});
  const back=new THREE.Mesh(new THREE.BoxGeometry(.72,.48,.045),frame);back.position.set(0,1.08,.22);group.add(back);
  const sign=new THREE.Mesh(new THREE.PlaneGeometry(.66,.42),new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide}));sign.position.set(0,1.08,.247);sign.userData.skipStaticMerge=true;sign.userData.marketAdTexture=texture;group.add(sign);
- const holdArm=(from,to)=>{const direction=new THREE.Vector3().subVectors(to,from),mesh=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,direction.length(),6),skin);mesh.position.copy(from).add(to).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.normalize());group.add(mesh);};
- holdArm(new THREE.Vector3(-.17,.9,.04),new THREE.Vector3(-.23,.94,.19));holdArm(new THREE.Vector3(.17,.9,.04),new THREE.Vector3(.23,.94,.19));
+ addGroundDisplayPost(THREE,group,{height:1.32,z:.20,color:0x564536});
  mergeStaticMeshes(THREE,group);group.userData.marketAdTexture=texture;return group;
 }
 

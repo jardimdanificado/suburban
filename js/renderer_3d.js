@@ -19,10 +19,10 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=boats-transport-23";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=single-post-head-flag-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
-import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=distance-gait-1';
+import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
 import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';

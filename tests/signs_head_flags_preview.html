@@ -1,0 +1,29 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Postes e bandeirinhas na cabeça</title>
+<style>body{margin:0;background:#cad6d3;font:14px system-ui}header{position:absolute;z-index:1;background:#ffffffe8;top:10px;left:10px;padding:12px;border-radius:8px}select{padding:7px;min-width:160px}#status{display:block;padding-top:5px}</style>
+<header>Poste único no anúncio e na arte · Bandeirinha fixada em cada pose<br><select id="pose"><option value="all">Todas as poses</option></select><span id="status">Carregando…</span></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {CityCitizenModels,CITIZEN_MODEL_FRAMES} from '../js/city_citizen_models.js?v=head-flag-crown-1';
+import {advertiserGroup} from '../js/city_street_market_renderer.js?v=single-ground-post-1';
+import {addArtDisplayStand} from '../js/city_renderer_3d.js?v=single-post-head-flag-1';
+const out=document.querySelector('#status');
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.body.append(renderer.domElement);let errors=0;renderer.debug.onShaderError=()=>errors++;
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xcad6d3);scene.add(new THREE.HemisphereLight(0xf1f6ff,0x6b725c,2));const sun=new THREE.DirectionalLight(0xffefd0,2);sun.position.set(5,12,7);scene.add(sun);
+ const floor=new THREE.Mesh(new THREE.PlaneGeometry(24,18),new THREE.MeshStandardMaterial({color:0x9d9d89,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.set(6,-.005,3);scene.add(floor);
+ const advertisement=advertiserGroup(THREE,{name:'ANÚNCIO'},null);advertisement.position.set(-1,0,-1);scene.add(advertisement);
+ const art=new THREE.Group();addArtDisplayStand(THREE,art,{height:1.18});const panel=new THREE.Mesh(new THREE.BoxGeometry(.78,.38,.04),new THREE.MeshLambertMaterial({color:0x54758b}));panel.position.y=1;art.add(panel);art.position.set(1,0,-1);scene.add(art);
+ const group=new THREE.Group();scene.add(group);const models=new CityCitizenModels(THREE,group);await models.loading;if(!models.ready)throw Error(models.error);models.begin(0,0);
+ const poses=[];let index=0;
+ for(const [clip,frames]of Object.entries(CITIZEN_MODEL_FRAMES))for(const frame of frames){
+  const i=index++,entity={id:i*17,x:(i%6)*2.4,y:Math.floor(i/6)*2.5,properties:{render:{color:0x99744c},citizen:{task:null,path:[],bodyHeightCm:i%2?185:160,bodyWeightKg:i%2?120:65,combatAnimation:{clip,sequence:i},campaign:{flag:{background:'#b6533f',foreground:'#f2d491',pattern:1,icons:[]}}}}};
+  models.motion.set(entity,{x:entity.x,y:entity.y,renderX:entity.x,renderY:entity.y,angle:0,renderAngle:0,walkDistance:0,walkFrame:frame,actionToken:`${clip}:${i}`,actionStartedAt:0});models.clock=(frame+.001)/(['murro','chute','derrotado'].includes(clip)?8:4);models.add(entity,0);
+  const carrier=models.campaignFlags.get(entity.id);if(!carrier)throw Error(`Bandeira ausente em ${clip}:${frame}`);
+  const motion=models.motion.get(entity),matrix=new THREE.Matrix4();motion.bodyMesh.getMatrixAt(motion.bodyIndex,matrix);for(let k=0;k<16;k++)if(Math.abs(matrix.elements[k]-carrier.group.matrix.elements[k])>1e-6)throw Error(`Transformação divergente em ${clip}:${frame}`);
+  poses.push({entity,carrier,label:`${clip}:${frame}`});const option=document.createElement('option');option.value=String(i);option.textContent=`${clip}:${frame}`;document.querySelector('#pose').append(option);
+ }
+ models.end();const aspect=innerWidth/innerHeight,overview=new THREE.OrthographicCamera(-9*aspect,9*aspect,9,-9,.1,200);overview.position.set(5,12,17);overview.lookAt(5,0,3);const close=new THREE.PerspectiveCamera(38,aspect,.01,100);let camera=overview;
+ document.querySelector('#pose').onchange=e=>{if(e.target.value==='all')camera=overview;else{const item=poses[Number(e.target.value)],head=item.carrier.group.userData.mount.position.clone().applyMatrix4(item.carrier.group.matrix);close.position.set(head.x+.75,head.y+.4,head.z+1.6);close.lookAt(head.x,head.y+.15,head.z);camera=close;}renderer.render(scene,camera);};
+ renderer.render(scene,camera);out.textContent=`${poses.length} poses · transformações iguais às do corpo · postes únicos · erros de shader: ${errors}`;
+}catch(error){out.textContent=error.stack;}
+</script></html>
