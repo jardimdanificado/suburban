@@ -1,0 +1,33 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Prévia da grama</title>
+<style>body{margin:0;background:#b2c6cf;font:14px system-ui;color:#172923}header{position:absolute;z-index:1;top:12px;left:12px;padding:12px;background:#ffffffe0;border-radius:8px}button{padding:7px;margin:3px}canvas{display:block}#status{display:block;margin-top:6px}</style>
+<header>Grama: folhas enraizadas, sem camadas horizontais<br><button id="iso">Isométrica</button><button id="close">Perto</button><button id="pause">Pausar vento</button><span id="status">Carregando…</span></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from '../js/volumetric_grass.js?v=rooted-blades-2';
+const status=document.querySelector('#status');
+try {
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.body.append(renderer.domElement);
+let shaderErrors=0;renderer.debug.onShaderError=(_gl,program,vs,fs)=>{shaderErrors++;status.textContent='ERRO: shader';};
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xb2c6cf);
+scene.add(new THREE.HemisphereLight(0xe3f1ff,0x637448,2));const sun=new THREE.DirectionalLight(0xfff1ce,2.5);sun.position.set(5,10,3);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:.1,far:30});sun.shadow.normalBias=.015;scene.add(sun);
+const positions=[],colors=[],size=14;
+const height=(x,z)=>.25*Math.sin(x*.45)*Math.cos(z*.32);
+for(let z=-size/2;z<size/2;z++)for(let x=-size/2;x<size/2;x++){
+  if(x>=-1&&x<1)continue; // A stone path must stay clear.
+  for(const [u,v]of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]]){positions.push(x+u,height(x+u,z+v),z+v);colors.push(1,1,1);}
+}
+const surface=new THREE.BufferGeometry();surface.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));surface.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));surface.computeVertexNormals();
+const textureCanvas=document.createElement('canvas');textureCanvas.width=textureCanvas.height=128;const ctx=textureCanvas.getContext('2d');const gradient=ctx.createLinearGradient(0,0,128,0);gradient.addColorStop(0,'#3f622d');gradient.addColorStop(.5,'#6a8745');gradient.addColorStop(1,'#3f622d');ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);const map=new THREE.CanvasTexture(textureCanvas);map.wrapS=map.wrapT=THREE.RepeatWrapping;map.colorSpace=THREE.SRGBColorSpace;surface.setAttribute('uv',new THREE.Float32BufferAttribute(positions.flatMap((value,i)=>i%3===0?[value/8,positions[i+2]/8]:[]),2));
+const groundMaterial=new THREE.MeshStandardMaterial({color:0xffffff,map,roughness:1});const ground=new THREE.Mesh(surface,groundMaterial);ground.receiveShadow=true;scene.add(ground);
+const excludedCells=new Set();for(let z=-3;z<0;z++)for(let x=2;x<5;x++)excludedCells.add(`${x},${z}`);const soilPositions=[];for(const key of excludedCells){const [x,z]=key.split(',').map(Number);for(const [u,v]of [[0,0],[0,1],[1,1],[0,0],[1,1],[1,0]])soilPositions.push(x+u,height(x+u,z+v)+.01,z+v);}const soilGeometry=new THREE.BufferGeometry();soilGeometry.setAttribute('position',new THREE.Float32BufferAttribute(soilPositions,3));soilGeometry.computeVertexNormals();const soil=new THREE.Mesh(soilGeometry,new THREE.MeshStandardMaterial({color:0x8c704f,roughness:1}));soil.receiveShadow=true;scene.add(soil);
+const time={value:0};const grass=createVolumetricGrassMesh(THREE,surface,createVolumetricGrassMaterial(THREE,groundMaterial,time),{excludedCells});scene.add(grass);
+const path=new THREE.Mesh(new THREE.PlaneGeometry(2,14),new THREE.MeshStandardMaterial({color:0xb1aea3,roughness:1}));path.rotation.x=-Math.PI/2;path.position.y=.005;path.receiveShadow=true;scene.add(path);
+const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(.7,1),new THREE.MeshStandardMaterial({color:0x858783,roughness:1}));rock.position.set(2.5,.45,1);rock.castShadow=true;rock.receiveShadow=true;scene.add(rock);
+const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.1,.15,1.8,8),new THREE.MeshStandardMaterial({color:0x766047}));trunk.position.set(-3,1,-2);trunk.castShadow=true;scene.add(trunk);
+const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(1,1),new THREE.MeshStandardMaterial({color:0x3c6b2d,roughness:1}));crown.position.set(-3,2.6,-2);crown.castShadow=true;scene.add(crown);
+const aspect=innerWidth/innerHeight;const iso=new THREE.OrthographicCamera(-9*aspect,9*aspect,9,-9,.1,300);iso.position.set(70,100,70);iso.lookAt(0,0,0);
+const close=new THREE.PerspectiveCamera(48,aspect,.05,200);close.position.set(3.5,1.8,4);close.lookAt(2,.12,0);let camera=iso,paused=false;
+document.querySelector('#iso').onclick=()=>camera=iso;document.querySelector('#close').onclick=()=>camera=close;document.querySelector('#pause').onclick=()=>paused=!paused;
+let last=performance.now(),frames=0,elapsed=0;renderer.setAnimationLoop(now=>{const dt=Math.min(.05,(now-last)/1000);last=now;if(!paused)time.value+=dt;renderer.render(scene,camera);frames++;elapsed+=dt;if(elapsed>=1){if(!shaderErrors)status.textContent=`${grass.geometry.instanceCount} folhas · ${renderer.info.render.triangles} triângulos · ${Math.round(frames/elapsed)} FPS · shader OK`;frames=0;elapsed=0;}});
+}catch(error){status.textContent=error.stack;}
+</script></html>

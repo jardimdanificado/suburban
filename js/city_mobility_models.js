@@ -1,3 +1,13 @@
+// Contact dimensions match the wheels built by city_mobility_models.js.
+export const MOBILITY_GROUND_CONTACTS = {
+  bicicleta: [[0,-.43,.044],[0,.43,.044]],
+  bicicleta_carga: [[0,-.43,.044],[0,.63,.044]],
+  carrinho: [[-.33,.24,.044],[.33,.24,.044]],
+  patinete: [[0,-.28,.044],[0,.28,.044]],
+  skate: [[-.14,-.22,.038],[.14,-.22,.038],[-.14,.22,.038],[.14,.22,.038]],
+  patins: [-.13,.13].flatMap(x=>[-.078,.078].flatMap(dx=>[-.083,.083].map(z=>[x+dx,z,.032]))),
+};
+
 const WOOD=0x986c43,WICKER=0xb88d58,STEEL=0x6b7475,RUBBER=0x292d2c,LEATHER=0x49392e;
 const linear=c=>{c/=255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;};
 const rgb=hex=>[linear(hex>>>16&255),linear(hex>>>8&255),linear(hex&255)];
@@ -31,9 +41,9 @@ class Surface{
   }
   data(){return {positions:new Float32Array(this.positions),normals:new Float32Array(this.normals),colors:new Float32Array(this.colors)};}
 }
-function wheel(s,x,z,r=.205){
+function wheel(s,x,z,r=.205,tireRadius=.022){
   const y=r+.024;
-  s.ring(x,y,z,r,.022,RUBBER);
+  s.ring(x,y,z,r,tireRadius,RUBBER);
   for(const dx of [-.013,.013])s.ring(x+dx,y,z,r-.012,.007,0xbaa17c,20,4);
   s.ring(x,y,z,r-.031,.008,0xb4b8b2,20,4);
   s.tube([x-.035,y,z],[x+.035,y,z],.014,STEEL);
@@ -108,14 +118,14 @@ function bicycle(s,p,cargo){
   s.tube([.032,.333,-.07],[.032,.246,-.43],.004,0x747975,4);
   s.tube([.032,.247,-.07],[.032,.213,-.43],.004,0x747975,4);
   if(cargo){
-    wheel(s,0,-.43);wheel(s,0,.63);
+    for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.bicicleta_carga)wheel(s,x,z,.205,width/2);
     p.tube([0,.29,-.07],[0,.29,-.82],.025,0xffffff);
     p.tube([-.20,.25,-.42],[-.22,.52,-.68],.019,0xffffff);p.tube([.20,.25,-.42],[.22,.52,-.68],.019,0xffffff);
     p.tube([-.22,.52,-.68],[.22,.52,-.68],.018,0xffffff);p.tube([-.22,.52,-.68],[-.22,.52,-.35],.016,0xffffff);p.tube([.22,.52,-.68],[.22,.52,-.35],.016,0xffffff);
     p.tube(lowerHead,[0,.27,.63],.02,0xffffff);
     woodenCrate(s,0,.52,-.57,.56,.58,.22);
   }else{
-    wheel(s,0,-.43);wheel(s,0,.43);
+    for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.bicicleta)wheel(s,x,z,.205,width/2);
     basket(s,0,.64,.48);
     for(const dx of [-.065,.065]){
       s.tube([dx,.58,.34],[dx,.67,.39],.007,STEEL);
@@ -132,7 +142,7 @@ export function mobilityModelSurface(kind){
   const s=new Surface(),p=new Surface();
   if(kind==='bicicleta'||kind==='bicicleta_carga')bicycle(s,p,kind==='bicicleta_carga');
   else if(kind==='carrinho'){
-    wheel(s,-.33,.24,.16);wheel(s,.33,.24,.16);
+    for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.carrinho)wheel(s,x,z,.16,width/2);
     woodenCrate(s,0,.35,.22,.58,.73,.27);
     for(const x of [-.315,.315]){
       p.tube([x,.26,.50],[x,.53,-.64],.023,0xffffff,6);
@@ -141,7 +151,7 @@ export function mobilityModelSurface(kind){
     }
     p.tube([-.33,.185,.24],[.33,.185,.24],.024,0xffffff);
   }else if(kind==='patinete'){
-    wheel(s,0,-.28,.055);wheel(s,0,.28,.055);
+    for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.patinete)wheel(s,x,z,.055,width/2);
     p.box(0,.12,0,.20,.035,.61,0xffffff);s.box(0,.141,-.02,.15,.009,.43,0x5d645c);
     p.tube([0,.09,.28],[0,.73,.23],.017,0xffffff);
     s.tube([-.19,.75,.22],[.19,.75,.22],.014,STEEL);
@@ -149,13 +159,14 @@ export function mobilityModelSurface(kind){
     basket(s,0,.51,.34,.22,.17,.17,12,8);
   }else if(kind==='skate'){
     skateDeck(s,.13,.25,.66,.035,0xb68a55);skateDeck(p,.136,.225,.625,.006,0xffffff);
-    for(const z of [-.22,.22]){s.tube([-.13,.067,z],[.13,.067,z],.015,STEEL);for(const x of [-.14,.14])s.ring(x,.052,z,.031,.019,0xceae7d,12,5);}
+    for(const z of [-.22,.22])s.tube([-.13,.067,z],[.13,.067,z],.015,STEEL);
+    for(const [x,z,width] of MOBILITY_GROUND_CONTACTS.skate)s.ring(x,.052,z,.031,width/2,0xceae7d,12,5);
   }else{
     for(const x of [-.13,.13]){
       p.box(x,.16,0,.13,.15,.25,0xffffff);p.box(x,.24,-.065,.125,.15,.11,0xffffff);
       s.box(x,.086,0,.145,.025,.27,0x685445);
       for(let i=0;i<4;i++)s.box(x,.24-i*.017,.075-i*.027,.092,.008,.012,0xd2c4a4);
-      for(const dx of [-.078,.078])for(const z of [-.083,.083])s.ring(x+dx,.045,z,.027,.016,0xc6a277,10,5);
+      for(const [wx,z,width] of MOBILITY_GROUND_CONTACTS.patins)if(Math.abs(wx-x)<.08)s.ring(wx,.045,z,.027,width/2,0xc6a277,10,5);
     }
   }
   return {fixed:s.data(),paint:p.data()};

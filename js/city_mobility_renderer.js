@@ -1,5 +1,5 @@
 import {partyFlagCanvas} from './city_party_flags.js';
-import {mobilityModelGeometry} from './city_mobility_models.js?v=cargo-box-rear-1';
+import {mobilityModelGeometry} from './city_mobility_models.js?v=ground-contacts-1';
 import {clothFlagGeometry,animateClothFlag,flagWindTime} from './city_flag_animation.js?v=flag-wind-tick-13';
 import {surfaceElevation,flagNightFactor} from './city_terrain.js?v=entrance-retaining-clearance-1';
 const colors={bicicleta:0x386b78,bicicleta_carga:0x9b603f,carrinho:0x52645b,patinete:0x648d82,patins:0xa3774b,skate:0x414943};

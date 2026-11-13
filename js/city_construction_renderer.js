@@ -1,3 +1,4 @@
+import {constructionSiteCells} from './city_site_footprints.js';
 import {cornerHeight,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {caribbeanGroundSurfaceTextures} from './caribbean_pixel_materials.js?v=ground-realism-2';
 
@@ -77,11 +78,7 @@ export function syncConstructionSites(renderer,THREE,world,development){
  const plots=new Map(development.plots.map(p=>[p.id,p])),live=new Set();
  for(const project of development.projects){
   if(project.cancelled||project.status==='completed')continue;
-  const plot=plots.get(project.plotId),route=project.path||project.route;
-  let cells=[];
-  if(project.service==='building'&&plot){for(let y=plot.y;y<plot.y+Math.min(plot.depth,project.depth||plot.depth);y++)for(let x=plot.x;x<plot.x+Math.min(plot.width,project.width||plot.width);x++)cells.push({x:x+.5,y:y+.5});}
-  else if((project.service==='road'||project.service==='road-repair')&&route)cells=route.map(p=>({x:Math.floor(p.x)+.5,y:Math.floor(p.y)+.5}));
-  else if(project.door)cells=[{x:project.door.x,y:project.door.y}];
+  const cells=constructionSiteCells(project,plots.get(project.plotId));
   if(!cells.length)continue;
   const terrainRevision=world.topologyRevision??world.revision??0,signature=`${terrainRevision}:${project.service}:${cells.map(c=>`${c.x},${c.y}`).join(';')}`;
   live.add(project.id);let site=renderer.constructionMeshes.get(project.id);

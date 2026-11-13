@@ -1,3 +1,6 @@
+import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,TerrainTracks} from './terrain_tracks.js?v=contact-atlas-2';
+import {constructionSiteCells,grassExclusionCells} from './city_site_footprints.js';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=rooted-blades-tracks-4';
 import { COLOR_PALETTE_GLSL, colorPaletteIndex } from "./color_palettes.js?v=palette-intensity-3x";
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
@@ -4242,6 +4245,20 @@ export class RCT3DRenderer {
       applyWindFoliageShader(dict.grassFoliage, 0.07, 0);
     }
 
+    this.grassTimeUniform = {value: 0};
+    this.terrainTrackUniforms = createTerrainTrackUniforms(THREE);
+    this.terrainTracks = new TerrainTracks(THREE,this.terrainTrackUniforms);
+    for (const dict of [this.materialsIso, this.materialsPerspective]) {
+      addGrassTracksToMaterial(dict[TILE_FLOOR],this.terrainTrackUniforms);
+      addGrassTracksToMaterial(dict[TILE_HILL],this.terrainTrackUniforms);
+      addSandTracksToMaterial(dict[TILE_SAND],this.terrainTrackUniforms);
+      addSandTracksToMaterial(dict.sandClean,this.terrainTrackUniforms);
+      dict.volumetricGrass = createVolumetricGrassMaterial(THREE, dict[TILE_FLOOR], this.grassTimeUniform,this.terrainTrackUniforms);
+      dict.volumetricHillGrass = createVolumetricGrassMaterial(THREE, dict[TILE_HILL], this.grassTimeUniform,this.terrainTrackUniforms);
+    }
+    this.materials.volumetricGrass = this.materialsIso.volumetricGrass;
+    this.materials.volumetricHillGrass = this.materialsIso.volumetricHillGrass;
+
     // Dark Quad Grid Material (RCT Style)
     this.rctGridMaterial = new THREE.LineBasicMaterial({
       color: 0x050c14,
@@ -5565,6 +5582,7 @@ export class RCT3DRenderer {
   isSimPaused() { return this.isPaused; }
 
   clear() {
+    this.terrainTracks?.clear();
     for (const chunk of this.terrainChunks?.values() || []) this.disposeTerrainChunk(chunk);
     this.terrainChunks?.clear();
     this.visibleTerrainChunkKeys?.clear();
@@ -6626,8 +6644,15 @@ export class RCT3DRenderer {
       this._terrainFarmSignatureCache={city,structureRevision:city?.structureRevision||0,value:(city?.buildings||[]).filter(building=>building.type==='farm'&&!building.entity.destroyed).map(building=>`${building.id}:${building.entity.x},${building.entity.y},${building.width},${building.depth}`).sort().join(';')};
     }
     const farmSignature=this._terrainFarmSignatureCache.value;
+    const development=this.cityDevelopment,plots=new Map((development?.plots||[]).map(plot=>[plot.id,plot]));
+    const siteCells=(development?.projects||[]).flatMap(project=>constructionSiteCells(project,plots.get(project.plotId)));
+    const grassSignature=`${farmSignature}|sites:${[...new Set(siteCells.map(p=>`${Math.floor(p.x)},${Math.floor(p.y)}`))].sort().join(';')}`;
+    if(this._grassCoverageCity!==city||this._grassCoverageSignature!==grassSignature){
+      this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
+      this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
+    }
     const railingSignature=`party:${party?.id??'none'}|farms:${farmSignature}`;
-    const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}|${railingSignature}`;
+    const signature = `${visionSignature}|${this.isPerspectiveActive() ? 'p' : 'i'}|${gridEnabled ? 1 : 0}|d${detailTier}|z${zoomBand}|${railingSignature}|grass:${grassSignature}`;
     const visible = new Set();
     const x0 = Math.max(0, Math.floor(minTx / chunkSize)), x1 = Math.floor(Math.min(this.mapWidth - 1, maxTx) / chunkSize);
     const y0 = Math.max(0, Math.floor(minTy / chunkSize)), y1 = Math.floor(Math.min(this.mapHeight - 1, maxTy) / chunkSize);
@@ -6775,14 +6800,7 @@ export class RCT3DRenderer {
       return bucket;
     };
     const gridLinePositions = [];
-    const matHelper = new THREE.Matrix4();
-    let foliageCount = 0;
-    const isPersp = this.isPerspectiveActive();
-    const chunkGrassTufts = new THREE.InstancedMesh(this.instGrassTufts.geometry, this.instGrassTufts.material, 5000);
-    chunkGrassTufts.count = 0;
-    chunkGrassTufts.frustumCulled = false;
-    chunkGrassTufts.userData.sharedTerrainGeometry = true;
-    const tuftPalette = [0x779756, 0x6e8d4d, 0x5f8248, 0x8c9e63].map(color => new THREE.Color(color));
+
 
     const clampedMinTx = Math.max(0, Math.min(this.mapWidth - 1, minTx));
     const clampedMaxTx = Math.max(0, Math.min(this.mapWidth - 1, maxTx));
@@ -7099,60 +7117,6 @@ export class RCT3DRenderer {
           }
         }
 
-        // 3D Natural Grass Tufts (Clean, small, fine tufts with dense placement in 1P/3P)
-        if (!isSidewalk && (tType === TILE_FLOOR || tType === TILE_HILL)) {
-          if (!isPersp && detailBand > 0) {
-            // Short, scattered clumps over the dense turf texture.
-            if (shouldSpawnGrassTuft(tx, ty) && foliageCount < 1200) {
-              const hash=terrainTextureHash(tx,ty,tType),ox=.22+(hash&255)/255*.56,oy=.22+((hash>>>8)&255)/255*.56;
-              const groundY=ox<=oy?h00+(h01-h00)*oy+(h11-h01)*ox:h00+(h10-h00)*ox+(h11-h10)*oy;
-              matHelper.makeRotationY((hash>>>16)/65535*Math.PI*2);
-              this._scaleMatrix.makeScale(.9, .8+((hash>>>24)&255)/255*.45,.9);matHelper.multiply(this._scaleMatrix);
-              matHelper.setPosition(tx+ox,groundY-.008,ty+oy);
-              chunkGrassTufts.setMatrixAt(foliageCount, matHelper);
-              chunkGrassTufts.setColorAt(foliageCount, tuftPalette[(hash>>>4)&3]);
-              foliageCount++;
-            }
-          } else if (isPersp && detailBand > 0) {
-            // 1P/3P Perspective Mode: High density of small, delicate natural grass tufts planted firmly into ground
-            let tHash = Math.imul(tx ^ Math.imul(ty, 198491317), 445582319);
-            tHash = Math.imul(tHash ^ (tHash >>> 11), 892341233) >>> 0;
-            const spawnChance = tHash % 100;
-
-            if (spawnChance < (tType === TILE_HILL ? 64 : 72)) {
-              const numTufts = (spawnChance < 24) ? 3 : ((spawnChance < 48) ? 2 : 1);
-              for (let k = 0; k < numTufts; k++) {
-                if (foliageCount >= 5000) break;
-                const subHash = Math.imul(tHash ^ (k * 1337 + 7), 2654435761) >>> 0;
-                const ox = 0.15 + ((subHash & 0xFF) / 255.0) * 0.70;
-                const oy = 0.15 + (((subHash >> 8) & 0xFF) / 255.0) * 0.70;
-
-                let groundY;
-                if (ox <= oy) {
-                  groundY = h00 + (h01 - h00) * oy + (h11 - h01) * ox;
-                } else {
-                  groundY = h00 + (h10 - h00) * ox + (h11 - h10) * oy;
-                }
-                const tuftY = groundY - 0.008;
-
-                const rotY = (((subHash >> 16) & 0xFF) / 255.0) * Math.PI * 2;
-                const scale = 0.85 + (((subHash >> 24) & 0xFF) / 255.0) * 0.35;
-
-                matHelper.identity();
-                this._rotEuler.set(0, rotY, 0, "YXZ");
-                matHelper.makeRotationFromEuler(this._rotEuler);
-                matHelper.setPosition(tx + ox, tuftY, ty + oy);
-                this._scaleMatrix.makeScale(scale, scale, scale);
-                matHelper.multiply(this._scaleMatrix);
-
-                chunkGrassTufts.setMatrixAt(foliageCount, matHelper);
-                chunkGrassTufts.setColorAt(foliageCount, tuftPalette[subHash & 3]);
-                foliageCount++;
-              }
-            }
-          }
-        }
-
         // 4-Sided Cliff Drop-walls (South, East, North, West) for full 360-degree visibility
         // Streets and sidewalks already receive their complete edge walls from
         // roadRetainingFaces above. Adding the natural cliff sheet here too
@@ -7259,11 +7223,6 @@ export class RCT3DRenderer {
       }
     }
 
-    chunkGrassTufts.count = foliageCount;
-    chunkGrassTufts.instanceMatrix.needsUpdate = true;
-    if (chunkGrassTufts.instanceColor) chunkGrassTufts.instanceColor.needsUpdate = true;
-    if (foliageCount) chunk.terrain.add(chunkGrassTufts);
-
     const terrainSurfaceGeometries=[],naturalGroundGeometries=[];
     for (const [matKey, bucket] of Object.entries(tileMeshBuckets)) {
       if (bucket.pos.length === 0) continue;
@@ -7285,6 +7244,10 @@ export class RCT3DRenderer {
         mesh.userData.waterCells=bucket.waterCells;mesh.userData.waterLights=bucket.waterLights;mesh.userData.waterShoreMix=bucket.waterShoreMix;chunk.water.add(mesh);
       } else {
         chunk.terrain.add(mesh);
+        if (matKey === String(TILE_FLOOR) || matKey === String(TILE_HILL)) {
+          const materialKey=matKey===String(TILE_HILL)?'volumetricHillGrass':'volumetricGrass';
+          chunk.terrain.add(createVolumetricGrassMesh(THREE, geom, this.materials[materialKey], {excludedCells:this._grassExclusionCells,materialKey}));
+        }
       }
     }
     if(roadRailingBucket.pos.length){
@@ -7576,6 +7539,7 @@ export class RCT3DRenderer {
     this.waterGroup.position.y = Math.sin(this.waterTime * 2.8) * 0.012;
     if (effectiveSpeed > 0) {
       this.flameTime += dt * effectiveSpeed;
+      if (this.grassTimeUniform) this.grassTimeUniform.value = this.flameTime;
 
       // Update GPU Wind Vertex Sway on all tree species, cacti, bushes, roses and grass
       const currentTickVal = this.simTick || 0;
@@ -9090,6 +9054,7 @@ export class RCT3DRenderer {
 
     // Draw WebGL Frame with Depth of Field & Chromatic Aberration in Perspective Modes
     const profilePrepared = this.profileFrame ? performance.now() : 0;
+    this.terrainTracks.update(this.renderer,world,entities,dt*effectiveSpeed,this.cityCitizenModels,citizenRenderOffsets,this);
     const activeCam = this.isPerspectiveActive() ? this.fpCamera : this.camera;
     this.nightLighting?.update(this.nightLightPool,activeCam,this.scene);
     const shadowNow=performance.now(),shadowCameraDx=this.camX-this._lastShadowRefreshCamX,shadowCameraDy=this.camY-this._lastShadowRefreshCamY;
