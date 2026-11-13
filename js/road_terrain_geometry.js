@@ -1,3 +1,4 @@
+import {WATER_LEVEL,SAND_WATERLINE_HEIGHT} from './water_surface.js?v=shore-runup-2';
 import {baseTerrainTile,TILE_SAND,TILE_STONE,TILE_WATER,TILE_VOID,TILE_ROAD_GRASS,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL,TILE_ROAD_HILL_STONE} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
 const HEIGHTS=[1.1,5.5,0,.4,3.8,0,1.1,.4,1.1,2.3,7.5,.4,2.3,2.3];
@@ -36,9 +37,25 @@ export function terrainTileTouchesStone(world,x,y){
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE)return true;
   return false;
 }
-const SAND_MIN_HEIGHT=.34; // Water peaks at about .317 including the global bob.
-function sandTouchesWater(world,x,y){return baseTerrainTile(at(world,x,y))===TILE_SAND&&EDGES.some(edge=>at(world,x+edge.dx,y+edge.dy)===TILE_WATER);}
-function sandVertexHeight(world,x,y){return Math.max(SAND_MIN_HEIGHT,terrainTileHeight(TILE_SAND)+(((stoneVertexSeed(world,x,y,0x3c6ef372)/4294967295)*2)-1)*.055);}
+const SAND_MIN_HEIGHT=.34; // Inland sand remains above ordinary wave crests.
+function sandVertexHeight(world,x,y){
+  const noise=(((stoneVertexSeed(world,x,y,0x3c6ef372)/4294967295)*2)-1);
+  const dry=Math.max(SAND_MIN_HEIGHT,terrainTileHeight(TILE_SAND)+noise*.055);
+  for(let dz=-1;dz<=0;dz++)for(let dx=-1;dx<=0;dx++){
+    const tile=at(world,x+dx,y+dz);
+    if(ROADS.has(tile)||baseTerrainTile(tile)===TILE_STONE||sidewalkAt(world,x+dx,y+dz))return dry;
+  }
+  // Spread the dry approach over three tiles instead of lowering only the
+  // last corner. Shared corner heights keep walking, grass and picking aligned.
+  let distance=3;
+  for(let z=y-3;z<=y+2&&distance>0;z++)for(let tx=x-3;tx<=x+2&&distance>0;tx++){
+    if(at(world,tx,z)!==TILE_WATER)continue;
+    const dx=Math.max(tx-x,0,x-tx-1),dz=Math.max(z-y,0,y-z-1);
+    distance=Math.min(distance,Math.hypot(dx,dz));
+  }
+  const edge=SAND_WATERLINE_HEIGHT+noise*.003;
+  return edge+(dry-edge)*Math.min(1,distance/3);
+}
 function cacheFor(world){
   let cache=caches.get(world);
   if(!cache||cache.map!==world.map||cache.width!==world.width||cache.height!==world.height){
@@ -51,7 +68,7 @@ function cacheFor(world){
 }
 function naturalCorner(world,x,y){
   let sum=0,count=0;
-  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tx=x+dx,ty=y+dy,tile=at(world,tx,ty);if(tile!==TILE_WATER&&tile!==TILE_VOID){const base=baseTerrainTile(tile);sum+=base===TILE_STONE?stoneVertexHeight(world,x,y):sandTouchesWater(world,tx,ty)?sandVertexHeight(world,x,y):terrainTileHeight(tile);count++;}}
+  for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++){const tx=x+dx,ty=y+dy,tile=at(world,tx,ty);if(tile!==TILE_WATER&&tile!==TILE_VOID){const base=baseTerrainTile(tile);sum+=base===TILE_STONE?stoneVertexHeight(world,x,y):base===TILE_SAND?sandVertexHeight(world,x,y):terrainTileHeight(tile);count++;}}
   return count?sum/count:0;
 }
 export function terrainCornerHeight(world,x,y){
@@ -155,7 +172,7 @@ export function roadRetainingFaces(world,x,y,ownsSharedBoundary=null){
       }
       continue;
     }
-    const waterOrVoid=neighbor===TILE_WATER||neighbor===TILE_VOID,base=waterOrVoid?0.08:null,groundA=base??terrainCornerHeight(world,x+ax,y+ay),groundB=base??terrainCornerHeight(world,x+bx,y+by),surfaceA=surface[edge.a],surfaceB=surface[edge.b];
+    const waterOrVoid=neighbor===TILE_WATER||neighbor===TILE_VOID,base=neighbor===TILE_WATER?WATER_LEVEL:waterOrVoid?0.08:null,groundA=base??terrainCornerHeight(world,x+ax,y+ay),groundB=base??terrainCornerHeight(world,x+bx,y+by),surfaceA=surface[edge.a],surfaceB=surface[edge.b];
     const deltaA=groundA-surfaceA,deltaB=groundB-surfaceB;
     if(Math.max(Math.abs(deltaA),Math.abs(deltaB))<.02)continue;
     const cuts=deltaA*deltaB<0?[0,deltaA/(deltaA-deltaB),1]:[0,1];
@@ -168,7 +185,7 @@ export function roadRetainingFaces(world,x,y,ownsSharedBoundary=null){
 }
 
 export function terrainSurfaceElevation(world,x,y){
-  const tx=Math.floor(x),ty=Math.floor(y);if(at(world,tx,ty)===TILE_WATER)return .08;
+  const tx=Math.floor(x),ty=Math.floor(y);if(at(world,tx,ty)===TILE_WATER)return WATER_LEVEL;
   const surface=streetSurfaceCorners(world,tx,ty)||terrainTileSurfaceCorners(world,tx,ty),u=x-tx,v=y-ty;
   const h00=surface?surface[0]:terrainCornerHeight(world,tx,ty),h10=surface?surface[1]:terrainCornerHeight(world,tx+1,ty),h11=surface?surface[2]:terrainCornerHeight(world,tx+1,ty+1),h01=surface?surface[3]:terrainCornerHeight(world,tx,ty+1);
   // Use the same diagonal as the rendered triangles, including non-planar turns.

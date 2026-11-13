@@ -1,9 +1,12 @@
+import {sandNormalField,applySandSurfaceNormals,addSandWetnessShader} from './sand_surface_lighting.js?v=continuous-sand-1';
+import {WATER_LEVEL,WATER_WAVE_GLSL} from './water_surface.js?v=shore-runup-2';
+import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=continuous-beach-5';
 import {createTravellerPalmGeometry} from './traveller_palm.js?v=ravenala-fan-1';
 import {cursorLightPlacement} from './cursor_light.js?v=above-roofs-1';
 import {createBeachShellMesh} from './beach_shells.js?v=scattered-shells-1';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
 import {createGrassDetailsMesh} from './grass_details.js?v=rare-meadow-2';
-import {addShoreFoamShader,shoreFoamTileSurface} from './water_foam.js?v=near-bank-4';
+import {addShoreFoamShader,shoreFoamTileSurface} from './water_foam.js?v=beach-runup-9';
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=more-sand-2';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature} from './city_site_footprints.js?v=natural-open-lots-2';
@@ -30,7 +33,7 @@ import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-k
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=stone-road-edge-seam-1';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=low-water-shore-4';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -3890,7 +3893,7 @@ export class RCT3DRenderer {
     this.infiniteSea = new THREE.Mesh(seaGeometry, new THREE.MeshLambertMaterial({
       color: 0x143746, side: THREE.DoubleSide, fog: true, depthWrite: true
     }));
-    this.infiniteSea.position.y = -0.12;
+    this.infiniteSea.position.y = WATER_LEVEL-.20;
     this.infiniteSea.renderOrder = -1;
     this.infiniteSea.receiveShadow = true;
     this.scene.add(this.infiniteSea);
@@ -3930,13 +3933,7 @@ export class RCT3DRenderer {
         shader.uniforms.uCaribbeanWaterTime = waterMotionUniform;
         shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>
           uniform float uCaribbeanWaterTime;
-          float caribbeanWaveHeight(vec2 p) {
-            float waves = sin(p.x * 1.55 + p.y * 0.82 + uCaribbeanWaterTime * 1.15) * 0.10
-              + sin(p.x * 0.72 - p.y * 1.7 - uCaribbeanWaterTime * 0.82) * 0.075
-              + cos(p.x * 0.35 + p.y * 0.45 + uCaribbeanWaterTime * 0.5) * 0.05;
-            // Keep troughs above the ground while retaining visible wave crests.
-            return max(-0.065, waves);
-          }`);
+          ${WATER_WAVE_GLSL}`);
         shader.vertexShader = shader.vertexShader.replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
           float waterNormalStep = 0.08;
           float waterDx = (caribbeanWaveHeight(position.xz + vec2(waterNormalStep, 0.0)) - caribbeanWaveHeight(position.xz - vec2(waterNormalStep, 0.0))) / (2.0 * waterNormalStep);
@@ -3946,7 +3943,7 @@ export class RCT3DRenderer {
           transformed.y += caribbeanWaveHeight(position.xz);`);
         material.userData.caribbeanWaterShader = shader;
       };
-      material.customProgramCacheKey = () => "caribbean-water-displacement-v1";
+      material.customProgramCacheKey = () => "caribbean-water-low-waves-v2";
       material.userData.caribbeanWaterTime = waterMotionUniform;
       return material;
     };
@@ -3985,6 +3982,7 @@ export class RCT3DRenderer {
       farmSoil:makeMat(normalMapsEnabled,{map:farmGround.map,color:0xffffff,dithering:true,vertexColors:true,side:THREE.DoubleSide},farmGround.normalMap,.38,.91,.005),
       [TILE_FLOOR]: makeMat(normalMapsEnabled, { map: caribbeanGrass, color: 0xffffff, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.3, 0.95, 0),
       beachShells: new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:THREE.DoubleSide,dithering:true}),
+      shoreSand: makeMat(normalMapsEnabled,{color:0xdec078,dithering:true,vertexColors:true,side:THREE.DoubleSide},normSand,.42,.90,.01),
       sandClean: makeMat(normalMapsEnabled, { color: 0xdec078, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.42, 0.90, 0.01),
       [TILE_SAND]: makeMat(normalMapsEnabled, { map: createTintedTexture("Feature_Pebbles.png", 0x6e5228, 0xdec078, 1.0), dithering: true, vertexColors: true, side: THREE.DoubleSide }, normSand, 0.46, 0.88, 0.02),
       [TILE_HILL]: makeMat(normalMapsEnabled, { map: caribbeanGrass, color: 0xc2d0a0, dithering: true, vertexColors: true, side: THREE.DoubleSide }, normGrass, 0.75, 0.82, 0.02),
@@ -4206,6 +4204,12 @@ export class RCT3DRenderer {
     weatherMaterials(this.materialsPerspective);
     this.materials = Object.assign({}, this.materialsIso);
 
+    for(const dict of [this.materialsIso,this.materialsPerspective]){
+      for(const key of [TILE_SAND,'sandClean','shoreSand']){
+        addSandWetnessShader(dict[key]);
+        applyRetroDitherToMaterial(dict[key],32,1.0);
+      }
+    }
     // Apply Bayer ordered dithering to all materials in both Isometric and 1P/3P Perspective modes
     for (const dict of [this.materialsIso, this.materialsPerspective]) {
       for (const mat of Object.values(dict)) {
@@ -5879,7 +5883,7 @@ export class RCT3DRenderer {
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     const t = this.getTileTypeAt(map, tx, ty);
-    if (t === TILE_WATER) return 0.08;
+    if (t === TILE_WATER) return WATER_LEVEL;
 
     const u = x - tx;
     const v = y - ty;
@@ -6749,6 +6753,7 @@ export class RCT3DRenderer {
       [TILE_FLOOR]: { pos: [], uvs: [], colors: [] },
       [TILE_SAND]: { pos: [], uvs: [], colors: [] },
       sandClean: { pos: [], uvs: [], colors: [] },
+      shoreSand: {pos:[],uvs:[],colors:[]},
       [TILE_HILL]: { pos: [], uvs: [], colors: [] },
       [TILE_STONE]: { pos: [], uvs: [], colors: [] },
       [TILE_MOUNTAIN]: { pos: [], uvs: [], colors: [] },
@@ -6779,7 +6784,7 @@ export class RCT3DRenderer {
       const rgb=[(color>>16&255)/255,(color>>8&255)/255,(color&255)/255],half=.055,baseY=center[1]-.045,apex=[center[0],center[1]+.055,center[2]],corners=[[center[0]-half,baseY,center[2]-half],[center[0]+half,baseY,center[2]-half],[center[0]+half,baseY,center[2]+half],[center[0]-half,baseY,center[2]+half]];
       for(let i=0;i<4;i++)for(const p of [corners[i],corners[(i+1)%4],apex]){roadRailingBucket.pos.push(...p);roadRailingBucket.colors.push(...rgb);}
     };
-    const waterFoamBucket = { pos: [], uvs: [], colors: [], inward: [] };
+    const waterFoamBucket = { pos: [], uvs: [], colors: [], inward: [], beachSlope: [] };
     for (const category of ['Rock','Mountain','Peak','DirtRoad','PavedRoad','Sidewalk','SidewalkTree','RetainingWall']) for (let variant=0;variant<4;variant++) {
       tileMeshBuckets[`terrain${category}${variant}`]={pos:[],uvs:[],colors:[]};
     }
@@ -6818,13 +6823,33 @@ export class RCT3DRenderer {
       }
       return landTouches * 0.15;
     };
-    const addWaterFoamTile = (tx, ty) => {
-      const foam=shoreFoamTileSurface(tx,ty,isWaterAt);
+    // Run-up water and foam share ownership on dry beach tiles too. The sand
+    // depth, rather than the tile boundary, clips the advancing wave.
+    const addWaterTile=(tx,ty,zoneMult,coastal=false)=>{
+      const bucket=tileMeshBuckets[TILE_WATER];
+          // Four smaller quads per tile give the animated vertex waves enough geometry to bend.
+          const tint = waterTint(waterPollutionAt(world, tx, ty));
+          const cornerMixes = [waterCornerMix(tx,ty),waterCornerMix(tx,ty+1),waterCornerMix(tx+1,ty+1),waterCornerMix(tx+1,ty)];
+          const waterVertex = (px, pz, fx, fy) => {
+            const mix=cornerMixes[0]*(1-fx)*(1-fy)+cornerMixes[1]*(1-fx)*fy+cornerMixes[2]*fx*fy+cornerMixes[3]*fx*(1-fy);
+            const color=tint.map((value,i)=>{const bright=0.58+value*0.42,shallow=[0.76,0.98,0.86][i];return (bright*(1-mix)+shallow*mix)*zoneMult;});
+            bucket.pos.push(px,WATER_LEVEL,pz);bucket.uvs.push(px/8,pz/8);bucket.colors.push(...color);
+            bucket.waterCells.push(ty*this.mapWidth+tx);bucket.waterLights.push(zoneMult);bucket.waterShoreMix.push(mix);
+          };
+          const steps=coastal?4:2;
+          for (let gy=0;gy<steps;gy++) for(let gx=0;gx<steps;gx++) {
+            const x0=gx/steps,x1=(gx+1)/steps,y0=gy/steps,y1=(gy+1)/steps;
+            for(const [fx,fy] of [[x0,y0],[x0,y1],[x1,y1],[x0,y0],[x1,y1],[x1,y0]]) waterVertex(tx+fx,ty+fy,fx,fy);
+          }
+    };
+    const addWaterFoamTile = (tx, ty, beach) => {
+      const foam=shoreFoamTileSurface(tx,ty,isWaterAt,beach,(x,z)=>isSlopingBeachTile(world,x,z)&&!this._farmSoilCells?.has(`${x},${z}`));
       if(!foam)return;
       waterFoamBucket.pos.push(...foam.positions);
       waterFoamBucket.uvs.push(...foam.uvs);
-      waterFoamBucket.inward.push(...foam.inward);
+      waterFoamBucket.inward.push(...foam.inward);waterFoamBucket.beachSlope.push(...foam.beachSlope);
       for(let i=0;i<foam.positions.length/3;i++)waterFoamBucket.colors.push(1,1,.97);
+      return true;
     };
 
     for (let ty = clampedMinTy; ty <= clampedMaxTy; ty++) {
@@ -6927,7 +6952,7 @@ export class RCT3DRenderer {
         }
 
         if (tType === TILE_WATER) {
-          h00 = h10 = h11 = h01 = 0.08;
+          h00 = h10 = h11 = h01 = WATER_LEVEL;
         }
 
         const ownsRetainingBoundary=(nx,ny)=>{
@@ -7016,20 +7041,17 @@ export class RCT3DRenderer {
         }
 
         if (tType === TILE_WATER) {
-          // Four smaller quads per tile give the animated vertex waves enough geometry to bend.
-          const tint = waterTint(waterPollutionAt(world, tx, ty));
-          const cornerMixes = [waterCornerMix(tx,ty),waterCornerMix(tx,ty+1),waterCornerMix(tx+1,ty+1),waterCornerMix(tx+1,ty)];
-          const waterVertex = (px, pz, fx, fy) => {
-            const mix=cornerMixes[0]*(1-fx)*(1-fy)+cornerMixes[1]*(1-fx)*fy+cornerMixes[2]*fx*fy+cornerMixes[3]*fx*(1-fy);
-            const color=tint.map((value,i)=>{const bright=0.58+value*0.42,shallow=[0.76,0.98,0.86][i];return (bright*(1-mix)+shallow*mix)*zoneMult;});
-            bucket.pos.push(px,0.08,pz);bucket.uvs.push(px/8,pz/8);bucket.colors.push(...color);
-            bucket.waterCells.push(yOffset+tx);bucket.waterLights.push(zoneMult);bucket.waterShoreMix.push(mix);
-          };
-          for (let gy=0;gy<2;gy++) for(let gx=0;gx<2;gx++) {
-            const x0=gx/2,x1=(gx+1)/2,y0=gy/2,y1=(gy+1)/2;
-            for(const [fx,fy] of [[x0,y0],[x0,y1],[x1,y1],[x0,y0],[x1,y1],[x1,y0]]) waterVertex(tx+fx,ty+fy,fx,fy);
+          const beach=sandShoreTileSurface(world,tx,ty);
+          addWaterTile(tx,ty,zoneMult,!!beach);
+          if(beach){
+            const shore=tileMeshBuckets.shoreSand;shore.pos.push(...beach.positions);shore.uvs.push(...beach.uvs);
+            for(let i=0;i<beach.positions.length;i+=3){
+              const x=beach.positions[i],z=beach.positions[i+2],tx0=Math.floor(x),tz0=Math.floor(z),u=x-tx0,v=z-tz0;
+              const shade=zoneMult*sampleTerrainQuad([this.getCornerAO(map,tx0,tz0),this.getCornerAO(map,tx0+1,tz0),this.getCornerAO(map,tx0+1,tz0+1),this.getCornerAO(map,tx0,tz0+1)],u,v);
+              shore.colors.push(shade,shade,shade);
+            }
           }
-          addWaterFoamTile(tx,ty);
+          addWaterFoamTile(tx,ty,beach);
         } else if(adjacentPavedRoads.length){
           const regions=[[0,0,.5,.5],[.5,0,1,.5],[0,.5,.5,1],[.5,.5,1,1]],ao=(u,v)=>ao00*(1-u)*(1-v)+ao10*u*(1-v)+ao11*u*v+ao01*(1-u)*v;
           const height=(u,v)=>u<=v?h00*(1-v)+h01*(v-u)+h11*u:h00*(1-u)+h10*(u-v)+h11*v;
@@ -7090,19 +7112,26 @@ export class RCT3DRenderer {
           }
         }
 
+        if(!isFarmSoil&&isSlopingBeachTile(world,tx,ty)){
+          const profile=sandShoreTileSurface(world,tx,ty,{profileOnly:true});
+          addWaterFoamTile(tx,ty,profile);
+          if(profile&&Math.min(h00,h10,h11,h01)<=WATER_LEVEL+.10)addWaterTile(tx,ty,zoneMult,true);
+        }
+
         // 4-Sided Cliff Drop-walls (South, East, North, West) for full 360-degree visibility
         // Streets and sidewalks already receive their complete edge walls from
         // roadRetainingFaces above. Adding the natural cliff sheet here too
         // overlaps those panels (notably at water and void edges), producing
         // z-fighting triangles and apparent holes in the retaining texture.
         if (tType !== TILE_WATER && !streetCorners) {
+          const naturalDrop=(x,y)=>isDropAt(x,y)&&!(!isFarmSoil&&isSlopingBeachTile(world,tx,ty)&&this.getTileTypeAt(map,x,y)===TILE_WATER);
           const baseH = 0.0;
           const cliffBaseAO = 0.65 * zoneMult;
           const cliffTopAO = 0.95 * zoneMult;
           const cliffVertices=terrainVertices||[[tx,h00,ty],[tx+1,h10,ty],[tx+1,h11,ty+1],[tx,h01,ty+1]];
           const cliffBucket=side=>streetCorners?tileMeshBuckets[`terrainRetainingWall${terrainTextureHash(tx,ty,tType+side)&3}`]:bucket;
           // 1. South Face (+Y, at ty + 1, facing +Z)
-          if (ty === this.mapHeight - 1 || isDropAt(tx, ty + 1)) {
+          if (ty === this.mapHeight - 1 || naturalDrop(tx, ty + 1)) {
             const wallBucket=cliffBucket(2);
             wallBucket.pos.push(
               cliffVertices[3][0], baseH, cliffVertices[3][2],
@@ -7125,7 +7154,7 @@ export class RCT3DRenderer {
           }
 
           // 2. East Face (+X, at tx + 1, facing +X)
-          if (tx === this.mapWidth - 1 || isDropAt(tx + 1, ty)) {
+          if (tx === this.mapWidth - 1 || naturalDrop(tx + 1, ty)) {
             const wallBucket=cliffBucket(1);
             wallBucket.pos.push(
               cliffVertices[2][0], baseH, cliffVertices[2][2],
@@ -7148,7 +7177,7 @@ export class RCT3DRenderer {
           }
 
           // 3. North Face (-Y, at ty, facing -Z)
-          if (ty === 0 || isDropAt(tx, ty - 1)) {
+          if (ty === 0 || naturalDrop(tx, ty - 1)) {
             const wallBucket=cliffBucket(0);
             wallBucket.pos.push(
               cliffVertices[1][0], baseH, cliffVertices[1][2],
@@ -7171,7 +7200,7 @@ export class RCT3DRenderer {
           }
 
           // 4. West Face (-X, at tx, facing -X)
-          if (tx === 0 || isDropAt(tx - 1, ty)) {
+          if (tx === 0 || naturalDrop(tx - 1, ty)) {
             const wallBucket=cliffBucket(3);
             wallBucket.pos.push(
               cliffVertices[0][0], baseH, cliffVertices[0][2],
@@ -7204,6 +7233,7 @@ export class RCT3DRenderer {
       geom.setAttribute("uv", new THREE.Float32BufferAttribute(bucket.uvs, 2));
       geom.setAttribute("color", new THREE.Float32BufferAttribute(bucket.colors, 3));
       geom.computeVertexNormals();
+      geom.userData.sandSurface=matKey===String(TILE_SAND)||matKey==='sandClean'||matKey==='shoreSand';
       terrainSurfaceGeometries.push(geom);
       if(terrainTransitionMaterialKeys.has(matKey))naturalGroundGeometries.push(geom);
 
@@ -7235,6 +7265,8 @@ export class RCT3DRenderer {
       const railing=new THREE.Mesh(geometry,this.materials.roadRailing);railing.userData.terrainMaterialKey='roadRailing';railing.castShadow=false;railing.receiveShadow=true;railing.frustumCulled=false;chunk.terrain.add(railing);
     }
     smoothTerrainTopNormals(THREE,terrainSurfaceGeometries);
+    const sandNormalAt=sandNormalField(world);
+    for(const geometry of terrainSurfaceGeometries)if(geometry.userData.sandSurface)applySandSurfaceNormals(geometry,sandNormalAt);
     const groundNormalField=new Map();
     for(const geometry of naturalGroundGeometries){
       const positions=geometry.getAttribute('position'),normals=geometry.getAttribute('normal');
@@ -7275,6 +7307,7 @@ export class RCT3DRenderer {
       foamGeometry.setAttribute("position", new THREE.Float32BufferAttribute(waterFoamBucket.pos, 3));
       foamGeometry.setAttribute("uv", new THREE.Float32BufferAttribute(waterFoamBucket.uvs, 2));
       foamGeometry.setAttribute("foamInward", new THREE.Float32BufferAttribute(waterFoamBucket.inward, 2));
+      foamGeometry.setAttribute("foamBeachSlope", new THREE.Float32BufferAttribute(waterFoamBucket.beachSlope, 1));
       foamGeometry.setAttribute("color", new THREE.Float32BufferAttribute(waterFoamBucket.colors, 3));
       foamGeometry.computeVertexNormals();
       const foamMesh = new THREE.Mesh(foamGeometry, this.materials.waterFoam);
@@ -7517,7 +7550,7 @@ export class RCT3DRenderer {
         waterMat.map.offset.y = (this.waterTime * 0.022) % 1;
       }
     }
-    this.waterGroup.position.y = Math.sin(this.waterTime * 2.8) * 0.012;
+    this.waterGroup.position.y = Math.sin(this.waterTime * 2.8) * 0.005;
     if (effectiveSpeed > 0) {
       this.flameTime += dt * effectiveSpeed;
 
@@ -7885,7 +7918,7 @@ export class RCT3DRenderer {
         this.instTropicalFoliage.setMatrixAt(tropicalFoliageCount,mMatrix);this.instTropicalFoliage.setColorAt(tropicalFoliageCount,this.tempColor1.setHex(TROPICAL_FOLIAGE_COLORS[e.properties.species]||0x68894e));tropicalFoliageCount++;
       }
       // Giant Amazonian water lily: floating pad with V-notch and a layered
-      // pink bloom, sitting directly on the water surface (water plane y=0.08)
+      // pink bloom, sitting directly on the water surface (shared water level)
       else if(isWaterLily&&waterLilyCount<this.maxInstances){
         const rotY=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9157),982451653)>>>0)%628)/100),size=(r.size||1);
         mMatrix.makeRotationY(rotY);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
@@ -8235,7 +8268,7 @@ export class RCT3DRenderer {
         const isHouseOverWater = (map?.getTile ? map.getTile(htx, hty) === 2 : false) || (!!h?.isPlatform);
         if (isHouseOverWater && waterPlatformCount < 800) {
           const platMat = new THREE.Matrix4();
-          platMat.setPosition(e.x + fpW * 0.5, 0.08, e.y + fpH * 0.5);
+          platMat.setPosition(e.x + fpW * 0.5, WATER_LEVEL, e.y + fpH * 0.5);
           this.instWaterPlatforms.setMatrixAt(waterPlatformCount++, platMat);
         }
 

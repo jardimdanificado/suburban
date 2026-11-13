@@ -85,3 +85,16 @@ test('shells are rare, stable, follow sandy slopes and stay outside excluded cel
   const geometry=beachShellSurface();assert.equal(geometry.positions.length/9,14);assert.equal(geometry.colors.length,geometry.positions.length);
   for(let i=0;i<geometry.positions.length;i+=9){const p=geometry.positions;assert.ok((p[i+5]-p[i+2])*(p[i+6]-p[i])-(p[i+3]-p[i])*(p[i+8]-p[i+2])>0);}
 });
+
+test('raised foam uses one continuous thickness profile for geometry and visible crests',async()=>{
+ const {addShoreFoamShader}=await import('../js/water_foam.js');
+ const material={onBeforeCompile(){},customProgramCacheKey(){return 'base';}};addShoreFoamShader(material);
+ const shader={uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>\n#include <defaultnormal_vertex>\n#include <project_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>'};material.onBeforeCompile(shader);
+ assert.ok(shader.vertexShader.includes('crest*crest*thickness.y'),'crest height must change the geometry');
+ assert.ok(shader.fragmentShader.includes('float width=foamThickness(vFoamWorld).x;'),'visible width follows the same world-space profile');
+ const profile=source=>source.slice(source.indexOf('vec2 foamThickness'),source.indexOf('float foamLift'));
+ assert.equal(profile(shader.vertexShader),profile(shader.fragmentShader));
+ const g=shoreFoamSurface(0,0,0),rows=[...new Set(g.positions.filter((_,i)=>i%3===2))].sort((a,b)=>a-b);
+ assert.ok(rows[1]<.05&&rows[2]<=.10,'support the near-bank volume without adding triangles');
+ assert.equal(g.positions.length/9,128);
+});
