@@ -1,4 +1,4 @@
-import {grassRootSteps} from './volumetric_grass.js?v=camera-budget-6';
+import {grassRootSteps} from './volumetric_grass.js?v=dense-soil-grass-1';
 
 // Root generation advances a few milliseconds per frame. The existing ground
 // remains visible, and completed blades keep the original deterministic data.

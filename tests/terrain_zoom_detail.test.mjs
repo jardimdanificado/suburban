@@ -7,12 +7,12 @@ import {cachedShoreFoamTileSurface} from '../js/water_foam.js';
 const tile=(x,z)=>[x,x*.2,z,x,x*.2,z+1,x+1,(x+1)*.2,z+1,x,x*.2,z,x+1,(x+1)*.2,z+1,x+1,(x+1)*.2,z];
 test('zoom bands reduce invisible geometry and preserve full detail in close and perspective views',()=>{
  const near=terrainZoomDetail(2),mid=terrainZoomDetail(.7),far=terrainZoomDetail(.3);
- assert.equal(terrainZoomDetail(1),near);assert.equal(near.grassAxis,10);assert.ok(near.smallDetails);assert.equal(mid.grassAxis,4);assert.equal(far.grassAxis,0);
+ assert.equal(terrainZoomDetail(1),near);assert.equal(near.grassAxis,24);assert.ok(near.smallDetails);assert.equal(mid.grassAxis,12);assert.equal(far.grassAxis,0);
  assert.equal(terrainZoomDetail(.3,true),near);assert.equal(terrainZoomDetail(.4),far);
  assert.ok(far.beachSteps<mid.beachSteps&&mid.beachSteps<near.beachSteps);
  assert.ok(far.foamSteps<mid.foamSteps&&mid.foamSteps<near.foamSteps);
 });
-test('grass density falls from 100 to 16 to zero roots per tile, retaining slope and lot exclusions',()=>{
+test('grass density falls from 576 to 144 to zero roots per tile, retaining slope and lot exclusions',()=>{
  for(const zoom of [2,.7,.3]){
    const {grassAxis}=terrainZoomDetail(zoom),options={bladesPerAxis:grassAxis},positions=[...tile(0,0),...tile(1,0)];
    const roots=grassRoots(positions,undefined,new Set(['1,0']),options).roots;

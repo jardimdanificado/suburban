@@ -1,6 +1,6 @@
 import {setWaterGeometryCacheEnabled} from './water_geometry_cache.js?v=terrain-revision-2';
 import {GrassRootJobs} from './grass_root_jobs.js?v=frame-budget-9';
-import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-2';
+import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-4';
 import {sandNormalField,sandSurfaceNormalSteps,addSandWetnessShader} from './sand_surface_lighting.js?v=camera-budget-5';
 import {WATER_LEVEL,WATER_WAVE_GLSL} from './water_surface.js?v=shore-runup-2';
 import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=zoom-coast-8';
@@ -13,7 +13,7 @@ import {addShoreFoamShader,cachedShoreFoamTileSurface} from './water_foam.js?v=z
 import {farmSurfaceTile} from './city_farm_ground.js?v=whole-farm-soil-1';
 import {createTerrainTrackUniforms,addSandTracksToMaterial,addGrassTracksToMaterial,addSandDepositsToMaterial,TerrainTracks} from './terrain_tracks.js?v=more-sand-2';
 import {constructionSiteCells,grassExclusionCells,grassExclusionSignature,grassChunkSignatures} from './city_site_footprints.js?v=local-chunk-mask-3';
-import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=camera-budget-6';
+import {createVolumetricGrassMaterial,createVolumetricGrassMesh} from './volumetric_grass.js?v=wider-grass-contact-1';
 import {syncSubstanceSmoke} from './city_substance_smoke.js?v=active-substance-effects-1';
 import {syncCityFavoriteMarkers} from './city_activity_renderer.js?v=favorite-glyph-sprites-3';
 import {FARM_TILES,baseTerrainTile} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
@@ -4250,6 +4250,20 @@ export class RCT3DRenderer {
       for(const [key,material] of Object.entries(dict)){
         if(/terrain(Rock|Mountain|Peak|DirtRoad|PavedRoad|Sidewalk)/.test(key)||key==='farmSoil'||[TILE_STONE,TILE_MOUNTAIN,TILE_PEAK,TILE_ROAD_GRASS,TILE_ROAD_SAND,TILE_ROAD_HILL,TILE_ROAD_GRASS_STONE,TILE_ROAD_SAND_STONE,TILE_ROAD_HILL_STONE].includes(Number(key)))addSandDepositsToMaterial(material,this.terrainTrackUniforms);
       }
+      // Keep the original green material for blades and distant vegetation.
+      // Soil variants retain texture grain, lighting and contact shader hooks.
+      for(const tile of [TILE_FLOOR,TILE_HILL])for(const band of [1,2]){
+        const base=dict[tile],soil=base.clone(),compile=base.onBeforeCompile;
+        soil.onBeforeCompile=shader=>{
+          compile?.call(soil,shader);
+          shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+            float soilGrain=dot(diffuseColor.rgb,vec3(.299,.587,.114));
+            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.29,.17,.085)*(.55+soilGrain*1.2),${band===2?'1.0':'.45'});
+          `);
+        };
+        soil.customProgramCacheKey=()=>base.customProgramCacheKey()+':soil:'+band;
+        dict[`grassSoil${tile}_${band}`]=soil;
+      }
       dict.grassDetails = createVolumetricGrassMaterial(THREE,null,this.grassWindTickUniform,this.terrainTrackUniforms,{details:true});
       dict.volumetricGrass = createVolumetricGrassMaterial(THREE, dict[TILE_FLOOR], this.grassWindTickUniform,this.terrainTrackUniforms);
       dict.volumetricHillGrass = createVolumetricGrassMaterial(THREE, dict[TILE_HILL], this.grassWindTickUniform,this.terrainTrackUniforms);
@@ -7314,6 +7328,25 @@ export class RCT3DRenderer {
       }
     }
 
+    // Sample colors at tile centers so adjacent chunks share the same blend.
+    const tintGrass=mesh=>{
+      const roots=mesh.geometry.getAttribute('grassRoot'),tints=mesh.geometry.getAttribute('grassTint');
+      const base=mesh.material.color;
+      for(let i=0;i<roots.count;i++){
+        const x=roots.getX(i)-.5,z=roots.getZ(i)-.5,tx=Math.floor(x),tz=Math.floor(z);
+        const u=x-tx,v=z-tz,smooth=t=>t*t*(3-2*t),a=smooth(u),b=smooth(v);
+        const color=[0,0,0];
+        for(const [dx,dz,weight]of [[0,0,(1-a)*(1-b)],[1,0,a*(1-b)],[0,1,(1-a)*b],[1,1,a*b]]){
+          const tile=world.getTile(tx+dx,tz+dz);
+          const tint=(tile===TILE_FLOOR||tile===TILE_HILL)?this.materials[tile].color:null;
+          color[0]+=(tint?tint.r:base.r/.82)*weight;
+          color[1]+=(tint?tint.g:base.g/.82)*weight;
+          color[2]+=(tint?tint.b:base.b/.82)*weight;
+        }
+        tints.setXYZ(i,color[0]*.82/base.r,color[1]*.82/base.g,color[2]*.82/base.b);
+      }
+      tints.needsUpdate=true;
+    };
     const terrainSurfaceGeometries=[],naturalGroundGeometries=[];
     for (const [matKey, bucket] of Object.entries(tileMeshBuckets)) {
       yield;
@@ -7328,9 +7361,10 @@ export class RCT3DRenderer {
       terrainSurfaceGeometries.push(geom);
       if(terrainTransitionMaterialKeys.has(matKey))naturalGroundGeometries.push(geom);
 
-      const mat = this.materials[matKey] || this.materials[TILE_FLOOR];
+      const groundKey=zoomDetail.band>0&&(matKey===String(TILE_FLOOR)||matKey===String(TILE_HILL))?`grassSoil${matKey}_${zoomDetail.band}`:matKey;
+      const mat = this.materials[groundKey] || this.materials[TILE_FLOOR];
       const mesh = new THREE.Mesh(geom, mat);
-      mesh.userData.terrainMaterialKey = matKey;
+      mesh.userData.terrainMaterialKey = groundKey;
       mesh.receiveShadow = true;
       mesh.castShadow = false;
 
@@ -7346,7 +7380,7 @@ export class RCT3DRenderer {
           const materialKey=matKey===String(TILE_HILL)?'volumetricHillGrass':'volumetricGrass';
           if(this.terrainOptimizationsEnabled===false){
             const grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis});
-            chunk.terrain.add(grass);
+            tintGrass(grass);chunk.terrain.add(grass);
             if(zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);if(details)chunk.terrain.add(details);}
           }else{
           const emptyRoots={roots:new Float32Array(),shapes:new Float32Array(),shades:new Float32Array()};
@@ -7357,7 +7391,7 @@ export class RCT3DRenderer {
             // A new instanced geometry also refreshes Three's cached instance
             // capacity after the initially empty mesh has reached the GPU.
             const readyMesh=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{materialKey,rootData:data});
-            grass.geometry.dispose();grass.geometry=readyMesh.geometry;
+            grass.geometry.dispose();grass.geometry=readyMesh.geometry;tintGrass(grass);
             chunk.pendingRoots--;
             if(zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);if(details)chunk.terrain.add(details);}
           };
@@ -7365,7 +7399,7 @@ export class RCT3DRenderer {
           const ready=jobs.request(world,rootKey,geom,this._grassExclusionCells,zoomDetail.grassAxis,()=>!chunk.disposed,install);
           if(!ready)chunk.pendingRoots=(chunk.pendingRoots||0)+1;
           grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis,rootData:ready??emptyRoots});
-          chunk.terrain.add(grass);
+          tintGrass(grass);chunk.terrain.add(grass);
           if(ready&&zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);if(details)chunk.terrain.add(details);}
           }
         }
@@ -7409,8 +7443,9 @@ export class RCT3DRenderer {
         normalValues.push(normal[0]/length,normal[1]/length,normal[2]/length);
       }
       geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normalValues,3));
-      const mesh=new THREE.Mesh(geometry,this.terrainTransitionMaterial(this.materials[bucket.materialKey],bucket.side));
-      mesh.userData.terrainMaterialKey=`terrainBlend:${bucket.materialKey}:${bucket.side}`;
+      const blendKey=zoomDetail.band>0&&(String(bucket.materialKey)===String(TILE_FLOOR)||String(bucket.materialKey)===String(TILE_HILL))?`grassSoil${bucket.materialKey}_${zoomDetail.band}`:bucket.materialKey;
+      const mesh=new THREE.Mesh(geometry,this.terrainTransitionMaterial(this.materials[blendKey],bucket.side));
+      mesh.userData.terrainMaterialKey=`terrainBlend:${blendKey}:${bucket.side}`;
       mesh.receiveShadow=true;mesh.castShadow=false;
       chunk.terrain.add(mesh);
     }

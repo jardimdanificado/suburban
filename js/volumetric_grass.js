@@ -64,6 +64,8 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, 
       attribute vec3 grassRoot;
       attribute vec4 grassShape;
       attribute float grassShade;
+      attribute vec3 grassTint;
+      varying vec3 vGrassTint;
       ${details ? "attribute vec3 detailColor;" : ""}
       uniform float grassSimTick;
       varying float vBladeHeight;
@@ -86,27 +88,35 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, 
       float bend = h;
       vec2 wind = vec2(.75, .35) * sin(windEpoch * .68 + grassShape.w) * .018;
       transformed = grassRoot + vec3(
-        across.x * position.x * grassShape.z + forward.x * (bend * .065 + position.z * grassShape.z) + wind.x * bend,
+        across.x * position.x * grassShape.z * 1.65 + forward.x * (bend * .065 + position.z * grassShape.z) + wind.x * bend,
         h * grassShape.y,
-        across.y * position.x * grassShape.z + forward.y * (bend * .065 + position.z * grassShape.z) + wind.y * bend);
-      ${tracks ? `float recovery = 1.0 - terrainTrackStrength(grassRoot.xz, ${GRASS_TRACK_HOLD.toFixed(1)}, ${GRASS_TRACK_LIFE.toFixed(1)});
+        across.y * position.x * grassShape.z * 1.65 + forward.y * (bend * .065 + position.z * grassShape.z) + wind.y * bend);
+      ${tracks ? `float contactStrength = terrainTrackStrength(grassRoot.xz, ${GRASS_TRACK_HOLD.toFixed(1)}, ${GRASS_TRACK_LIFE.toFixed(1)});
+      // Expand grass contact by 2.5 cm while keeping sand imprints unchanged.
+      for(int side=0;side<4;side++){
+        vec2 offset=side==0?vec2(.025,0.0):side==1?vec2(-.025,0.0):side==2?vec2(0.0,.025):vec2(0.0,-.025);
+        contactStrength=max(contactStrength,terrainTrackStrength(grassRoot.xz+offset, ${GRASS_TRACK_HOLD.toFixed(1)}, ${GRASS_TRACK_LIFE.toFixed(1)}));
+      }
+      float recovery=1.0-contactStrength;
       transformed = grassRoot + (transformed - grassRoot) * recovery;` : ""}
       ${details ? "vDetailColor = h > .72 ? detailColor : vec3(.23,.38,.10);" : ""}
       vBladeHeight = h;
       vBladeShade = grassShade;
+      vGrassTint = grassTint;
       ${tracks ? "vBladeWorld = (modelMatrix * vec4(transformed, 1.0)).xz;" : ""}
     `);
     // Upward shading normals model a soft canopy. They are shared across the
     // field, so terrain triangle boundaries cannot create polygonal lighting.
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
       ${tracks ? TERRAIN_TRACK_GLSL : ""}
+      varying vec3 vGrassTint;
       varying float vBladeHeight;
       varying float vBladeShade;
       ${details ? "varying vec3 vDetailColor;" : ""}
       ${tracks ? "varying vec2 vBladeWorld;" : ""}
     `).replace('#include <color_fragment>', `#include <color_fragment>
       ${tracks ? `if (terrainTrackStrength(vBladeWorld, ${GRASS_TRACK_HOLD.toFixed(1)}, ${GRASS_TRACK_LIFE.toFixed(1)}) > .98) discard;` : ""}
-      ${details ? "diffuseColor.rgb *= vDetailColor * vBladeShade;" : "diffuseColor.rgb *= vBladeShade * mix(vec3(.59, .68, .45), vec3(1.12, 1.10, .92), vBladeHeight);"}
+      ${details ? "diffuseColor.rgb *= vDetailColor * vBladeShade;" : "diffuseColor.rgb *= vGrassTint * vBladeShade * mix(vec3(.59, .68, .45), vec3(1.12, 1.10, .92), vBladeHeight);"}
     `).replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
       normal = normalize(vNormal);
     `);
@@ -127,6 +137,7 @@ export function createVolumetricGrassMesh(THREE, surface, material, {excludedCel
   geometry.setAttribute('grassRoot', new THREE.InstancedBufferAttribute(roots, 3));
   geometry.setAttribute('grassShape', new THREE.InstancedBufferAttribute(shapes, 4));
   geometry.setAttribute('grassShade', new THREE.InstancedBufferAttribute(shades, 1));
+  geometry.setAttribute('grassTint', new THREE.InstancedBufferAttribute(new Float32Array(roots.length).fill(1), 3));
   geometry.instanceCount = roots.length / 3;
   surface.computeBoundingBox();
   geometry.boundingBox = surface.boundingBox.clone();
