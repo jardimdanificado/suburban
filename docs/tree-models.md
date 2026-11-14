@@ -6,6 +6,8 @@ As copas de árvores de folhas largas usam folhas dobradas e galhos, sem uma esf
 
 A geometria é criada uma vez por espécie visível e reutilizada em `InstancedMesh`. Cada modelo tem até 4.500 triângulos. O limite existente de 1.200 instâncias passa a valer por espécie. Só madeira participa das sombras: o material de profundidade elimina folhas, flores e frutos. O vento usa o relógio discreto `uSimTick` existente e mantém os pontos de inserção das folhas fixos. Flores e frutos ficam ocultos em plantas com tamanho visual inferior a 0,8.
 
+As cores hexadecimais são convertidas de sRGB para linear por `vegetationColor`, como nas cores de materiais do Three.js. Isso evita o aspecto pastel que surge quando canais sRGB são enviados diretamente aos atributos de vértice. A árvore-do-viajante usa a mesma conversão e o verde do coqueiro como referência, mantendo sua geometria.
+
 ## Conferência
 
 - `node --test tests/botanical_trees.test.mjs tests/fan_palm.test.mjs`: nove testes de cobertura das espécies, geometria, orçamento, frutos, vento, instâncias e preservação dos caminhos existentes.

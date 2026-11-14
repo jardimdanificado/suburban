@@ -1,3 +1,4 @@
+import {vegetationColor} from './vegetation_color.js';
 // Species silhouettes share mesh builders, not a scaled generic crown. Geometry
 // is built once per species; all planted and wild specimens use GPU instances.
 const broad=(height,radius,leaf,bark,extra={})=>({kind:'broad',height,radius,leaf,bark,leafLength:.29,leafWidth:.105,...extra});
@@ -48,7 +49,7 @@ const TAU=Math.PI*2;
 const add=(a,b)=>a.map((v,i)=>v+b[i]),mul=(a,s)=>a.map(v=>v*s),mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const unit=a=>mul(a,1/(Math.hypot(...a)||1));
-const rgb=hex=>[hex>>16&255,hex>>8&255,hex&255].map(v=>v/255*.78);
+const rgb=vegetationColor;
 function builder(seed){
   const positions=[],colors=[],uvs=[],flex=[],parts=[],woodMask=[];
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
