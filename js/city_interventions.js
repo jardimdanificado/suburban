@@ -148,7 +148,7 @@ export class CityInterventions {
     }else if(kind==='divineGovernment'){
       const type=options.type,payload=options.payload||{},council=city.politics.council;
       if(type==='publicWork'||type==='build'&&!['townhall','mint','council_chamber'].includes(payload.buildingType)){
-        const project=city.politics.startPublicWork(payload.buildingType,payload.crop||'milho',{observer:true});if(!project)return false;
+        const project=city.politics.startPublicWork(payload.buildingType,payload.crop||'milho',{observer:true,vertical:!!payload.vertical,floors:payload.floors??null});if(!project)return false;
         record.projectId=project.id;record.buildingId=project.buildingId??null;record.affected=1;record.description=`Obra pública contratada imediatamente: ${city.buildingTypes[payload.buildingType]?.label||payload.buildingType} (projeto #${project.id}).`;
       }else if(type==='veto'){
         if(!city.politics.vetoBill(payload.billId))return false;

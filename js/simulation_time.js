@@ -15,6 +15,7 @@ export class SimulationTime {
   constructor({now=()=>performance.now()}={}) {
     this.now=now;
     this.speed = 1;
+    this.fastForwardEnabled = false;
     this.paused = false;
     this.tick = 0;
     this.elapsed = 0;
@@ -31,9 +32,23 @@ export class SimulationTime {
     this.accumulator = 0;
   }
 
+  get speedTiers() {
+    return this.fastForwardEnabled ? SPEED_TIERS : SPEED_TIERS.filter(speed => speed < FF_SPEED);
+  }
+
+  setFastForwardEnabled(value) {
+    this.fastForwardEnabled = !!value;
+    if (!this.fastForwardEnabled && this.speed >= FF_SPEED) this.setSpeed(32);
+  }
+
+  cycleSpeed() {
+    const tiers = this.speedTiers;
+    this.setSpeed(tiers[(tiers.indexOf(this.speed) + 1) % tiers.length]);
+  }
+
   setSpeed(value) {
     if (!SPEED_TIERS.includes(value)) throw new RangeError("Velocidade de simulacao invalida.");
-    this.speed = value;
+    this.speed = !this.fastForwardEnabled && value >= FF_SPEED ? 32 : value;
     this.effectiveSpeed = null;
     this.progressSample = null;
   }
@@ -46,8 +61,9 @@ export class SimulationTime {
   }
 
   changeSpeed(direction) {
-    const index = SPEED_TIERS.indexOf(this.speed);
-    this.setSpeed(SPEED_TIERS[Math.max(0, Math.min(SPEED_TIERS.length - 1, index + Math.sign(direction)))]);
+    const tiers = this.speedTiers;
+    const index = tiers.indexOf(this.speed);
+    this.setSpeed(tiers[Math.max(0, Math.min(tiers.length - 1, index + Math.sign(direction)))]);
   }
 
   runStep(update, dt = this.stepSeconds) {

@@ -1,3 +1,4 @@
+import {canFarmVertically,isVerticalFarm,farmCells,plannedFarmArea} from './city_farm_layout.js';
 import {fishingWork,fishSupplyInputs,fishingSiteNearby} from './city_fishing.js';
 import {FISH_SPECIES} from './fishing_catalog.js';
 import {economicPolicy} from './city_economic_policies.js';
@@ -11,7 +12,7 @@ import {taxCategory,taxRate} from './city_sales_tax.js';
 import {equityShares,offerShares,buyShares,cancelShareOffer,tradeSharesHourly,distributeShareDividends} from './city_equity.js?v=daily-mayor-privatization-2';
 import {TILE_FLOOR,TILE_SAND,TILE_HILL} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {externalTradeHourly,orderImport,ensureImportDepot,importDepotClaim} from './city_external_trade.js';
-import {outdoorCellReady,workCellReady} from './city_interiors.js?v=citizen-access-1';
+import {outdoorCellReady,workCellReady,activityRoomReady} from './city_interiors.js?v=citizen-access-1';
 import {fundInitialCycleChain,INITIAL_CYCLE_STAGES} from './city_cycle_startup.js';
 import {CIVIC_SERVICES,civicSpec,planCivicServices} from './city_public_services.js';
 import {career,requirements,qualification,reviewMarket,advanceRecruitment,workEfficiency,reviewWages,wageFor} from './city_employment.js?v=fast-speeds-1';
@@ -293,7 +294,7 @@ export class CityEconomy {
     const grainConsumers=businesses.filter(b=>b.type==='bakery'||INDUSTRIES[b.type]?.inputs.trigo).length;
     const pendingFarmCapacityByCrop=new Map();
     for(const p of this.city.development.projects)if(p.type==='farm'&&CROPS[p.crop]&&!p.cancelled&&p.status!=='completed'){
-      const area=Math.max(1,(p.width||10)*(p.depth||10)-2),staff=Math.ceil(area/18)+(p.accountId==='treasury'?0:1),labor=Math.ceil(area*ECONOMY_RULES.farmLabor/12),cycle=Math.max(CROPS[p.crop].grow,labor/staff),capacity=Math.floor(area*540/(cycle+CROPS[p.crop].grow));
+      const area=Math.max(1,plannedFarmArea(p.width||10,p.depth||10,p.floors||1,p.kind)),staff=Math.ceil(area/18)+(p.accountId==='treasury'?0:1),labor=Math.ceil(area*ECONOMY_RULES.farmLabor/12),cycle=Math.max(CROPS[p.crop].grow,labor/staff),capacity=Math.floor(area*540/(cycle+CROPS[p.crop].grow));
       pendingFarmCapacityByCrop.set(p.crop,(pendingFarmCapacityByCrop.get(p.crop)||0)+capacity);
     }
     for (const b of businesses) b.inputDemand = b.type==='kitchen'?Object.fromEntries([...new Set(KITCHEN_RECIPES.flatMap(r=>Object.keys(r.inputs)))].map(g=>[g,Math.max(0,18-(b.inventory[g]||0)-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))])):b.type==='mill'?{girassol:Math.max(0,36-b.inventory.girassol-(b.incoming.girassol||0)-(b.worldIncoming?.girassol||0)-(b.importIncoming?.girassol||0))}:INDUSTRIES[b.type] ? Object.fromEntries(Object.entries(this.city.vehicles.recipeFor(b)?.inputs||INDUSTRIES[b.type].inputs).map(([g,n])=>[g,Math.max(0,(b.type==='boat_shop'?1:b.type==='cycle_assembler'?n*Math.max(6,b.vehicleBatchSize||3):b.type==='publisher'&&g==='papel'?Math.max(12,(b.bookPages||5)*3):n*6)-b.inventory[g]-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))])) : b.type === 'bakery' ? { trigo: Math.max(0, 24 - b.inventory.trigo-(b.incoming?.trigo||0)-(b.worldIncoming?.trigo||0)-(b.importIncoming?.trigo||0)) } : b.type==='restaurant' ? Object.fromEntries(restaurantGoods.map(g=>[g,Math.max(0,6-b.inventory[g]-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))])) : ['market','greengrocer'].includes(b.type) ? Object.fromEntries(this.retailAssortment(b).map(g=>[g,Math.max(0,12-(b.inventory[g]||0)-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))])) : !retailTypes.has(b.type) ? {} : Object.fromEntries(edible.filter(g => this.accepts(b, g)).map(g => [g, Math.max(0, 12 - b.inventory[g]-(b.incoming[g]||0)-(b.worldIncoming?.[g]||0)-(b.importIncoming?.[g]||0))]));
@@ -447,13 +448,15 @@ export class CityEconomy {
     return cells * (2 * this.goods.pedra.price + this.city.currency.price(10000)) + startupCash(this.city,type);
   }
 
-  setupFarm(b) {
-    const area = Math.max(1,b.width*b.depth-2);
-    b.fields = Array.from({length:Math.ceil(area/12)},(_,i) => {
-      const cells = Math.min(12,area-i*12);
-      return {area:cells,yield:Math.max(1,Math.floor(cells*(CROPS[b.crop]?.yieldFactor||1))),requiredLabor:Math.ceil(ECONOMY_RULES.farmLabor*cells/12*(CROPS[b.crop]?.laborFactor||1)),labor:0,plantedAt:null,...(b.crop==='girassol'?{sunflowerBoostVersion:1}:{})};
-    });
-    b.jobs = Math.min(32,Math.max(1,Math.ceil(area/18)));
+  setupFarm(b,{preserve=false}={}) {
+    const cells=isVerticalFarm(b)?farmCells(b):farmCells(b).slice(0,Math.max(1,b.width*b.depth-2)),groups=new Map(),old=preserve?new Map((b.fields||[]).filter(f=>f.unitIds).map(f=>[f.unitIds.join('|'),f])):new Map();
+    for(const cell of cells){const floor=cell.z||0;if(!groups.has(floor))groups.set(floor,[]);groups.get(floor).push(cell);}
+    b.fields=[];
+    for(const floorCells of groups.values())for(let i=0;i<floorCells.length;i+=12){
+      const units=floorCells.slice(i,i+12),area=units.length,unitIds=units.map(u=>u.id),previous=old.get(unitIds.join('|'));
+      b.fields.push(previous||{area,unitIds,yield:Math.max(1,Math.floor(area*(CROPS[b.crop]?.yieldFactor||1))),requiredLabor:Math.ceil(ECONOMY_RULES.farmLabor*area/12*(CROPS[b.crop]?.laborFactor||1)),labor:0,plantedAt:null,...(b.crop==='girassol'?{sunflowerBoostVersion:1}:{})});
+    }
+    b.jobs=Math.min(32,Math.max(1,Math.ceil(cells.length/18)));
   }
   farmCapacity(b,planned=false,crew=null) {
     if(b.crop==='girassol')for(const field of b.fields)if(field.sunflowerBoostVersion!==1){field.yield=Math.max(1,Math.floor((field.yield||field.area||12)*4));field.requiredLabor=Math.max(1,Math.ceil((field.requiredLabor||ECONOMY_RULES.farmLabor)*.65));field.sunflowerBoostVersion=1;}
@@ -469,6 +472,7 @@ export class CityEconomy {
     return {area,fields:b.fields.length,staff,jobs:b.jobs,harvest,daily};
   }
   activateMunicipalBusiness(b, budget = 50000, crop = null) {
+    if(isVerticalFarm(b)&&!canFarmVertically(crop))return this.city.fail('Esta cultura precisa de uma fazenda ao ar livre.');
     b.municipal = true; b.ownerId = null; b.active = true; b.crop = crop; b.foundedAt = this.city.minute;
     if(b.type==='farm') this.setupFarm(b); else b.fields=[];
     if (b.type === 'quarry') b.stoneReserve ??= 12000;
@@ -479,6 +483,7 @@ export class CityEconomy {
   }
   activateBusiness(b, founder, crop = null, capitalize = true) {
     if (!founder) return null;
+    if(isVerticalFarm(b)&&!canFarmVertically(crop))return this.city.fail('Esta cultura precisa de uma fazenda ao ar livre.');
     b.politicalTaxRevenue=b.totalRevenue;b.politicalTaxExpenses=Math.max(0,b.totalExpenses-(b.businessTaxPaid||0));
     founder.startupProjectId=null;
     b.ownerId = founder.id; b.crop = crop; b.active = true; b.foundedAt = this.city.minute;
@@ -499,6 +504,7 @@ export class CityEconomy {
     this.buySeeds(b); return b;
   }
   purchasePremises(b, founder, crop, authorization = null) {
+    if(isVerticalFarm(b)&&!canFarmVertically(crop))return null;
     if(b?.municipal && !authorization?.billId)return null;
     if(b&&OFFICE_ONLY_TYPES.has(b.type)&&!b.officeTenantOf)return null;
     if (!b || (b.active && !b.municipal) || b.entity.destroyed || !founder || !this.city.society.isAdult(founder) || this.city.politics.officeHolder(founder) || !PRIVATE_TYPES.has(b.type) || !b.units.every(u => u.ownerId === 'treasury' && u.forSale)) return null;
@@ -524,19 +530,19 @@ export class CityEconomy {
     if(OFFICE_ONLY_TYPES.has(type)){const office=rentAvailableOffice(city,type,founder);if(office){this.hire();this.updateDemand();return office;}return city.fail('Esta atividade precisa de um andar disponível em um empresarial.');}
     const owned=this.useOwnedPremises(founder,type,crop);if(owned){this.hire();this.updateDemand();return owned;}
     const rented=rentAvailableOffice(city,type,founder);if(rented){this.hire();this.updateDemand();return rented;}
-    const existing = city.buildings.find(b => b.type === type && (!b.active || b.municipal) && !b.entity.destroyed && b.units.every(u => u.ownerId === 'treasury' && u.forSale));
+    const existing = city.buildings.find(b => b.type === type && (!isVerticalFarm(b)||canFarmVertically(crop)) && (!b.active || b.municipal) && !b.entity.destroyed && b.units.every(u => u.ownerId === 'treasury' && u.forSale));
     if (existing) return this.purchasePremises(existing, founder, crop);
     city.development.ensurePlots();
-    const fertile = p => type === 'farm' ? city.development.isFarmPlot(p) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine', 'bauxite_mine'].includes(type) ? (!city.world.map || p.type === 'quarry') : !['quarry', 'farm'].includes(p.type));
+    const fertile = p => type === 'farm' ? city.development.isFarmPlot(p)||canFarmVertically(crop)&&p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&!['farm','quarry'].includes(p.type) : p.width <= 8 && p.depth <= 8 && (['quarry', 'iron_mine', 'bauxite_mine'].includes(type) ? (!city.world.map || p.type === 'quarry') : !['quarry', 'farm'].includes(p.type));
     let boughtLot=false;
     let lot = city.development.plots.find(p => p.ownerId === founder.accountId && !p.buildingId && !p.projectId && fertile(p));
     if (!lot) {
-      const available = city.development.plots.find(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId && fertile(p));
+      const available = city.development.plots.filter(p => p.ownerId === 'treasury' && p.forSale && !p.buildingId && !p.projectId && fertile(p)).sort((a,b)=>type==='farm'?Number(city.development.isFarmPlot(b))-Number(city.development.isFarmPlot(a)):0)[0];
       if (!available || founder.balance < available.price + this.quote(type) + this.city.currency.price(15000)) return null;
       lot = city.development.buyPlot(founder.accountId, available.id);boughtLot=!!lot;
     }
     if (!lot) return null;
-    const options={crop,width:type==='farm'?lot.width:Math.min(3,lot.width),depth:type==='farm'?lot.depth:Math.min(3,lot.depth)},floors=businessFloors(type,lot.id);
+    const vertical=type==='farm'&&!city.development.isFarmPlot(lot),options={crop,...(vertical?{kind:'building'}:{}),width:type==='farm'?Math.min(vertical?4:20,lot.width):Math.min(3,lot.width),depth:type==='farm'?Math.min(vertical?4:20,lot.depth):Math.min(3,lot.depth)},floors=vertical?3:businessFloors(type,lot.id);
     const project = city.development.beginProject(founder.accountId, lot.id, type, {...options,floors}) || (floors>1?city.development.beginProject(founder.accountId,lot.id,type,{...options,floors:1}):null);
     if(!project&&boughtLot&&!lot.projectId&&city.transfer('treasury',founder.accountId,lot.price,'Estorno de terreno: empresa não iniciada')){lot.ownerId='treasury';lot.forSale=true;}
     if(project&&project.status!=='completed')founder.startupProjectId=project.id;
@@ -826,14 +832,14 @@ export class CityEconomy {
     return true;
   }
   farmWork(b,c){
-    if(!c||c.entity.destroyed)return false;
+    if(!c||c.entity.destroyed||isVerticalFarm(b)&&!canFarmVertically(b.crop))return false;
     if(this.city.substances&&!this.city.substances.canFarm(b))return false;
     b.lastSubstanceGrowerSkill=c.skills.agriculture;if(b.substanceIllegalCultivation)c.lastSubstanceCrime={kind:'substanceCultivation',good:b.crop,minute:this.city.minute,buildingId:b.id};
     this.buySeeds(b);
-    const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType));let offset=0,best=null;
+    const cells=farmCells(b);let offset=0,best=null;
     search: for(const field of b.fields){
       if(b.crop==='girassol'&&field.sunflowerBoostVersion!==1){field.yield=Math.max(1,Math.floor((field.yield||field.area||12)*4));field.requiredLabor=Math.max(1,Math.ceil((field.requiredLabor||ECONOMY_RULES.farmLabor)*.65));field.sunflowerBoostVersion=1;}
-      const area=field.area||12,units=cells.slice(offset,offset+area);offset+=area;if(!units.length)continue;
+      const area=field.area||12,units=field.unitIds?field.unitIds.map(id=>this.city.units.get(id)).filter(Boolean):cells.slice(offset,offset+area);offset+=area;if(!units.length)continue;
       const required=field.requiredLabor||ECONOMY_RULES.farmLabor,quota=required/units.length;
       if(field.plantedAt===null&&(b.seedStock<Math.ceil(area/3)||b.inventory[b.crop]>=Math.max(36,b.fields.length*18)))continue;
       field.cellLabor??=units.map(()=>Math.min(quota,(field.labor||0)/units.length));field.harvestedCells??=units.map(()=>false);
@@ -846,7 +852,7 @@ export class CityEconomy {
         // Finish a cell already reached, otherwise harvest ripe crops first and
         // seed unused fields before repeatedly cycling the first field.
         const priority=unit.id===c.workCell?.unitId?0:harvest?1:field.plantedAt===null?2:3;
-        const distance=Math.abs(b.entity.x+unit.x+.5-c.entity.x)+Math.abs(b.entity.y+unit.y+.5-c.entity.y);
+        const distance=Math.abs(b.entity.x+unit.x+.5-c.entity.x)+Math.abs(b.entity.y+unit.y+.5-c.entity.y)+Math.abs((unit.z||0)-(c.indoorLocation?.floor||0))*2;
         if(!best||priority<best.priority||priority===best.priority&&distance<best.distance)best={field,units,unit,index,required,quota,area,priority,distance};
         if(priority===0)break search;
       }
@@ -854,7 +860,7 @@ export class CityEconomy {
     if(!best)return false;
     const {field,units,unit,index,required,quota,area}=best,old=this.city.units.get(c.workCell?.unitId);
     if(old?.farmWorkerId===c.id&&old!==unit)old.farmWorkerId=null;unit.farmWorkerId=c.id;
-    if(!outdoorCellReady(this.city,c,b,unit))return true;
+    if(isVerticalFarm(b)?!activityRoomReady(this.city,c,b,unit,'workspace'):!outdoorCellReady(this.city,c,b,unit))return true;
     if(field.plantedAt===null){const seeds=Math.ceil(area/3);if(b.seedStock<seeds)return false;b.seedStock-=seeds;field.plantedAt=this.city.minute;field.establishedAt??=this.city.minute;field.labor=0;field.cellLabor=units.map(()=>0);field.harvestedCells=units.map(()=>false);field.harvestedQuantity=0;field.growthMultiplier=1;field.fertilized=false;
       if(b.inventory.adubo>0){b.inventory.adubo--;this.consumed.adubo++;field.growthMultiplier=1.5;field.fertilized=true;this.recordGoods('fertilizing','adubo',1,b.id,null);field.labor=Math.min(required,30);field.cellLabor=units.map(()=>field.labor/units.length);}
       this.consumed.sementes+=seeds;this.recordGoods('sowing','sementes',seeds,b.id,null);

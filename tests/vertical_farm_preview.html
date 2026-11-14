@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>Fazenda vertical</title><style>body{margin:0}#view{height:100vh}pre{position:absolute;background:#fff;z-index:2;padding:8px}</style><pre id="status">Carregando…</pre><div id="view"></div>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {RCT3DRenderer} from '../js/renderer_3d.js';
+import {setActiveEntities} from '../js/engine.js';
+import {setup} from './helpers/city.mjs';
+import {FARM_CROPS} from '../js/farm_crop_catalog.js';
+try{
+ const city=setup({starter:true,funded:true,population:16}),owner=city.citizens.find(c=>c.fixtureInvestor),lot=city.development.plots.find(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&!['farm','quarry'].includes(p.type)&&p.width>=3&&p.depth>=3);city.development.buyPlot(owner.accountId,lot.id);
+ const project=city.development.beginProject(owner.accountId,lot.id,'farm',{kind:'building',crop:'alface',width:3,depth:3,floors:3});if(!project)throw Error(city.lastError||"No valid greenhouse site");project.inventory.pedra=project.stone;project.labor=project.requiredLabor;const farm=city.development.complete(project);if(!farm)throw Error(city.lastError);
+ const renderer=new RCT3DRenderer(document.querySelector('#view'));let errors=0;renderer.renderer.debug.onShaderError=()=>errors++;renderer.cityDevelopment=city.development;renderer.terrainOptimizationsEnabled=false;
+ city.world.map=new Uint8Array(128*128).fill(3);city.world.getTile=(x,y)=>city.world.map[y*128+x]??5;
+ const entities=[farm.entity];setActiveEntities(entities);renderer.setCamera(farm.entity.x+1.5,farm.entity.y+1.5,5);city.world.clock.day=1;city.world.clock.hour=12;city.world.clock.minute=0;
+ for(const field of farm.fields)field.plantedAt=720-FARM_CROPS.alface.grow-1;
+ renderer.render(city.world,entities,0,1/60,1);const group=renderer.cityMeshes.get(farm.id),plants=group?.userData.cropPlants,levels=new Set();for(let i=0;i<plants.mesh.count;i++){const matrix=new THREE.Matrix4();plants.mesh.getMatrixAt(i,matrix);levels.add(Math.floor(matrix.elements[13]/1.8));}
+ const result={instances:plants.mesh.count,levels:[...levels],shaderErrors:errors};if(errors||levels.size!==3)throw Error(JSON.stringify(result));document.querySelector('#status').textContent=JSON.stringify(result,null,2);document.body.dataset.ready='true';
+}catch(e){document.querySelector('#status').textContent=e.stack;document.body.dataset.ready='error';}
+</script>

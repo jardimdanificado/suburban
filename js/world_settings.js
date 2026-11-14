@@ -1,4 +1,4 @@
-export const WORLD_PRESETS = { archipelago: { id: 0, label: 'Arquipélago' }, continent: { id: 1, label: 'Continente' }, highlands: { id: 2, label: 'Terras altas' } };
+export const WORLD_PRESETS = { archipelago: { id: 0, label: 'Arquipélago' }, continent: { id: 1, label: 'Continente' }, highlands: { id: 2, label: 'Terras altas' }, coastal: { id: 3, label: 'Planície costeira' }, islands: { id: 4, label: 'Ilhas oceânicas' }, delta: { id: 5, label: 'Costa recortada' } };
 export function randomWorldSeed() {
   const values = new Uint32Array(1);
   if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(values);
@@ -9,7 +9,8 @@ export function resolveWorldSettings(params = new URLSearchParams()) {
   const raw = params.get('seed');
   const parsed = raw !== null && /^\d+$/.test(raw) ? Number(raw) : NaN;
   const seed = Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 2147483647 ? parsed : randomWorldSeed();
-  const preset = 'archipelago';
+  const requested = params.get('terrain');
+  const preset = Object.hasOwn(WORLD_PRESETS, requested) ? requested : 'archipelago';
   const rawPopulation = params.get('population');
   const parsedPopulation = rawPopulation !== null && /^\d+$/.test(rawPopulation) ? Number(rawPopulation) : NaN;
   const population = Number.isSafeInteger(parsedPopulation) && parsedPopulation >= 1 && parsedPopulation <= 2000 ? parsedPopulation : 512;

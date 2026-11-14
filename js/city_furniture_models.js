@@ -17,6 +17,10 @@ export function furnitureModel(THREE,item){
  else if(type==='beach_ground'){
   if(item.umbrellaStyle!=null)addBeachUmbrella(THREE,g,item.umbrellaStyle,0,-.12);
  }
+ else if(type==='planter'){
+  box(.44,.2,.76,0,.12,0);
+  box(.39,.025,.7,0,.23,0,0x59412b);
+ }
  else if(type==='chair'||type==='meeting_chair'||type==='council_chair'||type==='bench'){
   const bench=type==='bench',w=bench?.78:.28,seatY=bench?.24:.30,legH=seatY-.025;
   if(bench&&Number.isInteger(item.colonialStyle)){

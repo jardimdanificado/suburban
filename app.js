@@ -5,12 +5,12 @@ import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
 import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=citizen-access-1";
 import { CityDesktop } from "./js/city_desktop.js?v=citizen-access-1";
 import { World } from "./js/world.js";
-import { RCT3DRenderer } from "./js/renderer_3d.js?v=wild-plants-1";
+import { RCT3DRenderer } from "./js/renderer_3d.js?v=vertical-farms-1";
 import { setActiveEntities } from "./js/engine.js";
 import { ManagementCanvasUI } from "./js/management_ui.js";
 import { MapEditor } from "./js/map_editor.js?v=map-editor-prefabs-1";
-import { SimulationTime, SPEED_TIERS, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
-import { OptionsPanel } from "./js/options.js?v=terrain-default-off-2";
+import { SimulationTime, FF_SPEED, FF_LOD_SPEED, FF2_SPEED } from "./js/simulation_time.js?v=ff3-ff4-steps-1";
+import { OptionsPanel } from "./js/options.js?v=ff-toggle-terrain-default-on-1";
 import { MainMenu, SUBURBAN_PRESETS } from "./js/main_menu.js";
 import { WorldNetClient, WorldNetCoordinator } from './js/world_net.js?v=world-net-1';
 
@@ -681,7 +681,7 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   mainMenu: openMainMenu,
   hasActiveGame: () => mainMenu.hasActiveGame,
   startNewCity: (params) => startNewCity(params),
-  pause:togglePause, speed:()=>time.setSpeed(SPEED_TIERS[(SPEED_TIERS.indexOf(time.speed)+1)%SPEED_TIERS.length]), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
+  pause:togglePause, speed:()=>time.cycleSpeed(), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
   center:()=>{renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);renderer3D.setCamera(world.spawnCenter.x,world.spawnCenter.y);},
   observe:(mode,id)=>{if(mode==='third')renderer3D.setThirdPersonMode(true,id);else if(mode==='follow')renderer3D.setFollowCharacter(id);else if(mode==='free')renderer3D.setFreeCameraMode(true);else {renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);}},
   freeCameraActive:()=>renderer3D.isFirstPersonActive()&&(renderer3D.fpEntityId===null||renderer3D.fpEntityId===undefined),

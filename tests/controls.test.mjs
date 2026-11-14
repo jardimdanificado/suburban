@@ -8,6 +8,7 @@ import { WorldClock } from "../js/world.js";
 test("all speed tiers advance the world clock and experience with fixed steps", () => {
   for (const speed of SPEED_TIERS) {
     const time = new SimulationTime({now:()=>0});
+    time.setFastForwardEnabled(true);
     const clock = new WorldClock();
     time.setSpeed(speed);
     let calls = 0;
@@ -60,6 +61,7 @@ test("single-step requires pause and is independent of the selected speed", () =
   assert.equal(time.tick, 1);
   assert.equal(dt, 1 / 60);
   assert.equal(time.paused, true);
+  time.setFastForwardEnabled(true);
   time.changeSpeed(1);
   assert.equal(time.speed, 64);
   for (let i = 0; i < 20; i++) time.changeSpeed(-1);
@@ -177,9 +179,45 @@ test('retired palette preferences are ignored and cannot be activated through op
 test('terrain optimizations toggle updates renderer and persists both ways',()=>{
  let saved='{}';const storage={getItem:()=>saved,setItem(_key,value){saved=value;}},renderer=rendererMock();
  const make=()=>new OptionsPanel({renderer,time:new SimulationTime({now:()=>0}),step(){},storage});
- const panel=make();assert.equal(renderer.terrainOptimizationsEnabled,false);
+ const panel=make();assert.equal(renderer.terrainOptimizationsEnabled,true);
  panel.apply('terrainOptimizations',false);assert.equal(renderer.terrainOptimizationsEnabled,false);
  assert.equal(make().values.terrainOptimizations,false);
  panel.apply('terrainOptimizations',true);assert.equal(renderer.terrainOptimizationsEnabled,true);
  assert.equal(make().values.terrainOptimizations,true);
+});
+
+
+test('FF modes default off, gate all speed controls, and persist their toggle',()=>{
+ let saved='{}';const storage={getItem:()=>saved,setItem(_key,value){saved=value;}};
+ const time=new SimulationTime({now:()=>0});
+ const panel=new OptionsPanel({renderer:rendererMock(),time,step(){},storage});
+ assert.equal(panel.values.fastForwardEnabled,false);
+ time.setSpeed(FF4_SPEED);assert.equal(time.speed,32);
+ time.changeSpeed(1);assert.equal(time.speed,32);
+ time.cycleSpeed();assert.equal(time.speed,.25);
+ assert(time.speedTiers.every(speed=>speed<FF_SPEED));
+ panel.apply('fastForwardEnabled',true);
+ assert.equal(time.speedTiers.length,SPEED_TIERS.length);
+ for(const speed of [FF_SPEED,FF2_SPEED,FF3_SPEED,FF4_SPEED]){time.setSpeed(speed);assert.equal(time.speed,speed);}
+ const restored=new SimulationTime();
+ new OptionsPanel({renderer:rendererMock(),time:restored,step(){},storage});
+ assert.equal(restored.fastForwardEnabled,true);
+ panel.apply('fastForwardEnabled',false);assert.equal(time.speed,32);
+ assert.equal(JSON.parse(saved).fastForwardEnabled,false);
+});
+
+
+test('time settings button exposes FF tiers and disables an active FF mode',()=>{
+ const ui=canvasUI(640,800),time=new SimulationTime();
+ const panel=new OptionsPanel({renderer:rendererMock(),time,step(){}});
+ panel.open=true;panel.tab='TIME';
+ const clickToggle=()=>{
+  ui.beginFrame();panel.draw(ui);
+  const columns=Math.max(1,Math.floor((panel.bounds.w-24)/64));
+  const y=panel.bounds.y+62+30+Math.ceil(time.speedTiers.length/columns)*28;
+  ui.clickAt(panel.bounds.x+24,y+12);
+ };
+ clickToggle();assert.equal(time.fastForwardEnabled,true);
+ time.setSpeed(FF4_SPEED);
+ clickToggle();assert.equal(time.fastForwardEnabled,false);assert.equal(time.speed,32);
 });

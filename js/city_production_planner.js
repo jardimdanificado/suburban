@@ -1,3 +1,4 @@
+import {canFarmVertically} from './city_farm_layout.js';
 import {fishSupplyInputs} from './city_fishing.js';
 import {businessFloors} from './city_business_heights.js';
 import {INDUSTRIES} from './city_industries.js';
@@ -159,7 +160,8 @@ export function investProductionPlan(economy){
   markStage('siteAndFounders');
   const batchLimit=1,assignedManagers=new Set();let opened=0;
   const lotPools=new Map(),lotsFor=row=>{
-    const kind=row.type==='farm'?'farm':['iron_mine','bauxite_mine'].includes(row.type)?'quarry':'urban';
+    const ruralAvailable=row.type==='farm'&&city.development.plots.some(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&city.development.isFarmPlot(p));
+    const kind=row.type==='farm'?(canFarmVertically(row.crop)&&!ruralAvailable?'vertical-farm':'farm'):['iron_mine','bauxite_mine'].includes(row.type)?'quarry':'urban';
     let lots=lotPools.get(kind);if(lots)return lots;
     lots=city.development.plots.filter(p=>p.ownerId==='treasury'&&!p.buildingId&&!p.projectId&&(kind==='farm'?city.development.isFarmPlot(p):p.width>=2&&p.depth>=2&&p.width<=8&&p.depth<=8&&(kind==='quarry'?p.type==='quarry':!['farm','quarry'].includes(p.type)))).sort((a,b)=>a.price-b.price||a.id-b.id).slice(0,4);
     lotPools.set(kind,lots);return lots;
@@ -185,12 +187,13 @@ export function investProductionPlan(economy){
     if(!lots.length){recordResponse(economy,row,row.type==='farm'?'Aguardando terreno fértil.':'Aguardando terreno urbano.');continue;}
     let selected,accessPending=false;
     for(const lot of lots){
-      const width=row.type==='farm'?lot.width:Math.min(row.type==='office_tower'?2:3,lot.width),depth=row.type==='farm'?lot.depth:Math.min(row.type==='office_tower'?2:3,lot.depth),site=chooseBuildingSite(city,lot.x,lot.y,width,depth,{plotId:lot.id,type:row.type});if(site.error){accessPending ||= !!site.pending;continue;}
-      const builder=row.type==='farm'?null:city.development.selectBuilder('treasury',site.door);if(row.type!=='farm'&&!builder)continue;
-      selected={lot,width,depth,site,builder};break;
+      const verticalSite=row.type==='farm'&&!city.development.isFarmPlot(lot),width=row.type==='farm'?Math.min(verticalSite?4:20,lot.width):Math.min(row.type==='office_tower'?2:3,lot.width),depth=row.type==='farm'?Math.min(verticalSite?4:20,lot.depth):Math.min(row.type==='office_tower'?2:3,lot.depth),site=chooseBuildingSite(city,lot.x,lot.y,width,depth,{plotId:lot.id,type:verticalSite?'building':row.type});if(site.error){accessPending ||= !!site.pending;continue;}
+      const vertical=row.type==='farm'&&!city.development.isFarmPlot(lot),builder=row.type==='farm'&&!vertical?null:city.development.selectBuilder('treasury',site.door);if((row.type!=='farm'||vertical)&&!builder)continue;
+      if(vertical&&productionProjects.length>=pipelineLimit)continue;
+      selected={lot,width,depth,site,builder,vertical};break;
     }
     if(!selected){recordResponse(economy,row,accessPending?'Planejando acesso ao terreno.':'Aguardando terreno e construtora com acesso ao canteiro.');continue;}
-    const {lot,width,depth,site,builder}=selected,floors=row.type==='office_tower'?3:businessFloors(row.type,lot.id),stone=row.type==='farm'?0:width*depth*floors*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*floors*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=startupCapital(city,economy,row.type),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
+    const {lot,width,depth,site,builder,vertical}=selected,floors=vertical?3:row.type==='office_tower'?3:businessFloors(row.type,lot.id),stone=row.type==='farm'&&!vertical?0:width*depth*floors*DEVELOPMENT_RULES.stonePerCell,fee=builder?width*depth*floors*city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell):0,capital=startupCapital(city,economy,row.type),freight=city.currency.price(24000),privateBudget=lot.price+stone*economy.goods.pedra.price+fee+capital+freight+city.currency.price(20000);
     const managementSkill=({farm:'agriculture',...Object.fromEntries(Object.entries(INDUSTRIES).map(([type,spec])=>[type,spec.skill]))})[row.type]||'management';
     const founders=founderPool.filter(row=>!assignedManagers.has(row.citizen.id)).map(row=>({...row,aptitude:(row.citizen.skills.management||0)*.45+(row.citizen.skills[managementSkill]||0)*.55+(row.citizen.skills.governance||0)*.15})).sort((a,b)=>a.load-b.load||b.aptitude-a.aptitude||Number(!!a.citizen.jobId)-Number(!!b.citizen.jobId)||b.citizen.balance-a.citizen.balance||a.citizen.id-b.citizen.id).slice(0,16).map(row=>row.citizen);
     let project=null;
@@ -198,7 +201,7 @@ export function investProductionPlan(economy){
       let loan=null;const deficit=Math.max(0,privateBudget-founder.balance);
       if(deficit&&founder.creditAllowed!==false)for(const bank of city.bank.available()){loan=city.bank.lendForBusiness(bank,founder,deficit,{type:row.type,crop:row.crop,initialChain:true,score:Math.max(60,row.priority),budget:privateBudget});if(loan)break;}
       if(founder.balance<privateBudget){if(loan)city.bank.cancelBusinessLoan(loan);continue;}
-      if(city.development.buyPlot(founder.accountId,lot.id))project=city.development.beginProject(founder.accountId,lot.id,row.type,{width,depth,crop:row.crop,floors,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(250,row.priority))});
+      if(city.development.buyPlot(founder.accountId,lot.id))project=city.development.beginProject(founder.accountId,lot.id,row.type,{width,depth,crop:row.crop,floors,...(vertical?{kind:'building'}:{}),rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(250,row.priority))});
       if(project){if(project.status==='completed'){const b=city.buildings.find(b=>b.plotId===lot.id);if(b)city.transfer(founder.accountId,b.accountId,capital,'Capital da lavoura prioritária',{buildingId:b.id,projectId:project.id});}else{fundProject(economy,project,capital,freight);founder.startupProjectId=project.id;}if(loan){loan.projectId=project.id;project.loanId=loan.id;}break;}
       if(lot.ownerId===founder.accountId&&!lot.projectId&&city.transfer('treasury',founder.accountId,lot.price,'Estorno de terreno: cadeia não iniciada')){lot.ownerId='treasury';lot.forSale=true;}
       if(loan)city.bank.cancelBusinessLoan(loan);
@@ -209,7 +212,7 @@ export function investProductionPlan(economy){
       if(!foodSafe){recordResponse(economy,row,city.bank.lastBusinessRefusal?.reason||'Sem crédito privado; município preservando alimentação emergencial.');continue;}
       if(city.treasury<needs.reserve+cost){recordResponse(economy,row,city.bank.lastBusinessRefusal?.reason||'Aguardando banco com atendimento ou caixa municipal após reserva social.',{requiredBudget:cost});continue;}
       if(active.filter(p=>p.accountId==='treasury'&&p.productionChain).length>=2){recordResponse(economy,row,'Aguardando conclusão das etapas públicas já financiadas.');continue;}
-      project=city.development.beginProject('treasury',lot.id,row.type,{width,depth,crop:row.crop,floors,rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(250,row.priority))});
+      project=city.development.beginProject('treasury',lot.id,row.type,{width,depth,crop:row.crop,floors,...(vertical?{kind:'building'}:{}),rotation:site.rotation,builderId:builder?.id,priority:Math.max(105,Math.min(250,row.priority))});
       if(project&&project.status!=='completed')fundProject(economy,project,capital,freight);
     }
     if(project){project.productionChain=true;project.chainReason=row.reason;project.priority=Math.max(105,Math.min(250,row.priority));if(project.accountId!=='treasury')assignedManagers.add(project.ownerId);recordResponse(economy,row,'Governo destinou a abertura a um gestor com afinidade e capacidade: materiais, construção e capital financiados.',{projectId:project.id});city.log(`Demanda iniciou ${city.buildingTypes[row.type].label}${row.crop?' de '+economy.crops[row.crop].label:''}: ${row.reason}`,'business',[],{kind:'production-chain-funded',projectId:project.id,type:row.type,crop:row.crop,accounts:[project.accountId]});opened++;continue;}

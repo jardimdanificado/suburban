@@ -14,7 +14,7 @@ test('MainMenu initializes with proper default states and scenarios', () => {
   assert.equal(menu.selectedSize, 256);
   assert.equal(menu.selectedPopulation, 512);
   assert.equal(menu.selectedSeed, 482910);
-  assert.equal(SUBURBAN_PRESETS.length, 3);
+  assert.equal(SUBURBAN_PRESETS.length, 6);
   assert.equal(MAP_SIZES.length, 3);
   assert.equal(POPULATION_PRESETS.length, 4);
 });

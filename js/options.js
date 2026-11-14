@@ -1,10 +1,10 @@
-import { SPEED_TIERS, speedLabel } from "./simulation_time.js?v=ff3-ff4-steps-1";
+import { speedLabel } from "./simulation_time.js?v=ff3-ff4-steps-1";
 
 const BOOL = [[false, "OFF"], [true, "ON"]];
 const effect = (key, label, values, initial) => ({ key, label, values, default: initial, graphic: true });
 const GRAPHICS = [
   { key: "resolution", label: "RESOLUCAO", values: [0.25, 0.5, 0.75, 1].map(v => [v, `${v * 100}%`]), default: 0.5 },
-  { key: "terrainOptimizations", label: "OTIMIZACOES DE TERRENO", values: BOOL, default: false },
+  { key: "terrainOptimizations", label: "OTIMIZACOES DE TERRENO", values: BOOL, default: true },
   { key: "smoothMovement", label: "MOVIMENTO SUAVE", values: BOOL, default: true },
   { key: "shadows", label: "SOMBRAS", values: BOOL, default: true },
   { key: "shadowQuality", label: "MAPA SOMBRAS", values: [512, 1024, 2048, 4096].map(v => [v, `${v}`]), default: 512 },
@@ -13,6 +13,7 @@ const GRAPHICS = [
   { key: "nightLightLimit", label: "LUZES NOTURNAS", values: [32, 64, 128, 256].map(v => [v, `${v}`]), default: 32, graphic: true },
   effect("normalMaps", "NORMAL MAPS", BOOL, true),
 ];
+const TIME = [{key:"fastForwardEnabled",label:"MODOS FF",values:BOOL,default:false}];
 const INTERFACE = [{key:'showInterventions',label:'CONTROLES DE INTERVENÇÃO',values:BOOL,default:true}];
 const EFFECTS = [
   { key: "postEffects", label: "POS EFEITOS", values: BOOL, default: true },
@@ -39,7 +40,7 @@ export class OptionsPanel {
     this.maxScroll = 0;
     this.bounds = null;
     this.values = {};
-    this.items = [...GRAPHICS, ...EFFECTS, ...INTERFACE].map(item => item.key === "nightLightLimit" && Number.isFinite(renderer.nightLightLimitCeiling)
+    this.items = [...GRAPHICS, ...EFFECTS, ...INTERFACE, ...TIME].map(item => item.key === "nightLightLimit" && Number.isFinite(renderer.nightLightLimitCeiling)
       ? { ...item, values: item.values.filter(([value]) => value <= renderer.nightLightLimitCeiling) }
       : item);
     for (const item of this.items) if (!item.values.length) item.values = [[32, "32"]];
@@ -58,7 +59,8 @@ export class OptionsPanel {
     const item = this.items.find(row => row.key === key);
     if (!item || !item.values.some(([v]) => v === value)) return false;
     const r = this.renderer;
-    if (item.graphic) r.setGraphicOptions({ [key]: value });
+    if (key === "fastForwardEnabled") { this.time.setFastForwardEnabled(value); this.onTimeChange(this.time); }
+    else if (item.graphic) r.setGraphicOptions({ [key]: value });
     else if (key === "terrainOptimizations") r.setTerrainOptimizations(value);
     else if (key === "resolution") r.setResolutionScale(value);
     else if (key === "shadows" && r.shadowsEnabled !== value) r.toggleShadows();
@@ -110,14 +112,16 @@ export class OptionsPanel {
     const first = ui.regions.length;
     ui.ctx.save(); ui.ctx.beginPath(); ui.ctx.rect(x + 4, contentY, w - 8, Math.max(0, bottom - contentY)); ui.ctx.clip();
     if (this.tab === "TIME") {
+      const SPEED_TIERS = this.time.speedTiers;
       const columns = Math.max(1, Math.floor((w - 24) / 64));
-      this.maxScroll = Math.max(0, 160 + Math.ceil(SPEED_TIERS.length / columns) * 28 - (bottom - contentY));
+      this.maxScroll = Math.max(0, 190 + Math.ceil(SPEED_TIERS.length / columns) * 28 - (bottom - contentY));
       this.scroll = Math.min(this.scroll, this.maxScroll);
       const base = contentY - this.scroll;
       ui.text("VELOCIDADE", x + 12, base + 8, "#f8b800");
       SPEED_TIERS.forEach((value, i) => ui.button(x + 12 + i % columns * 64, base + 24 + Math.floor(i / columns) * 28, 60, 24,
         speedLabel(value), () => { this.time.setSpeed(value); this.onTimeChange(this.time); }, { selected: this.time.speed === value }));
-      const after = base + 30 + Math.ceil(SPEED_TIERS.length / columns) * 28;
+      const after = base + 60 + Math.ceil(SPEED_TIERS.length / columns) * 28;
+      ui.button(x + 12, after - 30, 216, 24, `MODOS FF: ${this.values.fastForwardEnabled ? "ON" : "OFF"}`, () => this.apply("fastForwardEnabled", !this.values.fastForwardEnabled));
       ui.button(x + 12, after, 118, 24, this.time.paused ? "CONTINUAR" : "PAUSAR", () => { this.time.setPaused(!this.time.paused); this.onTimeChange(this.time); });
       ui.button(x + 138, after, 90, 24, "PASSO", () => this.step());
       ui.text("ESPACO: PAUSA\n-/+: VELOCIDADE\n.: UM PASSO QUANDO PAUSADO\nff: AVANÇO COM DETALHE REDUZIDO\nff2: DETALHES PESSOAIS EM MENOR FREQUÊNCIA", x + 12, after + 42);

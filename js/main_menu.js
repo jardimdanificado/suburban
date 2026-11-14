@@ -1,5 +1,5 @@
 import { MANAGEMENT_THEME, bevel, readableLabel } from './management_ui.js';
-import { randomWorldSeed } from './world_settings.js';
+import { randomWorldSeed, WORLD_PRESETS } from './world_settings.js';
 
 const T = MANAGEMENT_THEME;
 
@@ -30,7 +30,8 @@ export const SUBURBAN_PRESETS = [
     desc: 'Topografia alpina com vales e encostas íngremes. Desafios de relevo e pontes elevadas.',
     seed: 671203,
     color: T.gold
-  }
+  },
+  ...['coastal','islands','delta'].map((id,i)=>({id,presetId:WORLD_PRESETS[id].id,name:WORLD_PRESETS[id].label,badge:['Mais terra','Mais água','Terra e água'][i],desc:'Costa acessível e navegação marítima para o porto.',seed:482910+i*7919,color:T.blue}))
 ];
 
 export const MAP_SIZES = [
@@ -396,8 +397,8 @@ export class MainMenu {
     const contentX = mx + 12;
 
     // Every new city is an island map so maritime trade can connect it to the world.
-    const presetLabel = 'Arquipélago';
-    ui.text(`PAISAGEM: ${presetLabel.toUpperCase()}`, contentX + 6, curY + 7, T.ink);
+    const presetLabel = WORLD_PRESETS[this.selectedPreset]?.label||'Arquipélago';
+    ui.button(contentX,curY,contentW,24,`PAISAGEM: ${presetLabel.toUpperCase()} ▸`,()=>{const keys=Object.keys(WORLD_PRESETS);this.selectedPreset=keys[(keys.indexOf(this.selectedPreset)+1)%keys.length];});
     curY += 32;
 
     // 2. Semente do próximo mapa (matches Governo > Terreno)

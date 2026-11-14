@@ -209,7 +209,7 @@ export function syncCitizenInterior(city,c){
  }
  if(c.mobilityTrip||c.ridingVehicleId){return exit(city,c);}
  if(task==='construction'&&project?.service!=='expansion')return exit(city,c);
- if(c.path.length&&!queued||c.deliveryId||!INDOOR_TASKS.has(task)||fieldWork||!b||(['work','manage'].includes(task)&&OUTDOOR_WORK.has(b.type))||(b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal','clean','job-interview','supplies'].includes(task)))return exit(city,c);
+ if(c.path.length&&!queued||c.deliveryId||!INDOOR_TASKS.has(task)||fieldWork||!b||(['work','manage'].includes(task)&&OUTDOOR_WORK.has(b.type)&&!(b.type==='farm'&&b.constructionKind==='building'))||(b.constructionKind==='open-air'&&!['toilet','hygiene','food','workmeal','clean','job-interview','supplies'].includes(task)))return exit(city,c);
  if(previous?.exiting)return false;
  if(task==='food'&&c.servicePaid!==`${b.id}:food`&&!city.economy.mealOffer(b,c)){
   c.task=null;c.targetId=null;c.path=[];c.serviceQueue=null;c.facingTarget=null;c.action='Alimento indisponível neste local; procurando outra opção';return exit(city,c);

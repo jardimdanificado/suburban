@@ -22,7 +22,7 @@ import {
   TILE_ROAD_SAND_STONE,
   TILE_ROAD_HILL,
   TILE_ROAD_HILL_STONE,
-  MAP_PRESET_ARCHIPELAGO,
+  MAP_PRESETS,
   world_gen_generate,
   world_gen_is_walkable
 } from "./world_gen.js?v=terrain-generation-reset-2-map-default-128";
@@ -112,10 +112,10 @@ export class World {
     this.revision = (this.revision || 0) + 1;
     this.topologyRevision = (this.topologyRevision || 0) + 1;
     this.waterTopologyRevision=(this.waterTopologyRevision||0)+1;
-    // Multi-city worlds rely on reliable sea connections. Keep legacy preset
-    // IDs readable in saves, but generate every new map as an archipelago.
-    const cfg = MAP_PRESET_ARCHIPELAGO;
-    this.presetId = 0;
+    // Every profile preserves coastal access to the edge-connected ocean.
+    this.presetId = MAP_PRESETS[presetId] ? presetId : 0;
+    const cfg = MAP_PRESETS[this.presetId];
+    this.preset = ['archipelago','continent','highlands','coastal','islands','delta'][this.presetId];
 
     const outCenter = { x: this.width / 2, y: this.height / 2 };
     world_gen_generate(this.map, { ...cfg, seed, width:this.width, height:this.height }, outCenter);

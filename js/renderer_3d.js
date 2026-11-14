@@ -36,7 +36,7 @@ import {caribbeanBuildingSurfaceTextures,caribbeanGroundSurfaceTextures,portugue
 import * as THREE from "https://esm.sh/three@0.160.0";
 import {NightLighting} from "./night_lighting.js?v=local-night-lights-1";
 import { CITY_FLOOR_HEIGHT,cityBuildingPickVerticalBounds } from "./city_building_geometry.js";
-import { syncCityBuildings } from "./city_renderer_3d.js?v=wild-plants-1";
+import { syncCityBuildings } from "./city_renderer_3d.js?v=vertical-farms-1";
 import { CityCitizenBatches } from './city_citizen_batches.js';
 import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-key-1';
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
@@ -109,7 +109,7 @@ function roadRailingFarmFenceCells(city){
     const segment={ax:x1,ay:y1,bx:x2,by:y2};
     for(let y=Math.floor(Math.min(y1,y2)-.15);y<=Math.floor(Math.max(y1,y2)+.15);y++)for(let x=Math.floor(Math.min(x1,x2)-.15);x<=Math.floor(Math.max(x1,x2)+.15);x++){const key=`${x},${y}`;let list=byCell.get(key);if(!list)byCell.set(key,list=[]);list.push(segment);}
   };
-  for(const building of city?.buildings||[]){if(building.type!=='farm'||building.entity?.destroyed||!building.door||!building.entity)continue;const {x,y}=building.entity;
+  for(const building of city?.buildings||[]){if(building.type!=='farm'||building.constructionKind==='building'||building.entity?.destroyed||!building.door||!building.entity)continue;const {x,y}=building.entity;
     for(let along=0;along<building.width;along++){add(building,x+along+.04,y+.04,x+Math.min(building.width-.04,along+1+.04),y+.04);add(building,x+along+.04,y+building.depth-.04,x+Math.min(building.width-.04,along+1+.04),y+building.depth-.04);}
     for(let along=0;along<building.depth;along++){add(building,x+.04,y+along+.04,x+.04,y+Math.min(building.depth-.04,along+1+.04));add(building,x+building.width-.04,y+along+.04,x+building.width-.04,y+Math.min(building.depth-.04,along+1+.04));}
   }
@@ -6701,7 +6701,7 @@ export class RCT3DRenderer {
     if(this._grassCoverageCity!==city||this._grassCoverageSignature!==grassSignature){
       this._grassCoverageCity=city;this._grassCoverageSignature=grassSignature;
       this._grassExclusionCells=grassExclusionCells(city?.buildings||[],siteCells);
-      this._farmSoilCells=grassExclusionCells((city?.buildings||[]).filter(b=>b.type==='farm'),[]);
+      this._farmSoilCells=grassExclusionCells((city?.buildings||[]).filter(b=>b.type==='farm'&&b.constructionKind!=='building'),[]);
       this._grassChunkSignatures=null;this._farmChunkSignatures=null;
     }
     if(!this._grassChunkSignatures||this._grassChunkSignatureSize!==chunkSize){

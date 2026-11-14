@@ -65,6 +65,16 @@ export const MAP_PRESET_HIGHLANDS = {
   ca_smooth_iterations: 2
 };
 
+// IDs remain stable. Profiles vary the existing noise and island parameters.
+export const MAP_PRESETS = [
+  MAP_PRESET_ARCHIPELAGO,
+  MAP_PRESET_CONTINENT,
+  MAP_PRESET_HIGHLANDS,
+  {...MAP_PRESET_CONTINENT,water_threshold:.29,num_islands:2},
+  {...MAP_PRESET_ARCHIPELAGO,noise_scale:.035,land_base:.9,water_threshold:.44,num_islands:9},
+  {...MAP_PRESET_ARCHIPELAGO,noise_scale:.035,land_base:.9,water_threshold:.43,num_islands:5}
+];
+
 let s_rand_seed = 123456789;
 
 function wasm_rand() {
@@ -307,5 +317,37 @@ export function world_gen_generate(map, config, outCenter = { x: MAP_WIDTH / 2, 
 
   outCenter.x = center_x;
   outCenter.y = center_y;
+  try{ensureMaritimeSpawn(map, MAP_WIDTH, MAP_HEIGHT, outCenter);}
+  catch(error){
+    // Expose the noise field's natural lowlands when a dry seed has no sea
+    // access. Never carve a border channel or insert a founding island.
+    const attempt=config?._maritimeAttempt||0;
+    if(attempt>=20)throw error;
+    return world_gen_generate(map,{...config,water_threshold:cfg.water_threshold+.015,_maritimeAttempt:attempt+1},outCenter);
+  }
   return outCenter;
+}
+
+// Choose a land component touching ocean connected to the map edge, rather
+// than accepting an inland lake as a working international harbor.
+export function ensureMaritimeSpawn(map,width,height,outCenter){
+  const total=map.length,sea=new Uint8Array(total),seen=new Uint8Array(total),queue=new Int32Array(total);let head=0,tail=0;
+  const addSea=i=>{if(map[i]===TILE_WATER&&!sea[i]){sea[i]=1;queue[tail++]=i;}};
+  for(let x=0;x<width;x++){addSea(x);addSea((height-1)*width+x);}
+  for(let y=0;y<height;y++){addSea(y*width);addSea(y*width+width-1);}
+  const neighbors=(i,visit)=>{const x=i%width,y=Math.floor(i/width);if(x>0)visit(i-1);if(x+1<width)visit(i+1);if(y>0)visit(i-width);if(y+1<height)visit(i+width);};
+  while(head<tail)neighbors(queue[head++],addSea);
+  let bestSize=0,best=null;
+  const walkable=i=>map[i]===TILE_FLOOR||map[i]===TILE_SAND||map[i]===TILE_HILL;
+  const landHeight=i=>map[i]===TILE_SAND?.4:map[i]===TILE_HILL?2.3:1.1;
+  for(let start=0;start<total;start++){
+    if(seen[start]||!walkable(start))continue;
+    head=0;tail=1;queue[0]=start;seen[start]=1;let coast=false,nearest=start,distance=Infinity;
+    while(head<tail){const i=queue[head++],x=i%width,y=Math.floor(i/width),d=(x-width/2)**2+(y-height/2)**2;if(d<distance){distance=d;nearest=i;}
+      neighbors(i,j=>{if(sea[j])coast=true;if(!seen[j]&&walkable(j)&&Math.abs(landHeight(i)-landHeight(j))<=1.25){seen[j]=1;queue[tail++]=j;}});
+    }
+    if(coast&&tail>bestSize){bestSize=tail;best=nearest;}
+  }
+  if(best===null)throw new Error('Terreno sem costa navegável para fundar a cidade.');
+  outCenter.x=best%width;outCenter.y=Math.floor(best/width);
 }

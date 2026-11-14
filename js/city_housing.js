@@ -18,6 +18,7 @@ function configureRoomWindow(b,u){const roll=roomRoll(b,u,5);u.hasWindow=u.roomT
 /** Only facade cells can be owned. Interior cells are common circulation. */
 export function floorCells(b, z) {
   const cells = [],x0=0,y0=0,width=b.width,depth=b.depth,x1=width-1,y1=depth-1;
+  if(b.type==='farm'&&b.constructionKind==='building'){for(let y=0;y<depth;y++)for(let x=0;x<width;x++)if(x!==Math.floor(width/2))cells.push({x,y,z});return cells;}
   if (b.constructionKind === 'open-air'||b.type==='council_chamber'&&z===0) { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells.push({ x, y, z }); return cells; }
   for (let x = x0; x <= x1; x++) cells.push({ x, y: y0, z });
   for (let y = y0+1; y <= y1; y++) cells.push({ x: x1, y, z });
@@ -59,7 +60,7 @@ export class CityHousing {
       }
     }
     if(b.type==='laundromat'&&units[0])units[0].roomType='laundry';
-    else if(!housingType&&b.constructionKind!=='open-air'&&b.type!=='council_chamber'&&units.length>=6&&roomRoll(b,units[0],37)<22)units[0].roomType='laundry';
+    else if(!housingType&&b.type!=='farm'&&b.constructionKind!=='open-air'&&b.type!=='council_chamber'&&units.length>=6&&roomRoll(b,units[0],37)<22)units[0].roomType='laundry';
     for(const u of units)configureRoomWindow(b,u);
     b.layoutRevision=(b.layoutRevision||0)+1;
     return units;

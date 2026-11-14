@@ -1,3 +1,4 @@
+import {canFarmVertically} from './city_farm_layout.js';
 import {interventionButton,interventionButtons} from './city_context_actions.js';
 import {renderSubstancePolicy} from './city_substances_ui.js';
 import {TAX_CATEGORIES,taxRate,baseTaxRate,MINIMUM_WAGE_TAX_RATE,MINIMUM_BUSINESS_TAX_RATE} from './city_sales_tax.js';
@@ -131,6 +132,11 @@ export function renderPolitics(ui,p) {
       const publicTypes=Object.entries(city.buildingTypes).filter(([type])=>!['townhall','mint','council_chamber'].includes(type)&&ui.matches(city.buildingTypes[type].label));
       p.heading('CONTRATAÇÃO DIRETA PELO PREFEITO');
       if(publicTypes.some(([type])=>type==='farm'))p.buttons(Object.entries(city.economy.crops).map(([id,crop])=>({label:`CULTURA ${crop.label.toUpperCase()}`,selected:(ui.publicCrop||'milho')===id,click:()=>{ui.publicCrop=id;}})));
+      if(publicTypes.some(([type])=>type==='farm')){
+        const crop=ui.publicCrop||'milho';
+        if(canFarmVertically(crop)){ui.verticalFarmFloors??=3;p.kv('Fazenda vertical',`${ui.verticalFarmFloors} andares · canteiros, corredores e escadas`);p.buttons([{label:'ANDAR −',click:()=>{ui.verticalFarmFloors=Math.max(2,ui.verticalFarmFloors-1);}},{label:'ANDAR +',click:()=>{ui.verticalFarmFloors=Math.min(8,ui.verticalFarmFloors+1);}}]);interventionButton(ui,p,'CONSTRUIR FAZENDA VERTICAL',()=>execute('publicWork',{buildingType:'farm',crop,vertical:true,floors:ui.verticalFarmFloors}));}
+        else p.note('Árvores e palmeiras exigem uma fazenda ao ar livre.');
+      }
       for(const [type,spec] of paginate(ui,p,publicTypes,'executiveWorkPage',12))interventionButton(ui,p,`CONSTRUIR ${spec.label.toUpperCase()}`,()=>execute('publicWork',{buildingType:type,crop:ui.publicCrop||'milho'}));
       const projects=city.development.projects.filter(project=>project.executiveInitiative&&!project.cancelled).slice(-8).reverse();
       if(projects.length){p.heading('OBRAS CONTRATADAS NESTA GESTÃO');for(const project of projects)p.record(project.name,`${project.status} · verba autorizada ${money(project.worksBudgetCharge||0)}`,()=>ui.openContract(project.id));}

@@ -1,3 +1,4 @@
+import {canFarmVertically,isVerticalFarm,farmSiteType} from './city_farm_layout.js';
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {setupOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
 import {OFFICE_ONLY_TYPES} from './city_offices.js?v=office-demand-rollout-1';
@@ -93,6 +94,7 @@ export class CityDevelopment {
   }
   beginExpansion(accountId, buildingId, { floors = 1, builderId = null } = {}) {
     const b = this.city.building(buildingId);
+    if(isVerticalFarm(b)&&!canFarmVertically(b.crop))return null;
     if (!b || b.constructionKind !== 'building' || !Number.isInteger(floors) || floors < 1 || b.floors + floors > 12 || !b.units.every(u => u.ownerId === accountId) || this.projects.some(p => p.buildingId === buildingId && p.service === 'expansion' && !p.cancelled && p.status !== 'completed')) return null;
     const builder = this.selectBuilder(accountId, b.door, builderId), cells = b.width * b.depth * floors;
     const project = this.registerService(accountId, builder, { service: 'expansion', type: b.type, name: `Ampliação de ${b.entity.properties.name}`, buildingId, plotId: b.plotId, baseFloors: b.floors, floors, targetFloors: b.floors + floors, door: { ...b.door }, stone: cells * DEVELOPMENT_RULES.stonePerCell, requiredLabor: cells * DEVELOPMENT_RULES.laborPerCell, fee: cells * this.city.currency.price(DEVELOPMENT_RULES.constructionFeePerCell) });
@@ -123,7 +125,7 @@ export class CityDevelopment {
       city.sanitation.setupBuilding(b);
       city.sanitation.setupBusinessRooms(b);
       if (project.service === 'expansion') {
-      b.floors = project.targetFloors;if(b.type==='office_tower')setupOfficeTower(city,b); b.inventoryCapacity += b.width * b.depth * project.floors * 16;
+      b.floors = project.targetFloors;if(isVerticalFarm(b))city.economy.setupFarm(b,{preserve:true});if(b.type==='office_tower')setupOfficeTower(city,b); b.inventoryCapacity += b.width * b.depth * project.floors * 16;
       if(b.type==='townhall')b.jobs+=project.floors;else b.jobs=Math.min(32,b.jobs+businessJobCapacity(b.type,2,project.targetFloors)-businessJobCapacity(b.type,2,project.baseFloors)); b.geometryRevision = (b.geometryRevision || 0) + 1;
       if(['super_popular_housing','popular_housing','popular_luxury_housing'].includes(b.type)&&project.accountId==='treasury')city.housing.assign();
       }
@@ -419,14 +421,16 @@ export class CityDevelopment {
   beginProject(accountId, plotId, type, { kind = ['farm','quarry','iron_mine','bauxite_mine','park','bike_rack'].includes(type) ? 'open-air' : 'building', floors = null, crop = null, sell = false, width = null, depth = null, builderId = null, selfBuild = false, priority = 0, micro = false, rotation = null } = {}) {
     if(OFFICE_ONLY_TYPES.has(type))return this.city.fail('Esta atividade precisa ocupar um andar em um empresarial.');
     const city = this.city, p = this.plots.find(p => p.id === plotId), owner = this.clientCitizen(accountId);
+    if(type==='farm'&&kind==='building'&&!canFarmVertically(crop))return city.fail('Árvores e palmeiras precisam de cultivo ao ar livre.');
     const autoFloors=floors===null;
     floors ??= ['residential','super_popular_housing','popular_housing','popular_luxury_housing','luxury_housing','office_tower'].includes(type)?3:businessFloors(type,plotId);
-    if ((kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind !== 'open-air'))) return null;
+    if ((kind === 'open-air' && !['farm', 'quarry','iron_mine','bauxite_mine', 'park', 'bike_rack', 'leisure', 'greengrocer'].includes(type)) || !p || p.ownerId !== accountId || p.buildingId || p.projectId || !owner || !city.buildingTypes[type] || !['open-air', 'building'].includes(kind) || !Number.isInteger(floors) || floors < 1 || floors > 8 || (type === 'farm' && (!city.economy.crops[crop] || kind==='building'&&!canFarmVertically(crop)))) return null;
     width ??= p.width; depth ??= p.depth;
     if(width*depth<MIN_PLOT_CELLS||p.width*p.depth<MIN_PLOT_CELLS)return city.fail('Terrenos e prédios precisam de pelo menos 4 células de área.');
     if ((p.type === 'quarry' && !['quarry','iron_mine','bauxite_mine'].includes(type)) || (p.type==='farm' && type!=='farm')) return null;
     if (![width, depth].every(Number.isInteger) || width < 1 || depth < 1 || width*depth<MIN_PLOT_CELLS || p.width*p.depth<MIN_PLOT_CELLS || width > p.width || depth > p.depth || (kind==='building' && (width>8 || depth>8))) return null;
-    const terrain=chooseBuildingSite(city,p.x,p.y,width,depth,{plotId,type,rotation});if(terrain.error)return null;
+    if(type==='farm'&&kind==='building'&&(width<2||depth<2))return null;
+    const terrain=chooseBuildingSite(city,p.x,p.y,width,depth,{plotId,type:farmSiteType(type,kind),rotation});if(terrain.error)return null;
     floors = kind === 'open-air' ? 1 : floors;
     const builder = selfBuild ? null : this.selectBuilder(accountId, terrain.door, builderId);
     if (builderId && !builder) return null;
@@ -451,7 +455,7 @@ export class CityDevelopment {
     if (project.status === 'completed' || project.cancelled || project.inventory.pedra < project.stone || project.labor < project.requiredLabor) return null;
     if (['lamp', 'road', 'road-repair', 'repair', 'expansion'].includes(project.service)) return this.completeService(project);
     const p = this.plots.find(p => p.id === project.plotId), city = this.city;
-    const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, materialSource: project,rotation:project.rotation??0 });
+    const b = city.addBuilding(project.type, p.x, p.y, { width: project.width ?? p.width, depth: project.depth ?? p.depth, floors: project.floors, plotId: p.id, ownerAccountId: project.accountId, kind: project.kind, crop:project.crop, materialSource: project,rotation:project.rotation??0 });
     if(b&&project.micro)b.micro=true;
     if(b&&project.officialJournal){b.officialJournal=true;b.newsGenre='política';b.entity.properties.name='Jornal Oficial do Município';}
     if(b&&project.equityPartners)b.equityPartners=project.equityPartners;

@@ -1,7 +1,5 @@
-import {NATURAL_PLANTS} from './plant_catalog.js';
-import {createFarmPlantGeometry} from './farm_plant_geometry.js';
-import {FARM_CROPS} from './farm_crop_catalog.js';
-import {addBotanicalTreeWind,botanicalTreeTextures} from './botanical_trees.js?v=species-colors-3';
+import {createFarmPlants,syncFarmPlants} from './city_farm_renderer.js';
+import {syncVerticalFarm} from './city_vertical_farm_renderer.js';
 import {cardboardFootprint} from './cardboard_grass.js?v=local-mask-2';
 import {syncCityFishing} from './city_fishing_renderer.js';
 import {addGroundDisplayPost} from './city_display_supports.js';
@@ -491,6 +489,7 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     active.add(entity.id);
     if(b.constructionKind!=='open-air'||b.type==='market')b.architecture=architectureFor(b.type,b.id,world.seed??0);
     if(!inView(entity.x,entity.y,b.width,b.depth)){const existing=renderer.cityMeshes.get(entity.id);if(existing)existing.visible=false;continue;}
+    if(b.type==='farm'&&b.constructionKind==='building'){syncVerticalFarm(renderer,THREE,entity,b,world);continue;}
     if ((b.constructionKind === 'open-air' && b.type !== 'market') || b.type === 'greengrocer') { syncOpenAir(renderer, THREE, entity, b, world); continue; }
     let group = renderer.cityMeshes.get(entity.id);
     const bridgeDoors=renderer.skybridgeDoors?.get(b.id),bridgeDoorKey=bridgeDoors?[...bridgeDoors].map(([id,mask])=>`${id}:${mask}`).join('|'):'';
@@ -732,26 +731,6 @@ export function syncCityBuildings(renderer, THREE, entities, world, dt=1/60) {
     batchContext.structureRevision=structureRevision;batchContext.visualRevision=renderer.cityMeshVisualRevision||0;batchContext.terrainRevision=world.revision||0;batchContext.activeCount=active.size;
     batchContext.minTx=renderer.renderedMinTx;batchContext.maxTx=renderer.renderedMaxTx;batchContext.minTy=renderer.renderedMinTy;batchContext.maxTy=renderer.renderedMaxTy;batchContext.perspectiveView=perspectiveView;
   }
-}
-
-function createFarmPlants(THREE,b){
-  const species=FARM_CROPS[b.crop]?.plantSpecies,perennial=FARM_CROPS[b.crop]?.perennial||!!species&&!!(NATURAL_PLANTS[species]?.wood||NATURAL_PLANTS[species]?.tree),capacity=b.units.length*3,group=new THREE.Group(),geometry=createFarmPlantGeometry(THREE,b.crop);
-  const textures=botanicalTreeTextures(THREE),material=addBotanicalTreeWind(new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.95,map:textures.map,normalMap:textures.normalMap,alphaTest:.5}));
-  material.addEventListener('dispose',()=>{textures.map.dispose();textures.normalMap.dispose();});
-  const age=new THREE.InstancedBufferAttribute(new Float32Array(capacity),1);geometry.setAttribute('instanceGrowth',age);
-  const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.count=0;mesh.receiveShadow=true;mesh.castShadow=false;group.add(mesh);
-  return {group,mesh,age,capacity,perennial,grow:FARM_CROPS[b.crop]?.grow||120};
-}
-function syncFarmPlants(renderer,THREE,b,world,plantSet,minute){
-  const cells=b.units.filter(u=>!['bathroom','dining'].includes(u.roomType)),growthByCell=new Float32Array(cells.length);let offset=0;
-  for(const field of b.fields||[]){const count=Math.min(field.area||12,cells.length-offset),age=field.plantedAt==null?0:Math.max(0,minute-field.plantedAt)*(field.growthMultiplier||1),growth=field.plantedAt==null?(plantSet.perennial&&field.establishedAt!=null?.01:0):Math.max(plantSet.perennial?.01:0,Math.min(1,age/Math.max(1,plantSet.grow)));for(let i=0;i<count;i++)growthByCell[offset+i]=field.harvestedCells?.[i]?(plantSet.perennial?.01:0):growth;offset+=count;if(offset>=cells.length)break;}
-  const m=renderer._farmPlantMatrix??=new THREE.Matrix4(),pos=renderer._farmPlantPosition??=new THREE.Vector3(),quat=renderer._farmPlantQuaternion??=new THREE.Quaternion(),scale=renderer._farmPlantScale??=new THREE.Vector3(),axis=renderer._farmPlantAxis??=new THREE.Vector3(0,1,0);
-  let n=0;
-  for(let i=0;i<cells.length;i++){const growth=growthByCell[i];if(!growth)continue;const u=cells[i];if(plantSet.perennial&&(Math.floor(u.x)%2||Math.floor(u.y)%2))continue;const ground=surfaceElevation(world,b.entity.x+u.x+.5,b.entity.y+u.y+.5);
-    for(let j=0;j<(plantSet.perennial?1:3);j++){pos.set(u.x+.5+(plantSet.perennial?0:(j-1)*.25),ground+.04,u.y+.5+(plantSet.perennial?0:j%2?.16:-.14));quat.setFromAxisAngle(axis,i*2.4+j*1.7);const size=plantSet.perennial?.95:(.18+.82*growth)*.85;scale.set(size,size,size);m.compose(pos,quat,scale);plantSet.mesh.setMatrixAt(n,m);plantSet.age.setX(n,growth);n++;}
-  }
-  plantSet.mesh.count=n;plantSet.mesh.instanceMatrix.needsUpdate=true;plantSet.age.needsUpdate=true;plantSet.mesh.computeBoundingSphere();
-  const shader=plantSet.mesh.material.userData.foliageShader;if(shader)shader.uniforms.uSimTick.value=minute;
 }
 
 // Open-air premises follow every patch of the natural surface; no slab, walls or roof.
