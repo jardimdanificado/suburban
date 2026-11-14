@@ -8,6 +8,8 @@ A geometria é criada uma vez por espécie visível e reutilizada em `InstancedM
 
 As cores hexadecimais são convertidas de sRGB para linear por `vegetationColor`, como nas cores de materiais do Three.js. Isso evita o aspecto pastel que surge quando canais sRGB são enviados diretamente aos atributos de vértice. A árvore-do-viajante usa a mesma conversão e o verde do coqueiro como referência, mantendo sua geometria.
 
+A paleta das folhas recebe também mais saturação em sRGB e um pequeno aprofundamento dos valores antes da conversão linear. Esse tratamento é exclusivo da folhagem: cascas, flores e frutos mantêm suas paletas. Os tons quentes de bordo e amendoeira preservam a família de cor.
+
 ## Conferência
 
 - `node --test tests/botanical_trees.test.mjs tests/fan_palm.test.mjs`: nove testes de cobertura das espécies, geometria, orçamento, frutos, vento, instâncias e preservação dos caminhos existentes.

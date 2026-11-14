@@ -1,9 +1,9 @@
-import {vegetationColor} from './vegetation_color.js';
+import {vegetationColor,foliageColor} from './vegetation_color.js';
 // Ravenala: long petioles and banana-shaped paddles radiate in one vertical
 // plane. It has neither a radial coconut crown nor palmate, fingered leaves.
 export function travellerPalmSurface(){
   const positions=[],colors=[],uvs=[];
-  const barkDark=vegetationColor(0x766747),barkLight=vegetationColor(0x968052),petiole=vegetationColor(0x648a2f),leafColor=vegetationColor(0x478d32);
+  const barkDark=vegetationColor(0x766747),barkLight=vegetationColor(0x968052),petiole=vegetationColor(0x648a2f),leafColor=foliageColor(0x478d32);
   const triangle=(a,b,c,color,uv=[[0,0],[1,0],[.5,1]])=>{positions.push(...a,...b,...c);colors.push(...color,...color,...color);uvs.push(...uv.flat());};
   const tube=(a,b,r,color,sides=5)=>{
     const delta=b.map((v,i)=>v-a[i]),length=Math.hypot(...delta),axis=delta.map(v=>v/length);

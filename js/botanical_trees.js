@@ -1,4 +1,4 @@
-import {vegetationColor} from './vegetation_color.js';
+import {vegetationColor,foliageColor} from './vegetation_color.js';
 // Species silhouettes share mesh builders, not a scaled generic crown. Geometry
 // is built once per species; all planted and wild specimens use GPU instances.
 const broad=(height,radius,leaf,bark,extra={})=>({kind:'broad',height,radius,leaf,bark,leafLength:.29,leafWidth:.105,...extra});
@@ -126,7 +126,7 @@ function compound(b,a,end,width,color){
   }
 }
 function broadTree(b,s){
-  const bark=rgb(s.bark),green=rgb(s.leaf),h=s.height,rootY=s.stilt?.65:0,trunkTop=h*(s.tiered?.88:.66);
+  const bark=rgb(s.bark),green=foliageColor(s.leaf),h=s.height,rootY=s.stilt?.65:0,trunkTop=h*(s.tiered?.88:.66);
   const trunkRadius=s.succulent?.12:s.birch?.065:.13;
   const axis=[[0,rootY,0],[.055,h*.3,-.035],[-.035,trunkTop,.055]];
   for(let i=0;i<2;i++)b.tube(axis[i],axis[i+1],trunkRadius*(1-i*.22),trunkRadius*(.76-i*.28),bark,7);
@@ -169,7 +169,7 @@ function broadTree(b,s){
       const length=s.shape==='compound'?.65:s.leafLength;
       const tip=add(root,[Math.cos(a)*length,(b.random()-.65)*length*.8-(s.droop||0),Math.sin(a)*length]);
       const twig=mix(joint,end,.65),edge=add(root,[.003,.002,.003]);b.triangle(twig,root,edge,bark,true);
-      const col=s.autumn&&leaf%9===0?rgb(0xbc7549):mul(green,.84+b.random()*.3);
+      const col=s.autumn&&leaf%9===0?foliageColor(0xbc7549):mul(green,.84+b.random()*.3);
       if(s.shape==='compound')compound(b,root,tip,.2,col);
       else b.blade(root,tip,s.leafWidth,col,{shape:s.shape,segments:['lobed','maple'].includes(s.shape)?5:3});
     }
@@ -197,7 +197,7 @@ function broadTree(b,s){
   }
 }
 function pineTree(b,s){
-  const green=rgb(s.leaf),bark=rgb(s.bark),h=s.height;
+  const green=foliageColor(s.leaf),bark=rgb(s.bark),h=s.height;
   b.tube([0,0,0],[0,h,0],.15,.012,bark,7);
   for(let tier=0;tier<6;tier++){const y=.9+tier*.48,r=s.radius*(1-tier*.145);b.ellipsoid([0,y+.17,0],[r*.93,.31,r*.93],mul(green,.82+tier*.025),0,9,5,true);}
   for(let tier=0;tier<6;tier++)for(let branch=0;branch<5;branch++){
@@ -213,7 +213,7 @@ function pineTree(b,s){
   }
 }
 function pinnateCrown(b,center,s,length,count){
-  const green=rgb(s.leaf);
+  const green=foliageColor(s.leaf);
   for(let leaf=0;leaf<count;leaf++){
     const angle=leaf/count*TAU+.24,rise=.35+(leaf%3)*.23,drop=s.droop||.72;
     const point=t=>add(center,[Math.cos(angle)*length*t,Math.sin(t*Math.PI)*rise-drop*t*t,Math.sin(angle)*length*t]);
@@ -246,7 +246,7 @@ function palms(b,s){
         const a=leaf*2.399,petiole=s.divided?.75:.5;
         const root=add(top,[Math.cos(a)*petiole,.2+(leaf%3)*.19,Math.sin(a)*petiole]);
         b.tube(top,root,.018,.011,rgb(0x7e9952),4);
-        const horizontal=[-Math.sin(a),0,Math.cos(a)],up=unit([Math.cos(a)*.5,1,Math.sin(a)*.5]),green=rgb(s.leaf);
+        const horizontal=[-Math.sin(a),0,Math.cos(a)],up=unit([Math.cos(a)*.5,1,Math.sin(a)*.5]),green=foliageColor(s.leaf);
         const rim=t=>{
           const theta=(t-.5)*(s.divided?Math.PI*1.6:Math.PI*1.85),radius=s.length*(s.divided&&Math.round(t*24)%2?.7:1);
           return add(root,add(mul(horizontal,Math.sin(theta)*radius),mul(up,(Math.cos(theta)+.25)*radius)));
@@ -262,7 +262,7 @@ function palms(b,s){
   }
 }
 function bananaTree(b,s){
-  const green=rgb(s.leaf),h=s.height;
+  const green=foliageColor(s.leaf),h=s.height;
   for(let ring=0;ring<9;ring++)b.tube([0,ring*h/9,0],[.025,(ring+1)*h/9,.025],.18-ring*.008,.17-ring*.008,rgb(ring%3===0?0x9b865d:s.bark),7);
   for(let leaf=0;leaf<10;leaf++){
     const a=leaf*2.399,length=1.1+(leaf%3)*.2,rise=.24+(leaf%4)*.2,start=[0,h-.15+(leaf%2)*.08,0];
@@ -282,7 +282,7 @@ function bananaTree(b,s){
   b.ellipsoid([.42,h-1.02,.15],[.07,.14,.07],rgb(0x86475c),1,6,3);
 }
 function papayaTree(b,s){
-  const h=s.height,green=rgb(s.leaf);
+  const h=s.height,green=foliageColor(s.leaf);
   for(let ring=0;ring<12;ring++)b.tube([0,ring*h/12,0],[0,(ring+1)*h/12,0],.105-ring*.002,.104-ring*.002,rgb(ring%3?0xa7a485:0x837e60),7);
   for(let leaf=0;leaf<11;leaf++){
     const angle=leaf*2.399,length=.74+(leaf%3)*.1,origin=[0,h-.12-(leaf%3)*.08,0],p=add(origin,[Math.cos(angle)*length,.12+(leaf%3)*.12,Math.sin(angle)*length]);
@@ -296,7 +296,7 @@ function papayaTree(b,s){
   }
 }
 function aroid(b,s){
-  const green=rgb(s.leaf);
+  const green=foliageColor(s.leaf);
   for(let leaf=0;leaf<11;leaf++){
     const angle=leaf*2.399,h=s.height*(.45+(leaf%4)*.17),root=[Math.cos(angle)*.24,h,Math.sin(angle)*.24],dir=[Math.cos(angle),-.2,Math.sin(angle)];
     b.tube([0,.03,0],root,.018,.009,rgb(s.bark),4);

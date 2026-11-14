@@ -1,4 +1,4 @@
-import {BOTANICAL_TREE_MODELS,botanicalTreeTextures,addBotanicalTreeWind,BotanicalTreeInstances} from './botanical_trees.js?v=species-colors-2';
+import {BOTANICAL_TREE_MODELS,botanicalTreeTextures,addBotanicalTreeWind,BotanicalTreeInstances} from './botanical_trees.js?v=species-colors-3';
 import {dirtRoadGround} from './dirt_road_visuals.js';
 import {scheduleTerrainIdleWork,stopTerrainIdleWork} from './terrain_idle_work.js';
 import {beginTerrainFade,finishTerrainFade,advanceTerrainFades} from './terrain_quality_fade.js';
@@ -9,7 +9,7 @@ import {terrainZoomDetail} from './terrain_zoom_detail.js?v=zoom-density-4';
 import {sandNormalField,sandSurfaceNormalSteps,addSandWetnessShader} from './sand_surface_lighting.js?v=camera-budget-5';
 import {WATER_LEVEL,WATER_WAVE_GLSL} from './water_surface.js?v=shore-runup-2';
 import {sandShoreTileSurface,isSlopingBeachTile} from './sand_shore.js?v=zoom-coast-8';
-import {createTravellerPalmGeometry} from './traveller_palm.js?v=ravenala-colors-2';
+import {createTravellerPalmGeometry} from './traveller_palm.js?v=ravenala-colors-3';
 import {cursorLightPlacement} from './cursor_light.js?v=above-roofs-1';
 import {createBeachShellMesh} from './beach_shells.js?v=filtered-roots-2';
 import {floweringShrubSurfaceTextures,floweringShrubLeavesGeometry,floweringShrubFlowersGeometry} from './flowering_shrub_surface.js?v=leaf-bract-detail-2';
