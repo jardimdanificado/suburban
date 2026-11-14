@@ -2,7 +2,7 @@ import {interventionButton,interventionButtons} from './city_context_actions.js'
 import {contextActions} from './city_context_actions.js';
 import {colorName} from './city_colors.js';
 import {renderVehiclePaint} from './city_paint_ui.js';
-import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=harbor-boats-4';
+import {VEHICLE_SPECS,VEHICLE_RECIPES} from './city_vehicles.js?v=shared-crossings-1';
 import {formatMoney as money} from './city_ui_format.js';
 import {UI_COLORS as C} from './city_ui_widgets.js';
 const title=v=>VEHICLE_SPECS[v.good]?.label||v.good;
@@ -24,6 +24,16 @@ export function renderVehicle(ui,p,v){
   p.kv('Distância percorrida',`${v.distance.toFixed(1)} células`);p.kv(v.boatClass?'Capacidade de transporte':'Capacidade de carga',v.boatClass?spec.cargo:`${spec.cargo} itens`);
   if(v.entity)p.button('LOCALIZAR NO MAPA',()=>ui.camera(v.entity.x,v.entity.y));
   if(v.driverId)p.button(`USUÁRIO ATUAL: ${city.accountName(`citizen:${v.driverId}`)}`,()=>ui.openCitizen(v.driverId));
+  if(v.boatClass){
+    const routes=(system.crossingRoutes||[]).filter(route=>route.boatId===v.id);
+    if(routes.length){p.heading('TRAVESSIAS POR LOTAÇÃO');p.note('O custo da viagem é dividido pelos passageiros embarcados. A embarcação parte mesmo sem lotar.');
+      for(const route of routes.slice(-4)){const clock=route.dailyDepartureMinute,time=clock==null?'Sob demanda':`${String(Math.floor(clock/60)).padStart(2,'0')}:${String(clock%60).padStart(2,'0')}`;
+        p.record(route.companyName,`${time} · (${Math.floor(route.origin.x)}, ${Math.floor(route.origin.y)}) até (${Math.floor(route.landing.x)}, ${Math.floor(route.landing.y)}) · ${route.members.length} participantes do grupo`);
+        if(route.departures)p.kv('Última saída',`${route.lastPassengerCount} passageiros · ${money(route.lastFare)} por pagante`);
+        if(route.organizerId!=null)p.button('VER ORGANIZADOR',()=>ui.openCitizen(route.organizerId));
+      }
+    }
+  }
   const rack=v.parking&&city.building(v.parking.rackId);if(v.boatClass)p.kv('Atracação',v.driverId?'Em travessia com passageiro':v.waterRoute?.length?'Rota costeira do porto':'À disposição no porto');else{p.kv('Estacionamento',rack?`${rack.entity.properties.name} · vaga ${v.parking.index+1}`:v.driverId?'Em deslocamento':v.parking?.kind==='roadside'?'Ao lado da rua':'Fora de bicicletário');if(rack)p.button('VER BICICLETÁRIO',()=>ui.openBuilding(rack.id));}
   if(v.reservedParking)p.kv('Vaga reservada no destino',v.reservedParking.kind==='roadside'?'Ao lado da rua':`${city.building(v.reservedParking.rackId)?.entity.properties.name||v.reservedParking.rackId} · ${v.reservedParking.index+1}`);
   p.kv('Cor',colorName(v.color));

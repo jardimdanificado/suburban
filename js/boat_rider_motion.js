@@ -5,12 +5,21 @@ export function packBoatRiders(citizens){
 }
 export function applyBoatRiders(city,rows){
  if(!rows)return;
+ const affected=new Set(),incoming=new Map();
  for(let at=0;at<rows.length;at+=3){
   const person=city.society.citizen(rows[at]);if(!person)continue;
-  const old=person.boatVehicleId,next=rows[at+1]||null;
-  if(old&&old!==next){const boat=city.vehicles.units.get(old);if(boat?.transportCitizenId===person.id){boat.transportCitizenId=null;boat.driverId=null;}}
-  person.boatVehicleId=next;person.boatClass=classes[rows[at+2]]||null;
-  if(next){const boat=city.vehicles.units.get(next);if(boat){boat.transportCitizenId=person.id;boat.driverId=person.id;}}
+  if(person.boatVehicleId)affected.add(person.boatVehicleId);
+  person.boatVehicleId=rows[at+1]||null;person.boatClass=classes[rows[at+2]]||null;
+  if(person.boatVehicleId){affected.add(person.boatVehicleId);let ids=incoming.get(person.boatVehicleId);if(!ids)incoming.set(person.boatVehicleId,ids=[]);ids.push(person.id);}
+ }
+ // Keep the pilot stable when several compact rows refer to the same hull.
+ for(const id of affected){
+  const boat=city.vehicles.units.get(id);if(!boat)continue;
+  const ids=new Set([boat.driverId,...(boat.passengerIds||[])]);
+  for(const personId of incoming.get(id)||[])ids.add(personId);
+  const aboard=[...ids].filter(id=>id!=null&&city.society.citizen(id)?.boatVehicleId===boat.id);
+  const pilot=[boat.localTripCitizenId,boat.driverId,...aboard].find(id=>aboard.includes(id))??null;
+  boat.transportCitizenId=pilot;boat.driverId=pilot;boat.passengerIds=aboard.filter(id=>id!==pilot);
  }
 }
 

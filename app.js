@@ -1,9 +1,9 @@
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=vehicle-interpolation-2';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=shared-crossings-1';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=starter-stock-13";
-import { CityDesktop } from "./js/city_desktop.js?v=custom-history-limit-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=shared-crossings-1";
+import { CityDesktop } from "./js/city_desktop.js?v=shared-crossings-1";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=worker-roots-38";
 import { setActiveEntities } from "./js/engine.js";

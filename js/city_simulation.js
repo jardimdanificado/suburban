@@ -1,7 +1,8 @@
+import {releaseSharedPassenger} from './city_boat_crossings.js?v=shared-crossings-1';
 import {advanceFishing} from './city_fishing.js';
-import {advanceLocalBoatTrip,boatRouteTime} from './city_boat_towing.js';
+import {advanceLocalBoatTrip,boatRouteTime} from './city_boat_towing.js?v=shared-crossings-1';
 import {WATERFRONT_BUSINESSES,waterfrontBerth} from './waterfront_businesses.js';
-import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js?v=ff2-speed-1';
+import {beginFastForwardMinute,deferFastForwardCitizen,routineRevision,nextRoutineReview,reducedCadence} from './city_fast_forward.js?v=shared-crossings-1';
 
 // The movement loop used to compose the same long status string for a moving
 // citizen on every waypoint of every animation frame. The memo compares only
@@ -26,7 +27,7 @@ import {CityPaint} from './city_paint.js?v=interiors-completion-2';
 import {CIVIC_SERVICES,civicSpec,civicStatus,civicVisit} from './city_public_services.js';
 import {recordWork,discoverVacancies,searchEmployment,routeToInterview,advanceRecruitment,RECRUITMENT_RULES,occupiedPositions} from './city_employment.js?v=fast-speeds-1';
 import {CityFiscal} from './city_fiscal.js';
-import {CityVehicles} from './city_vehicles.js?v=starter-stock-5';
+import {CityVehicles} from './city_vehicles.js?v=shared-crossings-1';
 import {clothingMood,moveGarments} from './city_clothing.js?v=party-apparel-1';
 import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
 import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
@@ -57,7 +58,7 @@ import { CityCurrency, CURRENCY_RULES, ensureExternalAccount } from './city_curr
 
 import { CityHousing, HOUSING_RULES } from './city_housing.js?v=ff2-speed-2';
 import { CitySanitation } from './city_sanitation.js?v=ff2-speed-2';
-import { CityLife } from './city_life.js?v=position-validation-cache-1';
+import { CityLife } from './city_life.js?v=shared-crossings-1';
 import { CityWorkMeals } from './city_work_meals.js?v=wardrobe-expansion-1';
 import { CityDevelopment, DEVELOPMENT_RULES } from './city_development.js?v=road-network-cache-1';
 import { CityLogistics } from './city_logistics.js?v=ff2-speed-1';
@@ -1591,6 +1592,7 @@ export class CitySimulation {
       if(c.policePatrol){if(c.indoorLocation&&!syncCitizenInterior(this,c))continue;this.justice.updatePolicePatrol(c);continue;}
       if(c.skybridgeTransit){this.finishSkybridgeTransit(c);if(c.skybridgeTransit)continue;}
       if(age>=18&&!c.indoorLocation&&!c.businessIds.length&&!this.politics.officeHolder(c)&&this.minute>=(c.career?.nextDiscoveryAt??c.id%RECRUITMENT_RULES.discoveryInterval)){if(citizenDetail)measureCitizen('vacancyDiscovery',()=>discoverVacancies(this,c));else discoverVacancies(this,c);}
+      if(c.sharedBoatRide){if(this.urgentNeed(c)&&c.sharedBoatRide.state==='approaching')releaseSharedPassenger(this,c,{cancel:true});else continue;}
       if(c.mobilityTrip||c.ridingVehicleId)continue;
       let mealAdvanced=false;if(c.workMeal){if(citizenDetail)measureCitizen('workMealAdvance',()=>{mealAdvanced=this.workMeals.advance(c);});else mealAdvanced=this.workMeals.advance(c);}if(mealAdvanced)continue;
       if(c.task!=='energy'&&wantsSleep(this,c)&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!['food','water','health','toilet','hygiene','care','caregiving','provisions','workmeal','supplies'].includes(c.task)){c.task=null;c.path=[];}
@@ -1641,7 +1643,7 @@ export class CitySimulation {
     if(societyParts)societyParts.socialUpdateMs=performance.now()-societyPartStart;
     const societyMs=performance.now()-profileMark;profileMark=performance.now();
     const movers=this._movingCitizens??=[];movers.length=0;
-    for(const c of this.citizens)if(c.path.length||c.indoorLocation?.path?.length||c.deliveryId||c.ridingVehicleId||c.fishingJob)movers.push(c);
+    for(const c of this.citizens)if(c.sharedBoatRide||c.path.length||c.indoorLocation?.path?.length||c.deliveryId||c.ridingVehicleId||c.fishingJob)movers.push(c);
     const moverSetupMs=performance.now()-profileMark;profileMark=performance.now();
     // Spread hourly work across minutes; keep the same order and one run per hour.
     if (this.minute % 60 === 0) this.hourlyPhase = 0;

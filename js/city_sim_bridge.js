@@ -1,7 +1,7 @@
 import {applyFishing} from './fishing_motion.js';
-import {applyBoatRiders,applyBoatTows} from './boat_rider_motion.js';
+import {applyBoatRiders,applyBoatTows} from './boat_rider_motion.js?v=shared-crossings-1';
 import {queueMotion,sampleRoundedMotion,sampleMotion,MOTION_BUFFER_MS} from './city_motion.js?v=rounded-routes-1';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-12';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=shared-crossings-1';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
@@ -116,7 +116,7 @@ export class CitySimulationBridge {
     this.checkpointWaiters=new Map();this.checkpointId=0;this.exportWaiters=new Map();this.exportId=0;
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=worker-state-export-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=shared-crossings-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });
@@ -313,8 +313,10 @@ export class CitySimulationBridge {
       for(let i=-1;i<passengers.length;i++){
         const id=i<0?v.driverId:passengers[i];if(id==null)continue;
         const c=this.city.society.citizen(id);if(!c||(v.boatClass?c.boatVehicleId!==v.id:c.ridingVehicleId!==v.id))continue;
-        const behind=i<0?0:(i+1)*.38,angle=v.angle||0;
-        c.entity.x=v.entity.x-Math.sin(angle)*behind;c.entity.y=v.entity.y-Math.cos(angle)*behind;
+        const angle=v.angle||0,columns=Math.min(3,Math.max(1,passengers.length)),rows=Math.ceil(passengers.length/columns);
+        const behind=i<0?0:v.boatClass?(v.pickLength||2.5)*(.12+.25*Math.floor(i/columns)/Math.max(1,rows-1)):(i+1)*.38;
+        const side=v.boatClass&&i>=0?((i%columns)-(columns-1)/2)*(v.pickWidth||1.2)*.24:0;
+        c.entity.x=v.entity.x-Math.sin(angle)*behind+Math.cos(angle)*side;c.entity.y=v.entity.y-Math.cos(angle)*behind-Math.sin(angle)*side;
       }
     }
   }

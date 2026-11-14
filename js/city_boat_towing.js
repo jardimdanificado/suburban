@@ -1,3 +1,4 @@
+import {planSharedCrossing,joinSharedCrossing,beginSharedCrossing,advanceSharedPassenger,prepareSharedDeparture,syncSharedCrossing,finishSharedCrossing} from './city_boat_crossings.js?v=shared-crossings-1';
 import {BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {findTerrainPath,canStep,tileHeight,tileAt,roadTravelCost,ROAD_TILES,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -84,7 +85,7 @@ function approaches(city,boat){
  return result;
 }
 function computeBoatTrip(city,start,goal,{boat:fixedBoat=null,relocate=false,serviceAccountId=null,maxSeconds=Infinity,groundPath=null}={}){
- const person=start.properties?.citizen;if(!city.walkable(Math.floor(goal.x),Math.floor(goal.y))||!person||person.dead||person.localBoatTrip||person.mobilityTrip||person.ridingVehicleId||person.boatClass||person.worldBoatCrew||person.custody||person.entity.destroyed)return null;
+ const person=start.properties?.citizen;if(!city.walkable(Math.floor(goal.x),Math.floor(goal.y))||!person||person.dead||person.localBoatTrip||person.sharedBoatRide||person.mobilityTrip||person.ridingVehicleId||person.boatClass||person.worldBoatCrew||person.custody||person.entity.destroyed)return null;
  const accounts=boatAccessAccounts(city,person);if(serviceAccountId)accounts.add(serviceAccountId);
  const load=Math.max(1,person.deliveryLoad||city.logistics?.shipments?.find(s=>s.id===person.deliveryId)?.quantity||1);
  const units=[...(city.vehicles?.units?.values()||[])],bikes=units.filter(v=>!v.boatClass&&Number.isFinite(v.x)&&Number.isFinite(v.y)&&free(v)&&v.condition>15&&!v.passengerIds?.length&&accounts.has(v.possessorAccountId||v.ownerAccountId)&&['bicicleta','bicicleta_carga'].includes(v.good));
@@ -124,7 +125,8 @@ function computeBoatTrip(city,start,goal,{boat:fixedBoat=null,relocate=false,ser
 const boatPlanCaches=new WeakMap();
 export function planBoatTrip(city,start,goal,options={}){
  const person=start.properties?.citizen;
- if(!city.walkable(Math.floor(goal.x),Math.floor(goal.y))||!person||person.dead||person.localBoatTrip||person.mobilityTrip||person.ridingVehicleId||person.boatClass||person.worldBoatCrew||person.custody||person.entity.destroyed)return null;
+ if(!city.walkable(Math.floor(goal.x),Math.floor(goal.y))||!person||person.dead||person.localBoatTrip||person.sharedBoatRide||person.mobilityTrip||person.ridingVehicleId||person.boatClass||person.worldBoatCrew||person.custody||person.entity.destroyed)return null;
+ const shared=planSharedCrossing(city,start,goal,options.maxSeconds);if(shared)return shared;
  const vehicles=[...(city.vehicles?.units?.values()||[])];if(!vehicles.some(v=>v.boatClass&&free(v)))return null;
  const revision=`${city.minute}:${city.world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
  let cache=boatPlanCaches.get(city);if(!cache||cache.revision!==revision){cache={revision,paths:new Map()};boatPlanCaches.set(city,cache);}
@@ -152,10 +154,23 @@ function safeLanding(city,boat,bike){
 export function releaseLocalBoatTrip(city,person,cancel=false){
  const trip=person.localBoatTrip;if(!trip)return;
  const boat=city.vehicles.units.get(trip.boatId),bike=city.vehicles.units.get(trip.bikeId);
+ // A surviving passenger takes the shared hull to shore if its pilot dies.
+ if(cancel&&(person.dead||person.entity.destroyed||person.custody)&&trip.sharedCrossing&&boat?.active&&!boat.scrapped&&trip.pickedUp&&water(city,boat.x,boat.y)){
+  const group=trip.sharedCrossing,next=group.members.map(m=>city.society.citizen(m.citizenId)).find(c=>c&&!c.dead&&!c.entity.destroyed&&!c.custody&&c.sharedBoatRide?.state==='aboard'),landing=next&&safeLanding(city,boat,null);
+  if(next&&landing){
+   group.members=group.members.filter(m=>m.citizenId!==next.id);group.phase='sailing';
+   next.sharedBoatRide=null;next.localBoatTrip=trip;next.path=landing;
+   trip.position={x:boat.x,y:boat.y};trip.task=next.task;trip.targetId=next.targetId;trip.cancelAtShore=true;
+   boat.localTripCitizenId=next.id;boat.driverId=next.id;boat.transportCitizenId=next.id;boat.passengerIds=(boat.passengerIds||[]).filter(id=>id!==next.id);
+   for(const member of group.members){const c=city.society.citizen(member.citizenId);if(c?.sharedBoatRide)c.sharedBoatRide.leaderId=next.id;}
+   person.localBoatTrip=null;person.boatClass=null;person.boatVehicleId=null;person.path=[];return;
+  }
+ }
  if(cancel&&boat?.active&&!boat.scrapped&&trip.pickedUp&&!person.entity.destroyed&&!person.dead&&!person.custody&&water(city,boat.x,boat.y)){
   const landing=safeLanding(city,boat,bike);
   if(landing){person.path=landing;trip.position={x:boat.x,y:boat.y};trip.task=person.task;trip.targetId=person.targetId;trip.cancelAtShore=true;return;}
  }
+ finishSharedCrossing(city,person);
  for(const vehicle of [boat,bike])if(vehicle?.localTripCitizenId===person.id){vehicle.localTripCitizenId=null;vehicle.driverId=null;vehicle.transportCitizenId=null;vehicle.towedByVehicleId=null;vehicle.towedBoatId=null;vehicle.ferrying=false;vehicle.journey=null;vehicle.status=vehicle.boatClass?(water(city,vehicle.x,vehicle.y)?'Atracado após a viagem':'Embarcação em terra'):'Bicicleta estacionada';}
  if(person.boatTowService){const resume=person.boatTowService;if(person.task==='boat-tow-service'){person.task=resume.task;person.targetId=resume.targetId;}person.boatTowService=null;}
  person.localBoatTrip=null;person.boatClass=null;person.boatVehicleId=null;person.ridingVehicleId=null;person.ridingVehicleKind=null;person.towedBoatId=null;person.towBikeId=null;
@@ -166,12 +181,18 @@ function startTrip(city,person,plan){
  const accounts=boatAccessAccounts(city,person);if(plan.serviceAccountId)accounts.add(plan.serviceAccountId);
  const load=Math.max(bike?2:1,person.deliveryLoad||city.logistics?.shipments?.find(s=>s.id===person.deliveryId)?.quantity||1);
  if(!boat||!free(boat)||!(BOAT_CLASSES[boat.boatClass]?.capacity>=load)||(boat.condition??100)<=0||bike&&!accounts.has(boat.ownerAccountId)&&!plan.serviceAccountId||Math.hypot(boat.x-plan.boatX,boat.y-plan.boatY)>.1||plan.bikeId!=null&&(!bike||!free(bike)||bike.condition<=15||!accounts.has(bike.possessorAccountId||bike.ownerAccountId)||!BOAT_TOW_RULES[boat.boatClass]?.bikes.includes(bike.good)||Math.hypot(bike.x-plan.bikeX,bike.y-plan.bikeY)>.1))return false;
- if(!accounts.has(boat.ownerAccountId)&&boat.ownerAccountId!==city.worldPort?.accountId&&!plan.serviceAccountId){const fare=city.currency.price(BOAT_CLASSES[boat.boatClass].capacity>=8?45:20);if(!city.transfer(city.payerFor(person),boat.ownerAccountId,fare,'Travessia local de barco',{vehicleId:boat.id,citizenId:person.id}))return false;}
+
  for(const v of [boat,bike])if(v){v.localTripCitizenId=person.id;v.driverId=person.id;delete v.waterRoute;delete v.waterRouteIndex;}
- person.localBoatTrip={...plan,position:{x:person.entity.x,y:person.entity.y},task:person.task,targetId:person.targetId,pickedUp:false};return true;
+ person.localBoatTrip={...plan,position:{x:person.entity.x,y:person.entity.y},task:person.task,targetId:person.targetId,pickedUp:false};
+ const shared=beginSharedCrossing(city,person,boat,plan);
+ if(!shared&&!accounts.has(boat.ownerAccountId)&&boat.ownerAccountId!==city.worldPort?.accountId&&!plan.serviceAccountId){const fare=city.currency.price(BOAT_CLASSES[boat.boatClass].capacity>=8?45:20);if(!city.transfer(city.payerFor(person),boat.ownerAccountId,fare,'Travessia local de barco',{vehicleId:boat.id,citizenId:person.id})){releaseLocalBoatTrip(city,person,true);return false;}}
+ return true;
 }
 function lookAhead(city,position,path,distance){let previous=position;for(const point of path){if(water(city,point.x,point.y))break;const length=Math.hypot(point.x-previous.x,point.y-previous.y);if(length>=distance){const ratio=distance/(length||1);return {x:previous.x+(point.x-previous.x)*ratio,y:previous.y+(point.y-previous.y)*ratio};}distance-=length;previous=point;}return previous;}
 export function advanceLocalBoatTrip(city,person,dt){
+ if(person.sharedBoatRide)return advanceSharedPassenger(city,person,dt);
+ const shared=person.path?.[0]?.boatPlan;
+ if(shared?.sharedTripCitizenId!=null){if(!joinSharedCrossing(city,person,shared)){person.path=[];person.task=null;return true;}return advanceSharedPassenger(city,person,dt);}
  if(!person.localBoatTrip){const plan=person.path?.[0]?.boatPlan;if(!plan)return false;if(!startTrip(city,person,plan)){person.path=[];person.task=null;return true;}}
  const trip=person.localBoatTrip,boat=city.vehicles.units.get(trip.boatId),bike=trip.bikeId!=null?city.vehicles.units.get(trip.bikeId):null;
  if(person.entity.destroyed||person.dead||person.custody||person.task!==trip.task||person.targetId!==trip.targetId||!boat||!boat.active||boat.scrapped||boat.localTripCitizenId!==person.id||bike&&(!bike.active||bike.scrapped||bike.condition<=15||bike.localTripCitizenId!==person.id)||!person.path?.length||!person.path[0].transportMode){releaseLocalBoatTrip(city,person,true);return true;}
@@ -179,6 +200,11 @@ export function advanceLocalBoatTrip(city,person,dt){
  while(remaining>0&&person.path.length&&guard++<512){
   const point=person.path[0],mode=point.transportMode,from=trip.position,dx=point.x-from.x,dy=point.y-from.y,len=Math.hypot(dx,dy),isWater=water(city,point.x,point.y),tx=Math.floor(point.x),ty=Math.floor(point.y);
   if(isWater&&!['pickup','sail'].includes(mode)||!isWater&&!city.walkable(tx,ty)||mode==='sail'&&!isWater||mode==='tow'&&(!bike||!boatTowClear(city,boat,point.x,point.y,Math.abs(dx)>=Math.abs(dy)?Math.sign(dx)||1:0,Math.abs(dy)>Math.abs(dx)?Math.sign(dy):0))){releaseLocalBoatTrip(city,person,true);return true;}
+  if(mode==='sail'&&trip.sharedCrossing?.phase==='boarding'){
+   const departure=prepareSharedDeparture(city,person,remaining);remaining=departure.remaining;
+   if(departure.cancel){releaseLocalBoatTrip(city,person,true);return true;}
+   if(!departure.ready)break;
+  }
   const waitKey=`${mode}:${point.x},${point.y}`;
   if(trip.waitKey!==waitKey){trip.waitKey=waitKey;trip.waitSeconds=mode==='pickup'?2:water(city,from.x,from.y)!==isWater?1.5:0;}
   if(trip.waitSeconds>0){const wait=Math.min(remaining,trip.waitSeconds);remaining-=wait;trip.waitSeconds-=wait;if(remaining<=0)break;}
@@ -198,6 +224,7 @@ export function advanceLocalBoatTrip(city,person,dt){
    }
    boat.status=mode==='tow'?'Guinchado por bicicleta':'Em travessia local';
   }
+  syncSharedCrossing(city,person,{landed:mode==='walkAfter'&&len<=travel+.00001});
   person.action=mode==='walk'?'Indo buscar embarcação':mode==='cycle'?'Indo engatar embarcação':mode==='tow'?'Guinchando embarcação por terra':mode==='sail'?'Atravessando de barco':'Desembarcando';
   if(!person.path.length){releaseLocalBoatTrip(city,person);break;}
  }

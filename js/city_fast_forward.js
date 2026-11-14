@@ -24,7 +24,7 @@ const TRAVEL_TASKS = new Set(['work','manage','leisure','social','walk','energy'
 // SPECIAL keys split by frequency: the common personal states are checked by
 // direct property read before the array scan, so the recurring fast-forward
 // pass pays the small list only for citizens in rare missions.
-const COMMON_SPECIAL=['deliveryId','cleaningJobId','informalJobId','conversation','workMeal','mobilityTrip','ridingVehicleId','pregnancy'];
+const COMMON_SPECIAL=['deliveryId','cleaningJobId','informalJobId','conversation','workMeal','mobilityTrip','sharedBoatRide','ridingVehicleId','pregnancy'];
 
 /** A small deterministic min-heap; equal times retain insertion order. */
 export class OccurrenceQueue {

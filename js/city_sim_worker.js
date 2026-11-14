@@ -1,6 +1,6 @@
 import {packFishing} from './fishing_motion.js';
-import {packBoatRiders,packBoatTows} from './boat_rider_motion.js';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=regional-supply-12';
+import {packBoatRiders,packBoatTows} from './boat_rider_motion.js?v=shared-crossings-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=shared-crossings-1';
 import { FF_SPEED, FF_LOD_SPEED, FF2_SPEED, FF3_SPEED, FF4_SPEED } from './simulation_time.js?v=ff3-ff4-steps-1';
 
 const graph = new CityStateGraph();

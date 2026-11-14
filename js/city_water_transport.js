@@ -1,4 +1,4 @@
-import {planBoatTrip} from './city_boat_towing.js';
+import {planBoatTrip} from './city_boat_towing.js?v=shared-crossings-1';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {BOAT_CLASSES} from './boat_types.js?v=local-sea-travel-2';

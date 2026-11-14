@@ -33,3 +33,15 @@ test('compact towing packets attach the correct bike and hull and clear both aft
  bridge.applyVehiclePositions(new Float64Array([7,9,6,0,0,8,11,6,0,0]));assert.deepEqual(person.entity,{x:11,y:6});
  applyBoatTows(bridge.city,packBoatTows([{id:1}]));assert.equal(boat.towedByVehicleId,null);assert.equal(person.ridingVehicleId,null);assert.equal(bike.driverId,null);
 });
+
+test('compact passenger rows preserve the pilot and carry every passenger within the hull',()=>{
+ const {person,boat,bridge}=fixture(),passengers=Array.from({length:7},(_,i)=>({id:i+2,entity:{x:1,y:1}})),people=[person,...passengers];
+ bridge.city.society.citizen=id=>people.find(c=>c.id===id);boat.localTripCitizenId=1;
+ applyBoatRiders(bridge.city,packBoatRiders([...people].reverse().map(c=>({id:c.id,boatClass:'launch',boatVehicleId:7}))));
+ assert.equal(boat.driverId,1);assert.equal(boat.passengerIds.length,7);
+ bridge.applyVehiclePositions(new Float64Array([7,18,11,0,0]));
+ assert.deepEqual(person.entity,{x:18,y:11});
+ for(const c of passengers)assert.ok(Math.hypot(c.entity.x-18,c.entity.y-11)<1.1);
+ assert.equal(new Set(people.map(c=>`${c.entity.x},${c.entity.y}`)).size,people.length);
+ applyBoatRiders(bridge.city,packBoatRiders([{id:2}]));assert.equal(boat.driverId,1);assert.equal(boat.passengerIds.length,6);
+});

@@ -1,7 +1,7 @@
 import {moveGarments} from './city_clothing.js?v=party-apparel-1';
 import { carryCapacity } from './city_markets.js?v=market-one-pass-1';
 import { inventoryFree, initializeInventory } from './city_inventory.js';
-import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=harbor-boats-4';
+import { MAX_CARGO_CAPACITY } from './city_vehicles.js?v=shared-crossings-1';
 import { ensureImportDepot } from './city_external_trade.js';
 import {reducedCadence} from './city_fast_forward.js';
 

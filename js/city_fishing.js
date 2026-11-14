@@ -2,7 +2,7 @@ import {FISH_SPECIES,FISHING_RULES} from './fishing_catalog.js';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {tileAt,tileHeight,surfaceElevation} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {inventoryFree} from './city_inventory.js';
-import {boatAccessAccounts,planBoatTrip} from './city_boat_towing.js';
+import {boatAccessAccounts,planBoatTrip} from './city_boat_towing.js?v=shared-crossings-1';
 
 const steps=[[1,0],[-1,0],[0,1],[0,-1]],habitats=new WeakMap();
 const isWater=(world,x,y)=>x>=0&&y>=0&&x<world.width&&y<world.height&&world.getTile(x,y)===TILE_WATER;

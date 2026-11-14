@@ -15,7 +15,7 @@ import {civicSpec,civicStatus,renderCivicServices} from './city_public_services.
 import {renderEmployment,renderCompanyRecruitment} from './city_employment_ui.js';
 import {renderResume,requirements,occupiedPositions,ownerSelfHire} from './city_employment.js?v=fast-speeds-1';
 import {renderFiscalReport} from './city_fiscal_ui.js';
-import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=harbor-boats-4';
+import {renderMobility,renderVehicle,renderWorldVessel,renderAssembly,renderParking} from './city_vehicles_ui.js?v=shared-crossings-1';
 import {appearance,clothingOdor,wornGarment,wornLowerGarment,wornHeadwear,wornFootwear,wornHandwear,GARMENT_TYPES,CLOTHING_STYLES,brandPreference,clothingPreference} from './city_clothing.js?v=party-apparel-1';
 import {newsroomGenre} from './city_newspapers.js';
 import {renderPartyOrganizationWindow} from './city_party_organization_ui.js';
@@ -50,7 +50,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-5';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-128-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=ff2-speed-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=regional-supply-12';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=shared-crossings-1';
 import { renderWorldManagement } from './city_world_ui.js?v=world-management-9';
 export const money = formatMoney;
 export const TABS = [
