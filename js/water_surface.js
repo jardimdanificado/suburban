@@ -10,3 +10,10 @@ export const WATER_WAVE_GLSL = `
     return max(-.035, waves);
   }
 `;
+
+/** CPU counterpart of caribbeanWaveHeight, used to seat boats on rendered waves. */
+export function waterWaveHeight(x,z,time){
+  return Math.max(-.035,Math.sin(x*1.55+z*.82+time*1.15)*.035
+    +Math.sin(x*.72-z*1.7-time*.82)*.026
+    +Math.cos(x*.35+z*.45+time*.5)*.018);
+}

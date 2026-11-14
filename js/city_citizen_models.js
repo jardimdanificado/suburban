@@ -1,3 +1,4 @@
+import {smoothCitizenNormals} from './city_citizen_shading.js';
 import {citizenHeadAttachment,createHeadFlag} from './city_head_flag.js';
 import {advanceCitizenGait} from './city_citizen_gait.js';
 import {wickerBasketSurface} from './city_mobility_models.js?v=cargo-box-rear-1';
@@ -164,14 +165,15 @@ export function splitGarmentSurface(data,mask,piece=null){
   return {body:new Float32Array(body),bodyNormals:new Float32Array(bodyNormals),clothes:new Float32Array(clothes),clothesNormals:new Float32Array(clothesNormals)};
 }
 export class CityCitizenModels {
-  constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/model/',import.meta.url)}={}){
-    this.THREE=THREE;this.group=group;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearAnchors=new Map();this.headAttachments=new Map();this.headwearBatches=new Map();this.batches=new Map();this.activeBatches=new Set();this.activeHeadwearBatches=new Set();this.motion=new WeakMap();this.bodyShapeCache=new WeakMap();this.appearanceCache=new WeakMap();this.printMaterials=new Map();this.combinedSurfaces=new WeakMap();this.clock=0;this.frameToken=0;this.ready=false;this.error=null;
+  constructor(THREE,group,{fetchAsset=globalThis.fetch?.bind(globalThis),baseURL=new URL('../data/model/',import.meta.url),decorateMaterial=()=>{}}={}){
+    this.THREE=THREE;this.group=group;this.decorateMaterial=decorateMaterial;this.fetchAsset=fetchAsset;this.baseURL=baseURL;this.frames=new Map();this.outfits=new Map();this.headwear=new Map();this.headwearAnchors=new Map();this.headAttachments=new Map();this.headwearBatches=new Map();this.batches=new Map();this.activeBatches=new Set();this.activeHeadwearBatches=new Set();this.motion=new WeakMap();this.bodyShapeCache=new WeakMap();this.appearanceCache=new WeakMap();this.printMaterials=new Map();this.combinedSurfaces=new WeakMap();this.clock=0;this.frameToken=0;this.ready=false;this.error=null;
     this.matrix=new THREE.Matrix4();this.accessoryMatrix=new THREE.Matrix4();this.position=new THREE.Vector3();this.accessoryOffset=new THREE.Vector3();this.scale=new THREE.Vector3();this.quaternion=new THREE.Quaternion();this.axis=new THREE.Vector3(0,1,0);this.headFlagNormal=new THREE.Vector3();this.lyingRotation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/2);this.color=new THREE.Color();this.dirtColor=new THREE.Color(0x62584b);
     this.material=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});this.enableWeightMorph(this.material);this.combinedMaterial=this.enableWeightMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));const morphCompile=this.combinedMaterial.onBeforeCompile;this.combinedMaterial.onBeforeCompile=shader=>{morphCompile(shader);shader.vertexShader=shader.vertexShader.replace('attribute vec2 weightMorph;','attribute vec2 weightMorph;\nattribute float citizenSurfaceType;\nattribute vec3 instanceGarmentColor;\nvarying float vCitizenSurfaceType;\nvarying vec3 vCitizenGarmentColor;').replace('#include <begin_vertex>','#include <begin_vertex>\nvCitizenSurfaceType = citizenSurfaceType;\nvCitizenGarmentColor = instanceGarmentColor;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying float vCitizenSurfaceType;\nvarying vec3 vCitizenGarmentColor;').replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vCitizenGarmentColor, vCitizenSurfaceType);');};this.combinedMaterial.customProgramCacheKey=()=> 'citizen-combined-surface-weight-morph-1';this.dressMaterial=this.enableDressMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.skirtMaterial=this.enableSkirtMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));this.campaignFlags=new Map();this.campaignFlagMaterials=new Map();this.activeCampaignFlags=new Set();
     // Bias fitted face materials in depth instead of moving each triangle
     // along its flat normal, which tears open seams around knees and ankles.
     this.fittedMaterial=this.enableWeightMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));
     this.footwearMaterial=this.enableWeightMorph(new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+    for(const material of [this.material,this.combinedMaterial,this.dressMaterial,this.skirtMaterial,this.fittedMaterial,this.footwearMaterial])this.decorateMaterial(material);
     this.loading=this.load().catch(error=>{this.error=error.message;console.warn('Modelos dos cidadãos indisponíveis; usando sprites.',error.message);return false;});
   }
   enableWeightMorph(material){
@@ -287,7 +289,7 @@ export class CityCitizenModels {
     const key=`artwork-print:${dress?'dress:':''}${artPrint.cacheKey||artPrint.artId}`;if(this.printMaterials.has(key))return this.printMaterials.get(key);if(typeof document==='undefined'||!this.THREE.CanvasTexture)return this.material;const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const ctx=canvas.getContext('2d',{willReadFrequently:!!artPrint.partyFlag}),ink='#352c27',color=/^#[0-9a-f]{6}$/i.test(artPrint.color)?artPrint.color:'#9b5944';ctx.fillStyle='#eee2cc';ctx.fillRect(0,0,128,128);ctx.strokeStyle=ink;ctx.lineWidth=5;ctx.strokeRect(5,5,118,118);
     let texture;if(artPrint.partyFlag){const repaint=()=>{drawPartyFlag(ctx,artPrint.partyFlag,13,13,102,67,()=>{repaint();if(texture)texture.needsUpdate=true;});};repaint();ctx.fillStyle='#f7f0dc';ctx.fillRect(12,84,104,30);ctx.fillStyle=ink;ctx.font='bold 22px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(artPrint.partyNumber??''),64,99,96);}
     else{ctx.fillStyle=color;ctx.fillRect(21,15,86,65);ctx.fillStyle='rgba(255,255,255,.62)';ctx.beginPath();ctx.arc(64,47,22,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.beginPath();if(artPrint.kind==='flags'){ctx.moveTo(38,31);ctx.lineTo(52,31);ctx.lineTo(45,52);ctx.closePath();ctx.moveTo(58,31);ctx.lineTo(72,31);ctx.lineTo(65,52);ctx.closePath();ctx.moveTo(78,31);ctx.lineTo(92,31);ctx.lineTo(85,52);ctx.closePath();}else if(['statue','monument'].includes(artPrint.kind)){ctx.rect(45,35,38,26);ctx.arc(64,28,10,0,Math.PI*2);}else{ctx.moveTo(39,57);ctx.lineTo(47,39);ctx.lineTo(56,54);ctx.lineTo(67,29);ctx.lineTo(79,55);ctx.lineTo(89,43);ctx.lineTo(96,59);ctx.closePath();}ctx.fill();ctx.fillStyle=ink;ctx.font='bold 11px sans-serif';ctx.textAlign='center';const words=String(artPrint.message||'ARTE').split(/\s+/);let lines=[],line='';for(const word of words){if(line&&ctx.measureText(`${line} ${word}`).width>112){lines.push(line);line=word;}else line=line?`${line} ${word}`:word;}if(line)lines.push(line);for(let i=0;i<Math.min(3,lines.length);i++)ctx.fillText(lines[i],64,91+i*12,112);}
-    texture??=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;const material=(dress?this.enableDressMorph.bind(this):this.enableWeightMorph.bind(this))(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.printMaterials.set(key,material);return material;
+    texture??=new this.THREE.CanvasTexture(canvas);texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;const material=(dress?this.enableDressMorph.bind(this):this.enableWeightMorph.bind(this))(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.decorateMaterial(material);this.printMaterials.set(key,material);return material;
   }
   tropicalPrintMaterial(dress=false){
     const cacheKey=dress?'dressPrintAtlasMaterial':'printAtlasMaterial';if(this[cacheKey])return this[cacheKey];
@@ -312,7 +314,7 @@ export class CityCitizenModels {
       shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>','#ifdef USE_MAP\n  vec2 patternUv = vec2((mod(floor(vCitizenPattern + 0.5), 6.0) + fract(vMapUv.x * 2.0)) / 6.0, fract(vMapUv.y * 2.0));\n  vec4 tropicalPattern = texture2D(map, patternUv);\n  diffuseColor.rgb = mix(diffuseColor.rgb, tropicalPattern.rgb * vColor, tropicalPattern.a);\n#endif');
     };
     material.customProgramCacheKey=()=>`${baseCacheKey()}:citizen-print-atlas-1`;
-    this[cacheKey]=material;return material;
+    this.decorateMaterial(material);this[cacheKey]=material;return material;
   }
   legacyPrintedMaterial(piece,baseColor='#ffffff',printId='hibisco'){
     const baseHex=typeof baseColor==='number'?`#${baseColor.toString(16).padStart(6,'0')}`:typeof baseColor==='string'&&/^#[0-9a-f]{6}$/i.test(baseColor)?baseColor:'#ffffff',patternId=TROPICAL_PRINTS.includes(printId)?printId:'hibisco',key=`${piece}:${baseHex}:${patternId}`;
@@ -341,7 +343,7 @@ export class CityCitizenModels {
       for(let y=24,row=0;y<152;y+=64,row++)for(let x=28+(row%2)*37;x<152;x+=72){flower(x,y,22,coral,sun);tropicalLeaf(x-28,y+22,29,-.8,leaf);tropicalLeaf(x+27,y+24,25,.55,leafLight);}
     }
     const texture=new this.THREE.CanvasTexture(canvas);texture.wrapS=this.THREE.ClampToEdgeWrapping;texture.wrapT=this.THREE.ClampToEdgeWrapping;texture.magFilter=this.THREE.NearestFilter;texture.minFilter=this.THREE.NearestFilter;texture.generateMipmaps=false;texture.colorSpace=this.THREE.SRGBColorSpace;
-    const material=this.enableWeightMorph(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.printMaterials.set(key,material);return material;
+    const material=this.enableWeightMorph(new this.THREE.MeshLambertMaterial({color:0xffffff,map:texture,side:this.THREE.DoubleSide}));this.decorateMaterial(material);this.printMaterials.set(key,material);return material;
   }
   async load(){
     if(!this.fetchAsset)throw Error('Carregamento de OBJ indisponível');
@@ -357,10 +359,13 @@ export class CityCitizenModels {
     const origin=[(idle.min[0]+idle.max[0])/2,Math.min(...entries.map(e=>e.data.bounds.min[1])),(idle.min[2]+idle.max[2])/2],factor=1.05/height;
     for(const {key,data}of entries){const positions=data.positions;for(let i=0;i<positions.length;i++)positions[i]=(positions[i]-origin[i%3])*factor;
       this.headAttachments.set(key,citizenHeadAttachment(data));
+      data.normals=smoothCitizenNormals(positions,data.normals).normals;
       const geometry=new this.THREE.BufferGeometry();geometry.setAttribute('position',new this.THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new this.THREE.Float32BufferAttribute(data.normals,3));geometry.computeBoundingSphere();this.frames.set(key,geometry);
       const skirtCuts={};
       for(const piece of ['saia','saia longa']){
         const surface=fittedSkirtSurface(data,piece,citizenVertexWeightDelta),mask=surface.bodyMask,parts=splitGarmentSurface(data,mask,piece);
+        const smooth=smoothCitizenNormals(surface.positions,surface.normals,[surface.normalLinear,surface.normalQuadratic]);
+        surface.normals=smooth.normals;[surface.normalLinear,surface.normalQuadratic]=smooth.derivatives;
         parts.clothes=surface.positions;parts.clothesNormals=surface.normals;skirtCuts[piece]={mask,parts,surface};
       }
       const dressSkirt=skirtCuts.saia.surface,dressMask=new Uint8Array(CITIZEN_BODY_FACE_COUNT),dressTopMask=new Uint8Array(CITIZEN_BODY_FACE_COUNT);

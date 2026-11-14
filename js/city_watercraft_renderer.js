@@ -1,3 +1,4 @@
+import {waterWaveHeight} from './water_surface.js?v=shore-runup-2';
 import {BOAT_HULL_DIMENSIONS} from './boat_types.js?v=local-sea-travel-2';
 import {boatVisualPosition,hideLocalBoat} from './boat_visual_state.js';
 import {trackShadowTransform} from './dynamic_shadow_updates.js';
@@ -87,11 +88,11 @@ function edgeRoute(renderer,coordinator,city,world,cityId){
 function routePoint(path,progress){
   if(!path?.length)return null;const position=clamp01(progress)*(path.length-1),index=Math.min(path.length-2,Math.floor(position)),fraction=position-index,a=path[index]||path[0],b=path[index+1]||a;return{x:a.x+(b.x-a.x)*fraction,y:a.y+(b.y-a.y)*fraction,angle:Math.atan2(b.x-a.x,b.y-a.y)};
 }
-function boatSurfaceY(renderer,world,x,y,group){
+export function boatSurfaceY(renderer,world,x,y,group){
   const floatHeight=group.userData.floatHeight||0;
   const base=surfaceElevation(world,x,y);if(world?.getTile?.(Math.floor(x),Math.floor(y))!==TILE_WATER)return base+floatHeight;
-  const time=renderer.waterTime||0,waves=Math.sin(x*1.55+y*.82+time*1.15)*.10+Math.sin(x*.72-y*1.7-time*.82)*.075+Math.cos(x*.35+y*.45+time*.5)*.05;
-  return base+Math.max(-.065,waves)+Math.sin(time*2.8)*.012+floatHeight;
+  const time=renderer.waterTime||0,draft=.08*(group.scale?.y??1);
+  return base+waterWaveHeight(x,y,time)+floatHeight-draft;
 }
 
 export function syncCityWatercraft(renderer,THREE,city,world){

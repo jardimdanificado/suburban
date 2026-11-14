@@ -63,9 +63,9 @@ export function* grassRootSteps(positions, colors, excludedCells = new Set(), {b
 }
 
 export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, {details = false} = {}) {
-  const material = new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshLambertMaterial({
     color: details ? 0xffffff : base?.color?.clone().multiplyScalar(.82) ?? 0x4b6832,
-    map: base?.map ?? null, roughness: 1, metalness: 0,
+    map: base?.map ?? null,
     side: THREE.DoubleSide, transparent: false, depthWrite: true,
   });
   material.defaultAttributeValues={...material.defaultAttributeValues,grassShelter:[0,0,0,0]};
@@ -142,7 +142,7 @@ export function createVolumetricGrassMaterial(THREE, base, time, tracks = null, 
       normal = normalize(vNormal);
     `);
   };
-  material.customProgramCacheKey = () => `angular-grass-canopy-ticks-v2-details-${details}-tracks-${!!tracks}`;
+  material.customProgramCacheKey = () => `lambert-grass-canopy-ticks-v3-details-${details}-tracks-${!!tracks}`;
   return material;
 }
 

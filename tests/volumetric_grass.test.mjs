@@ -23,7 +23,7 @@ test('roots follow the exact sloped surface and never grow on vertical walls', (
 test('grass shader moves leaf tips, retains roots, and has no shells or random cutouts', () => {
   class Material { constructor(options) {Object.assign(this, options);} }
   const time = {value: 3};
-  const material = createVolumetricGrassMaterial({MeshStandardMaterial: Material, DoubleSide: 2}, null, time);
+  const material = createVolumetricGrassMaterial({MeshLambertMaterial: Material, DoubleSide: 2}, null, time);
   const shader = {uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>\n#include <normal_fragment_begin>'};
   material.onBeforeCompile(shader);
   assert.equal(shader.uniforms.grassSimTick, time);
@@ -41,7 +41,7 @@ test('grass inherits the tile texture and tint, with darker shading', () => {
   class Material { constructor(options) {Object.assign(this, options);} }
   const tint = {factor: 1, clone(){return {...this};}, multiplyScalar(value){this.factor *= value;return this;}};
   const map = {name:'terrain texture'};
-  const material = createVolumetricGrassMaterial({MeshStandardMaterial: Material, DoubleSide: 2}, {color:tint,map}, {value:0});
+  const material = createVolumetricGrassMaterial({MeshLambertMaterial: Material, DoubleSide: 2}, {color:tint,map}, {value:0});
   assert.equal(material.map,map);
   assert.equal(material.color.factor,.82);
   assert.equal(tint.factor,1,'the terrain material itself must stay unchanged');
@@ -52,7 +52,7 @@ test('grass inherits the tile texture and tint, with darker shading', () => {
 
 test('grass wind holds seeded canopy poses using simulation ticks, without continuous-time sway',()=>{
  class Material{constructor(options){Object.assign(this,options);}}
- const tick={value:12},material=createVolumetricGrassMaterial({MeshStandardMaterial:Material,DoubleSide:2},null,tick);
+ const tick={value:12},material=createVolumetricGrassMaterial({MeshLambertMaterial:Material,DoubleSide:2},null,tick);
  const shader={uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>\n#include <normal_fragment_begin>'};
  material.onBeforeCompile(shader);
  assert.equal(shader.uniforms.grassSimTick,tick);

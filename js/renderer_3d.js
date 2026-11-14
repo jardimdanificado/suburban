@@ -4270,6 +4270,7 @@ export class RCT3DRenderer {
       dict.grassDetails = createVolumetricGrassMaterial(THREE,null,this.grassWindTickUniform,this.terrainTrackUniforms,{details:true});
       dict.volumetricGrass = createVolumetricGrassMaterial(THREE, dict[TILE_FLOOR], this.grassWindTickUniform,this.terrainTrackUniforms);
       dict.volumetricHillGrass = createVolumetricGrassMaterial(THREE, dict[TILE_HILL], this.grassWindTickUniform,this.terrainTrackUniforms);
+      for(const material of [dict.grassDetails,dict.volumetricGrass,dict.volumetricHillGrass])applyRetroDitherToMaterial(material);
     }
     this.materials.grassDetails = this.materialsIso.grassDetails;
     this.materials.volumetricGrass = this.materialsIso.volumetricGrass;
@@ -4863,7 +4864,11 @@ export class RCT3DRenderer {
     this.scene.add(this.entityGroup);
     this.entitySprites = new Map();
     this.cityCitizenBatches=new CityCitizenBatches(THREE,this.entityGroup,this.billboardGeo);
-    this.cityCitizenModels=new CityCitizenModels(THREE,this.entityGroup);
+    this.cityCitizenModels=new CityCitizenModels(THREE,this.entityGroup,{decorateMaterial:material=>{
+      const cacheKey=material.customProgramCacheKey.bind(material);
+      applyRetroDitherToMaterial(material,32,1.0);
+      material.customProgramCacheKey=()=>`${cacheKey()}:citizen-smooth-dither-1`;
+    }});
     this.citizenViewProjection=new THREE.Vector3();
 
     // Floating UI Group (Emotes, Held Items & Clan House Flags)

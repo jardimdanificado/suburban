@@ -42,7 +42,7 @@ test('sand preserves its existing material hook; grass shares the same timestamp
   const shader={uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>'};sand.onBeforeCompile(shader);
   assert.equal(shader.uniforms.original.value,1);assert.equal(shader.uniforms.terrainTrackMap,uniforms.terrainTrackMap);assert.ok(sand.customProgramCacheKey().includes('sand-original'));
   class Material{constructor(options){Object.assign(this,options);}}
-  const grass=createVolumetricGrassMaterial({MeshStandardMaterial:Material,DoubleSide:2},null,{value:0},uniforms);
+  const grass=createVolumetricGrassMaterial({MeshLambertMaterial:Material,DoubleSide:2},null,{value:0},uniforms);
   const g={uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>\n#include <normal_fragment_begin>'};grass.onBeforeCompile(g);
   assert.equal(g.uniforms.terrainTrackMap,uniforms.terrainTrackMap);assert.ok(g.vertexShader.includes('transformed = grassRoot + (transformed - grassRoot) * recovery;'));
 });
@@ -83,4 +83,56 @@ test('dragged hulls leave broad pointed contacts matching the canoe and reset wh
  assert(painted.length>0);assert(painted.every(s=>s.kind===2&&s.width===BOAT_HULL_DIMENSIONS.canoe.width&&s.length===BOAT_HULL_DIMENSIONS.canoe.length));
  const count=painted.length;boat.properties.cityVehicle.towedByVehicleId=null;boat.y+=.5;tracker.update({}, {}, [boat],.1);assert.equal(painted.length,count);
  boat.properties.cityVehicle.towedByVehicleId=3;tracker.update({}, {}, [boat],.1);assert.equal(painted.length,count);
+});
+
+test('CPU wear samples individual feet, follows regrowth and cleans expired entries with bounded work',async()=>{
+  const {GrassWear}=await import('../js/terrain_tracks.js');
+  const wear=new GrassWear(),world={width:8,height:8},stamp={x:2.5,z:2.5,width:.1,length:.22,angle:0,kind:-1};
+  assert.equal(wear.coverage(stamp,world,0),0);
+  wear.record([stamp],world,0);
+  assert(wear.coverage(stamp,world,0)>0);
+  assert.equal(wear.strength(2.8,2.5,world,0),0,'nearby grass in the same tile remains intact');
+  const full=wear.coverage(stamp,world,0),middle=(GRASS_TRACK_HOLD+GRASS_TRACK_LIFE)/2;
+  assert(Math.abs(wear.coverage(stamp,world,middle)-full*.5)<1e-6);
+  assert.equal(wear.coverage(stamp,world,GRASS_TRACK_LIFE),0);
+  const size=wear.cells.size;wear.prune(GRASS_TRACK_LIFE,1);assert.equal(wear.cells.size,size-1);
+  wear.prune(GRASS_TRACK_LIFE,100);assert.equal(wear.cells.size,0);
+});
+
+test('soil carried from worn grass is proportional; intact grass carries none and bare roads retain full pickup',()=>{
+  const world={width:20,height:4,getTile:x=>x===0?0:8},step=x=>({x,z:1,kind:-1,width:.1,length:.22,angle:0});
+  const pickup=strength=>{
+    const carry=new SandCarry(),entity={};carry.contacts(entity,[step(.5)],world,[0],'dirt',()=>strength);
+    return carry.contacts(entity,[step(1.1),step(1.3),step(1.5)],world,[0],'dirt');
+  };
+  assert.deepEqual(pickup(0),[]);
+  const full=pickup(1),half=pickup(.5);assert(full.length>0);assert.equal(full.length,half.length);
+  full.forEach((mark,i)=>assert.equal(half[i].deposit,mark.deposit*.5));
+});
+
+test('longer residue and grass lifetimes leave sand footprint deadlines unchanged',async()=>{
+  const {DEPOSIT_HOLD,DEPOSIT_LIFE}=await import('../js/terrain_tracks.js');
+  assert.equal(GRASS_TRACK_HOLD,36);assert.equal(GRASS_TRACK_LIFE,72);
+  assert.equal(DEPOSIT_HOLD,24);assert.equal(DEPOSIT_LIFE,84);
+  assert.equal(SAND_TRACK_HOLD,30);assert.equal(SAND_TRACK_LIFE,55);
+  const material={onBeforeCompile(){},customProgramCacheKey:()=>''};addSandTracksToMaterial(material,{});
+  const shader={uniforms:{},vertexShader:'#include <common>\n#include <begin_vertex>',fragmentShader:'#include <common>\n#include <color_fragment>'};material.onBeforeCompile(shader);
+  assert(shader.fragmentShader.includes('smoothstep(24.0,84.0,terrainTrackTime-depositBorn)'));
+  assert(shader.fragmentShader.includes('terrainTrackStrength(vTrackWorld, 30.0, 55.0)'));
+});
+
+test('render pickup consults local wear for grass and uses full loading on bare dirt roads',async()=>{
+  const {TerrainTracks}=await import('../js/terrain_tracks.js');
+  const {TILE_FLOOR,TILE_ROAD_GRASS}=await import('../js/world_gen.js');
+  for(const tile of [TILE_FLOOR,TILE_ROAD_GRASS]){
+    const tracker=Object.create(TerrainTracks.prototype),entity={id:1,x:3,y:3,properties:{citizen:{}}};
+    let sampled=0,load=null,recorded=0;
+    Object.assign(tracker,{time:0,motion:new TerrainTrackMotion(),sandCarry:new SandCarry(),
+      dirtCarry:{reset(){},contacts(_entity,stamps,_world,_sources,kind,amount){assert.equal(kind,'dirt');if(stamps.length)load=amount(stamps[0],tile);return [];}},
+      grassWear:{coverage(){sampled++;return .4;},record(stamps){recorded+=stamps.length;},prune(){}},
+      uniforms:{terrainTrackTime:{value:0}},ensureWorld(){},paint(){}});
+    const world={width:10,height:10,getTile:()=>tile};
+    tracker.update({},world,[entity],.1);entity.x+=.5;tracker.update({},world,[entity],.1);
+    assert.equal(load,tile===TILE_FLOOR?.4:1);assert.equal(sampled,tile===TILE_FLOOR?1:0);assert(recorded>0);
+  }
 });
