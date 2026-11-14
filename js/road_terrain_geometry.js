@@ -18,11 +18,22 @@ const at=(world,x,y)=>x<0||y<0||x>=world.width||y>=world.height?TILE_VOID:world.
 function stoneVertexSeed(world,x,y,salt=0){
   let hash=Math.imul((x|0)^((world.seed||0)>>>0)^salt,0x45d9f3b);hash=Math.imul(hash^(hash>>>16)^Math.imul(y|0,0x27d4eb2d),0x45d9f3b);return(hash^(hash>>>16))>>>0;
 }
+// Broad, continuous relief crosses tile boundaries instead of placing a summit
+// at every tile center. Small grain keeps the silhouette from becoming uniform.
+function stoneRelief(world,x,y){
+  const scale=3.4,u=x/scale,v=y/scale,gx=Math.floor(u),gy=Math.floor(v);
+  const smooth=t=>t*t*(3-2*t),sx=smooth(u-gx),sy=smooth(v-gy);
+  const sample=(dx,dy)=>stoneVertexSeed(world,gx+dx,gy+dy,0x517cc1b7)/4294967295;
+  return ((sample(0,0)*(1-sx)+sample(1,0)*sx)*(1-sy)+(sample(0,1)*(1-sx)+sample(1,1)*sx)*sy-.5)*1.25;
+}
 function stoneVertexHeight(world,x,y){
-  return terrainTileHeight(TILE_STONE)+(((stoneVertexSeed(world,x,y)/4294967295)*2)-1)*.18;
+  let count=0;for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE)count++;
+  return terrainTileHeight(TILE_STONE)-(4-count)*.08+stoneRelief(world,x,y);
 }
 function stoneVertexOffset(world,x,y){
-  return {x:(((stoneVertexSeed(world,x,y,0x6d2b79f5)/4294967295)*2)-1)*.045,z:(((stoneVertexSeed(world,x,y,0x1b873593)/4294967295)*2)-1)*.045};
+  let count=0,cx=0,cz=0;for(let dy=-1;dy<=0;dy++)for(let dx=-1;dx<=0;dx++)if(baseTerrainTile(at(world,x+dx,y+dy))===TILE_STONE){count++;cx+=dx+.5;cz+=dy+.5;}
+  const inset=count===1?.36:0;
+  return {x:cx*inset+(((stoneVertexSeed(world,x,y,0x6d2b79f5)/4294967295)*2)-1)*.11,z:cz*inset+(((stoneVertexSeed(world,x,y,0x1b873593)/4294967295)*2)-1)*.11};
 }
 export function terrainVertexOffset(world,x,y){
   // Keep vertices shared with streets and sidewalks on the exact grid line.
@@ -60,10 +71,10 @@ function cacheFor(world){
   let cache=caches.get(world);
   if(!cache||cache.map!==world.map||cache.width!==world.width||cache.height!==world.height){
     const size=(world.width+1)*(world.height+1);
-    cache={map:world.map,width:world.width,height:world.height,revision:world.revision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size),roads:new Map(),sidewalks:new Map()};
+    cache={map:world.map,width:world.width,height:world.height,revision:world.revision,generation:1,values:new Float64Array(size),marks:new Uint32Array(size),roads:new Map(),sidewalks:new Map(),stones:new Map()};
     caches.set(world,cache);
   }
-  if(cache.revision!==world.revision){cache.revision=world.revision;cache.roads.clear();cache.sidewalks.clear();cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
+  if(cache.revision!==world.revision){cache.revision=world.revision;cache.roads.clear();cache.sidewalks.clear();cache.stones.clear();cache.generation=(cache.generation+1)>>>0;if(!cache.generation){cache.marks.fill(0);cache.generation=1;}}
   return cache;
 }
 function naturalCorner(world,x,y){
@@ -90,6 +101,28 @@ export function terrainTileSurfaceVertices(world,x,y){
   // the grid line, so keeping the rocky silhouette offset here opens a wedge
   // between the two meshes at the shared boundary.
   return [[x,y,0],[x+1,y,1],[x+1,y+1,2],[x,y+1,3]].map(([vx,vy,index])=>{const offset=terrainVertexOffset(world,vx,vy);return [vx+offset.x,heights[index],vy+offset.z];});
+}
+
+// Shared edge vertices keep independently rebuilt chunks watertight. Eight
+// coarse facets replace the flat tile lid without adding objects or materials.
+export function terrainStoneSurface(world,x,y){
+  if(baseTerrainTile(at(world,x,y))!==TILE_STONE)return null;
+  const cache=Number.isFinite(world.revision)?cacheFor(world):null,key=y*world.width+x;
+  if(cache?.stones.has(key))return cache.stones.get(key);
+  const corners=terrainTileSurfaceVertices(world,x,y),ring=[];
+  for(let i=0;i<4;i++){
+    const a=corners[i],b=corners[(i+1)%4];
+    // Boundary midpoints stay on the existing retaining and cliff panels.
+    // Interior edges share their seeded ridge with the adjacent rock tile.
+    // Collinear midpoints avoid a repeated ridge along each tile boundary.
+    ring.push(a,[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2]);
+  }
+  const u=.34+(stoneVertexSeed(world,x,y,0x165667b1)/4294967295)*.32;
+  const v=.34+(stoneVertexSeed(world,x,y,0x85ebca6b)/4294967295)*.32;
+  const weights=[(1-u)*(1-v),u*(1-v),u*v,(1-u)*v];
+  const centerHeight=corners.reduce((sum,p,i)=>sum+weights[i]*(p[1]-stoneRelief(world,x+CORNERS[i][0],y+CORNERS[i][1])),0)+stoneRelief(world,x+u,y+v);
+  const center=[x+u,centerHeight,y+v];
+  const surface={ring,center};cache?.stones.set(key,surface);return surface;
 }
 
 // Only connected streets determine the road grade. An uphill bank beside a
@@ -192,7 +225,16 @@ export function roadRetainingFaces(world,x,y,ownsSharedBoundary=null){
 
 export function terrainSurfaceElevation(world,x,y){
   const tx=Math.floor(x),ty=Math.floor(y);if(at(world,tx,ty)===TILE_WATER)return WATER_LEVEL;
-  const surface=streetSurfaceCorners(world,tx,ty)||terrainTileSurfaceCorners(world,tx,ty),u=x-tx,v=y-ty;
+  const street=streetSurfaceCorners(world,tx,ty),stone=!street&&terrainStoneSurface(world,tx,ty);
+  if(stone){
+    for(let i=0;i<8;i++){
+      const a=stone.center,b=stone.ring[i],c=stone.ring[(i+1)%8],den=(b[2]-c[2])*(a[0]-c[0])+(c[0]-b[0])*(a[2]-c[2]);
+      if(Math.abs(den)<1e-9)continue;
+      const u=((b[2]-c[2])*(x-c[0])+(c[0]-b[0])*(y-c[2]))/den,v=((c[2]-a[2])*(x-c[0])+(a[0]-c[0])*(y-c[2]))/den;
+      if(u>=-1e-7&&v>=-1e-7&&u+v<=1+1e-7)return u*a[1]+v*b[1]+(1-u-v)*c[1];
+    }
+  }
+  const surface=street||terrainTileSurfaceCorners(world,tx,ty),u=x-tx,v=y-ty;
   const h00=surface?surface[0]:terrainCornerHeight(world,tx,ty),h10=surface?surface[1]:terrainCornerHeight(world,tx+1,ty),h11=surface?surface[2]:terrainCornerHeight(world,tx+1,ty+1),h01=surface?surface[3]:terrainCornerHeight(world,tx,ty+1);
   // Use the same diagonal as the rendered triangles, including non-planar turns.
   return u<=v?h00*(1-v)+h01*(v-u)+h11*u:h00*(1-u)+h10*(u-v)+h11*v;

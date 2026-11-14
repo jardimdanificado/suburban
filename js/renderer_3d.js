@@ -40,7 +40,7 @@ import {crowdDirection,crowdGroupKey} from './citizen_crowd.js?v=citizen-group-k
 import { CityCitizenModels, citizenIsSleeping } from './city_citizen_models.js?v=head-flag-crown-1';
 import { flagNightFactor } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {partyFlagCanvas} from './city_party_flags.js?v=municipal-flag-quality-1-canvas-readback-1';
-import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=low-water-shore-4';
+import {terrainTileHeight,terrainCornerHeight,terrainSurfaceElevation,terrainTileSurfaceCorners,terrainTileSurfaceVertices,terrainStoneSurface,terrainTileTouchesStone,terrainVertexOffset,streetSurfaceCorners,roadRetainingFaces,roadRailingAllowed} from './road_terrain_geometry.js?v=low-water-shore-4';
 import { ASSET_DATA } from "./assets_data.js";
 import {
   MAP_WIDTH,
@@ -7195,6 +7195,18 @@ export class RCT3DRenderer {
             const [u0,v0,u1,v1]=regions[region],road=adjacentPavedRoads.find(edge=>edge.dy<0&&region<2||edge.dy>0&&region>=2||edge.dx<0&&(region===0||region===2)||edge.dx>0&&(region===1||region===3));
             if(road){const variant=terrainTextureHash(road.x,road.y,road.type)&3,toneHash=terrainTextureHash(road.x,road.y,road.type)>>>8,tone=.96+(toneHash%9)/100;addRegion(tileMeshBuckets[`terrainPavedRoad${variant}`],u0,v0,u1,v1,tone);}
             else addRegion(bucket,u0,v0,u1,v1,1);
+          }
+        } else if(stoneShelf&&!streetCorners&&!isSidewalk){
+          const {ring,center}=terrainStoneSurface(world,tx,ty);
+          for(let face=0;face<ring.length;face++){
+            const tone=.97+(terrainTextureHash(tx,ty,TILE_STONE)%7)/100;
+            // Clockwise winding keeps the coarse facets facing upward.
+            for(const point of [center,ring[(face+1)%ring.length],ring[face]]){
+              bucket.pos.push(...point);bucket.uvs.push(point[0],point[2]);
+              const u=Math.max(0,Math.min(1,point[0]-tx)),v=Math.max(0,Math.min(1,point[2]-ty));
+              const shade=zoneMult*tone*(ao00*(1-u)*(1-v)+ao10*u*(1-v)+ao11*u*v+ao01*(1-u)*v);
+              bucket.colors.push(shade,shade,shade);
+            }
           }
         } else {
           const p00=terrainVertices?.[0]||[tx,h00,ty],p10=terrainVertices?.[1]||[tx+1,h10,ty],p11=terrainVertices?.[2]||[tx+1,h11,ty+1],p01=terrainVertices?.[3]||[tx,h01,ty+1];

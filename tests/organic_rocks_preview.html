@@ -1,0 +1,32 @@
+<!doctype html><meta charset="utf-8"><title>Pedras facetadas</title>
+<style>body{margin:0;background:#a1bac1}canvas{display:block}#status{position:absolute;padding:12px;font:14px sans-serif}</style>
+<div id="status">Carregando…</div>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {terrainStoneSurface} from '../js/road_terrain_geometry.js';
+import {TILE_FLOOR,TILE_STONE} from '../js/world_gen.js';
+try{
+ const world={width:12,height:10,seed:42,revision:1,map:new Uint8Array(120).fill(TILE_FLOOR)};
+ for(const [x,z] of [[2,2],[3,2],[2,3],[3,3],[4,3],[7,3],[8,3],[7,4],[8,4],[8,5],[4,7]])world.map[z*12+x]=TILE_STONE;
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0xa1bac1);
+ scene.add(new THREE.HemisphereLight(0xddeeff,0x554b38,2));const sun=new THREE.DirectionalLight(0xffedcc,2.5);sun.position.set(-5,12,8);scene.add(sun);
+ const positions=[],colors=[];
+ const add=(points,tone)=>{for(const point of points){positions.push(...point);colors.push(tone,tone,tone);}};
+ for(let z=0;z<10;z++)for(let x=0;x<12;x++){
+  const rock=terrainStoneSurface(world,x,z);if(!rock)continue;
+  const {ring,center}=rock;
+  for(let i=0;i<8;i++){
+   const a=ring[i],b=ring[(i+1)%8];add([center,b,a],1);
+   const dx=[0,1,0,-1][Math.floor(i/2)],dz=[-1,0,1,0][Math.floor(i/2)];
+   if(world.map[(z+dz)*12+x+dx]===TILE_STONE)continue;
+   const lowA=[a[0],1.1,a[2]],lowB=[b[0],1.1,b[2]];add([lowA,a,b,lowA,b,lowB],.78);
+  }
+ }
+ const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();
+ scene.add(new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x827d6d,vertexColors:true,roughness:1,side:THREE.DoubleSide})));
+ const ground=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.MeshStandardMaterial({color:0x4a6137,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.set(6,1.08,5);scene.add(ground);
+ const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(960,640);document.body.append(renderer.domElement);
+ const camera=new THREE.OrthographicCamera(-8,8,5.33,-5.33,.1,100);camera.position.set(17,17,22);camera.lookAt(5,1.5,4.5);renderer.render(scene,camera);
+ document.querySelector('#status').textContent=`Pedras facetadas · ${renderer.info.render.triangles} triângulos`;
+}catch(error){document.querySelector('#status').textContent=error.stack;}
+</script>
