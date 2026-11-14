@@ -1,4 +1,4 @@
-import {activityRoomReady} from './city_interiors.js?v=night-crowd-1';
+import {activityRoomReady} from './city_interiors.js?v=citizen-access-1';
 import { inventoryFree } from './city_inventory.js';
 import { HOUSING_TYPES } from './city_housing.js?v=ff2-speed-2';
 import {reducedCadence} from './city_fast_forward.js';

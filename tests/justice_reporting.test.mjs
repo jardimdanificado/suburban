@@ -23,3 +23,10 @@ test('trips to a removed station are reconciled even when there are no staffed s
 test('unreported events and reporting trips do not count as overdue judicial proceedings',()=>{
  const {city,justice,make}=fixture();justice.cases.push(make(1),{...make(2),status:'reporting'});assert.equal(governmentPerformance(city).unresolvedCases,0);assert.equal(governmentPerformance(city).justiceHealth,100);justice.cases.push({...make(3),status:'reported',reportedAt:0});assert.equal(governmentPerformance(city).unresolvedCases,1);assert.equal(governmentPerformance(city).justiceHealth,0);
 });
+
+test('automatic reports preserve hygiene recovery, sleep, voting and an occupied shared crossing',()=>{
+ for(const state of [{task:'hygiene'},{task:'energy',sleep:{active:true}},{task:'vote'},{task:'work',sharedBoatRide:{state:'aboard'}}]){
+  const {justice,people,make}=fixture(),record=make(1);Object.assign(people[0],state);justice.cases.push(record);
+  justice.dispatchReports();assert.equal(record.status,'unreported');assert.equal(people[0].task,state.task);assert.equal(people[0].targetId,99);
+ }
+});

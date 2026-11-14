@@ -1,4 +1,4 @@
-import {isOpenJusticeCase} from './city_justice.js';
+import {isOpenJusticeCase} from './city_justice.js?v=citizen-access-1';
 import {PAVED_ROAD_TILES,tileAt} from './city_terrain.js';
 const clamp=(value,min=0,max=100)=>Math.max(min,Math.min(max,value));
 export const BUSINESS_REVENUE_WINDOW_DAYS=30;

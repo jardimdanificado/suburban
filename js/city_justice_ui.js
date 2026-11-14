@@ -1,5 +1,5 @@
 import {interventionButton,interventionButtons} from './city_context_actions.js';
-import {CRIME_TYPES,isOpenJusticeCase} from './city_justice.js';
+import {CRIME_TYPES,isOpenJusticeCase} from './city_justice.js?v=citizen-access-1';
 import {funeralSpec} from './city_funeral_services.js';
 
 const stamp=minute=>minute==null?'—':`D${Math.floor(minute/1440)+1} ${String(Math.floor(minute%1440/60)).padStart(2,'0')}:${String(Math.floor(minute%60)).padStart(2,'0')}`;

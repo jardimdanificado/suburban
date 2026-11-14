@@ -1,3 +1,7 @@
+import {interiorRoute} from './city_interior_layout.js';
+import {injuryMovementFactor} from './city_injury_effects.js';
+import {boatRouteTime} from './city_boat_towing.js?v=shared-crossings-1';
+import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=citizen-access-1';
 export const VOTING_RULES=Object.freeze({opensHour:8,closesHour:18,minutesPerVoter:2,routesPerMinute:2,retryMinutes:30});
 import {SECRETARIATS} from './city_secretariats.js';
 /** Polling uses actual paths, an electoral roll, a physical queue and incremental tallies. */
@@ -26,11 +30,20 @@ export class CityVoting {
     // ordinary hunger, fatigue, or a routine trip to get food count as a reason
     // to miss the entire polling window. Only urgent needs and committed jobs
     // that cannot safely be interrupted keep a voter from routing to the hall.
-    if(city.urgentNeed(c)||c.workMeal||c.deliveryId||c.cleaningJobId){row.reason=city.urgentNeed(c)?`Necessidade urgente: ${city.urgentNeed(c)}`:'Serviço ou entrega em andamento';return false;}
-    const recovering=(c.sleep?.minutes>0&&c.sleep.minutes<480)||(c.task==='energy'&&(c.sleep?.active||c.needs.energy<50))||(c.task==='toilet'&&c.needs.toilet<60)||(c.task==='food'&&c.needs.food<50);
-    if(recovering){row.reason=c.sleep?.minutes>0?'Completando oito horas de sono':c.task==='energy'?'Recuperando energia':c.task==='toilet'?'Usando ou aguardando banheiro':'Recuperando alimentação';row.nextAttemptAt=city.minute+VOTING_RULES.retryMinutes;return false;}
+    if(city.urgentNeed(c)||c.workMeal||c.deliveryId||c.cleaningJobId||c.sharedBoatRide||c.localBoatTrip||c.mobilityTrip||c.ridingVehicleId){row.reason=city.urgentNeed(c)?`Necessidade urgente: ${city.urgentNeed(c)}`:'Serviço ou entrega em andamento';return false;}
+    const recovering=(c.task==='energy'&&(c.sleep?.active||c.needs.energy<50))||(c.task==='toilet'&&c.needs.toilet<60)||(c.task==='food'&&c.needs.food<50)||(c.task==='hygiene'&&c.needs.hygiene<75);
+    if(recovering){row.reason=c.sleep?.active?'Completando oito horas de sono':c.task==='energy'?'Recuperando energia':c.task==='toilet'?'Usando ou aguardando banheiro':c.task==='hygiene'?'Recuperando higiene':'Recuperando alimentação';row.nextAttemptAt=city.minute+VOTING_RULES.retryMinutes;return false;}
     row.nextAttemptAt=city.minute+VOTING_RULES.retryMinutes;const path=city.findPath(c.entity,hall.door);
     if(path===null){row.reason='Sem caminho acessível até a prefeitura';return true;}
+    const inside=c.indoorLocation,building=inside&&city.building(inside.buildingId),shell=building&&(city.building(building.officeTenantOf)||building);
+    let indoorDistance=0;
+    if(shell&&inside.position){
+      const exit=interiorRoute(shell,inside.position,{...shell.door,z:0});
+      if(exit){let from=inside.position;for(const to of exit){indoorDistance+=Math.hypot(to.x-from.x,to.y-from.y,(to.z||0)-(from.z||0));from=to;}}
+    }
+    const travelMinutes=Math.ceil(boatRouteTime(city,shell?.door||c.entity,path)*4/Math.max(.1,bodyMovementSpeedFactor(c)*(city.justice?.mobilityFactor?.(c)??1))+indoorDistance/Math.max(.1,bodyMovementSpeedFactor(c)*injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1)));
+    row.departureAt=Math.max(e.voteAt??city.minute,(row.plannedAt??city.minute)-travelMinutes-30);
+    if(city.minute<row.departureAt){row.nextAttemptAt=row.departureAt;return true;}
     if(c.conversation){const other=city.society.citizen(c.conversation.a===c.id?c.conversation.b:c.conversation.a);if(other)other.conversation=null;c.conversation=null;}
     path.push({x:Math.floor(hall.door.x)+.18+(c.id%3)*.32,y:Math.floor(hall.door.y)+.18+(Math.floor(c.id/3)%3)*.32});
     c.campaign=null;c.socialVisitId=null;c.voting={electionId:e.id};c.targetId=hall.id;c.path=path;c.task='vote';c.action='Indo votar presencialmente na prefeitura';row.status='travelling';row.departedAt=city.minute;row.reason='A caminho da prefeitura';return true;
@@ -82,7 +95,7 @@ export class CityVoting {
     if(e.status==='counting'){if(!e.queue.length&&e.stations.every(s=>s.citizenId==null))this.close(e);return;}
     let routes=0;for(let scanned=0;scanned<Math.min(24,e.electorate.length)&&routes<VOTING_RULES.routesPerMinute;scanned++){
       const row=e.electorate[e.routingCursor++%e.electorate.length];if(row.status==='travelling'){const c=city.society.citizen(row.citizenId);if(!c||c.task!=='vote'){this.release(e,row,'Trajeto interrompido; aguardando nova tentativa');}continue;}
-      if(row.status!=='pending'||city.minute<row.plannedAt||city.minute<row.nextAttemptAt)continue;if(this.route(e,row))routes++;
+      if(row.status!=='pending'||city.minute<row.nextAttemptAt)continue;if(this.route(e,row))routes++;
     }
   }
 }

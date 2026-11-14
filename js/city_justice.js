@@ -8,9 +8,9 @@ import {artworkNarrative,artworkReception,narrativeReception} from './city_art_n
 import {funeralSpec} from './city_funeral_services.js';
 import {interiorRoute,interiorUsePoint} from './city_interior_layout.js?v=route-cache-512-index-1';
 import {injuryMovementFactor,injuredCarryCapacity} from './city_injury_effects.js';
-import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
+import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=citizen-access-1';
 import {CITY_FLOOR_HEIGHT,buildingPoint} from './city_building_geometry.js';
-import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=night-crowd-1';
+import {activityRoomReady,syncCitizenInterior} from './city_interiors.js?v=citizen-access-1';
 import {civicStatus,civicVisit} from './city_public_services.js';
 import {inventoryFree} from './city_inventory.js';
 import {beginBuildingSiteSearch} from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -1285,7 +1285,7 @@ export class CityJustice {
     if(!this.activeBuildings('police_station').some(b=>this.staffed(b)>0))return;
     for(const record of this.cases){
       if(record.status!=='unreported')continue;
-      const victim=city.society.citizen(record.victimId),available=c=>c&&!c.entity.destroyed&&c.needs.health>20&&!c.custody&&!c.justiceReportCaseId&&!city.urgentNeed?.(c);
+      const victim=city.society.citizen(record.victimId),available=c=>c&&!c.entity.destroyed&&c.needs.health>20&&!c.custody&&!c.justiceReportCaseId&&!c.sleep?.active&&!c.sharedBoatRide&&!['vote','food','water','health','toilet','hygiene','energy','provisions','workmeal','supplies'].includes(c.task)&&!city.urgentNeed?.(c);
       if(record.type==='defamation'&&!record.discovery){const work=this.art.find(piece=>piece.id===record.details?.artId);if(work?.seenBy?.[victim?.id]!=null)record.discovery={citizenId:victim.id,noticedAt:work.seenBy[victim.id],basis:'public-art-accusation'};}
       if(record.stolenAsset&&victim&&!victim.entity.destroyed&&city.minute-record.occurredAt>=30&&!record.discovery)record.discovery={citizenId:victim.id,noticedAt:city.minute,basis:'missing-property'};
       const victimAware=record.witnesses.some(w=>w.citizenId===victim?.id)||record.discovery?.citizenId===victim?.id;

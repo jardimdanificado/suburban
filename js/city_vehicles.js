@@ -1,5 +1,5 @@
 import {dispatchRegularCrossings} from './city_boat_crossings.js?v=shared-crossings-1';
-import {syncCitizenInterior} from './city_interiors.js?v=needs-recovery-1';
+import {syncCitizenInterior} from './city_interiors.js?v=citizen-access-1';
 import {planBoatTrip,releaseLocalBoatTrip,boatLandParking} from './city_boat_towing.js?v=shared-crossings-1';
 import {mooringPosition} from './harbor_berths.js';
 import {injuredCarryCapacity,injuryMovementFactor,injuryWorkFactor} from './city_injury_effects.js';

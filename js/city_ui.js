@@ -50,7 +50,7 @@ import { UIPage as Page, UI_COLORS as C, fitText as trim } from './city_ui_widge
 import { SKILLS, CROPS, GOODS, JOB_SKILL } from './city_economy.js?v=regional-supply-5';
 import { WORLD_PRESETS, randomWorldSeed } from './world_settings.js?v=map-default-128-1';
 import { EVENT_CATEGORIES, relationLabel, SOCIAL_RULES } from './city_society.js?v=ff2-speed-1';
-import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=shared-crossings-1';
+import { BUILDING_TYPES, NEED_LABELS } from './city_simulation.js?v=citizen-access-1';
 import { renderWorldManagement } from './city_world_ui.js?v=world-management-9';
 export const money = formatMoney;
 export const TABS = [

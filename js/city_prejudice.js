@@ -1,4 +1,4 @@
-import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
+import {initializeBodyMetrics} from './city_body_metrics.js?v=citizen-access-1';
 
 export const PREJUDICE_TYPES=Object.freeze({
   racismo:{label:'Racismo',crimeLabel:'Discriminação racial',severity:85},

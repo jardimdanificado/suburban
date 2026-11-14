@@ -1,7 +1,7 @@
 import {applyFishing} from './fishing_motion.js';
 import {applyBoatRiders,applyBoatTows} from './boat_rider_motion.js?v=shared-crossings-1';
 import {queueMotion,sampleRoundedMotion,sampleMotion,MOTION_BUFFER_MS} from './city_motion.js?v=rounded-routes-1';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=shared-crossings-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=citizen-access-1';
 import {canStep,terrainWalkable} from './city_terrain.js?v=entrance-retaining-clearance-1';
 import {TILE_WATER} from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 
@@ -116,7 +116,7 @@ export class CitySimulationBridge {
     this.checkpointWaiters=new Map();this.checkpointId=0;this.exportWaiters=new Map();this.exportId=0;
     if (typeof Worker === 'undefined') return;
     try {
-      this.worker = new Worker(new URL('./city_sim_worker.js?v=shared-crossings-1', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./city_sim_worker.js?v=citizen-access-1', import.meta.url), { type: 'module' });
       this.worker.onmessage = event => { try { this.receive(event.data); } catch (error) { this.fail(error.message); } };
       this.worker.onerror = event => this.fail(event.message || 'Falha ao carregar a simulação.');
       this.worker.postMessage({ type: 'init', cityId:this.cityId, packet: this.graph.encode(this.state),profileDiagnostics:profiling,stateFeatures:{fieldTailPatches:this.graph.supportsFieldTailPatches===true} });

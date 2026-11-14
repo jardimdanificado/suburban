@@ -2,7 +2,7 @@
 
 ## Scope
 
-Investigate discontinuous interior movement and abstention/early deaths; implement shared boat crossings using existing vessels, ownership, paths and accounts. Interior movement and election rules were not changed.
+Investigate discontinuous interior movement and abstention/early deaths; implement shared boat crossings using existing vessels, ownership, paths and accounts. Interior movement and election rules were not changed during the original investigation. Follow-up authorized corrections are recorded below.
 
 ## Interior discontinuity: confirmed cause
 
@@ -51,3 +51,15 @@ Routes retain regular members and record owner/organizer, destination, departure
 37 focused boat/compact-state/worker-export tests passed. Five targeted health/deprivation/bathroom tests also passed. Added coverage includes shared fare, recruitment, physical movement at every step, daily outbound/return trips, changed jobs, capacity, no-shows, household affordability, pilot death and a saved mid-crossing continuation without duplicate payment. Compact rider packets preserve one pilot and all passengers on the actual hull.
 
 Four fast-forward tests also fail on an extracted unmodified HEAD: journey deferral, routine revision boundary, timed interior duration and sleep deadline. They are pre-existing failures, not claimed fixed here. A broad sanitation suite did not complete promptly and was stopped; five targeted health/deprivation/bathroom tests passed.
+
+## Corrections after authorization
+
+The follow-up request authorized fixes to the diagnosed behavior. Ordinary interior access now retains and follows its full validated polyline. Legacy timed saves rebuild a real route from the saved position without jumping to the destination. Missing body-speed cache values are initialized instead of being returned as undefined.
+
+Active sleep now yields to urgent health, hygiene, food, water and toilet needs at their normal thresholds. Interrupted sleep retains accumulated minutes. Hygiene is treated as an essential recovery task, and automatic crime reporting and council routing no longer replace it. Medical emergencies can still interrupt recovery.
+
+Awake voters are no longer excluded solely for unfinished sleep. Rested citizens already walking to vote keep that task rather than automatically returning to bed. Active sleep and essential recovery remain protected. Existing vehicle journeys finish before voting takes over their destination. Planned departure subtracts actual outdoor path duration, interior exit distance, movement modifiers and a 30-minute margin from planned arrival. Planning keeps the existing two-route-searches-per-minute limit; no new per-frame polling or all-citizen path search was introduced.
+
+Validation: 44 focused regression/integration tests passed, covering physical interior movement and immutable trails, legacy timed saves, early medical departure, hygiene protection, awake voters, detours and planning limits, council/reporting behavior, shared crossings and worker state export. Two selected fast-forward interior/sleep tests also passed. The neighboring substance suite's catalog migration assertion (`6 !== 4`) also fails in the extracted unmodified baseline; it is unrelated to these corrections.
+
+The corrected-seed run completed seven simulated days, ending at day 8, 08:00: all 512 citizens alive and zero deaths. The former first victim retained health 100 at the end. Configuration matches the original diagnostic; no player interventions. Evidence: `docs/investigations/citizen-access-558901596-corrected.json`. This validates the reproduced early-mortality window, not indefinite survival or an exact recreation of the user's saved election. Election regression tests validate routing and interruption rules; a full day-13 turnout comparison was not run.

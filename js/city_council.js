@@ -5,7 +5,7 @@ import {TAX_CATEGORIES,baseTaxRate as taxRate,MINIMUM_WAGE_TAX_RATE,MINIMUM_BUSI
 import {equityShares,offerShares,initializeEquity,nationalizeShares} from './city_equity.js?v=daily-mayor-privatization-2';
 import {syncCorruptionVotes} from './city_corruption_votes.js';
 import {ideologicalProfile,policyAffinity,citizenPolicyInterest} from './city_ideology.js';
-import {CityCouncilChamber} from './city_council_chamber.js';
+import {CityCouncilChamber} from './city_council_chamber.js?v=citizen-access-1';
 import {inviteMembers} from './city_party_membership.js?v=party-affiliation-history-1';
 import { seatBounds, scandalEligible, publicPressure } from './city_political_institutions.js';
 import {partyNameAgenda} from './city_party_names.js?v=party-vocabulary-position-names-2';

@@ -3,7 +3,7 @@ import {advanceCitizenGait} from './city_citizen_gait.js';
 import {wickerBasketSurface} from './city_mobility_models.js?v=cargo-box-rear-1';
 import {partyFlagCanvas,drawPartyFlag} from './city_party_flags.js';
 import {clothFlagGeometry,animateClothFlag} from './city_flag_animation.js?v=flag-wind-tick-13';
-import {bodyFatAmount} from './city_body_metrics.js?v=body-morph-4';
+import {bodyFatAmount} from './city_body_metrics.js?v=citizen-access-1';
 import {TROPICAL_PRINTS} from './city_clothing.js?v=party-apparel-1';
 import {CITIZEN_BODY_FACE_COUNT,CITIZEN_GARMENT_FACES} from './city_garment_faces.js?v=shared-anatomical-faces-2';
 import {fittedSkirtSurface} from './city_citizen_skirts.js?v=anatomical-dress-skirt-1';

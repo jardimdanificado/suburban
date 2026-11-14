@@ -32,9 +32,9 @@ test('routine revisions wake at shift boundaries and respond to home/job/map cha
  city.minute=539;assert.equal(nextRoutineReview(city,c,true),540);city.minute=540;assert.notEqual(routineRevision(city,c),old);
  for(const change of [()=>c.jobId=4,()=>c.homeUnitId=2,()=>city.world.revision++]){const previous=routineRevision(city,c);change();assert.notEqual(routineRevision(city,c),previous);}
 });
-test('timed interior access conserves polyline duration, destination and reservation',()=>{
+test('ordinary interior access conserves the physical polyline, destination and reservation',()=>{
  const c={entity:{x:0,y:0},indoorLocation:{position:{x:0,y:0,z:0},path:[{x:3,y:0,z:0},{x:3,y:4,z:0}],targetUnitId:'desk',targetRoomType:'workspace'}};
- timeInteriorJourney(c.indoorLocation);assert.equal(c.indoorLocation.travelRemaining,7);
+ timeInteriorJourney(c.indoorLocation);assert.equal(c.indoorLocation.travelRemaining,undefined);assert.equal(c.indoorLocation.path.length,2);
  advanceCitizenInterior({minute:1},c,6/bodyMovementSpeedFactor(c));assert.equal(c.indoorLocation.unitId,undefined);assert.equal(c.indoorLocation.path.length,1);
  advanceCitizenInterior({minute:2},c,1/bodyMovementSpeedFactor(c));assert.equal(c.indoorLocation.unitId,'desk');assert.deepEqual(c.indoorLocation.position,{x:3,y:4,z:0});assert.equal(c.indoorLocation.path.length,0);
 });

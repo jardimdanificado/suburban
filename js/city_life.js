@@ -1,5 +1,5 @@
 import { makeIdentity, makeBuildingName } from './city_names.js';
-import {initializeBodyMetrics} from './city_body_metrics.js?v=body-morph-4';
+import {initializeBodyMetrics} from './city_body_metrics.js?v=citizen-access-1';
 export const LIFE_RULES = { starvationMinutes: 720, dehydrationMinutes: 360, terminalHealthMinutes: 120, stalledMinutes: 120 };
 const NEED_KEYS=['food','water','energy','hygiene','toilet','social','leisure','health','shelter','safety'];
 export class CityLife {

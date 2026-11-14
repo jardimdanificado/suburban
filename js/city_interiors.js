@@ -1,6 +1,6 @@
 import {injuryMovementFactor} from './city_injury_effects.js';
 import {findActivityRoom,invalidateActivitySearch} from './city_activity_search.js';
-import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=body-morph-4';
+import {bodyMovementSpeedFactor} from './city_body_metrics.js?v=citizen-access-1';
 import {furnitureInteraction,roomFurniture} from './city_furniture_catalog.js?v=fast-speeds-1';
 import {buildingInteriorEntrance,CITY_FLOOR_HEIGHT} from './city_building_geometry.js?v=banner-placement-2';
 import {queueService} from './city_service_queue.js?v=fast-speeds-1';
@@ -74,38 +74,25 @@ function normalizeInterior(city,c){
  if(old&&!old.phase)old.phase=old.exiting?'leaving':old.path?.length?'walking':'using';
 }
 
-// Ordinary room access uses a reserved destination and a travel duration.
-// Validate the real route first; special missions retain their full itinerary.
+// Ordinary room access and special missions retain their validated itinerary.
+// Keep the former timing entry point compatible with existing callers.
 export function timeInteriorJourney(location){
- const route=location.path;if(!route?.length)return location;
- let distance=0,from=location.position;for(const to of route){distance+=Math.hypot(to.x-from.x,to.y-from.y,(to.z||0)-(from.z||0));from=to;}
- location.travelRemaining=distance;location.path=[{...route.at(-1)}];return location;
-}
-
-function observedInterior(city,location){
- const id=city.detailedInteriorBuildingId;if(id==null)return false;
- return id===location.buildingId||city.building(location.buildingId)?.officeTenantOf===id;
+ // Keep the validated polyline: ordinary access must move just like missions.
+ return location;
 }
 export function restoreInteriorJourney(city,location){
  if(location.travelRemaining==null||!location.path.length)return;
  const b=city.building(location.buildingId),route=b&&interiorRoute(city.building(b.officeTenantOf)||b,location.position,location.path.at(-1));
  if(!route)return;
- let total=0,from=location.position;for(const to of route){total+=Math.hypot(to.x-from.x,to.y-from.y,(to.z||0)-(from.z||0));from=to;}
- let elapsed=Math.max(0,total-location.travelRemaining),i=0;
- while(i<route.length){const to=route[i],p=location.position,len=Math.hypot(to.x-p.x,to.y-p.y,(to.z||0)-(p.z||0));if(elapsed<len){const ratio=len?elapsed/len:0;p.x+=(to.x-p.x)*ratio;p.y+=(to.y-p.y)*ratio;p.z+=((to.z||0)-(p.z||0))*ratio;break;}Object.assign(p,to);elapsed-=len;i++;}
- location.path=route.slice(i);delete location.travelRemaining;
+ // Old saves retained only a destination. Resume physically from their saved position.
+ location.path=route;delete location.travelRemaining;
 }
 export function advanceCitizenInterior(city,c,minutes=1){
  const s=c.indoorLocation;if(!s?.path?.length)return;
- if(observedInterior(city,s))restoreInteriorJourney(city,s);
+ if(s.travelRemaining!=null){restoreInteriorJourney(city,s);if(s.travelRemaining!=null)return;}
  s.trail??=[Object.freeze({...s.position})];
  s.phase=s.exiting?'leaving':'walking';
  let distance=Math.max(0,minutes)*injuryMovementFactor(c)*(c.substanceModifiers?.mobility||1)*bodyMovementSpeedFactor(c);
- if(s.travelRemaining!=null){
-  const used=Math.min(distance,s.travelRemaining);s.travelRemaining=Math.max(0,s.travelRemaining-used);if(used>0)c.lastProgressAt=city.minute;
-  if(s.travelRemaining>1e-5)return;
-  Object.assign(s.position,s.path.at(-1));s.path=[];delete s.travelRemaining;
- }
  while(distance>0&&s.path.length){const target=s.path[0],p=s.position,dx=target.x-p.x,dy=target.y-p.y,dz=target.z-p.z,len=Math.hypot(dx,dy,dz),d=Math.min(distance,len);if(len>0){p.x+=dx/len*d;p.y+=dy/len*d;p.z+=dz/len*d;}distance-=d;if(len<=d+.00001){s.path.shift();if(!s.exiting){const visited=s.trail.findIndex(q=>Math.hypot(q.x-target.x,q.y-target.y,(q.z||0)-(target.z||0))<.001);if(visited>=0)s.trail.length=visited+1;else s.trail.push(Object.isFrozen(target)?target:Object.freeze({...target}));}}}
  c.entity.x=s.position.x;c.entity.y=s.position.y;
  s.floor=Math.max(0,Math.floor(s.position.z/CITY_FLOOR_HEIGHT+.001));
@@ -131,7 +118,7 @@ export function activityRoomReady(city,c,b,room,kind=room?.roomType||'workspace'
   let slot=0;while(usedSlots.has(slot)&&slot<8)slot++;const interaction=furnitureInteraction(b,room,kind,slot,c.workMeal?'workmeal':c.task),target=interaction?.point||interiorUsePoint(b,room,kind,slot,c.task),path=interiorRoute(city.building(b.officeTenantOf)||b,from,target);
   if(path===null){c.action=`Sem rota interna acessível até ${kind}`;return false;}
   c.indoorLocation={buildingId:b.id,targetUnitId:room.id,unitId:path.length?null:room.id,targetRoomType:kind,roomType:path.length?'circulation':kind,floor:Math.floor(from.z/CITY_FLOOR_HEIGHT),position:{...from},path,trail:previous?.buildingId===b.id?previous.trail:[Object.freeze({...from})],phase:path.length?'walking':'using',task:c.workMeal?'workmeal':c.task,furnitureId:interaction?.item.id||null,furnitureSlot:slot,layoutRevision:b.layoutRevision||0,enteredAt:previous?.buildingId===b.id?previous.enteredAt:city.minute,toiletTargetId:c.toiletTargetId};
-  if(!observedInterior(city,c.indoorLocation)&&['work','manage','food','water','health','hygiene','toilet','energy','leisure','social','workmeal','supplies'].includes(c.task))timeInteriorJourney(c.indoorLocation);
+
  }
  c.workCell={buildingId:b.id,unitId:room.id,x:room.x,y:room.y,z:room.z,target:point(b,room)};
  if(!room.activityReservedIds.includes(c.id)){room.activityReservedIds.push(c.id);invalidateActivitySearch(city,b.id);}

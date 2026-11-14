@@ -1,0 +1,1643 @@
+{
+  "configuration": {
+    "seed": 558901596,
+    "preset": "archipelago",
+    "size": 128,
+    "population": 512,
+    "foundingWorks": true,
+    "updateSeconds": 0.25,
+    "fastForward": false,
+    "playerInterventions": false
+  },
+  "snapshots": [
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 0,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {},
+      "day": 1,
+      "hour": 8,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 0,
+      "foodDays": 1.5,
+      "elapsedMs": 10
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 360,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {},
+      "day": 1,
+      "hour": 14,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 0,
+      "foodDays": 4.0859375,
+      "elapsedMs": 11689
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 720,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {},
+      "day": 1,
+      "hour": 20,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 0,
+      "foodDays": 3.8544921875,
+      "elapsedMs": 20543
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 1080,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {},
+      "day": 2,
+      "hour": 2,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 1,
+      "foodDays": 4.2763671875,
+      "elapsedMs": 25879
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 1440,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 39
+      },
+      "day": 2,
+      "hour": 8,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 26,
+      "foodDays": 4.017578125,
+      "elapsedMs": 32558
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 1800,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 16,
+        "toilet": 6
+      },
+      "day": 2,
+      "hour": 14,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 3,
+      "foodDays": 4.1796875,
+      "elapsedMs": 42652
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 2160,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 5,
+        "hygiene": 1
+      },
+      "day": 2,
+      "hour": 20,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 0,
+      "foodDays": 4.004557291666667,
+      "elapsedMs": 51391
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 2520,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 12
+      },
+      "day": 3,
+      "hour": 2,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 26,
+      "foodDays": 4.120768229166667,
+      "elapsedMs": 58233
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 2880,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 3,
+        "toilet": 3
+      },
+      "day": 3,
+      "hour": 8,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 2,
+      "inactiveUnfinishedSleep": 24,
+      "foodDays": 3.9947916666666665,
+      "elapsedMs": 65123
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 3240,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 29,
+        "toilet": 12,
+        "food": 1
+      },
+      "day": 3,
+      "hour": 14,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 10,
+      "foodDays": 3.7568359375,
+      "elapsedMs": 81571
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 3600,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "water": 1,
+        "hygiene": 4,
+        "toilet": 6,
+        "energy": 1
+      },
+      "day": 3,
+      "hour": 20,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 7,
+      "foodDays": 3.8343098958333335,
+      "elapsedMs": 94319
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 3960,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 3,
+        "toilet": 3,
+        "water": 1
+      },
+      "day": 4,
+      "hour": 2,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 8,
+      "foodDays": 4.067708333333333,
+      "elapsedMs": 102823
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 4320,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 17,
+        "water": 1
+      },
+      "day": 4,
+      "hour": 8,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 30,
+      "foodDays": 3.9348958333333335,
+      "elapsedMs": 116739
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 4680,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 13,
+        "hygiene": 14,
+        "water": 2
+      },
+      "day": 4,
+      "hour": 14,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 13,
+      "foodDays": 3.8206380208333335,
+      "elapsedMs": 144304
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 5040,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 30,
+        "food": 5,
+        "hygiene": 11,
+        "water": 3
+      },
+      "day": 4,
+      "hour": 20,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 13,
+      "foodDays": 3.8235677083333335,
+      "elapsedMs": 165452
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 5400,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 5,
+        "toilet": 3
+      },
+      "day": 5,
+      "hour": 2,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 16,
+      "foodDays": 3.9895833333333335,
+      "elapsedMs": 173153
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 5760,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 3,
+        "hygiene": 2
+      },
+      "day": 5,
+      "hour": 8,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 29,
+      "foodDays": 3.8850911458333335,
+      "elapsedMs": 184942
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 6120,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 23,
+        "toilet": 23,
+        "energy": 2,
+        "food": 1,
+        "water": 1
+      },
+      "day": 5,
+      "hour": 14,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 24,
+      "foodDays": 3.7789713541666665,
+      "elapsedMs": 201187
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 6480,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 29,
+        "hygiene": 10,
+        "water": 1,
+        "food": 2
+      },
+      "day": 5,
+      "hour": 20,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 18,
+      "foodDays": 3.712890625,
+      "elapsedMs": 212740
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 6840,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 9,
+        "toilet": 6,
+        "food": 2
+      },
+      "day": 6,
+      "hour": 2,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 19,
+      "foodDays": 3.900390625,
+      "elapsedMs": 220412
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 7200,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 8,
+        "toilet": 5
+      },
+      "day": 6,
+      "hour": 8,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 28,
+      "foodDays": 3.7880859375,
+      "elapsedMs": 228050
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 7560,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 13,
+        "toilet": 19,
+        "water": 3,
+        "energy": 1,
+        "food": 2
+      },
+      "day": 6,
+      "hour": 14,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 21,
+      "foodDays": 3.720703125,
+      "elapsedMs": 241671
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 7920,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 11,
+        "toilet": 38,
+        "energy": 1,
+        "food": 3,
+        "water": 4
+      },
+      "day": 6,
+      "hour": 20,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 1,
+      "inactiveUnfinishedSleep": 19,
+      "foodDays": 3.7552083333333335,
+      "elapsedMs": 253355
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 8280,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 11,
+        "water": 2,
+        "toilet": 4,
+        "energy": 1
+      },
+      "day": 7,
+      "hour": 2,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 1,
+      "inactiveUnfinishedSleep": 24,
+      "foodDays": 3.9778645833333335,
+      "elapsedMs": 261216
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 8640,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "hygiene": 10,
+        "toilet": 6,
+        "energy": 1
+      },
+      "day": 7,
+      "hour": 8,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 2,
+      "inactiveUnfinishedSleep": 46,
+      "foodDays": 3.8489583333333335,
+      "elapsedMs": 269101
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 9000,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 18,
+        "hygiene": 12,
+        "water": 3,
+        "energy": 1,
+        "health": 1
+      },
+      "day": 7,
+      "hour": 14,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 23,
+      "foodDays": 3.7210286458333335,
+      "elapsedMs": 284687
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 9360,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 29,
+        "hygiene": 7,
+        "food": 2,
+        "water": 6
+      },
+      "day": 7,
+      "hour": 20,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 18,
+      "foodDays": 3.6009114583333335,
+      "elapsedMs": 298489
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 9720,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 2,
+        "hygiene": 4,
+        "food": 2,
+        "water": 1
+      },
+      "day": 8,
+      "hour": 2,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 17,
+      "foodDays": 3.8655598958333335,
+      "elapsedMs": 306691
+    },
+    {
+      "terrain": "archipelago",
+      "seed": 558901596,
+      "population": 512,
+      "minutes": 10080,
+      "alive": 512,
+      "deathCount": 0,
+      "firstDeaths": [],
+      "urgent": {
+        "toilet": 8,
+        "hygiene": 7
+      },
+      "day": 8,
+      "hour": 8,
+      "disconnectedFromHall": 0,
+      "unclassifiedHallConnections": 0,
+      "inactiveUnfinishedSleep": 51,
+      "foodDays": 3.7242838541666665,
+      "elapsedMs": 317730
+    }
+  ],
+  "formerVictimTrace": [
+    {
+      "watch": 428,
+      "minute": 9060,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 190/480 min",
+      "needs": {
+        "food": 86.26269925189295,
+        "water": 87.70599999999953,
+        "energy": 77.88999999999488,
+        "hygiene": 12.394474134046343,
+        "toilet": 83.38300000000078,
+        "social": 77.43000000000717,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 190,
+        "lastMinute": 9060,
+        "lastWakeAt": 7898,
+        "completed": 5,
+        "startedAt": 8871,
+        "sessionStartedAt": 8871,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9120,
+      "task": "hygiene",
+      "action": "Indo: Higiene",
+      "needs": {
+        "food": 84.46869925189317,
+        "water": 85.22199999999944,
+        "energy": 86.24999999999442,
+        "hygiene": 9.694474134046347,
+        "toilet": 81.03700000000049,
+        "social": 75.33000000000737,
+        "leisure": 0,
+        "health": 99.15999999999997,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 92.46818441700002,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": 8,
+      "pathLength": 5,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 243,
+        "lastMinute": 9113,
+        "lastWakeAt": 7898,
+        "completed": 5,
+        "startedAt": 8871,
+        "sessionStartedAt": 8871,
+        "interruptedAt": 9114,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9180,
+      "task": null,
+      "action": "Indo registrar o BO na delegacia",
+      "needs": {
+        "food": 80.5686992518933,
+        "water": 79.82199999999924,
+        "energy": 82.949999999994,
+        "hygiene": 94.94447413404632,
+        "toilet": 75.93700000000086,
+        "social": 73.23000000000758,
+        "leisure": 0,
+        "health": 95.72999999999996,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 86.5538458712436,
+        "y": 55.371691301627216
+      },
+      "inside": {
+        "buildingId": 8,
+        "position": {
+          "x": 86.5538458712436,
+          "y": 55.371691301627216,
+          "z": 3.651230972704608
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 243,
+        "lastMinute": 9113,
+        "lastWakeAt": 7898,
+        "completed": 5,
+        "startedAt": 8871,
+        "sessionStartedAt": 8871,
+        "interruptedAt": 9114,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9240,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 246/480 min",
+      "needs": {
+        "food": 76.74669925189345,
+        "water": 74.52999999999903,
+        "energy": 80.3099999999936,
+        "hygiene": 91.91263983912107,
+        "toilet": 70.93900000000122,
+        "social": 71.13000000000778,
+        "leisure": 0,
+        "health": 97.2300000000003,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 246,
+        "lastMinute": 9240,
+        "lastWakeAt": 7898,
+        "completed": 5,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9300,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 306/480 min",
+      "needs": {
+        "food": 75.18669925189367,
+        "water": 72.36999999999895,
+        "energy": 90.20999999999312,
+        "hygiene": 89.21263983912097,
+        "toilet": 68.89900000000085,
+        "social": 69.03000000000799,
+        "leisure": 0,
+        "health": 98.73000000000064,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 306,
+        "lastMinute": 9300,
+        "lastWakeAt": 7898,
+        "completed": 5,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9360,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 366/480 min",
+      "needs": {
+        "food": 73.6266992518939,
+        "water": 70.20999999999887,
+        "energy": 100,
+        "hygiene": 86.51263983912087,
+        "toilet": 66.85900000000049,
+        "social": 66.93000000000819,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 366,
+        "lastMinute": 9360,
+        "lastWakeAt": 7898,
+        "completed": 5,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9420,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 426/480 min",
+      "needs": {
+        "food": 72.06669925189412,
+        "water": 68.04999999999879,
+        "energy": 100,
+        "hygiene": 83.81263983912076,
+        "toilet": 64.81900000000013,
+        "social": 64.8300000000084,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 426,
+        "lastMinute": 9420,
+        "lastWakeAt": 7898,
+        "completed": 5,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9480,
+      "task": "justice-report",
+      "action": "Indo: Trabalho",
+      "needs": {
+        "food": 70.27269925189434,
+        "water": 65.5659999999987,
+        "energy": 99.66999999999996,
+        "hygiene": 81.11263983912066,
+        "toilet": 62.47300000000001,
+        "social": 62.7300000000086,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 92.75844378600002,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": 1269,
+      "pathLength": 54,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9540,
+      "task": "justice-report",
+      "action": "Indo: Trabalho",
+      "needs": {
+        "food": 66.37269925189447,
+        "water": 95.22999999999982,
+        "energy": 96.36999999999955,
+        "hygiene": 77.81502821702375,
+        "toilet": 57.37299999999996,
+        "social": 60.630000000008806,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 88.5,
+        "y": 71.69241646687351
+      },
+      "inside": null,
+      "targetId": 1269,
+      "pathLength": 29,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9600,
+      "task": "justice-report",
+      "action": "Conversando com Zaina Rival Guiauto Minguitão sobre comida",
+      "needs": {
+        "food": 62.47269925189461,
+        "water": 89.82999999999961,
+        "energy": 93.06999999999914,
+        "hygiene": 74.39081269179535,
+        "toilet": 52.27299999999991,
+        "social": 58.53000000000901,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 98.11,
+        "y": 89.5
+      },
+      "inside": {
+        "buildingId": 1269,
+        "position": {
+          "x": 98.11,
+          "y": 89.5,
+          "z": 0
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9660,
+      "task": "justice-report",
+      "action": "Conversando com Wanilde Anglófono Braquisclereídeo sobre a cidade",
+      "needs": {
+        "food": 58.57269925189475,
+        "water": 84.42999999999941,
+        "energy": 89.76999999999873,
+        "hygiene": 71.69081269179524,
+        "toilet": 47.17299999999986,
+        "social": 59.430000000009215,
+        "leisure": 2.039999999999992,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 98.36333078564614,
+        "y": 89.16373668728755
+      },
+      "inside": {
+        "buildingId": 1269,
+        "position": {
+          "x": 98.36333078564614,
+          "y": 89.16373668728755,
+          "z": 0
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9720,
+      "task": "justice-report",
+      "action": "Saindo do prédio",
+      "needs": {
+        "food": 54.67269925189488,
+        "water": 79.0299999999992,
+        "energy": 86.46999999999832,
+        "hygiene": 68.99081269179514,
+        "toilet": 42.07299999999981,
+        "social": 57.33000000000942,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 98.5,
+        "y": 90.5
+      },
+      "inside": null,
+      "targetId": 1269,
+      "pathLength": 1,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9780,
+      "task": "justice-report",
+      "action": "Aguardando na fila de atendimento",
+      "needs": {
+        "food": 50.77269925189502,
+        "water": 73.629999999999,
+        "energy": 83.16999999999791,
+        "hygiene": 66.29081269179504,
+        "toilet": 36.97299999999976,
+        "social": 71.23000000000962,
+        "leisure": 2.2149999999999928,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 97.35000000000001,
+        "y": 87.55
+      },
+      "inside": {
+        "buildingId": 1269,
+        "position": {
+          "x": 97.35000000000001,
+          "y": 87.55,
+          "z": 0
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9840,
+      "task": "justice-report",
+      "action": "Aguardando na fila de atendimento",
+      "needs": {
+        "food": 46.872699251895156,
+        "water": 68.2299999999988,
+        "energy": 79.8699999999975,
+        "hygiene": 63.59081269179494,
+        "toilet": 31.872999999999706,
+        "social": 72.13000000000983,
+        "leisure": 4.1149999999999896,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 98.3709730058778,
+        "y": 88.46633192102907
+      },
+      "inside": {
+        "buildingId": 1269,
+        "position": {
+          "x": 98.3709730058778,
+          "y": 88.46633192102907,
+          "z": 0
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9900,
+      "task": "justice-report",
+      "action": "Aguardando na fila de atendimento",
+      "needs": {
+        "food": 42.97269925189529,
+        "water": 97.83999999999992,
+        "energy": 76.5699999999971,
+        "hygiene": 60.890812691794835,
+        "toilet": 26.772999999999655,
+        "social": 70.03000000001003,
+        "leisure": 2.014999999999981,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 98.65,
+        "y": 88.35000000000001
+      },
+      "inside": {
+        "buildingId": 1269,
+        "position": {
+          "x": 98.65,
+          "y": 88.35000000000001,
+          "z": 0
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 9960,
+      "task": "justice-report",
+      "action": "Aguardando na fila de atendimento",
+      "needs": {
+        "food": 39.07269925189543,
+        "water": 92.43999999999971,
+        "energy": 73.26999999999668,
+        "hygiene": 58.19081269179473,
+        "toilet": 21.672999999999604,
+        "social": 67.93000000001024,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 98.72500000000001,
+        "y": 88.275
+      },
+      "inside": {
+        "buildingId": 1269,
+        "position": {
+          "x": 98.72500000000001,
+          "y": 88.275,
+          "z": 0
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10020,
+      "task": "justice-report",
+      "action": "Saindo do prédio",
+      "needs": {
+        "food": 35.172699251895565,
+        "water": 87.03999999999951,
+        "energy": 69.96999999999628,
+        "hygiene": 55.49081269179463,
+        "toilet": 16.572999999999553,
+        "social": 81.83000000001044,
+        "leisure": 3.8949999999999996,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 98.125,
+        "y": 89.29414011990409
+      },
+      "inside": {
+        "buildingId": 1269,
+        "position": {
+          "x": 98.125,
+          "y": 89.29414011990409,
+          "z": 0
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 1,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10080,
+      "task": "justice-report",
+      "action": "Conversando com Weik Rabado Emocionável sobre o dia a dia",
+      "needs": {
+        "food": 31.27269925189566,
+        "water": 81.6399999999993,
+        "energy": 66.66999999999587,
+        "hygiene": 52.79081269179453,
+        "toilet": 11.472999999999502,
+        "social": 79.73000000001065,
+        "leisure": 1.7949999999999924,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 97.375,
+        "y": 88.07201826622571
+      },
+      "inside": {
+        "buildingId": 1269,
+        "position": {
+          "x": 97.375,
+          "y": 88.07201826622571,
+          "z": 0
+        }
+      },
+      "targetId": 1269,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10140,
+      "task": "toilet",
+      "action": "Indo: Banheiro",
+      "needs": {
+        "food": 27.372699251895583,
+        "water": 76.2399999999991,
+        "energy": 63.36999999999554,
+        "hygiene": 49.67477528094774,
+        "toilet": 6.372999999999468,
+        "social": 93.63000000001085,
+        "leisure": 3.694999999999986,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 87.51085961557195,
+        "y": 71.51085961557195
+      },
+      "inside": null,
+      "targetId": 8,
+      "pathLength": 24,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10200,
+      "task": null,
+      "action": "Saindo do prédio",
+      "needs": {
+        "food": 23.472699251895506,
+        "water": 70.8399999999989,
+        "energy": 60.06999999999556,
+        "hygiene": 46.56832531837906,
+        "toilet": 100,
+        "social": 91.53000000001106,
+        "leisure": 1.5949999999999802,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 86.99889471060057,
+        "y": 56.137404089925134
+      },
+      "inside": {
+        "buildingId": 8,
+        "position": {
+          "x": 86.99889471060057,
+          "y": 56.137404089925134,
+          "z": 1.8
+        }
+      },
+      "targetId": 8,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10260,
+      "task": "food",
+      "action": "Indo: Alimentação",
+      "needs": {
+        "food": 19.57269925189543,
+        "water": 65.43999999999869,
+        "energy": 56.769999999995576,
+        "hygiene": 43.62551960835359,
+        "toilet": 94.90000000000038,
+        "social": 89.43000000001126,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 76.7877715989848,
+        "y": 44.5
+      },
+      "inside": null,
+      "targetId": 9,
+      "pathLength": 3,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10320,
+      "task": "energy",
+      "action": "Indo: Descanso",
+      "needs": {
+        "food": 96.67269925189552,
+        "water": 60.039999999998486,
+        "energy": 53.46999999999559,
+        "hygiene": 40.588552980928874,
+        "toilet": 89.80000000000075,
+        "social": 87.33000000001147,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 84.86246637325374,
+        "y": 42.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 14,
+      "waitingSince": null,
+      "sleep": {
+        "active": false,
+        "minutes": 0,
+        "lastMinute": 9474,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 9238,
+        "sessionStartedAt": 9238,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10380,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 13/480 min",
+      "needs": {
+        "food": 93.24069925189568,
+        "water": 55.287999999998306,
+        "energy": 53.029999999995596,
+        "hygiene": 37.82261464026012,
+        "toilet": 85.31200000000098,
+        "social": 85.23000000001167,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 13,
+        "lastMinute": 10380,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 10368,
+        "sessionStartedAt": 10368,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10440,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 73/480 min",
+      "needs": {
+        "food": 91.6806992518959,
+        "water": 53.127999999998224,
+        "energy": 62.929999999995545,
+        "hygiene": 35.12261464026002,
+        "toilet": 83.27200000000062,
+        "social": 83.13000000001188,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 73,
+        "lastMinute": 10440,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 10368,
+        "sessionStartedAt": 10368,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10500,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 133/480 min",
+      "needs": {
+        "food": 90.12069925189613,
+        "water": 50.96799999999814,
+        "energy": 72.82999999999512,
+        "hygiene": 32.422614640259916,
+        "toilet": 81.23200000000026,
+        "social": 81.03000000001208,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 133,
+        "lastMinute": 10500,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 10368,
+        "sessionStartedAt": 10368,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    },
+    {
+      "watch": 428,
+      "minute": 10560,
+      "task": "energy",
+      "action": "Dormindo no abrigo de rua · 193/480 min",
+      "needs": {
+        "food": 88.56069925189635,
+        "water": 48.80799999999806,
+        "energy": 82.72999999999465,
+        "hygiene": 29.722614640259813,
+        "toilet": 79.1919999999999,
+        "social": 78.93000000001228,
+        "leisure": 0,
+        "health": 100,
+        "shelter": 0,
+        "safety": 100
+      },
+      "position": {
+        "x": 94.5,
+        "y": 53.5
+      },
+      "inside": null,
+      "targetId": null,
+      "pathLength": 0,
+      "waitingSince": null,
+      "sleep": {
+        "active": true,
+        "minutes": 193,
+        "lastMinute": 10560,
+        "lastWakeAt": 9474,
+        "completed": 6,
+        "startedAt": 10368,
+        "sessionStartedAt": 10368,
+        "interruptedAt": null,
+        "lastDuration": 480
+      }
+    }
+  ]
+}

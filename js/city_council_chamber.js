@@ -93,7 +93,7 @@ export class CityCouncilChamber {
     for(const c of council.people()){
       if(c.councilSession&&c.task!=='council-session')c.councilSession=null;
       if(c.task==='council-session'){if(city.urgentNeed(c))this.release(c);else{const member=council.members.find(m=>m.citizenId===c.id),office=city.units.get(member?.officeUnitId),target=this.open()?hall:city.building(office?.buildingId)||hall;if(c.targetId!==target.id){const path=city.findPath(c.entity,target.door);if(path!==null){c.path=path;c.targetId=target.id;c.councilSession.buildingId=target.id;}}}continue;}
-      if(routed>=2||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||['vote','interview','care','caregiving','food','provisions','water','health','energy','toilet','workmeal'].includes(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<35||city.minute-(c.lastCouncilRouteAt??-Infinity)<30)continue;
+      if(routed>=2||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||['vote','interview','care','caregiving','food','provisions','water','health','energy','toilet','hygiene','workmeal'].includes(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<35||city.minute-(c.lastCouncilRouteAt??-Infinity)<30)continue;
       c.lastCouncilRouteAt=city.minute;const path=city.findPath(c.entity,hall.door);if(path===null)continue;
       c.path=path;c.task='council-session';c.targetId=hall.id;c.councilSession={buildingId:hall.id,startedAt:city.minute};c.action='Indo trabalhar na Câmara';routed++;
     }

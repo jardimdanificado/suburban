@@ -11,7 +11,7 @@ import {partyAccount,allocatePartyFunds,changePartyFund,illegalPartyFunding} fro
 import {appearance} from './city_clothing.js?v=party-apparel-1';
 import {CityResearch} from './city_research.js';
 import {CityGovernmentAgenda} from './city_government_agenda.js?v=substances-sleep-1';
-import {CityVoting} from './city_voting.js?v=municipal-secretariats-1';
+import {CityVoting} from './city_voting.js?v=citizen-access-1';
 import {CityPoliticalStanding} from './city_political_standing.js?v=standing-panel-cache-2';
 import {CityPartyOrganization,PARTY_ORGANIZATION_RULES} from './city_party_organization.js';
 import {makePartyName,makeMergedPartyName,partyNameAgenda} from './city_party_names.js?v=party-vocabulary-position-names-2';
