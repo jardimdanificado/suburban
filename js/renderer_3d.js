@@ -1,3 +1,4 @@
+import {BOTANICAL_TREE_MODELS,botanicalTreeTextures,addBotanicalTreeWind,BotanicalTreeInstances} from './botanical_trees.js?v=species-crowns-1';
 import {dirtRoadGround} from './dirt_road_visuals.js';
 import {scheduleTerrainIdleWork,stopTerrainIdleWork} from './terrain_idle_work.js';
 import {beginTerrainFade,finishTerrainFade,advanceTerrainFades} from './terrain_quality_fade.js';
@@ -202,7 +203,7 @@ const DAY_NIGHT_KEYFRAMES = [
 
 const STATIC_FOLIAGE_KEYS = [
   'oakLeaves', 'pineLeaves', 'cherryLeaves', 'birchLeaves',
-  'mapleLeaves', 'travellerPalm', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseLeaves', 'roseFlowers', 'grassFoliage'
+  'mapleLeaves', 'botanicalTree', 'travellerPalm', 'palmLeaves', 'cactus', 'bushLeaves', 'bushBerries', 'roseLeaves', 'roseFlowers', 'grassFoliage'
 ];
 const TROPICAL_CANOPY_COLORS = {flamboyant:0xd46b38,sea_grape:0x557b3c,tropical_almond:0x71934c,mangrove:0x416f45,banana:0x4b8e3a,mango:0x6c9a43,guava:0x7b9d50,jackfruit:0x39764b,breadfruit:0x54864b,papaya:0x82a44d,avocado:0x466f3d,tamarind:0x8a9e5a,cacao:0x376e49,soursop:0x498153,ackee:0x71994a,lime:0x8ca442,allspice:0x527848,monstera:0x326c44,guaimbe:0x4b8150,pau_brasil:0x658348,yellow_ipe:0x78964a,quaresmeira:0x61804a,manaca_serra:0x69894d,sibipiruna:0x718b46,pau_ferro:0x527846,pitanga:0x4b7c3e,jabuticaba:0x486f3e,frangipani:0x76954b,clusia:0x4b7844};
 const TROPICAL_CANOPY_ASPECT = {banana:[.82,1.18,.82],papaya:[.7,.82,.7],cacao:[.82,1.1,.82],guava:[.9,1.05,.9],mango:[1.16,.92,1.12],jackfruit:[1.13,1.02,1.13],breadfruit:[1.12,.94,1.12],soursop:[1.05,1,1.05],ackee:[.94,1.06,.94],lime:[.96,1,.96],tamarind:[1.2,.9,1.08],allspice:[.92,1.08,.92],monstera:[1.22,.78,1.22],guaimbe:[1.32,.88,1.15],pau_brasil:[1.12,1.03,1.12],yellow_ipe:[1.18,1,1.18],quaresmeira:[1.1,1.04,1.1],manaca_serra:[1.08,1,1.08],sibipiruna:[1.2,.96,1.2],pau_ferro:[1.06,1.08,1.06],pitanga:[.92,1.08,.92],jabuticaba:[1.04,1.08,1.04],frangipani:[1.04,.94,1.04],clusia:[1.12,.95,1.12]};
@@ -3977,6 +3978,7 @@ export class RCT3DRenderer {
       })
     );
 
+    const treeSurfaces=botanicalTreeTextures(THREE);
     const farmGround=caribbeanGroundSurfaceTextures(THREE,'farm');
     const buildDict = (normalMapsEnabled) => ({
       ...terrainSurfaceMaterials(normalMapsEnabled,'Rock','rock',normStoneB,1.1,.70,.08),
@@ -4012,6 +4014,7 @@ export class RCT3DRenderer {
       bananaStem: makeMat(normalMapsEnabled, { color: 0xffffff, dithering: true }, normWood, 0.24, 0.92, 0),
       oakLeaves: makeMat(normalMapsEnabled, { color: 0x3e8226, dithering: true }, normOak, 1.2, 0.65, 0.02),
       tropicalFlora: makeMat(normalMapsEnabled, { color: 0xffffff, side: THREE.DoubleSide, dithering: true }, normOak, 0.72, 0.76, 0),
+      botanicalTree: makeMat(normalMapsEnabled,{map:treeSurfaces.map,alphaTest:.5,color:0xffffff,vertexColors:true,side:THREE.DoubleSide,dithering:true},treeSurfaces.normalMap,.5,.92,0),
       travellerPalm: makeMat(normalMapsEnabled,{color:0xffffff,vertexColors:true,side:THREE.DoubleSide,dithering:true},normOak,.4,.9,0),
       palmLeaves: makeMat(normalMapsEnabled, { color: 0x478d32, dithering: true, side: THREE.DoubleSide }, normOak, 0.9, 0.72, 0.01),
       pineLeaves: makeMat(normalMapsEnabled, { color: 0x205222, dithering: true }, normPine, 1.2, 0.65, 0.02),
@@ -4228,6 +4231,7 @@ export class RCT3DRenderer {
           applyRetroDitherToMaterial(mat);
         }
       }
+      addBotanicalTreeWind(dict.botanicalTree);
       applyWindFoliageShader(dict.oakLeaves, 0.055);
       applyPalmWindShader(dict.palmLeaves, 0.11);
       applyWindFoliageShader(dict.travellerPalm,.035,1.45);
@@ -4856,6 +4860,7 @@ export class RCT3DRenderer {
       this.instRoads, this.instRoadSnaps,
       this.instWaterPlatforms
     );
+    this.botanicalTrees=new BotanicalTreeInstances(THREE,this.instancedGroup,this.materials.botanicalTree,this.maxInstances);
     this.scene.add(this.instancedGroup);
 
     // Dynamic Billboard Entities (Creatures, Humanoids, Items)
@@ -5471,6 +5476,7 @@ export class RCT3DRenderer {
     if (this.instOakLeaves && activeDict.oakLeaves) this.instOakLeaves.material = activeDict.oakLeaves;
     if (this.instPalmTrunks && activeDict.treeTrunk) this.instPalmTrunks.material = activeDict.treeTrunk;
     if (this.instPalmFronds && activeDict.palmLeaves) this.instPalmFronds.material = activeDict.palmLeaves;
+    if(activeDict.botanicalTree)this.botanicalTrees?.setMaterial(activeDict.botanicalTree);
     if(this.instTravellerPalms&&activeDict.travellerPalm)this.instTravellerPalms.material=activeDict.travellerPalm;
     if (this.instFanPalmFronds && activeDict.palmLeaves) this.instFanPalmFronds.material = activeDict.palmLeaves;
     if (this.instPapayaTrunks && activeDict.treeTrunk) this.instPapayaTrunks.material = activeDict.treeTrunk;
@@ -5646,6 +5652,7 @@ export class RCT3DRenderer {
       if (m.geometry) m.geometry.dispose();
     }
 
+    this.botanicalTrees?.clear();
     if(this.mobilityBatches){for(const b of this.mobilityBatches.values()){this.scene.remove(b.mesh);b.mesh.dispose();b.geometry.dispose();b.material.dispose();}this.mobilityBatches.clear();this.mobilityTemplates?.clear();this.mobilityStreetStamp=null;}
     if (this.entitySprites) {
       for (const spr of this.entitySprites.values()) {
@@ -7878,6 +7885,7 @@ export class RCT3DRenderer {
 
     let oakCount = 0;
     let tropicalTreeBloomCount=0;
+    if(shouldUpdateStaticInstances)this.botanicalTrees?.begin();
     let palmCount = 0,palmFrondCount=0,fanPalmCount=0,travellerPalmCount=0;
     let tropicalFruitCount = 0;
     let bananaCount=0,bananaFruitCount=0,papayaCount=0,papayaFruitCount=0,broadLeafCount=0,tropicalFoliageCount=0,tropicalFlowerCount=0,waterLilyCount=0;
@@ -8071,6 +8079,15 @@ export class RCT3DRenderer {
         mMatrix.makeRotationY(rotY);
         mMatrix.setPosition(e.x + 0.5, surfaceH, e.y + 0.5);
         this.instStoneItems.setMatrixAt(stoneItemCount++, mMatrix);
+      }
+      // Species geometry is shared by planted, wild and legacy tree entities.
+      // Keep the recently revised coconut, water lily and Ravenala routes intact.
+      else if((isTree||isBerryBush||isBroadLeafPlant)&&BOTANICAL_TREE_MODELS[e.properties.species==='tree'?'oak':e.properties.species]){
+        const rotation=(((Math.imul(Math.floor(e.x)^Math.imul(Math.floor(e.y),9187),982451653)>>>0)%628)/100);
+        const growth=r.size||1,size=growth*(isBroadLeafPlant?(e.properties.cityPlant?.visualScale||1):getTreeVisualScale(e));
+        mMatrix.makeRotationY(rotation);scaleMatrix.makeScale(size,size,size);mMatrix.multiply(scaleMatrix);
+        mMatrix.setPosition(e.x+.5,surfaceH,e.y+.5);
+        this.botanicalTrees.add(e.properties.species,mMatrix,growth);
       }
       // --- 3D CHERRY BLOSSOM TREES (Sakura) ---
       else if (isCherry && cherryCount < this.maxInstances) {
@@ -9086,6 +9103,7 @@ export class RCT3DRenderer {
     }
 
     if (shouldUpdateStaticInstances) {
+      this.botanicalTrees?.end();
       // Flush Instanced Counts to GPU
       this.instOakTrunks.count = oakCount;
       this.instOakTrunks.instanceMatrix.needsUpdate = true;

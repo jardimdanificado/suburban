@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><title>Revisão botânica das árvores</title>
+<style>body{margin:0;background:#b7c7c5;color:#213a32;font:13px system-ui}header{height:60px;box-sizing:border-box;padding:10px;background:#e6ece6}select,button{padding:5px;margin-left:10px}canvas{display:block}.label{position:absolute;text-align:center;pointer-events:none;font-weight:600}#status{margin-left:15px;font-weight:400}</style>
+<header>Árvores por espécie <select id="species"><option value="all">Todas</option></select><button id="turn">Girar</button><button id="young">Alternar jovem/adulta</button><span id="status">Carregando…</span></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {BOTANICAL_TREE_MODELS,botanicalTreeTextures,addBotanicalTreeWind,BotanicalTreeInstances} from '../js/botanical_trees.js?v=species-crowns-1';
+import {PLANT_SPECIES} from '../js/city_nature.js';
+try{
+ const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});renderer.setPixelRatio(1);document.body.append(renderer.domElement);
+ let errors=0;renderer.debug.onShaderError=()=>errors++;
+ const surfaces=botanicalTreeTextures(THREE),material=addBotanicalTreeWind(new THREE.MeshStandardMaterial({...surfaces,alphaTest:.5,color:0xffffff,vertexColors:true,roughness:.92,normalScale:new THREE.Vector2(.5,.5),side:THREE.DoubleSide}));
+ const views=[],group=new THREE.Group(),models=new BotanicalTreeInstances(THREE,group,material,4),matrix=new THREE.Matrix4();models.begin();
+ for(const id of Object.keys(BOTANICAL_TREE_MODELS)){
+   models.add(id,matrix,1);const mesh=models.batches.get(id).mesh;group.remove(mesh);
+   const scene=new THREE.Scene();scene.background=new THREE.Color(0xb7c7c5);scene.add(mesh,new THREE.HemisphereLight(0xe8f1ff,0x64734c,2.2));
+   const sun=new THREE.DirectionalLight(0xffefcd,2.3);sun.position.set(-4,9,6);scene.add(sun);
+   mesh.geometry.computeBoundingBox();const box=mesh.geometry.boundingBox,size=new THREE.Vector3(),center=new THREE.Vector3();box.getSize(size);box.getCenter(center);
+   const ground=new THREE.Mesh(new THREE.CircleGeometry(Math.max(size.x,size.z)*.7,32),new THREE.MeshStandardMaterial({color:0x84916c,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.02;scene.add(ground);
+   const label=document.createElement('div');label.className='label';label.textContent=PLANT_SPECIES[id]?.label||id;document.body.append(label);
+   const camera=new THREE.OrthographicCamera(-3,3,3,-3,.1,80);views.push({id,scene,mesh,camera,size,center,label});
+   const option=document.createElement('option');option.value=id;option.textContent=label.textContent;document.querySelector('#species').append(option);
+ }
+ models.end();let angle=.62,young=false;
+ const draw=()=>{
+   const selected=document.querySelector('#species').value,list=selected==='all'?views:views.filter(v=>v.id===selected),cols=selected==='all'?Math.max(3,Math.floor(innerWidth/190)):1,rows=Math.ceil(list.length/cols),w=Math.floor(innerWidth/cols),h=selected==='all'?230:innerHeight-60;
+   renderer.setSize(innerWidth,rows*h);renderer.setScissorTest(true);
+   for(const view of views)view.label.style.display='none';
+   for(const [index,view]of list.entries()){
+     const x=(index%cols)*w,y=Math.floor(index/cols)*h,span=Math.max(view.size.y*1.03,view.size.x*.95,view.size.z*.95)*.62;
+     const aspect=w/(h-25),camera=view.camera;camera.left=-span*aspect;camera.right=span*aspect;camera.top=span;camera.bottom=-span;
+     camera.position.set(view.center.x+Math.sin(angle)*12,view.center.y+7,view.center.z+Math.cos(angle)*12);camera.lookAt(view.center);camera.updateProjectionMatrix();
+     renderer.setViewport(x,rows*h-y-h+25,w,h-25);renderer.setScissor(x,rows*h-y-h,w,h);renderer.render(view.scene,camera);
+     Object.assign(view.label.style,{display:'block',left:`${x}px`,top:`${60+y+h-23}px`,width:`${w}px`});
+   }
+   document.querySelector('#status').textContent=`${list.length} modelos · ${errors} erros de shader`;document.body.dataset.ready=errors?'error':'true';
+ };
+ document.querySelector('#species').onchange=draw;document.querySelector('#turn').onclick=()=>{angle+=Math.PI/4;draw();};
+ document.querySelector('#young').onclick=()=>{young=!young;for(const {age}of models.batches.values()){age.setX(0,young?.65:1);age.needsUpdate=true;}draw();};
+ window.onresize=draw;draw();window.botanicalPreview={renderer,models,draw};
+}catch(error){document.querySelector('#status').textContent=error.stack;document.body.dataset.ready='error';}
+</script>
