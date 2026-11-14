@@ -23,10 +23,10 @@ test('dirt roads use their natural ground while paved roads keep their material'
   }
 });
 
-test('permanent marks stop at dirt-road borders and exclude transported residue',()=>{
+test('permanent contacts and residue stop at dirt-road borders',()=>{
   const world={width:4,height:4,getTile:x=>x===1?TILE_ROAD_GRASS:TILE_FLOOR};
   const marks=permanentRoadContacts([stamp,{...stamp,deposit:-.5}],world);
-  assert.equal(marks.length,1);assert.deepEqual(marks[0].clip,[1,1,2,2]);
+  assert.equal(marks.length,2);assert.deepEqual(marks[0].clip,[1,1,2,2]);assert.equal(marks[1].deposit,-.5);
   assert.deepEqual(permanentRoadContacts([stamp],{...world,getTile:()=>TILE_ROAD_GRASS_STONE}),[]);
   for(const tile of [TILE_ROAD_GRASS,TILE_ROAD_HILL,TILE_ROAD_SAND])assert(permanentRoadContacts([stamp],{...world,getTile:()=>tile}).length>0);
 });
@@ -50,7 +50,7 @@ test('sand from imaginary roads still transfers to shoes',()=>{
   assert(marks.length>0);assert(marks.every(mark=>mark.deposit>0));
 });
 
-test('permanent contacts use a separate GPU atlas, survive deposits and release GPU targets on reset',()=>{
+test('permanent contacts and residues use ordered codes without erasing earlier deposits',()=>{
   class Attribute{constructor(array,itemSize){Object.assign(this,{array,itemSize});}setUsage(){return this;}setXYZW(i,...v){this.array.set(v,i*4);}setXY(i,...v){this.array.set(v,i*2);}setX(i,v){this.array[i]=v;}}
   class Geometry{constructor(){this.attributes={};}setAttribute(k,v){this.attributes[k]=v;}getAttribute(k){return this.attributes[k];}setIndex(){}dispose(){}}
   class Scene{add(){}remove(){}}
@@ -58,18 +58,27 @@ test('permanent contacts use a separate GPU atlas, survive deposits and release 
   class Target{constructor(width,height,options){Object.assign(this,{width,height,options,texture:{}});}dispose(){this.disposed=true;}}
   class Vector{set(){}}
   const THREE={DataTexture:class{},Vector2:Vector,Scene,Camera:class{},Color,ShaderMaterial:class{constructor(options){Object.assign(this,options);}},WebGLRenderTarget:Target,
-    InstancedBufferGeometry:Geometry,Float32BufferAttribute:Attribute,InstancedBufferAttribute:Attribute,Mesh:class{constructor(geometry,material){Object.assign(this,{geometry,material});}},RedFormat:'red',RGBAFormat:'rgba'};
+    InstancedBufferGeometry:Geometry,Float32BufferAttribute:Attribute,InstancedBufferAttribute:Attribute,Mesh:class{constructor(geometry,material){Object.assign(this,{geometry,material});}},RedFormat:'red',RGBAFormat:'rgba',NoBlending:0,CustomBlending:5,MaxEquation:104};
   const passes=[],renderer={capabilities:{maxTextureSize:4096,isWebGL2:true},autoClear:true,shadowMap:{autoUpdate:true,needsUpdate:false},target:null,
     getRenderTarget(){return this.target;},setRenderTarget(target){this.target=target;},getClearColor:()=>new Color(),getClearAlpha:()=>1,setClearColor(){},clear(){},
-    readRenderTargetPixels(){throw Error('GPU readback forbidden');},render(){passes.push({target:this.target,pass:tracks.material.uniforms.permanentPass.value});}};
+    readRenderTargetPixels(){throw Error('GPU readback forbidden');},render(){passes.push({target:this.target,pass:tracks.material.uniforms.permanentPass.value,blending:tracks.material.blending});}};
   const world={width:4,height:4,getTile:()=>TILE_ROAD_GRASS},uniforms=createTerrainTrackUniforms(THREE),tracks=new TerrainTracks(THREE,uniforms);
   tracks.ensureWorld(renderer,world);
   const permanent=tracks.permanentTarget;
   assert.equal(permanent.options.format,'red');assert.equal(uniforms.terrainPermanentTrackMap.value,permanent.texture);
   tracks.paint(renderer,[stamp]);tracks.paint(renderer,permanentRoadContacts([stamp],world),permanent,1);
   tracks.paint(renderer,[{...stamp,deposit:-.5}]);
-  assert.deepEqual(passes.map(pass=>pass.pass),[0,1,0]);assert.notEqual(passes[2].target,permanent);
-  assert(TERRAIN_TRACK_GLSL.includes('max(texture2D(terrainPermanentTrackMap, uv).r,'));
+  tracks.paint(renderer,permanentRoadContacts([{...stamp,deposit:-.5}],world),permanent,1);
+  assert.deepEqual(passes.map(pass=>pass.pass),[0,1,0,1]);assert.equal(passes[1].blending,THREE.CustomBlending);assert.equal(passes[3].blending,THREE.CustomBlending);
+  assert(tracks.material.fragmentShader.includes('vDeposit>0.0?.3+.2*vDeposit'));
+  assert(tracks.material.fragmentShader.includes('vDeposit<0.0?.6+.14*abs(vDeposit):.2'));
+  const expression=tracks.material.fragmentShader.match(/float mark=(.*);/)[1],encode=new Function('vDeposit',`const abs=Math.abs;return ${expression};`);
+  assert.equal(encode(0),.2);assert.equal(encode(1),.5);assert.equal(encode(-1),.74);
+  assert.equal(Math.max(encode(-.5),encode(0)),encode(-.5),'later footprints cannot erase soil');
+  assert.equal(Math.max(encode(1),encode(0)),encode(1),'later footprints cannot erase sand');
+  assert.equal(tracks.material.blending,THREE.NoBlending,'temporary stamps retain their original blending');
+assert.notEqual(passes[2].target,permanent);
+  assert(TERRAIN_TRACK_GLSL.includes('max(step(.1,texture2D(terrainPermanentTrackMap, uv).r),'));
   assert(tracks.material.fragmentShader.includes('greaterThanEqual(vContactWorld,vContactClip.zw)'));
   tracks.permanentRoadTiles.set(5,{x:1,z:1});
   world.getTile=()=>TILE_ROAD_GRASS_STONE;world.revision=1;

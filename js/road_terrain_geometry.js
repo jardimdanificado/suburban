@@ -152,16 +152,22 @@ export function sidewalkSurfaceCorners(world,x,y){
   }
   cache?.sidewalks.set(key,corners);return corners;
 }
-export function streetSurfaceCorners(world,x,y){return roadSurfaceCorners(world,x,y)||sidewalkSurfaceCorners(world,x,y);}
+export function streetSurfaceCorners(world,x,y){
+  const tile=at(world,x,y);
+  // Unpaved paths follow the natural surface instead of cutting an engineered shelf.
+  if(ROADS.has(tile)&&!PAVED_ROADS.has(tile))return null;
+  return roadSurfaceCorners(world,x,y)||sidewalkSurfaceCorners(world,x,y);
+}
 
 export function roadRetainingFaces(world,x,y,ownsSharedBoundary=null){
+  if(!roadRailingAllowed(world,x,y))return [];
   const surface=streetSurfaceCorners(world,x,y);if(!surface)return [];
   const faces=[];
   for(let side=0;side<EDGES.length;side++){
-    const edge=EDGES[side],nx=x+edge.dx,ny=y+edge.dy,neighbor=at(world,nx,ny),neighborIsStreet=ROADS.has(neighbor)||sidewalkAt(world,nx,ny);
+    const edge=EDGES[side],nx=x+edge.dx,ny=y+edge.dy,neighbor=at(world,nx,ny),neighborIsStreet=!!streetSurfaceCorners(world,nx,ny);
     const [ax,ay]=CORNERS[edge.a],[bx,by]=CORNERS[edge.b];
     if(neighborIsStreet){
-      if(ownsSharedBoundary?!ownsSharedBoundary(nx,ny):ny*world.width+nx<y*world.width+x)continue;
+      if(roadRailingAllowed(world,nx,ny)&&(ownsSharedBoundary?!ownsSharedBoundary(nx,ny):ny*world.width+nx<y*world.width+x))continue;
       const other=streetSurfaceCorners(world,nx,ny);if(!other)continue;
       const opposite=side===0?[3,2]:side===1?[0,3]:side===2?[0,1]:[1,2],surfaceA=surface[edge.a],surfaceB=surface[edge.b],otherA=other[opposite[0]],otherB=other[opposite[1]],deltaA=otherA-surfaceA,deltaB=otherB-surfaceB;
       if(Math.max(Math.abs(deltaA),Math.abs(deltaB))<.015)continue;

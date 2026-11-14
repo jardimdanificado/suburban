@@ -80,12 +80,14 @@ test('crossing bank and ramp profiles taper to zero instead of creating an uprig
   }
 });
 
-test('paving wear keeps the road profile and retaining walls, and edits invalidate cached grades',()=>{
+test('only pavement has retaining walls; removing paving restores the natural surface',()=>{
   const world=fixture();road(world);
   for(let x=0;x<12;x++)world.setTile(x,4,TILE_HILL);
   const before=roadSurfaceCorners(world,5,5),faces=roadRetainingFaces(world,5,5);
   world.setTile(5,5,TILE_ROAD_GRASS);
-  assert.deepEqual(roadSurfaceCorners(world,5,5),before);assert.deepEqual(roadRetainingFaces(world,5,5),faces);
+  assert(faces.length>0);assert.deepEqual(roadSurfaceCorners(world,5,5),before);assert.deepEqual(roadRetainingFaces(world,5,5),[]);
+  world.setTile(5,5,TILE_ROAD_GRASS_STONE);assert.deepEqual(roadRetainingFaces(world,5,5),faces);
+  world.setTile(5,5,TILE_ROAD_GRASS);
   world.setTile(6,5,TILE_ROAD_HILL_STONE);
   assert(roadSurfaceCorners(world,5,5)[1]>before[1]);
   const flat=fixture();road(flat);assert.equal(roadRetainingFaces(flat,5,5).length,0);
@@ -96,4 +98,15 @@ test('walking height follows the actual mesh triangles even on a non-planar terr
   near(terrainSurfaceElevation(world,5.5,5.5),1.1);
   near(terrainSurfaceElevation(world,5.75,5.25),1.25);
   near(surfaceElevation(world,5.75,5.25),1.25);
+});
+
+
+test('unbuilt dirt roads follow natural slopes, and only paving creates the shelf and retaining wall',()=>{
+  const world=fixture();
+  for(let y=0;y<5;y++)for(let x=0;x<12;x++)world.setTile(x,y,TILE_HILL);
+  const natural=terrainSurfaceElevation(world,5.5,5.5);
+  for(let x=2;x<10;x++)world.setTile(x,5,TILE_ROAD_GRASS);
+  near(terrainSurfaceElevation(world,5.5,5.5),natural);
+  assert.deepEqual(roadRetainingFaces(world,5,5),[]);
+  road(world);assert(roadRetainingFaces(world,5,5).length>0);near(terrainSurfaceElevation(world,5.5,5.5),1.1);
 });

@@ -150,7 +150,7 @@ export const TERRAIN_TRACK_GLSL = `
     if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 0.0;
     vec4 mark = texture2D(terrainTrackMap, uv);
     float born = dot(floor(mark.rgb * 255.0 + .5), vec3(65536.0, 256.0, 1.0)) * .1;
-    return max(texture2D(terrainPermanentTrackMap, uv).r, step(.001, mark.a) * (1.0 - smoothstep(hold, life, max(0.0, terrainTrackTime - born))));
+    return max(step(.1,texture2D(terrainPermanentTrackMap, uv).r), step(.001, mark.a) * (1.0 - smoothstep(hold, life, max(0.0, terrainTrackTime - born))));
   }
 `;
 function addGroundTracksToMaterial(material,uniforms,grass){
@@ -164,9 +164,12 @@ function addGroundTracksToMaterial(material,uniforms,grass){
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>\nvarying vec2 vTrackWorld;\n${TERRAIN_TRACK_GLSL}`)
       .replace('#include <color_fragment>',`#include <color_fragment>
         vec4 deposit = texture2D(terrainTrackMap, vTrackWorld / terrainTrackWorldSize);
+        float permanentDeposit = texture2D(terrainPermanentTrackMap, vTrackWorld / terrainTrackWorldSize).r;
         float depositBorn = dot(floor(deposit.rgb * 255.0 + .5), vec3(65536.0,256.0,1.0)) * .1;
         float sand = deposit.a * (1.0-step(.75,deposit.a)) * (1.0-smoothstep(${DEPOSIT_HOLD.toFixed(1)},${DEPOSIT_LIFE.toFixed(1)},terrainTrackTime-depositBorn));
         float dirt = step(.60,deposit.a)*(1.0-step(.75,deposit.a))*(1.0-smoothstep(${DEPOSIT_HOLD.toFixed(1)},${DEPOSIT_LIFE.toFixed(1)},terrainTrackTime-depositBorn));
+        sand = max(sand,step(.25,permanentDeposit)*(1.0-step(.55,permanentDeposit))*(.2+1.5*(permanentDeposit-.3)));
+        dirt = max(dirt,step(.55,permanentDeposit));
         float imprint = terrainTrackStrength(vTrackWorld, ${hold.toFixed(1)}, ${life.toFixed(1)});
         vec2 texel = terrainTrackTexel;
         float lip = terrainTrackStrength(vTrackWorld + texel * vec2(.8, .8), ${hold.toFixed(1)}, ${life.toFixed(1)}) - imprint;
@@ -175,7 +178,7 @@ function addGroundTracksToMaterial(material,uniforms,grass){
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.34,.23,.12), dirt * 1.35);
       `);
   };
-  material.customProgramCacheKey=()=>`${programKey}|ground-contact-tracks-v6-${grass}`;
+  material.customProgramCacheKey=()=>`${programKey}|ground-contact-tracks-v8-${grass}`;
 }
 
 export function addSandDepositsToMaterial(material,uniforms){addGroundTracksToMaterial(material,uniforms,null);}
@@ -187,7 +190,7 @@ export class TerrainTracks {
     this.THREE=THREE;this.uniforms=uniforms;this.empty=uniforms.terrainTrackMap.value;this.motion=new TerrainTrackMotion();this.sandCarry=new SandCarry();this.dirtCarry=new SandCarry();this.grassWear=new GrassWear();
     this.scene=new THREE.Scene();this.camera=new THREE.Camera();this.time=0;
     this.permanentRoadTiles=new Map();
-    this.material=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,blending:THREE.NoBlending,toneMapped:false,
+    this.material=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,blending:THREE.NoBlending,blendEquation:THREE.MaxEquation,blendSrc:THREE.OneFactor,blendDst:THREE.OneFactor,toneMapped:false,
       uniforms:{...uniforms,permanentPass:{value:0}},vertexShader:`
         attribute vec4 contactClip; varying vec4 vContactClip; varying vec2 vContactWorld;
         attribute vec4 contactShape; attribute vec2 contactInfo; attribute float depositAmount; varying float vDeposit; varying vec2 vContact; varying float vContactKind;
@@ -219,7 +222,12 @@ export class TerrainTracks {
             float grain=fract(sin(dot(floor(gl_FragCoord.xy),vec2(12.9898,78.233)))*43758.5453);
             if(grain>.50*abs(vDeposit))discard;
           }
-          if(permanentPass>.5){gl_FragColor=vec4(1.0);return;}
+          if(permanentPass>.5){
+            // Ordered codes keep residue colors above ordinary footprints in one channel.
+            // Maximum blending prevents later footsteps from erasing carried soil or sand.
+            float mark=vDeposit>0.0?.3+.2*vDeposit:vDeposit<0.0?.6+.14*abs(vDeposit):.2;
+            gl_FragColor=vec4(mark,mark,mark,1.0);return;
+          }
           float ticks=floor(terrainTrackTime*10.0);
           vec3 packed=vec3(floor(ticks/65536.0),floor(mod(ticks,65536.0)/256.0),mod(ticks,256.0));
           gl_FragColor=vec4(packed/255.0,vDeposit>0.0?.2+.3*vDeposit:vDeposit<0.0?.6+.14*abs(vDeposit):1.0);
@@ -264,8 +272,9 @@ export class TerrainTracks {
     const old=renderer.getRenderTarget(),autoClear=renderer.autoClear,shadowUpdate=renderer.shadowMap.autoUpdate,shadowNeedsUpdate=renderer.shadowMap.needsUpdate;
     renderer.autoClear=false;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=false;
     this.material.uniforms.permanentPass.value=permanentPass;
+    this.material.blending=permanentPass===1?T.CustomBlending:T.NoBlending;
     renderer.setRenderTarget(target);renderer.render(this.scene,this.camera);renderer.setRenderTarget(old);
-    this.material.uniforms.permanentPass.value=0;
+    this.material.uniforms.permanentPass.value=0;this.material.blending=T.NoBlending;
     renderer.autoClear=autoClear;renderer.shadowMap.autoUpdate=shadowUpdate;renderer.shadowMap.needsUpdate=shadowNeedsUpdate;
   }
   update(renderer,world,entities,dt,models,offsets,bounds){

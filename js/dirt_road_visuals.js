@@ -9,7 +9,6 @@ export function dirtRoadGround(tile){
 export function permanentRoadContacts(stamps,world){
   const result=[];
   for(const stamp of stamps){
-    if(stamp.deposit)continue;
     const c=Math.abs(Math.cos(stamp.angle)),s=Math.abs(Math.sin(stamp.angle));
     const rx=(c*stamp.width+s*stamp.length)/2,rz=(s*stamp.width+c*stamp.length)/2;
     for(let z=Math.max(0,Math.floor(stamp.z-rz));z<=Math.min(world.height-1,Math.floor(stamp.z+rz));z++){
