@@ -81,6 +81,13 @@ export function renderPolitics(ui,p) {
   if(tab==='overview'){
     p.metrics([['APROVAÇÃO',`${gov.approval.toFixed(1)}%`,gov.approval<40?'#963226':'#305c28'],['VEREADORES',`${gov.council.members.length}/${gov.council.seats}`]]);
     p.button('ENTENDER A AVALIAÇÃO DO GOVERNO',()=>ui.openPanel({politicsTab:'approval',approvalView:'summary'}));
+    const response=gov.mandates.current?.response;
+    if(response)fold(ui,p,'governmentResponse','RESPOSTA À DESAPROVAÇÃO',()=>{
+      p.note(`Diagnóstico atualizado em ${stamp(response.minute)}. A gestão compara perdas de aprovação e revisa resultados a cada seis horas.`);
+      p.table([{label:'Problema',weight:2},{label:'Perda de aprovação'}],response.priorities.map(row=>({cells:[row.title,`${row.loss.toFixed(1)} p.p.`]})));
+      if(response.current){const action=response.current;p.kv('Prioridade',action.title);p.note(action.execution?.blocked||action.execution?.status||'Diagnóstico concluído');}
+      for(const review of response.history.slice(-3).reverse())p.note(`${stamp(review.minute)} · ${review.title}: variação ${review.change.toFixed(1)}; redução da perda ${review.lossChange.toFixed(1)} p.p.${review.blocked?` · ${review.blocked}`:''}`);
+    });
     const currentPlan=gov.mandates.current?.promises?.[0];if(currentPlan)p.record('PLANO EM EXECUÇÃO',currentPlan.title,()=>ui.openPanel({politicsTab:'promises',mandateView:'promise'}));
     fold(ui,p,'governmentInitiatives','BANCO DE PROJETOS E INCENTIVOS (31)',()=>{const activeParty=gov.partyOfId(city.economy.mayorId),profile=describePoliticalOrientation(activeParty);p.note(`O plano anunciado pela gestão considera problemas da cidade e a orientação do partido no governo (${profile.ideology}). Projetos com custo alto dependem de caixa e tramitação na Câmara.`);p.table([{label:'Projeto ou incentivo',weight:2.5},{label:'Resultado acompanhado',weight:2}],GOVERNMENT_INITIATIVES.map(item=>({cells:[item.title,PROMISE_METRICS[item.metric]?.label||item.metric]})));});
     p.columns(q=>{

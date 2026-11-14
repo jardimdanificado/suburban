@@ -7413,7 +7413,7 @@ export class RCT3DRenderer {
           if(this.terrainOptimizationsEnabled===false||this._terrainSynchronousBuild){
             const grass=createVolumetricGrassMesh(THREE,geom,this.materials[materialKey],{excludedCells:this._grassExclusionCells,materialKey,bladesPerAxis:zoomDetail.grassAxis});
             tintGrass(grass);chunk.terrain.add(grass);
-            if(zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails,ready.details);if(details)chunk.terrain.add(details);}
+            if(zoomDetail.smallDetails){const details=createGrassDetailsMesh(THREE,grass,this.materials.grassDetails);if(details)chunk.terrain.add(details);}
           }else{
           const emptyRoots={roots:new Float32Array(),shapes:new Float32Array(),shades:new Float32Array()};
           const jobs=this.grassRootJobs??=new GrassRootJobs();

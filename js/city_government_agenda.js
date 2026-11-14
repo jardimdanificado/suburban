@@ -1,3 +1,5 @@
+import {approvalReport} from './city_political_institutions.js';
+import {reviewGovernmentResponse} from './city_government_response.js';
 const live=b=>b&&!b.entity.destroyed;
 const pending=b=>['awaiting-session','proposed','awaiting-sanction','approved','executing','vetoed'].includes(b.status);
 const buildingFor={housed:'popular_housing',publicHomes:'popular_housing',publicMeals:'popular_refectory',kitchens:'kitchen',stateFirms:'utility',publicJobs:'carrier',employed:'carrier',smallFirms:'artisan',clean:'cleaner',hygiene:'cleaner',cleaners:'cleaner',health:'clinic',clinics:'clinic',water:'utility',waterWorks:'utility',rest:'leisure',parks:'leisure',carriers:'carrier',deliveries:'carrier',builders:'builder',cultivatedTrees:'forestry',woodStock:'forestry',paperStock:'paper_mill',publishedTexts:'publisher',readers:'publisher',literacy:'publisher',artisans:'artisan',equipped:'artisan',savers:'bank',banks:'bank',paidLoans:'bank',recycling:'composting',waste:'waste_collector',oilMills:'mill',sunflowerFarms:'farm'};
@@ -15,7 +17,7 @@ export class CityGovernmentAgenda {
     if(matching){matching.agendaTermId=term.id;matching.promiseMetric=term.promises[0].metric;if(!execution.actions.some(a=>a.billId===matching.id))this.record(term,execution,`A gestão passou a acompanhar: ${matching.title}.`,{billId:matching.id,action:'follow-bill'});return matching;}
     if(p.council.bills.filter(b=>b.agendaTermId===term.id&&pending(b)).length>=2){execution.blocked='Aguardando os projetos prioritários já encaminhados à Câmara.';return null;}
     const author=p.council.people().find(c=>c.political.partyId===term.partyId)||p.council.people()[0];if(!author){execution.blocked='Câmara sem vereador disponível para apresentar o projeto.';return null;}
-    const bill=p.council.propose(author,type,payload,`Plano de governo: ${title}`);if(!bill||typeof bill!=='object'){execution.blocked='Aguardando tramitação de proposta semelhante.';return null;}
+    const bill=p.council.propose(author,type,payload,`${term.responseAction?'Resposta à desaprovação':'Plano de governo'}: ${title}`);if(!bill||typeof bill!=='object'){execution.blocked='Aguardando tramitação de proposta semelhante.';return null;}
     bill.agendaTermId=term.id;bill.promiseMetric=term.promises[0].metric;this.record(term,execution,`${term.mayorName} articulou na Câmara: ${title}.`,{billId:bill.id,action:'propose'});return bill;
   }
   build(term,execution,type,crop=null){
@@ -69,6 +71,15 @@ export class CityGovernmentAgenda {
   hourly(force=false){
     const city=this.city,p=city.politics,term=p.mandates.current,pr=term?.promises[0];if(!pr||term.endedAt!=null)return;
     const period=`${term.id}:${Math.floor(city.minute/360)}`;if(!force&&this.lastPeriod===period)return;this.lastPeriod=period;
+    this.execute(term,pr);
+    const response=reviewGovernmentResponse(city,term,approvalReport(p));
+    if(response.current){
+      if(response.current.metric===pr.metric)response.current.execution=pr.execution;
+      else this.execute({...term,promises:[response.current],responseAction:true},response.current);
+    }
+  }
+  execute(term,pr){
+    const city=this.city,p=city.politics;
     const execution=pr.execution??={actions:[],status:'Planejamento',blocked:null,committed:0};execution.updatedAt=city.minute;execution.blocked=null;
     // Reconcile real bills and contracts before choosing the next bounded action.
     for(const action of execution.actions){const bill=p.council.bills.find(b=>b.id===action.billId);if(bill){action.status=bill.status;action.result=bill.result;if(bill.projectId)action.projectId=bill.projectId;}const project=city.development.projects.find(a=>a.id===action.projectId);if(project){action.status=project.cancelled?'cancelled':project.status;project.agendaTermId=term.id;project.priority=Math.max(project.priority||0,95);}if(bill?.result&&bill.status==='executing')execution.blocked=bill.result;}
@@ -76,8 +87,15 @@ export class CityGovernmentAgenda {
     const metric=pr.metric,buildings=city.buildings.filter(live),active=type=>buildings.some(b=>b.type===type&&b.active&&(type!=='farm'||b.crop==='girassol'));
     if(!pr.fulfilled){
       if(['marketRecoveries','rentVouchers','stateEquityLoans'].includes(metric)){if(!execution.initiativeApplied)execution.blocked='Aguardando mercado em crise, família elegível ou estatal disponível e caixa preservando a reserva municipal.';}
+      else if(['funeralHealth','justiceHealth'].includes(metric)){
+        const types=metric==='funeralHealth'?['iml','crematorium']:['courthouse','police_station'];
+        this.operations(term,execution,types);city.economy.hire();
+        const missing=types.find(type=>!active(type));
+        if(missing)this.build(term,execution,missing);
+        else execution.blocked='Estrutura custeada; aguardando funcionários, insumos e procedimentos legais, sem interferência nas decisões judiciais.';
+      }
       else if(metric.startsWith('salesTax_'))this.proposal(term,execution,'salesTax',{category:metric.slice(9),value:pr.target/100},`reduzir imposto do ramo para ${pr.target.toFixed(1)}%`);
-      else if(['treasuryHealth','operatingHealth','serviceHealth','companyProductivity'].includes(metric)){city.fiscal.hourly();city.fiscal.fundServices();city.economy.hire();if(metric!=='companyProductivity')city.fiscal.requestRevenueReview();execution.blocked='Revisão de receitas, custeio dos serviços e contratação em andamento; resultado depende das contas e da produção reais.';}
+      else if(['treasuryHealth','operatingHealth','serviceHealth','companyProductivity','municipalSolvency'].includes(metric)){city.fiscal.hourly();city.fiscal.fundServices();city.economy.hire();if(metric!=='companyProductivity')city.fiscal.requestRevenueReview();execution.blocked='Revisão de receitas, custeio dos serviços e contratação em andamento; resultado depende das contas e da produção reais.';}
       else if(metric==='tax')this.proposal(term,execution,'tax',{value:pr.target/100},`reduzir imposto para ${pr.target.toFixed(1)}%`);
       else if(metric==='wage')this.proposal(term,execution,'minimumWage',{value:Math.ceil(pr.target/60)},'aumentar o piso salarial prometido');
       else if(metric==='inflation'){if(city.currency.policy.inflationTarget>pr.target/100||!execution.actions.some(a=>a.action==='propose'))this.proposal(term,execution,'inflation',{value:Math.max(0,Math.floor(city.currency.policy.dailyLimit*.8)),target:pr.target/100},'controle de inflação e emissão');else execution.blocked='Aguardando os efeitos das medidas monetárias aprovadas.';}

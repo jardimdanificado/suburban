@@ -803,3 +803,9 @@ node server/world_server.mjs --port 8787 --data server/data   # servidor do mund
 ```
 
 No jogo, abra **Mundo, comércio e migração** e clique em **CONECTAR AO SERVIDOR** (`ws://localhost:8787` por padrão). Cada cidade mantém seu relógio local; o servidor coordena embarques, entregas e migração e persiste um ledger que retoma transferências quando uma cidade se reconecta. Sem dependências externas: o servidor Node implementa o WebSocket (RFC 6455) internamente.
+
+### Resposta do governo à desaprovação
+
+A cada seis horas simuladas, a gestão identifica e compara as perdas reais no cálculo da aprovação. Problemas do mesmo indicador são agrupados; efeitos positivos, limites contábeis e escândalos não viram demandas artificiais por serviços. A prioridade recebe medidas pela agenda existente: projetos na Câmara, obras, custeio e revisão fiscal, respeitando orçamento, reserva essencial e tramitação. Serviços funerários e estrutura da Justiça recebem apoio material, sem interferência nas decisões judiciais.
+
+A promessa eleitoral continua sendo executada separadamente. A resposta não cria outra promessa nem concede bônus por iniciativa. A gestão acompanha a mudança do indicador e da perda de aprovação; após um dia sem melhora, permite que outro problema urgente receba atenção. O painel de governo mostra diagnóstico, prioridade, pendências e revisões recentes. Aprovação só muda pelos resultados e regras existentes.
