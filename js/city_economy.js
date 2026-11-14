@@ -28,16 +28,8 @@ import { ensureExternalAccount } from './city_currency.js';
 import { inspectBuildingSite, tileAt, tileHeight, settlementConnected } from './city_terrain.js?v=entrance-retaining-clearance-1';
 
 export const SKILLS = { fishing:'Pesca', agriculture: 'Agricultura', baking: 'Panificação', commerce: 'Comércio', management: 'Gestão', governance: 'Administração pública', medicine: 'Saúde', maintenance: 'Manutenção', social: 'Comunicação', care: 'Cuidados',artistic:'Arte',combat:'Combate',investigation:'Investigação',forensics:'Perícia',law:'Direito',construction: 'Construção', mining: 'Mineração', logistics: 'Logística', cleaning: 'Faxina', recycling: 'Reciclagem', minting: 'Cunhagem' };
-export const CROPS = {
-  ...SUBSTANCE_CROPS,
-  arroz:{label:'Arroz',grow:150,price:95},alface:{label:'Alface',grow:75,price:80},tomate:{label:'Tomate',grow:100,price:110},
-  girassol: { label: 'Girassol', grow: 100, price: 12, yieldFactor: 4, laborFactor: .65 },
-  maca: { label: 'Maçã', grow: 180, price: 100 }, goiaba: { label: 'Goiaba', grow: 160, price: 100 },
-  trigo: { label: 'Trigo', grow: 120, price: 90 }, milho: { label: 'Milho', grow: 100, price: 95 },
-  mandioca: { label: 'Mandioca', grow: 200, price: 105 }, cebola: { label: 'Cebola', grow: 140, price: 95 },
-  feijao: { label: 'Feijão', grow: 150, price: 100 }, coentro: { label: 'Coentro', grow: 80, price: 90 },
-  cevada:{label:'Cevada',grow:125,price:105,nonFood:true},lupulo:{label:'Lúpulo',grow:150,price:190,nonFood:true},uva:{label:'Uva',grow:170,price:150,nonFood:true},agave:{label:'Agave',grow:190,price:180,nonFood:true},
-};
+export {FARM_CROPS as CROPS} from './farm_crop_catalog.js';
+import {FARM_CROPS as CROPS} from './farm_crop_catalog.js';
 export const GOODS = { ...INDUSTRIAL_GOODS, ...CROPS, oleo: { label: 'Óleo de girassol', price: 10 }, pao: { label: 'Pão', price: 180 }, pedra: { label: 'Pedra', price: 10000 }, sementes: { label: 'Sementes', price: 10 }, lixo: { label: 'Lixo', price: 20 } };
 export const PRIVATE_TYPES = new Set([...Object.keys(INDUSTRIES), 'farm', 'bakery', 'greengrocer', 'market', 'restaurant', 'builder', 'quarry', 'carrier', 'lamp_service', 'office_tower', 'cleaner', 'waste_collector', 'recycler', 'paid_toilet', 'mill','clinic','library']);
 export const PUBLIC_TYPES = new Set([...Object.keys(CIVIC_SERVICES),'iml','crematorium','police_station','council_oversight_office','jail','courthouse','townhall','council_chamber','bike_rack', 'clinic', 'utility', 'leisure', 'public_toilet', 'mint', 'super_popular_housing', 'popular_housing', 'popular_luxury_housing', 'luxury_housing', 'popular_refectory']);
@@ -640,6 +632,7 @@ export class CityEconomy {
   }
   buySeeds(b) {
     if (!['farm','forestry'].includes(b.type) || !b.active || b.seedStock >= 8) return;
+    if(b.type==='farm'&&b.crop?.startsWith('muda_')&&(b.inventory[b.crop]||0)>0){const n=Math.min(8-b.seedStock,b.inventory[b.crop]);b.inventory[b.crop]-=n;b.seedStock+=n;this.consumed[b.crop]+=n;this.produced.sementes+=n;this.recordGoods('cuttings-to-seedstock',b.crop,n,b.id,null);return;}
     const qty = Math.min(24 - b.seedStock, Math.floor(b.balance / this.goods.sementes.price), inventoryFree(b), Math.max(0, 12 - b.seedStock));
     const cost = qty * this.goods.sementes.price;
     if (qty > 0 && this.city.transfer(b.accountId, 'supplier', cost, 'Compra de sementes',{good:'sementes',quantity:qty})) { b.seedStock += qty; this.initialStock.sementes += qty; b.totalExpenses += cost; }
@@ -862,7 +855,7 @@ export class CityEconomy {
     const {field,units,unit,index,required,quota,area}=best,old=this.city.units.get(c.workCell?.unitId);
     if(old?.farmWorkerId===c.id&&old!==unit)old.farmWorkerId=null;unit.farmWorkerId=c.id;
     if(!outdoorCellReady(this.city,c,b,unit))return true;
-    if(field.plantedAt===null){const seeds=Math.ceil(area/3);if(b.seedStock<seeds)return false;b.seedStock-=seeds;field.plantedAt=this.city.minute;field.labor=0;field.cellLabor=units.map(()=>0);field.harvestedCells=units.map(()=>false);field.harvestedQuantity=0;field.growthMultiplier=1;field.fertilized=false;
+    if(field.plantedAt===null){const seeds=Math.ceil(area/3);if(b.seedStock<seeds)return false;b.seedStock-=seeds;field.plantedAt=this.city.minute;field.establishedAt??=this.city.minute;field.labor=0;field.cellLabor=units.map(()=>0);field.harvestedCells=units.map(()=>false);field.harvestedQuantity=0;field.growthMultiplier=1;field.fertilized=false;
       if(b.inventory.adubo>0){b.inventory.adubo--;this.consumed.adubo++;field.growthMultiplier=1.5;field.fertilized=true;this.recordGoods('fertilizing','adubo',1,b.id,null);field.labor=Math.min(required,30);field.cellLabor=units.map(()=>field.labor/units.length);}
       this.consumed.sementes+=seeds;this.recordGoods('sowing','sementes',seeds,b.id,null);
     }

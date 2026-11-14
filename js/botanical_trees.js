@@ -50,7 +50,7 @@ const add=(a,b)=>a.map((v,i)=>v+b[i]),mul=(a,s)=>a.map(v=>v*s),mix=(a,b,t)=>a.ma
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const unit=a=>mul(a,1/(Math.hypot(...a)||1));
 const rgb=vegetationColor;
-function builder(seed){
+export function botanicalMeshBuilder(seed){
   const positions=[],colors=[],uvs=[],flex=[],parts=[],woodMask=[];
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
   const triangle=(a,b,c,color,wood=false,part=0,bend=[0,0,0],uv=[[0,0],[.5,1],[1,0]])=>{
@@ -323,17 +323,17 @@ function aroid(b,s){
     }
   }
 }
-export function botanicalTreeSurface(species){
-  const s=BOTANICAL_TREE_MODELS[species];if(!s)return null;
+export function botanicalTreeSurface(species,model=null){
+  const s=model||BOTANICAL_TREE_MODELS[species];if(!s)return null;
   let seed=2166136261;for(const c of species)seed=Math.imul(seed^c.charCodeAt(0),16777619)>>>0;
-  const b=builder(seed);
+  const b=botanicalMeshBuilder(seed);
   if(s.kind==='broad')broadTree(b,s);else if(s.kind==='pine')pineTree(b,s);
   else if(['pinnate','fan'].includes(s.kind))palms(b,s);else if(s.kind==='banana')bananaTree(b,s);
   else if(s.kind==='papaya')papayaTree(b,s);else aroid(b,s);
   return {positions:b.positions,colors:b.colors,uvs:b.uvs,flex:b.flex,parts:b.parts,woodMask:b.woodMask};
 }
-export function createBotanicalTreeGeometry(THREE,species){
-  const surface=botanicalTreeSurface(species);if(!surface)return null;
+export function createBotanicalTreeGeometry(THREE,species,model=null){
+  const surface=botanicalTreeSurface(species,model);if(!surface)return null;
   const geometry=new THREE.BufferGeometry();
   for(const [name,data,size] of [['position',surface.positions,3],['color',surface.colors,3],['uv',surface.uvs,2],['treeFlex',surface.flex,1],['treePart',surface.parts,1],['treeWood',surface.woodMask,1]])geometry.setAttribute(name,new THREE.Float32BufferAttribute(data,size));
   geometry.computeVertexNormals();geometry.computeBoundingSphere();return geometry;
@@ -394,7 +394,7 @@ export function addBotanicalTreeWind(material){
 }
 
 export class BotanicalTreeInstances {
-  constructor(THREE,group,material,capacity=1200){this.THREE=THREE;this.group=group;this.material=material;this.capacity=capacity;this.batches=new Map();
+  constructor(THREE,group,material,capacity=1200,geometryFactory=createBotanicalTreeGeometry){this.geometryFactory=geometryFactory;this.THREE=THREE;this.group=group;this.material=material;this.capacity=capacity;this.batches=new Map();
     this.shadowMaterial=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking,side:THREE.DoubleSide});
     this.shadowMaterial.onBeforeCompile=shader=>{
       shader.vertexShader='attribute float treeWood;\n'+shader.vertexShader;
@@ -405,10 +405,11 @@ export class BotanicalTreeInstances {
   begin(){for(const batch of this.batches.values())batch.used=0;}
   add(species,matrix,growth=1){
     if(species==='tree')species='oak';
-    if(!BOTANICAL_TREE_MODELS[species])return false;
+
     let batch=this.batches.get(species);
     if(!batch){
-      const {THREE}=this,geometry=createBotanicalTreeGeometry(THREE,species);
+      const {THREE}=this,geometry=this.geometryFactory(THREE,species);
+      if(!geometry)return false;
       const age=new THREE.InstancedBufferAttribute(new Float32Array(this.capacity).fill(1),1);
       geometry.setAttribute('instanceGrowth',age);
       const mesh=new THREE.InstancedMesh(geometry,this.material,this.capacity);

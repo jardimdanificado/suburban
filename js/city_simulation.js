@@ -1100,6 +1100,7 @@ export class CitySimulation {
     const company=companies[Math.floor(this.minute/120)%Math.max(1,c.businessIds.length)]||companies[0]||null;
     const child = this.childrenOf(c.id).find(child => this.society.age(child) < 6 && Math.min(child.needs.food, child.needs.water, child.needs.hygiene, child.needs.social) < 45);
     let task = 'leisure', type = 'leisure';
+    if((!urgent||urgent==='food')&&n.food<72){const good=Object.keys(c.inventory||{}).find(g=>c.inventory[g]>0&&this.nature.productsForFood?.(g));if(good&&this.nature.eat(c,good))return;}
     if(!urgent||['food','water'].includes(urgent)){const routed=measure?measure('taskSuppliesRoute',()=>this.supplies.route(c)):this.supplies.route(c);if(routed)return;}
     const streetStall=measure?measure('taskMarketCheck',()=>streetMarketFor(this.economy,c)):streetMarketFor(this.economy,c);
     if(!urgent&&!wantsSleep(this,c)&&streetStall&&this.society.isAdult(c)&&Math.min(n.food,n.water,n.energy,n.health,n.toilet)>25&&!c.conversation&&!c.deliveryId&&!c.workMeal){
@@ -1128,6 +1129,7 @@ export class CitySimulation {
     else if (job && c.role!=='councilor' && this.hour >= 8 && this.hour < 17) { task = 'work'; type = 'job'; }
     else if (this.substances?.routeBar(c))return;
     else if (n.social < 60) { task = 'social'; type = 'leisure'; }
+    if(task==='leisure'&&!urgent&&this.nature.consider(c))return;
     if(task==='energy'&&!home){this.routeHomelessToSleep(c);return;}
     if (this.society.age(c) < 6 && !urgent) { task = 'care'; type = 'home'; }
     const joblessDuringShift=this.society.isAdult(c)&&!c.jobId&&!c.businessIds.length&&this.hour>=8&&this.hour<17;
@@ -1215,11 +1217,13 @@ export class CitySimulation {
         c.path = path; c.targetId = b.id; c.task = task; if(['food','water','health','leisure','social'].includes(task)){c.routineServices??={};c.routineServices[task]={buildingId:b.id,reviewAt:this.minute+(this.fastForward?(this.fastForward2?960+c.id%481:480+c.id%241):360+c.id%60)};} if (task === 'food') this.workMeals.issueVoucher(c, b); return;
       }
     }
+    if(task==='food'&&this.nature.consider(c,{foodOnly:true}))return;
     c.task = task==='energy'&&!home?'energy':null; c.targetId = null; c.action = task==='energy'&&!home?'Dormindo na rua':task === 'food' ? 'Alimentos indisponíveis nas lojas locais' : home ? 'Sem acesso ao serviço' : 'Sem moradia';
     if (task === 'food' && (!c.foodShortageAt || this.minute - c.foodShortageAt >= 60)) { c.foodShortageAt = this.minute; this.economy.failedMeals++; this.log(`${c.entity.properties.name} não encontrou alimentos à venda.`, 'production', [c.id], { kind: 'food-shortage' }); }
     if (task === 'energy'&&home) n.energy = clamp(n.energy + 0.1);
   }
   performTask(c) {
+    if(c.task==='forage'||c.task==='forage-sale'){this.nature.perform(c);return;}
     if(c.task==='work-wait'){if(!c.seatId&&!syncCitizenInterior(this,c))return;this.furniture.advanceWait(c);return;}
     if(c.task==='market-vending'){const stall=streetMarketFor(this.economy,c);if(!stall){c.marketStall=null;c.task=null;c.targetId=null;c.path=[];c.action='Encerrando o mercado de rua';return;}if(this.urgentNeed(c)){c.task=null;c.targetId=null;c.path=[];return;}c.action=`Vendendo ${this.building(stall.businessId)?.entity.properties.name||'produtos'} na feira`;this.economy.practice(c,'commerce',1);return;}
     if(c.task==='sit'){if(c.path.length)return;c.needs.leisure=clamp(c.needs.leisure+.7);c.action='Descansando sentado no banco';if(this.minute>=c.sitUntil||this.urgentNeed(c)){this.furniture.release(c);c.task=null;}return;}

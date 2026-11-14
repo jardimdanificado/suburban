@@ -6,6 +6,7 @@ const HOUSING_FURNITURE_TYPES=new Set(['residential','super_popular_housing','po
 // renderer can agree about what a person is trying to use. `none` is an
 // intentional spatial task (travel/escort), never an unclassified activity.
 export const TASK_FURNITURE_PROFILES=Object.freeze({
+ forage:{item:[],pose:'collect',room:[]},'forage-sale':{item:[],pose:'work',room:[]},'plant-infusion':{item:['cabinet','workbench'],pose:'work',room:['bedroom','workspace']},
  energy:{item:['bed','cot'],pose:'lying',room:['bedroom','cell']},toilet:{item:['toilet'],pose:'seated',room:['bathroom','cell']},hygiene:{item:['shower','sink'],pose:'use',room:['bathroom']},
  water:{item:['water_cooler','pump','counter'],pose:'use',room:['service','workspace','bathroom']},food:{item:['chair','counter'],pose:'use',room:['dining','service']},workmeal:{item:['chair'],pose:'seated',room:['dining']},provisions:{item:['chair','fridge','pantry'],pose:'use',room:['dining','bedroom']},supplies:{item:['shelf','counter'],pose:'use',room:['service','workspace']},
  care:{item:['crib','bed'],pose:'use',room:['bedroom']},caregiving:{item:['chair','play_mat'],pose:'seated',room:['bedroom','dining']},health:{item:['exam_bed','chair'],pose:'lying',room:['treatment']},
@@ -26,6 +27,7 @@ export const TASK_FURNITURE_PROFILES=Object.freeze({
 // Every task also declares where its physical activity happens. Empty furniture
 // lists are valid only for these moving or outdoor destinations.
 export const TASK_DESTINATION_KINDS=Object.freeze({
+ forage:'wild-plant','forage-sale':'shop-entrance','plant-infusion':'home-preparation',
  energy:'home',toilet:'bathroom-service',hygiene:'home-or-service',water:'utility',food:'meal-service',workmeal:'employer-refectory',provisions:'carried-meal-or-home',supplies:'supply-service',care:'home',caregiving:'child-or-home',health:'clinic',work:'workplace-or-field',manage:'business',
  'work-wait':'workplace-or-queue',construction:'construction-site', 'job-interview':'labor-secretariat',interview:'interview-partner',research:'research-site', 'council-session':'council-chamber',vote:'townhall',clean:'cleaning-assignment','informal-service':'gig-site',shopping:'shop-or-laundromat',leisure:'leisure-site',social:'social-partner-or-venue',visit:'host-home',sit:'public-seat',outdoor_leisure:'balcony-or-roof',
  'justice-report':'police-station-counter','police-patrol':'patrol-route','police-response':'incident-scene','police-investigation':'case-scene-and-witness','police-oversight':'oversight-office','police-restitution':'person-and-handoff','police-arrest-escort':'person-to-custody',custody:'reserved-jail-cell','custody-escort':'escorted-route','custody-water':'water-source-to-jail',funeral:'body-and-ceremony-site',

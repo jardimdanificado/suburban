@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>Plantas cultivadas e silvestres</title>
+<style>body{margin:0;background:#314334;color:#eff3df;font:12px system-ui}header{padding:8px}canvas{display:block}.label{position:absolute;color:#fff;text-align:center;pointer-events:none}</style>
+<header>Plantas cultivadas e silvestres · <span id="status">Carregando…</span></header>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {createFarmPlantGeometry} from '../js/farm_plant_geometry.js';
+import {FARM_CROPS} from '../js/farm_crop_catalog.js';
+import {botanicalTreeTextures,addBotanicalTreeWind,BotanicalTreeInstances} from '../js/botanical_trees.js?v=species-colors-3';
+try{
+ const ids=['alface','tomate','arroz','trigo','milho','cebola','mandioca','coentro','feijao','girassol','grao_cafe','folha_tabaco','flor_cannabis','folha_coca','cana','uva','agave','cubensis','amanita','peyote','trombeta_anjo','manga','goiaba','coco'];
+ const renderer=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true});renderer.setSize(innerWidth,innerHeight-32);renderer.setPixelRatio(1);document.body.append(renderer.domElement);let errors=0;renderer.debug.onShaderError=()=>errors++;
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0x314334);const group=new THREE.Group();scene.add(group);const material=addBotanicalTreeWind(new THREE.MeshStandardMaterial({...botanicalTreeTextures(THREE),vertexColors:true,side:THREE.DoubleSide,alphaTest:.5,roughness:.95})),batch=new BotanicalTreeInstances(THREE,group,material,2,createFarmPlantGeometry),matrix=new THREE.Matrix4();batch.begin();
+ ids.forEach((id,i)=>{matrix.makeTranslation((i%6)*1.8,0,Math.floor(i/6)*2);batch.add(id,matrix,1);});batch.end();scene.add(new THREE.HemisphereLight(0xffffff,0x38552b,2));const light=new THREE.DirectionalLight(0xfff4d3,2.3);light.position.set(3,7,4);scene.add(light);
+ const soil=new THREE.Mesh(new THREE.PlaneGeometry(12,9),new THREE.MeshLambertMaterial({color:0x6a4c2d}));soil.rotation.x=-Math.PI/2;soil.position.set(4.5,-.015,3);scene.add(soil);
+ const camera=new THREE.OrthographicCamera(-6.6,6.6,4.7,-4.7,.1,80);camera.position.set(9,12,17);camera.lookAt(4.4,.2,3);renderer.render(scene,camera);
+ ids.forEach((id,i)=>{const p=new THREE.Vector3((i%6)*1.8,-.12,Math.floor(i/6)*2).project(camera),el=document.createElement('div');el.className='label';el.textContent=FARM_CROPS[id].label;el.style.left=`${(p.x*.5+.5)*innerWidth-55}px`;el.style.top=`${(-p.y*.5+.5)*(innerHeight-32)+32}px`;el.style.width='110px';document.body.append(el);});
+ if(errors)throw Error(`${errors} shader errors`);document.querySelector('#status').textContent=`${ids.length} modelos · ${renderer.info.render.calls} chamadas · ${renderer.info.render.triangles} triângulos · ${errors} erros`;document.body.dataset.ready='true';
+}catch(e){document.querySelector('#status').textContent=e.stack;document.body.dataset.ready='error';}
+</script>

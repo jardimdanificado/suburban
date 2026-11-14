@@ -1,0 +1,81 @@
+import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
+export const NATURAL_PLANTS = {
+  coconut_palm: { label: 'Coqueiro', color: 0x548d38, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
+  royal_palm: { label: 'Palmeira-real', color: 0x6a9b46, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
+  banana: { label: 'Bananeira', color: 0x5c9639, grow: 2 * 1440, wood: 0, tree: true, terrain: [0] },
+  mango: { label: 'Mangueira', color: 0x568341, grow: 4 * 1440, wood: 4, terrain: [0,9] },
+  guava: { label: 'Goiabeira', color: 0x68964b, grow: 3 * 1440, wood: 3, terrain: [0,9] },
+  jackfruit: { label: 'Jaqueira', color: 0x4e7d3c, grow: 5 * 1440, wood: 4, terrain: [0] },
+  breadfruit: { label: 'Fruta-pão', color: 0x548447, grow: 4 * 1440, wood: 4, terrain: [0] },
+  papaya: { label: 'Mamoeiro', color: 0x65954a, grow: 2 * 1440, wood: 0, tree: true, terrain: [0] },
+  avocado: { label: 'Abacateiro', color: 0x4f7842, grow: 4 * 1440, wood: 4, terrain: [0,9] },
+  tamarind: { label: 'Tamarindeiro', color: 0x63854b, grow: 4 * 1440, wood: 4, terrain: [0,9] },
+  cacao: { label: 'Cacaueiro', color: 0x3e7046, grow: 3 * 1440, wood: 2, terrain: [0] },
+  soursop: { label: 'Gravioleira', color: 0x4b7e49, grow: 4 * 1440, wood: 3, terrain: [0] },
+  ackee: { label: 'Akee', color: 0x598340, grow: 4 * 1440, wood: 3, terrain: [0] },
+  lime: { label: 'Limoeiro', color: 0x6f9144, grow: 3 * 1440, wood: 3, terrain: [0,9] },
+  allspice: { label: 'Pimenteira-da-jamaica', color: 0x4d7b44, grow: 4 * 1440, wood: 3, terrain: [0] },
+  flamboyant: { label: 'Flamboyant', color: 0x658d38, grow: 3 * 1440, wood: 4, terrain: [0,9] },
+  sea_grape: { label: 'Uva-da-praia', color: 0x77964c, grow: 3 * 1440, wood: 4, terrain: [0,9] },
+  tropical_almond: { label: 'Amendoeira-da-praia', color: 0x638849, grow: 3 * 1440, wood: 4, terrain: [0,9] },
+  mangrove: { label: 'Mangue', color: 0x4e7948, grow: 4 * 1440, wood: 4, terrain: [0] },
+  hibiscus: { label: 'Hibisco tropical', color: 0x5c8f43, grow: 2 * 1440, wood: 0, tree: false, terrain: [0,9] },
+  bougainvillea: { label: 'Buganvília', color: 0x668d43, grow: 2 * 1440, wood: 0, tree: false, terrain: [0,9] },
+  oak: { label: 'Carvalho', color: 0x6c994b, grow: 3 * 1440, wood: 4, terrain: [0,9] },
+  pine: { label: 'Pinheiro', color: 0x527d55, grow: 4 * 1440, wood: 4, terrain: [0,9] },
+  willow: { label: 'Salgueiro', color: 0x81a967, grow: 3 * 1440, wood: 4, terrain: [0] },
+  birch: { label: 'Bétula', color: 0xa7bc70, grow: 3 * 1440, wood: 4, terrain: [0,9] },
+  maple: { label: 'Bordo', color: 0xc99352, grow: 3 * 1440, wood: 4, terrain: [0,9] },
+  cherry_blossom: { label: 'Cerejeira', color: 0xd899b1, grow: 3 * 1440, wood: 4, terrain: [0] },
+  berry: { label: 'Amoreira', color: 0x73934c, grow: 1440, wood: 0, terrain: [0,9] },
+  monstera: { label:'Costela-de-adão', scientific:'Monstera deliciosa', color:0x39794c, grow:3*1440, wood:0, tree:true, form:'broad_leaf', renderSize:.78, terrain:[0,9] },
+  guaimbe: { label:'Guaimbê', scientific:'Philodendron bipinnatifidum', color:0x4f8250, grow:3*1440, wood:0, tree:true, form:'broad_leaf', renderSize:.82, terrain:[0,9] },
+  traveller_palm: { label:'Árvore-do-viajante', scientific:'Ravenala madagascariensis', color:0x5b934a, grow:5*1440, wood:0, tree:true, form:'fan_palm', renderSize:1.15, terrain:[0,9] },
+  zebra_maranta: { label:'Maranta-zebrina', scientific:'Goeppertia zebrina', color:0x66834a, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  croton: { label:'Cróton', scientific:'Codiaeum variegatum', color:0x8c7340, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  watermelon_calathea: { label:'Calatéia-melancia', scientific:'Goeppertia roseopicta', color:0x59764a, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  heliconia_rostrata: { label:'Helicônia-papagaio', scientific:'Heliconia rostrata', color:0x53853f, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  red_ginger: { label:'Alpínia-vermelha', scientific:'Alpinia purpurata', color:0x4c8142, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  bird_of_paradise: { label:'Ave-do-paraíso', scientific:'Strelitzia reginae', color:0x507f45, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  licuala_palm: { label:'Palmeira-leque', scientific:'Licuala grandis', color:0x498346, grow:5*1440, wood:0, tree:true, form:'fan_palm', renderSize:.9, terrain:[0,9] },
+  areca_palm: { label:'Areca-bambu', scientific:'Dypsis lutescens', color:0x688e43, grow:4*1440, wood:0, tree:true, form:'palm', renderSize:1.05, terrain:[0,9] },
+  torch_ginger: { label:'Bastão-do-imperador', scientific:'Etlingera elatior', color:0x4d8143, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  imperial_bromeliad: { label:'Bromélia-imperial', scientific:'Alcantarea imperialis', color:0x617f4b, grow:5*1440, wood:0, tree:false, form:'foliage', renderSize:1.12, terrain:[0,9] },
+  silver_vase_bromeliad: { label:'Bromélia-prateada', scientific:'Aechmea fasciata', color:0x718b76, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  anthurium: { label:'Antúrio', scientific:'Anthurium andraeanum', color:0x3f7444, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  caladium: { label:'Tinhorão', scientific:'Caladium bicolor', color:0x6c8053, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  prayer_plant: { label:'Maranta-tricolor', scientific:'Maranta leuconeura', color:0x58764b, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
+  heliconia_bihai: { label:'Helicônia-pássaro-de-fogo', scientific:'Heliconia bihai', color:0x557e3d, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  heliconia_psittacorum: { label:'Helicônia-papagaio-pequena', scientific:'Heliconia psittacorum', color:0x5e8841, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  pau_brasil: { label:'Pau-brasil', scientific:'Paubrasilia echinata', color:0x527747, grow:6*1440, wood:5, tree:true, form:'tree', terrain:[0,9] },
+  yellow_ipe: { label:'Ipê-amarelo', scientific:'Handroanthus serratifolius', color:0x71834a, grow:5*1440, wood:4, tree:true, form:'tree', terrain:[0,9] },
+  quaresmeira: { label:'Quaresmeira', scientific:'Pleroma granulosum', color:0x657e50, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
+  manaca_serra: { label:'Manacá-da-serra', scientific:'Tibouchina mutabilis', color:0x5e8249, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
+  sibipiruna: { label:'Sibipiruna', scientific:'Cenostigma pluviosum', color:0x68884a, grow:5*1440, wood:4, tree:true, form:'tree', terrain:[0,9] },
+  pau_ferro: { label:'Pau-ferro', scientific:'Libidibia ferrea', color:0x507747, grow:6*1440, wood:5, tree:true, form:'tree', terrain:[0,9] },
+  jeriva_palm: { label:'Jerivá', scientific:'Syagrus romanzoffiana', color:0x638746, grow:5*1440, wood:3, tree:true, form:'palm', terrain:[0,3,9] },
+  buriti_palm: { label:'Buriti', scientific:'Mauritia flexuosa', color:0x6a8a43, grow:6*1440, wood:3, tree:true, form:'palm', terrain:[0,3,9] },
+  pitanga: { label:'Pitangueira', scientific:'Eugenia uniflora', color:0x547c3e, grow:3*1440, wood:2, tree:true, form:'tree', terrain:[0,9] },
+  jabuticaba: { label:'Jabuticabeira', scientific:'Plinia cauliflora', color:0x527b42, grow:5*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
+  frangipani: { label:'Jasmim-manga', scientific:'Plumeria rubra', color:0x6d9149, grow:4*1440, wood:2, tree:true, form:'tree', terrain:[0,9] },
+  ixora: { label:'Ixora', scientific:'Ixora coccinea', color:0x4d7740, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  indian_shot: { label:'Cana-da-índia', scientific:'Canna indica', color:0x638847, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  jade_vine: { label:'Trepadeira-jade', scientific:'Strongylodon macrobotrys', color:0x4e8048, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  passionflower: { label:'Maracujazeiro', scientific:'Passiflora edulis', color:0x528044, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  allamanda: { label:'Alamanda-amarela', scientific:'Allamanda cathartica', color:0x648b43, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
+  clusia: { label:'Clúsia', scientific:'Clusia rosea', color:0x537c45, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,3,9] },
+  water_lily: { label:'Vitória-régia', scientific:'Victoria amazonica', color:0x4f8c57, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[TILE_WATER] },
+  canela_de_ema: { label:'Cana-do-brejo', scientific:'Costus spiralis', color:0x557f43, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,3,9] },
+};
+
+// Products are renewable unless explicitly harvested as timber. Ornamental
+// cuttings support cultivation and restoration, rather than becoming food.
+const fruits={coconut_palm:['coco','Coco'],banana:['banana','Banana'],mango:['manga','Manga'],guava:['goiaba','Goiaba'],jackfruit:['jaca','Jaca'],breadfruit:['fruta_pao','Fruta-pão'],papaya:['mamao','Mamão'],avocado:['abacate','Abacate'],tamarind:['tamarindo','Tamarindo'],cacao:['cacau','Cacau'],soursop:['graviola','Graviola'],lime:['limao','Limão'],allspice:['pimenta_jamaica','Pimenta-da-jamaica'],sea_grape:['uva_praia','Uva-da-praia'],tropical_almond:['amendoa','Amêndoa'],berry:['amora','Amora'],pitanga:['pitanga','Pitanga'],jabuticaba:['jabuticaba','Jabuticaba'],passionflower:['maracuja','Maracujá'],jeriva_palm:['coquinho','Coquinho'],buriti_palm:['buriti','Buriti']};
+export const PLANT_PRODUCTS={};
+export const BOTANICAL_CROPS={};
+for(const [species,spec] of Object.entries(NATURAL_PLANTS)){
+ const fruit=fruits[species],good=fruit?.[0]||`muda_${species}`,label=fruit?.[1]||`Muda de ${spec.label.toLowerCase()}`;
+ spec.products={[good]:fruit?3:1};spec.crop=good;
+ PLANT_PRODUCTS[good]={label,price:fruit?110:85,nonFood:!fruit,plantSpecies:species};
+ BOTANICAL_CROPS[good]={...PLANT_PRODUCTS[good],grow:Math.max(90,Math.round(spec.grow/24)),plantSpecies:species};
+}

@@ -335,7 +335,7 @@ export function bindCityState(city,{rebuildIndexes=true}={}) {
   city.substances??=new CitySubstances(city);city.substances.city=city;city.substances.ensureState();
   city.paint??=new CityPaint(city);
   city.fiscal??=new CityFiscal(city);
-  if(city.substanceSchemaVersion!==6||city.goodsCatalogSchemaVersion!==2){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of [...city.buildings,city.worldPort,city.economy.importDepot].filter(holder=>holder?.inventory)){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=6;city.goodsCatalogSchemaVersion=2;}
+  if(city.substanceSchemaVersion!==6||city.goodsCatalogSchemaVersion!==3){city.economy.crops=CROPS;city.buildingTypes=BUILDING_TYPES;for(const [good,spec]of Object.entries(GOODS)){city.economy.goods[good]??={...spec};city.economy.goods[good].label??=spec.label;city.economy.goods[good].price??=spec.price;for(const key of ['initialStock','produced','consumed','lost'])city.economy[key][good]??=0;for(const b of [...city.buildings,...city.citizens,city.worldPort,city.economy.importDepot].filter(holder=>holder?.inventory)){b.inventory[good]??=0;b.incoming??={};}}city.substanceSchemaVersion=6;city.goodsCatalogSchemaVersion=3;}
   city.housing.invalidateResidents();
   if(city.development)city.development.plotOverlapBuckets=null;
   city.buildingsById ??= new Map();

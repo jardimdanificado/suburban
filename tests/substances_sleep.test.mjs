@@ -29,7 +29,7 @@ test('regulated crop needs a formal permit and a prohibited lab cannot produce',
 test('all legal substance crops can be harvested and the economy requests their supply',()=>{
  const {city,s,c}=fixture(),farm=city.economy.businesses.find(b=>b.type==='farm');farm.ownerId=c.id;farm.active=true;
  for(const [crop,spec] of Object.entries(SUBSTANCE_CROPS)){
-  farm.crop=crop;city.economy.setupFarm(farm);const law=s.law(spec.substance);let permit=null;
+  farm.crop=crop;city.economy.setupFarm(farm);if(s.law(spec.substance).regime==='prohibited')s.setLaw(spec.substance,'free',4);const law=s.law(spec.substance);let permit=null;
   if(law.regime==='regulated'){permit=s.requestPermit(farm,spec.substance);city.minute+=360;s.hourly();assert.equal(permit.status,'approved');}
   assert.equal(s.canFarm(farm,{request:false}),true,`${crop} should be cultivable under its initial law`);
   const field=farm.fields[0];field.plantedAt=city.minute-spec.grow-1;field.labor=field.requiredLabor;assert.equal(city.economy.harvest(farm,field),true,`${crop} should complete a harvest`);assert(farm.inventory[crop]>0,`${crop} should enter farm inventory`);
@@ -84,7 +84,7 @@ test('new system and resident effects survive the worker state graph with method
  const {city,c,s}=fixture();stock(city,c,'cafe',1);s.initialize(c).uses.cafe.liking=1;s.consume(c,'cafe');const writer=new CityStateGraph(),reader=new CityStateGraph(),packet=writer.encode({city}),restored=reader.apply(packet).city;bindCityState(restored);assert.equal(typeof restored.substances.consume,'function');assert.equal(restored.substances.city,restored);assert.equal(restored.substances.law('coca').regime,'prohibited');assert.equal(restored.society.citizen(c.id).lastSubstanceUse.id,'cafe');assert.equal(restored.society.citizen(c.id).substanceState.uses.cafe.count,1);
 });
 test('legacy saves gain the new catalog, ledgers and inventory fields during one-time migration',()=>{
- const {city}=fixture();city.substanceSchemaVersion=0;delete city.economy.goods.cafe;delete city.economy.produced.cafe;delete city.economy.consumed.cafe;delete city.economy.lost.cafe;delete city.buildings[0].inventory.canhamo;bindCityState(city);assert.equal(city.substanceSchemaVersion,4);assert.equal(city.economy.goods.cafe.label,'Café');assert.equal(city.economy.produced.cafe,0);assert.equal(city.buildings[0].inventory.canhamo,0);assert(city.buildingTypes.coca_laboratory);
+ const {city}=fixture();city.substanceSchemaVersion=0;delete city.economy.goods.cafe;delete city.economy.produced.cafe;delete city.economy.consumed.cafe;delete city.economy.lost.cafe;delete city.buildings[0].inventory.canhamo;bindCityState(city);assert.equal(city.substanceSchemaVersion,6);assert.equal(city.economy.goods.cafe.label,'Café');assert.equal(city.economy.produced.cafe,0);assert.equal(city.buildings[0].inventory.canhamo,0);assert(city.buildingTypes.coca_laboratory);
 });
 test('industry batches consume their real inputs, produce distinct goods and obey hemp prohibition',()=>{
  const {city,c,s}=fixture(),b=city.economy.businesses.find(b=>b.type==='farm');b.type='coffee_roaster';Object.assign(b.inventory,{grao_cafe:4,carvao:1});b.productionLabor=22;c.skills.baking=100;const before=city.economy.produced.cafe;assert(city.economy.industrialWork(b,c,INDUSTRIES.coffee_roaster));assert.equal(b.inventory.grao_cafe,0);assert.equal(b.inventory.cafe,8);assert.equal(city.economy.produced.cafe,before+8);const loom={type:'hemp_weaver'};assert(s.canProduce(loom));assert(s.setLaw('canhamo','prohibited',null));assert.equal(s.canProduce(loom),false);

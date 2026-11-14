@@ -1,75 +1,16 @@
+import {INDUSTRIES} from './city_industries.js';
 import { inventoryFree } from './city_inventory.js';
 import { tileAt, ROAD_TILES } from './city_terrain.js?v=entrance-retaining-clearance-1';
 import { TILE_WATER } from './world_gen.js?v=terrain-generation-reset-2-map-default-128';
 import {reducedCadence} from './city_fast_forward.js';
-export const PLANT_SPECIES = {
-  coconut_palm: { label: 'Coqueiro', color: 0x548d38, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
-  royal_palm: { label: 'Palmeira-real', color: 0x6a9b46, grow: 4 * 1440, wood: 4, terrain: [0,3,9] },
-  banana: { label: 'Bananeira', color: 0x5c9639, grow: 2 * 1440, wood: 0, tree: true, terrain: [0] },
-  mango: { label: 'Mangueira', color: 0x568341, grow: 4 * 1440, wood: 4, terrain: [0,9] },
-  guava: { label: 'Goiabeira', color: 0x68964b, grow: 3 * 1440, wood: 3, terrain: [0,9] },
-  jackfruit: { label: 'Jaqueira', color: 0x4e7d3c, grow: 5 * 1440, wood: 4, terrain: [0] },
-  breadfruit: { label: 'Fruta-pão', color: 0x548447, grow: 4 * 1440, wood: 4, terrain: [0] },
-  papaya: { label: 'Mamoeiro', color: 0x65954a, grow: 2 * 1440, wood: 0, tree: true, terrain: [0] },
-  avocado: { label: 'Abacateiro', color: 0x4f7842, grow: 4 * 1440, wood: 4, terrain: [0,9] },
-  tamarind: { label: 'Tamarindeiro', color: 0x63854b, grow: 4 * 1440, wood: 4, terrain: [0,9] },
-  cacao: { label: 'Cacaueiro', color: 0x3e7046, grow: 3 * 1440, wood: 2, terrain: [0] },
-  soursop: { label: 'Gravioleira', color: 0x4b7e49, grow: 4 * 1440, wood: 3, terrain: [0] },
-  ackee: { label: 'Akee', color: 0x598340, grow: 4 * 1440, wood: 3, terrain: [0] },
-  lime: { label: 'Limoeiro', color: 0x6f9144, grow: 3 * 1440, wood: 3, terrain: [0,9] },
-  allspice: { label: 'Pimenteira-da-jamaica', color: 0x4d7b44, grow: 4 * 1440, wood: 3, terrain: [0] },
-  flamboyant: { label: 'Flamboyant', color: 0x658d38, grow: 3 * 1440, wood: 4, terrain: [0,9] },
-  sea_grape: { label: 'Uva-da-praia', color: 0x77964c, grow: 3 * 1440, wood: 4, terrain: [0,9] },
-  tropical_almond: { label: 'Amendoeira-da-praia', color: 0x638849, grow: 3 * 1440, wood: 4, terrain: [0,9] },
-  mangrove: { label: 'Mangue', color: 0x4e7948, grow: 4 * 1440, wood: 4, terrain: [0] },
-  hibiscus: { label: 'Hibisco tropical', color: 0x5c8f43, grow: 2 * 1440, wood: 0, tree: false, terrain: [0,9] },
-  bougainvillea: { label: 'Buganvília', color: 0x668d43, grow: 2 * 1440, wood: 0, tree: false, terrain: [0,9] },
-  oak: { label: 'Carvalho', color: 0x6c994b, grow: 3 * 1440, wood: 4, terrain: [0,9] },
-  pine: { label: 'Pinheiro', color: 0x527d55, grow: 4 * 1440, wood: 4, terrain: [0,9] },
-  willow: { label: 'Salgueiro', color: 0x81a967, grow: 3 * 1440, wood: 4, terrain: [0] },
-  birch: { label: 'Bétula', color: 0xa7bc70, grow: 3 * 1440, wood: 4, terrain: [0,9] },
-  maple: { label: 'Bordo', color: 0xc99352, grow: 3 * 1440, wood: 4, terrain: [0,9] },
-  cherry_blossom: { label: 'Cerejeira', color: 0xd899b1, grow: 3 * 1440, wood: 4, terrain: [0] },
-  berry: { label: 'Amoreira', color: 0x73934c, grow: 1440, wood: 0, terrain: [0,9] },
-  monstera: { label:'Costela-de-adão', scientific:'Monstera deliciosa', color:0x39794c, grow:3*1440, wood:0, tree:true, form:'broad_leaf', renderSize:.78, terrain:[0,9] },
-  guaimbe: { label:'Guaimbê', scientific:'Philodendron bipinnatifidum', color:0x4f8250, grow:3*1440, wood:0, tree:true, form:'broad_leaf', renderSize:.82, terrain:[0,9] },
-  traveller_palm: { label:'Árvore-do-viajante', scientific:'Ravenala madagascariensis', color:0x5b934a, grow:5*1440, wood:0, tree:true, form:'fan_palm', renderSize:1.15, terrain:[0,9] },
-  zebra_maranta: { label:'Maranta-zebrina', scientific:'Goeppertia zebrina', color:0x66834a, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
-  croton: { label:'Cróton', scientific:'Codiaeum variegatum', color:0x8c7340, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
-  watermelon_calathea: { label:'Calatéia-melancia', scientific:'Goeppertia roseopicta', color:0x59764a, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
-  heliconia_rostrata: { label:'Helicônia-papagaio', scientific:'Heliconia rostrata', color:0x53853f, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  red_ginger: { label:'Alpínia-vermelha', scientific:'Alpinia purpurata', color:0x4c8142, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  bird_of_paradise: { label:'Ave-do-paraíso', scientific:'Strelitzia reginae', color:0x507f45, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  licuala_palm: { label:'Palmeira-leque', scientific:'Licuala grandis', color:0x498346, grow:5*1440, wood:0, tree:true, form:'fan_palm', renderSize:.9, terrain:[0,9] },
-  areca_palm: { label:'Areca-bambu', scientific:'Dypsis lutescens', color:0x688e43, grow:4*1440, wood:0, tree:true, form:'palm', renderSize:1.05, terrain:[0,9] },
-  torch_ginger: { label:'Bastão-do-imperador', scientific:'Etlingera elatior', color:0x4d8143, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  imperial_bromeliad: { label:'Bromélia-imperial', scientific:'Alcantarea imperialis', color:0x617f4b, grow:5*1440, wood:0, tree:false, form:'foliage', renderSize:1.12, terrain:[0,9] },
-  silver_vase_bromeliad: { label:'Bromélia-prateada', scientific:'Aechmea fasciata', color:0x718b76, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  anthurium: { label:'Antúrio', scientific:'Anthurium andraeanum', color:0x3f7444, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  caladium: { label:'Tinhorão', scientific:'Caladium bicolor', color:0x6c8053, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
-  prayer_plant: { label:'Maranta-tricolor', scientific:'Maranta leuconeura', color:0x58764b, grow:2*1440, wood:0, tree:false, form:'foliage', terrain:[0,9] },
-  heliconia_bihai: { label:'Helicônia-pássaro-de-fogo', scientific:'Heliconia bihai', color:0x557e3d, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  heliconia_psittacorum: { label:'Helicônia-papagaio-pequena', scientific:'Heliconia psittacorum', color:0x5e8841, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  pau_brasil: { label:'Pau-brasil', scientific:'Paubrasilia echinata', color:0x527747, grow:6*1440, wood:5, tree:true, form:'tree', terrain:[0,9] },
-  yellow_ipe: { label:'Ipê-amarelo', scientific:'Handroanthus serratifolius', color:0x71834a, grow:5*1440, wood:4, tree:true, form:'tree', terrain:[0,9] },
-  quaresmeira: { label:'Quaresmeira', scientific:'Pleroma granulosum', color:0x657e50, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
-  manaca_serra: { label:'Manacá-da-serra', scientific:'Tibouchina mutabilis', color:0x5e8249, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
-  sibipiruna: { label:'Sibipiruna', scientific:'Cenostigma pluviosum', color:0x68884a, grow:5*1440, wood:4, tree:true, form:'tree', terrain:[0,9] },
-  pau_ferro: { label:'Pau-ferro', scientific:'Libidibia ferrea', color:0x507747, grow:6*1440, wood:5, tree:true, form:'tree', terrain:[0,9] },
-  jeriva_palm: { label:'Jerivá', scientific:'Syagrus romanzoffiana', color:0x638746, grow:5*1440, wood:3, tree:true, form:'palm', terrain:[0,3,9] },
-  buriti_palm: { label:'Buriti', scientific:'Mauritia flexuosa', color:0x6a8a43, grow:6*1440, wood:3, tree:true, form:'palm', terrain:[0,3,9] },
-  pitanga: { label:'Pitangueira', scientific:'Eugenia uniflora', color:0x547c3e, grow:3*1440, wood:2, tree:true, form:'tree', terrain:[0,9] },
-  jabuticaba: { label:'Jabuticabeira', scientific:'Plinia cauliflora', color:0x527b42, grow:5*1440, wood:3, tree:true, form:'tree', terrain:[0,9] },
-  frangipani: { label:'Jasmim-manga', scientific:'Plumeria rubra', color:0x6d9149, grow:4*1440, wood:2, tree:true, form:'tree', terrain:[0,9] },
-  ixora: { label:'Ixora', scientific:'Ixora coccinea', color:0x4d7740, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  indian_shot: { label:'Cana-da-índia', scientific:'Canna indica', color:0x638847, grow:2*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  jade_vine: { label:'Trepadeira-jade', scientific:'Strongylodon macrobotrys', color:0x4e8048, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  passionflower: { label:'Maracujazeiro', scientific:'Passiflora edulis', color:0x528044, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  allamanda: { label:'Alamanda-amarela', scientific:'Allamanda cathartica', color:0x648b43, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,9] },
-  clusia: { label:'Clúsia', scientific:'Clusia rosea', color:0x537c45, grow:4*1440, wood:3, tree:true, form:'tree', terrain:[0,3,9] },
-  water_lily: { label:'Vitória-régia', scientific:'Victoria amazonica', color:0x4f8c57, grow:4*1440, wood:0, tree:false, form:'flowering', terrain:[TILE_WATER] },
-  canela_de_ema: { label:'Cana-do-brejo', scientific:'Costus spiralis', color:0x557f43, grow:3*1440, wood:0, tree:false, form:'flowering', terrain:[0,3,9] },
-};
+import {NATURAL_PLANTS} from './plant_catalog.js';
+import {FARM_CROPS} from './farm_crop_catalog.js';
+export const PLANT_SPECIES={...NATURAL_PLANTS};
+for(const [good,crop] of Object.entries(FARM_CROPS)){
+ const species=crop.plantSpecies||good;if(PLANT_SPECIES[species])continue;
+ PLANT_SPECIES[species]={label:crop.label,scientific:({cubensis:'Psilocybe cubensis',amanita:'Amanita muscaria',peyote:'Lophophora williamsii',trombeta_anjo:'Brugmansia suaveolens'})[species]||'',color:0x398a29,grow:crop.grow*12,wood:0,tree:false,form:'crop',renderSize:1,terrain:[0,9],crop:good,products:{[good]:3}};
+}
+const citizenFree=c=>{c.inventoryCapacity??=24;return inventoryFree(c);};
 export const NATURE_RULES = { maxPlants: 1000, maxSeeds: 240, germinationMinutes: 360, seedAttemptsPerHour: 12 };
 /** Bounded vegetation population. Seeds are records until germination, not extra entities. */
 export class CityNature {
@@ -121,8 +62,7 @@ export class CityNature {
   }
   initialize() {
     const hall=this.city.buildings.find(b=>b.type==='townhall'); if(!hall)return;
-    const species=['coconut_palm','royal_palm','banana','mango','guava','jackfruit','breadfruit','papaya','avocado','tamarind','cacao','soursop','ackee','lime','allspice','flamboyant','sea_grape','tropical_almond','mangrove','hibiscus','bougainvillea','berry',
-      'monstera','guaimbe','traveller_palm','zebra_maranta','croton','watermelon_calathea','heliconia_rostrata','red_ginger','bird_of_paradise','licuala_palm','areca_palm','torch_ginger','imperial_bromeliad','silver_vase_bromeliad','anthurium','caladium','prayer_plant','heliconia_bihai','heliconia_psittacorum','pau_brasil','yellow_ipe','quaresmeira','manaca_serra','sibipiruna','pau_ferro','jeriva_palm','buriti_palm','pitanga','jabuticaba','frangipani','ixora','indian_shot','jade_vine','passionflower','allamanda','clusia','canela_de_ema'];
+    const species=Object.keys(PLANT_SPECIES);
     for(let attempt=0;attempt<2600 && this.plants.size<320;attempt++) {
       const angle=this.city.random()*Math.PI*2,distance=22+this.city.random()*95;
       const x=Math.floor(hall.door.x+Math.cos(angle)*distance),y=Math.floor(hall.door.y+Math.sin(angle)*distance);
@@ -139,7 +79,7 @@ export class CityNature {
   }
   seedNewFloraForExistingCities() {
     if(this.tropicaliaVarietyIndex==null)this.tropicaliaVarietyIndex=0;
-    const additions=Object.keys(PLANT_SPECIES).filter(id=>PLANT_SPECIES[id].scientific);
+    const additions=Object.keys(PLANT_SPECIES).filter(id=>PLANT_SPECIES[id].scientific||PLANT_SPECIES[id].form==='crop');
     if(this.plants.size>=NATURE_RULES.maxPlants)return;
     let placed=0,checked=0;
     while(this.tropicaliaVarietyIndex<additions.length&&placed<4&&checked<8){
@@ -163,7 +103,7 @@ export class CityNature {
     return this.city.log(`${label}: ${reason}.`,'nature',[],{kind:'plant-removed',plantId:plant.id,buildingId:plant.buildingId,...details});
   }
   hourly() {
-    const city=this.city;
+    const city=this.city;this.reviewFellingLicenses();
     const reconcilePlants=reducedCadence(city,this,'plant-reconciliation',360,360,`${city.world.revision}:${city.buildings.length}:${this.plants.size}`);
     this.seedNewFloraForExistingCities();
     if(reconcilePlants)for(const plant of this.plants.values())this.normalizePlantSpecies(plant);
@@ -210,6 +150,7 @@ export class CityNature {
       const claimed=new Set(city.citizens.filter(v=>v.forestryJob).map(v=>v.forestryJob.treeId));
       const tree=[...this.plants.values()].filter(p=>p.stage==='mature'&&this.normalizePlantSpecies(p)?.wood&&(!p.buildingId||p.buildingId===b.id)&&!claimed.has(p.id)&&Math.hypot(p.x-b.door.x,p.y-b.door.y)<=14&&this.validExisting(p)).sort((a,d)=>Math.hypot(a.x-c.entity.x,a.y-c.entity.y)-Math.hypot(d.x-c.entity.x,d.y-c.entity.y))[0];
       if(b.seedStock<1&&!(c.forestrySeeds>0))return false;
+      if(tree&&!tree.buildingId&&city.justice?.policies.penalCode.unlicensedTreeFelling?.criminal&&!this.fellingLicense(b)&&!city.substances?.dealer(c)){this.requestFellingLicense(b);c.action='Aguardando licença municipal de corte';return false;}
       if(tree)job={buildingId:b.id,treeId:tree.id,x:tree.x+.5,y:tree.y+.5,species:tree.species,stage:'cut',labor:0,load:0};
       else{
         const planted=[...this.plants.values()].filter(p=>p.buildingId===b.id).length+this.seeds.filter(p=>p.buildingId===b.id).length;
@@ -250,10 +191,85 @@ export class CityNature {
     }else if(this.available(x,y,job.species,b.id)&&!this.seeds.some(s=>s.x===x&&s.y===y))return false;
     job.stage='return';return true;
   }
+  products(plant){return PLANT_SPECIES[plant.species]?.products||{};}
+  stock(plant,good){
+    const maximum=this.products(plant)[good]||0;if(plant.stage!=='mature'||plant.entity.destroyed)return 0;
+    const record=plant.gatheredProducts?.[good];return !record||this.city.minute>=record.readyAt?maximum:record.remaining;
+  }
+  collect(c,plant,good,quantity=1){
+    if(!c||c.entity.destroyed||c.custody||c.sleep?.active||c.indoorLocation||!this.plants.has(plant?.id)||plant.buildingId||Math.hypot(c.entity.x-plant.x-.5,c.entity.y-plant.y-.5)>1.6)return 0;
+    const available=this.stock(plant,good),q=Math.min(Math.max(0,Math.floor(quantity)),available,citizenFree(c));if(!(q>0))return 0;
+    plant.gatheredProducts??={};const record=plant.gatheredProducts[good],readyAt=record&&this.city.minute<record.readyAt?record.readyAt:this.city.minute+Math.max(180,PLANT_SPECIES[plant.species].grow/4);
+    plant.gatheredProducts[good]={remaining:available-q,readyAt};c.inventory??={};c.inventory[good]=(c.inventory[good]||0)+q;
+    const economy=this.city.economy;economy.produced[good]=(economy.produced[good]||0)+q;economy.recordGoods('wild-harvest',good,q,plant.id,c.id,{species:plant.species});this.city.substances?.addLot(c,good,q,55,'wild-harvest');
+    this.city.log(`${c.entity.properties.name} colheu ${q} ${economy.goods[good].label.toLowerCase()} na natureza.`,'nature',[c.id],{kind:'wild-harvest',plantId:plant.id,good,quantity:q});return q;
+  }
+  productsForFood(good){return !!FARM_CROPS[good]&&!FARM_CROPS[good].nonFood;}
+  eat(c,good){
+    if(!FARM_CROPS[good]||FARM_CROPS[good].nonFood||!(c.inventory?.[good]>0)||c.custody||c.sleep?.active)return false;
+    c.inventory[good]--;this.city.economy.consumed[good]=(this.city.economy.consumed[good]||0)+1;this.city.economy.recordGoods('wild-food-consumed',good,1,c.id,null);c.needs.food=Math.min(100,c.needs.food+18);return true;
+  }
+  routeGather(c,plant,good){
+    if(!plant||!this.stock(plant,good)||plant.buildingId||citizenFree(c)<1||c.custody||c.sleep?.active)return false;
+    const point={x:plant.x+.5,y:plant.y+.5},path=this.city.findPath(c.entity,point);if(path===null)return false;
+    c.forageJob={plantId:plant.id,good,progress:0};c.task='forage';c.targetId=null;c.path=path;c.action='Indo colher uma planta silvestre';return true;
+  }
+  sell(c,b,good,quantity=1){
+    const city=this.city,controlled=city.substances?.controlled(good),illegal=controlled&&city.substances.law(controlled).regime==='prohibited';
+    if(!b?.active||b.entity.destroyed||Math.hypot(c.entity.x-b.door.x,c.entity.y-b.door.y)>1.6||illegal&&!city.substances.dealer(c))return 0;
+    if(!city.substances?.canTrade(good,c,b,{quantity,illegal}))return 0;
+    const price=Math.max(1,Math.floor((city.economy.goods[good]?.price||0)*.55)),q=Math.min(Math.floor(quantity),c.inventory?.[good]||0,inventoryFree(b),Math.floor(b.balance/price));
+    if(!(q>0)||!city.transfer(b.accountId,c.accountId,q*price,'Compra de produtos coletados',{good,quantity:q}))return 0;
+    city.substances?.moveLots(c,b,good,q);c.inventory[good]-=q;b.inventory[good]=(b.inventory[good]||0)+q;b.totalExpenses=(b.totalExpenses||0)+q*price;city.economy.recordGoods('wild-harvest-sale',good,q,c.id,b.id);if(illegal)city.substances.observeIllegalSale(b,c,good,q);return q;
+  }
+  plantCutting(c,good,x,y){
+    const species=FARM_CROPS[good]?.plantSpecies;if(!good.startsWith('muda_')||!species||!(c.inventory?.[good]>0)||Math.hypot(c.entity.x-x-.5,c.entity.y-y-.5)>1.6||!this.sow(x,y,species))return false;
+    c.inventory[good]--;this.city.economy.consumed[good]++;this.city.economy.recordGoods('cutting-planted',good,1,c.id,null);return true;
+  }
+  consider(c,{foodOnly=false}={}){
+    const city=this.city;if(c.custody||c.sleep?.active||c.indoorLocation||c.deliveryId||c.mobilityTrip||!city.society.isAdult(c))return false;
+    if(c.needs.food<80){const food=Object.keys(c.inventory||{}).find(g=>c.inventory[g]>0&&FARM_CROPS[g]&&!FARM_CROPS[g].nonFood);if(food&&this.eat(c,food))return true;}
+    if(city.minute-(c.lastForageDecisionAt??-Infinity)<90)return false;c.lastForageDecisionAt=city.minute;
+    if(!foodOnly){
+      const good=Object.keys(c.inventory||{}).find(g=>c.inventory[g]>0&&FARM_CROPS[g]);
+      if(good){
+        if(good.startsWith('muda_'))for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]])if(this.plantCutting(c,good,Math.floor(c.entity.x)+dx,Math.floor(c.entity.y)+dy))return true;
+        const controlled=city.substances?.controlled(good),illegal=controlled&&city.substances.law(controlled).regime==='prohibited';
+        const buyers=city.buildings.filter(b=>b.active&&!b.entity.destroyed&&Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y)<20&&((!FARM_CROPS[good].nonFood&&['market','greengrocer','restaurant'].includes(b.type))||b.type==='farm'&&b.crop===good||city.economy.goods[good]&&INDUSTRIES[b.type]?.inputs?.[good])).sort((a,b)=>Math.hypot(a.door.x-c.entity.x,a.door.y-c.entity.y)-Math.hypot(b.door.x-c.entity.x,b.door.y-c.entity.y));
+        if(!illegal||city.substances.dealer(c))for(const b of buyers.slice(0,3)){if(illegal&&!city.substances.dealer(city.society.citizen(b.ownerId)||{}))continue;if(inventoryFree(b)<1||b.balance<(city.economy.goods[good].price||0))continue;const path=city.findPath(c.entity,b.door);if(path!==null){c.forageSale={buildingId:b.id,good};c.task='forage-sale';c.targetId=b.id;c.path=path;return true;}}
+      }
+    }
+    if(citizenFree(c)<1)return false;
+    const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y),candidates=[];
+    // Tile index bounds each decision; never scan the vegetation population.
+    for(let dy=-7;dy<=7;dy++)for(let dx=-7;dx<=7;dx++){const plant=this.plants.get(this.tiles.get(`${x+dx},${y+dy}`));if(!plant||plant.buildingId||plant.stage!=='mature')continue;for(const good of Object.keys(this.products(plant))){if(!this.stock(plant,good)||foodOnly&&FARM_CROPS[good]?.nonFood)continue;const id=city.substances?.controlled(good);if(id&&!city.substances.initialize(c).uses[id]?.potential&&!city.substances.dealer(c))continue;candidates.push({plant,good,d:dx*dx+dy*dy});}}
+    candidates.sort((a,b)=>a.d-b.d);for(const {plant,good}of candidates.slice(0,3))if(this.routeGather(c,plant,good))return true;return false;
+  }
+  perform(c){
+    if(c.task==='forage-sale'){if(c.path.length)return;const job=c.forageSale;this.sell(c,this.city.building(job?.buildingId),job?.good,c.inventory?.[job?.good]||0);c.forageSale=null;c.task=null;c.targetId=null;return;}
+    const job=c.forageJob,plant=this.plants.get(job?.plantId);if(c.path.length)return;
+    if(!plant||Math.hypot(c.entity.x-plant.x-.5,c.entity.y-plant.y-.5)>1.6){c.task=null;c.forageJob=null;return;}
+    c.lastProgressAt=this.city.minute;c.action=`Colhendo ${PLANT_SPECIES[plant.species].label.toLowerCase()}`;if(++job.progress<6)return;
+    this.collect(c,plant,job.good,3);if(c.needs.food<80)this.eat(c,job.good);c.task=null;c.forageJob=null;
+  }
+  requestFellingLicense(holder){
+    this.fellingLicenses??=[];if(!holder?.accountId)return null;
+    const existing=this.fellingLicenses.find(p=>p.holderId===holder.id&&(p.status==='pending'||p.status==='approved'&&p.expiresAt>this.city.minute&&p.remaining>0));if(existing)return existing;
+    const permit={id:this.fellingLicenses.length+1,holderId:holder.id,accountId:holder.accountId,status:'pending',requestedAt:this.city.minute,decideAt:this.city.minute+60,remaining:8};this.fellingLicenses.push(permit);return permit;
+  }
+  fellingLicense(holder){return this.fellingLicenses?.find(p=>p.holderId===holder?.id&&p.accountId===holder.accountId&&p.status==='approved'&&p.expiresAt>this.city.minute&&p.remaining>0);}
+  reviewFellingLicenses(){
+    for(const permit of this.fellingLicenses||[]){if(permit.status!=='pending'||this.city.minute<permit.decideAt)continue;
+      const holder=this.city.building(permit.holderId)||this.city.society.citizen(permit.holderId),paid=holder&&!holder.entity.destroyed&&holder.accountId===permit.accountId&&this.city.transfer(holder.accountId,'treasury',this.city.currency.price(80),'Licença municipal de manejo florestal',{kind:'felling-license',permitId:permit.id});
+      permit.status=paid?'approved':'rejected';permit.expiresAt=this.city.minute+7*1440;permit.decidedAt=this.city.minute;this.city.log(`Licença florestal #${permit.id}: ${paid?'aprovada por sete dias, até oito árvores':'recusada por falta de recursos ou titular inválido'}.`,'government',[],{kind:'felling-license-decided',permitId:permit.id});
+    }
+  }
   harvest(b,tree,worker){
     if(!worker||!tree||!this.plants.has(tree.id)||tree.stage!=='mature'||Math.hypot(worker.entity.x-tree.x-.5,worker.entity.y-tree.y-.5)>1.6)return false;
     if(!(this.normalizePlantSpecies(tree)?.wood>0))return false;
-    const event=this.remove(tree,`cortada por ${worker.entity.properties.name}`,{citizenIds:[worker.id],buildingId:b.id,quantity:PLANT_SPECIES[tree.species].wood});
+    const license=this.fellingLicense(b)||this.fellingLicense(worker);
+    if(!tree.buildingId&&this.city.justice?.policies.penalCode.unlicensedTreeFelling?.criminal){if(license)license.remaining--;else this.city.justice.crimeRecord('unlicensedTreeFelling',worker.id,null,{position:{x:tree.x,y:tree.y},plantId:tree.id,species:tree.species,physicalEvidence:true,buildingId:b?.id??null});}
+    const event=this.remove(tree,`cortada por ${worker.entity.properties.name}`,{citizenIds:[worker.id],buildingId:b?.id??null,quantity:PLANT_SPECIES[tree.species].wood});
     this.harvested++;this.city.economy.produced.madeira+=PLANT_SPECIES[tree.species].wood;return event;
   }
 }

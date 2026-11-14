@@ -1,4 +1,4 @@
-import {SUBSTANCES,SUBSTANCE_REGIMES,HEMP,REFINING_LEAVES} from './city_substance_catalog.js';
+import {INFUSIONS,SUBSTANCES,SUBSTANCE_REGIMES,HEMP,REFINING_LEAVES} from './city_substance_catalog.js';
 import {substanceStance} from './city_substances.js?v=economic-flow-7';
 const labels={pending:'Em análise',approved:'Aprovado',rejected:'Recusado',revoked:'Revogado'};
 const percent=n=>`${(100*(n||0)).toFixed(1)}%`;
@@ -10,6 +10,8 @@ export function renderCitizenSubstances(ui,p,c){
  p.table([{label:'Substância',weight:1.5},{label:'Paladar'},{label:'Usos'},{label:'Dependência'},{label:'Tolerância'},{label:'Abstinência'}],Object.entries(state.uses).map(([id,u])=>({cells:[`${SUBSTANCES[id].icon} ${SUBSTANCES[id].label}`,u.liking>.2?'Gosta':u.liking<-.2?'Não gosta':'Neutro',u.count,percent(u.dependence),percent(u.tolerance),percent(u.withdrawal)]})));
  const brands=Object.entries(state.brandPreferences||{}).map(([key,value])=>({key,value,name:state.brandPreferenceNames?.[key]||key}));if(brands.length)p.table([{label:'Preferência por marcas',weight:2},{label:'Afinidade'}],brands.map(row=>({cells:[row.name,row.value>.2?'Gosta':row.value<-.2?'Evita':'Neutra']})));
  const carried=Object.entries(c.inventory||{}).filter(([g,q])=>q>0&&city.substances.controlled(g));if(carried.length)p.table([{label:'Porte',weight:2},{label:'Unidades'},{label:'Marca e intensidade'}],carried.map(([g,q])=>{const lots=city.substances.lots(c,g).filter(l=>l.quantity>0),brands=[...new Set(lots.map(l=>`${l.brandName||city.economy.goods[g]?.label||g}${l.intensity?` · ${l.intensity}% ${l.intensityUnit||''}`:''}`))];return {cells:[city.economy.goods[g]?.label||g,q,brands.join(' / ')||`${city.substances.quality(c,g).toFixed(0)}/100`]};}));
+ for(const [good,q]of carried){const id=INFUSIONS[good]?.substance||good;if(!SUBSTANCES[id])continue;p.buttons([{label:`CONSUMIR ${city.economy.goods[good].label.toUpperCase()}`,click:()=>city.substances.consume(c,good)},...(INFUSIONS[`cha_${good}`]?[{label:'PREPARAR INFUSÃO',click:()=>city.substances.startInfusion(c,good)}]:[])]);}
+ p.note('Infusões preservam o regime legal da planta. Amanita e trombeta-de-anjo causam intoxicação grave.');
  if(c.substanceCraft)p.kv('Atividade doméstica',`${Math.floor(c.substanceCraft.progress||0)}/${c.substanceCraft.labor} minutos de trabalho${c.substanceCraft.paid?' · instalação paga':''}`);
 }
 export function renderSubstancePolicy(ui,p){

@@ -6,11 +6,21 @@ export const SUBSTANCES=Object.freeze({
  tabaco:{label:'Tabaco',icon:'🚬',popularity:.64,addiction:.34,duration:18,happiness:4,energy:0,aggression:0,mobility:1,speech:1,cognition:1,lung:.001,regime:'free',limit:8,smoke:true},
  cannabis:{label:'Cannabis',icon:'🌿',popularity:.20,addiction:.12,duration:180,happiness:17,energy:0,aggression:-.98,mobility:.82,speech:.95,cognition:.85,lung:.0005,regime:'regulated',limit:3,smoke:true},
  coca:{label:'Coca refinada',icon:'⚡',popularity:.025,addiction:.48,duration:90,happiness:24,energy:32,aggression:.82,mobility:1.32,speech:.22,cognition:.55,lung:.005,regime:'prohibited',limit:0},
+ cubensis:{label:'Cubensis',icon:'🍄',popularity:0.07,addiction:.025,duration:240,happiness:4,energy:0,aggression:-.2,mobility:0.7,speech:.65,cognition:.4,lung:0,regime:'prohibited',limit:0,hallucinogen:true,toxicity:8},
+ amanita:{label:'Amanita',icon:'🍄',popularity:0.025,addiction:.025,duration:240,happiness:-8,energy:0,aggression:-.2,mobility:0.45,speech:.65,cognition:.4,lung:0,regime:'prohibited',limit:0,hallucinogen:true,toxicity:28},
+ peyote:{label:'Peyote',icon:'🌵',popularity:0.04,addiction:.025,duration:240,happiness:3,energy:0,aggression:-.2,mobility:0.65,speech:.65,cognition:.4,lung:0,regime:'prohibited',limit:0,hallucinogen:true,toxicity:12},
+ trombeta_anjo:{label:'Trombeta-de-anjo',icon:'🌼',popularity:0.012,addiction:.025,duration:240,happiness:-18,energy:0,aggression:-.2,mobility:0.35,speech:.65,cognition:.4,lung:0,regime:'prohibited',limit:0,hallucinogen:true,toxicity:48},
+
 });
 export const SUBSTANCE_REGIMES={prohibited:'Proibido',regulated:'Regulamentado',free:'Livre'};
 export const HEMP={label:'Cânhamo',regime:'regulated',limit:null};
 export const REFINING_LEAVES=12;
 export const SUBSTANCE_CROPS={
+ cubensis:{label:'Cubensis',grow:180,price:180,nonFood:true,substance:'cubensis',yieldFactor:.8,laborFactor:1.2},
+ amanita:{label:'Amanita',grow:180,price:180,nonFood:true,substance:'amanita',yieldFactor:.8,laborFactor:1.2},
+ peyote:{label:'Peyote',grow:180,price:180,nonFood:true,substance:'peyote',yieldFactor:.8,laborFactor:1.2},
+ trombeta_anjo:{label:'Trombeta-de-anjo',grow:180,price:180,nonFood:true,substance:'trombeta_anjo',yieldFactor:.8,laborFactor:1.2},
+
  grao_cafe:{label:'Grão de café',grow:280,price:160,nonFood:true,substance:'cafe',yieldFactor:1.5,laborFactor:1.2},
  cana:{label:'Cana para bebidas',grow:180,price:65,nonFood:true,substance:'alcool',yieldFactor:2,laborFactor:.8},
  folha_tabaco:{label:'Folha de tabaco',grow:90,price:55,nonFood:true,substance:'tabaco',yieldFactor:3,laborFactor:.6},
@@ -18,7 +28,7 @@ export const SUBSTANCE_CROPS={
  folha_coca:{label:'Folha de coca',grow:130,price:75,nonFood:true,substance:'folha_coca',yieldFactor:2.5,laborFactor:.8},
 };
 export const BRAND_CROPS={trigo:true,cevada:true,lupulo:true,uva:true,agave:true};
-export const SUBSTANCE_GOODS={...Object.fromEntries(Object.entries(SUBSTANCES).map(([id,s])=>[id,{label:id==='alcool'?'Cachaça':s.label,price:{cafe:350,alcool:650,folha_coca:75,tabaco:180,cannabis:900,coca:4200}[id]}])),cerveja:{label:'Cerveja',price:520},vinho:{label:'Vinho',price:980},tequila:{label:'Tequila',price:1250},canhamo:{label:'Fibra de cânhamo',price:110}};
+export const SUBSTANCE_GOODS={...Object.fromEntries(Object.entries(SUBSTANCES).map(([id,s])=>[id,{label:id==='alcool'?'Cachaça':s.label,price:{cafe:350,alcool:650,folha_coca:75,tabaco:180,cannabis:900,coca:4200,cubensis:180,amanita:90,peyote:240,trombeta_anjo:60}[id]}])),cerveja:{label:'Cerveja',price:520},vinho:{label:'Vinho',price:980},tequila:{label:'Tequila',price:1250},canhamo:{label:'Fibra de cânhamo',price:110}};
 export const SUBSTANCE_INDUSTRIES={
  coffee_roaster:['Torrefação e casa de café',{grao_cafe:4,carvao:1},{cafe:8},22,'baking','Torra e prepara café; qualidade depende do grão e do preparo.'],
  distillery:['Alambique e cachaçaria',{cana:6,carvao:1},{alcool:4},45,'baking','Fermenta e destila cana para produzir cachaça.'],
@@ -32,3 +42,7 @@ export const SUBSTANCE_INDUSTRIES={
 };
 export const SUBSTANCE_CONTROLLED_GOODS={grao_cafe:'cafe',cana:'alcool',folha_tabaco:'tabaco',flor_cannabis:'cannabis',canhamo:'canhamo',cerveja:'alcool',vinho:'alcool',tequila:'alcool',...Object.fromEntries(Object.keys(SUBSTANCES).map(id=>[id,id]))};
 export const ALCOHOL_DRINKS=['alcool','cerveja','vinho','tequila'];
+
+// Abstract inventory transformation, not a real-world preparation recipe.
+export const INFUSIONS=Object.fromEntries(["cubensis", "amanita", "peyote", "trombeta_anjo"].map(id=>[`cha_${id}`,{label:`Infusão de ${SUBSTANCES[id].label.toLowerCase()}`,price:220,substance:id}]));
+for(const [good,spec] of Object.entries(INFUSIONS)){SUBSTANCE_GOODS[good]=spec;SUBSTANCE_CONTROLLED_GOODS[good]=spec.substance;}
