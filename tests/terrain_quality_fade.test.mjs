@@ -23,5 +23,17 @@ test('a hidden or disabled replacement skips fading, and cancellation frees temp
  r.terrainOptimizationsEnabled=false;assert.equal(beginTerrainFade(r,old,next),false);
  r.terrainOptimizationsEnabled=true;beginTerrainFade(r,old,next);
  const fade=next._terrainFade,materials=[...fade.materials];finishTerrainFade(r,fade);finishTerrainFade(r,fade);
- assert(materials.every(m=>m.disposed));assert.equal(next._terrainFade,null);assert.equal(r._terrainFades.size,0);
+   assert(materials.every(m=>m.disposed));assert.equal(next._terrainFade,null);assert.equal(r._terrainFades.size,0);
 });
+test('fade materials share userData instead of serializing shader textures',()=>{
+ const r=renderer(),old=chunk(),next=chunk();let serializations=0;
+ const base=material(),userData={foliageShader:{uniforms:{map:{toJSON(){serializations++;return {};}}}}};
+ base.userData=userData;
+ base.clone=function(){const copy=material();copy.userData=JSON.parse(JSON.stringify(this.userData));return copy;};
+ next.terrain.children[0].material=base;
+ assert.equal(beginTerrainFade(r,old,next),true);
+ assert.equal(serializations,0);
+ assert.equal(next.terrain.children[0].material.userData,userData);
+ assert.equal(base.userData,userData);
+});
+

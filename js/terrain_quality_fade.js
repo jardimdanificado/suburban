@@ -1,4 +1,16 @@
 const DURATION=.4;
+// Material.clone() copies userData through JSON.stringify, so a shader stored
+// there (foliage/water) would serialize its uniform textures and break the
+// reference. Share the original userData instead.
+function cloneMaterial(base){
+  const userData=base.userData;
+  if(!userData||typeof userData!=='object')return base.clone();
+  base.userData={};
+  let material;
+  try{material=base.clone();}finally{base.userData=userData;}
+  material.userData=userData;
+  return material;
+}
 export function finishTerrainFade(renderer,fade){
   if(!fade||fade.finished)return;
   fade.finished=true;
@@ -19,7 +31,7 @@ export function beginTerrainFade(renderer,old,next){
       const base=mesh.material;if(!base?.clone||Array.isArray(base))continue;
       let material=cache.get(base);
       if(!material){
-        material=base.clone();material.defaultAttributeValues=base.defaultAttributeValues;cache.set(base,material);fade.materials.push(material);
+        material=cloneMaterial(base);material.defaultAttributeValues=base.defaultAttributeValues;cache.set(base,material);fade.materials.push(material);
         const compile=base.onBeforeCompile,key=base.customProgramCacheKey();
         material.onBeforeCompile=shader=>{
           compile?.call(material,shader);
