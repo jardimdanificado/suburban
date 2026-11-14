@@ -1,3 +1,4 @@
+import {dirtRoadGround} from './dirt_road_visuals.js';
 import {scheduleTerrainIdleWork,stopTerrainIdleWork} from './terrain_idle_work.js';
 import {beginTerrainFade,finishTerrainFade,advanceTerrainFades} from './terrain_quality_fade.js';
 import {syncCardboardGrass} from './cardboard_grass.js?v=local-mask-2';
@@ -7012,10 +7013,10 @@ export class RCT3DRenderer {
           const rx=tx+edge.dx,ry=ty+edge.dy,roadType=world.getTile?.(rx,ry);
           if(PAVED_ROAD_TILES.has(roadType))adjacentPavedRoads.push({...edge,x:rx,y:ry,type:roadType});
         }
-        const surfaceType=farmSurfaceTile(tType,!!this._farmSoilCells?.has(`${tx},${ty}`)),isFarmSoil=FARM_TILES.has(surfaceType);
-        const hasSprite = detailBand === 2 && !isSidewalk && !isFarmSoil&&shouldRenderTerrainSprite(tx, ty, tType);
-        const textureCategory=isTreeSidewalk?'sidewalkTree':isSidewalk?'sidewalk':isFarmSoil?null:terrainTextureCategory(tType);
-        let bucketKey = isSidewalk?`terrainSidewalk${terrainTextureHash(tx,ty,tType)&3}`:isFarmSoil?"farmSoil":tType;
+        const visualType=dirtRoadGround(tType),surfaceType=farmSurfaceTile(visualType,!!this._farmSoilCells?.has(`${tx},${ty}`)),isFarmSoil=FARM_TILES.has(surfaceType);
+        const hasSprite = detailBand === 2 && !isSidewalk && !isFarmSoil&&shouldRenderTerrainSprite(tx, ty, visualType);
+        const textureCategory=isTreeSidewalk?'sidewalkTree':isSidewalk?'sidewalk':isFarmSoil?null:terrainTextureCategory(visualType);
+        let bucketKey = isSidewalk?`terrainSidewalk${terrainTextureHash(tx,ty,tType)&3}`:isFarmSoil?"farmSoil":visualType;
         if (surfaceType === TILE_SAND && !hasSprite) bucketKey = "sandClean";
         if (textureCategory) {
           const materialCategory={rock:'Rock',mountain:'Mountain',peak:'Peak',dirtRoad:'DirtRoad',pavedRoad:'PavedRoad',sidewalk:'Sidewalk',sidewalkTree:'SidewalkTree'}[textureCategory];
@@ -7366,7 +7367,7 @@ export class RCT3DRenderer {
         colors=cache.grassTintSamples=new Float64Array(width*height*3);
         const fallbackR=base.r/.82,fallbackG=base.g/.82,fallbackB=base.b/.82;
         for(let y=0;y<height;y++)for(let x=0;x<width;x++){
-          const tile=world.getTile(minTx-1+x,minTy-1+y);
+          const tile=dirtRoadGround(world.getTile(minTx-1+x,minTy-1+y));
           const tint=(tile===TILE_FLOOR||tile===TILE_HILL)?this.materials[tile].color:null,offset=(y*width+x)*3;
           colors[offset]=tint?tint.r:fallbackR;colors[offset+1]=tint?tint.g:fallbackG;colors[offset+2]=tint?tint.b:fallbackB;
         }

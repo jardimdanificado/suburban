@@ -809,3 +809,9 @@ No jogo, abra **Mundo, comércio e migração** e clique em **CONECTAR AO SERVID
 A cada seis horas simuladas, a gestão identifica e compara as perdas reais no cálculo da aprovação. Problemas do mesmo indicador são agrupados; efeitos positivos, limites contábeis e escândalos não viram demandas artificiais por serviços. A prioridade recebe medidas pela agenda existente: projetos na Câmara, obras, custeio e revisão fiscal, respeitando orçamento, reserva essencial e tramitação. Serviços funerários e estrutura da Justiça recebem apoio material, sem interferência nas decisões judiciais.
 
 A promessa eleitoral continua sendo executada separadamente. A resposta não cria outra promessa nem concede bônus por iniciativa. A gestão acompanha a mudança do indicador e da perda de aprovação; após um dia sem melhora, permite que outro problema urgente receba atenção. O painel de governo mostra diagnóstico, prioridade, pendências e revisões recentes. Aprovação só muda pelos resultados e regras existentes.
+
+### Estradas de barro visuais
+
+Estradas de barro continuam com as mesmas regras de navegação, velocidade, desgaste, custos, manutenção e geometria. Na renderização, usam a superfície natural correspondente — grama, colina ou areia — sem uma textura própria de estrada. As partes ainda não pisadas conservam a vegetação; pegadas, rodas e cascos arrastados deixam marcas permanentes somente dentro das células de estrada de barro. Fora delas, a grama e a areia mantêm seus prazos normais de recuperação. Resíduos transportados continuam temporários e não apagam as marcas permanentes.
+
+O desgaste permanente usa um atlas separado na GPU, sem leitura de volta para a CPU. Pavimentar ou remover uma estrada limpa suas marcas permanentes. Como os demais rastros visuais, essas marcas pertencem à sessão de renderização e reiniciam ao recarregar a cidade; não integram o save.

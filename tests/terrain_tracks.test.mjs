@@ -121,7 +121,7 @@ test('longer residue and grass lifetimes leave sand footprint deadlines unchange
   assert(shader.fragmentShader.includes('terrainTrackStrength(vTrackWorld, 30.0, 55.0)'));
 });
 
-test('render pickup consults local wear for grass and uses full loading on bare dirt roads',async()=>{
+test('render pickup consults local wear for natural grass and imaginary dirt roads',async()=>{
   const {TerrainTracks}=await import('../js/terrain_tracks.js');
   const {TILE_FLOOR,TILE_ROAD_GRASS}=await import('../js/world_gen.js');
   for(const tile of [TILE_FLOOR,TILE_ROAD_GRASS]){
@@ -133,6 +133,6 @@ test('render pickup consults local wear for grass and uses full loading on bare 
       uniforms:{terrainTrackTime:{value:0}},ensureWorld(){},paint(){}});
     const world={width:10,height:10,getTile:()=>tile};
     tracker.update({},world,[entity],.1);entity.x+=.5;tracker.update({},world,[entity],.1);
-    assert.equal(load,tile===TILE_FLOOR?.4:1);assert.equal(sampled,tile===TILE_FLOOR?1:0);assert(recorded>0);
+    assert.equal(load,.4);assert.equal(sampled,1);assert(recorded>0);
   }
 });
