@@ -1,3 +1,4 @@
+import {gameAction,characterMinute,characterMovement,updateCharacterGame} from './character_game.js';
 import {familyAction, updateFamilyCampaign} from './city_family_campaign.js';
 import {canFarmVertically,isVerticalFarm,farmSiteType} from './city_farm_layout.js';
 import {releaseSharedPassenger} from './city_boat_crossings.js?v=shared-crossings-1';
@@ -147,6 +148,7 @@ const key = (x, y) => `${x},${y}`;
 
 export class CitySimulation {
   constructor({ world, createEntity, seed = world.seed ?? 1337, population = INITIAL_POPULATION, startFoundingWorks = false, foundingPrivateBanks = true }) {
+    this.characterGame = null;
     this.familyCampaign = null;
     this.initialPopulation = population;
     this.startFoundingWorks = startFoundingWorks;
@@ -268,7 +270,7 @@ export class CitySimulation {
     return true;
   }
   worldBoatCrewEligible(person,transferId=null){
-    return !!person&&!person.dead&&!person.entity.destroyed&&this.society.isAdult(person)&&!person.worldMigrationPending&&(!person.worldBoatCrew||person.worldBoatCrew===transferId)&&!person.deliveryId&&!person.ridingVehicleId&&!person.custody&&!person.indoorLocation&&!person.mechanicJob&&!person.cleaningJobId&&!person.informalJobId&&!person.serviceQueue&&!person.workMeal&&!person.conversation&&!['food','water','energy','health','toilet','hygiene'].some(key=>(person.needs?.[key]??100)<20);
+    return !!person&&!person.playerControlled&&!person.dead&&!person.entity.destroyed&&this.society.isAdult(person)&&!person.worldMigrationPending&&(!person.worldBoatCrew||person.worldBoatCrew===transferId)&&!person.deliveryId&&!person.ridingVehicleId&&!person.custody&&!person.indoorLocation&&!person.mechanicJob&&!person.cleaningJobId&&!person.informalJobId&&!person.serviceQueue&&!person.workMeal&&!person.conversation&&!['food','water','energy','health','toilet','hygiene'].some(key=>(person.needs?.[key]??100)<20);
   }
   boardWorldBoatCrew(mission,boatId){
     const person=this.society.citizen(mission.citizenId),boat=boatId==null?null:this.vehicles.units.get(boatId);
@@ -519,7 +521,7 @@ export class CitySimulation {
     }}
     const ids=new Set(members.keys());
     for(const person of members.values()){
-      if(person.partnerId!=null&&!ids.has(person.partnerId)||person.dead||person.worldBoatCrew||person.worldMigrationPending||person.businessIds?.length||person.deliveryId||person.mobilityTrip||person.ridingVehicleId||person.custody||person.indoorLocation||person.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===person.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===person.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return null;
+      if(person.playerControlled||person.partnerId!=null&&!ids.has(person.partnerId)||person.dead||person.worldBoatCrew||person.worldMigrationPending||person.businessIds?.length||person.deliveryId||person.mobilityTrip||person.ridingVehicleId||person.custody||person.indoorLocation||person.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===person.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===person.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return null;
       if(!this.society.isAdult(person)&&(!person.guardianId||!ids.has(person.guardianId)))return null;
     }
     return [...members.keys()];
@@ -539,7 +541,7 @@ export class CitySimulation {
   reserveWorldCitizenMigration(transferId,citizenId,{householdIds=[]}={}){
     if(typeof transferId!=='string'||!transferId)return false;
     this.worldPort.migrations??={};const previous=this.worldPort.migrations[transferId];if(previous)return previous.status==='reserved'&&previous.package.citizenId===citizenId?structuredClone(previous.package):false;
-    const citizen=this.society.citizen(citizenId),included=new Set(householdIds);if(!citizen||citizen.entity.destroyed||citizen.dead||citizen.worldBoatCrew||citizen.worldMigrationPending||(!householdIds.length&&!this.society.isAdult(citizen))||(!householdIds.length&&(citizen.partnerId!=null||citizen.childIds?.length))||(citizen.partnerId!=null&&!included.has(citizen.partnerId))||(citizen.childIds||[]).some(id=>{const child=this.society.citizen(id);return child?.guardianId===citizen.id&&!included.has(id);})||citizen.businessIds?.length||citizen.deliveryId||citizen.mobilityTrip||citizen.ridingVehicleId||citizen.custody||citizen.indoorLocation||citizen.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===citizen.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===citizen.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return false;
+    const citizen=this.society.citizen(citizenId),included=new Set(householdIds);if(!citizen||citizen.playerControlled||citizen.entity.destroyed||citizen.dead||citizen.worldBoatCrew||citizen.worldMigrationPending||(!householdIds.length&&!this.society.isAdult(citizen))||(!householdIds.length&&(citizen.partnerId!=null||citizen.childIds?.length))||(citizen.partnerId!=null&&!included.has(citizen.partnerId))||(citizen.childIds||[]).some(id=>{const child=this.society.citizen(id);return child?.guardianId===citizen.id&&!included.has(id);})||citizen.businessIds?.length||citizen.deliveryId||citizen.mobilityTrip||citizen.ridingVehicleId||citizen.custody||citizen.indoorLocation||citizen.expectingId!=null||[...this.units.values()].some(unit=>unit.ownerId===citizen.accountId)||[...this.vehicles.units.values()].some(vehicle=>vehicle.ownerAccountId===citizen.accountId&&!['bicicleta','bicicleta_carga','patinete','patins','skate'].includes(vehicle.good)))return false;
     const packageData=this.worldCitizenMigrationPackage(transferId,citizenId,householdIds);if(!packageData||!this.vehicles.reserveWorldMigrationAssets(transferId,citizen.accountId))return false;const globalId=packageData.globalId;
     citizen.worldMigrationPending=transferId;this.worldPort.migrations[transferId]={transferId,status:'reserved',citizenId,globalId,package:packageData,createdAt:this.minute};return structuredClone(packageData);
   }
@@ -1503,6 +1505,7 @@ export class CitySimulation {
       if (parent && (child.homeId !== parent.homeId || child.homeUnitId !== parent.homeUnitId)) this.society.houseChild(child);
     }
   }
+  gameAction(action, options = {}) { return gameAction(this, action, options); }
   familyAction(action, options = {}) { return familyAction(this, action, options); }
   stepMinute() {
     const profileStart=performance.now();let profileMark=profileStart;
@@ -1521,7 +1524,7 @@ export class CitySimulation {
     }
     const reconcileMs=performance.now()-profileMark;profileMark=performance.now();
     this.sanitation.updateMinute();
-    for (const c of this.citizens)if(!c.worldBoatCrew&&(c.workMeal||(c.jobId||c.businessIds.length)&&c.needs.food<45))this.workMeals.tryStart(c);
+    for (const c of this.citizens)if(!c.playerControlled&&!c.worldBoatCrew&&(c.workMeal||(c.jobId||c.businessIds.length)&&c.needs.food<45))this.workMeals.tryStart(c);
     this.logistics.updateMinute();
     updateFamilyCampaign(this);
     const servicesMs=performance.now()-profileMark;profileMark=performance.now();
@@ -1545,7 +1548,7 @@ export class CitySimulation {
     try{
     for (const c of this.citizens) {
       if(c.worldBoatCrew){c._lastNeedsAt=this.minute;continue;}
-      if(deferFastForwardCitizen(this,c))continue;
+      if(!c.playerControlled&&deferFastForwardCitizen(this,c))continue;
       if(activitySearchPass.hasFull&&(c.custody||c.custodyEscort||c.custodyWaterDelivery||c.funeralBodyId||c.graffitiMission||c.policePatrol||c.policeResponse||c.policeInvestigation||c.policeOversight||c.policeAudit||c.policeRestitution||c.policeArrestEscort))invalidateActivitySearch(this);
       if(citizenDetail)measureCitizen('blockedPositionRecovery',()=>this.life.recoverBlockedPosition(c));else this.life.recoverBlockedPosition(c);
       const n = c.needs;
@@ -1553,7 +1556,7 @@ export class CitySimulation {
       // window expires. Accumulate their passive need changes in one pass;
       // active workers, travelers, conversations and children still run each
       // minute. Reviews wake at hourly boundaries and on changed conditions.
-      if(!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==(c.id%8)&&c._routineRevision===routineRevision(this,c)&&!this.urgentNeed(c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>35)continue;
+      if(!c.playerControlled&&!c.entity.destroyed&&!c.substanceState?.effects?.length&&c.initialAge>=18&&!c.task&&!c.path.length&&!c.deliveryId&&!c.cleaningJobId&&!c.conversation&&!c.workMeal&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.indoorLocation&&!this.childrenOf(c.id).length&&c._idleHomeId===c.homeUnitId&&this.minute<(c._nextTaskAt||0)&&this.minute%60!==(c.id%8)&&c._routineRevision===routineRevision(this,c)&&!this.urgentNeed(c)&&Math.min(n.food,n.water,n.energy,n.hygiene,n.toilet,n.health)>35)continue;
       const elapsed=Math.max(1,this.minute-(c._lastNeedsAt??this.minute-1));c._lastNeedsAt=this.minute;c._idleHomeId=c.homeUnitId;
       const age=this.society.age(c);
       if(c._renderAge!==age){c._renderAge=age;c.entity.properties.render.size=age<6?.55:age>=18?1:.8;}
@@ -1570,7 +1573,7 @@ export class CitySimulation {
       const totalNeeds=n.food+n.water+n.energy+n.hygiene+n.toilet+n.social+n.leisure+n.health+n.shelter+n.safety;
       let comfort=0;if(c.homeUnitId&&c.homeComfort)for(const key in c.homeComfort)if(c.homeComfort[key]>this.minute)comfort++;
       c.happiness = clamp(totalNeeds / 10 + (c.jobId&&c.career?(c.career.motivation-50)*.08:0) + c.mood + (c.substanceModifiers?.mood||0) + clothingMood(c) + this.relationships.moodEffect(c) + Math.min(6,comfort)*2);
-      if(!sleeping)this.supplies.useCarried(c);
+      if(!sleeping&&!c.playerControlled)this.supplies.useCarried(c);
       // Custody rations must be issued before the mortality check. Otherwise a
       // prisoner who reaches zero food on this minute can die before the jail
       // gets its chance to provide a ration. This also covers escort queues
@@ -1592,6 +1595,7 @@ export class CitySimulation {
         if(!c.path.length){const path=this.findPath(c.entity,safe.door);if(path===null){c.combatFlee.waitingReason='sem rota para local seguro';c.action='Aguardando rota para fugir da agressão';continue;}c.path=path;if(!path.length&&Math.hypot(c.entity.x-safe.door.x,c.entity.y-safe.door.y)>.1)c.path=[{x:safe.door.x,y:safe.door.y}];}
         c.task='combat-flee';c.targetId=safe.id;c.action=`Fugindo da agressão para ${safe.entity.properties.name}`;continue;
       }
+      if(characterMinute(this,c))continue;
       if(c.graffitiMission){this.justice.updateGraffitiMission(c);continue;}
       if(c.policeOversight){const urgent=this.urgentNeed(c);this.justice.updatePoliceOversight(c);if(c.policeOversight||!urgent)continue;}
       if(c.policeAudit){const urgent=this.urgentNeed(c);this.justice.updatePoliceAudit(c);if(c.policeAudit||!urgent)continue;}
@@ -1651,6 +1655,7 @@ export class CitySimulation {
     if(!this.fastForward||this.minute%4===0)disperseCrowds(this);
     if(societyParts){societyParts.crowdDispersionMs=performance.now()-societyPartStart;societyPartStart=performance.now();}
     this.society.updateMinute();
+    updateCharacterGame(this);
     if(societyParts)societyParts.socialUpdateMs=performance.now()-societyPartStart;
     const societyMs=performance.now()-profileMark;profileMark=performance.now();
     const movers=this._movingCitizens??=[];movers.length=0;
@@ -1681,10 +1686,11 @@ export class CitySimulation {
     this.accumulator += dt * 4;
     while (this.accumulator >= 1) { this.accumulator -= 1; this.stepMinute(); }
     const minuteStepsMs=performance.now()-profileMark;profileMark=performance.now();
+    characterMovement(this,dt);
     const movers=this._movingCitizens||[];
     if(this.vehicles.activeCount&&this._lastVehicleScanMinute!==this.minute){
       this._lastVehicleScanMinute=this.minute;
-      for(const c of movers)if(!c.worldBoatCrew&&!c.ridingVehicleId&&!c.indoorLocation)this.vehicles.tryTrip(c);
+      for(const c of movers)if(!c.playerControlled&&!c.worldBoatCrew&&!c.ridingVehicleId&&!c.indoorLocation)this.vehicles.tryTrip(c);
     }
     const mobilityMs=performance.now()-profileMark;profileMark=performance.now();
     // Many active drivers used to scan the entire shipment list independently
@@ -1709,7 +1715,7 @@ export class CitySimulation {
       if(load?.pickedUp&&!c.mobilityTrip&&(c.deliveryLoad||load.quantity)>this.vehicles.cargoCapacity(c)){c.action='Aguardando veículo para transportar a carga';continue;}
       if(!c.path.length&&c.skybridgeZ&&!c.skybridgeId){c.skybridgeZ=0;c.skybridgeId=null;}
       if (c.conversation || c.workMeal || !c.path.length) continue;
-      let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * this.justice.mobilityFactor(c) * bodyMovementSpeedFactor(c);
+      let distance = dt * (this.society.isAdult(c) ? 4 : 2.5) * (c.playerControlled&&this.characterGame?.input?.run&&c.needs.energy>12?1.65:1) * this.justice.mobilityFactor(c) * bodyMovementSpeedFactor(c);
       while (distance > 0 && c.path.length) {
         const p = c.path[0];
         if(p.skybridgeEntry||p.skybridgeExit){
@@ -1726,6 +1732,7 @@ export class CitySimulation {
         if(len<=available){c.entity.x=p.x;c.entity.y=p.y;c.skybridgeZ=p.z||0;c.skybridgeId=pBridge||null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;if(!elevated&&!boatWaypoint){this.recordTraffic(p);discoverStreetMarket(this.economy,c,p);}c.path.shift();distance=Math.max(0,distance-len*cost);}
         else{const ratio=available/len;c.entity.x+=dx*ratio;c.entity.y+=dy*ratio;c.skybridgeZ=(c.skybridgeZ||0)+dz*ratio;c.skybridgeId=elevated?pBridge:null;c.boatClass=boatWaypoint?p.boatClass:this.world.getTile(Math.floor(c.entity.x),Math.floor(c.entity.y))===TILE_WATER?c.boatClass:null;distance=0;}
         if(travelled>0){
+          if(c.playerControlled&&this.characterGame?.input?.run)c.needs.energy=Math.max(0,c.needs.energy-travelled*.18);
           c.mobilityTimeLostToday=(c.mobilityTimeLostToday||0)+travelled*cost;
           c.mobilityNeed=Math.min(100,(c.mobilityNeed||0)+travelled*cost*.22*(c.mobilityPriority||1));
           if(!elevated&&!boatWaypoint){wearRoad(this.world,tx,ty,travelled*ROAD_RULES.wearPerCell);
@@ -1734,7 +1741,7 @@ export class CitySimulation {
         let actionState=movementActionCache.get(c);if(!actionState){actionState={action:null};movementActionCache.set(c,actionState);}
         const actionDelivery=c.deliveryId??null,actionBoat=c.boatClass??null,actionSky=c.skybridgeZ>0,actionForestry=c.forestryJob?.stage??null,actionVisit=c.socialVisitId??null;
         if(actionState.task!==c.task||actionState.delivery!==actionDelivery||actionState.boat!==actionBoat||actionState.sky!==actionSky||actionState.forestry!==actionForestry||actionState.visit!==actionVisit||actionState.action!==c.action){
-          c.action = c.boatClass?`Navegando de ${BOAT_CLASSES[c.boatClass]?.label?.toLowerCase()||'barco'}`:c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
+          c.action = c.boatClass?`Navegando de ${BOAT_CLASSES[c.boatClass]?.label?.toLowerCase()||'barco'}`:c.skybridgeZ>0?'Atravessando a passarela elevada':c.deliveryId ? 'Transportando mercadorias' : c.task==='combat-flee' ? 'Fugindo da agressão' : c.task==='player-walk'?'Caminhando sob seu controle':c.task==='walk'?'Passeando pela cidade':c.task==='supplies'?'Indo repor comida e água':c.task==='lake-water'?'Buscando água do lago':c.task==='job-interview'?'Indo à Secretaria do Trabalho':c.task==='council-session'?'Indo ao plenário da Câmara':c.task === 'research' ? 'Indo ao ponto de entrevistas' : c.task === 'vote' ? 'Indo votar na prefeitura' : c.task === 'construction' ? 'Indo para a obra' : c.forestryJob&&['work','manage'].includes(c.task)?(c.forestryJob.stage==='return'?'Levando madeira à silvicultura':c.forestryJob.stage==='cut'?'Indo cortar uma árvore':'Indo plantar uma árvore'):c.task === 'workmeal' ? 'Indo ao refeitório da empresa' : c.task === 'visit' ? `Indo visitar ${this.society.citizen(c.socialVisitId)?.entity.properties.name||'pessoa próxima'}` : `Indo: ${NEED_LABELS[c.task] || 'Trabalho'}`;
           actionState.task=c.task;actionState.delivery=actionDelivery;actionState.boat=actionBoat;actionState.sky=actionSky;actionState.forestry=actionForestry;actionState.visit=actionVisit;actionState.action=c.action;
         }
       }

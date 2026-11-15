@@ -59,6 +59,7 @@ export class MainMenu {
     renderer,
     time,
     onStartGame,
+    onPlayGame,
     onStartNewCity,
     onOpenNewGame,
     onOpenOptions
@@ -69,6 +70,7 @@ export class MainMenu {
     this.renderer = renderer;
     this.time = time;
     this.onStartGame = onStartGame;
+    this.onPlayGame = onPlayGame;
     this.onStartNewCity = onStartNewCity;
     this.onOpenNewGame = onOpenNewGame;
     this.onOpenOptions = onOpenOptions;
@@ -277,7 +279,7 @@ export class MainMenu {
     const ctx = ui.ctx;
 
     const winW = Math.min(280, width - 24);
-    const winH = 124;
+    const winH = 154;
 
     // Initialize or constrain window position
     if (this.windowPos.x === null || this.windowPos.y === null) {
@@ -331,6 +333,9 @@ export class MainMenu {
         if (typeof this.onStartGame === 'function') this.onStartGame();
       }, { selected: true });
     }
+    btnY += 30;
+
+    ui.button(btnX, btnY, btnW, btnH, 'Jogar como personagem', () => this.onPlayGame?.());
     btnY += 30;
 
     // Button: Novo Jogo…

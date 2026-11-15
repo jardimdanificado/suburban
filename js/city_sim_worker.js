@@ -1,6 +1,6 @@
 import {packFishing} from './fishing_motion.js';
 import {packBoatRiders,packBoatTows} from './boat_rider_motion.js?v=shared-crossings-1';
-import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=citizen-access-1';
+import { CityStateGraph, bindCityState, CITY_NEED_FIELDS } from './city_state.js?v=survival-controls-2';
 import { FF_SPEED, FF_LOD_SPEED, FF2_SPEED, FF3_SPEED, FF4_SPEED } from './simulation_time.js?v=ff3-ff4-steps-1';
 
 const graph = new CityStateGraph();
@@ -29,8 +29,8 @@ const stateInterval = () => {
   if(speed>=128)return Math.max(4000,populationFloor,Math.min(5000,lastSnapshotCost*8));
   return Math.max(speed>=32?3000:speed>=16?1000:populationFloor,populationFloor,Math.min(3000,lastSnapshotCost*6));
 };
-const motionInterval=()=>observed?(speed>=128?320:100):500;
-const allowed = new Set(['familyAction','history.configureFavorites','paint.setPalette','paint.requestPurchase','paint.requestVehicle','paint.requestBuilding','vehicles.mountFlag','vehicles.removeFlag','politics.leaseHeadquarters','economy.rentOffice','economy.configureEmployment','economy.offerShares','economy.buyShares','economy.cancelShareOffer','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.executePlayerAction','politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'bank.fileRecoveryPlan', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance','reserveWorldExport','worldExportReservationInfo','departWorldExport','completeWorldExport','returnWorldExport','reserveWorldImport','cancelWorldImport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','receiveWorldFreightIncome','setWorldBoatAssigned','approachWorldBoat','reserveWorldBoatCrew','departWorldBoatCrew','returnWorldBoatCrew','payWorldPassengerFare','refundWorldPassengerFare','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration']);
+const motionInterval=()=>observed?(state?.city?.characterGame?.mode==='play'?33:speed>=128?320:100):500;
+const allowed = new Set(['gameAction','familyAction','history.configureFavorites','paint.setPalette','paint.requestPurchase','paint.requestVehicle','paint.requestBuilding','vehicles.mountFlag','vehicles.removeFlag','politics.leaseHeadquarters','economy.rentOffice','economy.configureEmployment','economy.offerShares','economy.buyShares','economy.cancelShareOffer','vehicles.configureAssembly','vehicles.buyVehicle','vehicles.transferVehicle','vehicles.revisePart','politics.research.commissionService','publications.write', 'publications.read', 'publications.configure', 'politics.executePlayerAction','politics.intervene','politics.startPublicWork','politics.submitBill', 'politics.vetoBill', 'bank.deposit', 'bank.withdraw', 'bank.lend', 'bank.fileRecoveryPlan', 'currency.retire', 'addBuilding', 'setPolicies', 'setCitizenFinance','reserveWorldExport','worldExportReservationInfo','departWorldExport','completeWorldExport','returnWorldExport','reserveWorldImport','cancelWorldImport','receiveWorldImport','deliverWorldImport','reserveWorldPayment','receiveWorldPayment','settleWorldPayment','receiveWorldFreightIncome','setWorldBoatAssigned','approachWorldBoat','reserveWorldBoatCrew','departWorldBoatCrew','returnWorldBoatCrew','payWorldPassengerFare','refundWorldPassengerFare','refundWorldPayment','finalizeWorldPayment','reserveWorldCitizenMigration','cancelWorldCitizenMigration','departWorldCitizenMigration','receiveWorldCitizenMigration','completeWorldCitizenMigration','reserveWorldHouseholdMigration','cancelWorldHouseholdMigration','departWorldHouseholdMigration','receiveWorldHouseholdMigration','completeWorldHouseholdMigration']);
 
 function positions() {
   const people = state.city.citizens, result = new Float64Array(people.length * 4);
@@ -121,8 +121,8 @@ function snapshot(force = false, sync = false) {
   awaitingAck = true; lastSnapshot = lastMotion = performance.now(); dirty = forceSnapshotPending = false;
   return true;
 }
-function sendMotion() {
-  if (!state || !dirty || paused || performance.now() - lastMotion < motionInterval()) return;
+function sendMotion(force=false) {
+  if (!state || !dirty || !force&&(paused || performance.now() - lastMotion < motionInterval())) return;
   if(!observed){postMessage({type:'heartbeat',cityId,minute:state.city.minute,tick,elapsed,workerMetrics:workerMetrics()});lastMotion=performance.now();return;}
   const motion = positions(), inside=interiorPositions(),vehicles = vehiclePositions(),needs=vitals();
   postMessage({ type: 'motion', cityId, minute:state.city.minute, positions: motion, boatRiders:packBoatRiders(state.city.citizens), boatTows:packBoatTows(state.city.citizens), fishing:packFishing(state.city.citizens), inside, vehicles, needs, tick, elapsed, workerMetrics:workerMetrics() }, [motion.buffer, inside.buffer, vehicles.buffer, needs.buffer]);
@@ -221,7 +221,14 @@ self.onmessage = ({ data }) => {
       postMessage({ type: 'result', cityId, id: data.id, ok, value:result, message: ok ? (['politics.leaseHeadquarters','economy.rentOffice','politics.intervene','economy.offerShares','economy.buyShares','economy.cancelShareOffer','politics.submitBill'].includes(data.path)?(result?.description||'Operação concluída.'):'') : errors[data.path] || state.city.lastError });
       // Commands still answer immediately; the mirror of a background city
       // catches up on its next checkpoint instead of paying a graph transfer.
-      dirty = true; if(observed)snapshot(true);
+      dirty = true;
+      if(data.path==='gameAction'&&data.args[0]==='input'){
+        // Held keys never walk/encode the world graph. The controlled actor uses
+        // the compact motion stream; management commands keep their snapshots.
+        const game=state.city.characterGame,c=state.city.society.citizen(game?.citizenId);
+        if(game&&c)postMessage({type:'player-control',cityId,citizenId:c.id,input:game.input,intent:game.intent,task:c.task,action:c.action});
+        if(observed)sendMotion(true);
+      }else if(observed)snapshot(true);
     }
   } catch (error) {
     if (data.type === 'command') postMessage({ type: 'result', cityId, id: data.id, ok: false, message: error.message });

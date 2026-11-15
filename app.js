@@ -1,9 +1,12 @@
+import {interiorViewForLocation} from './js/city_interior_view.js';
+import {CharacterGameUI} from './js/character_game_ui.js';
+import {playing,controlledCitizen,movementVector} from './js/character_game.js';
 import { FreeCameraTouchControls } from './js/free_camera_touch_controls.js';
 import {CityFavorites} from './js/city_favorites.js?v=custom-history-limit-1';
-import { CitySimulationBridge } from './js/city_sim_bridge.js?v=citizen-access-1';
+import { CitySimulationBridge } from './js/city_sim_bridge.js?v=survival-controls-2';
 import { resolveWorldSettings, WORLD_PRESETS } from './js/world_settings.js';
-import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=citizen-access-1";
-import { CityDesktop } from "./js/city_desktop.js?v=citizen-access-1";
+import { CitySimulation, BUILDING_TYPES } from "./js/city_simulation.js?v=survival-controls-2";
+import { CityDesktop } from "./js/city_desktop.js?v=survival-controls-2";
 import { World } from "./js/world.js";
 import { RCT3DRenderer } from "./js/renderer_3d.js?v=graphics-perf-1";
 import { setActiveEntities } from "./js/engine.js";
@@ -18,6 +21,7 @@ const root = document.querySelector("#experience");
 const canvasUI = document.querySelector("#canvas-ui");
 const container3D = document.querySelector("#container-3d");
 const renderer3D = new RCT3DRenderer(container3D);
+let gameCameraCitizenId=null;
 const urlParams = new URLSearchParams(window.location.search);
 const worldSettings = resolveWorldSettings(urlParams);
 const world = new World(worldSettings.presetId, worldSettings.seed, worldSettings.size);
@@ -63,6 +67,7 @@ export const mainMenu = new MainMenu({
   renderer: renderer3D,
   time,
   onStartGame: () => startOrResumeGame(),
+  onPlayGame: () => gameUI.choose(),
   onStartNewCity: (params) => startNewCity(params),
   onOpenNewGame: () => {
     if (typeof cityUI !== 'undefined') {
@@ -92,7 +97,7 @@ export function startOrResumeGame() {
     cityUI.hidden = false;
     cityUI.element.hidden = false;
     if (cityUI.manager.windows.length === 0) {
-      cityUI.openModule('family');
+      cityUI.openModule('city');
     }
   }
 }
@@ -211,6 +216,7 @@ export function update(dt, _api) { city.update(dt); }
 
 /** Draw additional experience-specific UI after the framework HUD. */
 export function renderUI(ui, _api) {
+  if(playing(city))return;
   cityUI.draw(ui);
   favorites.refresh();
   if(!mainMenu.isActive()&&!favorites.historyWindowCreated){
@@ -289,6 +295,7 @@ function updateFreeCameraMovement(dt){
 }
 
 function onPointerDown(event) {
+  if(playing(city)){pointerDown=lastPointer={x:event.clientX,y:event.clientY};cameraLookDrag=event.button===2&&renderer3D.isThirdPersonActive();root.setPointerCapture?.(event.pointerId);return;}
   if (mainMenu.isActive()) {
     const rect = root.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -358,6 +365,7 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
+  if(playing(city)){if(cameraLookDrag&&lastPointer)renderer3D.rotatePerspectiveCamera((event.clientX-lastPointer.x)*.004,-(event.clientY-lastPointer.y)*.004);lastPointer={x:event.clientX,y:event.clientY};return;}
   const rect = root.getBoundingClientRect();
   mousePosition = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   renderer3D.setMousePos(mousePosition.x,mousePosition.y);
@@ -400,6 +408,15 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if(playing(city)){
+    if(pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)<6){
+      if(event.button===2){gameUI.inspect(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world));pointerDown=lastPointer=null;cameraLookDrag=false;return;}
+      if(event.button===0&&gameUI.combat){gameUI.attack(renderer3D.getEntityAtScreen(event.clientX,event.clientY,entities,world));pointerDown=lastPointer=null;return;}
+      if(event.button!==0){pointerDown=lastPointer=null;return;}
+      const rect=root.getBoundingClientRect(),tile=mapTileAt(event.clientX-rect.left,event.clientY-rect.top);
+      if(tile)gameUI.act('walk',{x:tile.x+.5,y:tile.y+.5});
+    }pointerDown=lastPointer=null;cameraLookDrag=false;return;
+  }
   if (freeCameraTouch.pointers.has(event.pointerId)) {
     freeCameraTouch.pointerUp(event.pointerId);
     pointerOnUI = false;
@@ -469,7 +486,7 @@ root.addEventListener("pointerdown", onPointerDown);
 root.addEventListener("pointermove", onPointerMove);
 root.addEventListener("pointerleave",()=>renderer3D.setMousePos(undefined,undefined));
 root.addEventListener("pointerup", onPointerUp);
-root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if(cityUI.doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
+root.addEventListener("dblclick",event=>{const rect=root.getBoundingClientRect();if(!playing(city)&&cityUI.doubleClick(event.clientX-rect.left,event.clientY-rect.top))event.preventDefault();});
 root.addEventListener("pointercancel", (event) => {
   freeCameraTouch.pointerUp(event.pointerId);
   rightClickConsumed=false;
@@ -484,7 +501,7 @@ root.addEventListener("contextmenu", (event) => event.preventDefault());
 root.addEventListener("wheel", (event) => {
   if (event.target.closest(".ui-panel")) return;
   const rect = root.getBoundingClientRect();
-  if(cityUI.scrollAt(event.clientX-rect.left,event.clientY-rect.top,event.deltaY)){event.preventDefault();return;}
+  if(!playing(city)&&cityUI.scrollAt(event.clientX-rect.left,event.clientY-rect.top,event.deltaY)){event.preventDefault();return;}
   if (legacyUI.hitTest(event.clientX - rect.left, event.clientY - rect.top)) return;
   event.preventDefault();
   const renderer = renderer3D;
@@ -496,6 +513,7 @@ root.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 window.addEventListener("keydown", (event) => {
+  if(playing(city)){if(gameUI.key(event,true))event.preventDefault();return;}
   if (mainMenu.isActive()) {
     if (event.code === 'Escape' && cityUI?.visible && cityUI?.manager?.windows?.length > 0) {
       cityUI.key(event);
@@ -537,13 +555,25 @@ window.addEventListener("keydown", (event) => {
   if (["Equal", "NumpadAdd"].includes(event.code)) { event.preventDefault(); time.changeSpeed(1); }
   if (event.code === "Period" && !event.repeat) stepSimulation();
 });
-window.addEventListener('keyup',event=>freeCameraKeys.delete(event.code));
-window.addEventListener('blur',()=>{freeCameraKeys.clear();freeCameraTouch.clear();cameraLookDrag=false;});
+window.addEventListener('keyup',event=>{freeCameraKeys.delete(event.code);if(gameUI.key(event,false))event.preventDefault();});
+window.addEventListener('blur',()=>{freeCameraKeys.clear();freeCameraTouch.clear();cameraLookDrag=false;gameUI.blur();});
 window.addEventListener("resize", resize);
 
 function frame(now) {
   const frameStarted = profiling ? performance.now() : 0;
   resize();
+  gameUI.element.hidden=mainMenu.isActive();gameUI.draw(false,now);
+  if(playing(city)){
+    const c=controlledCitizen(city);
+    if(c){
+      // The worker sends the command result before the new world state. Set up
+      // the gameplay camera when the controlled person reaches the mirror.
+      if(gameCameraCitizenId!==c.id){renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(c.entity.id);renderer3D.setCamera(c.entity.x,c.entity.y,4);gameCameraCitizenId=c.id;}
+      if(!renderer3D.isThirdPersonActive()&&renderer3D.followCharacterId!==c.entity.id)renderer3D.setFollowCharacter(c.entity.id);
+      renderer3D.selectEntity(c.entity.id);
+      if(!renderer3D.isPerspectiveActive())renderer3D.cityInteriorView=interiorViewForLocation(c.indoorLocation,c.indoorLocation&&city.building(c.indoorLocation.buildingId));
+    }
+  }
   const dt = Math.min((now - previousFrame) / 1000, 0.25);
   previousFrame = now;
   updateFreeCameraMovement(dt);
@@ -579,7 +609,7 @@ function frame(now) {
       cityUI.draw(legacyUI);
     }
     mainMenu.draw(legacyUI);
-    cityUI.element.hidden = !cityUI.visible;
+    cityUI.element.hidden = playing(city)||!cityUI.visible;
 
     requestAnimationFrame(frame);
     return;
@@ -604,6 +634,7 @@ function frame(now) {
   renderer3D.cityDevelopment=city.development;
   renderer3D.cityLogistics=city.logistics;
   renderer3D.profileFrame=profiling;renderer3D.render(world, entities, time.elapsed, renderDt, paused ? 0 : time.speed);
+  {const c=playing(city)&&controlledCitizen(city);gameUI.track(c?renderer3D.projectWorldToScreen(c.entity.x,c.entity.y,(c.indoorLocation?.position?.z??renderer3D.getSurfaceElevation(world.map,c.entity.x,c.entity.y))+2):null);}
   const sceneEnded = profiling ? performance.now() : 0;
   const pointerX = mousePosition.x;
   const pointerY = mousePosition.y;
@@ -612,10 +643,10 @@ function frame(now) {
   lastUiDrawnAt=now;lastUiPointerX=pointerX;lastUiPointerY=pointerY;
   legacyUI.beginFrame(pointerX, pointerY);
   const clockText = `D${String(world.clock.day).padStart(2, "0")} ${String(world.clock.hour).padStart(2, "0")}:${String(world.clock.minute).padStart(2, "0")}`;
-  cityUI.drawChrome(legacyUI,{clockText,paused,speed:time.speed,effectiveSpeed:time.effectiveSpeed,renderMode});
-  const hoverTile = editor.open && mousePosition.x >= 0 ? mapTileAt(mousePosition.x, mousePosition.y) : null;
+  if(!playing(city))cityUI.drawChrome(legacyUI,{clockText,paused,speed:time.speed,effectiveSpeed:time.effectiveSpeed,renderMode});
+  const hoverTile = !playing(city) && editor.open && mousePosition.x >= 0 ? mapTileAt(mousePosition.x, mousePosition.y) : null;
 
-  if (!legacyUI.hitTest(mousePosition.x, mousePosition.y)) {
+  if (!playing(city)&&!legacyUI.hitTest(mousePosition.x, mousePosition.y)) {
     legacyUI.ctx.save();legacyUI.ctx.beginPath();legacyUI.ctx.rect(0,cityUI.manager.top,legacyUI.width,Math.max(0,legacyUI.height-cityUI.manager.top-27));legacyUI.ctx.clip();
     editor.drawPreview(legacyUI, hoverTile, (x, y) => {
       const elevation = renderer3D.getSurfaceElevation(world.map, x, y);
@@ -625,7 +656,7 @@ function frame(now) {
   }
   renderUI(legacyUI, api);
 
-  cityUI.element.hidden = !cityUI.visible;
+  cityUI.element.hidden = playing(city)||!cityUI.visible;
   }
   if (profiling) {
     const ended=performance.now(),cpu=ended-frameStarted;
@@ -679,6 +710,7 @@ try { city.initialize(); } catch (error) {
 export const cityUI = new CityDesktop({ city, root, select: selectEntity, controls: {
   interventionsVisible:()=>options.values.showInterventions!==false,
   mainMenu: openMainMenu,
+  play:()=>gameUI.choose(),
   hasActiveGame: () => mainMenu.hasActiveGame,
   startNewCity: (params) => startNewCity(params),
   pause:togglePause, speed:()=>time.cycleSpeed(), options:toggleOptions, editor:()=>cityUI.toggleTool("editor",editor),
@@ -691,6 +723,17 @@ export const cityUI = new CityDesktop({ city, root, select: selectEntity, contro
   renderer3D.setFollowCharacter(null);
   renderer3D.setCamera(x, y);
 } });
+export const gameUI = new CharacterGameUI({root,getCity:()=>city,
+  command:async(action,options)=>{
+    if(simulationBridge?.active)return simulationBridge.request('gameAction',[action,options]);
+    const ok=city.gameAction(action,options);return {ok:!!ok,message:city.lastError};
+  },
+  onEnter:()=>{gameCameraCitizenId=null;mainMenu.close();cityUI.hidden=true;editor.open=false;options.open=false;freeCameraKeys.clear();time.setSpeed?.(1);if(time.paused)togglePause();const c=controlledCitizen(city);renderer3D.setThirdPersonMode(false);if(c){renderer3D.setFollowCharacter(c.entity.id);renderer3D.setCamera(c.entity.x,c.entity.y,4);}},
+  onSimulation:()=>{gameCameraCitizenId=null;renderer3D.cityInteriorView=null;renderer3D.setThirdPersonMode(false);renderer3D.setFollowCharacter(null);cityUI.hidden=false;},
+  onMenu:()=>mainMenu.close(),onPause:togglePause,isPaused:()=>time.paused,
+  getDirection:(x,y)=>movementVector(x,y,renderer3D.isThirdPersonActive()?renderer3D.fpYaw+Math.PI:renderer3D.fixedRotationY),
+  onCamera:()=>{const c=controlledCitizen(city);if(c)renderer3D.setThirdPersonMode(!renderer3D.isThirdPersonActive(),c.entity.id);}
+});
 if (mainMenu.isActive()) {
   cityUI.manager.closeAll(true);
 }
@@ -810,7 +853,7 @@ export function startNewCity({ preset = 'archipelago', seed = 482910, size = 256
     cityUI.lastElectionResultId = city.politics.lastResult?.id ?? null;
     cityUI.element.replaceChildren();
     cityUI.manager.closeAll(true);
-    cityUI.openModule('family');
+    cityUI.openModule('city');
     cityUI.notice = genError || `Nova cidade fundada com sucesso! (${size}×${size}, ${population} hab.)`;
   }
 

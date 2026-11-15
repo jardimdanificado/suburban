@@ -45,13 +45,13 @@ const entranceRings=Array.from({length:10},(_,radius)=>{
 });
 function crowdTileKey(city,x,y){return x>=0&&y>=0&&x<city.world?.width&&y<city.world?.height?y*city.world.width+x:`${x},${y}`;}
 function leaveEntrance(city,c,occupied=null){
- if(c.task||c.path.length||c.conversation||c.deliveryId||c.mobilityTrip)return;
+ if(c.playerControlled||c.task||c.path.length||c.conversation||c.deliveryId||c.mobilityTrip)return;
  const x=Math.floor(c.entity.x),y=Math.floor(c.entity.y),taken=occupied||new Set();if(!occupied)for(const other of city.citizens)if(other!==c&&!other.entity.destroyed&&!other.indoorLocation){taken.add(crowdTileKey(city,Math.floor(other.entity.x),Math.floor(other.entity.y)));const goal=other.path?.at(-1);if(goal)taken.add(crowdTileKey(city,Math.floor(goal.x),Math.floor(goal.y)));}
  for(let radius=2;radius<=9;radius++){const offsets=entranceRings[radius];const first=(c.id*13+city.minute)%offsets.length;for(let i=0;i<offsets.length;i++){const [dx,dy]=offsets[(first+i)%offsets.length],px=x+dx,py=y+dy,destination={x:px+.5,y:py+.5};if(taken.has(crowdTileKey(city,px,py))||!city.walkable(px,py))continue;const path=city.findPath(c.entity,destination);if(path?.length){c.path=path;c.task='walk';c.targetId=null;c.action='Saindo da entrada do prédio';taken.add(crowdTileKey(city,px,py));return;}}}
 }
 export function disperseCrowds(city){
  const groups=new Map();for(const c of city.citizens)if(!c.entity.destroyed&&!c.indoorLocation&&!c.path.length){const key=crowdTileKey(city,Math.floor(c.entity.x),Math.floor(c.entity.y)),people=groups.get(key);if(!people)groups.set(key,c);else if(Array.isArray(people))people.push(c);else groups.set(key,[people,c]);}
- let budget=32,taken=null;for(const people of groups.values())if(Array.isArray(people)&&people.length>2)for(const c of people){if(!budget) return;if(c.task||c.conversation||c.deliveryId||c.mobilityTrip||city.urgentNeed(c))continue;if(!taken){taken=new Set();for(const other of city.citizens)if(!other.entity.destroyed&&!other.indoorLocation){taken.add(crowdTileKey(city,Math.floor(other.entity.x),Math.floor(other.entity.y)));const goal=other.path?.at(-1);if(goal)taken.add(crowdTileKey(city,Math.floor(goal.x),Math.floor(goal.y)));}}leaveEntrance(city,c,taken);if(c.path.length)budget--;}
+ let budget=32,taken=null;for(const people of groups.values())if(Array.isArray(people)&&people.length>2)for(const c of people){if(!budget) return;if(c.playerControlled||c.task||c.conversation||c.deliveryId||c.mobilityTrip||city.urgentNeed(c))continue;if(!taken){taken=new Set();for(const other of city.citizens)if(!other.entity.destroyed&&!other.indoorLocation){taken.add(crowdTileKey(city,Math.floor(other.entity.x),Math.floor(other.entity.y)));const goal=other.path?.at(-1);if(goal)taken.add(crowdTileKey(city,Math.floor(goal.x),Math.floor(goal.y)));}}leaveEntrance(city,c,taken);if(c.path.length)budget--;}
 }
 
 function exit(city,c){
@@ -136,6 +136,7 @@ export function outdoorCellReady(city,c,b,u,adjacent=false){
  c.action='Deslocando-se até a célula de atividade';return false;
 }
 export function syncCitizenInterior(city,c){
+ if(c.playerControlled&&c.indoorLocation&&!c.indoorLocation.exiting&&['player-enter','player-explore'].includes(c.task))return !c.indoorLocation.path?.length;
  if(c.funeralInterior&&c.task==='funeral')return !c.indoorLocation?.path?.length;
  const task=c.workMeal?'workmeal':c.task,s=c.indoorLocation,queued=!!c.serviceQueue&&c.serviceQueue.buildingId===c.targetId&&c.serviceQueue.kind===task;
  // Outdoor field workers cannot have an indoor destination to validate.

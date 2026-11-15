@@ -44,7 +44,7 @@ export class CityResearch {
     if(this.electionPriority(b.id))return;
     let dispatched=0;for(let i=0;i<staff.length&&dispatched<staff.length;i++){
       const c=staff[i],start=today+(8+i%5*2)*60,end=start+240;
-      if(city.minute<start||city.minute>=end||s.sessions.some(r=>r.agentId===c.id&&(r.status==='active'||city.minute-(r.endedAt??0)<15))||c.researchAssignment||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||essential.has(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<40)continue;
+      if(c.playerControlled||city.minute<start||city.minute>=end||s.sessions.some(r=>r.agentId===c.id&&(r.status==='active'||city.minute-(r.endedAt??0)<15))||c.researchAssignment||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||essential.has(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<40)continue;
       if(s.responses.length+s.reservedIds.size>=s.target)break;
       const site=s.sites.slice().sort((a,b)=>(b.quota-b.interviews)/Math.max(1,b.quota)-(a.quota-a.interviews)/Math.max(1,a.quota)).find(t=>t.interviews+(t.reserved||0)<t.quota);if(!site)continue;
       const path=city.findPath(c.entity,site);if(path===null)continue;
@@ -165,7 +165,7 @@ export class CityResearch {
     if(this.electionPriority(b.id)?.id!==s.id){s.reason='Na fila de coleta; pesquisas eleitorais obrigatórias têm prioridade';return;}
     for(let i=0;i<staff.length;i++){
       const c=staff[i],start=today+(6+i%4)*60,end=Math.min(s.deadline,today+21*60,city.minute+180);
-      if(city.minute<start||city.minute>=end||s.sessions.some(r=>r.agentId===c.id&&(r.status==='active'||city.minute-(r.endedAt??0)<15))||c.researchAssignment||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||essential.has(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<30)continue;
+      if(c.playerControlled||city.minute<start||city.minute>=end||s.sessions.some(r=>r.agentId===c.id&&(r.status==='active'||city.minute-(r.endedAt??0)<15))||c.researchAssignment||c.deliveryId||c.cleaningJobId||c.workMeal||c.conversation||essential.has(c.task)||city.urgentNeed(c)||Math.min(c.needs.food,c.needs.water,c.needs.energy,c.needs.toilet)<30)continue;
       if(s.responses.length+s.reservedIds.size>=s.target)break;
       if(c.id!==b.ownerId&&(s.spent+b.wage>s.funded||b.balance<b.wage)){s.reason='Coleta aguardando recursos para salários';continue;}
       const sites=s.sites.filter(site=>site.interviews+(site.reserved||0)<site.quota).sort((a,b)=>{
@@ -181,7 +181,7 @@ export class CityResearch {
   }
   recruitRespondent(c,s,session){
     const city=this.city;if(city.minute<session.nextInterviewAt||s.responses.length+s.reservedIds.size>=s.target)return;session.nextInterviewAt=city.minute+2;
-    const nearby=city.citizens.filter(v=>live(v)&&v.id!==c.id&&city.society.isAdult(v)&&!s.respondentIds.has(v.id)&&!s.reservedIds.has(v.id)&&!v.pollInterview&&!v.researchAssignment&&!v.deliveryId&&!v.cleaningJobId&&!v.workMeal&&!v.conversation&&!essential.has(v.task)&&!city.urgentNeed(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<=18);
+    const nearby=city.citizens.filter(v=>!v.playerControlled&&live(v)&&v.id!==c.id&&city.society.isAdult(v)&&!s.respondentIds.has(v.id)&&!s.reservedIds.has(v.id)&&!v.pollInterview&&!v.researchAssignment&&!v.deliveryId&&!v.cleaningJobId&&!v.workMeal&&!v.conversation&&!essential.has(v.task)&&!city.urgentNeed(v)&&Math.hypot(v.entity.x-c.entity.x,v.entity.y-c.entity.y)<=18);
     // Random selection among local passers-by; never manufacture or duplicate an interview.
     for(let attempt=0;attempt<Math.min(8,nearby.length);attempt++){
       const index=Math.floor(city.random()*(nearby.length-attempt)),voter=nearby[index];nearby[index]=nearby[nearby.length-1-attempt];

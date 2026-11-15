@@ -194,7 +194,7 @@ export class CityLogistics {
       // of permanently turning a large order into an impossible owner-only haul.
       const next=!allowFreelance&&(s.requireCarrier||s.fee>0)?this.leastLoaded(economy.businesses.filter(b=>(b.type==='carrier'||s.purpose==='lamp-refill'&&b.type==='lamp_service') && b.active && b.balance>=b.wage && [...b.workers,b.ownerId].some(id=>this.capacity(economy.citizen(id))>=s.quantity))):null;
       if(next){s.carrierId=next.id;carrier=next;ids.push(...next.workers,next.ownerId);}
-      if(s.requireCarrier)return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25);
+      if(s.requireCarrier)return [...new Set(ids)].map(id=>economy.citizen(id)).filter(c=>c && (!c.playerControlled||this.city.characterGame?.intent?.kind==='work') && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.cleaningJobId && !c.workMeal && !c.conversation && !this.city.urgentNeed(c) && c.needs.energy>25);
       if(!carrier){
         // Owners and temporary public workers can bootstrap an unserved route.
         if(s.fee>0)ids.push(...this.city.citizens.filter(c=>!c.entity.destroyed&&this.city.society.isAdult(c)&&!c.jobId&&!(c.businessIds?.length)&&!this.city.politics.officeHolder(c)&&(!c.task||INTERRUPTIBLE_GIG_TASKS.has(c.task))&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.workMeal&&!c.conversation&&!c.mobilityTrip&&!c.ridingVehicleId&&!this.city.urgentNeed(c)).sort((a,b)=>Math.hypot(a.entity.x-s.position.x,a.entity.y-s.position.y)-Math.hypot(b.entity.x-s.position.x,b.entity.y-s.position.y)).slice(0,16).map(c=>c.id));
@@ -202,7 +202,7 @@ export class CityLogistics {
         const founder = this.city.development?.ownerCitizen(s.buyer.accountId); if (founder) ids.push(founder.id);
       }
     }
-    return [...new Set(ids)].map(id => economy.citizen(id)).filter(c => c && c.role!=='councilor' && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.entity.destroyed && this.city.society.isAdult(c) && !c.conversation && !c.workMeal && !c.cleaningJobId && !c.informalJobId && !this.city.urgentNeed(c) && c.needs.energy > 25 && (!carrier || c.id === carrier.ownerId || carrier.balance >= carrier.wage));
+    return [...new Set(ids)].map(id => economy.citizen(id)).filter(c => c && (!c.playerControlled||this.city.characterGame?.intent?.kind==='work') && c.role!=='councilor' && this.capacity(c)>=s.quantity && !c.deliveryId && !c.mobilityTrip && !c.ridingVehicleId && !c.entity.destroyed && this.city.society.isAdult(c) && !c.conversation && !c.workMeal && !c.cleaningJobId && !c.informalJobId && !this.city.urgentNeed(c) && c.needs.energy > 25 && (!carrier || c.id === carrier.ownerId || carrier.balance >= carrier.wage));
   }
   updateMinute() {
     const city = this.city;

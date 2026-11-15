@@ -352,7 +352,7 @@ export class CityJustice {
       review.status='waiting';let assignment;
       for(const office of this.activeBuildings('council_oversight_office')){
         if(occupied.has(office.id))continue;
-        const officer=(office.workers||[]).map(id=>city.society.citizen(id)).filter(c=>c&&!conflicts.has(c.id)&&!city.politics.officeHolder(c)&&!c.entity.destroyed&&!c.custody&&!c.workMeal&&!c.conversation&&!c.mobilityTrip&&c.jobId===office.id&&c.task==='work'&&c.indoorLocation?.buildingId===office.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.policeOversight&&!c.policeAudit&&!c.policeInvestigation&&!c.policePatrol&&!c.policeResponse&&!c.custodyEscort&&!city.urgentNeed?.(c)).sort((a,b)=>(b.skills?.law||0)-(a.skills?.law||0))[0];
+        const officer=(office.workers||[]).map(id=>city.society.citizen(id)).filter(c=>c&&!c.playerControlled&&!conflicts.has(c.id)&&!city.politics.officeHolder(c)&&!c.entity.destroyed&&!c.custody&&!c.workMeal&&!c.conversation&&!c.mobilityTrip&&c.jobId===office.id&&c.task==='work'&&c.indoorLocation?.buildingId===office.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.policeOversight&&!c.policeAudit&&!c.policeInvestigation&&!c.policePatrol&&!c.policeResponse&&!c.custodyEscort&&!city.urgentNeed?.(c)).sort((a,b)=>(b.skills?.law||0)-(a.skills?.law||0))[0];
         if(officer){assignment={office,officer};break;}
       }
       if(!assignment){review.waitingReason=this.activeBuildings('council_oversight_office').length?'aguardando auditor sem conflito disponível':'aguardando instalação da comissão de fiscalização';continue;}
@@ -399,7 +399,7 @@ export class CityJustice {
       const otherShiftOfficerId=station.policeShiftAssignments[shift==='day'?'nightOfficerId':'dayOfficerId'];
       if(shift==='night'&&activeStaff<2)continue;
       const activeInvestigators=new Set(this.cases.filter(r=>r.status==='investigating'&&r.investigation?.status==='active').map(r=>r.investigation.officerId));
-      officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&c.id!==otherShiftOfficerId&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.custody&&!c.custodyEscort&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.conversation&&!c.funeralBodyId&&!c.deliveryId&&!c.cleaningJobId&&!c.paintWorkId&&!c.policeAudit&&!activeInvestigators.has(c.id)&&!city.urgentNeed?.(c));
+      officer=(station.workers||[]).map(id=>city.society.citizen(id)).find(c=>c&&!c.playerControlled&&c.id!==otherShiftOfficerId&&!c.entity.destroyed&&c.jobId===station.id&&c.task==='work'&&c.indoorLocation?.buildingId===station.id&&!c.indoorLocation.path?.length&&!c.path.length&&!c.custody&&!c.custodyEscort&&!c.mobilityTrip&&!c.ridingVehicleId&&!c.conversation&&!c.funeralBodyId&&!c.deliveryId&&!c.cleaningJobId&&!c.paintWorkId&&!c.policeAudit&&!activeInvestigators.has(c.id)&&!city.urgentNeed?.(c));
       if(!officer)continue;
       station.patrolOfficerId=officer.id;officer.policePatrol={stationId:station.id,phase:'exit',startedAt:city.minute,waypointIndex:(officer.id+station.id)%8,waitUntil:0,lastPaidMinute:null};officer.task='police-patrol';officer.targetId=null;officer.path=[];officer.action='Iniciando patrulhamento a pé';
       station.policeShiftAssignments[shift==='day'?'dayOfficerId':'nightOfficerId']=officer.id;officer.policePatrol.shift=shift;this.considerMunicipalPoliceOrder(station,officer);

@@ -208,7 +208,7 @@ export class CityHousing {
       const option={home,building,units,bedroom,hasBathroom,social,price:units.reduce((sum,u)=>sum+u.price,0),color:building.wallColors?.[bedroom?.id]||buildingColor(building)};if(!social)candidateHousingOptions.push(option);optionsByHome.set(home.id,option);
     }
     for (const c of this.city.citizens) {
-      if (c.entity.destroyed) continue;
+      if (c.playerControlled || c.entity.destroyed) continue;
       if (!this.city.society.isAdult(c)) { const parent = this.city.society.guardian(c); if (parent) this.houseChild(c, parent); continue; }
       const partner = this.city.society.citizen(c.partnerId), partnerHome = partner && this.home(partner),existingHome=this.home(c);
       if(existingHome&&optionsByHome.get(existingHome.id)?.hasBathroom&&!c.homeShareWith&&!(partnerHome&&c.homeId!==partnerHome.id&&partner.id<c.id))continue;
