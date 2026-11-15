@@ -328,6 +328,18 @@ export class CityRelationships {
     this.city.log(`${observer.entity.properties.name} presenciou a aproximação de ${partner.entity.properties.name} e ${rival.entity.properties.name} e reagiu com ciúme.`,'relationship',[observer.id,partner.id,rival.id],{kind:'jealousy',socialFactId:fact.id,parentEventId:fact.eventId});
     this.updateBond(observer,partner);this.updateBond(observer,rival);
   }
+  proposePartnership(actor,target){
+    const city=this.city;
+    if(actor.partnerId||target.partnerId||!this.compatible(actor,target)||city.minute<actor.social.romanceAfter||city.minute<target.social.romanceAfter)return false;
+    const a=this.view(actor,target,true),b=this.view(target,actor,true);
+    if(a.affection<55||a.trust<45||a.attraction<60||city.minute<a.rejectedUntil||city.minute-a.lastProposalAt<RELATIONSHIP_RULES.proposalCooldown)return false;
+    a.lastProposalAt=city.minute;
+    const accepted=b.affection>=55&&b.trust>=45&&b.attraction>=60&&b.fear<40&&city.minute>=b.rejectedUntil&&city.random()<bounded(.45+b.trust/250+b.attraction/350-b.resentment/150,.05,.95);
+    const proposal=this.fact('proposal',actor,target,`${actor.entity.properties.name} propôs um relacionamento a ${target.entity.properties.name}, que ${accepted?'aceitou':'preferiu esperar'}.`,{accepted,playerInitiated:true});
+    if(accepted)this.formPartnership(actor,target,proposal.eventId);
+    else {a.romance='rejected';a.rejectedUntil=city.minute+RELATIONSHIP_RULES.proposalCooldown;}
+    return true;
+  }
   formPartnership(a,b,parentEventId) {
     if(a.partnerId || b.partnerId || !this.compatible(a,b))return false;
     a.partnerId=b.id;b.partnerId=a.id;const r=this.city.society.getRelation(a,b,true);r.partnerSince=this.city.minute;
@@ -337,7 +349,7 @@ export class CityRelationships {
   }
   endPartnership(a,b,reason) {
     if(a.partnerId!==b.id || b.partnerId!==a.id)return false;
-    a.partnerId=b.partnerId=null;const r=this.city.society.getRelation(a,b);r.partnerSince=null;r.separatedAt=this.city.minute;
+    a.partnerId=b.partnerId=null;const r=this.city.society.getRelation(a,b);r.partnerSince=null;if(r.marriedAt!=null){r.divorcedAt=this.city.minute;r.marriedAt=null;}r.separatedAt=this.city.minute;
     for(const [c,other] of [[a,b],[b,a]]){r.views[c.id].romance='ex';c.social.romanceAfter=this.city.minute+720;if(c.homeShareWith===other.id && !this.canShareHome(other,c))this.city.housing.release(c);}
     this.sync(r);this.fact('breakup',a,b,`${a.entity.properties.name} e ${b.entity.properties.name} encerraram o relacionamento: ${reason}.`);
     return true;

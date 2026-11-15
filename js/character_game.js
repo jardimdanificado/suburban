@@ -1,3 +1,5 @@
+import {carryCapacity} from './city_markets.js?v=market-one-pass-1';
+import {playerAction,playerActivityMinute} from './character_player_actions.js';
 import {markerPreferences,CITY_SYMBOLS} from './city_symbols.js';
 import {nearbyTargets,interactionOptions,samePlace,entryRoom} from './character_interactions.js';
 import {canStep} from './city_terrain.js?v=entrance-retaining-clearance-1';
@@ -24,7 +26,7 @@ export function relatives(city,c=controlledCitizen(city)){
   return city.citizens.filter(other=>other.id!==c.id&&live(other)&&city.society.isAdult(other)&&(ids.has(other.id)||other.parentIds?.includes(c.id)));
 }
 export function canControl(city,c){
-  return live(c)&&city.society.isAdult(c)&&!city.politics.officeHolder(c)&&!c.custody&&!c.workMeal&&!c.campaign&&!c.researchAssignment&&!c.funeralBodyId&&!c.custodyEscort&&!c.custodyWaterDelivery&&!c.policeAudit&&!c.policeOversight&&!c.policeRestitution&&!c.policeArrestEscort&&!c.policePatrol&&!c.policeInvestigation&&!c.policeResponse&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.worldBoatCrew&&!c.ridingVehicleId&&!c.mobilityTrip&&!c.skybridgeTransit;
+  return live(c)&&city.society.isAdult(c)&&!c.custody&&!c.workMeal&&!c.campaign&&!c.researchAssignment&&!c.funeralBodyId&&!c.custodyEscort&&!c.custodyWaterDelivery&&!c.policeAudit&&!c.policeOversight&&!c.policeRestitution&&!c.policeArrestEscort&&!c.policePatrol&&!c.policeInvestigation&&!c.policeResponse&&!c.deliveryId&&!c.cleaningJobId&&!c.informalJobId&&!c.worldBoatCrew&&!c.ridingVehicleId&&!c.mobilityTrip&&!c.skybridgeTransit;
 }
 function message(city,text){const s=city.characterGame;s.message=text;s.journal.push({minute:city.minute,text});if(s.journal.length>30)s.journal.shift();}
 function release(city,c){
@@ -45,9 +47,10 @@ function restore(city){
   if(c){if((!s.autonomous||s.intent)&&!c.deliveryId&&!c.cleaningJobId)release(city,c);c.playerControlled=false;c.playerManaged=s.previous.managed;c.playerPoliticalAmbition=s.previous.politics;}
 }
 function possess(city,c){
+  c.inventoryCapacity??=carryCapacity(c);
   const s=city.characterGame;s.previous={managed:c.playerManaged,politics:c.playerPoliticalAmbition};
   s.autonomous??=false;s.manualPending=false;
-  if(!s.autonomous)release(city,c);c.playerControlled=!s.autonomous;c.playerManaged=true;c.playerPoliticalAmbition=false;if(!s.autonomous&&c.indoorLocation&&!c.indoorLocation.exiting){c.task='player-explore';c.targetId=c.indoorLocation.buildingId;}
+  if(!s.autonomous)release(city,c);c.playerControlled=!s.autonomous;c.playerManaged=true;c.playerPoliticalAmbition=s.previous.politics??false;if(!s.autonomous&&c.indoorLocation&&!c.indoorLocation.exiting){c.task='player-explore';c.targetId=c.indoorLocation.buildingId;}
   s.familyIds=relatives(city,c).map(person=>person.id);
   s.citizenId=c.id;s.mode='play';s.status='alive';s.intent=null;s.input={x:0,y:0};s.message='Você decide. O tempo e as necessidades continuam passando.';
 }
@@ -91,7 +94,7 @@ function performGameAction(city,action,options={}){
   city.lastError='';if(!options||typeof options!=='object')return city.fail('Ação inválida.');
   if(action==='start'){
     const c=city.society.citizen(options.citizenId);
-    if(!canControl(city,c))return city.fail('Escolha um adulto livre, fora de transporte, serviço reservado e cargo público.');
+    if(!canControl(city,c))return city.fail('Escolha um adulto livre, fora de transporte e serviço reservado.');
     if(playing(city))return city.fail('Você já controla uma pessoa.');
     city.characterGame??={version:1,mode:'simulation',citizenId:null,journal:[],startedAt:city.minute,earned:0,collected:0,meals:0,previous:{}};
     possess(city,c);message(city,`Você assumiu ${c.entity.properties.name}. Nenhum dinheiro ou item foi criado.`);return true;
@@ -117,6 +120,7 @@ function performGameAction(city,action,options={}){
     )return city.fail('Opções de marcador inválidas.');
     s.marker=markerPreferences({...s.marker,...options});return true;
   }
+  if((c.ridingVehicleId||c.mobilityTrip||c.localBoatTrip||c.sharedBoatRide)&&!['leave-vehicle','simulation'].includes(action))return city.fail('Desembarque antes de iniciar outra ação.');
   if(action==='autonomy'){
     if(typeof options.enabled!=='boolean')return city.fail('Escolha ligar ou desligar a rotina automática.');
     return setAutonomy(city,c,options.enabled);
@@ -125,7 +129,7 @@ function performGameAction(city,action,options={}){
     if(options.x!==0||options.y!==0)return city.fail('Desligue a rotina automática para usar WASD.');
     s.input={x:0,y:0};return true;
   }
-  if(s.autonomous&&reservedActivity(city,c))return city.fail('Aguarde o transporte ou serviço em andamento antes de dar outra ordem.');
+  if(action!=='leave-vehicle'&&s.autonomous&&reservedActivity(city,c))return city.fail('Aguarde o transporte ou serviço em andamento antes de dar outra ordem.');
   if(c.custody||(c.unconsciousUntil||0)>city.minute||(c.surrenderedUntil||0)>city.minute||c.combatFlee?.status==='running')return city.fail('Prisão, ferimentos ou rendição impedem esta ação.');
   if(c.deliveryId||c.cleaningJobId)return city.fail('Conclua o serviço reservado ou volte à simulação para devolver a autonomia.');
   const b=city.building(options.buildingId);
@@ -165,9 +169,16 @@ function performGameAction(city,action,options={}){
     }
     case 'enter':{
       if(!b?.active||b.entity.destroyed||b.constructionKind==='open-air'||distance(c.entity,b.door)>1.8)return city.fail('Aproxime-se de uma entrada acessível.');
-      const room=entryRoom(city,b,c);
+      const room=entryRoom(city,b,c)||(options.force===true?b.units.find(u=>!['cell','circulation','bathroom'].includes(u.roomType)):null);
       if(!room)return city.fail('Esta entrada não oferece acesso ao público.');
-      stop(city,c);s.intent={kind:'enter',targetId:b.id,roomId:room.id};c.task='player-enter';c.targetId=b.id;return true;
+      stop(city,c);s.intent={kind:'enter',targetId:b.id,roomId:room.id,unauthorized:!entryRoom(city,b,c)};c.task='player-enter';c.targetId=b.id;return true;
+    }
+    case 'explore-room':{
+      const location=c.indoorLocation,b=location&&city.building(location.buildingId),room=city.units.get(options.unitId);
+      if(!b||!room||room.buildingId!==b.id||room.roomType==='cell')return city.fail('Escolha um cômodo acessível no prédio atual.');
+      const path=interiorRoute(city.building(b.officeTenantOf)||b,location.position,{x:b.entity.x+room.x+.5,y:b.entity.y+room.y+.5,z:room.z*1.8});
+      if(path===null)return city.fail('Não existe passagem até este cômodo.');
+      stop(city,c);location.path=path;location.targetUnitId=room.id;location.targetRoomType=room.roomType;c.task='player-explore';c.targetId=b.id;s.intent={kind:'player-room'};return true;
     }
     case 'exit':{
       if(!c.indoorLocation)return city.fail('Você já está do lado de fora.');
@@ -240,7 +251,7 @@ function performGameAction(city,action,options={}){
       if(!result)return city.fail('O alvo não pode ser atingido desta posição.');
       s.nextAttackAt=city.minute+4;message(city,'Você iniciou uma agressão. Ferimentos, testemunhas e consequências legais são reais.');return true;
     }
-    default:return city.fail('Ação desconhecida.');
+    default:return playerAction(city,c,action,options,{stop,route});
   }
 }
 function finish(city,c,text){stop(city,c);if(city.characterGame.autonomous)syncControl(city,c);if(text)message(city,text);}
@@ -266,11 +277,17 @@ export function characterMinute(city,c){
     }
     c.action='Aproximando-se para executar a ação';return true;
   }
+  if(playerActivityMinute(city,c,{finish}))return true;
+  if(intent.kind==='player-action'&&!c.path.length){
+    const action=intent.playerAction,options=intent.options;stop(city,c);
+    const ok=gameAction(city,action,options);if(!ok)finish(city,c,city.lastError||'Ação indisponível.');else if(!s.intent)message(city,'Ação concluída.');return true;
+  }
   if(intent.kind==='manual'||c.path.length||c.indoorLocation?.path?.length)return true;
+  if(intent.kind==='player-room'){finish(city,c,'Você chegou ao cômodo escolhido.');return true;}
   if(intent.kind==='rest'){c.needs.energy=Math.min(100,c.needs.energy+.2);c.action='Descansando no lugar';if(s.autonomous&&c.needs.energy>=90)finish(city,c,'Descanso concluído. Retomando a rotina automática.');return true;}
-  if(intent.kind==='talk'){const other=city.society.citizen(intent.targetId);if(!other||!samePlace(c,other)||distance(c.entity,other.entity)>2){finish(city,c,'A conversa terminou.');return true;}c.needs.social=Math.min(100,c.needs.social+.8);if(++intent.progress>=8)finish(city,c,'Conversa encerrada.');return true;}
+  if(intent.kind==='talk'){const other=city.society.citizen(intent.targetId);if(!other||!samePlace(c,other)||distance(c.entity,other.entity)>2){finish(city,c,'A conversa terminou.');return true;}c.needs.social=Math.min(100,c.needs.social+.8);if(++intent.progress>=8){city.relationships.greet(c,other,true);c.lastConversationAt=other.lastConversationAt=city.minute;finish(city,c,'Conversa encerrada.');}return true;}
   if(intent.kind==='exit'){if(!c.indoorLocation)finish(city,c,'Você saiu do prédio.');return true;}
-  if(intent.kind==='enter'){const building=city.building(intent.targetId),room=city.units.get(intent.roomId);if(!building||!room){finish(city,c,'Entrada indisponível.');return true;}if(activityRoomReady(city,c,building,room,room.roomType==='bedroom'?'bedroom':'service')){s.intent=null;c.task='player-explore';c.targetId=building.id;c.action='Explorando o interior';}return true;}
+  if(intent.kind==='enter'){const building=city.building(intent.targetId),room=city.units.get(intent.roomId);if(!building||!room){finish(city,c,'Entrada indisponível.');return true;}if(activityRoomReady(city,c,building,room,room.roomType==='bedroom'?'bedroom':'service')){if(intent.unauthorized)city.justice.crimeRecord('trespass',c.id,building.ownerId??null,{buildingId:building.id,purpose:'player-exploration',position:{...c.indoorLocation.position},scene:{buildingId:building.id,floor:c.indoorLocation.floor}});s.intent=null;c.task='player-explore';c.targetId=building.id;c.action='Explorando o interior';}return true;}
   const b=city.building(intent.targetId);
   if(['meal','water','apply','home','sell'].includes(intent.kind)&&(!b?.active||b.entity.destroyed)){finish(city,c,'O destino não está disponível.');return true;}
   if(!intent.arrived&&intent.point&&distance(c.entity,intent.point)>1.7&&!c.indoorLocation){finish(city,c,'O caminho foi interrompido antes de chegar.');return true;}

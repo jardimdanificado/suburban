@@ -72,6 +72,7 @@ export class CityLogistics {
   pendingTo(holder, good) { return holder.incoming?.[good] || 0; }
   publicOrder(s){return s.payerAccountId==='treasury'||s.buyer.accountId==='treasury'||s.buyer.municipal;}
   order(seller, buyer, good, quantity, unitPrice, { payerAccountId = buyer?.accountId, purpose = 'trade', serviceFee = 0, serviceAccountId = null, serviceFees = [], requireCarrier = false,garmentIds=null,reserveBalance=0 } = {}) {
+    if(purpose==='trade'&&Number.isSafeInteger(seller?.playerPrices?.[good])&&seller.playerPrices[good]>0)unitPrice=seller.playerPrices[good];
     const city = this.city;
     const directDepotArrival=!!seller?.externalImport&&!!seller?.door&&!!buyer?.importDepot&&!!buyer?.door&&Math.hypot(seller.door.x-buyer.door.x,seller.door.y-buyer.door.y)<.01;
     if(buyer?.importDepot&&!seller?.externalImport)return false;

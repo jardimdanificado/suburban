@@ -1753,13 +1753,14 @@ export class CitySimulation {
     this.lastUpdateProfile={minute:this.minute,totalMs:performance.now()-profileStart,minuteStepsMs,mobilityMs,movementSetupMs,movementMs,vehicleMs:performance.now()-profileMark,step:this.lastStepProfile};
   }
   goodsStock(good) {
+    const playerStored=(this.playerGroundItems||[]).reduce((n,e)=>n+(!e.destroyed&&e.properties.playerItem.good===good?e.properties.item.quantity:0),0)+this.citizens.reduce((n,c)=>n+(c.playerEquipped?.[good]?1:0),0)+(good==='moveis'?[...this.units.values()].reduce((n,u)=>n+(u.playerFurniture?.length||0),0):0);
     const campaignCarried=this.citizens.reduce((n,c)=>n+(c.campaignInventory?.[good]||0),0);
     const pocketGoods=this.supplies.carriedGoods(good);
     const fishingCarried=this.citizens.reduce((n,c)=>n+(c.fishingCatch?.goods?.[good]||0)+(good==='vara_pesca'&&c.fishingRod?1:0)+(good==='moveis'&&c.fishingChair?1:0),0);
     const carried=good==='madeira'?this.citizens.reduce((n,c)=>n+(c.forestryJob?.load||0),0):good==='sementes'?this.citizens.reduce((n,c)=>n+(c.forestrySeeds||0),0):0;
     const worn=good==='roupas'?this.citizens.reduce((n,c)=>n+(c.wardrobe||[]).filter(g=>g.manufacturedAt!=null&&!g.discarded).length,0):0;
     let printed=0;if(['livros','panfletos','jornais'].includes(good)){const matched=new Map();for(const doc of this.publications.documents.values()){if(doc.lost||doc.good!==good)continue;const holder=this.publications.inventoryHolder(doc.ownerAccountId),count=matched.get(doc.ownerAccountId)||0,represented=holder?.inventory?.[good]||0;if(count>=represented)printed++;matched.set(doc.ownerAccountId,count+1);}}
-    return this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0)+(c.substanceHomeStock?.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+fishingCarried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),this.worldPort,...(this.economy.importDepot?[this.economy.importDepot]:[]),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
+    return playerStored+this.citizens.reduce((n,c)=>n+(c.inventory?.[good]||0)+(c.substanceHomeStock?.inventory?.[good]||0),0)+this.furniture.storedGoods(good)+pocketGoods+this.paint.goodsStock(good)+this.vehicles.goodsStock(good)+printed+worn+campaignCarried+carried+fishingCarried+[...this.buildings, ...this.development.projects, ...this.logistics.shipments, ...this.lighting.propertyStores.values(),this.worldPort,...(this.economy.importDepot?[this.economy.importDepot]:[]),...this.politics.parties.map(p=>this.accounts.get(p.accountId)).filter(a=>a?.inventory)].reduce((n, h) => n + (h.inventory[good] || 0) + (good === 'lixo' ? h.litter || 0 : 0), 0);
   }
   stats() {
     if (this._statsCache && this._statsMinute === this.minute && this._statsStructure === this.structureRevision) return this._statsCache;

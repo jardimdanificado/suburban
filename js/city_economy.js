@@ -1008,7 +1008,7 @@ export class CityEconomy {
     b.inventory[good]--;if(streetVendor){streetVendor.stock[good]--;streetVendor.stockRevision=(streetVendor.stockRevision||0)+1;}const publication=['livros','panfletos','jornais'].includes(good),durable=publication||good==='roupas'||good==='oleo'||['porrete','barra_ferro','faca','garrucha','cesta','carrinho'].includes(good);if(!durable)this.consumed[good]++;this.recordGoods(streetVendor?'street-market-sale':durable?'durable-purchase':'household-consumption',good,1,b.id,c.id,streetVendor?{marketId:streetVendor.marketId,vendorBusinessId:b.id}:{});
     if(good==='oleo'){c.inventory??={};c.inventory.oleo=(c.inventory.oleo||0)+1;return true;}
     if(good==='roupas'){buyClothes(this.city,c,b,offer.garmentIndex);return true;}
-    if(['porrete','barra_ferro','faca','garrucha'].includes(good)){const weapon=good==='porrete'?{name:'Porrete de madeira',damage:2.4,range:1.8,durability:5}:good==='faca'?{name:'Faca de trabalho',damage:3.4,range:1.55,durability:4}:good==='garrucha'?{name:'Garrucha artesanal',damage:4.6,range:5.5,durability:6,kind:'firearm'}:{name:'Bastão de ferro',damage:3.1,range:1.75,durability:7};c.equipment??={};c.inventory??={};c.inventory[good]=(c.inventory[good]||0)+1;c.equipment.weapon={good,...weapon,boughtAt:this.city.minute,buildingId:b.id};return true;}
+    if(['porrete','barra_ferro','faca','garrucha'].includes(good)){c.inventory??={};c.inventory[good]=(c.inventory[good]||0)+1;equipCarriedWeapon(c,good,{boughtAt:this.city.minute,buildingId:b.id});return true;}
     if(good==='jornais'){const doc=this.city.publications.documents.get(offer.documentId);this.city.publications.move(doc,c.accountId);c.newspaperEditions??=[];c.newspaperEditions.push(doc.editionKey);c.newspaperEditions=c.newspaperEditions.slice(-32);this.city.publications.read(doc.id,c.id);return true;}
     if(good==='cesta'||good==='carrinho'){c.equipment??={};c.equipment[good]={boughtAt:this.city.minute,buildingId:b.id};if(good==='carrinho')this.city.vehicles?.activateProducedCart(b,c.accountId,b,price,'Compra pessoal em loja artesanal');return true;}
     c.needs[spec.use.need]=Math.min(100,c.needs[spec.use.need]+spec.use.boost);
@@ -1144,4 +1144,13 @@ export class CityEconomy {
       this.city.transfer(b.accountId, 'treasury', b.balance, 'Encerramento de empresa sem proprietário');
     }
   }
+}
+
+/** Equipment keeps the weapon in carried stock so trading and combat share one item. */
+export function equipCarriedWeapon(c,good,details={}){
+ if(!['porrete','barra_ferro','faca','garrucha'].includes(good)||!(c.inventory?.[good]>0))return false;
+ c.equipment??={};c.storedWeaponEquipment??={};
+ if(c.equipment.weapon)c.storedWeaponEquipment[c.equipment.weapon.good]=c.equipment.weapon;
+ const weapon=good==='porrete'?{name:'Porrete de madeira',damage:2.4,range:1.8,durability:5}:good==='faca'?{name:'Faca de trabalho',damage:3.4,range:1.55,durability:4}:good==='garrucha'?{name:'Garrucha artesanal',damage:4.6,range:5.5,durability:6,kind:'firearm'}:{name:'Bastão de ferro',damage:3.1,range:1.75,durability:7};
+ c.equipment.weapon=c.storedWeaponEquipment[good]||{good,...weapon,...details};return true;
 }

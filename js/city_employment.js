@@ -231,6 +231,7 @@ export function advanceRecruitment(city){
     const b=rows[0].b,slots=openPositions(city,b);let hired=0;
     rows.sort((x,y)=>city.economy.hiringScore(y.c,b)-city.economy.hiringScore(x.c,b)||x.c.id-y.c.id);
     for(const {c,a} of rows){
+      if(b.playerHiring&&!a.employerApproved)continue;
       const q=qualification(city,c,b),old=city.building(c.jobId),better=!old||wageFor(city,c,b)>wageFor(city,c,old)*1.15;
       a.resultReceivedAt=city.minute;a.resultBuildingId=b.id;
       if(hired<slots&&b.balance>=b.wage*60&&q.eligible&&better&&c.jobId!==b.id){

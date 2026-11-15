@@ -2,11 +2,11 @@ import {waterIndex} from './city_water.js';
 import {controlledCitizen,relatives} from './character_game.js';
 
 export const INTERACTION_REACH=1.8;
-const PUBLIC_PLACES=new Set(['townhall','bank','market','bakery','greengrocer','popular_refectory','clinic','hospital','public_toilet','leisure','restaurant']);
+const PUBLIC_PLACES=new Set(['townhall','bank','market','bakery','greengrocer','popular_refectory','clinic','hospital','public_toilet','leisure','restaurant','library','theater','sports_center','school','laundromat','clothing_store','thrift_store','sports_shop','cycle_shop','boat_shop','pharmacy','paid_toilet','legal_office','newsroom','council_chamber']);
 export function entryRoom(city,b,c=controlledCitizen(city)){
   if(!b?.active||b.constructionKind==='open-air')return null;
   if(city.housing.home(c)?.buildingId===b.id)return b.units.find(u=>u.roomType==='bedroom');
-  if(!PUBLIC_PLACES.has(b.type)&&b.ownerId!==c.id&&c.jobId!==b.id)return null;
+  if(!PUBLIC_PLACES.has(b.type)&&b.ownerId!==c.id&&!b.units.some(u=>u.ownerId===c.accountId)&&c.jobId!==b.id)return null;
   return b.units.find(u=>['service','dining','waiting'].includes(u.roomType))||b.units.find(u=>['workspace','bathroom'].includes(u.roomType));
 }
 const alive=entity=>entity&&!entity.destroyed;
@@ -32,6 +32,7 @@ export function nearbyTargets(city,c=controlledCitizen(city),radius=INTERACTION_
       if(bodyId>=0){targets.push({kind:'water',id:bodyId,entityId:null,point:{x:c.entity.x,y:c.entity.y},label:'Água sem tratamento',distance:1});break;}
     }
   }
+  if(!c.indoorLocation)for(const item of city.playerGroundItems||[])if(alive(item))add('object',item.id,item,item,item.properties.name);
   if(inspectable&&!c.indoorLocation)for(const vehicle of city.vehicles.units.values())if(vehicle.active&&!vehicle.scrapped&&alive(vehicle.entity))add('vehicle',vehicle.id,vehicle.entity,vehicle.entity,vehicle.entity.properties.name);
   for(const other of city.citizens)if(other!==c&&alive(other.entity)&&samePlace(c,other))add('person',other.id,other.entity,other.entity,other.entity.properties.name);
   return targets.sort((a,b)=>a.distance-b.distance||a.id-b.id);

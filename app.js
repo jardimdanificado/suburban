@@ -332,7 +332,8 @@ function onPointerDown(event) {
     const rect=root.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
     pointerOnUI=gameUI.pointerDown(x,y,event.button,legacyUI);
     pointerDown=lastPointer={x:event.clientX,y:event.clientY};
-    cameraLookDrag=!pointerOnUI&&event.button===2;
+    cameraLookDrag=!pointerOnUI&&event.button===1;
+    if(cameraLookDrag)event.preventDefault();
     root.setPointerCapture?.(event.pointerId);return;
   }
   if (mainMenu.isActive()) {
@@ -392,7 +393,8 @@ function onPointerDown(event) {
   }
   pointerDown = { x: event.clientX, y: event.clientY };
   lastPointer = pointerDown;
-  cameraLookDrag=renderer3D.isPerspectiveActive()&&(event.button===2||(event.button===0&&renderer3D.isFirstPersonActive()&&renderer3D.fpEntityId==null));
+  cameraLookDrag=event.button===1||(renderer3D.isFirstPersonActive()&&renderer3D.fpEntityId==null&&event.button===0);
+  if(event.button===1)event.preventDefault();
   if (cityUI.pointerDown(x,y)) { pointerOnUI=true; return; }
   if (pointerOnUI) return;
   if (event.button === 0 && editor.open && !renderer3D.isPerspectiveActive()) {
@@ -410,7 +412,7 @@ function onPointerMove(event) {
     if(!gameUI.pointerMove(mousePosition.x,mousePosition.y)&&lastPointer){
       if(pointerOnUI&&event.pointerType==='touch'&&pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6){
         gameUI.desktop.scrollAt(pointerDown.x-rect.left,pointerDown.y-rect.top,lastPointer.y-event.clientY);
-      }else if(!pointerOnUI&&pointerDown&&!gameCameraLocked&&(event.buttons&4)){panGameCamera(event.clientX-lastPointer.x,event.clientY-lastPointer.y);
+      }else if(!pointerOnUI&&pointerDown&&!gameCameraLocked&&(event.buttons&2)&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6){panGameCamera(event.clientX-lastPointer.x,event.clientY-lastPointer.y);
       }else if(cameraLookDrag&&pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6){
         const dx=event.clientX-lastPointer.x,dy=event.clientY-lastPointer.y;
         if(renderer3D.isPerspectiveActive())renderer3D.rotatePerspectiveCamera(dx*.004,-dy*.004);
@@ -455,9 +457,12 @@ function onPointerMove(event) {
   if (!dragging || !lastPointer) return;
   const dx = event.clientX - lastPointer.x;
   const dy = event.clientY - lastPointer.y;
-  if(renderer3D.isPerspectiveActive()){
-    if(cameraLookDrag)renderer3D.rotatePerspectiveCamera(renderer3D.isFirstPersonActive()?-dx*.004:dx*.004,-dy*.004);
-  }else moveCameraByPointer(dx,dy,renderer3D.getCameraZoom());
+  if(cameraLookDrag){
+    if(Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>=6){
+      if(renderer3D.isPerspectiveActive())renderer3D.rotatePerspectiveCamera(renderer3D.isFirstPersonActive()?-dx*.004:dx*.004,-dy*.004);
+      else renderer3D.rotateIsometricCamera(-dx*.004);
+    }
+  }else if(!renderer3D.isPerspectiveActive())moveCameraByPointer(dx,dy,renderer3D.getCameraZoom());
   lastPointer = { x: event.clientX, y: event.clientY };
 }
 

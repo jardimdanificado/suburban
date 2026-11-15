@@ -126,7 +126,7 @@ const boatPlanCaches=new WeakMap();
 export function planBoatTrip(city,start,goal,options={}){
  const person=start.properties?.citizen;
  if(!city.walkable(Math.floor(goal.x),Math.floor(goal.y))||!person||person.dead||person.localBoatTrip||person.sharedBoatRide||person.mobilityTrip||person.ridingVehicleId||person.boatClass||person.worldBoatCrew||person.custody||person.entity.destroyed)return null;
- const shared=planSharedCrossing(city,start,goal,options.maxSeconds);if(shared)return shared;
+ const shared=!options.boat&&planSharedCrossing(city,start,goal,options.maxSeconds);if(shared)return shared;
  const vehicles=[...(city.vehicles?.units?.values()||[])];if(!vehicles.some(v=>v.boatClass&&free(v)))return null;
  const revision=`${city.minute}:${city.world.revision||0}:${city.structureRevision||0}:${city.obstacleRevision||0}:${city.occupied.size}`;
  let cache=boatPlanCaches.get(city);if(!cache||cache.revision!==revision){cache={revision,paths:new Map()};boatPlanCaches.set(city,cache);}

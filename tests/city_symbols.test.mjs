@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {ASSET_DATA} from '../js/assets_data.js';
 import {CITY_SYMBOLS,legacyGlyphIndex} from '../js/city_symbols.js';
 import {CityFavorites,FAVORITE_GLYPH_COUNT} from '../js/city_favorites.js';
-import {drawFavoriteSymbol,drawPartyFlag,mutateMunicipalFlag} from '../js/city_party_flags.js';
+import {drawFavoriteSymbol,drawPartyFlag,mutateMunicipalFlag,makePartyFlag,makeMunicipalFlag} from '../js/city_party_flags.js';
 
 test('shared catalog preserves favorite indices and includes every flag tile',()=>{
  assert.equal(FAVORITE_GLYPH_COUNT,CITY_SYMBOLS.length);
@@ -69,4 +69,21 @@ test('favorite marker backgrounds default on for old preferences and persist whe
  const restored=new CityFavorites({city,storage});
  assert.equal(restored.people[1].background,false);
  restored.togglePerson(2);assert.equal(restored.people[2].background,true);
+});
+
+
+test('new party and municipal flags both draw from legacy favorite glyphs and tiles',()=>{
+ for(const kind of ['party','municipal']){
+  let seed=1337;
+  const city={random(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}};
+  const selected=new Set();
+  for(let index=0;index<100;index++){
+   const flag=kind==='party'?makePartyFlag(city,index):makeMunicipalFlag(city,{name:'Cidade de teste'});
+   for(const emblem of flag.emblems){
+    assert(CITY_SYMBOLS.includes(emblem.skin));selected.add(emblem.skin);
+   }
+  }
+  assert([...selected].some(skin=>legacyGlyphIndex(skin)!==null),`${kind} flags must use former favorite glyphs`);
+  assert([...selected].some(skin=>legacyGlyphIndex(skin)===null),`${kind} flags must also retain tiles`);
+ }
 });

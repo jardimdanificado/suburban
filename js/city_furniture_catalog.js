@@ -77,6 +77,7 @@ export function roomFurniture(b,u){
  if(['workspace','service','office','plenary','treatment','waiting'].includes(u.roomType)&&!stairCell&&!serviceOperator)add('water_cooler',.12,.86,'Bebedouro');
  if(b.type==='townhall'&&u.roomType==='service')add('ballot_booth',.78,.28,'Cabine de votação');
  if(serviceOperator&&u.roomType==='workspace')add('loading_dock',innerX,innerY,'Área de expedição',{visualScale:.62,footprint:{width:.4,depth:.3}});
+ items.push(...(u.playerFurniture||[]));
  roomCaches.set(u,{key,items});return items;
 }
 export function furnitureInteraction(b,u,kind,slot=0,task=null){

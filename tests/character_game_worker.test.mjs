@@ -9,6 +9,7 @@ test('worker accepts possession, movement input and exports a resumable characte
  let nextId=1;const entities=[],world=new World(1,1337,128);
  const city=new CitySimulation({world,population:24,startFoundingWorks:false,createEntity:data=>{const entity={id:nextId++,destroyed:false,...data};entities.push(entity);return entity;}});city.initialize();
  const person=city.citizens.find(c=>canControl(city,c));
+ person.inventory.madeira=2;
  const graph=new CityStateGraph(),packet=graph.encode({city,entities,nextId}),worker=new Worker(new URL('./helpers/ff_worker.mjs',import.meta.url));t.after(()=>worker.terminate());
  let compactControl=false;
  const saved=await new Promise((resolve,reject)=>{let initialized=false;worker.on('error',reject);worker.on('message',m=>{try{
@@ -21,7 +22,8 @@ test('worker accepts possession, movement input and exports a resumable characte
    else {assert(m.ok,m.message);if(m.id===1)worker.postMessage({type:'command',cityId:'character',id:2,path:'gameAction',args:['autonomy',{enabled:true}]});
    else if(m.id===2)worker.postMessage({type:'command',cityId:'character',id:3,path:'gameAction',args:['input',{x:1,y:0}]});
    else if(m.id===5)worker.postMessage({type:'command',cityId:'character',id:6,path:'gameAction',args:['input',{x:1,y:0}]});
-   else if(m.id===6)worker.postMessage({type:'export-state',cityId:'character',id:7});}
+   else if(m.id===6)worker.postMessage({type:'command',cityId:'character',id:8,path:'gameAction',args:['drop-good',{good:'madeira',quantity:1}]});
+   else if(m.id===8)worker.postMessage({type:'export-state',cityId:'character',id:7});}
   }
   if(m.type==='export-state'){
    if(m.id===4){const automatic=new CityStateGraph().apply(m.packet).city;bindCityState(automatic);assert(automatic.characterGame.autonomous);assert(!controlledCitizen(automatic).playerControlled);worker.postMessage({type:'command',cityId:'character',id:5,path:'gameAction',args:['autonomy',{enabled:false}]});}
@@ -29,5 +31,5 @@ test('worker accepts possession, movement input and exports a resumable characte
   }
  }catch(e){reject(e);}});});
  assert(compactControl,'Movement must use compact control messages');
- const restored=new CityStateGraph().apply(saved).city;bindCityState(restored);assert.equal(restored.characterGame.mode,'play');assert.equal(restored.characterGame.input.x,1);assert(controlledCitizen(restored).playerControlled);const x=controlledCitizen(restored).entity.x;restored.update(.1);assert(controlledCitizen(restored).entity.x>x);assert(restored.gameAction('simulation'));assert(!controlledCitizen(restored).playerControlled);
+ const restored=new CityStateGraph().apply(saved).city;bindCityState(restored);assert.equal(controlledCitizen(restored).inventory.madeira,1);assert.equal(restored.playerGroundItems[0].properties.item.quantity,1);assert.equal(restored.playerGroundItems[0].properties.playerItem.good,'madeira');assert.equal(restored.characterGame.mode,'play');assert.equal(restored.characterGame.input.x,1);assert(controlledCitizen(restored).playerControlled);const x=controlledCitizen(restored).entity.x;restored.update(.1);assert(controlledCitizen(restored).entity.x>x);assert(restored.gameAction('simulation'));assert(!controlledCitizen(restored).playerControlled);
 });

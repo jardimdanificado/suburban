@@ -160,8 +160,10 @@ export class CityCouncil {
     if(!chamber.open()||presentWeight<requiredQuorum){bill.waitingForPlenary=true;bill.waitingForQuorum=true;bill.lastQuorumCheckAt=this.city.minute;return;}
     bill.waitingForPlenary=false;bill.waitingForQuorum=false;bill.plenaryBuildingId=chamber.hall().id;bill.attendance=present.map(c=>({citizenId:c.id,name:c.entity.properties.name,weight:this.weight(c.id),officeUnitId:this.members.find(m=>m.citizenId===c.id)?.officeUnitId??null}));const presentIds=new Set(bill.attendance.map(a=>a.citizenId));bill.absences=this.people().filter(c=>!presentIds.has(c.id)).map(c=>({citizenId:c.id,name:c.entity.properties.name,task:c.task,reason:c.action}));
     const eligible=present.filter(c=>c.id!==bill.payload.targetId||!['impeach','convict','confidence','arrestAuthorization','releasePrisoner'].includes(bill.type));
+    if(eligible.some(c=>c.playerControlled&&typeof bill.playerVotes?.[c.id]!=='boolean')){bill.waitingForPlayerVote=true;return;}
+    bill.waitingForPlayerVote=false;
     bill.eligibleWeight=eligible.reduce((n,c)=>n+this.weight(c.id),0);
-    bill.votes=eligible.map(c=>({citizenId:c.id,name:c.entity.properties.name,partyId:c.political.partyId,weight:this.weight(c.id),...this.preference(c,bill)}));
+    bill.votes=eligible.map(c=>({citizenId:c.id,name:c.entity.properties.name,partyId:c.political.partyId,weight:this.weight(c.id),...(typeof bill.playerVotes?.[c.id]==='boolean'?{yes:bill.playerVotes[c.id],reason:'Voto declarado pelo jogador'}:this.preference(c,bill))}));
     bill.yes=bill.votes.filter(v=>v.yes).reduce((n,v)=>n+v.weight,0);bill.no=bill.votes.filter(v=>!v.yes).reduce((n,v)=>n+v.weight,0);
     const supermajority=override||['impeach','convict','confidence'].includes(bill.type),threshold=supermajority?Math.ceil(bill.eligibleWeight*2/3):Math.floor(bill.eligibleWeight/2)+1;
     bill.threshold=threshold;bill.status=bill.yes>=threshold?'approved':override?'veto-maintained':'rejected';bill.votedAt=this.city.minute;if(override){bill.overrideVotes=bill.votes.map(v=>({...v}));const veto=this.city.politics.vetoes?.slice().reverse().find(entry=>entry.billId===bill.id);if(veto){veto.status=bill.status==='approved'?'overridden':'maintained';veto.resolvedAt=this.city.minute;}}
@@ -291,6 +293,7 @@ export class CityCouncil {
     for(const bill of this.bills){
       if(bill.status==='proposed'&&city.minute>=bill.voteAt)this.vote(bill);
       else if(bill.status==='awaiting-sanction'&&city.minute>=bill.sanctionAt){const mayor=city.society.citizen(city.economy.mayorId),opposed=mayor&&!this.preference(mayor,bill).yes,powerBill=['mayorElectionSystem','secretaryElection','councilRate','councilSeats','councilBudget','mayorBudget'].includes(bill.type),canVeto=powerBill||bill.agendaTermId!==p.mandates.current?.id;
+        if(mayor?.playerControlled)continue;
         if(canVeto&&opposed&&(mayor.traits?.ambition??.5)>.72&&city.random()<(powerBill?.035:.055))p.vetoBill(bill.id);else this.execute(bill);}
       else if(bill.status==='vetoed'&&city.minute>=bill.overrideAt)this.vote(bill,true);
       else if(bill.status==='executing'&&city.hour%6===0)this.execute(bill);
@@ -298,7 +301,7 @@ export class CityCouncil {
     if(this.lastProposalDay!==city.day){this.lastProposalDay=city.day;const people=this.people(),reserve=city.welfare.conditions().reserve,budget=Math.min(p.policy.councilBudget,Math.max(0,city.treasury-reserve)),share=people.length?Math.floor(budget/people.length):0;
       for(const [index,c] of people.entries()){const amount=share+(index<budget-share*people.length?1:0);if(amount)city.transfer('treasury',c.accountId,amount,'Salário diário: orçamento global da Câmara');}
       const mayor=city.society.citizen(city.economy.mayorId),salary=Math.min(p.policy.mayorBudget,Math.max(0,city.treasury-reserve));if(mayor&&salary)city.transfer('treasury',mayor.accountId,salary,'Salário diário do prefeito');
-      for(let i=0;i<Math.min(3,people.length);i++){const c=people[(city.day*3+i)%people.length];city.economy.practice(c,'governance',30);this.draft(c);}
+      for(let i=0;i<Math.min(3,people.length);i++){const c=people[(city.day*3+i)%people.length];city.economy.practice(c,'governance',30);if(!c.playerControlled)this.draft(c);}
     }
   }
 }

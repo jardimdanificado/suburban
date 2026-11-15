@@ -180,3 +180,25 @@ test('character marker uses the favorite editor and saves symbol, color and back
   h.draw();for(const region of h.ui.regions.filter(r=>r.label?.startsWith('Símbolo ')))assert(region.x>=0&&region.x+region.w<=width);
  }
 });
+
+test('life and management exposes every workflow with native fields and hides inputs between pages',async()=>{
+ const h=harness();await h.start();h.game.desktop.closeAll(true);h.game.key({code:'KeyG'},true);h.draw();
+ const state=h.game.desktop.manager.find('page:survival-actions').state;assert(state);
+ const before=h.calls.length;
+ for(const tab of ['trade','items','property','business','bank','vehicles','social','work','explore','politics']){
+  state.playerForm.tab=tab;state.resetScroll();h.draw();assert.equal(h.calls.length,before,'Drawing a workflow must not send commands');
+ }
+ state.playerForm.tab='trade';state.resetScroll();h.draw();const visible=state.inputs.filter(i=>!i.hidden);assert(visible.some(i=>i.type==='number'));assert(visible.some(i=>i.tagName==='SELECT'||i.tagName==='select'||i.getAttribute?.('aria-label')?.startsWith('player:'))||Object.keys(state.dynamicSelects).length>0);
+ const moneyInput=state.dynamicSelects['player:tradeQuantity'];assert(moneyInput);state.playerForm.tab='social';h.draw();assert(moneyInput.hidden);
+ h.game.desktop.close('page:survival-actions');assert(!state.visible);assert(!h.game.desktop.manager.find('page:survival-actions'));
+});
+
+test('life and management stays within mobile and desktop viewports',async()=>{
+ for(const [width,height]of [[390,844],[1440,900]]){
+  const h=harness(width,height);await h.start();h.game.desktop.closeAll(true);h.game.openPanel('actions');h.draw();const state=h.game.desktop.manager.active.state;
+  for(const tab of ['trade','items','property','business','bank','vehicles','social','work','explore','politics']){
+   state.playerForm.tab=tab;state.resetScroll();h.draw();
+   for(const region of h.ui.regions)if(region.w>0&&region.h>0){assert(region.x>=0&&region.y>=0,`${tab}: negative widget`);assert(region.x+region.w<=width+1,`${tab}: widget exceeds width`);assert(region.y+region.h<=height+1,`${tab}: widget exceeds height`);}
+  }
+ }
+});

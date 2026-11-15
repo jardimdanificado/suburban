@@ -1,3 +1,4 @@
+import {drawPlayerActions} from './character_player_ui.js';
 import {markerPreferences} from './city_symbols.js';
 import {playing,controlledCitizen,canControl,relatives} from './character_game.js';
 import {nearbyTargets,interactionOptions} from './character_interactions.js';
@@ -9,7 +10,7 @@ import {drawTargetDossier,targetKindLabel} from './character_game_inspectors.js'
 
 const name=c=>c?.entity?.properties?.name||'Sem nome';
 const meters=[['health','Saúde'],['food','Alimentação'],['water','Água'],['energy','Energia'],['hygiene','Higiene'],['toilet','Banheiro']];
-const titles={marker:'Símbolo do personagem',profile:'Personagem',activity:'Atividade e ações',targets:'Alvos próximos',interactions:'Interações próximas',inventory:'Mochila',body:'Condição física',family:'Família',journal:'Diário',menu:'Pausa e opções',death:'Fim desta vida',interaction:'Interagir'};
+const titles={actions:'Vida e gestão',marker:'Símbolo do personagem',profile:'Personagem',activity:'Atividade e ações',targets:'Alvos próximos',interactions:'Interações próximas',inventory:'Mochila',body:'Condição física',family:'Família',journal:'Diário',menu:'Pausa e opções',death:'Fim desta vida',interaction:'Interagir'};
 const movingCodes=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
 
 /** Gameplay uses the same canvas widgets, native fields and desktop windows as management. */
@@ -47,8 +48,11 @@ export class CharacterGameUI {
   }
   openPanel(panel){
     const searchable=['targets','interactions'].includes(panel);
-    const state=this.desktop.openPage(`survival-${panel}`,{title:titles[panel],width:panel==='marker'?460:panel==='inventory'?430:['profile','activity','body'].includes(panel)?280:340,height:({profile:225,activity:230,body:310,targets:260,interactions:310})[panel]||400,search:searchable?'Filtrar por nome ou tipo…':false,draw:(p,state)=>this.content(panel,p,state),onClose:()=>{if(panel==='interaction')this.contextOpen=false;}});
+    const state=this.desktop.openPage(`survival-${panel}`,{title:titles[panel],width:panel==='actions'?520:panel==='marker'?460:panel==='inventory'?430:['profile','activity','body'].includes(panel)?280:340,height:({actions:620,profile:225,activity:230,body:310,targets:260,interactions:310})[panel]||400,search:searchable?'Filtrar por nome ou tipo…':false,draw:(p,state)=>this.content(panel,p,state),onClose:()=>{if(panel==='interaction')this.contextOpen=false;}});
     if(searchable)state.search.setAttribute('aria-label',`${titles[panel]}: filtrar`);return state;
+  }
+  openActions(tab,fields={}){
+    const state=this.openPanel('actions');state.playerForm={...(state.playerForm||{}),tab,...fields};state.resetScroll();return state;
   }
   input(){
     const x=Number(this.keys.has('KeyD')||this.keys.has('ArrowRight'))-Number(this.keys.has('KeyA')||this.keys.has('ArrowLeft'));
@@ -89,9 +93,13 @@ export class CharacterGameUI {
     if(menu.entityId!=null&&!target)return null;
     const items=[],add=(label,click,disabled=false,danger=false)=>items.push({label,click,disabled,danger});
     if(menu.self){
-      add('Ver personagem',()=>this.openPanel('profile'));add('Abrir mochila',()=>this.openPanel('inventory'));add('Descansar',()=>this.act('rest'));add('Interromper ação',()=>this.act('stop'));
+      add('Ver personagem',()=>this.openPanel('profile'));add('Abrir mochila',()=>this.openPanel('inventory'));add('Descansar',()=>this.act('rest'));add('Interromper ação',()=>this.act('stop'));add('Vida e gestão',()=>this.openPanel('actions'));
     }else if(target){
       for(const choice of interactionOptions(city,target))add(choice.label,()=>choice.action==='family'?this.toggle('family'):this.act('approach-interact',{kind:target.kind,targetId:target.id,choice:choice.id}));
+      if(target.kind==='building'){const b=city.building(target.id),tab=b?.type==='bank'?'bank':b?.ownerId===c.id?'business':'trade';add('Vida e gestão',()=>this.openActions(tab,{seller:target.id,business:target.id,bank:target.id,exploreBuilding:target.id}));add('Explorar interiores',()=>this.openActions('explore',{exploreBuilding:target.id}));}
+      if(target.kind==='vehicle')add('Usar veículo',()=>this.openActions('vehicles',{vehicle:target.id}));
+      if(target.kind==='person')add('Relações e presentes',()=>this.openActions('social',{socialPerson:target.id}));
+      if(target.kind==='object'){add('Recolher uma unidade',()=>this.act('pickup-good',{entityId:target.id,quantity:1}));add('Vida e gestão',()=>this.openActions('items'));}
       if(target.kind==='person')add('Atacar',()=>this.act('approach-interact',{kind:'person',targetId:target.id,choice:'attack'}),false,true);
       if(!c.indoorLocation&&target.point)add('Aproximar-se',()=>this.act('walk',target.point));
       add('Selecionar alvo',()=>this.selectTarget(target));add('Examinar',()=>this.dossier(target));
@@ -153,7 +161,7 @@ export class CharacterGameUI {
       if(down&&!this.keys.has(event.code)){this.keys.add(event.code);this.contextOpen=false;this.worldMenu=null;this.input();}else if(!down&&this.keys.delete(event.code))this.input();return true;
     }
     if(!down||event.repeat||event.metaKey||event.altKey)return false;
-    const actions={KeyO:()=>this.onSettings(),KeyL:()=>this.onCameraLock(),KeyZ:()=>this.onCamera(),KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.onPause(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
+    const actions={KeyG:()=>this.toggle('actions'),KeyO:()=>this.onSettings(),KeyL:()=>this.onCameraLock(),KeyZ:()=>this.onCamera(),KeyC:()=>this.toggle('profile'),KeyV:()=>this.toggle('activity'),KeyT:()=>this.toggle('targets'),KeyB:()=>this.toggle('interactions'),KeyE:()=>this.interact(),KeyI:()=>this.toggle('inventory'),KeyH:()=>this.toggle('body'),KeyU:()=>this.toggle('family'),KeyJ:()=>this.toggle('journal'),KeyP:()=>{this.onPause();},KeyX:()=>{this.keys.clear();this.act('stop');},KeyR:()=>this.act('rest'),KeyF:()=>this.attack(),Space:()=>this.onPause(),Digit1:()=>this.act('eat'),Digit2:()=>this.act('drink'),Escape:()=>{if(this.contextOpen){this.contextOpen=false;}else if(this.desktop.manager.windows.length)this.desktop.close(this.desktop.manager.activeId);else this.toggle('menu');},KeyQ:()=>{
       const targets=this.targets(),index=targets.findIndex(t=>`${t.kind}:${t.id}`===this.targetKey),target=targets[(index+1)%targets.length];if(target)this.selectTarget(target);
     }};
     if(this.contextOpen&&/^Digit[1-9]$/.test(event.code)){
@@ -228,7 +236,7 @@ export class CharacterGameUI {
   }
 
   launcher(ui){
-    const tools=[['profile','C · Personagem'],['body','H · Corpo'],['activity','V · Atividade'],['targets','T · Alvos'],['interactions','B · Interações'],['inventory','I · Mochila'],['family','U · Família'],['journal','J · Diário'],['menu','Esc · Opções']];
+    const tools=[['actions','G · Vida e gestão'],['profile','C · Personagem'],['body','H · Corpo'],['activity','V · Atividade'],['targets','T · Alvos'],['interactions','B · Interações'],['inventory','I · Mochila'],['family','U · Família'],['journal','J · Diário'],['menu','Esc · Opções']];
     let x=4,y=3;const buttons=[];
     for(const [panel,label]of tools){const w=Math.min(ui.width-8,Math.ceil(ui.textWidth(label))+18);if(x+w>ui.width-4){x=4;y+=26;}buttons.push({x,y,w,panel,label});x+=w+3;}
     const h=y+27;bevel(ui.ctx,0,0,ui.width,h);ui.regions.push({x:0,y:0,w:ui.width,h,onClick:null});
@@ -282,14 +290,15 @@ export class CharacterGameUI {
     if(panel==='marker'){
       const pref=markerPreferences(s.marker);state.markerEditor(p,'player',pref,patch=>this.act('marker',patch));return;
     }
+    if(panel==='actions')return drawPlayerActions(this,p,state);
     if(panel==='profile'){
       p.heading(name(c));p.kv('Data',`Dia ${city.day} · ${String(city.hour).padStart(2,'0')}:${String(city.minute%60).padStart(2,'0')}`);
-      p.kv('Saldo',formatMoney(c?.balance||0));p.kv('Estado',this.status(city,c));p.kv('Tempo',this.isPaused()?'Pausado':'Em andamento');p.kv('Controle',s.manualPending?'Aguardando concluir atividade':s.autonomous?'Rotina automática':'Total · WASD');p.button('Personalizar símbolo',()=>this.openPanel('marker'));return;
+      p.kv('Saldo',formatMoney(c?.balance||0));p.kv('Estado',this.status(city,c));p.kv('Tempo',this.isPaused()?'Pausado':'Em andamento');p.kv('Controle',s.manualPending?'Aguardando concluir atividade':s.autonomous?'Rotina automática':'Total · WASD');p.button('Personalizar símbolo',()=>this.openPanel('marker'));p.button('Vida e gestão [G]',()=>this.openPanel('actions'));return;
     }
     if(panel==='targets')return this.nearbyList(p,false,state.query);
     if(panel==='interactions')return this.nearbyList(p,true,state.query);
     if(panel==='activity'){
-      p.note(c?.action||this.status(city,c));
+      p.note(c?.action||this.status(city,c));p.button('Vida e gestão [G]',()=>this.openPanel('actions'));
       if(s.intent?.kind==='gather')p.meter('Coleta',100*(s.intent.progress||0)/6);
       if(s.intent)p.button('X · Cancelar ação',()=>{this.keys.clear();this.act('stop');});
       if(s.intent?.kind==='rest'&&!c?.indoorLocation)p.button('Dormir no chão',()=>this.act('sleep-here'));
@@ -317,7 +326,7 @@ export class CharacterGameUI {
       p.button('Personalizar símbolo',()=>this.openPanel('marker'));
       p.button(this.isPaused()?'Continuar o tempo [P]':'Pausar o tempo [P]',()=>this.onPause());
       p.button(this.getThirdPerson()?'Câmera isométrica [Z]':'Câmera em terceira pessoa [Z]',()=>this.onCamera());p.button(this.getCameraLocked()?'Liberar câmera [L]':'Travar câmera no personagem [L]',()=>this.onCameraLock());p.button('Configurações [O]',()=>this.onSettings());p.button('Voltar à simulação',()=>this.act('simulation'));
-      p.heading('Controles');p.note('WASD / setas: mover\nZ: isométrica / 3ª pessoa · L: câmera livre / travada\nBotão direito + arrastar: girar câmera em 3p ou isométrica\nBotão do meio + arrastar: deslocar câmera livre\nO: configurações\nClique: selecionar pessoa ou objeto · chão livre: andar\nBotão direito sem arrastar: menu contextual\nMenu: setas e Enter · Esc ou clique fora: cancelar\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F: atacar · Espaço / P: pausar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
+      p.button('Vida e gestão [G]',()=>this.openPanel('actions'));p.heading('Controles');p.note('G: vida e gestão\nWASD / setas: mover\nZ: isométrica / 3ª pessoa · L: câmera livre / travada\nBotão do meio + arrastar: girar câmera em 3p ou isométrica\nBotão direito + arrastar: deslocar câmera livre\nO: configurações\nClique: selecionar pessoa ou objeto · chão livre: andar\nBotão direito sem arrastar: menu contextual\nMenu: setas e Enter · Esc ou clique fora: cancelar\nShift: correr\nE: interagir · Q: alternar alvo\nC: personagem · H: corpo · V: atividade\nT: alvos próximos · B: interações próximas\nI: mochila · U: família · J: diário\n1: comer · 2: beber · R: descansar\nCtrl + clique / F: atacar · Espaço / P: pausar\nX: interromper · P: pausar\nTab: alternar janela · Esc: fechar');
     }
   }
   inventory(p,city,c,target){

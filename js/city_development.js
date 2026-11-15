@@ -1,3 +1,4 @@
+import {completePlayerDemolition} from './city_player_property.js';
 import {canFarmVertically,isVerticalFarm,farmSiteType} from './city_farm_layout.js';
 import {businessFloors,businessJobCapacity} from './city_business_heights.js';
 import {setupOfficeTower} from './city_offices.js?v=office-demand-rollout-1';
@@ -43,7 +44,7 @@ export class CityDevelopment {
   }
   registerService(accountId, builder, details) {
     const city = this.city, owner = this.clientCitizen(accountId);
-    if (!owner || !builder || !Number.isSafeInteger(details.stone) || details.stone < 1) return null;
+    if (!owner || !builder || !Number.isSafeInteger(details.stone) || (details.stone < 0 || details.stone === 0 && details.service !== 'demolition')) return null;
     const project = { id: `project:${this.nextProjectId++}`, accountId, ownerId: owner.id, builderId: builder.id, active: true, status: 'materials', startedAt: city.minute, cancelled: false, labor: 0, plotId: null, ...details };
     const priority=city.politics?.policy?.infrastructurePriority;
     if(accountId==='treasury' && (priority==='lamps' && project.service==='lamp'||priority==='roads' && ['road','road-repair'].includes(project.service))){project.politicalPriority=project.priority||0;project.priority=project.politicalPriority+50;}
@@ -120,7 +121,9 @@ export class CityDevelopment {
     } else {
       const b = city.building(project.buildingId);
       if (!b || (project.service === 'expansion' && b.floors !== project.baseFloors)) { project.status = 'blocked'; project.error = 'Edifício foi removido ou alterado durante a obra.'; return null; }
-      if (project.service === 'repair') { b.condition = 100; b.repairNeeded = false; }
+      if (project.service === 'demolition') {
+        result=completePlayerDemolition(city,project);if(!result)return null;
+      } else if (project.service === 'repair') { b.condition = 100; b.repairNeeded = false; }
       else {
       if (project.service === 'expansion') for (let z = b.floors; z < project.targetFloors; z++) city.housing.addFloor(b, z, project.accountId);
       city.sanitation.setupBuilding(b);

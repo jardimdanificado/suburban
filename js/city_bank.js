@@ -74,6 +74,16 @@ export class CityBank {
     city.history.record('credit', `Crédito aprovado por ${bank.entity.properties.name}.`, [clientId,bank.accountId], { amount, rate:loan.rate, loanId:loan.id });
     return loan;
   }
+  repay(bank,clientId,loanId,amount){
+    const loan=this.loans.find(l=>l.id===loanId&&l.bankId===bank?.id&&l.clientId===clientId&&!['paid','written-off','foreclosed'].includes(l.status));
+    if(!this.canServe(bank)||!loan||!Number.isSafeInteger(amount)||amount<1||amount>loan.remaining+loan.interest)return false;
+    if(!this.city.transfer(clientId,bank.accountId,amount,'Amortização voluntária de empréstimo',{loanId:loan.id}))return false;
+    const interest=Math.min(amount,loan.interest),principal=amount-interest;
+    loan.interest-=interest;loan.remaining-=principal;loan.paid+=amount;
+    this.city.recordBusinessRevenue(bank,interest);this.repayDevelopment(bank,principal,loan);
+    if(loan.remaining+loan.interest===0){loan.status='paid';loan.missed=0;const plan=this.recoveryPlans().find(p=>p.loanId===loan.id&&['active','protection','under-review'].includes(p.status));if(plan){plan.status='completed';plan.completedAt=this.city.minute;}}
+    this.city.history.record('credit','Amortização voluntária de dívida.',[clientId,bank.accountId],{loanId:loan.id,amount});return true;
+  }
   mortgage(bank,buyer,amount,{homeId}={}){
     const city=this.city,home=city.housing.homes.get(homeId),units=home&&city.housing.units(home),value=home&&city.housing.price(home);
     if(!this.policy.creditEnabled||!this.canServe(bank)||!buyer||buyer.entity.destroyed||buyer.creditAllowed===false||!city.society.isAdult(buyer)||!home||city.housing.isSocial(home)||!units?.length||units.some(u=>!u.forSale||u.tenantId)||!Number.isSafeInteger(amount)||amount<=0||amount>Math.floor(value*.75))return null;
